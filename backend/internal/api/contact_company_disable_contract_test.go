@@ -248,6 +248,13 @@ func TestContactCompanyDisableContract(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("被禁用企业读学员明文应 403, 实际 %d %s", rec.Code, rec.Body.String())
 	}
+	// 那句错误必须真的走到对外：登记表把 ErrCompanyUnavailable 认作 company_unavailable 的
+	// **明文面载体**（ADR-0065 决策 8），而消费点对齐锁只核到「投影位的契约描述里含这句话」。
+	// 这一行补的是另一半——这句话确实发得出去，不是一枚只活在 Go 里的哨兵。
+	if !strings.Contains(rec.Body.String(), service.ErrCompanyUnavailable.Error()) {
+		t.Fatalf("403 的正文要带那件事实的具名句子 %q, 实际 %s",
+			service.ErrCompanyUnavailable.Error(), rec.Body.String())
+	}
 	if strings.Contains(rec.Body.String(), disabledStudentPhone) ||
 		strings.Contains(rec.Body.String(), disabledStudentWechat) {
 		t.Fatalf("被禁用企业不应再拿到学员明文, body=%s", rec.Body.String())

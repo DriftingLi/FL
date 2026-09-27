@@ -2,8 +2,11 @@
  * 模块声明 —— 「一个模块是什么」的**唯一事实源**（ADR-0023 票 A / epic #1221）
  *
  * 这个文件**只放数据**：零逻辑、零断言、不读磁盘、不认识 jest。
- * 读取与对账机制在 `utils/contractHarness.js`；豁免名单的单点在 `utils/guardAllowlist.js`。
+ * 读取与对账机制在 `utils/contractHarness.js`。
  * 为什么分家：合成一份会把「改了模块边界」与「改了检查逻辑」混进同一个 diff（ADR-0023 ②①）。
+ *
+ * 这里曾有 `allowlistOwned`（守护规则存量豁免的归属面），已随 #654（T16，epic 收尾）删除：
+ * 豁免机制不留登记位。「不许把它带回来」由 `utils/modulesDeclarationContract.test.js` C 组守着。
  *
  * ## 键与归属面
  *
@@ -107,7 +110,7 @@ const INFRA = {
 
 /**
  * 23 个 `pages/` 模块的声明。
- * 字段顺序统一为：extraDirs → files → extractDirs → crossModuleConsumers → budget → budgetOverrides → allowlistOwned → maxDepth。
+ * 字段顺序统一为：extraDirs → files → extractDirs → crossModuleConsumers → budget → budgetOverrides → maxDepth。
  */
 const MODULES = {
   'ai-assistant': {
@@ -144,7 +147,6 @@ const MODULES = {
     /** 超预算：ai-assistant.uvue 839 / ai-feature 629 / ai-settings 621 / api/aiAssistant.uts 667 */
     budget: 'pending',
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -168,7 +170,6 @@ const MODULES = {
     crossModuleConsumers: ['jobs', 'mall', 'practice'],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -191,7 +192,6 @@ const MODULES = {
     crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'profile', 'search'],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -212,7 +212,6 @@ const MODULES = {
     crossModuleConsumers: ['profile'],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -223,7 +222,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -235,7 +233,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -250,7 +247,6 @@ const MODULES = {
     /** T12 手术（#650）：forgot-password.uvue 675→437（状态与动作下沉模块私有 composable）⇒ 执法面随之上线（原为「超预算 676」的 pending） */
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -296,8 +292,6 @@ const MODULES = {
      */
     budget: BUDGET,
     budgetOverrides: {},
-    /** 规则 H 的存量豁免；归属理由：`pages/forum/check-in.uvue` 与它同属本模块（另一个消费者是 profile） */
-    allowlistOwned: ['api/checkin.uts'],
     maxDepth: MAX_DEPTH,
   },
 
@@ -308,7 +302,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -319,7 +312,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -331,7 +323,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -348,7 +339,6 @@ const MODULES = {
     /** T13 手术（#651）：login.uvue 977→581（表单态下沉 useLoginForm、生物识别门控面单拆 useBiometricGate）⇒ 执法面随之上线（原为「超预算 977」的 pending） */
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -365,7 +355,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -377,8 +366,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    /** 规则 H 的存量豁免（本模块唯一的页） */
-    allowlistOwned: ['pages/notifications/notifications.uvue'],
     maxDepth: MAX_DEPTH,
   },
 
@@ -390,7 +377,6 @@ const MODULES = {
     /** 超预算：task-center.uvue 617 */
     budget: 'pending',
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -415,7 +401,6 @@ const MODULES = {
     crossModuleConsumers: ['profile'],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -456,7 +441,6 @@ const MODULES = {
     /** 达标但贴近上限：`pages/profile/wrong-questions.uvue` 恰 600 行（先例 profileContract 的落袋锁） */
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -467,7 +451,6 @@ const MODULES = {
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -490,7 +473,6 @@ const MODULES = {
     /** 超预算：resume-detail.uvue 702 / api/recruit.uts 675 */
     budget: 'pending',
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -502,7 +484,6 @@ const MODULES = {
     /** T11 手术（#649）：register.uvue 722→427（状态与动作下沉模块私有 composable）⇒ 执法面随之上线（原为「超预算 723」的 pending） */
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -519,7 +500,6 @@ const MODULES = {
     crossModuleConsumers: ['forum'],
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -539,7 +519,6 @@ const MODULES = {
     /** T09 手术（#647）：resume-edit 922→460、模块 7 文件全 ≤600 ⇒ 执法面随之上线（原为「超预算 923」的 pending） */
     budget: BUDGET,
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 
@@ -552,7 +531,6 @@ const MODULES = {
     /** 超预算：search.uvue 702 */
     budget: 'pending',
     budgetOverrides: {},
-    allowlistOwned: [],
     maxDepth: MAX_DEPTH,
   },
 };

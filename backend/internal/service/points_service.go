@@ -39,7 +39,7 @@ type PointsLedgerItem struct {
 
 // PointsLedgerResult 流水分页
 type PointsLedgerResult struct {
-	Items []PointsLedgerItem `json:"items" nullability:"nullable"`
+	Items []PointsLedgerItem `json:"items" nullability:"nonnil"`
 	Total int64              `json:"total"`
 	Page  int                `json:"page"`
 	Pages int                `json:"pages"`
@@ -59,7 +59,7 @@ type PointsTaskItem struct {
 
 // PointsTasksResult 任务列表
 type PointsTasksResult struct {
-	Tasks []PointsTaskItem `json:"tasks" nullability:"nullable"`
+	Tasks []PointsTaskItem `json:"tasks" nullability:"nonnil"`
 }
 
 // taskMeta 行为判定需要的「聚合行为快照 + 用户资料」一次性取齐（GetTasks/Claim 共用）。

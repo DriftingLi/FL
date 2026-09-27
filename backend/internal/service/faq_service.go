@@ -39,7 +39,7 @@ type FaqEntryDTO struct {
 // FaqCategoryDTO 帮助中心分类（含其下已发布条目）。
 type FaqCategoryDTO struct {
 	Code      string        `json:"code"`
-	Entries   []FaqEntryDTO `json:"entries" nullability:"nullable"`
+	Entries   []FaqEntryDTO `json:"entries" nullability:"nonnil"`
 	ID        int           `json:"id"`
 	SortOrder int           `json:"sort_order"`
 	Title     string        `json:"title"`
@@ -47,7 +47,7 @@ type FaqCategoryDTO struct {
 
 // FaqResult 学员端帮助中心整页载荷。
 type FaqResult struct {
-	Categories []FaqCategoryDTO `json:"categories" nullability:"nullable"`
+	Categories []FaqCategoryDTO `json:"categories" nullability:"nonnil"`
 }
 
 // AdminFaqCategoryDTO 管理端分类条目（含停用态与条目计数，不带条目正文）。
@@ -73,12 +73,12 @@ type AdminFaqEntryDTO struct {
 
 // AdminFaqCategoriesResult 管理端分类清单载荷。
 type AdminFaqCategoriesResult struct {
-	Categories []AdminFaqCategoryDTO `json:"categories" nullability:"nullable"`
+	Categories []AdminFaqCategoryDTO `json:"categories" nullability:"nonnil"`
 }
 
 // AdminFaqEntriesResult 管理端条目清单载荷。
 type AdminFaqEntriesResult struct {
-	Entries []AdminFaqEntryDTO `json:"entries" nullability:"nullable"`
+	Entries []AdminFaqEntryDTO `json:"entries" nullability:"nonnil"`
 }
 
 // FaqCategoryInput 分类写入口径（新建与更新共用）。

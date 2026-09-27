@@ -22,6 +22,12 @@ const maxNoteLen = 2000
 // ErrNoteNotFound 笔记不存在或不属于当前用户（同一哨兵：不区分「没有」与「不是你的」）。
 var ErrNoteNotFound = errors.New("笔记不存在")
 
+// 笔记内容的两条输入事实（同评论域，ADR-0065 决策 7 的连带件）：有名字才谈得上分档。
+var (
+	ErrNoteContentEmpty   = errors.New("笔记内容不能为空")
+	ErrNoteContentTooLong = errors.New("笔记不能超过2000字")
+)
+
 // 笔记列表的筛选口径（scope 查询参数）。
 const (
 	// NoteScopeAll 全部笔记（题目笔记 + 独立笔记）。
@@ -45,7 +51,7 @@ type NoteDTO struct {
 
 // NotePageDTO 我的笔记分页（字段按 JSON key 字母序：items / page / page_size / total）。
 type NotePageDTO struct {
-	Items    []NoteDTO `json:"items" nullability:"nullable"`
+	Items    []NoteDTO `json:"items" nullability:"nonnil"`
 	Page     int       `json:"page"`
 	PageSize int       `json:"page_size"`
 	Total    int64     `json:"total"`
@@ -81,10 +87,10 @@ func NewNoteService(db *gorm.DB, logger *zap.Logger) *NoteService {
 func normalizeNoteContent(content string) (string, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return "", errors.New("笔记内容不能为空")
+		return "", ErrNoteContentEmpty
 	}
 	if len(content) > maxNoteLen {
-		return "", errors.New("笔记不能超过2000字")
+		return "", ErrNoteContentTooLong
 	}
 	return content, nil
 }
@@ -93,8 +99,8 @@ func normalizeNoteContent(content string) (string, error) {
 // 题目须在本 scope 内可见（ADR-0062 决策 4：题目维度的学员读面一律收 scope）——
 // 池外题按「不存在」处理，与题目 by-id 读面同口径（笔记行本身仍是本人的私有数据，列表照列）。
 func (s *NoteService) GetForQuestion(questionID, userID int, scope QuestionReadScope) (*model.Note, error) {
-	if !scope.VisibleByID(s.db, questionID) {
-		return nil, ErrQuestionNotFound
+	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+		return nil, err
 	}
 	var n model.Note
 	if err := s.db.Where("question_id = ? AND user_id = ?", questionID, userID).First(&n).Error; err != nil {
@@ -114,8 +120,8 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, 
 	if err != nil {
 		return nil, err
 	}
-	if !scope.VisibleByID(s.db, questionID) {
-		return nil, ErrQuestionNotFound
+	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+		return nil, err
 	}
 	var n model.Note
 	err = s.db.Where("question_id = ? AND user_id = ?", questionID, userID).First(&n).Error
@@ -141,8 +147,8 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, 
 // DeleteForQuestion 删除本人对某题的笔记（不存在时静默成功，与旧口径一致）。
 // 题目维度同 GetForQuestion：池外题按「不存在」，判据由 scope 承载。
 func (s *NoteService) DeleteForQuestion(questionID, userID int, scope QuestionReadScope) error {
-	if !scope.VisibleByID(s.db, questionID) {
-		return ErrQuestionNotFound
+	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+		return err
 	}
 	return s.db.Where("question_id = ? AND user_id = ?", questionID, userID).Delete(&model.Note{}).Error
 }

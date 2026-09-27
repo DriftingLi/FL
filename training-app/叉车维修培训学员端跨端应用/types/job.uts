@@ -1,0 +1,51 @@
+/**
+ * 职位模块类型
+ *
+ * 契约事实源：后端学员侧职位 DTO（`/jobs`、`/jobs/:id`）。#652 T14 域 api 批量收紧时，
+ * 这组类型从 `api/job.uts` 内联声明迁到本文件（与 points / featured / notification / search
+ * 等已收紧域同构：DTO 落 `types/<域>.uts`，页面经 `types/index` 消费，api 层只做映射）。
+ */
+
+/** 职位详情 */
+export type JobPosting = {
+    id : number
+    title : string
+    region : string
+    salary_min ?: number
+    salary_max ?: number
+    salary_text : string
+    experience_req : string
+    description : string
+    specialty_id ?: number
+    published_at : string
+    company_name : string
+    status : string
+    forced_offline : boolean
+    /** 学员视角投递态（#488）：'' 可投 / 'applied' 已投递 / 'not_hired' 未录用（冷却中）；'withdrawn' 后服务端不给状态（可立即重投） */
+    apply_state ?: string
+    /** 'not_hired' 时距可再投的天数（服务端向上取整；30 天冷却） */
+    cooldown_days ?: number
+}
+
+/** 职位列表查询参数 */
+export type JobListParams = {
+    page ?: number
+    page_size ?: number
+    specialty_id ?: number
+    region ?: string
+    salary_min ?: number
+    salary_max ?: number
+    experience ?: string
+}
+
+/** 职位列表查询结果 */
+export type JobListResult = {
+    items : JobPosting[]
+    total : number
+}
+
+/** 举报原因预设选项 */
+export type ReportReason = {
+    key : string
+    label : string
+}

@@ -60,7 +60,7 @@ type WrongQuestionDTO struct {
 
 // WrongQuestionPageDTO 错题本分页（字段按 JSON key 字母序：items / page / page_size / total）。
 type WrongQuestionPageDTO struct {
-	Items    []WrongQuestionDTO `json:"items" nullability:"nullable"`
+	Items    []WrongQuestionDTO `json:"items" nullability:"nonnil"`
 	Page     int                `json:"page"`
 	PageSize int                `json:"page_size"`
 	Total    int64              `json:"total"`

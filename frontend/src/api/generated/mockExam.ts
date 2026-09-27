@@ -66,7 +66,7 @@ export interface MockExamHistoryItemDTO {
 export interface MockExamResultDTO {
   accuracy: number
   correct_count: number
-  details: MockExamAnswerDetailDTO[]
+  details: MockExamAnswerDetailDTO[] | null
   max_score: number
   mock_exam_id: number
   submit_time: string
@@ -95,7 +95,7 @@ export interface MockExamStartDTO {
 export interface MockExamSubmitDTO {
   accuracy: number
   correct_count: number
-  details: MockExamAnswerDetailDTO[]
+  details: MockExamAnswerDetailDTO[] | null
   max_score: number
   total_questions: number
   total_score: number

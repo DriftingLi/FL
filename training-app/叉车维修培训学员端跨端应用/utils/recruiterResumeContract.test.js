@@ -5,7 +5,7 @@
  * 断言请求形状与「下载后交系统打开」的行为；本文件断言**源码结构与字段边界** ——
  * 行为测试自己搭依赖，接线断了它照样可能绿。
  *
- * 四组守护，对应票面的三条判据：
+ * 守护分组（A–D 是 P3 本票的四条判据；E / R6 / R7 / F 是后续票加在同一个文件上的锁）：
  *   A. **脱敏字段清单与真源逐项对齐**：真源 = `backend/internal/service/resume_projection.go`
  *      的 `desensitize()`（ADR-0053 §4 / spec #1051）。**不是硬编码清单** ——
  *      本测试现读那个文件，把它的返回字段与移动端模型/映射/页面逐项对账：
@@ -15,6 +15,8 @@
  *   C. **已授权态**：真实姓名 / 电话 / 微信原生渲染；工作照可点开；上传 PDF 与打码 PDF
  *      走同一个「下载后交系统打开」的出路。
  *   D. **筛选抽屉 = 后端已支持的 8 维**（不多不少），列表「加载更多」按 page_size=20。
+ *   F. **#1267 后半**：卡面 `company_disabled` 与后端 json tag 逐字对账（缺席式键 ⇒ 只认真值），
+ *      且详情页在「授权在、明文已收回」那一支**不给**「发起交换」入口。
  *
  * 真源读取假设（fail-closed）：`backend/internal/service/resume_projection.go` 必须
  * 在**本分支的工作树里**且与 `origin/master` 逐字节一致（本票分支从 P1 切出时已带上）。
@@ -517,5 +519,91 @@ describe('R7. 抽屉 filters 就地类型与 api 层字段逐字对账（跨模�
     expect(a).toEqual(['x', 'y']);
     expect(b).toEqual(['x']);
     expect(a).not.toEqual(b); // 少一维必须判不等
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F. 企业可用性那一格（#1267 后半）：卡面键的字段边界 + 详情页的收口
+// ---------------------------------------------------------------------------
+
+const RECRUIT_SERVICE_GO = path.join(REPO_ROOT, 'backend', 'internal', 'service', 'recruit_service.go');
+
+/**
+ * 真源侧：后端 `RecruitResumeCard.CompanyDisabled` 的 json tag（含 `omitempty`）。
+ * 读不到 ⇒ 返回 null 由用例判红：真源搬家要**改锁**，不是把锁删掉当成通过。
+ */
+function cardCompanyDisabledTagFromTruth() {
+  if (!fs.existsSync(RECRUIT_SERVICE_GO)) return null;
+  return cardCompanyDisabledTagFrom(readText(RECRUIT_SERVICE_GO));
+}
+
+/** 同一套解析，暴露给自检（自检必须跑在锁真正用的那个解析器上，不是跑在它的手抄副本上） */
+function cardCompanyDisabledTagFrom(src) {
+  const m = /CompanyDisabled\s+bool\s+`json:"([^"]+)"/.exec(src);
+  return m === null ? null : m[1];
+}
+
+/** 剥 HTML 注释后的详情页源码（注释里写着「保留唯一出口『发起交换』」，不剥就会自证通过） */
+const detailClean = detailSrc.replace(/<!--[\s\S]*?-->/g, ' ');
+
+describe('F. 卡面 company_disabled：字段边界只认真值 + 详情页「授权在、明文已收回」的收口', () => {
+  test('F1：真源确有此键且是 omitempty ⇒ 移动端两处边界逐字同一个归一形状，且不写 false 分支', () => {
+    expect(cardCompanyDisabledTagFromTruth()).toBe('company_disabled,omitempty');
+    // 类型面：键在，且归一成 boolean（可空性由**字段边界**收口，不下渗给页面）
+    const typeStart = recruitSrc.indexOf('export type RecruitResumeCard = {');
+    const cardType = recruitSrc.slice(typeStart, recruitSrc.indexOf('}', typeStart));
+    expect(cardType).toMatch(/company_disabled\s*:\s*boolean/);
+    // 映射面：缺席式键在**两处边界**逐字同一个归一形状（一个键折成两种形状 = 暗示它们不等价）
+    const norm = "company_disabled: toBool(obj['company_disabled']),";
+    expect((recruitSrc.match(new RegExp(norm.replace(/[?*()|[\]{}\\]/g, '\\$&'), 'g')) || []).length).toBe(2);
+    // 出现即真 ⇒ 不得写 `== false` 分支：那等于把「后端还没这个键」读成「企业可用」
+    const mapStart = recruitSrc.indexOf('export function buildRecruitResumeCard(');
+    const body = recruitSrc.slice(mapStart, recruitSrc.indexOf('\n}', mapStart));
+    expect(body).toContain(norm);
+    expect(body).not.toMatch(/obj\['company_disabled'\]\s*(?:===?|!=)\s*false/);
+    const crStart = recruitSrc.indexOf('export function buildRecruitContactRequest(');
+    expect(recruitSrc.slice(crStart, recruitSrc.indexOf('\n}', crStart))).toContain(norm);
+  });
+
+  test('F1 自检：tag 对账器认得 `omitempty` 的增删（合成样本，跑的是锁真正用的那个解析器）', () => {
+    expect(cardCompanyDisabledTagFrom('CompanyDisabled bool `json:"company_disabled,omitempty"`')).toBe('company_disabled,omitempty');
+    // 真源哪天去掉 omitempty ⇒ 上面那条相等就会红（这里先证明解析器看得见那个变化）
+    expect(cardCompanyDisabledTagFrom('CompanyDisabled bool `json:"company_disabled"`')).not.toBe('company_disabled,omitempty');
+    // 字段改名 / 搬家 ⇒ null（判红，而不是拿一个空字符串去比不相等）
+    expect(cardCompanyDisabledTagFrom('CompanyGone bool `json:"company_disabled,omitempty"`')).toBeNull();
+  });
+
+  test('F2：详情页措辞出自单点，且「已收回」优先于「未授权」两种成因（不互相顶替）', () => {
+    expect(detailSrc).toMatch(/import\s*\{[^}]*companyDisabledNotice[^}]*\}\s*from\s*'\.\.\/\.\.\/utils\/recruitDisplay'/);
+    const hintStart = detailSrc.indexOf('const contactStateHint = computed<');
+    const hint = detailSrc.slice(hintStart, detailSrc.indexOf('\n    })', hintStart));
+    // 单点函数是**第一**支：企业被停用时不能再说「需学员授权后才能查看」（那是另一种成因）
+    expect(hint).toContain('companyDisabledNotice(companyDisabled.value)');
+    expect(hint.indexOf('companyDisabledNotice')).toBeLessThan(hint.indexOf('已发起交换申请'));
+    // 判据只有卡面那个键：详情页不得拿 `contact_state` 反推可用性（服务端事实不由客户端重推）
+    const flagStart = detailSrc.indexOf('const companyDisabled = computed<');
+    const flag = detailSrc.slice(flagStart, detailSrc.indexOf('\n    })', flagStart));
+    expect(flag).toContain('c!.company_disabled');
+    expect(flag).not.toContain('contact_state');
+  });
+
+  test('F3：企业被停用时**不给**「发起交换」入口（#705：必失败的入口比没有入口更贵）', () => {
+    // 只数模板段：`onCreateRequest` 的函数声明本来就要在（那是出口的实现，不是入口）
+    const tpl = detailClean.slice(0, detailClean.indexOf('</template>'));
+    const lines = tpl.split('\n').filter((l) => l.includes('onCreateRequest'));
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain('v-if="!companyDisabled"');
+    // 唯一出口的门就在按钮那一行（下一行才是按钮文字）：门与出口之间不留缝
+    const btnIdx = tpl.split('\n').indexOf(lines[0]);
+    expect(tpl.split('\n')[btnIdx + 1]).toContain('发起交换');
+    // 未授权（企业可用）那一支仍在：不能为了这一格把唯一出口整段删掉
+    expect(detailClean).toContain('<text class="btn-primary-text">发起交换</text>');
+    // 两种成因分面渲染：停用走 `.contact-notice`，未授权走 `.paragraph`（一行两态）
+    expect(detailClean).toContain(
+      '<text :class="companyDisabled ? \'contact-notice\' : \'paragraph\'">{{ contactStateHint }}</text>');
+    // 那句话只有一处渲染行：复制成两行 = 多一个会各自漂移的落点（v-if/v-else 的写法就属于这一类）
+    expect((detailClean.match(/\{\{ contactStateHint \}\}/g) || []).length).toBe(1);
+    // uvue 里 class 没定义 = 静默没样式 ⇒ 用了就要钉住它存在
+    expect(detailSrc.slice(detailSrc.indexOf('<style'))).toContain('.contact-notice');
   });
 });

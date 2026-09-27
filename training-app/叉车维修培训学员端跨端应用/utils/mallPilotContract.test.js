@@ -1,19 +1,19 @@
 /**
  * mall 试点手术契约测试（TDD: RED → GREEN，refs #640 / refactor epic #638 T02）
  *
- * 钉住试点交付的三类契约，采用项目既有源码契约缝（.uvue/.uts 不可被 jest import）：
+ * 钉住试点交付的两类契约（1) 2)；编号是类别不是 describe 数，3) 4) 是「执法点在别处」的口径登记），
+ * 采用项目既有源码契约缝（.uvue/.uts 不可被 jest import）：
  * 1) api 收紧：getCourseListApi 经 requestMapped mapper-callback 出口（#639 出口首个真实消费者）
  * 2) 组件接线：mall.uvue 以显式 import 使用三个模块私有组件（Q17 安置规则）
  * 3) 600 软预算 / 目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
  *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
- * 4) allowlist 不回潮：mall 域文件不得出现在 GUARD_ALLOWLIST（试点验收「清零」的锁）
+ * 4) mall 域文件机械坑位（catch : any / .detail 直取，即试点验收的「清零」项）：本文件不再写这类锁
+ *    ——#654 起豁免面已删，执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 
 describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）', () => {
   const src = read('api/course.uts');
@@ -58,12 +58,5 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
     expect(page).toMatch(/<MallSortBar[\s/>]/);
     expect(page).toMatch(/<MallCategorySidebar[\s/>]/);
     expect(page).toMatch(/<MallFloatActions[\s/>]/);
-  });
-});
-
-describe('allowlist 不回潮（mall 域违例清零的锁）', () => {
-  it('豁免面不含 mall 域文件', () => {
-    const hits = allowlistPaths().filter((p) => /pages[/\\]mall|api[/\\]course\.uts/.test(p));
-    expect(hits).toEqual([]);
   });
 });

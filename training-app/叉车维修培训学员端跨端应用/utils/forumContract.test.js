@@ -1,7 +1,8 @@
 /**
  * forum 手术契约测试（T04，refs #642 / refactor epic #638）
  *
- * 钉住手术的三类契约（.uvue/.uts 不可被 jest import，走源码契约缝，先例 mallPilotContract）：
+ * 钉住手术的三类契约（下面 1)–3)；4) 5) 两条不是本文件的锁，是「执法点在别处」的口径登记。
+ * .uvue/.uts 不可被 jest import，走源码契约缝，先例 mallPilotContract）：
  * 1) 组件接线：forum.uvue / forum-detail.uvue 以显式 import 使用模块私有组件（Q17 安置规则）
  * 2) composable 下沉：列表/资源两域 + 详情/回复/举报三域状态离开壳层
  *    （招聘域已随 #705 退场部分整体删除，退场回归见「招聘 tab 退场契约」）
@@ -11,14 +12,13 @@
  *    `v-model`（uvue 跨组件 v-model 属编译风险区；#1240 P3 把输入区形态收进共享组件后这条不变）
  * 4) 600 软预算 / 目录 ≤2 层：**已由声明面执法**（`utils/modules.js` +
  *    `utils/modulesDeclarationContract.test.js` 的 A3/A5/A10），本文件不再各写一遍（ADR-0023 票 C #1219）
- * 5) allowlist 不回潮：forum 页面文件不得出现在 GUARD_ALLOWLIST
+ * 5) 页面与域 api 机械坑位（catch : any / .detail 直取）：本文件不再写这类锁——#654 起豁免面已删，
+ *    执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 
 /**
  * DTO 构造层（#1218 / ADR-0023 票 B 拆出）：`build*` / `extract*` 九个函数住在 `api/forumDto.uts`。
@@ -560,15 +560,6 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
 
   it('列表卡片不加属地（ADR-0045：卡片信息密度已高）', () => {
     expect(card).not.toMatch(/regionText|ip_province|ip_city|reply-region|post-region/);
-  });
-});
-
-describe('allowlist 不回潮（forum 域违例清零的锁）', () => {
-  it('豁免面不含 forum 域文件（页面与 api 双清零）', () => {
-    // ⚠️ `api/checkin.uts`（规则 H 存量豁免）由 `utils/modules.js` 登记在 forum 的 `allowlistOwned`；
-    //    本用例守的是「`pages/forum/**` 与 forum 域 api 都已清零」—— 与那条例外的归属是两件事。
-    const hits = allowlistPaths().filter((p) => /pages[/\\]forum|api[/\\]forum\.uts/.test(p));
-    expect(hits).toEqual([]);
   });
 });
 

@@ -18,7 +18,8 @@ import (
 
 // AuditLogPageResult 审计日志分页结果。
 type AuditLogPageResult struct {
-	Items []model.AuditLog `json:"items" extensions:"x-nullable" nullability:"nullable"`
+	// Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。
+	Items []model.AuditLog `json:"items" nullability:"nonnil"`
 	Page  int              `json:"page"`
 	Pages int              `json:"pages"`
 	Total int64            `json:"total"`

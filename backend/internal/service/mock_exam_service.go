@@ -49,7 +49,7 @@ type MockExamStartDTO struct {
 	TotalScore     int           `json:"total_score"`
 	TotalQuestions int           `json:"total_questions"`
 	RemainingTime  int           `json:"remaining_time"`
-	Questions      []QuestionDTO `json:"questions" nullability:"nullable"`
+	Questions      []QuestionDTO `json:"questions" nullability:"nonnil"`
 }
 
 // MockExamResumeDTO 恢复考试返回。
@@ -57,7 +57,7 @@ type MockExamResumeDTO struct {
 	MockExamID    int           `json:"mock_exam_id"`
 	Duration      int           `json:"duration"`
 	RemainingTime int           `json:"remaining_time"`
-	Questions     []QuestionDTO `json:"questions" nullability:"nullable"`
+	Questions     []QuestionDTO `json:"questions" nullability:"nonnil"`
 	Answers       any           `json:"answers"`
 	StartTime     string        `json:"start_time"`
 }
@@ -87,7 +87,7 @@ type MockExamSubmitDTO struct {
 	CorrectCount   int                       `json:"correct_count"`
 	TotalQuestions int                       `json:"total_questions"`
 	Accuracy       float64                   `json:"accuracy"`
-	Details        []MockExamAnswerDetailDTO `json:"details" nullability:"nullable"`
+	Details        []MockExamAnswerDetailDTO `json:"details" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // MockExamResultDTO 结果详情（交卷结果 + mock_exam_id + submit_time）。
@@ -122,7 +122,7 @@ type MockExamHistoryDTO struct {
 	Total    int64                    `json:"total"`
 	Page     int                      `json:"page"`
 	PageSize int                      `json:"page_size"`
-	Exams    []MockExamHistoryItemDTO `json:"exams" nullability:"nullable"`
+	Exams    []MockExamHistoryItemDTO `json:"exams" nullability:"nonnil"`
 }
 
 // Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。

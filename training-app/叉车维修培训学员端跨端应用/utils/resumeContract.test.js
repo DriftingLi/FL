@@ -8,7 +8,8 @@
  * 2) composable 接线：resume-edit.uvue 以显式 import 使用模块私有 composable，且 composable 有显式结果类型
  * 3) 组件接线零孤儿：页面 import 的组件文件必须存在，组件文件必须被页面引用（#779 回归教训）
  * 4) 页面 ↔ 组件接口对账：prop / 事件双向无孤儿，`update:` 前缀按 kebab 归一（本票唯一新增接口面）
- * 5) allowlist 不回潮：resume 域文件不得出现在 GUARD_ALLOWLIST
+ * 5) 域文件机械坑位（catch : any / .detail 直取）：本文件不再写这类锁——#654 起豁免面已删，
+ *    执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  * 6) 零直发请求：pages/resume/** 不直接 uni.request；请求只经 api/resume.uts
  * 7) 域 api 收紧：5 个 DTO 出口经 mapper-callback 家族，3 个裸透传在白名单内（multipart 上传 ×2 + void 删除）
  * 8) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（job_card.go / resume_view.go / training_catalog.go）
@@ -274,22 +275,6 @@ describe('页面 ↔ 组件接口对账（prop / 事件双向无孤儿）', () =
     // 反向：页面监听了组件没声明的事件 → 必须红
     const badEventPage = page.replace(' />', ' @progress-tap="onSave" />');
     expect(undeclaredEvents(badEventPage, progress, 'ResumeProgressCard')).toEqual(['progress-tap']);
-  });
-});
-
-describe('allowlist 不回潮（resume 域违例清零的锁）', () => {
-  // ADR-0023 决策 ⑧：`GUARD_ALLOWLIST` 的唯一声明点是 `utils/guardAllowlist.js`，
-  // 消费方一律 require 取用 —— **不得再解析源码文本**（旧形态「indexOf + slice」的终止符缺失会静默扩扫全文）。
-  const { allowlistPaths } = require('./guardAllowlist');
-  const isResumePath = (p) => /^pages\/resume\//.test(p) || p === 'api/resume.uts';
-
-  it('GUARD_ALLOWLIST 不含 resume 域文件', () => {
-    expect(allowlistPaths().filter(isResumePath)).toEqual([]);
-  });
-
-  it('判据具备红能力（注入一条 resume 豁免必须被抓到）', () => {
-    const injected = allowlistPaths().concat(['pages/resume/resume-edit.uvue']);
-    expect(injected.filter(isResumePath)).toEqual(['pages/resume/resume-edit.uvue']);
   });
 });
 

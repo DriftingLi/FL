@@ -218,7 +218,7 @@ func TestQuestionReadScopeThreeFormsAgree(t *testing.T) {
 			if !frag[id] {
 				t.Fatalf("%s：片段形态漏了 %d", tc.name, id)
 			}
-			if !tc.scope.VisibleByID(db, id) {
+			if got, err := tc.scope.VisibleByID(db, id); err != nil || !got {
 				t.Fatalf("%s：by-id 判定与行集不一致（%d 在池内却判不可见）", tc.name, id)
 			}
 		}
@@ -226,7 +226,7 @@ func TestQuestionReadScopeThreeFormsAgree(t *testing.T) {
 
 	// by-id 判定必须把池三元组一条不落用上（漏任何一条都会在这里红）。
 	poolScoped := NewQuestionReadScope(&credA)
-	if !poolScoped.VisibleByID(db, inA.ID) {
+	if ok, err := poolScoped.VisibleByID(db, inA.ID); err != nil || !ok {
 		t.Fatal("池内题应可见")
 	}
 	var draft, pending, other, real model.Question
@@ -235,16 +235,19 @@ func TestQuestionReadScopeThreeFormsAgree(t *testing.T) {
 	db.Where("content = ?", "池内-B").First(&other)
 	db.Where("content = ?", "真题题").First(&real)
 	for name, q := range map[string]model.Question{"draft": draft, "pending": pending, "非当前证件": other, "源标记真题": real} {
-		if poolScoped.VisibleByID(db, q.ID) {
+		if ok, err := poolScoped.VisibleByID(db, q.ID); err != nil || ok {
 			t.Fatalf("%s 题不得经 by-id 判定对学员可见", name)
 		}
 	}
 	// 未选证件时证件那一格不分区，但 published / 排真题两条照旧。
 	global := NewQuestionReadScope(nil)
-	if !global.VisibleByID(db, other.ID) {
+	if ok, err := global.VisibleByID(db, other.ID); err != nil || !ok {
 		t.Fatal("未选证件时不分区：别的证件的池内题也应可见")
 	}
-	if global.VisibleByID(db, real.ID) || global.VisibleByID(db, draft.ID) {
+	if ok, err := global.VisibleByID(db, real.ID); err != nil || ok {
+		t.Fatalf("真题/草稿不该在池内")
+	}
+	if ok, err := global.VisibleByID(db, draft.ID); err != nil || ok {
 		t.Fatal("未选证件不得放宽 published / 排真题两条")
 	}
 

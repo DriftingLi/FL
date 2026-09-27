@@ -62,7 +62,7 @@
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 export interface AuditLogPageResult {
-  items: AuditLog[] | null
+  items: AuditLog[]
   page: number
   pages: number
   total: number

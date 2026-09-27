@@ -12,12 +12,18 @@ import (
 )
 
 // noteErrStatus 笔记域哨兵→状态码表（ADR-0024 口径：按哨兵映射，不比对文案）。
-// 正文校验类错误（空/超长）不是哨兵，走 fallback 400；删改他人笔记按「不存在」404。
+//
+// fallback 由 400 改 500（ADR-0065 决策 7）：旧形状是「正文校验类错误不是哨兵，所以兜在 400」，
+// 而那同时把**未具名的库故障**咽成 400 + 驱动原文。要让故障落 500，前提是那两条校验事实先有名字
+// ⇒ 不是二选一，是必须同时做（本文件第一次提交时只加了 swagger 的 500 档而没改这张表，
+// 由双轴评审按实测抓回——「文档说的档位」与「代码打得出的档位」之间今天仍没有锁，见 ADR-0065 批⑤ 残留缺口）。
 var noteErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
 		{sentinel: service.ErrNoteNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrNoteContentEmpty, status: http.StatusBadRequest},
+		{sentinel: service.ErrNoteContentTooLong, status: http.StatusBadRequest},
 	},
-	fallback: http.StatusBadRequest,
+	fallback: http.StatusInternalServerError,
 }
 
 // NoteHandler 学员笔记 handler（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。
@@ -72,6 +78,7 @@ type listNotesReq struct {
 // @Param page_size query int false "每页条数" default(20)
 // @Success 200 {object} response.R{data=service.NotePageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [get]
 func (h *NoteHandler) List(c *gin.Context) {
 	Endpoint[listNotesReq, service.NotePageDTO]{
@@ -108,6 +115,7 @@ type createNoteReq struct {
 // @Success 201 {object} response.R{data=service.NoteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [post]
 func (h *NoteHandler) Create(c *gin.Context) {
 	Endpoint[createNoteReq, service.NoteDTO]{
@@ -156,6 +164,7 @@ type updateNoteReq struct {
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "笔记不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [put]
 func (h *NoteHandler) Update(c *gin.Context) {
 	Endpoint[updateNoteReq, service.NoteDTO]{
@@ -200,6 +209,7 @@ type deleteNoteReq struct {
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "笔记不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [delete]
 func (h *NoteHandler) Delete(c *gin.Context) {
 	Endpoint[deleteNoteReq, struct{}]{

@@ -2,7 +2,7 @@
  * 错题本手术契约测试（refs #675 / T03c，parent #641）
  *
  * 沿用源码契约缝（.uvue 不可 jest import）。先例：mallPilotContract、profileContract。
- * 钉住：双组件存在与接线、600 预算机检、allowlist 无错题本条目。
+ * 钉住：双组件存在与接线、600 预算机检（机械坑位零命中由全工程守护执法，#654 起无豁免）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -11,8 +11,6 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const { allowlistPaths } = require('./contractHarness');
 
 function nonTestSources(dirRel) {
   const out = [];
@@ -250,12 +248,5 @@ describe('600 行软预算机检（wrong-questions 模块文件）', () => {
     ].map((rel) => ({ file: rel, lines: read(rel).split('\n').length }))
       .filter((x) => x.lines > 600);
     expect(over).toEqual([]);
-  });
-});
-
-describe('allowlist 不回潮（错题本域违例清零的锁）', () => {
-  it('豁免面不含 wrong-questions 相关文件', () => {
-    const hits = allowlistPaths().filter((p) => /wrong-questions|wrong-stats|wrong-question-card/.test(p));
-    expect(hits).toEqual([]);
   });
 });

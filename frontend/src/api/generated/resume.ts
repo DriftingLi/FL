@@ -62,14 +62,14 @@ export interface JobCardDTO {
   created_at: string
   expected_position_extra: string
   expected_position_id?: number
-  expected_regions: string[]
+  expected_regions: string[] | null
   experience_years: number
   job_nature: string
-  photos: string[]
+  photos: string[] | null
   real_name: string
   region: string
-  resume_certifications: Record<string, unknown>[]
-  resume_experiences: Record<string, unknown>[]
+  resume_certifications: Record<string, unknown>[] | null
+  resume_experiences: Record<string, unknown>[] | null
   resume_file_url: string
   salary_max?: number
   salary_min?: number

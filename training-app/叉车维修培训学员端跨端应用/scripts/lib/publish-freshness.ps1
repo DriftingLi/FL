@@ -98,7 +98,7 @@ function Test-AppResourceFreshness {
        `ExitCode`（0 通过 / 1 判红：导出陈旧或无产物 / 2 环境：publish 未成立）
        `Reason`（ok | stale-export | no-artifact | publish-timeout | publish-cli-ipc-blocked |
                  publish-cli-command-failed | publish-no-success-marker）
-       `Freshness`（fresh | stale | no-kt | not-measured）—— publish 未成立时记 `not-measured`（**没判过就不假装判过**）
+       `Freshness`（fresh | stale | no-kt）——**一律是实测量**；publish 未成立时也照报实测值（#1285：`fresh` = 导出已刷新但成功文案没读到（采集层方向），`stale`/`no-kt` = 根本没导出（环境方向）——旧的 `not-measured` 短路把处置完全不同的两者糊成同一条红；退出码与 reason 的 fail-closed 不变）
        `KtCount` / `Newest`（导出目录的诊断读数；未成立时也给出，供失败日志使用）
 #>
 function Get-PublishStageVerdict {
@@ -107,9 +107,12 @@ function Get-PublishStageVerdict {
     $f = Test-AppResourceFreshness -ExportDir $ExportDir -Since $Since
     $v = Get-PublishVerdict -Output $PublishOutput -TimedOut $PublishTimedOut
     if (-not $v.Ok) {
-        # publish 没成立 ⇒ 新鲜度**没有判过**（不能把「量到陈旧」当成结论）⇒ 记 not-measured
+        # #1285：publish 没成立只改 ExitCode / Reason（仍 fail-closed：2 / publish-*），freshness **照实报实测量** ——
+        # 旧写法在这里短路成 'not-measured'，把「导出已刷新但成功文案没读到」（门的采集层 bug ⇒ 查采集层 / 文案判据）
+        # 与「根本没导出」（环境未就绪 ⇒ 先解决导出）糊成同一条红，而两者处置完全不同。
+        # 量在本函数开头已做过（先量后判）；fresh = 目录其实已刷新、只是标记没读到 —— 正是要区分出来的那一支。
         return @{
-            ExitCode = 2; Reason = "publish-$($v.Reason)"; Freshness = 'not-measured'
+            ExitCode = 2; Reason = "publish-$($v.Reason)"; Freshness = $f.Reason
             KtCount = $f.KtCount; Newest = $f.Newest
         }
     }

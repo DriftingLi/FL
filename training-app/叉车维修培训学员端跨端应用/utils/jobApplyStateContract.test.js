@@ -11,7 +11,10 @@
  * "本地量是否还在"这类接线。两者互补，故本套件钉接线、①a 钉渲染。
  *
  * 守护：
- *   C1 `api/job.uts`：类型声明两字段，且**两处**手动映射（详情 + 列表）都补上（ADR-0003）
+ *   C1 职位 DTO 与映射：apply_state / cooldown_days 都要有（ADR-0003）。
+ *      #652 T14 收紧后：DTO 从 `api/job.uts` 迁入 `types/job.uts`，两处同形内联映射去重为
+ *      单一 `buildJobPosting`（详情直连、列表经 `buildJobListResult` 复用）⇒ 两字段仍被映射，
+ *      且两端点共用一处映射更强（不会再出现只补详情漏列表）。
  *   C2 `job-detail.uvue`：三态由 `applyState()` 驱动；本地 `hasApplied` 不得回归；
  *      `onApply` 先判态再发请求
  *   C3 `job-list.uvue`：列表项按态收敛，不可投时是**状态标签而非可点伪按钮**
@@ -24,10 +27,12 @@ const { readText } = require('./utsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const JOB_UTS = path.join(ROOT, 'api', 'job.uts');
+const JOB_TYPES = path.join(ROOT, 'types', 'job.uts');
 const DETAIL_UVUE = path.join(ROOT, 'pages', 'jobs', 'job-detail.uvue');
 const LIST_UVUE = path.join(ROOT, 'pages', 'jobs', 'job-list.uvue');
 
 const jobSrc = readText(JOB_UTS);
+const jobTypesSrc = readText(JOB_TYPES);
 const detailSrc = readText(DETAIL_UVUE);
 const listSrc = readText(LIST_UVUE);
 
@@ -45,16 +50,32 @@ function jobActionsBlock() {
   return between(listSrc, '<view class="job-actions">', '<!-- 加载更多 -->');
 }
 
-describe('C1 api/job.uts：类型与两处手动映射都要补（ADR-0003）', () => {
-  test('JobPosting 声明 apply_state 与 cooldown_days', () => {
-    const typeBlock = between(jobSrc, 'export type JobPosting = {', '\n}');
+describe('C1 职位 DTO 与映射都要补两字段（ADR-0003；#652 后类型迁 types/job.uts、映射去重至 buildJobPosting）', () => {
+  test('JobPosting 声明 apply_state 与 cooldown_days（#652 起 DTO 住在 types/job.uts）', () => {
+    const typeBlock = between(jobTypesSrc, 'export type JobPosting = {', '\n}');
     expect(typeBlock).toMatch(/apply_state\s*\?:\s*string/);
     expect(typeBlock).toMatch(/cooldown_days\s*\?:\s*number/);
   });
 
-  test('两处映射点（详情 / 列表）都写了这两个字段', () => {
-    expect((jobSrc.match(/apply_state:\s*\(/g) || []).length).toBeGreaterThanOrEqual(2);
-    expect((jobSrc.match(/cooldown_days:\s*/g) || []).length).toBeGreaterThanOrEqual(2);
+  test('api 层不再内联声明 JobPosting，改经 types/index 消费（类型单一来源）', () => {
+    expect(jobSrc).not.toMatch(/export type JobPosting =/);
+    expect(jobSrc).toMatch(/import type \{[^}]*\bJobPosting\b[^}]*\} from '\.\.\/types\/index'/);
+  });
+
+  test('buildJobPosting 映射这两个字段，且详情与列表两端点都经它（去重后单一映射覆盖两端，防漏列表）', () => {
+    const builder = between(jobSrc, 'function buildJobPosting', '\n}');
+    expect(builder).toMatch(/apply_state:\s*\(/);
+    expect(builder).toMatch(/cooldown_days:/);
+    // 详情 / 列表**各自函数体内**都要见到 getMapped<…> 与 buildJobPosting 的调用。
+    // ⚠️ 不能用 `/getMapped<JobPosting>[\s\S]*buildJobPosting\(data\)/` 这种**全文件无界**匹配：
+    //    `api/job.uts` 的文件头注释里就写着「映射…收敛到 `buildJobPosting`」，无界匹配会被
+    //    「注释 + 别处的代码」凑满足 ⇒ 代码真被改坏也不红（假绿）。按体切开后注释不参与。
+    const detailFn = between(jobSrc, 'export function getJobDetailApi', '\n}');
+    expect(detailFn).toMatch(/getMapped<JobPosting>/);
+    expect(detailFn).toMatch(/buildJobPosting\(data\)/);
+    // 列表：buildJobListResult 复用 buildJobPosting（去重后单一映射覆盖两端，防「补详情漏列表」）
+    const listBuilder = between(jobSrc, 'function buildJobListResult', '\n}');
+    expect(listBuilder).toMatch(/buildJobPosting\(obj\)/);
   });
 });
 

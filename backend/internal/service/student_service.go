@@ -63,14 +63,14 @@ type CourseProgressDTO struct {
 type StudentProfileDTO struct {
 	StudentInfo    StudentDTO          `json:"student_info"`
 	StudyStats     StudyStatsDTO       `json:"study_stats"`
-	CourseProgress []CourseProgressDTO `json:"course_progress" nullability:"nullable"`
+	CourseProgress []CourseProgressDTO `json:"course_progress" nullability:"nonnil"`
 }
 
 // StudyDailyStatsDTO 按天学习统计（学员仪表盘图表）。
 type StudyDailyStatsDTO struct {
 	Days         int      `json:"days"`
-	Labels       []string `json:"labels" nullability:"nullable"`
-	Data         []int64  `json:"data" nullability:"nullable"`
+	Labels       []string `json:"labels" nullability:"nonnil"`
+	Data         []int64  `json:"data" nullability:"nonnil"`
 	TotalMinutes int64    `json:"total_minutes"`
 	ActiveDays   int      `json:"active_days"`
 }
@@ -239,7 +239,7 @@ func (s *StudentService) queryStudyStats(studentID, days int) *StudyDailyStatsDT
 type StudyRecordPageResult struct {
 	Page    int              `json:"page"`
 	Pages   int              `json:"pages"`
-	Records []StudyRecordDTO `json:"records" nullability:"nullable"`
+	Records []StudyRecordDTO `json:"records" nullability:"nonnil"`
 	Total   int64            `json:"total"`
 }
 
@@ -346,7 +346,7 @@ type StudentCourseDTO struct {
 
 // StudentCoursesDTO 我的课程信封（continue_learning 为最后学习时间最新的课程）。
 type StudentCoursesDTO struct {
-	Courses          []StudentCourseDTO `json:"courses" nullability:"nullable"`
+	Courses          []StudentCourseDTO `json:"courses" nullability:"nonnil"`
 	ContinueLearning *StudentCourseDTO  `json:"continue_learning" extensions:"x-nullable"`
 }
 
@@ -362,7 +362,7 @@ type StudentCourseChapterDTO struct {
 // StudentCourseDetailDTO 单课程学习详情（我的课程条目 + 每章状态）。
 type StudentCourseDetailDTO struct {
 	StudentCourseDTO
-	Chapters []StudentCourseChapterDTO `json:"chapters" nullability:"nullable"`
+	Chapters []StudentCourseChapterDTO `json:"chapters" nullability:"nonnil"`
 }
 
 // GetStudentCourses 我的课程列表（按最后学习时间倒序）+ 继续学习 top1。

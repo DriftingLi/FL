@@ -264,7 +264,9 @@ async function loadFaultCodes(page = 1) {
       page,
       page_size: 5
     })
-    faultCodes.value = data.items
+    // 上游是外部诊断服务的 JSON，它可以整段省略 items（后端契约已按实测落 x-nullable）；
+    // 本组件的 faultCodes 语义是「这一页没有故障码」，所以在入口收一次，不在模板里到处 `|| []`。
+    faultCodes.value = data.items ?? []
     faultTotal.value = data.total
     faultPage.value = page
   } catch {

@@ -19,7 +19,7 @@ import (
 
 // CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
 type CoursePageResult struct {
-	Courses []CourseDTO `json:"courses" nullability:"nullable"`
+	Courses []CourseDTO `json:"courses" nullability:"nonnil"`
 	Page    int         `json:"page"`
 	Pages   int         `json:"pages"`
 	Total   int64       `json:"total"`
@@ -53,15 +53,15 @@ type CourseDTO struct {
 	Name                  string             `json:"name"`
 	PointsPrice           *int               `json:"points_price,omitempty" extensions:"x-optional"`
 	PracticeHours         int                `json:"practice_hours"`
-	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nullable"`
-	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nullable"`
+	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nonnil"`
 	SortOrder             int                `json:"sort_order"`
 	Specialty             *SpecialtyBriefDTO `json:"specialty,omitempty" extensions:"x-optional"`
 	SpecialtyID           *int               `json:"specialty_id" extensions:"x-nullable"`
 	Status                int16              `json:"status"`
 	StudentCount          *int64             `json:"student_count,omitempty" extensions:"x-optional"`
 	TheoryHours           int                `json:"theory_hours"`
-	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional" nullability:"nullable"`
+	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional" nullability:"nonnil"`
 }
 
 // CredentialBriefDTO 目标证件简述（课程详情元数据）。
@@ -116,7 +116,7 @@ type ChapterDTO struct {
 	FileURL     string            `json:"file_url"`
 	OrderNum    int               `json:"order_num"`
 	Title       string            `json:"title"`
-	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nullable"`
+	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
 }
 
 // ChapterFileDTO 章节文件（chapter_file 表条目与旧版 chapter.file_url 兼容条目同构）。
@@ -133,7 +133,7 @@ type ChapterFileDTO struct {
 // ChapterDetailDTO 章节详情（含上下章 ID 与文件列表；study_status 仅学员端路径填充）。
 type ChapterDetailDTO struct {
 	ChapterDTO
-	Files             []ChapterFileDTO `json:"files" nullability:"nullable"`
+	Files             []ChapterFileDTO `json:"files" nullability:"nonnil"`
 	NextChapterID     *int             `json:"next_chapter_id" extensions:"x-nullable"`
 	PreviousChapterID *int             `json:"previous_chapter_id" extensions:"x-nullable"`
 	StudyStatus       string           `json:"study_status,omitempty" extensions:"x-optional"`
@@ -161,19 +161,20 @@ type CourseDetailDTO struct {
 // AdminCourseDetailDTO 管理端课程详情（course 字段平铺 + chapters）。
 type AdminCourseDetailDTO struct {
 	CourseDTO
-	Chapters []ChapterDTO `json:"chapters" nullability:"nullable"`
+	Chapters []ChapterDTO `json:"chapters" nullability:"nonnil"`
 }
 
 // TutorCourseChaptersDTO 导师端课程章节列表信封。
 type TutorCourseChaptersDTO struct {
 	Course   CourseDTO    `json:"course"`
-	Chapters []ChapterDTO `json:"chapters" nullability:"nullable"`
+	Chapters []ChapterDTO `json:"chapters" nullability:"nonnil"`
 }
 
 // ChapterSlidesDTO 章节幻灯片。
 type ChapterSlidesDTO struct {
-	ChapterID int      `json:"chapter_id"`
-	Slides    []string `json:"slides" nullability:"nullable"`
+	ChapterID int `json:"chapter_id"`
+	// Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。
+	Slides []string `json:"slides" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // StudyProgressDTO 学习进度更新结果。
@@ -326,7 +327,11 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 		}
 		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
 	}
-	if !CourseVisibleByID(s.db, courseID) {
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return err // 问不出可见性不得被读成「不在平台上」（ADR-0065 决策 7）
+	}
+	if !visible {
 		return ErrCourseNotVisible
 	}
 	entitled, err := courseEntitled(s.db, courseID, studentID, course.PointsPrice)
@@ -342,10 +347,14 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 // GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
 // 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
 func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
-	// 可见性谓词 fail-closed（查询失败按「不可见」，与 QuestionReadScope.VisibleByID 同形先例）：
-	// 平台不能证明它可见时不把它交出去。代价是这一格的「查不动」外显也是 404 而非 500
-	// ——档位台账据实只声明 404/400，不虚报 500 档。
-	if !CourseVisibleByID(s.db, courseID) {
+	// 可见性谓词仍 fail-closed（问不出可见性时不把内容交出去），但**把 err 交出去**：
+	// 旧写法把「读不动 courses」演成 404「课程不存在」，Web 的 `.catch(()=>null)` 会把它缓存成
+	// 「这门课没了」——故障被收成空态就再没人报警（ADR-0065 决策 7；档位台账从此声明 500 档）。
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
 		return nil, ErrCourseNotFound
 	}
 	course, chapterList, err := loadCourseWithChapters(s.db, courseID)

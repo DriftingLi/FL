@@ -86,7 +86,7 @@ export interface DiagnosisFaultCodeItem {
 }
 
 export interface DiagnosisFaultCodePage {
-  items: DiagnosisFaultCodeItem[]
+  items: DiagnosisFaultCodeItem[] | null
   total: number
 }
 

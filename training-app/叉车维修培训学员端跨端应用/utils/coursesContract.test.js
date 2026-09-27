@@ -7,7 +7,7 @@
  * 2) 页面 ↔ 组件接口对账：prop / 事件双向（改名即红，无孤儿 prop、无孤儿 emit）
  * 3) composable 接线：chapter-view 以显式 import 使用模块私有 composable，且该 composable 显式结果类型
  * 4) 组件接线零孤儿（#779 回归锁）：页面 import 的组件文件必须存在，组件目录不得有孤儿文件
- * 5) allowlist 不回潮：courses 域文件不得出现在 GUARD_ALLOWLIST
+ * 5) 域文件零 catch-any / 零 .detail 直取（模块侧锁；全工程面在 utsAndroidCompile 规则 H/I，#654 起无豁免）
  * 6) 零直发请求：页面层不直接 uni.request
  * 7) 域 api 收紧：6 个 DTO 函数经 mapper-callback 出口（箭头包裹 build*），
  *    updateCourseProgressApi 保持 raw post 白名单；api 层 .catch 静默回退计数与术前一致（本票按删除禁区不退役回退）
@@ -22,8 +22,6 @@ const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
 const exists = h.exists;
-/** 豁免名单从单点读（ADR-0023 ⑧）：不再解析守护脚本源码文本取常量 */
-const allowlistPaths = h.allowlistPaths;
 
 const COURSES_PAGES = [
   'pages/courses/chapter-view.uvue',
@@ -190,12 +188,7 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
   });
 });
 
-describe('allowlist 不回潮（courses 域违例清零的锁）', () => {
-  it('豁免面不含 courses 域文件', () => {
-    const hits = allowlistPaths().filter((p) => /pages[/\\]courses|api[/\\]course\.uts/.test(p));
-    expect(hits).toEqual([]);
-  });
-
+describe('机械坑位清零（courses 域文件自身的锁）', () => {
   it('courses 域源文件零 catch-any / 零 e.detail 直取（规则 H / I 全量执法）', () => {
     const files = h.sourceFilesIn('pages/courses').concat(['api/course.uts']);
     for (const f of files) {

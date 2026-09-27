@@ -16,8 +16,15 @@
  * 而 `middleware.CredentialScoped` 的兜底分支要求 `roleOf(c) == student`（credential_scope.go:42）
  * —— 没有 JWT 解析就没有角色 ⇒ **兜底永不生效**。因此不传 `credential_id` 时搜索是
  * 「全证件不分区」，不是「按当前证件」。Web 侧是显式传的（SearchPage.vue），移动端此前漏传。
+ *
+ * ## 出口收紧（#652 T14）
+ *
+ * 两个出口由裸 `get(...).then(...)` 收紧至 mapper-callback 便捷面 `getMapped<T>`（#639 出口家族）：
+ * 请求形态逐字不变（getMapped 的 query 序列化与 get 同通路），响应字段读取也逐行不变——
+ * 变的只是出口签名带 DTO 类型、内联映射收敛为 `buildSearchResult` / `buildSearchPagedResult`
+ * 具名函数（与 #643 T05 已收紧域同构：出口一行委托，映射只有一份实现）。
  */
-import { get } from './request'
+import { getMapped } from './request'
 import { toNumber, toStr } from './helpers'
 import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../types/index'
 
@@ -54,6 +61,43 @@ function buildSearchCategoryResult(obj : UTSJSONObject | null) : SearchCategoryR
 	} as SearchCategoryResult
 }
 
+/** 全局搜索结果映射（#652 T14：收紧至 getMapped 出口，响应字段读取逐行不变） */
+function buildSearchResult(data : UTSJSONObject, keyword : string) : SearchResult {
+	const coursesRaw = data['courses']
+	const chaptersRaw = data['chapters']
+	const questionsRaw = data['questions']
+	const contentsRaw = data['contents']
+	const topicsRaw = data['topics']
+	return {
+		keyword: toStr(data['keyword'], keyword),
+		courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
+		chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null),
+		questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
+		contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
+		topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
+	} as SearchResult
+}
+
+/** 指定类型分页结果映射（同口径；keyword/type 是回退缺省值，须由出口传入） */
+function buildSearchPagedResult(data : UTSJSONObject, keyword : string, type : string) : SearchPagedResult {
+	const items : SearchItem[] = []
+	const itemsRaw = data['items']
+	if (itemsRaw != null) {
+		const arr = itemsRaw as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			items.push(buildSearchItem(arr[i]))
+		}
+	}
+	return {
+		keyword: toStr(data['keyword'], keyword),
+		type: toStr(data['type'], type),
+		total: toNumber(data['total']),
+		page: toNumber(data['page'], 1),
+		pages: toNumber(data['pages']),
+		items: items,
+	} as SearchPagedResult
+}
+
 /** 显式证件参数：>0 才下发（0 表示「未声明」，与服务端 nil 语义一致） */
 function withCredential(params : UTSJSONObject, credentialId : number) : UTSJSONObject {
 	if (credentialId > 0) {
@@ -69,21 +113,7 @@ function withCredential(params : UTSJSONObject, credentialId : number) : UTSJSON
  */
 export function searchAllApi(keyword : string, credentialId : number = 0) : Promise<SearchResult> {
 	const params : UTSJSONObject = withCredential({ keyword: keyword } as UTSJSONObject, credentialId)
-	return get('/search', params).then((data : UTSJSONObject) : SearchResult => {
-		const coursesRaw = data['courses']
-		const chaptersRaw = data['chapters']
-		const questionsRaw = data['questions']
-		const contentsRaw = data['contents']
-		const topicsRaw = data['topics']
-		return {
-			keyword: toStr(data['keyword'], keyword),
-			courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
-			chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null),
-			questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
-			contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
-			topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
-		} as SearchResult
-	})
+	return getMapped<SearchResult>('/search', params, (data : UTSJSONObject) : SearchResult => buildSearchResult(data, keyword))
 }
 
 /**
@@ -101,22 +131,5 @@ export function searchByTypeApi(keyword : string, type : string, page : number =
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject, credentialId)
-	return get('/search', params).then((data : UTSJSONObject) : SearchPagedResult => {
-		const items : SearchItem[] = []
-		const itemsRaw = data['items']
-		if (itemsRaw != null) {
-			const arr = itemsRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildSearchItem(arr[i]))
-			}
-		}
-		return {
-			keyword: toStr(data['keyword'], keyword),
-			type: toStr(data['type'], type),
-			total: toNumber(data['total']),
-			page: toNumber(data['page'], 1),
-			pages: toNumber(data['pages']),
-			items: items,
-		} as SearchPagedResult
-	})
+	return getMapped<SearchPagedResult>('/search', params, (data : UTSJSONObject) : SearchPagedResult => buildSearchPagedResult(data, keyword, type))
 }

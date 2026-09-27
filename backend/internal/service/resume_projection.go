@@ -120,6 +120,16 @@ func resumeRegions(raw model.JSONB) []string {
 
 // ===== 投影 1：企业浏览用脱敏卡（L2） =====
 //
+// 三格同为 JSONArray，表态却**两样**（recruit_service.go 里那两条 nullability tag），差别在
+// 投影有没有把它重建过：
+//   - expected_regions / resume_experiences 只加了一道 `len(x)==0 → "[]"` 的守卫，列里存着
+//     4 字节的 JSON `null` 时原样透传 ⇒ 保持 nullable。
+//   - resume_certifications 走 maskCertificationsJSON：解码成 []map 再 make(...,0,n) 重编，
+//     解码失败与解出 null 都落到 `[]` ⇒ 任何列内容下都不是 null，所以 nonnil。
+//
+// 判据 5 跑一次成功出口分不出这两种（两种都能量到 `[]`）——非 null 来自代码还是来自列默认值，
+// 只能读这里。也是「改判前先读投影」这条纪律的出处。
+//
 // 字段清单：姓名（打码）/ 期望岗位 / 意向地区 / 薪资 / 到岗 / 用工性质 / 年限 / 自述 /
 // 工作经历 / 持证（去图）/ 更新时间。
 // 刻意**不含**：真实姓名、现居地、电话、微信、上传 PDF、工作照、证件原图。

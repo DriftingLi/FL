@@ -29,6 +29,14 @@ const utc = (y, mo, d, h = 0, mi = 0, s = 0) => Date.UTC(y, mo - 1, d, h, mi, s)
 
 const DAY = 86400000;
 
+/**
+ * 可用性那一格的期望措辞 —— 取自两端裁定的那一句（后端 PR #1298 让卡面与明文位置同 key，
+ * Web 侧措辞在 `frontend/src/utils/contactRequestStatus.ts` 的 `companyAvailability` label）。
+ * **逐字同源不由本文件的字面量保证**（手抄两份正是漂移的起点）：那把锁在
+ * `recruitWorkspaceContract.test.js` 的「对照③」里现读 Web 文件对账，搬家或改词即红。
+ */
+const COMPANY_DISABLED_NOTICE_EXPECTED = '企业账号已停用或已注销，联系方式已收回';
+
 describe('parseIsoMs：RFC3339 → epoch 毫秒（纯算术，不依赖平台日期解析）', () => {
   const { parseIsoMs, daysFromCivil } = display();
 
@@ -228,6 +236,20 @@ describe('状态词表投影：过期态覆盖 pending，未知取值诚实兜�
     // 强制下架这一行的 status 同时是 class 后缀（`.tag-<status>`）——
     // uvue 的 class 选择器用下划线虽合法，但消费面刻意避开，此断言把这条约定钉住
     expect(describeRecruitJobStatus('open', true).status).toBe('forced');
+  });
+});
+
+describe('可用性那一格（#1267）：`company_disabled` 缺席式，判据只认真值', () => {
+  it('键缺席（映射层折成 false）⇒ 不产出说明：企业可用是常态，不给装饰性提示', () => {
+    const { companyDisabledNotice } = display();
+    expect(companyDisabledNotice(false)).toBe('');
+  });
+
+  it('键为 true ⇒ 产出那一句说明；三个消费面（交换段行 / 列表卡 / 详情明文区）共用这一个单点', () => {
+    const { companyDisabledNotice } = display();
+    // 期望串独立取自 Web 单点 `frontend/src/utils/contactRequestStatus.ts` 的 companyAvailability
+    // label（逐字同源由 recruitWorkspaceContract 的「对照③」现读对账，不靠这里的手抄）
+    expect(companyDisabledNotice(true)).toBe(COMPANY_DISABLED_NOTICE_EXPECTED);
   });
 });
 

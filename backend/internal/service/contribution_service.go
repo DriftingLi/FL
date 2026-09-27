@@ -124,7 +124,7 @@ type ContributionItemDTO struct {
 	IsAnonymous    bool                  `json:"is_anonymous"`
 	DownloadsCount int                   `json:"downloads_count"`
 	RejectReason   string                `json:"reject_reason,omitempty" extensions:"x-optional"`
-	Files          []ContributionFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nullable"`
+	Files          []ContributionFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
 	// Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，
 	// 生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。
 	Author    ContributionAuthor `json:"author,omitempty"`
@@ -133,7 +133,7 @@ type ContributionItemDTO struct {
 
 // ContributionPageResult 分页结果。
 type ContributionPageResult struct {
-	Items    []ContributionItemDTO `json:"items" nullability:"nullable"`
+	Items    []ContributionItemDTO `json:"items" nullability:"nonnil"`
 	Total    int64                 `json:"total"`
 	Page     int                   `json:"page"`
 	PageSize int                   `json:"page_size"`
@@ -834,7 +834,7 @@ type ContributionReportItemDTO struct {
 
 // ContributionReportPageResult 举报分页结果。
 type ContributionReportPageResult struct {
-	Items    []ContributionReportItemDTO `json:"items" nullability:"nullable"`
+	Items    []ContributionReportItemDTO `json:"items" nullability:"nonnil"`
 	Total    int64                       `json:"total"`
 	Page     int                         `json:"page"`
 	PageSize int                         `json:"page_size"`

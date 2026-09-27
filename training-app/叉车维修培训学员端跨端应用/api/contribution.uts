@@ -7,6 +7,10 @@
  * - 配额：自然日 ≤3 份、pending 积压 ≤5 份；过审 +50 积分
  * @note 投稿类型内聚本模块（不进 types/index.uts），先例 api/aiAssistant.uts
  * @note catch 参数零 `: any` 注解（守护规则 H，同 forum.uts）
+ * @note 裸出口白名单（T15 批 B #653 登记）：`uploadContributionFileApi` 留裸 `uploadFile` 通路 ——
+ *   multipart 上传在 T01 #639 的出口家族里没有 mapped 便捷面（只有 requestMapped / getMapped / postMapped），
+ *   硬套需在 api 层自造拆包，反比裸通路多一份映射真相 ⇒ 留裸，拆包后的映射收在 `buildFileItem` 一处。
+ *   同文件另两条有载荷出口（`createContributionApi` / `getMyContributionsApi`）已在 postMapped / getMapped 上。
  */
 import { uploadFile, getMapped, postMapped } from './request'
 import type { RequestOptions } from './request'

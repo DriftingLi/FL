@@ -80,6 +80,14 @@ function loadRecruit(reply = {}) {
     toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(`${v}`)) ? d : parseFloat(`${v}`))),
     toNumberOrNull: (v) => (v == null ? null : (Number.isNaN(parseFloat(`${v}`)) ? null : parseFloat(`${v}`))),
     toStr: (v, d = '') => (v == null ? d : `${v}`),
+    // 与 `api/helpers.uts` 的 `toBool` 逐字同语义（缺席式键的空安全读取，#1267 真机 ①a 实测的 NPE 修复）
+    toBool: (v, d = false) => {
+      if (v == null) return d;
+      const s = `${v}`.toLowerCase();
+      if (s === 'true' || s === '1') return true;
+      if (s === 'false' || s === '0') return false;
+      return d;
+    },
     errMsg: (e, fallback) => (e instanceof Error && e.message ? e.message : fallback),
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'recruiter-access-token',
@@ -342,5 +350,75 @@ describe('D. 发起交换与我的交换申请', () => {
     expect(calls[0].params.page_size).toBe('20');
     expect(r.page).toBe(2);
     expect(r.page_size).toBe(20);
+  });
+
+  // D3 / D4：`company_disabled` 是**缺席式**可选键（后端 `contact_service.go:80` 的
+  // `json:"company_disabled,omitempty"`，出现即恒 `true`）。映射层收不下它 = 后面所有
+  // 消费面都拿不到「授权在但明文已收回」这一维，故在读取层就归一成 boolean。
+  test('D3：交换申请行不带 `company_disabled` ⇒ 归一成 false（企业可用是常态，不是「未知」）', () => {
+    const { mod } = loadRecruit({ data: {} });
+    const row = mod.buildRecruitContactRequest({
+      id: 12, student_user_id: 7, message: '您好', status: 'approved',
+      created_at: '2026-09-20T10:00:00+08:00', updated_at: '2026-09-21T10:00:00+08:00',
+      expires_at: '2026-10-04T10:00:00+08:00', source: 'recruiter',
+    });
+    expect(row.company_disabled).toBe(false);
+  });
+
+  test('D4：行带 `company_disabled: true` ⇒ 逐字读出，且列表路径与单条路径同一映射', async () => {
+    const { mod } = loadRecruit({ data: {} });
+    const row = mod.buildRecruitContactRequest({
+      id: 13, student_user_id: 8, message: '您好', status: 'approved',
+      created_at: '2026-09-20T10:00:00+08:00', updated_at: '2026-09-21T10:00:00+08:00',
+      expires_at: '2026-10-04T10:00:00+08:00', source: 'recruiter', company_disabled: true,
+    });
+    expect(row.company_disabled).toBe(true);
+    // 后端**从不**发 false（`if approved && !usable { = true }` 是唯一赋值点）；
+    // 但若哪天发了 false，映射也不得把它折成 true。
+    const { mod: mod2 } = loadRecruit({ data: {} });
+    expect(mod2.buildRecruitContactRequest({ company_disabled: false }).company_disabled).toBe(false);
+    // 列表路径必须走同一个函数：否则两处消费会各自漂移
+    const { mod: mod3 } = loadRecruit({
+      data: { items: [{ id: 14, status: 'approved', company_disabled: true }], page: 1, page_size: 20, total: 1 },
+    });
+    const list = await mod3.getRecruitContactRequestsApi(1, 20);
+    expect(list.items[0].company_disabled).toBe(true);
+  });
+});
+
+// E1 / E2：同一格键现在也挂在**驱动角标的简历卡面**（后端第十五波第④批 = PR #1298，
+// `recruit_service.go:75` 的 `RecruitResumeCard.CompanyDisabled`）。它是**另一个赋值点**：
+// 卡面填在 `fillContactStates`（`recruit_service.go:86`，赋值 `:106`；列表 `:225` 与详情
+// `:251` 共用这一处），明文位置那条在 `contact_service.go:215-218` —— 两处同键同判据
+// （approved ∧ 企业不可用），但**不是同一段代码**。票面 #1267 的列表角标那半此前被这条契约
+// 卡住：卡面收不到这一维，列表页就只能显示一个说谎的「已授权」。
+describe('E. 简历卡面的可用性那一格（#1267 后半）', () => {
+  /** 卡面响应：只写本组关心的键（其余键缺席即映射成零值，不影响判据） */
+  function cardReply(extra) {
+    return {
+      data: {
+        items: [Object.assign({ user_id: 7, contact_state: 'approved', contact_source: 'recruiter' }, extra)],
+        total: 1,
+      },
+    };
+  }
+
+  test('E1：卡面不带 `company_disabled` ⇒ 归一成 false（企业可用是常态，不是「未知」）', async () => {
+    const { mod } = loadRecruit(cardReply({}));
+    const list = await mod.getRecruitResumesApi(emptyFilters(), 1);
+    expect(list.items[0].company_disabled).toBe(false);
+  });
+
+  test('E2：卡面带 `company_disabled: true` ⇒ 逐字读出，且详情卡与列表卡同一映射', async () => {
+    const { mod } = loadRecruit(cardReply({ company_disabled: true }));
+    const list = await mod.getRecruitResumesApi(emptyFilters(), 1);
+    expect(list.items[0].company_disabled).toBe(true);
+    // 详情卡（`GET /recruit/resumes/:id`）必须走同一个函数：后端两处共用 `fillContactStates`，
+    // 移动端若分两份映射就会造出「列表有、详情没有」的半态
+    const { mod: detail } = loadRecruit({ data: {} });
+    expect(detail.buildRecruitResumeCard({ user_id: 7, company_disabled: true }).company_disabled).toBe(true);
+    // 「显式 false 也不得折成 true」与 D4 同判据（两个边界各测一次，不是重复用例）
+    const { mod: explicitFalse } = loadRecruit({ data: {} });
+    expect(explicitFalse.buildRecruitResumeCard({ company_disabled: false }).company_disabled).toBe(false);
   });
 });

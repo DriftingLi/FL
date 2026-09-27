@@ -290,7 +290,7 @@ type JobListParams struct {
 
 // JobListResult 职位分页列表。
 type JobListResult struct {
-	Items []JobPostingDTO `json:"items" nullability:"nullable"`
+	Items []JobPostingDTO `json:"items" nullability:"nonnil"`
 	Total int64           `json:"total"`
 }
 

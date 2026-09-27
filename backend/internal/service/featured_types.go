@@ -36,7 +36,7 @@ type FeaturedContentDetailDTO struct {
 	Next          *FeaturedNavDTO      `json:"next"`
 	Prev          *FeaturedNavDTO      `json:"prev"`
 	PublishedAt   *string              `json:"published_at" extensions:"x-nullable"`
-	Related       []FeaturedContentDTO `json:"related" nullability:"nullable"`
+	Related       []FeaturedContentDTO `json:"related" nullability:"nonnil"`
 	SortOrder     int                  `json:"sort_order"`
 	Source        string               `json:"source"`
 	Status        int16                `json:"status"`
@@ -75,7 +75,7 @@ type FeaturedNavDTO struct {
 
 // FeaturedContentPageResult 内容精选分页结果。
 type FeaturedContentPageResult struct {
-	Items []FeaturedContentDTO `json:"items" nullability:"nullable"`
+	Items []FeaturedContentDTO `json:"items" nullability:"nonnil"`
 	Page  int                  `json:"page"`
 	Pages int                  `json:"pages"`
 	Total int64                `json:"total"`

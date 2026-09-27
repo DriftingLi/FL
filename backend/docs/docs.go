@@ -9078,6 +9078,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -9834,6 +9840,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -9899,6 +9911,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -10303,6 +10321,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -13043,6 +13067,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -13101,6 +13131,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -13180,6 +13216,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -13221,6 +13263,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "笔记不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15238,6 +15286,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -15307,6 +15361,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15366,6 +15426,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -15469,6 +15535,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15530,6 +15602,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             },
@@ -15561,6 +15639,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "题目ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -23198,11 +23282,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "items": {
+                    "description": "Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.AuditLog"
-                    },
-                    "x-nullable": true
+                    }
                 },
                 "page": {
                     "type": "integer"
@@ -25101,10 +25185,12 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "slides": {
+                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -25222,7 +25308,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "real_name": {
                     "type": "string"
@@ -25231,7 +25318,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_file_url": {
                     "type": "string"
@@ -25245,7 +25333,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "company_disabled": {
-                    "description": "CompanyDisabled 授权**在**而明文**不可用**的具名说明：该企业账号已被禁用（处置动作）或已注销，\n于是上面三段明文一律缺失，但 status 仍是 approved（徽章按授权事实投影，处置不改写授权事实）。\n词表依据：CONTEXT.md「授权有效态」——「授权存在 ≠ 授权可用，可用性问题呈现在明文位置」；\n「企业招聘者」条的 status 禁用位（ADR-0062 决策 9）。缺席即企业可用。",
+                    "description": "CompanyDisabled 授权**在**而明文**不可用**的具名说明，那句可用性说的是「企业账号已停用或已注销」\n——与明文门禁拒同一件事时返回的那句错误逐字同一句（禁用是处置动作、注销是账号行没了，\n两者在联系面上的后果相同）。此时上面三段明文一律缺失，但 status 仍是 approved\n（徽章按授权事实投影，处置不改写授权事实）。\n词表依据：CONTEXT.md「授权有效态」——「授权存在 ≠ 授权可用，可用性问题呈现在明文位置」；\n「企业招聘者」条的 status 禁用位（ADR-0062 决策 9、ADR-0065 决策 8）。缺席即企业可用。",
                     "type": "boolean",
                     "x-optional": true
                 },
@@ -25952,7 +26040,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.DiagnosisFaultCodeItem"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "total": {
                     "type": "integer"
@@ -26816,7 +26905,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "experience_years": {
                     "type": "integer"
@@ -26828,7 +26918,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "real_name": {
                     "type": "string"
@@ -26840,13 +26931,15 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_experiences": {
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "resume_file_url": {
                     "type": "string"
@@ -27279,7 +27372,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -27361,7 +27455,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "max_score": {
                     "type": "number"
@@ -28244,7 +28339,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "integer"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -28317,7 +28413,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "company_disabled": {
-                    "description": "CompanyDisabled 与联系面明文位置**同键同措辞**的那一格：本企业账号已被禁用（处置动作）或\n已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影（授权存在 ≠ 授权可用，\n词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。\n移动端 #1267 的退回诉求就是这一格：只挂在明文位置上，列表角标无从分辨。",
+                    "description": "CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的\n同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：\n本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影\n（授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。\n移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。",
                     "type": "boolean",
                     "x-optional": true
                 },
@@ -28342,7 +28438,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "experience_years": {
                     "type": "integer"
@@ -28369,7 +28466,8 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "object"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "salary_max": {
                     "type": "integer",

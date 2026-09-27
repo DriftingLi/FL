@@ -169,7 +169,7 @@ export async function submitPasswordFlow(code : string, pwd : string, confirm : 
 		return false
 	}
 	if (pwd.length < 6 || pwd.length > 20) {
-		uni.showToast({ title: '密码长度需为6-20位', icon: 'none' })
+		uni.showToast({ title: '密码长度需为 6-20 位', icon: 'none' })
 		return false
 	}
 	if (pwd != confirm) {
