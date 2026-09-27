@@ -10,7 +10,7 @@
  * 5) 域文件零 catch-any / 零 .detail 直取（模块侧锁；全工程面在 utsAndroidCompile 规则 H/I，#654 起无豁免）
  * 6) 零直发请求：页面层不直接 uni.request
  * 7) 域 api 收紧：6 个 DTO 函数经 mapper-callback 出口（箭头包裹 build*），
- *    updateCourseProgressApi 保持 raw post 白名单；api 层 .catch 静默回退计数与术前一致（本票按删除禁区不退役回退）
+ *    updateCourseProgressApi 保持 raw post 白名单；api 层零静默回退（#1331 收口：4 处 catch-mock 与 getMock* 死代码全部退役）
  * 8) 幻影路由锁（#662 口径）：api/course.uts 的每条路由字面量都必须落在后端已注册清单内
  * 9) 删除禁区行为保持点：章节学习的计时/上报/切章补报/预览/附件下载、课程详情的收藏/学习状态/
  *    继续学习/章节跳转/失败重试逐项仍在；三条路由仍在 pages.json
@@ -232,14 +232,15 @@ describe('域 api 收紧（T08 / ADR-0007）：DTO 函数经 mapper-callback 出
     expect(code).not.toMatch(/[^a-zA-Z]get\(/);
   });
 
-  it('api 层静默回退计数与术前一致（本票按删除禁区不退役 mock 回退）', () => {
-    // 4 处：courses 列表 / catalog 专业方向 / levels / 课程详情（getTagsApi 本就无回退）
-    // 第 5 处「章节详情」由 #1268 **主动摘除**（不是漏登记）：它折掉的不是 mock 而是 `chapter_id:0`
-    // 空详情，正是「把未解锁误报成加载失败」的成因。判据见 `utils/chapterNotFoundBehavior.test.js` 的 A1/C3。
-    expect((src.match(/\.catch\(/g) || []).length).toBe(4);
+  it('api 层零静默回退（#1331 收口：4 处 catch-mock 与 4 个 getMock* 死代码全部退役）', () => {
+    // 计数锁沿革：#1268 摘「章节详情」5→4（它折掉的是 chapter_id:0 空详情，判据见 chapterNotFoundBehavior A1/C3）；
+    // #1331 按同一「掩盖面」判据收其余 4 处（列表 / catalog 专业方向 / levels / 课程详情）4→0。
+    // 每次计数变化都必须留下可追的解释 —— 这把锁禁止的是「无声变化」，不是数量本身（ADR-0007 先例）。
+    expect((stripComments(src).match(/\.catch\(/g) || []).length).toBe(0);
     expect(fnBody(src, 'export function getChapterDetailApi')).not.toContain('.catch');
-    // T02 试点锁定的那条回退保持原样（mallPilotContract 亦钉此点）
-    expect(fnBody(src, 'export function getCourseListApi')).toContain('getMockCourseList()');
+    // 反向锁：mock 回退不得复活（原先此处钉「getMockCourseList() 保持原样」，随 #1331 口径反转为「不得出现」；
+    // 先 stripComments —— 文件头注释里提及 getMock 属解释性文字，不是回退）
+    expect(stripComments(src)).not.toContain('getMock');
   });
 });
 

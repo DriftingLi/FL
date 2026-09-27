@@ -44,7 +44,14 @@
                 </view>
 
                 <!-- 商品列表 -->
-                <view v-if="products.length == 0 && !loading" class="empty-tip">
+                <!-- #1331/#816：失败态与「暂无商品」分开 —— 5xx/断网不伪装成空货架，给可见错误 + 重试位 -->
+                <view v-if="loadError && products.length == 0 && !loading" class="empty-tip">
+                    <text class="empty-text">商品加载失败，请检查网络后重试</text>
+                    <view class="retry-btn" @click="loadProducts(true)">
+                        <text class="retry-btn-text">重试</text>
+                    </view>
+                </view>
+                <view v-else-if="products.length == 0 && !loading" class="empty-tip">
                     <text class="empty-text">暂无商品</text>
                 </view>
                 <view v-for="(item, idx) in products" :key="idx" class="product-item" @click="onProductClick(item)">
@@ -116,6 +123,8 @@
     const pageSize = 12
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    /** #1331：首屏失败标记 —— 失败与「暂无商品」分开（#816 口径），5xx/断网不伪装成空货架，给可见错误 + 重试位 */
+    const loadError = ref<boolean>(false)
     /** 「浏览指定」证件：随请求下发的分区参数（自解释名，与 Web api/client 半边同口径 #1106） */
     const browseCredentialId = ref<number>(0)
 
@@ -141,6 +150,7 @@
         loading.value = true
         try {
             const result : CourseListResult = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
+            loadError.value = false
             if (reset) {
                 products.value = result.items
             } else {
@@ -157,6 +167,7 @@
             }
         } catch (e) {
             console.error('[mall] load failed:', e)
+            loadError.value = true
         } finally {
             loading.value = false
         }
@@ -448,6 +459,19 @@
     .empty-text {
         font-size: 28rpx;
         color: #999999;
+    }
+
+    /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
+    .retry-btn {
+        background-color: #2979ff;
+        border-radius: 32rpx;
+        padding: 16rpx 48rpx;
+        margin-top: 24rpx;
+    }
+
+    .retry-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
     }
 
     /* ===== 加载更多 ===== */
