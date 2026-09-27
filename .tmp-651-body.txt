@@ -1,0 +1,67 @@
+CLOSED | ## Parent
+
+#638（refactor epic，T13/16，auth 三兄弟之一）
+
+## What to build
+
+登录页 1012 行。**生物识别门控逻辑（凭据门控回填/快捷登录/凭据降级/孤儿凭据自愈）只读引用、零行为改动**；auth 域 api 收紧不碰生物识别链路，loginGating/credentialApi/quickLogin/secureStorage 系列契约测试保持原强度。auth 三兄弟建议连排执行（在 T11/T12 之后）。
+
+## Acceptance criteria
+
+- [x] 模块内全部源文件 ≤600 行（软预算），模块目录 ≤2 层；巨型页面拆 section 组件/composable
+- [x] UI 像素级不变；发现的 UI 问题记 issue，不顺手改
+- [x] 生物识别门控行为零改动：门控/快捷登录/降级相关契约测试全数保持原断言强度
+- [x] 模块私有组件/composable 放模块目录内、显式 import；跨模块复用走增量式抽取（新建共享件 + 本模块采用；不碰其他模块行为代码，机械 import 迁移除外）
+- [x] 本模块域 api 收紧：显式 DTO + 手动映射，经 T01 mapper-callback 出口（#639）；页面层不直接发请求
+- [x] 契约测试纪律：同 PR 可更新路径指向，禁删/弱断言（弱化须引用 issue）；utils 单测随被测文件同进退
+- [x] 本模块 allowlist 条目（catch/detail）清零
+- [x] jest 全绿（npm test / test:unit）
+- [x] HBuilderX 真机运行全量编译无新增 error（人工）—— 由维护者 2026-09-23 签收（执行者为 agent，边界见下）
+- [x] Android 逐页截图前后对比（含生物识别入口态）+ 微信开发者工具逐页无报错（人工签收，按 ADR-0007 checklist）—— 微信那半按 ADR-0008 **免**（未命中 MP-WEIXIN 面）
+- [x] 分支 refactor/login，PR 关联本 issue；合并即直发 production，回滚 = revert squash commit
+
+## 进度：100%（已合并）
+
+**收尾事实**：PR **#1288** 于 2026-09-23 02:05Z 以 squash 合并进 `master` ⇒ squash commit **`4188db53`**（合并前 head `609f110a`、基线 `c55e1352`），远端分支 `refactor/login` 已删（`git ls-remote` 读数 = 0）。合并即触发 `cd.yml` 的 **production** 部署（run `35808957653`，结果见下条）。回滚 = revert `4188db53` 这一个 commit。本票由 PR 正文的 `Closes #651` 在合并时自动 close。
+
+**取证原始件归档（worktree 已清理，路径变了）**：`wt-651` worktree 合并后按 release.md 顺序拆除（`worktree remove --force` → `branch -D` ⇒ 本地 `refactor/login` 亦无），445 MB 释放。拆除前把「仓库产物背后的原始件」搬到 **`D:\FL\.scratch\archived\issue-651-t13\`**：五轮原始 `screencap` PNG + `uiautomator` XML + `machine-*.txt` + `tree.txt`、④a/④c 两份日志（`gate-logs/build.log`、`gate-logs/kotlin-all.log` —— PR 正文 ④ 行引用的 `.ci-verify/build.log` 现在此）、取证驱动 `t13-capture.ps1`（含 `-NoNavigate` 分支，**从未入仓**）与两个归因小工具。五轮 `logcat` 已 gzip（232 MB → 24 MB）且复测仍可 `zgrep`：`FATAL EXCEPTION=0`、`ANR in=0`。归档当场复算 5 个 sha256 前缀与 PR 正文引用**逐一 MATCH**（详见该目录 `README.md`）。
+
+**人工签收怎么记的（写给下一个执行同类票的会话）**：维护者 2026-09-23 会话原文「帮我签收」⇒ agent **代录**进 PR 正文「### 人工签收」段，并照实写明**事实边界**：第九条/第十条的**执行者是 agent**（①a 出证、④a/④c 跑门），维护者给的是**对证据的接受与合并授权**，不是「本人亲自跑过 HBuilderX」。这不是把两格变脏 —— ①a 的「执行人：agent 执行」是 ADR-0016 明确允许的形态；若哪天该格要的是**亲自执行**，正确处置是退回、由人跑一次再签，而不是 agent 代写。
+
+**①a 已于 2026-09-23 跑完并出证**（四门全绿：`ci-summary` / `mobile-test` / `pr-evidence` 均 pass）⇒ **PR #1288 已合并**（`refactor/login` → `master`）。
+
+分支四个提交（rebase 后号 / rebase 前号）：手术 `c968d9a9`（7 文件 +1192/−456，原 `625ea7cd`）、ADR 复盘 `68388187` + `b8a9bb00`（原 `80d18aa2` + `11bcdbf7`）、①a 取证入仓 `609f110a`（原 `4e2cf458`）。⚠️ 证据文本与 ADR 里写的仍是**取证当时**的号（`11bcdbf7` / `4e2cf458`），那是历史出处、不追改。合并前又 rebase 了一次（基线 `f21e4fdd` → `c55e1352`），`4e2cf458..609f110a` 的 diff 只有根 `scripts/forklift-watchdog.sh` + `deploy/systemd/forklift-watchdog.service` ⇒ **移动端运行时面 0 文件变动**，`login.uvue` sha256 复核仍是 `806C0E0A…C3FD5` / 581 行 ⇒ ①a 与 ④ 两份证据描述的仍是同一棵树；③ 在新 head 重跑（本机 124 suites / 2406 tests exit 0，CI `mobile-test` 同 commit success）。
+
+**已做完并有机检证据的（十一条全勾的依据：前八条本票机检、第九/第十条维护者签收、第十一条=本次合并）**
+
+- `login.uvue` **977→581**（`readText().split('\n').length` 口径；裸行数 580）。⚠️ **票面「1012 行」与本票术前实测 977 不一致**，差异未逐笔追溯（`git show HEAD~1` 即为 977）；本票一律以实测值为准。
+- 拆出**两个**模块私有 composable：`pages/login/composables/useLoginForm.uts`（434）、`useBiometricGate.uts`（169），目录 ≤2 层、显式 import；`utils/modules.js` 的 login 预算由 `pending` **翻转成 600 执法**、`extractDirs` 登记。
+- **逐字搬迁可复算**：术前 28 个函数 → 21 个搬进 composable 且**函数体 21/21 与术前逐字节相同**；7 个 `InputEvent` 薄包装留壳层（`.uts` 侧该类型无先例）。
+- **UI 冻结证据升级到「模板 + 样式双 sha256」**：模板 169 行 / 8,964 字符、`<style lang="scss">` 309 行 / 5,847 字符，术前术后**逐字节相同**（成立条件 = 壳层用**解构**而非 `reg.<成员>` 前缀改写，模板一字未改）。⇒ 本票因此**不抽 section 组件**（抽组件必动模板，会废掉这条最强证据）。
+- **票面第三条「契约测试保持原强度」的机检口径**：`loginGating.test.js` 的 `it(` **21→21**（用例数不变）、`expect(` **39→44**（只增不减）；11 行删除全是读者指向与 helper 签名（`fnBody(name)`→`fnBody(text,name)` 且**找不到即 throw**），被删的 3 条 `expect(script…)` 逐条以 `gateSrc`/`formSrc` 重述；`secureStorage` 直调禁令由 1 面扩到 3 面。
+- **本票新增的先例锁：非单例 composable 的「实例注入锁」**。`useBiometric()` 每次调用返回**新** ref ⇒ 若两个 composable 各取一份，`checkSupport()` 写入的实例与模板读取的不是同一个，**快捷登录入口静默不显示**（不报错、③ 仍全绿）。已落锁：壳层 `useBiometric()` 调用数 `toHaveLength(1)` + 两个 composable 必须 `import type { UseBiometricResult }` 且禁止 `import { useBiometric }`，并配注入自检。
+- **新契约 `utils/loginContract.test.js`**：506 行 / **41 用例** / 9 条判别力（成变异）自检。
+- 门控面归属唯一（5 个门控动作只在 `useBiometricGate`）；页面壳层零自持状态；lifecycle 只在壳层；解构面 ⊆ 声明面 且反向亦成立；`templateRoots() ⊆ pageScope()`；allowlist **不回潮**锁。
+- **域 api 收紧 = 承接 + 锁形**：`getCaptchaApi` 的 DTO 化已由 #650 兑现（login 是三消费方之一），`sendCodeApi` 按 #650 两问判据留裸；本票锁住「壳层与两 composable 零直发、`data.id`/`data.image` 按 DTO 取值、裸索引不回潮、register 专属出口不得回流登录页」。
+- **allowlist「清零」是既成事实**：现测 `GUARD_ALLOWLIST` 里 login 条目 = **0**（早前票已消化）⇒ 无可清，交付物换成「不回潮锁」。
+- ③ **124 suites / 2406 tests 全绿**（rebase 后重跑）；④a `errors=0 clean=True`；④c `errors=0 classes=1498 files=120`。
+
+**T12 留给本票的判断题已结案：auth 三兄弟不晋升共享件**（度量与三条理由见移动端 `docs/adr/0007` 的 T13 复盘）。同时**更正 T12 复盘的口径**：那里「非注释行约 90% 同形」是整文件粗估；按函数体逐字比对，三页同名函数 8 个里只有 **3** 个逐字相同（合计 20 行），而它们依赖各页局部状态 ⇒ 晋升收益远小于代价。
+
+**①a 怎么跑成的（写给下一个执行同类页的会话）**
+
+1. **两态 × 术前术后 = 四张图**：改动集含 `.uvue` ⇒ `lowRiskRuntime=false` ⇒ ① 是硬前置（`.github/workflows/pr-evidence.yml:130,333`）。设备侧 2026-09-22 那次「不可得」在次日解除（人重开无线调试给新端点 `192.168.0.212:38345`；网络同时换段，而**配对密钥跨网络/IP 变更存活** ⇒ 只需 `adb connect`）。票面第十条要的「生物识别入口态」**深链抵达不了**：默认 `mode = 'phone'`，每次 `cli launch --pagePath` 都重置回去，而快捷登录入口只在 password 模式内 ⇒ **A 态**走深链，**B 态**由维护者点一次「账号密码登录」、agent 用 `-NoNavigate` **只截不导航**。
+   ⚠️ 本票原先写的「须维护者先登录并勾选记住密码一次」**过窄**：真机上凭据本就仍在（`showedStored` 已为 true），**退出登录后入口立即可见**，人只需点一次模式切换。
+2. **结论 = 正文零漂移**（产物 `docs/verification/login/1288/`）：A 态三份原始 a11y XML **逐字节相同**，逐像素差 `27090` **恰等于随机图形验证码矩形的面积**（bbox `258×105`，行带 `17×258 + 88×258` 逐一对上），且**同一棵树自己两次进页的噪声对照同为 27090、bbox 与行带逐字相同** ⇒ 归因于页面自身随机源，矩形之外 2,467,710 像素零差异；B 态（含 `🔒 指纹快捷登录` 入口）`different=0` —— 逐像素完全相同。五轮 logcat `FATAL EXCEPTION=0 / ANR in=0`。
+   ⇒ **一般判据**（已回写 ADR-0007）：带随机图的页做像素差时，先算差区 bbox 面积与行带，再补一次「同树两次进页」噪声对照；两者相等即归因，不必靠人眼看图判「差不多」。
+3. ①b **免**（7 个改动文件不含 `composables/useBiometric.uts`，生物识别链路只读引用；「入口态」的证据属 ①a）。 ② **免**（未命中 MP-WEIXIN 面）。④b **免**（未命中打包面）。
+
+**顺带产出/登记（都是术前既有，按票面不顺手改）**
+
+- **#1285**：④c 的稳定假红 —— 门脚本 `Invoke-Process` 在 `WaitForExit(int)` 后未等异步读任务排空，**独独丢了 publish 的成功标记行**（字节级捕获证明该行完整在 stdout 上，紧接 2 ms 的下一行反而收进）。⇒ 导出实际成功却被判 `publish-no-success-marker / freshness=not-measured`。**本票不改门**（`scripts/*.ps1` 按根 `AGENTS.md` 须拆独立 PR），改走：手动 `cli publish` 出产物 + **独立核对产物覆盖当次改动**（全树 `.uvue`/`.uts` 最新 mtime 21:00:21 < 导出 21:16:25）+ 门脚本自带的 `-SkipPublish` 分支取编译裁决 ⇒ `errors=0 classes=1498 files=120`；**没有**拿「exit 0」当「产物覆盖当次改动」的替身，结论里 `freshness` 如实写 `skipped(skip-publish)`。
+- **#1286**：login 手机验证码模式缺数字校验，且**补它的那行注释里正则本身是坏的**（`/^d{11}$/` 匹配「字母 d 重复 11 次」⇒ 直接取消注释会把每一个合法手机号判成不合法）。同族 register/forgot 生效且正则正确 ⇒ 不是刻意差异。
+- **#1262 更正评论**（`issues/1262#issuecomment-5777503913`）：「三兄弟里只有 forgot-password 缺密码上限」不准确 —— login 同样只判下限；并补一条现测：后端每处密码写入都判 6-20 ⇒ 客户端补上限对登录页同样安全。建议与 #1286 并一次收口。
+
+**票面第九条（人工项）已由维护者 2026-09-23 签收**：这一格要的是「HBuilderX 真机运行 + 全量编译无新增 error」，两半各自有据：真机运行 = ①a 五轮 `cli launch` 全部落到目标页并出图，`FATAL EXCEPTION=0 / ANR in=0`，页面自报渲染正常（`创建dom元素个数 39 个 / 排版 1 次 / 渲染 1 次 / onReady 429ms`）；全量编译 = ④a `COMPILE_RESULT errors=0 clean=True`（干净缓存重建）。签收原文与「执行者是 agent、维护者给的是接受与合并授权」的边界声明见 PR #1288 正文「### 人工签收」段。
+
+

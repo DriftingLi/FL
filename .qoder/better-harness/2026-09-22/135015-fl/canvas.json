@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 2,
+  "summary": {
+    "evidenceMode": "session-limited",
+    "evidenceBoundary": {
+      "manifest": {
+        "schemaVersion": 2,
+        "sourceFingerprint": "aa6d611c3e7c5d2f",
+        "adapterVersion": "qoder-task-loop-source-v2",
+        "platform": "qoder",
+        "selection": {
+          "strategy": "all-eligible",
+          "eligibleCount": 0,
+          "analyzedCount": 0,
+          "confidence": "Low"
+        }
+      },
+      "episodeCoverage": {
+        "episodeCount": 0,
+        "editedEpisodeCount": 0,
+        "closedEpisodeCount": 0,
+        "recoveredEpisodeCount": 0
+      },
+      "deliveryEvidenceLevels": [],
+      "sourceGaps": []
+    },
+    "semanticFacets": {
+      "schemaVersion": 1,
+      "status": "supplementary",
+      "entries": [
+        {
+          "id": "session-insight:source-coverage",
+          "kind": "redacted-summary",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "source-coverage",
+            "Low"
+          ],
+          "summary": "Analyzed 0 of 0 sessions; 0/6 enabled source roots exist. Use this as the current workspace evidence boundary for final insight cards.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        },
+        {
+          "id": "session-insight:validation-behavior",
+          "kind": "redacted-summary",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "validation-behavior",
+            "Low"
+          ],
+          "summary": "No validation command category was observed in the analyzed session sample. Inspect more sessions or add explicit validation guidance before claiming validation-after-edit behavior.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        },
+        {
+          "id": "session-insight:post-edit-validation",
+          "kind": "rework-correction",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "post-edit-validation",
+            "Low"
+          ],
+          "summary": "No edit event was observed in the analyzed sample. Inspect more sessions before making claims about edit or validation habits.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        },
+        {
+          "id": "session-insight:execution-friction",
+          "kind": "friction-taxonomy",
+          "episodeRef": null,
+          "status": "candidate",
+          "labels": [
+            "execution-friction",
+            "Low"
+          ],
+          "summary": "No strong execution friction signal in the analyzed sample. Keep friction claims narrow unless additional failed commands, rejected actions, or warnings are inspected.",
+          "evidenceRefs": [],
+          "modelVersion": "session-insights-v1"
+        }
+      ]
+    },
+    "learningCapture": {
+      "schemaVersion": 1,
+      "state": "N/A",
+      "summary": "N/A — requires two comparable observation windows and an intervention comparison.",
+      "interventions": []
+    },
+    "aiAgentPractice": {
+      "inspectedSurfaces": [
+        "Rules"
+      ],
+      "coverageRows": [
+        {
+          "surface": "Rules",
+          "scopes": [
+            "Project"
+          ],
+          "count": 1,
+          "paths": [
+            "AGENTS.md"
+          ]
+        },
+        {
+          "surface": "Workflows",
+          "scopes": [
+            "Project"
+          ],
+          "count": 4,
+          "paths": [
+            ".github/workflows/cd.yml",
+            ".github/workflows/ci.yml",
+            ".github/workflows/pr-evidence.yml",
+            ".github/workflows/testing-smoke.yml"
+          ]
+        },
+        {
+          "surface": "Skills",
+          "scopes": [
+            "Global",
+            "Plugin"
+          ],
+          "count": 16,
+          "paths": [
+            "~/.agents/skills/agent-browser-cli/SKILL.md",
+            "~/.agents/skills/architecture-decision-records/SKILL.md",
+            "~/.agents/skills/bazi-mingli/SKILL.md",
+            "~/.agents/skills/computer-use/SKILL.md",
+            "~/.agents/skills/execute-task/SKILL.md",
+            "~/.agents/skills/find-skills/SKILL.md",
+            "~/.agents/skills/grill-with-docs/SKILL.md",
+            "~/.agents/skills/orca-cli/SKILL.md",
+            "~/.agents/skills/orchestration/SKILL.md",
+            "~/.agents/skills/plan-feature/SKILL.md",
+            "~/.agents/skills/review-code/SKILL.md",
+            "~/.agents/skills/ubiquitous-language/SKILL.md"
+          ]
+        },
+        {
+          "surface": "MCP",
+          "scopes": [
+            "Plugin"
+          ],
+          "count": 1,
+          "paths": [
+            "~/.qoder/plugins/cache/qoder-bundler/computer-use/.mcp.json"
+          ]
+        },
+        {
+          "surface": "Plugins",
+          "scopes": [
+            "Plugin"
+          ],
+          "count": 3,
+          "paths": [
+            "~/.qoder/plugins/cache/qoder-bundler/better-harness/.qoder-plugin/plugin.json",
+            "~/.qoder/plugins/cache/qoder-bundler/computer-use/.qoder-plugin/plugin.json",
+            "~/.qoder/plugins/cache/qoder-bundler/qoder-create-plugin"
+          ]
+        },
+        {
+          "surface": "Hooks",
+          "scopes": [
+            "Project"
+          ],
+          "count": 0
+        },
+        {
+          "surface": "Commands",
+          "scopes": [
+            "Project"
+          ],
+          "count": 0
+        },
+        {
+          "surface": "Custom Agents",
+          "scopes": [
+            "Project"
+          ],
+          "count": 0
+        },
+        {
+          "surface": "Memories",
+          "scopes": [
+            "Project"
+          ],
+          "count": 0
+        }
+      ],
+      "repositorySourceRows": [],
+      "memoryDetails": {
+        "contentPolicy": "metadata-only",
+        "scanState": "scanned-empty",
+        "scopeCounts": [],
+        "integrity": {
+          "status": "reviewed",
+          "titleCount": 0,
+          "reviewedTitleCount": 0,
+          "truncated": false,
+          "exactCollisionGroups": 0,
+          "similarityCandidates": 0
+        }
+      }
+    },
+    "projectName": "FL",
+    "locale": "en",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 26,
+    "overview": "The project ships well-navigated agent guidance (root AGENTS.md plus a docs/agents/ split, CONTEXT.md and ~90 ADRs), a broad test suite (538 test files), and four CI workflows including a PR-evidence acceptance gate. No eligible sessions were available in the 30-day window, so behavioral claims about editing, validation, and friction were not assessed and stay in the evidence boundary. One present issue was found: the repository root accumulates throwaway scratch and per-task worktree directories that .gitignore does not cover, which misdirects tooling and risks accidental staging.",
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "Task Understanding",
+        "score": 72,
+        "summary": "Layered instructions, a domain glossary, and ADR records make the intended scope and authoritative context explicit, though no task episode was available to exercise them.",
+        "findingRefs": []
+      },
+      {
+        "id": "controlled-execution",
+        "label": "Controlled Execution",
+        "score": 55,
+        "summary": "A worktree gate script and build manifests give supported startup routes, but the filesystem cleanup boundary is deficient: recurring scratch and worktree residue in the repo root is not covered by ignore rules.",
+        "findingRefs": [
+          "root-scratch-residue-not-ignored"
+        ]
+      },
+      {
+        "id": "change-validation",
+        "label": "Change Validation",
+        "score": 70,
+        "summary": "A large tracked test suite and path-correlated source/test co-changes provide a relevant verification route; no session evidence was available to confirm it is exercised after edits.",
+        "findingRefs": []
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "Reliable Delivery",
+        "score": 62,
+        "summary": "CI and a PR-evidence acceptance workflow with a documented ruleset gate define the delivery boundary; the current review opened no real acceptance decision for a specific revision.",
+        "findingRefs": []
+      },
+      {
+        "id": "learning-capture",
+        "label": "Learning Capture",
+        "score": 40,
+        "summary": "A bounded review completed with clean asset and memory integrity, but zero eligible episodes block any repeat, maintenance, or effectiveness conclusion; the gap stays an evidence boundary, not a finding.",
+        "findingRefs": []
+      }
+    ],
+    "assignmentSummaries": []
+  },
+  "findings": [
+    {
+      "id": "root-scratch-residue-not-ignored",
+      "title": "Throwaway scratch and worktree folders in the repo root misdirect tooling and risk accidental staging",
+      "severity": "Medium",
+      "reason": "The repository root accumulates a large set of untracked throwaway directories from prior tasks: temporary probe/repro trees (.tmp-*, including a bundled Python virtualenv at .tmp-921-dev/ocrenv), verification captures (.ci-verify/), handoff notes (.dsh-handoff/), spreadsheet extracts (xl/), and roughly a dozen per-task worktrees (wt-*, wtx-*, .wt-*). None of these are matched by the root .gitignore, so git status reports 169 untracked entries and any git add -A from the root would stage them. The consequence is already observable in tooling: the diff-impact scan grades the working tree as critical from ~5,556 changed files that are almost entirely these residue paths, and automated core/verification targeting anchors on throwaway content (repro .mjs files as 'source', vendored colorama/tests as the validation target, .ci-verify/*.png as recommended reads) instead of the backend/ and frontend/ implementation. The .gitignore already carves out .scratch/ and .workbuddy/ as non-committed working areas, so the same intent for these recurring classes is a proven wiring gap, not a new policy.",
+      "dimensionRefs": [
+        "controlled-execution"
+      ],
+      "aiFixPrompt": "/better-harness fix this issue\n\nExtend the repository-root .gitignore so the recurring throwaway and per-task-worktree classes are excluded, mirroring the existing .scratch/ and .workbuddy/ carve-outs. Add ignore patterns for the observed classes (.tmp-*/, .ci-verify/, .dsh-handoff/, .dsh-*/, wt-*/, wtx-*/, .wt-*/, xl/) as separate lines with a short comment; do not weaken any existing rule and do not delete or move any directory. These paths are currently untracked, so no tracked file changes.\n\n## Validation\n\n- Run `git check-ignore .tmp-921-dev wt-1240 xl .ci-verify` from the repo root and confirm each now resolves to an ignore rule\n- Run `git status --porcelain` and confirm the untracked entry count drops and no residue directory is listed for staging\n- Run `git ls-files` and confirm none of these paths were previously tracked (expected: still zero)",
+      "expectedArtifact": "Config",
+      "expectedOutput": [
+        "Update the existing Config owner identified by the reviewed evidence and retain a focused validation result."
+      ]
+    }
+  ]
+}

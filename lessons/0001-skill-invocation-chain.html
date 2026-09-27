@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 1 课 · 一次 /命令 的完整链路</title>
+<link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+<main class="sheet">
+
+<p class="kicker">第 1 课 · 技能机制</p>
+<h1>一次 /命令 的完整链路</h1>
+<p class="lede">你已经用过 <code>/teach</code> 这类技能，但不知道点下回车后机器做了什么。这一课给你一个能自己复述的五步链路——而且证据全部来自本课备课时的真实会话。</p>
+
+<div class="win">
+<strong>学完你能做到：</strong>别人问「技能到底是什么、跑在哪、用什么工具」时，不看资料讲出五步链路；并能指出技能在你仓库里的生效落点。
+</div>
+
+<h2>先立三个地基事实</h2>
+<p><strong>① 技能不是程序，是指令文本。</strong>本机技能包是 25 个目录，每个目录一份 <code>SKILL.md</code>（外加若干格式说明文件），没有任何可执行逻辑。执行者永远是模型，技能只决定「模型读到什么」。<span class="tag">实测：bundled-skills 下 25 个目录，teach/ 内 6 个文件</span></p>
+<p><strong>② 会话开始时你只拿到名册。</strong>harness 把技能名单（名字 + 一句话摘要）注入上下文，并明说「这只是摘要，未加载前不要推断其指令」。全文在点名那一刻才进入。<span class="tag">出处：本会话系统提示 <code>available_skills</code> 段</span></p>
+<p><strong>③ 工具属于 harness，不属于技能。</strong>技能说「读这个文件、跑那条命令」，真正能读能跑的是模型手里那套工具；沙箱与审批策略随时可以否决它。<em>这就是你第一个心结（代码不可控）的伏笔：技能文本 ≠ 能力许可。</em></p>
+
+<h2>五步链路（每步都有本课实证）</h2>
+
+<div class="step"><div class="n">1</div><p class="t"><strong>名册注入</strong> — 会话启动，<code>available_skills</code> 名单进上下文。<em>实证：本次会话开始时列出 30+ 技能名与摘要。</em></p></div>
+<div class="step"><div class="n">2</div><p class="t"><strong>点名加载</strong> — 你输入 <code>/teach</code>，harness 扫描技能根、按名命中，把 <code>SKILL.md</code> 全文作为 <code>skill_content</code> 块放进对话。<em>实证：你这条消息下方紧跟一整块 skill_instructions。</em></p></div>
+<div class="step"><div class="n">3</div><p class="t"><strong>按图施工</strong> — 模型按指令调用工具。<em>实证：本课备课依次用了 <code>glob</code>（找工作区文件）、<code>read</code>（读 4 个 FORMAT 文件）、<code>pwsh</code>（列技能包、验扫描根）、<code>web_fetch</code>（读上游 README）、<code>ask_user_question</code>（访谈你四问）。</em></p></div>
+<div class="step"><div class="n">4</div><p class="t"><strong>落盘成状态</strong> — 产出写进工作区文件（<code>MISSION.md</code>、<code>RESOURCES.md</code>、<code>learning-records/</code>），技能的「记忆」是文件，不是聊天记录。<em>实证：你刚看到这 4 个文件被创建。</em></p></div>
+<div class="step"><div class="n">5</div><p class="t"><strong>下次续读</strong> — 新会话里模型先读这些文件，才知道教到哪了。会话可以断，状态在盘上。</p></div>
+
+<h2>生效面：技能从哪里被加载</h2>
+<p>扫描根是一张优先级表（数字小的赢），每层都「现测、不按记忆」：</p>
+<table>
+<tr><th>rank</th><th>位置</th><th>本机现测（本课验证）</th></tr>
+<tr><td>100</td><td><code>项目根/.dsh/skills</code></td><td>目录存在但无 skills 子目录 —— 且<b>本仓裁定不放</b>（它会改掉所有会话的生效版本）</td></tr>
+<tr><td>200</td><td><code>项目根/.agents/skills</code></td><td>不存在</td></tr>
+<tr><td>400</td><td><code>~/.dsh/skills</code></td><td>不存在</td></tr>
+<tr><td>500</td><td><code>~/.agents/skills</code></td><td><b>存在</b>（用户级技能落点）</td></tr>
+<tr><td>600</td><td>插件 bundled</td><td><b>存在</b>，25 个 = 你点名的 mattpocock 全家桶（pin v1.2.3）</td></tr>
+</table>
+<p>直接推论（出自你仓的 <a href="../training-app/叉车维修培训学员端跨端应用/docs/agents/skills.md">skills.md</a>，原始实测在 <a href="../training-app/叉车维修培训学员端跨端应用/docs/adr/0024-技能供给与管线归属.md">ADR-0024</a>）：<strong>在移动端子树里放技能副本不生效</strong>——子树不在任何扫描根下，放了也是死文件，还会在将来某次路径调整后静默改变全会话版本。</p>
+
+<h2>你的第三问：在 uniapp-x 项目里怎么用？</h2>
+<p>答案一句话：<strong>技能跑在开发机的 harness 里，作用对象是 <code>training-app/</code> 的代码——它不跑在手机上，也不需要跑在手机上。</strong></p>
+<ul>
+<li>你在 D:\FL 开会话、敲 <code>/grill-me</code> 或 <code>/tdd</code>，加载与执行全程发生在本机；技能指令里的「读票 → 动手术 → 跑 <code>npm run test:unit</code>」操作的是移动端代码库。</li>
+<li>移动端自己那套会话纪律（grilling→to-spec→to-tickets 连做、一票一会话）写在移动端 <code>AGENTS.md</code>，与技能机制是<strong>两层</strong>：技能给流程骨架，AGENTS.md 给本仓规则，后者优先。</li>
+<li>「用户触发」与「模型自取」有别（上游 Reference 分法）：<code>/teach</code>、<code>/grill-me</code> 是 user-invoked（只有你能点名）；<code>tdd</code>、<code>diagnosing-bugs</code> 是 model-invoked（任务匹配时模型自己会拿）。</li>
+</ul>
+
+<div class="quiz" id="quiz1">
+<h3>检索练习 —— 先在心里答，再展开</h3>
+
+<div class="q" data-a="0">
+  <div class="stem">Q1 · 输入 /teach 后，最先<em>完整</em>进入上下文的是？</div>
+  <label><input type="radio" name="q1" value="0">技能目录的指令文件</label>
+  <label><input type="radio" name="q1" value="1">上游仓库的说明文档</label>
+  <label><input type="radio" name="q1" value="2">会话开始的系统消息</label>
+  <div class="why"></div>
+</div>
+
+<div class="q" data-a="0">
+  <div class="stem">Q2 · 技能本体本质上是什么？</div>
+  <label><input type="radio" name="q2" value="0">一段供模型读的指令文本</label>
+  <label><input type="radio" name="q2" value="1">一个在后台跑的常驻程序</label>
+  <label><input type="radio" name="q2" value="2">一个需要安装的编译模块</label>
+  <div class="why"></div>
+</div>
+
+<div class="q" data-a="0">
+  <div class="stem">Q3 · 本仓裁定「不往根 .dsh/skills 放技能」，因为？</div>
+  <label><input type="radio" name="q3" value="0">它会改掉所有会话的生效版本</label>
+  <label><input type="radio" name="q3" value="1">它会让技能目录变得太臃肿</label>
+  <label><input type="radio" name="q3" value="2">它和用户级技能的优先级冲突</label>
+  <div class="why"></div>
+</div>
+
+<p class="score controls">—— <button id="check1" type="button">判分</button> <span id="result1"></span></p>
+</div>
+
+<h2>主源（课后读这一个就够）</h2>
+<p>上游 <a href="https://github.com/mattpocock/skills">mattpocock/skills README</a> 的 <strong>Reference</strong> 一节——user-invoked / model-invoked 的划分与全部技能一句话职责，是关于「技能是什么」最权威的一手材料。本仓侧读 <a href="../training-app/叉车维修培训学员端跨端应用/docs/agents/skills.md">skills.md 的「生效面」表</a>（rank 表 + 现测命令）。</p>
+
+<div class="win askline">
+<strong>卡住了就直接问我。</strong>我是你的老师——链路里任何一步（比如「审批策略怎么否决工具」「名册是怎么生成的」）想拆开看，随时追问，我会用现测而不是背书回答你。
+</div>
+
+<footer class="nav">
+<p><strong>下一课（预告）：</strong>第 2 课 · 代码为什么不会失控——技能、AGENTS.md、CI、守卫脚本各管哪一段（回答你的心结①）。</p>
+<p>相关：<a href="../reference/技能执行链路速查表.html">速查表 · 技能执行链路</a> ｜ <a href="../MISSION.md">MISSION</a> ｜ <a href="../RESOURCES.md">RESOURCES</a></p>
+</footer>
+
+</main>
+<script>
+document.getElementById('check1').addEventListener('click', function () {
+  var reasons = [
+    ['对。会话开始只有名册（名字+一句话摘要），点名后 SKILL.md 全文才作为 skill_content 进入。', '不对。上游 README 从没进过上下文——模型读到的只是技能包里那份 SKILL.md。'],
+    ['对。没有可执行逻辑，执行者是模型；技能只改变模型读到什么。', '不对。技能是纯文本目录，harness 不执行它，只把它读给模型听。'],
+    ['对。rank 100 压过用户级与插件层，放进去等于改变所有会话（含前后端）的生效版本——这是裁定不放的理由。', '不对。优先级冲突不是理由（低 rank 本来就该赢）；理由是它会改掉所有会话的生效版本。']
+  ];
+  var qs = document.querySelectorAll('#quiz1 .q'), right = 0;
+  qs.forEach(function (q, i) {
+    var pick = q.querySelector('input:checked');
+    if (!pick) return;
+    var ok = pick.value === q.dataset.a;
+    if (ok) right++;
+    q.querySelectorAll('label').forEach(function (l) {
+      l.classList.toggle('correct', l.querySelector('input').value === q.dataset.a);
+      l.classList.toggle('wrong', l === pick.parentElement && !ok);
+    });
+    var why = q.querySelector('.why');
+    why.textContent = reasons[i][ok ? 0 : 1];
+    why.className = 'why show ' + (ok ? 'ok' : 'no');
+  });
+  document.getElementById('result1').textContent = right + ' / 3' + (right === 3 ? ' —— 链路到手，去读主源吧。' : right > 0 ? ' —— 错的那条回头看正文对应段。' : '');
+});
+</script>
+</body>
+</html>

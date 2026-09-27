@@ -1,0 +1,22 @@
+{
+  "state": {
+    "subject": "发票重复扣款",
+    "body": "你好，我们三月份被重复扣了两次费用。请今天把多收的钱退回来，否则我们就取消订阅。"
+  },
+  "questions": {
+    "department": {
+      "type": "choice",
+      "instructions": "Which department should handle this request?",
+      "criteria": {
+        "billing": "invoices, payments, refunds",
+        "technical": "bugs, outages, system errors",
+        "sales": "pricing, new contracts",
+        "other": "everything else"
+      }
+    },
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "Does the user explicitly request a refund?"
+    }
+  }
+}

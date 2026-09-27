@@ -1,0 +1,18 @@
+chore: .gitattributes 给 *.uts / *.uvue 钉 LF（#1137）
+
+同一个坑位在本文件里已被记过两次（*.ps1、deploy/env.defaults），这是第三处：
+多处契约测试读 *.uts / *.uvue 的**源文本**做多行锚点匹配，而 Windows 上
+core.autocrlf=true 会把它们检出成 CRLF ⇒ 锚点必然失配。实测先例就是 #1137
+（contributionStatusContract 的「漏一个取值」用例在本机恒红）。比假红更糟的是
+锚点永不命中时守护会**静默失效** —— 以为在守，其实没守。
+
+补钉无 renormalize 风险：全仓 0 个 i/crlf / i/mixed，故只改检出行为、
+不改动任何已提交内容（这一点在 #1137 的 triage 里已实证，本次复核仍成立）。
+
+验证（真实仓库 + 最小对照，均留命令与读数）：
+- worktree 内 autocrlf=true 重新检出：203 个 *.uts/*.uvue 由 w/crlf → w/lf，
+  utils/format.uts 实测 CR=0 / LF=135，git status 无幻影 diff。
+- 最小隔离仓库对照：无规则 ⇒ CRLF；加规则 ⇒ CR=0。
+- 属性判定：git check-attr 显示 text: set / eol: lf。
+
+不改 ①②③④ 门语义与 pr-evidence 校验逻辑。

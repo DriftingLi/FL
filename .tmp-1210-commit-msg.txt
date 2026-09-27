@@ -1,0 +1,25 @@
+fix(mobile): ② 门加产物合法性 fail-closed 判据（非法 JSON / 缺必需文件 / appid 解析后取值）（#1210）
+
+票面病根：② 门对**产物配置的合法性**没有任何断言 —— 它取 appid 用的是正则
+（`'"appid"\s*:\s*"([^"]*)"'`）⇒ **`project.config.json` 是非法 JSON 也能通过 appid 校验**。
+这类坏产物会让开发者工具白屏、IDE 日志反复 `routeTo appLaunch timeout`、自动化会话 `App.getPageStack`
+永不应答，而门最终只报一个**看起来像环境问题**的 `page-stack-not-answering`（exit 2），把真正的病根藏起来。
+
+判据面（维护者 2026-09-21 裁定）：
+
+- 新增判据库 `scripts/lib/mp-weixin-product.ps1`（**单点真源**，由门脚本 dot-source）：
+  ① 必需文件 `project.config.json` / `app.json` / `app.js` / `app.wxss`
+  （`sitemap.json` / `project.private.config.json` 不作必需 —— 实测 publish 不产出它们）；
+  ② 两份 JSON 必须可解析，非法即 fail-closed 并带出**位置原文**（`line N, position M`）；
+  ③ appid 由**解析后取值**（不再从坏文件里抠）；④ `app.json.pages` 每页必须有 `<page>.js`。
+- `scripts/mp-weixin-check.ps1`：接上该断言，**产物坏了判 exit 1**（与「环境不可用 exit 2」分开），
+  删掉旧的正则抠 appid；docstring 的退出码口径同步写实。
+- 回写移动端 `docs/adr/0008-移动端验收门与证据.md`（新增「② 产物合法性判据」段）与
+  `.github/PULL_REQUEST_TEMPLATE.md` 的 ② 说明。
+- 守护 `utils/mpWeixinGateContract.test.js` **C20**：a–d 四条**真执行**判据库的好 / 坏产物夹具
+  （必不红 = 合法产物；必红 = 非法 JSON / 缺必需文件 / 缺页 .js，三条各自定向），
+  另加两条 wiring（门脚本真的调它了 + 旧正则真的没了 / ADR 与模板都写明了新判据）。
+  判据库单独成文件就是为了让守护能**真跑**它 —— 源码文本断言在「判据被摘掉、只留字面量」时照样绿。
+
+DoD（真链路）：坏产物（票面形态：根对象闭合后又多出游离片段）⇒ **exit 1** + 打印 `line 37, position 3`；
+合法产物 ⇒ 断言通过、门照常跑完（见 PR 正文）。

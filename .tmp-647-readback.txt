@@ -1,0 +1,53 @@
+## 进度：95%
+
+下一步：**①a Android 真机逐页截图前后对比**（本票唯一未完成项；①b 免、② 免、④b 免，理由见下）——
+命令级配方（按 ADR-0008「①a 取证手法补遗」+ T08 先例）：
+
+1. 部署术后树：`cd D:\FL\wt-647\training-app\叉车维修培训学员端跨端应用 && npm run hx:run`（设备 `b32d8398`，HEAD `7843fb1d`）
+2. 逐页取证：`npm run capture:device -- -Pages "pages/resume/resume,pages/resume/resume-edit,pages/resume/resume-attach" -Module resume`
+3. 术前基线：临时 `git checkout origin/master -- pages/resume/resume-edit.uvue api/resume.uts` → 重复第 1–2 步 → `git checkout HEAD -- <同上>` 还原（取证后 `git status` 必须干净）
+4. 机器判据（agent 核不了截图内容时用）：逐页 `uiautomator dump` 的 `content-desc` **逐条一致** + 裁掉顶部状态栏行带后像素哈希一致
+5. 截图压缩入仓 `docs/verification/resume/1205/` 并补 README，回填 PR #1205 的 ① 行 ⇒ 本票可 close
+
+为什么本轮没做：本会话已连跑 ④c / ④a 两道 HBuilderX 门，按 ADR-0011 与 AGENTS「真机步骤集中到一个会话执行」的并发纪律，部署到设备的取证留给批次会话；`pr-evidence` 的 ① 行在本 PR 上会红，属**预期且已声明**（不是漏填）。
+
+## 实施记录（T09 手术会话，2026-09-20）
+
+- **PR**：https://github.com/DriftingLi/FL/pull/1205 （base `master`，head `refactor/resume`，4 个提交）
+- **分支 HEAD**：`7843fb1d`（worktree `D:\FL\wt-647`）
+- **做了什么**：
+  - `pages/resume/resume-edit.uvue` **922 → 426**：编辑态与保存流程下沉 `pages/resume/composables/useResumeEdit.uts`（581）；完善度卡 / 基本信息卡 / 求职期望卡抽为 3 个模块私有 section 组件（68 / 113 / 231）。模块 8 个源文件全部 ≤600，目录 2 层
+  - `api/resume.uts` 域收紧：5 个 DTO 出口迁 `getMapped` / `requestMapped`（PUT 面 `opts.method` 赋值，与既有 `put()` 同通路），补 `buildPositionList`；裸透传白名单 3 条（multipart 上传 ×2 + void 删除 ×1）
+  - 新增 `utils/resumeContract.test.js`（**63 条**模块汇总契约）；ADR-0007 补「T09 resume 复盘」
+- **迁移保真（三向归一化 diff 审计 + 反向包含检查，临时脚本收口即删）**：CSS 规则集 42→42、**零声明漂移**；模板展开后 187→187 归一化行、20 行差异逐条可解释（10 处 `v-model`→`:value`+`@input`、1 处组件内 handler 改名、9 处 `edit.` 前缀透传）；脚本**反向**检查 composable 539 归一化行**零逻辑改写**（未覆盖的 27 行全是显式返回类型面）
+- **门结果**：③ CI `mobile-test` success（run https://github.com/DriftingLi/FL/actions/runs/35488253171 ，106 套件 / **1892** 测试）；④c `KOTLIN_ALL_RESULT errors=0 classes=1416 files=111`；④a `COMPILE_RESULT errors=0 clean=True`；② 与 ④b 机检**未命中触发面** ⇒ 免；①b 免（能力面路径白名单零命中）
+- **④c 抓到的真实缺口（本票最有价值的一条）**：页面绑了 `edit.jobNature` / `edit.availableIn`，而二者既没进 `UseResumeEditResult` 也没进 return 对象 ⇒ Kotlin `unresolved reference`。**jest / 静态守护 / 模块契约三套自动门当时全绿**（规则 W 只查模板裸 handler 的定义，不查成员存在性）⇒ 已修复 + 落锁「页面引用的每个 `edit.<成员>` 必在显式结果类型内」+ 注入自检，坑位与新决策一并回写 ADR-0007「T09 resume 复盘」
+- **拆分准入判据（新决策）**：接口面只有「原始值 prop + 单参事件」才抽组件；教育 / 工作经历列表（`v-for` 逐字段改写需 `$event` 双参投递，属 T04 已录风险区）与单 textarea 卡留壳层，但状态仍全归 composable（页面 script 零 `ref<`，契约锁）
+- **发现的既有缺陷**（按票面「记 issue 不顺手改」另立）：**#1204** —— 简历 `notfound` 语义失效（`request` 层恒以 `Error(message)` reject，两页却按 `e['kind']=='notfound'` 判定 ⇒ 分支恒不命中：新用户编辑页误报「简历加载失败」、总览页完善度引导卡不展示）。已证术前既有、本票逐字搬迁未改
+- **运行环境写实**：本会话以全访问权限跑通 ④c / ④a（HBuilderX `E:\HBuilderX.5.23.…`，`HX_BUSY wait=1 result=free`）；跑完两道门后 `git status` 干净（`manifest.json` / `pages.json` 未被回写改脏）；本地全量 106 套件复跑见 PR ④ 行
+
+## Parent
+
+#638（refactor epic，T09/16）
+
+## What to build
+
+简历编辑 922 行。表单区/预览区/保存流程拆组件。
+
+## Acceptance criteria
+
+- [x] 模块内全部源文件 ≤600 行（软预算），模块目录 ≤2 层；巨型页面拆 section 组件/composable —— 922→426（页面）+ 3 组件 + 1 composable（581），8 文件全 ≤600，目录 2 层
+- [x] UI 像素级不变；发现的 UI 问题记 issue，不顺手改 —— 三向归一化 diff 审计零声明漂移（CSS 42/42）/ 模板差异逐条可解释 / 脚本反向零逻辑改写；既有缺陷另立 #1204
+- [x] 模块私有组件/composable 放模块目录内、显式 import；跨模块复用走增量式抽取 —— `pages/resume/components|composables/` + 显式 import；**零跨模块改动**（8 文件全是本模块 + 契约 + ADR）
+- [x] 本模块域 api 收紧：显式 DTO + 手动映射，经 T01 mapper-callback 出口（#639）；页面层不直接发请求 —— 5 DTO 走 `getMapped`/`requestMapped`，3 条 raw 白名单写明理由，契约锁「模块唯一请求出口」
+- [x] 契约测试纪律：同 PR 可更新路径指向，禁删/弱断言；utils 单测随被测文件同进退 —— 未改任何既有断言（`resumeAttachmentContract` 等全绿），新增 `resumeContract` 63 条
+- [x] 本模块 allowlist 条目（catch/detail）清零 —— `GUARD_ALLOWLIST` 无 resume 域条目，契约锁不回潮
+- [x] jest 全绿（npm test / test:unit） —— CI `mobile-test` 106 套件 / 1892 测试绿；本地全量复跑同绿
+- [x] HBuilderX 真机运行全量编译无新增 error —— ④c `errors=0 classes=1416 files=111` + ④a `errors=0 clean=True`（按 ADR-0008 现行口径由 **agent 执行**，日志 `.ci-verify/kotlin-all.log` / `build.log`）
+- [ ] Android 逐页截图前后对比 + 微信开发者工具逐页无报错 —— **①a 未做**（见「下一步」）；② 免（机检未命中触发面）；①b 免（能力面零命中）
+- [x] 分支 refactor/resume，PR 关联本 issue；合并即直发 production，回滚 = revert squash commit —— PR #1205（待 ①a 补齐后合并）
+
+## Blocked by
+
+- #640（T02 mall 试点 + ADR-0007 草案）
+

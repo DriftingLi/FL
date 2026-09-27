@@ -1,0 +1,62 @@
+## 改了什么 / 为什么改
+
+ADR-0025 单票三段的最后一段（P1 = #1254 / P2 = #1257 已合入 master）。关联 **#1240**。
+
+本段补**输入端形态**，并把 P2 留下的两处欠账同批收口：
+
+- **输入区收敛为一个共享组件** `pages/forum/components/forum-markdown-input.uvue`（发帖表单与回复栏只接线，**形态只有一份** —— 同根 ADR-0052 决策① 的目标）。三条档位轴互不混用：数据档位（胶囊，会永久保存）/ 视图档位（下划线 tab，临时）/ 图片（**拍照 + 相册两个直达入口**）。
+- **工具栏**（`utils/markdownToolbar.uts`）：按钮集 = 本档成员声明集（`###` / `-` / `>` / 代码围栏 / `---` **恰好五枚**），两个方向都对账；**行内格式不放按钮**（本档不做行内渲染，⑥-6 已登记）。「按钮承诺必须真能渲染」做成可执行的 **round-trip** 判据（插入 → 真执行解析器 → 必须产出该块类型）。
+- **格式记忆位**（`utils/forumFormatPreference.uts`）：发帖与回复共用一个键；「首次默认纯文本」= **读不到就是纯文本**（根 ADR-0044）。
+- **创建 / 回复载荷带上作者的声明**；**编辑路径仍不带**（P1 的编辑不变式不动），故编辑态**不给档位控件**、按帖子原格式呈现；资源投稿态恒纯文本。
+- 同批收口 P2 的两处欠账：**「我的动态」的回复原文**接上格式轴（P2 复核回写认定的**真实缺口**；`buildReply` 早已带回 `content_format`，不动 DTO）；**`forum-markdown-blocks.uvue` 补 `lang="scss"`**（P2 登记为「与 P3 同批」的那条）。
+
+完整变更、**新决策 10 条**与**已知偏差 5 条**见移动端 `docs/adr/0025-论坛正文格式与输入区形态.md` 的「实施回记（#1240 · P3 输入区形态已落地）」。
+
+## 改动类型
+- [x] feat（新功能）
+- [ ] fix（缺陷修复）
+- [x] refactor（把输入区形态从两个页面收进一个共享组件）
+- [ ] style（样式/格式）
+- [x] docs（文档）
+- [x] test（测试）
+- [ ] chore/build/ci（构建或依赖）
+
+## 评审回写（`/code-review` 双轴，提交 `dffe7f75`）
+
+对 P3 的 diff 跑了 Standards / Spec 双轴评审，逐条处置（均已进代码与用例；详见移动端 ADR-0025 新增的「复核回写」节）：
+
+- **Standards hard**：可移除图片列表的 `:key="idx"` ⇒ `:key="img"`（AGENTS.md 明写避免下标作 key）；`api/forum.uts` 两处 `= 'text'` 字面量 ⇒ import `FORMAT_TEXT`（副产一条 fail-closed 接线判据）。
+- **Standards · Duplicated Code（最重）**：图片流水线（选图 / 逐张上传 / 删除 / 预览）从两个宿主抽成 `composables/useForumImagePicker.uts`；**副产**把这段逻辑变成可真执行的行为判据（新增 `utils/forumImagePickerBehavior.test.js`，含两条必红取证）。
+- **Standards · Mysterious Name / Primitive Obsession**：`caret` ⇒ `insertAt`（它装的是草稿末尾）；9 / 3 限额收到 `constants/app`，组件的 `maxImages` 改必填 prop（不再持第三个缺省值）。
+- **Spec · 实现有错**：档位值原先只归一存储侧、上抛值**直接进** `content_format` 载荷 ⇒ 两个宿主改为在**赋值处**过 `normalizeAuthorFormat`（违反的是 P3 回记第 4 条明文不变式）。
+- **Spec · 缺失**：长按提示的具名映射无判据 ⇒ `markdownToolbarBehavior` 逐枚钉住五个中文名与五枚记号 + 「换掉文案必红」取证（真机读不到 toast，判据只能落在这里）。
+- **Spec · 附带**：发送按钮原先按 `length == 0` 判灰而提交按 `trim()` 拦 ⇒ composer 暴露 `canSubmitReply`，模板只用它（纯空白不再「亮着却点了没反应」）。
+- **Spec · ⑥-6「四处登记」不改**（有意）：那四处是**跨端差异**，而 P3 新增的两条（回复栏常驻档位胶囊、编辑态 / 资源态无档位控件）是**本端形态决策** —— 塞进去会让那张表混进两类东西；边界已在复核回写节点明，**⑥-6 的四处仍完整**。
+## 影响范围 / 风险点
+
+- **低风险？否** —— 含 `.uvue` ⇒ ① 与 ④ 必过；**② 本 PR 免**（未命中 MP-WEIXIN 面：diff 里没有增删 `#ifdef … MP-WEIXIN` 指令行，也未改 `manifest.json` / `platformConfig.json`）——判据以 `.github/workflows/pr-evidence.yml` 的校验器为准，本节不复述那份清单。
+- **零契约变更**：后端 `content_format` 字段与缺省语义早就有（根 ADR-0044）；本段只**写入**作者的声明（创建 / 回复）并**继续不写**编辑载荷。未引入任何 `#ifdef` 指令行。
+- **零回归设计**：纯文本档（存量全部）走的仍是原形态 —— 发帖侧 `textarea`、回复侧单行 `input` 的外观与节点语义未变，新形态只作用于新出现的 Markdown 档。
+- 共享文件（`pages.json` / `manifest.json` / `platformConfig.json`）**一行未动**（跑完 ④c 后已 `git status` 复核干净）。
+- 模块登记：新组件已按既有规则补进 `utils/modules.js` 的 forum `files`（**登记机制未改**）。
+
+- [x] **本次改动触及「agent 观测不到的能力面」**（真机上传 + 运行时相机权限弹窗）—— **①b 必做、由人给出原文**。本票首次出现**单独的相机直达入口**（`sourceType: [source]`；改动前四处 `chooseImage` 都是 `['album','camera']` 系统选择器），而 `manifest.json` 里没有任何 android 权限声明 ⇒ 相机权限弹窗必须由人在真机上过一遍。
+
+## 验收证据
+
+- ① Android 真机逐页截图对比（**①a**：agent 出证、按一次分支收口跑；**①b**：命中能力面，**本轮未签收**） — 执行人：agent 执行 · 日期：2026-09-22 · 复测对象：分支 head `fa6881e8` 真运行到 Redmi `23049RAD8C` / Android 15（无线调试；机检行 `HX_RUN_DEPLOY deployed=true … mtime 相对基线前进`、`HX_RUN mode=incremental compile=150 deploy=0 total=198 exit=ok`），承载面 = 发帖页输入区 · 结论（含产物）：`docs/verification/forum/1261/01-forum-create-text.jpg` 对 `docs/verification/forum/1261/02-forum-create-markdown.jpg`（**纯文本档无 tab / 工具栏 / 边界提示行 → Markdown 档三者齐现且工具栏恰好五枚**），对应机检行 `docs/verification/forum/1261/01-forum-create-text.content-desc.txt` 对 `docs/verification/forum/1261/02-forum-create-markdown.content-desc.txt`；`docs/verification/forum/1261/03-forum-create-toolbar-insert.content-desc.txt` 证明点工具栏 `###` 后正文由 `E01code` 变为 `### E01code`（计数 7/10000 → 11/10000）；`docs/verification/forum/1261/04-forum-create-preview.content-desc.txt` 证明预览档源串 `### ` 消失、块渲染出 heading；`docs/verification/forum/1261/05-camera-entry-after-tap.content-desc.txt` 证明点「拍照」**直达系统相机**（`com.android.camera/OneShotCamera`）且**应用内无权限弹窗**（图片流水线抽成共享 picker 之后接线仍在）；logcat 判据见 `docs/verification/forum/1261/logcat.txt`（app 自身 tag 73 条 E 级行里命中本次改动关键词 = **0**，不写「E=0」）。**未覆盖面已如实登记**（回复栏因取证环境 0 帖未取证；长按提示仍无法机检，含稳定性对照数据）见 `docs/verification/forum/1261/README.md`。
+- ② 微信开发者工具无报错（半自动） — **免（未命中 MP-WEIXIN 面）**。附实况留痕（**不构成门证据**，仅供参考）：本会话三次尝试 —— 第 1 次 `publish mp-weixin` **成功**（58 页、`appid=wx38c3e31b16a7ced0` 与期望一致、「产物合法性」前置断言通过），卡在 `cli.bat auto --auto-port` 超时（180 秒）；第 2、3 次在 `publish` 阶段报 `服务端响应异常，请检查本地网络状况或联系客服`（DCloud 侧）。三次均**未**产出 `MP_WEIXIN_RESULT`（第 1 次卡在自动化端口超时，第 2、3 次卡在 DCloud 的 publish 服务）。
+- ③ `npm run test:unit` 全绿 — 结论（含产物）：CI run https://github.com/DriftingLi/FL/actions/runs/35678298139 （`mobile-test` 全绿，head `fa6881e8`）；本机复测 **121 suites / 2293 tests 全绿**，守护分类 行为 **24 → 25** / 接线 96。守护三问：`markdownToolbarBehavior` / `forumFormatPreferenceBehavior` / `forumImagePickerBehavior` 是**行为**守护（`loadUts` 真执行，各含成对取证 —— 加一枚未声明按钮 / 少一枚按钮 / 代码块承诺落空 / 提示行删关键词 / 声明表加 table；不读存储 / 归一放宽 / 写入不归一；双入口退化 / 上游限额闸门被拆）；`forumMarkdownInputContract` 是**接线**守护（模板闸门、两组控件形态、图片流水线单份、限额单点、编辑态闸门），其行为面由上面三个行为守护兜底。
+- ④ 本地编译门（默认 ④c `npm run build:kotlin-all`） — 执行人：agent 执行 · 日期：2026-09-22 · 复测对象：`fa6881e8`（评审修复后重跑；首次跑在 `5371951f` 时抓到过一个 UTS「无变量提升」的真错并已修） · 结论（含产物）：`.ci-verify/kotlin-all.log` 的 `KOTLIN_ALL_RESULT errors=0 classes=1526 files=120`；跑后 `manifest.json` / `pages.json` / `platformConfig.json` **零改动**。
+- ④b release 云打包 — **免（未触及打包面：未改三份 json、未增删 `uni_modules/**/utssdk/app-android/**`、未新增 `*.aar` / `libs/*.jar`）**。
+
+> ⚠️ **①b 未签收 ⇒ 本 PR 现在不可合并**：本票命中能力面（真机上传 + 相机权限弹窗），按 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md` 与同目录 `0016-真机门的人工性收缩与按批取证.md`，①b 的「执行人」栏必须由**人**给出原文（agent 只可代录）。维护者已明确「本轮先停在 95%，①b 留待稍后补签」⇒ 证据段其余部分齐备，**等 ①b 原文补入后再合并**；在它签收前本 PR 不进合并。
+
+## 自检清单
+- [x] 提交信息遵循 Conventional Commits
+- [x] 一个分支只做一件事，可独立 revert
+- [x] 未把其他会话/模块的改动夹带进来
+- [x] 已关联对应 Issue（#1240）
+
+
+

@@ -1,0 +1,21 @@
+feat(mobile-ai): #998 宫格入口悬浮可及（FAB → 半屏 sheet，共用同一发送路径）
+
+#998 的滚动缺陷（`.pro-scroll` 缺 `height: 0`）已在 #1008 修好，宫格「能滑回去够到」；
+本次补完该票**剩余部分**：把 5 宫格入口做成悬浮可及。
+
+- 新增 `components/ai-chat/ai-chat-function-sheet.uvue`（半屏 sheet，范式同 ai-chat-pro-sheet）；
+- `ai-assistant.uvue` 新增 FAB，`messages.length > 0` 才出现 —— 无对话时宫格本就在首屏，
+  常驻等于「同一功能两个入口」，故刻意不做常驻；
+- 悬浮入口与首屏宫格**共用** `onFunctionClick`，刻意不新增第二条发送路径
+  （两条路径必然漂移：一条带功能键、一条不带，那正是 #999「每轮送空键、专项通道静默失效」的成因形态）。
+
+两处「写错不报错、只会静默坏」的约束已落进代码注释：
+- `manifest.json` 的 `styleIsolationVersion: "2"` ⇒ **组件样式默认隔离**，sheet 拿不到页面的
+  `.function-grid` 等规则（对照证据：`ai-chat-bubble.uvue` 自己也重复定义了 `.message-*`），
+  故宫格样式在组件内自带，两侧逐值一致由契约测试守护；
+- FAB 的 `bottom: 240rpx` 是算出来的：`.input-card` 实测 202rpx 高（逐条见页面注释），必须避开输入区。
+
+测试：新增 `utils/aiFunctionEntryContract.test.js`（28 例，含 5 条注入违规自检，防检测器空跑假绿）。
+`npm run test:unit` = 67 suites / 1063 tests 全绿；④c `npm run build:kotlin-all` = errors=0 classes=1261 files=96。
+
+① 真机门**未取**：设备 f0bae674 已从 USB 掉线，需重新插线后补。本 PR 因此保持 draft、不合并。

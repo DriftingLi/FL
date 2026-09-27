@@ -1,0 +1,15 @@
+fix(mobile): 简历 notfound 语义单一出口（404 消息前缀 + isResumeNotFound）（#1204）
+
+请求层错误出口恒为 `Error(message)`、不带 `kind`，而 `getResumeApi()` 又按后端中文文案
+（`不存在` / `404`）识别 404，两个页面各自按 `e['kind'] == 'notfound'` 判定 ⇒ 该分支恒不命中：
+新用户进编辑页误报「简历加载失败」、总览页完善度引导卡恒不展示。
+
+- api/request.uts：新增 404 分支 + `NOT_FOUND_MESSAGE_PREFIX`（与 #1196 的 403 前缀同构；
+  UTS→Kotlin 不允许给 any 动态加 statusCode ⇒ 状态码只能走消息前缀），404 不清登录态、不跳登录页
+- api/resume.uts：新增 `isResumeNotFound(e)` 作为 notfound 的**唯一判定出口**；
+  `getResumeApi()` 去掉按中文文案匹配的 catch（happy path 逐字不变）
+- pages/resume/resume.uvue + composables/useResumeEdit.uts：两端改为消费同一实现，
+  删掉各自复制的 `obj['kind']` 死判据
+- 守护：新增 utils/resumeNotFoundBehavior.test.js（真跑 request→resume→编辑页 composable，
+  含变异必红侧 C1–C3）；utils/resumeContract.test.js 原先把 `obj['kind']` 死判据**钉住**的
+  那条断言按新契约重写，并加写端/读端/消费方三段接线断言（含红能力自检）

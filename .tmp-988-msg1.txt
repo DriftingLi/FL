@@ -1,0 +1,27 @@
+feat(mobile-ai): 消费诊断通道的 sources 事件与手册溯源（#988）
+
+后端在 SSE 里发独立事件 `sources`（`answer_sources` 透传，`ai_assistant.go:494`），并按
+ADR-0033 把来源随助手消息行持久化；移动端此前只认 message/error/done，其余事件整个丢弃，
+读消息接口也没读 sources 列 ⇒ 回答引用的手册页码与溯源图一直看不见（#921 接通后的已知缺口）。
+
+- `api/aiAssistant.uts`：新增单点 `parseDiagnosisSources()`（SSE 事件与回看 DTO 共用同一份
+  实现，避免两份解析产生「当轮有、回看没有」的假差异）；`handleStreamSSEEvent` 新增 `sources`
+  分支与 `onSources` 回调；`buildSessionMessage` 映射 sources 列（为空不写字段）；
+  新增 `aiManualUrl()`（逐段 `encodeURIComponent`，对齐 web `manualUrl`；返回值有 `?? p`
+  兜底 —— UTS 的 `encodeURIComponent` 签名是 `String?`，直接 push 进 string[] 编译不过）。
+- `types/ai.uts` / `types/index.uts`：新增 `AiDiagnosisSource`（metadata 展平为可选顶层字段，
+  规避 UTS 嵌套可空对象与 Kotlin 空值检查），`AiSessionMessage` 加可选 `sources`。
+- `composables/useAiChat.uts`：当轮来源挂到那一条助手消息（与回看路径落同一个字段）。
+- 新增 `components/ai-chat/ai-chat-sources.uvue`：折叠头「资料来源（N 条）」+ 来源卡片
+  （手册图片点击走 `uni.previewImage`、正文剥掉 `<<IMAGE:…>>` 标记、页码）；`<<IMAGE:…>>`
+  用 `indexOf`/`substring` 解析（全仓 `.uts` 无 RegExp 字面量先例），样式遵守 uvue 约束
+  （class 选择器、无 gap/CSS 变量、`lang="scss"`）。
+- `components/ai-chat/ai-chat-bubble.uvue`：加可选 `sources` prop（默认空数组 ⇒ 未传值的
+  调用方零 diff），助手消息下方渲染来源组件（对齐 web `#assistant-extra` 的位置）。
+- `pages/ai-assistant/ai-assistant.uvue`：把消息上的 sources 传进气泡。
+- 新增 `utils/aiDiagnosisSourcesContract.test.js`：源码契约测试缝，按 #999 的教训断言
+  **调用点与顺序**而非「某行存在」，并对注入变异的样本断言检测器判红（防空跑假绿）。
+
+口径（维护者 2026-09-16 拍板，见 #988「口径裁定记录」）：范围 = 实时 + 回看（对齐 ADR-0033；
+票面原引的 ADR-0032「回看不显示」已被该 ADR 取代）；渲染粒度 = 对齐 web 但**去掉** PDF 外链
+（原生端无内嵌 PDF 阅读器）。

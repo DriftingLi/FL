@@ -1,0 +1,4 @@
+Merge branch 'master' into feat/988-mobile-ai-diagnosis-sources
+
+同步 origin/master（9e6c0e83）。merge-tree 判 clean（本次并入的是 #1070 之后的文档/验证产物与 #1072，与本票改动面不相交）。
+本提交由「索引内合并」产生（merge-tree --write-tree + commit-tree），不碰任何工作树。

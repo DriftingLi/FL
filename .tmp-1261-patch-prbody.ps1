@@ -1,0 +1,15 @@
+$p = 'D:\FL\.tmp-1261-pr-body.md'
+$row1 = '- ① Android 真机逐页截图对比（**①a**：agent 出证、按**第二次分支收口**跑；**①b**：命中能力面，**待签** —— 回退后只剩「长按出中文名」一条需要人眼） — 执行人：agent 执行 · 日期：2026-09-22 · 复测对象：分支 `2f4f74e1`（含回退提交 `f0ef4b8e`）真运行到 Redmi `23049RAD8C` / Android 15（无线调试；部署读数 `HX_RUN_DEPLOY deployed=true www=…1790064062->1790064702 … reason=资源已落到设备…mtime 相对基线前进`；本轮另做了一次 `cli launch app-android --cleanCache true` 干净重建，缘由见下「坑位」）· 结论（含产物）：入库在 `docs/verification/forum/1261/` —— 判据 1 `docs/verification/forum/1261/01-forum-create-text.jpg`（纯文本档：**无** tab / 工具栏 / 边界提示行）对判据 2 `docs/verification/forum/1261/02-forum-create-markdown.jpg`（Markdown 档：三者齐现、工具栏**恰好五枚**）；判据 3 **图片区是单入口**（两档 dump 都是**一个 `＋` + `0/9`**，全批 dump 无「拍照」「相册」常驻方块）；判据 4 `docs/verification/forum/1261/03-forum-create-toolbar-insert.content-desc.txt`（`E01code` → `### E01code`，计数 0→11）；判据 5 `docs/verification/forum/1261/04-forum-create-preview.content-desc.txt`（源串消失、块渲染）；判据 6 `docs/verification/forum/1261/05-image-entry-picker.jpg`（点 `＋` 弹**含两个来源**的选择器：拍摄 / 从相册选择 / 取消 —— 旧形态是**直达相机**）；判据 7 `docs/verification/forum/1261/06-album-picker.content-desc.txt`（相册入口进得去、`完成(0/9)`、**无应用内权限弹窗**）；判据 8 `docs/verification/forum/1261/07-after-upload.content-desc.txt`（选图 → 回应用 → **上传成功**：缩略图 + `×` + 计数 `1/9`，经你授权由我执行）；logcat 判据见 `docs/verification/forum/1261/logcat.txt`（4743 行 / E 级 106 / **app 进程 20** / 命中改动关键词 **0**，不写「E=0」）。**未覆盖面**见 `docs/verification/forum/1261/README.md`（回复栏与「我的动态」仍未取证；列表卡片预览属另一批）。'
+$row4 = '- ④ 本地编译门（默认 ④c `npm run build:kotlin-all`） — 执行人：agent 执行 · 日期：2026-09-22 · 复测对象：⚠️ **本 head 未取得有效读数 —— 本机 ④c 现会拿旧导出编译出假绿** · 结论（含产物）：**本次跑出的 `KOTLIN_ALL_RESULT errors=0 classes=1526 files=120` 不可用作本 head 的 ④c 证据**。机制（本机现测）：脚本的 publish 步用的 `cli publish app-android --type appResource` 在这台机器的 HBuilderX（CLI 自报 v5.24，`cli --help` 的命令表只有 `compile` / `launch` / `logcat` / `pack`）里**已不存在**，实测报 `-1:cli:命令…不存在或缺少参数`；而脚本对 publish 步只按 `与主程序的连接已中断|启动超时` 两条文案判失败 ⇒ **没接住**，随后按「成败以产物为准」取 `unpackage/resources/app-android` 里**上次会话 09:47 的旧导出**（实测：该目录 mtime 仍 09:47:32，且内容**不含**本次回退的 `imageCounter` / `.image-add-icon`，仍带旧的 `拍照` / `相册`）⇒ 那次 ✅ 是**假绿**。**已立票 #1272**（影响面：所有移动端 PR 的 ④c）。**恢复路径**：先在 HBuilderX GUI 执行一次「发行 → 原生App-本地打包 → 生成本地打包App资源」刷新该目录，再用 `npm run build:kotlin-all -SkipPublish` 重跑并把新读数回填本行。**边界**：④c ≠ compileReleaseKotlin，只作本地加固（脚本自述）。'
+$warn = '> ⚠️ **本 PR 现在不可合并 —— 两条待办**：（1）**④c 待新导出后重跑**（本机 ④c 会拿旧导出编译出假绿，机制与恢复路径见上 ④ 行；已立票 **#1272**）；（2）**①b 待签** —— 形态回退后**只剩「长按工具栏按钮出中文名」一条需要人眼**（其余含**选图 → 回应用 → 上传成功**的写路径都已机检，见 ① 行判据 6/7/8）：由你给出那一句原文，我代录进 ① 行后合并。'
+$lines = [System.IO.File]::ReadAllLines($p)
+$out = New-Object System.Collections.Generic.List[string]
+$hit1 = $false; $hit4 = $false; $hitW = $false
+foreach ($l in $lines) {
+  if ($l.StartsWith('- ① ')) { $out.Add($row1); $hit1 = $true }
+  elseif ($l.StartsWith('- ④ 本地编译门')) { $out.Add($row4); $hit4 = $true }
+  elseif ($l.StartsWith('> ⚠️')) { $out.Add($warn); $hitW = $true }
+  else { $out.Add($l) }
+}
+[System.IO.File]::WriteAllLines($p, $out, (New-Object System.Text.UTF8Encoding($false)))
+"row1=$hit1 row4=$hit4 warn=$hitW; CR=" + ([regex]::Matches([System.IO.File]::ReadAllText($p), "`r")).Count

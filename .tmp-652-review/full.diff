@@ -1,0 +1,911 @@
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/job.uts" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/job.uts"
+index 7ddf4556..a5cbbe74 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/job.uts"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/job.uts"
+@@ -1,51 +1,18 @@
+ /**
+  * 职位相关 API
++ *
++ * ## 出口收紧（#652 T14）
++ *
++ * 两个有载荷的 GET 出口（详情 / 列表）由裸 `get(...).then(...)` 收紧至 mapper-callback
++ * 便捷面 `getMapped<T>`（#639 出口家族）：请求形态与字段读取逐行不变，只是出口签名带 DTO、
++ * 映射从内联 `.then` 收敛到 `buildJobPosting`（此前详情与列表各复制一份同形映射，一并去重）。
++ * DTO 类型迁至 `types/job.uts`（经 `types/index` 消费），本文件只留映射与出口。
++ *
++ * 留裸 `post` 的两条（void 透传，按 ADR-0007「两问判据」）：`reportJobApi` / `applyJobApi`
++ * 后端无 data 载荷、调用方只 await 成败，硬套 identity map 属过度设计 ⇒ 保持原 `post` 通路。
+  */
+-import { get, post } from './request'
+-
+-/** 职位详情 */
+-export type JobPosting = {
+-    id : number
+-    title : string
+-    region : string
+-    salary_min ?: number
+-    salary_max ?: number
+-    salary_text : string
+-    experience_req : string
+-    description : string
+-    specialty_id ?: number
+-    published_at : string
+-    company_name : string
+-    status : string
+-    forced_offline : boolean
+-    /** 学员视角投递态（#488）：'' 可投 / 'applied' 已投递 / 'not_hired' 未录用（冷却中）；'withdrawn' 后服务端不给状态（可立即重投） */
+-    apply_state ?: string
+-    /** 'not_hired' 时距可再投的天数（服务端向上取整；30 天冷却） */
+-    cooldown_days ?: number
+-}
+-
+-/** 职位列表查询参数 */
+-export type JobListParams = {
+-    page ?: number
+-    page_size ?: number
+-    specialty_id ?: number
+-    region ?: string
+-    salary_min ?: number
+-    salary_max ?: number
+-    experience ?: string
+-}
+-
+-/** 职位列表查询结果 */
+-export type JobListResult = {
+-    items : JobPosting[]
+-    total : number
+-}
+-
+-/** 举报原因预设选项 */
+-export type ReportReason = {
+-    key : string
+-    label : string
+-}
++import { getMapped, post } from './request'
++import type { JobPosting, JobListParams, JobListResult, ReportReason } from '../types/index'
+ 
+ /** 预设举报原因列表 */
+ export const REPORT_REASONS : ReportReason[] = [
+@@ -55,30 +22,43 @@ export const REPORT_REASONS : ReportReason[] = [
+     { key: 'other', label: '其他' },
+ ]
+ 
++/** 从 UTSJSONObject 构造 JobPosting（详情与列表共用；字段读取与收紧前逐行一致） */
++function buildJobPosting(obj : UTSJSONObject) : JobPosting {
++    return {
++        id: obj['id'] as number,
++        title: (obj['title'] as string) ?? '',
++        region: (obj['region'] as string) ?? '',
++        salary_min: obj['salary_min'] != null ? obj['salary_min'] as number : null,
++        salary_max: obj['salary_max'] != null ? obj['salary_max'] as number : null,
++        salary_text: (obj['salary_text'] as string) ?? '',
++        experience_req: (obj['experience_req'] as string) ?? '',
++        description: (obj['description'] as string) ?? '',
++        specialty_id: obj['specialty_id'] != null ? obj['specialty_id'] as number : null,
++        published_at: (obj['published_at'] as string) ?? '',
++        company_name: (obj['company_name'] as string) ?? '',
++        status: (obj['status'] as string) ?? 'open',
++        forced_offline: (obj['forced_offline'] as boolean) ?? false,
++        apply_state: (obj['apply_state'] as string) ?? '',
++        cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
++    } as JobPosting
++}
++
++/** 从 UTSJSONObject 构造 JobListResult（items 逐条走 buildJobPosting，total 直读） */
++function buildJobListResult(data : UTSJSONObject) : JobListResult {
++    const itemsRaw = (data['items'] as UTSJSONObject[]) ?? []
++    const items : JobPosting[] = itemsRaw.map((obj : UTSJSONObject) : JobPosting => buildJobPosting(obj))
++    return {
++        items: items,
++        total: data['total'] as number,
++    } as JobListResult
++}
++
+ /**
+  * 获取职位详情
+  * @param jobId 职位 ID
+  */
+ export function getJobDetailApi(jobId : number) : Promise<JobPosting> {
+-    return get('/jobs/' + jobId).then((data : UTSJSONObject) : JobPosting => {
+-        return {
+-            id: data['id'] as number,
+-            title: (data['title'] as string) ?? '',
+-            region: (data['region'] as string) ?? '',
+-            salary_min: data['salary_min'] != null ? data['salary_min'] as number : null,
+-            salary_max: data['salary_max'] != null ? data['salary_max'] as number : null,
+-            salary_text: (data['salary_text'] as string) ?? '',
+-            experience_req: (data['experience_req'] as string) ?? '',
+-            description: (data['description'] as string) ?? '',
+-            specialty_id: data['specialty_id'] != null ? data['specialty_id'] as number : null,
+-            published_at: (data['published_at'] as string) ?? '',
+-            company_name: (data['company_name'] as string) ?? '',
+-            status: (data['status'] as string) ?? 'open',
+-            forced_offline: (data['forced_offline'] as boolean) ?? false,
+-            apply_state: (data['apply_state'] as string) ?? '',
+-            cooldown_days: data['cooldown_days'] != null ? data['cooldown_days'] as number : null,
+-        } as JobPosting
+-    })
++    return getMapped<JobPosting>('/jobs/' + jobId, null, (data : UTSJSONObject) : JobPosting => buildJobPosting(data))
+ }
+ 
+ /**
+@@ -126,30 +106,5 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
+     const qs = qsParts.join('&')
+     const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
+ 
+-    return get(url).then((data : UTSJSONObject) : JobListResult => {
+-        const itemsRaw = (data['items'] as UTSJSONObject[]) ?? []
+-        const items : JobPosting[] = itemsRaw.map((obj : UTSJSONObject) : JobPosting => {
+-            return {
+-                id: obj['id'] as number,
+-                title: (obj['title'] as string) ?? '',
+-                region: (obj['region'] as string) ?? '',
+-                salary_min: obj['salary_min'] != null ? obj['salary_min'] as number : null,
+-                salary_max: obj['salary_max'] != null ? obj['salary_max'] as number : null,
+-                salary_text: (obj['salary_text'] as string) ?? '',
+-                experience_req: (obj['experience_req'] as string) ?? '',
+-                description: (obj['description'] as string) ?? '',
+-                specialty_id: obj['specialty_id'] != null ? obj['specialty_id'] as number : null,
+-                published_at: (obj['published_at'] as string) ?? '',
+-                company_name: (obj['company_name'] as string) ?? '',
+-                status: (obj['status'] as string) ?? 'open',
+-                forced_offline: (obj['forced_offline'] as boolean) ?? false,
+-                apply_state: (obj['apply_state'] as string) ?? '',
+-                cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
+-            } as JobPosting
+-        })
+-        return {
+-            items: items,
+-            total: data['total'] as number,
+-        } as JobListResult
+-    })
++    return getMapped<JobListResult>(url, null, (data : UTSJSONObject) : JobListResult => buildJobListResult(data))
+ }
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/search.uts" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/search.uts"
+index 73fdf9fd..557bf81d 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/search.uts"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/api/search.uts"
+@@ -16,8 +16,15 @@
+  * 而 `middleware.CredentialScoped` 的兜底分支要求 `roleOf(c) == student`（credential_scope.go:42）
+  * —— 没有 JWT 解析就没有角色 ⇒ **兜底永不生效**。因此不传 `credential_id` 时搜索是
+  * 「全证件不分区」，不是「按当前证件」。Web 侧是显式传的（SearchPage.vue），移动端此前漏传。
++ *
++ * ## 出口收紧（#652 T14）
++ *
++ * 两个出口由裸 `get(...).then(...)` 收紧至 mapper-callback 便捷面 `getMapped<T>`（#639 出口家族）：
++ * 请求形态逐字不变（getMapped 的 query 序列化与 get 同通路），响应字段读取也逐行不变——
++ * 变的只是出口签名带 DTO 类型、内联映射收敛为 `buildSearchResult` / `buildSearchPagedResult`
++ * 具名函数（与 #643 T05 已收紧域同构：出口一行委托，映射只有一份实现）。
+  */
+-import { get } from './request'
++import { getMapped } from './request'
+ import { toNumber, toStr } from './helpers'
+ import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../types/index'
+ 
+@@ -54,6 +61,43 @@ function buildSearchCategoryResult(obj : UTSJSONObject | null) : SearchCategoryR
+ 	} as SearchCategoryResult
+ }
+ 
++/** 全局搜索结果映射（#652 T14：收紧至 getMapped 出口，响应字段读取逐行不变） */
++function buildSearchResult(data : UTSJSONObject, keyword : string) : SearchResult {
++	const coursesRaw = data['courses']
++	const chaptersRaw = data['chapters']
++	const questionsRaw = data['questions']
++	const contentsRaw = data['contents']
++	const topicsRaw = data['topics']
++	return {
++		keyword: toStr(data['keyword'], keyword),
++		courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
++		chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null),
++		questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
++		contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
++		topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
++	} as SearchResult
++}
++
++/** 指定类型分页结果映射（同口径；keyword/type 是回退缺省值，须由出口传入） */
++function buildSearchPagedResult(data : UTSJSONObject, keyword : string, type : string) : SearchPagedResult {
++	const items : SearchItem[] = []
++	const itemsRaw = data['items']
++	if (itemsRaw != null) {
++		const arr = itemsRaw as Array<UTSJSONObject>
++		for (let i = 0; i < arr.length; i++) {
++			items.push(buildSearchItem(arr[i]))
++		}
++	}
++	return {
++		keyword: toStr(data['keyword'], keyword),
++		type: toStr(data['type'], type),
++		total: toNumber(data['total']),
++		page: toNumber(data['page'], 1),
++		pages: toNumber(data['pages']),
++		items: items,
++	} as SearchPagedResult
++}
++
+ /** 显式证件参数：>0 才下发（0 表示「未声明」，与服务端 nil 语义一致） */
+ function withCredential(params : UTSJSONObject, credentialId : number) : UTSJSONObject {
+ 	if (credentialId > 0) {
+@@ -69,21 +113,7 @@ function withCredential(params : UTSJSONObject, credentialId : number) : UTSJSON
+  */
+ export function searchAllApi(keyword : string, credentialId : number = 0) : Promise<SearchResult> {
+ 	const params : UTSJSONObject = withCredential({ keyword: keyword } as UTSJSONObject, credentialId)
+-	return get('/search', params).then((data : UTSJSONObject) : SearchResult => {
+-		const coursesRaw = data['courses']
+-		const chaptersRaw = data['chapters']
+-		const questionsRaw = data['questions']
+-		const contentsRaw = data['contents']
+-		const topicsRaw = data['topics']
+-		return {
+-			keyword: toStr(data['keyword'], keyword),
+-			courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
+-			chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null),
+-			questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
+-			contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
+-			topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
+-		} as SearchResult
+-	})
++	return getMapped<SearchResult>('/search', params, (data : UTSJSONObject) : SearchResult => buildSearchResult(data, keyword))
+ }
+ 
+ /**
+@@ -101,22 +131,5 @@ export function searchByTypeApi(keyword : string, type : string, page : number =
+ 		page: page.toString(),
+ 		page_size: pageSize.toString(),
+ 	} as UTSJSONObject, credentialId)
+-	return get('/search', params).then((data : UTSJSONObject) : SearchPagedResult => {
+-		const items : SearchItem[] = []
+-		const itemsRaw = data['items']
+-		if (itemsRaw != null) {
+-			const arr = itemsRaw as Array<UTSJSONObject>
+-			for (let i = 0; i < arr.length; i++) {
+-				items.push(buildSearchItem(arr[i]))
+-			}
+-		}
+-		return {
+-			keyword: toStr(data['keyword'], keyword),
+-			type: toStr(data['type'], type),
+-			total: toNumber(data['total']),
+-			page: toNumber(data['page'], 1),
+-			pages: toNumber(data['pages']),
+-			items: items,
+-		} as SearchPagedResult
+-	})
++	return getMapped<SearchPagedResult>('/search', params, (data : UTSJSONObject) : SearchPagedResult => buildSearchPagedResult(data, keyword, type))
+ }
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/adr/0007-\346\270\220\350\277\233\345\274\217\351\207\215\346\236\204\346\211\213\345\206\214.md" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/adr/0007-\346\270\220\350\277\233\345\274\217\351\207\215\346\236\204\346\211\213\345\206\214.md"
+index 66755372..d314fa2e 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/adr/0007-\346\270\220\350\277\233\345\274\217\351\207\215\346\236\204\346\211\213\345\206\214.md"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/docs/adr/0007-\346\270\220\350\277\233\345\274\217\351\207\215\346\236\204\346\211\213\345\206\214.md"
+@@ -740,8 +740,159 @@ launch 与 logcat 日志）只活在 `.ci-verify/` ⇒ 现在 README 里「原
+   `code_service.go:596/664/756`）⇒ 系统里不可能存在 >20 的合法口令 ⇒ **客户端补上限对登录页同样安全**，
+   不会把人锁在门外。两票建议并一次收口（同批 `.uvue`/`.uts`、同一次 ④ + ①a）。
+ 
++## T14 域 api 批量收紧 A 复盘（#652）
++
++票面：把 points / jobs / featured / search / guide / notifications **六个域**的 api 收紧到
++「显式 DTO + 手动映射，经 #639 mapper-callback 出口家族」；调用方页面只做机械 import 适配（零行为改动）；
++api 层 allowlist 条目清零。分支 `refactor/api-batch-a`。
++
++### 坑位一（本票最大信息量）：「六域」在开工时已经不成立了
++
++术前普查（每个 `api/*.uts` 数一遍 `get(` / `getMapped` / `^export type`）的结论：
++
++| 域 | 术前现状 | 本票动作 |
++| --- | --- | --- |
++| points | **#709 已收紧**（3 `getMapped` + 2 `postMapped` + 7 `build*`，零 `.catch`） | 只做不回潮复检 |
++| featured / notification | **T05 #643 已收紧**（同款形态） | 只做不回潮复检 |
++| search | 裸 `get(...).then` + 映射内联在出口 | 收紧 |
++| jobs | 裸 `get(...).then` + **DTO 内联在 api 文件** + 详情/列表两份同形映射 | 收紧 + 去重 + DTO 归位 |
++| guide | **没有 api 文件** | 登记事实 + 钉不回潮 |
++
++- **guide 是票面幻影项**：`pages/guide/` 只有 `choose-cert.uvue` 一个文件，依赖面是
++  `stores/auth` + `utils/storage` + `utils/navigation`（切完证件 `uni.reLaunch` 到 dashboard / login），
++  零 api import；`grep -rni guide backend --include=*.go` 命中 **0** ⇒ 后端从未注册过 guide 端点。
++  **正解是把这条事实钉进契约，不是新建一个空 `api/guide.uts` 去满足 AC 字面**。
++- **一般教训**：**批量收紧票开工前先跑出口家族现状普查**。epic 排票时六域都还是裸的，
++  两张并行的前序票（#709 / #643）把它们顺手收掉了 ⇒ 票面陈旧。按票面字面「补做」会造出无收益改动，
++  而幻影项会直接诱导人建空文件。批量票的**第一份产出是现状表，不是代码**。
++
++### 决策一：域 DTO 归位 `types/<域>.uts` 的判据是「19 vs 1」，不是审美
++
++`api/job.uts` 是**全仓唯一一个把响应 DTO 内联声明在 api 文件里的域 api**。度量（同一棵树实测）：
++
++- `types/` 下已有 **18** 个域类型文件（`ai` / `auth` / `common` / `course` / `credential` / `exam` / `faq` /
++  `favorite` / `featured` / `forum` / `note` / `notification` / `points` / `practice` / `resume` / `search` /
++  `student` + barrel），`api/job` 是唯一没归队的；
++- 页面层 type import：**70 处指向 `types/index`**，8 处指向 `api/*` —— 而那 8 处
++  （`ContributionFileItem` / `WrongQuestionQuery` / `Recruit*`）全是 **api 本地的请求参数类型**，
++  不是响应 DTO。⇒ 口径清晰：**响应 DTO 住 `types/`，请求参数可以住 api**。
++- 本票把 `JobPosting` / `JobListParams` / `JobListResult` / `ReportReason` 逐字节搬进新建
++  `types/job.uts`（51 行），`types/index.uts` 加一行 barrel re-export，两个 job 页面各改**一行**
++  type import 指向。api/job.uts 155→**110** 行。
++
++**barrel 行的形态必须用 `export { type X, type Y } from './job'`**（inline type modifier）。
++写成 `export type { X } from './job'` 会让 UTS 编译器报 `load_transformed failed … index not found`
++—— 见上节「types 域拆分两个坑位 · 坑位一」，本票照既有先例走，未重踩。
++
++### 决策二：这次的真实代价 = 门 ①a 与 ② 从「免」变「必过」，登记而不回避
++
++`api/search.uts` 单独收紧是纯 `.uts` 改动 ⇒ 命中「低风险运行时面」豁免 ⇒ ①② 免。
++但**决策一那两个页面的 type import 一动，整个 PR 就被降级为常规运行时面**——
++判据（`.github/workflows/pr-evidence.yml` 的 `isLowRiskUtChange`）是**逐文件**的：改动集里
++每一个文件都得落在 `*.uts` / `*test.js` / `*.md` / `jest.config*.js` 白名单内，一行 `.uvue` 就破功。
++
++这正是根 `AGENTS.md` 那条「不看源码读不出来」的硬口径的又一例。**为什么仍然做**：
++
++- 反向做法（让 `api/job.uts` 用 `export { type JobPosting, … } from '../types/job'` 把类型再导出，
++  页面 import 一个字都不动）**技术上成立**、且能省下 ①a + ② 两道门；
++- 但它会造出**仓内唯一「api 层 re-export 类型」的异类**——即把「不一致」从「DTO 声明位置不一致」
++  换成「DTO 导出路径不一致」，与本票所属 epic 的目标（治 `api 契约不一致`，见「背景」）**反向**。
++- ⇒ 结论：**门成本不是把结构留在错位的理由**。成本如实登记在此，由本票 PR 的 ①a + ② 兑现。
++  （度量补一句：两个 `.uvue` 各只改一行，改后**行数逐字不变**——`job-detail.uvue` 573→573、
++  `job-list.uvue` 513→513 ⇒ 页面渲染面零改动，①a 的实质风险极低。）
++
++### 决策三：收紧后的目标形态 = 「出口一行委托，出口体内零字段读取」
++
++对齐 T05 #643 已收紧域的既有形态（`featured.uts` / `notification.uts` 都是这个形状）：
++
++```ts
++export function searchAllApi(keyword : string, credentialId : number = 0) : Promise<SearchResult> {
++    const params : UTSJSONObject = withCredential({ keyword: keyword } as UTSJSONObject, credentialId)
++    return getMapped<SearchResult>('/search', params, (data : UTSJSONObject) : SearchResult => buildSearchResult(data, keyword))
++}
++```
++
++- **`keyword` / `type` 是回退缺省值，只能由出口注入映射**（`toStr(data['keyword'], keyword)`）。
++  这决定了 `buildSearchResult` 不能是纯单参函数——写成单参会静默丢掉回退，是一处会改变行为的假等价。
++- **job 详情与列表此前各有一份 15 行同形映射**（`apply_state` / `cooldown_days` 那组 #488 字段）⇒
++  去重为 `buildJobPosting`，列表经 `buildJobListResult` 复用它。`jobApplyStateContract` 的旧锁
++  C1 原本断言「两处映射点各写了这两个字段（计数 ≥ 2）」，收紧后只剩一处 ⇒ 判据**升级为结构锁**：
++  两端点必须都路由进同一个 `buildJobPosting`。**这是强化不是弱化**——旧判据容忍两份会各自漂移的复制品，
++  新判据让「补了详情漏列表」在结构上不可能发生。
++- **规则 M**（`*Mapped` 出口不得收裸 `build*` 函数引用，Kotlin error17）：一律箭头包裹。
++- **请求形态锁**：`getJobListApi` 保留手动 query 拼接 + `params` 传 `null`。`getMapped` 内部
++  `url + (url.includes('?') ? '&' : '?') + pairs.join('&')` 与旧拼接逐字节同解，
++  「顺手改成传 params 对象」属另一件事（会换掉序列化通路），故钉住现状不改。
++- **void 透传仍留裸 `post`**（`reportJobApi` / `applyJobApi` / `viewFeaturedContentApi` / `mark*`）：
++  按「两问判据」①无载荷可 DTO 化 ②消费方全在手，硬套 identity map 属过度设计。
++
++### 落锁：`utils/apiBatchAContract.test.js`（296 行 / 46 用例）+ 三条判据各带注入自检
++
++批量票的契约不重复前序票的主体锁（points / featured / notification 的域锁在
++`pointsRealApiContract` / `dashboardContract`），本票只钉**批次一致性**与**不回潮**：
++
++| 判据 | 抓什么 | 为什么需要它 |
++| --- | --- | --- |
++| `RAW_THEN_TO_DTO` | `return get/post/patch(...).then((data : UTSJSONObject) : DTO …` | 「未收紧」的标准形态 |
++| `RAW_GET` | 域 api 里任何裸 `get(` | **比上条更严**：`get(url).then(x => x)`、`.then((d : any) => …)` 这类没标注 `data : UTSJSONObject` 的回潮从上一条的缝里过去。实测五域该判据零命中，而 `getMapped` / `getJobListApi` / `getUnreadCountApi` 不误伤（`get` 后紧跟字母而非 `(`） |
++| `FIELD_READ` | 出口体内出现 `data['…']` | 映射一旦回到出口里，就意味着又开始按出口复制映射（job 域收紧前正是这个病） |
++
++另钉：五域 import 含 `getMapped`、DTO 一律来自 `types/index` 且 api 层零 `export type`、
++guide 零 api + 页面零 api import、五域永不出现在 GUARD_ALLOWLIST、以及每条判据的
++**植入违规必红 / 合法形态不误伤**双向自检。
++
++### 缺口七的第三面：新搬进 barrel 的类型族要进反向自检清单
++
++「types 域拆分两个坑位 · 缺口七」（规则 K/L 字段表被 barrel 行以零字段先占 → **本机绿 / CI 红**，
++根因是 `readdir` 顺序 NTFS≠ext4）对本票是**直接命中**——决策一正是往 barrel 里加一族新类型。
++正则已收紧为「类型头与 `{` 同行」，barrel 四形态均不命中，且「正序 / 逆序两次构建结果必须一致」
++的通用锁会抓住任何回归。**本票补的是它的反向断言面**：`utsAndroidCompile.test.js` 那份
++「被 barrel 先占过的类型必须解析出真实字段」清单原本只有受害的 3 个类型，现加入
++`JobPosting`（含 #488 的 `apply_state` / `cooldown_days`）——**每往 barrel 归位一族，清单就加一族**，
++否则新家族只被通用顺序锁覆盖、不被「字段真在表里」这条具体断言覆盖。
++
++### 既成事实与遗留：api 层 allowlist
++
++票面「api/ 层 allowlist 条目（catch/detail）清零」在本票范围内**早已成立**，不是本票动作：
++「catch/detail」指规则 H（`catch (e : any)`）与规则 I（`: any` 参数访问 `.detail`，见 `AGENTS.md` 坑位表）；
++现状是规则 I 的键已不存在，规则 H 只剩 `api/checkin.uts`（归 forum）与
++`pages/notifications/notifications.uvue`（归 notifications）**两条，都不在本票六域里** ⇒ 六域对
++allowlist 的净贡献为 0，无需删除动作。本票只钉「五域 api 文件永不出现在豁免名单里」防回潮。
++
++⚠️ **遗留（另立票，不在本票顺手动）**：那两条 H 项实测各自规则命中数已为 **0**，属**过期豁免**。
++删除要动 `utils/guardAllowlist.js` + `utils/modules.js` 且跨 forum / notifications 两个模块，
++塞进本票还会（见决策二）再破一次「低风险运行时面」——由各自模块的清票处理。
++
++### 门
++
++- **③** `npm run test:unit`：**131 suites / 2529 tests 全绿**（253s，2026-09-24）。
++- **④c** `npm run build:kotlin-all`：`KOTLIN_ALL_RESULT errors=0 classes=1501 files=120
++  input=unpackage\resources\app-android freshness=fresh`。
++  ⚠️ **不只看 errors=0**——#1272 的假绿形态是「errors=0 而导出的是一份陈旧树」。本票据此补了
++  **覆盖证明**：在导出的 `index.kt` 里搜本次新引入的符号，`buildSearchResult` / `buildSearchPagedResult`
++  / `buildJobPosting` / `buildJobListResult` **全部命中**，而收紧前的旧形态 `get('/search'` 命中 **0**
++  ⇒ 编译的确实是当次改动。**「④ 绿」的完整断言是「errors=0 ∧ 新符号在导出里」**，缺一不成立。
++- **④a 免**：未命中 dev 专属面（`pages.json` / `manifest.json` / `platformConfig.json` 未动、无新增页面、
++  非收口 PR）。
++- **①a / ② 必过**：**这是决策二的直接后果** —— 纯 `.uts` 的本票原本可拿「低风险运行时面」豁免，
++  但两个 `.uvue` 各改一行 type import 使 PR 降级为常规运行时面。设备与微信开发者工具均在位
++  （`192.168.0.212:37611` / `D:\软件\微信web开发者工具\cli.bat`），随 PR 一并执行。
++  ①b 免（未命中能力面：本票不碰指纹 / 权限 / 上传 / 厂商交互）。
++
+ ## 关联
+ 
++- T14 域 api 批量收紧 A（**#652**，分支 `refactor/api-batch-a`，手术 commit `77789430` + 本复盘 commit，2026-09-24）：
++  `api/search.uts` 两出口 + `api/job.uts` 两出口收紧至 `getMapped<T>`（**留裸 `post` 两条**：`reportJobApi` / `applyJobApi`
++  void 透传，按「两问判据」）+ job 域详情/列表两份同形映射去重为 `buildJobPosting` + 四个 job DTO 逐字节归位新建
++  `types/job.uts`（`types/index.uts` 加一行 inline-type barrel）+ 两个 job 页面各改一行 type import（页面行数 573 / 513 **未变**）；
++  票面「六域」实测只剩两域要动（points #709 / featured+notification #643 已收紧，**guide 无 api 文件且后端零端点** ⇒ 登记幻影项不建空文件），
++  api 层 allowlist「清零」这条 AC 是**既成事实**（残留两条过期 H 豁免不属本票域，另立票）；
++  新增 `utils/apiBatchAContract.test.js`（46 用例）+ 改口径升级 `jobApplyStateContract` C1（映射点计数 ≥2 → 结构锁）
++  + `utsAndroidCompile` 缺口七反向自检补 `JobPosting` 字段表；
++  ③ **131 suites / 2529 tests** 全绿、④c `errors=0 classes=1501 files=120 freshness=fresh`（**另附新符号覆盖证明**，
++  防 #1272 陈旧导出假绿）、④a 免（未命中 dev 专属面）、①b 免（未命中能力面）；
++  **①a 与 ② 因那两行 `.uvue` 由「免」转「必过」**（决策二）——本复盘 commit **不声称**两门已执行，执行结果只写在 PR 的
++  `## 验收证据` 段与票面进度里
+ - T13 login 手术（**#651**，分支 `refactor/login`，PR **#1288**，手术 `625ea7cd` + 本复盘 `80d18aa2`/`11bcdbf7` + ①a 取证与证据 commit，2026-09-22/23）：
+   `login.uvue` 977→581 + 门控/表单双拆（`useLoginForm` 434 / `useBiometricGate` 169）+ 声明面预算翻转（`pending` → 600）；
+   **模板与样式双 sha256 逐字节锁**（本票先例，成立条件 = 解构形态使模板零改写）+ **非单例 composable 的实例注入锁**；
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-detail.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-detail.uvue"
+index fd353aaa..be0cfdfe 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-detail.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-detail.uvue"
+@@ -110,7 +110,7 @@
+     import { onLoad } from '@dcloudio/uni-app'
+     import { useStatusBarHeight } from '../../utils/system'
+     import { getJobDetailApi, reportJobApi, applyJobApi, REPORT_REASONS } from '../../api/job'
+-    import type { JobPosting, ReportReason } from '../../api/job'
++    import type { JobPosting, ReportReason } from '../../types/index'
+ 
+     const statusBarHeight = useStatusBarHeight()
+     const windowHeight = uni.getSystemInfoSync().windowHeight
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-list.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-list.uvue"
+index a4d553a0..180ca971 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-list.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/jobs/job-list.uvue"
+@@ -90,7 +90,7 @@
+     import { getJobListApi } from '../../api/job'
+     import { getCatalogTreeSpecialties } from '../../api/course'
+     import { useAuthStore } from '../../stores/auth'
+-    import type { JobPosting } from '../../api/job'
++    import type { JobPosting } from '../../types/index'
+ 
+     const statusBarHeight = useStatusBarHeight()
+     const windowHeight = uni.getSystemInfoSync().windowHeight
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/index.uts" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/index.uts"
+index 1b3ec068..4ad1d31b 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/index.uts"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/index.uts"
+@@ -17,6 +17,7 @@ export { type ResumeExperience, type ResumeCertification, type ResumeData, type
+ export { type FeaturedContentItem, type FeaturedContentListResult, type FeaturedContentDetail } from './featured'
+ export { type FavoriteItem, type FavoriteListResult, type FavoriteCheckResult } from './favorite'
+ export { type SearchItem, type SearchCategoryResult, type SearchResult, type SearchPagedResult, type HighlightSegment } from './search'
++export { type JobPosting, type JobListParams, type JobListResult, type ReportReason } from './job'
+ export { type StudyStats, type CourseProgressItem, type StudentProfile, type StudyRecord, type StudyRecordsResult, type StudentCourse, type StudentCourseListResult, type StudentCourseChapterProgress, type StudentCourseDetail } from './student'
+ export { type NoteItem, type NoteListResult } from './note'
+ export { type FaqEntry, type FaqCategory, type FaqNavItem, type FaqGroup } from './faq'
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/job.uts" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/job.uts"
+new file mode 100644
+index 00000000..deda107b
+--- /dev/null
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/types/job.uts"
+@@ -0,0 +1,51 @@
++/**
++ * 职位模块类型
++ *
++ * 契约事实源：后端学员侧职位 DTO（`/jobs`、`/jobs/:id`）。#652 T14 域 api 批量收紧时，
++ * 这组类型从 `api/job.uts` 内联声明迁到本文件（与 points / featured / notification / search
++ * 等已收紧域同构：DTO 落 `types/<域>.uts`，页面经 `types/index` 消费，api 层只做映射）。
++ */
++
++/** 职位详情 */
++export type JobPosting = {
++    id : number
++    title : string
++    region : string
++    salary_min ?: number
++    salary_max ?: number
++    salary_text : string
++    experience_req : string
++    description : string
++    specialty_id ?: number
++    published_at : string
++    company_name : string
++    status : string
++    forced_offline : boolean
++    /** 学员视角投递态（#488）：'' 可投 / 'applied' 已投递 / 'not_hired' 未录用（冷却中）；'withdrawn' 后服务端不给状态（可立即重投） */
++    apply_state ?: string
++    /** 'not_hired' 时距可再投的天数（服务端向上取整；30 天冷却） */
++    cooldown_days ?: number
++}
++
++/** 职位列表查询参数 */
++export type JobListParams = {
++    page ?: number
++    page_size ?: number
++    specialty_id ?: number
++    region ?: string
++    salary_min ?: number
++    salary_max ?: number
++    experience ?: string
++}
++
++/** 职位列表查询结果 */
++export type JobListResult = {
++    items : JobPosting[]
++    total : number
++}
++
++/** 举报原因预设选项 */
++export type ReportReason = {
++    key : string
++    label : string
++}
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/apiBatchAContract.test.js" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/apiBatchAContract.test.js"
+new file mode 100644
+index 00000000..83828590
+--- /dev/null
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/apiBatchAContract.test.js"
+@@ -0,0 +1,296 @@
++/**
++ * 域 api 批量收紧 A 契约（refs #652，refactor epic #638 T14）
++ *
++ * 本票票面写「六个域 api 收紧」，实测收口现状是**只有两域还需要动**，锁按三类事实分别钉：
++ *
++ * ① 本票新收紧（此前仍是裸 get + 映射内联在出口）：
++ *    - api/search.uts：两出口 get(...) .then → getMapped<T> + 内联映射收敛为具名 build*
++ *    - api/job.uts：有载荷的 GET（详情 / 列表）→ getMapped<T> + build* 去重；DTO 内联声明迁至 types/job.uts
++ * ② 前序票**已经**收紧，本票只做「不回潮」复检（同批次口径齐平，防后续误改）：
++ *    - api/points.uts（#709）、api/featured.uts / api/notification.uts（T05 #643，主体锁在 dashboardContract）
++ * ③ 票面与实际不符的两项，登记为事实而非按票面补做（避免为凑 AC 造无收益改动）：
++ *    - **guide 域根本没有 api 文件**：pages/guide 只有 choose-cert.uvue 一个文件，它的依赖面是
++ *      stores/auth + utils/storage + utils/navigation（切证件后 uni.reLaunch 到 dashboard / login），
++ *      不触 api 层；后端亦无 guide 端点。⇒ 钉「零 api + 页面零 api import」防隐性回潮，不新建空文件。
++ *    - **api 层豁免在本票范围内早已清零**（既成事实，不是本票动作）。票面写的「catch/detail 条目」
++ *      = GUARD_ALLOWLIST 的规则 H（`catch (e : any)`）与规则 I（`: any` 参数访问 `.detail`，见
++ *      AGENTS.md 坑位表），两者现状：规则 I 键已不存在，规则 H 只剩两条 ——
++ *      api/checkin.uts（归 forum）与 pages/notifications/notifications.uvue（归 notifications），
++ *      **都不在本票五域里**。⇒ 六域 api 文件对 allowlist 的净贡献是 0，本票无需删除动作，
++ *      只钉「五域 api 文件永不出现在豁免名单里」防回潮。
++ *      （那两条 H 项实测规则命中数已为 0，属**过期豁免**；删除要动 guardAllowlist.js + modules.js
++ *      且跨两个模块，由各自模块的清票处理 —— 塞进本票还会把 PR 从「低风险运行时面」升级为必过 ①②。）
++ *
++ * void 透传出口（reportJobApi / applyJobApi / viewFeaturedContentApi / mark* 等）按 ADR-0007
++ * 「两问判据」保持裸 post，不硬套 identity map —— 本锁显式承认其为合法留裸，不算未收紧。
++ *
++ * .uvue/.uts 无法被 jest 直接 import，沿用仓库既有源码契约缝（先例 pointsRealApiContract / dashboardContract）。
++ */
++/** harness：读取层归一 + 模块归属面 + 豁免名单单点（本文件不自建 ROOT / read / walker） */
++const h = require('./contractHarness');
++const read = h.read;
++const exists = h.exists;
++const allowlistPaths = h.allowlistPaths;
++
++/**
++ * 抹掉块注释与行注释（`://` 例外，防误杀 URL 字面量）。
++ * 历史说明注释会提到裸 get、.then、.catch 这些「已退役」名词，断言只针对代码本体。
++ */
++function stripComments(src) {
++  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
++}
++
++/**
++ * 「未收紧」的判据形态：`return get|post|patch(...).then((data : UTSJSONObject) : DTO ...`
++ * —— 出口拿裸 HTTP 函数 + 内联 `.then` 直接映射成 DTO。收紧后应改走 *Mapped<T>。
++ * void 透传的 `.then(() : void => {...})` 无 `(data : UTSJSONObject)` 形参，天然不被本式命中。
++ */
++const RAW_THEN_TO_DTO = /return\s+(get|post|patch)\([^)]*\)\s*\.then\(\s*\(\s*data\s*:\s*UTSJSONObject\s*\)/;
++
++/**
++ * 域 api 里「裸 GET」的判据：`\bget\s*\(`。收紧后六域（有 api 文件的五域）**一条不剩**——
++ * 它们所有 GET 都有载荷，全走 getMapped。比 RAW_THEN_TO_DTO 更严：后者只抓「内联 .then 映射成
++ * DTO」这一种未收紧形态，`get(url).then(x => x)` 之类从它缝里漏过。
++ * 不误伤 getMapped / getJobListApi / getUnreadCountApi（`get` 后紧跟字母而非 `(`）。
++ * 裸 `post` 不在靶内：void 透传按「两问判据」合法留裸（见文件头）。
++ */
++const RAW_GET = /\bget\s*\(/;
++
++/** 出口体内「直接读响应字段」的判据：`data['x']`。收紧后出口只剩一行委托，故应零命中 */
++const FIELD_READ = /\bdata\['/;
++
++/**
++ * 本票六域里**有 api 文件**的五域。第六域 guide 无 api 文件（后端无 guide 端点，
++ * 见下方 ③-a 的登记），故不出现在这里的 it.each 里 —— 不是漏项。
++ */
++const DOMAINS = ['points', 'featured', 'notification', 'search', 'job'];
++
++/** 取某个顶层函数（`marker` 起）的函数体，到下一个行首 `}` 为止 */
++function topFn(fileSrc, marker) {
++  const start = fileSrc.indexOf(marker);
++  expect(start).toBeGreaterThan(-1);
++  const end = fileSrc.indexOf('\n}', start);
++  expect(end).toBeGreaterThan(-1);
++  return fileSrc.slice(start, end);
++}
++
++const searchApi = stripComments(read('api/search.uts'));
++const jobApi = stripComments(read('api/job.uts'));
++const typesJob = read('types/job.uts');
++const typesIndex = read('types/index.uts');
++const jobListPage = read('pages/jobs/job-list.uvue');
++const jobDetailPage = read('pages/jobs/job-detail.uvue');
++
++/* ══ ①-a search 域出口收紧（#652 T14） ══ */
++describe('search 域收紧：两出口经 getMapped<T>，请求形态与字段读取不变', () => {
++  it('import 只引入 getMapped（不再引入裸 get）', () => {
++    expect(searchApi).toMatch(/import\s*\{\s*getMapped\s*\}\s*from\s*'\.\/request'/);
++  });
++
++  it('searchAllApi / searchByTypeApi 各经 getMapped<SearchResult> / getMapped<SearchPagedResult>', () => {
++    expect(topFn(searchApi, 'export function searchAllApi')).toContain("getMapped<SearchResult>('/search'");
++    expect(topFn(searchApi, 'export function searchByTypeApi')).toContain("getMapped<SearchPagedResult>('/search'");
++  });
++
++  /**
++   * 「导出显式 DTO + **手动映射函数**」（本票 AC 原话）的落地形态：与 #643 T05 已收紧域同构——
++   * 出口一行委托具名 build*，出口体内零 `data['…']`。字段读取一旦回到出口里，就意味着映射又开始
++   * 各出口复制一份（job 域收紧前正是这个病：详情与列表两份同形映射，补一处漏一处）。
++   */
++  it('两出口一行委托具名映射，出口体内零字段读取（映射单一实现，与 T05 同构）', () => {
++    for (const [marker, delegation] of [
++      ['export function searchAllApi', '=> buildSearchResult(data, keyword)'],
++      ['export function searchByTypeApi', '=> buildSearchPagedResult(data, keyword, type)'],
++    ]) {
++      const body = topFn(searchApi, marker);
++      expect(body).toContain(delegation);
++      expect(body).not.toMatch(FIELD_READ);
++    }
++    // keyword/type 是回退缺省值，只能由出口传给映射（不是映射自己去猜）
++    expect(topFn(searchApi, 'function buildSearchResult')).toContain("keyword: toStr(data['keyword'], keyword)");
++    expect(topFn(searchApi, 'function buildSearchPagedResult')).toContain("type: toStr(data['type'], type)");
++  });
++
++  it('字段读取保持（chapters 分区、credential_id 显式下发未被收紧动作改坏）', () => {
++    expect(searchApi).toContain("data['chapters']");
++    expect(searchApi).toContain("params['credential_id'] = credentialId.toString()");
++  });
++
++  it('零裸 get/post(...).then → DTO 残留，零 .catch(（失败上抛页面）', () => {
++    expect(searchApi).not.toMatch(RAW_THEN_TO_DTO);
++    expect(searchApi).not.toContain('.catch(');
++  });
++});
++
++/* ══ ①-b job 域出口收紧 + DTO 迁 types/（#652 T14） ══ */
++describe('job 域收紧：有载荷 GET 经 getMapped<T> + build* 去重', () => {
++  it('import 引入 getMapped 与 post（post 供 void 透传出口）', () => {
++    expect(jobApi).toMatch(/import\s*\{[^}]*\bgetMapped\b[^}]*\bpost\b[^}]*\}\s*from\s*'\.\/request'/);
++  });
++
++  it('详情 / 列表收敛到 buildJobPosting（此前两处同形映射去重），列表经 buildJobListResult', () => {
++    expect(jobApi).toMatch(/function buildJobPosting\(/);
++    expect(jobApi).toMatch(/function buildJobListResult\(/);
++    expect(topFn(jobApi, 'export function getJobDetailApi')).toContain('getMapped<JobPosting>');
++    expect(topFn(jobApi, 'export function getJobDetailApi')).toMatch(/\(data : UTSJSONObject\) : JobPosting => buildJobPosting\(data\)/);
++    expect(topFn(jobApi, 'export function getJobListApi')).toContain('getMapped<JobListResult>');
++    expect(topFn(jobApi, 'export function getJobListApi')).toMatch(/\(data : UTSJSONObject\) : JobListResult => buildJobListResult\(data\)/);
++    // 同 search 口径：去重后映射只有一份，出口不得再自己读字段
++    for (const marker of ['export function getJobDetailApi', 'export function getJobListApi']) {
++      expect(topFn(jobApi, marker)).not.toMatch(FIELD_READ);
++    }
++  });
++
++  it('字段读取逐行不变（apply_state / cooldown_days / forced_offline 等 DTO 字段仍被映射）', () => {
++    const builder = topFn(jobApi, 'function buildJobPosting');
++    for (const f of ['id', 'title', 'salary_min', 'apply_state', 'cooldown_days', 'forced_offline']) {
++      expect(builder).toContain(`obj['${f}']`);
++    }
++  });
++
++  /**
++   * 请求形态锁（ADR-0007「params 沿用手动 query 序列化…收紧不得改变请求形态」）。
++   * 列表把查询串自己拼进 url、params 传 null —— 这是收紧**前后同一形态**，不是新写法：
++   * getMapped 内部正是 `url + (url.includes('?') ? '&' : '?') + pairs.join('&')`，
++   * 与旧的 `'/jobs' + (qs.length > 0 ? '?' + qs : '')` 逐字节同解。本条钉住它不被
++   * 「顺手改成 params 传对象」（那会改序列化通路，属本票范围外的另一件事）。
++   */
++  it('列表请求形态不变：手动 query 串进 url、params 传 null', () => {
++    const body = topFn(jobApi, 'export function getJobListApi');
++    expect(body).toContain("const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')");
++    expect(body).toContain("encodeURIComponent(k) + '=' + encodeURIComponent(query[k] as string)");
++    expect(body).toContain('getMapped<JobListResult>(url, null,');
++  });
++
++  it('reportJobApi / applyJobApi（void 透传）保持裸 post，不硬套 mapper', () => {
++    expect(topFn(jobApi, 'export function reportJobApi')).toMatch(/return post\(/);
++    expect(topFn(jobApi, 'export function applyJobApi')).toMatch(/return post\(/);
++  });
++
++  it('零裸 get/post(...).then → DTO 残留，零 .catch(', () => {
++    expect(jobApi).not.toMatch(RAW_THEN_TO_DTO);
++    expect(jobApi).not.toContain('.catch(');
++  });
++});
++
++describe('job DTO 迁出：类型落 types/job.uts 并经 types/index 消费', () => {
++  it('types/job.uts 定义四个 export type（api 层不再内联声明）', () => {
++    for (const t of ['JobPosting', 'JobListParams', 'JobListResult', 'ReportReason']) {
++      expect(typesJob).toContain(`export type ${t} = {`);
++    }
++    expect(jobApi).not.toMatch(/export type JobPosting/);
++  });
++
++  it('types/index barrel re-export job 类型（UTS 合法形态：inline type modifier）', () => {
++    expect(typesIndex).toMatch(/export\s*\{[^}]*\btype JobPosting\b[^}]*\}\s*from\s*'\.\/job'/);
++    for (const t of ['JobListParams', 'JobListResult', 'ReportReason']) {
++      expect(typesIndex).toContain(`type ${t}`);
++    }
++  });
++
++  it('job 页面 type import 指向 types/index，api/job 只剩值 import（机械重定向，零行为改动）', () => {
++    expect(jobListPage).toMatch(/import type \{[^}]*JobPosting[^}]*\} from '\.\.\/\.\.\/types\/index'/);
++    expect(jobDetailPage).toMatch(/import type \{[^}]*JobPosting[^}]*ReportReason[^}]*\} from '\.\.\/\.\.\/types\/index'/);
++    // 页面仍从 api/job 取出口函数与常量（值 import 不动）
++    expect(jobDetailPage).toContain('from \'../../api/job\'');
++    // 但不再从 api/job 里 import 任何类型
++    expect(jobListPage).not.toMatch(/import type \{[^}]*\} from '\.\.\/\.\.\/api\/job'/);
++    expect(jobDetailPage).not.toMatch(/import type \{[^}]*\} from '\.\.\/\.\.\/api\/job'/);
++  });
++});
++
++/* ══ ② 前序票已收紧域：不回潮复检（与本批口径齐平） ══ */
++describe('points / featured / notification 域出口家族不回潮', () => {
++  it.each(DOMAINS)('api/%s.uts import 含 getMapped（出口家族一致性）', (domain) => {
++    const src = stripComments(read(`api/${domain}.uts`));
++    expect(src).toMatch(/import\s*\{[^}]*\bgetMapped\b[^}]*\}\s*from\s*'\.\/request'/);
++  });
++
++  it.each(DOMAINS)('api/%s.uts 零裸 HTTP(...).then → DTO 残留', (domain) => {
++    const src = stripComments(read(`api/${domain}.uts`));
++    expect(src).not.toMatch(RAW_THEN_TO_DTO);
++  });
++
++  /**
++   * 比 RAW_THEN_TO_DTO 更严的一致性面：这五域的**每一个** GET 都有载荷，收紧后全仓五域
++   * 零裸 `get(`。抓的是 RAW_THEN_TO_DTO 漏掉的那类回潮（`get(url).then(x => x)`、
++   * `get(url).then((d : any) => …)` —— 没标注 `data : UTSJSONObject` 就从它的缝里过去）。
++   */
++  it.each(DOMAINS)('api/%s.uts 零裸 get(（所有 GET 一律走 getMapped）', (domain) => {
++    const src = stripComments(read(`api/${domain}.uts`));
++    expect(src).not.toMatch(RAW_GET);
++  });
++
++  /** 票面 AC「六个域 api 全部导出显式 DTO 类型」的类型单一来源面 */
++  it.each(DOMAINS)('api/%s.uts 的 DTO 来自 types/index，api 层零内联 `export type`', (domain) => {
++    const src = stripComments(read(`api/${domain}.uts`));
++    expect(src).toMatch(/import\s+type\s*\{[^}]+\}\s*from\s*'\.\.\/types\/index'/);
++    expect(src).not.toMatch(/^export type /m);
++  });
++});
++
++/* ══ ③-a guide 域零 api（登记 + 不回潮） ══ */
++describe('guide 域零 api（无域 api 文件，页面不触 api 层）', () => {
++  it('不存在 api/guide.uts（后端无 guide 端点，域本就无数据 api）', () => {
++    expect(exists('api/guide.uts')).toBe(false);
++  });
++
++  it('pages/guide/** 无源文件 import api/ 或裸调 uni.request（不得回潮出隐性 api 面）', () => {
++    const hits = [];
++    for (const rel of h.sourceFilesIn('pages/guide')) {
++      const src = stripComments(read(rel));
++      if (/from\s*'[^']*\/api\//.test(src)) hits.push(`${rel}: import api/*`);
++      if (/uni\.request\s*\(/.test(src)) hits.push(`${rel}: uni.request 裸调`);
++    }
++    expect(hits).toEqual([]);
++  });
++});
++
++/* ══ ③-b api 层豁免（catch/detail）本票范围内清零，不回潮 ══ */
++describe('api 层 allowlist 不回潮（本批五域 api 文件均无豁免条目）', () => {
++  it.each(DOMAINS)('%s.uts 不在任何豁免名单', (domain) => {
++    const hits = allowlistPaths().filter((p) => new RegExp(`api[/\\\\]${domain}\\.uts$`).test(p));
++    expect(hits).toEqual([]);
++  });
++});
++
++/* ══ 注入违规自检：证明上面每条判据真能判红（防正则失配导致假绿） ══ */
++describe('判据自检（red-capable）：三条判据各命中植入的违规、不误伤合法形态', () => {
++  it('RAW_THEN_TO_DTO：命中植入的裸 get(...).then → DTO 违规', () => {
++    const planted = "export function foo() : Promise<Foo> {\n    return get('/x').then((data : UTSJSONObject) : Foo => buildFoo(data))\n}";
++    expect(RAW_THEN_TO_DTO.test(planted)).toBe(true);
++  });
++
++  it('RAW_THEN_TO_DTO：不误伤 void 透传（无 data : UTSJSONObject 形参）与 getMapped 合法出口', () => {
++    const voidPost = "return post(url, payload).then(() : void => {\n    })";
++    const mapped = "return getMapped<Foo>('/x', params, (data : UTSJSONObject) : Foo => buildFoo(data))";
++    expect(RAW_THEN_TO_DTO.test(voidPost)).toBe(false);
++    expect(RAW_THEN_TO_DTO.test(mapped)).toBe(false);
++  });
++
++  /** 本条正是 RAW_GET 存在的理由：这类回潮从 RAW_THEN_TO_DTO 的缝里过去（形参没标注类型） */
++  it('RAW_GET：命中 RAW_THEN_TO_DTO 漏掉的裸 get（无 DTO 标注的 .then、裸透传）', () => {
++    for (const planted of [
++      "return get('/x').then((d) : Foo => buildFoo(d))",
++      "return get('/x').then((x : any) => x)",
++      "return get('/x', params)",
++    ]) {
++      expect(RAW_GET.test(planted)).toBe(true);
++      expect(RAW_THEN_TO_DTO.test(planted)).toBe(false);
++    }
++  });
++
++  it('RAW_GET：不误伤 getMapped 出口与 get* 命名的函数（`get` 后紧跟字母不是 `(`）', () => {
++    const legal = "return getMapped<Foo>('/x', params, (data : UTSJSONObject) : Foo => buildFoo(data))"
++      + "\nexport function getJobListApi(params : P) : Promise<R> {"
++      + "\nexport function getUnreadCountApi() : Promise<number> {";
++    expect(RAW_GET.test(legal)).toBe(false);
++  });
++
++  it('FIELD_READ：命中「映射又复制回出口里」，不误伤委托形态与 params 手动序列化', () => {
++    expect(FIELD_READ.test("const a = 1\nreturn { id: data['id'] }")).toBe(true);
++    expect(FIELD_READ.test("return getMapped<Foo>('/x', params, (data : UTSJSONObject) : Foo => buildFoo(data, keyword))")).toBe(false);
++    // job 列表出口体里有 query['page'] 与 params.page!，都不是响应字段读取
++    expect(FIELD_READ.test("if (params.page != null) query['page'] = params.page!.toString()")).toBe(false);
++  });
++});
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/jobApplyStateContract.test.js" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/jobApplyStateContract.test.js"
+index 28c90be1..d351f74c 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/jobApplyStateContract.test.js"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/jobApplyStateContract.test.js"
+@@ -11,7 +11,10 @@
+  * "本地量是否还在"这类接线。两者互补，故本套件钉接线、①a 钉渲染。
+  *
+  * 守护：
+- *   C1 `api/job.uts`：类型声明两字段，且**两处**手动映射（详情 + 列表）都补上（ADR-0003）
++ *   C1 职位 DTO 与映射：apply_state / cooldown_days 都要有（ADR-0003）。
++ *      #652 T14 收紧后：DTO 从 `api/job.uts` 迁入 `types/job.uts`，两处同形内联映射去重为
++ *      单一 `buildJobPosting`（详情直连、列表经 `buildJobListResult` 复用）⇒ 两字段仍被映射，
++ *      且两端点共用一处映射更强（不会再出现只补详情漏列表）。
+  *   C2 `job-detail.uvue`：三态由 `applyState()` 驱动；本地 `hasApplied` 不得回归；
+  *      `onApply` 先判态再发请求
+  *   C3 `job-list.uvue`：列表项按态收敛，不可投时是**状态标签而非可点伪按钮**
+@@ -24,10 +27,12 @@ const { readText } = require('./utsHarness');
+ 
+ const ROOT = path.join(__dirname, '..');
+ const JOB_UTS = path.join(ROOT, 'api', 'job.uts');
++const JOB_TYPES = path.join(ROOT, 'types', 'job.uts');
+ const DETAIL_UVUE = path.join(ROOT, 'pages', 'jobs', 'job-detail.uvue');
+ const LIST_UVUE = path.join(ROOT, 'pages', 'jobs', 'job-list.uvue');
+ 
+ const jobSrc = readText(JOB_UTS);
++const jobTypesSrc = readText(JOB_TYPES);
+ const detailSrc = readText(DETAIL_UVUE);
+ const listSrc = readText(LIST_UVUE);
+ 
+@@ -45,16 +50,25 @@ function jobActionsBlock() {
+   return between(listSrc, '<view class="job-actions">', '<!-- 加载更多 -->');
+ }
+ 
+-describe('C1 api/job.uts：类型与两处手动映射都要补（ADR-0003）', () => {
+-  test('JobPosting 声明 apply_state 与 cooldown_days', () => {
+-    const typeBlock = between(jobSrc, 'export type JobPosting = {', '\n}');
++describe('C1 职位 DTO 与映射都要补两字段（ADR-0003；#652 后类型迁 types/job.uts、映射去重至 buildJobPosting）', () => {
++  test('JobPosting 声明 apply_state 与 cooldown_days（#652 起 DTO 住在 types/job.uts）', () => {
++    const typeBlock = between(jobTypesSrc, 'export type JobPosting = {', '\n}');
+     expect(typeBlock).toMatch(/apply_state\s*\?:\s*string/);
+     expect(typeBlock).toMatch(/cooldown_days\s*\?:\s*number/);
+   });
+ 
+-  test('两处映射点（详情 / 列表）都写了这两个字段', () => {
+-    expect((jobSrc.match(/apply_state:\s*\(/g) || []).length).toBeGreaterThanOrEqual(2);
+-    expect((jobSrc.match(/cooldown_days:\s*/g) || []).length).toBeGreaterThanOrEqual(2);
++  test('api 层不再内联声明 JobPosting，改经 types/index 消费（类型单一来源）', () => {
++    expect(jobSrc).not.toMatch(/export type JobPosting =/);
++    expect(jobSrc).toMatch(/import type \{[^}]*\bJobPosting\b[^}]*\} from '\.\.\/types\/index'/);
++  });
++
++  test('buildJobPosting 映射这两个字段，且详情与列表两端点都经它（去重后单一映射覆盖两端，防漏列表）', () => {
++    const builder = between(jobSrc, 'function buildJobPosting', '\n}');
++    expect(builder).toMatch(/apply_state:\s*\(/);
++    expect(builder).toMatch(/cooldown_days:/);
++    // 详情：getMapped<JobPosting> 直接 buildJobPosting；列表：buildJobListResult 复用 buildJobPosting
++    expect(jobSrc).toMatch(/getMapped<JobPosting>[\s\S]*buildJobPosting\(data\)/);
++    expect(jobSrc).toMatch(/function buildJobListResult[\s\S]*buildJobPosting\(obj\)/);
+   });
+ });
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/utsAndroidCompile.test.js" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/utsAndroidCompile.test.js"
+index f5e722a2..f0715352 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/utsAndroidCompile.test.js"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/utsAndroidCompile.test.js"
+@@ -912,6 +912,9 @@ describe('守护自检：检测逻辑对已知违规样本必须报出', () => {
+       ['NotificationItem', ['id', 'type', 'title', 'content', 'link', 'is_read', 'created_at']],
+       ['SearchItem', ['type', 'id', 'title', 'cover', 'summary']],
+       ['ExamQuestion', ['question_id', 'type', 'title', 'options', 'score']],
++      // #652 T14：JobPosting 一族是本票新搬进 barrel 的（types/job.uts），同一条坑位的新面——
++      // apply_state / cooldown_days 是 #488 的载荷字段，被零字段先占就会让 job-detail 报假阳性
++      ['JobPosting', ['id', 'title', 'salary_min', 'forced_offline', 'apply_state', 'cooldown_days']],
+     ]) {
+       const set = forward.get(name);
+       expect(set).toBeDefined();

@@ -1,0 +1,254 @@
+<template>
+	<view class="page" :style="{ height: pageHeight + 'px' }">
+		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="header">
+			<view class="header-left" @click="onBack">
+				<text class="back-icon">&#8249;</text>
+			</view>
+			<text class="header-title">{{ featureTitle }}</text>
+			<view class="header-right"></view>
+		</view>
+
+		<!-- 会话区：本页**没有**宫格、没有档位横幅、没有模型选择器 —— 专项通道由管理端单绑定
+		     解析模型（见 buildBody 注释），用户在这一页没有可自选的东西。 -->
+		<scroll-view class="chat-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+			<view v-if="messages.length > 0" class="chat-area">
+				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
+				<view v-if="thinking" class="message-row assistant">
+					<view class="message-bubble thinking">
+						<text class="message-text">思考中...</text>
+					</view>
+				</view>
+			</view>
+			<view id="bottom-anchor"></view>
+		</scroll-view>
+
+		<AiChatInput @send="onInputSend" @voice-click="onVoiceClick" />
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { onLoad } from '@dcloudio/uni-app'
+	import { ref } from 'vue'
+	import { useAuthStore } from '../../stores/auth'
+	import { useAiChat } from '../../composables/useAiChat'
+	import type { ChatBodyBuilder } from '../../composables/useAiChat'
+	import type { AiChatMessage, AIFunctionItem } from '../../types/index'
+
+	import { FUNCTION_ITEMS } from './ai-assistant-constants'
+	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
+	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
+
+	/**
+	 * 参数化专项页（ADR-0009 2026-09-15 修订 ②）：**1 个页面 + `featureKey` 参数**，形态照 web 的
+	 * 一条参数化路由（`frontend/src/config/pages.ts` 的 `AIAssistantFeature` → 同一个
+	 * `FeatureChatPage.vue`），**不是 4 个页面文件**。
+	 *
+	 * 与通用页（`ai-assistant.uvue`）的差别是**结构性**的，不是「同一页换个参数」：
+	 * - 通用页**没有任何**「本轮带哪个键」的状态 ⇒ 「键从早退分支漏出去」这一整类缺陷
+	 *   （#999 真机实测：先清后取 ⇒ 键恒为空、专项通道从未生效）在新形态下**不可能发生**：
+	 *   本页的键是页面级常量，不经过任何轮次边界。
+	 * - 本页不读模型列表、不带模型芯片、不做「请先配置自定义模型」前置校验 ——
+	 *   专项通道由后端按管理端单绑定解析模型，与「用户自选模型」无关（#998 口径的形态化）。
+	 *
+	 * 会话归属**不变**（分区属 #1041）：建/列会话仍不带键（`createAiSessionApi` 只收 title/modelName），
+	 * 故本页产生的会话落遗留 `ai_assistant` 区、在通用页「最近对话」里可见、可重开/改名/删除；
+	 * 键只进**本轮对话请求体**。若在此处给会话带键，会让会话落进没人列的区而永久不可见
+	 * （#921 首版实测回归，见 `api/aiAssistant.uts` `getAiSessionsApi` 的说明）。
+	 */
+
+	const auth = useAuthStore()
+
+	const {
+		statusBarHeight,
+		messages,
+		inputText,
+		thinking,
+		scrollIntoViewId,
+		sendInput,
+	} = useAiChat()
+
+	// 本页的专项功能键与展示名（由入口跳转时的查询参数定位，见 onLoad）
+	const currentFeatureKey = ref<string>('')
+	const featureTitle = ref<string>('')
+
+	// 根容器高度（同 ai-settings.uvue / 通用页）：给根节点一个确定高度，onLoad 里赋值
+	const pageHeight = ref<number>(0)
+
+	/**
+	 * 按键定位宫格项。清单是**移动端手写**的（ADR-0009 修订 ② 的配套口径），
+	 * 与后端注册表的键集合 / 展示名 / 限免位由 `utils/aiFeatureRegistryParityContract.test.js` 锁一致。
+	 * 声明在 onLoad 之前：Kotlin 局部函数不支持前向引用（UTS error18）。
+	 */
+	function findFunctionItem(featureKey : string) : AIFunctionItem | null {
+		for (let i = 0; i < FUNCTION_ITEMS.length; i++) {
+			if (FUNCTION_ITEMS[i].featureKey == featureKey) {
+				return FUNCTION_ITEMS[i]
+			}
+		}
+		return null
+	}
+
+	/**
+	 * 专项通道请求体：只送 `session_id` + 历史 + 本轮键。
+	 *
+	 * **不送** `model_source` / `config_id` / `user_model_id` / `custom_*` —— 后端
+	 * `ResolveChatSettings` 的专项分支命中 `featureChatKeys` 后按管理端单绑定解析模型，
+	 * 并**忽略**选择子里的模型来源字段（`ai_config_service.go` 原文「防绕过」）⇒ 送了也是死字段，
+	 * 而 `custom_api_key` 是明文密钥，更不该发出去（维护者 2026-09-15 口径：#998）。
+	 * 键为空时后端落通用对话并照通用对话计费（`aiFeatureChatBilled`），故本页**必须**有键。
+	 */
+	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) : UTSJSONObject => {
+		const params : UTSJSONObject = {
+			session_id: sessionID,
+			messages: history,
+		}
+		params['feature_key'] = featureKey
+		return params
+	}
+
+	function onBack() : void {
+		uni.navigateBack()
+	}
+
+	function onCopyText(content : string) : void {
+		uni.setClipboardData({ data: content, success: () => { uni.showToast({ title: '已复制', icon: 'success' }) } })
+	}
+
+	function onVoiceClick() : void {
+		uni.showToast({ title: '语音输入开发中', icon: 'none' })
+	}
+
+	function getLastUserMessage() : string {
+		for (let i = messages.value.length - 1; i >= 0; i--) {
+			if (messages.value[i].role == 'user') {
+				return messages.value[i].content
+			}
+		}
+		return ''
+	}
+
+	function onRetry() : void {
+		const lastUserMsg = getLastUserMessage()
+		if (lastUserMsg.length > 0) {
+			inputText.value = lastUserMsg
+			sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
+		}
+	}
+
+	/**
+	 * 发送：键**恒定**取自页面状态（不存在「这一轮带哪个键」的判定，也没有可被早退分支跳过的清空）。
+	 * 不做模型前置校验：专项通道的模型由管理端单绑定解析，「暂无可用的 AI 模型」这条通用页守卫
+	 * 在这里既无需要也无意义（本页压根不加载模型列表）。
+	 */
+	function onInputSend(text : string) : void {
+		inputText.value = text
+		sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
+	}
+
+	// 生命周期
+	onLoad((options : OnLoadOptions) => {
+		const sysInfo = uni.getSystemInfoSync()
+		statusBarHeight.value = sysInfo.statusBarHeight
+		pageHeight.value = sysInfo.windowHeight
+
+		auth.restoreFromStorage()
+		if (!auth.isLoggedIn.value) {
+			uni.reLaunch({ url: '/pages/login/login' })
+			return
+		}
+
+		// 参数定位，**fail-closed**：键必须命中手写清单（与后端注册表锁一致）。
+		// 未知/缺失 ⇒ 不进页 —— 注册表里没有键的入口就是「点了走通用对话」的伪入口
+		// （ADR-0009 修订 ② 据此下线了「故障代码查询」），不能靠「悄悄退化成通用对话」把它复活。
+		const raw = options['featureKey']
+		const item = findFunctionItem(raw != null ? `${raw}` : '')
+		if (item == null) {
+			uni.showToast({ title: '功能入口不存在', icon: 'none' })
+			setTimeout(() => { uni.navigateBack() }, 1500)
+			return
+		}
+		currentFeatureKey.value = item.featureKey
+		featureTitle.value = item.title
+	})
+</script>
+
+<style>
+	.page {
+		display: flex;
+		flex-direction: column;
+		background-color: #dfeffb;
+	}
+
+	.status-bar {
+		background-color: #ffffff;
+	}
+
+	.header {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16rpx 24rpx;
+		background-color: #ffffff;
+		border-bottom: 1rpx solid #f0f0f0;
+	}
+
+	.header-left,
+	.header-right {
+		width: 72rpx;
+		height: 72rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.back-icon {
+		font-size: 48rpx;
+		color: #333333;
+		font-weight: bold;
+	}
+
+	.header-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		color: #222222;
+	}
+
+	.chat-scroll {
+		flex: 1;
+		/* 同通用页 `.pro-scroll`：必须 height:0 + flex:1，只给 flex:1 时滚动容器会长到内容高度、
+		   没有可滚动余量（手势滚不动，但 scroll-into-view 仍会视觉上跳到底部）。 */
+		height: 0;
+		padding: 24rpx;
+	}
+
+	.chat-area {
+		flex-direction: column;
+		margin-bottom: 24rpx;
+	}
+
+	.message-row {
+		flex-direction: row;
+		margin-bottom: 20rpx;
+	}
+
+	.message-row.assistant {
+		justify-content: flex-start;
+	}
+
+	.message-bubble {
+		max-width: 600rpx;
+		padding: 20rpx 24rpx;
+		border-radius: 16rpx;
+		background-color: #ffffff;
+	}
+
+	.message-bubble.thinking {
+		background-color: #f0f0f0;
+	}
+
+	.message-text {
+		font-size: 28rpx;
+		color: #333333;
+		line-height: 1.6;
+	}
+</style>

@@ -1,0 +1,43 @@
+
+FAIL utils/hxLaunchDetachBehavior.test.js
+FAIL utils/levelDetectBehavior.test.js
+FAIL utils/mpWeixinGateContract.test.js
+FAIL utils/screenshotDiffSingleFileBehavior.test.js
+FAIL utils/capabilitySurfaceBehavior.test.js
+FAIL utils/screenshotDiffBehavior.test.js
+FAIL utils/contractTestPatternBehavior.test.js
+FAIL utils/pngDiffBehavior.test.js
+FAIL utils/levelDetectQuotepathBehavior.test.js
+FAIL utils/hxErrorLinesBehavior.test.js
+FAIL utils/autoScreenshotAdbAgreementBehavior.test.js
+FAIL utils/autoScreenshotStabilityBehavior.test.js
+FAIL utils/guardClassification.test.js
+PASS utils/markdownToolbarBehavior.test.js
+PASS utils/markdownSubsetBehavior.test.js
+PASS utils/forumContentFormatBehavior.test.js
+PASS utils/forumBodyBehavior.test.js
+PASS utils/forumFormatPreferenceBehavior.test.js
+PASS utils/forumImagePickerBehavior.test.js
+PASS utils/markdownContract.test.js
+PASS utils/forumContract.test.js
+PASS utils/forumMarkdownInputContract.test.js
+PASS utils/forumAcceptButtonContract.test.js
+PASS utils/forumEditContract.test.js
+FAIL utils/hxTimingBehavior.test.js
+FAIL utils/hxLaunchDetachBehavior.test.js
+FAIL utils/levelDetectBehavior.test.js
+FAIL utils/mpWeixinGateContract.test.js
+FAIL utils/screenshotDiffSingleFileBehavior.test.js
+FAIL utils/capabilitySurfaceBehavior.test.js
+FAIL utils/screenshotDiffBehavior.test.js
+FAIL utils/contractTestPatternBehavior.test.js
+FAIL utils/pngDiffBehavior.test.js
+FAIL utils/levelDetectQuotepathBehavior.test.js
+FAIL utils/hxErrorLinesBehavior.test.js
+FAIL utils/autoScreenshotAdbAgreementBehavior.test.js
+FAIL utils/autoScreenshotStabilityBehavior.test.js
+FAIL utils/guardClassification.test.js
+FAIL utils/hxTimingBehavior.test.js
+Test Suites: 14 failed, 107 passed, 121 total
+Tests:       90 failed, 2196 passed, 2286 total
+

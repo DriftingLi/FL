@@ -1,0 +1,21 @@
+
+
+>>> "D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe" launch app-android --project D:\FL\wt-1240\training-app\叉车维修培训学员端跨端应用 --deviceId adb-b32d8398-ul54S3._adb-tls-connect._tcp
+>>> [deploy] 已等 60 秒（上限 900 秒），设备侧事实仍未前进…
+>>> [deploy] 已等 120 秒（上限 900 秒），设备侧事实仍未前进…
+
+分段计时（segment_source=wallclock）：
+  open           = 0s
+  project-open   = 0s
+  compile        = 160s
+  deploy         = 0s
+  total          = 218s
+  [note] 未从 stdout 命中带时间戳的编译段边界 ⇒ 编译段退化为 launch 步墙钟、部署段记 0。
+         真机首跑后按真实输出校准 $script:HxCompileEndMarkers（见脚本头「诚实声明」）。
+HX_RUN_DEPLOY deployed=true www=/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www=1790062579->1790063449 pid_before=io.dcloud.uniappx=22008 pid_after=io.dcloud.uniappx=22866 foreground=io.dcloud.uniappx reason=资源已落到设备：/sdcard/Android/data/io.dcloud.uniappx/apps/__UNI__1C1D180/www 的 mtime 相对基线前进
+
+✅ 已 incremental 运行到 adb-b32d8398-ul54S3._adb-tls-connect._tcp（device_mode=auto）：设备侧事实相对基线前进。
+   那个运行会话**仍然活着**（真运行不自己收口）；要停就在 HBuilderX 里点「停止」—— 本脚本绝不 kill。
+   本脚本不是门：收口前记得跑中循环（npm run test:unit + npm run build:kotlin-all）。
+HX_RUN mode=incremental compile=160 deploy=0 total=218 exit=ok
+exit=0

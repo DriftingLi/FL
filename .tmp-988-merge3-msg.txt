@@ -1,0 +1,18 @@
+Merge branch 'master' into feat/988-mobile-ai-diagnosis-sources
+
+同步 origin/master（e29e203a，含 #1062「平台模型为空的空态改成可执行引导」，PR #1069）。
+
+本次用 `git merge-tree --write-tree` 求出的合并树直接建提交（**索引内合并**，不碰工作树）——
+作业 worktree `D:\wt-988` 的项目目录此刻被常驻的 `cli` 会话攥着、暂时改不回原名，在那棵树里做
+git 操作会误报整目录删除（仓库 `multi-agent-git.md` 记过这条坑）。合并内容由 merge-ort 计算，
+无冲突。
+
+**#1062 对 `pages/ai-assistant/ai-assistant.uvue` 的改动 = 空态 toast 文案一行 + 一段注释**
+（`onInputSend` 的「暂无可用的 AI 模型」早退分支），与本票相关区域**不相交**：
+
+- 消息列表 / `AiChatBubble` 的 `:sources` 绑定、左抽屉、`useAiChat`、`api/aiAssistant.uts`
+  的 sources 通路均未变；
+- 专项页 `ai-feature.uvue`（实时面取证所在页）根本不在 #1062 的改动面内。
+
+⇒ 按移动端 ADR-0016 ⑥「相关页必须重跑」的**目的**（证据须反映将被合并的那棵树）本票 ①a 继续有效；
+按其**字面**（页面文件动过）严格说需重跑。本 PR 如实记这一条，交由合并人裁定。

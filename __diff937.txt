@@ -1,0 +1,490 @@
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/courses/courses.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/courses/courses.uvue"
+index 9fefe457..4b9d9c3a 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/courses/courses.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/courses/courses.uvue"
+@@ -242,7 +242,8 @@
+ <style>
+     .container {
+         display: flex;
+-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
++        background-color: #F5F5F5;
++        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
+         flex-direction: column;
+     }
+ 
+@@ -275,7 +276,8 @@
+         flex-direction: row;
+         align-items: center;
+         justify-content: center;
+-        background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
++        background-color: #3B82F6;
++        background: linear-gradient(135deg, #60A5FA, #3B82F6);
+         opacity: 0.7;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/components/dashboard-cert-dropdown.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/components/dashboard-cert-dropdown.uvue"
+index e3d694a9..e3c94a56 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/components/dashboard-cert-dropdown.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/components/dashboard-cert-dropdown.uvue"
+@@ -308,7 +308,8 @@
+     .cert-dropdown-hot-card {
+         flex: 1;
+         padding: 20rpx 16rpx;
+-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
++        background-color: #1565C0;
++        background: linear-gradient(135deg, #2979FF, #1565C0);
+         border-radius: 12rpx;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/dashboard.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/dashboard.uvue"
+index cb8a254b..fe0925a9 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/dashboard.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/dashboard/dashboard.uvue"
+@@ -209,7 +209,8 @@
+ <style>
+     .container {
+         flex: 1;
+-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
++        background-color: #F5F5F5;
++        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
+         flex-direction: column;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/exam/components/exam-result-summary.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/exam/components/exam-result-summary.uvue"
+index 5cdab3be..a5c52cd0 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/exam/components/exam-result-summary.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/exam/components/exam-result-summary.uvue"
+@@ -65,10 +65,12 @@
+     }
+ 
+     .summary-passed {
++        background-color: #4caf50;
+         background: linear-gradient(135deg, #4caf50, #66bb6a);
+     }
+ 
+     .summary-failed {
++        background-color: #f44336;
+         background: linear-gradient(135deg, #f44336, #ef5350);
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/components/forum-resource-panel.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/components/forum-resource-panel.uvue"
+index 288e2c95..1584171f 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/components/forum-resource-panel.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/components/forum-resource-panel.uvue"
+@@ -92,6 +92,7 @@
+         margin: 24rpx;
+         padding: 28rpx 32rpx;
+         border-radius: 20rpx;
++        background-color: #1E88E5;
+         background: linear-gradient(90deg, #6FB9F7, #1E88E5);
+         flex-direction: row;
+         align-items: center;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-create.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-create.uvue"
+index afe8b928..d3a1b18f 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-create.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-create.uvue"
+@@ -352,7 +352,8 @@
+ <style>
+     .container {
+         display: flex;
+-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
++        background-color: #F5F5F5;
++        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
+         flex-direction: column;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-detail.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-detail.uvue"
+index 67478dc1..8f35e279 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-detail.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum-detail.uvue"
+@@ -293,7 +293,8 @@
+ <style>
+     .container {
+         display: flex;
+-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
++        background-color: #F5F5F5;
++        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
+         flex-direction: column;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum.uvue"
+index f3725ac4..30a1c3bd 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/forum/forum.uvue"
+@@ -203,7 +203,8 @@
+ <style>
+     .container {
+         display: flex;
+-        background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%);
++        background-color: #F5F5F5;
++        background: linear-gradient(180deg, #CFE9FB, #F5F5F5);
+         flex-direction: column;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/guide/choose-cert.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/guide/choose-cert.uvue"
+index 912fb10b..b3176213 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/guide/choose-cert.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/guide/choose-cert.uvue"
+@@ -401,7 +401,8 @@
+     .hot-card {
+         flex: 1;
+         padding: 24rpx 20rpx;
+-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
++        background-color: #1565C0;
++        background: linear-gradient(135deg, #2979FF, #1565C0);
+         border-radius: 16rpx;
+     }
+ 
+@@ -484,7 +485,8 @@
+ 
+     .btn-confirm {
+         height: 96rpx;
+-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
++        background-color: #1565C0;
++        background: linear-gradient(135deg, #2979FF, #1565C0);
+         border-radius: 48rpx;
+         align-items: center;
+         justify-content: center;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/index/index.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/index/index.uvue"
+index 41727967..97bbe510 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/index/index.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/index/index.uvue"
+@@ -100,7 +100,8 @@
+         flex-direction: column;
+         position: relative;
+         overflow: hidden;
+-        background: linear-gradient(180deg, #0066FF 0%, #00CC99 100%);
++        background-color: #00CC99;
++        background: linear-gradient(180deg, #0066FF, #00CC99);
+     }
+ 
+     /* 背景光晕装饰 */
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/points-detail.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/points-detail.uvue"
+index 81d5761d..a17cf046 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/points-detail.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/points-detail.uvue"
+@@ -315,6 +315,7 @@
+         margin: 24rpx;
+         padding: 32rpx;
+         border-radius: 16rpx;
++        background-color: #1565c0;
+         background: linear-gradient(135deg, #2979ff, #1565c0);
+         flex-direction: column;
+         align-items: flex-start;
+@@ -557,6 +558,7 @@
+         width: 100%;
+         height: 96rpx;
+         border-radius: 48rpx;
++        background-color: #1565c0;
+         background: linear-gradient(135deg, #2979ff, #1565c0);
+         color: #ffffff;
+         font-size: 34rpx;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/task-center.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/task-center.uvue"
+index 65fc446d..da2c4d9e 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/task-center.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/points/task-center.uvue"
+@@ -377,6 +377,7 @@
+         width: 80rpx;
+         height: 80rpx;
+         border-radius: 40rpx;
++        background-color: #FFA000;
+         background: linear-gradient(135deg, #FFD700, #FFA000);
+         align-items: center;
+         justify-content: center;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-banner-card.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-banner-card.uvue"
+index 7b6ea300..16faa7c2 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-banner-card.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-banner-card.uvue"
+@@ -35,7 +35,8 @@
+ 
+     .banner-image-area {
+         height: 260rpx;
+-        background: linear-gradient(135deg, #e8f4ff 0%, #d0e8ff 100%);
++        background-color: #e8f4ff;
++        background: linear-gradient(135deg, #e8f4ff, #d0e8ff);
+         flex-direction: row;
+         align-items: center;
+         position: relative;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-stats-bar.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-stats-bar.uvue"
+index 3ccf0053..1c266e19 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-stats-bar.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/components/practice-stats-bar.uvue"
+@@ -47,7 +47,8 @@
+ <style>
+     .stat-bar {
+         margin: 0 24rpx 24rpx 24rpx;
+-        background: linear-gradient(135deg, #4facfe 0%, #2979ff 100%);
++        background-color: #2979ff;
++        background: linear-gradient(135deg, #4facfe, #2979ff);
+         border-radius: 20rpx;
+         padding: 24rpx 0;
+         flex-direction: row;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/practice-report.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/practice-report.uvue"
+index f3b98003..b0d8c123 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/practice-report.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/practice/practice-report.uvue"
+@@ -222,7 +222,8 @@
+     /* 概览卡 */
+     .overview-card {
+         margin-top: 24rpx;
+-        background: linear-gradient(135deg, #4facfe 0%, #239edd 100%);
++        background-color: #239edd;
++        background: linear-gradient(135deg, #4facfe, #239edd);
+         border-radius: 20rpx;
+         padding: 32rpx 0;
+         flex-direction: row;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/credential-switch.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/credential-switch.uvue"
+index 2b110671..678cb2aa 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/credential-switch.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/credential-switch.uvue"
+@@ -385,7 +385,8 @@
+ 
+     .btn-confirm {
+         height: 96rpx;
+-        background: linear-gradient(135deg, #2979FF 0%, #1565C0 100%);
++        background-color: #1565C0;
++        background: linear-gradient(135deg, #2979FF, #1565C0);
+         border-radius: 48rpx;
+         align-items: center;
+         justify-content: center;
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/profile.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/profile.uvue"
+index 2f89d655..e69487a6 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/profile.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/profile/profile.uvue"
+@@ -343,7 +343,8 @@
+ <style>
+     .container {
+         flex: 1;
+-        background: linear-gradient(180deg, #6ECCFD 20%, #0CA2EF 72%, #0CA2EF 100%);
++        background-color: #0CA2EF;
++        background: linear-gradient(180deg, #6ECCFD, #0CA2EF);
+         flex-direction: column;
+     }
+ 
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/resume/resume.uvue" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/resume/resume.uvue"
+index b649a85e..3f45d42c 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/resume/resume.uvue"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/pages/resume/resume.uvue"
+@@ -248,7 +248,8 @@
+ 
+     /* ===== 用户信息卡 ===== */
+     .user-card {
+-        background-image: linear-gradient(135deg, #e3f0ff, #cfe4ff);
++        background-color: #e3f0ff;
++        background: linear-gradient(135deg, #e3f0ff, #cfe4ff);
+         border-radius: 24rpx;
+         padding: 32rpx 24rpx 24rpx 24rpx;
+     }
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiCapabilityGateContract.test.js" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiCapabilityGateContract.test.js"
+index b51fc7b2..b03d975b 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiCapabilityGateContract.test.js"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiCapabilityGateContract.test.js"
+@@ -11,7 +11,10 @@
+  *   ① 输入区：模型芯片不渲染、附件按钮不渲染；
+  *   ② 抽屉菜单：不显示「自定义模型」；
+  *   ③ 模型芯片点击：不打开选择器（走档位入口）；
+- *   ④ 「解锁专业版」横幅用**实色**（本机型实测 background: linear-gradient(...) 静默不绘制）。
++ *   ④ 「解锁专业版」横幅用**实色**（按设计：两态用实色更干净）。
++ *      注：2026-09-13 真机实测已证伪早前那句「本机型不绘制 linear-gradient」的归因 ——
++ *      合规语法（角度/关键字 + 恰好 2 个颜色值、无百分比停靠）是画得出来的（#937，守护见
++ *      `utils/gradientSyntaxContract.test.js`）。横幅保持实色是**设计选择**，不是能力限制。
+  *   ⑥ **对话设置页是同一条门**（#939 口径 A）：该页的「＋ 新增」与空态卡按门隐藏 ——
+  *      `pages/ai-assistant/custom-models` 有两条入口链，只收抽屉那条（#926/#936）不算收口。
+  *      （抽屉自身那两个**真机实测**踩到的坑 —— 类型名义重复导致的 `ClassCastException`、`<view>`
+@@ -64,7 +67,7 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
+     expect(consts).toMatch(/'custom-models'/);
+   });
+ 
+-  it('⑤ 「解锁专业版」横幅用实色，不用 gradient（本机型不绘制渐变）', () => {
++  it('⑤ 「解锁专业版」横幅用实色（设计选择：两态用实色；非能力限制）', () => {
+     expect(page).toMatch(/class="pro-banner"/);
+     // 只断言横幅自己的样式块 —— 不能全局断言（页面别处的注释里就写着 linear-gradient 这个词，
+     // 全局匹配会把注释当实现，属假阳性）
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiProGateContract.test.js" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiProGateContract.test.js"
+index 7643b8de..5108e7c9 100644
+--- "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiProGateContract.test.js"
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/aiProGateContract.test.js"
+@@ -116,11 +116,14 @@ describe('AI 专业版 = 积分兑换权益（#920）契约', () => {
+     });
+   });
+ 
+-  describe('④ 两态横幅与能力清单（实色，本机型不绘制渐变）', () => {
++  describe('④ 两态横幅与能力清单（横幅按设计用实色；#937 口径）', () => {
+     it('未解锁 = 橙 / 已解锁 = 绿，均为实色 background-color', () => {
+       expect(PAGE).toMatch(/\.pro-banner\.pro-banner-unlocked \{/);
+       expect(PAGE).toMatch(/background-color: #fff3e0/);
+       expect(PAGE).toMatch(/background-color: #e8f8ee/);
++      // 横幅**按设计**不用渐变（两态用实色更干净），不是「渐变画不出来」——
++      // 2026-09-13 真机实测已证伪后者：合规语法（角度/关键字 + 2 颜色值、无百分比）
++      // 是画得出来的，见 utils/gradientSyntaxContract.test.js（#937）。
+       const from = PAGE.indexOf('.pro-banner {');
+       const style = PAGE.slice(from, PAGE.indexOf('.pro-banner-go {', from));
+       expect(style).not.toMatch(/gradient/);
+diff --git "a/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/gradientSyntaxContract.test.js" "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/gradientSyntaxContract.test.js"
+new file mode 100644
+index 00000000..192e1135
+--- /dev/null
++++ "b/training-app/\345\217\211\350\275\246\347\273\264\344\277\256\345\237\271\350\256\255\345\255\246\345\221\230\347\253\257\350\267\250\347\253\257\345\272\224\347\224\250/utils/gradientSyntaxContract.test.js"
+@@ -0,0 +1,162 @@
++/**
++ * uvue 渐变语法契约守护（#937）—— 源码契约测试缝（读源文本、断言语法形态）。
++ *
++ * 为什么需要它：2026-09-13 在真机上跑了 10 种写法的探针页（小米 2510DRK44C，`screencap` 无损 PNG
++ * + 逐块精确取色），实测结论是 —— uvue 原生端的 `linear-gradient` **只接受「恰好 2 个颜色值、
++ * 且不带百分比停靠位」**：
++ *
++ *   可用：`linear-gradient(135deg, #e3f0ff, #cfe4ff)`        （角度、2 值、无 %）
++ *   可用：`linear-gradient(to bottom, #FF0000, #0000FF)`      （关键字、2 值、无 %）
++ *   丢弃：`linear-gradient(135deg, #FF1493 0%, #FF1493 100%)` （带 %）
++ *   丢弃：`linear-gradient(to bottom, #F00, #FF0, #0F0, #00F)`（4 值）
++ *
++ * 两条容易搞反的事实，别再复述错：
++ *   ① **角度合法** —— 实测 `135deg` 画得出来 ⇒ **不要**把「不得出现 `deg`」写成守护规则；
++ *   ② **失败是整条声明被丢弃** —— 连同一处的 `background-color` 兜底也不生效（实测该显示兜底色
++ *      的几块全是纯白）⇒ 兜底是好实践，但**不是**静默失败的保护网，只能靠语法本身合规。
++ *
++ * 本测试把「语法形态」锁死，让后续会话不会再写回不可用的写法（#937 之前全项目 22 处里 15 处中招，
++ * 而且**不报错不警告**地静默失败）。
++ *
++ * 设计沿用本仓既有守护测试的形态（见 utils/deviceCaptureContract.test.js）：
++ * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
++ */
++const fs = require('fs');
++const path = require('path');
++
++const ROOT = path.join(__dirname, '..');
++
++/** 颜色值个数上限；uvue 只接受 color-start / color-stop 两个 */
++const MAX_COLOR_STOPS = 2;
++
++/** 抽取 <style> 块内容（渐变只可能出现在样式里；模板/脚本里出现这个词基本都是注释） */
++function styleTextOf(source) {
++  const blocks = source.match(/<style[^>]*>[\s\S]*?<\/style>/g) || [];
++  return blocks.join('\n');
++}
++
++/** 去掉 HTML 注释与 CSS 注释 —— 注释里写着 `linear-gradient` 不算实现（假阳性来源） */
++function stripComments(text) {
++  return text
++    .replace(/<!--[\s\S]*?-->/g, ' ')
++    .replace(/\/\*[\s\S]*?\*\//g, ' ');
++}
++
++/** 纯函数：单个文件源码 → 违规清单 */
++function scanGradients(source) {
++  const violations = [];
++  const css = stripComments(styleTextOf(source));
++  const re = /linear-gradient\(\s*([^)]*)\)/g;
++  let m;
++  while ((m = re.exec(css)) !== null) {
++    const args = m[1].trim();
++    // 参数切分：方向有两种写法 —— 关键字（`to bottom` / `to bottom right`，含空格）与
++    // **角度**（`135deg`）。两者都实测可用（#937 探针 A4 就是角度），都不计入颜色值个数。
++    const parts = args.split(',').map((s) => s.trim());
++    const DIRECTION = /^(to\s+(right|left|top|bottom)(\s+(right|left))?|\d+(\.\d+)?deg)$/;
++    const hasDirection = DIRECTION.test(parts[0]);
++    const stops = hasDirection ? parts.slice(1) : parts;
++
++    if (/.*%/.test(stops.join(','))) {
++      violations.push(
++        '带百分比停靠位（实测整条声明被丢弃）：linear-gradient(' + args + ')'
++      );
++    }
++    if (stops.length !== MAX_COLOR_STOPS) {
++      violations.push(
++        '颜色值个数 ' + stops.length + '（uvue 只接受恰好 ' + MAX_COLOR_STOPS + ' 个）：linear-gradient(' + args + ')'
++      );
++    }
++  }
++  // 背景图只支持 linear-gradient，且统一走简写 background（长写形态在全项目已收敛为 0 处）
++  if (/background-image\s*:\s*linear-gradient/.test(css)) {
++    violations.push('用 background-image 长写声明渐变（本仓统一走简写 background）');
++  }
++  return violations;
++}
++
++/** 递归收集目标 .uvue（跳过构建产物与依赖） */
++function collectUvue(dir, acc = []) {
++  let entries;
++  try {
++    entries = fs.readdirSync(dir, { withFileTypes: true });
++  } catch {
++    return acc;
++  }
++  for (const e of entries) {
++    const full = path.join(dir, e.name);
++    if (e.isDirectory()) {
++      if (e.name === 'unpackage' || e.name === 'node_modules') continue;
++      collectUvue(full, acc);
++    } else if (e.name.endsWith('.uvue')) {
++      acc.push(full);
++    }
++  }
++  return acc;
++}
++
++describe('uvue 渐变语法契约（#937 真机实测口径）', () => {
++  // ---- 注入自检：检测器必须能抓住违规，否则本测试是空跑假绿 ----
++  describe('① 检测器自检（注入违规样本必须被判红）', () => {
++    const cases = [
++      ['三值 + 百分比（本仓原页底写法）',
++        '<style>.a { background: linear-gradient(180deg, #CFE9FB 1%, #D0EBFD 16%, #F5F5F5 100%); }</style>',
++        /百分比停靠位[\s\S]*颜色值个数 3/],
++      ['两值但带百分比（探针 A1 写法）',
++        '<style>.a { background: linear-gradient(135deg, #FF1493 0%, #FF1493 100%); }</style>',
++        /百分比停靠位/],
++      ['四值无百分比（探针 B3 写法，实测同样被丢弃）',
++        '<style>.a { background: linear-gradient(to bottom, #FF0000, #FFFF00, #00FF00, #0000FF); }</style>',
++        /颜色值个数 4/],
++      ['background-image 长写',
++        '<style>.a { background-image: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>',
++        /长写声明渐变/],
++    ];
++    cases.forEach(([name, src, pattern]) => {
++      it(name, () => {
++        const v = scanGradients(src);
++        expect(v.length).toBeGreaterThan(0);
++        expect(v.join('\n')).toMatch(pattern);
++      });
++    });
++  });
++
++  // ---- 自检的另一半：合规写法与「注释里出现该词」不得误报 ----
++  describe('② 检测器自检（合规样本必须判绿，防误报）', () => {
++    const ok = [
++      ['角度 + 两值 + 无百分比（探针 A4 实测可用）',
++        '<style>.a { background: linear-gradient(135deg, #e3f0ff, #cfe4ff); }</style>'],
++      ['关键字 + 两值 + 无百分比（探针 B1 实测可用）',
++        '<style>.a { background: linear-gradient(to bottom, #FF0000, #0000FF); }</style>'],
++      ['两词方向（to bottom right）',
++        '<style>.a { background: linear-gradient(to bottom right, #CFE9FB, #F5F5F5); }</style>'],
++      ['只有本行兜底、没有渐变',
++        '<style>.a { background-color: #F5F5F5; }</style>'],
++      ['注释里出现该词不算实现',
++        '<style>.a { background-color: #fff; /* 实色：本机型不绘制 linear-gradient(...) */ }</style>'],
++    ];
++    ok.forEach(([name, src]) => {
++      it(name, () => {
++        expect(scanGradients(src)).toEqual([]);
++      });
++    });
++  });
++
++  // ---- 对真实文件断言零命中 ----
++  it('③ 全项目 .uvue 的渐变声明均为「恰好 2 个颜色值 + 无百分比 + 简写 background」', () => {
++    const files = [
++      ...collectUvue(path.join(ROOT, 'pages')),
++      ...collectUvue(path.join(ROOT, 'components')),
++      path.join(ROOT, 'App.uvue'),
++    ].filter((p) => { try { return fs.statSync(p).isFile(); } catch { return false; } });
++
++    expect(files.length).toBeGreaterThan(50);   // 锚点自检：扫描面必须真的覆盖到，不许退化成空跑
++
++    const offenders = [];
++    for (const f of files) {
++      const v = scanGradients(fs.readFileSync(f, 'utf8'));
++      if (v.length) offenders.push(path.relative(ROOT, f) + '\n    ' + v.join('\n    '));
++    }
++    expect(offenders.join('\n')).toBe('');
++  });
++});

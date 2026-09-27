@@ -1,0 +1,23 @@
+
+
+>>> [project-open] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+项目导入成功
+
+
+>>> [publish-appresource] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+20:31:53.624 项目 叉车维修培训学员端跨端应用 开始导出...
+20:32:07.730 编译器版本：5.24（uni-app x）VDOM模式
+20:32:07.735 当前样式隔离策略：2.0。详见：https://doc.dcloud.net.cn/uni-app-x/css/common/style-isolation.html
+20:32:07.739 正在编译中...
+20:32:07.743 编译会生成大量临时文件，杀毒软件监控时会影响编译速度，并造成CPU升高。推荐把项目目录添加到杀毒软件的监控排除名单中。[添加] [帮助]
+20:32:55.946 项目 叉车维修培训学员端跨端应用 编译成功。
+20:32:56.080 项目 叉车维修培训学员端跨端应用 正在导出...
+20:32:56.938 项目 叉车维修培训学员端跨端应用 导出 android 成功，路径为：D:\FL\wt-1240\training-app\叉车维修培训学员端跨端应用\unpackage\resources\app-android
+20:32:56.939 wgt文件由HBuilderX 5.24 版本生成，运行的基座sdk也需配套相同版本，否则在手机端部分功能可能无法正常使用。详见 http://ask.dcloud.net.cn/article/35627 
+
+
+>>> [kotlinc-all] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\plugins\amazon-corretto\bin\java.exe
+
+✅ ④c 通过：整模块编译无 error（KOTLIN_ALL_RESULT errors=0 classes=1517 files=120 input=unpackage\resources\app-android freshness=fresh log=D:\FL\wt-1240\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log）
+   注意：④c ≠ compileReleaseKotlin（工具链不同），只作本地加固，不能替代 ④b 的结论。
+exit=0

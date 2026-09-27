@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "sourceTool": "vision_pixel_diff",
+  "original": {
+    "path": "C:\\Users\\ZHENG\\AppData\\Local\\Temp\\toast-1062\\burst-162128-06.png",
+    "bytes": 172386,
+    "width": 1080,
+    "height": 2400,
+    "format": "png",
+    "originalPath": "C:\\Users\\ZHENG\\AppData\\Local\\Temp\\toast-1062\\burst-162128-06.png"
+  },
+  "rebuilt": {
+    "path": "C:\\Users\\ZHENG\\AppData\\Local\\Temp\\toast-1062\\burst-162128-02.png",
+    "bytes": 200819,
+    "width": 1080,
+    "height": 2400,
+    "format": "png",
+    "originalPath": "C:\\Users\\ZHENG\\AppData\\Local\\Temp\\toast-1062\\burst-162128-02.png"
+  },
+  "scaled": false,
+  "overallDifferencePct": 4.16,
+  "grid": 8,
+  "worstRegions": [
+    {
+      "index": 1,
+      "differencePct": 21.9,
+      "box": {
+        "x1": 675,
+        "y1": 900,
+        "x2": 810,
+        "y2": 1200
+      }
+    },
+    {
+      "index": 2,
+      "differencePct": 21.04,
+      "box": {
+        "x1": 810,
+        "y1": 900,
+        "x2": 945,
+        "y2": 1200
+      }
+    },
+    {
+      "index": 3,
+      "differencePct": 20.87,
+      "box": {
+        "x1": 540,
+        "y1": 900,
+        "x2": 675,
+        "y2": 1200
+      }
+    },
+    {
+      "index": 4,
+      "differencePct": 20.71,
+      "box": {
+        "x1": 135,
+        "y1": 900,
+        "x2": 270,
+        "y2": 1200
+      }
+    },
+    {
+      "index": 5,
+      "differencePct": 20.54,
+      "box": {
+        "x1": 405,
+        "y1": 900,
+        "x2": 540,
+        "y2": 1200
+      }
+    },
+    {
+      "index": 6,
+      "differencePct": 20.4,
+      "box": {
+        "x1": 270,
+        "y1": 900,
+        "x2": 405,
+        "y2": 1200
+      }
+    }
+  ]
+}

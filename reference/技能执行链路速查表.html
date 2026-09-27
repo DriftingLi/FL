@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 技能执行链路</title>
+<link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+<main class="sheet">
+
+<p class="kicker">Reference · 随课速查</p>
+<h1>技能执行链路速查表</h1>
+<p class="lede">一页纸压缩：五步链路、扫描根 rank 表、工具清单、两层规则的分工。打印后贴工位。</p>
+
+<h2>五步链路</h2>
+<table>
+<tr><th style="width:2.5rem">#</th><th>步骤</th><th>发生了什么</th><th>怎么自己验证</th></tr>
+<tr><td>1</td><td>名册注入</td><td><code>available_skills</code> 名单（名+摘要）进上下文；注明「摘要不等于指令」</td><td>开新会话看系统提示</td></tr>
+<tr><td>2</td><td>点名加载</td><td><code>/名字</code> → 扫描根按名命中 → <code>SKILL.md</code> 全文进 <code>skill_content</code></td><td>看你消息下方的 skill_instructions 块</td></tr>
+<tr><td>3</td><td>按图施工</td><td>模型按指令调工具（read / write / pwsh / grep / web_fetch / 子代理…）</td><td>看会话工具调用轨迹</td></tr>
+<tr><td>4</td><td>落盘状态</td><td>产出写进工作区文件；技能记忆 = 文件不是聊天</td><td><code>ls MISSION.md learning-records/</code></td></tr>
+<tr><td>5</td><td>下次续读</td><td>新会话先读盘上文件恢复进度</td><td>新会话直接问「读 MISSION 告诉我学什么」</td></tr>
+</table>
+
+<h2>扫描根 rank 表（小者赢；每次现测）</h2>
+<table>
+<tr><th>rank</th><th>位置</th><th>本机 2026-09 实测</th></tr>
+<tr><td>100</td><td><code>项目根/.dsh/skills</code></td><td>根有 .dsh 但无 skills；<b>裁定不放</b>（会改掉所有会话生效版本）</td></tr>
+<tr><td>200</td><td><code>项目根/.agents/skills</code></td><td>不存在</td></tr>
+<tr><td>300</td><td>自定义根</td><td>未配置</td></tr>
+<tr><td>400</td><td><code>~/.dsh/skills</code></td><td>不存在</td></tr>
+<tr><td>500</td><td><code>~/.agents/skills</code></td><td>存在（用户级落点）</td></tr>
+<tr><td>600</td><td>插件 bundled</td><td>存在，25 个（mattpocock v1.2.3）= 实际生效层</td></tr>
+</table>
+<p><strong>推论</strong>：移动端子树（<code>training-app/**/.agents/skills</code> 等）不在任何扫描根 → 放技能副本 = 死文件 + 未来静默换版本风险。出处：移动端 <code>docs/agents/skills.md</code> / <code>ADR-0024</code>。</p>
+
+<h2>现测命令（别按记忆）</h2>
+<pre><code>Test-Path D:\FL\.dsh            # 根 .dsh 是否存在
+Test-Path D:\FL\.agents         # 根 .agents（期望 False）
+Test-Path "$env:USERPROFILE\.agents\skills"   # 用户级落点
+(Get-ChildItem "C:\Users\ZHENG\.dsh\profiles\web\node_modules\dsh-mattpocock-skills-deck\bundled-skills" -Directory).Count  # 期望 25</code></pre>
+
+<h2>工具归属：谁提供、谁能否决</h2>
+<table>
+<tr><th>层</th><th>管什么</th><th>失控时从哪查</th></tr>
+<tr><td><b>技能文本</b></td><td>建议流程：先读什么、后跑什么、何时停下问人</td><td>读它的 SKILL.md 原文</td></tr>
+<tr><td><b>AGENTS.md / docs/agents/</b></td><td>本仓硬规则：门、纪律、禁区（优先于技能）</td><td>仓内文档，逐条可现测</td></tr>
+<tr><td><b>harness（工具+沙箱+审批）</b></td><td>真正能读/写/跑什么；越权即拒</td><td>当前 file policy / approval policy</td></tr>
+<tr><td><b>CI / 守卫脚本</b></td><td>机器判据：测试、类型、lint、guard --all</td><td><code>docs/agents/checks.md</code> 权威命令表</td></tr>
+<tr><td><b>人</b></td><td>①b 能力面签收 + 例外通道合并</td><td>PR 正文「验收证据」段</td></tr>
+</table>
+
+<h2>两层规则分工（技能 vs 本仓）</h2>
+<table>
+<tr><th></th><th>技能（mattpocock…）</th><th>本仓 AGENTS.md / ADR</th></tr>
+<tr><td>来源</td><td>插件包，上游可更新</td><td>仓内文件，随 PR 演化</td></tr>
+<tr><td>管</td><td>通用流程骨架（grill / spec / tdd / review）</td><td>本项目门禁、命令、禁区</td></tr>
+<tr><td>冲突时</td><td colspan="2"><b>本仓规则优先</b>（技能是建议，AGENTS.md 是约束）</td></tr>
+</table>
+
+<footer class="nav">
+<p><a href="../lessons/0001-skill-invocation-chain.html">← 第 1 课</a> ｜ <a href="../RESOURCES.md">RESOURCES</a></p>
+</footer>
+
+</main>
+</body>
+</html>

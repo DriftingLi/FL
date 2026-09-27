@@ -1,0 +1,101 @@
+[19:56:44] === capture-1331 phase=after serial=192.168.10.54:43211 ===
+[19:56:44] screen asleep -> input keyevent 224 (WAKEUP)
+[19:56:47] screen awake now
+[19:56:48] net -> OFF (global http_proxy = '192.168.10.55:18899' -> 拒连监听器，应用侧等价断网)
+[19:56:53] --- OFFLINE captures ---
+[19:56:53] launch pages/mall/mall name=after-offline-mall
+[20:00:26] SETTLED after-offline-mall seconds=211 diff=0% entered=pages/mall/mall
+20:00:13.464 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:00:13.469 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/auth/me[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:00:13.478 [0m进入页面:​pages/mall/mall​ 。[{"创建dom元素个数":"45个","耗时":"39ms"},{"排版":"1次","耗时":"78ms"},{"渲染":"1次","耗时":"107ms"},{"跳转页面到onReady总耗时":"380ms"}][0m
+20:00:13.499 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:00:13.504 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:00:14.270 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/courses?page=1&page_size=12&credential_id=1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:00:14.280 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:00:14.285 [31m[0m[mall] load failed:[0m [94m‍[⁠Error⁠]‍[31m {"cause": [96mnull[31m, "message": [92m"request system error"[31m, "name": [92m"Error"[31m} at pages/mall/mall.uvue:169[39m
+[20:00:33] CAPTURED after-offline-mall desc=21 lines jpg=44773B
+[20:00:33] launch pages/courses/course-detail id=1name=after-offline-detail
+[20:04:26] SETTLED after-offline-detail seconds=231 diff=0% entered=pages/courses/course-detail
+20:04:09.826 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/course/1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:04:10.095 [0m进入页面:​pages/courses/course-detail?id=1​ 。[{"创建dom元素个数":"10个","耗时":"10ms"},{"排版":"1次","耗时":"19ms"},{"渲染":"1次","耗时":"6ms"},{"跳转页面到onReady总耗时":"127ms"}][0m
+20:04:10.288 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:04:10.931 [31m[0m[course-detail] load failed:[0m [94m‍[⁠Error⁠]‍[31m {"cause": [96mnull[31m, "message": [92m"request system error"[31m, "name": [92m"Error"[31m} at pages/courses/course-detail.uvue:238[39m
+20:04:10.935 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/favorites/check?target_type=course&target_id=1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:04:10.938 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+[20:04:33] CAPTURED after-offline-detail desc=5 lines jpg=34601B
+[20:04:33] launch pages/courses/courses name=after-offline-courses
+[20:07:54] SETTLED after-offline-courses seconds=200 diff=0% entered=pages/courses/courses
+20:07:41.014 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:07:41.017 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/catalog/tree[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:07:41.019 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/levels[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:07:41.080 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:07:41.084 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:07:41.122 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:07:41.226 [0m进入页面:​/pages/courses/courses​ 。[{"创建dom元素个数":"30个","耗时":"26ms"},{"排版":"1次","耗时":"63ms"},{"渲染":"1次","耗时":"38ms"},{"跳转页面到onReady总耗时":"398ms"}][0m
+20:07:41.747 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/courses?page=1&page_size=12&credential_id=1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:07:41.751 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:07:41.754 [31m[0m[courses] load failed:[0m [94m‍[⁠Error⁠]‍[31m {"cause": [96mnull[31m, "message": [92m"request system error"[31m, "name": [92m"Error"[31m} at pages/courses/courses.uvue:189[39m
+[20:07:58] CAPTURED after-offline-courses desc=13 lines jpg=60451B
+[20:07:58] net -> ON (clear global http_proxy)
+[20:07:59] http_proxy readback after clear = 'null'
+[20:08:04] tap retry at (540,912) desc='课程加载失败，请检查网络后重试'
+[20:08:16] CAPTURED after-retry-courses desc=2
+[20:08:16] launch pages/courses/courses name=after-online-courses
+[20:16:18] NOT-SETTLED after-online-courses : 到上限 480 秒日志里始终没有页面进入行（launch 未真正跑起来）
+[20:16:18] launch pages/courses/course-detail id=1name=after-online-detail
+[20:19:53] SETTLED after-online-detail seconds=212 diff=0% entered=pages/courses/course-detail
+20:19:38.463 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/auth/me[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:19:38.466 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/course/1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:19:38.472 [0m进入页面:​pages/courses/course-detail?id=1​ 。[{"创建dom元素个数":"10个","耗时":"11ms"},{"排版":"1次","耗时":"22ms"},{"渲染":"1次","耗时":"6ms"},{"跳转页面到onReady总耗时":"151ms"}][0m
+20:19:38.529 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/auth/me[0m at api/request.uts:411
+20:19:38.610 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/course/1[0m at api/request.uts:411
+20:19:38.613 [0m[getCourseDetailApi] raw data:[0m [0m{"course_info":{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":1,"created_at":"2026-08-27T22:03:10.072523+08:00","credential":{"category":"special_operation","code":"forklift_n1","id":1,"level":null,"name":"叉车司机N1证"},"credential_id":1,"description":"叉车分类、基本结构、主要技术参数等入门知识，为后续维修与操作学习奠定基础。","duration":120,"entitled":true,"is_featured":false,"is_hot":false,"level":{"code":"beginner","level_id":1,"name":"入门"},"level_id":1,"name":"叉车基础知识概述","practice_hours":0,"prerequisite_course_ids":[],"prerequisites":[],"sort_order":0,"specialty":{"code":"maintenance","name":"维修","specialty_id":2},"specialty_id":2,"status":1,"theory_hours":0},"chapters":[{"chapter_id":1,"content":"## 第一章 叉车分类与型号\n\n叉车（Forklift Truck）是工业搬运车辆，主要用于成件托盘货物的装卸、堆垛和短距离运输。\n\n### 按动力方式分类\n- **内燃叉车**：柴油、汽油、液化石油气（LPG）动力，功率大、续航长\n- **电动叉车**：蓄电池驱动，噪音低、无污染，适合室内作业\n- **手动液压叉车**：人力操作，适用于轻型短距离搬运\n\n### 按结构形式分类\n- 平衡重式叉车（最常见，车体后部配重）\n- 前移式叉车（门架可前后移动，适合窄通道）\n- 插腿式叉车（前伸支腿提供稳定性）\n- 侧面叉车（货叉在侧面，适合长条物料）\n- 托盘堆垛车（专用于托盘堆垛）\n\n### 按额定起重量分类\n- 轻型：1 吨以下（电商物流中心）\n- 中型：1～5 吨（一般工厂仓库，2.0～2.5 吨最常见）\n- 重型：5～10 吨（建材、机械等重工业）\n- 超重型：10 吨以上（港口、冶金）\n\n### 本章重点\n叉车按动力分为内燃/电动/手动；按结构分为平衡重/前移/插腿/侧面；2.0～2.5 吨级是工厂仓库最常见规格。\n\n\n\n### 技术参数速查表\n\n| 叉车类型 | 额定起重量 | 动力方式 | 适用场景 |\n|---------|----------|---------|---------|\n| 轻型 | ≤1吨 | 电动 | 电商物流、轻型仓储 |\n| 中型 | 1-5吨 | 内燃/电动 | 工厂仓库（2.0-2.5吨最常见） |\n| 重型 | 5-10吨 | 内燃 | 建材、机械等重工业 |\n| 超重型 | >10吨 | 内燃 | 港口、冶金 |\n\n| 结构类型 | 特点 | 适用场景 |\n|---------|------|---------|\n| 平衡重式 | 后部配重，最常见 | 通用搬运 |\n| 前移式 | 门架前后移动 | 窄通道仓储 |\n| 插腿式 | 前伸支腿 | 低层堆垛 |\n| 侧面叉车 | 货叉在侧面 | 长条物料 |\n| 托盘堆垛车 | 步行/站立操作 | 托盘堆垛 |\n\n### 常见误区辨析\n- **误区**：电动叉车比内燃叉车力量小 → **事实**：同吨位级别两者额定起重量相同，区别在于续航和适用环境\n- **误区**：平衡重越重越好 → **事实**：平衡重需与额定起重量匹配，过重会影响转向灵活性和后轮承压\n","content_type":"text","course_id":1,"created_at":"2026-08-27T22:03:10.072523+08:00","description":"","duration":40,"file_url":"","order_num":1,"title":"第一章 叉车分类与型号"},{"chapter_id":2,"content":"## 第二章 叉车基本结构组成\n\n叉车主要由七大系统组成：动力系统、传动系统、转向系统、制动系统、液压系统、工作装置、电气系统。\n\n### 动力与传动系统\n- 内燃叉车动力传递：发动机 → 液力变矩器 → 变速箱 → 传动轴 → 驱动桥 → 驱动轮\n- 电动叉车动力传递：蓄电池 → 电机控制器 → 行走电机 → 驱动桥 → 驱动轮\n- 变速箱功能：变换速度和扭矩，实现前进后退\n\n### 液压系统（核心工作系统）\n- 以液压油为工作介质，利用液体压力能传递动力\n- 核心原理：帕斯卡定律\n- 工作流程：吸油 → 压油 → 控制 → 执行 → 回油\n- 主要驱动工作装置（货叉升降、门架倾斜），不驱动车轮行驶\n\n### 工作装置\n- 门架：前倾角 3°～6°（便于叉取），后倾角 6°～12°（防止货物滑落）\n- 货叉：直接接触货物的部件\n- 自由起升高度：门架高度不增加时货叉的最大起升高度（集装箱作业关键参数）\n\n### 安全装置\n- 护顶架：防止上方坠落物伤害操作人员\n- 安全带：防止侧翻时驾驶员被甩出\n\n### 本章重点\n叉车七大系统；液压系统基于帕斯卡定律；门架后倾角 6°～12°防滑落；护顶架防坠落物。\n\n\n\n### 叉车七大系统对照表\n\n| 系统 | 功能 | 核心部件 | 常见故障 |\n|------|------|---------|---------|\n| 动力系统 | 提供动力 | 发动机/蓄电池 | 无法启动、动力不足 |\n| 传动系统 | 传递动力 | 变速箱、传动轴、驱动桥 | 异响、跳挡 |\n| 转向系统 | 控制方向 | 方向盘、转向器、转向油缸 | 转向沉重、跑偏 |\n| 制动系统 | 减速停车 | 制动踏板、制动总泵/分泵、制动片 | 失灵、发软、偏刹 |\n| 液压系统 | 驱动工作装置 | 液压泵、换向阀、起升油缸、倾斜油缸 | 不起升、下落、油温高 |\n| 工作装置 | 装卸货物 | 门架、货叉、链条 | 变形、磨损、异响 |\n| 电气系统 | 照明信号 | 灯光、喇叭、仪表、传感器 | 灯不亮、喇叭不响 |\n\n### 门架角度参数\n\n| 参数 | 角度范围 | 用途 |\n|------|---------|------|\n| 前倾角 | 3°-6° | 便于叉取和卸货 |\n| 后倾角 | 6°-12° | 行驶时防止货物滑落 |\n| 最大倾斜角 | 10° | 超过此角度有侧翻风险 |\n","content_type":"text","course_id":1,"created_at":"2026-08-27T22:03:10.072523+08:00","description":"","duration":40,"file_url":"","order_num":2,"title":"第二章 叉车基本结构组成"},{"chapter_id":3,"content":"## 第三章 叉车主要技术参数\n\n理解叉车技术参数是正确选型和安全作业的基础。\n\n### 起重量参数\n- **额定起重量**：规定条件下允许起升的最大货物质量（最重要的性能参数）\n- **载荷中心距**：货物质心到货叉垂直段前表面的水平距离，标准值 500mm（针对 2～5 吨叉车）\n- **载荷曲线图**：当载荷中心距增大时，实际起重量需相应降低\n\n### 速度与爬坡能力\n- 内燃叉车满载行驶速度：15～20 km/h\n- 电动叉车满载行驶速度：10～14 km/h\n- 满载爬坡度：不低于 15%\n- 空载爬坡度：不低于 20%\n\n### 转向与起升\n- 最小转弯半径：\n  - 1.5 吨电动叉车约 1500～1800mm\n  - 2.5 吨内燃叉车约 2100～2400mm\n  - 前移式叉车约 1400～1600mm（窄通道优势）\n- 起升高度：\n  - 标准起升 3000mm：二节门架\n  - 起升 5000mm：二节门架\n  - 起升 7000mm 以上：三节门架\n\n### 厂内限速规定\n- 厂区主干道：10 km/h\n- 仓库车间内：5 km/h\n- 载货行驶货叉离地：10～20 cm，门架后倾\n\n### 本章重点\n额定起重量是最重要参数；载荷中心距标准 500mm；转弯半径决定窄通道通过能力；厂内限速 5/10 km/h。\n\n\n\n### 技术参数速查表\n\n| 参数 | 标准值 | 说明 |\n|------|--------|------|\n| 额定起重量 | 1-10吨 | 标准载荷中心距下的最大允许重量 |\n| 载荷中心距 | 500mm | 货物质心到货叉垂直段前表面的水平距离 |\n| 内燃满载速度 | 15-20 km/h | 平坦路面满载最高行驶速度 |\n| 电动满载速度 | 10-14 km/h | 电动叉车满载最高行驶速度 |\n| 满载爬坡度 | ≥15% | 满载时最大爬坡能力 |\n| 空载爬坡度 | ≥20% | 空载时最大爬坡能力 |\n| 厂区主干道限速 | 10 km/h | 厂区主干道限速规定 |\n| 仓库车间限速 | 5 km/h | 仓库车间内限速规定 |\n| 载货行驶货叉离地 | 10-20 cm | 载货行驶时货叉离地高度 |\n| 转弯半径 | 1.5-2.4m | 最小转弯半径（视吨位而定） |\n| 标准起升高度 | 3000mm | 二节门架标准起升 |\n| 链条下垂量 | 1-2 cm | 起升链条正常松紧度 |\n\n### 载荷曲线使用说明\n当载荷中心距从500mm增加到600mm时，2.5吨叉车的实际安全起重量降至约2.1吨。\n**务必查阅车身铭牌上的载荷曲线图**，不可仅凭额定起重量判断。\n","content_type":"text","course_id":1,"created_at":"2026-08-27T22:03:10.072523+08:00","description":"","duration":40,"file_url":"","order_num":3,"title":"第三章 叉车主要技术参数"}],"progress":0,"is_enrolled":false,"completed_chapters":0,"last_chapter_id":null,"last_position":0,"last_studied_at":""}[0m at api/course.uts:376
+20:19:38.615 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/student/courses/1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:19:38.631 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/favorites/check?target_type=course&target_id=1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:19:38.839 [0m[request] <<<[0m [95m‍[number]‍ 403[39m [0mhttps://www.gccsmile.com/api/student/courses/1[0m at api/request.uts:411
+20:19:39.060 [0m[request] <<<[0m [95m‍[number]‍ 403[39m [0mhttps://www.gccsmile.com/api/favorites/check?target_type=course&target_id=1[0m at api/request.uts:411
+[20:19:58] CAPTURED after-online-detail desc=31 lines jpg=84637B
+[20:19:59] device writes: stay_on deleted; http_proxy readback = 'null' (须为 null/空)
+[20:19:59] summary: after-offline-mall=OK, after-offline-detail=OK, after-offline-courses=OK, after-retry-courses=OK, =FAIL, after-online-detail=OK
+[20:19:59] === done ===
+[20:22:20] === capture-1331 phase=after serial=192.168.10.54:43211 ===
+[20:22:20] screen awake
+[20:22:21] net -> OFF (global http_proxy = '192.168.10.55:18899' -> 拒连监听器，应用侧等价断网)
+[20:22:26] --- OFFLINE captures ---
+[20:22:26] launch pages/courses/courses name=after-offline-courses
+[20:26:11] SETTLED after-offline-courses seconds=223 diff=0% entered=pages/courses/courses
+20:26:00.886 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/auth/me[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:26:00.889 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:26:00.892 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/catalog/tree[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:26:00.895 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/levels[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:26:00.902 [0m进入页面:​/pages/courses/courses​ 。[{"创建dom元素个数":"30个","耗时":"25ms"},{"排版":"1次","耗时":"70ms"},{"渲染":"1次","耗时":"37ms"},{"跳转页面到onReady总耗时":"391ms"}][0m
+20:26:00.904 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:26:01.302 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:26:01.308 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:26:01.317 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:26:02.307 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/courses?page=1&page_size=12&credential_id=1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:26:02.312 [31m[0m[request] <<< FAIL errMsg=[0m [0mrequest system error[0m at api/request.uts:442[39m
+20:26:02.318 [31m[0m[courses] load failed:[0m [94m‍[⁠Error⁠]‍[31m {"cause": [96mnull[31m, "message": [92m"request system error"[31m, "name": [92m"Error"[31m} at pages/courses/courses.uvue:189[39m
+[20:26:17] CAPTURED after-offline-courses desc=13 lines jpg=60748B
+[20:26:17] found retry button at (540,1024) desc='重试'
+[20:26:17] net -> ON (clear global http_proxy)
+[20:26:18] http_proxy readback after clear = 'null'
+[20:26:25] tapped retry btn at (540,1024)
+[20:26:38] CAPTURED after-retry-courses desc=32
+[20:26:38] launch pages/courses/courses name=after-online-courses
+[20:28:12] SETTLED after-online-courses seconds=93 diff=0% entered=pages/courses/courses
+20:27:58.674 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/auth/me[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:27:58.684 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:27:58.693 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/catalog/tree[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:27:58.697 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/levels[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:27:59.245 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/levels[0m at api/request.uts:411
+20:27:59.248 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/auth/me[0m at api/request.uts:411
+20:27:59.257 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+20:27:59.266 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/catalog/tree[0m at api/request.uts:411
+20:27:59.314 [0m进入页面:​/pages/courses/courses​ 。[{"创建dom元素个数":"30个","耗时":"36ms"},{"排版":"1次","耗时":"73ms"},{"渲染":"1次","耗时":"34ms"},{"跳转页面到onReady总耗时":"476ms"}][0m
+20:27:59.329 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/courses?page=1&page_size=12&credential_id=1[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+20:27:59.334 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/courses?page=1&page_size=12&credential_id=1[0m at api/request.uts:411
+20:27:59.337 [0m[getCourseListApi] raw data:[0m [0m{"courses":[{"certificate_name":"叉车操作培训合格证书","certificate_template_id":1,"chapter_count":7,"cover_image":"","course_id":8,"created_at":"2026-08-30T14:13:49.630778+08:00","credential_id":1,"description":"内燃机（汽油机、柴油机）的构造、工作原理、性能指标与保养维修，对标 N1 考试大纲第二章。","duration":359,"is_featured":true,"is_hot":true,"level_id":4,"name":"内燃叉车动力装置（内燃机）","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":1,"status":1,"theory_hours":6},{"certificate_name":"叉车操作培训合格证书","certificate_template_id":1,"chapter_count":3,"cover_image":"","course_id":7,"created_at":"2026-08-30T14:13:49.452254+08:00","credential_id":1,"description":"场车的工作原理、结构特点、分类与性能技术参数，对标 N1 考试大纲第一章。","duration":123,"is_featured":true,"is_hot":true,"level_id":4,"name":"场（厂）内机动车辆基础","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":1,"status":1,"theory_hours":3},{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":6,"created_at":"2026-08-27T22:03:10.072523+08:00","credential_id":1,"description":"叉车制动、液压、转向系统故障诊断与排除，应急处置与突发情况应对。","duration":150,"is_featured":false,"is_hot":false,"level_id":2,"name":"故障诊断与排除进阶","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":2,"status":1,"theory_hours":0},{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":5,"created_at":"2026-08-27T22:03:10.072523+08:00","credential_id":1,"description":"货物叉取、起升、堆垛、装卸等作业环节的标准操作与安全要求。","duration":120,"is_featured":false,"is_hot":false,"level_id":2,"name":"货叉操作技能训练","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":1,"status":1,"theory_hours":0},{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":4,"created_at":"2026-08-27T22:03:10.072523+08:00","credential_id":1,"description":"出车前检查项目、十字作业法、液压与制动系统保养、电瓶与轮胎维护。","duration":120,"is_featured":false,"is_hot":false,"level_id":2,"name":"日常检查与保养指南","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":1,"status":1,"theory_hours":0},{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":3,"created_at":"2026-08-27T22:03:10.072523+08:00","credential_id":1,"description":"叉车起步、行驶、转弯、坡道、停车、会车等环节的安全操作规程。","duration":120,"is_featured":false,"is_hot":false,"level_id":1,"name":"叉车安全操作规范","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":3,"status":1,"theory_hours":0},{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":2,"created_at":"2026-08-27T22:03:10.072523+08:00","credential_id":1,"description":"液压传动原理、液压元件结构、液压系统维护与故障排除，进阶技术内容。","duration":150,"is_featured":false,"is_hot":false,"level_id":2,"name":"液压系统原理与维护","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":2,"status":1,"theory_hours":0},{"certificate_template_id":null,"chapter_count":3,"cover_image":"","course_id":1,"created_at":"2026-08-27T22:03:10.072523+08:00","credential_id":1,"description":"叉车分类、基本结构、主要技术参数等入门知识，为后续维修与操作学习奠定基础。","duration":120,"is_featured":false,"is_hot":false,"level_id":1,"name":"叉车基础知识概述","practice_hours":0,"prerequisite_course_ids":[],"sort_order":0,"specialty_id":2,"status":1,"theory_hours":0}],"page":1,"pages":1,"total":8}[0m at api/course.uts:306
+[20:28:17] CAPTURED after-online-courses desc=32 lines jpg=118663B
+[20:28:17] summary: after-retry-courses=OK, after-online-courses=OK
+[20:28:17] === done ===

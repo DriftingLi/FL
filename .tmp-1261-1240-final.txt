@@ -1,0 +1,178 @@
+## 改了什么 / 为什么改
+
+**移动端论坛从来没有格式轴**：`content_format` 在移动端全树 **0 命中**，`pages/forum/components/forum-topic-body.uvue` 对 Web 发来的 Markdown 帖**直出源串** —— 读者看到的是 `**故障码 E01**` 的星号。这是「内容读不出来的降级」，而根 `CONTEXT.md` 把「会让内容读不出来的降级必须在每一端补齐」定成了硬口径 ⇒ **它是欠账，不是新功能**。
+
+本票是 **ADR-0025**（`training-app/叉车维修培训学员端跨端应用/docs/adr/0025-论坛正文格式与输入区形态.md`）的落地，按 `docs/agents/issue-dispatch.md` 的进度契约分三段交付（每段一个 PR、各自的门判据不同）：
+
+| 段 | 内容 | 门 | 状态 |
+| --- | --- | --- | --- |
+| **P1 逻辑面** | 声明子集第三档 + 成员声明表 + `content_format` 消费与编辑不变式 | 改动集 = `.uts` / `test.js` / `.md` ⇒ **免 ①②**，③④ 必过 | **已落地（PR #1254，2026-09-21 合入 `a57d51f1`）** |
+| **P2 渲染接入** | 论坛渲染接入（`forum-topic-body` / `forum-detail` / 回复卡走 `SUBSET_FORUM`） | 含 `.uvue` ⇒ **①②④ 必过**，①b 免（不命中能力面） | **已落地（PR #1257，2026-09-21 合入 `50524f66`）** |
+| **P3 输入区形态** | 编写/预览 + 工具栏 + 长按提示 + 图片**单入口**（ADR-0025 ⑨ 取代 ⑦）+ 能力提示行 | 含 `.uvue` ⇒ **①②④ 必过**，**①b 必过**（真机上传 + 运行时权限弹窗；判据是**路径白名单**，与入口数无关） | **已落地（PR #1261 / 分支 `f0ef4b8e`；③ 已在回退后的树由 CI 过，**①a 与 ④c 待重跑**，② 实测未命中 MP-WEIXIN 面而免，①b 待人工签收）** |
+
+**依赖**：P2 / P3 都消费 P1 的声明与档位 ⇒ **P1 必须先合**（已在 #1254 合入）。P2 与 P3 可并行（互不改同一批文件）。
+
+## 进度：100%
+
+三段**全部落地并已合入 master**：**P1（逻辑面）**（PR #1254 / `a57d51f1`）、**P2（渲染接入）**（PR #1257 / `50524f66`）、**P3（输入区形态）**（PR #1261 —— 形态回退提交 `f0ef4b8e` + ①a 证据批次 `ebb732cd`，**squash 合入 `eb526a68`**）。P3 的证据链：`36ba80c6`（首轮）→ `fa6881e8`（评审修复后）→ **形态回退**（ADR-0025 ⑨ 取代 ⑦）→ `2f4f74e1` / `ebb732cd` **第二次分支收口**重取 ①a（7 份状态 + logcat 入仓）；③ 由 CI 过、④c `errors=0 freshness=fresh`（#1272 的修复随 sync 进入后为真读数）、② 实测未命中 MP-WEIXIN 面而免、①b 由维护者签收。
+
+下一步：无 —— 本票随 PR #1261 合入 master（`eb526a68`，2026-09-22）而关闭。**①b 的「执行人」栏用的是维护者原话「Q1 做了」，由 agent 代录（未自拟）**；未覆盖面（回复栏、「我的动态」回复原文、列表卡片 80 字预览）已如实登记在 `docs/verification/forum/1261/README.md` 与 ADR-0025 的对应条目。
+
+**诊断补记（2026-09-22 · `/triage`，只核验不实施）**：① **①b 的触发面非误报** —— 按能力面唯一真源 `scripts/lib/capability-surface.ps1` 的路径白名单机检，本 PR 命中「运行时权限弹窗」类两处（`composables/useReplyComposer.uts`、`pages/forum/forum-create.uvue`）⇒ 按 ADR-0008 / 0016 必须由**人**给出原文（agent 只可代录）。② **分支落后 master 1 个提交**（`d5150d49` = #1264，纯 `backend/**` + `frontend/**` + 根 `docs/adr/ADR-0062`，与本 PR 的 35 个文件零交集）⇒ ruleset 的 up-to-date 要求下合并前须 sync，该 sync 不触及运行时面。③ **以重跑数为准**：head `fa6881e8` 本机复跑 P3 相关 7 个套件 **7 suites / 184 tests 全绿**；本正文「验收证据（P3）」节记的是重跑前的首轮数（`36ba80c6`：logcat app tag 40 条 E 级行 / 120 suites·2278 tests / classes=1531），**现行数为「复核回写」节与 PR #1261 正文的 73 条 / 121 suites·2293 tests / classes=1526**。④ **附带欠账（不阻塞本票）**：本 PR 把 `uni.chooseImage` 的唯一调用点搬进了新件 `composables/useForumImagePicker.uts`，但能力面白名单仍只列两条旧宿主路径 ⇒ 下次只改新件时白名单判「否」（只剩调用点扫描提示 + PR 模板自报兜底，**不判红**），建议独立小票补录 ⇒ **已开 #1266**（`enhancement` + `ready-for-mobile-agent`，非运行时面、可即时合并）。
+
+## 交付物（承载面）
+
+### P3（已落地；承载面 = 发帖页与回复栏的输入区）
+
+| 交付物 | 内容 |
+| --- | --- |
+| `pages/forum/components/forum-markdown-input.uvue`（新） | **共享输入区组件**：数据档位（胶囊）/ 视图档位（下划线 tab）/ 工具栏（横滑 + 长按）/ 图片**单入口**（一个 `＋` 方块 → 系统选择器；ADR-0025 ⑨ 取代 ⑦）/ 能力边界提示行 / 属地提示。发帖与回复**只接线**，形态只有一份 |
+| `utils/markdownToolbar.uts`（新） | 工具栏模型 + **纯插入逻辑**：按钮集 = 本档成员声明集（5 枚）且双向对账；`applyToolbarInsert` 完整支持选区 |
+| `utils/forumFormatPreference.uts`（新） | 作者格式的**记忆位**（发帖 / 回复共用一个键）；「首次默认纯文本」= 读不到就是纯文本 |
+| `utils/forumDisplay.uts` | 新增 `FORUM_MARKDOWN_BOUNDARY_NOTICE`（**只讲边界**的提示行文案单点） |
+| `utils/forumBody.uts` | 补 `FORMAT_TEXT` 常量（格式词汇表仍只有一处） |
+| `api/forum.uts` | 创建 / 回复载荷**带上**作者的格式声明；编辑路径仍**不带**（编辑不变式不动） |
+| `pages/forum/forum-create.uvue` | 接入共享组件；档位控件只在新建论坛帖时出现；编辑态回填原格式（只读）；删掉旧 `textarea` / 图片区与其死 CSS |
+| `pages/forum/forum-detail.uvue` | 回复栏接入共享组件（**原地展开**）；发送按钮留壳层；删掉旧 `input` / 图片条与死 CSS |
+| `composables/useReplyComposer.uts` | 回复的格式声明 + 记忆位写入 + **单入口**选图（图片来源交回系统选择器） |
+| `pages/forum/my-forum.uvue` | **P2 真实缺口收口**：「我的动态」的回复原文接上格式轴（**不动 DTO**） |
+| `pages/forum/components/forum-markdown-blocks.uvue` | 补 `lang="scss"`（P2 登记为「与 P3 同批」的那条） |
+| `utils/modules.js` | 登记新组件（**登记机制未改**） |
+| `utils/markdownToolbarBehavior.test.js` / `utils/forumFormatPreferenceBehavior.test.js`（新，**行为**）/ `utils/forumMarkdownInputContract.test.js`（新，**接线**） | 新增守护；另随形态更新 `forumContract` / `forumEditContract` / `forumContentFormatBehavior` |
+| `docs/adr/0025-…md` | 补「实施回记（#1240 · P3）」+ 登记⑥ + ①a 取证坑位 |
+| `docs/verification/forum/1261/**` | ①a 真机取证产物（a11y 机检行 + 截图 + logcat 实数统计）+ README |
+### P1（已落地，8 个文件；只动逻辑面，无 UI 承载面）
+
+| 交付物 | 内容 |
+| --- | --- |
+| `utils/markdown.uts` | 第三档 `SUBSET_FORUM` + **成员声明表**（`MEMBER_*` 成员名 + `SUBSET_MEMBERS_{CHAPTER,FEATURED,FORUM}` 三张表 + `subsetMembers` / `subsetHasMember`）；解析器**七个可开关块产生点全部经 `hasMember()` 闸门** ⇒ 声明即行为 |
+| `utils/markdownSubsetBehavior.test.js`（新） | **行为守护**（`loadUts` 真执行）：三档声明表 + 正/反向对账 + 降级可读 + 零回归 + 成对取证 |
+| `types/forum.uts` | 三个 DTO（`ForumTopic` / `ForumReply` / `ForumTopicDetail`）补 `content_format` |
+| `api/forumDto.uts` | `normalizeContentFormat` 归一单点（缺省与一切非 `markdown` 取值 → `text`） |
+| `utils/forumContentFormatBehavior.test.js`（新） | **行为守护**：DTO 归一 + **编辑不变式**（PUT 载荷不含该字段）+ 成对取证 |
+| `api/forum.uts` | **仅 JSDoc 注释**（零逻辑改动） |
+| `docs/adr/0025-…md` | 补「实施回记（#1240 · P1）」 |
+
+`SUBSET_FORUM` 成员（P1 定版）：`heading` / `list` / `quote` / `code` / `divider`；**不含 table**（退回逐行原始文本）；**不含 image**（论坛图文分离 —— 正文内嵌 `![alt](url)` 展开成 alt 文本，图片走 `images` 数组）。**段落不在声明表里，它是不可关闭的地板**（降级可读）。
+
+### P2（已落地，10 个文件；渲染承载面 = 论坛详情页）
+
+| 交付物 | 内容 |
+| --- | --- |
+| `utils/forumBody.uts`（新） | **格式轴**：`FORMAT_MARKDOWN` / `isMarkdownFormat(format)` / `forumContentBlocks(content, format)` —— Markdown 档 ⇒ `parseMarkdown(content, SUBSET_FORUM)`；其余一切取值 ⇒ **空数组**（壳层直出原串）。归一单点仍在 `forumDto.normalizeContentFormat`，本模块只消费 |
+| `pages/forum/components/forum-markdown-blocks.uvue`（新） | 论坛档**块渲染**：heading / paragraph / code / list / quote / divider 六条分支；**不持** table 与 image（本档没声明它们 ⇒ 多写一条就是永远不可达的分支） |
+| `pages/forum/components/forum-topic-body.uvue` | 新增 `format` prop：`text` 档仍走原 `.content-text`（**一行未动**）、`markdown` 档走块组件 |
+| `pages/forum/components/forum-reply-list.uvue` | 回复卡同口径（本地薄包装 `isMarkdownReply` / `replyBlocks` —— uvue 模板禁直调 import 函数） |
+| `pages/forum/forum-detail.uvue` | 壳层扁平下发话题 `topicFormat` 与每条回复的 `contentFormat` |
+| `utils/forumDetailDisplay.uts` | `ForumReplyDisplay` 补 `contentFormat` |
+| `utils/modules.js` | 登记新组件（模块目录内新增文件必须入表） |
+| `utils/forumBodyBehavior.test.js`（新） | **行为守护**（`loadUts` 真执行，注入真执行的 `utils/markdown.uts`）：档位闸门取值表 + 正反向对账 + 源串剥离 + 降级可读 + mermaid 具名降级 + **成对取证两组** |
+| `utils/markdownContract.test.js` | ⑤ 页面级契约组补 3 条**接线**断言 |
+| `docs/adr/0025-…md` | 补「实施回记（#1240 · P2）」 |
+
+## 改动类型
+
+- [x] feat
+- [ ] fix
+- [ ] refactor
+- [x] docs
+- [x] test
+- [ ] style / chore
+
+## 实施记录（P3，2026-09-22）
+
+- **形态收成一个组件**：新件 `pages/forum/components/forum-markdown-input.uvue` 承载数据档位（胶囊，永久保存）/ 视图档位（下划线 tab，临时）/ 工具栏 / 图片**单入口**（2026-09-22 回退，ADR-0025 ⑨ 取代 ⑦；回退前是拍照/相册两个常驻方块）/ 两条功能提示；发帖表单与回复栏只接线（同根 ADR-0052 决策① 的目标）。回复栏的形态是**原地展开** —— 数据档位常驻一行（它是「Markdown 完全 opt-in」下**唯一**的入口，可发现性靠它），tab / 工具栏 / 提示行只在 Markdown 档长出（⑥-5 只把这三样排除出纯文本档，数据档位不在排除名单里）。
+- **工具栏与声明同源**：`utils/markdownToolbar.uts` 持 5 枚按钮（`###` / `-` / `>` / 代码围栏 / `---`），**两个方向都对账**（每枚按钮的成员必须在声明表里；声明表里每个成员必须有按钮或登记进 `DECLARED_WITHOUT_BUTTON`）。**行内格式不放按钮** —— 本档不做行内渲染，`**粗**` 会被剥成「粗」但**不出加粗样式**，放一枚加粗按钮就是承诺一个渲染不出来的效果（⑥-6 已把「行内格式」登记为跨端差异）。判据做成可执行的 **round-trip**：每枚按钮插入后的正文交**真执行的解析器**跑一遍，必须产出该按钮承诺的块类型。
+- **插入逻辑是纯函数、组件只喂末尾**：`applyToolbarInsert(content, start, end, member)` 完整支持选区（行前缀类逐行加、空行跳过；代码块整块包裹；分隔线独占一行且**不丢选区内容**）。**已知偏差**：组件这一侧只喂正文末尾、**不控制插入后的光标落位** —— 全仓对 `<textarea :cursor>` 与 `selectionStart` 都是 **0 先例**，且 ADR-0025 只要求「工具栏可横滑 + 长按出中文提示」、**未要求选区语义**（选区语义是根 ADR-0052 决策⑩ 的 **Web** 机制）。
+- **编辑态与资源态不给档位控件**：编辑载荷按 P1 的编辑不变式不带 `content_format` ⇒ 在那里摆个开关就是承诺做不到的事（与工具栏同一条纪律）；编辑态改为回填帖子**原格式**（只读）决定形态；资源投稿走投稿接口、根本没有格式契约，故恒纯文本。
+- **同批收口两处欠账**：① 「我的动态」的**回复原文**接上格式轴（P2 复核回写认定的**正文承载面**真实缺口；`buildReply` 早已带回 `content_format`，**不动 DTO**）；② `forum-markdown-blocks.uvue` 补 `lang="scss"`（P2 登记为「与 P3 同批」）。
+- **守护落锁**：新增 2 个**行为**守护（`markdownToolbarBehavior`：按钮↔声明双向对账 + round-trip + 插入语义 + 提示行与声明表对账，**成对取证五条**；`forumFormatPreferenceBehavior`：默认纯文本 + 往返成立 + **共用一个键** + 读写两侧归一，**成对取证三条**）与 1 个**接线**守护（`forumMarkdownInputContract`：纯文本档闸门、两组控件**形态不同**、图片入口、编辑态闸门、页面不直引档位常量）。行为守护 **22 → 24**、接线 95 → 96。**（2026-09-22 回退后）**：`forumImagePickerBehavior` 的「来源直达」组改写为「两个来源都在」组、必红对随决策反转（来源被砍 / `count` 写死 / 限额闸门被拆），`forumMarkdownInputContract` ④ 组同步反转。
+- **回退（2026-09-22，ADR-0025 ⑨ 取代 ⑦）**：图片入口从「拍照 / 相册两个常驻方块」收成一个 `＋` 方块（+ `n/9` 计数；回复侧沿用旧形态不出计数），来源交回系统选择器；图片**流水线一字未动**；缩略图行 `:key="idx"` ⇒ 用图片 URL 作 key（该条原被复核回写记为「已落」，实测**未落**）；①a/④c 证据随回退**作废重跑**。详见 PR #1261 正文与 ADR-0025 的「形态回退（第二次分支收口）」节。
+- **④c 抓到一条真错**：首次 `build:kotlin-all` 报 `unresolved reference 'isResourceMode'` —— UTS 编译到 Kotlin 后**没有变量提升**，我的格式轴 computed 排在 `isResourceMode` 之前；已按依赖顺序重排（坑位在代码注释与 ADR 里留痕）。
+- **未做**：**列表卡片正文预览**（80 字截断）仍直出源串 —— P2 的既有裁定「属另一批」（它的降级口径是「剥成纯文本」而不是块渲染），本段如实登记为未覆盖面。
+## 实施记录（P2，2026-09-21）
+
+- **机制**：格式轴收成 `utils/forumBody.uts`（决策从模板收进 utils，好让 ③ 门有一条**真执行**的判据 —— 模板里只能靠源码文本断言，`guards.md` 明说那不构成 ③ 证据）；块渲染抽成 `forum-markdown-blocks.uvue`（课程面 T08 已有同形先例），正文与回复卡两处只接线。
+- **新决策（ADR 六段与 P1 回记未覆盖，已回写 ADR-0025 实施回记）**：① 格式 → 档位的决策落在 `utils/forumBody.uts`；② 块渲染成组件、**纯文本档仍留各自文件直出**（常见路径视觉零 diff）；③ 块组件不持 table / image 分支；④ **空数组是「不解析」的哨兵**，渲染层的二选一闸门看**格式声明**而不是数组长度（否则空正文的 Markdown 帖会被读成「没正文」）。
+- **守护落锁**：`forumBodyBehavior` 为**行为守护**（`node scripts/classify-guards.mjs`：behavior 20 → 22，只升不降）；`markdownContract` ⑤ 组三条为接线守护。③ 三条判据：①判别力 → 成对取证两组必红；②测的是该测的那一支 → 注入的是**真执行**出来的解析器，不是手抄镜像；③成对取证 → 必不红 / 必红各一条。
+- **①a 取证坑位（本轮实测，已记进 ADR 与证据 README）**：`uiautomator dump --compressed` 会把**长** `content-desc`（整段正文源串）丢成空串，看着像「正文没渲染」；换**未压缩** dump 才拿到原文。
+- **未做**：P3 输入区形态（工具栏 / 编写预览 / 拍照相册 / 能力提示行）。
+- **如实登记的未覆盖面（code-review 后已据实修正）**：① 列表卡片正文**预览**（`getContentPreview`：截断 80 字 + 去换行）仍直出原串；② **「我的动态」的回复原文**（`my-forum.uvue` 的 `.reply-content`）渲的是**完整** `content`、**属正文承载面**，仍直出源串 —— 它是本段**真实缺口**（原回记把它误写成「截断预览」，已据实修正，见 `ADR-0025` 的「复核回写」修正①）。收口要么把格式下发到「我的回复」的展示模型，要么与 P3 同批。
+
+## 实施记录（P1，2026-09-21）
+
+- **机制**：`isFeatured` 布尔 → 三张成员声明表；七个可开关块产生点（标题 / 列表 / 引用 / 代码块 / 分隔线 / 图片 / 表格）各经 `hasMember()` 闸门。
+- **新决策（ADR 六段未覆盖，已回写 ADR-0025 实施回记）**：段落是「不可关闭的地板」，不进声明表。
+- **对票面初版的三处执行细化**：① 论坛档成员收了 `image`（图文分离，与 Web 同口径）；② 两条新守护取 `*Behavior` 后缀；③ `api/forum.uts` 落了一处 JSDoc 注释（零逻辑）。
+- **守护落锁**：`markdownSubsetBehavior` / `forumContentFormatBehavior` 均为**行为守护**；`markdownContract.test.js` 的镜像同步锚点随机制更新。
+- **未做**：P2 渲染接入、P3 输入区形态。
+
+## 影响范围 / 风险点（P2）
+
+- **低风险？否** —— P2 含 `.uvue` ⇒ ①②④ 必过（`pr-evidence` 的逐文件白名单不再适用），①b 免（不命中能力面：无指纹 / 无运行时权限弹窗 / 无真机上传 / 无厂商 ROM 交互）。
+- **零回归设计**：`text` 档（存量全部）走的仍是各自文件里原来那行直出，样式与节点都未动；新样式只作用于新出现的 Markdown 档。
+- **零契约变更**：后端字段与缺省语义早就有了（根 ADR-0044），本段只消费；未引入任何 `#ifdef MP-WEIXIN` 指令行；`MarkdownBlock` 形状未动。
+- **未改 `utils/modules.js` 的登记机制**：只按既有规则给新组件补了一行 `files` 登记。
+
+## 验收证据（P3 · PR #1261）
+
+- ① Android 真机逐页截图对比（**①a** agent 出证 / **①b** 人签） — 执行人：agent 执行 · 日期：2026-09-22 · 复测对象：**第二次分支收口已重跑**（绑 `2f4f74e1`，含回退提交 `f0ef4b8e`；real 真运行到 Redmi `23049RAD8C` / Android 15；另做了一次 `cli launch --cleanCache true` 干净重建）· 结论（含产物）：**新形态判据全部重取**（7 份状态 + 机检行 + logcat 实数）—— 图片区是**单入口**（`＋` + `0/9`，全批无「拍照」「相册」常驻方块）、点 `＋` 弹**含两个来源**的选择器（拍摄 / 从相册选择 / 取消）、相册入口可进且无应用内权限弹窗、**选图 → 回应用 → 上传成功**（缩略图 + `×` + `1/9`）；logcat 4743 行 / E 级 106 / app 进程 20 / 关键词命中 0。逐条见 `docs/verification/forum/1261/README.md`。**历史留痕（不覆盖当前 head）**：旧一批（`36ba80c6`/`fa6881e8`）判的是已被 ⑨ 取代的双入口形态（历史留痕：`36ba80c6` 真运行到 Redmi `23049RAD8C` / Android 15）· 结论（含产物）：**回退前的历史留痕（不覆盖当前 head）** —— 入库在 `docs/verification/forum/1261/` —— `01-forum-create-text` 对 `02-forum-create-markdown`（**纯文本档无 tab / 工具栏 / 提示行 → Markdown 档三者齐现，且工具栏恰好五枚**，配同名 `.content-desc.txt` 机检行）；`03-forum-create-toolbar-insert.content-desc.txt`（点 `###` 后正文 `E01code`→`### E01code`，计数 7→11）；`04-forum-create-preview.content-desc.txt`（预览档源串消失、块渲染出 heading）；`logcat.txt`（app tag 40 条 E 级行中命中本次改动关键词 = **0**，未写「E=0」）。工具列与预览两组判据与图片入口无关，重跑后可直接沿用；**图片入口那两条（原判据 6「双入口」、8「点『拍照』直达系统相机」）必须重取**（新形态改为「点 `＋` → 系统选择器出现」）。
+- ② 微信开发者工具无报错 — **免（未命中 MP-WEIXIN 面：diff 里没有增删 `#ifdef … MP-WEIXIN` 指令行，也未改 `manifest.json` / `platformConfig.json`）**。实况留痕（**不构成门证据**）：三次尝试 —— 第 1 次 `publish mp-weixin` 成功（58 页、appid 与期望一致、产物合法性前置断言通过）但卡 `cli.bat auto --auto-port` 超时 180 秒；第 2、3 次在 `publish` 阶段报 `服务端响应异常，请检查本地网络状况或联系客服`（DCloud 侧）。三次均**未**产出 `MP_WEIXIN_RESULT`。
+- ③ `npm run test:unit` 全绿 — 结论（含产物）：CI run https://github.com/DriftingLi/FL/actions/runs/35674288196 （`mobile-test` 全绿，head `36ba80c6`）；本机复测 **120 suites / 2278 tests 全绿**（基线 117 / 2219）。
+- ④ 本地编译门（④c） — 执行人：agent 执行 · 日期：2026-09-22 · 复测对象：`36ba80c6` · 结论（含产物）：`.ci-verify/kotlin-all.log` 的 `KOTLIN_ALL_RESULT errors=0 classes=1531 files=120`；跑后 `manifest.json` / `pages.json` / `platformConfig.json` **零改动**。
+
+**①b 待人工签收（未确认前不 close）**：本票命中能力面（**真机上传 + 运行时权限弹窗 + 长按手势**；触发面 = 路径白名单 `useReplyComposer.uts` / `forum-create.uvue`，**与入口数无关** ⇒ 回退不改变这条）。待确认三条（回退后口径）：① 点 `＋` 后**系统选择器**出现、选图 / 拍照能回到应用并**上传成功**；② 长按工具栏任一按钮弹出其中文名；③ 「我的动态」的回复原文渲染。①a 未能覆盖这几条的缘由已如实登记在 `docs/verification/forum/1261/README.md`：取证环境的论坛**一篇帖子都没有**（广场 / 知识问答 / 备考经验三 tab 实测皆空）⇒ 回复栏与「我的动态」进不去；uvue 的 toast **在 adb 侧不可观测**（对照实验：已知 toast 路径在像素面上有 345 个采样差异，而注入的长按 0 差异）⇒ 长按无法机检。**另：①a 需按「第二次分支收口」在回退后的树重跑一遍**（环境：HBuilderX + 真机）。
+## 复核回写（P3 · `/code-review` 双轴，2026-09-22 · 提交 `dffe7f75`）
+
+对 P3 的 diff 跑了 Standards / Spec 双轴评审，**7 条全部处置**。**⚠️ 2026-09-22 据实更正（`/triage` 对账实测）**：原总述「改法都进了代码与用例」对其中三条**不成立** —— ① `:key` 那条当时**未落地**（已于回退批次落地）；② 「副产 fail-closed 接线判据」**方向写反**（改回裸字面量会同时删掉 import 行 ⇒ 不会缺绑定、套件照绿）；③ 「剩下的 `.uvue` 逻辑由接线守护覆盖」只覆盖了 `isMarkdown` / `previewBlocks` / 格式轴 ⇒ `isReply` / `isEditView` / 视图档位重置**零断言**（如实登记为缺口）。逐条详见 `docs/adr/0025-…md` 的「复核回写（P3 双轴评审后）」：
+
+- **Standards（2 hard + 4 judgement）**：可移除图片列表用下标作 key ⇒ `:key="img"`（**⚠️ 当时未落地，已于 2026-09-22 回退批次落地**）；`api/forum.uts` 两处 `'text'` 字面量 ⇒ import `FORMAT_TEXT`（**代码改动属实；「副产 fail-closed 接线判据」的说法方向写反，已更正**）；**图片流水线去重** ⇒ 抽成 `composables/useForumImagePicker.uts`，两个宿主只接线 —— 这同时补上了「这段逻辑住在跑不到的代码里」的证据缺口（新增 `utils/forumImagePickerBehavior.test.js` 行为守护，含两条必红取证）；`caret` ⇒ `insertAt`（它装的是草稿末尾，不是光标）；9 / 3 限额收到 `constants/app`、组件 `maxImages` 改**必填 prop**（不再持第三个缺省值）。
+- **Spec（1 实现有错 + 2 缺失 + 1 附带）**：**档位值未归一就进载荷** ⇒ 两个宿主改在**赋值处**过 `normalizeAuthorFormat`（原先只归一存储侧，违反 P3 回记第 4 条明文不变式）；长按提示的具名映射补判据（逐枚钉住五个中文名 + 五枚记号，并补「换掉文案必红」取证 —— 真机读不到 toast，判据只能落在这里）；发送按钮闸门与 `trim` 口径对齐（composer 暴露 `canSubmitReply`，纯空白不再「亮着却点了没反应」）；**⑥-6「四处登记」有意不改**（那四处是**跨端差异**，P3 新增两条是**本端形态决策**，塞进去会让表混类；边界已在复核回写里写实，四处仍完整）。
+- **证据重跑**：因修复触及本页交互面，①a 曾按「一次分支收口」**重跑**（证据绑定在评审修复之后的 head `fa6881e8`）：四份状态机检行 + 截图全部刷新，并**新增**「点『拍照』直达系统相机（`OneShotCamera`）、**应用内无权限弹窗**」的实证。**⚠️ 这批证据随后续形态回退（⑨ 取代 ⑦）整体作废** —— 判的是已被取代的双入口形态，需按「第二次分支收口」重跑。
+- **门**：③ 回退前为 **121 套件 / 2293 测试全绿**（行为守护 **24 → 25**、接线 96）；回退后本机复测时本会话沙箱禁 Node 管道子进程 ⇒ 14 个工具链探针套件 fail-closed 失败（与改动无关，forum 面全绿），**回退后的 ③ 正式读数取 CI `mobile-test`（head `2f4f74e1`）= 绿**；④c 回退前 `KOTLIN_ALL_RESULT errors=0 classes=1526 files=120`（**回退后待重跑**）；pr-evidence 绿；② 仍为「免（未命中 MP-WEIXIN 面）」。
+
+**①b 仍未签收** ⇒ 本票停在 **95%**，**不 close**（待确认三条见上「进度」区与 PR #1261 正文）。回退后的口径：原「拍照入口侧已由 ①a 实证」那条**随形态回退作废**（不再有常驻的「拍照」入口），剩下要人看的是「点 `＋` → 系统选择器 → 选图 / 拍照 → 回应用 → **上传成功**」这段写操作，以及长按提示与「我的动态」回复原文。
+
+## 形态回退回记（2026-09-22 · 第二次分支收口，ADR-0025 ⑨ 取代 ⑦）
+
+维护者裁定「图片入口的两个常驻方块过重」，回退成 P3 之前的一个 `＋` 方块（偏好裁定，非技术约束）。本票的落点：
+
+- **代码**：共享组件的两个 `image-add` ⇒ 一个（`＋` + `n/9` 计数；回复侧不出计数）；picker 的 `onAddImage()` 去掉来源入参、来源数组回到系统选择器；**流水线一字未动**；缩略图行 `:key` 落地（原复核回写称已落、实测未落）。
+- **守护**：`forumImagePickerBehavior` 的判据方向随决策反转（旧的「退化成系统选择器 = 坏实现」换为「来源被砍 / `count` 写死 / 限额闸门被拆」三个真坏实现），`forumMarkdownInputContract` ④ 组同步反转。
+- **证据**：①a 已按「第二次分支收口」**重跑完成**（2026-09-22，绑 `2f4f74e1`，7 份状态 + logcat 入仓）；**④c 待新导出后重跑**（本机 ④c 现会拿旧导出编译出假绿 ⇒ 已立票 #1272）；③ 取回退后树的 CI 读数（`mobile-test` + `ci-summary` 绿）；**①b 的必要性不变**（路径白名单 + 真机上传，与入口数无关），且回退后**只剩「长按出中文名」一条需要人眼**。
+- **坑位**：回退说明里**不要写出被回退掉的那个字面量** —— `forumMarkdownInputContract` 是按文本判的接线守护，注释带上旧写法会让它替代码判红（与 #1030 同族）。
+## 验收证据（P2 · PR #1257）
+
+- ① Android 真机逐页截图对比 —— 执行人：agent 执行 · 日期：2026-09-21 · 复测对象：论坛列表入口 → Markdown 话题「测试markdown渲染」正文与回复卡 → 纯文本话题「1」正文（设备 `b32d8398` / Android 15）· 结论（含产物）：**同一话题正文的 a11y 文本由「源串直出」变为「分块渲染」** —— `docs/verification/forum/1257/02-forum-detail-markdown-before.jpg` 对 `...-after.jpg`；机检文本 `docs/verification/forum/1257/02-before-content-desc.txt`（`## ` / `- 无序列表` / ` ```python ` / `---` 四条源串全命中）对 `docs/verification/forum/1257/02-after-content-desc.txt`（同四条全为 0；块文本 `测试 Markdown 渲染` / `• 无序列表` / `• 有序列表` / `• 你好` / `print("hello world")` 各就位）；`docs/verification/forum/1257/05-after-text-topic-content-desc.txt` 证明纯文本档**同 bounds 同文本**（零回归）；`docs/verification/forum/1257/logcat.txt` 内 app 进程 E 级行 0。
+- ② 微信开发者工具无报错 —— 执行人：@zhengcookie 人签：② 半自动门结果已核对 · 日期：2026-09-21 · 复测对象：`scripts/mp-weixin-check.ps1`（本分支产物，58 页）· 结论（含产物）：`MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 logsTotal=5 shots=1 navigation=skip(unsupported) ready=22s sdk=3.17.2 ide=2.01.2510290`；截图 `docs/verification/forum/1257/06-mp-weixin-automation-shot.jpg`。
+- ③ `npm run test:unit` 全绿 —— 结论（含产物）：CI run https://github.com/DriftingLi/FL/actions/runs/35609768653 （`mobile-test` 全绿）；本机复测 **117 suites / 2219 tests 全绿**，行为守护 20 → 22。
+- ④ 本地编译门（④c） —— 执行人：agent 执行 · 日期：2026-09-21 · 复测对象：`50524f66` · 结论（含产物）：`.ci-verify/kotlin-all.log` 的 `KOTLIN_ALL_RESULT errors=0 classes=1513 files=119`；跑后三份 json 零改动。
+
+## 验收证据（P1 · PR #1254，存档）
+
+- ① Android 真机逐页截图对比 —— **免（低风险运行时面：仅 .uts 逻辑改动，无 `.uvue` / 三份 json / `uni_modules`）**；代价按 ADR-0008 由发版前 ① 全量冒烟兜底。
+- ② 微信开发者工具无报错 —— **免（同上；本段未增删任何平台指令行、未改 `manifest.json` / `platformConfig.json`）**。
+- ③ `npm run test:unit` 全绿 —— 执行人：agent 执行 · 日期：2026-09-21 · 复测对象：`09a1821e` · 结论（含产物）：CI run https://github.com/DriftingLi/FL/actions/runs/35582162581 （`mobile-test` 全绿）；本机全访问下另跑 **115 suites / 2155 tests 全绿**。
+- ④ 本地编译门（④c `npm run build:kotlin-all`） —— 执行人：agent 执行 · 日期：2026-09-21 · 复测对象：`09a1821e` · 结论（含产物）：`.ci-verify/kotlin-all.log` 的 `KOTLIN_ALL_RESULT errors=0 classes=1522 files=118`；跑后 `manifest.json` / `pages.json` / `platformConfig.json` 零改动。
+
+## 复核要点（给 reviewer）
+
+- **格式轴为什么落 `utils/`**：不只为「展示纯函数唯一实现」那条既有口径，更是为了让 ③ 门有一条**能真执行**的判据（`docs/agents/guards.md`：接线守护不构成 ③ 证据）。**注意**：若把闸门写回 `.uvue`，本票的验收就只剩「源码里出现过 `SUBSET_FORUM`」这一层。
+- **`SUBSET_FORUM` 与 `SUBSET_FEATURED` 的差别**：两者都不解析表格；论坛档另少一个 `image`（图文分离）。**不要**把两者合并成同一个常量。
+- **空数组 ≠ 正文为空**：渲染层的二选一闸门读的是**格式声明**（`isMarkdownFormat`），不是块数组长度。
+- **编辑不变式的判据不得断言源码文本**：真执行 `api/forum.uts`、看 PUT 载荷的键集合（P1 已落锁）。
+- **P2 之后仍未覆盖的面**：列表卡片正文**预览**（截断 80 字 + 去换行）与「我的动态」的**回复原文**（完整 `content`，**属正文承载面**）仍直出源串；`forum-markdown-blocks.uvue` 的 `<style>` 缺 `lang="scss"`（已知偏差，与 P3 同批收口）；行内渲染 / 表格 / **任务列表** / mermaid 渲染 / 粘贴拖拽按 ADR-0025 ③ 具名不做，重开须另立 ADR。
+
+## 复核回写（`/code-review` 双轴评审后，2026-09-21 · PR #1259）
+
+对 #1257 做了 Standards / Spec 双轴评审，结论已回写 `docs/adr/0025-…md` 的「复核回写」节：
+
+- **据实修正**：P2 回记把「我的动态」的回复原文误登记为「截断预览」—— 它渲的是**完整** `content`，属 ⑥-1 射程内的正文承载面（真实缺口，不是合法豁免）。
+- **六段对齐**：ADR ④ 表与 P1 边界的「`forum-topic-body` 走 `parseMarkdown(…)`」是规划期路径指向；实现把决策收进 `utils/forumBody.uts`（接线断言反过来钉住页面不得直引解析器）⇒ 路径指向随实施更新。
+- **登记补齐**：⑥-6 的四处登记里补上**任务列表**（`- [ ] x` 渲成 `• [ ] x`，Web 是勾选图形）。
+- **已知偏差不静默**：`forum-markdown-blocks.uvue` 的 `<style>` 沿用同目录 12 个兄弟组件的裸写法、与「必须 `lang="scss"`」冲突 ⇒ 与 **P3 同批**收口（P3 必然改同一批 `.uvue` 且要走全门；本轮不为一处无行为影响的属性再跑 ①②④）。
+- **边界句回写**：⑤ 的「不得顺手改 `utils/modules.js`」实测被 `modulesDeclarationContract` 强制 ⇒ 改述为「不得改登记机制；补一行登记是义务」。
+
+
+
+

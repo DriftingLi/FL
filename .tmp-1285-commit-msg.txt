@@ -1,0 +1,23 @@
+fix(mobile): ④c 采集层有界排空 + freshness 实测回传，修 publish 标记假红（#1285）
+
+- Invoke-Process 抽成零副作用库 scripts/lib/process-capture.ps1（门 dot-source）：
+  WaitForExit($ms) 之后对 stdout/stderr 两个读任务做有界 WaitAll（剩余预算 + 1s 下限），
+  排不空 ⇒ TimedOut=true ⇒ 门照旧 reason=timeout。探针实测旧实现：子脚本秒退、后代握
+  stdout 40s 时总耗时 41137ms / 预算 4000ms 且 TimedOut=False（超时语义对读段完全失效）。
+- Get-PublishStageVerdict 不再把 freshness 短路成 not-measured：照实报实测值
+  （fresh|stale|no-kt），退出码与 reason 一字未改（#1272 fail-closed 保持）；
+  门失败提示按 freshness 分流「文案没读到」与「没导出」两种处置（单探针读数，提示里写明可重跑分辨）。
+- 新增行为守护 utils/kotlinAllProcessCaptureBehavior.test.js：真起子进程喂「多行 + 末行后
+  立刻退出」合成流（300 行收全 / 超时保持 / 读段有界）+ 三条注入变异必红；
+  kotlinAllStaleExportBehavior 补「无成功标记 × 三种实测 freshness」区分对与回注变异。
+- 回写：ADR-0008 增 2026-09-26 修订段、freshness 词表四种、失败路径写实（按判据推演、
+  唯一实测记录仍是修复前 not-measured）、守护覆盖；ADR-0007 #1285 收口附记。
+
+验证（红→绿）：修复前 6 failed/22 passed（读段有界在旧实现判红 TimedOut=False + 三条
+not-measured + 两条变异锚点）→ 修复后 28/28；全量 ③ 135 suites / 2594 tests 全绿；
+真链路 -SkipPublish ④c exit 0（KOTLIN_ALL_RESULT errors=0 classes=1501 files=120）。
+边界（写实）：字段那次丢行合成流复现不了、publish 段端到端被受限会话 HBuilderX IPC 挡住，
+由票面字节级记录 + 守护合成流承担；同款无界读段在 mp-weixin-check.ps1 / hx-busy.ps1
+仍在（票面只 mandate ④c），已在 ADR-0008 登记。
+
+Refs #1285

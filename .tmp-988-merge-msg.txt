@@ -1,0 +1,12 @@
+Merge branch 'master' into feat/988-mobile-ai-diagnosis-sources
+
+同步 origin/master（9601b61a）以满足 ruleset 的 up-to-date 要求。
+
+并入的运行时面改动 = `pages/courses/chapter-view.uvue`、`pages/featured/featured-detail.uvue`、
+`types/common.uts`、`utils/markdown.uts`（#905 / #1058 内容渲染线）—— **没有一个落在本票相关页**
+（`pages/ai-assistant/**`、`components/ai-chat/**`、`api/aiAssistant.uts`、`types/ai.uts`、
+`types/index.uts`、`composables/useAiChat.uts`）⇒ 按移动端 ADR-0016 ⑥「相关页必须重跑」，
+本票的 ①a 真机证据继续有效，无需重跑。
+
+③ 由 CI 在合并后的 head 上重跑（`mobile-test`）；④c 的结论不变——本票的 8 个文件在本合并前后
+字节一致，而 ④c 的判据面正是这些文件。

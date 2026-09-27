@@ -1,0 +1,36 @@
+
+branch                           own landed absent bothMoved absentFiles
+------                           --- ------ ------ --------- -----------
+prototype/forum-t04                6      0      6         0 training-app/叉车维修培训学员端跨端应用/prototype/forum-t04/index.html; training-app/叉车维修培训学员端跨端应用/prototype/forum-t04/mockups/forum-6screens-alt.
+                                                             png; training-app/叉车维修培训学员端跨端应用/prototype/forum-t04/mockups/forum-6screens-alt2.png; training-app/叉车维修培训学员端跨端应用/prototype/forum-t04/m
+                                                             ockups/forum-6screens.png; training-app/叉车维修培训学员端跨端应用/prototype/forum-t04/mockups/points-screens.png; training-app/叉车维修培训学员端跨端应用/prot
+                                                             otype/forum-t04/mockups/upload-screen.png
+fix/957-uvue-entity-icons          4      0      4         0 docs/agents/triage-labels.md; training-app/叉车维修培训学员端跨端应用/components/ai-chat/ai-chat-pro-sheet.uvue; training-app/叉车维修培训学员端跨端应用/docs/a
+                                                             dr/0015-uvue实体解码边界.md; training-app/叉车维修培训学员端跨端应用/utils/uvueEntityLiteralContract.test.js
+probe/937-gradient-syntax          2      0      2         0 training-app/叉车维修培训学员端跨端应用/pages.json; training-app/叉车维修培训学员端跨端应用/pages/gradient-probe/gradient-probe.uvue
+prototype/ai-consult-entry         2      0      2         0 training-app/叉车维修培训学员端跨端应用/prototype/ai-consult-entry.html; training-app/叉车维修培训学员端跨端应用/prototype/ai-consult-page.html
+prototype/jobs-resume              1      0      1         0 training-app/叉车维修培训学员端跨端应用/prototype/jobs-resume/index.html
+tmp-mall-sync                      8      5      1         2 training-app/叉车维修培训学员端跨端应用/docs/adr/0007-渐进式重构playbook.md
+refactor/mall                      9      5      1         3 training-app/叉车维修培训学员端跨端应用/docs/adr/0007-渐进式重构playbook.md
+prototype/ai-pro-gate              8      2      1         5 training-app/叉车维修培训学员端跨端应用/prototype/ai-pro-gate.html
+feat/check-in-contract-adapter    10      0      1         9 training-app/叉车维修培训学员端跨端应用/api/checkin.uts
+probe/worktree-check               0      0      0         0 
+docs/e-volume-health-and-d-drive   1      0      0         1 
+fix/ci-smoke-teardown              1      0      0         1 
+docs/multi-session-discipline      2      1      0         1 
+fix/mapped-fn-ref-mapper           4      2      0         2 
+feat/checkin-contract-migration    2      0      0         2 
+docs/main-tree-relocated-to-d      3      1      0         2 
+refactor/pr0                       3      1      0         2 
+fix/926-drawer-pro-gate            3      0      0         3 
+gate/ai-pro-closeout               8      4      0         4 
+feat/921-fault-consult-wiring      7      3      0         4 
+fix/hx-run-truly-runs              4      0      0         4 
+feat/biometric-quick-login        15      9      0         6 
+refactor/ai-single-page           12      4      0         8 
+refactor/profile                  10      2      0         8 
+verify/device-smoke               11      2      0         9 
+refactor/profile-wrong-questions  16      4      0        12 
+refactor/practice                 17      1      0        16 
+
+

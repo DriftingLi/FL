@@ -1,0 +1,16 @@
+fix(mobile-ai): 平台模型列表为空时不再堵死带键的专项通道（#988 的前置修复）
+
+`onInputSend` 的第一道守卫 `models.length==0 && userModels.length==0 && source!='custom'`
+没有豁免带键通道，而专项通道的模型由管理端单绑定在**服务端**解析（#998 维护者口径）：
+2026-09-16 实测生产 `/ai-assistant/models` 返回 `[]`、`/modes` 返回 `{normal:null,expert:null}`，
+而**带键**的 `fault_diagnosis` 直连 `POST /chat` 能拿到 200 + `sources` 事件 ——
+旧写法把这条本来可用的通道一并堵死（真机实测：点宫格与输入框发送都只弹 toast、
+`/ai-assistant/chat` 一次都不发）。
+
+修法：第一道守卫加 `featureKey.length == 0 &&` 前缀 ⇒ 只拦通用对话，与第二道守卫
+（#998 已豁免自定义模型那条）口径一致。
+
+守护：契约测试 `utils/aiDiagnosisSourcesContract.test.js` ⑨/⑨b（含「去掉前缀必须判红」的
+变异自检）；`aiFeatureEntryWiringContract` 的有序序列断言不受影响（两条 toast 文案都还在）。
+
+登记票 #1045；相邻的生产配置缺陷（无平台模型绑定 ⇒ 通用对话不可用）见 #1044。

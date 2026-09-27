@@ -1,0 +1,39 @@
+fix(mobile): #1240 P3 图片入口回退为单一 ＋ 方块（ADR-0025 ⑨ 取代 ⑦）+ :key 与回写据实更正
+
+形态（维护者 2026-09-22 裁定：两个常驻方块过重 ⇒ 回退成 P3 之前的一个 ＋ 方块）：
+
+- 共享组件 `pages/forum/components/forum-markdown-input.uvue`：两个 `image-add` 方块
+  （拍照 / 相册）⇒ **一个**（`＋` + `n/9` 计数；上传中 `…` / 「上传中」）；`emit('add-image')`
+  不再带来源；**回复侧沿用回退前的旧形态**（只有 `＋`、不出计数，走既有 `variant` 闸门）
+- `composables/useForumImagePicker.uts`：`onAddImage(source)` ⇒ `onAddImage()`；
+  `sourceType` 由「单来源直达」⇒ `['album', 'camera']`（系统选择器）。**流水线一字未动**
+  （`count = 剩余额度` / `sizeType: ['compressed']` / 限额 toast / `uploading` 闸门 / 失败计数）
+- `composables/useReplyComposer.uts`：`onAddReplyImage` 去掉入参（只接线）
+
+守护翻面（不是删除）：
+
+- `forumImagePickerBehavior`：「来源直达」组 ⇒「两个来源都在」组；旧的必红对
+  （把「退化成系统选择器」当坏实现）随决策反转，替换为新的一组真坏实现
+  —— ① 来源数组被砍成一个来源、② `count` 写死不按剩余额度、③ 上传循环的限额闸门被拆；
+  **必不红对照保留** ⇒ 成对取证（③ 判据③）仍成立
+- `forumMarkdownInputContract` ④ 组反转：一个入口 + `＋`/计数 + 「旧的双入口写法已退场」
+
+`:key` 与回写（`/triage` 对账实测的假实施）：
+
+- 图片缩略图行 `:key="idx"` ⇒ 用图片 URL 作 key（复核回写声称「已进代码」，实测**未落** ——
+  `dffe7f75` 对该文件只有 `maxImages` / `insertAt` 两组 hunk；撞键风险已核：服务端毫秒时间戳
+  命名 + 逐张串行上传 ⇒ 不会重复）
+- `forumContentFormatBehavior` 里「谁改回裸字面量就缺绑定 fail-closed」的表述**方向是反的**
+  ⇒ 据实更正（`loadUts` 只对缺绑定抛错，而改回裸字面量会同时删掉 import 行）
+
+ADR-0025（只增不删，过时用「取代」表达）：
+
+- ② 选型表新增 **⑨ 图片 = 单一入口 + 系统选择器（取代 ⑦）**，⑦ 就地标注被取代
+- 新增「形态回退（2026-09-22 · 第二次分支收口）」节：改动面 / 守护翻面 / ①a 作废重跑 /
+  坑位（回退说明里写出被回退的字面量会让**按文本判**的接线守护替代码判红）
+- ③ / ④ / ⑥-5 / 守护落锁 / 已知偏差 6 同步改写；复核回写补三处据实更正
+  （`:key` 未落、fail-closed 方向反、`isReply`/`isEditView`/视图档位重置零断言、
+  picker「不持文案」不成立）
+
+已核：①b 的触发面是**路径白名单**（`useReplyComposer.uts` / `forum-create.uvue`）+ 真机上传，
+与入口数无关 ⇒ 本回退**不改变** ①b 的必要性，只改变 ①b 要看的东西；①a 按「第二次分支收口」重跑。

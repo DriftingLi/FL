@@ -1,0 +1,9 @@
+课程页（pages/courses/courses.uvue）整页滑不动：f1ab2648（#361 模块重构）删掉了该页唯一的滚动容器，
+根容器仍绑 height: windowHeight ⇒ 内容被裁、无滚动区域，@scrolltolower 分页一并失效。
+
+- 列表区包回 <scroll-view class="course-scroll" scroll-y="true" @scrolltolower="onLoadMore"> + .course-scroll { flex: 1; height: 0 }
+- 新增 utils/uvuePageScrollContract.test.js（根容器绑视口高度的页面必须自持滚动容器；接受 scroll-y 与 direction="vertical"）
+
+验收：①a 真机 4 张截图 + content-desc（docs/verification/courses/1141/）；②免（未命中 MP-WEIXIN 面）；
+③ci-summary + mobile-test pass；④c KOTLIN_ALL_RESULT errors=0 classes=1393 files=108；①b/④a/④b 免。
+未验证到的面（诚实声明）：@scrolltolower 的自动加载下一页在真机不可区分验证（该页只 8 条、无第 2 页）。

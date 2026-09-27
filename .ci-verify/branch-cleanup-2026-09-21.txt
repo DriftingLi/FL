@@ -1,0 +1,32 @@
+# 本地分支清理 2026-09-21 23:31:33  — 恢复：git branch <name> <sha>
+# 判据：PR MERGED 且 mergeCommit 为 origin/master 祖先（或 #1161 经 #1154 反向应用证实）；临时分支见 docs/agents/multi-agent-git.md
+7900574cca59dc6b260c189eb135bfa60ee31654	probe/937-gradient-syntax
+b62b8644c1346d09a11c7974dc58b6695d349e83	probe/worktree-check
+2511fbceb7308956b5c84a0910164b6da4f4eb09	tmp-mall-sync
+cdcd879c9a53b1a8677c1cf2bcc9ffb31cc8a541	verify/device-smoke
+41ebebaf7758dc2ffc21f43be57c18d74db8c23f	prototype/ai-consult-entry
+d926bb8a7e8a13054572fce28c02032a73195d03	prototype/ai-pro-gate
+9406f8eb52a1b046015b5d45f0fa7eb671e6d1a1	prototype/forum-t04
+7c27d9030a92dbf46cef069c8ccb8f21ffd12dc9	prototype/jobs-resume
+cfef78e1830b927fab35a83876d9a8cc07ee7041	prototype/recruiter-workspace
+25ecb32102d475ac9d3ff0b5a91d493aaeeb58d0	docs/1240-p2-review-post
+4f06588cfdbd3122f1bf7ec1de06f98cbb5fedd9	docs/e-volume-health-and-d-drive
+a5c04ccfe00318858e48e5d287f714ae956432c9	docs/main-tree-relocated-to-d
+4681fda18cca37c98defb388d3481b8f7f3b97a8	docs/multi-session-discipline
+c11b3d3cd21e97eb2f89426e08c8c69a7ebcf623	feat/1132-web-chapter-entry-restore
+adfb0d41b92cca612c978d5d0c438dcc7b82de6d	feat/1204
+09c70fb587a2f8773e32843466ea494df8f9191f	feat/1210
+02969f42bcb7806eaf65494e7204751880718dd0	feat/921-fault-consult-wiring
+7ebd24697e14f239335aafa5e759d04088d6ae75	feat/988-mobile-ai-diagnosis-sources
+e18efbc7f59bbcbe5d21b32229d5b59256bdad44	feat/biometric-quick-login
+0ec487dadedcd19d593235a14b6d1928b9794502	feat/mobile-1011-practice-records-entry
+3fcb5ec70dc6f88c137d7fcb127d6c21efe2d1e8	fix/1111-chapter-mark-complete
+aa9f911472e1467f4e124d756bb9b86bd0cf0e6f	fix/1209-mp-weixin-gate-report
+a278d4a429be35cc20e85e53bd2437c36e6c5e5a	fix/ci-smoke-teardown
+03abd336e097442f6888f1cd04ef5bd2a831165a	fix/hx-run-truly-runs
+30e73d760505ffaa676fbdfc583bdadba79b8dbf	fix/mapped-fn-ref-mapper
+a8b700f07513021e0a155c492d6a5ce992c7d4ae	fix/screenshot-thisrun-only
+4ad094734ed14fef748459b227f75f24e8fceec9	refactor/1217-modules-decl-harness
+4bbd7f30931b83d6535a5bb035b7d1b5916b3b94	refactor/ai-single-page
+17c996d4ce365cdd53ceb7758ee6e95b60c5c706	refactor/mall
+c45fef17f3770907969e4649d5af991b615e2a94	refactor/profile-wrong-questions

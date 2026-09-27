@@ -1,0 +1,645 @@
+16:14:03.291 HBuilderX Version: 5.24
+16:14:05.734 项目 叉车维修培训学员端跨端应用 开始编译
+16:14:09.842 请注意运行模式下，因日志输出、sourcemap 以及未压缩源码等原因，性能和包体积，均不及发行模式。
+16:14:09.844 编译器版本：5.24（uni-app x）VDOM模式
+16:14:09.847 当前样式隔离策略：2.0。详见：https://doc.dcloud.net.cn/uni-app-x/css/common/style-isolation.html
+16:14:09.849 正在编译中...
+16:14:09.852 编译会生成大量临时文件，杀毒软件监控时会影响编译速度，并造成CPU升高。推荐把项目目录添加到杀毒软件的监控排除名单中。[添加] [帮助]
+16:14:26.181 uts插件[uni-secure-storage]文件未发生变化，跳过编译
+16:14:54.609 当前工程58个页面，正在编译为android class，此过程耗时较长.
+16:14:55.124 当前工程58个页面，正在编译为android class，此过程耗时较长..
+16:14:55.638 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:14:56.145 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:14:56.647 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:14:57.162 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:14:57.675 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:14:58.189 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:14:58.723 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:14:59.276 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:14:59.782 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:00.290 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:00.806 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:01.310 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:01.820 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:02.331 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:02.843 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:03.364 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:03.872 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:04.390 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:04.901 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:05.419 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:05.926 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:06.441 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:06.954 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:07.467 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:07.983 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:08.486 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:09.004 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:09.518 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:10.022 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:10.550 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:11.072 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:11.584 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:12.084 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:12.594 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:13.107 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:13.631 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:14.197 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:14.707 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:15.215 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:15.723 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:16.228 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:16.853 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:17.364 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:17.870 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:18.410 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:18.924 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:19.449 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:19.951 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:20.753 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:21.268 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:21.772 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:22.295 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:22.829 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:23.348 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:23.854 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:24.370 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:24.873 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:25.381 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:25.889 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:26.518 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:27.026 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:27.546 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:28.051 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:28.570 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:29.078 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:29.595 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:30.105 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:30.621 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:31.123 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:31.632 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:32.134 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:32.641 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:33.148 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:33.664 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:34.246 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:34.751 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:35.277 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:35.786 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:36.318 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:36.821 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:37.330 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:37.850 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:38.355 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:38.876 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:39.395 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:39.906 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:40.416 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:40.942 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:41.474 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:41.975 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:42.490 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:43.006 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:43.540 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:44.043 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:44.583 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:45.091 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:45.597 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:46.118 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:46.686 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:47.198 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:47.712 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:48.224 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:48.737 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:49.249 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:49.765 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:50.271 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:50.788 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:51.292 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:51.804 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:52.317 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:52.836 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:53.349 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:53.877 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:54.387 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:54.901 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:55.410 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:55.928 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:56.438 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:56.976 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:57.510 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:58.017 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:15:58.517 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:15:59.020 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:15:59.532 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:00.051 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:00.562 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:01.069 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:01.578 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:02.091 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:02.601 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:03.114 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:03.627 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:04.137 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:04.639 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:05.164 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:05.665 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:06.166 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:06.678 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:07.197 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:07.708 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:08.208 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:08.721 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:09.224 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:09.737 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:10.261 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:10.770 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:11.275 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:11.781 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:12.299 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:12.807 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:13.324 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:13.832 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:14.349 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:14.860 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:15.402 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:15.905 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:16.421 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:16.935 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:17.455 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:17.962 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:18.476 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:18.986 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:19.501 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:20.017 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:20.533 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:21.046 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:21.549 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:22.061 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:22.575 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:23.092 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:23.609 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:24.121 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:24.625 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:25.140 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:25.642 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:26.158 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:26.669 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:27.177 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:27.694 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:28.203 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:28.714 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:29.228 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:29.744 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:30.258 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:30.766 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:31.280 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:31.804 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:32.337 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:32.854 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:33.363 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:33.883 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:34.392 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:34.923 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:35.432 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:36.107 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:36.607 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:37.174 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:37.687 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:38.194 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:38.707 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:39.221 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:39.735 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:40.296 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:40.804 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:41.367 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:41.883 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:42.397 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:42.911 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:43.429 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:43.935 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:44.448 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:44.951 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:45.464 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:45.983 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:46.484 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:46.993 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:47.516 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:48.020 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:48.561 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:49.065 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:49.607 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:50.115 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:50.643 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:51.153 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:51.669 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:52.188 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:52.921 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:53.422 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:53.944 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:54.452 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:54.962 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:55.477 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:55.988 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:56.501 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:57.016 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:57.525 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:58.028 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:16:58.541 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:16:59.052 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:16:59.569 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:00.200 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:00.711 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:01.221 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:01.724 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:02.268 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:02.781 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:03.288 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:03.800 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:04.308 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:04.822 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:05.336 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:06.002 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:06.517 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:07.027 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:07.549 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:08.057 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:08.562 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:09.076 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:09.593 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:10.135 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:10.636 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:11.150 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:11.650 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:12.168 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:12.681 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:13.253 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:13.756 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:14.275 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:14.793 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:15.457 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:15.974 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:16.487 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:17.003 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:17.519 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:18.029 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:18.531 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:19.043 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:19.558 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:20.061 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:20.575 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:21.093 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:21.595 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:22.138 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:22.651 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:23.165 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:23.670 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:24.179 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:24.682 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:25.198 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:25.716 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:26.227 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:26.734 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:27.251 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:27.766 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:28.270 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:28.784 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:29.292 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:29.825 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:30.328 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:30.844 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:31.348 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:31.860 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:32.357 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:32.866 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:33.380 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:33.937 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:34.522 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:35.106 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:35.643 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:36.143 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:36.649 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:37.169 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:37.835 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:38.271 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:38.795 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:39.298 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:39.799 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:40.309 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:41.225 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:41.396 at utils/secureStorage.uts:134:8
+16:17:41.398 132|          return false
+16:17:41.402 134|      if (env.has !== true) {
+16:17:41.404    |          ^
+16:17:41.405 135|          return false
+16:17:41.410 [33m​​﻿warning: Identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.​[39m
+16:17:41.413 173|      }
+16:17:41.411 at utils/secureStorage.uts:175:8
+16:17:41.418 175|      if (env.has === true) {
+16:17:41.420    |          ^
+16:17:41.421 176|          return ''
+16:17:41.423 177|      }﻿
+16:17:41.428 at utils/secureStorage.uts:187:8
+16:17:41.430 185|          return null
+16:17:41.435 187|      if (env.has !== true) {
+16:17:41.438 188|          return null
+16:17:41.441 189|      }﻿
+16:17:41.443 [33m​​﻿warning: Identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.​[39m
+16:17:41.449 204|          return ''
+16:17:41.454    |          ^
+16:17:41.453 206|      if (env.has !== true) {
+16:17:41.459 208|      }﻿
+16:17:41.400 133|      }
+16:17:41.426 [33m​​﻿warning: Identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.​[39m
+16:17:41.433 186|      }
+16:17:41.408 136|      }﻿
+16:17:41.451 205|      }
+16:17:41.457 207|          return ''
+16:17:41.415 174|      // 仅记住账号模式：has=false 且账号非空
+16:17:41.394 [33m​​﻿warning: Identity equality for arguments of types 'Boolean' and 'Boolean' is deprecated.​[39m
+16:17:41.447 at utils/secureStorage.uts:206:8
+16:17:41.436    |          ^
+16:17:41.865 当前工程58个页面，正在编译为android class，此过程耗时较长.
+16:17:42.373 当前工程58个页面，正在编译为android class，此过程耗时较长..
+16:17:42.880 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:43.387 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:43.895 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:44.405 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:44.921 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:45.435 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:45.940 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:46.454 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:47.487 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:48.008 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:48.524 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:49.036 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:49.835 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:50.345 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:51.002 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:51.619 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:52.133 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:53.312 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:54.083 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:54.594 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:17:55.687 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:17:56.966 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:17:58.765 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:01.106 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:01.625 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:02.141 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:04.238 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:04.750 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:06.800 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:07.936 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:09.022 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:10.441 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:10.951 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:11.828 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:12.938 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:13.563 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:14.069 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:14.724 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:15.367 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:15.962 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:16.462 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:16.965 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:17.787 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:18.290 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:18.803 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:19.844 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:20.656 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:21.170 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:21.813 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:22.891 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:23.703 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:24.218 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:24.740 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:25.245 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:25.773 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:26.288 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:26.832 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:27.335 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:27.854 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:28.363 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:28.876 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:29.385 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:30.043 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:30.559 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:31.256 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:31.764 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:32.352 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:32.867 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:33.388 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:33.905 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:34.422 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:34.938 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:35.446 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:35.967 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:36.470 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:37.034 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:37.546 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:38.048 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:38.573 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:39.649 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:40.161 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:40.669 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:41.178 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:41.783 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:42.526 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:43.037 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:43.553 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:44.066 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:44.578 当前工程58个页面，正在编译为android class，此过程耗时较长.  
+16:18:45.079 当前工程58个页面，正在编译为android class，此过程耗时较长.. 
+16:18:45.584 当前工程58个页面，正在编译为android class，此过程耗时较长...
+16:18:45.817 当前工程58个页面，正在编译为android class，此过程耗时较长... 
+16:18:46.691 ready in 278195ms.
+16:18:46.676 项目 叉车维修培训学员端跨端应用 编译成功。
+16:18:47.851 [31mPID：23824[39m
+16:18:47.852 [31m进程名称：adb.exe[39m
+16:18:47.856 [31m可能存在 ADB 冲突，导致真机运行不刷新或无法重启。运行正常可忽略，如遇异常请前往 运行配置 中设置 ADB 路径[39m
+16:18:47.854 [31m路径：D:/android-sdk/platform-tools/adb.exe[39m
+16:18:47.849 [31m注：当前使用的 ADB 非 HBuilderX 内置或自定义版本：[39m
+16:18:48.257 [33m手机端uni-app x调试基座已是最新版本，跳过更新[39m
+16:18:49.391 正在建立手机连接...
+16:18:51.107 正在同步手机端程序文件...
+16:18:53.147 同步手机端程序文件成功
+16:18:54.253 正在启动uni-app x调试基座...
+16:18:54.591 [0mApp Launch[0m at App.uvue:10
+16:18:54.661 [0mApp Show[0m at App.uvue:24
+16:18:54.663 [0m[welcome] restored=[0m [91m[boolean] true[39m [0misLoggedIn=[0m [91m[boolean] true[39m at pages/index/index.uvue:71
+16:18:54.666 [0m[welcome] redirect to dashboard[0m at pages/index/index.uvue:73
+16:18:54.696 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/auth/me[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:18:54.818 [0m应用启动到触发onLaunch耗时: 4932ms[0m
+16:18:54.847 [0m进入页面:​/pages/index/index​ 。[{"创建dom元素个数":"32个","耗时":"34ms"},{"排版":"1次","耗时":"32ms"},{"渲染":"1次","耗时":"118ms"},{"跳转页面到onReady总耗时":"303ms"}][0m
+16:18:54.955 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/auth/me[0m at api/request.uts:411
+16:18:54.986 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:18:54.988 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/student/courses[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:18:55.028 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/featured-contents?page=1&page_size=5[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:18:55.030 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:18:55.123 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:18:55.153 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/featured-contents?page=1&page_size=5[0m at api/request.uts:411
+16:18:55.195 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/student/courses[0m at api/request.uts:411
+16:18:55.218 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:18:55.221 [0mToken validated, isLoggedIn=[0m [91m[boolean] true[39m at App.uvue:17
+16:18:55.557 [31m应用【叉车维修培训学员端跨端应用】已启动[39m
+16:18:55.571 [0m进入页面:​/pages/dashboard/dashboard​ 。[{"创建dom元素个数":"110个","耗时":"86ms"},{"排版":"1次","耗时":"151ms"},{"渲染":"2次","耗时":"58ms"},{"跳转页面到onReady总耗时":"693ms"}][0m
+16:19:24.942 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:19:25.013 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:19:54.942 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:19:55.269 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:20:24.933 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:20:25.029 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:20:54.937 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:20:55.058 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:21:24.940 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:21:25.027 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:21:54.938 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:21:55.109 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:22:24.941 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:22:25.007 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:22:54.947 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:22:55.053 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:23:24.940 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:23:25.016 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:23:54.928 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:23:55.091 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:24:24.935 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:24:25.050 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:24:54.984 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:24:55.185 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:25:24.941 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:25:25.141 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:25:54.934 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:25:55.068 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:26:24.934 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:26:25.135 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:26:54.945 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:26:55.131 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:27:24.981 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:27:25.104 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:27:54.931 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:27:55.122 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:28:24.938 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:28:25.047 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:28:52.741 [0mApp Hide[0m at App.uvue:27
+16:34:26.510 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:34:26.530 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/featured-contents?page=1&page_size=5[0m at api/request.uts:411
+16:34:26.668 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:34:26.684 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/student/courses[0m at api/request.uts:411
+16:34:49.197 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:34:49.209 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:34:49.213 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:34:49.380 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:34:49.393 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m at api/request.uts:411
+16:34:49.395 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m at api/request.uts:411
+16:34:49.398 [0m进入页面:​/pages/forum/forum​ 。[{"创建dom元素个数":"54个","耗时":"44ms"},{"排版":"2次","耗时":"81ms"},{"渲染":"2次","耗时":"33ms"},{"跳转页面到onReady总耗时":"262ms"}][0m
+16:34:49.411 [0m[getForumTopicsApi] raw data:[0m [0m{"page":1,"pages":1,"topics":[{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":58,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"广东省","ip_city":"广州市","view_count":1,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-17T11:03:43.406989+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":15,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":47,"reply_count":3,"last_reply_at":"2026-09-15T15:11:47.694681+08:00","created_at":"2026-09-09T08:58:25.920824+08:00","author":{"user_id":2,"username":"沐泽子","avatar_url":"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false},{"id":20,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试markdown渲染","content":"## 测试 Markdown 渲染\n\n- 无序列表\n\n---\n\n1. 有序列表\n2. 你好\n\n---\n\n```python\nprint(\"hello world\")\n```\n\n---","content_format":"markdown","images":[],"ip_province":"","ip_city":"","view_count":12,"reply_count":6,"last_reply_at":"2026-09-14T11:12:55.973378+08:00","created_at":"2026-09-12T11:33:55.527246+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":1,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试帖子","content":"这是一个测试帖子","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":116,"reply_count":2,"last_reply_at":"2026-09-03T09:43:20.976038+08:00","created_at":"2026-08-28T10:08:49.405520+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":3,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false}],"total":5}[0m at api/forum.uts:56
+16:34:59.064 [31mat pages/forum/forum.uvue:99:4[39m
+16:34:59.066 [31m97 |      const currentTab = ref<string>('square') // square | resource | hot | experience[39m
+16:34:59.071 [31m99 |      // ---- 帖子流（列表域下沉 useTopicFeed）----[39m
+16:34:59.077 [31m100|      const {[39m
+16:34:59.069 [31m98 |  [39m
+16:34:59.074 [31m   |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[39m
+16:34:59.078 [31m101|          topics, loading, noMore, sortField, sortOrder, qaSort, qaStatus, expSort, featuredFilter,⁠[39m
+16:34:59.063 [31m‌‌⁠error: UniError(errSubject='uni-navigateTo', errCode=4, errMsg='navigateTo: fail /pages/forum/forum-create?scope=discussion locked', data=null, cause=null)‌[39m [上报Bug] [AI修复]
+16:34:59.573 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:34:59.575 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:34:59.577 [0m进入页面:​/pages/forum/forum-create?scope=discussion​ 。[{"创建dom元素个数":"59个","耗时":"43ms"},{"排版":"1次","耗时":"82ms"},{"渲染":"2次","耗时":"80ms"},{"跳转页面到onReady总耗时":"394ms"}][0m
+16:34:59.569 [33m[0mPossible Unhandled Promise Rejection:[0m [94m‍[⁠io.dcloud.uniapp.framework.extapi.NavigateToFailImpl⁠]‍[33m {"errCode": [95m‍[number]‍ 4[33m, "cause": [96mnull[33m, "data": [96mnull[33m, "errMsg": [92m"navigateTo: fail /pages/forum/forum-create?scope=discussion locked"[33m, "errSubject": [92m"uni-navigateTo"[33m, "message": [92m""[33m, "name": [92m"Error"[33m}[39m
+16:37:37.484 [0mApp Hide[0m at App.uvue:27
+16:38:34.274 [0mApp Show[0m at App.uvue:24
+16:38:34.327 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:38:34.460 [0m[uploadFile] >>> POST[0m [0mhttps://www.gccsmile.com/api/forum/upload-image[0m [0mfilePath=[0m [0mfile:///storage/emulated/0/Android/data/io.dcloud.uniappx/cache/uni-media/1790066315277_cap.png[0m at api/request.uts:590
+16:38:34.524 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:49:11.684 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:11.690 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:11.693 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:11.824 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m at api/request.uts:411
+16:49:11.838 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m at api/request.uts:411
+16:49:11.841 [0m[getForumTopicsApi] raw data:[0m [0m{"page":1,"pages":1,"topics":[{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":58,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"广东省","ip_city":"广州市","view_count":1,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-17T11:03:43.406989+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":15,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":47,"reply_count":3,"last_reply_at":"2026-09-15T15:11:47.694681+08:00","created_at":"2026-09-09T08:58:25.920824+08:00","author":{"user_id":2,"username":"沐泽子","avatar_url":"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false},{"id":20,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试markdown渲染","content":"## 测试 Markdown 渲染\n\n- 无序列表\n\n---\n\n1. 有序列表\n2. 你好\n\n---\n\n```python\nprint(\"hello world\")\n```\n\n---","content_format":"markdown","images":[],"ip_province":"","ip_city":"","view_count":12,"reply_count":6,"last_reply_at":"2026-09-14T11:12:55.973378+08:00","created_at":"2026-09-12T11:33:55.527246+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":1,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试帖子","content":"这是一个测试帖子","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":116,"reply_count":2,"last_reply_at":"2026-09-03T09:43:20.976038+08:00","created_at":"2026-08-28T10:08:49.405520+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":3,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false}],"total":5}[0m at api/forum.uts:56
+16:49:12.042 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:49:16.638 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:16.778 [0m进入页面:​/pages/forum/forum-create?scope=discussion​ 。[{"创建dom元素个数":"59个","耗时":"26ms"},{"排版":"1次","耗时":"63ms"},{"渲染":"2次","耗时":"29ms"},{"跳转页面到onReady总耗时":"233ms"}][0m
+16:49:19.743 [0mApp Hide[0m at App.uvue:27
+16:49:19.928 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:49:22.742 [0mApp Show[0m at App.uvue:24
+16:49:23.005 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:23.049 [0m[uploadFile] >>> POST[0m [0mhttps://www.gccsmile.com/api/forum/upload-image[0m [0mfilePath=[0m [0mfile:///storage/emulated/0/Android/data/io.dcloud.uniappx/cache/uni-media/1790066960163.jpg[0m at api/request.uts:590
+16:49:23.144 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:49:29.573 [0mApp Hide[0m at App.uvue:27
+16:49:38.325 [0mApp Show[0m at App.uvue:24
+16:49:38.328 [0m[welcome] restored=[0m [91m[boolean] true[39m [0misLoggedIn=[0m [91m[boolean] true[39m at pages/index/index.uvue:71
+16:49:38.331 [0m[welcome] redirect to dashboard[0m at pages/index/index.uvue:73
+16:49:38.335 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/auth/me[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:38.315 [0mApp Launch[0m at App.uvue:10
+16:49:38.606 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/auth/me[0m at api/request.uts:411
+16:49:38.621 [0m进入页面:​/pages/index/index​ 。[{"创建dom元素个数":"32个","耗时":"34ms"},{"排版":"1次","耗时":"47ms"},{"渲染":"1次","耗时":"252ms"},{"跳转页面到onReady总耗时":"452ms"}][0m
+16:49:38.616 [0m应用启动到触发onLaunch耗时: 999ms[0m
+16:49:38.737 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/student/courses[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:38.727 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:38.758 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/featured-contents?page=1&page_size=5[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:38.762 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:49:38.845 [0mToken validated, isLoggedIn=[0m [91m[boolean] true[39m at App.uvue:17
+16:49:38.889 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/featured-contents?page=1&page_size=5[0m at api/request.uts:411
+16:49:38.949 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:49:38.960 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/student/courses[0m at api/request.uts:411
+16:49:38.967 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+16:49:39.370 [0m进入页面:​/pages/dashboard/dashboard​ 。[{"创建dom元素个数":"110个","耗时":"76ms"},{"排版":"1次","耗时":"198ms"},{"渲染":"2次","耗时":"77ms"},{"跳转页面到onReady总耗时":"759ms"}][0m
+16:50:08.705 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:50:08.796 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:50:38.710 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:50:38.818 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:51:08.731 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:51:08.822 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:51:38.720 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:51:38.846 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:52:08.711 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:52:08.820 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:52:38.723 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:52:38.875 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:53:08.726 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:53:08.794 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:53:22.570 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:53:22.606 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:53:22.610 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:53:22.733 [0m进入页面:​/pages/forum/forum​ 。[{"创建dom元素个数":"54个","耗时":"45ms"},{"排版":"2次","耗时":"81ms"},{"渲染":"2次","耗时":"33ms"},{"跳转页面到onReady总耗时":"267ms"}][0m
+16:53:22.781 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+16:53:22.783 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m at api/request.uts:411
+16:53:22.784 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m at api/request.uts:411
+16:53:22.819 [0m[getForumTopicsApi] raw data:[0m [0m{"page":1,"pages":1,"topics":[{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":58,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"广东省","ip_city":"广州市","view_count":1,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-17T11:03:43.406989+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":15,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":47,"reply_count":3,"last_reply_at":"2026-09-15T15:11:47.694681+08:00","created_at":"2026-09-09T08:58:25.920824+08:00","author":{"user_id":2,"username":"沐泽子","avatar_url":"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false},{"id":20,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试markdown渲染","content":"## 测试 Markdown 渲染\n\n- 无序列表\n\n---\n\n1. 有序列表\n2. 你好\n\n---\n\n```python\nprint(\"hello world\")\n```\n\n---","content_format":"markdown","images":[],"ip_province":"","ip_city":"","view_count":12,"reply_count":6,"last_reply_at":"2026-09-14T11:12:55.973378+08:00","created_at":"2026-09-12T11:33:55.527246+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":1,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试帖子","content":"这是一个测试帖子","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":116,"reply_count":2,"last_reply_at":"2026-09-03T09:43:20.976038+08:00","created_at":"2026-08-28T10:08:49.405520+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":3,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false}],"total":5}[0m at api/forum.uts:56
+16:53:26.710 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics/59?sort=latest&order=asc&page=1&page_size=20[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:53:26.831 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics/59?sort=latest&order=asc&page=1&page_size=20[0m at api/request.uts:411
+16:53:26.875 [0m[getForumTopicDetailApi] raw data:[0m [0m{"page":1,"pages":0,"replies":[],"topic":{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":true,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},"total":0}[0m at api/forum.uts:84
+16:53:26.877 [0m进入页面:​/pages/forum/forum-detail?id=59​ 。[{"创建dom元素个数":"11个","耗时":"5ms"},{"排版":"1次","耗时":"13ms"},{"渲染":"1次","耗时":"5ms"},{"跳转页面到onReady总耗时":"127ms"}][0m
+16:53:26.879 [0m[forum-detail] DIAG can_delete=[0m [91m[boolean] true[39m [0mauthor_id=[0m [95m‍[number]‍ 8[39m [0mcurrentUserId=[0m [95m‍[number]‍ 8[39m [0muser=[0m [0m{"account":"hrfce98a449c69e4f603","avatar_url":"","company":"","email":"","has_password":true,"has_pending_change":true,"name":"张三","phone":"13592867284","role":"hrwai_user","user_id":8,"username":"张三"}[0m [0mcanDelete=[0m [91m[boolean] true[39m at composables/useTopicDetail.uts:220
+16:53:27.123 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/favorites/check?target_type=topic&target_id=59[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+16:53:27.185 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/favorites/check?target_type=topic&target_id=59[0m at api/request.uts:411
+17:03:31.140 [0mApp Hide[0m at App.uvue:27
+17:30:10.636 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:10.651 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:10.648 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:10.789 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+17:30:10.806 [0m[getForumTopicsApi] raw data:[0m [0m{"page":1,"pages":1,"topics":[{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":58,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"广东省","ip_city":"广州市","view_count":1,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-17T11:03:43.406989+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":15,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":47,"reply_count":3,"last_reply_at":"2026-09-15T15:11:47.694681+08:00","created_at":"2026-09-09T08:58:25.920824+08:00","author":{"user_id":2,"username":"沐泽子","avatar_url":"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false},{"id":20,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试markdown渲染","content":"## 测试 Markdown 渲染\n\n- 无序列表\n\n---\n\n1. 有序列表\n2. 你好\n\n---\n\n```python\nprint(\"hello world\")\n```\n\n---","content_format":"markdown","images":[],"ip_province":"","ip_city":"","view_count":12,"reply_count":6,"last_reply_at":"2026-09-14T11:12:55.973378+08:00","created_at":"2026-09-12T11:33:55.527246+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":1,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试帖子","content":"这是一个测试帖子","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":116,"reply_count":2,"last_reply_at":"2026-09-03T09:43:20.976038+08:00","created_at":"2026-08-28T10:08:49.405520+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":3,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false}],"total":5}[0m at api/forum.uts:56
+17:30:10.801 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m at api/request.uts:411
+17:30:10.989 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m at api/request.uts:411
+17:30:15.101 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:15.217 [0m进入页面:​/pages/forum/forum-create?scope=discussion​ 。[{"创建dom元素个数":"59个","耗时":"44ms"},{"排版":"1次","耗时":"75ms"},{"渲染":"2次","耗时":"46ms"},{"跳转页面到onReady总耗时":"357ms"}][0m
+17:30:15.238 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+17:30:16.109 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:16.291 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:16.294 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:16.441 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+17:30:16.520 [0m[getForumTopicsApi] raw data:[0m [0m{"page":1,"pages":1,"topics":[{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":58,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"广东省","ip_city":"广州市","view_count":1,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-17T11:03:43.406989+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":15,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":47,"reply_count":3,"last_reply_at":"2026-09-15T15:11:47.694681+08:00","created_at":"2026-09-09T08:58:25.920824+08:00","author":{"user_id":2,"username":"沐泽子","avatar_url":"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false},{"id":20,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试markdown渲染","content":"## 测试 Markdown 渲染\n\n- 无序列表\n\n---\n\n1. 有序列表\n2. 你好\n\n---\n\n```python\nprint(\"hello world\")\n```\n\n---","content_format":"markdown","images":[],"ip_province":"","ip_city":"","view_count":12,"reply_count":6,"last_reply_at":"2026-09-14T11:12:55.973378+08:00","created_at":"2026-09-12T11:33:55.527246+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":1,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试帖子","content":"这是一个测试帖子","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":116,"reply_count":2,"last_reply_at":"2026-09-03T09:43:20.976038+08:00","created_at":"2026-08-28T10:08:49.405520+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":3,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false}],"total":5}[0m at api/forum.uts:56
+17:30:16.524 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m at api/request.uts:411
+17:30:16.517 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m at api/request.uts:411
+17:30:17.492 [0m[request] >>>[0m [0mGET[0m [0mhttps://training.gccsmile.com/api/me/credential[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:17.587 [0m进入页面:​/pages/forum/forum-create?scope=discussion​ 。[{"创建dom元素个数":"59个","耗时":"33ms"},{"排版":"1次","耗时":"76ms"},{"渲染":"2次","耗时":"42ms"},{"跳转页面到onReady总耗时":"282ms"}][0m
+17:30:17.633 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://training.gccsmile.com/api/me/credential[0m at api/request.uts:411
+17:30:18.138 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:18.181 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:18.175 [0m[request] >>>[0m [0mGET[0m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m [0mdata:[0m [96mnull[39m at api/request.uts:332
+17:30:18.310 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/notifications/unread-count[0m at api/request.uts:411
+17:30:18.329 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10&category=discussion[0m at api/request.uts:411
+17:30:18.333 [0m[request] <<<[0m [95m‍[number]‍ 200[39m [0mhttps://www.gccsmile.com/api/check-in/calendar?year=2026&month=9[0m at api/request.uts:411
+17:30:18.338 [0m[getForumTopicsApi] raw data:[0m [0m{"page":1,"pages":1,"topics":[{"id":59,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试摄影拍照功能","content":"### 拍照摄影","content_format":"markdown","images":["https://www.gccsmile.com/images/forum/1790052147642_ev3_1790052148465.webp","https://www.gccsmile.com/images/forum/1790052160212_1790052168825.jpg"],"ip_province":"广东省","ip_city":"广州市","view_count":0,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-22T12:43:13.689969+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":58,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"广东省","ip_city":"广州市","view_count":1,"reply_count":0,"last_reply_at":null,"created_at":"2026-09-17T11:03:43.406989+08:00","author":{"user_id":8,"username":"张三","avatar_url":""},"can_delete":false,"likes_count":0,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":15,"chapter_id":null,"category":"discussion","chapter_title":"","title":"1","content":"1","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":47,"reply_count":3,"last_reply_at":"2026-09-15T15:11:47.694681+08:00","created_at":"2026-09-09T08:58:25.920824+08:00","author":{"user_id":2,"username":"沐泽子","avatar_url":"https://storage.forklifttraining.asia/avatars/Nt8bDeazC8iEc3575ea264b7bf920e61742653d5dac1_1787878970438.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false},{"id":20,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试markdown渲染","content":"## 测试 Markdown 渲染\n\n- 无序列表\n\n---\n\n1. 有序列表\n2. 你好\n\n---\n\n```python\nprint(\"hello world\")\n```\n\n---","content_format":"markdown","images":[],"ip_province":"","ip_city":"","view_count":12,"reply_count":6,"last_reply_at":"2026-09-14T11:12:55.973378+08:00","created_at":"2026-09-12T11:33:55.527246+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":2,"liked_by_me":false,"is_featured":false,"is_experience":false,"reward_issued":false},{"id":1,"chapter_id":null,"category":"discussion","chapter_title":"","title":"测试帖子","content":"这是一个测试帖子","content_format":"text","images":[],"ip_province":"","ip_city":"","view_count":116,"reply_count":2,"last_reply_at":"2026-09-03T09:43:20.976038+08:00","created_at":"2026-08-28T10:08:49.405520+08:00","author":{"user_id":1,"username":"张三十","avatar_url":"https://www.gccsmile.com/avatars/wallhaven-w8ed3p_1788483557560.webp"},"can_delete":false,"likes_count":3,"liked_by_me":false,"is_featured":true,"is_experience":true,"reward_issued":false}],"total":5}[0m at api/forum.uts:56

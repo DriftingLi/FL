@@ -1,0 +1,26 @@
+npm warn Unknown user config "node-sqlite3-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "sqlite3-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "grpc-node-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-hyper-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "utf-8-validate-binary-host-mirror". This will stop working in the next major version of npm.
+
+> forklift-training-app@1.0.0 build:kotlin-all
+> pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/kotlin-all-check.ps1
+
+HX_BUSY wait=1 result=free
+>>> [cli-open] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+
+
+>>> [project-open] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+项目导入成功
+
+
+>>> [publish-appresource] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+-1:cli:命令'publish app-android'不存在或缺少参数 当前命令执行错误
+
+>>> [kotlinc-all] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\plugins\amazon-corretto\bin\java.exe
+
+✅ ④c 通过：整模块编译无 error（KOTLIN_ALL_RESULT errors=0 classes=1526 files=120 input=unpackage\resources\app-android log=D:\FL\wt-1240\training-app\叉车维修培训学员端跨端应用\.ci-verify\kotlin-all.log）
+   注意：④c ≠ compileReleaseKotlin（工具链不同），只作本地加固，不能替代 ④b 的结论。
+exit=0

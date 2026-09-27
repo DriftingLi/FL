@@ -1,0 +1,2 @@
+60e02f6d docs(mobile): ADR-0007 补 T14 域 api 批量收紧 A 复盘（#652）
+77789430 refactor(mobile,api): 域 api 批量收紧 A —— search/job 两域进 getMapped 出口，job DTO 归位 types/ (#652)

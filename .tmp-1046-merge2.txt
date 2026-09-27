@@ -1,0 +1,3 @@
+Merge branch 'master' into feat/988-mobile-ai-diagnosis-sources
+
+同步 origin/master（20ce05c8，即 docs PR #1068 的 squash 结果）。merge-tree 判 clean；索引内合并，不碰工作树。

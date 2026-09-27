@@ -1,0 +1,78 @@
+## 进度：100%
+
+已合并并上线：**PR #1245 MERGED**（squash `f9be5e97`），master CD run [35581609523](https://github.com/DriftingLi/FL/actions/runs/35581609523) **success** ⇒ production 已部署。本票的验收判据（分类器翻转 + 成对取证）已达成。
+
+下一步：无 —— 本票关闭。
+
+## 现象 / 缺口（本票要修的病）
+
+`utils/favoritesLandingContract.test.js` 一直是「取出 `pages/profile/favorites.uvue` 的 `onItemClick` 函数体 → 注入桩 `uni` → `new Function` 求值」的**自搓执行器**。它其实**真的执行**了落点表、断言的是对外行为，但按 `docs/agents/guards.md` 的分类器（判据是**代码级执行调用**：`child_process` / `execFileSync` / `spawnSync` / **`loadUts(`** / 动态 `import()`），它判为**接线守护** ⇒ **不构成 ③ 门承重证据**。
+
+缝在判据上：分类器只认 `loadUts(`，并**明确防了绕法**（「不能只认模块名 —— 读取层归一后一批接线守护也 `require('./utsHarness')` 取 `readText`」）；而 `loadUts` **只吃 `.uts` 模块**（它自己写明「`.uvue` 的模板/样式不参与」）⇒ 住在 `.uvue` 里的落点表**永远进不了**那条判据。后果：收藏落点这一面（五类条目 + 章节双键 + 缺课程可见提示）在 `master` 上**没有 ③ 承重证据**；而 `ADR-0018` 补遗与 `1166/README.md` 还写着「行为断言」，措辞偏宽。
+
+## 实施记录
+
+1. **新增 `utils/favoriteLanding.uts`**：`favoriteLanding(item) : FavoriteLanding`（`url` + `notice`）——落点表的**唯一**实现（与 `utils/searchDisplay.uts` 的 `searchItemPath` 同形）。空 `url` 的两种含义在模块里写死：`notice` 非空 = 有落点但缺前提（必须可见提示）；`notice` 空 = 没落点（静默是对的）。
+2. **`pages/profile/favorites.uvue`**：`onItemClick` 只剩「应用决策」——`notice` → `showToast`、`url` → `navigateTo`；页面不再内联任何落点分支（**承载面 UI** 在这里）。
+3. **`utils/favoritesLandingContract.test.js`**：执行器切到共享 `loadUts` 真跑该模块；断言面逐条保留（五类落点 / 章节 `course_id`+`chapter_id` 双键 / 缺课程可见提示 / 未知类型静默 / 键集合 / 幻影路由），新增「唯一口径 + 应用决策接线」一组，并加执行器自检（防空跑假绿）。
+4. **`utils/personalActivityContract.test.js`**：「摘除的前提」补钉落点实现文件存在。
+5. **根仓库 `ADR-0018` 补遗**：落点表位置改为 `utils/favoriteLanding.uts`、收口点③④随之更正、守护描述改为「行为守护、对 ③ 承重」。
+
+## 分类器读数（本票的目的达成判据）
+
+```
+行为守护 behavior：19   （改前 18）
+接线守护 wiring  ：94   （改前 95）
+[行为] favoritesLandingContract.test.js ← utsHarness.loadUts：把 .uts 当 JS 真执行
+```
+
+## 成对取证（`guards.md` 判据③）
+
+- **必不红**：未改动树上该套件 **23/23 全绿**（还原变异后再跑，仍全绿）。
+- **必红**：4 个「落点表损坏」变异 **4/4 判红**，每轮之间**逐字节还原**：
+
+| 变异 | 内容 | 结果 |
+| --- | --- | --- |
+| M1 | chapter 落点回到 camelCase 单键（#1089 原始缺陷形态） | 红（4 条） |
+| M2 | 去掉课程 ID 守卫（`course_id == 0` 也照跳） | 红（4 条） |
+| M3 | 删掉 question 分支（静默 no-op） | 红（2 条） |
+| M4 | 提示文案清空（不跳且不提示） | 红（5 条） |
+
+## 门（现测执行记录，ADR-0008 / ADR-0016）
+
+- **③ 单测**：**已过** —— CI run [35579829226](https://github.com/DriftingLi/FL/actions/runs/35579829226)（head `c0de519b`，`mobile-test` SUCCESS）；本地同树 `Test Suites: 114 passed, 114 total` / `Tests: 2153 passed, 2153 total`。
+- **④c 整模块编译**：**已过** —— `KOTLIN_ALL_RESULT errors=0 classes=1523 files=118`，日志 `.ci-verify/kotlin-all.log`。**如实声明**：为满足 ruleset 的 up-to-date 而同步 master 时，master 引入了运行时面（#1247 的 `register.uvue` / `useRegisterForm.uts` / `api/auth.uts`）⇒ 重跑**完整** ④c 时本机**环境不可用**（`project-open` 超时 900s，HBuilderX 单实例被占；按本仓口径**不 kill、不抢占**），故改跑本仓点名的免 HBuilderX 回退 `scripts/kotlin-all-check.ps1 -SkipPublish`（上列读数即该次，跑在既有导出上、含本次改动）；master 侧新增运行时面由**其自身 PR 的门**覆盖。三份 json 未被 HBuilderX 回写。
+- **①a 真机取证**：**已过**。执行人：agent 执行 · 日期：2026-09-21 · 复测对象 `31f6ff2c`（设备 `23049RAD8C`，本次 adb 入口为 TCP `192.168.0.212:43057`）· 产物：`docs/verification/favorites/1245/`（README + 6 张截图 + 1 份 content-desc + logcat 原文）。**五类条目全部真机点过**：chapter `/pages/courses/chapter-view?course_id=8&chapter_id=23`（双键）、question `/pages/practice/practice-do?mode=single&question_id=3`、featured `/pages/featured/featured-detail?id=1`、course `/pages/courses/course-detail?id=8`、topic `/pages/forum/forum-detail?id=20`，目标页正文均渲染。同步 master 未改动本 PR 验过的四个文件（用 `git -c core.quotePath=false diff --name-only` 核过）。
+- **② 微信开发者工具**：**未通过 —— 环境不可用**（3 次尝试：automation 端口 180s 超时 / 导出缺 `app.json` / `page-stack-not-answering` 坑位 5）。**构建面已过**：`产物合法性 = 产物合法：appid='wx38c3e31b16a7ced0'；pages=58 页各自有 .js；必需文件齐`。按校验器判据（`pr-evidence.yml:110-112,331`）本 PR **未命中 mp-weixin 面**（未动 `manifest.json`/`platformConfig.json`，patch 无 `MP-WEIXIN` 条件编译指令）⇒ 该门在 `pr-evidence` 里被**跳过**。
+- **①b / ④b**：**免**（未命中能力面白名单；未触及打包面，校验器 `needs4b` 未命中）。
+
+## 交付物（勾选）
+
+- [x] 1. `utils/favoriteLanding.uts` —— 落点表的唯一实现
+- [x] 2. `pages/profile/favorites.uvue` 接线到该模块（**承载面 UI**）
+- [x] 3. `utils/favoritesLandingContract.test.js` 执行器切 `loadUts`
+- [x] 4. `ADR-0018` 补遗措辞改准（落点表位置 + 收口点 + 守护分类）
+- [x] 5. 分类器实测读数：该文件由 `[接线]` 变 `[行为]`
+- [x] 6. ①a 真机取证入仓（`docs/verification/favorites/1245/`）
+
+## 验收标准
+
+- [x] 分类器读数变化可核验（命令与输出已入票）；
+- [x] 成对取证：必不红 23/23 + 必红 4/4（逐字节还原）；
+- [x] `npm run test:unit` 全绿（114 套件 / 2153 用例，CI 同 head）；
+- [x] ①a 真机五类落点各带齐键且正文渲染（截图 + logcat 入仓）；
+- [ ] ② 微信开发者工具无报错 —— **未通过（环境不可用）**，构建面证据已附；按判据本 PR 未命中该面。**维护者裁定：直接合并**（「签收在人、合并不限人」——由维护者给出合并指令）；
+- [x] ④c `errors=0`（含上列回退的如实声明）。
+
+## ② 的处置（已裁定）
+
+维护者（签收人）就本票的 ② 给出「直接合并」的指令 ⇒ 按「接受按判据跳过」处理：本 PR 未命中 mp-weixin 面（机器判据跳过了该门），构建面（产物合法性 / 58 页 / appid）已有证据，未通过的只是开发者工具**自动化会话就绪**这一环，其三次失败原因均为环境侧（脚本自注坑位 5）。若日后需要该会话级结论，可随时重跑 `npm run build:mp-weixin-check`。
+
+## 关联
+
+#1156（③ 门补判据 + 守护分类可机检）、#1160、`docs/agents/guards.md`、**PR #1166**（本条缝的发现处与更正评论）、**PR #1245**（本票实现 + ①a 证据）、根仓库 `ADR-0018` 补遗、移动端 `ADR-0019`（读取层归一）、`docs/spec-永绿整改.md` §④（S6 迁移方向）
+
+## 来源
+
+> 由 #1159 收口时的分类器核查牵出：`[接线] favoritesLandingContract.test.js`（分类器读数 行为 18 · 接线 95 @ `ccfcec5f`）。
+

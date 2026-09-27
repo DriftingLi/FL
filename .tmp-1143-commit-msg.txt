@@ -1,0 +1,18 @@
+test(mobile): contributionStatusContract 读者归一 EOL —— 修 Windows 工作树恒红（#1143）
+
+守护的 read() / readRepo() 直读工作树文本且不归一 EOL，而本仓 *.uts / *.uvue 没有被
+.gitattributes 钉 LF（git ls-files --eol → i/lf w/crlf attr/；另票 #1137）⇒ Windows 检出
+（core.autocrlf=true）拿到的是 CRLF。`.*\n` 这类多行锚点里 `.` 不匹配 `\r`、`\n` 又必须
+紧跟其后 ⇒ 在 CRLF 行上匹配 0 次：删掉 archived 行的变异根本没生效，断言却照跑 ——
+「防假绿」的自检静默假绿（18 例红 1 例）。
+
+修法（票面推荐的 A）：归一放在读者处（normalizeEol + readText），对任何原因导致的 CRLF
+都成立；零内联扫描的 walk 也走同一读者。不动 .gitattributes（留给 #1137 单独一票）。
+
+新增 2 例读者自检：
+- 合成 CRLF 源经 readText 后不含 \r —— 唯一与检出平台无关的判据（LF 检出上归一没了也照样绿）
+- 真源（.uts / .uvue / 仓外对账源）经读者后不含 \r
+
+自证（Windows 工作树）：修复后 20/20 绿（修复前 18 例红 1 例）；把
+utils/contributionStatus.uts 的 archived 行临时删掉 ⇒ 3 例判红（红能力仍在；测完按
+SHA256 逐字节还原）；把 .uts / .uvue 临时转 LF 模拟 CI 检出 ⇒ 20/20 绿。
