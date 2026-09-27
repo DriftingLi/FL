@@ -18,11 +18,12 @@
  *   params 仍沿用手动 query 序列化、请求形态未变（getMapped 的 URL 构造段与历史 get 逐字一致）。
  * @note 唯一裸出口 = updateCourseProgressApi（确认型透传、无 DTO 可映射），理由见其函数注释，
  *   并由 utils/coursesContract.test.js 的白名单锁死「未误加 DTO」。
- * @note catch-mock 静默回退保持 T02 试点的既有决策（utils/mallPilotContract.test.js 锁定
- *   getMockCourseList 保留）；退役回退属「改口径」，T08 本票不做。
- *   ⚠️ 例外一处（#1268 已按 ADR-0007「掩盖面」判据退役）：`getChapterDetailApi` 的 `.catch`
- *   已删除 —— 它把后端的 404（未兑换的付费章节 = 鉴权收回）折成 `chapter_id:0` 空详情，
- *   正是「把真实缺口伪装成正常首屏」的形态。其余 4 处回退原样保留，计数由 coursesContract 钉。
+ * @note catch-mock 静默回退已随本域**整体退役**（#1331；判据 = ADR-0007「掩盖面」处理，不按「降级」处理）：
+ *   原 4 处 `.catch` 兜底（列表 / catalog 专业方向 / levels / 课程详情）与 4 个 getMock* 死代码一并删除，
+ *   5xx / 网络失败不再被演成假课程 —— 错误一律上抛，由页面呈现可见失败态 + 重试。
+ *   先例：#1268 getChapterDetailApi、points #408/#409、practice 零静默回退。
+ *   计数锁 utils/coursesContract.test.js 已 4→0；mallPilotContract 的「getMockCourseList 保留」已反转。
+ *   筛选条（specialties / levels）失败保持静默降级（job-list 同款先例；判据见 ADR-0007 实施回记）。
  */
 import { getMapped, post, NOT_FOUND_MESSAGE_PREFIX } from './request'
 import { toNumber, toStr, errMsg } from './helpers'
@@ -268,73 +269,6 @@ function buildLevelItem(obj : UTSJSONObject) : LevelItem {
 	return item
 }
 
-/** mock 课程列表（网络不可用时回退） */
-function getMockCourseList() : CourseListResult {
-	const items : CourseItem[] = [
-		{ course_id: 1, title: '叉车基本构造', description: '学习叉车基本构造知识', cover_url: '', duration: 120, chapter_count: 3, specialty_id: 1, level_id: 1 } as CourseItem,
-		{ course_id: 2, title: '液压传动系统', description: '掌握液压系统原理', cover_url: '', duration: 90, chapter_count: 4, specialty_id: 1, level_id: 2 } as CourseItem,
-		{ course_id: 3, title: '叉车驾驶操作', description: '叉车驾驶技能培训', cover_url: '', duration: 150, chapter_count: 5, specialty_id: 1, level_id: 1 } as CourseItem,
-		{ course_id: 4, title: '日常维护保养', description: '叉车日常保养知识', cover_url: '', duration: 100, chapter_count: 4, specialty_id: 2, level_id: 2 } as CourseItem,
-		{ course_id: 5, title: '货物装卸作业', description: '安全装卸作业规范', cover_url: '', duration: 80, chapter_count: 3, specialty_id: 2, level_id: 1 } as CourseItem,
-		{ course_id: 6, title: '故障排查与应急', description: '故障诊断与处理', cover_url: '', duration: 110, chapter_count: 4, specialty_id: 2, level_id: 3 } as CourseItem,
-	]
-	return {
-		items: items,
-		total: 6,
-		page: 1,
-		page_size: 12,
-	} as CourseListResult
-}
-
-/** mock 课程详情 */
-function getMockCourseDetail(courseId : number) : CourseDetail {
-	const chapters : ChapterItem[] = [
-		{ chapter_id: 1, title: '第一章 叉车分类与型号', order_num: 1, duration: 40 } as ChapterItem,
-		{ chapter_id: 2, title: '第二章 叉车基本结构组成', order_num: 2, duration: 40 } as ChapterItem,
-		{ chapter_id: 3, title: '第三章 叉车主要技术参数', order_num: 3, duration: 40 } as ChapterItem,
-	]
-	return {
-		course_id: courseId,
-		title: '叉车基础知识概述',
-		description: '叉车分类、基本结构、主要技术参数等入门知识，为后续维修与操作学习奠定基础。',
-		cover_url: '',
-		duration: 120,
-		chapters: chapters,
-		progress_pct: 33,
-		specialty_id: 1,
-		level_id: 1,
-		specialty_name: '操作',
-		level_name: '入门',
-		theory_hours: 16,
-		practice_hours: 8,
-		certificate_name: '叉车维修技能培训合格证书',
-		certificate_validity_days: 365,
-		is_enrolled: true,
-		completed_chapters: 1,
-		prerequisites: [] as CoursePrereq[],
-	} as CourseDetail
-}
-
-/** mock 专业方向 */
-function getMockSpecialties() : SpecialtyItem[] {
-	return [
-		{ specialty_id: 1, name: '操作' } as SpecialtyItem,
-		{ specialty_id: 2, name: '维修' } as SpecialtyItem,
-		{ specialty_id: 3, name: '安全' } as SpecialtyItem,
-		{ specialty_id: 4, name: '电池' } as SpecialtyItem,
-	]
-}
-
-/** mock 课程等级 */
-function getMockLevels() : LevelItem[] {
-	return [
-		{ level_id: 1, name: '入门' } as LevelItem,
-		{ level_id: 2, name: '进阶' } as LevelItem,
-		{ level_id: 3, name: '专项' } as LevelItem,
-		{ level_id: 4, name: '认证' } as LevelItem,
-	]
-}
-
 /**
  * 课程列表
  *
@@ -371,9 +305,6 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 	return getMapped<CourseListResult>('/courses', params, (data : UTSJSONObject) : CourseListResult => {
 		console.log('[getCourseListApi] raw data:', JSON.stringify(data))
 		return buildCourseListResult(data)
-	}).catch((e) : CourseListResult => {
-		console.warn('[getCourseListApi] network failed, using mock data:', e)
-		return getMockCourseList()
 	})
 }
 
@@ -410,9 +341,6 @@ export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
 	return getMapped<SpecialtyItem[]>('/catalog/tree', null, (data : UTSJSONObject) : SpecialtyItem[] => {
 		console.log('[getCatalogTreeSpecialties] raw data:', JSON.stringify(data))
 		return buildSpecialtyListFromCatalog(data)
-	}).catch((e) : SpecialtyItem[] => {
-		console.warn('[getCatalogTreeSpecialties] failed, using mock data:', e)
-		return getMockSpecialties()
 	})
 }
 
@@ -436,9 +364,6 @@ export function getLevelsApi() : Promise<LevelItem[]> {
 	return getMapped<LevelItem[]>('/levels', null, (data : UTSJSONObject) : LevelItem[] => {
 		console.log('[getLevelsApi] raw data:', JSON.stringify(data))
 		return buildLevelList(data)
-	}).catch((e) : LevelItem[] => {
-		console.warn('[getLevelsApi] network failed, using mock data:', e)
-		return getMockLevels()
 	})
 }
 
@@ -450,9 +375,6 @@ export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
 	return getMapped<CourseDetail>('/course/' + courseId, null, (data : UTSJSONObject) : CourseDetail => {
 		console.log('[getCourseDetailApi] raw data:', JSON.stringify(data))
 		return buildCourseDetail(data)
-	}).catch((e) : CourseDetail => {
-		console.warn('[getCourseDetailApi] network failed, using mock data:', e)
-		return getMockCourseDetail(courseId)
 	})
 }
 

@@ -55,7 +55,14 @@
                  f1ab2648 曾把该容器整段删掉 ⇒ 整页滑不动 + @scrolltolower 分页失效；
                  回归锁见 utils/uvuePageScrollContract.test.js（#1134） -->
             <scroll-view class="course-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-                <view v-if="courses.length == 0 && !loading" class="empty-tip">
+                <!-- #1331/#816：失败态与「暂无数据」分开 —— 5xx/断网不伪装成空列表，给可见错误 + 重试位 -->
+                <view v-if="loadError && courses.length == 0 && !loading" class="empty-tip">
+                    <text class="empty-text">课程加载失败，请检查网络后重试</text>
+                    <view class="retry-btn" @click="loadCourses(true)">
+                        <text class="retry-btn-text">重试</text>
+                    </view>
+                </view>
+                <view v-else-if="courses.length == 0 && !loading" class="empty-tip">
                     <text class="empty-text">暂无课程数据</text>
                 </view>
                 <view class="course-list">
@@ -151,6 +158,8 @@
     const pageSize = 12
     const total = ref<number>(0)
     const noMore = ref<boolean>(false)
+    /** #1331：首屏失败标记 —— 失败与「暂无数据」必须分开（#816 口径），失败给可见错误 + 重试位，不伪装成空列表 */
+    const loadError = ref<boolean>(false)
 
     async function loadCourses(reset : boolean) : Promise<void> {
         if (loading.value) return
@@ -164,6 +173,7 @@
         try {
             await ensureBrowseCredential()
             const result = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
+            loadError.value = false
             if (reset) {
                 courses.value = result.items
             } else {
@@ -177,6 +187,7 @@
             }
         } catch (e) {
             console.error('[courses] load failed:', e)
+            loadError.value = true
             uni.showToast({ title: '加载课程失败', icon: 'none' })
         } finally {
             loading.value = false
@@ -199,6 +210,8 @@
         try {
             specialties.value = await getCatalogTreeSpecialties()
         } catch (e) {
+            // #1331：筛选条失败保持**静默降级**（job-list 同款先例）—— 它是辅助数据，主列表失败态已承载「可见」；
+            // 且入口两条 toast 会互相顶掉反而变糊。徽标由 getBadgeText 回退「基础」，重进页即重拉。判据见 ADR-0007 实施回记。
             console.error('[courses] load specialties failed:', e)
         }
     }
@@ -207,6 +220,7 @@
         try {
             levels.value = await getLevelsApi()
         } catch (e) {
+            // #1331：同 loadSpecialties —— 筛选条失败静默降级（判据见 ADR-0007 实施回记）
             console.error('[courses] load levels failed:', e)
         }
     }
@@ -511,6 +525,19 @@
     .empty-text {
         font-size: 28rpx;
         color: #999999;
+    }
+
+    /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
+    .retry-btn {
+        background-color: #2979ff;
+        border-radius: 32rpx;
+        padding: 16rpx 48rpx;
+        margin-top: 24rpx;
+    }
+
+    .retry-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
     }
 
     .loading-more {

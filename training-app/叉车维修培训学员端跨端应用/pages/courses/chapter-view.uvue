@@ -226,10 +226,15 @@
         try {
             const data = await getChapterDetailApi(courseId.value, chapterId.value)
             detail.value = data
-            // 加载课程详情以获取上下章标题
+            // 加载课程详情以获取上下章标题（#1331：二级调用独立兜底 —— 正文已到手，只缺上下章标题；
+            // 若让它冒泡到外层 catch，会连带跳过下方 updateNavTitles / study.beginStudy，正文与计时陪绑失败）
             if (courseDetail.value == null) {
-                const cd = await getCourseDetailApi(courseId.value)
-                courseDetail.value = cd
+                try {
+                    const cd = await getCourseDetailApi(courseId.value)
+                    courseDetail.value = cd
+                } catch (metaErr) {
+                    console.warn('[chapter-view] course meta failed (nav titles degraded):', metaErr)
+                }
             }
             updateNavTitles()
             study.beginStudy(courseId.value, data.chapter_id)
