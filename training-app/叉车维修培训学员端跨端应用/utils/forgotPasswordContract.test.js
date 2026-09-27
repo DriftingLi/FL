@@ -476,7 +476,7 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 行为逐字保持
   });
 
   it('#1262 已收口：口令档是 6-20 区间，而输入上界按裁定保持 32（反向锁翻正向）', () => {
-    // 术前：页面 placeholder 与后端唯一规则源（service.validatePasswordLength）都承诺 6-20，
+    // 术前：页面 placeholder 与后端规则源（service.validatePasswordLength；同规则在 auth_service.go:401 另有一份内联判据）都承诺 6-20，
     // 唯独客户端只判下限 ⇒ 21–32 位要打到后端才拿 400。现已与注册页同形同文案。
     // 行为兜底 = `utils/authPreRequestValidationBehavior.test.js`（真跑 composable 数请求次数）；本文件只锁文本与模板。
     expect(fnBodyOf(src, 'validate')).toContain("if (password.length < 6 || password.length > 20) return '密码长度需为 6-20 位'");
