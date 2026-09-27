@@ -43,6 +43,7 @@
 | `after-03b-source-preview-2.png` / `after-03c-source-preview-3.png` | 同卡 2 / 3、3 / 3 页 | 与已知三候选均不匹配（本轮检索的其他溯源图） |
 | `after-04-machine-lines.txt` | ①a 机检行原文（计数 / 指纹 / logcat / 过程备注） | 复算入口 |
 | `after-05-answer-a11y-dump.xml` | 修复后：制动异响回答态 a11y dump | after 计数数据源 |
+| `after-06-mp-weixin-check.png` | ② 门 `build:mp-weixin-check` 的截图产物（`.ci-verify/current.png` 入仓） | PR ② 行的行内可核验产物 |
 
 ## 门状态（2026-09-26 本会话）
 
