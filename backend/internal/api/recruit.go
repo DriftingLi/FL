@@ -89,7 +89,7 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 	params.RecruiterID = middleware.CurrentUserID(c)
 	result, err := h.svc.List(params)
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	// 审计留痕：列表实际读取的每张卡各记一次（best-effort，不影响响应）
@@ -129,7 +129,7 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 			response.NotFound(c, "简历不存在")
 			return
 		}
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	// 审计留痕：详情实际读取计一次

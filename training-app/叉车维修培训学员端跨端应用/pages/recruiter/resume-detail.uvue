@@ -54,8 +54,8 @@
                             <text class="exp-company">{{ emptyAsDash(exp.company) }}</text>
                             <text class="exp-period ml-16">{{ periodText(exp) }}</text>
                         </view>
-                        <text class="exp-position mt-8">{{ emptyAsDash(exp.position) }}</text>
-                        <text class="paragraph mt-8">{{ emptyAsDash(exp.description) }}</text>
+                        <text class="exp-position mt-8">{{ emptyAsDash(exp.role) }}</text>
+                        <text class="paragraph mt-8">{{ emptyAsDash(exp.desc) }}</text>
                     </view>
                 </view>
 
@@ -160,7 +160,8 @@
     import { isRecruiterActive } from '../../utils/authRole'
     import { companyDisabledNotice } from '../../utils/recruitDisplay'
     import { errMsg, toStr } from '../../api/helpers'
-    import type { RecruitResumeCard, RecruitExperience, RecruitCertification, RecruitContactPlain } from '../../api/recruit'
+    import type { RecruitResumeCard, RecruitCertification, RecruitContactPlain } from '../../api/recruit'
+    import type { ResumeExperience } from '../../types/index'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -174,9 +175,9 @@
     const contactForbidden = ref<boolean>(false)
     const requesting = ref<boolean>(false)
 
-    const experiences = computed<RecruitExperience[]>(() : RecruitExperience[] => {
+    const experiences = computed<ResumeExperience[]>(() : ResumeExperience[] => {
         const c = card.value
-        if (c == null) return [] as RecruitExperience[]
+        if (c == null) return [] as ResumeExperience[]
         return c!.resume_experiences
     })
 
@@ -326,9 +327,9 @@
         return toStr(v)
     }
 
-    function periodText(exp : RecruitExperience) : string {
-        const start = emptyAsDash(exp.start_date)
-        const end = exp.end_date.length > 0 ? exp.end_date : '至今'
+    function periodText(exp : ResumeExperience) : string {
+        const start = emptyAsDash(exp.start_month)
+        const end = exp.end_month.length > 0 ? exp.end_month : '至今'
         return start + ' ~ ' + end
     }
 
@@ -547,7 +548,7 @@
 
     .position {
         font-size: 28rpx;
-        color: #2979ff;
+        color: #239EDD;
         margin-top: 8rpx;
     }
 
@@ -614,7 +615,7 @@
 
     .exp-position {
         font-size: 26rpx;
-        color: #2979ff;
+        color: #239EDD;
     }
 
     .cert-item {
@@ -674,7 +675,7 @@
     .btn-primary {
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #2979ff;
+        background-color: #239EDD;
         align-items: center;
         justify-content: center;
     }

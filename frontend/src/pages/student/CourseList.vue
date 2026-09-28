@@ -302,10 +302,13 @@ const {
     const browseCredentialId = credentialStore.current?.id
     if (browseCredentialId) params.credential_id = browseCredentialId
     const data = await courseApi.getCourses(params)
-    courses.value = data.courses
-    total.value = data.total
+    return data
   },
   {
+    apply: (data) => {
+      courses.value = data.courses
+      total.value = data.total
+    },
     defaultPageSize: 12,
     itemsRef: courses,
     // #594 存量缺口修复（起手写在页面里的证件 watch，第十四波票 10 收进 facet 声明槽）：

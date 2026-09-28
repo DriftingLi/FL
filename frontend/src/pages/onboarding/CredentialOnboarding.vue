@@ -83,14 +83,18 @@ const { loading, run: loadGrouped } = useAsyncPage(
   async () => {
     await credentialStore.loadGrouped()
     // 若已持有 current，则预选
-    if (credentialStore.current?.id) selectedId.value = credentialStore.current.id
-    else {
-      // 尝试加载 current
-      const cur = await credentialStore.loadCurrent().catch(() => null)
-      if (cur?.id) selectedId.value = cur.id
-    }
+    if (credentialStore.current?.id) return credentialStore.current.id
+    // 尝试加载 current
+    const cur = await credentialStore.loadCurrent().catch(() => null)
+    return cur?.id ?? null
   },
-  { credentialScoped: false }
+  {
+    credentialScoped: false,
+    // 写回槽（ADR-0069 决策 1）：预选 id 由 loader 取回、在这里落地（取不到则不动用户的选择）
+    apply: (preselectedId) => {
+      if (preselectedId) selectedId.value = preselectedId
+    }
+  }
 )
 
 const grouped = computed(() => credentialStore.grouped)

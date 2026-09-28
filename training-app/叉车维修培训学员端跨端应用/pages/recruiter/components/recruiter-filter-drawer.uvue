@@ -278,7 +278,7 @@
 
     .drawer-close {
         font-size: 28rpx;
-        color: #2979ff;
+        color: #239EDD;
         padding: 12rpx 8rpx;
     }
 
@@ -328,7 +328,7 @@
 
     .chip-active {
         background-color: #e8f0fe;
-        border-color: #2979ff;
+        border-color: #239EDD;
     }
 
     .chip-text {
@@ -337,7 +337,7 @@
     }
 
     .chip-text-active {
-        color: #2979ff;
+        color: #239EDD;
     }
 
     .drawer-footer {
@@ -366,7 +366,7 @@
         align-items: center;
         justify-content: center;
         border-radius: 44rpx;
-        background-color: #2979ff;
+        background-color: #239EDD;
     }
 
     .btn-apply-text {

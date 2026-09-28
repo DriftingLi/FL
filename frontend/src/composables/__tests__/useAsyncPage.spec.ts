@@ -925,3 +925,139 @@ describe('useAsyncPage facet 声明槽（ADR-0062 决策 10：旁路装载归位
     error.mockRestore()
   })
 })
+
+/**
+ * ADR-0069 决策 1/3 的行为锁：replace 档的 loader 只取数，写回在 `apply` 槽里，
+ * 而 `apply` 只在 `gen === generation` 校验通过后才被调用 —— 旧轮**连写回都不执行**。
+ * 三条轴各一例（翻页 / 筛选 / 切证件）；仓库此前的代数用例全是 append 档，
+ * replace 档零覆盖，正是本缺陷长期没被发现的原因。
+ */
+describe('useAsyncPage 写回槽（ADR-0069：replace 档旧轮连写回都不执行）', () => {
+  function pageOf(tag: string, pageNo: number, total: number) {
+    return { tag, page: pageNo, total, items: [{ id: tag + '-' + pageNo }] }
+  }
+
+  it('翻页：第 1 页的旧响应后到时，items/total 仍是第 2 页的', async () => {
+    const items = ref<Array<{ id: string }>>([])
+    const applied: string[] = []
+    let releaseSlow!: () => void
+    const slow = new Promise<void>(resolve => { releaseSlow = resolve })
+    const { page, run, total, handlePageChange } = useAsyncPage(
+      async (p?: number) => {
+        const pageNo = p ?? 1
+        if (pageNo === 1) await slow // 第 1 页慢：用户等不及，先翻了页
+        return pageOf('r', pageNo, pageNo * 10)
+      },
+      {
+        itemsRef: items,
+        apply: (res) => {
+          applied.push(res.tag + res.page)
+          items.value = res.items
+          total.value = res.total
+        }
+      }
+    )
+
+    const first = run()
+    await nextTick()
+    page.value = 2
+    handlePageChange()
+    await vi.waitFor(() => expect(items.value[0]?.id).toBe('r-2'))
+    expect(total.value).toBe(20)
+
+    releaseSlow()
+    await first
+    // 旧轮整体作废：写回只发生过一次（第 2 页那次），列表与分页信封同源同批
+    expect(applied).toEqual(['r2'])
+    expect(items.value).toHaveLength(1)
+    expect(items.value[0].id).toBe('r-2')
+    expect(total.value).toBe(20)
+  })
+
+  it('筛选轴：旧筛选的响应后到时，不回写（与翻页同一判据）', async () => {
+    const items = ref<Array<{ id: string }>>([])
+    const filter = ref('a')
+    let releaseSlow!: () => void
+    const slow = new Promise<void>(resolve => { releaseSlow = resolve })
+    const { run, total } = useAsyncPage(
+      async () => {
+        const key = filter.value
+        if (key === 'a') await slow
+        return { tag: key, page: 1, total: key === 'a' ? 99 : 7, items: [{ id: key }] }
+      },
+      {
+        itemsRef: items,
+        filterDeps: [filter],
+        apply: (res) => {
+          items.value = res.items
+          total.value = res.total
+        }
+      }
+    )
+
+    const flight = run()
+    await nextTick()
+    filter.value = 'b'
+    await vi.waitFor(() => expect(items.value[0]?.id).toBe('b'))
+    expect(total.value).toBe(7)
+
+    releaseSlow()
+    await flight
+    expect(items.value[0].id).toBe('b')
+    expect(total.value).toBe(7)
+  })
+
+  it('切证件：上一证件的响应后到时，不回写', async () => {
+    setActivePinia(createPinia())
+    const store = useCredentialStore()
+    store.current = credentialOf(1)
+    const items = ref<Array<{ id: string }>>([])
+    let releaseSlow!: () => void
+    const slow = new Promise<void>(resolve => { releaseSlow = resolve })
+    const { run, total } = useAsyncPage(
+      async () => {
+        const id = store.current?.id ?? 0
+        if (id === 1) await slow
+        return { tag: 'c' + id, page: 1, total: id, items: [{ id: 'c' + id }] }
+      },
+      {
+        itemsRef: items,
+        apply: (res) => {
+          items.value = res.items
+          total.value = res.total
+        }
+      }
+    )
+
+    const flight = run()
+    await nextTick()
+    store.current = credentialOf(2)
+    await vi.waitFor(() => expect(items.value[0]?.id).toBe('c2'))
+    releaseSlow()
+    await flight
+    expect(items.value[0].id).toBe('c2')
+    expect(total.value).toBe(2)
+  })
+
+  it('判据本身有效：写回留在 loader 里（旧形状）时，旧轮照样覆盖新数据', async () => {
+    // 反例自检：不建 apply 槽、照旧在 loader 内写回 —— 与 ADR-0069 背景里的实测形态逐字同形。
+    // 它证明本组用例测的是「写回搬到了守卫之后」，而不是「竞态本来就不存在」。
+    const items = ref<Array<{ id: string }>>([])
+    let releaseSlow!: () => void
+    const slow = new Promise<void>(resolve => { releaseSlow = resolve })
+    const { page, run, handlePageChange } = useAsyncPage(async (p?: number) => {
+      const pageNo = p ?? 1
+      if (pageNo === 1) await slow
+      items.value = [{ id: 'r-' + pageNo }] // ← 旧形状：写回发生在守卫看到之前
+    })
+
+    const first = run()
+    await nextTick()
+    page.value = 2
+    handlePageChange()
+    await vi.waitFor(() => expect(items.value[0]?.id).toBe('r-2'))
+    releaseSlow()
+    await first
+    expect(items.value[0]?.id).toBe('r-1')
+  })
+})

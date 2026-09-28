@@ -266,6 +266,10 @@ const {
   itemsRef: replies,
   // 列表键是 replies（同响应里还有非列表的 topic），默认的 res.items 读不到
   pickItems: (res) => (res as ForumTopicDetailData).replies,
+  // 写回槽（ADR-0069 决策 1）：同响应里的非列表面 topic 也在这里落地（判空态读它）
+  apply: (res) => {
+    topic.value = res.topic
+  },
   // 排序双轴（维度 / 方向）即筛选轴：任一变化 → 清空累积 + 回第 1 批重装，
   // 页面不再手写「切排序要回第一页」
   filterDeps: [replySort, replyOrder]
@@ -346,7 +350,6 @@ async function loadReplyBatch(page = 1) {
   const res = await forumApi.getTopic(
     Number(route.params.topicId), replySort.value, replyOrder.value, page, REPLY_BATCH
   )
-  topic.value = res.topic
   // 深链 #reply-N 只由采纳通知生成（指向被采纳回复），而后端恒把它放首页第一条，
   // 故只在首页装载后滚动一次——加载更多/切排序不该把用户拽回置顶条。
   if (page === 1) {

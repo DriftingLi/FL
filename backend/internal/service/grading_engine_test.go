@@ -68,6 +68,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			wantWrong:  true,
 		},
 		{
+			// ADR-0068 决策 1：短答的「本题得分」= AI 分（旧口径恒 0，故总分漏计简答分）。
 			name:   "短答-AI评分成功及格",
 			flow:   "practice",
 			qType:  "short_answer",
@@ -75,7 +76,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			aiRes:  &AIGradeResult{Score: 8, Comment: "回答到位"},
 			wantResult: GradeResult{
 				IsCorrect:   nil,
-				Earned:      0,
+				Earned:      8,
 				MaxScore:    10,
 				ShortAnswer: &ShortAnswerGrade{Score: 8, Comment: "回答到位", Fallback: false, Passed: true},
 			},
@@ -89,7 +90,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			aiRes:  &AIGradeResult{Score: 2, Comment: "偏题"},
 			wantResult: GradeResult{
 				IsCorrect:   nil,
-				Earned:      0,
+				Earned:      2,
 				MaxScore:    10,
 				ShortAnswer: &ShortAnswerGrade{Score: 2, Comment: "偏题", Fallback: false, Passed: false},
 			},
@@ -115,6 +116,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			wantAICall: true,
 		},
 		{
+			// AI 不可用 = 降级为 0 分（ADR-0068 决策 1），不是「保留旧分」。
 			name:   "短答-AI不可用-adapter返回nil",
 			flow:   "practice",
 			qType:  "short_answer",

@@ -83,8 +83,11 @@ const {
   run: loadData
 } = useAsyncPage(async () => {
   const res = await faqApi.getHelpCenter()
-  center.value = res || { categories: [] }
-}, { itemsRef: center })
+  return res
+}, {
+  apply: (res) => {
+    center.value = res || { categories: [] }
+  }, itemsRef: center })
 
 const categories = computed(() => center.value.categories || [])
 

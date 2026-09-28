@@ -180,10 +180,16 @@ const {
     if (specialtyId.value !== null) params.specialty_id = specialtyId.value
     if (levelId.value !== null) params.level_id = levelId.value
     const res = await tutorApi.getCourses(params)
-    courses.value = res.courses
-    total.value = res.total
+    return res
   },
-  { defaultPageSize: 12, itemsRef: courses }
+  {
+    apply: (res) => {
+      courses.value = res.courses
+      total.value = res.total
+    },
+    defaultPageSize: 12,
+    itemsRef: courses
+  }
 )
 
 const credentialOptions = computed(() =>

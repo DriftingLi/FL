@@ -207,9 +207,12 @@ const {
   if (browseCredentialId.value) params.credential_id = browseCredentialId.value
   const res = await questionBankApi.getQuestions(params)
   // 票 6（ADR-0060 决策 6）：容器键中立化——本域的行不再叫 questions，一律 items
-  questions.value = res?.items || []
-  total.value = res?.total || 0
-}, { itemsRef: questions })
+  return res
+}, {
+  apply: (res) => {
+    questions.value = res?.items || []
+    total.value = res?.total || 0
+  }, itemsRef: questions })
 
 const hasFilters = computed(
   () =>

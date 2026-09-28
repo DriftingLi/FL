@@ -84,13 +84,16 @@ const INFRA = {
     'utils',
   ],
   /**
-   * 单个文件（`api/` 里**多消费、无单一主消费方**的那几个；有唯一消费方的域 api 归该模块，见 `MODULES`）。
+   * 单个文件（`api/` 与 `composables/` 里**多消费、无单一主消费方**的那几个；有唯一消费方的域 api
+   * 或模块私有 composable 归该模块，见 `MODULES`）。
    * 逐条理由：
    * - `App.uvue` / `main.uts` —— 应用入口，没有模块「拥有」它
    * - `api/auth.uts` —— 鉴权域，5 个模块（forgot-password / login / profile / profile-setup / register）共用
    * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
    * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**611 行，见 `oversized`**）
+   * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），被 20+ 模块的列表页共用，
+   *   无模块级消费者；与 `utils/**` 同属**跨切面基础设施**（登记不执法），预算面归它自己的票
    */
   files: [
     'App.uvue',
@@ -99,6 +102,7 @@ const INFRA = {
     'api/helpers.uts',
     'api/refreshGate.uts',
     'api/request.uts',
+    'composables/usePagedList.uts',
   ],
   /**
    * 基础设施里**已超 600 行、本票不拆**的文件（登记不执法；拆它需要独立票）。
@@ -462,6 +466,8 @@ const MODULES = {
       'pages/recruiter/components/recruiter-filter-drawer.uvue',
       'pages/recruiter/components/recruiter-tab-bar.uvue',
       'pages/recruiter/contacts.uvue',
+      'pages/recruiter/home.uvue',
+      'pages/recruiter/job-edit.uvue',
       'pages/recruiter/jobs.uvue',
       'pages/recruiter/login.uvue',
       'pages/recruiter/me.uvue',
@@ -515,7 +521,8 @@ const MODULES = {
     ],
     extractDirs: ['pages/resume/components', 'pages/resume/composables'],
     /** 消费 `profile` 的 `api/student.uts` / `api/favorite.uts`（登记在 profile 的消费者面） */
-    crossModuleConsumers: [],
+    /** 被 `recruiter` 的 `job-edit.uvue` 消费 `getPositionsApi`（T3 / ADR-0028：岗位下拉复用岗位字典） */
+    crossModuleConsumers: ['recruiter'],
     /** T09 手术（#647）：resume-edit 922→460、模块 7 文件全 ≤600 ⇒ 执法面随之上线（原为「超预算 923」的 pending） */
     budget: BUDGET,
     budgetOverrides: {},

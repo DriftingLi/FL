@@ -127,7 +127,7 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 	pageSize := atoiDefault(c.Query("page_size"), 20)
 	items, total, err := h.svc.ListForRecruiter(recruiterID, page, pageSize)
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	// typed page（#1095）：键序 = 旧 gin.H 的 map 键序，响应字节不变（登记表 service.ContactRequestListResult）。
@@ -194,7 +194,7 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 	pageSize := atoiDefault(c.Query("page_size"), 20)
 	items, total, err := h.svc.ListForStudent(studentID, page, pageSize)
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	// typed page（#1095）：同上，学员侧共用同一 DTO。

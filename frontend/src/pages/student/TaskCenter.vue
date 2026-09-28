@@ -136,10 +136,16 @@ const claimingCode = ref<string | null>(null)
 const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyncPage(
   async () => {
     const [bal, ts] = await Promise.all([pointsApi.getBalance(), pointsApi.getTasks()])
-    points.value = { balance: bal.balance, totalEarned: bal.total_earned }
-    tasks.value = ts.tasks || []
+    return { bal, ts }
   },
-  { credentialScoped: false }
+  {
+    credentialScoped: false,
+    // 写回槽（ADR-0069 决策 1）：余额与任务清单一起落地
+    apply: ({ bal, ts }) => {
+      points.value = { balance: bal.balance, totalEarned: bal.total_earned }
+      tasks.value = ts.tasks || []
+    }
+  }
 )
 
 const todayEarnable = computed(() =>

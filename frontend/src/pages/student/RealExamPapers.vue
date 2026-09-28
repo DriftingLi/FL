@@ -99,9 +99,16 @@ const {
   retry: handleRetry,
   isEmpty,
   run: loadPapers
-} = useAsyncPage(async () => {
-  papers.value = (await realExamApi.listPapers()) || []
-}, { itemsRef: papers })
+} = useAsyncPage(
+  async () => await realExamApi.listPapers(),
+  {
+    itemsRef: papers,
+    // 写回槽（ADR-0069 决策 1）：空响应归一成空列表的判据在这里，不再住在 loader 里
+    apply: (res) => {
+      papers.value = res || []
+    }
+  }
+)
 
 const currentCredentialName = computed(() => credentialStore.current?.name || '')
 

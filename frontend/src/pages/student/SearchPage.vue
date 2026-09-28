@@ -176,24 +176,22 @@ const sectionTotals = ref<Record<string, number>>({})
 
 // 三态 + 分页三件套（#388）：loader 按 activeType 分流（聚合 / 指定类型分页），
 // retry 因此天然回到触发失败的那次查询。
-const { loading, loadError, retrying, retry, page: currentPage, pageSize, total, run } = useAsyncPage(async () => {
-  const kw = keyword.value.trim()
-  if (!kw) return
-  // 「浏览指定证件」语义：/search 是无 JWT 的公开端点，匿名/非学员角色服务端不兜底（按不分区处理），
-  // 要按证件分区只能显式下发；未选证件时本值本就是 undefined（不传 = 不分区，与兜底无关）。
-  const browseCredentialId = credentialStore.current?.id ?? undefined
-  if (activeType.value === 'all') {
-    const res = (await searchApi.search({ keyword: kw, credential_id: browseCredentialId })) as SearchAllResult
-    allResult.value = res
-    pageResult.value = null
-    sectionTotals.value = {
-      course: res.courses.total,
-      chapter: res.chapters.total,
-      question: res.questions.total,
-      content: res.contents.total,
-      topic: res.topics.total
+// loader 只取数并标明「这批是聚合还是分页」（ADR-0069 决策 1）：写回按同一个标记分派。
+type SearchLoadResult =
+  | { mode: 'all'; res: SearchAllResult }
+  | { mode: 'page'; res: SearchPageResult }
+
+const { loading, loadError, retrying, retry, page: currentPage, pageSize, total, run } = useAsyncPage(
+  async (): Promise<SearchLoadResult | null> => {
+    const kw = keyword.value.trim()
+    if (!kw) return null
+    // 「浏览指定证件」语义：/search 是无 JWT 的公开端点，匿名/非学员角色服务端不兜底（按不分区处理），
+    // 要按证件分区只能显式下发；未选证件时本值本就是 undefined（不传 = 不分区，与兜底无关）。
+    const browseCredentialId = credentialStore.current?.id ?? undefined
+    if (activeType.value === 'all') {
+      const res = (await searchApi.search({ keyword: kw, credential_id: browseCredentialId })) as SearchAllResult
+      return { mode: 'all', res }
     }
-  } else {
     const res = (await searchApi.search({
       keyword: kw,
       type: activeType.value,
@@ -201,11 +199,30 @@ const { loading, loadError, retrying, retry, page: currentPage, pageSize, total,
       page_size: pageSize.value,
       credential_id: browseCredentialId
     })) as SearchPageResult
-    pageResult.value = res
-    allResult.value = null
-    total.value = res.total || 0
+    return { mode: 'page', res }
+  },
+  {
+    // 写回槽（ADR-0069 决策 1）：两个分支各自的面一起落地（互斥置空也在同一处）
+    apply: (payload) => {
+      if (!payload) return // 空关键词：不写回，保持上一次结果（与原 loader 早退同义）
+      if (payload.mode === 'all') {
+        allResult.value = payload.res
+        pageResult.value = null
+        sectionTotals.value = {
+          course: payload.res.courses.total,
+          chapter: payload.res.chapters.total,
+          question: payload.res.questions.total,
+          content: payload.res.contents.total,
+          topic: payload.res.topics.total
+        }
+      } else {
+        pageResult.value = payload.res
+        allResult.value = null
+        total.value = payload.res.total || 0
+      }
+    }
   }
-})
+)
 
 // 分区与落点全部派生自内容对象声明表（票 2，#1168）——「种类→称谓/落点」不再在本页手抄。
 const sections = computed(() => {

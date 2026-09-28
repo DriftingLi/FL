@@ -1,0 +1,133 @@
+/**
+ * 分页异步列表（paged list）—— 列表页装载协议的单点实现（移动端 ADR-0027）。
+ *
+ * 为什么要有它：本仓 20 个页面 + 2 个 composable 各写一遍同一段协议
+ * （`if (loading) return` → 归 1 → `noMore` 短路 → try → 替换或 `concat` → 重算终止 → catch），
+ * 且细节已经分叉：终止条件有三种算法（`len >= total` / `items.length < pageSize` / `page < pages`）、
+ * 失败标记有四个名字与两种类型、只有 2 页手写了「丢弃过期响应」的 `seq`。
+ * 一份协议写 22 遍的代价不在行数，在**每加一个页面就再赌一次**。
+ *
+ * 模块边界（ADR-0027 决策）：
+ *   - **只出动作与状态，不含模板、不注册 uni 生命周期、不碰 `uni.*`** —— 页面的壳层负责
+ *     `onLoad` / `onShow` / 重入策略；模板绑定 `@scrolltolower="list.onLoadMore"` 由页面写
+ *     （先例：`composables/useTopicFeed.uts:22` 与 `pages/forum/forum.uvue:38`）。
+ *   - **`fetchPage` 只回归一化批次 `{ items, hasMore }`，模块不看后端信封** —— 数组键名
+ *     （`items` / `records` / `materials` / `courses`）与分页字段（`total` / `pages` / `page_size`）
+ *     在各域并不统一，认信封是 api 层的账（`types/job.uts:42-45` 连 `page_size` 都没有）。
+ *   - **`pageSize` 不进接口** —— 它由调用方在自己的闭包里带着，模块只递页码。
+ *
+ * 三条判据（只有跑起来才看得见，见 `utils/pagedListBehavior.test.js`）：
+ *   ① **代际守卫**：`loadFirst` 会作废在飞请求；过期响应到达时不得写任何状态。
+ *      本仓此前只有 `pages/search/search.uvue:211` 与 `pages/points/points-detail.uvue:200-229` 手写过它。
+ *   ② **空批次兜底**：批次 `items` 为空 ⇒ `hasMore` 强制 `false`，即使调用方给了 `true`。
+ *      没有这一条，调用方漏判一个终止条件就是死循环。
+ *   ③ **失败保留已有数据**：`failed = true` 时**不清空** `items`、不动 `hasMore`，
+ *      页面照 ADR-0007:217 的口径渲染可见错误态 + 重试（重试即 `loadFirst()`）。
+ *
+ * 本地增删/就地改动不归模块：`items` 由页面自由改（删除条目、改 `is_read` 等）。
+ * 只有「新批次到达」才更新 `hasMore`，因此本地删除不会打歪终止条件。
+ * （旧写法 `len >= total` 正是被本地删除打歪的那一种，见 `pages/profile/favorites.uvue:182-189`。）
+ *
+ * 形态约束（ADR-0007:240-256，`utils/utsAndroidCompile.test.js` 规则 U 在守）：
+ * 显式结果类型 + 每个函数成员箭头包裹 + `as` 收口；状态用扁平 `ref`。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+
+/** 一页的归一化批次：数组 + 「还有下一页吗」，由调用方给出（模块不推） */
+export type PagedBatch<T> = {
+    items : T[]
+    hasMore : boolean
+}
+
+/** 模块对外的全部面：5 个状态 + 2 个动作 */
+export type UsePagedListResult<T> = {
+    items : Ref<T[]>
+    loading : Ref<boolean>
+    failed : Ref<boolean>
+    isEmpty : ComputedRef<boolean>
+    hasMore : Ref<boolean>
+    loadFirst : () => void
+    onLoadMore : () => void
+}
+
+/**
+ * @param fetchPage 取第 `page` 页（页码从 1 起）。成功回 `PagedBatch`，失败请直接 reject ——
+ *                  「缺席」与「查不动」的分辨是 api 层的账，模块只认「有没有成功」。
+ */
+export function usePagedList<T>(fetchPage : (page : number) => Promise<PagedBatch<T>>) : UsePagedListResult<T> {
+    const items = ref<T[]>([]) as Ref<T[]>
+    const loading = ref<boolean>(false)
+    const failed = ref<boolean>(false)
+    const hasMore = ref<boolean>(false)
+    const page = ref<number>(1)
+
+    /** 代际：`loadFirst` 每次递增；在飞响应的代际对不上就整条丢弃（判据 ①） */
+    let generation = 0
+
+    /** 空批次兜底与显式 `hasMore` 的合流点（判据 ②） */
+    function settle(batch : PagedBatch<T>) : boolean {
+        return batch.hasMore && batch.items.length > 0
+    }
+
+    /**
+     * 首屏 / 刷新 / 重试 同一入口：页码归 1、作废在飞请求、替换 `items`。
+     * 失败时保留已有 `items`（判据 ③），只翻 `failed`。
+     */
+    function loadFirst() : void {
+        generation = generation + 1
+        const mine = generation
+        page.value = 1
+        hasMore.value = false
+        failed.value = false
+        loading.value = true
+        fetchPage(1)
+            .then((batch : PagedBatch<T>) : void => {
+                if (mine != generation) return
+                items.value = batch.items
+                hasMore.value = settle(batch)
+                loading.value = false
+            })
+            .catch((e : any | null) : void => {
+                if (mine != generation) return
+                failed.value = true
+                loading.value = false
+            })
+    }
+
+    /** 追加下一页；在飞或已到底时直接返回（重入守卫） */
+    function onLoadMore() : void {
+        if (loading.value || !hasMore.value) return
+        const mine = generation
+        const next = page.value + 1
+        loading.value = true
+        fetchPage(next)
+            .then((batch : PagedBatch<T>) : void => {
+                if (mine != generation) return
+                items.value = items.value.concat(batch.items)
+                hasMore.value = settle(batch)
+                page.value = next
+                loading.value = false
+            })
+            .catch((e : any | null) : void => {
+                if (mine != generation) return
+                failed.value = true
+                loading.value = false
+            })
+    }
+
+    /** 空态只在「成功且空」时成立 —— 于是空态与失败态在模板里可分（ADR-0007:217 的 #816 口径） */
+    const isEmpty = computed<boolean>(() : boolean => {
+        return items.value.length == 0 && !loading.value && !failed.value
+    })
+
+    return {
+        items: items,
+        loading: loading,
+        failed: failed,
+        isEmpty: isEmpty,
+        hasMore: hasMore,
+        loadFirst: () : void => loadFirst(),
+        onLoadMore: () : void => onLoadMore(),
+    } as UsePagedListResult<T>
+}

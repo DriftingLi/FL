@@ -100,10 +100,13 @@ const { loading, loadError, retrying, isEmpty, retry: handleRetry, run: loadChap
   async () => {
     const courseId = Number(route.params.id)
     const res = await tutorApi.getCourseChapters(courseId)
-    courseInfo.value = res.course ?? null
-    chapters.value = res.chapters || []
+    return res
   },
-  { itemsRef: chapters }
+  {
+    apply: (res) => {
+      courseInfo.value = res.course ?? null
+      chapters.value = res.chapters || []
+    }, itemsRef: chapters }
 )
 
 const pageTitle = computed(() =>

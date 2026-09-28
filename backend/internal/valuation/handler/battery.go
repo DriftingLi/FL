@@ -89,7 +89,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	result, err := h.service.Predict(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.Error("电池 RUL 预测失败", zap.Error(err))
-		response.ServerError(c, "预测失败: "+err.Error())
+		response.ServerErrorCause(c, "预测失败: ", err)
 		return
 	}
 

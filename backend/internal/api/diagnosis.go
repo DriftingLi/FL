@@ -50,7 +50,7 @@ func RegisterDiagnosisRoutes(g *gin.RouterGroup, rd RouterDeps, proxy *service.D
 func (h *DiagnosisHandler) ListBrands(c *gin.Context) {
 	brands, err := h.proxy.ListBrands(c.Request.Context())
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	response.Success(c, brands)
@@ -70,7 +70,7 @@ func (h *DiagnosisHandler) ListBrands(c *gin.Context) {
 func (h *DiagnosisHandler) ListModels(c *gin.Context) {
 	models, err := h.proxy.ListModels(c.Request.Context(), c.Query("brand"))
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	response.Success(c, models)
@@ -95,7 +95,7 @@ func (h *DiagnosisHandler) ListFaultCodes(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.Query("page_size"))
 	resp, err := h.proxy.ListFaultCodes(c.Request.Context(), c.Query("brand"), c.Query("keyword"), page, pageSize)
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	response.Success(c, resp)
