@@ -449,4 +449,163 @@ describe('R4c 写回槽的入参来源（ADR-0069）：loader 必须回传数据
   })
 })
 
+// ===== R5（#1354）：composable 内部的写回也必须排在批次代数比对之后 =====
+
+/**
+ * R5 写回代数（#1354，判据源仍是 ADR-0069 决策 1）：`useAdminTable.load()` 在
+ * `await options.fetch(...)` 之后直接写 `list.value`/`total.value`，没有任何代数校验 ⇒
+ * 两次装载重叠时后到的旧响应盖掉新状态（与真实缺陷 #5 同形）。
+ *
+ * **为什么不是将本件塞进 R4 的扫描面**：R4 判的是「useAsyncPage 的 loader 参数体内写**页面** ref」，
+ * 而本件的 `list`/`total` 住在 composable 内部（interface 就拥有它们），页面侧的 fetch adapter
+ * 只回传 `Page<T>`（容器形状另有锁：`api/__tests__/page.spec.ts`）⇒ R4 在本件上没有任何可扫的面，
+ * 硬套只会扫到 0 处并恒绿。可复用的形状是**同一条判据换宿主**：把「写回之前必须有一次批次代数比对」
+ * 直接钉在装载函数体内（`useAdminTable.load` / `useAsyncPage.run` / `useAsyncPage.loadMore`）。
+ *
+ * 判据形状（按 AST 位置，不看语句文本）：装载函数体内每一次 `x.value =` 写回，若它之前出现过
+ * `await`，那么在「最近一次 await」与「这次写回」之间必须有一次把批次代数计数器（`generation`）
+ * 拿来比对的表达式。守卫写在写回**之后**就是没有守卫（正是 #1354 的形状）；await 之前的写回
+ * （`loading.value = true` 这类起飞前的复位）没有竞态可言，不算违规。
+ * 另带「找不到被测装载函数即红」的防空转半边 —— 函数改名或扫描面失灵时不得静默放行。
+ */
+const BATCH_COUNTER = 'generation'
+
+/** 一次「与批次代数的比对」：`gen !== generation` / `generation === gen` 这类比较表达式。 */
+function isGenerationComparison(node: ts.Node): boolean {
+  if (!ts.isBinaryExpression(node)) return false
+  const k = node.operatorToken.kind
+  if (
+    k !== ts.SyntaxKind.ExclamationEqualsToken && k !== ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+    k !== ts.SyntaxKind.EqualsEqualsToken && k !== ts.SyntaxKind.EqualsEqualsEqualsToken
+  ) {
+    return false
+  }
+  const sides = [node.left, node.right].filter(ts.isIdentifier).map(n => n.text)
+  // 必须是一边批次计数器、另一边是本轮捕获值（`generation !== generation` 这种恒假不算守卫）
+  return sides.length === 2 && sides.includes(BATCH_COUNTER) && sides.some(s => s !== BATCH_COUNTER)
+}
+
+/** 装载函数体内「写回排在最近一次 await 之后、代数比对之前」的违规描述（空数组 = 合规）。 */
+function writeBackWithoutGuard(text: string, fnName: string): string[] {
+  const offenders: string[] = []
+  for (const block of scriptBlocks(text)) {
+    const slice = text.slice(block.start, block.end)
+    const sf = ts.createSourceFile('inline.ts', slice, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const locals = new Map<string, ts.Node>()
+    const collect = (n: ts.Node): void => {
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) locals.set(n.name.text, n.body)
+      if (ts.isVariableStatement(n)) {
+        for (const d of n.declarationList.declarations) {
+          if (
+            ts.isIdentifier(d.name) && d.initializer &&
+            (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) && d.initializer.body
+          ) {
+            locals.set(d.name.text, d.initializer.body)
+          }
+        }
+      }
+      ts.forEachChild(n, collect)
+    }
+    collect(sf)
+    const body = locals.get(fnName)
+    if (!body) {
+      offenders.push(`扫描面空转：找不到装载函数 ${fnName}()`)
+      continue
+    }
+    const awaits: number[] = []
+    const guards: number[] = []
+    const writes: Array<{ name: string; pos: number }> = []
+    const visit = (n: ts.Node): void => {
+      if (ts.isAwaitExpression(n)) awaits.push(n.getStart())
+      if (isGenerationComparison(n)) guards.push(n.getStart())
+      const write = isRefWrite(n)
+      if (write) writes.push({ name: write, pos: n.getStart() })
+      ts.forEachChild(n, visit)
+    }
+    visit(body)
+    for (const w of writes) {
+      const prior = awaits.filter(a => a < w.pos)
+      if (!prior.length) continue
+      const lastAwait = Math.max(...prior)
+      if (!guards.some(g => g > lastAwait && g < w.pos)) {
+        offenders.push(`${w.name}.value 写回排在最近一次 await 之后、代数比对之前（${fnName} 内无守卫）`)
+      }
+    }
+  }
+  return offenders
+}
+
+const COMPOSABLE_SRC = resolve(__dirname, '..')
+
+describe('R5 写回代数（#1354）：composable 的写回排在批次代数比对之后', () => {
+  /** 三个「await 回来后写状态」的宿主：本件补的 useAdminTable.load 与真源 useAsyncPage 的两条装载流。 */
+  const targets: Array<{ file: string; fn: string }> = [
+    { file: resolve(COMPOSABLE_SRC, 'useAdminTable.ts'), fn: 'load' },
+    { file: resolve(COMPOSABLE_SRC, 'useAsyncPage.ts'), fn: 'run' },
+    { file: resolve(COMPOSABLE_SRC, 'useAsyncPage.ts'), fn: 'loadMore' }
+  ]
+
+  it('装载函数体内每一次写回都在代数比对之后（含「函数不存在即红」的防空转半边）', () => {
+    const offenders: string[] = []
+    for (const t of targets) {
+      for (const hit of writeBackWithoutGuard(read(t.file), t.fn)) {
+        offenders.push(`${srcLabel(t.file)} ${t.fn}() ${hit}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('判据本身有效：await 之后直接写回（#1354 修复前的形状）一定红', () => {
+    const stale = [
+      'async function load() {',
+      '  loading.value = true',
+      '  const result = await options.fetch(paging, payload)',
+      '  list.value = result.items',
+      '  total.value = result.total',
+      '  loading.value = false',
+      '}'
+    ].join('\n')
+    expect(writeBackWithoutGuard(stale, 'load')).toEqual([
+      'list.value 写回排在最近一次 await 之后、代数比对之前（load 内无守卫）',
+      'total.value 写回排在最近一次 await 之后、代数比对之前（load 内无守卫）',
+      'loading.value 写回排在最近一次 await 之后、代数比对之前（load 内无守卫）'
+    ])
+  })
+
+  it('判据本身有效：守卫写在写回之后等于没有守卫', () => {
+    const late = [
+      'async function load() {',
+      '  const gen = generation + 1',
+      '  const result = await options.fetch(paging, payload)',
+      '  list.value = result.items',
+      '  if (gen !== generation) return',
+      '}'
+    ].join('\n')
+    expect(writeBackWithoutGuard(late, 'load')).toEqual([
+      'list.value 写回排在最近一次 await 之后、代数比对之前（load 内无守卫）'
+    ])
+  })
+
+  it('判据不误伤：await 之前的起飞前复位与有守卫的写回都不算违规', () => {
+    const clean = [
+      'let generation = 0',
+      'async function load() {',
+      '  const gen = generation + 1',
+      '  loading.value = true',
+      '  loadError.value = false',
+      '  const result = await options.fetch(paging, payload)',
+      '  if (gen !== generation) return',
+      '  list.value = result.items',
+      '  total.value = result.total',
+      '}'
+    ].join('\n')
+    expect(writeBackWithoutGuard(clean, 'load')).toEqual([])
+  })
+
+  it('防空转半边有效：装载函数改名或不存在时判红，不静默放行', () => {
+    const missing = ['async function loadSomethingElse() {', '  list.value = []', '}'].join('\n')
+    expect(writeBackWithoutGuard(missing, 'load')).toEqual(['扫描面空转：找不到装载函数 load()'])
+  })
+})
+
 

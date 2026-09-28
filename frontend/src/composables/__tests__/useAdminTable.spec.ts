@@ -1,6 +1,7 @@
 // useAdminTable：管理端列表状态机的接口级测试。
 // seam：composable 接口——fetch 用内存 fixture，actions 用内存 stub，不触达 API 层。
 import { describe, it, expect, vi } from 'vitest'
+import { nextTick, ref, toRaw } from 'vue'
 
 // 删除确认已收口到 useConfirm（#735），mock 掉按「确认/取消」两种路径放行
 const { confirmSpy } = vi.hoisted(() => ({ confirmSpy: vi.fn() }))
@@ -258,5 +259,143 @@ describe('useAdminTable（admin 列表状态机）', () => {
     fail = false
     await table.load()
     expect(table.loadErrorKind.value).toBe(null)
+  })
+})
+
+/**
+ * #1354（ADR-0069 实施回写段登记的「不在本 ADR 面上的同类」）：列表装载的批次代数。
+ *
+ * 缺陷形状与真实缺陷 #5 逐字同形：`load()` 在 `await options.fetch(...)` **之后**无条件写
+ * `list`/`total`，没有「发起时捕获、落地前比对」的判据 ⇒ 两次装载重叠时后到的旧响应盖掉新状态
+ * （筛选词条是新的、列表是旧的）。判据宿主在 composable（与 useAsyncPage.generation 同一份机制），
+ * 页面零改动；结构锁见 `loadFlowLocks.spec.ts` R5（本件的 list/total 住在 module 内部，
+ * R4 那条「页面 loader 不写回」在这里没有可扫的面）。
+ */
+describe('useAdminTable 批次代数（#1354：旧轮不落地）', () => {
+  it('连发两次 applyFilters（第一次慢、第二次快）：list/total 停在第二次的结果上', async () => {
+    let releaseSlow!: () => void
+    const slow = new Promise<void>(resolve => {
+      releaseSlow = resolve
+    })
+    const slowItems: Row[] = [{ id: 1, name: 'row-a' }]
+    const fastItems: Row[] = [{ id: 2, name: 'row-b' }]
+    const table = useAdminTable<Row>({
+      fetch: async (_paging, filters) => {
+        if (filters.status === 'a') {
+          await slow
+          return { items: slowItems, total: 99 }
+        }
+        return { items: fastItems, total: 7 }
+      }
+    })
+
+    const first = table.applyFilters({ status: 'a' })
+    await nextTick()
+    await table.applyFilters({ status: 'b' })
+    // toRaw：list 是深响应 ref，取回 fetch 出口那个数组本体 —— 比的是**引用同一性**，
+    // 旧轮只要写回过一次，这里就不是同一个对象了（深相等断言看不出没发生过写回）。
+    expect(toRaw(table.list.value)).toBe(fastItems)
+    expect(table.total.value).toBe(7)
+
+    // 旧响应此刻才到：整体作废，连写回都不执行（断言数组**引用**没换过，
+    // 不是「先写成 row-a 再被改回 row-b」——那一帧的可看见状态正是本缺陷的形态）
+    releaseSlow()
+    await first
+    expect(toRaw(table.list.value)).toBe(fastItems)
+    expect(table.list.value[0].name).toBe('row-b')
+    expect(table.total.value).toBe(7)
+  })
+
+  it('旧轮的失败后到：不把新一轮打成错误态', async () => {
+    let rejectSlow!: (e: unknown) => void
+    const slow = new Promise<never>((_resolve, reject) => {
+      rejectSlow = reject
+    })
+    const table = useAdminTable<Row>({
+      fetch: async (_paging, filters) => {
+        if (filters.status === 'a') return slow
+        return { items: [{ id: 2, name: 'row-b' }], total: 7 }
+      }
+    })
+
+    const first = table.applyFilters({ status: 'a' })
+    await nextTick()
+    await table.applyFilters({ status: 'b' })
+    expect(table.loadError.value).toBe(false)
+
+    rejectSlow(new Error('boom'))
+    await first
+    // 上一轮的失败不属于这一轮：列表与错误态都停在新一轮的成功结果上
+    expect(table.loadError.value).toBe(false)
+    expect(table.loadErrorKind.value).toBe(null)
+    expect(table.list.value[0].name).toBe('row-b')
+  })
+
+  it('旧轮先落地、新轮仍在飞：loading 不由旧轮归零', async () => {
+    let releaseOld!: () => void
+    const old = new Promise<void>(resolve => {
+      releaseOld = resolve
+    })
+    let releaseNew!: () => void
+    const fresh = new Promise<void>(resolve => {
+      releaseNew = resolve
+    })
+    let calls = 0
+    const table = useAdminTable<Row>({
+      fetch: async () => {
+        calls++
+        if (calls === 1) return old.then(() => ({ items: [{ id: 1, name: 'old' }], total: 1 }))
+        return fresh.then(() => ({ items: [{ id: 2, name: 'new' }], total: 2 }))
+      }
+    })
+
+    const first = table.load()
+    await nextTick()
+    const second = table.load()
+    expect(table.loading.value).toBe(true)
+
+    // 旧轮此刻落地：它没有权利熄灭新轮的 spinner（旧形状的 finally 会无条件归零）
+    releaseOld()
+    await first
+    expect(table.loading.value).toBe(true)
+    expect(table.list.value).toEqual([])
+
+    releaseNew()
+    await second
+    expect(table.loading.value).toBe(false)
+    expect(table.list.value[0].name).toBe('new')
+    expect(table.total.value).toBe(2)
+  })
+
+  it('判据本身有效：没有代数守卫（本票修复前的形状）时，旧轮照样覆盖新筛选', async () => {
+    // 复刻修复前的 load()：await 之后直接写回 —— 证明上面那组用例测的是「守卫在写回之前」，
+    // 而不是「这个竞态本来就不存在」（口径同 useAsyncPage.spec 的反例自检）。
+    const list = ref<Row[]>([])
+    const total = ref(0)
+    let releaseSlow!: () => void
+    const slow = new Promise<void>(resolve => {
+      releaseSlow = resolve
+    })
+    const fetch = async (filters: Record<string, unknown>) => {
+      if (filters.status === 'a') {
+        await slow
+        return { items: [{ id: 1, name: 'row-a' }], total: 99 }
+      }
+      return { items: [{ id: 2, name: 'row-b' }], total: 7 }
+    }
+    const loadOld = async (filters: Record<string, unknown>) => {
+      const result = await fetch(filters)
+      list.value = result.items
+      total.value = result.total
+    }
+
+    const first = loadOld({ status: 'a' })
+    await loadOld({ status: 'b' })
+    expect(list.value[0].name).toBe('row-b')
+
+    releaseSlow()
+    await first
+    expect(list.value[0].name).toBe('row-a')
+    expect(total.value).toBe(99)
   })
 })
