@@ -474,6 +474,17 @@ jobs:
       - name: 表驱动单测（列表四段式守卫判定逻辑）
         run: node --test scripts/check-async-section.test.mjs
 
+      # ci-summary 门禁自身的判据（真实缺陷 #2）：依赖闭包 + needs==check 清单相等。
+      - name: 表驱动单测（CI 汇总门禁判定逻辑）
+        run: node --test scripts/ci-summary-needs.test.mjs
+
+      # 部署面两条常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
+      # 此前它们只在本地被引用、CI 零触发（2026-09-17 架构评审登记项）—— 一并接上。
+      - name: 表驱动单测（回滚计划与镜像自证判定逻辑）
+        run: node --test scripts/deploy-rollback-plan.test.mjs
+      - name: 表驱动单测（迁移失败门判定逻辑）
+        run: node --test scripts/deploy-migration-gate.test.mjs
+
       - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
         run: node --test scripts/check-ai-assistant-send.test.mjs
 
@@ -513,8 +524,12 @@ jobs:
   #      不能被 skip —— skipped 不满足必检，PR 会永远停在 pending 无法合并。
   #   2) CI 全绿且该分支有开启中的 PR 时，派发 CD workflow 部署 testing 冒烟。
   # ============================================================
+  #   ⚠️ changes 必须在 needs 里（2026-09-28 修，真实缺陷 #2 / spec #1345）：它是所有子 job 的上游，
+  #   漏掉它时「changes 失败 ⇒ 子 job 全部 skipped ⇒ FAILED 为空 ⇒ 汇总 success」，
+  #   而 ci-summary 是 ruleset 唯一必检 + cd.yml 生产 gate 的唯一 CI 判据 ⇒ 零检查的 PR 可直发 production。
+  #   两条锁见 scripts/ci-summary-needs.test.mjs（依赖闭包 + needs==check 清单相等），由 el-controls-selftest 跑。
   ci-summary:
-    needs: [backend-lint, backend-test, frontend-check, mobile-test, pr-evidence-selftest, el-controls-selftest, security-scan, migration-check]
+    needs: [changes, backend-lint, backend-test, frontend-check, mobile-test, pr-evidence-selftest, el-controls-selftest, security-scan, migration-check]
     if: always()
     runs-on: ubuntu-latest
     # 触发 CD workflow_dispatch 需要 actions:write；查分支 open PR 需要 pull-requests:read
@@ -544,6 +559,8 @@ jobs:
             fi
           }
 
+          # changes 先判：它失败会把下游全变成 skipped，而 skipped 不计入 FAILED（见上面的注释）
+          check "${{ needs.changes.result }}" "changes"
           check "${{ needs.backend-lint.result }}" "backend-lint"
           check "${{ needs.backend-test.result }}" "backend-test"
           check "${{ needs.frontend-check.result }}" "frontend-check"

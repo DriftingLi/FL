@@ -18,7 +18,7 @@
         <!-- 简历库**段**的正文（列表 + 8 维抽屉筛选 + 加载更多）来自 ADR-0022 ④ 步骤 P3（#1196）。
              壳（分段件 + 徽标 + 会话守卫）属 P2（#1195）：一级面**只有这一页**，
              P3 原建的 `pages/recruiter/resume-library.uvue` 已并入本页并删除（两页承担同一个面）。 -->
-        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+        <scroll-view class="content-scroll" scroll-y="true" :refresher-enabled="true" :refresher-triggered="refreshing" @refresherrefresh="onRefresh" @scrolltolower="onLoadMore">
             <view v-if="!loading && items.length == 0" class="empty-tip">
                 <text class="empty-text">{{ activeFilterCount > 0 ? '没有符合条件的简历' : '暂无可浏览的简历' }}</text>
             </view>
@@ -95,7 +95,7 @@
      *   items / total）⇒ 页码由本页自记，到底只看「本批不足一页」或「已够 total」。
      */
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import { getRecruitContactRequestsApi, getRecruitResumesApi, emptyRecruitFilters, jobNatureLabel, RECRUIT_PAGE_SIZE } from '../../api/recruit'
     import { unexpiredPendingCount, companyDisabledNotice } from '../../utils/recruitDisplay'
@@ -115,6 +115,7 @@
     const items = ref<RecruitResumeCard[]>([])
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    const refreshing = ref<boolean>(false)
     const page = ref<number>(1)
     const filters = ref<RecruitResumeFilters>(emptyRecruitFilters())
     const filterVisible = ref<boolean>(false)
@@ -192,6 +193,40 @@
 
     function onLoadMore() : void {
         loadResumes(false)
+    }
+
+    /**
+     * 重新显示 / 下拉时刷新第一页：取数前**不清空** items（成功后整体替换），
+     * 失败保留上一次结果并提示——避免「清空→再填充」闪烁与把列表变空。
+     * 以 loading 收口：首屏紧随 onLoad 的 onShow 会因 loading 已置真而跳过，天然不双取。
+     */
+    function refreshResumes() : void {
+        if (loading.value) {
+            refreshing.value = false
+            return
+        }
+        loading.value = true
+        page.value = 1
+        noMore.value = false
+        getRecruitResumesApi(filters.value, 1).then((result) : void => {
+            items.value = result.items
+            if (result.items.length < RECRUIT_PAGE_SIZE || items.value.length >= result.total) {
+                noMore.value = true
+            }
+            page.value = 2
+            loading.value = false
+            refreshing.value = false
+        }).catch((e) : void => {
+            console.error('[recruiter-resumes] refresh failed:', e)
+            loading.value = false
+            refreshing.value = false
+            uni.showToast({ title: '刷新失败，显示的是上次结果', icon: 'none' })
+        })
+    }
+
+    function onRefresh() : void {
+        refreshing.value = true
+        refreshResumes()
     }
 
     function onOpenFilter() : void {
@@ -291,6 +326,11 @@
         if (!guardRecruiter()) return
         loadContactSignals()
         loadResumes(true)
+    })
+
+    // 重新显示（navigateBack 回本页 / App 前台恢复）时刷新；首屏由紧随 onLoad 的调用被 loading 挡住，不双取
+    onShow(() : void => {
+        refreshResumes()
     })
 </script>
 
