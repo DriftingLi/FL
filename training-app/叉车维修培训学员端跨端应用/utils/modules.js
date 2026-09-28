@@ -84,13 +84,16 @@ const INFRA = {
     'utils',
   ],
   /**
-   * 单个文件（`api/` 里**多消费、无单一主消费方**的那几个；有唯一消费方的域 api 归该模块，见 `MODULES`）。
+   * 单个文件（`api/` 与 `composables/` 里**多消费、无单一主消费方**的那几个；有唯一消费方的域 api
+   * 或模块私有 composable 归该模块，见 `MODULES`）。
    * 逐条理由：
    * - `App.uvue` / `main.uts` —— 应用入口，没有模块「拥有」它
    * - `api/auth.uts` —— 鉴权域，5 个模块（forgot-password / login / profile / profile-setup / register）共用
    * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
    * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**611 行，见 `oversized`**）
+   * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），被 20+ 模块的列表页共用，
+   *   无模块级消费者；与 `utils/**` 同属**跨切面基础设施**（登记不执法），预算面归它自己的票
    */
   files: [
     'App.uvue',
@@ -99,6 +102,7 @@ const INFRA = {
     'api/helpers.uts',
     'api/refreshGate.uts',
     'api/request.uts',
+    'composables/usePagedList.uts',
   ],
   /**
    * 基础设施里**已超 600 行、本票不拆**的文件（登记不执法；拆它需要独立票）。
