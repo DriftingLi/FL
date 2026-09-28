@@ -5,23 +5,29 @@
         <view class="nav-bar">
             <view class="nav-side"></view>
             <text class="nav-title">职位</text>
-            <view class="nav-side"></view>
+            <view class="nav-side nav-side-right" @click="onPublish">
+                <text class="nav-action">发布</text>
+            </view>
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view v-if="!loading && jobs.length == 0" class="empty-tip">
-                <text class="empty-text">暂无职位</text>
+                <text class="empty-text">暂无职位，点击右上角「发布」开始招聘</text>
             </view>
 
-            <view v-for="job in jobs" :key="job.id" class="job-row" @click="onOpenApplications(job)">
-                <view class="row-main">
+            <view v-for="job in jobs" :key="job.id" class="job-card">
+                <view class="card-head" @click="onOpenApplications(job)">
                     <view class="row-title-line">
                         <text class="row-title">{{ job.title }}</text>
                         <text class="tag" :class="jobTagClass(job)">{{ jobTagLabel(job) }}</text>
                     </view>
                     <text class="row-meta">{{ jobMeta(job) }}</text>
                 </view>
-                <text class="row-arrow">›</text>
+                <view class="card-actions">
+                    <text class="action-text" @click="onOpenApplications(job)">投递列表</text>
+                    <text class="action-text" @click="onEdit(job)">编辑</text>
+                    <text v-if="!job.forced_offline" class="action-text" @click="onToggle(job)">{{ job.status == 'open' ? '下架' : '上架' }}</text>
+                </view>
             </view>
 
             <view v-if="loading" class="loading-tip">
@@ -35,19 +41,21 @@
 
 <script setup lang="uts">
     /**
-     * 招聘者工作区 · 职位面（一级 tab；ADR-0028 ② 从「顶部三段 + 首页即职位段」改为底部五 tab 后，
-     * 职位面回归**只列职位**，紧迫行与徽标取数移交首页）
+     * 招聘者工作区 · 职位面（一级 tab；T3 升级：列表卡内联「编辑 / 上下架」+ 右上角「发布」）
      *
-     * 首屏批量请求 = 1（`GET /recruit/jobs`）：本面**不**再拉 contact-requests（那份现由首页承担）。
+     * 首屏批量请求 = 1（`GET /recruit/jobs`）。
      * **禁 N+1 原样保留**（ADR-0021 ② / 0028 ②）：不逐职位拉 `unread_count`——它在
      * `GET /recruit/jobs/{id}/applications` 的响应里，逐职位拉就是 N+1；`JobPostingDTO` 也无投递计数字段。
      *
-     * 只读边界（T2）：本面仍**不含**发布 / 编辑 / 上下架（那是 T3 的职位管理面）。
+     * 职位生命周期管理（ADR-0028 ④ T3，推翻 0021 ③「只读、不做发布/编辑/上下架」）：
+     *   - 发布 / 编辑：`navigateTo` 全屏 `job-edit`（二级面）；
+     *   - 上架 / 下架：`POST /recruit/jobs/{id}/toggle-status`（可逆，无需二次确认）；
+     *   - `forced_offline`（平台强制下架）的职位**隐藏「上架」**——上架按钮点了必被后端拒，是 #705 判的空入口。
      */
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
-    import { getRecruitJobsApi } from '../../api/recruit'
+    import { getRecruitJobsApi, toggleRecruitJobStatusApi } from '../../api/recruit'
     import { describeRecruitJobStatus } from '../../utils/recruitDisplay'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
     import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
@@ -56,7 +64,6 @@
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // 本页是底部五 tab 中的「职位」面：active 由页面显式给出（不靠路由猜）
     const activeKey : string = 'jobs'
 
     const jobs = ref<RecruitJob[]>([])
@@ -107,6 +114,26 @@
         uni.navigateTo({ url: '/pages/recruiter/applications?jobId=' + job.id.toString() })
     }
 
+    /** 发布：全屏编辑页，无 id = 新建 */
+    function onPublish() : void {
+        uni.navigateTo({ url: '/pages/recruiter/job-edit' })
+    }
+
+    /** 编辑：全屏编辑页，带 id = 预填更新 */
+    function onEdit(job : RecruitJob) : void {
+        uni.navigateTo({ url: '/pages/recruiter/job-edit?id=' + job.id.toString() })
+    }
+
+    /** 上架 / 下架切换（可逆）：成功后重取列表拿回新 status；失败透出，不做乐观更新 */
+    function onToggle(job : RecruitJob) : void {
+        toggleRecruitJobStatusApi(job.id).then(() : void => {
+            loadJobs()
+        }).catch((e) : void => {
+            console.error('[recruiter-jobs] toggle failed:', e)
+            uni.showToast({ title: '操作失败，请重试', icon: 'none' })
+        })
+    }
+
     onLoad((options : OnLoadOptions) => {
         if (!ensureRecruiterSession()) return
         loadJobs()
@@ -136,6 +163,10 @@
         align-items: center;
     }
 
+    .nav-side-right {
+        justify-content: flex-end;
+    }
+
     .nav-title {
         flex: 1;
         font-size: 34rpx;
@@ -144,21 +175,25 @@
         text-align: center;
     }
 
+    .nav-action {
+        font-size: 30rpx;
+        color: #239EDD;
+        padding: 16rpx 0;
+    }
+
     .content-scroll {
         flex: 1;
     }
 
-    .job-row {
-        flex-direction: row;
-        align-items: center;
+    .job-card {
         margin: 16rpx 24rpx 0 24rpx;
         padding: 24rpx;
         background-color: #ffffff;
         border-radius: 12rpx;
     }
 
-    .row-main {
-        flex: 1;
+    .card-head {
+        flex-direction: column;
     }
 
     .row-title-line {
@@ -178,10 +213,18 @@
         color: #999999;
     }
 
-    .row-arrow {
-        font-size: 34rpx;
-        color: #cccccc;
-        padding-left: 12rpx;
+    .card-actions {
+        flex-direction: row;
+        justify-content: flex-end;
+        margin-top: 16rpx;
+        border-top: 1rpx solid #F0F0F0;
+        padding-top: 16rpx;
+    }
+
+    .action-text {
+        font-size: 26rpx;
+        color: #239EDD;
+        margin-left: 32rpx;
     }
 
     .tag {

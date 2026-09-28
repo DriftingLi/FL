@@ -42,6 +42,7 @@ const PAGE_JOBS = 'pages/recruiter/jobs.uvue';
 const PAGE_RESUMES = 'pages/recruiter/resumes.uvue';
 const PAGE_CONTACTS = 'pages/recruiter/contacts.uvue';
 const PAGE_APPLICATIONS = 'pages/recruiter/applications.uvue';
+const PAGE_JOB_EDIT = 'pages/recruiter/job-edit.uvue';
 const PAGE_ME = 'pages/recruiter/me.uvue';
 const PAGE_LOGIN = 'pages/recruiter/login.uvue';
 const API_RECRUIT = 'api/recruit.uts';
@@ -50,8 +51,8 @@ const GUARD = 'utils/recruitGuard.uts';
 
 /** 一级面（挂底部五 tab 件，互相 `redirectTo`；ADR-0028 ②） */
 const FIRST_LEVEL = [PAGE_HOME, PAGE_JOBS, PAGE_RESUMES, PAGE_CONTACTS, PAGE_ME];
-/** 二级面（**无**底栏件；`me` 已升为一级 tab） */
-const SECOND_LEVEL = [PAGE_APPLICATIONS];
+/** 二级面（**无**底栏件；`me` 已升为一级 tab；job-edit 是 T3 的推入页） */
+const SECOND_LEVEL = [PAGE_APPLICATIONS, PAGE_JOB_EDIT];
 /** 本票的完整源码面（用于「零内联 / 零入口」这类全量扫描） */
 const WORKSPACE_PAGES = [PAGE_LOGIN].concat(FIRST_LEVEL).concat(SECOND_LEVEL);
 const SURFACE = WORKSPACE_PAGES.concat([TAB_BAR, API_RECRUIT, DISPLAY, GUARD]);
@@ -340,8 +341,8 @@ describe('B. 首页首屏批量请求 = 1；禁逐职位拉 unread_count（N+1�
     expect(stripComments(home)).not.toContain('getRecruitJobsApi');
   });
 
-  it('职位 tab 自己拉职位列表（首屏不替它预取，换面本就要重进页面）', () => {
-    expect(apiCallsIn(jobs)).toEqual(['getRecruitJobsApi']);
+  it('职位 tab 自己拉职位列表 + 上下架写端点（首屏不替它预取 contact）', () => {
+    expect(apiCallsIn(jobs)).toEqual(['getRecruitJobsApi', 'toggleRecruitJobStatusApi']);
     expect((jobs.match(/getRecruitJobsApi\s*\(/g) || []).length).toBe(1);
     expect(stripComments(jobs)).not.toContain('getRecruitContactRequestsApi');
   });
@@ -537,19 +538,15 @@ describe('D. 标记不合适：二次确认（不可逆 + 30 天冷却），全�
     expect(offenders).toEqual([]);
   });
 
-  it('api 层的写操作恰好是两个具名 POST（reject + 发起交换），没有第三个写端点', () => {
-    // ⚠️ 收口（#1195 + #1196 叠加）后本断言由「恰好 1 个」改成「恰好 2 个」——这是**事实修正**，
-    // 不是放宽：P3（#1196）的「发起交换」`POST /recruit/contact-requests` 是本文件里第二个
-    // 合法写端点（两票并行各自写了自己的 `api/recruit.uts`，合一后两个都必须在）。
-    // 强制的部分（**没有多余的写端点 / 没有回退端点 / 没有 PUT|DELETE|PATCH**）一条未减，
-    // 且两条端点路径都逐字钉死 —— 笔误端点名或端点搬家都会被判红。
+  it('api 层写操作 = 4 个具名 POST（reject + 发起交换 + 发布职位 + 上下架），无回退端点', () => {
+    // T3（ADR-0028 ④）推翻 0021 ③后，写端点由 2 个变 4 个：新增发布 + 上下架（两个职位写 POST）。
+    // 强制的部分一条未减：没有回退端点；reject / contact 两条路径仍逐字钉死。
     const api = stripComments(read(API_RECRUIT));
     const posts = api.match(/\bpost\s*\(/g) || [];
-    expect(posts.length).toBe(2);
-    // P2 的 reject：终态、且后端**无回退端点** ⇒ 全仓只有这一个写它的地方
+    expect(posts.length).toBe(4);
     expect(api).toContain("'/recruit/applications/' + applicationId.toString() + '/reject'");
-    // P3 的发起交换（另见 `recruiterResumeBehavior` D1 的运行期断言）
     expect(api).toContain("post('/recruit/contact-requests', payload)");
+    expect(api).toContain("post('/recruit/jobs', buildJobInputPayload(input))");
   });
 
   it('标记不合适的前置是 status == applied（后端只允许 applied 被拒）', () => {
@@ -561,7 +558,7 @@ describe('D. 标记不合适：二次确认（不可逆 + 30 天冷却），全�
 // E. 无职位发布入口 / 无「功能开发中」占位
 // ---------------------------------------------------------------------------
 
-describe('E. 移动端不存在职位发布入口，也不存在「功能开发中」式占位', () => {
+describe('E. 职位管理面存在且与 web 同源；仍零「功能开发中」式占位', () => {
   it('招聘者面零「功能开发中 / 敬请期待 / UNAVAILABLE_TOAST」', () => {
     const offenders = SURFACE.filter((rel) => {
       const clean = stripComments(read(rel));
@@ -570,20 +567,23 @@ describe('E. 移动端不存在职位发布入口，也不存在「功能开发�
     expect(offenders).toEqual([]);
   });
 
-  it('零发布 / 编辑 / 上下架：面内不出现 toggle-status，也没有职位写端点', () => {
-    for (const rel of SURFACE) {
-      const clean = stripComments(read(rel));
-      expect([rel, clean.includes('toggle-status')]).toEqual([rel, false]);
-      expect([rel, clean.includes('发布职位')]).toEqual([rel, false]);
-      expect([rel, clean.includes('编辑职位')]).toEqual([rel, false]);
-      expect([rel, clean.includes("post('/recruit/jobs'")]).toEqual([rel, false]);
-    }
-    // api 层只有读端点 + 一个写端点（reject）；PUT / DELETE / PATCH 一个都没有
+  it('职位管理面与 web 同源：发布/编辑/上下架入口齐 + 三方法端点路径逐字钉（ADR-0028 ④ T3，推翻 0021 ③）', () => {
     const api = stripComments(read(API_RECRUIT));
-    expect(api).not.toMatch(/\bput\s*\(/);
+    // 三写端点与 web jobApi.{createJob,updateJob,toggleJobStatus} 逐字同源
+    expect(api).toContain("post('/recruit/jobs', buildJobInputPayload(input))");
+    expect(api).toContain("put('/recruit/jobs/' + id.toString(), buildJobInputPayload(input))");
+    expect(api).toContain("'/recruit/jobs/' + id.toString() + '/toggle-status'");
+    // 编辑走 PUT（现在必须在）；DELETE / PATCH web 未用，仍禁止
+    expect(api).toMatch(/\bput\s*\(/);
     expect(api).not.toMatch(/\bdel\s*\(/);
     expect(api).not.toMatch(/\bpatch\s*\(/);
-    expect(api).not.toMatch(/\/recruit\/jobs'/);
+    // 面内确有发布 / 编辑 / 上下架动作入口（jobs 卡 + job-edit 页），且 forced_offline 抑制上架
+    expect(h.exists(PAGE_JOB_EDIT)).toBe(true);
+    const jobs = read(PAGE_JOBS);
+    expect(jobs).toContain('onPublish');
+    expect(jobs).toContain('onEdit');
+    expect(jobs).toContain('onToggle');
+    expect(jobs).toContain('!job.forced_offline');
   });
 
   it('移动端无任何职位编辑路由（与 worker/recruiter 路由集对比：路由名一眼可见）', () => {
@@ -595,7 +595,7 @@ describe('E. 移动端不存在职位发布入口，也不存在「功能开发�
     // （简历详情，被简历库的列表项 `navigateTo` 推入），它把「简历库」这一级接成了一个完整的面。
     // **判据方向未变**：仍然是「面内出现的招聘者路由**逐个列名**、不许多出编辑/发布类路由」——
     // 加进白名单的是这个已被 ADR-0022 ④ 步骤 P3 明文授权的详情面，不是放宽。
-    expect([...new Set(routes)].sort()).toEqual(['applications', 'contacts', 'home', 'jobs', 'login', 'me', 'resume-detail', 'resumes']);
+    expect([...new Set(routes)].sort()).toEqual(['applications', 'contacts', 'home', 'job-edit', 'jobs', 'login', 'me', 'resume-detail', 'resumes']);
   });
 });
 

@@ -34,6 +34,10 @@
                 <text class="entry-title">职位管理</text>
                 <text class="entry-desc">查看与维护在招职位</text>
             </view>
+            <view class="entry-card" @click="goPublish">
+                <text class="entry-title">发布职位</text>
+                <text class="entry-desc">填写职位描述，开始招聘</text>
+            </view>
         </scroll-view>
 
         <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
@@ -117,6 +121,8 @@
     function goResumes() : void { uni.redirectTo({ url: '/pages/recruiter/resumes' }) }
     function goContacts() : void { uni.redirectTo({ url: '/pages/recruiter/contacts' }) }
     function goMe() : void { uni.redirectTo({ url: '/pages/recruiter/me' }) }
+    /** 发布位（T3 点亮）：`navigateTo` 推入全屏编辑页，无 id = 新建 */
+    function goPublish() : void { uni.navigateTo({ url: '/pages/recruiter/job-edit' }) }
 
     function onSwitchTab(key : string) : void {
         if (key == activeKey) return

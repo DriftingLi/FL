@@ -467,6 +467,7 @@ const MODULES = {
       'pages/recruiter/components/recruiter-tab-bar.uvue',
       'pages/recruiter/contacts.uvue',
       'pages/recruiter/home.uvue',
+      'pages/recruiter/job-edit.uvue',
       'pages/recruiter/jobs.uvue',
       'pages/recruiter/login.uvue',
       'pages/recruiter/me.uvue',
@@ -520,7 +521,8 @@ const MODULES = {
     ],
     extractDirs: ['pages/resume/components', 'pages/resume/composables'],
     /** 消费 `profile` 的 `api/student.uts` / `api/favorite.uts`（登记在 profile 的消费者面） */
-    crossModuleConsumers: [],
+    /** 被 `recruiter` 的 `job-edit.uvue` 消费 `getPositionsApi`（T3 / ADR-0028：岗位下拉复用岗位字典） */
+    crossModuleConsumers: ['recruiter'],
     /** T09 手术（#647）：resume-edit 922→460、模块 7 文件全 ≤600 ⇒ 执法面随之上线（原为「超预算 923」的 pending） */
     budget: BUDGET,
     budgetOverrides: {},
