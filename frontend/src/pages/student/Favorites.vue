@@ -127,9 +127,12 @@ const {
     page: currentPage.value,
     page_size: pageSize.value
   })
-  favorites.value = res.favorites || []
-  total.value = res.total || 0
-}, { itemsRef: favorites })
+  return res
+}, {
+  apply: (res) => {
+    favorites.value = res.favorites || []
+    total.value = res.total || 0
+  }, itemsRef: favorites })
 
 const staggerStyle = useStagger()
 

@@ -135,11 +135,14 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await jobApi.listJobApplications(jobId, { page: page.value, page_size: pageSize.value })
-  items.value = res?.items || []
-  total.value = res?.total || 0
-  unreadCount.value = res?.unread_count || 0
-  jobTitle.value = res?.job_title || ''
-}, { itemsRef: items })
+  return res
+}, {
+  apply: (res) => {
+    items.value = res?.items || []
+    total.value = res?.total || 0
+    unreadCount.value = res?.unread_count || 0
+    jobTitle.value = res?.job_title || ''
+  }, itemsRef: items })
 
 // 漂移提示：投递那一刻的简历更新时间 < 当前简历更新时间
 function resumeUpdated(item: JobApplication) {

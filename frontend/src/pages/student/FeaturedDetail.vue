@@ -79,10 +79,17 @@ const detail = ref<FeaturedContentDetailDTO | null>(null)
 const { loading, loadError, retrying, isEmpty, retry, run } = useAsyncPage(
   async () => {
     const id = Number(route.params.id)
-    if (!id) return
-    detail.value = await featuredApi.getDetail(id)
+    if (!id) return null
+    return await featuredApi.getDetail(id)
   },
-  { itemsRef: detail }
+  {
+    itemsRef: detail,
+    // 写回槽（ADR-0069 决策 1）：无 id（路由异常）时 loader 回 null，不写回、保持原判据
+    apply: (res) => {
+      if (!res) return
+      detail.value = res
+    }
+  }
 )
 
 const publishedText = computed(() => ((detail.value?.published_at ?? detail.value?.created_at) ?? '').slice(0, 10))

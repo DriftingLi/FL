@@ -149,23 +149,32 @@ const markdownEditorRef = ref<{ getValue: () => string } | null>(null)
 const saving = ref(false)
 
 // 编辑详情加载三态收编 useAsyncPage（#439）：错误仍由拦截器 toast 并回列表，loading 由 composable 驱动
-const { loading, run: loadDetail } = useAsyncPage(async () => {
-  if (!isEdit.value) return
-  try {
-    const d = await adminFeaturedApi.getDetail(editId.value)
-    form.title = d.title || ''
-    form.category = d.category || ''
-    form.source = d.source || ''
-    form.summary = d.summary || ''
-    form.cover_image = d.cover_image || ''
-    form.content = d.content || ''
-    form.sort_order = d.sort_order || 0
-    form.status = d.status ?? 0
-  } catch (e) {
-    // 错误已由全局拦截器提示；行为冻结：失败回列表
-    router.push({ name: 'AdminFeaturedContentList' })
+const { loading, run: loadDetail } = useAsyncPage(
+  async () => {
+    if (!isEdit.value) return null
+    try {
+      return await adminFeaturedApi.getDetail(editId.value)
+    } catch (e) {
+      // 错误已由全局拦截器提示；行为冻结：失败回列表（导航是取数轮的后果，留在 loader）
+      router.push({ name: 'AdminFeaturedContentList' })
+      return null
+    }
+  },
+  {
+    // 写回槽（ADR-0069 决策 1）：reactive 表单的八处赋值原先住在 loader 里，同样跑在守卫之前
+    apply: (d) => {
+      if (!d) return
+      form.title = d.title || ''
+      form.category = d.category || ''
+      form.source = d.source || ''
+      form.summary = d.summary || ''
+      form.cover_image = d.cover_image || ''
+      form.content = d.content || ''
+      form.sort_order = d.sort_order || 0
+      form.status = d.status ?? 0
+    }
   }
-})
+)
 
 const isEdit = computed(() => !!route.params.id)
 const editId = computed(() => Number(route.params.id))

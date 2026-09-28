@@ -56,9 +56,12 @@ const {
     page: currentPage.value,
     page_size: pageSize.value
   })
-  contributions.value = res.items || []
-  total.value = res.total || 0
-}, { itemsRef: contributions })
+  return res
+}, {
+  apply: (res) => {
+    contributions.value = res.items || []
+    total.value = res.total || 0
+  }, itemsRef: contributions })
 
 /** 我的投稿加载（轻量、失败静默降级） */
 async function loadMine() {

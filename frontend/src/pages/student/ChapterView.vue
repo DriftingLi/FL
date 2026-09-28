@@ -194,18 +194,26 @@ const { loading, loadError, retrying, isEmpty, retry: retryLoadChapter, run: loa
     studyTracker.stop()
     // 拦截器已解包信封；章节不存在由后端 404 触发（归空态）
     const detail = await courseApi.getChapterDetail(Number(courseId.value), Number(chapterId.value))
-    chapterDetail.value = detail
-    // 断点续播位置取**后端下发**的权威值（ADR-0062 决策 11）。旧写法在这里同步读
-    // chapterStateMap —— 它由另一条并发请求填，谁先回来全凭运气，未落地即读到 0
-    // ⇒ 从课程列表点进看到一半的章节每次都从片头重播。
-    chapterVideoPosition.value = detail.resume_position || 0
-    latestVideoPosition = chapterVideoPosition.value
     // 章节加载成功后启动学习计时
     studyTracker.begin()
+    return detail
   },
   // 学习位置/进行中学习的证件切换联动属 #594 Out of Scope（另案决策），
   // 本页保持现状不随切换重装——loader 内含学习计时上报副作用，重装会重复上报（#604 opt-out）
-  { credentialScoped: false, itemsRef: chapterDetail }
+  {
+    apply: (detail) => {
+      chapterDetail.value = detail
+      // 断点续播位置取**后端下发**的权威值（ADR-0062 决策 11）。旧写法在这里同步读
+      // chapterStateMap —— 它由另一条并发请求填，谁先回来全凭运气，未落地即读到 0
+      // ⇒ 从课程列表点进看到一半的章节每次都从片头重播。
+      chapterVideoPosition.value = detail.resume_position || 0
+      // 计时基准取**刚写回**的位置：写回搬进 apply 后，这条读不能留在 loader 里抢跑
+      // （loader 先执行，会把上一章的位置记成本章基准）
+      latestVideoPosition = chapterVideoPosition.value
+    },
+    credentialScoped: false,
+    itemsRef: chapterDetail
+  }
 )
 
 // 学习状态（ADR-0017）：每课程加载一次（切章不重复请求），

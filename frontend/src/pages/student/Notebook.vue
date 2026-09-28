@@ -119,9 +119,12 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await noteApi.list({ scope: scope.value, page: page.value, page_size: pageSize.value })
-  notes.value = res?.items || []
-  total.value = res?.total || 0
-}, { itemsRef: notes })
+  return res
+}, {
+  apply: (res) => {
+    notes.value = res?.items || []
+    total.value = res?.total || 0
+  }, itemsRef: notes })
 
 const emptyText = computed(() => {
   if (scope.value === 'question') return '还没有题目笔记'

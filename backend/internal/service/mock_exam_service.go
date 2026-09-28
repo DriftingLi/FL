@@ -31,13 +31,16 @@ const mockExamAbandonTTL = 24 * time.Hour
 type MockExamService struct {
 	db *gorm.DB
 	ai *AIService
+	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 PracticeModeService.grader）。
+	// nil 时简答降级：不进 AI 分，Earned 记 0（ADR-0068 决策 1）。测试可注入 fake。
+	grader ShortAnswerGrader
 
 	logger *zap.Logger
 }
 
 // NewMockExamService 创建模拟考试服务实例。
 func NewMockExamService(db *gorm.DB, ai *AIService, logger *zap.Logger) *MockExamService {
-	return &MockExamService{db: db, ai: ai, logger: logger}
+	return &MockExamService{db: db, ai: ai, grader: shortAnswerGraderOf(ai), logger: logger}
 }
 
 // ===== DTO（JSON 契约与 B6 前的 map key 逐字一致，前端零改动约束）=====
@@ -276,7 +279,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 
 	engine := newGradingEngine(s.db)
 	flow := gradingFlow{
-		ai:       shortAnswerGraderOf(s.ai),
+		ai:       s.grader,
 		maxScore: mockExamMaxScore,
 	}
 	results := engine.gradeSet(flow, qMap, ids, answersMap, studentID)
@@ -289,10 +292,12 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	for _, r := range results {
 		question := r.Question
 		qid := question.ID
+		// ADR-0068 决策 2：correct_count 只认 IsCorrect（整题判对），总分无条件累加「本题得分」
+		// ——多选半对与简答 AI 分都是得分，此前被 IsCorrect 一并挡在总分之外。
 		if r.IsCorrect != nil && *r.IsCorrect {
 			correctCount++
-			totalScore += r.Earned
 		}
+		totalScore += r.Earned
 		maxScore += r.MaxScore
 
 		detail := MockExamAnswerDetailDTO{

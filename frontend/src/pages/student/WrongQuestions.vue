@@ -195,14 +195,21 @@ const {
     favorited: filterFavorited.value || undefined,
     min_wrong_count: filterMultiWrong.value ? 2 : undefined
   })
-  wrongList.value = res?.items || []
-  total.value = res?.total || 0
-  // 清理不在当前页的选择
-  const ids = new Set(wrongList.value.map(i => i.question_id))
-  const n = new Set<number>()
-  selectedIds.value.forEach(id => { if (ids.has(id)) n.add(id) })
-  selectedIds.value = n
-}, { itemsRef: wrongList })
+  return res
+}, {
+  itemsRef: wrongList,
+  // 写回槽（ADR-0069 决策 1）：列表、总数与「清理不在当前页的选择」是同一批事实，
+  // 整块一起在代数校验之后执行（顺序与原 loader 一致：先写列表再按它清选择）
+  apply: (res) => {
+    wrongList.value = res?.items || []
+    total.value = res?.total || 0
+    // 清理不在当前页的选择
+    const ids = new Set(wrongList.value.map(i => i.question_id))
+    const n = new Set<number>()
+    selectedIds.value.forEach(id => { if (ids.has(id)) n.add(id) })
+    selectedIds.value = n
+  }
+})
 
 const staggerStyle = useStagger()
 const filterType = ref('')
