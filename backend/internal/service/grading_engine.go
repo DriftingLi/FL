@@ -92,6 +92,10 @@ func newGradingEngine(db *gorm.DB) *gradingEngine {
 
 // gradeOne 单题判分：按流分值取满分 → gradeQuestion → 短答 AI 分支 → 错题入库。
 // 错题入库规则单点：仅客观题判错（isCorrect 非 nil 且 false）入库，与四流现状语义一致。
+//
+// Earned 是**本题得分**的唯一出口（ADR-0068 决策 1）：客观题取判分结果（含多选部分分），
+// 简答题取 AI 评分（AI 不可用或降级评分为 0）。装配层不得再用 IsCorrect 过滤 Earned ——
+// 那正是「半对与简答都进不了总分」的旧口径。IsCorrect 三态语义不变。
 func (e *gradingEngine) gradeOne(f gradingFlow, q *model.Question, userAnswer any, studentID int) GradeResult {
 	maxScore := f.maxScore(q)
 	isCorrect, earned := gradeQuestion(q, userAnswer, maxScore)
@@ -99,6 +103,9 @@ func (e *gradingEngine) gradeOne(f gradingFlow, q *model.Question, userAnswer an
 	var sa *ShortAnswerGrade
 	if q.Type == "short_answer" {
 		sa = gradeShortAnswer(f.ai, q, stringifyAnswer(userAnswer), maxScore)
+		if sa != nil {
+			earned = sa.Score
+		}
 	}
 	if isCorrect != nil && !*isCorrect {
 		_ = addToWrongQuestions(e.db, studentID, q.ID)
