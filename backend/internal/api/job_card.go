@@ -161,7 +161,7 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 // @Router /resume/pdf [delete]
 func (h *JobCardHandler) DeletePDF(c *gin.Context) {
 	if err := h.svc.DeleteResumeFile(middleware.CurrentUserID(c)); err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	response.SuccessWithMsg(c, "附件已删除", gin.H{})
@@ -196,7 +196,7 @@ func (h *JobCardHandler) UploadImage(c *gin.Context) {
 	}
 	url, err := h.fileSvc.Save(content, file.Filename, service.ResumeImageDirPrefix)
 	if err != nil {
-		response.ServerError(c, "保存失败: "+err.Error())
+		response.ServerErrorCause(c, "保存失败: ", err)
 		return
 	}
 	response.SuccessWithMsg(c, "上传成功", gin.H{"url": url})

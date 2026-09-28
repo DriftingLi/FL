@@ -162,7 +162,11 @@ jobs:
           REDIS_ADDR: localhost:6379
           REDIS_PASSWORD: ""
           REDIS_DB: "0"
-        run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 10m
+        # -timeout 20m（2026-09-28）：internal/api 是单包最重的一个（真路由 + 真库的契约面），
+        # 实测本机 577s / CI 600s —— 正好压在 Go 默认 10m 的线上，一次 runner 抖动就是
+        # 「panic: test timed out after 10m0s」这种与改动无关的假红（本次真实发生）。
+        # 这是**包级预算**问题，不是某个用例挂住：10m 那条线对最重的包留不出余量。
+        run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 20m
 
       - name: 上传覆盖率报告
         uses: actions/upload-artifact@v4

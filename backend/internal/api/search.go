@@ -79,7 +79,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 func (h *SearchHandler) ZeroResults(c *gin.Context) {
 	rows, err := h.svc.ZeroResultKeywords(atoiDefault(c.Query("days"), 30), atoiDefault(c.Query("limit"), 50))
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	response.Success(c, rows)

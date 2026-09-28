@@ -57,5 +57,11 @@ func RedactError(err error) string {
 	if err == nil {
 		return ""
 	}
-	return credentialURLRe.ReplaceAllString(err.Error(), "${1}***@")
+	return RedactText(err.Error())
+}
+
+// RedactText 同 RedactError，但入口是字符串（gin 的 c.Errors.String() 这种聚合文本，
+// 它不是 error）。脱敏判据仍只有 credentialURLRe 一处。
+func RedactText(s string) string {
+	return credentialURLRe.ReplaceAllString(s, "${1}***@")
 }
