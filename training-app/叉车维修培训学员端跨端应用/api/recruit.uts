@@ -36,7 +36,7 @@
  * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
  * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
  */
-import { get, post, FORBIDDEN_MESSAGE_PREFIX } from './request'
+import { get, post, put, FORBIDDEN_MESSAGE_PREFIX } from './request'
 // ⚠️ `API_BASE_URL` 来自 `config/env`，**不是** `./request`（`request.uts` 并不 export 它）。
 //    写错会在 ④a 编译期报 `找不到名称"API_BASE_URL"`（error18）—— 2026-09-20 编译门抓获。
 //    同款先例：`api/aiAssistant.uts:13`。
@@ -67,6 +67,21 @@ export type RecruitJob = {
 export type RecruitJobListResult = {
     items : RecruitJob[]
     total : number
+}
+
+/**
+ * 发布 / 编辑职位的输入 —— 字段与 web `JobPostingInput`（`frontend/src/api/job.ts`）逐字同源（ADR-0028 ② 推翻 0021 ③）。
+ * `position_id` / `salary_min` / `salary_max` 可缺席（后端 `*int`）；`title` + `position_id` 必填由页面判。
+ */
+export type RecruitJobInput = {
+    title : string
+    position_id : number | null
+    region : string
+    salary_min : number | null
+    salary_max : number | null
+    salary_text : string
+    experience_req : string
+    description : string
 }
 
 /** 投递（企业侧脱敏：`student_real_name_masked`，无手机/微信/PDF/证书原图） */
@@ -364,6 +379,52 @@ export function buildRecruitContactRequest(obj : UTSJSONObject) : RecruitContact
     } as RecruitContactRequest
 }
 
+/**
+ * 单条职位映射（**列表 / 创建 / 编辑 / 上下架响应共用一处**，ADR-0028 ④ T3）。
+ *
+ * ⚠️ `offline_reason` 必须**先判空再强转**（2026-09-20 真机 ①a 抓到的真缺陷）：
+ *   后端 `JobPostingDTO.OfflineReason` 带 `json:"offline_reason,omitempty"`
+ *   （backend/internal/service/job_posting_service.go:74）⇒ **未强制下架时该键根本不存在**。
+ *   而 UTS 的 `as string` 编到 Kotlin 是**运行时非空断言**（ADR-0003）：
+ *   对缺失键会先抛 `NullPointerException`，`?? ''` **兜不住**（抛的是 Exception，不是 null）。
+ *   写法对齐仓内既有先例 `api/auth.uts:20-21`。本函数是这个读法的**唯一一处**（J 组回归锁钉）。
+ */
+export function buildRecruitJob(obj : UTSJSONObject) : RecruitJob {
+    const offlineReasonRaw = obj['offline_reason']
+    return {
+        id: obj['id'] as number,
+        title: (obj['title'] as string) ?? '',
+        region: (obj['region'] as string) ?? '',
+        salary_text: (obj['salary_text'] as string) ?? '',
+        experience_req: (obj['experience_req'] as string) ?? '',
+        status: (obj['status'] as string) ?? '',
+        forced_offline: (obj['forced_offline'] as boolean) ?? false,
+        offline_reason: offlineReasonRaw == null ? '' : offlineReasonRaw as string,
+        published_at: (obj['published_at'] as string) ?? '',
+        updated_at: (obj['updated_at'] as string) ?? '',
+    } as RecruitJob
+}
+
+/** 职位输入 → 写载荷（可空键**缺席即不发**，避免把「未填」写成 0/null 筛选，与 `buildFilterParams` 同策略） */
+function buildJobInputPayload(input : RecruitJobInput) : UTSJSONObject {
+    const body : UTSJSONObject = {} as UTSJSONObject
+    body['title'] = input.title
+    body['region'] = input.region
+    body['salary_text'] = input.salary_text
+    body['experience_req'] = input.experience_req
+    body['description'] = input.description
+    if (input.position_id != null && input.position_id! > 0) {
+        body['position_id'] = input.position_id!
+    }
+    if (input.salary_min != null && input.salary_min! > 0) {
+        body['salary_min'] = input.salary_min!
+    }
+    if (input.salary_max != null && input.salary_max! > 0) {
+        body['salary_max'] = input.salary_max!
+    }
+    return body
+}
+
 /** 8 维筛选 → query 参数（空值**不发**该键，避免把「未筛选」写成空串筛选） */
 function buildFilterParams(filters : RecruitResumeFilters, page : number) : UTSJSONObject {
     const params : UTSJSONObject = {} as UTSJSONObject
@@ -421,28 +482,7 @@ export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : P
         const raw = (data['items'] as UTSJSONObject[]) ?? []
         const items : RecruitJob[] = []
         for (let i = 0; i < raw.length; i++) {
-            const obj = raw[i]
-            // ⚠️ `offline_reason` 必须**先判空再强转**（2026-09-20 真机 ①a 抓到的真缺陷）：
-            //   后端 `JobPostingDTO.OfflineReason` 带 `json:"offline_reason,omitempty"`
-            //   （backend/internal/service/job_posting_service.go:74）⇒ **未强制下架时该键根本不存在**。
-            //   而 UTS 的 `as string` 编到 Kotlin 是**运行时非空断言**（ADR-0003）：
-            //   对缺失键会先抛 `NullPointerException: null cannot be cast to non-null type kotlin.String`
-            //   —— `?? ''` **兜不住**（抛的是 Exception，不是 null；生成 Kotlin 实测见
-            //   unpackage/cache/.app-android/src/index.kt:10674）。
-            //   写法对齐仓内既有先例 `api/auth.uts:20-21`（先 `obj['x']` 取值 → `== null ? … : … as string`）。
-            const offlineReasonRaw = obj['offline_reason']
-            items.push({
-                id: obj['id'] as number,
-                title: (obj['title'] as string) ?? '',
-                region: (obj['region'] as string) ?? '',
-                salary_text: (obj['salary_text'] as string) ?? '',
-                experience_req: (obj['experience_req'] as string) ?? '',
-                status: (obj['status'] as string) ?? '',
-                forced_offline: (obj['forced_offline'] as boolean) ?? false,
-                offline_reason: offlineReasonRaw == null ? '' : offlineReasonRaw as string,
-                published_at: (obj['published_at'] as string) ?? '',
-                updated_at: (obj['updated_at'] as string) ?? '',
-            } as RecruitJob)
+            items.push(buildRecruitJob(raw[i]))
         }
         return { items: items, total: (data['total'] as number) ?? 0 } as RecruitJobListResult
     })
@@ -537,6 +577,50 @@ export function getRecruitMeApi() : Promise<RecruitMe> {
             account: (data['account'] as string) ?? '',
             role: (data['role'] as string) ?? '',
         } as RecruitMe
+    })
+}
+
+// ── 职位管理面（T3 / ADR-0028 ④，推翻 0021 ③「不做发布/编辑/上下架」）──────────
+//   三个写端点与 web `jobApi.{createJob,updateJob,toggleJobStatus}` 逐字同源（路径 / 方法）：
+//   POST /recruit/jobs ・ PUT /recruit/jobs/{id} ・ POST /recruit/jobs/{id}/toggle-status。
+
+/** 发布职位 `POST /recruit/jobs`（返回带 id/status 的新职位） */
+export function createRecruitJobApi(input : RecruitJobInput) : Promise<RecruitJob> {
+    return post('/recruit/jobs', buildJobInputPayload(input)).then((data : UTSJSONObject) : RecruitJob => {
+        return buildRecruitJob(data)
+    })
+}
+
+/** 编辑职位 `PUT /recruit/jobs/{id}` */
+export function updateRecruitJobApi(id : number, input : RecruitJobInput) : Promise<RecruitJob> {
+    return put('/recruit/jobs/' + id.toString(), buildJobInputPayload(input)).then((data : UTSJSONObject) : RecruitJob => {
+        return buildRecruitJob(data)
+    })
+}
+
+/** 上架 / 下架切换 `POST /recruit/jobs/{id}/toggle-status`（返回带新 status 的职位）。forced_offline 的职位由页面隐去本入口 */
+export function toggleRecruitJobStatusApi(id : number) : Promise<RecruitJob> {
+    return post('/recruit/jobs/' + id.toString() + '/toggle-status').then((data : UTSJSONObject) : RecruitJob => {
+        return buildRecruitJob(data)
+    })
+}
+
+/**
+ * 单条职位详情 `GET /recruit/jobs/{id}`（web `jobApi.getById` 同源）—— 编辑页预填用。
+ * 列表 DTO 不含 description / position_id / 薪资区间，故编辑前单独取一次详情。
+ */
+export function getRecruitJobDetailApi(id : number) : Promise<RecruitJobInput> {
+    return get('/recruit/jobs/' + id.toString()).then((data : UTSJSONObject) : RecruitJobInput => {
+        return {
+            title: toStr(data['title']),
+            position_id: toNumberOrNull(data['position_id']),
+            region: toStr(data['region']),
+            salary_min: toNumberOrNull(data['salary_min']),
+            salary_max: toNumberOrNull(data['salary_max']),
+            salary_text: toStr(data['salary_text']),
+            experience_req: toStr(data['experience_req']),
+            description: toStr(data['description']),
+        } as RecruitJobInput
     })
 }
 
