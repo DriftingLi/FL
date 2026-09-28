@@ -152,9 +152,12 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await jobApi.listMyJobs({ page: page.value, page_size: pageSize.value })
-  items.value = res?.items || []
-  total.value = res?.total || 0
-}, { itemsRef: items })
+  return res
+}, {
+  apply: (res) => {
+    items.value = res?.items || []
+    total.value = res?.total || 0
+  }, itemsRef: items })
 
 function openCreate() {
   editing.value = false

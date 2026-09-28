@@ -158,10 +158,19 @@ function toUIQuestion(dto: QuestionDTO): Question {
 const { loading, loadError, retrying, isEmpty, retry, run: load } = useAsyncPage(
   async () => {
     const id = Number(route.params.id)
-    if (!id) return
-    question.value = toUIQuestion(await questionBankApi.getQuestion(id))
+    if (!id) return null
+    // DTO → UI 的映射是纯函数，留在 loader（loader 只取数、不碰页面 ref）
+    return toUIQuestion(await questionBankApi.getQuestion(id))
   },
-  { itemsRef: question, credentialScoped: false }
+  {
+    itemsRef: question,
+    credentialScoped: false,
+    // 写回槽（ADR-0069 决策 1）：无 id（路由异常）时 loader 回 null，不写回
+    apply: (mapped) => {
+      if (!mapped) return
+      question.value = mapped
+    }
+  }
 )
 
 // 单题变体：无推进节奏、无断点进度（与错题重做同一形态）

@@ -140,7 +140,11 @@ const { inExam, currentIdx, remainingTime, questions, answers, shellRef, start, 
 // 历史记录三态收编 useAsyncPage（#439）：loader 纯装配，失败收敛 loadError（不打断考试主流程）
 const { run: loadHistory } = useAsyncPage(async () => {
   const res = await mockExamApi.getMockExamHistory({ page: 1, page_size: 5 })
-  history.value = res.exams || []
+  return res
+}, {
+  apply: (res) => {
+    history.value = res.exams || []
+  }
 })
 
 onMounted(async () => {

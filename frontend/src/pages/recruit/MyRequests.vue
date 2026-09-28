@@ -72,9 +72,12 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await recruitApi.listMyRequests({ page: page.value, page_size: pageSize.value })
-  items.value = res?.items || []
-  total.value = res?.total || 0
-}, { itemsRef: items })
+  return res
+}, {
+  apply: (res) => {
+    items.value = res?.items || []
+    total.value = res?.total || 0
+  }, itemsRef: items })
 
 onMounted(load)
 </script>

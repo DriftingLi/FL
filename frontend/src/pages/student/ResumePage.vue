@@ -184,14 +184,17 @@ async function toggleVisibility(val: boolean) {
 // 其余 = 错误态，均由 useAsyncPage 判定（loadErrorKind 复用 ApiErrorKind）。
 const { loadError, retrying, isEmpty, retry, run: load } = useAsyncPage(async () => {
   const data: any = await resumeApi.get()
-  resume.value = data || null
   if (!data) return
-  realName.value = data.real_name || ''
-  contactPhone.value = data.contact_phone || ''
-  wechat.value = data.wechat || ''
-  resumeFileUrl.value = data.resume_file_url || ''
-  visibilityOpen.value = data.visibility === 'open'
-}, { itemsRef: resume })
+  return data
+}, {
+  apply: (data) => {
+    resume.value = data || null
+    realName.value = data.real_name || ''
+    contactPhone.value = data.contact_phone || ''
+    wechat.value = data.wechat || ''
+    resumeFileUrl.value = data.resume_file_url || ''
+    visibilityOpen.value = data.visibility === 'open'
+  }, itemsRef: resume })
 
 /** 浏览统计是旁路数据（失败静默降级），不参与本页三态。 */
 async function loadViewStats() {

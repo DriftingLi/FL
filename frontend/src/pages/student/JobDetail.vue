@@ -101,10 +101,16 @@ const {
   async () => {
     const id = Number(route.params.id)
     const res = await jobApi.getPublicJob(id)
-    data.value = (res as any) || null
+    return res
   },
   // 招聘域不受证件过滤（#604 opt-out）；404（职位已下线/不存在）归空态（#1101）
-  { credentialScoped: false, itemsRef: data }
+  {
+    apply: (res) => {
+      data.value = (res as any) || null
+    },
+    credentialScoped: false,
+    itemsRef: data
+  }
 )
 
 // #488：可投递 = 无记录或冷却期满/已撤回

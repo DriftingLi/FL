@@ -142,9 +142,15 @@ const {
     page: currentPage.value,
     page_size: pageSize.value
   })
-  materials.value = res.materials || []
-  total.value = res.total || 0
-}, { itemsRef: materials, facets: [{ load: () => loadCourses() }] })
+  return res
+}, {
+  apply: (res) => {
+    materials.value = res.materials || []
+    total.value = res.total || 0
+  },
+  itemsRef: materials,
+  facets: [{ load: () => loadCourses() }]
+})
 
 const staggerStyle = useStagger()
 
