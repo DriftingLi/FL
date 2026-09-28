@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,12 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
+
+// uid 占位符：`testutil.SeedStudent` 的 uid 取自**进程级**递增计数器
+// （`testutil.seedUIDCounter`），同包内任何先跑的播种用例（含 PG 契约用例）都会把它推走。
+// 把 uid 写成字面量就是一张「只有当本用例恰好是第一个播种者时才绿」的锁 —— 判据是形状，
+// 不是某一枚计数器取值，故期望值从**实际种下的那一行**回读。
+const uidPlaceholder = "{{UID}}"
 
 func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -29,7 +37,7 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 	}{
 		{
 			name: "hrwai_user", role: "hrwai_user", username: "alice",
-			want: `{"code":200,"message":"success","data":{"account":"acct_alice","avatar_url":"","company":"","email":"","has_password":true,"pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","uid":"1000000000000000001","user_id":1,"username":"alice"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"acct_alice","avatar_url":"","company":"","email":"","has_password":true,"pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","uid":"{{UID}}","user_id":1,"username":"alice"}}`,
 		},
 		{
 			name: "tutor", role: "tutor", username: "tutor1",
@@ -45,9 +53,12 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testutil.NewMemoryDB(t)
 			var userID int
+			want := tc.want
 			switch tc.role {
 			case "hrwai_user":
-				userID = testutil.SeedStudent(t, db, tc.username, "hash123").ID
+				seeded := testutil.SeedStudent(t, db, tc.username, "hash123")
+				userID = seeded.ID
+				want = strings.ReplaceAll(want, uidPlaceholder, strconv.FormatInt(seeded.UID, 10))
 			case "tutor":
 				userID = testutil.SeedTutor(t, db, tc.username, "hash123").TutorID
 			case "admin":
@@ -74,8 +85,8 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Fatalf("期望 200, got %d: %s", w.Code, w.Body.String())
 			}
-			if got := w.Body.String(); got != tc.want {
-				t.Errorf("响应体与契约不符\n got: %s\nwant: %s", got, tc.want)
+			if got := w.Body.String(); got != want {
+				t.Errorf("响应体与契约不符\n got: %s\nwant: %s", got, want)
 			}
 		})
 	}

@@ -1,0 +1,345 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side" @click="onBack">
+                <text class="nav-back">‹</text>
+            </view>
+            <text class="nav-title">{{ editing ? '编辑职位' : '发布职位' }}</text>
+            <view class="nav-side nav-side-right" @click="onSubmit">
+                <text class="nav-save">保存</text>
+            </view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view class="field">
+                <text class="field-label">职位名<text class="req">*</text></text>
+                <input class="field-input" v-model="title" :maxlength="100" placeholder="如：叉车维修技师" />
+            </view>
+
+            <view class="field">
+                <text class="field-label">岗位<text class="req">*</text></text>
+                <view class="chip-row">
+                    <view v-for="p in positions" :key="p.position_id" class="chip"
+                        :class="{ 'chip-active': p.position_id == positionId }" @click="pickPosition(p.position_id)">
+                        <text class="chip-text" :class="{ 'chip-text-active': p.position_id == positionId }">{{ p.name }}</text>
+                    </view>
+                    <text v-if="positions.length == 0" class="chip-empty">岗位字典加载中…</text>
+                </view>
+            </view>
+
+            <view class="field">
+                <text class="field-label">地区</text>
+                <input class="field-input" v-model="region" :maxlength="100" placeholder="如：江苏苏州" />
+            </view>
+
+            <view class="field">
+                <text class="field-label">薪资区间（月，元）</text>
+                <view class="salary-row">
+                    <input class="field-input flex-1" v-model="salaryMinStr" type="number" placeholder="下限" />
+                    <text class="salary-dash">—</text>
+                    <input class="field-input flex-1" v-model="salaryMaxStr" type="number" placeholder="上限" />
+                </view>
+                <input class="field-input mt-12" v-model="salaryText" :maxlength="100" placeholder="或文字描述，如：6-9K / 面议" />
+            </view>
+
+            <view class="field">
+                <text class="field-label">经验要求</text>
+                <input class="field-input" v-model="experienceReq" :maxlength="100" placeholder="如：2年" />
+            </view>
+
+            <view class="field">
+                <text class="field-label">职位描述</text>
+                <textarea class="field-textarea" v-model="description" :maxlength="5000" placeholder="岗位职责、任职要求等" />
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 职位编辑（二级面，navigateTo 推入；ADR-0028 ④ 步骤 T3，推翻 0021 ③「不做发布/编辑」）
+     *
+     * 双模式：URL 带 `id` ⇒ 编辑（先 `getRecruitJobDetailApi` 预填）；不带 ⇒ 发布（空表单）。
+     * 字段与必填口径与 web `JobManage.vue` 同源：8 个字段、`职位名`+`岗位`必填、描述上限 5000。
+     *
+     * 岗位下拉复用 `api/resume.uts` 的 `getPositionsApi`（`GET /positions` 字典，web 同源）；
+     * 提交走 `api/recruit.uts` 的 create/update（POST / PUT `/recruit/jobs`），**不动后端**。
+     * 校验只挡「空职位名 / 未选岗位」两条硬必填，其余以后端为准（失败透出 400 文案，不本地预判）。
+     */
+    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getPositionsApi } from '../../api/resume'
+    import {
+        createRecruitJobApi,
+        updateRecruitJobApi,
+        getRecruitJobDetailApi,
+        type RecruitJobInput
+    } from '../../api/recruit'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const editing = ref<boolean>(false)
+    const jobId = ref<number>(0)
+
+    const title = ref<string>('')
+    const positionId = ref<number>(0)
+    const region = ref<string>('')
+    const salaryMinStr = ref<string>('')
+    const salaryMaxStr = ref<string>('')
+    const salaryText = ref<string>('')
+    const experienceReq = ref<string>('')
+    const description = ref<string>('')
+
+    type PositionOption = {
+        position_id : number
+        name : string
+    }
+    const positions = ref<PositionOption[]>([])
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：`onLoad(...)` 放最后。
+
+    function loadPositions() : void {
+        getPositionsApi().then((list) : void => {
+            const opts : PositionOption[] = []
+            for (let i = 0; i < list.length; i++) {
+                opts.push({ position_id: list[i].position_id, name: list[i].name } as PositionOption)
+            }
+            positions.value = opts
+        }).catch((e) : void => {
+            console.error('[recruiter-job-edit] load positions failed:', e)
+        })
+    }
+
+    function prefill(id : number) : void {
+        getRecruitJobDetailApi(id).then((input : RecruitJobInput) : void => {
+            title.value = input.title
+            region.value = input.region
+            salaryText.value = input.salary_text
+            experienceReq.value = input.experience_req
+            description.value = input.description
+            if (input.position_id != null) positionId.value = input.position_id!
+            if (input.salary_min != null) salaryMinStr.value = input.salary_min!.toString()
+            if (input.salary_max != null) salaryMaxStr.value = input.salary_max!.toString()
+        }).catch((e) : void => {
+            console.error('[recruiter-job-edit] prefill failed:', e)
+        })
+    }
+
+    function pickPosition(id : number) : void {
+        positionId.value = id
+    }
+
+    /** 只解析正整数（0 / 空 / 非法 ⇒ null，与 `buildJobInputPayload` 的「缺席即不发」同策略） */
+    function parseSalary(s : string) : number | null {
+        const t = s.trim()
+        if (t.length == 0) return null
+        const n = parseInt(t)
+        if (isNaN(n) || n <= 0) return null
+        return n
+    }
+
+    function buildInput() : RecruitJobInput {
+        return {
+            title: title.value.trim(),
+            position_id: positionId.value > 0 ? positionId.value : null,
+            region: region.value.trim(),
+            salary_min: parseSalary(salaryMinStr.value),
+            salary_max: parseSalary(salaryMaxStr.value),
+            salary_text: salaryText.value.trim(),
+            experience_req: experienceReq.value.trim(),
+            description: description.value,
+        } as RecruitJobInput
+    }
+
+    function onSubmit() : void {
+        if (title.value.trim().length == 0) {
+            uni.showToast({ title: '职位名不能为空', icon: 'none' })
+            return
+        }
+        if (positionId.value <= 0) {
+            uni.showToast({ title: '请选择岗位', icon: 'none' })
+            return
+        }
+        const input = buildInput()
+        const done = () : void => {
+            uni.showToast({ title: editing.value ? '职位已更新' : '职位发布成功', icon: 'success' })
+            setTimeout(() => { uni.navigateBack() }, 600)
+        }
+        if (editing.value) {
+            updateRecruitJobApi(jobId.value, input).then(() : void => { done() }).catch((e) : void => {
+                console.error('[recruiter-job-edit] update failed:', e)
+                uni.showToast({ title: '保存失败，请重试', icon: 'none' })
+            })
+        } else {
+            createRecruitJobApi(input).then(() : void => { done() }).catch((e) : void => {
+                console.error('[recruiter-job-edit] create failed:', e)
+                uni.showToast({ title: '保存失败，请重试', icon: 'none' })
+            })
+        }
+    }
+
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
+    onLoad((options : OnLoadOptions) => {
+        if (!ensureRecruiterSession()) return
+        loadPositions()
+        const idStr = options['id']
+        if (idStr != null && (idStr as string).length > 0) {
+            const id = parseInt(idStr as string)
+            if (!isNaN(id) && id > 0) {
+                editing.value = true
+                jobId.value = id
+                prefill(id)
+            }
+        }
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+        border-bottom: 1rpx solid #eeeeee;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-side-right {
+        justify-content: flex-end;
+    }
+
+    .nav-back {
+        font-size: 44rpx;
+        color: #333333;
+        padding: 8rpx 16rpx 8rpx 0;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .nav-save {
+        font-size: 30rpx;
+        color: #239EDD;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .field {
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+        background-color: #ffffff;
+        border-radius: 12rpx;
+    }
+
+    .field-label {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .req {
+        color: #E5484D;
+        margin-left: 4rpx;
+    }
+
+    .field-input {
+        margin-top: 12rpx;
+        height: 72rpx;
+        font-size: 28rpx;
+        color: #333333;
+        padding: 0 16rpx;
+        background-color: #F7F8FA;
+        border-radius: 8rpx;
+    }
+
+    .field-textarea {
+        margin-top: 12rpx;
+        height: 240rpx;
+        font-size: 28rpx;
+        color: #333333;
+        padding: 16rpx;
+        background-color: #F7F8FA;
+        border-radius: 8rpx;
+    }
+
+    .salary-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .flex-1 {
+        flex: 1;
+    }
+
+    .salary-dash {
+        font-size: 28rpx;
+        color: #999999;
+        padding: 0 16rpx;
+    }
+
+    .mt-12 {
+        margin-top: 12rpx;
+    }
+
+    .chip-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 12rpx;
+    }
+
+    .chip {
+        padding: 10rpx 22rpx;
+        border-radius: 30rpx;
+        background-color: #F7F8FA;
+        border: 1rpx solid #eeeeee;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .chip-active {
+        background-color: #E7F4F9;
+        border-color: #239EDD;
+    }
+
+    .chip-text {
+        font-size: 26rpx;
+        color: #666666;
+    }
+
+    .chip-text-active {
+        color: #239EDD;
+    }
+
+    .chip-empty {
+        font-size: 26rpx;
+        color: #999999;
+    }
+</style>

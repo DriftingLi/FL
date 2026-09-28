@@ -1061,3 +1061,168 @@ describe('useAsyncPage 写回槽（ADR-0069：replace 档旧轮连写回都不�
     expect(items.value[0]?.id).toBe('r-1')
   })
 })
+
+/**
+ * #1355（ADR-0069 决策 1 的另一半）：错误出口槽 `onError`。
+ *
+ * `apply` 只在成功路径被调用，而有些页面的失败路径**也**要写页面 ref ——
+ * `admin/ValuationConfigManage.vue` 要在装载失败时清掉四份草稿（「错误态与陈旧数据不同屏」）。
+ * 那段清理若留在 loader 的 `catch` 体内，就是「写回排在守卫之前」的形状（R4/R4c 要禁的形态），
+ * 且旧一轮的失败会抹掉新一轮刚落地的数据。本槽将成功与失败两条写回路都收在代数校验之后。
+ */
+describe('useAsyncPage 错误出口槽 onError（#1355：失败路径的写回同样只发生在最新一轮）', () => {
+  it('本轮失败：先置 loadError/loadErrorKind，再带着错误对象调用 onError', async () => {
+    const boom = Object.assign(new Error('boom'), { kind: 'server' })
+    const seen: unknown[] = []
+    const { loadError, loadErrorKind, run } = useAsyncPage(
+      async () => {
+        throw boom
+      },
+      {
+        onError: (error) => {
+          // 调用时机判据：错误态已由 composable 承载，本槽只做页面自己的清理
+          expect(loadError.value).toBe(true)
+          expect(loadErrorKind.value).toBe('server')
+          seen.push(error)
+        }
+      }
+    )
+
+    await run()
+    expect(seen).toEqual([boom])
+    expect(loadError.value).toBe(true)
+  })
+
+  it('成功轮不调用 onError；下一轮失败才调用一次', async () => {
+    let fail = true
+    const onError = vi.fn()
+    const { run } = useAsyncPage(
+      async () => {
+        if (fail) throw new Error('boom')
+        return { items: [] }
+      },
+      { apply: () => {}, onError }
+    )
+
+    await run()
+    expect(onError).toHaveBeenCalledTimes(1)
+    fail = false
+    await run()
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  it('旧轮的失败后到：不调用 onError —— 上一轮的失败不许抹掉新一轮已落地的数据', async () => {
+    let releaseSlow!: (e: unknown) => void
+    const slow = new Promise<never>((_resolve, reject) => {
+      releaseSlow = reject
+    })
+    const cleared = vi.fn()
+    const items = ref<Array<{ id: string }>>([])
+    let calls = 0
+    const { run, loadError, total } = useAsyncPage(
+      async () => {
+        calls++
+        // 第 1 轮（旧筛选）失败得晚；第 2 轮（新筛选）先成功落地
+        if (calls === 1) return slow
+        return { items: [{ id: 'new' }], total: 7 }
+      },
+      {
+        apply: (res) => {
+          items.value = res.items
+          total.value = res.total
+        },
+        onError: cleared
+      }
+    )
+
+    const first = run()
+    await nextTick()
+    await run()
+    expect(items.value[0].id).toBe('new')
+    expect(total.value).toBe(7)
+
+    releaseSlow(new Error('boom'))
+    await first
+    // 清理没被执行（旧形状里这一笔会把新数据抹成空）
+    expect(cleared).not.toHaveBeenCalled()
+    expect(items.value[0].id).toBe('new')
+    expect(total.value).toBe(7)
+    expect(loadError.value).toBe(false)
+  })
+
+  it('判据本身有效：清理留在 loader 的 catch 里（本票修复前的形状）时，旧轮的失败抹掉新数据', async () => {
+    // 反例自检：证明上面那条测的是「清理排在了守卫之后」，而不是「竞态本来就不存在」。
+    // 被清的状态用页面侧的「草稿数组」（本票真实场景 ValuationConfigManage 同形：修复前的 loader 是
+    // try 里 setAll 四份草稿、catch 里 clear() 四份草稿再 rethrow）。
+    const drafts: string[] = []
+    let releaseSlow!: (e: unknown) => void
+    const slow = new Promise<never>((_resolve, reject) => {
+      releaseSlow = reject
+    })
+    let calls = 0
+    const { run } = useAsyncPage(async () => {
+      try {
+        calls++
+        if (calls === 1) await slow
+        else {
+          drafts.length = 0
+          drafts.push('draft-new')
+        }
+      } catch (e) {
+        drafts.length = 0 // ← 旧形状：失败清理写在 loader 体内，发生在守卫看到之前
+        throw e
+      }
+    })
+
+    const first = run()
+    await nextTick()
+    await run()
+    expect(drafts).toEqual(['draft-new'])
+    releaseSlow(new Error('boom'))
+    await first
+    // 旧轮的失败抹掉了新一轮已落地的草稿 —— 这正是清理必须走 onError 槽的理由
+    expect(drafts).toEqual([])
+  })
+
+  it('append 形态：loadMore 的批失败不调用 onError（既有「原地保持」语义不被波及）', async () => {
+    const items = ref<Array<{ id: number }>>([])
+    const cleared = vi.fn()
+    let calls = 0
+    const { run, loadMore, hasMore, page } = useAsyncPage(
+      async (p?: number) => {
+        calls++
+        if (calls === 2) throw new Error('boom')
+        return { items: [{ id: p ?? 1 }], page: p ?? 1, pages: 3, total: 60 }
+      },
+      { mode: 'append', batchSize: 20, itemsRef: items, onError: cleared }
+    )
+
+    await run()
+    await loadMore()
+    // 「加载更多」失败即停：条目不清、页码不动、入口不消失（本槽不该插手）
+    expect(cleared).not.toHaveBeenCalled()
+    expect(items.value).toHaveLength(1)
+    expect(page.value).toBe(1)
+    expect(hasMore.value).toBe(true)
+  })
+
+  it('onError 自身抛错不外溢：run 仍不 reject，记一条 console.error', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { run, loadError } = useAsyncPage(
+      async () => {
+        throw new Error('boom')
+      },
+      {
+        onError: () => {
+          throw new Error('清理失败')
+        }
+      }
+    )
+
+    await expect(run()).resolves.toBeUndefined()
+    expect(loadError.value).toBe(true)
+    expect(error).toHaveBeenCalled()
+    expect(error.mock.calls[0][0]).toContain('onError')
+    error.mockRestore()
+  })
+})

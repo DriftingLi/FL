@@ -19,6 +19,15 @@
 // （topics / questions / tutors / requests / list …）是各域 api 模块出口之前的事，页面只
 // `return someApi.listX(...)`。不读服务端分页的页面（岗位字典、原价表）在自己出口处
 // `toPage(rows, rows.length)` 造一个容器，本件不为它们开特例。
+//
+// #1354（ADR-0069 实施回写段登记的「同病同类」）：装载批次代数。此前 `load()` 在
+// `await options.fetch(...)` 之后**无条件**写 `list`/`total`，两次装载重叠时后到的旧响应
+// 盖掉新状态（筛选词条是新的、列表是旧的；页码与内容不同批）—— 与真实缺陷 #5 逐字同形。
+// 本件**不复用 useAsyncPage**：admin 档的 interface 拥有 list/total/currentPage/pageSize/filters
+// 与 action 分发，且服务端参数驱动分页（currentPage + pageSize，无 credentialScoped /
+// filterDeps / append 那一整面），合并两档会把学员端列表页的判据拖进 admin。搬过来的是
+// **那一条判据本身**（同名 `generation`、同形的 `invalidate()`、同一位置：写回之前），
+// 机检见 `__tests__/loadFlowLocks.spec.ts` R5。
 import { computed, ref } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 // 只取类型：client.ts 会建 axios 实例，不因这条依赖把网络侧带进 composable 的运行时
@@ -60,8 +69,24 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
     return typeof kind === 'string' ? kind : null
   }
 
+  /**
+   * 批次代数（#1354，判据同 useAsyncPage.generation / ADR-0069 决策 1）：`load` 起飞时递增并捕获，
+   * **落地前比对** —— 不等即整轮作废：`list`/`total` 不写回、错误态不改写、`loading`/`retrying`
+   * 也不由旧轮归零（旧轮归零会把新轮在飞的 spinner 熄掉）。
+   * 缺它时的实测形态与真实缺陷 #5 同形：搜索框回车 / 连点筛选 / 删完刷新这些入口都会连发 `load()`，
+   * 先起飞的慢响应后到时把新一轮的筛选结果换成旧筛选的行。
+   */
+  let generation = 0
+
+  /** 一轮装载起飞前的作废动作：旧轮（含在飞响应）就此不落地。 */
+  function invalidate(): number {
+    generation += 1
+    return generation
+  }
+
   /** 装载（首屏/翻页/筛选变化共用）：错误收敛为 loadError，绝不 reject */
   async function load() {
+    const gen = invalidate()
     loading.value = true
     loadError.value = false
     loadErrorKind.value = null
@@ -71,17 +96,26 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
         payload.keyword = searchKeyword.value
       }
       const result = await options.fetch({ page: currentPage.value, pageSize: pageSize.value }, payload)
+      // 更新的一轮已起飞（再点筛选 / 搜索回车 / 翻页 / 删完刷新）：本轮结果整体作废。
+      // 代数校验在写回**之前**（ADR-0069 决策 1 那条判据）：旧轮连 `list`/`total` 都不碰，
+      // 不是「先写回再纠正」—— 中间那一帧新筛选配旧行是可看见的。
+      if (gen !== generation) return
       // 容器已由 api 层出口保证（Page<T> 的 items/total 非空，兜底单点在 toPage，见 api/page.ts）；
       // 这里再兜一层就是同一判据的第二宿主。
       list.value = result.items
       total.value = result.total
     } catch (error) {
+      // 旧轮的失败不属于本轮：新一轮可能已经成功落地，这里把它打成错误态就是假故障
+      if (gen !== generation) return
       // 错误态由 loadError 承载（拦截器已统一 toast），不向上抛：调用点常不 await load()
       loadError.value = true
       loadErrorKind.value = kindOf(error)
     } finally {
-      loading.value = false
-      retrying.value = false
+      // 同样只在本轮仍是最新一轮时才收灯：旧轮归零会让在飞的新轮失去 loading 态
+      if (gen === generation) {
+        loading.value = false
+        retrying.value = false
+      }
     }
   }
 

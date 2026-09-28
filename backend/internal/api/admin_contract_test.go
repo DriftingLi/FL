@@ -153,9 +153,11 @@ func assertHasKeys(t *testing.T, obj map[string]json.RawMessage, want ...string)
 	}
 }
 
-// seedAdminContractStudent 直接落一行 hrwai_users。
-// 不用 testutil.SeedStudent：它的 uid 取自包级递增计数器，而 auth_me 契约测试把首个 uid
-// 硬编码成 ...001（内联快照）——本文件按文件名排在它之前，先 seed 会把那个快照串掉。
+// seedAdminContractStudent 直接落一行 hrwai_users（uid 显式给定，取值不参与任何断言）。
+// 历史原因：`testutil.SeedStudent` 的 uid 取自进程级递增计数器，而 auth_me 契约测试把首个 uid
+// 硬编码成 ...001 内联快照，本文件按文件名排在它之前，先 seed 会把那个快照串掉（CI 上真红过一次）。
+// 该快照已在 #1356 的修复里改成「回读种下的那一行」⇒ 这层顺序依赖不再存在；这里保留显式 uid
+// 只因为它让本文件的夹具与计数器彻底无关，不必再依赖运行顺序。
 func seedAdminContractStudent(t *testing.T, db *gorm.DB, username string) *model.HrwaiUser {
 	t.Helper()
 	u := &model.HrwaiUser{
