@@ -373,13 +373,20 @@ describe('R4 写回形状（ADR-0069）：useAsyncPage 的 loader 只取数', ()
 /**
  * R4c loader 必须**回传数据**：apply 的入参就是 loader 的返回值 —— 一个不返回任何东西的 loader
  * 只能靠「调本页/别的 composable 的写状态函数」落地，而那个形状 R4 看不见（写回在别的函数体里）。
- * 存量剩三处，逐条登记理由（不是豁免「不想改」，而是「要连同另一个 module 的契约一起改」）：
+ *
+ * 存量的三处已由 #1355 全部销账（这张表的用途正是让它变短）：
+ * - `pages/admin/CourseCatalog.vue` → `useCourseCatalog` 给出 `loadCatalog()`（只取数、原样回传）
+ *   与 `applyCatalog()`（写回）两条出口；管理端那一次 `Promise.all` 顺带取回的课程行改成 adapter
+ *   回传载荷的额外键（`CourseCatalogAdapter<R>` 泛型化），不再在 adapter 体内写页面 ref；
+ * - `pages/student/Dashboard.vue` → 课程/最近学习两路 helper 直接回传数据，统计那路改用
+ *   `useRoleDashboard` 的 `fetchStats()` + `applyStats()`；
+ * - `pages/admin/ValuationConfigManage.vue` → 清草稿那段搬进 `useAsyncPage` 新增的 `onError` 槽
+ *   （与 `apply` 同一条代数判据），loader 因此只剩取数。
+ *
+ * 将来若又出现「只调函数、不回传」的 loader，必须重新加条目**并附理由**（理由是「要连同另一个
+ * module 的契约一起改」，不是「不想改」），而不是让锁红着绕过。
  */
-const NO_RETURN_ALLOWLIST: Record<string, string> = {
-  'pages/admin/CourseCatalog.vue': '委托 useCourseCatalog.fetchCatalog()：状态与该 module 的 8 条用例都归它',
-  'pages/admin/ValuationConfigManage.vue': '装载器 catch 分支要清四份草稿（错误态与陈旧数据不同屏），apply 槽只在成功路径被调用',
-  'pages/student/Dashboard.vue': '三路 helper 里 loadStudyStats 归 useRoleDashboard（同 CourseCatalog）'
-}
+const NO_RETURN_ALLOWLIST: Record<string, string> = {}
 
 /** 扫一份源码文本，返回「块体 loader 里没有任何带值 return」的位置描述。 */
 function loadersWithoutReturnValue(text: string): string[] {
@@ -425,7 +432,7 @@ function loadersWithoutReturnValue(text: string): string[] {
 }
 
 describe('R4c 写回槽的入参来源（ADR-0069）：loader 必须回传数据', () => {
-  it('没有带值 return 的 loader 只剩登记在案的三处，且登记表里没有过期条目', () => {
+  it('src 下没有「不带值 return」的 loader（#1355 销账后登记表为空，且不得留死条目）', () => {
     const offenders: string[] = []
     for (const file of sourceFiles()) {
       const key = srcLabel(file)
@@ -462,13 +469,21 @@ describe('R4c 写回槽的入参来源（ADR-0069）：loader 必须回传数据
  * 硬套只会扫到 0 处并恒绿。可复用的形状是**同一条判据换宿主**：把「写回之前必须有一次批次代数比对」
  * 直接钉在装载函数体内（`useAdminTable.load` / `useAsyncPage.run` / `useAsyncPage.loadMore`）。
  *
- * 判据形状（按 AST 位置，不看语句文本）：装载函数体内每一次 `x.value =` 写回，若它之前出现过
- * `await`，那么在「最近一次 await」与「这次写回」之间必须有一次把批次代数计数器（`generation`）
- * 拿来比对的表达式。守卫写在写回**之后**就是没有守卫（正是 #1354 的形状）；await 之前的写回
+ * 判据形状（按 AST 位置，不看语句文本）：装载函数体内每一次 `x.value =` 写回、以及每一次写回槽调用
+ * （`options.apply?.(res)` / `options.onError?.(error)`），若它之前出现过 `await`，那么在
+ * 「最近一次 await」与「这一笔落地」之间必须有一次把批次代数计数器（`generation`）拿来比对的表达式。
+ * 守卫写在写回**之后**就是没有守卫（正是 #1354 的形状）；await 之前的写回
  * （`loading.value = true` 这类起飞前的复位）没有竞态可言，不算违规。
  * 另带「找不到被测装载函数即红」的防空转半边 —— 函数改名或扫描面失灵时不得静默放行。
  */
 const BATCH_COUNTER = 'generation'
+
+/**
+ * 写回槽的名字：`options.apply?.(res)` / `options.onError?.(error)` 这两个**调用点**与页面 ref 写回等价
+ * —— 它们的整个用途就是把页面的写回搬到代数校验之后，挪回校验之前等于没有守卫
+ * （#1355 实施时实测：只扫 `x.value =` 会让「apply 提前到守卫前」这种退化悄悄溜过 R5）。
+ */
+const WRITE_BACK_SLOTS = new Set(['apply', 'onError'])
 
 /** 一次「与批次代数的比对」：`gen !== generation` / `generation === gen` 这类比较表达式。 */
 function isGenerationComparison(node: ts.Node): boolean {
@@ -485,7 +500,13 @@ function isGenerationComparison(node: ts.Node): boolean {
   return sides.length === 2 && sides.includes(BATCH_COUNTER) && sides.some(s => s !== BATCH_COUNTER)
 }
 
-/** 装载函数体内「写回排在最近一次 await 之后、代数比对之前」的违规描述（空数组 = 合规）。 */
+/** R5 用：写回节点连同位置（判形状复用 R4 的 `isRefWrite`，但比先后要知道排在哪一列）。 */
+function refWriteAt(node: ts.Node): { name: string; pos: number } | null {
+  const name = isRefWrite(node)
+  return name ? { name, pos: node.getStart() } : null
+}
+
+/** 装载函数体内「写回（或写回槽调用）排在最近一次 await 之后、代数比对之前」的违规描述。 */
 function writeBackWithoutGuard(text: string, fnName: string): string[] {
   const offenders: string[] = []
   for (const block of scriptBlocks(text)) {
@@ -518,8 +539,12 @@ function writeBackWithoutGuard(text: string, fnName: string): string[] {
     const visit = (n: ts.Node): void => {
       if (ts.isAwaitExpression(n)) awaits.push(n.getStart())
       if (isGenerationComparison(n)) guards.push(n.getStart())
-      const write = isRefWrite(n)
-      if (write) writes.push({ name: write, pos: n.getStart() })
+      const write = refWriteAt(n)
+      if (write) writes.push({ name: write.name + '.value 写回', pos: write.pos })
+      // 写回槽的调用点与页面 ref 写回等价：它把「页面的写回」搬到守卫之后，挪回守卫之前就等于没有守卫
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && WRITE_BACK_SLOTS.has(n.expression.name.text)) {
+        writes.push({ name: n.expression.name.text + ' 槽调用', pos: n.getStart() })
+      }
       ts.forEachChild(n, visit)
     }
     visit(body)
@@ -528,7 +553,7 @@ function writeBackWithoutGuard(text: string, fnName: string): string[] {
       if (!prior.length) continue
       const lastAwait = Math.max(...prior)
       if (!guards.some(g => g > lastAwait && g < w.pos)) {
-        offenders.push(`${w.name}.value 写回排在最近一次 await 之后、代数比对之前（${fnName} 内无守卫）`)
+        offenders.push(`${w.name}排在最近一次 await 之后、代数比对之前（${fnName} 内无守卫）`)
       }
     }
   }

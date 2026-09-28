@@ -137,3 +137,72 @@ describe('useRoleDashboard（统计 section 收敛）', () => {
     expect(initSpy).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * #1355（R4c 登记表销账的前置 2）：`fetchStats`（只取数）与 `applyStats`（写回 + 重绘）两条出口。
+ *
+ * `pages/student/Dashboard.vue` 的三路装载此前只在 loader 里 `await` 三个 helper，统计那路把写回
+ * 住在 `useRoleDashboard.loadStats()` 体内 —— R4「loader 不写回」看不见这个形状，R4c 只能登记例外。
+ * 拆开后页面走 loader 回传 + `apply` 槽（写回排在批次代数校验之后，ADR-0069 决策 1）；
+ * `loadStats` 保留为两条出口的一体入口（tab 切换与本 module 的存量用例仍用它，#506 时机不变）。
+ */
+describe('useRoleDashboard 取数出口与写回出口（#1355）', () => {
+  function makeWithFetcher(statsFetcher: (days: number) => Promise<RoleDashboardStats | null>) {
+    return useRoleDashboard({
+      statsFetcher,
+      seriesType: 'line',
+      unit: '分钟',
+      yAxisName: '分钟',
+      summaryText: (s) => `共 ${s.total} 分钟`,
+      timeTabs: makeTabs()
+    })
+  }
+
+  it('fetchStats 只取数：回传结果，不写 stats、不重绘', async () => {
+    const d = makeDashboard()
+    // 容器已挂载：若 fetchStats 越界做了写回，就会顺带触发重绘 —— 用这一条把「无副作用」测实
+    d.chartRef.value = document.createElement('div')
+
+    const res = await d.fetchStats()
+    expect(res?.total).toBe(3)
+    expect(d.stats.value).toBeNull()
+    expect(d.summary.value).toBe('')
+    expect(initSpy).not.toHaveBeenCalled()
+    // 在飞态由取数出口自己收口（不悬干）
+    expect(d.statsLoading.value).toBe(false)
+  })
+
+  it('applyStats 写回并按 #506 的时机自动重绘', async () => {
+    const d = makeDashboard()
+    d.chartRef.value = document.createElement('div')
+
+    const res = await d.fetchStats()
+    await d.applyStats(res)
+    expect(d.stats.value?.total).toBe(3)
+    expect(d.summary.value).toBe('共 3 分钟')
+    expect(d.statsEmpty.value).toBe(false)
+    expect(initSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('statsFetcher 抛错：fetchStats 回传 null（统计面降级为空态，不外抛、不连带把整页打成错误态）', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const d = makeWithFetcher(async () => {
+      throw new Error('boom')
+    })
+
+    await expect(d.fetchStats()).resolves.toBeNull()
+    expect(d.stats.value).toBeNull()
+    expect(d.statsLoading.value).toBe(false)
+    expect(error).toHaveBeenCalled()
+    error.mockRestore()
+  })
+
+  it('loadStats 仍是两条出口的一体入口（旧入口语义与 tab 切换路径不变）', async () => {
+    const d = makeDashboard()
+    d.chartRef.value = document.createElement('div')
+
+    await d.loadStats()
+    expect(d.stats.value?.total).toBe(3)
+    expect(initSpy).toHaveBeenCalledTimes(1)
+  })
+})

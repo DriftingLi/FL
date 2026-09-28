@@ -88,6 +88,21 @@ export interface UseAsyncPageOptions<T = unknown> {
    */
   apply?: (res: T) => void
   /**
+   * 错误出口槽（#1355，与 `apply` 对称）：装载失败时**且仅在 `gen === generation` 校验通过之后**
+   * 调用，入参是 loader 抛出的错误（`loadError`/`loadErrorKind` 已由本 composable 置好，
+   * 本槽只做页面自己的清理，例如「错误态与陈旧数据不同屏」那类清草稿）。
+   *
+   * 为什么需要它、而不是让 loader 自己 `catch`：`apply` 只在成功路径被调用，而有些页面的失败路径
+   * **也**要写页面 ref（`admin/ValuationConfigManage.vue` 要清四份草稿）。把清理写在 loader 的
+   * catch 里，就等于把写回搬回守卫之前（正是 R4/R4c 的射程），且**旧轮**的失败会抹掉
+   * **新轮**刚落地的数据。写回既然要收在一处，成功与失败两条路都得有槽。
+   *
+   * 射程：只挂 `run`（整页装载）的失败路径。`loadMore` 的批失败按既有语义原地保持
+   * （条目不清、页码不推进、入口不消失），故不调用本槽 —— 追加失败不该把已看到的内容清掉。
+   * 本槽抛错不外溢（记一条 console.error，口径同 `facets` 的装载失败）：`run` 的契约是「绝不 reject」。
+   */
+  onError?: (error: unknown) => void
+  /**
    * facet 声明槽（第十四波 B 票 10，ADR-0062 决策 10）：**列表之外的旁路装载流**
    * （筛选选项、目录树、标签计数这类跟着页面走的面）在这里声明，
    * 于是「它什么时候该重装」这件事全仓只有一处判据 —— 与列表共享同一批失效时机：
@@ -125,6 +140,7 @@ export interface AsyncPageFacet {
  * - `run`：装载入口。装载前清错误态；loader 抛错即置 loadError（拦截器已统一 toast），
  *   loader **只取数**（拉数据并 return），写页面 ref 一律走 `apply` 槽 —— 判据在代数校验之后
  *   （ADR-0069 决策 1），页面不再各自 try/catch、juggle loading。
+ *   失败路径的页面清理走 `onError` 槽（#1355）：同一条代数判据，旧轮的失败不动新轮的状态。
  * - `retry`：错误态重试。retrying 防重入，并作为重试按钮的 loading 态。
  * - `page/pageSize/total`：el-pagination 三件套；`handlePageChange` 翻页即重装，
  *   `handleSizeChange` 改页大小回第一页重装（与存量页行为一致）。
@@ -325,6 +341,17 @@ export function useAsyncPage<T = unknown>(load: (page?: number) => Promise<T>, o
       if (gen !== generation) return
       loadError.value = true
       loadErrorKind.value = kindOf(error)
+      // 错误出口槽与 apply 同判据：代数校验通过后才执行（#1355）。
+      // 本槽抛错不外溢 —— run 的契约是「错误收敛为 loadError，绝不 reject」。
+      try {
+        options.onError?.(error)
+      } catch (slotError) {
+        console.error(
+          '[useAsyncPage] onError 槽抛错：本轮的失败清理未执行完（错误态已由 loadError 承载，' +
+            '不再向上 reject —— 调用点常不 await run()）',
+          slotError
+        )
+      }
       // append 形态：本批失败即停（不回退页码），由 retry 重跑同一批
       if (append) hasMore.value = false
     } finally {

@@ -51,22 +51,41 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
     return options.summaryText(stats.value)
   })
 
-  async function loadStats() {
+  /**
+   * 只取数出口（#1355）：按当前 tab 的天数拉统计并**回传**，不写 `stats`。
+   * 页面用它配 `useAsyncPage` 的 loader（回传值）+ `apply` 槽（调 `applyStats` 落地），
+   * 于是「写回只发生在最新一轮」（ADR-0069 决策 1）这条判据在委托本 module 的页面上同样成立
+   * —— 此前页面 loader 只是 `await loadStats()`，写回住在本 module 里，R4 看不见、R4c 只能登记例外。
+   * 失败口径照旧：catch 后回传 null（统计面降级为空态，不把整页打成错误态）。
+   */
+  async function fetchStats(): Promise<RoleDashboardStats | null> {
     statsLoading.value = true
     try {
       const tab = timeTabs.find((t) => t.value === currentTab.value)
       const days = tab ? tab.days : 7
       const res = await options.statsFetcher(days)
-      stats.value = res ?? null
+      return res ?? null
     } catch (error) {
       console.error('加载统计失败:', error)
-      stats.value = null
+      return null
     } finally {
       statsLoading.value = false
     }
-    // #506：数据就绪后自动重绘（容器若仍被骨架隐藏则跳过，等 watch(chartRef) 补渲染）
+  }
+
+  /**
+   * 写回出口（#1355，与 `useAsyncPage` 的 `apply` 槽同位）：写 `stats`，并按 #506 的时机自动重绘
+   * （容器若仍被骨架隐藏则跳过，等 `watch(chartRef)` 补渲染）。
+   */
+  async function applyStats(res: RoleDashboardStats | null): Promise<void> {
+    stats.value = res
     await nextTick()
     renderChart()
+  }
+
+  /** 取数 + 写回 + 重绘一体的旧入口（本 module 的 tab 切换与非 seam 调用方用这条）。 */
+  async function loadStats() {
+    await applyStats(await fetchStats())
   }
 
   function renderChart() {
@@ -183,6 +202,8 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
     statsLoading,
     statsEmpty,
     summary,
+    fetchStats,
+    applyStats,
     loadStats,
     renderChart
   }
