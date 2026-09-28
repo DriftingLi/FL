@@ -27,10 +27,17 @@ function loadCred(requestMappedImpl) {
 }
 
 describe('credential.uts switchCredentialApi：失败上抛、不 mock 假成功（K4 #1346）', () => {
-  test('请求失败时必须 reject，不得 resolve success:true', async () => {
-    const mod = loadCred(() => Promise.reject(new Error('500 backend reject')));
+  test('请求失败时必须 reject（且确实发出了 PATCH 请求，非无条件 reject）', async () => {
+    const calls = [];
+    const spy = (opts) => { calls.push(opts); return Promise.reject(new Error('500 backend reject')); };
+    const mod = loadCred(spy);
     // 现状（带 mock 兜底）会 resolve { success:true } ⇒ 本断言判红；去掉兜底后 reject ⇒ 绿
     await expect(mod.switchCredentialApi(1)).rejects.toBeInstanceOf(Error);
+    // 防「无条件 reject」假绿：断言真发了请求且形态正确
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe('PATCH');
+    expect(calls[0].url).toContain('/me/credential');
+    expect(calls[0].data.credential_id).toBe(1);
   });
 
   test('成功时透传后端返回的 credential（不吞成功、不读 mock）', async () => {

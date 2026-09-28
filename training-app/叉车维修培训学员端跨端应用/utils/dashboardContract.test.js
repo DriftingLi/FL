@@ -200,11 +200,13 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(body).toContain('currentCert.value = prevName');
     expect(body).toContain('切换失败，请重试');
     expect(body).toContain('isSwitching.value = false');
+    // #1346：未确认切换（success:false）不得再当成功写本地存储 ⇒ else 分支不再有 item.code 写入
+    expect(body).not.toContain("uni.setStorageSync('selected_cert', item.code)");
   });
 
-  it("selected_cert 存储同步点保持（load 1 + switch 2 + composable getStorageSync 回退 2）", () => {
+  it("selected_cert 存储同步点保持（load 1 + switch 成功 1；未确认切换不写存储 #1346）", () => {
     const syncWrites = (cred.match(/uni\.setStorageSync\('selected_cert'/g) || []).length;
-    expect(syncWrites).toBe(3);
+    expect(syncWrites).toBe(2);
     const syncReads = (cred.match(/uni\.getStorageSync\('selected_cert'/g) || []).length;
     expect(syncReads).toBe(2);
   });
