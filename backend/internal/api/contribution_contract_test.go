@@ -15,11 +15,15 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
 // newContributionRouter 装配投稿蓝图测试路由器。
-func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, *model.Credential) {
+//
+// 第五个返回值是投稿暂存位的本地存储：#1361 之后 Create 要问它「那个暂存文件在不在」，
+// 用例必须先往本人的分区 contributions/<uid>/ 里种一个真文件，才谈得上提交成功。
+func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, *model.Credential, *storage.LocalStorage) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testutil.NewFileDB(t)
@@ -27,7 +31,8 @@ func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, 
 		JWTSecretKey: "contract-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
 	}
-	deps := newContractDeps(t, db, cfg)
+	st := storage.NewLocalStorage(t.TempDir())
+	deps := newContractDepsWithStorage(t, db, cfg, st)
 	r := gin.New()
 	api := r.Group("/api")
 	RegisterContributionRoutes(api, deps.RouterDeps(), deps.ContributionSvc)
@@ -41,7 +46,7 @@ func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, 
 	if err := db.Create(stu).Error; err != nil {
 		t.Fatalf("建学员失败: %v", err)
 	}
-	return r, deps, stu, cred
+	return r, deps, stu, cred, st
 }
 
 // issueContributionToken 签发学员 token。
@@ -76,17 +81,17 @@ func contributionDo(t *testing.T, r *gin.Engine, token, method, path string, bod
 
 // TestContributionAPIContract 学员投稿 + 管理审核端到端契约。
 func TestContributionAPIContract(t *testing.T) {
-	r, deps, stu, cred := newContributionRouter(t)
+	r, deps, stu, cred, st := newContributionRouter(t)
 	cfg := &config.Config{JWTSecretKey: "contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	tok := issueContributionToken(t, cfg, stu)
 
-	// 1. 创建投稿（files 直接传虚构 URL——service 不校验文件归属）
+	// 1. 创建投稿（files 引用**本人暂存位**里真实存在的文件——#1361 起服务端不再相信客户端造的 URL）
 	createBody := map[string]any{
 		"credential_id": cred.ID,
 		"title":         "故障排查手册",
 		"intro":         "一线维修整理",
 		"files": []map[string]any{{
-			"file_url": "/static/uploads/contributions/x.pdf", "file_name": "x.pdf", "file_size": 1024, "content_type": "document",
+			"file_url": stageLocalFile(t, st, stu.ID, "x.pdf"), "file_name": "x.pdf", "file_size": 1024, "content_type": "document",
 		}},
 	}
 	w := contributionDo(t, r, tok, "POST", "/api/contributions", createBody)
@@ -127,7 +132,8 @@ func TestContributionAPIContract(t *testing.T) {
 		"title":         "电工安全手册",
 		"intro":         "跨证件供稿",
 		"files": []map[string]any{{
-			"file_url": "/static/uploads/contributions/y.pdf", "file_name": "y.pdf", "file_size": 1024, "content_type": "document",
+			// 跨证件改的只是**投稿投向哪个证件**，暂存位的归属仍是投稿人本人（#1361 的 ①）。
+			"file_url": stageLocalFile(t, st, stu.ID, "y.pdf"), "file_name": "y.pdf", "file_size": 1024, "content_type": "document",
 		}},
 	}
 	w = contributionDo(t, r, tok, "POST", "/api/contributions", crossBody)

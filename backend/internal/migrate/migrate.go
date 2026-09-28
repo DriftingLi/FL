@@ -59,7 +59,8 @@ func RunMigrations(dsn, direction string, logger *zap.Logger, args ...string) er
 		}
 		logger.Info("迁移版本已强制设置", zap.Int("version", version))
 	case "check-columns":
-		// 单向列对账（#1099 / ADR-0056 §6）：GORM 模型期望的列 ⊆ information_schema 实际列。
+		// 单向列对账（#1099 / ADR-0056 §6）：GORM 模型期望的列 ⊆ information_schema 实际列；
+		// #1362 起同一条命令再对两半唯一索引（登记表 ⇔ 迁移逐字、登记表 ⇒ pg_indexes 存在性）。
 		// 用法: DATABASE_URL=... go run ./cmd/migrate check-columns
 		if err := CheckColumns(dsn, logger); err != nil {
 			return err

@@ -5383,7 +5383,8 @@ paths:
       - 管理端-培训目录
   /admin/credential/{id}:
     delete:
-      description: 管理员删除目标证件字典项；无返回载荷
+      description: '管理员删除目标证件字典项；无返回载荷。练习进度分区随证件删除（迁移 000040 的 ON DELETE CASCADE），课程/题目置空归属；证件下仍有投稿时**阻塞删除**并回该句事实（含条数），不做静默级联删投稿（CONTEXT.md「证件删除的阻塞项」/
+        #1360）'
       parameters:
       - description: 证件ID
         in: path
@@ -5395,6 +5396,10 @@ paths:
       responses:
         "200":
           description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 该证件下仍有 N 篇投稿（文案带条数）
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -9904,8 +9909,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: 学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日
-        ≤3 份、pending 积压 ≤5 份。未过审不产生积分
+      description: '学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日
+        ≤3 份、pending 积压 ≤5 份。提交的每个 file_url 过四校验：前缀属本人 contributions/<id>/、扩展名在白名单内、未被任何投稿登记过、文件真实存在（ADR-0066
+        决策 5 / #1361）。未过审不产生积分'
       parameters:
       - description: 投稿表单
         in: body
@@ -9926,11 +9932,19 @@ paths:
                   $ref: '#/definitions/service.ContributionItemDTO'
               type: object
         "400":
-          description: 校验失败/配额已满/未选证件
+          description: 校验失败/配额已满/未选证件/类型不在白名单/文件已被登记
           schema:
             $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 暂存文件不属于本人目录
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 暂存文件不存在
           schema:
             $ref: '#/definitions/response.R'
       security:
@@ -10094,8 +10108,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: 先传后交：逐个文件上传到暂存位，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件
-        ≤20MB
+      description: 先传后交：逐个文件上传到**本人**暂存位 contributions/<当前用户id>/，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单
+        pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件 ≤20MB（ADR-0066 决策 5：归属由路径承载）
       parameters:
       - description: 投稿文件
         in: formData

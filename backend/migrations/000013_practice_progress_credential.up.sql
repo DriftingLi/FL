@@ -5,6 +5,8 @@
 -- （hrwai_users.current_credential_id），其余证件分区从其视角重新起算——唯一可行解。
 -- 当前证件为 NULL 的存量行保持 NULL（无分区），由 partial 唯一索引兜底（NULL 不判重）。
 
+-- 这条外键的删除动作后由 000040 改为 ON DELETE CASCADE（CONTEXT.md「证件删除的阻塞项」，#1360）：
+-- 本文件已上过生产，就地改只影响空库重建，存量库拿不到新动作，故另立迁移。
 ALTER TABLE practice_progress ADD COLUMN credential_id INT REFERENCES credential(id);
 
 UPDATE practice_progress pp
