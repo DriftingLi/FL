@@ -72,9 +72,19 @@
 
       <el-card v-if="examResult.details" class="mt-[15px]">
         <h3>答题详情</h3>
-        <div v-for="(d, idx) in examResult.details" :key="idx" class="detail-item mb-2 rounded-[8px] p-2.5" :class="d.is_correct ? 'bg-ok-soft' : 'bg-bad-soft'">
+        <!-- 判色三态（ADR-0068）：is_correct 为 null = 未判对错（简答），既不是对也不是错 —— 
+             它现在也拿得到得分，标红会变成「8/10 分却画成错题」。 -->
+        <div
+          v-for="(d, idx) in examResult.details"
+          :key="idx"
+          class="detail-item mb-2 rounded-[8px] p-2.5"
+          :class="d.is_correct === true ? 'bg-ok-soft' : d.is_correct === false ? 'bg-bad-soft' : ''"
+        >
           <p><strong>第{{ idx + 1 }}题：</strong>{{ d.content }}</p>
           <p>你的答案：{{ d.user_answer || '未作答' }} | 正确答案：{{ d.correct_answer }}</p>
+          <!-- 本题得分与总分同源（ADR-0068 决策 3）：短答不再并排展示「0 分」与「AI 评分」两个数 -->
+          <p>本题得分：{{ d.score }} / {{ d.max_score }}</p>
+          <p v-if="d.ai_comment" class="text-[13px] text-ink-3">AI 评语：{{ d.ai_comment }}</p>
           <p v-if="d.explanation" class="text-[13px] text-ink-3">解析：{{ d.explanation }}</p>
         </div>
       </el-card>
