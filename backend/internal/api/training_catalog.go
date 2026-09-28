@@ -848,12 +848,13 @@ type credentialIDReq struct {
 
 // DeleteCredential 删除目标证件
 // @Summary 删除证件
-// @Description 管理员删除目标证件字典项；无返回载荷
+// @Description 管理员删除目标证件字典项；无返回载荷。练习进度分区随证件删除（迁移 000040 的 ON DELETE CASCADE），课程/题目置空归属；证件下仍有投稿时**阻塞删除**并回该句事实（含条数），不做静默级联删投稿（CONTEXT.md「证件删除的阻塞项」/ #1360）
 // @Tags 管理端-培训目录
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "证件ID"
 // @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "该证件下仍有 N 篇投稿（文案带条数）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "证件不存在"
 // @Router /admin/credential/{id} [delete]
@@ -870,6 +871,10 @@ func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 			return struct{}{}, h.svc.DeleteCredential(req.ID)
 		}),
 	}.WithSuccess(okMsgNoData("证件删除成功"), http.StatusInternalServerError).
+		// #1360：投稿阻塞走 400（ADR-0064 决策 9 让 4xx 原样发出那句话，条数因此在文案里）。
+		// 不用 409：本仓从未使用 409，renderStatus 的单一咽喉里没有 409 分支，域表放 409 会被
+		// 静默渲染成 500（同 faq.go 里「标识已占用」的同一处先例与同一理由）。
+		WithSentinel(service.ErrCredentialHasContributions, http.StatusBadRequest).
 		WithSentinel(service.ErrCredentialNotFound, http.StatusNotFound).Handle(c)
 }
 
