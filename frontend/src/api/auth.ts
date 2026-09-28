@@ -20,7 +20,6 @@ import type {
   WechatQRCodeInfoDTO,
   WxLoginResult
 } from './generated/auth'
-import { getRefreshToken } from '@/utils/storage'
 
 export type { GenerateCaptchaDTO, LoginResult, ProfileChangeRequestDTO, ProfileDTO, WechatQRCodeInfoDTO, WxLoginResult }
 
@@ -47,9 +46,12 @@ export const authApi = {
   },
 
   logout() {
-    // refresh_token 缺失时发空串（与迁移前逐字一致；Go 侧空串/缺键同为未提供）
-    const refresh_token = getRefreshToken() || ''
-    return unwrappedRequest.post<null>('/auth/logout', { refresh_token })
+    // ADR-0067（票 #1363）：refresh 已经在 httpOnly Cookie 里，JS 读不到，因此这里恒发空串
+    // （Go 侧空串/缺键同为「未提供」，线上形状与迁移前逐字一致）。
+    // 副作用要看清：refresh cookie 的 Path 收在 /api/auth/refresh，浏览器不会把它发到 /logout，
+    // 所以浏览器登出只做「清本地 + 清 Cookie」，不再吊销手上那一支；
+    // 服务端吊销路径是改密/注销的全会话吊销（详见 #1363 报告的 ADR 冲突条）。
+    return unwrappedRequest.post<null>('/auth/logout', { refresh_token: '' })
   },
 
   getUserInfo(config?: AxiosRequestConfig) {

@@ -9,11 +9,10 @@ vi.mock('element-plus', () => ({
 
 // 隔离 localStorage 环境差异（getToken 直读 localStorage）：证件注入相关用例只关心 params 改写，
 // 无 token 也能走到注入分支
+// 注：ADR-0067 后存储层不再有 refresh 的读写口，这里也就无需再 mock 它们。
 vi.mock('@/utils/storage', () => ({
   getToken: vi.fn(() => null),
-  getRefreshToken: vi.fn(() => null),
-  setToken: vi.fn(),
-  setRefreshToken: vi.fn()
+  setToken: vi.fn()
 }))
 
 import { ElMessage } from 'element-plus'

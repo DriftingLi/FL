@@ -4,7 +4,7 @@ import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
 import { getValidAccessToken } from '@/api/client'
 import type { UserProfile } from '@/types/user'
-import { getToken, getUserInfo, setToken, removeToken, setRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
+import { getToken, getUserInfo, setToken, removeToken, removeRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
 import { consumeAuthTokenFromUrl } from '@/utils/authToken'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -39,6 +39,11 @@ export const useAuthStore = defineStore('auth', () => {
   let readyPromise: Promise<void> | null = null
 
   function initFromStorage() {
+    // ADR-0067（票 #1363）：#1363 之前的登录把 refresh 写进了 localStorage，那是**存量残留**。
+    // 浏览器侧的续期通道已经换成 httpOnly Cookie（JS 读不到），留着那一份只是把 7 天凭证
+    // 继续摊在「任何同源脚本都能扫一遍存储」的窗口里——本票要关的就是这一层。
+    // 清它不伤可用性：续期不再需要前端手上那一份（服务端按 Cookie 轮换）。
+    removeRefreshToken()
     // 令牌不从这里赋值出去：经派生 ref 现取（就是 storage 的 TOKEN_KEY），
     // userInfo 只用来恢复资料与角色；其登录快照里的 token 字段不再是事实源。
     const savedToken = token.value
@@ -103,13 +108,16 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 令牌写入的唯一入口：派生 ref 的 setter（只落 storage，不再另存内存副本）
     token.value = data.token
-    userInfo.value = data
+    // ADR-0067（票 #1363）：refresh 不进任何 JS 可达存储。浏览器侧续期只认服务端下发的
+    // httpOnly Cookie；响应体里那一份是给移动端/非浏览器客户端的，Web 端不是它的消费者。
+    // 必须在**入库前**剥掉：`setUserInfo` 会把整个对象序列化进 localStorage，
+    // 只删掉 setRefreshToken 那一行等于没删——refresh 会顺着 userInfo 漏回存储。
+    const profile = { ...data }
+    delete profile.refresh_token
+    userInfo.value = profile
     isLoggedIn.value = true
 
-    if (data.refresh_token) {
-      setRefreshToken(data.refresh_token)
-    }
-    setUserInfo(data)
+    setUserInfo(profile)
 
     // 登录响应只含基础字段（无昵称/头像等），异步拉取 /auth/me 补齐完整资料
     refreshUserInfo()

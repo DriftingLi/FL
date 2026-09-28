@@ -5,6 +5,10 @@
 //
 // 双令牌会话（ADR-0012）：access（2h，鉴权中间件专用，不入黑名单）+
 // refresh（7 天，刷新端点专用，轮换时旧值立即入黑名单防重放）；登出吊销 refresh。
+//
+// ADR-0067（修订 ADR-0016）：refresh 在浏览器侧改由本模块下发的 httpOnly Cookie 承载
+// （Path 收在 /api/auth/refresh），请求体通道保留给移动端与非浏览器客户端；
+// 签发/回写/吊销三条动作仍收敛在本模块单点。
 package security
 
 import (
@@ -33,6 +37,23 @@ const (
 
 // defaultRefreshExpiry 默认 refresh token 有效期（JWT_REFRESH_EXPIRES_DAYS=7，可配置覆盖）。
 const defaultRefreshExpiry = 7 * 24 * time.Hour
+
+// refresh 令牌的浏览器通道（ADR-0067 决策 1、2）：httpOnly Cookie 优先、请求体通道保留。
+//
+// RefreshCookiePath 把 Cookie 收在**唯一消费它的那个端点**上——Path 写 `/` 就等于把 7 天凭证
+// 挂到全站每个请求上；收窄到这一个路径后，同域下的其它端点（含 /api/auth/logout）根本收不到它。
+// 名字族与 access cookie 同名族但不同名，Domain / Secure **一律继承**各自的 access cookie 配置
+// （见 refreshCookiesFor）：本仓是子域名多工作区，作用域只能有一处事实源，另开一个配置项
+// 就是留一处「两个 cookie 域口径不一致」的漂移点，故这里不新增任何环境变量。
+const (
+	RefreshCookiePath                 = "/api/auth/refresh"
+	DefaultRefreshCookieName          = "hrwai_refresh"
+	DefaultRecruiterRefreshCookieName = "recruiter_refresh"
+
+	// roleRecruiter 与 service.RecruiterRole 同值：分流 refresh cookie 归属用。
+	// 不直接引用 service 是因为依赖方向是 service → security，反向引用成环。
+	roleRecruiter = "recruiter"
+)
 
 // Claims JWT 声明。
 type Claims struct {
@@ -86,7 +107,19 @@ type Session struct {
 	refreshExpiry   time.Duration
 	cookie          CookieConfig // hrwai / admin / tutor 共享的父域 cookie
 	recruiterCookie CookieConfig // recruiter 独立 host-only cookie
-	blacklist       BlacklistStore
+	// refreshCookie / recruiterRefreshCookie（ADR-0067）：浏览器侧 refresh 的落点。
+	// 两者都由对应的 access cookie 经 refreshCookiesFor 推导，Path 一律收在 RefreshCookiePath。
+	refreshCookie          CookieConfig
+	recruiterRefreshCookie CookieConfig
+	blacklist              BlacklistStore
+}
+
+// refreshCookiesFor 由两族 access cookie 推导出各自的 refresh cookie 配置（ADR-0067 决策 2 的
+// 「同一套域名与安全口径」）：Domain/Secure 逐字继承，只换名字与 Path。
+// 招聘者侧保持 host-only——轮换时把招聘者那支写进父域等于凭空扩大凭证作用域。
+func refreshCookiesFor(cookie, recruiterCookie CookieConfig) (CookieConfig, CookieConfig) {
+	return CookieConfig{Name: DefaultRefreshCookieName, Domain: cookie.Domain, Secure: cookie.Secure},
+		CookieConfig{Name: DefaultRecruiterRefreshCookieName, Domain: recruiterCookie.Domain, Secure: recruiterCookie.Secure}
 }
 
 // NewSession 构造会话模块（默认 Redis 黑名单存储；refresh 默认 7 天）。
@@ -96,18 +129,8 @@ func NewSession(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig) 
 
 // NewSessionWithBlacklistAndRefresh 构造会话模块：黑名单存储与 refresh 有效期均可注入（测试用）。
 func NewSessionWithBlacklistAndRefresh(jwtSecret string, jwtExpiry, refreshExpiry time.Duration, cookie CookieConfig, blacklist BlacklistStore) *Session {
-	s := &Session{
-		jwtSecret:     jwtSecret,
-		jwtExpiry:     jwtExpiry,
-		refreshExpiry: refreshExpiry,
-		cookie:        cookie,
-		blacklist:     blacklist,
-	}
-	s.recruiterCookie = CookieConfig{Name: "recruiter_token", Domain: "", Secure: cookie.Secure}
-	if s.recruiterCookie.Name == "" {
-		s.recruiterCookie.Name = "recruiter_token"
-	}
-	return s
+	return NewSessionWithRecruiterCookie(jwtSecret, jwtExpiry, refreshExpiry, cookie,
+		CookieConfig{Name: "recruiter_token", Secure: cookie.Secure}, blacklist)
 }
 
 // NewSessionWithRecruiterCookie 构造会话模块：显式指定招聘者 cookie（测试可注入 host-only 配置）。
@@ -115,13 +138,16 @@ func NewSessionWithRecruiterCookie(jwtSecret string, jwtExpiry, refreshExpiry ti
 	if recruiterCookie.Name == "" {
 		recruiterCookie.Name = "recruiter_token"
 	}
+	refresh, recruiterRefresh := refreshCookiesFor(cookie, recruiterCookie)
 	return &Session{
-		jwtSecret:       jwtSecret,
-		jwtExpiry:       jwtExpiry,
-		refreshExpiry:   refreshExpiry,
-		cookie:          cookie,
-		recruiterCookie: recruiterCookie,
-		blacklist:       blacklist,
+		jwtSecret:              jwtSecret,
+		jwtExpiry:              jwtExpiry,
+		refreshExpiry:          refreshExpiry,
+		cookie:                 cookie,
+		recruiterCookie:        recruiterCookie,
+		refreshCookie:          refresh,
+		recruiterRefreshCookie: recruiterRefresh,
+		blacklist:              blacklist,
 	}
 }
 
@@ -285,6 +311,25 @@ func (s *Session) RotateRefresh(ctx context.Context, refreshToken string) (strin
 	return s.IssuePair(claims.UserID, claims.Account, claims.Role)
 }
 
+// RotateAndSetCookie 轮换并把新 refresh 回写成 httpOnly Cookie（ADR-0067 决策 1、2 的落点）。
+//
+// 语义与 RotateRefresh 完全一致（轮换/吊销不因此改变，票 #1363 判据 2），只是多一步下发：
+// 浏览器侧下一轮只认这枚 Cookie；响应体里 refresh_token 照旧返回，请求体通道客户端
+// （移动端 / 非浏览器客户端）继续按 ADR-0016 的形态持有。
+// Cookie 归属按新令牌的 claims.Role 分流，招聘者那支不会写进父域（作用域只收窄不外扩）。
+func (s *Session) RotateAndSetCookie(ctx context.Context, w http.ResponseWriter, refreshToken string) (string, string, error) {
+	access, refresh, err := s.RotateRefresh(ctx, refreshToken)
+	if err != nil {
+		return "", "", err
+	}
+	// 刚签出的这枚必然自校验通过；真失败时只回退到「响应体通道」（不阻断续期），
+	// 不把它升级成 500——此刻旧 refresh 已被抢占吊销，报错误只会把用户挡在门外。
+	if claims, verr := s.ValidateRefresh(refresh); verr == nil {
+		s.setRefreshCookieForRole(w, claims.Role, refresh)
+	}
+	return access, refresh, nil
+}
+
 // RevokeRefresh 吊销 refresh token：写入黑名单，TTL = token 剩余有效期。
 // 供登出使用（轮换路径的吊销由 RotateRefresh 的原子抢占承担）。
 // 无效或类型不是 refresh 的令牌静默忽略（access 短生命周期，不入黑名单）。
@@ -303,13 +348,38 @@ func (s *Session) RevokeRefresh(ctx context.Context, tokenStr string) error {
 // 撑起的假想 seam（ADR-0060 自己的判据）。
 // 吊销失败仍清 Cookie：本地登录态已不可用，凭证缺口由日志暴露（与既有登出口径一致）。
 // 终止该身份全部会话不在此处：那属 RevokeIdentity。
+//
+// ADR-0067 之后 refresh 的本地清除也收敛到本动作（ClearRefreshCookies）：登出至少要把凭证
+// 从浏览器里抹掉。但 refresh cookie 的 Path 收在 /api/auth/refresh（ADR-0067 决策 2 的
+// 最小暴露面），浏览器**不会**把它发到本端点——所以浏览器侧登出只能清 Cookie、无法再吊销
+// 手上那一支（服务端吊销路径由改密/注销的 RevokeIdentity 承担）。冲突与处置见 #1363 报告。
 func (s *Session) SignOut(ctx context.Context, w http.ResponseWriter, refreshToken string) error {
 	var err error
 	if refreshToken != "" {
 		err = s.RevokeRefresh(ctx, refreshToken)
 	}
 	s.ClearCookie(w)
+	s.ClearRefreshCookies(w)
 	return err
+}
+
+// ClearLoginCookies 抹掉本地全部登录态 Cookie（access + 两族 refresh）：登出与注销共用一处。
+func (s *Session) ClearLoginCookies(w http.ResponseWriter) {
+	s.ClearCookie(w)
+	s.ClearRefreshCookies(w)
+}
+
+// SetLoginCookies 登录路径一次性下发 access + refresh（ADR-0067：refresh 从此有 Cookie 通道，
+// 响应体里的双令牌照旧返回，非浏览器客户端继续按 ADR-0016 的形态持有）。
+func (s *Session) SetLoginCookies(w http.ResponseWriter, access, refresh string) {
+	s.SetCookie(w, access)
+	s.SetRefreshCookie(w, refresh)
+}
+
+// SetRecruiterLoginCookies 招聘者登录：两枚 Cookie 都保持 host-only（招牌隔离 #370，作用域不外扩）。
+func (s *Session) SetRecruiterLoginCookies(w http.ResponseWriter, access, refresh string) {
+	s.SetRecruiterCookie(w, access)
+	s.SetRecruiterRefreshCookie(w, refresh)
 }
 
 // verify 解析并校验 JWT（显式校验签名算法，拒绝非 HMAC 算法，防止 alg=none 攻击）。
@@ -356,32 +426,30 @@ func (s *Session) CookieName() string {
 	return s.cookie.Name
 }
 
-// SetCookie 将 JWT 写入父域名 httpOnly Cookie，实现子域名间登录态共享。
-func (s *Session) SetCookie(w http.ResponseWriter, token string) {
+// writeLoginCookie 登录态 Cookie 的唯一写形：httpOnly + SameSite=Lax + 由配置决定的 Domain/Secure
+// 三处口径集中一处（ADR-0016 的 access 与 ADR-0067 的 refresh 共用，差别只有 Name/Path/MaxAge）。
+// maxAge 传秒：-1 表示清除。
+func writeLoginCookie(w http.ResponseWriter, cfg CookieConfig, value, path string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.cookie.Name,
-		Value:    token,
-		Path:     "/",
-		Domain:   s.cookie.Domain,
-		MaxAge:   int(s.jwtExpiry.Seconds()),
+		Name:     cfg.Name,
+		Value:    value,
+		Path:     path,
+		Domain:   cfg.Domain,
+		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   s.cookie.Secure,
+		Secure:   cfg.Secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
+// SetCookie 将 JWT 写入父域名 httpOnly Cookie，实现子域名间登录态共享。
+func (s *Session) SetCookie(w http.ResponseWriter, token string) {
+	writeLoginCookie(w, s.cookie, token, "/", int(s.jwtExpiry.Seconds()))
+}
+
 // ClearCookie 清除登录 Cookie（登出时调用）。
 func (s *Session) ClearCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.cookie.Name,
-		Value:    "",
-		Path:     "/",
-		Domain:   s.cookie.Domain,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   s.cookie.Secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	writeLoginCookie(w, s.cookie, "", "/", -1)
 }
 
 // RecruiterCookieName 返回招聘者登录态 Cookie 名称（host-only 隔离）。
@@ -404,16 +472,89 @@ func (s *Session) CookieNames() []string {
 
 // SetRecruiterCookie 将招聘者 JWT 写入 host-only httpOnly Cookie（不设 Domain，浏览器仅对当前 host 发送）。
 func (s *Session) SetRecruiterCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.RecruiterCookieName(),
-		Value:    token,
-		Path:     "/",
-		Domain:   s.recruiterCookie.Domain,
-		MaxAge:   int(s.jwtExpiry.Seconds()),
-		HttpOnly: true,
-		Secure:   s.recruiterCookie.Secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	cfg := s.recruiterCookie
+	cfg.Name = s.RecruiterCookieName()
+	writeLoginCookie(w, cfg, token, "/", int(s.jwtExpiry.Seconds()))
+}
+
+// ===== ADR-0067：refresh 令牌的浏览器通道（httpOnly Cookie 优先，请求体通道保留）=====
+
+// RefreshCookieNames 返回 refresh cookie 名（优先级与 CookieNames 同口径：主站先、招聘者次之）。
+// 与 access 侧的取舍一致：同一浏览器同一时刻只有一族活跃会话（前端令牌 key 也是单份），
+// 双族并存时以主站为准，不做「哪个 cookie 先过期」的隐式回退。
+func (s *Session) RefreshCookieNames() []string {
+	names := make([]string, 0, 2)
+	if s.refreshCookie.Name != "" {
+		names = append(names, s.refreshCookie.Name)
+	}
+	if rn := s.RecruiterRefreshCookieName(); rn != "" && rn != s.refreshCookie.Name {
+		names = append(names, rn)
+	}
+	return names
+}
+
+// RecruiterRefreshCookieName 返回招聘者 refresh cookie 名（host-only）。
+func (s *Session) RecruiterRefreshCookieName() string {
+	if s.recruiterRefreshCookie.Name != "" {
+		return s.recruiterRefreshCookie.Name
+	}
+	return DefaultRecruiterRefreshCookieName
+}
+
+// RefreshCookieName 返回主站 refresh cookie 名。
+func (s *Session) RefreshCookieName() string {
+	if s.refreshCookie.Name != "" {
+		return s.refreshCookie.Name
+	}
+	return DefaultRefreshCookieName
+}
+
+// ExtractRefreshCookie 按优先级取第一枚非空的 refresh cookie。
+// 返回空串 = 「这次请求没带 Cookie 通道」，端点才回退请求体（ADR-0067 决策 1 的读取顺序）。
+func (s *Session) ExtractRefreshCookie(r *http.Request) string {
+	for _, name := range s.RefreshCookieNames() {
+		if ck, err := r.Cookie(name); err == nil && ck.Value != "" {
+			return ck.Value
+		}
+	}
+	return ""
+}
+
+// SetRefreshCookie 下发主站 refresh 的 httpOnly Cookie（Path 收在刷新端点）。
+func (s *Session) SetRefreshCookie(w http.ResponseWriter, token string) {
+	s.refreshCookie.Name = s.RefreshCookieName()
+	writeLoginCookie(w, s.refreshCookie, token, RefreshCookiePath, int(s.refreshExpiry.Seconds()))
+}
+
+// SetRecruiterRefreshCookie 下发招聘者 refresh 的 httpOnly Cookie（host-only，作用域不外扩）。
+func (s *Session) SetRecruiterRefreshCookie(w http.ResponseWriter, token string) {
+	s.recruiterRefreshCookie.Name = s.RecruiterRefreshCookieName()
+	writeLoginCookie(w, s.recruiterRefreshCookie, token, RefreshCookiePath, int(s.refreshExpiry.Seconds()))
+}
+
+// ClearRefreshCookies 清掉两族 refresh cookie（登出/注销的本地凭证清除）。
+// 注意两处细节：清除必须与写入同 Path/Domain（否则浏览器不认这条 Set-Cookie 是删除），
+// 且 Max-Age 必须是 -1（只把值置空、Max-Age 仍是 7 天等于又发了一枚空值 Cookie）。
+func (s *Session) ClearRefreshCookies(w http.ResponseWriter) {
+	writeLoginCookie(w, CookieConfig{
+		Name:   s.RefreshCookieName(),
+		Domain: s.refreshCookie.Domain,
+		Secure: s.refreshCookie.Secure,
+	}, "", RefreshCookiePath, -1)
+	writeLoginCookie(w, CookieConfig{
+		Name:   s.RecruiterRefreshCookieName(),
+		Domain: s.recruiterRefreshCookie.Domain,
+		Secure: s.recruiterRefreshCookie.Secure,
+	}, "", RefreshCookiePath, -1)
+}
+
+// setRefreshCookieForRole 按令牌归属角色回写 refresh cookie（招聘者只落 host-only 那族）。
+func (s *Session) setRefreshCookieForRole(w http.ResponseWriter, role, token string) {
+	if role == roleRecruiter {
+		s.SetRecruiterRefreshCookie(w, token)
+		return
+	}
+	s.SetRefreshCookie(w, token)
 }
 
 // randomJWTID 生成随机 jti（防重放/保证每次签发唯一；crypto/rand 失败时退化为时间戳）。

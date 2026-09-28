@@ -142,11 +142,15 @@ describe('判据 1：store.token 是 storage 的派生值（无缓存窗口）',
 
       // 重试的那一发带的是刷新后的新令牌 ⇒ 链路真的走通了
       expect(data).toEqual({ reached: true })
-      expect(refreshBodies).toEqual([{ refresh_token: 'refresh-old' }])
+      // ADR-0067（票 #1363，修订 ADR-0016 的「refresh 由前端持有」）：浏览器侧只提供 httpOnly
+      // Cookie，请求体不再带 refresh_token，轮换出来的新 refresh 也不再入库。
+      // 本票的判据是 **access** 的单一事实源（下面三条），refresh 的存放面由
+      // `api/__tests__/refreshCookieChannel.spec.ts` 锁。
+      expect(refreshBodies).toEqual([{}])
+      expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBeNull()
       // 判据 1：刷新之后 store 侧与 storage 侧同值（术前那份缓存副本到这里还是 expired）
       expect(store.token).toBe('access-rotated')
       expect(localStorage.getItem(TOKEN_KEY)).toBe('access-rotated')
-      expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-new')
     } finally {
       axios.defaults.adapter = previousAdapter
     }

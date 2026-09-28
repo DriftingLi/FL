@@ -60,7 +60,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		},
 		ErrStatus: errStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
-			h.session.SetCookie(c.Writer, resp.Token)
+			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
 	}.Handle(c)
@@ -93,7 +93,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 		},
 		ErrStatus: errStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
-			h.session.SetCookie(c.Writer, resp.Token)
+			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "管理员登录成功", resp)
 		},
 	}.Handle(c)
@@ -126,7 +126,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 		},
 		ErrStatus: errStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
-			h.session.SetCookie(c.Writer, resp.Token)
+			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "讲师登录成功", resp)
 		},
 	}.Handle(c)
@@ -159,7 +159,7 @@ func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 		},
 		ErrStatus: errStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
-			h.session.SetRecruiterCookie(c.Writer, resp.Token)
+			h.session.SetRecruiterLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "招聘者登录成功", resp)
 		},
 	}.Handle(c)
@@ -174,7 +174,7 @@ type loginReq struct {
 
 // Logout 登出
 // @Summary 登出
-// @Description 撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出
+// @Description 撤销 refresh_token（Cookie 优先，回退请求体）并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出
 // @Tags 学员端-认证
 // @Accept json
 // @Produce json
@@ -186,30 +186,47 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	_ = c.ShouldBindJSON(&req) // refresh_token 缺失或解析失败时只清本地/Cookie，静默放行
-	_ = h.session.SignOut(c.Request.Context(), c.Writer, req.RefreshToken)
+	// ADR-0067 的读取顺序（Cookie 优先）在登出入口同样成立：手上那支凭证来自哪里是入口差异，
+	// 不是第三种语义（Session.SignOut 的既有口径）。
+	// 现实约束：refresh cookie 的 Path 收在 /api/auth/refresh，浏览器不会把它发到本端点，
+	// 因此这条分支实际服务的是「显式回传 Cookie 的非浏览器客户端」；浏览器登出的服务端吊销
+	// 走改密/注销的全会话吊销（详见 #1363 报告里的 ADR 冲突条）。
+	refresh := h.session.ExtractRefreshCookie(c.Request)
+	if refresh == "" {
+		refresh = req.RefreshToken
+	}
+	_ = h.session.SignOut(c.Request.Context(), c.Writer, refresh)
 	response.SuccessWithMsg(c, "已登出", nil)
 }
 
 // Refresh 刷新双令牌
 // @Summary 刷新双令牌
-// @Description 轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401
+// @Description 轮换签发新 access/refresh，旧 refresh 入黑名单；凭证读取顺序为 httpOnly Cookie（ADR-0067）→ 请求体（移动端兼容），失败统一 401
 // @Tags 学员端-认证
 // @Accept json
 // @Produce json
-// @Param body body object true "refresh_token" example({"refresh_token":"eyJhbGciOi..."})
-// @Success 200 {object} response.R{data=service.RefreshResultDTO} "success"
+// @Param body body object false "refresh_token（Cookie 通道存在时被忽略；无 Cookie 的客户端才用）" example({"refresh_token":"eyJhbGciOi..."})
+// @Success 200 {object} response.R{data=service.RefreshResultDTO} "success（响应体恒含新 access + 新 refresh，请求体通道客户端需要）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
+	// ADR-0067 决策 1：Cookie 存在即**以 Cookie 为准**，请求体不再参与判定（连读都不读，
+	// 否则「两个通道各带一支」时谁赢就成了实现细节）。请求体通道保留给移动端与
+	// 非浏览器客户端——它们拿不到 Cookie，砍掉就是跨端断供。
+	refreshToken := h.session.ExtractRefreshCookie(c.Request)
+	if refreshToken == "" {
+		var req struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+			response.Unauthorized(c, "登录已过期，请重新登录")
+			return
+		}
+		refreshToken = req.RefreshToken
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
-		response.Unauthorized(c, "登录已过期，请重新登录")
-		return
-	}
-	// 原子轮换（ADR-0016）：校验/抢占/吊销/签发收敛在会话模块单点，并发双刷恰一成功
-	access, refresh, err := h.session.RotateRefresh(c.Request.Context(), req.RefreshToken)
+	// 原子轮换（ADR-0016）：校验/抢占/吊销/签发收敛在会话模块单点，并发双刷恰一成功。
+	// 轮换语义不变（票 #1363 判据 2），只是浏览器侧多回写一枚新 Cookie（ADR-0067）。
+	access, refresh, err := h.session.RotateAndSetCookie(c.Request.Context(), c.Writer, refreshToken)
 	if err != nil {
 		if errors.Is(err, security.ErrInvalidRefresh) {
 			response.Unauthorized(c, "登录已过期，请重新登录")
@@ -345,7 +362,7 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 		response.BadRequest(c, "注销失败：数据清理未生效，请稍后重试")
 		return
 	}
-	h.session.ClearCookie(c.Writer)
+	h.session.ClearLoginCookies(c.Writer)
 	response.SuccessWithMsg(c, "帐号已注销", nil)
 }
 

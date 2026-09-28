@@ -170,7 +170,7 @@ func (h *CodeChannelAuthHandler) Register(c *gin.Context) {
 		},
 		ErrStatus: errStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *codeRegisterReq, resp *service.LoginResult) {
-			h.sess.SetCookie(c.Writer, resp.Token)
+			h.sess.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.Created(c, "注册成功", resp)
 		},
 	}.Handle(c)
@@ -228,7 +228,7 @@ func (h *CodeChannelAuthHandler) Login(c *gin.Context) {
 		},
 		ErrStatus: errStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *codeLoginReq, resp *service.LoginResult) {
-			h.sess.SetCookie(c.Writer, resp.Token)
+			h.sess.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
 	}.Handle(c)
