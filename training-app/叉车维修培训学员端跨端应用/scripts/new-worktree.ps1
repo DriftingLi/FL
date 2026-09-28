@@ -52,6 +52,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 仓库根解析与 jest 入口路径都取 scripts/lib/wt-bootstrap.ps1 的真源（与入口同源，不再各抄一份）：
+# 形态同 dev-finish.ps1 dot-source scripts/lib/contract-tests.ps1。本文件只调用，不重写判据。
+. (Join-Path $PSScriptRoot 'lib\wt-bootstrap.ps1')
 
 function Fail([string]$msg, [int]$code) {
     Write-Host "[new-worktree] $msg" -ForegroundColor Red
@@ -67,11 +70,10 @@ if ([string]::IsNullOrWhiteSpace($Task)) { Fail "-Task 不能为空" 1 }
 # ⚠️ 不能从 $PSScriptRoot 上溯：本脚本既可能在主树、也可能在某个 worktree 里被调用，
 #    上溯会得到**那个 worktree**，于是新 worktree 被嵌进另一个 worktree 里（实测踩过：
 #    建出了 D:\FL\wt-1185\wt-(wip)1185）。改用 git 的公共目录 —— 对所有 worktree 指向同一处。
-$commonDir = (& git -C $PSScriptRoot rev-parse --git-common-dir 2>$null | Select-Object -First 1)
-if (-not $commonDir) { Fail "取不到 --git-common-dir（不在 git 仓库里？）" 2 }
-$commonDir = $commonDir.Trim()
-if (-not [System.IO.Path]::IsPathRooted($commonDir)) { $commonDir = Join-Path $PSScriptRoot $commonDir }
-$RepoRoot = Split-Path -Parent (Resolve-Path $commonDir).Path
+#    这条判据的唯一真源是 lib/wt-bootstrap.ps1 的 Get-WtMainRoot（上面已 dot-source）：
+#    此处不再自带一份 --git-common-dir 反推块 —— 两份实现会漂移（I4）。
+$RepoRoot = Get-WtMainRoot -Base $PSScriptRoot
+if (-not $RepoRoot) { Fail "取不到主树根（--git-common-dir 失败，不在 git 仓库里？）" 2 }
 $MobileRoot = Join-Path $RepoRoot (Join-Path 'training-app' '叉车维修培训学员端跨端应用')
 
 $name = "wt-$Task"
@@ -97,8 +99,9 @@ Write-Host "[new-worktree] 已建 $dest（分支 $Branch）" -ForegroundColor Gr
 $boot = Join-Path (Join-Path $dest 'training-app') '叉车维修培训学员端跨端应用\scripts\wt-bootstrap.ps1'
 if (Test-Path -LiteralPath $boot) {
     & $boot -ExpectEligible
-    if ($LASTEXITCODE -eq 3) { Fail '闸门建的树仍不可信（段首带点/元字符）⇒ ③ 门会静默假绿，必须换树名（见上方红字）' 3 }
-    if ($LASTEXITCODE -ne 0) { Fail "初始化失败（exit $LASTEXITCODE）" 2 }
+    $rc = $LASTEXITCODE
+    if ($rc -eq 3) { Fail '闸门建的树仍不可信（段首带点/元字符）⇒ ③ 门会静默假绿，必须换树名（见上方红字）' 3 }
+    if ($rc -ne 0) { Fail "初始化失败（exit $rc）" 2 }
 } else {
     Write-Host "[new-worktree] 没有 $boot —— 树里要自己 npm ci 或建 junction，否则 jest 起不来" -ForegroundColor Yellow
 }
@@ -111,7 +114,8 @@ if (-not (Test-Path (Join-Path $proj 'jest.config.unit.js'))) {
     Write-Host "[new-worktree] $proj 下没有 jest.config.unit.js，跳过判据。" -ForegroundColor Yellow
     exit 0
 }
-$jest = Join-Path $MobileRoot 'node_modules\jest\bin\jest.js'
+# jest 入口路径取真源 Get-WtJestEntryPath（与入口/Test-WtJestEntry 同源，不再散写 node_modules\jest\bin\jest.js）
+$jest = Get-WtJestEntryPath -NodeModules (Join-Path $MobileRoot 'node_modules')
 if (-not (Test-Path $jest)) {
     Write-Host "[new-worktree] 主树缺 jest（$jest），无法跑判据。先在主树 npm ci。" -ForegroundColor Yellow
     exit 0

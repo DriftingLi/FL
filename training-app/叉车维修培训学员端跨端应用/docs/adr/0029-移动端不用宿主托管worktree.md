@@ -29,16 +29,17 @@
 
 1. `scripts/lib/wt-bootstrap.ps1` —— 纯函数真源（主树反推 / 子工程枚举 / 点段判定 / 初始化计划），**无副作用**，可被 ③ 在 ubuntu CI 上 dot-source 断言。
 2. `utils/wtBootstrapBehavior.test.js` —— 行为守护 W1–W8，token `wtBootstrap` 接进 `Get-ContractTestPattern`（自指，否则是"永不执行的守护"）。
-3. `scripts/wt-bootstrap.ps1` —— 入口：落 junction / 打红字 / 退出码分工（`0` 正常与告知、`2` 取不到树、`3` 仅当 `-ExpectEligible`）；`new-worktree.ps1` 建完树即带 `-ExpectEligible` 调它。
+3. `scripts/wt-bootstrap.ps1` —— 入口：落 junction / 打红字 / 退出码分工（`0` 正常与告知、`2` 取不到树或注入的 `-Root`/`-WtRoot` 不存在、`3` 仅当 `-ExpectEligible`、`4` 落 junction 时 `New-Item` 抛错）；`new-worktree.ps1` 建完树即带 `-ExpectEligible` 调它。
 4. 规范落文：本侧 `AGENTS.md`「Qoder 托管 worktree 的使用边界」+ 根 `docs/agents/multi-agent-git.md`（收编原 `mklink /J` 手工配方，并登记术语）。
 
 ## ⑤ 约束与代价
 
 - **`refuse` 态是故意的**：真源在 ③ 不可信的树里**不链**移动端 `node_modules`，让 `npx jest` 直接报"命令找不到"（fail-loud），而不是链上之后扫到 0 套件报全绿（fail-silent）。代价：这条硬报错历史上被误读成"测试坏了"（已有血账）⇒ 入口必须**先打红字**，红字里写明"这不是测试坏了"。
 - **拦截靠红字，不靠失败码**：宿主树不可信是**常态不是故障**，所以入口在宿主树里打完红字后 `exit 0`；`exit 3` 只留给「闸门建的树仍不可信」（即 `new-worktree.ps1` 传入的 `-ExpectEligible`）。否则每建一棵宿主树都返一次失败码 —— 那会让"正常"长得像"坏了"，把信号成本转嫁给不相关的人（包括只干 Web 活的会话）。
+- **落 junction 失败不再绕过退出码契约**：入口置 `$ErrorActionPreference='Stop'`，若 `New-Item -ItemType Junction` 无局部 `try/catch`，终止错误会直接逸出 ⇒ 调用方的 `$LASTEXITCODE` 分支不会跑、`pwsh -File` 退 **1**（一个本 ADR 从未列出的码）、用户只看到裸错误记录。故现在接住、按项目/目标/源打齐红字再 `exit 4`（一个枚举里列出的码，红字里同样写明"这不是测试坏了"）。
 - **主树 `npm ci` 有并发窗口**：junction 是共享读，重装期间别的树会看到依赖半套 ⇒ 纪律是"没人跑移动端命令时才装，装完不再在主树重装"。
-- **宿主树会被自动回收**（`worktreeMaxCount`，现为 5，删最旧，且连带删掉 gitignored 的 `.ci-verify/` 原始判据输入）⇒ 进树第一件事是建分支、尽早推 origin；判据输入当场拷出或入 `docs/verification/`。
-- **HBuilderX 项目名冲突不是本决定的理由**：改成唯一名（`fl-mobile-wt<票号>`）是所有 worktree 的共同代价、且已有 5 处取证先例；闸门树同样要付。把它当宿主树专属阻断是**误判**（本 ADR 明确更正这一点，防止后人拿它去论证别的方案）。
+- **宿主树会被自动回收**（`worktreeMaxCount`——现值读 `%APPDATA%\Qoder\SharedClientCache\cache\app-config.json` 的该键、不冻结数字，删最旧，且连带删掉 gitignored 的 `.ci-verify/` 原始判据输入）⇒ 进树第一件事是建分支、尽早推 origin；判据输入当场拷出或入 `docs/verification/`。
+- **HBuilderX 项目名冲突不是本决定的理由**：改成唯一名（`fl-mobile-wt<票号>`）是所有 worktree 的共同代价、取证先例见 `docs/verification/*/*/README.md`（可复算、不冻结数量）；闸门树同样要付。把它当宿主树专属阻断是**误判**（本 ADR 明确更正这一点，防止后人拿它去论证别的方案）。
 
 ## ⑥ 关键判据（全部当场实测，可复算）
 
@@ -47,7 +48,7 @@
 | A | 宿主落点 `<userHome>/.qoder/worktree/…` 父段段首带点 ⇒ ③ 的 `--listTests` **0 套件且 exit 0**；同内容无点父段 **140 套件**（调研基线 140；本票新增守护后为 141） | 建两棵只差父段名的树各跑一次；机制是 jest-util `replacePathSepForGlob` 不转换后跟 `{}()+?.^$` 的分隔符（#1144，Windows-only） |
 | B | 该落点**不可配置**（bundle 里 `worktreePrefix = join(userHome, dataFolderName, 'worktree')`） | 读 `workbench.desktop.main.js` |
 | C | CI `changes.mobile = 'training-app/**'` ⇒ 任何该路径改动都要 ③ | 读 `ci.yml` 的 `changes` job |
-| D | `pr-evidence.yml` 校验器"只判结构与 sha 绑定，不校真伪" ⇒ 本地假绿抄进正文过得去（CI 是最后防线，不是本地反馈环的替代品） | 读该校验器注释 |
+| D | `pr-evidence.yml` 校验器「判据只为『结构与 sha 绑定』，不校真伪」 ⇒ 本地假绿抄进正文过得去（CI 是最后防线，不是本地反馈环的替代品） | 读该校验器注释 |
 | E | junction 共享这个模式本仓已跑了一段时间没爆过（移动端依赖主树已装，3 棵树 junction、1 棵独立真装） | `Get-Item …\node_modules -Force).LinkType` |
 
 ## 重审条件

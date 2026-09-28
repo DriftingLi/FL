@@ -13,6 +13,12 @@
 .EXAMPLE
     pwsh scripts/wt-bootstrap.ps1            # 在某个 worktree 里跑（任意子目录均可）
     pwsh scripts/wt-bootstrap.ps1 -DryRun    # 只看计划，不落 junction
+.NOTES
+    退出码分工（Q5-C + I5，本枚举与 docs/agents/multi-agent-git.md、ADR-0029 的拆分步骤与约束段同一口径）：
+      0 = 正常；**也含**「本树非 ③ 可信树但不是闸门建的 ⇒ 仅告知」（宿主树不可信是常态，不是故障）
+      2 = 取不到本树根 / 主树，或显式注入的 -Root / -WtRoot 指向不存在的路径
+      3 = **仅当 -ExpectEligible**（闸门建的树仍不可信 ⇒ 真故障，必须换树名）
+      4 = 落 junction 时 New-Item 抛错（源缺失 / 目标父目录不可写等）——先打红字命名项目 / 目标 / 源再退（否则 $ErrorActionPreference=Stop 下错误记录会直接逸出，pwsh -File 退 1 ———— 一个文档从未列出的码）
 #>
 [CmdletBinding()]
 param(
@@ -34,6 +40,10 @@ function Fail([string]$msg, [int]$code) {
 }
 
 $projRoot = Split-Path -Parent $PSScriptRoot
+# M8：-Root / -WtRoot 可注入是为可测性，但拼错一个字母会得到一个空计划 + 绿字「③ 可信树」（无输出即过）
+#     ⇒ 显式注入时必须先确认路径存在，不拿「不存在」当「空树」默认放行。
+if ($WtRoot -and -not (Test-Path -LiteralPath $WtRoot)) { Fail "-WtRoot 指向不存在的路径：$WtRoot" 2 }
+if ($Root -and -not (Test-Path -LiteralPath $Root)) { Fail "-Root 指向不存在的路径：$Root" 2 }
 # ⚠️ -WtRoot / -Root 可注入是**为可测性**：退出码的分工（Q5-C，2026-09-28 定）必须能被守护锁住，
 #    而默认值从 $PSScriptRoot 推 ⇒ 在临时目录里复现不出来。两个都显式给出时本入口不碰 git。
 $treeRoot = if ($WtRoot) { $WtRoot } else { Get-WtTreeRoot -Base $projRoot }
@@ -48,13 +58,26 @@ foreach ($i in (Get-WtNodeModulesPlan -MainRoot $mainRoot -WtRoot $treeRoot)) {
         'ok'   { Write-Host "ok   $($i.Project)" }
         'broken' {
             Write-Host "broken $($i.Project)（树里有 node_modules 但没有 jest 入口 ⇒ ③ 跑不起来）" -ForegroundColor Red
-            Write-Host "[wt-bootstrap]        修法：删掉 $((Split-Path -Parent $i.Target)) 里那份坏 node_modules 后重跑本脚本（工具不代删别人的目录）。" -ForegroundColor Red
+            Write-Host "[wt-bootstrap]        修法：先判它是不是 junction——若是，按仓规先 `cmd /c rmdir $((Split-Path -Parent $i.Target))` 摘掉联接再删（别 `Remove-Item -Recurse` 跟进主树），再删掉那份坏 node_modules 后重跑本脚本（工具不代删别人的目录）。" -ForegroundColor Red
         }
         'link' {
             if ($DryRun) { Write-Host "link $($i.Project)  (dry-run)" }
             else {
-                New-Item -ItemType Junction -Path $i.Target -Target $i.Source | Out-Null
-                Write-Host "link $($i.Project)"
+                # I5：New-Item Junction 无局部 try/catch 时，$ErrorActionPreference=Stop 会把终止错误直接抛出去
+                #     ⇒ 调用方的 $LASTEXITCODE 分支不会跑、pwsh -File 退 1（无文档列出）、用户只看到裸错误记录。
+                #     接住、按项目/目标/源打齐红字再 exit 4（一个枚举里列出的码）。
+                try {
+                    New-Item -ItemType Junction -Path $i.Target -Target $i.Source | Out-Null
+                    Write-Host "link $($i.Project)"
+                } catch {
+                    Write-Host "link FAILED $($i.Project)（建 junction 抛错 —— 这不是测试坏了）" -ForegroundColor Red
+                    Write-Host "[wt-bootstrap]        项目：$($i.Project)" -ForegroundColor Red
+                    Write-Host "[wt-bootstrap]        目标：$($i.Target)" -ForegroundColor Red
+                    Write-Host "[wt-bootstrap]        源（主树）：$($i.Source)" -ForegroundColor Red
+                    Write-Host "[wt-bootstrap]        错误：$($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host '[wt-bootstrap]        正解：确认源目录存在、目标父目录可写；或直接在该子工程里 npm ci（本入口不重试、不代删）。' -ForegroundColor Red
+                    exit 4
+                }
             }
         }
         'refuse' {

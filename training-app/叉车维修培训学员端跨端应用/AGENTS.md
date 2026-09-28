@@ -275,23 +275,24 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 
 **一句话**：**改动落在 `training-app/**` 下的活，一律不在宿主树里做**（哪怕只改一个 `.md`）。本段只声明移动端与小程序的禁令；宿主树适合干什么，由 Web/后端的负责人定，本段不表态。
 
-判据不是「命中运行时面」，而是「**③ 要不要在这棵树里跑**」——而 CI 的 `changes.mobile` 过滤器是 `'training-app/**'`（`ci.yml` 的 `changes` job），**任何**该路径下的改动都让 ③ 成为必过门。开工先机检一句：
+判据不是「命中运行时面」，而是「**③ 要不要在这棵树里跑**」——而 CI 的 `changes.mobile` 过滤器是 `'training-app/**'`（`ci.yml` 的 `changes` job），**任何**该路径下的改动都让 ③ 成为必过门。**判据看的是「你这轮打算动哪些路径」的意图，不是「git diff 现在显不显示东西」**：只要你计划新建 / 修改的任一路径落在 `training-app/**` 下（**含还没 `git add` 的新 `.uvue`**），就命中 ⇒ 不在宿主树里做，走 `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`。
+
+⚠️ **别拿开工前的一句 `git diff` 当许可**——它在最该报警的时刻恰好返回空：开工前什么都没改（diff 为空）、`git diff` 不含未跟踪新文件（新增 `.uvue` 是最常见命中却看不见）、`origin/master` 可能陈旧。一个「无输出＝可以干」的检查，正是本分支要杀的那种静默假绿。要机检也得连未跟踪一起看、且当作**事后回检**（确认没漏），不是开工前的通行证：
 
 ```powershell
-git diff --name-only origin/master | Select-String '^training-app/'
+# 事后回检（含未跟踪）：任一行路径以 training-app/ 开头 ⇒ 本不该在这棵宿主树里做
+git status --porcelain | Select-String 'training-app/'
 ```
-
-出任何一行 ⇒ 不在宿主树里做，走 `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`。
 
 三条原因（都是实测，不是偏好）：
 
-1. **③ 门在宿主树里静默假绿，且这是永久属性。** 宿主落点是 `<userHome>/.qoder/worktree/…`，父段段首带点，正踩 #1144 的 jest-util glob 机制；**该落点不可配置**。实测同一份内容只差父段名：点父段 `--listTests` **0 套件**、无点父段 **141 套件**，且 0 那次 **exit 0、不报错**。CI 侧（ubuntu）不受此坑 ⇒ 最后一道防线还在，但**本地反馈环失效**，而 `.github/workflows/pr-evidence.yml` 顶部校验器的 P1 注释明写「判据只为结构与 sha 绑定，不校真伪」⇒ 把宿主树里的假绿抄进正文是过得去的。
-2. **HBuilderX 那条不是宿主树专属的阻断（2026-09-28 更正）。** 取证时把项目目录改成唯一名是既定常规动作（`docs/verification/` 里 `fl-mobile-wt1042` 等 5 处先例，理由是 `cli project list` 现测有 8 个同名项目）；真正的代价在「改回来会被锁卡住」（`docs/agents/multi-agent-git.md` 的「Windows 上用 worktree 的注意事项」→ HBuilderX 唯一项目名那条），而**这个代价闸门树同样有** ⇒ 它不构成「移动端不用宿主树」的理由，第 1 条才是。
-3. **树会被自动回收。** `worktreeMaxCount`（现为 5）超限即删最旧，**包括别的编辑器正开着的那一棵**；`git worktree remove` 还会连带删掉 gitignored 的 `.ci-verify/`（原始判据输入，删了不可复算）。
+1. **③ 门在宿主树里静默假绿，且这是永久属性。** 宿主落点是 `<userHome>/.qoder/worktree/…`，父段段首带点，正踩 #1144 的 jest-util glob 机制；**该落点不可配置**。实测同一份内容只差父段名：点父段 `--listTests` **0 套件**、无点父段 **141 套件**，且 0 那次 **exit 0、不报错**。CI 侧（ubuntu）不受此坑 ⇒ 最后一道防线还在，但**本地反馈环失效**，而 `.github/workflows/pr-evidence.yml` 顶部校验器的 P1 注释明写「判据只为『结构与 sha 绑定』，不校真伪」⇒ 把宿主树里的假绿抄进正文是过得去的。
+2. **HBuilderX 那条不是宿主树专属的阻断（2026-09-28 更正）。** 取证时把项目目录改成唯一名是既定常规动作（先例见 `docs/verification/*/*/README.md` 里的 `fl-mobile-wt<票号>` 命名，逐例可复算、不活标数量；同名项目数现算：`cli project list` 数同名条目，别照抄历史数字）；真正的代价在「改回来会被锁卡住」（`docs/agents/multi-agent-git.md` 的「Windows 上用 worktree 的注意事项」→ HBuilderX 唯一项目名那条），而**这个代价闸门树同样有** ⇒ 它不构成「移动端不用宿主树」的理由，第 1 条才是。
+3. **树会被自动回收。** `worktreeMaxCount`（现值**读** `%APPDATA%\Qoder\SharedClientCache\cache\app-config.json` 的 `worktreeMaxCount` 键，别冻结一个数字）超限即删最旧，**包括别的编辑器正开着的那一棵**；`git worktree remove` 还会连带删掉 gitignored 的 `.ci-verify/`（原始判据输入，删了不可复算）。
 
 **回退与复用的边界**：宿主树是普通 git worktree ⇒ **提交并推了分支就能回退**，任何编辑器/命令行 `cd` 进去都能接着干（`git worktree list` 一定列得出它）。反过来，**没提交的改动与 gitignored 证据，树没了就没了**。所以进树第一件事是建分支、尽早推 origin，判据输入当场拷到树外或直接入 `docs/verification/<模块>/<PR号>/`。
 
-**初始化单一真源**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`（主树位置由 `git rev-parse --git-common-dir` 反推，不依赖任何工具私有变量）。宿主「本地任务的 Worktree 配置」框里填的就是**这一行调用**——框里只允许填调用，填逻辑就等于开了第二真源。
+**初始化单一真源**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`（主树位置由 `git rev-parse --git-common-dir` 反推，不依赖任何工具私有变量）。**宿主「本地任务的 Worktree 配置」框由宿主维护、PR 审查不到、本仓文档不校验其现值**：框里**必须且只能填上面这一行调用**——填逻辑就等于开了第二真源。要确认它已同步，读回 `%APPDATA%\Qoder\logs\<run>\questWindow\renderer.log` 里 `worktreeSetup` 键的值与上面这行比对（**别拿「应该已填」当作已填**）。
 
 决策论证全文见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0029-移动端不用宿主托管worktree.md`（**移动端编号体系，须写全路径**；根仓库另有同名的 `ADR-0029`，两套互不相关）。
 
@@ -464,7 +465,7 @@ src/
 
 ## 相关文档
 
-- **ADRs（移动端独立编号，现至 `0029`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退、`0024` 技能供给与管线归属（死副本清退 + 四条约定）、`0025` 论坛正文格式与输入区形态（声明子集第三档 `SUBSET_FORUM` + 渲染接入 + 输入区形态）；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
+- **ADRs（移动端独立编号，现至 `0029`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退、`0024` 技能供给与管线归属（死副本清退 + 四条约定）、`0025` 论坛正文格式与输入区形态（声明子集第三档 `SUBSET_FORUM` + 渲染接入 + 输入区形态）、`0029` 移动端不用宿主托管 worktree（③ 门在其默认落点恒假绿，工具改为响亮拒绝）；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
 - **Git 工作流**：`docs/GIT_WORKFLOW.md`
 - **UI 规范**：`docs/ui-spec.md`
 - **技术规范**：`docs/technical-spec.md`

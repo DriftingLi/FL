@@ -92,6 +92,11 @@ describe('worktree 初始化真源（运行期）', () => {
       ['C:/Users/dev/.qoder/worktree/FL-1a2b3c4d', 'False'],
       ['D:/FL/.wt-1144probe/training-app/x', 'False'],
       ['D:/FL/(wip)1185/training-app/x', 'False'],
+      // I2：判据是 `[\\/][{}()+?.^$]` —— 反斜杠那一半在 ubuntu 上永远不会被测到（POSIX 路径无 `\`）。
+      // 只删掉字符类里的 `\\` 也能让以上七条全绿 ⇒ 必须补反斜杠形态的用例（该 bug 本就 Windows-only）。
+      // PS 单引号串把反斜杠按字面吃 ⇒ JS 里写 `\\` 到 pwsh 就是单个 `\`。
+      ['D:\\FL\\.wt-1144probe\\training-app\\x', 'False'],
+      ['D:\\FL\\wt-1368', 'True'],
     ];
     const got = kv(runPs(cases.map(([p]) => `Write-Output ("S=" + (Test-WtPathSafe -Path '${p}'))`).join('\n')), 'S');
     expect(got.length).toBe(cases.length);
@@ -173,6 +178,8 @@ describe('worktree 初始化真源（运行期）', () => {
     // 独立判据：`git worktree list --porcelain` 的第一条恒为主工作树。
     // ⚠️ 不能拿「本树根」当期望值：linked worktree 里 --git-common-dir 返回的是**主树**的 .git
     //    ⇒ 主树根 ≠ 本树根 —— 而那正是本函数要的语义（要借的就是主树那份 node_modules）。
+    // ⚠️ M7：本条只在 **linked worktree** 里有判别力。普通 checkout（CI 的默认形态）下主树根 == 本树根，
+    //    一个退化的实现（直接返回本树根）也能过 —— 所以别假设 CI 守住丁这条；真正的区分靠本地在 linked 树里跑。
     const porcelain = String(execFileSync('git', ['-C', ROOT, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' }));
     const mainWorktree = porcelain.match(/^worktree (.+)$/m);
     expect(mainWorktree).toBeTruthy();
@@ -219,5 +226,17 @@ describe('worktree 初始化真源（运行期）', () => {
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
+  });
+
+  test('W9: 闸门接线守护 —— new-worktree.ps1 调真源且未把 junction 配方抄回闸门（P4/P5 同款）', () => {
+    // 为什么要静态守护（I3）：「初始化单一真源」这句话在入口里，「闸门有没有接上它」在 new-worktree.ps1。
+    // 删掉 new-worktree.ps1 里的 bootstrap 块，③ 门不会红（W1–W8 都不读那个文件）⇒ 而三份文档断言它已接线。
+    // 本条把「接线」本身钉住（沿 contractTestPatternBehavior 的 P4/P5先例：调用方不得重新内联配方）：
+    //   ① 必须出现对真源入口的调用（wt-bootstrap.ps1 + -ExpectEligible）；
+    //   ② 不得把 junction 配方（New-Item -ItemType Junction）重新抄回闸门 —— 那正是本计划要消灭的第二真源。
+    const src = readText(path.join(ROOT, 'scripts', 'new-worktree.ps1'));
+    expect(src).toContain('wt-bootstrap.ps1');
+    expect(src).toContain('-ExpectEligible');
+    expect(src).not.toContain('New-Item -ItemType Junction');
   });
 });

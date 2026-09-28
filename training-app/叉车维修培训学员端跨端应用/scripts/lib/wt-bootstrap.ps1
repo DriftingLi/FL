@@ -12,7 +12,8 @@
 function Get-WtMainRoot {
     <#
       主树根。判据 = git rev-parse --git-common-dir（对所有 worktree 指向同一处）。
-      ⚠️ 不能从 $PSScriptRoot 上溯：那会得到**调用方所在的那棵树**（new-worktree.ps1:66-74 的血账）。
+      ⚠️ 不能从 $PSScriptRoot 上溯：那会得到**调用方所在的那棵树**（new-worktree.ps1「仓库根与主工作树」小节的血账）。
+      ⚠️ new-worktree.ps1 的仓库根解析已 dot-source 本函数（不再各留一份 --git-common-dir 块）⇒ 本函数是「反推主树」的唯一实现。
       ⚠️ 不读宿主注入的私有环境变量：命令行 / 闸门 / 别的编辑器都没有它 —— 本文件存在的理由，
         就是把「主树在哪」收成一条与工具无关的判据。
     #>
@@ -70,16 +71,27 @@ function Test-WtPathSafe {
     return -not ($Path -match '[\\/][{}()+?.^$]')
 }
 
+function Get-WtJestEntryPath {
+    <#
+      一份 node_modules 里 ③ 用的 jest 入口文件**路径**（不判在不在，只拼路径）。
+      `jest/bin/jest.js`（平台无关，不带 .cmd）——与守护自己拉 jest 的方式同源。
+      收成函数而非散落的 Join-Path 字面量：入口、闸门（new-worktree.ps1 跑 --listTests 用的 jest 二进制）
+      与下面的 Test-WtJestEntry 都取同一个真源，避免「jest 入口在哪」再次分叉成两份。
+    #>
+    [OutputType([string])]
+    param([string]$NodeModules)
+    return Join-Path (Join-Path $NodeModules 'jest') (Join-Path 'bin' 'jest.js')
+}
+
 function Test-WtJestEntry {
     <#
-      一份 node_modules 能不能跑 ③ —— 判据就是 ③ 自己用的那个入口文件。
-      路径用 `jest/bin/jest.js`（平台无关，不带 .cmd）——与守护自己拉 jest 的方式同源。
+      一份 node_modules 能不能跑 ③ —— 判据就是 ③ 自己用的那个入口文件在不在（路径取 Get-WtJestEntryPath）。
       为什么需要它：只看目录存在，会把「一次失败的 npm ci 留下的空壳」或「指向已删主树的
       失效 junction」判成已装好 ⇒ 静默复发本计划要消灭的那个症状。
     #>
     [OutputType([bool])]
     param([string]$NodeModules)
-    return Test-Path -LiteralPath (Join-Path (Join-Path $NodeModules 'jest') (Join-Path 'bin' 'jest.js'))
+    return Test-Path -LiteralPath (Get-WtJestEntryPath -NodeModules $NodeModules)
 }
 
 function Get-WtNodeModulesPlan {
