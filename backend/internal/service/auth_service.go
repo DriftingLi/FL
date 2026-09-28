@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -792,15 +793,62 @@ func (s *AuthService) UpdateCompany(userID int, company string) error {
 	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", userID).Update("company", company).Error
 }
 
+// accountCleanupStep 注销清理表的一行：一张按「条件列 = 本人 userID」归属的依赖表。
+type accountCleanupStep struct {
+	// table 表名，只用于报错与日志指向；真正决定删哪张表的是 dest（GORM 由模型推表名），
+	// 所以这里写错不会改变行为——锁见 TestDeleteAccount_清理表是删除序列的唯一事实源。
+	table string
+	// column 该表指向 hrwai_users.id 的条件列。
+	column string
+	// dest 每次执行现造一个零值模型指针：GORM 需要它推表名与主键，复用一个实例会被条件污染。
+	dest func() any
+	// likesTarget 非空 ⇒ 这一行不是「纯删除」：点赞行必须在同一事务里按行数回扣对应计数列
+	// （spec #297），本字段就是聚合与回扣的目标列（topic_id / reply_id）。
+	likesTarget string
+}
+
+// accountCleanupSteps 注销清理表——**唯一事实源**（spec #1345 决策 10 / 真实缺陷 #6）。
+//
+// 新增一张依赖表 = 只在这里加一行；删除序列（runAccountCleanup 的循环）不动，也不许在别处
+// 再抄一份表名清单。顺序沿用旧实现：论坛内容先匿名化（在循环之前，见 DeleteAccount）、
+// 主行最后删（剩余 CASCADE 由库兜）。有 CASCADE 的表亦显式删除，以兼容测试内存库并确保无残留。
+var accountCleanupSteps = []accountCleanupStep{
+	{table: "favorite", column: "user_id", dest: func() any { return &model.Favorite{} }},
+	// 点赞两张表带计数回扣（spec #297），执行形态见 deleteLikesWithRefund。
+	{table: "forum_topic_like", column: "user_id", dest: func() any { return &model.ForumTopicLike{} }, likesTarget: "topic_id"},
+	{table: "forum_reply_like", column: "user_id", dest: func() any { return &model.ForumReplyLike{} }, likesTarget: "reply_id"},
+	{table: "forum_report", column: "reporter_id", dest: func() any { return &model.ForumReport{} }},
+	{table: "question_practice_record", column: "student_id", dest: func() any { return &model.QuestionPracticeRecord{} }},
+	{table: "wrong_question", column: "student_id", dest: func() any { return &model.WrongQuestion{} }},
+	{table: "mock_exam", column: "student_id", dest: func() any { return &model.MockExam{} }},
+	{table: "practice_progress", column: "student_id", dest: func() any { return &model.PracticeProgress{} }},
+	{table: "study_record", column: "student_id", dest: func() any { return &model.StudyRecord{} }},
+	{table: "forum_checkin", column: "user_id", dest: func() any { return &model.ForumCheckIn{} }},
+	{table: "notifications", column: "user_id", dest: func() any { return &model.Notification{} }},
+	{table: "profile_change_requests", column: "user_id", dest: func() any { return &model.ProfileChangeRequest{} }},
+	{table: "ai_chat_sessions", column: "user_id", dest: func() any { return &model.AIChatSession{} }},
+	{table: "ai_user_models", column: "user_id", dest: func() any { return &model.AIUserModel{} }},
+	{table: "question_comment", column: "user_id", dest: func() any { return &model.QuestionComment{} }},
+	{table: "note", column: "user_id", dest: func() any { return &model.Note{} }},
+	{table: "job_cards", column: "user_id", dest: func() any { return &model.JobCard{} }},
+	{table: "contact_requests", column: "student_user_id", dest: func() any { return &model.ContactRequest{} }},
+	// #452：注销时投递一并失效（投递产生的授权随 contact_requests 已级联/显式删除）
+	{table: "job_applications", column: "student_user_id", dest: func() any { return &model.JobApplication{} }},
+}
+
 // DeleteAccount 硬删除学员账号并级联清理相关数据，论坛内容匿名化。
 //
 // 全会话吊销不在此处：注销走「先 RevokeIdentity、标记失败即不调本方法」，
 // 由 handler 承担（会话终止两族归 security.Session，资料层删除归本方法）。ADR-0060 票2。
+//
+// 两段自证（spec #1345 决策 10）：事务内一次（失败即整笔回滚）、提交后再一次（失败即报错）。
+// 旧形态里逐条手写的删除**从不读 .Error**，PG 上一旦某条语句把事务打进 aborted 态、后续语句与
+// 提交全部空转，接口却照样回 200「注销成功」而数据仍在（真实缺陷 #6）。
 func (s *AuthService) DeleteAccount(userID int) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		var user model.HrwaiUser
 		if err := tx.First(&user, userID).Error; err != nil {
-			return errors.New("用户不存在")
+			return ErrHrwaiUserNotFound
 		}
 		// 确保匿名占位用户存在
 		var sentinel model.HrwaiUser
@@ -815,93 +863,101 @@ func (s *AuthService) DeleteAccount(userID int) error {
 				CreatedAt: beijingNow(),
 			}
 			if err := tx.Create(&sentinel).Error; err != nil {
-				return err
+				return fmt.Errorf("注销建匿名占位用户失败（表 hrwai_users）: %w", err)
 			}
 		}
-		// 论坛内容匿名化：重分配给占位用户，避免 CASCADE 删除
+		// 论坛内容匿名化：重分配给占位用户，避免 CASCADE 删除。
+		// 这两条是 UPDATE 不是 DELETE，故不在清理表里（表只管「按归属清掉的依赖表」）。
 		if err := tx.Model(&model.ForumTopic{}).Where("user_id = ?", userID).Update("user_id", sentinel.ID).Error; err != nil {
-			return err
+			return fmt.Errorf("注销匿名化论坛帖子失败（表 forum_topics）: %w", err)
 		}
 		if err := tx.Model(&model.ForumReply{}).Where("user_id = ?", userID).Update("user_id", sentinel.ID).Error; err != nil {
+			return fmt.Errorf("注销匿名化论坛回复失败（表 forum_replies）: %w", err)
+		}
+		if err := s.runAccountCleanup(tx, userID); err != nil {
 			return err
 		}
-		// 显式清理无外键或需额外处理的关联数据（有 CASCADE 的表亦显式删除以确保无残留）
-		tx.Where("user_id = ?", userID).Delete(&model.Favorite{})
-		// 点赞回扣（spec #297）：先按主题/回复聚合该用户点赞行数，同事务删除后按行数
-		// 回扣对应计数列——DELETE 行数与受影响主题集合一一对应，注销不再污染计数。
-		if err := s.refundLikesOnDelete(tx, userID); err != nil {
-			return err
-		}
-		tx.Where("reporter_id = ?", userID).Delete(&model.ForumReport{})
-		// 有 CASCADE 的表显式删除以兼容测试内存库
-		tx.Where("student_id = ?", userID).Delete(&model.QuestionPracticeRecord{})
-		tx.Where("student_id = ?", userID).Delete(&model.WrongQuestion{})
-		tx.Where("student_id = ?", userID).Delete(&model.MockExam{})
-		tx.Where("student_id = ?", userID).Delete(&model.PracticeProgress{})
-		tx.Where("student_id = ?", userID).Delete(&model.StudyRecord{})
-		tx.Where("user_id = ?", userID).Delete(&model.ForumCheckIn{})
-		tx.Where("user_id = ?", userID).Delete(&model.Notification{})
-		tx.Where("user_id = ?", userID).Delete(&model.ProfileChangeRequest{})
-		tx.Where("user_id = ?", userID).Delete(&model.AIChatSession{})
-		tx.Where("user_id = ?", userID).Delete(&model.AIUserModel{})
-		tx.Where("user_id = ?", userID).Delete(&model.QuestionComment{})
-		tx.Where("user_id = ?", userID).Delete(&model.Note{})
-		tx.Where("user_id = ?", userID).Delete(&model.JobCard{})
-		tx.Where("student_user_id = ?", userID).Delete(&model.ContactRequest{})
-		// #452：注销时投递一并失效（投递产生的授权随 ContactRequest 已级联/显式删除）
-		tx.Where("student_user_id = ?", userID).Delete(&model.JobApplication{})
-		// 删除用户本体（剩余 CASCADE 关联自动清理）
+		// 删除主行（剩余 CASCADE 关联由库兜）
 		if err := tx.Delete(&model.HrwaiUser{}, userID).Error; err != nil {
-			return err
+			return fmt.Errorf("注销删除主行失败（表 hrwai_users，id=%d）: %w", userID, err)
 		}
-		return nil
-	})
+		// 自证第一遍（事务内）：主行仍在就判失败 ⇒ 整笔回滚，绝不留「一半删了、一半没删」。
+		return s.proveAccountGone(tx, userID)
+	}); err != nil {
+		return err
+	}
+	// 自证第二遍（提交后、换一条连接读）：兜住「事务没真提交、函数却回了 nil」这一类静默失败
+	// ——缺陷 #6 的原始形态正是它。此时已无法回滚，只能明确报错，让接口非 2xx。
+	return s.proveAccountGone(s.db, userID)
 }
 
-// refundLikesOnDelete 注销事务内的点赞回扣：先查后删（先按主题/回复聚合该用户点赞行数，
-// 再 DELETE），同事务内经 ForumCounter 按行数回扣对应计数列，保证 DELETE 行数与
-// 受影响主题/回复集合一一对应（spec #297）。
-func (s *AuthService) refundLikesOnDelete(tx *gorm.DB, userID int) error {
-	var topicLikes []struct {
-		TopicID int64
-		Cnt     int
-	}
-	if err := tx.Model(&model.ForumTopicLike{}).
-		Select("topic_id, COUNT(*) AS cnt").
-		Where("user_id = ?", userID).
-		Group("topic_id").
-		Scan(&topicLikes).Error; err != nil {
-		return err
-	}
-	if err := tx.Where("user_id = ?", userID).Delete(&model.ForumTopicLike{}).Error; err != nil {
-		return err
-	}
-	for _, agg := range topicLikes {
-		if err := s.forumCnt.AdjustLikes(tx, agg.TopicID, -agg.Cnt); err != nil {
-			return err
+// runAccountCleanup 单点执行清理表：逐条删除、逐条判错。
+// 判错统一在这里做（旧实现逐条手写、错误各判各的，13 条删除里只有 2 条读了 .Error）。
+func (s *AuthService) runAccountCleanup(tx *gorm.DB, userID int) error {
+	for i := range accountCleanupSteps {
+		step := accountCleanupSteps[i]
+		var err error
+		if step.likesTarget != "" {
+			err = s.deleteLikesWithRefund(tx, userID, step)
+		} else {
+			err = tx.Where(step.column+" = ?", userID).Delete(step.dest()).Error
+		}
+		if err != nil {
+			return fmt.Errorf("注销清理第 %d/%d 步失败（表 %s，条件列 %s）: %w",
+				i+1, len(accountCleanupSteps), step.table, step.column, err)
 		}
 	}
+	return nil
+}
 
-	var replyLikes []struct {
-		ReplyID int64
-		Cnt     int
+// proveAccountGone 自证主行已不存在。exec 由调用方给（事务内传 tx、提交后传 s.db）。
+func (s *AuthService) proveAccountGone(exec *gorm.DB, userID int) error {
+	var left int64
+	if err := exec.Model(&model.HrwaiUser{}).Where("id = ?", userID).Count(&left).Error; err != nil {
+		return fmt.Errorf("注销自证读不出用户 %d 的主行状态（表 hrwai_users）: %w", userID, err)
 	}
-	if err := tx.Model(&model.ForumReplyLike{}).
-		Select("reply_id, COUNT(*) AS cnt").
-		Where("user_id = ?", userID).
-		Group("reply_id").
-		Scan(&replyLikes).Error; err != nil {
+	if left != 0 {
+		return fmt.Errorf("注销未生效：用户 %d 的主行仍在（清理序列没有真的删掉它，表 hrwai_users）", userID)
+	}
+	return nil
+}
+
+// deleteLikesWithRefund 执行带计数回扣的那两行（forum_topic_like / forum_reply_like）：
+// 先聚合（删之前才知道回扣多少）、再删、最后同事务回扣目标计数列，保证删除行数与
+// 受影响主题/回复集合一一对应（spec #297）。列名全部取自行声明，不另抄清单。
+func (s *AuthService) deleteLikesWithRefund(tx *gorm.DB, userID int, step accountCleanupStep) error {
+	var agg []struct {
+		TargetID int64
+		Cnt      int
+	}
+	if err := tx.Model(step.dest()).
+		Select(step.likesTarget+" AS target_id, COUNT(*) AS cnt").
+		Where(step.column+" = ?", userID).
+		Group(step.likesTarget).
+		Scan(&agg).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("user_id = ?", userID).Delete(&model.ForumReplyLike{}).Error; err != nil {
+	if err := tx.Where(step.column+" = ?", userID).Delete(step.dest()).Error; err != nil {
 		return err
 	}
-	for _, agg := range replyLikes {
-		if err := s.forumCnt.AdjustReplyLikes(tx, agg.ReplyID, -agg.Cnt); err != nil {
+	for _, a := range agg {
+		if err := s.applyLikesRefund(tx, step, a.TargetID, a.Cnt); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// applyLikesRefund 按行声明的回扣目标列选计数出口（新增点赞表时的唯一分派点）。
+func (s *AuthService) applyLikesRefund(tx *gorm.DB, step accountCleanupStep, targetID int64, count int) error {
+	switch step.likesTarget {
+	case "topic_id":
+		return s.forumCnt.AdjustLikes(tx, targetID, -count)
+	case "reply_id":
+		return s.forumCnt.AdjustReplyLikes(tx, targetID, -count)
+	default:
+		return fmt.Errorf("注销点赞回扣：表 %s 声明了未知目标列 %q", step.table, step.likesTarget)
+	}
 }
 
 // beijingNow 返回当前北京时间。时区政策已单点归位 internal/clock 包（spec #296），此函数仅作遗留调用方的一行委托。
