@@ -138,10 +138,34 @@ migration_failure_action() {
     fi
 }
 
+# rollback_tag 从完整镜像坐标解析 tag（**唯一判据点**，纯函数）：
+#   ghcr.io/org/fl-backend:sha-old      ⇒ sha-old
+#   registry.local:5000/org/app:v1.2.3  ⇒ v1.2.3（端口不算 tag）
+#   无 tag / unknown / 空               ⇒ 空串（调用方按「无历史版本」处理，不改写 .env）
+rollback_tag() {
+    local image="${1:-}" last
+    case "$image" in
+        ""|unknown) echo ""; return 0 ;;
+    esac
+    last="${image##*/}"
+    case "$last" in
+        *:*) echo "${last##*:}" ;;
+        *)   echo "" ;;
+    esac
+}
+
 # --migration-gate：dry-run 入口，只打印上面的判定结果就退出（不做任何部署动作、不碰 docker）。
 # 常驻判据物：scripts/deploy-migration-gate.test.mjs 用它断言两条分支（#1099「可 dry-run 断言」）。
 if [ "$MODE" = "--migration-gate" ]; then
     migration_failure_action "$ALLOW_MIGRATION_FAILURE"
+    exit 0
+fi
+
+# --rollback-plan：dry-run 入口，只打印回滚将写入 .env 的 tag 就退出（不碰 docker、不写文件）。
+# 常驻判据物：scripts/deploy-rollback-plan.test.mjs（真实缺陷 #3：回滚曾写回本次失败的镜像）。
+if [ "$MODE" = "--rollback-plan" ]; then
+    echo "IMAGE_TAG_BACKEND=$(rollback_tag "${PREVIOUS_BACKEND_IMAGE:-}")"
+    echo "IMAGE_TAG_FRONTEND=$(rollback_tag "${PREVIOUS_FRONTEND_IMAGE:-}")"
     exit 0
 fi
 
@@ -1229,6 +1253,25 @@ prune_old_images() {
 # ======================================================================
 # 回滚操作
 # ======================================================================
+
+# assert_running_image 回滚自证（真实缺陷 #3 的配套判据）：回滚后容器**实际**用的镜像必须等于
+# 目标 —— 只写 .env 不算回滚，compose 认为无变更时不会重建容器，坏版本会继续在线。
+assert_running_image() {
+    local service="$1" expected="$2" cid actual
+    cid=$(docker compose -f "$COMPOSE_FILE" ps -q "$service" 2>/dev/null | head -1)
+    if [ -z "$cid" ]; then
+        log_error "回滚自证失败：$service 没有运行中的容器"
+        return 1
+    fi
+    actual=$(docker inspect --format='{{.Config.Image}}' "$cid" 2>/dev/null || echo "unknown")
+    if [ "$actual" != "$expected" ]; then
+        log_error "回滚自证失败：$service 运行镜像 = ${actual}，期望 = ${expected}"
+        return 1
+    fi
+    log_ok "回滚自证通过：$service = ${actual}"
+    return 0
+}
+
 do_rollback() {
     log_warn ">>> 执行回滚操作..."
 
@@ -1254,33 +1297,51 @@ do_rollback() {
     docker compose -f "$COMPOSE_FILE" up -d "$POSTGRES_SERVICE" 2>&1 | tail -3 || true
     wait_postgres
 
-    # 回滚 backend（先做迁移兼容性预检，避免回滚到旧镜像后崩溃循环）
-    if [ "${PREVIOUS_BACKEND_IMAGE:-unknown}" != "unknown" ]; then
+    # 回滚 backend（先做迁移兼容性预检，避免回滚到旧镜像后崩溃循环）。
+    # 回滚 = 把「本次部署的 tag」改成历史 tag：.env 始终只是 IMAGE_BACKEND:IMAGE_TAG_BACKEND 的函数，
+    # 不引入 BACKEND_IMAGE 第二事实源 —— 真实缺陷 #3 的成因正是那一步被 write_env_file 无视。
+    local prev_be_tag
+    prev_be_tag="$(rollback_tag "${PREVIOUS_BACKEND_IMAGE:-}")"
+    if [ -n "$prev_be_tag" ]; then
         if preflight_migration_check "${PREVIOUS_BACKEND_IMAGE}"; then
-            log_info "回滚后端到: $PREVIOUS_BACKEND_IMAGE"
-            export BACKEND_IMAGE="${PREVIOUS_BACKEND_IMAGE}"
+            log_info "回滚后端到: $PREVIOUS_BACKEND_IMAGE（tag=$prev_be_tag）"
+            export IMAGE_TAG_BACKEND="$prev_be_tag"
             write_env_file
             docker compose -f "$COMPOSE_FILE" down "$BACKEND_SERVICE" 2>&1 || true
             sleep 3
             docker compose -f "$COMPOSE_FILE" up -d "$BACKEND_SERVICE" 2>&1
+            if ! assert_running_image "$BACKEND_SERVICE" "${IMAGE_BACKEND}:${IMAGE_TAG_BACKEND}"; then
+                log_error "后端回滚自证失败：.env 已写 tag=$IMAGE_TAG_BACKEND，但运行容器不是该镜像"
+                return 1
+            fi
         else
             log_error "❌ 拒绝回滚后端到 ${PREVIOUS_BACKEND_IMAGE}（迁移版本落后数据库，会崩溃循环）"
             log_error "   保持当前后端镜像: ${cur_be}"
-            export BACKEND_IMAGE="${cur_be}"
-            write_env_file
+            local cur_be_tag
+            cur_be_tag="$(rollback_tag "${cur_be}")"
+            if [ -n "$cur_be_tag" ]; then
+                export IMAGE_TAG_BACKEND="$cur_be_tag"
+                write_env_file
+            fi
         fi
     else
         log_warn "无后端历史版本，跳过后端回滚"
     fi
 
-    # 回滚 frontend
-    if [ "${PREVIOUS_FRONTEND_IMAGE:-unknown}" != "unknown" ]; then
-        log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE"
-        export FRONTEND_IMAGE="${PREVIOUS_FRONTEND_IMAGE}"
+    # 回滚 frontend（同后端：只改 tag 变量 + 回滚后自证）
+    local prev_fe_tag
+    prev_fe_tag="$(rollback_tag "${PREVIOUS_FRONTEND_IMAGE:-}")"
+    if [ -n "$prev_fe_tag" ]; then
+        log_info "回滚前端到: $PREVIOUS_FRONTEND_IMAGE（tag=$prev_fe_tag）"
+        export IMAGE_TAG_FRONTEND="$prev_fe_tag"
         write_env_file
         docker compose -f "$COMPOSE_FILE" down "$FRONTEND_SERVICE" 2>&1 || true
         sleep 2
         docker compose -f "$COMPOSE_FILE" up -d "$FRONTEND_SERVICE" 2>&1
+        if ! assert_running_image "$FRONTEND_SERVICE" "${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"; then
+            log_error "前端回滚自证失败：.env 已写 tag=$IMAGE_TAG_FRONTEND，但运行容器不是该镜像"
+            return 1
+        fi
     else
         log_warn "无前端历史版本，跳过前端回滚"
     fi
