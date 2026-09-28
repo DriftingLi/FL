@@ -4,13 +4,9 @@
 
         <view class="nav-bar">
             <view class="nav-side"></view>
-            <text class="nav-title">工作台</text>
-            <view class="nav-side nav-side-right" @click="onMe">
-                <text class="nav-action">我的</text>
-            </view>
+            <text class="nav-title">交换</text>
+            <view class="nav-side"></view>
         </view>
-
-        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view v-if="!loading && items.length == 0" class="empty-tip">
@@ -38,6 +34,8 @@
                 <text class="loading-text">加载中...</text>
             </view>
         </scroll-view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
     </view>
 </template>
 
@@ -151,19 +149,13 @@
         return '有效期至 ' + until
     }
 
+    /** 面间 `redirectTo` 替换（不堆栈）；本 tab 的 key 命中则不动 */
     function onSwitchTab(key : string) : void {
         if (key == activeKey) return
-        if (key == 'jobs') {
-            uni.redirectTo({ url: '/pages/recruiter/jobs' })
-            return
-        }
-        if (key == 'resumes') {
-            uni.redirectTo({ url: '/pages/recruiter/resumes' })
-        }
-    }
-
-    function onMe() : void {
-        uni.navigateTo({ url: '/pages/recruiter/me' })
+        if (key == 'home') { uni.redirectTo({ url: '/pages/recruiter/home' }); return }
+        if (key == 'jobs') { uni.redirectTo({ url: '/pages/recruiter/jobs' }); return }
+        if (key == 'resumes') { uni.redirectTo({ url: '/pages/recruiter/resumes' }); return }
+        if (key == 'me') { uni.redirectTo({ url: '/pages/recruiter/me' }); return }
     }
 
     onLoad((options : OnLoadOptions) => {
@@ -195,22 +187,12 @@
         align-items: center;
     }
 
-    .nav-side-right {
-        justify-content: flex-end;
-    }
-
     .nav-title {
         flex: 1;
         font-size: 34rpx;
         font-weight: bold;
         color: #333333;
         text-align: center;
-    }
-
-    .nav-action {
-        font-size: 30rpx;
-        color: #2979ff;
-        padding: 16rpx 0;
     }
 
     .content-scroll {

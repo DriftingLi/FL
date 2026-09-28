@@ -171,7 +171,8 @@ const continueLearningPath = computed<RouteLocationRaw>(() => {
 // 最近学习
 const recentLearning = ref<QuickCardItem[]>([])
 
-// 学习统计 section（骨架/加载/空态/tab 切换/图表组装收敛进 useRoleDashboard）
+// 学习统计 section（骨架/加载/空态/tab 切换/图表组装收敛在 useRoleDashboard）
+// #1355：本页面只用它的「取数出口 + 写回出口」两条，写回时机由下面的 apply 槽统一给。
 const {
   chartRef,
   timeTabs,
@@ -180,7 +181,8 @@ const {
   statsLoading,
   statsEmpty,
   summary,
-  loadStats: loadStudyStats
+  fetchStats,
+  applyStats
 } = useRoleDashboard({
   statsFetcher: async (days) => {
     const res = await studentApi.getStudyStats({ days })
@@ -213,67 +215,93 @@ const overviewStats = computed(() => {
   }
 })
 
-async function loadCourses() {
+/** 进行中的课程与「继续学习」入口：同一次 getStudentCourses 响应的两个面（#1355：只回传、不写回）。 */
+interface CoursesBundle {
+  continueLearning: StudentCourseItem | null
+  activeCourses: QuickCardItem[]
+}
+
+async function fetchCourses(): Promise<CoursesBundle> {
   try {
     // 我的课程（ADR-0017）：含最后学习位置，点击直达最后学习章节
     const res = await studentApi.getStudentCourses()
-    continueLearning.value = res?.continue_learning || null
-    if (res?.courses) {
-      activeCourses.value = res.courses
-        .filter((c) => {
-          const p = c.progress ?? 0
-          return p > 0 && p < 100
-        })
-        .slice(0, 5)
-        .map((c) => ({
-          title: c.course_name || '未命名课程',
-          subtitle: c.last_chapter_title || '',
-          badge: `${Math.round(c.progress ?? 0)}%`,
-          to: c.last_chapter_id
-            ? href('ChapterView', { courseId: c.course_id, chapterId: c.last_chapter_id })
-            : { ...href('CourseList'), query: { course_id: String(c.course_id) } }
-        }))
-    }
+    const activeCourses: QuickCardItem[] = (res?.courses ?? [])
+      .filter((c) => {
+        const p = c.progress ?? 0
+        return p > 0 && p < 100
+      })
+      .slice(0, 5)
+      .map((c) => ({
+        title: c.course_name || '未命名课程',
+        subtitle: c.last_chapter_title || '',
+        badge: `${Math.round(c.progress ?? 0)}%`,
+        to: c.last_chapter_id
+          ? href('ChapterView', { courseId: c.course_id, chapterId: c.last_chapter_id })
+          : { ...href('CourseList'), query: { course_id: String(c.course_id) } }
+      }))
+    return { continueLearning: res?.continue_learning || null, activeCourses }
   } catch (error) {
     console.error('加载课程失败:', error)
-    // 向上抛，交给 loadAll 决定渲染错误态（拦截器已 toast，这里不重复提示）
+    // 向上抛，交给 useAsyncPage 决定渲染错误态（拦截器已 toast，这里不重复提示）
     throw error
   }
 }
 
-async function loadRecentLearning() {
+async function fetchRecentLearning(): Promise<QuickCardItem[]> {
   try {
     // 多拉一些记录再按课程去重：study_record 是逐章节/逐次学习的行，
     // 同一门课会占多条记录，直接取前 5 条会导致“最近学习”卡片出现重复课程。
     const res = await studentApi.getRecords({ page: 1, page_size: 50 })
-    if (res?.records) {
-      // 记录已按 study_date 倒序，第一次遇到的 course_id 即该课程最新学习记录
-      const seenCourses = new Set<number>()
-      const recentCourses: StudyRecordItem[] = []
-      for (const r of res.records) {
-        if (!r.course_id || seenCourses.has(r.course_id)) continue
-        seenCourses.add(r.course_id)
-        recentCourses.push(r)
-        if (recentCourses.length >= 5) break
-      }
-      recentLearning.value = recentCourses.map((r) => ({
-        title: r.course_name || '未知课程',
-        subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
-        badge: r.study_duration ? `${r.study_duration}分钟` : '',
-        to: href('CourseList')
-      }))
+    // 记录已按 study_date 倒序，第一次遇到的 course_id 即该课程最新学习记录
+    const seenCourses = new Set<number>()
+    const recentCourses: StudyRecordItem[] = []
+    for (const r of res?.records ?? []) {
+      if (!r.course_id || seenCourses.has(r.course_id)) continue
+      seenCourses.add(r.course_id)
+      recentCourses.push(r)
+      if (recentCourses.length >= 5) break
     }
+    return recentCourses.map((r) => ({
+      title: r.course_name || '未知课程',
+      subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
+      badge: r.study_duration ? `${r.study_duration}分钟` : '',
+      to: href('CourseList')
+    }))
   } catch (error) {
     console.error('加载最近学习失败:', error)
     throw error
   }
 }
 
-const { loading: pageLoading, loadError: pageError, retrying, retry: handleRetry, run: loadAll } = useAsyncPage(
+// #1355（ADR-0069 决策 1 的收尾）：三路装载都**只取数并回传**，页面 ref 的写回全在 `apply` 槽里，
+// 而 `apply` 由 composable 在「批次代数校验通过」之后才调用 ⇒ 首屏在飞时切证件/点重试，
+// 上一轮的三份读数不会盖掉新一轮（旧形状里写回住在 helper 体内，R4 扫不到、只能登记 R4c 例外）。
+// 统计那一路仍用 `useRoleDashboard` 的出口：它带着 #506 的图表重绘时机，不在本处复刻。
+const {
+  loading: pageLoading,
+  loadError: pageError,
+  retrying,
+  retry: handleRetry,
+  run: loadAll
+} = useAsyncPage(
   async () => {
     // 三路并行：课程 / 最近学习 / 统计
     // #506：统计图渲染由 useRoleDashboard 自治（容器挂载即绘），此处不再手动编排
-    await Promise.all([loadCourses(), loadRecentLearning(), loadStudyStats()])
+    const [courses, recent, statsRes] = await Promise.all([
+      fetchCourses(),
+      fetchRecentLearning(),
+      fetchStats()
+    ])
+    return { courses, recent, statsRes }
+  },
+  {
+    apply: ({ courses, recent, statsRes }) => {
+      continueLearning.value = courses.continueLearning
+      activeCourses.value = courses.activeCourses
+      recentLearning.value = recent
+      // 写回与重绘时机归 useRoleDashboard（fire-and-forget：装载的 await 不该等 canvas 绘完）
+      void applyStats(statsRes)
+    }
   }
 )
 

@@ -1,7 +1,7 @@
 // useCourseCatalog：课程目录筛选 module 的接口级测试（计数语义的唯一事实源）。
 // seam：composable 接口——data-source adapter 用内存 fixture，不触达 API 层。
 import { describe, it, expect } from 'vitest'
-import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
+import { useCourseCatalog, treeCatalogAdapter, type CatalogAdapterResult } from '@/composables/useCourseCatalog'
 import type { CatalogDirectionNode, CatalogLevelNode, LevelDict } from '@/api/training'
 import type { CourseDTO } from '@/api/course'
 
@@ -167,5 +167,71 @@ describe('管理端扁平模式（bidirectional=false）', () => {
     catalog.selectDirection(-1)
     expect(catalog.scopedTotal.value).toBe(1)
     expect(catalog.countOfLevel(1)).toBe(0)
+  })
+})
+
+/**
+ * #1355（R4c 登记表销账的前置 1）：把「取数」与「写回」拆成两条出口。
+ *
+ * 此前 `admin/CourseCatalog.vue` 的 useAsyncPage loader 只是 `await fetchCatalog()`：
+ * 状态写在别的 module 的函数体里 ⇒ R4「loader 不写回」扫不到这个形状，R4c 只能把它登记成例外。
+ * 拆出 `loadCatalog()`（原样回传）+ `applyCatalog()`（写回）后，页面可以走 loader 回传 + `apply` 槽，
+ * 写回因此排在批次代数校验之后（ADR-0069 决策 1）。`fetchCatalog()` 保留为「取数 + 写回」一体的旧入口。
+ */
+describe('useCourseCatalog 取数出口与写回出口（#1355）', () => {
+  it('loadCatalog 只取数：原样回传 adapter 的结果，不写本 module 的任何状态', async () => {
+    const catalog = mountTree()
+    const data = await catalog.loadCatalog()
+
+    expect(data.directions).toHaveLength(2)
+    // 关键判据：取数出口不留副作用（写回只发生在 applyCatalog / fetchCatalog 里）
+    expect(catalog.directions.value).toEqual([])
+    expect(catalog.levels.value).toEqual([])
+    expect(catalog.totalAll.value).toBe(0)
+    expect(catalog.levelNameOf(2)).toBe('')
+  })
+
+  it('applyCatalog 写回三元组：计数与名称查找自此刻起生效', async () => {
+    const catalog = mountTree()
+    const data = await catalog.loadCatalog()
+    catalog.applyCatalog(data)
+
+    expect(catalog.directions.value.map(d => d.specialty_id)).toEqual([2, 3])
+    expect(catalog.levels.value.map(l => l.name)).toEqual(['入门', '进阶'])
+    expect(catalog.totalAll.value).toBe(4)
+    expect(catalog.levelNameOf(2)).toBe('进阶')
+  })
+
+  it('adapter 可回传页面自己的额外键（泛型 R）：本 module 只认三元组，不替页面写它不认得的状态', async () => {
+    interface CatalogBundle extends CatalogAdapterResult {
+      courses: number[]
+    }
+    const catalog = useCourseCatalog<CatalogBundle>({
+      adapter: {
+        async load(): Promise<CatalogBundle> {
+          return {
+            directions: [specialtyOf(2, '维修', [])],
+            levels: [levelDictOf(1, '入门')],
+            items: [{ specialty_id: 2, level_id: 1, count: 1 }],
+            courses: [7, 8]
+          }
+        }
+      },
+      bidirectional: false
+    })
+
+    const bundle = await catalog.loadCatalog()
+    expect(bundle.courses).toEqual([7, 8])
+    catalog.applyCatalog(bundle)
+    // 三元组落地，额外键仍只活在页面的回传载荷里（页面在自己的 apply 中写它）
+    expect(catalog.countOfLevel(1)).toBe(1)
+  })
+
+  it('fetchCatalog 仍是「取数 + 写回」一体的旧入口（本 module 的存量用例与非 seam 调用方用它）', async () => {
+    const catalog = mountTree()
+    await catalog.fetchCatalog()
+
+    expect(catalog.directions.value).toHaveLength(2)
+    expect(catalog.totalAll.value).toBe(4)
   })
 })

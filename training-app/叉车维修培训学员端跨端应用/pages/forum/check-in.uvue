@@ -11,12 +11,28 @@
         </view>
 
         <scroll-view class="content-scroll" scroll-y="true">
+            <view class="reminder-row">
+                <text class="reminder-label">每日签到</text>
+                <view class="reminder-right">
+                    <text class="reminder-text">签到提醒</text>
+                    <view class="switch" :class="reminderOn ? 'switch-on' : ''" @click="onToggleReminder">
+                        <view class="switch-knob"></view>
+                    </view>
+                </view>
+            </view>
+
             <view class="checkin-banner">
                 <view class="banner-left">
-                    <text class="banner-title">8月学习打卡</text>
-                    <text class="banner-desc">已连续打卡 {{ consecutiveDays }} 天 · 累计 {{ totalDays }} 天，每日 5 分基础奖，连击满 3/7/30 天额外加分</text>
+                    <text class="banner-title">{{ displayMonth }}月学习打卡</text>
+                    <view class="banner-desc-row">
+                        <text class="banner-desc">连续签到 </text>
+                        <text class="banner-desc-num">{{ consecutiveDays }}</text>
+                        <text class="banner-desc"> 天，累计签到 </text>
+                        <text class="banner-desc-num">{{ totalDays }}</text>
+                        <text class="banner-desc"> 天</text>
+                    </view>
                 </view>
-                <view class="banner-btn" @click="onCheckIn">
+                <view v-if="isViewingCurrentMonth" class="banner-btn" @click="onCheckIn">
                     <text class="banner-btn-text">{{ todayChecked ? '已打卡' : '开始打卡' }}</text>
                 </view>
             </view>
@@ -37,23 +53,21 @@
 
             <view class="calendar-grid">
                 <view v-for="(cell, idx) in calendarCells" :key="idx" class="calendar-cell">
-                    <view v-if="cell.isEmpty" class="cell-empty"></view>
-                    <view v-else class="cell-day" :class="getCellClass(cell)">
+                    <view class="cell-day" :class="getCellClass(cell)">
                         <text class="cell-num" :class="getCellNumClass(cell)">{{ cell.day }}</text>
-                        <!-- 过去已签到 / 今日已签到：蓝色圆圈 + 白色对勾 -->
-                        <view v-if="cell.checked" class="cell-check-done">
-                            <text class="cell-check-done-text">✓</text>
+                        <!-- 已打卡：蓝色圆 + 白色对勾 -->
+                        <view v-if="cell.checked" class="badge badge-check">
+                            <text class="badge-check-text">✓</text>
                         </view>
-                        <!-- 过去未签到：灰色对勾 -->
-                        <view v-else-if="!cell.isFuture && !cell.isToday" class="cell-missed-check">
-                            <text class="cell-missed-check-text">✓</text>
+                        <!-- 今日未打卡 / 本月未到日期：金币徽章 -->
+                        <view v-else-if="!cell.isAdjacent && !cell.isMissed" class="badge badge-coin">
+                            <text class="badge-coin-text">$</text>
                         </view>
-                        <!-- 今日未签到 / 未来日期：蓝色圆圈 + 金币图标 -->
-                        <view v-else class="cell-coin">
-                            <view class="coin-icon">
-                                <text class="coin-text">$</text>
-                            </view>
+                        <!-- 过去未打卡：灰色金币徽章 -->
+                        <view v-else-if="cell.isMissed" class="badge badge-coin-missed">
+                            <text class="badge-coin-missed-text">$</text>
                         </view>
+                        <!-- 相邻月日期：无徽章 -->
                     </view>
                 </view>
             </view>
@@ -80,6 +94,9 @@
     const totalDays = ref<number>(0)
     const calendarDays = ref<CheckInCalendarDay[]>([])
     const todayChecked = ref<boolean>(false)
+    // 签到提醒开关：本地偏好，uni.setStorageSync 持久化
+    const REMINDER_KEY = 'checkin-reminder-on'
+    const reminderOn = ref<boolean>(false)
     // 自动打卡：进入页面即代打卡一次（仅真实数据下触发，每次访问尝试一次）
     const usingMock = ref<boolean>(false)
     const autoCheckInTried = ref<boolean>(false)
@@ -89,8 +106,8 @@
         date : string
         checked : boolean
         isToday : boolean
-        isFuture : boolean
-        isEmpty : boolean
+        isAdjacent : boolean
+        isMissed : boolean
     }
 
     function padZero(n : number) : string {
@@ -98,48 +115,58 @@
         return '' + n
     }
 
+    function dateKey(dt : Date) : string {
+        return dt.getFullYear() + '-' + padZero(dt.getMonth() + 1) + '-' + padZero(dt.getDate())
+    }
+
+    // 生成整周网格：周一为首列，前导=上月末真实日期，尾部=下月初真实日期
+    // 每格日期均由 new Date(y, m-1, d) 归一化产生，星期列与真实日期严格对齐
     const calendarCells = computed<CalendarCell[]>(() : CalendarCell[] => {
         const cells : CalendarCell[] = []
         const year = displayYear.value
         const month = displayMonth.value
-        const firstDay = new Date(year, month - 1, 1).getDay()
-        const blankCount = firstDay == 0 ? 6 : firstDay - 1
-        for (let i = 0; i < blankCount; i++) {
-            cells.push({ day: 0, date: '', checked: false, isToday: false, isFuture: false, isEmpty: true } as CalendarCell)
-        }
-        const daysInMonth = new Date(year, month, 0).getDate()
         const today = new Date()
-        const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = year + '-' + padZero(month) + '-' + padZero(d)
+        const todayStr = dateKey(today)
+        // getDay(): 0=周日；周一为首列时上月末需补的天数
+        const firstWeekday = new Date(year, month - 1, 1).getDay()
+        const leadCount = firstWeekday == 0 ? 6 : firstWeekday - 1
+        const daysInMonth = new Date(year, month, 0).getDate()
+        const totalCells = Math.ceil((leadCount + daysInMonth) / 7) * 7
+        for (let i = 0; i < totalCells; i++) {
+            const dt = new Date(year, month - 1, i + 1 - leadCount)
+            const d = dt.getDate()
+            const dateStr = dateKey(dt)
+            const isAdjacent = dt.getMonth() != month - 1
             const isToday = dateStr == todayStr
-            const isFuture = new Date(year, month - 1, d) > today
             let checked = false
-            // 遍历 API 返回的签到记录，兼容多种日期格式
-            for (let j = 0; j < calendarDays.value.length; j++) {
-                const apiDate = calendarDays.value[j].date
-                // 精确匹配 YYYY-MM-DD
-                if (apiDate == dateStr) {
-                    checked = calendarDays.value[j].checked
-                    break
-                }
-                // 兼容 YYYY-M-D（无前导零）
-                const shortDate = year + '-' + (month) + '-' + d
-                if (apiDate == shortDate) {
-                    checked = calendarDays.value[j].checked
-                    break
-                }
-                // 兼容只匹配日期中的日（如 "13" 或 "-13"）
-                if (apiDate.length <= 2 && apiDate == '' + d) {
-                    checked = calendarDays.value[j].checked
-                    break
-                }
-                if (apiDate.length > 2 && apiDate.endsWith('-' + d) && apiDate.endsWith(padZero(month) + '-' + d)) {
-                    checked = calendarDays.value[j].checked
-                    break
+            if (!isAdjacent) {
+                // 遍历 API 返回的签到记录，兼容多种日期格式（仅本月格子参与匹配）
+                for (let j = 0; j < calendarDays.value.length; j++) {
+                    const apiDate = calendarDays.value[j].date
+                    // 精确匹配 YYYY-MM-DD
+                    if (apiDate == dateStr) {
+                        checked = calendarDays.value[j].checked
+                        break
+                    }
+                    // 兼容 YYYY-M-D（无前导零）
+                    const shortDate = year + '-' + (month) + '-' + d
+                    if (apiDate == shortDate) {
+                        checked = calendarDays.value[j].checked
+                        break
+                    }
+                    // 兼容只匹配日期中的日（如 "13" 或 "-13"）
+                    if (apiDate.length <= 2 && apiDate == '' + d) {
+                        checked = calendarDays.value[j].checked
+                        break
+                    }
+                    if (apiDate.length > 2 && apiDate.endsWith('-' + d) && apiDate.endsWith(padZero(month) + '-' + d)) {
+                        checked = calendarDays.value[j].checked
+                        break
+                    }
                 }
             }
-            cells.push({ day: d, date: dateStr, checked: checked, isToday: isToday, isFuture: isFuture, isEmpty: false } as CalendarCell)
+            const isMissed = !isAdjacent && !isToday && !checked && dateStr < todayStr
+            cells.push({ day: d, date: dateStr, checked: checked, isToday: isToday, isAdjacent: isAdjacent, isMissed: isMissed } as CalendarCell)
         }
         // 打印调试：列出所有 checked 的日期
         const checkedDays : string[] = []
@@ -152,18 +179,34 @@
         return cells
     })
 
+    // 打卡是针对「今天」的动作：仅浏览当月时可操作，历史/未来月份为只读回看
+    const isViewingCurrentMonth = computed<boolean>(() : boolean => {
+        const now = new Date()
+        return displayYear.value == now.getFullYear() && displayMonth.value == now.getMonth() + 1
+    })
+
+    // 瓦片四态：今日未打卡=深蓝高亮；已打卡=浅蓝；过去未打卡=灰；默认/未到=白；相邻月=白底淡化
     function getCellClass(cell : CalendarCell) : string {
-        if (cell.isToday) return 'cell-today'
+        if (cell.isAdjacent) return 'cell-adjacent'
         if (cell.checked) return 'cell-checked'
-        if (cell.isFuture) return 'cell-future'
-        return 'cell-missed'
+        if (cell.isToday) return 'cell-today'
+        if (cell.isMissed) return 'cell-missed'
+        return 'cell-default'
     }
 
     function getCellNumClass(cell : CalendarCell) : string {
+        if (cell.isAdjacent) return 'num-adjacent'
         if (cell.isToday) return 'num-today'
         if (cell.checked) return 'num-checked'
-        if (cell.isFuture) return 'num-future'
+        if (cell.isMissed) return 'num-missed'
         return ''
+    }
+
+    /** 签到提醒开关：切换并持久化本地偏好 */
+    function onToggleReminder() : void {
+        reminderOn.value = !reminderOn.value
+        uni.setStorageSync(REMINDER_KEY, reminderOn.value)
+        uni.showToast({ title: reminderOn.value ? '已开启签到提醒' : '已关闭签到提醒', icon: 'none' })
     }
 
     /** mock 日历数据（后端接口未就绪时回退；mock 态不触发自动打卡） */
@@ -245,6 +288,8 @@
     }
 
     function onCheckIn() : void {
+        // 防御：非当月不提供打卡入口（按钮已隐藏，此处再兑一道）
+        if (!isViewingCurrentMonth.value) return
         doCheckIn(false)
     }
 
@@ -277,6 +322,10 @@
 
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
     onLoad((options : OnLoadOptions) => {
+        const stored = uni.getStorageSync(REMINDER_KEY)
+        if (stored == true || stored == 'true') {
+            reminderOn.value = true
+        }
         loadCalendar().then(() => {
             // 进入页面自动代打卡一次：仅真实日历加载成功、今日未打卡时触发
             if (!usingMock.value && !todayChecked.value && !autoCheckInTried.value) {
@@ -299,9 +348,18 @@
     .checkin-banner { margin: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: #2979ff; flex-direction: row; align-items: center; justify-content: space-between; }
     .banner-left { flex: 1; flex-direction: column; margin-right: 24rpx; }
     .banner-title { font-size: 34rpx; font-weight: bold; color: #ffffff; margin-bottom: 12rpx; }
-    .banner-desc { font-size: 22rpx; color: rgba(255, 255, 255, 0.85); lines: 2; }
+    .banner-desc-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .banner-desc { font-size: 22rpx; color: rgba(255, 255, 255, 0.85); }
+    .banner-desc-num { font-size: 26rpx; font-weight: bold; color: #ffffff; }
     .banner-btn { background-color: #ffffff; padding: 16rpx 32rpx; border-radius: 32rpx; flex-shrink: 0; }
     .banner-btn-text { font-size: 28rpx; font-weight: bold; color: #2979ff; }
+    .reminder-row { margin: 24rpx 24rpx 0 24rpx; flex-direction: row; align-items: center; justify-content: space-between; }
+    .reminder-label { font-size: 30rpx; font-weight: bold; color: #333333; }
+    .reminder-right { flex-direction: row; align-items: center; }
+    .reminder-text { font-size: 24rpx; color: #999999; margin-right: 12rpx; }
+    .switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background-color: #d9d9d9; justify-content: center; padding: 0 4rpx; }
+    .switch-on { background-color: #2979ff; justify-content: flex-end; }
+    .switch-knob { width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #ffffff; }
     .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }
     .month-arrow { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
     .arrow-text { font-size: 40rpx; color: #333333; font-weight: bold; }
@@ -309,29 +367,33 @@
     .week-header { flex-direction: row; padding: 12rpx 24rpx; }
     .week-item { flex: 1; text-align: center; font-size: 24rpx; color: #999999; }
     .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 16rpx; }
-    .calendar-cell { width: 14.28%; align-items: center; padding: 8rpx 0; }
-    .cell-empty { width: 88rpx; height: 88rpx; }
-    .cell-day { width: 88rpx; height: 88rpx; border-radius: 44rpx; align-items: center; justify-content: center; flex-direction: column; }
-    /* 今日 */
+    .calendar-cell { width: 14.28%; align-items: center; padding: 6rpx 2rpx; }
+    /* 圆角方形瓦片：数字在上、状态徽章在下 */
+    .cell-day { width: 84rpx; height: 96rpx; border-radius: 16rpx; background-color: #ffffff; align-items: center; flex-direction: column; }
+    /* 今日未打卡：深蓝高亮瓦片 */
     .cell-today { background-color: #2979ff; }
-    /* 过去已签到：蓝色背景（与今日一致） */
-    .cell-checked { background-color: #2979ff; }
-    /* 过去未签到：浅灰背景 */
-    .cell-missed { background-color: #f0f0f0; }
-    /* 未来日期：蓝色背景 */
-    .cell-future { background-color: #2979ff; }
-    .cell-num { font-size: 28rpx; color: #333333; line-height: 32rpx; }
+    /* 已打卡：浅蓝瓦片 */
+    .cell-checked { background-color: #dbeafe; }
+    /* 过去未打卡：灰瓦片 */
+    .cell-missed { background-color: #e8e8e8; }
+    /* 默认/未到：白瓦片 */
+    .cell-default { background-color: #ffffff; }
+    /* 相邻月日期：白底淡化 */
+    .cell-adjacent { background-color: #ffffff; }
+    .cell-num { font-size: 26rpx; color: #333333; line-height: 30rpx; margin-top: 12rpx; }
     .num-today { color: #ffffff; font-weight: bold; }
-    .num-checked { color: #ffffff; }
-    .num-future { color: #ffffff; }
-    /* 已签到：蓝色圆圈 + 白色对勾（通用：今日+历史） */
-    .cell-check-done { width: 28rpx; height: 28rpx; border-radius: 14rpx; background-color: #ffffff; align-items: center; justify-content: center; margin-top: 2rpx; }
-    .cell-check-done-text { font-size: 16rpx; color: #2979ff; line-height: 18rpx; font-weight: bold; }
-    /* 过去未签到：灰色圆圈 + 灰色对勾 */
-    .cell-missed-check { width: 28rpx; height: 28rpx; border-radius: 14rpx; background-color: #d0d0d0; align-items: center; justify-content: center; margin-top: 2rpx; }
-    .cell-missed-check-text { font-size: 16rpx; color: #ffffff; line-height: 18rpx; }
-    /* 未来/今日未签到：金币图标 */
-    .cell-coin { margin-top: 2rpx; align-items: center; justify-content: center; }
-    .coin-icon { width: 32rpx; height: 32rpx; border-radius: 16rpx; background-color: #FFD700; align-items: center; justify-content: center; }
-    .coin-text { font-size: 18rpx; color: #ffffff; font-weight: bold; line-height: 20rpx; }
+    .num-checked { color: #1d4ed8; }
+    .num-missed { color: #8a8a8a; }
+    .num-adjacent { color: #cccccc; }
+    /* 状态徽章：小圆形，位于数字下方 */
+    .badge { width: 34rpx; height: 34rpx; border-radius: 17rpx; align-items: center; justify-content: center; margin-top: 8rpx; }
+    /* 已打卡：蓝底白对勾 */
+    .badge-check { background-color: #2979ff; }
+    .badge-check-text { font-size: 20rpx; color: #ffffff; line-height: 22rpx; font-weight: bold; }
+    /* 今日未打卡/未到：金色金币 */
+    .badge-coin { background-color: #f6b93e; }
+    .badge-coin-text { font-size: 20rpx; color: #ffffff; font-weight: bold; line-height: 22rpx; }
+    /* 过去未打卡：灰色金币 */
+    .badge-coin-missed { background-color: #c9c9c9; }
+    .badge-coin-missed-text { font-size: 20rpx; color: #ffffff; font-weight: bold; line-height: 22rpx; }
 </style>
