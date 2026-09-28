@@ -188,7 +188,7 @@ describe('A. 简历库列表：page_size=20 + 8 维筛选的形状', () => {
           expected_regions: ['江苏省/苏州市'], salary_min: 6000, salary_max: 9000,
           experience_years: 3, self_intro: '五年叉车维修', updated_at: '2026-09-20T10:00:00Z',
           contact_state: 'approved', contact_source: 'recruiter',
-          resume_experiences: [{ company: '某物流', position: '维修工', start_date: '2020-01', end_date: '', description: '保养' }],
+          resume_experiences: [{ company: '某物流', role: '维修工', start_month: '2020-01', end_month: '', desc: '保养' }],
           resume_certifications: [{ credential_id: 4, cert_no: 'N1-001', expire_date: '2028-01-01', image_urls: ['should-not-be-read'] }],
           // 后端若混进敏感键，移动端**读不出来**（无对应读取行）——见契约测试 C 组
           contact_phone: '13800000000', wechat: 'wx_should_not_leak', region: '江苏省/苏州市/工业园区',
@@ -209,6 +209,27 @@ describe('A. 简历库列表：page_size=20 + 8 维筛选的形状', () => {
     expect(r.items[0].resume_file_url).toBe(undefined);
     expect(r.items[0].photos).toBe(undefined);
     expect(r.items[0].resume_certifications[0].image_urls).toBe(undefined);
+  });
+
+  test('A8：经历映射读后端真实键（role/start_month/end_month/desc）—— K3 #1339 键名漂移回归锁', async () => {
+    const { mod } = loadRecruit({
+      data: {
+        items: [{
+          user_id: 7, real_name: '张*丰', real_name_masked: '张*丰',
+          expected_regions: [], salary_min: null, salary_max: null,
+          experience_years: 3, self_intro: '', updated_at: '2026-09-20T10:00:00Z',
+          contact_state: 'none', contact_source: '',
+          resume_experiences: [{ company: '某物流', role: '维修工', start_month: '2020-01', end_month: '', desc: '保养' }],
+          resume_certifications: [],
+        }],
+        total: 1,
+      },
+    });
+    const r = await mod.getRecruitResumesApi(emptyFilters(), 1);
+    // 逐字段比对：读错任一键（漂移）即红——镜像夹具做不到这一点
+    expect(r.items[0].resume_experiences[0]).toEqual({
+      company: '某物流', role: '维修工', start_month: '2020-01', end_month: '', desc: '保养',
+    });
   });
 });
 
