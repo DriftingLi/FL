@@ -478,6 +478,13 @@ jobs:
       - name: 表驱动单测（CI 汇总门禁判定逻辑）
         run: node --test scripts/ci-summary-needs.test.mjs
 
+      # 部署面两条常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
+      # 此前它们只在本地被引用、CI 零触发（2026-09-17 架构评审登记项）—— 一并接上。
+      - name: 表驱动单测（回滚计划与镜像自证判定逻辑）
+        run: node --test scripts/deploy-rollback-plan.test.mjs
+      - name: 表驱动单测（迁移失败门判定逻辑）
+        run: node --test scripts/deploy-migration-gate.test.mjs
+
       - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
         run: node --test scripts/check-ai-assistant-send.test.mjs
 

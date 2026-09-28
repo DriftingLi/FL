@@ -20,7 +20,7 @@ var executableExtensions = []string{"svg", "svgz", "html", "htm", "xhtml", "xml"
 
 func TestFileTypeTable_UploadableMustBeSafe(t *testing.T) {
 	for ext, e := range fileTypeTable {
-		if e.uploadCategory == "" {
+		if e.upload == "" {
 			continue
 		}
 		if e.class != FileTypeSafe {
@@ -39,8 +39,8 @@ func TestFileTypeTable_ExecutableExtensionsAreUnsafeAndNotUploadable(t *testing.
 		if e.class != FileTypeUnsafe {
 			t.Errorf("%q 的分档 = %v，期望 FileTypeUnsafe", ext, e.class)
 		}
-		if e.uploadCategory != "" {
-			t.Errorf("%q 竟可上传（category = %q）", ext, e.uploadCategory)
+		if e.upload != "" {
+			t.Errorf("%q 竟可上传（category = %q）", ext, e.upload)
 		}
 	}
 }

@@ -202,6 +202,8 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 // safe 不动（保留扩展名推断的 Content-Type 与内联语义）；unsafe / unknown 一律
 // attachment + octet-stream —— 用户可控内容不得以「浏览器会执行」的类型同源呈现。
 func applyUploadDeliveryHeaders(c *gin.Context, fullPath string) {
+	// nosniff 两档都设：safe 档按扩展名推断类型，禁止浏览器再按内容嗅探改写（ADR-0066 决策 2）。
+	c.Header("X-Content-Type-Options", "nosniff")
 	if service.FileTypeClassOfPath(fullPath) == service.FileTypeSafe {
 		return
 	}

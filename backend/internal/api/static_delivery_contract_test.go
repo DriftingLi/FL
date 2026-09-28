@@ -13,10 +13,37 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
+
+// newUploadEnv 建一个带真实本地存储的路由环境（上传端点会写盘）。
+func newUploadEnv(t *testing.T) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{JWTSecretKey: "upload-gate-secret", UploadFolder: t.TempDir()}
+	deps := NewDeps(cfg, testutil.NewMemoryDB(t), storage.NewLocalStorage(t.TempDir()), zap.NewNop(), stubExportStore{})
+	return NewRouter(deps)
+}
+
+// TestUploadEndpointRejectsSvg 上传侧的唯一闸门（ValidateImage，五个上传端点共用）必须拒掉 svg；
+// 同时反证白名单没被误伤（png 仍可上传）。ADR-0066 决策 1。
+func TestUploadEndpointRejectsSvg(t *testing.T) {
+	r := newUploadEnv(t)
+	w := uploadAIImage(t, r, "evil.svg")
+	if w.Code == http.StatusOK {
+		t.Fatalf("上传 evil.svg 竟成功（body=%s）—— 存储型 XSS 的注入源仍在", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "不支持的图片格式") {
+		t.Fatalf("拒绝文案未命中白名单提示：%s", w.Body.String())
+	}
+	if w2 := uploadAIImage(t, r, "ok.png"); w2.Code != http.StatusOK {
+		t.Fatalf("上传 ok.png 失败（%d）：%s", w2.Code, w2.Body.String())
+	}
+}
 
 // newStaticDeliveryEnv 建一个上传目录可控的路由环境（静态面不需要任何登录态）。
 func newStaticDeliveryEnv(t *testing.T, files map[string]string) *gin.Engine {

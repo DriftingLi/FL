@@ -262,33 +262,9 @@ func shouldCompressImage(contentType string) bool {
 	return false
 }
 
+// mimeTypeFromExt 扩展名 → MIME 类型（读类型表，唯一事实源；未登记回落 octet-stream）。
 func mimeTypeFromExt(ext string) string {
-	switch ext {
-	case "pdf":
-		return "application/pdf"
-	case "ppt":
-		return "application/vnd.ms-powerpoint"
-	case "pptx":
-		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-	case "mp4":
-		return "video/mp4"
-	case "webm":
-		return "video/webm"
-	case "png":
-		return "image/png"
-	case "jpg", "jpeg":
-		return "image/jpeg"
-	case "gif":
-		return "image/gif"
-	case "webp":
-		return "image/webp"
-	case "bmp":
-		return "image/bmp"
-	case "svg":
-		return "image/svg+xml"
-	default:
-		return "application/octet-stream"
-	}
+	return MimeTypeOf(ext)
 }
 
 func fileExtension(filename string) string {

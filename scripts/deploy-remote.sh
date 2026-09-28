@@ -154,6 +154,22 @@ rollback_tag() {
     esac
 }
 
+# images_equal 运行镜像与期望镜像是否一致（回滚自证的判据，纯函数）：一致 0，不一致 1。
+images_equal() {
+    [ "${1:-}" = "${2:-}" ]
+}
+
+# --image-match：dry-run 入口，用退出码表达「运行镜像 == 目标镜像」这条判据（不碰 docker）。
+# 常驻判据物：scripts/deploy-rollback-plan.test.mjs。
+if [ "$MODE" = "--image-match" ]; then
+    if images_equal "${2:-}" "${3:-}"; then
+        echo "match"
+        exit 0
+    fi
+    echo "mismatch"
+    exit 1
+fi
+
 # --migration-gate：dry-run 入口，只打印上面的判定结果就退出（不做任何部署动作、不碰 docker）。
 # 常驻判据物：scripts/deploy-migration-gate.test.mjs 用它断言两条分支（#1099「可 dry-run 断言」）。
 if [ "$MODE" = "--migration-gate" ]; then
@@ -1264,7 +1280,7 @@ assert_running_image() {
         return 1
     fi
     actual=$(docker inspect --format='{{.Config.Image}}' "$cid" 2>/dev/null || echo "unknown")
-    if [ "$actual" != "$expected" ]; then
+    if ! images_equal "$actual" "$expected"; then
         log_error "回滚自证失败：$service 运行镜像 = ${actual}，期望 = ${expected}"
         return 1
     fi
@@ -1377,7 +1393,11 @@ main() {
 
     case "$MODE" in
         --rollback)
-            do_rollback
+            # 显式接返回值：do_rollback 的自证失败必须让脚本非零退出（main 末尾还有一条 echo，
+            # 不接住的话失败会被它的退出码盖掉）。
+            if ! do_rollback; then
+                exit 1
+            fi
             ;;
         deploy|*)
             pre_deploy_check

@@ -8,7 +8,8 @@
 // rollback_tag 的解析结果 —— 完整镜像坐标 ⇒ tag，无 tag / unknown / 缺省 ⇒ 空。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -53,4 +54,39 @@ test('回滚计划：无 tag / unknown / 缺省 ⇒ 空（调用方按「无历�
   assert.equal(plan({ PREVIOUS_BACKEND_IMAGE: 'unknown' }).IMAGE_TAG_BACKEND, '')
   assert.equal(plan({}).IMAGE_TAG_BACKEND, '')
   assert.equal(plan({}).IMAGE_TAG_FRONTEND, '')
+})
+
+/** 跑一次 --image-match dry-run，返回 {status, out}：退出码就是自证判据。 */
+function imageMatch(actual, expected) {
+  const r = spawnSync('bash', ['scripts/deploy-remote.sh', '--image-match', actual, expected], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  return { status: r.status, out: (r.stdout || '').trim() }
+}
+
+test('镜像自证：一致 ⇒ 退出码 0；不一致 ⇒ 非零且打印 mismatch', () => {
+  const same = imageMatch('ghcr.io/org/fl-backend:sha-a', 'ghcr.io/org/fl-backend:sha-a')
+  assert.equal(same.status, 0, '一致时必须 0（否则回滚会被误判为失败）')
+  const bad = imageMatch('ghcr.io/org/fl-backend:sha-new', 'ghcr.io/org/fl-backend:sha-old')
+  assert.notEqual(bad.status, 0, '不一致必须非零（否则「回滚成功」会被假打印）')
+  assert.equal(bad.out.split('\n').pop(), 'mismatch')
+})
+
+// 结构判据（照 check-async-section.mjs 的文本守卫手法）：回滚必须只改 tag 变量、必须带自证，
+// 且不得再出现历史那份「export BACKEND_IMAGE=」—— write_env_file 不读它，正是空操作回滚的成因。
+test('回滚接线：只改 IMAGE_TAG_* + write_env_file + assert_running_image，且不再 export BACKEND_IMAGE', () => {
+  const src = readFileSync(resolve(ROOT, 'scripts/deploy-remote.sh'), 'utf8')
+  const start = src.indexOf('do_rollback() {')
+  assert.ok(start > 0, '找不到 do_rollback')
+  const end = src.indexOf('\nmain\n', start)
+  const body = src.slice(start, end > 0 ? end : src.length)
+  for (const needle of ['export IMAGE_TAG_BACKEND=', 'export IMAGE_TAG_FRONTEND=', 'write_env_file', 'assert_running_image']) {
+    assert.ok(body.includes(needle), 'do_rollback 缺少：' + needle)
+  }
+  for (const banned of ['export BACKEND_IMAGE=', 'export FRONTEND_IMAGE=']) {
+    assert.ok(!body.includes(banned), 'do_rollback 又出现 ' + banned + '（write_env_file 不读它 ⇒ 空操作回滚回归）')
+  }
 })
