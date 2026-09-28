@@ -249,26 +249,28 @@ const conditionRatingsDraft = conditionRatings.draft
 const regionCoefficientsDraft = regionCoefficients.draft
 
 // 档位二：算法参数聚合装载走 useAsyncPage（错误/重试上档位通道，不再吞成空草稿）；
-// 失败仍清四份 draft（与旧行为一致：错误态与陈旧数据不同屏），保存侧维持 useDirtyDraft 五态。
+// 保存侧维持 useDirtyDraft 五态。#1355：写回从 loader 的 try/catch 体内搬进两个槽 ——
+// 成功走 `apply`、失败走 `onError`，两个槽都由 composable 在 `gen === generation` 校验通过之后调用。
+// 旧形状里这段清草稿住在 loader 的 `catch` 体内：那是「写回排在守卫之前」的形状（R4/R4c 的射程），
+// 且**旧一轮**的失败会抹掉**新一轮**刚落地的草稿。搬进 `onError` 后只有「本轮确实失败」才执行。
 const {
   loading: algorithmLoading,
   loadError: algorithmLoadError,
   retrying: algorithmRetrying,
   retry: retryAlgorithmLoad,
   run: loadAlgorithmParams
-} = useAsyncPage(async () => {
-  try {
-    const data: AlgorithmParameters = await listAlgorithmParameters()
+} = useAsyncPage(async (): Promise<AlgorithmParameters> => await listAlgorithmParameters(), {
+  apply: (data) => {
     coefficients.setAll(data.coefficients)
     brands.setAll(data.brands)
     conditionRatings.setAll(data.condition_ratings)
     regionCoefficients.setAll(data.region_coefficients)
-  } catch (e) {
+  },
+  onError: () => {
     coefficients.clear()
     brands.clear()
     conditionRatings.clear()
     regionCoefficients.clear()
-    throw e
   }
 })
 
