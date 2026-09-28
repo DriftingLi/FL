@@ -91,6 +91,18 @@ if ($NoBranch) {
 if ($LASTEXITCODE -ne 0) { Fail "git worktree add 失败（exit $LASTEXITCODE）" 2 }
 Write-Host "[new-worktree] 已建 $dest（分支 $Branch）" -ForegroundColor Green
 
+# ── 初始化：新树的 node_modules 与「路径会不会让 ③ 门假绿」都在这一步收敛（2026-09-28）
+#    判据源单一：真源在 scripts/lib/wt-bootstrap.ps1，被 ③ 门的 wtBootstrapBehavior 锁住；
+#    这里只调用，不复制逻辑。放在 -SkipVerify 早退之前 ⇒ 跳过判据也不跳过初始化。
+$boot = Join-Path (Join-Path $dest 'training-app') '叉车维修培训学员端跨端应用\scripts\wt-bootstrap.ps1'
+if (Test-Path -LiteralPath $boot) {
+    & $boot -ExpectEligible
+    if ($LASTEXITCODE -eq 3) { Fail '闸门建的树仍不可信（段首带点/元字符）⇒ ③ 门会静默假绿，必须换树名（见上方红字）' 3 }
+    if ($LASTEXITCODE -ne 0) { Fail "初始化失败（exit $LASTEXITCODE）" 2 }
+} else {
+    Write-Host "[new-worktree] 没有 $boot —— 树里要自己 npm ci 或建 junction，否则 jest 起不来" -ForegroundColor Yellow
+}
+
 # ── 唯一判据：实测 jest 能否看见套件
 if ($SkipVerify) { Write-Host "[new-worktree] 已按 -SkipVerify 跳过判据"; exit 0 }
 

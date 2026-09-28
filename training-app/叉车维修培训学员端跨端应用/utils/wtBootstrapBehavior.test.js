@@ -32,7 +32,8 @@ const { readText } = require('./utsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'wt-bootstrap.ps1');
-const JEST_ENTRY = require.resolve('jest/bin/jest');   // ENTRY_REL 到 Task 2 追加 W8 时才声明
+const ENTRY_REL = path.join('scripts', 'wt-bootstrap.ps1');
+const JEST_ENTRY = require.resolve('jest/bin/jest');
 
 function psArgs(extra) {
   const args = ['-NoProfile', '-NonInteractive'];
@@ -75,7 +76,7 @@ describe('worktree 初始化真源（运行期）', () => {
 
   test('W2: 真源不写死移动端项目名、不读编辑器专有变量', () => {
     const projName = path.basename(ROOT);
-    for (const rel of [LIB_REL]) {                       // ⚠️ 只查 lib —— 入口在 Task 2 才存在（W2 在那里扩到入口）
+    for (const rel of [LIB_REL, ENTRY_REL]) {
       const src = readText(path.join(ROOT, rel));
       expect(src).not.toContain(projName);
       expect(src).not.toContain('ROOT_WORKTREE_PATH');
@@ -189,6 +190,34 @@ describe('worktree 初始化真源（运行期）', () => {
     const suites = String(out).split(/\r?\n/).map((l) => l.trim()).filter((l) => l.endsWith('.test.js'));
     expect(suites.some((l) => norm(l).endsWith('utils/wtBootstrapBehavior.test.js'))).toBe(true);
   });
-  // ⚠️ W8（跑入口脚本的那条）**不在本任务** —— 入口到 Task 2 才存在，它由 Task 2 Step 2 追加。
-  //    同理：`ENTRY_REL` 常量也在 Task 2 追加 W8 时一并加回（本任务不引用它，留它就是死变量）。
+
+  test('W8: 退出码分工 —— 非闸门树不可信只告知（exit 0），闸门树不可信才判失败（exit 3）', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wtb-'));
+    try {
+      const main = path.join(tmp, 'main');
+      const tree = path.join(tmp, '.qoder', 'worktree', 'FL-1a2b3c4d');   // 不可信路径
+      const proj = 'training-app/FakeProj';
+      for (const root of [main, tree]) {
+        fs.mkdirSync(path.join(root, proj), { recursive: true });
+        fs.writeFileSync(path.join(root, proj, 'jest.config.unit.js'), 'module.exports = {};\n');
+      }
+      fs.mkdirSync(path.join(main, proj, 'node_modules'), { recursive: true });
+      const run = (expectEligible) => {
+        const args = psArgs(['-File', path.join(ROOT, ENTRY_REL), '-DryRun', '-Root', main, '-WtRoot', tree]);
+        if (expectEligible) args.push('-ExpectEligible');
+        try {
+          return { code: 0, out: String(execFileSync('pwsh', args, { encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 8 * 1024 * 1024 })) };
+        } catch (e) {
+          return { code: e.status, out: String(e.stdout || '') + String(e.stderr || '') };
+        }
+      };
+      const told = run(false);
+      expect(told.code).toBe(0);            // 宿主树：不可信是常态 ⇒ 不判失败
+      expect(told.out).toMatch(/refuse/);    // 但红字必须打过（拦截靠红字，不靠失败码）
+      expect(told.out).toMatch(/静默假绿/);
+      expect(run(true).code).toBe(3);        // 闸门树起错名 ⇒ 真故障
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
