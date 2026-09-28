@@ -2,45 +2,76 @@
     <view class="recruiter-tab-bar">
         <view v-for="tab in tabs" :key="tab.key" class="recruiter-tab-item"
             :class="{ 'recruiter-tab-item-active': tab.key == active }" @click="onTap(tab.key)">
+            <view class="recruiter-tab-icon-wrap">
+                <image v-if="tab.iconKind == 'png'" class="recruiter-tab-icon"
+                    :src="tab.key == active ? tab.iconActive : tab.icon" mode="aspectFit"></image>
+                <text v-if="tab.iconKind == 'glyph'" class="recruiter-tab-glyph"
+                    :class="{ 'recruiter-tab-glyph-active': tab.key == active }">{{ tab.glyph }}</text>
+                <!-- 交换 tab 徽标：只计**未过期**的 pending（数量由 utils/recruitDisplay.uts 算好传进来） -->
+                <text v-if="tab.key == 'contacts' && pendingCount > 0" class="recruiter-tab-badge">{{ pendingCount }}</text>
+            </view>
             <text class="recruiter-tab-text" :class="{ 'recruiter-tab-text-active': tab.key == active }">{{ tab.label }}</text>
-            <!-- 交换段徽标：只计**未过期**的 pending（数量由 utils/recruitDisplay.uts 算好传进来） -->
-            <text v-if="tab.key == 'contacts' && pendingCount > 0" class="recruiter-tab-badge">{{ pendingCount }}</text>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
     /**
-     * 招聘者工作区分段件 —— **全仓唯一一份**（ADR-0022 ②）
+     * 招聘者工作区 · 底部常驻五 tab 件 —— **全仓唯一一份**（ADR-0028 ②；原 0022 ② 的顶部三段件已删除、不并存）
      *
-     * 三个一级面（职位 / 简历库 / 交换）各挂一次，面间 `redirectTo` 替换（不堆栈）；
-     * **二级面（投递列表、我的）不带分段** —— 否则段切换与返回栈语义打架。
-     * 先例形状：`pages/profile/components/activity-tab-bar.uvue`（被 3 页挂载，
-     * 由 `utils/personalActivityContract.test.js` 锁住挂载数）。
+     * 五个一级面（首页 / 职位 / 简历库 / 交换 / 我的）各挂一次，面间 `redirectTo` 替换（不堆栈）；
+     * **二级面（投递列表）不带底栏** —— 否则 tab 切换与返回栈语义打架。
      *
-     * ADR-0009 的病根是**两份手画的栏**，不是「面多」⇒ 三个面必须共用这一个文件，
-     * 而不是各自内联一份长得一样的 view。挂载数与唯一性由
-     * `utils/recruitWorkspaceContract.test.js` 锁住。
+     * 视觉向学员端 `pages.json` 原生 tabBar 收敛：白底、选中 `#239EDD`、图标 + 文字。
+     * 图标口径（维护者 2026-09-28 裁定「复用学员 PNG + 缺的走 BMP 符号」）：
+     *   - 首页 / 我的 复用学员 `static/tabbar/home*.png` / `profile*.png`（语义一致）；
+     *   - 职位 / 简历库 / 交换 用 BMP 符号（☰ ▤ ⇄）—— **刻意避开非 BMP 代理对 emoji**
+     *     （`iconGlyphContract` 记的历史血账：f1ab2648 把非 BMP 成片吃成空串）；BMP 符号能跟着选中态染 `#239EDD`。
+     *
+     * ADR-0009 的病根是**两份手画的栏**，不是「面多」⇒ 五个面必须共用这一个文件。
+     * 挂载数与唯一性由 `utils/recruitWorkspaceContract.test.js` A 段锁住。
      *
      * 纯展示：零 api / store / 定时器，切换决策与取数留页面（emit `switch` 回传 key）。
      */
     type RecruiterTab = {
         key : string
         label : string
+        // 'png' → 用 icon / iconActive（学员 tabBar 资产）；'glyph' → 用 BMP 符号 glyph
+        iconKind : string
+        icon : string
+        iconActive : string
+        glyph : string
     }
 
-    // 三段的 key 与文案是**冻结值**（ADR-0022 ②）：改这里 = 改三个面的路由契约
+    // 五 tab 的 key / 文案 / 图标是**冻结值**（ADR-0028 ②）：改这里 = 改五个面的路由契约
     const tabs : RecruiterTab[] = [
-        { key: 'jobs', label: '职位' } as RecruiterTab,
-        { key: 'resumes', label: '简历库' } as RecruiterTab,
-        { key: 'contacts', label: '交换' } as RecruiterTab,
+        {
+            key: 'home', label: '首页', iconKind: 'png',
+            icon: '/static/tabbar/home.png', iconActive: '/static/tabbar/home-active.png', glyph: ''
+        } as RecruiterTab,
+        {
+            key: 'jobs', label: '职位', iconKind: 'glyph',
+            icon: '', iconActive: '', glyph: '\u2630'
+        } as RecruiterTab,
+        {
+            key: 'resumes', label: '简历库', iconKind: 'glyph',
+            icon: '', iconActive: '', glyph: '\u25A4'
+        } as RecruiterTab,
+        {
+            key: 'contacts', label: '交换', iconKind: 'glyph',
+            icon: '', iconActive: '', glyph: '\u21C4'
+        } as RecruiterTab,
+        {
+            key: 'me', label: '我的', iconKind: 'png',
+            icon: '/static/tabbar/profile.png', iconActive: '/static/tabbar/profile-active.png', glyph: ''
+        } as RecruiterTab,
     ]
 
     const props = withDefaults(defineProps<{
         active?: string
         pendingCount?: number
     }>(), {
-        active: 'jobs',
+        active: 'home',
         pendingCount: 0
     })
 
@@ -56,34 +87,45 @@
     .recruiter-tab-bar {
         flex-direction: row;
         background-color: #ffffff;
-        border-bottom: 1rpx solid #eeeeee;
+        border-top: 1rpx solid #eeeeee;
+        padding-bottom: 8rpx;
     }
 
     .recruiter-tab-item {
         flex: 1;
-        height: 88rpx;
-        flex-direction: row;
+        height: 100rpx;
         align-items: center;
         justify-content: center;
-        border-bottom: 4rpx solid transparent;
     }
 
-    .recruiter-tab-item-active {
-        border-bottom-color: #2979ff;
+    .recruiter-tab-icon-wrap {
+        position: relative;
+        width: 48rpx;
+        height: 48rpx;
+        align-items: center;
+        justify-content: center;
     }
 
-    .recruiter-tab-text {
-        font-size: 28rpx;
-        color: #666666;
+    .recruiter-tab-icon {
+        width: 44rpx;
+        height: 44rpx;
     }
 
-    .recruiter-tab-text-active {
-        color: #2979ff;
-        font-weight: bold;
+    .recruiter-tab-glyph {
+        font-size: 40rpx;
+        color: #999999;
+        line-height: 48rpx;
+        text-align: center;
+    }
+
+    .recruiter-tab-glyph-active {
+        color: #239EDD;
     }
 
     .recruiter-tab-badge {
-        margin-left: 8rpx;
+        position: absolute;
+        right: -14rpx;
+        top: -4rpx;
         min-width: 30rpx;
         height: 30rpx;
         padding: 0 8rpx;
@@ -92,5 +134,15 @@
         color: #ffffff;
         font-size: 20rpx;
         text-align: center;
+    }
+
+    .recruiter-tab-text {
+        margin-top: 4rpx;
+        font-size: 20rpx;
+        color: #999999;
+    }
+
+    .recruiter-tab-text-active {
+        color: #239EDD;
     }
 </style>

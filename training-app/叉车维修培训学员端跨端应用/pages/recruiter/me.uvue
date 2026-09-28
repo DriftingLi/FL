@@ -3,9 +3,7 @@
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
         <view class="nav-bar">
-            <view class="nav-side" @click="onBack">
-                <text class="nav-back">‹</text>
-            </view>
+            <view class="nav-side"></view>
             <text class="nav-title">我的</text>
             <view class="nav-side"></view>
         </view>
@@ -37,16 +35,18 @@
                 <text class="logout-btn-text">退出登录</text>
             </view>
         </scroll-view>
+
+        <RecruiterTabBar :active="activeKey" @switch="onSwitchTab" />
     </view>
 </template>
 
 <script setup lang="uts">
     /**
-     * 招聘者工作区 · 我的（二级面推入页，**无分段件**；ADR-0022 ②/④ 步骤 P2）
+     * 招聘者工作区 · 我的（一级 tab；ADR-0028 ② 从「右上角推入的二级面」升为底部五 tab 之一）
      *
-     * 由一级面导航栏右上角的常驻入口推入；内容 = 账号信息 + 凭据策略 + 退出登录。
-     * **不给「切换到学员登录」入口**（ADR-0022 ②）：身份互斥的价值是「不可能同时是两个身份」，
-     * 配一个切换按钮等于把互斥做成开关；学员侧入口只保留学员登录页底部那一个。
+     * 内容 = 账号信息 + 凭据策略 + 退出登录。
+     * **不给「切换到学员登录」入口**（ADR-0022 ② 保留）：身份互斥的价值是「不可能同时是两个身份」，
+     * tab 化的「我的」只把退出 / 账号信息挂到底栏，不新增身份切换开关；学员侧入口只保留学员登录页底部那一个。
      *
      * 凭据策略两行是**功能性事实**而非说明文案：招聘者按 ADR-0021 ② 不提供记住密码 / 生物识别
      * （企业账号可能多人共用，凭据不留个人设备），用户点到这里就该知道为什么没有这些开关。
@@ -60,9 +60,13 @@
     import { getRecruitMeApi } from '../../api/recruit'
     import { useAuthStore } from '../../stores/auth'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
 
     const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // 本页是底部五 tab 中的「我的」面
+    const activeKey : string = 'me'
 
     const auth = useAuthStore()
 
@@ -87,8 +91,13 @@
         })
     }
 
-    function onBack() : void {
-        uni.navigateBack()
+    /** 面间 `redirectTo` 替换（不堆栈）；「我的」现为一级 tab */
+    function onSwitchTab(key : string) : void {
+        if (key == activeKey) return
+        if (key == 'home') { uni.redirectTo({ url: '/pages/recruiter/home' }); return }
+        if (key == 'jobs') { uni.redirectTo({ url: '/pages/recruiter/jobs' }); return }
+        if (key == 'resumes') { uni.redirectTo({ url: '/pages/recruiter/resumes' }); return }
+        if (key == 'contacts') { uni.redirectTo({ url: '/pages/recruiter/contacts' }); return }
     }
 
     /**

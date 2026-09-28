@@ -1,0 +1,235 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
+        <view class="nav-bar">
+            <view class="nav-side"></view>
+            <text class="nav-title">工作台</text>
+            <view class="nav-side"></view>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 欢迎卡：静态，取自本地登录态（零 api）——照 web `recruit/Dashboard.vue` 的零统计形态 -->
+            <view class="welcome-card">
+                <text class="welcome-title">欢迎回来，{{ displayName }}</text>
+                <text class="welcome-sub">企业招聘工作台 · {{ accountText }}</text>
+            </view>
+
+            <!-- 紧迫行：交换响应侧的核心价值线索（ADR-0022 已裁，保留）——点它直达交换面 -->
+            <view v-if="urgencyText.length > 0" class="urgency-row" @click="goContacts">
+                <text class="urgency-text">{{ urgencyText }}</text>
+                <text class="urgency-arrow">›</text>
+            </view>
+
+            <!-- 快捷入口：零统计静态卡，功能参考 web Dashboard（简历库入口）+ 移动端的交换 / 职位管理 -->
+            <view class="entry-card" @click="goResumes">
+                <text class="entry-title">简历库</text>
+                <text class="entry-desc">查看已公开的学员简历</text>
+            </view>
+            <view class="entry-card" @click="goContacts">
+                <text class="entry-title">交换</text>
+                <text class="entry-desc">联系方式交换的申请与状态</text>
+            </view>
+            <view class="entry-card" @click="goJobs">
+                <text class="entry-title">职位管理</text>
+                <text class="entry-desc">查看与维护在招职位</text>
+            </view>
+            <view class="entry-card" @click="goPublish">
+                <text class="entry-title">发布职位</text>
+                <text class="entry-desc">填写职位描述，开始招聘</text>
+            </view>
+        </scroll-view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 招聘者工作区 · 首页（一级面，登录落点；ADR-0028 ② 新增）
+     *
+     * ## 首屏批量请求恰好 1 个（ADR-0028 ②/⑥ 改写自 0022 ⑥ 的「2 个」）
+     *   `GET /recruit/contact-requests` —— 同时喂紧迫行与底栏交换徽标（两处共用这一份，不多发）。
+     *   欢迎卡与账号信息用**本地登录态**（`stores/auth`）投影，零统计（照 web `recruit/Dashboard.vue`，它本就零 api）。
+     *   职位列表**由职位 tab 自己拉**：`redirectTo` 换面本来就要重进页面，不在首屏替职位段预取。
+     *   **禁 N+1 原样保留**（ADR-0021 ② / 0028 ②）：不逐职位拉 `unread_count`、不新增 `/recruit/summary`。
+     *
+     * 快捷入口是**静态**入口卡（点哪个面就 redirectTo 哪个面），不聚合任何统计数字。
+     */
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { useStatusBarHeight } from '../../utils/system'
+    import { getRecruitContactRequestsApi } from '../../api/recruit'
+    import {
+        unexpiredPendingCount,
+        soonestPendingIndex,
+        remainingDays,
+        contactUrgencyText
+    } from '../../utils/recruitDisplay'
+    import { useAuthStore } from '../../stores/auth'
+    import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
+    import type { RecruitContactRequest } from '../../api/recruit'
+
+    const statusBarHeight = useStatusBarHeight()
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const auth = useAuthStore()
+    const activeKey : string = 'home'
+
+    const pendingCount = ref<number>(0)
+    const urgencyText = ref<string>('')
+
+    // 欢迎卡 / 账号信息：本地登录态投影，**不发请求**（拿不到就退化成占位，不编数据）
+    const displayName = computed<string>(() : string => {
+        const u = auth.user.value
+        if (u != null && u.name != null && u.name!.length > 0) return u.name!
+        if (u != null && u.account != null && u.account!.length > 0) return u.account!
+        return '企业用户'
+    })
+    const accountText = computed<string>(() : string => {
+        const u = auth.user.value
+        if (u != null && u.account != null && u.account!.length > 0) return '账号 ' + u.account!
+        return '企业招聘工作台'
+    })
+
+    // ⚠️ 函数定义顺序是**契约**（`utils/utsAndroidCompile.test.js` 的 A 守护）：`onLoad(...)` 放最后。
+
+    /** 紧迫行 + 徽标共用同一份 contact-requests（首屏唯一的批量请求） */
+    function applyContactSignals(items : RecruitContactRequest[]) : void {
+        const now = Date.now()
+        pendingCount.value = unexpiredPendingCount(items, now)
+        const idx = soonestPendingIndex(items, now)
+        if (idx < 0) {
+            urgencyText.value = ''
+            return
+        }
+        urgencyText.value = contactUrgencyText(pendingCount.value, remainingDays(items[idx].expires_at, now))
+    }
+
+    function loadContactSignals() : void {
+        getRecruitContactRequestsApi().then((result) : void => {
+            applyContactSignals(result.items)
+        }).catch((e) : void => {
+            console.error('[recruiter-home] load contacts failed:', e)
+        })
+    }
+
+    /** 面间 `redirectTo` 替换（不堆栈）；底栏切面与快捷入口共用同一组跳转 */
+    function goHome() : void { uni.redirectTo({ url: '/pages/recruiter/home' }) }
+    function goJobs() : void { uni.redirectTo({ url: '/pages/recruiter/jobs' }) }
+    function goResumes() : void { uni.redirectTo({ url: '/pages/recruiter/resumes' }) }
+    function goContacts() : void { uni.redirectTo({ url: '/pages/recruiter/contacts' }) }
+    function goMe() : void { uni.redirectTo({ url: '/pages/recruiter/me' }) }
+    /** 发布位（T3 点亮）：`navigateTo` 推入全屏编辑页，无 id = 新建 */
+    function goPublish() : void { uni.navigateTo({ url: '/pages/recruiter/job-edit' }) }
+
+    function onSwitchTab(key : string) : void {
+        if (key == activeKey) return
+        if (key == 'jobs') { goJobs(); return }
+        if (key == 'resumes') { goResumes(); return }
+        if (key == 'contacts') { goContacts(); return }
+        if (key == 'me') { goMe(); return }
+    }
+
+    onLoad((options : OnLoadOptions) => {
+        if (!ensureRecruiterSession()) return
+        // 首屏批量请求恰好 1 个：contact-requests（紧迫行 + 徽标共用）
+        loadContactSignals()
+    })
+</script>
+
+<style lang="scss">
+    .page {
+        background-color: #F5F6FA;
+    }
+
+    .status-bar {
+        background-color: #ffffff;
+    }
+
+    .nav-bar {
+        flex-direction: row;
+        align-items: center;
+        height: 88rpx;
+        padding: 0 24rpx;
+        background-color: #ffffff;
+    }
+
+    .nav-side {
+        width: 120rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .nav-title {
+        flex: 1;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        text-align: center;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .welcome-card {
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 32rpx 28rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+    }
+
+    .welcome-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .welcome-sub {
+        margin-top: 10rpx;
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .urgency-row {
+        flex-direction: row;
+        align-items: center;
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 20rpx 24rpx;
+        background-color: #E7F4F9;
+        border-radius: 12rpx;
+    }
+
+    .urgency-text {
+        flex: 1;
+        font-size: 26rpx;
+        color: #1B7BA0;
+    }
+
+    .urgency-arrow {
+        font-size: 30rpx;
+        color: #1B7BA0;
+        padding-left: 12rpx;
+    }
+
+    .entry-card {
+        margin: 16rpx 24rpx 0 24rpx;
+        padding: 28rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+    }
+
+    .entry-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    .entry-desc {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: #999999;
+    }
+</style>
