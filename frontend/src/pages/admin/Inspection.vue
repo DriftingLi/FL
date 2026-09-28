@@ -326,7 +326,11 @@ const {
   retry: retryCount
 } = useAsyncPage(async () => {
   const res = await inspectionApi.deletedAfterAccepted()
-  deletedCount.value = res?.count ?? 0
+  return res
+}, {
+  apply: (res) => {
+    deletedCount.value = res?.count ?? 0
+  }
 })
 // 切换域即时重载（#411）：v-model 变更即刷新，不依赖下拉的 change 事件时序。
 watch(domain, () => loadLedger())

@@ -101,13 +101,23 @@ const {
   isEmpty,
   retry: handleRetry,
   run: load
-} = useAsyncPage(async () => {
-  const id = String(route.params.id)
-  const res = await recruitApi.getResume(id)
-  data.value = (res as any) || null
-  loadContact()
-  startApprovedPolling()
-}, { itemsRef: data })
+} = useAsyncPage(
+  async () => {
+    const id = String(route.params.id)
+    return await recruitApi.getResume(id)
+  },
+  {
+    itemsRef: data,
+    // 写回槽（ADR-0069 决策 1）：data 落地后紧接着的两条派生装载都要读它
+    // （loadContact 读 user_id、startApprovedPolling 读 contact_state），
+    // 所以它们与写回同住 apply 且排在写回之后 —— 这里的顺序就是语义。
+    apply: (res) => {
+      data.value = (res as any) || null
+      loadContact()
+      startApprovedPolling()
+    }
+  }
+)
 
 // 授权在而明文不可用（企业自己账号被处置）那一格：措辞出自 descriptor 单点（ADR-0064 决策 5）。
 // 判据只认 company_disabled === true —— 缺席即无此态。

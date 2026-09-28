@@ -153,14 +153,22 @@ const categories = ref<AdminFaqCategory[]>([])
 const entries = ref<AdminFaqEntry[]>([])
 const entryFilterCategoryId = ref<number | undefined>(undefined)
 
-const { loading, loadError, retrying, retry: retryLoad, run: loadData } = useAsyncPage(async () => {
-  const [cats, list] = await Promise.all([
-    faqApi.adminListCategories(),
-    faqApi.adminListEntries(entryFilterCategoryId.value ? { category_id: entryFilterCategoryId.value } : undefined)
-  ])
-  categories.value = cats?.categories || []
-  entries.value = list?.entries || []
-})
+const { loading, loadError, retrying, retry: retryLoad, run: loadData } = useAsyncPage(
+  async () => {
+    const [cats, list] = await Promise.all([
+      faqApi.adminListCategories(),
+      faqApi.adminListEntries(entryFilterCategoryId.value ? { category_id: entryFilterCategoryId.value } : undefined)
+    ])
+    return { cats, list }
+  },
+  {
+    // 写回槽（ADR-0069 决策 1）：两个清单一起落地，判据在代数校验之后
+    apply: ({ cats, list }) => {
+      categories.value = cats?.categories || []
+      entries.value = list?.entries || []
+    }
+  }
+)
 
 function handleTabChange() {
   // 切页不重新拉数据：两个清单一次取齐（条目量小），避免来回切换反复请求

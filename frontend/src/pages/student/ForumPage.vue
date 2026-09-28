@@ -376,7 +376,16 @@ const {
   defaultPageSize: 10,
   // 论坛不受证件过滤（CONTEXT.md「当前证件」），不随切换重装/重置页码（#604 opt-out）
   credentialScoped: false,
-  itemsRef: topics
+  itemsRef: topics,
+  // 写回槽（ADR-0069 决策 1）：按 loader 给出的面标记分派，两个列表 + 分页信封都在这里落地
+  apply: (payload) => {
+    if (payload.target === 'replies') {
+      myReplies.value = payload.res.replies || []
+    } else {
+      topics.value = payload.res.topics || []
+    }
+    total.value = payload.res.total || 0
+  }
 })
 
 /**
@@ -389,17 +398,20 @@ const isEmpty = computed(() => {
   return isEmptyList(active, { error: loadError.value, kind: loadErrorKind.value })
 })
 
-async function loadTopicsOnce() {
+// 一次装载按 Tab 二选一写入两个列表之一：loader 只取数并标明「这批属于哪个面」，
+// 写回在 apply 里按同一个标记分派（ADR-0069 决策 1——写回不得住在 loader 内）。
+type TopicsLoadResult =
+  | { target: 'replies'; res: Awaited<ReturnType<typeof forumApi.getMyReplies>> }
+  | { target: 'topics'; res: { topics?: ForumTopicItem[]; total?: number } }
+
+async function loadTopicsOnce(): Promise<TopicsLoadResult> {
   const params = { page: currentPage.value, page_size: pageSize.value }
   const activeMain = mainTab.value
 
   if (activeMain === 'mine') {
     const activeMine = mineTab.value
     if (activeMine === 'my-replies') {
-      const res = await forumApi.getMyReplies(params)
-      myReplies.value = res.replies || []
-      total.value = res.total || 0
-      return
+      return { target: 'replies', res: await forumApi.getMyReplies(params) }
     }
     // 我的帖子 / 赞过 / 围观 / 浏览记录四视图同走主题列表渲染（#701：响应逐字沿用 my-topics 形态）
     const fetcher =
@@ -410,10 +422,7 @@ async function loadTopicsOnce() {
           : activeMine === 'history'
             ? forumApi.getMyViewHistory
             : forumApi.getMyTopics
-    const res = await fetcher(params)
-    topics.value = res.topics || []
-    total.value = res.total || 0
-    return
+    return { target: 'topics', res: await fetcher(params) }
   }
 
   // activeMain: 'discussion' | 'question' | 'experience'（#722 备考经验进场）
@@ -435,9 +444,10 @@ async function loadTopicsOnce() {
   if (featuredFilter.value !== '') {
     ;(query as { featured?: string }).featured = featuredFilter.value
   }
-  const res = await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
-  topics.value = res.topics || []
-  total.value = res.total || 0
+  return {
+    target: 'topics',
+    res: await forumApi.listTopics(query as Parameters<typeof forumApi.listTopics>[0])
+  }
 }
 
 function openCreateDialog() {

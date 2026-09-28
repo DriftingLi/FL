@@ -454,30 +454,38 @@ async function loadTags() {
 // 入口卡片聚合装载收编进 useAsyncPage（#605）：loader 纯装配（各并发请求自带降级 catch，
 // 不外抛）；证件切换即重拉由 module 内聚 watch 承担——loadCardData 已含 getPracticeStats，
 // 覆盖原事件通知里的 loadPracticeStats
-const { run: loadCardData } = useAsyncPage(async () => {
-  const [statsRes, progRes, practiceRes] = await Promise.all([
-    questionBankApi.getStats().catch(() => null as any),
-    practiceModeApi.getSequentialProgress().catch(() => null as any),
-    practiceModeApi.getPracticeStats().catch(() => null as any)
-  ])
-  if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
-  if (progRes) seqProgress.value = progRes
-  if (practiceRes) {
-    practiceStats.value = {
-      today_count: Number((practiceRes as any)?.today_count ?? 0),
-      total_count: Number((practiceRes as any)?.total_count ?? 0),
-      total_days: Number((practiceRes as any)?.total_days ?? 0)
+const { run: loadCardData } = useAsyncPage(
+  async () => {
+    const [statsRes, progRes, practiceRes] = await Promise.all([
+      questionBankApi.getStats().catch(() => null as any),
+      practiceModeApi.getSequentialProgress().catch(() => null as any),
+      practiceModeApi.getPracticeStats().catch(() => null as any)
+    ])
+    // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）：这条兜底自带写回，
+    // 判据只能是「第 3 并发没结果」——practiceStatsLoading 的归零搬进 apply 后，读它已晚一步。
+    if (!practiceRes) {
+      try { await loadPracticeStats() } catch {}
     }
-    practiceStatsLoading.value = false
+    return { statsRes, progRes, practiceRes }
+  },
+  {
+    // 票 10：标签 facet 与卡片聚合装载共享同一批失效时机（首装 / 筛选变化 / 切证件 / reset）
+    facets: [{ load: () => loadTags() }],
+    // 写回槽（ADR-0069 决策 1）：三个聚合面按各自是否有结果落地
+    apply: ({ statsRes, progRes, practiceRes }) => {
+      if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
+      if (progRes) seqProgress.value = progRes
+      if (practiceRes) {
+        practiceStats.value = {
+          today_count: Number((practiceRes as any)?.today_count ?? 0),
+          total_count: Number((practiceRes as any)?.total_count ?? 0),
+          total_days: Number((practiceRes as any)?.total_days ?? 0)
+        }
+        practiceStatsLoading.value = false
+      }
+    }
   }
-  // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）
-  if (practiceStatsLoading.value) {
-    try { await loadPracticeStats() } catch {}
-  }
-}, {
-  // 票 10：标签 facet 与卡片聚合装载共享同一批失效时机（首装 / 筛选变化 / 切证件 / reset）
-  facets: [{ load: () => loadTags() }]
-})
+)
 
 // 入口只需拉起列表这一条流；标签 facet 由上面那条槽随首装一起装载（票 10）。
 // 位置在 useAsyncPage 之后是刻意的：`loadCardData` 是 const 解构，早于声明行取用会踩 TDZ。

@@ -164,19 +164,25 @@ const {
   run: refresh,
   handlePageChange
 } = useAsyncPage(
-  async () => {
+  // 返回类型显式写出：loader 读解构出来的 page/pageSize，而解构类型又要靠本返回类型推导
+  // —— 不点破这一步 TS 会判「自引用」并把 page 退化成 any（TS7022）。
+  async (): Promise<{ bal: PointsBalance; ledgerRes: PointsLedgerData }> => {
     const [bal, ledgerRes] = await Promise.all([
       pointsApi.getBalance(),
       // #512：收支方向由后端分页过滤（direction 透传），前端不跨页漏项
       pointsApi.getLedger({ page: page.value, page_size: pageSize.value, direction: filter.value === 'all' ? undefined : filter.value })
     ])
-    balance.value = { ...balance.value, ...bal }
-    ledger.value = ledgerRes
-    total.value = ledgerRes.total || 0
+    return { bal, ledgerRes }
   },
   {
     credentialScoped: false, // 积分不按当前证件分区，不随切换重置页码（#604 opt-out）
-    filterDeps: [filter] // 收支方向轴：变化即回第一页重装（票 10）
+    filterDeps: [filter], // 收支方向轴：变化即回第一页重装（票 10）
+    // 写回槽（ADR-0069 决策 1）：余额与流水一起落地，旧轮整体作废
+    apply: ({ bal, ledgerRes }) => {
+      balance.value = { ...balance.value, ...bal }
+      ledger.value = ledgerRes
+      total.value = ledgerRes.total || 0
+    }
   }
 )
 

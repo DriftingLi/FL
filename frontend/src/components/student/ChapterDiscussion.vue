@@ -60,12 +60,10 @@ async function fetchReplyBatch(page?: number) {
   const res = await forumApi.getTopic(currentReplyTopicId.value, undefined, undefined, p, REPLY_BATCH)
   // 第 1 批顺带把帖子本体与正文带回来（展开面板的头部用）；分页信封不在这里另抄一份
   // —— total/pages 的唯一宿主是 useAsyncPage（票 10：旧写法抄成组件局部 ref，
-  // 于是「加载更多」飞行中切帖时旧帖的信封会改写新帖面板上的「剩余 N 条」）
-  if (p === 1) {
-    expandedTopic.value = res.topic || null
-    detailContent.value = res.topic?.content || ''
-  }
-  return res
+  // 于是「加载更多」飞行中切帖时旧帖的信封会改写新帖面板上的「剩余 N 条」）。
+  // 面板头部只在第 1 批写（分页批次不带帖子本体），而写回不能住在 loader 里（ADR-0069）：
+  // 把「是不是第 1 批」随响应一起交给 apply，展开与信封共用同一批事实。
+  return { ...res, firstBatch: p === 1 }
 }
 const replyContent = ref('')
 const replyImages = ref<string[]>([])
@@ -83,7 +81,13 @@ const {
   mode: 'append',
   batchSize: REPLY_BATCH,
   itemsRef: replies,
-  pickItems: (res) => (res as { replies?: ForumReplyItem[] }).replies
+  pickItems: (res) => (res as { replies?: ForumReplyItem[] }).replies,
+  // 写回槽（ADR-0069 决策 1）：loader 只取数，展开面板的头部在这里写
+  apply: (res) => {
+    if (!res.firstBatch) return
+    expandedTopic.value = res.topic || null
+    detailContent.value = res.topic?.content || ''
+  }
 })
 
 // ===== 发帖对话框（复用 ForumPostForm，与论坛页同一套表单）=====
@@ -92,14 +96,13 @@ const postForm = ref<InstanceType<typeof ForumPostForm> | null>(null)
 
 // ===== 列表三态（四段式的骨架/错误/内容/空态由此驱动）=====
 async function loadTopicsOnce() {
-  if (!props.chapterId) return
-  const res = await forumApi.listTopics({
+  if (!props.chapterId) return null
+  return await forumApi.listTopics({
     scope: 'chapter',
     chapter_id: props.chapterId,
     page: 1,
     page_size: 50
   })
-  topics.value = res.topics || []
 }
 
 const {
@@ -109,7 +112,15 @@ const {
   isEmpty,
   retry: retryLoad,
   run: loadTopics
-} = useAsyncPage(loadTopicsOnce, { credentialScoped: false, itemsRef: topics }) // 论坛不受证件过滤（#604 opt-out）
+} = useAsyncPage(loadTopicsOnce, {
+  credentialScoped: false, // 论坛不受证件过滤（#604 opt-out）
+  itemsRef: topics,
+  // 无章可载（chapterId 缺失）时 loader 回 null：保持空列表，不写回（ADR-0069 决策 1）
+  apply: (res) => {
+    if (!res) return
+    topics.value = res.topics || []
+  }
+})
 
 async function toggleTopic(topicId: number) {
   if (expandedTopicId.value === topicId) {
