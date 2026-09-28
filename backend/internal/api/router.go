@@ -19,6 +19,7 @@ import (
 	"forklift-training/internal/config"
 	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/service"
 )
 
 // NewRouter 创建并配置 Gin 引擎，注册全部路由与中间件。
@@ -170,7 +171,8 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 		}
 
 		var fullPath string
-		if strings.HasPrefix(reqPath, "/uploads/") || reqPath == "/uploads" {
+		isUpload := strings.HasPrefix(reqPath, "/uploads/") || reqPath == "/uploads"
+		if isUpload {
 			// 上传文件：从 uploadDir 提供
 			rel := strings.TrimPrefix(reqPath, "/uploads")
 			fullPath = filepath.Join(uploadDir, rel)
@@ -185,10 +187,26 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
+		// 静态投递分档（ADR-0066 决策 2）：只作用于用户可控的上传面；
+		// 已知安全类型保持 c.File 的扩展名推断（PDF 内联预览依赖它）。
+		if isUpload {
+			applyUploadDeliveryHeaders(c, fullPath)
+		}
 		c.File(fullPath)
 	}
 	r.GET("/static/*filepath", staticHandler)
 	r.HEAD("/static/*filepath", staticHandler)
+}
+
+// applyUploadDeliveryHeaders 按文件类型表设置上传面的投递头（ADR-0066 决策 2）：
+// safe 不动（保留扩展名推断的 Content-Type 与内联语义）；unsafe / unknown 一律
+// attachment + octet-stream —— 用户可控内容不得以「浏览器会执行」的类型同源呈现。
+func applyUploadDeliveryHeaders(c *gin.Context, fullPath string) {
+	if service.FileTypeClassOfPath(fullPath) == service.FileTypeSafe {
+		return
+	}
+	c.Header("Content-Disposition", "attachment")
+	c.Header("Content-Type", "application/octet-stream")
 }
 
 // resolveStaticDir 解析静态资源目录（返回绝对路径）。

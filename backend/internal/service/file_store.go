@@ -21,13 +21,8 @@ import (
 	"forklift-training/internal/storage"
 )
 
-// 文件扩展名白名单（文档仅允许 PDF，浏览器原生预览；其他 Office 格式无法内嵌渲染故移除）。
-var allowedExtensions = map[string]map[string]bool{
-	"document": {"pdf": true},
-	"ppt":      {"ppt": true, "pptx": true},
-	"video":    {"mp4": true, "webm": true},
-	"image":    {"png": true, "jpg": true, "jpeg": true, "gif": true, "webp": true, "bmp": true, "svg": true},
-}
+// 文件扩展名白名单与静态投递分档统一住在 file_type_table.go（ADR-0066：一份类型表驱动两处）。
+// 可上传类别：document（仅 PDF，浏览器原生预览）/ ppt / video / image。
 
 // 文件大小限制。
 var maxFileSizes = map[string]int64{
@@ -144,12 +139,8 @@ func (s *FileStore) ListWithInfoWithContext(ctx context.Context, prefix string) 
 // ValidateImage 校验图片文件格式与大小。
 func (s *FileStore) ValidateImage(filename string, size int64) (bool, string) {
 	ext := fileExtension(filename)
-	if !allowedExtensions["image"][ext] {
-		allowedList := make([]string, 0)
-		for k := range allowedExtensions["image"] {
-			allowedList = append(allowedList, k)
-		}
-		return false, fmt.Sprintf("不支持的图片格式，允许格式：%s", strings.Join(allowedList, ", "))
+	if UploadCategoryOf(ext) != "image" {
+		return false, fmt.Sprintf("不支持的图片格式，允许格式：%s", strings.Join(AllowedExtensionsFor("image"), ", "))
 	}
 	if size > maxFileSizes["image"] {
 		return false, fmt.Sprintf("图片大小超出限制，最大允许%dMB", maxFileSizes["image"]/(1024*1024))
@@ -176,13 +167,7 @@ func (s *FileStore) Read(fileURL string) ([]byte, string, error) {
 // ===== 章节文件校验（package-private：仅导师文件上传路径使用）=====
 
 func fileContentType(filename string) string {
-	ext := fileExtension(filename)
-	for contentType, exts := range allowedExtensions {
-		if exts[ext] {
-			return contentType
-		}
-	}
-	return ""
+	return UploadCategoryOf(fileExtension(filename))
 }
 
 func allowedFile(filename string) bool {
