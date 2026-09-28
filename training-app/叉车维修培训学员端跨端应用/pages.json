@@ -21,10 +21,24 @@
             }
         },
         {
+            "path": "pages/recruiter/home",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "工作台"
+            }
+        },
+        {
             "path": "pages/recruiter/jobs",
             "style": {
                 "navigationStyle": "custom",
                 "navigationBarTitleText": "工作台"
+            }
+        },
+        {
+            "path": "pages/recruiter/job-edit",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "编辑职位"
             }
         },
         {

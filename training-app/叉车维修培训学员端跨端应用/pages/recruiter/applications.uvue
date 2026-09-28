@@ -258,7 +258,7 @@
     }
 
     .tag-applied {
-        color: #2979ff;
+        color: #239EDD;
         background-color: #EEF3FD;
     }
 
