@@ -336,7 +336,13 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 		return
 	}
 	if err := h.authSvc.DeleteAccount(uid); err != nil {
-		response.BadRequest(c, err.Error())
+		// 「用户不存在」是业务态，可以照原话回；清理或自证失败是内部故障——它们的包装里带
+		// 表名与驱动原文，不外发（#1356 要的是「明确失败」，不是把库的结构贴给调用方）。
+		if errors.Is(err, service.ErrHrwaiUserNotFound) {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.BadRequest(c, "注销失败：数据清理未生效，请稍后重试")
 		return
 	}
 	h.session.ClearCookie(c.Writer)
