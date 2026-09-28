@@ -73,6 +73,7 @@ function loadRecruit(reply = {}) {
   const bindings = {
     get: (url, params) => respond(url, params),
     post: (url, data) => respond(url, data),
+    put: (url, data) => respond(url, data),
     API_BASE_URL: 'https://example.test/api',
     // 403 的可识别前缀（真源 = `api/request.uts` 的 FORBIDDEN_MESSAGE_PREFIX）：
     // 这里按 **相同字面量** 注入，与 request 出口对齐（契约测试 E3 同时钉住两端的单点真源）。
