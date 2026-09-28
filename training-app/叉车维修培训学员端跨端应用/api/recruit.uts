@@ -45,6 +45,7 @@ import { toBool, toNumber, toNumberOrNull, toStr, errMsg } from './helpers'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
 import type { RequestOptions } from './request'
+import type { ResumeExperience } from '../types/index'
 
 // ── P2 的类型（职位段 / 投递 / 我的）────────────────────────────────────────
 
@@ -101,14 +102,7 @@ export type RecruitMe = {
 
 // ── P3 的类型（简历库 / 脱敏卡 / 明文联系方式）───────────────────────────────
 
-/** 打码卡里的一条工作经历（`resume_experiences` 元素，原样透出、无敏感字段）。 */
-export type RecruitExperience = {
-    company : string
-    position : string
-    start_date : string
-    end_date : string
-    description : string
-}
+/** 工作经历项复用 `types/resume.uts` 的 `ResumeExperience`（单一真源，键名对齐后端 resume_experiences）。 */
 
 /** 打码卡里的一条持证（`resume_certifications` 元素，后端白名单已去 `image_urls`）。 */
 export type RecruitCertification = {
@@ -136,7 +130,7 @@ export type RecruitResumeCard = {
     job_nature : string
     experience_years : number
     self_intro : string
-    resume_experiences : RecruitExperience[]
+    resume_experiences : ResumeExperience[]
     resume_certifications : RecruitCertification[]
     updated_at : string
     /** 企业视角联系状态：none / pending / approved（#489 回填） */
@@ -270,14 +264,14 @@ export function isContactForbidden(e : any | null) : boolean {
 
 // ── 映射层（ADR-0003 手动 JSON 映射：Android 端不能 as 到 type 字面量）─────────
 
-function buildExperience(obj : UTSJSONObject) : RecruitExperience {
+function buildExperience(obj : UTSJSONObject) : ResumeExperience {
     return {
         company: toStr(obj['company']),
-        position: toStr(obj['position']),
-        start_date: toStr(obj['start_date']),
-        end_date: toStr(obj['end_date']),
-        description: toStr(obj['description']),
-    } as RecruitExperience
+        role: toStr(obj['role']),
+        start_month: toStr(obj['start_month']),
+        end_month: toStr(obj['end_month']),
+        desc: toStr(obj['desc']),
+    } as ResumeExperience
 }
 
 function buildCertification(obj : UTSJSONObject) : RecruitCertification {
@@ -299,8 +293,8 @@ function buildStringArray(raw : any | null) : string[] {
     return out
 }
 
-function buildExperienceArray(raw : any | null) : RecruitExperience[] {
-    const out : RecruitExperience[] = []
+function buildExperienceArray(raw : any | null) : ResumeExperience[] {
+    const out : ResumeExperience[] = []
     if (raw == null) return out
     const arr = raw as Array<UTSJSONObject>
     for (let i = 0; i < arr.length; i++) {
