@@ -547,7 +547,7 @@
 
     .position {
         font-size: 28rpx;
-        color: #2979ff;
+        color: #239EDD;
         margin-top: 8rpx;
     }
 
@@ -614,7 +614,7 @@
 
     .exp-position {
         font-size: 26rpx;
-        color: #2979ff;
+        color: #239EDD;
     }
 
     .cert-item {
@@ -674,7 +674,7 @@
     .btn-primary {
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #2979ff;
+        background-color: #239EDD;
         align-items: center;
         justify-content: center;
     }

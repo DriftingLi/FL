@@ -4,7 +4,7 @@
 
         <view class="nav-bar">
             <view class="nav-side"></view>
-            <text class="nav-title">工作台</text>
+            <text class="nav-title">简历库</text>
             <view class="nav-side nav-side-right">
                 <view class="filter-entry" @click="onOpenFilter">
                     <text class="filter-entry-text">筛选</text>
@@ -12,13 +12,8 @@
                         <text class="filter-badge-text">{{ activeFilterCount }}</text>
                     </view>
                 </view>
-                <view class="nav-action-wrap" @click="onMe">
-                    <text class="nav-action">我的</text>
-                </view>
             </view>
         </view>
-
-        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
 
         <!-- 简历库**段**的正文（列表 + 8 维抽屉筛选 + 加载更多）来自 ADR-0022 ④ 步骤 P3（#1196）。
              壳（分段件 + 徽标 + 会话守卫）属 P2（#1195）：一级面**只有这一页**，
@@ -66,6 +61,8 @@
                 <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
+
+        <RecruiterTabBar :active="activeKey" :pending-count="pendingCount" @switch="onSwitchTab" />
 
         <!-- 平铺标量 props 下发（#1322：对象 prop 在编译产物里是两个 nominal class ⇒ CCE）；
              声明 camelCase、模板绑 kebab；字段与 `RecruitResumeFilters` 逐字对账（R7b/R7e 锁） -->
@@ -279,19 +276,13 @@
         return raw.substring(5, 10)
     }
 
+    /** 面间 `redirectTo` 替换（不堆栈）；本 tab 的 key 命中则不动 */
     function onSwitchTab(key : string) : void {
         if (key == activeKey) return
-        if (key == 'jobs') {
-            uni.redirectTo({ url: '/pages/recruiter/jobs' })
-            return
-        }
-        if (key == 'contacts') {
-            uni.redirectTo({ url: '/pages/recruiter/contacts' })
-        }
-    }
-
-    function onMe() : void {
-        uni.navigateTo({ url: '/pages/recruiter/me' })
+        if (key == 'home') { uni.redirectTo({ url: '/pages/recruiter/home' }); return }
+        if (key == 'jobs') { uni.redirectTo({ url: '/pages/recruiter/jobs' }); return }
+        if (key == 'contacts') { uni.redirectTo({ url: '/pages/recruiter/contacts' }); return }
+        if (key == 'me') { uni.redirectTo({ url: '/pages/recruiter/me' }); return }
     }
 
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
@@ -349,7 +340,7 @@
 
     .filter-entry-text {
         font-size: 28rpx;
-        color: #2979ff;
+        color: #239EDD;
     }
 
     .filter-badge {
@@ -366,18 +357,6 @@
     .filter-badge-text {
         font-size: 20rpx;
         color: #ffffff;
-    }
-
-    .nav-action-wrap {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .nav-action {
-        font-size: 30rpx;
-        color: #2979ff;
-        padding: 16rpx 0;
-        margin-left: 24rpx;
     }
 
     .content-scroll {
@@ -417,7 +396,7 @@
 
     .resume-position {
         font-size: 28rpx;
-        color: #2979ff;
+        color: #239EDD;
         margin-top: 8rpx;
     }
 
@@ -460,7 +439,7 @@
 
     .contact-state {
         font-size: 24rpx;
-        color: #2979ff;
+        color: #239EDD;
     }
 
     /* 可用性那一格：与交换段 `.row-notice` 同色同因（uvue 不支持 CSS 变量 ⇒ 色值逐字写） */

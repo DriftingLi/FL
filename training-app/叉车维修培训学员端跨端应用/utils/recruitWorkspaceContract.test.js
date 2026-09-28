@@ -37,6 +37,7 @@ const read = h.read;
 
 // ---- 本票的面 ----
 const TAB_BAR = 'pages/recruiter/components/recruiter-tab-bar.uvue';
+const PAGE_HOME = 'pages/recruiter/home.uvue';
 const PAGE_JOBS = 'pages/recruiter/jobs.uvue';
 const PAGE_RESUMES = 'pages/recruiter/resumes.uvue';
 const PAGE_CONTACTS = 'pages/recruiter/contacts.uvue';
@@ -47,15 +48,15 @@ const API_RECRUIT = 'api/recruit.uts';
 const DISPLAY = 'utils/recruitDisplay.uts';
 const GUARD = 'utils/recruitGuard.uts';
 
-/** 一级面（挂分段件，互相 `redirectTo`） */
-const FIRST_LEVEL = [PAGE_JOBS, PAGE_RESUMES, PAGE_CONTACTS];
-/** 二级面（**无**分段件） */
-const SECOND_LEVEL = [PAGE_APPLICATIONS, PAGE_ME];
+/** 一级面（挂底部五 tab 件，互相 `redirectTo`；ADR-0028 ②） */
+const FIRST_LEVEL = [PAGE_HOME, PAGE_JOBS, PAGE_RESUMES, PAGE_CONTACTS, PAGE_ME];
+/** 二级面（**无**底栏件；`me` 已升为一级 tab） */
+const SECOND_LEVEL = [PAGE_APPLICATIONS];
 /** 本票的完整源码面（用于「零内联 / 零入口」这类全量扫描） */
 const WORKSPACE_PAGES = [PAGE_LOGIN].concat(FIRST_LEVEL).concat(SECOND_LEVEL);
 const SURFACE = WORKSPACE_PAGES.concat([TAB_BAR, API_RECRUIT, DISPLAY, GUARD]);
 
-const NEW_UVUE = [TAB_BAR].concat(FIRST_LEVEL).concat(SECOND_LEVEL);
+const NEW_UVUE = [TAB_BAR, PAGE_HOME].concat(FIRST_LEVEL).concat(SECOND_LEVEL);
 
 // ---------------------------------------------------------------------------
 // 源码工具（全部先剥注释：注释里写着「不做什么」不算做了）
@@ -273,7 +274,7 @@ const AVAIL_NOTICE = parseMobileNoticeConst(read(DISPLAY));
 // A. 分段件的唯一性
 // ---------------------------------------------------------------------------
 
-describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一次', () => {
+describe('A. 底栏件：全仓唯一一份，且只被五个一级面各挂一次', () => {
   it(`${TAB_BAR} 存在`, () => {
     expect(h.exists(TAB_BAR)).toBe(true);
   });
@@ -283,7 +284,7 @@ describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一�
     expect(hits).toEqual([TAB_BAR]);
   });
 
-  it('三个一级面各挂一次（挂载数 === 1，不是「至少一次」）', () => {
+  it('五个一级面各挂一次（挂载数 === 1，不是「至少一次」）', () => {
     for (const rel of FIRST_LEVEL) {
       const n = (templateOf(read(rel)).match(/<RecruiterTabBar/g) || []).length;
       expect([rel, n]).toEqual([rel, 1]);
@@ -291,7 +292,7 @@ describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一�
     }
   });
 
-  it('二级面（投递列表、我的）零分段：既不挂组件，也不出现段切换处理器', () => {
+  it('二级面（投递列表）零底栏：既不挂组件，也不出现 tab 切换处理器', () => {
     for (const rel of SECOND_LEVEL) {
       const src = read(rel);
       expect([rel, (templateOf(src).match(/<RecruiterTabBar/g) || []).length]).toEqual([rel, 0]);
@@ -308,11 +309,13 @@ describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一�
     expect(mounters).toEqual([...FIRST_LEVEL].sort());
   });
 
-  it('分段件的三段 key/label 是本票冻结值，且集中在这一个文件里', () => {
+  it('底栏件的五 tab key/label 是本票冻结值，且集中在这一个文件里（ADR-0028 ②）', () => {
     const src = read(TAB_BAR);
-    expect(src).toContain("{ key: 'jobs', label: '职位' }");
-    expect(src).toContain("{ key: 'resumes', label: '简历库' }");
-    expect(src).toContain("{ key: 'contacts', label: '交换' }");
+    expect(src).toContain("key: 'home', label: '首页'");
+    expect(src).toContain("key: 'jobs', label: '职位'");
+    expect(src).toContain("key: 'resumes', label: '简历库'");
+    expect(src).toContain("key: 'contacts', label: '交换'");
+    expect(src).toContain("key: 'me', label: '我的'");
   });
 
   it('分段件是纯展示件：零 api/store、零路由调用（切换决策留页面）', () => {
@@ -327,16 +330,30 @@ describe('A. 分段件：全仓唯一一份，且只被三个一级面各挂一�
 // B. 请求账本：首屏恰好 2 个批量请求，禁 N+1
 // ---------------------------------------------------------------------------
 
-describe('B. 首屏批量请求 = 2；禁逐职位拉 unread_count（N+1）', () => {
+describe('B. 首页首屏批量请求 = 1；禁逐职位拉 unread_count（N+1；ADR-0028 ⑥）', () => {
+  const home = read(PAGE_HOME);
   const jobs = read(PAGE_JOBS);
 
-  it('职位段的取数面恰好是这两个批量端点，各调一次', () => {
-    expect(apiCallsIn(jobs)).toEqual(['getRecruitContactRequestsApi', 'getRecruitJobsApi']);
-    expect((jobs.match(/getRecruitJobsApi\s*\(/g) || []).length).toBe(1);
-    expect((jobs.match(/getRecruitContactRequestsApi\s*\(/g) || []).length).toBe(1);
+  it('首页首屏恰好 1 个批量请求（contact-requests），且不替职位段预取 jobs', () => {
+    expect(apiCallsIn(home)).toEqual(['getRecruitContactRequestsApi']);
+    expect((home.match(/getRecruitContactRequestsApi\s*\(/g) || []).length).toBe(1);
+    expect(stripComments(home)).not.toContain('getRecruitJobsApi');
   });
 
-  it('职位段**不碰**按职位的投递端点、也不出现 unread 字样（JobPostingDTO 没有投递计数）', () => {
+  it('职位 tab 自己拉职位列表（首屏不替它预取，换面本就要重进页面）', () => {
+    expect(apiCallsIn(jobs)).toEqual(['getRecruitJobsApi']);
+    expect((jobs.match(/getRecruitJobsApi\s*\(/g) || []).length).toBe(1);
+    expect(stripComments(jobs)).not.toContain('getRecruitContactRequestsApi');
+  });
+
+  it('首页的徽标与紧迫行共用同一份 contact-requests（不为其中一处再发一次）', () => {
+    const countFn = fnBody(home, 'applyContactSignals');
+    expect(countFn).toContain('unexpiredPendingCount(items, now)');
+    expect(countFn).toContain('soonestPendingIndex(items, now)');
+    expect((home.match(/getRecruitContactRequestsApi\s*\(/g) || []).length).toBe(1);
+  });
+
+  it('职位面**不碰**按职位的投递端点、也不出现 unread 字样（JobPostingDTO 没有投递计数）', () => {
     const clean = stripComments(jobs);
     expect(clean).not.toContain('getRecruitJobApplicationsApi');
     expect(clean).not.toContain('/recruit/jobs/');
@@ -354,29 +371,17 @@ describe('B. 首屏批量请求 = 2；禁逐职位拉 unread_count（N+1）', ()
 
   it('api 层没有「遍历职位再逐个拉」的循环（N+1 的源码形态）', () => {
     const api = stripComments(read(API_RECRUIT));
-    // 逐职位拉必然要有一个循环变量当 jobId；本文件里 getRecruitJobApplicationsApi 只有定义处
     expect((api.match(/getRecruitJobApplicationsApi/g) || []).length).toBe(1);
     expect(api).not.toMatch(/for\s*\([^)]*job/i);
   });
 
-  it('徽标与紧迫行共用同一份 contact-requests（不为其中一处再发一次）', () => {
-    // 两个函数体里同源：先算 count，再算 soonest，都消费同一个 items 形参
-    const countFn = fnBody(jobs, 'applyContactSignals');
-    expect(countFn).toContain('unexpiredPendingCount(items, now)');
-    expect(countFn).toContain('soonestPendingIndex(items, now)');
-    expect((jobs.match(/getRecruitContactRequestsApi\s*\(/g) || []).length).toBe(1);
-  });
-
-  it('一级面之间用 redirectTo 替换（不堆栈），二级面用 navigateTo 推入', () => {
+  it('一级面之间用 redirectTo 替换（不堆栈），二级面（投递列表）可 navigateBack', () => {
     for (const rel of FIRST_LEVEL) {
       const src = read(rel);
       expect([rel, src.includes('uni.redirectTo')]).toEqual([rel, true]);
-      // 一级面之间**不得**用 navigateTo（那会把段切换堆进返回栈）
-      expect([rel, /uni\.navigateTo\(\{\s*url:\s*'\/pages\/recruiter\/(jobs|resumes|contacts)'/.test(src)]).toEqual([rel, false]);
-      // 「我的」是一级面导航栏的常驻入口 → 推入二级面
-      expect([rel, src.includes("uni.navigateTo({ url: '/pages/recruiter/me' })")]).toEqual([rel, true]);
+      // 一级面之间**不得**用 navigateTo（那会把 tab 切换堆进返回栈）
+      expect([rel, /uni\.navigateTo\(\{\s*url:\s*'\/pages\/recruiter\/(jobs|resumes|contacts|me|home)'/.test(src)]).toEqual([rel, false]);
     }
-    expect(read(PAGE_ME)).toContain('uni.navigateBack()');
     expect(read(PAGE_APPLICATIONS)).toContain('uni.navigateBack()');
   });
 });
@@ -397,10 +402,10 @@ describe('C. 交换段：客户端判过期、过期项无操作入口', () => {
     expect(templateOf(contacts)).not.toMatch(/contactExpired\s*\(/);
   });
 
-  it('行内零操作入口：整页只有导航的「我的」一个 @click，没有按钮、没有「标记不合适」', () => {
+  it('行内零操作入口：交换面整页零 @click（列表行不可点、无「我的」入口），无按钮、无「标记不合适」', () => {
     const clicks = contacts.match(/@click=/g) || [];
-    expect(clicks.length).toBe(1);
-    expect(contacts).toContain('@click="onMe"');
+    expect(clicks.length).toBe(0);
+    expect(contacts).not.toContain('onMe');
     expect(contacts).not.toContain('<button');
     expect(contacts).not.toContain('标记不合适');
     expect(contacts).not.toContain('onReject');
@@ -590,7 +595,7 @@ describe('E. 移动端不存在职位发布入口，也不存在「功能开发�
     // （简历详情，被简历库的列表项 `navigateTo` 推入），它把「简历库」这一级接成了一个完整的面。
     // **判据方向未变**：仍然是「面内出现的招聘者路由**逐个列名**、不许多出编辑/发布类路由」——
     // 加进白名单的是这个已被 ADR-0022 ④ 步骤 P3 明文授权的详情面，不是放宽。
-    expect([...new Set(routes)].sort()).toEqual(['applications', 'contacts', 'jobs', 'login', 'me', 'resume-detail', 'resumes']);
+    expect([...new Set(routes)].sort()).toEqual(['applications', 'contacts', 'home', 'jobs', 'login', 'me', 'resume-detail', 'resumes']);
   });
 });
 
@@ -715,7 +720,7 @@ describe('G. pages.json：新增路由注册闭环（无死链 / 无未注册页
   const pagesJson = read('pages.json');
 
   it('本票新增的 5 条注册齐备，且历史登录页仍在', () => {
-    for (const route of ['jobs', 'resumes', 'contacts', 'applications', 'me', 'login']) {
+    for (const route of ['home', 'jobs', 'resumes', 'contacts', 'applications', 'me', 'login']) {
       expect([route, pagesJson.includes(`"pages/recruiter/${route}"`)]).toEqual([route, true]);
     }
   });
@@ -818,9 +823,9 @@ describe('H. 会话守卫与骨架边界', () => {
     expect(read('stores/auth.uts')).toContain('clearIdentityForSwitch()');
   });
 
-  it('招聘者登录页落到工作区首页（首页即职位段），不再落到学员 dashboard', () => {
+  it('招聘者登录页落到工作区首页（ADR-0028 ② 新增独立 home），不再落到学员 dashboard', () => {
     const login = read(PAGE_LOGIN);
-    expect(login).toContain("uni.reLaunch({ url: '/pages/recruiter/jobs' })");
+    expect(login).toContain("uni.reLaunch({ url: '/pages/recruiter/home' })");
     expect(login).not.toContain("'/pages/dashboard/dashboard'");
   });
 });

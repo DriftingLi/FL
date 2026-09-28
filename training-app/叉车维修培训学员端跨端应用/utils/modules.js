@@ -466,6 +466,7 @@ const MODULES = {
       'pages/recruiter/components/recruiter-filter-drawer.uvue',
       'pages/recruiter/components/recruiter-tab-bar.uvue',
       'pages/recruiter/contacts.uvue',
+      'pages/recruiter/home.uvue',
       'pages/recruiter/jobs.uvue',
       'pages/recruiter/login.uvue',
       'pages/recruiter/me.uvue',
