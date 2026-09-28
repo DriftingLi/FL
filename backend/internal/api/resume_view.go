@@ -41,7 +41,7 @@ func (h *ResumeViewHandler) StudentViewStats(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	cnt, err := h.recruitSvc.StudentViewStats(uid)
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	// 仅返回聚合数，不含企业名与任何身份信息

@@ -202,7 +202,7 @@ func (h *AdminRecruiterHandler) List(c *gin.Context) {
 	keyword := c.Query("keyword")
 	resp, err := h.authSvc.ListRecruiters(page, pageSize, keyword)
 	if err != nil {
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	response.Success(c, resp)

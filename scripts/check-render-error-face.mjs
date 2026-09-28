@@ -41,8 +41,12 @@ export const SKELETON_FILE = 'backend/internal/api/endpoint.go'
 /** 扫描面后缀（Go 侧只有 .go）。 */
 export const SCAN_EXTENSIONS = ['.go']
 
-/** `pkg/response` 的错误信封（写响应的五个错误出口）。 */
-export const ERROR_ENVELOPE_FNS = ['ServerError', 'BadRequest', 'Unauthorized', 'Forbidden', 'NotFound']
+/**
+ * `pkg/response` 的错误信封（写响应的六个错误出口）。
+ * `ServerErrorCause`（ADR-0064 决策 9 执行面）是裸 handler 的 5xx 固定文案出口：
+ * 它同样**不得**写进 Render 闭包（错误面归骨架），故与其余五个同列。
+ */
+export const ERROR_ENVELOPE_FNS = ['ServerError', 'ServerErrorCause', 'BadRequest', 'Unauthorized', 'Forbidden', 'NotFound']
 
 /** 成功面：不在禁列（Render 的唯一职责就是写成功面）。 */
 export const SUCCESS_ENVELOPE_FNS = ['Success', 'SuccessWithMsg', 'Created']
