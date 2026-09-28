@@ -86,13 +86,14 @@ describe('credential 域收紧（dashboard 证件切换数据源）', () => {
     expect(src).not.toMatch(/obj\['level'\]\s*as\s+number/);
     expect(src).toMatch(/import\s*\{[^}]*toNumberOrNull[^}]*\}\s*from\s*'\.\/helpers'/);
   });
-  it('switchCredentialApi 经 requestMapped，PATCH 经 opts.method 赋值（与 patch() 逐字同通路）且保留 catch + mock 模拟切换', () => {
+  it('switchCredentialApi 经 requestMapped，PATCH 经 opts.method 赋值；失败上抛、不再 mock 假成功（#1346 反转 #643 的「后端未实现」兜底）', () => {
     const body = fnBodyOf(src, 'switchCredentialApi');
     expect(body).toContain('requestMapped<CredentialSwitchResult>');
     expect(body).toContain("opts.method = 'PATCH'");
     expect(body).toContain('opts.data = body');
-    expect(body).toContain('.catch((e) : CredentialSwitchResult =>');
-    expect(body).toContain('getMockCredentialList()');
+    // 后端 PATCH /me/credential 已实现 ⇒ 失败必须上抛，不得用 .catch + mock 兜成 success:true
+    expect(body).not.toContain('.catch(');
+    expect(body).not.toContain('getMockCredentialList');
   });
 });
 
@@ -199,11 +200,13 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(body).toContain('currentCert.value = prevName');
     expect(body).toContain('切换失败，请重试');
     expect(body).toContain('isSwitching.value = false');
+    // #1346：未确认切换（success:false）不得再当成功写本地存储 ⇒ else 分支不再有 item.code 写入
+    expect(body).not.toContain("uni.setStorageSync('selected_cert', item.code)");
   });
 
-  it("selected_cert 存储同步点保持（load 1 + switch 2 + composable getStorageSync 回退 2）", () => {
+  it("selected_cert 存储同步点保持（load 1 + switch 成功 1；未确认切换不写存储 #1346）", () => {
     const syncWrites = (cred.match(/uni\.setStorageSync\('selected_cert'/g) || []).length;
-    expect(syncWrites).toBe(3);
+    expect(syncWrites).toBe(2);
     const syncReads = (cred.match(/uni\.getStorageSync\('selected_cert'/g) || []).length;
     expect(syncReads).toBe(2);
   });
