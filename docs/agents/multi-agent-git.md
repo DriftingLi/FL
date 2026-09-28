@@ -74,6 +74,10 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
 
 - **junction 要先删再删目录**：PowerShell 7 的 `Remove-Item -Recurse -Force` 只删联接本身、不跟进主树（本机 PS 7.6.5 实测；Windows PowerShell 5.1 不保证），但**删 worktree 时先单独拆掉联接更稳**：`cmd /c rmdir <worktree>\training-app\叉车维修培训学员端跨端应用\node_modules`，再 `git worktree remove`。Windows PowerShell 5.1 下 `Remove-Item -Recurse` 是否会跟进 junction 并删掉主树内容，**未证实**——所以不要靠它。
 
+- **worktree 初始化只有一个真源：`training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`**（2026-09-28 补）。上面那条 `mklink /J` 手工配方是它的**前身**，现在由脚本承担，判据被 ③ 门的 `utils/wtBootstrapBehavior.test.js` 锁住（token `wtBootstrap`）。要点：主树位置用 `git rev-parse --git-common-dir` 反推（**不**读宿主注入的私有环境变量 ⇒ 命令行 / 闸门 / 别的编辑器同一条链路成立）；需要依赖的子工程由「目录里有 `jest.config.unit.js`」反推（**不**写死中文项目名）；并机检「目录段段首为 `.` 或 glob 元字符」——那种路径下 jest 的绝对 glob 永不匹配，`--listTests` 会 **0 套件且 exit 0**（静默假绿，见上面 #1144 那条）。退出码分工：`0` = 正常，**也包含「本树不可信但不是闸门建的 ⇒ 仅告知」**；`2` = 取不到树；`3` = **仅当 `-ExpectEligible`**（只有 `new-worktree.ps1` 会传）——因为宿主树不可信是**常态不是故障**，每次都返失败码会让“正常”长得像“坏了”。
+
+  配套术语（2026-09-28 定）：**③ 可信树** = 其绝对路径下 `jest --config jest.config.unit.js -i --listTests` 能列出**非 0** 套件的工作树；路径含「段首为 `.` 或 glob 元字符」的目录段即不可信。宿主托管树**恒不是** ③ 可信树（落点不可配置），所以 `wt-bootstrap` 在那类树里**故意不给移动端项目建 junction**（`refuse` 态，判据与重审条件见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0029-移动端不用宿主托管worktree.md`）——链上就等于装配假绿，不链则 jest 直接命令找不到（fail-loud）。注意：这条硬报错历史上会被误读成「测试坏了」（已有血账），所以入口必须先打红字再退，看到这行先读红字。
+
 - **HBuilderX 仍要唯一项目名（worktree 解决不了）**：HBuilderX 按**项目名**解析，worktree / 完整 clone 里的项目目录 basename 与主树相同 ⇒ 跑 HBuilderX 前要把该项目目录改成**唯一名**。改名期间 `git diff --name-only` 会误报整目录删除（删除 + 未跟踪新增），所以**任何 git 操作前必须先把项目目录名改回**。
 
   ⚠️ **但「改回来」这一步在本机会卡住，成因与解（2026-09-17 实测补，血账）**：本文件与 `hx-run.ps1` / `auto-screenshot.ps1` 的收尾建议都写「先 `cli project close --path <项目>` 结束会话」——

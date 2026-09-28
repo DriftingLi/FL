@@ -271,6 +271,30 @@ UTS（uni-app-x 的 TypeScript 变体）不支持以下 TypeScript 语法：
 - **不要拿「另一个会话空着」当假设**：判据现测，不看记忆 ——
   `Get-Process HBuilderX,cli`、`$env:TEMP\hx-agent.lock`、以及 `.ci-verify\` 里是否有文件**正在被写**。
 
+### Qoder 托管 worktree 的使用边界（2026-09-28 立）
+
+**一句话**：**改动落在 `training-app/**` 下的活，一律不在宿主树里做**（哪怕只改一个 `.md`）。本段只声明移动端与小程序的禁令；宿主树适合干什么，由 Web/后端的负责人定，本段不表态。
+
+判据不是「命中运行时面」，而是「**③ 要不要在这棵树里跑**」——而 CI 的 `changes.mobile` 过滤器是 `'training-app/**'`（`ci.yml` 的 `changes` job），**任何**该路径下的改动都让 ③ 成为必过门。开工先机检一句：
+
+```powershell
+git diff --name-only origin/master | Select-String '^training-app/'
+```
+
+出任何一行 ⇒ 不在宿主树里做，走 `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`。
+
+三条原因（都是实测，不是偏好）：
+
+1. **③ 门在宿主树里静默假绿，且这是永久属性。** 宿主落点是 `<userHome>/.qoder/worktree/…`，父段段首带点，正踩 #1144 的 jest-util glob 机制；**该落点不可配置**。实测同一份内容只差父段名：点父段 `--listTests` **0 套件**、无点父段 **141 套件**，且 0 那次 **exit 0、不报错**。CI 侧（ubuntu）不受此坑 ⇒ 最后一道防线还在，但**本地反馈环失效**，而 `.github/workflows/pr-evidence.yml` 顶部校验器的 P1 注释明写「判据只为结构与 sha 绑定，不校真伪」⇒ 把宿主树里的假绿抄进正文是过得去的。
+2. **HBuilderX 那条不是宿主树专属的阻断（2026-09-28 更正）。** 取证时把项目目录改成唯一名是既定常规动作（`docs/verification/` 里 `fl-mobile-wt1042` 等 5 处先例，理由是 `cli project list` 现测有 8 个同名项目）；真正的代价在「改回来会被锁卡住」（`docs/agents/multi-agent-git.md` 的「Windows 上用 worktree 的注意事项」→ HBuilderX 唯一项目名那条），而**这个代价闸门树同样有** ⇒ 它不构成「移动端不用宿主树」的理由，第 1 条才是。
+3. **树会被自动回收。** `worktreeMaxCount`（现为 5）超限即删最旧，**包括别的编辑器正开着的那一棵**；`git worktree remove` 还会连带删掉 gitignored 的 `.ci-verify/`（原始判据输入，删了不可复算）。
+
+**回退与复用的边界**：宿主树是普通 git worktree ⇒ **提交并推了分支就能回退**，任何编辑器/命令行 `cd` 进去都能接着干（`git worktree list` 一定列得出它）。反过来，**没提交的改动与 gitignored 证据，树没了就没了**。所以进树第一件事是建分支、尽早推 origin，判据输入当场拷到树外或直接入 `docs/verification/<模块>/<PR号>/`。
+
+**初始化单一真源**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`（主树位置由 `git rev-parse --git-common-dir` 反推，不依赖任何工具私有变量）。宿主「本地任务的 Worktree 配置」框里填的就是**这一行调用**——框里只允许填调用，填逻辑就等于开了第二真源。
+
+决策论证全文见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0029-移动端不用宿主托管worktree.md`（**移动端编号体系，须写全路径**；根仓库另有同名的 `ADR-0029`，两套互不相关）。
+
 ### 反模式（逐条禁）
 
 - **在真机上验「本该编译期就红」的东西**——类型名义不一致（`ClassCastException`）、uvue 样式规则违反、模板编译错误**都是编译期诊断**：先 `npm run hx:compile-only`（**不碰设备**；成本见下表），别让它变成一次 5 分钟的真机返工。2026-09-13 实测就这样白烧了两次。
@@ -440,7 +464,7 @@ src/
 
 ## 相关文档
 
-- **ADRs（移动端独立编号，现至 `0025`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退、`0024` 技能供给与管线归属（死副本清退 + 四条约定）、`0025` 论坛正文格式与输入区形态（声明子集第三档 `SUBSET_FORUM` + 渲染接入 + 输入区形态）；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
+- **ADRs（移动端独立编号，现至 `0029`）**：`docs/adr/` —— 关键几条：`0008` 验收门与证据（四门判据）、`0016` 真机门的触发面与取证节奏、`0019` 契约测试读取层归一、`0020` 端到端通道裁决与装配清退、`0024` 技能供给与管线归属（死副本清退 + 四条约定）、`0025` 论坛正文格式与输入区形态（声明子集第三档 `SUBSET_FORUM` + 渲染接入 + 输入区形态）；与根仓库 `docs/adr/`（`ADR-0001`+ 编号）互不相关，引用时注意区分
 - **Git 工作流**：`docs/GIT_WORKFLOW.md`
 - **UI 规范**：`docs/ui-spec.md`
 - **技术规范**：`docs/technical-spec.md`
