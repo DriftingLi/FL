@@ -197,6 +197,34 @@ jobs:
       - name: 安装依赖
         run: npm install
 
+      # 部署面生成物新鲜度（ADR-0066 决策 2 / 票 #1364）：nginx 的 RGW 投递分档 map 由
+      # service.fileTypeTable 现算、就地覆写 frontend/nginx-host.conf 的生成区。
+      # 为什么挂在 frontend-check 而不是 backend-lint：生成物住在 frontend/，而 backend-lint /
+      # backend-test 都由 changes.backend 门控 —— 只改 nginx-host.conf（手改生成区、删掉一档）
+      # 时那两个 job 根本不跑，锁必须在这个面上也真跑一次。判据与上面的「Swagger 产物新鲜度」
+      # 同形：现算 → git diff 必须为空（同一次现算也顺带证明再生成是幂等的）。
+      - name: Set up Go（部署面生成物新鲜度用）
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: 部署面生成物新鲜度（类型表 → nginx 投递分档 map 必须同步）
+        working-directory: ${{ github.workspace }}
+        run: |
+          (cd backend && go run ./cmd/gen-deploy -only nginx)
+          if ! git diff --exit-code -- frontend/nginx-host.conf; then
+            echo "::error::frontend/nginx-host.conf 的投递分档生成区与 service.fileTypeTable 不同步：请在 backend 下执行 go run ./cmd/gen-deploy 并提交生成物"
+            exit 1
+          fi
+          # 同一面再跑一遍六条 nginx 锁（全等 / 逐档 / 传播 / 接线 / 结构 / 标记）。为什么要在这里
+          # 再跑一次 backend 包的测试：接线锁判的是两个 RGW location 里那两行 add_header，它们在
+          # 生成区**之外** ⇒ 上面的 git diff 比对看不见；而只改那两行（摘掉分档头、把值写死成
+          # attachment）的改动只命中 frontend/** ⇒ backend-lint / backend-test 整个被 changes.backend
+          # 跳过，全 CI 只有这个 job 会跑到。-count=1 是硬要求：产物在 Go 模块外、不算进 go test
+          # 结果缓存的输入集，而 setup-go 的缓存按 go.sum 取键 ⇒ 不加就会回 cached ok（ADR-0066 实施回记）。
+          (cd backend && go test ./internal/deploy/ -run TestNginx -count=1)
+
       - name: TypeScript 类型检查
         run: npm run type-check
 
