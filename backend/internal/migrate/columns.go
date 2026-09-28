@@ -16,7 +16,10 @@
 //
 //	DATABASE_URL=postgres://... go run ./cmd/migrate check-columns
 //
-// 缺失任一列/表即非零退出，并逐条打印「表.列」。CI 的 migration-check job 在
+// 缺失任一列/表即非零退出，并逐条打印「表.列」。
+//
+// #1362 在同一子命令里追加了唯一索引两半对账（登记表 ⇔ 迁移逐字、登记表 ⇒ 实际库存在性），
+// 宿主在 unique_index.go；列对账的三条口径与判据**逐字不变**，扩面只新增判据。CI 的 migration-check job 在
 // 「migrate up 之后」与「migrate down 之后（期望报红）」各跑一次。
 package migrate
 
@@ -141,7 +144,15 @@ func DiffColumns(expected map[string][]string, actual map[string]map[string]stru
 	return diff
 }
 
-// CheckColumns 连库真跑单向列对账（CI 的 migration-check 与本地排查共用同一实现）。
+// CheckColumns 连库真跑对账（CI 的 migration-check 与本地排查共用同一实现）。
+//
+// 三段判据（#1362 把唯一索引扩进来，顺序是硬的）：
+//  1. 单向列对账（本文件既有语义，一行未动）：模型期望的列 ⊆ information_schema 实际列；
+//  2. 唯一索引登记表 ⇔ migrations 逐字相等（不连库，见 unique_index.go）；
+//  3. 唯一索引存在性：登记表要求的「表.索引名」 ⊆ pg_indexes 实际索引（单向，同 1 的口径）。
+//
+// 列对账仍排在最前：CI 的 down-之后反向断言依赖它先失败并逐条点名业务表
+// （`.github/workflows/ci.yml` 的 migration-check 用 grep 校那三个表名），顺序换了那条断言会失真。
 func CheckColumns(dsn string, logger *zap.Logger) error {
 	expected, err := ExpectedColumns(model.AllModels())
 	if err != nil {
@@ -177,5 +188,10 @@ func CheckColumns(dsn string, logger *zap.Logger) error {
 
 	logger.Info("单向列对账通过",
 		zap.Int("表", diff.CheckedTables), zap.Int("列", diff.CheckedColumns))
-	return nil
+
+	// 以下两半是 #1362 扩进来的唯一索引对账（判据只增不减）。
+	if err := CheckUniqueIndexRegistry(logger); err != nil {
+		return err
+	}
+	return checkUniqueIndexPresence(ctx, db, logger)
 }

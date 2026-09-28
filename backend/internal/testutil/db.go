@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"forklift-training/internal/migrate"
 	"forklift-training/internal/model"
 )
 
@@ -19,7 +20,22 @@ func Now() time.Time {
 	return time.Now()
 }
 
-// NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部 22 张表。
+// applyCriticalUniqueIndexes 在 AutoMigrate 之后补跑 migrations 里的关键唯一索引 DDL（#1362）。
+//
+// 为什么必须在建库后补同句 DDL：偏唯一索引的 WHERE 谓词 GORM tag 表达不了，AutoMigrate 建不出
+// 它们 ⇒ 「并发建号应被唯一索引兜底」这类用例过去靠「测试库没有约束」通过（真实缺陷 #14 的假绿）。
+// DDL 的宿主与生产同一处（internal/migrate 的登记表，与 migrations 逐字相等到有锁），
+// 这里不抄第二份；某条建不出来就直接 t.Fatalf（fail-closed：静默少一条约束正是本票要防的）。
+func applyCriticalUniqueIndexes(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	for _, idx := range migrate.CriticalUniqueIndexes() {
+		if err := db.Exec(idx.DDL).Error; err != nil {
+			t.Fatalf("测试库补建关键唯一索引 %s（表 %s）失败: %v\nDDL: %s", idx.Name, idx.Table, err, idx.DDL)
+		}
+	}
+}
+
+// NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部表 + 补建关键唯一索引。
 // 每个测试用例应独立调用以获得隔离的数据库实例。
 func NewMemoryDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -32,10 +48,11 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
+	applyCriticalUniqueIndexes(t, db)
 	return db
 }
 
-// NewFileDB 返回一个临时文件 SQLite 数据库（AutoMigrate 全部表）。
+// NewFileDB 返回一个临时文件 SQLite 数据库（AutoMigrate 全部表 + 补建关键唯一索引）。
 // 与 NewMemoryDB 的差异：:memory: 每连接独立库、无法多连接并发，文件库支持
 // goroutine 并发读写（busy_timeout 串行化写冲突），供并发场景测试使用。
 // 测试结束自动关闭连接池并随 TempDir 清理。
@@ -56,6 +73,7 @@ func NewFileDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(model.AllModels()...); err != nil {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
+	applyCriticalUniqueIndexes(t, db)
 	return db
 }
 

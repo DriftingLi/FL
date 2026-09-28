@@ -1,13 +1,37 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, customRef } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
+import { getValidAccessToken } from '@/api/client'
 import type { UserProfile } from '@/types/user'
-import { getToken, getUserInfo, setToken, setRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
+import { getToken, getUserInfo, setToken, removeToken, setRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
 import { consumeAuthTokenFromUrl } from '@/utils/authToken'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token: Ref<string> = ref('')
+  /**
+   * 令牌的唯一事实源 = storage（`utils/storage.ts` 的 TOKEN_KEY）——票 #1359 / spec #1345 真实缺陷 #11。
+   *
+   * 术前形态 `const token = ref('')` + 登录时 `token.value = data.token` 有两处漂移：
+   *  ① 内存副本与 storage 是**双写**，而 `api/client.ts` 的 401 静默刷新只写 storage、不知道这份副本
+   *     ⇒ 长驻页面（章节编辑 / 精选正文编辑的插图上传）拿着过期副本发请求，直接 401；
+   *  ② 重新加载时 `initFromStorage` 取的是 `userInfo` 里登录那一刻的令牌快照，
+   *     刷新过的新令牌被旧快照盖掉 ⇒ 漂移被固化。
+   *
+   * 术后：读 `getToken()`（customRef 每次访问都现取，不是 computed ⇒ 没有缓存窗口），
+   * 写只写同一个 key。本文件里唯一碰令牌 storage 的地方就是这个 customRef，
+   * 其余函数一律经 `token.value` 走它（结构锁 + 行为锁见 `__tests__/tokenSingleSource.spec.ts`）。
+   */
+  const token = customRef<string>((track, trigger) => ({
+    get() {
+      track()
+      return getToken() ?? ''
+    },
+    set(value) {
+      if (value) setToken(value)
+      else removeToken()
+      trigger()
+    }
+  }))
   const userInfo: Ref<UserProfile> = ref({})
   const isLoggedIn: Ref<boolean> = ref(false)
 
@@ -15,11 +39,12 @@ export const useAuthStore = defineStore('auth', () => {
   let readyPromise: Promise<void> | null = null
 
   function initFromStorage() {
-    const savedToken = getToken()
+    // 令牌不从这里赋值出去：经派生 ref 现取（就是 storage 的 TOKEN_KEY），
+    // userInfo 只用来恢复资料与角色；其登录快照里的 token 字段不再是事实源。
+    const savedToken = token.value
     const savedInfo = getUserInfo<UserProfile>()
 
-    if (savedToken && savedInfo && savedInfo.token && savedInfo.role) {
-      token.value = savedInfo.token
+    if (savedToken && savedInfo && savedInfo.role) {
       userInfo.value = savedInfo
       isLoggedIn.value = true
       return
@@ -34,12 +59,12 @@ export const useAuthStore = defineStore('auth', () => {
     initFromStorage()
 
     try {
-      // 跨子域名跳转携带的 token：优先于本地缓存，供 Cookie 不可用环境恢复登录态
+      // 跨子域名跳转携带的 token：优先于本地登录态，供 Cookie 不可用环境恢复登录
       const carriedToken = consumeAuthTokenFromUrl()
       if (carriedToken) {
+        // 写进唯一事实源（派生 ref 的 setter 落 storage），读取侧随即跟上
         token.value = carriedToken
         isLoggedIn.value = true
-        setToken(carriedToken)
       }
       // 登录态以 /auth/me 为准：父域名 Cookie 共享后，
       // 即使本地无 token（跨子域名首次访问），也能恢复登录；
@@ -76,11 +101,11 @@ export const useAuthStore = defineStore('auth', () => {
       return
     }
 
+    // 令牌写入的唯一入口：派生 ref 的 setter（只落 storage，不再另存内存副本）
     token.value = data.token
     userInfo.value = data
     isLoggedIn.value = true
 
-    setToken(data.token)
     if (data.refresh_token) {
       setRefreshToken(data.refresh_token)
     }
@@ -91,6 +116,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearAuthData() {
+    // 令牌侧经派生 ref 的 setter 清；clearLocalAuth 是「整份登录态」的清除单点（key 归 storage 层），
+    // 不是令牌的第二个写口
     token.value = ''
     userInfo.value = {}
     isLoggedIn.value = false
@@ -130,6 +157,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * 按请求现取新鲜 access token（票 #1359 判据 2）：给**绕过 client 拦截器**的裸请求
+   * （Vditor 插图上传这类原生 XHR）在发起前换一次 —— 本地过期则静默刷新，新令牌照
+   * ADR-0016 / ADR-0067 的现有形态落进 storage（请求契约不改）。
+   * 实现单点仍在 `api/client.ts` 的 `getValidAccessToken()`，这里只是认证域的转发面：
+   * 页面与业务组件不得直接引用请求层（`scripts/check-api-seam.mjs`）。
+   */
+  function freshAccessToken(): Promise<string | null> {
+    return getValidAccessToken()
+  }
+
   return {
     token,
     userInfo,
@@ -138,6 +176,7 @@ export const useAuthStore = defineStore('auth', () => {
     setAuthData,
     clearAuthData,
     signOut,
-    refreshUserInfo
+    refreshUserInfo,
+    freshAccessToken
   }
 })

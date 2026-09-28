@@ -131,8 +131,10 @@
 
     <!-- 输入区差异内容：图片待发队列（诊断来源只在回答下方逐轮展示，不在输入框上方残留） -->
     <template #input-above>
+      <!-- key 用 previewUrl（每个 blob 唯一）：上传中 url 恒为空串，多张图会撞 key，
+           移除失败项时 Vue 的 keyed diff 可能摘掉另一张的 DOM（票 #1358 判据 2） -->
       <div v-if="pendingImages.length" class="pending-images">
-        <div v-for="(p, i) in pendingImages" :key="p.url" class="pending-image-item">
+        <div v-for="(p, i) in pendingImages" :key="p.previewUrl" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
           <button class="pending-image-remove" title="移除" @click="removePendingImage(i)">
             <el-icon :size="12"><Close /></el-icon>
@@ -162,7 +164,7 @@
 <script setup lang="ts">
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
 // 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -357,7 +359,13 @@ async function handleImageSelect(file: UploadFile) {
     return
   }
   const previewUrl = URL.createObjectURL(raw)
-  const pending: PendingImage = { url: '', previewUrl, uploading: true }
+  // 入队的是**代理本身**（票 #1358 / spec #1345 决策 #10）：push 裸对象时队列里读回的是
+  // Vue 为它新建的代理，与局部变量身份不等 ⇒
+  //  ① catch 分支「按身份摘掉失败项」的 `p !== pending` 恒成立，失败项永远摘不掉；
+  //  ② 后续 pending.url / pending.uploading 写在裸对象上、绕过代理，不触发重渲染
+  //     （蒙层不会自己消失、canSend 不会立刻翻真）。
+  // reactive(p) 返回的代理与 arr[i] 读回的是同一个（reactive 幂等），两条都自动恢复正确。
+  const pending = reactive<PendingImage>({ url: '', previewUrl, uploading: true })
   pendingImages.value.push(pending)
   try {
     pending.url = await store.uploadImage(raw)

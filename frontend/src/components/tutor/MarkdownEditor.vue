@@ -67,22 +67,43 @@ let internalUpdate = false
 
 const bodyHeight = ref(`${props.height}px`)
 
+// 上传请求头（唯一形态：有令牌才带 Authorization）
+function authHeaders(token: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 // 构造 Vditor upload 配置（仅当传入 uploadUrl 时启用）
+//
+// 令牌**按请求现取**（票 #1359 / spec #1345 真实缺陷 #11）：Vditor 走自己的 XHR，不经
+// `api/client.ts` 的拦截器 ⇒ 401 不会触发静默刷新。术前的写法是在「创建编辑器」那一刻抓一份
+// `authStore.token` 快照塞进 headers，而本组件常驻在章节编辑 / 精选正文编辑页里 —— 令牌一旦在
+// 别处被刷新（store 不再缓存后 storage 才是事实源），这份快照就是过期令牌，插图直接 401。
+// 现在两个钩子各管一半，且都不持有副本：
+//   upload.file —— Vditor 发 xhr 前会 await 它（vditor/src/ts/upload/index.ts:187），
+//                  在这里换一次新鲜 access token（本地过期则静默刷新，新令牌照 ADR-0016/0067
+//                  的现有形态落进 storage，请求契约不改）；
+//   upload.setHeaders —— 每次上传前同步调用（同文件 :230 → upload/setHeaders.ts:3），
+//                  现取派生值 authStore.token（= 刚被上一步刷新过的那份 storage）。
 function buildUploadConfig() {
   if (!props.uploadUrl) return undefined
   const authStore = useAuthStore()
-  const headers: Record<string, string> = {}
-  if (authStore.token) {
-    headers.Authorization = `Bearer ${authStore.token}`
-  }
   return {
     url: props.uploadUrl,
     fieldName: 'file',
-    headers,
     // 后端返回 { msg, code, data: { errFiles, succMap: { name: url } } }
     // Vditor 默认按此结构解析，无需额外处理
     accept: 'image/*',
-    multiple: false
+    multiple: false,
+    file: async (files: File[]) => {
+      try {
+        // 刻意不用返回值：副作用就是「把 storage 里的令牌换新鲜」，取头一律走 setHeaders
+        await authStore.freshAccessToken()
+      } catch {
+        // 换取失败不拦上传：setHeaders 仍会带上当下 storage 里的那份
+      }
+      return files
+    },
+    setHeaders: () => authHeaders(authStore.token)
   }
 }
 

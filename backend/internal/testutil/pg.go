@@ -8,9 +8,12 @@
 //   - 每个用例创建独立 schema（search_path 切换），用例间互不污染；结束时 DROP SCHEMA CASCADE。
 //   - 缺少 DATABASE_URL 连接串时 t.Skip（本地与纯前端 CI 不受影响）；沿用 CI 既有的
 //     DATABASE_URL / Postgres service，无需新增 CI 配置。
+//   - 建库后断言「关键唯一索引都在」（#1362），与 SQLite 面补跑的是同一张登记表
+//     （internal/migrate.CriticalUniqueIndexes）⇒ 两个测试引擎的约束面同源，不再各测各的。
 package testutil
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"os"
@@ -60,6 +63,21 @@ func NewPostgresDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatalf("打开迁移后的连接失败: %v", err)
+	}
+	// 关键唯一索引存在性（#1362）：SQLite 面由 applyCriticalUniqueIndexes 补同句 DDL，
+	// PG 面靠真迁移建出来——这里把两侧对齐到同一张登记表，任一侧少了索引就在契约测试里红。
+	// 查询按 current_schema() 收窄（pg_indexes 是全库视图，见 checks.md 的两条纪律）。
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("取 *sql.DB 失败: %v", err)
+	}
+	actual, err := migrate.ActualUniqueIndexes(context.Background(), sqlDB)
+	if err != nil {
+		t.Fatalf("查询测试 schema 的唯一索引失败: %v", err)
+	}
+	if missing := migrate.DiffUniqueIndexes(migrate.CriticalUniqueIndexes(), actual); len(missing) > 0 {
+		t.Fatalf("迁移后的测试 schema 缺关键唯一索引 %d 条（首个：%s）——migrations 与 internal/migrate 登记表已漂移",
+			len(missing), missing[0])
 	}
 	return db
 }
