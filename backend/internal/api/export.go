@@ -88,12 +88,12 @@ func (h *ExportHandler) exportCSV(fetch func() ([][]any, error), filename string
 	return func(c *gin.Context) {
 		rows, err := fetch()
 		if err != nil {
-			response.ServerError(c, "导出失败: "+err.Error())
+			response.ServerErrorCause(c, "导出失败: ", err)
 			return
 		}
 		buf, err := encodeCSV(rows)
 		if err != nil {
-			response.ServerError(c, "导出失败: "+err.Error())
+			response.ServerErrorCause(c, "导出失败: ", err)
 			return
 		}
 		c.Header("Content-Disposition", contentDisposition(filename))

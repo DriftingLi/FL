@@ -2,8 +2,10 @@ package response
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -142,6 +144,87 @@ func TestServerError(t *testing.T) {
 	var resp R
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	assertResponse(t, resp, 500, "服务器错误", true)
+}
+
+// --- 5xx 不外发驱动原文（ADR-0064 决策 9）---
+
+// driverErr 驱动/ORM 原文的样本（与 internal/api 台账 leakyDriverText 认的那一族同形）。
+var driverErr = errors.New("SQL logic error: no such table: recruiter_users (1)")
+
+// TestClientErrorText 4xx 回原文、5xx 保留前缀丢尾巴 —— 这条规则的唯一实现。
+func TestClientErrorText(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		prefix string
+		want   string
+	}{
+		{"4xx 保留错误原文（给调用方看的领域说明）", 400, "证件不存在: ", "证件不存在: " + driverErr.Error()},
+		{"4xx 无前缀", 404, "", driverErr.Error()},
+		{"5xx 保留前缀、丢掉尾巴", 500, "导出失败: ", "导出失败"},
+		{"5xx 前缀只有中文冒号", 500, "生成报告失败：", "生成报告失败"},
+		{"5xx 前缀只有分隔符", 500, " : ", "服务器内部错误"},
+		{"5xx 无前缀", 500, "", "服务器内部错误"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ClientErrorText(tc.status, driverErr, tc.prefix)
+			if got != tc.want {
+				t.Errorf("ClientErrorText(%d, driverErr, %q) = %q，期望 %q", tc.status, tc.prefix, got, tc.want)
+			}
+			if tc.status >= 500 && strings.Contains(got, "no such table") {
+				t.Errorf("5xx 文案漏出了驱动原文: %q", got)
+			}
+		})
+	}
+}
+
+// TestServerErrorCause 5xx 一次做齐：响应体是固定文案（无驱动原文），原因经 c.Error 记账不丢。
+func TestServerErrorCause(t *testing.T) {
+	var recorded []*gin.Error
+	r := setupRouter(func(c *gin.Context) {
+		ServerErrorCause(c, "导出失败: ", driverErr)
+		recorded = append(recorded, c.Errors...)
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != 500 {
+		t.Fatalf("HTTP 状态码 = %d，期望 500", w.Code)
+	}
+	var resp R
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	assertResponse(t, resp, 500, "导出失败", true)
+	if strings.Contains(w.Body.String(), "no such table") {
+		t.Errorf("响应体漏出驱动原文: %s", w.Body.String())
+	}
+	// 记账：真实原因仍在 gin 上下文（日志面不丢）
+	if len(recorded) != 1 {
+		t.Fatalf("c.Error 记账条数 = %d，期望 1", len(recorded))
+	}
+	if !errors.Is(recorded[0].Err, driverErr) {
+		t.Errorf("记账的错误 = %v，期望原错误", recorded[0].Err)
+	}
+}
+
+// TestServerErrorCauseNilError err 为 nil 时不 panic 也不记账（前缀仍按 5xx 规则渲染）。
+func TestServerErrorCauseNilError(t *testing.T) {
+	var recorded []*gin.Error
+	r := setupRouter(func(c *gin.Context) {
+		ServerErrorCause(c, "", nil)
+		recorded = append(recorded, c.Errors...)
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	r.ServeHTTP(w, req)
+
+	var resp R
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	assertResponse(t, resp, 500, "服务器内部错误", true)
+	if len(recorded) != 0 {
+		t.Errorf("nil 错误不应记账，实得 %d 条", len(recorded))
+	}
 }
 
 // --- PageResult 分页信封 ---

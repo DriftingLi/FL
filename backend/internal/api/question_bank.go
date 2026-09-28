@@ -646,7 +646,7 @@ func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 	}
 	url, err := h.fileSvc.Save(buf, file.Filename, service.QuestionImageDirPrefix)
 	if err != nil {
-		response.ServerError(c, "图片上传失败: "+err.Error())
+		response.ServerErrorCause(c, "图片上传失败: ", err)
 		return
 	}
 	response.SuccessWithMsg(c, "图片上传成功", service.QuestionImageUploadDTO{URL: url})

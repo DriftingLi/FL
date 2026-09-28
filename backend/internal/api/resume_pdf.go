@@ -84,7 +84,7 @@ func (h *ResumePDFHandler) RecruiterResumePDF(c *gin.Context) {
 			response.NotFound(c, "简历不存在")
 			return
 		}
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	// 审计留痕：预览即一次查看
@@ -110,7 +110,7 @@ func (h *ResumePDFHandler) MyResumePDF(c *gin.Context) {
 			response.NotFound(c, "简历不存在")
 			return
 		}
-		response.ServerError(c, err.Error())
+		response.ServerErrorCause(c, "", err)
 		return
 	}
 	h.serveResumePDF(c, card, pdfCompress(c))

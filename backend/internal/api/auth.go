@@ -379,7 +379,7 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 
 	url, err := h.fileSvc.Save(content, file.Filename, service.AvatarImageDirPrefix)
 	if err != nil {
-		response.ServerError(c, "头像保存失败: "+err.Error())
+		response.ServerErrorCause(c, "头像保存失败: ", err)
 		return
 	}
 	reqDTO, err := h.reviewSvc.CreateRequest(uid, service.ProfileFieldAvatar, url)

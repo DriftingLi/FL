@@ -38,7 +38,7 @@ func serveReportGenerate[T any](c *gin.Context, coord *report.Coordinator[T], no
 			return
 		}
 		logger.Error("生成报告失败", zap.Error(err), zap.Int64("id", id))
-		response.ServerError(c, "生成报告失败: "+err.Error())
+		response.ServerErrorCause(c, "生成报告失败: ", err)
 		return
 	}
 
