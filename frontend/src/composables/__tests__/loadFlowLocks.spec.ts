@@ -23,6 +23,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+// R4 用编译器 API 判「写页面 ref」：文本法会把 x.value === … 这类**读**误判成写（实现时踩过）。
+import ts from 'typescript'
 
 const PAGES = resolve(__dirname, '../../pages')
 
@@ -161,3 +163,290 @@ describe('票 10 R3：页面不再自带第二条证件 watch', () => {
     expect(offenders).toEqual([])
   })
 })
+
+// ===== R4（ADR-0069 决策 1/2）：loader 只取数 =====
+
+/**
+ * R4 写回形状（ADR-0069 决策 1/2）：useAsyncPage 的 loader **只取数** —— 页面 ref 的写回
+ * 一律走 apply 槽，由 composable 在「批次代数校验通过」之后调用。写回一旦回到 loader 体内，
+ * 单页层面的行为锁测不到（旧轮的数据在守卫看到之前就已落地），所以这一条必须是结构锁、零豁免
+ * （存量 43 文件已全量迁移）。
+ *
+ * 判据形状：扫 useAsyncPage 调用的 loader 实参源码（内联箭头，或按名字解析同文件的具名 loader），
+ * 出现「写页面 ref」即红：
+ *   - 赋值给 x.value（含 += / ??= 等复合赋值）、x.value[i] = …
+ *   - 对 x.value 调**可变**方法（push / splice / sort / set / delete …）
+ * 只读用法（x.value.trim() / x.value.map(…) / 条件里的 x.value）不算 —— 判据按 AST 判写目标，
+ * 不看语句文本（文本法会把 'activeType.value === …' 误判成写，实现时踩过）。
+ */
+const MUTATING_CALLS = new Set([
+  'push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin',
+  'set', 'add', 'delete', 'clear'
+])
+
+const SRC = resolve(__dirname, '../..')
+const srcLabel = (file: string) => file.slice(SRC.length + 1).split('\\').join('/')
+
+/** 递归列出扫描面上的 .vue/.ts（排除 __tests__ 与 spec）。 */
+function sourceFiles(dir: string = SRC): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const full = resolve(dir, entry.name)
+    if (entry.isDirectory()) return entry.name === '__tests__' ? [] : sourceFiles(full)
+    return /[.](vue|ts)$/.test(entry.name) && !entry.name.endsWith('.spec.ts') ? [full] : []
+  })
+}
+
+/** 剥掉 () / as / satisfies / ! 这些不改变「写目标」身份的包装。 */
+function unwrapNode(node: ts.Node): ts.Node {
+  let n = node
+  while (
+    ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) ||
+    ts.isTypeAssertionExpression(n) || ts.isNonNullExpression(n)
+  ) {
+    n = n.expression
+  }
+  return n
+}
+
+/** x.value / x.value[i] 的根名字（不是这两种形状则 null）。 */
+function refTargetName(expr: ts.Node): string | null {
+  if (ts.isPropertyAccessExpression(expr) && expr.name.text === 'value' && ts.isIdentifier(expr.expression)) {
+    return expr.expression.text
+  }
+  if (
+    ts.isElementAccessExpression(expr) && ts.isPropertyAccessExpression(expr.expression) &&
+    expr.expression.name.text === 'value' && ts.isIdentifier(expr.expression.expression)
+  ) {
+    return expr.expression.expression.text
+  }
+  return null
+}
+
+/** 该节点自身是否是「写页面 ref」（不含子节点）。 */
+function isRefWrite(node: ts.Node): string | null {
+  if (ts.isBinaryExpression(node)) {
+    const op = node.operatorToken.kind
+    if (op >= ts.SyntaxKind.FirstAssignment && op <= ts.SyntaxKind.LastAssignment) {
+      return refTargetName(unwrapNode(node.left))
+    }
+    return null
+  }
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && MUTATING_CALLS.has(node.expression.name.text)) {
+    return refTargetName(unwrapNode(node.expression.expression))
+  }
+  if (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
+  ) {
+    return refTargetName(unwrapNode(node.operand))
+  }
+  return null
+}
+
+/** 子树里所有「写页面 ref」的目标名（去重）。 */
+function refWritesIn(node: ts.Node): string[] {
+  const names = new Set<string>()
+  const visit = (n: ts.Node): void => {
+    const hit = isRefWrite(n)
+    if (hit) names.add(hit)
+    ts.forEachChild(n, visit)
+  }
+  visit(node)
+  return [...names]
+}
+
+/** 源码里的 script 块（.ts 视作整文件一块）。 */
+function scriptBlocks(text: string): Array<{ start: number; end: number }> {
+  const blocks: Array<{ start: number; end: number }> = []
+  const re = /<script\b[^>]*>/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const open = m.index + m[0].length
+    const close = text.indexOf('</script>', open)
+    if (close < 0) continue
+    blocks.push({ start: open, end: close })
+  }
+  return blocks.length ? blocks : [{ start: 0, end: text.length }]
+}
+
+/** 扫一份源码文本，返回 useAsyncPage 的 loader 内出现写回的位置描述（空数组 = 合规）。 */
+function loaderWriteOffenders(text: string): string[] {
+  const offenders: string[] = []
+  for (const block of scriptBlocks(text)) {
+    const slice = text.slice(block.start, block.end)
+    const sf = ts.createSourceFile('inline.ts', slice, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    // 同文件的具名函数体：命名 loader（useAsyncPage(loadX, …)）要按名字解析再扫
+    const locals = new Map<string, ts.Node>()
+    const collect = (n: ts.Node): void => {
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) locals.set(n.name.text, n.body)
+      if (ts.isVariableStatement(n)) {
+        for (const d of n.declarationList.declarations) {
+          if (
+            ts.isIdentifier(d.name) && d.initializer &&
+            (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) && d.initializer.body
+          ) {
+            locals.set(d.name.text, d.initializer.body)
+          }
+        }
+      }
+      ts.forEachChild(n, collect)
+    }
+    collect(sf)
+    const lineOf = (pos: number) => text.slice(0, block.start + pos).split('\n').length
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'useAsyncPage') {
+        let loader: ts.Node | null = node.arguments.length ? unwrapNode(node.arguments[0]) : null
+        if (loader && ts.isIdentifier(loader)) loader = locals.get(loader.text) ?? null
+        if (loader) {
+          for (const name of refWritesIn(loader)) {
+            offenders.push(name + '.value 写回（loader 内），行 ' + lineOf(node.getStart()))
+          }
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sf)
+  }
+  return offenders
+}
+
+describe('R4 写回形状（ADR-0069）：useAsyncPage 的 loader 只取数', () => {
+  it('src 下所有 useAsyncPage 的 loader 内没有页面 ref 写回（零豁免）', () => {
+    const offenders: string[] = []
+    for (const file of sourceFiles()) {
+      for (const hit of loaderWriteOffenders(read(file))) {
+        offenders.push(srcLabel(file) + ' ' + hit)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('判据本身有效：写回留在 loader 里（旧形状）一定红', () => {
+    const stale = [
+      '<script setup lang="ts">',
+      'const items = ref<Item[]>([])',
+      'const total = ref(0)',
+      'const { run } = useAsyncPage(async () => {',
+      '  const res = await listApi()',
+      '  items.value = res.items',
+      '  total.value = res.total',
+      '}, { itemsRef: items })',
+      '</' + 'script>'
+    ].join('\n')
+    expect(loaderWriteOffenders(stale)).toEqual(['items.value 写回（loader 内），行 4', 'total.value 写回（loader 内），行 4'])
+  })
+
+  it('判据不误伤：只读用法与可变方法之外的调用都不算写回', () => {
+    const clean = [
+      '<script setup lang="ts">',
+      'const items = ref<Item[]>([])',
+      'const total = ref(0)',
+      'const keyword = ref("")',
+      'async function loadOnce() {',
+      '  const kw = keyword.value.trim()',
+      '  const res = await listApi({ q: kw, page: page.value })',
+      '  return res',
+      '}',
+      'const { run } = useAsyncPage(loadOnce, {',
+      '  itemsRef: items,',
+      '  apply: (res) => { items.value = res.items; total.value = res.total }',
+      '})',
+      '</' + 'script>'
+    ].join('\n')
+    expect(loaderWriteOffenders(clean)).toEqual([])
+  })
+
+  it('判据本身有效：x.value.push(...) 这类可变调用同样算写回', () => {
+    const stale = [
+      '<script setup lang="ts">',
+      'const rows = ref<Item[]>([])',
+      'const { run } = useAsyncPage(async () => {',
+      '  const res = await listApi()',
+      '  rows.value.push(...res.items)',
+      '})',
+      '</' + 'script>'
+    ].join('\n')
+    expect(loaderWriteOffenders(stale)).toEqual(['rows.value 写回（loader 内），行 3'])
+  })
+})
+
+/**
+ * R4c loader 必须**回传数据**：apply 的入参就是 loader 的返回值 —— 一个不返回任何东西的 loader
+ * 只能靠「调本页/别的 composable 的写状态函数」落地，而那个形状 R4 看不见（写回在别的函数体里）。
+ * 存量剩三处，逐条登记理由（不是豁免「不想改」，而是「要连同另一个 module 的契约一起改」）：
+ */
+const NO_RETURN_ALLOWLIST: Record<string, string> = {
+  'pages/admin/CourseCatalog.vue': '委托 useCourseCatalog.fetchCatalog()：状态与该 module 的 8 条用例都归它',
+  'pages/admin/ValuationConfigManage.vue': '装载器 catch 分支要清四份草稿（错误态与陈旧数据不同屏），apply 槽只在成功路径被调用',
+  'pages/student/Dashboard.vue': '三路 helper 里 loadStudyStats 归 useRoleDashboard（同 CourseCatalog）'
+}
+
+/** 扫一份源码文本，返回「块体 loader 里没有任何带值 return」的位置描述。 */
+function loadersWithoutReturnValue(text: string): string[] {
+  const offenders: string[] = []
+  for (const block of scriptBlocks(text)) {
+    const slice = text.slice(block.start, block.end)
+    const sf = ts.createSourceFile('inline.ts', slice, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const locals = new Map<string, ts.Node>()
+    const collect = (n: ts.Node): void => {
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) locals.set(n.name.text, n.body)
+      if (ts.isVariableStatement(n)) {
+        for (const d of n.declarationList.declarations) {
+          if (
+            ts.isIdentifier(d.name) && d.initializer &&
+            (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) && d.initializer.body
+          ) {
+            locals.set(d.name.text, d.initializer.body)
+          }
+        }
+      }
+      ts.forEachChild(n, collect)
+    }
+    collect(sf)
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'useAsyncPage') {
+        let loader: ts.Node | null = node.arguments.length ? unwrapNode(node.arguments[0]) : null
+        if (loader && ts.isIdentifier(loader)) loader = locals.get(loader.text) ?? null
+        if (loader && ts.isArrowFunction(loader) && ts.isBlock(loader.body)) {
+          let hasValueReturn = false
+          const scanRet = (n: ts.Node): void => {
+            if (ts.isReturnStatement(n) && n.expression) hasValueReturn = true
+            ts.forEachChild(n, scanRet)
+          }
+          scanRet(loader.body)
+          if (!hasValueReturn) offenders.push('useAsyncPage 的 loader 没有 return 值')
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sf)
+  }
+  return offenders
+}
+
+describe('R4c 写回槽的入参来源（ADR-0069）：loader 必须回传数据', () => {
+  it('没有带值 return 的 loader 只剩登记在案的三处，且登记表里没有过期条目', () => {
+    const offenders: string[] = []
+    for (const file of sourceFiles()) {
+      const key = srcLabel(file)
+      if (loadersWithoutReturnValue(read(file)).length) offenders.push(key)
+    }
+    // ① 实际违规必须全部登记（新增一个「只调函数、不回传」的 loader 即红）
+    expect(offenders.filter(f => !(f in NO_RETURN_ALLOWLIST))).toEqual([])
+    // ② 登记表不得留死条目（已迁移的文件必须从表里销账）
+    expect(Object.keys(NO_RETURN_ALLOWLIST).filter(f => !offenders.includes(f))).toEqual([])
+  })
+
+  it('判据本身有效：只调写状态函数、不回传的 loader 一定红', () => {
+    const stale = [
+      '<script setup lang="ts">',
+      'const { run } = useAsyncPage(async () => {',
+      '  await loadCourses()',
+      '})',
+      '</' + 'script>'
+    ].join('\n')
+    expect(loadersWithoutReturnValue(stale)).toEqual(['useAsyncPage 的 loader 没有 return 值'])
+  })
+})
+
+

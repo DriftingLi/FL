@@ -6,7 +6,7 @@ import { isEmptyList, type EmptyableValue } from '@/utils/listState'
 
 export type { EmptyableValue }
 
-export interface UseAsyncPageOptions {
+export interface UseAsyncPageOptions<T = unknown> {
   /** 默认页大小（分页场景；缺省 20） */
   defaultPageSize?: number
   /** 外部持有的页码 ref（如论坛页按类别分片存储页码）；缺省内部自建 */
@@ -50,7 +50,8 @@ export interface UseAsyncPageOptions {
   itemsRef?: Ref<EmptyableValue>
   /**
    * 装载形态（第十一波 #1101）：
-   * - `'replace'`（默认）：每次 run 重新装载当前页（按钮式分页 el-pagination 口径）。
+   * - `'replace'`（默认）：每次 run 重新装载当前页（按钮式分页 el-pagination 口径）——
+   *   loader 只取数并 return，页面 ref 在 `apply` 里写回。
    * - `'append'`：追加式分页（「加载更多」口径）的**唯一入口**。loader 只取一批
    *   （页码由本 composable 维护与推进，作为入参给出），`pickItems` 从响应里取出
    *   条目数组（缺省读 `res.items`），追加与 `hasMore` 判定由本 composable 负责；
@@ -72,7 +73,20 @@ export interface UseAsyncPageOptions {
    */
   batchSize?: number
   /** append 形态：从 `fetch` 的响应里取出本批条目（缺省读 `res.items`）。 */
-  pickItems?: (res: unknown) => unknown[] | undefined
+  pickItems?: (res: T) => unknown[] | undefined
+  /**
+   * 写回槽（ADR-0069 决策 1）：**loader 只取数，页面 ref 只在这里写**。
+   *
+   * 此前 loader 自己「取数 + 写回」，而批次代数守卫在 `await load()` **之后** —— 旧轮的数据
+   * 在守卫看到之前就已落地：连点分页 / 快切筛选 / 切证件时，后到的旧响应盖掉新数据
+   * （页码是第 3 页、内容是第 1 页）。本槽把这个判据从 43 个消费面收回一处：
+   * `run` / `loadMore` 在 `gen === generation` 校验通过之后才调用它，旧轮整体作废
+   * （含不写回）。写回一旦回到 loader 体内，单页层面的行为锁测不到 —— 机检见
+   * `__tests__/loadFlowLocks.spec.ts` R4（零豁免）。
+   *
+   * 入参就是 loader 的返回值（本件对 loader 的返回类型泛型化，`res` 无需断言）。
+   */
+  apply?: (res: T) => void
   /**
    * facet 声明槽（第十四波 B 票 10，ADR-0062 决策 10）：**列表之外的旁路装载流**
    * （筛选选项、目录树、标签计数这类跟着页面走的面）在这里声明，
@@ -109,7 +123,8 @@ export interface AsyncPageFacet {
  *
  * 收编各页逐字复制的 loading/loadError/retrying + retryLoad 模板与手写分页：
  * - `run`：装载入口。装载前清错误态；loader 抛错即置 loadError（拦截器已统一 toast），
- *   loader 保持纯装配（拉数据 + 写响应），不再各自 try/catch、juggle loading。
+ *   loader **只取数**（拉数据并 return），写页面 ref 一律走 `apply` 槽 —— 判据在代数校验之后
+ *   （ADR-0069 决策 1），页面不再各自 try/catch、juggle loading。
  * - `retry`：错误态重试。retrying 防重入，并作为重试按钮的 loading 态。
  * - `page/pageSize/total`：el-pagination 三件套；`handlePageChange` 翻页即重装，
  *   `handleSizeChange` 改页大小回第一页重装（与存量页行为一致）。
@@ -139,7 +154,7 @@ export interface AsyncPageFacet {
  *
  * 不分页的页面（详情/聚合页）只解构三态部分即可，分页字段闲置无害。
  */
-export function useAsyncPage(load: (page?: number) => Promise<unknown>, options: UseAsyncPageOptions = {}) {
+export function useAsyncPage<T = unknown>(load: (page?: number) => Promise<T>, options: UseAsyncPageOptions<T> = {}) {
   const loading = ref(false)
   const loadError = ref(false)
   /** 最近一次装载失败的错误分类（`ApiErrorKind`，成功时清空）。404 归空态见 `isEmpty`。 */
@@ -239,7 +254,7 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
   }
 
   /** 本批条目（append 形态用）。 */
-  function pickBatch(res: unknown): unknown[] | undefined {
+  function pickBatch(res: T): unknown[] | undefined {
     if (options.pickItems) return options.pickItems(res)
     const items = (res as { items?: unknown } | null)?.items
     return Array.isArray(items) ? items : undefined
@@ -255,7 +270,7 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
    * 只回 19/20，按钮就此消失、长帖翻不到底；末页恰好满批时它又该消失不消失，
    * 点下去是空的一批）。
    */
-  function serverPageCount(res: unknown): number | undefined {
+  function serverPageCount(res: T): number | undefined {
     const envelope = res as { pages?: unknown; total?: unknown } | null
     if (typeof envelope?.pages === 'number') return envelope.pages
     if (typeof envelope?.total === 'number') return Math.ceil(envelope.total / batchSize)
@@ -263,7 +278,7 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
   }
 
   /** append 形态写入一批：追加进 `itemsRef`，`hasMore` 与 `total` 均取响应的分页信封。 */
-  function appendBatch(res: unknown, requestedPage: number): void {
+  function appendBatch(res: T, requestedPage: number): void {
     const batch = pickBatch(res)
     if (!batch) {
       hasMore.value = false
@@ -303,6 +318,8 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
       const res = await load(page.value)
       // 更新的一轮已起飞（切证件 / 筛选变化 / 再翻页）：本轮结果整体作废
       if (gen !== generation) return
+      // 写回槽在代数校验**之后**（ADR-0069 决策 1）：旧轮连页面 ref 都不碰
+      options.apply?.(res)
       if (append) appendBatch(res, page.value)
     } catch (error) {
       if (gen !== generation) return
@@ -381,6 +398,7 @@ export function useAsyncPage(load: (page?: number) => Promise<unknown>, options:
       const next = page.value + 1
       const res = await load(next)
       if (gen !== generation) return
+      options.apply?.(res)
       appendBatch(res, next)
       page.value = next
     } catch {

@@ -104,7 +104,11 @@ const list = ref<CredentialDict[]>([])
 // 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError（页面无错误态 UI，行为冻结）
 const { loading, run: load } = useAsyncPage(async () => {
   const data = await credentialApi.listAdminCredentials()
-  list.value = data.credentials || []
+  return data
+}, {
+  apply: (data) => {
+    list.value = data.credentials || []
+  }
 })
 const filterCategory = ref<string>('')
 const keyword = ref('')

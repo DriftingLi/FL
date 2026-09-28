@@ -205,10 +205,24 @@ const {
   retrying,
   retry: handleRetry,
   run: loadPage
-} = useAsyncPage(async () => {
-  await loadDicts()
-  if (isEdit.value) await loadQuestion()
-})
+} = useAsyncPage(
+  async () => {
+    // 两个 helper 都只取数（写回在下面的 apply 里）：编辑态题目加载失败必须抛出去阻断渲染
+    const dicts = await loadDicts()
+    const question = isEdit.value ? await fetchQuestion() : null
+    return { dicts, question }
+  },
+  {
+    // 写回槽（ADR-0069 决策 1）：字典与编辑态题目在代数校验通过后落地
+    apply: ({ dicts, question }) => {
+      if (dicts) {
+        tags.value = dicts.tags
+        credentials.value = dicts.credentials
+      }
+      if (question) writeQuestionToForm(question)
+    }
+  }
+)
 
 const form = ref<{
   type: string
@@ -236,22 +250,27 @@ const form = ref<{
   credential_id: null
 })
 
+/** 字典取数（只取数不写回；失败不阻断：证件/标签缺失只影响可选项，表单仍可用）。 */
 async function loadDicts() {
-  // 字典拉取失败不阻断：证件/标签缺失只影响可选项，表单仍可用
   try {
     const [tagData, credData] = await Promise.all([
       trainingApi.getTags(),
       credentialApi.listCredentials()
     ])
-    tags.value = tagData.tags || []
-    credentials.value = credData.credentials || []
+    return { tags: tagData.tags || [], credentials: credData.credentials || [] }
   } catch (e) {
     console.error('Failed to load dicts:', e)
+    return null
   }
 }
 
-async function loadQuestion() {
-  const res = await questionBankApi.getQuestion(Number(route.query.id))
+/** 编辑态题目取数（只取数不写回；失败向上抛，阻断渲染）。 */
+async function fetchQuestion() {
+  return await questionBankApi.getQuestion(Number(route.query.id))
+}
+
+/** 题目写回表单（apply 槽专用：status 剥离与整份并入 form 的判据仍只有这一处）。 */
+function writeQuestionToForm(res: Awaited<ReturnType<typeof fetchQuestion>>) {
   // status 在装载处剥离（票 6：写面不携带 status 通道，编辑装载整份 res 并入 form 是唯一带回路径）
   const { status: _status, ...rest } = res as unknown as Record<string, unknown>
   form.value = {

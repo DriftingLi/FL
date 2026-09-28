@@ -77,13 +77,17 @@ const {
   run: loadData
 } = useAsyncPage(async () => {
   const courseRes = await tutorApi.getCourses({ page: 1, page_size: 100 })
-  if (courseRes) {
-    const courses = Array.isArray(courseRes) ? courseRes : (courseRes.courses || [])
-    myCourses.value = courses.map((c) => ({
-      title: c.name || '未命名课程',
-      subtitle: `${c.student_count ?? 0} 名学员`,
-      to: c.course_id ? href('TutorChapterManage', { id: String(c.course_id) }) : undefined
-    }))
+  return courseRes
+}, {
+  apply: (courseRes) => {
+    if (courseRes) {
+      const courses = Array.isArray(courseRes) ? courseRes : (courseRes.courses || [])
+      myCourses.value = courses.map((c) => ({
+        title: c.name || '未命名课程',
+        subtitle: `${c.student_count ?? 0} 名学员`,
+        to: c.course_id ? href('TutorChapterManage', { id: String(c.course_id) }) : undefined
+      }))
+    }
   }
 })
 
