@@ -211,7 +211,7 @@ import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type Certifi
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { levelTagType } from '@/constants/level'
-import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID } from '@/composables/useCourseCatalog'
+import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID, type CatalogAdapterResult } from '@/composables/useCourseCatalog'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
@@ -227,16 +227,16 @@ import UiSwitch from '@/components/ui/UiSwitch.vue'
 
 const submitting = ref(false)
 
-// 三态收编 useAsyncPage（#439）：refreshCatalog 只负责拉数据，loading 由 composable 驱动
-// （页面无错误态 UI，行为冻结：错误仍由拦截器 toast，v-loading 复用 composable loading）
-const {
-  loading,
-  run: refreshCatalog
-} = useAsyncPage(async () => {
-  await fetchCatalog()
-})
-
 // ===== 数据源：管理端课程列表（客户端过滤/分页，课程规模小） =====
+/**
+ * 管理端 adapter 的回传载荷（#1355）：目录三元组（`useCourseCatalog` 的状态）+ 课程行（本页表格用的）。
+ * adapter 只**回传**、不写页面 ref —— 写回全在下面 `useAsyncPage` 的 `apply` 槽里，
+ * 于是「上一轮的响应后到」不会把新目录配旧课程表（ADR-0069 决策 1 那条判据）。
+ */
+interface AdminCatalogBundle extends CatalogAdapterResult {
+  courses: AdminCourseItem[]
+}
+
 const allCourses = ref<AdminCourseItem[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
 const credentials = ref<CredentialDict[]>([])
@@ -257,32 +257,48 @@ const {
   unmountedCount,
   selectDirection,
   selectLevel,
-  fetchCatalog,
+  loadCatalog,
+  applyCatalog,
   levelNameOf,
   specialtyNameOf
-} = useCourseCatalog({
+} = useCourseCatalog<AdminCatalogBundle>({
   adapter: {
-    async load() {
+    async load(): Promise<AdminCatalogBundle> {
       const [treeData, levelsData, coursesData] = await Promise.all([
         trainingApi.getAdminCatalogTree(),
         trainingApi.getLevels(),
         adminApi.getCourses({ page: 1, page_size: 500 })
       ])
-      allCourses.value = coursesData.courses || []
+      const courses = coursesData.courses || []
       return {
         directions: treeData.specialties || [],
         levels: levelsData.levels || [],
-        items: (coursesData.courses || []).map(c => ({
+        items: courses.map(c => ({
           specialty_id: isUnmounted(c) ? null : (c.specialty_id ?? null),
           level_id: isUnmounted(c) ? null : (c.level_id ?? null),
           count: 1
-        }))
+        })),
+        courses
       }
     }
   },
   bidirectional: false,
   onSelect: () => {
     currentPage.value = 1
+  }
+})
+
+// 三态收编 useAsyncPage（#439）：loading 由 composable 驱动；#1355 起 loader 只取数
+// （`loadCatalog()` 回传 bundle），两份状态都在 `apply` 槽里落地 —— 代数校验通过之后才执行，
+// 旧一轮的目录/课程不会盖掉新一轮（R4/R4c 机检，本页因此从 R4c 登记表销账）。
+// （页面无错误态 UI，行为冻结：错误仍由拦截器 toast，v-loading 复用 composable loading）
+const {
+  loading,
+  run: refreshCatalog
+} = useAsyncPage(loadCatalog, {
+  apply: (bundle) => {
+    applyCatalog(bundle)
+    allCourses.value = bundle.courses
   }
 })
 
