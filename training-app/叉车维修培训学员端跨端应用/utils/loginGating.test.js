@@ -6,7 +6,7 @@
  * 2) 门控顺序：authenticate 通过才 loadSecureCredentials 回填；失败不回填不清除
  * 3) 取消勾选：立即 clearSecureCredentials 并收起入口
  * 4) 保存时机：仅账号密码登录成功后保存（含 refresh_token）；微信一键登录不触及凭据
- * 5) 快捷登录：authenticate → loadSecureToken → auth.quickLogin → reLaunch；失败降级回填
+ * 5) 快捷登录：authenticate → loadSecureCredentials → auth.quickLogin(u, p) → reLaunch；失败降级回填
  * 6) 孤儿凭据自愈：确定性不支持 + 完整凭据 → 降级仅账号；API 失败（definitive=false）不清理
  *
  * **读取指向平移（#651 T13 login 手术）**：门控四个动作搬进
@@ -109,34 +109,35 @@ describe('保存时机契约（登录成功路径）', () => {
   });
 });
 
-describe('快捷登录契约（onQuickLogin，ADR-0004 增补）', () => {
+describe('快捷登录契约（onQuickLogin，ADR-0004 增补 · #1391 改凭据登录）', () => {
   const body = fnBody(gateSrc, 'onQuickLogin');
 
-  it('门控顺序：先 authenticate，通过后才 loadSecureToken', () => {
+  it('门控顺序：先 authenticate，通过后才 loadSecureCredentials 解密包络', () => {
     const authIdx = body.indexOf('biometric.authenticate');
-    const tokenIdx = body.indexOf('loadSecureToken()');
+    const credIdx = body.indexOf('loadSecureCredentials()');
     expect(authIdx).toBeGreaterThan(-1);
-    expect(tokenIdx).toBeGreaterThan(authIdx);
+    expect(credIdx).toBeGreaterThan(authIdx);
   });
 
-  it('静默续登成功后直接 reLaunch 进 dashboard（回写由 auth store 统一负责）', () => {
-    const quickIdx = body.indexOf('auth.quickLogin(rt)');
+  it('凭据交给 store 走一次正常登录，成功后直接 reLaunch 进 dashboard（回写由 auth store 统一负责）', () => {
+    const quickIdx = body.indexOf('auth.quickLogin(cred.u, cred.p)');
     const reIdx = body.indexOf("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
     expect(quickIdx).toBeGreaterThan(-1);
     expect(reIdx).toBeGreaterThan(quickIdx);
   });
 
-  it('续登失败提示过期并降级回填（不静默失败）', () => {
-    expect(body).toContain('快捷登录已过期，请验证后登录');
+  it('登录失败提示后降级回填（不静默失败，保留「再弹一次认证框」口径）', () => {
+    expect(body).toContain('快捷登录失败，请验证后登录');
     expect(body).toContain('onBiometricUnlock()');
   });
 
-  it('无令牌（升级前旧包络）给出一次性引导并走回填兜底', () => {
-    expect(body).toContain('请先输入密码登录一次，之后可快捷登录');
-    const tokenIdx = body.indexOf('loadSecureToken()');
-    const fallbackIdx = body.indexOf('onBiometricUnlock()');
-    expect(tokenIdx).toBeGreaterThan(-1);
-    expect(fallbackIdx).toBeGreaterThan(tokenIdx);
+  it('凭据缺失（防御分支）只提示不发请求：loadSecureCredentials 之后判空即返回', () => {
+    const credIdx = body.indexOf('loadSecureCredentials()');
+    const guardIdx = body.indexOf('未找到保存的凭据');
+    const quickIdx = body.indexOf('auth.quickLogin(cred.u, cred.p)');
+    expect(credIdx).toBeGreaterThan(-1);
+    expect(guardIdx).toBeGreaterThan(credIdx);
+    expect(quickIdx).toBeGreaterThan(guardIdx);
   });
 
   it('防重入：quickLogging 进行中直接返回', () => {
