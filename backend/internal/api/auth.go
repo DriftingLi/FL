@@ -215,9 +215,11 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	// ADR-0067 决策 1（#1376 跨端评审后收窄）：Cookie 通道存在即以 Cookie 为准，请求体不再参与
 	// 判定（连读都不读，否则「两个通道各带一支」时谁赢就成了实现细节）。
 	// 而「Cookie 通道存在」的前提是**读得出族**：族由 access 定（Session.RefreshCookieForRequest），
-	// 没有族线索时一枚 Cookie 都不看。原因——通道归属由客户端容器行为决定，不由代码决定
-	// （移动端 ADR-0030 ②：App/H5 自动带 cookie，只有小程序不带；浏览器两族可并存），
-	// 所以正确性靠这里的定族，不靠「body 分支一定被走到」。
+	// 没有族线索时一枚 Cookie 都不看。原因——通道归属由客户端容器行为决定，不由代码决定，
+	// 而 #1389 的真机读数把方向判成了：**App 容器不维持 cookie jar**（那句「App/H5 自动带 cookie」
+	// 出自 uni-app vue 版参数表，uni-app x 的表里没有），所以并存问题实际落在**浏览器**这一面
+	// （父域学员那枚 + host-only 招聘者那枚在 recruit. 上同时被投递；H5 面未测）。
+	// ⇒ 正确性靠这里的定族，不靠「body 分支一定被走到」，也不靠「App 一定不带 cookie」。
 	// 请求体通道保留给移动端与非浏览器客户端——它们拿不到 Cookie，砍掉就是跨端断供。
 	refreshToken := h.session.RefreshCookieForRequest(c.Request)
 	if refreshToken == "" {

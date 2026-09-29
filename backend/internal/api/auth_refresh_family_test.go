@@ -24,7 +24,8 @@ import (
 
 // twoFamilySession 两族都配齐的会话：主站 refresh 落父域、招聘者 refresh 落 host-only
 // （ADR-0022 的招牌形状）。生产里 `recruit.` 子域上「父域那枚学员 + host-only 那枚招聘者」
-// 就是这么并存的，移动端两个角色打的还是同一个 API_BASE_URL。
+// 就是这么并存的 —— 这是**浏览器**侧的形状；App 侧容器不维持 cookie jar（#1389 真机读数），
+// 所以本文件的夹具模拟的是 Web，不是移动端。
 func twoFamilySession(t *testing.T) *security.Session {
 	t.Helper()
 	return security.NewSessionWithRecruiterCookie("test-secret", time.Hour, 7*24*time.Hour,
