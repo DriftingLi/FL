@@ -194,8 +194,13 @@ const MODULES = {
       'pages/dashboard/dashboard.uvue',
     ],
     extractDirs: ['components/cert-selector', 'pages/dashboard/components', 'pages/dashboard/composables'],
-    /** guide 自 #1395 起消费 `api/credential.uts` 与 `components/cert-selector/`（引导页选证单源化） */
-    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'profile', 'guide', 'search'],
+    /**
+     * 两侧登记在此合并（#1401 / #1402 都改过这一行）：
+     * - `guide` 自 #1395 起消费 `api/credential.uts` 与 `components/cert-selector/`（引导页选证单源化）；
+     * - `profile` 随 #1396 删除 credential-switch.uvue 退出消费者面（它曾是 profile 消费
+     *   `api/credential.uts` 的唯一接线；A9 实测面对账逼登记诚实）。
+     */
+    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
@@ -429,7 +434,8 @@ const MODULES = {
       'pages/profile/components/wrong-question-card.uvue',
       'pages/profile/components/wrong-stats-card.uvue',
       'pages/profile/composables/personal-info-flows.uts',
-      'pages/profile/credential-switch.uvue',
+      // 'pages/profile/credential-switch.uvue' —— #1396 删除：不可达死页（不在 pages.json 路由，
+      // 且依赖幻影 export/字段），声明与实现同 PR 摘除；回滚见 git 历史。
       'pages/profile/favorites.uvue',
       'pages/profile/help-center.uvue',
       'pages/profile/mock-exam-records.uvue',

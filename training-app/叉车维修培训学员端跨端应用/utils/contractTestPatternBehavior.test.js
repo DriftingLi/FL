@@ -103,22 +103,39 @@ function readPatternFromLib() {
   }
 }
 
-/** 用 jest --listTests 回读某个 token 能选中几个套件。
- *  ⚠️ 直接用 `process.execPath` 跑 jest 的入口，**不要** spawn `npx` / `npx.cmd`：
- *     Node 24 下 spawn `.cmd` 不带 shell 会 EINVAL，而 `npx`（无扩展名）从 Node 视角又 ENOENT
- *     （它只在 PowerShell 的 PATH 解析里存在）。直连 node + jest 入口是唯一稳的形态。 */
+/** 一次性取全量套件清单（`--listTests`，无 pattern）。P3 逐 token 在**进程内**过滤它，
+ *  不再每 token 起一个 jest 子进程。原形态 21 token = 21 次 node/jest 冷启 ≈ 30s，是 ③ 门最贵的
+ *  单件；且那个 token 清单只增（docs/adr/0027：每加一个行为守护就 +1 token ⇒ 每加一个永久
+ *  +~1.5s），改成列全一次后与 token 数无关。**等价性**：jest 的 `--testPathPattern <token>`
+ *  本就是「把 token 当正则测绝对路径」，与下面 `new RegExp(token).test(path)` 同语义——已用一次性
+ *  对照脚本对当前全部 token 逐个实测**集合全等**（含 `contractTestPattern` 自指那条）后才落地，
+ *  免得改行为守护内部却悄悄改了它度量的东西（本仓最恨的静默漂移）。 */
+// ⚠️ 直接用 `process.execPath` 跑 jest 入口，**不要** spawn `npx` / `npx.cmd`：
+//    Node 24 下 spawn `.cmd` 不带 shell 会 EINVAL，而 `npx`（无扩展名）从 Node 视角又 ENOENT
+//    （它只在 PowerShell 的 PATH 解析里存在）。直连 node + jest 入口是唯一稳的形态。
 const JEST_ENTRY = require.resolve('jest/bin/jest');
 
-function suitesMatchedBy(token) {
+function listAllTestSuites() {
   const out = execFileSync(
     process.execPath,
-    [JEST_ENTRY, '--config', 'jest.config.unit.js', '--listTests', '--testPathPattern', token],
+    [JEST_ENTRY, '--config', 'jest.config.unit.js', '--listTests'],
     { cwd: ROOT, encoding: 'utf8', timeout: 180000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }
   );
   return String(out)
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.endsWith('.test.js'));
+}
+
+// 整个 describe 内只起一次子进程（缓存）；null = 尚未取
+let cachedAllSuites = null;
+function allSuites() {
+  if (cachedAllSuites === null) cachedAllSuites = listAllTestSuites();
+  return cachedAllSuites;
+}
+function suitesMatchedBy(token, list) {
+  const re = new RegExp(token);
+  return list.filter((p) => re.test(p));
 }
 
 describe('Q-A 契约测试 pattern 唯一真源（运行期）', () => {
@@ -143,10 +160,14 @@ describe('Q-A 契约测试 pattern 唯一真源（运行期）', () => {
   });
 
   test('P3: 每个 token 都能真的选中至少一个套件（子串匹配坑位）', () => {
+    // 列全一次（缓存），逐 token 在进程内按与 jest --testPathPattern 相同的正则语义过滤。
+    const list = allSuites();
+    // 防空转：若这份全量清单静默为空，下面每个 token 都「0 命中」会全红 —— 但那是「清单没取到」
+    // 而非「守护没接线」，两种成因要分得开（本仓反复踩过「判不了当无变化」那半岛）。取不到即非零抛。
+    if (list.length === 0) throw new Error('--listTests 返回空清单 ⇒ 取数失灵，无法判 token 命中（fail-closed，不静默放行）');
     const failed = [];
     TOKENS_REQUIRED_TO_SELECT.forEach((token) => {
-      const suites = suitesMatchedBy(token);
-      if (suites.length === 0) failed.push(token);
+      if (suitesMatchedBy(token, list).length === 0) failed.push(token);
     });
     // 一个 token 都选不中 ⇒ 该守护永不执行（本仓反复踩过的假绿形态）
     expect(failed).toEqual([]);
