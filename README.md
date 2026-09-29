@@ -392,7 +392,7 @@ npm test             # vitest 单元测试
 ls backend/migrations/*.up.sql | sed 's#.*/##'
 ```
 
-配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → `check-columns` 对账（模型期望的列 ⊆ 实际列）→ `migrate down` 回空库并**反向断言**对账报缺表。
+配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → `check-columns` 三段对账（模型期望的列 ⊆ 实际列；关键偏唯一索引登记表 ⇔ migrations 逐字相等；登记表 ⇒ `pg_indexes` 存在性，按 `current_schema()` 收窄）→ `migrate down` 回空库并**反向断言**对账报缺表。判据细节与「哪几段本机不连库就能红」见 `docs/agents/checks.md`。
 
 执行 / 回滚：`make migrate-up` / `make migrate-down`，或直接 `go run ./cmd/migrate up|down|version|force|check-columns`。**部署侧的迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续，见 `docs/agents/checks.md`）。
 

@@ -49,18 +49,24 @@ type credentialFKShape struct {
 }
 
 // checkCredentialFKShape 扫一批迁移正文（纯函数：真实目录与合成破坏样本共用同一判据）。
+//
+// 判据只看**正文**，注释先剥掉（`stripSQLLineComments` 的宿主在 unique_index.go，这里复用不抄第二份）：
+// 迁移文件里「把另一侧的形状抄在注释里便于回滚逐字比对」是常态（000040 头注、000013:8 都是），
+// 连注释一起扫会把文档读成语句（假红）。
 func checkCredentialFKShape(files []migrationFile) credentialFKShape {
 	var s credentialFKShape
 	for _, f := range files {
-		text := strings.ReplaceAll(f.content, "\r\n", "\n")
 		if !strings.HasSuffix(f.name, ".up.sql") {
 			continue
 		}
+		text := stripSQLLineComments(strings.ReplaceAll(f.content, "\r\n", "\n"))
 		if practiceFKCascadeRe.MatchString(text) {
 			s.cascadeAddedInUp = append(s.cascadeAddedInUp, f.name)
 		}
 		// 「先 DROP 再 ADD ... ;」的 down 形态若出现在 up 里，等于把级联又收回去了。
-		if practiceFKPlainRe.MatchString(text) && !strings.Contains(text, "ON DELETE CASCADE") {
+		// ⚠️ 这里**不许**用「整文件不含 ON DELETE CASCADE 才判」当放行条件：CASCADE 那句本来就
+		// 合法存在于同一份 up 里，文件级字样会把后面混进来的无动作语句豁免掉（锁有缝等于没锁）。
+		if practiceFKPlainRe.MatchString(text) {
 			s.plainReAddInUp = append(s.plainReAddInUp, f.name)
 		}
 		if contributionInlineCascadeRe.MatchString(text) || contributionAlterCascadeRe.MatchString(text) {
@@ -188,7 +194,29 @@ ALTER TABLE user_contribution ADD CONSTRAINT user_contribution_credential_id_fke
 	if s := checkCredentialFKShape([]migrationFile{up, contribCascade}); len(s.contributionCascad) != 1 {
 		t.Fatalf("投稿侧被改成级联没被判红: %+v", s)
 	}
-	t.Log("三条破坏样本各判红一次（cascade=0 / plain=1 / contributionCascade=1）")
+	// 破坏四：同一份 up 里**既有合法级联、又混进一条无动作的 re-add**。
+	// 这条是原实现的真洞：判据曾用「整文件不含 ON DELETE CASCADE」当放行条件，而本文件里
+	// 级联那句本来就在 ⇒ 无动作那句被同文件的 CASCADE 字样**豁免**掉了（锁有缝等于没锁）。
+	bothInOne := migrationFile{name: "000042_z.up.sql", content: `
+ALTER TABLE practice_progress ADD CONSTRAINT practice_progress_credential_id_fkey
+    FOREIGN KEY (credential_id) REFERENCES credential(id) ON DELETE CASCADE;
+ALTER TABLE real_exam_paper ADD CONSTRAINT practice_progress_credential_id_fkey
+    FOREIGN KEY (credential_id) REFERENCES credential(id);`}
+	if s := checkCredentialFKShape([]migrationFile{up, bothInOne}); len(s.plainReAddInUp) != 1 {
+		t.Fatalf("同一文件里混进无动作 re-add 没被判红（文件级 CASCADE 字样把它豁免了）: %+v", s)
+	}
+	// 反例：把那条无动作**写进行注释**（文档里描述 down 的形状是常态，见 000040 头注）
+	// ⇒ 不得判红。剥注释与「破坏四」是一对，只补半边就 Either 假绿 Either 假红。
+	commented := migrationFile{name: "000043_w.up.sql", content: `
+-- down 的形态照抄在这里，便于回滚时逐字比对：
+-- ALTER TABLE practice_progress ADD CONSTRAINT practice_progress_credential_id_fkey
+--     FOREIGN KEY (credential_id) REFERENCES credential(id);
+ALTER TABLE practice_progress ADD CONSTRAINT practice_progress_credential_id_fkey
+    FOREIGN KEY (credential_id) REFERENCES credential(id) ON DELETE CASCADE;`}
+	if s := checkCredentialFKShape([]migrationFile{up, commented}); len(s.plainReAddInUp) != 0 {
+		t.Fatalf("注释里的描述被当成真语句（假红）: %+v", s)
+	}
+	t.Log("四条破坏样本 + 一条注释反例：cascade=0 / plain=1 / contributionCascade=1 / 同文件混入 plain=1 / 注释 plain=0")
 }
 
 // flattenSQL 折叠空白，便于按单行子串比多行写法。
