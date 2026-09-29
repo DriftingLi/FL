@@ -295,15 +295,17 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(syncWrites).toBe(0);
     const syncReads = (cred.match(/uni\.getStorageSync\('selected_cert'/g) || []).length;
     expect(syncReads).toBe(0);
-    // 退役判据扫全仓源码面（pages 各模块 + 基础设施 + api 层；测试文件被 walker 天然剔除，
-    // 否则本锁自己的字面量就是命中）：任何一处存储读写再碰这个键 ⇒ 判红
+    // 退役判据扫**整仓**源文件（`.` 口径：harness 的 SKIP_DIRS 已排除依赖/产物/点目录，
+    // `*.test.*` 被 walker 剔除 —— 否则本锁自己的字面量就是命中）：
+    // 任何一处存储读写再碰这个键 ⇒ 判红。
+    // ⚠️ 曾用「pages 各模块 + infraFiles + api」三段并集，实测漏 19 个文件 —— 恰含
+    // `components/cert-selector/**`（本票新建的证件域组件，最可能重新写这个键的地方）
+    // 与顶层 `composables/**`（#1401 评审发现）。漏一个目录就是给假绿留门缝。
     const retiredKey = /StorageSync\('selected_cert'/;
-    const allSrc = [
-      ...h.pagesModuleDirs().flatMap((d) => h.sourceFilesIn(`pages/${d}`)),
-      ...h.infraFiles(),
-      ...h.sourceFilesIn('api'),
-    ];
-    expect(allSrc.length).toBeGreaterThan(100); // 下限断言：防枚举断链让扫描恒空
+    const allSrc = h.sourceFilesIn('.');
+    expect(allSrc.length).toBeGreaterThan(200); // 下限断言：防枚举断链让扫描恒空
+    // 把曾经的盲区显式钉进判据：它不在面内就直接红，而不是退化成「差不多全仓」
+    expect(allSrc).toContain('components/cert-selector/cert-selector.uvue');
     const strays = allSrc.filter((rel) => retiredKey.test(stripComments(read(rel))));
     expect(strays).toEqual([]);
     // 缓存出口的接线：1 读（回退）+ 3 写（后端确认 ×2、确认无证件清空 ×1）
