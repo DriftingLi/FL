@@ -1,0 +1,37 @@
+# Task 4 / Step 3 artifact - 点段路径负例对（真实链路取证, 主证据）
+# 判据(AGENTS.md): 工具类改动要达成的行为 = 「点段路径不再可能静默假绿」=>
+#   同一棵不可信树(D:\FL\.wtbootprobe, 段首为 .)下:
+#     不加 -ExpectEligible => 打红字并 exit 0(告知, 非闸门树恒不可信是常态)
+#     加   -ExpectEligible => 同一红字 + exit 3(闸门建的树仍不可信 => 判失败)
+# 两次运行均**不含** "link training-app/..." 行, 也不含 "frontend" 行(机检 0 命中)。
+# 主树/worktree HEAD: 51c5c65f   branch: feat/wt-bootstrap   Date: 2026-09-29
+
+============ 探针树 ============
+# 建法 (cwd: D:\FL\wt-wt-bootstrap, HEAD 51c5c65f):
+#   git worktree add --detach d:\FL\.wtbootprobe   # detached, 不建分支
+# 建树后 Test-Path d:\FL\.wtbootprobe\training-app\叉车维修培训学员端跨端应用\node_modules = False
+#   => 树里无依赖, refuse 分支被真实触发(非人为注入); 下方两次 RUN 为逐字命令输出。
+
+============ RUN 1 - 不加 -ExpectEligible (期望 红字 + exit 0) ============
+# Command (cwd: D:\FL\.wtbootprobe\training-app\叉车维修培训学员端跨端应用):
+#   pwsh -NoProfile -File scripts/wt-bootstrap.ps1
+# Exit code: 0
+refuse training-app/叉车维修培训学员端跨端应用（本树不是 ③ 可信树 ⇒ 故意**不**共享这份依赖：链上 jest 会扫到 0 套件并报全绿）
+[wt-bootstrap]        这不是「测试坏了」，也不是环境缺件 —— 是这条路径下 ③ 不可信。
+[wt-bootstrap]        正解：用 new-worktree.ps1 建 wt-<票号>，在那棵树里跑。
+[wt-bootstrap] ⚠️ 本树路径含「段首为 . 或 glob 元字符」的目录段 ⇒ ③ 门 --listTests 会匹配 0 套件且 exit 0（静默假绿）
+[wt-bootstrap]              本树：D:\FL\.wtbootprobe
+[wt-bootstrap]              修法：git worktree move 到无点路径；移动端交付一律走 new-worktree.ps1 建 wt-<票号>。
+[wt-bootstrap] 以上为**告知**：非闸门树不可信是常态（宿主树恒如此）⇒ 不判失败，exit 0。
+
+============ RUN 2 - 加 -ExpectEligible (期望 同红字 + exit 3) ============
+# Command (cwd: D:\FL\.wtbootprobe\training-app\叉车维修培训学员端跨端应用):
+#   pwsh -NoProfile -File scripts/wt-bootstrap.ps1 -ExpectEligible
+# Exit code: 3
+refuse training-app/叉车维修培训学员端跨端应用（本树不是 ③ 可信树 ⇒ 故意**不**共享这份依赖：链上 jest 会扫到 0 套件并报全绿）
+[wt-bootstrap]        这不是「测试坏了」，也不是环境缺件 —— 是这条路径下 ③ 不可信。
+[wt-bootstrap]        正解：用 new-worktree.ps1 建 wt-<票号>，在那棵树里跑。
+[wt-bootstrap] ⚠️ 本树路径含「段首为 . 或 glob 元字符」的目录段 ⇒ ③ 门 --listTests 会匹配 0 套件且 exit 0（静默假绿）
+[wt-bootstrap]              本树：D:\FL\.wtbootprobe
+[wt-bootstrap]              修法：git worktree move 到无点路径；移动端交付一律走 new-worktree.ps1 建 wt-<票号>。
+[wt-bootstrap] 本树由闸门创建 ⇒ 起名时就该可信 ⇒ 判失败（exit 3）。
