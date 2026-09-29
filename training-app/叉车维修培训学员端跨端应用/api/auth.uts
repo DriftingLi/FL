@@ -356,10 +356,25 @@ export function emailLoginApi(email : string, code : string) : Promise<LoginResu
 	return postMapped<LoginResult>('/auth/email/login', payload, (data : UTSJSONObject) : LoginResult => buildLoginResult(data))
 }
 
-/** 登出（token SHA256 写入 Redis 黑名单） */
-export function logoutApi() : Promise<UTSJSONObject> {
-	// 静默请求：退出登录是用户主动行为，后端失败不应弹错误 toast 干扰
-	return post('/auth/logout', null, { url: '/auth/logout', silent: true } as RequestOptions)
+/**
+ * 登出（token SHA256 写入 Redis 黑名单）POST /auth/logout
+ *
+ * 为什么**必须**带上手上那支 refresh_token（#1386，口径见 `docs/adr/0030` ④ 第 2 项）：
+ * 后端 `/auth/logout` 的吊销分支**只认请求体**（refresh cookie 的 `Path` 收在
+ * `/api/auth/refresh`，登出端点收不到它 —— 根仓库 ADR-0067 决策 2 的必然后果）。
+ * 不带 ⇒ 服务端拿不到东西 ⇒ **登出只清本地，那支 7 天凭证仍可继续刷新**（#1385 缺口 2）。
+ *
+ * ⚠️ 调用方必须在**清槽之前**取到 rt：`clearAuthData()` 会 `removeStorage` 掉
+ * `auth_refresh_token`，顺序反了这里就静默退化成「发空串」，判据看不出任何异常。
+ * 顺序锁在 `utils/logoutRevokeBehavior.test.js` 的 L2。
+ *
+ * 静默语义逐字保留：退出登录是用户主动行为，后端失败不弹 toast 干扰（`silent: true`）。
+ */
+export function logoutApi(refreshToken : string) : Promise<UTSJSONObject> {
+	const payload : UTSJSONObject = {
+		refresh_token: refreshToken,
+	} as UTSJSONObject
+	return post('/auth/logout', payload, { url: '/auth/logout', silent: true } as RequestOptions)
 }
 
 
