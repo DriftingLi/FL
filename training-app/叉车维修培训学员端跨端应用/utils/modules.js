@@ -193,7 +193,9 @@ const MODULES = {
       'pages/dashboard/dashboard.uvue',
     ],
     extractDirs: ['pages/dashboard/components', 'pages/dashboard/composables'],
-    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'profile', 'search'],
+    // #1396：`profile` 随 credential-switch.uvue 删除退出消费者面（曾是 profile 消费
+    // `api/credential.uts` 的唯一接线；A9 实测面对账逼登记诚实）。
+    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'search'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
@@ -427,7 +429,8 @@ const MODULES = {
       'pages/profile/components/wrong-question-card.uvue',
       'pages/profile/components/wrong-stats-card.uvue',
       'pages/profile/composables/personal-info-flows.uts',
-      'pages/profile/credential-switch.uvue',
+      // 'pages/profile/credential-switch.uvue' —— #1396 删除：不可达死页（不在 pages.json 路由，
+      // 且依赖幻影 export/字段），声明与实现同 PR 摘除；回滚见 git 历史。
       'pages/profile/favorites.uvue',
       'pages/profile/help-center.uvue',
       'pages/profile/mock-exam-records.uvue',
