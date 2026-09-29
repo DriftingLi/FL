@@ -9,15 +9,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
 func TestChapterDetailProjectsResumePosition(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "resume-pos-secret",

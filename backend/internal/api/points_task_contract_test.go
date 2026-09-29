@@ -40,7 +40,8 @@ type tasksTaskSlice struct {
 }
 
 func TestPointsTaskBehaviorContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	seedPointsTaskConfigs(t, db)
 

@@ -53,7 +53,7 @@ type contactDisableEnv struct {
 
 func newContactDisableEnv(t *testing.T) *contactDisableEnv {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:          "contact-disable-secret",
@@ -65,7 +65,7 @@ func newContactDisableEnv(t *testing.T) *contactDisableEnv {
 	r := NewRouter(newContractDeps(t, db, cfg))
 
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuDisable", pwd)
+	stu := seedStudent(t, db, "stuDisable", pwd)
 	card := model.JobCard{
 		UserID: stu.ID, RealName: "李四", ContactPhone: disabledStudentPhone, Wechat: disabledStudentWechat,
 		Region: "江苏省/苏州市", ExpectedRegions: model.JSONB([]byte(`["江苏省/苏州市"]`)),
@@ -203,6 +203,7 @@ func assertNoCompanyPlaintext(t *testing.T, label, body string) {
 // 只写②，则可能压根没判禁用。②的另一条断言（status 仍 approved、条目仍在）钉住
 // 「授权存在 ≠ 授权可用」——处置不改写授权事实，只摘掉可用性。
 func TestContactCompanyDisableContract(t *testing.T) {
+	t.Parallel()
 	e := newContactDisableEnv(t)
 
 	// 基线：未禁用时学员侧确实看得到明文。不先钉这一条，下面的「不含」就是恒真的空话。
@@ -290,6 +291,7 @@ func TestContactCompanyDisableContract(t *testing.T) {
 //     （对称化时最容易把它并成笼统的「无授权」）；整链注销走真实动作那半边已由
 //     contact_contract_test.go 第 11 步锁住（DeleteAccount 会连带删掉授权行）。
 func TestContactStudentGoneStillDegradesPlaintextContract(t *testing.T) {
+	t.Parallel()
 	e := newContactDisableEnv(t)
 
 	rec := doWithToken(t, e.router, e.recruiterTok, http.MethodGet,

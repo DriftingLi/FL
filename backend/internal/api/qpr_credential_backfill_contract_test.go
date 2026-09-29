@@ -9,14 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
 func TestQPRCredentialBackfillOnPostgres(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")
@@ -39,7 +37,7 @@ func TestQPRCredentialBackfillOnPostgres(t *testing.T) {
 		}
 	}
 
-	student := testutil.SeedStudent(t, db, "qprBfStu", "x")
+	student := seedStudent(t, db, "qprBfStu", "x")
 	now := time.Now()
 	recA := model.QuestionPracticeRecord{StudentID: student.ID, QuestionID: qA.ID, IsCorrect: true, PracticeType: "free", CreatedAt: now}
 	recB := model.QuestionPracticeRecord{StudentID: student.ID, QuestionID: qB.ID, IsCorrect: true, PracticeType: "free", CreatedAt: now}

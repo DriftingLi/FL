@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -19,7 +18,8 @@ import (
 )
 
 func TestForumLikeRefundOnAccountDeletionContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "acct_ref_a", Phone: "13800000011", Username: "楼主", Status: 1, CreatedAt: testutil.Now()}

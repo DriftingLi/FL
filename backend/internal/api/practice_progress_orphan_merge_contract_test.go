@@ -9,15 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func TestOrphanProgressMergeOnPostgres(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")
@@ -40,7 +38,7 @@ func TestOrphanProgressMergeOnPostgres(t *testing.T) {
 	pwd, _ := service.HashPassword("pass1234")
 
 	// 学员1（有当前证件 credA）：桶行 + 孤儿行并存（#505 前崩溃形状）
-	stu1 := testutil.SeedStudent(t, db, "mergeStu1", pwd)
+	stu1 := seedStudent(t, db, "mergeStu1", pwd)
 	if err := db.Model(stu1).Update("current_credential_id", credA.ID).Error; err != nil {
 		t.Fatalf("设学员1当前证件失败: %v", err)
 	}
@@ -65,7 +63,7 @@ func TestOrphanProgressMergeOnPostgres(t *testing.T) {
 	}
 
 	// 学员2（有当前证件 credB）：只有孤儿行（桶行不存在）
-	stu2 := testutil.SeedStudent(t, db, "mergeStu2", pwd)
+	stu2 := seedStudent(t, db, "mergeStu2", pwd)
 	if err := db.Model(stu2).Update("current_credential_id", credB.ID).Error; err != nil {
 		t.Fatalf("设学员2当前证件失败: %v", err)
 	}
@@ -80,7 +78,7 @@ func TestOrphanProgressMergeOnPostgres(t *testing.T) {
 	}
 
 	// 学员3（无当前证件）：NULL 行是唯一合法行，原样保留
-	stu3 := testutil.SeedStudent(t, db, "mergeStu3", pwd)
+	stu3 := seedStudent(t, db, "mergeStu3", pwd)
 	legal := model.PracticeProgress{
 		StudentID: stu3.ID, PracticeMode: "sequential", CredentialID: nil,
 		QuestionIDs: model.JSONB([]byte("[1]")), CurrentIndex: 0, Total: 1,

@@ -21,7 +21,8 @@ import (
 
 // TestAdminPenaltyContract 域表映射（404）+ 同事务发信（成功路径）。
 func TestAdminPenaltyContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	adminPwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "penalty_admin", adminPwd)

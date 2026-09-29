@@ -13,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -23,7 +21,8 @@ import (
 )
 
 func TestResumePDFContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	spec1 := model.Position{Code: "pdf_forklift", Name: "叉车维修", Status: 1}
@@ -36,9 +35,9 @@ func TestResumePDFContract(t *testing.T) {
 	}
 
 	pwd, _ := service.HashPassword("pass1234")
-	stu1 := testutil.SeedStudent(t, db, "stuPdf1", pwd)
-	stu2 := testutil.SeedStudent(t, db, "stuPdf2", pwd)
-	stu3 := testutil.SeedStudent(t, db, "stuPdfHidden", pwd)
+	stu1 := seedStudent(t, db, "stuPdf1", pwd)
+	stu2 := seedStudent(t, db, "stuPdf2", pwd)
+	stu3 := seedStudent(t, db, "stuPdfHidden", pwd)
 	ip := func(v int) *int { return &v }
 	now := time.Now()
 	card1 := model.JobCard{
@@ -280,10 +279,11 @@ func indexBytes(data, needle []byte, from int) int {
 
 // #491：PDF 附件删除端点（学员本人；删除后 resume_file_url 置空）。
 func TestResumePDFDeleteContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuPdfDel", pwd)
+	stu := seedStudent(t, db, "stuPdfDel", pwd)
 	now := time.Now()
 	card := model.JobCard{
 		UserID: stu.ID, RealName: "张三", ContactPhone: "13800000001", Region: "江苏省/苏州市",

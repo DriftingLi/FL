@@ -16,7 +16,7 @@ import (
 // newRateLimitedRouter 装配真实路由器，并把限流收紧到「第二个请求必被拒」。
 func newRateLimitedRouter(t *testing.T, trusted []string) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	cfg := &config.Config{
 		TrustedProxies: trusted,
 		RateLimit:      config.RateLimitConfig{Enabled: true, RPS: 0.0001, Burst: 1},
@@ -42,6 +42,7 @@ func limiterCodes(t *testing.T, r *gin.Engine, remoteAddr string, headers []map[
 }
 
 func TestNewRouter_SpoofedXForwardedForCannotRotateLimiterBucket(t *testing.T) {
+	t.Parallel()
 	r := newRateLimitedRouter(t, []string{"192.0.2.10"})
 	codes := limiterCodes(t, r, "203.0.113.7:51820", []map[string]string{
 		{"X-Forwarded-For": "1.1.1.1"},
@@ -60,6 +61,7 @@ func TestNewRouter_SpoofedXForwardedForCannotRotateLimiterBucket(t *testing.T) {
 
 // 反向断言：可信代理转发的不同客户端各自成桶——证明键确实来自转发头，而不是固定取对端。
 func TestNewRouter_TrustedProxyKeepsClientsInSeparateLimiterBuckets(t *testing.T) {
+	t.Parallel()
 	r := newRateLimitedRouter(t, []string{"192.0.2.10"})
 	codes := limiterCodes(t, r, "192.0.2.10:41234", []map[string]string{
 		{"X-Forwarded-For": "198.51.100.1"},

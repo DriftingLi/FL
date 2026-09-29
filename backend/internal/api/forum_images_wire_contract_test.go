@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -20,7 +18,8 @@ import (
 )
 
 func TestForumImagesArrayNeverNull(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "images-wire-secret",
@@ -33,7 +32,7 @@ func TestForumImagesArrayNeverNull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)
 	}
-	student := testutil.SeedStudent(t, db, "images_wire_stu", pwd)
+	student := seedStudent(t, db, "images_wire_stu", pwd)
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name}).
 		Issue(student.ID, student.Username, "hrwai_user")
 	if err != nil {

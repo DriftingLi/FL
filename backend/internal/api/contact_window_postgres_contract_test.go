@@ -31,8 +31,8 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 	if err := db.Create(&recruiter).Error; err != nil {
 		t.Fatalf("seed recruiter: %v", err)
 	}
-	student := testutil.SeedStudent(t, db, "win_stu", "x")
-	other := testutil.SeedStudent(t, db, "win_stu_other", "x")
+	student := seedStudent(t, db, "win_stu", "x")
+	other := seedStudent(t, db, "win_stu_other", "x")
 
 	// 1. 库层形状：偏索引仍在（唯一性仍由库兜），000039 的 CHECK 已生效。
 	//

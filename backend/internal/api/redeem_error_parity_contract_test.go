@@ -9,15 +9,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
 func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "redeem-parity-secret",
@@ -64,7 +63,8 @@ func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
 // 商城兑换的**业务拒绝**（sku 未登记读者 ⇒ sku 对账表 deny-by-default）也必须落 400，
 // 与课程、真题卷两面同一族。三面同判据的锁若只钉两面，第四面（未来新增 sku）就会重新漂。
 func TestRedeemShopSurfaceSameCodeFamily(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "redeem-parity-shop-secret",

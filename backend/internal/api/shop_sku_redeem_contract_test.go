@@ -30,7 +30,8 @@ import (
 const realPaperUnlockPrice = 300
 
 func TestPriceOnlyShopSKUCannotBeRedeemed(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "shop-sku-redeem-secret",
@@ -81,7 +82,8 @@ func TestPriceOnlyShopSKUCannotBeRedeemed(t *testing.T) {
 }
 
 func TestUndeclaredShopSKUCannotBeRedeemed(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "shop-sku-undeclared-secret",
@@ -118,7 +120,7 @@ func shopRedeemStudent(t *testing.T, db *gorm.DB, cfg *config.Config, account st
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)
 	}
-	stu := testutil.SeedStudent(t, db, account, pwd)
+	stu := seedStudent(t, db, account, pwd)
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", stu.ID).
 		UpdateColumn("points_balance", balance).Error; err != nil {
 		t.Fatalf("预置余额失败: %v", err)

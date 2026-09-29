@@ -13,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -23,7 +21,8 @@ import (
 )
 
 func TestPaidCourseEntitlementGate(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "paid-gate-secret",
@@ -52,7 +51,7 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 	}
 
 	pwd, _ := service.HashPassword("student123")
-	student := testutil.SeedStudent(t, db, "paid_gate_stu", pwd)
+	student := seedStudent(t, db, "paid_gate_stu", pwd)
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", student.ID).UpdateColumn("points_balance", 500).Error; err != nil {
 		t.Fatalf("预置余额失败: %v", err)
 	}
@@ -108,7 +107,8 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 // 课程详情在有主体时下发 entitled，前端不再靠「把 points_price 抹成 null」表达已解锁。
 // 公开的课程列表无主体 ⇒ 该槽省略（见 CourseDTO.Entitled 注释），故只锁详情。
 func TestCourseDetailProjectsEntitlement(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "entitled-slot-secret",

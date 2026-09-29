@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -81,7 +80,7 @@ func assertSlice5MissingKeys(t *testing.T, label string, body []byte, absent ...
 func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuSlice5", pwd)
+	stu := seedStudent(t, db, "stuSlice5", pwd)
 	adminPwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminSlice5", adminPwd)
 
@@ -226,7 +225,7 @@ func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 }
 
 func TestSlice5ContractShape_OnSqlite(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	assertSlice5Shape(t, testutil.NewMemoryDB(t))
 }
 

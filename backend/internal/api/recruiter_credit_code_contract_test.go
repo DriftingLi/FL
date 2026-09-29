@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -25,7 +24,7 @@ import (
 )
 
 func assertRecruiterCreditCodeUnique(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminCCU", pwd)
 

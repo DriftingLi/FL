@@ -72,6 +72,7 @@ func inlineEnvelopeFields(line string) ([]string, error) {
 
 // TestAdminInspectionInlineEnvelopeKeyOrder 主锁：注解内联字段序 == ItemsPage 键序。
 func TestAdminInspectionInlineEnvelopeKeyOrder(t *testing.T) {
+	t.Parallel()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "admin_inspection.go", nil, parser.ParseComments)
 	if err != nil {
@@ -115,6 +116,7 @@ func TestAdminInspectionInlineEnvelopeKeyOrder(t *testing.T) {
 // TestAdminInspectionInlineEnvelopeKeyOrderProbe 判定面的正负样本（合成注解行）：
 // 换序 / 少字段必须与事实源不等，逐字同形必须相等；命名类型注解不得被误当内联信封。
 func TestAdminInspectionInlineEnvelopeKeyOrderProbe(t *testing.T) {
+	t.Parallel()
 	want := jsonKeyOrder(t, paging.ItemsPage[service.RecruitResumeViewDTO]{})
 	for _, bad := range []string{
 		`@Success 200 {object} response.R{data=object{page=int,items=[]service.RecruitResumeViewDTO,page_size=int,total=int}} "success"`,

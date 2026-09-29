@@ -17,7 +17,7 @@ import (
 
 func newWxLoginEnv(t *testing.T) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	return NewRouter(newContractDeps(t, db, nil))
 }
@@ -33,6 +33,7 @@ func wxLoginRequest(t *testing.T, r *gin.Engine, body string) *httptest.Response
 }
 
 func TestWxLogin_MissingCode(t *testing.T) {
+	t.Parallel()
 	w := wxLoginRequest(t, newWxLoginEnv(t), "{}")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("缺 code 应 400, got %d: %s", w.Code, w.Body.String())
@@ -50,6 +51,7 @@ func TestWxLogin_MissingCode(t *testing.T) {
 }
 
 func TestWxLogin_NotConfigured(t *testing.T) {
+	t.Parallel()
 	w := wxLoginRequest(t, newWxLoginEnv(t), "{\"code\":\"js-code\"}")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("未配置应 400, got %d: %s", w.Code, w.Body.String())

@@ -73,7 +73,8 @@ type balanceResp struct {
 }
 
 func TestForumAcceptContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	// 构造用户：楼主、答主1、答主2、旁观者

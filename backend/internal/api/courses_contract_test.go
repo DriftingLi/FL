@@ -20,7 +20,8 @@ import (
 )
 
 func TestCoursesListCategoryParamRetired(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
@@ -86,7 +87,8 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 // TestTutorCoursesListContract 契约测试：导师课程列表与学员端同口径（挂载不变式）
 // 且附 student_count；未挂载课程不可见（ADR-0012 §2 行为变更锁定）。
 func TestTutorCoursesListContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
@@ -175,7 +177,8 @@ func TestTutorCoursesListContract(t *testing.T) {
 // 此前它与 /api/courses 一起挂在「公开访问」段，任意章节 id 无凭证即可拉取 slides（含未发布 /
 // 未挂载课程的章节）。消费方只有 Web 章节页的 PptViewer（走已鉴权的请求层），故收紧为零破坏面。
 func TestChapterSlidesRequireAuthContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }

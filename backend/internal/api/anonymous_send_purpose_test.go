@@ -13,6 +13,7 @@ import (
 // TestAnonymousSendPurposes_SubsetOfSessionFree 单向不变式：
 // 匿名发码白名单里的用途一律不得要求已登录会话（漏标属性不会静默多出公网发码口）。
 func TestAnonymousSendPurposes_SubsetOfSessionFree(t *testing.T) {
+	t.Parallel()
 	if len(anonymousSendPurposes) == 0 {
 		t.Fatal("匿名发码白名单为空")
 	}
@@ -25,6 +26,7 @@ func TestAnonymousSendPurposes_SubsetOfSessionFree(t *testing.T) {
 
 // TestAnonymousSendPurposes_Accepted 白名单里的每个用途都能被 resolvePurpose 接受。
 func TestAnonymousSendPurposes_Accepted(t *testing.T) {
+	t.Parallel()
 	for _, want := range anonymousSendPurposes {
 		got, err := resolvePurpose(string(want))
 		if err != nil {
@@ -40,6 +42,7 @@ func TestAnonymousSendPurposes_Accepted(t *testing.T) {
 // TestAnonymousSendPurposes_RejectsSessionScoped 要求已登录会话的用途（绑定 / 改账号 / 改密码）
 // 不得从匿名发码口发出——它们不经 `/auth/<通道>/send-code`，目标也是当前用户自己的账号。
 func TestAnonymousSendPurposes_RejectsSessionScoped(t *testing.T) {
+	t.Parallel()
 	for _, p := range []service.CodePurpose{
 		service.CodePurposeBind,
 		service.CodePurposeAccountChange,

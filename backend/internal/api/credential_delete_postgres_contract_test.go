@@ -104,7 +104,7 @@ func TestCredentialDeleteCascadesPracticeProgressOnPostgres(t *testing.T) {
 
 	doomed := seedCredForPGDelete(t, db, "N1_pg_cascade")
 	keeper := seedCredForPGDelete(t, db, "N1_pg_keeper")
-	student := testutil.SeedStudent(t, db, "cred_del_pg", "x")
+	student := seedStudent(t, db, "cred_del_pg", "x")
 
 	// 被删证件下：同一学员两种模式各一行（分区里不止一行时才看得出级联是整段消失）
 	seedPGProgress(t, db, student.ID, doomed.ID, "sequential")
@@ -160,7 +160,7 @@ func TestCredentialDeleteBlockedByContributionsOnPostgres(t *testing.T) {
 	svc := service.NewTrainingCatalogService(db, zap.NewNop())
 
 	cred := seedCredForPGDelete(t, db, "N1_pg_contrib")
-	student := testutil.SeedStudent(t, db, "cred_del_pg_block", "x")
+	student := seedStudent(t, db, "cred_del_pg_block", "x")
 	seedPGContribution(t, db, student.ID, cred.ID, "pending")
 	seedPGContribution(t, db, student.ID, cred.ID, "withdrawn")
 

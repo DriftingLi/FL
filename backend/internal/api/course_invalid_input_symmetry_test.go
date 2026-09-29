@@ -63,6 +63,7 @@ var courseFactCases = []courseFactCase{
 // TestCourseInvalidInputSameFaceOnCreateAndUpdate 每件输入不合法在两条面上同码且都是 400；
 // 每件「查不动」在两条面上同码且都是 500。
 func TestCourseInvalidInputSameFaceOnCreateAndUpdate(t *testing.T) {
+	t.Parallel()
 	for _, tc := range courseFactCases {
 		want := http.StatusBadRequest
 		if tc.dropTable != "" {
@@ -123,6 +124,7 @@ func TestCourseInvalidInputSameFaceOnCreateAndUpdate(t *testing.T) {
 // 构造不出来（新课程的 id 在写库之后才知道，也不可能有入边）⇒ 这里只声明 Update 面，
 // 并把「为什么另一面不声明」写在测试里 —— 台账的「据实不声明」口径（ADR-0064 决策 8）。
 func TestCoursePrerequisiteFactsAreUpdateOnly(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		build func(ids courseDomainIDs) map[string]any
@@ -147,6 +149,7 @@ func TestCoursePrerequisiteFactsAreUpdateOnly(t *testing.T) {
 // 查不动 ⇒ 500 且不外发驱动原文。改之前这五格全挤在默认面 400 里（「这门课没有」被说成
 // 「参数错了」，而 `no such table` 直接发给客户端）。
 func TestCourseSwapSortFaces(t *testing.T) {
+	t.Parallel()
 	type swapCase struct {
 		name   string
 		drop   string
