@@ -11,6 +11,9 @@
  *     在 setAuthData 之后经 updateSecureToken 回写加密凭据包络。
  *     #1391 之后包络里的 rt 只写不读（vestigial，登出即吊销），这条锁的是**落盘一致性**，
  *     不是「跨登出续命」——后者已随 #1387 的吊销口径作废。
+ *  ③ #1398：quickLogin 的**成功信号 = 会话建立**（access token 落地），与 rt 是否下发**解绑**；
+ *     rt 只作回写值。旧实现拿 `result.refresh_token` 当成功信号，后端不下发 rt 时会把
+ *     「已登录」误报成失败（`loginApi` 的 `toStr(data['refresh_token'], '')` 显式容忍 rt 为空）。
  */
 const path = require('path');
 
@@ -59,13 +62,17 @@ describe('快捷登录=凭据登录契约（#1391 换机制，钉住新机制而
     expect(body).not.toContain('removeStorage(STORAGE_KEY_TOKEN)');
   });
 
-  it('落盘走密码登录口径（provider=password），返回新令牌仅作成功信号', () => {
+  it('落盘走密码登录口径（provider=password）；成功信号与会话建立绑定、与 rt 解绑（#1398）', () => {
     expect(body).toContain("setAuthData(result.token, result.user, result.refresh_token, 'password')");
-    expect(body).toContain('return result.refresh_token');
+    // 成功信号 = token 落地；缺 rt 不影响「已登录」的事实
+    expect(body).toContain('if (result == null || result.token.length == 0) return false');
+    expect(body).toContain('return true');
+    // 旧形状（把轮换出的 rt 当成功信号）不得回来 —— 后端不下发 rt 时它是假失败
+    expect(body).not.toMatch(/return\s+result\.refresh_token/);
   });
 
-  it('暴露面签名 = 凭据（username, password），不再是令牌', () => {
-    expect(src).toContain('quickLogin: (username : string, password : string) : Promise<string> => quickLogin(username, password)');
+  it('暴露面签名 = 凭据（username, password）返回成功与否（Promise<boolean>），不再是令牌串', () => {
+    expect(src).toContain('quickLogin: (username : string, password : string) : Promise<boolean> => quickLogin(username, password)');
     expect(src).not.toContain('quickLogin(rt)');
   });
 });

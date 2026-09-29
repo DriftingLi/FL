@@ -121,9 +121,10 @@ export type AuthStore = {
     tryRefreshToken : () => Promise<boolean>
     /**
      * 快捷登录：用生物门控解锁的账号密码走一次正常登录（ADR-0004 增补 · #1391 换机制）
-     * @returns 新 refresh_token —— 仅作成功信号与加密包络回写值；失败返回空串（调用方降级回填）
+     * @returns 会话是否建立（true = access token 已落地）；失败返回 false（调用方降级回填）。
+     *          #1398：成功信号与 rt 解绑（后端可不下发 refresh_token，rt 只作包络回写值）。
      */
-    quickLogin : (username : string, password : string) => Promise<string>
+    quickLogin : (username : string, password : string) => Promise<boolean>
     setAuthData : (t : string, u : UserInfo, rt : string) => void
     clearAuthData : () => void
     /**
