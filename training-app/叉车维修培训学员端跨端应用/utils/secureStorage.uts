@@ -3,9 +3,9 @@
  *
  * 对外语义固定（契约测试 utils/secureStorage.test.js 钉住）：
  * - hasStoredCredentials:  has=true 且账号密码均非空才算"存在"
- * - saveSecureCredentials: 账号+密码+refresh_token 完整保存（rt 供快捷登录，ADR-0004 增补）
- * - loadSecureCredentials: 与包络判定同口径；无完整凭据返回 null
- * - loadSecureToken:       快捷登录令牌（仅完整凭据且 rt 非空时返回，否则空串）
+ * - saveSecureCredentials: 账号+密码完整保存；rt 为 vestigial 字段——登出即吊销（#1387），
+ *                          快捷登录已改凭据登录（#1391），本字段自此**只写不读**
+ * - loadSecureCredentials: 与包络判定同口径；无完整凭据返回 null（快捷登录与门控回填共用）
  * - clearSecureCredentials: 清除（幂等）
  * - saveAccountOnly / loadSavedAccount: 凭据降级（仅记住账号，ADR-0004 决策 A；降级包络不含 rt）
  *
@@ -29,7 +29,7 @@ export type StoredCredentials = {
     u : string
     p : string
     has : boolean
-    rt : string              // 快捷登录用 refresh_token（非完整凭据包络时为空串）
+    rt : string              // vestigial：只写不读（#1391），为持久化格式兼容保留（非完整凭据包络时为空串）
 }
 
 /** 当前平台是否可用加密存储（App 端 true） */
@@ -137,7 +137,7 @@ export function hasStoredCredentials() : boolean {
     return env.u.length > 0 && env.p.length > 0
 }
 
-/** 保存凭据（App 端加密落盘；rt 为快捷登录 refresh_token，可为空串） */
+/** 保存凭据（App 端加密落盘；rt 照写入参落盘 = vestigial 字段，见文件头声明，可为空串） */
 export function saveSecureCredentials(username : string, password : string, rt : string) : void {
     const data : StoredCredentials = {
         u: username,
@@ -152,7 +152,7 @@ export function saveSecureCredentials(username : string, password : string, rt :
  * 凭据降级：仅记住账号（生物识别不可用平台/设备用，ADR-0004 决策 A；孤儿凭据自愈同款终态）
  *
  * 密码字段落空串、has 落 false、rt 落空串——存储内容不构成完整凭据包络，
- * hasStoredCredentials()/loadSecureCredentials()/loadSecureToken() 均判定为"无"，
+ * hasStoredCredentials()/loadSecureCredentials() 均判定为"无"，
  * 脱敏入口因此不出现；账号回填走独立的 loadSavedAccount()。
  */
 export function saveAccountOnly(username : string) : void {
@@ -194,28 +194,11 @@ export function loadSecureCredentials() : StoredCredentials | null {
 }
 
 /**
- * 读取快捷登录令牌（生物门控的 refresh_token，ADR-0004 增补）
- * 与 loadSecureCredentials 同口径：仅完整凭据包络（has=true 且 u/p 非空）且 rt 非空时返回；
- * 降级包络/旧包络/异常包络返回空串
- */
-export function loadSecureToken() : string {
-    const env = readEnvelope()
-    if (env == null) {
-        return ''
-    }
-    if (env.has !== true) {
-        return ''
-    }
-    if (env.u.length == 0 || env.p.length == 0) {
-        return ''
-    }
-    return env.rt
-}
-
-/**
- * 回写轮换后的快捷登录令牌（ADR-0004：refresh 每次轮换即旧令牌失效，
- * 包络里的 rt 是唯一跨登出持久副本，不回写则滑动续期在登出后断裂）
+ * 回写包络里的 refresh_token（会话内 401 自动续期轮换出的新令牌随之落盘）
  * 仅完整凭据包络时生效；无凭据/降级包络为无害 no-op
+ * @note #1391 起该字段**只写不读**：登出会吊销手上的 rt（#1387），快捷登录已改凭据登录，
+ *       不存在「跨登出用包络里的 rt 续会话」这回事 —— 本函数保留只因 auth store 仍在两处调用它，
+ *       收口（连同明文槽做单槽化）属 ADR-0030 ④ 第 3 项，另票处理。
  */
 export function updateSecureToken(rt : string) : void {
     if (rt.length == 0) {

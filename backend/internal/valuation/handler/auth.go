@@ -57,11 +57,19 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	})
 }
 
-// Logout 处理 POST /api/valuation/auth/logout（与主站 /auth/logout 同口径，ADR-0016）：
-// 接收 refresh_token（请求体优先，回退 Bearer 头）并吊销；不依赖 JWTAuth，
-// access 过期时也能登出。黑名单只管理 refresh，access 自然过期。
+// Logout 处理 POST /api/valuation/auth/logout（#1388 起收敛到主站同一个动作 Session.SignOut）：
+// 吊销手上那支 refresh（请求体优先，回退 Bearer 头）**并清除登录态 Cookie**（access + 两族 refresh）。
+// 原形状只吊销、一枚 Cookie 都不清 ⇒ 还在用这个入口的客户端「登出」之后，浏览器里那枚 7 天
+// refresh 原封不动，登出退化成前端自己把状态擦了（ADR-0067 要降的那层后果一件都没降）。
+//
+// 这里**不读** refresh Cookie，也不是遗漏：它的 `Path=/api/auth`（ADR-0067 决策 2 的最小暴露面）
+// 结构上覆盖不到 `/api/valuation/auth/logout`，写那一路就是一枚恒空的死代码。可达性由
+// TestValuationLogout_刷新Cookie到不了本端点 钉住 —— 谁把 Path 放宽到 `/`（把 7 天凭证挂到全站
+// 每一个请求上）就会在那里判红，被迫在这里重新决策，而不是让代码与 ADR 各说一套。
+// 仓内的估值工作区不走这个入口（`ValuationLayout.vue` 的退出调 `authStore.signOut()` →
+// 主 `/api/auth/logout`，Cookie 与族判定都在那里生效）；本端点是 `API.md` 对外列着的兼容入口。
 // @Summary 估值用户登出
-// @Description 以 refresh_token 自证身份吊销会话（请求体优先，回退 Bearer 头）；不依赖 JWTAuth。公开端点：无需登录。
+// @Description 吊销 refresh_token（请求体优先，回退 Bearer 头）并清除登录态 Cookie（access + 两族 refresh）；不依赖 JWTAuth。公开端点：无需登录。
 // @Tags 估值-认证
 // @Accept json
 // @Produce json
@@ -77,8 +85,7 @@ func (h *ValuationAuthHandler) Logout(c *gin.Context) {
 	if tokenStr == "" {
 		tokenStr = h.sess.ExtractToken(c.GetHeader("Authorization"), "")
 	}
-	if tokenStr != "" {
-		_ = h.sess.RevokeRefresh(c.Request.Context(), tokenStr)
-	}
+	// 吊销失败仍清 Cookie：本地登录态已不可用，凭证缺口由 SignOut 的返回值暴露（主站同口径）。
+	_ = h.sess.SignOut(c.Request.Context(), c.Writer, tokenStr)
 	response.Success(c, nil)
 }

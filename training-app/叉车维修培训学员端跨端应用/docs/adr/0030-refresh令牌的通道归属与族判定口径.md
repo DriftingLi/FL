@@ -65,6 +65,16 @@ H5 端 header 里的 cookie 也不可手动修改），只是它现在意味着�
 - **`auth_refresh_token` 继续留在 storage，本次不动。** 它与 `secureStorage` 的加密凭据
   包络**双槽并存**（`STORAGE_KEY_REFRESH_TOKEN='auth_refresh_token'` + `StoredCredentials.rt`），
   这个重复是否收口属另一件事（见 ④ 第 3 项），**不在本次裁定内** —— 本次只裁「通道」。
+  > **第二次裁定（#1391，裁的是「谁消费 rt」）**：④ 第 2 项落地（`e030c81b`）后，登出会把
+  > 手上的 rt 发给后端吊销，而密码登录写进包络的 `StoredCredentials.rt` 与明文槽**同值**
+  > （唯一写入点 `pages/login/composables/useLoginForm.uts:331`）⇒ 登出即两支齐死，
+  > `0004-生物识别门控`「用包络里的 rt 静默续登」与「登出真的吊销」逻辑上不可能同时成立。
+  > **裁定：吊销不回退（安全修复），快捷登录改用包络里的账号密码走一次凭据登录
+  > （`POST /auth/login`）**——两条口径同时成立，卖点（一键回会话、零输入）保住。
+  > 连带：包络里的 rt 自此**只写不读**（读取方 `loadSecureToken()` 退役；字段暂不删，
+  > 删它属 ④ 第 3 项的存储面问题，另票）；rt 的唯一合法用途回到**会话内** 401 自动续期
+  > （`tryRefreshToken`）。#1389 的读数使这条必要性上调：App 恒走 body 兜底通道，
+  > 登出吊销**每一次**都会让旧 rt 机制的快捷登录降级——不是边角案例。
 - **登出语义的缺口本端认账、本端修。** `logoutApi()` 曾是 `post('/auth/logout', null)`
   （`api/auth.uts:360-363`）**不带 refresh_token** ⇒ **我们的登出不吊销任何长效凭证**。
   这条在 ADR-0067 之前就存在，但 ADR-0067 之后「登出至少把凭证抹掉」这句话对本端

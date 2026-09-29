@@ -120,14 +120,17 @@ export type AuthStore = {
     getRefreshToken : () => string
     tryRefreshToken : () => Promise<boolean>
     /**
-     * 快捷登录：用生物门控解锁的 refresh_token 静默续登（ADR-0004 增补）
-     * @returns 轮换出的新 refresh_token（调用方回写加密包络）；失败返回空串（调用方降级回填）
+     * 快捷登录：用生物门控解锁的账号密码走一次正常登录（ADR-0004 增补 · #1391 换机制）
+     * @returns 新 refresh_token —— 仅作成功信号与加密包络回写值；失败返回空串（调用方降级回填）
      */
-    quickLogin : (rt : string) => Promise<string>
+    quickLogin : (username : string, password : string) => Promise<string>
     setAuthData : (t : string, u : UserInfo, rt : string) => void
+    /**
+     * 同一身份的退出：清 auth 四键 + 证件域三键（#1380），**故意保留** `auth_secure_credentials`（ADR-0004）
+     */
     clearAuthData : () => void
     /**
-     * 身份互斥清槽（ADR-0022 ③）：清学员三键 + 登录来源 + 安全凭据 + 角色标记，**不碰** `clearAuthData()` 的语义
+     * 身份互斥清槽（ADR-0022 ③）：清学员三键 + 登录来源 + 安全凭据 + 证件域三键（#1380）+ 角色标记，**不碰** `clearAuthData()` 的语义
      * @note 调用方 = `loginAsRecruiter()`（落招聘者凭据前）与 `pages/recruiter/login.uvue` 的「返回学员登录」出口
      */
     clearIdentityForSwitch : () => void

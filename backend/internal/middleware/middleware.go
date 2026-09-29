@@ -125,15 +125,10 @@ func resolveClaims(c *gin.Context, sess *security.Session) bool {
 }
 
 // authCookieValue 读取登录 Cookie（依次尝试 hrwai_token 与 recruiter_token，不存在时返回空串）。
-// 兼容保持单参调用：旧签名 authCookieValue(c, name) 已收敛为按 Session CookieNames 遍历，
-// 保留同名 helper 供测试或外部调用时走多 cookie 逻辑。
+// 遍历顺序的实现已上收到 Session.AccessCookieValue —— refresh 的族判定读的是同一个函数：
+// 「鉴权面认的活跃身份」与「续期面选择的令牌族」必须是同一个答案（#1376 跨端评审的串族缺陷）。
 func authCookieValue(c *gin.Context, sess *security.Session) string {
-	for _, name := range sess.CookieNames() {
-		if tk, err := c.Cookie(name); err == nil && tk != "" {
-			return tk
-		}
-	}
-	return ""
+	return sess.AccessCookieValue(c.Request)
 }
 
 // CapabilityRequired 能力守卫（ADR-0047 §1）：判据是 authz 能力，不是角色字面量。
