@@ -7,19 +7,25 @@
 // refresh（7 天，刷新端点专用，轮换时旧值立即入黑名单防重放）；登出吊销 refresh。
 //
 // ADR-0067（修订 ADR-0016）：refresh 在浏览器侧改由本模块下发的 httpOnly Cookie 承载
-// （Path 收在 /api/auth/refresh），请求体通道保留给移动端与非浏览器客户端；
+// （Path 收在认证族前缀 /api/auth，见 RefreshCookiePath），请求体通道保留给移动端与非浏览器客户端；
 // 签发/回写/吊销三条动作仍收敛在本模块单点。
+//
+// 两族 Cookie（主站 / 招聘者）可以在同一 host 上并存，所以「读哪一族」必须由 access 决定
+// ——口径与判据见本文件「族判定」段与移动端 ADR-0030 ② 第 2 条。
 package security
 
 import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -357,9 +363,13 @@ func (s *Session) RevokeRefresh(ctx context.Context, tokenStr string) error {
 // 终止该身份全部会话不在此处：那属 RevokeIdentity。
 //
 // ADR-0067 之后 refresh 的本地清除也收敛到本动作（ClearRefreshCookies）：登出至少要把凭证
-// 从浏览器里抹掉。但 refresh cookie 的 Path 收在 /api/auth/refresh（ADR-0067 决策 2 的
-// 最小暴露面），浏览器**不会**把它发到本端点——所以浏览器侧登出只能清 Cookie、无法再吊销
-// 手上那一支（服务端吊销路径由改密/注销的 RevokeIdentity 承担）。冲突与处置见 #1363 报告。
+// 从浏览器里抹掉。服务端吊销同样收敛到本动作——refresh cookie 的 Path = /api/auth（决策 2 的
+// 最小暴露面在此让一步的理由见 RefreshCookiePath 注释），浏览器登出取得到手上那一支，
+// `CONTEXT.md`「会话」的单会话终止在浏览器侧照旧成立（#1385 缺口 1 的处置）。
+// 取不到的那一种要说明白：本次请求没有族线索（既没带 Bearer 头也没带 access cookie）时
+// RefreshCookieForRequest 返回空串 ⇒ 登出退化为「只清本地」。这是刻意的：此时任选一族去吊销
+// 就是拿名序决定「谁的会话被终止」，而两族并存时那个答案一定是错的其中一边。
+// 终止该身份全部会话不在此处：那属 RevokeIdentity。
 func (s *Session) SignOut(ctx context.Context, w http.ResponseWriter, refreshToken string) error {
 	var err error
 	if refreshToken != "" {
@@ -428,6 +438,18 @@ func (s *Session) ExtractToken(authHeader, cookieValue string) string {
 	return cookieValue
 }
 
+// AccessCookieValue 读取本次请求携带的 access cookie 值（按 CookieNames() 的优先级取第一枚非空）。
+// 鉴权中间件与 refresh 的族判定**共用本函数**：两处对「当前活跃身份」的回答必须是同一个，
+// 否则续期会轮换另一族凭证（见 RefreshCookieForRequest）。
+func (s *Session) AccessCookieValue(r *http.Request) string {
+	for _, name := range s.CookieNames() {
+		if ck, err := r.Cookie(name); err == nil && ck.Value != "" {
+			return ck.Value
+		}
+	}
+	return ""
+}
+
 // CookieName 返回登录态 Cookie 名称（中间件读取 Cookie 用，避免重复持有配置）。
 func (s *Session) CookieName() string {
 	return s.cookie.Name
@@ -486,9 +508,10 @@ func (s *Session) SetRecruiterCookie(w http.ResponseWriter, token string) {
 
 // ===== ADR-0067：refresh 令牌的浏览器通道（httpOnly Cookie 优先，请求体通道保留）=====
 
-// RefreshCookieNames 返回 refresh cookie 名（优先级与 CookieNames 同口径：主站先、招聘者次之）。
-// 与 access 侧的取舍一致：同一浏览器同一时刻只有一族活跃会话（前端令牌 key 也是单份），
-// 双族并存时以主站为准，不做「哪个 cookie 先过期」的隐式回退。
+// RefreshCookieNames 返回两族 refresh cookie 名（主站先、招聘者次之）。
+// ⚠️ 只用于**枚举**（登出/注销要把两族都清掉）与测试，不参与选族：两族可以在同一个 host 上
+// 并存，「按名序取第一枚非空」正是把招聘者面的续期轮换到学员那一族上的那条路（见本段末
+// RefreshCookieForRequest 的口径）。
 func (s *Session) RefreshCookieNames() []string {
 	names := make([]string, 0, 2)
 	if s.refreshCookie.Name != "" {
@@ -516,15 +539,64 @@ func (s *Session) RefreshCookieName() string {
 	return DefaultRefreshCookieName
 }
 
-// ExtractRefreshCookie 按优先级取第一枚非空的 refresh cookie。
-// 返回空串 = 「这次请求没带 Cookie 通道」，端点才回退请求体（ADR-0067 决策 1 的读取顺序）。
-func (s *Session) ExtractRefreshCookie(r *http.Request) string {
-	for _, name := range s.RefreshCookieNames() {
-		if ck, err := r.Cookie(name); err == nil && ck.Value != "" {
-			return ck.Value
-		}
+// ===== 族判定（#1376 跨端评审 · 移动端 ADR-0030 ② 第 2 条、④ 第 1 项）=====
+//
+// 两族 refresh cookie **可以并存**：ADR-0022 把招聘者 access 收紧为 host-only 之后，父域那枚
+// hrwai_refresh 在招聘者子域上依然会被投递；移动端两个角色打的又是同一个 API_BASE_URL，
+// 两族更是全落在同一个 host 上。于是「按名序取第一枚非空」会让招聘者面的续期**轮换学员那一族**，
+// 而客户端把续出的令牌连同当前内存角色一起落盘 ⇒ 登录态被静默换成另一个身份、UI 还停在原身份。
+//
+// 口径：**族由 access 定**。本次续期归属哪一族，判据与鉴权中间件对「你是谁」的回答**同源**
+// （ExtractToken 的头优先 + AccessCookieValue 的遍历顺序），这里只取其中的 role 一个字段。
+// 两条线索都没有 ⇒ Cookie 通道视为**不可用**（不是「任选一族」）：端点据此回退请求体，
+// 而请求体那支的归属由令牌自身的 claims.Role 决定、不经 Cookie 选族，不存在串族面。
+
+// accessRoleOf 只从 JWT 载荷里读出 role，**不做任何认证判定**：不验签、不看 exp/iat、
+// 不校验 token_type、不查黑名单。它回答的是「客户端自认为属于哪一族」，答案只用来选 Cookie；
+// 认证面仍只能走 VerifyAccess / ValidateRefresh。
+// 用例 TestRefreshFamily_Role解析不是认证面 把这句话钉成代码（错签名的令牌在这里能读出 role、
+// 在 VerifyAccess 那里必须被拒）。
+func accessRoleOf(tokenStr string) string {
+	parts := strings.Split(tokenStr, ".")
+	if len(parts) != 3 {
+		return ""
 	}
-	return ""
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		Role string `json:"role"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	return claims.Role
+}
+
+// RefreshFamilyRole 返回本次请求所声明的令牌族（与同一请求里鉴权中间件会认的那个身份同源）。
+// 空串 = 没有任何族线索（既没带 Bearer 头，也没带 access cookie）。
+func (s *Session) RefreshFamilyRole(r *http.Request) string {
+	return accessRoleOf(s.ExtractToken(r.Header.Get("Authorization"), s.AccessCookieValue(r)))
+}
+
+// RefreshCookieForRequest 取出本次请求 Cookie 通道里**属于该族**的 refresh 凭证。
+// 返回空串 = Cookie 通道不可用（没有族线索，或该族没带 Cookie）⇒ 端点回退请求体。
+// 分流口径与回写侧的 setRefreshCookieForRole 一致：recruiter 落 host-only 那一族，其余落主站那一族。
+func (s *Session) RefreshCookieForRequest(r *http.Request) string {
+	role := s.RefreshFamilyRole(r)
+	if role == "" {
+		return ""
+	}
+	name := s.RefreshCookieName()
+	if role == roleRecruiter {
+		name = s.RecruiterRefreshCookieName()
+	}
+	ck, err := r.Cookie(name)
+	if err != nil || ck.Value == "" {
+		return ""
+	}
+	return ck.Value
 }
 
 // SetRefreshCookie 下发主站 refresh 的 httpOnly Cookie（Path 收在刷新端点）。

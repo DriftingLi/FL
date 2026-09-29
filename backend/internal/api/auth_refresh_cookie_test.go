@@ -3,7 +3,10 @@
 // seam：真实路由 + 内存库/内存黑名单，全部走 HTTP 层（与 auth_refresh_test.go 同一 seam）。
 // 三条锁对应票面三条判据：
 //
-//	① Cookie 存在时忽略请求体（Cookie 与 body 各带一支合法 refresh 时，被消费的是 Cookie 那一支）；
+//	① Cookie 通道存在时忽略请求体（Cookie 与 body 各带一支合法 refresh 时，被消费的是 Cookie 那一支）。
+//	   前提是**读得出族**：族由 access 定，两族并存时的选族口径与四条用例在 auth_refresh_family_test.go；
+//	   **通道归属由客户端容器行为决定，不由代码决定**（移动端 ADR-0030 ②：App/H5 自动带 cookie，
+//	   只有小程序不带），所以本文件的用例统一带学员族线索，而不是假设「body 分支一定被走到」。
 //	   只有请求体时仍然可用（移动端与非浏览器客户端的生命线，响应体形状逐字不变）；
 //	② 轮换/吊销语义不变：ADR-0016 的两族吊销（全会话 RevokeIdentity / 单会话 SignOut）
 //	   对 Cookie 那一支同样成立——不是只对 body 那一族成立；
@@ -13,6 +16,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -41,6 +45,14 @@ func cookieSession(secure bool) *security.Session {
 		security.CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: secure}, newValBlacklist())
 }
 
+// familyClue 拼一枚「客户端自认属于哪一族」的声明令牌。
+// 族判定只读载荷里的 role、**不验签**（见 security.accessRoleOf），所以这里不必按各用例
+// 的 session 密钥签发真令牌——本文件的 7 条锁的是主站那一族的 Cookie 通道，统一带学员族线索。
+func familyClue(role string) string {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"role":"` + role + `"}`))
+	return "h." + payload + ".s"
+}
+
 // doRefreshCookie 带 Cookie 通道（cookie 为空串则不带）发一次刷新请求；
 // bodyToken 为空串则请求体里不带 refresh_token（连字段都不带，与「无 body 通道」等价）。
 func doRefreshCookie(r *gin.Engine, cookie, bodyToken string) *httptest.ResponseRecorder {
@@ -51,6 +63,7 @@ func doRefreshCookie(r *gin.Engine, cookie, bodyToken string) *httptest.Response
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/api/auth/refresh", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+familyClue(service.HrwaiRole))
 	if cookie != "" {
 		req.AddCookie(&http.Cookie{Name: security.DefaultRefreshCookieName, Value: cookie})
 	}
@@ -118,7 +131,10 @@ func TestRefresh_Cookie优先于请求体(t *testing.T) {
 	}
 }
 
-func TestRefresh_仅请求体仍然可用_移动端生命线(t *testing.T) {
+// 请求体通道仍可用。⚠️ 用例**原名**叫「…移动端生命线」，那是过强的声称：App/H5 端由容器自动
+// 带 cookie（移动端 ADR-0030 ②），真机上走的是 Cookie 通道；本用例真正锁住的是**不带 cookie 的
+// 客户端**（小程序、脚本、老版本）不因 ADR-0067 断供。响应形状与键集合是它们的唯一契约面。
+func TestRefresh_仅请求体仍然可用_非浏览器客户端通道(t *testing.T) {
 	sess := cookieSession(false)
 	r := newRefreshRouter(sess)
 	_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
@@ -284,9 +300,10 @@ func TestLogout_Cookie通道的refresh被吊销且响应清除Cookie(t *testing.
 			"（`CONTEXT.md`「会话」词条的单会话终止失守）。若这是有意收窄，必须连同 ADR-0067 决策 2 与该词条一起改。", ck.Path)
 	}
 
-	// ② 吊销：浏览器据此把这枚 Cookie 投递到登出入口。
+	// ② 吊销：浏览器据此把这枚 Cookie 投递到登出入口（带上族线索——登出与续期共用同一把定族钥匙）。
 	req, _ := http.NewRequest("POST", "/api/auth/logout", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+familyClue(service.HrwaiRole))
 	req.AddCookie(&http.Cookie{Name: ck.Name, Value: ck.Value})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

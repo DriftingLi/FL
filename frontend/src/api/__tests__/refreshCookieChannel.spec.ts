@@ -1,8 +1,10 @@
 // refresh 令牌的浏览器通道（ADR-0067 / 票 #1363）：Cookie 优先 + 请求体兼容的前端侧锁。
 //
 // 三条判据在前端的形状：
-//   判据 1「Cookie 存在时忽略请求体」⇒ 前端**不再参与** refresh 的传递：刷新请求不带 refresh_token，
+//   判据 1「Cookie 通道存在时忽略请求体」⇒ 前端**不再参与** refresh 的传递：刷新请求不带 refresh_token，
 //     且必须带凭证（withCredentials），否则 Cookie 发不出去；
+//     并带一条**族线索**头（storage 里那支 access，过期也发）——两族 refresh cookie 可在同一父域
+//     并存，服务端按 access 决定续哪一族（#1376 跨端评审 · 移动端 ADR-0030 ②）。
 //   判据 3「refresh 不再进 JS 可达存储」⇒ 结构锁：`api/client.ts` 里连 RefreshToken 这个标识符
 //     都不得出现（读写都不许），且 `utils/storage.ts` 之外不得有任何 refresh 读写口；
 //     行为锁：轮换出来的新 refresh 不落存储、登录响应里的那一份也不经 userInfo 落存储。
@@ -77,6 +79,11 @@ describe('结构锁：client.ts 不碰 refresh 的存放面（ADR-0067）', () =
     expect(count(CLIENT_SOURCE, /post[^\n]*\/auth\/refresh[^\n]*\{\s*\}/g)).toBe(1)
   })
 
+  it('刷新请求带族线索头（服务端靠它定族；不发就只能 401，绝不回退 Cookie 名序）', () => {
+    // 钉在刷新那一次 post 的调用行上：只判「文件里出现过 familyClueHeaders」会被别的调用顶掉。
+    expect(count(CLIENT_SOURCE, /post[^\n]*\/auth\/refresh[^\n]*headers:\s*familyClueHeaders\(\)/g)).toBe(1)
+  })
+
   it('防恒绿：术前的形态必须被同一套扫描判红', () => {
     const before = `
       const rt = getRefreshToken()
@@ -92,6 +99,8 @@ describe('结构锁：client.ts 不碰 refresh 的存放面（ADR-0067）', () =
       count(before, /localStorage/g) > 0
     ].filter(Boolean)
     expect(hits).toHaveLength(5)
+    // 族线索头是本次新加的形态：术前形状必须在这条上判红，否则等于没锁。
+    expect(/post[^\n]*\/auth\/refresh[^\n]*headers:\s*familyClueHeaders\(\)/.test(before)).toBe(false)
   })
 })
 
@@ -142,7 +151,11 @@ describe('行为锁：401 → Cookie 静默刷新 → 重试（新 refresh 不�
   })
 
   /** 装一个 axios adapter 捕获刷新请求并把链路跑完（client.ts 在模块初始化时 create，故必须先装再 import） */
-  async function runRefreshChain(capture: { bodies: Array<Record<string, unknown>>; credentials: boolean[] }) {
+  async function runRefreshChain(capture: {
+    bodies: Array<Record<string, unknown>>
+    credentials: boolean[]
+    authHeaders: Array<string | undefined>
+  }) {
     const previousAdapter = axios.defaults.adapter
     vi.resetModules()
     axios.defaults.adapter = (async (config: {
@@ -154,6 +167,9 @@ describe('行为锁：401 → Cookie 静默刷新 → 重试（新 refresh 不�
       if ((config.url || '').includes('/auth/refresh')) {
         capture.bodies.push(config.data ? (JSON.parse(config.data) as Record<string, unknown>) : {})
         capture.credentials.push(config.withCredentials === true)
+        capture.authHeaders.push(
+          (config.headers?.Authorization ?? config.headers?.authorization) as string | undefined
+        )
         return ok({
           code: 200,
           message: 'ok',
@@ -193,7 +209,11 @@ describe('行为锁：401 → Cookie 静默刷新 → 重试（新 refresh 不�
     // 登录态成立的另一半（initFromStorage 要 userInfo.role，否则清态 ⇒ 刷新链路根本不发）
     localStorage.setItem('userInfo', JSON.stringify({ role: 'hrwai_user', account: 'u1' }))
 
-    const capture = { bodies: [] as Array<Record<string, unknown>>, credentials: [] as boolean[] }
+    const capture = {
+      bodies: [] as Array<Record<string, unknown>>,
+      credentials: [] as boolean[],
+      authHeaders: [] as Array<string | undefined>
+    }
     const { store, data } = await runRefreshChain(capture)
 
     expect(data).toEqual({ reached: true })
@@ -203,6 +223,10 @@ describe('行为锁：401 → Cookie 静默刷新 → 重试（新 refresh 不�
     expect(capture.bodies[0]).not.toHaveProperty('refresh_token')
     // 不带凭证就发不出去（refresh cookie 的 Path 收在该端点，是浏览器侧唯一通道）
     expect(capture.credentials).toEqual([true])
+    // 族线索（#1376 跨端评审）：storage 里那支**已过期**的 access 仍要原样发出去。
+    // 它不参与认证，只回答「本次续期属于哪一族」；不发，服务端在两族并存时只能拒绝
+    // （按 Cookie 名序猜族 = 替另一族续期，正是本次修的缺陷）。
+    expect(capture.authHeaders).toEqual([`Bearer ${expired}`])
     // 判据 3：轮换出来的新 refresh 不进 JS 可达存储；access 仍按 ADR-0067 决策 3 留原处
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBeNull()
     expect(localStorage.getItem(TOKEN_KEY)).toBe('access-rotated')

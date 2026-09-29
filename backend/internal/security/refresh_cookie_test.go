@@ -1,5 +1,6 @@
-// ADR-0067（票 #1363）会话模块侧的 refresh Cookie 单测：读取优先级、下发属性、清除形状、
-// 轮换回写。端点侧的契约（Cookie 优先于请求体 / 两族吊销）在 internal/api 的契约测试里锁。
+// ADR-0067（票 #1363）会话模块侧的 refresh Cookie 单测：下发属性、清除形状、轮换回写。
+// 「读哪一族」的口径（#1376 跨端评审：族由 access 定）在 refresh_family_test.go 里锁；
+// 端点侧的契约（Cookie 优先于请求体 / 两族吊销）在 internal/api 的契约测试里锁。
 package security
 
 import (
@@ -26,12 +27,15 @@ func TestSetRefreshCookie_并发不写共享字段(t *testing.T) {
 
 	const n = 32
 	// 读取侧走的是同一批字段：并发下发时若存在共享写，-race 会在这里报红。
+	// 带一条**学员族**的 Bearer 头，否则族判定会在「无线索」处直接返回、走不到 Cookie 读取那一步。
+	mainAccess, _, _ := sess.IssuePair(1, "u1", "hrwai_user")
 	go func() {
 		for i := 0; i < n; i++ {
 			_ = sess.RefreshCookieNames()
 			r, _ := http.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+			r.Header.Set("Authorization", "Bearer "+mainAccess)
 			r.AddCookie(&http.Cookie{Name: sess.RefreshCookieName(), Value: "rt"})
-			_ = sess.ExtractRefreshCookie(r)
+			_ = sess.RefreshCookieForRequest(r)
 		}
 	}()
 	var wg sync.WaitGroup
@@ -66,42 +70,15 @@ func TestRefreshCookieName_默认与配置推导(t *testing.T) {
 	if got := sess.RecruiterRefreshCookieName(); got != DefaultRecruiterRefreshCookieName {
 		t.Errorf("RecruiterRefreshCookieName = %q", got)
 	}
-	// 优先级与 access 侧同口径：主站先、招聘者次之（两族并存时不做隐式回退）
+	// 枚举面：两族都要在（登出/注销的清除按这份名单走，漏一族就是把另一族的活跃凭证留在浏览器里）。
+	// ⚠️ 这里**不是**选族优先级锁：选族由 access 定，见 refresh_family_test.go。
 	names := sess.RefreshCookieNames()
 	if len(names) != 2 || names[0] != DefaultRefreshCookieName || names[1] != DefaultRecruiterRefreshCookieName {
 		t.Errorf("RefreshCookieNames = %v", names)
 	}
 }
 
-func TestExtractRefreshCookie_读取优先级(t *testing.T) {
-	sess := NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, 7*24*time.Hour,
-		CookieConfig{Name: "hrwai_token", Domain: "example.com"}, newInmemoryBlacklistStore())
-
-	cases := []struct {
-		name    string
-		cookies map[string]string
-		want    string
-	}{
-		{name: "无 Cookie", cookies: nil, want: ""},
-		{name: "只有主站", cookies: map[string]string{DefaultRefreshCookieName: "rt-main"}, want: "rt-main"},
-		{name: "只有招聘者", cookies: map[string]string{DefaultRecruiterRefreshCookieName: "rt-rec"}, want: "rt-rec"},
-		{name: "两族并存取主站", cookies: map[string]string{
-			DefaultRefreshCookieName: "rt-main", DefaultRecruiterRefreshCookieName: "rt-rec"}, want: "rt-main"},
-		{name: "空值 Cookie 不算带上通道", cookies: map[string]string{DefaultRefreshCookieName: ""}, want: ""},
-		{name: "无关 Cookie 干扰", cookies: map[string]string{"hrwai_token": "access-x"}, want: ""},
-	}
-	for _, c := range cases {
-		req := httptest.NewRequest(http.MethodPost, RefreshCookiePath, nil)
-		for n, v := range c.cookies {
-			req.AddCookie(&http.Cookie{Name: n, Value: v})
-		}
-		if got := sess.ExtractRefreshCookie(req); got != c.want {
-			t.Errorf("%s: ExtractRefreshCookie = %q, want %q", c.name, got, c.want)
-		}
-	}
-}
-
-// 下发属性：httpOnly + SameSite=Lax + Path 收在刷新端点 + Max-Age = refresh 有效期；
+// 下发属性：httpOnly + SameSite=Lax + Path 收在认证族前缀 + Max-Age = refresh 有效期；
 // 域口径逐字继承 access cookie（子域名多工作区，作用域只能有一处事实源）。
 func TestSetRefreshCookie_属性与域口径继承(t *testing.T) {
 	sess := NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, 7*24*time.Hour,
