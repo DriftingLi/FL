@@ -1,0 +1,5 @@
+# 对照组：同一 URL、同一 302 链，在带 cookie 会话的客户端上必须回显那枚 cookie
+# 目的：排除「探针形状无效 / Set-Cookie 的 Path 不匹配」造成真机侧假阴性
+# 采集端: Windows PowerShell 7 · Invoke-WebRequest（-WebSession 维持 cookie jar）
+hop1 status = Found（302 Found，说明服务端确实下发了 Set-Cookie 后再跳转）
+hop2 /cookies 回显 = { "cookies": { "probe": "jar1389" } } 
