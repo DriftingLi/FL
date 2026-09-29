@@ -24,19 +24,24 @@
    - `1790673125.194 [request] >>> POST https://www.gccsmile.com/api/auth/login`（body 含 username/password）
    - `1790673125.322 [request] <<< 200 /api/auth/login`
    - `1790673125.886 进入页面: /pages/dashboard/dashboard`（零输入直达，判据 1 成立）
-   - **全窗口 121 条 console 行中 `auth/refresh` 命中 0 条**（机检行：`auth/refresh lines: 0`）。
+   - **机检（`05-machine-check.txt`，对入仓产物的计数）：全窗口 125 条 console 行中 `auth/refresh` 命中 0 条**；
+     `auth/logout` 2 次调用、`auth/login` 3 次（1 次人工密码登录 + 2 次快捷登录）、指纹认证成功 2 次
+     —— 实际发生了**两轮**「登出 → 指纹快捷登录」（第一轮由人自测，第二轮由 agent 引导），两轮结论一致。
 
 ## 结论
 
-- 判据 1 ✅（logcat 三条链 + 页面跳转行）；判据 2 ✅（登出带 body 的 POST /auth/logout 200；
-  旧 rt 401 的吊销判据由 #1387 出证（`docs/verification/auth-session/1387/revoke-check-prod.md`）
-  且本 PR 未触碰 `logout()` 面，机械锁 `utils/logoutRevokeBehavior.test.js` L1/L2 在位）；
+- 判据 1 ✅（logcat 三条链 + 页面跳转行 + `auth/refresh` 0 命中机检）；判据 2 ✅（登出带 body 的
+  POST /auth/logout ⇒ 200；旧 rt 401 的吊销判据由 #1387 出证
+  （`docs/verification/auth-session/1387/revoke-check-prod.md`）且本 PR 未触碰 `logout()` 的**逻辑**
+  （仅注释），机械锁 `utils/logoutRevokeBehavior.test.js` L1/L2 在位）；
   判据 3 ✅（入口显隐判定未改动，本轮登出后入口按包络在位、无包络 tab 页不显示）。
-- 「被吊销的旧 rt 不再有任何消费方」：快捷登录路径实测不发 `/auth/refresh`（上表 0 命中）。
+- 「被吊销的旧 rt 不再有任何消费方」：快捷登录路径实测不发 `/auth/refresh`（机检 0 命中）。
 
 ## 声明
 
-- `01-logcat-request-lines.txt` 为 `adb logcat -d -v epoch` 中 `I console` 行的原样摘录，
-  **仅对 `password` 字段值做了 `***MASKED***` 替换**（request.uts:332 会打印请求体，密码明文行不得入库）。
+- `01-logcat-request-lines.txt` 为 `adb logcat -d -v epoch` 中 `I console` 行的原样摘录，打码口径：
+  **`password` 字段值 → `***MASKED***`；`refresh_token` JWT 值（logout 请求体，2 处）→ `***REVOKED-RT***`；
+  手机号与登录账号 → 脱敏**。判据需要的是「logout 带了非空 rt 且回 200」，不需要 rt 原文。
+  根因（`request.uts:332` 无条件打印请求体）另立票治理，见 #1391 评论与后续 issue。
 - 截图为 `screencap -p` 原图。`03-settings-after-quicklogin.png` 拍摄时用户已在会话内浏览设置页
   （快捷登录成功后 1 分钟），dashboard 在位证据以 `04` + logcat 跳转行为准。

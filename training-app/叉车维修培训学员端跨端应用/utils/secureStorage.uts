@@ -29,7 +29,7 @@ export type StoredCredentials = {
     u : string
     p : string
     has : boolean
-    rt : string              // 快捷登录用 refresh_token（非完整凭据包络时为空串）
+    rt : string              // vestigial：只写不读（#1391），为持久化格式兼容保留（非完整凭据包络时为空串）
 }
 
 /** 当前平台是否可用加密存储（App 端 true） */
@@ -137,7 +137,7 @@ export function hasStoredCredentials() : boolean {
     return env.u.length > 0 && env.p.length > 0
 }
 
-/** 保存凭据（App 端加密落盘；rt 为快捷登录 refresh_token，可为空串） */
+/** 保存凭据（App 端加密落盘；rt 照写入参落盘 = vestigial 字段，见文件头声明，可为空串） */
 export function saveSecureCredentials(username : string, password : string, rt : string) : void {
     const data : StoredCredentials = {
         u: username,

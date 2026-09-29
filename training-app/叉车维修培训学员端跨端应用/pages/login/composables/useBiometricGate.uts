@@ -103,7 +103,7 @@ export function useBiometricGate(
         }
     }
 
-    // 快捷登录进行中（防重入：refresh 是网络请求，连点会重复弹认证框）
+    // 快捷登录进行中（防重入：凭据登录是网络请求，连点会重复弹认证框）
     const quickLogging = ref<boolean>(false)
 
     // 入口文案按设备实际支持的认证方式动态生成（ADR-0004 单入口双轨）

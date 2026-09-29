@@ -88,7 +88,8 @@ function clearAuthData() : void {
  * 身份互斥清槽（**专用函数，不复用 `clearAuthData()`** —— ADR-0022 ③）
  *
  * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**
- * `auth_secure_credentials`（ADR-0004 生物识别快捷登录）与 `auth_refresh_token`（登出后仍可快捷续登）。
+ * `auth_secure_credentials`（ADR-0004 门控回填 / 快捷登录的凭据来源）与 `auth_refresh_token`
+ * 留槽纪律（#1391 起快捷登录已改凭据登录、不消费 rt；其消费方只剩会话内 401 续期与登出吊销）。
  * 身份切换是另一件事：ADR-0021 ② 否掉的是**并存**身份，「复用单槽」意味着该槽不能同时留着
  * 另一方的凭据 —— 学员的 refresh_token 与安全凭据在招聘者态下**必须一并清掉**，
  * 否则登出后遗留的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
@@ -138,7 +139,7 @@ async function loginAsRecruiter(params : LoginParams) : Promise<void> {
  * 招聘者退出登录（ADR-0022 ④ 步骤 P2）
  *
  * 为什么**不**复用 `logout()`：`logout()` 走的是 `clearAuthData()`，它按 ADR-0004
- * **故意保留** `auth_secure_credentials` 与 `auth_refresh_token`（学员的快捷登录续期链）。
+ * **故意保留** `auth_secure_credentials` 与 `auth_refresh_token`（学员的门控回填凭据与会话内续期槽）。
  * 招聘者按 ADR-0021 ② 根本没有记住密码 / 生物识别 ⇒ 复用会把一个属于学员语义的
  * refresh_token 槽留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
  * 让下一个学员态的 401 被送进招聘者登录页。
@@ -380,8 +381,8 @@ async function tryRefreshToken() : Promise<boolean> {
         const result = await refreshTokenApi(rt)
         if (result != null && result.token.length > 0) {
             setAuthData(result.token, user.value!, result.refresh_token)
-            // 轮换即旧令牌失效：同步回写加密凭据包络，否则包内 rt 立即过期，
-            // 下次快捷登录必 401 降级（ADR-0004 滑动续期依赖此回写）
+            // 轮换即旧令牌失效：同步回写加密凭据包络（单一同步点）。#1391 起包内 rt
+            // 只写不读，本回写只维持落盘一致性（vestigial 声明见 secureStorage.uts 文件头）
             updateSecureToken(result.refresh_token)
             return true
         }
