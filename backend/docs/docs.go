@@ -8092,7 +8092,7 @@ const docTemplate = `{
         },
         "/auth/logout": {
             "post": {
-                "description": "撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出",
+                "description": "撤销 refresh_token（Cookie 优先，回退请求体）并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出",
                 "consumes": [
                     "application/json"
                 ],
@@ -8708,7 +8708,7 @@ const docTemplate = `{
         },
         "/auth/refresh": {
             "post": {
-                "description": "轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401",
+                "description": "轮换签发新 access/refresh，旧 refresh 入黑名单；凭证读取顺序为 httpOnly Cookie（ADR-0067）→ 请求体（移动端兼容），失败统一 401",
                 "consumes": [
                     "application/json"
                 ],
@@ -8721,10 +8721,9 @@ const docTemplate = `{
                 "summary": "刷新双令牌",
                 "parameters": [
                     {
-                        "description": "refresh_token",
+                        "description": "refresh_token（Cookie 通道存在时被忽略；无 Cookie 的客户端才用）",
                         "name": "body",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "type": "object"
                         }
@@ -8732,7 +8731,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "success",
+                        "description": "success（响应体恒含新 access + 新 refresh，请求体通道客户端需要）",
                         "schema": {
                             "allOf": [
                                 {
@@ -21016,7 +21015,7 @@ const docTemplate = `{
         },
         "/valuation/auth/logout": {
             "post": {
-                "description": "以 refresh_token 自证身份吊销会话（请求体优先，回退 Bearer 头）；不依赖 JWTAuth。公开端点：无需登录。",
+                "description": "吊销 refresh_token（请求体优先，回退 Bearer 头）并清除登录态 Cookie（access + 两族 refresh）；不依赖 JWTAuth。公开端点：无需登录。",
                 "consumes": [
                     "application/json"
                 ],

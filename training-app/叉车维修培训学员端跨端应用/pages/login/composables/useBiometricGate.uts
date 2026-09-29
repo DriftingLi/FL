@@ -18,7 +18,7 @@
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useAuthStore } from '../../../stores/auth'
-import { hasStoredCredentials, loadSecureCredentials, loadSecureToken, saveAccountOnly, loadSavedAccount, clearSecureCredentials } from '../../../utils/secureStorage'
+import { hasStoredCredentials, loadSecureCredentials, saveAccountOnly, loadSavedAccount, clearSecureCredentials } from '../../../utils/secureStorage'
 import type { UseBiometricResult } from '../../../composables/useBiometric'
 
 /** 本 composable 的显式返回类型（Kotlin error18 规避，先例 useRegisterForm） */
@@ -103,7 +103,7 @@ export function useBiometricGate(
         }
     }
 
-    // 快捷登录进行中（防重入：refresh 是网络请求，连点会重复弹认证框）
+    // 快捷登录进行中（防重入：凭据登录是网络请求，连点会重复弹认证框）
     const quickLogging = ref<boolean>(false)
 
     // 入口文案按设备实际支持的认证方式动态生成（ADR-0004 单入口双轨）
@@ -124,10 +124,18 @@ export function useBiometricGate(
     })
 
     /**
-     * 快捷登录（ADR-0004 增补）：生物验证 → 解密 refresh_token 静默续登 → 直接进 dashboard。
-     * 轮换令牌的包络回写在 auth store 内统一完成（tryRefreshToken/quickLogin 两个同步点）。
-     * 令牌失效（超 7 天未用/被互踢/后续改密吊销）或无令牌时，降级为回填流程（onBiometricUnlock，
-     * 会再次弹认证框确认身份——降级即退出快捷语义，回归门控回填）。
+     * 快捷登录（ADR-0004 增补 · 机制经 #1391 改写）：生物验证 → 解密凭据包络取账号密码
+     * → 走一次正常登录（POST /auth/login）→ 直接进 dashboard，全程零输入。
+     *
+     * 为什么不再是「用包络里的 refresh_token 静默续登」：#1387 起登出会把手上那支 rt 一并
+     * 吊销（ADR-0030 ④ 第 2 项），而密码登录时包络里的 rt 与明文槽同值 ⇒ 登出即两支齐死，
+     * 「登出真的吊销」与「登出后还能用登出前留下的凭证换回会话」逻辑上不可能同时成立。
+     * #1391 因此裁定快捷登录改凭据登录：两条口径同时成立，包络里的 rt 降级为只写不读。
+     *
+     * 新令牌的包络回写在 auth store 内统一完成（tryRefreshToken / quickLogin 共用同一套同步点）。
+     * 登录失败（密码被改过 / 账户状态变化，即未建立会话）时降级为回填流程（onBiometricUnlock，
+     * 会再次弹认证框确认身份——回填密码是敏感操作，二次确认是既有口径，不改）。
+     * #1398：成功与否看会话是否建立（`quickLogin` 返回 boolean），不再拿 refresh_token 非空当判据。
      */
     async function onQuickLogin() : Promise<void> {
         if (quickLogging.value) {
@@ -138,22 +146,22 @@ export function useBiometricGate(
             uni.showToast({ title: '认证未通过', icon: 'none' })
             return
         }
-        const rt = loadSecureToken()
-        if (rt.length == 0) {
-            // 无令牌 = 包络产生于快捷登录上线前（或已降级）：一次密码登录即写入 rt 启用
-            uni.showToast({ title: '请先输入密码登录一次，之后可快捷登录', icon: 'none' })
-            onBiometricUnlock()
+        const cred = loadSecureCredentials()
+        if (cred == null) {
+            // 防御分支：入口显隐与 hasStoredCredentials() 同口径，正常路径到不了这里
+            // —— 只在生物验证期间包络被清（取消勾选 / 身份互斥清槽）时才触发
+            uni.showToast({ title: '未找到保存的凭据', icon: 'none' })
             return
         }
         quickLogging.value = true
         uni.showLoading({ title: '登录中' })
-        const newRt = await auth.quickLogin(rt)
+        const loggedIn = await auth.quickLogin(cred.u, cred.p)
         uni.hideLoading()
         quickLogging.value = false
-        if (newRt.length > 0) {
+        if (loggedIn) {
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
         } else {
-            uni.showToast({ title: '快捷登录已过期，请验证后登录', icon: 'none' })
+            uni.showToast({ title: '快捷登录失败，请验证后登录', icon: 'none' })
             onBiometricUnlock()
         }
     }
