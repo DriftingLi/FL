@@ -1,0 +1,15 @@
+# Task 4 / Step 1 artifact - 主树侧 dry-run（真实链路取证）
+# 目的: 证明「主树自身就是 ③ 可信树」=> dry-run 只出 ok, 不出 refuse。
+# Command (cwd: D:\FL\wt-wt-bootstrap\training-app\叉车维修培训学员端跨端应用):
+#   pwsh -NoProfile -File scripts/wt-bootstrap.ps1 -DryRun -Root D:\FL -WtRoot D:\FL
+#   注: 入口脚本仅在 feat/wt-bootstrap 分支检出, master 主树工作副本没有该文件;
+#       故从本 worktree 运行, 以 -Root/-WtRoot 显式注入主树 D:\FL,
+#       语义 = 「在主树路径上干跑」(与 task-2 Step 3 同口径, 主树目录零写操作)。
+# cwd: D:\FL\wt-wt-bootstrap\training-app\叉车维修培训学员端跨端应用
+# HEAD: 51c5c65f   branch: feat/wt-bootstrap
+# Date: 2026-09-29
+# Exit code: 0
+# 校验: 含 "ok training-app/叉车维修培训学员端跨端应用" 与 "本树是 ③ 可信树"; 无 refuse/link/frontend。
+# ---- verbatim stdout+stderr (UTF-8, no BOM) ----
+ok   training-app/叉车维修培训学员端跨端应用
+[wt-bootstrap] 主树 D:\FL；本树是 ③ 可信树。
