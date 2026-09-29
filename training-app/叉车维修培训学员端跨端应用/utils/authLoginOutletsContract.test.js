@@ -180,7 +180,11 @@ describe('锁 2：登录族不回潮（签名零改动 + 十处调用点原样�
     expect(src).toContain(sig);
   });
 
-  it('十处调用点原样在位：stores/auth.uts 9 处 + personal-info-flows.uts 1 处，全部 await DTO', () => {
+  it('调用点普查在位（#1324 十处基线，#1391 后 stores 侧 8 处）：全部 await DTO', () => {
+    // 普查基线 = #1324 收紧时的十处（stores 9 + flows 1）。#1391 把快捷登录从
+    // 「refreshTokenApi + getUserInfoApi 回拉」换成「loginApi 一次拿全」，
+    // stores 侧因此 -1（refreshTokenApi 只剩 tryRefreshToken）-1（getUserInfoApi 只剩 validateToken）+1（loginApi 多处一条）
+    // ⇒ 现判据是**逐条点名的精确计数**，不是放宽：任何一处调用点消失或回潮都会红。
     const stores = read(STORES);
     const flows = read(FLOWS);
     const expectIn = (hay, needle, times) => {
@@ -188,19 +192,19 @@ describe('锁 2：登录族不回潮（签名零改动 + 十处调用点原样�
       expect({ needle, n }).toEqual({ needle, n: times });
     };
     expectIn(stores, 'await recruiterLoginApi(params)', 1);
-    expectIn(stores, 'await loginApi(params)', 1);
+    expectIn(stores, 'await loginApi(params)', 2);
     expectIn(stores, 'await emailLoginApi(params.target, params.code)', 1);
     expectIn(stores, 'await phoneLoginApi(params.target, params.code)', 1);
     expectIn(stores, 'await mpWechatLoginApi(code)', 1);
-    expectIn(stores, 'await refreshTokenApi(rt)', 2);
-    expectIn(stores, 'await getUserInfoApi()', 2);
+    expectIn(stores, 'await refreshTokenApi(rt)', 1);
+    expectIn(stores, 'await getUserInfoApi()', 1);
     expectIn(flows, 'await updateAccountApi(acc, code)', 1);
     const total = ['await recruiterLoginApi(params)', 'await loginApi(params)',
       'await emailLoginApi(params.target, params.code)', 'await phoneLoginApi(params.target, params.code)',
       'await mpWechatLoginApi(code)', 'await refreshTokenApi(rt)', 'await getUserInfoApi()']
       .reduce((n, s) => n + stores.split(s).length - 1, 0)
       + (flows.split('await updateAccountApi(acc, code)').length - 1);
-    expect(total).toBe(10);
+    expect(total).toBe(9);
   });
 
   it('文件头「乙」条改写带 #1324 票号，旧的「现无 open 票覆盖」烂指针已除', () => {

@@ -54,11 +54,10 @@ describe('凭据读写与清除契约', () => {
     expect(body).toContain('rt: rt');
   });
 
-  it('loadSecureToken 仅完整凭据包络且 rt 非空时返回令牌（快捷登录数据源，与 loadSecureCredentials 同口径）', () => {
-    const body = fnBody('loadSecureToken');
-    expect(body).toContain('env.has !== true');
-    expect(body).toContain('env.u.length == 0 || env.p.length == 0');
-    expect(body).toContain('return env.rt');
+  it('loadSecureToken 已退役：包络里的 rt 无任何读取方（#1391 快捷登录改凭据登录，登出即吊销）', () => {
+    // 反向锁 —— 读它的最后一条路径（快捷登录）换机制后，这面留着就是死代码；
+    // 字段本身按票面「附带 1」保留（删它要动持久化格式与旧包络兼容，属独立改动）。
+    expect(src).not.toContain('export function loadSecureToken');
   });
 
   it('updateSecureToken 回写轮换令牌：仅完整包络生效，空 rt 与降级包络为 no-op（滑动续期回写口）', () => {

@@ -313,7 +313,7 @@ describe('门控面归属唯一（票面 ③「生物识别门控行为零改动
       expect(form).not.toContain('function ' + fn);
     }
     // 防「同一逻辑复制两份」：门控面的关键调用点在门控文件各出现一次
-    for (const probe of ['biometric.authenticate(', 'loadSecureToken()', 'saveAccountOnly(cred.u)']) {
+    for (const probe of ['biometric.authenticate(', 'loadSecureCredentials()', 'saveAccountOnly(cred.u)']) {
       expect([...gate.matchAll(new RegExp(probe.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))].length).toBeGreaterThan(0);
       expect(page).not.toContain(probe.replace('(', ''));
     }
