@@ -1,15 +1,21 @@
 <template>
-    <!-- 证件下拉选择器（选择学习阶段风格）——T05 手术自 dashboard.uvue 逐段搬出，显隐由页面 v-if 控制 -->
-    <view class="cert-dropdown-mask" @click="onClose">
-        <view class="cert-dropdown" @click.stop>
-            <!-- 标题栏 -->
-            <view class="cert-dropdown-header">
+    <!-- 证件选择器（共享领域件，#1395）——原 dashboard-cert-dropdown 提升搬家：
+         dashboard 证件下拉与引导页 choose-cert 共挂同一件，消灭「同一 UI 抄两份」。
+         纯选择器：只 emit 选中项，不发请求、不落库（动作时机是页面的事，#1379 裁定⑥）。
+         embedded=true 时为页面内嵌形态（无遮罩/标题/关闭，宿主页面自给导航）；默认仍是下拉浮层。 -->
+    <view :class="embedded ? 'cert-selector-embed' : 'cert-dropdown-mask'" @click="onMaskTap">
+        <view :class="embedded ? 'cert-selector-panel' : 'cert-dropdown'" @click.stop>
+            <!-- 标题栏（仅浮层形态；内嵌形态由宿主页面的导航栏承担标题） -->
+            <view v-if="!embedded" class="cert-dropdown-header">
                 <text class="cert-dropdown-title">选择学习阶段</text>
                 <view class="cert-dropdown-close" @click="onClose">
                     <text class="cert-dropdown-close-icon">✕</text>
                 </view>
             </view>
-            <scroll-view scroll-y class="cert-dropdown-scroll">
+            <!-- 浮层形态自带滚动面；内嵌形态交宿主页面滚动（scroll-view 套 scroll-view 是双滚动面，
+                 uni-app-x 下行为不可靠 ⇒ 用动态组件按形态选容器） -->
+            <component :is="embedded ? 'view' : 'scroll-view'" scroll-y
+                :class="embedded ? 'cert-selector-scroll' : 'cert-dropdown-scroll'">
                 <view v-for="(group, gIdx) in groups" :key="gIdx" class="cert-dropdown-section">
                     <!-- 分组标题 -->
                     <view class="cert-dropdown-section-header">
@@ -76,19 +82,22 @@
 </template>
 
 <script setup lang="uts">
-    import type { CredentialGroup, CredentialItem } from '../../../types/index'
+    import type { CredentialGroup, CredentialItem } from '../../types/index'
 
     const props = withDefaults(defineProps<{
         groups? : CredentialGroup[]
         currentId? : number
+        /** 内嵌形态（引导页）：不渲染遮罩/标题栏/关闭，由宿主页面承担导航 */
+        embedded? : boolean
     }>(), {
         groups: () => [] as CredentialGroup[],
-        currentId: 0
+        currentId: 0,
+        embedded: false
     })
 
     const emit = defineEmits(['close', 'select'])
 
-    // 等级数字转中文
+    // 等级数字转中文（全仓唯一抄本，随组件从 dashboard 搬来，#1395）
     const levelNames : UTSJSONObject = {
         '5': '五级',
         '4': '四级',
@@ -97,7 +106,7 @@
         '1': '一级',
     }
 
-    // ---- 热门考证（静态数据） ----
+    // ---- 热门考证（静态数据，全仓唯一抄本） ----
     type HotCertItem = {
         title : string
         desc : string
@@ -124,6 +133,13 @@
         }
     ]
 
+    /** 遮罩点击只在浮层形态生效；内嵌形态根 view 不铺满屏幕，无「点外部关闭」语义 */
+    function onMaskTap() : void {
+        if (!props.embedded) {
+            emit('close')
+        }
+    }
+
     function onClose() : void {
         emit('close')
     }
@@ -134,7 +150,22 @@
 </script>
 
 <style>
-    /* ===== 证件下拉选择器（选择学习阶段风格） ===== */
+    /* ===== 证件选择器（浮层形态 = 原「选择学习阶段」下拉；内嵌形态只换外层壳，条目形态同源） ===== */
+    /* 内嵌形态（引导页）：不定位、不铺满，随宿主页面布局流动 */
+    .cert-selector-embed {
+        width: 100%;
+    }
+
+    /* 内嵌面板：去灰底/圆角/阴影（宿主页面自己成卡），内容仍按浮层同款分组渲染 */
+    .cert-selector-panel {
+        width: 100%;
+    }
+
+    /* 内嵌滚动面：高度随内容（宿主页面负责滚动） */
+    .cert-selector-scroll {
+        width: 100%;
+    }
+
     .cert-dropdown-mask {
         position: fixed;
         left: 0;

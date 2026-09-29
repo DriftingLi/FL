@@ -178,12 +178,13 @@ const MODULES = {
   },
 
   dashboard: {
-    extraDirs: [],
+    /** #1395：cert-selector 是 dashboard 与 guide 共挂的共享领域件，住 `components/` 而非模块目录 */
+    extraDirs: ['components/cert-selector'],
     files: [
       'api/credential.uts',
       'api/featured.uts',
       'api/notification.uts',
-      'pages/dashboard/components/dashboard-cert-dropdown.uvue',
+      'components/cert-selector/cert-selector.uvue',
       'pages/dashboard/components/dashboard-continue-card.uvue',
       'pages/dashboard/components/dashboard-course-section.uvue',
       'pages/dashboard/components/dashboard-menu-grid.uvue',
@@ -192,8 +193,9 @@ const MODULES = {
       'pages/dashboard/composables/use-dashboard-feeds.uts',
       'pages/dashboard/dashboard.uvue',
     ],
-    extractDirs: ['pages/dashboard/components', 'pages/dashboard/composables'],
-    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'profile', 'search'],
+    extractDirs: ['components/cert-selector', 'pages/dashboard/components', 'pages/dashboard/composables'],
+    /** guide 自 #1395 起消费 `api/credential.uts` 与 `components/cert-selector/`（引导页选证单源化） */
+    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'profile', 'guide', 'search'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

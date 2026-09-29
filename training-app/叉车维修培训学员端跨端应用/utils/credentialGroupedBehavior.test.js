@@ -148,8 +148,10 @@ describe('当前证件缓存（selected_cert_id / selected_cert_name）读写出
     expect(c.id).toBe(0);
   });
 
-  test('写入 id + name 两键；传 null ⇒ 连 code 一起三键清空（后端确认无证件不得留旧值）', () => {
-    const { mod, store } = loadApi({ storage: { selected_cert: 'forklift_n1' } });
+  test('写入 id + name 两键；传 null ⇒ 两键一起清空（后端确认无证件不得留旧值）', () => {
+    // #1395 沿革：清空原为「三键」（含 selected_cert code 键）；code 键随引导页接线退役
+    // （全仓写 0 读 0），这里只锁缓存自己的两键。
+    const { mod, store } = loadApi({ storage: {} });
     mod.writeCurrentCredentialCache({ id: 4, code: 'maintenance_L5', name: '五级' });
     expect(store['selected_cert_id']).toBe('4');
     expect(store['selected_cert_name']).toBe('五级');
@@ -157,7 +159,6 @@ describe('当前证件缓存（selected_cert_id / selected_cert_name）读写出
     mod.writeCurrentCredentialCache(null);
     expect(store['selected_cert_id']).toBe('');
     expect(store['selected_cert_name']).toBe('');
-    expect(store['selected_cert']).toBe('');
   });
 });
 
