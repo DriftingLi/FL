@@ -43,7 +43,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律 | push / PR / merge 前 |
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
 
-> **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**）。它在创建处校验参数、并在新目录里实测 `jest --listTests` 必须列出套件 —— 目录名不合规会让 ③ 门**静默匹配 0 个套件**（血账 #1144；闸门见 #1185）。
+> **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**）。它在创建处校验参数、并在新目录里实测 `jest --listTests` 必须列出套件 —— 目录名不合规会让 ③ 门**静默匹配 0 个套件**（血账 #1144；闸门见 #1185）。新树建好后的初始化（共享 `node_modules` + 路径判据）由 `training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1` 承担，闸门 `new-worktree.ps1` 已接线（在仓内，可被 ③ 门守护）。**Qoder 的「本地任务的 Worktree 配置」框由宿主维护、PR 审查不到，本仓文档不校验其现值**：该框**必须且只能填下面这一行调用**（填逻辑＝开了第二真源）——`pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`；要确认框里已同步成这一行，读回 `%APPDATA%\Qoder\logs\<run>\questWindow\renderer.log` 里 `worktreeSetup` 键的值与之比对（**别拿「应该已填」当作已填**）。**移动端交付不用 Qoder 托管树**（③ 门在其默认落点会静默假绿），边界见移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」。
 
 ## 命令速查（只补 README / checks.md 没写的「跑单个测试」）
 
