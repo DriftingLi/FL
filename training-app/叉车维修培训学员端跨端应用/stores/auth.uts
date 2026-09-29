@@ -73,12 +73,36 @@ function resetAuthState() : void {
     syncDerived()
 }
 
+/**
+ * 证件域三键清理（#1380）—— 登出与身份切换**共用**的单点
+ *
+ * 为什么单立一个点：这三个键的**写点**在证件域（`api/credential.uts` 的缓存出口与
+ * `use-dashboard-credential.uts`），而**必须清它们的地方**在登录域。两处漏一处，就会出现
+ * 「A 的数据出现在 B 的会话里」：首页离线回退分支在 `GET /me/credential` 恰好失败时读
+ * `readCurrentCredentialCache()`，供出的还是**上一个账号**的证件 id + name。`selected_cert` 是
+ * #1349 之前就如此计的既有残留（不是本票新引入）。本函数是**登录域这一侧**的单点：两处清槽
+ * 各自内联一份就会漏；证件域自己那条清空路径（后端确认无证件）在
+ * `api/credential.uts` 的 `writeCurrentCredentialCache(null)`，两处同形。
+ *
+ * 为什么写空串而不是 `removeStorage()`：生产读方 `readCurrentCredentialCache()` 直接拿
+ * `uni.getStorageSync(…) as string` 再取 `.length`，**没有** null 兜底；写空串是 #1349
+ * `writeCurrentCredentialCache(null)` 已在跑的那条清空形态（键在、值为空），不拿「键不存在时
+ * 各端回什么」这件未在本仓实测过的事当依据。
+ */
+function clearCredentialStorage() : void {
+    setStorage('selected_cert', '')
+    setStorage('selected_cert_id', '')
+    setStorage('selected_cert_name', '')
+}
+
 function clearAuthData() : void {
     resetAuthState()
     removeStorage(STORAGE_KEY_TOKEN)
     removeStorage(STORAGE_KEY_REFRESH_TOKEN)
     removeStorage(STORAGE_KEY_USER)
     removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
+    // 证件域三键（#1380）：留在槽里就是「上一账号的当前证件」，会被首页离线回退顶显
+    clearCredentialStorage()
 
     // 安全凭据（STORAGE_KEY_CREDENTIALS）故意不移除：
     // 生物识别门控回填，退出登录不清理，下次登录时可通过生物识别恢复。
@@ -87,12 +111,13 @@ function clearAuthData() : void {
 /**
  * 身份互斥清槽（**专用函数，不复用 `clearAuthData()`** —— ADR-0022 ③）
  *
- * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**
- * `auth_secure_credentials`（ADR-0004 门控回填 / 快捷登录的凭据来源）与 `auth_refresh_token`
- * 留槽纪律（#1391 起快捷登录已改凭据登录、不消费 rt；其消费方只剩会话内 401 续期与登出吊销）。
+ * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**的只有
+ * `auth_secure_credentials`（ADR-0004 门控回填 / 快捷登录的凭据来源）；`auth_refresh_token`
+ * 自 #1386 起在登出时**照常移除**（登出要先拿它去吊销；#1391 起快捷登录改凭据登录、不再消费它，
+ * 包络内那一份只写不读）。
  * 身份切换是另一件事：ADR-0021 ② 否掉的是**并存**身份，「复用单槽」意味着该槽不能同时留着
  * 另一方的凭据 —— 学员的 refresh_token 与安全凭据在招聘者态下**必须一并清掉**，
- * 否则登出后遗留的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
+ * 否则切换前留在槽里的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
  * （`tryRefreshToken` 只在内存 user 为空时拒绝，而招聘者态的内存 user 非空）。
  *
  * ⚠️ **不要**把这段逻辑并进 `clearAuthData()`：那会改动三条既有锁的语义
@@ -109,6 +134,8 @@ function clearIdentityForSwitch() : void {
     // 上一重身份的登录来源与生物识别安全凭据：身份切换必须清
     removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
     removeStorage(STORAGE_KEY_CREDENTIALS)
+    // 证件域三键（#1380）：切换后的首页若拉不到 `/me/credential`，不得拿上一重身份的证顶显
+    clearCredentialStorage()
     // 角色标记先清空，由调用方在落新凭据后显式重设（避免中途出现「新 token + 旧角色」）
     clearActiveRole()
 }
@@ -139,9 +166,10 @@ async function loginAsRecruiter(params : LoginParams) : Promise<void> {
  * 招聘者退出登录（ADR-0022 ④ 步骤 P2）
  *
  * 为什么**不**复用 `logout()`：`logout()` 走的是 `clearAuthData()`，它按 ADR-0004
- * **故意保留** `auth_secure_credentials` 与 `auth_refresh_token`（学员的门控回填凭据与会话内续期槽）。
+ * **故意保留** `auth_secure_credentials`（门控回填的账号密码凭据），而 `auth_refresh_token`
+ * 自 #1386 / #1391 起**照常移除**（登出拿它去吊销、快捷登录已改凭据登录不再消费它）。
  * 招聘者按 ADR-0021 ② 根本没有记住密码 / 生物识别 ⇒ 复用会把一个属于学员语义的
- * refresh_token 槽留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
+ * 保留项留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
  * 让下一个学员态的 401 被送进招聘者登录页。
  *
  * 故招聘者退出 = **身份槽整体复位**（与 P1 的互斥清槽同一处实现：`clearIdentityForSwitch()`），

@@ -10,13 +10,19 @@
  *
  * 分工（`utsHarness` 文件头口径）：本文件跑**行为**，接线（谁调谁、存储键字面量）由
  * `dashboardContract.test.js` 的源码锁守。
+ *
+ * 第三段（#1380）把**真的 `stores/auth.uts`** 也起起来：证件域三键在登出 / 身份切换时
+ * 必须一并清空 —— 那三个键是「上一个账号」的数据，留着就会在下一个账号的会话里、
+ * 且恰好在 `GET /me/credential` 失败时被 `readCurrentCredentialCache()` 顶显出来。
  */
 const path = require('path');
-const { loadUts } = require('./utsHarness');
+const { loadUts, importedNames, readText } = require('./utsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const CRED = path.join(ROOT, 'api', 'credential.uts');
 const COMPOSABLE = path.join(ROOT, 'pages', 'dashboard', 'composables', 'use-dashboard-credential.uts');
+const AUTH_STORE = path.join(ROOT, 'stores', 'auth.uts');
+const STORAGE_UTS = path.join(ROOT, 'utils', 'storage.uts');
 
 /** 后端 CredentialDict 的线上形态（字段序按 training_catalog_types.go:107 的字母序声明） */
 const dict = (over) => ({
@@ -25,16 +31,19 @@ const dict = (over) => ({
   sort_order: 1, status: 1, updated_at: '2026-08-27T22:03:10+08:00', ...over,
 });
 
-/** 最小 uni：storage 走 map（缺键回 ''，与 UTS 侧 `as string` 语义一致），toast 收集 */
+/** 最小 uni：storage 走 map（缺键回 ''，与 UTS 侧 `as string` 语义一致），toast / reLaunch 收集 */
 function makeUni(init = {}) {
   const store = { ...init };
   const toasts = [];
+  const relaunches = [];
   const uni = {
     getStorageSync: (k) => (store[k] === undefined ? '' : store[k]),
     setStorageSync: (k, v) => { store[k] = v; },
+    removeStorageSync: (k) => { delete store[k]; },
     showToast: (o) => { toasts.push(o.title); },
+    reLaunch: (o) => { relaunches.push(o); },
   };
-  return { uni, store, toasts };
+  return { uni, store, toasts, relaunches };
 }
 
 const toNumber = (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(`${v}`)) ? d : parseFloat(`${v}`)));
@@ -256,5 +265,113 @@ describe('use-dashboard-credential：当前证件与列表各自失败各自呈�
     await face.onSelectCredential({ id: 3, code: 'welder', name: '焊工证' });
     expect(writes).toEqual([]);
     expect(face.currentCert.value).toBe('加载中...');
+  });
+});
+
+// ===== #1380：登出 / 身份切换必须清掉证件域三键 =====
+
+/** auth.uts 清槽清单里那几个键的真值（真源在 constants/app.uts；本票的接线锁 = `concurrent401RefreshContract.test.js` 的 C6） */
+const KEY = {
+  token: 'auth_token',
+  refreshToken: 'auth_refresh_token',
+  user: 'auth_user',
+  loginProvider: 'auth_login_provider',
+  credentials: 'auth_secure_credentials',
+};
+/** 证件域三键：`selected_cert` 是 #1349 之前的既有残留，两外键由 #1349 新增 */
+const CERT_KEYS = ['selected_cert', 'selected_cert_id', 'selected_cert_name'];
+const ACCESS = 'access-under-test';
+const RT = 'refresh-under-test';
+const USER_OBJ = { user_id: 7, username: 'u7', name: '同学', role: 'student' };
+
+/** 「清」的两种合法形态都算（写空串 / 移除键），判据只取生产读方看得到的那个：`as string` 后为空 */
+const isCleared = (v) => v === undefined || v === '';
+
+/**
+ * 起**真的** `stores/auth.uts`（连同真的 `utils/storage.uts`），并把**真的**
+ * `api/credential.uts` 的缓存读出口接在同一片 storage 上 —— 断言「退出后缓存读回 null」
+ * 用的就是生产里那段读代码，不是测试自己另搭一份。其余 import 按名单补桩。
+ * 读源一律走 `readText`（ADR-0019：契约/行为测试的 EOL 归一读取层）。
+ */
+function loadAuthFace(init = {}) {
+  const u = makeUni(init);
+  const storage = loadUts(STORAGE_UTS, { uni: u.uni });
+  const bindings = {};
+  importedNames(readText(AUTH_STORE)).forEach((n) => { bindings[n] = () => {}; });
+  bindings.ref = (v) => ({ value: v });
+  bindings.registerRefreshTokenHandler = () => {};
+  bindings.logoutApi = () => Promise.resolve({});
+  bindings.setStorage = storage.setStorage;
+  bindings.setStorageJSON = storage.setStorageJSON;
+  bindings.getStorage = storage.getStorage;
+  bindings.getStorageJSON = storage.getStorageJSON;
+  bindings.removeStorage = storage.removeStorage;
+  bindings.updateSecureToken = () => {};
+  bindings.setActiveRole = () => {};
+  bindings.clearActiveRole = () => {};
+  bindings.errMsg = (_e, fallback) => fallback;
+  bindings.STORAGE_KEY_TOKEN = KEY.token;
+  bindings.STORAGE_KEY_REFRESH_TOKEN = KEY.refreshToken;
+  bindings.STORAGE_KEY_USER = KEY.user;
+  bindings.STORAGE_KEY_LOGIN_PROVIDER = KEY.loginProvider;
+  bindings.STORAGE_KEY_CREDENTIALS = KEY.credentials;
+  bindings.ACTIVE_ROLE_RECRUITER = 'recruiter';
+  bindings.uni = u.uni;
+  const cred = loadUts(CRED, { getMapped: () => Promise.resolve({}), requestMapped: () => Promise.resolve({}), toNumber, toNumberOrNull, toStr, uni: u.uni });
+  return { store: loadUts(AUTH_STORE, bindings).useAuthStore(), kv: u.store, uni: u, readCache: () => cred.readCurrentCredentialCache() };
+}
+
+/** 上一个账号留下的证件数据（三键全部有值 = 缺陷发生的那个前置态） */
+const prevAccountCert = () => ({ selected_cert: 'forklift_n1', selected_cert_id: '7', selected_cert_name: '上一账号的证' });
+
+describe('登出与身份切换必须清掉证件域三键（#1380）', () => {
+  test('反事实前提：三键有值时缓存确实读得到上一账号的证件（下面两条不是假绿）', () => {
+    const face = loadAuthFace(prevAccountCert());
+    const cached = face.readCache();
+    expect(cached).not.toBeNull();
+    expect(cached.id).toBe(7);
+    expect(cached.name).toBe('上一账号的证');
+  });
+
+  test('学员登出（走真的 logout()）后三键为空、缓存读回 null', async () => {
+    const face = loadAuthFace({ ...prevAccountCert(), [KEY.credentials]: 'secure-envelope', [KEY.loginProvider]: 'password' });
+    face.store.setAuthData(ACCESS, USER_OBJ, RT);
+    // 前提：登录态与证件数据同时在槽里
+    expect(face.kv[KEY.token]).toBe(ACCESS);
+    expect(face.readCache()).not.toBeNull();
+
+    await face.store.logout();
+
+    for (const k of CERT_KEYS) expect(isCleared(face.kv[k])).toBe(true);
+    expect(face.readCache()).toBeNull();
+    // auth 四键照旧清干净（新增三键不该挤掉既有清理项）
+    expect(isCleared(face.kv[KEY.token])).toBe(true);
+    expect(isCleared(face.kv[KEY.refreshToken])).toBe(true);
+    expect(isCleared(face.kv[KEY.loginProvider])).toBe(true);
+    // 保留项逐条不变：生物识别凭据按 ADR-0004 留下，本票**只增清理项**
+    expect(face.kv[KEY.credentials]).toBe('secure-envelope');
+    expect(face.uni.relaunches.map((o) => o.url)).toContain('/pages/login/login');
+  });
+
+  test('身份互斥清槽（学员↔招聘者、招聘者退出）后三键为空、缓存读回 null', () => {
+    const face = loadAuthFace({ ...prevAccountCert(), [KEY.credentials]: 'secure-envelope', [KEY.token]: ACCESS });
+
+    face.store.clearIdentityForSwitch();
+
+    for (const k of CERT_KEYS) expect(isCleared(face.kv[k])).toBe(true);
+    expect(face.readCache()).toBeNull();
+    // 切换语义逐条不变：安全凭据在切换中**必须**清（ADR-0021 ② 单槽）
+    expect(isCleared(face.kv[KEY.credentials])).toBe(true);
+    expect(isCleared(face.kv[KEY.token])).toBe(true);
+  });
+
+  test('清后不留「可顶显的脏缓存」：即使 GET /me/credential 挂了也不得供出上一账号（本票的可见后果）', async () => {
+    const face = loadAuthFace(prevAccountCert());
+    face.store.setAuthData(ACCESS, USER_OBJ, RT);
+
+    await face.store.logout();
+
+    // 首页离线回退分支读的就是这个：null ⇒ 页面走「选择证件」，不会把上一账号的证顶显
+    expect(face.readCache()).toBeNull();
   });
 });
