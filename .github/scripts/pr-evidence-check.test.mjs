@@ -815,3 +815,62 @@ test('#1030 静态自检：判据不得退回「扫改动文本里的字面量�
     '② 的 patch 面必须限定在运行时面文件（否则文档/测试又能点亮它）',
   );
 });
+
+// ============================================================
+// 模板门行形状锁（#1403：验收证据「复述品」漂移防线）
+// ------------------------------------------------------------
+// 为什么建这把锁、为什么不建「门规格表」（决策语境，改门前先读）：
+//   门语法有**三处真源/复述品**：① 校验器内联的 GATES（`.github/workflows/pr-evidence.yml`，
+//   **权威真源**）、② 生成器 `evidence-gen.ps1` 的字符串模板、③ PR 模板手写的 5 行门。
+//   #1403 实测：生成器吐「多行块」而校验器按「每门一行」取门 ⇒ ①③④ 全判「缺该行」⇒
+//   移动端 PR 一开即红、逼人手工重排结构。②的漂移已被 `utils/evidenceGenContract.test.js`
+//   的**真跑成对锁**堵住（生成产物喂进校验器）；③这一处**未锁**——本测试补的就是它。
+//   为什么不抽「门规格表」统一驱动三处：校验器刻意**内联、不 checkout**（ADR-0008 的唯一豁免），
+//   共享 lib 文件**读不到** ⇒ 表只能内联副本 + 逐字相等锁 ⇒ **校验器仍是唯一事实源、表只是它的镜像**，
+//   镜像只有两个下游时它是「复述品」而非「真源」——用锁把复述品包装成真源是**假整合**（同 ADR-0020
+//   「半死配置」的味道）。本仓历史门漂移都发生在**产物判据 / 触发面**，从不在**门行字段清单**，
+//   故这把锁**只咬形状**（S1）不咬字段集（S3）：模板门行被改回多行、或某门行丢失 ⇒ 红；
+//   真哪天加了带新必填字段的门，再补 S3 的抽取式不迟（YAGNI）。
+//
+// 只断言「形状可识别（无缺该行）」，**不**断言整段判绿：模板行是「待填骨架」，
+//   结论/执行人冒号后本就空，校验器报「为空/占位」是**对的**——那正是它提示人来填的机制。
+// ============================================================
+const templatePath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'PULL_REQUEST_TEMPLATE.md',
+);
+
+test('模板门行形状锁：PR 模板「## 验收证据」的 5 行门必须逐门被校验器识别（无「缺该行」）', async () => {
+  const template = readFileSync(templatePath, 'utf8');
+  // 只取「## 验收证据」段的门行（剔掉 HTML 注释与周边散文，同校验器的切段口径）——
+  // 直接喂整份模板会因正文含「已接受未验证风险」+「事后验证计划」而误走例外通道（errors 被清空、
+  // 转写进 notes），使下面两条断言双双失真（一个恒真、一个必假）。只留门行，测的才是「形状」本身。
+  const clean = template.replace(/<!--[\s\S]*?-->/g, '');
+  const head = clean.match(/^##\s*验收证据\s*$/m);
+  assert.ok(head, '模板必须含「## 验收证据」段（否则本锁无从取门行）');
+  const rest = clean.slice(head.index + head[0].length);
+  const nxt = rest.search(/^##\s/m);
+  const section = nxt === -1 ? rest : rest.slice(0, nxt);
+  const gateLines = section.split('\n').filter((l) => /^\s*[-*]\s/.test(l));
+  const body = `## 验收证据\n\n${gateLines.join('\n')}\n`;
+
+  // manifest.json 同时命中 ②（MP-WEIXIN json）与 ④b（打包面）⇒ 校验器强制检查全部 5 门
+  const files = mpWeixinFiles();
+  const r = await run({ files, body });
+  // 防空转：必须先确认真的进入「命中运行时面 → 校验门」分支——否则 runtime.length===0 会让校验器
+  //   在检查门之前就早退 ok=true，上面那句「无缺该行」就成了恒真的假绿（spec §④ 更正 3）。
+  assert.ok(r.runtime.length > 0, '未命中运行时面 ⇒ 门根本没被检查，这把锁是空的');
+  assert.ok(r.needs4b, 'manifest.json 应点亮 ④b 打包面，否则模板 ④b 行没被检查到');
+  const missing = r.errors.filter((e) => /缺该行/.test(e));
+  assert.deepEqual(missing, [], `模板门行形状漂移（被改成多行 / 某门行丢失）：\n- ${missing.join('\n- ')}`);
+
+  // 必红对照（成对，spec §⑥ 判据③「只跑通过那次不算验收」）：删掉模板 ③ 行 ⇒ 必须报「③…缺该行」，
+  //   否则本锁抓不住门行丢失。若 heading 检测本身失灵，这条会连带不红——于是它把「绿用例非恒真」也一并证了。
+  const withoutGate3 = `## 验收证据\n\n${gateLines.filter((l) => !/^\s*-\s*③/.test(l)).join('\n')}\n`;
+  const r2 = await run({ files, body: withoutGate3 });
+  assert.ok(
+    r2.errors.some((e) => e.startsWith('③') && /缺该行/.test(e)),
+    '删掉模板 ③ 行竟没报「缺该行」⇒ 锁恒绿、抓不住门行丢失',
+  );
+});
