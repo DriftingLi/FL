@@ -21008,7 +21008,7 @@
         },
         "/valuation/auth/logout": {
             "post": {
-                "description": "以 refresh_token 自证身份吊销会话（请求体优先，回退 Bearer 头）；不依赖 JWTAuth。公开端点：无需登录。",
+                "description": "吊销 refresh_token（请求体优先，回退 Bearer 头）并清除登录态 Cookie（access + 两族 refresh）；不依赖 JWTAuth。公开端点：无需登录。",
                 "consumes": [
                     "application/json"
                 ],

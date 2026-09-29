@@ -34,10 +34,12 @@ ADR-0016 决定双令牌并明确 refresh 由前端持有（localStorage）。�
 
 - **一条显式接受的暴露增量（#1376 的非阻塞回问，2026-09-29 按生成面实测清点）**。`Path` 是按**前缀**投递的，而 `/api/auth` 下不止 `router.go` 那个主登录组 —— `/auth/email/*`、`/auth/phone/*`、`/auth/profile/*`、`/auth/account/*`、`/auth/wechat/*`、`/auth/wx-login` 全在同一前缀里。按 `docs/swagger.json` 数：**27 条 path / 28 个 operation，只有 `/auth/refresh` 与 `/auth/logout` 两处消费这枚凭证 ⇒ 其余 25 条 path 每次请求都白附带一支 7 天长效凭证**。（@zhengcookie 开回问时清点是「10 条里 8 条」，那是只数了主 auth 组；嵌套分组同前缀，故此处按生成面重算 —— 数字差 2.5 倍，结论方向一致。）记为**已接受**，理由三条：① 不外泄给第三方 —— `HttpOnly` + `SameSite=Lax` + 生产 `Secure` 逐字未放宽，跨站 POST 不带 Cookie，CSRF 面没有变化；② 这 25 条**没有一处读它**（消费面只有两个端点，都有锁），白附带只是传输面宽，不构成新的读取方；③ 换来的判据是「浏览器登出真能吊销手上那一支」，比把 `Path` 收回单端点、让单会话终止静默失效更值。
   **残留面写清（别当已解决）**：登录类端点在登录成功前会带上**上一个账号**留下的那枚凭证（成功后被 `SetLoginCookies` 覆写），所以这枚凭证的传输面确实比必要范围宽。要收窄，唯一不牺牲登出的办法是把两个消费点挪到一条与这 25 条不相交的更短前缀下 —— 那是**改公开 URL 的跨端契约变更**，需另行排期，不在本 ADR 里顺手做；在此之前，本条按「已算过、显式接受」记录。
+- **估值面那第二把登出闸（#1388，2026-09-29）**。`POST /api/valuation/auth/logout`（`internal/valuation/handler/auth.go`）不在决策 1 的射程里：它不读 refresh cookie，而且**结构上收不到** —— `Path=/api/auth` 覆盖不到 `/api/valuation/**`。术前的形状是「只吊销、一枚 Cookie 都不清」⇒ 还在用这个对外入口（`API.md` 列着）的客户端登出之后，浏览器里那枚 7 天 refresh 与 access cookie 原封不动，ADR-0067 要降的那层后果**一件都没降**。现在它收敛到同一个 `Session.SignOut`：吊销那一路按 请求体 → Bearer 头 取显式凭证（cookie 那一路在这里恒空，不写 —— 写了就是一枚死代码），清除那一路**必须发生**。
+  两条口径顺带钉死在这里：① **仓内的估值工作区不走这个入口**（`frontend/src/layouts/ValuationLayout.vue` 的退出调 `authStore.signOut()` → 主 `/api/auth/logout`，cookie + 族判定都在主端点生效），移动端也不调它 ⇒ 本条只影响对外兼容面；② 反向可达性锁 `TestValuationLogout_刷新Cookie到不了本端点` 断言真下发的 cookie 的 `Path` **覆盖不到**本端点，它与主站那条「必须送得到 `/api/auth/logout`」的锁**方向相反** —— 收窄回单端点红在主站那条，放宽到 `/`（把 7 天凭证挂到全站每一个请求上）红在这一条。
 
 ## 相关
 
 - ADR-0016（被本 ADR 修订）；ADR-0066（XSS 的注入源层）；ADR-0022（招聘者 access 收紧 host-only —— 串角色缺陷的先例，本次族判定的理由与形状都取自它）
 - 移动端 `docs/adr/0030-refresh令牌的通道归属与族判定口径`（本端不迁 Cookie 通道、④ 第 1 项要求服务端定族；两套 ADR 编号体系互不相关）
 - `backend/internal/api/auth.go`（/refresh、/logout）、`backend/internal/security/session.go`（`RefreshCookieForRequest` / `accessRoleOf`）、`frontend/src/api/client.ts`、`frontend/src/utils/storage.ts`
-- 票：#1363（实施）· #1376（跨端对齐与串族修复）· #1385（登出吊销与 `Path` 互斥）· #1386（移动端口径，另端）
+- 票：#1363（实施）· #1376（跨端对齐与串族修复）· #1385（登出吊销与 `Path` 互斥）· #1386（移动端口径，另端）· #1388（估值面第二把登出闸）
