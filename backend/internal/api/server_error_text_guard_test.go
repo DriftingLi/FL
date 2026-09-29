@@ -73,6 +73,7 @@ func containsErrErrorCall(node ast.Node) bool {
 
 // TestServerErrorTextGuard 全仓 5xx 文案不得拼 err.Error()（存量 0，零豁免）。
 func TestServerErrorTextGuard(t *testing.T) {
+	t.Parallel()
 	root := moduleRoot(t)
 	scanRoots := []string{filepath.Join(root, "internal"), filepath.Join(root, "pkg")}
 	var offenders []string
@@ -113,6 +114,7 @@ func TestServerErrorTextGuard(t *testing.T) {
 
 // TestServerErrorTextGuardSelfCheck 判据本身有效：旧形状必红（裸的与带前缀的两种），正解不红。
 func TestServerErrorTextGuardSelfCheck(t *testing.T) {
+	t.Parallel()
 	stale := `package x
 
 func a(c *gin.Context, err error) {

@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -20,10 +18,11 @@ import (
 
 // TestPointsSentinelStatusMapping 哨兵 → 状态码映射零漂移。
 func TestPointsSentinelStatusMapping(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	pwd, _ := service.HashPassword("student123")
-	student := testutil.SeedStudent(t, db, "sentinel_stu", pwd)
+	student := seedStudent(t, db, "sentinel_stu", pwd)
 
 	cfg := &config.Config{
 		JWTSecretKey:    "points-sentinel-contract-secret",

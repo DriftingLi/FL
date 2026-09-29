@@ -41,6 +41,7 @@ var allowedSameText = map[string]int{
 }
 
 func TestCourseWriteFactsArePairwiseDistinct(t *testing.T) {
+	t.Parallel()
 	seen := map[string]error{}
 	textCount := map[string]int{}
 	for i, a := range courseWaveFacts {

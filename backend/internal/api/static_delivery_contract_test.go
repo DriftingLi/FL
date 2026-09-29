@@ -23,7 +23,7 @@ import (
 // newUploadEnv 建一个带真实本地存储的路由环境（上传端点会写盘）。
 func newUploadEnv(t *testing.T) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	cfg := &config.Config{JWTSecretKey: "upload-gate-secret", UploadFolder: t.TempDir()}
 	deps := NewDeps(cfg, testutil.NewMemoryDB(t), storage.NewLocalStorage(t.TempDir()), zap.NewNop(), stubExportStore{})
 	return NewRouter(deps)
@@ -32,6 +32,7 @@ func newUploadEnv(t *testing.T) *gin.Engine {
 // TestUploadEndpointRejectsSvg 上传侧的唯一闸门（ValidateImage，五个上传端点共用）必须拒掉 svg；
 // 同时反证白名单没被误伤（png 仍可上传）。ADR-0066 决策 1。
 func TestUploadEndpointRejectsSvg(t *testing.T) {
+	t.Parallel()
 	r := newUploadEnv(t)
 	w := uploadAIImage(t, r, "evil.svg")
 	if w.Code == http.StatusOK {
@@ -48,7 +49,7 @@ func TestUploadEndpointRejectsSvg(t *testing.T) {
 // newStaticDeliveryEnv 建一个上传目录可控的路由环境（静态面不需要任何登录态）。
 func newStaticDeliveryEnv(t *testing.T, files map[string]string) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	dir := t.TempDir()
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -60,6 +61,7 @@ func newStaticDeliveryEnv(t *testing.T, files map[string]string) *gin.Engine {
 }
 
 func TestStaticDeliveryClasses(t *testing.T) {
+	t.Parallel()
 	r := newStaticDeliveryEnv(t, map[string]string{
 		"ok.pdf":      "%PDF-1.4",
 		"ok.png":      "not-a-real-png",
@@ -103,6 +105,7 @@ func TestStaticDeliveryClasses(t *testing.T) {
 
 // HEAD 也被前端用来探测文件存在性（DocumentViewer/ImageViewer），分档头必须同样生效。
 func TestStaticDeliveryHeadKeepsClassification(t *testing.T) {
+	t.Parallel()
 	r := newStaticDeliveryEnv(t, map[string]string{"evil.svg": "<svg/>", "ok.pdf": "%PDF-1.4"})
 	for _, c := range []struct {
 		path           string

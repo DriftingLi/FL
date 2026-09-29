@@ -57,7 +57,8 @@ func dataKeys(t *testing.T, data json.RawMessage) []string {
 }
 
 func TestForumTopicDetailShapeContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	cfg := &config.Config{

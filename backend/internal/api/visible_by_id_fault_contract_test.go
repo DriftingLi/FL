@@ -24,6 +24,7 @@ func qpath(v int) string { return strconv.Itoa(v) }
 
 // TestVisibleByIDFaultIsNotOutOfPool 题目侧：读不动 question 表 ⇒ 500，不是「题目不存在」的 404。
 func TestVisibleByIDFaultIsNotOutOfPool(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	dropTable("question")(t, f.db)
 
@@ -54,6 +55,7 @@ func TestVisibleByIDFaultIsNotOutOfPool(t *testing.T) {
 // TestOutOfPoolQuestionIsStillNotFound 反向半边：没有故障时，池外题必须仍答 404。
 // 少了这条，「把所有错误都推给 500」也能骗过上面那把锁——两半同时成立才叫分档。
 func TestOutOfPoolQuestionIsStillNotFound(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for qid, name := range f.hiddenByID() {
 		code, body := doAndBody(t, f, f.studentToken, http.MethodGet,
@@ -73,6 +75,7 @@ func TestOutOfPoolQuestionIsStillNotFound(t *testing.T) {
 // 判据 8 的「登记的档必须打得出」在这一半上的形状——文档里写一档而代码出不来，就是本批第一版
 // 被双轴评审抓到的那件事（/notes 四个面当时只加了 swagger 行，fallback 仍是 400）。
 func TestFaultFacesAllSayFault(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	dropTable("question")(t, f.db)
 	dropTable("note")(t, f.db)
@@ -103,6 +106,7 @@ func TestFaultFacesAllSayFault(t *testing.T) {
 // TestFavoriteTargetFactsStillSayThemselves 收藏域被本批改了签名的那条链上，业务事实必须仍各说自己的句子
 // （表里每条若被默认面吞成 500，这里就红）。
 func TestFavoriteTargetFactsStillSayThemselves(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for _, tc := range []struct{ name, want string }{
 		{"不支持的类型", "收藏类型仅支持"},

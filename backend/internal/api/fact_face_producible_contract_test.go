@@ -28,9 +28,10 @@ type factFace struct {
 }
 
 func TestInteractionErrStatusFacesAreProducible(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	// 他人的一条已存在的评论 ⇒ 「无权删除」这条必须有真实载体，否则它又会成为死条目。
-	foreignUID := testutil.SeedStudent(t, f.db, "stuOtherCmt", "x").ID
+	foreignUID := seedStudent(t, f.db, "stuOtherCmt", "x").ID
 	f.seedComment(f.poolQ.ID, foreignUID, "别人的评论")
 	var foreign model.QuestionComment
 	if err := f.db.Where("user_id = ? AND question_id = ?", foreignUID, f.poolQ.ID).
@@ -55,6 +56,7 @@ func TestInteractionErrStatusFacesAreProducible(t *testing.T) {
 }
 
 func TestFavoriteErrStatusFacesAreProducible(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	spec := model.Specialty{Code: "favf", Name: "收藏面", SortOrder: 1, Status: 1}
 	lv := model.CourseLevel{Code: "favf-lv", Name: "等级", SortOrder: 1, Status: 1}
@@ -123,6 +125,7 @@ func assertFacesAgainstTable(t *testing.T, f *poolLeakFixture, tableName string,
 }
 
 func TestNoteErrStatusFacesAreProducible(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	own := model.Note{UserID: f.studentID, Content: "我自己的独立笔记", UpdatedAt: testutil.Now()}
 	if err := f.db.Create(&own).Error; err != nil {

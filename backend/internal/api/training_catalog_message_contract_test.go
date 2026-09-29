@@ -32,6 +32,7 @@ func assertEnvelope(t *testing.T, rec *httptest.ResponseRecorder, wantCode int, 
 
 // TestCatalogContract_SuccessMessages 六类实体 × CRUD 的成功文案与状态码逐字锁定。
 func TestCatalogContract_SuccessMessages(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newCatalogContractEnv(t)
 	token := catalogAdminToken(t, cfg, 1)
 
@@ -167,6 +168,7 @@ func TestCatalogContract_SuccessMessages(t *testing.T) {
 // TestCatalogContract_PublicPositions 公开岗位字典端点（/positions）的契约：
 // 学员端与招聘端共用，仅启用项；ADR-0053 §7 把它补进契约后它才第一次有类型与用例。
 func TestCatalogContract_PublicPositions(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newCatalogContractEnv(t)
 	token := catalogAdminToken(t, cfg, 1)
 

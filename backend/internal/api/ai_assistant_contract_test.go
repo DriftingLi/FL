@@ -105,7 +105,8 @@ func aiArray(t *testing.T, raw json.RawMessage) []json.RawMessage {
 }
 
 func TestAIAssistantEnvelopeContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	stu := model.HrwaiUser{Account: "ai_contract_stu", Phone: "13800002001", Username: "AI契约", Status: 1, CreatedAt: testutil.Now()}
@@ -265,7 +266,8 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 // TestAIAssistantDiagnosisEnvelopeContract 诊断字典三个信封端点（外部助手代理）+ 手册字节流。
 // 本片给这 4 条此前**零注解**的路由补了完整注解块，故一并锁顶层 key。
 func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	stub := newDiagnosisStub(t)
 

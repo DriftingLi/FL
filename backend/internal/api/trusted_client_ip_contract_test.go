@@ -21,7 +21,7 @@ import (
 // newTrustedProxyRouter 用给定可信代理装配真实路由器，并捕获访问日志。
 func newTrustedProxyRouter(t *testing.T, trusted []string) (*gin.Engine, *strings.Builder) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	var buf strings.Builder
 	enc := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 	logger := zap.New(zapcore.NewCore(enc, zapcore.AddSync(&buf), zapcore.InfoLevel))
@@ -61,6 +61,7 @@ func accessLogIP(t *testing.T, r *gin.Engine, buf *strings.Builder, remoteAddr, 
 const proxyPeerAddr = "192.0.2.10:41234"
 
 func TestNewRouter_SpoofedXForwardedForIsNotTheClientIP(t *testing.T) {
+	t.Parallel()
 	r, buf := newTrustedProxyRouter(t, []string{"192.0.2.10"})
 	got := accessLogIP(t, r, buf, "203.0.113.7:51820", "114.114.114.114")
 	if got != "203.0.113.7" {
@@ -69,6 +70,7 @@ func TestNewRouter_SpoofedXForwardedForIsNotTheClientIP(t *testing.T) {
 }
 
 func TestNewRouter_TrustedProxyResolvesForwardedClientIP(t *testing.T) {
+	t.Parallel()
 	r, buf := newTrustedProxyRouter(t, []string{"192.0.2.10"})
 	got := accessLogIP(t, r, buf, proxyPeerAddr, "114.114.114.114, 198.51.100.9")
 	if got != "198.51.100.9" {
@@ -78,6 +80,7 @@ func TestNewRouter_TrustedProxyResolvesForwardedClientIP(t *testing.T) {
 
 // 未配置可信代理（默认）时，任何对端都不被当作代理——包括看起来像代理的地址。
 func TestNewRouter_DefaultsToTrustingNoProxy(t *testing.T) {
+	t.Parallel()
 	r, buf := newTrustedProxyRouter(t, nil)
 	got := accessLogIP(t, r, buf, proxyPeerAddr, "114.114.114.114, 198.51.100.9")
 	if got != "192.0.2.10" {

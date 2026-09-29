@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -26,7 +24,8 @@ import (
 const uidPlaceholder = "{{UID}}"
 
 func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	const secret = "contract-test-secret"
 
 	cases := []struct {
@@ -56,7 +55,7 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 			want := tc.want
 			switch tc.role {
 			case "hrwai_user":
-				seeded := testutil.SeedStudent(t, db, tc.username, "hash123")
+				seeded := seedStudent(t, db, tc.username, "hash123")
 				userID = seeded.ID
 				want = strings.ReplaceAll(want, uidPlaceholder, strconv.FormatInt(seeded.UID, 10))
 			case "tutor":
@@ -95,11 +94,12 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 // TestAuthMeContract_EmailPlaceholderPhoneMasked 值级契约：邮箱注册的占位手机号
 // （email_ 前缀）在 /auth/me 源头过滤为空串，其余字段与形状不变。
 func TestAuthMeContract_EmailPlaceholderPhoneMasked(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	const secret = "contract-test-secret"
 
 	db := testutil.NewMemoryDB(t)
-	u := testutil.SeedStudent(t, db, "bob", "hash123")
+	u := seedStudent(t, db, "bob", "hash123")
 	if err := db.Model(u).Update("phone", "email_0123456789abcdef0123456789abcdef").Error; err != nil {
 		t.Fatalf("更新手机号失败: %v", err)
 	}

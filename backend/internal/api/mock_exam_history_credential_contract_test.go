@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -25,7 +23,8 @@ import (
 )
 
 func TestMockExamHistoryCredentialPartition(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "mock-exam-credential-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -38,7 +37,7 @@ func TestMockExamHistoryCredentialPartition(t *testing.T) {
 		}
 	}
 
-	student := testutil.SeedStudent(t, db, "mock_history_student", "x")
+	student := seedStudent(t, db, "mock_history_student", "x")
 	if err := db.Model(student).Update("current_credential_id", credA.ID).Error; err != nil {
 		t.Fatalf("设置当前证件失败: %v", err)
 	}

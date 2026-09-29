@@ -39,7 +39,7 @@ import (
 // newAdminContractDeps 构建装配根（含 JWT + 能力位的真实路由依赖），返回 admin token。
 func newAdminContractDeps(t *testing.T) (*Deps, *gorm.DB, string) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	adminPwd, _ := service.HashPassword("admin123")
@@ -186,6 +186,7 @@ func jsonInt(t *testing.T, raw json.RawMessage) int {
 
 // TestAdminContract_UsersTutorsRecruiters 用户 / 导师 / 招聘者三组管理端点。
 func TestAdminContract_UsersTutorsRecruiters(t *testing.T) {
+	t.Parallel()
 	r, _, token := newAdminContractEnv(t)
 
 	// ===== HRWAI 用户 =====
@@ -268,6 +269,7 @@ func TestAdminContract_UsersTutorsRecruiters(t *testing.T) {
 
 // TestAdminContract_StatisticsCoursesChapters 统计 / 课程 / 章节端点。
 func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
+	t.Parallel()
 	r, db, token := newAdminContractEnv(t)
 
 	// 课程创建校验方向/等级存在性（applyCourseTrainingFields）：先落最小字典行
@@ -344,6 +346,7 @@ func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 
 // TestAdminContract_AIConfigsBindingsReviewAudit AI 配置 / 功能绑定 / 资料审核 / 审计日志。
 func TestAdminContract_AIConfigsBindingsReviewAudit(t *testing.T) {
+	t.Parallel()
 	r, db, token := newAdminContractEnv(t)
 
 	// ===== AI 配置 =====
@@ -450,6 +453,7 @@ func TestAdminContract_AIConfigsBindingsReviewAudit(t *testing.T) {
 
 // TestFeaturedContract_AdminEndpoints 精选内容管理端端点（含 201 创建与发布态流转）。
 func TestFeaturedContract_AdminEndpoints(t *testing.T) {
+	t.Parallel()
 	r, _, token := newAdminContractEnv(t)
 
 	rec := doWithToken(t, r, token, http.MethodGet, "/api/admin/featured-contents", nil)
@@ -487,6 +491,7 @@ func TestFeaturedContract_AdminEndpoints(t *testing.T) {
 // TestAdminContract_ExportRoutes 导出路由（非统一信封的 CSV 附件）：
 // 三条路由改由具名包装方法承载注解（swag 只认函数声明的注释块），这里钉住路由没被改坏。
 func TestAdminContract_ExportRoutes(t *testing.T) {
+	t.Parallel()
 	r, _, token := newAdminContractEnv(t)
 	for _, kind := range []string{"students", "questions", "evaluations"} {
 		rec := doWithToken(t, r, token, http.MethodGet, "/api/admin/export/"+kind, nil)

@@ -15,7 +15,6 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/internal/testutil"
 )
 
 // credDeleteEnvelope 解出信封的 code / message。
@@ -55,8 +54,9 @@ func seedContribHTTPDelete(t *testing.T, db *gorm.DB, userID, credID int, n int)
 
 // TestDeleteCredentialBlockedHTTP 有投稿 ⇒ 400，且正文那句带条数的话原样发得出去。
 func TestDeleteCredentialBlockedHTTP(t *testing.T) {
+	t.Parallel()
 	r, db, token := newAdminContractEnv(t)
-	student := testutil.SeedStudent(t, db, "cred_del_http", "x")
+	student := seedStudent(t, db, "cred_del_http", "x")
 	cred := seedCredForHTTPDelete(t, db, "N1_http_block")
 	seedContribHTTPDelete(t, db, student.ID, cred.ID, 2)
 
@@ -89,8 +89,9 @@ func TestDeleteCredentialBlockedHTTP(t *testing.T) {
 // CASCADE 那一半在 SQLite 面上不可见（测试库不建外键），这里判的是端点不再拿外键冲突答 500；
 // 分区真的随证件消失见 credential_delete_postgres_contract_test.go（首跑在 CI）。
 func TestDeleteCredentialWithProgressOnlyHTTP(t *testing.T) {
+	t.Parallel()
 	r, db, token := newAdminContractEnv(t)
-	student := testutil.SeedStudent(t, db, "cred_del_http_ok", "x")
+	student := seedStudent(t, db, "cred_del_http_ok", "x")
 	cred := seedCredForHTTPDelete(t, db, "N1_http_progress")
 	cid := cred.ID
 	p := model.PracticeProgress{StudentID: student.ID, PracticeMode: "sequential", CredentialID: &cid,
@@ -111,6 +112,7 @@ func TestDeleteCredentialWithProgressOnlyHTTP(t *testing.T) {
 
 // TestDeleteCredentialNotFoundHTTP 不存在的证件仍回 404（预检不得把它压成 400/200）。
 func TestDeleteCredentialNotFoundHTTP(t *testing.T) {
+	t.Parallel()
 	r, _, token := newAdminContractEnv(t)
 	rec := doWithToken(t, r, token, "DELETE", "/api/admin/credential/999999", nil)
 	if rec.Code != 404 {

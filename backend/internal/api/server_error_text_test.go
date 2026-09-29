@@ -35,7 +35,7 @@ type serverErrorEnv struct {
 
 func newServerErrorEnv(t *testing.T) *serverErrorEnv {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "server-error-text-secret",
@@ -47,7 +47,7 @@ func newServerErrorEnv(t *testing.T) *serverErrorEnv {
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
-	stu := testutil.SeedStudent(t, db, "srv_err_stu", hashed)
+	stu := seedStudent(t, db, "srv_err_stu", hashed)
 	rec := testutil.SeedRecruiter(t, db, "srv_err_rec", hashed)
 	adm := testutil.SeedAdmin(t, db, "srv_err_admin", hashed)
 
@@ -69,6 +69,7 @@ func newServerErrorEnv(t *testing.T) *serverErrorEnv {
 
 // TestServerErrorTextNoDriverLeak 删表注入 ⇒ 500 且响应体里没有驱动原文、没有表名。
 func TestServerErrorTextNoDriverLeak(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		drop   string

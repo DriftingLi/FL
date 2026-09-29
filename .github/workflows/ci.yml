@@ -162,11 +162,14 @@ jobs:
           REDIS_ADDR: localhost:6379
           REDIS_PASSWORD: ""
           REDIS_DB: "0"
-        # -timeout 20m（2026-09-28）：internal/api 是单包最重的一个（真路由 + 真库的契约面），
-        # 实测本机 577s / CI 600s —— 正好压在 Go 默认 10m 的线上，一次 runner 抖动就是
-        # 「panic: test timed out after 10m0s」这种与改动无关的假红（本次真实发生）。
-        # 这是**包级预算**问题，不是某个用例挂住：10m 那条线对最重的包留不出余量。
-        run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 20m
+        # -timeout 收回 10m（2026-09-29，#1366 测试面瘦身）：先前抬到 20m 是止血——internal/api
+        # 单包串行 -race -cover 实测压到 ~600s 线（一次 runner 抖动即「panic: test timed out after
+        # 10m0s」的与改动无关假红）。#1366 给非 PG 契约用例加 t.Parallel（并把 gin 模式位与
+        # testutil 的进程级 uid 计数器这两处包级可变状态各自收敛成 Once / 互斥，消掉 -race 竞态），
+        # 4 核同环境实测（-race -cover、PG 起）internal/api 由 553s 降到 297s、0 数据竞态、覆盖率不变
+        # 77.4%；PG 契约用例仍串行（golang-migrate 的 pg_advisory_lock 是全库级，并发建 schema 只会
+        # 互相排队）。包级预算回到默认 10m 线内且留有余量，故收回抬高、恢复这条线本应承担的门禁意义。
+        run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 10m
 
       - name: 上传覆盖率报告
         uses: actions/upload-artifact@v4

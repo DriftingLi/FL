@@ -24,7 +24,7 @@ import (
 
 func newCatalogContractEnv(t *testing.T) (*gin.Engine, *config.Config, *Deps) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -112,6 +112,7 @@ var isoMicroRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}
 // TestCatalogContract_Specialty 专业方向端点全流程：创建/列表/更新/交换/删除，
 // data 键集与旧 map 字典一致，值类型经 JSON 往返后不变。
 func TestCatalogContract_Specialty(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newCatalogContractEnv(t)
 	token := catalogAdminToken(t, cfg, 1)
 
@@ -215,6 +216,7 @@ func TestCatalogContract_Specialty(t *testing.T) {
 
 // TestCatalogContract_Level 课程等级端点：创建/列表/更新/删除键集一致。
 func TestCatalogContract_Level(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newCatalogContractEnv(t)
 	token := catalogAdminToken(t, cfg, 1)
 
@@ -262,6 +264,7 @@ func TestCatalogContract_Level(t *testing.T) {
 
 // TestCatalogContract_CertificateTemplate 证书模板端点：创建/列表/更新/删除键集一致。
 func TestCatalogContract_CertificateTemplate(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newCatalogContractEnv(t)
 	token := catalogAdminToken(t, cfg, 1)
 
@@ -325,6 +328,7 @@ func TestCatalogContract_CertificateTemplate(t *testing.T) {
 
 // TestCatalogContract_QuestionTag 题库标签端点 + 题目打标：键集一致。
 func TestCatalogContract_QuestionTag(t *testing.T) {
+	t.Parallel()
 	r, cfg, deps := newCatalogContractEnv(t)
 	token := catalogAdminToken(t, cfg, 1)
 

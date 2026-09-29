@@ -27,7 +27,7 @@ import (
 // newAccountChangeTestRouter 装配手机注册 + profile 绑定 + 修改账号路由（内存库 + 内存验证码存储）。
 func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChannel, *gorm.DB) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
@@ -69,6 +69,7 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 
 // TestAuthAccountChange_NoAuthRejected 无登录态调用发送验证码/修改账号均被拒。
 func TestAuthAccountChange_NoAuthRejected(t *testing.T) {
+	t.Parallel()
 	r, _, _, _ := newAccountChangeTestRouter(t)
 
 	for _, tc := range []struct {
@@ -86,6 +87,7 @@ func TestAuthAccountChange_NoAuthRejected(t *testing.T) {
 
 // TestAuthAccountChange_FullFlow 端到端：注册（绑定手机号）→ 发送验证码 → 各拒绝分支 → 成功 → 新账号登录。
 func TestAuthAccountChange_FullFlow(t *testing.T) {
+	t.Parallel()
 	r, store, phoneCh, db := newAccountChangeTestRouter(t)
 
 	// 1. 手机验证码注册（绑定手机号 + 密码）
@@ -188,6 +190,7 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 
 // TestAuthAccountChange_UnboundPhone 未绑定手机号（邮箱注册占位）发送验证码被拒。
 func TestAuthAccountChange_UnboundPhone(t *testing.T) {
+	t.Parallel()
 	r, store, _, _ := newAccountChangeTestRouter(t)
 
 	// 邮箱注册：phone 为 email_ 占位值

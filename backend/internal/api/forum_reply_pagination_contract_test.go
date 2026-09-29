@@ -44,7 +44,8 @@ type replyPageResp struct {
 }
 
 func TestForumReplyPaginationContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	cfg := &config.Config{

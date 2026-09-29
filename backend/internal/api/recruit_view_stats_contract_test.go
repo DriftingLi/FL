@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -19,7 +17,8 @@ import (
 )
 
 func TestRecruitViewStatsContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:          "contract-test-secret",
@@ -32,7 +31,7 @@ func TestRecruitViewStatsContract(t *testing.T) {
 
 	// 准备学员与公开简历
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuViewStats", pwd)
+	stu := seedStudent(t, db, "stuViewStats", pwd)
 	card := model.JobCard{UserID: stu.ID, RealName: "测试员", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`))}
 	if err := db.Create(&card).Error; err != nil {
 		t.Fatalf("create card: %v", err)

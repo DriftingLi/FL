@@ -17,20 +17,18 @@ package api
 import (
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
 func TestForumExperienceDesignationOnPostgres(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")
 	}
 
-	author := testutil.SeedStudent(t, db, "desig_pg_author", "x")
+	author := seedStudent(t, db, "desig_pg_author", "x")
 
 	// 1. 列存在且默认 false
 	//

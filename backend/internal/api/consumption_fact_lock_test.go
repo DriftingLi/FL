@@ -48,6 +48,7 @@ var factScanDirs = []struct{ dir, pkg string }{
 // 判据来源是 swagger 定义键的前缀集合，而不是再去抄一份目录清单——抄来的清单本身会漂，
 // 生成物不会（它由 handler 注解生成，且 CI 有新鲜度锁）。
 func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
+	t.Parallel()
 	// 先数清单：绊线比的是**前缀**，而 `../model` 与 `../valuation/model` 同前缀 ⇒ 删掉其中一枚
 	// 绊线看不出来。这条计数断言补的就是那一条（与批⑤「pathInt* 名字族必须恰好两枚」同形）。
 	if n := len(factScanDirs); n != 6 {
@@ -199,6 +200,7 @@ func factDescriptions(t *testing.T) map[string]map[string]string {
 }
 
 func TestConsumptionFactsAreAligned(t *testing.T) {
+	t.Parallel()
 	tagged := taggedFactFields(t)
 	if len(tagged) == 0 {
 		t.Fatal("整个扫描面里没有一处 fact tag：登记表成了唯一的声明方，那它就不是一把锁。" +
@@ -595,6 +597,7 @@ func splitProjection(p string) (defName, jsonKey string, ok bool) {
 // 今天登记表只有一行，「重复 key」「投影位跨 key 复用」「一句错误挂两个 key」「投影位不同名」
 // 四条**都没有真实的行能触发**——不拿夹具打一次，它们就只是四段看起来像断言的代码。
 func TestConsumptionFactRulesFire(t *testing.T) {
+	t.Parallel()
 	okSpec := FactSpec{
 		Key:         "f_ok",
 		Sentinels:   []error{errFact("句子甲")},
@@ -653,6 +656,7 @@ func TestConsumptionFactRulesFire(t *testing.T) {
 // TestSentinelFaceRulesFire 给「明文面可达」那两条配正向例：它们在今天那张一行的表上
 // 都不会触发（唯一的载体既查得到宿主、也被 contact.go 引用着），不打夹具就是两条空架子。
 func TestSentinelFaceRulesFire(t *testing.T) {
+	t.Parallel()
 	hosts := map[string]string{"句子甲": "service.ErrFaceA", "句子乙": "service.ErrFaceB"}
 	used := func(q string) bool { return q == "service.ErrFaceA" }
 	reg := []FactSpec{

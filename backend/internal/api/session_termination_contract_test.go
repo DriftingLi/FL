@@ -68,7 +68,7 @@ func (s *valBlacklist) PutIfAbsent(_ context.Context, key, value string, _ time.
 // newDeleteAccountRouter 装配一个带登录态的 DELETE /api/auth/account（黑名单存储可注入）。
 func newDeleteAccountRouter(t *testing.T, store security.BlacklistStore) (*gin.Engine, *security.Session, *gorm.DB, int) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, store)
@@ -89,6 +89,7 @@ func newDeleteAccountRouter(t *testing.T, store security.BlacklistStore) (*gin.E
 
 // 注销成功后，该身份手上的 refresh（含注销前刚轮换出来的那枚）一律换不出新令牌。
 func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
+	t.Parallel()
 	r, sess, db, uid := newDeleteAccountRouter(t, newValBlacklist())
 	ctx := context.Background()
 
@@ -121,6 +122,7 @@ func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 
 // 吊销标记写不进去 ⇒ 注销整体不生效，账号仍在（不留「资料已删、凭证仍活」的半成品）。
 func TestDeleteAccount_吊销写失败则整体不生效(t *testing.T) {
+	t.Parallel()
 	r, _, db, uid := newDeleteAccountRouter(t, rejectBlacklist{})
 
 	rec := performRequest(r, "DELETE", "/api/auth/account")

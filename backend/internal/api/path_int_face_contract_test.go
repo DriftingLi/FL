@@ -32,7 +32,8 @@ import (
 
 // TestPathIntRejectsNonPositive 解析层的判定表：正整数放行，非数字/0/负数一律 400 且带本端点文案。
 func TestPathIntRejectsNonPositive(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 
 	for _, tc := range []struct {
 		raw    string
@@ -106,7 +107,8 @@ var nonPositiveFaces = []nonPositiveFaceCase{
 
 // TestNonPositivePathIDMatchesNonNumericFace 同一端点上「0 / 负数」与「非数字」必须同码同文案。
 func TestNonPositivePathIDMatchesNonNumericFace(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 
 	for _, f := range nonPositiveFaces {
 		t.Run(f.name, func(t *testing.T) {

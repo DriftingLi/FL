@@ -3,8 +3,6 @@ package api
 import (
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"go.uber.org/zap"
 
@@ -16,7 +14,8 @@ import (
 //  2. 用域注册表构出的路由总数等于登记常量——**新增蓝图却忘记登记会让数量下降**，测试即红；
 //     反过来，重复登记会在 gin 注册期直接 panic（同一路径重复注册），由本测试触发暴露。
 func TestRouteRegistryCoverage(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	seen := map[string]bool{}
 	for _, reg := range routeRegistrars {
 		if reg.Domain == "" || reg.Register == nil {

@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -51,7 +50,8 @@ func seedFaqFixture(t *testing.T, db *gorm.DB) (liveID, hiddenID int) {
 }
 
 func TestFaqContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	liveID, hiddenID := seedFaqFixture(t, db)
 
@@ -60,7 +60,7 @@ func TestFaqContract(t *testing.T) {
 	r := NewRouter(deps)
 
 	pwd, _ := service.HashPassword("student123")
-	student := testutil.SeedStudent(t, db, "faq_stu", pwd)
+	student := seedStudent(t, db, "faq_stu", pwd)
 	admin := testutil.SeedAdmin(t, db, "faq_admin", pwd)
 	sess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	stuToken, err := sess.Issue(int(student.ID), student.Username, "hrwai_user")

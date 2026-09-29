@@ -22,7 +22,8 @@ import (
 )
 
 func TestForumAcceptNotifyContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "notify_author", Phone: "13900000001", Username: "楼主N", Status: 1, CreatedAt: testutil.Now(), PointsBalance: 0}

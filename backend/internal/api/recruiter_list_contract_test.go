@@ -48,11 +48,11 @@ func fetchRecruiters(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 }
 
 func assertRecruiterList(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := service.HashPassword(`student123`)
-	student := testutil.SeedStudent(t, db, `stu1`, stuPwd)
+	student := seedStudent(t, db, `stu1`, stuPwd)
 	// 种 3 个招聘者（2 个企业名含「叉车」，1 个不含）
 	seed := []model.RecruiterUser{
 		{Username: `recruit_a`, Password: pwd, CompanyName: `上海叉车租赁`, CreditCode: `CC1`, BusinessScope: `叉车维修`, ContactName: `甲`, ContactPhone: `13800000001`, ContactEmail: `a@ex.com`, Status: 1, CreatedAt: time.Now()},

@@ -45,7 +45,7 @@ type rewardFactsEnv struct {
 
 func newRewardFactsEnv(t *testing.T) *rewardFactsEnv {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
@@ -152,6 +152,7 @@ func (e *rewardFactsEnv) rollbackRows(t *testing.T, topicID int64) []model.Point
 // TestForumPairDecayNotResettableByStateEdits 配对衰减的事实源是不可回退的流水：
 // 「采纳 → 取消采纳 → 再采纳」不得把配对计数打回起点。
 func TestForumPairDecayNotResettableByStateEdits(t *testing.T) {
+	t.Parallel()
 	e := newRewardFactsEnv(t)
 
 	// 前 3 次采纳均为满分（配对 prior 0/1/2 都 < 3）
@@ -227,6 +228,7 @@ func TestForumPairDecayNotResettableByStateEdits(t *testing.T) {
 // TestForumRollbackCoversRewardWithoutAccept 回收触发条件是「存在任一正向流水」，
 // 而不是「曾被采纳」——否则「加精但不可被采纳」的备考经验帖永远追不回。
 func TestForumRollbackCoversRewardWithoutAccept(t *testing.T) {
+	t.Parallel()
 	e := newRewardFactsEnv(t)
 
 	rec := doWithToken(t, e.r, e.authorTok, http.MethodPost, "/api/forum/topics",
@@ -261,6 +263,7 @@ func TestForumRollbackCoversRewardWithoutAccept(t *testing.T) {
 // TestForumRollbackSurvivesReplyDeletion 删被采纳的回复只清采纳状态、不回收，
 // 以便之后删整帖时三笔奖励仍能一次全部追回（ref 级一次性护栏）。
 func TestForumRollbackSurvivesReplyDeletion(t *testing.T) {
+	t.Parallel()
 	e := newRewardFactsEnv(t)
 
 	top := e.createQuestion(t, e.authorTok, "先删回答再删整帖")
@@ -328,6 +331,7 @@ func TestForumRollbackSurvivesReplyDeletion(t *testing.T) {
 // TestForumViewCountCountsRealBrowsingOnly 浏览量只统计真实浏览：
 // 排除作者自访问，且每人每日每帖只计一次（hot 排序第三键就是它，不设防即可自刷推热）。
 func TestForumViewCountCountsRealBrowsingOnly(t *testing.T) {
+	t.Parallel()
 	e := newRewardFactsEnv(t)
 	top := e.createQuestion(t, e.authorTok, "浏览量防刷")
 

@@ -10,6 +10,7 @@ import (
 // TestCellString CSV 单元格序列化表驱动（#230）：
 // float 截断、nil 单元格、普通值透传（逗号/引号转义在 encoding/csv 层，见 TestEncodeCSVRoundTrip）。
 func TestCellString(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		in   any
@@ -36,6 +37,7 @@ func TestCellString(t *testing.T) {
 
 // TestEncodeCSVBasics CSV 序列化基础（#230）：UTF-8 BOM 前缀 + 表头 + float 去尾零 + nil 单元格。
 func TestEncodeCSVBasics(t *testing.T) {
+	t.Parallel()
 	rows := [][]any{{"ID", "账号"}, {float64(180000), nil}, {float64(3.5), "x"}}
 	b, err := encodeCSV(rows)
 	if err != nil {
@@ -53,6 +55,7 @@ func TestEncodeCSVBasics(t *testing.T) {
 // TestEncodeCSVRoundTrip 逗号/引号/换行经 encoding/csv 正确转义（#230）：
 // 用 csv.Reader 反解析，断言单元格值逐字还原，证明序列化未破坏字段边界。
 func TestEncodeCSVRoundTrip(t *testing.T) {
+	t.Parallel()
 	rows := [][]any{
 		{"a,b", "say \"hi\""},
 		{"line1" + string(rune(10)) + "line2", ""},
@@ -91,6 +94,7 @@ func TestEncodeCSVRoundTrip(t *testing.T) {
 
 // TestContentDisposition 四类导出文件名唯一真值为后端（#230）。
 func TestContentDisposition(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		filename string
 		want     string

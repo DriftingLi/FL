@@ -100,10 +100,10 @@ func seedPointsTaskConfigs(t *testing.T, db *gorm.DB) {
 func intPtr(v int) *int { return &v }
 
 func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	seedPointsTaskConfigs(t, db)
 	pwd, _ := service.HashPassword("student123")
-	student := testutil.SeedStudent(t, db, "stu1", pwd)
+	student := seedStudent(t, db, "stu1", pwd)
 	cfg := &config.Config{
 		JWTSecretKey:          "points-claim-contract-secret",
 		JWTExpiresHours:       2,

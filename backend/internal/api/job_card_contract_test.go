@@ -20,7 +20,8 @@ import (
 )
 
 func TestJobCardContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	spec := model.Position{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
 	if err := db.Create(&spec).Error; err != nil {
