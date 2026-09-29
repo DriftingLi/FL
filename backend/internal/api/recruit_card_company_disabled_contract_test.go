@@ -56,6 +56,7 @@ func readRecruitCard(t *testing.T, env *contactDisableEnv) recruitCardRow {
 // TestRecruitCardNoDisabledFlagWhenCompanyUsable 企业可用 ⇒ 卡面上**不得出现** company_disabled
 // （缺席即正常态；出现即恒 true 是 #1265 第 3 条定下的契约形状）。
 func TestRecruitCardNoDisabledFlagWhenCompanyUsable(t *testing.T) {
+	t.Parallel()
 	env := newContactDisableEnv(t)
 
 	row := readRecruitCard(t, env)
@@ -71,6 +72,7 @@ func TestRecruitCardNoDisabledFlagWhenCompanyUsable(t *testing.T) {
 // 投影为 approved（处置不改写授权事实，ADR-0051 的「不追溯改写」），但卡面必须给出具名说明，
 // 否则消费方只能继续显一个说谎的角标。
 func TestRecruitCardMarksCompanyDisabledAfterAdminDisable(t *testing.T) {
+	t.Parallel()
 	env := newContactDisableEnv(t)
 	toggleCompany(t, env)
 
@@ -86,6 +88,7 @@ func TestRecruitCardMarksCompanyDisabledAfterAdminDisable(t *testing.T) {
 // TestRecruitCardDetailAlsoMarksDisabled 详情卡与列表卡同一装配点：只回填列表会让详情面继续说谎
 // （「统一」不能只做一半）。
 func TestRecruitCardDetailAlsoMarksDisabled(t *testing.T) {
+	t.Parallel()
 	env := newContactDisableEnv(t)
 	toggleCompany(t, env)
 

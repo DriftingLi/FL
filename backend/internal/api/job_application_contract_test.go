@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -32,11 +31,11 @@ import (
 )
 
 func assertJobApplicationContract(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminApp", pwd)
 	stuPwd, _ := service.HashPassword("student123")
-	stu := testutil.SeedStudent(t, db, "stuApp", stuPwd)
+	stu := seedStudent(t, db, "stuApp", stuPwd)
 
 	cfg := &config.Config{JWTSecretKey: "app-contract-secret", JWTExpiresHours: 2}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -150,7 +149,7 @@ func assertJobApplicationContract(t *testing.T, db *gorm.DB) {
 	}
 
 	// 7.5 pending 覆盖：该企业对该学员已有 pending 申请时，投递把它覆盖为 approved
-	stu3 := testutil.SeedStudent(t, db, "stuApp3", stuPwd)
+	stu3 := seedStudent(t, db, "stuApp3", stuPwd)
 	card3 := model.JobCard{UserID: stu3.ID, RealName: "赵六", ContactPhone: "13800007777", Visibility: "hidden"}
 	_ = db.Create(&card3).Error
 	// 企业发起一个 pending 申请
@@ -186,7 +185,7 @@ func assertJobApplicationContract(t *testing.T, db *gorm.DB) {
 	// 8. 企业日限不受投递影响：投递产生的授权不消耗企业日限（先投 5 个职位再发满额申请）
 	// 简化：直接验证投递 5 个后企业仍能发起第 1 个申请（若日限被误扣则 400）
 	// 这里用另一个学员来验证企业日限独立
-	stu2 := testutil.SeedStudent(t, db, "stuApp2", stuPwd)
+	stu2 := seedStudent(t, db, "stuApp2", stuPwd)
 	card2 := model.JobCard{UserID: stu2.ID, RealName: "李四", ContactPhone: "13800008888", Visibility: "hidden"}
 	_ = db.Create(&card2).Error
 	// 给 stu2 也建一个职位
@@ -206,7 +205,7 @@ func assertJobApplicationContract(t *testing.T, db *gorm.DB) {
 	}
 
 	// 8.5 缺真实姓名/电话的简历不能投递
-	stu4 := testutil.SeedStudent(t, db, "stuApp4", stuPwd)
+	stu4 := seedStudent(t, db, "stuApp4", stuPwd)
 	card4 := model.JobCard{UserID: stu4.ID, RealName: "", ContactPhone: "", Visibility: "hidden"}
 	_ = db.Create(&card4).Error
 	stu4Sess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})

@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -25,11 +24,11 @@ import (
 )
 
 func assertRecruiterEditReset(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := service.HashPassword(`student123`)
-	student := testutil.SeedStudent(t, db, `stu1`, stuPwd)
+	student := seedStudent(t, db, `stu1`, stuPwd)
 
 	cfg := &config.Config{
 		JWTSecretKey: `recruiter-edit-secret`,

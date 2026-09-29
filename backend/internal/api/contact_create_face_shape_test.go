@@ -47,7 +47,7 @@ type contactCreateEnv struct {
 
 func newContactCreateEnv(t *testing.T) *contactCreateEnv {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:          contactCreateSecret,
@@ -59,7 +59,7 @@ func newContactCreateEnv(t *testing.T) *contactCreateEnv {
 	r := NewRouter(newContractDeps(t, db, cfg))
 
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuCreateShape", pwd)
+	stu := seedStudent(t, db, "stuCreateShape", pwd)
 
 	adminPwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminCreateShape", adminPwd)
@@ -141,11 +141,12 @@ func mustJSON(v any) []byte {
 //   - 「查不动」（DB 故障）不在本锁：旧 handler 把它咽成 400 + **驱动原文**，字节随驱动版本而变，
 //     写不成字面量。它正是步 2 要改判的对象，由 contact_create_fact_tier_test.go 接管。
 func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
+	t.Parallel()
 	e := newContactCreateEnv(t)
 	long := strings.Repeat("叉", 201)
 
 	t.Run("输入不合法与业务事实：一律 400 + 该事实自己那句", func(t *testing.T) {
-		cooldownStu := testutil.SeedStudent(t, e.db, "stuCreateCooldown", "x")
+		cooldownStu := seedStudent(t, e.db, "stuCreateCooldown", "x")
 		now := time.Now()
 		if err := e.db.Create(&model.ContactRequest{
 			RecruiterID: e.recruiterID, StudentUserID: cooldownStu.ID, Message: "旧申请",
@@ -190,7 +191,7 @@ func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
 	})
 
 	t.Run("pending 唯一：400 + 已存在那句", func(t *testing.T) {
-		stu := testutil.SeedStudent(t, e.db, "stuCreatePending", "x")
+		stu := seedStudent(t, e.db, "stuCreatePending", "x")
 		body := map[string]any{"student_user_id": stu.ID, "message": "第一次申请"}
 		first := e.postCreate(t, e.recruiterTok, body)
 		if !strings.HasPrefix(first, `{"code":201,"message":"申请已提交"`) {
@@ -203,7 +204,7 @@ func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
 	})
 
 	t.Run("成功面：201 + 申请 DTO", func(t *testing.T) {
-		stu := testutil.SeedStudent(t, e.db, "stuCreateOk", "x")
+		stu := seedStudent(t, e.db, "stuCreateOk", "x")
 		got := e.postCreate(t, e.recruiterTok, map[string]any{"student_user_id": stu.ID, "message": "聊聊岗位"})
 		if !strings.HasPrefix(got, `{"code":201,"message":"申请已提交","data":{`) {
 			t.Fatalf("成功面字节变了：%s", got)

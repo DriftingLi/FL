@@ -79,6 +79,7 @@ func favoritePageBody(t *testing.T) string {
 }
 
 func TestNonNilOutletsNeverEmitNull(t *testing.T) {
+	t.Parallel()
 	for key, outlet := range nonnilOutlets {
 		t.Run(key, func(t *testing.T) {
 			jsonKey := key[strings.LastIndex(key, ".")+1:]
@@ -99,7 +100,7 @@ func contactRequestListBody(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
-	stu := testutil.SeedStudent(t, db, "listshape_stu", hashed)
+	stu := seedStudent(t, db, "listshape_stu", hashed)
 	// 一个孤立课程：证明「读通了、只是没有记录」，而不是那条路径整条坏掉。
 	course := model.Course{Name: "列表形状课", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {

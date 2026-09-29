@@ -74,6 +74,7 @@ func stagingEnvelope(t *testing.T, body string) (int, string) {
 // 的落档注释），但两句话必须不同——客户端要能告诉学员「换个文件」还是「换个类型」，
 // 这正是「各自返回明确不同的 4xx」在本仓语义下的读法：档位不同 + 句子不同，两条都判。
 func TestCreateStagedFileChecksReturnDistinctFourXXs(t *testing.T) {
+	t.Parallel()
 	r, deps, stu, cred, st := newContributionRouter(t)
 	tok := issueContributionToken(t, stagingCfg(), stu)
 
@@ -186,6 +187,7 @@ func TestCreateStagedFileChecksReturnDistinctFourXXs(t *testing.T) {
 // 服务层已证明 key 的形状；这里证明 handler 真的把**当前 token 里的用户**取出来传了进去
 // （UploadFile 的 userID 参数一旦接错来源，只有走真端点才看得见）。
 func TestUploadFileLandsInOwnPartition(t *testing.T) {
+	t.Parallel()
 	r, _, stu, cred, st := newContributionRouter(t)
 	tok := issueContributionToken(t, stagingCfg(), stu)
 
@@ -235,6 +237,7 @@ func TestUploadFileLandsInOwnPartition(t *testing.T) {
 
 // TestUploadFileUnauthenticatedIs401 未认证时不得落任何分区（UploadFile 的 userID 只能来自会话）。
 func TestUploadFileUnauthenticatedIs401(t *testing.T) {
+	t.Parallel()
 	r, _, _, _, st := newContributionRouter(t)
 	body := &bytes.Buffer{}
 	mw := multipart.NewWriter(body)

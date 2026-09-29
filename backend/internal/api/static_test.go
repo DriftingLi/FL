@@ -15,7 +15,7 @@ import (
 // newTestRouter 创建仅含静态路由的测试路由器，避免依赖数据库。
 func newTestRouter(t *testing.T, cfg *config.Config) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	r := gin.New()
 	registerStaticRoutes(r, cfg)
 	return r
@@ -23,6 +23,7 @@ func newTestRouter(t *testing.T, cfg *config.Config) *gin.Engine {
 
 // TestStaticUploadsFromLocal 测试从本地 UploadFolder 提供 /static/uploads/*。
 func TestStaticUploadsFromLocal(t *testing.T) {
+	t.Parallel()
 	// 准备临时上传目录与测试文件
 	tmpDir := t.TempDir()
 	uploadDir := filepath.Join(tmpDir, "uploads")
@@ -50,6 +51,7 @@ func TestStaticUploadsFromLocal(t *testing.T) {
 
 // TestStaticUploadsFromVolume 测试从 VOLUME_MOUNT_PATH 提供 /static/uploads/*。
 func TestStaticUploadsFromVolume(t *testing.T) {
+	t.Parallel()
 	volDir := t.TempDir()
 	uploadDir := filepath.Join(volDir, "uploads")
 	if err := os.MkdirAll(filepath.Join(uploadDir, "slides"), 0o755); err != nil {
@@ -75,6 +77,7 @@ func TestStaticUploadsFromVolume(t *testing.T) {
 
 // TestStaticNotFound 测试不存在的文件返回 404。
 func TestStaticNotFound(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{UploadFolder: t.TempDir()}
 	r := newTestRouter(t, cfg)
 
@@ -86,6 +89,7 @@ func TestStaticNotFound(t *testing.T) {
 
 // TestStaticPathTraversal 测试路径穿越防护。
 func TestStaticPathTraversal(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{UploadFolder: t.TempDir()}
 	r := newTestRouter(t, cfg)
 
@@ -97,6 +101,7 @@ func TestStaticPathTraversal(t *testing.T) {
 
 // TestStaticOtherResource 测试 /static/* 其他静态资源从本地 static/ 提供。
 func TestStaticOtherResource(t *testing.T) {
+	t.Parallel()
 	// 在工作目录的 static/ 下创建测试文件
 	staticDir := "static"
 	_ = os.MkdirAll(staticDir, 0o755)
@@ -121,6 +126,7 @@ func TestStaticOtherResource(t *testing.T) {
 
 // TestResolveUploadDir 测试上传目录解析逻辑。
 func TestResolveUploadDir(t *testing.T) {
+	t.Parallel()
 	// VOLUME_MOUNT_PATH 优先
 	volDir := t.TempDir()
 	cfg := &config.Config{VolumeMountPath: volDir, UploadFolder: "/some/local"}

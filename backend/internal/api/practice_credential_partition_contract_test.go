@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -30,7 +28,8 @@ import (
 )
 
 func TestPracticeCredentialPartitionContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "practice-credential-contract"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -45,7 +44,7 @@ func TestPracticeCredentialPartitionContract(t *testing.T) {
 	qA := testutil.SeedQuestion(t, db, "single", "A 证题", "A")
 	qB := testutil.SeedQuestion(t, db, "single", "B 证题", "A")
 
-	student := testutil.SeedStudent(t, db, "practice_partition_student", "x")
+	student := seedStudent(t, db, "practice_partition_student", "x")
 	if err := db.Model(student).Update("current_credential_id", credA.ID).Error; err != nil {
 		t.Fatalf("设置当前证件失败: %v", err)
 	}

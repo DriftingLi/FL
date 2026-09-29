@@ -50,13 +50,14 @@ type loginResp struct {
 }
 
 func TestRecruiterContract_FullFlow(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	adminPwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "admin1", adminPwd)
 	studentPwd, _ := service.HashPassword("student123")
-	_ = testutil.SeedStudent(t, db, "stu1", studentPwd)
+	_ = seedStudent(t, db, "stu1", studentPwd)
 
 	cfg := &config.Config{
 		JWTSecretKey:          "contract-test-secret",
@@ -223,7 +224,8 @@ func TestRecruiterContract_FullFlow(t *testing.T) {
 }
 
 func TestRecruiterCookieIsolation_HostOnly(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "test-secret",

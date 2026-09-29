@@ -35,6 +35,7 @@ func legacyVditorSuccessEnvelope(name, url string) map[string]any {
 
 // TestVditorErrorEnvelopeShapeLock 冻结 Vditor 错误信封：code=1、errFiles/succMap 结构逐字一致。
 func TestVditorErrorEnvelopeShapeLock(t *testing.T) {
+	t.Parallel()
 	got, _ := json.Marshal(vditorError("未找到上传文件", []string{}))
 	want, _ := json.Marshal(legacyVditorErrorEnvelope("未找到上传文件", []string{}))
 	if string(got) != string(want) {
@@ -50,7 +51,8 @@ func TestVditorErrorEnvelopeShapeLock(t *testing.T) {
 
 // TestVditorSuccessEnvelopeShapeLock 冻结 Vditor 成功信封：code=0、succMap 以文件名映射 URL。
 func TestVditorSuccessEnvelopeShapeLock(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	fs := service.NewFileStore("", nil, zap.NewNop())
 
 	r := gin.New()

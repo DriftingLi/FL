@@ -27,7 +27,7 @@ import (
 
 func newSlice6Env(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -77,6 +77,7 @@ func slice6AssertNullData(t *testing.T, rec *httptest.ResponseRecorder) {
 
 // TestSlice6CatalogEnvelopeKeys 培训目录域：公开/管理端列表 + 字典 CRUD + NoData 端点。
 func TestSlice6CatalogEnvelopeKeys(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
 	admin := slice6Token(t, cfg, 1, "admin1", "admin")
 
@@ -183,9 +184,10 @@ func TestSlice6CatalogEnvelopeKeys(t *testing.T) {
 
 // TestSlice6CredentialAndStudentEnvelopeKeys 证件域 + 学员端学习面。
 func TestSlice6CredentialAndStudentEnvelopeKeys(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
 	admin := slice6Token(t, cfg, 1, "admin1", "admin")
-	student := testutil.SeedStudent(t, db, "stu1", "hash")
+	student := seedStudent(t, db, "stu1", "hash")
 	stuToken := slice6Token(t, cfg, student.ID, student.Account, "hrwai_user")
 
 	// 未选证件：键在、值为 null（CurrentCredentialDTO 的 x-nullable）
@@ -247,6 +249,7 @@ func TestSlice6CredentialAndStudentEnvelopeKeys(t *testing.T) {
 
 // TestSlice6QuestionBankEnvelopeKeys 题库域：注解从零补齐后，data 指认必须与 handler 实际渲染一致。
 func TestSlice6QuestionBankEnvelopeKeys(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
 	admin := slice6Token(t, cfg, 1, "admin1", "admin")
 	tutor := testutil.SeedTutor(t, db, "tutor1", "hash")
@@ -308,6 +311,7 @@ func TestSlice6QuestionBankEnvelopeKeys(t *testing.T) {
 
 // TestSlice6TutorEnvelopeKeys 讲师端：课程 / 章节 / 文件删除的 data 指认。
 func TestSlice6TutorEnvelopeKeys(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
 	tutor := testutil.SeedTutor(t, db, "tutor1", "hash")
 	token := slice6Token(t, cfg, tutor.TutorID, tutor.Username, "tutor")
@@ -355,8 +359,9 @@ func TestSlice6TutorEnvelopeKeys(t *testing.T) {
 
 // TestSlice6SearchAndRealExamEnvelopeKeys 搜索（联合形状注解取聚合）与真题卷列表（数组 data）。
 func TestSlice6SearchAndRealExamEnvelopeKeys(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
-	student := testutil.SeedStudent(t, db, "stu2", "hash")
+	student := seedStudent(t, db, "stu2", "hash")
 	token := slice6Token(t, cfg, student.ID, student.Account, "hrwai_user")
 
 	rec := catalogRequest(t, r, "", "GET", "/api/search?keyword=%E5%8F%89%E8%BD%A6", "")

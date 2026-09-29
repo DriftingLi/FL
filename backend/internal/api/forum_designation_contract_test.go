@@ -60,7 +60,7 @@ func newDesignationEnv(t *testing.T) *designationEnv {
 // （仓库既有先例 answering_session_cursor_concurrent_test.go 同样使用 NewFileDB）。
 func newDesignationEnvWithDB(t *testing.T, db *gorm.DB) *designationEnv {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -166,6 +166,7 @@ func (e *designationEnv) featuredLedgerCount(t *testing.T, topicID int64) int64 
 
 // TestForumIntentNarrowedToTwoValues 学员不能自称「备考经验」——写入路径已收窄。
 func TestForumIntentNarrowedToTwoValues(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 
 	// 1. 发帖传 experience → 400（旧实现把它当第三类别放行，本条即该收窄的守卫）
@@ -202,6 +203,7 @@ func TestForumIntentNarrowedToTwoValues(t *testing.T) {
 
 // TestForumDesignateExperienceIsOneAction 认定是一个动作：两个标记同时置位 + 一次性 +30 + 站内信。
 func TestForumDesignateExperienceIsOneAction(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 	topicID := e.createDiscussion(t, "值得推荐的备考经验")
 
@@ -239,6 +241,7 @@ func TestForumDesignateExperienceIsOneAction(t *testing.T) {
 
 // TestForumDesignationRewardIsOncePerTopic 认定奖励与加精共用一笔，三种顺序都只发一次。
 func TestForumDesignationRewardIsOncePerTopic(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 
 	post := func(path string) *httptest.ResponseRecorder {
@@ -298,6 +301,7 @@ func TestForumDesignationRewardIsOncePerTopic(t *testing.T) {
 
 // TestForumRevokeExperienceKeepsFeatured 取消认定只撤归类，保留精选位且不回滚已发分。
 func TestForumRevokeExperienceKeepsFeatured(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 	topicID := e.createDiscussion(t, "认定后取消")
 	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, fmt.Sprintf("/api/admin/forum/topics/%d/experience", topicID), nil); rec.Code != http.StatusOK {
@@ -330,6 +334,7 @@ func TestForumRevokeExperienceKeepsFeatured(t *testing.T) {
 
 // TestForumUnfeatureBlockedOnExperienceTopic 经验蕴含精选：经验帖不能直接撤精，须先取消认定。
 func TestForumUnfeatureBlockedOnExperienceTopic(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 	topicID := e.createDiscussion(t, "经验帖撤精")
 	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, fmt.Sprintf("/api/admin/forum/topics/%d/experience", topicID), nil); rec.Code != http.StatusOK {
@@ -368,6 +373,7 @@ func TestForumUnfeatureBlockedOnExperienceTopic(t *testing.T) {
 
 // TestForumExperienceFilterDoesNotLeak 认定筛选与意图/区域筛选共存不串区。
 func TestForumExperienceFilterDoesNotLeak(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 
 	expTopic := e.createDiscussion(t, "被认定的考经")
@@ -439,6 +445,7 @@ func TestForumExperienceFilterDoesNotLeak(t *testing.T) {
 
 // TestForumDesignationRequiresAdmin 认定端点仅管理员可达。
 func TestForumDesignationRequiresAdmin(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 	topicID := e.createDiscussion(t, "权限校验")
 
@@ -476,6 +483,7 @@ func TestForumDesignationRequiresAdmin(t *testing.T) {
 
 // TestForumExperienceTopicNotAcceptable 经验帖不可被采纳（采纳之门只看意图 question）。
 func TestForumExperienceTopicNotAcceptable(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 	topicID := e.createDiscussion(t, "被认定的考经不可采纳")
 	if rec := doWithToken(t, e.r, e.adminTok, http.MethodPost, fmt.Sprintf("/api/admin/forum/topics/%d/experience", topicID), nil); rec.Code != http.StatusOK {
@@ -500,6 +508,7 @@ func TestForumExperienceTopicNotAcceptable(t *testing.T) {
 // 两条都必须被拒并给出逃生口；库层另有 CHECK chk_forum_topics_experience_not_accepted 兜底
 // （见 forum_experience_migration_contract_test.go 的 Postgres 断言）。
 func TestForumExperienceNotAcceptableInvariant(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 	post := func(path string) *httptest.ResponseRecorder {
 		return doWithToken(t, e.r, e.adminTok, http.MethodPost, path, nil)
@@ -595,6 +604,7 @@ func TestForumExperienceNotAcceptableInvariant(t *testing.T) {
 //
 // spec 的 testing decisions 第 2 项要求，此前只有 SetFeatured 的同构实现而无测试。
 func TestForumDesignateConcurrentOnlyOneReward(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnvWithDB(t, testutil.NewFileDB(t))
 	topicID := e.createDiscussion(t, "并发认定")
 	before := e.balance(t, e.authorTok)
@@ -634,6 +644,7 @@ func TestForumDesignateConcurrentOnlyOneReward(t *testing.T) {
 
 // TestForumDesignationNotificationWording 两种认定共用同一笔流水，但站内信文案必须区分。
 func TestForumDesignationNotificationWording(t *testing.T) {
+	t.Parallel()
 	e := newDesignationEnv(t)
 
 	readNotif := func(topicID int64) (string, string) {

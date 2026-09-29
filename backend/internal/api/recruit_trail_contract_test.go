@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -29,11 +28,11 @@ var forbiddenCredentialKeys = []string{
 }
 
 func assertRecruitTrail(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := service.HashPassword(`student123`)
-	student := testutil.SeedStudent(t, db, `stu1`, stuPwd)
+	student := seedStudent(t, db, `stu1`, stuPwd)
 	// 种招聘者 + 查看留痕 + 申请记录
 	recruiter := testutil.SeedRecruiter(t, db, `rec1`, pwd)
 	if err := db.Create(&model.RecruitResumeView{RecruiterID: recruiter.ID, ResumeUserID: student.ID, ViewedAt: time.Now()}).Error; err != nil {

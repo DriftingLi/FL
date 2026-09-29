@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 }
 
 // doEndpoint 构造 gin 引擎并命中单条路由，返回响应。
@@ -37,6 +37,7 @@ func renderSuccessOnly[Resp any](c *gin.Context, _ *int, resp *Resp) {
 
 // TestEndpoint_ParseFailure_BadRequest parse 返回 badRequest → 400 + 原文案。
 func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, badRequest("参数非法")
@@ -54,6 +55,7 @@ func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
 
 // TestEndpoint_InvokeServiceError_ServerError invoke 返回普通 error → 500 + err.Error()。
 func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errors.New("服务崩了")
@@ -73,6 +75,7 @@ func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
 
 // TestEndpoint_ParseNotFound parse 返回 404 ParseError → 404。
 func TestEndpoint_ParseNotFound(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusNotFound, Message: "不存在"}
@@ -87,6 +90,7 @@ func TestEndpoint_ParseNotFound(t *testing.T) {
 
 // TestEndpoint_Success_200 invoke 成功 → 200 + data。
 func TestEndpoint_Success_200(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			v := "ok"
@@ -105,6 +109,7 @@ func TestEndpoint_Success_200(t *testing.T) {
 
 // TestEndpoint_PanicRecovery_ServerError invoke panic → 恢复为 500 信封。
 func TestEndpoint_PanicRecovery_ServerError(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			panic("boom")
@@ -122,6 +127,7 @@ func TestEndpoint_PanicRecovery_ServerError(t *testing.T) {
 
 // TestEndpoint_NilParse_UsesZeroReq Parse 为 nil 时用零值 Req，invoke 正常。
 func TestEndpoint_NilParse_UsesZeroReq(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			if *req != 0 {
@@ -142,6 +148,7 @@ func TestEndpoint_NilParse_UsesZeroReq(t *testing.T) {
 // 成功 → 200 统一信封由 Render 承载；*ParseError → 其状态码、其他错误 → 500 两条错误面**与挂没挂
 // Render 无关**（票1b 把 err 从签名上拿掉后，错误面只有骨架一个作者）。
 func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
+	t.Parallel()
 	// 成功路径
 	okInvoke := func(ctx context.Context, req *int) (*string, error) {
 		v := "ok"

@@ -38,7 +38,7 @@ const (
 // 三者共用一个会话实例（黑名单存储由参数注入）。
 func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Engine, *security.Session, *memCodeStore, *fakeChannel, int) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, bl)
@@ -90,6 +90,7 @@ func postPasswordLogin(r *gin.Engine, account, password string) int {
 
 // 重置口令后，手上那枚 refresh（重置前一刻刚轮换出来的、本身完全有效）换不出新令牌 ⇒ 401。
 func TestResetPassword_旧refresh在重置后被拒(t *testing.T) {
+	t.Parallel()
 	r, sess, store, ch, uid := newPasswordFamilyRouter(t, newValBlacklist())
 
 	_, staleRefresh, err := sess.IssuePair(uid, resetAccount, service.HrwaiRole)
@@ -121,6 +122,7 @@ func TestResetPassword_旧refresh在重置后被拒(t *testing.T) {
 // 吊销标记写不进去 ⇒ 口令仍然生效（尽力而为族：不能为吊销失败而拒绝落口令，
 // 否则 Redis 抖动时用户找不回账号）。
 func TestResetPassword_吊销写失败口令仍生效(t *testing.T) {
+	t.Parallel()
 	r, _, store, ch, _ := newPasswordFamilyRouter(t, rejectBlacklist{})
 
 	if w := resetPasswordViaCode(t, r, store, ch, resetNewPassword); w.Code != http.StatusOK {

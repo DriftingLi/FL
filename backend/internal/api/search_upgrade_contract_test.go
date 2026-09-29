@@ -11,8 +11,9 @@ import (
 )
 
 func TestSearchUpgradeContract(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
-	student := testutil.SeedStudent(t, db, "search_upgrade_stu", "hash")
+	student := seedStudent(t, db, "search_upgrade_stu", "hash")
 
 	spID, lvID := 1, 1
 	course := model.Course{Name: "液压系统课程", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}

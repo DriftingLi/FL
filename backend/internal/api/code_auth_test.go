@@ -131,7 +131,7 @@ func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChann
 // 返回 captcha 服务供测试读取/注入验证码答案。
 func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel, *captcha.Service) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
@@ -206,6 +206,7 @@ func extractStoredCode(t *testing.T, store *memCodeStore, ch *fakeChannel, purpo
 
 // TestCodeAuth_EmailRegisterLogin 邮箱通道：send-code → register → login 全流程。
 func TestCodeAuth_EmailRegisterLogin(t *testing.T) {
+	t.Parallel()
 	r, store, emailCh, _ := newCodeAuthTestRouter(t)
 
 	// 1. send-code
@@ -248,6 +249,7 @@ func TestCodeAuth_EmailRegisterLogin(t *testing.T) {
 
 // TestCodeAuth_PhoneRegisterLogin 手机通道：同一骨架另一 adapter，行为一致。
 func TestCodeAuth_PhoneRegisterLogin(t *testing.T) {
+	t.Parallel()
 	r, store, _, phoneCh := newCodeAuthTestRouter(t)
 
 	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
@@ -281,6 +283,7 @@ func TestCodeAuth_PhoneRegisterLogin(t *testing.T) {
 
 // TestCodeAuth_PhoneResetPassword 手机号忘记密码：发码→重置→新密码可登录。
 func TestCodeAuth_PhoneResetPassword(t *testing.T) {
+	t.Parallel()
 	r, store, _, phoneCh := newCodeAuthTestRouter(t)
 	phone := "13800138001"
 
@@ -329,6 +332,7 @@ func TestCodeAuth_PhoneResetPassword(t *testing.T) {
 
 // TestCodeAuth_InvalidPurpose 非法 purpose 返回 400（purpose 校验行为不变）。
 func TestCodeAuth_InvalidPurpose(t *testing.T) {
+	t.Parallel()
 	r, _, _, _ := newCodeAuthTestRouter(t)
 	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "a@example.com", "purpose": "whatever"}, "")
@@ -342,6 +346,7 @@ func TestCodeAuth_InvalidPurpose(t *testing.T) {
 
 // TestCodeAuth_ProfileBind 个人信息绑定：send-code channel 分发 + email/phone 绑定。
 func TestCodeAuth_ProfileBind(t *testing.T) {
+	t.Parallel()
 	r, store, emailCh, phoneCh := newCodeAuthTestRouter(t)
 
 	// 先注册一个用户拿 token
@@ -382,6 +387,7 @@ func TestCodeAuth_ProfileBind(t *testing.T) {
 
 // TestCodeAuth_ProfileChangePassword 修改密码：短信验证码确认后更新密码。
 func TestCodeAuth_ProfileChangePassword(t *testing.T) {
+	t.Parallel()
 	r, store, _, phoneCh := newCodeAuthTestRouter(t)
 	phone := "13900139001"
 

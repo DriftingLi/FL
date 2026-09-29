@@ -15,7 +15,8 @@ import (
 )
 
 func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
 
@@ -44,7 +45,8 @@ func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 }
 
 func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
 
@@ -62,7 +64,8 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 
 // TestTutorCourseRoutesAbsent 导师端不可建课/改课：/api/tutor/course 路由不存在（404）。
 func TestTutorCourseRoutesAbsent(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
 

@@ -23,7 +23,7 @@ import (
 // setupInspectionRouter 起一台含巡检路由的整机（内存库 + 管理员 token）。
 func setupInspectionRouter(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "inspection-shape-secret",
@@ -68,6 +68,7 @@ func seedInspectionRows(t *testing.T, db *gorm.DB) {
 
 // TestAdminInspectionReadPathsShapeLock 三条读路径与搬迁前逐字节全等（空态 + 有数据 + 过滤）。
 func TestAdminInspectionReadPathsShapeLock(t *testing.T) {
+	t.Parallel()
 	r, db, token := setupInspectionRouter(t)
 
 	const (
@@ -120,6 +121,7 @@ func TestAdminInspectionReadPathsShapeLock(t *testing.T) {
 // TestAdminInspectionReadPathsFailureIs500 失败用例：读库故障 → 500 信封（不再是 200 + 空列表）。
 // 注入手段：删表（查询即 ErrNoSuchTable），与 paging 失败注入同族。
 func TestAdminInspectionReadPathsFailureIs500(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		path  string

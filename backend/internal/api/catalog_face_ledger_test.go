@@ -43,6 +43,7 @@ const catalogMissingID = 999999
 
 // TestCatalogFaceLedger 每个目录端点三档：输入不合法(400) / 真不存在(404) / 查不动(500)。
 func TestCatalogFaceLedger(t *testing.T) {
+	t.Parallel()
 	for _, f := range catalogFaces {
 		for _, want := range []int{http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError} {
 			t.Run(fmt.Sprintf("%s/%d", f.name, want), func(t *testing.T) {

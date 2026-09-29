@@ -83,7 +83,7 @@ func tokenFor(t *testing.T, db *gorm.DB, who string) string {
 		if err != nil {
 			t.Fatalf("哈希种子口令失败: %v", err)
 		}
-		stu := testutil.SeedStudent(t, db, "cledger_stu", hashed)
+		stu := seedStudent(t, db, "cledger_stu", hashed)
 		uid, account, role = stu.ID, stu.Account, service.HrwaiRole
 	}
 	tok, err := sess.Issue(uid, account, role)
@@ -367,6 +367,7 @@ var courseDomainFaces = []courseEndpointFaces{
 // 这一条同时是「档位集合与代码一致」的锁：删掉某端点的一条 WithSentinel，它对应的 404/400
 // 档会当场打不出来而红（本批实测过，见 ADR-0064 实施回记）。
 func TestCourseDomainFaceLedger(t *testing.T) {
+	t.Parallel()
 	for _, ep := range courseDomainFaces {
 		for i, declared := range ep.cases {
 			c := declared.req

@@ -40,6 +40,7 @@ func fetchCaptcha(t *testing.T, r *gin.Engine, store *memCodeStore) (id, answer 
 
 // TestCaptcha_DisabledByDefault 开关关闭（默认）时 send-code 不受人机验证影响。
 func TestCaptcha_DisabledByDefault(t *testing.T) {
+	t.Parallel()
 	r, _, _, _ := newCodeAuthTestRouter(t)
 	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "nocap@example.com", "purpose": "register"}, "")
@@ -50,6 +51,7 @@ func TestCaptcha_DisabledByDefault(t *testing.T) {
 
 // TestCaptcha_EnabledContract 开关开启时的完整契约。
 func TestCaptcha_EnabledContract(t *testing.T) {
+	t.Parallel()
 	r, store, _, _, _ := newCodeAuthTestRouterX(t, true)
 
 	// 未带验证码 → 400
@@ -93,7 +95,8 @@ func TestCaptcha_EnabledContract(t *testing.T) {
 
 // TestCaptcha_GenerateShapeLock 冻结 GET /api/captcha 的 data 顶层键集 {id, image}（对照 GenerateCaptchaDTO）。
 func TestCaptcha_GenerateShapeLock(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	store := newMemCodeStore()
 	r := gin.New()
 	RegisterCaptchaRoutes(r, captcha.NewService(store))

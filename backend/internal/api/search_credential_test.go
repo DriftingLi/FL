@@ -5,8 +5,6 @@ package api
 import (
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
@@ -16,7 +14,8 @@ import (
 // 必须把当前证件透传到底层分区查询：course/question 只返回当前证件的内容；
 // 不带证件时不过滤（显式 type 路径本就正确，一并对齐断言）。
 func TestSearchAggregationFollowsCredential(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	svc := service.NewSearchService(db, nil)
 

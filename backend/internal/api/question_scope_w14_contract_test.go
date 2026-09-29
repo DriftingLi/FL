@@ -53,7 +53,7 @@ type poolLeakFixture struct {
 // newPoolLeakFixture 播种夹具。当前证件 = credA；学员选 credA。
 func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "scope-w14-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 
@@ -153,6 +153,7 @@ func doAndBody(t *testing.T, f *poolLeakFixture, token, method, path string, bod
 // 修复前该端点只挂 JWTAuth、status 不传即全量 ⇒ 学员 token 翻走 draft/pending/真题题。
 // 讲师支（CapQuestionAuthor）必须仍能读全量含 draft——那是它的本职，不得回归。
 func TestStudentQuestionListIsPoolScoped(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 
 	_, body := doAndBody(t, f, f.studentToken, http.MethodGet, "/api/question-bank/questions?page_size=50", nil)
@@ -177,6 +178,7 @@ func TestStudentQuestionListIsPoolScoped(t *testing.T) {
 // 学员历史上把笔记挂在池外题上（本用例直接落库模拟修复前的存量），列表也不得把题干吐出来；
 // 笔记行本身是学员自己的私有数据，仍列出（只是摘要为空），与「题目已删除」同一形态。
 func TestNoteListHidesOutOfPoolStem(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for id := range f.hiddenByID() {
 		f.seedNote(id, f.studentID, "挂在池外题上的笔记")
@@ -219,6 +221,7 @@ func TestNoteListHidesOutOfPoolStem(t *testing.T) {
 
 // TestNoteWriteRejectsOutOfPoolQuestion 锁 3：笔记写面（每人每题一条）必须收 scope。
 func TestNoteWriteRejectsOutOfPoolQuestion(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for id, name := range f.hiddenByID() {
 		code, body := doAndBody(t, f, f.studentToken, http.MethodPut,
@@ -249,6 +252,7 @@ func TestNoteWriteRejectsOutOfPoolQuestion(t *testing.T) {
 // TestCommentReadRejectsOutOfPoolQuestion 锁 4：评论列表不得成为「池外题存在性/内容」的枚举器。
 // 修复前 List 连题目存在性都不查 ⇒ 直调 id 即可读到任意题的评论。
 func TestCommentReadRejectsOutOfPoolQuestion(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for id := range f.hiddenByID() {
 		f.seedComment(id, f.studentID, "别人留在这题上的评论")
@@ -274,6 +278,7 @@ func TestCommentReadRejectsOutOfPoolQuestion(t *testing.T) {
 
 // TestCommentWriteRejectsOutOfPoolQuestion 锁 4（写面半边）：池外题不可被挂评论。
 func TestCommentWriteRejectsOutOfPoolQuestion(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for id, name := range f.hiddenByID() {
 		code, body := doAndBody(t, f, f.studentToken, http.MethodPost,
@@ -294,6 +299,7 @@ func TestCommentWriteRejectsOutOfPoolQuestion(t *testing.T) {
 // TestFavoriteQuestionRequiresPool 锁 5：收藏写面的题目支必须走池（含排真题与证件分区）。
 // 修复前只判 status='published'，收藏后经 GET /api/favorites 回题干快照。
 func TestFavoriteQuestionRequiresPool(t *testing.T) {
+	t.Parallel()
 	f := newPoolLeakFixture(t)
 	for id, name := range f.hiddenByID() {
 		code, body := doAndBody(t, f, f.studentToken, http.MethodPost, "/api/favorites",

@@ -20,7 +20,8 @@ import (
 )
 
 func TestWrongQuestionRedoContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	student := model.HrwaiUser{Account: "acct_wq", Phone: "13800000003", Username: "错题学员", Status: 1, CreatedAt: testutil.Now()}

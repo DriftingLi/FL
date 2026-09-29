@@ -19,7 +19,8 @@ import (
 )
 
 func TestForumInteractionContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "acct_a", Phone: "13800000001", Username: "作者甲", Status: 1, CreatedAt: testutil.Now()}
