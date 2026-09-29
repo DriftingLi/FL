@@ -103,9 +103,10 @@
     /**
      * 退出登录 = **身份槽整体复位**，不是「同一身份的退出」
      *
-     * `auth.logout()` 走的是 `clearAuthData()`，它**故意保留** `auth_secure_credentials`
-     * 与 `auth_refresh_token`（ADR-0004 生物识别快捷登录）。招聘者按 ADR-0021 ②
-     * 根本没有快捷登录 ⇒ 复用它会留下一个属于学员语义的 refresh_token 槽，
+     * `auth.logout()` 走的是 `clearAuthData()`，它**故意保留**的只有 `auth_secure_credentials`
+     * （门控回填 / 快捷登录的凭据来源，其包络内的 rt 自 #1391 起只写不读）；`auth_refresh_token`
+     * 自 #1386 起登出时**照常移除**（登出先拿它去吊销）。招聘者按 ADR-0021 ②
+     * 根本没有记住密码 / 生物识别 ⇒ 复用它会留下一个属于学员语义的保留项（安全凭据），
      * 而且角色标记 `auth_active_role` 也会停在 `recruiter`，让下一个学员态的 401
      * 被送进招聘者登录页。故用招聘者专用的 `logoutRecruiter()`
      * （内部复用 `clearIdentityForSwitch()`，与 P1 的互斥清槽同一处实现）。
