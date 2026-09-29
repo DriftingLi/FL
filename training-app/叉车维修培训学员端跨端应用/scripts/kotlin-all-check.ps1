@@ -37,9 +37,10 @@
         (b) 后续「成败以产物为准」只看**有没有 .kt**、不看新鲜度 ⇒ 只要磁盘上留着一份旧导出就判 ✅。
         实测的坏读数：`KOTLIN_ALL_RESULT errors=0 classes=1526 files=120` + ✅，而导出是第一棵树的
         （工作树里当时的改动在导出里搜不到）⇒ 那次读数**不覆盖当次改动**。
-      - 现在两道判据都补上：publish 步要求输出里出现正向标记（`$PublishSuccessMarker`），
-        且导出目录里 .kt 的最新 mtime **必须晚于**本次 publish 的基准（`Test-AppResourceFreshness`）。
-        两者任一不成立 ⇒ **exit 非 0 且不打印 ✅**。
+      - 现在两道判据都补上：publish 步要求输出里出现正向标记（`$PublishSuccessMarkers` 任一；#1381
+        加了第二层——标记没读到时由「编译成功 + 已进入导出 + 本次导出目录确实被重写」三条**正向**证据
+        合判，放行结论记 `ok-compound`），且导出目录里 .kt 的最新 mtime **必须晚于**本次 publish 的基准
+        （`Test-AppResourceFreshness`）。判据不成立 ⇒ **exit 非 0 且不打印 ✅**。
       - **根因写实**：票面原写「publish 命令在 v5.24 已不存在」是**误诊** —— 实测该命令存在且可用
         （同一台机成功导出 119 个 .kt）；这恰恰说明**不能靠文案猜命令是否存在**，只能判「这一步有没有成立」。
       - `-SkipPublish` 是受限会话的逃生门，**不适用**新鲜度判据 ⇒ 结果行显式记
@@ -221,9 +222,13 @@ if (-not $SkipPublish) {
     }
     # 导出可能是异步的 ⇒ 有界轮询等它变新鲜。publish 本身没成立时**不必等**，
     # 但下面仍会量一次导出目录 —— 失败日志同样需要 mtime 这一行。
+    # ⚠️ #1381：准入条件不能只看 `$publishPre.Ok`（硬标记）。联合判据拿的是**新鲜度实测量**，
+    # 而硬标记丢行时若不轮询，异步晚到的导出会被单次读数判成 stale ⇒ 联合判据永远拿不到 fresh，
+    # 修好的判据在原故障场景上照样判红。故「输出证据齐」也准入。
     $exportProbeDir = Join-Path $Project $AppResourceRelative
     $publishPre = Get-PublishVerdict -Output $publishResult.Output -TimedOut $publishResult.TimedOut
-    if ($publishPre.Ok) {
+    $polledOnCompound = (-not $publishPre.Ok) -and (Test-PublishCompoundEvidence -Output $publishResult.Output)
+    if ($publishPre.Ok -or $polledOnCompound) {
         for ($i = 0; $i -lt 40; $i++) {
             if ((Test-AppResourceFreshness -ExportDir $exportProbeDir -Since $publishStartedAt).Fresh) { break }
             Start-Sleep -Seconds 3
@@ -247,18 +252,38 @@ if (-not $SkipPublish) {
         } else {
             Write-Host "[error] publish 步**没有成立**（判据：$($publishEval.Reason)）⇒ ④c 不得据此判 ✅。" -ForegroundColor Red
             if ($publishEval.Freshness -eq 'fresh') {
-                Write-Host '        freshness=fresh：导出目录**其实已刷新** ⇒ 这是「导出成功但成功文案没读到」的方向（采集层 / 文案判据，#1285）——不是没导出。' -ForegroundColor Red
+                # #1381：走到这里说明**两层**正向证据都不成立（硬标记没读到，且「编译成功 + 已进入导出」也缺一条）
+                # —— 旧文案只说「查采集层 / 文案判据」，而那正是把人往「去改常量」上引的错误处置。
+                Write-Host '        freshness=fresh：导出目录**其实已刷新** ⇒ 是证据没读到，不是没导出（#1285 / #1381）。' -ForegroundColor Red
+                Write-Host '        先对照日志尾部和 utils/kotlinAllStaleExportBehavior.test.js 的真实样本：这条转发流的**尾部记录会随机丢**，丢哪条不固定；' -ForegroundColor Red
+                Write-Host '        缺的是硬标记 ⇒ 联合判据应已放行（reason=ok-compound）；还红着就是四条正向证据里缺了别的某条，缺哪条看上面那行 reason。' -ForegroundColor Red
+                Write-Host '        ⚠️ 别照着「文案失配」去改 $PublishSuccessMarkers —— 那只是把下一个随机丢的行换成新的恒红。' -ForegroundColor Red
             } else {
-                Write-Host "        freshness=$($publishEval.Freshness)：导出目录**没有刷新** ⇒ 根本没导出（环境方向）—— 先解决导出，再跑 ④c（这一探是 publish 未成立时的**单次读数**，不轮询；若导出其实是异步晚到，重跑一次即可分辨）。" -ForegroundColor Red
+                # #1381 评审：这条文案原先无条件说「单次读数，不轮询；重跑一次即可分辨」—— 而联合证据齐时
+                # 本轮**确实轮询到了上限**（最多 40×3s），照旧那么说会把人引向「再等一次就好」，
+                # 事实是等满了还没刷新 ⇒ 是导出真没发生，不是晚到。按是否走过联合准出两种话。
+                if ($polledOnCompound) {
+                    Write-Host "        freshness=$($publishEval.Freshness)：本次**已按联合证据轮询到上限**（最多 40×3s）仍未见导出目录被重写 ⇒ 不是异步晚到，是**根本没导出**（环境方向）。" -ForegroundColor Red
+                    Write-Host '        处置：先解决导出（HBuilderX 是否就绪 / 命令在本版是否可用），再跑 ④c —— 重跑同一棵树不会改变结论。' -ForegroundColor Red
+                } else {
+                    Write-Host "        freshness=$($publishEval.Freshness)：导出目录**没有刷新** ⇒ 根本没导出（环境方向）—— 先解决导出，再跑 ④c（这一探是 publish 未成立时的**单次读数**，不轮询；若导出其实是异步晚到，重跑一次即可分辨）。" -ForegroundColor Red
+                }
             }
             Write-Host '        三种可能：① HBuilderX 忙 / 未就绪（重试即可）；② 命令或参数在本版本不可用（对照 `cli publish app-android --help`）；③ CLI↔主程序 IPC 被断。' -ForegroundColor Red
-            Write-Host '        若本版 CLI 的**成功文案**变了（正向标记未命中），改 scripts/lib/publish-freshness.ps1 的 $PublishSuccessMarker —— 判据是 fail-closed：宁可判红，不可假绿。' -ForegroundColor Red
+            Write-Host '        若本版 CLI 的**成功文案**整体换了（旧标记从此再也不出现），往 scripts/lib/publish-freshness.ps1 的 $PublishSuccessMarkers 加一条；样本钉会告诉你能不能命中。判据是 fail-closed：宁可判红，不可假绿。' -ForegroundColor Red
         }
         # errors= 这一栏在失败路径写 `gate`（判据不成立）或 `env`（环境），**不写数字** ——
         # 旧写法写 `errors=1`，读起来像「有 1 条编译错误」，而那条路径根本没跑到编译（评审发现）。
         $errorTag = if ($publishEval.ExitCode -eq 1) { 'gate' } else { 'env' }
         Write-Log "KOTLIN_ALL_RESULT errors=$errorTag stage=publish reason=$($publishEval.Reason) freshness=$($publishEval.Freshness)"
         exit $publishEval.ExitCode
+    }
+    # #1381：靠联合判据放行时**说出来** —— 「过是过了，但过的不是硬标记」必须能从结论读出来，
+    # 否则下一个人只会看到 ✅，不知道成功行又丢了一次。
+    if ($publishEval.Reason -eq 'ok-compound') {
+        Write-Host '⚠️ publish 的**硬成功标记没读到**，本次靠联合判据放行（编译成功 + 已进入导出 + 导出目录实测已刷新 + 每个 .kt 都被重写）。' -ForegroundColor Yellow
+        Write-Host '   结论仍成立（四条都是正向证据），但这条流的尾部记录在丢 —— 见 scripts/lib/publish-freshness.ps1 的 #1381 段。' -ForegroundColor Yellow
+        Write-Log 'publish 放行层 = 联合判据（硬标记未命中；#1381）'
     }
     $freshnessVerdict = $publishEval.Freshness
     Write-Log "publish 产物 .kt = $($publishEval.KtCount)（新鲜度 $($publishEval.Freshness)）"
