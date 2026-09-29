@@ -303,7 +303,10 @@ async function logout() : Promise<void> {
     const savedToken = token.value
     if (savedToken.length > 0) {
         try {
-            await logoutApi()
+            // 顺序即语义（#1386）：rt 必须在**清槽之前**交出去 —— clearAuthData() 会移除
+            // auth_refresh_token，先清后取就静默退化成发空串（服务端吊销分支拿不到东西）。
+            // 取的是本端 storage 那支，不是 cookie：App 端容器里同值的 cookie 会被后端一并吊销。
+            await logoutApi(getRefreshToken())
         } catch (e) {
             console.warn('[auth] logout backend failed (ignored):', e)
         }
