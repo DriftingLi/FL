@@ -8,6 +8,27 @@
 	export default {
 		onLaunch: function() {
 			console.log('App Launch')
+			// [probe1389] ADR-0030 ④-4 取证探针（throwaway，不入主线）：
+			// 第一步让服务端下发一枚 cookie，第二步只看「服务端收到的」——
+			// 若第二步响应体里还有 probe=jar1389，说明容器维持 jar 并在后续请求自动带 Cookie:。
+			uni.request({
+				url: 'https://httpbin.org/cookies/set?probe=jar1389',
+				success: (res) => {
+					console.log('[probe1389] step1 status=', res.statusCode, 'res.cookies=', res.cookies, 'body=', JSON.stringify(res.data))
+					uni.request({
+						url: 'https://httpbin.org/cookies',
+						success: (res2) => {
+							console.log('[probe1389] step2 status=', res2.statusCode, 'body=', JSON.stringify(res2.data))
+						},
+						fail: (err2) => {
+							console.log('[probe1389] step2 fail=', err2.errMsg)
+						}
+					})
+				},
+				fail: (err) => {
+					console.log('[probe1389] step1 fail=', err.errMsg)
+				}
+			})
 			// 启动时异步校验 token（不阻塞渲染）
 			const auth = useAuthStore()
 			// 使用 async/await + try/catch 避免 UTSPromise.catch 类型推断问题
