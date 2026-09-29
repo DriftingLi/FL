@@ -7,9 +7,54 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+// TestSetRefreshCookie_并发不写共享字段 锁住 #1363 判据 2 的并发半边：
+// `*Session` 跨请求共享，下发 refresh Cookie 时**不许**把 cookie 名写回 `s.refreshCookie`。
+//
+// ⚠️ 这条用例的牙齿是 `-race`，不是断言：构造器 `refreshCookiesFor` 已把 Name 填成默认值，
+// 所以旧写法 `s.refreshCookie.Name = s.RefreshCookieName()` 是**恒等自赋值** —— 值不变，
+// 「比对快照」永远测不出它，只有竞态检测器认它（写/写 + 写/读）。本会话已实测：
+// 把两个 setter 改回共享写形态，WSL `go test -race -count=2` 直接报 `WARNING: DATA RACE`；
+// 局部拷贝形态（现行）同一条命令 0 竞态。旧形态在 CI 上跑得过去，只因为**没有任何用例并发调它**。
+func TestSetRefreshCookie_并发不写共享字段(t *testing.T) {
+	sess := NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, 7*24*time.Hour,
+		CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: true}, newInmemoryBlacklistStore())
+
+	const n = 32
+	// 读取侧走的是同一批字段：并发下发时若存在共享写，-race 会在这里报红。
+	go func() {
+		for i := 0; i < n; i++ {
+			_ = sess.RefreshCookieNames()
+			r, _ := http.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+			r.AddCookie(&http.Cookie{Name: sess.RefreshCookieName(), Value: "rt"})
+			_ = sess.ExtractRefreshCookie(r)
+		}
+	}()
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			rec := httptest.NewRecorder() // 每 goroutine 自己的 ResponseWriter，竞争点只应在 Session 上
+			sess.SetRefreshCookie(rec, "rt")
+			sess.SetRecruiterRefreshCookie(rec, "rt-rec")
+			// 功能半边：并发下**两族**响应头都要在（Get 只回第一枚，必须取 Values 全部；
+			// 只断言第一枚会让招聘者那族漏发测不出来）。
+			text := strings.Join(rec.Header().Values("Set-Cookie"), "\n")
+			for _, want := range []string{DefaultRefreshCookieName + "=rt", DefaultRecruiterRefreshCookieName + "=rt-rec", "Path=" + RefreshCookiePath, "HttpOnly", "SameSite=Lax"} {
+				if !strings.Contains(text, want) {
+					t.Errorf("并发下发丢了三件事 %q；实得：%s", want, text)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
 
 func TestRefreshCookieName_默认与配置推导(t *testing.T) {
 	sess := NewSessionWithBlacklistAndRefresh(testSecret, time.Hour, 7*24*time.Hour,

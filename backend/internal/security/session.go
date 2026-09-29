@@ -521,15 +521,22 @@ func (s *Session) ExtractRefreshCookie(r *http.Request) string {
 }
 
 // SetRefreshCookie 下发主站 refresh 的 httpOnly Cookie（Path 收在刷新端点）。
+// ⚠️ 取配置必须走**局部拷贝**（与同文件 SetRecruiterCookie 同形）：`*Session` 是跨请求共享的，
+// 直接写 `s.refreshCookie.Name` 就是并发请求在同一个字段上 race —— 本仓刚为同一个形状修过
+// 限流器（`middleware/ratelimit.go` 的「普通字段与 cleanup  goroutine 形成数据竞争」那条），
+// 这里不许复发。名字缺省值由 RefreshCookieName() 读时兜，不需要写回去缓存。
 func (s *Session) SetRefreshCookie(w http.ResponseWriter, token string) {
-	s.refreshCookie.Name = s.RefreshCookieName()
-	writeLoginCookie(w, s.refreshCookie, token, RefreshCookiePath, int(s.refreshExpiry.Seconds()))
+	cfg := s.refreshCookie
+	cfg.Name = s.RefreshCookieName()
+	writeLoginCookie(w, cfg, token, RefreshCookiePath, int(s.refreshExpiry.Seconds()))
 }
 
 // SetRecruiterRefreshCookie 下发招聘者 refresh 的 httpOnly Cookie（host-only，作用域不外扩）。
+// 取配置的形态与 SetRefreshCookie 一致：局部拷贝，不写共享 Session 字段。
 func (s *Session) SetRecruiterRefreshCookie(w http.ResponseWriter, token string) {
-	s.recruiterRefreshCookie.Name = s.RecruiterRefreshCookieName()
-	writeLoginCookie(w, s.recruiterRefreshCookie, token, RefreshCookiePath, int(s.refreshExpiry.Seconds()))
+	cfg := s.recruiterRefreshCookie
+	cfg.Name = s.RecruiterRefreshCookieName()
+	writeLoginCookie(w, cfg, token, RefreshCookiePath, int(s.refreshExpiry.Seconds()))
 }
 
 // ClearRefreshCookies 清掉两族 refresh cookie（登出/注销的本地凭证清除）。
