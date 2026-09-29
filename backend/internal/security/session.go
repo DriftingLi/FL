@@ -40,13 +40,20 @@ const defaultRefreshExpiry = 7 * 24 * time.Hour
 
 // refresh 令牌的浏览器通道（ADR-0067 决策 1、2）：httpOnly Cookie 优先、请求体通道保留。
 //
-// RefreshCookiePath 把 Cookie 收在**唯一消费它的那个端点**上——Path 写 `/` 就等于把 7 天凭证
-// 挂到全站每个请求上；收窄到这一个路径后，同域下的其它端点（含 /api/auth/logout）根本收不到它。
+// RefreshCookiePath = `/api/auth`：这是对 ADR-0067 决策 2「Cookie 只用于该一个端点」的**修订后落点**，
+// 因为原设计挡掉的那件事恰恰是产品语义本身 ——
+// Path 收在 `/api/auth/refresh` 时，浏览器不会把这枚 Cookie 发到 `/api/auth/logout`，
+// 于是「登出 = 单会话终止（手上这一枚 refresh 失效）」（`CONTEXT.md`「会话」词条，自 ADR-0016 就在）
+// 在浏览器侧**静默退化**成「只清本地、长效凭证继续可用」。放宽一档到认证族前缀 ⇒
+// 两个消费点（refresh / logout）都被覆盖，登出重新拿得到吊销所需的那枚凭证。
+// 它仍然不是 `/`：`/` 等于把 7 天凭证挂到全站每一个请求上；现在只有 `/api/auth/**` 这一族收到，
+// 其中不消费它的端点（登录/注册/验证码）本就要覆写或清除这枚 Cookie，不存在新的读取方。
+// CSRF 面不因此放宽：`SameSite=Lax` 下跨站 POST 不带 Cookie，刷新与登出都只接受同站 POST。
 // 名字族与 access cookie 同名族但不同名，Domain / Secure **一律继承**各自的 access cookie 配置
 // （见 refreshCookiesFor）：本仓是子域名多工作区，作用域只能有一处事实源，另开一个配置项
 // 就是留一处「两个 cookie 域口径不一致」的漂移点，故这里不新增任何环境变量。
 const (
-	RefreshCookiePath                 = "/api/auth/refresh"
+	RefreshCookiePath                 = "/api/auth"
 	DefaultRefreshCookieName          = "hrwai_refresh"
 	DefaultRecruiterRefreshCookieName = "recruiter_refresh"
 

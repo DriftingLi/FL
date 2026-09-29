@@ -7,8 +7,9 @@
 //	   只有请求体时仍然可用（移动端与非浏览器客户端的生命线，响应体形状逐字不变）；
 //	② 轮换/吊销语义不变：ADR-0016 的两族吊销（全会话 RevokeIdentity / 单会话 SignOut）
 //	   对 Cookie 那一支同样成立——不是只对 body 那一族成立；
-//	③ Cookie 属性（HttpOnly / SameSite=Lax / 生产 Secure / Path 收在该端点）逐字锁死，
-//	   其中 SameSite 写成 None 必须判红。
+//	③ Cookie 属性（HttpOnly / SameSite=Lax / 生产 Secure / Path=/api/auth 认证族前缀）逐字锁死，
+//	   SameSite 写成 None 必须判红；Path 收窄回单端点也要判红（那会让登出拿不到凭证，
+//	   见 TestLogout_Cookie通道的refresh被吊销且响应清除Cookie 的第 ① 段）。
 package api
 
 import (
@@ -248,17 +249,45 @@ func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
 	}
 }
 
-// 吊销族之二（单会话终止 SignOut）：凭证经 Cookie 通道到达登出入口时同样被吊销。
-// 浏览器侧的边界另见 ADR-0067 冲突条——refresh cookie 的 Path 收在 /api/auth/refresh，
-// 浏览器不会把它发到 /api/auth/logout，故本用例锁定的是「端点认哪枚凭证」这件事本身。
+// 吊销族之二（单会话终止 SignOut）。
+//
+// ⚠️ 本用例的**形状被改过**：上一版直接 `req.AddCookie(...)` 手工造请求，于是 Path 收在
+// `/api/auth/refresh`（浏览器根本不会把它发到 /logout）时它照样绿 —— 典型的「锁声称比实际更硬」。
+// 现在判据分两段，顺序不许换：
+//
+//	① 先按**浏览器的投递规则**问一句：服务端真正下发的那枚 Cookie，它的 Path 覆盖得到
+//	  `/api/auth/logout` 吗？（Cookie 由 `SetRefreshCookie` 现下发，名字、值、属性都是浏览器手上那份）
+//	② 覆盖得到，才谈吊销。
+//
+// ⇒ 谁把 Path 改窄回单端点，① 立刻判红，而不是留下一个「测过但生产不成立」的绿。
 func TestLogout_Cookie通道的refresh被吊销且响应清除Cookie(t *testing.T) {
 	sess := cookieSession(true)
 	r := newRefreshRouter(sess)
 	_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
 
+	// ① 投递前提：取服务端真正下发的那枚 Cookie（只读属性，不消费 rt）。
+	issued := httptest.NewRecorder()
+	sess.SetRefreshCookie(issued, rt)
+	var ck *http.Cookie
+	for _, c := range issued.Result().Cookies() {
+		if c.Name == security.DefaultRefreshCookieName {
+			ck = c
+			break
+		}
+	}
+	if ck == nil {
+		t.Fatalf("登出入口的吊销前提无从判断：下发响应里没有 %s（实得 %v）",
+			security.DefaultRefreshCookieName, issued.Result().Cookies())
+	}
+	if !strings.HasPrefix("/api/auth/logout", ck.Path) {
+		t.Fatalf("refresh Cookie 的 Path=%q，按浏览器的前缀投递规则到不了 /api/auth/logout ⇒ 登出静默退化成「只清本地」"+
+			"（`CONTEXT.md`「会话」词条的单会话终止失守）。若这是有意收窄，必须连同 ADR-0067 决策 2 与该词条一起改。", ck.Path)
+	}
+
+	// ② 吊销：浏览器据此把这枚 Cookie 投递到登出入口。
 	req, _ := http.NewRequest("POST", "/api/auth/logout", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: security.DefaultRefreshCookieName, Value: rt})
+	req.AddCookie(&http.Cookie{Name: ck.Name, Value: ck.Value})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -286,8 +315,8 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 		}
 		attrs := cookieAttrTail(t, raw)
 		// 属性集逐字锁定（顺序即 Go net/http 的写出顺序；改任何一个属性都会在这里判红）
-		if attrs != "; Path=/api/auth/refresh; Domain=example.com; Max-Age=604800; HttpOnly; Secure; SameSite=Lax" {
-			t.Errorf("Cookie 属性 = %q，期望生产口径（HttpOnly + SameSite=Lax + Secure + Path 收在刷新端点）", attrs)
+		if attrs != "; Path=/api/auth; Domain=example.com; Max-Age=604800; HttpOnly; Secure; SameSite=Lax" {
+			t.Errorf("Cookie 属性 = %q，期望生产口径（HttpOnly + SameSite=Lax + Secure + Path=认证族前缀）", attrs)
 		}
 	})
 

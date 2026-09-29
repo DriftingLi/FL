@@ -188,9 +188,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req) // refresh_token 缺失或解析失败时只清本地/Cookie，静默放行
 	// ADR-0067 的读取顺序（Cookie 优先）在登出入口同样成立：手上那支凭证来自哪里是入口差异，
 	// 不是第三种语义（Session.SignOut 的既有口径）。
-	// 现实约束：refresh cookie 的 Path 收在 /api/auth/refresh，浏览器不会把它发到本端点，
-	// 因此这条分支实际服务的是「显式回传 Cookie 的非浏览器客户端」；浏览器登出的服务端吊销
-	// 走改密/注销的全会话吊销（详见 #1363 报告里的 ADR 冲突条）。
+	// ADR-0067 决策 2 的落点（2026-09-29 修订）：refresh cookie 的 Path = /api/auth，覆盖本端点，
+	// 所以浏览器登出**能**取到凭证、单会话终止（CONTEXT.md「会话」）照旧成立。
+	// body 那一路继续服务显式回传凭证的非浏览器客户端（移动端拿不到 Cookie）。
 	refresh := h.session.ExtractRefreshCookie(c.Request)
 	if refresh == "" {
 		refresh = req.RefreshToken
