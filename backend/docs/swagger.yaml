@@ -9111,7 +9111,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: 撤销 refresh_token 并清除登录 Cookie；不依赖 JWTAuth，access 过期亦可登出
+      description: 撤销 refresh_token（Cookie 优先，回退请求体）并清除登录 Cookie；不依赖 JWTAuth，access
+        过期亦可登出
       parameters:
       - description: refresh_token
         in: body
@@ -9489,19 +9490,19 @@ paths:
     post:
       consumes:
       - application/json
-      description: 轮换签发新 access/refresh，旧 refresh 入黑名单；失败统一 401
+      description: 轮换签发新 access/refresh，旧 refresh 入黑名单；凭证读取顺序为 httpOnly Cookie（ADR-0067）→
+        请求体（移动端兼容），失败统一 401
       parameters:
-      - description: refresh_token
+      - description: refresh_token（Cookie 通道存在时被忽略；无 Cookie 的客户端才用）
         in: body
         name: body
-        required: true
         schema:
           type: object
       produces:
       - application/json
       responses:
         "200":
-          description: success
+          description: success（响应体恒含新 access + 新 refresh，请求体通道客户端需要）
           schema:
             allOf:
             - $ref: '#/definitions/response.R'
