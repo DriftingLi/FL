@@ -8,11 +8,14 @@ vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() }
 }))
 
+// mock 的导出面必须与 #1363 之后的真源一致：storage.ts 只剩 getToken/setToken/removeToken
+// 与 removeRefreshToken（refresh 的读写口已随「不进 JS 可达存储」删掉）。
+// 留着 get/setRefreshToken 就是给一个不存在的 API 作保 —— 下一个人会以为刷新仍走存储。
 vi.mock('@/utils/storage', () => ({
   getToken: vi.fn(() => null),
-  getRefreshToken: vi.fn(() => null),
   setToken: vi.fn(),
-  setRefreshToken: vi.fn()
+  removeToken: vi.fn(),
+  removeRefreshToken: vi.fn()
 }))
 
 vi.mock('@/stores/credential', () => ({

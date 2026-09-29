@@ -9,7 +9,7 @@
 import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
-import { getToken, getRefreshToken, setToken, setRefreshToken } from '@/utils/storage'
+import { getToken, setToken } from '@/utils/storage'
 import type { RefreshResultDTO } from './generated/auth'
 
 /**
@@ -48,32 +48,61 @@ function attachKind(err: unknown): void {
   e.kind = classifyError(e)
 }
 
-// ===== 双令牌静默刷新（ADR-0012）：模块级共享的单飞行，三端实例并发去重 =====
-// 401 时统一用 refresh token 换新 access + 新 refresh，再重试原请求；
+// ===== 双令牌静默刷新（ADR-0016 / ADR-0067）：模块级共享的单飞行，三端实例并发去重 =====
+// 401 时用 refresh 换新 access + 新 refresh，再重试原请求；
 // 刷新失败才走各实例的 onUnauthorized（清登录态 + 跳登录）。
+//
+// ADR-0067（票 #1363）：浏览器侧的 refresh **只经 httpOnly Cookie 走**——
+// 本文件既不读也不写 JS 可达的 refresh（结构锁见 `api/__tests__/refreshCookieChannel.spec.ts`）。
+// 服务端读取顺序是 Cookie → 请求体，请求体通道留给移动端与非浏览器客户端。
 let refreshPromise: Promise<boolean> | null = null
 
-// 刷新专用裸 client（不走本工厂拦截器，避免 401 递归）；路径固定为全局 /api/auth/refresh
-const refreshHttp = axios.create({ baseURL: '/api', timeout: 30000 })
+// 刷新专用裸 client（不走本工厂拦截器，避免 401 递归）；路径固定为全局 /api/auth/refresh。
+// withCredentials：refresh cookie 的 Path 收在认证族前缀 /api/auth（ADR-0067 决策 2 的落点），
+// 不带凭证就发不出去 —— 这是浏览器侧的唯一通道。
+const refreshHttp = axios.create({ baseURL: '/api', timeout: 30000, withCredentials: true })
+
+/**
+ * 续期请求的「族线索」头：把 storage 里那支 access 原样发出去，**过期也发**。
+ *
+ * 它在这里**不参与认证**（服务端只从载荷里读 role、不验签，见 security.accessRoleOf），
+ * 作用只有一个：回答「本次续期属于哪一族」。两族 refresh cookie 可以在同一父域上并存
+ * （招聘者子域收得到父域的学员那枚），服务端若按 Cookie 名序选族，招聘者页的静默续期就会
+ * 轮换掉学员那一族 ⇒ 登录态被静默换成另一个身份（#1376 跨端评审 · 移动端 ADR-0030 ②）。
+ * access cookie 不能当这条线索：它的 Max-Age 是 2 小时，而续期恰恰发生在它已死之后。
+ */
+function familyClueHeaders(): Record<string, string> {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 function isRefreshEndpoint(url: string): boolean {
   return url.includes('/auth/refresh')
 }
 
-/** 静默刷新（单飞行）：并发 401 只发一次刷新请求，成功后更新双令牌 */
+/**
+ * 本地是否有登录态（可作为「值不值得发一次刷新」的判据）。
+ * 注意事实源仍是 access：ADR-0067 决策 3 明确本轮不动 access 的存放面。
+ */
+function hasLocalSession(): boolean {
+  return !!getToken()
+}
+
+/** 静默刷新（单飞行）：并发 401 只发一次刷新请求，成功后更新 access（refresh 在 Cookie 里，前端拿不到也不必拿） */
 function tryRefreshTokens(): Promise<boolean> {
-  const rt = getRefreshToken()
-  if (!rt) return Promise.resolve(false)
   if (!refreshPromise) {
     refreshPromise = refreshHttp
-      // 响应形状来自生成物（后端注解是唯一事实源）：raw axios 拿不到 unwrappedRequest 的解包，
-      // 故这里显式声明信封（ADR-0009 的统一 {code,message,data}）。
-      .post<{ data: RefreshResultDTO }>('/auth/refresh', { refresh_token: rt })
+      // 请求体不带 refresh_token：Cookie 在场时服务端以 Cookie 为准（票 #1363 判据 1），
+      // 空对象只是保持 Content-Type: application/json 与既有线上形状兼容。
+      // 头里带族线索（见 familyClueHeaders）：Cookie 通道读哪一族由它决定，无线索时服务端
+      // 一枚 Cookie 都不看（不回退名序），续期就会退化成 401。
+      // 响应形状来自生成面 RefreshResultDTO（后端注解是唯一事实源）：raw axios 拿不到
+      // unwrappedRequest 的解包，故这里显式声明信封（ADR-0009 的统一 {code,message,data}）。
+      .post<{ data: RefreshResultDTO }>('/auth/refresh', {}, { headers: familyClueHeaders() })
       .then(res => {
         const data = res.data?.data
-        if (data?.token && data?.refresh_token) {
+        if (data?.token) {
           setToken(data.token)
-          setRefreshToken(data.refresh_token)
           return true
         }
         return false
@@ -245,8 +274,10 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
         if (status === 401) {
           const url = err.config?.url || ''
           const cfg = err.config as AxiosRequestConfig & { _retry?: boolean }
-          // 双令牌（ADR-0012）：非刷新端点、未重试过、本地有 refresh → 静默刷新后重试原请求
-          if (!isRefreshEndpoint(url) && !cfg._retry && getRefreshToken()) {
+          // 双令牌（ADR-0016 + ADR-0067）：非刷新端点、未重试过、本地有登录态 → 静默刷新后重试原请求。
+          // 判据从「本地有没有 refresh」换成「本地有没有会话」：refresh 已在 httpOnly Cookie 里，
+          // JS 读不到、也不该读（票 #1363 判据 3）。
+          if (!isRefreshEndpoint(url) && !cfg._retry && hasLocalSession()) {
             const refreshed = await tryRefreshTokens()
             if (refreshed) {
               cfg._retry = true
