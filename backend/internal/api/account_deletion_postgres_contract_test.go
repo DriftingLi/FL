@@ -25,7 +25,7 @@ import (
 // 「播种在一个 schema、注销打在另一个 schema」，判据恒绿。
 func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	deps := newContractDeps(t, db, nil)
 	r := gin.New()
 	g := r.Group("/api/auth", func(c *gin.Context) {
@@ -39,7 +39,7 @@ func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) *gin.Engine {
 // 判据 1：注入某一条删除失败 ⇒ 接口非 2xx，且主行仍在（整笔回滚，不是半删）。
 func TestDeleteAccountOnPostgres_注入清理失败则非2xx且主行仍在(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
-	student := testutil.SeedStudent(t, db, "del_pg_stu", "hash")
+	student := seedStudent(t, db, "del_pg_stu", "hash")
 	now := testutil.Now()
 
 	// 清理表靠前的一张表（favorite 在第 1 行、note 在第 16 行）：note 失败时它已被删过，
@@ -90,7 +90,7 @@ func TestDeleteAccountOnPostgres_注入清理失败则非2xx且主行仍在(t *t
 // 从来就失败」通过。判据是 200 + 主行确实不在 + 论坛内容已匿名化（占位用户接管）。
 func TestDeleteAccountOnPostgres_无故障时注销真的生效(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
-	student := testutil.SeedStudent(t, db, "del_pg_ok", "hash")
+	student := seedStudent(t, db, "del_pg_ok", "hash")
 	now := testutil.Now()
 	topic := model.ForumTopic{
 		Category: "discussion", UserID: student.ID, Title: "注销前发的帖子", Content: "c",

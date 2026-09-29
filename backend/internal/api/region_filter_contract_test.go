@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -20,13 +18,14 @@ import (
 )
 
 func TestRegionCityFilterContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	pwd, _ := service.HashPassword("pass1234")
-	stuSu := testutil.SeedStudent(t, db, "stuRegionSu", pwd)
-	stuNan := testutil.SeedStudent(t, db, "stuRegionNan", pwd)
-	stuBj := testutil.SeedStudent(t, db, "stuRegionBj", pwd)
+	stuSu := seedStudent(t, db, "stuRegionSu", pwd)
+	stuNan := seedStudent(t, db, "stuRegionNan", pwd)
+	stuBj := seedStudent(t, db, "stuRegionBj", pwd)
 	now := time.Now()
 	ip := func(v int) *int { return &v }
 	// 新契约格式（迁移后）：两段「省/市」

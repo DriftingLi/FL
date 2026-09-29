@@ -18,6 +18,7 @@ import (
 // 鉴权走纯 JWT 校验（不查库），因此请求能到达 handler 的查询点；随后由 paging 的
 // 错误模式上抛 → Endpoint 骨架 → response.ServerError。
 func TestListEndpointDBFailureRenders500Envelope(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{
 		JWTSecretKey:    "paging-failure-secret",
 		JWTExpiresHours: 2,

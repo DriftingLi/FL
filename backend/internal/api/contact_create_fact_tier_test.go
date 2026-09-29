@@ -25,6 +25,7 @@ import (
 // 相邻那一档的句子。表驱动是必要的：只测学员那半边时，把招聘者那半边的 ErrRecordNotFound 分档
 // 整个删掉、全包仍然绿（本批实测）。
 func TestContactCreate_RowLookupFaultIsNotNotFound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		table string
@@ -54,6 +55,7 @@ func TestContactCreate_RowLookupFaultIsNotNotFound(t *testing.T) {
 // TestContactCreate_BadReferenceIsNotMissingResource 同一枚哨兵、两个端点、两件事实。
 // 400 那一半的字节另由保形锁钉着；本锁要的是**两半同时成立**这一格。
 func TestContactCreate_BadReferenceIsNotMissingResource(t *testing.T) {
+	t.Parallel()
 	t.Run("学员不存在：档案面 404、发起面 400", func(t *testing.T) {
 		e := newContactCreateEnv(t)
 
@@ -108,6 +110,7 @@ func TestContactCreate_BadReferenceIsNotMissingResource(t *testing.T) {
 // 客户端却分不出是哪一件。装配**漏项**不在这里抓：漏一条会掉进 500 默认面，由行为面当场判红
 // （日限那条就是这么发现的）。
 func TestContactCreate_FactTableIsNineDistinctFacts(t *testing.T) {
+	t.Parallel()
 	seen := map[string]string{}
 	for _, sent := range contactCreateFacts400 {
 		text := sent.Error()

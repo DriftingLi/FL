@@ -21,7 +21,8 @@ import (
 )
 
 func TestQuestionByIdReadPathEnforcesPool(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "pool-read-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := gin.New()

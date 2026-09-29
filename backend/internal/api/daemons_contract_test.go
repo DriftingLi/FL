@@ -27,6 +27,7 @@ var expectedDaemonNames = []string{
 }
 
 func TestDaemonRegistryLock(t *testing.T) {
+	t.Parallel()
 	db := testutil.NewMemoryDB(t)
 	d := newContractDeps(t, db, nil)
 
@@ -59,6 +60,7 @@ func TestDaemonRegistryLock(t *testing.T) {
 // 只锁条数——每个 tick 跑几次由 daemon 包自己锁（tasks_test.go），两层合起来才是全链。
 // 假时钟永不投递，故这里不会执行任何业务动作。
 func TestStartDaemonsStartsEveryRegisteredTask(t *testing.T) {
+	t.Parallel()
 	db := testutil.NewMemoryDB(t)
 	d := newContractDeps(t, db, nil)
 

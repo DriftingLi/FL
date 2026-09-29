@@ -48,6 +48,7 @@ func scanNotificationComposition(source string) []notificationHit {
 
 // TestAPILayerHasNoNotificationComposition 扫描 api 包源码：出现任一禁止形态即红。
 func TestAPILayerHasNoNotificationComposition(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("读取 api 包目录失败: %v", err)
@@ -78,6 +79,7 @@ func TestAPILayerHasNoNotificationComposition(t *testing.T) {
 //   - 正样本：收编后的干净形态（Endpoint + Render）不得报红；
 //   - 行号也是判据：第 3 行的命中不得报成第 1 行。
 func TestNotificationCompositionProbe(t *testing.T) {
+	t.Parallel()
 	for _, f := range notificationCompositionForbidden {
 		hits := scanNotificationComposition("package api\nfunc probe() { _ = " + f.needle + " }\n")
 		if len(hits) != 1 || hits[0].needle != f.needle {

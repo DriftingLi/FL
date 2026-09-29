@@ -32,6 +32,7 @@ var testTable = &errStatusTable{
 
 // TestEndpointErrStatus_TableHit errors.Is 命中表内哨兵 → 表内状态码 + err.Error() 文案。
 func TestEndpointErrStatus_TableHit(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, fmt.Errorf("service wrap: %w", errSentinelA) // wrap 后仍须命中
@@ -49,6 +50,7 @@ func TestEndpointErrStatus_TableHit(t *testing.T) {
 
 // TestEndpointErrStatus_TableMiss_Fallback 未命中 → fallback 状态码。
 func TestEndpointErrStatus_TableMiss_Fallback(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errSentinelB
@@ -63,6 +65,7 @@ func TestEndpointErrStatus_TableMiss_Fallback(t *testing.T) {
 
 // TestEndpointErrStatus_TableMiss_NoFallback_500 未命中且未设 fallback → 500 默认信封。
 func TestEndpointErrStatus_TableMiss_NoFallback_500(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errSentinelB
@@ -78,6 +81,7 @@ func TestEndpointErrStatus_TableMiss_NoFallback_500(t *testing.T) {
 // TestEndpointErrStatus_RenderCannotOverrideTable 票1b（ADR-0060 §1）：Render 只写成功面。
 // 错误面归骨架查域表——自定义 Render 既看不到 err、也不得被调用；成功时 Render 说了算。
 func TestEndpointErrStatus_RenderCannotOverrideTable(t *testing.T) {
+	t.Parallel()
 	rendered := 0
 	render := func(c *gin.Context, _ *int, resp *string) {
 		rendered++
@@ -115,6 +119,7 @@ func TestEndpointErrStatus_RenderCannotOverrideTable(t *testing.T) {
 // TestEndpointErrStatus_ParseError_PrecedesTable 解析错误优先于域表：
 // ParseError 404 不得被 fallback 400 吞掉。
 func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
@@ -132,6 +137,7 @@ func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
 // 参数错误吞进那个固定码里（翻转前本例钉的是 500，钉法随票8 一并改）。
 // 无条件条目仍然命中**其余**一切错误（业务错误与 DB 故障保持该端点既有的单一码形状）。
 func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
+	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
@@ -159,6 +165,7 @@ func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
 // 解析错误不包装业务哨兵，故「ParseError 先判」与「表先扫」对具名条目逐字等价（本例锁住这一点，
 // 免得翻转被读成「域表语义变了」）。
 func TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries(t *testing.T) {
+	t.Parallel()
 	w := doEndpoint(t, Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
 			return nil, badRequest("查询参数无效")
@@ -176,6 +183,7 @@ func TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries(t *testing.T)
 // TestEndpointErrStatus_FixedMessageEntry 票1b 的固定文案槽：message 非空即渲染该文案而非 err.Error()
 // （收编自旧闭包的 response.Xxx(c, "字面量") 与 gorm.ErrRecordNotFound → 404「主题不存在」两族）。
 func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
+	t.Parallel()
 	// 「哨兵 + 尾部无条件条目」= 旧 if-chain 的形状：先命中先用，尾部 else 兜一切
 	// （票8 起解析错误不再归它兜，见 TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry）
 	tbl := &errStatusTable{entries: []errStatusEntry{
@@ -246,6 +254,7 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 // TestErrStatusTable_Snapshot_Points 积分域表快照（#610：已领取类 400、不存在类 404、兜底 400；
 // #1098 追加：扣罚目标不存在 404、通知写失败 500）。
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []errStatusEntry{
 		{sentinel: service.ErrTaskNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
@@ -262,6 +271,7 @@ func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 // TestErrStatusTable_Snapshot_Contribution 投稿域表快照（#611：不存在 404、其余 400、未设 fallback → 500；
 // #1361 追加暂存文件四校验的落档：越权 403 / 类型与已登记 400 / 文件不存在 404）。
 func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "contributionErrStatus", contributionErrStatus, []errStatusEntry{
 		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrContributionFileMissing, status: http.StatusNotFound},
@@ -289,6 +299,7 @@ func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 
 // TestErrStatusTable_Snapshot_Application 投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_Application(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "applicationErrStatus", applicationErrStatus, []errStatusEntry{
 		{sentinel: service.ErrApplyJobInactive, status: http.StatusNotFound},
 		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
@@ -298,6 +309,7 @@ func TestErrStatusTable_Snapshot_Application(t *testing.T) {
 
 // TestErrStatusTable_Snapshot_JobReport 举报治理域表快照（#611）。
 func TestErrStatusTable_Snapshot_JobReport(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "jobReportErrStatus", jobReportErrStatus, []errStatusEntry{
 		{sentinel: service.ErrReportJobNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrReportNotFound, status: http.StatusNotFound},
@@ -306,6 +318,7 @@ func TestErrStatusTable_Snapshot_JobReport(t *testing.T) {
 
 // TestErrStatusTable_Snapshot_RecruiterApplication 企业侧投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_RecruiterApplication(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "recruiterApplicationErrStatus", recruiterApplicationErrStatus, []errStatusEntry{
 		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrApplyNotFound, status: http.StatusNotFound},
@@ -315,6 +328,7 @@ func TestErrStatusTable_Snapshot_RecruiterApplication(t *testing.T) {
 
 // TestErrStatusTable_Snapshot_Job 职位域表快照（#611）。
 func TestErrStatusTable_Snapshot_Job(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "jobErrStatus", jobErrStatus, []errStatusEntry{
 		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrJobNotYours, status: http.StatusForbidden},
@@ -323,6 +337,7 @@ func TestErrStatusTable_Snapshot_Job(t *testing.T) {
 
 // TestErrStatusTable_Snapshot_QuestionBank 题库域表快照（#611；第十二波票 6 补写面哨兵族并撤 fallback——未命中即 500）。
 func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "questionBankErrStatus", questionBankErrStatus, []errStatusEntry{
 		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrQuestionCredentialNotFound, status: http.StatusNotFound},
@@ -338,6 +353,7 @@ func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 
 // TestQuestionBankErrStatus_Spectrum 票 6：题库域表 400/404/500 档位断言（DB 故障未命中 → 500）。
 func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		err  error
@@ -368,6 +384,7 @@ func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
 // TestErrStatusTable_Snapshot_Forum 第十二波票 5：论坛域表快照
 // （存在性 404 / 所有权 403 / 状态前置与校验 400 / 未设 fallback → 未命中即 500）。
 func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
+	t.Parallel()
 	assertTableSnapshot(t, "forumErrStatus", forumErrStatus, []errStatusEntry{
 		{sentinel: service.ErrTopicNotFound, status: http.StatusNotFound},
 		{sentinel: service.ErrReplyNotFound, status: http.StatusNotFound},
@@ -407,6 +424,7 @@ func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
 // TestForumErrStatus_Spectrum 票 5：域表 400/403/404/500 全谱表驱动断言——
 // 四档各有代表哨兵、%w 包装详情仍能命中、未命中（DB 故障形态）落 500。
 func TestForumErrStatus_Spectrum(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		err  error

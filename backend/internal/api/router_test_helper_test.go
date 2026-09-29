@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -10,9 +11,39 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/testutil"
 )
+
+// setTestGinMode 幂等地把 gin 切到 TestMode（#1366 测试面瘦身）。
+//
+// 契约测试改用 t.Parallel 后，若每个并行用例各自直接调 gin.SetMode(gin.TestMode)，
+// 会并发写 gin 的包级全局（运行模式位与错误 writer），在 CI 的 -race 下即数据竞态。
+// 用 sync.Once 把整个测试进程里的这次设置收敛成「只真正发生一次」：Once 让各调用点
+// 相互串行并建立 happens-before，模式位一旦落定不再被并发改写。它不引入第二份事实源——
+// 只是把「每个文件各写一遍 SetMode」收成「同一条链上设置一次」。
+var setTestGinMode = sync.OnceFunc(func() { gin.SetMode(gin.TestMode) })
+
+// seedMu 串行化本测试包对 testutil.SeedStudent 的调用（#1366）。
+//
+// testutil.SeedStudent 的 uid 取自一个进程级、非原子递增的计数器（testutil/db.go
+// 的 seedUIDCounter++）。#1362 刚把 testutil 定形，本票不改它；而契约测试改 t.Parallel
+// 后，并行用例并发播种会读-改-写同一个全局 ⇒ -race 报数据竞态。此处只在 api 测试包的
+// 调用边界加锁把并发串行化，不复制 testutil 的任何构造逻辑（不构成第二份事实源，只是
+// 把「并发触碰同一全局」收成「互斥访问」）。uid 因此仍逐次唯一，且本包无任何用例断言
+// 某个绝对 uid 值（已核：无 1000000000000000000 量级的字面对账），加锁只影响并发时序、
+// 不影响期望值。
+var seedMu sync.Mutex
+
+// seedStudent 与 testutil.SeedStudent 完全同一条链，只多把并发播种互斥。
+func seedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.HrwaiUser {
+	t.Helper()
+	seedMu.Lock()
+	defer seedMu.Unlock()
+	return testutil.SeedStudent(t, db, username, hashedPassword)
+}
 
 // performRequest 向测试路由器发起 HTTP 请求并返回响应记录器。
 func performRequest(r *gin.Engine, method, path string) *httptest.ResponseRecorder {

@@ -57,7 +57,7 @@ func (s *memBlacklist) PutIfAbsent(_ context.Context, key, _ string, _ time.Dura
 
 // newRefreshRouter 构造仅含 /api/auth/{refresh,logout} 的最小路由（其余服务注入 nil）。
 func newRefreshRouter(sess *security.Session) *gin.Engine {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	r := gin.New()
 	h := NewAuthHandler(sess, nil, nil, nil, nil, zap.NewNop())
 	g := r.Group("/api/auth")
@@ -88,6 +88,7 @@ func doRefresh(r *gin.Engine, rt string) (int, refreshResp) {
 }
 
 func TestRefresh_RotateAndRevokeOld(t *testing.T) {
+	t.Parallel()
 	sess := security.NewSessionWithBlacklistAndRefresh("test", 2*time.Hour, 7*time.Hour, security.CookieConfig{Name: "hrwai_token"}, newMemBlacklist())
 	r := newRefreshRouter(sess)
 
@@ -110,6 +111,7 @@ func TestRefresh_RotateAndRevokeOld(t *testing.T) {
 }
 
 func TestRefresh_RejectsOwnAccessToken(t *testing.T) {
+	t.Parallel()
 	sess := security.NewSessionWithBlacklistAndRefresh("test", 2*time.Hour, 7*time.Hour, security.CookieConfig{Name: "hrwai_token"}, newMemBlacklist())
 	r := newRefreshRouter(sess)
 
@@ -122,6 +124,7 @@ func TestRefresh_RejectsOwnAccessToken(t *testing.T) {
 }
 
 func TestRefresh_MissingToken401(t *testing.T) {
+	t.Parallel()
 	sess := security.NewSessionWithBlacklistAndRefresh("test", 2*time.Hour, 7*time.Hour, security.CookieConfig{Name: "hrwai_token"}, newMemBlacklist())
 	r := newRefreshRouter(sess)
 
@@ -132,6 +135,7 @@ func TestRefresh_MissingToken401(t *testing.T) {
 }
 
 func TestLogout_ThenRefreshRejected(t *testing.T) {
+	t.Parallel()
 	sess := security.NewSessionWithBlacklistAndRefresh("test", 2*time.Hour, 7*time.Hour, security.CookieConfig{Name: "hrwai_token"}, newMemBlacklist())
 	r := newRefreshRouter(sess)
 

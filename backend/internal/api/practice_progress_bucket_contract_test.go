@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -23,9 +22,9 @@ import (
 )
 
 func assertPracticeProgressBucketing(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword(`student123`)
-	student := testutil.SeedStudent(t, db, `stu1`, pwd)
+	student := seedStudent(t, db, `stu1`, pwd)
 
 	cfg := &config.Config{
 		JWTSecretKey: `bucket-contract-secret`,

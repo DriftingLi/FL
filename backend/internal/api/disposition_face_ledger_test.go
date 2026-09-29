@@ -89,7 +89,7 @@ func seedAll(t *testing.T, db *gorm.DB) subjectIDs {
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
-	stu := testutil.SeedStudent(t, db, "ledger_stu", hashed)
+	stu := seedStudent(t, db, "ledger_stu", hashed)
 	tut := testutil.SeedTutor(t, db, "ledger_tutor", hashed)
 	rec := testutil.SeedRecruiter(t, db, "ledger_rec", hashed)
 	return subjectIDs{student: stu.ID, tutor: tut.TutorID, recruiter: rec.ID, missing: 999999}
@@ -174,6 +174,7 @@ var ledgerPathways = []endpointFaces{
 
 // TestDispositionFaceLedger 逐档验：登记的档必须打得出，且任何一档都不得泄漏驱动原文。
 func TestDispositionFaceLedger(t *testing.T) {
+	t.Parallel()
 	for _, ep := range ledgerPathways {
 		for i, declared := range ep.cases {
 			c := declared.req

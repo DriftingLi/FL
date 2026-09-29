@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -19,14 +17,15 @@ import (
 )
 
 func TestResumeContactStateContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	pwd, _ := service.HashPassword("pass1234")
-	stuNone := testutil.SeedStudent(t, db, "stuCsNone", pwd)
-	stuPending := testutil.SeedStudent(t, db, "stuCsPending", pwd)
-	stuApproved := testutil.SeedStudent(t, db, "stuCsApproved", pwd)
-	stuAppSource := testutil.SeedStudent(t, db, "stuCsApp", pwd)
+	stuNone := seedStudent(t, db, "stuCsNone", pwd)
+	stuPending := seedStudent(t, db, "stuCsPending", pwd)
+	stuApproved := seedStudent(t, db, "stuCsApproved", pwd)
+	stuAppSource := seedStudent(t, db, "stuCsApp", pwd)
 	now := time.Now()
 	cards := []model.JobCard{
 		{UserID: stuNone.ID, RealName: "无状态", ContactPhone: "13833330001", Region: "江苏省/苏州市", ExpectedRegions: model.JSONB([]byte(`["江苏省/苏州市"]`)), Visibility: "open", CreatedAt: now, UpdatedAt: now},

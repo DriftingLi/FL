@@ -41,9 +41,9 @@ func fetchMap(t *testing.T, r *gin.Engine, token, path string) map[string]any {
 }
 
 func assertPracticePoolCaliber(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword(`student123`)
-	student := testutil.SeedStudent(t, db, `stu1`, pwd)
+	student := seedStudent(t, db, `stu1`, pwd)
 	cfg := &config.Config{
 		JWTSecretKey: `pool-contract-secret`,
 	}

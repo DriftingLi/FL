@@ -133,6 +133,7 @@ func mustRotateOK(t *testing.T, sess *security.Session, refresh string) string {
 
 // TestDisableStudentRevokesAllSessions 禁用学员 = 全会话吊销（与禁用招聘者同判）。
 func TestDisableStudentRevokesAllSessions(t *testing.T) {
+	t.Parallel()
 	adminSvc, sess, _, uid := newDispositionFixture(t, newValBlacklist())
 	inHand := mustRotateOK(t, sess, issueStudentRefresh(t, sess, uid))
 
@@ -151,6 +152,7 @@ func TestDisableStudentRevokesAllSessions(t *testing.T) {
 // TestEnableStudentDoesNotRevoke 只有「禁用」是处置动作；恢复启用不写吊销标记
 // （它不剥夺任何既有凭证，写标记反而会把「解除即恢复原状」做成二次惩罚）。
 func TestEnableStudentDoesNotRevoke(t *testing.T) {
+	t.Parallel()
 	adminSvc, sess, db, uid := newDispositionFixture(t, newValBlacklist())
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", uid).Update("status", 0).Error; err != nil {
 		t.Fatalf("预置禁用态失败: %v", err)
@@ -171,6 +173,7 @@ func TestEnableStudentDoesNotRevoke(t *testing.T) {
 
 // TestAdminResetPasswordRevokesAllSessions 管理员代重置 = 与学员自助改密同一个动作 ⇒ 同样吊销。
 func TestAdminResetPasswordRevokesAllSessions(t *testing.T) {
+	t.Parallel()
 	adminSvc, sess, db, uid := newDispositionFixture(t, newValBlacklist())
 	before := storedPassword(t, db, uid)
 	inHand := mustRotateOK(t, sess, issueStudentRefresh(t, sess, uid))
@@ -192,6 +195,7 @@ func TestAdminResetPasswordRevokesAllSessions(t *testing.T) {
 // TestAdminResetPasswordSharesLengthRule 长度规则必须在**动作**里兜底，不只住在 handler：
 // 否则任何绕过 handler 的 caller 都能落一个 3 位口令。非法口令不得留下任何副作用。
 func TestAdminResetPasswordSharesLengthRule(t *testing.T) {
+	t.Parallel()
 	adminSvc, _, db, uid := newDispositionFixture(t, newValBlacklist())
 	before := storedPassword(t, db, uid)
 
@@ -207,6 +211,7 @@ func TestAdminResetPasswordSharesLengthRule(t *testing.T) {
 // （auth_service.go 的 TutorRole 分支），所以「禁用不吊销」在讲师侧是学员侧的另一半，
 // 不是一票新增（ADR-0064 决策 4，维护者 2026-09-22 裁定并入第①批）。
 func TestDisableTutorRevokesAllSessions(t *testing.T) {
+	t.Parallel()
 	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
 	inHand := mustRotateOK(t, sess, issueTutorRefresh(t, sess, tid))
 
@@ -229,6 +234,7 @@ func TestDisableTutorRevokesAllSessions(t *testing.T) {
 // TestAdminResetTutorPasswordRevokesAllSessions 代重置讲师口令 = 与学员代重置同一条动作。
 // 收紧前它自己 First→哈希→落库，零吊销，且长度规则只在 handler。
 func TestAdminResetTutorPasswordRevokesAllSessions(t *testing.T) {
+	t.Parallel()
 	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
 	before := storedTutorPassword(t, db, tid)
 	inHand := mustRotateOK(t, sess, issueTutorRefresh(t, sess, tid))
@@ -264,6 +270,7 @@ func (failOnSetBlacklist) PutIfAbsent(_ context.Context, _, _ string, _ time.Dur
 // TestDispositionRevokeFailureDoesNotRollBackAction 吊销写失败不回退处置本身（禁用已落库），
 // 但那条缺口必须仍然被走到（Set 真被调用过一次），否则「尽力而为」会退化成都没尝试。
 func TestDispositionRevokeFailureDoesNotRollBackAction(t *testing.T) {
+	t.Parallel()
 	bl := &failOnSetBlacklist{}
 	adminSvc, _, db, uid := newDispositionFixture(t, bl)
 
@@ -281,6 +288,7 @@ func TestDispositionRevokeFailureDoesNotRollBackAction(t *testing.T) {
 
 // TestEnableTutorDoesNotRevoke 讲师侧同判：只有转成禁用态才吊销，恢复启用不动凭证。
 func TestEnableTutorDoesNotRevoke(t *testing.T) {
+	t.Parallel()
 	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
 	if err := db.Model(&model.Tutor{}).Where("tutor_id = ?", tid).Update("status", 0).Error; err != nil {
 		t.Fatalf("预置禁用态失败: %v", err)
@@ -304,6 +312,7 @@ func TestEnableTutorDoesNotRevoke(t *testing.T) {
 // 这条断言之所以要有：「补齐处置后果」最自然的过度修正是顺手冻结权益/回收积分，
 // 而那会把处置与退款合成一件事，并让「解除即恢复原状」失效。
 func TestDispositionDoesNotRewriteHistory(t *testing.T) {
+	t.Parallel()
 	adminSvc, _, db, uid := newDispositionFixture(t, newValBlacklist())
 	if err := db.Create(&model.UserEntitlement{UserID: uid, SKU: service.CourseSKU(1), RefID: "1"}).Error; err != nil {
 		t.Fatalf("播种权益行失败: %v", err)

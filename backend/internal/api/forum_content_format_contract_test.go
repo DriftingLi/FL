@@ -64,7 +64,8 @@ type contentFormatListResp struct {
 }
 
 func TestForumContentFormatContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	cfg := &config.Config{

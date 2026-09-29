@@ -64,7 +64,8 @@ func (r topicListResp) titles() map[string]bool {
 }
 
 func TestForumCategorySplitContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "cat_author", Phone: "13800000101", Username: "分类作者", Status: 1, CreatedAt: testutil.Now()}

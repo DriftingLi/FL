@@ -14,14 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
 func TestMockExamCredentialBackfillOnPostgres(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")
@@ -46,11 +44,11 @@ func TestMockExamCredentialBackfillOnPostgres(t *testing.T) {
 	}
 
 	// 学员1：当前证件 A；学员2：未选证件
-	stu1 := testutil.SeedStudent(t, db, "bfStu1", "x")
+	stu1 := seedStudent(t, db, "bfStu1", "x")
 	if err := db.Model(stu1).Update("current_credential_id", credA.ID).Error; err != nil {
 		t.Fatalf("设学员1当前证件失败: %v", err)
 	}
-	stu2 := testutil.SeedStudent(t, db, "bfStu2", "x")
+	stu2 := seedStudent(t, db, "bfStu2", "x")
 
 	now := time.Now()
 	ids := func(v ...int) model.JSONB {

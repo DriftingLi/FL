@@ -39,7 +39,7 @@ type listContractEnv struct {
 
 func newListContractEnv(t *testing.T) *listContractEnv {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
@@ -116,6 +116,7 @@ func (e *listContractEnv) rewardIssuedOf(t *testing.T, query, title string) (boo
 
 // TestForumSolvedRequiresQuestionCategory solved 只对问答帖有意义：缺类别时 400，不静默返回空。
 func TestForumSolvedRequiresQuestionCategory(t *testing.T) {
+	t.Parallel()
 	e := newListContractEnv(t)
 
 	// 素材：一篇问答帖（已采纳）+ 一篇讨论帖，证明「空结果」在旧实现下确实会发生
@@ -174,6 +175,7 @@ func TestForumSolvedRequiresQuestionCategory(t *testing.T) {
 // 一篇**只是被加精、从未被采纳**的问答帖会让楼主看到「采纳不再产生积分」——而实际上答主仍会
 // 拿到 40 分。错误提示会劝退真实的采纳行为，故 reason 集合必须是采纳类。
 func TestForumRewardIssuedCoversAllDirectRewards(t *testing.T) {
+	t.Parallel()
 	e := newListContractEnv(t)
 
 	// 素材一：被加精的讨论帖（旧实现下 reward_issued=false，因为它不是 question 帖）
@@ -259,6 +261,7 @@ func TestForumRewardIssuedCoversAllDirectRewards(t *testing.T) {
 
 // TestForumListFiltersCoexist 四种筛选与 scope/category 共存不互相污染（回归）。
 func TestForumListFiltersCoexist(t *testing.T) {
+	t.Parallel()
 	e := newListContractEnv(t)
 
 	expTitle := "认定帖"
