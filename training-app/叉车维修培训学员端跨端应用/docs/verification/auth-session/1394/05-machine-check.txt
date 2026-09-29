@@ -1,0 +1,7 @@
+# 机检行（取证会话原样输出，命令在仓库根 training-app/叉车维修培训学员端跨端应用/docs/verification/auth-session/1394/ 下复算）
+# 对 01-logcat-request-lines.txt 的计数：
+console lines total: 125
+auth/refresh lines: 0
+auth/logout lines: 4
+auth/login lines: 6
+useBiometric 认证成功 lines: 2
