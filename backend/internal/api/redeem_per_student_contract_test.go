@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -22,7 +20,8 @@ import (
 const redeemCoursePrice = 100
 
 func TestTwoStudentsRedeemSameCourse(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "redeem-per-student-secret",
@@ -44,7 +43,7 @@ func TestTwoStudentsRedeemSameCourse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("hash password failed: %v", err)
 		}
-		stu := testutil.SeedStudent(t, db, account, pwd)
+		stu := seedStudent(t, db, account, pwd)
 		if err := db.Model(&model.HrwaiUser{}).Where("id = ?", stu.ID).
 			Update("points_balance", 5*redeemCoursePrice).Error; err != nil {
 			t.Fatalf("预置余额失败: %v", err)

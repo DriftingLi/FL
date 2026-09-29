@@ -203,6 +203,7 @@ const valuationPathParseDebt = 6
 
 // TestPathIntHasASingleParsePoint 锁本体：internal/api 内路径整型 id 只能由 pathInt/pathInt64 解析。
 func TestPathIntHasASingleParsePoint(t *testing.T) {
+	t.Parallel()
 	sites, files := scanDir(t, ".")
 
 	// 空转判据：扫到的文件数远低于本包实际数量 ⇒ 目录或判据变了，不许当成「无违规」。
@@ -241,6 +242,7 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 // 一种好形状不被抓到；且 strconv 是以**别名**导入的 —— 不解析导入别名的实现会当场少抓两处。
 // 生产代码那条判据的可信度全部押在这上面。
 func TestPathParseDetectorFiresOnPlantedSources(t *testing.T) {
+	t.Parallel()
 	src := `package probe
 
 import (
@@ -290,6 +292,7 @@ func good(c *gin.Context) int {
 // 这里断言它确实抓不到。检测器被做深时这条会红，逼着改措辞与 ADR —— 而不是留一句
 // 读起来比实际更硬的「凡是…即红」。
 func TestPathParseDetectorKnownBlindSpot(t *testing.T) {
+	t.Parallel()
 	src := `package probe
 
 import (

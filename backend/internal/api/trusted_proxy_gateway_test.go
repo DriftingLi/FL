@@ -10,6 +10,7 @@ import (
 )
 
 func TestParseDefaultGateway(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		table string
@@ -42,6 +43,7 @@ func TestParseDefaultGateway(t *testing.T) {
 }
 
 func TestIPCoveredByProxies(t *testing.T) {
+	t.Parallel()
 	proxies := []string{"127.0.0.1/32", "172.19.0.1", "192.168.240.0/20"}
 	cases := []struct {
 		name string
@@ -67,6 +69,7 @@ func TestIPCoveredByProxies(t *testing.T) {
 
 // 网段变化（换宿主机 / 重建 docker 网络）时必须在启动日志里点名，而不是静默退化成全局限流。
 func TestWarnIfGatewayNotTrusted(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		gateway string

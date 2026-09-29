@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
@@ -15,14 +13,14 @@ import (
 
 // Postgres 适配器：真实 SQL 迁移（含 000017）全量 up 成功即迁移正确。
 func TestRegionMigrationOnPostgres(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")
 	}
 	// 迁移链执行成功即验证。写入一段契约样本验证列可读写。
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuMig", pwd)
+	stu := seedStudent(t, db, "stuMig", pwd)
 	min_ := 6000
 	max_ := 9000
 	card := model.JobCard{

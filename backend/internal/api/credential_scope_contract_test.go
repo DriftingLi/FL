@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -25,7 +23,8 @@ import (
 //
 // 主 seam：HTTP + 真实 JWT（现有契约测试的同一层）；被测端点是题库统计（受作用域、按证件分区）。
 func TestCredentialScopeContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -45,7 +44,7 @@ func TestCredentialScopeContract(t *testing.T) {
 		}
 	}
 
-	student := testutil.SeedStudent(t, db, "scope_student", "x")
+	student := seedStudent(t, db, "scope_student", "x")
 	if err := db.Model(student).Update("current_credential_id", credA.ID).Error; err != nil {
 		t.Fatalf("设置当前证件失败: %v", err)
 	}
@@ -103,7 +102,8 @@ func TestCredentialScopeContract(t *testing.T) {
 // 来自各自的表，而 current_credential_id 是 hrwai_users 的列——按 sub 直查会命中**同号的陌生学员行**，
 // 让控制台请求被静默按别人的证件过滤。改造前客户端也从不给这三端注入证件，故语义是「非学员 = 不分区」。
 func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -124,7 +124,7 @@ func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
 	if err := db.Create(credB).Error; err != nil {
 		t.Fatalf("建证件失败: %v", err)
 	}
-	student := testutil.SeedStudent(t, db, "scope_student2", "x")
+	student := seedStudent(t, db, "scope_student2", "x")
 	if err := db.Model(student).Update("current_credential_id", credB.ID).Error; err != nil {
 		t.Fatalf("设置当前证件失败: %v", err)
 	}
@@ -161,7 +161,8 @@ func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
 // 判别力前置：同一端点显式传 credential_id 必须**真的**改变结果 —— 否则「两种调用都返回全量」
 // 会让用例退化成语义不变式（挂不挂中间件都绿）。
 func TestPublicCatalogEndpointsAreNotCredentialScoped(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -214,7 +215,7 @@ func TestPublicCatalogEndpointsAreNotCredentialScoped(t *testing.T) {
 		}
 	}
 
-	student := testutil.SeedStudent(t, db, "public_scope_student", "x")
+	student := seedStudent(t, db, "public_scope_student", "x")
 	if err := db.Model(student).Update("current_credential_id", credA.ID).Error; err != nil {
 		t.Fatalf("设置当前证件失败: %v", err)
 	}

@@ -23,7 +23,7 @@ import (
 
 func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "qwrite-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := gin.New()
@@ -45,6 +45,7 @@ func qwriteIssue(t *testing.T, cfg *config.Config, role string) string {
 }
 
 func TestQuestionWriteSurfaceRejectsStatus(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
 
@@ -82,6 +83,7 @@ func TestQuestionWriteSurfaceRejectsStatus(t *testing.T) {
 }
 
 func TestQuestionWriteTypedFieldMismatchFails(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
 	// score 传字符串：typed 绑定必须拒绝（旧 map 面会静默落零值）
@@ -105,6 +107,7 @@ func TestQuestionWriteTypedFieldMismatchFails(t *testing.T) {
 }
 
 func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
+	t.Parallel()
 	r, cfg, _ := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
 	rec := doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
@@ -125,6 +128,7 @@ func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
 }
 
 func TestQuestionSubmitAction(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
 	q := model.Question{Type: "single_choice", Content: "待提交题", Answer: "A", Status: "draft", CreatedByType: "tutor", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
@@ -147,6 +151,7 @@ func TestQuestionSubmitAction(t *testing.T) {
 }
 
 func TestQuestionReviewInvariantOverHTTP(t *testing.T) {
+	t.Parallel()
 	r, cfg, db := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
 	admin := qwriteIssue(t, cfg, "admin")

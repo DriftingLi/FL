@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -27,11 +26,11 @@ import (
 )
 
 func assertJobPostingContract(t *testing.T, db *gorm.DB) {
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	pwd, _ := service.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminJob", pwd)
 	stuPwd, _ := service.HashPassword("student123")
-	stu := testutil.SeedStudent(t, db, "stuJob", stuPwd)
+	stu := seedStudent(t, db, "stuJob", stuPwd)
 
 	cfg := &config.Config{JWTSecretKey: "job-posting-secret",
 		JWTExpiresHours: 2}

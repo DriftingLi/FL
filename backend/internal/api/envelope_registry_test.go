@@ -71,6 +71,7 @@ func containsString(list []string, want string) bool {
 
 // TestEnvelopeRegistryShapeLock 形状锁：键集合 + 键序 + 方言 + 类型名逐行对齐。
 func TestEnvelopeRegistryShapeLock(t *testing.T) {
+	t.Parallel()
 	rows := Envelopes()
 	if len(rows) == 0 {
 		t.Fatal("信封登记表为空")
@@ -123,6 +124,7 @@ func TestEnvelopeRegistryShapeLock(t *testing.T) {
 
 // TestEnvelopeRegistryEndpointsUnique 端点跨行唯一：每个端点恰有一行声明（「每端点一行」的机检）。
 func TestEnvelopeRegistryEndpointsUnique(t *testing.T) {
+	t.Parallel()
 	seen := map[string]string{}
 	for _, row := range Envelopes() {
 		if len(row.Endpoints) == 0 {
@@ -219,6 +221,7 @@ func scanTotalListTypes(t *testing.T, root string) []string {
 // TestEnvelopeRegistryCoversTotalListTypes 覆盖锁（两向）：
 // 源码里每个含 total + 切片字段的导出类型都在登记表内；登记表里的名字也都还在源码里。
 func TestEnvelopeRegistryCoversTotalListTypes(t *testing.T) {
+	t.Parallel()
 	registered := map[string]bool{}
 	fromSource := map[string]bool{}
 	for _, row := range Envelopes() {
@@ -251,6 +254,7 @@ func TestEnvelopeRegistryCoversTotalListTypes(t *testing.T) {
 // TestEnvelopeCoverageDetectsMissingRegistration 判定面自测：
 // 扫描器必须真的能报出漏登记的类型（否则覆盖锁是空转的假绿）。
 func TestEnvelopeCoverageDetectsMissingRegistration(t *testing.T) {
+	t.Parallel()
 	found := scanTotalListTypes(t, moduleRoot(t))
 	for _, want := range []string{
 		"api.AuditLogPageResult",
@@ -270,6 +274,7 @@ func TestEnvelopeCoverageDetectsMissingRegistration(t *testing.T) {
 //
 // 历史形态是 ts.TypeParams != nil 一律 skip：新信封只要写成泛型就静默逃出登记表。
 func TestEnvelopeCoverageTreatsForeignGenericsAsTotalListTypes(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	foreign := filepath.Join(root, "service", "envelope.go")
 	pagingHost := filepath.Join(root, "pkg", "paging", "envelope.go")

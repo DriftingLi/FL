@@ -39,7 +39,8 @@ func seedContractFeatured(t *testing.T, db *gorm.DB, title string, viewCount int
 }
 
 func TestFeaturedDetailNoViewParam(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	id := seedContractFeatured(t, db, "no_view 契约", 7)
 
@@ -80,7 +81,8 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 }
 
 func TestFeaturedViewEndpoint(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	id := seedContractFeatured(t, db, "view 端点契约", 10)
 

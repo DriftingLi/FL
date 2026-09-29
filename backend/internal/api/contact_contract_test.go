@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -19,7 +17,8 @@ import (
 )
 
 func TestContactContract_FullFlow(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:          "contract-test-secret",
@@ -33,7 +32,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 
 	// 学员与简历
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuContact", pwd)
+	stu := seedStudent(t, db, "stuContact", pwd)
 	// 给简历
 	card := model.JobCard{UserID: stu.ID, RealName: "张三丰", ContactPhone: "13800009999", Wechat: "zhang_wx", Region: "江苏苏州精确", ResumeFileURL: "/static/uploads/resumes/a.pdf", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`))}
 	if err := db.Create(&card).Error; err != nil {
@@ -285,7 +284,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	_ = db.Model(&model.ContactRequest{}).Where("recruiter_id = ?", recruiterBID).Update("created_at", yesterday).Error
 	// 用 recruiterB 连续创建 20 条（对不同学员）
 	for i := 0; i < 20; i++ {
-		tmpStu := testutil.SeedStudent(t, db, "stuDaily"+strconv.Itoa(i), pwd)
+		tmpStu := seedStudent(t, db, "stuDaily"+strconv.Itoa(i), pwd)
 		tmpCard := model.JobCard{UserID: tmpStu.ID, RealName: "临时", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`[]`))}
 		_ = db.Create(&tmpCard).Error
 		rec = doWithToken(t, r, recruiterBToken, http.MethodPost, "/api/recruit/contact-requests", map[string]any{"student_user_id": tmpStu.ID, "message": "日限测试"})
@@ -294,7 +293,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 		}
 	}
 	// 第 21 条应被拒
-	extraStu := testutil.SeedStudent(t, db, "stuDailyExtra", pwd)
+	extraStu := seedStudent(t, db, "stuDailyExtra", pwd)
 	extraCard := model.JobCard{UserID: extraStu.ID, RealName: "临时", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`[]`))}
 	_ = db.Create(&extraCard).Error
 	rec = doWithToken(t, r, recruiterBToken, http.MethodPost, "/api/recruit/contact-requests", map[string]any{"student_user_id": extraStu.ID, "message": "超出日限"})
@@ -387,7 +386,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 
 	// 11. 学员注销后授权失效
 	// 创建一个新的学员与申请，同意后注销学员，招聘方读取应失败
-	stu2 := testutil.SeedStudent(t, db, "stuToDelete", pwd)
+	stu2 := seedStudent(t, db, "stuToDelete", pwd)
 	card2 := model.JobCard{UserID: stu2.ID, RealName: "待删学员", ContactPhone: "13900001111", Wechat: "todelete_wx", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`[]`))}
 	_ = db.Create(&card2).Error
 	// 用 recruiterA 对 stu2 发起申请（需要冷却已过，但 recruiterA 对 stu2 无冷却）

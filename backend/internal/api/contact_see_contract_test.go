@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -20,11 +18,12 @@ import (
 )
 
 func TestStudentSeesCompanyContactContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuSeeContact", pwd)
+	stu := seedStudent(t, db, "stuSeeContact", pwd)
 	now := time.Now()
 	card := model.JobCard{
 		UserID: stu.ID, RealName: "张三丰", ContactPhone: "13800009999", Wechat: "zhang_wx", Region: "江苏省/苏州市",

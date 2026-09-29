@@ -25,7 +25,7 @@ import (
 // 用例必须先往本人的分区 contributions/<uid>/ 里种一个真文件，才谈得上提交成功。
 func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, *model.Credential, *storage.LocalStorage) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewFileDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-secret",
@@ -81,6 +81,7 @@ func contributionDo(t *testing.T, r *gin.Engine, token, method, path string, bod
 
 // TestContributionAPIContract 学员投稿 + 管理审核端到端契约。
 func TestContributionAPIContract(t *testing.T) {
+	t.Parallel()
 	r, deps, stu, cred, st := newContributionRouter(t)
 	cfg := &config.Config{JWTSecretKey: "contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	tok := issueContributionToken(t, cfg, stu)

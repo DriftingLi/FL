@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -18,11 +16,12 @@ import (
 )
 
 func TestJobApplyStateContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	pwd, _ := service.HashPassword("pass1234")
-	stu := testutil.SeedStudent(t, db, "stuApplyState", pwd)
+	stu := seedStudent(t, db, "stuApplyState", pwd)
 	now := time.Now()
 	pos := model.Position{Code: "apply_pos", Name: "叉车司机", Status: 1}
 	if err := db.Create(&pos).Error; err != nil {

@@ -25,7 +25,7 @@ import (
 // newNotificationContractEnv 装配全路由 + 种子 admin，返回路由器、config 与 service 装配根。
 func newNotificationContractEnv(t *testing.T) (*gin.Engine, *config.Config, *Deps) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-notif-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -69,9 +69,10 @@ func contractJSONRequest(t *testing.T, r *gin.Engine, method, path, token, body 
 // TestNotificationContract_ApprovedPayload：学员提交昵称修改 → 管理员通过 → 学员通知列表
 // payload.review_status=approved，标题人读文案不变。
 func TestNotificationContract_ApprovedPayload(t *testing.T) {
+	t.Parallel()
 	r, cfg, deps := newNotificationContractEnv(t)
 
-	student := testutil.SeedStudent(t, deps.DB, "学员甲", "x")
+	student := seedStudent(t, deps.DB, "学员甲", "x")
 	studentToken := contractToken(t, cfg, student.ID, student.Account, "student")
 	adminToken := contractToken(t, cfg, 1, "admin1", "admin")
 

@@ -20,7 +20,8 @@ import (
 // TestSearchQuestionExcludesSourceTagged 搜索 question 分区走题库池口径：
 // 来源标记标签的真题题退出搜索；公共池未打标真题题仍可搜。
 func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	catalogSvc := service.NewTrainingCatalogService(db, nil)
 	qsvc := service.NewQuestionBankService(db, nil, nil)
@@ -81,7 +82,8 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 // TestPracticeModeUnknownModeRejected400 进度读写入口对未知 mode 返回 400；
 // 合法三形态（sequential / tag:<id> / paper:<id>）不受影响。
 func TestPracticeModeUnknownModeRejected400(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "mode-gate-secret",
@@ -137,9 +139,10 @@ func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 // TestMockExamHistoryCarriesPaperID 模考历史响应补卷来源：按卷开考的历史条目
 // 携带 paper_id；随机模考（无卷）不出现该字段（向后兼容）。
 func TestMockExamHistoryCarriesPaperID(t *testing.T) {
+	t.Parallel()
 	db := testutil.NewMemoryDB(t)
 	svc := service.NewMockExamService(db, nil, nil)
-	student := testutil.SeedStudent(t, db, "paper_src_student", "x")
+	student := seedStudent(t, db, "paper_src_student", "x")
 
 	now := time.Now()
 	paperID := 42

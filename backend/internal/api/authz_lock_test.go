@@ -19,6 +19,7 @@ import (
 //
 // 用 AST 而非正则：正则会被注释与字符串内容骗过（本仓库的注释里就出现过 "admin"）。
 func TestAuthzLock_NoRawRoleLiteralInGuards(t *testing.T) {
+	t.Parallel()
 	dirs := []string{".", filepath.Join("..", "valuation", "handler")}
 	fset := token.NewFileSet()
 	checked := 0
@@ -74,6 +75,7 @@ func isRoleGuardCall(fun ast.Expr) bool {
 // 分层锁：authz 是被依赖方，不得 import service / api / security / middleware——
 // security 硬编码 "recruiter" 的历史根因正是「security 不能 import service」。
 func TestAuthzLock_NoUpwardImports(t *testing.T) {
+	t.Parallel()
 	forbidden := []string{
 		"forklift-training/internal/service",
 		"forklift-training/internal/api",
@@ -107,6 +109,7 @@ func TestAuthzLock_NoUpwardImports(t *testing.T) {
 
 // 能力表覆盖锁：能力键必须形如「资源域.动作」（含且仅含一个点），且能力表非空。
 func TestAuthzLock_CapabilityNaming(t *testing.T) {
+	t.Parallel()
 	caps := authz.AllCapabilities()
 	if len(caps) == 0 {
 		t.Fatal("能力表不得为空")
@@ -129,6 +132,7 @@ func TestAuthzLock_CapabilityNaming(t *testing.T) {
 // RoleRequired 若复活即为回归——它是 pass-through（21 行查表），删掉后复杂度只会散回 34 个蓝图；
 // 「角色 → 可达面」的事实源只能是 authz 能力表。
 func TestAuthzLock_RoleGuardRetired(t *testing.T) {
+	t.Parallel()
 	fset := token.NewFileSet()
 	var offenders []string
 	err := filepath.WalkDir(filepath.Join(".."), func(path string, d fs.DirEntry, err error) error {

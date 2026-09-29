@@ -16,7 +16,7 @@ import (
 
 func renderWithTable(t *testing.T, tbl *errStatusTable, err error) (int, string) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	tbl.renderError(c, err)
@@ -31,6 +31,7 @@ func renderWithTable(t *testing.T, tbl *errStatusTable, err error) (int, string)
 }
 
 func TestErrTableMessageShapes(t *testing.T) {
+	t.Parallel()
 	boom := errors.New("db down")
 
 	// 5xx 裸形态：固定文案，不外发 err 原文（ADR-0064 决策 9）。

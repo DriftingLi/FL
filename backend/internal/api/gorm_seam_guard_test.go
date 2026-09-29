@@ -61,6 +61,7 @@ func apiPackageDir(t *testing.T) string {
 
 // TestAPILayerHasNoGormDB 守卫：非测试源码里 *gorm.DB 只允许出现在白名单文件内。
 func TestAPILayerHasNoGormDB(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(apiPackageDir(t))
 	if err != nil {
 		t.Fatalf("读取 api 目录失败: %v", err)
@@ -91,6 +92,7 @@ func TestAPILayerHasNoGormDB(t *testing.T) {
 // TestGormDBWhitelistIsLive 白名单必须仍然有理由：deps.go 不再持 *gorm.DB 时就该删掉这一条，
 // 否则守卫会悄悄放宽（白名单腐化）。
 func TestGormDBWhitelistIsLive(t *testing.T) {
+	t.Parallel()
 	for name, reason := range gormDBWhitelist {
 		if reason == "" {
 			t.Errorf("白名单 %s 缺理由", name)
@@ -108,6 +110,7 @@ func TestGormDBWhitelistIsLive(t *testing.T) {
 // TestGormDBGuardDetectsOffender 判定面自测：守卫不是空转 —— 合成违例必须被报出，
 // 合法的 gorm 错误判定（非 *gorm.DB 类型）不得误报。
 func TestGormDBGuardDetectsOffender(t *testing.T) {
+	t.Parallel()
 	offender := `package api
 
 import "gorm.io/gorm"

@@ -18,6 +18,7 @@ import (
 // 为什么不做「路由 → 能力」的全枚举：gin 不在路由上暴露中间件链，运行期拿不到「这条路由需要什么能力」；
 // 静态扫描注册函数是能落地的最近似形态，且与本仓既有 AST 锁（authz_lock_test.go）同一手法。
 func TestBlueprintCapabilityCoverage(t *testing.T) {
+	t.Parallel()
 	// allowlist：确实没有能力位、且理由成立的蓝图（新增一项 = 一次显式的豁免决定）。
 	allow := map[string]string{
 		"RegisterCaptchaRoutes":             "图形验证码：无需鉴权的公开端点",

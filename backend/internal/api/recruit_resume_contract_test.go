@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -19,7 +17,8 @@ import (
 )
 
 func TestRecruitResumesContract_Full(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	spec1 := model.Position{Code: "spec_forklift", Name: "叉车维修", Status: 1}
@@ -41,9 +40,9 @@ func TestRecruitResumesContract_Full(t *testing.T) {
 
 	now := time.Now()
 	pwd, _ := service.HashPassword("pass1234")
-	stu1 := testutil.SeedStudent(t, db, "stuRecruit1", pwd)
-	stu2 := testutil.SeedStudent(t, db, "stuRecruit2", pwd)
-	stu3 := testutil.SeedStudent(t, db, "stuRecruitHidden", pwd)
+	stu1 := seedStudent(t, db, "stuRecruit1", pwd)
+	stu2 := seedStudent(t, db, "stuRecruit2", pwd)
+	stu3 := seedStudent(t, db, "stuRecruitHidden", pwd)
 	older := now.Add(-2 * time.Hour)
 	newer := now.Add(-30 * time.Minute)
 	ip := func(v int) *int { return &v }

@@ -25,7 +25,8 @@ import (
 )
 
 func TestFavoriteChapterVisibilityContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }

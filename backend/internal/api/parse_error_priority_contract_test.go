@@ -36,7 +36,7 @@ type parseErrFixture struct {
 
 func parseErrRouter(t *testing.T) (*gin.Engine, *parseErrFixture) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "parse-priority-secret",
@@ -54,6 +54,7 @@ func parseErrRouter(t *testing.T) (*gin.Engine, *parseErrFixture) {
 // TestParseErrorBeatsUnconditionalEntries 无条件条目三族：参数错误必须回自己的 400 与自己的文案。
 // forbid 钉的是「无条件条目那一层的痕迹」（人读前缀）不得再覆盖解析错误文案。
 func TestParseErrorBeatsUnconditionalEntries(t *testing.T) {
+	t.Parallel()
 	r, fx := parseErrRouter(t)
 
 	cases := []struct {
@@ -150,6 +151,7 @@ func newRegenerateFixture(t *testing.T, db *gorm.DB, paid bool) regenerateFixtur
 // TestRegenerateSlidesGateStillRenders404 门禁（未兑换的付费课程）仍按「不存在」返回 404
 // （ADR-0062 决策 3：越权按不存在，不泄漏存在性）。这条是改判后**必须不变**的那一半。
 func TestRegenerateSlidesGateStillRenders404(t *testing.T) {
+	t.Parallel()
 	r, fx := parseErrRouter(t)
 	fixture := newRegenerateFixture(t, fx.db, true)
 	rec := doWithToken(t, r, fx.token, http.MethodPost, fixture.regenURL, nil)
@@ -162,6 +164,7 @@ func TestRegenerateSlidesGateStillRenders404(t *testing.T) {
 // 旧形状 `WithSuccess(ok, 404)` 把门禁与下游故障压成同一个 404 ⇒ 门禁本身无测可建
 // （ADR-0062 复核登记「regenerate 的门禁建不了锁」）。
 func TestRegenerateSlidesDownstreamFailureRenders500(t *testing.T) {
+	t.Parallel()
 	r, fx := parseErrRouter(t)
 	fixture := newRegenerateFixture(t, fx.db, true)
 	if rec := doWithToken(t, r, fx.token, http.MethodPost,
@@ -177,6 +180,7 @@ func TestRegenerateSlidesDownstreamFailureRenders500(t *testing.T) {
 // TestRegenerateSlidesDBFailureRenders500 权益查询本身查不动（删 user_entitlement 表 = 真实驱动错误）
 // 不得被读成「这个章节不存在」⇒ 必须 500（ADR-0062 票6「查不动 ≠ 查得空」在错误面的另一半）。
 func TestRegenerateSlidesDBFailureRenders500(t *testing.T) {
+	t.Parallel()
 	r, fx := parseErrRouter(t)
 	fixture := newRegenerateFixture(t, fx.db, true)
 	if err := fx.db.Migrator().DropTable(&model.UserEntitlement{}); err != nil {
@@ -196,7 +200,7 @@ func parseErrStudentToken(t *testing.T, db *gorm.DB, cfg *config.Config, account
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)
 	}
-	stu := testutil.SeedStudent(t, db, account, pwd)
+	stu := seedStudent(t, db, account, pwd)
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", stu.ID).
 		Update("points_balance", 5000).Error; err != nil {
 		t.Fatalf("预置余额失败: %v", err)

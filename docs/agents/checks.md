@@ -71,10 +71,13 @@
 CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpine` 上空库真跑三步，共用 job 级 `DATABASE_URL`：
 
 1. `go run ./cmd/migrate up` —— 空库重建 baseline（全部 up 迁移真执行一次）。
-2. `go run ./cmd/migrate check-columns` —— **单向列对账**：GORM 模型期望的列集合必须 ⊆ `information_schema` 实际列集合，**缺列/缺表即非零退出并逐条打印「表.列」**；实际库多出来的列（迁移里有、模型刻意不映射）不算错（不做反向对账）。实现：`backend/internal/migrate/columns.go`（子命令复用 `cmd/migrate` 既有的 direction 分派，不改 CLI 入口）。
+2. `go run ./cmd/migrate check-columns` —— 自 #1362 起是**三段**判据（实现：`backend/internal/migrate/columns.go`；子命令复用 `cmd/migrate` 既有的 direction 分派，不改 CLI 入口）：
+   - **列对账（语义逐字未变，仍是单向）**：GORM 模型期望的列集合必须 ⊆ `information_schema` 实际列集合，**缺列/缺表即非零退出并逐条打印「表.列」**；实际库多出来的列（迁移里有、模型刻意不映射）不算错（**不做反向列对账**）。
+   - **唯一索引登记表 ⇔ migrations 逐字相等**（#1362 新增，**不连库**，本机 `go test ./internal/migrate/` 就能红）：`internal/migrate` 那张关键偏唯一索引登记表的每条 DDL，必须与 migrations 里的原句逐字一致、且谁也不多谁也不少。
+   - **唯一索引存在性（单向）**：登记表里的索引必须真在 `pg_indexes` 里（按 `current_schema()` 收窄）；库里多出来的索引不算错。
 3. `go run ./cmd/migrate down` —— 真跑回滚到空库，随后用 `check-columns` 做**反向断言**：它必须报红且点名 `hrwai_users` / `question` / `credential`（回滚不干净即红）。
 
-口径澄清：`migrate up` 此前并非从没在 CI 跑过——`backend-test` 已注入 `DATABASE_URL`，`internal/testutil/pg.go` 的 `NewPostgresDB` 会为每个 Postgres 契约测试在独立 schema 上真跑迁移（各用例 `DROP SCHEMA CASCADE` 清理）。`migration-check` 补的是**空库 baseline + 列对账 + down 回滚**这三件此前没有的事。本地无 Postgres/Docker 时，对账口径的回归跑 `go test ./internal/migrate/`（含缺列/多列正负样本）；真实迁移链路只能在 CI 上验。
+口径澄清：`migrate up` 此前并非从没在 CI 跑过——`backend-test` 已注入 `DATABASE_URL`，`internal/testutil/pg.go` 的 `NewPostgresDB` 会为每个 Postgres 契约测试在独立 schema 上真跑迁移（各用例 `DROP SCHEMA CASCADE` 清理）。`migration-check` 补的是**空库 baseline + 列与唯一索引对账 + down 回滚**这三件此前没有的事。本地无 Postgres/Docker 时，对账口径的回归跑 `go test ./internal/migrate/`（含缺列/多列正负样本、登记表 ⇔ migrations 逐字相等、以及「删掉任一索引必红」的合成破坏样本 —— 这三段都**不连库**，是本机唯一能证伪那半张票的地方）；真实迁移链路只能在 CI 上验。
 
 **反代到后端的每个 `location` 必须显式设置 `X-Forwarded-For`**（`frontend/nginx-host.conf`、`frontend/nginx.default.conf`）：nginx 只在设置时才覆写/追加该头，没设置的 location 会把客户端自带的同名头原样透传；后端信任本机对端（`TRUSTED_PROXIES`）之后会采信那个伪造值——限流键可被轮换、访问日志与审计日志写入假 IP。新增或改动反代 location 时逐条核对（#888 的 `/static/` 就是漏网的那条）。
 

@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -18,14 +16,15 @@ import (
 )
 
 func TestResumeEnhancedFilterContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	pwd, _ := service.HashPassword("pass1234")
-	stuA := testutil.SeedStudent(t, db, "stuFiltA", pwd)
-	stuB := testutil.SeedStudent(t, db, "stuFiltB", pwd)
-	stuC := testutil.SeedStudent(t, db, "stuFiltC", pwd)
-	stuD := testutil.SeedStudent(t, db, "stuFiltD", pwd)
+	stuA := seedStudent(t, db, "stuFiltA", pwd)
+	stuB := seedStudent(t, db, "stuFiltB", pwd)
+	stuC := seedStudent(t, db, "stuFiltC", pwd)
+	stuD := seedStudent(t, db, "stuFiltD", pwd)
 	now := time.Now()
 	posDriver := model.Position{Code: "filt_driver", Name: "叉车司机", Status: 1}
 	posRepair := model.Position{Code: "filt_repair", Name: "叉车维修", Status: 1}

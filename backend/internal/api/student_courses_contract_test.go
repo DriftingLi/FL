@@ -23,7 +23,8 @@ import (
 )
 
 func TestLearningPositionContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
@@ -226,7 +227,8 @@ func TestLearningPositionContract(t *testing.T) {
 
 // 未登录/未学学员：我的课程空信封、课程详情零值学习位置。
 func TestLearningPositionEmptyContract(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
+	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
