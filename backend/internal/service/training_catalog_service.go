@@ -3,6 +3,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -59,6 +60,13 @@ func renumberSortGroup(db *gorm.DB, entity any, idCol string, where map[string]a
 // ErrSwapItemNotFound 是 `swap_with` 指向的那一行不在本组序列里（ADR-0065 决策 3）。
 // 它是输入不合法（400）而不是 404：404 说的是「路径里那个资源没有」，而路径资源在这里是好的。
 var ErrSwapItemNotFound = errors.New("待交换的项不存在")
+
+// ErrCredentialHasContributions 是证件删除的投稿阻塞（#1360 / CONTEXT.md「证件删除的阻塞项」）。
+// 本枚哨兵只认领「该证件下挂着投稿行、删除会被挡住」这件事；**条数在包装它的那句文案里**
+// （`fmt.Errorf("该证件下仍有 %d 篇投稿，请先迁移或下架：%w", n, ...)`），
+// api 侧按哨兵落 400、按 ADR-0064 决策 9 把那句话原样发出去。
+// 之所以不把整句写进哨兵常量：哨兵是 errors.Is 的判据，句子随条数变，两者不能混在一枚值里。
+var ErrCredentialHasContributions = errors.New("该证件下仍有投稿")
 
 // swapGroupPositions 把组内两项交换位置：重编号后交换 a/b 在新序中的下标，再整体落库。
 // 即使两项 sort_order 相同（默认 0）也真实生效。
@@ -336,9 +344,42 @@ func (s *TrainingCatalogService) UpdateCredential(id int, in CredentialInput) (C
 	return catalogUpdate(s.db, credentialCatalogSpec(), id, &in)
 }
 
-// DeleteCredential 删除目标证件（已关联课程/题目置空 credential_id，不级联删除）。
+// DeleteCredential 删除目标证件。
+//
+// 两处分区按 CONTEXT.md「证件删除的阻塞项（credential delete blocker）」分开处置：
+//   - 行为历史分区（practice_progress）**随证件删除**：库层 ON DELETE CASCADE，由迁移 000040 声明
+//     （不在这里删行——那会把「分区随证件消失」这件结构事实降级成某个调用点记得写）；
+//     课程/题目/模考/答题记录挂的是 SET NULL，真实考试卷是 CASCADE，都无需预检。
+//   - 投稿（user_contribution）是**内容资产**，外键保持 NO ACTION（000020），这里做预检：
+//     算出条数回明确文案（「该证件下仍有 N 篇投稿，请先迁移或下架」），不做静默级联删投稿，
+//     也不让数据库拿外键冲突报 500。
+//
+// 计数口径 = 「挡住删除的那些行」，即该证件下的**全部**投稿行（含 withdrawn/rejected）——
+// 外键不看状态，预检少算一档就等于放行后被 FK 判红，那条 500 正是本票要消掉的东西。
+// 预检与删除之间存在插入投稿的窗口（配额与状态机在投稿侧另有守卫），真撞上了由 FK 兜底，
+// 那是「并发写入撞上删除」的窄窗，不是口径缺口。
 func (s *TrainingCatalogService) DeleteCredential(id int) error {
+	if err := s.checkCredentialDeleteBlockers(id); err != nil {
+		return err
+	}
 	return catalogDelete(s.db, credentialCatalogSpec(), id)
+}
+
+// checkCredentialDeleteBlockers 证件删除的投稿预检（#1360）。
+// 返回的错误以 ErrCredentialHasContributions 为哨兵（api 侧据此落 400），句子带条数。
+//
+// 分区谓词走 credential_scope.go 的具名谓词 EntityOwnedBy（归属分区：读被检索对象自身的证件列），
+// 不在调用点手写 credential_id 谓词——那条静态扫描锁（credential_scope_guard_test.go）正是为此立的。
+func (s *TrainingCatalogService) checkCredentialDeleteBlockers(id int) error {
+	var contributions int64
+	if err := EntityOwnedBy(s.db.Model(&model.UserContribution{}), "credential_id", &id).
+		Count(&contributions).Error; err != nil {
+		return err
+	}
+	if contributions > 0 {
+		return fmt.Errorf("该证件下仍有 %d 篇投稿，请先迁移或下架：%w", contributions, ErrCredentialHasContributions)
+	}
+	return nil
 }
 
 // SwapCredentialSort 交换两个目标证件的排序位置。

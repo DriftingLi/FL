@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -23,8 +24,10 @@ type memContributionStorage struct {
 	files   []string
 }
 
-func (m *memContributionStorage) Save(_ context.Context, _ string, _ []byte, _ string) (string, error) {
-	return "/static/uploads/contributions/note_1700000000000.pdf", nil
+func (m *memContributionStorage) Save(_ context.Context, key string, _ []byte, _ string) (string, error) {
+	// 照实回显传入的 key（#1361 之后投稿暂存 key 形如 contributions/<uid>/<name>），
+	// 不再硬返回一条扁平老路径——否则「上传落哪个分区」这条判据在替身里就被抹平了。
+	return "/static/uploads/" + key, nil
 }
 
 func (m *memContributionStorage) Delete(_ context.Context, url string) error {
@@ -102,11 +105,17 @@ func oneFile(url string, size int64) ContributionFileDTO {
 	return ContributionFileDTO{FileName: "a.pdf", FileURL: url, FileSize: size, ContentType: "document"}
 }
 
-// contributionInput 构造创建入参。
+// stagedFor 学员 uid 暂存位下的一个文件 URL（#1361：暂存按用户分区 contributions/<uid>/，
+// Create 的归属校验读的就是这一段；扁平的 contributions/x.pdf 已是老路径，不再被接受）。
+func stagedFor(uid int, name string) string {
+	return fmt.Sprintf("/static/uploads/contributions/%d/%s", uid, name)
+}
+
+// contributionInput 构造创建入参（缺省文件落在**该学员自己的**暂存位）。
 func contributionInput(userID, credID int, files ...ContributionFileDTO) CreateContributionInput {
 	in := CreateContributionInput{UserID: userID, CredentialID: credID, Title: "叉车液压故障排查手册", Intro: "整理自一线维修笔记", Files: files}
 	if len(files) == 0 {
-		in.Files = []ContributionFileDTO{oneFile("/static/uploads/contributions/a.pdf", 1024)}
+		in.Files = []ContributionFileDTO{oneFile(stagedFor(userID, "a.pdf"), 1024)}
 	}
 	return in
 }
@@ -141,12 +150,12 @@ func TestContribution_QuotaDaily(t *testing.T) {
 	cred := seedCredential(t, db)
 	u := seedContributionUser(t, db, "qday", cred.ID)
 	for i := 0; i < ContributionDailyMax; i++ {
-		in := contributionInput(u.ID, cred.ID, oneFile("/static/uploads/contributions/f"+string(rune(49+i))+".pdf", 1024))
+		in := contributionInput(u.ID, cred.ID, oneFile(stagedFor(u.ID, "f"+string(rune(49+i))+".pdf"), 1024))
 		if _, err := svc.Create(in); err != nil {
 			t.Fatalf("第 %d 次投稿应成功: %v", i+1, err)
 		}
 	}
-	_, err := svc.Create(contributionInput(u.ID, cred.ID, oneFile("/static/uploads/contributions/f4.pdf", 1024)))
+	_, err := svc.Create(contributionInput(u.ID, cred.ID, oneFile(stagedFor(u.ID, "f4.pdf"), 1024)))
 	if !errors.Is(err, ErrContributionQuotaDaily) {
 		t.Fatalf("第 4 份应触达日配额, got %v", err)
 	}
@@ -168,7 +177,7 @@ func TestContribution_QuotaPending(t *testing.T) {
 			t.Fatalf("seed pending 失败: %v", err)
 		}
 	}
-	_, err := svc.Create(contributionInput(u.ID, cred.ID, oneFile("/static/uploads/contributions/z.pdf", 1024)))
+	_, err := svc.Create(contributionInput(u.ID, cred.ID, oneFile(stagedFor(u.ID, "z.pdf"), 1024)))
 	if !errors.Is(err, ErrContributionQuotaPending) {
 		t.Fatalf("pending=5 应拒投, got %v", err)
 	}
@@ -181,7 +190,7 @@ func TestContribution_Lifecycle(t *testing.T) {
 	author := seedContributionUser(t, db, "author", cred.ID)
 
 	// 1. 创建（pending）
-	in := contributionInput(author.ID, cred.ID, oneFile("/static/uploads/contributions/m.pdf", 2048))
+	in := contributionInput(author.ID, cred.ID, oneFile(stagedFor(author.ID, "m.pdf"), 2048))
 	created, err := svc.Create(in)
 	if err != nil {
 		t.Fatalf("创建投稿失败: %v", err)
@@ -238,7 +247,7 @@ func TestContribution_Lifecycle(t *testing.T) {
 	}
 
 	// 7. 匿名投稿作者显示
-	anonIn := contributionInput(author.ID, cred.ID, oneFile("/static/uploads/contributions/an.pdf", 1024))
+	anonIn := contributionInput(author.ID, cred.ID, oneFile(stagedFor(author.ID, "an.pdf"), 1024))
 	anonIn.IsAnonymous = true
 	anonIn.Title = "匿名资料"
 	anon, err := svc.Create(anonIn)
@@ -396,9 +405,9 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	db := testutil.NewFileDB(t)
 	st := &memContributionStorage{
 		files: []string{
-			"/static/uploads/contributions/orphan_1699999999999.pdf", // 24h 前（旧）未引用
-			"/static/uploads/contributions/used_1700000000000.pdf",   // 已被投稿引用
-			"/static/uploads/contributions/fresh_1900000000000.pdf",  // 新传未引用（未到 TTL）
+			stagedFor(1, "orphan_1699999999999.pdf"), // 24h 前（旧）未引用
+			stagedFor(1, "used_1700000000000.pdf"),   // 已被投稿引用
+			stagedFor(1, "fresh_1900000000000.pdf"),  // 新传未引用（未到 TTL）
 		},
 	}
 	fileSvc := NewFileStore("", st, zap.NewNop())
@@ -415,7 +424,7 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 		t.Fatalf("seed 投稿失败: %v", err)
 	}
 	if err := db.Create(&model.UserContributionFile{ContributionID: contr.ID,
-		FileURL: "/static/uploads/contributions/used_1700000000000.pdf", FileName: "used.pdf",
+		FileURL: stagedFor(u.ID, "used_1700000000000.pdf"), FileName: "used.pdf",
 		FileSize: 10, ContentType: "document", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("seed 文件失败: %v", err)
 	}
@@ -423,7 +432,7 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	if cleaned != 1 {
 		t.Fatalf("应清 1 个孤儿, got %d (deleted=%v)", cleaned, st.deleted)
 	}
-	if len(st.deleted) != 1 || st.deleted[0] != "/static/uploads/contributions/orphan_1699999999999.pdf" {
+	if len(st.deleted) != 1 || st.deleted[0] != stagedFor(1, "orphan_1699999999999.pdf") {
 		t.Fatalf("应删旧孤儿, deleted=%v", st.deleted)
 	}
 }
