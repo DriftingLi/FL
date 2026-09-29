@@ -12,6 +12,8 @@
  *   C2 登出只由**真实刷新失败**（或终态 401）触发，且跳转只此一处
  *   C3 `restoreFromStorage()` 判 storage 不可用时同步归零内存登录态
  *   C4「清理缓存」不丢 `auth_refresh_token` / `auth_login_provider`
+ *   C5 已登出时不得用遗留的 refresh_token 悄悄复活会话
+ *   C6 证件域三键由单点清理，登出与身份切换都经它（#1380）
  */
 const path = require('path');
 
@@ -130,7 +132,7 @@ describe('C3 restoreFromStorage 在 storage 不可用时归零内存登录态', 
     expect(resets).toBe(2);
   });
 
-  test('只重置内存、不动 storage：登出后 refresh_token 仍留给生物识别快捷登录（ADR-0004）', () => {
+  test('只重置内存、不动 storage（清态由调用方决定）：#1391 起快捷登录走凭据登录，rt 的槽由 clearAuthData 移除', () => {
     const body = fnBody(authSrc, 'restoreFromStorage');
     expect(body).not.toContain('removeStorage(');
   });
@@ -163,5 +165,33 @@ describe('C5 已登出时不得用遗留的 refresh_token 悄悄复活会话', (
     const derefIdx = body.indexOf('setAuthData(result.token, user.value!');
     expect(guardIdx).toBeGreaterThan(-1);
     expect(derefIdx).toBeGreaterThan(guardIdx);
+  });
+});
+
+/**
+ * C6 证件域三键（#1380）。
+ *
+ * 行为面在 `utils/credentialGroupedBehavior.test.js`（真的起 `stores/auth.uts`，断言退出后
+ * 三键为空 + 缓存读回 null）；本处只补那看不到的一半：**接线**——两处清槽是否真的共用一个点。
+ * 本票的缺陷正是「两处各写一份清单、证件域那三条没人写进去」，所以单点本身就是需守的东西。
+ *
+ * 为什么连「写空串」这个形态也钉：它不是实现细节，而是一条安全决策 ——
+ * `readCurrentCredentialCache()` 拿 `uni.getStorageSync(…) as string` 再取 `.length`，无 null 兜底，
+ * 所以生产侧不用 `removeStorage()`（理由写在 `stores/auth.uts` 的 `clearCredentialStorage()` 头注释）。行为测试
+ * 对两种「清」都宽容（只判用户看得到的结果），形态归本锁管 —— 分层，不是口径不一致。
+ */
+describe('C6 证件域三键由单点清理，登出与身份切换都经它（#1380）', () => {
+  test('clearCredentialStorage 三键齐，且两处清槽都调它（漏一处 = 跨账号供出上一账号证件）', () => {
+    const clearer = fnBody(authSrc, 'clearCredentialStorage');
+    for (const k of ['selected_cert', 'selected_cert_id', 'selected_cert_name']) {
+      expect(clearer).toContain(`setStorage('${k}', '')`);
+    }
+    expect(fnBody(authSrc, 'clearAuthData')).toContain('clearCredentialStorage()');
+    expect(fnBody(authSrc, 'clearIdentityForSwitch')).toContain('clearCredentialStorage()');
+  });
+
+  test('保留项逐条不变：`auth_secure_credentials` 只在身份切换时清，登出仍保留（ADR-0004）', () => {
+    expect(fnBody(authSrc, 'clearAuthData')).not.toContain('removeStorage(STORAGE_KEY_CREDENTIALS)');
+    expect(fnBody(authSrc, 'clearIdentityForSwitch')).toContain('removeStorage(STORAGE_KEY_CREDENTIALS)');
   });
 });
