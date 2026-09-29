@@ -599,7 +599,7 @@ func (s *Session) RefreshCookieForRequest(r *http.Request) string {
 	return ck.Value
 }
 
-// SetRefreshCookie 下发主站 refresh 的 httpOnly Cookie（Path 收在刷新端点）。
+// SetRefreshCookie 下发主站 refresh 的 httpOnly Cookie（Path = RefreshCookiePath，认证族前缀）。
 // ⚠️ 取配置必须走**局部拷贝**（与同文件 SetRecruiterCookie 同形）：`*Session` 是跨请求共享的，
 // 直接写 `s.refreshCookie.Name` 就是并发请求在同一个字段上 race —— 本仓刚为同一个形状修过
 // 限流器（`middleware/ratelimit.go` 的「普通字段与 cleanup  goroutine 形成数据竞争」那条），

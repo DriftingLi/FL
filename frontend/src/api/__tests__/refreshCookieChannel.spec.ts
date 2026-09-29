@@ -221,7 +221,7 @@ describe('行为锁：401 → Cookie 静默刷新 → 重试（新 refresh 不�
     // 判据 1：浏览器侧只提供 Cookie，不提供第二支凭证
     expect(capture.bodies[0]).toEqual({})
     expect(capture.bodies[0]).not.toHaveProperty('refresh_token')
-    // 不带凭证就发不出去（refresh cookie 的 Path 收在该端点，是浏览器侧唯一通道）
+    // 不带凭证就发不出去（refresh cookie 的 Path 收在认证族前缀 /api/auth，是浏览器侧唯一通道）
     expect(capture.credentials).toEqual([true])
     // 族线索（#1376 跨端评审）：storage 里那支**已过期**的 access 仍要原样发出去。
     // 它不参与认证，只回答「本次续期属于哪一族」；不发，服务端在两族并存时只能拒绝
