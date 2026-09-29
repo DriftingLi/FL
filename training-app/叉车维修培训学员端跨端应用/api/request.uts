@@ -6,7 +6,8 @@
  * - 401 自动用 refresh_token 刷新并重试一次；**并发 401 共享同一次刷新**
  *   （api/refreshGate.uts 单飞），只有刷新**真的**失败才清空登录态并跳转登录页
  * - X-Silent: 1 头关闭错误 toast
- * - 调试日志仅开发环境输出（ENABLE_DEBUG_LOG），且不打印请求头（避免泄漏 token）
+ * - 调试日志仅开发环境输出（ENABLE_DEBUG_LOG），不打印请求头（避免泄漏 token）；
+ *   请求体经 `sanitizeForLog` 打码敏感键（password / refresh_token / token / code / api_key / captcha_value）后再入日志（#1398）
  */
 import { API_BASE_URL, REQUEST_TIMEOUT, ENABLE_DEBUG_LOG } from '../config/env'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants/app'
@@ -316,6 +317,56 @@ function networkError(errMsg : string | null, failMsg : string, timeoutMsg : str
 }
 
 /**
+ * 命中这些键的请求体值不得原样进 logcat（明文密码 / 长效令牌 / 短信验证码 / 第三方模型密钥 / 图形验证码）—— #1398。
+ * #1394 取证实证：快捷登录（凭据登录）把明文密码、`POST /auth/logout` 把 7 天有效期的
+ * refresh_token JWT 原样打进日志；此前靠「取证产物入库前人工打码」兜，人工漏一次即明文凭证入仓。
+ * 键面不止票面点名的四个：`api_key`（自定义 AI 模型密钥 `sk-…`，长期有效的外部凭证，
+ * 经 `POST /ai-assistant/user-models` 走同一打印口）与 `captcha_value`（图形验证码）同属该防。
+ */
+const SENSITIVE_LOG_KEYS : string[] = ['password', 'refresh_token', 'token', 'code', 'api_key', 'captcha_value']
+/** 敏感值在日志里的替身：不回显任何片段、不保留长度 */
+const LOG_SECRET_MASK = '***'
+
+/** 键名是否落进敏感清单（逐字匹配后端 snake_case 字段） */
+function isSensitiveLogKey(key : string) : boolean {
+    for (let i = 0; i < SENSITIVE_LOG_KEYS.length; i++) {
+        if (SENSITIVE_LOG_KEYS[i] == key) return true
+    }
+    return false
+}
+
+/**
+ * 生成**可安全写进日志**的请求体副本：命中敏感键的值替换为掩码，其余逐字保留。
+ *
+ * 为什么返回副本而非原地改写：入参 `options.data` 在 `request()` 里紧随其后要**原样发出去**
+ * （`doSingleRequest`），就地打码会连同真实请求体一起毁掉。
+ *
+ * 只处理**扁平对象**请求体：本仓敏感请求体（登录 / 登出 / 刷新 / 验证码）的敏感值都在顶层键；
+ * 非对象形态（null / 数组 / 标量）原样返回，不做递归（无需要脱敏的嵌套载荷，YAGNI）。
+ */
+export function sanitizeForLog(data : any | null) : any | null {
+    if (data == null) return null
+    let casted : UTSJSONObject | null = null
+    try {
+        casted = data as UTSJSONObject
+    } catch (e) {
+        // 非对象形态（数组 / 标量）：本仓无此类敏感请求体，原样返回
+        return data
+    }
+    if (casted == null) return data
+    const obj : UTSJSONObject = casted!
+    const out : UTSJSONObject = {}
+    for (const k in obj) {
+        if (isSensitiveLogKey(k)) {
+            out[k] = LOG_SECRET_MASK
+        } else {
+            out[k] = obj[k]
+        }
+    }
+    return out
+}
+
+/**
  * 发起请求，返回解包后的 data（UTSJSONObject）
  * @throws Error 当网络错误、HTTP 错误或业务 code 非 200/201 时 reject
  * @note Android 端无法用 as 把 UTSJSONObject 强转为 type 字面量（Kotlin data class）
@@ -329,7 +380,7 @@ export function request<T>(options : RequestOptions) : Promise<UTSJSONObject> {
         const fullURL = resolveURL(options.url)
 
         if (ENABLE_DEBUG_LOG) {
-            console.log('[request] >>>', method, fullURL, 'data:', options.data)
+            console.log('[request] >>>', method, fullURL, 'data:', sanitizeForLog(options.data))
         }
 
         // 单次 HTTP 请求；401 刷新成功后带新 token 重试一次
