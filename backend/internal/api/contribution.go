@@ -79,9 +79,18 @@ func currentUserID(c *gin.Context) (int, error) {
 
 // contributionErrStatus 投稿域哨兵→状态码表（#611，ADR-0024）：不存在 → 404，
 // 状态/校验/配额类 → 400；未命中（含解析错误已先行处理）走 500 默认信封。
+//
+// 暂存文件四校验（#1361 / ADR-0066 决策 5）的落档：
+//   - 前缀不属本人 → **403**（那是别人的暂存位，属越权，不是「这个字段格式不对」）；
+//   - 类型不在白名单 / 同一 URL 已被登记 → **400**（两件各有自己的哨兵与自己的句子，
+//     压不成一句）。「已占用」本可表达为 409，但本仓从未使用 409、renderStatus 的单一咽喉里
+//     没有那一档，域表放 409 会被静默渲染成 500 —— 同 faq.go「标识已占用」的同一处先例与同一理由；
+//   - 文件在存储侧不存在 → **404**（引用的那个资源没有，语义就是 404）。
 var contributionErrStatus = &errStatusTable{
 	entries: []errStatusEntry{
 		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrContributionFileMissing, status: http.StatusNotFound},
+		{sentinel: service.ErrContributionStagedNotOwner, status: http.StatusForbidden},
 		{sentinel: service.ErrContributionNotOwner, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionNotPending, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionNotApproved, status: http.StatusBadRequest},
@@ -95,6 +104,8 @@ var contributionErrStatus = &errStatusTable{
 		{sentinel: service.ErrContributionFileTooLarge, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionTotalTooLarge, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionFileInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileExtNotAllowed, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileAlreadyClaimed, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionRejectReason, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionArchiveReason, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionInvalidReportReason, status: http.StatusBadRequest},
@@ -103,7 +114,7 @@ var contributionErrStatus = &errStatusTable{
 
 // UploadFile 上传投稿暂存文件 POST /api/contributions/upload-file
 // @Summary 上传投稿文件（暂存）
-// @Description 先传后交：逐个文件上传到暂存位，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件 ≤20MB
+// @Description 先传后交：逐个文件上传到**本人**暂存位 contributions/<当前用户id>/，返回 URL 与元数据，随投稿表单提交时引用。扩展名白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4，单文件 ≤20MB（ADR-0066 决策 5：归属由路径承载）
 // @Tags 学员端-投稿
 // @Accept multipart/form-data
 // @Produce json
@@ -116,11 +127,16 @@ var contributionErrStatus = &errStatusTable{
 func (h *ContributionHandler) UploadFile(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionFileDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionFileDTO, error) {
+			// 暂存位按用户分区 ⇒ 上传这一刻就知道「这是谁的」，Create 的归属校验才读得判据。
+			userID, err := currentUserID(c)
+			if err != nil {
+				return nil, err
+			}
 			file, err := c.FormFile("file")
 			if err != nil {
 				return nil, badRequest("未找到上传文件")
 			}
-			return h.svc.UploadFile(ctx, file)
+			return h.svc.UploadFile(ctx, userID, file)
 		},
 		// #611：错误映射收编至 contributionErrStatus
 		ErrStatus: contributionErrStatus,
@@ -143,15 +159,17 @@ type createContributionReq struct {
 
 // Create 创建投稿 POST /api/contributions
 // @Summary 创建投稿（pending）
-// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。未过审不产生积分
+// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。提交的每个 file_url 过四校验：前缀属本人 contributions/<id>/、扩展名在白名单内、未被任何投稿登记过、文件真实存在（ADR-0066 决策 5 / #1361）。未过审不产生积分
 // @Tags 学员端-投稿
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param body body createContributionReq true "投稿表单"
 // @Success 200 {object} response.R{data=service.ContributionItemDTO} "success"
-// @Failure 400 {object} response.R "校验失败/配额已满/未选证件"
+// @Failure 400 {object} response.R "校验失败/配额已满/未选证件/类型不在白名单/文件已被登记"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "暂存文件不属于本人目录"
+// @Failure 404 {object} response.R "暂存文件不存在"
 // @Router /contributions [post]
 func (h *ContributionHandler) Create(c *gin.Context) {
 	Endpoint[createContributionReq, service.ContributionItemDTO]{

@@ -259,10 +259,13 @@ func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	}, http.StatusBadRequest)
 }
 
-// TestErrStatusTable_Snapshot_Contribution 投稿域表快照（#611：不存在 404、其余 400、未设 fallback → 500）。
+// TestErrStatusTable_Snapshot_Contribution 投稿域表快照（#611：不存在 404、其余 400、未设 fallback → 500；
+// #1361 追加暂存文件四校验的落档：越权 403 / 类型与已登记 400 / 文件不存在 404）。
 func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 	assertTableSnapshot(t, "contributionErrStatus", contributionErrStatus, []errStatusEntry{
 		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
+		{sentinel: service.ErrContributionFileMissing, status: http.StatusNotFound},
+		{sentinel: service.ErrContributionStagedNotOwner, status: http.StatusForbidden},
 		{sentinel: service.ErrContributionNotOwner, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionNotPending, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionNotApproved, status: http.StatusBadRequest},
@@ -276,6 +279,8 @@ func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 		{sentinel: service.ErrContributionFileTooLarge, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionTotalTooLarge, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionFileInvalid, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileExtNotAllowed, status: http.StatusBadRequest},
+		{sentinel: service.ErrContributionFileAlreadyClaimed, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionRejectReason, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionArchiveReason, status: http.StatusBadRequest},
 		{sentinel: service.ErrContributionInvalidReportReason, status: http.StatusBadRequest},

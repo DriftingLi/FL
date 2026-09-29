@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -95,6 +96,22 @@ var (
 	ErrContributionRejectReason        = errors.New("驳回原因不能为空")
 	ErrContributionArchiveReason       = errors.New("下架原因不能为空")
 	ErrContributionInvalidReportReason = errors.New("举报理由无效")
+
+	// ===== 投稿暂存文件的四校验（ADR-0066 决策 5 / #1361）=====
+	// 一句话一条事实：四条判据各落一枚哨兵，档位由 api 侧的域表决定（403 / 400 / 400 / 404）。
+
+	// ErrContributionStagedNotOwner 引用的暂存文件不在本人的暂存目录下（别人的分区，或干脆是外部 URL）。
+	ErrContributionStagedNotOwner = errors.New("该暂存文件不属于当前用户的投稿目录")
+	// ErrContributionFileExtNotAllowed 扩展名不在投稿白名单内（绕过上传接口直接造 URL 的情形）。
+	ErrContributionFileExtNotAllowed = errors.New("该文件类型不在投稿白名单内")
+	// ErrContributionFileAlreadyClaimed 同一 URL 已被某篇投稿登记过（一份暂存文件只许被引用一次）。
+	ErrContributionFileAlreadyClaimed = errors.New("该文件已被其它投稿登记，请重新上传")
+	// ErrContributionFileMissing 存储侧查不到这个文件（未上传、已过期被回收，或路径是编的）。
+	ErrContributionFileMissing = errors.New("暂存文件不存在，请重新上传")
+	// ErrContributionStorageUnconfigured 没配存储后端时**无法**校验「文件确实存在」——
+	// 这一格在生产装配里不存在（cmd/server 一律注入 local 或 r2），出现即装配漏了，
+	// 报出来而不是静默跳过第四校验（跳过等于把判据换成「客户端说了算」，正是本票要消掉的形状）。
+	ErrContributionStorageUnconfigured = errors.New("投稿存储未配置，无法校验暂存文件")
 )
 
 // ContributionAuthor 投稿作者信息（展示名 = 昵称；匿名投稿不展示）。
@@ -175,6 +192,92 @@ var allowedContributionExt = map[string]bool{
 	"mp4": true,
 }
 
+// contributionStagedDir 某位学员的投稿暂存前缀（ADR-0066 决策 5：归属由路径承载）。
+// 登记仍在 attachment.go 的 ContributionFileDirPrefix（域前缀单点），这里只在它下面按用户分一层：
+// 扁平的 contributions/ 让任何人只要猜中文件名就能把别人的暂存文件登记进自己的投稿，
+// 而 contributions/<uid>/ 把「谁的」写进路径 ⇒ Create 的四校验第 ① 条才有判据可读。
+func contributionStagedDir(userID int) string {
+	return fmt.Sprintf("%s/%d", ContributionFileDirPrefix, userID)
+}
+
+// contributionStagedOwner 从暂存文件 URL 里取出「这是谁的暂存位」（contributions/<uid>/<name>）。
+// 不属于任何学员（外部 URL、扁平老路径、目录段不是数字、带 . / .. 的段）一律回 0。
+//
+// 为什么不用「URL 里含 /contributions/<uid>/ 子串」这种宽松判据：那挡不住
+// `https://x/contributions/9/../../contributions/8/a.pdf` 这类形状——local 存储把 key 直接拼成
+// 文件路径（storage.LocalStorage.urlToKey），段级穿越会把别人的文件读成「我的」。
+// 本站形态判定仍走 attachment.go 的单点（IsSiteAttachmentURL），这里只补「归属段」这一层。
+func contributionStagedOwner(url string) int {
+	if !IsSiteAttachmentURL(url, ContributionFileDirPrefix) {
+		return 0
+	}
+	key := AttachmentKey(url, ContributionFileDirPrefix) // contributions/<uid>/<name>
+	parts := strings.Split(key, "/")
+	if len(parts) < 3 {
+		return 0 // 扁平的 contributions/x.pdf（老路径）不再被认成任何人的暂存位
+	}
+	for _, p := range parts[1:] {
+		if p == ".." || p == "." || p == "" {
+			return 0
+		}
+	}
+	uid, err := strconv.Atoi(parts[1])
+	if err != nil || uid <= 0 {
+		return 0
+	}
+	return uid
+}
+
+// stagedFileExists 校验暂存文件在存储侧真实存在（第四校验）。
+// 未配置存储后端时**报错而不是放行**：放行等于把这一校验变成「测试装配下的空洞」，
+// 而本仓的装配根（cmd/server → api.NewDeps）永远会带一个真存储上来。
+func (s *ContributionService) stagedFileExists(fileURL string) (bool, error) {
+	if s.fileSvc == nil || s.fileSvc.storage == nil {
+		return false, ErrContributionStorageUnconfigured
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.fileSvc.storage.Exists(ctx, fileURL)
+}
+
+// validateStagedFiles 投稿创建的四校验（ADR-0066 决策 5 / #1361）：
+// ① 前缀属本人 ② 扩展名在白名单内 ③ 该 URL 未被任何投稿登记过 ④ 文件在存储侧真实存在。
+//
+// 承重的是「服务端不再相信客户端提交的 file_url/file_name/file_size/content_type」这一句：
+// 此前的 Create 只校验大小，归属与类型都不判 ⇒ 任何人都能把别人的暂存文件、
+// 非白名单类型、或凭空的 URL 登记进自己的投稿（真实缺陷 #13）。
+// ② 判的是 **URL 的扩展名**（上传时由服务端铸造），不是客户端传来的 file_name。
+func (s *ContributionService) validateStagedFiles(userID int, files []ContributionFileDTO) error {
+	for _, f := range files {
+		// ① 归属
+		if contributionStagedOwner(f.FileURL) != userID {
+			return fmt.Errorf("%w：%s", ErrContributionStagedNotOwner, f.FileURL)
+		}
+		// ② 类型（读服务端写的 URL，不读客户端写的 file_name / content_type）
+		if ext := fileExtension(f.FileURL); !allowedContributionExt[ext] {
+			return fmt.Errorf("%w：%s", ErrContributionFileExtNotAllowed, f.FileURL)
+		}
+		// ③ 未被登记过（一份暂存文件只许被引用一次；引用即归属，见 attachment.go 的注释）
+		var claimed int64
+		if err := s.db.Model(&model.UserContributionFile{}).
+			Where("file_url = ?", f.FileURL).Count(&claimed).Error; err != nil {
+			return fmt.Errorf("查投稿文件登记失败: %w", err)
+		}
+		if claimed > 0 {
+			return fmt.Errorf("%w：%s", ErrContributionFileAlreadyClaimed, f.FileURL)
+		}
+		// ④ 真实存在
+		exists, err := s.stagedFileExists(f.FileURL)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("%w：%s", ErrContributionFileMissing, f.FileURL)
+		}
+	}
+	return nil
+}
+
 // contributionContentType 从扩展名推导内容类型（列表图标/展示用）。
 func contributionContentType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
@@ -195,8 +298,14 @@ func contributionContentType(filename string) string {
 	}
 }
 
-// UploadFile 上传投稿暂存文件：校验扩展名与单文件大小，落 contributions/ 前缀。
-func (s *ContributionService) UploadFile(ctx context.Context, fileHeader *multipart.FileHeader) (*ContributionFileDTO, error) {
+// UploadFile 上传投稿暂存文件：校验扩展名与单文件大小，落 contributions/<uid>/ 前缀（ADR-0066 决策 5）。
+//
+// 按用户分区是「归属由路径承载」的那一半：Create 侧的「前缀属本人」校验只能读得出路径里写了什么，
+// 所以上传这一刻就必须把 uid 写进去（此前的扁平 contributions/ 里，归属这件事在数据里根本不存在）。
+func (s *ContributionService) UploadFile(ctx context.Context, userID int, fileHeader *multipart.FileHeader) (*ContributionFileDTO, error) {
+	if userID <= 0 {
+		return nil, errors.New("未认证")
+	}
 	if fileHeader.Filename == "" {
 		return nil, errors.New("未选择文件")
 	}
@@ -211,7 +320,7 @@ func (s *ContributionService) UploadFile(ctx context.Context, fileHeader *multip
 	if err != nil {
 		return nil, fmt.Errorf("读取文件失败: %w", err)
 	}
-	url, err := s.fileSvc.Save(content, fileHeader.Filename, ContributionFileDirPrefix)
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, contributionStagedDir(userID))
 	if err != nil {
 		return nil, fmt.Errorf("文件保存失败: %w", err)
 	}
@@ -382,6 +491,12 @@ func (s *ContributionService) Create(in CreateContributionInput) (*ContributionI
 	}
 	if totalSize > ContributionMaxTotalSize {
 		return nil, ErrContributionTotalTooLarge
+	}
+	// 暂存文件四校验（#1361 / ADR-0066 决策 5）：归属、类型、未登记、真实存在。
+	// 排在张数与体积那些「输入不合法」之后、事务之前——事务里只做配额守卫与落库，
+	// 不让一次存储侧 Exists 落在事务持有期内。
+	if err := s.validateStagedFiles(in.UserID, in.Files); err != nil {
+		return nil, err
 	}
 	now := s.clk.Now()
 	var created model.UserContribution
