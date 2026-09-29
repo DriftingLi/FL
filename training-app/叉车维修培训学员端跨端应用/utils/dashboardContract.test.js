@@ -4,6 +4,9 @@
  * 沿用源码契约缝（.uvue/.uts 不可 jest import）。先例：profileContract（T03 模块汇总契约）、
  * forumContract（T04 五类锁 + 行为保持点）。本文件五类锁：
  * ① 本模块域 api 收紧（出口家族 + catch/降级保持 + 零裸 .then 残留）
+ *    ⚠️ credential 域两条口径已被推翻：#1346 去掉 switch 的 mock 假成功；**#1349** 把证件列表
+ *    真源切到后端 `GET /credentials/grouped`、硬编码字典整删、离线回退改读「后端确认值」缓存，
+ *    并同批新建 credential 域**幻影路由锁**（#662 口径，此前独缺）—— 见下面两个 describe。
  * ② 页面预算落袋锁（模块全量预算 / 目录 ≤2 层已由声明面执法，见 ADR-0023 票 C #1219）
  * ③ 拆出物接线收口（显式 import + 模板挂载 + 零孤儿）
  * ④ 页面层零直发请求
@@ -25,6 +28,15 @@ function fnBodyOf(fileSrc, name) {
   if (start === -1) throw new Error(`未找到 ${name}`);
   const end = fileSrc.indexOf('\n}', start);
   return fileSrc.slice(start, end);
+}
+
+/**
+ * 抹注释（`://` 例外，防误杀 URL 字面量）。先例 coursesContract。
+ * #1349 起 credential 段的**反向锁**一律走它：那些注释里引用着被删掉的旧代码
+ * （`getMockCredentialList()` / `Promise.resolve(...)`），拿原文判「不得出现」会自己绊自己。
+ */
+function stripComments(s) {
+  return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
 /* ══ ① 本模块域 api 收紧（featured / notification / credential；student 域已由 T03 收紧，此处复检） ══ */
@@ -70,16 +82,46 @@ describe('notification 域收紧（dashboard 未读轮询数据源）', () => {
 
 describe('credential 域收紧（dashboard 证件切换数据源）', () => {
   const src = read('api/credential.uts');
+  // 注释里的 getMock* 是**解释性文字**（说明为什么删），不是回退 —— 判据一律先抹注释
+  const code = stripComments(src);
   it('引入 getMapped 与 requestMapped（PATCH 无便捷面，走 opts 同通路）', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
     expect(src).toMatch(/import\s*\{[^}]*requestMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it('getCurrentCredentialApi 经 getMapped 且保留 catch + mock 列表回退（错误行为不得变）', () => {
+  it('getCurrentCredentialApi 经 getMapped 且保留 catch（GET 面「读不到」不当业务失败），但不再查硬编码字典（#1349）', () => {
     const body = fnBodyOf(src, 'getCurrentCredentialApi');
+    const bare = stripComments(body);
     expect(body).toContain('getMapped<CredentialItem | null>');
     expect(body).toContain(".catch((e) : CredentialItem | null =>");
-    expect(body).toContain('getMockCredentialList()');
-    expect(body).toContain("uni.getStorageSync('selected_cert')");
+    // #1349：离线回退上移到使用方（读「后端确认值」缓存）；本层折进回退会让调用方
+    // 把缓存项误当后端回显、拿空 code 去写 selected_cert
+    expect(bare).not.toContain('getMockCredentialList');
+    expect(bare).not.toContain("uni.getStorageSync('selected_cert')");
+  });
+  it('getAllCredentialsApi 走后端 grouped、失败上抛（#1349 反转 #643 的 mock 列表兜底）', () => {
+    const body = fnBodyOf(src, 'getAllCredentialsApi');
+    const bare = stripComments(body);
+    expect(body).toContain('getMapped<CredentialGroup[]>');
+    expect(body).toContain('/credentials/grouped');
+    expect(body).toContain('buildCredentialGroups');
+    // 兜底的两种形态都不许在：catch 回落、以及 Promise.resolve(mock) 的同步假列表
+    expect(bare).not.toContain('.catch(');
+    expect(bare).not.toContain('Promise.resolve(');
+    expect(bare).not.toContain('getMockCredentialList');
+  });
+  it('硬编码证件字典整删（含定义处）—— 锁的是「mock 绝迹」，不是「catch 归零」（与 coursesContract 的差别写在里面）', () => {
+    expect(code).not.toContain('getMockCredentialList');
+    expect(code).not.toContain('groupCredentials');
+    // 与 coursesContract.test.js:239-243 的口径差别写明，免得后人「顺手对齐」：
+    // #1331 那处把 .catch 一并清零；本票按裁定**保留** getCurrentCredentialApi 的 .catch
+    // （GET 读面的「读不到」不当业务失败上抛），所以这里的数字锁是 1 而不是 0。
+    expect((code.match(/\.catch\(/g) || []).length).toBe(1);
+  });
+  it('缓存读写出口在位（#1349 离线回退的真源，两键都写字符串）', () => {
+    expect(src).toContain('export function readCurrentCredentialCache');
+    expect(src).toContain('export function writeCurrentCredentialCache');
+    expect(code).toContain("uni.setStorageSync('selected_cert_id'");
+    expect(code).toContain("uni.setStorageSync('selected_cert_name'");
   });
   it('credential.level 走 toNumberOrNull（后端该字段可为 null，裸 as number 抛 Kotlin NPE）', () => {
     expect(src).toContain("level: toNumberOrNull(obj['level'])");
@@ -94,6 +136,45 @@ describe('credential 域收紧（dashboard 证件切换数据源）', () => {
     // 后端 PATCH /me/credential 已实现 ⇒ 失败必须上抛，不得用 .catch + mock 兜成 success:true
     expect(body).not.toContain('.catch(');
     expect(body).not.toContain('getMockCredentialList');
+  });
+});
+
+/* ══ 幻影路由锁（#662 口径，先例 coursesContract / resumeContract）══ */
+describe('幻影路由锁（#662）：credential 域路由必须落在后端已注册清单内（#1349 新建）', () => {
+  /** 后端注册面：training_catalog.go 学员端段直接挂 `rg.`（无子组前缀） */
+  function registeredCredentialRoutes() {
+    const go = stripComments(read('../../backend/internal/api/training_catalog.go'));
+    return [...go.matchAll(/\brg\.(GET|POST|PUT|PATCH|DELETE)\("([^"]+)"/g)]
+      .map((m) => `${m[1]} ${m[2]}`);
+  }
+
+  /** 前端请求点：method 由出口形态定（getMapped→GET / opts.method 赋值→该值） */
+  function frontendCredentialRoutes() {
+    const code = stripComments(read('api/credential.uts'));
+    const out = [];
+    for (const m of code.matchAll(/getMapped<[^(]*\(\s*TRAINING_API_BASE \+ '([^']+)'/g)) {
+      out.push(`GET ${m[1]}`);
+    }
+    const opts = /opts\.method = '([A-Z]+)'/.exec(code);
+    const patchPath = /opts : RequestOptions = \{ url: TRAINING_API_BASE \+ '([^']+)' \}/.exec(code);
+    if (opts != null && patchPath != null) out.push(`${opts[1]} ${patchPath[1]}`);
+    return out;
+  }
+
+  it('credential.uts 的请求点非空（防判据空跑），且每条都被后端注册面覆盖', () => {
+    const used = [...new Set(frontendCredentialRoutes())];
+    expect(used.length).toBe(3);
+    expect(used).toContain('GET /credentials/grouped');
+    const registered = registeredCredentialRoutes();
+    expect(registered).toContain('GET /credentials/grouped');
+    expect(used.filter((u) => !registered.includes(u))).toEqual([]);
+  });
+
+  it('判据具备红能力：注入一条未注册路由必须被列出', () => {
+    const registered = registeredCredentialRoutes();
+    expect(registered.filter((r) => r.includes('credentials/grouped'))).toHaveLength(1);
+    expect(['GET /credentials/grouped-x'].filter((u) => !registered.includes(u)))
+      .toEqual(['GET /credentials/grouped-x']);
   });
 });
 
@@ -204,11 +285,19 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(body).not.toContain("uni.setStorageSync('selected_cert', item.code)");
   });
 
-  it("selected_cert 存储同步点保持（load 1 + switch 成功 1；未确认切换不写存储 #1346）", () => {
+  it("selected_cert 存储同步点（#1349 改写：写 2 保持，读 2→0 —— 回退改读「后端确认值」缓存）", () => {
+    // 沿革：#1346 把写从 3 调到 2（未确认切换不写）；#1349 把**读**清零 —— 原两处读拿 code
+    // 去查硬编码字典（后端字典一漂移就供出后端没有的 id），现由 selected_cert_id / _name 两键
+    // 承接。code 键本身仍有写（choose-cert 页面在消费它），其退役在 #1349 跟进票里议。
     const syncWrites = (cred.match(/uni\.setStorageSync\('selected_cert'/g) || []).length;
     expect(syncWrites).toBe(2);
     const syncReads = (cred.match(/uni\.getStorageSync\('selected_cert'/g) || []).length;
-    expect(syncReads).toBe(2);
+    expect(syncReads).toBe(0);
+    // 缓存出口的接线：1 读（回退）+ 3 写（后端确认 ×2、确认无证件清空 ×1）
+    expect((cred.match(/readCurrentCredentialCache\(\)/g) || []).length).toBe(1);
+    expect((cred.match(/writeCurrentCredentialCache\(/g) || []).length).toBe(3);
+    // 清空必须显式传 null（供旧值冒充当前证件是 #1349 要堵的第二处漂移）
+    expect(cred).toContain('writeCurrentCredentialCache(null)');
   });
 
   it('筛选抽屉留页面（选中态重开保持）；组件不引入跨层 v-model（ADR-0007 T04 教训）', () => {
