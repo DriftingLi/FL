@@ -12,10 +12,9 @@
                     <text class="cert-dropdown-close-icon">✕</text>
                 </view>
             </view>
-            <!-- 浮层形态自带滚动面；内嵌形态交宿主页面滚动（scroll-view 套 scroll-view 是双滚动面，
-                 uni-app-x 下行为不可靠 ⇒ 用动态组件按形态选容器） -->
-            <component :is="embedded ? 'view' : 'scroll-view'" scroll-y
-                :class="embedded ? 'cert-selector-scroll' : 'cert-dropdown-scroll'">
+            <!-- 两种形态共用同一个 scroll-view，只换容器 class：浮层限高自滚（max-height），
+                 内嵌面 `flex: 1` 吃满宿主给的内容区 ⇒ 不出现「scroll-view 套 scroll-view」的双滚动面。 -->
+            <scroll-view scroll-y :class="embedded ? 'cert-selector-scroll' : 'cert-dropdown-scroll'">
                 <view v-for="(group, gIdx) in groups" :key="gIdx" class="cert-dropdown-section">
                     <!-- 分组标题 -->
                     <view class="cert-dropdown-section-header">
@@ -151,19 +150,21 @@
 
 <style>
     /* ===== 证件选择器（浮层形态 = 原「选择学习阶段」下拉；内嵌形态只换外层壳，条目形态同源） ===== */
-    /* 内嵌形态（引导页）：不定位、不铺满，随宿主页面布局流动 */
+    /* 内嵌形态（引导页）：吃满宿主给的内容区，自身不定位、不铺满屏幕 */
     .cert-selector-embed {
-        width: 100%;
+        flex: 1;
+        flex-direction: column;
     }
 
     /* 内嵌面板：去灰底/圆角/阴影（宿主页面自己成卡），内容仍按浮层同款分组渲染 */
     .cert-selector-panel {
-        width: 100%;
+        flex: 1;
+        flex-direction: column;
     }
 
-    /* 内嵌滚动面：高度随内容（宿主页面负责滚动） */
+    /* 内嵌滚动面：高度由宿主的内容区决定（页面级滚动在组件内这一层发生） */
     .cert-selector-scroll {
-        width: 100%;
+        flex: 1;
     }
 
     .cert-dropdown-mask {

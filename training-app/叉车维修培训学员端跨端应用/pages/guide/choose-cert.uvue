@@ -12,35 +12,31 @@
             <view class="nav-placeholder"></view>
         </view>
 
-        <!-- 滚动内容区 -->
-        <scroll-view scroll-y class="scroll-area">
-            <!-- 省份选择 -->
-            <view class="province-bar" @click="onProvinceTap">
-                <text class="province-pin">📍</text>
-                <text class="province-label">报考省份：</text>
-                <text class="province-value">{{ province }}</text>
-            </view>
+        <!-- 省份选择 -->
+        <view class="province-bar" @click="onProvinceTap">
+            <text class="province-pin">📍</text>
+            <text class="province-label">报考省份：</text>
+            <text class="province-value">{{ province }}</text>
+        </view>
 
-            <!-- 选证列表：共享领域件 cert-selector（内嵌形态），数据唯一真源 = 后端 grouped 字典。
-                 原「特种作业 / 技能等级 / 热门考证」三块静态列表已随 #1395 整删——自持静态列表
-                 的 key 与后端 code 不通，是「选了永远匹配不上、从不落库」病灶的根。 -->
-            <view class="section">
-                <CertSelector v-if="!listFailed" :groups="groups" :current-id="selectedId" :embedded="true"
-                    @select="onSelect" />
-            </view>
-            <!-- 列表加载失败 = 空态 + 重试，不静态兜底（兜底列表 = 重引入本票要埋掉的病灶） -->
-            <view v-if="listFailed" class="section error-section">
+        <!-- 内容区：滚动面在 cert-selector 内部（内嵌形态 flex:1），页面不再另套一层 scroll-view
+             ⇒ 不出现双滚动面。选证列表 = 共享领域件（内嵌形态），数据唯一真源 = 后端 grouped 字典；
+             原「特种作业 / 技能等级 / 热门考证」三块静态列表已随 #1395 整删——自持静态列表
+             的 key 与后端 code 不通，是「选了永远匹配不上、从不落库」病灶的根。 -->
+        <view class="content">
+            <CertSelector v-if="!listFailed" :groups="groups" :current-id="selectedId" :embedded="true"
+                @select="onSelect" />
+            <!-- 列表加载失败 = 空态 + 重试，不静态兜底（兜底列表 = 重引入本票要埋掉的病灶）。
+                 两条各拿一个并列 v-if（不用 v-else）：uvue 的 v-else 不容注释/空行间隔。 -->
+            <view v-if="listFailed" class="error-section">
                 <text class="error-text">证件列表加载失败</text>
                 <view class="btn-retry" @click="loadList">
                     <text class="btn-retry-text">重试</text>
                 </view>
             </view>
+        </view>
 
-            <!-- 底部留白（为固定按钮腾空间） -->
-            <view style="height: 160rpx;"></view>
-        </scroll-view>
-
-        <!-- 底部完成按钮（固定）：一次真切换——PATCH 后端确认成功才跳首页，失败留页可重试 -->
+        <!-- 底部完成按钮：一次真切换——PATCH 后端确认成功才跳首页，失败留页可重试 -->
         <view class="bottom-bar">
             <view class="btn-confirm" :class="{ 'btn-confirm--disabled': selectedId == 0 }" @click="onConfirm">
                 <text class="btn-confirm-text">完成</text>
@@ -212,18 +208,14 @@
         font-weight: 500;
     }
 
-    /* ---- 滚动区域 ---- */
-    .scroll-area {
+    /* ---- 内容区（滚动面在 cert-selector 内，这里只给 flex 高度） ---- */
+    .content {
         flex: 1;
-    }
-
-    /* ---- 选证列表容器（组件内部分组自带卡片样式，这里只留外边距） ---- */
-    .section {
-        margin: 16rpx 32rpx 0;
     }
 
     /* ---- 列表失败空态 ---- */
     .error-section {
+        margin: 16rpx 32rpx 0;
         padding: 48rpx 28rpx;
         background-color: #FFFFFF;
         border-radius: 20rpx;
@@ -249,12 +241,8 @@
         font-weight: 600;
     }
 
-    /* ---- 底部完成按钮 ---- */
+    /* ---- 底部完成按钮（页面 flex 列的末子元素，不再 fixed） ---- */
     .bottom-bar {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
         padding: 20rpx 32rpx;
         padding-bottom: 20rpx;
         background-color: #FFFFFF;
