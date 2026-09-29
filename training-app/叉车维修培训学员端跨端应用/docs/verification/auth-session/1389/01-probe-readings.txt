@@ -1,0 +1,5 @@
+# 探针读数（原样 logcat，未改写）
+# task: #1389 · ADR-0030 ④-4 · 取证 uni-app x App 端容器是否维持 cookie jar
+# device: 23049RAD8C / arm64-v8a / Android 15 (SDK 35)
+# runtime: HBuilderX 5.23.2026080626 标准基座 io.dcloud.uniappx（增量部署 pid 30176->3611）
+# probe 页: App.uvue onLaunch（[probe1389] 标记），无 UI 交互、无事件注入
