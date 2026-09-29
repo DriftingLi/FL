@@ -287,27 +287,35 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(body).not.toContain("uni.setStorageSync('selected_cert', item.code)");
   });
 
-  it("selected_cert 键退役（#1395 改写：写 2→0、读 0 保持 —— code 键全仓绝迹，缓存只剩 id/name 两键）", () => {
+  it("selected_cert 键退役（#1395：证件域**零业务读写**；唯一允许触碰点 = 登录域清槽）", () => {
     // 沿革：#1346 把写从 3 调到 2（未确认切换不写）；#1349 把**读**清零（原读点拿 code 查硬编码字典）；
-    // #1395 把最后两处**写**删除 —— 引导页切到「PATCH 后端确认 + writeCurrentCredentialCache」后
-    // code 键写 0 读 0（Web/后端零引用已实测），旧键在存量设备的残留不做迁移（全仓已无人读它）。
+    // #1395 把证件域最后两处**写**删除 —— 引导页切到「PATCH 后端确认 + writeCurrentCredentialCache」后，
+    // 证件域对该键写 0 读 0，旧键在存量设备的残留不做迁移（已无人读它）。
+    //
+    // ⚠️ 口径订正（合并 #1405 后）：票面原写「全仓写 0」，但 #1380 在**登录域**加了登出/身份切换
+    // 的清槽 `setStorage('selected_cert', '')`（防 B 账号顶出 A 账号缓存）。那是清、不是写业务值，
+    // 且读点为 0 ⇒ 与本票不冲突。但「绝迹」二字已不成立，故本锁改为**显式登记唯一允许点**：
+    // 比「全仓绝迹」更强 —— 它同时钉住「除这里以外谁都不许碰」。
     const syncWrites = (cred.match(/uni\.setStorageSync\('selected_cert'/g) || []).length;
     expect(syncWrites).toBe(0);
     const syncReads = (cred.match(/uni\.getStorageSync\('selected_cert'/g) || []).length;
     expect(syncReads).toBe(0);
-    // 退役判据扫**整仓**源文件（`.` 口径：harness 的 SKIP_DIRS 已排除依赖/产物/点目录，
-    // `*.test.*` 被 walker 剔除 —— 否则本锁自己的字面量就是命中）：
-    // 任何一处存储读写再碰这个键 ⇒ 判红。
+    // 判据射程 = 四种存储 API 形态一律入内。旧正则 `StorageSync\(` 抓不到 `setStorage(`
+    // （#1405 的清槽走的正是 utils/storage 的包装）⇒ 那是**漏抓**、不是判过。
+    const retiredKey = /(?:set|get|remove)Storage(?:Sync)?\(\s*'selected_cert'/;
+    // 扫描面 = **整仓**源文件（`.` 口径：harness 的 SKIP_DIRS 已排除依赖/产物/点目录，
+    // `*.test.*` 被 walker 剔除 —— 否则本锁自己的字面量就是命中）。
     // ⚠️ 曾用「pages 各模块 + infraFiles + api」三段并集，实测漏 19 个文件 —— 恰含
-    // `components/cert-selector/**`（本票新建的证件域组件，最可能重新写这个键的地方）
-    // 与顶层 `composables/**`（#1401 评审发现）。漏一个目录就是给假绿留门缝。
-    const retiredKey = /StorageSync\('selected_cert'/;
+    // `components/cert-selector/**`（本票新建的证件域组件）与顶层 `composables/**`（#1401 评审发现）。
+    // 漏一个目录就是给假绿留门缝。
     const allSrc = h.sourceFilesIn('.');
     expect(allSrc.length).toBeGreaterThan(200); // 下限断言：防枚举断链让扫描恒空
     // 把曾经的盲区显式钉进判据：它不在面内就直接红，而不是退化成「差不多全仓」
     expect(allSrc).toContain('components/cert-selector/cert-selector.uvue');
-    const strays = allSrc.filter((rel) => retiredKey.test(stripComments(read(rel))));
-    expect(strays).toEqual([]);
+    const touched = allSrc.filter((rel) => retiredKey.test(stripComments(read(rel))));
+    // 允许点必须**恰好是**登录域那一处：多出来 = 有人重新碰这个键；少了 = 白名单过期
+    // （拿等式而不是「包含于」，免得将来偷偷往白名单里塞写点）
+    expect(touched).toEqual(['stores/auth.uts']);
     // 缓存出口的接线：1 读（回退）+ 3 写（后端确认 ×2、确认无证件清空 ×1）
     expect((cred.match(/readCurrentCredentialCache\(\)/g) || []).length).toBe(1);
     expect((cred.match(/writeCurrentCredentialCache\(/g) || []).length).toBe(3);
