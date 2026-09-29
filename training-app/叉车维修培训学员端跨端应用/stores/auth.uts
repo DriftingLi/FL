@@ -73,12 +73,36 @@ function resetAuthState() : void {
     syncDerived()
 }
 
+/**
+ * 证件域三键清理（#1380）—— 登出与身份切换**共用**的单点
+ *
+ * 为什么单立一个点：这三个键的**写点**在证件域（`api/credential.uts` 的缓存出口与
+ * `use-dashboard-credential.uts`），而**必须清它们的地方**在登录域。两处漏一处，就会出现
+ * 「A 的数据出现在 B 的会话里」：首页离线回退分支在 `GET /me/credential` 恰好失败时读
+ * `readCurrentCredentialCache()`，供出的还是**上一个账号**的证件 id + name。`selected_cert` 是
+ * #1349 之前就如此计的既有残留（不是本票新引入）。本函数是**登录域这一侧**的单点：两处清槽
+ * 各自内联一份就会漏；证件域自己那条清空路径（后端确认无证件）在
+ * `api/credential.uts` 的 `writeCurrentCredentialCache(null)`，两处同形。
+ *
+ * 为什么写空串而不是 `removeStorage()`：生产读方 `readCurrentCredentialCache()` 直接拿
+ * `uni.getStorageSync(…) as string` 再取 `.length`，**没有** null 兜底；写空串是 #1349
+ * `writeCurrentCredentialCache(null)` 已在跑的那条清空形态（键在、值为空），不拿「键不存在时
+ * 各端回什么」这件未在本仓实测过的事当依据。
+ */
+function clearCredentialStorage() : void {
+    setStorage('selected_cert', '')
+    setStorage('selected_cert_id', '')
+    setStorage('selected_cert_name', '')
+}
+
 function clearAuthData() : void {
     resetAuthState()
     removeStorage(STORAGE_KEY_TOKEN)
     removeStorage(STORAGE_KEY_REFRESH_TOKEN)
     removeStorage(STORAGE_KEY_USER)
     removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
+    // 证件域三键（#1380）：留在槽里就是「上一账号的当前证件」，会被首页离线回退顶显
+    clearCredentialStorage()
 
     // 安全凭据（STORAGE_KEY_CREDENTIALS）故意不移除：
     // 生物识别门控回填，退出登录不清理，下次登录时可通过生物识别恢复。
@@ -87,11 +111,13 @@ function clearAuthData() : void {
 /**
  * 身份互斥清槽（**专用函数，不复用 `clearAuthData()`** —— ADR-0022 ③）
  *
- * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**
- * `auth_secure_credentials`（ADR-0004 生物识别快捷登录）与 `auth_refresh_token`（登出后仍可快捷续登）。
+ * 为什么另立：`clearAuthData()` 讲的是「**同一身份**的退出」，它**故意保留**的只有
+ * `auth_secure_credentials`（ADR-0004 门控回填 / 快捷登录的凭据来源）；`auth_refresh_token`
+ * 自 #1386 起在登出时**照常移除**（登出要先拿它去吊销；#1391 起快捷登录改凭据登录、不再消费它，
+ * 包络内那一份只写不读）。
  * 身份切换是另一件事：ADR-0021 ② 否掉的是**并存**身份，「复用单槽」意味着该槽不能同时留着
  * 另一方的凭据 —— 学员的 refresh_token 与安全凭据在招聘者态下**必须一并清掉**，
- * 否则登出后遗留的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
+ * 否则切换前留在槽里的学员 refresh_token 会被 `/auth/refresh` 拿去**悄悄复活一个学员会话**
  * （`tryRefreshToken` 只在内存 user 为空时拒绝，而招聘者态的内存 user 非空）。
  *
  * ⚠️ **不要**把这段逻辑并进 `clearAuthData()`：那会改动三条既有锁的语义
@@ -108,6 +134,8 @@ function clearIdentityForSwitch() : void {
     // 上一重身份的登录来源与生物识别安全凭据：身份切换必须清
     removeStorage(STORAGE_KEY_LOGIN_PROVIDER)
     removeStorage(STORAGE_KEY_CREDENTIALS)
+    // 证件域三键（#1380）：切换后的首页若拉不到 `/me/credential`，不得拿上一重身份的证顶显
+    clearCredentialStorage()
     // 角色标记先清空，由调用方在落新凭据后显式重设（避免中途出现「新 token + 旧角色」）
     clearActiveRole()
 }
@@ -138,9 +166,10 @@ async function loginAsRecruiter(params : LoginParams) : Promise<void> {
  * 招聘者退出登录（ADR-0022 ④ 步骤 P2）
  *
  * 为什么**不**复用 `logout()`：`logout()` 走的是 `clearAuthData()`，它按 ADR-0004
- * **故意保留** `auth_secure_credentials` 与 `auth_refresh_token`（学员的快捷登录续期链）。
+ * **故意保留** `auth_secure_credentials`（门控回填的账号密码凭据），而 `auth_refresh_token`
+ * 自 #1386 / #1391 起**照常移除**（登出拿它去吊销、快捷登录已改凭据登录不再消费它）。
  * 招聘者按 ADR-0021 ② 根本没有记住密码 / 生物识别 ⇒ 复用会把一个属于学员语义的
- * refresh_token 槽留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
+ * 保留项留下，同时角色标记 `auth_active_role` 也会停在 `recruiter`，
  * 让下一个学员态的 401 被送进招聘者登录页。
  *
  * 故招聘者退出 = **身份槽整体复位**（与 P1 的互斥清槽同一处实现：`clearIdentityForSwitch()`），
@@ -156,7 +185,8 @@ function restoreFromStorage() : boolean {
     if (t.length == 0) {
         // storage 已无 access token ⇒ 内存登录态**同步归零**（#1124 根因 2）：
         // 否则调用方会拿到陈旧的 isLoggedIn=true（登录页据此弹回首页）。
-        // 只重置内存、**不动 storage**：refresh_token 按 ADR-0004 保留给生物识别快捷登录。
+        // 只重置内存、**不动 storage**：refresh_token 留槽是既有清态纪律（#1391 起快捷登录
+        // 已改凭据登录、不消费它；其唯一消费方是会话内 401 续期与登出吊销）。
         resetAuthState()
         return false
     }
@@ -305,7 +335,8 @@ async function logout() : Promise<void> {
         try {
             // 顺序即语义（#1386）：rt 必须在**清槽之前**交出去 —— clearAuthData() 会移除
             // auth_refresh_token，先清后取就静默退化成发空串（服务端吊销分支拿不到东西）。
-            // 取的是本端 storage 那支，不是 cookie：App 端容器里同值的 cookie 会被后端一并吊销。
+            // 取的是本端 storage 那支，不是 cookie：#1389 实测 App 容器不维持 cookie jar，
+            // body 里的 rt 是服务端吊销分支唯一能看见的凭证。
             await logoutApi(getRefreshToken())
         } catch (e) {
             console.warn('[auth] logout backend failed (ignored):', e)
@@ -378,8 +409,8 @@ async function tryRefreshToken() : Promise<boolean> {
         const result = await refreshTokenApi(rt)
         if (result != null && result.token.length > 0) {
             setAuthData(result.token, user.value!, result.refresh_token)
-            // 轮换即旧令牌失效：同步回写加密凭据包络，否则包内 rt 立即过期，
-            // 下次快捷登录必 401 降级（ADR-0004 滑动续期依赖此回写）
+            // 轮换即旧令牌失效：同步回写加密凭据包络（单一同步点）。#1391 起包内 rt
+            // 只写不读，本回写只维持落盘一致性（vestigial 声明见 secureStorage.uts 文件头）
             updateSecureToken(result.refresh_token)
             return true
         }
@@ -390,40 +421,38 @@ async function tryRefreshToken() : Promise<boolean> {
 }
 
 /**
- * 快捷登录：用生物门控解锁的 refresh_token 静默续登（ADR-0004 增补）
+ * 快捷登录：用生物门控解锁的账号密码走一次正常登录（ADR-0004 增补 · 机制经 #1391 改写）
  *
- * 与 tryRefreshToken 的区别：接受外部传入的令牌（来自加密凭据包络而非常规会话存储）。
- * 到达登录页的路径均执行过 clearAuthData（登出/401），本地 user 必为空，
- * 故 refresh 成功后经 /auth/me 拉取用户信息，不以"本地已有 user"为前提。
+ * 为什么不再是「拿包络里的 refresh_token 调 /auth/refresh」：#1387 起登出会吊销手上那支 rt
+ * （ADR-0030 ④ 第 2 项），而密码登录写入包络的 rt 与明文槽同值 ⇒ 登出即两支齐死，快捷登录
+ * 若仍走 refresh 就永远降级。裁定改凭据登录：`loginApi` 一次返回 token + user + refresh_token，
+ * 不再需要 /auth/me 回拉，也就不再有「拉 user 失败要回滚 token」那一段。
  *
- * @returns 轮换出的新 refresh_token（供调用方回写加密凭据包络，维持跨登出滑动续期）；
- *          失败返回空串，调用方降级回填
+ * 与 `login()` 的区别：不抛错，失败返回 `false`，由调用方（`onQuickLogin`）降级为门控回填。
+ * `tryRefreshToken`（会话内 401 自动续期）不受本裁定影响 —— 续已有会话仍是 rt 的唯一合法用途；
+ * 登出吊销（#1387 的安全修复）亦不回退。
+ *
+ * @returns 会话是否建立 —— 成功（access token 落地并落盘）返回 true；失败返回 false，调用方降级回填。
+ *          #1398：成功信号与 rt 解绑。`loginApi` 显式容忍后端不下发 refresh_token
+ *          （`toStr(data['refresh_token'], '')`）⇒ 拿 rt 非空判成功会把「已登录」误报成失败，
+ *          出现「会话已建立、UI 却停在登录页再弹认证框」的错配。rt 只作回写值（包络里只写不读）。
  */
-async function quickLogin(rt : string) : Promise<string> {
-    if (rt.length == 0) return ''
+async function quickLogin(username : string, password : string) : Promise<boolean> {
+    const params : LoginParams = {
+        username: username,
+        password: password
+    } as LoginParams
     try {
-        const result = await refreshTokenApi(rt)
-        if (result == null || result.token.length == 0) return ''
-        // 先落新 access token：/auth/me 经 request 层从 STORAGE_KEY_TOKEN 取凭据
-        setStorage(STORAGE_KEY_TOKEN, result.token)
-        let u = user.value
-        if (u == null) {
-            try {
-                u = await getUserInfoApi()
-            } catch (e) {
-                // 用户信息拉取失败：回滚 token，避免残留"有 token 无 user"的脏状态
-                removeStorage(STORAGE_KEY_TOKEN)
-                console.warn('[auth] quickLogin fetchUser failed:', e)
-                return ''
-            }
-        }
-        setAuthData(result.token, u, result.refresh_token)
-        // 轮换令牌同步回写加密包络（与 tryRefreshToken 同一套同步点）
+        const result = await loginApi(params)
+        if (result == null || result.token.length == 0) return false
+        setAuthData(result.token, result.user, result.refresh_token, 'password')
+        // 单一同步点：新令牌照常回写加密包络（与 tryRefreshToken 同一套同步点，语义见 secureStorage.uts）
         updateSecureToken(result.refresh_token)
-        return result.refresh_token
+        // 成功信号 = 会话已建立（token 落地）；即便后端未下发 rt，也不得回头报失败（#1398）
+        return true
     } catch (e) {
         console.warn('[auth] quickLogin failed:', e)
-        return ''
+        return false
     }
 }
 
@@ -446,7 +475,7 @@ export function useAuthStore() : AuthStore {
         loginProvider,
         getRefreshToken: () : string => getRefreshToken(),
         tryRefreshToken: () : Promise<boolean> => tryRefreshToken(),
-        quickLogin: (rt : string) : Promise<string> => quickLogin(rt),
+        quickLogin: (username : string, password : string) : Promise<boolean> => quickLogin(username, password),
         setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
         // 身份互斥清槽（ADR-0022 ③）：招聘者登录前与**招聘者登录页回学员端的出口**共用同一份实现。

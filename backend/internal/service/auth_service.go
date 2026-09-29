@@ -171,7 +171,9 @@ type RefreshResultDTO struct {
 }
 
 // LoginResult 登录返回结构（双令牌：access token + refresh token）。
-// 旧字段 token 保留，前端向后兼容；refresh_token 仅前端本地存储，不写入 Cookie。
+// 旧字段 token 保留，前端向后兼容。refresh_token 自 ADR-0067 起**同时**下发一枚 httpOnly Cookie
+// （浏览器侧优先用 Cookie 通道），响应体这一份继续留给移动端与非浏览器客户端——它是请求体通道
+// 客户端的唯一来源，字段本身不因 Cookie 通道而移除或改语义。
 type LoginResult struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refresh_token"`
