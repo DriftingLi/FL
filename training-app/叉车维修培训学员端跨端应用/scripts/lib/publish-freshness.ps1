@@ -23,27 +23,91 @@
     「没改动 ⇒ 不重写」这个反例在本工具链上不成立 ⇒ 「最新 .kt mtime 晚于 publish 基准」是有效判据。
 
     已知边界（写实，勿读成「已覆盖」）：本库只判**新鲜度**与**这一步是否成立**，不判「产物与源码内容
-    是否逐字一致」。内容一致性由「publish 成功标记 + 新鲜度」联合兜住；两者任一不成立即判红。
+    是否逐字一致」。内容一致性由「publish 成立的证据 + 新鲜度」联合兜住；成立与否有两层证据（硬标记 /
+    联合判据，见下面 `$PublishSuccessMarkers` 段），任一层都不成立、或新鲜度不成立，即判红。
+
+    ⚠️ #1381 定性（本票标题写的「文案判据在当前 CLI 上失配」是**误诊**，别照着它改常量）：本机 2026-09-29
+    用同一版 CLI（launcher 5.23 / 编译器 5.26）连跑三次，`导出 android 成功` **三次都命中**（主树两次、
+    按闸门新建的 worktree 一次，原文已钉进守护测试的样本）。真实形态是**尾部记录随机丢一条**，
+    丢哪条不固定 —— 所以「按当前输出重新校准某一条文案」修不好它（下一个丢的是另一条），
+    能修的是**不再让单条记录成为必要条件**。
 #>
 
 # publish「成立」的判据 = 输出里的**正向标记**（不是退出码：HBuilderX CLI 退出码恒为 0）。
-# 文案随版本可能变 ⇒ 收敛成一处常量，改这里就够。
-$PublishSuccessMarker = '导出 android 成功'
+#
+# 为什么不能只靠一条文案（#1381，2026-09-29 复现）：这条流是 CLI 从 HBuilderX 主程序**转发**过来的
+# 合并日志，实测两件事（本机同版 CLI 连跑、原文见 utils/kotlinAllStaleExportBehavior.test.js 的样本钉）：
+#   ① 记录之间**不保证有序**（同一次运行里时间戳 15:11:40.551 → .553 → .556 → .549）；
+#   ② **尾部记录会丢**，且丢哪条不固定 —— 主树那次两条尾部记录都在，worktree 那次缺 `wgt文件由HBuilderX…`
+#      提示，#1349 的 wt-1349 那次缺 `导出 android 成功`（而导出目录 mtime 照常刷新、cli exitcode 照常 0）。
+# 把「唯一一条中文文案」当**充要**条件 ⇒ 采集面随机丢一条就让整扇门恒红，且每次跑 ④ 都要人重查一遍根因。
+# （#1285 当年已把「导出已刷新但成功文案没读到」记成一种待分辨的处置方向，本票是它第一次真的发生。）
+#
+# 判据因此分两层，两层都是**正向**证据：
+#   硬标记 `$PublishSuccessMarkers` 任一命中 ⇒ 直接成立（版本改了文案就往集合里加一条，不动逻辑）；
+#   硬标记没读到 ⇒ 走联合判据 `Test-PublishCompoundEvidence` + 新鲜度实测量（见其说明）。
+$PublishSuccessMarkers = @('导出 android 成功')
+
+# 联合判据需要的两条**输出**证据；另外两条是**实测量**——「本次导出目录确实被重写」（新鲜度）与
+# 「每个 .kt 都被重写」（完成度），都在 `Get-PublishStageVerdict` 里合。四条缺一仍判红。
+# 为什么这四条合起来足以成立、且不会退回 #1272 的假绿、也不会放过截断导出（写实，别读成「已放宽」）：
+#   - 「编译成功」+「正在导出」证明**这一次调用**真走完了编译并进入导出阶段（不是上一次留下的）；
+#   - 「新鲜度 fresh」= 导出目录最新 `.kt` 的 mtime 晚于本次发第一条 CLI 命令**之前**取的时刻。
+#     #1272 实测 publish 是**全量重写**（工作树一字未改再跑，119/119 个 `.kt` mtime 照样前进），
+#     所以「磁盘上留着一份旧导出」这一形态必然判 stale ⇒ 被这条实测量拦住。
+#   - 「完成度」= **最旧**的 `.kt` 也晚于基准（`Test-PublishExportCompleteness`）。这一条是评审补的：
+#     硬标记本是「导出走到终点」的唯一信号，而联合分支只在它缺失时触发 ⇒ 只看「最新 mtime」会放过
+#     「重写了一个文件就失败」的**截断导出**。全量重写 ⇒ 最旧的也前进；截断 ⇒ 有文件停在旧 mtime。
+#   - 编译失败 ⇒ 无「编译成功」；没进导出 ⇒ 无「正在导出」；导出没写完 ⇒ 后两条实测量不成立。都判红。
+#   - 命中 `$PublishFailurePattern` 时**不给它翻案**：失败签名优先（见 `Get-PublishStageVerdict`）。
+$PublishCompileMarker = '编译成功'
+$PublishExportStageMarker = '正在导出'
 # publish「没成立」的判据：命中即判这一步没成立（**不**用来宣告「命令不存在」）。
 $PublishFailurePattern = '与主程序的连接已中断|不存在或缺少参数|命令执行错误|启动超时'
+
+<#
+ .SYNOPSIS
+     输出里是否出现**硬**成功标记（`$PublishSuccessMarkers` 任一）。
+ .DESCRIPTION
+     单独成函数（#1381）：门脚本在「要不要轮询导出目录」这个决策上也需要问一次正向证据，
+     而 `Get-PublishVerdict` 的返回形状是裁决用的（Ok/Reason），不适合当布尔问句 —— 抄字面量又会漂。
+#>
+function Test-PublishSuccessMarker {
+    param([string]$Output)
+    foreach ($m in $PublishSuccessMarkers) {
+        if ($Output -match [regex]::Escape($m)) { return $true }
+    }
+    return $false
+}
+
+<#
+ .SYNOPSIS
+     硬标记没读到时，输出里是否还齐着「这一步大概成立了」的两条**独立**证据（#1381）。
+ .DESCRIPTION
+     只管输出这一半；新鲜度那条实测量由调用方（`Get-PublishStageVerdict`）合上。
+     拆成两半是为了让门脚本能拿它决定「要不要继续轮询导出目录」——轮询要的正是输出证据，
+     而那一刻还不该拿新鲜度当准入条件（异步晚到的导出此时必然还没 fresh，拿它准入就等于永不轮询）。
+#>
+function Test-PublishCompoundEvidence {
+    param([string]$Output)
+    if ($Output -notmatch [regex]::Escape($PublishCompileMarker)) { return $false }
+    if ($Output -notmatch [regex]::Escape($PublishExportStageMarker)) { return $false }
+    return $true
+}
 
 <#
  .SYNOPSIS
      publish 步的输出 → 这一步是否成立。
  .OUTPUTS
      hashtable：`Ok`（bool）/ `Reason`（timeout | cli-ipc-blocked | cli-command-failed | no-success-marker | exported）
+     —— 只认**硬标记**；联合判据在 `Get-PublishStageVerdict` 里合（那里才有新鲜度实测量）。
 #>
 function Get-PublishVerdict {
     param([string]$Output, [bool]$TimedOut)
     if ($TimedOut) { return @{ Ok = $false; Reason = 'timeout' } }
     if ($Output -match '与主程序的连接已中断') { return @{ Ok = $false; Reason = 'cli-ipc-blocked' } }
     if ($Output -match $PublishFailurePattern) { return @{ Ok = $false; Reason = 'cli-command-failed' } }
-    if ($Output -match [regex]::Escape($PublishSuccessMarker)) { return @{ Ok = $true; Reason = 'exported' } }
+    if (Test-PublishSuccessMarker -Output $Output) { return @{ Ok = $true; Reason = 'exported' } }
     return @{ Ok = $false; Reason = 'no-success-marker' }
 }
 
@@ -84,6 +148,27 @@ function Test-AppResourceFreshness {
 
 <#
  .SYNOPSIS
+     导出目录**每一个** `.kt` 的 mtime 是否都晚于基准（#1381 评审补的完成度代理）。
+ .DESCRIPTION
+     为什么联合判据还要这一条（评审发现，2026-09-29）：`Test-AppResourceFreshness` 只看**最新**那个
+     `.kt`，于是「重写了一个文件就失败」的**截断导出**也算 fresh —— 而硬标记 `导出 android 成功` 原本
+     正是「导出走到了终点」的**唯一**信号，联合分支偏偏只在它缺失时触发，所以这一格必须由别的东西补上，
+     否则就是本次改动**新引入**的假绿面（不是 #1272 那条，那条被新鲜度拦住了）。
+     判据的依据与新鲜度同源：#1272 实测 publish 是**全量重写**（119/119 个 `.kt` mtime 全部前进），
+     故「最旧的也晚于基准」在全量重写成立、在截断不成立（截断 ⇒ 有文件停在旧 mtime）。
+     **只加在联合分支**：硬标记命中时已经有终点信号，不需要代理 —— 拿它去收紧既有路径只会把
+     「某文件本版确实没重写」这种未观测情形变成新的恒红。
+#>
+function Test-PublishExportCompleteness {
+    param([string]$ExportDir, [datetime]$Since)
+    $kt = @(Get-AppResourceKtFiles -ExportDir $ExportDir)
+    if ($kt.Count -eq 0) { return $false }
+    $oldest = ($kt | Sort-Object LastWriteTime | Select-Object -First 1).LastWriteTime
+    return ($oldest -gt $Since)
+}
+
+<#
+ .SYNOPSIS
      publish 段的**整段裁决**：给定三步的输出/超时与导出目录 → 该以什么码退出、reason 是什么、日志三件事的取值。
 
  .DESCRIPTION
@@ -96,7 +181,7 @@ function Test-AppResourceFreshness {
  .OUTPUTS
      hashtable：
        `ExitCode`（0 通过 / 1 判红：导出陈旧或无产物 / 2 环境：publish 未成立）
-       `Reason`（ok | stale-export | no-artifact | publish-timeout | publish-cli-ipc-blocked |
+       `Reason`（ok | ok-compound | stale-export | no-artifact | publish-timeout | publish-cli-ipc-blocked |
                  publish-cli-command-failed | publish-no-success-marker）
        `Freshness`（fresh | stale | no-kt）——**一律是实测量**；publish 未成立时也照报实测值（#1285：`fresh` = 导出已刷新但成功文案没读到（采集层方向），`stale`/`no-kt` = 根本没导出（环境方向）——旧的 `not-measured` 短路把处置完全不同的两者糊成同一条红；退出码与 reason 的 fail-closed 不变）
        `KtCount` / `Newest`（导出目录的诊断读数；未成立时也给出，供失败日志使用）
@@ -107,6 +192,16 @@ function Get-PublishStageVerdict {
     $f = Test-AppResourceFreshness -ExportDir $ExportDir -Since $Since
     $v = Get-PublishVerdict -Output $PublishOutput -TimedOut $PublishTimedOut
     if (-not $v.Ok) {
+        # #1381：硬标记没读到、但四条正向证据齐 ⇒ 放行，并把结论**记成 ok-compound**（不是 ok）——
+        # 「靠哪条证据过的」必须读得出来，否则下次排查又只能重新猜。四条：编译成功 + 已进入导出（两条输出证据）、
+        # 本次导出目录确实被重写（新鲜度实测量）、且**每个** .kt 都被重写（完成度代理 —— 硬标记原本是「导出
+        # 走到终点」的唯一信号，缺它时必须由完成度补上，否则截断导出会被放行；评审发现，见
+        # `Test-PublishExportCompleteness`）。
+        # 失败签名（timeout / ipc / cli-command-failed）到不了这一支：`Get-PublishVerdict` 先判它们，
+        # reason 就不是 no-success-marker，联合判据**不给它翻案**。
+        if ($v.Reason -eq 'no-success-marker' -and (Test-PublishCompoundEvidence -Output $PublishOutput) -and $f.Fresh -and (Test-PublishExportCompleteness -ExportDir $ExportDir -Since $Since)) {
+            return @{ ExitCode = 0; Reason = 'ok-compound'; Freshness = 'fresh'; KtCount = $f.KtCount; Newest = $f.Newest }
+        }
         # #1285：publish 没成立只改 ExitCode / Reason（仍 fail-closed：2 / publish-*），freshness **照实报实测量** ——
         # 旧写法在这里短路成 'not-measured'，把「导出已刷新但成功文案没读到」（门的采集层 bug ⇒ 查采集层 / 文案判据）
         # 与「根本没导出」（环境未就绪 ⇒ 先解决导出）糊成同一条红，而两者处置完全不同。
