@@ -428,28 +428,31 @@ async function tryRefreshToken() : Promise<boolean> {
  * 若仍走 refresh 就永远降级。裁定改凭据登录：`loginApi` 一次返回 token + user + refresh_token，
  * 不再需要 /auth/me 回拉，也就不再有「拉 user 失败要回滚 token」那一段。
  *
- * 与 `login()` 的区别：不抛错，失败以空串回报，由调用方（`onQuickLogin`）降级为门控回填。
+ * 与 `login()` 的区别：不抛错，失败返回 `false`，由调用方（`onQuickLogin`）降级为门控回填。
  * `tryRefreshToken`（会话内 401 自动续期）不受本裁定影响 —— 续已有会话仍是 rt 的唯一合法用途；
  * 登出吊销（#1387 的安全修复）亦不回退。
  *
- * @returns 新 refresh_token —— 仅作成功信号与包络回写值（rt 自此在包络里只写不读）；
- *          失败返回空串，调用方降级回填
+ * @returns 会话是否建立 —— 成功（access token 落地并落盘）返回 true；失败返回 false，调用方降级回填。
+ *          #1398：成功信号与 rt 解绑。`loginApi` 显式容忍后端不下发 refresh_token
+ *          （`toStr(data['refresh_token'], '')`）⇒ 拿 rt 非空判成功会把「已登录」误报成失败，
+ *          出现「会话已建立、UI 却停在登录页再弹认证框」的错配。rt 只作回写值（包络里只写不读）。
  */
-async function quickLogin(username : string, password : string) : Promise<string> {
+async function quickLogin(username : string, password : string) : Promise<boolean> {
     const params : LoginParams = {
         username: username,
         password: password
     } as LoginParams
     try {
         const result = await loginApi(params)
-        if (result == null || result.token.length == 0) return ''
+        if (result == null || result.token.length == 0) return false
         setAuthData(result.token, result.user, result.refresh_token, 'password')
         // 单一同步点：新令牌照常回写加密包络（与 tryRefreshToken 同一套同步点，语义见 secureStorage.uts）
         updateSecureToken(result.refresh_token)
-        return result.refresh_token
+        // 成功信号 = 会话已建立（token 落地）；即便后端未下发 rt，也不得回头报失败（#1398）
+        return true
     } catch (e) {
         console.warn('[auth] quickLogin failed:', e)
-        return ''
+        return false
     }
 }
 
@@ -472,7 +475,7 @@ export function useAuthStore() : AuthStore {
         loginProvider,
         getRefreshToken: () : string => getRefreshToken(),
         tryRefreshToken: () : Promise<boolean> => tryRefreshToken(),
-        quickLogin: (username : string, password : string) : Promise<string> => quickLogin(username, password),
+        quickLogin: (username : string, password : string) : Promise<boolean> => quickLogin(username, password),
         setAuthData: (t : string, u : UserInfo, rt : string) : void => setAuthData(t, u, rt),
         clearAuthData: () : void => clearAuthData(),
         // 身份互斥清槽（ADR-0022 ③）：招聘者登录前与**招聘者登录页回学员端的出口**共用同一份实现。

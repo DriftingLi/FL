@@ -133,8 +133,9 @@ export function useBiometricGate(
      * #1391 因此裁定快捷登录改凭据登录：两条口径同时成立，包络里的 rt 降级为只写不读。
      *
      * 新令牌的包络回写在 auth store 内统一完成（tryRefreshToken / quickLogin 共用同一套同步点）。
-     * 登录失败（密码被改过 / 账户状态变化）时降级为回填流程（onBiometricUnlock，会再次弹认证框
-     * 确认身份——回填密码是敏感操作，二次确认是既有口径，不改）。
+     * 登录失败（密码被改过 / 账户状态变化，即未建立会话）时降级为回填流程（onBiometricUnlock，
+     * 会再次弹认证框确认身份——回填密码是敏感操作，二次确认是既有口径，不改）。
+     * #1398：成功与否看会话是否建立（`quickLogin` 返回 boolean），不再拿 refresh_token 非空当判据。
      */
     async function onQuickLogin() : Promise<void> {
         if (quickLogging.value) {
@@ -154,10 +155,10 @@ export function useBiometricGate(
         }
         quickLogging.value = true
         uni.showLoading({ title: '登录中' })
-        const newRt = await auth.quickLogin(cred.u, cred.p)
+        const loggedIn = await auth.quickLogin(cred.u, cred.p)
         uni.hideLoading()
         quickLogging.value = false
-        if (newRt.length > 0) {
+        if (loggedIn) {
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
         } else {
             uni.showToast({ title: '快捷登录失败，请验证后登录', icon: 'none' })
