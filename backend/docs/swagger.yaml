@@ -16892,8 +16892,9 @@ paths:
     post:
       consumes:
       - application/json
+      deprecated: true
       description: 吊销 refresh_token（请求体优先，回退 Bearer 头）并清除登录态 Cookie（access + 两族 refresh）；不依赖
-        JWTAuth。公开端点：无需登录。
+        JWTAuth。公开端点：无需登录。已废弃：将在下一版移除，请改用 POST /api/auth/logout
       parameters:
       - description: refresh_token
         in: body

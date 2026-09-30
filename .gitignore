@@ -204,3 +204,10 @@ viz/
 node_modules.broken/
 # SDD 台账 / 任务报告（会话本地记录，不入库）
 .superpowers/
+
+# ===== Windows 本机全量测试的路径粘连垃圾件（仓根，不入库）=====
+# internal/deploy 的 TestDeployEnvChainPreservesProvidedValues 在本机失败时会把 temp 路径的分隔符
+# 吞掉、在仓根落成「C：Users…deploy-env.sh」（那个「：」是 U+F03A）。这类文件已被误提交过一次
+# （8f01cec9，2026-09-24），故只锚定仓根、只按后缀收：合法生成物从不落在仓根。
+# ⚠️ 清理时别对这类名字用通配 rm —— 仓根可能同时有「未跟踪的新产物」与「已跟踪的存量件」。
+/*deploy-env.sh

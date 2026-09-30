@@ -1384,7 +1384,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 | GET | `/api/valuation/battery/evaluations` | 电池评估列表 |
 | GET | `/api/valuation/battery/evaluations/:id` | 电池评估详情 |
 | GET | `/api/valuation/auth/me` | 当前估值用户 |
-| POST | `/api/valuation/auth/logout` | 估值登出 |
+| POST | `/api/valuation/auth/logout` | 估值登出 —— 已废弃：将在下一版移除，请改用 POST /api/auth/logout |
 
 ### 17.4 管理员 CRUD（JWT + role=admin）
 

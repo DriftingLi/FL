@@ -68,8 +68,13 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 // 每一个请求上）就会在那里判红，被迫在这里重新决策，而不是让代码与 ADR 各说一套。
 // 仓内的估值工作区不走这个入口（`ValuationLayout.vue` 的退出调 `authStore.signOut()` →
 // 主 `/api/auth/logout`，Cookie 与族判定都在那里生效）；本端点是 `API.md` 对外列着的兼容入口。
+//
+// #1412 起标废弃（维护者 2026-09-30 定 B 方案：先对外宣告、留一个发布周期的观察窗口，真正的
+// 移除另票且由人执行）。`@Deprecated` 让它进生成契约而不只是散文 —— 观察窗口结束时按「有无带
+// 凭证调用」复取证（判据不是「恒为 0」：33 天里那 1 次是无凭证的人为试探，见 PR #1399 收尾评论）。
 // @Summary 估值用户登出
-// @Description 吊销 refresh_token（请求体优先，回退 Bearer 头）并清除登录态 Cookie（access + 两族 refresh）；不依赖 JWTAuth。公开端点：无需登录。
+// @Description 吊销 refresh_token（请求体优先，回退 Bearer 头）并清除登录态 Cookie（access + 两族 refresh）；不依赖 JWTAuth。公开端点：无需登录。已废弃：将在下一版移除，请改用 POST /api/auth/logout
+// @Deprecated
 // @Tags 估值-认证
 // @Accept json
 // @Produce json
