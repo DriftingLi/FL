@@ -39,7 +39,7 @@
 	import { aiAnswerBlocks } from '../../utils/aiAnswerBody'
 	import type { AiDiagnosisSource, MarkdownBlock } from '../../types/index'
 
-	withDefaults(defineProps<{
+	const props = withDefaults(defineProps<{
 		role?: string
 		content?: string
 		showActions?: boolean
@@ -70,7 +70,9 @@
 	 * 模板的 v-if/v-else 已把用户消息分流出去，这里不再判 role。
 	 */
 	const assistantBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
-		return aiAnswerBlocks(content)
+		// 脚本作用域取 props 必须 `props.` 前缀（forum-topic-body 同例）；模板里裸名可用，
+		// 但编译到 Kotlin 后脚本里的裸名是 unresolved reference（④c 实测：content 报错）。
+		return aiAnswerBlocks(props.content)
 	})
 
 	function onCopy() : void {
