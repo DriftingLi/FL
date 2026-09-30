@@ -175,7 +175,8 @@ const MODULES = {
       'pages/courses/courses.uvue',
     ],
     extractDirs: ['pages/courses/components', 'pages/courses/composables'],
-    crossModuleConsumers: ['jobs', 'mall', 'practice'],
+    // #1422：dashboard 首页课程区接真实数据 ⇒ 消费本域 `api/course.uts`（getCourseListApi 热门口径）
+    crossModuleConsumers: ['dashboard', 'jobs', 'mall', 'practice'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

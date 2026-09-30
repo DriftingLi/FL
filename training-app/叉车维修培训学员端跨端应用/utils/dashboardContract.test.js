@@ -329,7 +329,8 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(page).toContain('const selectedType = ref(0)');
     expect(page).toContain('filter applied');
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
-    expect(course).toContain("defineEmits(['openFilter'])");
+    // #1422：emit 清单由 ['openFilter'] 扩为 ['openFilter', 'courseOpen']（点击回抛归页面）
+    expect(course).toContain("defineEmits(['openFilter', 'courseOpen'])");
     expect(page).toContain('@open-filter="onFilterBtnClick"');
     // 页面与抽屉之间不存在 modelValue/v-model
     expect(page).not.toMatch(/v-model[:.\\w]*=/);
@@ -340,11 +341,10 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(all).not.toContain('certNameMap');
   });
 
-  it('静态数据完整性：宫格 4 入口 / 课程 4 卡 / Tab 2 / 筛选标签 3 / 热门考证 2', () => {
+  it('静态数据完整性：宫格 4 入口 / Tab 2 / 筛选标签 3 / 热门考证 2（课程 4 卡 mock 已由 #1422 退役，绝迹锁见 coursesContract #1422 组）', () => {
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
     for (const t of ['课程商城', '题库练习', '学习资料', '考情资讯']) expect(menu).toContain(t);
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
-    for (const t of ['2026年叉车基础理论课程', '叉车实操技能强化班', '叉车安全规范专题课', '叉车维修高级进阶课']) expect(course).toContain(t);
     expect(course).toContain("['热门课程', '精品课程']");
     expect(course).toContain("['全部', '实操技能', '综合评审']");
     // #1395：下拉件搬家为共享件 cert-selector（levelNames / 热门考证文案的唯一抄本随件走，
@@ -359,7 +359,10 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
     expect(menu).toContain('uni.reLaunch({ url: item.path })');
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
-    expect(course).toContain('/pages/courses/course-detail?id=${course.id}');
+    // #1422：mock id 直跳真实详情是本项目要修的 bug ⇒ 点击改为 emit 真 course_id、由页面统一跳转
+    // （navigateTo 字面量留在组件会让 dashboardPage 的跳转契约扫不到注册页，故跳转归页面、此处锁 emit）
+    expect(course).toContain("defineEmits(['openFilter', 'courseOpen'])");
+    expect(page).toContain("url: '/pages/courses/course-detail?id=' + course.course_id.toString()");
     expect(page).toContain("url: '/pages/featured/featured-detail?id=' + news.content_id.toString()");
     expect((page.match(/\/pages\/featured\/featured-list/g) || []).length).toBe(2);
   });
@@ -372,3 +375,72 @@ function fnBodyOf2(fileSrc, name) {
   const end = fileSrc.indexOf('\n    }', start);
   return fileSrc.slice(start, end);
 }
+
+/* ══ #1422 首页课程区接真实数据：页面 ↔ 组件接口对账 + 数据流接线（先例 coursesContract 对账口径） ══ */
+describe('#1422 课程区接线：DashboardCourseSection 页面↔组件双向对账（prop/事件改名即红）', () => {
+  const page = read('pages/dashboard/dashboard.uvue');
+  const comp = read('pages/dashboard/components/dashboard-course-section.uvue');
+
+  /** 组件声明面：defineProps<{...}> 的键（本组件用类型声明形态，非运行时对象） */
+  function declaredProps(src) {
+    const m = /defineProps<\{([\s\S]*?)\}>/.exec(src);
+    if (m === null) return [];
+    return [...m[1].matchAll(/([A-Za-z_$][\w$]*)\s*\??\s*:/g)].map((x) => x[1]);
+  }
+  function declaredEmits(src) {
+    const m = /defineEmits\(\[([^\]]*)\]\)/.exec(src);
+    if (m === null) return [];
+    return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  }
+  /** 页面标签属性区（自闭合）：:x / @x，kebab 归一 camel（open-filter → openFilter） */
+  function tagAttrs(src, tag) {
+    const m = new RegExp('<' + tag + '\\b([\\s\\S]*?)/>').exec(src);
+    return m === null ? null : m[1];
+  }
+  const kebabToCamel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  function boundOf(attrs, sigil) {
+    const out = [];
+    for (const m of attrs.matchAll(new RegExp('(?:^|\\s)' + sigil + '([a-z][a-z0-9-]*)\\s*=', 'g'))) {
+      out.push(kebabToCamel(m[1]));
+    }
+    return out;
+  }
+
+  const attrs = tagAttrs(page, 'DashboardCourseSection');
+
+  it('对账解析器有效：页面挂载点与组件声明面都读得出（防判据空跑）', () => {
+    expect(attrs).not.toBeNull();
+    expect(declaredProps(comp).length).toBeGreaterThan(0);
+    expect(declaredEmits(comp).length).toBe(2);
+  });
+
+  it('页面绑定的每个 prop/事件都在组件声明内；组件声明的每个 prop/事件都被页面绑定（无孤儿）', () => {
+    for (const p of boundOf(attrs, ':')) expect(declaredProps(comp)).toContain(p);
+    for (const e of boundOf(attrs, '@')) expect(declaredEmits(comp)).toContain(e);
+    for (const p of declaredProps(comp)) expect(boundOf(attrs, ':')).toContain(p);
+    for (const e of declaredEmits(comp)) expect(boundOf(attrs, '@')).toContain(e);
+  });
+
+  it('对账锁具备红能力：prop 改名必须被双向对账抓到（同 coursesContract 注入手法）', () => {
+    // 注入用 kebab 兼容名（boundOf 只认 [a-z0-9-]，与页面绑定 kebab 归一同口径）
+    const renamed = attrs.replace(':courses=', ':coursesx=');
+    expect(boundOf(renamed, ':')).toContain('coursesx');
+    expect(boundOf(renamed, ':')).not.toContain('courses');
+    expect(declaredProps(comp)).not.toContain('coursesx');
+    expect(boundOf(attrs, ':')).toContain('courses');
+  });
+
+  it('数据流留 composable（页面层零直发请求口径）：loadHotCourses 在 feeds、onShow 串证件解析后拉取', () => {
+    expect(feedsSrc()).toContain('export function useDashboardFeeds');
+    // fnBodyOf2 未命中即 throw ⇒ 红灯期这一句先炸，正是「mock 尚存时必红」的锚点
+    expect(feedsSrc()).toContain('async function loadHotCourses');
+    const show = page.slice(page.indexOf('onShow('), page.indexOf('onHide('));
+    // 证件解析完成后再拉热门课程（/courses 公开路由兜底永不生效，credential_id 必须显式）
+    expect(show).toContain('loadCredentials().then(() => loadHotCourses(currentCredentialId.value))');
+  });
+
+  /** feeds 源现读（不进文件顶层：顶层读法会被后续新增文件的 EOL 归一问题牵连，同本文件既有 describe 口径） */
+  function feedsSrc() {
+    return read('pages/dashboard/composables/use-dashboard-feeds.uts');
+  }
+});

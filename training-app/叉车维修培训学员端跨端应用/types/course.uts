@@ -22,6 +22,12 @@ export type CourseItem = {
      * 价格文案渲染单点在 `utils/coursePointsCta.uts` 的 renderCoursePrice，消费页不得各写一份。
      */
     points_price ? : number | null
+    /**
+     * 热门标（后端 course.is_hot，bool）：列表 DTO **恒发、不 omitempty** ⇒ 非空槽位，
+     * 可空性不得凭空发明。#1422 迁出：dashboard 课程区「热销」标吃这一格，
+     * 不再吃本地假数据（值来自后端 course 表 is_hot 列，管理端课程维护面设置）。
+     */
+    is_hot : boolean
 }
 
 /** 专业方向（筛选项） */

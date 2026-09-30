@@ -52,8 +52,8 @@
             <!-- 新闻资讯板块 -->
             <DashboardNewsSection :news-list="newsList" @click="onNewsClick" @more="onMoreNews" />
 
-            <!-- 内容 Tab + 筛选标签 + 课程卡片列表 -->
-            <DashboardCourseSection @open-filter="onFilterBtnClick" />
+            <!-- 内容 Tab + 筛选标签 + 课程卡片列表（#1422：数据源改为真实热门课程，经 props 流入） -->
+            <DashboardCourseSection :courses="hotCourses" @open-filter="onFilterBtnClick" @course-open="onCourseOpen" />
 
             <!-- 底部留白（tabBar 悬浮遮挡） -->
             <view class="page-footer-space"></view>
@@ -112,7 +112,7 @@
     import { ref } from 'vue'
     import { onShow, onHide } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
-    import type { FeaturedContentItem } from '../../types/index'
+    import type { FeaturedContentItem, CourseItem } from '../../types/index'
     import CertSelector from '../../components/cert-selector/cert-selector.uvue'
     import DashboardMenuGrid from './components/dashboard-menu-grid.uvue'
     import DashboardContinueCard from './components/dashboard-continue-card.uvue'
@@ -130,10 +130,10 @@
         loadCredentials, onCertTap, onSelectCredential, onCloseCertDropdown,
     } = useDashboardCredential()
 
-    // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯（composable 持有） ----
+    // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯 / 首页课程区（composable 持有） ----
     const {
-        unreadCount, continueLearning, newsList,
-        loadMyCourses, loadFeaturedContents, startUnreadPolling, stopUnreadPolling,
+        unreadCount, continueLearning, newsList, hotCourses,
+        loadMyCourses, loadFeaturedContents, loadHotCourses, startUnreadPolling, stopUnreadPolling,
     } = useDashboardFeeds()
 
     // ---- 筛选弹窗（页面持有选中态） ----
@@ -171,7 +171,8 @@
 
     // 页面显示时刷新数据
     onShow(() => {
-        loadCredentials()
+        // #1422：课程区热门口径要按「当前证件」分区取（公开路由兜底永不生效），故证件解析完成后再拉
+        loadCredentials().then(() => loadHotCourses(currentCredentialId.value))
         loadMyCourses()
         loadFeaturedContents()
         startUnreadPolling()
@@ -186,6 +187,12 @@
         if (cl != null) {
             uni.navigateTo({ url: '/pages/courses/course-detail?id=' + cl.course_id.toString() })
         }
+    }
+
+    // #1422：首页课程区点击落点即该课真详情（修 mock id 直跳真实详情页的错位 bug）
+    // 跳转归页面而非组件：字面量留在组件会让 dashboardPage 的跳转契约扫不到注册页
+    function onCourseOpen(course : CourseItem) : void {
+        uni.navigateTo({ url: '/pages/courses/course-detail?id=' + course.course_id.toString() })
     }
 
     function onCartClick() : void {
