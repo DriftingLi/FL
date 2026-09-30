@@ -7,12 +7,17 @@
 //
 // 范围纪律：只做**声明表里登记的域**（ADR-0048 决策 2：Web 消费面 + 域内完整）。
 //
-// 刻意不登记的三条系统探活（issue #1417 的书面豁免）：GET /api、GET /api/health、
+// 刻意不登记的四条探活（issue #1417 的书面豁免）：GET /api、GET /api/health、
 // GET /api/health/live（注册路径；在本表的 swagger 口径下分别写作 /、/health、/health/live）
-// 现已进 swagger（internal/api/system.go 的具名 handler），但**不进本表**——
-// 它们是部署侧与容器编排的探针，无任何 Web 消费方；且响应是裸 gin.H（非 {code,message,data} 信封），
+// 与 GET /valuation/health，四条均**已进 swagger**（前三条在 internal/api/system.go 的具名
+// handler，第四条在 valuation/handler/health.go 的 Check），但**不进本表**——
+// 它们是部署侧与容器编排的探针，无任何 Web 消费方；且响应是裸体（非 {code,message,data} 信封），
 // 没有 data 类型可生成，硬塞要么新建一个「基础设施域」（ADR-0048 决策 7 的分片顺序里没有它），
 // 要么往既有业务域里挂进不属于它的路由。将来前端真要消费它们时，再按销账式补登记。
+// 对照：POST /tutor/upload-image 同样是裸信封（Vditor 约定），但它**登记**——因为 Web 真在消费
+// （frontend/src/pages/tutor/TutorChapterEdit.vue 把它作为 Vditor 的上传 URL 直连），
+// 判据是「有无消费方」而不是「是否信封」；NoData 的用法与 master 上
+// /admin/featured-content/upload-image 同一形状的先例一致。
 package apitypes
 
 // Endpoint 生成物头部列出的端点。
@@ -807,10 +812,8 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/valuation/dictionaries/algorithm-parameters"},
 			{Method: "GET", Path: "/valuation/dictionaries/original-prices"},
 			{Method: "GET", Path: "/valuation/dictionaries/region-coefficients"},
-			// 公开组：评估统计 / 子模块探活 / 报告生成
+			// 公开组：评估统计与报告生成（子模块探活 GET /valuation/health 刻意不登记，理由见包注释）
 			{Method: "GET", Path: "/valuation/evaluations/stats"},
-			// 非统一信封：裸 HealthResponse {status,service,timestamp}，无 data 可指认。
-			{Method: "GET", Path: "/valuation/health", NoData: true},
 			{Method: "POST", Path: "/valuation/evaluations/{id}/report"},
 			{Method: "GET", Path: "/valuation/evaluations/{id}/report", NoData: true},
 			{Method: "POST", Path: "/valuation/battery/evaluations/{id}/report"},

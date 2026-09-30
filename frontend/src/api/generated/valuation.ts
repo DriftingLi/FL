@@ -25,7 +25,6 @@
 //   GET  /valuation/dictionaries/original-prices
 //   GET  /valuation/dictionaries/region-coefficients
 //   GET  /valuation/evaluations/stats
-//   GET  /valuation/health
 //   POST /valuation/evaluations/{id}/report
 //   GET  /valuation/evaluations/{id}/report
 //   POST /valuation/battery/evaluations/{id}/report
