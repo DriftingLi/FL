@@ -153,6 +153,25 @@ describe('串行轮转外层的计划面（运行期）', () => {
     }
   });
 
+  test('FP3b: 默认档（AgentExe=none）的写码步是**暂停步**：File 为空、cwd 仍在本票树里', () => {
+    // none 档的存在理由：本机唯一可用的 agent CLI 凭证已失效（实调 401），
+    // 而外层价值在取票/建树/自检/门/收尾那几格 —— 写码换成人不影响它们。这一档不可被删：
+    // 删了整条链在凭证坏掉时就一行都跑不了（本轮真实发生过）。
+    const lines = runPs([
+      `$p = Get-FrontierRunPlan -RepoRoot '${REPO}' -TicketNumber 1499 -Level standard -Device $null -DisciplineFile ''`,
+      "$a = $p | Where-Object { $_.Name -eq 'agent' }",
+      'Write-Output ("file=" + $(if ($a.File) { $a.File } else { "~" }))',
+      'Write-Output ("cwd=" + $(if ($a.Cwd) { $a.Cwd } else { "~" }))',
+      'Write-Output ("stop=" + $(if ($a.StopOn) { $a.StopOn } else { "~" }))',
+      'Write-Output ("args=" + ($a.Args -join " "))',
+    ].join('\n'));
+    // 逐行键值取回，不用分隔符拼一行（cwd 本身可能含 | 或 \，拼行会把字段切错 —— 第一版就这么红过）
+    expect(kv(lines, 'file')[0]).toBe('~');              // File 空 = 无可执行体 = 暂停
+    expect(norm(kv(lines, 'cwd')[0])).toContain('wt-1499'); // 但仍钉在本票的树里
+    expect(kv(lines, 'stop')[0]).toBe('~');               // 暂停步不配 StopOn
+    expect(kv(lines, 'args')[0]).toMatch(/Enter/);        // 提示人完成后继续
+  });
+
   test('FP4: 只有 gate 一步可以调 dev-finish，且只透传 Level / Device（不夹带别的开关）', () => {
     const g = ALL.steps.gate;
     expect(g.file).toMatch(/dev-finish\.ps1$/);
@@ -234,7 +253,7 @@ describe('串行轮转外层的计划面（运行期）', () => {
     expect(src).toMatch(/AUTO_PICK_CONFIRM/);       // 母票不可判 ⇒ 自动取票必须过人这一关
   });
 
-  test('FP10: 没有纪律文件就组不出计划（宁可显式失败，不起一个无约束的 AFK agent）', () => {
+  test('FP10: CLI 档没有纪律文件就组不出计划；none 档不要求（否则默认档自己先跑不起来）', () => {
     let failed = false;
     try {
       runPs([
@@ -246,5 +265,12 @@ describe('串行轮转外层的计划面（运行期）', () => {
       expect(String(e.message)).toMatch(/DisciplineFile/);
     }
     expect(failed).toBe(true);   // 反向锁：删掉这条守卫，本用例即红
+    // 另一半：默认档（不传 AgentExe）不带纪律也必须能组图 ——
+    // 否则FP3b 那一档在真实调用里会先被 FP10 的守卫抵掉。
+    const okLines = runPs([
+      `$p = Get-FrontierRunPlan -RepoRoot '${REPO}' -TicketNumber 1499 -Level standard -Device $null`,
+      'foreach ($x in $p) { Write-Output ("n=" + $x.Name) }',
+    ].join('\n'));
+    expect(kv(okLines, 'n')).toEqual(['worktree', 'agent', 'self-test', 'gate']);
   });
 });

@@ -41,7 +41,10 @@ param(
     [ValidateSet('quick', 'standard', 'full')][string]$Level = 'standard',
     [string]$Device,
     [string]$RepoRoot,
-    [string]$AgentExe = 'pi',
+    # 'none'（默认）= 写码段交回人/会话，脚本在该步暂停等回车；其余值 = headless agent CLI
+    # 的可执行名（如 'pi'）。默认取 none 不是降级 —— 本机唯一可用的 CLI 凭证已失效（实调 401），
+    # 而外层价值本来就在取票/建树/门/收尾那四格，写码是谁的不影响它们。
+    [string]$AgentExe = 'none',
     [switch]$DryRun,
     # 自动取票的**人工确认门**。判据层拿不到「这是不是波级母票」（本仓未启用 sub-issues，
     # gh 的 parent 恒 null，父子关系只在正文；母票本身不带 `Part of`）⇒ 自动选出的票
@@ -80,12 +83,17 @@ function Show-Plan($plan, $ticketNumber) {
 # ---------- -DryRun：在取票之前返回，零副作用 ----------
 if ($DryRun) {
     if ($Ticket) {
-        # 纪律路径在这里**只打印、不落盘** —— 真跑时它由下面的落盘步生成。
+        # 纪律路径在 DryRun 里**只算、不写盘**；none 档根本不写盘（纪律打给人读）。
         # 用一个可见的占位段而不是假造真实路径：DryRun 自称零副作用，就不该偷偷写一个 TEMP 文件。
         $placeholder = Join-Path ([System.IO.Path]::GetTempPath()) "fl-frontier-$Ticket-discipline.txt"
         $plan = Get-FrontierRunPlan -RepoRoot $RepoRoot -TicketNumber $Ticket -Level $Level -Device $Device -AgentExe $AgentExe -DisciplineFile $placeholder
         Show-Plan $plan $Ticket
-        Write-Host "  （纪律文件在 DryRun 里只算路径不写盘；真跑时由落盘步生成，内容＝Get-AfkAgentDiscipline）" -ForegroundColor DarkGray
+        if ($AgentExe -eq 'none') {
+            Write-Host "  （none 档：第 2 步是暂停步，纪律在真跑时直接打在终端，不写盘）" -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host "  （纪律文件在 DryRun 里只算路径不写盘；真跑时由落盘步生成，内容＝Get-AfkAgentDiscipline）" -ForegroundColor DarkGray
+        }
     }
     else {
         Write-Host ""
@@ -152,11 +160,15 @@ if (-not $ticketNumber) {
 Write-Host ""
 Write-Host "=== 本轮目标：票 #$ticketNumber ===" -ForegroundColor Cyan
 
-# 纪律落盘到**仓外**（TEMP）：落进树里就有被 `git add` 进去的风险，而它不该是交付物。
-# 这份文件是真源 Get-AfkAgentDiscipline 的产物，不是手写的第二份 —— 判据改一处即生效。
-$disciplineFile = Join-Path $env:TEMP "fl-frontier-$ticketNumber-discipline.txt"
-Set-Content -LiteralPath $disciplineFile -Value (Get-AfkAgentDiscipline).Text -Encoding utf8
-Write-Host ("纪律文件（仓外）：{0}" -f $disciplineFile) -ForegroundColor DarkGray
+# 纪律：CLI 档落盘到**仓外** TEMP（落进树里就有被 git add 进去的风险）；
+# none 档不写盘，纪律直接打在终端给人读 —— 同一份真源 Get-AfkAgentDiscipline，不开第二份。
+$discipline = Get-AfkAgentDiscipline
+$disciplineFile = ''   # Set-StrictMode 下未赋值的变量不可引用；none 档就让它停在建值。
+if ($AgentExe -ne 'none') {
+    $disciplineFile = Join-Path $env:TEMP "fl-frontier-$ticketNumber-discipline.txt"
+    Set-Content -LiteralPath $disciplineFile -Value $discipline.Text -Encoding utf8
+    Write-Host ("纪律文件（仓外）：{0}" -f $disciplineFile) -ForegroundColor DarkGray
+}
 
 $plan = Get-FrontierRunPlan -RepoRoot $RepoRoot -TicketNumber $ticketNumber -Level $Level -Device $Device -AgentExe $AgentExe -DisciplineFile $disciplineFile
 Show-Plan $plan $ticketNumber
@@ -170,8 +182,20 @@ foreach ($s in $plan) {
     Write-Host ("[{0}/{1}] {2}" -f $idx, $total, $s.Name) -ForegroundColor Cyan
     Push-Location $s.Cwd
     try {
-        & $s.File @($s.Args)
-        $code = $LASTEXITCODE
+        if (-not $s.File) {
+            # 暂停步（AgentExe=none）：把纪律打给人读，等回车再继续跑门。
+            Write-Host ''
+            Write-Host ('写码目录：{0}' -f $s.Cwd) -ForegroundColor Cyan
+            Write-Host '--- 本票射程（与 CLI 档同一份真源）---'
+            Write-Host $discipline.Text
+            Write-Host '--------------------------------------'
+            Read-Host '写完并 commit 后按 Enter 继续（直接 Ctrl+C 可中止）' | Out-Null
+            $code = 0
+        }
+        else {
+            & $s.File @($s.Args)
+            $code = $LASTEXITCODE
+        }
     }
     finally {
         Pop-Location

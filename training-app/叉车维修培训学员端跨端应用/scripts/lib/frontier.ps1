@@ -190,9 +190,12 @@ function Get-FrontierRunPlan {
         [Parameter(Mandatory = $true)][int]$TicketNumber,
         [ValidateSet('quick', 'standard', 'full')][string]$Level = 'standard',
         [AllowNull()][AllowEmptyString()][string]$Device,
-        [string]$AgentExe = 'pi',
-        # 纪律文件的**路径**（由入口段用 Get-AfkAgentDiscipline 落盘到仓外）。
-        # 缺省即拒绝组计划 —— 让「忘了注入纪律」显式失败，而不是静默地起一个无约束的 agent。
+        # 'none' = 写码这一格交回人/会话（暂停步）；'pi' 等 = headless CLI 执行该步。
+        # 本机现状：pi 的密钥失效（实调 401，而 auth check 报 ready ⇒ 状态不可信），
+        # 所以 none 不是退路而是默认档位 —— 外层价值在取票/建树/门/收尾，不在起 agent。
+        [string]$AgentExe = 'none',
+        # 纪律文件路径：AgentExe -ne 'none' 时必填（无纪律=无约束的 AFK agent，宁可组不出计划）；
+        # none 档下可为空 —— 那时纪律由入口段直接打在终端给人读。
         [string]$DisciplineFile
     )
 
@@ -204,8 +207,9 @@ function Get-FrontierRunPlan {
     $tree = Join-Path $RepoRoot "wt-$TicketNumber"
     $treeProject = Join-Path $tree $mobileProject
 
-    if ([string]::IsNullOrWhiteSpace($DisciplineFile)) {
-        throw "Get-FrontierRunPlan: -DisciplineFile 必填。没有纪律文件的计划=一个无约束的无人值守 agent，宁可组不出计划。"
+    # 'none' 档没有可执行体，纪律由入口段打给人读 —— 不再为它要求纪律文件。
+    if (($AgentExe -ne 'none') -and [string]::IsNullOrWhiteSpace($DisciplineFile)) {
+        throw "Get-FrontierRunPlan: AgentExe='$AgentExe' 时 -DisciplineFile 必填。没有纪律的计划=一个无约束的无人值守 agent，宁可组不出计划。"
     }
 
     $prompt = "按 issue #$TicketNumber 在本树实现并自检。纪律见 --append-system-prompt 注入的那份清单：只写代码、只跑 npm run test:unit，不得调用任何 HBuilderX 相关脚本，做完提交到当前分支即停。"
@@ -221,17 +225,27 @@ function Get-FrontierRunPlan {
         StopOn = '2'
     }
 
-    # 2) 写码 —— 纪律随会话注入；这一步里没有门。
-    #    ⚠️ --append-system-prompt 接的是**纪律文件的路径**，不是本真源 `.ps1`：
-    #    把源码路径塞进去，agent 读到的是函数定义、不是禁令（DryRun 实测过这个形态，
-    #    而「参数存在且非空」的断言判不住它）。纪律文件由入口段用 Get-AfkAgentDiscipline
-    #    落盘，且**必须落在仓外** —— 落进树里就有被 `git add` 进去的风险。
-    $steps += [pscustomobject]@{
-        Name   = 'agent'
-        File   = $AgentExe
-        Cwd    = $treeProject
-        Args   = @('--print', '--append-system-prompt', $DisciplineFile, '--', $prompt)
-        StopOn = ''
+    # 2) 写码 —— 'none' ⇒ 暂停步（File 为空，入口打印指令后等回车）；
+    #    CLI 档 ⇒ 纪律随会话注入，这一步里没有门。
+    #    ⚠️ CLI 档的 --append-system-prompt 接的是**纪律文件路径**，不是本仓真源 .ps1
+    #    （塞源码路径，agent 读到的是函数定义不是禁令 —— DryRun 实测过，「参数非空」判不住）。
+    if ($AgentExe -eq 'none') {
+        $steps += [pscustomobject]@{
+            Name   = 'agent'
+            File   = ''
+            Cwd    = $treeProject
+            Args   = @('写码步：在本目录实现本票并 git commit，完成后按 Enter 继续（门与收尾由外层接着跑）')
+            StopOn = ''
+        }
+    }
+    else {
+        $steps += [pscustomobject]@{
+            Name   = 'agent'
+            File   = $AgentExe
+            Cwd    = $treeProject
+            Args   = @('--print', '--append-system-prompt', $DisciplineFile, '--', $prompt)
+            StopOn = ''
+        }
     }
 
     # 3) 自检 —— 外层复跑 ③，不信 agent 的自述（不占设备、不取锁）。
