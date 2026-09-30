@@ -9,6 +9,7 @@
 //   GET  /tutor/course/{course_id}/chapters
 //   GET  /tutor/chapter/{chapter_id}
 //   POST /tutor/chapter/{chapter_id}/upload
+//   POST /tutor/upload-image
 //   PUT  /tutor/chapter/{chapter_id}
 //   DELETE /tutor/file/{file_id}
 //   POST /tutor/files/batch-delete

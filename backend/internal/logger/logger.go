@@ -48,10 +48,10 @@ func New(cfg Config) (*zap.Logger, error) {
 
 	var writer zapcore.WriteSyncer
 	if cfg.OutputDir == "" {
-		writer = zapcore.AddSync(&lumberjackAdapter{})
+		writer = zapcore.AddSync(&stdoutWriter{})
 	} else {
 		writer = zapcore.NewMultiWriteSyncer(
-			zapcore.AddSync(&lumberjackAdapter{}),
+			zapcore.AddSync(&stdoutWriter{}),
 			zapcore.AddSync(newRotatingFile(cfg)),
 		)
 	}
@@ -96,11 +96,13 @@ func (c *redactCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 
 func (c *redactCore) Sync() error { return c.core.Sync() }
 
-// lumberjackAdapter 把 os.Stdout 包成 WriteSyncer（无缓冲，便于容器日志即时可见）。
-type lumberjackAdapter struct{}
+// stdoutWriter 把 os.Stdout 包成 WriteSyncer（无缓冲，便于容器日志即时可见）。
+// 曾用名 lumberjackAdapter，与 lumberjack 无关：真轮转在下面的 newRotatingFile。
+// 那个名字让读过它的人（2026-09-30 是我自己）误判「文件输出没配轮转」，据此立过一张错票。
+type stdoutWriter struct{}
 
-func (*lumberjackAdapter) Write(p []byte) (int, error) { return os.Stdout.Write(p) }
-func (*lumberjackAdapter) Sync() error                 { return nil }
+func (*stdoutWriter) Write(p []byte) (int, error) { return os.Stdout.Write(p) }
+func (*stdoutWriter) Sync() error                 { return nil }
 
 // newRotatingFile 创建按大小轮转、可压缩归档、受保留策略约束的日志文件 writer。
 // 默认策略：100MB 轮转、保留 7 份、30 天；压缩默认关闭，由配置显式开启

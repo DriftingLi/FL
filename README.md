@@ -438,6 +438,26 @@ docker compose -f docker-compose.prod.yml up -d
 
 `scripts/deploy-remote.sh` 通过公网 SSH 将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback` 回滚到上一个版本；备份默认落在 `/opt/forklift-backups`。配套脚本：`setup-server.sh`（初始化）、`lxc-install-docker.sh` / `lxc-setup-ssh.sh`（LXC 容器初始化）、`backup-daily.sh` / `rbd-snap-hourly.sh`（定时备份与快照）。
 
+### 生产诊断：某个端点到底有没有真实流量
+
+回答「这接口有人调吗 / 多少次 / 谁在调」时，**只有一个面可用**：后端容器 named volume 里的 `app.log`。
+
+```bash
+# 在 pve-02（生产应用宿主）上，按路径计数
+F=/var/lib/docker/volumes/forklift-training_logs-data/_data/app.log
+grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
+```
+
+三条口径，少一条就会得出错结论：
+
+1. **必须带 `-a`**。该文件含二进制字节，不加 `-a` 时 `grep` 只回一句 `binary file matches` 而**不给计数** —— 看着像 0，其实什么都没数。
+2. **别用 nginx 的 access.log**。`forklift-frontend-prod` 是 `network_mode: host`，容器内 `/var/log/nginx/access.log` 只是**软链到 `/dev/stdout`**，访问行进 docker `json-file` 驱动；而 **CD 每次部署都重建容器 ⇒ 历史清零**。实测（2026-09-30）该窗口只剩 10.2 小时 / 8875 行，且窗口内 `/api/**` 的 POST 一条都没有（只有扫描器探针）——在那里面「命中 0」与「没有流量」**不可区分**。
+3. **计数不带方向，要回到行里看**。日志行由 `logger/access.go` 逐请求写一条 JSON：`{method, path, status, duration_ms, ip, user_id, user_role, request_id}`。判「是不是集成客户端在调」看 `user_id` / `user_role` 与同一 `ip` 前后的请求时序，而不是只看总数（2026-09-30 那次就是靠这个把「33 天 1 次」定性成人为试探而非使用）。
+
+留存边界：`app.log` 由 lumberjack 按 `LOG_DIR=/data/logs`、`LOG_MAX_SIZE_MB`（生产 100）、`LOG_MAX_BACKUPS`（7）、`LOG_MAX_AGE_DAYS`（30）、`LOG_COMPRESS` 轮转（实现 `backend/internal/logger/logger.go` 的 `newRotatingFile`），跨容器重建留存；实测窗口 33 天 / 13.5 万行。⚠️ 归档只在**越过大小阈值时**才产生，所以「卷里只有一个 app.log」不等于「没配轮转」。
+
+判据类改动的取证纪律见 [`docs/agents/checks.md`](docs/agents/checks.md)；`docker exec` 免密读库的只读法与「用镜像内容标签判断生产在跑哪一版」见 `docs/agents/release.md` 一侧的运维记录。
+
 ### CI/CD（GitHub Actions）
 
 触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开启的 PR）testing 冒烟部署**；**PR 事件默认不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）——**唯一例外是 `pr-evidence.yml`**，它只读 PR 正文/评论/改动清单，不 checkout、不构建、不部署；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。

@@ -25,6 +25,12 @@ type HealthResponse struct {
 }
 
 // Check 处理 GET /api/valuation/health 请求
+// @Summary 估值子模块健康检查
+// @Description 返回子模块状态/服务名/时间戳，不连数据库也不连 Redis，仅证明该蓝图可响应。非统一信封（裸 HealthResponse，字段全为字符串）。公开端点：无需登录
+// @Tags 估值-系统
+// @Produce json
+// @Success 200 {object} map[string]any "{status:ok,service:forklift-valuation-backend,timestamp:RFC3339}"
+// @Router /valuation/health [get]
 func (h *HealthHandler) Check(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{
 		Status:    "ok",

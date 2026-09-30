@@ -1,12 +1,10 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -15,7 +13,6 @@ import (
 
 	_ "forklift-training/docs"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/middleware"
@@ -40,29 +37,11 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 健康检查 /api/health 在中间件内放行，不受限流影响
 	r.Use(middleware.RateLimit(cfg, deps.Logger))
 
-	// 健康检查与根路由（无需鉴权）
-	// 探测 Redis 连通性，异常时返回 503 便于容器编排重启
-	r.GET("/api/health", func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
-		defer cancel()
-		if err := cache.Ping(ctx); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "degraded",
-				"redis":  "unreachable",
-				"error":  err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "backend is running"})
-	})
-	// 存活探针（liveness）：仅表示进程存活，不依赖外部组件。
-	// 容器编排探活应使用本端点，避免 Redis 抖动导致容器被重启。
-	r.GET("/api/health/live", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
-	r.GET("/api", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "Forklift Training System API", "version": "1.0.0"})
-	})
+	// 健康检查与根路由（无需鉴权）。handler 是包级具名函数（system.go）：
+	// swag 只解析具名函数上方的注解块，内联闭包上的注释不会进 swagger（issue #1417）。
+	r.GET("/api/health", HealthCheck)
+	r.GET("/api/health/live", HealthLive)
+	r.GET("/api", APIRoot)
 
 	// 图形验证码（人机验证）：无需鉴权
 	RegisterCaptchaRoutes(r, deps.CaptchaSvc)
