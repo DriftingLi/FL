@@ -40,7 +40,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | --- | --- | --- |
 | [`docs/agents/ui-conventions.md`](docs/agents/ui-conventions.md) | 前端 UI 约定：UI 词汇（封装层/分段控件/空态两级/筛选栏/表格/确认框）、Tailwind 共存四条边界规则（R1-R4）、不得触碰的边界（brand 色域/冻结区/裸 hex/主题入口） | 改前端模板或样式前 |
 | [`docs/agents/checks.md`](docs/agents/checks.md) | 测试与检查流程：后端四件套（**Windows 本机 golangci-lint 暂不可用，由 CI 兜底** / WSL 双环境）、生成链顺序（swagger → gen-apitypes → 再跑测试）、PG 契约测试纪律（随机 schema / 目录查询按 `current_schema()` 收窄）、前端 type-check + vitest、部署配置校验、DeepSec 安全检测 | 每次提交前 |
-| [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律 | push / PR / merge 前 |
+| [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律；**合并后的分支与 worktree 收尾顺序**见其 :13 | push / PR / merge / 清理工作树前 |
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
 
 > **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**）。它在创建处校验参数、并在新目录里实测 `jest --listTests` 必须列出套件 —— 目录名不合规会让 ③ 门**静默匹配 0 个套件**（血账 #1144；闸门见 #1185）。新树建好后的初始化（共享 `node_modules` + 路径判据）由 `training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1` 承担，闸门 `new-worktree.ps1` 已接线（在仓内，可被 ③ 门守护）。**Qoder 的「本地任务的 Worktree 配置」框由宿主维护、PR 审查不到，本仓文档不校验其现值**：该框**必须且只能填下面这一行调用**（填逻辑＝开了第二真源）——`pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`；要确认框里已同步成这一行，读回 `%APPDATA%\Qoder\logs\<run>\questWindow\renderer.log` 里 `worktreeSetup` 键的值与之比对（**别拿「应该已填」当作已填**）。**移动端交付不用 Qoder 托管树**（③ 门在其默认落点会静默假绿），边界见移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」。
@@ -71,6 +71,6 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 - **「低风险运行时面」的豁免是逐文件的**（`:121-130`）：改动集里**每一个**文件都必须落在白名单内（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`）。顺手改一处 `training-app/**/scripts/*.ps1`（**哪怕只是给契约套件补一条 token 注册**）⇒ 整个 PR 被降级为常规运行时面、**① 真机与 ② 微信开发者工具双双变必过**。这个排除是**故意**的（改门脚本本身不该拿低风险豁免）⇒ 正解是**把工具改动拆成独立 PR**（非运行时面 ⇒ 免四门，可立即合并），而不是在同一个 PR 里硬塞。
 - **「结论」栏引用的可核验产物必须写在该行的行内**：仓库内 `docs/verification/<模块>/<PR号>/<页名>.<ext>`（PR 号须为数字）、GitHub 附件/Markdown 图片、或 sha 绑定的门评论链接（`#issuecomment-<id>`）。把它写在**子条目**（`  - …`）里、或只写裸本地产物路径（`.ci-verify/*.png`）、或任意 http(s) 链接，校验器**一律不认**（判「未引用可核验截图」）。
 
-移动端改动触及运行时面时，适用四门验收与证据要求：**签收在人、合并不限人**——**人工门已收缩为 ①b**（只在命中「能力面」时必过：指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互），其「执行人」栏由**人**给出原文（agent 代录）；**①a**（agent 出证的逐页截图 + 机检行，按**一次分支收口**跑）的「执行人」栏允许写「agent 执行」（2026-09-16 修订，见移动端 `docs/adr/0016-真机门的人工性收缩与按批取证.md`）。签齐后 **agent 直接合并**，不必停在「待人工签收」；例外通道（「已接受未验证风险」）仍由人执行合并。
+移动端改动触及运行时面时，适用四门验收与证据要求：**签收在人、合并不限人**——**人工门已收缩为 ①b**（只在命中「能力面」时必过：指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互），其「执行人」栏由**人**给出原文（agent 代录）；**①a**（agent 出证的逐页截图 + 机检行，按**一次分支收口**跑）的「执行人」栏允许写「agent 执行」（2026-09-16 修订，见移动端 `docs/adr/0016-真机门的人工性收缩与按批取证.md`）。签齐后 **agent 直接合并**，不必停在「待人工签收」——**「不必停在」不等于「还要问」**：证据齐且不走例外通道时，「是否合并 / 是否清理工作树」**不是问题**，直接执行（合并前一行披露 production 部署的口径见 `docs/agents/release.md`:16）。例外通道（「已接受未验证风险」）仍由人执行合并。
 
 规则全文见 `training-app/叉车维修培训学员端跨端应用/AGENTS.md`「验收门与合并纪律」；**四门判据与原因**见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**须写全路径**：它属移动端编号体系，根仓库另有一个同名的 `ADR-0008`）；**① 门的现行触发面、签收语义与取证节奏**见同目录 `0016-真机门的人工性收缩与按批取证.md`（2026-09-16 修订）。合并流程里的位置见 `docs/agents/release.md`。
