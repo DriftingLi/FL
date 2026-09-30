@@ -12,13 +12,11 @@
                 <navigator class="header-avatar" target="miniProgram" app-id="wx56ce2775c2b3aea8" version="release">
                     <image class="avatar-icon" src="/static/icons/易拉宝-006 1-1.png"></image>
                 </navigator>
-
-                <text class="header-icon" @click="onCart">🛒</text>
             </view>
         </view>
 
         <!-- 排序栏 -->
-        <MallSortBar :active-sort="activeSort" @sort-change="onSortChange" @search="onSearch" @cart="onCart" />
+        <MallSortBar :active-sort="activeSort" @sort-change="onSortChange" @search="onSearch" />
 
         <!-- 双栏主体 -->
         <view class="main-body">
@@ -62,19 +60,11 @@
                     <view class="product-info">
                         <text class="product-name">{{ item.title }}</text>
                         <view class="product-meta-row">
-                            <text v-if="(item.price ?? 0) == 0" class="product-price-free">免费</text>
-                            <text v-else class="product-price">¥{{ item.price ?? 0 }}</text>
-                            <text class="product-sales">已有{{ item.enrollCount ?? 0 }}人参与学习</text>
-                        </view>
-                        <!-- 数量选择器（付费商品） -->
-                        <view v-if="(item.price ?? 0) > 0" class="quantity-selector">
-                            <view class="qty-btn" @click.stop="decreaseQty(item)">
-                                <text class="qty-btn-text">-</text>
-                            </view>
-                            <text class="qty-value">{{ item.quantity ?? 1 }}</text>
-                            <view class="qty-btn" @click.stop="increaseQty(item)">
-                                <text class="qty-btn-text">+</text>
-                            </view>
+                            <!-- #1421（移动端 ADR-0031）：价格行吃单点渲染 —— 「N 积分 / 免费」，
+                                 不再有 ¥ 金额与恒假「免费」；原「已有 N 人参与学习」行随接线清退
+                                 （学员端列表后端根本不发 student_count，恒 0 是假信号）。
+                                 经本地包装函数转发（模板直调 import 函数会被 Kotlin 判炸，规则 S）。 -->
+                            <text class="product-price">{{ coursePriceText(item) }}</text>
                         </view>
                     </view>
                 </view>
@@ -99,6 +89,7 @@
     import { goBack } from '../../utils/navigation'
     import { getCourseListApi } from '../../api/course'
     import { getCurrentCredentialApi } from '../../api/credential'
+    import { renderCoursePrice } from '../../utils/coursePointsCta'
     import type { CourseItem, CourseListResult } from '../../types/index'
     import MallSortBar from './components/mall-sort-bar.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
@@ -195,22 +186,16 @@
         uni.navigateTo({ url: '/pages/search/search' })
     }
 
-    function onCart() : void {
-        uni.showToast({ title: '购物车开发中', icon: 'none' })
-    }
-
     function toback() : void {
         goBack()
     }
 
-    function increaseQty(item : CourseItem) : void {
-        const q = item.quantity ?? 0
-        item.quantity = q + 1
-    }
-
-    function decreaseQty(item : CourseItem) : void {
-        const q = item.quantity ?? 1
-        item.quantity = q > 1 ? q - 1 : 1
+    /**
+     * 价格行单点包装（#1421）：模板不能直调 import 函数（Kotlin 判炸，同 utsAndroidCompile 规则 S），
+     * 这里只做转发 —— 价格语义仍单点在 utils/coursePointsCta.uts 的 renderCoursePrice。
+     */
+    function coursePriceText(item : CourseItem) : string {
+        return renderCoursePrice(item.points_price)
     }
 
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
@@ -273,7 +258,6 @@
     .header-avatar {
         width: 64rpx;
         height: 64rpx;
-        margin-right: 150rpx;
         overflow: hidden;
     }
 
@@ -281,12 +265,6 @@
         width: 64rpx;
         height: 64rpx;
         border-radius: 32rpx;
-    }
-
-    .header-icon {
-        font-size: 32rpx;
-        margin-left: 20rpx;
-        color: #666666;
     }
 
     /* ===== 双栏主体 ===== */
@@ -405,49 +383,6 @@
         font-size: 32rpx;
         font-weight: bold;
         color: #ff4d4f;
-    }
-
-    .product-price-free {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #ff4d4f;
-    }
-
-    .product-sales {
-        font-size: 22rpx;
-        color: #999999;
-    }
-
-    /* ===== 数量选择器 ===== */
-    .quantity-selector {
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-end;
-        margin-top: 16rpx;
-    }
-
-    .qty-btn {
-        width: 48rpx;
-        height: 48rpx;
-        border-radius: 8rpx;
-        border: 1rpx solid #dddddd;
-        align-items: center;
-        justify-content: center;
-        background-color: #ffffff;
-    }
-
-    .qty-btn-text {
-        font-size: 28rpx;
-        color: #666666;
-    }
-
-    .qty-value {
-        font-size: 28rpx;
-        color: #333333;
-        margin-left: 20rpx;
-        margin-right: 20rpx;
-        min-width: 40rpx;
-        text-align: center;
     }
 
     /* ===== 空状态 ===== */

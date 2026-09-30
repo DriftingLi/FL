@@ -16,6 +16,8 @@
  *    继续学习/章节跳转/失败重试逐项仍在；三条路由仍在 pages.json
  * 10) 展示纯函数唯一实现：文件图标三件套与课程分类图标/底色各只有一处实现；
  *     formatDuration 两处是**刻意不同语义**（空值兜底 '未知' vs '-'），锁住不被「顺手合并」
+ * 11) #1421（移动端 ADR-0031）：课程 DTO 逐字段迁出 points_price/entitled（谎言注释终结）、
+ *     CTA/价格渲染单点被三处界面消费、购物车族死 UI 全仓零出现、章节 404 支「去解锁」且零兑换调用
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -353,7 +355,9 @@ describe('删除禁区「courses 不用删」：行为保持点逐项仍在', ()
     for (const t of ['checkFavoriteApi', 'addFavoriteApi', 'removeFavoriteApi', 'getStudentCourseDetailApi', 'computeContinueChapterId', 'onStartLearn']) {
       expect(src).toContain(t);
     }
-    expect(src).toContain("{{ continueChapterId > 0 ? '继续学习' : '开始学习' }}");
+    // #1421：CTA 文案从「页面三元各写一份」收进单点派生（ctaText computed ← buildCourseCta），
+    // 「继续学习/开始学习」的区分仍在（resumeLabel 由 continueChapterId 派生，见详情兑换面锁）
+    expect(src).toContain("{{ ctaText }}");
   });
 
   it('章节页：收藏三连接线在（#1140），且 target_type 是 chapter 不是 course', () => {
@@ -605,5 +609,144 @@ describe('#1087 Q3：课程域 category 残留面已退役', () => {
       const code = stripAll(read(f));
       for (const c of consumers) expect(code).not.toContain(c);
     }
+  });
+});
+
+/**
+ * #1421（移动端 ADR-0031）兑换闭环 —— 契约形状锁。
+ *
+ * 行为面（mapper 对真 DTO 的迁出、兑换动词的请求形状、CTA 五组组合）各有专档：
+ * `coursePointsRedeemBehavior.test.js` / `coursePointsCtaBehavior.test.js`；本 describe 守的是
+ * **接线与绝迹** —— 改名、改道、死 UI 复活这类「跑起来看不见」的断点。
+ * 「全仓零出现」的范围如实写：课程域归属面（types/course.uts、api/course.uts、pages/mall/**、
+ * pages/courses/**）。dashboard 课程区的 ¥ mock 与 🛒 是**静态假数据族**的另一具尸体，
+ * 由 #1422（首页接真实数据，其唯一消费者即本函数单点）同票处置 —— 不在本锁射程里偷偷扩面。
+ */
+describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝迹', () => {
+  /** 三形态注释剥离（模板 HTML / 块 / 行），断言只针对代码本体 */
+  const stripAll = (s) =>
+    s
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+  /** 取 .uvue 的 <template> 段（pointsRealApiContract 同法） */
+  const tplOf = (src) => src.slice(src.indexOf('<template>'), src.lastIndexOf('</template>'));
+
+  const TYPES = 'types/course.uts';
+  const API = 'api/course.uts';
+  const MALL = 'pages/mall/mall.uvue';
+  const SORT_BAR = 'pages/mall/components/mall-sort-bar.uvue';
+  const DETAIL = 'pages/courses/course-detail.uvue';
+  const CHAPTER = 'pages/courses/chapter-view.uvue';
+  const CTA_FN = 'utils/coursePointsCta.uts';
+
+  it('types/course.uts：points_price / entitled 逐字段在册，购物车族三字段绝迹（谎言注释随之终结）', () => {
+    const src = read(TYPES);
+    // CourseItem：列表价格槽（后端 points_price，*int 可空）
+    expect(src).toMatch(/CourseItem = \{[\s\S]*?points_price \? : number \| null/);
+    // CourseDetail：价格 + 权益投影双槽；entitled 的可空语义必须显式（没登录 ≠ 没解锁）
+    expect(src).toMatch(/CourseDetail = \{[\s\S]*?points_price \? : number \| null/);
+    expect(src).toMatch(/CourseDetail = \{[\s\S]*?entitled \? : boolean \| null/);
+    // 反向锁：注释剥离后，「后端暂未返回」这句谎言不得再作为**字段声明的现值口径**存在
+    //（说明性注释里以历史口吻点名它是允许且必要的 —— 故本条只在剥注释的代码本体上判绝迹）
+    expect(stripAll(src)).not.toContain('暂未返回');
+    // 购物车族：本地数量 / 金额价格 / 报名人数 三个死字段绝迹
+    expect(src).not.toMatch(/\bquantity\b/);
+    expect(src).not.toMatch(/\benrollCount\b/);
+    expect(src).not.toMatch(/^\s*price \?/m);
+  });
+
+  it('api/course.uts：两处 mapper 各迁 points_price 一行，详情另迁 entitled；旧别名不再被读', () => {
+    const code = stripAll(read(API));
+    // 列表侧 buildCourseItem 与详情侧 buildCourseDetail 各读一次 points_price（obj / infoObj 两形）
+    expect(code).toContain("obj['points_price']");
+    expect(code).toContain("infoObj['points_price']");
+    expect(code).toContain("infoObj['entitled']");
+    // 反向锁：后端从不返回的旧别名不得残留（price / enroll_count / quantity 都不是课程 DTO 字段）
+    expect(code).not.toContain("obj['price']");
+    expect(code).not.toContain("obj['enroll_count']");
+    expect(code).not.toContain('quantity');
+  });
+
+  it('CTA/价格渲染单点存在且被货架与详情两处消费（价格语义不各写一份，ADR-0031 决策 7）', () => {
+    expect(exists(CTA_FN)).toBe(true);
+    const cta = stripAll(read(CTA_FN));
+    expect(cta).toContain('export function buildCourseCta');
+    expect(cta).toContain('export function renderCoursePrice');
+    // 货架价格行吃单点：import renderCoursePrice + 本地包装转发（模板直调 import 函数会被 Kotlin 判炸，规则 S）
+    const mall = stripAll(read(MALL));
+    expect(mall).toMatch(/import\s*\{\s*renderCoursePrice\s*\}\s*from\s*'\.\.\/\.\.\/utils\/coursePointsCta'/);
+    expect(mall).toMatch(/function\s+coursePriceText\s*\([^)]*\)\s*:\s*string\s*\{[\s\S]{0,80}?return\s+renderCoursePrice\(/);
+    expect(tplOf(mall)).toContain('coursePriceText(item)');
+    // 详情 CTA 吃单点：buildCourseCta 是唯一派生入口，文案与提示都从它的产物来
+    const detail = stripAll(read(DETAIL));
+    expect(detail).toMatch(/import\s*\{[^}]*buildCourseCta[^}]*\}\s*from\s*'\.\.\/\.\.\/utils\/coursePointsCta'/);
+    expect(detail).toContain('buildCourseCta(');
+    // 单点实现锁：全仓 `function buildCourseCta` / `function renderCoursePrice` 各只有 CTA 文件一处
+    const declFiles = (name) => h.filesUnder('.').filter((f) => new RegExp('function\\s+' + name + '\\s*\\(').test(read(f)));
+    expect(declFiles('buildCourseCta')).toEqual([CTA_FN]);
+    expect(declFiles('renderCoursePrice')).toEqual([CTA_FN]);
+  });
+
+  it('mall 购物车族零出现：🛒 / onCart / 数量选择器 / 销量行 / ¥ 全部绝迹，且无孤儿本地函数', () => {
+    const src = stripAll(read(MALL));
+    const tpl = tplOf(src);
+    expect(tpl).not.toContain('🛒');
+    expect(tpl).not.toContain('¥');
+    expect(src).not.toContain('onCart');
+    expect(src).not.toContain('购物车');
+    expect(src).not.toMatch(/\bincreaseQty\b|\bdecreaseQty\b/);
+    expect(src).not.toMatch(/\bquantity\b/);
+    expect(tpl).not.toContain('参与学习');
+    expect(tpl).not.toMatch(/enrollCount|item\.price\b/);
+    // 死 CSS 同步清退（「删 hint 同步删 class」约定）：数量选择器一族类名不得孤儿留存
+    expect(src).not.toMatch(/\.quantity-selector|\.qty-btn|\.qty-value/);
+    // 排序栏组件：cart emit 与其 🛒 按钮绝迹（emit 改名即红：defineEmits 清单钉死）
+    const bar = stripAll(read(SORT_BAR));
+    expect(bar).not.toContain('🛒');
+    expect(bar).not.toMatch(/defineEmits\(\[[^\]]*'cart'[^\]]*\]\)/);
+    expect(bar).not.toMatch(/\bonCartClick\b/);
+  });
+
+  it('章节 404 支：「去解锁」回详情兑换面，且 chapter-view 零兑换调用（兑换面单点归详情）', () => {
+    const src = stripAll(read(CHAPTER));
+    const lockedStart = src.indexOf('<view v-else-if="chapterLocked"');
+    expect(lockedStart).toBeGreaterThan(-1);
+    const lockedEnd = src.indexOf('章节内容加载失败');
+    expect(lockedEnd).toBeGreaterThan(lockedStart);
+    const locked = src.slice(lockedStart, lockedEnd);
+    expect(locked).toContain('去解锁');
+    expect(locked).toContain('该章节需先解锁');
+    // 支内不给重试（#1268 原判据不回归）、不内联兑换（ADR-0031 决策 5：404 不泄漏存在性）
+    expect(locked).not.toContain('retry-btn');
+    expect(locked).not.toContain('兑换');
+    expect(src).not.toMatch(/redeemCoursePointsApi|redeemShopItemApi|getPointsBalanceApi/);
+    expect(src).not.toMatch(/from\s*'\.\.\/\.\.\/api\/points'/);
+    // 落点 = 回详情兑换面：goBack 的 fallback 指向 course-detail（带当前课程 id）
+    expect(src).toMatch(/goBack\('\/pages\/courses\/course-detail\?id=' \+ courseId/);
+  });
+
+  it('详情兑换面接线：确认必过（文案票面逐字）、成功重拉详情、失败原样呈现、去赚积分直达任务中心', () => {
+    const src = stripAll(read(DETAIL));
+    // 决策 2：确认弹窗必过，文案含「积分解锁，确认兑换？」
+    expect(src).toContain('uni.showModal');
+    expect(src).toContain('积分解锁，确认兑换？');
+    // 决策 4：成功后重拉详情取服务端 entitled；禁内存改写 entitled / 抹 points_price 当已解锁
+    //（可空槽在 Kotlin 侧非空引用根本赋不进 null，静态面能抓的是改写形态）
+    expect(src).toMatch(/async function doRedeemCourse[\s\S]{0,500}?await loadDetail\(\)/);
+    // 禁内存改写服务端投影：`.entitled =`（赋值）不得出现；`.entitled ==`（比较）是合法的，故 (?!=) 排除
+    expect(src).not.toMatch(/\.entitled\s*=(?!=)/);
+    expect(src).not.toMatch(/\.points_price\s*=(?!=)/);
+    // 决策 3：余额读失败降级为「读数缺失」（归 null，不归 0），提示由单点派生
+    expect(src).toMatch(/getPointsBalanceApi\(\)[\s\S]{0,120}?balanceReading\.value = bal\.balance/);
+    expect(src).toMatch(/catch[\s\S]{0,80}?balanceReading\.value = null/);
+    // 失败原样呈现：提示直接用后端哨兵文案（errMsg 透传），不另造「兑换失败」话术做语义比对
+    expect(src).toMatch(/redeemCoursePointsApi\(/);
+    expect(src).not.toMatch(/indexOf\('(积分不足|已兑换)'\)/);
+    // 「去赚积分」与 ai-assistant 同落点：任务中心
+    expect(src).toContain("uni.navigateTo({ url: '/pages/points/task-center' })");
+    // 兑换动词来自 points 域（跨模块消费已登记 modules.js points.crossModuleConsumers）
+    expect(src).toMatch(/redeemCoursePointsApi,\s*getPointsBalanceApi\s*}\s*from\s*'\.\.\/\.\.\/api\/points'/);
   });
 });

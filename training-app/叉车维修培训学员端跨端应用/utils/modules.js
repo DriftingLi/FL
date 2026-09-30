@@ -103,6 +103,10 @@ const INFRA = {
     'api/refreshGate.uts',
     'api/request.uts',
     'composables/usePagedList.uts',
+    // 'utils/coursePointsCta.uts' —— #1421（移动端 ADR-0031 决策 7）：课程价格/兑换 CTA 的
+    // 展示纯函数单点，被 mall 货架与 courses 详情两个模块消费 ⇒ 按「展示纯函数唯一实现」口径
+    // 落 `utils/**`（跨切面基础设施），不归任一模块私有（modules.js 归属规则③的适用面外）。
+    'utils/coursePointsCta.uts',
   ],
   /**
    * 基础设施里**已超 600 行、本票不拆**的文件（登记不执法；拆它需要独立票）。
@@ -384,7 +388,9 @@ const MODULES = {
     extraDirs: [],
     files: ['api/points.uts', 'pages/points/points-detail.uvue', 'pages/points/task-center.uvue'],
     extractDirs: [],
-    crossModuleConsumers: ['profile'],
+    // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
+    // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）
+    crossModuleConsumers: ['profile', 'courses'],
     /** 超预算：task-center.uvue 617 */
     budget: 'pending',
     budgetOverrides: {},

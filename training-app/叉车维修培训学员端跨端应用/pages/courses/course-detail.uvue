@@ -38,11 +38,13 @@
             <CourseChapterList :chapters="detail!.chapters" :completed-ids="completedIds"
                 :continue-chapter-id="continueChapterId" @chapter-click="onChapterClick" />
 
-            <!-- 底部操作栏 -->
+            <!-- 底部操作栏：CTA 四态由 buildCourseCta 单点派生（免费/已拥有→学习，未拥有→兑换） -->
             <view class="action-bar">
-                <view class="action-btn" @click="onStartLearn">
-                    <text class="action-btn-text">{{ continueChapterId > 0 ? '继续学习' : '开始学习' }}</text>
+                <view class="action-btn" @click="onCtaClick">
+                    <text class="action-btn-text">{{ ctaText }}</text>
                 </view>
+                <!-- 余额不足的装饰提示：可点直达任务中心、永不拦截 CTA（读数缺失时整行缺席） -->
+                <text v-if="ctaHint != ''" class="earn-hint" @click="onGoEarnPoints">{{ ctaHint }}</text>
             </view>
         </scroll-view>
 
@@ -64,6 +66,10 @@
     import { getCourseDetailApi } from '../../api/course'
     import { getStudentCourseDetailApi } from '../../api/student'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
+    import { redeemCoursePointsApi, getPointsBalanceApi } from '../../api/points'
+    import { errMsg } from '../../api/helpers'
+    import { buildCourseCta } from '../../utils/coursePointsCta'
+    import type { CourseCtaResult } from '../../utils/coursePointsCta'
     import CourseCoverSection from './components/course-cover-section.uvue'
     import CourseProgressSection from './components/course-progress-section.uvue'
     import CourseInfoGrid from './components/course-info-grid.uvue'
@@ -87,6 +93,56 @@
     const completedIds = ref<number[]>([])
     // 继续学习的章节 ID
     const continueChapterId = ref<number>(0)
+
+    // ===== #1421（移动端 ADR-0031）兑换面状态 =====
+    /** 余额读数：null = 读不到（未登录 / 读失败）⇒ CTA 装饰提示整体缺席，干净降级为纯事后 */
+    const balanceReading = ref<number | null>(null)
+    /** 兑换请求中 / 成功后重拉详情确认中（两态把 CTA 文案切成进度提示，避免重复点击） */
+    const redeeming = ref<boolean>(false)
+    const reloading = ref<boolean>(false)
+
+    /**
+     * CTA 四态由单点纯函数派生（价格 / 权益投影 / 余额读数）。学习态文案（继续/开始）
+     * 是页面事实，作为 resumeLabel 传入 —— 状态机不抄第二份文案。
+     */
+    const cta = computed<CourseCtaResult>(() : CourseCtaResult => {
+        const resumeLabel = continueChapterId.value > 0 ? '继续学习' : '开始学习'
+        const d = detail.value
+        if (d == null) {
+            return buildCourseCta(null, null, null, resumeLabel)
+        }
+        return buildCourseCta(d.points_price ?? null, d.entitled ?? null, balanceReading.value, resumeLabel)
+    })
+
+    const ctaText = computed<string>(() : string => {
+        if (redeeming.value) return '兑换中…'
+        if (reloading.value) return '确认中…'
+        return cta.value.text
+    })
+
+    /** 装饰提示整行（余额不足时非空）；读数缺失 / 已拥有 / 免费时为 ''（模板据此不渲染） */
+    const ctaHint = computed<string>(() : string => cta.value.hintText)
+
+    /**
+     * 读余额（仅在「付费 + 未拥有」时才有意义）。读失败不报错挡道 —— 归 null 让提示整体缺席，
+     * 扣不扣由服务端兑换管线裁定（决策 3：预判只为提示口径）。
+     */
+    async function loadBalanceIfPaid() : Promise<void> {
+        const d = detail.value
+        if (d == null) return
+        const paid = (d.points_price ?? 0) > 0
+        if (!paid || d.entitled == true) {
+            balanceReading.value = null
+            return
+        }
+        try {
+            const bal = await getPointsBalanceApi()
+            balanceReading.value = bal.balance
+        } catch (e) {
+            balanceReading.value = null
+            console.warn('[course-detail] balance read failed, degrade to no-hint:', e)
+        }
+    }
 
     async function loadFavoriteStatus() : Promise<void> {
         if (courseId.value <= 0) return
@@ -232,6 +288,8 @@
                 learningProgress.value = data.progress_pct
                 learningCompleted.value = data.completed_chapters
             }
+            // #1421：付费未拥有时预读余额做装饰提示（读失败/无主体 → 归 null，提示整体缺席）
+            loadBalanceIfPaid()
             // 并行加载学习状态（获取每章完成情况）
             loadLearningState()
         } catch (e) {
@@ -267,6 +325,62 @@
         uni.navigateTo({
             url: '/pages/courses/chapter-view?course_id=' + courseId.value + '&chapter_id=' + targetId
         })
+    }
+
+    /**
+     * 执行兑换（POST /points/shop/course/{id}/redeem）。成功**不本地写已解锁** —— 重拉详情取
+     * 服务端 entitled 投影（决策 4，禁内存抹 points_price）；失败原样呈现后端哨兵文案（不做字符串比对）。
+     * ⚠️ 必须先于 onCtaClick 声明：UTS 无函数提升（Kotlin error18「找不到名称」，见原型同款注释）。
+     */
+    async function doRedeemCourse() : Promise<void> {
+        const d = detail.value
+        if (d == null) return
+        const id = d.course_id
+        redeeming.value = true
+        try {
+            await redeemCoursePointsApi(id)
+            redeeming.value = false
+            reloading.value = true
+            // 成功后重拉详情：entitled 由服务端投影决定，刷新/重进仍是已解锁（非客户端内存假象）
+            await loadDetail()
+            reloading.value = false
+            uni.showToast({ title: '兑换成功', icon: 'success' })
+        } catch (e) {
+            redeeming.value = false
+            reloading.value = false
+            uni.showToast({ title: errMsg(e, '兑换失败'), icon: 'none' })
+        }
+    }
+
+    /**
+     * 兑换 CTA 点击：非兑换面（免费 / 已拥有）直接学习；兑换面必过确认弹窗（决策 2）。
+     * 余额不足也不在此拦截 —— 由服务端管线最终裁定（决策 3：预判永不拦截 CTA）。
+     * 声明在 onStartLearn / doRedeemCourse 之后：UTS 无函数提升（Kotlin error18）。
+     */
+    function onCtaClick() : void {
+        if (redeeming.value || reloading.value) return
+        const d = detail.value
+        if (d == null) return
+        if (!cta.value.redeem) {
+            onStartLearn()
+            return
+        }
+        const price = d.points_price ?? 0
+        uni.showModal({
+            title: '积分兑换',
+            content: '该课程需 ' + price.toString() + ' 积分解锁，确认兑换？',
+            // uni.showModal 的 success 回调不可为 async（error17），转由独立异步函数执行
+            success: (res) => {
+                if (res.confirm) {
+                    doRedeemCourse()
+                }
+            }
+        })
+    }
+
+    // 装饰提示里的「去赚积分」直达任务中心（与 ai-assistant 同落点）
+    function onGoEarnPoints() : void {
+        uni.navigateTo({ url: '/pages/points/task-center' })
     }
 
     onLoad((options : UTSJSONObject) => {
@@ -359,6 +473,14 @@
         font-size: 32rpx;
         font-weight: bold;
         color: #ffffff;
+    }
+
+    /* 余额不足的装饰提示行（可点直达任务中心；uVue 仅 class 选择器，文字样式落在 <text> 上） */
+    .earn-hint {
+        font-size: 24rpx;
+        color: #e2622c;
+        text-align: center;
+        margin-top: 16rpx;
     }
 
     /* ===== 加载/空状态 ===== */

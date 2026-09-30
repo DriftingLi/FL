@@ -157,6 +157,8 @@ function buildApp(opts = {}) {
     getMapped: request.getMapped,
     post: request.post,
     toNumber: helpers.toNumber,
+    toNumberOrNull: helpers.toNumberOrNull,
+    toBool: helpers.toBool,
     toStr: helpers.toStr,
     errMsg: helpers.errMsg,
     // ⚠️ 读写两端共用**同一个真源常量**：从 request 模块回读，不抄字面量
@@ -283,6 +285,17 @@ describe('B. 页面接线（接线守护，行为兜底 = A1/C3）：未解锁�
     // 页面不得自己复制前缀判据（#1204 病根：两端各写一份判据）
     expect(src).not.toContain('NOT_FOUND_MESSAGE_PREFIX');
     expect(src).not.toContain("'404");
+  });
+
+  test('B3（#1421）：未解锁支给「去解锁」出口跳回详情兑换面 —— 重试之外的另一条死胡同判据（#1268 票内排后项落地）', () => {
+    const src = readText(CHAPTER_VIEW_UVUE);
+    // 截取「未解锁支 → 加载失败支之前」的整段（与 coursesContract #1421 组同切口）
+    const locked = src.slice(src.indexOf('<view v-else-if="chapterLocked"'), src.indexOf('章节内容加载失败'));
+    expect(locked.length).toBeGreaterThan(0);
+    expect(locked).toContain('去解锁');
+    // 「去解锁」是**跳转**不是就地兑换：支内不得出现 redeem/积分文案（兑换面单点归 detail，ADR-0031 决策 1/5；
+    // 全页零兑换调用的承重锁在 coursesContract #1421 组）
+    expect(locked).not.toMatch(/redeem|积分/);
   });
 });
 

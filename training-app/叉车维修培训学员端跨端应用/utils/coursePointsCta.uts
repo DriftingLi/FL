@@ -1,0 +1,86 @@
+/**
+ * 课程兑换 CTA 状态机 —— 「(points_price, entitled, balance) → 界面」的**唯一**派生实现
+ * （#1421 / 移动端 ADR-0031 决策 1/3/7；形态来自原型分支 `prototype/points-redeem-cta` 的真机取证）
+ *
+ * 三个消费面共用本文件，价格与兑换语义在任何面上都不写第二份：
+ *   - mall 货架价格行：`renderCoursePrice(points_price)` → 「N 积分 / 免费」
+ *   - course-detail 底部 CTA：`buildCourseCta(...).text`（免费/已拥有 → 学习，未拥有 → 兑换）
+ *   - course-detail 装饰提示：`.hintText`（「余额不足 · 还差 N 分 · 去赚积分」）
+ *
+ * 口径（照抄 ADR-0009 时代 `useAiPro.uts` 的头注精神）：**预判只为提示口径，
+ * 扣不扣由服务端兑换管线裁定** —— 余额不足永不拦截 CTA；余额读数缺失（未接/读失败）
+ * 时提示整体缺席、干净降级为纯事后，不得报错挡道（ADR-0031 决策 3）。
+ *
+ * 纯函数、零副作用、零 import：行为面由 `utils/coursePointsCtaBehavior.test.js` 真跑守护
+ * （五组组合成对断言 + 注入变异），接线面由 `utils/coursesContract.test.js` #1421 组守。
+ * 函数声明顺序 = 被引用者在前（UTS 无提升，Kotlin error18 纪律）。
+ */
+
+/** buildCourseCta 的产物（显式结果类型：UTS 对返回对象的要求，同 UseAiProResult 先例） */
+export type CourseCtaResult = {
+	/** CTA 文案（票面逐字：「N 积分兑换」/「开始学习」/「继续学习」） */
+	text : string
+	/** 本格是否走兑换面（false = 点击直接学习；不存在「不可点」形态 —— 预判永不拦截） */
+	redeem : boolean
+	/** 装饰提示整行（'' = 缺席；非空时原样渲染，可点直达任务中心） */
+	hintText : string
+	/** 「去赚积分」是否可达（与 hintText 同灭的呈现锁，不提供第二判定路径） */
+	earnHint : boolean
+	/** 余额缺口（hint 的数值单槽；null = 不适用。被否决的 cost-block 常显形态的数字就吸收在这里） */
+	shortfall : number | null
+}
+
+/** 是否付费课：null / 0 都判免费（后端 omitempty 与显式 0 两形态同价） */
+function isPaidCourse(pointsPrice : number | null) : boolean {
+	return pointsPrice != null && pointsPrice > 0
+}
+
+/**
+ * 余额不足判定：读数缺失（balance null）不参与比较 —— 干净降级为纯事后（ADR-0031 决策 3）。
+ * 判据是装饰层的，与服务端管线互不越权（服务端自比余额，不足回 400 哨兵）。
+ */
+function isLackingBalance(pointsPrice : number, balance : number | null) : boolean {
+	return balance != null && balance < pointsPrice
+}
+
+/**
+ * 四态派生（ADR-0031 决策 1 + 3 + 6）：
+ *   免费（price null/0）→ 直接学习，零兑换痕迹；
+ *   未拥有·余额足 → 「N 积分兑换」；
+ *   未拥有·余额不足 → 同 CTA + 提示行（数值 = price − balance）；
+ *   已拥有（entitled true）→ 兑换 UI 消失（不常驻）。
+ * entitled=null（无主体读路径的缺省）与 false 同按「未拥有」面渲染 —— 但语义不同，
+ * 可空性在类型上显式（没登录 ≠ 没解锁，见 types/course.uts）。
+ *
+ * @param pointsPrice 后端 course.points_price（*int 原样迁出：null = 免费缺省）
+ * @param entitled 后端详情投影（null = 读路径无主体）
+ * @param balance 积分余额读数（null = 读不到，提示整体缺席）
+ * @param resumeLabel 「学习」态文案由调用方给出（继续学习/开始学习是页面事实，状态机不抄第二份文案）
+ */
+export function buildCourseCta(pointsPrice : number | null, entitled : boolean | null, balance : number | null, resumeLabel : string = '开始学习') : CourseCtaResult {
+	// 免费与已拥有都回归学习面
+	if (!isPaidCourse(pointsPrice) || entitled == true) {
+		return { text: resumeLabel, redeem: false, hintText: '', earnHint: false, shortfall: null } as CourseCtaResult
+	}
+	const price = pointsPrice ?? 0
+	const redeemText = price.toString() + ' 积分兑换'
+	if (isLackingBalance(price, balance)) {
+		const lack = price - (balance ?? 0)
+		return {
+			text: redeemText,
+			redeem: true,
+			hintText: '余额不足 · 还差 ' + lack.toString() + ' 分 · 去赚积分',
+			earnHint: true,
+			shortfall: lack,
+		} as CourseCtaResult
+	}
+	return { text: redeemText, redeem: true, hintText: '', earnHint: false, shortfall: null } as CourseCtaResult
+}
+
+/** 货架/列表价格行的单点渲染：「N 积分」或「免费」（不得出现 ¥ 与任何金额语义） */
+export function renderCoursePrice(pointsPrice : number | null) : string {
+	if (!isPaidCourse(pointsPrice)) {
+		return '免费'
+	}
+	return pointsPrice!.toString() + ' 积分'
+}

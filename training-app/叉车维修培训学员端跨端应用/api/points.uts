@@ -6,6 +6,7 @@
  * - GET  /points/tasks                任务中心（todo / claimable / claimed 三态）
  * - POST /points/tasks/{code}/claim   领取任务积分
  * - POST /points/shop/{sku}/redeem    商城兑换（AI 专业版走这条；#920）
+ * - POST /points/shop/course/{id}/redeem  课程兑换（#1421 / 移动端 ADR-0031）
  *
  * 后端从未注册过的路由不在本文件出现：/points/records 与 /points/course-view 是 #662
  * 实测 404 的幻影路由。旧版靠 api 层 .catch() 回落占位数据把 404 静默盖住（用户永远看到
@@ -157,5 +158,22 @@ export function claimPointsTaskApi(code : string) : Promise<PointsClaimResult> {
  */
 export function redeemShopItemApi(sku : string) : Promise<PointsRedeemResult> {
 	const url = '/points/shop/' + encodeURIComponent(sku) + '/redeem'
+	return postMapped<PointsRedeemResult>(url, null, (data : UTSJSONObject) : PointsRedeemResult => buildPointsRedeemResult(data))
+}
+
+/**
+ * 课程兑换（POST /points/shop/course/{courseId}/redeem，后端 points.go 已注册；
+ * 移动端 ADR-0031 决策 1/2 · #1421 接线）。
+ *
+ * 与 redeemShopItemApi 共用**同一条兑换管线与响应形状**（PointsRedeemResult 四字段）——
+ * 守卫全在服务端：锁 + 已拥有校验 + 余额预检 + 课程可兑换校验 + 幂等键（含主体，
+ * 「每人每课终身一次」）。业务失败（积分不足 / 已兑换 / 课程不存在）由 `pointsErrStatus`
+ * 哨兵映射 HTTP 状态，本动词**原样 reject 后端文案**：客户端不做字符串比对、不本地预扣、
+ * 不写「已解锁」—— 扣不扣由服务端裁定，成功后的事实以重拉详情的 entitled 投影为准（决策 4）。
+ *
+ * @param courseId 课程 ID
+ */
+export function redeemCoursePointsApi(courseId : number) : Promise<PointsRedeemResult> {
+	const url = '/points/shop/course/' + encodeURIComponent(courseId.toString()) + '/redeem'
 	return postMapped<PointsRedeemResult>(url, null, (data : UTSJSONObject) : PointsRedeemResult => buildPointsRedeemResult(data))
 }
