@@ -1178,7 +1178,6 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/admin/export/students` | 导出学员名单 CSV |
-| GET | `/api/admin/export/exam-records` | 导出成绩单 CSV |
 | GET | `/api/admin/export/questions` | 导出题库 CSV |
 | GET | `/api/admin/export/evaluations` | 导出评估记录 CSV |
 
@@ -1314,6 +1313,8 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 ## 17. 残值评估子模块 `/api/valuation`
 
 > 独立连接池（pgx）+ 独立响应格式（同样 `{code, message, data}` 信封）；鉴权分三档：公开 / 可选认证（登录则记录 user_id）/ hrwai_user JWT / admin JWT。
+>
+> **本子模块没有自己的登录与刷新端点**（#1388 实测：`internal/valuation/handler/router.go` 只注册 `/auth/logout` 与 `/auth/me`）—— 登录走主 `POST /api/auth/login`、续期走主 `POST /api/auth/refresh`，估值面的令牌与主体系同源；登出请用主 `POST /api/auth/logout`，`/api/valuation/auth/logout` 已标废弃（#1412）。
 
 ### 17.1 公开（无需登录）
 
@@ -1321,7 +1322,6 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 |---|---|---|
 | GET | `/api/valuation/evaluations/stats` | 评估统计 |
 | GET | `/api/valuation/health` | 子模块健康检查 |
-| POST | `/api/valuation/auth/login` | 估值模块登录（兼容主体系） |
 | POST | `/api/valuation/evaluations/:id/report` | 生成评估 PDF 报告 |
 | GET | `/api/valuation/evaluations/:id/report` | 下载评估 PDF 报告 |
 | POST | `/api/valuation/battery/evaluations/:id/report` | 生成电池评估 PDF |
@@ -1384,7 +1384,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 | GET | `/api/valuation/battery/evaluations` | 电池评估列表 |
 | GET | `/api/valuation/battery/evaluations/:id` | 电池评估详情 |
 | GET | `/api/valuation/auth/me` | 当前估值用户 |
-| POST | `/api/valuation/auth/logout` | 估值登出 |
+| POST | `/api/valuation/auth/logout` | 估值登出 —— 已废弃：将在下一版移除，请改用 POST /api/auth/logout |
 
 ### 17.4 管理员 CRUD（JWT + role=admin）
 
