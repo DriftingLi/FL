@@ -436,7 +436,10 @@ describe('#1422 课程区接线：DashboardCourseSection 页面↔组件双向�
     expect(feedsSrc()).toContain('async function loadHotCourses');
     const show = page.slice(page.indexOf('onShow('), page.indexOf('onHide('));
     // 证件解析完成后再拉热门课程（/courses 公开路由兜底永不生效，credential_id 必须显式）
-    expect(show).toContain('loadCredentials().then(() => loadHotCourses(currentCredentialId.value))');
+    // 锁形态而非字面量：`.then` 回调须显式 `: void` 吞 Promise（否则 Kotlin 判 UTSPromise<Unit>），
+    // 故这里断言「链式 + 传当前证件」两点，不钉死会返 Promise 的箭头一行式
+    expect(show).toContain('loadCredentials().then(');
+    expect(show).toContain('loadHotCourses(currentCredentialId.value)');
   });
 
   /** feeds 源现读（不进文件顶层：顶层读法会被后续新增文件的 EOL 归一问题牵连，同本文件既有 describe 口径） */

@@ -171,8 +171,12 @@
 
     // 页面显示时刷新数据
     onShow(() => {
-        // #1422：课程区热门口径要按「当前证件」分区取（公开路由兜底永不生效），故证件解析完成后再拉
-        loadCredentials().then(() => loadHotCourses(currentCredentialId.value))
+        // #1422：课程区热门口径要按「当前证件」分区取（公开路由兜底永不生效），故证件解析完成后再拉。
+        // `.then` 回调必须显式 `: void` 块体吞掉 Promise —— 箭头直返 loadHotCourses(...) 会被 Kotlin
+        // 判成「return type mismatch: expected Unit, actual UTSPromise<Unit>」（同 mall onLoad 先例）。
+        loadCredentials().then(() : void => {
+            loadHotCourses(currentCredentialId.value)
+        })
         loadMyCourses()
         loadFeaturedContents()
         startUnreadPolling()
