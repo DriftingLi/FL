@@ -15,12 +15,13 @@ export type CourseItem = {
     specialty_id : number
     /** 课程等级 ID（0 表示未设置） */
     level_id : number
-    /** 购物车本地数量（非后端字段，选填） */
-    quantity ?: number
-    /** 商城价格（0=免费；后端课程接口暂未返回，选填） */
-    price ?: number
-    /** 报名人数（后端课程接口暂未返回，选填） */
-    enrollCount ?: number
+    /**
+     * 积分价格（后端 course.points_price，*int）：null / 0 = 免费。
+     * #1421（移动端 ADR-0031）逐字段迁出 —— 原 `price`（金额）与「后端暂未返回」注释都是谎言：
+     * 后端从不下发金额字段，而 points_price 一直在列表 DTO 上（omitempty：免费课缺省）。
+     * 价格文案渲染单点在 `utils/coursePointsCta.uts` 的 renderCoursePrice，消费页不得各写一份。
+     */
+    points_price ? : number | null
 }
 
 /** 专业方向（筛选项） */
@@ -102,6 +103,18 @@ export type CourseDetail = {
     completed_chapters : number
     /** 前置课程列表 */
     prerequisites : CoursePrereq[]
+    /**
+     * 积分价格（后端 course.points_price，*int）：null / 0 = 免费。#1421 逐字段迁出，
+     * 判价与判权渲染单点在 `utils/coursePointsCta.uts`。
+     */
+    points_price ? : number | null
+    /**
+     * 权益投影（移动端 ADR-0031 决策 4 的判据源；根仓库 ADR-0062 决策 3 的服务端产物）：
+     * 该学员是否已持有本课程的读取资格。**可空语义必须显式** —— 后端只在**有主体**的读路径填
+     * （登录态详情），未登录/读不到 = null（缺省省略而非 false）；null 与 false 在 CTA 单点里
+     * 同按「未拥有」面渲染，但语义不同（没登录 ≠ 没解锁），不得压成同一个值。
+     */
+    entitled ? : boolean | null
 }
 
 /** 前置课程 */

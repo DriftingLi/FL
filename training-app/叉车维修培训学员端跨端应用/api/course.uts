@@ -26,7 +26,7 @@
  *   筛选条（specialties / levels）失败保持静默降级（job-list 同款先例；判据见 ADR-0007 实施回记）。
  */
 import { getMapped, post, NOT_FOUND_MESSAGE_PREFIX } from './request'
-import { toNumber, toStr, errMsg } from './helpers'
+import { toNumber, toNumberOrNull, toBool, toStr, errMsg } from './helpers'
 import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, TagItem, CoursePrereq } from '../types/index'
 
 
@@ -35,6 +35,8 @@ import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDe
  * 从 UTSJSONObject 构造 CourseItem
  * @note 后端字段 name → 前端 title，cover_image → cover_url
  *       后端无 chapter_count 字段，默认 0
+ *       #1421：points_price 逐字段迁出（后端 *int，omitempty ⇒ 免费课缺省 = null，
+ *       与「0 = 免费」同判价；原 `price`/「暂未返回」注释是谎言，见 types/course.uts）
  */
 function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 	const item : CourseItem = {
@@ -46,6 +48,7 @@ function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 		chapter_count: toNumber(obj['chapter_count']), // 后端不返回此字段，默认 0
 		specialty_id: toNumber(obj['specialty_id']),
 		level_id: toNumber(obj['level_id']),
+		points_price: toNumberOrNull(obj['points_price']),
 	} as CourseItem
 	return item
 }
@@ -137,6 +140,10 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 	let certificateName : string = ''
 	let certificateValidityDays : number = 0
 	let prerequisites : CoursePrereq[] = []
+	// #1421（移动端 ADR-0031）：积分价格与权益投影两槽。可空语义按后端原样保留 ——
+	// points_price null=免费缺省；entitled 只在**有主体**的读路径填（未登录=缺省，不是 false）。
+	let pointsPrice : number | null = null
+	let entitled : boolean | null = null
 
 	if (courseInfo != null) {
 		const infoObj = courseInfo as UTSJSONObject
@@ -149,6 +156,12 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		courseLevelId = toNumber(infoObj['level_id'])
 		theoryHours = toNumber(infoObj['theory_hours'])
 		practiceHours = toNumber(infoObj['practice_hours'])
+		pointsPrice = toNumberOrNull(infoObj['points_price'])
+		// 三态直读（缺省保持 null）：不用 toBool 兜底 —— 「没读到」与「没解锁」是两个事实
+		const entitledRaw = infoObj['entitled']
+		if (entitledRaw != null) {
+			entitled = toBool(entitledRaw, false)
+		}
 
 		// 嵌套 specialty 对象
 		const specialtyRaw = infoObj['specialty']
@@ -218,6 +231,8 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 		is_enrolled: isEnrolled,
 		completed_chapters: completedChapters,
 		prerequisites: prerequisites,
+		points_price: pointsPrice,
+		entitled: entitled,
 	} as CourseDetail
 	return detail
 }
