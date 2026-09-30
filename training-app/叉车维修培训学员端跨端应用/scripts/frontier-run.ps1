@@ -53,8 +53,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-. (Join-Path $PSScriptRoot 'lib\frontier.ps1')
-. (Join-Path $PSScriptRoot 'lib\wt-bootstrap.ps1')
+# 逐段 Join-Path：`'lib\frontier.ps1'` 这种带反斜杠的子路径在 ubuntu 上会被当成
+# **合法文件名**（找不到 → dot-source 抛），Windows 本机却测不到 —— CI 才是这条的第一现场。
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'frontier.ps1')
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'wt-bootstrap.ps1')
 
 if (-not $RepoRoot) {
     # 仓库根一律从 git 的公共目录反推（与闸门同源）；不从脚本位置上溯，否则在树里调它会算出那个树。

@@ -10,6 +10,11 @@
  *     ③ `-DryRun` 偷偷做了事 —— 一个自称 dry-run 的入口如果真去 push，比没有 dry-run 更糟。
  *   所以这三条钉成**数据断言**（计划是数组，可直接比对），而不是文案断言。
  *
+ * ⚠️ 平台中立是这份文件的硬要求（第一轮 CI 实测教训）：③ 门跑在 **ubuntu**，
+ *   而 `Join-Path $Root 'a\b\c'` 在 Windows 能过、在 Linux **直接抛**（子路径含反斜杠＝非法字符），
+ *   本地全绿 CI 判红就是这个形态。⇒ 本文件的仓库根**用真实 ROOT**（两平台各自成立），
+ *   断言一律走 `norm()` 比正斜杠形态，不写死任何 `D:\` / `C:\` 字面量。
+ *
  * 刻意不测的（防越界断言）：
  *   建树、起 agent、跑门、真机取证 —— 那些的验收判据是「真跑一张票跑通」（#1435 ⑥ 第 3 条），
  *   在本文件里假称「已验证」正是 release.md:25 记的那类假绿。本文件只 dot-source 纯函数，
@@ -18,12 +23,17 @@
  * 运行前提：需要 pwsh（PowerShell 7）。先例同 wtBootstrapBehavior / frontierBehavior。
  */
 const { execFileSync } = require('child_process');
+const os = require('os');
 const path = require('path');
 const { readText } = require('./utsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'frontier.ps1');
 const ENTRY_REL = path.join('scripts', 'frontier-run.ps1');
+
+// 仓库根与纪律路径都取**当前平台**的真实值：纪律文件必须落在仓外（TEMP）。
+const REPO = ROOT.replace(/\\/g, '/');
+const DISCIPLINE = (path.join(os.tmpdir(), 'fl-frontier-1499-discipline.txt')).replace(/\\/g, '/');
 
 function psArgs(extra) {
   const args = ['-NoProfile', '-NonInteractive'];
@@ -45,6 +55,7 @@ function runPs(body) {
   })).split(/\r?\n/).map((l) => l.trim());
 }
 
+const norm = (p) => String(p).replace(/\\/g, '/');
 const kv = (lines, key) => lines.filter((l) => l.startsWith(key + '=')).map((l) => l.slice(key.length + 1));
 
 /**
@@ -55,7 +66,7 @@ const kv = (lines, key) => lines.filter((l) => l.startsWith(key + '=')).map((l) 
 function plan(device) {
   const devLit = (device === null || device === undefined) ? '$null' : `'${device}'`;
   const lines = runPs([
-    `$p = Get-FrontierRunPlan -RepoRoot 'D:/FL' -TicketNumber 1499 -Level standard -Device ${devLit} -AgentExe 'pi' -DisciplineFile 'C:/Temp/fl-frontier-1499-discipline.txt'`,
+    `$p = Get-FrontierRunPlan -RepoRoot '${REPO}' -TicketNumber 1499 -Level standard -Device ${devLit} -AgentExe 'pi' -DisciplineFile '${DISCIPLINE}'`,
     'foreach ($x in $p) {',
     '  Write-Output ("STEP=" + $x.Name)',
     '  Write-Output ("file=" + $(if ($x.File) { $x.File } else { "~" }))',
@@ -96,10 +107,30 @@ describe('串行轮转外层的计划面（运行期）', () => {
     expect(s.file).toMatch(/new-worktree\.ps1$/);
     // 判据真源：new-worktree.ps1 自己从 git 的公共目录取仓库根，但 cwd 落在别的树里时
     // 它仍会把新树建进那棵树 —— 故计划必须钉死 cwd = 主树。
-    expect(s.cwd.replace(/\\/g, '/')).toBe('D:/FL');
+    expect(norm(s.cwd)).toBe(REPO);
     expect(s.args.join(' ')).toContain('-Task 1499');
     // 反向：建树步里不得出现 agent 参数（防把两步糊成一步）
     expect(s.args.join(' ')).not.toMatch(/--print|--append-system-prompt/);
+  });
+
+  test('FP2b: 真源与入口的**代码行**里不得有「子路径含反斜杠」的 Join-Path（Windows 能过、ubuntu 直接抛）', () => {
+    // 这条是**静态**守卫而非输出守卫：把断言写成「输出里没有 D:\」会变成平台依赖测试
+    // （本机 Windows 一定写出反斜杠、CI ubuntu 不会）—— 那正是「本地绿 CI 红」的镜像错误，
+    // 第一版就犯过一次。真正的不变量在源码里：Join-Path 的**子段**不许带分隔符。
+    // ⚠️ 只扫代码行：注释里留着 `'a\b\c'` 这种反面示例是有教学价值的，第一版把注释也扫
+    //    进去，守卫抓到的是自己的注释（假阳性），不是真缺陷。
+    for (const rel of [LIB_REL, ENTRY_REL]) {
+      const codeLines = readText(path.join(ROOT, rel))
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !l.startsWith('#'));
+      const bad = [];
+      for (const l of codeLines) {
+        const m = l.match(/Join-Path[^\r\n]*['"][^'"\r\n]*\\[^'"\r\n]*['"]/g);
+        if (m) bad.push(...m);
+      }
+      expect({ file: rel, offenders: bad }).toEqual({ file: rel, offenders: [] });
+    }
   });
 
   test('FP3: agent 步**不得**含任何 HBuilderX 调用，且必须带上纪律与票号', () => {
@@ -108,15 +139,15 @@ describe('串行轮转外层的计划面（运行期）', () => {
     expect(a).toContain('--print');                       // 非交互形态
     expect(a).toContain('--append-system-prompt');        // 纪律必须随会话注入
     expect(a).toContain('1499');
-    expect(s.cwd.replace(/\\/g, '/')).toContain('wt-1499'); // 写码发生在自己的树里，不是主树
+    expect(norm(s.cwd)).toContain('wt-1499');              // 写码发生在自己的树里，不是主树
     // 纪律参数必须指向**纪律文件**，而且不能是本仓真源 .ps1（把源码路径塞进去，
     // agent 读到的是函数定义、不是禁令；这一条是 DryRun 实测抓出来的，「参数非空」判不住它）。
     const discIdx = s.args.indexOf('--append-system-prompt');
     expect(discIdx).toBeGreaterThanOrEqual(0);
-    const discArg = s.args[discIdx + 1];
+    const discArg = norm(s.args[discIdx + 1]);
     expect(discArg).toMatch(/discipline/i);
     expect(discArg).not.toMatch(/\.ps1$/);
-    expect(discArg.replace(/\\/g, '/')).not.toContain('D:/FL'); // 落仓外，防被 git add 进树
+    expect(discArg.startsWith(REPO)).toBe(false);          // 落仓外，防被 git add 进树
     for (const forbidden of ['hx-run', 'dev-finish', 'kotlin-all', 'compile-check', 'mp-weixin-check', 'cli.exe']) {
       expect(joined(s)).not.toContain(forbidden);
     }
@@ -142,11 +173,10 @@ describe('串行轮转外层的计划面（运行期）', () => {
   });
 
   test('FP5: 退出码分工 —— 门与环境步骤 2 必停，写码/自检步骤 1 可续', () => {
-    // dev-finish 的 exit 2 = 「环境不可用」（忙 / 超时 / 无设备）⇒ 继续轮转只会连续撞同一个
-    // 环境，还会把上一棵树的常驻会话留在原地。这条是 #1435 ⑤ 第三条的落点。
+    // dev-finish 的 exit 2 = 「环境不可用」（忙 / 超时 / 无设备）⇒ 继续轮转只会连续撞同一个环境，
+    // 还会把上一棵树的常驻真运行会话留在原地。这条是 #1435 ⑤ 第三条的落点。
     expect(ALL.steps.gate.stop).toBe('2');
     expect(ALL.steps.worktree.stop).toBe('2');
-    // agent / self-test 失败不阻塞下一步（写码没通过自检也照样该由人去判，但轮转不该 runaway）
     expect(ALL.steps.agent.stop).toBe('~');
     expect(ALL.steps['self-test'].stop).toBe('~');
   });
@@ -201,13 +231,14 @@ describe('串行轮转外层的计划面（运行期）', () => {
     expect(src).toMatch(/Get-FrontierRunPlan/);
     expect(src).toMatch(/Select-FrontierTicket/);
     expect(src).toMatch(/Get-AfkAgentDiscipline/);   // 纪律文件必须由入口落盘，不是手写常量
+    expect(src).toMatch(/AUTO_PICK_CONFIRM/);       // 母票不可判 ⇒ 自动取票必须过人这一关
   });
 
   test('FP10: 没有纪律文件就组不出计划（宁可显式失败，不起一个无约束的 AFK agent）', () => {
     let failed = false;
     try {
       runPs([
-        "Get-FrontierRunPlan -RepoRoot 'D:/FL' -TicketNumber 1499 -Level standard -Device $null -AgentExe 'pi' -DisciplineFile ''",
+        `Get-FrontierRunPlan -RepoRoot '${REPO}' -TicketNumber 1499 -Level standard -Device $null -AgentExe 'pi' -DisciplineFile ''`,
       ].join('\n'));
     }
     catch (e) {

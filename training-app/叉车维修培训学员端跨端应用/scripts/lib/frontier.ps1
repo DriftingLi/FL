@@ -196,9 +196,13 @@ function Get-FrontierRunPlan {
         [string]$DisciplineFile
     )
 
-    $gateScripts = Join-Path $RepoRoot 'training-app\叉车维修培训学员端跨端应用\scripts'
+    # ⚠️ 路径必须**逐段** Join-Path：`Join-Path $Root 'a\b\c'` 在 Windows 上能过，
+    #    在 ubuntu CI 上直接抛（子路径含反斜杠 = 非法字符）—— 本仓 ③ 门跑在 ubuntu，
+    #    这条是 CI 实测红出来的（frontier.ps1:199，本地全绿、CI 判红，本地测不到）。
+    $mobileProject = 'training-app/叉车维修培训学员端跨端应用'   # 正斜杠：两平台都是合法相对段
+    $gateRoot = Join-Path (Join-Path $RepoRoot $mobileProject) 'scripts'
     $tree = Join-Path $RepoRoot "wt-$TicketNumber"
-    $treeProject = Join-Path $tree 'training-app\叉车维修培训学员端跨端应用'
+    $treeProject = Join-Path $tree $mobileProject
 
     if ([string]::IsNullOrWhiteSpace($DisciplineFile)) {
         throw "Get-FrontierRunPlan: -DisciplineFile 必填。没有纪律文件的计划=一个无约束的无人值守 agent，宁可组不出计划。"
@@ -211,7 +215,7 @@ function Get-FrontierRunPlan {
     # 1) 建树 —— cwd 必须是主树：在别的树里调闸门会把新树建进那棵树（实测建出 wt-1185\wt-(wip)1185）。
     $steps += [pscustomobject]@{
         Name   = 'worktree'
-        File   = (Join-Path $gateScripts 'new-worktree.ps1')
+        File   = (Join-Path $gateRoot 'new-worktree.ps1')
         Cwd    = $RepoRoot
         Args   = @('-Task', "$TicketNumber")
         StopOn = '2'
@@ -244,7 +248,7 @@ function Get-FrontierRunPlan {
     if ($Device) { $gateArgs += @('-Device', $Device) }
     $steps += [pscustomobject]@{
         Name   = 'gate'
-        File   = (Join-Path $gateScripts 'dev-finish.ps1')
+        File   = (Join-Path $gateRoot 'dev-finish.ps1')
         Cwd    = $treeProject
         Args   = $gateArgs
         StopOn = '2'
