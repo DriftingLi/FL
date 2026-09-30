@@ -175,6 +175,9 @@ function handleUnauthorized() {
 
     removeStorage(STORAGE_KEY_TOKEN)
     removeStorage(STORAGE_KEY_USER)
+    // 证件域三键经回调交回 auth store 清（#1404）：此处抄一份键清单就是第三个「两处各写一份」
+    // 的抄写点（单点原则见 ADR-0022 ⑤ 补充约束 / stores/auth.uts 的 clearCredentialStorage）
+    if (_unauthorizedCredentialCleanupHandler != null) _unauthorizedCredentialCleanupHandler!()
     // 按角色选目标：招聘者态 → 招聘者登录页；学员态 → 学员登录页（行为不变）
     const target = loginPathForActiveRole()
     // 避免已经在**目标**登录页时还跳一次（`getCurrentPages()` 的 route 不带前导 `/`）
@@ -207,6 +210,21 @@ let _refreshTokenHandler : (() => Promise<boolean>) | null = null
 /** 注册 token 刷新回调（auth store 初始化时调用） */
 export function registerRefreshTokenHandler(handler : () => Promise<boolean>) : void {
     _refreshTokenHandler = handler
+}
+
+/**
+ * 401 顶出时的证件域清理回调（#1404，与 `registerRefreshTokenHandler` 同款通道）
+ *
+ * 为什么走回调而不是在 401 出口内直接清：键清单的单点在 `stores/auth.uts`
+ * 的 `clearCredentialStorage()`（#1380 / ADR-0022 ⑤ 补充约束），而 `request.uts` 不能
+ * import auth store（循环依赖，见文件头）⇒ 在此抄第三份清单等于把单点原则破掉一半。
+ * 注册方在未注册时（如未走登录域的裸调用）回调为 null ⇒ 跳过，与刷新回调同一容错形态。
+ */
+let _unauthorizedCredentialCleanupHandler : (() => void) | null = null
+
+/** 注册 401 顶出的证件域清理回调（auth store 初始化时调用） */
+export function registerUnauthorizedCredentialCleanup(handler : () => void) : void {
+    _unauthorizedCredentialCleanupHandler = handler
 }
 
 /**

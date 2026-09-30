@@ -38,6 +38,8 @@ function buildStore(loginApiImpl) {
     refreshTokenApi: () => Promise.resolve(null),
     recruiterLoginApi: () => Promise.resolve(null),
     registerRefreshTokenHandler: () => {},
+    // #1404 新增的 import 依赖：本缝只跑 quickLogin，不调 401 出口，占位即可（loadUts fail-closed）
+    registerUnauthorizedCredentialCleanup: () => {},
     setStorage: (k, v) => { writes[k] = v; },
     setStorageJSON: (k, v) => { writes[k] = v; },
     getStorage: (k) => (writes[k] === undefined ? '' : writes[k]),

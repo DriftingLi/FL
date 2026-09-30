@@ -107,6 +107,9 @@ function buildApp(opts) {
     UPLOAD_TMP_DIR: 'upload-tmp',
     uni,
     getCurrentPages: () => pages,
+    // #1404 新增的 import 依赖：本组用例判据不含证件域（那是 unauthorized401CertCleanupBehavior 的活），
+    // 占位即可 —— 但 loadUts fail-closed，缺绑定会直接抛，所以必须给
+    registerUnauthorizedCredentialCleanup: () => {},
   });
 
   const refreshCalls = [];
@@ -115,6 +118,7 @@ function buildApp(opts) {
   const authMod = loadUts(AUTH_UTS, {
     ref: (v) => ({ value: v }),
     registerRefreshTokenHandler: request.registerRefreshTokenHandler,
+    registerUnauthorizedCredentialCleanup: request.registerUnauthorizedCredentialCleanup,
     loginApi: noopApi,
     phoneLoginApi: noopApi,
     emailLoginApi: noopApi,

@@ -38,6 +38,8 @@ function loadSanitizer() {
     buildTempFilePath: () => '',
     UPLOAD_TMP_DIR: 'upload-tmp',
     isRecruiterActive: () => false,
+    // #1404 新增的 import 依赖：本缝只跑 sanitizeForLog，不调 request()，占位即可
+    registerUnauthorizedCredentialCleanup: () => {},
   });
   return mod.sanitizeForLog;
 }
