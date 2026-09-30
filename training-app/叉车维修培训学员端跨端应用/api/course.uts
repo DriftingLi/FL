@@ -37,6 +37,8 @@ import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDe
  *       后端无 chapter_count 字段，默认 0
  *       #1421：points_price 逐字段迁出（后端 *int，omitempty ⇒ 免费课缺省 = null，
  *       与「0 = 免费」同判价；原 `price`/「暂未返回」注释是谎言，见 types/course.uts）
+ *       #1422：is_hot 逐字段迁出（后端 bool、列表 DTO 恒发不 omitempty ⇒ 非空槽位，
+ *       dashboard 课程区「热销」标吃这一格）
  */
 function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 	const item : CourseItem = {
@@ -49,6 +51,7 @@ function buildCourseItem(obj : UTSJSONObject) : CourseItem {
 		specialty_id: toNumber(obj['specialty_id']),
 		level_id: toNumber(obj['level_id']),
 		points_price: toNumberOrNull(obj['points_price']),
+		is_hot: toBool(obj['is_hot']),
 	} as CourseItem
 	return item
 }
@@ -302,8 +305,9 @@ function buildLevelItem(obj : UTSJSONObject) : LevelItem {
  * @param specialtyId 专业方向 ID 过滤（可选，0 表示全部）
  * @param levelId 课程等级 ID 过滤（可选，0 表示全部）
  * @param credentialId 当前证件 ID（>0 才下发；0 = 未声明，与服务端 nil 语义一致）
+ * @param filter 热门/精品口径（'' = 全部，不下发；'hot' | 'featured' —— #1422 dashboard 课程区取热门）
  */
-export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0) : Promise<CourseListResult> {
+export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0, filter : string = '') : Promise<CourseListResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -316,6 +320,10 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 	}
 	if (credentialId > 0) {
 		params['credential_id'] = credentialId.toString()
+	}
+	// #1422：'' 与后端缺省 all 同义，不下发空参数（保持既有请求形状零变化，向后兼容 mall / courses）
+	if (filter.length > 0) {
+		params['filter'] = filter
 	}
 	return getMapped<CourseListResult>('/courses', params, (data : UTSJSONObject) : CourseListResult => {
 		console.log('[getCourseListApi] raw data:', JSON.stringify(data))

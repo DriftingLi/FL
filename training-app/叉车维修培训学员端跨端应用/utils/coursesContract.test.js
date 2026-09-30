@@ -18,6 +18,8 @@
  *     formatDuration 两处是**刻意不同语义**（空值兜底 '未知' vs '-'），锁住不被「顺手合并」
  * 11) #1421（移动端 ADR-0031）：课程 DTO 逐字段迁出 points_price/entitled（谎言注释终结）、
  *     CTA/价格渲染单点被三处界面消费、购物车族死 UI 全仓零出现、章节 404 支「去解锁」且零兑换调用
+ * 12) #1422：列表 DTO 迁出 is_hot（后端恒在字段）、/courses 消费 filter=hot 热门口径、
+ *     dashboard 课程区 mock 族与 ¥ 绝迹、价格单点第三消费方接线收口（单点实现仍全仓唯一）
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -751,5 +753,88 @@ describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝
     expect(src).toContain("uni.navigateTo({ url: '/pages/points/task-center' })");
     // 兑换动词来自 points 域（跨模块消费已登记 modules.js points.crossModuleConsumers）
     expect(src).toMatch(/redeemCoursePointsApi,\s*getPointsBalanceApi\s*}\s*from\s*'\.\.\/\.\.\/api\/points'/);
+  });
+});
+
+/**
+ * #1422 首页课程区接真实数据 —— 契约形状锁（票面 AC2）。
+ *
+ * 承 #1421 头注的口径分工：dashboard 课程区的 ¥ mock 是「静态假数据族的另一具尸体」，
+ * 由本票同票处置 —— 不再「在本锁射程里偷偷扩面」，而是按票新开一组。
+ * 守四件事：① is_hot 三处连锁在册（后端 CourseDTO 恒发 is_hot，不 omitempty）；
+ * ② /courses 的 filter=hot 热门口径逐参在册；③ 价格单点全仓唯一实现不被第二份绕开；
+ * ④ dashboard 模块面上 mock 数组 / ¥ / 已售 / sales 槽位彻底绝迹（成对：必红锚点在现状上即红）。
+ */
+describe('#1422 首页课程区接真实数据：is_hot 迁出 · filter=hot 口径 · mock 族绝迹', () => {
+  /** 代码本体判「绝迹」前抹注释（模板 HTML / 块 / 行三形态，同 #1421 组口径） */
+  const stripAll = (s) =>
+    s
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const tplOf = (src) => src.slice(src.indexOf('<template>'), src.lastIndexOf('</template>'));
+
+  const TYPES = 'types/course.uts';
+  const API = 'api/course.uts';
+  const SECTION = 'pages/dashboard/components/dashboard-course-section.uvue';
+  const DASH_PAGE = 'pages/dashboard/dashboard.uvue';
+  const FEEDS = 'pages/dashboard/composables/use-dashboard-feeds.uts';
+
+  it('is_hot 三处连锁在册：types 槽位 → mapper 迁出 → api 面 filter 参数', () => {
+    // 类型槽位：非空 boolean —— 后端恒发、不 omitempty，可空性不得凭空发明
+    const types = read(TYPES);
+    expect(types).toMatch(/CourseItem = \{[\s\S]*?is_hot : boolean/);
+    const code = stripAll(read(API));
+    // 列表 mapper 迁出真字段（读法与 #1421 的 points_price 同族）
+    expect(code).toContain("obj['is_hot']");
+    // getCourseListApi 新增 filter 形参：默认 '' = 不下发（向后兼容 mall / courses 两个既有调用方）
+    const body = fnBody(code, 'export function getCourseListApi');
+    expect(body).toMatch(/filter : string = ''/);
+    expect(body).toContain("params['filter'] = filter");
+    expect(body).toContain("if (filter.length > 0)");
+  });
+
+  it('dashboard 课程区经 useDashboardFeeds 消费 filter=hot 热门口径 + 当前证件显式下发', () => {
+    const feeds = stripAll(read(FEEDS));
+    expect(feeds).toContain("import { getCourseListApi } from '../../../api/course'");
+    expect(feeds).toMatch(/async function loadHotCourses[\s\S]*?getCourseListApi\(1, 4, 0, 0, credentialId, 'hot'\)/);
+    // 结果面接线：hotCourses 与 loadHotCourses 都进返回值（页面消费的前提）
+    expect(feeds).toMatch(/hotCourses\s*:\s*hotCourses/);
+    expect(feeds).toMatch(/loadHotCourses\s*:\s*\(/);
+  });
+
+  it('价格单点第三消费方接线收口：dashboard 组件经本地包装消费 renderCoursePrice，单点实现仍全仓唯一', () => {
+    const section = stripAll(read(SECTION));
+    expect(section).toMatch(/import\s*\{\s*renderCoursePrice\s*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/coursePointsCta'/);
+    // 模板不能直调 import 函数（Kotlin 判炸，规则 S）—— 必须经本地包装转发，同 mall 先例
+    expect(section).toMatch(/function\s+renderCoursePriceText\s*\(\s*item\s*:\s*CourseItem\s*\)\s*:\s*string\s*\{[\s\S]{0,80}?return\s+renderCoursePrice\(item\.points_price\)/);
+    expect(tplOf(section)).toContain('renderCoursePriceText(course)');
+    // 单点实现锁不因新消费方扩面：全仓 renderCoursePrice 定义仍只有 CTA 文件一处
+    const declFiles = (name) => h.filesUnder('.').filter((f) => new RegExp('function\\s+' + name + '\\s*\\(').test(read(f)));
+    expect(declFiles('renderCoursePrice')).toEqual(['utils/coursePointsCta.uts']);
+  });
+
+  it('dashboard 模块面 mock 族与 ¥ 绝迹：假数组 / ¥ 渲染 / 已售行 / sales 槽位 / 假价字面量零出现', () => {
+    const all = h.sourceFilesIn('pages/dashboard').map(read).join('\n');
+    const bare = stripAll(all);
+    // 成对判据「必红」锚点：本组在 mock 尚存的现状上先跑红（四条假课标题、¥ 渲染、已售行都在这）
+    for (const t of ['2026年叉车基础理论课程', '叉车实操技能强化班', '叉车安全规范专题课', '叉车维修高级进阶课']) {
+      expect(bare).not.toContain(t);
+    }
+    expect(tplOf(bare)).not.toContain('¥');
+    expect(bare).not.toMatch(/已售/);
+    expect(bare).not.toMatch(/\bsales\b/);
+    // mock 假价与假销量字面量族（39/128/199/999/567/1234/234）不得以槽位形态回潮
+    expect(bare).not.toMatch(/price:\s*\d|sales:\s*\d|isHot:\s*(true|false)/);
+    // mock 退役的形态判据：组件不再自持课程数组，数据经 props 流入（对账见 dashboardContract #1422 组）
+    const section = stripAll(read(SECTION));
+    expect(section).not.toMatch(/const courseList\s*:/);
+    expect(section).toContain('defineProps');
+    // 「热销」标签文本属 #1423 文案票射程，本锁不越界处置 —— 只锁数据面真字段驱动
+    expect(tplOf(section)).toContain('course.is_hot');
+    expect(tplOf(bare)).not.toContain('course.isHot');
+    // 页面点击落点即该课真 id（修 mock id 直跳真实详情的错位 bug；query 键沿用现行口径 id=）
+    const page = stripAll(read(DASH_PAGE));
+    expect(page).toMatch(/uni\.navigateTo\(\{ url: '\/pages\/courses\/course-detail\?id=' \+ course\.course_id\.toString\(\) \}\)/);
   });
 });
