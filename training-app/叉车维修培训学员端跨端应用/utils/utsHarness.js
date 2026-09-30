@@ -127,7 +127,11 @@ function loadUts(file, bindings) {
     configFile: false,
   });
   const exps = exportedNames(src);
-  const names = [...new Set(need.concat(Object.keys(bindings)))];
+  // 自有导出不进注入清单：装配方常把「A 模块的导出」塞进同棵树里别的 loadUts 的 bindings
+  // （供消费方取用），若某模块的 bindings 恰好含**它自己的导出名**，`const { X } = bindings`
+  // 会与模块体内 `function X` / `const X` 顶层重复声明 ⇒ SyntaxError（#1404 抓获）。
+  // 剔除与 JS 模块语义一致（模块不会被注入自己的导出），消费方要的引用从下方 return 回读，一条不少。
+  const names = [...new Set(need.concat(Object.keys(bindings)))].filter((n) => !exps.includes(n));
   const body = [
     `const { ${names.join(', ')} } = bindings;`,
     out.code,
