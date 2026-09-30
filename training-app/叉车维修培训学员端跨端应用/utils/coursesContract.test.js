@@ -738,8 +738,11 @@ describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝
     // 禁内存改写服务端投影：`.entitled =`（赋值）不得出现；`.entitled ==`（比较）是合法的，故 (?!=) 排除
     expect(src).not.toMatch(/\.entitled\s*=(?!=)/);
     expect(src).not.toMatch(/\.points_price\s*=(?!=)/);
-    // 决策 3：余额读失败降级为「读数缺失」（归 null，不归 0），提示由单点派生
-    expect(src).toMatch(/getPointsBalanceApi\(\)[\s\S]{0,120}?balanceReading\.value = bal\.balance/);
+    // 决策 3：余额读失败降级为「读数缺失」（归 null，不归 0），提示由单点派生；
+    // 且装饰性预读必须走静默（getPointsBalanceApi(true)）—— 非静默形态（裸 getPointsBalanceApi()）
+    // 会让一行预判提示在令牌过期/网络抖动时弹一条用户没触发的错误 toast，正是「报错挡道」。
+    expect(src).toMatch(/getPointsBalanceApi\(true\)[\s\S]{0,120}?balanceReading\.value = bal\.balance/);
+    expect(src).not.toMatch(/getPointsBalanceApi\(\s*\)/);
     expect(src).toMatch(/catch[\s\S]{0,80}?balanceReading\.value = null/);
     // 失败原样呈现：提示直接用后端哨兵文案（errMsg 透传），不另造「兑换失败」话术做语义比对
     expect(src).toMatch(/redeemCoursePointsApi\(/);

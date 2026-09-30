@@ -30,8 +30,8 @@ const { toNumber, toNumberOrNull, toBool, toStr } = helpers;
 /** 捕获 postMapped/getMapped 调用的最小桩：返回值由用例给（reject 用 err 槽） */
 function makeRequestStub(reply) {
   const calls = [];
-  const getMapped = (url, params, map) => {
-    calls.push({ method: 'GET', url, params });
+  const getMapped = (url, params, map, options) => {
+    calls.push({ method: 'GET', url, params, silent: options == null ? null : options.silent });
     return reply == null ? Promise.resolve(map({})) : (reply.err != null ? Promise.reject(reply.err) : Promise.resolve(map(reply.data)));
   };
   const postMapped = (url, data, map) => {
@@ -120,6 +120,18 @@ describe('A. redeemCoursePointsApi：请求形状与失败语义（真 api/point
     const src = stripComments(readText(COURSE_UTS));
     expect(src).not.toContain('redeem');
     expect(src).not.toContain('/points/');
+  });
+
+  test('A5 装饰性余额预读走静默：getPointsBalanceApi(true) 把 silent 透传给 getMapped（默认不静默）', async () => {
+    const bal = { data: { balance: 500, total_earned: 500, total_spent: 0 } };
+    const silent = loadPoints(bal);
+    await silent.mod.getPointsBalanceApi(true);
+    expect(silent.calls[0].url).toBe('/points/balance');
+    expect(silent.calls[0].silent).toBe(true);
+    // 反向：默认调用不静默（其它消费方仍按 request 层弹错）
+    const loud = loadPoints(bal);
+    await loud.mod.getPointsBalanceApi();
+    expect(loud.calls[0].silent).toBe(false);
   });
 });
 

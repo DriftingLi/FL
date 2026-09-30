@@ -14,6 +14,7 @@
  * 可见错误态与重试入口（同 #408/#409「占位数据不是后端异常的正确呈现」口径）。
  */
 import { getMapped, postMapped } from './request'
+import type { RequestOptions } from './request'
 import { toNumber, toStr } from './helpers'
 import type { PointsBalance, PointsLedgerItem, PointsLedgerResult, PointsTaskItem, PointsTasksResult, PointsClaimResult, PointsRedeemResult } from '../types/index'
 
@@ -106,10 +107,14 @@ function buildPointsRedeemResult(obj : UTSJSONObject) : PointsRedeemResult {
 
 /**
  * 获取积分余额
- * 失败时 reject（request 层已提示），由调用方呈现错误态
+ * 失败时 reject（request 层已提示），由调用方呈现错误态。
+ * @param silent 静默模式（默认 false）：装饰性预读（如课程详情 CTA 的余额提示）传 true ——
+ *   读失败只上抛、不弹全局错误 toast（ADR-0031 决策 3「读不到不得报错挡道」：一行预判提示
+ *   不该为浏览课程的用户制造一次他没触发的报错）。权威判定仍在服务端兑换管线，与此无关。
  */
-export function getPointsBalanceApi() : Promise<PointsBalance> {
-	return getMapped<PointsBalance>('/points/balance', null, (data : UTSJSONObject) : PointsBalance => buildPointsBalance(data))
+export function getPointsBalanceApi(silent : boolean = false) : Promise<PointsBalance> {
+	const opts : RequestOptions = { url: '/points/balance', silent: silent } as RequestOptions
+	return getMapped<PointsBalance>('/points/balance', null, (data : UTSJSONObject) : PointsBalance => buildPointsBalance(data), opts)
 }
 
 /**

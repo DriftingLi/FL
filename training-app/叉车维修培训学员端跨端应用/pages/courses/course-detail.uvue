@@ -124,8 +124,9 @@
     const ctaHint = computed<string>(() : string => cta.value.hintText)
 
     /**
-     * 读余额（仅在「付费 + 未拥有」时才有意义）。读失败不报错挡道 —— 归 null 让提示整体缺席，
-     * 扣不扣由服务端兑换管线裁定（决策 3：预判只为提示口径）。
+     * 读余额（仅在「付费 + 未拥有」时才有意义）。这是**装饰性预读**：读失败静默（silent=true，
+     * 不弹全局错误 toast）并归 null ⇒ 提示整体缺席、干净降级为纯事后（决策 3「读不到不得报错挡道」）。
+     * 扣不扣由服务端兑换管线裁定，与本读取成败无关。
      */
     async function loadBalanceIfPaid() : Promise<void> {
         const d = detail.value
@@ -136,7 +137,7 @@
             return
         }
         try {
-            const bal = await getPointsBalanceApi()
+            const bal = await getPointsBalanceApi(true)
             balanceReading.value = bal.balance
         } catch (e) {
             balanceReading.value = null
