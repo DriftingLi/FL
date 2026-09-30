@@ -1,10 +1,26 @@
 <template>
 	<view class="message-row" :class="role">
 		<view class="message-bubble">
-			<!-- 正文图片表达展开（#1279）：后端归一后的 `![alt](本站代理 URL)` 与历史行的
-			     `<<IMAGE:…>>` 直出都会把百分号编码的内网路径逐字露给学员（真机实测一条回答 11 处）。
-			     纯文本面按 root ADR-0046 展开为图片说明；不含图片表达的文本逐字节不变。 -->
-			<text class="message-text">{{ displayContent(content) }}</text>
+			<!-- 用户消息：保持纯文本，逐字节不变（#1443 刻意不改这一支，学员自己打进去的原始文本不该被二次解析）。 -->
+			<text v-if="role == 'user'" class="message-text">{{ displayContent(content) }}</text>
+			<!-- 助手消息：markdown 块渲染（#1443，ADR-0046 决定 6 已回填）。解析在壳层
+			     `utils/aiAnswerBody.uts`（唯一真源 parseMarkdown + #1279 展开前置，均不在本处重写）；
+			     模板只消费本地 computed —— 直调 import 函数会编成 .invoke()（见脚本注释）。 -->
+			<view v-else class="md-body">
+				<view v-for="(block, idx) in assistantBlocks" :key="idx" class="md-block">
+					<text v-if="block.type == 'heading'" :class="['md-heading', 'md-h' + block.level]">{{ block.text }}</text>
+					<view v-else-if="block.type == 'code'" class="md-code-wrap"><text class="md-code">{{ block.text }}</text></view>
+					<view v-else-if="block.type == 'list'" class="md-list">
+						<view v-for="(item, li) in block.items" :key="li" class="md-list-item">
+							<text class="md-list-bullet">&#8226;</text>
+							<text class="md-list-text">{{ item }}</text>
+						</view>
+					</view>
+					<view v-else-if="block.type == 'quote'" class="md-quote"><text class="md-quote-text">{{ block.text }}</text></view>
+					<view v-else-if="block.type == 'divider'" class="md-divider"></view>
+					<text v-else class="md-paragraph">{{ block.text }}</text>
+				</view>
+			</view>
 		</view>
 		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。
 		     仅助手消息且有来源才出现；调用方不传 `sources` 时行为与从前完全一致。 -->
@@ -17,9 +33,11 @@
 </template>
 
 <script setup lang="uts">
+	import { computed } from 'vue'
 	import AiChatSources from './ai-chat-sources.uvue'
 	import { expandImageMarkers } from '../../utils/aiSourcesDisplay'
-	import type { AiDiagnosisSource } from '../../types/index'
+	import { aiAnswerBlocks } from '../../utils/aiAnswerBody'
+	import type { AiDiagnosisSource, MarkdownBlock } from '../../types/index'
 
 	withDefaults(defineProps<{
 		role?: string
@@ -38,13 +56,22 @@
 	const emit = defineEmits(['copy', 'retry'])
 
 	/**
-	 * 正文展开的**本地包装**（#1279）：模板里直调 import 函数会被 uni-app x 编成 `.invoke()`
+	 * 用户消息的**本地包装**（#1279）：模板里直调 import 函数会被 uni-app x 编成 `.invoke()`
 	 * ⇒ Kotlin `error18 找不到名称 invoke`（全工程守护 = `utils/utsAndroidCompile.test.js` S 组），
 	 * 故模板只调本地名；算法本体仍在 `utils/aiSourcesDisplay.uts`，本处不自行解析。
 	 */
 	function displayContent(value : string) : string {
 		return expandImageMarkers(value)
 	}
+
+	/**
+	 * 助手气泡的渲染块（#1443）：全部口径（#1279 展开前置、论坛档位、降级形状）
+	 * 住在唯一壳层 `utils/aiAnswerBody.uts`，本处只包一层本地名供模板消费（.invoke 雷同上）。
+	 * 模板的 v-if/v-else 已把用户消息分流出去，这里不再判 role。
+	 */
+	const assistantBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
+		return aiAnswerBlocks(content)
+	})
 
 	function onCopy() : void {
 		emit('copy')
@@ -103,5 +130,91 @@
 		color: #999999;
 		margin-right: 20rpx;
 		padding: 4rpx 0;
+	}
+
+	/* 助手气泡 markdown 块（#1443）：气泡底 #fff，文字取深色；字号跟 message-text 同基准。 */
+	.md-body {
+		flex-direction: column;
+	}
+
+	.md-block {
+		flex-direction: column;
+	}
+
+	.md-heading {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: #1a1a1a;
+		margin-top: 12rpx;
+		margin-bottom: 6rpx;
+	}
+
+	.md-h1 { font-size: 36rpx; }
+	.md-h2 { font-size: 32rpx; }
+	.md-h3 { font-size: 30rpx; }
+
+	.md-paragraph {
+		font-size: 28rpx;
+		color: #333333;
+		line-height: 1.6;
+	}
+
+	.md-code-wrap {
+		background-color: #f5f5f5;
+		border-radius: 8rpx;
+		padding: 16rpx;
+		margin-top: 8rpx;
+		margin-bottom: 8rpx;
+	}
+
+	.md-code {
+		font-size: 24rpx;
+		color: #444444;
+	}
+
+	.md-list {
+		flex-direction: column;
+		margin-top: 4rpx;
+		margin-bottom: 4rpx;
+	}
+
+	.md-list-item {
+		flex-direction: row;
+		align-items: flex-start;
+	}
+
+	.md-list-bullet {
+		font-size: 28rpx;
+		color: #333333;
+		margin-right: 10rpx;
+	}
+
+	.md-list-text {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333333;
+		line-height: 1.6;
+	}
+
+	.md-quote {
+		border-left-width: 6rpx;
+		border-left-color: #d0d0d0;
+		border-left-style: solid;
+		padding-left: 16rpx;
+		margin-top: 6rpx;
+		margin-bottom: 6rpx;
+	}
+
+	.md-quote-text {
+		font-size: 28rpx;
+		color: #666666;
+		line-height: 1.6;
+	}
+
+	.md-divider {
+		height: 1rpx;
+		background-color: #e0e0e0;
+		margin-top: 12rpx;
+		margin-bottom: 12rpx;
 	}
 </style>
