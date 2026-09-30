@@ -110,9 +110,6 @@ function buildApp(opts = {}) {
     UPLOAD_TMP_DIR: 'upload-tmp',
     uni,
     getCurrentPages: () => pages,
-    // #1404 新增的 import 依赖：本组用例判据在 404 语义，证件域清理给接线的空实现即可
-    // （loadUts fail-closed，缺绑定会直接抛，不给静默少注入的机会）
-    registerUnauthorizedCredentialCleanup: () => {},
   };
   const request = opts.requestSource == null
     ? loadUts(REQUEST_UTS, requestBindings)
