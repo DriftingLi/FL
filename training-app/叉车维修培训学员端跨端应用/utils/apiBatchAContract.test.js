@@ -9,9 +9,15 @@
  * ② 前序票**已经**收紧，本票只做「不回潮」复检（同批次口径齐平，防后续误改）：
  *    - api/points.uts（#709）、api/featured.uts / api/notification.uts（T05 #643，主体锁在 dashboardContract）
  * ③ 票面与实际不符的两项，登记为事实而非按票面补做（避免为凑 AC 造无收益改动）：
- *    - **guide 域根本没有 api 文件**：pages/guide 只有 choose-cert.uvue 一个文件，它的依赖面是
- *      stores/auth + utils/storage + utils/navigation（切证件后 uni.reLaunch 到 dashboard / login），
- *      不触 api 层；后端亦无 guide 端点。⇒ 钉「零 api + 页面零 api import」防隐性回潮，不新建空文件。
+ *    - **guide 域没有自己的 api 文件**（#652 原文；前提翻于 #1379 裁定、收口于 #1395 接线）：
+ *      pages/guide 只有 choose-cert.uvue 一个文件。#652 时它的依赖面是 stores/auth + utils/storage +
+ *      utils/navigation，不触 api 层；#1395 起它经 `api/credential.uts` 现成出口消费证件字典
+ *      （`getAllCredentialsApi`）并落库（`switchCredentialApi`），**仍不建 `api/guide.uts`** ——
+ *      证件读写归 credential 域（见 `docs/agents/credential-scope.md` 第三节 `/me/credential` 行；
+ *      为 guide 单造 api 文件是域分裂）。⇒ 本锁现形：「guide 无自己的域 api」钉
+ *      `exists('api/guide.uts') === false`；「禁裸调 `uni.request`」永久保留（与域有无 api 文件无关）；
+ *      原「禁 api import」半边随页面接线在本 PR 内退场（锁与接线同 PR，不留假绿窗口 ——
+ *      裁定全图见 #1379 收口评论第 1 条）。
  *    - **api 层豁免在本票范围内早已清零**（既成事实，不是本票动作）。票面写的「catch/detail 条目」
  *      = 守护规则 H（`catch (e : any)`）与规则 I（`: any` 参数访问 `.detail`，见
  *      AGENTS.md 坑位表），两者现状：规则 I 键已不存在，规则 H 只剩两条 ——
@@ -235,26 +241,27 @@ describe('points / featured / notification 域出口家族不回潮', () => {
   });
 });
 
-/* ══ ③-a guide 域零 api（登记 + 不回潮） ══ */
+/* ══ ③-a guide 域无自己的 api（#1395 拆式改写：禁 api import 半边退场，禁裸调永久保留） ══ */
 /**
- * guide 页面「不得触 api 层」的判据本体。抽出来给锁与注入自检**共用同一份**——
+ * guide 页面的判据本体。抽出来给锁与注入自检**共用同一份**——
  * 若自检里另写一遍正则，自检绿只证明自检那份正则没坏，证明不了锁没坏。
+ * （#1379 裁定、#1395 落地：钉锁前提「guide 不触 api 层」已翻——引导页经 `api/credential.uts`
+ * 现成出口消费证件字典并落库。本判据随之收缩为**只禁裸调 `uni.request`**；原「禁 api import」
+ * 半边（GUIDE_API_IMPORT 正则）随页面接线在本 PR 内退场。裁定全文见文件头 ③ 第一条。）
  */
-const GUIDE_API_IMPORT = /from\s*'[^']*\/api\//;
 const GUIDE_BARE_REQUEST = /uni\.request\s*\(/;
 function guideApiHits(src) {
   const hits = [];
-  if (GUIDE_API_IMPORT.test(src)) hits.push('import api/*');
   if (GUIDE_BARE_REQUEST.test(src)) hits.push('uni.request 裸调');
   return hits;
 }
 
-describe('guide 域零 api（无域 api 文件，页面不触 api 层）', () => {
-  it('不存在 api/guide.uts（后端无 guide 端点，域本就无数据 api）', () => {
+describe('guide 域无自己的 api（页面只经 credential 域现成出口触网）', () => {
+  it("不存在 api/guide.uts（guide 无自己的域 api：证件读写归 credential 域，#1379 裁定①）", () => {
     expect(exists('api/guide.uts')).toBe(false);
   });
 
-  it('pages/guide/** 无源文件 import api/ 或裸调 uni.request（不得回潮出隐性 api 面）', () => {
+  it('pages/guide/** 无源文件裸调 uni.request（网络必须经域 api 出口，不得绕层）', () => {
     const files = h.sourceFilesIn('pages/guide');
     // **下限断言**：目录空 / 路径写错时下面的循环零次执行、hits 恒为 [] ⇒ 假绿。
     expect(files.length).toBeGreaterThan(0);
@@ -308,12 +315,12 @@ describe('判据自检（red-capable）：五条判据各命中植入的违规�
   });
 
   /**
-   * guide 判据的自检。植入的两条正是它要抓的两种回潮形态（显式 import 一个域 api、
-   * 或绕过 api 层直接 uni.request）；合法形态拿**真实页面**当样本，避免自说自话。
+   * guide 判据的自检（#1395 拆式改写后只剩一支）：植入的裸 uni.request 正是它要抓的回潮形态；
+   * 合法形态拿**真实页面**当样本 —— 接线后的 choose-cert import 域 api 出口，判据必须不碰它。
    */
-  it('guideApiHits：命中植入的 api import 与裸 uni.request，不误伤 choose-cert 现状', () => {
-    expect(guideApiHits("import { searchAllApi } from '../../api/search'")).toEqual(['import api/*']);
+  it('guideApiHits：命中植入的裸 uni.request，不误伤接线后的 choose-cert 现状', () => {
     expect(guideApiHits("uni.request({ url: '/x' })")).toEqual(['uni.request 裸调']);
+    expect(guideApiHits("import { switchCredentialApi } from '../../api/credential'")).toEqual([]);
     expect(guideApiHits("import { getItemList } from '../../components/list'")).toEqual([]);
     for (const rel of h.sourceFilesIn('pages/guide')) {
       expect(guideApiHits(stripComments(read(rel)))).toEqual([]);

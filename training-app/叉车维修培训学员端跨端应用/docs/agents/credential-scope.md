@@ -44,8 +44,8 @@
 | --- | --- | --- |
 | `GET /catalog/tree` | `api/course.uts#getCatalogTreeSpecialties`（courses 页筛选、招聘页筛选） | **类别 A**：未挂 `CredentialScoped`、handler 自读 query（`training_catalog.go:105`），但传 `credential_id` **只分区课程节点**；`service.getCatalogTree` 的专业方向 / 等级列表恒为全量启用项（`training_catalog_service.go:456-475`），而移动端**只消费 `specialties`** ⇒ 传了是 no-op。改成消费课程节点时才需要补参数 |
 | `GET /course/:id`、`GET /course/:id/chapter/:id`、`POST /course/:id/progress`、`GET /chapter/:id/slides` | `api/course.uts` | 这四条**在** `CredentialScoped` 的 group 里，但 handler 不读上下文（`courses.go` 只有 `ListCourses` 读，`:72`）⇒ 实际不分证件 |
-| `GET /levels`、`GET /credentials`、`GET /credentials/grouped`、`GET /positions` | `api/course.uts#getLevelsApi`、`api/credential.uts`、`api/resume.uts` | 公开字典读，无证件参数（专业方向 / 等级 / 证件 / 岗位均全局共享） |
-| `GET/PATCH /me/credential` | `api/credential.uts` | 这是**当前证件自身**的读写（切证件），与「按证件过滤」正交 |
+| `GET /levels`、`GET /credentials`、`GET /credentials/grouped`、`GET /positions` | `api/course.uts#getLevelsApi`、`api/credential.uts`（消费面：dashboard 证件下拉 **与引导页 `pages/guide/choose-cert.uvue`（#1379 裁定后新增）**）、`api/resume.uts` | 公开字典读，无证件参数（专业方向 / 等级 / 证件 / 岗位均全局共享） |
+| `GET/PATCH /me/credential` | `api/credential.uts`；PATCH 出口 `switchCredentialApi` 的两个消费面：dashboard 证件切换流 **与引导页 `onConfirm` 落库（#1379 裁定后新增，不建 `api/guide.uts`——证件读写归 credential 域，guide 域零 api 锁的前提已翻，见 `utils/apiBatchAContract.test.js` 文件头 ③）** | 这是**当前证件自身**的读写（切证件），与「按证件过滤」正交 |
 | `/materials`、`/student/materials`、`/student/*` | `api/material.uts`、`api/student.uts` | 未挂 `CredentialScoped`；学习资料 / 学员档案不按证件分区 |
 | `/resume*`、`/positions` | `api/resume.uts` | 简历域，与证件分区无关（`credential_id` 字段是简历里的**期望证件**，不是分区参数） |
 | `/forum/*`、`/featured-contents*`、`/points/*`、`/check-in/*`、`/notifications*`、`/jobs*` | `api/forum.uts`、`api/featured.uts`、`api/points.uts`、`api/checkin.uts`、`api/notification.uts`、`api/job.uts` | 与 `CONTEXT.md`「当前证件」一致：**论坛 / AI 不过滤**，个人流水面（积分 / 打卡 / 站内信 / 任务）不按证件分区 |
