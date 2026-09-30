@@ -527,6 +527,11 @@ jobs:
       - name: 表驱动单测（契约消费面覆盖锁判定逻辑）
         run: node --test scripts/check-api-consumers.test.mjs
 
+      # 注解覆盖审计的判定逻辑自检（issue #1425）：C/D 两段分桶——真缺口 vs basePath 之外的根级路由。
+      # 这个 job 是**逐条点名**跑自检的，新增 .test.mjs 不往这里加一行就永远不会被执行。
+      - name: 表驱动单测（注解覆盖审计的 C/D 分桶判定逻辑）
+        run: node --test scripts/audit-api-annotations.test.mjs
+
       # ADR-0060 决策 10 / 第十三波票 10：目录排序串第二源守卫的判定面（第二源报红 / 收口形态与
       # ADR 明记「不动」的三类形态不误伤 / 声明表与 spec 表互等锁 / 合成违规目录必须判红防恒绿）。
       # 守卫本体跑在 backend-lint（扫的是 backend 的 .go）。
