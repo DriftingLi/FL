@@ -5,6 +5,9 @@
          embedded=true 时为页面内嵌形态（无遮罩/标题/关闭，宿主页面自给导航）；默认仍是下拉浮层。 -->
     <view :class="embedded ? 'cert-selector-embed' : 'cert-dropdown-mask'" @click="onMaskTap">
         <view :class="embedded ? 'cert-selector-panel' : 'cert-dropdown'" @click.stop>
+            <!-- 状态栏占位（仅浮层形态）：面板现在铺满全屏，标题栏必须让开系统时钟；
+                 内嵌形态由宿主页面自己给占位，这里不重复。 -->
+            <view v-if="!embedded" class="cert-dropdown-statusbar" :style="{ height: statusBarHeight + 'px' }"></view>
             <!-- 标题栏（仅浮层形态；内嵌形态由宿主页面的导航栏承担标题） -->
             <view v-if="!embedded" class="cert-dropdown-header">
                 <text class="cert-dropdown-title">选择学习阶段</text>
@@ -82,6 +85,10 @@
 
 <script setup lang="uts">
     import type { CredentialGroup, CredentialItem } from '../../types/index'
+    import { useStatusBarHeight } from '../../utils/system'
+
+    // 浮层形态铺满全屏后，标题栏要让开系统状态栏（内嵌形态由宿主页面的导航栏承担，不消费它）
+    const statusBarHeight = useStatusBarHeight()
 
     const props = withDefaults(defineProps<{
         groups? : CredentialGroup[]
@@ -178,12 +185,16 @@
         justify-content: flex-start;
     }
 
+    /* ---- 浮层形态：铺满状态栏以下的整屏。原 `max-height: 800rpx` 把面板截在屏高约 48%
+       处，下半屏露出被遮罩压暗的首页、卡片切一半 —— 真机回看判为难看（#1401 追加修正） ---- */
+    .cert-dropdown-statusbar {
+        background-color: #FFFFFF;
+    }
+
     .cert-dropdown {
+        flex: 1;
+        flex-direction: column;
         background-color: #F5F7FA;
-        border-bottom-left-radius: 28rpx;
-        border-bottom-right-radius: 28rpx;
-        max-height: 800rpx;
-        box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
     }
 
     .cert-dropdown-header {
@@ -215,7 +226,7 @@
     }
 
     .cert-dropdown-scroll {
-        max-height: 700rpx;
+        flex: 1;
     }
 
     /* ---- 分组区块 ---- */
