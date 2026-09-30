@@ -18,9 +18,13 @@
         </view>
 
         <!-- 未解锁（#1268）：后端对未兑换的付费章节返回 404 —— 不是加载失败，重试必然再 404，
-             故这一支**不给重试入口**（给了就是硬死胡同）；「去解锁」待移动端上课程兑换面后补（票内排后项） -->
+             故这一支**不给重试入口**（给了就是硬死胡同）；#1421 补「去解锁」出路跳回详情兑换面
+             （兑换面单点归详情，此处不内联兑换：404 不泄漏存在性，ADR-0031 决策 5） -->
         <view v-else-if="chapterLocked" class="empty-wrap">
             <text class="empty-text">该章节需先解锁</text>
+            <view class="unlock-btn" @click="goUnlock">
+                <text class="unlock-btn-text">去解锁</text>
+            </view>
         </view>
 
         <!-- 加载失败 -->
@@ -251,6 +255,16 @@
 
     function onBack() : void {
         goBack()
+    }
+
+    /**
+     * #1421（移动端 ADR-0031 决策 5）：未解锁出路 = 回课程详情兑换面。
+     * 章节页**不内联兑换** —— 404 对「未解锁」与「不存在」同形、不泄漏存在性，
+     * 就地兑换可能对并不存在的章节开兑换口；兑换面单点归详情，这里只把人带回去。
+     * 正常路径（详情 push 进来）navigateBack 即回详情；深链直入时 goBack 的 fallback 兜到详情。
+     */
+    function goUnlock() : void {
+        goBack('/pages/courses/course-detail?id=' + courseId.value.toString())
     }
 
     /**
@@ -491,6 +505,19 @@
     }
 
     .retry-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    /* #1421：未解锁支「去解锁」出路（与 retry-btn 同形态，但语义是跳回详情兑换面而非重试本请求） */
+    .unlock-btn {
+        background-color: #2979ff;
+        border-radius: 32rpx;
+        padding: 16rpx 48rpx;
+        margin-top: 24rpx;
+    }
+
+    .unlock-btn-text {
         font-size: 28rpx;
         color: #ffffff;
     }

@@ -67,6 +67,36 @@ describe('幻影路由绝迹（#662：后端从未注册，404 被 catch-mock �
       expect(registered.some((r) => m[1].startsWith(r))).toBe(true);
     }
   });
+
+  /**
+   * 判别力注入（#1421：新增课程兑换动词的字面量必须真的在射程内）。
+   *
+   * ⚠️ 如实处理「拼接起点字面量」这件事：api 里 `'/points/shop/course/' + id + '/redeem'`
+   * 的首段 `'/points/shop/course/'` 只是**前缀**，光拿它比对后端整路由（`.../:courseId/redeem`）
+   * 永远不中 —— 所以判据要先把**动词函数体**里的三段（前缀 + 参数槽 + 后缀）拼回整路径，
+   * 再用 `:param` 展开成模式的正则去命中。这样才既抓得住「漏了 /redeem / 走错子路径」，
+   * 又不会把合法 SKU 名（如恰好叫 courses 的商品）误杀（那本该走通用 shop redeem，不算幻影）。
+   */
+  it('判据具备红能力：课程兑换拼回整路径命中注册模式，漏 /redeem 后缀必须出清单', () => {
+    const patterns = [
+      '/points/balance',
+      '/points/ledger',
+      '/points/tasks',
+      '/points/tasks/:code/claim',
+      '/points/shop/course/:courseId/redeem',
+      '/points/shop/:sku/redeem',
+    ].map((p) => new RegExp('^' + p.replace(/:[A-Za-z_]+/g, '[^/]+') + '$'));
+    const shapeMatch = (full) => patterns.some((re) => re.test(full));
+    // 动词函数体真的把三段拼成了后端那条整路径
+    const courseBody = fnBody(apiSrc, 'export function redeemCoursePointsApi');
+    const prefix = /'(\/points\/shop\/course\/)'/.exec(courseBody)[1];
+    expect(prefix + '7/redeem').toBe('/points/shop/course/7/redeem');
+    expect(shapeMatch('/points/shop/course/7/redeem')).toBe(true);
+    // 反向：漏掉 /redeem 后缀（拼错管线）必须被判幻影
+    expect(shapeMatch(prefix + '7')).toBe(false);
+    // 历史幻影仍出清单
+    expect(shapeMatch('/points/records')).toBe(false);
+  });
 });
 
 describe('catch-mock 静默回退退役（失败要可见）', () => {
@@ -138,6 +168,23 @@ describe('任务中心接口：GET /points/tasks + POST /points/tasks/{code}/cla
     expect(balBody).toContain('total_spent : number');
     expect(balBody).not.toContain('total_points');
     expect(balBody).not.toContain('today_earned');
+  });
+});
+
+describe('课程兑换动词（#1421 / 移动端 ADR-0031：接后端 points.go 的 shop/course/:courseId/redeem）', () => {
+  it('导出 redeemCoursePointsApi，经 postMapped DTO 出口、复用 PointsRedeemResult（不新造响应形状）', () => {
+    expect(apiSrc).toContain('export function redeemCoursePointsApi');
+    const body = fnBody(apiSrc, 'export function redeemCoursePointsApi');
+    expect(body).toContain("'/points/shop/course/'");
+    expect(body).toContain("'/redeem'");
+    expect(body).toContain('postMapped<PointsRedeemResult>');
+    // encodeURIComponent 纪律与 claim/redeemShopItem 同款（id 是数字仍需显式过一遍，防调用方塞串）
+    expect(body).toContain('encodeURIComponent');
+  });
+
+  it('出口家族同步：PointsRedeemResult 的两个动词共用同一 builder（兑换管线唯一、形状唯一）', () => {
+    expect((apiSrc.match(/buildPointsRedeemResult/g) || []).length).toBe(3); // 1 定义 + 2 消费
+    expect(apiSrc).toContain("postMapped<PointsRedeemResult>(url, null, (data : UTSJSONObject) : PointsRedeemResult => buildPointsRedeemResult(data))");
   });
 });
 
