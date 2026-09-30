@@ -6,6 +6,13 @@
 // 输出是 frontend/src/api/generated/<domain>.ts。
 //
 // 范围纪律：只做**声明表里登记的域**（ADR-0048 决策 2：Web 消费面 + 域内完整）。
+//
+// 刻意不登记的三条系统探活（issue #1417 的书面豁免）：GET /api、GET /api/health、
+// GET /api/health/live（注册路径；在本表的 swagger 口径下分别写作 /、/health、/health/live）
+// 现已进 swagger（internal/api/system.go 的具名 handler），但**不进本表**——
+// 它们是部署侧与容器编排的探针，无任何 Web 消费方；且响应是裸 gin.H（非 {code,message,data} 信封），
+// 没有 data 类型可生成，硬塞要么新建一个「基础设施域」（ADR-0048 决策 7 的分片顺序里没有它），
+// 要么往既有业务域里挂进不属于它的路由。将来前端真要消费它们时，再按销账式补登记。
 package apitypes
 
 // Endpoint 生成物头部列出的端点。
@@ -422,6 +429,9 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/tutor/course/{course_id}/chapters"},
 			{Method: "GET", Path: "/tutor/chapter/{chapter_id}"},
 			{Method: "POST", Path: "/tutor/chapter/{chapter_id}/upload"},
+			// 非统一信封：Vditor 约定的 {msg,code,data:{errFiles,succMap}} 裸响应（与
+			// /admin/featured-content/upload-image 同一适配器），无 data 类型可指认。
+			{Method: "POST", Path: "/tutor/upload-image", NoData: true},
 			{Method: "PUT", Path: "/tutor/chapter/{chapter_id}"},
 			{Method: "DELETE", Path: "/tutor/file/{file_id}"},
 			{Method: "POST", Path: "/tutor/files/batch-delete"},
@@ -797,8 +807,10 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/valuation/dictionaries/algorithm-parameters"},
 			{Method: "GET", Path: "/valuation/dictionaries/original-prices"},
 			{Method: "GET", Path: "/valuation/dictionaries/region-coefficients"},
-			// 公开组：评估统计与报告生成
+			// 公开组：评估统计 / 子模块探活 / 报告生成
 			{Method: "GET", Path: "/valuation/evaluations/stats"},
+			// 非统一信封：裸 HealthResponse {status,service,timestamp}，无 data 可指认。
+			{Method: "GET", Path: "/valuation/health", NoData: true},
 			{Method: "POST", Path: "/valuation/evaluations/{id}/report"},
 			{Method: "GET", Path: "/valuation/evaluations/{id}/report", NoData: true},
 			{Method: "POST", Path: "/valuation/battery/evaluations/{id}/report"},

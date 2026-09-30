@@ -4232,6 +4232,21 @@ info:
   title: 叉车维修培训系统-学员端 API
   version: "1.0"
 paths:
+  /:
+    get:
+      description: 返回服务名与版本号。注意本文档 basePath 即 /api，故本端点在 paths 里落在 "/" 下（basePath
+        + path = /api，与注册路径一致）。非统一信封。公开端点：无需鉴权
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{message:Forklift Training System API,version:1.0.0}'
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 服务信息（根路由）
+      tags:
+      - 系统
   /admin/ai-configs:
     get:
       description: 管理员查看全部多 AI 配置（api_key 已脱敏）
@@ -11520,6 +11535,39 @@ paths:
       summary: 上传论坛图片
       tags:
       - 学员端-论坛
+  /health:
+    get:
+      description: 探测 Redis 连通性；不可达时返回 503 degraded，供容器编排重启决策。非统一信封（裸 gin.H）。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 正常：{status:ok,message:backend is running}
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: 降级：{status:degraded,redis:unreachable,error:原因}
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 服务健康检查
+      tags:
+      - 系统
+  /health/live:
+    get:
+      description: 仅表示进程存活，不依赖 Redis 等外部组件；容器编排探活应使用本端点，避免 Redis 抖动导致容器被重启。非统一信封。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{status:ok}'
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 存活探针（liveness）
+      tags:
+      - 系统
   /jobs:
     get:
       description: 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）
@@ -15400,6 +15448,40 @@ paths:
       summary: 批量删除章节文件
       tags:
       - 讲师端-课程
+  /tutor/upload-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Vditor 编辑器内嵌图上传（需讲师能力）；chapter_id 支持 query（Vditor 走 URL）与 form（直接
+        multipart）两种传递方式，用于按章节分目录存储。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0
+        表示成功），与 /admin/featured-content/upload-image 同一适配器
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: 章节ID（可选，按章节分目录存储 images/chapters/<id>）
+        in: query
+        name: chapter_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Vditor 响应（非统一信封）
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传讲师图文内嵌图片
+      tags:
+      - 讲师端-课程
   /valuation/admin/battery-types:
     post:
       consumes:
@@ -18068,6 +18150,20 @@ paths:
       summary: 评估统计
       tags:
       - 估值-评估
+  /valuation/health:
+    get:
+      description: 返回子模块状态/服务名/时间戳，不连数据库也不连 Redis，仅证明该蓝图可响应。非统一信封（裸 HealthResponse，字段全为字符串）。公开端点：无需登录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{status:ok,service:forklift-valuation-backend,timestamp:RFC3339}'
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 估值子模块健康检查
+      tags:
+      - 估值-系统
   /wrong-questions:
     get:
       consumes:
