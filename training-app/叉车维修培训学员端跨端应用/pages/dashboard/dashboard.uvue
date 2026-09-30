@@ -31,8 +31,8 @@
             <text class="notice-arrow">›</text>
         </view>
 
-        <!-- 证件下拉选择器（选择学习阶段风格） -->
-        <DashboardCertDropdown v-if="showCertDropdown" :groups="credentialGroups"
+        <!-- 证件下拉选择器（共享领域件 cert-selector，#1395 提升搬家） -->
+        <CertSelector v-if="showCertDropdown" :groups="credentialGroups"
             :current-id="currentCredentialId" @close="onCloseCertDropdown" @select="onSelectCredential" />
 
         <scroll-view class="content-scroll" scroll-y="true">
@@ -113,7 +113,7 @@
     import { onShow, onHide } from '@dcloudio/uni-app'
     import { useStatusBarHeight } from '../../utils/system'
     import type { FeaturedContentItem } from '../../types/index'
-    import DashboardCertDropdown from './components/dashboard-cert-dropdown.uvue'
+    import CertSelector from '../../components/cert-selector/cert-selector.uvue'
     import DashboardMenuGrid from './components/dashboard-menu-grid.uvue'
     import DashboardContinueCard from './components/dashboard-continue-card.uvue'
     import DashboardNewsSection from './components/dashboard-news-section.uvue'

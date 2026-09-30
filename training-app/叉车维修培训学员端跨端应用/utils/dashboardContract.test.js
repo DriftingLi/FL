@@ -188,8 +188,8 @@ describe('raw .then 收紧完成度（本票域 DTO 函数零残留，student �
 
 /* ══ ② 页面预算落袋锁（模块全量预算 / 目录深度已由声明面执法，#1219） ══ */
 describe('页面预算落袋锁（手术目标本身也断言，防「只挪注释」的假达标）', () => {
-  it('走查范围非空（防路径断链导致空集合假绿：页面 + 5 组件 + 2 composable = 8）', () => {
-    expect(h.sourceFilesIn('pages/dashboard').length).toBe(8);
+  it('走查范围非空（防路径断链导致空集合假绿：页面 + 4 组件 + 2 composable = 7；#1395 起下拉件搬家为共享件，不再住本目录）', () => {
+    expect(h.sourceFilesIn('pages/dashboard').length).toBe(7);
   });
 
   it('主页面预算落袋锁（手术前 1423 行）', () => {
@@ -201,8 +201,10 @@ describe('页面预算落袋锁（手术目标本身也断言，防「只挪注�
 
 /* ══ ③ 拆出物接线收口 ══ */
 describe('组件接线汇总（T05 拆出物 5 组件 + 2 composable：显式 import + 模板挂载/调用）', () => {
+  // #1395：证件下拉组件提升为共享领域件 `components/cert-selector/`（dashboard 与 guide 共挂），
+  // 接线锁随搬家改路径 —— 组件本体仍是「只 emit、不发请求」的纯选择器（裁定④）。
   const WIRING = [
-    ['DashboardCertDropdown', './components/dashboard-cert-dropdown.uvue'],
+    ['CertSelector', '../../components/cert-selector/cert-selector.uvue'],
     ['DashboardMenuGrid', './components/dashboard-menu-grid.uvue'],
     ['DashboardContinueCard', './components/dashboard-continue-card.uvue'],
     ['DashboardNewsSection', './components/dashboard-news-section.uvue'],
@@ -285,14 +287,35 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(body).not.toContain("uni.setStorageSync('selected_cert', item.code)");
   });
 
-  it("selected_cert 存储同步点（#1349 改写：写 2 保持，读 2→0 —— 回退改读「后端确认值」缓存）", () => {
-    // 沿革：#1346 把写从 3 调到 2（未确认切换不写）；#1349 把**读**清零 —— 原两处读拿 code
-    // 去查硬编码字典（后端字典一漂移就供出后端没有的 id），现由 selected_cert_id / _name 两键
-    // 承接。code 键本身仍有写（choose-cert 页面在消费它），其退役在 #1349 跟进票里议。
+  it("selected_cert 键退役（#1395：证件域**零业务读写**；唯一允许触碰点 = 登录域清槽）", () => {
+    // 沿革：#1346 把写从 3 调到 2（未确认切换不写）；#1349 把**读**清零（原读点拿 code 查硬编码字典）；
+    // #1395 把证件域最后两处**写**删除 —— 引导页切到「PATCH 后端确认 + writeCurrentCredentialCache」后，
+    // 证件域对该键写 0 读 0，旧键在存量设备的残留不做迁移（已无人读它）。
+    //
+    // ⚠️ 口径订正（合并 #1405 后）：票面原写「全仓写 0」，但 #1380 在**登录域**加了登出/身份切换
+    // 的清槽 `setStorage('selected_cert', '')`（防 B 账号顶出 A 账号缓存）。那是清、不是写业务值，
+    // 且读点为 0 ⇒ 与本票不冲突。但「绝迹」二字已不成立，故本锁改为**显式登记唯一允许点**：
+    // 比「全仓绝迹」更强 —— 它同时钉住「除这里以外谁都不许碰」。
     const syncWrites = (cred.match(/uni\.setStorageSync\('selected_cert'/g) || []).length;
-    expect(syncWrites).toBe(2);
+    expect(syncWrites).toBe(0);
     const syncReads = (cred.match(/uni\.getStorageSync\('selected_cert'/g) || []).length;
     expect(syncReads).toBe(0);
+    // 判据射程 = 四种存储 API 形态一律入内。旧正则 `StorageSync\(` 抓不到 `setStorage(`
+    // （#1405 的清槽走的正是 utils/storage 的包装）⇒ 那是**漏抓**、不是判过。
+    const retiredKey = /(?:set|get|remove)Storage(?:Sync)?\(\s*'selected_cert'/;
+    // 扫描面 = **整仓**源文件（`.` 口径：harness 的 SKIP_DIRS 已排除依赖/产物/点目录，
+    // `*.test.*` 被 walker 剔除 —— 否则本锁自己的字面量就是命中）。
+    // ⚠️ 曾用「pages 各模块 + infraFiles + api」三段并集，实测漏 19 个文件 —— 恰含
+    // `components/cert-selector/**`（本票新建的证件域组件）与顶层 `composables/**`（#1401 评审发现）。
+    // 漏一个目录就是给假绿留门缝。
+    const allSrc = h.sourceFilesIn('.');
+    expect(allSrc.length).toBeGreaterThan(200); // 下限断言：防枚举断链让扫描恒空
+    // 把曾经的盲区显式钉进判据：它不在面内就直接红，而不是退化成「差不多全仓」
+    expect(allSrc).toContain('components/cert-selector/cert-selector.uvue');
+    const touched = allSrc.filter((rel) => retiredKey.test(stripComments(read(rel))));
+    // 允许点必须**恰好是**登录域那一处：多出来 = 有人重新碰这个键；少了 = 白名单过期
+    // （拿等式而不是「包含于」，免得将来偷偷往白名单里塞写点）
+    expect(touched).toEqual(['stores/auth.uts']);
     // 缓存出口的接线：1 读（回退）+ 3 写（后端确认 ×2、确认无证件清空 ×1）
     expect((cred.match(/readCurrentCredentialCache\(\)/g) || []).length).toBe(1);
     expect((cred.match(/writeCurrentCredentialCache\(/g) || []).length).toBe(3);
@@ -324,7 +347,9 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     for (const t of ['2026年叉车基础理论课程', '叉车实操技能强化班', '叉车安全规范专题课', '叉车维修高级进阶课']) expect(course).toContain(t);
     expect(course).toContain("['热门课程', '精品课程']");
     expect(course).toContain("['全部', '实操技能', '综合评审']");
-    const dd = read('pages/dashboard/components/dashboard-cert-dropdown.uvue');
+    // #1395：下拉件搬家为共享件 cert-selector（levelNames / 热门考证文案的唯一抄本随件走，
+    // 引导页共挂这一件 —— 全仓不许再有第二份胶囊渲染/静态文案抄本）
+    const dd = read('components/cert-selector/cert-selector.uvue');
     expect(dd).toContain('入门组合');
     expect(dd).toContain('电动叉车维修优选');
     for (const lv of ['五级', '四级', '三级', '二级', '一级']) expect(dd).toContain(lv);
