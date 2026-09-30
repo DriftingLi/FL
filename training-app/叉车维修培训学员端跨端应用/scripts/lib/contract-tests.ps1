@@ -55,5 +55,7 @@ function Get-ContractTestPattern {
     # wtBootstrap      → wtBootstrapBehavior（worktree 初始化真源，2026-09-28）
     # frontier         → frontierBehavior（#1435：串行轮转外层的取票判据 + agent 纪律清单；
     #                    只钉纯逻辑，副作用由带真机证据的那个 PR 验）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier'
+    # frontierRun      → frontierRunPlan（#1435 ④2-3：轮转计划的**归属与顺序**——
+    #                    「门不交给 agent」「建树 cwd 在主树」「StopOn=2 即整轮停」）
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|frontierRun'
 }

@@ -1,0 +1,219 @@
+/**
+ * 串行轮转外层 `scripts/frontier-run.ps1` 的**计划面**守护（#1435 ④ 步骤 2-3）
+ *
+ * 为什么这样切（设计要点，不是装饰）：
+ *   外层真正会伤人的三件事都发生在**组命令**的那一刻：
+ *     ① 建错树 / 嵌树 —— `new-worktree.ps1` 必须在**主树 cwd** 下跑（在树内调它会算出
+ *        那个树自己，实测建出 `D:\FL\wt-1185\wt-(wip)1185`）；
+ *     ② 把门交给 agent —— agent 一旦能调 `hx-run` / `dev-finish`，无人值守时它就会在
+ *        「编译卡住」的路上顺手清理占用进程（kill 红线），而本机 agent CLI **没有权限档位**；
+ *     ③ `-DryRun` 偷偷做了事 —— 一个自称 dry-run 的入口如果真去 push，比没有 dry-run 更糟。
+ *   所以这三条钉成**数据断言**（计划是数组，可直接比对），而不是文案断言。
+ *
+ * 刻意不测的（防越界断言）：
+ *   建树、起 agent、跑门、真机取证 —— 那些的验收判据是「真跑一张票跑通」（#1435 ⑥ 第 3 条），
+ *   在本文件里假称「已验证」正是 release.md:25 记的那类假绿。本文件只 dot-source 纯函数，
+ *   **入口段（需要 -Ticket 才跑）根本不触达**。
+ *
+ * 运行前提：需要 pwsh（PowerShell 7）。先例同 wtBootstrapBehavior / frontierBehavior。
+ */
+const { execFileSync } = require('child_process');
+const path = require('path');
+const { readText } = require('./utsHarness');
+
+const ROOT = path.join(__dirname, '..');
+const LIB_REL = path.join('scripts', 'lib', 'frontier.ps1');
+const ENTRY_REL = path.join('scripts', 'frontier-run.ps1');
+
+function psArgs(extra) {
+  const args = ['-NoProfile', '-NonInteractive'];
+  if (process.platform === 'win32') args.push('-ExecutionPolicy', 'Bypass', '-OutputFormat', 'Text');
+  return args.concat(extra);
+}
+
+function runPs(body) {
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    'Set-StrictMode -Version Latest',
+    'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }',
+    `. "${path.join(ROOT, LIB_REL)}"`,
+    body,
+  ].join('\n');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  return String(execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
+    encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 8 * 1024 * 1024,
+  })).split(/\r?\n/).map((l) => l.trim());
+}
+
+const kv = (lines, key) => lines.filter((l) => l.startsWith(key + '=')).map((l) => l.slice(key.length + 1));
+
+/**
+ * 一次取回整份计划，按步切块。
+ * ⚠️ 空值一律打哨兵 `~`：runPs 会 trim，`stop=` 这种空尾会被读成「没有这一步」——
+ *    第一版就是这样把「步骤缺失」误读成「步骤不阻塞」的（假绿方向正好相反）。
+ */
+function plan(device) {
+  const devLit = (device === null || device === undefined) ? '$null' : `'${device}'`;
+  const lines = runPs([
+    `$p = Get-FrontierRunPlan -RepoRoot 'D:/FL' -TicketNumber 1499 -Level standard -Device ${devLit} -AgentExe 'pi' -DisciplineFile 'C:/Temp/fl-frontier-1499-discipline.txt'`,
+    'foreach ($x in $p) {',
+    '  Write-Output ("STEP=" + $x.Name)',
+    '  Write-Output ("file=" + $(if ($x.File) { $x.File } else { "~" }))',
+    '  Write-Output ("cwd=" + $(if ($x.Cwd) { $x.Cwd } else { "~" }))',
+    '  Write-Output ("stop=" + $(if ($x.StopOn) { $x.StopOn } else { "~" }))',
+    '  foreach ($a in $x.Args) { Write-Output ("arg=" + $a) }',
+    '}',
+  ].join('\n'));
+  const steps = {};
+  let cur = null;
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) continue;
+    if (l.startsWith('STEP=')) {
+      cur = l.slice(5);
+      steps[cur] = { file: '', cwd: '', stop: '', args: [] };
+      continue;
+    }
+    if (!cur) throw new Error(`计划输出里有不属于任何步骤的行：${l}`);
+    if (l.startsWith('file=')) steps[cur].file = l.slice(5);
+    else if (l.startsWith('cwd=')) steps[cur].cwd = l.slice(4);
+    else if (l.startsWith('stop=')) steps[cur].stop = l.slice(5);
+    else if (l.startsWith('arg=')) steps[cur].args.push(l.slice(4));
+  }
+  return { steps, names: Object.keys(steps) };
+}
+
+const ALL = plan('10.0.0.2:5555');
+const joined = (s) => [s.file, ...s.args].join(' ');
+
+describe('串行轮转外层的计划面（运行期）', () => {
+  test('FP1: 计划是固定的四步，顺序不可换（先建树 → 再写码 → 再自检 → 最后上机）', () => {
+    expect(ALL.names).toEqual(['worktree', 'agent', 'self-test', 'gate']);
+  });
+
+  test('FP2: 建树步必须在主树 cwd 下跑（在树内调它会算出那个树自己 ⇒ 嵌树）', () => {
+    const s = ALL.steps.worktree;
+    expect(s.file).toMatch(/new-worktree\.ps1$/);
+    // 判据真源：new-worktree.ps1 自己从 git 的公共目录取仓库根，但 cwd 落在别的树里时
+    // 它仍会把新树建进那棵树 —— 故计划必须钉死 cwd = 主树。
+    expect(s.cwd.replace(/\\/g, '/')).toBe('D:/FL');
+    expect(s.args.join(' ')).toContain('-Task 1499');
+    // 反向：建树步里不得出现 agent 参数（防把两步糊成一步）
+    expect(s.args.join(' ')).not.toMatch(/--print|--append-system-prompt/);
+  });
+
+  test('FP3: agent 步**不得**含任何 HBuilderX 调用，且必须带上纪律与票号', () => {
+    const s = ALL.steps.agent;
+    const a = s.args.join(' ');
+    expect(a).toContain('--print');                       // 非交互形态
+    expect(a).toContain('--append-system-prompt');        // 纪律必须随会话注入
+    expect(a).toContain('1499');
+    expect(s.cwd.replace(/\\/g, '/')).toContain('wt-1499'); // 写码发生在自己的树里，不是主树
+    // 纪律参数必须指向**纪律文件**，而且不能是本仓真源 .ps1（把源码路径塞进去，
+    // agent 读到的是函数定义、不是禁令；这一条是 DryRun 实测抓出来的，「参数非空」判不住它）。
+    const discIdx = s.args.indexOf('--append-system-prompt');
+    expect(discIdx).toBeGreaterThanOrEqual(0);
+    const discArg = s.args[discIdx + 1];
+    expect(discArg).toMatch(/discipline/i);
+    expect(discArg).not.toMatch(/\.ps1$/);
+    expect(discArg.replace(/\\/g, '/')).not.toContain('D:/FL'); // 落仓外，防被 git add 进树
+    for (const forbidden of ['hx-run', 'dev-finish', 'kotlin-all', 'compile-check', 'mp-weixin-check', 'cli.exe']) {
+      expect(joined(s)).not.toContain(forbidden);
+    }
+  });
+
+  test('FP4: 只有 gate 一步可以调 dev-finish，且只透传 Level / Device（不夹带别的开关）', () => {
+    const g = ALL.steps.gate;
+    expect(g.file).toMatch(/dev-finish\.ps1$/);
+    expect(g.args.join(' ')).toMatch(/-Level standard/);
+    expect(g.args.join(' ')).toMatch(/-Device 10\.0\.0\.2:5555/);
+    // 反向：不得把 -Distribute / -UpdateBaseline 这类会动发行或动基线默认的开关塞进去
+    for (const forbidden of ['-Distribute', '-UpdateBaseline', '-DryRun']) {
+      expect(g.args.some((a) => a === forbidden)).toBe(false);
+    }
+    // 其余三步都不得指向 dev-finish（「只有 gate 能调门」是这句的另一半）
+    for (const n of ['worktree', 'agent', 'self-test']) {
+      expect(joined(ALL.steps[n])).not.toContain('dev-finish');
+    }
+    // 自检步必须是纯 ③（不占设备、不取锁）
+    const t = ALL.steps['self-test'];
+    expect(t.args.join(' ')).toContain('test:unit');
+    expect(joined(t)).not.toMatch(/hx-run|dev-finish/);
+  });
+
+  test('FP5: 退出码分工 —— 门与环境步骤 2 必停，写码/自检步骤 1 可续', () => {
+    // dev-finish 的 exit 2 = 「环境不可用」（忙 / 超时 / 无设备）⇒ 继续轮转只会连续撞同一个
+    // 环境，还会把上一棵树的常驻会话留在原地。这条是 #1435 ⑤ 第三条的落点。
+    expect(ALL.steps.gate.stop).toBe('2');
+    expect(ALL.steps.worktree.stop).toBe('2');
+    // agent / self-test 失败不阻塞下一步（写码没通过自检也照样该由人去判，但轮转不该 runaway）
+    expect(ALL.steps.agent.stop).toBe('~');
+    expect(ALL.steps['self-test'].stop).toBe('~');
+  });
+
+  test('FP6: 无设备时 gate 步不带 -Device（不得凭空造一个设备串，也不得留空的 -Device 尾巴）', () => {
+    const noDev = plan(null);
+    const g = noDev.steps.gate;
+    expect(g.args.join(' ')).toMatch(/-Level standard/);
+    expect(g.args.join(' ')).not.toMatch(/-Device/);
+    // 反向锁：有设备时必须带 —— 两半都钉住，删掉任一半的实现都会红
+    expect(ALL.steps.gate.args.join(' ')).toMatch(/-Device 10\.0\.0\.2:5555/);
+  });
+
+  test('FP7: 取票只取判据认可的候选，且按票号升序取第一张', () => {
+    const lines = runPs([
+      '$c = @(',
+      '  [pscustomobject]@{ number = 1424; state = "OPEN"; labels = @("ready-for-mobile-agent"); assignees = @(); blockedBy = @() }',
+      '  [pscustomobject]@{ number = 1422; state = "OPEN"; labels = @("ready-for-mobile-agent"); assignees = @(); blockedBy = @() }',
+      '  [pscustomobject]@{ number = 1423; state = "OPEN"; labels = @("ready-for-mobile-agent"); assignees = @(); blockedBy = @(@{ number = 1421; state = "OPEN" }) }',
+      '  [pscustomobject]@{ number = 1421; state = "OPEN"; labels = @("ready-for-mobile-agent"); assignees = @(@{ login = "other" }); blockedBy = @() }',
+      ')',
+      '$r = Select-FrontierTicket -Candidates $c',
+      'Write-Output ("picked=" + $(if ($null -ne $r.Number) { $r.Number } else { "~" }))',
+      // ⚠️ 逐条打行，**不做字符串 join**：`("x=" + @(...)) -join ","` 的 -join 绑在拼接结果上，
+      //    会把整个数组折成一行（本仓记过的「转发流尾部丢行」同一族形态），断言看着有内容、实则不可分。
+      'foreach ($x in $r.Rejected) { Write-Output ("rej=" + $x.Number + ":" + $x.Reason) }',
+    ].join('\n'));
+    expect(kv(lines, 'picked')[0]).toBe('1422');   // 升序里第一张**合格**的（不是数组第一个）
+    const rejected = kv(lines, 'rej');
+    expect(rejected).toEqual(expect.arrayContaining(['1423:blocked', '1421:assigned', '1424:superseded']));
+    expect(rejected.length).toBe(3);
+  });
+
+  test('FP8: 空候选不猜票（取不到票 ⇒ 停，不退回「随便挑一张」）', () => {
+    const lines = runPs([
+      '$r = Select-FrontierTicket -Candidates @()',
+      'Write-Output ("picked=" + $(if ($null -ne $r.Number) { $r.Number } else { "~" }))',
+      'Write-Output ("rej=" + @($r.Rejected).Count)',
+    ].join('\n'));
+    expect(kv(lines, 'picked')[0]).toBe('~');      // 无票可取时不得凭空造一个票号
+    expect(kv(lines, 'rej')[0]).toBe('0');
+  });
+
+  test('FP9: 整份计划里不得出现任何交付动作或进程操作（AFK 终点 = 本地提交）', () => {
+    const all = Object.values(ALL.steps).map(joined).join(' | ');
+    for (const forbidden of ['git push', 'gh pr', 'gh issue', 'Stop-Process', 'taskkill', 'cli.exe']) {
+      expect(all).not.toContain(forbidden);
+    }
+    // 入口段必须存在且被守卫（DryRun 要在取票**之前**就能返回，否则「看一眼计划」也要联网）
+    const src = readText(path.join(ROOT, ENTRY_REL));
+    expect(src).toMatch(/DryRun/);
+    expect(src).toMatch(/Get-FrontierRunPlan/);
+    expect(src).toMatch(/Select-FrontierTicket/);
+    expect(src).toMatch(/Get-AfkAgentDiscipline/);   // 纪律文件必须由入口落盘，不是手写常量
+  });
+
+  test('FP10: 没有纪律文件就组不出计划（宁可显式失败，不起一个无约束的 AFK agent）', () => {
+    let failed = false;
+    try {
+      runPs([
+        "Get-FrontierRunPlan -RepoRoot 'D:/FL' -TicketNumber 1499 -Level standard -Device $null -AgentExe 'pi' -DisciplineFile ''",
+      ].join('\n'));
+    }
+    catch (e) {
+      failed = true;
+      expect(String(e.message)).toMatch(/DisciplineFile/);
+    }
+    expect(failed).toBe(true);   // 反向锁：删掉这条守卫，本用例即红
+  });
+});
