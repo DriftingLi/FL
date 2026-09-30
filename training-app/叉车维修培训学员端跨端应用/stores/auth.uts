@@ -7,7 +7,7 @@
  **/
 import { ref } from 'vue'
 import { loginApi, phoneLoginApi, emailLoginApi, mpWechatLoginApi, logoutApi, getUserInfoApi, refreshTokenApi, recruiterLoginApi } from '../api/auth'
-import { registerRefreshTokenHandler } from '../api/request'
+import { registerRefreshTokenHandler, registerUnauthorizedCredentialCleanup } from '../api/request'
 import { setStorage, setStorageJSON, getStorage, getStorageJSON, removeStorage } from '../utils/storage'
 import { updateSecureToken } from '../utils/secureStorage'
 import { setActiveRole, clearActiveRole } from '../utils/authRole'
@@ -459,11 +459,16 @@ async function quickLogin(username : string, password : string) : Promise<boolea
 let _refreshRegistered = false
 
 export function useAuthStore() : AuthStore {
-    // 惰性注册 token 刷新回调（首次调用 useAuthStore 时执行一次），避免在 .uts 模块顶层执行 async 副作用
+    // 惰性注册回调（首次调用 useAuthStore 时执行一次），避免在 .uts 模块顶层执行 async 副作用
     if (!_refreshRegistered) {
         _refreshRegistered = true
         registerRefreshTokenHandler(() : Promise<boolean> => {
             return tryRefreshToken()
+        })
+        // 401 顶出的证件域清理（#1404）：`handleUnauthorized()` 不能 import 本 store（循环依赖），
+        // 经回调把清理交回单点 —— 清理动作就是 `clearCredentialStorage()` 本身，不另抄键清单
+        registerUnauthorizedCredentialCleanup(() : void => {
+            clearCredentialStorage()
         })
     }
     return {
