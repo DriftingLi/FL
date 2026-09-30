@@ -195,3 +195,35 @@ describe('C6 证件域三键由单点清理，登出与身份切换都经它（#
     expect(fnBody(authSrc, 'clearIdentityForSwitch')).toContain('removeStorage(STORAGE_KEY_CREDENTIALS)');
   });
 });
+
+/**
+ * C6b 401 顶出也经单点清证件域三键（#1404，C6 的同族第三条边）。
+ *
+ * C6 锁「登出与身份切换」两条路共用单点；#1380 收口时查证出第三条泄漏路径 ——
+ * `handleUnauthorized()` 不经任何清槽函数（循环依赖），401 顶出后三键留着，换账号登录
+ * 即供出上一账号证件。行为面在 `utils/unauthorized401CertCleanupBehavior.test.js`
+ * （真的起 request.uts → 回调 → auth.uts，断言「401 顶出 → 换账号登录 → 缓存读回 null」）；
+ * 本处锁那半件行为测试看不到的事：**接缝的接线形状**。
+ *
+ * 两条判据各对一个真实退化方向：
+ *   ① 出口里抄一份键清单（#1380 要消灭的「两处各写一份」在第三个点回潮）→ 出口体不得含任何证件键；
+ *   ② 回调通道接线断掉（注册点被删/改名 ⇒ 行为测试自己接线，照样绿）→ 注册必须落在
+ *      `useAuthStore()` 的惰性块里，且清理动作就是单点函数本身，不是又一份内联。
+ * null 兜底形态与刷新回调同族（C1 的 `_refreshTokenHandler == null` 口径）：未注册 ⇒ 跳过，不抛。
+ */
+describe('C6b 401 顶出经回调清证件域三键，不抄第二份清单（#1404）', () => {
+  test('handleUnauthorized 只触发回调：出口体不含任何证件键字面量，回调判空后才调', () => {
+    const body = fnBody(requestSrc, 'handleUnauthorized');
+    for (const k of ['selected_cert', 'selected_cert_id', 'selected_cert_name']) {
+      expect(body).not.toContain(k);
+    }
+    expect(body).toMatch(/if\s*\(\s*_unauthorizedCredentialCleanupHandler\s*!=\s*null\s*\)\s*_unauthorizedCredentialCleanupHandler!\(\)/);
+  });
+
+  test('auth store 在 useAuthStore 惰性块里注册单点本身（注册被删/改名/内联抄写 = 本锁红）', () => {
+    expect(authSrc).toContain("import { registerRefreshTokenHandler, registerUnauthorizedCredentialCleanup } from '../api/request'");
+    const body = fnBody(authSrc, 'useAuthStore');
+    expect(body).toContain('registerUnauthorizedCredentialCleanup(');
+    expect(body).toContain('clearCredentialStorage()');
+  });
+});

@@ -115,6 +115,7 @@ function buildApp(opts) {
   const authMod = loadUts(AUTH_UTS, {
     ref: (v) => ({ value: v }),
     registerRefreshTokenHandler: request.registerRefreshTokenHandler,
+    registerUnauthorizedCredentialCleanup: request.registerUnauthorizedCredentialCleanup,
     loginApi: noopApi,
     phoneLoginApi: noopApi,
     emailLoginApi: noopApi,
