@@ -53,5 +53,7 @@ function Get-ContractTestPattern {
     # recruiterResume → recruiterResumeContract / recruiterResumeBehavior（#1196：脱敏字段清单与后端
     #                 resume_projection.go 逐项对账、未授权态不渲染敏感面、打码 PDF 出口、8 维筛选）
     # wtBootstrap      → wtBootstrapBehavior（worktree 初始化真源，2026-09-28）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap'
+    # frontier         → frontierBehavior（#1435：串行轮转外层的取票判据 + agent 纪律清单；
+    #                    只钉纯逻辑，副作用由带真机证据的那个 PR 验）
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier'
 }
