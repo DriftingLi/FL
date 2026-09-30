@@ -185,6 +185,17 @@ func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
 // UploadImage 上传图文 Markdown 中的图片（Vditor 格式）POST /api/tutor/upload-image
 // form 字段：file（图片）、chapter_id（可选，用于按章节分目录存储 images/chapters/<chapterId>/）
 // 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
+// @Summary 上传讲师图文内嵌图片
+// @Description Vditor 编辑器内嵌图上传（需讲师能力）；chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式，用于按章节分目录存储。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功），与 /admin/featured-content/upload-image 同一适配器
+// @Tags 讲师端-课程
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "图片文件"
+// @Param chapter_id query int false "章节ID（可选，按章节分目录存储 images/chapters/<id>）"
+// @Success 200 {object} map[string]any "Vditor 响应（非统一信封）"
+// @Failure 401 {object} response.R "未认证"
+// @Router /tutor/upload-image [post]
 func (h *TutorHandler) UploadImage(c *gin.Context) {
 	// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
 	// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
