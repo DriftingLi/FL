@@ -5,7 +5,7 @@
 // 跟着改，页面换生成物属 PR-2 的面）：
 //   - 4 个职位治理端点（/admin/jobs、/admin/job-reports 及其处置动作）→ generated/job.ts；
 //   - 4 个巡检端点（积分流水 / 删除计数 / 简历留痕 / 联系方式申请）→ generated/inspection.ts。
-// 后者由 #1097 在 internal/api/admin_inspection.go 补齐 swagger 注解、并在 apitypes.Domains 新建
+// 后者由 #1097 在 internal/inspection/handler.go 补齐 swagger 注解、并在 apitypes.Domains 新建
 // inspection 域登记，原先 4 条 ALLOWLIST 欠条已随之销账（见 scripts/check-api-consumers.mjs 头部留痕）。
 import { unwrappedRequest } from './request'
 // 票 6（ADR-0060 决策 6）：分页容器不再由本模块自备一份 `PagedResult` 副本，统一吃 api 侧的

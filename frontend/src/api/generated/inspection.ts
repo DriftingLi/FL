@@ -10,7 +10,7 @@
 //   GET  /admin/inspection/deleted-after-accepted
 //   GET  /admin/points/ledger
 //
-// 覆盖的 Go 类型：PointsLedgerItem / PointsLedgerResult / ContactRequestRowDTO / InspectionCountDTO / RecruitResumeViewDTO
+// 覆盖的 Go 类型：ContactRequestRowDTO / InspectionCountDTO / RecruitResumeViewDTO / PointsLedgerItem / PointsLedgerResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -21,24 +21,6 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
-
-export interface PointsLedgerItem {
-  created_at: string
-  delta: number
-  expires_at: string | null
-  id: number
-  reason: string
-  ref_id: string
-  ref_type: string
-  user_id: number
-}
-
-export interface PointsLedgerResult {
-  items: PointsLedgerItem[]
-  page: number
-  pages: number
-  total: number
-}
 
 export interface ContactRequestRowDTO {
   created_at: string
@@ -62,4 +44,22 @@ export interface RecruitResumeViewDTO {
   recruiter_id: number
   resume_user_id: number
   viewed_at: string
+}
+
+export interface PointsLedgerItem {
+  created_at: string
+  delta: number
+  expires_at: string | null
+  id: number
+  reason: string
+  ref_id: string
+  ref_type: string
+  user_id: number
+}
+
+export interface PointsLedgerResult {
+  items: PointsLedgerItem[]
+  page: number
+  pages: number
+  total: number
 }

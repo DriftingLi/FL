@@ -215,6 +215,7 @@ var sweptDirs = map[string]string{
 	"model":        "../model",
 	"material":     "../material",
 	"points":       "../points",
+	"inspection":   "../inspection",
 	"repository":   "../valuation/repository",
 }
 

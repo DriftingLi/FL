@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/faq"
+	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -139,7 +140,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "巡检与投稿",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminInspectionRoutes(api, rd, deps.InspectionSvc, deps.PointsSvc)
+			inspection.RegisterRoutes(api, rd.Session, deps.InspectionSvc, deps.PointsSvc)
 			RegisterContributionRoutes(api, rd, deps.ContributionSvc)
 		},
 	},
