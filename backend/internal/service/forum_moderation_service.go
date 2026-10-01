@@ -18,6 +18,8 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -28,7 +30,7 @@ type ForumModerationService struct {
 }
 
 // NewForumModerationService 构造论坛治理服务（依赖与 ForumService 同源，实例分离）。
-func NewForumModerationService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumModerationService {
+func NewForumModerationService(db *gorm.DB, fileSvc *FileStore, notificationSvc *notification.Service, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumModerationService {
 	return &ForumModerationService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 
@@ -90,7 +92,7 @@ func (s *ForumModerationService) AdminDeleteTopic(topicID int64) error {
 	// 清理文件（事务外，尽力而为）
 	s.deleteImages(urls)
 	// 通知作者（尽力而为：内容已删，通知失败不回滚，仅记日志；ADR-0027 C1 收编）
-	s.notificationSvc.TryCreateForumTopicDeletedEvent(NewForumTopicDeletedEvent(topic.UserID, topic.Title))
+	s.notificationSvc.TryCreateForumTopicDeletedEvent(notification.NewForumTopicDeletedEvent(topic.UserID, topic.Title))
 	return nil
 }
 
@@ -128,7 +130,7 @@ func (s *ForumModerationService) AdminDeleteReply(replyID int64) error {
 		return err
 	}
 	// 通知回复作者（尽力而为：内容已删，通知失败不回滚，仅记日志；ADR-0027 C1 收编）
-	s.notificationSvc.TryCreateForumReplyDeletedEvent(NewForumReplyDeletedEvent(reply.UserID, topicTitle, reply.TopicID))
+	s.notificationSvc.TryCreateForumReplyDeletedEvent(notification.NewForumReplyDeletedEvent(reply.UserID, topicTitle, reply.TopicID))
 	return nil
 }
 
@@ -166,7 +168,7 @@ func (s *ForumModerationService) ListReports(page, pageSize int, status *int16) 
 		items = append(items, ForumReportDTO{
 			ID: r.ID, ReporterID: r.ReporterID, Reporter: r.Reporter,
 			TopicID: r.TopicID, TopicTitle: r.TopicTitle, ReplyID: r.ReplyID,
-			Reason: r.Reason, Status: r.Status, CreatedAt: formatISO(r.CreatedAt),
+			Reason: r.Reason, Status: r.Status, CreatedAt: timefmt.FormatISO(r.CreatedAt),
 		})
 	}
 	return &ForumReportPageResult{
@@ -209,7 +211,7 @@ func (s *ForumModerationService) notifyReportHandled(report *model.ForumReport) 
 			topicTitle = topic.Title
 		}
 	}
-	s.notificationSvc.TryCreateForumReportHandledEvent(NewForumReportHandledEvent(report.ReporterID, report.ReplyID != nil, topicID, topicTitle))
+	s.notificationSvc.TryCreateForumReportHandledEvent(notification.NewForumReportHandledEvent(report.ReporterID, report.ReplyID != nil, topicID, topicTitle))
 }
 
 // DesignateExperience 管理端认定「备考经验」（ADR-0040）。
@@ -254,7 +256,7 @@ func (s *ForumModerationService) DesignateExperience(topicID int64) (*ForumTopic
 		}
 		return s.rewards.Award(tx, forumRewardFact{
 			Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title,
-			TopicOwner: topic.UserID, Designation: DesignationExperience, At: now,
+			TopicOwner: topic.UserID, Designation: notification.DesignationExperience, At: now,
 		})
 	})
 	if err != nil {
@@ -329,7 +331,7 @@ func (s *ForumModerationService) SetFeatured(topicID int64, featured bool) (*For
 		// 认定奖励与「认定备考经验」共用同一实现：每帖只发一次，先认定后加精不重复发分。
 		return s.rewards.Award(tx, forumRewardFact{
 			Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title,
-			TopicOwner: topic.UserID, Designation: DesignationFeatured, At: now,
+			TopicOwner: topic.UserID, Designation: notification.DesignationFeatured, At: now,
 		})
 	})
 	if err != nil {

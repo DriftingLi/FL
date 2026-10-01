@@ -398,8 +398,8 @@ func TestAdminContract_AIConfigsBindingsReviewAudit(t *testing.T) {
 	// ===== 资料审核 =====
 	student := seedAdminContractStudent(t, db, "stu1")
 	pending := model.ProfileChangeRequest{
-		UserID: student.ID, FieldType: service.ProfileFieldNickname,
-		OldValue: "旧昵称", NewValue: "新昵称", Status: service.ProfileStatusPending, CreatedAt: testutil.Now(),
+		UserID: student.ID, FieldType: model.ProfileFieldNickname,
+		OldValue: "旧昵称", NewValue: "新昵称", Status: model.ProfileStatusPending, CreatedAt: testutil.Now(),
 	}
 	if err := db.Create(&pending).Error; err != nil {
 		t.Fatalf("插入待审请求失败: %v", err)

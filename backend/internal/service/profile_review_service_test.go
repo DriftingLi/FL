@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -42,10 +43,10 @@ func (m *memReviewStorage) Get(_ context.Context, url string) (io.ReadCloser, er
 	return io.NopCloser(bytes.NewReader([]byte(url))), nil
 }
 
-func newReviewTestSvc(t *testing.T) (*ProfileReviewService, *NotificationService, *gorm.DB, *memReviewStorage) {
+func newReviewTestSvc(t *testing.T) (*ProfileReviewService, *notification.Service, *gorm.DB, *memReviewStorage) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	notifySvc := NewNotificationService(db, zap.NewNop())
+	notifySvc := notification.NewService(db, zap.NewNop())
 	st := &memReviewStorage{}
 	return NewProfileReviewService(db, notifySvc, st, zap.NewNop()), notifySvc, db, st
 }
@@ -72,7 +73,7 @@ func TestProfileReview_Approve_EmitsNotification(t *testing.T) {
 	svc, notifySvc, db, _ := newReviewTestSvc(t)
 	user := seedHrwaiUser(t, db, "13900001111", "u1@example.com")
 
-	req, err := svc.CreateRequest(user.ID, ProfileFieldNickname, "新昵称")
+	req, err := svc.CreateRequest(user.ID, model.ProfileFieldNickname, "新昵称")
 	if err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}
@@ -90,7 +91,12 @@ func TestProfileReview_Approve_EmitsNotification(t *testing.T) {
 	if string(n.Payload) != "{\"review_status\":\"approved\"}" {
 		t.Errorf("通过审核通知 payload 应含 review_status=approved: %s", n.Payload)
 	}
-	if !notifySvc.hasNotification(user.ID, n.ID) {
+	// 通知应通过站内信模块落库：读面（域包的 List）能看到这条消息，而不只是表里有一行。
+	page, err := notifySvc.List(user.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("站内信列表失败: %v", err)
+	}
+	if page.Total < 1 || len(page.Items) == 0 {
 		t.Error("通知应通过站内信模块落库")
 	}
 	// 审核通过后资料已生效
@@ -105,7 +111,7 @@ func TestProfileReview_Reject_EmitsNotificationWithReason(t *testing.T) {
 	svc, _, db, _ := newReviewTestSvc(t)
 	user := seedHrwaiUser(t, db, "13900002222", "u2@example.com")
 
-	req, err := svc.CreateRequest(user.ID, ProfileFieldAvatar, "/static/uploads/avatar.webp")
+	req, err := svc.CreateRequest(user.ID, model.ProfileFieldAvatar, "/static/uploads/avatar.webp")
 	if err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}
@@ -125,13 +131,6 @@ func TestProfileReview_Reject_EmitsNotificationWithReason(t *testing.T) {
 	}
 }
 
-// hasNotification 校验通知存在（测试辅助）。
-func (s *NotificationService) hasNotification(userID int, id int64) bool {
-	var count int64
-	s.db.Model(&model.Notification{}).Where("user_id = ? AND id = ?", userID, id).Count(&count)
-	return count > 0
-}
-
 // TestProfileReview_ApproveAvatar_DeletesOldAvatar 审核通过头像修改时清理被替换的旧头像
 // （孤儿文件 bug 修复的回归测试：approve 路径此前不清理）。
 func TestProfileReview_ApproveAvatar_DeletesOldAvatar(t *testing.T) {
@@ -142,7 +141,7 @@ func TestProfileReview_ApproveAvatar_DeletesOldAvatar(t *testing.T) {
 		t.Fatalf("设置旧头像失败: %v", err)
 	}
 
-	req, err := svc.CreateRequest(user.ID, ProfileFieldAvatar, "https://fake-cdn/new-avatar.png")
+	req, err := svc.CreateRequest(user.ID, model.ProfileFieldAvatar, "https://fake-cdn/new-avatar.png")
 	if err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}
@@ -161,7 +160,7 @@ func TestProfileReview_RejectAvatar_DeletesPendingFile(t *testing.T) {
 	svc, _, db, st := newReviewTestSvc(t)
 	user := seedHrwaiUser(t, db, "13900003333", "u3@example.com")
 
-	req, err := svc.CreateRequest(user.ID, ProfileFieldAvatar, "https://fake-cdn/pending-avatar.png")
+	req, err := svc.CreateRequest(user.ID, model.ProfileFieldAvatar, "https://fake-cdn/pending-avatar.png")
 	if err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}
@@ -179,7 +178,7 @@ func TestProfileReview_NicknameReview_NoFileCleanup(t *testing.T) {
 	svc, _, db, st := newReviewTestSvc(t)
 	user := seedHrwaiUser(t, db, "13900004444", "u4@example.com")
 
-	req, err := svc.CreateRequest(user.ID, ProfileFieldNickname, "新昵称")
+	req, err := svc.CreateRequest(user.ID, model.ProfileFieldNickname, "新昵称")
 	if err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}

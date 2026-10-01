@@ -108,13 +108,15 @@ func TestGinHostWhitelistIsLive(t *testing.T) {
 func TestLayerGuardDetectsPlantedViolations(t *testing.T) {
 	t.Parallel()
 	edges := []Edge{
-		{From: "pkg/httpx", To: "internal/service"},    // 叶子反向依赖 ⇒ 违规
-		{From: "internal/service", To: "internal/api"}, // 装配面被反向依赖 ⇒ 违规
-		{From: "internal/api", To: "pkg/httpx"},        // 允许：装配面依赖叶子
-		{From: "cmd/server", To: "internal/api"},       // 允许：装配根依赖装配面
+		{From: "pkg/httpx", To: "internal/service"},           // 叶子反向依赖 ⇒ 违规
+		{From: "internal/service", To: "internal/api"},        // 装配面被反向依赖 ⇒ 违规
+		{From: "internal/middleware", To: "internal/service"}, // HTTP 基建反向依赖业务层 ⇒ 违规
+		{From: "internal/api", To: "pkg/httpx"},               // 允许：装配面依赖叶子
+		{From: "cmd/server", To: "internal/api"},              // 允许：装配根依赖装配面
+		{From: "internal/api", To: "internal/middleware"},     // 允许：装配面依赖 HTTP 基建
 	}
-	if got := directionViolations(edges); len(got) != 2 {
-		t.Fatalf("合成违例应恰好报 2 条（httpx→internal 与 service→api），实得 %d：%v", len(got), got)
+	if got := directionViolations(edges); len(got) != 3 {
+		t.Fatalf("合成违例应恰好报 3 条（httpx→internal、service→api、middleware→service），实得 %d：%v", len(got), got)
 	}
 	files := []SourceFile{
 		{Path: "internal/service/only_test_test.go", Dir: "internal/service", Test: true}, // 孤立测试 ⇒ 违规

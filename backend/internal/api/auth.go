@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -318,7 +319,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 					return &service.ProfileChangeRequestDTO{}, nil
 				}
 			}
-			return h.reviewSvc.CreateRequest(req.UID, service.ProfileFieldNickname, req.Nickname)
+			return h.reviewSvc.CreateRequest(req.UID, model.ProfileFieldNickname, req.Nickname)
 		},
 		ErrStatus: &httpx.ErrStatusTable{Fallback: http.StatusBadRequest},
 		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO) {
@@ -414,7 +415,7 @@ func (h *AuthHandler) UploadAvatar(c *gin.Context) {
 		response.ServerErrorCause(c, "头像保存失败: ", err)
 		return
 	}
-	reqDTO, err := h.reviewSvc.CreateRequest(uid, service.ProfileFieldAvatar, url)
+	reqDTO, err := h.reviewSvc.CreateRequest(uid, model.ProfileFieldAvatar, url)
 	if err != nil {
 		// 提交审核失败时清理已上传的文件（尽力而为）
 		_ = h.storage.Delete(c.Request.Context(), url)

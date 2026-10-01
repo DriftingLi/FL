@@ -26,6 +26,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
 	"forklift-training/pkg/paging"
 )
@@ -160,14 +161,14 @@ type ContributionPageResult struct {
 type ContributionService struct {
 	db              *gorm.DB
 	fileSvc         *FileStore
-	notificationSvc *NotificationService
+	notificationSvc *notification.Service
 	points          *PointsService
 	logger          *zap.Logger
 	clk             clock.Clock
 }
 
 // NewContributionService 构造投稿服务。clk 为空时回退生产实钟（Asia/Shanghai）。
-func NewContributionService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, points *PointsService, logger *zap.Logger, clk clock.Clock) *ContributionService {
+func NewContributionService(db *gorm.DB, fileSvc *FileStore, notificationSvc *notification.Service, points *PointsService, logger *zap.Logger, clk clock.Clock) *ContributionService {
 	if clk == nil {
 		clk = clock.Real()
 	}
@@ -756,7 +757,7 @@ func (s *ContributionService) Approve(reviewerID int, contributionID int64) (*Co
 		}
 		// 站内信（与入账同事务；事件构造器单点，ADR-0027 C1）
 		if err := s.notificationSvc.CreateContributionApprovedEvent(tx,
-			NewContributionApprovedEvent(c.UserID, c.Title, contributionID, ContributionApprovedPoints), now); err != nil {
+			notification.NewContributionApprovedEvent(c.UserID, c.Title, contributionID, ContributionApprovedPoints, ReasonContributionApproved), now); err != nil {
 			return err
 		}
 		return nil
@@ -801,7 +802,7 @@ func (s *ContributionService) Reject(reviewerID int, contributionID int64, reaso
 	}
 	// 驳回站内信（含原因；link 到我的投稿；维持「通知失败返回 error」的强一致语义）
 	if err := s.notificationSvc.CreateContributionRejectedEvent(s.db,
-		NewContributionRejectedEvent(c.UserID, c.Title, contributionID, reason), now); err != nil {
+		notification.NewContributionRejectedEvent(c.UserID, c.Title, contributionID, reason), now); err != nil {
 		return nil, err
 	}
 	return s.GetDetail(contributionID, c.UserID)
@@ -866,7 +867,7 @@ func (s *ContributionService) Download(userID int, contributionID int64) (*Downl
 				}
 				result.TierAwarded = tier.Points
 				if err := s.notificationSvc.CreateContributionTierEvent(tx,
-					NewContributionTierEvent(c.UserID, c.Title, contributionID, tier.Threshold, tier.Points), now); err != nil {
+					notification.NewContributionTierEvent(c.UserID, c.Title, contributionID, tier.Threshold, tier.Points, ReasonContributionTier), now); err != nil {
 					return err
 				}
 				break
@@ -1079,7 +1080,7 @@ func (s *ContributionService) Archive(reviewerID int, contributionID int64, reas
 		clawedBack = clawed
 		// 下架站内信（含原因与扣减；同事务；事件构造器单点）
 		if err := s.notificationSvc.CreateContributionArchivedEvent(tx,
-			NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack), now); err != nil {
+			notification.NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack, ReasonRollback), now); err != nil {
 			return err
 		}
 		return nil

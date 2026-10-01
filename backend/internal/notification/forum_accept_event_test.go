@@ -1,6 +1,6 @@
 // Package service 站内信问答采纳事件构造器测试（ADR-0024 C3）：
 // title/content/link/payload 口径内聚站内信域，事务内使用形状验证，与积分入账一致。
-package service
+package notification
 
 import (
 	"encoding/json"
@@ -19,15 +19,15 @@ import (
 // TestForumAcceptEventConstructors 构造器输出与既有文案/链接/payload 契约逐字一致。
 func TestForumAcceptEventConstructors(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
-	answerer := NewAnswererAcceptEvent(1, "如何更换叉车轮胎", 42, 7, 40)
-	owner := NewOwnerAcceptEvent(2, "如何更换叉车轮胎", 42, 7, 5)
+	answerer := NewAnswererAcceptEvent(1, "如何更换叉车轮胎", 42, 7, 40, "accepted_bonus")
+	owner := NewOwnerAcceptEvent(2, "如何更换叉车轮胎", 42, 7, 5, "accept_action")
 
-	if answerer.Type != NotifTypeForumAcceptAnswerer || answerer.Reason != ReasonAcceptedBonus {
+	if answerer.Type != NotifTypeForumAcceptAnswerer || answerer.Reason != "accepted_bonus" {
 		t.Fatalf("答主事件字段不符: %+v", answerer)
 	}
-	if owner.Type != NotifTypeForumAcceptOwner || owner.Reason != ReasonAcceptAction {
+	if owner.Type != NotifTypeForumAcceptOwner || owner.Reason != "accept_action" {
 		t.Fatalf("楼主事件字段不符: %+v", owner)
 	}
 
@@ -95,9 +95,9 @@ func TestForumAcceptEventConstructors(t *testing.T) {
 // TestForumAcceptEventTxRollback 构造器在事务回滚时不落库（与积分入账同事务提交/回滚）。
 func TestForumAcceptEventTxRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
-	ev := NewAnswererAcceptEvent(1, "回滚验证", 99, 1, 40)
+	ev := NewAnswererAcceptEvent(1, "回滚验证", 99, 1, 40, "accepted_bonus")
 	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := svc.CreateForumAcceptEvent(tx, ev, time.Now()); err != nil {
 			return err

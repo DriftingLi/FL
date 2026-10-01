@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -459,6 +460,6 @@ func tutorToDTO(t *model.Tutor) TutorDTO {
 		Username:  t.Username,
 		Name:      t.Name,
 		Status:    t.Status,
-		CreatedAt: formatISO(t.CreatedAt),
+		CreatedAt: timefmt.FormatISO(t.CreatedAt),
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
@@ -109,7 +110,7 @@ func TestDeleteAccount_RefundsForumLikeCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	forumSvc := NewForumService(db, nil, NewNotificationService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop())), zap.NewNop())
+	forumSvc := NewForumService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 	if _, err := forumSvc.LikeTopic(liker.ID, topic.ID); err != nil {
 		t.Fatal(err)
 	}

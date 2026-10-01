@@ -13402,7 +13402,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NotificationListPageResult"
+                                            "$ref": "#/definitions/notification.NotificationListPageResult"
                                         }
                                     }
                                 }
@@ -13482,7 +13482,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NotificationUnreadCountDTO"
+                                            "$ref": "#/definitions/notification.NotificationUnreadCountDTO"
                                         }
                                     }
                                 }
@@ -24384,6 +24384,72 @@
                 }
             }
         },
+        "notification.NotificationDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_read": {
+                    "type": "boolean"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "payload": {
+                    "description": "Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，\n故用 swaggertype 钉成不透明 object（生成物渲染 Record\u003cstring, unknown\u003e），\n具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。",
+                    "type": "object",
+                    "x-optional": true
+                },
+                "read_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "notification.NotificationListPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/notification.NotificationDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "notification.NotificationUnreadCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
         "repository.AlgorithmParameters": {
             "type": "object",
             "properties": {
@@ -27732,72 +27798,6 @@
                     "type": "integer"
                 },
                 "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.NotificationDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_read": {
-                    "type": "boolean"
-                },
-                "link": {
-                    "type": "string"
-                },
-                "payload": {
-                    "description": "Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，\n故用 swaggertype 钉成不透明 object（生成物渲染 Record\u003cstring, unknown\u003e），\n具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。",
-                    "type": "object",
-                    "x-optional": true
-                },
-                "read_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.NotificationListPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.NotificationDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "unread_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.NotificationUnreadCountDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
                     "type": "integer"
                 }
             }

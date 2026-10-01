@@ -148,8 +148,12 @@ func RegisterRoutes(
 	admin := r.Group(valuationAdminGroupPath)
 	admin.Use(middleware.JWTAuth(sess))
 	admin.Use(middleware.CapabilityRequired(authz.CapValuationConfig))
-	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）
-	admin.Use(middleware.AuditLog(auditSvc, logger))
+	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）。
+	// 未注入审计服务时不挂（测试装配传 nil）：typed nil 装进 middleware.AuditWriter 不等于 nil 接口，
+	// 判空必须在装配点做（见 AuditWriter 的注释）。
+	if auditSvc != nil {
+		admin.Use(middleware.AuditLog(auditSvc, logger))
+	}
 	{
 		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))
 	}

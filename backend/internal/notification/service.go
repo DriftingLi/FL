@@ -1,6 +1,9 @@
-// Package service 实现业务服务层。
-// 本文件：站内信通知（P0 通知基础设施，当前仅站内信渠道）。
-package service
+// Package notification 站内信通知域：站内信写入、事件构造器与列表/已读接口。
+//
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，
+// service.go / events.go 是域实现，包内分层靠文件名而非子目录。
+// 本文件：站内信通知写入与读取（P0 通知基础设施，当前仅站内信渠道）。
+package notification
 
 import (
 	"encoding/json"
@@ -12,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -38,26 +42,26 @@ type GormCreator interface {
 	Create(value interface{}) *gorm.DB
 }
 
-// NotificationService 站内信通知服务。
-type NotificationService struct {
+// Service 站内信通知服务。
+type Service struct {
 	db *gorm.DB
 
 	logger *zap.Logger
 }
 
-// NewNotificationService 构造通知服务。
-func NewNotificationService(db *gorm.DB, logger *zap.Logger) *NotificationService {
-	return &NotificationService{db: db, logger: logger}
+// NewService 构造通知服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // Create 创建一条站内信通知（payload 为可选结构化标记，nil 表示无）。
-func (s *NotificationService) Create(userID int, typ, title, content, link string, payload model.JSONB) error {
+func (s *Service) Create(userID int, typ, title, content, link string, payload model.JSONB) error {
 	return s.CreateWithTx(s.db, userID, typ, title, content, link, payload, time.Now())
 }
 
 // CreateWithTx 在指定事务/连接内创建站内信。
 // 业务事件（如资料审核）与业务写同事务提交，避免通知丢失；createdAt 由调用方控制时区语义。
-func (s *NotificationService) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, payload model.JSONB, createdAt time.Time) error {
+func (s *Service) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, payload model.JSONB, createdAt time.Time) error {
 	n := model.Notification{
 		UserID:    userID,
 		Type:      typ,
@@ -118,7 +122,7 @@ type ForumAcceptEvent struct {
 	ReplyID int64
 	// Points 到账分值（与实际入账一致）。
 	Points int
-	// Reason 流水原因（ReasonAcceptedBonus / ReasonAcceptAction）。
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
 	Reason string
 }
 
@@ -129,7 +133,8 @@ const answererAcceptTitle = "你的回答被采纳"
 const ownerAcceptTitle = "你采纳了答案"
 
 // NewAnswererAcceptEvent 构造答主被采纳通知事件（+40 分到账，link 锚到回答）。
-func NewAnswererAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int) ForumAcceptEvent {
+// reason 由调用方传入（与同一事务入账的流水原因同源；流水原因归积分/论坛域所有，站内信只记录它）。
+func NewAnswererAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int, reason string) ForumAcceptEvent {
 	return ForumAcceptEvent{
 		UserID:     userID,
 		Type:       NotifTypeForumAcceptAnswerer,
@@ -137,12 +142,13 @@ func NewAnswererAcceptEvent(userID int, topicTitle string, topicID, replyID int6
 		TopicID:    topicID,
 		ReplyID:    replyID,
 		Points:     points,
-		Reason:     ReasonAcceptedBonus,
+		Reason:     reason,
 	}
 }
 
 // NewOwnerAcceptEvent 构造楼主采纳动作通知事件（+5 分到账，link 锚到回答）。
-func NewOwnerAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int) ForumAcceptEvent {
+// reason 由调用方传入（同 NewAnswererAcceptEvent）。
+func NewOwnerAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int, reason string) ForumAcceptEvent {
 	return ForumAcceptEvent{
 		UserID:     userID,
 		Type:       NotifTypeForumAcceptOwner,
@@ -150,13 +156,13 @@ func NewOwnerAcceptEvent(userID int, topicTitle string, topicID, replyID int64, 
 		TopicID:    topicID,
 		ReplyID:    replyID,
 		Points:     points,
-		Reason:     ReasonAcceptAction,
+		Reason:     reason,
 	}
 }
 
 // CreateForumAcceptEvent 在指定事务/连接内创建一条问答采纳事件站内信。
 // 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
-func (s *NotificationService) CreateForumAcceptEvent(tx GormCreator, ev ForumAcceptEvent, createdAt time.Time) error {
+func (s *Service) CreateForumAcceptEvent(tx GormCreator, ev ForumAcceptEvent, createdAt time.Time) error {
 	link := fmt.Sprintf("/training/forum/%d#reply-%d", ev.TopicID, ev.ReplyID)
 	title := answererAcceptTitle
 	if ev.Type == NotifTypeForumAcceptOwner {
@@ -204,20 +210,21 @@ type ForumFeaturedEvent struct {
 	TopicID int64
 	// Points 到账分值（与实际入账一致）。
 	Points int
-	// Reason 流水原因（ReasonFeaturedBonus）。
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
 	Reason string
 	// Designation 认定类型（DesignationFeatured | DesignationExperience），决定文案。
 	Designation string
 }
 
 // NewTopicFeaturedEvent 构造**加精**通知事件（+30 分到账，link 锚到帖子）。
-func NewTopicFeaturedEvent(userID int, topicTitle string, topicID int64, points int) ForumFeaturedEvent {
+// reason 由调用方传入（与同一事务入账的流水原因同源）。
+func NewTopicFeaturedEvent(userID int, topicTitle string, topicID int64, points int, reason string) ForumFeaturedEvent {
 	return ForumFeaturedEvent{
 		UserID:      userID,
 		TopicTitle:  topicTitle,
 		TopicID:     topicID,
 		Points:      points,
-		Reason:      ReasonFeaturedBonus,
+		Reason:      reason,
 		Designation: DesignationFeatured,
 	}
 }
@@ -225,20 +232,20 @@ func NewTopicFeaturedEvent(userID int, topicTitle string, topicID int64, points 
 // NewTopicExperienceEvent 构造**认定备考经验**通知事件（同一笔 +30，文案不同）。
 // 与 NewTopicFeaturedEvent 拆成两个构造函数，遵 ADR-0027 C1「每个业务事件一个构造函数」：
 // 流水 reason 相同不代表业务事件相同，文案口径内聚在站内信域，业务方一行触发。
-func NewTopicExperienceEvent(userID int, topicTitle string, topicID int64, points int) ForumFeaturedEvent {
+func NewTopicExperienceEvent(userID int, topicTitle string, topicID int64, points int, reason string) ForumFeaturedEvent {
 	return ForumFeaturedEvent{
 		UserID:      userID,
 		TopicTitle:  topicTitle,
 		TopicID:     topicID,
 		Points:      points,
-		Reason:      ReasonFeaturedBonus,
+		Reason:      reason,
 		Designation: DesignationExperience,
 	}
 }
 
 // CreateTopicFeaturedEvent 在指定事务/连接内创建一条帖子认定事件站内信。
 // 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
-func (s *NotificationService) CreateTopicFeaturedEvent(tx GormCreator, ev ForumFeaturedEvent, createdAt time.Time) error {
+func (s *Service) CreateTopicFeaturedEvent(tx GormCreator, ev ForumFeaturedEvent, createdAt time.Time) error {
 	link := fmt.Sprintf("/training/forum/%d", ev.TopicID)
 	var title, content string
 	switch ev.Designation {
@@ -278,7 +285,7 @@ type NotificationUnreadCountDTO struct {
 }
 
 // List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。
-func (s *NotificationService) List(userID int, page, pageSize int) (*NotificationListPageResult, error) {
+func (s *Service) List(userID int, page, pageSize int) (*NotificationListPageResult, error) {
 	var unread int64
 	if err := s.db.Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).Count(&unread).Error; err != nil {
@@ -308,7 +315,7 @@ func (s *NotificationService) List(userID int, page, pageSize int) (*Notificatio
 }
 
 // UnreadCount 查询当前用户未读通知数。
-func (s *NotificationService) UnreadCount(userID int) (int64, error) {
+func (s *Service) UnreadCount(userID int) (int64, error) {
 	var count int64
 	err := s.db.Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).
@@ -317,7 +324,7 @@ func (s *NotificationService) UnreadCount(userID int) (int64, error) {
 }
 
 // MarkRead 将单条通知标记为已读（仅限本人；已读或不存在均幂等成功，非本人报错）。
-func (s *NotificationService) MarkRead(userID int, id int64) error {
+func (s *Service) MarkRead(userID int, id int64) error {
 	res := s.db.Model(&model.Notification{}).
 		Where("id = ? AND user_id = ? AND is_read = ?", id, userID, false).
 		Updates(map[string]any{"is_read": true, "read_at": time.Now()})
@@ -340,7 +347,7 @@ func (s *NotificationService) MarkRead(userID int, id int64) error {
 }
 
 // MarkAllRead 将当前用户全部未读通知标记为已读。
-func (s *NotificationService) MarkAllRead(userID int) error {
+func (s *Service) MarkAllRead(userID int) error {
 	return s.db.Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).
 		Updates(map[string]any{"is_read": true, "read_at": time.Now()}).Error
@@ -356,7 +363,7 @@ func toNotificationDTO(n *model.Notification) NotificationDTO {
 		Link:      n.Link,
 		Payload:   n.Payload,
 		IsRead:    n.IsRead,
-		CreatedAt: formatISO(n.CreatedAt),
-		ReadAt:    formatTimePtr(n.ReadAt),
+		CreatedAt: timefmt.FormatISO(n.CreatedAt),
+		ReadAt:    timefmt.FormatTimePtr(n.ReadAt),
 	}
 }

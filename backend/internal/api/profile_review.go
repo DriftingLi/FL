@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -63,7 +64,7 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 		Parse: func(c *gin.Context) (*listRequestsReq, error) {
 			status := c.Query("status")
 			if status == "" {
-				status = service.ProfileStatusPending
+				status = model.ProfileStatusPending
 			}
 			return &listRequestsReq{
 				Status:   status,

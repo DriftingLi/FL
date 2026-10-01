@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 )
 
 // PositionInput 岗位创建/更新入参。
@@ -83,7 +84,7 @@ func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, Posi
 		ToDict: func(m *model.Position) PositionDict {
 			return PositionDict{
 				Code:        m.Code,
-				CreatedAt:   formatISO(m.CreatedAt),
+				CreatedAt:   timefmt.FormatISO(m.CreatedAt),
 				Description: m.Description,
 				Name:        m.Name,
 				PositionID:  m.PositionID,

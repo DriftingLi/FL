@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
@@ -18,8 +19,8 @@ import (
 func newRewardPolicyTest(t *testing.T) (*forumRewardPolicy, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop()))
-	policy := newForumRewardPolicy(points, NewNotificationService(db, zap.NewNop()))
+	points := NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
+	policy := newForumRewardPolicy(points, notification.NewService(db, zap.NewNop()))
 	return policy, db
 }
 
@@ -88,8 +89,10 @@ func TestForumRewardPolicy_AwardAcceptPaysBothSides(t *testing.T) {
 	if len(notes) != 2 {
 		t.Fatalf("站内信条数 = %d, want 2", len(notes))
 	}
-	if notes[0].Title != answererAcceptTitle || notes[1].Title != ownerAcceptTitle {
-		t.Fatalf("站内信标题 = [%s, %s], want [%s, %s]", notes[0].Title, notes[1].Title, answererAcceptTitle, ownerAcceptTitle)
+	// 标题的单一出处现在是域包私有常量（internal/notification/service.go 的 answererAcceptTitle /
+	// ownerAcceptTitle）：跨包只能断言可见的那两个字符串本身。
+	if notes[0].Title != "你的回答被采纳" || notes[1].Title != "你采纳了答案" {
+		t.Fatalf("站内信标题 = [%s, %s], want [%s, %s]", notes[0].Title, notes[1].Title, "你的回答被采纳", "你采纳了答案")
 	}
 	if notes[0].CreatedAt.UTC() != at.UTC() {
 		t.Fatalf("站内信时间 = %v, want %v（注入时刻应原样落库）", notes[0].CreatedAt.UTC(), at.UTC())
@@ -195,11 +198,11 @@ func TestForumRewardPolicy_AwardDesignationSharesOneBonus(t *testing.T) {
 			t.Fatalf("Award(%s) 失败: %v", designation, err)
 		}
 	}
-	award(DesignationFeatured)
+	award(notification.DesignationFeatured)
 	if got := balanceOf(t, db, owner.ID); got != FeaturedBonusPoints {
 		t.Fatalf("加精到账 = %d, want %d", got, FeaturedBonusPoints)
 	}
-	award(DesignationExperience)
+	award(notification.DesignationExperience)
 	if got := balanceOf(t, db, owner.ID); got != FeaturedBonusPoints {
 		t.Fatalf("认定经验后累计 = %d, want %d（两种认定共用一笔）", got, FeaturedBonusPoints)
 	}
@@ -221,7 +224,7 @@ func TestForumRewardPolicy_ReclaimClawsBackAllDirectRewards(t *testing.T) {
 		if err := policy.Award(tx, forumRewardFact{Kind: forumRewardAccept, TopicID: topic.ID, TopicTitle: topic.Title, TopicOwner: owner.ID, AnswererID: answerer.ID, ReplyID: 5, At: at}); err != nil {
 			return err
 		}
-		return policy.Award(tx, forumRewardFact{Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title, TopicOwner: owner.ID, Designation: DesignationFeatured, At: at})
+		return policy.Award(tx, forumRewardFact{Kind: forumRewardDesignation, TopicID: topic.ID, TopicTitle: topic.Title, TopicOwner: owner.ID, Designation: notification.DesignationFeatured, At: at})
 	}); err != nil {
 		t.Fatalf("发放失败: %v", err)
 	}
@@ -283,7 +286,7 @@ func TestForumRewardPolicy_AcceptRewardIssuedIgnoresDesignation(t *testing.T) {
 		if err := policy.Award(tx, forumRewardFact{Kind: forumRewardAccept, TopicID: acceptTopic.ID, TopicTitle: acceptTopic.Title, TopicOwner: owner.ID, AnswererID: answerer.ID, ReplyID: 3, At: at}); err != nil {
 			return err
 		}
-		return policy.Award(tx, forumRewardFact{Kind: forumRewardDesignation, TopicID: desigTopic.ID, TopicTitle: desigTopic.Title, TopicOwner: owner.ID, Designation: DesignationFeatured, At: at})
+		return policy.Award(tx, forumRewardFact{Kind: forumRewardDesignation, TopicID: desigTopic.ID, TopicTitle: desigTopic.Title, TopicOwner: owner.ID, Designation: notification.DesignationFeatured, At: at})
 	}); err != nil {
 		t.Fatalf("发放失败: %v", err)
 	}

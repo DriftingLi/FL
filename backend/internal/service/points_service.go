@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -206,10 +207,10 @@ type PointsService struct {
 	clk    clock.Clock
 	// notificationSvc 站内信域单点（#1098）：AdminPenalty 在扣罚事务内经事件构造器发信，
 	// 文案/payload 口径不落积分域。
-	notificationSvc *NotificationService
+	notificationSvc *notification.Service
 }
 
-func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSvc *NotificationService) *PointsService {
+func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSvc *notification.Service) *PointsService {
 	if clk == nil {
 		clk = clock.Real()
 	}
@@ -999,7 +1000,7 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 				return err
 			}
 		}
-		if err := s.notificationSvc.CreateAdminPenaltyEvent(tx, NewAdminPenaltyEvent(userID, actualDeduct, reason), time.Now()); err != nil {
+		if err := s.notificationSvc.CreateAdminPenaltyEvent(tx, notification.NewAdminPenaltyEvent(userID, actualDeduct, reason), time.Now()); err != nil {
 			return fmt.Errorf("%w：%v", ErrPenaltyNotifyFailed, err)
 		}
 		return nil

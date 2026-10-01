@@ -1,5 +1,5 @@
 // Package httpx 是 HTTP 面的**跨包共享出口**：请求解析单点（ParseError / BadRequest /
-// PathInt / PathInt64 / QueryIntPtr）与端点骨架（Endpoint 与 ErrStatus 域表，endpoint.go）
+// PathInt / PathInt64 / QueryIntPtr / QueryIntDefault）与端点骨架（Endpoint 与 ErrStatus 域表，endpoint.go）
 // 都住在这里；域包（internal/<域>/）自带的 handler 一律从这里取解析出口，不再各写一份。
 //
 // 为什么要有这个包：路径整型 id 的解析此前只有 internal/api 一处的出口（pathInt/pathInt64），
@@ -74,4 +74,23 @@ func QueryIntPtr(c *gin.Context, key string) *int {
 		return nil
 	}
 	return &v
+}
+
+// QueryIntDefault 解析带默认值的整型查询参数（分页/条数这类）：缺失或非数字时返回 def，
+// 0 与负数**原样透传**（钳制是服务层的事，解析层不替它决定）。
+//
+// 与 QueryIntPtr 的分工：那枚表达「没给这一维筛选项」（nil），这枚表达「这一维有默认值」。
+// 为什么升级到这里：internal/api 的 atoiDefault 是包私有且吃字符串，域包自带 handler 后拿不到它，
+// 各域再抄一份就是同一件解析事实的第二处实现（域包迁移手册：解析类助手一律升级到本包，ADR-0070）。
+// 本包是它的唯一宿主，path_parse_point_drift_lock_test.go 的 queryParseHelperNames 钉住这件事。
+func QueryIntDefault(c *gin.Context, key string, def int) int {
+	s := c.Query(key)
+	if s == "" {
+		return def
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return v
 }

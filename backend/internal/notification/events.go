@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：站内信事件构造器全域收编（ADR-0027 C1 / ADR-0024 C3 执行欠账）——
 // 论坛互动 / 投稿生命周期 / 联系方式交换申请 / 积分扣罚（#1098 收编最后一处 api 层第二源）全部手拼调用点收回站内信域，
 // 事件形状统一为 ForumAcceptEvent 已验证形态：事件 struct + New*Event 构造函数 + 域内写入方法。
@@ -6,7 +5,7 @@
 // 错误语义两族：
 //   - 强一致（Create*Event(tx, …) 返回 error）：与业务写同事务，失败回滚；
 //   - 尽力而为（TryCreate*Event(…)）：内部吞错记日志，调用点一行触发（删帖/删回复/举报/申请通知）。
-package service
+package notification
 
 import (
 	"encoding/json"
@@ -70,7 +69,7 @@ func NewReplyReplierEvent(userID int, replierName, topicTitle string, topicID in
 }
 
 // CreateForumReplyEvent 在指定事务/连接内创建一条回复互动站内信（与回复写入同事务）。
-func (s *NotificationService) CreateForumReplyEvent(tx GormCreator, ev ForumReplyEvent, createdAt time.Time) error {
+func (s *Service) CreateForumReplyEvent(tx GormCreator, ev ForumReplyEvent, createdAt time.Time) error {
 	title := "你的帖子有新回复"
 	content := fmt.Sprintf("%s 回复了你的帖子「%s」", ev.ReplierName, ev.TopicTitle)
 	if ev.IsReplyToReply {
@@ -95,7 +94,7 @@ func NewForumTopicDeletedEvent(userID int, topicTitle string) ForumTopicDeletedE
 }
 
 // TryCreateForumTopicDeletedEvent 尽力而为创建删帖通知（失败仅记日志）。
-func (s *NotificationService) TryCreateForumTopicDeletedEvent(ev ForumTopicDeletedEvent) {
+func (s *Service) TryCreateForumTopicDeletedEvent(ev ForumTopicDeletedEvent) {
 	content := "管理员删除了你的帖子「" + ev.TopicTitle + "」。"
 	s.tryCreateEvent(ev.UserID, NotifTypeForumTopicDel, "你的帖子已被删除", content, "", nil)
 }
@@ -113,7 +112,7 @@ func NewForumReplyDeletedEvent(userID int, topicTitle string, topicID int64) For
 }
 
 // TryCreateForumReplyDeletedEvent 尽力而为创建删回复通知（失败仅记日志）。
-func (s *NotificationService) TryCreateForumReplyDeletedEvent(ev ForumReplyDeletedEvent) {
+func (s *Service) TryCreateForumReplyDeletedEvent(ev ForumReplyDeletedEvent) {
 	content := "管理员删除了你在帖子「" + ev.TopicTitle + "」中的回复。"
 	s.tryCreateEvent(ev.UserID, NotifTypeForumReplyDel, "你的回复已被删除", content,
 		fmt.Sprintf("/training/forum/%d", ev.TopicID), forumTopicPayload(ev.TopicID))
@@ -141,7 +140,7 @@ func NewForumReportHandledEvent(userID int, forReply bool, topicID *int64, topic
 }
 
 // TryCreateForumReportHandledEvent 尽力而为创建举报处理通知（失败仅记日志）。
-func (s *NotificationService) TryCreateForumReportHandledEvent(ev ForumReportHandledEvent) {
+func (s *Service) TryCreateForumReportHandledEvent(ev ForumReportHandledEvent) {
 	target := "帖子"
 	if ev.ForReply {
 		target = "回复"
@@ -181,17 +180,18 @@ type ContributionApprovedEvent struct {
 	ContributionID int64
 	// Points 到账分值（与积分入账一致）。
 	Points int
-	// Reason 流水原因（ReasonContributionApproved）。
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
 	Reason string
 }
 
 // NewContributionApprovedEvent 构造投稿过审通知事件。
-func NewContributionApprovedEvent(userID int, title string, contributionID int64, points int) ContributionApprovedEvent {
-	return ContributionApprovedEvent{UserID: userID, Title: title, ContributionID: contributionID, Points: points, Reason: ReasonContributionApproved}
+// reason 由调用方传入（与同一事务里入账用的流水原因同源，站内信不做判定、不持有该常量）。
+func NewContributionApprovedEvent(userID int, title string, contributionID int64, points int, reason string) ContributionApprovedEvent {
+	return ContributionApprovedEvent{UserID: userID, Title: title, ContributionID: contributionID, Points: points, Reason: reason}
 }
 
 // CreateContributionApprovedEvent 在指定事务内创建过审站内信（与入账同事务）。
-func (s *NotificationService) CreateContributionApprovedEvent(tx GormCreator, ev ContributionApprovedEvent, createdAt time.Time) error {
+func (s *Service) CreateContributionApprovedEvent(tx GormCreator, ev ContributionApprovedEvent, createdAt time.Time) error {
 	content := fmt.Sprintf("你的投稿「%s」已通过审核，+%d 分已到账", ev.Title, ev.Points)
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeContributionApproved, "资料投稿通过审核", content,
 		"/training/materials?tab=contribution",
@@ -213,7 +213,7 @@ func NewContributionRejectedEvent(userID int, title string, contributionID int64
 }
 
 // CreateContributionRejectedEvent 创建驳回站内信（调用方传 db；维持既有「驳回通知失败返回 error」语义）。
-func (s *NotificationService) CreateContributionRejectedEvent(tx GormCreator, ev ContributionRejectedEvent, createdAt time.Time) error {
+func (s *Service) CreateContributionRejectedEvent(tx GormCreator, ev ContributionRejectedEvent, createdAt time.Time) error {
 	content := fmt.Sprintf("你的投稿「%s」未通过审核：%s", ev.Title, ev.RejectReason)
 	// 与原 contributionPayload(..., 0, "") 口径一致：驳回不score、reason 空。
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeContributionRejected, "资料投稿被驳回", content,
@@ -230,17 +230,18 @@ type ContributionTierEvent struct {
 	Threshold int
 	// Points 本档追加奖励。
 	Points int
-	// Reason 流水原因（ReasonContributionTier）。
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
 	Reason string
 }
 
 // NewContributionTierEvent 构造投稿达阶通知事件。
-func NewContributionTierEvent(userID int, title string, contributionID int64, threshold, points int) ContributionTierEvent {
-	return ContributionTierEvent{UserID: userID, Title: title, ContributionID: contributionID, Threshold: threshold, Points: points, Reason: ReasonContributionTier}
+// reason 由调用方传入（与同一事务里入账用的流水原因同源）。
+func NewContributionTierEvent(userID int, title string, contributionID int64, threshold, points int, reason string) ContributionTierEvent {
+	return ContributionTierEvent{UserID: userID, Title: title, ContributionID: contributionID, Threshold: threshold, Points: points, Reason: reason}
 }
 
 // CreateContributionTierEvent 在指定事务内创建达阶站内信（与入账同事务）。
-func (s *NotificationService) CreateContributionTierEvent(tx GormCreator, ev ContributionTierEvent, createdAt time.Time) error {
+func (s *Service) CreateContributionTierEvent(tx GormCreator, ev ContributionTierEvent, createdAt time.Time) error {
 	content := fmt.Sprintf("你的投稿「%s」下载量达 %d 次，+%d 分已到账", ev.Title, ev.Threshold, ev.Points)
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeContributionTier, "资料投稿下载量达阶", content,
 		"/training/materials?tab=contribution",
@@ -256,17 +257,18 @@ type ContributionArchivedEvent struct {
 	ArchiveReason string
 	// ClawedBack 追回分（0=未追回；文案与 payload points 用）。
 	ClawedBack int
-	// Reason 流水原因（ReasonRollback）。
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
 	Reason string
 }
 
 // NewContributionArchivedEvent 构造投稿下架通知事件。
-func NewContributionArchivedEvent(userID int, title string, contributionID int64, archiveReason string, clawedBack int) ContributionArchivedEvent {
-	return ContributionArchivedEvent{UserID: userID, Title: title, ContributionID: contributionID, ArchiveReason: archiveReason, ClawedBack: clawedBack, Reason: ReasonRollback}
+// reason 由调用方传入（下架的追回流水原因，与 RollbackByRef 用的同源）。
+func NewContributionArchivedEvent(userID int, title string, contributionID int64, archiveReason string, clawedBack int, reason string) ContributionArchivedEvent {
+	return ContributionArchivedEvent{UserID: userID, Title: title, ContributionID: contributionID, ArchiveReason: archiveReason, ClawedBack: clawedBack, Reason: reason}
 }
 
 // CreateContributionArchivedEvent 在指定事务内创建下架站内信（与追回同事务）。
-func (s *NotificationService) CreateContributionArchivedEvent(tx GormCreator, ev ContributionArchivedEvent, createdAt time.Time) error {
+func (s *Service) CreateContributionArchivedEvent(tx GormCreator, ev ContributionArchivedEvent, createdAt time.Time) error {
 	msg := fmt.Sprintf("你的投稿「%s」已下架：%s", ev.Title, ev.ArchiveReason)
 	if ev.ClawedBack > 0 {
 		msg = fmt.Sprintf("你的投稿「%s」已下架：%s（已回收该稿奖励 %d 分）", ev.Title, ev.ArchiveReason, ev.ClawedBack)
@@ -310,7 +312,7 @@ func NewAdminPenaltyEvent(userID, deducted int, reason string) AdminPenaltyEvent
 }
 
 // CreateAdminPenaltyEvent 在指定事务内创建扣罚站内信（与扣罚流水同事务）。
-func (s *NotificationService) CreateAdminPenaltyEvent(tx GormCreator, ev AdminPenaltyEvent, createdAt time.Time) error {
+func (s *Service) CreateAdminPenaltyEvent(tx GormCreator, ev AdminPenaltyEvent, createdAt time.Time) error {
 	content := fmt.Sprintf("您的积分因“%s”被扣除 %d 分", ev.Reason, ev.Deducted)
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeAdminPenalty, "积分扣罚", content, "", adminPenaltyPayload(ev.Deducted, ev.Reason), createdAt)
 }
@@ -339,7 +341,7 @@ func NewContactRequestEvent(userID int, companyName, contactName, message string
 }
 
 // TryCreateContactRequestEvent 尽力而为创建申请通知（失败仅记日志）。
-func (s *NotificationService) TryCreateContactRequestEvent(ev ContactRequestEvent) {
+func (s *Service) TryCreateContactRequestEvent(ev ContactRequestEvent) {
 	content := fmt.Sprintf("企业「%s」联系人 %s 申请查看你的联系方式，附言：%s", ev.CompanyName, ev.ContactName, ev.Message)
 	b, err := json.Marshal(struct {
 		ContactRequestID int64 `json:"contact_request_id"`
@@ -358,9 +360,9 @@ func (s *NotificationService) TryCreateContactRequestEvent(ev ContactRequestEven
 type ProfileReviewEvent struct {
 	// UserID 收件人（学员）。
 	UserID int
-	// FieldType 审核字段：ProfileFieldNickname / ProfileFieldAvatar（文案用）。
+	// FieldType 审核字段：model.ProfileFieldNickname / model.ProfileFieldAvatar（文案用）。
 	FieldType string
-	// Status 审核结果：ProfileStatusApproved / ProfileStatusRejected。
+	// Status 审核结果：model.ProfileStatusApproved / model.ProfileStatusRejected。
 	Status string
 	// Reason 驳回原因（approved 时为空）。
 	Reason string
@@ -376,22 +378,22 @@ func NewProfileReviewEvent(req *model.ProfileChangeRequest, status, reason strin
 }
 
 // CreateProfileReviewEvent 在指定事务/连接内创建资料审核结果站内信（与审核状态流转同事务）。
-func (s *NotificationService) CreateProfileReviewEvent(tx GormCreator, ev ProfileReviewEvent, createdAt time.Time) error {
+func (s *Service) CreateProfileReviewEvent(tx GormCreator, ev ProfileReviewEvent, createdAt time.Time) error {
 	fieldLabel := "昵称"
-	if ev.FieldType == ProfileFieldAvatar {
+	if ev.FieldType == model.ProfileFieldAvatar {
 		fieldLabel = "头像"
 	}
 	title := "资料审核通过"
 	content := "您的" + fieldLabel + "修改已通过审核，修改已生效。"
-	payload := reviewStatusPayload(ProfileStatusApproved)
-	if ev.Status == ProfileStatusRejected {
+	payload := reviewStatusPayload(model.ProfileStatusApproved)
+	if ev.Status == model.ProfileStatusRejected {
 		title = "资料审核被驳回"
 		content = "您的" + fieldLabel + "修改申请未通过审核"
 		if ev.Reason != "" {
 			content += "，原因：" + ev.Reason
 		}
 		content += "。"
-		payload = reviewStatusPayload(ProfileStatusRejected)
+		payload = reviewStatusPayload(model.ProfileStatusRejected)
 	}
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeProfileReview, title, content, "", payload, createdAt)
 }
@@ -400,7 +402,7 @@ func (s *NotificationService) CreateProfileReviewEvent(tx GormCreator, ev Profil
 
 // tryCreateEvent 尽力而为写入站内信：任何失败（含 receiver 为 nil）仅记日志，不向调用方传播。
 // 用于删帖/删回复/举报处理/联系方式交换申请等「内容已删或属辅助通知，失败不回滚」的调用族。
-func (s *NotificationService) tryCreateEvent(userID int, typ, title, content, link string, payload model.JSONB) {
+func (s *Service) tryCreateEvent(userID int, typ, title, content, link string, payload model.JSONB) {
 	if s == nil {
 		return
 	}

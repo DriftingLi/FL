@@ -12,13 +12,14 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
 func newRealExamSvc(t *testing.T) (*RealExamService, *PointsService, *QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), clock.Real(), NewNotificationService(db, zap.NewNop()))
+	points := NewPointsService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	return NewRealExamService(db, points, zap.NewNop()), points, qsvc, db
 }

@@ -237,8 +237,8 @@ var Domains = []Domain{
 		Name:  "notification",
 		Title: "站内通知（/api/notifications/*：列表 / 未读数 / 已读标记）",
 		Roots: []string{
-			"service.NotificationListPageResult",
-			"service.NotificationUnreadCountDTO",
+			"notification.NotificationListPageResult",
+			"notification.NotificationUnreadCountDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/notifications"},

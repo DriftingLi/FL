@@ -2,7 +2,7 @@
 
 > 读者：把后端一个功能域从 `internal/service` + `internal/api` 搬进 `internal/<域>/` 的实施者。
 > 每次搬家前读第 2、3 节；搬完逐条走第 9 节的验收清单。
-> 定案：[ADR-0070](../adr/ADR-0070-域包形态与目录即射程的收口.md)。首个样板：faq（2026-10-01，P1 试点批）。
+> 定案：[ADR-0070](../adr/ADR-0070-域包形态与目录即射程的收口.md)。样板：faq（2026-10-01，P1 试点批）、notification（同日，试点批第二域 —— 跨域词汇、事件构造器与依赖倒置的完整样本，见第 7.1 与第 11 节）。
 
 ## 1. 目标形态
 
@@ -17,16 +17,20 @@
 
 - **包名 = 域名**，域名取自 `backend/internal/apitypes/domains.go` 的域声明表（30 个域）。那张表同时是 swagger definitions 前缀与前端生成物的域边界，别另立一份域清单。
 - **分层靠文件名约定，不靠子目录**：先例是 `scripts/check-catalog-sort.mjs` 的 `GUARDED_PATH_SEGMENT`（按文件名判定）。子目录 = 多包 = 导出面被迫扩大，且会让「目录即射程」的守卫再次失明。
-- 域包允许依赖：`internal/model`、`internal/service`（共享助手，P3 收进 `internal/core`）、`internal/security`、`internal/middleware`、`pkg/httpx`、`pkg/response`、第三方。
+- 域包允许依赖：`internal/model`、`internal/service`（共享助手，P3 收进 `internal/core`）、`internal/timefmt`（时间格式化叶子包）、`internal/security`、`internal/middleware`、`pkg/httpx`、`pkg/response`、第三方。
 - 域包**不得** import `internal/api`（装配根在那里，反向依赖成环），也不得 import gin（HTTP 形状归 `handler.go`，见第 3 节）。
+- **跨域共享的词汇贴着实体放 `internal/model`**（notification 批的裁决）：两个域都要读的常量塞进任一个域包，就会让两个域互相 import ⇒ 贴着实体定义。`ProfileFieldNickname` / `ProfileStatusPending` 等因此从 `internal/service/profile_review_service.go` 挪到 `internal/model/account.go`（紧挨 `ProfileChangeRequest`）。**只被一个域读**的常量仍留在域包。
 - 不新建 `test/`、`tests/` 目录（`internal/layers` 的同居规矩）。
 
 ## 2. 迁移 recipe（以 faq 为样板）
 
 1. **定域边界**：在 `backend/internal/apitypes/domains.go` 找到该域的 `Roots`（带 Go 包前缀的 swagger 键，如 `service.FaqResult`）。
-2. **共享件先出包**（否则会造出没有消费者的导出 API）：
+2. **共享件先出包**（否则会造出没有消费者的导出 API；notification 批把五种情形都走了一遍）：
    - 域实现用到的**同包非导出助手**，先在该包里导出、调用点机械改名、原包不退场（faq 批：`BeijingNow`（`internal/service/auth_service.go:966`）、`IsDuplicateError`（`internal/service/forum_counter.go:67`），119 处 / 37 文件）；
-   - **解析类**助手升级到 `pkg/httpx`（先例：`httpx.QueryIntPtr`，票 #1452）。
+   - **解析类**助手升级到 `pkg/httpx`（先例：`httpx.QueryIntPtr`，票 #1452；notification 批新增 `httpx.QueryIntDefault` —— 域包 import 不到 `internal/api` 的私有 `atoiDefault`，各域再抄一份就是第二处实现）；
+   - **无状态纯函数**进叶子包：`internal/timefmt`（`FormatISO` / `FormatTimePtr`，原 `internal/service/helpers.go` 的私有函数）—— 域包与 `internal/service` 都取它，比塞回服务层轻（P3 收 `internal/core` 时再议去留）；
+   - **别域的事实常量**改成**调用方传参**：站内信事件构造器收 `reason string`（`NewContributionApprovedEvent(userID int, title string, contributionID int64, points int, reason string)` 等 7 个）—— 积分流水原因是积分域的事实，通知域只把它记进 payload，于是不必 import 别域或服务层的常量；
+   - **跨域共享词汇**贴着实体放 `internal/model`（第 1 节）。
 3. **搬服务**：`git mv backend/internal/service/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（`service.BeijingNow`）。DTO、哨兵、校验函数名原样不动。
 4. **搬 HTTP 出口**：`git mv backend/internal/api/<域>.go backend/internal/<域>/handler.go`；改 `package`；`XxxHandler`→`handler`、`NewXxxHandler`→`newHandler`、`RegisterXxxRoutes(rg, rd RouterDeps, svc)`→`RegisterRoutes(rg *gin.RouterGroup, <只收它真正需要的依赖>, svc *Service)`。faq 只用了 `rd.Session`，于是签名就是 `RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service)`，由 `routes_registry.go` 的闭包注入 `rd.Session`。
    - **不要把 `RouterDeps` 搬进域包**：它住在 `internal/api/deps.go`。
@@ -44,11 +48,11 @@
 | --- | --- | --- |
 | `backend/internal/testutil/codescan.go` | `ResponsePackages()` 加一项 `{"internal/<域>","<域>"}` | fact 两把锁不扫新域包（**漏扫**，静默）；`HTTPSurface` 无需改（文件名规则自动纳入） |
 | `backend/internal/api/consumption_fact_lock_test.go`、`backend/internal/apitypes/fact_reachability_lock_test.go` | 各自的 `n != <计数>` 与 Fatal 文案里的数字（迁一域 +1；faq 批 6→7） | 红——这是刻意的：数清单本身就是断言（ADR-0065 批⑤ 的规矩） |
-| `backend/internal/apitypes/nullability_lock_test.go` | `nonNilEvidenceSources` 加 `{"internal/<域>","nonnilOutlets"}`；`sweptDirs` 加 `"<域>": "../<域>"` | 域包里声明的 `nonnil` 找不到证据（判据 5 零容忍）／旧键变幽灵键 |
+| `backend/internal/apitypes/nullability_lock_test.go` | `nonNilEvidenceSources` 加 `{"internal/<域>","nonnilOutlets"}`；`sweptDirs` 加 `"<域>": "../<域>"` | 域包里声明的 `nonnil` 找不到证据（判据 5 零容忍）／旧键变幽灵键。**漏加 `sweptDirs` 的症状会骗人**：报的是「证据表里的 `notification.X.items` 并不是一条『射程内声明 nonnil』的字段」，看起来像字段改名，其实是被扫目录没进去 |
 | `backend/internal/api/authz_coverage_lock_test.go` | `allow` 表**键是裸函数名**（12 条）；域包把注册函数改名 `RegisterRoutes` 后裸名会**静默失配** ⇒ 键改限定名（`notification.RegisterRoutes`） | 红（该表只在被点名函数上生效，改错名字即从判据里消失） |
-| `backend/internal/api/path_parse_point_drift_lock_test.go` | `queryHelpers` / `allowedPathParseFuncs` 等按名字圈射程的清单（#1452 已允许限定名 `httpx.QueryIntPtr`） | 域包自带解析助手时判据看不见（**静默**）：解析类一律走 `pkg/httpx` |
+| `backend/internal/api/path_parse_point_drift_lock_test.go` | `queryHelpers` / `allowedPathParseFuncs` 等按名字圈射程的清单（#1452 已允许限定名 `httpx.QueryIntPtr`）；**在 `pkg/httpx` 新增解析出口**（如 notification 批的 `QueryIntDefault`）要同时加进 `queryParseHelperNames` —— 那张表断言「宿主 `pkg/httpx` 里恰好这么多枚」 | 域包自带解析助手时判据看不见（**静默**）：解析类一律走 `pkg/httpx` |
 | `scripts/check-render-error-face.mjs` | 无需改：`GUARDED_FILE_PREFIXES=['handler']` + `GUARDED_FILE_ROOT='backend/internal/'` 自动纳入域包 `handler*.go` | 若 HTTP 出口文件**不以 handler 开头**（如 `admin.go`），判据看不见（**静默**）⇒ 命名必须带 handler |
-| `backend/internal/layers/layer_guard.go` | 无需改：gin 只许出现在 HTTPSurface（含域包 `handler*.go`）与四个登记目录（`internal/middleware`、`internal/logger`、`pkg/httpx`、`pkg/response`） | 域实现（`service.go`/`dto.go`）里 import gin 即红 |
+| `backend/internal/layers/layer_guard.go` | gin 面**无需改**（自动纳入域包 `handler*.go`）；但**依赖方向的三条硬规矩**要过一眼：① `pkg/httpx` 不 import `internal/...`；② `internal/api` 只许 `cmd/...` 依赖；③ **`internal/middleware` 不得 import `internal/service`**（notification 批新增，见第 7.1 节） | 域包 `handler.go` 一引 middleware，三角 `service → 域包 → middleware` 就成环：`go build` 直接报 `import cycle not allowed`（不是红一条判据） |
 | `backend/internal/service/nonnil_outlets_*_test.go` | 属于该域的键与 outlet 函数**删掉**（不是复制），头部注释里的域名列表同步 | `testutil.AssertNonNilOutlets` 报「同名键出现在两张表」 |
 | `scripts/check-catalog-sort.mjs` 的 5 条 `declaredIn`、`backend/internal/deploy/nginx_delivery_gen.go:230` 的硬编码路径 | 只在被点名的文件真搬家时改 | 缺文件即 Fatal（不静默），会在 CI 点名 |
 
@@ -95,7 +99,22 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 
 1. **注入**：`RegisterRoutes` 的参数（faq：`session *security.Session`），由装配根闭包注入。
 2. **升级到 `pkg/httpx`**：HTTP 形状与请求解析（`ParseError` / `BadRequest` / `PathInt` / `PathInt64` / `QueryIntPtr` / `Endpoint` / 错误状态表）。`pkg/httpx` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①）。
-3. **留在 `internal/service` 并导出**：域实现共用的时间/DB/格式化助手（`BeijingNow` / `IsDuplicateError` / `FormatISO` / `FormatTimePtr`），P3 随 `internal/core` 一并收编。
+3. **留在 `internal/service` 并导出**：域实现共用的 DB / 业务助手（`BeijingNow` / `IsDuplicateError`），P3 随 `internal/core` 一并收编（无状态的时间格式化已另立叶子包 `internal/timefmt`，见第 2 节）。
+
+### 7.1 反向依赖（下游要业务层类型）：消费方接口反转
+
+上面三条讲的是「域包要别处的东西」。反过来 —— **HTTP 基建要业务层类型**时，绝不能在基建包里 import 业务包，否则三角成立（notification 批实测）：
+
+    cmd/*  →  internal/logger  →  internal/middleware  →  internal/service  →  internal/notification  →  internal/middleware
+                                                                                    ↑ import cycle not allowed
+
+做法是**消费方定义接口**（先例：`internal/middleware/audit.go`）：
+
+- `type AuditWriter interface { Write(record model.AuditLog) error; DescribeAction(method, path string) string }`，`AuditLog(svc AuditWriter, logger *zap.Logger)` —— 基建只认自己需要的那两个方法，实现仍是单点 `*service.AuditService`（`internal/service/audit_service.go:28` / `:53` 原样满足），由装配点注入。
+- **typed nil 陷阱**：`(*service.AuditService)(nil)` 装进接口**不等于** nil 接口，`svc == nil` 拦不住 ⇒ 判空上移到装配点（`internal/api/router.go:70-75`、`internal/valuation/handler/router.go:151` 都写成 `if auditSvc != nil { ... }`），基建里只留「真传进来的 nil 接口」兜底。
+- 这条因此被钉成方向规矩 ③（`internal/layers/layer_guard.go` 的 `directionViolations`）：`internal/middleware` 不得 import `internal/service`；合成违规自测在 `layer_guard_test.go`。
+
+**外部测试包例外**：`package foo_test` 住在被测包之外，两条边都能拿（import cycle 只发生在同一构建里）⇒ 它**不进依赖图**：`layer_guard.go` 的 `importEdges` 见到包名以 `_test` 结尾就跳过。这条例外是必要的 —— `internal/middleware/audit_ip_test.go` 就得拿**真实**的 `service.AuditService` 落库举证（本次成为全仓唯一一处外部测试包）。内部测试包（`package foo`）仍判：反向 import 在 test 构建里就是 import cycle。
 
 ## 8. 不许做的事
 
@@ -112,6 +131,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] `node scripts/check-render-error-face.mjs --all`；涉目录读面时另跑 `node scripts/check-catalog-sort.mjs --all`
 - [ ] `ResponsePackages()` 已加域包；两把 fact 计数锁与文案已同步
 - [ ] `nullability_lock_test.go` 的 `nonNilEvidenceSources` / `sweptDirs` 已加域包；域内证据表键已换包前缀；旧表里的键已删
+- [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
 - [ ] 旧符号（`XxxService` / `RegisterXxxRoutes` / 旧包前缀键）全仓残留 = 0
 - [ ] PR 正文一行披露「合并到 master 将触发 production 部署」
@@ -121,3 +141,12 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - 一波 1 个 PR、**≤3 个域**、diff ≤1500 行；域的顺序按 P1 计划公布的四波（faq / notification 是试点批）。
 - 生成链顺序是硬的：gofmt/vet → `make swagger` → `go run ./cmd/gen-apitypes` → `go test ./...` → 前端检查（`internal/apitypes/codegen_test.go` 把前端生成物与注解渲染结果全等比对，顺序弄反会先绿后红）。
 - 每个 PR 合并即触发 production 部署（master push ⇒ `cd.yml`）⇒ PR 正文必须留一行披露。
+
+## 11. 批量机械改名的纪律（血账）
+
+一个域几百处引用只能靠脚本改名 —— 脚本本身就是风险源。notification 批在这里踩过两次，四条硬规矩：
+
+- **pwsh 的 `-replace` 大小写不敏感**（要区分大小写必须 `-creplace`）。用它给 `internal/service` 加 `notification.` 限定名时，替换词表里的 `Service` / `NewService` 把 `package service`、字符串 `"forklift-training/internal/service"` 一起改掉，**一次性改坏 212 个文件**（import 路径变成 `"forklift-training/internal/notification.Service"`）。复原手法：`git checkout -- backend/internal/service`（从 **index** 恢复；`git mv` 的改名已 staged，不会被撤销）。
+- **替换词表里剔除过于通用的名字**：`Service` / `NewService` / `Handler` 这类词靠词边界拦不住组合形态，必须用显式模式逐条写（`-creplace 'NewNotificationService\(', 'notification.NewService('`、`-creplace '\*NotificationService\b', '*notification.Service'`）。
+- **闸门先试跑**：脚本先只对 2-3 个文件跑一遍看 diff；跑完立刻反查「**不该变的文件为什么出现在变更列表里**」（`uid.go` / `nickname.go` 这种域外文件一出现就停手回滚）。
+- **自检判据要写对**：`(?m)^package service\r?$` 计数 == 1、不得出现 `"forklift-training/internal/notification.``（字符串里带点的路径）、不得出现双重包前缀；**别在 CRLF 文件上用 `$` 收尾判行**（`$` 匹配不到 `\r` 前的位置，会给出假阳性）；改完 `gofmt -l` 必须为空。

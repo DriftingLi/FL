@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 )
 
 // CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
@@ -369,7 +370,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 	}
 	lastStudiedAt := ""
 	if lp.LastStudiedAt != nil {
-		lastStudiedAt = formatISO(*lp.LastStudiedAt)
+		lastStudiedAt = timefmt.FormatISO(*lp.LastStudiedAt)
 	}
 	detail := courseToDTO(course)
 	// 权益投影只在有主体的读路径填（见 CourseDTO.Entitled 的注释）：
@@ -714,7 +715,7 @@ func courseToDTO(c *model.Course) CourseDTO {
 		IsHot:                 c.IsHot,
 		IsFeatured:            c.IsFeatured,
 		PointsPrice:           c.PointsPrice,
-		CreatedAt:             formatISO(c.CreatedAt),
+		CreatedAt:             timefmt.FormatISO(c.CreatedAt),
 	}
 }
 
@@ -749,7 +750,7 @@ func chapterToDTO(c *model.Chapter) ChapterDTO {
 		Description: c.Description,
 		Duration:    c.Duration,
 		OrderNum:    c.OrderNum,
-		CreatedAt:   formatISO(c.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(c.CreatedAt),
 	}
 }
 
@@ -761,7 +762,7 @@ func chapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
 		FileName:    f.FileName,
 		ContentType: f.ContentType,
 		FileSize:    f.FileSize,
-		CreatedAt:   formatISO(f.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(f.CreatedAt),
 	}
 }
 
@@ -782,7 +783,7 @@ func legacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 		FileName:    fileName,
 		ContentType: contentType,
 		FileSize:    0,
-		CreatedAt:   formatISO(ch.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(ch.CreatedAt),
 	}
 }
 

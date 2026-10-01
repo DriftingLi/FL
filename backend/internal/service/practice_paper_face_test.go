@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
@@ -105,7 +106,7 @@ func TestMockExamNotFoundIsOnlyForMissingRows(t *testing.T) {
 // 此前它们挤在同一格 errStatusAll(404)，A 批在端点注释里把「升哨兵再换表」登记为正解。
 func TestRealPaperThreeFacts(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewRealExamService(db, NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop())), zap.NewNop())
+	svc := NewRealExamService(db, NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	paper := model.RealExamPaper{Title: "2026 叉车真题", SourceRef: "RP-LEDGER", Status: 1}
 	if err := db.Create(&paper).Error; err != nil {

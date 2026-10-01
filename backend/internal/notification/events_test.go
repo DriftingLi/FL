@@ -1,7 +1,7 @@
 // Package service 站内信事件构造器契约测试（ADR-0027 C1）：
 // 全域收编后 title/content/link/payload 口径在站内信域单点锁定，
 // 业务侧一行触发；本文件锁「逐字零漂移」契约（含 link 查询参数两种既有变体）。
-package service
+package notification
 
 import (
 	"encoding/json"
@@ -18,7 +18,7 @@ import (
 // TestForumReplyEventConstructors 楼主被回复 / 楼中楼被回复两条口径逐字锁定。
 func TestForumReplyEventConstructors(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	now := time.Now()
 
 	owner := NewTopicReplierEvent(1, "小明", "如何更换叉车轮胎", 42)
@@ -88,7 +88,7 @@ func assertTopicPayload(t *testing.T, payload model.JSONB, topicID int64) {
 // TestForumDeletionEventsContract 管理端删帖 / 删回复口径逐字锁定（尽力而为族落库验证）。
 func TestForumDeletionEventsContract(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	svc.TryCreateForumTopicDeletedEvent(NewForumTopicDeletedEvent(1, "违规帖"))
 	svc.TryCreateForumReplyDeletedEvent(NewForumReplyDeletedEvent(2, "有回复的帖", 88))
@@ -125,7 +125,7 @@ func TestForumDeletionEventsContract(t *testing.T) {
 // TestForumReportHandledEventContract 举报处理两种口径：主题存在（带标题+链接）与已删（降级无链接）。
 func TestForumReportHandledEventContract(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	// 帖子举报，主题存在
 	topicID := int64(77)
@@ -163,15 +163,15 @@ func TestForumReportHandledEventContract(t *testing.T) {
 // TestContributionEventsContract 投稿全生命周期四条口径逐字锁定（含两种 link 变体与追回文案）。
 func TestContributionEventsContract(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	now := time.Now()
 
 	// 过审（+50）与达阶（+30）同事务
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := svc.CreateContributionApprovedEvent(tx, NewContributionApprovedEvent(1, "叉车保养手册", 101, 50), now); err != nil {
+		if err := svc.CreateContributionApprovedEvent(tx, NewContributionApprovedEvent(1, "叉车保养手册", 101, 50, "contribution_approved"), now); err != nil {
 			return err
 		}
-		return svc.CreateContributionTierEvent(tx, NewContributionTierEvent(2, "叉车保养手册", 101, 10, 30), now)
+		return svc.CreateContributionTierEvent(tx, NewContributionTierEvent(2, "叉车保养手册", 101, 10, 30, "contribution_tier"), now)
 	}); err != nil {
 		t.Fatalf("事务内创建失败: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestContributionEventsContract(t *testing.T) {
 		t.Fatalf("创建驳回通知失败: %v", err)
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return svc.CreateContributionArchivedEvent(tx, NewContributionArchivedEvent(4, "叉车保养手册", 101, "违规", 80), now)
+		return svc.CreateContributionArchivedEvent(tx, NewContributionArchivedEvent(4, "叉车保养手册", 101, "违规", 80, "rollback"), now)
 	}); err != nil {
 		t.Fatalf("创建下架通知失败: %v", err)
 	}
@@ -272,7 +272,7 @@ func assertContributionPayload(t *testing.T, payload model.JSONB, contributionID
 // TestContactRequestEventContract 联系方式交换申请通知口径逐字锁定（payload 双字段）。
 func TestContactRequestEventContract(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	svc.TryCreateContactRequestEvent(NewContactRequestEvent(1, "华晨叉车", "王经理", "想约面试", 55, 9))
 
@@ -303,7 +303,7 @@ func TestContactRequestEventContract(t *testing.T) {
 // payload {deducted, reason}；Deducted 为按余额截断后的实际扣减额）。
 func TestAdminPenaltyEventContract(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	now := time.Now()
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
@@ -336,7 +336,7 @@ func TestAdminPenaltyEventContract(t *testing.T) {
 
 // TestTryCreateNilReceiver 尽力而为族对 nil receiver 不 panic（旧 contact 调用的 nil 守卫语义收编）。
 func TestTryCreateNilReceiver(t *testing.T) {
-	var svc *NotificationService
+	var svc *Service
 	svc.TryCreateForumTopicDeletedEvent(NewForumTopicDeletedEvent(1, "t"))
 	svc.TryCreateForumReplyDeletedEvent(NewForumReplyDeletedEvent(1, "t", 1))
 	svc.TryCreateForumReportHandledEvent(NewForumReportHandledEvent(1, false, nil, ""))

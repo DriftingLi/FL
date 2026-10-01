@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -604,7 +605,7 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 			IsCorrect:    rc.IsCorrect,
 			PracticeType: rc.PracticeType,
 			UserAnswer:   rc.UserAnswer,
-			CreatedAt:    formatISO(rc.CreatedAt),
+			CreatedAt:    timefmt.FormatISO(rc.CreatedAt),
 		}
 		if qq, ok := questions[rc.QuestionID]; ok {
 			d := newQuestionDTO(qq, false)

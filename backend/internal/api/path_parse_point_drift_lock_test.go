@@ -47,13 +47,15 @@ var (
 	intParseFuncs = map[string]bool{"Atoi": true, "ParseInt": true, "ParseUint": true}
 	queryHelpers  = map[string]bool{
 		"requiredPositiveID": true, "queryIDPtr": true, "atoiDefault": true, // 仍住 internal/api
-		"httpx.QueryIntPtr": true, // 唯一宿主：pkg/httpx
+		"httpx.QueryIntPtr": true, "httpx.QueryIntDefault": true, // 唯一宿主：pkg/httpx
 	}
 )
 
 // queryParseHelperNames 是查询侧解析出口的允许名（唯一宿主 pkg/httpx）。
 // 与 allowedPathParseFuncs 对称：宿主少一枚、本包多一枚，两侧都要报 —— 否则「搬完就没人管了」。
-var queryParseHelperNames = map[string]bool{"QueryIntPtr": true}
+// QueryIntDefault 是带默认值的那枚（分页参数）：通知域迁走 handler 时它随解析出口升级进 pkg/httpx，
+// 否则竞品写法是各域再内联一份 strconv.Atoi（ADR-0070 域包迁移手册）。
+var queryParseHelperNames = map[string]bool{"QueryIntPtr": true, "QueryIntDefault": true}
 
 // pathParseSite 一次「从路径参数取整数却没走 PathInt/PathInt64」。
 type pathParseSite struct {

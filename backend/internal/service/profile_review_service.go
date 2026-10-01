@@ -13,20 +13,16 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
 // 资料修改字段类型与状态。
-const (
-	ProfileFieldNickname = "nickname"
-	ProfileFieldAvatar   = "avatar"
-
-	ProfileStatusPending  = "pending"
-	ProfileStatusApproved = "approved"
-	ProfileStatusRejected = "rejected"
-)
+// ProfileField*/ProfileStatus* 词汇已移到 internal/model（贴着 ProfileChangeRequest 实体）：
+// 跨域共享——审核域写、站内信域读，塞进任一个域包都会让两个域互相 import。
 
 // ProfileChangeRequestDTO 审核请求展示对象（含用户当前资料）。
 type ProfileChangeRequestDTO struct {
@@ -47,7 +43,7 @@ type ProfileChangeRequestDTO struct {
 // ProfileReviewService 资料修改审核服务。
 type ProfileReviewService struct {
 	db              *gorm.DB
-	notificationSvc *NotificationService
+	notificationSvc *notification.Service
 	// storage 文件存储（头像文件生命周期：审核通过清理旧头像、驳回清理待审文件）
 	storage storage.Storage
 
@@ -55,7 +51,7 @@ type ProfileReviewService struct {
 }
 
 // NewProfileReviewService 构造审核服务。
-func NewProfileReviewService(db *gorm.DB, notificationSvc *NotificationService, st storage.Storage, logger *zap.Logger) *ProfileReviewService {
+func NewProfileReviewService(db *gorm.DB, notificationSvc *notification.Service, st storage.Storage, logger *zap.Logger) *ProfileReviewService {
 	return &ProfileReviewService{db: db, notificationSvc: notificationSvc, storage: st, logger: logger}
 }
 
@@ -63,11 +59,11 @@ func NewProfileReviewService(db *gorm.DB, notificationSvc *NotificationService, 
 func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue string) (*ProfileChangeRequestDTO, error) {
 	newValue = strings.TrimSpace(newValue)
 	switch fieldType {
-	case ProfileFieldNickname:
+	case model.ProfileFieldNickname:
 		if utf8.RuneCountInString(newValue) > 30 {
 			return nil, errors.New("昵称不能超过 30 个字符")
 		}
-	case ProfileFieldAvatar:
+	case model.ProfileFieldAvatar:
 		if newValue == "" {
 			return nil, errors.New("头像不能为空")
 		}
@@ -80,7 +76,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 		return nil, errors.New("用户不存在")
 	}
 	oldValue := user.Username
-	if fieldType == ProfileFieldAvatar {
+	if fieldType == model.ProfileFieldAvatar {
 		oldValue = user.AvatarURL
 	}
 	if newValue == oldValue {
@@ -90,7 +86,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 	// 同一字段存在待审请求时不允许重复提交
 	var pendingCount int64
 	if err := s.db.Model(&model.ProfileChangeRequest{}).
-		Where("user_id = ? AND field_type = ? AND status = ?", userID, fieldType, ProfileStatusPending).
+		Where("user_id = ? AND field_type = ? AND status = ?", userID, fieldType, model.ProfileStatusPending).
 		Count(&pendingCount).Error; err != nil {
 		return nil, err
 	}
@@ -104,7 +100,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 		FieldType: fieldType,
 		OldValue:  oldValue,
 		NewValue:  newValue,
-		Status:    ProfileStatusPending,
+		Status:    model.ProfileStatusPending,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -117,7 +113,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 // GetPendingForUser 查询用户最新一条待审请求（无则返回 nil）。
 func (s *ProfileReviewService) GetPendingForUser(userID int) (*ProfileChangeRequestDTO, error) {
 	var req model.ProfileChangeRequest
-	if err := s.db.Where("user_id = ? AND status = ?", userID, ProfileStatusPending).
+	if err := s.db.Where("user_id = ? AND status = ?", userID, model.ProfileStatusPending).
 		Order("id DESC").Limit(1).Find(&req).Error; err != nil {
 		return nil, err
 	}
@@ -183,8 +179,8 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 			FieldType: r.FieldType, OldValue: r.OldValue, NewValue: r.NewValue,
 			Status: r.Status, RejectReason: r.RejectReason,
 			ReviewedBy: r.ReviewedBy,
-			ReviewedAt: formatTimePtr(r.ReviewedAt),
-			CreatedAt:  formatISO(r.CreatedAt),
+			ReviewedAt: timefmt.FormatTimePtr(r.ReviewedAt),
+			CreatedAt:  timefmt.FormatISO(r.CreatedAt),
 		})
 	}
 	return &ProfileChangeRequestPageResult{
@@ -197,7 +193,7 @@ func (s *ProfileReviewService) ListRequests(status string, page, pageSize int) (
 
 // Approve 通过审核：将 new_value 应用到 hrwai_users 并标记状态。
 func (s *ProfileReviewService) Approve(requestID int64, reviewerID int) (*ProfileChangeRequestDTO, error) {
-	return s.review(requestID, reviewerID, ProfileStatusApproved, "")
+	return s.review(requestID, reviewerID, model.ProfileStatusApproved, "")
 }
 
 // Reject 驳回审核，返回请求对象（待审头像文件由 service 在 review 内清理）。
@@ -206,7 +202,7 @@ func (s *ProfileReviewService) Reject(requestID int64, reviewerID int, reason st
 	if utf8.RuneCountInString(reason) > 200 {
 		return nil, errors.New("驳回原因不能超过 200 个字符")
 	}
-	return s.review(requestID, reviewerID, ProfileStatusRejected, reason)
+	return s.review(requestID, reviewerID, model.ProfileStatusRejected, reason)
 }
 
 // review 执行审核状态流转：仅允许 pending → approved / rejected。
@@ -218,15 +214,15 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 		}
 		return nil, err
 	}
-	if req.Status != ProfileStatusPending {
+	if req.Status != model.ProfileStatusPending {
 		return nil, errors.New("该请求已审核，不能重复操作")
 	}
 
 	now := BeijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if status == ProfileStatusApproved {
+		if status == model.ProfileStatusApproved {
 			updates := map[string]any{}
-			if req.FieldType == ProfileFieldNickname {
+			if req.FieldType == model.ProfileFieldNickname {
 				updates["username"] = req.NewValue
 			} else {
 				updates["avatar_url"] = req.NewValue
@@ -247,7 +243,7 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 			return err
 		}
 		// 审核结果站内信（与审核状态流转同事务；事件构造器单点，ADR-0027 C1 资料审核四元组旧形态一并对齐）
-		return s.notificationSvc.CreateProfileReviewEvent(tx, NewProfileReviewEvent(&req, status, reason), now)
+		return s.notificationSvc.CreateProfileReviewEvent(tx, notification.NewProfileReviewEvent(&req, status, reason), now)
 	})
 	if err != nil {
 		return nil, err
@@ -270,11 +266,11 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 
 // cleanupAvatarFiles 按审核结果清理头像文件（孤儿文件修复：approve 路径清理被替换旧头像）。
 func (s *ProfileReviewService) cleanupAvatarFiles(req *model.ProfileChangeRequest, status string) {
-	if s.storage == nil || req.FieldType != ProfileFieldAvatar {
+	if s.storage == nil || req.FieldType != model.ProfileFieldAvatar {
 		return
 	}
 	target := req.NewValue
-	if status == ProfileStatusApproved {
+	if status == model.ProfileStatusApproved {
 		target = req.OldValue // 被替换的旧头像
 	}
 	if target == "" {
@@ -298,7 +294,7 @@ func (s *ProfileReviewService) toDTO(req *model.ProfileChangeRequest, user *mode
 		Status:       req.Status,
 		RejectReason: req.RejectReason,
 		ReviewedBy:   req.ReviewedBy,
-		ReviewedAt:   formatTimePtr(req.ReviewedAt),
-		CreatedAt:    formatISO(req.CreatedAt),
+		ReviewedAt:   timefmt.FormatTimePtr(req.ReviewedAt),
+		CreatedAt:    timefmt.FormatISO(req.CreatedAt),
 	}
 }
