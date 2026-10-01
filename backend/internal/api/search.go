@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -56,7 +57,7 @@ func RegisterSearchAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 func (h *SearchHandler) Search(c *gin.Context) {
 	credID := middleware.CredentialIDPtr(c)
 	resp, err := h.svc.Search(c.Query("keyword"), c.Query("type"),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -77,7 +78,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/search-facts/zero-results [get]
 func (h *SearchHandler) ZeroResults(c *gin.Context) {
-	rows, err := h.svc.ZeroResultKeywords(atoiDefault(c.Query("days"), 30), atoiDefault(c.Query("limit"), 50))
+	rows, err := h.svc.ZeroResultKeywords(httpx.QueryIntDefault(c, "days", 30), httpx.QueryIntDefault(c, "limit", 50))
 	if err != nil {
 		response.ServerErrorCause(c, "", err)
 		return

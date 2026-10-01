@@ -68,8 +68,8 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 			}
 			return &listRequestsReq{
 				Status:   status,
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listRequestsReq) (*service.ProfileChangeRequestPageResult, error) {

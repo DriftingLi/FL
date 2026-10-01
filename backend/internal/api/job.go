@@ -168,12 +168,12 @@ func (h *JobHandler) ListMine(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
 			params := service.JobListParams{
-				Page:          atoiDefault(c.Query("page"), 1),
-				PageSize:      atoiDefault(c.Query("page_size"), 20),
+				Page:          httpx.QueryIntDefault(c, "page", 1),
+				PageSize:      httpx.QueryIntDefault(c, "page_size", 20),
 				MineOnly:      true,
 				IncludeHidden: true,
 			}
-			if v := queryIDPtr(c, "position_id"); v != nil {
+			if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 				params.PositionID = v
 			}
 			return h.svc.List(middleware.CurrentUserID(c), params)
@@ -226,16 +226,16 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
 			params := service.JobListParams{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 			}
-			if v := queryIDPtr(c, "position_id"); v != nil {
+			if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 				params.PositionID = v
 			}
-			if v := queryIDPtr(c, "salary_min"); v != nil {
+			if v := httpx.QueryIDPtr(c, "salary_min"); v != nil {
 				params.SalaryMin = v
 			}
-			if v := queryIDPtr(c, "salary_max"); v != nil {
+			if v := httpx.QueryIDPtr(c, "salary_max"); v != nil {
 				params.SalaryMax = v
 			}
 			params.Region = c.Query("region")

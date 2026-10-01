@@ -231,8 +231,8 @@ func (h *ContributionHandler) ListPublic(c *gin.Context) {
 			return &listPublicReq{
 				CredentialID: credID,
 				Sort:         c.Query("sort"),
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 20),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listPublicReq) (*service.ContributionPageResult, error) {
@@ -262,7 +262,7 @@ func (h *ContributionHandler) ListMine(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return h.svc.ListMine(userID, atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
+			return h.svc.ListMine(userID, httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20))
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
@@ -410,7 +410,7 @@ func (h *ContributionHandler) Report(c *gin.Context) {
 func (h *ContributionHandler) ListPending(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.ContributionPageResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionPageResult, error) {
-			return h.svc.ListPending(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
+			return h.svc.ListPending(httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20))
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
@@ -543,14 +543,14 @@ func (h *ContributionHandler) ListReports(c *gin.Context) {
 			var status *int
 			if s := c.Query("status"); s != "" {
 				// status 0 待处理 / 1 已处理；缺失表示不筛这一维（全部）
-				if v, ok := requiredPositiveID(s); ok {
+				if v, ok := httpx.PositiveID(s); ok {
 					status = &v
 				} else if s == "0" {
 					z := 0
 					status = &z
 				}
 			}
-			return h.svc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
+			return h.svc.ListReports(httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), status)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }

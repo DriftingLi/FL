@@ -87,8 +87,8 @@ func (h *NoteHandler) List(c *gin.Context) {
 			return &listNotesReq{
 				UserID:   middleware.CurrentUserID(c),
 				Scope:    c.Query("scope"),
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listNotesReq) (*service.NotePageDTO, error) {

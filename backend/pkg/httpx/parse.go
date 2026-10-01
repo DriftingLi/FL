@@ -1,5 +1,5 @@
 // Package httpx 是 HTTP 面的**跨包共享出口**：请求解析单点（ParseError / BadRequest /
-// PathInt / PathInt64 / QueryIntPtr / QueryIntDefault）与端点骨架（Endpoint 与 ErrStatus 域表，endpoint.go）
+// PathInt / PathInt64 / QueryIntPtr / QueryIDPtr / QueryIntDefault / PositiveID）与端点骨架（Endpoint 与 ErrStatus 域表，endpoint.go）
 // 都住在这里；域包（internal/<域>/）自带的 handler 一律从这里取解析出口，不再各写一份。
 //
 // 为什么要有这个包：路径整型 id 的解析此前只有 internal/api 一处的出口（pathInt/pathInt64），
@@ -58,8 +58,8 @@ func PathInt64(c *gin.Context, key, failMsg string) (int64, error) {
 }
 
 // QueryIntPtr 解析可选整型查询参数（任意整数，含 0/负），非法或缺失时返回 nil。
-// 用于非 ID 型参数（如 min_wrong_count）；ID 型参数另走带 `id > 0` 守卫的那枚
-// （internal/api 的 queryIDPtr）。与 PathInt 一样，这里是**请求解析**：只看输入合法性，
+// 用于非 ID 型参数（如 min_wrong_count）；ID 型参数另走带 `id > 0` 守卫的那枚（QueryIDPtr）。
+// 与 PathInt 一样，这里是**请求解析**：只看输入合法性，
 // 不判断资源是否存在（nil 表示「不筛这一维」，不是「参数错了」）。
 //
 // 为什么从 internal/api 搬进来：域包自带 handler 后，解析出口若留在装配根，域包就要
@@ -93,4 +93,39 @@ func QueryIntDefault(c *gin.Context, key string, def int) int {
 		return def
 	}
 	return v
+}
+
+// QueryIDPtr 解析可选 **ID 型**查询参数：非法、缺失或 <=0 均返回 nil。
+// 这是 id>0 守卫的单点实现，替代各 handler 内联 strconv.Atoi + 手写 >0 判断。
+//
+// 与 QueryIntPtr 的分工：那枚是「任意整数」（含 0/负，用于 min_wrong_count 这类非 ID 维度），
+// 这枚是 ID 型、带 >0 守卫；与 PositiveID 的分工：那枚只吃字符串、把「缺失 vs 非法」的分流留给调用方。
+// 为什么从 internal/api 搬进来：它原是包私有（queryIDPtr），域包自带 handler 后拿不到它
+// （域包迁移手册：解析类助手一律升级到本包，ADR-0070）。
+// 本包是查询侧解析出口的唯一宿主，path_parse_point_drift_lock_test.go 的 queryParseHelperNames 钉住这件事。
+func QueryIDPtr(c *gin.Context, key string) *int {
+	s := c.Query(key)
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v <= 0 {
+		return nil
+	}
+	return &v
+}
+
+// PositiveID 解析必填的 ID 型**参数字符串**，非法或 <=0 返回 (0, false)。
+// 调用方已从查询串或请求体取到原文、并要自己分流「缺失」（空串）与「非法」（非正整数）两种提示时用它
+// （如 practice-mode 的 tag_id 答「请指定题库标签」/「题库标签ID无效」两句不同的话）。
+//
+// 与 PathInt 的关系：那枚直接吃 *gin.Context 与路径键、把 400 也一并构造好；这枚是纯字符串解析、
+// 不带 HTTP 语义。为什么从 internal/api 搬进来：它原是包私有（requiredPositiveID），
+// 域包自带 handler 后拿不到它（域包迁移手册：解析类助手一律升级到本包，ADR-0070）。
+func PositiveID(s string) (int, bool) {
+	v, err := strconv.Atoi(s)
+	if err != nil || v <= 0 {
+		return 0, false
+	}
+	return v, true
 }

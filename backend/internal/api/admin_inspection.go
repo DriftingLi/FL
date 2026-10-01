@@ -90,10 +90,10 @@ func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 	httpx.Endpoint[pointsLedgerReq, service.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*pointsLedgerReq, error) {
 			return &pointsLedgerReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 				// user_id 非法/缺省 → 0 = 不过滤用户
-				UserID: atoiDefault(c.Query("user_id"), 0),
+				UserID: httpx.QueryIntDefault(c, "user_id", 0),
 				Reason: c.Query("reason"),
 				// #411：按业务域（ref_type）过滤；不传 = 跨域全量（管理员知情切换）
 				RefType: c.Query("ref_type"),
@@ -123,10 +123,10 @@ func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
 	httpx.Endpoint[service.InspectionViewsParams, paging.ItemsPage[service.RecruitResumeViewDTO]]{
 		Parse: func(c *gin.Context) (*service.InspectionViewsParams, error) {
 			return &service.InspectionViewsParams{
-				RecruiterID:  atoiDefault(c.Query("recruiter_id"), 0),
-				ResumeUserID: atoiDefault(c.Query("student_user_id"), 0),
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 20),
+				RecruiterID:  httpx.QueryIntDefault(c, "recruiter_id", 0),
+				ResumeUserID: httpx.QueryIntDefault(c, "student_user_id", 0),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
 		Invoke: func(_ context.Context, req *service.InspectionViewsParams) (*paging.ItemsPage[service.RecruitResumeViewDTO], error) {
@@ -154,11 +154,11 @@ func (h *InspectionHandler) ListRecruitRequests(c *gin.Context) {
 	httpx.Endpoint[service.InspectionRequestsParams, paging.ItemsPage[service.ContactRequestRowDTO]]{
 		Parse: func(c *gin.Context) (*service.InspectionRequestsParams, error) {
 			return &service.InspectionRequestsParams{
-				RecruiterID:   atoiDefault(c.Query("recruiter_id"), 0),
-				StudentUserID: atoiDefault(c.Query("student_user_id"), 0),
+				RecruiterID:   httpx.QueryIntDefault(c, "recruiter_id", 0),
+				StudentUserID: httpx.QueryIntDefault(c, "student_user_id", 0),
 				Status:        c.Query("status"),
-				Page:          atoiDefault(c.Query("page"), 1),
-				PageSize:      atoiDefault(c.Query("page_size"), 20),
+				Page:          httpx.QueryIntDefault(c, "page", 1),
+				PageSize:      httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
 		Invoke: func(_ context.Context, req *service.InspectionRequestsParams) (*paging.ItemsPage[service.ContactRequestRowDTO], error) {

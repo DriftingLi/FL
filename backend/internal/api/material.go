@@ -55,8 +55,8 @@ func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Mat
 // @Router /student/materials [get]
 func (h *MaterialHandler) List(c *gin.Context) {
 	resp, err := h.svc.ListMaterials(
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20),
-		atoiDefault(c.Query("course_id"), 0))
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20),
+		httpx.QueryIntDefault(c, "course_id", 0))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

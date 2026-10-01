@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -69,8 +70,8 @@ func (h *CheckInHandler) CheckIn(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in/calendar [get]
 func (h *CheckInHandler) GetCheckInCalendar(c *gin.Context) {
-	year := atoiDefault(c.Query("year"), 0)
-	month := atoiDefault(c.Query("month"), 0)
+	year := httpx.QueryIntDefault(c, "year", 0)
+	month := httpx.QueryIntDefault(c, "month", 0)
 	res, err := h.svc.GetCheckInCalendar(middleware.CurrentUserID(c), year, month)
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -92,8 +93,8 @@ func (h *CheckInHandler) GetCheckInCalendar(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in/rank [get]
 func (h *CheckInHandler) GetCheckInRank(c *gin.Context) {
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	res, err := h.svc.GetCheckInRank(middleware.CurrentUserID(c), page, pageSize)
 	if err != nil {
 		response.BadRequest(c, err.Error())

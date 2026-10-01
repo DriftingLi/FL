@@ -98,8 +98,8 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 域实现需要别处的东西时，只有三条路（别开第四条）：
 
 1. **注入**：`RegisterRoutes` 的参数（faq：`session *security.Session`），由装配根闭包注入。
-2. **升级到 `pkg/httpx`**：HTTP 形状与请求解析（`ParseError` / `BadRequest` / `PathInt` / `PathInt64` / `QueryIntPtr` / `Endpoint` / 错误状态表）。`pkg/httpx` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①）。
-3. **留在 `internal/service` 并导出**：一时找不到更轻落点的 DB / 业务助手 —— 但要先试完前两条与「叶子包」。**三类曾经留在这里的共享件已在 P1 / P2 波 0a 各自归位**：时钟（`clock.Now` / `clock.DayStart` / `clock.DayKey` → `internal/clock`）、唯一冲突谓词（`dberr.IsDuplicateError` → `internal/dberr`）、时间格式化（`timefmt.FormatISO` / `timefmt.FormatTimePtr` → `internal/timefmt`，见第 2 节）。三者的共性是**无状态、不碰 DB、只吃参数**，所以本出口只该剩「真的要 `*gorm.DB` 或服务内部状态」的件，P3 随 `internal/core` 收编。
+2. **升级到 `pkg/httpx`**：HTTP 形状与请求解析（`ParseError` / `BadRequest` / `PathInt` / `PathInt64` / `QueryIntPtr` / `QueryIntDefault` / `QueryIDPtr` / `PositiveID` / `Endpoint` / 错误状态表）。`pkg/httpx` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①）。解析类助手**一律**走这条（`internal/api/helpers.go` 最后三枚包私有助手已随波 0a 尾款搬完并删除该文件）；`PositiveID` 只吃字符串、不带 HTTP 语义，专给「已取到原文、要自己分流缺失与非法」的调用方。
+3. **留在 `internal/service` 并导出**：一时找不到更轻落点的 DB / 业务助手 —— 但要先试完前两条与「叶子包」。**三类曾经留在这里的共享件已在 P1 / P2 波 0a 各自归位**：时钟（`clock.Now` / `clock.DayStart` / `clock.DayKey` → `internal/clock`）、唯一冲突谓词（`dberr.IsDuplicateError` → `internal/dberr`）、时间格式化（`timefmt.FormatISO` / `timefmt.FormatTimePtr` → `internal/timefmt`，见第 2 节）。三者的共性是**无状态、不碰 DB、只吃参数**，所以本出口只该剩「真的要 `*gorm.DB` 或服务内部状态」的件，P3 随 `internal/core` 收编。数值 / 指针助手与 `json_helpers.go` 这类的落点见第 10.1 节（波 0b）。
 
 ### 7.1 反向依赖（下游要业务层类型）：消费方接口反转
 
@@ -141,6 +141,26 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - 一波 1 个 PR、**≤3 个域**、diff ≤1500 行；域的顺序按 P1 计划公布的四波（faq / notification 是试点批）。
 - 生成链顺序是硬的：gofmt/vet → `make swagger` → `go run ./cmd/gen-apitypes` → `go test ./...` → 前端检查（`internal/apitypes/codegen_test.go` 把前端生成物与注解渲染结果全等比对，顺序弄反会先绿后红）。
 - 每个 PR 合并即触发 production 部署（master push ⇒ `cd.yml`）⇒ PR 正文必须留一行披露。
+
+### 10.1 共享叶子与跨文件共享件的落点（P2 判据：出边为零才能单独搬）
+
+域包能不能单独搬，只看出边 —— 域实现引用的每个残留符号都会逼它 import `internal/service`（只要 service 里还有一处引用该域，就是 import cycle）。入边只决定 diff 大小与合批。拆波前先扫一遍**跨文件私有引用**（同包内 A 文件用 B 文件的私有符号；共享扫描器的正式出处是 `internal/testutil/codescan.go`，别在调用点手抄判据）。
+
+| 件 | 落点 | 状态与说明 |
+| --- | --- | --- |
+| 时钟（`Now` / `DayStart` / `DayKey` / `Location`） | `internal/clock`（叶子） | 波 0a 已收编；`internal/service` 里的一行委托（`BeijingNow` / `startOfShanghaiDay` / `shanghaiDayStr`）全删，调用点写限定名 |
+| DB 错误判定（`IsDuplicateError`） | `internal/dberr`（叶子，只 import `strings`） | 波 0a 已收编；双方言谓词测试随行 |
+| 时间格式化（`FormatISO` / `FormatTimePtr`） | `internal/timefmt`（叶子） | notification 批收编 |
+| 解析出口：查询侧 `QueryIntPtr` / `QueryIntDefault` / `QueryIDPtr` / `PositiveID`，路径侧 `PathInt` / `PathInt64`，以及 `ParseError` / `BadRequest` / `Endpoint` | `pkg/httpx` | 波 0a 尾款收编；`internal/api/helpers.go` 已删；漂移锁 `path_parse_point_drift_lock_test.go` 钉住两侧计数（宿主四枚、本包零枚），新增出口必须同步 `queryParseHelperNames` |
+| credential 谓词（`RecordPartitionOf` / `PartitionBucket` / `EntityOwnedBy`） | `internal/scope`（波 0b） | 三族 nil 语义**相反**（记录冻结分区 nil 看全部 / NULL 桶 nil 只看 `credential_id IS NULL` / 归属分区 nil 看全部）⇒ 搬包时同步静态扫描锁的白名单路径（白名单就是谓词实现处那个文件） |
+| 数值/指针助手（`toFloat` / `clampFloat` / `parseFloat` / `parseInt` / `ptrInt` / `floatPtr` / `containsString` / `withTimeout`） | `internal/coerce`（波 0b） | 同批删掉 `internal/service/json_helpers.go`（8 行纯转发 `jsonMarshal` / `jsonUnmarshal`，调用点直接用 `encoding/json`） |
+| 文件存取 | `internal/filestore`（波 0c） | 未开工 |
+| 跨文件的请求 DTO 类型（`idParam` / `taskIDParam` / `courseIDInput` / `chapterIDInput` / `swapCourseSortReq` / `generateContentReq`，声明在 `internal/api/admin.go:873-905`，被 `admin_recruiter.go` / `settings.go` / `tutor.go` 跨文件引用） | **各域包自己声明** | 它们本来就是各域的请求面（`struct{ ID int }` + 用 `httpx.PathInt` 的 Parse 闭包），不是解析出口 ⇒ 不进 `pkg/httpx`；拆包时随 handler 搬、同名保留 |
+| 既要用 gin 又要用 middleware + service 的域内解析助手（`studentQuestionScope`，`internal/api/question_bank.go:105`） | **题库域包**（3c 波随 `internal/questionbank` 导出） | **不能进 `pkg/httpx`**：`pkg/` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①），而它同时需要 `internal/middleware`（`CredentialIDPtr`）与 `internal/service`（`NewQuestionReadScope`）；调用它的 `favorite.go` / `note.go` / `question_interaction.go` 都在 3c/4b/4c 波之后 ⇒ 不阻塞波 1、2 |
+
+**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`；0c `internal/filestore`。波 1：1a material / 1b points / 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
+
+**三个强环与破环手法**：course↔training、course↔tutor/points、resume↔recruit。五种破法 —— 跨域共享词汇贴实体进 `internal/model`、别域的事实常量改调用方传参、无状态纯函数进叶子包、下游要业务层类型走消费方接口反转（第 7.1 节）、助手搬回自己的域。
 
 ## 11. 批量机械改名的纪律（血账）
 

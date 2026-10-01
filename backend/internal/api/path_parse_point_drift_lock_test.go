@@ -2,7 +2,7 @@
 //
 // 为什么需要它：`pathInt` 补齐 `<= 0` 只修好了「走 helper 的那批」端点。同一件事实此前还在
 // 37 处自定义实现里各成立一次（36 处裸 `strconv.(Atoi|ParseInt)` 读 `c.Param`，分布在 10 个文件；
-// 另 1 处把**路径**参数喂给查询侧守卫 `requiredPositiveID`，`real_exam.go` 的 parsePaperAction）。
+// 另 1 处把**路径**参数喂给查询侧守卫 `PositiveID`（原 `requiredPositiveID`），`real_exam.go` 的 parsePaperAction）。
 // 批⑤ 把 `internal/api` 里的这些全部收进两枚 helper；随后抽 `pkg/httpx` 时两枚 helper 随出口搬家
 // （本包内部改调 httpx.PathInt/httpx.PathInt64），这道锁于是同时管两侧：宿主包恰好两枚、本包恰好零枚。
 //
@@ -40,22 +40,25 @@ const pathParseHome = "../../pkg/httpx"
 // intParseFuncs 是整数转换的本名；queryHelpers 是**查询参数**侧的解析助手 ——
 // 它们被用在路径参数上就是第二份实现（`real_exam.go` 曾经那样）。
 //
-// 键写**限定名或裸名**：查询侧出口 QueryIntPtr 已随解析出口搬进 pkg/httpx（ADR-0070），
-// 匹配时换算成限定名再比对（httpx.QueryIntPtr）。搬一次家、改一次名都必须回来改这里 ——
-// 否则名单会安静地少认一种坏形状（P0 的老教训：守卫失配不报错）。
+// 键写**限定名或裸名**：查询侧出口四枚现已全部住 pkg/httpx（ADR-0070 波 0a），匹配时换算成
+// 限定名再比对。搬一次家、改一次名都必须回来改这里 —— 否则名单会安静地少认一种坏形状
+// （P0 的老教训：守卫失配不报错）。
 var (
 	intParseFuncs = map[string]bool{"Atoi": true, "ParseInt": true, "ParseUint": true}
 	queryHelpers  = map[string]bool{
-		"requiredPositiveID": true, "queryIDPtr": true, "atoiDefault": true, // 仍住 internal/api
-		"httpx.QueryIntPtr": true, "httpx.QueryIntDefault": true, // 唯一宿主：pkg/httpx
+		"httpx.QueryIntPtr": true, "httpx.QueryIntDefault": true, // 任意整数 / 带默认值（分页参数）
+		"httpx.QueryIDPtr": true, "httpx.PositiveID": true, // ID 型（>0 守卫）/ 必填 ID 字符串
 	}
 )
 
 // queryParseHelperNames 是查询侧解析出口的允许名（唯一宿主 pkg/httpx）。
 // 与 allowedPathParseFuncs 对称：宿主少一枚、本包多一枚，两侧都要报 —— 否则「搬完就没人管了」。
-// QueryIntDefault 是带默认值的那枚（分页参数）：通知域迁走 handler 时它随解析出口升级进 pkg/httpx，
-// 否则竞品写法是各域再内联一份 strconv.Atoi（ADR-0070 域包迁移手册）。
-var queryParseHelperNames = map[string]bool{"QueryIntPtr": true, "QueryIntDefault": true}
+// 四枚的分工：QueryIntPtr 任意整数、QueryIntDefault 带默认值（分页）、QueryIDPtr ID 型（>0 守卫）、
+// PositiveID 必填 ID 字符串。波 0a 把后两枚从 internal/api 的 helpers.go 升级进来 —— 域包自带 handler
+// 后拿不到包私有助手，否则竞品写法是各域再内联一份 strconv.Atoi（ADR-0070 域包迁移手册）。
+var queryParseHelperNames = map[string]bool{
+	"QueryIntPtr": true, "QueryIntDefault": true, "QueryIDPtr": true, "PositiveID": true,
+}
 
 // pathParseSite 一次「从路径参数取整数却没走 PathInt/PathInt64」。
 type pathParseSite struct {
@@ -78,7 +81,7 @@ func isParamCall(e ast.Expr) bool {
 	return ok && se.Sel.Name == "Param"
 }
 
-// callName 返回被调用者的限定名与短名（strconv.Atoi → ("strconv","Atoi")；queryIDPtr → ("","queryIDPtr")）。
+// callName 返回被调用者的限定名与短名（strconv.Atoi → ("strconv","Atoi")；localHelper → ("","localHelper")）。
 func callName(ce *ast.CallExpr) (pkg, name string) {
 	switch fn := ce.Fun.(type) {
 	case *ast.SelectorExpr:
@@ -357,7 +360,7 @@ func badViaVar(c *gin.Context) int {
 }
 
 func badQueryHelper(c *gin.Context) int {
-	v, _ := requiredPositiveID(c.Param("paper_id"))
+	v, _ := httpx.PositiveID(c.Param("paper_id"))
 	return v
 }
 
@@ -376,10 +379,10 @@ func good(c *gin.Context) int {
 `
 	got := parseAndScan(t, "probe.go", src)
 	want := map[string]int{
-		"Atoi/inline":               1, // 直接套 c.Param（且 strconv 走别名导入）
-		"Atoi/var":                  1, // 经由同函数内的中间变量
-		"requiredPositiveID/inline": 1, // 路径参数喂给查询侧 helper（裸名，仍住 internal/api）
-		"QueryIntPtr/inline":        1, // 查询侧 helper 的**限定名**写法：名单换算限定名后仍认得出
+		"Atoi/inline":        1, // 直接套 c.Param（且 strconv 走别名导入）
+		"Atoi/var":           1, // 经由同函数内的中间变量
+		"PositiveID/inline":  1, // 路径参数喂给查询侧 helper（限定名写法，仍认得出）
+		"QueryIntPtr/inline": 1, // 查询侧 helper 的**限定名**写法：名单换算限定名后仍认得出
 	}
 	keys := map[string]int{}
 	for _, s := range got {

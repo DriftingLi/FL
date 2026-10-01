@@ -239,8 +239,8 @@ func (h *MockExamHandler) GetHistory(c *gin.Context) {
 			return &mockExamHistoryReq{
 				StudentID:    studentID,
 				CredentialID: middleware.CredentialIDPtr(c),
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*service.MockExamHistoryDTO, error) {

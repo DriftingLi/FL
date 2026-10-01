@@ -61,8 +61,8 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 	httpx.Endpoint[featuredListReq, service.FeaturedContentPageResult]{
 		Parse: func(c *gin.Context) (*featuredListReq, error) {
 			return &featuredListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 				Category: c.Query("category"),
 				Sort:     c.Query("sort"),
 			}, nil
@@ -157,8 +157,8 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 	httpx.Endpoint[adminFeaturedListReq, service.FeaturedContentPageResult]{
 		Parse: func(c *gin.Context) (*adminFeaturedListReq, error) {
 			return &adminFeaturedListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 				Category: c.Query("category"),
 				Status:   c.Query("status"),
 			}, nil

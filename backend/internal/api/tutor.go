@@ -69,11 +69,11 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 	httpx.Endpoint[tutorCourseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
 			return &tutorCourseListReq{
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 10),
-				CredentialID: queryIDPtr(c, "credential_id"),
-				SpecialtyID:  queryIDPtr(c, "specialty_id"),
-				LevelID:      queryIDPtr(c, "level_id"),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
+				CredentialID: httpx.QueryIDPtr(c, "credential_id"),
+				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
+				LevelID:      httpx.QueryIDPtr(c, "level_id"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*service.CoursePageResult, error) {

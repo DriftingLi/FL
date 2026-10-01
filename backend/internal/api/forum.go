@@ -212,9 +212,9 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 				// is_experience 是经验 Tab 的判据（ADR-0040）；category=experience 是遗留意图值，
 				// 两者**不是**同一件事，详见 service.parseForumExperienceArg 的注释。
 				IsExperience: c.Query("is_experience"),
-				ChapterID:    atoiDefault(c.Query("chapter_id"), 0),
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				ChapterID:    httpx.QueryIntDefault(c, "chapter_id", 0),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 				Keyword:      c.Query("keyword"),
 				Sort:         c.Query("sort"),
 				Order:        c.Query("order"),
@@ -324,7 +324,7 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 			return &topicGetReq{
 				TopicID: topicID, UserID: userID,
 				Sort: c.Query("sort"), Order: c.Query("order"),
-				Page: atoiDefault(c.Query("page"), 1), PageSize: atoiDefault(c.Query("page_size"), 0),
+				Page: httpx.QueryIntDefault(c, "page", 1), PageSize: httpx.QueryIntDefault(c, "page_size", 0),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *topicGetReq) (*service.ForumTopicDetailDTO, error) {
@@ -992,7 +992,7 @@ func (h *ForumHandler) report(c *gin.Context, kind string) {
 // @Router /forum/my-topics [get]
 func (h *ForumHandler) MyTopics(c *gin.Context) {
 	resp, err := h.svc.MyTopics(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 10))
 	if err != nil {
 		forumErrStatus.RenderError(c, err)
 		return
@@ -1014,7 +1014,7 @@ func (h *ForumHandler) MyTopics(c *gin.Context) {
 // @Router /forum/my-replies [get]
 func (h *ForumHandler) MyReplies(c *gin.Context) {
 	resp, err := h.svc.MyReplies(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 10))
 	if err != nil {
 		forumErrStatus.RenderError(c, err)
 		return
@@ -1036,7 +1036,7 @@ func (h *ForumHandler) MyReplies(c *gin.Context) {
 // @Router /forum/my-liked-topics [get]
 func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
 	resp, err := h.svc.MyLikedTopics(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 10))
 	if err != nil {
 		forumErrStatus.RenderError(c, err)
 		return
@@ -1058,7 +1058,7 @@ func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
 // @Router /forum/my-observed [get]
 func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
 	resp, err := h.svc.MyObservedTopics(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 10))
 	if err != nil {
 		forumErrStatus.RenderError(c, err)
 		return
@@ -1080,7 +1080,7 @@ func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
 // @Router /forum/my-view-history [get]
 func (h *ForumHandler) MyViewHistory(c *gin.Context) {
 	resp, err := h.svc.MyViewHistory(middleware.CurrentUserID(c),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 10))
 	if err != nil {
 		forumErrStatus.RenderError(c, err)
 		return
@@ -1104,15 +1104,15 @@ func (h *ForumHandler) MyViewHistory(c *gin.Context) {
 // @Router /admin/forum/reports [get]
 func (h *ForumHandler) ListReports(c *gin.Context) {
 	var status *int16
-	if raw := c.Query("status"); raw != "" {
-		v := int16(atoiDefault(raw, -1))
+	if c.Query("status") != "" {
+		v := int16(httpx.QueryIntDefault(c, "status", -1))
 		if v != 0 && v != 1 {
 			response.BadRequest(c, "status 仅支持 0（待处理）/ 1（已处理）")
 			return
 		}
 		status = &v
 	}
-	resp, err := h.modSvc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
+	resp, err := h.modSvc.ListReports(httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), status)
 	if err != nil {
 		forumErrStatus.RenderError(c, err)
 		return

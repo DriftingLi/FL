@@ -57,7 +57,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	credID := middleware.CredentialIDPtr(c)
 	resp, err := h.svc.List(userID, c.Query("target_type"),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

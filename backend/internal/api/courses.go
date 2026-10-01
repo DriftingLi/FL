@@ -93,11 +93,11 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 				f = "all"
 			}
 			return &courseListReq{
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 12),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 12),
 				CredentialID: middleware.CredentialIDPtr(c),
-				SpecialtyID:  queryIDPtr(c, "specialty_id"),
-				LevelID:      queryIDPtr(c, "level_id"),
+				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
+				LevelID:      httpx.QueryIDPtr(c, "level_id"),
 				Filter:       f,
 			}, nil
 		},

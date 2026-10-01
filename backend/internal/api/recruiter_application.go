@@ -68,8 +68,8 @@ func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
+			page := httpx.QueryIntDefault(c, "page", 1)
+			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			return h.svc.ListForRecruiter(middleware.CurrentUserID(c), jobID, page, pageSize)
 		},
 		// #611：错误映射收编至 recruiterApplicationErrStatus

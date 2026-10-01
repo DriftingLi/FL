@@ -58,16 +58,16 @@ func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Recr
 // 默认排序 updated_at DESC（service 层保证）；读写最新，无缓存；读取后审计留痕。
 func (h *RecruitHandler) ListResumes(c *gin.Context) {
 	params := service.RecruitListParams{
-		Page:        atoiDefault(c.Query("page"), 1),
-		PageSize:    atoiDefault(c.Query("page_size"), 20),
+		Page:        httpx.QueryIntDefault(c, "page", 1),
+		PageSize:    httpx.QueryIntDefault(c, "page_size", 20),
 		Region:      c.Query("region"),
 		AvailableIn: c.Query("available_in"),
 		JobNature:   c.Query("job_nature"),
 	}
-	if v := queryIDPtr(c, "position_id"); v != nil {
+	if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 		params.PositionID = v
 	}
-	if v := queryIDPtr(c, "credential_id"); v != nil {
+	if v := httpx.QueryIDPtr(c, "credential_id"); v != nil {
 		params.CredentialID = v
 	}
 	if v := httpx.QueryIntPtr(c, "salary_min"); v != nil {

@@ -83,8 +83,8 @@ func (h *StudentHandler) GetRecords(c *gin.Context) {
 		Parse: func(c *gin.Context) (*studyRecordsReq, error) {
 			return &studyRecordsReq{
 				UserID:    middleware.CurrentUserID(c),
-				Page:      atoiDefault(c.Query("page"), 1),
-				PageSize:  atoiDefault(c.Query("page_size"), 10),
+				Page:      httpx.QueryIntDefault(c, "page", 1),
+				PageSize:  httpx.QueryIntDefault(c, "page_size", 10),
 				StartDate: c.Query("start_date"),
 				EndDate:   c.Query("end_date"),
 			}, nil
@@ -133,7 +133,7 @@ type studyStatsReq struct {
 func (h *StudentHandler) GetStudyStats(c *gin.Context) {
 	httpx.Endpoint[studyStatsReq, service.StudyDailyStatsDTO]{
 		Parse: func(c *gin.Context) (*studyStatsReq, error) {
-			return &studyStatsReq{UserID: middleware.CurrentUserID(c), Days: atoiDefault(c.Query("days"), 7)}, nil
+			return &studyStatsReq{UserID: middleware.CurrentUserID(c), Days: httpx.QueryIntDefault(c, "days", 7)}, nil
 		},
 		Invoke: func(ctx context.Context, req *studyStatsReq) (*service.StudyDailyStatsDTO, error) {
 			return h.svc.GetStudyStats(req.UserID, req.Days), nil
