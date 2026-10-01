@@ -1,6 +1,6 @@
 // 悬空回收 sweep 单点的行为测试（ADR-0062 票5）：seam 是 sweep 自己的 interface
-// （orphanSweepConfig 的注入槽），与 orphan_sweep.go 的既有形状同层（ADR-0050 §3 同包 internal seam）。
-package service
+// （OrphanSweepConfig 的注入槽），与 orphan_sweep.go 的既有形状同层（ADR-0050 §3 同包 internal seam）。
+package filestore
 
 import (
 	"context"
@@ -18,15 +18,15 @@ const staleFileURL = "/static/uploads/images/forum/orphan_1000000000000.webp"
 // 健康库里「一个引用都没有」儿不成比例，拿它当合法输入等于拿最坏情况当缺省（票5 的兜底闸）。
 func TestOrphanSweepAbortsOnEmptyReferenceSet(t *testing.T) {
 	var deleted []string
-	cleaned := runOrphanSweep(context.Background(), orphanSweepConfig{
-		domain: "test",
-		ttl:    time.Hour,
-		list: func(context.Context) ([]storage.FileInfo, error) {
+	cleaned := RunOrphanSweep(context.Background(), OrphanSweepConfig{
+		Domain: "test",
+		TTL:    time.Hour,
+		List: func(context.Context) ([]storage.FileInfo, error) {
 			return []storage.FileInfo{{URL: staleFileURL, LastModified: time.Now().Add(-2 * time.Hour)}}, nil
 		},
-		referenced: func() (map[string]bool, error) { return map[string]bool{}, nil },
-		keyOf:      func(u string) string { return u },
-		deleteFile: func(_ context.Context, u string) error {
+		Referenced: func() (map[string]bool, error) { return map[string]bool{}, nil },
+		KeyOf:      func(u string) string { return u },
+		DeleteFile: func(_ context.Context, u string) error {
 			deleted = append(deleted, u)
 			return nil
 		},
@@ -41,17 +41,17 @@ func TestOrphanSweepAbortsOnEmptyReferenceSet(t *testing.T) {
 // 通道能区分「确实只有这些引用」与「还有一半没查到」，空集兜底闸拦不住这一形（ADR-0062 票5）。
 func TestOrphanSweepAbortsWhenReferenceLookupFails(t *testing.T) {
 	var deleted []string
-	cleaned := runOrphanSweep(context.Background(), orphanSweepConfig{
-		domain: "test",
-		ttl:    time.Hour,
-		list: func(context.Context) ([]storage.FileInfo, error) {
+	cleaned := RunOrphanSweep(context.Background(), OrphanSweepConfig{
+		Domain: "test",
+		TTL:    time.Hour,
+		List: func(context.Context) ([]storage.FileInfo, error) {
 			return []storage.FileInfo{{URL: staleFileURL, LastModified: time.Now().Add(-2 * time.Hour)}}, nil
 		},
-		referenced: func() (map[string]bool, error) {
+		Referenced: func() (map[string]bool, error) {
 			return map[string]bool{"images/forum/other.webp": true}, errors.New("查询回复引用失败")
 		},
-		keyOf: func(u string) string { return u },
-		deleteFile: func(_ context.Context, u string) error {
+		KeyOf: func(u string) string { return u },
+		DeleteFile: func(_ context.Context, u string) error {
 			deleted = append(deleted, u)
 			return nil
 		},

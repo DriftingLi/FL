@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
@@ -17,16 +18,16 @@ import (
 // FeaturedHandler 内容精选 handler。
 type FeaturedHandler struct {
 	svc     *service.FeaturedService
-	fileSvc *service.FileStore
+	fileSvc *filestore.FileStore
 }
 
 // NewFeaturedHandler 创建内容精选 handler。
-func NewFeaturedHandler(svc *service.FeaturedService, fileSvc *service.FileStore) *FeaturedHandler {
+func NewFeaturedHandler(svc *service.FeaturedService, fileSvc *filestore.FileStore) *FeaturedHandler {
 	return &FeaturedHandler{svc: svc, fileSvc: fileSvc}
 }
 
 // RegisterFeaturedRoutes 注册内容精选路由（公开 + 管理端）。
-func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FeaturedService, fileSvc *service.FileStore) {
+func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FeaturedService, fileSvc *filestore.FileStore) {
 	h := NewFeaturedHandler(svc, fileSvc)
 
 	// ===== 公开接口（无鉴权）=====

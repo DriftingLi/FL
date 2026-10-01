@@ -1,6 +1,6 @@
 // Package service 共享的文件清理辅助函数。
 // 本站图片归属判定已收编附件归属 module（attachment.go：IsSiteAttachmentURL）。
-package service
+package filestore
 
 import (
 	"regexp"
@@ -10,8 +10,8 @@ import (
 // markdownImageRe 匹配 Markdown 图片语法 ![](url)。
 var markdownImageRe = regexp.MustCompile(`!\[[^\]]*\]\(([^)\s]+)\)`)
 
-// markdownImageURLs 从 Markdown 文本中提取全部图片 URL（去重、去空白）。
-func markdownImageURLs(content string) []string {
+// MarkdownImageURLs 从 Markdown 文本中提取全部图片 URL（去重、去空白）。
+func MarkdownImageURLs(content string) []string {
 	if content == "" {
 		return nil
 	}

@@ -1,12 +1,13 @@
 // Package service 文件存储 module：上传、校验、删除与列表。
 // 图片 WebP 压缩保留在 Save 的 implementation 内（ADR-0015）。
-package service
+package filestore
 
 import (
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -24,11 +25,21 @@ import (
 // 文件扩展名白名单与静态投递分档统一住在 file_type_table.go（ADR-0066：一份类型表驱动两处）。
 // 可上传类别：document（仅 PDF，浏览器原生预览）/ ppt / video / image。
 
-// 文件大小限制。
+// 文件大小限制（按上传类别分档；键与 file_type_table.go 的 upload 列对齐）。
 var maxFileSizes = map[string]int64{
 	"video":   200 * 1024 * 1024,
 	"image":   20 * 1024 * 1024,
 	"default": 50 * 1024 * 1024,
+}
+
+// MaxFileSize 返回该文件名所属类别的上传上限（字节）；类别未登记时回落 default。
+// 导出是给调用方拼「最大允许 N MB」这类面向用户的文案（job_card_service），
+// 而不必把分档表整个摊开——表是包内事实，出口只给一个数。
+func MaxFileSize(filename string) int64 {
+	if m, ok := maxFileSizes[FileContentType(filename)]; ok {
+		return m
+	}
+	return maxFileSizes["default"]
 }
 
 // FileStore 文件存储 module：Save / Delete / DeleteFiles / List / ValidateImage。
@@ -60,7 +71,7 @@ func (s *FileStore) Save(content []byte, filename, subfolder string) (string, er
 	name := strings.TrimSuffix(filename, ext)
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 
-	contentType := mimeTypeFromExt(fileExtension(filename))
+	contentType := mimeTypeFromExt(FileExtension(filename))
 	finalExt := ext
 	if shouldCompressImage(contentType) {
 		if webpData, ok := s.compressImageViaSidecar(content); ok {
@@ -138,7 +149,7 @@ func (s *FileStore) ListWithInfoWithContext(ctx context.Context, prefix string) 
 
 // ValidateImage 校验图片文件格式与大小。
 func (s *FileStore) ValidateImage(filename string, size int64) (bool, string) {
-	ext := fileExtension(filename)
+	ext := FileExtension(filename)
 	if UploadCategoryOf(ext) != "image" {
 		return false, fmt.Sprintf("不支持的图片格式，允许格式：%s", strings.Join(AllowedExtensionsFor("image"), ", "))
 	}
@@ -161,26 +172,42 @@ func (s *FileStore) Read(fileURL string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return content, mimeTypeFromExt(fileExtension(fileURL)), nil
+	return content, mimeTypeFromExt(FileExtension(fileURL)), nil
 }
 
-// ===== 章节文件校验（package-private：仅导师文件上传路径使用）=====
+// ErrStorageUnconfigured 存储后端未装配。
+// 调用方（投稿暂存校验）要把它翻成自己域的错误，而不是把「没配存储」静默当成「文件不存在」——
+// 那样第四校验（文件确实存在）就变成测试装配下的空洞。
+var ErrStorageUnconfigured = errors.New("存储后端未配置")
 
-func fileContentType(filename string) string {
-	return UploadCategoryOf(fileExtension(filename))
-}
-
-func allowedFile(filename string) bool {
-	return fileContentType(filename) != ""
-}
-
-func validateFileSize(size int64, filename string) bool {
-	contentType := fileContentType(filename)
-	maxSize := maxFileSizes["default"]
-	if m, ok := maxFileSizes[contentType]; ok {
-		maxSize = m
+// Exists 判断 URL 指向的对象在存储侧是否存在。
+// 存储后端未装配时返回 ErrStorageUnconfigured（而不是 (false, nil)）；理由见上面那条。
+// ctx 取消语义贯穿到 storage 调用，另叠 30s 超时避免永久阻塞。
+func (s *FileStore) Exists(ctx context.Context, fileURL string) (bool, error) {
+	if s == nil || s.storage == nil {
+		return false, ErrStorageUnconfigured
 	}
-	return size <= maxSize
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return s.storage.Exists(ctx2, fileURL)
+}
+
+// ===== 上传类型与大小校验（导出：导师章节文件、招聘卡附件等上传路径共用）=====
+
+// FileContentType 文件名 → 上传类别（document / ppt / video / image；"" = 不可上传）。
+// 读的是 file_type_table.go 的 upload 列（唯一事实源），不认客户端传的 content_type。
+func FileContentType(filename string) string {
+	return UploadCategoryOf(FileExtension(filename))
+}
+
+// AllowedFile 文件名是否在可上传白名单内（= 有上传类别）。
+func AllowedFile(filename string) bool {
+	return FileContentType(filename) != ""
+}
+
+// ValidateFileSize 文件大小是否在上限内（按 FileContentType 分档，见 MaxFileSize）。
+func ValidateFileSize(size int64, filename string) bool {
+	return size <= MaxFileSize(filename)
 }
 
 // ===== 图片压缩 implementation =====
@@ -267,7 +294,9 @@ func mimeTypeFromExt(ext string) string {
 	return MimeTypeOf(ext)
 }
 
-func fileExtension(filename string) string {
+// FileExtension 取小写扩展名（不含点）；无扩展名返回 ""。
+// 判类型用的都是**服务端铸造的 URL/文件名**，不是客户端传的 content_type。
+func FileExtension(filename string) string {
 	idx := strings.LastIndex(filename, ".")
 	if idx < 0 {
 		return ""
@@ -275,6 +304,8 @@ func fileExtension(filename string) string {
 	return strings.ToLower(filename[idx+1:])
 }
 
+// base64Encode / base64Decode 只服务本包的 sidecarWebP 往返，不外借：
+// 纯粹的编解码转发，外部的调用点直接用 encoding/base64 即可（#1445 波 0c 的裁决）。
 func base64Encode(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }

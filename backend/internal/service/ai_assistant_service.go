@@ -16,6 +16,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 )
@@ -121,15 +122,15 @@ type AIStreamMessage struct {
 type AIAssistantService struct {
 	db          *gorm.DB
 	aiConfigSvc *AIConfigService
-	fileSvc     *FileStore // 图片上传/读取（多模态对话）
-	secretKey   string     // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
+	fileSvc     *filestore.FileStore // 图片上传/读取（多模态对话）
+	secretKey   string               // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
 	port        AIModelPort // 单一模型端口（与阻塞侧共享同一 adapter，ADR-0029 T2；测试可注入 fake）
 }
 
 // NewAIAssistantService 构造 AIAssistantService。port 为单一模型端口
 // （NewEinoAIModel 产物与阻塞侧共享同一 client 缓存），必须非 nil：构造期注入是不变量。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *FileStore, secretKey string, logger *zap.Logger, port AIModelPort) *AIAssistantService {
+func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *filestore.FileStore, secretKey string, logger *zap.Logger, port AIModelPort) *AIAssistantService {
 	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger, port: port}
 }
 
@@ -625,7 +626,7 @@ func (s *AIAssistantService) buildImageUserMessage(ctx context.Context, content 
 	}
 	var loadFails []string
 	for _, u := range images {
-		if !IsSiteAttachmentURL(u, AIAssistantImageDirPrefix) {
+		if !filestore.IsSiteAttachmentURL(u, filestore.AIAssistantImageDirPrefix) {
 			loadFails = append(loadFails, u)
 			continue
 		}
@@ -666,11 +667,11 @@ func (s *AIAssistantService) UploadImage(ctx context.Context, fileHeader *multip
 	if ok, msg := s.fileSvc.ValidateImage(fileHeader.Filename, fileHeader.Size); !ok {
 		return "", errors.New(msg)
 	}
-	content, err := ReadMultipartFile(fileHeader)
+	content, err := filestore.ReadMultipartFile(fileHeader)
 	if err != nil {
 		return "", errors.New("图片上传失败")
 	}
-	url, err := s.fileSvc.Save(content, fileHeader.Filename, AIAssistantImageDirPrefix)
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, filestore.AIAssistantImageDirPrefix)
 	if err != nil {
 		return "", errors.New("图片上传失败: " + err.Error())
 	}

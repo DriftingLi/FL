@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -290,7 +291,7 @@ func TestAIMeterAutoTitleNoDoubleCharge(t *testing.T) {
 	meter := &fakeAIMeter{}
 	inner := &fakeAIModelPort{content: "先查电瓶，再查起动机。"}
 	port := NewMeteredAIModel(inner, meter, zap.NewNop())
-	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
+	assistant := NewAIAssistantService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
 
 	ctx := context.Background()
 	session, err := assistant.CreateSession(ctx, 7, "新会话", "", FeatureMaintenanceKnowledge)

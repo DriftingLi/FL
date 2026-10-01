@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 )
 
@@ -17,14 +18,14 @@ import (
 type TutorService struct {
 	db            *gorm.DB
 	uploadFolder  string
-	fileStore     *FileStore
+	fileStore     *filestore.FileStore
 	slideRenderer *SlideRenderer
 
 	logger *zap.Logger
 }
 
 // NewTutorService 创建导师服务实例。
-func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *FileStore, slideRenderer *SlideRenderer, logger *zap.Logger) *TutorService {
+func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore, slideRenderer *SlideRenderer, logger *zap.Logger) *TutorService {
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
 }
 
@@ -112,15 +113,15 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	if s.fileStore == nil {
 		return nil, errors.New("文件服务不可用")
 	}
-	if !allowedFile(filename) {
+	if !filestore.AllowedFile(filename) {
 		return nil, errors.New("不支持的文件格式")
 	}
-	if !validateFileSize(int64(len(fileContent)), filename) {
+	if !filestore.ValidateFileSize(int64(len(fileContent)), filename) {
 		return nil, errors.New("文件大小超出限制")
 	}
 
-	contentType := fileContentType(filename)
-	fileURL, err := s.fileStore.Save(fileContent, filename, ChapterFileDirPrefix)
+	contentType := filestore.FileContentType(filename)
+	fileURL, err := s.fileStore.Save(fileContent, filename, filestore.ChapterFileDirPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("保存文件失败: %w", err)
 	}

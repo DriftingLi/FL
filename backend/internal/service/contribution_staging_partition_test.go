@@ -23,6 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
@@ -52,7 +53,7 @@ func newStagedSvc(t *testing.T) (*ContributionService, *gorm.DB, *stagedStorage)
 	t.Helper()
 	db := testutil.NewFileDB(t)
 	st := &stagedStorage{missing: map[string]bool{}}
-	fileSvc := NewFileStore("", st, zap.NewNop())
+	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notif := notification.NewService(db, zap.NewNop())
 	points := NewPointsService(db, zap.NewNop(), nil, notif)
 	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
@@ -176,7 +177,7 @@ func TestCreateValidatesStagedFileOwner(t *testing.T) {
 }
 
 // TestCreateAcceptsOwnStagedFileBothURLShapes 正样本：本人暂存位的 local 与 R2 两种形态都认
-// （本站判定走 attachment.go 的单点，两种形态同源，不能只认一种）。
+// （本站判定走 internal/filestore/attachment.go 的单点，两种形态同源，不能只认一种）。
 func TestCreateAcceptsOwnStagedFileBothURLShapes(t *testing.T) {
 	svc, db, _ := newStagedSvc(t)
 	cred := seedCredential(t, db)
@@ -254,7 +255,7 @@ func TestCreateFailsClosedWithoutStorageBackend(t *testing.T) {
 	db := testutil.NewFileDB(t)
 	cred := seedCredential(t, db)
 	u := seedContributionUser(t, db, "stage_nostore", cred.ID)
-	bare := NewContributionService(db, NewFileStore("", nil, zap.NewNop()), nil, nil, zap.NewNop(), clock.Real())
+	bare := NewContributionService(db, filestore.NewFileStore("", nil, zap.NewNop()), nil, nil, zap.NewNop(), clock.Real())
 	_, err := bare.Create(stagedInput(u, cred.ID, oneFile(stagedURL(u.ID, "a.pdf"), 1024)))
 	if !errors.Is(err, ErrContributionStorageUnconfigured) {
 		t.Fatalf("未配置存储时应回 ErrContributionStorageUnconfigured（落 500），实得 %v", err)
@@ -264,13 +265,13 @@ func TestCreateFailsClosedWithoutStorageBackend(t *testing.T) {
 // ===== 判据 2 的静态面：老路径（扁平 contributions/）不再被任何写入点使用 =====
 //
 // 为什么光有 TestUploadFileWritesIntoUserPartition 不够：那条用例钉住的是**现在这一个**写入点。
-// 日后谁在投稿域另开一处 `Save(…, ContributionFileDirPrefix)`（漏了 uid 段），它的 URL 依然过不了
+// 日后谁在投稿域另开一处 `Save(…, filestore.ContributionFileDirPrefix)`（漏了 uid 段），它的 URL 依然过不了
 // 校验①，于是学员看到的是「上传成功但提交被拒」——上面那条用例照样绿。扁平前缀一旦还能被写入，
 // 「归属由路径承载」就有了第二个不承载归属的出口，所以这条要从源码面上钉死。
 //
 // 手法与 credential_scope_guard_test.go 同一族：判据做成纯函数 + 正负探针，探针保证规则不是空转。
 
-// 判据做成「同一行里同时出现 .Save( 与裸的 ContributionFileDirPrefix」——不用正则括住实参：
+// 判据做成「同一行里同时出现 .Save( 与裸的 filestore.ContributionFileDirPrefix」——不用正则括住实参：
 // Save 的实参本身带括号（[]byte("x")、contributionStagedDir(userID)），任何 [^)] 风格的正则
 // 都会在第一个内层括号处断掉，那样这条扫描是假绿的（本文件末尾的探针正是这一格）。
 func flatContributionSaveHits(src string) []string {
@@ -280,7 +281,7 @@ func flatContributionSaveHits(src string) []string {
 		if strings.HasPrefix(t, "//") {
 			continue
 		}
-		if strings.Contains(t, ".Save(") && strings.Contains(t, "ContributionFileDirPrefix") {
+		if strings.Contains(t, ".Save(") && strings.Contains(t, "filestore.ContributionFileDirPrefix") {
 			hits = append(hits, fmt.Sprintf("%d: %s", i+1, t))
 		}
 	}
@@ -308,18 +309,18 @@ func TestContributionDomainHasNoFlatStagingWriter(t *testing.T) {
 		t.Fatalf("扫描面异常：只读到 %d 个源文件（规则可能在空转）", scanned)
 	}
 	// 规则活性：回归形态必须被抓住，分区的写法必须放过——两条都在本用例里当场验一遍。
-	if len(flatContributionSaveHits(`url, err := s.fileSvc.Save(content, fileHeader.Filename, ContributionFileDirPrefix)`)) != 1 {
+	if len(flatContributionSaveHits(`url, err := s.fileSvc.Save(content, fileHeader.Filename, filestore.ContributionFileDirPrefix)`)) != 1 {
 		t.Fatal("扫描规则失灵：扁平前缀的写入形态没被抓住")
 	}
 	// 实参里带内层括号的回归形态（[]byte("x")）——正则版正是从这一格假绿的。
-	if len(flatContributionSaveHits(`_, _ = s.fileSvc.Save([]byte("x"), "n.pdf", ContributionFileDirPrefix)`)) != 1 {
+	if len(flatContributionSaveHits(`_, _ = s.fileSvc.Save([]byte("x"), "n.pdf", filestore.ContributionFileDirPrefix)`)) != 1 {
 		t.Fatal("扫描规则失灵：带内层括号的扁平前缀写入形态没被抓住")
 	}
 	if len(flatContributionSaveHits(`url, err := s.fileSvc.Save(content, fileHeader.Filename, contributionStagedDir(userID))`)) != 0 {
 		t.Fatal("扫描规则误伤：按用户分区的写入形态被判违规")
 	}
 	// 前缀登记 / 分区目录的构造处都出现裸前缀，但都不是写入点。
-	if len(flatContributionSaveHits(`return fmt.Sprintf("%s/%d", ContributionFileDirPrefix, userID)`)) != 0 {
+	if len(flatContributionSaveHits(`return fmt.Sprintf("%s/%d", filestore.ContributionFileDirPrefix, userID)`)) != 0 {
 		t.Fatal("扫描规则误伤：contributionStagedDir 的构造行被判违规")
 	}
 	if len(violations) > 0 {

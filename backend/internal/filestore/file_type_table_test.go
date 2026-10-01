@@ -7,7 +7,7 @@
 // 锁②：可执行/脚本类型必须显式登记为 unsafe 且不可上传 —— 不许靠「没登记」蒙混
 //
 //	（未登记走 unknown，同样强制下载，但「考虑过它」这件事必须留在表里）。
-package service
+package filestore
 
 import (
 	"testing"

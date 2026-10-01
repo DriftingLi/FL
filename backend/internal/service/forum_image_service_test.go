@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
@@ -49,7 +50,7 @@ func (m *forumImgStorage) Exists(context.Context, string) (bool, error) { return
 func (m *forumImgStorage) List(_ context.Context, _ string) ([]string, error) { return m.files, nil }
 
 // ListWithInfo 模拟存储侧元数据：LastModified 由测试文件 URL 的命名契约（<name>_<ms>.<ext>）推导，
-// 等价于真实实现的「时间戳即修改时刻」（FileStore.Save 命名约定；时间戳知识归位见 ADR-0027 C2）。
+// 等价于真实实现的「时间戳即修改时刻」（filestore.FileStore.Save 命名约定；时间戳知识归位见 ADR-0027 C2）。
 func (m *forumImgStorage) ListWithInfo(_ context.Context, _ string) ([]storage.FileInfo, error) {
 	infos := make([]storage.FileInfo, 0, len(m.files))
 	for _, u := range m.files {
@@ -90,7 +91,7 @@ func newForumImageTestSvc(t *testing.T) (*ForumImageService, *gorm.DB, *forumImg
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := &forumImgStorage{}
-	fileSvc := NewFileStore("", st, zap.NewNop())
+	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	svc := NewForumImageService(db, fileSvc, zap.NewNop())
 	return svc, db, st
 }
@@ -133,10 +134,10 @@ func TestForumImage_Upload_Success(t *testing.T) {
 		t.Fatalf("应调用一次 Save，实际 %d", len(st.savedKeys))
 	}
 	key := st.savedKeys[0]
-	if !strings.HasPrefix(key, ForumImageDirPrefix+"/") {
-		t.Fatalf("应保存到 %s/ 前缀，得到 %q", ForumImageDirPrefix, key)
+	if !strings.HasPrefix(key, filestore.ForumImageDirPrefix+"/") {
+		t.Fatalf("应保存到 %s/ 前缀，得到 %q", filestore.ForumImageDirPrefix, key)
 	}
-	name := strings.TrimPrefix(key, ForumImageDirPrefix+"/")
+	name := strings.TrimPrefix(key, filestore.ForumImageDirPrefix+"/")
 	if tm := fileStampToTime(name); tm.IsZero() {
 		t.Fatalf("文件名应内嵌毫秒时间戳，得到 %q", name)
 	}

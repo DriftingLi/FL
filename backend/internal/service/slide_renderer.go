@@ -5,6 +5,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -75,7 +76,7 @@ func (s *SlideRenderer) Render(pptContent []byte, chapterID int) []string {
 
 	urls := make([]string, 0, len(images))
 	for _, img := range images {
-		imgData, err := base64Decode(img.Data)
+		imgData, err := base64.StdEncoding.DecodeString(img.Data)
 		if err != nil {
 			s.logger.Warn("[slide_renderer] base64 解码失败", zap.String("name", img.Name), zap.Error(err))
 			continue
@@ -242,7 +243,7 @@ func (s *SlideRenderer) convertWithLibreOffice(pptContent []byte, chapterID int)
 			Data string `json:"data"`
 		}{
 			Name: finalName,
-			Data: base64Encode(data),
+			Data: base64.StdEncoding.EncodeToString(data),
 		})
 	}
 

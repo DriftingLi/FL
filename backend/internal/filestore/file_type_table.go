@@ -11,7 +11,7 @@
 //
 // 关于 upload="" 但 class=safe 的行：它们由**投稿域自己的白名单**（allowedContributionExt）放行，
 // 不走上传校验的 image/document 闸门；登记在此只为静态投递分档有明确答案（否则落 unknown ⇒ 强制下载）。
-package service
+package filestore
 
 import (
 	"sort"
@@ -83,7 +83,7 @@ func FileTypeClassOf(ext string) FileTypeClass {
 
 // FileTypeClassOfPath 同 FileTypeClassOf，入参是文件名或 URL 路径。
 func FileTypeClassOfPath(path string) FileTypeClass {
-	return FileTypeClassOf(fileExtension(path))
+	return FileTypeClassOf(FileExtension(path))
 }
 
 // UploadCategoryOf 返回扩展名允许的上传类别（"" = 不在上传白名单）。

@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
@@ -16,14 +17,14 @@ import (
 
 type JobCardHandler struct {
 	svc     *service.JobCardService
-	fileSvc *service.FileStore
+	fileSvc *filestore.FileStore
 }
 
-func NewJobCardHandler(svc *service.JobCardService, fileSvc *service.FileStore) *JobCardHandler {
+func NewJobCardHandler(svc *service.JobCardService, fileSvc *filestore.FileStore) *JobCardHandler {
 	return &JobCardHandler{svc: svc, fileSvc: fileSvc}
 }
 
-func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *service.FileStore) {
+func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *filestore.FileStore) {
 	h := NewJobCardHandler(svc, fileSvc)
 	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
 	g.GET("", h.Get)
@@ -138,7 +139,7 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 		response.BadRequest(c, "文件大小超出限制，最大允许50MB")
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件读取失败")
 		return
@@ -190,12 +191,12 @@ func (h *JobCardHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件读取失败")
 		return
 	}
-	url, err := h.fileSvc.Save(content, file.Filename, service.ResumeImageDirPrefix)
+	url, err := h.fileSvc.Save(content, file.Filename, filestore.ResumeImageDirPrefix)
 	if err != nil {
 		response.ServerErrorCause(c, "保存失败: ", err)
 		return

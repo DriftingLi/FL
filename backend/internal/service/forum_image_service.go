@@ -1,7 +1,7 @@
 // Package service 实现业务服务层。
 // 本文件：论坛图片模块——上传（校验 + 命名）与悬空图片生命周期（孤儿清理）。
-// 命名契约（文件名内嵌毫秒时间戳）由 FileStore.Save 写入；时间戳知识归位存储 seam，
-// 悬空 TTL 判定不再解析文件名（ADR-0027 C2），见 orphan_sweep.go。
+// 命名契约（文件名内嵌毫秒时间戳）由 filestore.FileStore.Save 写入；时间戳知识归位存储 seam，
+// 悬空 TTL 判定不再解析文件名（ADR-0027 C2），见 internal/filestore/orphan_sweep.go。
 package service
 
 import (
@@ -14,11 +14,12 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/storage"
 )
 
-// 论坛图片常量（模块契约，单一事实源）。前缀登记归附件归属 module（attachment.go）。
+// 论坛图片常量（模块契约，单一事实源）。前缀登记归附件归属 module（internal/filestore/attachment.go）。
 const (
 	ForumImageOrphanTTL = 24 * time.Hour // 悬空图片清理门槛（超过该时长未被引用才删）
 )
@@ -26,13 +27,13 @@ const (
 // ForumImageService 论坛图片模块：上传与悬空清理。
 type ForumImageService struct {
 	db      *gorm.DB
-	fileSvc *FileStore
+	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
 // NewForumImageService 构造论坛图片服务。
-func NewForumImageService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *ForumImageService {
+func NewForumImageService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *ForumImageService {
 	return &ForumImageService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
@@ -45,7 +46,7 @@ type ForumImageError struct {
 func (e *ForumImageError) Error() string { return e.Message }
 
 // Upload 上传论坛图片：读取 multipart 文件头内容、校验格式/大小，
-// 经 FileStore.Save 保存到 images/forum/ 子目录（文件名 <name>_<毫秒时间戳>.<ext>），
+// 经 filestore.FileStore.Save 保存到 images/forum/ 子目录（文件名 <name>_<毫秒时间戳>.<ext>），
 // 返回完整可访问 URL。
 func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
 	if fileHeader.Filename == "" {
@@ -54,18 +55,18 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 	if ok, msg := s.fileSvc.ValidateImage(fileHeader.Filename, fileHeader.Size); !ok {
 		return "", &ForumImageError{Status: http.StatusBadRequest, Message: msg}
 	}
-	content, err := ReadMultipartFile(fileHeader)
+	content, err := filestore.ReadMultipartFile(fileHeader)
 	if err != nil {
 		return "", &ForumImageError{Status: http.StatusInternalServerError, Message: "图片上传失败"}
 	}
-	url, err := s.fileSvc.Save(content, fileHeader.Filename, ForumImageDirPrefix)
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, filestore.ForumImageDirPrefix)
 	if err != nil {
 		return "", &ForumImageError{Status: http.StatusInternalServerError, Message: "图片上传失败: " + err.Error()}
 	}
 	return url, nil
 }
 
-// CleanupOrphans 清理论坛悬空图片（薄配置壳，算法单点见 orphan_sweep.go / ADR-0027 C2）：
+// CleanupOrphans 清理论坛悬空图片（薄配置壳，算法单点见 internal/filestore/orphan_sweep.go / ADR-0027 C2）：
 // ListWithInfo(images/forum/) 与全量引用集差集，仅删存储侧 LastModified 超过
 // ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
 // 返回清理的文件数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；
@@ -74,16 +75,16 @@ func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
-	return runOrphanSweep(ctx, orphanSweepConfig{
-		domain: "forum_image",
-		ttl:    ForumImageOrphanTTL,
-		list: func(c context.Context) ([]storage.FileInfo, error) {
-			return s.fileSvc.ListWithInfoWithContext(c, ForumImageDirPrefix)
+	return filestore.RunOrphanSweep(ctx, filestore.OrphanSweepConfig{
+		Domain: "forum_image",
+		TTL:    ForumImageOrphanTTL,
+		List: func(c context.Context) ([]storage.FileInfo, error) {
+			return s.fileSvc.ListWithInfoWithContext(c, filestore.ForumImageDirPrefix)
 		},
-		referenced: s.collectReferencedImages,
-		keyOf:      func(u string) string { return AttachmentKey(u, ForumImageDirPrefix) },
-		deleteFile: s.fileSvc.DeleteWithContext,
-		logger:     s.logger,
+		Referenced: s.collectReferencedImages,
+		KeyOf:      func(u string) string { return filestore.AttachmentKey(u, filestore.ForumImageDirPrefix) },
+		DeleteFile: s.fileSvc.DeleteWithContext,
+		Logger:     s.logger,
 	})
 }
 
@@ -98,7 +99,7 @@ func (s *ForumImageService) collectReferencedImages() (map[string]bool, error) {
 	}
 	for _, raw := range rawList {
 		for _, u := range parseImageURLs(raw) {
-			if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
+			if key := filestore.AttachmentKey(u, filestore.ForumImageDirPrefix); key != "" {
 				ref[key] = true
 			} else if u != "" {
 				ref[u] = true
@@ -111,7 +112,7 @@ func (s *ForumImageService) collectReferencedImages() (map[string]bool, error) {
 	}
 	for _, raw := range rawList {
 		for _, u := range parseImageURLs(raw) {
-			if key := AttachmentKey(u, ForumImageDirPrefix); key != "" {
+			if key := filestore.AttachmentKey(u, filestore.ForumImageDirPrefix); key != "" {
 				ref[key] = true
 			} else if u != "" {
 				ref[u] = true

@@ -145,22 +145,3 @@ func TestExtractBraceJSON(t *testing.T) {
 		t.Error("不含 score 的 JSON 应返回 nil")
 	}
 }
-
-func TestFileExtension(t *testing.T) {
-	tests := []struct {
-		filename string
-		want     string
-	}{
-		{"test.pdf", "pdf"},
-		{"archive.tar.gz", "gz"},
-		{"noext", ""},
-		{".gitignore", "gitignore"},
-		{"path/to/file.PPTX", "pptx"},
-		{"", ""},
-	}
-	for _, tt := range tests {
-		if got := fileExtension(tt.filename); got != tt.want {
-			t.Errorf("fileExtension(%q) = %q，期望 %q", tt.filename, got, tt.want)
-		}
-	}
-}

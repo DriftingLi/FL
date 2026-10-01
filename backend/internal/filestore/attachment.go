@@ -3,7 +3,7 @@
 // 此前同一判据有五份互不一致的写法（isForumImageURL / isAIImageURL / isFeaturedImageURL 三份本站判定，
 // forumImageKey / contributionURLKey 两份 URL→key），由本 module 单点取代；判定语义与三份 is* 原文一致
 // （R2 形态接受任意域名 + scheme 守卫），漂移从此只在一处修。
-package service
+package filestore
 
 import (
 	"io"

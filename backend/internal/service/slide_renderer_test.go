@@ -1,16 +1,44 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
+
+	"forklift-training/internal/storage"
 )
 
+// slideRenderStorage 内存 storage adapter：本文件的用例只断言「往哪个 key 存了」。
+// （fileStoreMemStorage 随 file_store_test.go 搬进了 internal/filestore，跨包不可见，故自备一份。）
+type slideRenderStorage struct{ savedKeys []string }
+
+func (m *slideRenderStorage) Save(_ context.Context, key string, _ []byte, _ string) (string, error) {
+	m.savedKeys = append(m.savedKeys, key)
+	return "/static/uploads/" + key, nil
+}
+
+func (m *slideRenderStorage) Delete(context.Context, string) error { return nil }
+
+func (m *slideRenderStorage) Exists(context.Context, string) (bool, error) { return true, nil }
+
+func (m *slideRenderStorage) Get(context.Context, string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
+func (m *slideRenderStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+
+func (m *slideRenderStorage) ListWithInfo(context.Context, string) ([]storage.FileInfo, error) {
+	return nil, nil
+}
+
 func TestSlideRendererRenderEmpty(t *testing.T) {
-	st := &fileStoreMemStorage{}
+	st := &slideRenderStorage{}
 	renderer := NewSlideRenderer("", st, zap.NewNop())
 	if got := renderer.Render(nil, 1); got != nil {
 		t.Fatalf("空 PPT 应返回 nil，得到 %v", got)
@@ -34,7 +62,7 @@ func TestSlideRendererSidecarAdapter(t *testing.T) {
 	}))
 	defer server.Close()
 
-	st := &fileStoreMemStorage{}
+	st := &slideRenderStorage{}
 	renderer := NewSlideRenderer(server.URL, st, zap.NewNop())
 	urls := renderer.Render([]byte("ppt-bytes"), 12)
 
@@ -52,7 +80,7 @@ func TestSlideRendererFallbackPlaceholder(t *testing.T) {
 	}))
 	defer server.Close()
 
-	st := &fileStoreMemStorage{}
+	st := &slideRenderStorage{}
 	renderer := NewSlideRenderer(server.URL, st, zap.NewNop())
 	urls := renderer.Render([]byte("bad-ppt"), 3)
 
