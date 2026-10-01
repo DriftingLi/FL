@@ -12,17 +12,17 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
-// gormDBWhitelist 允许出现 *gorm.DB 的文件 → 理由（白名单逐条登记，防「顺手放宽」）。
+// gormDBWhitelist 允许出现 *gorm.DB 的文件（**模块根相对路径** → 理由；逐条登记，防「顺手放宽」）。
+// 键从文件名改成路径：拆包后同名文件可能落在新目录，文件名不再唯一指认。
 var gormDBWhitelist = map[string]string{
-	"deps.go": "装配根：RouterDeps.DB / Deps.DB 字段与 NewDeps 入参",
+	"internal/api/deps.go": "装配根：RouterDeps.DB / Deps.DB 字段与 NewDeps 入参",
 }
 
 // scanGormDBRefs 返回源码中 *gorm.DB 类型引用的行号（AST：只认类型表达式）。
@@ -53,39 +53,26 @@ func scanGormDBRefs(t *testing.T, filename, src string) []int {
 	return lines
 }
 
-// apiPackageDir 返回 internal/api 目录（本测试文件所在目录）。
-func apiPackageDir(t *testing.T) string {
-	t.Helper()
-	return filepath.Join(moduleRoot(t), "internal", "api")
-}
-
-// TestAPILayerHasNoGormDB 守卫：非测试源码里 *gorm.DB 只允许出现在白名单文件内。
+// TestAPILayerHasNoGormDB 守卫：HTTP 面的非测试源码里 *gorm.DB 只允许出现在白名单文件内。
+// 射程由 testutil.HTTPSurface 定义（拆包后各域包的端点/路由文件自动进射程），不再假定
+// 「本测试文件所在目录就是全部射程」。
 func TestAPILayerHasNoGormDB(t *testing.T) {
 	t.Parallel()
-	entries, err := os.ReadDir(apiPackageDir(t))
-	if err != nil {
-		t.Fatalf("读取 api 目录失败: %v", err)
-	}
 	var offenders []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for _, f := range testutil.ScanBackendCode(t) {
+		if !testutil.HTTPSurface(f) {
 			continue
 		}
-		if _, ok := gormDBWhitelist[name]; ok {
+		if _, ok := gormDBWhitelist[f.Path]; ok {
 			continue
 		}
-		src, err := os.ReadFile(filepath.Join(apiPackageDir(t), name))
-		if err != nil {
-			t.Fatalf("读取 %s 失败: %v", name, err)
-		}
-		for _, line := range scanGormDBRefs(t, name, string(src)) {
-			offenders = append(offenders, name+":"+strconv.Itoa(line))
+		for _, line := range scanGormDBRefs(t, f.Name, f.Src) {
+			offenders = append(offenders, f.Path+":"+strconv.Itoa(line))
 		}
 	}
 	if len(offenders) > 0 {
 		sort.Strings(offenders)
-		t.Fatalf("api 层不得再持 *gorm.DB（ADR-0056 §3）：读库只能经 service；违例 %v", offenders)
+		t.Fatalf("HTTP 面不得持 *gorm.DB（ADR-0056 §3）：读库只能经 service；违例 %v", offenders)
 	}
 }
 
@@ -93,16 +80,14 @@ func TestAPILayerHasNoGormDB(t *testing.T) {
 // 否则守卫会悄悄放宽（白名单腐化）。
 func TestGormDBWhitelistIsLive(t *testing.T) {
 	t.Parallel()
-	for name, reason := range gormDBWhitelist {
+	files := testutil.ScanBackendCode(t)
+	for path, reason := range gormDBWhitelist {
 		if reason == "" {
-			t.Errorf("白名单 %s 缺理由", name)
+			t.Errorf("白名单 %s 缺理由", path)
 		}
-		src, err := os.ReadFile(filepath.Join(apiPackageDir(t), name))
-		if err != nil {
-			t.Fatalf("白名单文件 %s 读取失败: %v", name, err)
-		}
-		if refs := scanGormDBRefs(t, name, string(src)); len(refs) == 0 {
-			t.Errorf("白名单 %s 已不再出现 *gorm.DB，应从 gormDBWhitelist 移除", name)
+		f := testutil.FindCode(t, files, path)
+		if refs := scanGormDBRefs(t, f.Name, f.Src); len(refs) == 0 {
+			t.Errorf("白名单 %s 已不再出现 *gorm.DB，应从 gormDBWhitelist 移除", path)
 		}
 	}
 }
@@ -126,6 +111,7 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
+
 )
 
 func isMissing(err error) bool { return errors.Is(err, gorm.ErrRecordNotFound) }

@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -289,27 +288,22 @@ func flatContributionSaveHits(src string) []string {
 
 // TestContributionDomainHasNoFlatStagingWriter 扫描 service 包的全部非测试源文件。
 func TestContributionDomainHasNoFlatStagingWriter(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("读取包目录失败: %v", err)
-	}
+	// 射程 = **生产代码全域**（原先是「本包目录」）：扁平暂存写入点若在新的域包里长回来，
+	// 这条锁照样抓得住（实测宽化后全域 0 新命中）。
 	scanned := 0
 	var violations []string
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for _, f := range testutil.ScanBackendCode(t) {
+		if !testutil.Production(f) {
 			continue
 		}
-		src, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatalf("读取 %s 失败: %v", name, err)
-		}
 		scanned++
-		for _, h := range flatContributionSaveHits(string(src)) {
-			violations = append(violations, name+":"+h)
+		for _, h := range flatContributionSaveHits(f.Src) {
+			violations = append(violations, f.Path+":"+h)
 		}
 	}
-	if scanned < 60 {
+	// 实测射程：internal/ + pkg/ 下的生产代码 275 个（下界留余量；真正防恒绿的是
+	// testutil.ScanBackendCode 的「一个都没读到即 Fatal」）。
+	if scanned < 250 {
 		t.Fatalf("扫描面异常：只读到 %d 个源文件（规则可能在空转）", scanned)
 	}
 	// 规则活性：回归形态必须被抓住，分区的写法必须放过——两条都在本用例里当场验一遍。
