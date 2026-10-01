@@ -19,6 +19,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -26,7 +27,7 @@ import (
 // TestCourseReadabilityFactsAreDistinct 两两不可替换（error value 与文案各一层）。
 func TestCourseReadabilityFactsAreDistinct(t *testing.T) {
 	facts := map[string]error{
-		"真不存在(课程)": ErrCourseNotFound,
+		"真不存在(课程)": model.ErrCourseNotFound,
 		"真不存在(章节)": ErrChapterNotFound,
 		"不在平台上":    ErrCourseNotVisible,
 		"无权益":      ErrCourseLocked,
@@ -73,8 +74,8 @@ func TestStudentCanReadCoursePicksTheRightFact(t *testing.T) {
 	}
 
 	// 1) 课程行根本不在。
-	if err := svc.studentCanReadCourse(999999, student.ID); !errors.Is(err, ErrCourseNotFound) {
-		t.Fatalf("课程不存在应报 ErrCourseNotFound，实际 %v", err)
+	if err := svc.studentCanReadCourse(999999, student.ID); !errors.Is(err, model.ErrCourseNotFound) {
+		t.Fatalf("课程不存在应报 model.ErrCourseNotFound，实际 %v", err)
 	}
 
 	// 2) 行在、但未挂载（不满足 ADR-0058 的挂载不变式）= 不在平台上。
@@ -98,7 +99,7 @@ func TestStudentCanReadCoursePicksTheRightFact(t *testing.T) {
 	}
 
 	// 4) 同一门课，兑换之后判据放行 —— 证明第 3 条不是恒假的死闸。
-	ent := model.UserEntitlement{UserID: student.ID, SKU: CourseSKU(priced.CourseID),
+	ent := model.UserEntitlement{UserID: student.ID, SKU: entitlement.CourseSKU(priced.CourseID),
 		RefID: strconv.Itoa(priced.CourseID)}
 	if err := db.Create(&ent).Error; err != nil {
 		t.Fatalf("播种权益行失败: %v", err)

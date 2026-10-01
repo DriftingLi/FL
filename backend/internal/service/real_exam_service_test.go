@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
@@ -60,7 +61,7 @@ func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents .
 // entitle 直接写入权益（绕过兑换扣分流程，模拟已兑换状态）。
 func entitle(t *testing.T, db *gorm.DB, userID, paperID int) {
 	t.Helper()
-	if err := db.Create(&model.UserEntitlement{UserID: userID, SKU: RealPaperSKU(paperID), RefID: itoa(paperID)}).Error; err != nil {
+	if err := db.Create(&model.UserEntitlement{UserID: userID, SKU: entitlement.RealPaperSKU(paperID), RefID: itoa(paperID)}).Error; err != nil {
 		t.Fatalf("写权益失败: %v", err)
 	}
 }
@@ -240,7 +241,7 @@ func TestRedeemRealPaper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("兑换失败: %v", err)
 	}
-	if res.SKU != RealPaperSKU(paperID) || res.RefID != itoa(paperID) {
+	if res.SKU != entitlement.RealPaperSKU(paperID) || res.RefID != itoa(paperID) {
 		t.Fatalf("兑换 sku/ref_id 不符: %+v", res)
 	}
 	if res.Balance != 200 {

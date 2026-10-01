@@ -366,7 +366,7 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	if err := h.authSvc.DeleteAccount(uid); err != nil {
 		// 「用户不存在」是业务态，可以照原话回；清理或自证失败是内部故障——它们的包装里带
 		// 表名与驱动原文，不外发（#1356 要的是「明确失败」，不是把库的结构贴给调用方）。
-		if errors.Is(err, service.ErrHrwaiUserNotFound) {
+		if errors.Is(err, model.ErrHrwaiUserNotFound) {
 			response.BadRequest(c, err.Error())
 			return
 		}

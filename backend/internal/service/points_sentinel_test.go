@@ -67,8 +67,8 @@ func TestRedeemSentinelSemantics(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedUserWithBalance(t, db, 1000)
 
-	if _, err := svc.RedeemCourse(context.Background(), uid, 999); !errors.Is(err, ErrCourseNotFound) {
-		t.Fatalf("课程不存在应报 ErrCourseNotFound, got %v", err)
+	if _, err := svc.RedeemCourse(context.Background(), uid, 999); !errors.Is(err, model.ErrCourseNotFound) {
+		t.Fatalf("课程不存在应报 model.ErrCourseNotFound, got %v", err)
 	}
 	if _, err := svc.RedeemRealPaper(context.Background(), uid, 999); !errors.Is(err, ErrRealPaperUnavailable) {
 		t.Fatalf("真题卷不存在应报 ErrRealPaperUnavailable, got %v", err)
@@ -89,8 +89,8 @@ func TestPenaltySentinelSemantics(t *testing.T) {
 	if _, err := svc.AdminPenalty(context.Background(), 1, uid, 10, ""); !errors.Is(err, ErrEmptyPenaltyReason) {
 		t.Fatalf("事由为空应报 ErrEmptyPenaltyReason, got %v", err)
 	}
-	if _, err := svc.AdminPenalty(context.Background(), 1, 99999, 10, "理由"); !errors.Is(err, ErrHrwaiUserNotFound) {
-		t.Fatalf("用户不存在应报 ErrHrwaiUserNotFound, got %v", err)
+	if _, err := svc.AdminPenalty(context.Background(), 1, 99999, 10, "理由"); !errors.Is(err, model.ErrHrwaiUserNotFound) {
+		t.Fatalf("用户不存在应报 model.ErrHrwaiUserNotFound, got %v", err)
 	}
 }
 

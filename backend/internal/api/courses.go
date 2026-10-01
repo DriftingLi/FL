@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -64,7 +65,7 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 var unreadableFaces404 = []error{
 	service.ErrCourseNotVisible, // 不在平台上：未发布 / 未挂载
 	service.ErrCourseLocked,     // 在平台上、可见，但这个人没兑换
-	service.ErrCourseNotFound,   // 课程行真不存在
+	model.ErrCourseNotFound,     // 课程行真不存在
 	service.ErrChapterNotFound,  // 章节行真不存在
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -20,8 +21,8 @@ import (
 var pointsErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
 		{Sentinel: service.ErrTaskNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrCourseNotFound, Status: http.StatusBadRequest},
+		{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
+		{Sentinel: model.ErrCourseNotFound, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrAlreadyClaimed, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrDailyClaimLimit, Status: http.StatusBadRequest},

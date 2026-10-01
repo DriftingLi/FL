@@ -51,7 +51,7 @@ type passwordSubject struct {
 }
 
 var (
-	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole, notFound: ErrHrwaiUserNotFound}
+	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole, notFound: model.ErrHrwaiUserNotFound}
 	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole, notFound: ErrTutorNotFound}
 	// 招聘者写面此前是本动作之外的第三份哈希副本（自建 Count + 哈希 + 落库 + 吊销），
 	// 且那句 Count 的 error 没查 ⇒ 查不动会被读成「招聘者不存在」（ADR-0062 票6 的同形）。

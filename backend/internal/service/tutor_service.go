@@ -30,7 +30,7 @@ func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *filestore.File
 }
 
 // ErrChapterFileNotFound 章节文件行不存在（课程章节的附件，与「章节不存在」是两件事）。
-// 本文件的「课程/章节不存在」直接用课程域的唯一载体 ErrCourseNotFound / ErrChapterNotFound。
+// 本文件的「课程/章节不存在」直接用课程域的唯一载体 model.ErrCourseNotFound / ErrChapterNotFound。
 // （声明必须留在函数文档块之外：它一度夹在下面那条注释与 func 之间，把 godoc 抢走了 ——
 // 同形缺陷在 api 层会让整条 swagger 路由消失，见 4c488c3c。）
 var ErrChapterFileNotFound = errors.New("文件不存在")
@@ -50,7 +50,7 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCourseNotFound
+			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}

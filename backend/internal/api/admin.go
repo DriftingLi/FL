@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -188,7 +189,7 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 			return h.courseSvc.GetCourseDetail(req.ID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 更新课程
@@ -223,7 +224,7 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 			return h.courseSvc.UpdateCourse(req.ID, req.Input)
 		},
 	}.WithSuccess(httpx.OkMsg("课程更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).
 		// 与 Create 面共用同一份表（ADR-0065 决策 3）：此前这里只挂了「必填」两条，
 		// 于是「方向被引用成一张不存在的行」在编辑面上是 500。
 		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
@@ -277,7 +278,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 		},
 	}.WithSuccess(httpx.OkMsgNoData("排序已交换"), http.StatusInternalServerError).
 		// 路径那门课不存在 ⇒ 404（此前落默认面 400：「你换的这门课没有」被说成「参数错了」）。
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).
 		WithSentinels(http.StatusBadRequest, courseSortFacts400...).Handle(c)
 }
 
@@ -306,7 +307,7 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 			return h.courseSvc.DeleteCourse(req.ID)
 		},
 	}.WithSuccess(httpx.OkMsg("课程删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建章节
@@ -603,7 +604,7 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			return &struct{}{}, nil
 		},
 	}.WithSuccess(httpx.OkMsgNoData("密码已重置"), http.StatusInternalServerError).
-		WithSentinel(service.ErrHrwaiUserNotFound, http.StatusNotFound).
+		WithSentinel(model.ErrHrwaiUserNotFound, http.StatusNotFound).
 		WithSentinel(service.ErrInvalidHrwaiUserID, http.StatusBadRequest).Handle(c)
 }
 
@@ -635,7 +636,7 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
 		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
-			{Sentinel: service.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
+			{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
 			{Sentinel: service.ErrInvalidHrwaiUserID, Status: http.StatusBadRequest},
 			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},

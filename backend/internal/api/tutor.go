@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -112,7 +113,7 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 			return h.svc.GetCourseChapters(req.ID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表）

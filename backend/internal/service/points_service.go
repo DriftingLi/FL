@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/dberr"
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/pkg/paging"
@@ -770,14 +771,14 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
-		return nil, ErrCourseNotFound
+		return nil, model.ErrCourseNotFound
 	}
 	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
 		return nil, ErrCourseNotRedeemable
 	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:course:%d:%d", userID, courseID),
-		sku:     CourseSKU(courseID),
+		sku:     entitlement.CourseSKU(courseID),
 		refID:   fmt.Sprintf("%d", courseID),
 		price:   *course.PointsPrice,
 		reason:  "redeem_course",
@@ -791,9 +792,6 @@ const realPaperUnlockSKU = "unlock_real_paper"
 
 // realPaperPriceFallback 商城项缺失时的兜底单价。
 const realPaperPriceFallback = 300
-
-// RealPaperSKU 真题卷权益 sku（real_paper:<paperID>，ref_id=<paperID>，按套粒度）。
-func RealPaperSKU(paperID int) string { return fmt.Sprintf("real_paper:%d", paperID) }
 
 // realPaperPrice 读取真题解锁单价（商城项缺失/停用时回退兜底价）。
 // 只认 enabled=true 的行 ⇒ 停售这一行等于把卷价悄悄改回硬编码，管理员改的是一行读不到的数据：
@@ -817,7 +815,7 @@ func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int
 	}
 	return s.redeem(ctx, userID, redeemOpts{
 		lockKey: fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID),
-		sku:     RealPaperSKU(paperID),
+		sku:     entitlement.RealPaperSKU(paperID),
 		refID:   strconv.Itoa(paperID),
 		price:   s.realPaperPrice(),
 		reason:  "redeem_real_paper",
@@ -848,9 +846,9 @@ func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) 
 	})
 }
 
-// HasEntitlement 校验是否已兑换（权益读面单点见 entitlement_read.go，ADR-0062 决策 3）。
+// HasEntitlement 校验是否已兑换（权益读面单点见 internal/entitlement，ADR-0062 决策 3）。
 func (s *PointsService) HasEntitlement(userID int, sku, refID string) (bool, error) {
-	return holdsEntitlement(s.db, userID, sku, refID)
+	return entitlement.Holds(s.db, userID, sku, refID)
 }
 
 // ErrInsufficientPoints 积分余额不足（哨兵错误，ADR-0023）：调用方一律 errors.Is 判定，
@@ -978,7 +976,7 @@ func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta
 	defer release()
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
-		return 0, ErrHrwaiUserNotFound
+		return 0, model.ErrHrwaiUserNotFound
 	}
 	actualDeduct := delta
 	if user.PointsBalance < delta {

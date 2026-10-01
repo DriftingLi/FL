@@ -850,7 +850,7 @@ func (s *AuthService) DeleteAccount(userID int) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		var user model.HrwaiUser
 		if err := tx.First(&user, userID).Error; err != nil {
-			return ErrHrwaiUserNotFound
+			return model.ErrHrwaiUserNotFound
 		}
 		// 确保匿名占位用户存在
 		var sentinel model.HrwaiUser

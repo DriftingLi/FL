@@ -81,7 +81,7 @@ func TestPasswordWriteResultErrIsExclusive(t *testing.T) {
 		t.Fatalf("长度非法应只报 Err，实际 Err=%v RevokeErr=%v", tooShort.Err, tooShort.RevokeErr)
 	}
 	missing := svc.SetNewPassword(context.Background(), 987654, "validpass123")
-	if !errors.Is(missing.Err, ErrHrwaiUserNotFound) || missing.RevokeErr != nil {
+	if !errors.Is(missing.Err, model.ErrHrwaiUserNotFound) || missing.RevokeErr != nil {
 		t.Fatalf("主体不存在应报该哨兵且不带 RevokeErr，实际 Err=%v RevokeErr=%v", missing.Err, missing.RevokeErr)
 	}
 	var still model.HrwaiUser

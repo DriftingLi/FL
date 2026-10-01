@@ -62,7 +62,7 @@ func TestCourseDomainFactSplit(t *testing.T) {
 				_, e := NewFeaturedService(db, nil, zap.NewNop()).AdminDetail(1)
 				return e
 			}},
-		{"课程", ErrCourseNotFound, "course",
+		{"课程", model.ErrCourseNotFound, "course",
 			func(t *testing.T, db *gorm.DB) error {
 				_, e := NewAdminCourseService(db, nil, zap.NewNop()).UpdateCourse(999999, &CourseInput{})
 				return e
