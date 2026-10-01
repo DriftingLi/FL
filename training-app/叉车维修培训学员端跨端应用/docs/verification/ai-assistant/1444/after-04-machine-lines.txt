@@ -1,0 +1,28 @@
+# ①a 真机取证 · 机检行（#1443 / PR #1444）
+# 取证日期：2026-09-30 23:20–23:30
+# 设备：Redmi 23049RAD8C（marble，arm64-v8a，Android 15），无线调试 192.168.10.51:37175
+# 构建：feat/1443 head 0f9dcf90，经 `cli launch app-android --pagePath pages/ai-assistant/ai-feature --pageQuery "featureKey=fault_diagnosis"` 增量部署到设备
+
+## 到设备 / 页面可达 / 无崩溃
+- 部署日志：`进入页面: pages/ai-assistant/ai-feature?featureKey=fault_diagnosis`；`应用【叉车维修培训学员端跨端应用】已启动`
+- 鉴权：`/api/auth/me` 200、`/api/ai-assistant/sessions?feature_key=fault_diagnosis` 200、`/api/ai-assistant/diagnosis/brands` 200；`Token validated, isLoggedIn= true`
+- 前台 Activity（取证后现测）：`topResumedActivity=io.dcloud.uniappx/io.dcloud.uniapp.UniAppActivity`
+- logcat（取证窗口内 `-d -t 400`）：FATAL / AndroidRuntime / SIGSEGV / Fatal signal 命中 **0**；无 uniapp/render error
+
+## 渲染判据（可复算，设备无关）
+问句「叉车刹车失灵怎么排查和处理」→ 助手回答（SOP，含多级标题 + 无序列表 + 诊断配图 + 资料来源 16 条）。
+对渲染后 a11y dump（after-03-answer-a11y-dump.xml，31 个文本/描述节点，正文确被捕获）统计裸 markdown 标记：
+- 粗体标记 `**`            = **0**
+- 行首标题 `#`            = **0**
+- 行内代码反引号 `` ` ``   = **0**
+- 行首列表 `- `           = **0**
+- `[citation:` 裸令牌      = **0**
+标题与列表项各自成为独立文本节点（例：「标准排查作业指导书 (SOP)」「一、适用范围与作业对象」「二、前置安全与作业准备」）⇒ markdown 被解析为块级结构，而非裸文本。
+
+## before 对照（旧构建，不含 #1443）
+before-01-old-build-answer-raw-markdown.png：设备上一构建（未含本票改动）的诊断回答，正文逐字露出
+`**检查电磁刹车器本体**`、`# 中力叉车故障维修指南：32`、`- **故障代码**：\`32\``、`**[citation:qa1344]`。
+（注：before 为另一问句，非同一会话；对照的是「裸 markdown」这一渲染现象，与问句内容无关。）
+
+## 用户气泡（role==user）
+after-01/02：用户气泡「叉车刹车失灵怎么排查和处理」以纯文本渲染，逐字节不变（displayContent 路径，未过 markdown 解析）。

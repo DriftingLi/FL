@@ -605,12 +605,26 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     expect(adr).toContain('MarkdownTableRow__1');
   });
 
-  it('决定 6 登记本票的覆盖面边界（论坛 / AI 面仍纯文本，不走本解析器）', () => {
-    expect(adr).toContain('论坛正文与 AI 助手回答仍是纯文本渲染');
-    // 边界是真的：两个面都不 import 本解析器
-    for (const rel of ['pages/forum/components/forum-topic-body.uvue', 'components/ai-chat/ai-chat-bubble.uvue']) {
-      expect(read(rel)).not.toContain('utils/markdown');
-    }
+  it('决定 6 的覆盖面登记已回填到现状（论坛 / AI 两面都经壳层接入，旧「仍纯文本」句不得残留）', () => {
+    // 旧句登记的是 #905 当时的范围，已被 ADR-0025（#1240）与 #1443 各自推进——
+    // 留着它就是「拿历史快照冒充现状」，正是本条当初要防的误读的反向形态。
+    expect(adr).not.toContain('论坛正文与 AI 助手回答仍是纯文本渲染');
+    expect(adr).toContain('#1443 回填本条');
+    // 回填后的边界换成壳层纪律，两面各自验：
+    //   渲染 .uvue 不直接 import 解析器（论坛经 forumBody、AI 经 aiAnswerBody）——
+    //   ⚠️ 扫描面**不含 aiSourcesDisplay.uts**：它注释里有字面 `utils/markdown`（讲 ADR 编号），
+    //   拉进来就是假红；且它不在解析链上，查它没有语义。
+    const body = read('pages/forum/components/forum-topic-body.uvue');
+    expect(body).toContain('utils/forumBody');
+    expect(body).not.toContain('utils/markdown');
+    const bubble = read('components/ai-chat/ai-chat-bubble.uvue');
+    expect(bubble).toContain('utils/aiAnswerBody');
+    expect(bubble).not.toContain('utils/markdown');
+    // 壳层存在且真的按论坛档解析（档位与展开前置的**行为**判据在
+    // `utils/aiAnswerBodyBehavior.test.js` 真执行，本处只登记接线不漂）
+    const shell = readText(path.join(__dirname, 'aiAnswerBody.uts'));
+    expect(shell).toContain("from './markdown'");
+    expect(shell).toContain('SUBSET_FORUM');
   });
 
   it('已知限制里的移动端一行已随本票更新（旧口径不再残留）', () => {
