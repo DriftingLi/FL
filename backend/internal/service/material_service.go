@@ -13,6 +13,8 @@ import (
 
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
+
+	"forklift-training/internal/timefmt"
 )
 
 // MaterialService 学习资料服务（chapter_file 聚合视图）。
@@ -81,7 +83,7 @@ func materialToDTO(r materialRow) MaterialDTO {
 		FileID: r.FileID, ChapterID: r.ChapterID, ChapterTitle: r.ChapterTitle,
 		CourseID: r.CourseIDVal, CourseName: r.CourseName,
 		FileName: r.FileName, FileURL: r.FileURL, ContentType: r.ContentType,
-		FileSize: r.FileSize, CreatedAt: formatISO(r.CreatedAt),
+		FileSize: r.FileSize, CreatedAt: timefmt.FormatISO(r.CreatedAt),
 	}
 }
 

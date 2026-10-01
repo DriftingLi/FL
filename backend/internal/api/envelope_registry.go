@@ -18,6 +18,7 @@
 package api
 
 import (
+	"forklift-training/internal/notification"
 	"forklift-training/internal/service"
 	vmodel "forklift-training/internal/valuation/model"
 	"forklift-training/pkg/paging"
@@ -117,9 +118,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.NotePageDTO", Endpoints: []string{"GET /notes"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.NotePageDTO{}},
-	{Result: "service.NotificationListPageResult", Endpoints: []string{"GET /notifications"},
+	{Result: "notification.NotificationListPageResult", Endpoints: []string{"GET /notifications"},
 		Keys: []string{"items", "page", "pages", "total", "unread_count"}, Dialect: paging.DialectPages,
-		Sample: service.NotificationListPageResult{}},
+		Sample: notification.NotificationListPageResult{}},
 	{Result: "service.PointsLedgerResult", Endpoints: []string{"GET /points/ledger", "GET /admin/points/ledger"},
 		Keys: []string{"items", "total", "page", "pages"}, Dialect: paging.DialectPages,
 		Sample: service.PointsLedgerResult{}},

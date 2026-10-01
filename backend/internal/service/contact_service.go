@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/pkg/paging"
 )
 
@@ -54,13 +55,13 @@ const contactDecisionWindow = 14 * 24 * time.Hour
 type ContactService struct {
 	db              *gorm.DB
 	logger          *zap.Logger
-	notificationSvc *NotificationService
+	notificationSvc *notification.Service
 	mailer          MailSender
 	dailyLimit      int
 }
 
 // NewContactService 构造服务。mailer 可为 nil（测试或未配置时降级为日志）。
-func NewContactService(db *gorm.DB, logger *zap.Logger, notificationSvc *NotificationService, mailer MailSender) *ContactService {
+func NewContactService(db *gorm.DB, logger *zap.Logger, notificationSvc *notification.Service, mailer MailSender) *ContactService {
 	if logger == nil {
 		logger, _ = zap.NewProduction()
 	}
@@ -334,7 +335,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 		return nil, err
 	}
 	// 站内信通知学员（不含企业电话；尽力而为，接收器 nil 与失败均吞；ADR-0027 C1 收编）
-	s.notificationSvc.TryCreateContactRequestEvent(NewContactRequestEvent(studentUserID, rec.CompanyName, rec.ContactName, msg, mdl.ID, recruiterID))
+	s.notificationSvc.TryCreateContactRequestEvent(notification.NewContactRequestEvent(studentUserID, rec.CompanyName, rec.ContactName, msg, mdl.ID, recruiterID))
 	dto := s.toDTO(&mdl)
 	return &dto, nil
 }

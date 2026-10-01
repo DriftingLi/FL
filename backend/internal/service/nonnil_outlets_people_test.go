@@ -60,11 +60,11 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	"service.HrwaiUserPageResult.list":                outletHrwaiUserPageEmpty,
 	"service.TutorListDTO.tutors":                     outletTutorListEmpty,
 
-	// ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
+	// ===== 投稿 / 资料 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
+	// 通知域的 items 举证已随域包搬去 internal/notification/nonnil_outlets_test.go（ADR-0070）。
 	"service.ContributionPageResult.items":            outletContributionPageEmpty,
 	"service.ContributionReportPageResult.items":      outletContributionReportPageEmpty,
 	"service.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
-	"service.NotificationListPageResult.items":        outletNotificationListEmpty,
 	"service.PointsLedgerResult.items":                outletPointsLedgerEmpty,
 	"service.PointsTasksResult.tasks":                 outletPointsTasksNone,
 	"service.CheckInCalendarResult.days":              outletCheckInCalendar,
@@ -331,17 +331,6 @@ func outletProfileChangeRequestPageEmpty(t *testing.T) any {
 	res, err := svc.ListRequests("", 1, 20)
 	if err != nil {
 		t.Fatalf("资料审核列表失败: %v", err)
-	}
-	return res
-}
-
-// outletNotificationListEmpty 站内信列表：零消息时 items 是空集。
-func outletNotificationListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewNotificationService(testutil.NewMemoryDB(t), zap.NewNop())
-	res, err := svc.List(1, 1, 20)
-	if err != nil {
-		t.Fatalf("站内信列表失败: %v", err)
 	}
 	return res
 }

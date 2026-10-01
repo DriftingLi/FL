@@ -99,6 +99,7 @@ var (
 		{"internal/service", "nonnilOutlets"},
 		{"internal/api", "nonnilOutlets"},
 		{"internal/faq", "nonnilOutlets"},
+		{"internal/notification", "nonnilOutlets"},
 	}
 )
 
@@ -205,11 +206,12 @@ func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
 // sweptDirs 扫哪些包目录。键 = 包名（swagger 的 definition 名前缀），值 = 目录。
 // 加新包就加一行；不在表里的包里的 DTO 不会被扫（因此也不会被误报）。
 var sweptDirs = map[string]string{
-	"service":    "../service",
-	"api":        "../api",
-	"faq":        "../faq",
-	"model":      "../model",
-	"repository": "../valuation/repository",
+	"service":      "../service",
+	"api":          "../api",
+	"faq":          "../faq",
+	"notification": "../notification",
+	"model":        "../model",
+	"repository":   "../valuation/repository",
 }
 
 var (

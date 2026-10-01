@@ -68,7 +68,11 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// ===== API 路由组 =====
 	api := r.Group("/api")
 	// 审计日志：记录管理员/讲师写操作（不依赖中间件顺序，见 middleware.AuditLog）
-	api.Use(middleware.AuditLog(deps.AuditSvc, deps.Logger))
+	// 未注入审计服务时不挂（测试装配）：typed nil 装进 middleware.AuditWriter 不等于 nil 接口，
+	// 判空必须在装配点做（见 AuditWriter 的注释）。
+	if deps.AuditSvc != nil {
+		api.Use(middleware.AuditLog(deps.AuditSvc, deps.Logger))
+	}
 
 	// 认证蓝图 /api/auth/*
 	auth := api.Group("/auth")

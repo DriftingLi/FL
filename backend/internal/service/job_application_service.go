@@ -15,6 +15,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/pkg/paging"
 )
 
@@ -52,13 +53,13 @@ type JobApplicationService struct {
 	contactSvc      *ContactService
 	db              *gorm.DB
 	logger          *zap.Logger
-	notificationSvc *NotificationService
+	notificationSvc *notification.Service
 	mailer          MailSender
 	dailyLimit      int
 }
 
 // NewJobApplicationService 创建投递服务。contact 收口授权状态机（ADR-0027 C5）；mailer 可为 nil。
-func NewJobApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *NotificationService, contact *ContactService) *JobApplicationService {
+func NewJobApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *notification.Service, contact *ContactService) *JobApplicationService {
 	return &JobApplicationService{db: db, logger: logger, notificationSvc: notificationSvc, contactSvc: contact, dailyLimit: 10}
 }
 

@@ -26,6 +26,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -412,7 +413,7 @@ func normalizeDBTime(raw string) string {
 		"2006-01-02 15:04:05",
 	} {
 		if t, err := time.Parse(layout, raw); err == nil {
-			return formatISO(t)
+			return timefmt.FormatISO(t)
 		}
 	}
 	return raw

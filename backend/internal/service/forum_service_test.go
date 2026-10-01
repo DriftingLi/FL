@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -63,7 +64,7 @@ func newForumTestEnv(t *testing.T) *forumTestEnv {
 	db := testutil.NewMemoryDB(t)
 	st := &memForumStorage{}
 	fileSvc := NewFileStore("", st, zap.NewNop())
-	notificationSvc := NewNotificationService(db, zap.NewNop())
+	notificationSvc := notification.NewService(db, zap.NewNop())
 	counters := NewForumCounter()
 	points := NewPointsService(db, zap.NewNop(), nil, notificationSvc)
 	return &forumTestEnv{

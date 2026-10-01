@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -245,7 +246,7 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 	answers := answersMapRoundTrip(mock.Answers)
 	startISO := ""
 	if mock.StartTime != nil {
-		startISO = formatISO(*mock.StartTime)
+		startISO = timefmt.FormatISO(*mock.StartTime)
 	}
 	return &MockExamResumeDTO{
 		MockExamID:    mock.ID,
@@ -371,7 +372,7 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 	}
 	submitISO := ""
 	if mock.SubmitTime != nil {
-		submitISO = formatISO(*mock.SubmitTime)
+		submitISO = timefmt.FormatISO(*mock.SubmitTime)
 	}
 	return &MockExamResultDTO{
 		MockExamSubmitDTO: result,
@@ -431,10 +432,10 @@ func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 	}
 	startISO, submitISO := "", ""
 	if m.StartTime != nil {
-		startISO = formatISO(*m.StartTime)
+		startISO = timefmt.FormatISO(*m.StartTime)
 	}
 	if m.SubmitTime != nil {
-		submitISO = formatISO(*m.SubmitTime)
+		submitISO = timefmt.FormatISO(*m.SubmitTime)
 	}
 	return MockExamHistoryItemDTO{
 		ID:            m.ID,
@@ -447,7 +448,7 @@ func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 		Duration:      m.Duration,
 		Status:        m.Status,
 		Result:        result,
-		CreatedAt:     formatISO(m.CreatedAt),
+		CreatedAt:     timefmt.FormatISO(m.CreatedAt),
 		Score:         m.Score,
 		PaperID:       m.PaperID,
 	}

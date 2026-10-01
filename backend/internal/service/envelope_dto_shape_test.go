@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 )
 
 // spec #940 片三（含片二）：信封 DTO 的 shape-lock。
@@ -292,9 +293,9 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &ForumLikeResultDTO{Liked: true, LikesCount: 7},
 		},
 		{
-			name:   "NotificationUnreadCountDTO（GET /notifications/unread-count：原 handler 内联 gin.H）",
+			name:   "notification.NotificationUnreadCountDTO（GET /notifications/unread-count：原 handler 内联 gin.H）",
 			legacy: map[string]any{"count": int64(3)},
-			dto:    &NotificationUnreadCountDTO{Count: 3},
+			dto:    &notification.NotificationUnreadCountDTO{Count: 3},
 		},
 		{
 			name: "QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",

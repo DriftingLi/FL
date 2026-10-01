@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -68,7 +69,7 @@ func NoteToDTO(n *model.Note, questionContent string) NoteDTO {
 		ID:              n.ID,
 		QuestionContent: questionContent,
 		QuestionID:      n.QuestionID,
-		UpdatedAt:       formatISO(n.UpdatedAt),
+		UpdatedAt:       timefmt.FormatISO(n.UpdatedAt),
 	}
 }
 

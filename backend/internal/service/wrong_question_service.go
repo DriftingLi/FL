@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -128,14 +129,14 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 			question = &dto
 		}
 		result = append(result, WrongQuestionDTO{
-			CreatedAt:      formatISO(wq.CreatedAt),
+			CreatedAt:      timefmt.FormatISO(wq.CreatedAt),
 			FavoriteID:     favoriteID,
 			Favorited:      favoriteID > 0,
 			ID:             wq.ID,
 			IsRedone:       wq.IsRedone,
 			IsRemoved:      wq.IsRemoved,
 			LastUserAnswer: lastAnswers[wq.QuestionID],
-			LastWrongAt:    formatISO(wq.LastWrongAt),
+			LastWrongAt:    timefmt.FormatISO(wq.LastWrongAt),
 			Question:       question,
 			QuestionID:     wq.QuestionID,
 			StudentID:      wq.StudentID,
@@ -310,7 +311,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 			"explanation":    question.Explanation,
 			"wrong_count":    wq.WrongCount,
 			"image_url":      question.ImageURL,
-			"last_wrong_at":  formatISO(wq.LastWrongAt),
+			"last_wrong_at":  timefmt.FormatISO(wq.LastWrongAt),
 		}
 		exportData = append(exportData, item)
 	}

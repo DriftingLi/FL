@@ -653,6 +653,53 @@ definitions:
       voltage_std:
         type: number
     type: object
+  notification.NotificationDTO:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_read:
+        type: boolean
+      link:
+        type: string
+      payload:
+        description: |-
+          Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，
+          故用 swaggertype 钉成不透明 object（生成物渲染 Record<string, unknown>），
+          具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。
+        type: object
+        x-optional: true
+      read_at:
+        type: string
+        x-optional: true
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  notification.NotificationListPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/notification.NotificationDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+      unread_count:
+        type: integer
+    type: object
+  notification.NotificationUnreadCountDTO:
+    properties:
+      count:
+        type: integer
+    type: object
   repository.AlgorithmParameters:
     properties:
       brands:
@@ -2916,53 +2963,6 @@ definitions:
       page_size:
         type: integer
       total:
-        type: integer
-    type: object
-  service.NotificationDTO:
-    properties:
-      content:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: integer
-      is_read:
-        type: boolean
-      link:
-        type: string
-      payload:
-        description: |-
-          Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，
-          故用 swaggertype 钉成不透明 object（生成物渲染 Record<string, unknown>），
-          具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。
-        type: object
-        x-optional: true
-      read_at:
-        type: string
-        x-optional: true
-      title:
-        type: string
-      type:
-        type: string
-    type: object
-  service.NotificationListPageResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.NotificationDTO'
-        type: array
-      page:
-        type: integer
-      pages:
-        type: integer
-      total:
-        type: integer
-      unread_count:
-        type: integer
-    type: object
-  service.NotificationUnreadCountDTO:
-    properties:
-      count:
         type: integer
     type: object
   service.PointsBalanceResult:
@@ -12342,7 +12342,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NotificationListPageResult'
+                  $ref: '#/definitions/notification.NotificationListPageResult'
               type: object
         "401":
           description: 未认证
@@ -12420,7 +12420,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NotificationUnreadCountDTO'
+                  $ref: '#/definitions/notification.NotificationUnreadCountDTO'
               type: object
         "401":
           description: 未认证

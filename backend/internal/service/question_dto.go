@@ -2,6 +2,7 @@ package service
 
 import (
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 )
 
 // QuestionDTO 题目契约：JSON key 与历史 map 输出逐字一致（shape-lock 测试
@@ -39,7 +40,7 @@ func newQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 	}
 	d := QuestionDTO{
 		Content:       q.Content,
-		CreatedAt:     formatISO(q.CreatedAt),
+		CreatedAt:     timefmt.FormatISO(q.CreatedAt),
 		CreatedBy:     q.CreatedBy,
 		CreatedByType: q.CreatedByType,
 		CredentialID:  q.CredentialID,
@@ -50,7 +51,7 @@ func newQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 		Score:         q.Score,
 		Status:        q.Status,
 		Type:          q.Type,
-		UpdatedAt:     formatISO(q.UpdatedAt),
+		UpdatedAt:     timefmt.FormatISO(q.UpdatedAt),
 	}
 	if includeAnswer {
 		d.Answer = strPtr(q.Answer)

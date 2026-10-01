@@ -17,6 +17,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -46,7 +47,7 @@ func TestForumAcceptNotifyContract(t *testing.T) {
 	RegisterPointsRoutes(apiGroup, deps.RouterDeps(), deps.PointsSvc)
 	RegisterFavoriteRoutes(apiGroup, deps.RouterDeps(), deps.FavoriteSvc)
 	RegisterSearchRoutes(apiGroup, deps.RouterDeps(), deps.SearchSvc)
-	RegisterNotificationRoutes(apiGroup, deps.RouterDeps(), deps.NotificationSvc)
+	notification.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.NotificationSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(u.ID), u.Account, "hrwai_user")

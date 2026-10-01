@@ -19,6 +19,8 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/geolocation"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -293,7 +295,7 @@ type ForumService struct {
 // notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
-func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *NotificationService, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
+func NewForumService(db *gorm.DB, fileSvc *FileStore, notificationSvc *notification.Service, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
 	return &ForumService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 
@@ -326,12 +328,12 @@ type topicRow struct {
 func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 	var lastReplyAt *string
 	if r.LastReplyAt != nil {
-		s := formatISO(*r.LastReplyAt)
+		s := timefmt.FormatISO(*r.LastReplyAt)
 		lastReplyAt = &s
 	}
 	var solvedAt *string
 	if r.SolvedAt != nil {
-		s := formatISO(*r.SolvedAt)
+		s := timefmt.FormatISO(*r.SolvedAt)
 		solvedAt = &s
 	}
 	return ForumTopicDTO{
@@ -353,7 +355,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		LastReplyAt:     lastReplyAt,
 		IsFeatured:      r.IsFeatured,
 		IsExperience:    r.IsExperience,
-		CreatedAt:       formatISO(r.CreatedAt),
+		CreatedAt:       timefmt.FormatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
@@ -759,7 +761,7 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 		ParentName: r.ParentName, ParentAvatarURL: r.ParentAvatarURL,
 		Content: r.Content, ContentFormat: r.ContentFormat,
 		IPProvince: r.IPProvince, IPCity: r.IPCity,
-		Images: imageURLsForWire(r.Images), CreatedAt: formatISO(r.CreatedAt),
+		Images: imageURLsForWire(r.Images), CreatedAt: timefmt.FormatISO(r.CreatedAt),
 		Author: ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
@@ -889,7 +891,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		IPProvince:    topic.IPProvince,
 		IPCity:        topic.IPCity,
 		Images:        imagesForWire(images),
-		CreatedAt:     formatISO(topic.CreatedAt),
+		CreatedAt:     timefmt.FormatISO(topic.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
@@ -1080,13 +1082,13 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		// 2) 楼中楼被回复人（非自己、非楼主——楼主已由 1) 覆盖，避免重复通知）
 		if topic.UserID != userID {
 			if err := s.notificationSvc.CreateForumReplyEvent(tx,
-				NewTopicReplierEvent(topic.UserID, replierName, topic.Title, topicID), now); err != nil {
+				notification.NewTopicReplierEvent(topic.UserID, replierName, topic.Title, topicID), now); err != nil {
 				return err
 			}
 		}
 		if parentAuthorID != 0 && parentAuthorID != userID && parentAuthorID != topic.UserID {
 			if err := s.notificationSvc.CreateForumReplyEvent(tx,
-				NewReplyReplierEvent(parentAuthorID, replierName, topic.Title, topicID), now); err != nil {
+				notification.NewReplyReplierEvent(parentAuthorID, replierName, topic.Title, topicID), now); err != nil {
 				return err
 			}
 		}
@@ -1104,7 +1106,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		ID: reply.ID, TopicID: reply.TopicID, ParentID: reply.ParentID,
 		ParentName: parentName, Content: reply.Content, ContentFormat: reply.ContentFormat,
 		IPProvince: reply.IPProvince, IPCity: reply.IPCity,
-		Images: imagesForWire(images), CreatedAt: formatISO(reply.CreatedAt),
+		Images: imagesForWire(images), CreatedAt: timefmt.FormatISO(reply.CreatedAt),
 		Author: ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
@@ -1532,7 +1534,7 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 		items = append(items, MyReplyDTO{
 			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
 			Content: r.Content, ContentFormat: r.ContentFormat,
-			Images: imageURLsForWire(r.Images), CreatedAt: formatISO(r.CreatedAt),
+			Images: imageURLsForWire(r.Images), CreatedAt: timefmt.FormatISO(r.CreatedAt),
 			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
 		})
 	}

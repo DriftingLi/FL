@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -327,7 +328,7 @@ func favoriteToDTO(f *model.Favorite) FavoriteDTO {
 		FavoriteID: f.FavoriteID,
 		TargetType: f.TargetType,
 		TargetID:   f.TargetID,
-		CreatedAt:  formatISO(f.CreatedAt),
+		CreatedAt:  timefmt.FormatISO(f.CreatedAt),
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 )
 
 // FeaturedContentDTO 精选内容列表项（不含正文）。
@@ -114,7 +115,7 @@ func featuredPublishedAt(publishedAt *time.Time) *string {
 	if publishedAt == nil {
 		return nil
 	}
-	v := formatISO(*publishedAt)
+	v := timefmt.FormatISO(*publishedAt)
 	return &v
 }
 
@@ -124,14 +125,14 @@ func featuredContentDTO(c *model.FeaturedContent) FeaturedContentDTO {
 		CategoryLabel: featuredCategoryLabel(c.Category),
 		ContentID:     c.ContentID,
 		CoverImage:    c.CoverImage,
-		CreatedAt:     formatISO(c.CreatedAt),
+		CreatedAt:     timefmt.FormatISO(c.CreatedAt),
 		PublishedAt:   featuredPublishedAt(c.PublishedAt),
 		SortOrder:     c.SortOrder,
 		Source:        c.Source,
 		Status:        c.Status,
 		Summary:       c.Summary,
 		Title:         c.Title,
-		UpdatedAt:     formatISO(c.UpdatedAt),
+		UpdatedAt:     timefmt.FormatISO(c.UpdatedAt),
 		ViewCount:     c.ViewCount,
 	}
 }

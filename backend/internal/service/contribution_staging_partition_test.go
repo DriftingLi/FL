@@ -24,6 +24,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
@@ -52,7 +53,7 @@ func newStagedSvc(t *testing.T) (*ContributionService, *gorm.DB, *stagedStorage)
 	db := testutil.NewFileDB(t)
 	st := &stagedStorage{missing: map[string]bool{}}
 	fileSvc := NewFileStore("", st, zap.NewNop())
-	notif := NewNotificationService(db, zap.NewNop())
+	notif := notification.NewService(db, zap.NewNop())
 	points := NewPointsService(db, zap.NewNop(), nil, notif)
 	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
 	return svc, db, st

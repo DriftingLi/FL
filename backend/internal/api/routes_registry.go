@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/faq"
+	"forklift-training/internal/notification"
 )
 
 // 域路由注册表（ADR-0047 §6 / spec #933）：一行一域，顺序即注册顺序。
@@ -94,7 +95,7 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "审核与治理",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			RegisterProfileReviewRoutes(api, rd, deps.ReviewSvc)
-			RegisterNotificationRoutes(api, rd, deps.NotificationSvc)
+			notification.RegisterRoutes(api, rd.Session, deps.NotificationSvc)
 			RegisterAuditRoutes(api, rd, deps.AuditSvc)
 			RegisterExportRoutes(api, rd, deps.ExportSvc)
 			RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)

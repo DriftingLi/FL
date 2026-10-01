@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 )
 
 // 论坛奖励政策 module（ADR-0047 §3；spec #927 片一）。
@@ -103,7 +104,7 @@ type forumRewardFact struct {
 	TopicOwner int   // 帖主（认定奖励的收款人；采纳类里是付款的楼主）
 	AnswererID int   // 仅采纳类：答主
 	ReplyID    int64 // 仅采纳类：站内信锚点
-	// Designation 仅认定类：DesignationFeatured | DesignationExperience，决定站内信文案，
+	// Designation 仅认定类：notification.DesignationFeatured | notification.DesignationExperience，决定站内信文案，
 	// 不影响流水（两种认定共用同一笔 featured_bonus）。
 	Designation string
 	// At 评估时刻（注入）：日封顶的「当日」以它为准，产线传真实时钟，测试传固定时刻。
@@ -113,10 +114,10 @@ type forumRewardFact struct {
 // forumRewardPolicy 论坛奖励政策 module（interface 见文件头注释）。
 type forumRewardPolicy struct {
 	points        *PointsService
-	notifications *NotificationService
+	notifications *notification.Service
 }
 
-func newForumRewardPolicy(points *PointsService, notifications *NotificationService) *forumRewardPolicy {
+func newForumRewardPolicy(points *PointsService, notifications *notification.Service) *forumRewardPolicy {
 	return &forumRewardPolicy{points: points, notifications: notifications}
 }
 
@@ -181,7 +182,7 @@ func (p *forumRewardPolicy) awardAccept(tx *gorm.DB, fact forumRewardFact) error
 			return err
 		}
 		if err := p.notifications.CreateForumAcceptEvent(tx,
-			NewAnswererAcceptEvent(fact.AnswererID, fact.TopicTitle, fact.TopicID, fact.ReplyID, split.AnswererDelta), fact.At); err != nil {
+			notification.NewAnswererAcceptEvent(fact.AnswererID, fact.TopicTitle, fact.TopicID, fact.ReplyID, split.AnswererDelta, ReasonAcceptedBonus), fact.At); err != nil {
 			return err
 		}
 	}
@@ -193,7 +194,7 @@ func (p *forumRewardPolicy) awardAccept(tx *gorm.DB, fact forumRewardFact) error
 			return err
 		}
 		if err := p.notifications.CreateForumAcceptEvent(tx,
-			NewOwnerAcceptEvent(fact.TopicOwner, fact.TopicTitle, fact.TopicID, fact.ReplyID, split.AskerDelta), fact.At); err != nil {
+			notification.NewOwnerAcceptEvent(fact.TopicOwner, fact.TopicTitle, fact.TopicID, fact.ReplyID, split.AskerDelta, ReasonAcceptAction), fact.At); err != nil {
 			return err
 		}
 	}
@@ -218,12 +219,12 @@ func (p *forumRewardPolicy) awardDesignation(tx *gorm.DB, fact forumRewardFact) 
 		return err
 	}
 	// 两种认定共用同一笔流水，但文案必须区分（ADR-0040）。
-	if fact.Designation == DesignationExperience {
+	if fact.Designation == notification.DesignationExperience {
 		return p.notifications.CreateTopicFeaturedEvent(tx,
-			NewTopicExperienceEvent(fact.TopicOwner, fact.TopicTitle, fact.TopicID, FeaturedBonusPoints), fact.At)
+			notification.NewTopicExperienceEvent(fact.TopicOwner, fact.TopicTitle, fact.TopicID, FeaturedBonusPoints, ReasonFeaturedBonus), fact.At)
 	}
 	return p.notifications.CreateTopicFeaturedEvent(tx,
-		NewTopicFeaturedEvent(fact.TopicOwner, fact.TopicTitle, fact.TopicID, FeaturedBonusPoints), fact.At)
+		notification.NewTopicFeaturedEvent(fact.TopicOwner, fact.TopicTitle, fact.TopicID, FeaturedBonusPoints, ReasonFeaturedBonus), fact.At)
 }
 
 // Reclaim 违规回收该帖的**全部直记奖励**（答主 + 楼主 + 帖主，含认定奖励）：

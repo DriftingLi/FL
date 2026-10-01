@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
@@ -31,7 +32,7 @@ func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*CheckInService, *c
 	t.Helper()
 	f := clock.At(now)
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), f, NewNotificationService(db, zap.NewNop()))
+	points := NewPointsService(db, zap.NewNop(), f, notification.NewService(db, zap.NewNop()))
 	svc := NewCheckInService(db, zap.NewNop(), f, points)
 	return svc, f, points
 }

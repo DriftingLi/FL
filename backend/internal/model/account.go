@@ -58,6 +58,17 @@ func (Tutor) TableName() string { return "tutor" }
 
 // ===== 25. 资料修改审核 =====
 
+// 资料修改审核请求的字段类型与状态值域（跨域共享：审核域写、站内信域读，
+// 所以贴着实体放而不是塞进某个域包，免得两个域互相 import）。
+const (
+	ProfileFieldNickname = "nickname"
+	ProfileFieldAvatar   = "avatar"
+
+	ProfileStatusPending  = "pending"
+	ProfileStatusApproved = "approved"
+	ProfileStatusRejected = "rejected"
+)
+
 // ProfileChangeRequest 用户资料（昵称/头像）修改审核请求。
 type ProfileChangeRequest struct {
 	ID           int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`

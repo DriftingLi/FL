@@ -15,6 +15,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/timefmt"
 )
 
 func newStudentServiceForTest(t *testing.T, db *gorm.DB) *StudentService {
@@ -214,10 +215,10 @@ func TestQueryProfileCourseProgressBatchBackfill(t *testing.T) {
 	if p.StudyDuration != 50 {
 		t.Fatalf("study_duration = %d, want 50（汇总全部记录）", p.StudyDuration)
 	}
-	if p.StudyDate != formatISO(d2) {
+	if p.StudyDate != timefmt.FormatISO(d2) {
 		// StudyDate 来自 MAX(study_date) 聚合，与批量回填无关；本测试环境（sqlite 内存库）
 		// 对聚合列按零时间扫描（生产 PostgreSQL 返回真值）。此处仅校验聚合被保留、不产生 panic。
-		t.Logf("study_date = %q, want %q（sqlite 聚合列按零时间扫描属环境行为，非本 ticket 变更）", p.StudyDate, formatISO(d2))
+		t.Logf("study_date = %q, want %q（sqlite 聚合列按零时间扫描属环境行为，非本 ticket 变更）", p.StudyDate, timefmt.FormatISO(d2))
 	}
 }
 

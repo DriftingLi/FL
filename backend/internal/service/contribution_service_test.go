@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -59,7 +60,7 @@ func newContributionTestSvc(t *testing.T) (*ContributionService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewFileDB(t)
 	fileSvc := NewFileStore("", &memContributionStorage{}, zap.NewNop())
-	notif := NewNotificationService(db, zap.NewNop())
+	notif := notification.NewService(db, zap.NewNop())
 	points := NewPointsService(db, zap.NewNop(), nil, notif)
 	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
 	return svc, db
@@ -411,7 +412,7 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 		},
 	}
 	fileSvc := NewFileStore("", st, zap.NewNop())
-	notif := NewNotificationService(db, zap.NewNop())
+	notif := notification.NewService(db, zap.NewNop())
 	points := NewPointsService(db, zap.NewNop(), nil, notif)
 	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
 	// 一条已提交投稿引用 used 文件

@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 )
 
 // TrainingCatalogService 培训目录（课程目录树与管理数据）服务。
@@ -640,7 +641,7 @@ func dedupeInts(vals []int) []int {
 func specialtyDict(s *model.Specialty) SpecialtyDict {
 	return SpecialtyDict{
 		Code:        s.Code,
-		CreatedAt:   formatISO(s.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(s.CreatedAt),
 		Description: s.Description,
 		Name:        s.Name,
 		SortOrder:   s.SortOrder,
@@ -652,7 +653,7 @@ func specialtyDict(s *model.Specialty) SpecialtyDict {
 func levelDict(l *model.CourseLevel) LevelDict {
 	return LevelDict{
 		Code:        l.Code,
-		CreatedAt:   formatISO(l.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(l.CreatedAt),
 		Description: l.Description,
 		LevelID:     l.LevelID,
 		Name:        l.Name,
@@ -664,13 +665,13 @@ func levelDict(l *model.CourseLevel) LevelDict {
 func certTemplateDict(t *model.CertificateTemplate) CertificateTemplateDict {
 	return CertificateTemplateDict{
 		Code:         t.Code,
-		CreatedAt:    formatISO(t.CreatedAt),
+		CreatedAt:    timefmt.FormatISO(t.CreatedAt),
 		Description:  t.Description,
 		ID:           t.ID,
 		Name:         t.Name,
 		Status:       t.Status,
 		TemplateURL:  t.TemplateURL,
-		UpdatedAt:    formatISO(t.UpdatedAt),
+		UpdatedAt:    timefmt.FormatISO(t.UpdatedAt),
 		ValidityDays: t.ValidityDays,
 	}
 }
@@ -678,13 +679,13 @@ func certTemplateDict(t *model.CertificateTemplate) CertificateTemplateDict {
 func tagDict(t *model.QuestionTag) QuestionTagDict {
 	return QuestionTagDict{
 		Code:        t.Code,
-		CreatedAt:   formatISO(t.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(t.CreatedAt),
 		Description: t.Description,
 		ID:          t.ID,
 		Name:        t.Name,
 		SortOrder:   t.SortOrder,
 		Status:      t.Status,
-		UpdatedAt:   formatISO(t.UpdatedAt),
+		UpdatedAt:   timefmt.FormatISO(t.UpdatedAt),
 	}
 }
 
@@ -692,14 +693,14 @@ func credentialDict(c *model.Credential) CredentialDict {
 	return CredentialDict{
 		Category:    c.Category,
 		Code:        c.Code,
-		CreatedAt:   formatISO(c.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(c.CreatedAt),
 		Description: c.Description,
 		ID:          c.ID,
 		Level:       c.Level,
 		Name:        c.Name,
 		SortOrder:   c.SortOrder,
 		Status:      c.Status,
-		UpdatedAt:   formatISO(c.UpdatedAt),
+		UpdatedAt:   timefmt.FormatISO(c.UpdatedAt),
 	}
 }
 
@@ -738,7 +739,7 @@ type CatalogLevelNode struct {
 func newCatalogSpecialtyNode(s *model.Specialty) CatalogSpecialtyNode {
 	return CatalogSpecialtyNode{
 		Code:        s.Code,
-		CreatedAt:   formatISO(s.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(s.CreatedAt),
 		Description: s.Description,
 		Name:        s.Name,
 		SortOrder:   s.SortOrder,
@@ -751,7 +752,7 @@ func newCatalogSpecialtyNode(s *model.Specialty) CatalogSpecialtyNode {
 func newCatalogLevelNode(l *model.CourseLevel) CatalogLevelNode {
 	return CatalogLevelNode{
 		Code:        l.Code,
-		CreatedAt:   formatISO(l.CreatedAt),
+		CreatedAt:   timefmt.FormatISO(l.CreatedAt),
 		Description: l.Description,
 		LevelID:     l.LevelID,
 		Name:        l.Name,

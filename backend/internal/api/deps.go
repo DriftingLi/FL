@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -47,7 +48,7 @@ type Deps struct {
 	WechatAuthSvc   *service.WechatAuthService
 	FileSvc         *service.FileStore
 	SlideRenderer   *service.SlideRenderer
-	NotificationSvc *service.NotificationService
+	NotificationSvc *notification.Service
 	ReviewSvc       *service.ProfileReviewService
 	AuditSvc        *service.AuditService
 	AIConfigSvc     *service.AIConfigService

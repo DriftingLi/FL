@@ -1,6 +1,6 @@
-// Package api 实现 HTTP handlers。
-// 本文件：站内信通知（P0 通知基础设施，当前仅站内信渠道）。
-package api
+// 本文件：站内信通知域的 HTTP 出口（ADR-0070）——/api/notifications 蓝图。
+// 装配点：internal/api/routes_registry.go 调 RegisterRoutes(api, rd.Session, deps.NotificationSvc)。
+package notification
 
 import (
 	"context"
@@ -9,26 +9,26 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// NotificationHandler 站内信通知 handler。
-type NotificationHandler struct {
-	svc *service.NotificationService
+// handler 站内信通知 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewNotificationHandler 创建站内信通知 handler。
-func NewNotificationHandler(svc *service.NotificationService) *NotificationHandler {
-	return &NotificationHandler{svc: svc}
-}
+// newHandler 创建站内信通知 handler。
+func newHandler(svc *Service) *handler { return &handler{svc: svc} }
 
-// RegisterNotificationRoutes 注册 /api/notifications 蓝图（登录用户站内信）。
-func RegisterNotificationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.NotificationService) {
-	h := NewNotificationHandler(svc)
+// RegisterRoutes 注册 /api/notifications 蓝图（登录用户站内信）。
+// 四条端点都只要求登录、不挂能力守卫：站内信按收件人鉴权（任何已登录角色都可能收到），
+// 不是资源域能力——豁免理由登记在 internal/api/authz_coverage_lock_test.go。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
 
-	g := rg.Group("/notifications", middleware.JWTAuth(rd.Session))
+	g := rg.Group("/notifications", middleware.JWTAuth(session))
 
 	// GET /api/notifications?page=&page_size= 分页查询通知（含未读数）
 	g.GET("", h.List)
@@ -56,19 +56,19 @@ type notificationListReq struct {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R{data=service.NotificationListPageResult} "success"
+// @Success 200 {object} response.R{data=NotificationListPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications [get]
-func (h *NotificationHandler) List(c *gin.Context) {
-	httpx.Endpoint[notificationListReq, service.NotificationListPageResult]{
+func (h *handler) List(c *gin.Context) {
+	httpx.Endpoint[notificationListReq, NotificationListPageResult]{
 		Parse: func(c *gin.Context) (*notificationListReq, error) {
 			return &notificationListReq{
 				UserID:   middleware.CurrentUserID(c),
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *notificationListReq) (*service.NotificationListPageResult, error) {
+		Invoke: func(ctx context.Context, req *notificationListReq) (*NotificationListPageResult, error) {
 			return h.svc.List(req.UserID, req.Page, req.PageSize)
 		},
 		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
@@ -82,10 +82,10 @@ func (h *NotificationHandler) List(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.NotificationUnreadCountDTO} "success"
+// @Success 200 {object} response.R{data=NotificationUnreadCountDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/unread-count [get]
-func (h *NotificationHandler) UnreadCount(c *gin.Context) {
+func (h *handler) UnreadCount(c *gin.Context) {
 	httpx.Endpoint[notificationUserIDReq, int64]{
 		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
 			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
@@ -99,7 +99,7 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 		},
 		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64) {
-			response.Success(c, service.NotificationUnreadCountDTO{Count: *resp})
+			response.Success(c, NotificationUnreadCountDTO{Count: *resp})
 		},
 	}.Handle(c)
 }
@@ -127,7 +127,7 @@ type notificationUserIDReq struct {
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/{id}/read [post]
-func (h *NotificationHandler) MarkRead(c *gin.Context) {
+func (h *handler) MarkRead(c *gin.Context) {
 	httpx.Endpoint[markReadReq, struct{}]{
 		Parse: func(c *gin.Context) (*markReadReq, error) {
 			id, err := httpx.PathInt64(c, "id", "通知ID无效")
@@ -155,7 +155,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/read-all [post]
-func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
+func (h *handler) MarkAllRead(c *gin.Context) {
 	httpx.Endpoint[notificationUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
 			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil

@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/testutil"
 )
 
@@ -23,7 +24,7 @@ func TestAdminPenaltyNotifyFailureRollsBack(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.Notification{}); err != nil {
 		t.Fatalf("注入发信失败（删 notifications 表）: %v", err)
 	}
-	svc := NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop()))
+	svc := NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
 
 	deducted, err := svc.AdminPenalty(context.Background(), 1, uid, 30, "违规")
 	if !errors.Is(err, ErrPenaltyNotifyFailed) {
@@ -44,7 +45,7 @@ func TestAdminPenaltyNotifyFailureRollsBack(t *testing.T) {
 func TestAdminPenaltyNotifyCommittedWithLedger(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	uid := seedUserWithBalance(t, db, 100)
-	svc := NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop()))
+	svc := NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
 
 	deducted, err := svc.AdminPenalty(context.Background(), 1, uid, 30, "违规操作")
 	if err != nil || deducted != 30 {
@@ -67,7 +68,7 @@ func TestAdminPenaltyNotifyCommittedWithLedger(t *testing.T) {
 func TestAdminPenaltyZeroBalanceStillNotifies(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	uid := seedUserWithBalance(t, db, 0)
-	svc := NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop()))
+	svc := NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
 
 	deducted, err := svc.AdminPenalty(context.Background(), 1, uid, 20, "违规")
 	if err != nil || deducted != 0 {

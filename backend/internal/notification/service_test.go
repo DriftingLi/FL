@@ -1,4 +1,4 @@
-package service
+package notification
 
 import (
 	"errors"
@@ -15,7 +15,7 @@ import (
 
 func TestNotificationService_CreateAndList(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_user", "x")
 	uid := student.ID
 
@@ -66,14 +66,14 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 // TestNotificationService_ProfileReviewEvent 审核通知结构化标记（Ticket #228；ADR-0027 C1 对齐事件形状后）：
 // NewProfileReviewEvent + CreateProfileReviewEvent 在标题不变的前提下，payload 携带结构化 review_status 判定。
 func TestNotificationService_ProfileReviewEvent(t *testing.T) {
-	req := &model.ProfileChangeRequest{UserID: 1, FieldType: ProfileFieldNickname}
-	ev := NewProfileReviewEvent(req, ProfileStatusApproved, "")
-	if ev.UserID != 1 || ev.FieldType != ProfileFieldNickname || ev.Status != ProfileStatusApproved {
+	req := &model.ProfileChangeRequest{UserID: 1, FieldType: model.ProfileFieldNickname}
+	ev := NewProfileReviewEvent(req, model.ProfileStatusApproved, "")
+	if ev.UserID != 1 || ev.FieldType != model.ProfileFieldNickname || ev.Status != model.ProfileStatusApproved {
 		t.Errorf("通过事件字段不符: %+v", ev)
 	}
 	// 构造器仅收数据；文案/payload 由 CreateProfileReviewEvent 单点（用内存 DB 落库校验）
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	if err := svc.CreateProfileReviewEvent(db, ev, time.Now()); err != nil {
 		t.Fatalf("创建审核通知失败: %v", err)
 	}
@@ -94,8 +94,8 @@ func TestNotificationService_ProfileReviewEvent(t *testing.T) {
 		t.Errorf("通过通知 payload 应为 approved，得到: %s", n.Payload)
 	}
 
-	req2 := &model.ProfileChangeRequest{UserID: 2, FieldType: ProfileFieldAvatar}
-	ev2 := NewProfileReviewEvent(req2, ProfileStatusRejected, "照片不清晰")
+	req2 := &model.ProfileChangeRequest{UserID: 2, FieldType: model.ProfileFieldAvatar}
+	ev2 := NewProfileReviewEvent(req2, model.ProfileStatusRejected, "照片不清晰")
 	if err := svc.CreateProfileReviewEvent(db, ev2, time.Now()); err != nil {
 		t.Fatalf("创建驳回通知失败: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestNotificationService_ProfileReviewEvent(t *testing.T) {
 
 func TestNotificationService_MarkRead(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_mark", "x")
 	uid := student.ID
 
@@ -167,7 +167,7 @@ func TestNotificationService_MarkRead(t *testing.T) {
 
 func TestNotificationService_CreateWithTx_CommitAndRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewNotificationService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "notify_tx", "x")
 	uid := student.ID
 

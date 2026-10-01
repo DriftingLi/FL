@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -136,7 +137,7 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 	s.db.Where("student_id = ?", studentID).Order("study_date DESC").Limit(1).Find(&latestRecord)
 	latestStudyTime := ""
 	if !latestRecord.StudyDate.IsZero() {
-		latestStudyTime = formatISO(latestRecord.StudyDate)
+		latestStudyTime = timefmt.FormatISO(latestRecord.StudyDate)
 	}
 
 	// 各课程进度
@@ -172,7 +173,7 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 		}
 		studyDate := ""
 		if !r.LatestDate.IsZero() {
-			studyDate = formatISO(r.LatestDate)
+			studyDate = timefmt.FormatISO(r.LatestDate)
 		}
 		courseProgressList = append(courseProgressList, CourseProgressDTO{
 			CourseID:      r.CourseID,
@@ -308,7 +309,7 @@ func studentToDTO(s *model.HrwaiUser) StudentDTO {
 		Username:  s.Username,
 		AvatarURL: s.AvatarURL,
 		Status:    s.Status,
-		CreatedAt: formatISO(s.CreatedAt),
+		CreatedAt: timefmt.FormatISO(s.CreatedAt),
 	}
 }
 
@@ -320,7 +321,7 @@ func studyRecordToDTO(r *model.StudyRecord) StudyRecordDTO {
 		ChapterID:     r.ChapterID,
 		StudyDuration: r.StudyDuration,
 		Progress:      r.Progress,
-		StudyDate:     formatISO(r.StudyDate),
+		StudyDate:     timefmt.FormatISO(r.StudyDate),
 	}
 }
 
@@ -484,12 +485,12 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 			dto.LastPosition = posByChapter[*r.LastChapterID]
 		}
 		if r.LastStudiedAt != nil {
-			dto.LastStudiedAt = formatISO(*r.LastStudiedAt)
+			dto.LastStudiedAt = timefmt.FormatISO(*r.LastStudiedAt)
 		}
 		result.Courses = append(result.Courses, dto)
 	}
 
-	// 最后学习时间倒序（formatISO 为**同时区**定长格式，偏移恒定故字典序即时间序；无值排后）。
+	// 最后学习时间倒序（timefmt.FormatISO 为**同时区**定长格式，偏移恒定故字典序即时间序；无值排后）。
 	sort.SliceStable(result.Courses, func(i, j int) bool {
 		return result.Courses[i].LastStudiedAt > result.Courses[j].LastStudiedAt
 	})
@@ -544,7 +545,7 @@ func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*Stude
 	}
 	lastStudiedAt := ""
 	if lp.LastStudiedAt != nil {
-		lastStudiedAt = formatISO(*lp.LastStudiedAt)
+		lastStudiedAt = timefmt.FormatISO(*lp.LastStudiedAt)
 	}
 
 	detail := &StudentCourseDetailDTO{

@@ -9,6 +9,8 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+
+	"forklift-training/internal/timefmt"
 )
 
 // ExportService 数据导出服务。
@@ -46,7 +48,7 @@ func (s *ExportService) Students() ([][]any, error) {
 			status = "启用"
 		}
 		out = append(out, []any{
-			r.ID, r.Account, r.Username, r.Phone, r.Email, r.Company, status, formatISO(r.CreatedAt),
+			r.ID, r.Account, r.Username, r.Phone, r.Email, r.Company, status, timefmt.FormatISO(r.CreatedAt),
 		})
 	}
 	return out, nil
@@ -80,7 +82,7 @@ func (s *ExportService) Questions() ([][]any, error) {
 		}
 		out = append(out, []any{
 			r.ID, r.Type, r.Content, options, r.Answer, r.Explanation,
-			r.Status, formatISO(r.CreatedAt),
+			r.Status, timefmt.FormatISO(r.CreatedAt),
 		})
 	}
 	return out, nil

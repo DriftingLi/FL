@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -85,7 +86,7 @@ func (s *QuestionCommentService) List(questionID, page, pageSize int, scope Ques
 	for i, r := range rows {
 		items[i] = QuestionCommentDTO{
 			ID: r.ID, QuestionID: r.QuestionID, UserID: r.UserID,
-			Content: r.Content, CreatedAt: formatISO(r.CreatedAt),
+			Content: r.Content, CreatedAt: timefmt.FormatISO(r.CreatedAt),
 			Username: r.Username, AvatarURL: r.AvatarURL,
 		}
 		if items[i].Username == "" {
@@ -121,7 +122,7 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 	_ = s.db.Select("username", "avatar_url").First(&u, userID).Error
 	dto := &QuestionCommentDTO{
 		ID: c.ID, QuestionID: c.QuestionID, UserID: c.UserID,
-		Content: c.Content, CreatedAt: formatISO(c.CreatedAt),
+		Content: c.Content, CreatedAt: timefmt.FormatISO(c.CreatedAt),
 		Username: u.Username, AvatarURL: u.AvatarURL,
 	}
 	if dto.Username == "" {

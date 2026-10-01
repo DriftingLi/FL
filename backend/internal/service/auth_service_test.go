@@ -326,7 +326,7 @@ func TestGetProfile_PendingReview(t *testing.T) {
 	svc, tdb := newGetProfileSvc(t)
 	hash, _ := HashPassword("pwd123")
 	u := testutil.SeedStudent(t, tdb, "pending", hash)
-	req, err := svc.reviewSvc.CreateRequest(u.ID, ProfileFieldNickname, "新昵称")
+	req, err := svc.reviewSvc.CreateRequest(u.ID, model.ProfileFieldNickname, "新昵称")
 	if err != nil {
 		t.Fatalf("提交待审请求失败: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestGetProfile_PendingReview(t *testing.T) {
 		t.Fatalf("应有待审资料对象: %v", dto.PendingProfileChange)
 	}
 	pending := *dto.PendingProfileChange
-	if pending.ID != req.ID || pending.Status != ProfileStatusPending {
+	if pending.ID != req.ID || pending.Status != model.ProfileStatusPending {
 		t.Fatalf("待审资料异常: %+v", pending)
 	}
 }

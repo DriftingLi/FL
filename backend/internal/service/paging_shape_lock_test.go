@@ -1,5 +1,7 @@
 package service
 
+import "forklift-training/internal/notification"
+
 import "testing"
 
 // paging_shape_lock_test 锁定三处 QueryWithScan 列表接口的分页信封 shape：
@@ -8,6 +10,6 @@ import "testing"
 
 func TestPagingResultShapeLock(t *testing.T) {
 	assertShapeLock(t, &ForumTopicPageResult{}, "page", "pages", "topics", "total")
-	assertShapeLock(t, &NotificationListPageResult{}, "items", "page", "pages", "total", "unread_count")
+	assertShapeLock(t, &notification.NotificationListPageResult{}, "items", "page", "pages", "total", "unread_count")
 	assertShapeLock(t, &ProfileChangeRequestPageResult{}, "page", "pages", "requests", "total")
 }

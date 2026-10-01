@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
 )
 
 // legacyQuestionDict 历史 questionToDict 的 map 实现（shape-lock 参照物）。
@@ -25,8 +26,8 @@ func legacyQuestionDict(q *model.Question, includeAnswer bool) map[string]any {
 		"score":           q.Score,
 		"created_by":      q.CreatedBy,
 		"created_by_type": q.CreatedByType,
-		"created_at":      formatISO(q.CreatedAt),
-		"updated_at":      formatISO(q.UpdatedAt),
+		"created_at":      timefmt.FormatISO(q.CreatedAt),
+		"updated_at":      timefmt.FormatISO(q.UpdatedAt),
 	}
 	// #412：credential_id 随新 DTO 一起入契约（omitempty：nil 省略，与 DTO 字节一致）。
 	if q.CredentialID != nil {
