@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/security"
@@ -46,7 +47,7 @@ type Deps struct {
 	PhoneCh         service.CodeChannel
 	CaptchaSvc      *captcha.Service
 	WechatAuthSvc   *service.WechatAuthService
-	FileSvc         *service.FileStore
+	FileSvc         *filestore.FileStore
 	SlideRenderer   *service.SlideRenderer
 	NotificationSvc *notification.Service
 	ReviewSvc       *service.ProfileReviewService

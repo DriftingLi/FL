@@ -4,7 +4,7 @@
 // `proxy_pass` 给 Ceph，**不经后端 staticHandler**，所以 ADR-0066 决策 2 的分档在生产是死代码
 // （实测 `curl -sI https://www.gccsmile.com/avatars/….webp` 既无 content-disposition 也无
 // x-content-type-options）。本票的决策是「在 nginx 层补齐分档，但**不在 nginx 手抄第二份规则**」——
-// 规则的唯一事实源仍是 `service.fileTypeTable`，这里只做渲染。
+// 规则的唯一事实源仍是 `filestore.fileTypeTable`，这里只做渲染。
 //
 // 落点形态：**就地覆写 `frontend/nginx-host.conf` 的生成区**（`# >>> …` 与 `# <<< …` 两行标记之间），
 // 而不是另出一个需要挂载进容器的片段文件——compose 只把 `nginx-host.conf` 挂成
@@ -16,7 +16,7 @@
 //   - safe → 内联；unsafe / unknown → 强制下载；nosniff 两档都设。
 //   - **Content-Type 刻意不在 nginx 侧覆写**（#1364 决策 3）：`attachment` 已经决定浏览器不渲染，
 //     覆写要 `proxy_hide_header Content-Type` + 每扩展名 MIME map，收益为零、风险是把 RGW 给的
-//     正确 MIME 弄丢。后端 local 面覆写是因为它自己就是出处（`MimeTypeOf`），nginx 不是。
+//     正确 MIME 弄丢。后端 local 面覆写是因为它自己就是出处（`filestore.MimeTypeOf`），nginx 不是。
 package deploy
 
 import (
@@ -33,7 +33,7 @@ import (
 	"strings"
 
 	"forklift-training/internal/codegen"
-	"forklift-training/internal/service"
+	"forklift-training/internal/filestore"
 )
 
 // nginx 生成区的两行标记（判据即字面量，改一处要同步改测试）。
@@ -51,17 +51,17 @@ var extPattern = regexp.MustCompile(`^[a-z0-9]+$`)
 
 // classLiteral AST 里 class 字段写法 → 运行期分档值。空串 = 源码省了 class 字段，
 // Go 零值即 FileTypeUnknown，与运行期同解。
-var classLiteral = map[string]service.FileTypeClass{
-	"":                service.FileTypeUnknown,
-	"FileTypeUnknown": service.FileTypeUnknown,
-	"FileTypeSafe":    service.FileTypeSafe,
-	"FileTypeUnsafe":  service.FileTypeUnsafe,
+var classLiteral = map[string]filestore.FileTypeClass{
+	"":                filestore.FileTypeUnknown,
+	"FileTypeUnknown": filestore.FileTypeUnknown,
+	"FileTypeSafe":    filestore.FileTypeSafe,
+	"FileTypeUnsafe":  filestore.FileTypeUnsafe,
 }
 
 // deliveryRow 类型表一行：扩展名 + 分档。
 type deliveryRow struct {
 	ext   string
-	class service.FileTypeClass
+	class filestore.FileTypeClass
 }
 
 // locateNginxHostConf 在 dir 下定位 frontend/nginx-host.conf。
@@ -115,7 +115,7 @@ func RenderNginxDeliveryRegion() (string, error) {
 		return "", err
 	}
 	if len(rows) == 0 {
-		return "", errors.New("从 service.fileTypeTable 解析到 0 行：生成器失效（表形态变了？本函数需要跟着改）")
+		return "", errors.New("从 filestore.fileTypeTable 解析到 0 行：生成器失效（表形态变了？本函数需要跟着改）")
 	}
 	return renderDeliveryRegion(rows)
 }
@@ -139,9 +139,9 @@ func renderDeliveryRegion(rows []deliveryRow) (string, error) {
 		}
 		line := deliveryLine(r.ext, deliveryOf(r.class))
 		switch r.class {
-		case service.FileTypeSafe:
+		case filestore.FileTypeSafe:
 			safe = append(safe, line)
-		case service.FileTypeUnsafe:
+		case filestore.FileTypeUnsafe:
 			unsafe_ = append(unsafe_, line)
 		default:
 			unknown = append(unknown, line)
@@ -150,7 +150,7 @@ func renderDeliveryRegion(rows []deliveryRow) (string, error) {
 
 	var b strings.Builder
 	b.WriteString("# ===== RGW 直出的投递分档（ADR-0066 决策 2 / 票 #1364）=====\n")
-	b.WriteString("# 唯一事实源：backend/internal/service/file_type_table.go 的 class 列；\n")
+	b.WriteString("# 唯一事实源：backend/internal/filestore/file_type_table.go 的 class 列；\n")
 	b.WriteString("# 再生成：cd backend && go run ./cmd/gen-deploy；\n")
 	b.WriteString("# 同步契约：backend/internal/deploy/nginx_delivery_gen_test.go（改表不改本段即红）。\n")
 	b.WriteString("# 语义与后端 staticHandler 的 applyUploadDeliveryHeaders 对齐：safe 内联、\n")
@@ -205,18 +205,18 @@ func pad(key, value string) string {
 const deliveryKeyIndent = 4
 
 // deliveryOf 分档 → nginx map 取值（safe 内联，其余强制下载）。
-func deliveryOf(class service.FileTypeClass) string {
-	if class == service.FileTypeSafe {
+func deliveryOf(class filestore.FileTypeClass) string {
+	if class == filestore.FileTypeSafe {
 		return "inline"
 	}
 	return "attachment"
 }
 
 // fileTypeTableRows 取类型表的**全集**与分档：扩展名键从源码 AST 读，分档值以运行期
-// service.FileTypeClassOf 为准，并与 AST 字面量逐行对账。
+// filestore.FileTypeClassOf 为准，并与 AST 字面量逐行对账。
 //
 // 为什么必须去解析另一个包的源码：`fileTypeTable` 是包内私有，导出面里没有任何「列出全部
-// 扩展名」的函数（AllowedExtensionsFor 按上传类别取，unsafe 与投稿专用行的 upload 都是空串，
+// 扩展名」的函数（filestore.AllowedExtensionsFor 按上传类别取，unsafe 与投稿专用行的 upload 都是空串，
 // 拿它拼不出全集）——而「拼不出全集」正是要防的那件事：漏一行就等于让那个扩展名静默落到
 // default，看上去生成了、其实表里新增的类型没人管。同形态先例见 topology_test.go 用 AST 读
 // internal/config/config.go 的默认值。本函数只读，不改 service 一行。
@@ -227,15 +227,15 @@ func fileTypeTableRows() ([]deliveryRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	src := filepath.Join(root, "backend", "internal", "service", "file_type_table.go")
+	src := filepath.Join(root, "backend", "internal", "filestore", "file_type_table.go")
 	rows, err := parseFileTypeTable(src)
 	if err != nil {
 		return nil, err
 	}
 	slices.SortFunc(rows, func(a, b deliveryRow) int { return strings.Compare(a.ext, b.ext) })
 	for _, r := range rows {
-		if got := service.FileTypeClassOf(r.ext); got != r.class {
-			return nil, fmt.Errorf("类型表解析失配: %s 在源码声明为 %v、service.FileTypeClassOf 返回 %v（生成器与表已不同形，请检查本文件的解析）",
+		if got := filestore.FileTypeClassOf(r.ext); got != r.class {
+			return nil, fmt.Errorf("类型表解析失配: %s 在源码声明为 %v、filestore.FileTypeClassOf 返回 %v（生成器与表已不同形，请检查本文件的解析）",
 				r.ext, r.class, got)
 		}
 	}
@@ -315,9 +315,9 @@ func parseFileTypeTable(path string) ([]deliveryRow, error) {
 // classOfEntry 读一行里的 `class:` 字段；省了该字段就是 Go 零值 FileTypeUnknown。
 //
 // 取值形态两种都要认：表内写的是同包裸标识符（`class: FileTypeSafe`），
-// 但把常量引用改成限定式（`service.FileTypeSafe`）不该让生成器失配 ——
+// 但把常量引用改成限定式（`filestore.FileTypeSafe`）不该让生成器失配 ——
 // 名字对上 classLiteral 即可，两侧的差别由下面的运行期对账兜住。
-func classOfEntry(entry *ast.CompositeLit) (service.FileTypeClass, error) {
+func classOfEntry(entry *ast.CompositeLit) (filestore.FileTypeClass, error) {
 	for _, f := range entry.Elts {
 		kv, ok := f.(*ast.KeyValueExpr)
 		if !ok {
@@ -334,15 +334,15 @@ func classOfEntry(entry *ast.CompositeLit) (service.FileTypeClass, error) {
 		case *ast.SelectorExpr:
 			name = v.Sel.Name
 		default:
-			return service.FileTypeUnknown, errors.New("class 字段不是标识符形态（FileTypeSafe / FileTypeUnsafe / FileTypeUnknown）")
+			return filestore.FileTypeUnknown, errors.New("class 字段不是标识符形态（FileTypeSafe / FileTypeUnsafe / FileTypeUnknown）")
 		}
 		cls, ok := classLiteral[name]
 		if !ok {
-			return service.FileTypeUnknown, fmt.Errorf("class 字段 %s 不在已知三档里", name)
+			return filestore.FileTypeUnknown, fmt.Errorf("class 字段 %s 不在已知三档里", name)
 		}
 		return cls, nil
 	}
-	return service.FileTypeUnknown, nil
+	return filestore.FileTypeUnknown, nil
 }
 
 // spliceRegion 用 region 替换两行标记之间的内容（标记本身保留）。

@@ -10,19 +10,20 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 )
 
 // AdminCourseService 管理端课程服务。
 type AdminCourseService struct {
 	db      *gorm.DB
-	fileSvc *FileStore
+	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
 // NewAdminCourseService 创建管理端课程服务实例。fileSvc 用于删除章节时清理幻灯片/图文图片（可 nil，nil 时跳过）。
-func NewAdminCourseService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *AdminCourseService {
+func NewAdminCourseService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *AdminCourseService {
 	return &AdminCourseService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
@@ -279,7 +280,7 @@ func (s *AdminCourseService) DeleteChapter(chapterID int) (*DeleteChapterResult,
 	}
 	if s.fileSvc != nil {
 		s.fileSvc.DeleteFiles(s.fileSvc.List(fmt.Sprintf("%s/%d", slideRenderDir, chapterID)))
-		s.fileSvc.DeleteFiles(s.fileSvc.List(ChapterImageDirPrefix + "/" + strconv.Itoa(chapterID)))
+		s.fileSvc.DeleteFiles(s.fileSvc.List(filestore.ChapterImageDirPrefix + "/" + strconv.Itoa(chapterID)))
 	}
 	return &DeleteChapterResult{ChapterID: chapterID}, nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
@@ -63,16 +64,16 @@ func bindQuestionWriteReq[T any](c *gin.Context) (*T, error) {
 // QuestionBankHandler 题库管理 handler。
 type QuestionBankHandler struct {
 	svc     *service.QuestionBankService
-	fileSvc *service.FileStore
+	fileSvc *filestore.FileStore
 }
 
 // NewQuestionBankHandler 创建题库管理 handler。
-func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *service.FileStore) *QuestionBankHandler {
+func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *filestore.FileStore) *QuestionBankHandler {
 	return &QuestionBankHandler{svc: svc, fileSvc: fileSvc}
 }
 
 // RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *service.FileStore) {
+func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *filestore.FileStore) {
 	h := NewQuestionBankHandler(svc, fileSvc)
 
 	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
@@ -640,12 +641,12 @@ func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	buf, err := service.ReadMultipartFile(file)
+	buf, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "图片上传失败")
 		return
 	}
-	url, err := h.fileSvc.Save(buf, file.Filename, service.QuestionImageDirPrefix)
+	url, err := h.fileSvc.Save(buf, file.Filename, filestore.QuestionImageDirPrefix)
 	if err != nil {
 		response.ServerErrorCause(c, "图片上传失败: ", err)
 		return

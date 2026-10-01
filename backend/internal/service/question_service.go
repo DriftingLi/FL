@@ -16,6 +16,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 )
@@ -343,13 +344,13 @@ func round1(f *float64) {
 // QuestionBankService 题库 CRUD 与知识点管理。
 type QuestionBankService struct {
 	db      *gorm.DB
-	fileSvc *FileStore
+	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
 // NewQuestionBankService 创建题库服务。fileSvc 用于删除题目时清理题图（可 nil，nil 时跳过）。
-func NewQuestionBankService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *QuestionBankService {
+func NewQuestionBankService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *QuestionBankService {
 	return &QuestionBankService{db: db, fileSvc: fileSvc, logger: logger}
 }
 

@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -26,7 +27,7 @@ func newAIStack(t *testing.T) (*AIConfigService, *AIAssistantService, *AIService
 	db := testutil.NewFileDB(t)
 	cfgSvc := NewAIConfigService(db, "test-master-key", zap.NewNop())
 	port := NewEinoAIModel(cfgSvc, zap.NewNop())
-	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
+	assistant := NewAIAssistantService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
 	aiSvc := NewAIService(db, port, zap.NewNop())
 	return cfgSvc, assistant, aiSvc, db
 }

@@ -7,6 +7,7 @@ import (
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -34,7 +35,7 @@ type coreSingletons struct {
 	phoneCh       service.CodeChannel
 	mailSender    service.MailSender
 	wechatAuthSvc *service.WechatAuthService
-	fileSvc       *service.FileStore
+	fileSvc       *filestore.FileStore
 	slideRenderer *service.SlideRenderer
 	notifSvc      *notification.Service
 	reviewSvc     *service.ProfileReviewService
@@ -65,7 +66,7 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	c.mailSender = service.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
 	c.phoneCh = service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	c.wechatAuthSvc = service.NewWechatAuthService(cfg.Wechat.MiniProgram, db, c.authSvc, logger)
-	c.fileSvc = service.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
+	c.fileSvc = filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
 	c.slideRenderer = service.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
 	c.notifSvc = notification.NewService(db, logger)
 	c.reviewSvc = service.NewProfileReviewService(db, c.notifSvc, st, logger)

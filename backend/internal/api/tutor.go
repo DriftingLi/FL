@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
@@ -18,16 +19,16 @@ import (
 // TutorHandler 导师端 handler。
 type TutorHandler struct {
 	svc     *service.TutorService
-	fileSvc *service.FileStore
+	fileSvc *filestore.FileStore
 }
 
 // NewTutorHandler 创建导师端 handler。
-func NewTutorHandler(svc *service.TutorService, fileSvc *service.FileStore) *TutorHandler {
+func NewTutorHandler(svc *service.TutorService, fileSvc *filestore.FileStore) *TutorHandler {
 	return &TutorHandler{svc: svc, fileSvc: fileSvc}
 }
 
 // RegisterTutorRoutes 注册 /api/tutor 蓝图。
-func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *service.FileStore) {
+func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *filestore.FileStore) {
 	h := NewTutorHandler(svc, fileSvc)
 
 	g := rg.Group("/tutor", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapTutorAccess))
@@ -170,7 +171,7 @@ func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
 		response.BadRequest(c, "未选择文件")
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件上传失败")
 		return
@@ -201,13 +202,13 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 	// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
 	// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
 	uploadVditorImage(c, h.fileSvc, func(content []byte, filename string) (string, error) {
-		subfolder := service.ChapterImageDirPrefix
+		subfolder := filestore.ChapterImageDirPrefix
 		chapterIDStr := c.Query("chapter_id")
 		if chapterIDStr == "" {
 			chapterIDStr = c.PostForm("chapter_id")
 		}
 		if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
-			subfolder = service.ChapterImageDirPrefix + "/" + chapterIDStr
+			subfolder = filestore.ChapterImageDirPrefix + "/" + chapterIDStr
 		}
 		return h.fileSvc.Save(content, filename, subfolder)
 	})

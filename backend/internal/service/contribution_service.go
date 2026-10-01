@@ -26,6 +26,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/dberr"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/scope"
@@ -33,7 +34,7 @@ import (
 	"forklift-training/pkg/paging"
 )
 
-// 投稿域常量（单一事实源，调用侧不得另立）。前缀登记归附件归属 module（attachment.go）：
+// 投稿域常量（单一事实源，调用侧不得另立）。前缀登记归附件归属 module（internal/filestore/attachment.go）：
 // 先传后交——文件先落 contributions/ 前缀，提交后由 user_contribution_file 行引用即转正式
 // （无物理搬移——引用即归属）；悬空文件由扫描守护按 ContributionOrphanTTL 回收（与论坛图片同模式）。
 const (
@@ -162,7 +163,7 @@ type ContributionPageResult struct {
 // ContributionService 投稿服务。
 type ContributionService struct {
 	db              *gorm.DB
-	fileSvc         *FileStore
+	fileSvc         *filestore.FileStore
 	notificationSvc *notification.Service
 	points          *PointsService
 	logger          *zap.Logger
@@ -170,7 +171,7 @@ type ContributionService struct {
 }
 
 // NewContributionService 构造投稿服务。clk 为空时回退生产实钟（Asia/Shanghai）。
-func NewContributionService(db *gorm.DB, fileSvc *FileStore, notificationSvc *notification.Service, points *PointsService, logger *zap.Logger, clk clock.Clock) *ContributionService {
+func NewContributionService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, points *PointsService, logger *zap.Logger, clk clock.Clock) *ContributionService {
 	if clk == nil {
 		clk = clock.Real()
 	}
@@ -196,11 +197,11 @@ var allowedContributionExt = map[string]bool{
 }
 
 // contributionStagedDir 某位学员的投稿暂存前缀（ADR-0066 决策 5：归属由路径承载）。
-// 登记仍在 attachment.go 的 ContributionFileDirPrefix（域前缀单点），这里只在它下面按用户分一层：
+// 登记仍在 internal/filestore/attachment.go 的 filestore.ContributionFileDirPrefix（域前缀单点），这里只在它下面按用户分一层：
 // 扁平的 contributions/ 让任何人只要猜中文件名就能把别人的暂存文件登记进自己的投稿，
 // 而 contributions/<uid>/ 把「谁的」写进路径 ⇒ Create 的四校验第 ① 条才有判据可读。
 func contributionStagedDir(userID int) string {
-	return fmt.Sprintf("%s/%d", ContributionFileDirPrefix, userID)
+	return fmt.Sprintf("%s/%d", filestore.ContributionFileDirPrefix, userID)
 }
 
 // contributionStagedOwner 从暂存文件 URL 里取出「这是谁的暂存位」（contributions/<uid>/<name>）。
@@ -209,12 +210,12 @@ func contributionStagedDir(userID int) string {
 // 为什么不用「URL 里含 /contributions/<uid>/ 子串」这种宽松判据：那挡不住
 // `https://x/contributions/9/../../contributions/8/a.pdf` 这类形状——local 存储把 key 直接拼成
 // 文件路径（storage.LocalStorage.urlToKey），段级穿越会把别人的文件读成「我的」。
-// 本站形态判定仍走 attachment.go 的单点（IsSiteAttachmentURL），这里只补「归属段」这一层。
+// 本站形态判定仍走 internal/filestore/attachment.go 的单点（filestore.IsSiteAttachmentURL），这里只补「归属段」这一层。
 func contributionStagedOwner(url string) int {
-	if !IsSiteAttachmentURL(url, ContributionFileDirPrefix) {
+	if !filestore.IsSiteAttachmentURL(url, filestore.ContributionFileDirPrefix) {
 		return 0
 	}
-	key := AttachmentKey(url, ContributionFileDirPrefix) // contributions/<uid>/<name>
+	key := filestore.AttachmentKey(url, filestore.ContributionFileDirPrefix) // contributions/<uid>/<name>
 	parts := strings.Split(key, "/")
 	if len(parts) < 3 {
 		return 0 // 扁平的 contributions/x.pdf（老路径）不再被认成任何人的暂存位
@@ -234,13 +235,17 @@ func contributionStagedOwner(url string) int {
 // stagedFileExists 校验暂存文件在存储侧真实存在（第四校验）。
 // 未配置存储后端时**报错而不是放行**：放行等于把这一校验变成「测试装配下的空洞」，
 // 而本仓的装配根（cmd/server → api.NewDeps）永远会带一个真存储上来。
+// 存在性本身归 filestore（只有它知道自己的适配器装没装）：这里只把它的
+// ErrStorageUnconfigured 翻成本域的 500 哨兵，别让「没配存储」被读成「文件不存在」。
 func (s *ContributionService) stagedFileExists(fileURL string) (bool, error) {
-	if s.fileSvc == nil || s.fileSvc.storage == nil {
+	if s.fileSvc == nil {
 		return false, ErrContributionStorageUnconfigured
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return s.fileSvc.storage.Exists(ctx, fileURL)
+	exists, err := s.fileSvc.Exists(context.Background(), fileURL)
+	if errors.Is(err, filestore.ErrStorageUnconfigured) {
+		return false, ErrContributionStorageUnconfigured
+	}
+	return exists, err
 }
 
 // validateStagedFiles 投稿创建的四校验（ADR-0066 决策 5 / #1361）：
@@ -257,10 +262,10 @@ func (s *ContributionService) validateStagedFiles(userID int, files []Contributi
 			return fmt.Errorf("%w：%s", ErrContributionStagedNotOwner, f.FileURL)
 		}
 		// ② 类型（读服务端写的 URL，不读客户端写的 file_name / content_type）
-		if ext := fileExtension(f.FileURL); !allowedContributionExt[ext] {
+		if ext := filestore.FileExtension(f.FileURL); !allowedContributionExt[ext] {
 			return fmt.Errorf("%w：%s", ErrContributionFileExtNotAllowed, f.FileURL)
 		}
-		// ③ 未被登记过（一份暂存文件只许被引用一次；引用即归属，见 attachment.go 的注释）
+		// ③ 未被登记过（一份暂存文件只许被引用一次；引用即归属，见 internal/filestore/attachment.go 的注释）
 		var claimed int64
 		if err := s.db.Model(&model.UserContributionFile{}).
 			Where("file_url = ?", f.FileURL).Count(&claimed).Error; err != nil {
@@ -319,7 +324,7 @@ func (s *ContributionService) UploadFile(ctx context.Context, userID int, fileHe
 	if fileHeader.Size > ContributionMaxFileSize {
 		return nil, ErrContributionFileTooLarge
 	}
-	content, err := ReadMultipartFile(fileHeader)
+	content, err := filestore.ReadMultipartFile(fileHeader)
 	if err != nil {
 		return nil, fmt.Errorf("读取文件失败: %w", err)
 	}
@@ -344,14 +349,14 @@ func (s *ContributionService) collectReferencedContributionFiles() (map[string]b
 		return nil, fmt.Errorf("收集投稿文件引用失败: %w", err)
 	}
 	for _, u := range urls {
-		if key := AttachmentKey(u, ContributionFileDirPrefix); key != "" {
+		if key := filestore.AttachmentKey(u, filestore.ContributionFileDirPrefix); key != "" {
 			ref[key] = true
 		}
 	}
 	return ref, nil
 }
 
-// CleanupOrphanFiles 清理投稿悬空文件（薄配置壳，算法单点见 orphan_sweep.go / ADR-0027 C2）：
+// CleanupOrphanFiles 清理投稿悬空文件（薄配置壳，算法单点见 internal/filestore/orphan_sweep.go / ADR-0027 C2）：
 // ListWithInfo(contributions/) 与全量引用集差集，仅删存储侧 LastModified 超过
 // ContributionOrphanTTL 且未被任何投稿文件行引用的文件。
 // 返回清理数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；ctx 取消语义贯穿到存储调用。
@@ -359,16 +364,16 @@ func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
-	return runOrphanSweep(ctx, orphanSweepConfig{
-		domain: "contribution",
-		ttl:    ContributionOrphanTTL,
-		list: func(c context.Context) ([]storage.FileInfo, error) {
-			return s.fileSvc.ListWithInfoWithContext(c, ContributionFileDirPrefix)
+	return filestore.RunOrphanSweep(ctx, filestore.OrphanSweepConfig{
+		Domain: "contribution",
+		TTL:    ContributionOrphanTTL,
+		List: func(c context.Context) ([]storage.FileInfo, error) {
+			return s.fileSvc.ListWithInfoWithContext(c, filestore.ContributionFileDirPrefix)
 		},
-		referenced: s.collectReferencedContributionFiles,
-		keyOf:      func(u string) string { return AttachmentKey(u, ContributionFileDirPrefix) },
-		deleteFile: s.fileSvc.DeleteWithContext,
-		logger:     s.logger,
+		Referenced: s.collectReferencedContributionFiles,
+		KeyOf:      func(u string) string { return filestore.AttachmentKey(u, filestore.ContributionFileDirPrefix) },
+		DeleteFile: s.fileSvc.DeleteWithContext,
+		Logger:     s.logger,
 	})
 }
 

@@ -14,9 +14,9 @@ import (
 	_ "forklift-training/docs"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/filestore"
 	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
 )
 
 // NewRouter 创建并配置 Gin 引擎，注册全部路由与中间件。
@@ -187,7 +187,7 @@ func registerStaticRoutes(r *gin.Engine, cfg *config.Config) {
 func applyUploadDeliveryHeaders(c *gin.Context, fullPath string) {
 	// nosniff 两档都设：safe 档按扩展名推断类型，禁止浏览器再按内容嗅探改写（ADR-0066 决策 2）。
 	c.Header("X-Content-Type-Options", "nosniff")
-	if service.FileTypeClassOfPath(fullPath) == service.FileTypeSafe {
+	if filestore.FileTypeClassOfPath(fullPath) == filestore.FileTypeSafe {
 		return
 	}
 	c.Header("Content-Disposition", "attachment")

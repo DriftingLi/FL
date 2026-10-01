@@ -6,7 +6,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/service"
+	"forklift-training/internal/filestore"
 )
 
 // vditorUploadSaver 上传保存目标：content → 返回可访问 URL。
@@ -21,7 +21,7 @@ func vditorError(msg string, errFiles []string) gin.H {
 // uploadVditorImage 统一的 Vditor 图片上传适配器。
 // 公共骨架：FormFile 读取 → 空文件名守卫 → Open/ReadAll → ValidateImage → 保存（saver 注入）→ 信封。
 // 返回 Vditor 期望格式：{ msg:"", code:0, data:{ errFiles:[], succMap:{"name":"url"} } }。
-func uploadVditorImage(c *gin.Context, fileSvc *service.FileStore, saver vditorUploadSaver) {
+func uploadVditorImage(c *gin.Context, fileSvc *filestore.FileStore, saver vditorUploadSaver) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(200, vditorError("未找到上传文件", []string{}))
@@ -31,7 +31,7 @@ func uploadVditorImage(c *gin.Context, fileSvc *service.FileStore, saver vditorU
 		c.JSON(200, vditorError("未选择文件", []string{}))
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		c.JSON(200, vditorError("文件读取失败", []string{file.Filename}))
 		return

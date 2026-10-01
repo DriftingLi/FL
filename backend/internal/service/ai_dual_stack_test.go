@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -203,7 +204,7 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	// 阻塞与流式消费方共享同一端口实例（client 签名缓存跨方法复用的前提；
 	// 承接 T1 双栈测试「两栈共用同一 resolver 实例」的断言）
 	aiSvc := NewAIService(db, adapter, zap.NewNop())
-	assistant := NewAIAssistantService(db, cfgSvc, NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), adapter)
+	assistant := NewAIAssistantService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), adapter)
 	if aiSvc.port != adapter || assistant.port != adapter {
 		t.Fatal("阻塞与流式消费方应共享同一模型端口实例")
 	}

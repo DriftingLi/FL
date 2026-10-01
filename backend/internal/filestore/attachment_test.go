@@ -1,6 +1,6 @@
 // 附件归属单 module 的表驱动测试（第十二波票 4）：
 // 只测三个导出函数的外部行为——本站判定、URL→key、multipart 读取。
-package service
+package filestore
 
 import (
 	"bytes"

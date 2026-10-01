@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"forklift-training/internal/config"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -40,7 +41,7 @@ func TestJobCardContract(t *testing.T) {
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	st := storage.NewLocalStorage(t.TempDir())
-	fileSvc := service.NewFileStore("", st, zap.NewNop())
+	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	jobSvc := service.NewJobCardService(db, fileSvc, zap.NewNop())
 	deps.FileSvc = fileSvc
 	deps.JobCardSvc = jobSvc

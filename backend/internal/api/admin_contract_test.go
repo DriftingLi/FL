@@ -52,7 +52,7 @@ func newAdminContractDeps(t *testing.T) (*Deps, *gorm.DB, string) {
 		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
 		RecruiterCookie:       config.RecruiterCookieConfig{Name: "recruiter_token", Domain: "", Secure: false},
 	}
-	// 用真实本地存储装配（不是 newContractDeps 的 nil）：章节/课程删除与图片上传会走 FileStore，
+	// 用真实本地存储装配（不是 newContractDeps 的 nil）：章节/课程删除与图片上传会走 filestore.FileStore，
 	// nil storage 只会在那些路径上 panic（片七契约测试要覆盖它们）。
 	deps := NewDeps(cfg, db, storage.NewLocalStorage(t.TempDir()), zap.NewNop(), stubExportStore{})
 

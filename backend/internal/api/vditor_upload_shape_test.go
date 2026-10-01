@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/service"
+	"forklift-training/internal/filestore"
 )
 
 // legacyVditorErrorEnvelope 历史 vditorError/vditorFeatureError 的 map 实现（shape-lock 参照物）。
@@ -53,7 +53,7 @@ func TestVditorErrorEnvelopeShapeLock(t *testing.T) {
 func TestVditorSuccessEnvelopeShapeLock(t *testing.T) {
 	t.Parallel()
 	setTestGinMode()
-	fs := service.NewFileStore("", nil, zap.NewNop())
+	fs := filestore.NewFileStore("", nil, zap.NewNop())
 
 	r := gin.New()
 	r.POST("/upload-image", func(c *gin.Context) {

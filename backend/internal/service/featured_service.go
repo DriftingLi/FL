@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -16,13 +17,13 @@ import (
 // FeaturedService 内容精选服务。
 type FeaturedService struct {
 	db      *gorm.DB
-	fileSvc *FileStore
+	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
 // NewFeaturedService 创建内容精选服务实例。
-func NewFeaturedService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *FeaturedService {
+func NewFeaturedService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *FeaturedService {
 	return &FeaturedService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
@@ -323,11 +324,11 @@ func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
 		return
 	}
 	var urls []string
-	if cover != "" && IsSiteAttachmentURL(cover, FeaturedImageDirPrefix) {
+	if cover != "" && filestore.IsSiteAttachmentURL(cover, filestore.FeaturedImageDirPrefix) {
 		urls = append(urls, cover)
 	}
-	for _, u := range markdownImageURLs(content) {
-		if IsSiteAttachmentURL(u, FeaturedImageDirPrefix) {
+	for _, u := range filestore.MarkdownImageURLs(content) {
+		if filestore.IsSiteAttachmentURL(u, filestore.FeaturedImageDirPrefix) {
 			urls = append(urls, u)
 		}
 	}
@@ -391,7 +392,7 @@ func (s *FeaturedService) SaveImage(content []byte, filename string) (string, er
 	if s.fileSvc == nil {
 		return "", errors.New("文件服务未初始化")
 	}
-	return s.fileSvc.Save(content, filename, FeaturedImageDirPrefix)
+	return s.fileSvc.Save(content, filename, filestore.FeaturedImageDirPrefix)
 }
 
 // featuredImageGate 精选写面归属门禁（第十二波票 4，与论坛走同一条判据）：
@@ -402,14 +403,14 @@ func featuredImageGate(oldCover, oldContent, newCover, newContent string) error 
 	if oldCover != "" {
 		known[oldCover] = true
 	}
-	for _, u := range markdownImageURLs(oldContent) {
+	for _, u := range filestore.MarkdownImageURLs(oldContent) {
 		known[u] = true
 	}
 	check := func(u string) error {
 		if u == "" || known[u] {
 			return nil
 		}
-		if !IsSiteAttachmentURL(u, FeaturedImageDirPrefix) {
+		if !filestore.IsSiteAttachmentURL(u, filestore.FeaturedImageDirPrefix) {
 			return ErrFeaturedImageInvalid
 		}
 		return nil
@@ -417,7 +418,7 @@ func featuredImageGate(oldCover, oldContent, newCover, newContent string) error 
 	if err := check(newCover); err != nil {
 		return err
 	}
-	for _, u := range markdownImageURLs(newContent) {
+	for _, u := range filestore.MarkdownImageURLs(newContent) {
 		if err := check(u); err != nil {
 			return err
 		}

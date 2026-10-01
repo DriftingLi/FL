@@ -31,6 +31,7 @@
    - **无状态纯函数**进叶子包：`internal/timefmt`（`FormatISO` / `FormatTimePtr`，原 `internal/service/helpers.go` 的私有函数）—— 域包与 `internal/service` 都取它，比塞回服务层轻（P3 收 `internal/core` 时再议去留）；
    - **数值 / 指针助手**进叶子包：`internal/coerce`（`ToFloat` / `ClampFloat` / `ParseFloat` / `ParseInt` / `IntPtr` / `FloatPtr`，原 `internal/service/helpers.go`）—— 只 import `strconv`；同批删掉两枚只转发标准库的助手（`withTimeout` → `context.WithTimeout`、`containsString` → `slices.Contains`）与 `internal/service/json_helpers.go`（8 行纯转发 ⇒ 调用点直接 `encoding/json`）（P2 波 0b）；
    - **吃 `*gorm.DB` 的分区谓词**也能进叶子包：`internal/scope`（`RecordPartitionOf` / `PartitionBucket` / `EntityOwnedBy` 三谓词 + 三枚导出片段 `RecordPartitionClause` / `PartitionBucketClause` / `EntityOwnedByClause`，原 `internal/service/credential_scope.go`，11 个 service 文件改限定名）—— 只 import `gorm.io/gorm`；判别句是「**它读参数还是读服务状态**」，不是「它碰没碰 DB」（P2 波 0b；**搬它必须同步静态扫描锁的白名单**，见第 3 节）；
+   - **一族文件存取件整包搬**：`internal/filestore`（`FileStore` 的上传/删除/列表/读取 + 类型表 `fileTypeTable` + 附件归属判定 + 悬空回收单点，原 `internal/service/{file_store,attachment,file_type_table,image_cleanup_helpers,orphan_sweep}.go`，只 import `internal/storage` / zap / stdlib）。三条子规矩：**跨文件被用的私有闸门件升导出**（`FileExtension` / `FileContentType` / `AllowedFile` / `ValidateFileSize`，大小表不裸导出、改出纯函数 `MaxFileSize(filename)`）；**伸手进结构体私有字段的调用点换成导出方法**（新增 `FileStore.Exists(ctx, url)` + 哨兵 `ErrStorageUnconfigured`，调用方保住「没配存储 ⇒ 本域 500 哨兵，不读成文件不存在」）；**只转发标准库的私有助手保持私有**（`base64Encode`/`base64Decode` ⇒ 调用点直接用 `encoding/base64`）。**生成链里有它的硬编码路径**，见第 3 节（P2 波 0c）；
    - **别域的事实常量**改成**调用方传参**：站内信事件构造器收 `reason string`（`NewContributionApprovedEvent(userID int, title string, contributionID int64, points int, reason string)` 等 7 个）—— 积分流水原因是积分域的事实，通知域只把它记进 payload，于是不必 import 别域或服务层的常量；
    - **跨域共享词汇**贴着实体放 `internal/model`（第 1 节）。
 3. **搬服务**：`git mv backend/internal/service/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（先例 `service.BeijingNow`，P2 波 0a 收编后写 `clock.Now()`）。DTO、哨兵、校验函数名原样不动。
@@ -57,7 +58,9 @@
 | `backend/internal/layers/layer_guard.go` | gin 面**无需改**（自动纳入域包 `handler*.go`）；但**依赖方向的三条硬规矩**要过一眼：① `pkg/httpx` 不 import `internal/...`；② `internal/api` 只许 `cmd/...` 依赖；③ **`internal/middleware` 不得 import `internal/service`**（notification 批新增，见第 7.1 节） | 域包 `handler.go` 一引 middleware，三角 `service → 域包 → middleware` 就成环：`go build` 直接报 `import cycle not allowed`（不是红一条判据） |
 | `backend/internal/service/credential_scope_guard_test.go` | 白名单常量 `implementation` 改指实现处（波 0b 起 `internal/scope/scope.go`）、负向探针与失败文案同步；实现处每族谓词要留足命中（`implementationHits < 3` 判「扫描规则失灵」） | 锁的射程 = 整条 `internal/service` 生产代码：实现搬走后不指新家，判据会对旧路径零命中而报「规则失灵」—— **会红，但文案说的是扫描器坏，容易误诊** |
 | `backend/internal/service/nonnil_outlets_*_test.go` | 属于该域的键与 outlet 函数**删掉**（不是复制），头部注释里的域名列表同步 | `testutil.AssertNonNilOutlets` 报「同名键出现在两张表」 |
-| `scripts/check-catalog-sort.mjs` 的 5 条 `declaredIn`、`backend/internal/deploy/nginx_delivery_gen.go:230` 的硬编码路径 | 只在被点名的文件真搬家时改 | 缺文件即 Fatal（不静默），会在 CI 点名 |
+| `scripts/check-catalog-sort.mjs` 的 5 条 `declaredIn`、`backend/internal/deploy/nginx_delivery_gen.go` 的硬编码路径（:154 生成注释文案、:231 `filepath.Join(root, "backend", "internal", "<包>", "file_type_table.go")`）与 AST 判据（按变量名 `fileTypeTable` 找表 ⇒ 变量名不许改） | 只在被点名的文件真搬家时改 | 缺文件即 Fatal（不静默），会在 CI 点名 |
+| `frontend/nginx-host.conf`（生成物，两处提到路径：:15 手写表头 + :22 生成区） | 搬 `file_type_table.go` 后 `cd backend && go run ./cmd/gen-deploy -only nginx` 重生成（只动生成区那行）；**:15 在手写区，生成器不管**，要手改 | 两把锁 `TestNginxDeliveryMapInSync`（`codegen.AssertInSync`）与 `TestNginxDeliveryMapCoversFileTypeTable` 直接红（不静默）|
+| 域包内**结构体字段**改名（波 0c：`OrphanSweepConfig` 的 `domain/ttl/list/referenced/keyOf/deleteFile/logger` → 导出名） | 包内**测试**里的复合字面量也用小写键（脚本的区间替换只覆盖包外 `<包>.OrphanSweepConfig{…}`）| `go vet` 报 `unknown field domain in struct literal`（不静默，但只在 vet 阶段）|
 
 方法论：**改名会让按名字/路径判定的锁静默失配**。删或重构 Go 符号后，除了 grep 残留引用（本机 golangci-lint 跑不了，见 `checks.md` 环境 A），还要 grep 一遍**按名字判定的锁**（清单名、白名单键、前缀计数）。
 
@@ -137,6 +140,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
 - [ ] 旧符号（`XxxService` / `RegisterXxxRoutes` / 旧包前缀键）全仓残留 = 0
+- [ ] 搬走的**私有**助手在包内还有调用点，或者被删掉：本地 `go build` / `go vet` 报不出「未使用」（那是 `unused` 的活，只在 CI `backend-lint` 兜）；自查方式是对每个进新包的私有函数数一遍**剥掉注释**后的包内引用
 - [ ] PR 正文一行披露「合并到 master 将触发 production 部署」
 
 ## 10. 波次与 PR 纪律
@@ -157,11 +161,11 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 | 解析出口：查询侧 `QueryIntPtr` / `QueryIntDefault` / `QueryIDPtr` / `PositiveID`，路径侧 `PathInt` / `PathInt64`，以及 `ParseError` / `BadRequest` / `Endpoint` | `pkg/httpx` | 波 0a 尾款收编；`internal/api/helpers.go` 已删；漂移锁 `path_parse_point_drift_lock_test.go` 钉住两侧计数（宿主四枚、本包零枚），新增出口必须同步 `queryParseHelperNames` |
 | credential 谓词（`RecordPartitionOf` / `PartitionBucket` / `EntityOwnedBy`） | `internal/scope`（叶子，只 import `gorm.io/gorm`；波 0b ✅ 已交付） | 三枚包私有片段已升为导出片段（favorite 子查询复用同一份判据）；三族 nil 语义**相反**（记录冻结分区 nil 看全部 / NULL 桶 nil 只看 `credential_id IS NULL` / 归属分区 nil 看全部）⇒ 搬包时同步静态扫描锁的白名单路径（白名单就是谓词实现处那个文件） |
 | 数值/指针助手（`toFloat` / `clampFloat` / `parseFloat` / `parseInt` / `ptrInt` / `floatPtr` / `containsString` / `withTimeout`） | `internal/coerce`（叶子，只 import `strconv`；波 0b ✅ 已交付） | 同批删掉 `internal/service/json_helpers.go`（8 行纯转发 `jsonMarshal` / `jsonUnmarshal`，调用点直接用 `encoding/json`） |
-| 文件存取 | `internal/filestore`（波 0c） | 未开工 |
+| 文件存取一族（`FileStore` 上传/删除/列表/读取、类型表 `fileTypeTable`、附件归属 `IsSiteAttachmentURL`/`AttachmentKey`/`ReadMultipartFile`、悬空回收 `RunOrphanSweep`） | `internal/filestore`（叶子，只 import `internal/storage` / zap / stdlib；波 0c ✅ 已交付） | 五个源文件 + 四个测试文件整包搬（9 个 `git mv`，39 文件机械改名）。**跨文件私有引用 11 处**是搬包的主要暗礁，三种破法：闸门四件升导出（`FileExtension` / `FileContentType` / `AllowedFile` / `ValidateFileSize`）+ 大小表改纯函数 `MaxFileSize(filename)`；结构体私有字段改导出方法（`FileStore.Exists` + `ErrStorageUnconfigured`）；纯转发标准库的 `base64Encode`/`base64Decode` 保持私有、调用点直接用 `encoding/base64`。`image_cleanup_helpers.go` 只导出 `MarkdownImageURLs`，`orphan_sweep.go` 的 `OrphanSweepConfig`/`RunOrphanSweep` 升导出 |
 | 跨文件的请求 DTO 类型（`idParam` / `taskIDParam` / `courseIDInput` / `chapterIDInput` / `swapCourseSortReq` / `generateContentReq`，声明在 `internal/api/admin.go:873-905`，被 `admin_recruiter.go` / `settings.go` / `tutor.go` 跨文件引用） | **各域包自己声明** | 它们本来就是各域的请求面（`struct{ ID int }` + 用 `httpx.PathInt` 的 Parse 闭包），不是解析出口 ⇒ 不进 `pkg/httpx`；拆包时随 handler 搬、同名保留 |
 | 既要用 gin 又要用 middleware + service 的域内解析助手（`studentQuestionScope`，`internal/api/question_bank.go:105`） | **题库域包**（3c 波随 `internal/questionbank` 导出） | **不能进 `pkg/httpx`**：`pkg/` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①），而它同时需要 `internal/middleware`（`CredentialIDPtr`）与 `internal/service`（`NewQuestionReadScope`）；调用它的 `favorite.go` / `note.go` / `question_interaction.go` 都在 3c/4b/4c 波之后 ⇒ 不阻塞波 1、2 |
 
-**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`（✅ 已交付）；0c `internal/filestore`。波 1：1a material / 1b points / 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
+**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`（✅ 已交付）；0c `internal/filestore`（✅ 已交付）。波 1：1a material / 1b points / 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
 
 **三个强环与破环手法**：course↔training、course↔tutor/points、resume↔recruit。五种破法 —— 跨域共享词汇贴实体进 `internal/model`、别域的事实常量改调用方传参、无状态纯函数进叶子包、下游要业务层类型走消费方接口反转（第 7.1 节）、助手搬回自己的域。
 
@@ -179,3 +183,13 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **先删定义，再改名**：改名规则只要会命中定义行（`func IsDuplicateError(`、`func (s *X) startOfShanghaiDay(`），就必须先把定义整块删掉或搬走再跑脚本 —— 否则产出 `func dberr.IsDuplicateError(` 这种语法垃圾。**方法形态尤其危险**：裸模式会匹配 `s.startOfShanghaiDay(`（`s.` 不是词边界），要么用后置断言 `(?<![\w.])`，要么先显式替换限定形态。
 - **别「内存改一遍 + 磁盘另跑一遍」**：把文件读进内存做区间删除、又用另一遍全仓扫描直接写盘，最后 `save()` 内存版会**把磁盘上的改名结果覆盖回去**（波 0a 实测 `contribution_service.go` 的 6 处改名被覆盖，方法名成了 `func (s *ContributionService) clock.DayStart(...)`，靠 `go build` 才发现）。每步改完立刻 `git status` + `go build`。
 - **正则不剥注释、也不防同名局部变量**：`clock := &stepClock{}` 这种局部变量会让「该文件用了 `clock` 包」的判据误判，给不需要的文件加 import（`go vet` 报 imported and not used 才抓到）；注释里的引用会被一起改名 —— 改完注释是对的，但 import 是多余的，加 import 的判据要么剥注释、要么以编译器为准。
+
+第三批（P2 波 0c：五文件搬 `internal/filestore`，39 文件机械改名）再添七条：
+
+- **搬包前先扫「跨文件私有引用」，不要只扫导出面**：被搬的文件里，11 处私有符号是**留在原包的其他文件**在用的（`fileExtension` ×6、`allowedFile` ×2、`validateFileSize` ×2、`fileContentType`、`maxFileSizes`、`base64Encode`/`base64Decode`，外加一次直接读结构体私有字段 `s.fileSvc.storage`）。这类引用在 `git mv` 之前 grep 不到（同包内不需要限定名），`go build` 才一次报全 ⇒ 先做一遍「新包导出面 vs 旧包剩余文件引用」的比对，再逐个决定升导出 / 换导出方法 / 调用点直接用标准库（本波三种破法各用了一次）。
+- **别用「导出字段」破封装**：`stagedFileExists` 读的是 `s.fileSvc.storage`，把 `storage` 升导出等于把存储适配器漏给所有调用方；正解是在 `FileStore` 上加**语义完整的导出方法**（`Exists(ctx, url)`）并把它自己的失败语义带出来（`ErrStorageUnconfigured` ⇒ 调用方仍回本域 500 哨兵，不静默读成「文件不存在」）。
+- **成对命名（大驼峰 / 小驼峰并存）要求全脚本一律 `-creplace`**：`FileStore` 与局部变量 `fileStore`、`markdownImageURLs` 与 `MarkdownImageURLs` 必须分开处理。反过来，**否定后顾 `(?<![\w.])` 会漏掉带点的旧包前缀**（`service.NewFileStore` / `service.ReadMultipartFile` 不是裸名）⇒ 改名后要额外 grep 一遍 `<旧包>.<符号>` 的组合形态（本波漏 9 处，靠 `go build` / `go vet` 抓到）。
+- **改结构体字段名要连包内测试的复合字面量一起改**：脚本的区间替换只覆盖包外 `<包>.OrphanSweepConfig{…}` 形态，包内 `orphan_sweep_test.go` 两处字面量仍是小写键 ⇒ `go vet` 报 `unknown field domain in struct literal`。字段导出后先 grep 全仓 `\b<小写字段>:` 再收工。
+- **生成链上的硬编码路径要一起改，且分「生成区 / 手写区」**：`internal/deploy/nginx_delivery_gen.go` 的 :154 文案与 :231 路径（AST 判据按变量名 `fileTypeTable` 找表 ⇒ **变量名不许改**），生成物 `frontend/nginx-host.conf` 的生成区一行由 `cd backend && go run ./cmd/gen-deploy -only nginx` 覆写、**手写表头 :15 那行生成器不管**。两把锁 `TestNginxDeliveryMapInSync` / `TestNginxDeliveryMapCoversFileTypeTable` 会在 CI 点名。
+- **`gofmt -w` 会改写文件**：脚本跑完执行 `gofmt -w` 之后再用编辑工具改同一文件，会报 `file changed since it was read` ⇒ 重新 read 再改。
+- **搬走的私有助手要回头看它在新家还有没有调用点**：`base64Encode` 的唯一消费者在包外（`internal/service/slide_renderer.go:245`），那条调用点改成 `base64.StdEncoding` 之后它在包内零引用 —— 而「未使用函数」**不由 `go build` / `go vet` / `go test` 报**（本机三样全绿），只有 CI `backend-lint`（`unused`）报 `internal/filestore/file_store.go:309:6: func base64Encode is unused (unused)`。本波第一个 PR 就是被这条拦下的：**本地验证全绿 ≠ CI 绿**，搬包后除「跨文件私有引用」（上一条）之外，还要反向数一遍「私有件在新包内的引用数」。数的时候**先剥注释** —— 文档注释里常把函数名再写一遍，会让零引用看起来非零。

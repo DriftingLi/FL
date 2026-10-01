@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
@@ -63,7 +64,7 @@ func newForumTestEnv(t *testing.T) *forumTestEnv {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := &memForumStorage{}
-	fileSvc := NewFileStore("", st, zap.NewNop())
+	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notificationSvc := notification.NewService(db, zap.NewNop())
 	counters := NewForumCounter()
 	points := NewPointsService(db, zap.NewNop(), nil, notificationSvc)
