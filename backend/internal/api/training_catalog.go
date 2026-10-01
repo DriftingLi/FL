@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -357,13 +358,13 @@ type catalogUpdateReq[I any] struct {
 func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.SpecialtyInput], service.SpecialtyDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.SpecialtyInput], error) {
-			id, err := pathInt(c, "specialty_id", "专业方向ID无效")
+			id, err := httpx.PathInt(c, "specialty_id", "专业方向ID无效")
 			if err != nil {
 				return nil, err
 			}
 			var in service.SpecialtyInput
 			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &catalogUpdateReq[service.SpecialtyInput]{ID: id, In: in}, nil
 		},
@@ -390,13 +391,13 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.LevelInput], service.LevelDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.LevelInput], error) {
-			id, err := pathInt(c, "level_id", "课程等级ID无效")
+			id, err := httpx.PathInt(c, "level_id", "课程等级ID无效")
 			if err != nil {
 				return nil, err
 			}
 			var in service.LevelInput
 			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &catalogUpdateReq[service.LevelInput]{ID: id, In: in}, nil
 		},
@@ -423,13 +424,13 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.CertificateTemplateInput], service.CertificateTemplateDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CertificateTemplateInput], error) {
-			id, err := pathInt(c, "id", "证书模板ID无效")
+			id, err := httpx.PathInt(c, "id", "证书模板ID无效")
 			if err != nil {
 				return nil, err
 			}
 			var in service.CertificateTemplateInput
 			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &catalogUpdateReq[service.CertificateTemplateInput]{ID: id, In: in}, nil
 		},
@@ -456,13 +457,13 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.QuestionTagInput], service.QuestionTagDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.QuestionTagInput], error) {
-			id, err := pathInt(c, "id", "题库标签ID无效")
+			id, err := httpx.PathInt(c, "id", "题库标签ID无效")
 			if err != nil {
 				return nil, err
 			}
 			var in service.QuestionTagInput
 			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &catalogUpdateReq[service.QuestionTagInput]{ID: id, In: in}, nil
 		},
@@ -492,7 +493,7 @@ type specialtyIDReq struct {
 func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
 	Endpoint[specialtyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*specialtyIDReq, error) {
-			id, err := pathInt(c, "specialty_id", "专业方向ID无效")
+			id, err := httpx.PathInt(c, "specialty_id", "专业方向ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -524,7 +525,7 @@ type levelIDReq struct {
 func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
 	Endpoint[levelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*levelIDReq, error) {
-			id, err := pathInt(c, "level_id", "课程等级ID无效")
+			id, err := httpx.PathInt(c, "level_id", "课程等级ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -556,7 +557,7 @@ type certificateTemplateIDReq struct {
 func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
 	Endpoint[certificateTemplateIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*certificateTemplateIDReq, error) {
-			id, err := pathInt(c, "id", "证书模板ID无效")
+			id, err := httpx.PathInt(c, "id", "证书模板ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -588,7 +589,7 @@ type questionTagIDReq struct {
 func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 	Endpoint[questionTagIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionTagIDReq, error) {
-			id, err := pathInt(c, "id", "题库标签ID无效")
+			id, err := httpx.PathInt(c, "id", "题库标签ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -621,7 +622,7 @@ type catalogSwapSortReq struct {
 // swap_with <= 0 的前置校验照旧做在这里——岗位端点刻意不做（既有行为，见 positionSwapSortReqBody）。
 func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
 	return func(c *gin.Context) (*catalogSwapSortReq, error) {
-		id, err := pathInt(c, idParam, idMsg)
+		id, err := httpx.PathInt(c, idParam, idMsg)
 		if err != nil {
 			return nil, err
 		}
@@ -629,7 +630,7 @@ func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
 			SwapWith int `json:"swap_with"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-			return nil, badRequest("swap_with 参数无效")
+			return nil, httpx.BadRequest("swap_with 参数无效")
 		}
 		return &catalogSwapSortReq{ID: id, SwapWith: body.SwapWith}, nil
 	}
@@ -705,7 +706,7 @@ type setQuestionTagsReq struct {
 func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 	Endpoint[setQuestionTagsReq, service.QuestionTagsResultDTO]{
 		Parse: func(c *gin.Context) (*setQuestionTagsReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -713,7 +714,7 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 				TagIDs []int `json:"tag_ids"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &setQuestionTagsReq{QuestionID: id, TagIDs: req.TagIDs}, nil
 		},
@@ -824,13 +825,13 @@ func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
 func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
 	Endpoint[catalogUpdateReq[service.CredentialInput], service.CredentialDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CredentialInput], error) {
-			id, err := pathInt(c, "id", "证件ID无效")
+			id, err := httpx.PathInt(c, "id", "证件ID无效")
 			if err != nil {
 				return nil, err
 			}
 			var in service.CredentialInput
 			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &catalogUpdateReq[service.CredentialInput]{ID: id, In: in}, nil
 		},
@@ -861,7 +862,7 @@ type credentialIDReq struct {
 func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 	Endpoint[credentialIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*credentialIDReq, error) {
-			id, err := pathInt(c, "id", "证件ID无效")
+			id, err := httpx.PathInt(c, "id", "证件ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -1023,7 +1024,7 @@ func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			id, err := pathInt(c, "position_id", "岗位 ID 无效")
+			id, err := httpx.PathInt(c, "position_id", "岗位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -1052,7 +1053,7 @@ func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
 func (h *TrainingCatalogHandler) SwapPositionSort(c *gin.Context) {
 	Endpoint[positionSwapSortReq, struct{}]{
 		Parse: func(c *gin.Context) (*positionSwapSortReq, error) {
-			id, err := pathInt(c, "position_id", "岗位 ID 无效")
+			id, err := httpx.PathInt(c, "position_id", "岗位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -1097,7 +1098,7 @@ type positionSwapSortReqBody struct {
 func (h *TrainingCatalogHandler) DeletePosition(c *gin.Context) {
 	Endpoint[positionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*positionIDReq, error) {
-			id, err := pathInt(c, "position_id", "岗位 ID 无效")
+			id, err := httpx.PathInt(c, "position_id", "岗位 ID 无效")
 			if err != nil {
 				return nil, err
 			}

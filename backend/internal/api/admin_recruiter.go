@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -80,7 +81,7 @@ func (h *AdminRecruiterHandler) Create(c *gin.Context) {
 func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "招聘者ID无效")
+			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -125,7 +126,7 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 	Endpoint[idParam, service.RecruiterUpdatedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "招聘者ID无效")
+			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -134,7 +135,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.RecruiterUpdatedDTO, error) {
 			var in service.RecruiterEditInput
 			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			rec, err := h.authSvc.EditRecruiter(req.ID, in)
 			if err != nil {
@@ -162,7 +163,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 	Endpoint[idParam, service.RecruiterPasswordResetResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "招聘者ID无效")
+			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +174,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 				Password string `json:"password"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil || body.Password == "" {
-				return nil, badRequest("新密码不能为空")
+				return nil, httpx.BadRequest("新密码不能为空")
 			}
 			if err := h.authSvc.ResetRecruiterPassword(ctx, req.ID, body.Password); err != nil {
 				return nil, err

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -40,7 +41,7 @@ func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
 	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, badRequest("参数非法")
+			return nil, httpx.BadRequest("参数非法")
 		},
 		// Render 省略：走默认信封（ADR-0024 C2）
 	}
@@ -78,7 +79,7 @@ func TestEndpoint_ParseNotFound(t *testing.T) {
 	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusNotFound, Message: "不存在"}
+			return nil, &httpx.ParseError{Status: http.StatusNotFound, Message: "不存在"}
 		},
 		// Render 省略：ParseError 404 → 404
 	}
@@ -178,7 +179,7 @@ func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 
 	// 解析错误路径
 	parseErr := func(c *gin.Context) (*int, error) {
-		return nil, badRequest("参数非法")
+		return nil, httpx.BadRequest("参数非法")
 	}
 	explicit = Endpoint[int, string]{Parse: parseErr, Render: renderSuccessOnly[string]}
 	implicit = Endpoint[int, string]{Parse: parseErr}

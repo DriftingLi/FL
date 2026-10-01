@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -86,7 +87,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 		Parse: func(c *gin.Context) (*courseListReq, error) {
 			f := c.Query("filter")
 			if f != "" && f != "hot" && f != "featured" && f != "all" {
-				return nil, badRequest("filter 仅支持 hot|featured|all")
+				return nil, httpx.BadRequest("filter 仅支持 hot|featured|all")
 			}
 			if f == "" {
 				f = "all"
@@ -126,7 +127,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -161,7 +162,7 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 		Parse: func(c *gin.Context) (*courseDetailReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -196,11 +197,11 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		Parse: func(c *gin.Context) (*chapterDetailReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			courseID, err := pathInt(c, "course_id", "课程ID无效")
+			courseID, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
-			chapterID, err := pathInt(c, "chapter_id", "章节ID无效")
+			chapterID, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -232,7 +233,7 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -274,7 +275,7 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		Parse: func(c *gin.Context) (*studyProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			courseID, err := pathInt(c, "course_id", "课程ID无效")
+			courseID, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -286,13 +287,13 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 				Completed       bool `json:"completed"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if body.Duration < 0 || body.DurationSeconds < 0 {
-				return nil, badRequest("学习时长不能为负数")
+				return nil, httpx.BadRequest("学习时长不能为负数")
 			}
 			if body.VideoPosition != nil && *body.VideoPosition < 0 {
-				return nil, badRequest("播放位置不能为负数")
+				return nil, httpx.BadRequest("播放位置不能为负数")
 			}
 			chapterID := 0
 			if body.ChapterID != nil {

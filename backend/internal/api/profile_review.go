@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // ProfileReviewHandler 资料审核 handler。
@@ -99,7 +100,7 @@ func (h *ProfileReviewHandler) Approve(c *gin.Context) {
 		Parse: func(c *gin.Context) (*approveReq, error) {
 			adminID, _ := c.Get(string(middleware.CtxUserID))
 			reviewerID, _ := adminID.(int)
-			requestID, err := pathInt64(c, "id", "请求ID无效")
+			requestID, err := httpx.PathInt64(c, "id", "请求ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -136,7 +137,7 @@ func (h *ProfileReviewHandler) Reject(c *gin.Context) {
 		Parse: func(c *gin.Context) (*rejectReq, error) {
 			adminID, _ := c.Get(string(middleware.CtxUserID))
 			reviewerID, _ := adminID.(int)
-			requestID, err := pathInt64(c, "id", "请求ID无效")
+			requestID, err := httpx.PathInt64(c, "id", "请求ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -144,7 +145,7 @@ func (h *ProfileReviewHandler) Reject(c *gin.Context) {
 				Reason string `json:"reason"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &rejectReq{RequestID: requestID, ReviewerID: reviewerID, Reason: req.Reason}, nil
 		},

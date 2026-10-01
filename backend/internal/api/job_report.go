@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -72,7 +73,7 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 			return bindJSON[service.ReportInput](c)
 		},
 		Invoke: func(ctx context.Context, req *service.ReportInput) (*service.ReportDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -157,7 +158,7 @@ func (h *JobReportHandler) ListReports(c *gin.Context) {
 func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 	Endpoint[struct{}, service.ReportDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportDTO, error) {
-			id, err := pathInt64(c, "id", "举报 ID 无效")
+			id, err := httpx.PathInt64(c, "id", "举报 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -191,7 +192,7 @@ func (h *JobReportHandler) ForceOffline(c *gin.Context) {
 			return &struct{}{}, nil
 		},
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}

@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -153,7 +154,7 @@ func (h *PointsHandler) Claim(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/shop/course/{courseId}/redeem [post]
 func (h *PointsHandler) RedeemCourse(c *gin.Context) {
-	courseID, err := pathInt(c, "courseId", "课程ID无效")
+	courseID, err := httpx.PathInt(c, "courseId", "课程ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

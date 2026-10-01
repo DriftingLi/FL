@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -107,7 +108,7 @@ func (h *JobHandler) Update(c *gin.Context) {
 			return req, nil
 		},
 		Invoke: func(ctx context.Context, req *service.JobPostingInput) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -135,7 +136,7 @@ func (h *JobHandler) Update(c *gin.Context) {
 func (h *JobHandler) ToggleStatus(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -194,7 +195,7 @@ func (h *JobHandler) ListMine(c *gin.Context) {
 func (h *JobHandler) GetMine(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -260,7 +261,7 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 func (h *JobHandler) GetPublic(c *gin.Context) {
 	Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}

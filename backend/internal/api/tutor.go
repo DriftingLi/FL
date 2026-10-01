@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -100,7 +101,7 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 	Endpoint[idParam, service.TutorCourseChaptersDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +129,7 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 	Endpoint[idParam, service.ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -155,7 +156,7 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/chapter/{chapter_id}/upload [post]
 func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
-	chapterID, err := pathInt(c, "chapter_id", "章节ID无效")
+	chapterID, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -228,7 +229,7 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 	Endpoint[chapterIDInput, service.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -260,7 +261,7 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 	Endpoint[idParam, service.DeleteFileResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "file_id", "文件ID无效")
+			id, err := httpx.PathInt(c, "file_id", "文件ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -293,7 +294,7 @@ func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 				return nil, err
 			}
 			if len(req.FileIDs) == 0 {
-				return nil, badRequest("请选择要删除的文件")
+				return nil, httpx.BadRequest("请选择要删除的文件")
 			}
 			return req, nil
 		},

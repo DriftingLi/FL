@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -76,7 +77,7 @@ func (h *MaterialHandler) List(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /materials/{id} [get]
 func (h *MaterialHandler) Get(c *gin.Context) {
-	id, err := pathInt(c, "id", "资料 ID 无效")
+	id, err := httpx.PathInt(c, "id", "资料 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -102,7 +103,7 @@ func (h *MaterialHandler) Get(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /materials/{id}/download [get]
 func (h *MaterialHandler) Download(c *gin.Context) {
-	id, err := pathInt(c, "id", "资料 ID 无效")
+	id, err := httpx.PathInt(c, "id", "资料 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // MockExamHandler 模拟考试 handler。
@@ -120,7 +121,7 @@ func (h *MockExamHandler) SaveProgress(c *gin.Context) {
 		Parse: func(c *gin.Context) (*saveProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			mockExamID, err := pathInt(c, "mock_exam_id", "考试ID无效")
+			mockExamID, err := httpx.PathInt(c, "mock_exam_id", "考试ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +130,7 @@ func (h *MockExamHandler) SaveProgress(c *gin.Context) {
 				RemainingTime int            `json:"remaining_time"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &saveProgressReq{
 				MockExamID:    mockExamID,
@@ -262,7 +263,7 @@ type mockExamHistoryReq struct {
 func (h *MockExamHandler) parseMockExamID(c *gin.Context) (*mockExamIDReq, error) {
 	uid, _ := c.Get(string(middleware.CtxUserID))
 	studentID, _ := uid.(int)
-	mockExamID, err := pathInt(c, "mock_exam_id", "考试ID无效")
+	mockExamID, err := httpx.PathInt(c, "mock_exam_id", "考试ID无效")
 	if err != nil {
 		return nil, err
 	}

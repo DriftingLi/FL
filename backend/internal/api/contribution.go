@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -134,7 +135,7 @@ func (h *ContributionHandler) UploadFile(c *gin.Context) {
 			}
 			file, err := c.FormFile("file")
 			if err != nil {
-				return nil, badRequest("未找到上传文件")
+				return nil, httpx.BadRequest("未找到上传文件")
 			}
 			return h.svc.UploadFile(ctx, userID, file)
 		},
@@ -224,7 +225,7 @@ func (h *ContributionHandler) ListPublic(c *gin.Context) {
 		Parse: func(c *gin.Context) (*listPublicReq, error) {
 			cred := middleware.CredentialIDPtr(c)
 			if cred == nil {
-				return nil, badRequest("credential_id 必填（未选择当前证件）")
+				return nil, httpx.BadRequest("credential_id 必填（未选择当前证件）")
 			}
 			credID := *cred
 			return &listPublicReq{
@@ -280,7 +281,7 @@ func (h *ContributionHandler) GetDetail(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionItemDTO, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -305,7 +306,7 @@ func (h *ContributionHandler) GetDetail(c *gin.Context) {
 func (h *ContributionHandler) Download(c *gin.Context) {
 	Endpoint[struct{}, service.DownloadResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.DownloadResult, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -333,7 +334,7 @@ func (h *ContributionHandler) Download(c *gin.Context) {
 func (h *ContributionHandler) Withdraw(c *gin.Context) {
 	Endpoint[struct{}, struct{}]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -376,7 +377,7 @@ func (h *ContributionHandler) Report(c *gin.Context) {
 			return bindJSON[reportContributionReq](c)
 		},
 		Invoke: func(ctx context.Context, req *reportContributionReq) (*struct{}, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -437,7 +438,7 @@ func reviewerID(c *gin.Context) (int, error) {
 func (h *ContributionHandler) Approve(c *gin.Context) {
 	Endpoint[struct{}, service.ContributionItemDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionItemDTO, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -475,7 +476,7 @@ func (h *ContributionHandler) Reject(c *gin.Context) {
 	Endpoint[contributionRejectReq, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return bindJSON[contributionRejectReq](c) },
 		Invoke: func(ctx context.Context, req *contributionRejectReq) (*service.ContributionItemDTO, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -508,7 +509,7 @@ func (h *ContributionHandler) Archive(c *gin.Context) {
 	Endpoint[contributionRejectReq, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return bindJSON[contributionRejectReq](c) },
 		Invoke: func(ctx context.Context, req *contributionRejectReq) (*service.ContributionItemDTO, error) {
-			id, err := pathInt64(c, "id", "投稿ID无效")
+			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -574,7 +575,7 @@ func (h *ContributionHandler) HandleReport(c *gin.Context) {
 	Endpoint[handleReportReq, struct{}]{
 		Parse: func(c *gin.Context) (*handleReportReq, error) { return bindJSON[handleReportReq](c) },
 		Invoke: func(ctx context.Context, req *handleReportReq) (*struct{}, error) {
-			id, err := pathInt64(c, "id", "举报ID无效")
+			id, err := httpx.PathInt64(c, "id", "举报ID无效")
 			if err != nil {
 				return nil, err
 			}

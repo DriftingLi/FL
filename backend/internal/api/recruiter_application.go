@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -63,7 +64,7 @@ func NewRecruiterApplicationHandler(svc *service.JobApplicationService) *Recruit
 func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 	Endpoint[struct{}, service.RecruiterApplicationListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RecruiterApplicationListResult, error) {
-			jobID, err := pathInt(c, "id", "职位 ID 无效")
+			jobID, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -90,7 +91,7 @@ func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
-			id, err := pathInt64(c, "id", "投递 ID 无效")
+			id, err := httpx.PathInt64(c, "id", "投递 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +117,7 @@ func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 func (h *RecruiterApplicationHandler) Reject(c *gin.Context) {
 	Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
-			id, err := pathInt64(c, "id", "投递 ID 无效")
+			id, err := httpx.PathInt64(c, "id", "投递 ID 无效")
 			if err != nil {
 				return nil, err
 			}

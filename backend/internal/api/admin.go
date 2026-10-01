@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -94,7 +95,7 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 		Parse: func(c *gin.Context) (*adminCourseListReq, error) {
 			f := c.Query("filter")
 			if f != "" && f != "hot" && f != "featured" && f != "all" {
-				return nil, badRequest("filter 仅支持 hot|featured|all")
+				return nil, httpx.BadRequest("filter 仅支持 hot|featured|all")
 			}
 			if f == "" {
 				f = "all"
@@ -177,7 +178,7 @@ func (h *AdminHandler) CreateCourse(c *gin.Context) {
 func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 	Endpoint[idParam, service.AdminCourseDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -208,7 +209,7 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 	Endpoint[courseIDInput, service.CourseDTO]{
 		Parse: func(c *gin.Context) (*courseIDInput, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -256,7 +257,7 @@ var courseSortFacts400 = append(append([]error{}, sortFacts400...),
 func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 	Endpoint[swapCourseSortReq, struct{}]{
 		Parse: func(c *gin.Context) (*swapCourseSortReq, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -264,7 +265,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 				SwapWith int `json:"swap_with"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-				return nil, badRequest("swap_with 参数无效")
+				return nil, httpx.BadRequest("swap_with 参数无效")
 			}
 			return &swapCourseSortReq{ID: id, SwapWith: body.SwapWith}, nil
 		},
@@ -295,7 +296,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 	Endpoint[idParam, service.DeleteCourseResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -324,7 +325,7 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 func (h *AdminHandler) CreateChapter(c *gin.Context) {
 	Endpoint[chapterIDInput, service.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -357,7 +358,7 @@ func (h *AdminHandler) CreateChapter(c *gin.Context) {
 func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 	Endpoint[chapterIDInput, service.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -388,7 +389,7 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 	Endpoint[idParam, service.DeleteChapterResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -421,10 +422,10 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 				ChapterIDs []int `json:"chapter_ids"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil || req.CourseID == 0 {
-				return nil, badRequest("请选择课程")
+				return nil, httpx.BadRequest("请选择课程")
 			}
 			if len(req.ChapterIDs) == 0 {
-				return nil, badRequest("请选择至少一个章节")
+				return nil, httpx.BadRequest("请选择至少一个章节")
 			}
 			return &generateContentReq{CourseID: req.CourseID, ChapterIDs: req.ChapterIDs, UserID: c.GetInt("user_id")}, nil
 		},
@@ -536,7 +537,7 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 	Endpoint[updateHrwaiUserReq, struct{}]{
 		Parse: func(c *gin.Context) (*updateHrwaiUserReq, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -547,10 +548,10 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 				Status   int16  `json:"status"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if body.Status != 0 && body.Status != 1 {
-				return nil, badRequest("状态值非法(仅支持 0/1)")
+				return nil, httpx.BadRequest("状态值非法(仅支持 0/1)")
 			}
 			return &updateHrwaiUserReq{ID: id, Username: body.Username, Email: body.Email, Company: body.Company, Status: body.Status}, nil
 		},
@@ -580,7 +581,7 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 	Endpoint[resetPasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*resetPasswordReq, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -588,10 +589,10 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 				Password string `json:"password"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if len(body.Password) < 6 || len(body.Password) > 20 {
-				return nil, badRequest("密码长度需为 6-20 个字符")
+				return nil, httpx.BadRequest("密码长度需为 6-20 个字符")
 			}
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
@@ -620,7 +621,7 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -662,7 +663,7 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 	Endpoint[idParam, struct{}]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -724,7 +725,7 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 				return nil, err
 			}
 			if req.Username == "" || req.Password == "" || req.Name == "" {
-				return nil, badRequest("用户名、密码和姓名不能为空")
+				return nil, httpx.BadRequest("用户名、密码和姓名不能为空")
 			}
 			return req, nil
 		},
@@ -748,7 +749,7 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 	Endpoint[idParam, service.TutorDeletedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "tutor_id", "讲师ID无效")
+			id, err := httpx.PathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -779,7 +780,7 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 	Endpoint[resetPasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*resetPasswordReq, error) {
-			id, err := pathInt(c, "tutor_id", "讲师ID无效")
+			id, err := httpx.PathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -787,10 +788,10 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 				Password string `json:"password"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if len(body.Password) < 6 || len(body.Password) > 20 {
-				return nil, badRequest("密码长度需为 6-20 个字符")
+				return nil, httpx.BadRequest("密码长度需为 6-20 个字符")
 			}
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
@@ -819,7 +820,7 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 	Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "tutor_id", "讲师ID无效")
+			id, err := httpx.PathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}

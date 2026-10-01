@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -67,7 +68,7 @@ func resolvePurpose(purpose string) (service.CodePurpose, error) {
 			return p, nil
 		}
 	}
-	return "", badRequest("purpose 必须为 register、login 或 reset_password")
+	return "", httpx.BadRequest("purpose 必须为 register、login 或 reset_password")
 }
 
 // codeSendReq 发码请求：Target/Purpose/Captcha* 由单次绑定填充（targetField 动态字段以两个小 struct 表达）。
@@ -88,7 +89,7 @@ func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, err
 			CaptchaValue string `json:"captcha_value"`
 		}
 		if err := c.ShouldBindJSON(&t); err != nil {
-			return nil, badRequest("请求参数错误")
+			return nil, httpx.BadRequest("请求参数错误")
 		}
 		return &codeSendReq{Target: t.Phone, Purpose: t.Purpose, CaptchaID: t.CaptchaID, CaptchaValue: t.CaptchaValue}, nil
 	}
@@ -99,7 +100,7 @@ func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, err
 		CaptchaValue string `json:"captcha_value"`
 	}
 	if err := c.ShouldBindJSON(&t); err != nil {
-		return nil, badRequest("请求参数错误")
+		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &codeSendReq{Target: t.Email, Purpose: t.Purpose, CaptchaID: t.CaptchaID, CaptchaValue: t.CaptchaValue}, nil
 }
@@ -129,7 +130,7 @@ func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 func (h *CodeChannelAuthHandler) invokeSendCode(ctx context.Context, req *codeSendReq) (*struct{}, error) {
 	if h.captchaEnabled {
 		if !h.captchaSvc.Verify(ctx, req.CaptchaID, req.CaptchaValue) {
-			return nil, badRequest("图形验证码错误或已过期")
+			return nil, httpx.BadRequest("图形验证码错误或已过期")
 		}
 	}
 	purpose, err := resolvePurpose(req.Purpose)
@@ -186,7 +187,7 @@ func (h *CodeChannelAuthHandler) parseRegisterReq(c *gin.Context) (*codeRegister
 			Password string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&t); err != nil {
-			return nil, badRequest("请求参数错误")
+			return nil, httpx.BadRequest("请求参数错误")
 		}
 		return &codeRegisterReq{Target: t.Phone, Code: t.Code, Nickname: t.Nickname, Company: t.Company, Password: t.Password}, nil
 	}
@@ -198,7 +199,7 @@ func (h *CodeChannelAuthHandler) parseRegisterReq(c *gin.Context) (*codeRegister
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&t); err != nil {
-		return nil, badRequest("请求参数错误")
+		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &codeRegisterReq{Target: t.Email, Code: t.Code, Nickname: t.Nickname, Company: t.Company, Password: t.Password}, nil
 }
@@ -241,7 +242,7 @@ func (h *CodeChannelAuthHandler) parseLoginReq(c *gin.Context) (*codeLoginReq, e
 			Code  string `json:"code"`
 		}
 		if err := c.ShouldBindJSON(&t); err != nil {
-			return nil, badRequest("请求参数错误")
+			return nil, httpx.BadRequest("请求参数错误")
 		}
 		return &codeLoginReq{Target: t.Phone, Code: t.Code}, nil
 	}
@@ -250,7 +251,7 @@ func (h *CodeChannelAuthHandler) parseLoginReq(c *gin.Context) (*codeLoginReq, e
 		Code  string `json:"code"`
 	}
 	if err := c.ShouldBindJSON(&t); err != nil {
-		return nil, badRequest("请求参数错误")
+		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &codeLoginReq{Target: t.Email, Code: t.Code}, nil
 }
@@ -293,7 +294,7 @@ func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, e
 			Password string `json:"password"`
 		}
 		if err := c.ShouldBindJSON(&t); err != nil {
-			return nil, badRequest("请求参数错误")
+			return nil, httpx.BadRequest("请求参数错误")
 		}
 		return &codeResetReq{Target: t.Phone, Code: t.Code, Password: t.Password}, nil
 	}
@@ -303,14 +304,14 @@ func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, e
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&t); err != nil {
-		return nil, badRequest("请求参数错误")
+		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &codeResetReq{Target: t.Email, Code: t.Code, Password: t.Password}, nil
 }
 
 // asParseError 判断 error 是否 *ParseError（供 render 分支区分参数错误与服务错误）。
-func asParseError(err error, target **ParseError) bool {
-	pe, ok := err.(*ParseError)
+func asParseError(err error, target **httpx.ParseError) bool {
+	pe, ok := err.(*httpx.ParseError)
 	if ok {
 		*target = pe
 	}

@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -76,7 +77,7 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 			uid := middleware.CurrentUserID(c)
 			var body service.JobCardInput
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &resumeUpsertReq{UserID: uid, Input: body}, nil
 		},

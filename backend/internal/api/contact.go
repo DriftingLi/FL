@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -146,7 +147,7 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 // @Failure 403 {object} response.R "无有效授权"
 // @Router /recruit/resumes/{id}/contact [get]
 func (h *ContactHandler) GetContact(c *gin.Context) {
-	uid, err := pathInt(c, "id", "学员 ID 无效")
+	uid, err := httpx.PathInt(c, "id", "学员 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -213,7 +214,7 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/approve [post]
 func (h *ContactHandler) Approve(c *gin.Context) {
-	id, err := pathInt64(c, "id", "申请 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "申请 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -239,7 +240,7 @@ func (h *ContactHandler) Approve(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/reject [post]
 func (h *ContactHandler) Reject(c *gin.Context) {
-	id, err := pathInt64(c, "id", "申请 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "申请 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -265,7 +266,7 @@ func (h *ContactHandler) Reject(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/revoke [post]
 func (h *ContactHandler) Revoke(c *gin.Context) {
-	id, err := pathInt64(c, "id", "申请 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "申请 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

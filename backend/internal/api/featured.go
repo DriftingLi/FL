@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -90,7 +91,7 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 	Endpoint[featuredDetailReq, service.FeaturedContentDetailDTO]{
 		Parse: func(c *gin.Context) (*featuredDetailReq, error) {
-			id, err := pathInt(c, "id", "内容ID无效")
+			id, err := httpx.PathInt(c, "id", "内容ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +117,7 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 	Endpoint[featuredIDReq, viewCountResp]{
 		Parse: func(c *gin.Context) (*featuredIDReq, error) {
-			id, err := pathInt(c, "id", "内容ID无效")
+			id, err := httpx.PathInt(c, "id", "内容ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -349,7 +350,7 @@ type viewCountResp struct {
 }
 
 func parseFeaturedID(c *gin.Context) (*featuredIDReq, error) {
-	id, err := pathInt(c, "id", "内容ID无效")
+	id, err := httpx.PathInt(c, "id", "内容ID无效")
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +358,7 @@ func parseFeaturedID(c *gin.Context) (*featuredIDReq, error) {
 }
 
 func parseFeaturedUpdate(c *gin.Context) (*featuredUpdateReq, error) {
-	id, err := pathInt(c, "id", "内容ID无效")
+	id, err := httpx.PathInt(c, "id", "内容ID无效")
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -95,7 +96,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 				Description string `json:"description"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求参数错误: " + err.Error())
+				return nil, httpx.BadRequest("请求参数错误: " + err.Error())
 			}
 			return &createConfigReq{Name: req.Name, APIKey: req.APIKey, BaseURL: req.BaseURL, Model: req.Model, Description: req.Description}, nil
 		},
@@ -129,7 +130,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 	Endpoint[updateConfigReq, struct{}]{
 		Parse: func(c *gin.Context) (*updateConfigReq, error) {
-			id, err := pathInt(c, "id", "无效的 id")
+			id, err := httpx.PathInt(c, "id", "无效的 id")
 			if err != nil {
 				return nil, err
 			}
@@ -142,7 +143,7 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 				IsActive    *bool  `json:"is_active"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误: " + err.Error())
+				return nil, httpx.BadRequest("请求参数错误: " + err.Error())
 			}
 			return &updateConfigReq{ID: id, Name: body.Name, APIKey: body.APIKey, BaseURL: body.BaseURL, Model: body.Model, Description: body.Description, IsActive: body.IsActive}, nil
 		},
@@ -173,7 +174,7 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 	Endpoint[idParam, struct{}]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "无效的 id")
+			id, err := httpx.PathInt(c, "id", "无效的 id")
 			if err != nil {
 				return nil, err
 			}
@@ -201,7 +202,7 @@ func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 // TestConfig 测试指定配置的连通性 POST /api/admin/ai-configs/:id/test
 // 建client/超时纪律在 AIConfigService.TestConfig 单点，handler 不再内联。
 func (h *AIConfigHandler) TestConfig(c *gin.Context) {
-	cfgID, err := pathInt(c, "id", "无效的 id")
+	cfgID, err := httpx.PathInt(c, "id", "无效的 id")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -261,7 +262,7 @@ func (h *AIConfigHandler) SetBinding(c *gin.Context) {
 				ConfigID int `json:"config_id"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误: " + err.Error())
+				return nil, httpx.BadRequest("请求参数错误: " + err.Error())
 			}
 			return &setBindingReq{FeatureKey: c.Param("feature_key"), ConfigID: body.ConfigID}, nil
 		},
@@ -289,7 +290,7 @@ func (h *AIConfigHandler) SetBinding(c *gin.Context) {
 func (h *AIConfigHandler) UnbindConfig(c *gin.Context) {
 	Endpoint[unbindConfigReq, struct{}]{
 		Parse: func(c *gin.Context) (*unbindConfigReq, error) {
-			id, err := pathInt(c, "config_id", "无效的 config_id")
+			id, err := httpx.PathInt(c, "config_id", "无效的 config_id")
 			if err != nil {
 				return nil, err
 			}

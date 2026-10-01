@@ -23,31 +23,18 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 // endpointTimeout 统一超时（保留既有各 handler 的 10s 语义）。
 const endpointTimeout = 10 * time.Second
 
-// ParseError 请求解析失败的哨兵错误：携带 HTTP 状态码与用户可见文案。
-type ParseError struct {
-	Status  int
-	Message string
-}
-
-func (e *ParseError) Error() string { return e.Message }
-
-// badRequest 构造 400 解析错误（endpoint 骨架内的参数错误统一出口）。
-func badRequest(msg string) *ParseError {
-	return &ParseError{Status: http.StatusBadRequest, Message: msg}
-}
-
-// ParseFunc 解析请求为 typed Req。返回 *ParseError 表示参数错误（渲染对应 4xx 信封）；
+// ParseFunc 解析请求为 typed Req。返回 *httpx.ParseError 表示参数错误（渲染对应 4xx 信封）；
 // 返回其他 error 视为服务器内部错误（渲染 500 信封）。
 type ParseFunc[Req any] func(c *gin.Context) (*Req, error)
 
@@ -230,7 +217,7 @@ func entryMsg(e errStatusEntry, err error) string {
 // 现有域表都不含无条件条目，故 2-4 与其逐字不变（域表快照锁 + 37 处论坛契约测试为证）。
 // nil 表即纯默认信封（ADR-0024 C2）。
 func (t *errStatusTable) renderError(c *gin.Context, err error) {
-	var pe *ParseError
+	var pe *httpx.ParseError
 	if asParseError(err, &pe) {
 		renderStatus(c, pe.Status, pe.Message)
 		return
@@ -258,7 +245,7 @@ func (t *errStatusTable) renderError(c *gin.Context, err error) {
 func bindJSON[T any](c *gin.Context) (*T, error) {
 	var req T
 	if err := c.ShouldBindJSON(&req); err != nil {
-		return nil, badRequest("请求参数错误")
+		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &req, nil
 }
@@ -267,7 +254,7 @@ func bindJSON[T any](c *gin.Context) (*T, error) {
 func bindJSONMsg[T any](c *gin.Context, failMsg string) (*T, error) {
 	var req T
 	if err := c.ShouldBindJSON(&req); err != nil {
-		return nil, badRequest(failMsg)
+		return nil, httpx.BadRequest(failMsg)
 	}
 	return &req, nil
 }
@@ -410,33 +397,4 @@ func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Re
 	e.Render = successRenderer[Req, Resp](ok)
 	e.ErrStatus = errStatusAll(errStatus)
 	return e
-}
-
-// pathInt 解析路径参数为正整数 id；非数字、0 与负数一律 400（带调用方给的那句文案）。
-//
-// 「路径上的整数 id 不是正整数」是一件**解析层**事实，与「这个资源不存在」无关：改之前这里只看
-// `strconv.Atoi` 的 err ⇒ 0 与负数被放行到 service，于是 `GET /course/0` 对外答 404「课程不存在」
-// （拿一个不存在的 id 冒充一个不存在的资源），而用户/讲师面因 service 有 `id <= 0` guard 答 400，
-// 且用的是另一句文案（「用户 ID 非法」）——同一件输入错误在三个地方说出三种话（ADR-0065 决策 1）。
-// `pathInt64` 一直是这里的形状，本函数向它对齐。
-//
-// service 层那 5 处 `id <= 0` guard **保留**：HTTP 面现在轮不到它触发，但 service 的契约不能依赖
-// 「调用方一定是这个 handler」（同一 guard 也管着来自 body 的 id）。被否备选见 ADR-0065。
-func pathInt(c *gin.Context, key, failMsg string) (int, error) {
-	v, err := strconv.Atoi(c.Param(key))
-	if err != nil || v <= 0 {
-		return 0, badRequest(failMsg)
-	}
-	return v, nil
-}
-
-// pathInt64 解析路径参数为正整数 id（int64 版），判定与 pathInt 逐字相同。
-// 两枚 helper 是**仅有的**两处路径整数解析点；由 ⑤b 把散在 9 个文件里的裸 `strconv.*(c.Param(...))`
-// 收进来，之后由 parse_point_drift_lock_test.go 钉住「不许再出现第三处」。
-func pathInt64(c *gin.Context, key, failMsg string) (int64, error) {
-	v, err := strconv.ParseInt(c.Param(key), 10, 64)
-	if err != nil || v <= 0 {
-		return 0, badRequest(failMsg)
-	}
-	return v, nil
 }

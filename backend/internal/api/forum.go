@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -266,7 +267,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 				ContentFormat string `json:"content_format"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &createTopicReq{
 				UserID: userID, ChapterID: body.ChapterID, Category: body.Category,
@@ -316,7 +317,7 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 		Parse: func(c *gin.Context) (*topicGetReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -355,7 +356,7 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 		Parse: func(c *gin.Context) (*replyTopicReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -367,7 +368,7 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 				ContentFormat string `json:"content_format"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &replyTopicReq{
 				UserID: userID, TopicID: topicID, Content: body.Content,
@@ -412,7 +413,7 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 	Endpoint[updateTopicReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*updateTopicReq, error) {
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -423,7 +424,7 @@ func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 				Images   []string `json:"images"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &updateTopicReq{
 				UserID:   middleware.CurrentUserID(c),
@@ -470,7 +471,7 @@ func (h *ForumHandler) DeleteTopic(c *gin.Context) {
 		Parse: func(c *gin.Context) (*topicDeleteReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -508,7 +509,7 @@ func (h *ForumHandler) DeleteReply(c *gin.Context) {
 		Parse: func(c *gin.Context) (*replyDeleteReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
-			replyID, err := pathInt64(c, "id", "回复ID无效")
+			replyID, err := httpx.PathInt64(c, "id", "回复ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -590,7 +591,7 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
 	Endpoint[topicIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -681,7 +682,7 @@ func (h *ForumHandler) AdminRevokeExperience(c *gin.Context) {
 func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 	Endpoint[topicIDReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -708,7 +709,7 @@ func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 	Endpoint[topicIDReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
-			topicID, err := pathInt64(c, "id", "主题ID无效")
+			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -744,7 +745,7 @@ func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
 	Endpoint[replyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*replyIDReq, error) {
-			replyID, err := pathInt64(c, "id", "回复ID无效")
+			replyID, err := httpx.PathInt64(c, "id", "回复ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -873,7 +874,7 @@ type replyIDReq struct {
 // @Failure 404 {object} response.R "主题不存在（票5 存在性档）"
 // @Router /forum/topics/{id}/like [post]
 func (h *ForumHandler) LikeTopic(c *gin.Context) {
-	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -900,7 +901,7 @@ func (h *ForumHandler) LikeTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "主题不存在（票5 存在性档）"
 // @Router /forum/topics/{id}/like [delete]
 func (h *ForumHandler) UnlikeTopic(c *gin.Context) {
-	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -951,7 +952,7 @@ func (h *ForumHandler) ReportReply(c *gin.Context) {
 
 // report 举报公共实现（kind: topic / reply，目标 ID 取路径参数 id）。
 func (h *ForumHandler) report(c *gin.Context, kind string) {
-	id, err := pathInt64(c, "id", "目标 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "目标 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -1135,7 +1136,7 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 // @Failure 404 {object} response.R "举报不存在（票5 存在性档）"
 // @Router /admin/forum/reports/{id} [put]
 func (h *ForumHandler) HandleReport(c *gin.Context) {
-	id, err := pathInt64(c, "id", "举报 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "举报 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -1168,7 +1169,7 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 // @Failure 404 {object} response.R "回复不存在（票5 存在性档）"
 // @Router /forum/replies/{id}/like [post]
 func (h *ForumHandler) LikeReply(c *gin.Context) {
-	replyID, err := pathInt64(c, "id", "回复 ID 无效")
+	replyID, err := httpx.PathInt64(c, "id", "回复 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -1195,7 +1196,7 @@ func (h *ForumHandler) LikeReply(c *gin.Context) {
 // @Failure 404 {object} response.R "回复不存在（票5 存在性档）"
 // @Router /forum/replies/{id}/like [delete]
 func (h *ForumHandler) UnlikeReply(c *gin.Context) {
-	replyID, err := pathInt64(c, "id", "回复 ID 无效")
+	replyID, err := httpx.PathInt64(c, "id", "回复 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -1224,7 +1225,7 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 // @Failure 404 {object} response.R "主题/回复不存在（票5 存在性档）"
 // @Router /forum/topics/{id}/accept [post]
 func (h *ForumHandler) AcceptTopic(c *gin.Context) {
-	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return
@@ -1258,7 +1259,7 @@ func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "主题不存在（票5 存在性档）"
 // @Router /forum/topics/{id}/accept [delete]
 func (h *ForumHandler) CancelAccept(c *gin.Context) {
-	topicID, err := pathInt64(c, "id", "主题 ID 无效")
+	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
 		forumErrStatus.renderError(c, err)
 		return

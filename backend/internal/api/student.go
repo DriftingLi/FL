@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // StudentHandler 学员端 handler。
@@ -184,7 +185,7 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
 	Endpoint[studentCourseReq, service.StudentCourseDetailDTO]{
 		Parse: func(c *gin.Context) (*studentCourseReq, error) {
-			courseID, err := pathInt(c, "course_id", "课程ID无效")
+			courseID, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
