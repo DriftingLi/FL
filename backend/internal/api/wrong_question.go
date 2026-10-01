@@ -83,7 +83,7 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 				Page:          atoiDefault(c.Query("page"), 1),
 				PageSize:      atoiDefault(c.Query("page_size"), 20),
 				QType:         c.Query("type"),
-				MinWrongCount: queryIntPtr(c, "min_wrong_count"),
+				MinWrongCount: httpx.QueryIntPtr(c, "min_wrong_count"),
 				Favorited:     c.Query("favorited") == "true",
 				Sort:          c.Query("sort"),
 				CredentialID:  middleware.CredentialIDPtr(c),

@@ -70,19 +70,19 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 	if v := queryIDPtr(c, "credential_id"); v != nil {
 		params.CredentialID = v
 	}
-	if v := queryIntPtr(c, "salary_min"); v != nil {
+	if v := httpx.QueryIntPtr(c, "salary_min"); v != nil {
 		params.SalaryMin = v
 	}
-	if v := queryIntPtr(c, "salary_max"); v != nil {
+	if v := httpx.QueryIntPtr(c, "salary_max"); v != nil {
 		params.SalaryMax = v
 	}
-	if v := queryIntPtr(c, "experience_years"); v != nil {
+	if v := httpx.QueryIntPtr(c, "experience_years"); v != nil {
 		params.ExperienceYears = v
 	} else {
-		if v := queryIntPtr(c, "experience_min"); v != nil {
+		if v := httpx.QueryIntPtr(c, "experience_min"); v != nil {
 			params.ExperienceMin = v
 		}
-		if v := queryIntPtr(c, "experience_max"); v != nil {
+		if v := httpx.QueryIntPtr(c, "experience_max"); v != nil {
 			params.ExperienceMax = v
 		}
 	}

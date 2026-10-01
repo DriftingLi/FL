@@ -542,7 +542,7 @@ func (h *ContributionHandler) ListReports(c *gin.Context) {
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionReportPageResult, error) {
 			var status *int
 			if s := c.Query("status"); s != "" {
-				// status 0 待处理 / 1 已处理；queryIntPtr 对缺失返回 nil（全部）
+				// status 0 待处理 / 1 已处理；缺失表示不筛这一维（全部）
 				if v, ok := requiredPositiveID(s); ok {
 					status = &v
 				} else if s == "0" {
