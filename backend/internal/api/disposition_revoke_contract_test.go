@@ -25,6 +25,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -314,7 +315,7 @@ func TestEnableTutorDoesNotRevoke(t *testing.T) {
 func TestDispositionDoesNotRewriteHistory(t *testing.T) {
 	t.Parallel()
 	adminSvc, _, db, uid := newDispositionFixture(t, newValBlacklist())
-	if err := db.Create(&model.UserEntitlement{UserID: uid, SKU: service.CourseSKU(1), RefID: "1"}).Error; err != nil {
+	if err := db.Create(&model.UserEntitlement{UserID: uid, SKU: entitlement.CourseSKU(1), RefID: "1"}).Error; err != nil {
 		t.Fatalf("播种权益行失败: %v", err)
 	}
 	beforeEnt, beforePts := countEntitlements(t, db, uid), sumPoints(t, db, uid)

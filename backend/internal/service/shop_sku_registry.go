@@ -30,7 +30,7 @@ var (
 // shopSKUDecl 一行商城 sku 的具名声明。
 type shopSKUDecl struct {
 	// EntitlementSKU 兑换写下的权益行 sku 值（入参为权益行 ref_id，商城兑换取 sku 本身）。
-	// **权益读面必须按同一对键查**（见 holdsEntitlement 与 CourseSKU / RealPaperSKU 的先例）。
+	// **权益读面必须按同一对键查**（见 internal/entitlement 的 Holds 与 CourseSKU / RealPaperSKU 先例）。
 	// nil = 该商品不产生任何可被读取的权益 ⇒ 不可兑换，Blocked 必填。
 	EntitlementSKU func(refID string) string
 	// ReadBy 这条权益由谁读（人读定位；EntitlementSKU 为 nil 时写「没有读者」的原因与出路）。

@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -258,8 +259,8 @@ func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	t.Parallel()
 	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []httpx.ErrStatusEntry{
 		{Sentinel: service.ErrTaskNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrCourseNotFound, Status: http.StatusBadRequest},
+		{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
+		{Sentinel: model.ErrCourseNotFound, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrAlreadyClaimed, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrDailyClaimLimit, Status: http.StatusBadRequest},

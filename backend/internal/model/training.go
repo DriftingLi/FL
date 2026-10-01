@@ -1,9 +1,18 @@
 // 培训域：课程目录（目标证件 → 专业方向 → 课程等级 → 课程）与学习内容（CONTEXT.md「培训领域」）。
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // ===== 4. 课程 =====
+
+// ErrCourseNotFound 课程行不存在的**全仓唯一载体**（跨域共享：课程域自己、积分域的课程兑换、
+// 讲师/学员域读课程都指向同一件事实，而 points 域先于 course 域搬包 ⇒ 载体留在任一域包里都会
+// 让另一个域反向依赖它，故贴着实体放 —— 同 ADR-0070「跨域共享的词汇贴着实体放 internal/model」）。
+// 「真不存在」与「查不动」必须分开（ADR-0064 决策 1）：只有 gorm.ErrRecordNotFound 才换成它。
+var ErrCourseNotFound = errors.New("课程不存在")
 
 type Course struct {
 	CourseID    int    `gorm:"column:course_id;primaryKey" json:"course_id"`

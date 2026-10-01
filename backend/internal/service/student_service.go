@@ -507,7 +507,7 @@ func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*Stude
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCourseNotFound
+			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}

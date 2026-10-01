@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -195,5 +196,5 @@ func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
 			return h.svc.GetStudentCourseDetail(req.UserID, req.CourseID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }

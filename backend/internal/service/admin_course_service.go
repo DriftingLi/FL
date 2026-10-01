@@ -104,7 +104,7 @@ func (s *AdminCourseService) UpdateCourse(courseID int, in *CourseInput) (*Cours
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCourseNotFound
+			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
@@ -153,7 +153,7 @@ var (
 	ErrCourseNotMountedForSort = errors.New("未挂载方向/等级的课程不能参与排序")
 	ErrCourseSortGroupMismatch = errors.New("只能交换同一方向+等级组内的课程")
 	// ErrCourseSwapTargetNotFound 指 body 里 `swap_with` 指向的那门课不存在 —— 与「路径里那门课
-	// 不存在」（ErrCourseNotFound ⇒ 404）是两件事实。改之前两次 First 都回同一个哨兵，于是
+	// 不存在」（model.ErrCourseNotFound ⇒ 404）是两件事实。改之前两次 First 都回同一个哨兵，于是
 	// 「你要换的东西没有」对外答 404「课程不存在」，与前置课程那一支的 400 也不一致（ADR-0065 决策 3）。
 	ErrCourseSwapTargetNotFound = errors.New("待交换的课程不存在")
 )
@@ -163,7 +163,7 @@ func (s *AdminCourseService) SwapCourseSort(a, b int) error {
 	var ca, cb model.Course
 	if err := s.db.First(&ca, a).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrCourseNotFound
+			return model.ErrCourseNotFound
 		}
 		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
@@ -188,7 +188,7 @@ func (s *AdminCourseService) DeleteCourse(courseID int) (*DeleteCourseResult, er
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCourseNotFound
+			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
@@ -203,7 +203,7 @@ func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*Cha
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCourseNotFound
+			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}

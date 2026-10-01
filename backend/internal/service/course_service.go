@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 )
@@ -228,7 +230,7 @@ func validateMountedCourseInputUpdate(in *CourseInput) error {
 // loadCourseWithChapters 课程 + 章节列表共享装载（学员端/管理端详情同源）。
 func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []ChapterDTO, error) {
 	var course model.Course
-	if err := fetchRow(db.Where("course_id = ?", courseID), &course, ErrCourseNotFound); err != nil {
+	if err := fetchRow(db.Where("course_id = ?", courseID), &course, model.ErrCourseNotFound); err != nil {
 		return nil, nil, err
 	}
 	var chapters []model.Chapter
@@ -270,9 +272,10 @@ func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID
 // 这种别名：那在编译期与运行期都「对」，但 errors.Is 会把四态认成同一件，分档当场失效。
 // （本次就是这样写错、而 404 映射测试照样全绿，靠 TestCourseReadabilityFactsAreDistinct 才照出来。）
 //
-// 「真不存在」的两件复用全仓唯一载体：ErrCourseNotFound（points_service 侧原有，同对象，
-// 已移入本文件）、ErrChapterNotFound（forum_service 侧原有 —— 论坛发帖挂的也是课程章节，
-// 同一对象，不另立）。
+// 「真不存在」的两件复用全仓唯一载体：model.ErrCourseNotFound（**已移入 internal/model/training.go**：
+// 它同时是积分域课程兑换与讲师/学员读面要用的那件事实，而 points 域先于本域搬包 ⇒ 载体留在本
+// 域包里会让积分域反向依赖本域）、ErrChapterNotFound（forum_service 侧原有 —— 论坛发帖挂的也是
+// 课程章节，同一对象，不另立）。
 //
 // **文案各自的规矩**：Error() 说出的是「哪一件事实」，四件两两不同名（同一测试锁的就是这一点）。
 // 对外统一那句「课程不存在 / 章节不存在」不在这里——它由 api 层各端点经 WithSentinelsMsg
@@ -295,7 +298,6 @@ func fetchRow(q *gorm.DB, dest any, notFound error) error {
 var (
 	// ErrChapterNotFound 课程章节行不存在的全仓唯一载体（论坛发帖挂的也是课程章节）。
 	ErrChapterNotFound = errors.New("章节不存在")
-	ErrCourseNotFound  = errors.New("课程不存在")
 	// ErrCourseNotVisible：不在平台上（未发布或未满足挂载不变式，判据见 ADR-0058）。
 	ErrCourseNotVisible = errors.New("课程不在平台上")
 	// ErrCourseLocked：在平台上、也可见，但这个学员没为它付过（权益，见词表「权益」）。
@@ -306,12 +308,12 @@ var (
 )
 
 // courseEntitled 权益判据（唯一出处）：非付费课程恒 true；付费课程看该学员是否已兑换。
-// 只经权益读面单点（entitlement_read.go）查，不在调用侧手拼 user_entitlement 查询。
+// 只经权益读面单点（internal/entitlement）查，不在调用侧手拼 user_entitlement 查询。
 func courseEntitled(db *gorm.DB, courseID, studentID int, pointsPrice *int) (bool, error) {
 	if pointsPrice == nil || *pointsPrice <= 0 {
 		return true, nil
 	}
-	return holdsEntitlement(db, studentID, CourseSKU(courseID), strconv.Itoa(courseID))
+	return entitlement.Holds(db, studentID, entitlement.CourseSKU(courseID), strconv.Itoa(courseID))
 }
 
 // studentCanReadCourse 学员能否读这门课的内容：**可见性 ∧ 权益**（ADR-0062 决策 3）。
@@ -321,12 +323,12 @@ func courseEntitled(db *gorm.DB, courseID, studentID int, pointsPrice *int) (boo
 // ——上报会在 study_record 上留下学习事实（喂给进度、完成态与「已拥有」判据），所以同样要拦。
 func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 	// 先取行、再判可见性：反过来的话「这门课根本不存在」会先被 CourseVisibleByID 判成
-	// 「不在平台上」，ErrCourseNotFound 那一支永远走不到 —— 两件事实名义上分了档、实际不可达
+	// 「不在平台上」，model.ErrCourseNotFound 那一支永远走不到 —— 两件事实名义上分了档、实际不可达
 	// （TestStudentCanReadCoursePicksTheRightFact 第一次跑就照出了这个顺序问题）。
 	var course model.Course
 	if err := s.db.Select("points_price").First(&course, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrCourseNotFound
+			return model.ErrCourseNotFound
 		}
 		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
 	}
@@ -358,7 +360,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 		return nil, err
 	}
 	if !visible {
-		return nil, ErrCourseNotFound
+		return nil, model.ErrCourseNotFound
 	}
 	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
 	if err != nil {

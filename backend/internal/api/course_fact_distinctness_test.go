@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"testing"
 
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 )
 
@@ -24,7 +25,7 @@ var courseWaveFacts = []error{
 	service.ErrCourseTheoryHoursNegative, service.ErrCoursePracticeHoursNegative,
 	service.ErrCourseSortOrderNegative,
 	service.ErrCoursePrerequisiteSelf, service.ErrCoursePrerequisiteNotFound,
-	service.ErrCoursePrerequisiteCycle, service.ErrCourseNotFound,
+	service.ErrCoursePrerequisiteCycle, model.ErrCourseNotFound,
 	service.ErrEntityNotSortable, service.ErrSwapItemNotFound,
 	service.ErrCourseNotMountedForSort, service.ErrCourseSortGroupMismatch,
 	service.ErrCourseSwapTargetNotFound,

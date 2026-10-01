@@ -16,13 +16,12 @@ import (
 	"forklift-training/pkg/paging"
 )
 
-// ErrHrwaiUserNotFound / ErrTutorNotFound 是这两类账号「真不存在」这一件事的**唯一载体**
-// （ADR-0064 决策 1/2）。住在本文件而非口令写面文件：它由禁用、删除、代重置三类动作共同
-// 发出，代重置只是其中一个 caller。积分域原有一个同文案的 ErrUserNotFound 指同一个对象
-// （hrwai_users 行），已并入此处 —— 同一个事实不得有两个载体。
+// ErrTutorNotFound 是讲师账号「真不存在」这一件事的**唯一载体**（ADR-0064 决策 1/2）。
+// 住在本文件而非口令写面文件：它由禁用、删除、代重置三类动作共同发出，代重置只是其中一个 caller。
+// （hrwai_users 那一半已随 points 域搬包提到 internal/model/account.go：它同时被积分域扣罚引用，
+// 不能留在账号域里；同一个事实不得有两个载体。）
 var (
-	ErrHrwaiUserNotFound = errors.New("用户不存在")
-	ErrTutorNotFound     = errors.New("讲师不存在")
+	ErrTutorNotFound = errors.New("讲师不存在")
 	// ErrRecruiterNotFound 见 auth_service.go 的 ToggleRecruiterStatus：招聘者账号不存在。
 	// ErrInvalidHrwaiUserID / ErrInvalidTutorID 是「id 根本不是个合法主体标识」，属输入不合法
 	// 一族（ADR-0064 决策 3，该族整批收口在后续批次）。本批先把分档建起来：此前这几处裸
@@ -260,7 +259,7 @@ func (s *AdminService) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16
 	var user model.HrwaiUser
 	if err := s.db.WithContext(ctx).First(&user, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, ErrHrwaiUserNotFound
+			return 0, model.ErrHrwaiUserNotFound
 		}
 		return 0, err // 查不动不得被读成「不存在」（ADR-0064 决策 1，同 ADR-0062 票6 判据）
 	}

@@ -1,9 +1,18 @@
 // 账号与认证域（CONTEXT.md「角色」「账号与认证」）。
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // ===== 1. HRWAI 账号(统一用户表) =====
+
+// ErrHrwaiUserNotFound hrwai_users 行不存在的**全仓唯一载体**（ADR-0064 决策 1/2）。
+// 它由禁用、删除、代重置、积分扣罚四类动作共同发出（跨账号域的共享事实），且积分域先于
+// 账号域搬包 ⇒ 贴着实体放，不留在任一域包里（ADR-0070）。积分域原有一个同文案、同对象的
+// ErrUserNotFound，已并入此处 —— 同一个事实不得有两个载体。
+var ErrHrwaiUserNotFound = errors.New("用户不存在")
 
 // HrwaiUser 统一用户表,合并原 student 与 valuation_users 两表。
 // 三套登录鉴权(培训学员端 / 残值评估 / AI 助手)共用此表与主体系 JWT。
