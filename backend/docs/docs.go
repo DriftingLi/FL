@@ -4203,7 +4203,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.InspectionCountDTO"
+                                            "$ref": "#/definitions/inspection.InspectionCountDTO"
                                         }
                                     }
                                 }
@@ -5690,7 +5690,7 @@ const docTemplate = `{
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
-                                                        "$ref": "#/definitions/service.ContactRequestRowDTO"
+                                                        "$ref": "#/definitions/inspection.ContactRequestRowDTO"
                                                     }
                                                 },
                                                 "page": {
@@ -5784,7 +5784,7 @@ const docTemplate = `{
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
-                                                        "$ref": "#/definitions/service.RecruitResumeViewDTO"
+                                                        "$ref": "#/definitions/inspection.RecruitResumeViewDTO"
                                                     }
                                                 },
                                                 "page": {
@@ -23653,6 +23653,70 @@ const docTemplate = `{
                 }
             }
         },
+        "inspection.ContactRequestRowDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "description": "DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；\n漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expires_at": {
+                    "description": "ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。\n与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "inspection.InspectionCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "inspection.RecruitResumeViewDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "resume_user_id": {
+                    "type": "integer"
+                },
+                "viewed_at": {
+                    "type": "string"
+                }
+            }
+        },
         "material.MaterialDTO": {
             "type": "object",
             "properties": {
@@ -25884,45 +25948,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.ContactRequestRowDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "decided_at": {
-                    "description": "DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；\n漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "expires_at": {
-                    "description": "ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。\n与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_user_id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
         "service.ContributionAuthor": {
             "type": "object",
             "properties": {
@@ -27291,14 +27316,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.InspectionCountDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.JobCardDTO": {
             "type": "object",
             "properties": {
@@ -28664,23 +28681,6 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.RecruitResumeViewDTO": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "resume_user_id": {
-                    "type": "integer"
-                },
-                "viewed_at": {
-                    "type": "string"
                 }
             }
         },

@@ -18,6 +18,7 @@
 package api
 
 import (
+	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -55,12 +56,12 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "model.ListBatteryResponse", Endpoints: []string{"GET /valuation/battery/evaluations"},
 		Keys: []string{"total", "items"}, Dialect: paging.DialectNone,
 		Sample: vmodel.ListBatteryResponse{}},
-	{Result: "paging.ItemsPage[service.ContactRequestRowDTO]", Endpoints: []string{"GET /admin/recruit/requests"},
+	{Result: "paging.ItemsPage[inspection.ContactRequestRowDTO]", Endpoints: []string{"GET /admin/recruit/requests"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: paging.ItemsPage[service.ContactRequestRowDTO]{}},
-	{Result: "paging.ItemsPage[service.RecruitResumeViewDTO]", Endpoints: []string{"GET /admin/recruit/views"},
+		Sample: paging.ItemsPage[inspection.ContactRequestRowDTO]{}},
+	{Result: "paging.ItemsPage[inspection.RecruitResumeViewDTO]", Endpoints: []string{"GET /admin/recruit/views"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: paging.ItemsPage[service.RecruitResumeViewDTO]{}},
+		Sample: paging.ItemsPage[inspection.RecruitResumeViewDTO]{}},
 	{Result: "service.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: service.ApplicationListResult{}},

@@ -1,5 +1,5 @@
-// #1097 巡检读面归位 service：typed DTO 的字节锁 + 错误上抛。
-package service
+// #1097 巡检读面归位域包 internal/inspection：typed DTO 的字节锁 + 错误上抛。
+package inspection
 
 import (
 	"encoding/json"
@@ -102,11 +102,11 @@ func TestInspectionDTOShapeLock(t *testing.T) {
 	}
 }
 
-// TestInspectionServiceQueryFailurePropagates 读库故障一律上抛（ADR-0056 §1）：
+// TestServiceQueryFailurePropagates 读库故障一律上抛（ADR-0056 §1）：
 // 三条读路径都不能再把故障渲染成「空列表 / 0」。
-func TestInspectionServiceQueryFailurePropagates(t *testing.T) {
+func TestServiceQueryFailurePropagates(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewInspectionService(db)
+	svc := NewService(db)
 	if err := db.Migrator().DropTable(&model.ContactRequest{}, &model.RecruitResumeView{}, &model.SystemSetting{}); err != nil {
 		t.Fatalf("注入故障（删表）失败: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestInspectionServiceQueryFailurePropagates(t *testing.T) {
 
 // TestInspectionDeletedAfterAcceptedMissingRowIsZero 计数行缺失（表在、行不在）= 0，不是故障。
 func TestInspectionDeletedAfterAcceptedMissingRowIsZero(t *testing.T) {
-	svc := NewInspectionService(testutil.NewMemoryDB(t))
+	svc := NewService(testutil.NewMemoryDB(t))
 	got, err := svc.DeletedAfterAcceptedCount()
 	if err != nil {
 		t.Fatalf("计数行缺失不应报错: %v", err)

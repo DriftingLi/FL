@@ -1,9 +1,9 @@
-// Package api 管理端巡检视图（#376）。
+// Package inspection 管理端巡检视图（#376）。
 //
 // 注解口径（#1097）：分页信封的运行时类型是 paging.ItemsPage[T]（#1095 的装配单点），
 // 但 CI 钉住的 swag v1.16.4 展不开泛型实例化（注解里写 paging.ItemsPage[...] 会退化成空对象），
-// 故两条列表端点的 Success 注解用内联 object{...} 声明信封字段、行类型仍 ref 到 service.*DTO。
-package api
+// 故两条列表端点的 Success 注解用内联 object{...} 声明信封字段、行类型仍 ref 到 inspection.*DTO。
+package inspection
 
 import (
 	"context"
@@ -14,28 +14,28 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/points"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/paging"
 )
 
-// InspectionHandler 管理端巡检 handler（#1097：三条读路径归位 InspectionService，handler 只解析/渲染）。
-// pointsSvc 按需注入：积分流水查询归位 service 层（#401），handler 不再裸查 PointsLedger。
-type InspectionHandler struct {
-	svc       *service.InspectionService
+// handler 管理端巡检 handler（#1097：三条读路径归位域实现，handler 只解析/渲染）。
+// pointsSvc 按需注入：积分流水查询归位积分域（#401），handler 不再裸查 PointsLedger。
+type handler struct {
+	svc       *Service
 	pointsSvc *points.Service
 }
 
-// NewInspectionHandler 创建管理端巡检 handler。
-func NewInspectionHandler(svc *service.InspectionService, pointsSvc *points.Service) *InspectionHandler {
-	return &InspectionHandler{svc: svc, pointsSvc: pointsSvc}
+// newHandler 创建管理端巡检 handler。
+func newHandler(svc *Service, pointsSvc *points.Service) *handler {
+	return &handler{svc: svc, pointsSvc: pointsSvc}
 }
 
-// RegisterAdminInspectionRoutes 注册管理端巡检相关路由（#376）。
-// 读路径全部经 service 出 typed DTO：api 层不再持有 *gorm.DB（ADR-0056 §3 静态守卫）。
-func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.InspectionService, pointsSvc *points.Service) {
-	h := NewInspectionHandler(svc, pointsSvc)
-	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapInspectionRead))
+// RegisterRoutes 注册管理端巡检相关路由（#376）。
+// 读路径全部经域实现出 typed DTO：handler 不再持有 *gorm.DB（ADR-0056 §3 静态守卫）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, pointsSvc *points.Service) {
+	h := newHandler(svc, pointsSvc)
+	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapInspectionRead))
 	// 巡检计数：删除已解决帖计数
 	g.GET("/inspection/deleted-after-accepted", h.DeletedAfterAcceptedCount)
 	// 问答积分流水按原因筛选（admin 全量；查询归位 points.Service.GetLedger，#401）
@@ -50,14 +50,14 @@ func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 // @Tags 管理端-巡检
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.InspectionCountDTO} "success"
+// @Success 200 {object} response.R{data=inspection.InspectionCountDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "权限不足"
 // @Router /admin/inspection/deleted-after-accepted [get]
 // DeletedAfterAcceptedCount 巡检计数 GET /api/admin/inspection/deleted-after-accepted
-func (h *InspectionHandler) DeletedAfterAcceptedCount(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.InspectionCountDTO]{
-		Invoke: func(_ context.Context, _ *struct{}) (*service.InspectionCountDTO, error) {
+func (h *handler) DeletedAfterAcceptedCount(c *gin.Context) {
+	httpx.Endpoint[struct{}, InspectionCountDTO]{
+		Invoke: func(_ context.Context, _ *struct{}) (*InspectionCountDTO, error) {
 			return h.svc.DeletedAfterAcceptedCount()
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
@@ -87,7 +87,7 @@ type pointsLedgerReq struct {
 // @Failure 403 {object} response.R "权限不足"
 // @Router /admin/points/ledger [get]
 // PointsLedger 问答积分流水 GET /api/admin/points/ledger?page=&page_size=&reason=&ref_type=&user_id=
-func (h *InspectionHandler) PointsLedger(c *gin.Context) {
+func (h *handler) PointsLedger(c *gin.Context) {
 	httpx.Endpoint[pointsLedgerReq, points.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*pointsLedgerReq, error) {
 			return &pointsLedgerReq{
@@ -115,22 +115,22 @@ func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 // @Param page_size query int false "每页条数" default(20)
 // @Param recruiter_id query int false "招聘者 ID（>0 生效）"
 // @Param student_user_id query int false "学员用户 ID（>0 生效）"
-// @Success 200 {object} response.R{data=object{items=[]service.RecruitResumeViewDTO,page=int,page_size=int,total=int}} "success"
+// @Success 200 {object} response.R{data=object{items=[]inspection.RecruitResumeViewDTO,page=int,page_size=int,total=int}} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "权限不足"
 // @Router /admin/recruit/views [get]
 // ListRecruitViews 简历查看留痕列表 GET /api/admin/recruit/views
-func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
-	httpx.Endpoint[service.InspectionViewsParams, paging.ItemsPage[service.RecruitResumeViewDTO]]{
-		Parse: func(c *gin.Context) (*service.InspectionViewsParams, error) {
-			return &service.InspectionViewsParams{
+func (h *handler) ListRecruitViews(c *gin.Context) {
+	httpx.Endpoint[InspectionViewsParams, paging.ItemsPage[RecruitResumeViewDTO]]{
+		Parse: func(c *gin.Context) (*InspectionViewsParams, error) {
+			return &InspectionViewsParams{
 				RecruiterID:  httpx.QueryIntDefault(c, "recruiter_id", 0),
 				ResumeUserID: httpx.QueryIntDefault(c, "student_user_id", 0),
 				Page:         httpx.QueryIntDefault(c, "page", 1),
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
-		Invoke: func(_ context.Context, req *service.InspectionViewsParams) (*paging.ItemsPage[service.RecruitResumeViewDTO], error) {
+		Invoke: func(_ context.Context, req *InspectionViewsParams) (*paging.ItemsPage[RecruitResumeViewDTO], error) {
 			return h.svc.ListRecruitViews(*req)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
@@ -146,15 +146,15 @@ func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
 // @Param recruiter_id query int false "招聘者 ID（>0 生效）"
 // @Param student_user_id query int false "学员用户 ID（>0 生效）"
 // @Param status query string false "申请状态（pending/approved/rejected/expired/revoked）"
-// @Success 200 {object} response.R{data=object{items=[]service.ContactRequestRowDTO,page=int,page_size=int,total=int}} "success"
+// @Success 200 {object} response.R{data=object{items=[]inspection.ContactRequestRowDTO,page=int,page_size=int,total=int}} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "权限不足"
 // @Router /admin/recruit/requests [get]
 // ListRecruitRequests 联系方式交换申请列表 GET /api/admin/recruit/requests
-func (h *InspectionHandler) ListRecruitRequests(c *gin.Context) {
-	httpx.Endpoint[service.InspectionRequestsParams, paging.ItemsPage[service.ContactRequestRowDTO]]{
-		Parse: func(c *gin.Context) (*service.InspectionRequestsParams, error) {
-			return &service.InspectionRequestsParams{
+func (h *handler) ListRecruitRequests(c *gin.Context) {
+	httpx.Endpoint[InspectionRequestsParams, paging.ItemsPage[ContactRequestRowDTO]]{
+		Parse: func(c *gin.Context) (*InspectionRequestsParams, error) {
+			return &InspectionRequestsParams{
 				RecruiterID:   httpx.QueryIntDefault(c, "recruiter_id", 0),
 				StudentUserID: httpx.QueryIntDefault(c, "student_user_id", 0),
 				Status:        c.Query("status"),
@@ -162,7 +162,7 @@ func (h *InspectionHandler) ListRecruitRequests(c *gin.Context) {
 				PageSize:      httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
-		Invoke: func(_ context.Context, req *service.InspectionRequestsParams) (*paging.ItemsPage[service.ContactRequestRowDTO], error) {
+		Invoke: func(_ context.Context, req *InspectionRequestsParams) (*paging.ItemsPage[ContactRequestRowDTO], error) {
 			return h.svc.ListRecruitRequests(*req)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)

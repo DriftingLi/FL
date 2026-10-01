@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/filestore"
+	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/notification"
@@ -93,7 +94,7 @@ type Deps struct {
 	JobPostingSvc        *service.JobPostingService
 	JobApplicationSvc    *service.JobApplicationService
 	JobReportSvc         *service.JobReportService
-	InspectionSvc        *service.InspectionService
+	InspectionSvc        *inspection.Service
 	ContributionSvc      *service.ContributionService
 
 	// Daemons 进程内周期守护的**登记表**（ADR-0061 §1）：NewDeps 声明，cmd/server 经 daemon.StartAll 启动。

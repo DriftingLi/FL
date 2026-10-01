@@ -1,5 +1,8 @@
-// Package service 管理端巡检读面（#376 巡检视图 / #1097 归位 service）。
-package service
+// Package inspection 管理端巡检读面（#376 巡检视图 / #1097 归位域包）。
+//
+// 本包是 internal/<域> 形态（ADR-0070）：handler.go 是 HTTP 出口（四条管理端 GET），
+// service.go 是域实现（三条读路径出 typed DTO，handler 只做参数解析与信封渲染）。
+package inspection
 
 import (
 	"errors"
@@ -19,17 +22,17 @@ const deletedAfterAcceptedSettingKey = "deleted_after_accepted"
 // inspectionDefaultPageSize 巡检列表默认页大小（沿用搬迁前 handler 的默认值）。
 const inspectionDefaultPageSize = 20
 
-// InspectionService 管理端巡检读面：简历查看记录 / 联系方式交换申请 / 删除已解决帖计数。
+// Service 管理端巡检读面：简历查看记录 / 联系方式交换申请 / 删除已解决帖计数。
 //
 // 三条读路径原先以闭包注册在 api 层、直持 *gorm.DB（ADR-0056 §3 前 api 层唯一的数据访问面）：
 // 这里收 typed 请求 + typed DTO + paging.Query* + 错误上抛，handler 只做参数解析与信封渲染。
-type InspectionService struct {
+type Service struct {
 	db *gorm.DB
 }
 
-// NewInspectionService 创建巡检读面服务。
-func NewInspectionService(db *gorm.DB) *InspectionService {
-	return &InspectionService{db: db}
+// NewService 创建巡检读面服务。
+func NewService(db *gorm.DB) *Service {
+	return &Service{db: db}
 }
 
 // InspectionViewsParams 简历查看记录查询参数（过滤位 <=0 表示不过滤，与搬迁前一致）。
@@ -90,7 +93,7 @@ type InspectionCountDTO struct {
 
 // ListRecruitViews 简历查看记录分页（过滤位 >0 才生效；按 viewed_at 倒序）。
 // 查询失败一律上抛（ADR-0056 §1）：不再渲染成 200 + 空列表。
-func (s *InspectionService) ListRecruitViews(p InspectionViewsParams) (*paging.ItemsPage[RecruitResumeViewDTO], error) {
+func (s *Service) ListRecruitViews(p InspectionViewsParams) (*paging.ItemsPage[RecruitResumeViewDTO], error) {
 	rows, total, page, pageSize, err := paging.Query[model.RecruitResumeView](s.db, p.Page, p.PageSize,
 		inspectionDefaultPageSize, "viewed_at DESC", func(q *gorm.DB) *gorm.DB {
 			if p.RecruiterID > 0 {
@@ -118,7 +121,7 @@ func (s *InspectionService) ListRecruitViews(p InspectionViewsParams) (*paging.I
 
 // ListRecruitRequests 联系方式交换申请分页（过滤位 >0 / Status 非空才生效；按 created_at 倒序）。
 // 查询失败一律上抛（ADR-0056 §1）。
-func (s *InspectionService) ListRecruitRequests(p InspectionRequestsParams) (*paging.ItemsPage[ContactRequestRowDTO], error) {
+func (s *Service) ListRecruitRequests(p InspectionRequestsParams) (*paging.ItemsPage[ContactRequestRowDTO], error) {
 	rows, total, page, pageSize, err := paging.Query[model.ContactRequest](s.db, p.Page, p.PageSize,
 		inspectionDefaultPageSize, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 			if p.RecruiterID > 0 {
@@ -155,7 +158,7 @@ func (s *InspectionService) ListRecruitRequests(p InspectionRequestsParams) (*pa
 
 // DeletedAfterAcceptedCount 「楼主删除自己已解决的帖子」累计计数。
 // 计数行缺失（从未发生过）= 0，不是故障；其余读库错误一律上抛（ADR-0056 §1）。
-func (s *InspectionService) DeletedAfterAcceptedCount() (*InspectionCountDTO, error) {
+func (s *Service) DeletedAfterAcceptedCount() (*InspectionCountDTO, error) {
 	var setting model.SystemSetting
 	err := s.db.Where("key = ?", deletedAfterAcceptedSettingKey).First(&setting).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
