@@ -187,7 +187,7 @@ func TestStreakWindow400_CapsAndTotalFull(t *testing.T) {
 	// 连续 500 天（远超 400 天窗口）：streak 截断为 401（窗口含 cutoff 当天），total 保持全量 500
 	start := now.AddDate(0, 0, -499)
 	for i := 0; i < 500; i++ {
-		d := startOfShanghaiDay(start.AddDate(0, 0, i))
+		d := clock.DayStart(start.AddDate(0, 0, i))
 		svc.db.Create(&model.ForumCheckIn{UserID: u.ID, CheckDate: d, CreatedAt: d})
 	}
 	streak, todayChecked := svc.streakInWindow(u.ID, now)
@@ -203,7 +203,7 @@ func TestStreakWindow400_CapsAndTotalFull(t *testing.T) {
 	svc2, _ := newCheckInSvcAt(t, now)
 	u2 := testutil.SeedStudent(t, svc2.db, "孤立生", "x")
 	svc2.db.Create(&model.ForumCheckIn{UserID: u2.ID, CheckDate: shDay(2026, 8, 20), CreatedAt: shDay(2026, 8, 20)})
-	svc2.db.Create(&model.ForumCheckIn{UserID: u2.ID, CheckDate: startOfShanghaiDay(now.AddDate(0, 0, -401)), CreatedAt: now.AddDate(0, 0, -401)})
+	svc2.db.Create(&model.ForumCheckIn{UserID: u2.ID, CheckDate: clock.DayStart(now.AddDate(0, 0, -401)), CreatedAt: now.AddDate(0, 0, -401)})
 	streak2, _ := svc2.streakInWindow(u2.ID, now)
 	if streak2 != 1 {
 		t.Fatalf("远古孤立记录不应抬高 streak, got %d", streak2)

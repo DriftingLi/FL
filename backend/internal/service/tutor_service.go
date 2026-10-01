@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 )
 
@@ -130,7 +131,7 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 		FileName:    filename,
 		ContentType: contentType,
 		FileSize:    int64(len(fileContent)),
-		CreatedAt:   BeijingNow(),
+		CreatedAt:   clock.Now(),
 	}
 	if err := s.db.Create(&chapterFile).Error; err != nil {
 		return nil, err

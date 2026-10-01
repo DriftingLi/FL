@@ -138,15 +138,3 @@ func TestWithTimeout(t *testing.T) {
 		t.Error("context 应有截止时间")
 	}
 }
-
-func TestBeijingNow(t *testing.T) {
-	now := BeijingNow()
-	if now.IsZero() {
-		t.Error("BeijingNow 不应返回零值")
-	}
-	// 北京时间应为 UTC+8
-	_, offset := now.Zone()
-	if offset != 8*3600 {
-		t.Errorf("北京时间偏移应为 28800 秒(UTC+8)，得到 %d", offset)
-	}
-}

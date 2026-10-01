@@ -11,6 +11,8 @@ package service
 import (
 	"fmt"
 	"time"
+
+	"forklift-training/internal/clock"
 )
 
 // ===== 直记键（赚取/消耗事件，一事件一坑）=====
@@ -50,9 +52,9 @@ func ContributionTierIdemKey(contributionID int64, threshold int) string {
 }
 
 // CheckInIdemKey 每日打卡直记幂等键：`checkin:{uid}:{date}`（CONTEXT.md「每日打卡」）。
-// date 为 Asia/Shanghai 自然日 YYYY-MM-DD（经 shanghaiDayStr/clock.DayKey 归一）。
+// date 为 Asia/Shanghai 自然日 YYYY-MM-DD（经 clock.DayKey 归一）。
 func CheckInIdemKey(userID int, day time.Time) string {
-	return fmt.Sprintf("checkin:%d:%s", userID, shanghaiDayStr(day))
+	return fmt.Sprintf("checkin:%d:%s", userID, clock.DayKey(day))
 }
 
 // ===== 回收键（违规回收对冲，封底 0）=====

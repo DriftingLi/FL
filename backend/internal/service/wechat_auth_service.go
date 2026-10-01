@@ -17,7 +17,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
 )
 
@@ -214,13 +216,13 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 			WechatOpenID:  openID,
 			WechatUnionID: unionID,
 			Status:        1,
-			CreatedAt:     BeijingNow(),
+			CreatedAt:     clock.Now(),
 		}
 		if err := s.db.Create(&newUser).Error; err == nil {
 			return &newUser, true, nil
 		} else {
 			lastErr = err
-			if IsDuplicateError(err) {
+			if dberr.IsDuplicateError(err) {
 				// 并发首登：wechat_openid 已被其他请求抢先插入
 				var again model.HrwaiUser
 				if qErr := s.db.Where("wechat_openid = ?", openID).First(&again).Error; qErr == nil {
@@ -235,7 +237,7 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 			}
 			// 非唯一冲突或候选耗尽：透传真实原因，便于可观测与区分「系统繁忙」与「注册失败」
 			s.logger.Warn("微信自动注册失败", zap.String("candidate", cand.account), zap.Error(err))
-			if IsDuplicateError(err) {
+			if dberr.IsDuplicateError(err) {
 				return nil, false, errors.New("微信登录注册失败，请稍后再试")
 			}
 			return nil, false, fmt.Errorf("微信登录注册失败: %w", err)

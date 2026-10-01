@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -113,7 +114,7 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 		QuestionID: questionID,
 		UserID:     userID,
 		Content:    content,
-		CreatedAt:  BeijingNow(),
+		CreatedAt:  clock.Now(),
 	}
 	if err := s.db.Create(&c).Error; err != nil {
 		return nil, err

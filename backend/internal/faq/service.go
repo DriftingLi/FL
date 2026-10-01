@@ -8,8 +8,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
+	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 )
 
 // 帮助中心（FAQ）域（#1079）：分类 + 条目两张表，管理端 CRUD、学员端只读。
@@ -214,9 +215,9 @@ func (s *Service) AdminCreateCategory(in FaqCategoryInput) (*AdminFaqCategoryDTO
 	if dup > 0 {
 		return nil, ErrFaqCategoryCodeUsed
 	}
-	c := model.FaqCategory{Code: in.Code, Title: in.Title, SortOrder: in.SortOrder, Enabled: in.Enabled, CreatedAt: service.BeijingNow(), UpdatedAt: service.BeijingNow()}
+	c := model.FaqCategory{Code: in.Code, Title: in.Title, SortOrder: in.SortOrder, Enabled: in.Enabled, CreatedAt: clock.Now(), UpdatedAt: clock.Now()}
 	if err := s.db.Create(&c).Error; err != nil {
-		if service.IsDuplicateError(err) {
+		if dberr.IsDuplicateError(err) {
 			return nil, ErrFaqCategoryCodeUsed
 		}
 		return nil, err
@@ -243,9 +244,9 @@ func (s *Service) AdminUpdateCategory(id int, in FaqCategoryInput) (*AdminFaqCat
 	if dup > 0 {
 		return nil, ErrFaqCategoryCodeUsed
 	}
-	c.Code, c.Title, c.SortOrder, c.Enabled, c.UpdatedAt = in.Code, in.Title, in.SortOrder, in.Enabled, service.BeijingNow()
+	c.Code, c.Title, c.SortOrder, c.Enabled, c.UpdatedAt = in.Code, in.Title, in.SortOrder, in.Enabled, clock.Now()
 	if err := s.db.Save(&c).Error; err != nil {
-		if service.IsDuplicateError(err) {
+		if dberr.IsDuplicateError(err) {
 			return nil, ErrFaqCategoryCodeUsed
 		}
 		return nil, err
@@ -334,7 +335,7 @@ func (s *Service) AdminCreateEntry(in FaqEntryInput) (*AdminFaqEntryDTO, error) 
 	}
 	e := model.Faq{
 		CategoryID: in.CategoryID, Question: in.Question, Answer: in.Answer,
-		SortOrder: in.SortOrder, Published: in.Published, CreatedAt: service.BeijingNow(), UpdatedAt: service.BeijingNow(),
+		SortOrder: in.SortOrder, Published: in.Published, CreatedAt: clock.Now(), UpdatedAt: clock.Now(),
 	}
 	if err := s.db.Create(&e).Error; err != nil {
 		return nil, err
@@ -362,7 +363,7 @@ func (s *Service) AdminUpdateEntry(id int, in FaqEntryInput) (*AdminFaqEntryDTO,
 		return nil, err
 	}
 	e.CategoryID, e.Question, e.Answer = in.CategoryID, in.Question, in.Answer
-	e.SortOrder, e.Published, e.UpdatedAt = in.SortOrder, in.Published, service.BeijingNow()
+	e.SortOrder, e.Published, e.UpdatedAt = in.SortOrder, in.Published, clock.Now()
 	if err := s.db.Save(&e).Error; err != nil {
 		return nil, err
 	}

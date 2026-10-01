@@ -5,6 +5,7 @@ package service
 import (
 	"errors"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 )
@@ -65,7 +66,7 @@ func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, Posi
 				Description: inputString(in.Description),
 				SortOrder:   sortOrder,
 				Status:      inputInt16(in.Status, 1),
-				CreatedAt:   BeijingNow(),
+				CreatedAt:   clock.Now(),
 			}
 		},
 		ApplyUpdate: func(m *model.Position, in *PositionInput) {

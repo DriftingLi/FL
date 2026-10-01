@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 )
@@ -475,7 +476,7 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 		rels = append(rels, model.QuestionTagRelation{
 			QuestionID: questionID,
 			TagID:      tagID,
-			CreatedAt:  BeijingNow(),
+			CreatedAt:  clock.Now(),
 		})
 	}
 	return db.Transaction(func(tx *gorm.DB) error {

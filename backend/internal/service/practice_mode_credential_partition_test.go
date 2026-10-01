@@ -13,6 +13,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -137,7 +138,7 @@ func TestPracticeStatsCountsRedoRecordsUnderTheirCredential(t *testing.T) {
 	}
 	rec := model.QuestionPracticeRecord{
 		StudentID: student.ID, CredentialID: &credB.ID, QuestionID: qA.ID,
-		IsCorrect: true, PracticeType: "redo", CreatedAt: BeijingNow(),
+		IsCorrect: true, PracticeType: "redo", CreatedAt: clock.Now(),
 	}
 	if err := db.Create(&rec).Error; err != nil {
 		t.Fatalf("插入重做记录失败: %v", err)
