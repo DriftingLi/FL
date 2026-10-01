@@ -127,10 +127,39 @@ func ProductionOrSelfTests(f CodeFile, selfDir string) bool {
 
 // HTTPSurface 报告一个非测试文件是否属于 HTTP 面（端点声明 / 渲染 / 路由所在那一层）。
 //
-// 今天 = internal/api 下的非测试源文件。拆包之后（P2）只改这**一处**：届时 HTTP 面 = 各域包里
-// 承载端点与路由的那些文件。各锁一律调它，别再各写一份目录判断 —— 那是「射程清单改回双份」的老病。
+// 今天 = internal/api 与 internal/valuation/handler（残值模块自带 handler 与路由，同样受
+// 「端点守卫只用能力常量」「端点不得持 *gorm.DB」「端点不得构造站内信」这些判据管）。
+// 拆包之后（P2）只改这**一处**：届时 HTTP 面 = 各域包里承载端点与路由的那些文件。
+// 各锁一律调它，别再各写一份目录判断 —— 那是「射程清单改回双份」的老病。
 func HTTPSurface(f CodeFile) bool {
-	return !f.Test && f.Dir == "internal/api"
+	if f.Test {
+		return false
+	}
+	return f.Dir == "internal/api" || f.Dir == "internal/valuation/handler"
+}
+
+// ScanDir 一个「对外契约类型可能住的包」：模块根相对路径 + 该目录里源文件应有的 package 名。
+type ScanDir struct {
+	Dir string
+	Pkg string
+}
+
+// ResponsePackages 返回「响应 DTO / 对外契约类型可能住的包」（模块根相对）。
+//
+// 这是两把 fact 锁共用的**目录宇宙**：api 侧的 tag 扫描面与 apitypes 侧的可达性射程论域不同
+// （过滤条件不同、另有一把表态锁射程更窄），但「哪些包可能承载响应类型」是同一件事 ——
+// 各抄一份的结果是搬一次包要改两处，且两处会漂。拆包（P2）后只改这一处。
+func ResponsePackages() []ScanDir {
+	return []ScanDir{
+		{"internal/api", "api"},
+		{"internal/service", "service"},
+		{"internal/model", "model"},
+		// valuation/model 的 Go 包名也叫 model，swagger 定义键同样落在 `model.` 前缀下（两边类型名
+		// 不重叠，swag 自己在重名时会报），所以 Pkg 列必须同为 "model" 才对得上生成物。
+		{"internal/valuation/model", "model"},
+		{"internal/valuation/repository", "repository"},
+		{"pkg/response", "response"},
+	}
 }
 
 // packageClause 取源文件的 package 名（取不到返回空串，由调用方决定算不算失败）。

@@ -46,6 +46,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // nullabilityTag 是表态所在的 struct tag key；值域两个（可为 null / 出口恒非 null）。
@@ -87,10 +89,11 @@ type outletSource struct {
 }
 
 var (
-	nullableEvidenceSources = []outletSource{{"../service", "nullableOutlets"}}
+	// 目录按**模块根相对**登记（不再是 ../service）：测试文件随域包搬家后 cwd 相对路径会静默指偏。
+	nullableEvidenceSources = []outletSource{{"internal/service", "nullableOutlets"}}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
-	nonNilEvidenceSources = []outletSource{{"../service", "nonnilOutlets"}, {"../api", "nonnilOutlets"}}
+	nonNilEvidenceSources = []outletSource{{"internal/service", "nonnilOutlets"}, {"internal/api", "nonnilOutlets"}}
 )
 
 // outletEvidenceKeys 收集来源目录里所有名字以 prefix 开头的复合字面量变量的键。
@@ -99,8 +102,10 @@ var (
 func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
+	root := testutil.ModuleRoot(t)
 	for _, src := range sources {
-		entries, err := os.ReadDir(src.dir)
+		dir := filepath.Join(root, filepath.FromSlash(src.dir))
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatalf("读%s的证据目录 %s 失败: %v", what, src.dir, err)
 		}
@@ -110,7 +115,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 			if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") {
 				continue
 			}
-			f, err := parser.ParseFile(fset, filepath.Join(src.dir, e.Name()), nil, parser.ParseComments)
+			f, err := parser.ParseFile(fset, filepath.Join(dir, e.Name()), nil, parser.ParseComments)
 			if err != nil {
 				continue // 编译不过由 go build 报，这里不重复报
 			}
@@ -122,7 +127,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 				lit, ok := firstCompositeLit(vs)
 				if !ok {
 					t.Fatalf("%s 里的 %s 不是复合字面量：证据表被改成运行期构造了？",
-						filepath.Join(src.dir, e.Name()), vs.Names[0].Name)
+						filepath.Join(dir, e.Name()), vs.Names[0].Name)
 				}
 				found++
 				for _, el := range lit.Elts {
