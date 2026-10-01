@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -101,12 +102,12 @@ type CheckInService struct {
 	logger *zap.Logger
 	clk    clock.Clock
 	// points 积分簿记通道（ADR-0028）：打卡直记发分经 SettleRewardTx 同事务落账。
-	points *PointsService
+	points *points.Service
 }
 
 // NewCheckInService 构造打卡服务；clk 为空时回退生产实钟（Asia/Shanghai）。
 // points 为打卡积分簿记通道（打卡即发分，ADR-0028）；可为 nil（测试或未接线时仅记录不发分）。
-func NewCheckInService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, points *PointsService) *CheckInService {
+func NewCheckInService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, points *points.Service) *CheckInService {
 	if clk == nil {
 		clk = clock.Real()
 	}
@@ -221,10 +222,10 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 			streak, _, _ := ComputeStreakMetrics(dates, now)
 			bonus := CheckInTierBonusFor(streak)
 			delta := checkInBasePoints + bonus
-			if err := s.points.SettleRewardTx(tx, PointsEntry{
+			if err := s.points.SettleRewardTx(tx, points.PointsEntry{
 				UserID: userID, Delta: delta, Reason: checkInReason,
 				RefType: checkInRefType, RefID: clock.DayKey(today),
-				IdemKey: CheckInIdemKey(userID, today),
+				IdemKey: points.CheckInIdemKey(userID, today),
 			}); err != nil {
 				return err
 			}

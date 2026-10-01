@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/points"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -460,7 +461,7 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	})
 
 	if err != nil {
-		if errors.Is(err, service.ErrInsufficientPoints) {
+		if errors.Is(err, points.ErrInsufficientPoints) {
 			// 闸门预检阻断（文案与迁移前 handler 逐字一致）；不扣费、无 done 事件
 			sendEvent("error", map[string]string{"message": "积分不足，请先去任务中心完成任务"})
 			return
@@ -477,7 +478,7 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	if usage != nil {
 		if usage.Err == nil {
 			sendEvent("usage", usage.Res)
-		} else if errors.Is(usage.Err, service.ErrInsufficientPoints) {
+		} else if errors.Is(usage.Err, points.ErrInsufficientPoints) {
 			sendEvent("error", map[string]string{"message": "积分不足"})
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -257,16 +258,16 @@ func assertTableSnapshot(t *testing.T, name string, got *httpx.ErrStatusTable, w
 // #1098 追加：扣罚目标不存在 404、通知写失败 500）。
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrTaskNotFound, Status: http.StatusNotFound},
+	assertTableSnapshot(t, "points.ErrStatus", points.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: points.ErrTaskNotFound, Status: http.StatusNotFound},
 		{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
 		{Sentinel: model.ErrCourseNotFound, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrAlreadyClaimed, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrDailyClaimLimit, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrInsufficientPoints, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrAlreadyRedeemed, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
+		{Sentinel: points.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrDailyClaimLimit, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrInsufficientPoints, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrAlreadyRedeemed, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
 	}, http.StatusBadRequest)
 }
 

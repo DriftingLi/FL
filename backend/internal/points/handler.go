@@ -1,4 +1,6 @@
-package api
+// 本文件：积分域的学员端 HTTP 出口（ADR-0070）——/api/points 蓝图（6 条路由）。
+// 装配点：internal/api/routes_registry.go 调 points.RegisterRoutes(api, rd.Session, deps.PointsSvc)。
+package points
 
 import (
 	"context"
@@ -9,43 +11,43 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// pointsErrStatus 积分域哨兵→状态码表（#610，ADR-0024）：已领取/额度/余额不足/已兑换等
+// ErrStatus 积分域哨兵→状态码表（#610，ADR-0024）：已领取/额度/余额不足/已兑换等
 // 业务冲突 → 400，不存在类 → 404；未命中兜底 400——积分域 service 错误均为业务错误。
 // 例外（#1098 扣罚回归域内）：ErrHrwaiUserNotFound → 404（不再是「一律 400」，与 /points/claim
 // 同域同判）；ErrPenaltyNotifyFailed → 500（强一致族下扣罚整笔回滚，管理端可见原因并可重试）。
-var pointsErrStatus = &httpx.ErrStatusTable{
+var ErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrTaskNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrTaskNotFound, Status: http.StatusNotFound},
 		{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
 		{Sentinel: model.ErrCourseNotFound, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrAlreadyClaimed, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrDailyClaimLimit, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrInsufficientPoints, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrAlreadyRedeemed, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
+		{Sentinel: ErrCourseNotRedeemable, Status: http.StatusBadRequest},
+		{Sentinel: ErrAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: ErrDailyClaimLimit, Status: http.StatusBadRequest},
+		{Sentinel: ErrInsufficientPoints, Status: http.StatusBadRequest},
+		{Sentinel: ErrAlreadyRedeemed, Status: http.StatusBadRequest},
+		{Sentinel: ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
 	},
 	Fallback: http.StatusBadRequest,
 }
 
-// PointsHandler 积分 handler
-type PointsHandler struct {
-	svc *service.PointsService
+// handler 积分 handler
+type handler struct {
+	svc *Service
 }
 
-func NewPointsHandler(svc *service.PointsService) *PointsHandler {
-	return &PointsHandler{svc: svc}
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterPointsRoutes 注册 /api/points 蓝图（需登录，hrwai_user）
-func RegisterPointsRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.PointsService) {
-	h := NewPointsHandler(svc)
-	g := rg.Group("/points", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapPointsUse))
+// RegisterRoutes 注册 /api/points 蓝图（需登录，hrwai_user）
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
+	g := rg.Group("/points", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapPointsUse))
 	g.GET("/balance", h.GetBalance)
 	g.GET("/ledger", h.GetLedger)
 	g.GET("/tasks", h.GetTasks)
@@ -61,12 +63,12 @@ func RegisterPointsRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Point
 // @Tags 学员端-积分
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.PointsBalanceResult} "余额"
+// @Success 200 {object} response.R{data=points.PointsBalanceResult} "余额"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/balance [get]
-func (h *PointsHandler) GetBalance(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.PointsBalanceResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsBalanceResult, error) {
+func (h *handler) GetBalance(c *gin.Context) {
+	httpx.Endpoint[struct{}, PointsBalanceResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*PointsBalanceResult, error) {
 			return h.svc.GetBalance(middleware.CurrentUserID(c))
 		},
 	}.Handle(c)
@@ -81,13 +83,13 @@ func (h *PointsHandler) GetBalance(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R{data=service.PointsLedgerResult} "流水"
+// @Success 200 {object} response.R{data=points.PointsLedgerResult} "流水"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/ledger [get]
-func (h *PointsHandler) GetLedger(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.PointsLedgerResult]{
+func (h *handler) GetLedger(c *gin.Context) {
+	httpx.Endpoint[struct{}, PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsLedgerResult, error) {
+		Invoke: func(ctx context.Context, _ *struct{}) (*PointsLedgerResult, error) {
 			page := httpx.QueryIntDefault(c, "page", 1)
 			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			// #512：direction 收支方向筛选（"" 全部 / "in" 收入 / "out" 支出）
@@ -104,12 +106,12 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 // @Tags 学员端-积分
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.PointsTasksResult} "任务列表"
+// @Success 200 {object} response.R{data=points.PointsTasksResult} "任务列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/tasks [get]
-func (h *PointsHandler) GetTasks(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.PointsTasksResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsTasksResult, error) {
+func (h *handler) GetTasks(c *gin.Context) {
+	httpx.Endpoint[struct{}, PointsTasksResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*PointsTasksResult, error) {
 			return h.svc.GetTasks(middleware.CurrentUserID(c))
 		},
 	}.Handle(c)
@@ -123,22 +125,22 @@ func (h *PointsHandler) GetTasks(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param code path string true "任务编码"
-// @Success 200 {object} response.R{data=service.PointsClaimResult} "已领取"
+// @Success 200 {object} response.R{data=points.PointsClaimResult} "已领取"
 // @Failure 400 {object} response.R "已领取/额度不足"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/tasks/{code}/claim [post]
-func (h *PointsHandler) Claim(c *gin.Context) {
+func (h *handler) Claim(c *gin.Context) {
 	code := c.Param("code")
 	if code == "" {
 		response.BadRequest(c, "任务 code 不能为空")
 		return
 	}
-	httpx.Endpoint[struct{}, service.PointsClaimResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsClaimResult, error) {
+	httpx.Endpoint[struct{}, PointsClaimResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*PointsClaimResult, error) {
 			return h.svc.Claim(ctx, middleware.CurrentUserID(c), code)
 		},
-		// #610：哨兵→状态码收编至 pointsErrStatus（已领取类 400、任务不存在 404），文案零漂移
-		ErrStatus: pointsErrStatus,
+		// #610：哨兵→状态码收编至 ErrStatus（已领取类 400、任务不存在 404），文案零漂移
+		ErrStatus: ErrStatus,
 	}.Handle(c)
 }
 
@@ -150,22 +152,22 @@ func (h *PointsHandler) Claim(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param courseId path int true "课程 ID"
-// @Success 200 {object} response.R{data=service.RedeemResult} "兑换成功"
+// @Success 200 {object} response.R{data=points.RedeemResult} "兑换成功"
 // @Failure 400 {object} response.R "余额不足/已拥有"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/shop/course/{courseId}/redeem [post]
-func (h *PointsHandler) RedeemCourse(c *gin.Context) {
+func (h *handler) RedeemCourse(c *gin.Context) {
 	courseID, err := httpx.PathInt(c, "courseId", "课程ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	httpx.Endpoint[struct{}, service.RedeemResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.RedeemResult, error) {
+	httpx.Endpoint[struct{}, RedeemResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*RedeemResult, error) {
 			return h.svc.RedeemCourse(ctx, middleware.CurrentUserID(c), courseID)
 		},
-		// #610：哨兵→状态码收编至 pointsErrStatus（余额不足/已拥有等 → 400），文案零漂移
-		ErrStatus: pointsErrStatus,
+		// #610：哨兵→状态码收编至 ErrStatus（余额不足/已拥有等 → 400），文案零漂移
+		ErrStatus: ErrStatus,
 	}.Handle(c)
 }
 
@@ -177,21 +179,21 @@ func (h *PointsHandler) RedeemCourse(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param sku path string true "商品 SKU"
-// @Success 200 {object} response.R{data=service.RedeemResult} "兑换成功"
+// @Success 200 {object} response.R{data=points.RedeemResult} "兑换成功"
 // @Failure 400 {object} response.R "余额不足/已拥有"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/shop/{sku}/redeem [post]
-func (h *PointsHandler) RedeemShop(c *gin.Context) {
+func (h *handler) RedeemShop(c *gin.Context) {
 	sku := c.Param("sku")
 	if sku == "" {
 		response.BadRequest(c, "sku 不能为空")
 		return
 	}
-	httpx.Endpoint[struct{}, service.RedeemResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.RedeemResult, error) {
+	httpx.Endpoint[struct{}, RedeemResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*RedeemResult, error) {
 			return h.svc.RedeemShop(ctx, middleware.CurrentUserID(c), sku)
 		},
-		// #610：哨兵→状态码收编至 pointsErrStatus（余额不足/已拥有等 → 400），文案零漂移
-		ErrStatus: pointsErrStatus,
+		// #610：哨兵→状态码收编至 ErrStatus（余额不足/已拥有等 → 400），文案零漂移
+		ErrStatus: ErrStatus,
 	}.Handle(c)
 }

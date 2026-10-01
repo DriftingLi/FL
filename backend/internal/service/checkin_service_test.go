@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
 )
 
@@ -28,13 +29,13 @@ func newCheckInSvcAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake)
 }
 
 // newCheckInSvcWithPointsAt 构造带积分簿记的打卡服务（ADR-0028 直记发分口径）。
-func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake, *PointsService) {
+func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake, *points.Service) {
 	t.Helper()
 	f := clock.At(now)
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), f, notification.NewService(db, zap.NewNop()))
-	svc := NewCheckInService(db, zap.NewNop(), f, points)
-	return svc, f, points
+	pointsSvc := points.NewService(db, zap.NewNop(), f, notification.NewService(db, zap.NewNop()))
+	svc := NewCheckInService(db, zap.NewNop(), f, pointsSvc)
+	return svc, f, pointsSvc
 }
 
 func TestNewCheckInService_NilClockFallsBackToReal(t *testing.T) {
@@ -225,7 +226,7 @@ func TestCheckInTierBonusFor(t *testing.T) {
 // 连击满 3/7 天当日基础+阶梯合并一笔；同日重复/并发只发一次；断签后重新跨档再发。
 func TestCheckIn_AwardsBaseAndTier(t *testing.T) {
 	now := shDay(2026, 8, 3).Add(10 * time.Hour)
-	svc, fake, points := newCheckInSvcWithPointsAt(t, now)
+	svc, fake, pointsSvc := newCheckInSvcWithPointsAt(t, now)
 	u := testutil.SeedStudent(t, svc.db, "打卡积分生", "x")
 
 	// day1 (8-03)：首签基础 5
@@ -268,7 +269,7 @@ func TestCheckIn_AwardsBaseAndTier(t *testing.T) {
 		t.Fatalf("day7 应 streak=7 且发 15 分, got %+v", r)
 	}
 	// 流水：7 笔正流水（7 天），累计 5+5+10+5+5+5+15 = 50
-	bal, _ := points.GetBalance(u.ID)
+	bal, _ := pointsSvc.GetBalance(u.ID)
 	if bal.Balance != 50 {
 		t.Fatalf("7 天累计应 50 分, got %d", bal.Balance)
 	}

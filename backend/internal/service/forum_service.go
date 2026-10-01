@@ -22,6 +22,7 @@ import (
 	"forklift-training/internal/geolocation"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -93,7 +94,7 @@ func normalizeForumCategory(category string) (string, error) {
 }
 
 // 采纳积分常量（#366）：每帖只发一次分，走流水直记（非任务制）。
-// ReasonRollback（违规回收流水原因）已随回收实现收编移入积分域（#609，points_service.go）。
+// points.ReasonRollback（违规回收流水原因）已随回收实现收编移入积分域（#609，internal/points/service.go）。
 const (
 	AcceptBonusPoints   = 40               // 答主采纳奖励
 	AcceptActionPoints  = 5                // 楼主采纳行为奖励
@@ -297,7 +298,7 @@ type ForumService struct {
 // notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
-func NewForumService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *PointsService, logger *zap.Logger) *ForumService {
+func NewForumService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *points.Service, logger *zap.Logger) *ForumService {
 	return &ForumService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 

@@ -1,4 +1,9 @@
-package service
+// Package points 积分域：余额与流水、任务中心、课程/真题卷/商城兑换、AI 计费、管理员扣罚
+// （ADR-0023 幂等簿记、ADR-0024 错误哨兵、ADR-0054 任务中心、ADR-0062 兑换对账）。
+//
+// 本包是 internal/<域> 形态（ADR-0070）：handler.go / handler_admin.go 是 HTTP 出口，
+// service.go 是域实现，idem_keys.go 是幂等键构造器单点，sku_registry.go 是商城 sku 对账表。
+package points
 
 import (
 	"context"
@@ -78,7 +83,7 @@ type taskMeta struct {
 }
 
 // loadTaskMeta 一次查询取齐全部行为判定所需数据（读错误向上传播，沿用 #409 口径）。
-func (s *PointsService) loadTaskMeta(userID int) (*taskMeta, error) {
+func (s *Service) loadTaskMeta(userID int) (*taskMeta, error) {
 	today := s.shanghaiDate()
 	todayStart := s.shanghaiDateTime()
 	var user model.HrwaiUser
@@ -202,8 +207,8 @@ type PointsClaimResult struct {
 	TaskStatus  string `json:"task_status"`
 }
 
-// PointsService 积分服务
-type PointsService struct {
+// Service 积分服务
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 	clk    clock.Clock
@@ -212,18 +217,18 @@ type PointsService struct {
 	notificationSvc *notification.Service
 }
 
-func NewPointsService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSvc *notification.Service) *PointsService {
+func NewService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSvc *notification.Service) *Service {
 	if clk == nil {
 		clk = clock.Real()
 	}
-	return &PointsService{db: db, logger: logger, clk: clk, notificationSvc: notificationSvc}
+	return &Service{db: db, logger: logger, clk: clk, notificationSvc: notificationSvc}
 }
 
 // tryLock 瞬态并发护栏锁单点（#609 内聚，直记入口 Claim/redeem/DeductAI/AdminPenalty 共用，
 // 前奏仅锁键/TTL 不同）：Redis SetNX 占锁成功返回释放函数（调用方 defer）；Redis 不可用或
 // 已被占时不阻断主流程——锁只是进程级双写护栏，最终裁决由唯一索引/占坑表承担（ADR-0023）。
 // 锁键为瞬态锁面（points:grant:* / shop:* / ai:tokens:* / points:penalty:*），不属幂等占坑键，格式保持现状。
-func (s *PointsService) tryLock(ctx context.Context, key string, ttl time.Duration) (release func()) {
+func (s *Service) tryLock(ctx context.Context, key string, ttl time.Duration) (release func()) {
 	if ok, err := cache.SetNX(ctx, key, "1", ttl); err == nil && ok {
 		return func() { _ = cache.Del(ctx, key) }
 	}
@@ -231,12 +236,12 @@ func (s *PointsService) tryLock(ctx context.Context, key string, ttl time.Durati
 }
 
 // shanghaiDate 当前业务自然日日期字符串（Asia/Shanghai）。
-func (s *PointsService) shanghaiDate() string {
+func (s *Service) shanghaiDate() string {
 	return clock.DayKey(s.clk.Now())
 }
 
 // shanghaiDateTime 当前业务自然日起点（Asia/Shanghai）。
-func (s *PointsService) shanghaiDateTime() time.Time {
+func (s *Service) shanghaiDateTime() time.Time {
 	return clock.DayStart(s.clk.Now())
 }
 
@@ -249,7 +254,7 @@ func (s *PointsService) shanghaiDateTime() time.Time {
 // 由数据库自身做类型转换——Postgres DATE 与 SQLite TEXT 的形态差异不再进入 Go 的比较路径（#409）。
 // 读取错误向上传播，不再静默降级为「没人领过」。遗留 (claim_date IS NULL AND ref_id IS NULL) 行
 // 视为当日已领占坑，维持修复前「有领取标记即 claimed」的可观测口径，不产生额度漂移。
-func (s *PointsService) claimCounts(userID int, today string) (map[string]claimCounts, error) {
+func (s *Service) claimCounts(userID int, today string) (map[string]claimCounts, error) {
 	type claimCountRow struct {
 		TaskCode string
 		Lifetime int64
@@ -276,7 +281,7 @@ func (s *PointsService) claimCounts(userID int, today string) (map[string]claimC
 // canClaim 额度判定唯一实现（#410）：输入任务配置与两个计数，输出「本任务当前可否领 / 是否已领完额度」。
 // 终身额度用尽（total_limit 非空且终身计数 ≥ 额度）或当日额度用尽（当日计数 ≥ daily_limit）→ 不可领。
 // 写路径（Claim）与读路径（GetTasks）共用本实现，不各写一套判定。
-func (s *PointsService) canClaim(cfg model.PointsTaskConfig, todayCount, lifetimeCount int64) claimDecision {
+func (s *Service) canClaim(cfg model.PointsTaskConfig, todayCount, lifetimeCount int64) claimDecision {
 	if cfg.TotalLimit != nil && lifetimeCount >= int64(*cfg.TotalLimit) {
 		return claimDecision{Exhausted: true}
 	}
@@ -326,7 +331,7 @@ var (
 	// ErrTaskNotDone 行为未达成（Claim 前校验：todo 任务不可空领）。
 	ErrTaskNotDone = errors.New("任务未完成")
 	// ErrPenaltyNotifyFailed 扣罚站内信写入失败（#1098 强一致族）：通知与扣罚同事务，
-	// 写失败即扣罚整体不生效；管理端经 pointsErrStatus 看到 500 + 可见原因，可原样重试。
+	// 写失败即扣罚整体不生效；管理端经 ErrStatus 看到 500 + 可见原因，可原样重试。
 	ErrPenaltyNotifyFailed = errors.New("扣罚未生效：站内信写入失败，请重试")
 )
 
@@ -408,7 +413,7 @@ func ApplyTx(tx *gorm.DB, e PointsEntry) (bool, error) {
 }
 
 // GetBalance 获取余额与累计
-func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
+func (s *Service) GetBalance(userID int) (*PointsBalanceResult, error) {
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {
 		return nil, err
@@ -424,13 +429,13 @@ func (s *PointsService) GetBalance(userID int) (*PointsBalanceResult, error) {
 // GetLedger 流水分页。userID=0 不过滤用户（admin 巡检全量视角）；reason 可选筛选
 // （空=不过滤，变参保持既有调用方零 diff，同 AdminCourseService.GetCourses 的 filter 惯例）。
 // 委托 GetLedgerFiltered（direction 空串）。
-func (s *PointsService) GetLedger(userID, page, pageSize int, reason string, refType ...string) (*PointsLedgerResult, error) {
+func (s *Service) GetLedger(userID, page, pageSize int, reason string, refType ...string) (*PointsLedgerResult, error) {
 	return s.GetLedgerFiltered(userID, page, pageSize, reason, "", refType...)
 }
 
 // GetLedgerFiltered 流水分页 + 收支方向筛选（#512 积分明细页）——direction: "" 全部 /
 // "in" 仅收入(delta>0) / "out" 仅支出(delta<0)；其余参数语义同 GetLedger。
-func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, direction string, refType ...string) (*PointsLedgerResult, error) {
+func (s *Service) GetLedgerFiltered(userID, page, pageSize int, reason, direction string, refType ...string) (*PointsLedgerResult, error) {
 	// count 与 find 同走 paging.QueryWithMax（过滤条件单一出处）
 	build := func(q *gorm.DB) *gorm.DB {
 		if userID > 0 {
@@ -482,7 +487,7 @@ func (s *PointsService) GetLedgerFiltered(userID, page, pageSize int, reason, di
 }
 
 // GetTasks 获取任务列表（实时算 todo/claimable/claimed，基于真实行为表）
-func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
+func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
 	var configs []model.PointsTaskConfig
 	if err := s.db.Order("code ASC").Find(&configs).Error; err != nil {
 		return nil, err
@@ -544,7 +549,7 @@ func (s *PointsService) GetTasks(userID int) (*PointsTasksResult, error) {
 }
 
 // Claim 领取任务
-func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) (*PointsClaimResult, error) {
+func (s *Service) Claim(ctx context.Context, userID int, taskCode string) (*PointsClaimResult, error) {
 	var cfg model.PointsTaskConfig
 	if err := s.db.Where("code = ?", taskCode).First(&cfg).Error; err != nil {
 		return nil, ErrTaskNotFound
@@ -620,7 +625,7 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 // SettleRewardTx 事务内「一事件一分」直记落账（ADR-0023 forum 收编通道）：
 // 占坑冲突（同键已处理）视为已处理静默跳过、事务继续——「每帖只发一次」由调用方
 // 状态 CAS + 占坑双保险；封底/守卫语义由 PointsEntry 声明，其余错误上抛整笔回滚。
-func (s *PointsService) SettleRewardTx(tx *gorm.DB, e PointsEntry) error {
+func (s *Service) SettleRewardTx(tx *gorm.DB, e PointsEntry) error {
 	_, err := ApplyTx(tx, e)
 	if errors.Is(err, ErrPointsProcessed) {
 		return nil
@@ -652,7 +657,7 @@ type PointsRollback struct {
 // 幂等三层：同 ref 已有 rollback 流水（存量数据标记，先于占坑表存在）→ 已对冲过跳过不双扣；
 // 原账为零 → 无事可收不占坑；占坑冲突 → ErrPointsProcessed（事件已处理过，调用方按各自
 // 语义映射——ADR-0023 契约）。
-func (s *PointsService) RollbackByRef(tx *gorm.DB, r PointsRollback) (int, error) {
+func (s *Service) RollbackByRef(tx *gorm.DB, r PointsRollback) (int, error) {
 	// 存量标记：占坑表上线前的 rollback 流水无占坑行，有标记即已对冲过
 	var rolledBack int64
 	if err := tx.Model(&model.PointsLedger{}).
@@ -719,7 +724,7 @@ type redeemOpts struct {
 // redeem 兑换唯一实现：锁 → 已拥有校验 → 余额预检 → 事务{权益 + 簿记核心}。
 // 幂等键 redeem:{sku}:{userID}（ADR-0062 票1）：占坑冲突映射为「已兑换」，整笔事务回滚；
 // 余额扣减经 ApplyTx 守卫（`points_balance >= ?` + RowsAffected 校验），并发双花不击穿余额。
-func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
+func (s *Service) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
 	release := s.tryLock(ctx, o.lockKey, 5*time.Second)
 	defer release()
 	// 已拥有校验
@@ -768,7 +773,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 }
 
 // RedeemCourse 兑换课程（课程级整锁）。
-func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
+func (s *Service) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
 	var course model.Course
 	if err := s.db.First(&course, courseID).Error; err != nil {
 		return nil, model.ErrCourseNotFound
@@ -787,16 +792,16 @@ func (s *PointsService) RedeemCourse(ctx context.Context, userID, courseID int) 
 }
 
 // realPaperUnlockSKU 商城里真题解锁项的 SKU（价格单点：管理员调整该项即调整全部卷价）。
-// 这一行**不是可兑换商品**——它只是价格；对账表与拒兑判据见 shop_sku_registry.go（ADR-0062 票2 D1）。
+// 这一行**不是可兑换商品**——它只是价格；对账表与拒兑判据见 sku_registry.go（ADR-0062 票2 D1）。
 const realPaperUnlockSKU = "unlock_real_paper"
 
 // realPaperPriceFallback 商城项缺失时的兜底单价。
 const realPaperPriceFallback = 300
 
-// realPaperPrice 读取真题解锁单价（商城项缺失/停用时回退兜底价）。
+// RealPaperPrice 读取真题解锁单价（商城项缺失/停用时回退兜底价）。
 // 只认 enabled=true 的行 ⇒ 停售这一行等于把卷价悄悄改回硬编码，管理员改的是一行读不到的数据：
 // 要停「解锁真题」的兑换请走对账表（ErrRealPaperUnlockNotRedeemable），别动 enabled。
-func (s *PointsService) realPaperPrice() int {
+func (s *Service) RealPaperPrice() int {
 	var item model.PointsShopItem
 	if err := s.db.Where("sku = ? AND enabled = true", realPaperUnlockSKU).First(&item).Error; err != nil {
 		return realPaperPriceFallback
@@ -808,7 +813,7 @@ func (s *PointsService) realPaperPrice() int {
 }
 
 // RedeemRealPaper 兑换单套真题卷（卷级整锁，语义同 RedeemCourse）。
-func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int) (*RedeemResult, error) {
+func (s *Service) RedeemRealPaper(ctx context.Context, userID, paperID int) (*RedeemResult, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
 		return nil, ErrRealPaperUnavailable
@@ -817,17 +822,17 @@ func (s *PointsService) RedeemRealPaper(ctx context.Context, userID, paperID int
 		lockKey: fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID),
 		sku:     entitlement.RealPaperSKU(paperID),
 		refID:   strconv.Itoa(paperID),
-		price:   s.realPaperPrice(),
+		price:   s.RealPaperPrice(),
 		reason:  "redeem_real_paper",
 		refType: "real_exam_paper",
 	})
 }
 
 // RedeemShop 兑换商城物品。
-// 放行判据 = 对账表（shop_sku_registry.go）：表里有一行 enabled=true 只说明「有这件商品」，
+// 放行判据 = 对账表（sku_registry.go）：表里有一行 enabled=true 只说明「有这件商品」，
 // 不说明「兑出去的权益有人读」⇒ 未登记读者的 sku 一律拒兑，扣分为零
 // （ADR-0062 票2 的 unlock_real_paper 死端就是这么漏出来的）。
-func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
+func (s *Service) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
 	var item model.PointsShopItem
 	if err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error; err != nil {
 		return nil, ErrShopItemUnavailable
@@ -847,7 +852,7 @@ func (s *PointsService) RedeemShop(ctx context.Context, userID int, sku string) 
 }
 
 // HasEntitlement 校验是否已兑换（权益读面单点见 internal/entitlement，ADR-0062 决策 3）。
-func (s *PointsService) HasEntitlement(userID int, sku, refID string) (bool, error) {
+func (s *Service) HasEntitlement(userID int, sku, refID string) (bool, error) {
 	return entitlement.Holds(s.db, userID, sku, refID)
 }
 
@@ -893,7 +898,7 @@ func aiPointsForTokens(tokens int) int {
 
 // AIPreflight AI 对话余额预检：余额低于下限返回 ErrInsufficientPoints（阻断对话）。
 // 余额查询失败时放行——后计量模式下真正的闸门在末端扣费，与既有 fail-open 语义一致。
-func (s *PointsService) AIPreflight(userID int) error {
+func (s *Service) AIPreflight(userID int) error {
 	bal, err := s.GetBalance(userID)
 	if err != nil || bal == nil {
 		return nil
@@ -908,7 +913,7 @@ func (s *PointsService) AIPreflight(userID int) error {
 // 字符长度 + 服务端铸造的 requestID），tokens 估算、分桶换算、上下限与幂等全部内聚在积分域：
 // 估算见 estimateAITokens，积分换算见 aiPointsForTokens；幂等键 ai_tokens:{userID}:{requestID}，
 // 一次服务端请求只扣一次（重放即新请求、新消费）。
-func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error) {
+func (s *Service) DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error) {
 	total, prompt, completion := estimateAITokens(promptChars, completionChars)
 	points := aiPointsForTokens(total)
 	lockKey := fmt.Sprintf("ai:tokens:%d:%s", userID, requestID)
@@ -947,7 +952,7 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 }
 
 // aiTokensResult 组装扣费结果（余额实时读取，读取失败时余额置 0 维持既有语义）。
-func (s *PointsService) aiTokensResult(points, total, prompt, completion, userID int) *AITokensResult {
+func (s *Service) aiTokensResult(points, total, prompt, completion, userID int) *AITokensResult {
 	res := &AITokensResult{Points: points, TotalTokens: total, PromptTokens: prompt, CompletionTokens: completion}
 	if bal, _ := s.GetBalance(userID); bal != nil {
 		res.Balance = bal.Balance
@@ -963,8 +968,8 @@ type PointsPenaltyResultDTO struct {
 // AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）。
 //
 // #1098：站内信回归积分域并与扣罚流水同事务（强一致族）——通知写失败则整笔扣罚不生效，
-// 管理端经 pointsErrStatus 看到 500 + 可见原因并可重试；审计仍由中间件承载，不在此处。
-func (s *PointsService) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
+// 管理端经 ErrStatus 看到 500 + 可见原因并可重试；审计仍由中间件承载，不在此处。
+func (s *Service) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
 	if delta <= 0 || delta > 500 {
 		return 0, ErrInvalidPenalty
 	}

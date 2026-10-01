@@ -2,7 +2,7 @@
  * 积分余额字段映射契约
  *
  * 后端 GET /api/points/balance 返回 { balance, total_earned, total_spent }（见
- * backend/internal/service/points_service.go PointsBalanceResult）。#709 前 PointsBalance
+ * backend/internal/points/service.go PointsBalanceResult）。#709 前 PointsBalance
  * 沿用早期字段名 total_points / today_earned 并靠映射兜底，「我的」页可用积分卡片消费的
  * 就是这条回退——若映射丢掉 balance，页面会稳定显示 0，故在此钉住契约。
  *

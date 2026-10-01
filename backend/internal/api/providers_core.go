@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -40,7 +41,7 @@ type coreSingletons struct {
 	notifSvc      *notification.Service
 	reviewSvc     *service.ProfileReviewService
 	aiConfigSvc   *service.AIConfigService
-	pointsSvc     *service.PointsService
+	pointsSvc     *points.Service
 	aiModelPort   service.AIModelPort
 	aiSvc         *service.AIService
 	contentGenSvc *service.ContentGenerateService
@@ -73,10 +74,10 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	c.authSvc.SetProfileReviewService(c.reviewSvc)
 	c.aiConfigSvc = service.NewAIConfigService(db, cfg.SecretKey, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
-	c.pointsSvc = service.NewPointsService(db, logger, clock.Real(), c.notifSvc)
+	c.pointsSvc = points.NewService(db, logger, clock.Real(), c.notifSvc)
 	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存。
 	// 计量闸门（ADR-0031）作为装饰器挂在该端口上：所有 LLM 消费（含会话自动命名）过同一道闸，
-	// 生产 meter 即积分域 *PointsService（预检与扣费下限同源），装配单点在此。
+	// 生产 meter 即积分域 *points.Service（预检与扣费下限同源），装配单点在此。
 	// 第二实现：外部诊断 RAG 助手（fault_diagnosis）经 routing adapter 按功能键分发
 	// （baseURL 来自 cfg.DiagnosisAssistantURL，不走管理端模型绑定）。
 	aiRouting := service.NewRoutingAIModel(

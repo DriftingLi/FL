@@ -1,5 +1,5 @@
 // #1098 管理员扣罚端点契约：
-//   - 目标学员不存在 → 404（pointsErrStatus 域表，不再压成 400）；
+//   - 目标学员不存在 → 404（points.ErrStatus 域表，不再压成 400）；
 //   - 成功路径：响应形状 {"deducted": N} 不变，且扣罚流水与站内信同事务落库。
 package api
 
@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
@@ -41,7 +42,7 @@ func TestAdminPenaltyContract(t *testing.T) {
 	deps := newContractDeps(t, db, cfg)
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterAdminPointsRoutes(api, deps.RouterDeps(), deps.PointsSvc)
+	points.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.PointsSvc)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	adminToken, err := adminSess.Issue(admin.AdminID, admin.Username, "admin")
 	if err != nil {

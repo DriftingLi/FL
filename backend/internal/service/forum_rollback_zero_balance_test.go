@@ -13,13 +13,14 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
 )
 
 func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	// 管理端强删属治理动作：经 ForumModerationService 自己的 interface 装配（ADR-0050 决策 3）
-	mod := NewForumModerationService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
+	mod := NewForumModerationService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "zero_bal_answerer", "x")
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", answerer.ID).UpdateColumn("points_balance", 0).Error; err != nil {
@@ -46,7 +47,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 		t.Fatalf("帖子应已删除: cnt=%d err=%v", topicCnt, err)
 	}
 	var rollbackCnt int64
-	if err := db.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ?", ReasonRollback, "forum_topic").Count(&rollbackCnt).Error; err != nil || rollbackCnt != 0 {
+	if err := db.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ?", points.ReasonRollback, "forum_topic").Count(&rollbackCnt).Error; err != nil || rollbackCnt != 0 {
 		t.Fatalf("余额 0 不得写回收流水, got %d 行 err=%v", rollbackCnt, err)
 	}
 	var idemCnt int64
@@ -67,7 +68,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 			t.Fatalf("第 %d 次重复回收应幂等跳过: %v", i+1, err)
 		}
 	}
-	if err := db.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ?", ReasonRollback, "forum_topic").Count(&rollbackCnt).Error; err != nil || rollbackCnt != 0 {
+	if err := db.Model(&model.PointsLedger{}).Where("reason = ? AND ref_type = ?", points.ReasonRollback, "forum_topic").Count(&rollbackCnt).Error; err != nil || rollbackCnt != 0 {
 		t.Fatalf("重复回收不得产生流水, got %d 行 err=%v", rollbackCnt, err)
 	}
 }
@@ -76,7 +77,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 // 同帖重复发放（占坑冲突）静默跳过且不影响状态迁移。
 func TestAcceptReplyRewardIdempotentOccupy(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewForumService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
+	svc := NewForumService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "occ_answerer", "x")
 	asker := testutil.SeedStudent(t, db, "occ_asker", "x")
@@ -93,7 +94,7 @@ func TestAcceptReplyRewardIdempotentOccupy(t *testing.T) {
 
 	// 直接走 settle 通道断言占坑语义：奖励静默跳过、无流水
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return svc.rewards.points.SettleRewardTx(tx, PointsEntry{
+		return svc.rewards.points.SettleRewardTx(tx, points.PointsEntry{
 			UserID: answerer.ID, Delta: AcceptBonusPoints, Reason: ReasonAcceptedBonus,
 			RefType: "forum_topic", RefID: strconv.FormatInt(topic.ID, 10),
 			IdemKey: idemKey,

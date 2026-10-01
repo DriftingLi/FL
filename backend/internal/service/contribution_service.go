@@ -29,6 +29,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/storage"
 	"forklift-training/pkg/paging"
@@ -165,13 +166,13 @@ type ContributionService struct {
 	db              *gorm.DB
 	fileSvc         *filestore.FileStore
 	notificationSvc *notification.Service
-	points          *PointsService
+	points          *points.Service
 	logger          *zap.Logger
 	clk             clock.Clock
 }
 
 // NewContributionService 构造投稿服务。clk 为空时回退生产实钟（Asia/Shanghai）。
-func NewContributionService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, points *PointsService, logger *zap.Logger, clk clock.Clock) *ContributionService {
+func NewContributionService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, points *points.Service, logger *zap.Logger, clk clock.Clock) *ContributionService {
 	if clk == nil {
 		clk = clock.Real()
 	}
@@ -749,10 +750,10 @@ func (s *ContributionService) Approve(reviewerID int, contributionID int64) (*Co
 			return ErrContributionNotPending
 		}
 		// 过审 +50 直记（幂等占坑：contribution_approved:{id}，重复/并发只发一次）
-		if err := s.points.SettleRewardTx(tx, PointsEntry{
+		if err := s.points.SettleRewardTx(tx, points.PointsEntry{
 			UserID: c.UserID, Delta: ContributionApprovedPoints,
 			Reason: ReasonContributionApproved, RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
-			IdemKey: ContributionApprovedIdemKey(contributionID),
+			IdemKey: points.ContributionApprovedIdemKey(contributionID),
 		}); err != nil {
 			return err
 		}
@@ -859,10 +860,10 @@ func (s *ContributionService) Download(userID int, contributionID int64) (*Downl
 		// 3. 达阶判定：是否刚好跨过某档（跨多档只发最高一档——每次下载只可能跨一档）
 		for _, tier := range ContributionTiers {
 			if c.DownloadsCount < tier.Threshold && newCount >= tier.Threshold {
-				if err := s.points.SettleRewardTx(tx, PointsEntry{
+				if err := s.points.SettleRewardTx(tx, points.PointsEntry{
 					UserID: c.UserID, Delta: tier.Points,
 					Reason: ReasonContributionTier, RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
-					IdemKey: ContributionTierIdemKey(contributionID, tier.Threshold),
+					IdemKey: points.ContributionTierIdemKey(contributionID, tier.Threshold),
 				}); err != nil {
 					return err
 				}
@@ -1067,21 +1068,21 @@ func (s *ContributionService) Archive(reviewerID int, contributionID int64, reas
 			return ErrContributionNotApproved
 		}
 		// 追回累计投稿分（过审 + 达阶）：声明式回收（#609）——原账 SUM 取反、封底 0、
-		// 占坑防双扣在 PointsService.RollbackByRef 单点；返回值为原账合计（封底截断前）。
+		// 占坑防双扣在 points.Service.RollbackByRef 单点；返回值为原账合计（封底截断前）。
 		// 占坑冲突（已追回过）静默放行：CAS 已保证单次下架，此处仅防御重试路径。
-		clawed, rbErr := s.points.RollbackByRef(tx, PointsRollback{
+		clawed, rbErr := s.points.RollbackByRef(tx, points.PointsRollback{
 			RefType: RefTypeContribution,
 			RefID:   fmt.Sprintf("%d", contributionID),
 			Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
-			IdemKey: ContributionRollbackIdemKey(contributionID),
+			IdemKey: points.ContributionRollbackIdemKey(contributionID),
 		})
-		if rbErr != nil && !errors.Is(rbErr, ErrPointsProcessed) {
+		if rbErr != nil && !errors.Is(rbErr, points.ErrPointsProcessed) {
 			return rbErr
 		}
 		clawedBack = clawed
 		// 下架站内信（含原因与扣减；同事务；事件构造器单点）
 		if err := s.notificationSvc.CreateContributionArchivedEvent(tx,
-			notification.NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack, ReasonRollback), now); err != nil {
+			notification.NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack, points.ReasonRollback), now); err != nil {
 			return err
 		}
 		return nil

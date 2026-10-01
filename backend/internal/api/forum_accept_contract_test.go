@@ -18,6 +18,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -103,7 +104,7 @@ func TestForumAcceptContract(t *testing.T) {
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-	RegisterPointsRoutes(apiGroup, deps.RouterDeps(), deps.PointsSvc)
+	points.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.PointsSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(u.ID), u.Account, "hrwai_user")

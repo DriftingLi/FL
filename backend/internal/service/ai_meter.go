@@ -15,25 +15,27 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
+
+	"forklift-training/internal/points"
 )
 
-// AIMetering 计量闸门 seam（ADR-0031 决策 1）：生产实现 = 积分域 *PointsService
+// AIMetering 计量闸门 seam（ADR-0031 决策 1）：生产实现 = 积分域 *points.Service
 // （AIPreflight/DeductAI 方法签名原样满足——余额预检与扣费下限同源，不另立实现），
 // 测试 fake 为第二实现。meter 只认这两个动作，金额换算与幂等全部留在积分域。
 type AIMetering interface {
 	AIPreflight(userID int) error
-	DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error)
+	DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*points.AITokensResult, error)
 }
 
 // 积分域实现即生产 meter：签名同源，零适配代码。
-var _ AIMetering = (*PointsService)(nil)
+var _ AIMetering = (*points.Service)(nil)
 
 // AIUsage 单次经闸调用的计量产出（仅计费调用非 nil）。
 // Res = 扣费数据面（即 SSE usage 事件负载，json 形状与迁移前逐字节一致，移动端契约无感）；
-// Err = 扣费失败（ErrInsufficientPoints → 调用方映射既有「积分不足」文案；其余错误沿用
+// Err = 扣费失败（points.ErrInsufficientPoints → 调用方映射既有「积分不足」文案；其余错误沿用
 // 迁移前行为：静默跳过 usage 事件）。内容错误与扣费失败互斥（内容失败不扣费）。
 type AIUsage struct {
-	Res *AITokensResult
+	Res *points.AITokensResult
 	Err error
 }
 
@@ -105,7 +107,7 @@ type meteredAIModel struct {
 }
 
 // NewMeteredAIModel 构建计量闸门端口。next 为裸传输 adapter（NewEinoAIModel 产物），
-// meter 为积分域实现（生产 = *PointsService），均必须非 nil：构造期注入是不变量。
+// meter 为积分域实现（生产 = *points.Service），均必须非 nil：构造期注入是不变量。
 func NewMeteredAIModel(next AIModelPort, meter AIMetering, logger *zap.Logger) AIModelPort {
 	return &meteredAIModel{next: next, meter: meter, logger: logger}
 }

@@ -40,6 +40,7 @@
 4. **搬 HTTP 出口**：`git mv backend/internal/api/<域>.go backend/internal/<域>/handler.go`；改 `package`；`XxxHandler`→`handler`、`NewXxxHandler`→`newHandler`、`RegisterXxxRoutes(rg, rd RouterDeps, svc)`→`RegisterRoutes(rg *gin.RouterGroup, <只收它真正需要的依赖>, svc *Service)`。faq 只用了 `rd.Session`，于是签名就是 `RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service)`，由 `routes_registry.go` 的闭包注入 `rd.Session`。
    - **不要把 `RouterDeps` 搬进域包**：它住在 `internal/api/deps.go`。
    - swagger 注解的 `data=service.X` 改成 `data=<域>.X`。
+   - **一个域两条蓝图时分居两文件、名字带 Admin 后缀**：`/api/points` 与 `/api/admin/points` 同属积分域 ⇒ `handler.go` 的 `RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service)`（6 条路由）+ `handler_admin.go` 的 `RegisterAdminRoutes(rg, session, pointsSvc *Service)`（POST `/admin/points/penalty`），两个 handler 类型 `handler` / `adminHandler` 都保持私有。同包不能有两个 `RegisterRoutes`，两个 HTTP 出口文件也都必须以 `handler` 开头（判据见第 3 节）。
    - 文件里那两个私有请求体结构（`faqCategoryBody` / `faqEntryBody`）原样留下：它们走 `c.ShouldBindJSON`，本来就不进 swagger definitions。**新增**端点要用 `@Param` 才可见。
 5. **装配三处**：`internal/api/deps.go` 的字段类型（`FaqSvc *faq.Service`）、`internal/api/providers_*.go` 的构造（`d.FaqSvc = faq.NewService(c.db, c.logger)`，新增 import）、`internal/api/routes_registry.go` 的一行（`faq.RegisterRoutes(api, rd.Session, deps.FaqSvc)`）。
 6. **域声明表**：`internal/apitypes/domains.go` 该域 `Roots` 的 `service.*` 改 `<域>.*`。
@@ -63,6 +64,7 @@
 | `scripts/check-catalog-sort.mjs` 的 5 条 `declaredIn`、`backend/internal/deploy/nginx_delivery_gen.go` 的硬编码路径（:154 生成注释文案、:231 `filepath.Join(root, "backend", "internal", "<包>", "file_type_table.go")`）与 AST 判据（按变量名 `fileTypeTable` 找表 ⇒ 变量名不许改） | 只在被点名的文件真搬家时改 | 缺文件即 Fatal（不静默），会在 CI 点名 |
 | `frontend/nginx-host.conf`（生成物，两处提到路径：:15 手写表头 + :22 生成区） | 搬 `file_type_table.go` 后 `cd backend && go run ./cmd/gen-deploy -only nginx` 重生成（只动生成区那行）；**:15 在手写区，生成器不管**，要手改 | 两把锁 `TestNginxDeliveryMapInSync`（`codegen.AssertInSync`）与 `TestNginxDeliveryMapCoversFileTypeTable` 直接红（不静默）|
 | `training-app/叉车维修培训学员端跨端应用/utils/*Contract.test.js` 里**硬编码的后端文件路径**（`resourcesContract.test.js:347` 直读 `backend/internal/api/material.go` 做幻影路由对照） | 搬 handler / service 时全仓 grep 这类路径（**含 `training-app/**`**；`frontend/` 与 `scripts/` 目前没有直读后端源码的写法），改指新家 | 该 ③ 门套件读不到文件即 fail-closed 判红（不静默），但只在 CI `mobile-test` 里红 |
+| `training-app/叉车维修培训学员端跨端应用/**` 里**只提旧后端路径的注释**（`composables/useAiPro.uts`、`types/points.uts`、`api/points.uts`、`utils/*.test.js`） | **不改**（改注释就动到了 `.uts` 源文件）——PR 正文披露一行即可 | 无事发生（它们是史述）；但**改 `.uts` 会把 PR 降级为运行时面**：低风险白名单是**逐文件**口径（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`，判据源 `.github/workflows/pr-evidence.yml`），本波只改了恰在白名单里的 `utils/pointsBalance.test.js:5` ⇒ ①真机与 ②微信开发者工具双双必过的口子没被打开 |
 | `backend/internal/api/errstatus_test.go`（`TestErrStatusTable_Snapshot_Points`）与 `backend/internal/api/course_fact_distinctness_test.go` 的**哨兵清单表** | 哨兵搬家（波 1b-0 把 `ErrCourseNotFound` / `ErrHrwaiUserNotFound` 贴进 `internal/model`）时，表里的 `service.X` 改 `model.X`（快照表按哨兵**值指针**与文案比对） | 红（不静默），但报的是「哨兵值不符」，容易被读成文案被改坏 |
 | 域包内**结构体字段**改名（波 0c：`OrphanSweepConfig` 的 `domain/ttl/list/referenced/keyOf/deleteFile/logger` → 导出名） | 包内**测试**里的复合字面量也用小写键（脚本的区间替换只覆盖包外 `<包>.OrphanSweepConfig{…}`）| `go vet` 报 `unknown field domain in struct literal`（不静默，但只在 vet 阶段）|
 
@@ -81,7 +83,7 @@ swagger 的 definitions 键**带 Go 包前缀**（`"service.FaqResult"`，`$ref`
 1. `cd backend && swag init -g cmd/server/main.go -o docs`（本机 `swag.exe` v1.16.4，与 CI 钉的版本一致）；
 2. `go run ./cmd/gen-apitypes`；
 3. **验证 diff**：把 `HEAD` 版 `backend/docs/swagger.json` / `.yaml` 落到临时文件，对旧文本做一次纯文本替换（正则 `/service\.((?:Admin)?Faq[A-Za-z]*)/g`，替换成 `faq.<捕获组>`）再与新文件比：json 应**深度相等**（键序无关）、yaml 应**行多重集相等**；`docs.go` 里不应有 `service.Faq*` 残留。
-4. **前端生成物应零 diff**：`tsName()`（`internal/apitypes/codegen.go`）只取最后一个点之后 ⇒ 包名不进 TS 类型名。`git diff --stat -- frontend` 为空即证。faq 批实测为空。
+4. **前端生成物「除声明顺序外」零 diff**：`tsName()`（`internal/apitypes/codegen.go`）只取最后一个点之后 ⇒ 包名不进 TS 类型名（faq / material 批 `git diff --stat -- frontend` 为空）。但 `collect()`（同文件）对根类型的传递闭包做 `sort.Strings`，排序键是**带包前缀的定义键** ⇒ 当一个域文件里混进了**别的域**的根类型（跨域复用的 DTO），换包会把 `points.*` 整段排到 `service.*` 之前，接口声明顺序与头部「覆盖的 Go 类型」清单一起前后移动（points 批：`generated/inspection.ts`、`generated/realExam.ts`）。判据因此是「**diff 只有顺序、类型内容逐字不变**」，不是「diff 为空」。
 
 ⚠️ 用 pwsh 读 `git show` 的输出会把 `warning: ... LF will be replaced by CRLF` 混进 stdout ⇒ 直接 `JSON.parse` 会炸：落盘再读，读时去掉 BOM。
 
@@ -144,6 +146,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
 - [ ] 旧符号（`XxxService` / `RegisterXxxRoutes` / 旧包前缀键）全仓残留 = 0
+- [ ] 域有两条蓝图时（`/x` 与 `/admin/x`）：`RegisterRoutes` / `RegisterAdminRoutes` 与 `handler` / `adminHandler` 分居 `handler.go` / `handler_admin.go`，两个注册函数都只收自己需要的依赖
 - [ ] 搬走的**私有**助手在包内还有调用点，或者被删掉：本地 `go build` / `go vet` 报不出「未使用」（那是 `unused` 的活，只在 CI `backend-lint` 兜）；自查方式是对每个进新包的私有函数数一遍**剥掉注释**后的包内引用
 - [ ] 搬动的后端文件若被移动端契约测试直读（第 3 节那一行），硬编码路径已同步；**点段路径的工作树里跑不了 ③**（jest 对 `.scratch` 这类父段静默 0 套件、还 exit 0）⇒ 本地跑不了就明确交 CI `mobile-test`
 - [ ] PR 正文一行披露「合并到 master 将触发 production 部署」
@@ -167,11 +170,11 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 | credential 谓词（`RecordPartitionOf` / `PartitionBucket` / `EntityOwnedBy`） | `internal/scope`（叶子，只 import `gorm.io/gorm`；波 0b ✅ 已交付） | 三枚包私有片段已升为导出片段（favorite 子查询复用同一份判据）；三族 nil 语义**相反**（记录冻结分区 nil 看全部 / NULL 桶 nil 只看 `credential_id IS NULL` / 归属分区 nil 看全部）⇒ 搬包时同步静态扫描锁的白名单路径（白名单就是谓词实现处那个文件） |
 | 数值/指针助手（`toFloat` / `clampFloat` / `parseFloat` / `parseInt` / `ptrInt` / `floatPtr` / `containsString` / `withTimeout`） | `internal/coerce`（叶子，只 import `strconv`；波 0b ✅ 已交付） | 同批删掉 `internal/service/json_helpers.go`（8 行纯转发 `jsonMarshal` / `jsonUnmarshal`，调用点直接用 `encoding/json`） |
 | 文件存取一族（`FileStore` 上传/删除/列表/读取、类型表 `fileTypeTable`、附件归属 `IsSiteAttachmentURL`/`AttachmentKey`/`ReadMultipartFile`、悬空回收 `RunOrphanSweep`） | `internal/filestore`（叶子，只 import `internal/storage` / zap / stdlib；波 0c ✅ 已交付） | 五个源文件 + 四个测试文件整包搬（9 个 `git mv`，39 文件机械改名）。**跨文件私有引用 11 处**是搬包的主要暗礁，三种破法：闸门四件升导出（`FileExtension` / `FileContentType` / `AllowedFile` / `ValidateFileSize`）+ 大小表改纯函数 `MaxFileSize(filename)`；结构体私有字段改导出方法（`FileStore.Exists` + `ErrStorageUnconfigured`）；纯转发标准库的 `base64Encode`/`base64Decode` 保持私有、调用点直接用 `encoding/base64`。`image_cleanup_helpers.go` 只导出 `MarkdownImageURLs`，`orphan_sweep.go` 的 `OrphanSweepConfig`/`RunOrphanSweep` 升导出 |
-| 权益读面（`CourseSKU` / `RealPaperSKU` / 「这一份是否被这个人兑换过」）与两枚跨域哨兵（`ErrCourseNotFound` / `ErrHrwaiUserNotFound`） | 读面进 `internal/entitlement`（叶子，只 import `gorm.io/gorm` / `internal/model`）；两枚哨兵贴实体进 `internal/model`（波 1b-0 ✅ 已交付） | 读面源 = `internal/service/entitlement_read.go` + `points_service.go` 的 `RealPaperSKU`；`realPaperPrice` **不搬** —— 它读 `points_shop_item`，是积分域自己的价格事实（1b 搬包时升导出 `RealPaperPrice()`）。哨兵是 model 里第一次出现包级哨兵：`Holds` 仍回 error 而不吞（「查不动」与「真不存在」由各自调用方分开） |
+| 权益读面（`CourseSKU` / `RealPaperSKU` / 「这一份是否被这个人兑换过」）与两枚跨域哨兵（`ErrCourseNotFound` / `ErrHrwaiUserNotFound`） | 读面进 `internal/entitlement`（叶子，只 import `gorm.io/gorm` / `internal/model`）；两枚哨兵贴实体进 `internal/model`（波 1b-0 ✅ 已交付） | 读面源 = `internal/service/entitlement_read.go` + `points_service.go` 的 `RealPaperSKU`；`realPaperPrice` **不搬** —— 它读 `points_shop_item`，是积分域自己的价格事实（波 1b 已升导出 `RealPaperPrice()`）。哨兵是 model 里第一次出现包级哨兵：`Holds` 仍回 error 而不吞（「查不动」与「真不存在」由各自调用方分开） |
 | 跨文件的请求 DTO 类型（`idParam` / `taskIDParam` / `courseIDInput` / `chapterIDInput` / `swapCourseSortReq` / `generateContentReq`，声明在 `internal/api/admin.go:873-905`，被 `admin_recruiter.go` / `settings.go` / `tutor.go` 跨文件引用） | **各域包自己声明** | 它们本来就是各域的请求面（`struct{ ID int }` + 用 `httpx.PathInt` 的 Parse 闭包），不是解析出口 ⇒ 不进 `pkg/httpx`；拆包时随 handler 搬、同名保留 |
 | 既要用 gin 又要用 middleware + service 的域内解析助手（`studentQuestionScope`，`internal/api/question_bank.go:105`） | **题库域包**（3c 波随 `internal/questionbank` 导出） | **不能进 `pkg/httpx`**：`pkg/` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①），而它同时需要 `internal/middleware`（`CredentialIDPtr`）与 `internal/service`（`NewQuestionReadScope`）；调用它的 `favorite.go` / `note.go` / `question_interaction.go` 都在 3c/4b/4c 波之后 ⇒ 不阻塞波 1、2 |
 
-**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`（✅ 已交付）；0c `internal/filestore`（✅ 已交付）。波 1：1a material（✅ 已交付，唯一不需要提共享件的域）/ 1b points（**共享件 1b-0 ✅ 已交付**：`internal/entitlement` + 两枚跨域哨兵贴 `internal/model`；域搬包待做）/ 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
+**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`（✅ 已交付）；0c `internal/filestore`（✅ 已交付）。波 1：1a material（✅ 已交付，唯一不需要提共享件的域）/ 1b points（✅ 已交付：共享件 1b-0 先出包 —— `internal/entitlement` + 两枚跨域哨兵贴 `internal/model`；域搬包 `internal/points` 随后同波完成后半）/ 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
 
 **三个强环与破环手法**：course↔training、course↔tutor/points、resume↔recruit。五种破法 —— 跨域共享词汇贴实体进 `internal/model`、别域的事实常量改调用方传参、无状态纯函数进叶子包、下游要业务层类型走消费方接口反转（第 7.1 节）、助手搬回自己的域。
 
@@ -211,3 +214,11 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **删掉定义后，同一文件里的其余裸引用要立刻 `replace_all`**：`internal/service/course_service.go` 的 `ErrCourseNotFound` 定义删掉后，函数体里还有三处裸名（:232/:330/:362），而 `go build` **一次只报前 10 条** `undefined`（先报 course_service，`points_service.go` / `real_exam_service.go` 的十几处要再跑一遍才看到）⇒ 别逐处点，删定义后就在该文件里对同名标识符做一次 `replace_all`。
 - **批量补 import 的命令要有「非空」校验**：`goimports -local forklift-training -w <文件列表>` 在列表**为空**时静默 `exit 0`（本波第一版把 `git status --porcelain` 的 `backend/…` 路径拿去给 cwd 已是 `backend/` 的 `Test-Path` 过滤，全被滤掉 ⇒ 看着「补过了」，`go build` 却全是 `undefined: entitlement`）。路径口径要对齐：`goimports` 收的是**相对模块根**（`internal/...`），`porcelain` 给的是**相对仓库根**（`backend/internal/...`）。
 - **本机 `golangci-lint` 已不可用，别信它报的错**：`%USERPROFILE%\go\bin\golangci-lint.exe` 配 `go1.27.1` 时刷一片 `typechecking error: … export data version 4 is greater than maximum supported version 2`（连 `unicode/utf8`、`internal/goarch` 都导不进来，还捎带一批与本次改动无关的假错）—— 它自带的 Go 比仓库工具链旧。波 0c 那条「本地三样全绿 ≠ CI 绿」的兜底只能靠**反向数私有件在新包内的引用数**（先剥注释），不能靠本机 lint。
+
+第六批（P2 波 1b：完整域 `points`，13 个 `git mv` + 172 处入边）再添四条：
+
+- **`goimports` 不会为新搬出的包补 import**：`internal/service` 里的 `points.X` 全是 `undefined: points`，`goimports -local forklift-training -w` **一条都没加**（它只在能推断出包路径时才动手）⇒ 搬包后要自己按「出现 `<域>.[A-Z]` 但没有该 import」插一行，插在 `forklift-training` 组的字母序位置上；补完再跑一次 `goimports` 收格式。
+- **包内改名会改变导出名 ⇒ 包外的替换规则要跑第二遍**：第一遍规则把 `PointsService` 一起写成了不存在的 `points.PointsService`（16 个文件），因为包内规则已把它改名成 `Service`。判据：`go build` 绿之后再 grep 一遍 `<域>.<旧类型名>` = 0 才收工。
+- **先探「局部变量与包同名」再插 import**：`points := NewPointsService(...)` 这类绑定在 import 进来之后变成**遮蔽**（报错会指向别处，不指向这行）⇒ 脚本先用 `^s*<包名>s*(,|:=|=)` 扫一遍，命中就改名 `pointsSvc`（本波 6 个文件）。
+- **注册函数收窄签名会把 in-package 契约测试的调用点一起改**：`RegisterRoutes(rg, rd RouterDeps, svc)` → `RegisterRoutes(rg, rd.Session, svc)` 之后，`internal/api` 里 6 个契约测试的 `deps.RouterDeps()` 要改 `deps.RouterDeps().Session`（8 处）。「契约测试留在 `internal/api`」（第 4 节）不等于搬注册函数时可以不看它们 —— 它们测的正是注册入口。
+- **顺带一条（非脚本）**：改注释/加包文档也要走一遍 `gofmt`；包文档与文件注释的逐字稿先写进计划文件再落盘，比在实现期现编省一轮核对。

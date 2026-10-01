@@ -1,11 +1,11 @@
 // 契约测（ADR-0062 票2 的 D1）：兑换 `unlock_real_paper` 这一行必须被拒，且**余额一分不动**。
 //
-// 那一行兼两个身份：① 全部卷价的价格事实源（realPaperPrice 读它，在用）② 一件「可兑换商品」
+// 那一行兼两个身份：① 全部卷价的价格事实源（RealPaperPrice() 读它，在用）② 一件「可兑换商品」
 // （`POST /points/shop/{sku}/redeem` 对任意 enabled 行开放）。兑它写下的 sku="unlock_real_paper"
 // 权益行没有任何读面会查（读侧只有 real_paper:{paperID} / course:{courseID}）⇒ 死端，
 // 而幂等键补上主体之后每个学员都能成交这笔白扣分。
 //
-// 定案修法是**拒绝兑换**而不是下线商品：realPaperPrice 只读 enabled=true 的行，置 false 会让
+// 定案修法是**拒绝兑换**而不是下线商品：RealPaperPrice() 只读 enabled=true 的行，置 false 会让
 // 卷价静默退回硬编码 300（管理员改价改的是一行读不到的数据）。本文件同时钉住「行仍在当价格源」。
 package api
 
@@ -22,6 +22,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
@@ -58,7 +59,7 @@ func TestPriceOnlyShopSKUCannotBeRedeemed(t *testing.T) {
 	body := rec.Body.String()
 	// 文案与哨兵同源（一语义一哨兵，见 CONTEXT.md「积分错误哨兵」），且必须给出路：
 	// 哨兵文本自带「请到真题页按套兑换」，故不在此另抄字面量。
-	if !strings.Contains(body, service.ErrRealPaperUnlockNotRedeemable.Error()) {
+	if !strings.Contains(body, points.ErrRealPaperUnlockNotRedeemable.Error()) {
 		t.Fatalf("响应文案必须是具名哨兵的话（含出路指引）: %s", body)
 	}
 	// 余额不动：只经外部契约（余额端点）问，不查库
@@ -106,7 +107,7 @@ func TestUndeclaredShopSKUCannotBeRedeemed(t *testing.T) {
 		t.Fatalf("被拒的兑换不得扣分, got %d", got)
 	}
 	// 真正不存在的商品仍报「商品不存在或已下架」（两语义不互相顶替）
-	if rec := doWithToken(t, r, token, http.MethodPost, "/api/points/shop/no_such_sku/redeem", nil); !strings.Contains(rec.Body.String(), service.ErrShopItemUnavailable.Error()) {
+	if rec := doWithToken(t, r, token, http.MethodPost, "/api/points/shop/no_such_sku/redeem", nil); !strings.Contains(rec.Body.String(), points.ErrShopItemUnavailable.Error()) {
 		t.Fatalf("缺行的商品仍应报商品不存在: %s", rec.Body.String())
 	}
 }

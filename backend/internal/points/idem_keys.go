@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：积分幂等键构造器单点（#608，ADR-0023 幂等占坑）。
 // 全仓积分幂等键（points_entry_idem 主键）的格式字符串只在此处存在：直记键与回收键两类
 // 构造器，调用侧（points/forum/contribution/checkin 各域）一律经此构造，禁止手拼。
@@ -6,7 +5,7 @@
 // 并同步 CONTEXT.md 登记。现行格式由 ADR-0062 票1 定案：**事件有主体的，主体必须在键里**
 // ——占坑表主键只有 idem_key 一列，主体既不在键里也不在主键里时，「每人一坑」的事件
 // 会被压成「全平台一坑」（第二个学员兑同一 SKU 必然撞坑）。
-package service
+package points
 
 import (
 	"fmt"

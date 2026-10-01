@@ -4829,7 +4829,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsLedgerResult"
+                                            "$ref": "#/definitions/points.PointsLedgerResult"
                                         }
                                     }
                                 }
@@ -13581,7 +13581,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsBalanceResult"
+                                            "$ref": "#/definitions/points.PointsBalanceResult"
                                         }
                                     }
                                 }
@@ -13638,7 +13638,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsLedgerResult"
+                                            "$ref": "#/definitions/points.PointsLedgerResult"
                                         }
                                     }
                                 }
@@ -13690,7 +13690,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RedeemResult"
+                                            "$ref": "#/definitions/points.RedeemResult"
                                         }
                                     }
                                 }
@@ -13748,7 +13748,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RedeemResult"
+                                            "$ref": "#/definitions/points.RedeemResult"
                                         }
                                     }
                                 }
@@ -13797,7 +13797,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsTasksResult"
+                                            "$ref": "#/definitions/points.PointsTasksResult"
                                         }
                                     }
                                 }
@@ -13849,7 +13849,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsClaimResult"
+                                            "$ref": "#/definitions/points.PointsClaimResult"
                                         }
                                     }
                                 }
@@ -15946,7 +15946,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RedeemResult"
+                                            "$ref": "#/definitions/points.RedeemResult"
                                         }
                                     }
                                 }
@@ -24513,6 +24513,142 @@ const docTemplate = `{
                 }
             }
         },
+        "points.PointsBalanceResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "total_earned": {
+                    "type": "integer"
+                },
+                "total_spent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsClaimResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "task_status": {
+                    "type": "string"
+                },
+                "total_earned": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsLedgerItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "delta": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "ref_id": {
+                    "type": "string"
+                },
+                "ref_type": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsLedgerResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.PointsLedgerItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsTaskItem": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "desc": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "todo/claimable/claimed",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsTasksResult": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.PointsTaskItem"
+                    }
+                }
+            }
+        },
+        "points.RedeemResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "ref_id": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "total_earned": {
+                    "type": "integer"
+                }
+            }
+        },
         "repository.AlgorithmParameters": {
             "type": "object",
             "properties": {
@@ -27809,125 +27945,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.PointsBalanceResult": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "integer"
-                },
-                "total_earned": {
-                    "type": "integer"
-                },
-                "total_spent": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsClaimResult": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "integer"
-                },
-                "task_status": {
-                    "type": "string"
-                },
-                "total_earned": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsLedgerItem": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "delta": {
-                    "type": "integer"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "ref_id": {
-                    "type": "string"
-                },
-                "ref_type": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsLedgerResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.PointsLedgerItem"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsTaskItem": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "desc": {
-                    "type": "string"
-                },
-                "group": {
-                    "type": "string"
-                },
-                "points": {
-                    "type": "integer"
-                },
-                "progress": {
-                    "type": "integer"
-                },
-                "status": {
-                    "description": "todo/claimable/claimed",
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsTasksResult": {
-            "type": "object",
-            "properties": {
-                "tasks": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.PointsTaskItem"
-                    }
-                }
-            }
-        },
         "service.PositionDict": {
             "type": "object",
             "properties": {
@@ -28815,23 +28832,6 @@ const docTemplate = `{
                 },
                 "wechat": {
                     "type": "string"
-                }
-            }
-        },
-        "service.RedeemResult": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "integer"
-                },
-                "ref_id": {
-                    "type": "string"
-                },
-                "sku": {
-                    "type": "string"
-                },
-                "total_earned": {
-                    "type": "integer"
                 }
             }
         },

@@ -142,7 +142,7 @@ func TestAdminInspectionInlineEnvelopeKeyOrderProbe(t *testing.T) {
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("正样本字段序必须等于 ItemsPage 键序\n  注解      = %v\n  ItemsPage = %v", names, want)
 	}
-	if named, err := inlineEnvelopeFields(`@Success 200 {object} response.R{data=service.PointsLedgerResult} "success"`); err != nil || named != nil {
+	if named, err := inlineEnvelopeFields(`@Success 200 {object} response.R{data=points.PointsLedgerResult} "success"`); err != nil || named != nil {
 		t.Fatalf("命名类型注解不得被判为内联信封，实得 %v / %v", named, err)
 	}
 }

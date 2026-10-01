@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -56,14 +57,14 @@ func (m *memContributionStorage) Get(_ context.Context, url string) (io.ReadClos
 	return io.NopCloser(strings.NewReader(url)), nil
 }
 
-// newContributionTestSvc 构造投稿服务（含真 PointsService 与通知）。
+// newContributionTestSvc 构造投稿服务（含真 points.Service 与通知）。
 func newContributionTestSvc(t *testing.T) (*ContributionService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewFileDB(t)
 	fileSvc := filestore.NewFileStore("", &memContributionStorage{}, zap.NewNop())
 	notif := notification.NewService(db, zap.NewNop())
-	points := NewPointsService(db, zap.NewNop(), nil, notif)
-	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
+	pointsSvc := points.NewService(db, zap.NewNop(), nil, notif)
+	svc := NewContributionService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
 	return svc, db
 }
 
@@ -304,7 +305,7 @@ func TestContribution_TierBonus(t *testing.T) {
 	if _, err := svc.Archive(1, created.ID, "内容违规"); err != nil {
 		t.Fatalf("下架失败: %v", err)
 	}
-	assertLedgerDelta(t, db, author.ID, ReasonRollback, RefTypeContribution, itoa(int(created.ID)), -80)
+	assertLedgerDelta(t, db, author.ID, points.ReasonRollback, RefTypeContribution, itoa(int(created.ID)), -80)
 	// 重复下架幂等（已 archived 拒）
 	if _, err := svc.Archive(1, created.ID, "again"); !errors.Is(err, ErrContributionNotApproved) {
 		t.Fatalf("重复下架应拒: %v", err)
@@ -414,8 +415,8 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	}
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notif := notification.NewService(db, zap.NewNop())
-	points := NewPointsService(db, zap.NewNop(), nil, notif)
-	svc := NewContributionService(db, fileSvc, notif, points, zap.NewNop(), clock.Real())
+	pointsSvc := points.NewService(db, zap.NewNop(), nil, notif)
+	svc := NewContributionService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
 	// 一条已提交投稿引用 used 文件
 	cred := seedCredential(t, db)
 	u := seedContributionUser(t, db, "cleanup", cred.ID)
