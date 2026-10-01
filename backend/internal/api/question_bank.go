@@ -19,17 +19,17 @@ import (
 
 // questionBankErrStatus 题库域哨兵→状态码表（#611 建表；第十二波票 6 补哨兵族并撤 fallback）：
 // 题目/证件不存在 → 404，写面校验与状态前置 → 400；未命中（DB 故障）一律 500，不再吞成 400。
-var questionBankErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrQuestionCredentialNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrQuestionTypeInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionContentRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionAnswerRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionOptionsRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionAnswerInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrSubmitNotDraft, status: http.StatusBadRequest},
-		{sentinel: service.ErrRejectReasonRequired, status: http.StatusBadRequest},
+var questionBankErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrQuestionNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrQuestionContentRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrQuestionOptionsRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrSubmitNotDraft, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrRejectReasonRequired, Status: http.StatusBadRequest},
 	},
 }
 
@@ -151,7 +151,7 @@ type listQuestionsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions [get]
 func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
-	Endpoint[listQuestionsReq, service.QuestionPageDTO]{
+	httpx.Endpoint[listQuestionsReq, service.QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
 				Page:     atoiDefault(c.Query("page"), 1),
@@ -175,7 +175,7 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 			}
 			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, studentQuestionScope(c), req.Sort)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // createQuestionReq 创建题目请求（票 6：body 由 map 直绑改 typed 入参）。
@@ -199,7 +199,7 @@ type createQuestionReq struct {
 // @Failure 404 {object} response.R "所属证件不存在"
 // @Router /question-bank/questions [post]
 func (h *QuestionBankHandler) CreateQuestion(c *gin.Context) {
-	Endpoint[createQuestionReq, service.QuestionDTO]{
+	httpx.Endpoint[createQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*createQuestionReq, error) {
 			input, err := bindQuestionWriteReq[service.QuestionCreateInput](c)
 			if err != nil {
@@ -220,7 +220,7 @@ func (h *QuestionBankHandler) CreateQuestion(c *gin.Context) {
 		},
 		ErrStatus: questionBankErrStatus,
 		Render: func(c *gin.Context, _ *createQuestionReq, resp *service.QuestionDTO) {
-			response.Created(c, "题目创建成功", deref(resp))
+			response.Created(c, "题目创建成功", httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -243,9 +243,9 @@ type batchPublishReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/batch-publish [post]
 func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
-	Endpoint[batchPublishReq, service.QuestionPublishResultDTO]{
+	httpx.Endpoint[batchPublishReq, service.QuestionPublishResultDTO]{
 		Parse: func(c *gin.Context) (*batchPublishReq, error) {
-			req, err := bindJSON[batchPublishReq](c)
+			req, err := httpx.BindJSON[batchPublishReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -282,9 +282,9 @@ type batchRejectReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/batch-reject [post]
 func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
-	Endpoint[batchRejectReq, service.QuestionRejectResultDTO]{
+	httpx.Endpoint[batchRejectReq, service.QuestionRejectResultDTO]{
 		Parse: func(c *gin.Context) (*batchRejectReq, error) {
-			req, err := bindJSON[batchRejectReq](c)
+			req, err := httpx.BindJSON[batchRejectReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -322,7 +322,7 @@ type batchImportReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/batch-import [post]
 func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
-	Endpoint[batchImportReq, service.QuestionImportResultDTO]{
+	httpx.Endpoint[batchImportReq, service.QuestionImportResultDTO]{
 		Parse: func(c *gin.Context) (*batchImportReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -362,7 +362,7 @@ type questionIDReq struct {
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id} [get]
 func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
-	Endpoint[questionIDReq, service.QuestionDTO]{
+	httpx.Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -388,7 +388,7 @@ func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 		},
 		ErrStatus: questionBankErrStatus,
 		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
-			response.Success(c, deref(resp))
+			response.Success(c, httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -414,7 +414,7 @@ type updateQuestionReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/{question_id} [put]
 func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
-	Endpoint[updateQuestionReq, service.QuestionDTO]{
+	httpx.Endpoint[updateQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*updateQuestionReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -437,7 +437,7 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 		},
 		ErrStatus: questionBankErrStatus,
 		Render: func(c *gin.Context, _ *updateQuestionReq, resp *service.QuestionDTO) {
-			response.SuccessWithMsg(c, "题目更新成功", deref(resp))
+			response.SuccessWithMsg(c, "题目更新成功", httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -454,7 +454,7 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id} [delete]
 func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
-	Endpoint[questionIDReq, struct{}]{
+	httpx.Endpoint[questionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -488,7 +488,7 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id}/publish [post]
 func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
-	Endpoint[questionIDReq, service.QuestionDTO]{
+	httpx.Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -505,7 +505,7 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 		},
 		ErrStatus: questionBankErrStatus,
 		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
-			response.SuccessWithMsg(c, "题目发布成功", deref(resp))
+			response.SuccessWithMsg(c, "题目发布成功", httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -524,7 +524,7 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id}/submit [post]
 func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
-	Endpoint[questionIDReq, service.QuestionDTO]{
+	httpx.Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -541,7 +541,7 @@ func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
 		},
 		ErrStatus: questionBankErrStatus,
 		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
-			response.SuccessWithMsg(c, "已提交审核", deref(resp))
+			response.SuccessWithMsg(c, "已提交审核", httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -566,7 +566,7 @@ type rejectQuestionReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/{question_id}/reject [post]
 func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
-	Endpoint[rejectQuestionReq, service.QuestionDTO]{
+	httpx.Endpoint[rejectQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*rejectQuestionReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -589,7 +589,7 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 		},
 		ErrStatus: questionBankErrStatus,
 		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *service.QuestionDTO) {
-			response.SuccessWithMsg(c, "题目已驳回", deref(resp))
+			response.SuccessWithMsg(c, "题目已驳回", httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -605,7 +605,7 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/stats [get]
 func (h *QuestionBankHandler) GetStats(c *gin.Context) {
-	Endpoint[struct{}, service.QuestionBankStatsDTO]{
+	httpx.Endpoint[struct{}, service.QuestionBankStatsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
 			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
 			return h.svc.GetStats(middleware.CredentialIDPtr(c)), nil

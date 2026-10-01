@@ -83,7 +83,7 @@ var unreadableFaces404 = []error{
 // @Success 200 {object} response.R{data=service.CoursePageResult} "success"
 // @Router /courses [get]
 func (h *CourseHandler) ListCourses(c *gin.Context) {
-	Endpoint[courseListReq, service.CoursePageResult]{
+	httpx.Endpoint[courseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
 			f := c.Query("filter")
 			if f != "" && f != "hot" && f != "featured" && f != "all" {
@@ -108,7 +108,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetChapterSlides 章节幻灯片
@@ -125,7 +125,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /chapter/{chapter_id}/slides [get]
 func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
-	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
+	httpx.Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
@@ -140,7 +140,7 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 		},
 		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）；
 		// 默认面 500 ⇒ 真故障不再像旧形状 WithSuccess(ok, 404) 那样被答成「这个章节不存在」。
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
 
@@ -158,7 +158,7 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /course/{course_id} [get]
 func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
-	Endpoint[courseDetailReq, service.CourseDetailDTO]{
+	httpx.Endpoint[courseDetailReq, service.CourseDetailDTO]{
 		Parse: func(c *gin.Context) (*courseDetailReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -174,7 +174,7 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 		// 详情是发现面：只判可见性、不判权益（未发布 / 未挂载按「不存在」返回，ADR-0058），
 		// 故这里可达的只有「课程不存在」那一件；四件一起登记是因为它们共享同一张呈现表，
 		// 未兑换若在别处冒出来，也不会被默认面答成 500。
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinelsMsg(http.StatusNotFound, "课程不存在", unreadableFaces404...).Handle(c)
 }
 
@@ -193,7 +193,7 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /course/{course_id}/chapter/{chapter_id} [get]
 func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
-	Endpoint[chapterDetailReq, service.ChapterDetailDTO]{
+	httpx.Endpoint[chapterDetailReq, service.ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*chapterDetailReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -212,7 +212,7 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 		},
 		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）。
 		// 「章节不属于该课程」是输入冲突（路径里两个 id 互相矛盾），具名后归位 400。
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrChapterNotInCourse, http.StatusBadRequest).
 		WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
@@ -231,7 +231,7 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误（该章节没有 PPT、转图失败、权益查询查不动）"
 // @Router /chapter/{chapter_id}/slides/regenerate [post]
 func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
-	Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
+	httpx.Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
@@ -248,7 +248,7 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 		// （该章节没有 PPT、PPT 转图失败）与权益查询查不动一律 500。
 		// 旧形状 WithSuccess(ok, 404) 把门禁与下游故障压成同一个 404 ⇒ 门禁从外部不可分辨、
 		// 无测可建（ADR-0062 复核登记 #4），并把 DB 故障答成「这个章节不存在」。
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: httpx.ErrStatusAll(http.StatusInternalServerError),
 		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO) {
 			response.SuccessWithMsg(c, "幻灯片重新生成成功", resp)
 		},
@@ -271,7 +271,7 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 // @Failure 500 {object} response.R "更新进度失败（写库故障等真故障；5xx 一律不外发下游原文）"
 // @Router /course/{course_id}/progress [post]
 func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
-	Endpoint[studyProgressReq, service.StudyProgressDTO]{
+	httpx.Endpoint[studyProgressReq, service.StudyProgressDTO]{
 		Parse: func(c *gin.Context) (*studyProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -312,7 +312,7 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 		},
 		// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判（ADR-0062 决策 3）；
 		// 其余错误落 500，前缀「更新进度失败」保留、错误原文不再外发（ADR-0064 决策 9）。
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
 		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)
 		},

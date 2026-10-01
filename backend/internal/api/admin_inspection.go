@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/paging"
 )
 
@@ -54,11 +55,11 @@ func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 // @Router /admin/inspection/deleted-after-accepted [get]
 // DeletedAfterAcceptedCount 巡检计数 GET /api/admin/inspection/deleted-after-accepted
 func (h *InspectionHandler) DeletedAfterAcceptedCount(c *gin.Context) {
-	Endpoint[struct{}, service.InspectionCountDTO]{
+	httpx.Endpoint[struct{}, service.InspectionCountDTO]{
 		Invoke: func(_ context.Context, _ *struct{}) (*service.InspectionCountDTO, error) {
 			return h.svc.DeletedAfterAcceptedCount()
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // pointsLedgerReq 积分流水查询参数（#411）。
@@ -86,7 +87,7 @@ type pointsLedgerReq struct {
 // @Router /admin/points/ledger [get]
 // PointsLedger 问答积分流水 GET /api/admin/points/ledger?page=&page_size=&reason=&ref_type=&user_id=
 func (h *InspectionHandler) PointsLedger(c *gin.Context) {
-	Endpoint[pointsLedgerReq, service.PointsLedgerResult]{
+	httpx.Endpoint[pointsLedgerReq, service.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*pointsLedgerReq, error) {
 			return &pointsLedgerReq{
 				Page:     atoiDefault(c.Query("page"), 1),
@@ -101,7 +102,7 @@ func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 		Invoke: func(_ context.Context, req *pointsLedgerReq) (*service.PointsLedgerResult, error) {
 			return h.pointsSvc.GetLedger(req.UserID, req.Page, req.PageSize, req.Reason, req.RefType)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 简历查看留痕列表
@@ -119,7 +120,7 @@ func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 // @Router /admin/recruit/views [get]
 // ListRecruitViews 简历查看留痕列表 GET /api/admin/recruit/views
 func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
-	Endpoint[service.InspectionViewsParams, paging.ItemsPage[service.RecruitResumeViewDTO]]{
+	httpx.Endpoint[service.InspectionViewsParams, paging.ItemsPage[service.RecruitResumeViewDTO]]{
 		Parse: func(c *gin.Context) (*service.InspectionViewsParams, error) {
 			return &service.InspectionViewsParams{
 				RecruiterID:  atoiDefault(c.Query("recruiter_id"), 0),
@@ -131,7 +132,7 @@ func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
 		Invoke: func(_ context.Context, req *service.InspectionViewsParams) (*paging.ItemsPage[service.RecruitResumeViewDTO], error) {
 			return h.svc.ListRecruitViews(*req)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 联系方式交换申请列表
@@ -150,7 +151,7 @@ func (h *InspectionHandler) ListRecruitViews(c *gin.Context) {
 // @Router /admin/recruit/requests [get]
 // ListRecruitRequests 联系方式交换申请列表 GET /api/admin/recruit/requests
 func (h *InspectionHandler) ListRecruitRequests(c *gin.Context) {
-	Endpoint[service.InspectionRequestsParams, paging.ItemsPage[service.ContactRequestRowDTO]]{
+	httpx.Endpoint[service.InspectionRequestsParams, paging.ItemsPage[service.ContactRequestRowDTO]]{
 		Parse: func(c *gin.Context) (*service.InspectionRequestsParams, error) {
 			return &service.InspectionRequestsParams{
 				RecruiterID:   atoiDefault(c.Query("recruiter_id"), 0),
@@ -163,5 +164,5 @@ func (h *InspectionHandler) ListRecruitRequests(c *gin.Context) {
 		Invoke: func(_ context.Context, req *service.InspectionRequestsParams) (*paging.ItemsPage[service.ContactRequestRowDTO], error) {
 			return h.svc.ListRecruitRequests(*req)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }

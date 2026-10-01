@@ -1,6 +1,5 @@
-// Package api 实现 HTTP handlers。
 // 本文件：Endpoint 骨架（ADR-0013 §9）——在 struct 方法之上再收一层
-// Endpoint(parse, invoke, render) 抽象，吸收「参数解析 - BindJSON - 响应信封 - 超时」公共守卫链。
+// Endpoint(parse, Invoke, render) 抽象，吸收「参数解析 - BindJSON - 响应信封 - 超时」公共守卫链。
 //
 // struct 方法仍保留为 handler 声明形式（ADR-0009），方法体改为配置端点的三个阶段后调用 Handle：
 //
@@ -13,11 +12,12 @@
 //	}
 //
 // 不重新引入闭包注册：路由装配形态（Register*Routes + RouterDeps）不变。
-// 「id>0 守卫」等 query 解析单点仍收敛于 helpers.go（atoiDefault/queryIntPtr/queryIDPtr），本骨架复用。
+// 「id>0 守卫」等解析单点收敛在 pkg/httpx（parse.go 的 PathInt/PathInt64 与 api 侧 helpers.go 的
+// query 族），本骨架复用。
 //
 // 三面分工（票1b，ADR-0060 §1）：Parse 管参数、Invoke 管业务、**错误面归骨架**（查 ErrStatus 域表），
 // Render 只写成功面。
-package api
+package httpx
 
 import (
 	"context"
@@ -27,14 +27,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 // endpointTimeout 统一超时（保留既有各 handler 的 10s 语义）。
 const endpointTimeout = 10 * time.Second
 
-// ParseFunc 解析请求为 typed Req。返回 *httpx.ParseError 表示参数错误（渲染对应 4xx 信封）；
+// ParseFunc 解析请求为 typed Req。返回 *ParseError 表示参数错误（渲染对应 4xx 信封）；
 // 返回其他 error 视为服务器内部错误（渲染 500 信封）。
 type ParseFunc[Req any] func(c *gin.Context) (*Req, error)
 
@@ -46,7 +45,7 @@ type InvokeFunc[Req, Resp any] func(ctx context.Context, req *Req) (*Resp, error
 // 「记得自己查域表」从注释约束升级为类型约束——闭包里既拿不到 err，也就写不出漏查表的分支。
 type RenderFunc[Req, Resp any] func(c *gin.Context, req *Req, resp *Resp)
 
-// Endpoint 泛型端点骨架：parse → invoke → render 三段式守卫链。
+// Endpoint 泛型端点骨架：parse → Invoke → render 三段式守卫链。
 // Req 为 typed 请求（query/路径/body 字段），Resp 为 service 返回的 typed DTO。
 type Endpoint[Req, Resp any] struct {
 	// Parse 解析请求。为 nil 时使用零值 Req（无请求参数的端点）。
@@ -60,10 +59,10 @@ type Endpoint[Req, Resp any] struct {
 	// errors.Is 命中 → 表内状态码；未命中 → 表 fallback（未设 → 500）。
 	// 表内任何条目都命中不了 *ParseError：解析错误恒优先（票8 / ADR-0062 决策 8）。
 	// 省略即纯默认：*ParseError → 其状态码、其余 500。
-	ErrStatus *errStatusTable
+	ErrStatus *ErrStatusTable
 }
 
-// Handle 执行端点全链条：10s 超时 → parse → invoke → render，并兜底 panic（保证 500 信封）。
+// Handle 执行端点全链条：10s 超时 → parse → Invoke → render，并兜底 panic（保证 500 信封）。
 func (e Endpoint[Req, Resp]) Handle(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), endpointTimeout)
 	defer cancel()
@@ -100,18 +99,18 @@ func (e Endpoint[Req, Resp]) render(c *gin.Context, req *Req, resp *Resp, err er
 	if err != nil {
 		// 错误面无条件归骨架（ADR-0060 §1 票1b）：查 ErrStatus 域表，Render 不参与。
 		// 未挂表时即纯默认信封（*ParseError → 其状态码、其余 500）。
-		e.ErrStatus.renderError(c, err)
+		e.ErrStatus.RenderError(c, err)
 		return
 	}
 	if e.Render == nil {
-		response.Success(c, deref(resp))
+		response.Success(c, Deref(resp))
 		return
 	}
 	e.Render(c, req, resp)
 }
 
-// deref 解引用指针；nil 返回 nil（保持 JSON "data": null 语义）。
-func deref[T any](p *T) any {
+// Deref 解引用指针；nil 返回 nil（保持 JSON "data": null 语义）。
+func Deref[T any](p *T) any {
 	if p == nil {
 		return nil
 	}
@@ -151,58 +150,58 @@ func renderStatus(c *gin.Context, status int, msg string) {
 // 走 raw handler：auth.go RotateRefresh、ai_assistant.go SSE 扣分事件、contact.go GetContact、
 // recruit.go ResumeCard、resume_pdf.go 两处、settings.go TestConfig。
 
-// errStatusEntry 域表条目：哨兵 → HTTP 状态码（+ 可选固定文案 / 可选人读前缀）。
+// ErrStatusEntry 域表条目：哨兵 → HTTP 状态码（+ 可选固定文案 / 可选人读前缀）。
 // sentinel 为 nil = **无条件命中**：本端点除解析错误之外的一切错误都按本条渲染
 // （票1b 用它表达「整条错误面只有一个固定码」的收编端点，逐字等价于旧闭包的写法；
-// 票8/ADR-0062 起 `*ParseError` 不再归它兜——参数错误恒回自己的码与自己的文案，见 renderError）。
+// 票8/ADR-0062 起 `*ParseError` 不再归它兜——参数错误恒回自己的码与自己的文案，见 RenderError）。
 // message 非空 = 渲染这条固定文案，而不是 err.Error()。
 // errPrefix 非空 = 渲染「前缀 + err.Error()」——旧闭包 `response.Xxx(c, "查询失败: "+err.Error())`
 // 那一族；票1b 实测出这是第四种定制之外的**第五种**形态（ADR-0060 实施回记有账），
 // 没有这一格时收编会把人读前缀静默丢掉，即一处未登记的行为变更。
-type errStatusEntry struct {
-	sentinel  error
-	status    int
-	message   string
-	errPrefix string
+type ErrStatusEntry struct {
+	Sentinel  error
+	Status    int
+	Message   string
+	ErrPrefix string
 }
 
-// errStatusTable 域级「哨兵 → HTTP 状态码」映射表。
+// ErrStatusTable 域级「哨兵 → HTTP 状态码」映射表。
 // entries 按声明顺序 errors.Is 判定、先命中先用（与被收编的 if-chain 语义逐字等价）；
 // fallback 为未命中兜底状态码，0 表示未设——未命中走 500 默认信封。
-type errStatusTable struct {
-	entries  []errStatusEntry
-	fallback int
+type ErrStatusTable struct {
+	Entries  []ErrStatusEntry
+	Fallback int
 }
 
-// errStatusAll 端点级单条目表：**除解析错误外**的一切错误都渲染 status，文案取 err.Error()。
+// ErrStatusAll 端点级单条目表：**除解析错误外**的一切错误都渲染 status，文案取 err.Error()。
 // 票1b 用它表达旧 Render 闭包「错误分支只有一个固定码」的写法（sentinel==nil 的无条件条目，
-// 见 errStatusEntry 与 renderError 的优先级注释）；票8（ADR-0062）把 *ParseError 让给它自己。
-func errStatusAll(status int) *errStatusTable {
-	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status}}}
+// 见 ErrStatusEntry 与 RenderError 的优先级注释）；票8（ADR-0062）把 *ParseError 让给它自己。
+func ErrStatusAll(status int) *ErrStatusTable {
+	return &ErrStatusTable{Entries: []ErrStatusEntry{{Sentinel: nil, Status: status}}}
 }
 
-// errStatusAllMsg 同 errStatusAll，但响应文案固定为 msg（旧闭包的 `response.Xxx(c, "字面量")` 形态）。
-func errStatusAllMsg(status int, msg string) *errStatusTable {
-	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status, message: msg}}}
+// ErrStatusAllMsg 同 ErrStatusAll，但响应文案固定为 msg（旧闭包的 `response.Xxx(c, "字面量")` 形态）。
+func ErrStatusAllMsg(status int, msg string) *ErrStatusTable {
+	return &ErrStatusTable{Entries: []ErrStatusEntry{{Sentinel: nil, Status: status, Message: msg}}}
 }
 
-// errStatusAllPrefix 同 errStatusAll，但文案是「前缀 + err.Error()」——
-// 旧闭包 `response.ServerError(c, "查询失败: "+err.Error())` 那一族的等价收编（见 errStatusEntry.errPrefix）；
+// ErrStatusAllPrefix 同 ErrStatusAll，但文案是「前缀 + err.Error()」——
+// 旧闭包 `response.ServerError(c, "查询失败: "+err.Error())` 那一族的等价收编（见 ErrStatusEntry.ErrPrefix）；
 // 不经端点表的裸 handler 是同一族的另一形态，现统一走 `response.ServerErrorCause(c, "查询失败: ", err)`。
 // 前缀只加在**业务/DB 错误**上：解析错误走自己的文案，不再被前缀包成「更新失败: 请求参数错误: …」。
-func errStatusAllPrefix(status int, prefix string) *errStatusTable {
-	return &errStatusTable{entries: []errStatusEntry{{sentinel: nil, status: status, errPrefix: prefix}}}
+func ErrStatusAllPrefix(status int, prefix string) *ErrStatusTable {
+	return &ErrStatusTable{Entries: []ErrStatusEntry{{Sentinel: nil, Status: status, ErrPrefix: prefix}}}
 }
 
 // entryMsg 条目的响应文案。固定文案优先；其余走 response.ClientErrorText（ADR-0064 决策 9）。
-func entryMsg(e errStatusEntry, err error) string {
-	if e.message != "" {
-		return e.message
+func entryMsg(e ErrStatusEntry, err error) string {
+	if e.Message != "" {
+		return e.Message
 	}
-	return response.ClientErrorText(e.status, err, e.errPrefix)
+	return response.ClientErrorText(e.Status, err, e.ErrPrefix)
 }
 
-// renderError 渲染错误面（票1b 后是本端点错误渲染的唯一入口）。判定序（票8 / ADR-0062 决策 8 翻转）：
+// RenderError 渲染错误面（票1b 后是本端点错误渲染的唯一入口）。判定序（票8 / ADR-0062 决策 8 翻转）：
 //  1. **`*ParseError` 恒优先**——解析错误回自带的状态码与文案。参数错误是 Parse 面的事实，
 //     不是「本端点错误面只有一个码」那种业务判断，故任何条目（含 sentinel==nil 的无条件项）
 //     都不得把它改写成自己的码：那正是 20 处 `WithSuccess(…, 500)` 把 400 答成 500 的成因。
@@ -216,22 +215,22 @@ func entryMsg(e errStatusEntry, err error) string {
 // （锁：TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries）。
 // 现有域表都不含无条件条目，故 2-4 与其逐字不变（域表快照锁 + 37 处论坛契约测试为证）。
 // nil 表即纯默认信封（ADR-0024 C2）。
-func (t *errStatusTable) renderError(c *gin.Context, err error) {
-	var pe *httpx.ParseError
-	if asParseError(err, &pe) {
+func (t *ErrStatusTable) RenderError(c *gin.Context, err error) {
+	var pe *ParseError
+	if AsParseError(err, &pe) {
 		renderStatus(c, pe.Status, pe.Message)
 		return
 	}
 	if t != nil {
-		for _, entry := range t.entries {
-			if entry.sentinel == nil || errors.Is(err, entry.sentinel) {
-				renderStatus(c, entry.status, entryMsg(entry, err))
+		for _, entry := range t.Entries {
+			if entry.Sentinel == nil || errors.Is(err, entry.Sentinel) {
+				renderStatus(c, entry.Status, entryMsg(entry, err))
 				return
 			}
 		}
 	}
-	if t != nil && t.fallback != 0 {
-		renderStatus(c, t.fallback, response.ClientErrorText(t.fallback, err, ""))
+	if t != nil && t.Fallback != 0 {
+		renderStatus(c, t.Fallback, response.ClientErrorText(t.Fallback, err, ""))
 		return
 	}
 	// 未挂表的端点：真实错误记进 gin 上下文（日志面不丢），对外只给「服务器内部错误」。
@@ -241,28 +240,28 @@ func (t *errStatusTable) renderError(c *gin.Context, err error) {
 
 // ===== 常用解析器（吸收既有 handler 手写解析链） =====
 
-// bindJSON 绑定请求体到 typed struct，失败返回 400「请求参数错误」。
-func bindJSON[T any](c *gin.Context) (*T, error) {
+// BindJSON 绑定请求体到 typed struct，失败返回 400「请求参数错误」。
+func BindJSON[T any](c *gin.Context) (*T, error) {
 	var req T
 	if err := c.ShouldBindJSON(&req); err != nil {
-		return nil, httpx.BadRequest("请求参数错误")
+		return nil, BadRequest("请求参数错误")
 	}
 	return &req, nil
 }
 
-// bindJSONMsg 绑定请求体，自定义失败文案（如「请求数据无效」）。
-func bindJSONMsg[T any](c *gin.Context, failMsg string) (*T, error) {
+// BindJSONMsg 绑定请求体，自定义失败文案（如「请求数据无效」）。
+func BindJSONMsg[T any](c *gin.Context, failMsg string) (*T, error) {
 	var req T
 	if err := c.ShouldBindJSON(&req); err != nil {
-		return nil, httpx.BadRequest(failMsg)
+		return nil, BadRequest(failMsg)
 	}
 	return &req, nil
 }
 
-// bindJSONMsgFunc 返回「绑定请求体 + 固定失败文案」的解析函数。
+// BindJSONMsgFunc 返回「绑定请求体 + 固定失败文案」的解析函数。
 // 供 Parse 字段直接引用，避免每个 handler 写一层只转调的闭包。
-func bindJSONMsgFunc[T any](failMsg string) ParseFunc[T] {
-	return func(c *gin.Context) (*T, error) { return bindJSONMsg[T](c, failMsg) }
+func BindJSONMsgFunc[T any](failMsg string) ParseFunc[T] {
+	return func(c *gin.Context) (*T, error) { return BindJSONMsg[T](c, failMsg) }
 }
 
 // ===== 域中立端点适配器（ADR-0053 §1） =====
@@ -271,14 +270,14 @@ func bindJSONMsgFunc[T any](failMsg string) ParseFunc[T] {
 // 返回指针 → 判空 → 按文案/状态码渲染」约 20 行，差异只有类型参数、成功文案与状态码。
 // 下面两个适配器把这两段样板抹平，且都是域中立的（不含任何目录域词汇）：
 
-// invoke 把「取结构体、返回 (结果, error)」的 service 方法适配成端点调用签名，
+// Invoke 把「取结构体、返回 (结果, error)」的 service 方法适配成端点调用签名，
 // 吸收取地址与判空。
 //
 // 两种用法（都让 Invoke 退化为一行）：
 //
-//	Invoke: invoke(h.svc.CreateSpecialty)                                  // 方法值，Req 即方法入参
-//	Invoke: invoke(func(req *updateReq) (Dict, error) { ... })             // Req 是复合请求体时自行拆参
-func invoke[Req, Resp any](fn func(Req) (Resp, error)) InvokeFunc[Req, Resp] {
+//	Invoke: Invoke(h.svc.CreateSpecialty)                                  // 方法值，Req 即方法入参
+//	Invoke: Invoke(func(req *updateReq) (Dict, error) { ... })             // Req 是复合请求体时自行拆参
+func Invoke[Req, Resp any](fn func(Req) (Resp, error)) InvokeFunc[Req, Resp] {
 	return func(_ context.Context, req *Req) (*Resp, error) {
 		result, err := fn(*req)
 		if err != nil {
@@ -298,36 +297,36 @@ type success struct {
 	NoData bool
 }
 
-// created 成功描述：201 + 文案 + 载荷（对齐 response.Created）。
-func created(msg string) *success {
+// Created 成功描述：201 + 文案 + 载荷（对齐 response.Created）。
+func Created(msg string) *success {
 	return &success{Status: http.StatusCreated, Msg: msg}
 }
 
-// okMsg 成功描述：200 + 文案 + 载荷（对齐 response.SuccessWithMsg(msg, deref(resp))）。
-func okMsg(msg string) *success { return &success{Msg: msg} }
+// OkMsg 成功描述：200 + 文案 + 载荷（对齐 response.SuccessWithMsg(msg, Deref(resp))）。
+func OkMsg(msg string) *success { return &success{Msg: msg} }
 
-// okMsgNoData 成功描述：200 + 文案 + 无载荷（对齐 response.SuccessWithMsg(msg, nil)）。
-func okMsgNoData(msg string) *success { return &success{Msg: msg, NoData: true} }
+// OkMsgNoData 成功描述：200 + 文案 + 无载荷（对齐 response.SuccessWithMsg(msg, nil)）。
+func OkMsgNoData(msg string) *success { return &success{Msg: msg, NoData: true} }
 
-// successRenderer 返回只写成功面的 Render（按 success 描述）。
+// SuccessRenderer 返回只写成功面的 Render（按 success 描述）。
 // 错误面由 WithSuccess 挂的 ErrStatus 无条件条目承载（解析错误除外，见该方法注释）。
-func successRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
+func SuccessRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
 	return func(c *gin.Context, _ *Req, resp *Resp) {
 		if ok.NoData {
 			response.SuccessWithMsg(c, ok.Msg, nil)
 			return
 		}
 		if ok.Status == http.StatusCreated {
-			response.Created(c, ok.Msg, deref(resp))
+			response.Created(c, ok.Msg, Deref(resp))
 			return
 		}
-		response.SuccessWithMsg(c, ok.Msg, deref(resp))
+		response.SuccessWithMsg(c, ok.Msg, Deref(resp))
 	}
 }
 
 // WithSentinel 在已装配的错误面上**前置**一条具名哨兵分档，返回自身便于链式声明：
 //
-//	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+//	}.WithSuccess(OkMsg("success"), http.StatusInternalServerError).
 //		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).Handle(c)
 //
 // 存在的理由就是本仓的主判据（ADR-0064 决策 1）：service 层把「不存在」「不可读」「查不动」
@@ -336,9 +335,9 @@ func successRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
 // 默认错误面（WithSuccess 第二参 / sentinel 为 nil 的条目）永远排在哨兵之后。
 func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[Req, Resp] {
 	if e.ErrStatus == nil {
-		e.ErrStatus = &errStatusTable{}
+		e.ErrStatus = &ErrStatusTable{}
 	}
-	e.ErrStatus.entries = append([]errStatusEntry{{sentinel: sentinel, status: status}}, e.ErrStatus.entries...)
+	e.ErrStatus.Entries = append([]ErrStatusEntry{{Sentinel: sentinel, Status: status}}, e.ErrStatus.Entries...)
 	return e
 }
 
@@ -352,13 +351,13 @@ func (e Endpoint[Req, Resp]) WithSentinel(sentinel error, status int) Endpoint[R
 // 4xx 按 ADR-0064 决策 9 保留 `err.Error()`，故 entry 的 message 留空即等于「说自己的话」。
 func (e Endpoint[Req, Resp]) WithSentinels(status int, sentinels ...error) Endpoint[Req, Resp] {
 	if e.ErrStatus == nil {
-		e.ErrStatus = &errStatusTable{}
+		e.ErrStatus = &ErrStatusTable{}
 	}
-	entries := make([]errStatusEntry, 0, len(sentinels))
+	entries := make([]ErrStatusEntry, 0, len(sentinels))
 	for _, s := range sentinels {
-		entries = append(entries, errStatusEntry{sentinel: s, status: status})
+		entries = append(entries, ErrStatusEntry{Sentinel: s, Status: status})
 	}
-	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	e.ErrStatus.Entries = append(entries, e.ErrStatus.Entries...)
 	return e
 }
 
@@ -371,30 +370,40 @@ func (e Endpoint[Req, Resp]) WithSentinels(status int, sentinels ...error) Endpo
 // 呈现层，且必须是显式决定）。逐条抄 WithSentinel 同样会抹掉「这是一组」这一层信息。
 func (e Endpoint[Req, Resp]) WithSentinelsMsg(status int, message string, sentinels ...error) Endpoint[Req, Resp] {
 	if e.ErrStatus == nil {
-		e.ErrStatus = &errStatusTable{}
+		e.ErrStatus = &ErrStatusTable{}
 	}
-	entries := make([]errStatusEntry, 0, len(sentinels))
+	entries := make([]ErrStatusEntry, 0, len(sentinels))
 	for _, sent := range sentinels {
-		entries = append(entries, errStatusEntry{sentinel: sent, status: status, message: message})
+		entries = append(entries, ErrStatusEntry{Sentinel: sent, Status: status, Message: message})
 	}
-	e.ErrStatus.entries = append(entries, e.ErrStatus.entries...)
+	e.ErrStatus.Entries = append(entries, e.ErrStatus.Entries...)
 	return e
 }
 
 // WithSuccess 按「成功描述 + 默认错误面」装配端点，返回自身便于链式声明：
 //
 //	Endpoint[In, Out]{
-//		Parse:  bindJSONMsgFunc[In]("请求数据无效"),
-//		Invoke: invoke(h.svc.Create),
-//	}.WithSuccess(created("XX创建成功"), http.StatusBadRequest).Handle(c)
+//		Parse:  BindJSONMsgFunc[In]("请求数据无效"),
+//		Invoke: Invoke(h.svc.Create),
+//	}.WithSuccess(Created("XX创建成功"), http.StatusBadRequest).Handle(c)
 //
-// 第二参 errStatus 是**该端点的默认错误面**（errStatusAll：除解析外的一切错误共用这一个码、
+// 第二参 errStatus 是**该端点的默认错误面**（ErrStatusAll：除解析外的一切错误共用这一个码、
 // 且不查域表）——业务错误与 DB 故障那一半与票1a 前 renderMsg 错误分支的写法逐字等价。
 // 解析面不归它（票8 / ADR-0062 决策 8）：`*ParseError` 恒回自己的 4xx 与自己的文案，
-// 所以 `WithSuccess(okMsg(…), 500)` 的端点参数错误天然是 400，不必逐端点改表。
+// 所以 `WithSuccess(OkMsg(…), 500)` 的端点参数错误天然是 400，不必逐端点改表。
 // 需要真正定制渲染的端点是少数，它们继续显式设置 Render（只写成功面）。
 func (e Endpoint[Req, Resp]) WithSuccess(ok *success, errStatus int) Endpoint[Req, Resp] {
-	e.Render = successRenderer[Req, Resp](ok)
-	e.ErrStatus = errStatusAll(errStatus)
+	e.Render = SuccessRenderer[Req, Resp](ok)
+	e.ErrStatus = ErrStatusAll(errStatus)
 	return e
+}
+
+// AsParseError 判断 error 是否是 *ParseError（供 render 分支区分参数错误与服务错误）。
+// 它随解析错误值一起住在 pkg/httpx：谁在 HTTP 面处理解析错误，都用这一枚判定。
+func AsParseError(err error, target **ParseError) bool {
+	pe, ok := err.(*ParseError)
+	if ok {
+		*target = pe
+	}
+	return ok
 }

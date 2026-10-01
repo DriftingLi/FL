@@ -27,9 +27,9 @@ func NewAIConfigHandler(svc *service.AIConfigService) *AIConfigHandler {
 // aiConfigUpdateErrStatus 「配置不存在」→ 404（具名哨兵，ADR-0062 票9）；其余错误保持既有的
 // 「更新失败: + 原文」500 形状——本票只收编那条不该出现在界面上的驱动原文，
 // 「一切错误同一个码」的整端点判定随票 8（错误码规则序）逐端点做。
-var aiConfigUpdateErrStatus = &errStatusTable{entries: []errStatusEntry{
-	{sentinel: service.ErrAIConfigNotFound, status: http.StatusNotFound},
-	{sentinel: nil, status: http.StatusInternalServerError, errPrefix: "更新失败: "},
+var aiConfigUpdateErrStatus = &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+	{Sentinel: service.ErrAIConfigNotFound, Status: http.StatusNotFound},
+	{Sentinel: nil, Status: http.StatusInternalServerError, ErrPrefix: "更新失败: "},
 }}
 
 // registerAIConfigRoutes 注册 /admin/ai-configs/* 与 /admin/ai-feature-bindings/* 子路由组。
@@ -61,7 +61,7 @@ func (h *AIConfigHandler) registerAIConfigRoutes(g *gin.RouterGroup) {
 // @Router /admin/ai-configs [get]
 // ListConfigs 列出所有配置（API Key 脱敏）GET /api/admin/ai-configs
 func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
-	Endpoint[struct{}, []service.AIConfigDTO]{
+	httpx.Endpoint[struct{}, []service.AIConfigDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.AIConfigDTO, error) {
 			list, err := h.svc.ListConfigs(ctx)
 			if err != nil {
@@ -69,7 +69,7 @@ func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -86,7 +86,7 @@ func (h *AIConfigHandler) ListConfigs(c *gin.Context) {
 // @Router /admin/ai-configs [post]
 // CreateConfig 新建配置 POST /api/admin/ai-configs
 func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
-	Endpoint[createConfigReq, struct{}]{
+	httpx.Endpoint[createConfigReq, struct{}]{
 		Parse: func(c *gin.Context) (*createConfigReq, error) {
 			var req struct {
 				Name        string `json:"name" binding:"required"`
@@ -106,7 +106,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "创建失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "创建失败: "),
 		Render: func(c *gin.Context, _ *createConfigReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "配置已创建", nil)
 		},
@@ -128,7 +128,7 @@ func (h *AIConfigHandler) CreateConfig(c *gin.Context) {
 // @Router /admin/ai-configs/{id} [put]
 // UpdateConfig 更新配置（api_key 为空表示不修改）PUT /api/admin/ai-configs/:id
 func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
-	Endpoint[updateConfigReq, struct{}]{
+	httpx.Endpoint[updateConfigReq, struct{}]{
 		Parse: func(c *gin.Context) (*updateConfigReq, error) {
 			id, err := httpx.PathInt(c, "id", "无效的 id")
 			if err != nil {
@@ -172,7 +172,7 @@ func (h *AIConfigHandler) UpdateConfig(c *gin.Context) {
 // @Router /admin/ai-configs/{id} [delete]
 // DeleteConfig 删除配置（被绑定时拒绝）DELETE /api/admin/ai-configs/:id
 func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
-	Endpoint[idParam, struct{}]{
+	httpx.Endpoint[idParam, struct{}]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "id", "无效的 id")
 			if err != nil {
@@ -186,7 +186,7 @@ func (h *AIConfigHandler) DeleteConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("配置已删除"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("配置已删除"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 测试 AI 配置连通性
@@ -229,7 +229,7 @@ func (h *AIConfigHandler) TestConfig(c *gin.Context) {
 // @Router /admin/ai-feature-bindings [get]
 // ListBindings 列出所有 AI 功能的绑定情况 GET /api/admin/ai-feature-bindings
 func (h *AIConfigHandler) ListBindings(c *gin.Context) {
-	Endpoint[struct{}, []service.FeatureBindingDTO]{
+	httpx.Endpoint[struct{}, []service.FeatureBindingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.FeatureBindingDTO, error) {
 			list, err := h.svc.ListBindings(ctx)
 			if err != nil {
@@ -237,7 +237,7 @@ func (h *AIConfigHandler) ListBindings(c *gin.Context) {
 			}
 			return &list, nil
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -256,7 +256,7 @@ func (h *AIConfigHandler) ListBindings(c *gin.Context) {
 // SetBinding 绑定功能到指定配置 PUT /api/admin/ai-feature-bindings/:feature_key
 // Body: {"config_id": 1}；config_id=0 表示解除绑定（单绑定清空，多绑定清空所有）
 func (h *AIConfigHandler) SetBinding(c *gin.Context) {
-	Endpoint[setBindingReq, struct{}]{
+	httpx.Endpoint[setBindingReq, struct{}]{
 		Parse: func(c *gin.Context) (*setBindingReq, error) {
 			var body struct {
 				ConfigID int `json:"config_id"`
@@ -272,7 +272,7 @@ func (h *AIConfigHandler) SetBinding(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("绑定已更新"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("绑定已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 解除 AI 功能的多绑定单项
@@ -288,7 +288,7 @@ func (h *AIConfigHandler) SetBinding(c *gin.Context) {
 // @Router /admin/ai-feature-bindings/{feature_key}/configs/{config_id} [delete]
 // UnbindConfig 解除多绑定功能的单个配置绑定 DELETE /api/admin/ai-feature-bindings/:feature_key/configs/:config_id
 func (h *AIConfigHandler) UnbindConfig(c *gin.Context) {
-	Endpoint[unbindConfigReq, struct{}]{
+	httpx.Endpoint[unbindConfigReq, struct{}]{
 		Parse: func(c *gin.Context) (*unbindConfigReq, error) {
 			id, err := httpx.PathInt(c, "config_id", "无效的 config_id")
 			if err != nil {
@@ -302,7 +302,7 @@ func (h *AIConfigHandler) UnbindConfig(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("已解除绑定"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("已解除绑定"), http.StatusBadRequest).Handle(c)
 }
 
 // ===== Endpoint 请求类型 =====

@@ -60,7 +60,7 @@ type notificationListReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications [get]
 func (h *NotificationHandler) List(c *gin.Context) {
-	Endpoint[notificationListReq, service.NotificationListPageResult]{
+	httpx.Endpoint[notificationListReq, service.NotificationListPageResult]{
 		Parse: func(c *gin.Context) (*notificationListReq, error) {
 			return &notificationListReq{
 				UserID:   middleware.CurrentUserID(c),
@@ -71,7 +71,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *notificationListReq) (*service.NotificationListPageResult, error) {
 			return h.svc.List(req.UserID, req.Page, req.PageSize)
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -86,7 +86,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/unread-count [get]
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
-	Endpoint[notificationUserIDReq, int64]{
+	httpx.Endpoint[notificationUserIDReq, int64]{
 		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
 			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
@@ -97,7 +97,7 @@ func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 			}
 			return &count, nil
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 		Render: func(c *gin.Context, _ *notificationUserIDReq, resp *int64) {
 			response.Success(c, service.NotificationUnreadCountDTO{Count: *resp})
 		},
@@ -128,7 +128,7 @@ type notificationUserIDReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/{id}/read [post]
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
-	Endpoint[markReadReq, struct{}]{
+	httpx.Endpoint[markReadReq, struct{}]{
 		Parse: func(c *gin.Context) (*markReadReq, error) {
 			id, err := httpx.PathInt64(c, "id", "通知ID无效")
 			if err != nil {
@@ -142,7 +142,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 			}
 			return nil, nil
 		},
-	}.WithSuccess(okMsgNoData("已标记为已读"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("已标记为已读"), http.StatusBadRequest).Handle(c)
 }
 
 // MarkAllRead 全部标记已读
@@ -156,7 +156,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /notifications/read-all [post]
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
-	Endpoint[notificationUserIDReq, struct{}]{
+	httpx.Endpoint[notificationUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*notificationUserIDReq, error) {
 			return &notificationUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
@@ -166,7 +166,7 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 			}
 			return nil, nil
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "操作失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "操作失败: "),
 		Render: func(c *gin.Context, _ *notificationUserIDReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "已全部标记为已读", nil)
 		},

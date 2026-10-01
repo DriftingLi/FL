@@ -20,13 +20,13 @@ import (
 
 // recruiterApplicationErrStatus 企业侧投递域哨兵→状态码表（#611）：职位/投递不存在 → 404，
 // 非本企业投递 → 403，其余（状态不允许等业务校验）兜底 400。
-var recruiterApplicationErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrApplyNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
+var recruiterApplicationErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrApplyNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
 	},
-	fallback: http.StatusBadRequest,
+	Fallback: http.StatusBadRequest,
 }
 
 // RegisterRecruiterApplicationRoutes 注册企业侧投递处理路由。
@@ -62,7 +62,7 @@ func NewRecruiterApplicationHandler(svc *service.JobApplicationService) *Recruit
 // @Failure 403 {object} response.R "越权"
 // @Router /recruit/jobs/{id}/applications [get]
 func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
-	Endpoint[struct{}, service.RecruiterApplicationListResult]{
+	httpx.Endpoint[struct{}, service.RecruiterApplicationListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RecruiterApplicationListResult, error) {
 			jobID, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
@@ -89,7 +89,7 @@ func (h *RecruiterApplicationHandler) ListByJob(c *gin.Context) {
 // @Failure 403 {object} response.R "越权"
 // @Router /recruit/applications/{id} [get]
 func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
-	Endpoint[struct{}, service.ApplicationDTO]{
+	httpx.Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投递 ID 无效")
 			if err != nil {
@@ -115,7 +115,7 @@ func (h *RecruiterApplicationHandler) GetDetail(c *gin.Context) {
 // @Failure 403 {object} response.R "越权"
 // @Router /recruit/applications/{id}/reject [post]
 func (h *RecruiterApplicationHandler) Reject(c *gin.Context) {
-	Endpoint[struct{}, service.ApplicationDTO]{
+	httpx.Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投递 ID 无效")
 			if err != nil {

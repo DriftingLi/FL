@@ -117,10 +117,10 @@ func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, err
 // @Router /auth/email/send-code [post]
 // @Router /auth/phone/send-code [post]
 func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
-	Endpoint[codeSendReq, struct{}]{
+	httpx.Endpoint[codeSendReq, struct{}]{
 		Parse:     h.parseSendReq,
 		Invoke:    h.invokeSendCode,
-		ErrStatus: &errStatusTable{fallback: http.StatusBadRequest},
+		ErrStatus: &httpx.ErrStatusTable{Fallback: http.StatusBadRequest},
 		Render: func(c *gin.Context, _ *codeSendReq, _ *struct{}) {
 			response.SuccessWithMsg(c, h.sentMsg, nil)
 		},
@@ -164,12 +164,12 @@ type codeRegisterReq struct {
 // @Router /auth/email/register [post]
 // @Router /auth/phone/register [post]
 func (h *CodeChannelAuthHandler) Register(c *gin.Context) {
-	Endpoint[codeRegisterReq, service.LoginResult]{
+	httpx.Endpoint[codeRegisterReq, service.LoginResult]{
 		Parse: h.parseRegisterReq,
 		Invoke: func(ctx context.Context, req *codeRegisterReq) (*service.LoginResult, error) {
 			return h.codeSvc.RegisterWithCode(ctx, h.ch, req.Target, req.Code, req.Nickname, req.Company, req.Password)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *codeRegisterReq, resp *service.LoginResult) {
 			h.sess.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.Created(c, "注册成功", resp)
@@ -222,12 +222,12 @@ type codeLoginReq struct {
 // @Router /auth/email/login [post]
 // @Router /auth/phone/login [post]
 func (h *CodeChannelAuthHandler) Login(c *gin.Context) {
-	Endpoint[codeLoginReq, service.LoginResult]{
+	httpx.Endpoint[codeLoginReq, service.LoginResult]{
 		Parse: h.parseLoginReq,
 		Invoke: func(ctx context.Context, req *codeLoginReq) (*service.LoginResult, error) {
 			return h.codeSvc.LoginWithCode(ctx, h.ch, req.Target, req.Code)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *codeLoginReq, resp *service.LoginResult) {
 			h.sess.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "登录成功", resp)
@@ -275,7 +275,7 @@ type codeResetReq struct {
 // @Router /auth/email/reset-password [post]
 // @Router /auth/phone/reset-password [post]
 func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
-	Endpoint[codeResetReq, struct{}]{
+	httpx.Endpoint[codeResetReq, struct{}]{
 		Parse: h.parseResetReq,
 		Invoke: func(ctx context.Context, req *codeResetReq) (*struct{}, error) {
 			if err := h.codeSvc.ResetPasswordWithCode(ctx, h.ch, req.Target, req.Code, req.Password); err != nil {
@@ -283,7 +283,7 @@ func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置，请使用新密码登录"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("密码已重置，请使用新密码登录"), http.StatusBadRequest).Handle(c)
 }
 
 func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, error) {
@@ -307,13 +307,4 @@ func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, e
 		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &codeResetReq{Target: t.Email, Code: t.Code, Password: t.Password}, nil
-}
-
-// asParseError 判断 error 是否 *ParseError（供 render 分支区分参数错误与服务错误）。
-func asParseError(err error, target **httpx.ParseError) bool {
-	pe, ok := err.(*httpx.ParseError)
-	if ok {
-		*target = pe
-	}
-	return ok
 }

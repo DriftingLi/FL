@@ -67,11 +67,11 @@ test('正例：五个错误信封写在 Render 闭包里都报，行号精确', 
   })
 })
 
-test('正例：renderStatus 与 .renderError（旧「闭包自查域表」）同样判红', () => {
+test('正例：renderStatus 与 .RenderError（旧「闭包自查域表」）同样判红', () => {
   const a = scanSource(legacySrc(['renderStatus(c, http.StatusBadRequest, err.Error())']), API_FILE)
   assert.equal(a.length, 1)
   assert.match(a[0].why, /单一咽喉/)
-  const b = scanSource(legacySrc(['if err != nil {', 'forumErrStatus.renderError(c, err)', 'return', '}']), API_FILE)
+  const b = scanSource(legacySrc(['if err != nil {', 'forumErrStatus.RenderError(c, err)', 'return', '}']), API_FILE)
   assert.equal(b.length, 1)
   assert.match(b[0].why, /不再自查域表/)
 })

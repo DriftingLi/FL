@@ -45,16 +45,16 @@ func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobC
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /resume [get]
 func (h *JobCardHandler) Get(c *gin.Context) {
-	Endpoint[resumeGetReq, service.JobCardDTO]{
+	httpx.Endpoint[resumeGetReq, service.JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeGetReq, error) {
 			return &resumeGetReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *resumeGetReq) (*service.JobCardDTO, error) {
 			return h.svc.Get(req.UserID)
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "简历不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "简历不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
 }
@@ -72,7 +72,7 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume [put]
 func (h *JobCardHandler) Upsert(c *gin.Context) {
-	Endpoint[resumeUpsertReq, service.JobCardDTO]{
+	httpx.Endpoint[resumeUpsertReq, service.JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeUpsertReq, error) {
 			uid := middleware.CurrentUserID(c)
 			var body service.JobCardInput
@@ -84,7 +84,7 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *resumeUpsertReq) (*service.JobCardDTO, error) {
 			return h.svc.Upsert(req.UserID, req.Input)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // UpdateVisibility 切换简历公开 PUT /api/resume/visibility

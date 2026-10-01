@@ -50,20 +50,20 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 // 是其余业务事实**各有名字**——两件事必须同时做，不是二选一。
 //
 // ErrQuestionNotFound 带 message：呈现层要说「题目不存在」（越权不泄漏存在性），不是哨兵自己那句；
-// 这正是 errStatusEntry.message 这一格存在的理由（WithSentinelsMsg 的同形规则在裸 handler 一侧）。
+// 这正是 httpx.ErrStatusEntry.Message 这一格存在的理由（WithSentinelsMsg 的同形规则在裸 handler 一侧）。
 // 旧的那枚 helper `renderOutOfPoolQuestion` 被本表第一条 entry 完整取代，随本批删除——留在文件里
 // 就是一处「两个宿主说同一件事」，而且 CI 的 unused 检查也当场把它点了出来。
-var interactionErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound, message: "题目不存在"},
-		{sentinel: service.ErrCommentContentEmpty, status: http.StatusBadRequest},
-		{sentinel: service.ErrCommentTooLong, status: http.StatusBadRequest},
-		{sentinel: service.ErrCommentNotFound, status: http.StatusBadRequest},
-		{sentinel: service.ErrCommentNotOwned, status: http.StatusBadRequest},
-		{sentinel: service.ErrNoteContentEmpty, status: http.StatusBadRequest},
-		{sentinel: service.ErrNoteContentTooLong, status: http.StatusBadRequest},
+var interactionErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrQuestionNotFound, Status: http.StatusNotFound, Message: "题目不存在"},
+		{Sentinel: service.ErrCommentContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCommentTooLong, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCommentNotFound, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCommentNotOwned, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrNoteContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrNoteContentTooLong, Status: http.StatusBadRequest},
 	},
-	fallback: http.StatusInternalServerError,
+	Fallback: http.StatusInternalServerError,
 }
 
 // ListComments 题目评论列表
@@ -90,7 +90,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	pageSize := atoiDefault(c.Query("page_size"), 10)
 	items, total, err := h.commentSvc.List(qid, page, pageSize, studentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, service.QuestionCommentPageResult{Items: items, Page: page, PageSize: pageSize, Total: total})
@@ -125,7 +125,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	}
 	m, err := h.commentSvc.Create(qid, uid, req.Content, studentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.Created(c, "评论成功", m)
@@ -152,7 +152,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 		// 「评论不存在」⇒ 两处叠起来，故障与业务事实同形。两面一起改（决策 7 的同一条）。
 		// 这一格是本批第二版补上的：第一版漏改，由 TestFaultFacesAllSayFault 注故障当场判红
 		// （它报出的正是 400 + `SQL logic error: no such table: question_comment`）。
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)
@@ -176,7 +176,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	n, err := h.noteSvc.GetForQuestion(qid, uid, studentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	if n == nil {
@@ -214,7 +214,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	}
 	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, studentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, n)
@@ -237,7 +237,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	}
 	uid := middleware.CurrentUserID(c)
 	if err := h.noteSvc.DeleteForQuestion(qid, uid, studentQuestionScope(c)); err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)
