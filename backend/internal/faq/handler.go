@@ -122,9 +122,7 @@ func (h *handler) AdminCreateCategory(c *gin.Context) {
 	}
 	httpx.Endpoint[struct{}, AdminFaqCategoryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*AdminFaqCategoryDTO, error) {
-			return h.svc.AdminCreateCategory(FaqCategoryInput{
-				Code: body.Code, Title: body.Title, SortOrder: body.SortOrder, Enabled: body.Enabled,
-			})
+			return h.svc.AdminCreateCategory(FaqCategoryInput(body))
 		},
 		ErrStatus: faqErrStatus,
 	}.Handle(c)
@@ -157,9 +155,7 @@ func (h *handler) AdminUpdateCategory(c *gin.Context) {
 	}
 	httpx.Endpoint[struct{}, AdminFaqCategoryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*AdminFaqCategoryDTO, error) {
-			return h.svc.AdminUpdateCategory(id, FaqCategoryInput{
-				Code: body.Code, Title: body.Title, SortOrder: body.SortOrder, Enabled: body.Enabled,
-			})
+			return h.svc.AdminUpdateCategory(id, FaqCategoryInput(body))
 		},
 		ErrStatus: faqErrStatus,
 	}.Handle(c)
@@ -243,10 +239,7 @@ func (h *handler) AdminCreateEntry(c *gin.Context) {
 	}
 	httpx.Endpoint[struct{}, AdminFaqEntryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*AdminFaqEntryDTO, error) {
-			return h.svc.AdminCreateEntry(FaqEntryInput{
-				CategoryID: body.CategoryID, Question: body.Question, Answer: body.Answer,
-				SortOrder: body.SortOrder, Published: body.Published,
-			})
+			return h.svc.AdminCreateEntry(FaqEntryInput(body))
 		},
 		ErrStatus: faqErrStatus,
 	}.Handle(c)
@@ -278,10 +271,7 @@ func (h *handler) AdminUpdateEntry(c *gin.Context) {
 	}
 	httpx.Endpoint[struct{}, AdminFaqEntryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*AdminFaqEntryDTO, error) {
-			return h.svc.AdminUpdateEntry(id, FaqEntryInput{
-				CategoryID: body.CategoryID, Question: body.Question, Answer: body.Answer,
-				SortOrder: body.SortOrder, Published: body.Published,
-			})
+			return h.svc.AdminUpdateEntry(id, FaqEntryInput(body))
 		},
 		ErrStatus: faqErrStatus,
 	}.Handle(c)
