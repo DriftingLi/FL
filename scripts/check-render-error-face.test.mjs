@@ -17,7 +17,7 @@ import {
   ALLOWLIST,
   ERROR_ENVELOPE_FNS,
   FORBIDDEN,
-  GUARDED_DIR_PREFIX,
+  GUARDED_PACKAGE_PREFIXES,
   GUARD_SPEC,
   SKELETON_FILE,
   SUCCESS_ENVELOPE_FNS,
@@ -177,7 +177,15 @@ test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它�
     assert.equal(isGuardedPath(p), true, p + ' 应在守卫面')
   }
   assert.equal(isTestFile('backend/internal/api/endpoint_test.go'), true)
-  assert.equal(GUARDED_DIR_PREFIX, 'backend/internal/api/')
+  assert.deepEqual(GUARDED_PACKAGE_PREFIXES, ['backend/internal/api/'])
+  // #1445 P2 拆包后这里是「加一条域包前缀」，不是换判据 —— 加前缀必须让新目录自动进判定面。
+  for (const p of ['backend/internal/forum/handler.go', 'backend/internal/api/sub/x.go']) {
+    assert.equal(
+      GUARDED_PACKAGE_PREFIXES.some((prefix) => p.startsWith(prefix)),
+      p.startsWith('backend/internal/api/'),
+      p + ' 的前缀判定'
+    )
+  }
 })
 
 test('一致性锁：错误/成功信封两份名单与 pkg/response 的导出函数互等（判据不许改回双份）', () => {

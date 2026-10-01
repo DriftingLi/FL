@@ -165,6 +165,9 @@ export const GUARD_SPEC = {
   cli: { noArgs: 'all', helpFlag: true, scanDirArg: true, usageOnUnknown: true, usageStream: 'stderr' },
   all: {
     scanDir: 'backend',
+    // 射程防空转：实测 6 个目录面文件（spec/engine/读面/接口各一），下界留余量。
+    // 文件名判据或扫描目录漂了会让 checked 掉下来，那种绿不许当成「无违规」。
+    minChecked: 4,
     extensions: SCAN_EXTENSIONS,
     skipNodeModules: true,
     tolerateWalkErrors: true,

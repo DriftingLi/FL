@@ -469,6 +469,60 @@ test('走查：后缀过滤 / node_modules 跳过 / tolerateWalkErrors 开关', 
   }
 })
 
+test('防空转：#1445 —— 判定面低于 all.minChecked 即红（射程漂了不许读成「无违规」）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'guard-minchecked-'))
+  try {
+    for (const name of ['a.vue', 'b.vue', 'c.vue']) writeFileSync(join(dir, name), '<template><div /></template>')
+    const spec = {
+      name: 'probe-minchecked',
+      usage: 'probe',
+      cli: { noArgs: 'all', helpFlag: true, scanDirArg: false, usageOnUnknown: true, usageStream: 'stderr' },
+      all: {
+        scanDir: dir,
+        extensions: ['.vue'],
+        minChecked: 3,
+        stream: 'stdout',
+        header: () => [],
+        ok: (ctx) => '无违规。' + ctx.checked + ' 个文件',
+        violation: (v) => v.file + ':' + v.line,
+        footer: () => []
+      },
+      diff: {
+        pathspec: ['*.vue'],
+        defaultBase: 'origin/master',
+        stream: 'stderr',
+        empty: () => '',
+        ok: () => '',
+        header: () => [],
+        violation: () => '',
+        footer: () => []
+      },
+      isGuardedPath: (p) => p.endsWith('.vue'),
+      scanSource: () => [],
+      allowlist: {}
+    }
+    const run = (s) => {
+      const out = []
+      const code = runGuard(s, { argv: ['--all'], root: dir, stdout: (l) => out.push(l), stderr: (l) => out.push(l) })
+      return { code, text: out.join('\n') }
+    }
+    // 射程够（3/3）⇒ 绿；下界抬到 4 ⇒ 红，且报告必须点名「防空转」而不是「无违规」
+    assert.equal(run(spec).code, 0)
+    assert.match(run(spec).text, /无违规。3 个文件/)
+    const short = run({ ...spec, all: { ...spec.all, minChecked: 4 } })
+    assert.equal(short.code, 1)
+    assert.match(short.text, /\[防空转\]/)
+    // 防空转文案里本身就含「这不是「无违规」」字样 ⇒ 断言要盯**通过语**的形状，不是「无违规」三字
+    assert.doesNotMatch(short.text, /无违规。\d+ 个文件/)
+    // 射程为空（判据写错把文件全排除）也必须红 —— 这条是本次要防的主场景
+    const empty = run({ ...spec, isGuardedPath: () => false })
+    assert.equal(empty.code, 1)
+    assert.match(empty.text, /\[防空转\]/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('isDirectRun：只在 argv[1] 与模块 URL 相同时为真', () => {
   const saved = process.argv[1]
   try {
