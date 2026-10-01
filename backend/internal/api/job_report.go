@@ -103,14 +103,14 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
 			params := service.JobListParams{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 				All:      true,
 			}
-			if v := queryIDPtr(c, "recruiter_id"); v != nil {
+			if v := httpx.QueryIDPtr(c, "recruiter_id"); v != nil {
 				params.RecruiterID = *v
 			}
-			if v := queryIDPtr(c, "position_id"); v != nil {
+			if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 				params.PositionID = v
 			}
 			// 管理端跨企业全量（recruiterID=0 且非 MineOnly 时服务层不加企业过滤）
@@ -133,8 +133,8 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 func (h *JobReportHandler) ListReports(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.ReportListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportListResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
+			page := httpx.QueryIntDefault(c, "page", 1)
+			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			items, total, err := h.svc.ListPendingReports(page, pageSize)
 			if err != nil {
 				return nil, err

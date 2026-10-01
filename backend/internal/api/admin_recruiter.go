@@ -198,8 +198,8 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 // @Router /admin/recruiters [get]
 // List 招聘者列表 GET /api/admin/recruiters（#416：分页 + 关键字过滤，字段白名单无凭据）。
 func (h *AdminRecruiterHandler) List(c *gin.Context) {
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	keyword := c.Query("keyword")
 	resp, err := h.authSvc.ListRecruiters(page, pageSize, keyword)
 	if err != nil {

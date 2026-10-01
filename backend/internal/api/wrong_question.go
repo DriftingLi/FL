@@ -80,8 +80,8 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 			studentID, _ := uid.(int)
 			return &listWrongQuestionsReq{
 				StudentID:     studentID,
-				Page:          atoiDefault(c.Query("page"), 1),
-				PageSize:      atoiDefault(c.Query("page_size"), 20),
+				Page:          httpx.QueryIntDefault(c, "page", 1),
+				PageSize:      httpx.QueryIntDefault(c, "page_size", 20),
 				QType:         c.Query("type"),
 				MinWrongCount: httpx.QueryIntPtr(c, "min_wrong_count"),
 				Favorited:     c.Query("favorited") == "true",

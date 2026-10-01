@@ -101,12 +101,12 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 				f = "all"
 			}
 			return &adminCourseListReq{
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 				Keyword:      c.Query("keyword"),
-				CredentialID: queryIDPtr(c, "credential_id"),
-				SpecialtyID:  queryIDPtr(c, "specialty_id"),
-				LevelID:      queryIDPtr(c, "level_id"),
+				CredentialID: httpx.QueryIDPtr(c, "credential_id"),
+				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
+				LevelID:      httpx.QueryIDPtr(c, "level_id"),
 				Filter:       f,
 			}, nil
 		},
@@ -481,8 +481,8 @@ func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 	httpx.Endpoint[hrwaiUserListReq, service.HrwaiUserPageResult]{
 		Parse: func(c *gin.Context) (*hrwaiUserListReq, error) {
 			return &hrwaiUserListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 				Keyword:  c.Query("keyword"),
 			}, nil
 		},
@@ -694,8 +694,8 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 	httpx.Endpoint[tutorListReq, service.TutorListDTO]{
 		Parse: func(c *gin.Context) (*tutorListReq, error) {
 			return &tutorListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 				Keyword:  c.Query("keyword"),
 			}, nil
 		},

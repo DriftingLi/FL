@@ -124,8 +124,8 @@ func (h *ContactHandler) Create(c *gin.Context) {
 // @Router /recruit/contact-requests [get]
 func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 	recruiterID := middleware.CurrentUserID(c)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	items, total, err := h.svc.ListForRecruiter(recruiterID, page, pageSize)
 	if err != nil {
 		response.ServerErrorCause(c, "", err)
@@ -191,8 +191,8 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 // @Router /resume/contact-requests [get]
 func (h *ContactHandler) ListForStudent(c *gin.Context) {
 	studentID := middleware.CurrentUserID(c)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	items, total, err := h.svc.ListForStudent(studentID, page, pageSize)
 	if err != nil {
 		response.ServerErrorCause(c, "", err)

@@ -92,8 +92,8 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 func (h *ApplicationHandler) ListMine(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.ApplicationListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationListResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
+			page := httpx.QueryIntDefault(c, "page", 1)
+			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			items, total, err := h.svc.ListForStudent(middleware.CurrentUserID(c), page, pageSize)
 			if err != nil {
 				return nil, err

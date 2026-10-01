@@ -74,9 +74,9 @@ func (h *AuditHandler) List(c *gin.Context) {
 	httpx.Endpoint[auditLogListReq, AuditLogPageResult]{
 		Parse: func(c *gin.Context) (*auditLogListReq, error) {
 			return &auditLogListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
-				ActorID:  atoiDefault(c.Query("actor_id"), 0),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
+				ActorID:  httpx.QueryIntDefault(c, "actor_id", 0),
 				Role:     strings.TrimSpace(c.Query("role")),
 				Keyword:  strings.TrimSpace(c.Query("keyword")),
 			}, nil

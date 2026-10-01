@@ -87,8 +87,8 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsLedgerResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
+			page := httpx.QueryIntDefault(c, "page", 1)
+			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			// #512：direction 收支方向筛选（"" 全部 / "in" 收入 / "out" 支出）
 			direction := c.Query("direction")
 			return h.svc.GetLedgerFiltered(middleware.CurrentUserID(c), page, pageSize, "", direction)
@@ -194,5 +194,3 @@ func (h *PointsHandler) RedeemShop(c *gin.Context) {
 		ErrStatus: pointsErrStatus,
 	}.Handle(c)
 }
-
-// helpers already in helpers.go (atoiDefault)

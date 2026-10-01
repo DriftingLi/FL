@@ -102,7 +102,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
-			return h.svc.GetCatalogTree(queryIDPtr(c, "credential_id")), nil
+			return h.svc.GetCatalogTree(httpx.QueryIDPtr(c, "credential_id")), nil
 		},
 	}.Handle(c)
 }
@@ -137,7 +137,7 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 	httpx.Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
-			result, err := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
+			result, err := h.svc.ListQuestionTags(true, false, httpx.QueryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
 			if err != nil {
 				return nil, err
 			}

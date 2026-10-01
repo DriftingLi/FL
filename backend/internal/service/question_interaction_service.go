@@ -70,7 +70,7 @@ func (s *QuestionCommentService) List(questionID, page, pageSize int, scope Ques
 		AvatarURL string `gorm:"column:avatar_url"`
 	}
 	// 既有语义保留：本列表无页大小上限、pageSize<=0 不回落默认（Limit(0) 即空页；负值取消 LIMIT），
-	// 默认值由 HTTP 层 atoiDefault(page_size,10) 保证。故 default/max 都传 pageSize 自身，
+	// 默认值由 HTTP 层 httpx.QueryIntDefault(c, "page_size", 10) 保证。故 default/max 都传 pageSize 自身，
 	// 让 paging 的钳制在这些维度上成为空操作；page<=0 → 1 与既有的 offset 下限 0 等价
 	//（本方法的返回不含 page，调用方用自己的请求值装配信封）。
 	rows, total, _, _, err := paging.QueryWithScan[row](s.db, page, pageSize, pageSize, pageSize,

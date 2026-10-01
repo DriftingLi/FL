@@ -86,8 +86,8 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 10)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 10)
 	items, total, err := h.commentSvc.List(qid, page, pageSize, studentQuestionScope(c))
 	if err != nil {
 		interactionErrStatus.RenderError(c, err)

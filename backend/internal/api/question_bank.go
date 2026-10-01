@@ -154,12 +154,12 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 	httpx.Endpoint[listQuestionsReq, service.QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 				QType:    c.Query("type"),
 				Status:   c.Query("status"),
 				Keyword:  c.Query("keyword"),
-				TagID:    queryIDPtr(c, "tag_id"),
+				TagID:    httpx.QueryIDPtr(c, "tag_id"),
 				Sort:     c.Query("sort"),
 				Editor:   actsAsQuestionEditor(c),
 			}, nil

@@ -66,7 +66,7 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 		Parse: func(c *gin.Context) (*freeQuestionsReq, error) {
 			return &freeQuestionsReq{
 				QType:        c.Query("type"),
-				Count:        atoiDefault(c.Query("count"), 20),
+				Count:        httpx.QueryIntDefault(c, "count", 20),
 				CredentialID: middleware.CredentialIDPtr(c),
 			}, nil
 		},
@@ -108,11 +108,11 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 			if tagIDStr == "" {
 				return nil, httpx.BadRequest("请指定题库标签")
 			}
-			tagID, ok := requiredPositiveID(tagIDStr)
+			tagID, ok := httpx.PositiveID(tagIDStr)
 			if !ok {
 				return nil, httpx.BadRequest("题库标签ID无效")
 			}
-			count := atoiDefault(c.Query("count"), 0) // 0=全部
+			count := httpx.QueryIntDefault(c, "count", 0) // 0=全部
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
 			return &tagPracticeReq{StudentID: studentID, TagID: tagID, Count: count, CredentialID: middleware.CredentialIDPtr(c)}, nil
@@ -430,8 +430,8 @@ func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
 			return &practiceHistoryReq{
 				StudentID:    studentID,
 				CredentialID: middleware.CredentialIDPtr(c),
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 20),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 20),
 				QType:        c.Query("type"),
 				StartDate:    c.Query("start_date"),
 				EndDate:      c.Query("end_date"),
