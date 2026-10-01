@@ -140,6 +140,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
 - [ ] 旧符号（`XxxService` / `RegisterXxxRoutes` / 旧包前缀键）全仓残留 = 0
+- [ ] 搬走的**私有**助手在包内还有调用点，或者被删掉：本地 `go build` / `go vet` 报不出「未使用」（那是 `unused` 的活，只在 CI `backend-lint` 兜）；自查方式是对每个进新包的私有函数数一遍**剥掉注释**后的包内引用
 - [ ] PR 正文一行披露「合并到 master 将触发 production 部署」
 
 ## 10. 波次与 PR 纪律
@@ -183,7 +184,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **别「内存改一遍 + 磁盘另跑一遍」**：把文件读进内存做区间删除、又用另一遍全仓扫描直接写盘，最后 `save()` 内存版会**把磁盘上的改名结果覆盖回去**（波 0a 实测 `contribution_service.go` 的 6 处改名被覆盖，方法名成了 `func (s *ContributionService) clock.DayStart(...)`，靠 `go build` 才发现）。每步改完立刻 `git status` + `go build`。
 - **正则不剥注释、也不防同名局部变量**：`clock := &stepClock{}` 这种局部变量会让「该文件用了 `clock` 包」的判据误判，给不需要的文件加 import（`go vet` 报 imported and not used 才抓到）；注释里的引用会被一起改名 —— 改完注释是对的，但 import 是多余的，加 import 的判据要么剥注释、要么以编译器为准。
 
-第三批（P2 波 0c：五文件搬 `internal/filestore`，39 文件机械改名）再添五条：
+第三批（P2 波 0c：五文件搬 `internal/filestore`，39 文件机械改名）再添七条：
 
 - **搬包前先扫「跨文件私有引用」，不要只扫导出面**：被搬的文件里，11 处私有符号是**留在原包的其他文件**在用的（`fileExtension` ×6、`allowedFile` ×2、`validateFileSize` ×2、`fileContentType`、`maxFileSizes`、`base64Encode`/`base64Decode`，外加一次直接读结构体私有字段 `s.fileSvc.storage`）。这类引用在 `git mv` 之前 grep 不到（同包内不需要限定名），`go build` 才一次报全 ⇒ 先做一遍「新包导出面 vs 旧包剩余文件引用」的比对，再逐个决定升导出 / 换导出方法 / 调用点直接用标准库（本波三种破法各用了一次）。
 - **别用「导出字段」破封装**：`stagedFileExists` 读的是 `s.fileSvc.storage`，把 `storage` 升导出等于把存储适配器漏给所有调用方；正解是在 `FileStore` 上加**语义完整的导出方法**（`Exists(ctx, url)`）并把它自己的失败语义带出来（`ErrStorageUnconfigured` ⇒ 调用方仍回本域 500 哨兵，不静默读成「文件不存在」）。
@@ -191,3 +192,4 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **改结构体字段名要连包内测试的复合字面量一起改**：脚本的区间替换只覆盖包外 `<包>.OrphanSweepConfig{…}` 形态，包内 `orphan_sweep_test.go` 两处字面量仍是小写键 ⇒ `go vet` 报 `unknown field domain in struct literal`。字段导出后先 grep 全仓 `\b<小写字段>:` 再收工。
 - **生成链上的硬编码路径要一起改，且分「生成区 / 手写区」**：`internal/deploy/nginx_delivery_gen.go` 的 :154 文案与 :231 路径（AST 判据按变量名 `fileTypeTable` 找表 ⇒ **变量名不许改**），生成物 `frontend/nginx-host.conf` 的生成区一行由 `cd backend && go run ./cmd/gen-deploy -only nginx` 覆写、**手写表头 :15 那行生成器不管**。两把锁 `TestNginxDeliveryMapInSync` / `TestNginxDeliveryMapCoversFileTypeTable` 会在 CI 点名。
 - **`gofmt -w` 会改写文件**：脚本跑完执行 `gofmt -w` 之后再用编辑工具改同一文件，会报 `file changed since it was read` ⇒ 重新 read 再改。
+- **搬走的私有助手要回头看它在新家还有没有调用点**：`base64Encode` 的唯一消费者在包外（`internal/service/slide_renderer.go:245`），那条调用点改成 `base64.StdEncoding` 之后它在包内零引用 —— 而「未使用函数」**不由 `go build` / `go vet` / `go test` 报**（本机三样全绿），只有 CI `backend-lint`（`unused`）报 `internal/filestore/file_store.go:309:6: func base64Encode is unused (unused)`。本波第一个 PR 就是被这条拦下的：**本地验证全绿 ≠ CI 绿**，搬包后除「跨文件私有引用」（上一条）之外，还要反向数一遍「私有件在新包内的引用数」。数的时候**先剥注释** —— 文档注释里常把函数名再写一遍，会让零引用看起来非零。

@@ -304,12 +304,8 @@ func FileExtension(filename string) string {
 	return strings.ToLower(filename[idx+1:])
 }
 
-// base64Encode / base64Decode 只服务本包的 sidecarWebP 往返，不外借：
+// base64Decode 只服务本包的 sidecar 图片往返，不外借：
 // 纯粹的编解码转发，外部的调用点直接用 encoding/base64 即可（#1445 波 0c 的裁决）。
-func base64Encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
 func base64Decode(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
