@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
@@ -94,7 +95,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 		return nil, errors.New("该资料已有待审核的修改，请等待审核结果")
 	}
 
-	now := BeijingNow()
+	now := clock.Now()
 	req := model.ProfileChangeRequest{
 		UserID:    userID,
 		FieldType: fieldType,
@@ -218,7 +219,7 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 		return nil, errors.New("该请求已审核，不能重复操作")
 	}
 
-	now := BeijingNow()
+	now := clock.Now()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if status == model.ProfileStatusApproved {
 			updates := map[string]any{}

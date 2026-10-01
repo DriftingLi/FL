@@ -23,6 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/cache"
+	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 )
@@ -624,7 +625,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		Password:  hashed,
 		Company:   strings.TrimSpace(company),
 		Status:    1,
-		CreatedAt: BeijingNow(),
+		CreatedAt: clock.Now(),
 	}
 	ch.ApplyTarget(&user, target)
 	if err := s.db.WithContext(ctx).Create(&user).Error; err != nil {

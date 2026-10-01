@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -203,7 +204,7 @@ func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdmin
 	if in.SortOrder != nil {
 		sortOrder = *in.SortOrder
 	}
-	now := BeijingNow()
+	now := clock.Now()
 	item := model.FeaturedContent{
 		Title:      in.Title,
 		Summary:    in.Summary,
@@ -284,11 +285,11 @@ func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*Featur
 		}
 	}
 	if oldStatus == 0 && newStatus == 1 {
-		now := BeijingNow()
+		now := clock.Now()
 		item.PublishedAt = &now
 	}
 	item.Status = newStatus
-	item.UpdatedAt = BeijingNow()
+	item.UpdatedAt = clock.Now()
 
 	if err := s.db.Save(&item).Error; err != nil {
 		return nil, err
@@ -346,7 +347,7 @@ func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error
 		dto := featuredContentAdminDetailDTO(&item)
 		return &dto, nil
 	}
-	now := BeijingNow()
+	now := clock.Now()
 	if err := s.db.Model(&item).Updates(map[string]any{
 		"status":       int16(1),
 		"published_at": now,

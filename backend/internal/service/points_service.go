@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
+	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/pkg/paging"
@@ -350,7 +351,7 @@ type PointsEntry struct {
 func ApplyTx(tx *gorm.DB, e PointsEntry) (bool, error) {
 	if e.IdemKey != "" {
 		if err := tx.Create(&model.PointsEntryIdem{IdemKey: e.IdemKey}).Error; err != nil {
-			if IsDuplicateError(err) {
+			if dberr.IsDuplicateError(err) {
 				return false, ErrPointsProcessed
 			}
 			return false, err
@@ -588,7 +589,7 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 			claim.ClaimDate = &today
 		}
 		if err := tx.Create(&claim).Error; err != nil {
-			if IsDuplicateError(err) {
+			if dberr.IsDuplicateError(err) {
 				if cfg.Group == "newbie" {
 					return ErrAlreadyClaimed
 				}
@@ -737,7 +738,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		ent := model.UserEntitlement{UserID: userID, SKU: o.sku, RefID: o.refID}
 		if err := tx.Create(&ent).Error; err != nil {
-			if IsDuplicateError(err) {
+			if dberr.IsDuplicateError(err) {
 				return ErrAlreadyRedeemed
 			}
 			return err

@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 )
 
@@ -195,7 +196,7 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 	// 清理废弃未交卷记录（与随机模拟考同口径）。
 	if err := s.db.
 		Where("student_id = ? AND status <> ? AND created_at < ?",
-			studentID, mockExamStatusSubmitted, BeijingNow().Add(-mockExamAbandonTTL)).
+			studentID, mockExamStatusSubmitted, clock.Now().Add(-mockExamAbandonTTL)).
 		Delete(&model.MockExam{}).Error; err != nil {
 		s.logger.Warn("清理废弃模拟考试记录失败", zap.Int("student_id", studentID), zap.Error(err))
 	}
@@ -211,7 +212,7 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 
 	idsJSON, _ := jsonMarshal(questionIDs)
 	emptyJSON, _ := jsonMarshal(map[string]any{})
-	startTime := BeijingNow()
+	startTime := clock.Now()
 	paperIDCopy := paperID
 	mock := model.MockExam{
 		StudentID: studentID,

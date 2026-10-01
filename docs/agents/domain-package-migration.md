@@ -26,12 +26,12 @@
 
 1. **定域边界**：在 `backend/internal/apitypes/domains.go` 找到该域的 `Roots`（带 Go 包前缀的 swagger 键，如 `service.FaqResult`）。
 2. **共享件先出包**（否则会造出没有消费者的导出 API；notification 批把五种情形都走了一遍）：
-   - 域实现用到的**同包非导出助手**，先在该包里导出、调用点机械改名、原包不退场（faq 批：`BeijingNow`（`internal/service/auth_service.go:966`）、`IsDuplicateError`（`internal/service/forum_counter.go:67`），119 处 / 37 文件）；
+   - 域实现用到的**同包非导出助手**，先在该包里导出、调用点机械改名、原包不退场（faq 批：`BeijingNow`（`internal/service/auth_service.go:966`）、`IsDuplicateError`（`internal/service/forum_counter.go:67`），119 处 / 37 文件）。**P2 波 0a 已把这两者分别收编进叶子包 `internal/clock`（`clock.Now` / `clock.DayStart` / `clock.DayKey`）与 `internal/dberr`（`dberr.IsDuplicateError`），原一行委托与包装函数全部删除** —— 「原包不退场」只是过渡态，找到稳定落点后要收编干净，别让委托长期挂着；
    - **解析类**助手升级到 `pkg/httpx`（先例：`httpx.QueryIntPtr`，票 #1452；notification 批新增 `httpx.QueryIntDefault` —— 域包 import 不到 `internal/api` 的私有 `atoiDefault`，各域再抄一份就是第二处实现）；
    - **无状态纯函数**进叶子包：`internal/timefmt`（`FormatISO` / `FormatTimePtr`，原 `internal/service/helpers.go` 的私有函数）—— 域包与 `internal/service` 都取它，比塞回服务层轻（P3 收 `internal/core` 时再议去留）；
    - **别域的事实常量**改成**调用方传参**：站内信事件构造器收 `reason string`（`NewContributionApprovedEvent(userID int, title string, contributionID int64, points int, reason string)` 等 7 个）—— 积分流水原因是积分域的事实，通知域只把它记进 payload，于是不必 import 别域或服务层的常量；
    - **跨域共享词汇**贴着实体放 `internal/model`（第 1 节）。
-3. **搬服务**：`git mv backend/internal/service/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（`service.BeijingNow`）。DTO、哨兵、校验函数名原样不动。
+3. **搬服务**：`git mv backend/internal/service/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（先例 `service.BeijingNow`，P2 波 0a 收编后写 `clock.Now()`）。DTO、哨兵、校验函数名原样不动。
 4. **搬 HTTP 出口**：`git mv backend/internal/api/<域>.go backend/internal/<域>/handler.go`；改 `package`；`XxxHandler`→`handler`、`NewXxxHandler`→`newHandler`、`RegisterXxxRoutes(rg, rd RouterDeps, svc)`→`RegisterRoutes(rg *gin.RouterGroup, <只收它真正需要的依赖>, svc *Service)`。faq 只用了 `rd.Session`，于是签名就是 `RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service)`，由 `routes_registry.go` 的闭包注入 `rd.Session`。
    - **不要把 `RouterDeps` 搬进域包**：它住在 `internal/api/deps.go`。
    - swagger 注解的 `data=service.X` 改成 `data=<域>.X`。
@@ -99,7 +99,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 
 1. **注入**：`RegisterRoutes` 的参数（faq：`session *security.Session`），由装配根闭包注入。
 2. **升级到 `pkg/httpx`**：HTTP 形状与请求解析（`ParseError` / `BadRequest` / `PathInt` / `PathInt64` / `QueryIntPtr` / `Endpoint` / 错误状态表）。`pkg/httpx` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①）。
-3. **留在 `internal/service` 并导出**：域实现共用的 DB / 业务助手（`BeijingNow` / `IsDuplicateError`），P3 随 `internal/core` 一并收编（无状态的时间格式化已另立叶子包 `internal/timefmt`，见第 2 节）。
+3. **留在 `internal/service` 并导出**：一时找不到更轻落点的 DB / 业务助手 —— 但要先试完前两条与「叶子包」。**三类曾经留在这里的共享件已在 P1 / P2 波 0a 各自归位**：时钟（`clock.Now` / `clock.DayStart` / `clock.DayKey` → `internal/clock`）、唯一冲突谓词（`dberr.IsDuplicateError` → `internal/dberr`）、时间格式化（`timefmt.FormatISO` / `timefmt.FormatTimePtr` → `internal/timefmt`，见第 2 节）。三者的共性是**无状态、不碰 DB、只吃参数**，所以本出口只该剩「真的要 `*gorm.DB` 或服务内部状态」的件，P3 随 `internal/core` 收编。
 
 ### 7.1 反向依赖（下游要业务层类型）：消费方接口反转
 
@@ -150,3 +150,9 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **替换词表里剔除过于通用的名字**：`Service` / `NewService` / `Handler` 这类词靠词边界拦不住组合形态，必须用显式模式逐条写（`-creplace 'NewNotificationService\(', 'notification.NewService('`、`-creplace '\*NotificationService\b', '*notification.Service'`）。
 - **闸门先试跑**：脚本先只对 2-3 个文件跑一遍看 diff；跑完立刻反查「**不该变的文件为什么出现在变更列表里**」（`uid.go` / `nickname.go` 这种域外文件一出现就停手回滚）。
 - **自检判据要写对**：`(?m)^package service\r?$` 计数 == 1、不得出现 `"forklift-training/internal/notification.``（字符串里带点的路径）、不得出现双重包前缀；**别在 CRLF 文件上用 `$` 收尾判行**（`$` 匹配不到 `\r` 前的位置，会给出假阳性）；改完 `gofmt -l` 必须为空。
+
+第二批（P2 波 0a：`BeijingNow`→`clock.Now`、`IsDuplicateError`→`dberr.IsDuplicateError`、`startOfShanghaiDay`→`clock.DayStart`、`shanghaiDayStr`→`clock.DayKey`）又添三条：
+
+- **先删定义，再改名**：改名规则只要会命中定义行（`func IsDuplicateError(`、`func (s *X) startOfShanghaiDay(`），就必须先把定义整块删掉或搬走再跑脚本 —— 否则产出 `func dberr.IsDuplicateError(` 这种语法垃圾。**方法形态尤其危险**：裸模式会匹配 `s.startOfShanghaiDay(`（`s.` 不是词边界），要么用后置断言 `(?<![\w.])`，要么先显式替换限定形态。
+- **别「内存改一遍 + 磁盘另跑一遍」**：把文件读进内存做区间删除、又用另一遍全仓扫描直接写盘，最后 `save()` 内存版会**把磁盘上的改名结果覆盖回去**（波 0a 实测 `contribution_service.go` 的 6 处改名被覆盖，方法名成了 `func (s *ContributionService) clock.DayStart(...)`，靠 `go build` 才发现）。每步改完立刻 `git status` + `go build`。
+- **正则不剥注释、也不防同名局部变量**：`clock := &stepClock{}` 这种局部变量会让「该文件用了 `clock` 包」的判据误判，给不需要的文件加 import（`go vet` 报 imported and not used 才抓到）；注释里的引用会被一起改名 —— 改完注释是对的，但 import 是多余的，加 import 的判据要么剥注释、要么以编译器为准。

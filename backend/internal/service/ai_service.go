@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 )
 
@@ -127,7 +128,7 @@ func (s *AIService) saveLog(userID int, userType, generationType string, inputPa
 		InputParams:    paramsBytes,
 		OutputResult:   out,
 		Status:         status,
-		CreatedAt:      BeijingNow(),
+		CreatedAt:      clock.Now(),
 	}
 	if err := s.db.Create(&log).Error; err != nil {
 		s.logger.Error("saveLog failed", zap.Error(err))

@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/timefmt"
@@ -170,7 +171,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email
 		Email:     email,
 		Company:   company,
 		Status:    1,
-		CreatedAt: BeijingNow(),
+		CreatedAt: clock.Now(),
 	}
 	if err := s.db.Create(&user).Error; err != nil {
 		return nil, err
@@ -401,7 +402,7 @@ func (s *AdminService) queryStatistics() *AdminStatisticsDTO {
 	s.db.Model(&model.Course{}).Count(&totalCourses)
 	s.db.Model(&model.StudyRecord{}).Select("COALESCE(SUM(study_duration), 0)").Scan(&totalStudyDuration)
 
-	todayStart := BeijingNow()
+	todayStart := clock.Now()
 	startOfDay := todayStart
 	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Hour()) * time.Hour)
 	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Minute()) * time.Minute)

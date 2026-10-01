@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -156,7 +157,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 	// 失败不阻断主流程：清理只是数据卫生，用户此刻要的是「开始考试」。
 	if err := s.db.
 		Where("student_id = ? AND status <> ? AND created_at < ?",
-			studentID, mockExamStatusSubmitted, BeijingNow().Add(-mockExamAbandonTTL)).
+			studentID, mockExamStatusSubmitted, clock.Now().Add(-mockExamAbandonTTL)).
 		Delete(&model.MockExam{}).Error; err != nil {
 		s.logger.Warn("清理废弃模拟考试记录失败",
 			zap.Int("student_id", studentID), zap.Error(err))
@@ -171,7 +172,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 
 	idsJSON, _ := jsonMarshal(questionIDs)
 	emptyJSON, _ := jsonMarshal(map[string]any{})
-	startTime := BeijingNow()
+	startTime := clock.Now()
 	mock := model.MockExam{
 		StudentID: studentID,
 		// 抽题与落库共用同一个值（#1003）：不两处各算。
@@ -331,7 +332,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	}
 
 	mock.Status = mockExamStatusSubmitted
-	submitTime := BeijingNow()
+	submitTime := clock.Now()
 	mock.SubmitTime = &submitTime
 	mock.Score = floatPtr(totalScore)
 	accuracy := 0.0

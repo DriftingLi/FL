@@ -78,7 +78,7 @@ func TestNoteListScopeAndOrder(t *testing.T) {
 	if _, err := svc.Create(1, "独立笔记较早"); err != nil {
 		t.Fatal(err)
 	}
-	// 拉开时间：Create 取 BeijingNow()，这里直接改库里的 updated_at 以稳定断言
+	// 拉开时间：Create 取 clock.Now()，这里直接改库里的 updated_at 以稳定断言
 	if err := db.Model(&model.Note{}).Where("user_id = ? AND question_id IS NULL", 1).
 		UpdateColumn("updated_at", time.Now().Add(-2*time.Hour)).Error; err != nil {
 		t.Fatal(err)

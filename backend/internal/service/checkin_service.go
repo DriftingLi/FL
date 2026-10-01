@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -118,18 +119,6 @@ func CheckInTierBonusFor(streak int) int {
 	return checkInTierBonus[streak]
 }
 
-// startOfShanghaiDay 返回 t 在业务时区（Asia/Shanghai）的自然日起点 00:00。
-// 实现委托 clock.DayStart（ADR-0027 自然日边界单点收编）。
-func startOfShanghaiDay(t time.Time) time.Time {
-	return clock.DayStart(t)
-}
-
-// shanghaiDayStr 归一化为业务时区日期字符串，避免 UTC 偏移导致跨日错位。
-// 实现委托 clock.DayKey（ADR-0027）。
-func shanghaiDayStr(t time.Time) string {
-	return clock.DayKey(t)
-}
-
 // ComputeStreakMetrics 纯函数：由已签日期集合计算连击指标。
 // dates 无序、可含重复，内部按业务时区日期归一化去重；now 为“当前时刻”。
 // todayChecked 判定今日；streak 从今日（已签）或昨日（未签）起点连续回溯，
@@ -142,20 +131,20 @@ func ComputeStreakMetrics(dates []time.Time, now time.Time) (streak, total int, 
 	}
 	set := make(map[string]bool, total)
 	for _, d := range dates {
-		set[shanghaiDayStr(d)] = true
+		set[clock.DayKey(d)] = true
 	}
-	today := startOfShanghaiDay(now)
-	todayChecked = set[shanghaiDayStr(today)]
+	today := clock.DayStart(now)
+	todayChecked = set[clock.DayKey(today)]
 	var cur time.Time
 	if todayChecked {
 		cur = today
 	} else {
 		cur = today.AddDate(0, 0, -1)
-		if !set[shanghaiDayStr(cur)] {
+		if !set[clock.DayKey(cur)] {
 			return 0, total, false
 		}
 	}
-	for set[shanghaiDayStr(cur)] {
+	for set[clock.DayKey(cur)] {
 		streak++
 		cur = cur.AddDate(0, 0, -1)
 	}
@@ -164,7 +153,7 @@ func ComputeStreakMetrics(dates []time.Time, now time.Time) (streak, total int, 
 
 // windowCutoff streak 截断窗口起点（今日 −checkInWindowDays 天），各统计路径共用。
 func (s *CheckInService) windowCutoff(now time.Time) time.Time {
-	return startOfShanghaiDay(now).AddDate(0, 0, -checkInWindowDays)
+	return clock.DayStart(now).AddDate(0, 0, -checkInWindowDays)
 }
 
 // checkInDates 取用户 ≤ today 且 ≥ cutoff 的签到日期（连击判定共用取数路径：排行榜窗口口径
@@ -173,7 +162,7 @@ func (s *CheckInService) windowCutoff(now time.Time) time.Time {
 func checkInDates(db *gorm.DB, userID int, now time.Time, order string) ([]time.Time, error) {
 	var dates []time.Time
 	err := db.Model(&model.ForumCheckIn{}).
-		Where("user_id = ? AND check_date >= ? AND check_date <= ?", userID, startOfShanghaiDay(now).AddDate(0, 0, -checkInWindowDays), startOfShanghaiDay(now)).
+		Where("user_id = ? AND check_date >= ? AND check_date <= ?", userID, clock.DayStart(now).AddDate(0, 0, -checkInWindowDays), clock.DayStart(now)).
 		Order(order).Pluck("check_date", &dates).Error
 	return dates, err
 }
@@ -204,7 +193,7 @@ func (s *CheckInService) checkInStats(userID int, now time.Time) (streak, total 
 // （合并单笔直记，幂等键 checkin:{uid}:{date}——同日重复/并发只发一次，ADR-0028）。
 func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 	now := s.clk.Now()
-	today := startOfShanghaiDay(now)
+	today := clock.DayStart(now)
 	awarded := 0
 	first := false
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -215,7 +204,7 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 		if exists == 0 {
 			if err := tx.Create(&model.ForumCheckIn{UserID: userID, CheckDate: today, CreatedAt: now}).Error; err != nil {
 				// 唯一冲突视为已签（并发幂等，共享 IsDuplicateError 谓词）
-				if !IsDuplicateError(err) {
+				if !dberr.IsDuplicateError(err) {
 					return err
 				}
 			} else {
@@ -234,7 +223,7 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 			delta := checkInBasePoints + bonus
 			if err := s.points.SettleRewardTx(tx, PointsEntry{
 				UserID: userID, Delta: delta, Reason: checkInReason,
-				RefType: checkInRefType, RefID: shanghaiDayStr(today),
+				RefType: checkInRefType, RefID: clock.DayKey(today),
 				IdemKey: CheckInIdemKey(userID, today),
 			}); err != nil {
 				return err
@@ -275,7 +264,7 @@ func (s *CheckInService) GetCheckInCalendar(userID, year, month int) (*CheckInCa
 	if len(dates) > 0 {
 		refIDs := make([]string, 0, len(dates))
 		for _, d := range dates {
-			refIDs = append(refIDs, shanghaiDayStr(d))
+			refIDs = append(refIDs, clock.DayKey(d))
 		}
 		if err := s.db.Model(&model.PointsLedger{}).
 			Where("user_id = ? AND ref_type = ? AND ref_id IN ?", userID, checkInRefType, refIDs).
@@ -289,13 +278,13 @@ func (s *CheckInService) GetCheckInCalendar(userID, year, month int) (*CheckInCa
 	}
 	checkedByDate := make(map[string]bool, len(dates))
 	for _, d := range dates {
-		checkedByDate[shanghaiDayStr(d)] = true
+		checkedByDate[clock.DayKey(d)] = true
 	}
 	// 契约：逐日返回整月每一天 {date, checked, points}（未打卡日 checked=false、points=0），
 	// 供日历渲染全月格；跨时区一致性由 Asia/Shanghai 承载。
 	days := make([]CheckInDay, 0, last.Day())
 	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
-		key := shanghaiDayStr(d)
+		key := clock.DayKey(d)
 		days = append(days, CheckInDay{Date: key, Checked: checkedByDate[key], Points: pointsByDate[key]})
 	}
 	streak, total, todayChecked := s.checkInStats(userID, s.clk.Now())

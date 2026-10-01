@@ -41,7 +41,7 @@ func TestPointsIdemKeyFormats(t *testing.T) {
 
 func TestCheckInIdemKeyUsesShanghaiDay(t *testing.T) {
 	// UTC 2026-09-05 17:00 = 上海 2026-09-06 01:00：键内日期必须按业务时区归一，
-	// 与打卡流水 ref_id（shanghaiDayStr）同口径。
+	// 与打卡流水 ref_id（clock.DayKey）同口径。
 	utcEvening := time.Date(2026, 9, 5, 17, 0, 0, 0, time.UTC)
 	if got, want := CheckInIdemKey(3, utcEvening), "checkin:3:2026-09-06"; got != want {
 		t.Fatalf("CheckInIdemKey crossing UTC day = %q, want %q", got, want)

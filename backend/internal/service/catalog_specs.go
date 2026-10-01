@@ -5,6 +5,7 @@ package service
 import (
 	"errors"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 )
 
@@ -42,7 +43,7 @@ func specialtyCatalogSpec() CatalogEntitySpec[model.Specialty, SpecialtyInput, S
 				Description: inputString(in.Description),
 				SortOrder:   sortOrder,
 				Status:      inputInt16(in.Status, 1),
-				CreatedAt:   BeijingNow(),
+				CreatedAt:   clock.Now(),
 			}
 		},
 		ApplyUpdate: func(m *model.Specialty, in *SpecialtyInput) {
@@ -85,7 +86,7 @@ func levelCatalogSpec() CatalogEntitySpec[model.CourseLevel, LevelInput, LevelDi
 				Description: inputString(in.Description),
 				SortOrder:   sortOrder,
 				Status:      inputInt16(in.Status, 1),
-				CreatedAt:   BeijingNow(),
+				CreatedAt:   clock.Now(),
 			}
 		},
 		ApplyUpdate: func(m *model.CourseLevel, in *LevelInput) {
@@ -127,7 +128,7 @@ func certificateCatalogSpec() CatalogEntitySpec[model.CertificateTemplate, Certi
 		},
 		EmptyModel: func() any { return &model.CertificateTemplate{} },
 		NewModel: func(in *CertificateTemplateInput, _ int) model.CertificateTemplate {
-			now := BeijingNow()
+			now := clock.Now()
 			return model.CertificateTemplate{
 				Code:         in.Code,
 				Name:         in.Name,
@@ -152,7 +153,7 @@ func certificateCatalogSpec() CatalogEntitySpec[model.CertificateTemplate, Certi
 			if in.Status != nil {
 				m.Status = *in.Status
 			}
-			m.UpdatedAt = BeijingNow()
+			m.UpdatedAt = clock.Now()
 		},
 		SetCode: func(m *model.CertificateTemplate, code string) { m.Code = code },
 		SetName: func(m *model.CertificateTemplate, name string) { m.Name = name },
@@ -177,7 +178,7 @@ func questionTagCatalogSpec() CatalogEntitySpec[model.QuestionTag, QuestionTagIn
 		Status:     func(in *QuestionTagInput) *int16 { return in.Status },
 		EmptyModel: func() any { return &model.QuestionTag{} },
 		NewModel: func(in *QuestionTagInput, sortOrder int) model.QuestionTag {
-			now := BeijingNow()
+			now := clock.Now()
 			return model.QuestionTag{
 				Code:        in.Code,
 				Name:        in.Name,
@@ -198,7 +199,7 @@ func questionTagCatalogSpec() CatalogEntitySpec[model.QuestionTag, QuestionTagIn
 			if in.Status != nil {
 				m.Status = *in.Status
 			}
-			m.UpdatedAt = BeijingNow()
+			m.UpdatedAt = clock.Now()
 		},
 		SetCode: func(m *model.QuestionTag, code string) { m.Code = code },
 		SetName: func(m *model.QuestionTag, name string) { m.Name = name },
@@ -240,7 +241,7 @@ func credentialCatalogSpec() CatalogEntitySpec[model.Credential, CredentialInput
 		},
 		EmptyModel: func() any { return &model.Credential{} },
 		NewModel: func(in *CredentialInput, sortOrder int) model.Credential {
-			now := BeijingNow()
+			now := clock.Now()
 			m := model.Credential{
 				Code:        in.Code,
 				Name:        in.Name,
@@ -284,7 +285,7 @@ func credentialCatalogSpec() CatalogEntitySpec[model.Credential, CredentialInput
 			if in.Status != nil {
 				m.Status = *in.Status
 			}
-			m.UpdatedAt = BeijingNow()
+			m.UpdatedAt = clock.Now()
 		},
 		SetCode: func(m *model.Credential, code string) { m.Code = code },
 		SetName: func(m *model.Credential, name string) { m.Name = name },

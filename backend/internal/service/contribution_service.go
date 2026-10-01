@@ -25,6 +25,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/storage"
@@ -372,17 +373,11 @@ func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 
 // ===== 资格与配额 =====
 
-// startOfShanghaiDay 返回业务时区（Asia/Shanghai）自然日起点 00:00。
-// 实现委托 clock.DayStart（ADR-0027 自然日边界单点收编）。
-func (s *ContributionService) startOfShanghaiDay(t time.Time) time.Time {
-	return clock.DayStart(t)
-}
-
 // countDaily 当日提交数（Asia/Shanghai 自然日起点之后的行数；time.Time 边界双方言可用）。
 func (s *ContributionService) countDaily(userID int) (int64, error) {
 	var cnt int64
 	err := s.db.Model(&model.UserContribution{}).
-		Where("user_id = ? AND created_at >= ?", userID, s.startOfShanghaiDay(s.clk.Now())).Count(&cnt).Error
+		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
 	return cnt, err
 }
 
@@ -555,7 +550,7 @@ func (s *ContributionService) Create(in CreateContributionInput) (*ContributionI
 func (s *ContributionService) countDailyTx(tx *gorm.DB, userID int) (int64, error) {
 	var cnt int64
 	err := tx.Model(&model.UserContribution{}).
-		Where("user_id = ? AND created_at >= ?", userID, s.startOfShanghaiDay(s.clk.Now())).Count(&cnt).Error
+		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
 	return cnt, err
 }
 
@@ -842,7 +837,7 @@ func (s *ContributionService) Download(userID int, contributionID int64) (*Downl
 		// 1. 落事实源（唯一约束幂等：同人重复点只算 1 次）
 		dl := model.ContributionDownload{UserID: userID, ContributionID: contributionID, CreatedAt: now}
 		if err := tx.Create(&dl).Error; err != nil {
-			if IsDuplicateError(err) {
+			if dberr.IsDuplicateError(err) {
 				// 已下载过：幂等返回（不新增计数）
 				return nil
 			}
@@ -924,7 +919,7 @@ func (s *ContributionService) Report(reporterID int, contributionID int64, reaso
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.db.Create(&rep).Error; err != nil {
-		if !IsDuplicateError(err) {
+		if !dberr.IsDuplicateError(err) {
 			return err
 		}
 		// 重复举报：合并（更新理由与状态回待处理），不新增行

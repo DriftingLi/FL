@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -210,7 +211,7 @@ func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScop
 	}
 	if existing.FavoriteID == 0 {
 		existing = model.Favorite{
-			UserID: userID, TargetType: targetType, TargetID: targetID, CreatedAt: BeijingNow(),
+			UserID: userID, TargetType: targetType, TargetID: targetID, CreatedAt: clock.Now(),
 		}
 		if err := s.db.Create(&existing).Error; err != nil {
 			return nil, err
