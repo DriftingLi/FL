@@ -1,11 +1,11 @@
-// Package httpx 是 HTTP 面的**跨包共享出口**。当前承载请求解析单点与解析错误值
-// （ParseError / BadRequest / PathInt / PathInt64）；端点骨架（Endpoint 与 ErrStatus 域表）
-// 仍在 internal/api，等它的消费面（域包自带 handler）落定后再一并迁入。
+// Package httpx 是 HTTP 面的**跨包共享出口**：请求解析单点（ParseError / BadRequest /
+// PathInt / PathInt64 / QueryIntPtr）与端点骨架（Endpoint 与 ErrStatus 域表，endpoint.go）
+// 都住在这里；域包（internal/<域>/）自带的 handler 一律从这里取解析出口，不再各写一份。
 //
-// 为什么先有这一步：路径整型 id 的解析此前只有 internal/api 一处的出口（pathInt/pathInt64），
+// 为什么要有这个包：路径整型 id 的解析此前只有 internal/api 一处的出口（pathInt/pathInt64），
 // 而 internal/valuation/handler 另有 6 处裸 `strconv.ParseInt(c.Param("id"), …)` 收不进来 ——
 // 缺的正是「一枚跨包共享的解析出口」（ADR-0065 决策 1 末段登记的债务）。
-// 本包就是那枚出口：HTTP 面上解析请求一律从这里取，不再各写一份。
+// 域包自带 handler 后这条要求更硬：解析出口若留在 internal/api，域包就只能反过来依赖装配根。
 package httpx
 
 import (
@@ -55,4 +55,23 @@ func PathInt64(c *gin.Context, key, failMsg string) (int64, error) {
 		return 0, BadRequest(failMsg)
 	}
 	return v, nil
+}
+
+// QueryIntPtr 解析可选整型查询参数（任意整数，含 0/负），非法或缺失时返回 nil。
+// 用于非 ID 型参数（如 min_wrong_count）；ID 型参数另走带 `id > 0` 守卫的那枚
+// （internal/api 的 queryIDPtr）。与 PathInt 一样，这里是**请求解析**：只看输入合法性，
+// 不判断资源是否存在（nil 表示「不筛这一维」，不是「参数错了」）。
+//
+// 为什么从 internal/api 搬进来：域包自带 handler 后，解析出口若留在装配根，域包就要
+// 反向依赖 internal/api（域包迁移手册：解析类助手一律升级到本包，见 ADR-0070）。
+func QueryIntPtr(c *gin.Context, key string) *int {
+	s := c.Query(key)
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return nil
+	}
+	return &v
 }

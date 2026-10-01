@@ -37,12 +37,23 @@ var allowedPathParseFuncs = map[string]bool{"PathInt": true, "PathInt64": true}
 // 本包留下的判据只剩「内部不许再长出第二份」（custom 解析点与本地 helper 各一条，见测试本体）。
 const pathParseHome = "../../pkg/httpx"
 
-// intParseFuncs 是整数转换的本名；queryParseHelpers 是**查询参数**侧的单点守卫——
+// intParseFuncs 是整数转换的本名；queryHelpers 是**查询参数**侧的解析助手 ——
 // 它们被用在路径参数上就是第二份实现（`real_exam.go` 曾经那样）。
+//
+// 键写**限定名或裸名**：查询侧出口 QueryIntPtr 已随解析出口搬进 pkg/httpx（ADR-0070），
+// 匹配时换算成限定名再比对（httpx.QueryIntPtr）。搬一次家、改一次名都必须回来改这里 ——
+// 否则名单会安静地少认一种坏形状（P0 的老教训：守卫失配不报错）。
 var (
 	intParseFuncs = map[string]bool{"Atoi": true, "ParseInt": true, "ParseUint": true}
-	queryHelpers  = map[string]bool{"requiredPositiveID": true, "queryIDPtr": true, "atoiDefault": true, "queryIntPtr": true}
+	queryHelpers  = map[string]bool{
+		"requiredPositiveID": true, "queryIDPtr": true, "atoiDefault": true, // 仍住 internal/api
+		"httpx.QueryIntPtr": true, // 唯一宿主：pkg/httpx
+	}
 )
+
+// queryParseHelperNames 是查询侧解析出口的允许名（唯一宿主 pkg/httpx）。
+// 与 allowedPathParseFuncs 对称：宿主少一枚、本包多一枚，两侧都要报 —— 否则「搬完就没人管了」。
+var queryParseHelperNames = map[string]bool{"QueryIntPtr": true}
 
 // pathParseSite 一次「从路径参数取整数却没走 PathInt/PathInt64」。
 type pathParseSite struct {
@@ -127,7 +138,11 @@ func findPathParseSites(fset *token.FileSet, file *ast.File) []pathParseSite {
 			}
 			pkg, name := callName(ce)
 			isStrconv := pkg == strconvName && intParseFuncs[name]
-			isQueryHelper := pkg == "" && queryHelpers[name]
+			qualified := name
+			if pkg != "" {
+				qualified = pkg + "." + name
+			}
+			isQueryHelper := queryHelpers[qualified]
 			if !isStrconv && !isQueryHelper {
 				return true
 			}
@@ -210,6 +225,42 @@ func countPathHelpers(t *testing.T, dir string) (named, prefixed, files int) {
 	return named, prefixed, files
 }
 
+// countQueryHelpers 数一个目录里的查询侧解析 helper 定义（同名一枚、改名重长一枚）。
+// named 按 queryParseHelperNames 数，prefixed 按 queryintptr 前缀（大小写不敏感）数 ——
+// 后者防「把 QueryIntPtr 改回 queryIntPtr 再长一份」这种绕过。
+func countQueryHelpers(t *testing.T, dir string) (named, prefixed, files int) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("读不到 %s：%v", dir, err)
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		parsed, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("解析 %s 失败：%v", name, err)
+		}
+		files++
+		for _, d := range parsed.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if queryParseHelperNames[fd.Name.Name] {
+				named++
+			}
+			if strings.HasPrefix(strings.ToLower(fd.Name.Name), "queryintptr") {
+				prefixed++
+			}
+		}
+	}
+	return named, prefixed, files
+}
+
 // valuationPathParseDebt 是**尚未**收进 helper 的跨包债务实测数（internal/valuation/handler，
 // 6 处 `strconv.ParseInt(c.Param("id"))`，同样只看 err ⇒ 0/负数继续往下走 repo）。
 // 共享出口（pkg/httpx 的 PathInt64）现在有了，但这 6 处**不能顺手改**：收进来会把它们的错误面
@@ -232,6 +283,10 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 		t.Fatalf("internal/api 里又长出 %d 枚 pathInt* 本地实现（其中 %d 枚与 %s 同名）⇒ 解析点必须有唯一宿主："+
 			"两个包各一份就是第二处实现，改一处忘另一处就回来了", prefixed, named, pathParseHome)
 	}
+	if named, prefixed, _ := countQueryHelpers(t, "."); named != 0 || prefixed != 0 {
+		t.Fatalf("internal/api 里又长出 %d 枚查询侧解析 helper（其中 %d 枚与 httpx 的 QueryIntPtr 同名）⇒ "+
+			"解析出口必须有唯一宿主：域包自带 handler 后，本地再来一份就是第二处实现", prefixed, named)
+	}
 	if len(sites) > 0 {
 		t.Errorf("internal/api 里发现 %d 处自定义的路径整数解析点（ADR-0065 批⑤ 已清零，只能保持 0）：\n  %s\n"+
 			"⇒ 同一件「路径 id 不是正整数」的事实有了第二份实现：它少挡一档、换一套文案，"+
@@ -247,6 +302,14 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 		t.Fatalf("%s 里的路径解析 helper 应有 %d 枚（%v），实得 %d ⇒ 有人加了第三枚或改了名",
 			pathParseHome, len(allowedPathParseFuncs), allowedPathParseFuncs, named)
 	}
+	qNamed, _, homeQueryFiles := countQueryHelpers(t, pathParseHome)
+	if homeQueryFiles == 0 {
+		t.Fatalf("宿主包 %s 一个源文件都没扫到（查询侧）⇒ 上面那条「查询出口只有一处」的断言是空的", pathParseHome)
+	}
+	if qNamed != len(queryParseHelperNames) {
+		t.Fatalf("%s 里的查询侧解析出口应有 %d 枚（%v），实得 %d ⇒ 有人加了第二枚或改了名",
+			pathParseHome, len(queryParseHelperNames), queryParseHelperNames, qNamed)
+	}
 
 	vSites, vFiles := scanDir(t, "../valuation/handler")
 	if vFiles == 0 {
@@ -260,9 +323,9 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 		t.Errorf("valuation/handler 实测只剩 %d 处（登记常量是 %d）⇒ 有人先收了这批债，"+
 			"请同步把常量改小并在 ADR-0065 决策 1 末段记一笔", len(vSites), valuationPathParseDebt)
 	}
-	t.Logf("扫描面：internal/api %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / helper %d 枚；"+
+	t.Logf("扫描面：internal/api %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / 路径 helper %d 枚 / 查询出口 %d 枚；"+
 		"valuation/handler %d 个文件 / 债务 %d 处（登记 %d）",
-		files, len(sites), pathParseHome, homeFiles, named, vFiles, len(vSites), valuationPathParseDebt)
+		files, len(sites), pathParseHome, homeFiles, named, qNamed, vFiles, len(vSites), valuationPathParseDebt)
 }
 
 // TestPathParseDetectorFiresOnPlantedSources 自证扫描器不是空转：三种坏形状各被抓到、
@@ -276,6 +339,8 @@ import (
 	st "strconv"
 
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/pkg/httpx"
 )
 
 func badInline(c *gin.Context) int {
@@ -294,6 +359,14 @@ func badQueryHelper(c *gin.Context) int {
 	return v
 }
 
+func badQualifiedHelper(c *gin.Context) int {
+	v := httpx.QueryIntPtr(c, c.Param("id"))
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
 func good(c *gin.Context) int {
 	v, _ := httpx.PathInt(c, "id", "ID无效")
 	return v
@@ -303,14 +376,15 @@ func good(c *gin.Context) int {
 	want := map[string]int{
 		"Atoi/inline":               1, // 直接套 c.Param（且 strconv 走别名导入）
 		"Atoi/var":                  1, // 经由同函数内的中间变量
-		"requiredPositiveID/inline": 1, // 路径参数喂给查询侧 helper
+		"requiredPositiveID/inline": 1, // 路径参数喂给查询侧 helper（裸名，仍住 internal/api）
+		"QueryIntPtr/inline":        1, // 查询侧 helper 的**限定名**写法：名单换算限定名后仍认得出
 	}
 	keys := map[string]int{}
 	for _, s := range got {
 		keys[s.fn+"/"+s.via]++
 	}
-	if len(got) != 3 || !sameCounts(want, keys) {
-		t.Fatalf("夹具应恰好抓到 3 处并按形状归因：\n  want %v\n  got  %v（%s）\n"+
+	if len(got) != 4 || !sameCounts(want, keys) {
+		t.Fatalf("夹具应恰好抓到 4 处并按形状归因：\n  want %v\n  got  %v（%s）\n"+
 			"⇒ 扫描器与坏形状失联，生产代码那条判据就是假绿", want, keys, joinSites(got))
 	}
 }

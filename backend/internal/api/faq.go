@@ -205,7 +205,7 @@ func (h *FaqHandler) AdminDeleteCategory(c *gin.Context) {
 func (h *FaqHandler) AdminListEntries(c *gin.Context) {
 	httpx.Endpoint[struct{}, service.AdminFaqEntriesResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqEntriesResult, error) {
-			items, err := h.svc.AdminListEntries(queryIntPtr(c, "category_id"))
+			items, err := h.svc.AdminListEntries(httpx.QueryIntPtr(c, "category_id"))
 			if err != nil {
 				return nil, err
 			}
