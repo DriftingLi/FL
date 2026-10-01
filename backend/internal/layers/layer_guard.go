@@ -7,6 +7,12 @@
 // 在 internal/api/authz_lock_test.go、api 不得持 *gorm.DB 在 internal/api/gorm_seam_guard_test.go）
 // —— 判据改回双份正是本仓反复点名要避开的老病。
 //
+// 三条规矩：① 单向依赖（pkg/httpx 是叶子、internal/api 只许 cmd/ 依赖）；
+// ② 测试与实现同居；③ gin 只许出现在 HTTP 面与登记的 HTTP 基建里。
+// 「哪些文件算 HTTP 面」这件事**不在本包定义**：判据由调用方以 isHTTP 注入（测试里传
+// testutil.HTTPSurface —— 全仓唯一出处）。本包不 import testutil，否则 layers 的包内测试
+// （它要 import testutil 拿扫描结果）会撞 Go 的 import cycle in test。
+//
 // 判据本身不依赖任何测试脚手架（只吃路径与源码），于是它既能在测试里跑，也不会把 gorm/sqlite
 // 这类测试依赖拖进生产包。
 package layers
@@ -33,18 +39,34 @@ type Edge struct {
 	To   string
 }
 
+// importPaths 解析出一份源码的全部 import 路径（含第三方）。
+func importPaths(fset *token.FileSet, f SourceFile) ([]string, error) {
+	parsed, err := parser.ParseFile(fset, f.Path, f.Src, parser.ImportsOnly)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(parsed.Imports))
+	for _, imp := range parsed.Imports {
+		p, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 // importEdges 解析出全部包级 import 边（只收 forklift-training/ 前缀的自有包）。
 func importEdges(files []SourceFile) ([]Edge, error) {
 	fset := token.NewFileSet()
 	var out []Edge
 	for _, f := range files {
-		parsed, err := parser.ParseFile(fset, f.Path, f.Src, parser.ImportsOnly)
+		paths, err := importPaths(fset, f)
 		if err != nil {
 			return nil, err
 		}
-		for _, imp := range parsed.Imports {
-			p, err := strconv.Unquote(imp.Path.Value)
-			if err != nil || !strings.HasPrefix(p, "forklift-training/") {
+		for _, p := range paths {
+			if !strings.HasPrefix(p, "forklift-training/") {
 				continue
 			}
 			out = append(out, Edge{From: f.Dir, To: strings.TrimPrefix(p, "forklift-training/")})
@@ -70,6 +92,63 @@ func directionViolations(edges []Edge) []string {
 		}
 	}
 	return out
+}
+
+// ginImportPath 是 HTTP 骨架依赖的 Web 框架包。
+const ginImportPath = "github.com/gin-gonic/gin"
+
+// ginHostAllowed 逐条登记的「不是 HTTP 面、但名正言顺 import gin」的包（目录 → 理由）。
+//
+// 表要**活的**：每个条目都必须真的扫到一个 gin 宿主，否则 TestGinHostWhitelistIsLive 报红
+// （同 internal/api/gorm_seam_guard_test.go 的 TestGormDBWhitelistIsLive）。
+// 除此之外任何地方 import gin 都是违规：域的 service.go 若开始直接读 *gin.Context，
+// 「handler → service」的单向就断了，「换/升 Web 框架」也从改一处变成全仓改。
+var ginHostAllowed = map[string]string{
+	"internal/middleware": "gin 中间件基建（鉴权 / 能力位 / 限流）：HTTP 面的一部分，但不写端点",
+	"internal/logger":     "请求日志与 panic 恢复中间件，同属 HTTP 基建",
+	"pkg/httpx":           "HTTP 骨架本体（Endpoint / 渲染 / 解析出口），gin 的第一宿主",
+	"pkg/response":        "响应信封渲染，与骨架同一层",
+}
+
+// ginImported 报告一份源码是否 import 了 gin（白名单活性自测也用它）。
+func ginImported(fset *token.FileSet, f SourceFile) (bool, error) {
+	paths, err := importPaths(fset, f)
+	if err != nil {
+		return false, err
+	}
+	for _, p := range paths {
+		if p == ginImportPath {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ginImportViolations 报告「非测试文件 import 了 gin，却不属于 HTTP 面」。
+//
+// isHTTP 由调用方注入（测试里传 testutil.HTTPSurface）：本包不重复定义「什么算 HTTP 面」——
+// 判据改回双份正是本仓反复点名要避开的老病。今天 HTTP 面 = internal/api 整目录，
+// 或域包里的 handler*.go（ADR-0070 的域包约定）。
+func ginImportViolations(files []SourceFile, isHTTP func(SourceFile) bool) ([]string, error) {
+	fset := token.NewFileSet()
+	var out []string
+	for _, f := range files {
+		if f.Test || isHTTP(f) {
+			continue
+		}
+		if _, ok := ginHostAllowed[f.Dir]; ok {
+			continue
+		}
+		imported, err := ginImported(fset, f)
+		if err != nil {
+			return nil, err
+		}
+		if imported {
+			out = append(out, f.Path+" 不是 HTTP 面却 import 了 gin：HTTP 出口只住在 internal/api "+
+				"或域包的 handler*.go 里（ADR-0070）：域实现要的是解析好的入参，不是 *gin.Context")
+		}
+	}
+	return out, nil
 }
 
 // colocationViolations 测试与实现同居：

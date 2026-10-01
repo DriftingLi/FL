@@ -23,7 +23,7 @@ func seedInProgressMockExam(t *testing.T, db *gorm.DB, studentID int, ids []int,
 	if err != nil {
 		t.Fatalf("序列化作答快照失败: %v", err)
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	mock := &model.MockExam{
 		StudentID:     studentID,
 		QuestionIDs:   model.JSONB(idsJSON),

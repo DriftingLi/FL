@@ -2309,7 +2309,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqCategoriesResult"
+                                            "$ref": "#/definitions/faq.AdminFaqCategoriesResult"
                                         }
                                     }
                                 }
@@ -2369,7 +2369,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqCategoryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqCategoryDTO"
                                         }
                                     }
                                 }
@@ -2433,7 +2433,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqCategoryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqCategoryDTO"
                                         }
                                     }
                                 }
@@ -2528,7 +2528,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqEntriesResult"
+                                            "$ref": "#/definitions/faq.AdminFaqEntriesResult"
                                         }
                                     }
                                 }
@@ -2582,7 +2582,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqEntryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqEntryDTO"
                                         }
                                     }
                                 }
@@ -2652,7 +2652,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqEntryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqEntryDTO"
                                         }
                                     }
                                 }
@@ -10221,7 +10221,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FaqResult"
+                                            "$ref": "#/definitions/faq.FaqResult"
                                         }
                                     }
                                 }
@@ -23531,6 +23531,128 @@ const docTemplate = `{
                 }
             }
         },
+        "faq.AdminFaqCategoriesResult": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.AdminFaqCategoryDTO"
+                    }
+                }
+            }
+        },
+        "faq.AdminFaqCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "entry_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "faq.AdminFaqEntriesResult": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.AdminFaqEntryDTO"
+                    }
+                }
+            }
+        },
+        "faq.AdminFaqEntryDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "category_code": {
+                    "type": "string"
+                },
+                "category_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "published": {
+                    "type": "boolean"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "faq.FaqCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.FaqEntryDTO"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "faq.FaqEntryDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "faq.FaqResult": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.FaqCategoryDTO"
+                    }
+                }
+            }
+        },
         "model.AuditLog": {
             "type": "object",
             "properties": {
@@ -24805,77 +24927,6 @@ const docTemplate = `{
                     "x-optional": true
                 },
                 "theory_hours": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.AdminFaqCategoriesResult": {
-            "type": "object",
-            "properties": {
-                "categories": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.AdminFaqCategoryDTO"
-                    }
-                }
-            }
-        },
-        "service.AdminFaqCategoryDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "entry_count": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AdminFaqEntriesResult": {
-            "type": "object",
-            "properties": {
-                "entries": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.AdminFaqEntryDTO"
-                    }
-                }
-            }
-        },
-        "service.AdminFaqEntryDTO": {
-            "type": "object",
-            "properties": {
-                "answer": {
-                    "type": "string"
-                },
-                "category_code": {
-                    "type": "string"
-                },
-                "category_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "published": {
-                    "type": "boolean"
-                },
-                "question": {
-                    "type": "string"
-                },
-                "sort_order": {
                     "type": "integer"
                 }
             }
@@ -26245,57 +26296,6 @@ const docTemplate = `{
                 "tier_awarded": {
                     "description": "本次触发的达阶奖励（0=未触发）",
                     "type": "integer"
-                }
-            }
-        },
-        "service.FaqCategoryDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "entries": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FaqEntryDTO"
-                    }
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.FaqEntryDTO": {
-            "type": "object",
-            "properties": {
-                "answer": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FaqResult": {
-            "type": "object",
-            "properties": {
-                "categories": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FaqCategoryDTO"
-                    }
                 }
             }
         },

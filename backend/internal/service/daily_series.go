@@ -16,7 +16,7 @@ func dailySeriesStart(days int) time.Time {
 	if days != 7 && days != 30 {
 		days = 7
 	}
-	end := beijingNow()
+	end := BeijingNow()
 	startOfDay := end.Add(-time.Duration(end.Hour()) * time.Hour).
 		Add(-time.Duration(end.Minute()) * time.Minute).
 		Add(-time.Duration(end.Second()) * time.Second).
@@ -34,7 +34,7 @@ type DailySeries struct {
 }
 
 // BuildDailySeries 由 day→count 映射组装最近 days 天的完整序列（含无记录的天补 0）。
-// days 仅允许 7 或 30，其他值统一回退为 7；时区取自 beijingNow()（Asia/Shanghai）。
+// days 仅允许 7 或 30，其他值统一回退为 7；时区取自 BeijingNow()（Asia/Shanghai）。
 // total 为 byDay 全部计数累加；labels 格式 "1/2"（月/日，无前导零）。
 func BuildDailySeries(days int, byDay map[string]int64) DailySeries {
 	if days != 7 && days != 30 {
@@ -52,7 +52,7 @@ func BuildDailySeries(days int, byDay map[string]int64) DailySeries {
 	labels := make([]string, 0, days)
 	data := make([]int64, 0, days)
 	activeDays := 0
-	// start 由 beijingNow() 派生，携带 Asia/Shanghai 时区，AddDate 保留时区。
+	// start 由 BeijingNow() 派生，携带 Asia/Shanghai 时区，AddDate 保留时区。
 	for i := 0; i < days; i++ {
 		d := start.AddDate(0, 0, i)
 		key := clock.DayKey(d)

@@ -61,10 +61,10 @@ func adjustForumCount(exec *gorm.DB, dst any, idCol string, id int64, col string
 	)).Error
 }
 
-// isDuplicateError 判断数据库错误是否为唯一约束冲突——幂等写入点共享谓词，
+// IsDuplicateError 判断数据库错误是否为唯一约束冲突——幂等写入点共享谓词，
 // 收敛原多处字符串匹配复制；小写归一后兼容 PG（duplicate key / uq_ 约束名）
 // 与 SQLite（UNIQUE constraint failed）双方言。
-func isDuplicateError(err error) bool {
+func IsDuplicateError(err error) bool {
 	if err == nil {
 		return false
 	}

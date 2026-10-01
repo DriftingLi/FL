@@ -214,8 +214,8 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 		}
 		if exists == 0 {
 			if err := tx.Create(&model.ForumCheckIn{UserID: userID, CheckDate: today, CreatedAt: now}).Error; err != nil {
-				// 唯一冲突视为已签（并发幂等，共享 isDuplicateError 谓词）
-				if !isDuplicateError(err) {
+				// 唯一冲突视为已签（并发幂等，共享 IsDuplicateError 谓词）
+				if !IsDuplicateError(err) {
 					return err
 				}
 			} else {

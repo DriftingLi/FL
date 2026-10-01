@@ -851,7 +851,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 	// 不报错也不阻断发帖——展示侧「为空即整段不渲染」。
 	region := geolocation.Resolve(in.ClientIP)
 
-	now := beijingNow()
+	now := BeijingNow()
 	topic := model.ForumTopic{
 		ChapterID: cid,
 		// 显式写入归一后的非空类别，不依赖数据库 DEFAULT：
@@ -971,7 +971,7 @@ func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) 
 		"title":      title,
 		"content":    content,
 		"images":     marshalImageURLs(in.Images),
-		"updated_at": beijingNow(),
+		"updated_at": BeijingNow(),
 	}).Error; err != nil {
 		return nil, err
 	}
@@ -1050,7 +1050,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 	// 属地快照（ADR-0045），与发帖同口径：发布那一刻取一次，解析不出来即空串。
 	region := geolocation.Resolve(in.ClientIP)
 
-	now := beijingNow()
+	now := BeijingNow()
 	reply := model.ForumReply{
 		TopicID:  topicID,
 		UserID:   userID,
@@ -1257,8 +1257,8 @@ func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 		if existing.ID != 0 {
 			return nil
 		}
-		if err := tx.Create(&model.ForumTopicLike{TopicID: topicID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
-			if isDuplicateError(err) {
+		if err := tx.Create(&model.ForumTopicLike{TopicID: topicID, UserID: userID, CreatedAt: BeijingNow()}).Error; err != nil {
+			if IsDuplicateError(err) {
 				return nil
 			}
 			return err
@@ -1352,7 +1352,7 @@ func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason 
 	}
 	return s.db.Create(&model.ForumReport{
 		ReporterID: userID, TopicID: topicID, ReplyID: replyID,
-		Reason: reason, Status: 0, CreatedAt: beijingNow(),
+		Reason: reason, Status: 0, CreatedAt: BeijingNow(),
 	}).Error
 }
 
@@ -1559,8 +1559,8 @@ func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
 		if existing.ID != 0 {
 			return nil
 		}
-		if err := tx.Create(&model.ForumReplyLike{ReplyID: replyID, UserID: userID, CreatedAt: beijingNow()}).Error; err != nil {
-			if isDuplicateError(err) {
+		if err := tx.Create(&model.ForumReplyLike{ReplyID: replyID, UserID: userID, CreatedAt: BeijingNow()}).Error; err != nil {
+			if IsDuplicateError(err) {
 				return nil
 			}
 			return err
@@ -1652,7 +1652,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 	}
 	// 已有采纳，视为更换：只改状态不发分
 	if topic.AcceptedReplyID != nil {
-		now := beijingNow()
+		now := BeijingNow()
 		if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Updates(map[string]any{
 			"accepted_reply_id": replyID,
 			"solved_at":         now,
@@ -1663,7 +1663,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 		return s.fetchTopicDTO(topicID, userID)
 	}
 	// 首次采纳：CAS + 积分直记（同一事务）。采纳他人回复（自采纳已在上层拒绝）。
-	now := beijingNow()
+	now := BeijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：仅当仍未采纳时才写入状态
 		res := tx.Model(&model.ForumTopic{}).Where("id = ? AND accepted_reply_id IS NULL", topicID).Updates(map[string]any{
@@ -1709,7 +1709,7 @@ func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, 
 	if topic.AcceptedReplyID == nil {
 		return s.fetchTopicDTO(topicID, userID)
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Updates(map[string]any{
 		"accepted_reply_id": nil,
 		"solved_at":         nil,

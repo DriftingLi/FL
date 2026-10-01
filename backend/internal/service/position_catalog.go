@@ -64,7 +64,7 @@ func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, Posi
 				Description: inputString(in.Description),
 				SortOrder:   sortOrder,
 				Status:      inputInt16(in.Status, 1),
-				CreatedAt:   beijingNow(),
+				CreatedAt:   BeijingNow(),
 			}
 		},
 		ApplyUpdate: func(m *model.Position, in *PositionInput) {

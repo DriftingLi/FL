@@ -11,7 +11,7 @@
 //   - 所以那句 `nullable` 是一句没有出口的谎：它让前端为一条走不到的分支写 `?? []`，
 //     并让生成的 TS 承诺 `ContributionFileDTO[] | null`（批①-B 的 flag 一旦补上就落地）。
 //     诚实形状是 nonnil + 既有的 `x-optional`（键可缺席 ≠ 键可为 null，两格各说一件事）。
-//   - marshalKey 在键缺席时判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」），
+//   - testutil.MarshalKey 在键缺席时判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」），
 //     所以举证必须走一条**带文件**的出口：这条出口证的是「键在场时它是数组」，
 //     而「键不在场」那一档由 omitempty 与 nil 的组合保证、由上面那条规定保证。
 //     两条合起来才是「这一格永不为 null」的完整证明——只跑其中一条都不算。

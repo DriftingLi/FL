@@ -66,7 +66,7 @@ func (s *AdminCourseService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	course := model.Course{
 		Name:      *in.Name,
 		Status:    status,
-		CreatedAt: beijingNow(),
+		CreatedAt: BeijingNow(),
 	}
 	if in.Description != nil {
 		course.Description = *in.Description
@@ -217,7 +217,7 @@ func (s *AdminCourseService) CreateChapter(courseID int, in *ChapterInput) (*Cha
 		CourseID:  courseID,
 		Title:     *in.Title,
 		OrderNum:  maxOrder + 1,
-		CreatedAt: beijingNow(),
+		CreatedAt: BeijingNow(),
 	}
 	if in.Content != nil {
 		chapter.Content = *in.Content

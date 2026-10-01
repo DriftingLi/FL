@@ -229,7 +229,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: "redo",
 		UserAnswer:   stringifyAnswer(userAnswer),
-		CreatedAt:    beijingNow(),
+		CreatedAt:    BeijingNow(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
 		return nil, err
@@ -326,7 +326,7 @@ func FormatWrongQuestionsText(exportData []map[string]any) string {
 		"fault_image":   "故障识图",
 		"short_answer":  "简答题",
 	}
-	now := beijingNow().Format("2006-01-02 15:04:05")
+	now := BeijingNow().Format("2006-01-02 15:04:05")
 	var sb strings.Builder
 	sb.WriteString(strings.Repeat("=", 50))
 	sb.WriteString("\n错题本导出\n")

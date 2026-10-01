@@ -209,7 +209,7 @@ func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScop
 	}
 	if existing.FavoriteID == 0 {
 		existing = model.Favorite{
-			UserID: userID, TargetType: targetType, TargetID: targetID, CreatedAt: beijingNow(),
+			UserID: userID, TargetType: targetType, TargetID: targetID, CreatedAt: BeijingNow(),
 		}
 		if err := s.db.Create(&existing).Error; err != nil {
 			return nil, err

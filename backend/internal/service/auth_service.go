@@ -346,7 +346,7 @@ func (s *AuthService) TutorRegister(username, password, name string) (*TutorRegi
 		Password:  hashed,
 		Name:      name,
 		Status:    1,
-		CreatedAt: beijingNow(),
+		CreatedAt: BeijingNow(),
 	}
 	if err := s.db.Create(&tutor).Error; err != nil {
 		return nil, err
@@ -528,8 +528,8 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 		ContactEmail:  in.ContactEmail,
 		Wechat:        in.Wechat,
 		Status:        1,
-		CreatedAt:     beijingNow(),
-		UpdatedAt:     beijingNow(),
+		CreatedAt:     BeijingNow(),
+		UpdatedAt:     BeijingNow(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
 		return nil, err
@@ -682,7 +682,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 		"wechat":         strings.TrimSpace(in.Wechat),
 		"contact_phone":  strings.TrimSpace(in.ContactPhone),
 		"contact_email":  strings.TrimSpace(in.ContactEmail),
-		"updated_at":     beijingNow(),
+		"updated_at":     BeijingNow(),
 	}
 	if newUsername != "" && newUsername != r.Username {
 		updates["username"] = newUsername
@@ -731,7 +731,7 @@ func (s *AuthService) EnsureDefaultUsers() error {
 			Username:  "admin",
 			Password:  hashed,
 			Name:      "系统管理员",
-			CreatedAt: beijingNow(),
+			CreatedAt: BeijingNow(),
 		}
 		if err := s.db.Create(&admin).Error; err != nil {
 			return err
@@ -753,7 +753,7 @@ func (s *AuthService) EnsureDefaultUsers() error {
 			Password:  hashed,
 			Name:      "导师",
 			Status:    1,
-			CreatedAt: beijingNow(),
+			CreatedAt: BeijingNow(),
 		}
 		if err := s.db.Create(&tutor).Error; err != nil {
 			return err
@@ -777,7 +777,7 @@ func (s *AuthService) EnsureDefaultUsers() error {
 			Password:  hashed,
 			Phone:     "13800000000",
 			Status:    1,
-			CreatedAt: beijingNow(),
+			CreatedAt: BeijingNow(),
 		}
 		if err := s.db.Create(&student).Error; err != nil {
 			return err
@@ -862,7 +862,7 @@ func (s *AuthService) DeleteAccount(userID int) error {
 				Password:  "",
 				Phone:     "deleted__sentinel",
 				Status:    0,
-				CreatedAt: beijingNow(),
+				CreatedAt: BeijingNow(),
 			}
 			if err := tx.Create(&sentinel).Error; err != nil {
 				return fmt.Errorf("注销建匿名占位用户失败（表 hrwai_users）: %w", err)
@@ -962,5 +962,5 @@ func (s *AuthService) applyLikesRefund(tx *gorm.DB, step accountCleanupStep, tar
 	}
 }
 
-// beijingNow 返回当前北京时间。时区政策已单点归位 internal/clock 包（spec #296），此函数仅作遗留调用方的一行委托。
-func beijingNow() time.Time { return clock.Now() }
+// BeijingNow 返回当前北京时间。时区政策已单点归位 internal/clock 包（spec #296），此函数仅作遗留调用方的一行委托。
+func BeijingNow() time.Time { return clock.Now() }

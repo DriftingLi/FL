@@ -156,7 +156,8 @@ func TestFaqContract(t *testing.T) {
 	rec = doWithToken(t, r, adminToken, http.MethodPost, "/api/admin/faq/categories", map[string]any{
 		"code": "account", "title": "重复标识", "sort_order": 9, "enabled": true,
 	})
-	// 标识冲突按 400 表达（本仓未使用 409；见 faq.go 里 faqErrStatus 的注释）
+	// 标识冲突按 400 表达（本仓未使用 409；见 internal/faq/handler.go 里 faqErrStatus 的注释）
+	// —— 契约测试留在装配根（internal/api）：它走 NewRouter 的全量装配链，不另起一份域内装配（见 router_test_helper_test.go）
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "分类标识已存在") {
 		t.Fatalf("重复分类标识应 400「分类标识已存在」, got %d %s", rec.Code, rec.Body.String())
 	}

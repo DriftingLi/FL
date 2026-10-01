@@ -137,7 +137,7 @@ func TestPracticeStatsCountsRedoRecordsUnderTheirCredential(t *testing.T) {
 	}
 	rec := model.QuestionPracticeRecord{
 		StudentID: student.ID, CredentialID: &credB.ID, QuestionID: qA.ID,
-		IsCorrect: true, PracticeType: "redo", CreatedAt: beijingNow(),
+		IsCorrect: true, PracticeType: "redo", CreatedAt: BeijingNow(),
 	}
 	if err := db.Create(&rec).Error; err != nil {
 		t.Fatalf("插入重做记录失败: %v", err)

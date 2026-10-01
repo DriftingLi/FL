@@ -349,7 +349,7 @@ type PointsEntry struct {
 func ApplyTx(tx *gorm.DB, e PointsEntry) (bool, error) {
 	if e.IdemKey != "" {
 		if err := tx.Create(&model.PointsEntryIdem{IdemKey: e.IdemKey}).Error; err != nil {
-			if isDuplicateError(err) {
+			if IsDuplicateError(err) {
 				return false, ErrPointsProcessed
 			}
 			return false, err
@@ -587,7 +587,7 @@ func (s *PointsService) Claim(ctx context.Context, userID int, taskCode string) 
 			claim.ClaimDate = &today
 		}
 		if err := tx.Create(&claim).Error; err != nil {
-			if isDuplicateError(err) {
+			if IsDuplicateError(err) {
 				if cfg.Group == "newbie" {
 					return ErrAlreadyClaimed
 				}
@@ -736,7 +736,7 @@ func (s *PointsService) redeem(ctx context.Context, userID int, o redeemOpts) (*
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		ent := model.UserEntitlement{UserID: userID, SKU: o.sku, RefID: o.refID}
 		if err := tx.Create(&ent).Error; err != nil {
-			if isDuplicateError(err) {
+			if IsDuplicateError(err) {
 				return ErrAlreadyRedeemed
 			}
 			return err
@@ -935,7 +935,7 @@ func (s *PointsService) DeductAI(ctx context.Context, userID int, requestID stri
 			IdemKey: AITokensIdemKey(userID, requestID),
 		})
 		if errors.Is(err, ErrPointsProcessed) {
-			// 并发窗口同键已扣：与既有 isDuplicateError 分支语义一致，视为成功
+			// 并发窗口同键已扣：与既有 IsDuplicateError 分支语义一致，视为成功
 			return nil
 		}
 		return err

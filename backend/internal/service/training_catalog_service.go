@@ -474,7 +474,7 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 		rels = append(rels, model.QuestionTagRelation{
 			QuestionID: questionID,
 			TagID:      tagID,
-			CreatedAt:  beijingNow(),
+			CreatedAt:  BeijingNow(),
 		})
 	}
 	return db.Transaction(func(tx *gorm.DB) error {

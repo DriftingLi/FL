@@ -98,7 +98,7 @@ func (s *ProfileReviewService) CreateRequest(userID int, fieldType, newValue str
 		return nil, errors.New("该资料已有待审核的修改，请等待审核结果")
 	}
 
-	now := beijingNow()
+	now := BeijingNow()
 	req := model.ProfileChangeRequest{
 		UserID:    userID,
 		FieldType: fieldType,
@@ -222,7 +222,7 @@ func (s *ProfileReviewService) review(requestID int64, reviewerID int, status, r
 		return nil, errors.New("该请求已审核，不能重复操作")
 	}
 
-	now := beijingNow()
+	now := BeijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if status == ProfileStatusApproved {
 			updates := map[string]any{}

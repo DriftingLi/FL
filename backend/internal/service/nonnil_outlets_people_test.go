@@ -5,7 +5,7 @@
 //
 // 本域的出口有两种形状，两种都不是偷懒：
 //   - 分页信封（topics / reports / items / …）：空库直接跑，量到的就是 make(…,0,0) 发出的 `[]`；
-//   - **住在列表条目里的数组**（images / resume_certifications / …）：marshalKey 只看顶层键，
+//   - **住在列表条目里的数组**（images / resume_certifications / …）：testutil.MarshalKey 只看顶层键，
 //     所以出口返回那条条目本身（先例：course 表的 outletCatalogLevelNodeNoCourses 返回等级节点）。
 //     播的那一行**不带图、不带证件**——要证的恰恰是「这一格空着时发的是什么」，
 //     给它塞满数据就等于什么都没证。
@@ -22,7 +22,7 @@
 //     「列里存 JSON null」并非只存在于想象：job_cards 的四列是 `NOT NULL DEFAULT '[]'`，
 //     NOT NULL 挡得住 SQL NULL、挡不住 `'null'::jsonb`。
 //   - ContributionItemDTO.files ⇒ `json:"files,omitempty"`：空集时**键整个缺席**，
-//     marshalKey 判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」）。
+//     testutil.MarshalKey 判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」）。
 //     要举出非 null 只能投一份带文件的稿，那证的是「有内容」那一档，不是「空集也不为 null」。
 //   - FavoritePageResult.favorites / NotePageDTO.items ⇒ 宿主文件由另一在飞分支持有，本波不改。
 //

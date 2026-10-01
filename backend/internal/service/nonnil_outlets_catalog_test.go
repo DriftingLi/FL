@@ -1,4 +1,4 @@
-// 目录树 / 字典列表 / FAQ / 章节文件 / 精选 / 练习与模考 / 学员侧读面的 nonnil 行为例
+// 目录树 / 字典列表 / 章节文件 / 精选 / 练习与模考 / 学员侧读面的 nonnil 行为例
 // （批①-A 第④段「wave 16」）。
 //
 // 为什么单独成文件：判据 5 的证据跟着出口走，一个域一张表（汇总表机制见 nonnil_declaration_test.go）。
@@ -59,11 +59,6 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	"service.QuestionTagListDTO.tags":                          outletQuestionTagListEmpty,
 	"service.CertificateTemplateListDTO.certificate_templates": outletCertificateTemplateListEmpty,
 	"service.CredentialListDTO.credentials":                    outletCredentialListEmpty,
-
-	"service.FaqResult.categories":                outletFaqPublishedEmpty,
-	"service.FaqCategoryDTO.entries":              outletFaqPublishedEmptyCategory,
-	"service.AdminFaqCategoriesResult.categories": outletAdminFaqCategoriesEmpty,
-	"service.AdminFaqEntriesResult.entries":       outletAdminFaqEntriesEmpty,
 
 	"service.ChapterDTO.files":                  outletTutorChapterNoFiles,
 	"service.ChapterDetailDTO.files":            outletChapterDetailNoFiles,
@@ -156,55 +151,6 @@ func outletCredentialListEmpty(t *testing.T) any {
 	t.Helper()
 	svc := NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop())
 	return CredentialListDTO{Credentials: svc.ListCredentials(false)}
-}
-
-// ===== FAQ 四个信封 =====
-
-func outletFaqPublishedEmpty(t *testing.T) any {
-	t.Helper()
-	res, err := NewFaqService(testutil.NewMemoryDB(t), zap.NewNop()).ListPublished()
-	if err != nil {
-		t.Fatalf("学员端帮助中心失败: %v", err)
-	}
-	return res
-}
-
-// outletFaqPublishedEmptyCategory entries 的形状要单独播一条**启用分类且其下零条已发布条目**
-// ——ListPublished 对这种分类显式回填 `[]FaqEntryDTO{}`（源码注释：前端免判空）。
-// 空库取不到分类节点，也就取不到这一格。
-func outletFaqPublishedEmptyCategory(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	cat := model.FaqCategory{Code: "nonnil-faq", Title: "空分类", SortOrder: 1, Enabled: true}
-	if err := db.Create(&cat).Error; err != nil {
-		t.Fatalf("播种 FAQ 分类失败: %v", err)
-	}
-	res, err := NewFaqService(db, zap.NewNop()).ListPublished()
-	if err != nil {
-		t.Fatalf("学员端帮助中心失败: %v", err)
-	}
-	if len(res.Categories) == 0 {
-		t.Fatal("帮助中心里没有分类节点：这条证据没有落地")
-	}
-	return res.Categories[0]
-}
-
-func outletAdminFaqCategoriesEmpty(t *testing.T) any {
-	t.Helper()
-	items, err := NewFaqService(testutil.NewMemoryDB(t), zap.NewNop()).AdminListCategories()
-	if err != nil {
-		t.Fatalf("管理端分类清单失败: %v", err)
-	}
-	return AdminFaqCategoriesResult{Categories: items}
-}
-
-func outletAdminFaqEntriesEmpty(t *testing.T) any {
-	t.Helper()
-	items, err := NewFaqService(testutil.NewMemoryDB(t), zap.NewNop()).AdminListEntries(nil)
-	if err != nil {
-		t.Fatalf("管理端条目清单失败: %v", err)
-	}
-	return AdminFaqEntriesResult{Entries: items}
 }
 
 // ===== 章节与课程三格 =====
