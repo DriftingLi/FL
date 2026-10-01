@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -42,19 +43,19 @@ func bindQuestionWriteReq[T any](c *gin.Context) (*T, error) {
 		} `json:"questions"`
 	}
 	if err := c.ShouldBindBodyWith(&probe, binding.JSON); err != nil {
-		return nil, badRequest("请求数据无效")
+		return nil, httpx.BadRequest("请求数据无效")
 	}
 	if probe.Status != nil {
-		return nil, badRequest("写面不携带 status 通道，状态迁移请走显式动作（提交审核 / 发布 / 驳回）")
+		return nil, httpx.BadRequest("写面不携带 status 通道，状态迁移请走显式动作（提交审核 / 发布 / 驳回）")
 	}
 	for _, item := range probe.Questions {
 		if item.Status != nil {
-			return nil, badRequest("写面不携带 status 通道，状态迁移请走显式动作（提交审核 / 发布 / 驳回）")
+			return nil, httpx.BadRequest("写面不携带 status 通道，状态迁移请走显式动作（提交审核 / 发布 / 驳回）")
 		}
 	}
 	var req T
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		return nil, badRequest("请求数据无效")
+		return nil, httpx.BadRequest("请求数据无效")
 	}
 	return &req, nil
 }
@@ -249,7 +250,7 @@ func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
 				return nil, err
 			}
 			if len(req.QuestionIDs) == 0 {
-				return nil, badRequest("请选择要发布的题目")
+				return nil, httpx.BadRequest("请选择要发布的题目")
 			}
 			return req, nil
 		},
@@ -288,7 +289,7 @@ func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
 				return nil, err
 			}
 			if len(req.QuestionIDs) == 0 {
-				return nil, badRequest("请选择要驳回的题目")
+				return nil, httpx.BadRequest("请选择要驳回的题目")
 			}
 			return req, nil
 		},
@@ -330,7 +331,7 @@ func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
 				return nil, err
 			}
 			if len(wrapper.Questions) == 0 {
-				return nil, badRequest("导入数据不能为空")
+				return nil, httpx.BadRequest("导入数据不能为空")
 			}
 			return &batchImportReq{Questions: wrapper.Questions, UserID: userID}, nil
 		},
@@ -363,7 +364,7 @@ type questionIDReq struct {
 func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -415,7 +416,7 @@ type updateQuestionReq struct {
 func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 	Endpoint[updateQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*updateQuestionReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -455,7 +456,7 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -489,7 +490,7 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -525,7 +526,7 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
 	Endpoint[questionIDReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -567,7 +568,7 @@ type rejectQuestionReq struct {
 func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 	Endpoint[rejectQuestionReq, service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*rejectQuestionReq, error) {
-			id, err := pathInt(c, "question_id", "题目ID无效")
+			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -575,7 +576,7 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 				Reason string `json:"reason"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &rejectQuestionReq{ID: id, Reason: req.Reason}, nil
 		},

@@ -3,7 +3,8 @@
 // 为什么需要它：`pathInt` 补齐 `<= 0` 只修好了「走 helper 的那批」端点。同一件事实此前还在
 // 37 处自定义实现里各成立一次（36 处裸 `strconv.(Atoi|ParseInt)` 读 `c.Param`，分布在 10 个文件；
 // 另 1 处把**路径**参数喂给查询侧守卫 `requiredPositiveID`，`real_exam.go` 的 parsePaperAction）。
-// 本批把 `internal/api` 里的这些全部收进 pathInt/pathInt64；这道锁负责让「第二处实现」长不回来。
+// 批⑤ 把 `internal/api` 里的这些全部收进两枚 helper；随后抽 `pkg/httpx` 时两枚 helper 随出口搬家
+// （本包内部改调 httpx.PathInt/httpx.PathInt64），这道锁于是同时管两侧：宿主包恰好两枚、本包恰好零枚。
 //
 // 扫描器走 AST 而不是文本匹配，理由与第④批的泄漏断言（ADR-0064 决策 10）同一条：
 // `idStr := c.Param("id")` 存进变量再转换的写法（`contact.go`/`recruit.go`/`resume_pdf.go` 三处就是这样）
@@ -26,8 +27,15 @@ import (
 	"testing"
 )
 
-// allowedPathParseFuncs 是本包允许的两处实现（都在 endpoint.go）。加第三个名字等于把这件事重新分散。
-var allowedPathParseFuncs = map[string]bool{"pathInt": true, "pathInt64": true}
+// allowedPathParseFuncs 是允许的那两处实现（都在 pkg/httpx）。加第三个名字等于把这件事重新分散。
+var allowedPathParseFuncs = map[string]bool{"PathInt": true, "PathInt64": true}
+
+// pathParseHome 是这两处实现的宿主包（相对 internal/api）。
+//
+// 为什么搬出本包：ADR-0065 决策 1 末段登记的**跨包债务**（valuation/handler 6 处裸 ParseInt）要收，
+// 缺的正是「一枚跨包共享的解析出口」——pkg/httpx 就是那枚出口，解析点随它一起走。
+// 本包留下的判据只剩「内部不许再长出第二份」（custom 解析点与本地 helper 各一条，见测试本体）。
+const pathParseHome = "../../pkg/httpx"
 
 // intParseFuncs 是整数转换的本名；queryParseHelpers 是**查询参数**侧的单点守卫——
 // 它们被用在路径参数上就是第二份实现（`real_exam.go` 曾经那样）。
@@ -36,7 +44,7 @@ var (
 	queryHelpers  = map[string]bool{"requiredPositiveID": true, "queryIDPtr": true, "atoiDefault": true, "queryIntPtr": true}
 )
 
-// pathParseSite 一次「从路径参数取整数却没走 pathInt/pathInt64」。
+// pathParseSite 一次「从路径参数取整数却没走 PathInt/PathInt64」。
 type pathParseSite struct {
 	file string
 	line int
@@ -167,15 +175,15 @@ func scanDir(t *testing.T, dir string) (sites []pathParseSite, files int) {
 	return sites, files
 }
 
-// countPathHelpers 数一个目录里名为 pathInt* 的函数定义（第三枚可能藏在别的文件）。
-func countPathHelpers(t *testing.T, dir string) int {
+// countPathHelpers 数一个目录里的路径解析 helper 定义（第三枚可能藏在别的文件）。
+// named 按 allowedPathParseFuncs 的**名字**数，prefixed 按 pathInt 前缀数：改个名重长一份也要被抓到。
+func countPathHelpers(t *testing.T, dir string) (named, prefixed, files int) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("读不到 %s：%v", dir, err)
 	}
 	fset := token.NewFileSet()
-	n := 0
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -185,23 +193,33 @@ func countPathHelpers(t *testing.T, dir string) int {
 		if err != nil {
 			t.Fatalf("解析 %s 失败：%v", name, err)
 		}
+		files++
 		for _, d := range parsed.Decls {
-			if fd, ok := d.(*ast.FuncDecl); ok && strings.HasPrefix(fd.Name.Name, "pathInt") {
-				n++
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if allowedPathParseFuncs[fd.Name.Name] {
+				named++
+			}
+			if strings.HasPrefix(fd.Name.Name, "pathInt") {
+				prefixed++
 			}
 		}
 	}
-	return n
+	return named, prefixed, files
 }
 
 // valuationPathParseDebt 是**尚未**收进 helper 的跨包债务实测数（internal/valuation/handler，
 // 6 处 `strconv.ParseInt(c.Param("id"))`，同样只看 err ⇒ 0/负数继续往下走 repo）。
-// 本批不同接：那 6 处要收，得先有一枚跨包共享的解析出口，而「现造一个没有先例可校的形状」
-// 正是 ADR-0064 决策 7 否掉的做法。⇒ 记成只能减的债，登记在 ADR-0065 决策 1 末段，与 ② 的
-// 跨包 seam 一起定形。这个数字变大即红；变小说明有人先收了，请把本行与 ADR 一起改小。
+// 共享出口（pkg/httpx 的 PathInt64）现在有了，但这 6 处**不能顺手改**：收进来会把它们的错误面
+// 从「0/负数继续进 repo」改成「400 + 本端点文案」，是 HTTP 面的行为变更，得单独一批带契约测试做。
+// ⇒ 仍记成只能减的债，登记在 ADR-0065 决策 1 末段。这个数字变大即红；变小说明有人先收了，
+// 请把本行与 ADR 一起改小。
 const valuationPathParseDebt = 6
 
-// TestPathIntHasASingleParsePoint 锁本体：internal/api 内路径整型 id 只能由 pathInt/pathInt64 解析。
+// TestPathIntHasASingleParsePoint 锁本体：路径整型 id 的唯一宿主是 pkg/httpx 那两枚实现；
+// internal/api 与 valuation/handler 两侧各有一条「不许再长第二份」的断言。
 func TestPathIntHasASingleParsePoint(t *testing.T) {
 	t.Parallel()
 	sites, files := scanDir(t, ".")
@@ -210,16 +228,24 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 	if files < 30 {
 		t.Fatalf("只扫到 %d 个源文件，说明目录或判据变了（本包实际有 50+ 个）⇒ 这条锁现在不构成保护", files)
 	}
-	if n := countPathHelpers(t, "."); n != len(allowedPathParseFuncs) {
-		t.Fatalf("本包里名为 pathInt* 的 helper 应有 %d 个（pathInt/pathInt64），实得 %d ⇒ 有人加了第三枚"+
-			"或改了名：同一件事实一旦有两个同名族出口，改一处忘另一处就回来了",
-			len(allowedPathParseFuncs), n)
+	if named, prefixed, _ := countPathHelpers(t, "."); named != 0 || prefixed != 0 {
+		t.Fatalf("internal/api 里又长出 %d 枚 pathInt* 本地实现（其中 %d 枚与 %s 同名）⇒ 解析点必须有唯一宿主："+
+			"两个包各一份就是第二处实现，改一处忘另一处就回来了", prefixed, named, pathParseHome)
 	}
 	if len(sites) > 0 {
 		t.Errorf("internal/api 里发现 %d 处自定义的路径整数解析点（ADR-0065 批⑤ 已清零，只能保持 0）：\n  %s\n"+
 			"⇒ 同一件「路径 id 不是正整数」的事实有了第二份实现：它少挡一档、换一套文案，"+
-			"且不会随 pathInt 一起改。正解是调 pathInt/pathInt64 并把本端点那句文案传进去。",
+			"且不会随解析点一起改。正解是调 httpx.PathInt / httpx.PathInt64 并把本端点那句文案传进去。",
 			len(sites), joinSites(sites))
+	}
+
+	named, _, homeFiles := countPathHelpers(t, pathParseHome)
+	if homeFiles == 0 {
+		t.Fatalf("宿主包 %s 一个源文件都没扫到 ⇒ 上面那条「不许本地实现」的断言是空的", pathParseHome)
+	}
+	if named != len(allowedPathParseFuncs) {
+		t.Fatalf("%s 里的路径解析 helper 应有 %d 枚（%v），实得 %d ⇒ 有人加了第三枚或改了名",
+			pathParseHome, len(allowedPathParseFuncs), allowedPathParseFuncs, named)
 	}
 
 	vSites, vFiles := scanDir(t, "../valuation/handler")
@@ -227,15 +253,16 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 		t.Fatalf("valuation/handler 一个源文件都没扫到 ⇒ 跨包债务这条断言是空的")
 	}
 	if len(vSites) > valuationPathParseDebt {
-		t.Errorf("valuation/handler 的路径整数解析点从 %d 涨到 %d ⇒ 债务只能减。新增处请改走一枚共享出口，"+
-			"而不是再加一份实现：\n  %s", valuationPathParseDebt, len(vSites), joinSites(vSites))
+		t.Errorf("valuation/handler 的路径整数解析点从 %d 涨到 %d ⇒ 债务只能减。新增处请改走共享出口"+
+			"（httpx.PathInt64），而不是再加一份实现：\n  %s", valuationPathParseDebt, len(vSites), joinSites(vSites))
 	}
 	if len(vSites) < valuationPathParseDebt {
 		t.Errorf("valuation/handler 实测只剩 %d 处（登记常量是 %d）⇒ 有人先收了这批债，"+
 			"请同步把常量改小并在 ADR-0065 决策 1 末段记一笔", len(vSites), valuationPathParseDebt)
 	}
-	t.Logf("扫描面：internal/api %d 个文件 / 自定义解析点 %d 处；valuation/handler %d 个文件 / 债务 %d 处（登记 %d）",
-		files, len(sites), vFiles, len(vSites), valuationPathParseDebt)
+	t.Logf("扫描面：internal/api %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / helper %d 枚；"+
+		"valuation/handler %d 个文件 / 债务 %d 处（登记 %d）",
+		files, len(sites), pathParseHome, homeFiles, named, vFiles, len(vSites), valuationPathParseDebt)
 }
 
 // TestPathParseDetectorFiresOnPlantedSources 自证扫描器不是空转：三种坏形状各被抓到、
@@ -268,7 +295,7 @@ func badQueryHelper(c *gin.Context) int {
 }
 
 func good(c *gin.Context) int {
-	v, _ := pathInt(c, "id", "ID无效")
+	v, _ := httpx.PathInt(c, "id", "ID无效")
 	return v
 }
 `
@@ -299,6 +326,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/pkg/httpx"
 )
 
 func rawID(c *gin.Context) string { return c.Param("id") }

@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -51,7 +52,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				return nil, err
 			}
 			if req.Username == "" || req.Password == "" {
-				return nil, badRequest("账号和密码不能为空")
+				return nil, httpx.BadRequest("账号和密码不能为空")
 			}
 			return req, nil
 		},
@@ -84,7 +85,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 				return nil, err
 			}
 			if req.Username == "" || req.Password == "" {
-				return nil, badRequest("用户名和密码不能为空")
+				return nil, httpx.BadRequest("用户名和密码不能为空")
 			}
 			return req, nil
 		},
@@ -117,7 +118,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 				return nil, err
 			}
 			if req.Username == "" || req.Password == "" {
-				return nil, badRequest("用户名和密码不能为空")
+				return nil, httpx.BadRequest("用户名和密码不能为空")
 			}
 			return req, nil
 		},
@@ -150,7 +151,7 @@ func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 				return nil, err
 			}
 			if req.Username == "" || req.Password == "" {
-				return nil, badRequest("用户名和密码不能为空")
+				return nil, httpx.BadRequest("用户名和密码不能为空")
 			}
 			return req, nil
 		},
@@ -295,14 +296,14 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		Parse: func(c *gin.Context) (*updateProfileReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid <= 0 {
-				return nil, &ParseError{Status: 401, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: 401, Message: "请先登录"}
 			}
 			req, err := bindJSON[updateProfileReq](c)
 			if err != nil {
 				return nil, err
 			}
 			if req.Nickname == "" && req.Company == nil {
-				return nil, badRequest("参数错误")
+				return nil, httpx.BadRequest("参数错误")
 			}
 			return &updateProfileReq{UID: uid, Nickname: req.Nickname, Company: req.Company}, nil
 		},

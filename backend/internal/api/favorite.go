@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -127,7 +128,7 @@ var favoriteErrStatus = &errStatusTable{
 // @Failure 401 {object} response.R "未认证"
 // @Router /favorites/{id} [delete]
 func (h *FavoriteHandler) Remove(c *gin.Context) {
-	id, err := pathInt64(c, "id", "收藏 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "收藏 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

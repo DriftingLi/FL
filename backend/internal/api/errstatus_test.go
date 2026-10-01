@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // 测试哨兵（与域表无交集，专测骨架行为）。
@@ -122,7 +123,7 @@ func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
 	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
+			return nil, &httpx.ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
 		},
 		ErrStatus: testTable,
 	}
@@ -140,7 +141,7 @@ func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
 	t.Parallel()
 	e := Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
+			return nil, &httpx.ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
 		},
 		ErrStatus: errStatusAll(http.StatusInternalServerError),
 	}
@@ -168,7 +169,7 @@ func TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries(t *testing.T)
 	t.Parallel()
 	w := doEndpoint(t, Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, badRequest("查询参数无效")
+			return nil, httpx.BadRequest("查询参数无效")
 		},
 		ErrStatus: &errStatusTable{entries: []errStatusEntry{
 			{sentinel: errSentinelA, status: http.StatusNotFound, message: "主题不存在"},
@@ -208,7 +209,7 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 	// 真哨兵仍优先于 fallback（解析错误永远先判，不进 fallback）
 	w = doEndpoint(t, Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 		},
 		ErrStatus: &errStatusTable{entries: []errStatusEntry{
 			{sentinel: errSentinelA, status: http.StatusNotFound},

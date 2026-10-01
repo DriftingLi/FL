@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -118,7 +119,7 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 // @Router /recruit/resumes/{id} [get]
 // 与列表共用同一脱敏实现（service 层 desensitize），不存在两套逻辑；隐藏卡 404。
 func (h *RecruitHandler) GetResume(c *gin.Context) {
-	uid, err := pathInt(c, "id", "简历 ID 无效")
+	uid, err := httpx.PathInt(c, "id", "简历 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

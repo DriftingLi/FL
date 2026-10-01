@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -120,7 +121,7 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			questionID, err := pathInt(c, "question_id", "题目ID无效")
+			questionID, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +129,7 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 				UserAnswer interface{} `json:"user_answer"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
@@ -165,7 +166,7 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
-			questionID, err := pathInt(c, "question_id", "题目ID无效")
+			questionID, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +197,7 @@ func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
 				QuestionIDs []int `json:"question_ids"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			return &batchRemoveReq{StudentID: studentID, QuestionIDs: req.QuestionIDs}, nil
 		},

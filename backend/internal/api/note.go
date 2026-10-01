@@ -8,6 +8,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -124,7 +125,7 @@ func (h *NoteHandler) Create(c *gin.Context) {
 				Content string `json:"content"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("参数错误")
+				return nil, httpx.BadRequest("参数错误")
 			}
 			return &createNoteReq{UserID: middleware.CurrentUserID(c), Content: body.Content}, nil
 		},
@@ -169,7 +170,7 @@ type updateNoteReq struct {
 func (h *NoteHandler) Update(c *gin.Context) {
 	Endpoint[updateNoteReq, service.NoteDTO]{
 		Parse: func(c *gin.Context) (*updateNoteReq, error) {
-			id, err := pathInt(c, "id", "笔记 ID 无效")
+			id, err := httpx.PathInt(c, "id", "笔记 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -177,7 +178,7 @@ func (h *NoteHandler) Update(c *gin.Context) {
 				Content string `json:"content"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("参数错误")
+				return nil, httpx.BadRequest("参数错误")
 			}
 			return &updateNoteReq{UserID: middleware.CurrentUserID(c), ID: id, Content: body.Content}, nil
 		},
@@ -214,7 +215,7 @@ type deleteNoteReq struct {
 func (h *NoteHandler) Delete(c *gin.Context) {
 	Endpoint[deleteNoteReq, struct{}]{
 		Parse: func(c *gin.Context) (*deleteNoteReq, error) {
-			id, err := pathInt(c, "id", "笔记 ID 无效")
+			id, err := httpx.PathInt(c, "id", "笔记 ID 无效")
 			if err != nil {
 				return nil, err
 			}

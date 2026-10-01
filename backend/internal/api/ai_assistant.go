@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -114,7 +115,7 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
 			return &aiUserIDReq{UserID: uid}, nil
 		},
@@ -145,14 +146,14 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiUserModelSaveReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
 			req, err := bindJSONMsg[service.SaveUserModelReq](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
 			if req.Name == "" || req.APIKey == "" || req.BaseURL == "" || req.Model == "" {
-				return nil, badRequest("name/api_key/base_url/model 均为必填")
+				return nil, httpx.BadRequest("name/api_key/base_url/model 均为必填")
 			}
 			return &aiUserModelSaveReq{UserID: uid, Req: *req}, nil
 		},
@@ -186,9 +187,9 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, err := pathInt(c, "id", "无效的模型 ID")
+			id, err := httpx.PathInt(c, "id", "无效的模型 ID")
 			if err != nil {
 				return nil, err
 			}
@@ -225,7 +226,7 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
 			return &aiUserIDReq{UserID: uid}, nil
 		},
@@ -255,7 +256,7 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiSessionCreateReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
 			var body struct {
 				Title      string `json:"title"`
@@ -288,9 +289,9 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, err := pathInt(c, "id", "无效的会话 ID")
+			id, err := httpx.PathInt(c, "id", "无效的会话 ID")
 			if err != nil {
 				return nil, err
 			}
@@ -330,9 +331,9 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiSessionRenameReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, err := pathInt(c, "id", "无效的会话 ID")
+			id, err := httpx.PathInt(c, "id", "无效的会话 ID")
 			if err != nil {
 				return nil, err
 			}
@@ -375,9 +376,9 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
-				return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			id, err := pathInt(c, "id", "无效的会话 ID")
+			id, err := httpx.PathInt(c, "id", "无效的会话 ID")
 			if err != nil {
 				return nil, err
 			}

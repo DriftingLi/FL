@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // PracticeModeHandler 题库练习 handler。
@@ -105,11 +106,11 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 		Parse: func(c *gin.Context) (*tagPracticeReq, error) {
 			tagIDStr := c.Query("tag_id")
 			if tagIDStr == "" {
-				return nil, badRequest("请指定题库标签")
+				return nil, httpx.BadRequest("请指定题库标签")
 			}
 			tagID, ok := requiredPositiveID(tagIDStr)
 			if !ok {
-				return nil, badRequest("题库标签ID无效")
+				return nil, httpx.BadRequest("题库标签ID无效")
 			}
 			count := atoiDefault(c.Query("count"), 0) // 0=全部
 			uid, _ := c.Get(string(middleware.CtxUserID))
@@ -219,14 +220,14 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 				CredentialID *int            `json:"credential_id"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			if req.PracticeMode == "" {
 				req.PracticeMode = string(service.PracticeModeSequential)
 			}
 			// 练习模式封闭校验（#386）：未知 mode 拒绝，消灭 typo 静默孤儿进度行
 			if _, ok := service.ParsePracticeMode(req.PracticeMode); !ok {
-				return nil, badRequest("练习模式无效")
+				return nil, httpx.BadRequest("练习模式无效")
 			}
 			return &practiceSaveProgressReq{
 				StudentID:    studentID,
@@ -276,7 +277,7 @@ func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 			}
 			// 练习模式封闭校验（#386）：未知 mode 拒绝
 			if _, ok := service.ParsePracticeMode(mode); !ok {
-				return nil, badRequest("练习模式无效")
+				return nil, httpx.BadRequest("练习模式无效")
 			}
 			return &getProgressReq{StudentID: studentID, Mode: mode, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
@@ -317,10 +318,10 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 				PracticeType string      `json:"practice_type"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
-				return nil, badRequest("请求数据无效")
+				return nil, httpx.BadRequest("请求数据无效")
 			}
 			if req.QuestionID == 0 {
-				return nil, badRequest("题目ID不能为空")
+				return nil, httpx.BadRequest("题目ID不能为空")
 			}
 			if req.PracticeType == "" {
 				req.PracticeType = "free"

@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -75,7 +76,7 @@ func (h *ProfileBindHandler) SendCode(c *gin.Context) {
 			channels := map[string]service.CodeChannel{"email": h.emailCh, "phone": h.phoneCh}
 			ch, ok := channels[req.Channel]
 			if !ok {
-				return nil, badRequest("channel 必须为 email 或 phone")
+				return nil, httpx.BadRequest("channel 必须为 email 或 phone")
 			}
 			if err := h.codeSvc.SendBind(ctx, ch, middleware.CurrentUserID(c), req.Target); err != nil {
 				return nil, err
@@ -271,7 +272,7 @@ func parseCodeBindReq(c *gin.Context, targetField string) (*codeBindReq, error) 
 			Code  string `json:"code"`
 		}
 		if err := c.ShouldBindJSON(&t); err != nil {
-			return nil, badRequest("请求参数错误")
+			return nil, httpx.BadRequest("请求参数错误")
 		}
 		return &codeBindReq{Target: t.Phone, Code: t.Code}, nil
 	}
@@ -280,7 +281,7 @@ func parseCodeBindReq(c *gin.Context, targetField string) (*codeBindReq, error) 
 		Code  string `json:"code"`
 	}
 	if err := c.ShouldBindJSON(&t); err != nil {
-		return nil, badRequest("请求参数错误")
+		return nil, httpx.BadRequest("请求参数错误")
 	}
 	return &codeBindReq{Target: t.Email, Code: t.Code}, nil
 }

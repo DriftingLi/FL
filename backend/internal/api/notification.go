@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -129,7 +130,7 @@ type notificationUserIDReq struct {
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	Endpoint[markReadReq, struct{}]{
 		Parse: func(c *gin.Context) (*markReadReq, error) {
-			id, err := pathInt64(c, "id", "通知ID无效")
+			id, err := httpx.PathInt64(c, "id", "通知ID无效")
 			if err != nil {
 				return nil, err
 			}

@@ -8,6 +8,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -80,7 +81,7 @@ var interactionErrStatus = &errStatusTable{
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [get]
 func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -109,7 +110,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [post]
 func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -140,7 +141,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/comments/{comment_id} [delete]
 func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
-	cid, err := pathInt(c, "comment_id", "评论ID无效")
+	cid, err := httpx.PathInt(c, "comment_id", "评论ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -167,7 +168,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -198,7 +199,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -229,7 +230,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [delete]
 func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -252,7 +253,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 // @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/knowledge [get]
 func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

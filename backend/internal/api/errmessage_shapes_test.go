@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/pkg/httpx"
 )
 
 func renderWithTable(t *testing.T, tbl *errStatusTable, err error) (int, string) {
@@ -62,7 +64,7 @@ func TestErrTableMessageShapes(t *testing.T) {
 	// 无条件条目**不再**吃解析错误（ADR-0062 票8：*ParseError 恒优先）——它回自己的状态码与自己的文案，
 	// 三个无条件条目构造器（WithSuccess 用的就是 errStatusAll）一条规则全盖住：
 	// 固定文案槽与人读前缀都不参与解析错误的渲染。
-	pe := badRequest("参数错了")
+	pe := httpx.BadRequest("参数错了")
 	for name, tbl := range map[string]*errStatusTable{
 		"errStatusAll":       errStatusAll(http.StatusInternalServerError),
 		"errStatusAllMsg":    errStatusAllMsg(http.StatusNotFound, "会话不存在"),

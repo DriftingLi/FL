@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -144,7 +145,7 @@ func (h *FaqHandler) AdminCreateCategory(c *gin.Context) {
 // @Failure 400 {object} response.R "分类标识已存在"
 // @Router /admin/faq/categories/{id} [put]
 func (h *FaqHandler) AdminUpdateCategory(c *gin.Context) {
-	id, err := pathInt(c, "id", "分类 ID 无效")
+	id, err := httpx.PathInt(c, "id", "分类 ID 无效")
 	if err != nil {
 		response.BadRequest(c, "分类 ID 无效")
 		return
@@ -175,7 +176,7 @@ func (h *FaqHandler) AdminUpdateCategory(c *gin.Context) {
 // @Failure 404 {object} response.R "分类不存在"
 // @Router /admin/faq/categories/{id} [delete]
 func (h *FaqHandler) AdminDeleteCategory(c *gin.Context) {
-	id, err := pathInt(c, "id", "分类 ID 无效")
+	id, err := httpx.PathInt(c, "id", "分类 ID 无效")
 	if err != nil {
 		response.BadRequest(c, "分类 ID 无效")
 		return
@@ -265,7 +266,7 @@ func (h *FaqHandler) AdminCreateEntry(c *gin.Context) {
 // @Failure 404 {object} response.R "条目或分类不存在"
 // @Router /admin/faq/entries/{id} [put]
 func (h *FaqHandler) AdminUpdateEntry(c *gin.Context) {
-	id, err := pathInt(c, "id", "条目 ID 无效")
+	id, err := httpx.PathInt(c, "id", "条目 ID 无效")
 	if err != nil {
 		response.BadRequest(c, "条目 ID 无效")
 		return
@@ -296,7 +297,7 @@ func (h *FaqHandler) AdminUpdateEntry(c *gin.Context) {
 // @Failure 404 {object} response.R "条目不存在"
 // @Router /admin/faq/entries/{id} [delete]
 func (h *FaqHandler) AdminDeleteEntry(c *gin.Context) {
-	id, err := pathInt(c, "id", "条目 ID 无效")
+	id, err := httpx.PathInt(c, "id", "条目 ID 无效")
 	if err != nil {
 		response.BadRequest(c, "条目 ID 无效")
 		return

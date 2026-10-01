@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -73,7 +74,7 @@ func (h *ResumePDFHandler) serveResumePDF(c *gin.Context, card *model.JobCard, c
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /recruit/resumes/{id}/pdf [get]
 func (h *ResumePDFHandler) RecruiterResumePDF(c *gin.Context) {
-	uid, err := pathInt(c, "id", "学员 ID 无效")
+	uid, err := httpx.PathInt(c, "id", "学员 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
