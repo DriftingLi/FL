@@ -2,14 +2,14 @@
 // （权益读面按 (user, sku, ref_id) 查）之间必须有一张具名声明表 —— 表就是那条对账。
 //
 // 病根（实测）：points_shop_item 的 ('unlock_real_paper', 300) 一行兼两个身份：
-// ① 全部卷价的价格事实源（realPaperPrice 读它，在用）② 一件可兑换商品（POST /points/shop/{sku}/redeem
+// ① 全部卷价的价格事实源（RealPaperPrice 读它，在用）② 一件可兑换商品（POST /points/shop/{sku}/redeem
 // 对任意 enabled 行开放）。兑它扣 300 分、写一条 sku="unlock_real_paper" 的权益行，而读侧只查
 // real_paper:{paperID} / course:{courseID} ⇒ **没人读 = 死端**，且上一批给兑换键补了主体之后
 // 每个学员都能成交这笔白扣分。
 //
-// 正解是拒绝兑换（**不**下线该商品：realPaperPrice 只读 enabled=true 的行，置 false 会让价格
+// 正解是拒绝兑换（**不**下线该商品：RealPaperPrice 只读 enabled=true 的行，置 false 会让价格
 // 退回硬编码兜底值，管理员改价改的是一行读不到的数据）。
-package service
+package points
 
 import (
 	"context"
@@ -94,8 +94,8 @@ func TestRedeemShopRejectsPriceOnlySKU(t *testing.T) {
 	if got := ledgerCount(t, db, "user_id = ?", uid); got != 0 {
 		t.Fatalf("被拒的兑换不得写流水, got %d", got)
 	}
-	// 行本身必须留着当价格事实源（下线它 = realPaperPrice 退回硬编码兜底值）
-	if price := svc.realPaperPrice(); price != 300 {
+	// 行本身必须留着当价格事实源（下线它 = RealPaperPrice 退回硬编码兜底值）
+	if price := svc.RealPaperPrice(); price != 300 {
 		t.Fatalf("拒绝兑换不得影响卷价（仍读该行）: got %d", price)
 	}
 }

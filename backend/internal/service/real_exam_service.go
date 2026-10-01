@@ -13,18 +13,19 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/internal/scope"
 )
 
 // RealExamService 真题套卷服务。
 type RealExamService struct {
 	db     *gorm.DB
-	points *PointsService
+	points *points.Service
 	logger *zap.Logger
 }
 
 // NewRealExamService 创建真题套卷服务。
-func NewRealExamService(db *gorm.DB, points *PointsService, logger *zap.Logger) *RealExamService {
+func NewRealExamService(db *gorm.DB, points *points.Service, logger *zap.Logger) *RealExamService {
 	return &RealExamService{db: db, points: points, logger: logger}
 }
 
@@ -42,7 +43,7 @@ type RealExamPaperDTO struct {
 
 // paperQuestionIDs 卷内题目 id（按 order_num 升序，仅 published）。
 // 按卷练习/开考链路上「三件不同的事」各自的载体（ADR-0064 决策 1/2）。此前它们与
-// ErrRealPaperUnavailable 混在一格 errStatusAll(404) 里，A 批在 real_exam.go 的注释里
+// points.ErrRealPaperUnavailable 混在一格 errStatusAll(404) 里，A 批在 real_exam.go 的注释里
 // 把这件事登记为「正解在 service 侧升哨兵」：
 //   - ErrRealPaperNotRedeemed：这份内容**在平台上、也可见**，只是当前主体没为它付过 ——
 //     与「不存在」是两件事；真题卷的可见性本来就是公开的（列表里能看见），所以这里不必
@@ -101,7 +102,7 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 		s.logger.Warn("查询真题卷列表失败", zap.Int("credential_id", credentialID), zap.Error(err))
 		return out
 	}
-	price := s.points.realPaperPrice()
+	price := s.points.RealPaperPrice()
 	for i := range papers {
 		p := &papers[i]
 		entitled, entErr := s.points.HasEntitlement(userID, entitlement.RealPaperSKU(p.PaperID), strconv.Itoa(p.PaperID))
@@ -130,7 +131,7 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeStartResultDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, ErrRealPaperUnavailable
+		return nil, points.ErrRealPaperUnavailable
 	}
 	entitled, entErr := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
 	if entErr != nil {
@@ -179,7 +180,7 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStartDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, ErrRealPaperUnavailable
+		return nil, points.ErrRealPaperUnavailable
 	}
 	entitled, entErr := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
 	if entErr != nil {

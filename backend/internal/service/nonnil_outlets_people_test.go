@@ -60,13 +60,12 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	"service.HrwaiUserPageResult.list":                outletHrwaiUserPageEmpty,
 	"service.TutorListDTO.tutors":                     outletTutorListEmpty,
 
-	// ===== 投稿 / 资料 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
+	// ===== 投稿 / 资料 / 打卡 / 资料库 / 搜索 / 导师 =====
 	// 通知域的 items 举证已随域包搬去 internal/notification/nonnil_outlets_test.go（ADR-0070）。
+	// 积分域的 items / tasks 举证已随域包搬去 internal/points/nonnil_outlets_test.go（ADR-0070）。
 	"service.ContributionPageResult.items":            outletContributionPageEmpty,
 	"service.ContributionReportPageResult.items":      outletContributionReportPageEmpty,
 	"service.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
-	"service.PointsLedgerResult.items":                outletPointsLedgerEmpty,
-	"service.PointsTasksResult.tasks":                 outletPointsTasksNone,
 	"service.CheckInCalendarResult.days":              outletCheckInCalendar,
 	"service.CheckInRankResult.items":                 outletCheckInRankEmpty,
 	"service.SearchSectionDTO.items":                  outletSearchSectionEmpty,
@@ -330,31 +329,6 @@ func outletProfileChangeRequestPageEmpty(t *testing.T) any {
 	res, err := svc.ListRequests("", 1, 20)
 	if err != nil {
 		t.Fatalf("资料审核列表失败: %v", err)
-	}
-	return res
-}
-
-// outletPointsLedgerEmpty 积分流水：零流水时 items 是空集。
-func outletPointsLedgerEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewPointsService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
-	res, err := svc.GetLedger(1, 1, 20, "")
-	if err != nil {
-		t.Fatalf("积分流水失败: %v", err)
-	}
-	return res
-}
-
-// outletPointsTasksNone 任务列表：一条任务配置都没有时 tasks 是空集。
-// 播一个用户不是为了让 tasks 有内容，而是 loadTaskMeta 先读资料（读不到就 error）。
-func outletPointsTasksNone(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "任务学员", "x")
-	svc := NewPointsService(db, zap.NewNop(), nil, nil)
-	res, err := svc.GetTasks(student.ID)
-	if err != nil {
-		t.Fatalf("任务列表失败: %v", err)
 	}
 	return res
 }

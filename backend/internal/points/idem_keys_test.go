@@ -1,8 +1,8 @@
-// Package service 实现业务服务层。
+// Package points 实现业务服务层。
 // 本文件：积分幂等键构造器快照测试（#608）。逐字钉住全部键格式——键即
 // points_entry_idem 占坑主键，格式漂移会让历史键失配（双发/双扣），任何变更
 // 都必须是有意的口径决策并同步 CONTEXT.md 登记（ADR-0023）。
-package service
+package points
 
 import (
 	"testing"

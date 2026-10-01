@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 )
 
 // forumCore 论坛域共享依赖与私有 helper（接收者沿用 s，与两个 service 同形）。
@@ -31,7 +32,7 @@ type forumCore struct {
 }
 
 // newForumCore 装配共享内核：两个 module 各调用一次（实例分离），依赖实例同源。
-func newForumCore(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *PointsService, logger *zap.Logger) forumCore {
+func newForumCore(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *points.Service, logger *zap.Logger) forumCore {
 	return forumCore{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters,
 		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
 }

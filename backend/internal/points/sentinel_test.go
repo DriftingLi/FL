@@ -1,6 +1,6 @@
-// Package service 积分域错误哨兵语义测试（ADR-0024 C1）：
-// 一语义一哨兵，service 层以 errors.Is 断言语义，不依赖文案字符串。
-package service
+// Package points 积分域错误哨兵语义测试（ADR-0024 C1）：
+// 一语义一哨兵，域包内以 errors.Is 断言语义，不依赖文案字符串。
+package points
 
 import (
 	"context"

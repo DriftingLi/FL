@@ -18,6 +18,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -44,7 +45,7 @@ func TestForumAcceptNotifyContract(t *testing.T) {
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-	RegisterPointsRoutes(apiGroup, deps.RouterDeps(), deps.PointsSvc)
+	points.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.PointsSvc)
 	RegisterFavoriteRoutes(apiGroup, deps.RouterDeps(), deps.FavoriteSvc)
 	RegisterSearchRoutes(apiGroup, deps.RouterDeps(), deps.SearchSvc)
 	notification.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.NotificationSvc)

@@ -547,7 +547,7 @@ var Domains = []Domain{
 			"service.MockExamStartDTO",
 			"service.PracticeStartResultDTO",
 			"service.RealExamPaperDTO",
-			"service.RedeemResult",
+			"points.RedeemResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/real-exam/papers"},
@@ -677,11 +677,11 @@ var Domains = []Domain{
 		Name:  "points",
 		Title: "积分（/api/points/*：余额 / 流水 / 任务中心 / 课程与商城兑换）",
 		Roots: []string{
-			"service.PointsBalanceResult",
-			"service.PointsLedgerResult",
-			"service.PointsTasksResult",
-			"service.PointsClaimResult",
-			"service.RedeemResult",
+			"points.PointsBalanceResult",
+			"points.PointsLedgerResult",
+			"points.PointsTasksResult",
+			"points.PointsClaimResult",
+			"points.RedeemResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/points/balance"},
@@ -914,7 +914,7 @@ var Domains = []Domain{
 			"service.RecruitResumeViewDTO",
 			"service.ContactRequestRowDTO",
 			"service.InspectionCountDTO",
-			"service.PointsLedgerResult",
+			"points.PointsLedgerResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/admin/recruit/views"},

@@ -13,6 +13,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/points"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/paging"
@@ -22,22 +23,22 @@ import (
 // pointsSvc 按需注入：积分流水查询归位 service 层（#401），handler 不再裸查 PointsLedger。
 type InspectionHandler struct {
 	svc       *service.InspectionService
-	pointsSvc *service.PointsService
+	pointsSvc *points.Service
 }
 
 // NewInspectionHandler 创建管理端巡检 handler。
-func NewInspectionHandler(svc *service.InspectionService, pointsSvc *service.PointsService) *InspectionHandler {
+func NewInspectionHandler(svc *service.InspectionService, pointsSvc *points.Service) *InspectionHandler {
 	return &InspectionHandler{svc: svc, pointsSvc: pointsSvc}
 }
 
 // RegisterAdminInspectionRoutes 注册管理端巡检相关路由（#376）。
 // 读路径全部经 service 出 typed DTO：api 层不再持有 *gorm.DB（ADR-0056 §3 静态守卫）。
-func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.InspectionService, pointsSvc *service.PointsService) {
+func RegisterAdminInspectionRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.InspectionService, pointsSvc *points.Service) {
 	h := NewInspectionHandler(svc, pointsSvc)
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapInspectionRead))
 	// 巡检计数：删除已解决帖计数
 	g.GET("/inspection/deleted-after-accepted", h.DeletedAfterAcceptedCount)
-	// 问答积分流水按原因筛选（admin 全量；查询归位 PointsService.GetLedger，#401）
+	// 问答积分流水按原因筛选（admin 全量；查询归位 points.Service.GetLedger，#401）
 	g.GET("/points/ledger", h.PointsLedger)
 	// 招聘企业账号的查看与申请记录（滥用收口靠禁用位）
 	g.GET("/recruit/views", h.ListRecruitViews)
@@ -81,13 +82,13 @@ type pointsLedgerReq struct {
 // @Param reason query string false "积分原因（如 accepted_bonus / rollback）"
 // @Param ref_type query string false "业务域（forum_topic / task / course / ai_chat 等）；不传 = 跨域全量"
 // @Param user_id query int false "用户 ID（>0 生效）"
-// @Success 200 {object} response.R{data=service.PointsLedgerResult} "success"
+// @Success 200 {object} response.R{data=points.PointsLedgerResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "权限不足"
 // @Router /admin/points/ledger [get]
 // PointsLedger 问答积分流水 GET /api/admin/points/ledger?page=&page_size=&reason=&ref_type=&user_id=
 func (h *InspectionHandler) PointsLedger(c *gin.Context) {
-	httpx.Endpoint[pointsLedgerReq, service.PointsLedgerResult]{
+	httpx.Endpoint[pointsLedgerReq, points.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*pointsLedgerReq, error) {
 			return &pointsLedgerReq{
 				Page:     httpx.QueryIntDefault(c, "page", 1),
@@ -99,7 +100,7 @@ func (h *InspectionHandler) PointsLedger(c *gin.Context) {
 				RefType: c.Query("ref_type"),
 			}, nil
 		},
-		Invoke: func(_ context.Context, req *pointsLedgerReq) (*service.PointsLedgerResult, error) {
+		Invoke: func(_ context.Context, req *pointsLedgerReq) (*points.PointsLedgerResult, error) {
 			return h.pointsSvc.GetLedger(req.UserID, req.Page, req.PageSize, req.Reason, req.RefType)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)

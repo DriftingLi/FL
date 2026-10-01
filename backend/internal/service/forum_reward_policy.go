@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 )
 
 // 论坛奖励政策 module（ADR-0047 §3；spec #927 片一）。
@@ -113,11 +114,11 @@ type forumRewardFact struct {
 
 // forumRewardPolicy 论坛奖励政策 module（interface 见文件头注释）。
 type forumRewardPolicy struct {
-	points        *PointsService
+	points        *points.Service
 	notifications *notification.Service
 }
 
-func newForumRewardPolicy(points *PointsService, notifications *notification.Service) *forumRewardPolicy {
+func newForumRewardPolicy(points *points.Service, notifications *notification.Service) *forumRewardPolicy {
 	return &forumRewardPolicy{points: points, notifications: notifications}
 }
 
@@ -175,9 +176,9 @@ func (p *forumRewardPolicy) awardAccept(tx *gorm.DB, fact forumRewardFact) error
 	refID := forumTopicRefID(fact.TopicID)
 	if split.AnswererDelta > 0 {
 		// 占坑键与状态 CAS 双保险「每帖只发一次」（ADR-0023）
-		if err := p.points.SettleRewardTx(tx, PointsEntry{
+		if err := p.points.SettleRewardTx(tx, points.PointsEntry{
 			UserID: fact.AnswererID, Delta: split.AnswererDelta, Reason: ReasonAcceptedBonus,
-			RefType: forumTopicRefType, RefID: refID, IdemKey: AcceptedBonusIdemKey(fact.TopicID),
+			RefType: forumTopicRefType, RefID: refID, IdemKey: points.AcceptedBonusIdemKey(fact.TopicID),
 		}); err != nil {
 			return err
 		}
@@ -187,9 +188,9 @@ func (p *forumRewardPolicy) awardAccept(tx *gorm.DB, fact forumRewardFact) error
 		}
 	}
 	if split.AskerDelta > 0 {
-		if err := p.points.SettleRewardTx(tx, PointsEntry{
+		if err := p.points.SettleRewardTx(tx, points.PointsEntry{
 			UserID: fact.TopicOwner, Delta: split.AskerDelta, Reason: ReasonAcceptAction,
-			RefType: forumTopicRefType, RefID: refID, IdemKey: AcceptActionIdemKey(fact.TopicID),
+			RefType: forumTopicRefType, RefID: refID, IdemKey: points.AcceptActionIdemKey(fact.TopicID),
 		}); err != nil {
 			return err
 		}
@@ -212,9 +213,9 @@ func (p *forumRewardPolicy) awardDesignation(tx *gorm.DB, fact forumRewardFact) 
 	if issued {
 		return nil
 	}
-	if err := p.points.SettleRewardTx(tx, PointsEntry{
+	if err := p.points.SettleRewardTx(tx, points.PointsEntry{
 		UserID: fact.TopicOwner, Delta: FeaturedBonusPoints, Reason: ReasonFeaturedBonus,
-		RefType: forumTopicRefType, RefID: forumTopicRefID(fact.TopicID), IdemKey: FeaturedBonusIdemKey(fact.TopicID),
+		RefType: forumTopicRefType, RefID: forumTopicRefID(fact.TopicID), IdemKey: points.FeaturedBonusIdemKey(fact.TopicID),
 	}); err != nil {
 		return err
 	}
@@ -241,13 +242,13 @@ func (p *forumRewardPolicy) Reclaim(tx *gorm.DB, topicID int64) (int, error) {
 	if !hasReward {
 		return 0, nil
 	}
-	clawed, err := p.points.RollbackByRef(tx, PointsRollback{
+	clawed, err := p.points.RollbackByRef(tx, points.PointsRollback{
 		RefType: forumTopicRefType,
 		RefID:   forumTopicRefID(topicID),
 		Reasons: forumTopicDirectRewardReasons,
-		IdemKey: ForumRollbackIdemKey(topicID),
+		IdemKey: points.ForumRollbackIdemKey(topicID),
 	})
-	if errors.Is(err, ErrPointsProcessed) {
+	if errors.Is(err, points.ErrPointsProcessed) {
 		// 占坑冲突（已回收过）按论坛语义静默放行：删帖动作不因重复回收失败
 		return 0, nil
 	}

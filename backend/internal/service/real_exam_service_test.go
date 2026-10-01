@@ -14,15 +14,16 @@ import (
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
 )
 
-func newRealExamSvc(t *testing.T) (*RealExamService, *PointsService, *QuestionBankService, *gorm.DB) {
+func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *QuestionBankService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
+	pointsSvc := points.NewService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-	return NewRealExamService(db, points, zap.NewNop()), points, qsvc, db
+	return NewRealExamService(db, pointsSvc, zap.NewNop()), pointsSvc, qsvc, db
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
@@ -224,7 +225,7 @@ func TestRealPaperExam(t *testing.T) {
 }
 
 func TestRedeemRealPaper(t *testing.T) {
-	svc, points, qsvc, db := newRealExamSvc(t)
+	svc, pointsSvc, qsvc, db := newRealExamSvc(t)
 	paperID, _ := seedPaper(t, db, qsvc, "兑换卷题一", "兑换卷题二")
 
 	student := testutil.SeedStudent(t, db, "redeemer", "pwd")
@@ -237,7 +238,7 @@ func TestRedeemRealPaper(t *testing.T) {
 		t.Fatalf("建商城项失败: %v", err)
 	}
 
-	res, err := points.RedeemRealPaper(context.Background(), student.ID, paperID)
+	res, err := pointsSvc.RedeemRealPaper(context.Background(), student.ID, paperID)
 	if err != nil {
 		t.Fatalf("兑换失败: %v", err)
 	}
@@ -248,7 +249,7 @@ func TestRedeemRealPaper(t *testing.T) {
 		t.Fatalf("扣费后余额应为 200, got %d", res.Balance)
 	}
 	// 幂等：重复兑换报已兑换
-	if _, err := points.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil || err.Error() != "已兑换" {
+	if _, err := pointsSvc.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil || err.Error() != "已兑换" {
 		t.Fatalf("重复兑换应报已兑换, got %v", err)
 	}
 	// 兑换后可按卷练习
@@ -259,7 +260,7 @@ func TestRedeemRealPaper(t *testing.T) {
 	if err := db.Model(&model.RealExamPaper{}).Where("paper_id = ?", paperID).Update("status", 0).Error; err != nil {
 		t.Fatalf("下架失败: %v", err)
 	}
-	if _, err := points.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil {
+	if _, err := pointsSvc.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil {
 		t.Fatal("下架卷应不可兑换")
 	}
 	_ = svc

@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
 )
 
@@ -19,8 +20,8 @@ import (
 func newRewardPolicyTest(t *testing.T) (*forumRewardPolicy, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
-	policy := newForumRewardPolicy(points, notification.NewService(db, zap.NewNop()))
+	pointsSvc := points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
+	policy := newForumRewardPolicy(pointsSvc, notification.NewService(db, zap.NewNop()))
 	return policy, db
 }
 
@@ -257,7 +258,7 @@ func TestForumRewardPolicy_ReclaimClawsBackAllDirectRewards(t *testing.T) {
 		t.Fatalf("无奖励 Reclaim 应 no-op: %v", err)
 	}
 	var idem int64
-	db.Model(&model.PointsEntryIdem{}).Where("idem_key = ?", ForumRollbackIdemKey(bare.ID)).Count(&idem)
+	db.Model(&model.PointsEntryIdem{}).Where("idem_key = ?", points.ForumRollbackIdemKey(bare.ID)).Count(&idem)
 	if idem != 0 {
 		t.Fatalf("无奖励帖不应落回收占坑行, got %d", idem)
 	}

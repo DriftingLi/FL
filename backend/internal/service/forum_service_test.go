@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -67,10 +68,10 @@ func newForumTestEnv(t *testing.T) *forumTestEnv {
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notificationSvc := notification.NewService(db, zap.NewNop())
 	counters := NewForumCounter()
-	points := NewPointsService(db, zap.NewNop(), nil, notificationSvc)
+	pointsSvc := points.NewService(db, zap.NewNop(), nil, notificationSvc)
 	return &forumTestEnv{
-		svc: NewForumService(db, fileSvc, notificationSvc, counters, points, zap.NewNop()),
-		mod: NewForumModerationService(db, fileSvc, notificationSvc, counters, points, zap.NewNop()),
+		svc: NewForumService(db, fileSvc, notificationSvc, counters, pointsSvc, zap.NewNop()),
+		mod: NewForumModerationService(db, fileSvc, notificationSvc, counters, pointsSvc, zap.NewNop()),
 		db:  db,
 		st:  st,
 	}

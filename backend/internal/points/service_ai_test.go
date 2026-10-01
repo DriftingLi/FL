@@ -1,6 +1,6 @@
-// Package service AI 计费编排回归（#396，ADR-0023）：tokens 估算与兜底阈值单点、
+// Package points AI 计费编排回归（#396，ADR-0023）：tokens 估算与兜底阈值单点、
 // 分桶换算 ceil×10、下限/上限、余额预检、幂等键不变、ErrInsufficientPoints 哨兵匹配。
-package service
+package points
 
 import (
 	"context"

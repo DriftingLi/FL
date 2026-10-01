@@ -139,7 +139,7 @@ func renderStatus(c *gin.Context, status int, msg string) {
 
 // ===== 域级「哨兵 → 状态码」表（#610/#611；票1b 起为错误面唯一出口） =====
 //
-// 每域一张表（pointsErrStatus / contributionErrStatus 等，写在各域文件内）：
+// 每域一张表（points.ErrStatus / contributionErrStatus 等，写在各域文件内）：
 // HTTP 语义归 api 侧（ADR-0024「handler 以 errors.Is 映射状态码」的投影位置），同域端点共用；
 // 不做全仓中央表——同一哨兵跨域可归属不同状态码（如 ErrJobNotFound 同时进 job / application /
 // recruiterApplication 三张表）。

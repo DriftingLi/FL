@@ -6,6 +6,7 @@ import (
 	"forklift-training/internal/faq"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 )
 
 // 域路由注册表（ADR-0047 §6 / spec #933）：一行一域，顺序即注册顺序。
@@ -88,8 +89,8 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "积分",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminPointsRoutes(api, rd, deps.PointsSvc)
-			RegisterPointsRoutes(api, rd, deps.PointsSvc)
+			points.RegisterAdminRoutes(api, rd.Session, deps.PointsSvc)
+			points.RegisterRoutes(api, rd.Session, deps.PointsSvc)
 		},
 	},
 	{

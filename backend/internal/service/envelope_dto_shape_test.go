@@ -6,7 +6,11 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 )
+
+// intPtr 本地 helper：原先复用积分域测试文件里的同名函数，随域包搬走（#1445 P2 波 1b）。
+func intPtr(v int) *int { return &v }
 
 // spec #940 片三（含片二）：信封 DTO 的 shape-lock。
 //
@@ -253,9 +257,9 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &GenerateContentResultDTO{TaskID: "task-abc"},
 		},
 		{
-			name:   "PointsPenaltyResultDTO",
+			name:   "points.PointsPenaltyResultDTO",
 			legacy: map[string]any{"deducted": 30},
-			dto:    &PointsPenaltyResultDTO{Deducted: 30},
+			dto:    &points.PointsPenaltyResultDTO{Deducted: 30},
 		},
 		{
 			name:   "QuestionTagsResultDTO",

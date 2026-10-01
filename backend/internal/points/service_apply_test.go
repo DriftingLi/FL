@@ -1,6 +1,6 @@
-// Package service 积分簿记核心测试（ADR-0023）：占坑幂等、守卫扣减、
+// Package points 积分簿记核心测试（ADR-0023）：占坑幂等、守卫扣减、
 // 兑换并发双花、AI 扣费稳定键、管理员罚分封底 0。
-package service
+package points
 
 import (
 	"context"
@@ -16,10 +16,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newPointsSvc(t *testing.T) (*PointsService, *gorm.DB) {
+func newPointsSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), db
+	return NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), db
 }
 
 // seedUserWithBalance 插入带余额的测试用户，返回用户 ID。
@@ -155,12 +155,12 @@ func TestApplyTxFloorZero(t *testing.T) {
 // 并发重复兑换恰有一笔成功，余额不击穿、流水与权益各一行。
 func TestRedeemShopConcurrentDoubleSpend(t *testing.T) {
 	db := testutil.NewFileDB(t) // :memory: 每连接独立库，并发场景须文件库
-	svc := NewPointsService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
+	svc := NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop()))
 	uid := seedUserWithBalance(t, db, 300)
 	if err := db.Create(&model.PointsShopItem{SKU: "unlock_gold", Title: "金牌", Price: 300, Enabled: true}).Error; err != nil {
 		t.Fatalf("建商城项失败: %v", err)
 	}
-	// 商城兑换的放行判据来自对账表（shop_sku_registry.go）：测试夹具商品在测试里登记读者，
+	// 商城兑换的放行判据来自对账表（sku_registry.go）：测试夹具商品在测试里登记读者，
 	// 与真实商品同一条路径（未登记的 sku 会被拒兑，见 TestRedeemShopRejectsUndeclaredSKU）。
 	withShopSKUDeclForTest(t, "unlock_gold", shopSKUDecl{
 		EntitlementSKU: func(refID string) string { return refID },

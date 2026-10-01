@@ -21,8 +21,27 @@ import (
 
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
 )
+
+// newMeterPointsSvc / seedMeterUser：积分域测试 helper 随域包搬走（#1445 P2 波 1b），
+// 本文件按原形态就地展开这两个最小 helper（原先跨文件复用 service 包内的同名函数）。
+func newMeterPointsSvc(t *testing.T) (*points.Service, *gorm.DB) {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	return points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), db
+}
+
+func seedMeterUser(t *testing.T, db *gorm.DB, balance int) int {
+	t.Helper()
+	u := testutil.SeedStudent(t, db, "pts_user", "x")
+	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", u.ID).UpdateColumn("points_balance", balance).Error; err != nil {
+		t.Fatalf("设置余额失败: %v", err)
+	}
+	return u.ID
+}
 
 // fakeAIMeter 第二个 meter adapter（seam 坐实，ADR-0031 决策 1）：记录事实、可编程结果。
 // 互斥保护：StreamChat 的异步命名 goroutine 也可能进入闸门（CI -race 下验证）。
@@ -35,7 +54,7 @@ type fakeAIMeter struct {
 	gotPromptChars     int
 	gotCompletionChars int
 	preflightErr       error
-	deductRes          *AITokensResult
+	deductRes          *points.AITokensResult
 	deductErr          error
 }
 
@@ -47,7 +66,7 @@ func (f *fakeAIMeter) AIPreflight(userID int) error {
 	return f.preflightErr
 }
 
-func (f *fakeAIMeter) DeductAI(_ context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error) {
+func (f *fakeAIMeter) DeductAI(_ context.Context, userID int, requestID string, promptChars, completionChars int) (*points.AITokensResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deductN++
@@ -61,7 +80,7 @@ func (f *fakeAIMeter) DeductAI(_ context.Context, userID int, requestID string, 
 	if f.deductRes != nil {
 		return f.deductRes, nil
 	}
-	return &AITokensResult{Points: 10, TotalTokens: 100, Balance: 990, PromptTokens: 4, CompletionTokens: 3}, nil
+	return &points.AITokensResult{Points: 10, TotalTokens: 100, Balance: 990, PromptTokens: 4, CompletionTokens: 3}, nil
 }
 
 func (f *fakeAIMeter) snapshot() (preflightN, deductN, promptChars, completionChars int, requestID string) {
@@ -208,12 +227,12 @@ func TestAIMeterRequestIDFallbackKey(t *testing.T) {
 // （handler 据此映射迁移前文案「积分不足，请先去任务中心完成任务」）。
 func TestAIMeterPreflightBlocksBeforeTransport(t *testing.T) {
 	ctx := context.Background()
-	meter := &fakeAIMeter{preflightErr: ErrInsufficientPoints}
+	meter := &fakeAIMeter{preflightErr: points.ErrInsufficientPoints}
 	port, inner := newMeteredStack("不应到达", meter)
 	msgs := []*schema.Message{schema.UserMessage("问")}
 
 	content, usage, err := port.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil)
-	if !errors.Is(err, ErrInsufficientPoints) || content != "" || usage != nil {
+	if !errors.Is(err, points.ErrInsufficientPoints) || content != "" || usage != nil {
 		t.Fatalf("预检阻断应短路: content=%q usage=%+v err=%v", content, usage, err)
 	}
 	if inner.streamN != 0 || meter.deductN != 0 {
@@ -350,7 +369,7 @@ type billingFacts struct {
 // 请求标识缺失时现场降级 → promptChars = len(最后一条用户消息原文) → DeductAI。
 // 迁移后口径的任何调整只允许发生在 meter 单点；本函数与 metered 端口对同一请求
 // 序列的扣费流水必须逐行一致（TestAIMeteringAmountDiffZero 钉住）。
-func legacyHandlerBillingPipeline(ctx context.Context, points *PointsService, f billingFacts) (*AITokensResult, error) {
+func legacyHandlerBillingPipeline(ctx context.Context, points *points.Service, f billingFacts) (*points.AITokensResult, error) {
 	if f.userID > 0 {
 		if err := points.AIPreflight(f.userID); err != nil {
 			return nil, err
@@ -442,20 +461,20 @@ func TestAIMeteringAmountDiffZero(t *testing.T) {
 		{name: "大额扣费封顶100", balance: 1000, userID: 42, requestID: "req-3", prompt: strings.Repeat("叉", 8000), content: strings.Repeat("答", 40000)},
 		{name: "游客不计费", balance: 1000, userID: 0, requestID: "req-4", prompt: "游客提问", content: "游客回复"},
 		{name: "空回复不扣费", balance: 1000, userID: 42, requestID: "req-5", prompt: "空回复提问", content: ""},
-		{name: "余额不足预检阻断", balance: 0, userID: 42, requestID: "req-6", prompt: "余额不足提问", content: "不应到达", wantErr: ErrInsufficientPoints},
+		{name: "余额不足预检阻断", balance: 0, userID: 42, requestID: "req-6", prompt: "余额不足提问", content: "不应到达", wantErr: points.ErrInsufficientPoints},
 		{name: "多模态图文消息同口径", balance: 1000, userID: 42, requestID: "req-7", prompt: "这张液压图里的部件是什么？", content: "图中是多路阀与先导阀组。", multimodal: true},
 		{name: "纯图片全部加载失败（DTO 零口径，注记不计费）", balance: 1000, userID: 42, requestID: "req-8", prompt: "", portText: "[部分图片加载失败: 模拟解码失败注记]", content: "未能识别图片内容，请重新上传或直接文字描述问题。", multimodal: true},
 	}
 
 	// 两侧同构环境：各自独立 DB + 积分域实现；迁移侧以真实 metered 端口 + fake 传输。
-	ptsOld, dbOld := newPointsSvc(t)
-	uidOld := seedUserWithBalance(t, dbOld, 1000)
-	ptsNew, dbNew := newPointsSvc(t)
-	uidNew := seedUserWithBalance(t, dbNew, 1000)
+	ptsOld, dbOld := newMeterPointsSvc(t)
+	uidOld := seedMeterUser(t, dbOld, 1000)
+	ptsNew, dbNew := newMeterPointsSvc(t)
+	uidNew := seedMeterUser(t, dbNew, 1000)
 	innerNew := &fakeAIModelPort{}
 	portNew := NewMeteredAIModel(innerNew, ptsNew, zap.NewNop())
 	if _, ok := any(ptsOld).(AIMetering); !ok {
-		t.Fatal("*PointsService 应原样满足 AIMetering（生产 adapter = 积分域实现）")
+		t.Fatal("*points.Service 应原样满足 AIMetering（生产 adapter = 积分域实现）")
 	}
 
 	// 记录会话级降级键，验证「同侧重试拿到新键」之外，两侧账目仍等价

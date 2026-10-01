@@ -1,5 +1,5 @@
 // C1 契约（#509）：余额接口新增 total_spent（支出聚合）、流水条目暴露 expires_at 设计位。
-package service
+package points
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 func TestPointsBalanceTotalSpent(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	pwd, _ := HashPassword("stu123")
+	pwd := "stu123"
 	stu := testutil.SeedStudent(t, db, "balStu", pwd)
 	// 收入 +100（earned）、支出 -30 与 -20（spent=50）
 	rows := []model.PointsLedger{
@@ -27,7 +27,7 @@ func TestPointsBalanceTotalSpent(t *testing.T) {
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", stu.ID).Update("points_balance", 50).Error; err != nil {
 		t.Fatalf("设余额失败: %v", err)
 	}
-	svc := NewPointsService(db, nil, nil, notification.NewService(db, nil))
+	svc := NewService(db, nil, nil, notification.NewService(db, nil))
 	bal, err := svc.GetBalance(stu.ID)
 	if err != nil {
 		t.Fatalf("GetBalance 失败: %v", err)
@@ -45,13 +45,13 @@ func TestPointsBalanceTotalSpent(t *testing.T) {
 
 func TestPointsLedgerExposesExpiresAt(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	pwd, _ := HashPassword("stu123")
+	pwd := "stu123"
 	stu := testutil.SeedStudent(t, db, "ledStu", pwd)
 	row := model.PointsLedger{UserID: stu.ID, Delta: 10, Reason: "task", RefType: "task", RefID: "1"}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("建流水失败: %v", err)
 	}
-	svc := NewPointsService(db, nil, nil, notification.NewService(db, nil))
+	svc := NewService(db, nil, nil, notification.NewService(db, nil))
 	res, err := svc.GetLedger(stu.ID, 1, 20, "")
 	if err != nil {
 		t.Fatalf("GetLedger 失败: %v", err)
@@ -68,7 +68,7 @@ func TestPointsLedgerExposesExpiresAt(t *testing.T) {
 // TestPointsLedgerDirectionFilter #512：收支方向筛选——in 仅 delta>0、out 仅 delta<0。
 func TestPointsLedgerDirectionFilter(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	pwd, _ := HashPassword("stu123")
+	pwd := "stu123"
 	stu := testutil.SeedStudent(t, db, "dirStu", pwd)
 	rows := []model.PointsLedger{
 		{UserID: stu.ID, Delta: 100, Reason: "task_a", RefType: "task", RefID: "1"},
@@ -80,7 +80,7 @@ func TestPointsLedgerDirectionFilter(t *testing.T) {
 			t.Fatalf("建流水失败: %v", err)
 		}
 	}
-	svc := NewPointsService(db, nil, nil, notification.NewService(db, nil))
+	svc := NewService(db, nil, nil, notification.NewService(db, nil))
 	inRes, err := svc.GetLedgerFiltered(stu.ID, 1, 20, "", "in")
 	if err != nil {
 		t.Fatalf("in 查询失败: %v", err)

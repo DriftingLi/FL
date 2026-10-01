@@ -1,6 +1,6 @@
-// Package service 回收对冲深方法 RollbackByRef 测试（#609）：多笔 SUM、单行特例、
+// Package points 回收对冲深方法 RollbackByRef 测试（#609）：多笔 SUM、单行特例、
 // 原账为零、并发占坑冲突（整事务回滚）、封底 0，及存量 rollback 标记防双扣。
-package service
+package points
 
 import (
 	"errors"
@@ -31,7 +31,7 @@ func seedLedger(t *testing.T, db *gorm.DB, userID, delta int, reason, refType, r
 	}
 }
 
-func rollbackInTx(t *testing.T, db *gorm.DB, svc *PointsService, r PointsRollback) (int, error) {
+func rollbackInTx(t *testing.T, db *gorm.DB, svc *Service, r PointsRollback) (int, error) {
 	t.Helper()
 	var clawed int
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -55,12 +55,12 @@ func idemCount(t *testing.T, db *gorm.DB, key string) int64 {
 func TestRollbackByRefSumsMultipleReasons(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedRollbackUser(t, db, "rb_multi", 100)
-	seedLedger(t, db, uid, 50, ReasonContributionApproved, RefTypeContribution, "7")
-	seedLedger(t, db, uid, 30, ReasonContributionTier, RefTypeContribution, "7")
+	seedLedger(t, db, uid, 50, "contribution_approved", "contribution", "7")
+	seedLedger(t, db, uid, 30, "contribution_tier", "contribution", "7")
 
 	clawed, err := rollbackInTx(t, db, svc, PointsRollback{
-		RefType: RefTypeContribution, RefID: "7",
-		Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
+		RefType: "contribution", RefID: "7",
+		Reasons: []string{"contribution_approved", "contribution_tier"},
 		IdemKey: ContributionRollbackIdemKey(7),
 	})
 	if err != nil || clawed != 80 {
@@ -69,7 +69,7 @@ func TestRollbackByRefSumsMultipleReasons(t *testing.T) {
 	if got := userBalance(t, db, uid); got != 20 {
 		t.Fatalf("余额应为 100-80=20, got %d", got)
 	}
-	if got := ledgerCount(t, db, "user_id = ? AND reason = ? AND ref_type = ? AND ref_id = ?", uid, ReasonRollback, RefTypeContribution, "7"); got != 1 {
+	if got := ledgerCount(t, db, "user_id = ? AND reason = ? AND ref_type = ? AND ref_id = ?", uid, ReasonRollback, "contribution", "7"); got != 1 {
 		t.Fatalf("回收流水应恰一行, got %d", got)
 	}
 	if got := idemCount(t, db, "contribution_rollback:7"); got != 1 {
@@ -81,18 +81,18 @@ func TestRollbackByRefSumsMultipleReasons(t *testing.T) {
 func TestRollbackByRefSingleRowForumBonus(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedRollbackUser(t, db, "rb_single", 200)
-	seedLedger(t, db, uid, AcceptBonusPoints, ReasonAcceptedBonus, "forum_topic", "101")
+	seedLedger(t, db, uid, 40, "accepted_bonus", "forum_topic", "101")
 
 	clawed, err := rollbackInTx(t, db, svc, PointsRollback{
 		RefType: "forum_topic", RefID: "101",
-		Reasons: []string{ReasonAcceptedBonus},
+		Reasons: []string{"accepted_bonus"},
 		IdemKey: ForumRollbackIdemKey(101),
 	})
-	if err != nil || clawed != AcceptBonusPoints {
-		t.Fatalf("单行特例应追回 %d: clawed=%d err=%v", AcceptBonusPoints, clawed, err)
+	if err != nil || clawed != 40 {
+		t.Fatalf("单行特例应追回 %d: clawed=%d err=%v", 40, clawed, err)
 	}
-	if got := userBalance(t, db, uid); got != 200-AcceptBonusPoints {
-		t.Fatalf("余额应为 %d, got %d", 200-AcceptBonusPoints, got)
+	if got := userBalance(t, db, uid); got != 200-40 {
+		t.Fatalf("余额应为 %d, got %d", 200-40, got)
 	}
 	if got := idemCount(t, db, "rollback:101"); got != 1 {
 		t.Fatalf("占坑行应存在: got %d", got)
@@ -106,8 +106,8 @@ func TestRollbackByRefZeroOriginals(t *testing.T) {
 
 	// (a) 该 ref 无任何原账
 	clawed, err := rollbackInTx(t, db, svc, PointsRollback{
-		RefType: RefTypeContribution, RefID: "9",
-		Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
+		RefType: "contribution", RefID: "9",
+		Reasons: []string{"contribution_approved", "contribution_tier"},
 		IdemKey: ContributionRollbackIdemKey(9),
 	})
 	if err != nil || clawed != 0 {
@@ -118,10 +118,10 @@ func TestRollbackByRefZeroOriginals(t *testing.T) {
 	}
 
 	// (b) 原账存在但全为非正向（负向消耗不参与聚合）
-	seedLedger(t, db, uid, -10, "admin_penalty", RefTypeContribution, "10")
+	seedLedger(t, db, uid, -10, "admin_penalty", "contribution", "10")
 	clawed, err = rollbackInTx(t, db, svc, PointsRollback{
-		RefType: RefTypeContribution, RefID: "10",
-		Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
+		RefType: "contribution", RefID: "10",
+		Reasons: []string{"contribution_approved", "contribution_tier"},
 		IdemKey: ContributionRollbackIdemKey(10),
 	})
 	if err != nil || clawed != 0 {
@@ -143,7 +143,7 @@ func TestRollbackByRefZeroOriginals(t *testing.T) {
 func TestRollbackByRefIdemConflictRollsBackTx(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedRollbackUser(t, db, "rb_conflict", 100)
-	seedLedger(t, db, uid, AcceptBonusPoints, ReasonAcceptedBonus, "forum_topic", "5")
+	seedLedger(t, db, uid, 40, "accepted_bonus", "forum_topic", "5")
 	// 预置占坑行（模拟并发先胜者已回收）
 	if err := db.Create(&model.PointsEntryIdem{IdemKey: ForumRollbackIdemKey(5)}).Error; err != nil {
 		t.Fatalf("预置占坑失败: %v", err)
@@ -156,7 +156,7 @@ func TestRollbackByRefIdemConflictRollsBackTx(t *testing.T) {
 		}
 		_, err := svc.RollbackByRef(tx, PointsRollback{
 			RefType: "forum_topic", RefID: "5",
-			Reasons: []string{ReasonAcceptedBonus},
+			Reasons: []string{"accepted_bonus"},
 			IdemKey: ForumRollbackIdemKey(5),
 		})
 		if !errors.Is(err, ErrPointsProcessed) {
@@ -176,7 +176,7 @@ func TestRollbackByRefIdemConflictRollsBackTx(t *testing.T) {
 	if got := userBalance(t, db, uid); got != 100 {
 		t.Fatalf("余额不得被冲突事务改动, got %d", got)
 	}
-	if got := ledgerCount(t, db, "user_id = ? AND reason = ? AND delta = ?", uid, ReasonAcceptedBonus, AcceptBonusPoints); got != 1 {
+	if got := ledgerCount(t, db, "user_id = ? AND reason = ? AND delta = ?", uid, "accepted_bonus", 40); got != 1 {
 		t.Fatalf("原账应原样保留, got %d 行", got)
 	}
 }
@@ -186,13 +186,13 @@ func TestRollbackByRefIdemConflictRollsBackTx(t *testing.T) {
 func TestRollbackByRefFloorsZero(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedRollbackUser(t, db, "rb_floor", 30)
-	seedLedger(t, db, uid, 60, ReasonContributionApproved, RefTypeContribution, "11")
-	seedLedger(t, db, uid, 40, ReasonContributionTier, RefTypeContribution, "11")
+	seedLedger(t, db, uid, 60, "contribution_approved", "contribution", "11")
+	seedLedger(t, db, uid, 40, "contribution_tier", "contribution", "11")
 
 	// 原账 100、余额仅 30：实扣截断为 -30，返回值仍为声明回收额 100（与迁移前 clawedBack 口径一致）
 	clawed, err := rollbackInTx(t, db, svc, PointsRollback{
-		RefType: RefTypeContribution, RefID: "11",
-		Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
+		RefType: "contribution", RefID: "11",
+		Reasons: []string{"contribution_approved", "contribution_tier"},
 		IdemKey: ContributionRollbackIdemKey(11),
 	})
 	if err != nil || clawed != 100 {
@@ -207,13 +207,13 @@ func TestRollbackByRefFloorsZero(t *testing.T) {
 
 	// 余额 0 的首次回收：占坑落行、无流水，返回值仍为原账合计
 	uid2 := seedRollbackUser(t, db, "rb_floor_zero", 0)
-	seedLedger(t, db, uid2, AcceptBonusPoints, ReasonAcceptedBonus, "forum_topic", "77")
+	seedLedger(t, db, uid2, 40, "accepted_bonus", "forum_topic", "77")
 	clawed2, err := rollbackInTx(t, db, svc, PointsRollback{
 		RefType: "forum_topic", RefID: "77",
-		Reasons: []string{ReasonAcceptedBonus},
+		Reasons: []string{"accepted_bonus"},
 		IdemKey: ForumRollbackIdemKey(77),
 	})
-	if err != nil || clawed2 != AcceptBonusPoints {
+	if err != nil || clawed2 != 40 {
 		t.Fatalf("余额 0 回收应返回原账合计: clawed=%d err=%v", clawed2, err)
 	}
 	if got := ledgerCount(t, db, "user_id = ? AND reason = ?", uid2, ReasonRollback); got != 0 {
@@ -232,13 +232,13 @@ func TestRollbackByRefFloorsZero(t *testing.T) {
 func TestRollbackByRefSkipsOnLegacyRollbackRow(t *testing.T) {
 	svc, db := newPointsSvc(t)
 	uid := seedRollbackUser(t, db, "rb_legacy", 100)
-	seedLedger(t, db, uid, AcceptBonusPoints, ReasonAcceptedBonus, "forum_topic", "13")
+	seedLedger(t, db, uid, 40, "accepted_bonus", "forum_topic", "13")
 	// 存量回收流水（无占坑行——占坑表上线前写入）
-	seedLedger(t, db, uid, -AcceptBonusPoints, ReasonRollback, "forum_topic", "13")
+	seedLedger(t, db, uid, -40, ReasonRollback, "forum_topic", "13")
 
 	clawed, err := rollbackInTx(t, db, svc, PointsRollback{
 		RefType: "forum_topic", RefID: "13",
-		Reasons: []string{ReasonAcceptedBonus},
+		Reasons: []string{"accepted_bonus"},
 		IdemKey: ForumRollbackIdemKey(13),
 	})
 	if err != nil || clawed != 0 {
