@@ -28,6 +28,7 @@ import (
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/storage"
 	"forklift-training/pkg/paging"
 )
@@ -581,7 +582,7 @@ func (s *ContributionService) ListPublic(in ListPublicInput) (*ContributionPageR
 		func(q *gorm.DB) *gorm.DB {
 			// 投稿浏览按目标证件分区（归属分区，ADR-0056 §2）：CredentialID 是必填位，
 			// 不存在「未选证件」的 nil 分支。
-			return EntityOwnedBy(q, "credential_id", &in.CredentialID).
+			return scope.EntityOwnedBy(q, "credential_id", &in.CredentialID).
 				Where("status = ?", ContributionStatusApproved)
 		},
 	)

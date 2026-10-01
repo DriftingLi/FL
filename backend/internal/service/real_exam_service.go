@@ -3,6 +3,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 )
 
 // RealExamService 真题套卷服务。
@@ -91,7 +93,7 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 	}
 	var papers []model.RealExamPaper
 	// 套卷按自身证件列分区（归属分区，ADR-0056 §2）：上方 credentialID<=0 已早退，不存在 nil 分支。
-	if err := EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID).
+	if err := scope.EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID).
 		Where("status = 1").
 		Order("year DESC NULLS LAST, paper_id DESC").
 		Find(&papers).Error; err != nil {
@@ -210,8 +212,8 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 		totalScore += int(mockExamMaxScore(&ordered[i]))
 	}
 
-	idsJSON, _ := jsonMarshal(questionIDs)
-	emptyJSON, _ := jsonMarshal(map[string]any{})
+	idsJSON, _ := json.Marshal(questionIDs)
+	emptyJSON, _ := json.Marshal(map[string]any{})
 	startTime := clock.Now()
 	paperIDCopy := paperID
 	mock := model.MockExam{

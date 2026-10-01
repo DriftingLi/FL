@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/timefmt"
@@ -186,7 +187,7 @@ func TestQueryProfileCourseProgressBatchBackfill(t *testing.T) {
 
 	// 课程级进度 + 章节级时长：progress 只看课程级(MAX)，时长汇总全部
 	seedStudyRecord(t, db, student.ID, course.CourseID, nil, 60, 20, d1)
-	seedStudyRecord(t, db, student.ID, course.CourseID, ptrInt(1), 0, 30, d2)
+	seedStudyRecord(t, db, student.ID, course.CourseID, coerce.IntPtr(1), 0, 30, d2)
 
 	// 未知课程的学习记录（course 已删）：档案进度行应被跳过（与逐行 First 失败 continue 同语义）
 	seedStudyRecord(t, db, student.ID, 7777, nil, 40, 10, d1)

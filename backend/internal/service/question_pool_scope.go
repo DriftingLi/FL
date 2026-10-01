@@ -20,6 +20,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 )
 
 // 题库池谓词的两个 SQL 片段（表别名固定 question）。raw SQL 计数必须引用它们，
@@ -41,7 +42,7 @@ const (
 func QuestionPoolScope(q *gorm.DB, cred *int) *gorm.DB {
 	q = q.Where(QuestionPoolPublishedSQL).Where(QuestionPoolExcludeSourceTagsSQL)
 	// 池的第三个元（证件分区）走归属分区具名谓词（ADR-0056 §2）：nil = 不分区、看全部。
-	return EntityOwnedBy(q, QuestionPoolCredentialColumn, cred)
+	return scope.EntityOwnedBy(q, QuestionPoolCredentialColumn, cred)
 }
 
 // ===== scope 值对象（ADR-0062 决策 4）=====
@@ -79,7 +80,7 @@ func (s QuestionReadScope) Apply(q *gorm.DB) *gorm.DB { return QuestionPoolScope
 // 位置的既有消费者，就地重写谓词正是本票要关闭的漂移窗口。
 func (s QuestionReadScope) WhereSQL() (string, []any) {
 	frag := QuestionPoolPublishedSQL + " AND " + QuestionPoolExcludeSourceTagsSQL
-	clause, args := entityOwnedByClause(QuestionPoolCredentialColumn, s.cred)
+	clause, args := scope.EntityOwnedByClause(QuestionPoolCredentialColumn, s.cred)
 	if clause == "" {
 		return frag, nil
 	}
@@ -116,7 +117,7 @@ func NewQuestionEditScope(credFilter *int) QuestionEditScope {
 
 // ApplyListFilter 叠上证件筛选轴（归属分区谓词的编辑面用法：nil → 不筛，看全部）。
 func (s QuestionEditScope) ApplyListFilter(q *gorm.DB) *gorm.DB {
-	return EntityOwnedBy(q, "credential_id", s.credFilter)
+	return scope.EntityOwnedBy(q, "credential_id", s.credFilter)
 }
 
 // questionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），

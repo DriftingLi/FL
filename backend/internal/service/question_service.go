@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/pkg/paging"
 )
@@ -354,7 +356,7 @@ func NewQuestionBankService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger)
 // CreateQuestion 创建题目（票 6 typed 面）：字段类型不符在绑定层即失败；status 通道不存在，
 // 创建固定入 pending 审核队列；证件校验遇 DB 故障如实上抛（旧实现 fail-open 吞错）。
 func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *int, createdByType string) (QuestionDTO, error) {
-	if !containsString(validQuestionTypes, in.Type) {
+	if !slices.Contains(validQuestionTypes, in.Type) {
 		return QuestionDTO{}, fmt.Errorf("%w，支持的题型：%s", ErrQuestionTypeInvalid, strings.Join(validQuestionTypes, ", "))
 	}
 	if in.Content == "" {
@@ -451,7 +453,7 @@ func (s *QuestionBankService) UpdateQuestion(id int, in QuestionUpdateInput, act
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
-	if in.Type != nil && !containsString(validQuestionTypes, *in.Type) {
+	if in.Type != nil && !slices.Contains(validQuestionTypes, *in.Type) {
 		return QuestionDTO{}, ErrQuestionTypeInvalid
 	}
 	answerChanged := false
@@ -884,7 +886,7 @@ func toInt(v interface{}) int {
 	case int64:
 		return int(n)
 	case string:
-		i, _ := parseInt(n)
+		i, _ := coerce.ParseInt(n)
 		return i
 	}
 	return 0

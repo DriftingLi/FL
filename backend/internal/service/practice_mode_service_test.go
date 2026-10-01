@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -24,8 +25,8 @@ func TestStartTagPractice(t *testing.T) {
 	svc, db := newPracticeSvc(t)
 	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
 
-	tag1, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: ptrInt(1)})
-	tag2, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(2)})
+	tag1, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
+	tag2, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
 
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	q1 := createQuestionAs(t, qsvc, db, QuestionCreateInput{

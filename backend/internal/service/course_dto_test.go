@@ -3,6 +3,7 @@
 package service
 
 import "testing"
+import "forklift-training/internal/coerce"
 
 func sampleCourseDTO() CourseDTO {
 	return CourseDTO{
@@ -11,9 +12,9 @@ func sampleCourseDTO() CourseDTO {
 		Description:           "描述",
 		CoverImage:            "/static/uploads/covers/1.png",
 		Duration:              120,
-		CredentialID:          ptrInt(1),
-		SpecialtyID:           ptrInt(1),
-		LevelID:               ptrInt(2),
+		CredentialID:          coerce.IntPtr(1),
+		SpecialtyID:           coerce.IntPtr(1),
+		LevelID:               coerce.IntPtr(2),
 		TheoryHours:           20,
 		PracticeHours:         10,
 		CertificateTemplateID: nil,
@@ -99,7 +100,7 @@ func TestChapterDTOShapeLock(t *testing.T) {
 func TestChapterFileDTOShapeLock(t *testing.T) {
 	// legacy 兼容条目：file_id=0、chapter_id=int（非 null）
 	legacy := ChapterFileDTO{
-		ChapterID: ptrInt(1), ContentType: "document", CreatedAt: "2026-08-01T10:00:00",
+		ChapterID: coerce.IntPtr(1), ContentType: "document", CreatedAt: "2026-08-01T10:00:00",
 		FileID: 0, FileName: "a.pdf", FileSize: 0, FileURL: "/static/uploads/chapters/a.pdf",
 	}
 	assertShapeLock(t, legacy,

@@ -3,6 +3,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"go.uber.org/zap"
@@ -16,11 +17,11 @@ import (
 // seedInProgressMockExam 落一条进行中的模考记录（题目集 / 作答快照都经 JSONB，与线上同形）。
 func seedInProgressMockExam(t *testing.T, db *gorm.DB, studentID int, ids []int, answers map[string]any) *model.MockExam {
 	t.Helper()
-	idsJSON, err := jsonMarshal(ids)
+	idsJSON, err := json.Marshal(ids)
 	if err != nil {
 		t.Fatalf("序列化题目集失败: %v", err)
 	}
-	answersJSON, err := jsonMarshal(answers)
+	answersJSON, err := json.Marshal(answers)
 	if err != nil {
 		t.Fatalf("序列化作答快照失败: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 		t.Errorf("mock_exam.score = %v, want %v", saved.Score, got.TotalScore)
 	}
 	var persisted MockExamSubmitDTO
-	if err := jsonUnmarshal(saved.Result, &persisted); err != nil {
+	if err := json.Unmarshal(saved.Result, &persisted); err != nil {
 		t.Fatalf("解析落库 result 失败: %v", err)
 	}
 	assertTotalIsSumOfDetails(t, &persisted)

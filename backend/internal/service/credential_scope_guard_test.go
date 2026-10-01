@@ -9,8 +9,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// 本文件 = 「service 包不得再出现裸 credential_id 谓词」的静态扫描锁（ADR-0056 §2 锁之一）。
+// 本文件 = 「生产代码不得再出现裸 credential_id 谓词」的静态扫描锁（ADR-0056 §2 锁之一）。
 // 用 Go 测试实现（读包内源码），不新增 CI 步骤、不动 scripts/ 与 .github/workflows。
+// 本文件住在 internal/service 是**射程**选择（装配与读面都在这），与谓词实现处无关——
+// P2 波 0b 起三族谓词住在叶子包 internal/scope，白名单随实现处改指那里。
 
 var (
 	// 裸谓词：字符串里直接出现「证件列 + 比较符」（等值 / 不等 / NULL 判定）。
@@ -36,11 +38,11 @@ func scanBareCredentialPredicates(src string) []string {
 	return hits
 }
 
-// TestServicePackageHasNoBareCredentialPredicate 真源扫描：包内**全部**源文件（含测试）里，
+// TestNoBareCredentialPredicate 真源扫描：论域内**全部**源文件（含本包测试）里，
 // 证件分区谓词只允许出现在白名单——
-//   - credential_scope.go：三族谓词的实现处；
+//   - internal/scope/scope.go：三族谓词与三枚 SQL 片段的实现处（「证件列 + 运算符」的拼接点）；
 //   - credential_scope_guard_test.go：本扫描器自身的探针样本（回归形态的字面量本身就是样本）。
-func TestServicePackageHasNoBareCredentialPredicate(t *testing.T) {
+func TestNoBareCredentialPredicate(t *testing.T) {
 	// 射程 = **生产代码全域 + 本包测试**（原先是「本包目录」）：拆包后新的域包自动进射程，
 	// 不必回来补目录；别的包的测试夹具不进射程 —— 它们拿 HTTP 查询串与契约测试的 db.Where
 	// 就会撞上这条谓词（实测 33 处，全在 internal/api 的契约夹具里），那不在本锁论域内。
@@ -50,7 +52,7 @@ func TestServicePackageHasNoBareCredentialPredicate(t *testing.T) {
 	// cmd/migrate check-columns 与 migrate 包的目录/列测试管着。除它之外**全部生产代码**进射程。
 	outOfScope := map[string]bool{"internal/migrate": true}
 	// 白名单按**模块根相对路径**登记（原先按文件名）：拆包后同名文件可能落在新目录，路径唯一。
-	const implementation = "internal/service/credential_scope.go"
+	const implementation = "internal/scope/scope.go"
 	allowlist := map[string]bool{
 		implementation: true,
 		"internal/service/credential_scope_guard_test.go": true,
@@ -83,7 +85,7 @@ func TestServicePackageHasNoBareCredentialPredicate(t *testing.T) {
 		t.Fatalf("扫描规则失灵：白名单 %s 只命中 %d 条谓词实现", implementation, implementationHits)
 	}
 	if len(violations) > 0 {
-		t.Fatalf("service 包出现裸证件分区谓词（应改调 credential_scope.go 的具名谓词）：\n%s", strings.Join(violations, "\n"))
+		t.Fatalf("生产代码出现裸证件分区谓词（应改调 internal/scope 的具名谓词）：\n%s", strings.Join(violations, "\n"))
 	}
 }
 
@@ -100,7 +102,7 @@ func TestCredentialPredicateScanProbes(t *testing.T) {
 		{"正向探针：NULL 桶分支", "return \"credential_id IS NULL\", nil", 1},
 		{"正向探针：非空 NULL 分支", "return \"credential_id IS NOT NULL\", nil", 1},
 		{"正向探针：列常量拼接", "query += \" AND \" + QuestionPoolCredentialColumn + \" = ?\"", 1},
-		{"负向样本：具名谓词调用", "q = EntityOwnedBy(q, \"question.credential_id\", credentialID)", 0},
+		{"负向样本：具名谓词调用（含域包限定名）", "q = scope.EntityOwnedBy(q, \"question.credential_id\", credentialID)", 0},
 		{"负向样本：列名常量定义", "const QuestionPoolCredentialColumn = \"question.credential_id\"", 0},
 		{"负向样本：无关谓词", "q = q.Where(\"status = ?\", 1)", 0},
 		{"负向样本：整行注释", "// 旧实现：q.Where(\"credential_id = ?\", cred)", 0},

@@ -121,7 +121,7 @@ func companyUnavailableForCards(db *gorm.DB, recruiterID int) bool {
 // resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id
 // （CAST 兼容 pg 与 sqlite；精确匹配 "credential_id":<id>，避免数字误匹配日期等）。
 //
-// **不是证件分区**：一张简历可持有多个证件，故不能并入 credential_scope.go 的归属分区谓词
+// **不是证件分区**：一张简历可持有多个证件，故不能并入 internal/scope 的归属分区谓词
 // （那个谓词按行自身的单个证件列过滤）；本谓词属招聘域的持证筛选口径（ADR-0056 §2 边界外）。
 func resumeHoldsCredential(q *gorm.DB, credentialID int) *gorm.DB {
 	idStr := strconv.Itoa(credentialID)

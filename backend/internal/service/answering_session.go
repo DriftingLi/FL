@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 )
 
 // guardOwnedInProgress 答题会话守卫：记录归属当前学员且处于进行中。
@@ -89,7 +90,7 @@ type ResumeSetSpec struct {
 func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec) (ids []int, startIdx int, err error) {
 	var prog model.PracticeProgress
 	// #414 / ADR-0056 §2：进度定位走 NULL 桶谓词——nil 只取「未选定证件」那一桶（不是看全部）。
-	q := PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
+	q := scope.PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
 		Where("student_id = ? AND practice_mode = ?", studentID, spec.Mode)
 	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return nil, 0, err
@@ -129,7 +130,7 @@ func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec
 func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []int, startIdx, total int, answers json.RawMessage) error {
 	var prog model.PracticeProgress
 	// ADR-0056 §2：与 ResumeSet 同源——进度按证件分桶，nil 只取未选定证件那一桶。
-	q := PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
+	q := scope.PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
 		Where("student_id = ? AND practice_mode = ?", studentID, mode)
 	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return err

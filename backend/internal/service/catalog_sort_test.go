@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 	"go.uber.org/zap"
@@ -75,16 +76,16 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("创建方向失败: %v", err)
 	}
 
-	c1, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程1"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID)})
+	c1, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程1"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c2, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程2"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID)})
+	c2, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程2"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	// 另一方向+等级组：从 1 重新开始
-	c3, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程3"), SpecialtyID: ptrInt(spec2.SpecialtyID), LevelID: ptrInt(lv.LevelID)})
+	c3, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程3"), SpecialtyID: coerce.IntPtr(spec2.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("不同组课程 sort_order 应从 1 开始, got %v", c3.SortOrder)
 	}
 	// 显式传入 sort_order 时尊重传值
-	c4, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程4"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), SortOrder: ptrInt(9)})
+	c4, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程4"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), SortOrder: coerce.IntPtr(9)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -169,8 +170,8 @@ func TestSwapCourseSortGroupBoundary(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatal(err)
 	}
-	c1 := model.Course{Name: "A", Status: 1, SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
-	c2 := model.Course{Name: "B", Status: 1, SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+	c1 := model.Course{Name: "A", Status: 1, SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	c2 := model.Course{Name: "B", Status: 1, SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c1).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +187,7 @@ func TestSwapCourseSortGroupBoundary(t *testing.T) {
 	if err := db.Create(&lv2).Error; err != nil {
 		t.Fatal(err)
 	}
-	c3 := model.Course{Name: "C", Status: 1, SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv2.LevelID), CreatedAt: testutil.Now()}
+	c3 := model.Course{Name: "C", Status: 1, SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv2.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c3).Error; err != nil {
 		t.Fatal(err)
 	}

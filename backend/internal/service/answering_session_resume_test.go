@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -138,8 +139,8 @@ func TestQuestionPoolOptsUnified(t *testing.T) {
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	psvc := NewPracticeModeService(db, nil, zap.NewNop())
 
-	tag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(1)})
-	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题", SortOrder: ptrInt(2)})
+	tag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
+	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题", SortOrder: coerce.IntPtr(2)})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}

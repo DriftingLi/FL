@@ -4,6 +4,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -45,7 +46,7 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 		if opts.LevelID != nil {
 			q = q.Where("level_id = ?", *opts.LevelID)
 		}
-		q = EntityOwnedBy(q, "credential_id", opts.CredentialID)
+		q = scope.EntityOwnedBy(q, "credential_id", opts.CredentialID)
 		if opts.Filter == "hot" {
 			q = q.Where("is_hot = ?", true)
 		} else if opts.Filter == "featured" {

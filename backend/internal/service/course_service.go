@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 )
@@ -953,7 +954,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 			if count == 0 {
 				return ErrCourseCredentialRefNotFound
 			}
-			course.CredentialID = ptrInt(id)
+			course.CredentialID = coerce.IntPtr(id)
 		}
 	}
 	if in.SpecialtyID != nil {
@@ -971,7 +972,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 			if count == 0 {
 				return ErrSpecialtyNotFound
 			}
-			course.SpecialtyID = ptrInt(id)
+			course.SpecialtyID = coerce.IntPtr(id)
 		}
 	}
 	if in.LevelID != nil {
@@ -989,7 +990,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 			if count == 0 {
 				return ErrCourseLevelNotFound
 			}
-			course.LevelID = ptrInt(id)
+			course.LevelID = coerce.IntPtr(id)
 		}
 	}
 	if in.CertificateTemplateID != nil {
@@ -1007,7 +1008,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 			if count == 0 {
 				return ErrCertificateTemplateNotFound
 			}
-			course.CertificateTemplateID = ptrInt(id)
+			course.CertificateTemplateID = coerce.IntPtr(id)
 		}
 	}
 	if in.TheoryHours != nil {

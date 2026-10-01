@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -9,7 +10,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
@@ -170,8 +173,8 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		totalScore += int(mockExamMaxScore(&q))
 	}
 
-	idsJSON, _ := jsonMarshal(questionIDs)
-	emptyJSON, _ := jsonMarshal(map[string]any{})
+	idsJSON, _ := json.Marshal(questionIDs)
+	emptyJSON, _ := json.Marshal(map[string]any{})
 	startTime := clock.Now()
 	mock := model.MockExam{
 		StudentID: studentID,
@@ -237,7 +240,7 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 
 	var ids []int
 	if len(mock.QuestionIDs) > 0 {
-		_ = jsonUnmarshal(mock.QuestionIDs, &ids)
+		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
 	ordered, _ := loadOrderedQuestions(s.db, ids)
 	questions := make([]QuestionDTO, 0, len(ordered))
@@ -275,7 +278,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	answersMap := answersMapRoundTrip(mock.Answers)
 	var ids []int
 	if len(mock.QuestionIDs) > 0 {
-		_ = jsonUnmarshal(mock.QuestionIDs, &ids)
+		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
 	_, qMap := loadOrderedQuestions(s.db, ids)
 
@@ -315,7 +318,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		}
 		var options interface{}
 		if len(question.Options) > 0 {
-			_ = jsonUnmarshal(question.Options, &options)
+			_ = json.Unmarshal(question.Options, &options)
 		}
 		detail.Options = options
 
@@ -334,7 +337,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	mock.Status = mockExamStatusSubmitted
 	submitTime := clock.Now()
 	mock.SubmitTime = &submitTime
-	mock.Score = floatPtr(totalScore)
+	mock.Score = coerce.FloatPtr(totalScore)
 	accuracy := 0.0
 	if len(ids) > 0 {
 		accuracy = roundFloat1(float64(correctCount) / float64(len(ids)) * 100)
@@ -347,7 +350,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		Accuracy:       accuracy,
 		Details:        details,
 	}
-	resultJSON, _ := jsonMarshal(result)
+	resultJSON, _ := json.Marshal(result)
 	mock.Result = model.JSONB(resultJSON)
 	if err := s.db.Save(&mock).Error; err != nil {
 		return nil, err
@@ -369,7 +372,7 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 	}
 	var result MockExamSubmitDTO
 	if len(mock.Result) > 0 {
-		_ = jsonUnmarshal(mock.Result, &result)
+		_ = json.Unmarshal(mock.Result, &result)
 	}
 	submitISO := ""
 	if mock.SubmitTime != nil {
@@ -392,7 +395,7 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
 	exams, total, page, pageSize, err := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
-		q = RecordPartitionOf(q, "credential_id", credentialID)
+		q = scope.RecordPartitionOf(q, "credential_id", credentialID)
 		return q
 	})
 	if err != nil {
@@ -423,13 +426,13 @@ func mockExamMaxScore(q *model.Question) float64 {
 func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 	var ids, answers, result any
 	if len(m.QuestionIDs) > 0 {
-		_ = jsonUnmarshal(m.QuestionIDs, &ids)
+		_ = json.Unmarshal(m.QuestionIDs, &ids)
 	}
 	if len(m.Answers) > 0 {
-		_ = jsonUnmarshal(m.Answers, &answers)
+		_ = json.Unmarshal(m.Answers, &answers)
 	}
 	if len(m.Result) > 0 {
-		_ = jsonUnmarshal(m.Result, &result)
+		_ = json.Unmarshal(m.Result, &result)
 	}
 	startISO, submitISO := "", ""
 	if m.StartTime != nil {
