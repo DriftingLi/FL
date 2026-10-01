@@ -197,9 +197,9 @@ func TestWithTimeout(t *testing.T) {
 }
 
 func TestBeijingNow(t *testing.T) {
-	now := beijingNow()
+	now := BeijingNow()
 	if now.IsZero() {
-		t.Error("beijingNow 不应返回零值")
+		t.Error("BeijingNow 不应返回零值")
 	}
 	// 北京时间应为 UTC+8
 	_, offset := now.Zone()

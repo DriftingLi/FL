@@ -2,6 +2,8 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/internal/faq"
 )
 
 // 域路由注册表（ADR-0047 §6 / spec #933）：一行一域，顺序即注册顺序。
@@ -115,7 +117,7 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "帮助中心",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			// #1079：学员端只读整页（faq.read）+ 管理端分类与条目 CRUD（faq.manage）
-			RegisterFaqRoutes(api, rd, deps.FaqSvc)
+			faq.RegisterRoutes(api, rd.Session, deps.FaqSvc)
 		},
 	},
 	{

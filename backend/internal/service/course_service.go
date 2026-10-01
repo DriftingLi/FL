@@ -554,7 +554,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyPro
 			CourseID:      courseID,
 			StudyDuration: record.StudyDuration,
 			Progress:      0,
-			StudyDate:     beijingNow(),
+			StudyDate:     BeijingNow(),
 		}
 		if err := s.db.Create(&record).Error; err != nil {
 			return nil, err
@@ -572,7 +572,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyPro
 		if e := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).
 			Order("record_id ASC").Limit(1).Find(&ch).Error; e == nil && ch.RecordID > 0 {
 			ch.StudyDuration += duration
-			ch.StudyDate = beijingNow()
+			ch.StudyDate = BeijingNow()
 			updates := map[string]any{
 				"study_duration": ch.StudyDuration,
 				"study_date":     ch.StudyDate,
@@ -603,7 +603,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyPro
 				StudyDuration: duration,
 				Progress:      chProgress,
 				VideoPosition: videoPosition,
-				StudyDate:     beijingNow(),
+				StudyDate:     BeijingNow(),
 			}
 			if err := s.db.Create(&newChapter).Error; err != nil {
 				return nil, err
@@ -620,7 +620,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyPro
 	// 4. 刷新课程级学习位置（ADR-0017）：带章节的上报即最后学习位置。
 	if chapterID > 0 {
 		record.LastChapterID = &chapterID
-		now := beijingNow()
+		now := BeijingNow()
 		record.LastStudiedAt = &now
 	}
 	record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
@@ -1062,7 +1062,7 @@ func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) erro
 		rels = append(rels, model.CoursePrerequisite{
 			CourseID:             courseID,
 			PrerequisiteCourseID: id,
-			CreatedAt:            beijingNow(),
+			CreatedAt:            BeijingNow(),
 		})
 	}
 	return db.Transaction(func(tx *gorm.DB) error {

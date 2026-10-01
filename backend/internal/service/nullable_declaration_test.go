@@ -104,7 +104,7 @@ func TestNullableDeclaredOutletsEmitNull(t *testing.T) {
 	for key, build := range outlets {
 		t.Run(key, func(t *testing.T) {
 			jsonKey := key[strings.LastIndex(key, ".")+1:]
-			got := marshalKey(t, build(t), jsonKey)
+			got := testutil.MarshalKey(t, build(t), jsonKey)
 			if got != "null" {
 				t.Fatalf("声明 nullable 的 %s 实际发出 %s——这句表态没有出口证明，"+
 					"要么找一条真发 null 的出口，要么按实测改判 nonnil", key, got)

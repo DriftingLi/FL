@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/daemon"
+	"forklift-training/internal/faq"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -79,7 +80,7 @@ type Deps struct {
 	QuestionCommentSvc   *service.QuestionCommentService
 	NoteSvc              *service.NoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService
-	FaqSvc               *service.FaqService
+	FaqSvc               *faq.Service
 	PointsSvc            *service.PointsService
 	JobCardSvc           *service.JobCardService
 	ResumePDFRenderer    *service.ResumePDFRenderer

@@ -395,7 +395,7 @@ func (s *SearchService) recordSearchFact(keyword, searchType string, counts sear
 		Keyword: keyword, SearchType: searchType,
 		CourseHits: counts.course, ChapterHits: counts.chapter, QuestionHits: counts.question,
 		ContentHits: counts.content, TopicHits: counts.topic,
-		TotalHits: counts.total(), CreatedAt: beijingNow(),
+		TotalHits: counts.total(), CreatedAt: BeijingNow(),
 	}
 	if err := s.db.Create(&fact).Error; err != nil && s.logger != nil {
 		s.logger.Warn("记录检索事实失败", zap.Error(err))
@@ -427,7 +427,7 @@ func (s *SearchService) ZeroResultKeywords(days, limit int) ([]ZeroResultKeyword
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	since := beijingNow().AddDate(0, 0, -days)
+	since := BeijingNow().AddDate(0, 0, -days)
 	// LastSeenAt 在**字符串面**上收口：SQLite 的 MAX(created_at) 回字符串、Postgres 回 timestamptz，
 	// 扫描类型不同；统一取字符串再规范化成 ISO（ADR-0043 时间契约）。
 	var rows []struct {

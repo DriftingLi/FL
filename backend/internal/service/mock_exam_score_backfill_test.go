@@ -22,7 +22,7 @@ func seedSubmittedMockExamWithResult(t *testing.T, db *gorm.DB, studentID int, s
 		}
 		raw = model.JSONB(buf)
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	mock := &model.MockExam{
 		StudentID:  studentID,
 		Status:     mockExamStatusSubmitted,
@@ -159,7 +159,7 @@ func TestBackfillMockExamTotalScoresSkipsRecordsWithoutFacts(t *testing.T) {
 	})
 
 	// 未交卷：即使带明细也不在回填面内。
-	now := beijingNow()
+	now := BeijingNow()
 	inProgress := &model.MockExam{
 		StudentID: student.ID,
 		Status:    mockExamStatusInProgress,

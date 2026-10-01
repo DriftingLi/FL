@@ -24,7 +24,7 @@
 //     是举证装置照不到；下一波要么给这两个包加证据源，要么把它们从判据 4 的分母里显式移出。
 //   - 键缺席而非 null：*[]T + omitempty 的那几格（CourseDTO.chapters / prerequisites /
 //     prerequisite_course_ids、ContributionItemDTO.files）。诚实形状是 nonnil + 既有 x-optional，
-//     marshalKey 在键缺席时判红，所以它们必须走一条**填得上**的出口才算举证。
+//     testutil.MarshalKey 在键缺席时判红，所以它们必须走一条**填得上**的出口才算举证。
 package service
 
 import (

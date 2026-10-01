@@ -93,7 +93,13 @@ var (
 	nullableEvidenceSources = []outletSource{{"internal/service", "nullableOutlets"}}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
-	nonNilEvidenceSources = []outletSource{{"internal/service", "nonnilOutlets"}, {"internal/api", "nonnilOutlets"}}
+	// 域包拆出去之后多一行 internal/faq（表住在域包里，见 internal/faq/nonnil_outlets_test.go）——
+	// 「哪个域举证、证据在哪」跟着域走，这个清单是它唯一的登记处。
+	nonNilEvidenceSources = []outletSource{
+		{"internal/service", "nonnilOutlets"},
+		{"internal/api", "nonnilOutlets"},
+		{"internal/faq", "nonnilOutlets"},
+	}
 )
 
 // outletEvidenceKeys 收集来源目录里所有名字以 prefix 开头的复合字面量变量的键。
@@ -102,6 +108,10 @@ var (
 func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
+	// 一个键只许有一个举证地（跨包也算）：证据表拆进各域包之后，同一把钥匙若在两个包里各写
+	// 一遍，合并后的 map 会把重复悄悄吃掉 —— 运行时那条「同名键出现在两张表即 Fatal」只管得住
+	// 同一个包内（见 testutil.AssertNonNilOutlets），跨包这半边由这里补上。
+	owner := map[string]string{}
 	root := testutil.ModuleRoot(t)
 	for _, src := range sources {
 		dir := filepath.Join(root, filepath.FromSlash(src.dir))
@@ -139,7 +149,13 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 					if !ok {
 						continue
 					}
-					out[strings.Trim(key.Value, `"`)] = true
+					k := strings.Trim(key.Value, `"`)
+					if prev, ok := owner[k]; ok && prev != src.dir {
+						t.Fatalf("%s 里的 %q 同时在 %s 举证：一条事实只许有一个举证地（跨包同一把钥匙会让「谁欠证据」失去唯一答案）",
+							src.dir, k, prev)
+					}
+					owner[k] = src.dir
+					out[k] = true
 				}
 				return false
 			})
@@ -191,6 +207,7 @@ func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
 var sweptDirs = map[string]string{
 	"service":    "../service",
 	"api":        "../api",
+	"faq":        "../faq",
 	"model":      "../model",
 	"repository": "../valuation/repository",
 }

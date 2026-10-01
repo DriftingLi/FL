@@ -130,14 +130,14 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, 
 	}
 	if n.ID != 0 {
 		n.Content = content
-		n.UpdatedAt = beijingNow()
+		n.UpdatedAt = BeijingNow()
 		if err := s.db.Save(&n).Error; err != nil {
 			return nil, err
 		}
 		return &n, nil
 	}
 	qid := questionID
-	n = model.Note{QuestionID: &qid, UserID: userID, Content: content, UpdatedAt: beijingNow()}
+	n = model.Note{QuestionID: &qid, UserID: userID, Content: content, UpdatedAt: BeijingNow()}
 	if err := s.db.Create(&n).Error; err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (s *NoteService) Create(userID int, content string) (*model.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	n := model.Note{UserID: userID, Content: content, UpdatedAt: beijingNow()}
+	n := model.Note{UserID: userID, Content: content, UpdatedAt: BeijingNow()}
 	if err := s.db.Create(&n).Error; err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (s *NoteService) Update(id, userID int, content string) (*model.Note, error
 		return nil, err
 	}
 	n.Content = content
-	n.UpdatedAt = beijingNow()
+	n.UpdatedAt = BeijingNow()
 	if err := s.db.Save(&n).Error; err != nil {
 		return nil, err
 	}

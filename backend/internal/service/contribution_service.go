@@ -841,7 +841,7 @@ func (s *ContributionService) Download(userID int, contributionID int64) (*Downl
 		// 1. 落事实源（唯一约束幂等：同人重复点只算 1 次）
 		dl := model.ContributionDownload{UserID: userID, ContributionID: contributionID, CreatedAt: now}
 		if err := tx.Create(&dl).Error; err != nil {
-			if isDuplicateError(err) {
+			if IsDuplicateError(err) {
 				// 已下载过：幂等返回（不新增计数）
 				return nil
 			}
@@ -923,7 +923,7 @@ func (s *ContributionService) Report(reporterID int, contributionID int64, reaso
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.db.Create(&rep).Error; err != nil {
-		if !isDuplicateError(err) {
+		if !IsDuplicateError(err) {
 			return err
 		}
 		// 重复举报：合并（更新理由与状态回待处理），不新增行

@@ -203,7 +203,7 @@ func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdmin
 	if in.SortOrder != nil {
 		sortOrder = *in.SortOrder
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	item := model.FeaturedContent{
 		Title:      in.Title,
 		Summary:    in.Summary,
@@ -284,11 +284,11 @@ func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*Featur
 		}
 	}
 	if oldStatus == 0 && newStatus == 1 {
-		now := beijingNow()
+		now := BeijingNow()
 		item.PublishedAt = &now
 	}
 	item.Status = newStatus
-	item.UpdatedAt = beijingNow()
+	item.UpdatedAt = BeijingNow()
 
 	if err := s.db.Save(&item).Error; err != nil {
 		return nil, err
@@ -346,7 +346,7 @@ func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error
 		dto := featuredContentAdminDetailDTO(&item)
 		return &dto, nil
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	if err := s.db.Model(&item).Updates(map[string]any{
 		"status":       int16(1),
 		"published_at": now,

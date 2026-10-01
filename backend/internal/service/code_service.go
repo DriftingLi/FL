@@ -624,7 +624,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		Password:  hashed,
 		Company:   strings.TrimSpace(company),
 		Status:    1,
-		CreatedAt: beijingNow(),
+		CreatedAt: BeijingNow(),
 	}
 	ch.ApplyTarget(&user, target)
 	if err := s.db.WithContext(ctx).Create(&user).Error; err != nil {

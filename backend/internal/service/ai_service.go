@@ -127,7 +127,7 @@ func (s *AIService) saveLog(userID int, userType, generationType string, inputPa
 		InputParams:    paramsBytes,
 		OutputResult:   out,
 		Status:         status,
-		CreatedAt:      beijingNow(),
+		CreatedAt:      BeijingNow(),
 	}
 	if err := s.db.Create(&log).Error; err != nil {
 		s.logger.Error("saveLog failed", zap.Error(err))

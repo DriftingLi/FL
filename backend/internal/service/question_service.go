@@ -223,7 +223,7 @@ func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	}
 	if wq.ID != 0 {
 		wq.WrongCount++
-		wq.LastWrongAt = beijingNow()
+		wq.LastWrongAt = BeijingNow()
 		wq.IsRemoved = false
 		return db.Save(&wq).Error
 	}
@@ -231,8 +231,8 @@ func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 		StudentID:   studentID,
 		QuestionID:  questionID,
 		WrongCount:  1,
-		LastWrongAt: beijingNow(),
-		CreatedAt:   beijingNow(),
+		LastWrongAt: BeijingNow(),
+		CreatedAt:   BeijingNow(),
 	}
 	return db.Create(&wq).Error
 }
@@ -399,8 +399,8 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 		Status:          "pending",
 		CreatedBy:       createdBy,
 		CreatedByType:   orDefault(createdByType, "tutor"),
-		CreatedAt:       beijingNow(),
-		UpdatedAt:       beijingNow(),
+		CreatedAt:       BeijingNow(),
+		UpdatedAt:       BeijingNow(),
 	}
 	if err := s.db.Create(&q).Error; err != nil {
 		return QuestionDTO{}, err
@@ -470,7 +470,7 @@ func (s *QuestionBankService) UpdateQuestion(id int, in QuestionUpdateInput, act
 		q.Status = "pending"
 		q.RejectReason = ""
 	}
-	q.UpdatedAt = beijingNow()
+	q.UpdatedAt = BeijingNow()
 	// 改题即失效旧 AI 解析（spec #295）：题目内容变更后缓存不再可信，与保存同事务清列。
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&q).Error; err != nil {
@@ -583,7 +583,7 @@ func (s *QuestionBankService) SubmitQuestion(id int) (QuestionDTO, error) {
 	}
 	q.Status = "pending"
 	q.RejectReason = ""
-	q.UpdatedAt = beijingNow()
+	q.UpdatedAt = BeijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
@@ -781,7 +781,7 @@ func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
 	}
 	q.Status = "published"
 	q.RejectReason = ""
-	q.UpdatedAt = beijingNow()
+	q.UpdatedAt = BeijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
@@ -812,7 +812,7 @@ func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO
 	}
 	q.Status = "draft"
 	q.RejectReason = reason
-	q.UpdatedAt = beijingNow()
+	q.UpdatedAt = BeijingNow()
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}

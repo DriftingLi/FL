@@ -148,13 +148,13 @@ func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []i
 			CurrentIndex: startIdx,
 			Total:        total,
 			AnswersState: model.JSONB(answers),
-			UpdatedAt:    beijingNow(),
+			UpdatedAt:    BeijingNow(),
 		}
 		return db.Create(&prog).Error
 	}
 	if ids != nil {
 		// 开始/续练协商流：游标与顺序由协商产物决定，直接落库
-		updates := map[string]any{"current_index": startIdx, "updated_at": beijingNow()}
+		updates := map[string]any{"current_index": startIdx, "updated_at": BeijingNow()}
 		updates["question_ids"] = model.JSONB(marshalIDs(ids))
 		updates["total"] = total
 		if answers != nil {
@@ -169,12 +169,12 @@ func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []i
 		Where("current_index <= ?", startIdx).
 		Updates(map[string]any{
 			"current_index": startIdx,
-			"updated_at":    beijingNow(),
+			"updated_at":    BeijingNow(),
 		}).Error; err != nil {
 		return err
 	}
 	// answers_state / total 无条件独立落库（游标守卫不影响答题状态与总量）
-	aux := map[string]any{"updated_at": beijingNow()}
+	aux := map[string]any{"updated_at": BeijingNow()}
 	if total > prog.Total && total > 0 {
 		aux["total"] = total
 	}

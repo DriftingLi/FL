@@ -112,7 +112,7 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 		QuestionID: questionID,
 		UserID:     userID,
 		Content:    content,
-		CreatedAt:  beijingNow(),
+		CreatedAt:  BeijingNow(),
 	}
 	if err := s.db.Create(&c).Error; err != nil {
 		return nil, err

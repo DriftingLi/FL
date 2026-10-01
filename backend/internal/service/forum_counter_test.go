@@ -1,5 +1,5 @@
 // Package service forumCounter 单测与集成测试（spec #297）：
-// isDuplicateError 双方言谓词、注销点赞回扣、删楼中楼 reply_count 级联少减 N。
+// IsDuplicateError 双方言谓词、注销点赞回扣、删楼中楼 reply_count 级联少减 N。
 package service
 
 import (
@@ -14,18 +14,18 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// --- isDuplicateError：PG / SQLite 双言文案 ---
+// --- IsDuplicateError：PG / SQLite 双言文案 ---
 
 func TestIsDuplicateError_PostgresDialect(t *testing.T) {
 	err := errors.New(`ERROR: duplicate key value violates unique constraint "uq_forum_topic_like" (SQLSTATE 23505)`)
-	if !isDuplicateError(err) {
+	if !IsDuplicateError(err) {
 		t.Fatal("PG duplicate key 文案应判为唯一冲突")
 	}
 }
 
 func TestIsDuplicateError_SQLiteDialect(t *testing.T) {
 	err := errors.New("UNIQUE constraint failed: forum_checkin.user_id, forum_checkin.check_date")
-	if !isDuplicateError(err) {
+	if !IsDuplicateError(err) {
 		t.Fatal("SQLite UNIQUE constraint 文案应判为唯一冲突")
 	}
 }
@@ -35,7 +35,7 @@ func TestIsDuplicateError_ConstraintNamePrefixes(t *testing.T) {
 		"constraint uq_forum_reply_like violated",
 		"pk_forum_checkin 冲突",
 	} {
-		if !isDuplicateError(errors.New(msg)) {
+		if !IsDuplicateError(errors.New(msg)) {
 			t.Fatalf("约束名前缀文案应判为唯一冲突: %s", msg)
 		}
 	}
@@ -47,7 +47,7 @@ func TestIsDuplicateError_Negative(t *testing.T) {
 		errors.New("record not found"),
 		errors.New("connection refused"),
 	} {
-		if isDuplicateError(err) {
+		if IsDuplicateError(err) {
 			t.Fatalf("非唯一冲突错误不应命中: %v", err)
 		}
 	}

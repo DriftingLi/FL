@@ -1,4 +1,4 @@
-package service
+package faq
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/service"
 )
 
 // 帮助中心（FAQ）域（#1079）：分类 + 条目两张表，管理端 CRUD、学员端只读。
@@ -98,21 +99,21 @@ type FaqEntryInput struct {
 	Published  bool
 }
 
-// FaqService 帮助中心服务：学员端只读 + 管理端 CRUD。
-type FaqService struct {
+// Service 帮助中心服务：学员端只读 + 管理端 CRUD。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-// NewFaqService 创建帮助中心服务。
-func NewFaqService(db *gorm.DB, logger *zap.Logger) *FaqService {
-	return &FaqService{db: db, logger: logger}
+// NewService 创建帮助中心服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // ListPublished 学员端帮助中心：enabled 分类 + 其下 published 条目，各按 (sort_order, id) 升序。
 // 两条查询一次取齐（禁 N+1），在内存里按 category_id 分组——没有分类的条目无处可挂，
 // 故不会被返回（那是管理端「未归类的已发布条目」问题，由管理面暴露）。
-func (s *FaqService) ListPublished() (*FaqResult, error) {
+func (s *Service) ListPublished() (*FaqResult, error) {
 	var cats []model.FaqCategory
 	if err := s.db.Where("enabled = ?", true).Order("sort_order ASC, id ASC").Find(&cats).Error; err != nil {
 		return nil, err
@@ -139,7 +140,7 @@ func (s *FaqService) ListPublished() (*FaqResult, error) {
 }
 
 // AdminListCategories 管理端分类清单（含停用），带条目计数（一次 GROUP BY，禁 N+1）。
-func (s *FaqService) AdminListCategories() ([]AdminFaqCategoryDTO, error) {
+func (s *Service) AdminListCategories() ([]AdminFaqCategoryDTO, error) {
 	var cats []model.FaqCategory
 	if err := s.db.Order("sort_order ASC, id ASC").Find(&cats).Error; err != nil {
 		return nil, err
@@ -202,7 +203,7 @@ func validateEntryInput(in *FaqEntryInput) error {
 }
 
 // AdminCreateCategory 新建分类。
-func (s *FaqService) AdminCreateCategory(in FaqCategoryInput) (*AdminFaqCategoryDTO, error) {
+func (s *Service) AdminCreateCategory(in FaqCategoryInput) (*AdminFaqCategoryDTO, error) {
 	if err := validateCategoryInput(&in); err != nil {
 		return nil, err
 	}
@@ -213,9 +214,9 @@ func (s *FaqService) AdminCreateCategory(in FaqCategoryInput) (*AdminFaqCategory
 	if dup > 0 {
 		return nil, ErrFaqCategoryCodeUsed
 	}
-	c := model.FaqCategory{Code: in.Code, Title: in.Title, SortOrder: in.SortOrder, Enabled: in.Enabled, CreatedAt: beijingNow(), UpdatedAt: beijingNow()}
+	c := model.FaqCategory{Code: in.Code, Title: in.Title, SortOrder: in.SortOrder, Enabled: in.Enabled, CreatedAt: service.BeijingNow(), UpdatedAt: service.BeijingNow()}
 	if err := s.db.Create(&c).Error; err != nil {
-		if isDuplicateError(err) {
+		if service.IsDuplicateError(err) {
 			return nil, ErrFaqCategoryCodeUsed
 		}
 		return nil, err
@@ -224,7 +225,7 @@ func (s *FaqService) AdminCreateCategory(in FaqCategoryInput) (*AdminFaqCategory
 }
 
 // AdminUpdateCategory 改分类。
-func (s *FaqService) AdminUpdateCategory(id int, in FaqCategoryInput) (*AdminFaqCategoryDTO, error) {
+func (s *Service) AdminUpdateCategory(id int, in FaqCategoryInput) (*AdminFaqCategoryDTO, error) {
 	if err := validateCategoryInput(&in); err != nil {
 		return nil, err
 	}
@@ -242,9 +243,9 @@ func (s *FaqService) AdminUpdateCategory(id int, in FaqCategoryInput) (*AdminFaq
 	if dup > 0 {
 		return nil, ErrFaqCategoryCodeUsed
 	}
-	c.Code, c.Title, c.SortOrder, c.Enabled, c.UpdatedAt = in.Code, in.Title, in.SortOrder, in.Enabled, beijingNow()
+	c.Code, c.Title, c.SortOrder, c.Enabled, c.UpdatedAt = in.Code, in.Title, in.SortOrder, in.Enabled, service.BeijingNow()
 	if err := s.db.Save(&c).Error; err != nil {
-		if isDuplicateError(err) {
+		if service.IsDuplicateError(err) {
 			return nil, ErrFaqCategoryCodeUsed
 		}
 		return nil, err
@@ -260,7 +261,7 @@ func (s *FaqService) AdminUpdateCategory(id int, in FaqCategoryInput) (*AdminFaq
 // 级联**在应用层显式做**，而不是只靠 DDL 的 ON DELETE CASCADE：测试内存库不强制外键，
 // 只靠 DDL 会让「测试绿、生产也绿但测试其实没验到」；照 auth_service 注销清理的既有先例
 // （「有 CASCADE 的表显式删除以兼容测试内存库」）。DDL 上的 CASCADE 保留为直接 SQL 删除的兜底。
-func (s *FaqService) AdminDeleteCategory(id int) error {
+func (s *Service) AdminDeleteCategory(id int) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var c model.FaqCategory
 		if err := tx.First(&c, id).Error; err != nil {
@@ -277,7 +278,7 @@ func (s *FaqService) AdminDeleteCategory(id int) error {
 }
 
 // AdminListEntries 管理端条目清单（含未发布），可按分类过滤。
-func (s *FaqService) AdminListEntries(categoryID *int) ([]AdminFaqEntryDTO, error) {
+func (s *Service) AdminListEntries(categoryID *int) ([]AdminFaqEntryDTO, error) {
 	q := s.db.Model(&model.Faq{}).
 		Select("faq.id, faq.category_id, faq.question, faq.answer, faq.sort_order, faq.published, faq_category.code AS category_code").
 		Joins("JOIN faq_category ON faq_category.id = faq.category_id")
@@ -308,7 +309,7 @@ func (s *FaqService) AdminListEntries(categoryID *int) ([]AdminFaqEntryDTO, erro
 }
 
 // faqEntryDTOOf 单条读回（新写 / 更新后回填分类 code）。
-func (s *FaqService) faqEntryDTOOf(e *model.Faq) (*AdminFaqEntryDTO, error) {
+func (s *Service) faqEntryDTOOf(e *model.Faq) (*AdminFaqEntryDTO, error) {
 	var c model.FaqCategory
 	if err := s.db.First(&c, e.CategoryID).Error; err != nil {
 		return nil, err
@@ -320,7 +321,7 @@ func (s *FaqService) faqEntryDTOOf(e *model.Faq) (*AdminFaqEntryDTO, error) {
 }
 
 // AdminCreateEntry 新建条目。
-func (s *FaqService) AdminCreateEntry(in FaqEntryInput) (*AdminFaqEntryDTO, error) {
+func (s *Service) AdminCreateEntry(in FaqEntryInput) (*AdminFaqEntryDTO, error) {
 	if err := validateEntryInput(&in); err != nil {
 		return nil, err
 	}
@@ -333,7 +334,7 @@ func (s *FaqService) AdminCreateEntry(in FaqEntryInput) (*AdminFaqEntryDTO, erro
 	}
 	e := model.Faq{
 		CategoryID: in.CategoryID, Question: in.Question, Answer: in.Answer,
-		SortOrder: in.SortOrder, Published: in.Published, CreatedAt: beijingNow(), UpdatedAt: beijingNow(),
+		SortOrder: in.SortOrder, Published: in.Published, CreatedAt: service.BeijingNow(), UpdatedAt: service.BeijingNow(),
 	}
 	if err := s.db.Create(&e).Error; err != nil {
 		return nil, err
@@ -342,7 +343,7 @@ func (s *FaqService) AdminCreateEntry(in FaqEntryInput) (*AdminFaqEntryDTO, erro
 }
 
 // AdminUpdateEntry 改条目。
-func (s *FaqService) AdminUpdateEntry(id int, in FaqEntryInput) (*AdminFaqEntryDTO, error) {
+func (s *Service) AdminUpdateEntry(id int, in FaqEntryInput) (*AdminFaqEntryDTO, error) {
 	if err := validateEntryInput(&in); err != nil {
 		return nil, err
 	}
@@ -361,7 +362,7 @@ func (s *FaqService) AdminUpdateEntry(id int, in FaqEntryInput) (*AdminFaqEntryD
 		return nil, err
 	}
 	e.CategoryID, e.Question, e.Answer = in.CategoryID, in.Question, in.Answer
-	e.SortOrder, e.Published, e.UpdatedAt = in.SortOrder, in.Published, beijingNow()
+	e.SortOrder, e.Published, e.UpdatedAt = in.SortOrder, in.Published, service.BeijingNow()
 	if err := s.db.Save(&e).Error; err != nil {
 		return nil, err
 	}
@@ -369,7 +370,7 @@ func (s *FaqService) AdminUpdateEntry(id int, in FaqEntryInput) (*AdminFaqEntryD
 }
 
 // AdminDeleteEntry 删条目。
-func (s *FaqService) AdminDeleteEntry(id int) error {
+func (s *Service) AdminDeleteEntry(id int) error {
 	res := s.db.Delete(&model.Faq{}, id)
 	if res.Error != nil {
 		return res.Error

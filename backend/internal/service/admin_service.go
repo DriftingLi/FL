@@ -169,7 +169,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email
 		Email:     email,
 		Company:   company,
 		Status:    1,
-		CreatedAt: beijingNow(),
+		CreatedAt: BeijingNow(),
 	}
 	if err := s.db.Create(&user).Error; err != nil {
 		return nil, err
@@ -400,7 +400,7 @@ func (s *AdminService) queryStatistics() *AdminStatisticsDTO {
 	s.db.Model(&model.Course{}).Count(&totalCourses)
 	s.db.Model(&model.StudyRecord{}).Select("COALESCE(SUM(study_duration), 0)").Scan(&totalStudyDuration)
 
-	todayStart := beijingNow()
+	todayStart := BeijingNow()
 	startOfDay := todayStart
 	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Hour()) * time.Hour)
 	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Minute()) * time.Minute)

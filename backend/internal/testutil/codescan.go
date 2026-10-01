@@ -127,15 +127,20 @@ func ProductionOrSelfTests(f CodeFile, selfDir string) bool {
 
 // HTTPSurface 报告一个非测试文件是否属于 HTTP 面（端点声明 / 渲染 / 路由所在那一层）。
 //
-// 今天 = internal/api 与 internal/valuation/handler（残值模块自带 handler 与路由，同样受
-// 「端点守卫只用能力常量」「端点不得持 *gorm.DB」「端点不得构造站内信」这些判据管）。
-// 拆包之后（P2）只改这**一处**：届时 HTTP 面 = 各域包里承载端点与路由的那些文件。
+// 两种命中方式：
+//   - 整目录：internal/api 与 internal/valuation/handler（残值模块自带 handler 与路由，同样受
+//     「端点守卫只用能力常量」「端点不得持 *gorm.DB」「端点不得构造站内信」这些判据管）；
+//   - 文件名前缀 `handler`：域包（internal/<域>，ADR-0070）把 HTTP 出口与域实现放进同一个包，
+//     按目录圈射程就不成立了，约定改由**文件名**承载 —— 域包里 handler*.go 是 HTTP 面，
+//     service.go / dto.go / errors.go 是域实现。这样 P2 逐域迁移时这条射程零清单维护。
+//     先例：scripts/check-catalog-sort.mjs 的 GUARDED_PATH_SEGMENT 同样按文件名判定。
+//
 // 各锁一律调它，别再各写一份目录判断 —— 那是「射程清单改回双份」的老病。
 func HTTPSurface(f CodeFile) bool {
 	if f.Test {
 		return false
 	}
-	return f.Dir == "internal/api" || f.Dir == "internal/valuation/handler"
+	return f.Dir == "internal/api" || f.Dir == "internal/valuation/handler" || strings.HasPrefix(f.Name, "handler")
 }
 
 // ScanDir 一个「对外契约类型可能住的包」：模块根相对路径 + 该目录里源文件应有的 package 名。
@@ -153,6 +158,7 @@ func ResponsePackages() []ScanDir {
 	return []ScanDir{
 		{"internal/api", "api"},
 		{"internal/service", "service"},
+		{"internal/faq", "faq"},
 		{"internal/model", "model"},
 		// valuation/model 的 Go 包名也叫 model，swagger 定义键同样落在 `model.` 前缀下（两边类型名
 		// 不重叠，swag 自己在重名时会报），所以 Pkg 列必须同为 "model" 才对得上生成物。

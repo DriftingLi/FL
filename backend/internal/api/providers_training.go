@@ -1,6 +1,9 @@
 package api
 
-import "forklift-training/internal/service"
+import (
+	"forklift-training/internal/faq"
+	"forklift-training/internal/service"
+)
 
 // provideTraining 培训工作区（课程/管理端/学员/讲师/检索/收藏/精选/导出/审计/FAQ）。
 func provideTraining(c *coreSingletons, d *Deps) {
@@ -15,5 +18,5 @@ func provideTraining(c *coreSingletons, d *Deps) {
 	d.FeaturedSvc = service.NewFeaturedService(c.db, c.fileSvc, c.logger)
 	d.ExportSvc = service.NewExportService(c.db, c.export, c.logger)
 	d.AuditSvc = service.NewAuditService(c.db)
-	d.FaqSvc = service.NewFaqService(c.db, c.logger)
+	d.FaqSvc = faq.NewService(c.db, c.logger)
 }

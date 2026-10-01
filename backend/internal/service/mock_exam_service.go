@@ -155,7 +155,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 	// 失败不阻断主流程：清理只是数据卫生，用户此刻要的是「开始考试」。
 	if err := s.db.
 		Where("student_id = ? AND status <> ? AND created_at < ?",
-			studentID, mockExamStatusSubmitted, beijingNow().Add(-mockExamAbandonTTL)).
+			studentID, mockExamStatusSubmitted, BeijingNow().Add(-mockExamAbandonTTL)).
 		Delete(&model.MockExam{}).Error; err != nil {
 		s.logger.Warn("清理废弃模拟考试记录失败",
 			zap.Int("student_id", studentID), zap.Error(err))
@@ -170,7 +170,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 
 	idsJSON, _ := jsonMarshal(questionIDs)
 	emptyJSON, _ := jsonMarshal(map[string]any{})
-	startTime := beijingNow()
+	startTime := BeijingNow()
 	mock := model.MockExam{
 		StudentID: studentID,
 		// 抽题与落库共用同一个值（#1003）：不两处各算。
@@ -330,7 +330,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	}
 
 	mock.Status = mockExamStatusSubmitted
-	submitTime := beijingNow()
+	submitTime := BeijingNow()
 	mock.SubmitTime = &submitTime
 	mock.Score = floatPtr(totalScore)
 	accuracy := 0.0

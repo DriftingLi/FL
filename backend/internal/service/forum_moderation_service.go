@@ -119,7 +119,7 @@ func (s *ForumModerationService) AdminDeleteReply(replyID int64) error {
 		if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topic.ID).Updates(map[string]any{
 			"accepted_reply_id": nil,
 			"solved_at":         nil,
-			"updated_at":        beijingNow(),
+			"updated_at":        BeijingNow(),
 		}).Error; err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (s *ForumModerationService) DesignateExperience(topicID int64) (*ForumTopic
 	if topic.AcceptedReplyID != nil {
 		return nil, ErrDesignateAcceptedTopic
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：认定与精选一并置位（两者必须同进，否则撞蕴含 CHECK）。
 		// WHERE is_experience = false 保证并发下只有先胜者发分。
@@ -281,7 +281,7 @@ func (s *ForumModerationService) RevokeExperience(topicID int64) (*ForumTopicDTO
 	// CAS：只改 is_experience，is_featured 原样保留（不写它，避免覆盖并发下的精选变更）
 	if err := s.db.Model(&model.ForumTopic{}).
 		Where("id = ? AND is_experience = ?", topicID, true).
-		Updates(map[string]any{"is_experience": false, "updated_at": beijingNow()}).Error; err != nil {
+		Updates(map[string]any{"is_experience": false, "updated_at": BeijingNow()}).Error; err != nil {
 		return nil, err
 	}
 	return s.fetchTopicDTO(topicID, 0)
@@ -311,7 +311,7 @@ func (s *ForumModerationService) SetFeatured(topicID int64, featured bool) (*For
 		// 幂等：状态已一致（重复加精/重复取消），不发分不改状态
 		return s.fetchTopicDTO(topicID, 0)
 	}
-	now := beijingNow()
+	now := BeijingNow()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// CAS：仅当状态仍为旧值时写入，并发下先胜者负责发分
 		res := tx.Model(&model.ForumTopic{}).

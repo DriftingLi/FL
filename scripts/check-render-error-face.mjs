@@ -19,8 +19,12 @@
  *     —— 例外文件（ALLOWLIST）在增量门里也是**逐行**判定：只有基线即违规的行号放行（口径见 runner）。
  *
  * 判定面（刻意窄，每条都有原因）：
- *   - 只扫 `backend/internal/api` 下的非测试 `.go`：`Endpoint` 骨架的管辖面就是这一层；
- *     骨架自身除外 —— #1445 P0-B 起骨架（`pkg/httpx/endpoint.go`）已不在本判定面前缀内，
+ *   - 两条圈法，任一命中即进面（#1445 P1 起）：
+ *     · 整目录 `backend/internal/api` —— 装配面的端点仍都写在这里；
+ *     · 域包里的 `handler*.go` —— 拆包后（ADR-0070）每个域把 HTTP 出口放在同包的 handler.go，
+ *       按目录圈射程就不成立了，约定随之由**文件名**承载（同 testutil.HTTPSurface，
+ *       先例 scripts/check-catalog-sort.mjs 的 GUARDED_PATH_SEGMENT）。加一个域不必回来改清单。
+ *     骨架自身除外 —— #1445 P0-B 起骨架（`pkg/httpx/endpoint.go`）已不在本判定面内，
  *     错误面的唯一合法作者随之搬走；SKELETON_FILE 保留为「射程外路径」的指认与自测夹具。
  *   - 只判 `Render:` 字段上那个函数字面量的**词法体内**：用括号深度进出闭包，深度计数前先剥掉
  *     注释与字符串字面量——Swagger 注解里的 `example({"a":1})` 有大括号，不剥就会数歪闭包边界。
@@ -35,12 +39,23 @@
 import { isDirectRun, runGuardCli } from './lib/guard.mjs'
 
 /**
- * 守卫面：HTTP 面（端点骨架管辖）的非测试 .go 所在的**包目录前缀**。
+ * 守卫面第一式：HTTP 面（端点骨架管辖）的非测试 .go 所在的**包目录前缀**。
  *
- * 为什么是清单而不是一个字符串：拆包（#1445 P2）后端点会分散到各域包，届时往这里**加一条前缀**
- * 即可 —— 射程只有这一处真源。单条前缀时写成清单是为了让那次改动是「加一行」，而不是「换判据」。
+ * 为什么是清单而不是一个字符串：装配面的端点今天都在 `internal/api`，写成清单是为了让将来
+ * 「某个域整包都算 HTTP 面」这类改动是「加一行」，而不是「换判据」。
  */
 export const GUARDED_PACKAGE_PREFIXES = ['backend/internal/api/']
+
+/**
+ * 守卫面第二式：域包里承载 HTTP 出口的**文件名前缀**（域包约定：handler*.go 是 HTTP 面，
+ * service.go / dto.go / errors.go 是域实现）。前缀而非全名：handler.go / handler_admin.go
+ * 都算。拆包（#1445 P2）时这一式是零维护的 —— 新域包落地即进面，不必同步任何清单；
+ * 「清单会漂、判据会静默失配」正是本仓反复点名要避开的病。
+ */
+export const GUARDED_FILE_PREFIXES = ['handler']
+
+/** 文件名规则只在域包根内生效（模块根相对）：别处的同名文件不该被误纳。 */
+export const GUARDED_FILE_ROOT = 'backend/internal/'
 
 /** 骨架自身：错误面的合法唯一作者，不进判定面。 */
 export const SKELETON_FILE = 'backend/pkg/httpx/endpoint.go'
@@ -90,8 +105,11 @@ export function isTestFile(filePath) {
 export function isGuardedPath(filePath) {
   const p = String(filePath).replace(/\\/g, '/')
   if (!p.endsWith('.go') || isTestFile(p)) return false
-  if (!GUARDED_PACKAGE_PREFIXES.some((prefix) => p.startsWith(prefix))) return false
-  return p !== SKELETON_FILE
+  if (p === SKELETON_FILE) return false
+  if (GUARDED_PACKAGE_PREFIXES.some((prefix) => p.startsWith(prefix))) return true
+  if (!p.startsWith(GUARDED_FILE_ROOT)) return false
+  const base = p.slice(p.lastIndexOf('/') + 1)
+  return GUARDED_FILE_PREFIXES.some((prefix) => base.startsWith(prefix))
 }
 
 /**
@@ -243,11 +261,12 @@ export const GUARD_SPEC = {
       '===== 端点错误面守卫：全量扫描（Render 闭包内不得渲染错误）=====',
       '扫描目录: ' + ctx.scanDirRel,
       '守卫面: ' + GUARDED_PACKAGE_PREFIXES.join(' / ') + ' 的非测试 .go' +
-        '（骨架 ' + SKELETON_FILE + ' 是错误面的唯一作者：#1445 P0-B 起已独立成包、不在上述前缀内）',
+        '，以及域包 ' + GUARDED_FILE_ROOT + '**/' + GUARDED_FILE_PREFIXES.join('/') + '*.go' +
+        '（骨架 ' + SKELETON_FILE + ' 是错误面的唯一作者：#1445 P0-B 起已独立成包、不在守卫面内）',
       '禁列: response.' + ERROR_ENVELOPE_FNS.join(' / response.') + ' | renderStatus( | .RenderError(',
       '---'
     ],
-    ok: (ctx) => '无违规。' + ctx.checked + ' 个 api 文件的 Render 闭包内均未出现错误信封调用。',
+    ok: (ctx) => '无违规。' + ctx.checked + ' 个 HTTP 面文件的 Render 闭包内均未出现错误信封调用。',
     violation: (v) =>
       v.file + ':' + v.line + ': Render 闭包（起于 :' + v.renderLine + '）内' + v.why + '  ' + v.text,
     footer: (ctx) => [

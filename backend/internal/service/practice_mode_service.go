@@ -367,7 +367,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: orDefault(practiceType, "free"),
 		UserAnswer:   stringifyAnswer(userAnswer),
-		CreatedAt:    beijingNow(),
+		CreatedAt:    BeijingNow(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
 		return nil, err
