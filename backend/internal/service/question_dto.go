@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 )
@@ -36,7 +37,7 @@ type QuestionDTO struct {
 func newQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 	var options any
 	if len(q.Options) > 0 {
-		_ = jsonUnmarshal(q.Options, &options)
+		_ = json.Unmarshal(q.Options, &options)
 	}
 	d := QuestionDTO{
 		Content:       q.Content,

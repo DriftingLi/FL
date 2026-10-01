@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 )
 
@@ -284,7 +285,7 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 		"COUNT(qtr.question_id) FILTER (WHERE " + QuestionPoolPublishedSQL + " AND " + QuestionPoolExcludeSourceTagsSQL
 	var args []any
 	// 池的证件分区走归属分区具名谓词的 SQL 片段形态（ADR-0056 §2）：nil → 空片段 = 不分区。
-	if clause, credArgs := entityOwnedByClause(QuestionPoolCredentialColumn, credentialID); clause != "" {
+	if clause, credArgs := scope.EntityOwnedByClause(QuestionPoolCredentialColumn, credentialID); clause != "" {
 		query += " AND " + clause
 		args = append(args, credArgs...)
 	}
@@ -370,11 +371,11 @@ func (s *TrainingCatalogService) DeleteCredential(id int) error {
 // checkCredentialDeleteBlockers 证件删除的投稿预检（#1360）。
 // 返回的错误以 ErrCredentialHasContributions 为哨兵（api 侧据此落 400），句子带条数。
 //
-// 分区谓词走 credential_scope.go 的具名谓词 EntityOwnedBy（归属分区：读被检索对象自身的证件列），
+// 分区谓词走 internal/scope 的具名谓词 EntityOwnedBy（归属分区：读被检索对象自身的证件列），
 // 不在调用点手写 credential_id 谓词——那条静态扫描锁（credential_scope_guard_test.go）正是为此立的。
 func (s *TrainingCatalogService) checkCredentialDeleteBlockers(id int) error {
 	var contributions int64
-	if err := EntityOwnedBy(s.db.Model(&model.UserContribution{}), "credential_id", &id).
+	if err := scope.EntityOwnedBy(s.db.Model(&model.UserContribution{}), "credential_id", &id).
 		Count(&contributions).Error; err != nil {
 		return err
 	}
@@ -540,7 +541,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 		if activeOnly {
 			q = q.Where("course.status = ?", 1)
 		}
-		q = EntityOwnedBy(q, "course.credential_id", cred)
+		q = scope.EntityOwnedBy(q, "course.credential_id", cred)
 		q.Order("course.sort_order ASC, course.course_id ASC").Find(&rows)
 	}
 

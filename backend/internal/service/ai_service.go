@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 )
 
@@ -169,8 +170,8 @@ func parseGradingResponse(content string, maxScore float64) *AIGradeResult {
 	}
 	// "score": 数字
 	if m := regexp.MustCompile(`"score"\s*:\s*([\d.]+)`).FindStringSubmatch(text); len(m) > 1 {
-		f, _ := parseFloat(m[1]) // AI 评分解析失败显式回退 0。
-		score := clampFloat(f, 0, maxScore)
+		f, _ := coerce.ParseFloat(m[1]) // AI 评分解析失败显式回退 0。
+		score := coerce.ClampFloat(f, 0, maxScore)
 		comment := ""
 		if cm := regexp.MustCompile(`"comment"\s*:\s*"((?:[^"\\]|\\.)*)"`).FindStringSubmatch(text); len(cm) > 1 {
 			comment = strings.ReplaceAll(strings.ReplaceAll(cm[1], `\n`, "\n"), `\"`, `"`)
@@ -179,12 +180,12 @@ func parseGradingResponse(content string, maxScore float64) *AIGradeResult {
 	}
 	// 数字/满分 形式
 	if m := regexp.MustCompile(fmt.Sprintf(`(\d+(?:\.\d+)?)\s*/\s*%g`, maxScore)).FindStringSubmatch(text); len(m) > 1 {
-		f, _ := parseFloat(m[1]) // AI 评分解析失败显式回退 0。
-		return &AIGradeResult{Score: clampFloat(f, 0, maxScore), Comment: "AI评分"}
+		f, _ := coerce.ParseFloat(m[1]) // AI 评分解析失败显式回退 0。
+		return &AIGradeResult{Score: coerce.ClampFloat(f, 0, maxScore), Comment: "AI评分"}
 	}
 	if m := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*分`).FindStringSubmatch(text); len(m) > 1 {
-		f, _ := parseFloat(m[1]) // AI 评分解析失败显式回退 0。
-		return &AIGradeResult{Score: clampFloat(f, 0, maxScore), Comment: "AI评分"}
+		f, _ := coerce.ParseFloat(m[1]) // AI 评分解析失败显式回退 0。
+		return &AIGradeResult{Score: coerce.ClampFloat(f, 0, maxScore), Comment: "AI评分"}
 	}
 	return nil
 }
@@ -194,9 +195,9 @@ func tryParseScore(s string, maxScore float64) *AIGradeResult {
 	if err := json.Unmarshal([]byte(s), &obj); err != nil {
 		return nil
 	}
-	score := toFloat(obj["score"])
+	score := coerce.ToFloat(obj["score"])
 	comment, _ := obj["comment"].(string)
-	return &AIGradeResult{Score: clampFloat(score, 0, maxScore), Comment: comment}
+	return &AIGradeResult{Score: coerce.ClampFloat(score, 0, maxScore), Comment: comment}
 }
 
 func extractBraceJSON(text string, maxScore float64) *AIGradeResult {

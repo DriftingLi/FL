@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -37,12 +38,12 @@ func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
 	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A")}); err == nil || !strings.Contains(err.Error(), "专业方向不能为空") {
 		t.Fatalf("缺少专业方向应报错, got: %v", err)
 	}
-	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A"), SpecialtyID: ptrInt(spec.SpecialtyID)}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID)}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
 		t.Fatalf("缺少课程等级应报错, got: %v", err)
 	}
 
 	created, err := svc.CreateCourse(&CourseInput{
-		Name: ptrStr("课程A"), SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID),
+		Name: ptrStr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID),
 	})
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
@@ -65,12 +66,12 @@ func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course)
 		t.Fatalf("创建等级失败: %v", err)
 	}
 	prereq := model.Course{Name: "前置课程", Status: 1,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&prereq).Error; err != nil {
 		t.Fatalf("创建前置课程失败: %v", err)
 	}
 	course := model.Course{Name: "主课程", Status: 1,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}

@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
@@ -99,7 +101,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		if qType != "" {
 			q = q.Where("question.type = ?", qType)
 		}
-		q = EntityOwnedBy(q, "question.credential_id", credentialID)
+		q = scope.EntityOwnedBy(q, "question.credential_id", credentialID)
 		if minWrongCount != nil {
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
 		}
@@ -213,7 +215,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
 	}
-	q := EntityOwnedBy(s.db.Model(&model.Question{}), "credential_id", credentialID).Where("id = ?", questionID)
+	q := scope.EntityOwnedBy(s.db.Model(&model.Question{}), "credential_id", credentialID).Where("id = ?", questionID)
 	var question model.Question
 	if err := q.First(&question).Error; err != nil {
 		return nil, errors.New("题目不存在")
@@ -301,7 +303,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 		}
 		var options interface{}
 		if len(question.Options) > 0 {
-			_ = jsonUnmarshal(question.Options, &options)
+			_ = json.Unmarshal(question.Options, &options)
 		}
 		item := map[string]any{
 			"question_id":    question.ID,

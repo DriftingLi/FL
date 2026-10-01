@@ -91,7 +91,7 @@ const aiFinishReasonContentFilter = "content_filter"
 
 // aiBlockingContext 阻塞补全超时纪律包装单点（Complete 唯一消费）。
 func aiBlockingContext() (context.Context, context.CancelFunc) {
-	return withTimeout(aiBlockingTimeout)
+	return context.WithTimeout(context.Background(), aiBlockingTimeout)
 }
 
 // einoAIAdapter 单一生产 adapter（ADR-0029 T2）：eino ChatModel 同时承载 Generate 与 Stream。

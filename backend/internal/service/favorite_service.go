@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -242,7 +243,7 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 // 谓词由归属分区具名谓词给出（ADR-0056 §2）；credentialID 为 nil 时返回空串（调用方整支跳过，
 // 不生成半截 SQL）。
 func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any) {
-	clause, args := entityOwnedByClause("credential_id", credentialID)
+	clause, args := scope.EntityOwnedByClause("credential_id", credentialID)
 	if clause == "" {
 		return "", nil
 	}

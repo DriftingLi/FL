@@ -1,110 +1,6 @@
 package service
 
-import (
-	"testing"
-	"time"
-)
-
-func TestToFloat(t *testing.T) {
-	tests := []struct {
-		input any
-		want  float64
-	}{
-		{float64(3.14), 3.14},
-		{float32(2.5), 2.5},
-		{int(42), 42},
-		{int64(100), 100},
-		{int32(7), 7},
-		{"3.14", 3.14},
-		{"42", 42},
-		{true, 1},
-		{false, 0},
-		{"invalid", 0},
-		{nil, 0},
-		{[]int{1, 2}, 0}, // 不支持的类型
-	}
-	for _, tt := range tests {
-		if got := toFloat(tt.input); got != tt.want {
-			t.Errorf("toFloat(%v) = %v，期望 %v", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestClampFloat(t *testing.T) {
-	if got := clampFloat(5, 0, 10); got != 5 {
-		t.Errorf("clampFloat(5,0,10) = %v，期望 5", got)
-	}
-	if got := clampFloat(-1, 0, 10); got != 0 {
-		t.Errorf("clampFloat(-1,0,10) = %v，期望 0", got)
-	}
-	if got := clampFloat(15, 0, 10); got != 10 {
-		t.Errorf("clampFloat(15,0,10) = %v，期望 10", got)
-	}
-	if got := clampFloat(0, 0, 10); got != 0 {
-		t.Errorf("clampFloat(0,0,10) = %v，期望 0", got)
-	}
-	if got := clampFloat(10, 0, 10); got != 10 {
-		t.Errorf("clampFloat(10,0,10) = %v，期望 10", got)
-	}
-}
-
-func TestParseFloat(t *testing.T) {
-	if got, err := parseFloat("3.14"); err != nil || got != 3.14 {
-		t.Errorf("parseFloat('3.14') = %v, err=%v", got, err)
-	}
-	if got, err := parseFloat("-5.5"); err != nil || got != -5.5 {
-		t.Errorf("parseFloat('-5.5') = %v, err=%v", got, err)
-	}
-	for _, s := range []string{"invalid", "", "abc12"} {
-		if got, err := parseFloat(s); err == nil {
-			t.Errorf("parseFloat(%q) 期望报错，得到 %v", s, got)
-		}
-	}
-}
-
-func TestParseInt(t *testing.T) {
-	if got, err := parseInt("42"); err != nil || got != 42 {
-		t.Errorf("parseInt('42') = %v, err=%v", got, err)
-	}
-	if got, err := parseInt("-7"); err != nil || got != -7 {
-		t.Errorf("parseInt('-7') = %v, err=%v", got, err)
-	}
-	for _, s := range []string{"invalid", "", "3.14"} {
-		if got, err := parseInt(s); err == nil {
-			t.Errorf("parseInt(%q) 期望报错，得到 %v", s, got)
-		}
-	}
-}
-
-func TestPtrInt(t *testing.T) {
-	p := ptrInt(42)
-	if p == nil || *p != 42 {
-		t.Errorf("ptrInt(42) 失败")
-	}
-}
-
-func TestFloatPtr(t *testing.T) {
-	p := floatPtr(3.14)
-	if p == nil || *p != 3.14 {
-		t.Errorf("floatPtr(3.14) 失败")
-	}
-}
-
-func TestContainsString(t *testing.T) {
-	slice := []string{"apple", "banana", "cherry"}
-	if !containsString(slice, "banana") {
-		t.Error("应包含 'banana'")
-	}
-	if containsString(slice, "grape") {
-		t.Error("不应包含 'grape'")
-	}
-	if containsString([]string{}, "x") {
-		t.Error("空切片应返回 false")
-	}
-	if !containsString(slice, "apple") {
-		t.Error("应包含 'apple'")
-	}
-}
+import "testing"
 
 func TestOrDefault(t *testing.T) {
 	if got := orDefault("hello", "default"); got != "hello" {
@@ -124,17 +20,5 @@ func TestTruncate(t *testing.T) {
 	}
 	if got := truncate("", 5); got != "" {
 		t.Errorf("truncate('',5) = %q", got)
-	}
-}
-
-func TestWithTimeout(t *testing.T) {
-	ctx, cancel := withTimeout(5 * time.Second)
-	defer cancel()
-	if ctx == nil {
-		t.Fatal("context 不应为 nil")
-	}
-	_, ok := ctx.Deadline()
-	if !ok {
-		t.Error("context 应有截止时间")
 	}
 }

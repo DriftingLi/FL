@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -28,7 +29,7 @@ func TestSpecialtyCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
 
 	// 创建
-	result, err := svc.CreateSpecialty(SpecialtyInput{Code: "operation", Name: "操作", SortOrder: ptrInt(1)})
+	result, err := svc.CreateSpecialty(SpecialtyInput{Code: "operation", Name: "操作", SortOrder: coerce.IntPtr(1)})
 	if err != nil {
 		t.Fatalf("创建专业方向失败: %v", err)
 	}
@@ -113,7 +114,7 @@ func TestSpecialtyValidation(t *testing.T) {
 
 func TestLevelCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
-	result, err := svc.CreateLevel(LevelInput{Code: "beginner", Name: "入门", SortOrder: ptrInt(1)})
+	result, err := svc.CreateLevel(LevelInput{Code: "beginner", Name: "入门", SortOrder: coerce.IntPtr(1)})
 	if err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestLevelValidation(t *testing.T) {
 func TestCertificateTemplateCRUD(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
 	result, err := svc.CreateCertificateTemplate(CertificateTemplateInput{
-		Code: "CERT_1", Name: "叉车培训证书", ValidityDays: ptrInt(1460),
+		Code: "CERT_1", Name: "叉车培训证书", ValidityDays: coerce.IntPtr(1460),
 	})
 	if err != nil {
 		t.Fatalf("创建模板失败: %v", err)
@@ -172,10 +173,10 @@ func TestCertificateTemplateCRUD(t *testing.T) {
 	}
 
 	// 无效有效期
-	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C", Name: "x", ValidityDays: ptrInt(0)}); err == nil {
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C", Name: "x", ValidityDays: coerce.IntPtr(0)}); err == nil {
 		t.Fatal("有效期为 0 应报错")
 	}
-	if _, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: ptrInt(-5)}); err == nil {
+	if _, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: coerce.IntPtr(-5)}); err == nil {
 		t.Fatal("负有效期应报错")
 	}
 
@@ -188,7 +189,7 @@ func TestCertificateTemplateCRUD(t *testing.T) {
 		t.Fatalf("默认有效期应为 365, got %d", def.ValidityDays)
 	}
 
-	updated, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: ptrInt(730)})
+	updated, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: coerce.IntPtr(730)})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
@@ -382,8 +383,8 @@ func TestListQuestionTags_CredentialPartition(t *testing.T) {
 func TestSetQuestionTags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "液压相关题目", "A")
-	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(1)})
-	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动", SortOrder: ptrInt(2)})
+	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
+	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动", SortOrder: coerce.IntPtr(2)})
 
 	// 设置两个标签
 	if err := svc.SetQuestionTags(q.ID, []int{tag1.ID, tag2.ID}); err != nil {
@@ -444,12 +445,12 @@ func TestGetCatalogTree(t *testing.T) {
 	}
 
 	c1 := model.Course{Name: "叉车基础", Status: 1, TheoryHours: 20,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c1).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	c2 := model.Course{Name: "下架课程", Status: 0,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c2)
 	db.Model(&c2).Update("status", 0)
 	ch := model.Chapter{CourseID: c1.CourseID, Title: "第一章", Duration: 10, CreatedAt: testutil.Now()}
@@ -490,7 +491,7 @@ func TestGetCatalogTree_CredentialPartition(t *testing.T) {
 	credB := model.Credential{Code: "ELEC", Name: "低压电工"}
 	db.Create(&credB)
 	db.Create(&model.Course{Name: "A课", Status: 1, CredentialID: &credA.ID,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()})
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()})
 
 	countCourses := func(tree *CatalogTreeDTO) int {
 		n := 0
@@ -529,17 +530,17 @@ func TestGetAdminCatalogTree(t *testing.T) {
 	}
 	// 2 门课程：sort_order 2 在前、1 在后，验证按 sort_order 排序；另 1 门下架课程
 	c1 := model.Course{Name: "晚建但排序靠前", Status: 1, SortOrder: 1,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c1).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	c2 := model.Course{Name: "早建但排序靠后", Status: 1, SortOrder: 2,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now().Add(-time.Hour)}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now().Add(-time.Hour)}
 	if err := db.Create(&c2).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	c3 := model.Course{Name: "下架课程", Status: 0, SortOrder: 3,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c3)
 	db.Model(&c3).Update("status", 0)
 
@@ -659,7 +660,7 @@ func TestCourseSortOrder(t *testing.T) {
 	// 创建时设置 sort_order
 	created, err := svc.CreateCourse(&CourseInput{
 		Name:        ptrStr("课程A"),
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), SortOrder: ptrInt(5),
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), SortOrder: coerce.IntPtr(5),
 	})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
@@ -670,7 +671,7 @@ func TestCourseSortOrder(t *testing.T) {
 	courseID := created.CourseID
 
 	// 更新时修改 sort_order
-	updated, err := svc.UpdateCourse(courseID, &CourseInput{SortOrder: ptrInt(1)})
+	updated, err := svc.UpdateCourse(courseID, &CourseInput{SortOrder: coerce.IntPtr(1)})
 	if err != nil {
 		t.Fatalf("更新课程失败: %v", err)
 	}
@@ -679,13 +680,13 @@ func TestCourseSortOrder(t *testing.T) {
 	}
 
 	// 负值应报错
-	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程B"), SortOrder: ptrInt(-1)}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程B"), SortOrder: coerce.IntPtr(-1)}); err == nil {
 		t.Fatal("负排序值应报错")
 	}
 
 	// 列表按 sort_order 升序（0 在 1 前，再按创建时间倒序）
 	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID), CreatedAt: testutil.Now()}
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
 	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
 	if err != nil {
@@ -719,11 +720,11 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 
 	data := &CourseInput{
 		Name:                  ptrStr("液压系统维护"),
-		SpecialtyID:           ptrInt(spec.SpecialtyID),
-		LevelID:               ptrInt(lv.LevelID),
-		CertificateTemplateID: ptrInt(tpl.ID),
-		TheoryHours:           ptrInt(30),
-		PracticeHours:         ptrInt(20),
+		SpecialtyID:           coerce.IntPtr(spec.SpecialtyID),
+		LevelID:               coerce.IntPtr(lv.LevelID),
+		CertificateTemplateID: coerce.IntPtr(tpl.ID),
+		TheoryHours:           coerce.IntPtr(30),
+		PracticeHours:         coerce.IntPtr(20),
 		PrerequisiteCourseIDs: []int{prereq.CourseID},
 	}
 	result, err := svc.CreateCourse(data)
@@ -754,10 +755,10 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	}
 
 	// 不存在的引用应报错
-	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), SpecialtyID: ptrInt(9999)}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), SpecialtyID: coerce.IntPtr(9999)}); err == nil {
 		t.Fatal("不存在的专业方向应报错")
 	}
-	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), TheoryHours: ptrInt(-1)}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), TheoryHours: coerce.IntPtr(-1)}); err == nil {
 		t.Fatal("负学时应报错")
 	}
 	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("x"), PrerequisiteCourseIDs: []int{9999}}); err == nil {
@@ -766,7 +767,7 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 
 	// 更新：等级不可清空（应用层必填，旧 category 退役后方向/等级为必备维度）
 	if _, err := svc.UpdateCourse(courseID, &CourseInput{
-		LevelID: ptrInt(0), PrerequisiteCourseIDs: []int{},
+		LevelID: coerce.IntPtr(0), PrerequisiteCourseIDs: []int{},
 	}); err == nil {
 		t.Fatal("清空课程等级应报错")
 	}
@@ -825,21 +826,21 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&lv)
 	course := model.Course{Name: "安全操作规范", Status: 1,
-		SpecialtyID: ptrInt(spec.SpecialtyID), LevelID: ptrInt(lv.LevelID),
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID),
 		TheoryHours: 12, PracticeHours: 8, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 
 	// 学员端列表按专业方向/等级过滤
-	list, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(lv.LevelID), "")
+	list, err := svc.GetCourses(1, 10, nil, coerce.IntPtr(spec.SpecialtyID), coerce.IntPtr(lv.LevelID), "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
 	if list.Total != 1 {
 		t.Fatalf("过滤后应 1 条, got %v", list.Total)
 	}
-	empty, err := svc.GetCourses(1, 10, nil, ptrInt(spec.SpecialtyID), ptrInt(9999), "")
+	empty, err := svc.GetCourses(1, 10, nil, coerce.IntPtr(spec.SpecialtyID), coerce.IntPtr(9999), "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -867,8 +868,8 @@ func TestQuestionBank_Tags(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
-	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: ptrInt(1)})
-	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: ptrInt(2)})
+	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
+	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
 
 	// 创建题目时打标
 	q1, err := qsvc.CreateQuestion(QuestionCreateInput{
@@ -890,7 +891,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", ptrInt(tag2.ID), NewQuestionEditScope(nil), "")
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}

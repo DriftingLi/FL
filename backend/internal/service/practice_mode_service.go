@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
@@ -258,7 +259,7 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, cr
 	}
 	var prog model.PracticeProgress
 	// ADR-0056 §2：进度是 NULL 桶分区——nil 只取「未选定证件」那一桶（不是看全部）。
-	q := PartitionBucket(s.db.Model(&model.PracticeProgress{}), "credential_id", cred).
+	q := scope.PartitionBucket(s.db.Model(&model.PracticeProgress{}), "credential_id", cred).
 		Where("student_id = ? AND practice_mode = ?", studentID, practiceMode)
 	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return &ProgressResultDTO{PoolTotal: poolTotal}
@@ -445,7 +446,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 	tomorrow := todayStart.AddDate(0, 0, 1)
 
 	base := func() *gorm.DB {
-		return RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
+		return scope.RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
 			Where("question_practice_record.student_id = ?", studentID)
 	}
 
@@ -483,7 +484,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 // 而同页另一侧的 /practice-stats 却 500（ADR-0062 票6「查不动 ≠ 查得空」）。
 func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*PracticeStatsDTO, error) {
 	base := func() *gorm.DB {
-		return RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
+		return scope.RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
 			Where("question_practice_record.student_id = ?", studentID)
 	}
 	var total, correct int64
@@ -573,7 +574,7 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 	records, total, page, pageSize, err := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "question_practice_record.created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
 		// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）
-		q = RecordPartitionOf(q, "question_practice_record.credential_id", credentialID)
+		q = scope.RecordPartitionOf(q, "question_practice_record.credential_id", credentialID)
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
 		}

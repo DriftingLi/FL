@@ -1,4 +1,4 @@
-// Package service 证件分区 module（ADR-0056 §2 / ADR-0047 §4 / ADR-0051）：
+// Package scope 证件分区 module（ADR-0056 §2 / ADR-0047 §4 / ADR-0051）：
 // 「当前证件」（hrwai_users.current_credential_id）在**读面**的三族具名谓词。
 //
 // 词表出处：CONTEXT.md「当前证件」。分区的三族语义不可混用——语义由**名字**承担，
@@ -13,8 +13,16 @@
 //     收藏目标、真题卷）。nil = 不分区、**看全部**。
 //
 // 双形态同源：gorm 链式形态（主形态，三谓词）+ SQL 片段形态（raw SQL 装配点，如 catalog
-// 标签计数的 LEFT JOIN + FILTER 计数）。片段形态是包内私有 helper，由对应谓词委托调用，
-// 保证「raw 重写与谓词脱钩」这一漂移窗口关闭（照 question_pool_scope.go 的双形态先例）。
+// 标签计数的 LEFT JOIN + FILTER 计数）。片段形态由对应谓词委托调用，保证「raw 重写与谓词
+// 脱钩」这一漂移窗口关闭（照 question_pool_scope.go 的双形态先例）；片段形态**导出**
+// 是搬包的要求——raw 装配点在域包里（favorite_service.go、training_catalog_service.go），
+// 私有片段它够不着。公开面因此是 3 谓词 + 3 片段，但拼接点仍只在本文件的 4 行。
+//
+// 落点（#1445 P2 波 0b）：本文件原为 internal/service/credential_scope.go。域包离开
+// internal/service 后仍要用这三族谓词，留在 service 就是「域包 → service」的反向依赖
+// （P2 判据：出边为零才搬得动），故整文件搬进叶子包 internal/scope。静态扫描锁
+// （internal/service/credential_scope_guard_test.go）的白名单随它改指本文件——「不许在
+// 调用点手写 credential_id 谓词」这条规矩的射程与实现处一起走，不因搬包而放宽。
 //
 // _Avoid_：
 //   - 把三族合并成一个「可选证件」参数——两种相反的 nil 语义会同形不同义（ADR-0056 §2 的由来）；
@@ -24,7 +32,7 @@
 // 边界（ADR-0056 §2）：**不合并** ADR-0050 §1 否掉的「学员可见性」那一族——题库池
 // （question_pool_scope.go）与课程挂载（course_mount_scope.go）是另一种不变式，各自保留；
 // 本 module 只承载它们内部那一格证件分区。
-package service
+package scope
 
 import "gorm.io/gorm"
 
@@ -32,7 +40,7 @@ import "gorm.io/gorm"
 // credentialColumn 传记录表的列名（带表名前缀，如 "question_practice_record.credential_id"）。
 // credentialID 为 nil 时不过滤——未选证件读作「不分区、看全部」。
 func RecordPartitionOf(q *gorm.DB, credentialColumn string, credentialID *int) *gorm.DB {
-	clause, args := recordPartitionClause(credentialColumn, credentialID)
+	clause, args := RecordPartitionClause(credentialColumn, credentialID)
 	if clause == "" {
 		return q
 	}
@@ -45,40 +53,40 @@ func RecordPartitionOf(q *gorm.DB, credentialColumn string, credentialID *int) *
 //
 // 注意与 RecordPartitionOf / EntityOwnedBy 的 nil 语义**相反**：这里 nil 不是「看全部」。
 func PartitionBucket(q *gorm.DB, credentialColumn string, credentialID *int) *gorm.DB {
-	clause, args := partitionBucketClause(credentialColumn, credentialID)
+	clause, args := PartitionBucketClause(credentialColumn, credentialID)
 	return q.Where(clause, args...)
 }
 
 // EntityOwnedBy 归属分区谓词：读被检索对象自身的证件列（课程挂载、题库池、搜索分区、
 // 收藏目标、真题卷）。credentialID 为 nil 时不过滤——未选证件读作「不分区、看全部」。
 func EntityOwnedBy(q *gorm.DB, credentialColumn string, credentialID *int) *gorm.DB {
-	clause, args := entityOwnedByClause(credentialColumn, credentialID)
+	clause, args := EntityOwnedByClause(credentialColumn, credentialID)
 	if clause == "" {
 		return q
 	}
 	return q.Where(clause, args...)
 }
 
-// recordPartitionClause 记录冻结分区的 SQL 片段形态：nil → 空串（调用方据此跳过整个片段，
-// 即「不分区、看全部」）。
-func recordPartitionClause(credentialColumn string, credentialID *int) (string, []any) {
+// RecordPartitionClause 记录冻结分区的 SQL 片段形态：nil → 空串（调用方据此跳过整个片段，
+// 即「不分区、看全部」）。raw 装配点必须先判空串再追加，空片段不许进 SQL。
+func RecordPartitionClause(credentialColumn string, credentialID *int) (string, []any) {
 	if credentialID == nil {
 		return "", nil
 	}
 	return credentialColumn + " = ?", []any{*credentialID}
 }
 
-// partitionBucketClause NULL 桶的 SQL 片段形态：nil → credential_id IS NULL（恒非空片段）。
-func partitionBucketClause(credentialColumn string, credentialID *int) (string, []any) {
+// PartitionBucketClause NULL 桶的 SQL 片段形态：nil → credential_id IS NULL（恒非空片段）。
+func PartitionBucketClause(credentialColumn string, credentialID *int) (string, []any) {
 	if credentialID == nil {
 		return credentialColumn + " IS NULL", nil
 	}
 	return credentialColumn + " = ?", []any{*credentialID}
 }
 
-// entityOwnedByClause 归属分区的 SQL 片段形态：nil → 空串（调用方据此跳过整个片段，
+// EntityOwnedByClause 归属分区的 SQL 片段形态：nil → 空串（调用方据此跳过整个片段，
 // 即「不分区、看全部」）。raw SQL 装配点必须先判空串再追加。
-func entityOwnedByClause(credentialColumn string, credentialID *int) (string, []any) {
+func EntityOwnedByClause(credentialColumn string, credentialID *int) (string, []any) {
 	if credentialID == nil {
 		return "", nil
 	}
