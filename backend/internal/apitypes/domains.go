@@ -533,7 +533,7 @@ var Domains = []Domain{
 		Name:  "material",
 		Title: "学习资料（/api/materials：chapter_file 聚合视图）",
 		Roots: []string{
-			"service.MaterialPageResult",
+			"material.MaterialPageResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/materials"},

@@ -69,7 +69,6 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	"service.PointsTasksResult.tasks":                 outletPointsTasksNone,
 	"service.CheckInCalendarResult.days":              outletCheckInCalendar,
 	"service.CheckInRankResult.items":                 outletCheckInRankEmpty,
-	"service.MaterialPageResult.materials":            outletMaterialPageEmpty,
 	"service.SearchSectionDTO.items":                  outletSearchSectionEmpty,
 	"service.TutorCourseChaptersDTO.chapters":         outletTutorCourseChaptersEmpty,
 
@@ -379,17 +378,6 @@ func outletCheckInRankEmpty(t *testing.T) any {
 	res, err := svc.GetCheckInRank(0, 1, 20)
 	if err != nil {
 		t.Fatalf("打卡排行榜失败: %v", err)
-	}
-	return res
-}
-
-// outletMaterialPageEmpty 资料列表：零挂载资料时 materials 是空集。
-func outletMaterialPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewMaterialService(testutil.NewMemoryDB(t), zap.NewNop())
-	res, err := svc.ListMaterials(1, 20, 0)
-	if err != nil {
-		t.Fatalf("资料列表失败: %v", err)
 	}
 	return res
 }

@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/filestore"
+	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/security"
@@ -67,7 +68,7 @@ type Deps struct {
 	FeaturedSvc          *service.FeaturedService
 	FavoriteSvc          *service.FavoriteService
 	SearchSvc            *service.SearchService
-	MaterialSvc          *service.MaterialService
+	MaterialSvc          *material.Service
 	ExportSvc            *service.ExportService
 	StudentSvc           *service.StudentService
 	QuestionBankSvc      *service.QuestionBankService

@@ -32,6 +32,7 @@
    - **数值 / 指针助手**进叶子包：`internal/coerce`（`ToFloat` / `ClampFloat` / `ParseFloat` / `ParseInt` / `IntPtr` / `FloatPtr`，原 `internal/service/helpers.go`）—— 只 import `strconv`；同批删掉两枚只转发标准库的助手（`withTimeout` → `context.WithTimeout`、`containsString` → `slices.Contains`）与 `internal/service/json_helpers.go`（8 行纯转发 ⇒ 调用点直接 `encoding/json`）（P2 波 0b）；
    - **吃 `*gorm.DB` 的分区谓词**也能进叶子包：`internal/scope`（`RecordPartitionOf` / `PartitionBucket` / `EntityOwnedBy` 三谓词 + 三枚导出片段 `RecordPartitionClause` / `PartitionBucketClause` / `EntityOwnedByClause`，原 `internal/service/credential_scope.go`，11 个 service 文件改限定名）—— 只 import `gorm.io/gorm`；判别句是「**它读参数还是读服务状态**」，不是「它碰没碰 DB」（P2 波 0b；**搬它必须同步静态扫描锁的白名单**，见第 3 节）；
    - **一族文件存取件整包搬**：`internal/filestore`（`FileStore` 的上传/删除/列表/读取 + 类型表 `fileTypeTable` + 附件归属判定 + 悬空回收单点，原 `internal/service/{file_store,attachment,file_type_table,image_cleanup_helpers,orphan_sweep}.go`，只 import `internal/storage` / zap / stdlib）。三条子规矩：**跨文件被用的私有闸门件升导出**（`FileExtension` / `FileContentType` / `AllowedFile` / `ValidateFileSize`，大小表不裸导出、改出纯函数 `MaxFileSize(filename)`）；**伸手进结构体私有字段的调用点换成导出方法**（新增 `FileStore.Exists(ctx, url)` + 哨兵 `ErrStorageUnconfigured`，调用方保住「没配存储 ⇒ 本域 500 哨兵，不读成文件不存在」）；**只转发标准库的私有助手保持私有**（`base64Encode`/`base64Decode` ⇒ 调用点直接用 `encoding/base64`）。**生成链里有它的硬编码路径**，见第 3 节（P2 波 0c）；
+   - **出边为零的域直接搬**：material（`internal/api/material.go` → `internal/material/handler.go`、`internal/service/material_service.go` → `internal/material/service.go`）的域实现只引 `internal/timefmt` 之类的叶子包，**没有任何 `internal/service` 符号** ⇒ 第 2 步无共享件要提，是 P2 里第一个「只做机械搬家」的完整域（波 1a）。判据仍是出边：先 grep 域实现里的 `service.` 限定名与同包私有助手，两样都空才敢直接搬。
    - **别域的事实常量**改成**调用方传参**：站内信事件构造器收 `reason string`（`NewContributionApprovedEvent(userID int, title string, contributionID int64, points int, reason string)` 等 7 个）—— 积分流水原因是积分域的事实，通知域只把它记进 payload，于是不必 import 别域或服务层的常量；
    - **跨域共享词汇**贴着实体放 `internal/model`（第 1 节）。
 3. **搬服务**：`git mv backend/internal/service/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（先例 `service.BeijingNow`，P2 波 0a 收编后写 `clock.Now()`）。DTO、哨兵、校验函数名原样不动。
@@ -60,6 +61,7 @@
 | `backend/internal/service/nonnil_outlets_*_test.go` | 属于该域的键与 outlet 函数**删掉**（不是复制），头部注释里的域名列表同步 | `testutil.AssertNonNilOutlets` 报「同名键出现在两张表」 |
 | `scripts/check-catalog-sort.mjs` 的 5 条 `declaredIn`、`backend/internal/deploy/nginx_delivery_gen.go` 的硬编码路径（:154 生成注释文案、:231 `filepath.Join(root, "backend", "internal", "<包>", "file_type_table.go")`）与 AST 判据（按变量名 `fileTypeTable` 找表 ⇒ 变量名不许改） | 只在被点名的文件真搬家时改 | 缺文件即 Fatal（不静默），会在 CI 点名 |
 | `frontend/nginx-host.conf`（生成物，两处提到路径：:15 手写表头 + :22 生成区） | 搬 `file_type_table.go` 后 `cd backend && go run ./cmd/gen-deploy -only nginx` 重生成（只动生成区那行）；**:15 在手写区，生成器不管**，要手改 | 两把锁 `TestNginxDeliveryMapInSync`（`codegen.AssertInSync`）与 `TestNginxDeliveryMapCoversFileTypeTable` 直接红（不静默）|
+| `training-app/叉车维修培训学员端跨端应用/utils/*Contract.test.js` 里**硬编码的后端文件路径**（`resourcesContract.test.js:347` 直读 `backend/internal/api/material.go` 做幻影路由对照） | 搬 handler / service 时全仓 grep 这类路径（**含 `training-app/**`**；`frontend/` 与 `scripts/` 目前没有直读后端源码的写法），改指新家 | 该 ③ 门套件读不到文件即 fail-closed 判红（不静默），但只在 CI `mobile-test` 里红 |
 | 域包内**结构体字段**改名（波 0c：`OrphanSweepConfig` 的 `domain/ttl/list/referenced/keyOf/deleteFile/logger` → 导出名） | 包内**测试**里的复合字面量也用小写键（脚本的区间替换只覆盖包外 `<包>.OrphanSweepConfig{…}`）| `go vet` 报 `unknown field domain in struct literal`（不静默，但只在 vet 阶段）|
 
 方法论：**改名会让按名字/路径判定的锁静默失配**。删或重构 Go 符号后，除了 grep 残留引用（本机 golangci-lint 跑不了，见 `checks.md` 环境 A），还要 grep 一遍**按名字判定的锁**（清单名、白名单键、前缀计数）。
@@ -141,6 +143,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
 - [ ] 旧符号（`XxxService` / `RegisterXxxRoutes` / 旧包前缀键）全仓残留 = 0
 - [ ] 搬走的**私有**助手在包内还有调用点，或者被删掉：本地 `go build` / `go vet` 报不出「未使用」（那是 `unused` 的活，只在 CI `backend-lint` 兜）；自查方式是对每个进新包的私有函数数一遍**剥掉注释**后的包内引用
+- [ ] 搬动的后端文件若被移动端契约测试直读（第 3 节那一行），硬编码路径已同步；**点段路径的工作树里跑不了 ③**（jest 对 `.scratch` 这类父段静默 0 套件、还 exit 0）⇒ 本地跑不了就明确交 CI `mobile-test`
 - [ ] PR 正文一行披露「合并到 master 将触发 production 部署」
 
 ## 10. 波次与 PR 纪律
@@ -165,7 +168,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 | 跨文件的请求 DTO 类型（`idParam` / `taskIDParam` / `courseIDInput` / `chapterIDInput` / `swapCourseSortReq` / `generateContentReq`，声明在 `internal/api/admin.go:873-905`，被 `admin_recruiter.go` / `settings.go` / `tutor.go` 跨文件引用） | **各域包自己声明** | 它们本来就是各域的请求面（`struct{ ID int }` + 用 `httpx.PathInt` 的 Parse 闭包），不是解析出口 ⇒ 不进 `pkg/httpx`；拆包时随 handler 搬、同名保留 |
 | 既要用 gin 又要用 middleware + service 的域内解析助手（`studentQuestionScope`，`internal/api/question_bank.go:105`） | **题库域包**（3c 波随 `internal/questionbank` 导出） | **不能进 `pkg/httpx`**：`pkg/` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①），而它同时需要 `internal/middleware`（`CredentialIDPtr`）与 `internal/service`（`NewQuestionReadScope`）；调用它的 `favorite.go` / `note.go` / `question_interaction.go` 都在 3c/4b/4c 波之后 ⇒ 不阻塞波 1、2 |
 
-**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`（✅ 已交付）；0c `internal/filestore`（✅ 已交付）。波 1：1a material / 1b points / 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
+**P2 波次（issue #1445 公布，2026-10-01）**：波 0 共享叶子 3 个 PR —— 0a 时钟 + DB 助手 + 解析出口（✅ 已交付）；0b `internal/scope` + `internal/coerce` + 删 `json_helpers.go`（✅ 已交付）；0c `internal/filestore`（✅ 已交付）。波 1：1a material（✅ 已交付，唯一不需要提共享件的域）/ 1b points / 1c inspection。波 2：2a featured + checkin / 2b contribution + forum / 2c aiAssistant。波 3：3a auth / 3b course + training / 3c questionBank + practiceMode。波 4：4a mockExam + realExam / 4b student + favorite + search / 4c note + questionInteraction + wrongQuestion / 4d tutor + admin / 4e recruit + resume + job / 4f 收尾 audit + export。
 
 **三个强环与破环手法**：course↔training、course↔tutor/points、resume↔recruit。五种破法 —— 跨域共享词汇贴实体进 `internal/model`、别域的事实常量改调用方传参、无状态纯函数进叶子包、下游要业务层类型走消费方接口反转（第 7.1 节）、助手搬回自己的域。
 
@@ -193,3 +196,9 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **生成链上的硬编码路径要一起改，且分「生成区 / 手写区」**：`internal/deploy/nginx_delivery_gen.go` 的 :154 文案与 :231 路径（AST 判据按变量名 `fileTypeTable` 找表 ⇒ **变量名不许改**），生成物 `frontend/nginx-host.conf` 的生成区一行由 `cd backend && go run ./cmd/gen-deploy -only nginx` 覆写、**手写表头 :15 那行生成器不管**。两把锁 `TestNginxDeliveryMapInSync` / `TestNginxDeliveryMapCoversFileTypeTable` 会在 CI 点名。
 - **`gofmt -w` 会改写文件**：脚本跑完执行 `gofmt -w` 之后再用编辑工具改同一文件，会报 `file changed since it was read` ⇒ 重新 read 再改。
 - **搬走的私有助手要回头看它在新家还有没有调用点**：`base64Encode` 的唯一消费者在包外（`internal/service/slide_renderer.go:245`），那条调用点改成 `base64.StdEncoding` 之后它在包内零引用 —— 而「未使用函数」**不由 `go build` / `go vet` / `go test` 报**（本机三样全绿），只有 CI `backend-lint`（`unused`）报 `internal/filestore/file_store.go:309:6: func base64Encode is unused (unused)`。本波第一个 PR 就是被这条拦下的：**本地验证全绿 ≠ CI 绿**，搬包后除「跨文件私有引用」（上一条）之外，还要反向数一遍「私有件在新包内的引用数」。数的时候**先剥注释** —— 文档注释里常把函数名再写一遍，会让零引用看起来非零。
+
+第四批（P2 波 1a：完整域 `material`，两个 `git mv` + 14 处调用点）再添三条：
+
+- **批量脚本只做「行级操作」，Go 源码一律用手工编辑逐处改**：`move-material.ps1` 第一版把 `$TAB` / `$DQ` 占位符写在 PS **单引号**字符串里（单引号内不插值 ⇒ 替换全不命中），第二版改用模板插值出真实制表符与引号、又拼 `[char]10` 换行 —— 结果把 7 个文件（`internal/api/{deps,providers_training,routes_registry,envelope_registry,mobile_p1_contract_test}.go`、`internal/apitypes/nullability_lock_test.go`、`internal/testutil/codescan.go`）**写成整文件一行**（判据：`[regex]::Matches($t, [string][char]10).Count -eq 0`；被脚本碰过的文件都要数一遍）。复原靠 `git checkout -- <带 `backend/` 前缀的路径>`，随后逐处手改。
+- **搬 handler 要全仓 grep 消费者的硬编码路径，别只 grep Go**：移动端 `utils/resourcesContract.test.js:347` 直读后端源码做幻影路由对照（`read('../../backend/internal/api/material.go')`），文件一搬它就 fail-closed 判红；同文件 :345 注释与 :359 用例名里的文件名文案、以及 `materialsPageContract.test.js:5` 的 `material.go:25-37` 行号引用（已改指 `internal/material/handler.go:31-38`）都要一起同步。
+- **点段路径的工作树里跑不了移动端 ③**：`D:\FL\.scratch\…` 这种含点父段的落点，jest `--listTests` **静默 0 套件且 exit 0**（#1144 的坑）；建无点 junction 也没用 —— jest 会把 rootDir realpath 回点段。本波取证办法：把移动端目录 robocopy 到无点路径（`D:\flmob\…`）+ `node_modules` junction + 一份新家的 `handler.go`，再用主树的 jest 跑该套件（`utils/resourcesContract.test.js` 41 passed）。

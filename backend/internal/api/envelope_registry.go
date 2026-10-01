@@ -18,6 +18,7 @@
 package api
 
 import (
+	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/service"
 	vmodel "forklift-training/internal/valuation/model"
@@ -106,9 +107,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
 		Sample: service.JobListResult{}},
-	{Result: "service.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
+	{Result: "material.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
 		Keys: []string{"page", "pages", "total", "materials"}, Dialect: paging.DialectPages,
-		Sample: service.MaterialPageResult{}},
+		Sample: material.MaterialPageResult{}},
 	{Result: "service.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
 		Keys: []string{"total", "page", "page_size", "exams"}, Dialect: paging.DialectPageSize,
 		Sample: service.MockExamHistoryDTO{}},

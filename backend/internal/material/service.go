@@ -1,8 +1,8 @@
-// Package service 实现业务服务层。
-// 本文件：学习资料聚合（ADR-0018 低成本路径）—— chapter_file 附件视图：
+// Package material 学习资料域：chapter_file 附件聚合视图（ADR-0018 低成本路径）——
 // 资料 = 已发布课程下章节挂载的课件附件，不建独立资料库表。
 // 覆盖：列表（可按课程过滤）/ 详情 / 下载地址（file_url 为静态直链）。
-package service
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，service.go 是域实现。
+package material
 
 import (
 	"errors"
@@ -17,15 +17,15 @@ import (
 	"forklift-training/internal/timefmt"
 )
 
-// MaterialService 学习资料服务（chapter_file 聚合视图）。
-type MaterialService struct {
+// Service 学习资料服务（chapter_file 聚合视图）。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-// NewMaterialService 构造学习资料服务。
-func NewMaterialService(db *gorm.DB, logger *zap.Logger) *MaterialService {
-	return &MaterialService{db: db, logger: logger}
+// NewService 构造学习资料服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // MaterialDTO 资料条目（附件 + 归属课程/章节回填）。
@@ -88,7 +88,7 @@ func materialToDTO(r materialRow) MaterialDTO {
 }
 
 // ListMaterials 资料列表（courseID 可选过滤，按 file_id 倒序）。
-func (s *MaterialService) ListMaterials(page, pageSize, courseID int) (*MaterialPageResult, error) {
+func (s *Service) ListMaterials(page, pageSize, courseID int) (*MaterialPageResult, error) {
 	rows, total, page, pageSize, err := paging.QueryWithScan[materialRow](s.db, page, pageSize, 20, 100,
 		"cf.file_id DESC",
 		func(q *gorm.DB) *gorm.DB {
@@ -108,7 +108,7 @@ func (s *MaterialService) ListMaterials(page, pageSize, courseID int) (*Material
 }
 
 // GetMaterial 资料详情。
-func (s *MaterialService) GetMaterial(fileID int) (*MaterialDTO, error) {
+func (s *Service) GetMaterial(fileID int) (*MaterialDTO, error) {
 	var row materialRow
 	if err := materialScope(s.db, 0).Where("cf.file_id = ?", fileID).Limit(1).Scan(&row).Error; err != nil {
 		return nil, err
