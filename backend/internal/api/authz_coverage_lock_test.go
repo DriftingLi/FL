@@ -4,9 +4,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // 端点授权覆盖锁（ADR-0047 §1 / spec #928 决策 6；代码审查补交）。
@@ -34,18 +35,15 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 		"RegisterQuestionBankRoutes":        "题库蓝图混合学员读写与管理端审核：管理端路由逐条挂能力守卫，学员侧继承组级 JWTAuth",
 		"RegisterNoteRoutes":                "学员笔记：纯用户私有数据（读写一律以 user_id 收口，越权按「不存在」处理），门禁与既有题目笔记端点一致——只要求登录；同一资源的两条路径挂两套门才是真不一致（ADR-0055）",
 	}
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("读取 api 目录失败: %v", err)
-	}
+	// 射程 = HTTP 面（testutil.HTTPSurface）：拆包后蓝图注册函数跟着域包走，这一处定义自动覆盖。
 	fset := token.NewFileSet()
 	checked, exempted := 0, 0
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for _, src := range testutil.ScanBackendCode(t) {
+		if !testutil.HTTPSurface(src) {
 			continue
 		}
-		f, perr := parser.ParseFile(fset, name, nil, 0)
+		name := src.Path
+		f, perr := parser.ParseFile(fset, name, src.Src, 0)
 		if perr != nil {
 			t.Fatalf("解析 %s 失败: %v", name, perr)
 		}

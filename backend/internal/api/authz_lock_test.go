@@ -5,12 +5,12 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/testutil"
 )
 
 // 角色字面量锁（ADR-0047 §1 / spec #928 决策 3-4）：端点守卫只允许用 authz 角色常量，
@@ -20,41 +20,34 @@ import (
 // 用 AST 而非正则：正则会被注释与字符串内容骗过（本仓库的注释里就出现过 "admin"）。
 func TestAuthzLock_NoRawRoleLiteralInGuards(t *testing.T) {
 	t.Parallel()
-	dirs := []string{".", filepath.Join("..", "valuation", "handler")}
+	// 射程 = HTTP 面（testutil.HTTPSurface）：今天 internal/api + internal/valuation/handler，
+	// 拆包（P2）后由那一处定义跟着走；不再靠「本文件所在目录 + 一条 ../valuation/handler」。
 	fset := token.NewFileSet()
 	checked := 0
-	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
+	for _, src := range testutil.ScanBackendCode(t) {
+		if !testutil.HTTPSurface(src) {
+			continue
+		}
+		f, err := parser.ParseFile(fset, src.Path, src.Src, 0)
 		if err != nil {
-			t.Fatalf("读取目录 %s 失败: %v", dir, err)
+			t.Fatalf("解析 %s 失败: %v", src.Path, err)
 		}
-		for _, e := range entries {
-			name := e.Name()
-			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-				continue
-			}
-			path := filepath.Join(dir, name)
-			f, err := parser.ParseFile(fset, path, nil, 0)
-			if err != nil {
-				t.Fatalf("解析 %s 失败: %v", path, err)
-			}
-			ast.Inspect(f, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				if !isRoleGuardCall(call.Fun) {
-					return true
-				}
-				checked++
-				for _, arg := range call.Args {
-					if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						t.Errorf("%s: 角色字面量 %s 应改用 authz 角色常量（RoleRequired 的参数只能是 authz.RoleX）", path, lit.Value)
-					}
-				}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
 				return true
-			})
-		}
+			}
+			if !isRoleGuardCall(call.Fun) {
+				return true
+			}
+			checked++
+			for _, arg := range call.Args {
+				if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					t.Errorf("%s: 角色字面量 %s 应改用 authz 角色常量（RoleRequired 的参数只能是 authz.RoleX）", src.Path, lit.Value)
+				}
+			}
+			return true
+		})
 	}
 	if checked == 0 {
 		t.Fatal("未找到任何角色守卫调用——锁测试失效（守卫被改名或移除？）")
@@ -82,17 +75,15 @@ func TestAuthzLock_NoUpwardImports(t *testing.T) {
 		"forklift-training/internal/security",
 		"forklift-training/internal/middleware",
 	}
-	entries, err := os.ReadDir(filepath.Join("..", "authz"))
-	if err != nil {
-		t.Fatalf("读取 authz 目录失败: %v", err)
-	}
+	// 射程按**模块根相对目录**认（internal/authz），不再用 ../authz：测试文件随域包搬家后，
+	// cwd 相对路径会静默指向别处。
 	fset := token.NewFileSet()
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+	for _, src := range testutil.ScanBackendCode(t) {
+		if src.Test || src.Dir != "internal/authz" {
 			continue
 		}
-		path := filepath.Join("..", "authz", e.Name())
-		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		path := src.Path
+		f, err := parser.ParseFile(fset, path, src.Src, parser.ImportsOnly)
 		if err != nil {
 			t.Fatalf("解析 %s 失败: %v", path, err)
 		}
