@@ -12494,7 +12494,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MaterialPageResult"
+                                            "$ref": "#/definitions/material.MaterialPageResult"
                                         }
                                     }
                                 }
@@ -17923,7 +17923,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MaterialPageResult"
+                                            "$ref": "#/definitions/material.MaterialPageResult"
                                         }
                                     }
                                 }
@@ -23653,6 +23653,62 @@ const docTemplate = `{
                 }
             }
         },
+        "material.MaterialDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "material.MaterialPageResult": {
+            "type": "object",
+            "properties": {
+                "materials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/material.MaterialDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.AuditLog": {
             "type": "object",
             "properties": {
@@ -27418,62 +27474,6 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
-                }
-            }
-        },
-        "service.MaterialDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_title": {
-                    "type": "string"
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "file_id": {
-                    "type": "integer"
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MaterialPageResult": {
-            "type": "object",
-            "properties": {
-                "materials": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MaterialDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },

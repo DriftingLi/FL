@@ -140,6 +140,43 @@ definitions:
           $ref: '#/definitions/faq.FaqCategoryDTO'
         type: array
     type: object
+  material.MaterialDTO:
+    properties:
+      chapter_id:
+        type: integer
+        x-nullable: true
+      chapter_title:
+        type: string
+      content_type:
+        type: string
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      created_at:
+        type: string
+      file_id:
+        type: integer
+      file_name:
+        type: string
+      file_size:
+        type: integer
+      file_url:
+        type: string
+    type: object
+  material.MaterialPageResult:
+    properties:
+      materials:
+        items:
+          $ref: '#/definitions/material.MaterialDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
   model.AuditLog:
     properties:
       action:
@@ -2701,43 +2738,6 @@ definitions:
         type: integer
       username:
         type: string
-    type: object
-  service.MaterialDTO:
-    properties:
-      chapter_id:
-        type: integer
-        x-nullable: true
-      chapter_title:
-        type: string
-      content_type:
-        type: string
-      course_id:
-        type: integer
-      course_name:
-        type: string
-      created_at:
-        type: string
-      file_id:
-        type: integer
-      file_name:
-        type: string
-      file_size:
-        type: integer
-      file_url:
-        type: string
-    type: object
-  service.MaterialPageResult:
-    properties:
-      materials:
-        items:
-          $ref: '#/definitions/service.MaterialDTO'
-        type: array
-      page:
-        type: integer
-      pages:
-        type: integer
-      total:
-        type: integer
     type: object
   service.MockExamAnswerDetailDTO:
     properties:
@@ -11789,7 +11789,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MaterialPageResult'
+                  $ref: '#/definitions/material.MaterialPageResult'
               type: object
         "401":
           description: 未认证
@@ -15028,7 +15028,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MaterialPageResult'
+                  $ref: '#/definitions/material.MaterialPageResult'
               type: object
         "401":
           description: 未认证

@@ -2,7 +2,7 @@
  * 学习资料页契约测试（#814，refs 首页第 3 格改「学习资料」）
  *
  * 背景：维护者 2026-09-11 裁定首页九宫格第 3 格「考试中心」→「学习资料」，并「一并删掉考试中心页」。
- * 后端 /api/materials 三条早已在产（material.go:25-37 + mobile_p1_contract_test.go），
+ * 后端 /api/materials 三条早已在产（internal/material/handler.go:31-38 + mobile_p1_contract_test.go），
  * 前端 api/material.uts 写好却零消费——本票补齐页面与两处入口接线。
  *
  * 钉住的契约：

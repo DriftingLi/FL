@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/faq"
+	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 )
 
@@ -109,7 +110,7 @@ var routeRegistrars = []routeRegistrar{
 			RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 			RegisterSearchRoutes(api, rd, deps.SearchSvc)
 			RegisterSearchAdminRoutes(api, rd, deps.SearchSvc)
-			RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
+			material.RegisterRoutes(api, rd.Session, deps.MaterialSvc)
 			// 学员笔记（ADR-0055）：题目笔记 + 独立笔记的汇集读面与独立笔记 CRUD
 			RegisterNoteRoutes(api, rd, deps.NoteSvc)
 		},

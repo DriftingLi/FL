@@ -1,33 +1,32 @@
-// Package api 实现 HTTP handlers。
 // 本文件：学习资料聚合（ADR-0018 低成本路径）—— chapter_file 附件视图，
 // /api/materials 与 /api/student/materials 同数据（清单别名）。
-package api
+package material
 
 import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// MaterialHandler 学习资料 handler。
-type MaterialHandler struct {
-	svc *service.MaterialService
+// handler 学习资料 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewMaterialHandler 创建学习资料 handler。
-func NewMaterialHandler(svc *service.MaterialService) *MaterialHandler {
-	return &MaterialHandler{svc: svc}
+// newHandler 创建学习资料 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterMaterialRoutes 注册 /api/materials 蓝图（JWT + hrwai_user）。
-func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.MaterialService) {
-	h := NewMaterialHandler(svc)
+// RegisterRoutes 注册 /api/materials 蓝图（JWT + hrwai_user）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
 
-	g := rg.Group("", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapMaterialRead))
+	g := rg.Group("", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapMaterialRead))
 
 	// GET /api/materials?course_id=&page=&page_size= 资料列表
 	g.GET("/materials", h.List)
@@ -49,11 +48,11 @@ func RegisterMaterialRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Mat
 // @Param course_id query int false "课程ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R{data=service.MaterialPageResult} "success"
+// @Success 200 {object} response.R{data=material.MaterialPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /materials [get]
 // @Router /student/materials [get]
-func (h *MaterialHandler) List(c *gin.Context) {
+func (h *handler) List(c *gin.Context) {
 	resp, err := h.svc.ListMaterials(
 		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20),
 		httpx.QueryIntDefault(c, "course_id", 0))
@@ -76,7 +75,7 @@ func (h *MaterialHandler) List(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /materials/{id} [get]
-func (h *MaterialHandler) Get(c *gin.Context) {
+func (h *handler) Get(c *gin.Context) {
 	id, err := httpx.PathInt(c, "id", "资料 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -102,7 +101,7 @@ func (h *MaterialHandler) Get(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /materials/{id}/download [get]
-func (h *MaterialHandler) Download(c *gin.Context) {
+func (h *handler) Download(c *gin.Context) {
 	id, err := httpx.PathInt(c, "id", "资料 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
