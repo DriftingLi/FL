@@ -22,7 +22,8 @@ import (
 // gormDBWhitelist 允许出现 *gorm.DB 的文件（**模块根相对路径** → 理由；逐条登记，防「顺手放宽」）。
 // 键从文件名改成路径：拆包后同名文件可能落在新目录，文件名不再唯一指认。
 var gormDBWhitelist = map[string]string{
-	"internal/api/deps.go": "装配根：RouterDeps.DB / Deps.DB 字段与 NewDeps 入参",
+	"internal/api/deps.go":           "装配根：RouterDeps.DB / Deps.DB 字段与 NewDeps 入参",
+	"internal/api/providers_core.go": "装配根：coreSingletons.db（#1445 P0-D 把装配根按域拆了文件）",
 }
 
 // scanGormDBRefs 返回源码中 *gorm.DB 类型引用的行号（AST：只认类型表达式）。

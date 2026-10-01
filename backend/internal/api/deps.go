@@ -99,102 +99,37 @@ type Deps struct {
 }
 
 // NewDeps 构建全部 service 单实例。进程启动早期由 main 调用一次。
+//
+// 装配顺序 = **core（横切单例）→ 各域 provider（一域一个文件）→ 守护登记 → 后置装配**。
+// 各域 provider 只写「自己那几个 service」，横切单例一律从 coreSingletons 取（providers_core.go），
+// 于是「全进程只有一份的东西」与「某域自己的东西」在文件层面就分得开。
 // exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
 func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
-	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
-	sess := security.SessionFromConfig(cfg)
-	// 论坛计数器唯一实例：ForumService / ForumModerationService 与 AuthService 共享（计数列唯一写入口，spec #297）
-	forumCnt := service.NewForumCounter()
-	authSvc := service.NewAuthService(db, sess, forumCnt,
-		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
-	codeSvc := service.NewVerifyCodeService(db, authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
-	captchaSvc := captcha.NewService(captcha.RedisStore{})
-	emailCh := service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
-	// 邮件发送器单点（spec #449 决定 15）：联系方式交换与投递通知共用，不再注入 nil 只写日志。
-	mailSender := service.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
-	phoneCh := service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
-	wechatAuthSvc := service.NewWechatAuthService(cfg.Wechat.MiniProgram, db, authSvc, logger)
-	fileSvc := service.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
-	slideRenderer := service.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
-	notificationSvc := service.NewNotificationService(db, logger)
-	reviewSvc := service.NewProfileReviewService(db, notificationSvc, st, logger)
-	authSvc.SetProfileReviewService(reviewSvc)
-	aiConfigSvc := service.NewAIConfigService(db, cfg.SecretKey, logger)
-	// 积分服务唯一实例：积分端点与真题卷权益校验共用
-	pointsSvc := service.NewPointsService(db, logger, clock.Real(), notificationSvc)
-	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存。
-	// 计量闸门（ADR-0031）作为装饰器挂在该端口上：所有 LLM 消费（含会话自动命名）过同一道闸，
-	// 生产 meter 即积分域 *PointsService（预检与扣费下限同源），装配单点在此。
-	// 第二实现：外部诊断 RAG 助手（fault_diagnosis）经 routing adapter 按功能键分发
-	// （baseURL 来自 cfg.DiagnosisAssistantURL，不走管理端模型绑定）。
-	aiRouting := service.NewRoutingAIModel(
-		service.NewEinoAIModel(aiConfigSvc, logger),
-		service.NewDiagnosisAssistantModel(cfg.DiagnosisAssistantURL, logger),
-	)
-	aiModelPort := service.NewMeteredAIModel(aiRouting, pointsSvc, logger)
-	aiSvc := service.NewAIService(db, aiModelPort, logger)
-	contentGenSvc := service.NewContentGenerateService(db, aiSvc, logger)
-	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
-	contactSvc := service.NewContactService(db, logger, notificationSvc, mailSender)
+	core := provideCore(cfg, db, st, logger, exportStore)
 
 	d := &Deps{
-		Cfg:                  cfg,
-		DB:                   db,
-		Storage:              st,
-		Logger:               logger,
-		Session:              sess,
-		AuthSvc:              authSvc,
-		CodeSvc:              codeSvc,
-		EmailCh:              emailCh,
-		PhoneCh:              phoneCh,
-		CaptchaSvc:           captchaSvc,
-		WechatAuthSvc:        wechatAuthSvc,
-		FileSvc:              fileSvc,
-		SlideRenderer:        slideRenderer,
-		NotificationSvc:      notificationSvc,
-		ReviewSvc:            reviewSvc,
-		AIConfigSvc:          aiConfigSvc,
-		ContentGenSvc:        contentGenSvc,
-		CourseSvc:            service.NewCourseService(db, slideRenderer, logger),
-		AdminSvc:             service.NewAdminService(db, sess, logger),
-		AdminCourseSvc:       service.NewAdminCourseService(db, fileSvc, logger),
-		ForumSvc:             service.NewForumService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
-		ForumModSvc:          service.NewForumModerationService(db, fileSvc, notificationSvc, forumCnt, pointsSvc, logger),
-		CheckInSvc:           service.NewCheckInService(db, logger, clock.Real(), pointsSvc),
-		ForumImageSvc:        service.NewForumImageService(db, fileSvc, logger),
-		FeaturedSvc:          service.NewFeaturedService(db, fileSvc, logger),
-		FavoriteSvc:          service.NewFavoriteService(db, logger),
-		SearchSvc:            service.NewSearchService(db, logger),
-		MaterialSvc:          service.NewMaterialService(db, logger),
-		ExportSvc:            service.NewExportService(db, exportStore, logger),
-		StudentSvc:           service.NewStudentService(db, logger),
-		QuestionBankSvc:      service.NewQuestionBankService(db, fileSvc, logger),
-		PracticeModeSvc:      service.NewPracticeModeService(db, aiSvc, logger),
-		MockExamSvc:          service.NewMockExamService(db, aiSvc, logger),
-		RealExamSvc:          service.NewRealExamService(db, pointsSvc, logger),
-		TutorSvc:             service.NewTutorService(db, cfg.UploadFolder, fileSvc, slideRenderer, logger),
-		WrongQuestionSvc:     service.NewWrongQuestionService(db, aiSvc, logger),
-		TrainingCatalogSvc:   service.NewTrainingCatalogService(db, logger),
-		AuditSvc:             service.NewAuditService(db),
-		AIAssistantSvc:       service.NewAIAssistantService(db, aiConfigSvc, fileSvc, cfg.SecretKey, logger, aiModelPort),
-		DiagnosisProxySvc:    service.NewDiagnosisProxyService(cfg.DiagnosisAssistantURL, logger),
-		QuestionCommentSvc:   service.NewQuestionCommentService(db, logger),
-		NoteSvc:              service.NewNoteService(db, logger),
-		QuestionKnowledgeSvc: service.NewQuestionKnowledgeService(db),
-		FaqSvc:               service.NewFaqService(db, logger),
-		PointsSvc:            pointsSvc,
-		JobCardSvc:           service.NewJobCardService(db, fileSvc, logger),
-		ResumePDFRenderer:    service.NewResumePDFRenderer(),
-		RecruitSvc:           service.NewRecruitService(db, logger),
-		ContactSvc:           contactSvc,
-		JobPostingSvc:        service.NewJobPostingService(db, logger),
-		JobApplicationSvc:    service.NewJobApplicationService(db, logger, notificationSvc, contactSvc),
-		JobReportSvc:         service.NewJobReportService(db, logger),
-		InspectionSvc:        service.NewInspectionService(db),
-		ContributionSvc:      service.NewContributionService(db, fileSvc, notificationSvc, pointsSvc, logger, clock.Real()),
+		Cfg:     cfg,
+		DB:      db,
+		Storage: st,
+		Logger:  logger,
+		Session: core.sess,
+		// 横切单例在 Deps 上的投影（路由装配与蓝图注册直接读这几个字段）
+		FileSvc:         core.fileSvc,
+		SlideRenderer:   core.slideRenderer,
+		NotificationSvc: core.notifSvc,
 	}
+
+	// 各域装配：一行一域，顺序即依赖序（域之间只经 core 的共享单例交互）。
+	provideAuth(core, d)
+	provideAI(core, d)
+	provideForum(core, d)
+	provideTraining(core, d)
+	provideExam(core, d)
+	provideJobs(core, d)
+	provideContribution(core, d)
+
 	// 守护登记（ADR-0061 §1）：加守护 = 往这张表加一条，不需要在 cmd/server 里再手写一次 start。
-	// 闭包读 d 上的 service 字段（此刻已构造完），故登记排在 Deps 字面量之后。
+	// 闭包读 d 上的 service 字段（此刻已构造完），故登记排在各域装配之后。
 	d.Daemons = []daemon.Task{
 		// 两个悬空文件清理都是 6 小时差集扫描（算法在各 service 里，这里只声明节奏）。
 		{Name: "forum-image-cleanup", Interval: 6 * time.Hour, Run: func(ctx context.Context) {
@@ -216,14 +151,14 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 			}
 		}},
 	}
+
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
-	if d.JobApplicationSvc != nil && mailSender != nil {
-		d.JobApplicationSvc.SetMailer(mailSender)
+	if d.JobApplicationSvc != nil && core.mailSender != nil {
+		d.JobApplicationSvc.SetMailer(core.mailSender)
 	}
-	if d.JobReportSvc != nil && mailSender != nil {
-		d.JobReportSvc.SetMailer(mailSender)
+	if d.JobReportSvc != nil && core.mailSender != nil {
+		d.JobReportSvc.SetMailer(core.mailSender)
 	}
-	d.AuthH = NewAuthHandler(d.Session, authSvc, fileSvc, st, reviewSvc, logger)
 	return d
 }
 
