@@ -19,12 +19,12 @@ import (
 
 // jobReportErrStatus 举报治理域哨兵→状态码表（#611）：职位/举报不存在 → 404，
 // 其余（原因为空等业务校验）兜底 400。
-var jobReportErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrReportJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrReportNotFound, status: http.StatusNotFound},
+var jobReportErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrReportJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrReportNotFound, Status: http.StatusNotFound},
 	},
-	fallback: http.StatusBadRequest,
+	Fallback: http.StatusBadRequest,
 }
 
 // RegisterJobReportRoutes 注册举报与治理路由。
@@ -68,9 +68,9 @@ func NewJobReportHandler(svc *service.JobReportService, jobSvc *service.JobPosti
 // @Failure 404 {object} response.R "职位不存在或已下架"
 // @Router /jobs/{id}/report [post]
 func (h *JobReportHandler) Report(c *gin.Context) {
-	Endpoint[service.ReportInput, service.ReportDTO]{
+	httpx.Endpoint[service.ReportInput, service.ReportDTO]{
 		Parse: func(c *gin.Context) (*service.ReportInput, error) {
-			return bindJSON[service.ReportInput](c)
+			return httpx.BindJSON[service.ReportInput](c)
 		},
 		Invoke: func(ctx context.Context, req *service.ReportInput) (*service.ReportDTO, error) {
 			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
@@ -100,7 +100,7 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/jobs [get]
 func (h *JobReportHandler) ListAll(c *gin.Context) {
-	Endpoint[struct{}, service.JobListResult]{
+	httpx.Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
 			params := service.JobListParams{
 				Page:     atoiDefault(c.Query("page"), 1),
@@ -131,7 +131,7 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/job-reports [get]
 func (h *JobReportHandler) ListReports(c *gin.Context) {
-	Endpoint[struct{}, service.ReportListResult]{
+	httpx.Endpoint[struct{}, service.ReportListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportListResult, error) {
 			page := atoiDefault(c.Query("page"), 1)
 			pageSize := atoiDefault(c.Query("page_size"), 20)
@@ -156,7 +156,7 @@ func (h *JobReportHandler) ListReports(c *gin.Context) {
 // @Failure 404 {object} response.R "举报不存在"
 // @Router /admin/job-reports/{id}/handle [post]
 func (h *JobReportHandler) MarkHandled(c *gin.Context) {
-	Endpoint[struct{}, service.ReportDTO]{
+	httpx.Endpoint[struct{}, service.ReportDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "举报 ID 无效")
 			if err != nil {
@@ -187,7 +187,7 @@ func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 // @Router /admin/jobs/{id}/force-offline [post]
 // body: { reason: string }。处置动作经 AuditLog 中间件自动记入审计日志。
 func (h *JobReportHandler) ForceOffline(c *gin.Context) {
-	Endpoint[struct{}, service.JobPostingDTO]{
+	httpx.Endpoint[struct{}, service.JobPostingDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) {
 			return &struct{}{}, nil
 		},

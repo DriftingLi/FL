@@ -53,14 +53,14 @@ func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Stud
 // @Failure 404 {object} response.R "学员不存在"
 // @Router /student/profile [get]
 func (h *StudentHandler) GetProfile(c *gin.Context) {
-	Endpoint[studentUserIDReq, service.StudentProfileDTO]{
+	httpx.Endpoint[studentUserIDReq, service.StudentProfileDTO]{
 		Parse: func(c *gin.Context) (*studentUserIDReq, error) {
 			return &studentUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentProfileDTO, error) {
 			return h.svc.GetProfile(req.UserID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrStudentNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -79,7 +79,7 @@ func (h *StudentHandler) GetProfile(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /student/records [get]
 func (h *StudentHandler) GetRecords(c *gin.Context) {
-	Endpoint[studyRecordsReq, service.StudyRecordPageResult]{
+	httpx.Endpoint[studyRecordsReq, service.StudyRecordPageResult]{
 		Parse: func(c *gin.Context) (*studyRecordsReq, error) {
 			return &studyRecordsReq{
 				UserID:    middleware.CurrentUserID(c),
@@ -96,7 +96,7 @@ func (h *StudentHandler) GetRecords(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // studentUserIDReq 仅带学员 ID 的请求。
@@ -131,7 +131,7 @@ type studyStatsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /student/study-stats [get]
 func (h *StudentHandler) GetStudyStats(c *gin.Context) {
-	Endpoint[studyStatsReq, service.StudyDailyStatsDTO]{
+	httpx.Endpoint[studyStatsReq, service.StudyDailyStatsDTO]{
 		Parse: func(c *gin.Context) (*studyStatsReq, error) {
 			return &studyStatsReq{UserID: middleware.CurrentUserID(c), Days: atoiDefault(c.Query("days"), 7)}, nil
 		},
@@ -158,7 +158,7 @@ type studentCourseReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /student/courses [get]
 func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
-	Endpoint[studentUserIDReq, service.StudentCoursesDTO]{
+	httpx.Endpoint[studentUserIDReq, service.StudentCoursesDTO]{
 		Parse: func(c *gin.Context) (*studentUserIDReq, error) {
 			return &studentUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
@@ -167,7 +167,7 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 		},
 		// 不挂 ErrStudentNotFound：GetStudentCourses 只读 study_records/course，从不取 hrwai_users
 		// 行 ⇒ 那一档在本端点不可达（虚报档位会让台账的「声明了却测不出」反向锁失去意义）。
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetStudentCourseDetail 单课程学习详情
@@ -183,7 +183,7 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /student/courses/{course_id} [get]
 func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
-	Endpoint[studentCourseReq, service.StudentCourseDetailDTO]{
+	httpx.Endpoint[studentCourseReq, service.StudentCourseDetailDTO]{
 		Parse: func(c *gin.Context) (*studentCourseReq, error) {
 			courseID, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
@@ -194,6 +194,6 @@ func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *studentCourseReq) (*service.StudentCourseDetailDTO, error) {
 			return h.svc.GetStudentCourseDetail(req.UserID, req.CourseID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }

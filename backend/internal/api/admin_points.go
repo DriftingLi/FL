@@ -6,6 +6,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // AdminPointsHandler 管理员积分扣罚
@@ -36,9 +37,9 @@ type adminPenaltyReq struct {
 // invoke 适配器不带 ctx，服务侧用请求作用域 ctx（罚分锁为瞬态护栏，Redis 不可用不阻断主流程）。
 func (h *AdminPointsHandler) Penalty(c *gin.Context) {
 	adminID := middleware.CurrentUserID(c)
-	Endpoint[adminPenaltyReq, service.PointsPenaltyResultDTO]{
-		Parse: bindJSONMsgFunc[adminPenaltyReq]("请求参数错误：user_id/delta/reason 必填"),
-		Invoke: invoke(func(req adminPenaltyReq) (service.PointsPenaltyResultDTO, error) {
+	httpx.Endpoint[adminPenaltyReq, service.PointsPenaltyResultDTO]{
+		Parse: httpx.BindJSONMsgFunc[adminPenaltyReq]("请求参数错误：user_id/delta/reason 必填"),
+		Invoke: httpx.Invoke(func(req adminPenaltyReq) (service.PointsPenaltyResultDTO, error) {
 			deducted, err := h.pointsSvc.AdminPenalty(c.Request.Context(), adminID, req.UserID, req.Delta, req.Reason)
 			return service.PointsPenaltyResultDTO{Deducted: deducted}, err
 		}),

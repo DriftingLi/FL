@@ -150,7 +150,7 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 // 响应形状是 service.RecruitMeDTO —— **不是** /auth/me 的 ProfileDTO（只回 3 个字段）；
 // #954 片二把它从裸 handler 迁到 Endpoint 骨架，与其余端点同一条守卫链。
 func recruitMe(c *gin.Context) {
-	Endpoint[struct{}, service.RecruitMeDTO]{
+	httpx.Endpoint[struct{}, service.RecruitMeDTO]{
 		Invoke: func(_ context.Context, _ *struct{}) (*service.RecruitMeDTO, error) {
 			return &service.RecruitMeDTO{
 				UserID:  middleware.CurrentUserID(c),

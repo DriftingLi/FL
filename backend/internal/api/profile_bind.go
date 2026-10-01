@@ -68,9 +68,9 @@ type sendCodeReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/profile/send-code [post]
 func (h *ProfileBindHandler) SendCode(c *gin.Context) {
-	Endpoint[sendCodeReq, struct{}]{
+	httpx.Endpoint[sendCodeReq, struct{}]{
 		Parse: func(c *gin.Context) (*sendCodeReq, error) {
-			return bindJSON[sendCodeReq](c)
+			return httpx.BindJSON[sendCodeReq](c)
 		},
 		Invoke: func(ctx context.Context, req *sendCodeReq) (*struct{}, error) {
 			channels := map[string]service.CodeChannel{"email": h.emailCh, "phone": h.phoneCh}
@@ -83,7 +83,7 @@ func (h *ProfileBindHandler) SendCode(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: &errStatusTable{fallback: http.StatusBadRequest},
+		ErrStatus: &httpx.ErrStatusTable{Fallback: http.StatusBadRequest},
 		Render: func(c *gin.Context, _ *sendCodeReq, _ *struct{}) {
 			response.SuccessWithMsg(c, "验证码已发送，请查收", nil)
 		},
@@ -133,7 +133,7 @@ func (h *ProfileBindHandler) bindPhone(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/profile/password/send-code [post]
 func (h *ProfileBindHandler) SendChangePasswordCode(c *gin.Context) {
-	Endpoint[profileUserIDReq, struct{}]{
+	httpx.Endpoint[profileUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*profileUserIDReq, error) {
 			return &profileUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
@@ -143,7 +143,7 @@ func (h *ProfileBindHandler) SendChangePasswordCode(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("验证码已发送，请查收"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("验证码已发送，请查收"), http.StatusBadRequest).Handle(c)
 }
 
 // profileUserIDReq 仅带登录用户 ID 的请求（发送验证码类）。
@@ -170,9 +170,9 @@ type changePasswordReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/profile/password [post]
 func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
-	Endpoint[changePasswordReq, struct{}]{
+	httpx.Endpoint[changePasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*changePasswordReq, error) {
-			return bindJSON[changePasswordReq](c)
+			return httpx.BindJSON[changePasswordReq](c)
 		},
 		Invoke: func(ctx context.Context, req *changePasswordReq) (*struct{}, error) {
 			if err := h.codeSvc.ChangePassword(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Code, req.Password); err != nil {
@@ -180,7 +180,7 @@ func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码设置成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("密码设置成功"), http.StatusBadRequest).Handle(c)
 }
 
 // SendAccountChangeCode 发送修改账号验证码
@@ -194,7 +194,7 @@ func (h *ProfileBindHandler) UpdatePassword(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/account/send-code [post]
 func (h *ProfileBindHandler) SendAccountChangeCode(c *gin.Context) {
-	Endpoint[profileUserIDReq, struct{}]{
+	httpx.Endpoint[profileUserIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*profileUserIDReq, error) {
 			return &profileUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
@@ -204,7 +204,7 @@ func (h *ProfileBindHandler) SendAccountChangeCode(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("验证码已发送，请查收"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("验证码已发送，请查收"), http.StatusBadRequest).Handle(c)
 }
 
 // changeAccountReq 修改登录账号请求 {account, code}。
@@ -226,20 +226,20 @@ type changeAccountReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/account [put]
 func (h *ProfileBindHandler) UpdateAccount(c *gin.Context) {
-	Endpoint[changeAccountReq, service.LoginResult]{
+	httpx.Endpoint[changeAccountReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*changeAccountReq, error) {
-			return bindJSON[changeAccountReq](c)
+			return httpx.BindJSON[changeAccountReq](c)
 		},
 		Invoke: func(ctx context.Context, req *changeAccountReq) (*service.LoginResult, error) {
 			return h.codeSvc.ChangeAccount(ctx, h.phoneCh, middleware.CurrentUserID(c), req.Account, req.Code)
 		},
-	}.WithSuccess(okMsg("账号修改成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("账号修改成功"), http.StatusBadRequest).Handle(c)
 }
 
 // handleCodeChannelBind 绑定/修改目标字段的公共实现（通道注入）。
 // body: {email|phone, code}；targetField 动态字段名以两个小 struct（bindEmailFields/bindPhoneFields）表达。
 func handleCodeChannelBind(c *gin.Context, codeSvc *service.VerifyCodeService, ch service.CodeChannel, targetField, successMsg string) {
-	Endpoint[codeBindReq, struct{}]{
+	httpx.Endpoint[codeBindReq, struct{}]{
 		Parse: func(c *gin.Context) (*codeBindReq, error) {
 			return parseCodeBindReq(c, targetField)
 		},
@@ -250,7 +250,7 @@ func handleCodeChannelBind(c *gin.Context, codeSvc *service.VerifyCodeService, c
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *codeBindReq, _ *struct{}) {
 			response.SuccessWithMsg(c, successMsg, nil)
 		},

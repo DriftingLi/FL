@@ -18,12 +18,12 @@ import (
 // 标识冲突本可表达为 409，但本仓从未使用 409，且 renderStatus 的单一咽喉里没有 409 分支
 // ——域表里放 409 会被静默渲染成 500（endpoint.go:130 的已知坑）。要引入 409 得同时动
 // response 单点与前端状态映射，那是独立一拍，不在本票范围。
-var faqErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrFaqCategoryNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrFaqEntryNotFound, status: http.StatusNotFound},
+var faqErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrFaqCategoryNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrFaqEntryNotFound, Status: http.StatusNotFound},
 	},
-	fallback: http.StatusBadRequest,
+	Fallback: http.StatusBadRequest,
 }
 
 // FaqHandler 帮助中心 handler（#1079）：学员端只读 + 管理端 CRUD。
@@ -64,7 +64,7 @@ func RegisterFaqRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.FaqServi
 // @Failure 401 {object} response.R "未认证"
 // @Router /faq [get]
 func (h *FaqHandler) List(c *gin.Context) {
-	Endpoint[struct{}, service.FaqResult]{
+	httpx.Endpoint[struct{}, service.FaqResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.FaqResult, error) {
 			return h.svc.ListPublished()
 		},
@@ -83,7 +83,7 @@ func (h *FaqHandler) List(c *gin.Context) {
 // @Failure 403 {object} response.R "无权限"
 // @Router /admin/faq/categories [get]
 func (h *FaqHandler) AdminListCategories(c *gin.Context) {
-	Endpoint[struct{}, service.AdminFaqCategoriesResult]{
+	httpx.Endpoint[struct{}, service.AdminFaqCategoriesResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqCategoriesResult, error) {
 			items, err := h.svc.AdminListCategories()
 			if err != nil {
@@ -120,7 +120,7 @@ func (h *FaqHandler) AdminCreateCategory(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	Endpoint[struct{}, service.AdminFaqCategoryDTO]{
+	httpx.Endpoint[struct{}, service.AdminFaqCategoryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqCategoryDTO, error) {
 			return h.svc.AdminCreateCategory(service.FaqCategoryInput{
 				Code: body.Code, Title: body.Title, SortOrder: body.SortOrder, Enabled: body.Enabled,
@@ -155,7 +155,7 @@ func (h *FaqHandler) AdminUpdateCategory(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	Endpoint[struct{}, service.AdminFaqCategoryDTO]{
+	httpx.Endpoint[struct{}, service.AdminFaqCategoryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqCategoryDTO, error) {
 			return h.svc.AdminUpdateCategory(id, service.FaqCategoryInput{
 				Code: body.Code, Title: body.Title, SortOrder: body.SortOrder, Enabled: body.Enabled,
@@ -181,7 +181,7 @@ func (h *FaqHandler) AdminDeleteCategory(c *gin.Context) {
 		response.BadRequest(c, "分类 ID 无效")
 		return
 	}
-	Endpoint[struct{}, struct{}]{
+	httpx.Endpoint[struct{}, struct{}]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 			if err := h.svc.AdminDeleteCategory(id); err != nil {
 				return nil, err
@@ -203,7 +203,7 @@ func (h *FaqHandler) AdminDeleteCategory(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/faq/entries [get]
 func (h *FaqHandler) AdminListEntries(c *gin.Context) {
-	Endpoint[struct{}, service.AdminFaqEntriesResult]{
+	httpx.Endpoint[struct{}, service.AdminFaqEntriesResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqEntriesResult, error) {
 			items, err := h.svc.AdminListEntries(queryIntPtr(c, "category_id"))
 			if err != nil {
@@ -241,7 +241,7 @@ func (h *FaqHandler) AdminCreateEntry(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	Endpoint[struct{}, service.AdminFaqEntryDTO]{
+	httpx.Endpoint[struct{}, service.AdminFaqEntryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqEntryDTO, error) {
 			return h.svc.AdminCreateEntry(service.FaqEntryInput{
 				CategoryID: body.CategoryID, Question: body.Question, Answer: body.Answer,
@@ -276,7 +276,7 @@ func (h *FaqHandler) AdminUpdateEntry(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	Endpoint[struct{}, service.AdminFaqEntryDTO]{
+	httpx.Endpoint[struct{}, service.AdminFaqEntryDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminFaqEntryDTO, error) {
 			return h.svc.AdminUpdateEntry(id, service.FaqEntryInput{
 				CategoryID: body.CategoryID, Question: body.Question, Answer: body.Answer,
@@ -302,7 +302,7 @@ func (h *FaqHandler) AdminDeleteEntry(c *gin.Context) {
 		response.BadRequest(c, "条目 ID 无效")
 		return
 	}
-	Endpoint[struct{}, struct{}]{
+	httpx.Endpoint[struct{}, struct{}]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 			if err := h.svc.AdminDeleteEntry(id); err != nil {
 				return nil, err

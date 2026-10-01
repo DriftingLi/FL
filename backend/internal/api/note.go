@@ -18,13 +18,13 @@ import (
 // 而那同时把**未具名的库故障**咽成 400 + 驱动原文。要让故障落 500，前提是那两条校验事实先有名字
 // ⇒ 不是二选一，是必须同时做（本文件第一次提交时只加了 swagger 的 500 档而没改这张表，
 // 由双轴评审按实测抓回——「文档说的档位」与「代码打得出的档位」之间今天仍没有锁，见 ADR-0065 批⑤ 残留缺口）。
-var noteErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrNoteNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrNoteContentEmpty, status: http.StatusBadRequest},
-		{sentinel: service.ErrNoteContentTooLong, status: http.StatusBadRequest},
+var noteErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrNoteNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrNoteContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrNoteContentTooLong, Status: http.StatusBadRequest},
 	},
-	fallback: http.StatusInternalServerError,
+	Fallback: http.StatusInternalServerError,
 }
 
 // NoteHandler 学员笔记 handler（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。
@@ -82,7 +82,7 @@ type listNotesReq struct {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [get]
 func (h *NoteHandler) List(c *gin.Context) {
-	Endpoint[listNotesReq, service.NotePageDTO]{
+	httpx.Endpoint[listNotesReq, service.NotePageDTO]{
 		Parse: func(c *gin.Context) (*listNotesReq, error) {
 			return &listNotesReq{
 				UserID:   middleware.CurrentUserID(c),
@@ -119,7 +119,7 @@ type createNoteReq struct {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [post]
 func (h *NoteHandler) Create(c *gin.Context) {
-	Endpoint[createNoteReq, service.NoteDTO]{
+	httpx.Endpoint[createNoteReq, service.NoteDTO]{
 		Parse: func(c *gin.Context) (*createNoteReq, error) {
 			var body struct {
 				Content string `json:"content"`
@@ -168,7 +168,7 @@ type updateNoteReq struct {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [put]
 func (h *NoteHandler) Update(c *gin.Context) {
-	Endpoint[updateNoteReq, service.NoteDTO]{
+	httpx.Endpoint[updateNoteReq, service.NoteDTO]{
 		Parse: func(c *gin.Context) (*updateNoteReq, error) {
 			id, err := httpx.PathInt(c, "id", "笔记 ID 无效")
 			if err != nil {
@@ -213,7 +213,7 @@ type deleteNoteReq struct {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [delete]
 func (h *NoteHandler) Delete(c *gin.Context) {
-	Endpoint[deleteNoteReq, struct{}]{
+	httpx.Endpoint[deleteNoteReq, struct{}]{
 		Parse: func(c *gin.Context) (*deleteNoteReq, error) {
 			id, err := httpx.PathInt(c, "id", "笔记 ID 无效")
 			if err != nil {

@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
+	"forklift-training/pkg/httpx"
 )
 
 // factFace 一条业务事实的可达出口：方法 + 路径 + body + 期望那句对外文案 + 该事实的哨兵。
@@ -99,7 +100,7 @@ func TestFavoriteErrStatusFacesAreProducible(t *testing.T) {
 //
 // fallback 那一档不在射程内（它说的是「没有名字的错误」），由
 // visible_by_id_fault_contract_test.go 注故障单独锁。
-func assertFacesAgainstTable(t *testing.T, f *poolLeakFixture, tableName string, tbl *errStatusTable, faces []factFace) {
+func assertFacesAgainstTable(t *testing.T, f *poolLeakFixture, tableName string, tbl *httpx.ErrStatusTable, faces []factFace) {
 	t.Helper()
 	reached := map[error]bool{}
 	for _, fc := range faces {
@@ -115,12 +116,12 @@ func assertFacesAgainstTable(t *testing.T, f *poolLeakFixture, tableName string,
 			reached[fc.sent] = true
 		})
 	}
-	for _, e := range tbl.entries {
-		if e.sentinel == nil || reached[e.sentinel] {
+	for _, e := range tbl.Entries {
+		if e.Sentinel == nil || reached[e.Sentinel] {
 			continue
 		}
 		t.Errorf("%s 登记了 %q，但没有任何一条行为例打得出它——「登记的档必须打得出」（决策 8）",
-			tableName, e.sentinel.Error())
+			tableName, e.Sentinel.Error())
 	}
 }
 

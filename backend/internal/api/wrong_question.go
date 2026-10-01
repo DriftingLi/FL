@@ -74,7 +74,7 @@ type listWrongQuestionsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions [get]
 func (h *WrongQuestionHandler) List(c *gin.Context) {
-	Endpoint[listWrongQuestionsReq, service.WrongQuestionPageDTO]{
+	httpx.Endpoint[listWrongQuestionsReq, service.WrongQuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listWrongQuestionsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -92,7 +92,7 @@ func (h *WrongQuestionHandler) List(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*service.WrongQuestionPageDTO, error) {
 			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // redoWrongQuestionReq 重做错题请求。
@@ -117,7 +117,7 @@ type redoWrongQuestionReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/{question_id}/redo [post]
 func (h *WrongQuestionHandler) Redo(c *gin.Context) {
-	Endpoint[redoWrongQuestionReq, service.SubmitResultDTO]{
+	httpx.Endpoint[redoWrongQuestionReq, service.SubmitResultDTO]{
 		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -136,9 +136,9 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*service.SubmitResultDTO, error) {
 			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO) {
-			response.Success(c, deref(resp))
+			response.Success(c, httpx.Deref(resp))
 		},
 	}.Handle(c)
 }
@@ -162,7 +162,7 @@ type removeWrongQuestionReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/{question_id}/remove [post]
 func (h *WrongQuestionHandler) Remove(c *gin.Context) {
-	Endpoint[removeWrongQuestionReq, service.WrongQuestionRemoveResultDTO]{
+	httpx.Endpoint[removeWrongQuestionReq, service.WrongQuestionRemoveResultDTO]{
 		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -175,7 +175,7 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *removeWrongQuestionReq) (*service.WrongQuestionRemoveResultDTO, error) {
 			return h.svc.RemoveWrongQuestion(req.StudentID, req.QuestionID)
 		},
-	}.WithSuccess(okMsg("已移出错题本"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("已移出错题本"), http.StatusBadRequest).Handle(c)
 }
 
 // BatchRemove 批量移出错题本
@@ -189,7 +189,7 @@ func (h *WrongQuestionHandler) Remove(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.WrongQuestionBatchRemoveResultDTO} "success"
 // @Router /wrong-questions/batch-remove [post]
 func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
-	Endpoint[batchRemoveReq, service.WrongQuestionBatchRemoveResultDTO]{
+	httpx.Endpoint[batchRemoveReq, service.WrongQuestionBatchRemoveResultDTO]{
 		Parse: func(c *gin.Context) (*batchRemoveReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -208,7 +208,7 @@ func (h *WrongQuestionHandler) BatchRemove(c *gin.Context) {
 			}
 			return &service.WrongQuestionBatchRemoveResultDTO{Removed: cnt}, nil
 		},
-	}.WithSuccess(okMsg("已批量移出"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("已批量移出"), http.StatusBadRequest).Handle(c)
 }
 
 type batchRemoveReq struct {
@@ -232,7 +232,7 @@ type getWrongStatsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/stats [get]
 func (h *WrongQuestionHandler) GetStats(c *gin.Context) {
-	Endpoint[getWrongStatsReq, service.WrongQuestionStatsDTO]{
+	httpx.Endpoint[getWrongStatsReq, service.WrongQuestionStatsDTO]{
 		Parse: func(c *gin.Context) (*getWrongStatsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -259,7 +259,7 @@ type exportWrongQuestionsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/export [get]
 func (h *WrongQuestionHandler) Export(c *gin.Context) {
-	Endpoint[exportWrongQuestionsReq, struct{}]{
+	httpx.Endpoint[exportWrongQuestionsReq, struct{}]{
 		Parse: func(c *gin.Context) (*exportWrongQuestionsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)

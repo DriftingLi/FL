@@ -62,7 +62,7 @@ type freeQuestionsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/free [get]
 func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
-	Endpoint[freeQuestionsReq, []service.QuestionDTO]{
+	httpx.Endpoint[freeQuestionsReq, []service.QuestionDTO]{
 		Parse: func(c *gin.Context) (*freeQuestionsReq, error) {
 			return &freeQuestionsReq{
 				QType:        c.Query("type"),
@@ -77,7 +77,7 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // tagPracticeReq 标签练习请求（tag_id 区分缺失/非法 + count）。
@@ -102,7 +102,7 @@ type tagPracticeReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/tag [get]
 func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
-	Endpoint[tagPracticeReq, service.PracticeStartResultDTO]{
+	httpx.Endpoint[tagPracticeReq, service.PracticeStartResultDTO]{
 		Parse: func(c *gin.Context) (*tagPracticeReq, error) {
 			tagIDStr := c.Query("tag_id")
 			if tagIDStr == "" {
@@ -120,7 +120,7 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *tagPracticeReq) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartTagPractice(req.StudentID, req.TagID, req.Count, req.CredentialID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrPracticeTagRequired, http.StatusBadRequest).
 		WithSentinel(service.ErrPracticeTagUnsupported, http.StatusBadRequest).Handle(c)
 }
@@ -136,7 +136,7 @@ func (h *PracticeModeHandler) StartTagPractice(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/sequential [get]
 func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
-	Endpoint[struct {
+	httpx.Endpoint[struct {
 		StudentID    int
 		CredentialID *int
 	}, service.PracticeStartResultDTO]{
@@ -157,7 +157,7 @@ func (h *PracticeModeHandler) StartSequential(c *gin.Context) {
 		}) (*service.PracticeStartResultDTO, error) {
 			return h.svc.StartSequential(req.StudentID, req.CredentialID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // studentIDReq 仅携带学员 ID 的请求。
@@ -176,7 +176,7 @@ type studentIDReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/sequential-progress [get]
 func (h *PracticeModeHandler) GetSequentialProgress(c *gin.Context) {
-	Endpoint[studentIDReq, service.ProgressResultDTO]{
+	httpx.Endpoint[studentIDReq, service.ProgressResultDTO]{
 		Parse: h.parseStudentID,
 		Invoke: func(ctx context.Context, req *studentIDReq) (*service.ProgressResultDTO, error) {
 			// #413：透传证件参数，进度返回体附带实时池总数。
@@ -208,7 +208,7 @@ type practiceSaveProgressReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/progress [post]
 func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
-	Endpoint[practiceSaveProgressReq, service.ProgressSaveResultDTO]{
+	httpx.Endpoint[practiceSaveProgressReq, service.ProgressSaveResultDTO]{
 		Parse: func(c *gin.Context) (*practiceSaveProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -244,7 +244,7 @@ func (h *PracticeModeHandler) SaveProgress(c *gin.Context) {
 			}
 			return &service.ProgressSaveResultDTO{Index: req.Index, Saved: true}, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // getProgressReq 查询练习进度请求（学员 ID + mode，默认 sequential）。
@@ -267,7 +267,7 @@ type getProgressReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/progress [get]
 func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
-	Endpoint[getProgressReq, service.ProgressResultDTO]{
+	httpx.Endpoint[getProgressReq, service.ProgressResultDTO]{
 		Parse: func(c *gin.Context) (*getProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -284,7 +284,7 @@ func (h *PracticeModeHandler) GetProgress(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *getProgressReq) (*service.ProgressResultDTO, error) {
 			return h.svc.GetProgress(req.StudentID, req.Mode, req.CredentialID), nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // submitAnswerReq 提交答案请求（学员 ID + body）。
@@ -308,7 +308,7 @@ type submitAnswerReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/submit [post]
 func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
-	Endpoint[submitAnswerReq, service.SubmitResultDTO]{
+	httpx.Endpoint[submitAnswerReq, service.SubmitResultDTO]{
 		Parse: func(c *gin.Context) (*submitAnswerReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -336,7 +336,7 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *submitAnswerReq) (*service.SubmitResultDTO, error) {
 			return h.svc.SubmitAnswer(req.StudentID, req.QuestionID, req.UserAnswer, req.PracticeType, middleware.CredentialIDPtr(c))
 		},
-	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // GetPracticeStats 刷题数据展示
@@ -351,7 +351,7 @@ func (h *PracticeModeHandler) SubmitAnswer(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/practice-stats [get]
 func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
-	Endpoint[practiceStatsReq, service.PracticePracticeStatsDTO]{
+	httpx.Endpoint[practiceStatsReq, service.PracticePracticeStatsDTO]{
 		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -360,7 +360,7 @@ func (h *PracticeModeHandler) GetPracticeStats(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*service.PracticePracticeStatsDTO, error) {
 			return h.svc.GetPracticeStats(req.StudentID, req.CredentialID)
 		},
-		ErrStatus: errStatusAllMsg(http.StatusInternalServerError, "查询失败"),
+		ErrStatus: httpx.ErrStatusAllMsg(http.StatusInternalServerError, "查询失败"),
 	}.Handle(c)
 }
 
@@ -383,7 +383,7 @@ type practiceStatsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/stats [get]
 func (h *PracticeModeHandler) GetStats(c *gin.Context) {
-	Endpoint[practiceStatsReq, service.PracticeStatsDTO]{
+	httpx.Endpoint[practiceStatsReq, service.PracticeStatsDTO]{
 		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -423,7 +423,7 @@ type practiceHistoryReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/history [get]
 func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
-	Endpoint[practiceHistoryReq, service.HistoryResultDTO]{
+	httpx.Endpoint[practiceHistoryReq, service.HistoryResultDTO]{
 		Parse: func(c *gin.Context) (*practiceHistoryReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -440,7 +440,7 @@ func (h *PracticeModeHandler) GetHistory(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *practiceHistoryReq) (*service.HistoryResultDTO, error) {
 			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // parseStudentID 解析学员 ID（来自上下文）。

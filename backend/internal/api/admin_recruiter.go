@@ -48,9 +48,9 @@ func NewAdminRecruiterHandler(authSvc *service.AuthService) *AdminRecruiterHandl
 // @Router /admin/recruiters [post]
 // Create 创建招聘者账号 POST /api/admin/recruiters
 func (h *AdminRecruiterHandler) Create(c *gin.Context) {
-	Endpoint[service.RecruiterCreateInput, service.RecruiterCreatedDTO]{
+	httpx.Endpoint[service.RecruiterCreateInput, service.RecruiterCreatedDTO]{
 		Parse: func(c *gin.Context) (*service.RecruiterCreateInput, error) {
-			req, err := bindJSON[service.RecruiterCreateInput](c)
+			req, err := httpx.BindJSON[service.RecruiterCreateInput](c)
 			if err != nil {
 				return nil, err
 			}
@@ -64,7 +64,7 @@ func (h *AdminRecruiterHandler) Create(c *gin.Context) {
 			dto := service.NewRecruiterCreatedDTO(rec)
 			return &dto, nil
 		},
-	}.WithSuccess(created("招聘者账号创建成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.Created("招聘者账号创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 切换招聘者启用/禁用状态
@@ -79,7 +79,7 @@ func (h *AdminRecruiterHandler) Create(c *gin.Context) {
 // @Router /admin/recruiters/{id}/status [put]
 // ToggleStatus 切换招聘者启用/禁用 PUT /api/admin/recruiters/:id/status
 func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
-	Endpoint[idParam, service.StatusResultDTO]{
+	httpx.Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -96,9 +96,9 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 		},
 		// 判定不动（票8 逐端点判过，同 admin.go 的两处 Toggle）：AuthService.ToggleRecruiterStatus
 		// 的「招聘者不存在」是裸 errors.New、后面的 UPDATE/回写错误原样上抛 ⇒ 无哨兵可分档。
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrRecruiterNotFound, status: http.StatusNotFound},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: service.ErrRecruiterNotFound, Status: http.StatusNotFound},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "招聘者已启用"
@@ -124,7 +124,7 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 // @Router /admin/recruiters/{id} [put]
 // Edit 编辑招聘者企业信息 PUT /api/admin/recruiters/:id（#417）。
 func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
-	Endpoint[idParam, service.RecruiterUpdatedDTO]{
+	httpx.Endpoint[idParam, service.RecruiterUpdatedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -144,7 +144,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			dto := service.NewRecruiterUpdatedDTO(rec)
 			return &dto, nil
 		},
-	}.WithSuccess(okMsg("招聘者信息已更新"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("招聘者信息已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置招聘者密码
@@ -161,7 +161,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 // @Router /admin/recruiters/{id}/password [put]
 // ResetPassword 重置招聘者密码 PUT /api/admin/recruiters/:id/password（#417）。
 func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
-	Endpoint[idParam, service.RecruiterPasswordResetResult]{
+	httpx.Endpoint[idParam, service.RecruiterPasswordResetResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -181,7 +181,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			}
 			return &service.RecruiterPasswordResetResult{}, nil
 		},
-	}.WithSuccess(okMsg("密码已重置"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("密码已重置"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 招聘者列表

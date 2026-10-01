@@ -92,9 +92,9 @@ var contactCreateFacts400 = []error{
 // @Failure 500 {object} response.R "服务端内部错误（DB 故障；不外发驱动原文）"
 // @Router /recruit/contact-requests [post]
 func (h *ContactHandler) Create(c *gin.Context) {
-	Endpoint[contactCreateReq, service.ContactRequestDTO]{
+	httpx.Endpoint[contactCreateReq, service.ContactRequestDTO]{
 		Parse: func(c *gin.Context) (*contactCreateReq, error) {
-			body, err := bindJSON[contactCreateBody](c)
+			body, err := httpx.BindJSON[contactCreateBody](c)
 			if err != nil {
 				return nil, err
 			}
@@ -107,7 +107,7 @@ func (h *ContactHandler) Create(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *contactCreateReq) (*service.ContactRequestDTO, error) {
 			return h.svc.Create(req.RecruiterID, req.StudentUserID, req.Message)
 		},
-	}.WithSuccess(created("申请已提交"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.Created("申请已提交"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, contactCreateFacts400...).Handle(c)
 }
 

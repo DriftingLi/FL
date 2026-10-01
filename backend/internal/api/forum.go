@@ -38,44 +38,44 @@ func NewForumHandler(svc *service.ForumService, modSvc *service.ForumModerationS
 // 例外：GetTopic（含 AdminGetTopic 委托）的 gorm.ErrRecordNotFound→404 手写映射不并入本表——
 // 其理由是**渲染定制**（详情读面走 raw SQL Scan，未命中返回裸 gorm 哨兵，需固定文案「主题不存在」），
 // 与哨兵缺失不同因（票面裁定保留，见 endpoint.go 例外清单）。
-var forumErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
+var forumErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
 		// 存在性 → 404
-		{sentinel: service.ErrTopicNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrReplyNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrForumReportNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrChapterNotFound, status: http.StatusNotFound},
+		{Sentinel: service.ErrTopicNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrReplyNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrForumReportNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrChapterNotFound, Status: http.StatusNotFound},
 		// 所有权 → 403
-		{sentinel: service.ErrNotTopicOwner, status: http.StatusForbidden},
-		{sentinel: service.ErrNotTopicAuthor, status: http.StatusForbidden},
-		{sentinel: service.ErrNotReplyAuthor, status: http.StatusForbidden},
+		{Sentinel: service.ErrNotTopicOwner, Status: http.StatusForbidden},
+		{Sentinel: service.ErrNotTopicAuthor, Status: http.StatusForbidden},
+		{Sentinel: service.ErrNotReplyAuthor, Status: http.StatusForbidden},
 		// 状态前置 → 400
-		{sentinel: service.ErrAcceptOwnReply, status: http.StatusBadRequest},
-		{sentinel: service.ErrAcceptNotQuestion, status: http.StatusBadRequest},
-		{sentinel: service.ErrCancelAcceptNotQuestion, status: http.StatusBadRequest},
-		{sentinel: service.ErrAcceptExperienceTopic, status: http.StatusBadRequest},
-		{sentinel: service.ErrDesignateAcceptedTopic, status: http.StatusBadRequest},
-		{sentinel: service.ErrUnfeatureExperienceTopic, status: http.StatusBadRequest},
-		{sentinel: service.ErrCategoryLockedByAccept, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionChapterConflict, status: http.StatusBadRequest},
-		{sentinel: service.ErrParentReplyMismatch, status: http.StatusBadRequest},
-		{sentinel: service.ErrReplyTopicMismatch, status: http.StatusBadRequest},
+		{Sentinel: service.ErrAcceptOwnReply, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrAcceptNotQuestion, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCancelAcceptNotQuestion, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrAcceptExperienceTopic, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrDesignateAcceptedTopic, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrUnfeatureExperienceTopic, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCategoryLockedByAccept, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrQuestionChapterConflict, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrParentReplyMismatch, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrReplyTopicMismatch, Status: http.StatusBadRequest},
 		// 参数/校验 → 400
-		{sentinel: service.ErrContentFormatInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrCategoryInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrSolvedArgInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrFeaturedArgInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrExperienceArgInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrSolvedFilterScope, status: http.StatusBadRequest},
-		{sentinel: service.ErrChapterIDRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrTitleLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrContentLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrReplyContentLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrImagesTooMany, status: http.StatusBadRequest},
-		{sentinel: service.ErrImageURLInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrReportReasonLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrReportTarget, status: http.StatusBadRequest},
-		{sentinel: service.ErrReportStatusValue, status: http.StatusBadRequest},
+		{Sentinel: service.ErrContentFormatInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCategoryInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrSolvedArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrFeaturedArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrExperienceArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrSolvedFilterScope, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrChapterIDRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrTitleLength, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContentLength, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrReplyContentLength, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrImagesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrImageURLInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrReportReasonLength, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrReportTarget, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrReportStatusValue, Status: http.StatusBadRequest},
 	},
 }
 
@@ -202,7 +202,7 @@ func (h *ForumHandler) UploadImage(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /forum/topics [get]
 func (h *ForumHandler) ListTopics(c *gin.Context) {
-	Endpoint[listTopicsReq, service.ForumTopicPageResult]{
+	httpx.Endpoint[listTopicsReq, service.ForumTopicPageResult]{
 		Parse: func(c *gin.Context) (*listTopicsReq, error) {
 			return &listTopicsReq{
 				Scope:    c.Query("scope"),
@@ -253,7 +253,7 @@ func (h *ForumHandler) ListTopics(c *gin.Context) {
 // @Failure 404 {object} response.R "章节不存在（票5 存在性档）"
 // @Router /forum/topics [post]
 func (h *ForumHandler) CreateTopic(c *gin.Context) {
-	Endpoint[createTopicReq, service.ForumTopicDTO]{
+	httpx.Endpoint[createTopicReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*createTopicReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -313,7 +313,7 @@ func (h *ForumHandler) CreateTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /forum/topics/{id} [get]
 func (h *ForumHandler) GetTopic(c *gin.Context) {
-	Endpoint[topicGetReq, service.ForumTopicDetailDTO]{
+	httpx.Endpoint[topicGetReq, service.ForumTopicDetailDTO]{
 		Parse: func(c *gin.Context) (*topicGetReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -330,9 +330,9 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *topicGetReq) (*service.ForumTopicDetailDTO, error) {
 			return h.svc.GetTopic(req.toDetailInput())
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "主题不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "主题不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
 }
@@ -352,7 +352,7 @@ func (h *ForumHandler) GetTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "主题/被回复的回复不存在（票5 存在性档）"
 // @Router /forum/topics/{id}/replies [post]
 func (h *ForumHandler) ReplyTopic(c *gin.Context) {
-	Endpoint[replyTopicReq, service.ForumReplyDTO]{
+	httpx.Endpoint[replyTopicReq, service.ForumReplyDTO]{
 		Parse: func(c *gin.Context) (*replyTopicReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -411,7 +411,7 @@ func (h *ForumHandler) ReplyTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "主题不存在"
 // @Router /forum/topics/{id} [put]
 func (h *ForumHandler) UpdateTopic(c *gin.Context) {
-	Endpoint[updateTopicReq, service.ForumTopicDTO]{
+	httpx.Endpoint[updateTopicReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*updateTopicReq, error) {
 			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
@@ -467,7 +467,7 @@ func (h *ForumHandler) UpdateTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "主题不存在"
 // @Router /forum/topics/{id} [delete]
 func (h *ForumHandler) DeleteTopic(c *gin.Context) {
-	Endpoint[topicDeleteReq, struct{}]{
+	httpx.Endpoint[topicDeleteReq, struct{}]{
 		Parse: func(c *gin.Context) (*topicDeleteReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -505,7 +505,7 @@ func (h *ForumHandler) DeleteTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "回复不存在"
 // @Router /forum/replies/{id} [delete]
 func (h *ForumHandler) DeleteReply(c *gin.Context) {
-	Endpoint[replyDeleteReq, struct{}]{
+	httpx.Endpoint[replyDeleteReq, struct{}]{
 		Parse: func(c *gin.Context) (*replyDeleteReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -589,7 +589,7 @@ func (h *ForumHandler) AdminGetTopic(c *gin.Context) {
 // @Failure 404 {object} response.R "主题不存在（票5 存在性档）"
 // @Router /admin/forum/topics/{id} [delete]
 func (h *ForumHandler) AdminDeleteTopic(c *gin.Context) {
-	Endpoint[topicIDReq, struct{}]{
+	httpx.Endpoint[topicIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
 			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
@@ -680,7 +680,7 @@ func (h *ForumHandler) AdminRevokeExperience(c *gin.Context) {
 
 // handleExperience 认定/取消经验共用管线（ADR-0040）：权限由路由组的 CapabilityRequired(authz.CapForumModerate) 收口。
 func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
-	Endpoint[topicIDReq, service.ForumTopicDTO]{
+	httpx.Endpoint[topicIDReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
 			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
@@ -707,7 +707,7 @@ func (h *ForumHandler) handleExperience(c *gin.Context, designate bool) {
 
 // handleSetFeatured 加精/取消精选共用管线（#742）：状态迁移 + 首次加精发分在同一服务方法内。
 func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
-	Endpoint[topicIDReq, service.ForumTopicDTO]{
+	httpx.Endpoint[topicIDReq, service.ForumTopicDTO]{
 		Parse: func(c *gin.Context) (*topicIDReq, error) {
 			topicID, err := httpx.PathInt64(c, "id", "主题ID无效")
 			if err != nil {
@@ -743,7 +743,7 @@ func (h *ForumHandler) handleSetFeatured(c *gin.Context, featured bool) {
 // @Failure 404 {object} response.R "回复不存在（票5 存在性档）"
 // @Router /admin/forum/replies/{id} [delete]
 func (h *ForumHandler) AdminDeleteReply(c *gin.Context) {
-	Endpoint[replyIDReq, struct{}]{
+	httpx.Endpoint[replyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*replyIDReq, error) {
 			replyID, err := httpx.PathInt64(c, "id", "回复ID无效")
 			if err != nil {
@@ -876,12 +876,12 @@ type replyIDReq struct {
 func (h *ForumHandler) LikeTopic(c *gin.Context) {
 	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	count, err := h.svc.LikeTopic(middleware.CurrentUserID(c), topicID)
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "点赞成功", service.ForumLikeResultDTO{Liked: true, LikesCount: count})
@@ -903,12 +903,12 @@ func (h *ForumHandler) LikeTopic(c *gin.Context) {
 func (h *ForumHandler) UnlikeTopic(c *gin.Context) {
 	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	count, err := h.svc.UnlikeTopic(middleware.CurrentUserID(c), topicID)
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已取消点赞", service.ForumLikeResultDTO{Liked: false, LikesCount: count})
@@ -954,7 +954,7 @@ func (h *ForumHandler) ReportReply(c *gin.Context) {
 func (h *ForumHandler) report(c *gin.Context, kind string) {
 	id, err := httpx.PathInt64(c, "id", "目标 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	var v int64 = id
@@ -972,7 +972,7 @@ func (h *ForumHandler) report(c *gin.Context, kind string) {
 		replyID = &v
 	}
 	if err := h.svc.CreateReport(middleware.CurrentUserID(c), topicID, replyID, body.Reason); err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "举报已提交，等待处理", nil)
@@ -994,7 +994,7 @@ func (h *ForumHandler) MyTopics(c *gin.Context) {
 	resp, err := h.svc.MyTopics(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1016,7 +1016,7 @@ func (h *ForumHandler) MyReplies(c *gin.Context) {
 	resp, err := h.svc.MyReplies(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1038,7 +1038,7 @@ func (h *ForumHandler) MyLikedTopics(c *gin.Context) {
 	resp, err := h.svc.MyLikedTopics(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1060,7 +1060,7 @@ func (h *ForumHandler) MyObservedTopics(c *gin.Context) {
 	resp, err := h.svc.MyObservedTopics(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1082,7 +1082,7 @@ func (h *ForumHandler) MyViewHistory(c *gin.Context) {
 	resp, err := h.svc.MyViewHistory(middleware.CurrentUserID(c),
 		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 10))
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1114,7 +1114,7 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 	}
 	resp, err := h.modSvc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, resp)
@@ -1138,7 +1138,7 @@ func (h *ForumHandler) ListReports(c *gin.Context) {
 func (h *ForumHandler) HandleReport(c *gin.Context) {
 	id, err := httpx.PathInt64(c, "id", "举报 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	var body struct {
@@ -1149,7 +1149,7 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 		return
 	}
 	if err := h.modSvc.HandleReport(id, body.Status); err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "举报状态已更新", nil)
@@ -1171,12 +1171,12 @@ func (h *ForumHandler) HandleReport(c *gin.Context) {
 func (h *ForumHandler) LikeReply(c *gin.Context) {
 	replyID, err := httpx.PathInt64(c, "id", "回复 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	count, err := h.svc.LikeReply(middleware.CurrentUserID(c), replyID)
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "点赞成功", service.ForumLikeResultDTO{Liked: true, LikesCount: count})
@@ -1198,12 +1198,12 @@ func (h *ForumHandler) LikeReply(c *gin.Context) {
 func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 	replyID, err := httpx.PathInt64(c, "id", "回复 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	count, err := h.svc.UnlikeReply(middleware.CurrentUserID(c), replyID)
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已取消点赞", service.ForumLikeResultDTO{Liked: false, LikesCount: count})
@@ -1227,7 +1227,7 @@ func (h *ForumHandler) UnlikeReply(c *gin.Context) {
 func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	var body struct {
@@ -1239,7 +1239,7 @@ func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 	}
 	topic, err := h.svc.AcceptReply(middleware.CurrentUserID(c), topicID, body.ReplyID)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：#366 手写 owner→403 链收编进域表
+		forumErrStatus.RenderError(c, err) // 票5：#366 手写 owner→403 链收编进域表
 		return
 	}
 	response.SuccessWithMsg(c, "已采纳", topic)
@@ -1261,12 +1261,12 @@ func (h *ForumHandler) AcceptTopic(c *gin.Context) {
 func (h *ForumHandler) CancelAccept(c *gin.Context) {
 	topicID, err := httpx.PathInt64(c, "id", "主题 ID 无效")
 	if err != nil {
-		forumErrStatus.renderError(c, err)
+		forumErrStatus.RenderError(c, err)
 		return
 	}
 	topic, err := h.svc.CancelAccept(middleware.CurrentUserID(c), topicID)
 	if err != nil {
-		forumErrStatus.renderError(c, err) // 票5：#366 手写 owner→403 链收编进域表
+		forumErrStatus.RenderError(c, err) // 票5：#366 手写 owner→403 链收编进域表
 		return
 	}
 	response.SuccessWithMsg(c, "已取消采纳", topic)

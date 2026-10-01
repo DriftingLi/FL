@@ -100,7 +100,7 @@ func RegisterTrainingCatalogRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *serv
 // @Success 200 {object} response.R{data=service.CatalogTreeDTO} "success"
 // @Router /catalog/tree [get]
 func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
-	Endpoint[struct{}, service.CatalogTreeDTO]{
+	httpx.Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetCatalogTree(queryIDPtr(c, "credential_id")), nil
 		},
@@ -115,7 +115,7 @@ func (h *TrainingCatalogHandler) GetCatalogTree(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.LevelListDTO} "success"
 // @Router /levels [get]
 func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
-	Endpoint[struct{}, []service.LevelDict]{
+	httpx.Endpoint[struct{}, []service.LevelDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.LevelDict, error) {
 			result := h.svc.ListLevels(true)
 			return &result, nil
@@ -135,7 +135,7 @@ func (h *TrainingCatalogHandler) ListPublicLevels(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.QuestionTagListDTO} "success"
 // @Router /tags [get]
 func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
-	Endpoint[struct{}, []service.QuestionTagDict]{
+	httpx.Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
 			result, err := h.svc.ListQuestionTags(true, false, queryIDPtr(c, "credential_id")) // 学员端专项练习：隐藏来源标记标签
 			if err != nil {
@@ -159,7 +159,7 @@ func (h *TrainingCatalogHandler) ListPublicTags(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/catalog/tree [get]
 func (h *TrainingCatalogHandler) GetAdminCatalogTree(c *gin.Context) {
-	Endpoint[struct{}, service.CatalogTreeDTO]{
+	httpx.Endpoint[struct{}, service.CatalogTreeDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.CatalogTreeDTO, error) {
 			return h.svc.GetAdminCatalogTree(), nil
 		},
@@ -176,7 +176,7 @@ func (h *TrainingCatalogHandler) GetAdminCatalogTree(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/specialties [get]
 func (h *TrainingCatalogHandler) ListSpecialties(c *gin.Context) {
-	Endpoint[struct{}, []service.SpecialtyDict]{
+	httpx.Endpoint[struct{}, []service.SpecialtyDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.SpecialtyDict, error) {
 			result := h.svc.ListSpecialties(false)
 			return &result, nil
@@ -198,7 +198,7 @@ func (h *TrainingCatalogHandler) ListSpecialties(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/levels [get]
 func (h *TrainingCatalogHandler) ListLevels(c *gin.Context) {
-	Endpoint[struct{}, []service.LevelDict]{
+	httpx.Endpoint[struct{}, []service.LevelDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.LevelDict, error) {
 			result := h.svc.ListLevels(false)
 			return &result, nil
@@ -219,7 +219,7 @@ func (h *TrainingCatalogHandler) ListLevels(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/certificate-templates [get]
 func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
-	Endpoint[struct{}, []service.CertificateTemplateDict]{
+	httpx.Endpoint[struct{}, []service.CertificateTemplateDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CertificateTemplateDict, error) {
 			result := h.svc.ListCertificateTemplates(false)
 			return &result, nil
@@ -240,7 +240,7 @@ func (h *TrainingCatalogHandler) ListCertificateTemplates(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/question-tags [get]
 func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
-	Endpoint[struct{}, []service.QuestionTagDict]{
+	httpx.Endpoint[struct{}, []service.QuestionTagDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.QuestionTagDict, error) {
 			result, err := h.svc.ListQuestionTags(false, true, nil) // 管理端：全部可见、不分区
 			if err != nil {
@@ -267,10 +267,10 @@ func (h *TrainingCatalogHandler) ListQuestionTags(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/specialty [post]
 func (h *TrainingCatalogHandler) CreateSpecialty(c *gin.Context) {
-	Endpoint[service.SpecialtyInput, service.SpecialtyDict]{
-		Parse:  bindJSONMsgFunc[service.SpecialtyInput]("请求数据无效"),
-		Invoke: invoke(h.svc.CreateSpecialty),
-	}.WithSuccess(created("专业方向创建成功"), http.StatusBadRequest).Handle(c)
+	httpx.Endpoint[service.SpecialtyInput, service.SpecialtyDict]{
+		Parse:  httpx.BindJSONMsgFunc[service.SpecialtyInput]("请求数据无效"),
+		Invoke: httpx.Invoke(h.svc.CreateSpecialty),
+	}.WithSuccess(httpx.Created("专业方向创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // CreateLevel 创建课程等级
@@ -286,10 +286,10 @@ func (h *TrainingCatalogHandler) CreateSpecialty(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/level [post]
 func (h *TrainingCatalogHandler) CreateLevel(c *gin.Context) {
-	Endpoint[service.LevelInput, service.LevelDict]{
-		Parse:  bindJSONMsgFunc[service.LevelInput]("请求数据无效"),
-		Invoke: invoke(h.svc.CreateLevel),
-	}.WithSuccess(created("课程等级创建成功"), http.StatusBadRequest).Handle(c)
+	httpx.Endpoint[service.LevelInput, service.LevelDict]{
+		Parse:  httpx.BindJSONMsgFunc[service.LevelInput]("请求数据无效"),
+		Invoke: httpx.Invoke(h.svc.CreateLevel),
+	}.WithSuccess(httpx.Created("课程等级创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // CreateCertificateTemplate 创建证书模板
@@ -305,10 +305,10 @@ func (h *TrainingCatalogHandler) CreateLevel(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/certificate-template [post]
 func (h *TrainingCatalogHandler) CreateCertificateTemplate(c *gin.Context) {
-	Endpoint[service.CertificateTemplateInput, service.CertificateTemplateDict]{
-		Parse:  bindJSONMsgFunc[service.CertificateTemplateInput]("请求数据无效"),
-		Invoke: invoke(h.svc.CreateCertificateTemplate),
-	}.WithSuccess(created("证书模板创建成功"), http.StatusBadRequest).Handle(c)
+	httpx.Endpoint[service.CertificateTemplateInput, service.CertificateTemplateDict]{
+		Parse:  httpx.BindJSONMsgFunc[service.CertificateTemplateInput]("请求数据无效"),
+		Invoke: httpx.Invoke(h.svc.CreateCertificateTemplate),
+	}.WithSuccess(httpx.Created("证书模板创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // CreateQuestionTag 创建题库标签
@@ -324,17 +324,17 @@ func (h *TrainingCatalogHandler) CreateCertificateTemplate(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/question-tag [post]
 func (h *TrainingCatalogHandler) CreateQuestionTag(c *gin.Context) {
-	Endpoint[service.QuestionTagInput, service.QuestionTagDict]{
-		Parse:  bindJSONMsgFunc[service.QuestionTagInput]("请求数据无效"),
-		Invoke: invoke(h.svc.CreateQuestionTag),
-	}.WithSuccess(created("题库标签创建成功"), http.StatusBadRequest).Handle(c)
+	httpx.Endpoint[service.QuestionTagInput, service.QuestionTagDict]{
+		Parse:  httpx.BindJSONMsgFunc[service.QuestionTagInput]("请求数据无效"),
+		Invoke: httpx.Invoke(h.svc.CreateQuestionTag),
+	}.WithSuccess(httpx.Created("题库标签创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // catalogUpdateReq 目录实体更新请求的公共容器（ID 来自路径，In 来自 body）。
 //
 // 六个目录实体（专业方向 / 课程等级 / 证书模板 / 题库标签 / 目标证件 / 岗位）的更新请求完全同形，
 // 只此一份声明（ADR-0060 决策 10）：实体差异只在 In 的 typed input 上，不进 wire
-// —— 本容器不经 JSON 绑定（body 由 Parse 里的 bindJSONMsg / ShouldBindJSON 绑成 service.XInput），
+// —— 本容器不经 JSON 绑定（body 由 Parse 里的 httpx.BindJSONMsg / ShouldBindJSON 绑成 service.XInput），
 // swagger 注解指认的请求体仍是 service.XInput，契约零变更。
 // 岗位一项的留痕：此前 ID 在 Invoke 里从 path 取，属越层的小样板，已收进本容器。
 type catalogUpdateReq[I any] struct {
@@ -356,7 +356,7 @@ type catalogUpdateReq[I any] struct {
 // @Failure 404 {object} response.R "专业方向不存在"
 // @Router /admin/specialty/{specialty_id} [put]
 func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
-	Endpoint[catalogUpdateReq[service.SpecialtyInput], service.SpecialtyDict]{
+	httpx.Endpoint[catalogUpdateReq[service.SpecialtyInput], service.SpecialtyDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.SpecialtyInput], error) {
 			id, err := httpx.PathInt(c, "specialty_id", "专业方向ID无效")
 			if err != nil {
@@ -368,10 +368,10 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 			}
 			return &catalogUpdateReq[service.SpecialtyInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req catalogUpdateReq[service.SpecialtyInput]) (service.SpecialtyDict, error) {
+		Invoke: httpx.Invoke(func(req catalogUpdateReq[service.SpecialtyInput]) (service.SpecialtyDict, error) {
 			return h.svc.UpdateSpecialty(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("专业方向更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("专业方向更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -389,7 +389,7 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 // @Failure 404 {object} response.R "课程等级不存在"
 // @Router /admin/level/{level_id} [put]
 func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
-	Endpoint[catalogUpdateReq[service.LevelInput], service.LevelDict]{
+	httpx.Endpoint[catalogUpdateReq[service.LevelInput], service.LevelDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.LevelInput], error) {
 			id, err := httpx.PathInt(c, "level_id", "课程等级ID无效")
 			if err != nil {
@@ -401,10 +401,10 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 			}
 			return &catalogUpdateReq[service.LevelInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req catalogUpdateReq[service.LevelInput]) (service.LevelDict, error) {
+		Invoke: httpx.Invoke(func(req catalogUpdateReq[service.LevelInput]) (service.LevelDict, error) {
 			return h.svc.UpdateLevel(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("课程等级更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("课程等级更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -422,7 +422,7 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 // @Failure 404 {object} response.R "证书模板不存在"
 // @Router /admin/certificate-template/{id} [put]
 func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
-	Endpoint[catalogUpdateReq[service.CertificateTemplateInput], service.CertificateTemplateDict]{
+	httpx.Endpoint[catalogUpdateReq[service.CertificateTemplateInput], service.CertificateTemplateDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CertificateTemplateInput], error) {
 			id, err := httpx.PathInt(c, "id", "证书模板ID无效")
 			if err != nil {
@@ -434,10 +434,10 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 			}
 			return &catalogUpdateReq[service.CertificateTemplateInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req catalogUpdateReq[service.CertificateTemplateInput]) (service.CertificateTemplateDict, error) {
+		Invoke: httpx.Invoke(func(req catalogUpdateReq[service.CertificateTemplateInput]) (service.CertificateTemplateDict, error) {
 			return h.svc.UpdateCertificateTemplate(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("证书模板更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("证书模板更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -455,7 +455,7 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 // @Failure 404 {object} response.R "题库标签不存在"
 // @Router /admin/question-tag/{id} [put]
 func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
-	Endpoint[catalogUpdateReq[service.QuestionTagInput], service.QuestionTagDict]{
+	httpx.Endpoint[catalogUpdateReq[service.QuestionTagInput], service.QuestionTagDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.QuestionTagInput], error) {
 			id, err := httpx.PathInt(c, "id", "题库标签ID无效")
 			if err != nil {
@@ -467,10 +467,10 @@ func (h *TrainingCatalogHandler) UpdateQuestionTag(c *gin.Context) {
 			}
 			return &catalogUpdateReq[service.QuestionTagInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req catalogUpdateReq[service.QuestionTagInput]) (service.QuestionTagDict, error) {
+		Invoke: httpx.Invoke(func(req catalogUpdateReq[service.QuestionTagInput]) (service.QuestionTagDict, error) {
 			return h.svc.UpdateQuestionTag(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("题库标签更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("题库标签更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrQuestionTagNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -491,7 +491,7 @@ type specialtyIDReq struct {
 // @Failure 404 {object} response.R "专业方向不存在"
 // @Router /admin/specialty/{specialty_id} [delete]
 func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
-	Endpoint[specialtyIDReq, struct{}]{
+	httpx.Endpoint[specialtyIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*specialtyIDReq, error) {
 			id, err := httpx.PathInt(c, "specialty_id", "专业方向ID无效")
 			if err != nil {
@@ -499,10 +499,10 @@ func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
 			}
 			return &specialtyIDReq{ID: id}, nil
 		},
-		Invoke: invoke(func(req specialtyIDReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req specialtyIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteSpecialty(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("专业方向删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("专业方向删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -523,7 +523,7 @@ type levelIDReq struct {
 // @Failure 404 {object} response.R "课程等级不存在"
 // @Router /admin/level/{level_id} [delete]
 func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
-	Endpoint[levelIDReq, struct{}]{
+	httpx.Endpoint[levelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*levelIDReq, error) {
 			id, err := httpx.PathInt(c, "level_id", "课程等级ID无效")
 			if err != nil {
@@ -531,10 +531,10 @@ func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
 			}
 			return &levelIDReq{ID: id}, nil
 		},
-		Invoke: invoke(func(req levelIDReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req levelIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteLevel(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("课程等级删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("课程等级删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -555,7 +555,7 @@ type certificateTemplateIDReq struct {
 // @Failure 404 {object} response.R "证书模板不存在"
 // @Router /admin/certificate-template/{id} [delete]
 func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
-	Endpoint[certificateTemplateIDReq, struct{}]{
+	httpx.Endpoint[certificateTemplateIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*certificateTemplateIDReq, error) {
 			id, err := httpx.PathInt(c, "id", "证书模板ID无效")
 			if err != nil {
@@ -563,10 +563,10 @@ func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
 			}
 			return &certificateTemplateIDReq{ID: id}, nil
 		},
-		Invoke: invoke(func(req certificateTemplateIDReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req certificateTemplateIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteCertificateTemplate(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("证书模板删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("证书模板删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -587,7 +587,7 @@ type questionTagIDReq struct {
 // @Failure 404 {object} response.R "题库标签不存在"
 // @Router /admin/question-tag/{id} [delete]
 func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
-	Endpoint[questionTagIDReq, struct{}]{
+	httpx.Endpoint[questionTagIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionTagIDReq, error) {
 			id, err := httpx.PathInt(c, "id", "题库标签ID无效")
 			if err != nil {
@@ -595,10 +595,10 @@ func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 			}
 			return &questionTagIDReq{ID: id}, nil
 		},
-		Invoke: invoke(func(req questionTagIDReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req questionTagIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteQuestionTag(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("题库标签删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("题库标签删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrQuestionTagNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -620,7 +620,7 @@ type catalogSwapSortReq struct {
 // 无效文案」外逐字相同，实参按端点传入，不留第二份实现。
 // body 绑定形态仍是只带 swap_with 一个字段的匿名 struct（JSON 字段名不动，wire 契约零变更）；
 // swap_with <= 0 的前置校验照旧做在这里——岗位端点刻意不做（既有行为，见 positionSwapSortReqBody）。
-func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
+func catalogSwapSortParse(idParam, idMsg string) httpx.ParseFunc[catalogSwapSortReq] {
 	return func(c *gin.Context) (*catalogSwapSortReq, error) {
 		id, err := httpx.PathInt(c, idParam, idMsg)
 		if err != nil {
@@ -651,12 +651,12 @@ func catalogSwapSortParse(idParam, idMsg string) ParseFunc[catalogSwapSortReq] {
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/specialty/{specialty_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
-	Endpoint[catalogSwapSortReq, struct{}]{
+	httpx.Endpoint[catalogSwapSortReq, struct{}]{
 		Parse: catalogSwapSortParse("specialty_id", "专业方向ID无效"),
-		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapSpecialtySort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("排序已交换"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
@@ -675,12 +675,12 @@ func (h *TrainingCatalogHandler) SwapSpecialtySort(c *gin.Context) {
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/level/{level_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapLevelSort(c *gin.Context) {
-	Endpoint[catalogSwapSortReq, struct{}]{
+	httpx.Endpoint[catalogSwapSortReq, struct{}]{
 		Parse: catalogSwapSortParse("level_id", "课程等级ID无效"),
-		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapLevelSort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("排序已交换"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
@@ -704,7 +704,7 @@ type setQuestionTagsReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/question/{question_id}/tags [put]
 func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
-	Endpoint[setQuestionTagsReq, service.QuestionTagsResultDTO]{
+	httpx.Endpoint[setQuestionTagsReq, service.QuestionTagsResultDTO]{
 		Parse: func(c *gin.Context) (*setQuestionTagsReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -718,14 +718,14 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 			}
 			return &setQuestionTagsReq{QuestionID: id, TagIDs: req.TagIDs}, nil
 		},
-		Invoke: invoke(func(req setQuestionTagsReq) (service.QuestionTagsResultDTO, error) {
+		Invoke: httpx.Invoke(func(req setQuestionTagsReq) (service.QuestionTagsResultDTO, error) {
 			if err := h.svc.SetQuestionTags(req.QuestionID, req.TagIDs); err != nil {
 				return service.QuestionTagsResultDTO{}, err
 			}
 			// 响应即「实际写入的标签集」回显，故在 Invoke 里成型（服务只负责落库）。
 			return service.QuestionTagsResultDTO{TagIDs: req.TagIDs}, nil
 		}),
-	}.WithSuccess(okMsg("题目标签已更新"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("题目标签已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // ===== 目标证件 =====
@@ -740,7 +740,7 @@ func (h *TrainingCatalogHandler) SetQuestionTags(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.CredentialListDTO} "success"
 // @Router /credentials [get]
 func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
-	Endpoint[struct{}, []service.CredentialDict]{
+	httpx.Endpoint[struct{}, []service.CredentialDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CredentialDict, error) {
 			result := h.svc.ListCredentials(true)
 			return &result, nil
@@ -761,7 +761,7 @@ func (h *TrainingCatalogHandler) ListPublicCredentials(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.GroupedCredentialsDTO} "success"
 // @Router /credentials/grouped [get]
 func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
-	Endpoint[struct{}, service.GroupedCredentialsDTO]{
+	httpx.Endpoint[struct{}, service.GroupedCredentialsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.GroupedCredentialsDTO, error) {
 			result := h.svc.ListGroupedCredentials()
 			return &result, nil
@@ -779,7 +779,7 @@ func (h *TrainingCatalogHandler) ListGroupedCredentials(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/credentials [get]
 func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
-	Endpoint[struct{}, []service.CredentialDict]{
+	httpx.Endpoint[struct{}, []service.CredentialDict]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.CredentialDict, error) {
 			result := h.svc.ListCredentials(false)
 			return &result, nil
@@ -803,10 +803,10 @@ func (h *TrainingCatalogHandler) ListCredentials(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/credential [post]
 func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
-	Endpoint[service.CredentialInput, service.CredentialDict]{
-		Parse:  bindJSONMsgFunc[service.CredentialInput]("请求数据无效"),
-		Invoke: invoke(h.svc.CreateCredential),
-	}.WithSuccess(created("证件创建成功"), http.StatusBadRequest).Handle(c)
+	httpx.Endpoint[service.CredentialInput, service.CredentialDict]{
+		Parse:  httpx.BindJSONMsgFunc[service.CredentialInput]("请求数据无效"),
+		Invoke: httpx.Invoke(h.svc.CreateCredential),
+	}.WithSuccess(httpx.Created("证件创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // UpdateCredential 更新目标证件
@@ -823,7 +823,7 @@ func (h *TrainingCatalogHandler) CreateCredential(c *gin.Context) {
 // @Failure 404 {object} response.R "证件不存在"
 // @Router /admin/credential/{id} [put]
 func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
-	Endpoint[catalogUpdateReq[service.CredentialInput], service.CredentialDict]{
+	httpx.Endpoint[catalogUpdateReq[service.CredentialInput], service.CredentialDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.CredentialInput], error) {
 			id, err := httpx.PathInt(c, "id", "证件ID无效")
 			if err != nil {
@@ -835,10 +835,10 @@ func (h *TrainingCatalogHandler) UpdateCredential(c *gin.Context) {
 			}
 			return &catalogUpdateReq[service.CredentialInput]{ID: id, In: in}, nil
 		},
-		Invoke: invoke(func(req catalogUpdateReq[service.CredentialInput]) (service.CredentialDict, error) {
+		Invoke: httpx.Invoke(func(req catalogUpdateReq[service.CredentialInput]) (service.CredentialDict, error) {
 			return h.svc.UpdateCredential(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("证件更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("证件更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCredentialNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -860,7 +860,7 @@ type credentialIDReq struct {
 // @Failure 404 {object} response.R "证件不存在"
 // @Router /admin/credential/{id} [delete]
 func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
-	Endpoint[credentialIDReq, struct{}]{
+	httpx.Endpoint[credentialIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*credentialIDReq, error) {
 			id, err := httpx.PathInt(c, "id", "证件ID无效")
 			if err != nil {
@@ -868,10 +868,10 @@ func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 			}
 			return &credentialIDReq{ID: id}, nil
 		},
-		Invoke: invoke(func(req credentialIDReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req credentialIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeleteCredential(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("证件删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("证件删除成功"), http.StatusInternalServerError).
 		// #1360：投稿阻塞走 400（ADR-0064 决策 9 让 4xx 原样发出那句话，条数因此在文案里）。
 		// 不用 409：本仓从未使用 409，renderStatus 的单一咽喉里没有 409 分支，域表放 409 会被
 		// 静默渲染成 500（同 faq.go 里「标识已占用」的同一处先例与同一理由）。
@@ -894,12 +894,12 @@ func (h *TrainingCatalogHandler) DeleteCredential(c *gin.Context) {
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/credential/{id}/sort [put]
 func (h *TrainingCatalogHandler) SwapCredentialSort(c *gin.Context) {
-	Endpoint[catalogSwapSortReq, struct{}]{
+	httpx.Endpoint[catalogSwapSortReq, struct{}]{
 		Parse: catalogSwapSortParse("id", "证件ID无效"),
-		Invoke: invoke(func(req catalogSwapSortReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req catalogSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapCredentialSort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("排序已交换"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
@@ -997,10 +997,10 @@ func (h *TrainingCatalogHandler) ListPositions(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/position [post]
 func (h *TrainingCatalogHandler) CreatePosition(c *gin.Context) {
-	Endpoint[service.PositionInput, service.PositionDict]{
-		Parse:  bindJSONMsgFunc[service.PositionInput]("请求数据无效"),
-		Invoke: invoke(h.svc.CreatePosition),
-	}.WithSuccess(created("岗位创建成功"), http.StatusBadRequest).Handle(c)
+	httpx.Endpoint[service.PositionInput, service.PositionDict]{
+		Parse:  httpx.BindJSONMsgFunc[service.PositionInput]("请求数据无效"),
+		Invoke: httpx.Invoke(h.svc.CreatePosition),
+	}.WithSuccess(httpx.Created("岗位创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // UpdatePosition 更新岗位 PUT /api/admin/position/:position_id
@@ -1017,10 +1017,10 @@ func (h *TrainingCatalogHandler) CreatePosition(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/position/{position_id} [put]
 func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
-	Endpoint[catalogUpdateReq[service.PositionInput], service.PositionDict]{
+	httpx.Endpoint[catalogUpdateReq[service.PositionInput], service.PositionDict]{
 		Parse: func(c *gin.Context) (*catalogUpdateReq[service.PositionInput], error) {
 			// 先 body 后 path：与既有「Invoke 内先绑定 body、再取 path」的报错优先级逐字一致
-			in, err := bindJSONMsg[service.PositionInput](c, "请求数据无效")
+			in, err := httpx.BindJSONMsg[service.PositionInput](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
@@ -1030,10 +1030,10 @@ func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
 			}
 			return &catalogUpdateReq[service.PositionInput]{ID: id, In: *in}, nil
 		},
-		Invoke: invoke(func(req catalogUpdateReq[service.PositionInput]) (service.PositionDict, error) {
+		Invoke: httpx.Invoke(func(req catalogUpdateReq[service.PositionInput]) (service.PositionDict, error) {
 			return h.svc.UpdatePosition(req.ID, req.In)
 		}),
-	}.WithSuccess(okMsg("岗位已更新"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("岗位已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // SwapPositionSort 交换岗位排序 PUT /api/admin/position/:position_id/sort
@@ -1051,27 +1051,27 @@ func (h *TrainingCatalogHandler) UpdatePosition(c *gin.Context) {
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/position/{position_id}/sort [put]
 func (h *TrainingCatalogHandler) SwapPositionSort(c *gin.Context) {
-	Endpoint[positionSwapSortReq, struct{}]{
+	httpx.Endpoint[positionSwapSortReq, struct{}]{
 		Parse: func(c *gin.Context) (*positionSwapSortReq, error) {
 			id, err := httpx.PathInt(c, "position_id", "岗位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
-			body, err := bindJSONMsg[positionSwapSortReqBody](c, "请求数据无效")
+			body, err := httpx.BindJSONMsg[positionSwapSortReqBody](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
 			return &positionSwapSortReq{ID: id, SwapWith: body.SwapWith}, nil
 		},
-		Invoke: invoke(func(req positionSwapSortReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req positionSwapSortReq) (struct{}, error) {
 			return struct{}{}, h.svc.SwapPositionSort(req.ID, req.SwapWith)
 		}),
-	}.WithSuccess(okMsgNoData("排序已更新"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("排序已更新"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, sortFacts400...).Handle(c)
 }
 
 // positionSwapSortReq 交换岗位排序请求（ID 来自路径，SwapWith 来自 body）。
-// 字段与 catalogSwapSortReq 相同但不同源：岗位端点的 Parse 走 pathInt + bindJSONMsg（错误优先级与
+// 字段与 catalogSwapSortReq 相同但不同源：岗位端点的 Parse 走 httpx.PathInt + httpx.BindJSONMsg（错误优先级与
 // 文案都不同，且不做 swap_with <= 0 的前置校验），是既有行为，不并进共用容器。
 type positionSwapSortReq struct {
 	ID       int
@@ -1096,7 +1096,7 @@ type positionSwapSortReqBody struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/position/{position_id} [delete]
 func (h *TrainingCatalogHandler) DeletePosition(c *gin.Context) {
-	Endpoint[positionIDReq, struct{}]{
+	httpx.Endpoint[positionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*positionIDReq, error) {
 			id, err := httpx.PathInt(c, "position_id", "岗位 ID 无效")
 			if err != nil {
@@ -1104,10 +1104,10 @@ func (h *TrainingCatalogHandler) DeletePosition(c *gin.Context) {
 			}
 			return &positionIDReq{ID: id}, nil
 		},
-		Invoke: invoke(func(req positionIDReq) (struct{}, error) {
+		Invoke: httpx.Invoke(func(req positionIDReq) (struct{}, error) {
 			return struct{}{}, h.svc.DeletePosition(req.ID)
 		}),
-	}.WithSuccess(okMsgNoData("岗位已删除"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("岗位已删除"), http.StatusBadRequest).Handle(c)
 }
 
 // positionIDReq 岗位 ID 路径参数请求。

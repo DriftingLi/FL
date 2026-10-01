@@ -87,29 +87,29 @@ func currentUserID(c *gin.Context) (int, error) {
 //     压不成一句）。「已占用」本可表达为 409，但本仓从未使用 409、renderStatus 的单一咽喉里
 //     没有那一档，域表放 409 会被静默渲染成 500 —— 同 faq.go「标识已占用」的同一处先例与同一理由；
 //   - 文件在存储侧不存在 → **404**（引用的那个资源没有，语义就是 404）。
-var contributionErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrContributionFileMissing, status: http.StatusNotFound},
-		{sentinel: service.ErrContributionStagedNotOwner, status: http.StatusForbidden},
-		{sentinel: service.ErrContributionNotOwner, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionNotPending, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionNotApproved, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionQuotaDaily, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionQuotaPending, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionNoCredential, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionTitleRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionIntroRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFilesRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFilesTooMany, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileTooLarge, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionTotalTooLarge, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileExtNotAllowed, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileAlreadyClaimed, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionRejectReason, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionArchiveReason, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionInvalidReportReason, status: http.StatusBadRequest},
+var contributionErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrContributionNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrContributionFileMissing, Status: http.StatusNotFound},
+		{Sentinel: service.ErrContributionStagedNotOwner, Status: http.StatusForbidden},
+		{Sentinel: service.ErrContributionNotOwner, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionNotPending, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionNotApproved, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionQuotaDaily, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionQuotaPending, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionNoCredential, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionTitleRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionIntroRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionFilesRequired, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionFilesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionFileTooLarge, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionTotalTooLarge, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionFileInvalid, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionFileExtNotAllowed, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionFileAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionRejectReason, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionArchiveReason, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrContributionInvalidReportReason, Status: http.StatusBadRequest},
 	},
 }
 
@@ -126,7 +126,7 @@ var contributionErrStatus = &errStatusTable{
 // @Failure 401 {object} response.R "未认证"
 // @Router /contributions/upload-file [post]
 func (h *ContributionHandler) UploadFile(c *gin.Context) {
-	Endpoint[struct{}, service.ContributionFileDTO]{
+	httpx.Endpoint[struct{}, service.ContributionFileDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionFileDTO, error) {
 			// 暂存位按用户分区 ⇒ 上传这一刻就知道「这是谁的」，Create 的归属校验才读得判据。
 			userID, err := currentUserID(c)
@@ -173,9 +173,9 @@ type createContributionReq struct {
 // @Failure 404 {object} response.R "暂存文件不存在"
 // @Router /contributions [post]
 func (h *ContributionHandler) Create(c *gin.Context) {
-	Endpoint[createContributionReq, service.ContributionItemDTO]{
+	httpx.Endpoint[createContributionReq, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*createContributionReq, error) {
-			return bindJSON[createContributionReq](c)
+			return httpx.BindJSON[createContributionReq](c)
 		},
 		Invoke: func(ctx context.Context, req *createContributionReq) (*service.ContributionItemDTO, error) {
 			userID, err := currentUserID(c)
@@ -221,7 +221,7 @@ type listPublicReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /contributions [get]
 func (h *ContributionHandler) ListPublic(c *gin.Context) {
-	Endpoint[listPublicReq, service.ContributionPageResult]{
+	httpx.Endpoint[listPublicReq, service.ContributionPageResult]{
 		Parse: func(c *gin.Context) (*listPublicReq, error) {
 			cred := middleware.CredentialIDPtr(c)
 			if cred == nil {
@@ -240,7 +240,7 @@ func (h *ContributionHandler) ListPublic(c *gin.Context) {
 				CredentialID: req.CredentialID, Sort: req.Sort, Page: req.Page, PageSize: req.PageSize,
 			})
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // ListMine 我的投稿 GET /api/contributions/mine
@@ -255,7 +255,7 @@ func (h *ContributionHandler) ListPublic(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /contributions/mine [get]
 func (h *ContributionHandler) ListMine(c *gin.Context) {
-	Endpoint[struct{}, service.ContributionPageResult]{
+	httpx.Endpoint[struct{}, service.ContributionPageResult]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionPageResult, error) {
 			userID, err := currentUserID(c)
@@ -264,7 +264,7 @@ func (h *ContributionHandler) ListMine(c *gin.Context) {
 			}
 			return h.svc.ListMine(userID, atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetDetail 投稿详情 GET /api/contributions/:id
@@ -278,7 +278,7 @@ func (h *ContributionHandler) ListMine(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在或非公开"
 // @Router /contributions/{id} [get]
 func (h *ContributionHandler) GetDetail(c *gin.Context) {
-	Endpoint[struct{}, service.ContributionItemDTO]{
+	httpx.Endpoint[struct{}, service.ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionItemDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
@@ -304,7 +304,7 @@ func (h *ContributionHandler) GetDetail(c *gin.Context) {
 // @Failure 400 {object} response.R "非已上架状态"
 // @Router /contributions/{id}/download [post]
 func (h *ContributionHandler) Download(c *gin.Context) {
-	Endpoint[struct{}, service.DownloadResult]{
+	httpx.Endpoint[struct{}, service.DownloadResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.DownloadResult, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
@@ -332,7 +332,7 @@ func (h *ContributionHandler) Download(c *gin.Context) {
 // @Failure 400 {object} response.R "非本人或非 pending"
 // @Router /contributions/{id} [delete]
 func (h *ContributionHandler) Withdraw(c *gin.Context) {
-	Endpoint[struct{}, struct{}]{
+	httpx.Endpoint[struct{}, struct{}]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
@@ -372,9 +372,9 @@ type reportContributionReq struct {
 // @Failure 400 {object} response.R "理由非法或非已上架"
 // @Router /contributions/{id}/report [post]
 func (h *ContributionHandler) Report(c *gin.Context) {
-	Endpoint[reportContributionReq, struct{}]{
+	httpx.Endpoint[reportContributionReq, struct{}]{
 		Parse: func(c *gin.Context) (*reportContributionReq, error) {
-			return bindJSON[reportContributionReq](c)
+			return httpx.BindJSON[reportContributionReq](c)
 		},
 		Invoke: func(ctx context.Context, req *reportContributionReq) (*struct{}, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
@@ -408,11 +408,11 @@ func (h *ContributionHandler) Report(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.ContributionPageResult} "success"
 // @Router /admin/contributions/pending [get]
 func (h *ContributionHandler) ListPending(c *gin.Context) {
-	Endpoint[struct{}, service.ContributionPageResult]{
+	httpx.Endpoint[struct{}, service.ContributionPageResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionPageResult, error) {
 			return h.svc.ListPending(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20))
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // reviewerID 从上下文取审核者 id（admin.id / tutor.tutor_id）。
@@ -436,7 +436,7 @@ func reviewerID(c *gin.Context) (int, error) {
 // @Failure 400 {object} response.R "非 pending"
 // @Router /admin/contributions/{id}/approve [post]
 func (h *ContributionHandler) Approve(c *gin.Context) {
-	Endpoint[struct{}, service.ContributionItemDTO]{
+	httpx.Endpoint[struct{}, service.ContributionItemDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionItemDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
@@ -473,8 +473,8 @@ type contributionRejectReq struct {
 // @Failure 400 {object} response.R "原因必填或非 pending"
 // @Router /admin/contributions/{id}/reject [post]
 func (h *ContributionHandler) Reject(c *gin.Context) {
-	Endpoint[contributionRejectReq, service.ContributionItemDTO]{
-		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return bindJSON[contributionRejectReq](c) },
+	httpx.Endpoint[contributionRejectReq, service.ContributionItemDTO]{
+		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return httpx.BindJSON[contributionRejectReq](c) },
 		Invoke: func(ctx context.Context, req *contributionRejectReq) (*service.ContributionItemDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
@@ -506,8 +506,8 @@ func (h *ContributionHandler) Reject(c *gin.Context) {
 // @Failure 400 {object} response.R "原因必填或非 approved"
 // @Router /admin/contributions/{id}/archive [post]
 func (h *ContributionHandler) Archive(c *gin.Context) {
-	Endpoint[contributionRejectReq, service.ContributionItemDTO]{
-		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return bindJSON[contributionRejectReq](c) },
+	httpx.Endpoint[contributionRejectReq, service.ContributionItemDTO]{
+		Parse: func(c *gin.Context) (*contributionRejectReq, error) { return httpx.BindJSON[contributionRejectReq](c) },
 		Invoke: func(ctx context.Context, req *contributionRejectReq) (*service.ContributionItemDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投稿ID无效")
 			if err != nil {
@@ -538,7 +538,7 @@ func (h *ContributionHandler) Archive(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.ContributionReportPageResult} "success"
 // @Router /admin/contributions/reports [get]
 func (h *ContributionHandler) ListReports(c *gin.Context) {
-	Endpoint[struct{}, service.ContributionReportPageResult]{
+	httpx.Endpoint[struct{}, service.ContributionReportPageResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ContributionReportPageResult, error) {
 			var status *int
 			if s := c.Query("status"); s != "" {
@@ -552,7 +552,7 @@ func (h *ContributionHandler) ListReports(c *gin.Context) {
 			}
 			return h.svc.ListReports(atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), status)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // handleReportReq 处置举报请求体。
@@ -572,8 +572,8 @@ type handleReportReq struct {
 // @Success 200 {object} response.R "已处理"
 // @Router /admin/contributions/reports/{id}/handle [post]
 func (h *ContributionHandler) HandleReport(c *gin.Context) {
-	Endpoint[handleReportReq, struct{}]{
-		Parse: func(c *gin.Context) (*handleReportReq, error) { return bindJSON[handleReportReq](c) },
+	httpx.Endpoint[handleReportReq, struct{}]{
+		Parse: func(c *gin.Context) (*handleReportReq, error) { return httpx.BindJSON[handleReportReq](c) },
 		Invoke: func(ctx context.Context, req *handleReportReq) (*struct{}, error) {
 			id, err := httpx.PathInt64(c, "id", "举报ID无效")
 			if err != nil {
@@ -588,5 +588,5 @@ func (h *ContributionHandler) HandleReport(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("已处理"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("已处理"), http.StatusBadRequest).Handle(c)
 }

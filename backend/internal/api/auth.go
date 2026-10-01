@@ -45,9 +45,9 @@ func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSv
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
-	Endpoint[loginReq, service.LoginResult]{
+	httpx.Endpoint[loginReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
-			req, err := bindJSON[loginReq](c)
+			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -59,7 +59,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.HrwaiLogin(req.Username, req.Password)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
 			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "登录成功", resp)
@@ -78,9 +78,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Router /auth/admin-login [post]
 // AdminLogin 管理员登录 POST /api/auth/admin-login
 func (h *AuthHandler) AdminLogin(c *gin.Context) {
-	Endpoint[loginReq, service.LoginResult]{
+	httpx.Endpoint[loginReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
-			req, err := bindJSON[loginReq](c)
+			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -92,7 +92,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.AdminLogin(req.Username, req.Password)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
 			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "管理员登录成功", resp)
@@ -111,9 +111,9 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 // @Router /auth/tutor-login [post]
 // TutorLogin 导师登录 POST /api/auth/tutor-login
 func (h *AuthHandler) TutorLogin(c *gin.Context) {
-	Endpoint[loginReq, service.LoginResult]{
+	httpx.Endpoint[loginReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
-			req, err := bindJSON[loginReq](c)
+			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -125,7 +125,7 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.TutorLogin(req.Username, req.Password)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
 			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "讲师登录成功", resp)
@@ -144,9 +144,9 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 // @Router /auth/recruiter-login [post]
 // RecruiterLogin 企业招聘者登录 POST /api/auth/recruiter-login（第四角色，host-only cookie 隔离）
 func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
-	Endpoint[loginReq, service.LoginResult]{
+	httpx.Endpoint[loginReq, service.LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
-			req, err := bindJSON[loginReq](c)
+			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -158,7 +158,7 @@ func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
 			return h.authSvc.RecruiterLogin(req.Username, req.Password)
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
 			h.session.SetRecruiterLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "招聘者登录成功", resp)
@@ -265,7 +265,7 @@ type meReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
-	Endpoint[meReq, service.ProfileDTO]{
+	httpx.Endpoint[meReq, service.ProfileDTO]{
 		Parse: func(c *gin.Context) (*meReq, error) {
 			return &meReq{
 				UserID:  middleware.CurrentUserID(c),
@@ -292,13 +292,13 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/profile [put]
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
-	Endpoint[updateProfileReq, service.ProfileChangeRequestDTO]{
+	httpx.Endpoint[updateProfileReq, service.ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*updateProfileReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid <= 0 {
 				return nil, &httpx.ParseError{Status: 401, Message: "请先登录"}
 			}
-			req, err := bindJSON[updateProfileReq](c)
+			req, err := httpx.BindJSON[updateProfileReq](c)
 			if err != nil {
 				return nil, err
 			}
@@ -320,7 +320,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 			}
 			return h.reviewSvc.CreateRequest(req.UID, service.ProfileFieldNickname, req.Nickname)
 		},
-		ErrStatus: &errStatusTable{fallback: http.StatusBadRequest},
+		ErrStatus: &httpx.ErrStatusTable{Fallback: http.StatusBadRequest},
 		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO) {
 			if resp != nil && resp.ID == 0 {
 				response.SuccessWithMsg(c, "单位更新成功", resp)

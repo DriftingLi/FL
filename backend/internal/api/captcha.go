@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/captcha"
+	"forklift-training/pkg/httpx"
 )
 
 // GenerateCaptchaDTO 图形验证码生成结果的展示对象（shape-lock：顶层键集 {id, image}）。
@@ -43,7 +44,7 @@ func RegisterCaptchaRoutes(r *gin.Engine, svc *captcha.Service) {
 // @Failure 500 {object} response.R "失败"
 // @Router /captcha [get]
 func (h *CaptchaHandler) Generate(c *gin.Context) {
-	Endpoint[struct{}, GenerateCaptchaDTO]{
+	httpx.Endpoint[struct{}, GenerateCaptchaDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*GenerateCaptchaDTO, error) {
 			id, imageURL, err := h.svc.Generate(ctx)
 			if err != nil {
@@ -51,6 +52,6 @@ func (h *CaptchaHandler) Generate(c *gin.Context) {
 			}
 			return &GenerateCaptchaDTO{ID: id, Image: imageURL}, nil
 		},
-		ErrStatus: errStatusAllMsg(http.StatusInternalServerError, "图形验证码生成失败，请重试"),
+		ErrStatus: httpx.ErrStatusAllMsg(http.StatusInternalServerError, "图形验证码生成失败，请重试"),
 	}.Handle(c)
 }

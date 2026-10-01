@@ -70,7 +70,7 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 // @Success 200 {object} response.R{data=[]service.ModelOption} "success"
 // @Router /ai-assistant/models [get]
 func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
-	Endpoint[struct{}, []service.ModelOption]{
+	httpx.Endpoint[struct{}, []service.ModelOption]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.ModelOption, error) {
 			models, err := h.svc.ListPublicModels(ctx)
 			if err != nil {
@@ -89,7 +89,7 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 // @Success 200 {object} response.R{data=service.AIAssistantModeModels} "success"
 // @Router /ai-assistant/modes [get]
 func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
-	Endpoint[struct{}, service.AIAssistantModeModels]{
+	httpx.Endpoint[struct{}, service.AIAssistantModeModels]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AIAssistantModeModels, error) {
 			modes, err := h.svc.ListAssistantModes(ctx)
 			if err != nil {
@@ -111,7 +111,7 @@ func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/user-models [get]
 func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
-	Endpoint[aiUserIDReq, []service.UserModelDTO]{
+	httpx.Endpoint[aiUserIDReq, []service.UserModelDTO]{
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -142,13 +142,13 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/user-models [post]
 func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
-	Endpoint[aiUserModelSaveReq, struct{}]{
+	httpx.Endpoint[aiUserModelSaveReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiUserModelSaveReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
 				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			req, err := bindJSONMsg[service.SaveUserModelReq](c, "请求数据无效")
+			req, err := httpx.BindJSONMsg[service.SaveUserModelReq](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
@@ -163,7 +163,7 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: errStatusAll(http.StatusBadRequest),
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *aiUserModelSaveReq, _ *struct{}) {
 			response.Success(c, nil)
 		},
@@ -183,7 +183,7 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/user-models/{id} [delete]
 func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
-	Endpoint[aiModelIDReq, struct{}]{
+	httpx.Endpoint[aiModelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -201,9 +201,9 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "模型不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "模型不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}) {
 			response.Success(c, nil)
@@ -222,7 +222,7 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions [get]
 func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
-	Endpoint[aiUserIDReq, []service.AIChatSessionDTO]{
+	httpx.Endpoint[aiUserIDReq, []service.AIChatSessionDTO]{
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -252,7 +252,7 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions [post]
 func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
-	Endpoint[aiSessionCreateReq, service.AIChatSessionDTO]{
+	httpx.Endpoint[aiSessionCreateReq, service.AIChatSessionDTO]{
 		Parse: func(c *gin.Context) (*aiSessionCreateReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -285,7 +285,7 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/sessions/{id} [delete]
 func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
-	Endpoint[aiModelIDReq, struct{}]{
+	httpx.Endpoint[aiModelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -303,9 +303,9 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "会话不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *aiModelIDReq, _ *struct{}) {
 			response.Success(c, nil)
@@ -327,7 +327,7 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions/{id}/title [patch]
 func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
-	Endpoint[aiSessionRenameReq, struct{}]{
+	httpx.Endpoint[aiSessionRenameReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiSessionRenameReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -337,7 +337,7 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			req, err := bindJSONMsg[aiSessionRenameReqBody](c, "请求数据无效")
+			req, err := httpx.BindJSONMsg[aiSessionRenameReqBody](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
@@ -349,9 +349,9 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
-			{sentinel: nil, status: http.StatusBadRequest},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "会话不存在"},
+			{Sentinel: nil, Status: http.StatusBadRequest},
 		}},
 		Render: func(c *gin.Context, _ *aiSessionRenameReq, _ *struct{}) {
 			response.Success(c, service.AISessionRenameResultDTO{Message: "已更新会话标题"})
@@ -372,7 +372,7 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/sessions/{id}/messages [get]
 func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
-	Endpoint[aiModelIDReq, []service.AIChatMessageDTO]{
+	httpx.Endpoint[aiModelIDReq, []service.AIChatMessageDTO]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -391,9 +391,9 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 			}
 			return &msgs, nil
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "会话不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "会话不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
 }

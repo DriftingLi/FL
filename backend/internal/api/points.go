@@ -17,19 +17,19 @@ import (
 // 业务冲突 → 400，不存在类 → 404；未命中兜底 400——积分域 service 错误均为业务错误。
 // 例外（#1098 扣罚回归域内）：ErrHrwaiUserNotFound → 404（不再是「一律 400」，与 /points/claim
 // 同域同判）；ErrPenaltyNotifyFailed → 500（强一致族下扣罚整笔回滚，管理端可见原因并可重试）。
-var pointsErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrTaskNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrCourseNotFound, status: http.StatusBadRequest},
-		{sentinel: service.ErrCourseNotRedeemable, status: http.StatusBadRequest},
-		{sentinel: service.ErrAlreadyClaimed, status: http.StatusBadRequest},
-		{sentinel: service.ErrDailyClaimLimit, status: http.StatusBadRequest},
-		{sentinel: service.ErrInsufficientPoints, status: http.StatusBadRequest},
-		{sentinel: service.ErrAlreadyRedeemed, status: http.StatusBadRequest},
-		{sentinel: service.ErrPenaltyNotifyFailed, status: http.StatusInternalServerError},
+var pointsErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrTaskNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrCourseNotFound, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrDailyClaimLimit, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrInsufficientPoints, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrAlreadyRedeemed, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
 	},
-	fallback: http.StatusBadRequest,
+	Fallback: http.StatusBadRequest,
 }
 
 // PointsHandler 积分 handler
@@ -64,7 +64,7 @@ func RegisterPointsRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Point
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/balance [get]
 func (h *PointsHandler) GetBalance(c *gin.Context) {
-	Endpoint[struct{}, service.PointsBalanceResult]{
+	httpx.Endpoint[struct{}, service.PointsBalanceResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsBalanceResult, error) {
 			return h.svc.GetBalance(middleware.CurrentUserID(c))
 		},
@@ -84,7 +84,7 @@ func (h *PointsHandler) GetBalance(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/ledger [get]
 func (h *PointsHandler) GetLedger(c *gin.Context) {
-	Endpoint[struct{}, service.PointsLedgerResult]{
+	httpx.Endpoint[struct{}, service.PointsLedgerResult]{
 		Parse: func(c *gin.Context) (*struct{}, error) { return &struct{}{}, nil },
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsLedgerResult, error) {
 			page := atoiDefault(c.Query("page"), 1)
@@ -107,7 +107,7 @@ func (h *PointsHandler) GetLedger(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/tasks [get]
 func (h *PointsHandler) GetTasks(c *gin.Context) {
-	Endpoint[struct{}, service.PointsTasksResult]{
+	httpx.Endpoint[struct{}, service.PointsTasksResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsTasksResult, error) {
 			return h.svc.GetTasks(middleware.CurrentUserID(c))
 		},
@@ -132,7 +132,7 @@ func (h *PointsHandler) Claim(c *gin.Context) {
 		response.BadRequest(c, "任务 code 不能为空")
 		return
 	}
-	Endpoint[struct{}, service.PointsClaimResult]{
+	httpx.Endpoint[struct{}, service.PointsClaimResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.PointsClaimResult, error) {
 			return h.svc.Claim(ctx, middleware.CurrentUserID(c), code)
 		},
@@ -159,7 +159,7 @@ func (h *PointsHandler) RedeemCourse(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	Endpoint[struct{}, service.RedeemResult]{
+	httpx.Endpoint[struct{}, service.RedeemResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RedeemResult, error) {
 			return h.svc.RedeemCourse(ctx, middleware.CurrentUserID(c), courseID)
 		},
@@ -186,7 +186,7 @@ func (h *PointsHandler) RedeemShop(c *gin.Context) {
 		response.BadRequest(c, "sku 不能为空")
 		return
 	}
-	Endpoint[struct{}, service.RedeemResult]{
+	httpx.Endpoint[struct{}, service.RedeemResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.RedeemResult, error) {
 			return h.svc.RedeemShop(ctx, middleware.CurrentUserID(c), sku)
 		},

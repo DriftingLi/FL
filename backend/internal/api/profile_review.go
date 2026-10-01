@@ -59,7 +59,7 @@ type listRequestsReq struct {
 // @Router /admin/profile-reviews [get]
 // ListRequests 审核请求列表 GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
 func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
-	Endpoint[listRequestsReq, service.ProfileChangeRequestPageResult]{
+	httpx.Endpoint[listRequestsReq, service.ProfileChangeRequestPageResult]{
 		Parse: func(c *gin.Context) (*listRequestsReq, error) {
 			status := c.Query("status")
 			if status == "" {
@@ -74,7 +74,7 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listRequestsReq) (*service.ProfileChangeRequestPageResult, error) {
 			return h.svc.ListRequests(req.Status, req.Page, req.PageSize)
 		},
-		ErrStatus: errStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
+		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
 	}.Handle(c)
 }
 
@@ -96,7 +96,7 @@ type approveReq struct {
 // @Router /admin/profile-reviews/{id}/approve [post]
 // Approve 通过审核 POST /api/admin/profile-reviews/:id/approve
 func (h *ProfileReviewHandler) Approve(c *gin.Context) {
-	Endpoint[approveReq, service.ProfileChangeRequestDTO]{
+	httpx.Endpoint[approveReq, service.ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*approveReq, error) {
 			adminID, _ := c.Get(string(middleware.CtxUserID))
 			reviewerID, _ := adminID.(int)
@@ -109,7 +109,7 @@ func (h *ProfileReviewHandler) Approve(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *approveReq) (*service.ProfileChangeRequestDTO, error) {
 			return h.svc.Approve(req.RequestID, req.ReviewerID)
 		},
-	}.WithSuccess(okMsg("已通过审核，修改已生效"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("已通过审核，修改已生效"), http.StatusBadRequest).Handle(c)
 }
 
 // rejectReq 驳回请求（含路径 id、审核人 id 与 reason）。
@@ -133,7 +133,7 @@ type rejectReq struct {
 // @Router /admin/profile-reviews/{id}/reject [post]
 // Reject 驳回 POST /api/admin/profile-reviews/:id/reject（body: {"reason": "..."}）
 func (h *ProfileReviewHandler) Reject(c *gin.Context) {
-	Endpoint[rejectReq, service.ProfileChangeRequestDTO]{
+	httpx.Endpoint[rejectReq, service.ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*rejectReq, error) {
 			adminID, _ := c.Get(string(middleware.CtxUserID))
 			reviewerID, _ := adminID.(int)
@@ -152,5 +152,5 @@ func (h *ProfileReviewHandler) Reject(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *rejectReq) (*service.ProfileChangeRequestDTO, error) {
 			return h.svc.Reject(req.RequestID, req.ReviewerID, req.Reason)
 		},
-	}.WithSuccess(okMsg("已驳回"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("已驳回"), http.StatusBadRequest).Handle(c)
 }

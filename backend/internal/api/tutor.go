@@ -66,7 +66,7 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorS
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/courses [get]
 func (h *TutorHandler) ListCourses(c *gin.Context) {
-	Endpoint[tutorCourseListReq, service.CoursePageResult]{
+	httpx.Endpoint[tutorCourseListReq, service.CoursePageResult]{
 		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
 			return &tutorCourseListReq{
 				Page:         atoiDefault(c.Query("page"), 1),
@@ -83,7 +83,7 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetCourseChapters 课程章节列表（含文件）
@@ -99,7 +99,7 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /tutor/course/{course_id}/chapters [get]
 func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
-	Endpoint[idParam, service.TutorCourseChaptersDTO]{
+	httpx.Endpoint[idParam, service.TutorCourseChaptersDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
@@ -110,7 +110,7 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorCourseChaptersDTO, error) {
 			return h.svc.GetCourseChapters(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -127,7 +127,7 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /tutor/chapter/{chapter_id} [get]
 func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
-	Endpoint[idParam, service.ChapterDetailDTO]{
+	httpx.Endpoint[idParam, service.ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
@@ -138,7 +138,7 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -227,13 +227,13 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /tutor/chapter/{chapter_id} [put]
 func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
-	Endpoint[chapterIDInput, service.ChapterDTO]{
+	httpx.Endpoint[chapterIDInput, service.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
-			data, err := bindJSONMsg[service.ChapterInput](c, "请求数据无效")
+			data, err := httpx.BindJSONMsg[service.ChapterInput](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
@@ -242,7 +242,7 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
 			return h.svc.UpdateChapterInfo(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("章节更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("章节更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -259,7 +259,7 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 // @Failure 404 {object} response.R "文件不存在"
 // @Router /tutor/file/{file_id} [delete]
 func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
-	Endpoint[idParam, service.DeleteFileResult]{
+	httpx.Endpoint[idParam, service.DeleteFileResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "file_id", "文件ID无效")
 			if err != nil {
@@ -270,7 +270,7 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteFileResult, error) {
 			return h.svc.DeleteChapterFileByID(req.ID)
 		},
-	}.WithSuccess(okMsg("文件删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("文件删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrChapterFileNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -287,9 +287,9 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/files/batch-delete [post]
 func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
-	Endpoint[batchDeleteFilesReq, service.BatchDeleteFilesResult]{
+	httpx.Endpoint[batchDeleteFilesReq, service.BatchDeleteFilesResult]{
 		Parse: func(c *gin.Context) (*batchDeleteFilesReq, error) {
-			req, err := bindJSON[batchDeleteFilesReq](c)
+			req, err := httpx.BindJSON[batchDeleteFilesReq](c)
 			if err != nil {
 				return nil, err
 			}

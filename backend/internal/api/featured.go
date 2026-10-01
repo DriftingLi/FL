@@ -58,7 +58,7 @@ func RegisterFeaturedRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Fea
 // @Success 200 {object} response.R "success"
 // @Router /featured-contents [get]
 func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
-	Endpoint[featuredListReq, service.FeaturedContentPageResult]{
+	httpx.Endpoint[featuredListReq, service.FeaturedContentPageResult]{
 		Parse: func(c *gin.Context) (*featuredListReq, error) {
 			return &featuredListReq{
 				Page:     atoiDefault(c.Query("page"), 1),
@@ -74,7 +74,7 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // GetPublicDetail 精选内容详情
@@ -89,7 +89,7 @@ func (h *FeaturedHandler) GetPublicList(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /featured-content/{id} [get]
 func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
-	Endpoint[featuredDetailReq, service.FeaturedContentDetailDTO]{
+	httpx.Endpoint[featuredDetailReq, service.FeaturedContentDetailDTO]{
 		Parse: func(c *gin.Context) (*featuredDetailReq, error) {
 			id, err := httpx.PathInt(c, "id", "内容ID无效")
 			if err != nil {
@@ -100,7 +100,7 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *featuredDetailReq) (*service.FeaturedContentDetailDTO, error) {
 			return h.svc.GetPublicDetail(req.ID, req.CountView)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -115,7 +115,7 @@ func (h *FeaturedHandler) GetPublicDetail(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在"
 // @Router /featured-content/{id}/view [post]
 func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
-	Endpoint[featuredIDReq, viewCountResp]{
+	httpx.Endpoint[featuredIDReq, viewCountResp]{
 		Parse: func(c *gin.Context) (*featuredIDReq, error) {
 			id, err := httpx.PathInt(c, "id", "内容ID无效")
 			if err != nil {
@@ -130,9 +130,9 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 			}
 			return &viewCountResp{ID: req.ID, Count: count}, nil
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrFeaturedContentNotFound, status: http.StatusNotFound},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: service.ErrFeaturedContentNotFound, Status: http.StatusNotFound},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *featuredIDReq, resp *viewCountResp) {
 			response.Success(c, gin.H{"content_id": resp.ID, "view_count": resp.Count})
@@ -154,7 +154,7 @@ func (h *FeaturedHandler) IncrementViewCount(c *gin.Context) {
 // @Router /admin/featured-contents [get]
 // AdminList 管理端列表（含草稿）GET /api/admin/featured-contents
 func (h *FeaturedHandler) AdminList(c *gin.Context) {
-	Endpoint[adminFeaturedListReq, service.FeaturedContentPageResult]{
+	httpx.Endpoint[adminFeaturedListReq, service.FeaturedContentPageResult]{
 		Parse: func(c *gin.Context) (*adminFeaturedListReq, error) {
 			return &adminFeaturedListReq{
 				Page:     atoiDefault(c.Query("page"), 1),
@@ -170,7 +170,7 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 精选内容详情（管理端）
@@ -185,12 +185,12 @@ func (h *FeaturedHandler) AdminList(c *gin.Context) {
 // @Router /admin/featured-content/{id} [get]
 // AdminDetail 管理端详情 GET /api/admin/featured-content/:id
 func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
-	Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
+	httpx.Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
 		Parse: parseFeaturedID,
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.AdminDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -208,16 +208,16 @@ func (h *FeaturedHandler) AdminDetail(c *gin.Context) {
 // @Router /admin/featured-content [post]
 // Create 创建内容精选 POST /api/admin/featured-content
 func (h *FeaturedHandler) Create(c *gin.Context) {
-	Endpoint[service.FeaturedContentInput, service.FeaturedContentAdminDetailDTO]{
+	httpx.Endpoint[service.FeaturedContentInput, service.FeaturedContentAdminDetailDTO]{
 		Parse: func(c *gin.Context) (*service.FeaturedContentInput, error) {
-			return bindJSONMsg[service.FeaturedContentInput](c, "请求数据无效")
+			return httpx.BindJSONMsg[service.FeaturedContentInput](c, "请求数据无效")
 		},
 		Invoke: func(ctx context.Context, req *service.FeaturedContentInput) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Create(*req)
 		},
 		// 默认面由 400 改 500：旧形状「一格 400」把写库故障也答成参数错误（与第 3 族
 		// 「输入不合法不再冒充服务端故障」互为镜像）。三条输入事实现已具名，各自落 400。
-	}.WithSuccess(created("内容创建成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.Created("内容创建成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrFeaturedTitleRequired, http.StatusBadRequest).
 		WithSentinel(service.ErrFeaturedCategoryInvalid, http.StatusBadRequest).
 		WithSentinel(service.ErrFeaturedImageInvalid, http.StatusBadRequest).Handle(c)
@@ -239,13 +239,13 @@ func (h *FeaturedHandler) Create(c *gin.Context) {
 // @Router /admin/featured-content/{id} [put]
 // Update 更新内容精选 PUT /api/admin/featured-content/:id
 func (h *FeaturedHandler) Update(c *gin.Context) {
-	Endpoint[featuredUpdateReq, service.FeaturedContentAdminDetailDTO]{
+	httpx.Endpoint[featuredUpdateReq, service.FeaturedContentAdminDetailDTO]{
 		Parse: parseFeaturedUpdate,
 		Invoke: func(ctx context.Context, req *featuredUpdateReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Update(req.ID, req.Input)
 		},
 		// 同 Create 一处：默认面 400 曾把「内容不存在」与写库故障一起答成参数错误。
-	}.WithSuccess(okMsg("内容更新成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("内容更新成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).
 		WithSentinel(service.ErrFeaturedCategoryInvalid, http.StatusBadRequest).
 		WithSentinel(service.ErrFeaturedImageInvalid, http.StatusBadRequest).Handle(c)
@@ -263,12 +263,12 @@ func (h *FeaturedHandler) Update(c *gin.Context) {
 // @Router /admin/featured-content/{id} [delete]
 // Delete 删除内容精选 DELETE /api/admin/featured-content/:id
 func (h *FeaturedHandler) Delete(c *gin.Context) {
-	Endpoint[featuredIDReq, service.FeaturedDeleteResult]{
+	httpx.Endpoint[featuredIDReq, service.FeaturedDeleteResult]{
 		Parse: parseFeaturedID,
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedDeleteResult, error) {
 			return h.svc.Delete(req.ID)
 		},
-	}.WithSuccess(okMsg("内容删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("内容删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -284,12 +284,12 @@ func (h *FeaturedHandler) Delete(c *gin.Context) {
 // @Router /admin/featured-content/{id}/publish [post]
 // Publish 发布内容精选 POST /api/admin/featured-content/:id/publish
 func (h *FeaturedHandler) Publish(c *gin.Context) {
-	Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
+	httpx.Endpoint[featuredIDReq, service.FeaturedContentAdminDetailDTO]{
 		Parse: parseFeaturedID,
 		Invoke: func(ctx context.Context, req *featuredIDReq) (*service.FeaturedContentAdminDetailDTO, error) {
 			return h.svc.Publish(req.ID)
 		},
-	}.WithSuccess(okMsg("内容发布成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("内容发布成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
 }
 
@@ -362,7 +362,7 @@ func parseFeaturedUpdate(c *gin.Context) (*featuredUpdateReq, error) {
 	if err != nil {
 		return nil, err
 	}
-	input, err := bindJSONMsg[service.FeaturedContentUpdateInput](c, "请求数据无效")
+	input, err := httpx.BindJSONMsg[service.FeaturedContentUpdateInput](c, "请求数据无效")
 	if err != nil {
 		return nil, err
 	}

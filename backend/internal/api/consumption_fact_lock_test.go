@@ -468,10 +468,13 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 				}
 			case *ast.CompositeLit:
 				// 整张表的**子树**都收下。第一版只遍历 `x.Elts`，实测数出 17 个标识符而按字面量
-				// 数是 100+：哨兵实际写在 `entries: []errStatusEntry{{sentinel: service.ErrX, …}}`
+				// 数是 100+：哨兵实际写在 `Entries: []httpx.ErrStatusEntry{{Sentinel: service.ErrX, …}}`
 				// 里，`x.Elts` 拿到的那个 KeyValueExpr 被 add 直接丢掉了。一条认法太窄的可达性判据
 				// 会「报红得多」，看着像收紧，其实是把没接线的和接线了的混在一起靠运气分。
-				if id, ok := x.Type.(*ast.Ident); ok && (id.Name == "errStatusTable" || id.Name == "errStatusEntry") {
+				// 名字在 #1445 P0-B 随骨架搬到 pkg/httpx 并导出首位：表字面量的类型从裸标识符
+				// `errStatusTable` 变成限定名 `httpx.ErrStatusTable`（SelectorExpr）——只认 Ident
+				// 会让这条判据静默匹配 0 处（下方 len(out) < 50 的防空转把它抓成红，本批即如此）。
+				if n := compositeLitTypeName(x.Type); n == "ErrStatusTable" || n == "ErrStatusEntry" {
 					ast.Inspect(x, func(n ast.Node) bool {
 						if sel, ok := n.(*ast.SelectorExpr); ok {
 							add(sel)
@@ -492,6 +495,18 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 			"（实测基线 100+：errStatusTable 子树里的选择器 99 种 + errors.Is 实参 5 种）", len(out))
 	}
 	return out
+}
+
+// compositeLitTypeName 取复合字面量的类型名：裸标识符（本包类型）与限定名（搬去 pkg/httpx 之后）
+// 都要认 —— 只认一种写法的判据会在搬家后静默匹配 0 处。
+func compositeLitTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		return t.Sel.Name
+	}
+	return ""
 }
 
 // identifierWiredIntoErrorFace 问「这枚哨兵是不是某个端点错误面的一部分」。
