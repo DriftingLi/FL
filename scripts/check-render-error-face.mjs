@@ -32,8 +32,13 @@
  */
 import { isDirectRun, runGuardCli } from './lib/guard.mjs'
 
-/** 守卫面：api 层（端点骨架管辖）的非测试 .go。 */
-export const GUARDED_DIR_PREFIX = 'backend/internal/api/'
+/**
+ * 守卫面：HTTP 面（端点骨架管辖）的非测试 .go 所在的**包目录前缀**。
+ *
+ * 为什么是清单而不是一个字符串：拆包（#1445 P2）后端点会分散到各域包，届时往这里**加一条前缀**
+ * 即可 —— 射程只有这一处真源。单条前缀时写成清单是为了让那次改动是「加一行」，而不是「换判据」。
+ */
+export const GUARDED_PACKAGE_PREFIXES = ['backend/internal/api/']
 
 /** 骨架自身：错误面的合法唯一作者，不进判定面。 */
 export const SKELETON_FILE = 'backend/internal/api/endpoint.go'
@@ -83,7 +88,7 @@ export function isTestFile(filePath) {
 export function isGuardedPath(filePath) {
   const p = String(filePath).replace(/\\/g, '/')
   if (!p.endsWith('.go') || isTestFile(p)) return false
-  if (!p.startsWith(GUARDED_DIR_PREFIX)) return false
+  if (!GUARDED_PACKAGE_PREFIXES.some((prefix) => p.startsWith(prefix))) return false
   return p !== SKELETON_FILE
 }
 
@@ -229,11 +234,13 @@ export const GUARD_SPEC = {
     extensions: SCAN_EXTENSIONS,
     skipNodeModules: true,
     tolerateWalkErrors: true,
+    // 射程防空转：实测 56 个判定面文件，下界留余量。前缀改名 / 搬目录导致 checked 掉下来即红。
+    minChecked: 40,
     stream: 'stdout',
     header: (ctx) => [
       '===== 端点错误面守卫：全量扫描（Render 闭包内不得渲染错误）=====',
       '扫描目录: ' + ctx.scanDirRel,
-      '守卫面: ' + GUARDED_DIR_PREFIX + ' 的非测试 .go（骨架 ' + SKELETON_FILE + ' 是错误面的唯一作者，除外）',
+      '守卫面: ' + GUARDED_PACKAGE_PREFIXES.join(' / ') + ' 的非测试 .go（骨架 ' + SKELETON_FILE + ' 是错误面的唯一作者，除外）',
       '禁列: response.' + ERROR_ENVELOPE_FNS.join(' / response.') + ' | renderStatus( | .renderError(',
       '---'
     ],
