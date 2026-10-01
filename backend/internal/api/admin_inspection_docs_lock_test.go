@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/service"
+	"forklift-training/internal/testutil"
 	"forklift-training/pkg/paging"
 )
 
@@ -74,9 +75,12 @@ func inlineEnvelopeFields(line string) ([]string, error) {
 func TestAdminInspectionInlineEnvelopeKeyOrder(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "admin_inspection.go", nil, parser.ParseComments)
+	// 判据宿主按**模块根相对路径**取，不再靠「测试进程的 cwd 恰好是本包」：拆包后测试随实现移动，
+	// cwd 相对路径会静默指向别的文件（或直接解析失败）。
+	host := testutil.FindCode(t, testutil.ScanBackendCode(t), "internal/api/admin_inspection.go")
+	file, err := parser.ParseFile(fset, host.Path, host.Src, parser.ParseComments)
 	if err != nil {
-		t.Fatalf("解析 admin_inspection.go 失败: %v", err)
+		t.Fatalf("解析 %s 失败: %v", host.Path, err)
 	}
 	// 运行时事实源：与 envelope_registry_test.go 的形状锁同一条 marshal 路径。
 	want := jsonKeyOrder(t, paging.ItemsPage[service.RecruitResumeViewDTO]{})

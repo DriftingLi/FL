@@ -6,9 +6,10 @@
 package api
 
 import (
-	"os"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // notificationCompositionForbidden api 层禁止出现的站内信构造形态。
@@ -49,28 +50,22 @@ func scanNotificationComposition(source string) []notificationHit {
 // TestAPILayerHasNoNotificationComposition 扫描 api 包源码：出现任一禁止形态即红。
 func TestAPILayerHasNoNotificationComposition(t *testing.T) {
 	t.Parallel()
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("读取 api 包目录失败: %v", err)
-	}
+	// 射程 = HTTP 面（testutil.HTTPSurface）：今天就是 internal/api 的非测试文件，拆包后跟着那
+	// 一处定义走。**不能**宽成「全部生产代码」——站内信构造器本身住在 service 域，宽化会把实现处
+	// 21 处命中当违规（实测）。
 	scanned := 0
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for _, f := range testutil.ScanBackendCode(t) {
+		if !testutil.HTTPSurface(f) {
 			continue
 		}
-		src, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatalf("读取 %s 失败: %v", name, err)
-		}
 		scanned++
-		for _, hit := range scanNotificationComposition(string(src)) {
+		for _, hit := range scanNotificationComposition(f.Src) {
 			t.Errorf("%s:%d 出现%s（%q）——站内信口径只能来自 service/notification_events.go 的事件构造器",
-				name, hit.line, hit.what, hit.needle)
+				f.Path, hit.line, hit.what, hit.needle)
 		}
 	}
 	if scanned == 0 {
-		t.Fatal("未扫描到任何 api 非测试源文件（判据宿主失效）")
+		t.Fatal("未扫描到任何 HTTP 面非测试源文件（判据宿主失效）")
 	}
 }
 
