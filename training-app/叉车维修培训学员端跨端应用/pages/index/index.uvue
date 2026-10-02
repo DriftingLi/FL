@@ -7,9 +7,14 @@
         <!-- 状态栏占位 -->
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-        <!-- 顶部标签 -->
-        <view class="page-tag">
-            <text class="page-tag-text">欢迎页</text>
+        <!-- 顶部：左标签 + 右倒计时/跳过（#1467：开屏每次完整出现，倒计时结束或点跳过自动落地） -->
+        <view class="top-row">
+            <view class="page-tag">
+                <text class="page-tag-text">欢迎页</text>
+            </view>
+            <view v-if="loggedIn" class="skip-btn" @click="goLanding">
+                <text class="skip-text">跳过 {{ countdown }}s</text>
+            </view>
         </view>
 
         <!-- 中部品牌区 -->
@@ -24,23 +29,22 @@
 
         <!-- 底部：吉祥物 + 入口 -->
         <view class="footer">
+            <!-- #1467：吉祥物所有部件直挂 .mascot，绝对坐标统一参照 0-190rpx 宽 / 0-210rpx 高 的坐标系；
+                 旧版把 .m-face/.m-ear/.m-eye/.m-mouth 嵌进 .m-head、.m-chest 嵌进 .m-body ⇒ 参照块变成小盒，
+                 web 靠 overflow:visible 越界绘制「碰巧像」，uvue 原生按包含块裁切 ⇒ 散架。扁平化后两端一致。 -->
             <view class="mascot">
                 <view class="antenna-stick"></view>
                 <view class="antenna-ball"></view>
-                <view class="m-head">
-                    <view class="m-face"></view>
-                    <view class="m-ear m-ear-l"></view>
-                    <view class="m-ear m-ear-r"></view>
-                    <view class="m-eye m-eye-l"></view>
-                    <view class="m-eye m-eye-r"></view>
-                    <view class="m-eye-glow m-eye-glow-l"></view>
-                    <view class="m-eye-glow m-eye-glow-r"></view>
-                    <view class="m-mouth"></view>
-                </view>
-                <view class="m-body">
-                    <view class="m-chest">
-                        <text class="m-chest-text">C</text>
-                    </view>
+                <view class="m-head"></view>
+                <view class="m-face"></view>
+                <view class="m-ear m-ear-l"></view>
+                <view class="m-ear m-ear-r"></view>
+                <view class="m-eye m-eye-l"></view>
+                <view class="m-eye m-eye-r"></view>
+                <view class="m-mouth"></view>
+                <view class="m-body"></view>
+                <view class="m-chest">
+                    <text class="m-chest-text">C</text>
                 </view>
                 <view class="m-arm m-arm-l"></view>
                 <view class="m-arm m-arm-r"></view>
@@ -48,7 +52,8 @@
                 <view class="m-leg m-leg-r"></view>
             </view>
 
-            <button class="enter-btn" @click="goLogin">进入系统</button>
+            <button v-if="loggedIn" class="enter-btn" @click="goLanding">进入首页</button>
+            <button v-else class="enter-btn" @click="goLogin">进入系统</button>
         </view>
     </view>
 </template>
@@ -59,29 +64,54 @@
     export default {
         data() {
             return {
-                statusBarHeight: 20
+                statusBarHeight: 20,
+                countdown: 3,
+                timer: 0,
+                loggedIn: false
             }
         },
         onLoad() {
             const sysInfo = uni.getSystemInfoSync()
             this.statusBarHeight = sysInfo.statusBarHeight
 
+            // #1467 症状1：旧版这里「已登录即同步 reLaunch 到 dashboard」⇒ 开屏页从未完成一次展示。
+            // 改为：开屏每次完整出现。先恢复登录态（只为判定去向），不在此无条件跳转。
             const auth = useAuthStore()
-            const restored = auth.restoreFromStorage()
-            console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
-            if (auth.isLoggedIn.value) {
-                console.log('[welcome] redirect to dashboard')
+            auth.restoreFromStorage()
+            this.loggedIn = auth.isLoggedIn.value
+
+            // 仅对**已登录**用户跑倒计时，归零自动落地首页；未登录停在开屏（本页即其入口，
+            // 点「进入系统」进登录页）——不自动跳走，页面得以持续在前台、可被 ①a 取证。
+            if (this.loggedIn) {
+                this.timer = setInterval(() => {
+                    this.countdown = this.countdown - 1
+                    if (this.countdown <= 0) {
+                        this.goLanding()
+                    }
+                }, 1000)
+            }
+        },
+        onUnload() {
+            this.clearTimer()
+        },
+        methods: {
+            clearTimer() {
+                if (this.timer != 0) {
+                    clearInterval(this.timer)
+                    this.timer = 0
+                }
+            },
+            // 已登录落地首页（倒计时归零 / 点跳过 / 点「进入首页」三处共用，幂等：先清计时器）。
+            goLanding() {
+                this.clearTimer()
                 uni.reLaunch({
                     url: '/pages/dashboard/dashboard',
                     fail: (err) => {
                         console.error('[welcome] reLaunch to dashboard failed:', err)
                     }
                 })
-            }
-
-            // 未登录：停留在欢迎页，点击「进入系统」进入登录页
-        },
-        methods: {
+            },
+            // 未登录：进登录页（本页是开屏/入口，不自动跳走，由此按钮手动进入）。
             goLogin() {
                 uni.navigateTo({
                     url: '/pages/login/login',
@@ -130,10 +160,15 @@
         background-color: transparent;
     }
 
-    /* 顶部标签 */
+    /* 顶部行：左标签 + 右跳过 */
+    .top-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20rpx 40rpx 0 40rpx;
+    }
+
     .page-tag {
-        align-self: flex-start;
-        margin: 20rpx 0 0 40rpx;
         padding: 10rpx 28rpx;
         border-radius: 999rpx;
         background-color: rgba(255, 255, 255, 0.20);
@@ -144,6 +179,20 @@
     .page-tag-text {
         font-size: 24rpx;
         color: rgba(255, 255, 255, 0.95);
+        text-align: center;
+    }
+
+    .skip-btn {
+        padding: 10rpx 24rpx;
+        border-radius: 999rpx;
+        background-color: rgba(0, 0, 0, 0.24);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .skip-text {
+        font-size: 24rpx;
+        color: #FFFFFF;
         text-align: center;
     }
 
@@ -187,7 +236,7 @@
         padding-bottom: 90rpx;
     }
 
-    /* 纯 view 绘制的机器人吉祥物（坐标系 0-190rpx 宽 / 0-210rpx 高） */
+    /* 纯 view 绘制的机器人吉祥物（坐标系 0-190rpx 宽 / 0-210rpx 高；所有部件均为 .mascot 直接子节点） */
     .mascot {
         position: relative;
         width: 190rpx;
@@ -272,14 +321,14 @@
         left: 101rpx;
     }
 
-    /* 微笑嘴：浅蓝弧 */
+    /* 微笑嘴：浅蓝弧（#1467：四值混单位 border-radius 全项目仅此一处、uvue 支持存疑 → 收敛为单值） */
     .m-mouth {
         position: absolute;
         left: 85rpx;
         top: 80rpx;
         width: 18rpx;
         height: 8rpx;
-        border-radius: 50% 50% 8rpx 8rpx;
+        border-radius: 8rpx;
         background-color: #93C5FD;
     }
 
