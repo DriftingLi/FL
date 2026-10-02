@@ -1,33 +1,37 @@
-package api
+// 本文件：题目互动域的 HTTP 出口（ADR-0070）—— /api/questions 下的评论 / 笔记 / 考点三组端点。
+//
+// 装配点：internal/api/routes_registry.go 的 RegisterRoutes 调用。
+// 题内笔记三端点转投 internal/note 的 Service（questionInteraction → note 单向边）。
+package questioninteraction
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/note"
 	"forklift-training/internal/questionbank"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-type QuestionInteractionHandler struct {
-	commentSvc   *service.QuestionCommentService
-	noteSvc      *service.NoteService
-	knowledgeSvc *service.QuestionKnowledgeService
+type handler struct {
+	commentSvc   *Service
+	noteSvc      *note.Service
+	knowledgeSvc *KnowledgeService
 }
 
-func NewQuestionInteractionHandler(c *service.QuestionCommentService, n *service.NoteService, k *service.QuestionKnowledgeService) *QuestionInteractionHandler {
-	return &QuestionInteractionHandler{commentSvc: c, noteSvc: n, knowledgeSvc: k}
+func newHandler(c *Service, n *note.Service, k *KnowledgeService) *handler {
+	return &handler{commentSvc: c, noteSvc: n, knowledgeSvc: k}
 }
 
-func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, commentSvc *service.QuestionCommentService, noteSvc *service.NoteService, knowledgeSvc *service.QuestionKnowledgeService) {
-	h := NewQuestionInteractionHandler(commentSvc, noteSvc, knowledgeSvc)
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, commentSvc *Service, noteSvc *note.Service, knowledgeSvc *KnowledgeService) {
+	h := newHandler(commentSvc, noteSvc, knowledgeSvc)
 	// CredentialScoped 在此蓝图的目的不是给评论/笔记本身分区，而是装配题目读 scope
 	// （ADR-0062 决策 4）：评论与笔记都挂在题上，判据 = 「这道题对该学员可读吗」。
-	g := rg.Group("/questions", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
+	g := rg.Group("/questions", middleware.JWTAuth(session), middleware.CredentialScoped(credRes))
 
 	// 评论
 	g.GET("/:question_id/comments", h.ListComments)
@@ -43,7 +47,7 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 	g.GET("/:question_id/knowledge", h.ListKnowledge)
 }
 
-// interactionErrStatus 题目互动域（评论 + 题内笔记）的错误面——直接复用 Endpoint 缝那张表，
+// ErrStatus 题目互动域（评论 + 题内笔记）的错误面——直接复用 Endpoint 缝那张表，
 // 不在本文件重写第二份「扫表 → 命中回 entry 的码与文案 / 未命中回 fallback」的算法。
 //
 // fallback 由 handler 既有的 400/500 混答改成 500（ADR-0065 决策 7）：`VisibleByID` 不再丢弃
@@ -54,15 +58,15 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 // 这正是 httpx.ErrStatusEntry.Message 这一格存在的理由（WithSentinelsMsg 的同形规则在裸 handler 一侧）。
 // 旧的那枚 helper `renderOutOfPoolQuestion` 被本表第一条 entry 完整取代，随本批删除——留在文件里
 // 就是一处「两个宿主说同一件事」，而且 CI 的 unused 检查也当场把它点了出来。
-var interactionErrStatus = &httpx.ErrStatusTable{
+var ErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
 		{Sentinel: questionbank.ErrQuestionNotFound, Status: http.StatusNotFound, Message: "题目不存在"},
-		{Sentinel: service.ErrCommentContentEmpty, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCommentTooLong, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCommentNotFound, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCommentNotOwned, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrNoteContentEmpty, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrNoteContentTooLong, Status: http.StatusBadRequest},
+		{Sentinel: ErrCommentContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: ErrCommentTooLong, Status: http.StatusBadRequest},
+		{Sentinel: ErrCommentNotFound, Status: http.StatusBadRequest},
+		{Sentinel: ErrCommentNotOwned, Status: http.StatusBadRequest},
+		{Sentinel: note.ErrNoteContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: note.ErrNoteContentTooLong, Status: http.StatusBadRequest},
 	},
 	Fallback: http.StatusInternalServerError,
 }
@@ -77,11 +81,11 @@ var interactionErrStatus = &httpx.ErrStatusTable{
 // @Param question_id path int true "题目ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R{data=service.QuestionCommentPageResult} "success"
+// @Success 200 {object} response.R{data=QuestionCommentPageResult} "success"
 // @Failure 400 {object} response.R "题目ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [get]
-func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
+func (h *handler) ListComments(c *gin.Context) {
 	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -91,10 +95,10 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	pageSize := httpx.QueryIntDefault(c, "page_size", 10)
 	items, total, err := h.commentSvc.List(qid, page, pageSize, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.RenderError(c, err)
+		ErrStatus.RenderError(c, err)
 		return
 	}
-	response.Success(c, service.QuestionCommentPageResult{Items: items, Page: page, PageSize: pageSize, Total: total})
+	response.Success(c, QuestionCommentPageResult{Items: items, Page: page, PageSize: pageSize, Total: total})
 }
 
 // CreateComment 发表题目评论
@@ -106,11 +110,11 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "内容" example({"content":"这题易错"})
-// @Success 201 {object} response.R{data=service.QuestionCommentDTO} "success"
+// @Success 201 {object} response.R{data=QuestionCommentDTO} "success"
 // @Failure 400 {object} response.R "题目ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [post]
-func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
+func (h *handler) CreateComment(c *gin.Context) {
 	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -126,7 +130,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 	}
 	m, err := h.commentSvc.Create(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.RenderError(c, err)
+		ErrStatus.RenderError(c, err)
 		return
 	}
 	response.Created(c, "评论成功", m)
@@ -141,7 +145,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 // @Failure 400 {object} response.R "评论ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/comments/{comment_id} [delete]
-func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
+func (h *handler) DeleteComment(c *gin.Context) {
 	cid, err := httpx.PathInt(c, "comment_id", "评论ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -153,7 +157,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 		// 「评论不存在」⇒ 两处叠起来，故障与业务事实同形。两面一起改（决策 7 的同一条）。
 		// 这一格是本批第二版补上的：第一版漏改，由 TestFaultFacesAllSayFault 注故障当场判红
 		// （它报出的正是 400 + `SQL logic error: no such table: question_comment`）。
-		interactionErrStatus.RenderError(c, err)
+		ErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)
@@ -168,7 +172,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Failure 400 {object} response.R "题目ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [get]
-func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
+func (h *handler) GetNote(c *gin.Context) {
 	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -177,7 +181,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	n, err := h.noteSvc.GetForQuestion(qid, uid, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.RenderError(c, err)
+		ErrStatus.RenderError(c, err)
 		return
 	}
 	if n == nil {
@@ -199,7 +203,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Failure 400 {object} response.R "题目ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [put]
-func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
+func (h *handler) UpsertNote(c *gin.Context) {
 	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -215,7 +219,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 	}
 	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.RenderError(c, err)
+		ErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, n)
@@ -230,7 +234,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 // @Failure 400 {object} response.R "题目ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [delete]
-func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
+func (h *handler) DeleteNote(c *gin.Context) {
 	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -238,7 +242,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 	}
 	uid := middleware.CurrentUserID(c)
 	if err := h.noteSvc.DeleteForQuestion(qid, uid, questionbank.StudentQuestionScope(c)); err != nil {
-		interactionErrStatus.RenderError(c, err)
+		ErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)
@@ -253,7 +257,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 // @Success 200 {object} response.R{data=[]model.QuestionTag} "success"
 // @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/knowledge [get]
-func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
+func (h *handler) ListKnowledge(c *gin.Context) {
 	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -269,4 +273,3 @@ func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
 }
 
 // endpoint helper to avoid unused import warning
-var _ = context.Background

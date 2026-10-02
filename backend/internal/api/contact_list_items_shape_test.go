@@ -33,8 +33,10 @@ var nonnilOutlets = map[string]func(t *testing.T) string{
 	// 是 handler 拼出来的 ⇒ 举证必须在路由这一层（批①-A 委托时也确认过一次：同一个 items，服务层跑不到）。
 	// 收藏那格（FavoritePageResult.favorites）波 4b 核对后确认组装点其实在 favorite.Service.List，
 	// 已随域包搬去 internal/favorite/nonnil_outlets_test.go。
-	"service.NotePageDTO.items":               notePageBody,
-	"service.QuestionCommentPageResult.items": commentPageBody,
+	// 笔记 / 题内评论两格的键前缀随波 4c 的域包改名（note. / questioninteraction.）：组装点已不在
+	// internal/service，但这两条证据走的是一整条真实路由 ⇒ 仍留在本文件。
+	"note.NotePageDTO.items":                              notePageBody,
+	"questioninteraction.QuestionCommentPageResult.items": commentPageBody,
 	// 反方向的谎：这一格从前声明 nullable 且契约上落了 x-nullable，而空审计表拉列表实测发的是
 	// `[]` —— 契约在承诺一个永远不来的 null。批①-B 把它改判 nonnil 并摘掉 x-nullable
 	//（判据 2 不许两者同在；摘掉后生成的 TS 从 `T[] | null` 收回 `T[]`，是收窄不是加负担）。

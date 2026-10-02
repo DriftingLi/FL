@@ -1,5 +1,8 @@
-// Package service 错题本。
-package service
+// Package wrongquestion 错题本域：错题列表、重做、移出 / 批量移出、统计与导出。
+//
+// 形态（ADR-0070）：handler.go 是 HTTP 出口（/api/wrong-questions 蓝图），service.go 是域实现，
+// stats.go 是统计聚合 DTO 与查询，nonnil_outlets_test.go 是本域的非空出口证据表。
+package wrongquestion
 
 import (
 	"encoding/json"
@@ -21,8 +24,8 @@ import (
 	"forklift-training/pkg/paging"
 )
 
-// WrongQuestionService 错题本服务。
-type WrongQuestionService struct {
+// Service 错题本服务。
+type Service struct {
 	db *gorm.DB
 	// grader 短答 AI 判分 adapter（nil 时简答重做降级，与练习流口径一致）。
 	grader practicemode.ShortAnswerGrader
@@ -32,9 +35,9 @@ type WrongQuestionService struct {
 	logger *zap.Logger
 }
 
-// NewWrongQuestionService 创建错题本服务实例。ai 可为 nil（简答判分与解析降级）。
-func NewWrongQuestionService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *WrongQuestionService {
-	return &WrongQuestionService{
+// NewService 创建错题本服务实例。ai 可为 nil（简答判分与解析降级）。
+func NewService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *Service {
+	return &Service{
 		db:        db,
 		grader:    practicemode.ShortAnswerGraderOf(ai),
 		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
@@ -92,7 +95,7 @@ type WrongQuestionBatchRemoveResultDTO struct {
 // sort: "time_asc" 按最近错误时间升序，其余按降序（默认）；
 // favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）；
 // credentialID: 按题目所属证件分区（与课程/题库同口径，#387；nil 表示不过滤）。
-func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) (*WrongQuestionPageDTO, error) {
+func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) (*WrongQuestionPageDTO, error) {
 	orderBy := "wrong_question.last_wrong_at DESC"
 	if sort == "time_asc" {
 		orderBy = "wrong_question.last_wrong_at ASC"
@@ -162,7 +165,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 // 「最近」按 (created_at DESC, id DESC) 取首条——同刻并列时用 id 兜底，保证结果稳定可断言。
 // 相关子查询在 Postgres 与 SQLite 两方言通用，且一次查询覆盖整页（禁 N+1）。
 // 从未作答过的题不出现在结果里，调用方按零值（空串）取值。
-func (s *WrongQuestionService) loadLastUserAnswers(studentID int, questionIDs []int) map[int]string {
+func (s *Service) loadLastUserAnswers(studentID int, questionIDs []int) map[int]string {
 	result := make(map[int]string, len(questionIDs))
 	if len(questionIDs) == 0 {
 		return result
@@ -193,7 +196,7 @@ func (s *WrongQuestionService) loadLastUserAnswers(studentID int, questionIDs []
 }
 
 // loadFavoriteIDs 批量查询题目收藏 ID（question_id → favorite_id，未收藏为 0）。
-func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int) map[int]int64 {
+func (s *Service) loadFavoriteIDs(studentID int, questionIDs []int) map[int]int64 {
 	result := make(map[int]int64, len(questionIDs))
 	if len(questionIDs) == 0 {
 		return result
@@ -214,7 +217,7 @@ func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int)
 // 与练习记录同口径。
 // 有意**不**施加完整池 scope（published / 排真题）：错题本是「我曾经做错的题」的历史面，题目下架或改标后若
 // 在这里被拦，列表会出现点不动的死链 —— 那是错题本读面 scope 的独立议题，不在本票范围。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*practicemode.SubmitResultDTO, error) {
+func (s *Service) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*practicemode.SubmitResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
@@ -263,7 +266,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 }
 
 // RemoveWrongQuestion 移除错题。
-func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (*WrongQuestionRemoveResultDTO, error) {
+func (s *Service) RemoveWrongQuestion(studentID, questionID int) (*WrongQuestionRemoveResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
@@ -275,7 +278,7 @@ func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (*
 
 // GetStats 错题统计（经统计聚合 module，一次 GROUP BY）。
 // 保留旧语义：仅统计未移除错题；by_type 只含实际存在题型的维度（不零填充）。
-func (s *WrongQuestionService) GetStats(studentID int) *WrongQuestionStatsDTO {
+func (s *Service) GetStats(studentID int) *WrongQuestionStatsDTO {
 	var total int64
 	s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false).Count(&total)
 	byType := questionbank.GroupByCount(
@@ -288,7 +291,7 @@ func (s *WrongQuestionService) GetStats(studentID int) *WrongQuestionStatsDTO {
 }
 
 // ExportWrongQuestions 导出错题。
-func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]any {
+func (s *Service) ExportWrongQuestions(studentID int) []map[string]any {
 	var items []model.WrongQuestion
 	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
 
@@ -387,7 +390,7 @@ func FormatWrongQuestionsText(exportData []map[string]any) string {
 }
 
 // BatchRemoveWrongQuestions 批量移出错题本
-func (s *WrongQuestionService) BatchRemoveWrongQuestions(studentID int, questionIDs []int) (int, error) {
+func (s *Service) BatchRemoveWrongQuestions(studentID int, questionIDs []int) (int, error) {
 	if len(questionIDs) == 0 {
 		return 0, errors.New("请选择要移除的题目")
 	}

@@ -2296,6 +2296,33 @@ definitions:
       voltage_std:
         type: number
     type: object
+  note.NoteDTO:
+    properties:
+      content:
+        type: string
+      id:
+        type: integer
+      question_content:
+        type: string
+      question_id:
+        type: integer
+        x-nullable: true
+      updated_at:
+        type: string
+    type: object
+  note.NotePageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/note.NoteDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   notification.NotificationDTO:
     properties:
       content:
@@ -2697,6 +2724,36 @@ definitions:
         type: integer
     type: object
   questionbank.QuestionUpdateInput:
+    type: object
+  questioninteraction.QuestionCommentDTO:
+    properties:
+      avatar_url:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      question_id:
+        type: integer
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  questioninteraction.QuestionCommentPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/questioninteraction.QuestionCommentDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
     type: object
   realexam.RealExamPaperDTO:
     properties:
@@ -3409,63 +3466,6 @@ definitions:
       title:
         type: string
     type: object
-  service.NoteDTO:
-    properties:
-      content:
-        type: string
-      id:
-        type: integer
-      question_content:
-        type: string
-      question_id:
-        type: integer
-        x-nullable: true
-      updated_at:
-        type: string
-    type: object
-  service.NotePageDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.NoteDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.QuestionCommentDTO:
-    properties:
-      avatar_url:
-        type: string
-      content:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: integer
-      question_id:
-        type: integer
-      user_id:
-        type: integer
-      username:
-        type: string
-    type: object
-  service.QuestionCommentPageResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.QuestionCommentDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
   service.RecruitListResult:
     properties:
       items:
@@ -3639,67 +3639,6 @@ definitions:
         items:
           $ref: '#/definitions/service.TutorDTO'
         type: array
-    type: object
-  service.WrongQuestionBatchRemoveResultDTO:
-    properties:
-      removed:
-        type: integer
-    type: object
-  service.WrongQuestionDTO:
-    properties:
-      created_at:
-        type: string
-      favorite_id:
-        type: integer
-      favorited:
-        type: boolean
-      id:
-        type: integer
-      is_redone:
-        type: boolean
-      is_removed:
-        type: boolean
-      last_user_answer:
-        type: string
-      last_wrong_at:
-        type: string
-      question:
-        allOf:
-        - $ref: '#/definitions/questionbank.QuestionDTO'
-        x-optional: true
-      question_id:
-        type: integer
-      student_id:
-        type: integer
-      wrong_count:
-        type: integer
-    type: object
-  service.WrongQuestionPageDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.WrongQuestionDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.WrongQuestionRemoveResultDTO:
-    properties:
-      removed:
-        type: boolean
-    type: object
-  service.WrongQuestionStatsDTO:
-    properties:
-      by_type:
-        additionalProperties:
-          type: integer
-        type: object
-      total:
-        type: integer
     type: object
   student.CourseProgressDTO:
     properties:
@@ -4223,6 +4162,67 @@ definitions:
         items:
           $ref: '#/definitions/training.SpecialtyDict'
         type: array
+    type: object
+  wrongquestion.WrongQuestionBatchRemoveResultDTO:
+    properties:
+      removed:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionDTO:
+    properties:
+      created_at:
+        type: string
+      favorite_id:
+        type: integer
+      favorited:
+        type: boolean
+      id:
+        type: integer
+      is_redone:
+        type: boolean
+      is_removed:
+        type: boolean
+      last_user_answer:
+        type: string
+      last_wrong_at:
+        type: string
+      question:
+        allOf:
+        - $ref: '#/definitions/questionbank.QuestionDTO'
+        x-optional: true
+      question_id:
+        type: integer
+      student_id:
+        type: integer
+      wrong_count:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionPageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/wrongquestion.WrongQuestionDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionRemoveResultDTO:
+    properties:
+      removed:
+        type: boolean
+    type: object
+  wrongquestion.WrongQuestionStatsDTO:
+    properties:
+      by_type:
+        additionalProperties:
+          type: integer
+        type: object
+      total:
+        type: integer
     type: object
 info:
   contact: {}
@@ -12179,7 +12179,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NotePageDTO'
+                  $ref: '#/definitions/note.NotePageDTO'
               type: object
         "401":
           description: 未认证
@@ -12215,7 +12215,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NoteDTO'
+                  $ref: '#/definitions/note.NoteDTO'
               type: object
         "400":
           description: 参数错误
@@ -12293,7 +12293,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NoteDTO'
+                  $ref: '#/definitions/note.NoteDTO'
               type: object
         "400":
           description: 参数错误
@@ -13519,7 +13519,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionCommentPageResult'
+                  $ref: '#/definitions/questioninteraction.QuestionCommentPageResult'
               type: object
         "400":
           description: 题目ID无效
@@ -13560,7 +13560,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionCommentDTO'
+                  $ref: '#/definitions/questioninteraction.QuestionCommentDTO'
               type: object
         "400":
           description: 题目ID无效
@@ -18211,7 +18211,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionPageDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionPageDTO'
               type: object
         "401":
           description: 未认证
@@ -18285,7 +18285,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionRemoveResultDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionRemoveResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -18322,7 +18322,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionBatchRemoveResultDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionBatchRemoveResultDTO'
               type: object
       security:
       - BearerAuth: []
@@ -18363,7 +18363,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionStatsDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionStatsDTO'
               type: object
         "401":
           description: 未认证

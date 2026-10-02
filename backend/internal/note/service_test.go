@@ -1,5 +1,5 @@
-// Package service 笔记域测试（ADR-0055）：题目笔记与独立笔记共用一张 note 表。
-package service
+// Package note 笔记域测试（ADR-0055）：题目笔记与独立笔记共用一张 note 表。
+package note
 
 import (
 	"errors"
@@ -18,10 +18,10 @@ import (
 // 夹具题（testutil.SeedQuestion）是 published 且无证件、无源标记 ⇒ 恒在池内。
 func studentScope() questionbank.QuestionReadScope { return questionbank.NewQuestionReadScope(nil) }
 
-func newNoteSvc(t *testing.T) (*NoteService, *gorm.DB) {
+func newNoteSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewNoteService(db, zap.NewNop()), db
+	return NewService(db, zap.NewNop()), db
 }
 
 // TestNoteStandaloneCanBeMultiple 独立笔记可多条（question_id 为空时唯一约束不生效——

@@ -14,8 +14,9 @@ import (
 
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/model"
+	"forklift-training/internal/note"
 	"forklift-training/internal/questionbank"
-	"forklift-training/internal/service"
+	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/testutil"
 	"forklift-training/pkg/httpx"
 )
@@ -47,14 +48,14 @@ func TestInteractionErrStatusFacesAreProducible(t *testing.T) {
 		break
 	}
 
-	assertFacesAgainstTable(t, f, "interactionErrStatus", interactionErrStatus, []factFace{
+	assertFacesAgainstTable(t, f, "questioninteraction.ErrStatus", questioninteraction.ErrStatus, []factFace{
 		{questionbank.ErrQuestionNotFound, http.StatusNotFound, http.MethodGet, "/api/questions/" + qpath(hidden) + "/comments?page_size=10", nil, "题目不存在"},
-		{service.ErrCommentContentEmpty, http.StatusBadRequest, http.MethodPost, "/api/questions/" + qpath(f.poolQ.ID) + "/comments", map[string]any{"content": "   "}, "评论内容不能为空"},
-		{service.ErrCommentTooLong, http.StatusBadRequest, http.MethodPost, "/api/questions/" + qpath(f.poolQ.ID) + "/comments", map[string]any{"content": strings.Repeat("叉", 501)}, "评论不能超过500字"},
-		{service.ErrCommentNotFound, http.StatusBadRequest, http.MethodDelete, "/api/questions/comments/999999", nil, "评论不存在"},
-		{service.ErrCommentNotOwned, http.StatusBadRequest, http.MethodDelete, "/api/questions/comments/" + qpath(int(foreign.ID)), nil, "无权删除"},
-		{service.ErrNoteContentEmpty, http.StatusBadRequest, http.MethodPut, "/api/questions/" + qpath(f.poolQ.ID) + "/note", map[string]any{"content": "  "}, "笔记内容不能为空"},
-		{service.ErrNoteContentTooLong, http.StatusBadRequest, http.MethodPut, "/api/questions/" + qpath(f.poolQ.ID) + "/note", map[string]any{"content": strings.Repeat("记", 2001)}, "笔记不能超过2000字"},
+		{questioninteraction.ErrCommentContentEmpty, http.StatusBadRequest, http.MethodPost, "/api/questions/" + qpath(f.poolQ.ID) + "/comments", map[string]any{"content": "   "}, "评论内容不能为空"},
+		{questioninteraction.ErrCommentTooLong, http.StatusBadRequest, http.MethodPost, "/api/questions/" + qpath(f.poolQ.ID) + "/comments", map[string]any{"content": strings.Repeat("叉", 501)}, "评论不能超过500字"},
+		{questioninteraction.ErrCommentNotFound, http.StatusBadRequest, http.MethodDelete, "/api/questions/comments/999999", nil, "评论不存在"},
+		{questioninteraction.ErrCommentNotOwned, http.StatusBadRequest, http.MethodDelete, "/api/questions/comments/" + qpath(int(foreign.ID)), nil, "无权删除"},
+		{note.ErrNoteContentEmpty, http.StatusBadRequest, http.MethodPut, "/api/questions/" + qpath(f.poolQ.ID) + "/note", map[string]any{"content": "  "}, "笔记内容不能为空"},
+		{note.ErrNoteContentTooLong, http.StatusBadRequest, http.MethodPut, "/api/questions/" + qpath(f.poolQ.ID) + "/note", map[string]any{"content": strings.Repeat("记", 2001)}, "笔记不能超过2000字"},
 	})
 }
 
@@ -135,11 +136,11 @@ func TestNoteErrStatusFacesAreProducible(t *testing.T) {
 		t.Fatalf("播种笔记失败: %v", err)
 	}
 
-	assertFacesAgainstTable(t, f, "noteErrStatus", noteErrStatus, []factFace{
-		{service.ErrNoteContentEmpty, http.StatusBadRequest, http.MethodPost, "/api/notes", map[string]any{"content": "   "}, "笔记内容不能为空"},
-		{service.ErrNoteContentTooLong, http.StatusBadRequest, http.MethodPost, "/api/notes", map[string]any{"content": strings.Repeat("记", 2001)}, "笔记不能超过2000字"},
-		{service.ErrNoteNotFound, http.StatusNotFound, http.MethodPut, "/api/notes/999999", map[string]any{"content": "改一点"}, "笔记不存在"},
-		{service.ErrNoteNotFound, http.StatusNotFound, http.MethodDelete, "/api/notes/999999", nil, "笔记不存在"},
+	assertFacesAgainstTable(t, f, "note.ErrStatus", note.ErrStatus, []factFace{
+		{note.ErrNoteContentEmpty, http.StatusBadRequest, http.MethodPost, "/api/notes", map[string]any{"content": "   "}, "笔记内容不能为空"},
+		{note.ErrNoteContentTooLong, http.StatusBadRequest, http.MethodPost, "/api/notes", map[string]any{"content": strings.Repeat("记", 2001)}, "笔记不能超过2000字"},
+		{note.ErrNoteNotFound, http.StatusNotFound, http.MethodPut, "/api/notes/999999", map[string]any{"content": "改一点"}, "笔记不存在"},
+		{note.ErrNoteNotFound, http.StatusNotFound, http.MethodDelete, "/api/notes/999999", nil, "笔记不存在"},
 	})
 
 	// 反向控制：同一批路径换成真实 id 就不再报「不存在」——否则上面四条 404 可能是恒真的。

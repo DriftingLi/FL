@@ -28,7 +28,7 @@ type statGroupRow struct {
 // GroupByCount 聚合引擎：按 dimension 列对 base 查询一次 GROUP BY，返回维度→计数字典
 // （仅含实际存在分组的维度；零填充由调用方按业务语义决定）。
 // base 为已含 WHERE/JOIN 的查询骨架，dimension 为分组列（可带限定如 question.type）。
-// 导出：留驻 internal/service 的错题统计仍在用（wrong_question_service.go 的 GetStats）。
+// 导出：错题统计在用（internal/wrongquestion/stats.go 的 GetStats，波 4c 随域搬入）。
 func GroupByCount(base *gorm.DB, dimension string) map[string]int64 {
 	var rows []statGroupRow
 	base.Select(dimension + " AS key, COUNT(*) AS count").Group(dimension).Scan(&rows)
