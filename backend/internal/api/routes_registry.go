@@ -7,6 +7,7 @@ import (
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
@@ -86,7 +87,8 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "论坛与打卡",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+			forum.RegisterAdminRoutes(api, rd.Session, deps.ForumSvc, deps.ForumModSvc)
+			forum.RegisterRoutes(api, rd.Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 			checkin.RegisterRoutes(api, rd.Session, deps.CheckInSvc)
 		},
 	},

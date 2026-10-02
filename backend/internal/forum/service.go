@@ -1,8 +1,12 @@
-// Package service 实现业务服务层。
+// Package forum 论坛域：主题与回复、采纳与精选、举报与处置、图片上传与孤儿清理（ADR-0050 决策 3、ADR-0070 域包形态）。
+//
+// 本包是 internal/<域> 形态（ADR-0070）：handler.go / handler_admin.go 是 HTTP 出口，service.go 是域实现，
+// core.go 是学员与治理两服务共享的内核，moderation.go 是管理端治理面，reward_policy.go 是采纳/精选奖励策略，
+// image_service.go 是论坛图片模块。
 // 本文件：学员端论坛（综合讨论区 + 章节讨论区，支持回复别人的回复，图文分离发图）——
 // 学员交互 + 个人集合。管理端治理动作（举报处置 / 意图认定 / 强删与违规回收）在
 // forum_moderation_service.go；共享依赖与私有 helper 在 forum_core.go（ADR-0050 决策 3）。
-package service
+package forum
 
 import (
 	"encoding/json"
@@ -23,6 +27,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/service"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -109,7 +114,7 @@ const (
 	ReasonFeaturedBonus = "featured_bonus" // 流水原因：帖子被加精
 )
 
-// 论坛错误哨兵族（第十二波票 5，#1168）：同一事实一个哨兵，api 侧 forumErrStatus 域表按档渲染——
+// 论坛错误哨兵族（第十二波票 5，#1168）：同一事实一个哨兵，api 侧 ErrStatus 域表按档渲染——
 // 存在性→404、所有权→403、状态前置/校验→400；未命中域表的 error 一律 DB/未知故障 → 500。
 // 沿用积分域哨兵纪律（ADR-0024 / #611 形态）：handler 以 errors.Is 映射，不做 err.Error() 字符串比对。
 
@@ -125,7 +130,7 @@ var ErrReplyNotFound = errors.New("回复不存在")
 // ErrForumReportNotFound 论坛举报记录不存在（名带 Forum 前缀避开求职举报域既有 ErrReportNotFound 的包级撞名）。
 var ErrForumReportNotFound = errors.New("举报不存在")
 
-// ErrChapterNotFound 的载体在 course_service.go（发帖/筛选挂的就是课程章节 —— 同一对象，
+// service.ErrChapterNotFound 的载体在 course_service.go（发帖/筛选挂的就是课程章节 —— 同一对象，
 // 不在论坛域另立一个同文案副本，ADR-0064 决策 2）。
 
 // —— 所有权（→403）——
@@ -273,21 +278,21 @@ type ForumLikeResultDTO struct {
 	LikesCount int64 `json:"likes_count"`
 }
 
-// ForumService 论坛服务（学员交互 + 个人集合，ADR-0050 决策 3）。
+// Service 论坛服务（学员交互 + 个人集合，ADR-0050 决策 3）。
 //
-// 治理动作（举报处置 / 意图认定 / 管理端强制删除与违规回收）在 ForumModerationService
+// 治理动作（举报处置 / 意图认定 / 管理端强制删除与违规回收）在 ModerationService
 // （forum_moderation_service.go）；两者共享 forumCore 的依赖与私有 helper，实例分离。
-type ForumService struct {
+type Service struct {
 	forumCore
 }
 
-// NewForumService 构造论坛服务。
+// NewService 构造论坛服务。
 // fileSvc 用于删除帖子/回复时清理图片存储（可 nil，nil 时跳过清理）；
 // notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
-func NewForumService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *points.Service, logger *zap.Logger) *ForumService {
-	return &ForumService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters service.ForumCounter, points *points.Service, logger *zap.Logger) *Service {
+	return &Service{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 
 // topicRow 列表查询的扫描结构。
@@ -467,7 +472,7 @@ type TopicListInput struct {
 
 // ListTopics 分页查询主题。
 // scope: all（默认）/ general（综合讨论区）/ chapter（需配合 chapterID）；sort: latest（默认，活跃度）/ hot（热度：点赞数→回复数→浏览数）/ created（发帖时间，#722）；order: desc（默认）/ asc（正序）。
-func (s *ForumService) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
+func (s *Service) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 	scope := in.Scope
 	chapterID, page, pageSize := in.ChapterID, in.Page, in.PageSize
 	keyword, sort, order := in.Keyword, in.Sort, in.Order
@@ -602,7 +607,7 @@ type TopicDetailInput struct {
 //
 // total 为**实时 COUNT**（分页必须与实际行数一致，否则会出现空页）；topic.reply_count 是
 // 列表页消费的反范式计数列，两者由计数单写入口保持同值。
-func (s *ForumService) GetTopic(in TopicDetailInput) (*ForumTopicDetailDTO, error) {
+func (s *Service) GetTopic(in TopicDetailInput) (*ForumTopicDetailDTO, error) {
 	topicID, viewerID := in.TopicID, in.ViewerID
 	replySort, order := in.ReplySort, in.Order
 	if replySort == "latest" {
@@ -769,7 +774,7 @@ const replyRowSelect = "r.id, r.topic_id, r.parent_id, r.content, r.content_form
 
 // replyBaseQuery 详情页回复查询的共享装配：同一 WHERE 同时服务 count 与 scan。
 // excludeReplyID 非 nil 时剔除该条——置顶条已单独取得，不应再出现在排序结果里。
-func (s *ForumService) replyBaseQuery(topicID int64, excludeReplyID *int64) *gorm.DB {
+func (s *Service) replyBaseQuery(topicID int64, excludeReplyID *int64) *gorm.DB {
 	q := s.db.Table("forum_replies AS r").
 		Select(replyRowSelect).
 		Joins("JOIN hrwai_users AS u ON u.id = r.user_id").
@@ -799,7 +804,7 @@ type CreateTopicInput struct {
 
 // CreateTopic 发帖。chapterID 为 nil/0 表示发到综合讨论区。
 // images 为主题图片 URL 列表（最多 ForumTopicMaxImages 张，仅接受本站 images/forum/ 前缀）。
-func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) {
+func (s *Service) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) {
 	category, err := normalizeForumCategory(in.Category)
 	if err != nil {
 		return nil, err
@@ -835,7 +840,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 			return nil, err
 		}
 		if cnt == 0 {
-			return nil, ErrChapterNotFound
+			return nil, service.ErrChapterNotFound
 		}
 		cid = chapterID
 	}
@@ -916,7 +921,7 @@ type UpdateTopicInput struct {
 //
 // 明确不做（#811 范围）：编辑历史/版本留痕、管理员代为编辑、is_edited 列、
 // 改 GET 详情响应形态（DTO 已含 category）。
-func (s *ForumService) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) {
+func (s *Service) UpdateTopic(in UpdateTopicInput) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, in.TopicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -989,7 +994,7 @@ type ReplyTopicInput struct {
 }
 
 // ReplyTopic 回复主题或回复某条回复（ParentReplyID 非空时）。
-func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
+func (s *Service) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 	userID, topicID, parentReplyID, images := in.UserID, in.TopicID, in.ParentReplyID, in.Images
 	content := strings.TrimSpace(in.Content)
 	if utf8.RuneCountInString(content) < 1 || utf8.RuneCountInString(content) > 5000 {
@@ -1106,7 +1111,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 }
 
 // DeleteTopic 删除主题（仅作者本人）。主题与全部回复（含子回复）的图片一并清理。
-func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
+func (s *Service) DeleteTopic(userID int, topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1125,7 +1130,7 @@ func (s *ForumService) DeleteTopic(userID int, topicID int64) error {
 }
 
 // incrementDeletedAfterAccepted 楼主删除已解决帖的巡检计数 +1（存于 system_settings）。
-func (s *ForumService) incrementDeletedAfterAccepted() error {
+func (s *Service) incrementDeletedAfterAccepted() error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var setting model.SystemSetting
 		err := tx.Where("key = ?", "deleted_after_accepted").First(&setting).Error
@@ -1145,7 +1150,7 @@ func (s *ForumService) incrementDeletedAfterAccepted() error {
 
 // DeleteReply 删除回复（仅作者本人；其下级回复随外键级联删除）。
 // 本回复与全部下级回复（parent_id 链条）的图片一并清理。
-func (s *ForumService) DeleteReply(userID int, replyID int64) error {
+func (s *Service) DeleteReply(userID int, replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1234,7 +1239,7 @@ func marshalImageURLs(urls []string) model.JSONB {
 // ===== 论坛互动（ADR-0018：点赞 / 举报 / 我的帖子 / 我的回复）=====
 
 // LikeTopic 点赞主题（幂等：重复点赞不报错、不重复计数；事务内同步维护 likes_count）。
-func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
+func (s *Service) LikeTopic(userID int, topicID int64) (int64, error) {
 	var cnt int64
 	if err := s.db.Model(&model.ForumTopic{}).Where("id = ?", topicID).Count(&cnt).Error; err != nil {
 		return 0, err
@@ -1265,7 +1270,7 @@ func (s *ForumService) LikeTopic(userID int, topicID int64) (int64, error) {
 }
 
 // UnlikeTopic 取消点赞（幂等：未点赞时直接返回当前计数；事务内同步维护 likes_count）。
-func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
+func (s *Service) UnlikeTopic(userID int, topicID int64) (int64, error) {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Where("topic_id = ? AND user_id = ?", topicID, userID).Delete(&model.ForumTopicLike{})
 		if res.Error != nil {
@@ -1283,7 +1288,7 @@ func (s *ForumService) UnlikeTopic(userID int, topicID int64) (int64, error) {
 }
 
 // topicLikesCount 主题点赞数（读侧只认 likes_count 列为事实源，ADR-0018）。
-func (s *ForumService) topicLikesCount(topicID int64) int64 {
+func (s *Service) topicLikesCount(topicID int64) int64 {
 	var n int64
 	_ = s.db.Model(&model.ForumTopic{}).Select("likes_count").Where("id = ?", topicID).Scan(&n).Error
 	return n
@@ -1299,7 +1304,7 @@ func toDTORefs(items []ForumTopicDTO) []*ForumTopicDTO {
 }
 
 // enrichReplyLikedByMe 批量回填回复是否已赞（计数已由 likes_count 列提供）。
-func (s *ForumService) enrichReplyLikedByMe(replies []ForumReplyDTO, viewerID int) {
+func (s *Service) enrichReplyLikedByMe(replies []ForumReplyDTO, viewerID int) {
 	if len(replies) == 0 || viewerID <= 0 {
 		return
 	}
@@ -1321,7 +1326,7 @@ func (s *ForumService) enrichReplyLikedByMe(replies []ForumReplyDTO, viewerID in
 }
 
 // CreateReport 举报主题或回复（topicID/replyID 二选一，由调用方保证）。
-func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason string) error {
+func (s *Service) CreateReport(userID int, topicID, replyID *int64, reason string) error {
 	reason = strings.TrimSpace(reason)
 	if utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
 		return ErrReportReasonLength
@@ -1350,7 +1355,7 @@ func (s *ForumService) CreateReport(userID int, topicID, replyID *int64, reason 
 }
 
 // MyTopics 我的帖子（复用主题列表行装配，按最后活跃倒序）。
-func (s *ForumService) MyTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
+func (s *Service) MyTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
 	rows, total, page, pageSize, err := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
@@ -1387,7 +1392,7 @@ const personalTopicSelect = topicRowSelect +
 	"COALESCE(ch.title, '') AS chapter_title"
 
 // finishPersonalTopics 行装配收尾单点：DTO 转换 + 点赞回填 + 发分回填 + 分页信封。
-func (s *ForumService) finishPersonalTopics(rows []topicRow, total int64, page, pageSize int, userID int) *ForumTopicPageResult {
+func (s *Service) finishPersonalTopics(rows []topicRow, total int64, page, pageSize int, userID int) *ForumTopicPageResult {
 	items := make([]ForumTopicDTO, 0, len(rows))
 	for _, r := range rows {
 		items = append(items, r.toDTO(userID))
@@ -1402,7 +1407,7 @@ func (s *ForumService) finishPersonalTopics(rows []topicRow, total int64, page, 
 
 // MyLikedTopics 赞过（#701）：点赞行驱动 + 主题/作者/章节 LEFT JOIN，按点赞时间倒序。
 // 主题被删时条目保留、标题回空串（与 MyReplies 口径一致）。
-func (s *ForumService) MyLikedTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
+func (s *Service) MyLikedTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
 	rows, total, page, pageSize, err := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
 		"l.created_at DESC, l.id DESC",
 		func(q *gorm.DB) *gorm.DB {
@@ -1423,7 +1428,7 @@ func (s *ForumService) MyLikedTopics(userID, page, pageSize int) (*ForumTopicPag
 // 去重面是「同一主题多日多行取最近一行」：先按主题聚合出每主题最近浏览（派生表），
 // 再 LEFT JOIN 主题取行装配——count 与 scan 同走派生表，去重语义在计数侧同样成立。
 // 自帖在写入侧已排除（GetTopic 不记录自帖浏览），此处不再过滤。主题被删时条目保留。
-func (s *ForumService) MyViewHistory(userID, page, pageSize int) (*ForumTopicPageResult, error) {
+func (s *Service) MyViewHistory(userID, page, pageSize int) (*ForumTopicPageResult, error) {
 	latestViews := s.db.Table("forum_topic_views AS v").
 		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
 		Where("v.user_id = ?", userID).
@@ -1446,7 +1451,7 @@ func (s *ForumService) MyViewHistory(userID, page, pageSize int) (*ForumTopicPag
 // MyObservedTopics 我的围观（#701）：浏览行驱动 + 排除四项直接互动（本人发帖、本人回复、
 // 本人主题点赞、本人对该主题的收藏；回复点赞不计入），按最近浏览倒序。主题被删时条目保留。
 // 同浏览记录：先按主题聚合最近浏览，再做互动排除——排除谓词落在聚合后的主题维度上。
-func (s *ForumService) MyObservedTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
+func (s *Service) MyObservedTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
 	latestViews := s.db.Table("forum_topic_views AS v").
 		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
 		Where("v.user_id = ?", userID).
@@ -1493,7 +1498,7 @@ type MyReplyPageResult struct {
 }
 
 // MyReplies 我的回复（主题被删时标题为空串，条目保留）。
-func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult, error) {
+func (s *Service) MyReplies(userID, page, pageSize int) (*MyReplyPageResult, error) {
 	type myReplyRow struct {
 		ID            int64
 		TopicID       int64
@@ -1536,7 +1541,7 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 }
 
 // LikeReply 点赞评论（幂等；事务内同步维护 likes_count）。
-func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
+func (s *Service) LikeReply(userID int, replyID int64) (int64, error) {
 	var cnt int64
 	if err := s.db.Model(&model.ForumReply{}).Where("id = ?", replyID).Count(&cnt).Error; err != nil {
 		return 0, err
@@ -1567,7 +1572,7 @@ func (s *ForumService) LikeReply(userID int, replyID int64) (int64, error) {
 }
 
 // UnlikeReply 取消点赞评论（幂等；事务内同步维护 likes_count）。
-func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
+func (s *Service) UnlikeReply(userID int, replyID int64) (int64, error) {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Where("reply_id = ? AND user_id = ?", replyID, userID).Delete(&model.ForumReplyLike{})
 		if res.Error != nil {
@@ -1585,7 +1590,7 @@ func (s *ForumService) UnlikeReply(userID int, replyID int64) (int64, error) {
 }
 
 // replyLikesCount 回复点赞数（读侧只认 likes_count 列为事实源）。
-func (s *ForumService) replyLikesCount(replyID int64) int64 {
+func (s *Service) replyLikesCount(replyID int64) int64 {
 	var n int64
 	_ = s.db.Model(&model.ForumReply{}).Select("likes_count").Where("id = ?", replyID).Scan(&n).Error
 	return n
@@ -1602,7 +1607,7 @@ type AcceptResult struct {
 //
 // 幂等：重复提交同一 replyID 不再发分；并发采纳靠 CAS 保证只发一次分；
 // 更换采纳对象时只改状态不新增流水；取消后重采同样只发一次（以流水是否存在判定）。
-func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTopicDTO, error) {
+func (s *Service) AcceptReply(userID int, topicID, replyID int64) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1685,7 +1690,7 @@ func (s *ForumService) AcceptReply(userID int, topicID, replyID int64) (*ForumTo
 }
 
 // CancelAccept 楼主取消采纳（状态回到未解决，已发分不回滚）。
-func (s *ForumService) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, error) {
+func (s *Service) CancelAccept(userID int, topicID int64) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

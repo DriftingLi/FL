@@ -1,4 +1,4 @@
-package service
+package forum
 
 import (
 	"errors"

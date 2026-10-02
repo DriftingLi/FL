@@ -6,12 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/internal/notification"
-	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
 )
 
@@ -20,7 +17,7 @@ import (
 func TestForumCounter_GuardDoesNotGoNegative(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	cnt := NewForumCounter()
-	u := seedForumUser(t, db, "guard")
+	u := testutil.SeedStudent(t, db, "guard", "hash")
 	now := time.Now()
 	topic := model.ForumTopic{UserID: u.ID, Title: "t", Content: "c", LikesCount: 1, ReplyCount: 1, CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&topic).Error; err != nil {
@@ -71,19 +68,26 @@ func TestDeleteAccount_RefundsForumLikeCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	forumSvc := NewForumService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
-	if _, err := forumSvc.LikeTopic(liker.ID, topic.ID); err != nil {
+	// 点赞行直插 + 计数走 ForumCounter：本用例判的是「注销时按行数回扣计数」，与论坛域无关；
+	// 域包不得被留驻测试反向 import（ADR-0070 波 2b-2），故不经 NewForumService 的点赞入口。
+	cnt := NewForumCounter()
+	if err := db.Create(&model.ForumTopicLike{TopicID: topic.ID, UserID: liker.ID, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := forumSvc.LikeTopic(bystander.ID, topic.ID); err != nil {
+	if err := db.Create(&model.ForumTopicLike{TopicID: topic.ID, UserID: bystander.ID, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := forumSvc.LikeReply(liker.ID, reply.ID); err != nil {
+	if err := db.Create(&model.ForumReplyLike{ReplyID: reply.ID, UserID: liker.ID, CreatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := cnt.AdjustLikes(db, topic.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := cnt.AdjustReplyLikes(db, reply.ID, 1); err != nil {
 		t.Fatal(err)
 	}
 	assertForumInt(t, db, "forum_topics", topic.ID, "likes_count", 2)
 	assertForumInt(t, db, "forum_replies", reply.ID, "likes_count", 1)
-
 	// 注销 liker：其主题/回复点赞行删除并按行数回扣计数
 	if err := authSvc.DeleteAccount(liker.ID); err != nil {
 		t.Fatalf("注销失败: %v", err)
@@ -101,46 +105,6 @@ func TestDeleteAccount_RefundsForumLikeCounts(t *testing.T) {
 	db.Model(&model.HrwaiUser{}).Where("id = ?", liker.ID).Count(&n)
 	if n != 0 {
 		t.Fatal("liker 账号应已硬删除")
-	}
-}
-
-// --- 删楼中楼：reply_count -= N（子树大小，含自身）---
-
-func TestDeleteNestedReply_DecrementsReplyCountBySubtreeSize(t *testing.T) {
-	svc, db, _ := newForumTestSvc(t)
-	user := seedForumUser(t, db, "nest")
-
-	topic, err := svc.CreateTopic(CreateTopicInput{UserID: user.ID, Title: "标题", Content: "内容"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 结构：r0（顶层幸存者）/ r1（删除根）← r2 ← r3，reply_count = 4。
-	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "顶层幸存者", ParentReplyID: nil, Images: nil}); err != nil {
-		t.Fatal(err)
-	}
-	r1, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "一楼", ParentReplyID: nil, Images: nil})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r2, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "楼中楼", ParentReplyID: &r1.ID, Images: nil})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.ReplyTopic(ReplyTopicInput{UserID: user.ID, TopicID: topic.ID, Content: "楼中楼的楼中楼", ParentReplyID: &r2.ID, Images: nil}); err != nil {
-		t.Fatal(err)
-	}
-	assertForumInt(t, db, "forum_topics", topic.ID, "reply_count", 4)
-
-	// 删除 r1：子树 {r1, r2, r3} 大小 N=3（生产端 ON DELETE CASCADE 连带删下级回复），
-	// reply_count 应 -3 剩 1，而非旧逻辑固定 -1 剩 3。
-	if err := svc.DeleteReply(user.ID, r1.ID); err != nil {
-		t.Fatalf("删除回复失败: %v", err)
-	}
-	assertForumInt(t, db, "forum_topics", topic.ID, "reply_count", 1)
-
-	var survivor model.ForumReply
-	if err := db.Where("topic_id = ? AND content = ?", topic.ID, "顶层幸存者").First(&survivor).Error; err != nil {
-		t.Fatalf("无关回复不应受影响: %v", err)
 	}
 }
 

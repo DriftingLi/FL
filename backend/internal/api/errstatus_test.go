@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/service"
@@ -389,39 +390,39 @@ func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
 // （存在性 404 / 所有权 403 / 状态前置与校验 400 / 未设 fallback → 未命中即 500）。
 func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "forumErrStatus", forumErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrTopicNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrReplyNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrForumReportNotFound, Status: http.StatusNotFound},
+	assertTableSnapshot(t, "forum.ErrStatus", forum.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: forum.ErrTopicNotFound, Status: http.StatusNotFound},
+		{Sentinel: forum.ErrReplyNotFound, Status: http.StatusNotFound},
+		{Sentinel: forum.ErrForumReportNotFound, Status: http.StatusNotFound},
 		{Sentinel: service.ErrChapterNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrNotTopicOwner, Status: http.StatusForbidden},
-		{Sentinel: service.ErrNotTopicAuthor, Status: http.StatusForbidden},
-		{Sentinel: service.ErrNotReplyAuthor, Status: http.StatusForbidden},
-		{Sentinel: service.ErrAcceptOwnReply, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrAcceptNotQuestion, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCancelAcceptNotQuestion, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrAcceptExperienceTopic, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrDesignateAcceptedTopic, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrUnfeatureExperienceTopic, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCategoryLockedByAccept, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionChapterConflict, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrParentReplyMismatch, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrReplyTopicMismatch, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContentFormatInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrCategoryInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrSolvedArgInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrFeaturedArgInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrExperienceArgInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrSolvedFilterScope, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrChapterIDRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrTitleLength, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContentLength, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrReplyContentLength, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrImagesTooMany, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrImageURLInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrReportReasonLength, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrReportTarget, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrReportStatusValue, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrNotTopicOwner, Status: http.StatusForbidden},
+		{Sentinel: forum.ErrNotTopicAuthor, Status: http.StatusForbidden},
+		{Sentinel: forum.ErrNotReplyAuthor, Status: http.StatusForbidden},
+		{Sentinel: forum.ErrAcceptOwnReply, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrAcceptNotQuestion, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrCancelAcceptNotQuestion, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrAcceptExperienceTopic, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrDesignateAcceptedTopic, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrUnfeatureExperienceTopic, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrCategoryLockedByAccept, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrQuestionChapterConflict, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrParentReplyMismatch, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReplyTopicMismatch, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrContentFormatInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrCategoryInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrSolvedArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrFeaturedArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrExperienceArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrSolvedFilterScope, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrChapterIDRequired, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrTitleLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrContentLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReplyContentLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrImagesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrImageURLInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReportReasonLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReportTarget, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReportStatusValue, Status: http.StatusBadRequest},
 	}, 0)
 }
 
@@ -434,24 +435,24 @@ func TestForumErrStatus_Spectrum(t *testing.T) {
 		err  error
 		want int
 	}{
-		{"存在性：主题 404", service.ErrTopicNotFound, http.StatusNotFound},
-		{"存在性：回复 404", service.ErrReplyNotFound, http.StatusNotFound},
-		{"存在性：举报 404", service.ErrForumReportNotFound, http.StatusNotFound},
+		{"存在性：主题 404", forum.ErrTopicNotFound, http.StatusNotFound},
+		{"存在性：回复 404", forum.ErrReplyNotFound, http.StatusNotFound},
+		{"存在性：举报 404", forum.ErrForumReportNotFound, http.StatusNotFound},
 		{"存在性：章节 404", service.ErrChapterNotFound, http.StatusNotFound},
-		{"所有权：楼主动作 403", service.ErrNotTopicOwner, http.StatusForbidden},
-		{"所有权：删主题 403", service.ErrNotTopicAuthor, http.StatusForbidden},
-		{"所有权：删回复 403", service.ErrNotReplyAuthor, http.StatusForbidden},
-		{"状态前置：自采纳 400", service.ErrAcceptOwnReply, http.StatusBadRequest},
-		{"状态前置：撤精镜像 400", service.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
-		{"校验：包装详情命中 400", fmt.Errorf("%w: discussion2", service.ErrCategoryInvalid), http.StatusBadRequest},
-		{"校验：图片张数包装 400", fmt.Errorf("%w（最多 9 张）", service.ErrImagesTooMany), http.StatusBadRequest},
+		{"所有权：楼主动作 403", forum.ErrNotTopicOwner, http.StatusForbidden},
+		{"所有权：删主题 403", forum.ErrNotTopicAuthor, http.StatusForbidden},
+		{"所有权：删回复 403", forum.ErrNotReplyAuthor, http.StatusForbidden},
+		{"状态前置：自采纳 400", forum.ErrAcceptOwnReply, http.StatusBadRequest},
+		{"状态前置：撤精镜像 400", forum.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
+		{"校验：包装详情命中 400", fmt.Errorf("%w: discussion2", forum.ErrCategoryInvalid), http.StatusBadRequest},
+		{"校验：图片张数包装 400", fmt.Errorf("%w（最多 9 张）", forum.ErrImagesTooMany), http.StatusBadRequest},
 		{"未命中：DB 故障 500", errors.New("dial tcp 127.0.0.1: db down"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			e := httpx.Endpoint[int, string]{
 				Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, c.err },
-				ErrStatus: forumErrStatus,
+				ErrStatus: forum.ErrStatus,
 			}
 			w := doEndpoint(t, e)
 			if w.Code != c.want {

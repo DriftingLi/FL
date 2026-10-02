@@ -154,17 +154,7 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 			},
 			dto: &ContactRequestListResult{Items: []ContactRequestDTO{}, Page: 1, PageSize: 20, Total: 0},
 		},
-		{
-			name: "ForumTopicDetailDTO",
-			legacy: map[string]any{
-				"topic":   ForumTopicDTO{},
-				"replies": []ForumReplyDTO{},
-				"page":    1,
-				"pages":   0,
-				"total":   int64(0),
-			},
-			dto: &ForumTopicDetailDTO{Page: 1, Pages: 0, Replies: []ForumReplyDTO{}, Topic: ForumTopicDTO{}, Total: 0},
-		},
+		// ForumTopicDetailDTO 的信封形状用例已随域包搬去 internal/forum/（ADR-0070 波 2b-2）。
 	}
 
 	for _, tc := range cases {
@@ -286,16 +276,7 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{"saved": true, "index": 5},
 			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
 		},
-		{
-			name:   "ForumImageUploadResultDTO（POST /forum/upload-image：原 handler 内联 gin.H）",
-			legacy: map[string]any{"url": "https://cdn.example/1.png"},
-			dto:    &ForumImageUploadResultDTO{URL: "https://cdn.example/1.png"},
-		},
-		{
-			name:   "ForumLikeResultDTO（主题/回复的 like 与 unlike 四端点共用：原 handler 内联 gin.H）",
-			legacy: map[string]any{"likes_count": int64(7), "liked": true},
-			dto:    &ForumLikeResultDTO{Liked: true, LikesCount: 7},
-		},
+		// ForumImageUploadResultDTO / ForumLikeResultDTO 的信封形状用例已随域包搬去 internal/forum/（ADR-0070 波 2b-2）。
 		{
 			name:   "notification.NotificationUnreadCountDTO（GET /notifications/unread-count：原 handler 内联 gin.H）",
 			legacy: map[string]any{"count": int64(3)},

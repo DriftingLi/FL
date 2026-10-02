@@ -21,6 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -55,7 +56,8 @@ func TestForumReplyPaginationContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	now := testutil.Now()
 	mkUser := func(account, phone, name string) model.HrwaiUser {
@@ -100,7 +102,7 @@ func TestForumReplyPaginationContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)
 	}
-	// 管理端详情走同一个 GetTopic，需 admin 角色才可达（RegisterForumRoutes 内含管理端路由）
+	// 管理端详情走同一个 GetTopic，需 admin 角色才可达（管理端路由由 forum.RegisterAdminRoutes 注册）
 	adminTok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(1, "admin1", "admin")
 	if err != nil {

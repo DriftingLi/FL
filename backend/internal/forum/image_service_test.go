@@ -1,4 +1,4 @@
-package service
+package forum
 
 import (
 	"bytes"
@@ -87,12 +87,12 @@ func fileStampToTime(url string) time.Time {
 }
 
 // newForumImageTestSvc 构造论坛图片服务 + 内存存储。
-func newForumImageTestSvc(t *testing.T) (*ForumImageService, *gorm.DB, *forumImgStorage) {
+func newForumImageTestSvc(t *testing.T) (*ImageService, *gorm.DB, *forumImgStorage) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := &forumImgStorage{}
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
-	svc := NewForumImageService(db, fileSvc, zap.NewNop())
+	svc := NewImageService(db, fileSvc, zap.NewNop())
 	return svc, db, st
 }
 

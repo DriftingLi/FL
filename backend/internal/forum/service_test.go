@@ -1,4 +1,4 @@
-package service
+package forum
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -54,8 +55,8 @@ func (m *memForumStorage) Get(_ context.Context, url string) (io.ReadCloser, err
 // forumTestEnv 论坛测试装置：同一组依赖实例上的两片 service（ADR-0050 决策 3 后治理动作
 // 不再挂在学员交互 interface 上——治理用例经 mod 装配，学员用例经 svc）。
 type forumTestEnv struct {
-	svc *ForumService
-	mod *ForumModerationService
+	svc *Service
+	mod *ModerationService
 	db  *gorm.DB
 	st  *memForumStorage
 }
@@ -67,18 +68,18 @@ func newForumTestEnv(t *testing.T) *forumTestEnv {
 	st := &memForumStorage{}
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notificationSvc := notification.NewService(db, zap.NewNop())
-	counters := NewForumCounter()
+	counters := service.NewForumCounter()
 	pointsSvc := points.NewService(db, zap.NewNop(), nil, notificationSvc)
 	return &forumTestEnv{
-		svc: NewForumService(db, fileSvc, notificationSvc, counters, pointsSvc, zap.NewNop()),
-		mod: NewForumModerationService(db, fileSvc, notificationSvc, counters, pointsSvc, zap.NewNop()),
+		svc: NewService(db, fileSvc, notificationSvc, counters, pointsSvc, zap.NewNop()),
+		mod: NewModerationService(db, fileSvc, notificationSvc, counters, pointsSvc, zap.NewNop()),
 		db:  db,
 		st:  st,
 	}
 }
 
 // newForumTestSvc 构造论坛服务 + 内存存储（记录删除调用）。治理侧用例用 newForumTestEnv 取 mod。
-func newForumTestSvc(t *testing.T) (*ForumService, *gorm.DB, *memForumStorage) {
+func newForumTestSvc(t *testing.T) (*Service, *gorm.DB, *memForumStorage) {
 	t.Helper()
 	env := newForumTestEnv(t)
 	return env.svc, env.db, env.st

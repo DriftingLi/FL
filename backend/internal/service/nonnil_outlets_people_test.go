@@ -43,14 +43,7 @@ import (
 )
 
 var nonnilOutletsPeople = map[string]func(t *testing.T) any{
-	// ===== 论坛读面（images 三格走 imageURLsForWire 归一，ADR-0062 决策 12）=====
-	"service.ForumTopicPageResult.topics":   outletForumTopicPageEmpty,
-	"service.ForumTopicDTO.images":          outletForumTopicNoImages,
-	"service.ForumTopicDetailDTO.replies":   outletForumTopicDetailNoReplies,
-	"service.ForumReplyDTO.images":          outletForumReplyNoImages,
-	"service.MyReplyPageResult.replies":     outletMyReplyPageEmpty,
-	"service.MyReplyDTO.images":             outletMyReplyNoImages,
-	"service.ForumReportPageResult.reports": outletForumReportPageEmpty,
+	// 论坛读面（topics / images / replies / reports）的举证已随域包搬去 internal/forum/nonnil_outlets_test.go（ADR-0070 波 2b-2）。
 
 	// ===== 简历 / 招聘 =====
 	"service.RecruitResumeCard.resume_certifications": outletRecruitCardNoCerts,
@@ -79,123 +72,7 @@ func init() {
 	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsPeople)
 }
 
-// ===== 论坛 =====
-
-// outletForumTopicPageEmpty 主题列表：一行帖子都没有时 topics 仍是 make 出来的空集。
-func outletForumTopicPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewForumService(testutil.NewMemoryDB(t), nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.ListTopics(TopicListInput{Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("空库拉主题列表失败: %v", err)
-	}
-	return res
-}
-
-// outletForumTopicNoImages 主题条目里的 images：帖子的 images 列为 NULL（发帖未带图）时，
-// 读面出口经 imageURLsForWire 归一成 `[]` —— 这条正是「契约说数组、出口却发 null」那个坑的正面证据。
-func outletForumTopicNoImages(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	author := seedForumUser(t, db, "无图楼主")
-	topic := seedRewardTopic(t, db, author.ID, "无图主题")
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.ListTopics(TopicListInput{Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("拉主题列表失败: %v", err)
-	}
-	if len(res.Topics) == 0 {
-		t.Fatalf("列表里没有取到刚播的主题: %v", topic.ID)
-	}
-	return res.Topics[0]
-}
-
-// outletForumTopicDetailNoReplies 主题详情：有帖无回复时 replies 是 make(0,pageSize) 的空集。
-func outletForumTopicDetailNoReplies(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	author := seedForumUser(t, db, "无人回复楼主")
-	topic := seedRewardTopic(t, db, author.ID, "无人回复的主题")
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.GetTopic(TopicDetailInput{TopicID: topic.ID, Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("主题详情失败: %v", err)
-	}
-	return res
-}
-
-// outletForumReplyNoImages 回复条目里的 images：与主题同一条归一判据（replyRow.toDTO 也走
-// imageURLsForWire），故出口单独占一键、各自 marshal。
-func outletForumReplyNoImages(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	replier := seedForumUser(t, db, "无图回复人")
-	topic := seedRewardTopic(t, db, replier.ID, "被回复的主题")
-	seedPlainReply(t, db, topic.ID, replier.ID)
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.GetTopic(TopicDetailInput{TopicID: topic.ID, Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("主题详情失败: %v", err)
-	}
-	if len(res.Replies) == 0 {
-		t.Fatalf("详情里没取到刚播的回复：出口取不到 ForumReplyDTO，这条证据没有落地")
-	}
-	return res.Replies[0]
-}
-
-// outletMyReplyPageEmpty 「我的回复」：零回复时 replies 是空集。
-func outletMyReplyPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewForumService(testutil.NewMemoryDB(t), nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.MyReplies(1, 1, 20)
-	if err != nil {
-		t.Fatalf("空回复列表失败: %v", err)
-	}
-	return res
-}
-
-// outletMyReplyNoImages 「我的回复」条目里的 images：与主题/回复同一条归一判据。
-func outletMyReplyNoImages(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	replier := seedForumUser(t, db, "我的无图回复人")
-	topic := seedRewardTopic(t, db, replier.ID, "我的回复所属主题")
-	seedPlainReply(t, db, topic.ID, replier.ID)
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.MyReplies(replier.ID, 1, 20)
-	if err != nil {
-		t.Fatalf("我的回复列表失败: %v", err)
-	}
-	if len(res.Replies) == 0 {
-		t.Fatalf("我的回复里没取到刚播的那条：出口取不到 MyReplyDTO，这条证据没有落地")
-	}
-	return res.Replies[0]
-}
-
-// outletForumReportPageEmpty 管理端举报列表：无举报时 reports 是空集。
-func outletForumReportPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewForumModerationService(testutil.NewMemoryDB(t), nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.ListReports(1, 20, nil)
-	if err != nil {
-		t.Fatalf("空举报列表失败: %v", err)
-	}
-	return res
-}
-
-// seedPlainReply 播一条**不带图**的回复（images 列留空），返回其行。
-func seedPlainReply(t *testing.T, db *gorm.DB, topicID int64, userID int) *model.ForumReply {
-	t.Helper()
-	reply := model.ForumReply{
-		TopicID: topicID, UserID: userID, Content: "无图回复正文",
-		ContentFormat: ForumContentFormatText, CreatedAt: testutil.Now(),
-	}
-	if err := db.Create(&reply).Error; err != nil {
-		t.Fatalf("播回复失败: %v", err)
-	}
-	return &reply
-}
-
+// 论坛读面（topics / images / replies / reports）的举证已随域包搬去 internal/forum/nonnil_outlets_test.go（ADR-0070 波 2b-2）。
 // ===== 简历 / 招聘 =====
 
 // outletRecruitCardNoCerts 脱敏简历卡：持证那一格由 maskCertifications 兜底——脏数据 / 空列
@@ -204,7 +81,7 @@ func seedPlainReply(t *testing.T, db *gorm.DB, topicID int64, userID int) *model
 func outletRecruitCardNoCerts(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	owner := seedForumUser(t, db, "公开简历卡主")
+	owner := testutil.SeedStudent(t, db, "公开简历卡主", "hash")
 	seedBlankJobCard(t, db, owner.ID, "open")
 	svc := NewRecruitService(db, zap.NewNop())
 	res, err := svc.Get(owner.ID)

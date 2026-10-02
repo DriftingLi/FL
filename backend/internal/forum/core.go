@@ -1,11 +1,10 @@
-// Package service 实现业务服务层。
-// 本文件：论坛域共享内核（ADR-0050 决策 3）——ForumService（学员交互 + 个人集合）与
-// ForumModerationService（论坛治理）共享的依赖与私有 helper。
+// 本文件：论坛域共享内核（ADR-0050 决策 3）——Service（学员交互 + 个人集合）与
+// ModerationService（论坛治理）共享的依赖与私有 helper。
 //
 // 同包分文件（被否备选：独立 package）：deleteReplyWithImages / fetchTopicDTO /
 // enrichRewardIssued 这类 helper 保持包内可见；拆独立 package 会迫使它们提升导出，
 // interface 反而变宽。两个 service 各持一个 forumCore 实例（实例分离、依赖共享）。
-package service
+package forum
 
 import (
 	"time"
@@ -17,6 +16,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/service"
 )
 
 // forumCore 论坛域共享依赖与私有 helper（接收者沿用 s，与两个 service 同形）。
@@ -24,7 +24,7 @@ type forumCore struct {
 	db              *gorm.DB
 	fileSvc         *filestore.FileStore
 	notificationSvc *notification.Service
-	counters        ForumCounter // 计数列唯一写入口（spec #297）
+	counters        service.ForumCounter // 计数列唯一写入口（spec #297）
 	// rewards 奖励政策 module（ADR-0047 §3 / spec #927）：发放、回收与发放事实判定的
 	// 唯一实现处——治理侧写（Award / Reclaim）、共享读（AcceptRewardIssued）都经它。
 	rewards *forumRewardPolicy
@@ -32,7 +32,7 @@ type forumCore struct {
 }
 
 // newForumCore 装配共享内核：两个 module 各调用一次（实例分离），依赖实例同源。
-func newForumCore(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *points.Service, logger *zap.Logger) forumCore {
+func newForumCore(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters service.ForumCounter, points *points.Service, logger *zap.Logger) forumCore {
 	return forumCore{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters,
 		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
 }

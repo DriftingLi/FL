@@ -3246,7 +3246,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumReportPageResult"
+                                            "$ref": "#/definitions/forum.ForumReportPageResult"
                                         }
                                     }
                                 }
@@ -3417,7 +3417,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -3475,7 +3475,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDetailDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDetailDTO"
                                         }
                                     }
                                 }
@@ -3583,7 +3583,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -3651,7 +3651,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -3721,7 +3721,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -3789,7 +3789,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -10681,7 +10681,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -10743,7 +10743,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -10805,7 +10805,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MyReplyPageResult"
+                                            "$ref": "#/definitions/forum.MyReplyPageResult"
                                         }
                                     }
                                 }
@@ -10867,7 +10867,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -10929,7 +10929,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -11045,7 +11045,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11110,7 +11110,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11290,7 +11290,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -11351,7 +11351,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11444,7 +11444,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDetailDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDetailDTO"
                                         }
                                     }
                                 }
@@ -11503,7 +11503,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11644,7 +11644,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11715,7 +11715,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11782,7 +11782,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11847,7 +11847,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11923,7 +11923,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumReplyDTO"
+                                            "$ref": "#/definitions/forum.ForumReplyDTO"
                                         }
                                     }
                                 }
@@ -12054,7 +12054,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumImageUploadResultDTO"
+                                            "$ref": "#/definitions/forum.ForumImageUploadResultDTO"
                                         }
                                     }
                                 }
@@ -24122,6 +24122,328 @@ const docTemplate = `{
                 }
             }
         },
+        "forum.ForumImageUploadResultDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.ForumLikeResultDTO": {
+            "type": "object",
+            "properties": {
+                "liked": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumReplyDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                },
+                "can_delete": {
+                    "type": "boolean"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip_city": {
+                    "type": "string"
+                },
+                "ip_province": {
+                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：\n空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。",
+                    "type": "string"
+                },
+                "is_accepted": {
+                    "type": "boolean"
+                },
+                "liked_by_me": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
+                },
+                "parent_avatar_url": {
+                    "description": "ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。\n与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "parent_name": {
+                    "description": "被回复人的展示名",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "topic_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumReportDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "reply_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "reporter": {
+                    "type": "string"
+                },
+                "reporter_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "topic_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "topic_title": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.ForumReportPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "reports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.ForumReportDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumTopicDTO": {
+            "type": "object",
+            "properties": {
+                "accepted_reply_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "author": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                },
+                "can_delete": {
+                    "type": "boolean"
+                },
+                "category": {
+                    "description": "意图：discussion | question（ADR-0040）",
+                    "type": "string"
+                },
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip_city": {
+                    "type": "string"
+                },
+                "ip_province": {
+                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，\n展示侧据此**整段不渲染**（不显示「未知」、不留占位）。\n位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。",
+                    "type": "string"
+                },
+                "is_experience": {
+                    "description": "认定：备考经验（蕴含 is_featured）",
+                    "type": "boolean"
+                },
+                "is_featured": {
+                    "description": "认定：精选位",
+                    "type": "boolean"
+                },
+                "last_reply_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "liked_by_me": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
+                },
+                "reply_count": {
+                    "type": "integer"
+                },
+                "reward_issued": {
+                    "type": "boolean"
+                },
+                "solved_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumTopicDetailDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.ForumReplyDTO"
+                    }
+                },
+                "topic": {
+                    "$ref": "#/definitions/forum.ForumTopicDTO"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumTopicPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.ForumTopicDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.MyReplyDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "topic_id": {
+                    "type": "integer"
+                },
+                "topic_title": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.MyReplyPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.MyReplyDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "inspection.ContactRequestRowDTO": {
             "type": "object",
             "properties": {
@@ -26874,271 +27196,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.ForumImageUploadResultDTO": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumLikeResultDTO": {
-            "type": "object",
-            "properties": {
-                "liked": {
-                    "type": "boolean"
-                },
-                "likes_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumReplyDTO": {
-            "type": "object",
-            "properties": {
-                "author": {
-                    "$ref": "#/definitions/model.ForumAuthor"
-                },
-                "can_delete": {
-                    "type": "boolean"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_format": {
-                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "ip_city": {
-                    "type": "string"
-                },
-                "ip_province": {
-                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：\n空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。",
-                    "type": "string"
-                },
-                "is_accepted": {
-                    "type": "boolean"
-                },
-                "liked_by_me": {
-                    "type": "boolean"
-                },
-                "likes_count": {
-                    "type": "integer"
-                },
-                "parent_avatar_url": {
-                    "description": "ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。\n与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "parent_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "parent_name": {
-                    "description": "被回复人的展示名",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "topic_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumReportDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "reply_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "reporter": {
-                    "type": "string"
-                },
-                "reporter_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "topic_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "topic_title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumReportPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "reports": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ForumReportDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumTopicDTO": {
-            "type": "object",
-            "properties": {
-                "accepted_reply_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "author": {
-                    "$ref": "#/definitions/model.ForumAuthor"
-                },
-                "can_delete": {
-                    "type": "boolean"
-                },
-                "category": {
-                    "description": "意图：discussion | question（ADR-0040）",
-                    "type": "string"
-                },
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_title": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_format": {
-                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "ip_city": {
-                    "type": "string"
-                },
-                "ip_province": {
-                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，\n展示侧据此**整段不渲染**（不显示「未知」、不留占位）。\n位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。",
-                    "type": "string"
-                },
-                "is_experience": {
-                    "description": "认定：备考经验（蕴含 is_featured）",
-                    "type": "boolean"
-                },
-                "is_featured": {
-                    "description": "认定：精选位",
-                    "type": "boolean"
-                },
-                "last_reply_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "liked_by_me": {
-                    "type": "boolean"
-                },
-                "likes_count": {
-                    "type": "integer"
-                },
-                "reply_count": {
-                    "type": "integer"
-                },
-                "reward_issued": {
-                    "type": "boolean"
-                },
-                "solved_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumTopicDetailDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "replies": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ForumReplyDTO"
-                    }
-                },
-                "topic": {
-                    "$ref": "#/definitions/service.ForumTopicDTO"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumTopicPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "topics": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ForumTopicDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.GenTaskStatus": {
             "type": "object",
             "properties": {
@@ -27861,63 +27918,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                }
-            }
-        },
-        "service.MyReplyDTO": {
-            "type": "object",
-            "properties": {
-                "author": {
-                    "$ref": "#/definitions/model.ForumAuthor"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_format": {
-                    "description": "ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "parent_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "topic_id": {
-                    "type": "integer"
-                },
-                "topic_title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MyReplyPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "replies": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MyReplyDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },

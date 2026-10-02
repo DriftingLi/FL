@@ -66,7 +66,7 @@ func init() {
 // 就量不到列的真实形状了。
 func seedJobCardWithJSONNullColumns(t *testing.T, db *gorm.DB, visibility string) int {
 	t.Helper()
-	owner := seedForumUser(t, db, "脏列卡主")
+	owner := testutil.SeedStudent(t, db, "脏列卡主", "hash")
 	seedBlankJobCard(t, db, owner.ID, visibility)
 	res := db.Exec("UPDATE job_cards SET expected_regions = 'null', photos = 'null', "+
 		"resume_experiences = 'null', resume_certifications = 'null' WHERE user_id = ?", owner.ID)

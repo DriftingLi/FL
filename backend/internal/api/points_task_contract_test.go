@@ -20,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
@@ -64,7 +65,8 @@ func TestPointsTaskBehaviorContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(apiGroup, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	forum.RegisterAdminRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+	forum.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 	points.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.PointsSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).

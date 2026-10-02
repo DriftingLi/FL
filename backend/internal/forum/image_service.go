@@ -1,8 +1,7 @@
-// Package service 实现业务服务层。
 // 本文件：论坛图片模块——上传（校验 + 命名）与悬空图片生命周期（孤儿清理）。
 // 命名契约（文件名内嵌毫秒时间戳）由 filestore.FileStore.Save 写入；时间戳知识归位存储 seam，
 // 悬空 TTL 判定不再解析文件名（ADR-0027 C2），见 internal/filestore/orphan_sweep.go。
-package service
+package forum
 
 import (
 	"context"
@@ -24,17 +23,17 @@ const (
 	ForumImageOrphanTTL = 24 * time.Hour // 悬空图片清理门槛（超过该时长未被引用才删）
 )
 
-// ForumImageService 论坛图片模块：上传与悬空清理。
-type ForumImageService struct {
+// ImageService 论坛图片模块：上传与悬空清理。
+type ImageService struct {
 	db      *gorm.DB
 	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
-// NewForumImageService 构造论坛图片服务。
-func NewForumImageService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *ForumImageService {
-	return &ForumImageService{db: db, fileSvc: fileSvc, logger: logger}
+// NewImageService 构造论坛图片服务。
+func NewImageService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *ImageService {
+	return &ImageService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // ForumImageError 论坛图片上传失败错误：携带 HTTP 状态码与最终响应消息。
@@ -48,7 +47,7 @@ func (e *ForumImageError) Error() string { return e.Message }
 // Upload 上传论坛图片：读取 multipart 文件头内容、校验格式/大小，
 // 经 filestore.FileStore.Save 保存到 images/forum/ 子目录（文件名 <name>_<毫秒时间戳>.<ext>），
 // 返回完整可访问 URL。
-func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
+func (s *ImageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
 	if fileHeader.Filename == "" {
 		return "", &ForumImageError{Status: http.StatusBadRequest, Message: "未选择文件"}
 	}
@@ -71,7 +70,7 @@ func (s *ForumImageService) Upload(ctx context.Context, fileHeader *multipart.Fi
 // ForumImageOrphanTTL 且未被任何主题/回复引用的文件。
 // 返回清理的文件数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；
 // ctx 取消语义贯穿到存储调用。
-func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
+func (s *ImageService) CleanupOrphans(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
@@ -91,7 +90,7 @@ func (s *ForumImageService) CleanupOrphans(ctx context.Context) int {
 // collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
 // 任一半查不动即返回 error：引用集不完整时无从判断谁还在被引用，sweep 据此整轮放弃
 // （ADR-0062 票5——「查不动」不得被读成「没人引用」）。
-func (s *ForumImageService) collectReferencedImages() (map[string]bool, error) {
+func (s *ImageService) collectReferencedImages() (map[string]bool, error) {
 	ref := map[string]bool{}
 	var rawList []string
 	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err != nil {
