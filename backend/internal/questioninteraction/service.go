@@ -1,4 +1,9 @@
-package service
+// Package questioninteraction 题目互动域（ADR-0055）：题内评论的读写。
+//
+// 形态（ADR-0070）：handler.go 是 HTTP 出口（/api/questions 下的评论 / 笔记 / 考点三组端点），
+// service.go 是评论服务（Service）与评论 DTO，knowledge.go 是考点服务（KnowledgeService）；
+// 题内笔记的读写不属本域，由 handler 转投 internal/note。
+package questioninteraction
 
 import (
 	"errors"
@@ -36,14 +41,14 @@ type QuestionCommentPageResult struct {
 	Total    int64                `json:"total"`
 }
 
-// QuestionCommentService 题目评论服务
-type QuestionCommentService struct {
+// Service 题目评论服务
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-func NewQuestionCommentService(db *gorm.DB, logger *zap.Logger) *QuestionCommentService {
-	return &QuestionCommentService{db: db, logger: logger}
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // 题目互动域的输入与业务事实（ADR-0065 决策 7 的连带件）：本域 handler 还是裸闭包，
@@ -61,7 +66,7 @@ var (
 // List 某题的评论列表。scope 必传（ADR-0062 决策 4）：修复前这条查询**连题目存在性都不查**，
 // 直调任意 question_id 即可枚举池外题（draft / pending / 源标记真题题 / 非当前证件）的评论，
 // 等于给不可见题装了一个只读探针。池外一律按「不存在」上抛，与题目 by-id 读面同口径。
-func (s *QuestionCommentService) List(questionID, page, pageSize int, scope questionbank.QuestionReadScope) ([]QuestionCommentDTO, int64, error) {
+func (s *Service) List(questionID, page, pageSize int, scope questionbank.QuestionReadScope) ([]QuestionCommentDTO, int64, error) {
 	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return nil, 0, err
 	}
@@ -100,7 +105,7 @@ func (s *QuestionCommentService) List(questionID, page, pageSize int, scope ques
 
 // Create 发表评论。scope 必传（ADR-0062 决策 4）：只判「题存在」的旧写法允许把评论挂到
 // 学员根本看不见的题上（再由列表/计数收割），写面与读面必须同一口径。
-func (s *QuestionCommentService) Create(questionID, userID int, content string, scope questionbank.QuestionReadScope) (*QuestionCommentDTO, error) {
+func (s *Service) Create(questionID, userID int, content string, scope questionbank.QuestionReadScope) (*QuestionCommentDTO, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, ErrCommentContentEmpty
@@ -133,7 +138,7 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 	return dto, nil
 }
 
-func (s *QuestionCommentService) Delete(commentID int, userID int) error {
+func (s *Service) Delete(commentID int, userID int) error {
 	var c model.QuestionComment
 	if err := s.db.First(&c, commentID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -145,25 +150,4 @@ func (s *QuestionCommentService) Delete(commentID int, userID int) error {
 		return ErrCommentNotOwned
 	}
 	return s.db.Delete(&c).Error
-}
-
-// 笔记服务已随 ADR-0055 迁到 note_service.go（NoteService）——本文件只管评论与考点。
-
-// QuestionKnowledgeService 考点（题库标签只读）
-type QuestionKnowledgeService struct {
-	db *gorm.DB
-}
-
-func NewQuestionKnowledgeService(db *gorm.DB) *QuestionKnowledgeService {
-	return &QuestionKnowledgeService{db: db}
-}
-
-func (s *QuestionKnowledgeService) ListForQuestion(questionID int) ([]model.QuestionTag, error) {
-	var tags []model.QuestionTag
-	err := s.db.Table("question_tag AS t").
-		Joins("JOIN question_tag_relation AS r ON r.tag_id = t.id").
-		Where("r.question_id = ?", questionID).
-		Order("t.sort_order ASC, t.id ASC").
-		Find(&tags).Error
-	return tags, err
 }

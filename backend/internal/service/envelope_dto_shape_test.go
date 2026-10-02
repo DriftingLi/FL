@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
 )
 
 // spec #940 片三（含片二）：信封 DTO 的 shape-lock。
@@ -69,62 +70,7 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 			},
 			dto: &questionbank.QuestionImportResultDTO{ErrorCount: 0, Errors: []questionbank.QuestionImportErrorDTO{}, SuccessCount: 2},
 		},
-		{
-			name: "WrongQuestionPageDTO",
-			legacy: map[string]any{
-				"total":     int64(1),
-				"page":      1,
-				"page_size": 20,
-				"items": []map[string]any{
-					{
-						"id": 9, "student_id": 1, "question_id": 42, "wrong_count": 3,
-						"last_wrong_at":    "2026-09-13T10:00:00.000000+08:00",
-						"last_user_answer": "B",
-						"is_removed":       false, "is_redone": false,
-						"created_at":  "2026-09-13T09:00:00.000000+08:00",
-						"favorited":   true,
-						"favorite_id": int64(5),
-					},
-				},
-			},
-			dto: &WrongQuestionPageDTO{
-				Items: []WrongQuestionDTO{{
-					CreatedAt:      "2026-09-13T09:00:00.000000+08:00",
-					FavoriteID:     5,
-					Favorited:      true,
-					ID:             9,
-					IsRedone:       false,
-					IsRemoved:      false,
-					LastUserAnswer: "B",
-					LastWrongAt:    "2026-09-13T10:00:00.000000+08:00",
-					QuestionID:     42,
-					StudentID:      1,
-					WrongCount:     3,
-				}},
-				Page:     1,
-				PageSize: 20,
-				Total:    1,
-			},
-		},
-		{
-			name: "WrongQuestionDTO（question 缺失时整个 key 不出现）",
-			legacy: map[string]any{
-				"id": 9, "student_id": 1, "question_id": 42, "wrong_count": 3,
-				"last_wrong_at": "", "last_user_answer": "", "is_removed": false, "is_redone": false,
-				"created_at": "", "favorited": false, "favorite_id": int64(0),
-			},
-			dto: &WrongQuestionDTO{ID: 9, StudentID: 1, QuestionID: 42, WrongCount: 3},
-		},
-		{
-			name:   "WrongQuestionRemoveResultDTO",
-			legacy: map[string]any{"removed": true},
-			dto:    &WrongQuestionRemoveResultDTO{Removed: true},
-		},
-		{
-			name:   "WrongQuestionBatchRemoveResultDTO（同键不同类型：批量是条数）",
-			legacy: map[string]any{"removed": 3},
-			dto:    &WrongQuestionBatchRemoveResultDTO{Removed: 3},
-		},
+		// WrongQuestion* 的五条用例已随域包搬去 internal/wrongquestion/dto_shape_test.go（ADR-0070 波 4c）。
 		// WechatQRCodeInfoDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			// #1095：ContactRequestListResult 从「只服务 swagger 的类型」变真返回类型。
@@ -220,13 +166,13 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &notification.NotificationUnreadCountDTO{Count: 3},
 		},
 		{
-			name: "QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",
+			name: "questioninteraction.QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",
 			legacy: map[string]any{
-				"items": []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+				"items": []questioninteraction.QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
 				"total": int64(1), "page": 1, "page_size": 10,
 			},
-			dto: &QuestionCommentPageResult{
-				Items: []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+			dto: &questioninteraction.QuestionCommentPageResult{
+				Items: []questioninteraction.QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
 				Page:  1, PageSize: 10, Total: 1,
 			},
 		},

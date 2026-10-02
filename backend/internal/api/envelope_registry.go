@@ -29,14 +29,17 @@ import (
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
+	"forklift-training/internal/note"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/search"
 	"forklift-training/internal/service"
 	"forklift-training/internal/student"
 	vmodel "forklift-training/internal/valuation/model"
+	"forklift-training/internal/wrongquestion"
 	"forklift-training/pkg/paging"
 )
 
@@ -131,9 +134,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "forum.MyReplyPageResult", Endpoints: []string{"GET /forum/my-replies"},
 		Keys: []string{"page", "pages", "total", "replies"}, Dialect: paging.DialectPages,
 		Sample: forum.MyReplyPageResult{}},
-	{Result: "service.NotePageDTO", Endpoints: []string{"GET /notes"},
+	{Result: "note.NotePageDTO", Endpoints: []string{"GET /notes"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.NotePageDTO{}},
+		Sample: note.NotePageDTO{}},
 	{Result: "notification.NotificationListPageResult", Endpoints: []string{"GET /notifications"},
 		Keys: []string{"items", "page", "pages", "total", "unread_count"}, Dialect: paging.DialectPages,
 		Sample: notification.NotificationListPageResult{}},
@@ -143,9 +146,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "auth.ProfileChangeRequestPageResult", Endpoints: []string{"GET /admin/profile-reviews"},
 		Keys: []string{"page", "pages", "requests", "total"}, Dialect: paging.DialectPages,
 		Sample: auth.ProfileChangeRequestPageResult{}},
-	{Result: "service.QuestionCommentPageResult", Endpoints: []string{"GET /questions/{question_id}/comments"},
+	{Result: "questioninteraction.QuestionCommentPageResult", Endpoints: []string{"GET /questions/{question_id}/comments"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.QuestionCommentPageResult{}},
+		Sample: questioninteraction.QuestionCommentPageResult{}},
 	{Result: "questionbank.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
 		Keys: []string{"page", "page_size", "questions", "total"}, Dialect: paging.DialectPageSize,
 		Sample: questionbank.QuestionPageDTO{}},
@@ -170,9 +173,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
 		Keys: []string{"total", "page", "tutors"}, Dialect: paging.DialectNone,
 		Sample: service.TutorListDTO{}},
-	{Result: "service.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
+	{Result: "wrongquestion.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.WrongQuestionPageDTO{}},
+		Sample: wrongquestion.WrongQuestionPageDTO{}},
 }
 
 // totalPayloadRegistry 含 total + 切片字段、但不是分页信封的结果类型（理由逐条登记）。

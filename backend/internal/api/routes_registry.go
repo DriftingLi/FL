@@ -15,14 +15,17 @@ import (
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
+	"forklift-training/internal/note"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/realexam"
 	"forklift-training/internal/search"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/wrongquestion"
 )
 
 // 域路由注册表（ADR-0047 §6 / spec #933）：一行一域，顺序即注册顺序。
@@ -84,7 +87,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "练习与考试",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
+			wrongquestion.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.WrongQuestionSvc)
 			mockexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.MockExamSvc)
 			realexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.RealExamSvc, deps.PointsSvc)
 		},
@@ -123,7 +126,7 @@ var routeRegistrars = []routeRegistrar{
 			training.RegisterRoutes(api, rd.Session, deps.TrainingCatalogSvc)
 			training.RegisterAdminRoutes(api, rd.Session, deps.TrainingCatalogSvc)
 			training.RegisterCredentialRoutes(api, rd.Session, deps.TrainingCatalogSvc)
-			RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
+			questioninteraction.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
 		},
 	},
 	{
@@ -135,7 +138,7 @@ var routeRegistrars = []routeRegistrar{
 			search.RegisterAdminRoutes(api, rd.Session, deps.SearchSvc)
 			material.RegisterRoutes(api, rd.Session, deps.MaterialSvc)
 			// 学员笔记（ADR-0055）：题目笔记 + 独立笔记的汇集读面与独立笔记 CRUD
-			RegisterNoteRoutes(api, rd, deps.NoteSvc)
+			note.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.NoteSvc)
 		},
 	},
 	{

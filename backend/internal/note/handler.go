@@ -1,4 +1,7 @@
-package api
+// 本文件：笔记域的 HTTP 出口（ADR-0070）—— /api/notes 蓝图（列表 / 新建 / 改 / 删）。
+//
+// 装配点：internal/api/routes_registry.go 的 RegisterRoutes 调用。
+package note
 
 import (
 	"context"
@@ -8,37 +11,37 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/questionbank"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// noteErrStatus 笔记域哨兵→状态码表（ADR-0024 口径：按哨兵映射，不比对文案）。
+// ErrStatus 笔记域哨兵→状态码表（ADR-0024 口径：按哨兵映射，不比对文案）。
 //
 // fallback 由 400 改 500（ADR-0065 决策 7）：旧形状是「正文校验类错误不是哨兵，所以兜在 400」，
 // 而那同时把**未具名的库故障**咽成 400 + 驱动原文。要让故障落 500，前提是那两条校验事实先有名字
 // ⇒ 不是二选一，是必须同时做（本文件第一次提交时只加了 swagger 的 500 档而没改这张表，
 // 由双轴评审按实测抓回——「文档说的档位」与「代码打得出的档位」之间今天仍没有锁，见 ADR-0065 批⑤ 残留缺口）。
-var noteErrStatus = &httpx.ErrStatusTable{
+var ErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrNoteNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrNoteContentEmpty, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrNoteContentTooLong, Status: http.StatusBadRequest},
+		{Sentinel: ErrNoteNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrNoteContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: ErrNoteContentTooLong, Status: http.StatusBadRequest},
 	},
 	Fallback: http.StatusInternalServerError,
 }
 
-// NoteHandler 学员笔记 handler（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。
-// 题目维度上的单条读写仍由 QuestionInteractionHandler 承载（/api/questions/:id/note，
-// 契约不变）；本蓝图只服务「我的笔记」列表页。
-type NoteHandler struct {
-	svc *service.NoteService
+// handler 学员笔记 HTTP 出口（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。
+// 题目维度上的单条读写（/api/questions/:id/note，契约不变）由 internal/questioninteraction
+// 的 handler 转投本包的 Service；本蓝图只服务「我的笔记」列表页。
+type handler struct {
+	svc *Service
 }
 
-// NewNoteHandler 创建笔记 handler。
-func NewNoteHandler(svc *service.NoteService) *NoteHandler { return &NoteHandler{svc: svc} }
+// newHandler 创建笔记 handler。
+func newHandler(svc *Service) *handler { return &handler{svc: svc} }
 
-// RegisterNoteRoutes 注册 /api/notes 蓝图。
+// RegisterRoutes 注册 /api/notes 蓝图。
 //
 // 门禁与既有 /api/questions/:id/note **一致：只要求登录，不挂能力点**——笔记是纯用户私有
 // 数据，读写一律以 user_id 收口、越权按「不存在」处理；给同一资源的两条路径挂两套门才是
@@ -46,9 +49,9 @@ func NewNoteHandler(svc *service.NoteService) *NoteHandler { return &NoteHandler
 //
 // CredentialScoped 不是为了给笔记本身分区，而是为了装配题目读 scope（ADR-0062 决策 4）：
 // 列表回填的题干摘要属题目域，必须按当前证件过题库池。
-func RegisterNoteRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.NoteService) {
-	h := NewNoteHandler(svc)
-	g := rg.Group("/notes", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
+	h := newHandler(svc)
+	g := rg.Group("/notes", middleware.JWTAuth(session), middleware.CredentialScoped(credRes))
 
 	// GET    /api/notes          我的笔记（分页 + scope 筛选）
 	g.GET("", h.List)
@@ -78,12 +81,12 @@ type listNotesReq struct {
 // @Param scope query string false "筛选：all/question/standalone" default(all)
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R{data=service.NotePageDTO} "success"
+// @Success 200 {object} response.R{data=NotePageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [get]
-func (h *NoteHandler) List(c *gin.Context) {
-	httpx.Endpoint[listNotesReq, service.NotePageDTO]{
+func (h *handler) List(c *gin.Context) {
+	httpx.Endpoint[listNotesReq, NotePageDTO]{
 		Parse: func(c *gin.Context) (*listNotesReq, error) {
 			return &listNotesReq{
 				UserID:   middleware.CurrentUserID(c),
@@ -92,11 +95,11 @@ func (h *NoteHandler) List(c *gin.Context) {
 				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *listNotesReq) (*service.NotePageDTO, error) {
+		Invoke: func(ctx context.Context, req *listNotesReq) (*NotePageDTO, error) {
 			// 题干摘要这一格属题目域读面：scope 在入口装配（ADR-0062 决策 4）。
 			return h.svc.List(req.UserID, req.Scope, req.Page, req.PageSize, questionbank.StudentQuestionScope(c))
 		},
-		ErrStatus: noteErrStatus,
+		ErrStatus: ErrStatus,
 	}.Handle(c)
 }
 
@@ -114,13 +117,13 @@ type createNoteReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "笔记" example({"content":"我的笔记"})
-// @Success 201 {object} response.R{data=service.NoteDTO} "success"
+// @Success 201 {object} response.R{data=NoteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes [post]
-func (h *NoteHandler) Create(c *gin.Context) {
-	httpx.Endpoint[createNoteReq, service.NoteDTO]{
+func (h *handler) Create(c *gin.Context) {
+	httpx.Endpoint[createNoteReq, NoteDTO]{
 		Parse: func(c *gin.Context) (*createNoteReq, error) {
 			var body struct {
 				Content string `json:"content"`
@@ -130,17 +133,17 @@ func (h *NoteHandler) Create(c *gin.Context) {
 			}
 			return &createNoteReq{UserID: middleware.CurrentUserID(c), Content: body.Content}, nil
 		},
-		Invoke: func(ctx context.Context, req *createNoteReq) (*service.NoteDTO, error) {
+		Invoke: func(ctx context.Context, req *createNoteReq) (*NoteDTO, error) {
 			n, err := h.svc.Create(req.UserID, req.Content)
 			if err != nil {
 				return nil, err
 			}
-			dto := service.NoteToDTO(n, "")
+			dto := NoteToDTO(n, "")
 			return &dto, nil
 		},
 		// 201 定制成功信封保留；错误路径退表（照 job.go 先例）
-		ErrStatus: noteErrStatus,
-		Render: func(c *gin.Context, _ *createNoteReq, resp *service.NoteDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *createNoteReq, resp *NoteDTO) {
 			response.Created(c, "笔记已保存", *resp)
 		},
 	}.Handle(c)
@@ -162,14 +165,14 @@ type updateNoteReq struct {
 // @Security BearerAuth
 // @Param id path int true "笔记 ID"
 // @Param body body object true "笔记" example({"content":"我的笔记"})
-// @Success 200 {object} response.R{data=service.NoteDTO} "success"
+// @Success 200 {object} response.R{data=NoteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "笔记不存在"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [put]
-func (h *NoteHandler) Update(c *gin.Context) {
-	httpx.Endpoint[updateNoteReq, service.NoteDTO]{
+func (h *handler) Update(c *gin.Context) {
+	httpx.Endpoint[updateNoteReq, NoteDTO]{
 		Parse: func(c *gin.Context) (*updateNoteReq, error) {
 			id, err := httpx.PathInt(c, "id", "笔记 ID 无效")
 			if err != nil {
@@ -183,15 +186,15 @@ func (h *NoteHandler) Update(c *gin.Context) {
 			}
 			return &updateNoteReq{UserID: middleware.CurrentUserID(c), ID: id, Content: body.Content}, nil
 		},
-		Invoke: func(ctx context.Context, req *updateNoteReq) (*service.NoteDTO, error) {
+		Invoke: func(ctx context.Context, req *updateNoteReq) (*NoteDTO, error) {
 			n, err := h.svc.Update(req.ID, req.UserID, req.Content)
 			if err != nil {
 				return nil, err
 			}
-			dto := service.NoteToDTO(n, "")
+			dto := NoteToDTO(n, "")
 			return &dto, nil
 		},
-		ErrStatus: noteErrStatus,
+		ErrStatus: ErrStatus,
 	}.Handle(c)
 }
 
@@ -213,7 +216,7 @@ type deleteNoteReq struct {
 // @Failure 404 {object} response.R "笔记不存在"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /notes/{id} [delete]
-func (h *NoteHandler) Delete(c *gin.Context) {
+func (h *handler) Delete(c *gin.Context) {
 	httpx.Endpoint[deleteNoteReq, struct{}]{
 		Parse: func(c *gin.Context) (*deleteNoteReq, error) {
 			id, err := httpx.PathInt(c, "id", "笔记 ID 无效")
@@ -228,6 +231,6 @@ func (h *NoteHandler) Delete(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: noteErrStatus,
+		ErrStatus: ErrStatus,
 	}.Handle(c)
 }

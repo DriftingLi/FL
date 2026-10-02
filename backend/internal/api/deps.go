@@ -25,10 +25,12 @@ import (
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/mockexam"
+	"forklift-training/internal/note"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/realexam"
 	"forklift-training/internal/search"
 	"forklift-training/internal/security"
@@ -36,6 +38,7 @@ import (
 	"forklift-training/internal/storage"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/wrongquestion"
 )
 
 // RouterDeps 聚合蓝图注册所需的横切依赖（Session/DB/Logger）。
@@ -92,13 +95,13 @@ type Deps struct {
 	MockExamSvc          *mockexam.Service
 	RealExamSvc          *realexam.Service
 	TutorSvc             *service.TutorService
-	WrongQuestionSvc     *service.WrongQuestionService
+	WrongQuestionSvc     *wrongquestion.Service
 	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service
 	DiagnosisProxySvc    *aiassistant.DiagnosisProxyService
-	QuestionCommentSvc   *service.QuestionCommentService
-	NoteSvc              *service.NoteService
-	QuestionKnowledgeSvc *service.QuestionKnowledgeService
+	QuestionCommentSvc   *questioninteraction.Service
+	NoteSvc              *note.Service
+	QuestionKnowledgeSvc *questioninteraction.KnowledgeService
 	FaqSvc               *faq.Service
 	PointsSvc            *points.Service
 	JobCardSvc           *service.JobCardService

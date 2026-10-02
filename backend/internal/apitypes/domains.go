@@ -268,10 +268,10 @@ var Domains = []Domain{
 		Name:  "wrongQuestion",
 		Title: "错题本（/api/wrong-questions/*：列表 / 重做 / 移出 / 统计 / 导出）",
 		Roots: []string{
-			"service.WrongQuestionPageDTO",
-			"service.WrongQuestionRemoveResultDTO",
-			"service.WrongQuestionBatchRemoveResultDTO",
-			"service.WrongQuestionStatsDTO",
+			"wrongquestion.WrongQuestionPageDTO",
+			"wrongquestion.WrongQuestionRemoveResultDTO",
+			"wrongquestion.WrongQuestionBatchRemoveResultDTO",
+			"wrongquestion.WrongQuestionStatsDTO",
 			"practicemode.SubmitResultDTO",
 		},
 		Endpoints: []Endpoint{
@@ -288,8 +288,8 @@ var Domains = []Domain{
 		Name:  "questionInteraction",
 		Title: "题目互动（/api/questions/*：评论 / 笔记 / 考点标签）",
 		Roots: []string{
-			"service.QuestionCommentPageResult",
-			"service.QuestionCommentDTO",
+			"questioninteraction.QuestionCommentPageResult",
+			"questioninteraction.QuestionCommentDTO",
 			"model.Note",
 			"model.QuestionTag",
 		},
@@ -867,8 +867,8 @@ var Domains = []Domain{
 		Name:  "note",
 		Title: "学员笔记（/api/notes/*：列表 / 新建独立笔记 / 改 / 删）",
 		Roots: []string{
-			"service.NoteDTO",
-			"service.NotePageDTO",
+			"note.NoteDTO",
+			"note.NotePageDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/notes"},

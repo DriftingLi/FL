@@ -1,5 +1,5 @@
-// Package service 错题本服务测试，使用内存 sqlite 数据库。
-package service
+// Package wrongquestion 错题本服务测试，使用内存 sqlite 数据库。
+package wrongquestion
 
 import (
 	"testing"
@@ -12,10 +12,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newWrongQuestionSvc(t *testing.T) (*WrongQuestionService, *gorm.DB) {
+func newWrongQuestionSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewWrongQuestionService(db, nil, zap.NewNop()), db
+	return NewService(db, nil, zap.NewNop()), db
 }
 
 func seedWrongQuestion(t *testing.T, db *gorm.DB, studentID, questionID, wrongCount int) {

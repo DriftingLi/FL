@@ -24,7 +24,7 @@
 //   - ContributionItemDTO.files ⇒ `json:"files,omitempty"`：空集时**键整个缺席**，
 //     testutil.MarshalKey 判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」）。
 //     要举出非 null 只能投一份带文件的稿，那证的是「有内容」那一档，不是「空集也不为 null」。
-//   - FavoritePageResult.favorites / NotePageDTO.items ⇒ 宿主文件由另一在飞分支持有，本波不改。
+//   - FavoritePageResult.favorites ⇒ 波 4b 已随域包搬去 internal/favorite；NotePageDTO.items ⇒ 波 4c 改名为 note.NotePageDTO.items，仍住在 internal/api 的路由级证据表（组装点虽在域包，证据走的是一整条真实路由）。
 //
 // 另有三格（ApplicationListResult.items / ReportListResult.items / PositionListDTO.positions）
 // 的 DTO **组装点在 internal/api/**（服务层只回 `[]DTO + total`）。那三处按 handler 那一行

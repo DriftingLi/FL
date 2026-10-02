@@ -37,11 +37,12 @@ import (
 
 var nonnilOutletsStats = map[string]func(t *testing.T) any{
 	"service.AdminStatisticsDTO.course_stats": outletAdminStatisticsNoCourses,
-	"service.WrongQuestionPageDTO.items":      outletWrongQuestionPageEmpty,
 	// 模考的 ResumeDTO.questions 已随域包搬去 internal/mockexam/nonnil_outlets_test.go（波 4a）。
 	// 证件分组两格（skill_level / special_operation）的举证已随域包搬去
 	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
 	// 学员档案（StudentProfileDTO.course_progress）的举证已随域包搬去 internal/student/nonnil_outlets_test.go（波 4b）。
+	// 错题本两格（WrongQuestionPageDTO.items / WrongQuestionStatsDTO.by_type）已随域包搬去
+	// internal/wrongquestion/nonnil_outlets_test.go（波 4c）。
 }
 
 func init() {
@@ -52,15 +53,4 @@ func init() {
 func outletAdminStatisticsNoCourses(t *testing.T) any {
 	t.Helper()
 	return NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStatistics()
-}
-
-// outletWrongQuestionPageEmpty 错题本分页：一行错题都没有时 items 仍是 make 出来的空集。
-func outletWrongQuestionPageEmpty(t *testing.T) any {
-	t.Helper()
-	res, err := NewWrongQuestionService(testutil.NewMemoryDB(t), nil, zap.NewNop()).
-		GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
-	if err != nil {
-		t.Fatalf("空错题本分页失败: %v", err)
-	}
-	return res
 }

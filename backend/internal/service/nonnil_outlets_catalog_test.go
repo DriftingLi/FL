@@ -22,9 +22,9 @@
 //     internal/training/nullable_outlets_test.go（ADR-0070 波 3b-2），判词原文随之搬走，不在这里复述。
 //
 // 本段**没跑**因而也没改判的三组，原因各不相同（都不是「嫌麻烦」）：
-//   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items、
+//   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items（键前缀随 4c 改 questioninteraction.）、
 //     api.AuditLogPageResult.items ⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
-//     question_interaction_service.go、internal/api/），本段不改。前两格另有独立理由：
+//     internal/questioninteraction/service.go、internal/api/），本段不改。前两格另有独立理由：
 //     service.JSONArray.MarshalJSON 在 `j == nil` 时**字面发出 `null`**，本就恒可空。
 //   - repository.AlgorithmParameters 的 4 格与 repository.SeriesConfigOptions 的 3 格 ⇒ 两道
 //     硬阻塞，任一都足以让它留在原地：
@@ -66,7 +66,6 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	// 已随域包搬去 internal/mockexam/nonnil_outlets_test.go（ADR-0070 波 4a）。
 	"questionbank.QuestionBankStatsDTO.by_type":   outletQuestionBankStatsEmpty,
 	"questionbank.QuestionBankStatsDTO.by_status": outletQuestionBankStatsEmpty,
-	"service.WrongQuestionStatsDTO.by_type":       outletWrongQuestionStatsEmpty,
 }
 
 func init() {
@@ -82,19 +81,13 @@ func outletBatchDeleteFilesEmpty(t *testing.T) any {
 }
 
 // ===== 题目域统计 =====
+// （错题本那格已随域包搬去 internal/wrongquestion/nonnil_outlets_test.go，波 4c）
 
 // outletQuestionBankStatsEmpty 一次调用举证 by_type 与 by_status 两格：两个 map 都取自
 // questionbank.GroupByCount 的 make(map,...) 再按合法维度零填充 ⇒ 恒 `{}` 起、只会更满。
 func outletQuestionBankStatsEmpty(t *testing.T) any {
 	t.Helper()
 	return questionbank.NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStats(nil)
-}
-
-func outletWrongQuestionStatsEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "错题统计学员", "x")
-	return NewWrongQuestionService(db, nil, zap.NewNop()).GetStats(student.ID)
 }
 
 // 学员侧四格（StudentCoursesDTO.courses / StudentCourseDetailDTO.chapters / StudyRecordPageResult.records /

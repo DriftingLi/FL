@@ -13142,7 +13142,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NotePageDTO"
+                                            "$ref": "#/definitions/note.NotePageDTO"
                                         }
                                     }
                                 }
@@ -13203,7 +13203,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NoteDTO"
+                                            "$ref": "#/definitions/note.NoteDTO"
                                         }
                                     }
                                 }
@@ -13279,7 +13279,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NoteDTO"
+                                            "$ref": "#/definitions/note.NoteDTO"
                                         }
                                     }
                                 }
@@ -15436,7 +15436,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionCommentPageResult"
+                                            "$ref": "#/definitions/questioninteraction.QuestionCommentPageResult"
                                         }
                                     }
                                 }
@@ -15504,7 +15504,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionCommentDTO"
+                                            "$ref": "#/definitions/questioninteraction.QuestionCommentDTO"
                                         }
                                     }
                                 }
@@ -23160,7 +23160,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionPageDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionPageDTO"
                                         }
                                     }
                                 }
@@ -23217,7 +23217,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionBatchRemoveResultDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionBatchRemoveResultDTO"
                                         }
                                     }
                                 }
@@ -23288,7 +23288,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionStatsDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionStatsDTO"
                                         }
                                     }
                                 }
@@ -23413,7 +23413,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionRemoveResultDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionRemoveResultDTO"
                                         }
                                     }
                                 }
@@ -26821,6 +26821,47 @@ const docTemplate = `{
                 }
             }
         },
+        "note.NoteDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question_content": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "note.NotePageDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/note.NoteDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "notification.NotificationDTO": {
             "type": "object",
             "properties": {
@@ -27416,6 +27457,52 @@ const docTemplate = `{
         },
         "questionbank.QuestionUpdateInput": {
             "type": "object"
+        },
+        "questioninteraction.QuestionCommentDTO": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "questioninteraction.QuestionCommentPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questioninteraction.QuestionCommentDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
         },
         "realexam.RealExamPaperDTO": {
             "type": "object",
@@ -28464,93 +28551,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.NoteDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question_content": {
-                    "type": "string"
-                },
-                "question_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.NotePageDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.NoteDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionCommentDTO": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionCommentPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionCommentDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.RecruitListResult": {
             "type": "object",
             "properties": {
@@ -28799,102 +28799,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/service.TutorDTO"
                     }
-                }
-            }
-        },
-        "service.WrongQuestionBatchRemoveResultDTO": {
-            "type": "object",
-            "properties": {
-                "removed": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.WrongQuestionDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "favorite_id": {
-                    "type": "integer"
-                },
-                "favorited": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_redone": {
-                    "type": "boolean"
-                },
-                "is_removed": {
-                    "type": "boolean"
-                },
-                "last_user_answer": {
-                    "type": "string"
-                },
-                "last_wrong_at": {
-                    "type": "string"
-                },
-                "question": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/questionbank.QuestionDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "wrong_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.WrongQuestionPageDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.WrongQuestionDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.WrongQuestionRemoveResultDTO": {
-            "type": "object",
-            "properties": {
-                "removed": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "service.WrongQuestionStatsDTO": {
-            "type": "object",
-            "properties": {
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
@@ -29693,6 +29597,102 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/training.SpecialtyDict"
                     }
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionBatchRemoveResultDTO": {
+            "type": "object",
+            "properties": {
+                "removed": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "favorited": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_redone": {
+                    "type": "boolean"
+                },
+                "is_removed": {
+                    "type": "boolean"
+                },
+                "last_user_answer": {
+                    "type": "string"
+                },
+                "last_wrong_at": {
+                    "type": "string"
+                },
+                "question": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "wrong_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionPageDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/wrongquestion.WrongQuestionDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionRemoveResultDTO": {
+            "type": "object",
+            "properties": {
+                "removed": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionStatsDTO": {
+            "type": "object",
+            "properties": {
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         }

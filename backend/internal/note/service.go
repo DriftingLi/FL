@@ -1,4 +1,9 @@
-package service
+// Package note 笔记域（ADR-0055）：题目笔记与独立笔记共用一张 note 表 —— 「我的笔记」列表与 CRUD。
+//
+// 形态（ADR-0070）：handler.go 是 HTTP 出口（/api/notes 蓝图），service.go 是域实现。
+// 题目维度上的单条笔记读写（/api/questions/:question_id/note）由 internal/questioninteraction
+// 侧的 handler 承载，它持有本包的 Service；本包不反向依赖它。
+package note
 
 import (
 	"errors"
@@ -75,15 +80,15 @@ func NoteToDTO(n *model.Note, questionContent string) NoteDTO {
 	}
 }
 
-// NoteService 学员笔记服务：题目笔记（每人每题一条）+ 独立笔记（可多条）。
-type NoteService struct {
+// Service 学员笔记服务：题目笔记（每人每题一条）+ 独立笔记（可多条）。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-// NewNoteService 创建笔记服务。
-func NewNoteService(db *gorm.DB, logger *zap.Logger) *NoteService {
-	return &NoteService{db: db, logger: logger}
+// NewService 创建笔记服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // normalizeNoteContent 正文归一：去首尾空白 → 非空校验 → 长度上限。
@@ -101,7 +106,7 @@ func normalizeNoteContent(content string) (string, error) {
 // GetForQuestion 取本人对某题的笔记；没有则返回 (nil, nil)（不是错误）。
 // 题目须在本 scope 内可见（ADR-0062 决策 4：题目维度的学员读面一律收 scope）——
 // 池外题按「不存在」处理，与题目 by-id 读面同口径（笔记行本身仍是本人的私有数据，列表照列）。
-func (s *NoteService) GetForQuestion(questionID, userID int, scope questionbank.QuestionReadScope) (*model.Note, error) {
+func (s *Service) GetForQuestion(questionID, userID int, scope questionbank.QuestionReadScope) (*model.Note, error) {
 	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return nil, err
 	}
@@ -118,7 +123,7 @@ func (s *NoteService) GetForQuestion(questionID, userID int, scope questionbank.
 // UpsertForQuestion 保存本人对某题的笔记（每人每题一条，UNIQUE(question_id, user_id) 兜底）。
 // scope 必传（ADR-0062 决策 4）：**写**在题上的东西也要先证明这道题对这位学员可读——
 // 否则「挂到不可见题上」就成了绕过池的第二条通道（列表读面会把题干带回来）。
-func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, scope questionbank.QuestionReadScope) (*model.Note, error) {
+func (s *Service) UpsertForQuestion(questionID, userID int, content string, scope questionbank.QuestionReadScope) (*model.Note, error) {
 	content, err := normalizeNoteContent(content)
 	if err != nil {
 		return nil, err
@@ -149,7 +154,7 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, 
 
 // DeleteForQuestion 删除本人对某题的笔记（不存在时静默成功，与旧口径一致）。
 // 题目维度同 GetForQuestion：池外题按「不存在」，判据由 scope 承载。
-func (s *NoteService) DeleteForQuestion(questionID, userID int, scope questionbank.QuestionReadScope) error {
+func (s *Service) DeleteForQuestion(questionID, userID int, scope questionbank.QuestionReadScope) error {
 	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return err
 	}
@@ -157,7 +162,7 @@ func (s *NoteService) DeleteForQuestion(questionID, userID int, scope questionba
 }
 
 // Create 新建一条独立笔记（question_id 为空）。
-func (s *NoteService) Create(userID int, content string) (*model.Note, error) {
+func (s *Service) Create(userID int, content string) (*model.Note, error) {
 	content, err := normalizeNoteContent(content)
 	if err != nil {
 		return nil, err
@@ -170,7 +175,7 @@ func (s *NoteService) Create(userID int, content string) (*model.Note, error) {
 }
 
 // Update 按笔记 id 改正文（**只认本人**：他人笔记按不存在处理）。
-func (s *NoteService) Update(id, userID int, content string) (*model.Note, error) {
+func (s *Service) Update(id, userID int, content string) (*model.Note, error) {
 	content, err := normalizeNoteContent(content)
 	if err != nil {
 		return nil, err
@@ -191,7 +196,7 @@ func (s *NoteService) Update(id, userID int, content string) (*model.Note, error
 }
 
 // Delete 按笔记 id 删除（只认本人；删不到报 ErrNoteNotFound）。
-func (s *NoteService) Delete(id, userID int) error {
+func (s *Service) Delete(id, userID int) error {
 	res := s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Note{})
 	if res.Error != nil {
 		return res.Error
@@ -210,7 +215,7 @@ func (s *NoteService) Delete(id, userID int) error {
 // 修复前 JOIN 不带池谓词 ⇒ 学员历史上（或经其他写面）挂在 draft / pending / 源标记真题题 /
 // 非当前证件题上的笔记，可以经这一条批量收割题干。笔记行本身是本人的私有数据，
 // 照常列出（摘要为空），与「题目已删除」同形态——不靠隐藏条目来判。
-func (s *NoteService) List(userID int, noteScope string, page, pageSize int, qScope questionbank.QuestionReadScope) (*NotePageDTO, error) {
+func (s *Service) List(userID int, noteScope string, page, pageSize int, qScope questionbank.QuestionReadScope) (*NotePageDTO, error) {
 	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
 	// 先归一化再交给 paging（其钳制对已归一化的值成为空操作）。
 	if page <= 0 {

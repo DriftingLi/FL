@@ -23,20 +23,20 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 	t.Parallel()
 	// allowlist：确实没有能力位、且理由成立的蓝图（新增一项 = 一次显式的豁免决定）。
 	allow := map[string]string{
-		"auth.RegisterCaptchaRoutes":        "图形验证码：无需鉴权的公开端点",
-		"auth.RegisterEmailAuthRoutes":      "认证入口：此刻尚无角色，能力守卫无从判定",
-		"auth.RegisterPhoneAuthRoutes":      "认证入口：同上",
-		"auth.RegisterWechatAuthRoutes":     "认证入口：同上",
-		"auth.RegisterProfileBindRoutes":    "认证入口：手机号/邮箱绑定，属账号自身而非资源域",
-		"auth.RegisterRoutes":               "公开登录/刷新/登出面 + 本人资料与注销（任何已登录角色都是自己的资料），无资源域能力位",
-		"course.RegisterRoutes":             "课程读面横跨学员/讲师/管理端（讲师与管理员读同一份章节详情），挂学员能力会误伤；能力位细化留待后续",
-		"training.RegisterRoutes":           "培训目录读面同样横跨学员/管理端（目录树、等级、标签、岗位、证件都是同一份），挂学员能力会误伤；能力位细化留待后续",
-		"search.RegisterRoutes":             "公开搜索端点（无 JWTAuth）",
-		"notification.RegisterRoutes":       "站内信按收件人鉴权（任何已登录角色都可能收到），不是资源域能力",
-		"aiassistant.RegisterAdminRoutes":   "AI 配置管理面：挂 internal/api/admin.go:39 的 /admin 组（组级 JWTAuth + CapabilityRequired(authz.CapAdminAccess)），函数体内不再重复守卫",
-		"RegisterQuestionInteractionRoutes": "题目评论/笔记/考点为学员面，但讲师与管理端审核读同一份；能力位细化留待后续",
-		"questionbank.RegisterRoutes":       "题库蓝图混合学员读写与管理端审核：管理端路由逐条挂能力守卫，学员侧继承组级 JWTAuth",
-		"RegisterNoteRoutes":                "学员笔记：纯用户私有数据（读写一律以 user_id 收口，越权按「不存在」处理），门禁与既有题目笔记端点一致——只要求登录；同一资源的两条路径挂两套门才是真不一致（ADR-0055）",
+		"auth.RegisterCaptchaRoutes":         "图形验证码：无需鉴权的公开端点",
+		"auth.RegisterEmailAuthRoutes":       "认证入口：此刻尚无角色，能力守卫无从判定",
+		"auth.RegisterPhoneAuthRoutes":       "认证入口：同上",
+		"auth.RegisterWechatAuthRoutes":      "认证入口：同上",
+		"auth.RegisterProfileBindRoutes":     "认证入口：手机号/邮箱绑定，属账号自身而非资源域",
+		"auth.RegisterRoutes":                "公开登录/刷新/登出面 + 本人资料与注销（任何已登录角色都是自己的资料），无资源域能力位",
+		"course.RegisterRoutes":              "课程读面横跨学员/讲师/管理端（讲师与管理员读同一份章节详情），挂学员能力会误伤；能力位细化留待后续",
+		"training.RegisterRoutes":            "培训目录读面同样横跨学员/管理端（目录树、等级、标签、岗位、证件都是同一份），挂学员能力会误伤；能力位细化留待后续",
+		"search.RegisterRoutes":              "公开搜索端点（无 JWTAuth）",
+		"notification.RegisterRoutes":        "站内信按收件人鉴权（任何已登录角色都可能收到），不是资源域能力",
+		"aiassistant.RegisterAdminRoutes":    "AI 配置管理面：挂 internal/api/admin.go:39 的 /admin 组（组级 JWTAuth + CapabilityRequired(authz.CapAdminAccess)），函数体内不再重复守卫",
+		"questioninteraction.RegisterRoutes": "题目评论/笔记/考点为学员面，但讲师与管理端审核读同一份；能力位细化留待后续",
+		"questionbank.RegisterRoutes":        "题库蓝图混合学员读写与管理端审核：管理端路由逐条挂能力守卫，学员侧继承组级 JWTAuth",
+		"note.RegisterRoutes":                "学员笔记：纯用户私有数据（读写一律以 user_id 收口，越权按「不存在」处理），门禁与既有题目笔记端点一致——只要求登录；同一资源的两条路径挂两套门才是真不一致（ADR-0055）",
 	}
 	// 射程 = HTTP 面（testutil.HTTPSurface）：拆包后蓝图注册函数跟着域包走，这一处定义自动覆盖。
 	fset := token.NewFileSet()
