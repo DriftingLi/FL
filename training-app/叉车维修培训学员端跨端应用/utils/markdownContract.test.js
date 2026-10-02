@@ -48,9 +48,10 @@ const MEMBER_CODE = 'code';
 const MEMBER_DIVIDER = 'divider';
 const MEMBER_IMAGE = 'image';
 const MEMBER_TABLE = 'table';
+const MEMBER_INLINE = 'inline';
 const SUBSET_MEMBERS_CHAPTER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE];
 const SUBSET_MEMBERS_FEATURED = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE];
-const SUBSET_MEMBERS_FORUM = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER];
+const SUBSET_MEMBERS_FORUM = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE];
 /** 镜像 `subsetMembers`：未知档位退到章节档（与 parseMarkdown 的缺省档同向） */
 function subsetMembers(subset) {
   if (subset === SUBSET_FEATURED) return SUBSET_MEMBERS_FEATURED;
@@ -59,6 +60,8 @@ function subsetMembers(subset) {
 }
 const TABLE_LEVEL_HEAD = 1;
 const TABLE_LEVEL_BODY = 0;
+const LIST_LEVEL_UL = 0;
+const LIST_LEVEL_OL = 1;
 const ESCAPED_PIPE = '\u0001';
 
 function trim(s) {
@@ -74,6 +77,7 @@ function stripInlinePlain(text) {
   s = s.replace(/\*([^\*]+)\*/g, '$1');
   s = s.replace(/_([^_]+)_/g, '$1');
   s = s.replace(/`([^`]+)`/g, '$1');
+  s = s.replace(/~~([^~]+)~~/g, '$1');
   return s;
 }
 
@@ -118,7 +122,8 @@ function collectMathSpans(text) {
   return spans;
 }
 
-function stripInline(text) {
+function stripInline(text, keepInline) {
+  if (keepInline) return text;
   const spans = collectMathSpans(text);
   if (spans.length === 0) return stripInlinePlain(text);
   let out = '';
@@ -153,21 +158,24 @@ function isTableDelimiterRow(line) {
   return cells.every((c) => /^:?-+:?$/.test(c));
 }
 
-function normalizeTableRow(raw, width) {
+function normalizeTableRow(raw, width, keepInline) {
   const cells = [];
-  for (let i = 0; i < width; i++) cells.push(i < raw.length ? stripInline(raw[i]) : '');
+  for (let i = 0; i < width; i++) cells.push(i < raw.length ? stripInline(raw[i], keepInline) : '');
   return cells;
 }
 
 function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
   const blocks = [];
   if (markdown.length === 0) return blocks;
-  // 镜像的**范围**（写实，不假装全量）：chapter / featured 两档的解析语义。
-  // 这两档把除 table 之外的成员**全都声明了**，故逐点闸门里只有 table 这一处会改变结果；
+  // 镜像的**范围**（写实，不假装全量）：三档的块语义。#1240 立它时只有 chapter / featured 两档，
+  // #1472 起 forum 也带上了行内分叉（`keepInline`）—— 镜像必须跟着分叉，否则「论坛档到底交出什么」
+  // 在本文件里是假的。这两档把除 table 之外的成员**全都声明了**，故逐点闸门里只有 table 这一处会改变结果；
   // 「声明 ↔ 行为」的全量对账跑**真模块**（`utils/markdownSubsetBehavior.test.js`，含成对取证），
-  // 本文件的镜像只保证既有两档的行为没被改造动过。
+  // 本文件的镜像只保证既有两档的行为没被改造动过 + 论坛档的分叉语义与 .uts 一致。
   const members = subsetMembers(subset);
   const hasMember = (m) => members.indexOf(m) >= 0;
+  // ⑩-2 的分叉闸门（与 utils/markdown.uts 同源）：声明 inline ⇒ 块内文本存行内源串
+  const keepInline = hasMember(MEMBER_INLINE);
   const lines = markdown.split('\n');
   const push = (o) => blocks.push(Object.assign({ type: '', level: 0, text: '', items: [] }, o));
   const pushTableRow = (cells, isHead) =>
@@ -181,7 +189,7 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
 
   function flushList() {
     if (listItems.length > 0) {
-      push({ type: 'list', text: '', items: listItems });
+      push({ type: 'list', level: (keepInline && listType === 'ol') ? LIST_LEVEL_OL : LIST_LEVEL_UL, text: '', items: listItems });
       listItems = [];
       listType = '';
     }
@@ -244,14 +252,14 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
       flushQuote();
       const headerRaw = splitTableRowRaw(line);
       const width = headerRaw.length;
-      pushTableRow(normalizeTableRow(headerRaw, width), true);
+      pushTableRow(normalizeTableRow(headerRaw, width, keepInline), true);
       i = i + 2;
       while (i < lines.length) {
         const bodyLine = trim(lines[i]);
         if (bodyLine.length === 0) break;
         if (!hasTablePipe(bodyLine)) break;
         if (isTableDelimiterRow(bodyLine)) break;
-        pushTableRow(normalizeTableRow(splitTableRowRaw(bodyLine), width), false);
+        pushTableRow(normalizeTableRow(splitTableRowRaw(bodyLine), width, keepInline), false);
         i++;
       }
       continue;
@@ -267,13 +275,13 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
     if (headingMatch != null && headingMatch.length >= 3) {
       flushList();
       flushQuote();
-      push({ type: 'heading', level: headingMatch[1].length, text: stripInline(headingMatch[2] || '') });
+      push({ type: 'heading', level: headingMatch[1].length, text: stripInline(headingMatch[2] || '', keepInline) });
       i++;
       continue;
     }
     if (line.startsWith('>')) {
       flushList();
-      quoteLines.push(stripInline(trim(line.substring(1))));
+      quoteLines.push(stripInline(trim(line.substring(1)), keepInline));
       i++;
       continue;
     }
@@ -284,7 +292,7 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
         flushList();
         listType = 'ul';
       }
-      listItems.push(stripInline(ulMatch[1] || ''));
+      listItems.push(stripInline(ulMatch[1] || '', keepInline));
       i++;
       continue;
     }
@@ -295,7 +303,7 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
         flushList();
         listType = 'ol';
       }
-      listItems.push(stripInline(olMatch[1] || ''));
+      listItems.push(stripInline(olMatch[1] || '', keepInline));
       i++;
       continue;
     }
@@ -309,7 +317,7 @@ function parseMarkdown(markdown, subset = SUBSET_CHAPTER) {
     }
     flushList();
     flushQuote();
-    push({ type: 'paragraph', text: stripInline(line) });
+    push({ type: 'paragraph', text: stripInline(line, keepInline) });
     i++;
   }
 
@@ -476,11 +484,38 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
     }
     // 每个成员都必须真的被解析器问过；段落**不在**声明表里（它是降级可读的地板，不设闸门）
     // 注意这里遍历的是**常量名**（不是它们的值）：断言的是 .uts 源码里的闸门写法
-    const memberNames = ['MEMBER_HEADING', 'MEMBER_LIST', 'MEMBER_QUOTE', 'MEMBER_CODE', 'MEMBER_DIVIDER', 'MEMBER_IMAGE', 'MEMBER_TABLE'];
+    const memberNames = ['MEMBER_HEADING', 'MEMBER_LIST', 'MEMBER_QUOTE', 'MEMBER_CODE', 'MEMBER_DIVIDER', 'MEMBER_IMAGE', 'MEMBER_TABLE', 'MEMBER_INLINE'];
     for (const member of memberNames) {
       expect([member, MD_CODE.includes(`hasMember(${member})`)]).toEqual([member, true]);
     }
     expect(MD_CODE).not.toContain('MEMBER_PARAGRAPH');
+  });
+
+  it('⑩-2 的分叉闸门在 .uts 内成文，且镜像与它**同形**（声明表决定，不看档位名）', () => {
+    // 分叉只由 hasMember(MEMBER_INLINE) 决定：这条锚点同时守两件事 ——
+    //   ① 有人把 `keepInline` 改成按 `subset == SUBSET_FORUM` 判（档位名硬编码 = 第二处事实）；
+    //   ② 有人改了 .uts 的分叉而镜像跟丢（镜像红 = 本文件的 forum 行为不再是真的）。
+    expect(MD_CODE).toContain('const keepInline = hasMember(MEMBER_INLINE)');
+    expect(MD_CODE).toContain('if (keepInline) return text');
+    expect(MD_SRC).not.toMatch(/keepInline\s*=\s*subset\s*==/);
+    // 镜像侧必须同样从声明表取值（名字与 .uts 一致；两边名字不同就是分叉漂移的第一步）
+    expect(parseMarkdown.toString()).toContain('hasMember(MEMBER_INLINE)');
+    // 有序编号落 level 槽只在**声明了 inline 的档**生效（⑩-6 的「两档逐字不变」由这条兜住）
+    expect(MD_CODE).toContain('LIST_LEVEL_OL');
+    // list 块的文字在 `items` 里、`text` 恒空（形状从 #905 起如此），故这里断言 items 而非 text
+    expect(parseMarkdown('3. 起步', SUBSET_CHAPTER)[0].items).toEqual(['起步']);
+    expect(parseMarkdown('3. 起步', SUBSET_CHAPTER)[0].level).toBe(LIST_LEVEL_UL);
+    expect(parseMarkdown('3. 起步', SUBSET_FORUM)[0].level).toBe(LIST_LEVEL_OL);
+    // 分叉的正反两面：论坛档交出源串、章节档仍交出抹平文本
+    expect(firstText('**粗** 体', SUBSET_FORUM)).toBe('**粗** 体');
+    expect(firstText('**粗** 体', SUBSET_CHAPTER)).toBe('粗 体');
+  });
+
+  it('⑩-5 的 `~~` 剥离规则在 .uts 与镜像里同源（缺任何一处都是「摘要还漏删除线」）', () => {
+    expect(MD_CODE).toContain('/~~([^~]+)~~/g');
+    expect(stripInlinePlain('~~作废~~')).toBe('作废');
+    // 未声明 inline 的档也必须剥净（否则课程面继续漏 `~~`）
+    expect(firstText('参 ~~作废~~ 数', SUBSET_CHAPTER)).toBe('参 作废 数');
   });
 
   it('公式保护在 stripInline 内、纯剥离仍走 stripInlinePlain', () => {

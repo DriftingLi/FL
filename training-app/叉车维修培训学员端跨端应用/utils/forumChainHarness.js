@@ -18,6 +18,7 @@ const path = require('path');
 const { loadUts } = require('./utsHarness');
 
 const MD_UTS = path.join(__dirname, 'markdown.uts');
+const INLINE_UTS = path.join(__dirname, 'markdownInline.uts');
 const BODY_UTS = path.join(__dirname, 'forumBody.uts');
 const DISPLAY_UTS = path.join(__dirname, 'forumDisplay.uts');
 
@@ -26,13 +27,24 @@ function markdownModule(file) {
   return loadUts(file || MD_UTS, {});
 }
 
-/** 格式轴（真执行的 `utils/forumBody.uts`，注入上游那一份解析器） */
-function forumBodyModule(md, file) {
+/**
+ * 行内分词器（真执行的 `utils/markdownInline.uts`）。#1472 起它是格式轴的**第二个上游**：
+ * `forumBody` 既桥解析器出块，也桥它出 runs / 取投影叶子。
+ */
+function markdownInlineModule(file) {
+  return loadUts(file || INLINE_UTS, {});
+}
+
+/** 格式轴（真执行的 `utils/forumBody.uts`，注入上游那两份：解析器 + 分词器） */
+function forumBodyModule(md, file, inline) {
   const m = md || markdownModule();
+  const k = inline || markdownInlineModule();
   return loadUts(file || BODY_UTS, {
     parseMarkdown: m.parseMarkdown,
     SUBSET_FORUM: m.SUBSET_FORUM,
     SUBSET_CHAPTER: m.SUBSET_CHAPTER,
+    splitInlineRuns: k.splitInlineRuns,
+    inlineRunsPlainText: k.inlineRunsPlainText,
   });
 }
 
@@ -45,19 +57,22 @@ function forumDisplayModule(body, file) {
   });
 }
 
-/** 一次拿到三层（各套件按需要的那一层取用；`overrides` 传 `{ md?, body?, display? }` 变异副本路径） */
+/** 一次拿到全链（各套件按需要的那一层取用；`overrides` 传 `{ md?, inline?, body?, display? }` 变异副本路径） */
 function forumChain(overrides) {
   const o = overrides || {};
   const md = markdownModule(o.md);
-  const body = forumBodyModule(md, o.body);
-  return { md, body, display: forumDisplayModule(body, o.display) };
+  const inline = markdownInlineModule(o.inline);
+  const body = forumBodyModule(md, o.body, inline);
+  return { md, inline, body, display: forumDisplayModule(body, o.display) };
 }
 
 module.exports = {
   MD_UTS,
+  INLINE_UTS,
   BODY_UTS,
   DISPLAY_UTS,
   markdownModule,
+  markdownInlineModule,
   forumBodyModule,
   forumDisplayModule,
   forumChain,

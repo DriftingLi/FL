@@ -33,18 +33,16 @@ const { forumDisplayModule, DISPLAY_UTS } = require('./forumChainHarness');
 const MD_UTS = path.join(__dirname, 'markdown.uts');
 const TOOLBAR_UTS = path.join(__dirname, 'markdownToolbar.uts');
 
-/** 真源依赖注入表：成员常量与档位取值口都取自**真执行**出来的 `utils/markdown.uts` */
+/**
+ * 真源依赖注入表：成员常量与档位取值口都取自**真执行**出来的 `utils/markdown.uts`。
+ *
+ * 这里**整体展开**而不是逐名手抄：手抄表每加一个成员就红一次（#1472 加 `MEMBER_INLINE`
+ * 时正是这样炸了本套件 24 例），而「成员常量叫什么名字」从来不是本套件要判的事。
+ * 「工具栏不许自持第二份声明」那条判据另有其主（下面 ⑥ 组按 `importedNames` 钉），
+ * 不靠这张表的缺绑定来兜 —— 缺绑定兜的是「绕开格式轴」，不是「多一个常量」。
+ */
 function markdownBindings() {
-  const m = loadUts(MD_UTS, {});
-  return {
-    MEMBER_HEADING: m.MEMBER_HEADING,
-    MEMBER_LIST: m.MEMBER_LIST,
-    MEMBER_QUOTE: m.MEMBER_QUOTE,
-    MEMBER_CODE: m.MEMBER_CODE,
-    MEMBER_DIVIDER: m.MEMBER_DIVIDER,
-    SUBSET_FORUM: m.SUBSET_FORUM,
-    subsetMembers: m.subsetMembers,
-  };
+  return { ...loadUts(MD_UTS, {}) };
 }
 
 /** 每次取一个**全新模块实例** */
@@ -75,7 +73,7 @@ describe('按钮集与声明表对账：工具栏不许承诺本档声明之外�
     }
   });
 
-  it('**行内格式没有按钮**：加粗 / 斜体 / 链接 / 行内代码都不在按钮集里（本档不做行内渲染，⑥-6 登记）', () => {
+  it('**行内格式没有按钮**：加粗 / 斜体 / 链接 / 行内代码都不在按钮集里（理由是 ⑩-7，不是「渲染不出来」）', () => {
     const t = toolbar();
     for (const member of ['bold', 'italic', 'link', 'inline_code', 'strikethrough', 'task_list']) {
       expect([member, t.TOOLBAR_MEMBERS.indexOf(member) >= 0]).toEqual([member, false]);
@@ -96,12 +94,20 @@ describe('按钮集与声明表对账：工具栏不许承诺本档声明之外�
 // ===== ② 声明 ⊆ 按钮（反向对账）=====
 
 describe('反向对账：坛档声明的每个成员都要有按钮（或显式登记为「故意不给」）', () => {
-  it('声明表 − 按钮集 = DECLARED_WITHOUT_BUTTON（今天为空 ⇒ 两个集合完全同构）', () => {
+  it('声明表 − 按钮集 = DECLARED_WITHOUT_BUTTON（今天是 `inline` 一枚，⑩-7）', () => {
     const m = loadUts(MD_UTS, {});
     const t = toolbar();
     const noButton = m.SUBSET_MEMBERS_FORUM.filter((member) => t.TOOLBAR_MEMBERS.indexOf(member) < 0);
     expect(noButton.sort()).toEqual(t.DECLARED_WITHOUT_BUTTON.slice().sort());
-    expect(t.DECLARED_WITHOUT_BUTTON).toEqual([]);
+    // 这句从 #1240 的「今天为空」改成了**恰此一枚**：登记表的每一条都得在 ADR 里有理由，
+    // 所以它只能被**指名**扩（顺手往里塞一个成员 = 这里红），不能变成兜底垃圾桶。
+    // `inline` 的理由是 ⑩-7「无真实选区 ⇒ 包裹式按钮只会插出空对」，不是「渲染不出来」
+    // （那句随 ⑩-2 作废）。将来接线真实选区时：摘掉这条、补按钮，两处一起改。
+    expect(t.DECLARED_WITHOUT_BUTTON).toEqual([m.MEMBER_INLINE]);
+    // 块类成员一个都不能漏进登记表（它们必须有按钮 —— 否则「声明了却没入口」又静默了）
+    for (const member of t.DECLARED_WITHOUT_BUTTON) {
+      expect([member, m.SUBSET_MEMBERS_FORUM.includes(member)]).toEqual([member, true]);
+    }
   });
 
   it('每枚按钮的长按中文提示非空且互不相同（文案单点，组件不许另抄一份）', () => {
@@ -277,8 +283,12 @@ describe('成对取证（必红）：本套件的三条判据在坏实现上确�
     ]);
     const m = loadUts(MD_UTS, {});
     const noButton = m.SUBSET_MEMBERS_FORUM.filter((member) => broken.TOOLBAR_MEMBERS.indexOf(member) < 0);
-    expect(noButton).toEqual(['divider']);           // 坏实现真的让一个声明成员没了入口
-    expect(noButton.sort()).not.toEqual([]);         // ⇒ 第 ② 组的「等于 DECLARED_WITHOUT_BUTTON」判据判红
+    // 坏实现确实让 `divider` 没了入口；而「没了入口的集合」不再等于登记表（`inline` 是**合法**的
+    // 故意不给，`divider` 不是）⇒ 第 ② 组那条「声明表 − 按钮集 = DECLARED_WITHOUT_BUTTON」必然判红。
+    // 这里刻意不写死数组内容：写死会变成「每加一个成员都要来改这行」的第二份事实。
+    expect(noButton).toContain('divider');
+    expect(noButton.sort()).not.toEqual(broken.DECLARED_WITHOUT_BUTTON.slice().sort());
+    expect(noButton.sort()).not.toEqual([]);
   });
 
   it('必红 · 换掉一枚长按文案（标题 → Heading）⇒ 具名映射判据必然判红', () => {
@@ -304,9 +314,9 @@ describe('成对取证（必红）：本套件的三条判据在坏实现上确�
 // ===== ⑥ 模块契约：不持第二份声明 =====
 
 describe('模块契约：工具栏只桥到 `utils/markdown.uts`，不自持子集声明', () => {
-  it('运行期 import 恰为五个成员常量 + 论坛档常量 + 声明表取值口（没有第二份子集声明 / 第二份解析器）', () => {
+  it('运行期 import 恰为六个成员常量 + 论坛档常量 + 声明表取值口（没有第二份子集声明 / 第二份解析器）', () => {
     expect(importedNames(readText(TOOLBAR_UTS)).sort()).toEqual(
-      ['MEMBER_CODE', 'MEMBER_DIVIDER', 'MEMBER_HEADING', 'MEMBER_LIST', 'MEMBER_QUOTE', 'SUBSET_FORUM', 'subsetMembers'].sort()
+      ['MEMBER_CODE', 'MEMBER_DIVIDER', 'MEMBER_HEADING', 'MEMBER_INLINE', 'MEMBER_LIST', 'MEMBER_QUOTE', 'SUBSET_FORUM', 'subsetMembers'].sort()
     );
   });
 
@@ -333,25 +343,37 @@ describe('模块契约：工具栏只桥到 `utils/markdown.uts`，不自持子�
 const boundaryNotice = () => forumDisplayModule().FORUM_MARKDOWN_BOUNDARY_NOTICE;
 
 describe('边界提示行：它claim的每条边界都必须**与成员声明表一致**（否则那行就是假话）', () => {
-  it('三条边界都在文案里点名（表格 / 图表 / 行内格式 / 图片入口）', () => {
+  it('三条边界都在文案里点名（表格与图表退回原文 / 图片走入口 / 链接点开需确认）', () => {
     const notice = boundaryNotice();
     expect(notice).toContain('表格');
     expect(notice).toContain('图表');
-    expect(notice).toContain('粗体');
     expect(notice).toContain('链接');
     expect(notice).toContain('图片');
     // 「只讲边界、不讲能力清单」（⑥-5）：它不许出现「支持 …」这种能力枚举
     expect(notice).not.toContain('支持');
   });
 
+  it('⑩-10：行内格式已渲染得出来 ⇒ 文案**不许**再声称「粗体/链接不出样式」（那已是假话）', () => {
+    const md = loadUts(MD_UTS, {});
+    const notice = boundaryNotice();
+    // 前提：本档确实声明了 inline（这句是锚 —— 哪天有人撤掉声明，下面两条就该反过来重审）
+    expect(md.SUBSET_MEMBERS_FORUM).toContain(md.MEMBER_INLINE);
+    expect(notice).not.toContain('不出样式');
+    expect(notice).not.toContain('粗体');
+  });
+
   it('文案说的边界在声明表里是**真的**：表格与正文内嵌图片都没被论坛档声明', () => {
     const md = loadUts(MD_UTS, {});
     expect(md.SUBSET_MEMBERS_FORUM).not.toContain(md.MEMBER_TABLE);
     expect(md.SUBSET_MEMBERS_FORUM).not.toContain(md.MEMBER_IMAGE);
-    // 反过来也成立：声明了的成员都有按钮（第 ② 组已判，这里只声明两表的同向关系）
+    // 反向：声明了的成员要么有按钮、要么**显式**登记在「故意不给」（⑩-7 的 `inline` 走后者）。
+    // 早先这里写的是「声明 ⊆ 按钮」（两表同构），⑩-2 之后那个同构关系本身不成立了 ——
+    // 真正的同构是「声明 = 按钮 ∪ 故意不给」，第 ② 组已按那个形状判，这里同步跟上。
     const t = toolbar();
     for (const member of md.SUBSET_MEMBERS_FORUM) {
-      expect([member, t.TOOLBAR_MEMBERS.indexOf(member) >= 0]).toEqual([member, true]);
+      const hasButton = t.TOOLBAR_MEMBERS.indexOf(member) >= 0;
+      const declaredNoButton = t.DECLARED_WITHOUT_BUTTON.indexOf(member) >= 0;
+      expect([member, hasButton || declaredNoButton]).toEqual([member, true]);
     }
   });
 
@@ -370,9 +392,9 @@ describe('边界提示行：它claim的每条边界都必须**与成员声明表
 
   it('成对取证（必红 · 声明表半）：给论坛档声明 table ⇒ 「边界是真的」判据必然判红', () => {
     let src = readText(MD_UTS);
-    const anchor = 'MEMBER_CODE, MEMBER_DIVIDER,\n]';
+    const anchor = 'MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE,\n]';
     expect(src.includes(anchor)).toBe(true); // 锚点失效即红：变异必须真的进去了
-    src = src.split(anchor).join('MEMBER_CODE, MEMBER_DIVIDER, MEMBER_TABLE,\n]');
+    src = src.split(anchor).join('MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE, MEMBER_TABLE,\n]');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forum-subset-'));
     const file = path.join(dir, 'markdown.uts');
     fs.writeFileSync(file, src);

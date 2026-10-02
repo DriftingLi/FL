@@ -7,9 +7,13 @@
  * 的 `loadUts` **真执行**：`markdownToolbarBehavior.test.js` 断言的是**跑起来的产出物**
  *   - 每枚按钮插入后的正文，交**真执行的解析器**跑一遍，必须产出该按钮承诺的块类型（round-trip）；
  *   - 每枚按钮的成员必须**在本档的成员声明表里**（`SUBSET_MEMBERS_FORUM`）——
- *     这一条就是 ADR-0025 ⑥-6 登记的「行内格式」差异：移动端本档不做行内渲染，
- *     `**粗**` 会被 `stripInline` **剥成「粗」**（可见、但**不出加粗样式**），所以工具栏
- *     **不放**加粗 / 斜体 / 链接 / 行内代码按钮 —— 放一枚就是承诺一个渲染不出来的效果。
+ *     这一条就是 ADR-0025 ⑥-6 登记的「行内格式」差异的历史形状：**当时**本档不做行内渲染，
+ *     `**粗**` 被 `stripInline` 剥成「粗」（可见、但不出加粗样式），所以放一枚加粗按钮
+ *     等于承诺一个渲染不出来的效果。
+ *     ⚠️ **2026-10-02 被 ⑩-2 取代**：论坛档现在声明 `inline`、行内格式**渲染得出来了**，
+ *     上面那句「渲染不出来」不再成立 —— 但**结论一样**（仍不放行内按钮），理由换成 ⑩-7 那条：
+ *     本模块的插入落点没有真实选区语义（P3 新决策 3 只喂 `content.length`），
+ *     包裹类按钮只会**插出一个空对**（把记号塞到光标处、圈不住任何文字）。
  *
  * 按钮集与声明集的**双向对账**（见 `markdownToolbarBehavior.test.js`）：
  *   ① 每枚按钮的成员必须在论坛档声明表里（不许承诺未声明的语法）；
@@ -18,12 +22,12 @@
  *
  * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
  */
-import { MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, SUBSET_FORUM, subsetMembers } from './markdown'
+import { MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE, SUBSET_FORUM, subsetMembers } from './markdown'
 
 /**
  * 工具栏**按钮成员**（数组顺序 = 工具栏上的排列顺序）。
  *
- * 这五个恰好就是 ADR-0025 P1 定版的论坛档声明（`SUBSET_MEMBERS_FORUM`）——
+ * 这五枚 = 论坛档声明的**块类**成员（`SUBSET_MEMBERS_FORUM` 减去 {@link DECLARED_WITHOUT_BUTTON}）——
  * **不是巧合，是判据**：两者由双向对账钉住（见文件头）。
  */
 export const TOOLBAR_MEMBERS : string[] = [
@@ -31,12 +35,17 @@ export const TOOLBAR_MEMBERS : string[] = [
 ]
 
 /**
- * **声明了但故意不给按钮**的成员（今天为空）。
+ * **声明了但故意不给按钮**的成员：目前是 `inline` 一枚（ADR-0025 **⑩-7**）。
  *
  * 存在的意义是让第 ② 条对账有个显式的、活的出口：将来给论坛档加成员时，要么补一枚按钮，
- * 要么在这里登记并写明为什么不给入口 —— 两条都不做则判红。空数组是「今天每个声明的成员都有按钮」。
+ * 要么在这里登记并写明为什么不给入口 —— 两条都不做则判红。
+ *
+ * `inline` 不给按钮的理由是**⑩-7**（不是「渲染不出来」，那句已被 ⑩-2 作废）：工具栏的插入落点
+ * 没有真实选区（P3 新决策 3 只喂 `content.length`），加粗 / 斜体 / 删除线这类**包裹式**动作
+ * 只会插出一对空记号（`****` 圈不住字），等于摆一枚「按了没反应」的按钮。
+ * 接线到真实选区是一次独立改动（那条 P3 已登记为已知偏差）；**届时把它从这里摘掉、补上按钮**。
  */
-export const DECLARED_WITHOUT_BUTTON : string[] = []
+export const DECLARED_WITHOUT_BUTTON : string[] = [MEMBER_INLINE]
 
 /** 插入结果：新正文 + 插入后应落的选区（`start == end` 即光标） */
 export type ToolbarInsert = {

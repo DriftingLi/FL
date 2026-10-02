@@ -25,14 +25,15 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, readText } = require('./utsHarness');
+// 格式轴的真执行（含它的两个上游）只从夹具取：#1472 起 forumBody 又多一个运行期依赖，
+// 各套件各自抄注入表 = 每次加依赖都要改 N 处（本文件与 forumFormatPreferenceBehavior 各中过一次）。
+const { forumBodyModule } = require('./forumChainHarness');
 
 const API_DIR = path.join(__dirname, '..', 'api');
 const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
 const DTO_UTS = path.join(API_DIR, 'forumDto.uts');
 const FORUM_UTS = path.join(API_DIR, 'forum.uts');
 const TYPES_FORUM = path.join(__dirname, '..', 'types', 'forum.uts');
-const MD_UTS = path.join(__dirname, 'markdown.uts');
-const BODY_UTS = path.join(__dirname, 'forumBody.uts');
 
 /** 真件：helpers（零 import，空绑定即可）与 DTO 构造层（依赖 helpers，注入真件） */
 const helpers = () => loadUts(HELPERS_UTS, {});
@@ -47,12 +48,9 @@ const dto = () => loadUts(DTO_UTS, { ...helpers() });
  * 是反的：api 保留 import 而这里忘了注入，才会红。⇒「api 不写裸字面量」目前**没有**用例断言，属已登记缺口。
  */
 function formatBindings() {
-  const md = loadUts(MD_UTS, {});
-  const body = loadUts(BODY_UTS, {
-    parseMarkdown: md.parseMarkdown,
-    SUBSET_FORUM: md.SUBSET_FORUM,
-    SUBSET_CHAPTER: md.SUBSET_CHAPTER,
-  });
+  // 注入表取自 `forumChainHarness`（#1472 起 forumBody 有**两个**运行期上游：解析器 + 行内分词器；
+  // 在本文件再抄一份绑定表 = 第二处需要同步的事实，缺一项就整片红）。
+  const body = forumBodyModule();
   return { FORMAT_TEXT: body.FORMAT_TEXT };
 }
 
