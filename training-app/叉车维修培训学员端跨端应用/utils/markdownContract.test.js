@@ -593,6 +593,25 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     expect(forumMd).not.toContain('md-table');
   });
 
+  it('⑥-1 的渲染面近似：文字一律经 runs 出，**只有代码块**允许直出 `block.text`', () => {
+    /*
+     * 为什么需要这一条：#1472 的判据对象是「真正画出来的产物」，而 `.uvue` 模板进不了
+     * `loadUts` 的行为缝（接线守护不构成 ③ 门证据，`docs/agents/guards.md`）。原型实测正是
+     * **引用块分支直出了 `block.text`** ⇒ 记号漏到渲染面，而「按 runs 判」的机检看不见它。
+     * 这里用**计数**近似那条渲染判据：直出点必须恰好一处（代码块，它本就不该解析）。
+     * 真判据仍在 ①a：未压缩 `uiautomator dump` 读渲染后的文本节点，断言不含成对记号。
+     */
+    const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
+    const rawOuts = (forumMd.match(/\{\{\s*block\.text\s*\}\}/g) || []);
+    expect(rawOuts.length).toBe(1);
+    // 且那唯一一处必须在 code 分支里（紧邻 `md-code` 类）
+    expect(forumMd.indexOf('md-code') < forumMd.indexOf('{{ block.text }}')
+      && forumMd.indexOf('{{ block.text }}') < forumMd.indexOf('md-list')).toBe(true);
+    // runs 的入口必须在（否则上面那条「一处直出」是假的：分支根本没渲染文字）
+    expect(forumMd).toContain('runsOf(');
+    expect(forumMd).toContain('runClasses(');
+  });
+
   it('论坛面：格式由详情壳层扁平下发（组件不自行读 topic / 回复 DTO）', () => {
     const detail = read('pages/forum/forum-detail.uvue');
     expect(detail).toContain(':format="topicFormat"');

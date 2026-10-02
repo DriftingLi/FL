@@ -148,6 +148,11 @@ function splitInner(src : string, spans : number[],
     const runs : MarkdownInlineRun[] = []
     let buf = ''
 
+    // ⚠️ 下方各 `match()` 分支读整段匹配长度时写成 `(X![0] ?? '').length`：UTS 里数组
+    // 元素访问返回 `String?`，直接 `.length` 会让 ④c 报「only safe (?.) or non-null
+    // asserted (!!.) calls are allowed on a nullable receiver of type 'String?'」。
+    // `?? ''` 与各 group 读法（`X![n] ?? ''`）同源、是正解；**别改成 `!!`**（那是关类型系统）。
+
     function flushPlain() {
         if (buf.length > 0) {
             runs.push({
@@ -173,7 +178,7 @@ function splitInner(src : string, spans : number[],
         if (img != null) {
             flushPlain()
             appendInner(runs, img![1] ?? '', bold, italic, strike, link)
-            i += img![0].length
+            i += (img![0] ?? '').length
             continue
         }
 
@@ -188,7 +193,7 @@ function splitInner(src : string, spans : number[],
             // 文本为空时退化成显示 URL 本身；过不了协议闸的退化为**不可点的普通文字**（内层样式仍在）
             const visible = rawText.length > 0 ? rawText : rawUrl
             appendInner(runs, visible, bold, italic, strike, safe ? rawUrl.replace(/^\s+|\s+$/g, '') : '')
-            i += lnk![0].length
+            i += (lnk![0] ?? '').length
             continue
         }
 
@@ -196,19 +201,19 @@ function splitInner(src : string, spans : number[],
         const b1 = rest.match(/^\*\*([^\s*](?:[^*]*[^\s*])?)\*\*/)
         if (b1 != null) {
             flushPlain(); appendInner(runs, b1![1] ?? '', true, italic, strike, link)
-            i += b1![0].length; continue
+            i += (b1![0] ?? '').length; continue
         }
         const b2 = rest.match(/^__([^\s_](?:[^_]*[^\s_])?)__/)
         if (b2 != null && !isWordChar(src.substring(i > 0 ? i - 1 : 0, i))) {
             flushPlain(); appendInner(runs, b2![1] ?? '', true, italic, strike, link)
-            i += b2![0].length; continue
+            i += (b2![0] ?? '').length; continue
         }
 
         // ④ 删除线 ~~x~~
         const st = rest.match(/^~~([^\s~](?:[^~]*[^\s~])?)~~/)
         if (st != null) {
             flushPlain(); appendInner(runs, st![1] ?? '', bold, italic, true, link)
-            i += st![0].length; continue
+            i += (st![0] ?? '').length; continue
         }
 
         // ⑤ 行内代码 `x`：内容**原样**、不再解析（代码里的 `**` 是代码）
@@ -218,7 +223,7 @@ function splitInner(src : string, spans : number[],
             runs.push({
                 text: cd![1] ?? '', bold: bold, italic: italic, strike: strike, code: true, link: link,
             } as MarkdownInlineRun)
-            i += cd![0].length
+            i += (cd![0] ?? '').length
             continue
         }
 
@@ -226,17 +231,17 @@ function splitInner(src : string, spans : number[],
         const it1 = rest.match(/^\*([^\s*](?:[^*]*[^\s*])?)\*/)
         if (it1 != null) {
             flushPlain(); appendInner(runs, it1![1] ?? '', bold, true, strike, link)
-            i += it1![0].length; continue
+            i += (it1![0] ?? '').length; continue
         }
         // 斜体 _x_：另加两道 flanking —— 前一个字符不能是单词字符（挡 `a_b_c`），
         // 且闭合侧的下一个字符不能是单词字符（挡 `snake_case_name` 这类把尾部也咬进去的形态）
         const it2 = rest.match(/^_([^\s_](?:[^_]*[^\s_])?)_/)
         const prevChar = i > 0 ? src.substring(i - 1, i) : ''
-        const nextIdx = i + (it2 != null ? it2![0].length : 0)
+        const nextIdx = i + (it2 != null ? (it2![0] ?? '').length : 0)
         const nextChar = nextIdx < src.length ? src.substring(nextIdx, nextIdx + 1) : ''
         if (it2 != null && !isWordChar(prevChar) && !isWordChar(nextChar)) {
             flushPlain(); appendInner(runs, it2![1] ?? '', bold, true, strike, link)
-            i += it2![0].length; continue
+            i += (it2![0] ?? '').length; continue
         }
 
         buf += src.substring(i, i + 1)
