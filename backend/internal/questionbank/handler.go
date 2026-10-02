@@ -1,5 +1,5 @@
-// Package api 实现 HTTP handlers。
-package api
+// 本文件：题库域 HTTP 出口（/api/question-bank 蓝图，ADR-0070 的 handler.go 形态）。
+package questionbank
 
 import (
 	"context"
@@ -13,24 +13,24 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// questionBankErrStatus 题库域哨兵→状态码表（#611 建表；第十二波票 6 补哨兵族并撤 fallback）：
+// ErrStatus 题库域哨兵→状态码表（#611 建表；第十二波票 6 补哨兵族并撤 fallback）：
 // 题目/证件不存在 → 404，写面校验与状态前置 → 400；未命中（DB 故障）一律 500，不再吞成 400。
-var questionBankErrStatus = &httpx.ErrStatusTable{
+var ErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrQuestionNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionContentRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionOptionsRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrSubmitNotDraft, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrRejectReasonRequired, Status: http.StatusBadRequest},
+		{Sentinel: ErrQuestionNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
+		{Sentinel: ErrQuestionContentRequired, Status: http.StatusBadRequest},
+		{Sentinel: ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
+		{Sentinel: ErrQuestionOptionsRequired, Status: http.StatusBadRequest},
+		{Sentinel: ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
+		{Sentinel: ErrSubmitNotDraft, Status: http.StatusBadRequest},
+		{Sentinel: ErrRejectReasonRequired, Status: http.StatusBadRequest},
 	},
 }
 
@@ -61,22 +61,22 @@ func bindQuestionWriteReq[T any](c *gin.Context) (*T, error) {
 	return &req, nil
 }
 
-// QuestionBankHandler 题库管理 handler。
-type QuestionBankHandler struct {
-	svc     *service.QuestionBankService
+// handler 题库管理 handler。
+type handler struct {
+	svc     *Service
 	fileSvc *filestore.FileStore
 }
 
-// NewQuestionBankHandler 创建题库管理 handler。
-func NewQuestionBankHandler(svc *service.QuestionBankService, fileSvc *filestore.FileStore) *QuestionBankHandler {
-	return &QuestionBankHandler{svc: svc, fileSvc: fileSvc}
+// newHandler 创建题库管理 handler。
+func newHandler(svc *Service, fileSvc *filestore.FileStore) *handler {
+	return &handler{svc: svc, fileSvc: fileSvc}
 }
 
-// RegisterQuestionBankRoutes 注册 /api/question-bank 蓝图。
-func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.QuestionBankService, fileSvc *filestore.FileStore) {
-	h := NewQuestionBankHandler(svc, fileSvc)
+// RegisterRoutes 注册 /api/question-bank 蓝图。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service, fileSvc *filestore.FileStore) {
+	h := newHandler(svc, fileSvc)
 
-	g := rg.Group("/question-bank", middleware.JWTAuth(rd.Session), middleware.CredentialScoped(rd.CredentialScope))
+	g := rg.Group("/question-bank", middleware.JWTAuth(session), middleware.CredentialScoped(credRes))
 
 	// ===== 题目 CRUD =====
 	g.GET("/questions", h.ListQuestions)
@@ -97,24 +97,24 @@ func RegisterQuestionBankRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service
 
 // ===== scope 入口装配（ADR-0062 决策 4）=====
 //
-// 面向学员的题目读/写路径必须收 service.QuestionReadScope，编辑面收 QuestionEditScope。
+// 面向学员的题目读/写路径必须收 QuestionReadScope，编辑面收 QuestionEditScope。
 // 装配点要同时拿到两件事：**能力**（决定形态）与**当前证件**（决定分区轴），故集中在本文件——
 // service 侧从此不接受裸 *int 证件，「忘过池」在签名上过不去。
 
-// studentQuestionScope 装配学员题目读 scope：分区轴 = CredentialScoped 解析出的当前证件
+// StudentQuestionScope 装配学员题目读 scope：分区轴 = CredentialScoped 解析出的当前证件
 // （学员未选证件 → nil → 池不分区、看全部）。
-func studentQuestionScope(c *gin.Context) service.QuestionReadScope {
-	return service.NewQuestionReadScope(middleware.CredentialIDPtr(c))
+func StudentQuestionScope(c *gin.Context) QuestionReadScope {
+	return NewQuestionReadScope(middleware.CredentialIDPtr(c))
 }
 
-// actsAsQuestionEditor 题库编辑面判定单点（题库作者 / 审核者），#981 的 by-id 分流同源。
-func actsAsQuestionEditor(c *gin.Context) bool {
+// ActsAsQuestionEditor 题库编辑面判定单点（题库作者 / 审核者），#981 的 by-id 分流同源。
+func ActsAsQuestionEditor(c *gin.Context) bool {
 	return middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview)
 }
 
-// editorQuestionScope 装配编辑面 scope：显式 credential_id 是**筛选轴**（不是可见性口径）。
-func editorQuestionScope(c *gin.Context) service.QuestionEditScope {
-	return service.NewQuestionEditScope(middleware.CredentialIDPtr(c))
+// EditorQuestionScope 装配编辑面 scope：显式 credential_id 是**筛选轴**（不是可见性口径）。
+func EditorQuestionScope(c *gin.Context) QuestionEditScope {
+	return NewQuestionEditScope(middleware.CredentialIDPtr(c))
 }
 
 // listQuestionsReq 题目列表查询参数。
@@ -127,7 +127,7 @@ type listQuestionsReq struct {
 	TagID    *int
 	// Sort 排序口径（#412）：缺省 = 现状（最新提交优先）；讲师端显式传 id_asc。
 	Sort string
-	// Editor 决定走哪一半读面（能力分流，见 actsAsQuestionEditor）：
+	// Editor 决定走哪一半读面（能力分流，见 ActsAsQuestionEditor）：
 	// true = 编辑面（draft/pending 全量 + 证件筛选轴），false = 学员面（题库池）。
 	Editor bool
 }
@@ -147,12 +147,12 @@ type listQuestionsReq struct {
 // @Param tag_id query int false "题库标签ID"
 // @Param credential_id query int false "目标证件ID"
 // @Param sort query string false "排序口径 id_asc"
-// @Success 200 {object} response.R{data=service.QuestionPageDTO} "success"
+// @Success 200 {object} response.R{data=QuestionPageDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions [get]
-func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
-	httpx.Endpoint[listQuestionsReq, service.QuestionPageDTO]{
+func (h *handler) ListQuestions(c *gin.Context) {
+	httpx.Endpoint[listQuestionsReq, QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
 				Page:     httpx.QueryIntDefault(c, "page", 1),
@@ -162,26 +162,26 @@ func (h *QuestionBankHandler) ListQuestions(c *gin.Context) {
 				Keyword:  c.Query("keyword"),
 				TagID:    httpx.QueryIDPtr(c, "tag_id"),
 				Sort:     c.Query("sort"),
-				Editor:   actsAsQuestionEditor(c),
+				Editor:   ActsAsQuestionEditor(c),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *listQuestionsReq) (*service.QuestionPageDTO, error) {
+		Invoke: func(ctx context.Context, req *listQuestionsReq) (*QuestionPageDTO, error) {
 			// 两半不同源（ADR-0062 决策 4 的事实依据）：编辑面读全量含 draft 是它的本职；
 			// 学员面必须过池，且 status 入参对学员无效（池的「已发布」在 scope 里，不在入参里）。
 			// 学员支保留 2xx 而非 403：移动端学员端有消费者（training-app api/practice.uts 的
 			// listQuestions），「挂能力守卫」会直接打断它 —— 该端点进「学员可读面」台账的理由
 			// 由 ADR-0062 票 5 的台账逐条登记（本票只把它的读面收进池）。
 			if req.Editor {
-				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, editorQuestionScope(c), req.Sort)
+				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, EditorQuestionScope(c), req.Sort)
 			}
-			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, studentQuestionScope(c), req.Sort)
+			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, StudentQuestionScope(c), req.Sort)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // createQuestionReq 创建题目请求（票 6：body 由 map 直绑改 typed 入参）。
 type createQuestionReq struct {
-	Input         service.QuestionCreateInput
+	Input         QuestionCreateInput
 	UserID        int
 	CreatedByType string
 }
@@ -193,16 +193,16 @@ type createQuestionReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body service.QuestionCreateInput true "题目" example({"type":"single_choice","content":"题干","options":{"A":"选项A"},"answer":"A","score":3})
-// @Success 201 {object} response.R{data=service.QuestionDTO} "success"
+// @Param body body QuestionCreateInput true "题目" example({"type":"single_choice","content":"题干","options":{"A":"选项A"},"answer":"A","score":3})
+// @Success 201 {object} response.R{data=QuestionDTO} "success"
 // @Failure 400 {object} response.R "参数错误（含类型不符、携带 status）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "所属证件不存在"
 // @Router /question-bank/questions [post]
-func (h *QuestionBankHandler) CreateQuestion(c *gin.Context) {
-	httpx.Endpoint[createQuestionReq, service.QuestionDTO]{
+func (h *handler) CreateQuestion(c *gin.Context) {
+	httpx.Endpoint[createQuestionReq, QuestionDTO]{
 		Parse: func(c *gin.Context) (*createQuestionReq, error) {
-			input, err := bindQuestionWriteReq[service.QuestionCreateInput](c)
+			input, err := bindQuestionWriteReq[QuestionCreateInput](c)
 			if err != nil {
 				return nil, err
 			}
@@ -212,15 +212,15 @@ func (h *QuestionBankHandler) CreateQuestion(c *gin.Context) {
 			roleStr, _ := role.(string)
 			return &createQuestionReq{Input: *input, UserID: userID, CreatedByType: roleStr}, nil
 		},
-		Invoke: func(ctx context.Context, req *createQuestionReq) (*service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *createQuestionReq) (*QuestionDTO, error) {
 			result, err := h.svc.CreateQuestion(req.Input, &req.UserID, req.CreatedByType)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *createQuestionReq, resp *service.QuestionDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *createQuestionReq, resp *QuestionDTO) {
 			response.Created(c, "题目创建成功", httpx.Deref(resp))
 		},
 	}.Handle(c)
@@ -239,12 +239,12 @@ type batchPublishReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "题目ID列表" example({"question_ids":[1,2]})
-// @Success 200 {object} response.R{data=service.QuestionPublishResultDTO} "success"
+// @Success 200 {object} response.R{data=QuestionPublishResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/batch-publish [post]
-func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
-	httpx.Endpoint[batchPublishReq, service.QuestionPublishResultDTO]{
+func (h *handler) BatchPublish(c *gin.Context) {
+	httpx.Endpoint[batchPublishReq, QuestionPublishResultDTO]{
 		Parse: func(c *gin.Context) (*batchPublishReq, error) {
 			req, err := httpx.BindJSON[batchPublishReq](c)
 			if err != nil {
@@ -255,10 +255,10 @@ func (h *QuestionBankHandler) BatchPublish(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *batchPublishReq) (*service.QuestionPublishResultDTO, error) {
+		Invoke: func(ctx context.Context, req *batchPublishReq) (*QuestionPublishResultDTO, error) {
 			return h.svc.BatchPublish(req.QuestionIDs), nil
 		},
-		Render: func(c *gin.Context, _ *batchPublishReq, resp *service.QuestionPublishResultDTO) {
+		Render: func(c *gin.Context, _ *batchPublishReq, resp *QuestionPublishResultDTO) {
 			response.SuccessWithMsg(c, "成功发布"+strconv.Itoa(resp.PublishedCount)+"道题目", *resp)
 		},
 	}.Handle(c)
@@ -278,12 +278,12 @@ type batchRejectReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "题目ID列表与原因" example({"question_ids":[1,2],"reason":"题干不完整"})
-// @Success 200 {object} response.R{data=service.QuestionRejectResultDTO} "success"
+// @Success 200 {object} response.R{data=QuestionRejectResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/batch-reject [post]
-func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
-	httpx.Endpoint[batchRejectReq, service.QuestionRejectResultDTO]{
+func (h *handler) BatchReject(c *gin.Context) {
+	httpx.Endpoint[batchRejectReq, QuestionRejectResultDTO]{
 		Parse: func(c *gin.Context) (*batchRejectReq, error) {
 			req, err := httpx.BindJSON[batchRejectReq](c)
 			if err != nil {
@@ -294,11 +294,11 @@ func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *batchRejectReq) (*service.QuestionRejectResultDTO, error) {
+		Invoke: func(ctx context.Context, req *batchRejectReq) (*QuestionRejectResultDTO, error) {
 			return h.svc.BatchReject(req.QuestionIDs, req.Reason)
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *batchRejectReq, resp *service.QuestionRejectResultDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *batchRejectReq, resp *QuestionRejectResultDTO) {
 			response.SuccessWithMsg(c, "成功驳回"+strconv.Itoa(resp.RejectedCount)+"道题目", *resp)
 		},
 	}.Handle(c)
@@ -306,7 +306,7 @@ func (h *QuestionBankHandler) BatchReject(c *gin.Context) {
 
 // batchImportReq 批量导入请求（票 6：条目由 map 数组改 typed 数组）。
 type batchImportReq struct {
-	Questions []service.QuestionCreateInput
+	Questions []QuestionCreateInput
 	UserID    int
 }
 
@@ -317,17 +317,17 @@ type batchImportReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body service.QuestionBatchImportInput true "题目数组" example({"questions":[{"type":"single_choice","content":"题干","answer":"A"}]})
-// @Success 200 {object} response.R{data=service.QuestionImportResultDTO} "success"
+// @Param body body QuestionBatchImportInput true "题目数组" example({"questions":[{"type":"single_choice","content":"题干","answer":"A"}]})
+// @Success 200 {object} response.R{data=QuestionImportResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误（含类型不符、条目携带 status、导入数组为空）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/batch-import [post]
-func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
-	httpx.Endpoint[batchImportReq, service.QuestionImportResultDTO]{
+func (h *handler) BatchImport(c *gin.Context) {
+	httpx.Endpoint[batchImportReq, QuestionImportResultDTO]{
 		Parse: func(c *gin.Context) (*batchImportReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
-			wrapper, err := bindQuestionWriteReq[service.QuestionBatchImportInput](c)
+			wrapper, err := bindQuestionWriteReq[QuestionBatchImportInput](c)
 			if err != nil {
 				return nil, err
 			}
@@ -336,11 +336,11 @@ func (h *QuestionBankHandler) BatchImport(c *gin.Context) {
 			}
 			return &batchImportReq{Questions: wrapper.Questions, UserID: userID}, nil
 		},
-		Invoke: func(ctx context.Context, req *batchImportReq) (*service.QuestionImportResultDTO, error) {
+		Invoke: func(ctx context.Context, req *batchImportReq) (*QuestionImportResultDTO, error) {
 			return h.svc.BatchImport(req.Questions, &req.UserID), nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *batchImportReq, resp *service.QuestionImportResultDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *batchImportReq, resp *QuestionImportResultDTO) {
 			response.SuccessWithMsg(c, "成功导入"+strconv.Itoa(resp.SuccessCount)+"道题目", *resp)
 		},
 	}.Handle(c)
@@ -359,11 +359,11 @@ type questionIDReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Success 200 {object} response.R{data=QuestionDTO} "success"
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id} [get]
-func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
-	httpx.Endpoint[questionIDReq, service.QuestionDTO]{
+func (h *handler) GetQuestion(c *gin.Context) {
+	httpx.Endpoint[questionIDReq, QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -371,24 +371,24 @@ func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 			}
 			return &questionIDReq{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *questionIDReq) (*service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *questionIDReq) (*QuestionDTO, error) {
 			// 分流读路径（#981）：题库作者/审核者走编辑面（可读 draft），其余（学员）走题库池口径。
 			// 两半各自的判据都由 scope 值对象承载（ADR-0062 决策 4），本处只负责按能力选形态。
-			if actsAsQuestionEditor(c) {
+			if ActsAsQuestionEditor(c) {
 				result, err := h.svc.GetQuestion(req.ID)
 				if err != nil {
 					return nil, err
 				}
 				return &result, nil
 			}
-			result, err := h.svc.GetQuestionForStudent(req.ID, studentQuestionScope(c))
+			result, err := h.svc.GetQuestionForStudent(req.ID, StudentQuestionScope(c))
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *QuestionDTO) {
 			response.Success(c, httpx.Deref(resp))
 		},
 	}.Handle(c)
@@ -397,7 +397,7 @@ func (h *QuestionBankHandler) GetQuestion(c *gin.Context) {
 // updateQuestionReq 更新题目请求（票 6：typed + 操作者角色——讲师改内容回 pending，管理员即时生效）。
 type updateQuestionReq struct {
 	ID        int
-	Input     service.QuestionUpdateInput
+	Input     QuestionUpdateInput
 	ActorType string
 }
 
@@ -409,19 +409,19 @@ type updateQuestionReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Param body body service.QuestionUpdateInput true "题目字段（部分更新，不含 status）"
-// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Param body body QuestionUpdateInput true "题目字段（部分更新，不含 status）"
+// @Success 200 {object} response.R{data=QuestionDTO} "success"
 // @Failure 400 {object} response.R "参数错误（含类型不符、携带 status）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/{question_id} [put]
-func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
-	httpx.Endpoint[updateQuestionReq, service.QuestionDTO]{
+func (h *handler) UpdateQuestion(c *gin.Context) {
+	httpx.Endpoint[updateQuestionReq, QuestionDTO]{
 		Parse: func(c *gin.Context) (*updateQuestionReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
 				return nil, err
 			}
-			input, err := bindQuestionWriteReq[service.QuestionUpdateInput](c)
+			input, err := bindQuestionWriteReq[QuestionUpdateInput](c)
 			if err != nil {
 				return nil, err
 			}
@@ -429,15 +429,15 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 			roleStr, _ := role.(string)
 			return &updateQuestionReq{ID: id, Input: *input, ActorType: roleStr}, nil
 		},
-		Invoke: func(ctx context.Context, req *updateQuestionReq) (*service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *updateQuestionReq) (*QuestionDTO, error) {
 			result, err := h.svc.UpdateQuestion(req.ID, req.Input, req.ActorType)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *updateQuestionReq, resp *service.QuestionDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *updateQuestionReq, resp *QuestionDTO) {
 			response.SuccessWithMsg(c, "题目更新成功", httpx.Deref(resp))
 		},
 	}.Handle(c)
@@ -454,7 +454,7 @@ func (h *QuestionBankHandler) UpdateQuestion(c *gin.Context) {
 // @Success 200 {object} response.R "success"
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id} [delete]
-func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
+func (h *handler) DeleteQuestion(c *gin.Context) {
 	httpx.Endpoint[questionIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
@@ -469,7 +469,7 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-		ErrStatus: questionBankErrStatus,
+		ErrStatus: ErrStatus,
 		Render: func(c *gin.Context, _ *questionIDReq, resp *struct{}) {
 			response.SuccessWithMsg(c, "题目删除成功", nil)
 		},
@@ -484,12 +484,12 @@ func (h *QuestionBankHandler) DeleteQuestion(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Success 200 {object} response.R{data=QuestionDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id}/publish [post]
-func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
-	httpx.Endpoint[questionIDReq, service.QuestionDTO]{
+func (h *handler) PublishQuestion(c *gin.Context) {
+	httpx.Endpoint[questionIDReq, QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -497,15 +497,15 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 			}
 			return &questionIDReq{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *questionIDReq) (*service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *questionIDReq) (*QuestionDTO, error) {
 			result, err := h.svc.PublishQuestion(req.ID)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *QuestionDTO) {
 			response.SuccessWithMsg(c, "题目发布成功", httpx.Deref(resp))
 		},
 	}.Handle(c)
@@ -519,13 +519,13 @@ func (h *QuestionBankHandler) PublishQuestion(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Success 200 {object} response.R{data=QuestionDTO} "success"
 // @Failure 400 {object} response.R "仅 draft 题目可提交"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "题目不存在"
 // @Router /question-bank/questions/{question_id}/submit [post]
-func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
-	httpx.Endpoint[questionIDReq, service.QuestionDTO]{
+func (h *handler) SubmitQuestion(c *gin.Context) {
+	httpx.Endpoint[questionIDReq, QuestionDTO]{
 		Parse: func(c *gin.Context) (*questionIDReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -533,15 +533,15 @@ func (h *QuestionBankHandler) SubmitQuestion(c *gin.Context) {
 			}
 			return &questionIDReq{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *questionIDReq) (*service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *questionIDReq) (*QuestionDTO, error) {
 			result, err := h.svc.SubmitQuestion(req.ID)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *questionIDReq, resp *service.QuestionDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *questionIDReq, resp *QuestionDTO) {
 			response.SuccessWithMsg(c, "已提交审核", httpx.Deref(resp))
 		},
 	}.Handle(c)
@@ -562,12 +562,12 @@ type rejectQuestionReq struct {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "驳回原因" example({"reason":"题干不完整"})
-// @Success 200 {object} response.R{data=service.QuestionDTO} "success"
+// @Success 200 {object} response.R{data=QuestionDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/questions/{question_id}/reject [post]
-func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
-	httpx.Endpoint[rejectQuestionReq, service.QuestionDTO]{
+func (h *handler) RejectQuestion(c *gin.Context) {
+	httpx.Endpoint[rejectQuestionReq, QuestionDTO]{
 		Parse: func(c *gin.Context) (*rejectQuestionReq, error) {
 			id, err := httpx.PathInt(c, "question_id", "题目ID无效")
 			if err != nil {
@@ -581,15 +581,15 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 			}
 			return &rejectQuestionReq{ID: id, Reason: req.Reason}, nil
 		},
-		Invoke: func(ctx context.Context, req *rejectQuestionReq) (*service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *rejectQuestionReq) (*QuestionDTO, error) {
 			result, err := h.svc.RejectQuestion(req.ID, req.Reason)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-		ErrStatus: questionBankErrStatus,
-		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *service.QuestionDTO) {
+		ErrStatus: ErrStatus,
+		Render: func(c *gin.Context, _ *rejectQuestionReq, resp *QuestionDTO) {
 			response.SuccessWithMsg(c, "题目已驳回", httpx.Deref(resp))
 		},
 	}.Handle(c)
@@ -602,12 +602,12 @@ func (h *QuestionBankHandler) RejectQuestion(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.QuestionBankStatsDTO} "success"
+// @Success 200 {object} response.R{data=QuestionBankStatsDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/stats [get]
-func (h *QuestionBankHandler) GetStats(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.QuestionBankStatsDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.QuestionBankStatsDTO, error) {
+func (h *handler) GetStats(c *gin.Context) {
+	httpx.Endpoint[struct{}, QuestionBankStatsDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*QuestionBankStatsDTO, error) {
 			// #413：总数按当前证件题库池口径（拦截器已注入 credential_id；缺省 = 不分区）。
 			return h.svc.GetStats(middleware.CredentialIDPtr(c)), nil
 		},
@@ -622,11 +622,11 @@ func (h *QuestionBankHandler) GetStats(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param image formData file true "图片文件"
-// @Success 200 {object} response.R{data=service.QuestionImageUploadDTO} "success"
+// @Success 200 {object} response.R{data=QuestionImageUploadDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /question-bank/upload-image [post]
-func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
+func (h *handler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("image")
 	if err != nil {
 		response.BadRequest(c, "未找到上传文件")
@@ -651,5 +651,5 @@ func (h *QuestionBankHandler) UploadImage(c *gin.Context) {
 		response.ServerErrorCause(c, "图片上传失败: ", err)
 		return
 	}
-	response.SuccessWithMsg(c, "图片上传成功", service.QuestionImageUploadDTO{URL: url})
+	response.SuccessWithMsg(c, "图片上传成功", QuestionImageUploadDTO{URL: url})
 }

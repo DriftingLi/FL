@@ -1,5 +1,5 @@
 // Package service 题库服务 CRUD 测试，使用内存 sqlite 数据库。
-package service
+package questionbank
 
 import (
 	"encoding/json"
@@ -15,16 +15,16 @@ import (
 	"forklift-training/internal/training"
 )
 
-func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
+func newQuestionBankSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewQuestionBankService(db, nil, zap.NewNop()), db
+	return NewService(db, nil, zap.NewNop()), db
 }
 
 // createQuestionAs 测试 fixture 单点：经票 6 typed 写面创建（固定 pending），
 // 到达目标状态——published 走显式发布动作，draft 直接改列（写面已无 status 通道，
 // 造「被驳回回退」等历史状态形态必须绕面）。
-func createQuestionAs(t *testing.T, svc *QuestionBankService, db *gorm.DB, in QuestionCreateInput, status string) QuestionDTO {
+func createQuestionAs(t *testing.T, svc *Service, db *gorm.DB, in QuestionCreateInput, status string) QuestionDTO {
 	t.Helper()
 	q, err := svc.CreateQuestion(in, nil, "tutor")
 	if err != nil {

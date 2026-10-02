@@ -19,6 +19,7 @@ import (
 
 	"forklift-training/internal/model"
 
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -47,9 +48,9 @@ func init() {
 // nonnilOutletsCore 键 = 包名.类型名.json键，值 = 走真实出口取到的结果。
 // 一条键对应一次真实调用；同一类型多条字段可以共用一次调用（各占一键、各自 marshal）。
 var nonnilOutletsCore = map[string]func(t *testing.T) any{
-	"service.RecruitListResult.items":        outletRecruitListEmpty,
-	"service.QuestionPageDTO.questions":      outletQuestionPageEmptyPool,
-	"service.QuestionImportResultDTO.errors": outletQuestionImportEmpty,
+	"service.RecruitListResult.items":             outletRecruitListEmpty,
+	"questionbank.QuestionPageDTO.questions":      outletQuestionPageEmptyPool,
+	"questionbank.QuestionImportResultDTO.errors": outletQuestionImportEmpty,
 }
 
 func outletRecruitListEmpty(t *testing.T) any {
@@ -64,8 +65,8 @@ func outletRecruitListEmpty(t *testing.T) any {
 
 func outletQuestionPageEmptyPool(t *testing.T) any {
 	t.Helper()
-	svc := NewQuestionBankService(testutil.NewMemoryDB(t), nil, zap.NewNop())
-	res, err := svc.ListPoolQuestions(1, 20, "", "", nil, NewQuestionReadScope(nil), "")
+	svc := questionbank.NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	res, err := svc.ListPoolQuestions(1, 20, "", "", nil, questionbank.NewQuestionReadScope(nil), "")
 	if err != nil {
 		t.Fatalf("空池列表失败: %v", err)
 	}
@@ -74,7 +75,7 @@ func outletQuestionPageEmptyPool(t *testing.T) any {
 
 func outletQuestionImportEmpty(t *testing.T) any {
 	t.Helper()
-	svc := NewQuestionBankService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	svc := questionbank.NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
 	return svc.BatchImport(nil, nil)
 }
 

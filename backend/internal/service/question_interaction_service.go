@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
@@ -60,8 +61,8 @@ var (
 // List 某题的评论列表。scope 必传（ADR-0062 决策 4）：修复前这条查询**连题目存在性都不查**，
 // 直调任意 question_id 即可枚举池外题（draft / pending / 源标记真题题 / 非当前证件）的评论，
 // 等于给不可见题装了一个只读探针。池外一律按「不存在」上抛，与题目 by-id 读面同口径。
-func (s *QuestionCommentService) List(questionID, page, pageSize int, scope QuestionReadScope) ([]QuestionCommentDTO, int64, error) {
-	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+func (s *QuestionCommentService) List(questionID, page, pageSize int, scope questionbank.QuestionReadScope) ([]QuestionCommentDTO, int64, error) {
+	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return nil, 0, err
 	}
 	type row struct {
@@ -99,7 +100,7 @@ func (s *QuestionCommentService) List(questionID, page, pageSize int, scope Ques
 
 // Create 发表评论。scope 必传（ADR-0062 决策 4）：只判「题存在」的旧写法允许把评论挂到
 // 学员根本看不见的题上（再由列表/计数收割），写面与读面必须同一口径。
-func (s *QuestionCommentService) Create(questionID, userID int, content string, scope QuestionReadScope) (*QuestionCommentDTO, error) {
+func (s *QuestionCommentService) Create(questionID, userID int, content string, scope questionbank.QuestionReadScope) (*QuestionCommentDTO, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, ErrCommentContentEmpty
@@ -107,7 +108,7 @@ func (s *QuestionCommentService) Create(questionID, userID int, content string, 
 	if len(content) > 500 {
 		return nil, ErrCommentTooLong
 	}
-	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return nil, err
 	}
 	c := model.QuestionComment{

@@ -2241,6 +2241,123 @@ definitions:
       total_earned:
         type: integer
     type: object
+  questionbank.QuestionBankStatsDTO:
+    properties:
+      by_status:
+        additionalProperties:
+          type: integer
+        type: object
+      by_type:
+        additionalProperties:
+          type: integer
+        type: object
+      total:
+        type: integer
+    type: object
+  questionbank.QuestionBatchImportInput:
+    properties:
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionCreateInput'
+        type: array
+    type: object
+  questionbank.QuestionCreateInput:
+    type: object
+  questionbank.QuestionDTO:
+    properties:
+      answer:
+        description: 学员侧（includeAnswer=false）省略以下四个字段。
+        type: string
+        x-optional: true
+      content:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+        x-nullable: true
+      created_by_type:
+        type: string
+      credential_id:
+        description: CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
+        type: integer
+        x-optional: true
+      explanation:
+        type: string
+        x-optional: true
+      id:
+        type: integer
+      image_url:
+        type: string
+      options: {}
+      reference_answer:
+        type: string
+        x-optional: true
+      reject_reason:
+        type: string
+      score:
+        type: integer
+      scoring_criteria:
+        type: string
+        x-optional: true
+      status:
+        type: string
+      tags:
+        description: Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。
+        x-optional: true
+      type:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  questionbank.QuestionImageUploadDTO:
+    properties:
+      url:
+        type: string
+    type: object
+  questionbank.QuestionImportErrorDTO:
+    properties:
+      error:
+        type: string
+      index:
+        type: integer
+    type: object
+  questionbank.QuestionImportResultDTO:
+    properties:
+      error_count:
+        type: integer
+      errors:
+        items:
+          $ref: '#/definitions/questionbank.QuestionImportErrorDTO'
+        type: array
+      success_count:
+        type: integer
+    type: object
+  questionbank.QuestionPageDTO:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  questionbank.QuestionPublishResultDTO:
+    properties:
+      published_count:
+        type: integer
+    type: object
+  questionbank.QuestionRejectResultDTO:
+    properties:
+      rejected_count:
+        type: integer
+    type: object
+  questionbank.QuestionUpdateInput:
+    type: object
   repository.AlgorithmParameters:
     properties:
       brands:
@@ -2726,7 +2843,7 @@ definitions:
         type: string
       question:
         allOf:
-        - $ref: '#/definitions/service.QuestionDTO'
+        - $ref: '#/definitions/questionbank.QuestionDTO'
         x-optional: true
       question_id:
         type: integer
@@ -3056,7 +3173,7 @@ definitions:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/service.QuestionDTO'
+          $ref: '#/definitions/questionbank.QuestionDTO'
         type: array
       remaining_time:
         type: integer
@@ -3071,7 +3188,7 @@ definitions:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/service.QuestionDTO'
+          $ref: '#/definitions/questionbank.QuestionDTO'
         type: array
       remaining_time:
         type: integer
@@ -3142,7 +3259,7 @@ definitions:
         type: integer
       questions:
         items:
-          $ref: '#/definitions/service.QuestionDTO'
+          $ref: '#/definitions/questionbank.QuestionDTO'
         type: array
       total:
         type: integer
@@ -3197,26 +3314,6 @@ definitions:
       saved:
         type: boolean
     type: object
-  service.QuestionBankStatsDTO:
-    properties:
-      by_status:
-        additionalProperties:
-          type: integer
-        type: object
-      by_type:
-        additionalProperties:
-          type: integer
-        type: object
-      total:
-        type: integer
-    type: object
-  service.QuestionBatchImportInput:
-    properties:
-      questions:
-        items:
-          $ref: '#/definitions/service.QuestionCreateInput'
-        type: array
-    type: object
   service.QuestionCommentDTO:
     properties:
       avatar_url:
@@ -3246,103 +3343,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  service.QuestionCreateInput:
-    type: object
-  service.QuestionDTO:
-    properties:
-      answer:
-        description: 学员侧（includeAnswer=false）省略以下四个字段。
-        type: string
-        x-optional: true
-      content:
-        type: string
-      created_at:
-        type: string
-      created_by:
-        type: integer
-        x-nullable: true
-      created_by_type:
-        type: string
-      credential_id:
-        description: CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
-        type: integer
-        x-optional: true
-      explanation:
-        type: string
-        x-optional: true
-      id:
-        type: integer
-      image_url:
-        type: string
-      options: {}
-      reference_answer:
-        type: string
-        x-optional: true
-      reject_reason:
-        type: string
-      score:
-        type: integer
-      scoring_criteria:
-        type: string
-        x-optional: true
-      status:
-        type: string
-      tags:
-        description: Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。
-        x-optional: true
-      type:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  service.QuestionImageUploadDTO:
-    properties:
-      url:
-        type: string
-    type: object
-  service.QuestionImportErrorDTO:
-    properties:
-      error:
-        type: string
-      index:
-        type: integer
-    type: object
-  service.QuestionImportResultDTO:
-    properties:
-      error_count:
-        type: integer
-      errors:
-        items:
-          $ref: '#/definitions/service.QuestionImportErrorDTO'
-        type: array
-      success_count:
-        type: integer
-    type: object
-  service.QuestionPageDTO:
-    properties:
-      page:
-        type: integer
-      page_size:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/service.QuestionDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.QuestionPublishResultDTO:
-    properties:
-      published_count:
-        type: integer
-    type: object
-  service.QuestionRejectResultDTO:
-    properties:
-      rejected_count:
-        type: integer
-    type: object
-  service.QuestionUpdateInput:
     type: object
   service.RealExamPaperDTO:
     properties:
@@ -3860,7 +3860,7 @@ definitions:
         type: string
       question:
         allOf:
-        - $ref: '#/definitions/service.QuestionDTO'
+        - $ref: '#/definitions/questionbank.QuestionDTO'
         x-optional: true
       question_id:
         type: integer
@@ -12660,7 +12660,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.QuestionDTO'
+                    $ref: '#/definitions/questionbank.QuestionDTO'
                   type: array
               type: object
         "401":
@@ -13041,7 +13041,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionPageDTO'
+                  $ref: '#/definitions/questionbank.QuestionPageDTO'
               type: object
         "400":
           description: 参数错误
@@ -13067,7 +13067,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.QuestionCreateInput'
+          $ref: '#/definitions/questionbank.QuestionCreateInput'
       produces:
       - application/json
       responses:
@@ -13078,7 +13078,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionDTO'
+                  $ref: '#/definitions/questionbank.QuestionDTO'
               type: object
         "400":
           description: 参数错误（含类型不符、携带 status）
@@ -13144,7 +13144,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionDTO'
+                  $ref: '#/definitions/questionbank.QuestionDTO'
               type: object
         "404":
           description: 题目不存在
@@ -13171,7 +13171,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.QuestionUpdateInput'
+          $ref: '#/definitions/questionbank.QuestionUpdateInput'
       produces:
       - application/json
       responses:
@@ -13182,7 +13182,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionDTO'
+                  $ref: '#/definitions/questionbank.QuestionDTO'
               type: object
         "400":
           description: 参数错误（含类型不符、携带 status）
@@ -13218,7 +13218,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionDTO'
+                  $ref: '#/definitions/questionbank.QuestionDTO'
               type: object
         "401":
           description: 未认证
@@ -13260,7 +13260,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionDTO'
+                  $ref: '#/definitions/questionbank.QuestionDTO'
               type: object
         "400":
           description: 参数错误
@@ -13296,7 +13296,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionDTO'
+                  $ref: '#/definitions/questionbank.QuestionDTO'
               type: object
         "400":
           description: 仅 draft 题目可提交
@@ -13326,7 +13326,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.QuestionBatchImportInput'
+          $ref: '#/definitions/questionbank.QuestionBatchImportInput'
       produces:
       - application/json
       responses:
@@ -13337,7 +13337,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionImportResultDTO'
+                  $ref: '#/definitions/questionbank.QuestionImportResultDTO'
               type: object
         "400":
           description: 参数错误（含类型不符、条目携带 status、导入数组为空）
@@ -13374,7 +13374,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionPublishResultDTO'
+                  $ref: '#/definitions/questionbank.QuestionPublishResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -13411,7 +13411,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionRejectResultDTO'
+                  $ref: '#/definitions/questionbank.QuestionRejectResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -13441,7 +13441,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionBankStatsDTO'
+                  $ref: '#/definitions/questionbank.QuestionBankStatsDTO'
               type: object
         "401":
           description: 未认证
@@ -13473,7 +13473,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionImageUploadDTO'
+                  $ref: '#/definitions/questionbank.QuestionImageUploadDTO'
               type: object
         "400":
           description: 参数错误

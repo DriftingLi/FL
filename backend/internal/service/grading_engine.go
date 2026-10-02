@@ -7,6 +7,7 @@ import (
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 )
 
 // fallbackCommentPrefix 短答 AI 评分降级注释统一前缀（四流单点）。
@@ -41,7 +42,7 @@ type ShortAnswerGrade struct {
 	Score    float64
 	Comment  string // fallback 时已统一加「[AI评分降级] 」前缀
 	Fallback bool
-	Passed   bool // 由 shortAnswerPassed 单点推导（score ≥ maxScore × 0.6）
+	Passed   bool // 由 questionbank.ShortAnswerPassed 单点推导（score ≥ maxScore × 0.6）
 }
 
 // gradeShortAnswer 短答 AI 判分单点入口：grader 为 nil 或 AI 返回 nil 时返回 nil（调用方降级，不产生 AI 分）。
@@ -62,7 +63,7 @@ func gradeShortAnswer(grader ShortAnswerGrader, q *model.Question, studentAnswer
 		Score:    res.Score,
 		Comment:  comment,
 		Fallback: res.Fallback,
-		Passed:   shortAnswerPassed(res.Score, maxScore),
+		Passed:   questionbank.ShortAnswerPassed(res.Score, maxScore),
 	}
 }
 
@@ -101,17 +102,17 @@ func newGradingEngine(db *gorm.DB) *gradingEngine {
 // 那正是「半对与简答都进不了总分」的旧口径。IsCorrect 三态语义不变。
 func (e *gradingEngine) gradeOne(f gradingFlow, q *model.Question, userAnswer any, studentID int) GradeResult {
 	maxScore := f.maxScore(q)
-	isCorrect, earned := gradeQuestion(q, userAnswer, maxScore)
+	isCorrect, earned := questionbank.GradeQuestion(q, userAnswer, maxScore)
 
 	var sa *ShortAnswerGrade
 	if q.Type == "short_answer" {
-		sa = gradeShortAnswer(f.ai, q, stringifyAnswer(userAnswer), maxScore)
+		sa = gradeShortAnswer(f.ai, q, questionbank.StringifyAnswer(userAnswer), maxScore)
 		if sa != nil {
 			earned = sa.Score
 		}
 	}
 	if isCorrect != nil && !*isCorrect {
-		_ = addToWrongQuestions(e.db, studentID, q.ID)
+		_ = questionbank.AddToWrongQuestions(e.db, studentID, q.ID)
 	}
 	return GradeResult{
 		Question:    q,
@@ -131,7 +132,7 @@ func (e *gradingEngine) gradeSet(f gradingFlow, qMap map[int]*model.Question, id
 		if !ok {
 			continue
 		}
-		results = append(results, e.gradeOne(f, q, answers[intToString(qid)], studentID))
+		results = append(results, e.gradeOne(f, q, answers[questionbank.IntToString(qid)], studentID))
 	}
 	return results
 }

@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -106,8 +107,8 @@ var (
 	ErrPracticeTagUnsupported = errors.New("该标签不支持专项练习")
 )
 
-func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID *int) ([]QuestionDTO, error) {
-	selected, err := sampleQuestions(s.db, qType, count, credentialID)
+func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID *int) ([]questionbank.QuestionDTO, error) {
+	selected, err := questionbank.SampleQuestions(s.db, qType, count, credentialID)
 	if err != nil {
 		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
 		// 换掉、再被端点那格 errStatusAll(404) 渲染成 404 —— 「查不动」被打扮成「没有题」，
@@ -117,9 +118,9 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credenti
 	if len(selected) == 0 {
 		return nil, errors.New("没有符合条件的题目")
 	}
-	out := make([]QuestionDTO, 0, len(selected))
+	out := make([]questionbank.QuestionDTO, 0, len(selected))
 	for i := range selected {
-		out = append(out, newQuestionDTO(&selected[i], false))
+		out = append(out, questionbank.NewQuestionDTO(&selected[i], false))
 	}
 	return out, nil
 }
@@ -142,7 +143,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 	if tag.IsSourceTag {
 		return nil, ErrPracticeTagUnsupported
 	}
-	all, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{tagID: tagID, cred: credentialID})
+	all, err := questionbank.SampleQuestionsByOpts(s.db, questionbank.SampleQuestionsOpts{TagID: tagID, Cred: credentialID})
 	if err != nil {
 		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
 		// 换掉、再被端点那格 errStatusAll(404) 渲染成 404 —— 「查不动」被打扮成「没有题」，
@@ -164,17 +165,17 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
 		Sample: func(ids []int) []int {
-			return shuffleTruncate(ids, count)
+			return questionbank.ShuffleTruncate(ids, count)
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]QuestionDTO, 0, len(ids))
+	out := make([]questionbank.QuestionDTO, 0, len(ids))
 	for _, id := range ids {
 		if q, ok := byID[id]; ok {
-			out = append(out, newQuestionDTO(&q, false))
+			out = append(out, questionbank.NewQuestionDTO(&q, false))
 		}
 	}
 	return &PracticeStartResultDTO{
@@ -189,7 +190,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
 // 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
 func (s *PracticeModeService) StartSequential(studentID int, credentialID *int) (*PracticeStartResultDTO, error) {
-	questions, err := sampleQuestionsByOpts(s.db, sampleQuestionsOpts{cred: credentialID})
+	questions, err := questionbank.SampleQuestionsByOpts(s.db, questionbank.SampleQuestionsOpts{Cred: credentialID})
 	if err != nil {
 		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
 		// 换掉、再被端点那格 errStatusAll(404) 渲染成 404 —— 「查不动」被打扮成「没有题」，
@@ -214,9 +215,9 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID *int) 
 	}
 
 	// 一次性返回全部题目，前端从游标处开始作答
-	all := make([]QuestionDTO, 0, len(questions))
+	all := make([]questionbank.QuestionDTO, 0, len(questions))
 	for i := range questions {
-		all = append(all, newQuestionDTO(&questions[i], false))
+		all = append(all, questionbank.NewQuestionDTO(&questions[i], false))
 	}
 	return &PracticeStartResultDTO{
 		Questions:    all,
@@ -311,13 +312,13 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, cr
 // poolTotalForMode 按模式取池计数（#413）：sequential → 证件分区池；tag:<id> → 标签 + 证件；
 // 其余模式（paper 等）返回 0——池口径只对顺序/标签练习有意义。
 func (s *PracticeModeService) poolTotalForMode(mode string, credentialID *int) int64 {
-	o := sampleQuestionsOpts{cred: credentialID}
+	o := questionbank.SampleQuestionsOpts{Cred: credentialID}
 	if pm, ok := ParsePracticeMode(mode); ok {
 		if tagID, ok := pmTagID(pm); ok {
-			o.tagID = tagID
+			o.TagID = tagID
 		}
 	}
-	total, err := countPoolByOpts(s.db, o)
+	total, err := questionbank.CountPoolByOpts(s.db, o)
 	if err != nil {
 		return 0
 	}
@@ -348,11 +349,11 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 	// 故按 id 直取的提交路径同样不得越过 published / 排源标记真题题 / 当前证件。
 	// credentialID 是**必填形参**（nil = 不分区）：可见性口径不许做成 fail-open 的可选变参。
 	var q model.Question
-	if err := poolFilter(s.db.Model(&model.Question{}), sampleQuestionsOpts{cred: credentialID}).
+	if err := questionbank.PoolFilter(s.db.Model(&model.Question{}), questionbank.SampleQuestionsOpts{Cred: credentialID}).
 		Where("id = ?", questionID).First(&q).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// 池外与真不存在同判（按不存在答，不泄漏存在性）；用**已有**载体，不另立哨兵。
-			return nil, ErrQuestionNotFound
+			return nil, questionbank.ErrQuestionNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6）
 	}
@@ -370,7 +371,7 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: orDefault(practiceType, "free"),
-		UserAnswer:   stringifyAnswer(userAnswer),
+		UserAnswer:   questionbank.StringifyAnswer(userAnswer),
 		CreatedAt:    clock.Now(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
@@ -426,7 +427,7 @@ func practiceMaxScore(q *model.Question) float64 {
 		}
 		return 10
 	}
-	return questionMaxScore("practice", q.Type)
+	return questionbank.QuestionMaxScore("practice", q.Type)
 }
 
 // GetPracticeStats 刷题聚合统计（Ticket #329，独立于 /stats）：
@@ -508,8 +509,8 @@ func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*Pract
 		return nil, err
 	}
 	// 保留旧语义：by_type 对合法题型零填充；accuracy 为每题型正确率（加性新 key）。
-	byType := make(map[string]PracticeTypeStat, len(validQuestionTypes))
-	for _, t := range validQuestionTypes {
+	byType := make(map[string]PracticeTypeStat, len(questionbank.ValidQuestionTypes))
+	for _, t := range questionbank.ValidQuestionTypes {
 		tt := all[t]
 		tc := filtered[t]
 		acc := 0.0
@@ -597,7 +598,7 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 	for i := range records {
 		questionIDs = append(questionIDs, records[i].QuestionID)
 	}
-	questions := loadQuestionsByIDs(s.db, questionIDs)
+	questions := questionbank.LoadQuestionsByIDs(s.db, questionIDs)
 
 	items := make([]HistoryItemDTO, 0, len(records))
 	for _, rc := range records {
@@ -611,7 +612,7 @@ func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page,
 			CreatedAt:    timefmt.FormatISO(rc.CreatedAt),
 		}
 		if qq, ok := questions[rc.QuestionID]; ok {
-			d := newQuestionDTO(qq, false)
+			d := questionbank.NewQuestionDTO(qq, false)
 			item.Question = &d
 		}
 		items = append(items, item)

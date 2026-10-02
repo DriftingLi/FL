@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/course"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -98,7 +99,7 @@ var (
 	ErrFavoriteNotFound          = errors.New("收藏不存在")
 )
 
-func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope QuestionReadScope) error {
+func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope questionbank.QuestionReadScope) error {
 	// 五条支的「查不动」一律上抛，不再被 `cnt == 0` 咽成「不存在」（ADR-0065 决策 7）。
 	// 这里原本是**同一个函数里五种漏法**：course/question 两支把错误丢在单点内部、
 	// chapter/featured/topic 三支把错误丢在 Count 的返回值上——只修其中两支，剩下三支仍会让
@@ -198,7 +199,7 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 
 // Add 收藏（幂等：已收藏直接返回既有条目）。
 // qScope 由入口装配（ADR-0062 决策 4）：只有题目支消费它，其余目标类型不读该参数。
-func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope QuestionReadScope) (*FavoriteDTO, error) {
+func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope questionbank.QuestionReadScope) (*FavoriteDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
 		return nil, ErrFavTargetIDInvalid

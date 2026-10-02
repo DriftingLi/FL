@@ -4,6 +4,7 @@ package service
 
 import (
 	"encoding/json"
+	"forklift-training/internal/questionbank"
 	"testing"
 )
 
@@ -11,7 +12,7 @@ func TestPracticeStartResultDTOShapeLock(t *testing.T) {
 	// 旧 StartTagPractice/StartSequential 的 map 输出顶层 key：
 	// {questions, current_index, total, completed}
 	d := PracticeStartResultDTO{
-		Questions:    []QuestionDTO{{ID: 1}},
+		Questions:    []questionbank.QuestionDTO{{ID: 1}},
 		CurrentIndex: 0,
 		Total:        5,
 		Completed:    0,
@@ -113,7 +114,7 @@ func TestHistoryResultDTOShapeLock(t *testing.T) {
 	assertShapeLock(t, item,
 		"id", "student_id", "question_id", "is_correct", "practice_type", "user_answer", "created_at",
 	)
-	qd := newQuestionDTO(sampleQuestionForShape(), false)
+	qd := questionbank.NewQuestionDTO(sampleQuestionForShape(), false)
 	item.Question = &qd
 	got, _ := json.Marshal(item)
 	var asMap map[string]any

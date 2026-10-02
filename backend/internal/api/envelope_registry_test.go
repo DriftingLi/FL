@@ -259,7 +259,7 @@ func TestEnvelopeCoverageDetectsMissingRegistration(t *testing.T) {
 	for _, want := range []string{
 		"api.AuditLogPageResult",
 		"model.ListBatteryResponse",
-		"service.QuestionPageDTO",
+		"questionbank.QuestionPageDTO",
 		"service.FavoritePageResult",
 	} {
 		if !containsString(found, want) {

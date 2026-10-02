@@ -2,11 +2,13 @@
 // 断言 JSON key 集合与重构前的 map 输出契约逐字一致；practice by_type 正确率 accuracy 为加性新增 key。
 package service
 
+import "forklift-training/internal/questionbank"
+
 import "testing"
 
 func TestQuestionBankStatsDTOShapeLock(t *testing.T) {
 	// 旧 question_service GetStats 顶层：{total, by_type, by_status}
-	d := QuestionBankStatsDTO{
+	d := questionbank.QuestionBankStatsDTO{
 		Total:    12,
 		ByType:   map[string]int64{"single_choice": 5, "multi_choice": 7},
 		ByStatus: map[string]int64{"published": 12},

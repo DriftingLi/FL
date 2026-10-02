@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -87,7 +88,7 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, studentQuestionScope(c))
+	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, questionbank.StudentQuestionScope(c))
 	if err != nil {
 		favoriteErrStatus.RenderError(c, err)
 		return

@@ -20,6 +20,7 @@ import (
 	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -344,16 +345,16 @@ func TestErrStatusTable_Snapshot_Job(t *testing.T) {
 // TestErrStatusTable_Snapshot_QuestionBank 题库域表快照（#611；第十二波票 6 补写面哨兵族并撤 fallback——未命中即 500）。
 func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "questionBankErrStatus", questionBankErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrQuestionNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionContentRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionOptionsRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrSubmitNotDraft, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrRejectReasonRequired, Status: http.StatusBadRequest},
+	assertTableSnapshot(t, "questionbank.ErrStatus", questionbank.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: questionbank.ErrQuestionNotFound, Status: http.StatusNotFound},
+		{Sentinel: questionbank.ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
+		{Sentinel: questionbank.ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionContentRequired, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionOptionsRequired, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrSubmitNotDraft, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrRejectReasonRequired, Status: http.StatusBadRequest},
 	}, 0)
 }
 
@@ -365,19 +366,19 @@ func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
 		err  error
 		want int
 	}{
-		{"题目不存在 404", service.ErrQuestionNotFound, http.StatusNotFound},
-		{"证件不存在 404", service.ErrQuestionCredentialNotFound, http.StatusNotFound},
-		{"证件不存在 wrap 后仍命中 404", fmt.Errorf("ctx: %w", service.ErrQuestionCredentialNotFound), http.StatusNotFound},
-		{"非 draft 提交 400", service.ErrSubmitNotDraft, http.StatusBadRequest},
-		{"驳回缺理由 400", service.ErrRejectReasonRequired, http.StatusBadRequest},
-		{"题型无效含列表 400", fmt.Errorf("%w，支持的题型：%s", service.ErrQuestionTypeInvalid, "single_choice"), http.StatusBadRequest},
+		{"题目不存在 404", questionbank.ErrQuestionNotFound, http.StatusNotFound},
+		{"证件不存在 404", questionbank.ErrQuestionCredentialNotFound, http.StatusNotFound},
+		{"证件不存在 wrap 后仍命中 404", fmt.Errorf("ctx: %w", questionbank.ErrQuestionCredentialNotFound), http.StatusNotFound},
+		{"非 draft 提交 400", questionbank.ErrSubmitNotDraft, http.StatusBadRequest},
+		{"驳回缺理由 400", questionbank.ErrRejectReasonRequired, http.StatusBadRequest},
+		{"题型无效含列表 400", fmt.Errorf("%w，支持的题型：%s", questionbank.ErrQuestionTypeInvalid, "single_choice"), http.StatusBadRequest},
 		{"DB 故障未命中 500", errors.New("dial tcp: db down"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			e := httpx.Endpoint[int, string]{
 				Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, c.err },
-				ErrStatus: questionBankErrStatus,
+				ErrStatus: questionbank.ErrStatus,
 			}
 			w := doEndpoint(t, e)
 			if w.Code != c.want {

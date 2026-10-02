@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/training"
 )
 
@@ -51,7 +52,7 @@ var routeRegistrars = []routeRegistrar{
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			course.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.CourseSvc)
 			RegisterStudentRoutes(api, rd, deps.StudentSvc)
-			RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
+			questionbank.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 			RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
 		},
 	},

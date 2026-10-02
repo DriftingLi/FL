@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 )
 
@@ -161,10 +162,10 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		return nil, err
 	}
 
-	out := make([]QuestionDTO, 0, len(ids))
+	out := make([]questionbank.QuestionDTO, 0, len(ids))
 	for _, id := range ids {
 		if q, ok := byID[id]; ok {
-			out = append(out, newQuestionDTO(&q, false))
+			out = append(out, questionbank.NewQuestionDTO(&q, false))
 		}
 	}
 	return &PracticeStartResultDTO{
@@ -235,9 +236,9 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 		return nil, err
 	}
 
-	questionsOut := make([]QuestionDTO, 0, len(ordered))
+	questionsOut := make([]questionbank.QuestionDTO, 0, len(ordered))
 	for i := range ordered {
-		questionsOut = append(questionsOut, newQuestionDTO(&ordered[i], false))
+		questionsOut = append(questionsOut, questionbank.NewQuestionDTO(&ordered[i], false))
 	}
 	return &MockExamStartDTO{
 		MockExamID:     mock.ID,

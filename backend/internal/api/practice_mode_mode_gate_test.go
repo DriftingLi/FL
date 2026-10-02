@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
@@ -25,14 +26,14 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	catalogSvc := training.NewService(db, nil)
-	qsvc := service.NewQuestionBankService(db, nil, nil)
+	qsvc := questionbank.NewService(db, nil, nil)
 
 	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}
 	mk := func(tagIDs []int, content string) {
-		q, err := qsvc.CreateQuestion(service.QuestionCreateInput{
+		q, err := qsvc.CreateQuestion(questionbank.QuestionCreateInput{
 			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 			TagIDs: tagIDs,
 		}, nil, "tutor")

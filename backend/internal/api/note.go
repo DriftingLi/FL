@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -93,7 +94,7 @@ func (h *NoteHandler) List(c *gin.Context) {
 		},
 		Invoke: func(ctx context.Context, req *listNotesReq) (*service.NotePageDTO, error) {
 			// 题干摘要这一格属题目域读面：scope 在入口装配（ADR-0062 决策 4）。
-			return h.svc.List(req.UserID, req.Scope, req.Page, req.PageSize, studentQuestionScope(c))
+			return h.svc.List(req.UserID, req.Scope, req.Page, req.PageSize, questionbank.StudentQuestionScope(c))
 		},
 		ErrStatus: noteErrStatus,
 	}.Handle(c)

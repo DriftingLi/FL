@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -129,9 +130,9 @@ func TestStartCredentialPartition(t *testing.T) {
 	if err := db.Create(&credB).Error; err != nil {
 		t.Fatalf("建证件B失败: %v", err)
 	}
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
+	qsvc := questionbank.NewService(db, nil, zap.NewNop())
 	cidA := credA.ID
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "A证件题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		CredentialID: cidA,
 	}, "published")

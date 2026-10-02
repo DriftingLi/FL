@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/training"
 )
@@ -29,20 +30,20 @@ func TestStartTagPractice(t *testing.T) {
 	tag1, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
 	tag2, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
 
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-	q1 := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	qsvc := questionbank.NewService(db, nil, zap.NewNop())
+	q1 := createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "法规已发布题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{tag1.ID},
 	}, "published")
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "法规草稿题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{tag1.ID},
 	}, "draft")
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "true_false", Content: "液压已发布题1", Answer: json.RawMessage(`"true"`),
 		TagIDs: []int{tag2.ID},
 	}, "published")
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "true_false", Content: "液压已发布题2", Answer: json.RawMessage(`"false"`),
 		TagIDs: []int{tag2.ID},
 	}, "published")

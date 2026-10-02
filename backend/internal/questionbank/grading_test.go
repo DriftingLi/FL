@@ -1,4 +1,4 @@
-package service
+package questionbank
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 
 func TestCheckAnswer_SingleChoice(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Answer: "A"}
-	judge := func(a interface{}) *bool { isCorrect, _ := gradeQuestion(q, a, 0); return isCorrect }
+	judge := func(a interface{}) *bool { isCorrect, _ := GradeQuestion(q, a, 0); return isCorrect }
 	// 正确
 	r := judge("A")
 	if r == nil || !*r {
@@ -28,7 +28,7 @@ func TestCheckAnswer_SingleChoice(t *testing.T) {
 
 func TestCheckAnswer_TrueFalse(t *testing.T) {
 	q := &model.Question{Type: "true_false", Answer: "TRUE"}
-	judge := func(a interface{}) *bool { isCorrect, _ := gradeQuestion(q, a, 0); return isCorrect }
+	judge := func(a interface{}) *bool { isCorrect, _ := GradeQuestion(q, a, 0); return isCorrect }
 	r := judge("true")
 	if r == nil || !*r {
 		t.Error("判断 true 应判定正确")
@@ -41,7 +41,7 @@ func TestCheckAnswer_TrueFalse(t *testing.T) {
 
 func TestCheckAnswer_MultiChoice(t *testing.T) {
 	q := &model.Question{Type: "multi_choice", Answer: "A,B,C"}
-	judge := func(a interface{}) *bool { isCorrect, _ := gradeQuestion(q, a, 0); return isCorrect }
+	judge := func(a interface{}) *bool { isCorrect, _ := GradeQuestion(q, a, 0); return isCorrect }
 	// 完全正确
 	r := judge([]interface{}{"A", "B", "C"})
 	if r == nil || !*r {
@@ -61,7 +61,7 @@ func TestCheckAnswer_MultiChoice(t *testing.T) {
 
 func TestCheckAnswer_ShortAnswer(t *testing.T) {
 	q := &model.Question{Type: "short_answer", Answer: "参考答案"}
-	r, _ := gradeQuestion(q, "任何答案", 0)
+	r, _ := GradeQuestion(q, "任何答案", 0)
 	if r != nil {
 		t.Error("简答题应返回 nil（无法判定）")
 	}
@@ -69,7 +69,7 @@ func TestCheckAnswer_ShortAnswer(t *testing.T) {
 
 func TestCheckAnswer_NilAnswer(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Answer: "A"}
-	r, _ := gradeQuestion(q, nil, 0)
+	r, _ := GradeQuestion(q, nil, 0)
 	if r != nil {
 		t.Error("未作答应返回 nil")
 	}
@@ -78,12 +78,12 @@ func TestCheckAnswer_NilAnswer(t *testing.T) {
 func TestGradeQuestion_SingleChoice(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Answer: "A"}
 	// 正确得满分
-	correct, score := gradeQuestion(q, "A", 3)
+	correct, score := GradeQuestion(q, "A", 3)
 	if correct == nil || !*correct || score != 3 {
 		t.Errorf("单选正确: correct=%v score=%v，期望 true 3", correct, score)
 	}
 	// 错误得 0 分
-	correct, score = gradeQuestion(q, "B", 3)
+	correct, score = GradeQuestion(q, "B", 3)
 	if correct == nil || *correct || score != 0 {
 		t.Errorf("单选错误: correct=%v score=%v，期望 false 0", correct, score)
 	}
@@ -91,7 +91,7 @@ func TestGradeQuestion_SingleChoice(t *testing.T) {
 
 func TestGradeQuestion_MultiChoice_Correct(t *testing.T) {
 	q := &model.Question{Type: "multi_choice", Answer: "A,B,C"}
-	correct, score := gradeQuestion(q, []interface{}{"A", "B", "C"}, 4)
+	correct, score := GradeQuestion(q, []interface{}{"A", "B", "C"}, 4)
 	if correct == nil || !*correct || score != 4 {
 		t.Errorf("多选全对: correct=%v score=%v，期望 true 4", correct, score)
 	}
@@ -100,7 +100,7 @@ func TestGradeQuestion_MultiChoice_Correct(t *testing.T) {
 func TestGradeQuestion_MultiChoice_Partial(t *testing.T) {
 	q := &model.Question{Type: "multi_choice", Answer: "A,B,C"}
 	// 部分正确（子集）得 50% 按比例分
-	correct, score := gradeQuestion(q, []interface{}{"A", "B"}, 4)
+	correct, score := GradeQuestion(q, []interface{}{"A", "B"}, 4)
 	if correct == nil || *correct {
 		t.Errorf("多选部分对: correct=%v，期望 false", correct)
 	}
@@ -113,7 +113,7 @@ func TestGradeQuestion_MultiChoice_Partial(t *testing.T) {
 func TestGradeQuestion_MultiChoice_Wrong(t *testing.T) {
 	q := &model.Question{Type: "multi_choice", Answer: "A,B,C"}
 	// 包含错误选项
-	correct, score := gradeQuestion(q, []interface{}{"A", "D"}, 4)
+	correct, score := GradeQuestion(q, []interface{}{"A", "D"}, 4)
 	if correct == nil || *correct {
 		t.Errorf("多选含错项: correct=%v，期望 false", correct)
 	}
@@ -124,11 +124,11 @@ func TestGradeQuestion_MultiChoice_Wrong(t *testing.T) {
 
 func TestGradeQuestion_TrueFalse(t *testing.T) {
 	q := &model.Question{Type: "true_false", Answer: "TRUE"}
-	correct, score := gradeQuestion(q, "true", 2)
+	correct, score := GradeQuestion(q, "true", 2)
 	if correct == nil || !*correct || score != 2 {
 		t.Errorf("判断正确: correct=%v score=%v", correct, score)
 	}
-	correct, score = gradeQuestion(q, "false", 2)
+	correct, score = GradeQuestion(q, "false", 2)
 	if correct == nil || *correct || score != 0 {
 		t.Errorf("判断错误: correct=%v score=%v", correct, score)
 	}
@@ -136,7 +136,7 @@ func TestGradeQuestion_TrueFalse(t *testing.T) {
 
 func TestGradeQuestion_ShortAnswer(t *testing.T) {
 	q := &model.Question{Type: "short_answer", Answer: "答案"}
-	correct, score := gradeQuestion(q, "学员答案", 5)
+	correct, score := GradeQuestion(q, "学员答案", 5)
 	if correct != nil {
 		t.Error("简答题 correct 应为 nil")
 	}
@@ -147,7 +147,7 @@ func TestGradeQuestion_ShortAnswer(t *testing.T) {
 
 func TestGradeQuestion_NilAnswer(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Answer: "A"}
-	correct, score := gradeQuestion(q, nil, 3)
+	correct, score := GradeQuestion(q, nil, 3)
 	if correct != nil {
 		t.Error("未作答 correct 应为 nil")
 	}
@@ -157,12 +157,12 @@ func TestGradeQuestion_NilAnswer(t *testing.T) {
 }
 
 func TestNormalizeAnswerList(t *testing.T) {
-	result := normalizeAnswerList("B,A,C")
+	result := NormalizeAnswerList("B,A,C")
 	if len(result) != 3 || result[0] != "A" || result[1] != "B" || result[2] != "C" {
-		t.Errorf("normalizeAnswerList 排序失败: %v", result)
+		t.Errorf("NormalizeAnswerList 排序失败: %v", result)
 	}
 	// 含空格
-	result = normalizeAnswerList(" A , B , C ")
+	result = NormalizeAnswerList(" A , B , C ")
 	if len(result) != 3 || result[0] != "A" {
 		t.Errorf("含空格处理失败: %v", result)
 	}

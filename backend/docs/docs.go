@@ -13955,7 +13955,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.QuestionDTO"
+                                                "$ref": "#/definitions/questionbank.QuestionDTO"
                                             }
                                         }
                                     }
@@ -14594,7 +14594,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionPageDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionPageDTO"
                                         }
                                     }
                                 }
@@ -14639,7 +14639,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionCreateInput"
+                            "$ref": "#/definitions/questionbank.QuestionCreateInput"
                         }
                     }
                 ],
@@ -14655,7 +14655,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -14708,7 +14708,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionBatchImportInput"
+                            "$ref": "#/definitions/questionbank.QuestionBatchImportInput"
                         }
                     }
                 ],
@@ -14724,7 +14724,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionImportResultDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionImportResultDTO"
                                         }
                                     }
                                 }
@@ -14787,7 +14787,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionPublishResultDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionPublishResultDTO"
                                         }
                                     }
                                 }
@@ -14850,7 +14850,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionRejectResultDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionRejectResultDTO"
                                         }
                                     }
                                 }
@@ -14911,7 +14911,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -14957,7 +14957,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionUpdateInput"
+                            "$ref": "#/definitions/questionbank.QuestionUpdateInput"
                         }
                     }
                 ],
@@ -14973,7 +14973,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15075,7 +15075,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15145,7 +15145,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15206,7 +15206,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15264,7 +15264,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionBankStatsDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionBankStatsDTO"
                                         }
                                     }
                                 }
@@ -15319,7 +15319,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionImageUploadDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionImageUploadDTO"
                                         }
                                     }
                                 }
@@ -26748,6 +26748,181 @@ const docTemplate = `{
                 }
             }
         },
+        "questionbank.QuestionBankStatsDTO": {
+            "type": "object",
+            "properties": {
+                "by_status": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionBatchImportInput": {
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionCreateInput"
+                    }
+                }
+            }
+        },
+        "questionbank.QuestionCreateInput": {
+            "type": "object"
+        },
+        "questionbank.QuestionDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "description": "学员侧（includeAnswer=false）省略以下四个字段。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "created_by_type": {
+                    "type": "string"
+                },
+                "credential_id": {
+                    "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "explanation": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "options": {},
+                "reference_answer": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reject_reason": {
+                    "type": "string"
+                },
+                "score": {
+                    "type": "integer"
+                },
+                "scoring_criteria": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。",
+                    "x-optional": true
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "questionbank.QuestionImageUploadDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "questionbank.QuestionImportErrorDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "index": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionImportResultDTO": {
+            "type": "object",
+            "properties": {
+                "error_count": {
+                    "type": "integer"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionImportErrorDTO"
+                    }
+                },
+                "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionPageDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionPublishResultDTO": {
+            "type": "object",
+            "properties": {
+                "published_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionRejectResultDTO": {
+            "type": "object",
+            "properties": {
+                "rejected_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionUpdateInput": {
+            "type": "object"
+        },
         "repository.AlgorithmParameters": {
             "type": "object",
             "properties": {
@@ -27460,7 +27635,7 @@ const docTemplate = `{
                 "question": {
                     "allOf": [
                         {
-                            "$ref": "#/definitions/service.QuestionDTO"
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
                         }
                     ],
                     "x-optional": true
@@ -27942,7 +28117,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
                     }
                 },
                 "remaining_time": {
@@ -27965,7 +28140,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
                     }
                 },
                 "remaining_time": {
@@ -28073,7 +28248,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
                     }
                 },
                 "total": {
@@ -28153,37 +28328,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.QuestionBankStatsDTO": {
-            "type": "object",
-            "properties": {
-                "by_status": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionBatchImportInput": {
-            "type": "object",
-            "properties": {
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionCreateInput"
-                    }
-                }
-            }
-        },
         "service.QuestionCommentDTO": {
             "type": "object",
             "properties": {
@@ -28229,150 +28373,6 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
-        },
-        "service.QuestionCreateInput": {
-            "type": "object"
-        },
-        "service.QuestionDTO": {
-            "type": "object",
-            "properties": {
-                "answer": {
-                    "description": "学员侧（includeAnswer=false）省略以下四个字段。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "created_by_type": {
-                    "type": "string"
-                },
-                "credential_id": {
-                    "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "explanation": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "image_url": {
-                    "type": "string"
-                },
-                "options": {},
-                "reference_answer": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "reject_reason": {
-                    "type": "string"
-                },
-                "score": {
-                    "type": "integer"
-                },
-                "scoring_criteria": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "tags": {
-                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。",
-                    "x-optional": true
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionImageUploadDTO": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionImportErrorDTO": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "index": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionImportResultDTO": {
-            "type": "object",
-            "properties": {
-                "error_count": {
-                    "type": "integer"
-                },
-                "errors": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionImportErrorDTO"
-                    }
-                },
-                "success_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionPageDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionPublishResultDTO": {
-            "type": "object",
-            "properties": {
-                "published_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionRejectResultDTO": {
-            "type": "object",
-            "properties": {
-                "rejected_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionUpdateInput": {
-            "type": "object"
         },
         "service.RealExamPaperDTO": {
             "type": "object",
@@ -29133,7 +29133,7 @@ const docTemplate = `{
                 "question": {
                     "allOf": [
                         {
-                            "$ref": "#/definitions/service.QuestionDTO"
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
                         }
                     ],
                     "x-optional": true

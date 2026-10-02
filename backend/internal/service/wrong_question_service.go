@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -49,18 +50,18 @@ func NewWrongQuestionService(db *gorm.DB, ai *aiassistant.GenerationService, log
 // LastUserAnswer（#1077）：学员**最近一次**作答这道题时提交的答案原文，供错题本卡片在
 // 折叠态直接做「我的答案 vs 正确答案」对照。从未作答过（错题来自何处无记录）为空串。
 type WrongQuestionDTO struct {
-	CreatedAt      string       `json:"created_at"`
-	FavoriteID     int64        `json:"favorite_id"`
-	Favorited      bool         `json:"favorited"`
-	ID             int          `json:"id"`
-	IsRedone       bool         `json:"is_redone"`
-	IsRemoved      bool         `json:"is_removed"`
-	LastUserAnswer string       `json:"last_user_answer"`
-	LastWrongAt    string       `json:"last_wrong_at"`
-	Question       *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
-	QuestionID     int          `json:"question_id"`
-	StudentID      int          `json:"student_id"`
-	WrongCount     int          `json:"wrong_count"`
+	CreatedAt      string                    `json:"created_at"`
+	FavoriteID     int64                     `json:"favorite_id"`
+	Favorited      bool                      `json:"favorited"`
+	ID             int                       `json:"id"`
+	IsRedone       bool                      `json:"is_redone"`
+	IsRemoved      bool                      `json:"is_removed"`
+	LastUserAnswer string                    `json:"last_user_answer"`
+	LastWrongAt    string                    `json:"last_wrong_at"`
+	Question       *questionbank.QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
+	QuestionID     int                       `json:"question_id"`
+	StudentID      int                       `json:"student_id"`
+	WrongCount     int                       `json:"wrong_count"`
 }
 
 // WrongQuestionPageDTO 错题本分页（字段按 JSON key 字母序：items / page / page_size / total）。
@@ -119,7 +120,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	for i := range items {
 		questionIDs = append(questionIDs, items[i].QuestionID)
 	}
-	questions := loadQuestionsByIDs(s.db, questionIDs)
+	questions := questionbank.LoadQuestionsByIDs(s.db, questionIDs)
 	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
 	lastAnswers := s.loadLastUserAnswers(studentID, questionIDs)
 
@@ -127,9 +128,9 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	for i := range items {
 		wq := &items[i]
 		favoriteID := favoriteIDs[wq.QuestionID]
-		var question *QuestionDTO
+		var question *questionbank.QuestionDTO
 		if q, ok := questions[wq.QuestionID]; ok {
-			dto := newQuestionDTO(q, true)
+			dto := questionbank.NewQuestionDTO(q, true)
 			question = &dto
 		}
 		result = append(result, WrongQuestionDTO{
@@ -233,7 +234,7 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: "redo",
-		UserAnswer:   stringifyAnswer(userAnswer),
+		UserAnswer:   questionbank.StringifyAnswer(userAnswer),
 		CreatedAt:    clock.Now(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
@@ -275,7 +276,7 @@ func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (*
 func (s *WrongQuestionService) GetStats(studentID int) *WrongQuestionStatsDTO {
 	var total int64
 	s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false).Count(&total)
-	byType := groupByCount(
+	byType := questionbank.GroupByCount(
 		s.db.Model(&model.WrongQuestion{}).
 			Joins("JOIN question ON question.id = wrong_question.question_id").
 			Where("wrong_question.student_id = ? AND wrong_question.is_removed = ?", studentID, false),
@@ -293,7 +294,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 	for i := range items {
 		qIDs = append(qIDs, items[i].QuestionID)
 	}
-	questions := loadQuestionsByIDs(s.db, qIDs)
+	questions := questionbank.LoadQuestionsByIDs(s.db, qIDs)
 
 	exportData := make([]map[string]any, 0, len(items))
 	for i := range items {
@@ -366,7 +367,7 @@ func FormatWrongQuestionsText(exportData []map[string]any) string {
 		if explanation, ok := item["explanation"].(string); ok && explanation != "" {
 			fmt.Fprintf(&sb, "解析: %s\n", explanation)
 		}
-		wrongCount := toInt(item["wrong_count"])
+		wrongCount := questionbank.ToInt(item["wrong_count"])
 		fmt.Fprintf(&sb, "错误次数: %d\n", wrongCount)
 		if lastWrong, ok := item["last_wrong_at"].(string); ok && lastWrong != "" {
 			fmt.Fprintf(&sb, "最近错误时间: %s\n", lastWrong)

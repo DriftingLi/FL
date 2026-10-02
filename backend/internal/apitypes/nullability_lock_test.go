@@ -237,6 +237,7 @@ var sweptDirs = map[string]string{
 	"aiassistant":  "../aiassistant",
 	"course":       "../course",
 	"training":     "../training",
+	"questionbank": "../questionbank",
 	"repository":   "../valuation/repository",
 }
 

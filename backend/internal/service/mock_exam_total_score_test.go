@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -68,9 +69,9 @@ func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 	student := testutil.SeedStudent(t, db, "李四", "x")
 
 	mock := seedInProgressMockExam(t, db, student.ID, []int{multi.ID, short.ID, single.ID}, map[string]any{
-		intToString(multi.ID):  []string{"A"}, // 3 选 1 ⇒ 4×1/3×0.5 ≈ 0.7（round1）
-		intToString(short.ID):  "我的作答",
-		intToString(single.ID): "A",
+		questionbank.IntToString(multi.ID):  []string{"A"}, // 3 选 1 ⇒ 4×1/3×0.5 ≈ 0.7（round1）
+		questionbank.IntToString(short.ID):  "我的作答",
+		questionbank.IntToString(single.ID): "A",
 	})
 
 	got, err := svc.Submit(mock.ID, student.ID)
@@ -135,8 +136,8 @@ func TestMockExamSubmitShortAnswerWithoutAIScoresZero(t *testing.T) {
 	student := testutil.SeedStudent(t, db, "王五", "x")
 
 	mock := seedInProgressMockExam(t, db, student.ID, []int{multi.ID, short.ID}, map[string]any{
-		intToString(multi.ID): []string{"A"},
-		intToString(short.ID): "我的作答",
+		questionbank.IntToString(multi.ID): []string{"A"},
+		questionbank.IntToString(short.ID): "我的作答",
 	})
 
 	got, err := svc.Submit(mock.ID, student.ID)

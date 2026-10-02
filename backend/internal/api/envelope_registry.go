@@ -29,6 +29,7 @@ import (
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	vmodel "forklift-training/internal/valuation/model"
 	"forklift-training/pkg/paging"
@@ -140,9 +141,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.QuestionCommentPageResult", Endpoints: []string{"GET /questions/{question_id}/comments"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.QuestionCommentPageResult{}},
-	{Result: "service.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
+	{Result: "questionbank.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
 		Keys: []string{"page", "page_size", "questions", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.QuestionPageDTO{}},
+		Sample: questionbank.QuestionPageDTO{}},
 	{Result: "service.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
 		Sample: service.RecruitListResult{}},

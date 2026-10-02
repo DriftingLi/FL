@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -55,7 +56,7 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 // 就是一处「两个宿主说同一件事」，而且 CI 的 unused 检查也当场把它点了出来。
 var interactionErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrQuestionNotFound, Status: http.StatusNotFound, Message: "题目不存在"},
+		{Sentinel: questionbank.ErrQuestionNotFound, Status: http.StatusNotFound, Message: "题目不存在"},
 		{Sentinel: service.ErrCommentContentEmpty, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrCommentTooLong, Status: http.StatusBadRequest},
 		{Sentinel: service.ErrCommentNotFound, Status: http.StatusBadRequest},
@@ -88,7 +89,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 	}
 	page := httpx.QueryIntDefault(c, "page", 1)
 	pageSize := httpx.QueryIntDefault(c, "page_size", 10)
-	items, total, err := h.commentSvc.List(qid, page, pageSize, studentQuestionScope(c))
+	items, total, err := h.commentSvc.List(qid, page, pageSize, questionbank.StudentQuestionScope(c))
 	if err != nil {
 		interactionErrStatus.RenderError(c, err)
 		return
@@ -123,7 +124,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	m, err := h.commentSvc.Create(qid, uid, req.Content, studentQuestionScope(c))
+	m, err := h.commentSvc.Create(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
 	if err != nil {
 		interactionErrStatus.RenderError(c, err)
 		return
@@ -174,7 +175,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 		return
 	}
 	uid := middleware.CurrentUserID(c)
-	n, err := h.noteSvc.GetForQuestion(qid, uid, studentQuestionScope(c))
+	n, err := h.noteSvc.GetForQuestion(qid, uid, questionbank.StudentQuestionScope(c))
 	if err != nil {
 		interactionErrStatus.RenderError(c, err)
 		return
@@ -212,7 +213,7 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, studentQuestionScope(c))
+	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
 	if err != nil {
 		interactionErrStatus.RenderError(c, err)
 		return
@@ -236,7 +237,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 		return
 	}
 	uid := middleware.CurrentUserID(c)
-	if err := h.noteSvc.DeleteForQuestion(qid, uid, studentQuestionScope(c)); err != nil {
+	if err := h.noteSvc.DeleteForQuestion(qid, uid, questionbank.StudentQuestionScope(c)); err != nil {
 		interactionErrStatus.RenderError(c, err)
 		return
 	}

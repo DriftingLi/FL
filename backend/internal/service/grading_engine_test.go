@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -158,7 +159,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 				flow.ai = g
 			}
 
-			results := engine.gradeSet(flow, map[int]*model.Question{q.ID: q}, []int{q.ID}, map[string]any{intToString(q.ID): tc.answer}, student.ID)
+			results := engine.gradeSet(flow, map[int]*model.Question{q.ID: q}, []int{q.ID}, map[string]any{questionbank.IntToString(q.ID): tc.answer}, student.ID)
 			if len(results) != 1 {
 				t.Fatalf("判分结果应恰 1 条, got %d", len(results))
 			}
@@ -221,7 +222,7 @@ func TestGradeShortAnswerNilAdapter(t *testing.T) {
 	}
 }
 
-// answerForType 按题型构造正确答案（与 gradeQuestion 判定语义一致）。
+// answerForType 按题型构造正确答案（与 questionbank.GradeQuestion 判定语义一致）。
 func answerForType(qType string) string {
 	switch qType {
 	case "multi_choice":

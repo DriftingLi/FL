@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 	"forklift-training/pkg/httpx"
@@ -46,7 +47,7 @@ func TestInteractionErrStatusFacesAreProducible(t *testing.T) {
 	}
 
 	assertFacesAgainstTable(t, f, "interactionErrStatus", interactionErrStatus, []factFace{
-		{service.ErrQuestionNotFound, http.StatusNotFound, http.MethodGet, "/api/questions/" + qpath(hidden) + "/comments?page_size=10", nil, "题目不存在"},
+		{questionbank.ErrQuestionNotFound, http.StatusNotFound, http.MethodGet, "/api/questions/" + qpath(hidden) + "/comments?page_size=10", nil, "题目不存在"},
 		{service.ErrCommentContentEmpty, http.StatusBadRequest, http.MethodPost, "/api/questions/" + qpath(f.poolQ.ID) + "/comments", map[string]any{"content": "   "}, "评论内容不能为空"},
 		{service.ErrCommentTooLong, http.StatusBadRequest, http.MethodPost, "/api/questions/" + qpath(f.poolQ.ID) + "/comments", map[string]any{"content": strings.Repeat("叉", 501)}, "评论不能超过500字"},
 		{service.ErrCommentNotFound, http.StatusBadRequest, http.MethodDelete, "/api/questions/comments/999999", nil, "评论不存在"},

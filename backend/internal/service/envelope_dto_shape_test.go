@@ -8,6 +8,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 )
 
 // spec #940 片三（含片二）：信封 DTO 的 shape-lock。
@@ -24,27 +25,27 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 	}{
 		// TutorRegisterResultDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
-			name: "QuestionPageDTO",
+			name: "questionbank.QuestionPageDTO",
 			legacy: map[string]any{
 				"total":     int64(3),
 				"page":      1,
 				"page_size": 20,
-				"questions": []QuestionDTO{},
+				"questions": []questionbank.QuestionDTO{},
 			},
-			dto: &QuestionPageDTO{Page: 1, PageSize: 20, Questions: []QuestionDTO{}, Total: 3},
+			dto: &questionbank.QuestionPageDTO{Page: 1, PageSize: 20, Questions: []questionbank.QuestionDTO{}, Total: 3},
 		},
 		{
-			name:   "QuestionPublishResultDTO",
+			name:   "questionbank.QuestionPublishResultDTO",
 			legacy: map[string]any{"published_count": 2},
-			dto:    &QuestionPublishResultDTO{PublishedCount: 2},
+			dto:    &questionbank.QuestionPublishResultDTO{PublishedCount: 2},
 		},
 		{
-			name:   "QuestionRejectResultDTO",
+			name:   "questionbank.QuestionRejectResultDTO",
 			legacy: map[string]any{"rejected_count": 1},
-			dto:    &QuestionRejectResultDTO{RejectedCount: 1},
+			dto:    &questionbank.QuestionRejectResultDTO{RejectedCount: 1},
 		},
 		{
-			name: "QuestionImportResultDTO（errors 内层 key 序也要一致）",
+			name: "questionbank.QuestionImportResultDTO（errors 内层 key 序也要一致）",
 			legacy: map[string]any{
 				"success_count": 1,
 				"error_count":   1,
@@ -52,20 +53,20 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 					{"index": 2, "error": "无效数据"},
 				},
 			},
-			dto: &QuestionImportResultDTO{
+			dto: &questionbank.QuestionImportResultDTO{
 				ErrorCount:   1,
-				Errors:       []QuestionImportErrorDTO{{Error: "无效数据", Index: 2}},
+				Errors:       []questionbank.QuestionImportErrorDTO{{Error: "无效数据", Index: 2}},
 				SuccessCount: 1,
 			},
 		},
 		{
-			name: "QuestionImportResultDTO（无失败时是 [] 不是 null）",
+			name: "questionbank.QuestionImportResultDTO（无失败时是 [] 不是 null）",
 			legacy: map[string]any{
 				"success_count": 2,
 				"error_count":   0,
 				"errors":        []map[string]any{},
 			},
-			dto: &QuestionImportResultDTO{ErrorCount: 0, Errors: []QuestionImportErrorDTO{}, SuccessCount: 2},
+			dto: &questionbank.QuestionImportResultDTO{ErrorCount: 0, Errors: []questionbank.QuestionImportErrorDTO{}, SuccessCount: 2},
 		},
 		{
 			name: "WrongQuestionPageDTO",
@@ -241,9 +242,9 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 		},
 		// ===== ADR-0048 片六（#964）：培训目录 / 题库 / 证件域的 handler 内联 map 收口 =====
 		{
-			name:   "QuestionImageUploadDTO（POST /question-bank/upload-image）",
+			name:   "questionbank.QuestionImageUploadDTO（POST /question-bank/upload-image）",
 			legacy: map[string]any{"url": "/uploads/images/questions/1.png"},
-			dto:    &QuestionImageUploadDTO{URL: "/uploads/images/questions/1.png"},
+			dto:    &questionbank.QuestionImageUploadDTO{URL: "/uploads/images/questions/1.png"},
 		},
 		// 培训目录 / 目标证件 / 岗位面的 13 例（QuestionTagsResultDTO / LevelListDTO / QuestionTagListDTO /
 		// CertificateTemplateListDTO / CredentialListDTO / CurrentCredentialDTO / SpecialtyListDTO /
