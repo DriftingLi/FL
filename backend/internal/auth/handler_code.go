@@ -1,7 +1,6 @@
-// Package api 实现 HTTP handlers。
 // 本文件：验证码认证路由生成器——注册/登录/发送一份骨架，通道作为 adapter 注入
 // （ADR-0001 的 CodeChannel seam 的自然收尾：handler 层不再按通道复制）。
-package api
+package auth
 
 import (
 	"context"
@@ -11,31 +10,30 @@ import (
 
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// CodeChannelAuthHandler 验证码注册/登录 handler（通道注入，一份骨架两通道共用）。
-type CodeChannelAuthHandler struct {
+// codeChannelHandler 验证码注册/登录 handler（通道注入，一份骨架两通道共用）。
+type codeChannelHandler struct {
 	sess           *security.Session
-	codeSvc        *service.VerifyCodeService
-	ch             service.CodeChannel
+	codeSvc        *VerifyCodeService
+	ch             CodeChannel
 	targetField    string // 请求体中的目标字段名（email / phone）
 	sentMsg        string // 发送成功提示文案
 	captchaSvc     *captcha.Service
 	captchaEnabled bool
 }
 
-// NewCodeChannelAuthHandler 创建验证码注册/登录 handler。
-func NewCodeChannelAuthHandler(sess *security.Session, codeSvc *service.VerifyCodeService, ch service.CodeChannel, targetField, sentMsg string, captchaSvc *captcha.Service, captchaEnabled bool) *CodeChannelAuthHandler {
-	return &CodeChannelAuthHandler{sess: sess, codeSvc: codeSvc, ch: ch, targetField: targetField, sentMsg: sentMsg, captchaSvc: captchaSvc, captchaEnabled: captchaEnabled}
+// newCodeChannelHandler 创建验证码注册/登录 handler。
+func newCodeChannelHandler(sess *security.Session, codeSvc *VerifyCodeService, ch CodeChannel, targetField, sentMsg string, captchaSvc *captcha.Service, captchaEnabled bool) *codeChannelHandler {
+	return &codeChannelHandler{sess: sess, codeSvc: codeSvc, ch: ch, targetField: targetField, sentMsg: sentMsg, captchaSvc: captchaSvc, captchaEnabled: captchaEnabled}
 }
 
 // registerCodeChannelAuthRoutes 注册 /auth/<prefix> 蓝图（验证码注册/登录，通道注入）。
-func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, codeSvc *service.VerifyCodeService,
-	ch service.CodeChannel, targetField, sentMsg string, captchaSvc *captcha.Service, captchaEnabled bool) {
-	h := NewCodeChannelAuthHandler(sess, codeSvc, ch, targetField, sentMsg, captchaSvc, captchaEnabled)
+func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, codeSvc *VerifyCodeService,
+	ch CodeChannel, targetField, sentMsg string, captchaSvc *captcha.Service, captchaEnabled bool) {
+	h := newCodeChannelHandler(sess, codeSvc, ch, targetField, sentMsg, captchaSvc, captchaEnabled)
 
 	// POST /auth/<prefix>/send-code {targetField, purpose: register|login}
 	g.POST("/send-code", h.SendCode)
@@ -54,15 +52,15 @@ func registerCodeChannelAuthRoutes(g *gin.RouterGroup, sess *security.Session, c
 // 若改成投影，以后新增一个不要求会话的用途就会**自动**多出一个公网发码口（fail-open）。
 // 新增用途默认不暴露；要暴露必须显式加到这里。
 // 单向不变式：本清单 ⊆ 非 RequiresSession 用途（见 anonymous_send_purpose_test.go）。
-var anonymousSendPurposes = []service.CodePurpose{
-	service.CodePurposeRegister,
-	service.CodePurposeLogin,
-	service.CodePurposeResetPassword,
+var anonymousSendPurposes = []CodePurpose{
+	CodePurposeRegister,
+	CodePurposeLogin,
+	CodePurposeResetPassword,
 }
 
 // resolvePurpose 显式化 purpose 白名单校验：非法值报错（与既有文案逐字一致）。
-func resolvePurpose(purpose string) (service.CodePurpose, error) {
-	p := service.CodePurpose(purpose)
+func resolvePurpose(purpose string) (CodePurpose, error) {
+	p := CodePurpose(purpose)
 	for _, allowed := range anonymousSendPurposes {
 		if p == allowed {
 			return p, nil
@@ -80,7 +78,7 @@ type codeSendReq struct {
 }
 
 // parseSendReq 单次绑定目标字段 + purpose/captcha（避免 ShouldBindJSON 二次消费 body）。
-func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, error) {
+func (h *codeChannelHandler) parseSendReq(c *gin.Context) (*codeSendReq, error) {
 	if h.targetField == "phone" {
 		var t struct {
 			Phone        string `json:"phone"`
@@ -116,7 +114,7 @@ func (h *CodeChannelAuthHandler) parseSendReq(c *gin.Context) (*codeSendReq, err
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/email/send-code [post]
 // @Router /auth/phone/send-code [post]
-func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
+func (h *codeChannelHandler) SendCode(c *gin.Context) {
 	httpx.Endpoint[codeSendReq, struct{}]{
 		Parse:     h.parseSendReq,
 		Invoke:    h.invokeSendCode,
@@ -127,7 +125,7 @@ func (h *CodeChannelAuthHandler) SendCode(c *gin.Context) {
 	}.Handle(c)
 }
 
-func (h *CodeChannelAuthHandler) invokeSendCode(ctx context.Context, req *codeSendReq) (*struct{}, error) {
+func (h *codeChannelHandler) invokeSendCode(ctx context.Context, req *codeSendReq) (*struct{}, error) {
 	if h.captchaEnabled {
 		if !h.captchaSvc.Verify(ctx, req.CaptchaID, req.CaptchaValue) {
 			return nil, httpx.BadRequest("图形验证码错误或已过期")
@@ -159,25 +157,25 @@ type codeRegisterReq struct {
 // @Accept json
 // @Produce json
 // @Param body body object true "注册" example({"email":"a@b.com","code":"123456","nickname":"张三","password":"123456"})
-// @Success 201 {object} response.R{data=service.LoginResult} "success"
+// @Success 201 {object} response.R{data=LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/email/register [post]
 // @Router /auth/phone/register [post]
-func (h *CodeChannelAuthHandler) Register(c *gin.Context) {
-	httpx.Endpoint[codeRegisterReq, service.LoginResult]{
+func (h *codeChannelHandler) Register(c *gin.Context) {
+	httpx.Endpoint[codeRegisterReq, LoginResult]{
 		Parse: h.parseRegisterReq,
-		Invoke: func(ctx context.Context, req *codeRegisterReq) (*service.LoginResult, error) {
+		Invoke: func(ctx context.Context, req *codeRegisterReq) (*LoginResult, error) {
 			return h.codeSvc.RegisterWithCode(ctx, h.ch, req.Target, req.Code, req.Nickname, req.Company, req.Password)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *codeRegisterReq, resp *service.LoginResult) {
+		Render: func(c *gin.Context, _ *codeRegisterReq, resp *LoginResult) {
 			h.sess.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.Created(c, "注册成功", resp)
 		},
 	}.Handle(c)
 }
 
-func (h *CodeChannelAuthHandler) parseRegisterReq(c *gin.Context) (*codeRegisterReq, error) {
+func (h *codeChannelHandler) parseRegisterReq(c *gin.Context) (*codeRegisterReq, error) {
 	if h.targetField == "phone" {
 		var t struct {
 			Phone    string `json:"phone"`
@@ -217,25 +215,25 @@ type codeLoginReq struct {
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"email":"a@b.com","code":"123456"})
-// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Success 200 {object} response.R{data=LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/email/login [post]
 // @Router /auth/phone/login [post]
-func (h *CodeChannelAuthHandler) Login(c *gin.Context) {
-	httpx.Endpoint[codeLoginReq, service.LoginResult]{
+func (h *codeChannelHandler) Login(c *gin.Context) {
+	httpx.Endpoint[codeLoginReq, LoginResult]{
 		Parse: h.parseLoginReq,
-		Invoke: func(ctx context.Context, req *codeLoginReq) (*service.LoginResult, error) {
+		Invoke: func(ctx context.Context, req *codeLoginReq) (*LoginResult, error) {
 			return h.codeSvc.LoginWithCode(ctx, h.ch, req.Target, req.Code)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *codeLoginReq, resp *service.LoginResult) {
+		Render: func(c *gin.Context, _ *codeLoginReq, resp *LoginResult) {
 			h.sess.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
 	}.Handle(c)
 }
 
-func (h *CodeChannelAuthHandler) parseLoginReq(c *gin.Context) (*codeLoginReq, error) {
+func (h *codeChannelHandler) parseLoginReq(c *gin.Context) (*codeLoginReq, error) {
 	if h.targetField == "phone" {
 		var t struct {
 			Phone string `json:"phone"`
@@ -274,7 +272,7 @@ type codeResetReq struct {
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/email/reset-password [post]
 // @Router /auth/phone/reset-password [post]
-func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
+func (h *codeChannelHandler) ResetPassword(c *gin.Context) {
 	httpx.Endpoint[codeResetReq, struct{}]{
 		Parse: h.parseResetReq,
 		Invoke: func(ctx context.Context, req *codeResetReq) (*struct{}, error) {
@@ -286,7 +284,7 @@ func (h *CodeChannelAuthHandler) ResetPassword(c *gin.Context) {
 	}.WithSuccess(httpx.OkMsgNoData("密码已重置，请使用新密码登录"), http.StatusBadRequest).Handle(c)
 }
 
-func (h *CodeChannelAuthHandler) parseResetReq(c *gin.Context) (*codeResetReq, error) {
+func (h *codeChannelHandler) parseResetReq(c *gin.Context) (*codeResetReq, error) {
 	if h.targetField == "phone" {
 		var t struct {
 			Phone    string `json:"phone"`

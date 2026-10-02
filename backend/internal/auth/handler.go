@@ -1,5 +1,5 @@
-// Package api 实现 HTTP handlers。
-package api
+// 本文件：/api/auth 公开面（登录/刷新/登出/me/资料/注销）的 handler 与注册入口。
+package auth
 
 import (
 	"context"
@@ -19,20 +19,51 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// AuthHandler 认证相关 handler。
-type AuthHandler struct {
-	authSvc   *service.AuthService
+// handler 认证相关 handler。
+type handler struct {
+	authSvc   *Service
 	fileSvc   *filestore.FileStore
 	storage   storage.Storage
-	reviewSvc *service.ProfileReviewService
+	reviewSvc *ProfileReviewService
 	session   *security.Session
 }
 
-// NewAuthHandler 创建认证 handler。session 由装配根构建一次注入。
-func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSvc *filestore.FileStore, st storage.Storage, reviewSvc *service.ProfileReviewService, logger *zap.Logger) *AuthHandler {
-	return &AuthHandler{
+// newHandler 创建认证 handler。session 由装配根构建一次注入。
+func newHandler(sess *security.Session, authSvc *Service, fileSvc *filestore.FileStore, st storage.Storage, reviewSvc *ProfileReviewService, logger *zap.Logger) *handler {
+	return &handler{
 		authSvc: authSvc, fileSvc: fileSvc, storage: st, reviewSvc: reviewSvc,
 		session: sess,
+	}
+}
+
+// RegisterRoutes 注册 /api/auth 公开面（10 条）——原 api/router.go 的内联 auth 组。
+// 形态纪律（ADR-0070）：handler 类型包私有、注册函数内构造、只收自己需要的依赖、不 import internal/api。
+//
+// session 在此同步给 Service：装配根注入的会话实例必须与服务内的那一份是同一对象，
+// 否则「注销先写吊销标记 / 旧 refresh 被拒」这类判据会静默失效（测试里 d.Session 会被换成带黑名单的会话）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service,
+	fileSvc *filestore.FileStore, st storage.Storage, reviewSvc *ProfileReviewService,
+	logger *zap.Logger) {
+	if svc != nil {
+		svc.session = session
+	}
+	h := newHandler(session, svc, fileSvc, st, reviewSvc, logger)
+
+	g := rg.Group("/auth")
+	{
+		g.POST("/login", h.Login)
+		g.POST("/admin-login", h.AdminLogin)
+		g.POST("/tutor-login", h.TutorLogin)
+		g.POST("/recruiter-login", h.RecruiterLogin)
+		// 双令牌会话（ADR-0012）：/refresh 用 refresh token 自身鉴权（不经过 JWTAuth）；
+		// /logout 撤销 refresh token（Cookie 优先、请求体兜底，与 /refresh 同口径），不依赖 JWTAuth（access 过期时也能撤销 refresh / 登出）。
+		g.POST("/refresh", h.Refresh)
+		g.POST("/logout", h.Logout)
+		g.GET("/me", middleware.JWTAuth(session), h.Me)
+		// 个人资料：昵称 / 头像 / 单位 / 注销
+		g.PUT("/profile", middleware.JWTAuth(session), h.UpdateProfile)
+		g.POST("/avatar", middleware.JWTAuth(session), h.UploadAvatar)
+		g.DELETE("/account", middleware.JWTAuth(session), h.DeleteAccount)
 	}
 }
 
@@ -43,11 +74,11 @@ func NewAuthHandler(sess *security.Session, authSvc *service.AuthService, fileSv
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"username":"13800000001","password":"123456"})
-// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Success 200 {object} response.R{data=LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/login [post]
-func (h *AuthHandler) Login(c *gin.Context) {
-	httpx.Endpoint[loginReq, service.LoginResult]{
+func (h *handler) Login(c *gin.Context) {
+	httpx.Endpoint[loginReq, LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
 			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
@@ -58,11 +89,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+		Invoke: func(ctx context.Context, req *loginReq) (*LoginResult, error) {
 			return h.authSvc.HrwaiLogin(req.Username, req.Password)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+		Render: func(c *gin.Context, _ *loginReq, resp *LoginResult) {
 			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "登录成功", resp)
 		},
@@ -75,12 +106,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"username":"admin","password":"123456"})
-// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Success 200 {object} response.R{data=LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/admin-login [post]
 // AdminLogin 管理员登录 POST /api/auth/admin-login
-func (h *AuthHandler) AdminLogin(c *gin.Context) {
-	httpx.Endpoint[loginReq, service.LoginResult]{
+func (h *handler) AdminLogin(c *gin.Context) {
+	httpx.Endpoint[loginReq, LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
 			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
@@ -91,11 +122,11 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+		Invoke: func(ctx context.Context, req *loginReq) (*LoginResult, error) {
 			return h.authSvc.AdminLogin(req.Username, req.Password)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+		Render: func(c *gin.Context, _ *loginReq, resp *LoginResult) {
 			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "管理员登录成功", resp)
 		},
@@ -108,12 +139,12 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"username":"tutor","password":"123456"})
-// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Success 200 {object} response.R{data=LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/tutor-login [post]
 // TutorLogin 导师登录 POST /api/auth/tutor-login
-func (h *AuthHandler) TutorLogin(c *gin.Context) {
-	httpx.Endpoint[loginReq, service.LoginResult]{
+func (h *handler) TutorLogin(c *gin.Context) {
+	httpx.Endpoint[loginReq, LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
 			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
@@ -124,11 +155,11 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+		Invoke: func(ctx context.Context, req *loginReq) (*LoginResult, error) {
 			return h.authSvc.TutorLogin(req.Username, req.Password)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+		Render: func(c *gin.Context, _ *loginReq, resp *LoginResult) {
 			h.session.SetLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "讲师登录成功", resp)
 		},
@@ -141,12 +172,12 @@ func (h *AuthHandler) TutorLogin(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param body body object true "登录" example({"username":"hr001","password":"123456"})
-// @Success 200 {object} response.R{data=service.LoginResult} "success"
+// @Success 200 {object} response.R{data=LoginResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /auth/recruiter-login [post]
 // RecruiterLogin 企业招聘者登录 POST /api/auth/recruiter-login（第四角色，host-only cookie 隔离）
-func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
-	httpx.Endpoint[loginReq, service.LoginResult]{
+func (h *handler) RecruiterLogin(c *gin.Context) {
+	httpx.Endpoint[loginReq, LoginResult]{
 		Parse: func(c *gin.Context) (*loginReq, error) {
 			req, err := httpx.BindJSON[loginReq](c)
 			if err != nil {
@@ -157,11 +188,11 @@ func (h *AuthHandler) RecruiterLogin(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *loginReq) (*service.LoginResult, error) {
+		Invoke: func(ctx context.Context, req *loginReq) (*LoginResult, error) {
 			return h.authSvc.RecruiterLogin(req.Username, req.Password)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *loginReq, resp *service.LoginResult) {
+		Render: func(c *gin.Context, _ *loginReq, resp *LoginResult) {
 			h.session.SetRecruiterLoginCookies(c.Writer, resp.Token, resp.RefreshToken)
 			response.SuccessWithMsg(c, "招聘者登录成功", resp)
 		},
@@ -184,7 +215,7 @@ type loginReq struct {
 // @Param body body object false "refresh_token" example({"refresh_token":"eyJhbGciOi..."})
 // @Success 200 {object} response.R "success"
 // @Router /auth/logout [post]
-func (h *AuthHandler) Logout(c *gin.Context) {
+func (h *handler) Logout(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -211,10 +242,10 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param body body object false "refresh_token（Cookie 通道存在时被忽略；无 Cookie 的客户端才用）" example({"refresh_token":"eyJhbGciOi..."})
-// @Success 200 {object} response.R{data=service.RefreshResultDTO} "success（响应体恒含新 access + 新 refresh，请求体通道客户端需要）"
+// @Success 200 {object} response.R{data=RefreshResultDTO} "success（响应体恒含新 access + 新 refresh，请求体通道客户端需要）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/refresh [post]
-func (h *AuthHandler) Refresh(c *gin.Context) {
+func (h *handler) Refresh(c *gin.Context) {
 	// ADR-0067 决策 1（#1376 跨端评审后收窄）：Cookie 通道存在即以 Cookie 为准，请求体不再参与
 	// 判定（连读都不读，否则「两个通道各带一支」时谁赢就成了实现细节）。
 	// 而「Cookie 通道存在」的前提是**读得出族**：族由 access 定（Session.RefreshCookieForRequest），
@@ -246,7 +277,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		response.ServerError(c, "服务器内部错误")
 		return
 	}
-	response.Success(c, service.RefreshResultDTO{RefreshToken: refresh, Token: access})
+	response.Success(c, RefreshResultDTO{RefreshToken: refresh, Token: access})
 }
 
 // meReq /auth/me 请求（身份来自 JWT 中间件上下文）。
@@ -263,11 +294,11 @@ type meReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.ProfileDTO} "success"
+// @Success 200 {object} response.R{data=ProfileDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/me [get]
-func (h *AuthHandler) Me(c *gin.Context) {
-	httpx.Endpoint[meReq, service.ProfileDTO]{
+func (h *handler) Me(c *gin.Context) {
+	httpx.Endpoint[meReq, ProfileDTO]{
 		Parse: func(c *gin.Context) (*meReq, error) {
 			return &meReq{
 				UserID:  middleware.CurrentUserID(c),
@@ -275,7 +306,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 				Account: middleware.CurrentAccount(c),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *meReq) (*service.ProfileDTO, error) {
+		Invoke: func(ctx context.Context, req *meReq) (*ProfileDTO, error) {
 			return h.authSvc.GetProfile(req.UserID, req.Role, req.Account), nil
 		},
 	}.Handle(c)
@@ -289,12 +320,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "资料" example({"nickname":"新昵称","company":"新单位"})
-// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "success"
+// @Success 200 {object} response.R{data=ProfileChangeRequestDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/profile [put]
-func (h *AuthHandler) UpdateProfile(c *gin.Context) {
-	httpx.Endpoint[updateProfileReq, service.ProfileChangeRequestDTO]{
+func (h *handler) UpdateProfile(c *gin.Context) {
+	httpx.Endpoint[updateProfileReq, ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*updateProfileReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid <= 0 {
@@ -309,7 +340,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 			}
 			return &updateProfileReq{UID: uid, Nickname: req.Nickname, Company: req.Company}, nil
 		},
-		Invoke: func(ctx context.Context, req *updateProfileReq) (*service.ProfileChangeRequestDTO, error) {
+		Invoke: func(ctx context.Context, req *updateProfileReq) (*ProfileChangeRequestDTO, error) {
 			// 单位立即生效
 			if req.Company != nil {
 				if err := h.authSvc.UpdateCompany(req.UID, *req.Company); err != nil {
@@ -317,13 +348,13 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 				}
 				// 若同时带昵称，继续走审核流
 				if req.Nickname == "" {
-					return &service.ProfileChangeRequestDTO{}, nil
+					return &ProfileChangeRequestDTO{}, nil
 				}
 			}
 			return h.reviewSvc.CreateRequest(req.UID, model.ProfileFieldNickname, req.Nickname)
 		},
 		ErrStatus: &httpx.ErrStatusTable{Fallback: http.StatusBadRequest},
-		Render: func(c *gin.Context, _ *updateProfileReq, resp *service.ProfileChangeRequestDTO) {
+		Render: func(c *gin.Context, _ *updateProfileReq, resp *ProfileChangeRequestDTO) {
 			if resp != nil && resp.ID == 0 {
 				response.SuccessWithMsg(c, "单位更新成功", resp)
 				return
@@ -350,7 +381,7 @@ type updateProfileReq struct {
 // @Success 200 {object} response.R "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/account [delete]
-func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+func (h *handler) DeleteAccount(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	if uid <= 0 {
 		response.Unauthorized(c, "请先登录")
@@ -385,11 +416,11 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param file formData file true "头像图片"
-// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "success"
+// @Success 200 {object} response.R{data=ProfileChangeRequestDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /auth/avatar [post]
-func (h *AuthHandler) UploadAvatar(c *gin.Context) {
+func (h *handler) UploadAvatar(c *gin.Context) {
 	userID, _ := c.Get(string(middleware.CtxUserID))
 	uid, _ := userID.(int)
 	if uid <= 0 {

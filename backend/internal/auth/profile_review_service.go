@@ -1,6 +1,5 @@
-// Package service 实现业务服务层。
 // 本文件：用户资料（昵称/头像）修改审核。
-package service
+package auth
 
 import (
 	"context"

@@ -1,7 +1,7 @@
 // 禁用招聘者 = 全会话吊销（ADR-0060 票2 / spec #1201 场景 29）。
 // seam：service 的具名动作 + security.Session 的轮换结果。
 // 只改状态列不构成「停用真实生效」——手上仍持 refresh 的会话能继续换新 access。
-package service
+package auth
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -40,12 +41,12 @@ func (s *valueBlacklist) PutIfAbsent(_ context.Context, k, v string, _ time.Dura
 	return true, nil
 }
 
-func newRecruiterFixture(t *testing.T) (*AuthService, *security.Session, int) {
+func newRecruiterFixture(t *testing.T) (*Service, *security.Session, int) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "recruiter_token"}, &valueBlacklist{m: map[string]string{}})
-	svc := NewAuthService(db, sess, NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	svc := NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := model.RecruiterUser{Username: "rec1", Password: "x", CompanyName: "禁用测试企业", Status: 1}
 	if err := db.Create(&r).Error; err != nil {
 		t.Fatalf("播种招聘者失败: %v", err)

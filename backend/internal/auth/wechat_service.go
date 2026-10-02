@@ -1,8 +1,7 @@
-// Package service 实现业务服务层。
 // 本文件：微信登录。
 // - 小程序登录（code2session）：uni.login 临时凭证换 openid → 按 openid 查/建用户 → 签发双令牌。
 // - 扫码登录（开放平台）：框架占位，授权信息待接入。
-package service
+package auth
 
 import (
 	"context"
@@ -21,6 +20,7 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
+	"forklift-training/internal/service"
 )
 
 // 微信 code2session 端点与错误码语义（官方文档）。
@@ -31,11 +31,11 @@ const (
 	wechatErrBlocked      = 40226 // 高风险用户，登录拦截
 )
 
-// WechatAuthService 微信登录服务。
-type WechatAuthService struct {
+// WechatService 微信登录服务。
+type WechatService struct {
 	cfg     config.WechatAppConfig
 	db      *gorm.DB
-	authSvc *AuthService
+	authSvc *Service
 	logger  *zap.Logger
 
 	// code2session 基地址（默认官方端点；测试注入 httptest server 覆盖）
@@ -43,10 +43,10 @@ type WechatAuthService struct {
 	httpCli *http.Client
 }
 
-// NewWechatAuthService 构造微信服务。
+// NewWechatService 构造微信服务。
 // db 用于按 openid 查/建用户；authSvc 复用登录签发骨架（双令牌 + 禁用校验）。
-func NewWechatAuthService(cfg config.WechatAppConfig, db *gorm.DB, authSvc *AuthService, logger *zap.Logger) *WechatAuthService {
-	return &WechatAuthService{
+func NewWechatService(cfg config.WechatAppConfig, db *gorm.DB, authSvc *Service, logger *zap.Logger) *WechatService {
+	return &WechatService{
 		cfg:     cfg,
 		db:      db,
 		authSvc: authSvc,
@@ -82,7 +82,7 @@ type wxSessionResponse struct {
 
 // MiniProgramLogin 微信小程序登录：code2session 换 openid → 按 openid 查用户；
 // 未注册则自动建账号并绑定 openid；签发双令牌返回（含 is_new 标记）。
-func (s *WechatAuthService) MiniProgramLogin(ctx context.Context, code string) (*WxLoginResult, error) {
+func (s *WechatService) MiniProgramLogin(ctx context.Context, code string) (*WxLoginResult, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return nil, errors.New("缺少微信登录凭证 code")
@@ -103,7 +103,7 @@ func (s *WechatAuthService) MiniProgramLogin(ctx context.Context, code string) (
 
 	login, err := s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, HrwaiRole)
+	}, service.HrwaiRole)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (s *WechatAuthService) MiniProgramLogin(ctx context.Context, code string) (
 }
 
 // code2Session 调用微信登录凭证校验接口，换取 openid/unionid。
-func (s *WechatAuthService) code2Session(ctx context.Context, code string) (*wxSessionResponse, error) {
+func (s *WechatService) code2Session(ctx context.Context, code string) (*wxSessionResponse, error) {
 	q := url.Values{}
 	q.Set("appid", s.cfg.AppID)
 	q.Set("secret", s.cfg.AppSecret)
@@ -168,7 +168,7 @@ func (s *WechatAuthService) code2Session(ctx context.Context, code string) (*wxS
 // account/username 由 openid 派生；account 前缀冲突时追加 openid 后段或序号重试（spec #279），
 // 数据库唯一约束冲突与其他错误分类处理：冲突走回查/重试，其他错误透传可观测原因。
 // 并发首登竞争由 wechat_openid 唯一索引兜底：撞唯一约束时按已存在用户处理。
-func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model.HrwaiUser, bool, error) {
+func (s *WechatService) findOrCreateByOpenID(openID, unionID string) (*model.HrwaiUser, bool, error) {
 	var user model.HrwaiUser
 	err := s.db.Where("wechat_openid = ?", openID).First(&user).Error
 	if err == nil {
@@ -209,7 +209,7 @@ func (s *WechatAuthService) findOrCreateByOpenID(openID, unionID string) (*model
 	var lastErr error
 	for idx, cand := range candidates {
 		newUser := model.HrwaiUser{
-			UID:           NextUID(),
+			UID:           service.NextUID(),
 			Account:       cand.account,
 			Username:      cand.username,
 			Phone:         phoneBase,
@@ -256,7 +256,7 @@ type WechatQRCodeInfoDTO struct {
 }
 
 // QRCodeInfo 返回扫码登录占位信息：未配置授权时 enabled=false，前端展示占位二维码。
-func (s *WechatAuthService) QRCodeInfo() *WechatQRCodeInfoDTO {
+func (s *WechatService) QRCodeInfo() *WechatQRCodeInfoDTO {
 	if !s.cfg.Configured() {
 		return &WechatQRCodeInfoDTO{
 			Enabled: false,
@@ -272,6 +272,6 @@ func (s *WechatAuthService) QRCodeInfo() *WechatQRCodeInfoDTO {
 }
 
 // LoginWithQRCode 微信扫码登录占位：真实授权流程待接入（与小程序 code2session 登录不同流）。
-func (s *WechatAuthService) LoginWithQRCode(code string) (*LoginResult, error) {
+func (s *WechatService) LoginWithQRCode(code string) (*LoginResult, error) {
 	return nil, errors.New("微信扫码登录尚未接入，请使用其他登录方式")
 }

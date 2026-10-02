@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -309,7 +310,7 @@ func TestQuestionContentTouched(t *testing.T) {
 		{"选项同字节", QuestionUpdateInput{Options: &eqOpts}, false},
 		{"选项序变化即内容变化", QuestionUpdateInput{Options: &sameOpts}, true},
 		{"分值相同", QuestionUpdateInput{Score: &sameScore}, false},
-		{"仅标签不动内容", QuestionUpdateInput{TagIDs: ptr([]int{1})}, false},
+		{"仅标签不动内容", QuestionUpdateInput{TagIDs: coerce.Ptr([]int{1})}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

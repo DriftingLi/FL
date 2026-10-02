@@ -114,6 +114,11 @@ func TestJWTExpiry(t *testing.T) {
 	if d.Hours() != 2 {
 		t.Errorf("JWTExpiry = %v，期望 2h", d)
 	}
+	// 零值必须回退 2h（同 Load 的默认口径）：config.Config 字面量不走 Load，
+	// 缺字段时若返回 0，签出的 access 立即过期、经 JWTAuth 全判 401（P2 波 3a 血账）。
+	if d := (&Config{}).JWTExpiry(); d.Hours() != 2 {
+		t.Errorf("零值 JWTExpiry = %v，期望回退 2h", d)
+	}
 }
 
 func TestJWTRefreshExpiry(t *testing.T) {
@@ -121,6 +126,9 @@ func TestJWTRefreshExpiry(t *testing.T) {
 	d := cfg.JWTRefreshExpiry()
 	if d.Hours() != 7*24 {
 		t.Errorf("JWTRefreshExpiry = %v，期望 7d", d)
+	}
+	if d := (&Config{}).JWTRefreshExpiry(); d.Hours() != 7*24 {
+		t.Errorf("零值 JWTRefreshExpiry = %v，期望回退 7d", d)
 	}
 }
 

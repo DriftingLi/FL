@@ -149,7 +149,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email
 		}
 	} else {
 		var err error
-		account, err = generateRandomAccount()
+		account, err = GenerateRandomAccount()
 		if err != nil {
 			return nil, errors.New("注册失败，请稍后再试")
 		}

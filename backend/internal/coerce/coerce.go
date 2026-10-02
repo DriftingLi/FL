@@ -64,6 +64,10 @@ func ParseInt(s string) (int, error) {
 	return strconv.Atoi(s)
 }
 
+// Ptr 构造任意类型 T 的指针（泛型版；IntPtr/FloatPtr 是它的具名特例，保留是因为
+// 调用点「类型 + Ptr」更好认）。给「键缺失/存在两态」的 DTO 指针字段用。
+func Ptr[T any](v T) *T { return &v }
+
 // IntPtr 返回 int 指针。
 func IntPtr(v int) *int { return &v }
 

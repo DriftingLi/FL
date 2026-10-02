@@ -5,7 +5,11 @@
 // caller 记错顺序就把「吊销失败」当成「口令没改成」（或反之）。升成 PasswordWriteResult 之后，
 // 本文件钉住的是语义那一半：吊销存储坏掉时口令必须已经落库、入口方法必须仍返回成功，
 // 缺口如实出现在 RevokeErr 上由 caller 记日志。
-package service
+//
+// P2 波 3a（ADR-0070）：本文件随域搬进 internal/auth —— 口令写面的入口方法（SetNewPassword /
+// UpdatePassword）是 auth 的，动作本体（ApplyHrwaiPassword）留在 internal/service；留在 internal/service
+// 会让该包的测试文件 import internal/auth ⇒ 「import cycle not allowed in test」（实测）。
+package auth
 
 import (
 	"context"
@@ -18,6 +22,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -32,19 +37,19 @@ func (b brokenRevokeStore) PutIfAbsent(context.Context, string, string, time.Dur
 	return false, b.setErr
 }
 
-func newBrokenRevokeAuth(t *testing.T, db *gorm.DB) *AuthService {
+func newBrokenRevokeAuth(t *testing.T, db *gorm.DB) *Service {
 	t.Helper()
 	sess := security.NewSessionWithBlacklistAndRefresh(
 		"pwd-result-test-secret", time.Hour, 7*24*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, brokenRevokeStore{setErr: errors.New("redis down")})
-	return NewAuthService(db, sess, nil, "", "", "", zap.NewNop())
+	return NewService(db, sess, nil, "", "", "", zap.NewNop())
 }
 
 // TestPasswordWriteResultKeepsPasswordOnRevokeFailure 吊销写失败 ⇒ 口令照样生效、
 // Applied() 为真、缺口如实出现在 RevokeErr（尽力而为族，不升级为整体失败）。
 func TestPasswordWriteResultKeepsPasswordOnRevokeFailure(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	old, _ := HashPassword("oldpass123")
+	old, _ := service.HashPassword("oldpass123")
 	stu := testutil.SeedStudent(t, db, "pwdres_stu", old)
 	svc := newBrokenRevokeAuth(t, db)
 
@@ -59,7 +64,7 @@ func TestPasswordWriteResultKeepsPasswordOnRevokeFailure(t *testing.T) {
 	if err := db.First(&stored, stu.ID).Error; err != nil {
 		t.Fatalf("回读学员行失败: %v", err)
 	}
-	if !VerifyPassword("newpass123", stored.Password) {
+	if !service.VerifyPassword("newpass123", stored.Password) {
 		t.Fatal("口令没落库 ⇒ 本测试要钉的「口令已成」这一半不成立")
 	}
 	// 入口方法的表态：同族尽力而为 ⇒ 对 caller 返回 nil（用户找不回账号才是更坏的后果）。
@@ -72,7 +77,7 @@ func TestPasswordWriteResultKeepsPasswordOnRevokeFailure(t *testing.T) {
 // 两格互斥是结果类型的不变式（否则 caller 无法判断该不该记「已改密但没吊销」这条日志）。
 func TestPasswordWriteResultErrIsExclusive(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	old, _ := HashPassword("oldpass123")
+	old, _ := service.HashPassword("oldpass123")
 	stu := testutil.SeedStudent(t, db, "pwdres_excl", old)
 	svc := newBrokenRevokeAuth(t, db)
 
@@ -88,7 +93,7 @@ func TestPasswordWriteResultErrIsExclusive(t *testing.T) {
 	if err := db.First(&still, stu.ID).Error; err != nil {
 		t.Fatalf("回读失败: %v", err)
 	}
-	if !VerifyPassword("oldpass123", still.Password) {
+	if !service.VerifyPassword("oldpass123", still.Password) {
 		t.Fatal("非法入参的这一次把口令改掉了 ⇒ 「没落成」那一格不可信")
 	}
 }

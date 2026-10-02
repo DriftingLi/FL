@@ -12,10 +12,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/middleware"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/model"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -23,17 +25,18 @@ import (
 // seam 形态照 session_termination_contract_test.go 的 newDeleteAccountRouter，只把测试库换成真实迁移建起来的 PG。
 // db 必须由调用方传入并复用：testutil.NewPostgresDB 每次建**独立随机 schema**，各建各的就变成
 // 「播种在一个 schema、注销打在另一个 schema」，判据恒绿。
-func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) *gin.Engine {
+func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) (*gin.Engine, string) {
 	t.Helper()
 	setTestGinMode()
 	deps := newContractDeps(t, db, nil)
 	r := gin.New()
-	g := r.Group("/api/auth", func(c *gin.Context) {
-		c.Set(string(middleware.CtxUserID), uid)
-		c.Next()
-	})
-	g.DELETE("/account", deps.AuthH.DeleteAccount)
-	return r
+	// P2 波 3a：注册真实路由面（/account 带 JWT 中间件）——用例带真 access，不再手工注入 CtxUserID。
+	auth.RegisterRoutes(r.Group("/api"), deps.Session, deps.AuthSvc, nil, nil, nil, zap.NewNop())
+	tok, _, err := deps.Session.IssuePair(uid, "del_pg_stu", service.HrwaiRole)
+	if err != nil {
+		t.Fatalf("签发 access 失败: %v", err)
+	}
+	return r, tok
 }
 
 // 判据 1：注入某一条删除失败 ⇒ 接口非 2xx，且主行仍在（整笔回滚，不是半删）。
@@ -54,8 +57,8 @@ func TestDeleteAccountOnPostgres_注入清理失败则非2xx且主行仍在(t *t
 		t.Fatalf("DROP TABLE note 失败: %v", err)
 	}
 
-	r := newDeleteAccountPGRouter(t, db, student.ID)
-	rec := performRequest(r, http.MethodDelete, "/api/auth/account")
+	r, tok := newDeleteAccountPGRouter(t, db, student.ID)
+	rec := codeAuthRequest(r, http.MethodDelete, "/api/auth/account", nil, tok)
 	if rec.Code >= http.StatusOK && rec.Code < http.StatusMultipleChoices {
 		t.Fatalf("清理语句失败时注销不得回 2xx，实际 %d，body=%s", rec.Code, rec.Body.String())
 	}
@@ -105,8 +108,8 @@ func TestDeleteAccountOnPostgres_无故障时注销真的生效(t *testing.T) {
 		t.Fatalf("播种收藏行失败: %v", err)
 	}
 
-	r := newDeleteAccountPGRouter(t, db, student.ID)
-	if rec := performRequest(r, http.MethodDelete, "/api/auth/account"); rec.Code != http.StatusOK {
+	r, tok := newDeleteAccountPGRouter(t, db, student.ID)
+	if rec := codeAuthRequest(r, http.MethodDelete, "/api/auth/account", nil, tok); rec.Code != http.StatusOK {
 		t.Fatalf("无故障时注销应 200，实际 %d，body=%s", rec.Code, rec.Body.String())
 	}
 

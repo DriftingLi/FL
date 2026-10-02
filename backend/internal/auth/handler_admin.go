@@ -1,6 +1,5 @@
-// Package api 实现 HTTP handlers。
 // 本文件：管理员审核用户资料（昵称/头像）修改。
-package api
+package auth
 
 import (
 	"context"
@@ -11,25 +10,25 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
 
-// ProfileReviewHandler 资料审核 handler。
-type ProfileReviewHandler struct {
-	svc *service.ProfileReviewService
+// profileReviewHandler 资料审核 handler。
+type profileReviewHandler struct {
+	svc *ProfileReviewService
 }
 
-// NewProfileReviewHandler 创建资料审核 handler。
-func NewProfileReviewHandler(svc *service.ProfileReviewService) *ProfileReviewHandler {
-	return &ProfileReviewHandler{svc: svc}
+// newProfileReviewHandler 创建资料审核 handler。
+func newProfileReviewHandler(svc *ProfileReviewService) *profileReviewHandler {
+	return &profileReviewHandler{svc: svc}
 }
 
-// RegisterProfileReviewRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
-func RegisterProfileReviewRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ProfileReviewService) {
-	h := NewProfileReviewHandler(svc)
+// RegisterAdminRoutes 注册 /api/admin/profile-reviews 蓝图（仅管理员）。
+func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *ProfileReviewService) {
+	h := newProfileReviewHandler(svc)
 
-	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapProfileReview))
+	g := rg.Group("/admin/profile-reviews", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapProfileReview))
 
 	// GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
 	g.GET("", h.ListRequests)
@@ -54,13 +53,13 @@ type listRequestsReq struct {
 // @Param status query string false "状态 pending|approved|rejected|all" default(pending)
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R{data=service.ProfileChangeRequestPageResult} "success"
+// @Success 200 {object} response.R{data=ProfileChangeRequestPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "查询失败"
 // @Router /admin/profile-reviews [get]
 // ListRequests 审核请求列表 GET /api/admin/profile-reviews?status=pending|approved|rejected|all&page=&page_size=
-func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
-	httpx.Endpoint[listRequestsReq, service.ProfileChangeRequestPageResult]{
+func (h *profileReviewHandler) ListRequests(c *gin.Context) {
+	httpx.Endpoint[listRequestsReq, ProfileChangeRequestPageResult]{
 		Parse: func(c *gin.Context) (*listRequestsReq, error) {
 			status := c.Query("status")
 			if status == "" {
@@ -72,7 +71,7 @@ func (h *ProfileReviewHandler) ListRequests(c *gin.Context) {
 				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *listRequestsReq) (*service.ProfileChangeRequestPageResult, error) {
+		Invoke: func(ctx context.Context, req *listRequestsReq) (*ProfileChangeRequestPageResult, error) {
 			return h.svc.ListRequests(req.Status, req.Page, req.PageSize)
 		},
 		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "查询失败: "),
@@ -91,13 +90,13 @@ type approveReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "审核单 ID"
-// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "已通过审核，修改已生效"
+// @Success 200 {object} response.R{data=ProfileChangeRequestDTO} "已通过审核，修改已生效"
 // @Failure 400 {object} response.R "审核失败"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/profile-reviews/{id}/approve [post]
 // Approve 通过审核 POST /api/admin/profile-reviews/:id/approve
-func (h *ProfileReviewHandler) Approve(c *gin.Context) {
-	httpx.Endpoint[approveReq, service.ProfileChangeRequestDTO]{
+func (h *profileReviewHandler) Approve(c *gin.Context) {
+	httpx.Endpoint[approveReq, ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*approveReq, error) {
 			adminID, _ := c.Get(string(middleware.CtxUserID))
 			reviewerID, _ := adminID.(int)
@@ -107,7 +106,7 @@ func (h *ProfileReviewHandler) Approve(c *gin.Context) {
 			}
 			return &approveReq{RequestID: requestID, ReviewerID: reviewerID}, nil
 		},
-		Invoke: func(ctx context.Context, req *approveReq) (*service.ProfileChangeRequestDTO, error) {
+		Invoke: func(ctx context.Context, req *approveReq) (*ProfileChangeRequestDTO, error) {
 			return h.svc.Approve(req.RequestID, req.ReviewerID)
 		},
 	}.WithSuccess(httpx.OkMsg("已通过审核，修改已生效"), http.StatusBadRequest).Handle(c)
@@ -128,13 +127,13 @@ type rejectReq struct {
 // @Security BearerAuth
 // @Param id path int true "审核单 ID"
 // @Param body body object false "驳回请求 {reason}"
-// @Success 200 {object} response.R{data=service.ProfileChangeRequestDTO} "已驳回"
+// @Success 200 {object} response.R{data=ProfileChangeRequestDTO} "已驳回"
 // @Failure 400 {object} response.R "驳回失败"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/profile-reviews/{id}/reject [post]
 // Reject 驳回 POST /api/admin/profile-reviews/:id/reject（body: {"reason": "..."}）
-func (h *ProfileReviewHandler) Reject(c *gin.Context) {
-	httpx.Endpoint[rejectReq, service.ProfileChangeRequestDTO]{
+func (h *profileReviewHandler) Reject(c *gin.Context) {
+	httpx.Endpoint[rejectReq, ProfileChangeRequestDTO]{
 		Parse: func(c *gin.Context) (*rejectReq, error) {
 			adminID, _ := c.Get(string(middleware.CtxUserID))
 			reviewerID, _ := adminID.(int)
@@ -150,7 +149,7 @@ func (h *ProfileReviewHandler) Reject(c *gin.Context) {
 			}
 			return &rejectReq{RequestID: requestID, ReviewerID: reviewerID, Reason: req.Reason}, nil
 		},
-		Invoke: func(ctx context.Context, req *rejectReq) (*service.ProfileChangeRequestDTO, error) {
+		Invoke: func(ctx context.Context, req *rejectReq) (*ProfileChangeRequestDTO, error) {
 			return h.svc.Reject(req.RequestID, req.ReviewerID, req.Reason)
 		},
 	}.WithSuccess(httpx.OkMsg("已驳回"), http.StatusBadRequest).Handle(c)

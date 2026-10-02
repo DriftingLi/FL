@@ -1,9 +1,9 @@
 // 注销清理表与事务自证的单测（#1356 / spec #1345 决策 10 / 真实缺陷 #6）。
 //
-// seam：AuthService.DeleteAccount 的整笔事务（判据 1 与 2 的失败注入都落在「事务里的一条语句」
+// seam：Service.DeleteAccount 的整笔事务（判据 1 与 2 的失败注入都落在「事务里的一条语句」
 // 这一层，用 GORM 回调与 DROP TABLE 注入，不改生产代码形状）；观察点只有两个——返回的错误与
 // 库里的行。PG 那一半的契约面在 internal/api/account_deletion_postgres_contract_test.go。
-package service
+package auth
 
 import (
 	"sort"

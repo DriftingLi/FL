@@ -49,7 +49,7 @@
 //   GET  /admin/export/questions
 //   GET  /admin/export/evaluations
 //
-// 覆盖的 Go 类型：AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / AuditLog / AdminCourseDetailDTO / AdminOverviewDTO / AdminStatisticsDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterGenResult / CourseBriefDTO / CourseDTO / CoursePageResult / CourseStatDTO / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / LevelBriefDTO / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / SpecialtyBriefDTO / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / TutorRegisterResultDTO
+// 覆盖的 Go 类型：AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / AuditLog / AdminCourseDetailDTO / AdminOverviewDTO / AdminStatisticsDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterGenResult / CourseBriefDTO / CourseDTO / CoursePageResult / CourseStatDTO / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / LevelBriefDTO / SpecialtyBriefDTO / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -85,6 +85,82 @@ export interface AuditLogPageResult {
   page: number
   pages: number
   total: number
+}
+
+export interface ProfileChangeRequestDTO {
+  avatar_url: string
+  created_at: string
+  field_type: string
+  id: number
+  new_value: string
+  old_value: string
+  reject_reason: string
+  reviewed_at?: string
+  reviewed_by?: number
+  status: string
+  user_id: number
+  username: string
+}
+
+export interface ProfileChangeRequestPageResult {
+  page: number
+  pages: number
+  requests: ProfileChangeRequestDTO[]
+  total: number
+}
+
+export interface RecruiterCreatedDTO {
+  business_scope: string
+  company_name: string
+  contact_email: string
+  contact_name: string
+  contact_phone: string
+  credit_code: string
+  id: number
+  status: number
+  username: string
+  wechat: string
+}
+
+export interface RecruiterListItem {
+  business_scope: string
+  company_name: string
+  contact_email: string
+  contact_name: string
+  contact_phone: string
+  created_at: string
+  credit_code: string
+  id: number
+  status: number
+  username: string
+  wechat: string
+}
+
+export interface RecruiterListResult {
+  items: RecruiterListItem[]
+  page: number
+  total: number
+}
+
+export interface RecruiterPasswordResetResult {
+}
+
+export interface RecruiterUpdatedDTO {
+  business_scope: string
+  company_name: string
+  contact_email: string
+  contact_name: string
+  contact_phone: string
+  credit_code: string
+  id: number
+  username: string
+  wechat: string
+}
+
+export interface TutorRegisterResultDTO {
+  name: string
+  tutor_id: number
+  username: string
 }
 
 export interface AuditLog {
@@ -298,76 +374,6 @@ export interface LevelBriefDTO {
   name: string
 }
 
-export interface ProfileChangeRequestDTO {
-  avatar_url: string
-  created_at: string
-  field_type: string
-  id: number
-  new_value: string
-  old_value: string
-  reject_reason: string
-  reviewed_at?: string
-  reviewed_by?: number
-  status: string
-  user_id: number
-  username: string
-}
-
-export interface ProfileChangeRequestPageResult {
-  page: number
-  pages: number
-  requests: ProfileChangeRequestDTO[]
-  total: number
-}
-
-export interface RecruiterCreatedDTO {
-  business_scope: string
-  company_name: string
-  contact_email: string
-  contact_name: string
-  contact_phone: string
-  credit_code: string
-  id: number
-  status: number
-  username: string
-  wechat: string
-}
-
-export interface RecruiterListItem {
-  business_scope: string
-  company_name: string
-  contact_email: string
-  contact_name: string
-  contact_phone: string
-  created_at: string
-  credit_code: string
-  id: number
-  status: number
-  username: string
-  wechat: string
-}
-
-export interface RecruiterListResult {
-  items: RecruiterListItem[]
-  page: number
-  total: number
-}
-
-export interface RecruiterPasswordResetResult {
-}
-
-export interface RecruiterUpdatedDTO {
-  business_scope: string
-  company_name: string
-  contact_email: string
-  contact_name: string
-  contact_phone: string
-  credit_code: string
-  id: number
-  username: string
-  wechat: string
-}
-
 export interface SpecialtyBriefDTO {
   code: string
   name: string
@@ -394,10 +400,4 @@ export interface TutorListDTO {
   page: number
   total: number
   tutors: TutorDTO[]
-}
-
-export interface TutorRegisterResultDTO {
-  name: string
-  tutor_id: number
-  username: string
 }

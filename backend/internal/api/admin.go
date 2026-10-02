@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
@@ -20,13 +21,13 @@ import (
 type AdminHandler struct {
 	adminSvc      *service.AdminService
 	courseSvc     *service.AdminCourseService
-	authSvc       *service.AuthService
+	authSvc       *auth.Service
 	aiConfigSvc   *aiassistant.ConfigService
 	contentGenSvc *service.ContentGenerateService
 }
 
 // NewAdminHandler 创建管理员后台 handler。
-func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) *AdminHandler {
+func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) *AdminHandler {
 	return &AdminHandler{
 		adminSvc: adminSvc, courseSvc: courseSvc, authSvc: authSvc,
 		aiConfigSvc: aiConfigSvc, contentGenSvc: contentGenSvc,
@@ -34,7 +35,7 @@ func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCou
 }
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) {
+func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) {
 	h := NewAdminHandler(adminSvc, courseSvc, authSvc, aiConfigSvc, contentGenSvc)
 
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAdminAccess))
@@ -714,13 +715,13 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "建号请求 {username,password,name}"
-// @Success 201 {object} response.R{data=service.TutorRegisterResultDTO} "讲师添加成功"
+// @Success 201 {object} response.R{data=auth.TutorRegisterResultDTO} "讲师添加成功"
 // @Failure 400 {object} response.R "参数错误/用户名已被注册"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/tutor [post]
 // CreateTutor 添加导师 POST /api/admin/tutor
 func (h *AdminHandler) CreateTutor(c *gin.Context) {
-	httpx.Endpoint[createTutorReq, service.TutorRegisterResultDTO]{
+	httpx.Endpoint[createTutorReq, auth.TutorRegisterResultDTO]{
 		Parse: func(c *gin.Context) (*createTutorReq, error) {
 			req, err := httpx.BindJSON[createTutorReq](c)
 			if err != nil {
@@ -731,7 +732,7 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *createTutorReq) (*service.TutorRegisterResultDTO, error) {
+		Invoke: func(ctx context.Context, req *createTutorReq) (*auth.TutorRegisterResultDTO, error) {
 			return h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
 		},
 	}.WithSuccess(httpx.Created("讲师添加成功"), http.StatusBadRequest).Handle(c)
