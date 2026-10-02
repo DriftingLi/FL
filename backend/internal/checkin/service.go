@@ -1,9 +1,8 @@
-// Package service 实现业务服务层。
-// 本文件：每日打卡（签到/日历/连击/排行榜/直记积分，Asia/Shanghai 自然日语义）。
-// 由 ForumService 拆出为独立 module（spec #279），与 ForumService 共享 ForumAuthor seam；
+// Package checkin 每日打卡（签到/日历/连击/排行榜/直记积分，Asia/Shanghai 自然日语义）。
+// 由论坛域拆出为独立 module（spec #279）；与论坛共享的 ForumAuthor seam 已按 ADR-0070 波 2a 移进 internal/model。
 // 路由前缀 /api/check-in/*（ADR-0028：打卡从论坛域迁出为独立模块，旧 /api/forum/check-in/* 已删除）。
 // 时间统一经 internal/clock 构造注入（spec #296）：生产为 Asia/Shanghai 实钟，测试可定格。
-package service
+package checkin
 
 import (
 	"errors"
@@ -78,11 +77,11 @@ type CheckInCalendarResult struct {
 
 // CheckInRankItem 排行榜条目。
 type CheckInRankItem struct {
-	Rank         int         `json:"rank"`
-	User         ForumAuthor `json:"user"`
-	Total        int         `json:"total"`
-	Streak       int         `json:"streak"`
-	TodayChecked bool        `json:"today_checked"`
+	Rank         int               `json:"rank"`
+	User         model.ForumAuthor `json:"user"`
+	Total        int               `json:"total"`
+	Streak       int               `json:"streak"`
+	TodayChecked bool              `json:"today_checked"`
 }
 
 // CheckInRankResult 排行榜分页结果。
@@ -96,8 +95,8 @@ type CheckInRankResult struct {
 	Me *CheckInRankItem `json:"me" extensions:"x-nullable"`
 }
 
-// CheckInService 每日打卡服务（独立 module，与论坛帖子/回复逻辑解耦）。
-type CheckInService struct {
+// Service 每日打卡服务（独立 module，与论坛帖子/回复逻辑解耦）。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 	clk    clock.Clock
@@ -105,13 +104,13 @@ type CheckInService struct {
 	points *points.Service
 }
 
-// NewCheckInService 构造打卡服务；clk 为空时回退生产实钟（Asia/Shanghai）。
+// NewService 构造打卡服务；clk 为空时回退生产实钟（Asia/Shanghai）。
 // points 为打卡积分簿记通道（打卡即发分，ADR-0028）；可为 nil（测试或未接线时仅记录不发分）。
-func NewCheckInService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, points *points.Service) *CheckInService {
+func NewService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, points *points.Service) *Service {
 	if clk == nil {
 		clk = clock.Real()
 	}
-	return &CheckInService{db: db, logger: logger, clk: clk, points: points}
+	return &Service{db: db, logger: logger, clk: clk, points: points}
 }
 
 // CheckInTierBonusFor 纯函数：由（跨档后）连续天数计算今日阶梯额外奖励。
@@ -153,7 +152,7 @@ func ComputeStreakMetrics(dates []time.Time, now time.Time) (streak, total int, 
 }
 
 // windowCutoff streak 截断窗口起点（今日 −checkInWindowDays 天），各统计路径共用。
-func (s *CheckInService) windowCutoff(now time.Time) time.Time {
+func (s *Service) windowCutoff(now time.Time) time.Time {
 	return clock.DayStart(now).AddDate(0, 0, -checkInWindowDays)
 }
 
@@ -169,7 +168,7 @@ func checkInDates(db *gorm.DB, userID int, now time.Time, order string) ([]time.
 }
 
 // streakInWindow 计算窗口内连击与今日已签（排行榜条目与 Me 共用同一截断口径）。
-func (s *CheckInService) streakInWindow(userID int, now time.Time) (streak int, todayChecked bool) {
+func (s *Service) streakInWindow(userID int, now time.Time) (streak int, todayChecked bool) {
 	dates, err := checkInDates(s.db, userID, now, "check_date ASC")
 	if err != nil {
 		return 0, false
@@ -181,7 +180,7 @@ func (s *CheckInService) streakInWindow(userID int, now time.Time) (streak int, 
 // checkInStats 连击 + 全量累计天数 + 今日已签（签到/日历统计共用）。
 // total 为全生命周期计数（不受 400 天窗口截断），与响应契约保持一致；
 // streak/todayChecked 为窗口内口径。
-func (s *CheckInService) checkInStats(userID int, now time.Time) (streak, total int, todayChecked bool) {
+func (s *Service) checkInStats(userID int, now time.Time) (streak, total int, todayChecked bool) {
 	var total64 int64
 	if err := s.db.Model(&model.ForumCheckIn{}).Where("user_id = ?", userID).Count(&total64).Error; err != nil {
 		return 0, 0, false
@@ -192,7 +191,7 @@ func (s *CheckInService) checkInStats(userID int, now time.Time) (streak, total 
 
 // CheckIn 每日打卡（幂等，Asia/Shanghai 自然日）；首次签到即发基础分 + 跨档阶梯分
 // （合并单笔直记，幂等键 checkin:{uid}:{date}——同日重复/并发只发一次，ADR-0028）。
-func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
+func (s *Service) CheckIn(userID int) (*CheckInResult, error) {
 	now := s.clk.Now()
 	today := clock.DayStart(now)
 	awarded := 0
@@ -241,7 +240,7 @@ func (s *CheckInService) CheckIn(userID int) (*CheckInResult, error) {
 }
 
 // GetCheckInCalendar 获取某月已签日期及统计（逐日带实发积分 points）。
-func (s *CheckInService) GetCheckInCalendar(userID, year, month int) (*CheckInCalendarResult, error) {
+func (s *Service) GetCheckInCalendar(userID, year, month int) (*CheckInCalendarResult, error) {
 	if year < 2000 || year > 2100 {
 		return nil, errors.New("年份无效")
 	}
@@ -300,7 +299,7 @@ type aggRow struct {
 }
 
 // GetCheckInRank 排行榜（累计总榜，tie-break 见 checkInRankOrderBy 单点定义）。
-func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*CheckInRankResult, error) {
+func (s *Service) GetCheckInRank(requesterID, page, pageSize int) (*CheckInRankResult, error) {
 	now := s.clk.Now()
 	// 排行榜聚合子查询（count 与 scan 同作用域，单一出处）。
 	aggQuery := func(q *gorm.DB) *gorm.DB {
@@ -354,7 +353,7 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 		streak, _, todayChecked := ComputeStreakMetrics(grouped[r.UserID], now)
 		items = append(items, CheckInRankItem{
 			Rank:         offset + i + 1,
-			User:         ForumAuthor{UserID: r.UserID, Username: u.Username, AvatarURL: u.AvatarURL},
+			User:         model.ForumAuthor{UserID: r.UserID, Username: u.Username, AvatarURL: u.AvatarURL},
 			Total:        r.Total,
 			Streak:       streak,
 			TodayChecked: todayChecked,
@@ -377,7 +376,7 @@ func (s *CheckInService) GetCheckInRank(requesterID, page, pageSize int) (*Check
 			streak, todayChecked := s.streakInWindow(requesterID, now)
 			me = &CheckInRankItem{
 				Rank:         myRank,
-				User:         ForumAuthor{UserID: requesterID, Username: mu.Username, AvatarURL: mu.AvatarURL},
+				User:         model.ForumAuthor{UserID: requesterID, Username: mu.Username, AvatarURL: mu.AvatarURL},
 				Total:        myRow.Total,
 				Streak:       streak,
 				TodayChecked: todayChecked,

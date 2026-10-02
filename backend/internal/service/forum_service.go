@@ -203,18 +203,6 @@ const (
 	ForumReplyMaxPageSize     = 100 // 页大小上限（超上限回退默认值，与全仓 ClampMax 同口径）
 )
 
-// ForumAuthor 论坛作者信息（展示名为昵称）。
-type ForumAuthor struct {
-	UserID    int    `json:"user_id"`
-	Username  string `json:"username"`
-	AvatarURL string `json:"avatar_url"`
-}
-
-// DisplayName 返回论坛展示名（昵称）。
-func (a ForumAuthor) DisplayName() string {
-	return a.Username
-}
-
 // ForumTopicDTO 论坛主题列表/详情对象。
 type ForumTopicDTO struct {
 	ID           int64  `json:"id"`
@@ -229,21 +217,21 @@ type ForumTopicDTO struct {
 	// IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，
 	// 展示侧据此**整段不渲染**（不显示「未知」、不留占位）。
 	// 位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。
-	IPProvince      string      `json:"ip_province"`
-	IPCity          string      `json:"ip_city"`
-	ViewCount       int         `json:"view_count"`
-	ReplyCount      int         `json:"reply_count"`
-	LastReplyAt     *string     `json:"last_reply_at" extensions:"x-nullable"`
-	CreatedAt       string      `json:"created_at"`
-	Author          ForumAuthor `json:"author"`
-	CanDelete       bool        `json:"can_delete"`
-	LikesCount      int64       `json:"likes_count"`
-	LikedByMe       bool        `json:"liked_by_me"`
-	AcceptedReplyID *int64      `json:"accepted_reply_id,omitempty" extensions:"x-optional"`
-	SolvedAt        *string     `json:"solved_at,omitempty" extensions:"x-optional"`
-	IsFeatured      bool        `json:"is_featured"`   // 认定：精选位
-	IsExperience    bool        `json:"is_experience"` // 认定：备考经验（蕴含 is_featured）
-	RewardIssued    bool        `json:"reward_issued"`
+	IPProvince      string            `json:"ip_province"`
+	IPCity          string            `json:"ip_city"`
+	ViewCount       int               `json:"view_count"`
+	ReplyCount      int               `json:"reply_count"`
+	LastReplyAt     *string           `json:"last_reply_at" extensions:"x-nullable"`
+	CreatedAt       string            `json:"created_at"`
+	Author          model.ForumAuthor `json:"author"`
+	CanDelete       bool              `json:"can_delete"`
+	LikesCount      int64             `json:"likes_count"`
+	LikedByMe       bool              `json:"liked_by_me"`
+	AcceptedReplyID *int64            `json:"accepted_reply_id,omitempty" extensions:"x-optional"`
+	SolvedAt        *string           `json:"solved_at,omitempty" extensions:"x-optional"`
+	IsFeatured      bool              `json:"is_featured"`   // 认定：精选位
+	IsExperience    bool              `json:"is_experience"` // 认定：备考经验（蕴含 is_featured）
+	RewardIssued    bool              `json:"reward_issued"`
 }
 
 // ForumReplyDTO 论坛回复对象。
@@ -257,14 +245,14 @@ type ForumReplyDTO struct {
 	ParentAvatarURL string `json:"parent_avatar_url,omitempty" extensions:"x-optional"`
 	Content         string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。
-	ContentFormat string      `json:"content_format"`
-	Images        []string    `json:"images" nullability:"nonnil"`
-	CreatedAt     string      `json:"created_at"`
-	Author        ForumAuthor `json:"author"`
-	CanDelete     bool        `json:"can_delete"`
-	LikesCount    int64       `json:"likes_count"`
-	LikedByMe     bool        `json:"liked_by_me"`
-	IsAccepted    bool        `json:"is_accepted"`
+	ContentFormat string            `json:"content_format"`
+	Images        []string          `json:"images" nullability:"nonnil"`
+	CreatedAt     string            `json:"created_at"`
+	Author        model.ForumAuthor `json:"author"`
+	CanDelete     bool              `json:"can_delete"`
+	LikesCount    int64             `json:"likes_count"`
+	LikedByMe     bool              `json:"liked_by_me"`
+	IsAccepted    bool              `json:"is_accepted"`
 	// IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：
 	// 空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。
 	IPProvince string `json:"ip_province"`
@@ -359,7 +347,7 @@ func (r topicRow) toDTO(viewerID int) ForumTopicDTO {
 		IsFeatured:      r.IsFeatured,
 		IsExperience:    r.IsExperience,
 		CreatedAt:       timefmt.FormatISO(r.CreatedAt),
-		Author: ForumAuthor{
+		Author: model.ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
 		CanDelete: r.UserID == viewerID,
@@ -765,7 +753,7 @@ func (r replyRow) toDTO(viewerID int, acceptedReplyID *int64) ForumReplyDTO {
 		Content: r.Content, ContentFormat: r.ContentFormat,
 		IPProvince: r.IPProvince, IPCity: r.IPCity,
 		Images: imageURLsForWire(r.Images), CreatedAt: timefmt.FormatISO(r.CreatedAt),
-		Author: ForumAuthor{
+		Author: model.ForumAuthor{
 			UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL,
 		},
 		CanDelete:  r.UserID == viewerID,
@@ -895,7 +883,7 @@ func (s *ForumService) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) 
 		IPCity:        topic.IPCity,
 		Images:        imagesForWire(images),
 		CreatedAt:     timefmt.FormatISO(topic.CreatedAt),
-		Author: ForumAuthor{
+		Author: model.ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
 		CanDelete: true,
@@ -1041,7 +1029,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		parentAuthorID = parent.UserID
 		var pu model.HrwaiUser
 		if err := s.db.First(&pu, parent.UserID).Error; err == nil {
-			parentName = ForumAuthor{
+			parentName = model.ForumAuthor{
 				UserID: pu.ID, Username: pu.Username, AvatarURL: pu.AvatarURL,
 			}.DisplayName()
 		}
@@ -1110,7 +1098,7 @@ func (s *ForumService) ReplyTopic(in ReplyTopicInput) (*ForumReplyDTO, error) {
 		ParentName: parentName, Content: reply.Content, ContentFormat: reply.ContentFormat,
 		IPProvince: reply.IPProvince, IPCity: reply.IPCity,
 		Images: imagesForWire(images), CreatedAt: timefmt.FormatISO(reply.CreatedAt),
-		Author: ForumAuthor{
+		Author: model.ForumAuthor{
 			UserID: u.ID, Username: u.Username, AvatarURL: u.AvatarURL,
 		},
 		CanDelete: true,
@@ -1490,10 +1478,10 @@ type MyReplyDTO struct {
 	ParentID   *int64 `json:"parent_id,omitempty" extensions:"x-optional"`
 	Content    string `json:"content"`
 	// ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。
-	ContentFormat string      `json:"content_format"`
-	Images        []string    `json:"images" nullability:"nonnil"`
-	CreatedAt     string      `json:"created_at"`
-	Author        ForumAuthor `json:"author"`
+	ContentFormat string            `json:"content_format"`
+	Images        []string          `json:"images" nullability:"nonnil"`
+	CreatedAt     string            `json:"created_at"`
+	Author        model.ForumAuthor `json:"author"`
 }
 
 // MyReplyPageResult 我的回复分页结果。
@@ -1538,7 +1526,7 @@ func (s *ForumService) MyReplies(userID, page, pageSize int) (*MyReplyPageResult
 			ID: r.ID, TopicID: r.TopicID, TopicTitle: r.TopicTitle, ParentID: r.ParentID,
 			Content: r.Content, ContentFormat: r.ContentFormat,
 			Images: imageURLsForWire(r.Images), CreatedAt: timefmt.FormatISO(r.CreatedAt),
-			Author: ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
+			Author: model.ForumAuthor{UserID: r.UserID, Username: r.Username, AvatarURL: r.AvatarURL},
 		})
 	}
 	return &MyReplyPageResult{

@@ -8,10 +8,12 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/captcha"
+	"forklift-training/internal/checkin"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
+	"forklift-training/internal/featured"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
@@ -65,9 +67,9 @@ type Deps struct {
 	AdminCourseSvc       *service.AdminCourseService
 	ForumSvc             *service.ForumService
 	ForumModSvc          *service.ForumModerationService
-	CheckInSvc           *service.CheckInService
+	CheckInSvc           *checkin.Service
 	ForumImageSvc        *service.ForumImageService
-	FeaturedSvc          *service.FeaturedService
+	FeaturedSvc          *featured.Service
 	FavoriteSvc          *service.FavoriteService
 	SearchSvc            *service.SearchService
 	MaterialSvc          *material.Service

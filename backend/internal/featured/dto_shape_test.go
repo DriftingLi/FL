@@ -1,4 +1,4 @@
-package service
+package featured
 
 import (
 	"encoding/json"

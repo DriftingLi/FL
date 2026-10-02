@@ -1,4 +1,4 @@
-package service
+package featured
 
 import (
 	"testing"
@@ -11,10 +11,10 @@ import (
 )
 
 // newFeaturedTestSvc 构造内容精选服务 + 内存数据库。
-func newFeaturedTestSvc(t *testing.T) (*FeaturedService, *gorm.DB) {
+func newFeaturedTestSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	svc := NewFeaturedService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	return svc, db
 }
 

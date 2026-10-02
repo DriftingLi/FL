@@ -66,10 +66,9 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	"service.ContributionPageResult.items":            outletContributionPageEmpty,
 	"service.ContributionReportPageResult.items":      outletContributionReportPageEmpty,
 	"service.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
-	"service.CheckInCalendarResult.days":              outletCheckInCalendar,
-	"service.CheckInRankResult.items":                 outletCheckInRankEmpty,
-	"service.SearchSectionDTO.items":                  outletSearchSectionEmpty,
-	"service.TutorCourseChaptersDTO.chapters":         outletTutorCourseChaptersEmpty,
+	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
+	"service.SearchSectionDTO.items":          outletSearchSectionEmpty,
+	"service.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
 
 	// 三格 handler 一行包出来的信封（见文件头那段）
 	"service.ApplicationListResult.items": outletStudentApplicationListEmpty,
@@ -329,29 +328,6 @@ func outletProfileChangeRequestPageEmpty(t *testing.T) any {
 	res, err := svc.ListRequests("", 1, 20)
 	if err != nil {
 		t.Fatalf("资料审核列表失败: %v", err)
-	}
-	return res
-}
-
-// outletCheckInCalendar 打卡日历：days 恒是**整月每一天**（未打卡日 checked=false），
-// 结构上不存在空月，所以这条举的是「非 null」而不是「空集」——断言放宽后才举得出来。
-func outletCheckInCalendar(t *testing.T) any {
-	t.Helper()
-	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
-	res, err := svc.GetCheckInCalendar(1, 2026, 9)
-	if err != nil {
-		t.Fatalf("打卡日历失败: %v", err)
-	}
-	return res
-}
-
-// outletCheckInRankEmpty 打卡排行榜：没人打卡时 items 是空集。
-func outletCheckInRankEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
-	res, err := svc.GetCheckInRank(0, 1, 20)
-	if err != nil {
-		t.Fatalf("打卡排行榜失败: %v", err)
 	}
 	return res
 }

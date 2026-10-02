@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/featured"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -47,7 +48,7 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, nil)
-	RegisterFeaturedRoutes(api, deps.RouterDeps(), deps.FeaturedSvc, deps.FileSvc)
+	featured.RegisterRoutes(api, deps.RouterDeps().Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
 
 	// no_view=1：阅读量不变
 	rec := performRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id)+"?no_view=1")
@@ -89,7 +90,7 @@ func TestFeaturedViewEndpoint(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, nil)
-	RegisterFeaturedRoutes(api, deps.RouterDeps(), deps.FeaturedSvc, deps.FileSvc)
+	featured.RegisterRoutes(api, deps.RouterDeps().Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
 
 	rec := performRequest(r, "POST", "/api/featured-content/"+strconv.Itoa(id)+"/view")
 	if rec.Code != http.StatusOK {

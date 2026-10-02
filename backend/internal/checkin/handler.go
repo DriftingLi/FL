@@ -1,32 +1,30 @@
-// Package api 实现 HTTP handlers。
-// 本文件：每日打卡独立蓝图 /api/check-in/*（ADR-0028：打卡从论坛域迁出独立模块；
-// 旧 /api/forum/check-in/* 已删除，移动端适配见 GitHub #587）。
-package api
+// Package checkin 每日打卡独立蓝图 /api/check-in/*（ADR-0028；旧 /api/forum/check-in/* 已删除，移动端适配见 GitHub #587）。
+package checkin
 
 import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// CheckInHandler 每日打卡 handler。
-type CheckInHandler struct {
-	svc *service.CheckInService
+// handler 每日打卡 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewCheckInHandler 创建打卡 handler。
-func NewCheckInHandler(svc *service.CheckInService) *CheckInHandler {
-	return &CheckInHandler{svc: svc}
+// newHandler 创建打卡 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterCheckInRoutes 注册 /api/check-in 蓝图（需登录，hrwai_user）。
-func RegisterCheckInRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.CheckInService) {
-	h := NewCheckInHandler(svc)
-	g := rg.Group("/check-in", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapCheckInUse))
+// RegisterRoutes 注册 /api/check-in 蓝图（需登录，hrwai_user）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
+	g := rg.Group("/check-in", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapCheckInUse))
 
 	// POST /api/check-in 签到（幂等；首签直记积分：基础 + 跨档阶梯）
 	g.POST("", h.CheckIn)
@@ -44,11 +42,11 @@ func RegisterCheckInRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Chec
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.CheckInResult} "打卡结果"
+// @Success 200 {object} response.R{data=checkin.CheckInResult} "打卡结果"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in [post]
-func (h *CheckInHandler) CheckIn(c *gin.Context) {
+func (h *handler) CheckIn(c *gin.Context) {
 	res, err := h.svc.CheckIn(middleware.CurrentUserID(c))
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -66,10 +64,10 @@ func (h *CheckInHandler) CheckIn(c *gin.Context) {
 // @Security BearerAuth
 // @Param year query int false "年份"
 // @Param month query int false "月份 1-12"
-// @Success 200 {object} response.R{data=service.CheckInCalendarResult} "日历"
+// @Success 200 {object} response.R{data=checkin.CheckInCalendarResult} "日历"
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in/calendar [get]
-func (h *CheckInHandler) GetCheckInCalendar(c *gin.Context) {
+func (h *handler) GetCheckInCalendar(c *gin.Context) {
 	year := httpx.QueryIntDefault(c, "year", 0)
 	month := httpx.QueryIntDefault(c, "month", 0)
 	res, err := h.svc.GetCheckInCalendar(middleware.CurrentUserID(c), year, month)
@@ -89,10 +87,10 @@ func (h *CheckInHandler) GetCheckInCalendar(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Success 200 {object} response.R{data=service.CheckInRankResult} "排行榜"
+// @Success 200 {object} response.R{data=checkin.CheckInRankResult} "排行榜"
 // @Failure 401 {object} response.R "未认证"
 // @Router /check-in/rank [get]
-func (h *CheckInHandler) GetCheckInRank(c *gin.Context) {
+func (h *handler) GetCheckInRank(c *gin.Context) {
 	page := httpx.QueryIntDefault(c, "page", 1)
 	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	res, err := h.svc.GetCheckInRank(middleware.CurrentUserID(c), page, pageSize)

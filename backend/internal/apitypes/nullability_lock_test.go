@@ -102,6 +102,8 @@ var (
 		{"internal/notification", "nonnilOutlets"},
 		{"internal/material", "nonnilOutlets"},
 		{"internal/points", "nonnilOutlets"},
+		{"internal/featured", "nonnilOutlets"},
+		{"internal/checkin", "nonnilOutlets"},
 	}
 )
 
@@ -216,6 +218,8 @@ var sweptDirs = map[string]string{
 	"material":     "../material",
 	"points":       "../points",
 	"inspection":   "../inspection",
+	"featured":     "../featured",
+	"checkin":      "../checkin",
 	"repository":   "../valuation/repository",
 }
 

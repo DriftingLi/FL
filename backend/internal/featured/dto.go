@@ -1,6 +1,6 @@
-// Package service 内容精选 typed surface。
+// Package featured 内容精选 typed surface。
 // JSON 字段声明按 key 字母序排列，与旧 map 字典序列化的字节序保持一致（ADR-0009）。
-package service
+package featured
 
 import (
 	"time"

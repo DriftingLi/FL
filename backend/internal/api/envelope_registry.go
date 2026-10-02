@@ -18,6 +18,8 @@
 package api
 
 import (
+	"forklift-training/internal/checkin"
+	"forklift-training/internal/featured"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
@@ -65,9 +67,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: service.ApplicationListResult{}},
-	{Result: "service.CheckInRankResult", Endpoints: []string{"GET /check-in/rank"},
+	{Result: "checkin.CheckInRankResult", Endpoints: []string{"GET /check-in/rank"},
 		Keys: []string{"items", "total", "page", "pages", "me"}, Dialect: paging.DialectPages,
-		Sample: service.CheckInRankResult{}},
+		Sample: checkin.CheckInRankResult{}},
 	{Result: "service.ContactRequestListResult", Endpoints: []string{"GET /recruit/contact-requests", "GET /resume/contact-requests"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.ContactRequestListResult{}},
@@ -86,9 +88,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.FavoritePageResult", Endpoints: []string{"GET /favorites"},
 		Keys: []string{"page", "pages", "total", "favorites"}, Dialect: paging.DialectPages,
 		Sample: service.FavoritePageResult{}},
-	{Result: "service.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents", "GET /admin/featured-contents"},
+	{Result: "featured.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents", "GET /admin/featured-contents"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
-		Sample: service.FeaturedContentPageResult{}},
+		Sample: featured.FeaturedContentPageResult{}},
 	{Result: "service.ForumReportPageResult", Endpoints: []string{"GET /admin/forum/reports"},
 		Keys: []string{"page", "pages", "total", "reports"}, Dialect: paging.DialectPages,
 		Sample: service.ForumReportPageResult{}},
@@ -164,7 +166,7 @@ var envelopeRegistry = []EnvelopeSpec{
 
 // totalPayloadRegistry 含 total + 切片字段、但不是分页信封的结果类型（理由逐条登记）。
 var totalPayloadRegistry = []PayloadSpec{
-	{Result: "service.CheckInCalendarResult",
+	{Result: "checkin.CheckInCalendarResult",
 		Reason: "打卡日历：days 是整月逐日数组、total 是累计打卡天数，不是列表页"},
 	{Result: "service.GenTaskStatus",
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},

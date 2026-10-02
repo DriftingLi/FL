@@ -2,6 +2,7 @@ package api
 
 import (
 	"forklift-training/internal/faq"
+	"forklift-training/internal/featured"
 	"forklift-training/internal/material"
 	"forklift-training/internal/service"
 )
@@ -16,7 +17,7 @@ func provideTraining(c *coreSingletons, d *Deps) {
 	d.MaterialSvc = material.NewService(c.db, c.logger)
 	d.SearchSvc = service.NewSearchService(c.db, c.logger)
 	d.FavoriteSvc = service.NewFavoriteService(c.db, c.logger)
-	d.FeaturedSvc = service.NewFeaturedService(c.db, c.fileSvc, c.logger)
+	d.FeaturedSvc = featured.NewService(c.db, c.fileSvc, c.logger)
 	d.ExportSvc = service.NewExportService(c.db, c.export, c.logger)
 	d.AuditSvc = service.NewAuditService(c.db)
 	d.FaqSvc = faq.NewService(c.db, c.logger)
