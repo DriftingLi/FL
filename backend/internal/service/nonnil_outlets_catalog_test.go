@@ -1,4 +1,4 @@
-// 目录树 / 字典列表 / 章节文件 / 精选 / 练习与模考 / 学员侧读面的 nonnil 行为例
+// 目录树 / 字典列表 / 章节文件 / 精选 / 模考 / 学员侧读面的 nonnil 行为例
 // （批①-A 第④段「wave 16」）。
 //
 // 为什么单独成文件：判据 5 的证据跟着出口走，一个域一张表（汇总表机制见 nonnil_declaration_test.go）。
@@ -16,12 +16,11 @@
 //     `len(task.Result) > 0` 时才赋值 ⇒ 实测发 `null`（已带 x-nullable）。
 //   - MockExamSubmitDTO.details ⇒ Submit 那一侧是 `make(0,n)` 恒非 null，但同一条声明经
 //     GetResult（未交卷记录 result 列为空）发 `null`，且 MockExamResultDTO 内嵌本 DTO 共用它。
-//   - ProgressResultDTO.answers_state ⇒ 从未存过进度时是 nil map ⇒ `null`（已带 x-nullable，
-//     GetProgress 无 error 出口：「没进度」是 200 不是失败）。
+//   - ProgressResultDTO.answers_state ⇒ 该键的证据已随域包搬去
+//     internal/practicemode/nullable_outlets_test.go（ADR-0070 波 3c-2），判词原文随之搬走。
 //   - QuestionTagsResultDTO.tag_ids ⇒ 该键的证据已随域包搬去
 //     internal/training/nullable_outlets_test.go（ADR-0070 波 3b-2），判词原文随之搬走，不在这里复述。
 //
-// 本段**没跑**因而也没改判的三组//
 // 本段**没跑**因而也没改判的三组，原因各不相同（都不是「嫌麻烦」）：
 //   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items、
 //     api.AuditLogPageResult.items ⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
@@ -60,11 +59,11 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 
 	"service.BatchDeleteFilesResult.failed_ids": outletBatchDeleteFilesEmpty,
 
-	"service.HistoryResultDTO.records":            outletPracticeHistoryEmpty,
-	"service.PracticeStartResultDTO.questions":    outletPracticeStartSequential,
+	// 练习域的三格（HistoryResultDTO.records / PracticeStartResultDTO.questions / PracticeStatsDTO.by_type）
+	// 已随域包搬去 internal/practicemode/nonnil_outlets_test.go（ADR-0070 波 3c-2）。
+
 	"service.MockExamHistoryDTO.exams":            outletMockExamHistoryEmpty,
 	"service.MockExamStartDTO.questions":          outletMockExamStart,
-	"service.PracticeStatsDTO.by_type":            outletPracticeStatsEmpty,
 	"questionbank.QuestionBankStatsDTO.by_type":   outletQuestionBankStatsEmpty,
 	"questionbank.QuestionBankStatsDTO.by_status": outletQuestionBankStatsEmpty,
 	"service.WrongQuestionStatsDTO.by_type":       outletWrongQuestionStatsEmpty,
@@ -88,32 +87,7 @@ func outletBatchDeleteFilesEmpty(t *testing.T) any {
 	return svc.BatchDeleteChapterFiles(nil)
 }
 
-// ===== 练习 / 模考 / 统计 =====
-
-func outletPracticeHistoryEmpty(t *testing.T) any {
-	t.Helper()
-	svc, db := newPracticeSvc(t)
-	res, err := svc.GetHistory(testutil.SeedStudent(t, db, "练习历史学员", "x").ID, nil, 1, 20, "", "", "")
-	if err != nil {
-		t.Fatalf("空练习历史失败: %v", err)
-	}
-	return res
-}
-
-// outletPracticeStartSequential 顺序练习开考：池里 0 题直接走 error，所以这条出口最少发 1 题。
-// 恒非 null 的判据不靠「凑得出空集」——questions 由 make(0,len(questions)) 起手，
-// 而那段长度在 `len(questions)==0 ⇒ error` 守卫之后，两件事各自成立。
-func outletPracticeStartSequential(t *testing.T) any {
-	t.Helper()
-	svc, db := newPracticeSvc(t)
-	student := testutil.SeedStudent(t, db, "顺序练习学员", "x")
-	testutil.SeedQuestion(t, db, "single", "空池守卫前的第一题", "A")
-	res, err := svc.StartSequential(student.ID, nil)
-	if err != nil {
-		t.Fatalf("顺序练习开考失败: %v", err)
-	}
-	return res
-}
+// ===== 模考 / 统计 =====
 
 func outletMockExamHistoryEmpty(t *testing.T) any {
 	t.Helper()
@@ -134,17 +108,6 @@ func outletMockExamStart(t *testing.T) any {
 	res, err := NewMockExamService(db, nil, zap.NewNop()).Start(student.ID, 1, 90, nil)
 	if err != nil {
 		t.Fatalf("模拟考试开考失败: %v", err)
-	}
-	return res
-}
-
-func outletPracticeStatsEmpty(t *testing.T) any {
-	t.Helper()
-	svc, db := newPracticeSvc(t)
-	student := testutil.SeedStudent(t, db, "练习统计学员", "x")
-	res, err := svc.GetStats(student.ID, nil)
-	if err != nil {
-		t.Fatalf("练习统计失败: %v", err)
 	}
 	return res
 }

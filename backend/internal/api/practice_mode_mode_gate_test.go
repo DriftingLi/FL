@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -94,7 +95,7 @@ func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
+	practicemode.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.PracticeModeSvc)
 
 	student := model.HrwaiUser{Account: "mode_gate_user", Phone: "13800000999", Username: "学员", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&student).Error; err != nil {

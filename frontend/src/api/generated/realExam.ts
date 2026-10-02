@@ -10,7 +10,7 @@
 //   POST /real-exam/papers/{paper_id}/exam
 //   POST /real-exam/papers/{paper_id}/redeem
 //
-// 覆盖的 Go 类型：RedeemResult / QuestionDTO / MockExamStartDTO / PracticeStartResultDTO / RealExamPaperDTO
+// 覆盖的 Go 类型：RedeemResult / PracticeStartResultDTO / QuestionDTO / MockExamStartDTO / RealExamPaperDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -27,6 +27,13 @@ export interface RedeemResult {
   ref_id: string
   sku: string
   total_earned: number
+}
+
+export interface PracticeStartResultDTO {
+  completed: number
+  current_index: number
+  questions: QuestionDTO[]
+  total: number
 }
 
 export interface QuestionDTO {
@@ -57,13 +64,6 @@ export interface MockExamStartDTO {
   remaining_time: number
   total_questions: number
   total_score: number
-}
-
-export interface PracticeStartResultDTO {
-  completed: number
-  current_index: number
-  questions: QuestionDTO[]
-  total: number
 }
 
 export interface RealExamPaperDTO {

@@ -14042,7 +14042,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HistoryResultDTO"
+                                            "$ref": "#/definitions/practicemode.HistoryResultDTO"
                                         }
                                     }
                                 }
@@ -14097,7 +14097,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticePracticeStatsDTO"
+                                            "$ref": "#/definitions/practicemode.PracticePracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -14152,7 +14152,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -14213,7 +14213,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressSaveResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressSaveResultDTO"
                                         }
                                     }
                                 }
@@ -14265,7 +14265,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -14311,7 +14311,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -14365,7 +14365,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStatsDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -14422,7 +14422,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SubmitResultDTO"
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -14490,7 +14490,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -15888,7 +15888,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -23352,7 +23352,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SubmitResultDTO"
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -26748,6 +26748,225 @@ const docTemplate = `{
                 }
             }
         },
+        "practicemode.HistoryItemDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_correct": {
+                    "type": "boolean"
+                },
+                "practice_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "user_answer": {
+                    "type": "string"
+                }
+            }
+        },
+        "practicemode.HistoryResultDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/practicemode.HistoryItemDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticePracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "today_count": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "total_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeStartResultDTO": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/practicemode.PracticeTypeStat"
+                    }
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "wrong": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeTypeStat": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.ProgressResultDTO": {
+            "type": "object",
+            "properties": {
+                "answers_state": {
+                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
+                    "type": "object",
+                    "additionalProperties": {},
+                    "x-nullable": true
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "pool_total": {
+                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.ProgressSaveResultDTO": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer"
+                },
+                "saved": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "practicemode.SubmitResultDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy_rate": {
+                    "type": "number",
+                    "x-optional": true
+                },
+                "ai_comment": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_explanation": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_fallback": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "ai_score": {
+                    "type": "number",
+                    "x-optional": true
+                },
+                "common_wrong": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "correct_answer": {
+                    "type": "string"
+                },
+                "explanation": {
+                    "type": "string"
+                },
+                "is_correct": {
+                    "type": "boolean",
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "reference_answer": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "scoring_criteria": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "total_attempts": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "user_answer": {}
+            }
+        },
         "questionbank.QuestionBankStatsDTO": {
             "type": "object",
             "properties": {
@@ -27617,60 +27836,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.HistoryItemDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_correct": {
-                    "type": "boolean"
-                },
-                "practice_type": {
-                    "type": "string"
-                },
-                "question": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/questionbank.QuestionDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "user_answer": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.HistoryResultDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.HistoryItemDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.HrwaiUserCreatedDTO": {
             "type": "object",
             "properties": {
@@ -28219,112 +28384,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.PracticePracticeStatsDTO": {
-            "type": "object",
-            "properties": {
-                "today_count": {
-                    "type": "integer"
-                },
-                "total_count": {
-                    "type": "integer"
-                },
-                "total_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeStartResultDTO": {
-            "type": "object",
-            "properties": {
-                "completed": {
-                    "type": "integer"
-                },
-                "current_index": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/questionbank.QuestionDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeStatsDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/service.PracticeTypeStat"
-                    }
-                },
-                "correct": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "wrong": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeTypeStat": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProgressResultDTO": {
-            "type": "object",
-            "properties": {
-                "answers_state": {
-                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
-                    "type": "object",
-                    "additionalProperties": {},
-                    "x-nullable": true
-                },
-                "completed": {
-                    "type": "integer"
-                },
-                "current_index": {
-                    "type": "integer"
-                },
-                "pool_total": {
-                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProgressSaveResultDTO": {
-            "type": "object",
-            "properties": {
-                "index": {
-                    "type": "integer"
-                },
-                "saved": {
-                    "type": "boolean"
                 }
             }
         },
@@ -28989,65 +29048,6 @@ const docTemplate = `{
                 "total_study_duration": {
                     "type": "integer"
                 }
-            }
-        },
-        "service.SubmitResultDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy_rate": {
-                    "type": "number",
-                    "x-optional": true
-                },
-                "ai_comment": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_explanation": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_fallback": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "ai_score": {
-                    "type": "number",
-                    "x-optional": true
-                },
-                "common_wrong": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "correct_answer": {
-                    "type": "string"
-                },
-                "explanation": {
-                    "type": "string"
-                },
-                "is_correct": {
-                    "type": "boolean",
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "reference_answer": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "scoring_criteria": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "total_attempts": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "user_answer": {}
             }
         },
         "service.TutorDTO": {

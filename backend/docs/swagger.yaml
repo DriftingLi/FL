@@ -2241,6 +2241,155 @@ definitions:
       total_earned:
         type: integer
     type: object
+  practicemode.HistoryItemDTO:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_correct:
+        type: boolean
+      practice_type:
+        type: string
+      question:
+        allOf:
+        - $ref: '#/definitions/questionbank.QuestionDTO'
+        x-optional: true
+      question_id:
+        type: integer
+      student_id:
+        type: integer
+      user_answer:
+        type: string
+    type: object
+  practicemode.HistoryResultDTO:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      records:
+        items:
+          $ref: '#/definitions/practicemode.HistoryItemDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  practicemode.PracticePracticeStatsDTO:
+    properties:
+      today_count:
+        type: integer
+      total_count:
+        type: integer
+      total_days:
+        type: integer
+    type: object
+  practicemode.PracticeStartResultDTO:
+    properties:
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  practicemode.PracticeStatsDTO:
+    properties:
+      accuracy:
+        type: number
+      by_type:
+        additionalProperties:
+          $ref: '#/definitions/practicemode.PracticeTypeStat'
+        type: object
+      correct:
+        type: integer
+      total:
+        type: integer
+      wrong:
+        type: integer
+    type: object
+  practicemode.PracticeTypeStat:
+    properties:
+      accuracy:
+        type: number
+      correct:
+        type: integer
+      total:
+        type: integer
+    type: object
+  practicemode.ProgressResultDTO:
+    properties:
+      answers_state:
+        additionalProperties: {}
+        description: AnswersState 无进度时为 null（键仍在）→ x-nullable。
+        type: object
+        x-nullable: true
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      pool_total:
+        description: |-
+          PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
+          Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
+        type: integer
+      total:
+        type: integer
+    type: object
+  practicemode.ProgressSaveResultDTO:
+    properties:
+      index:
+        type: integer
+      saved:
+        type: boolean
+    type: object
+  practicemode.SubmitResultDTO:
+    properties:
+      accuracy_rate:
+        type: number
+        x-optional: true
+      ai_comment:
+        type: string
+        x-optional: true
+      ai_explanation:
+        type: string
+        x-optional: true
+      ai_fallback:
+        type: boolean
+        x-optional: true
+      ai_score:
+        type: number
+        x-optional: true
+      common_wrong:
+        type: string
+        x-optional: true
+      correct_answer:
+        type: string
+      explanation:
+        type: string
+      is_correct:
+        type: boolean
+        x-nullable: true
+      max_score:
+        type: integer
+        x-optional: true
+      question_id:
+        type: integer
+      reference_answer:
+        type: string
+        x-optional: true
+      scoring_criteria:
+        type: string
+        x-optional: true
+      total_attempts:
+        type: integer
+        x-optional: true
+      user_answer: {}
+    type: object
   questionbank.QuestionBankStatsDTO:
     properties:
       by_status:
@@ -2831,40 +2980,6 @@ definitions:
       task_id:
         type: string
     type: object
-  service.HistoryItemDTO:
-    properties:
-      created_at:
-        type: string
-      id:
-        type: integer
-      is_correct:
-        type: boolean
-      practice_type:
-        type: string
-      question:
-        allOf:
-        - $ref: '#/definitions/questionbank.QuestionDTO'
-        x-optional: true
-      question_id:
-        type: integer
-      student_id:
-        type: integer
-      user_answer:
-        type: string
-    type: object
-  service.HistoryResultDTO:
-    properties:
-      page:
-        type: integer
-      page_size:
-        type: integer
-      records:
-        items:
-          $ref: '#/definitions/service.HistoryItemDTO'
-        type: array
-      total:
-        type: integer
-    type: object
   service.HrwaiUserCreatedDTO:
     properties:
       account:
@@ -3241,78 +3356,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  service.PracticePracticeStatsDTO:
-    properties:
-      today_count:
-        type: integer
-      total_count:
-        type: integer
-      total_days:
-        type: integer
-    type: object
-  service.PracticeStartResultDTO:
-    properties:
-      completed:
-        type: integer
-      current_index:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/questionbank.QuestionDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.PracticeStatsDTO:
-    properties:
-      accuracy:
-        type: number
-      by_type:
-        additionalProperties:
-          $ref: '#/definitions/service.PracticeTypeStat'
-        type: object
-      correct:
-        type: integer
-      total:
-        type: integer
-      wrong:
-        type: integer
-    type: object
-  service.PracticeTypeStat:
-    properties:
-      accuracy:
-        type: number
-      correct:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.ProgressResultDTO:
-    properties:
-      answers_state:
-        additionalProperties: {}
-        description: AnswersState 无进度时为 null（键仍在）→ x-nullable。
-        type: object
-        x-nullable: true
-      completed:
-        type: integer
-      current_index:
-        type: integer
-      pool_total:
-        description: |-
-          PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
-          Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.ProgressSaveResultDTO:
-    properties:
-      index:
-        type: integer
-      saved:
-        type: boolean
     type: object
   service.QuestionCommentDTO:
     properties:
@@ -3762,49 +3805,6 @@ definitions:
         type: integer
       total_study_duration:
         type: integer
-    type: object
-  service.SubmitResultDTO:
-    properties:
-      accuracy_rate:
-        type: number
-        x-optional: true
-      ai_comment:
-        type: string
-        x-optional: true
-      ai_explanation:
-        type: string
-        x-optional: true
-      ai_fallback:
-        type: boolean
-        x-optional: true
-      ai_score:
-        type: number
-        x-optional: true
-      common_wrong:
-        type: string
-        x-optional: true
-      correct_answer:
-        type: string
-      explanation:
-        type: string
-      is_correct:
-        type: boolean
-        x-nullable: true
-      max_score:
-        type: integer
-        x-optional: true
-      question_id:
-        type: integer
-      reference_answer:
-        type: string
-        x-optional: true
-      scoring_criteria:
-        type: string
-        x-optional: true
-      total_attempts:
-        type: integer
-        x-optional: true
-      user_answer: {}
     type: object
   service.TutorDTO:
     properties:
@@ -12714,7 +12714,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.HistoryResultDTO'
+                  $ref: '#/definitions/practicemode.HistoryResultDTO'
               type: object
         "401":
           description: 未认证
@@ -12747,7 +12747,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticePracticeStatsDTO'
+                  $ref: '#/definitions/practicemode.PracticePracticeStatsDTO'
               type: object
         "401":
           description: 未认证
@@ -12779,7 +12779,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ProgressResultDTO'
+                  $ref: '#/definitions/practicemode.ProgressResultDTO'
               type: object
         "400":
           description: 参数错误（含未知练习模式）
@@ -12815,7 +12815,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ProgressSaveResultDTO'
+                  $ref: '#/definitions/practicemode.ProgressSaveResultDTO'
               type: object
         "400":
           description: 参数错误（含未知练习模式）
@@ -12845,7 +12845,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStartResultDTO'
+                  $ref: '#/definitions/practicemode.PracticeStartResultDTO'
               type: object
         "401":
           description: 未认证
@@ -12871,7 +12871,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ProgressResultDTO'
+                  $ref: '#/definitions/practicemode.ProgressResultDTO'
               type: object
         "401":
           description: 未认证
@@ -12902,7 +12902,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStatsDTO'
+                  $ref: '#/definitions/practicemode.PracticeStatsDTO'
               type: object
         "401":
           description: 未认证
@@ -12935,7 +12935,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SubmitResultDTO'
+                  $ref: '#/definitions/practicemode.SubmitResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -12976,7 +12976,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStartResultDTO'
+                  $ref: '#/definitions/practicemode.PracticeStartResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -13812,7 +13812,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStartResultDTO'
+                  $ref: '#/definitions/practicemode.PracticeStartResultDTO'
               type: object
         "400":
           description: 参数错误或未兑换
@@ -18249,7 +18249,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SubmitResultDTO'
+                  $ref: '#/definitions/practicemode.SubmitResultDTO'
               type: object
         "400":
           description: 参数错误

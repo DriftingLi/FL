@@ -1,9 +1,10 @@
-// Package service 练习流 typed DTO shape-lock（Ticket #225）。
+// 练习流 typed DTO shape-lock（Ticket #225；随练习域 3c-2 搬入）。
 // 断言 JSON key 集合与重构前的 map 输出契约逐字一致——前端契约零改动是最高优先级约束。
-package service
+package practicemode
 
 import (
 	"encoding/json"
+	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
 	"testing"
 )
@@ -127,4 +128,31 @@ func TestHistoryResultDTOShapeLock(t *testing.T) {
 
 	h := HistoryResultDTO{Total: 1, Page: 1, PageSize: 20, Records: []HistoryItemDTO{item}}
 	assertShapeLock(t, h, "total", "page", "page_size", "records")
+}
+
+// sampleQuestionForShape 练习域 shape-lock 参照题目（随练习域 3c-2 从 internal/service/questionbank_fixture_test.go
+// 按接缝就地内联；用它构造命中题目的 HistoryItemDTO）。
+func sampleQuestionForShape() *model.Question {
+	options, _ := json.Marshal([]map[string]string{
+		{"A": "选项A"}, {"B": "选项B"}, {"C": "选项C"},
+	})
+	createdBy := 7
+	credID := 3
+	return &model.Question{
+		ID:              42,
+		Type:            "multi_choice",
+		Content:         "题干",
+		Options:         model.JSONB(options),
+		ImageURL:        "https://example.com/q.png",
+		Status:          "published",
+		RejectReason:    "驳回理由",
+		Score:           4,
+		CreatedBy:       &createdBy,
+		CreatedByType:   "tutor",
+		CredentialID:    &credID,
+		Answer:          "A,B",
+		Explanation:     "解析",
+		ReferenceAnswer: "参考答案",
+		ScoringCriteria: "评分标准",
+	}
 }

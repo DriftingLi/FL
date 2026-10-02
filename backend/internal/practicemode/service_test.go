@@ -1,5 +1,5 @@
-// Package service 标签练习抽题测试。
-package service
+// 标签练习抽题测试。
+package practicemode
 
 import (
 	"encoding/json"
@@ -16,10 +16,10 @@ import (
 	"forklift-training/internal/training"
 )
 
-func newPracticeSvc(t *testing.T) (*PracticeModeService, *gorm.DB) {
+func newPracticeSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewPracticeModeService(db, nil, zap.NewNop()), db
+	return NewService(db, nil, zap.NewNop()), db
 }
 
 // TestStartTagPractice 标签练习开始/续练：抽题、顺序固定（断点续练）、完成后重新抽、错误分支。

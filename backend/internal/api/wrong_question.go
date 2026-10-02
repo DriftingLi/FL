@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -112,12 +113,12 @@ type redoWrongQuestionReq struct {
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
 // @Param body body object true "答案" example({"user_answer":"A"})
-// @Success 200 {object} response.R{data=service.SubmitResultDTO} "success"
+// @Success 200 {object} response.R{data=practicemode.SubmitResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/{question_id}/redo [post]
 func (h *WrongQuestionHandler) Redo(c *gin.Context) {
-	httpx.Endpoint[redoWrongQuestionReq, service.SubmitResultDTO]{
+	httpx.Endpoint[redoWrongQuestionReq, practicemode.SubmitResultDTO]{
 		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -133,11 +134,11 @@ func (h *WrongQuestionHandler) Redo(c *gin.Context) {
 			}
 			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
-		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*service.SubmitResultDTO, error) {
+		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*practicemode.SubmitResultDTO, error) {
 			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
-		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *service.SubmitResultDTO) {
+		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *practicemode.SubmitResultDTO) {
 			response.Success(c, httpx.Deref(resp))
 		},
 	}.Handle(c)

@@ -1,9 +1,9 @@
-package service
+package practicemode
 
 import "forklift-training/internal/questionbank"
 
 // 练习流 typed DTO（Ticket #225）。JSON key 与重构前 map 输出逐字一致
-// （shape-lock 测试冻结：practice_mode_dto_shape_test.go）。字段声明按 key 字母序。
+// （shape-lock 测试冻结：dto_shape_test.go）。字段声明按 key 字母序。
 
 // PracticeStartResultDTO 标签/顺序练习开始或续练结果
 // （旧 StartTagPractice/StartSequential map 输出）。

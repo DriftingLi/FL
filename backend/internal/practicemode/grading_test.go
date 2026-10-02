@@ -1,7 +1,7 @@
-// Package service 判分 module 表格测试（Ticket #231 C1）。
+// 判分 module 表格测试（Ticket #231 C1）。
 // 锁定判分编排现状行为：题目集 + flow + AI adapter → 分数 / IsCorrect / 错题入库 / 降级标记。
 // 期望值为独立字面量，重构后仍须全绿。
-package service
+package practicemode
 
 import (
 	"testing"
@@ -29,13 +29,22 @@ func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore fl
 	return f.res
 }
 
+// mockExamMaxScoreFixture mock 流单题满分解析的测试副本（留驻 internal/service/mock_exam_service.go:420
+// 的 mockExamMaxScore 按接缝就地内联；域包测试不能反向 import internal/service，防漂移看该处）。
+func mockExamMaxScoreFixture(q *model.Question) float64 {
+	if q.Score > 0 {
+		return float64(q.Score)
+	}
+	return questionbank.QuestionMaxScore("mock_exam", q.Type)
+}
+
 // maxScoreByFlowOf 按流返回满分 resolver（与各流分值表单点对接）。
 func maxScoreByFlowOf(flow string) func(q *model.Question) float64 {
 	switch flow {
 	case "mock_exam":
-		return mockExamMaxScore
+		return mockExamMaxScoreFixture
 	default: // practice（原 level_exam，已正名）
-		return practiceMaxScore
+		return PracticeMaxScore
 	}
 }
 
@@ -145,21 +154,21 @@ func TestGradingEngineGradeSet(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testutil.NewMemoryDB(t)
-			engine := newGradingEngine(db)
+			engine := NewGradingEngine(db)
 
 			q := testutil.SeedQuestion(t, db, tc.qType, "题干-"+tc.qType, answerForType(tc.qType))
 			student := testutil.SeedStudent(t, db, "张三", "x")
 
 			g := &fakeGrader{res: tc.aiRes}
-			flow := gradingFlow{
-				ai:       shortAnswerGraderOf(nil), // 非短答不触发；短答用 fake 覆盖
-				maxScore: maxScoreByFlowOf(tc.flow),
+			flow := GradingFlow{
+				AI:       ShortAnswerGraderOf(nil), // 非短答不触发；短答用 fake 覆盖
+				MaxScore: maxScoreByFlowOf(tc.flow),
 			}
 			if tc.qType == "short_answer" {
-				flow.ai = g
+				flow.AI = g
 			}
 
-			results := engine.gradeSet(flow, map[int]*model.Question{q.ID: q}, []int{q.ID}, map[string]any{questionbank.IntToString(q.ID): tc.answer}, student.ID)
+			results := engine.GradeSet(flow, map[int]*model.Question{q.ID: q}, []int{q.ID}, map[string]any{questionbank.IntToString(q.ID): tc.answer}, student.ID)
 			if len(results) != 1 {
 				t.Fatalf("判分结果应恰 1 条, got %d", len(results))
 			}

@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
@@ -38,16 +39,16 @@ const mockExamAbandonTTL = 24 * time.Hour
 type MockExamService struct {
 	db *gorm.DB
 	ai *aiassistant.GenerationService
-	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 PracticeModeService.grader）。
+	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 practicemode.Service.grader）。
 	// nil 时简答降级：不进 AI 分，Earned 记 0（ADR-0068 决策 1）。测试可注入 fake。
-	grader ShortAnswerGrader
+	grader practicemode.ShortAnswerGrader
 
 	logger *zap.Logger
 }
 
 // NewMockExamService 创建模拟考试服务实例。
 func NewMockExamService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *MockExamService {
-	return &MockExamService{db: db, ai: ai, grader: shortAnswerGraderOf(ai), logger: logger}
+	return &MockExamService{db: db, ai: ai, grader: practicemode.ShortAnswerGraderOf(ai), logger: logger}
 }
 
 // ===== DTO（JSON 契约与 B6 前的 map key 逐字一致，前端零改动约束）=====
@@ -218,7 +219,7 @@ func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[st
 			return m, db.First(&m, mockExamID).Error
 		},
 		guard: func(m model.MockExam) error {
-			return guardOwnedInProgress(m.StudentID, m.Status, studentID, "无权操作此考试", "考试不在进行中")
+			return practicemode.GuardOwnedInProgress(m.StudentID, m.Status, studentID, "无权操作此考试", "考试不在进行中")
 		},
 		write: func(m *model.MockExam, snapshot model.JSONB, rt int) {
 			m.Answers = snapshot
@@ -236,7 +237,7 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 		}
 		return nil, err
 	}
-	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
+	if err := practicemode.GuardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
 		return nil, err
 	}
 
@@ -244,12 +245,12 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 	if len(mock.QuestionIDs) > 0 {
 		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
-	ordered, _ := loadOrderedQuestions(s.db, ids)
+	ordered, _ := practicemode.LoadOrderedQuestions(s.db, ids)
 	questions := make([]questionbank.QuestionDTO, 0, len(ordered))
 	for i := range ordered {
 		questions = append(questions, questionbank.NewQuestionDTO(&ordered[i], false))
 	}
-	answers := answersMapRoundTrip(mock.Answers)
+	answers := practicemode.AnswersMapRoundTrip(mock.Answers)
 	startISO := ""
 	if mock.StartTime != nil {
 		startISO = timefmt.FormatISO(*mock.StartTime)
@@ -273,23 +274,23 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		}
 		return nil, err
 	}
-	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
+	if err := practicemode.GuardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
 		return nil, err
 	}
 
-	answersMap := answersMapRoundTrip(mock.Answers)
+	answersMap := practicemode.AnswersMapRoundTrip(mock.Answers)
 	var ids []int
 	if len(mock.QuestionIDs) > 0 {
 		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
-	_, qMap := loadOrderedQuestions(s.db, ids)
+	_, qMap := practicemode.LoadOrderedQuestions(s.db, ids)
 
-	engine := newGradingEngine(s.db)
-	flow := gradingFlow{
-		ai:       s.grader,
-		maxScore: mockExamMaxScore,
+	engine := practicemode.NewGradingEngine(s.db)
+	flow := practicemode.GradingFlow{
+		AI:       s.grader,
+		MaxScore: mockExamMaxScore,
 	}
-	results := engine.gradeSet(flow, qMap, ids, answersMap, studentID)
+	results := engine.GradeSet(flow, qMap, ids, answersMap, studentID)
 
 	totalScore := 0.0
 	maxScore := 0.0

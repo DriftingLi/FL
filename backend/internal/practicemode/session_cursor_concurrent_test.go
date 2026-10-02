@@ -1,5 +1,5 @@
 // 并发回归（#504 原子守卫）：两个并发进度保存写不同游标，最终游标必须是较大者。
-package service
+package practicemode
 
 import (
 	"sync"

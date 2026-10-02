@@ -29,6 +29,7 @@ import (
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	vmodel "forklift-training/internal/valuation/model"
@@ -108,9 +109,9 @@ var envelopeRegistry = []EnvelopeSpec{
 		"GET /forum/my-liked-topics", "GET /forum/my-observed", "GET /forum/my-view-history"},
 		Keys: []string{"page", "pages", "topics", "total"}, Dialect: paging.DialectPages,
 		Sample: forum.ForumTopicPageResult{}},
-	{Result: "service.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
+	{Result: "practicemode.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
 		Keys: []string{"total", "page", "page_size", "records"}, Dialect: paging.DialectPageSize,
-		Sample: service.HistoryResultDTO{}},
+		Sample: practicemode.HistoryResultDTO{}},
 	{Result: "service.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
 		Keys: []string{"list", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.HrwaiUserPageResult{}},
@@ -176,7 +177,7 @@ var totalPayloadRegistry = []PayloadSpec{
 		Reason: "打卡日历：days 是整月逐日数组、total 是累计打卡天数，不是列表页"},
 	{Result: "service.GenTaskStatus",
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
-	{Result: "service.PracticeStartResultDTO",
+	{Result: "practicemode.PracticeStartResultDTO",
 		Reason: "练习会话载荷：questions 是本次会话题集、total/completed 是会话进度，不是列表页"},
 	{Result: "service.SearchSectionDTO",
 		Reason: "搜索分区片段：由 SearchPageDTO 信封承载，分区自身不分页（无 page 元数据、无独立端点）"},

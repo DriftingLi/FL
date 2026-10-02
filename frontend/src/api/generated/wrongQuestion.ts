@@ -12,7 +12,7 @@
 //   GET  /wrong-questions/stats
 //   GET  /wrong-questions/export
 //
-// 覆盖的 Go 类型：QuestionDTO / SubmitResultDTO / WrongQuestionBatchRemoveResultDTO / WrongQuestionDTO / WrongQuestionPageDTO / WrongQuestionRemoveResultDTO / WrongQuestionStatsDTO
+// 覆盖的 Go 类型：SubmitResultDTO / QuestionDTO / WrongQuestionBatchRemoveResultDTO / WrongQuestionDTO / WrongQuestionPageDTO / WrongQuestionRemoveResultDTO / WrongQuestionStatsDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -23,6 +23,24 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
+
+export interface SubmitResultDTO {
+  accuracy_rate?: number
+  ai_comment?: string
+  ai_explanation?: string
+  ai_fallback?: boolean
+  ai_score?: number
+  common_wrong?: string
+  correct_answer: string
+  explanation: string
+  is_correct: boolean | null
+  max_score?: number
+  question_id: number
+  reference_answer?: string
+  scoring_criteria?: string
+  total_attempts?: number
+  user_answer: unknown
+}
 
 export interface QuestionDTO {
   answer?: string
@@ -43,24 +61,6 @@ export interface QuestionDTO {
   tags?: unknown
   type: string
   updated_at: string
-}
-
-export interface SubmitResultDTO {
-  accuracy_rate?: number
-  ai_comment?: string
-  ai_explanation?: string
-  ai_fallback?: boolean
-  ai_score?: number
-  common_wrong?: string
-  correct_answer: string
-  explanation: string
-  is_correct: boolean | null
-  max_score?: number
-  question_id: number
-  reference_answer?: string
-  scoring_criteria?: string
-  total_attempts?: number
-  user_answer: unknown
 }
 
 export interface WrongQuestionBatchRemoveResultDTO {

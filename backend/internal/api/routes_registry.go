@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/training"
 )
@@ -53,7 +54,7 @@ var routeRegistrars = []routeRegistrar{
 			course.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.CourseSvc)
 			RegisterStudentRoutes(api, rd, deps.StudentSvc)
 			questionbank.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
-			RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
+			practicemode.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.PracticeModeSvc)
 		},
 	},
 	{

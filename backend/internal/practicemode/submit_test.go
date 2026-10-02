@@ -1,6 +1,6 @@
-// Package service 练习提交（SubmitAnswer）直接单测：客观判分落库、
+// 练习提交（SubmitAnswer）直接单测：客观判分落库、
 // 简答 AI 及格覆写 IsCorrect 的二次 Save 语义、AI 未配置降级、解析缓存命中。
-package service
+package practicemode
 
 import (
 	"testing"
@@ -151,14 +151,14 @@ func TestSubmitAnswer_AIExplanation_GeneratedAndPersisted(t *testing.T) {
 
 // TestPracticeMaxScore 练习流满分解析锁定：简答题目自定义分优先（缺省 10），客观走 practice 表。
 func TestPracticeMaxScore(t *testing.T) {
-	if got := practiceMaxScore(&model.Question{Type: "short_answer", Score: 7}); got != 7 {
+	if got := PracticeMaxScore(&model.Question{Type: "short_answer", Score: 7}); got != 7 {
 		t.Errorf("简答自定义分优先: got %v want 7", got)
 	}
-	if got := practiceMaxScore(&model.Question{Type: "short_answer"}); got != 10 {
+	if got := PracticeMaxScore(&model.Question{Type: "short_answer"}); got != 10 {
 		t.Errorf("简答缺省满分: got %v want 10", got)
 	}
 	for qType, want := range map[string]float64{"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 6} {
-		if got := practiceMaxScore(&model.Question{Type: qType}); got != want {
+		if got := PracticeMaxScore(&model.Question{Type: qType}); got != want {
 			t.Errorf("practice 表 %s: got %v want %v", qType, got, want)
 		}
 	}
