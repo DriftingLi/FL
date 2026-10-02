@@ -1,6 +1,7 @@
 package api
 
 import (
+	"forklift-training/internal/course"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/material"
@@ -9,9 +10,9 @@ import (
 
 // provideTraining 培训工作区（课程/管理端/学员/讲师/检索/收藏/精选/导出/审计/FAQ）。
 func provideTraining(c *coreSingletons, d *Deps) {
-	d.CourseSvc = service.NewCourseService(c.db, c.slideRenderer, c.logger)
+	d.CourseSvc = course.NewService(c.db, c.slideRenderer, c.logger)
 	d.AdminSvc = service.NewAdminService(c.db, c.sess, c.logger)
-	d.AdminCourseSvc = service.NewAdminCourseService(c.db, c.fileSvc, c.logger)
+	d.AdminCourseSvc = course.NewAdminService(c.db, c.fileSvc, c.logger)
 	d.StudentSvc = service.NewStudentService(c.db, c.logger)
 	d.TutorSvc = service.NewTutorService(c.db, c.cfg.UploadFolder, c.fileSvc, c.slideRenderer, c.logger)
 	d.MaterialSvc = material.NewService(c.db, c.logger)

@@ -4,8 +4,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
@@ -32,19 +34,21 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "认证与账号",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
+			// 认证蓝图 /api/auth/*：登录/刷新/登出/me/资料/注销（域包自持 handler）
+			auth.RegisterRoutes(api, rd.Session, deps.AuthSvc, deps.FileSvc, deps.Storage, deps.ReviewSvc, deps.Logger)
 			// 邮箱/手机号验证码注册登录（发码需过图形验证码）
-			RegisterEmailAuthRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
-			RegisterPhoneAuthRoutes(api, rd, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
+			auth.RegisterEmailAuthRoutes(api, rd.Session, deps.CodeSvc, deps.EmailCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
+			auth.RegisterPhoneAuthRoutes(api, rd.Session, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
 			// 微信扫码登录（框架占位）
-			RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
+			auth.RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
 			// 个人信息页：手机号/邮箱绑定修改
-			RegisterProfileBindRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+			auth.RegisterProfileBindRoutes(api, rd.Session, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 		},
 	},
 	{
 		Domain: "培训工作区",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterCoursesRoutes(api, rd, deps.CourseSvc)
+			course.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.CourseSvc)
 			RegisterStudentRoutes(api, rd, deps.StudentSvc)
 			RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
 			RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
@@ -102,7 +106,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "审核与治理",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterProfileReviewRoutes(api, rd, deps.ReviewSvc)
+			auth.RegisterAdminRoutes(api, rd.Session, deps.ReviewSvc)
 			notification.RegisterRoutes(api, rd.Session, deps.NotificationSvc)
 			RegisterAuditRoutes(api, rd, deps.AuditSvc)
 			RegisterExportRoutes(api, rd, deps.ExportSvc)

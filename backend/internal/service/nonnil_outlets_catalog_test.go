@@ -60,11 +60,8 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	"service.CertificateTemplateListDTO.certificate_templates": outletCertificateTemplateListEmpty,
 	"service.CredentialListDTO.credentials":                    outletCredentialListEmpty,
 
-	"service.ChapterDTO.files":                  outletTutorChapterNoFiles,
-	"service.ChapterDetailDTO.files":            outletChapterDetailNoFiles,
-	"service.CourseDTO.chapters":                outletAdminCatalogCourseNode,
-	"service.CourseDTO.prerequisites":           outletAdminCourseDetailMeta,
-	"service.CourseDTO.prerequisite_course_ids": outletAdminCourseDetailMeta,
+	// 课程域的课程 DTO 字段已随域包搬去 internal/course/nonnil_outlets_test.go；
+	// 本包仍留 course.ChapterDTO.files 与 course.CourseDTO.chapters 两键 —— 见 nonnil_outlets_course_test.go。
 
 	// 精选域的 items / related 举证已随域包搬去 internal/featured/nonnil_outlets_test.go（ADR-0070）。
 
@@ -150,64 +147,6 @@ func outletCredentialListEmpty(t *testing.T) any {
 	t.Helper()
 	svc := NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop())
 	return CredentialListDTO{Credentials: svc.ListCredentials(false)}
-}
-
-// ===== 章节与课程三格 =====
-
-// outletTutorChapterNoFiles 导师端章节列表的 files：**挑那条既无 chapter_file 行、file_url 也是空**
-// 的章节（夹具里第 2 条）——两条 legacy/表条目分支都不进，才落在 `fileList == nil ⇒ []` 那格。
-func outletTutorChapterNoFiles(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	_, chapters := seedChapterWithMeta(t, db)
-	res, err := newTutorServiceForTest(t, db).GetCourseChapters(chapters[0].CourseID)
-	if err != nil {
-		t.Fatalf("导师端章节列表失败: %v", err)
-	}
-	if len(res.Chapters) < 2 {
-		t.Fatalf("章节列表不足 2 条，取不到无文件的那条: %d", len(res.Chapters))
-	}
-	return res.Chapters[1]
-}
-
-func outletChapterDetailNoFiles(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	_, chapters := seedChapterWithMeta(t, db)
-	res, err := newTutorServiceForTest(t, db).GetChapterDetail(chapters[1].ChapterID)
-	if err != nil {
-		t.Fatalf("章节详情失败: %v", err)
-	}
-	return res
-}
-
-// outletAdminCatalogCourseNode CourseDTO.chapters 是 `*[]ChapterDTO,omitempty`：
-// 键缺席（未填充路径）与值为 null 是两件事，前者由 extensions:"x-optional" 表达、不改判，
-// 这里要证的是**填充路径**——管理端目录树是仓里唯一走 withChapters=true 的出口，
-// 它对「有章节」与「无章节」两种课程都显式赋一个非 nil 指针（后者赋 []ChapterDTO{}）。
-func outletAdminCatalogCourseNode(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	seedVisibleCourse(t, db)
-	tree := NewTrainingCatalogService(db, zap.NewNop()).GetAdminCatalogTree()
-	if len(tree.Specialties) == 0 || len(tree.Specialties[0].Levels) == 0 ||
-		len(tree.Specialties[0].Levels[0].Courses) == 0 {
-		t.Fatal("管理端目录树里没有课程节点：这条证据没有落地")
-	}
-	return tree.Specialties[0].Levels[0].Courses[0]
-}
-
-// outletAdminCourseDetailMeta 一次调用同时举证 prerequisites 与 prerequisite_course_ids：
-// fillCourseMeta 两者都以 `make(0,n)` 起手再取地址，于是 omitempty 只省掉「没调本函数」的读路径，
-// 调过的路径恒发数组（`[]` 也算发过）。
-func outletAdminCourseDetailMeta(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	res, err := NewAdminCourseService(db, nil, zap.NewNop()).GetCourseDetail(seedVisibleCourse(t, db))
-	if err != nil {
-		t.Fatalf("管理端课程详情失败: %v", err)
-	}
-	return res
 }
 
 // ===== 批量删文件 =====

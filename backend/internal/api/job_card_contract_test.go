@@ -4,6 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"forklift-training/internal/config"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
@@ -11,13 +20,6 @@ import (
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"mime/multipart"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestJobCardContract(t *testing.T) {

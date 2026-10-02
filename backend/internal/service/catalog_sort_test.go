@@ -7,10 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"forklift-training/internal/coerce"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
-	"go.uber.org/zap"
 )
 
 // TestCreateCatalogItemsAppendToEnd 新建方向/等级/标签自动排同级末尾（max+1），不再默认 0。
@@ -61,7 +63,7 @@ func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 // TestCreateCourseAppendsToEndOfGroup 新建课程自动排所属方向+等级组的末尾。
 func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil, zap.NewNop())
+	svc := course.NewAdminService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&spec).Error; err != nil {
@@ -76,16 +78,16 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("创建方向失败: %v", err)
 	}
 
-	c1, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程1"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
+	c1, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程1"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c2, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程2"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
+	c2, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程2"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	// 另一方向+等级组：从 1 重新开始
-	c3, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程3"), SpecialtyID: coerce.IntPtr(spec2.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
+	c3, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程3"), SpecialtyID: coerce.IntPtr(spec2.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("不同组课程 sort_order 应从 1 开始, got %v", c3.SortOrder)
 	}
 	// 显式传入 sort_order 时尊重传值
-	c4, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程4"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), SortOrder: coerce.IntPtr(9)})
+	c4, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程4"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), SortOrder: coerce.IntPtr(9)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -160,7 +162,7 @@ func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 // TestSwapCourseSortGroupBoundary 课程交换限制在同一个方向+等级组内。
 func TestSwapCourseSortGroupBoundary(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil, zap.NewNop())
+	svc := course.NewAdminService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&spec).Error; err != nil {

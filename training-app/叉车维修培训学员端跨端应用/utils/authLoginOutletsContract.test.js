@@ -235,13 +235,15 @@ describe('锁 2：登录族不回潮（签名零改动 + 十处调用点原样�
 /**
  * 后端注册面拼装（method + 完整 path，含 `/api` 前缀）：
  *
- * 链条一（前缀参数化）：`router.go` 里 `api := r.Group("/api")`、`auth := api.Group("/auth")`，
- *   `routes_registry.go` 的注册表闭包以 `api` 为参调四个 `Register*Routes(api, …)`，
- *   且 `router.go` 用 `reg.Register(api, rd, deps)` 驱动注册表 —— 三个锚点逐个断言在位，
+ * 链条一（前缀参数化）：`router.go` 里 `api := r.Group("/api")`，`router.go` 用
+ *   `reg.Register(api, rd, deps)` 驱动注册表，`routes_registry.go` 的注册表闭包以 `api` 为参调
+ *   `auth.RegisterRoutes(api, …)` 与三个通道 `Register*Routes(api, …)` —— 锚点逐个断言在位，
  *   `api` 组即 `/api` 这一事实由文本链机械推导，不硬编码。
- * 链条二（组上注册）：`phone_auth.go` / `email_auth.go` 的 `rg.Group("/auth/<通道>")` 前缀
- *   × `code_auth_routes.go` 的 `g.POST(…)` 四条路由（参数化组，两支都读真源）；
- *   `wechat_auth.go` 直挂 `rg.POST("/auth/wx-login")`；`profile_bind.go` 的
+ *   域包 `/auth` 组前缀与 10 条内联路由读 `internal/auth/handler.go`（P2 波 3a 起
+ *   `auth := api.Group("/auth")` 那 10 行随 handler 收进域包，入口仍是注册表递来的 `api` 组）。
+ * 链条二（组上注册）：`internal/auth/handler_phone.go` / `handler_email.go` 的
+ *   `rg.Group("/auth/<通道>")` 前缀 × `handler_code.go` 的 `g.POST(…)` 四条路由（参数化组，两支都读真源）；
+ *   `handler_wechat.go` 直挂 `rg.POST("/auth/wx-login")`；`handler_profile_bind.go` 的
  *   `acct := rg.Group("/auth/account")` + **空路径** `acct.PUT("")`（票面提醒的第三形态）。
  *
  * 覆盖面边界（显式声明，不假装全量）：本锁只拼「路由存在性」，不拼中间件链 / 处理器绑定 /
@@ -254,37 +256,41 @@ function registeredRoutes() {
 
   const router = stripComments(read('../../backend/internal/api/router.go'));
   const apiPrefix = (/api\s*:=\s*r\.Group\("([^"]+)"\)/.exec(router) || [])[1];
-  const authPrefix = (/auth\s*:=\s*api\.Group\("([^"]+)"\)/.exec(router) || [])[1];
   anchors.push(['router api 组', apiPrefix]);
-  anchors.push(['router auth 组', authPrefix]);
   anchors.push(['注册表驱动', /reg\.Register\(api, rd, deps\)/.test(router) ? 'yes' : undefined]);
-  for (const m of router.matchAll(/\bauth\.(GET|POST|PUT|DELETE)\("([^"]+)"/g)) {
+
+  // 3a 起 /api/auth 的 10 条内联注册随 handler 收进 internal/auth：组前缀与路由体读域包 handler.go，
+  // 装配那一步（注册表把 api 组交给域包）在 routes_registry.go 里钉住。
+  const registry = stripComments(read('../../backend/internal/api/routes_registry.go'));
+  const authHandler = stripComments(read('../../backend/internal/auth/handler.go'));
+  const authPrefix = (/g\s*:=\s*rg\.Group\("([^"]+)"\)/.exec(authHandler) || [])[1];
+  anchors.push(['auth 域包注册入口', /auth\.RegisterRoutes\(api,/.test(registry) ? 'yes' : undefined]);
+  anchors.push(['handler.go auth 组', authPrefix]);
+  for (const m of authHandler.matchAll(/\bg\.(GET|POST|PUT|DELETE)\("([^"]+)"/g)) {
     out.push(`${m[1]} ${apiPrefix}${authPrefix}${m[2]}`);
   }
-
-  const registry = stripComments(read('../../backend/internal/api/routes_registry.go'));
   for (const fn of ['RegisterEmailAuthRoutes', 'RegisterPhoneAuthRoutes', 'RegisterWechatAuthRoutes', 'RegisterProfileBindRoutes']) {
     anchors.push([`${fn} 收到 api 组`, new RegExp(`${fn}\\(api,`).test(registry) ? 'yes' : undefined]);
   }
 
-  // 通道组（前缀参数化两支）：组前缀来自 phone/email 文件，路由体来自共享的 code_auth_routes
-  const channelRoutes = [...stripComments(read('../../backend/internal/api/code_auth_routes.go'))
+  // 通道组（前缀参数化两支）：组前缀来自 phone/email handler，路由体来自共享的 handler_code.go
+  const channelRoutes = [...stripComments(read('../../backend/internal/auth/handler_code.go'))
     .matchAll(/\bg\.(GET|POST|PUT|DELETE)\("([^"]+)"/g)];
   anchors.push(['通道路由体', channelRoutes.length >= 4 ? 'yes' : undefined]);
-  for (const file of ['phone_auth.go', 'email_auth.go']) {
-    const g = (/rg\.Group\("([^"]+)"\)/.exec(stripComments(read(`../../backend/internal/api/${file}`))) || [])[1];
+  for (const file of ['handler_phone.go', 'handler_email.go']) {
+    const g = (/rg\.Group\("([^"]+)"\)/.exec(stripComments(read(`../../backend/internal/auth/${file}`))) || [])[1];
     anchors.push([`${file} 组前缀`, g]);
     for (const m of channelRoutes) out.push(`${m[1]} ${apiPrefix}${g}${m[2]}`);
   }
 
   // 微信：直挂在 rg（= /api 组）上
-  const wechat = stripComments(read('../../backend/internal/api/wechat_auth.go'));
+  const wechat = stripComments(read('../../backend/internal/auth/handler_wechat.go'));
   for (const m of wechat.matchAll(/\brg\.(GET|POST|PUT|DELETE)\("([^"]+)"/g)) {
     out.push(`${m[1]} ${apiPrefix}${m[2]}`);
   }
 
   // 账号修改：组 + 空路径（`acct.PUT("")` ⇒ 路径即组本身）
-  const bind = stripComments(read('../../backend/internal/api/profile_bind.go'));
+  const bind = stripComments(read('../../backend/internal/auth/handler_profile_bind.go'));
   const acctPrefix = (/acct\s*:=\s*rg\.Group\("([^"]+)"/.exec(bind) || [])[1];
   anchors.push(['profile_bind acct 组', acctPrefix]);
   for (const m of bind.matchAll(/\bacct\.(GET|POST|PUT|DELETE)\("([^"]*)"/g)) {

@@ -8,11 +8,13 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
@@ -49,25 +51,24 @@ type Deps struct {
 	Logger  *zap.Logger
 	Session *security.Session
 
-	AuthSvc         *service.AuthService
-	CodeSvc         *service.VerifyCodeService
-	EmailCh         service.CodeChannel
-	PhoneCh         service.CodeChannel
+	AuthSvc         *auth.Service
+	CodeSvc         *auth.VerifyCodeService
+	EmailCh         auth.CodeChannel
+	PhoneCh         auth.CodeChannel
 	CaptchaSvc      *captcha.Service
-	WechatAuthSvc   *service.WechatAuthService
+	WechatAuthSvc   *auth.WechatService
 	FileSvc         *filestore.FileStore
-	SlideRenderer   *service.SlideRenderer
+	SlideRenderer   *course.SlideRenderer
 	NotificationSvc *notification.Service
-	ReviewSvc       *service.ProfileReviewService
+	ReviewSvc       *auth.ProfileReviewService
 	AuditSvc        *service.AuditService
 	AIConfigSvc     *aiassistant.ConfigService
 	ContentGenSvc   *service.ContentGenerateService
 	ExportStore     service.ExportStore
-	AuthH           *AuthHandler
 
-	CourseSvc            *service.CourseService
+	CourseSvc            *course.Service
 	AdminSvc             *service.AdminService
-	AdminCourseSvc       *service.AdminCourseService
+	AdminCourseSvc       *course.AdminService
 	ForumSvc             *forum.Service
 	ForumModSvc          *forum.ModerationService
 	CheckInSvc           *checkin.Service

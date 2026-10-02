@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/auth"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/config"
@@ -29,17 +30,21 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	t.Helper()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	authSvc := service.NewAuthService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
-	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	captchaSvc := captcha.NewService(store)
 
 	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
 	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
 
+	// 补 JWT 过期默认值（同 config.Load 的 2h/7d）：config.Config 字面量不会走 Load 的默认值，
+	// 缺了它 SessionFromConfig 签出的 token 立即过期（ExpiresAt = now），域包服务的签发就全成 401。
 	cfg := &config.Config{
-		JWTSecretKey: "test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
+		JWTSecretKey:          "test-secret",
+		JWTExpiresHours:       2,
+		JWTRefreshExpiresDays: 7,
+		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
 	}
 
 	deps := &Deps{
@@ -57,12 +62,12 @@ func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fake
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
 	// /auth/login（新账号+密码登录断言用）
-	authH := NewAuthHandler(security.SessionFromConfig(cfg), authSvc, nil, nil, nil, zap.NewNop())
-	auth := api.Group("/auth")
-	auth.POST("/login", authH.Login)
-	RegisterEmailAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, captchaSvc, false)
-	RegisterPhoneAuthRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.PhoneCh, captchaSvc, false)
-	RegisterProfileBindRoutes(api, deps.RouterDeps(), deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	// P2 波 3a：/api/auth 的登录面由域包注册（handler 已包私有）；传 deps.Session 让服务内
+	// 那份会话与注入的中间件同对象（否则吊销标记写不到同一条链上）。
+	auth.RegisterRoutes(api, deps.Session, authSvc, nil, nil, nil, zap.NewNop())
+	auth.RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh, captchaSvc, false)
+	auth.RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh, captchaSvc, false)
+	auth.RegisterProfileBindRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 
 	return r, store, phoneCh, db
 }
@@ -95,7 +100,7 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 		map[string]interface{}{"phone": "13800138000", "purpose": "register"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	regCode := extractStoredCode(t, store, phoneCh, service.CodePurposeRegister, "13800138000")
+	regCode := extractStoredCode(t, store, phoneCh, auth.CodePurposeRegister, "13800138000")
 	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
 		map[string]interface{}{"phone": "13800138000", "code": regCode, "nickname": "改号学员", "password": "pass123456"}, "")
 	if w.Code != http.StatusCreated {
@@ -108,7 +113,7 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, phoneCh, service.CodePurposeAccountChange, "13800138000")
+	code := extractStoredCode(t, store, phoneCh, auth.CodePurposeAccountChange, "13800138000")
 
 	// 3. 验证码错误被拒
 	w = codeAuthRequest(r, http.MethodPut, "/api/auth/account",
@@ -138,7 +143,7 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 	if w := codeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token); w.Code != http.StatusOK {
 		t.Fatalf("重发 send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code = extractStoredCode(t, store, phoneCh, service.CodePurposeAccountChange, "13800138000")
+	code = extractStoredCode(t, store, phoneCh, auth.CodePurposeAccountChange, "13800138000")
 
 	// 6. 成功：账号变更为 new_acct_2
 	w = codeAuthRequest(r, http.MethodPut, "/api/auth/account",
@@ -199,7 +204,7 @@ func TestAuthAccountChange_UnboundPhone(t *testing.T) {
 		map[string]interface{}{"email": "acct@example.com", "purpose": "register"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	regCode := extractStoredCode(t, store, emailCh, service.CodePurposeRegister, "acct@example.com")
+	regCode := extractStoredCode(t, store, emailCh, auth.CodePurposeRegister, "acct@example.com")
 	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
 		map[string]interface{}{"email": "acct@example.com", "code": regCode, "nickname": "邮箱学员", "password": "pass123456"}, "")
 	if w.Code != http.StatusCreated {

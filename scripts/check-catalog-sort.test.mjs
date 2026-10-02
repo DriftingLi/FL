@@ -115,7 +115,7 @@ test('负例：非目录面文件与 Go 测试文件整体不进判定面', () =
   const line = 'q.Order("sort_order ASC, specialty_id ASC")'
   for (const p of [
     'backend/internal/service/faq_service.go',
-    'backend/internal/service/course_service.go',
+    'backend/internal/course/service.go',
     'backend/internal/api/admin.go',
     'backend/internal/service/catalog_tree_shape_test.go',
     'backend/internal/api/training_catalog_contract_test.go'

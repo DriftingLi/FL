@@ -4,9 +4,10 @@ package aiassistant
 import (
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"regexp"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/cloudwego/eino/schema"
 	"gorm.io/gorm"

@@ -50,7 +50,6 @@ var nonnilOutletsCore = map[string]func(t *testing.T) any{
 	"service.RecruitListResult.items":        outletRecruitListEmpty,
 	"service.QuestionPageDTO.questions":      outletQuestionPageEmptyPool,
 	"service.QuestionImportResultDTO.errors": outletQuestionImportEmpty,
-	"service.CourseDetailDTO.chapters":       outletCourseDetailNoChapters,
 }
 
 func outletRecruitListEmpty(t *testing.T) any {
@@ -77,17 +76,6 @@ func outletQuestionImportEmpty(t *testing.T) any {
 	t.Helper()
 	svc := NewQuestionBankService(testutil.NewMemoryDB(t), nil, zap.NewNop())
 	return svc.BatchImport(nil, nil)
-}
-
-func outletCourseDetailNoChapters(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil, zap.NewNop())
-	res, err := svc.GetCourseDetail(seedVisibleCourse(t, db), 0)
-	if err != nil {
-		t.Fatalf("课程详情失败: %v", err)
-	}
-	return res
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本包（含各分域表）的举证入口。判据本体在

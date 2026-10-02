@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
@@ -394,7 +395,7 @@ func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
 		{Sentinel: forum.ErrTopicNotFound, Status: http.StatusNotFound},
 		{Sentinel: forum.ErrReplyNotFound, Status: http.StatusNotFound},
 		{Sentinel: forum.ErrForumReportNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrChapterNotFound, Status: http.StatusNotFound},
+		{Sentinel: course.ErrChapterNotFound, Status: http.StatusNotFound},
 		{Sentinel: forum.ErrNotTopicOwner, Status: http.StatusForbidden},
 		{Sentinel: forum.ErrNotTopicAuthor, Status: http.StatusForbidden},
 		{Sentinel: forum.ErrNotReplyAuthor, Status: http.StatusForbidden},
@@ -438,7 +439,7 @@ func TestForumErrStatus_Spectrum(t *testing.T) {
 		{"存在性：主题 404", forum.ErrTopicNotFound, http.StatusNotFound},
 		{"存在性：回复 404", forum.ErrReplyNotFound, http.StatusNotFound},
 		{"存在性：举报 404", forum.ErrForumReportNotFound, http.StatusNotFound},
-		{"存在性：章节 404", service.ErrChapterNotFound, http.StatusNotFound},
+		{"存在性：章节 404", course.ErrChapterNotFound, http.StatusNotFound},
 		{"所有权：楼主动作 403", forum.ErrNotTopicOwner, http.StatusForbidden},
 		{"所有权：删主题 403", forum.ErrNotTopicAuthor, http.StatusForbidden},
 		{"所有权：删回复 403", forum.ErrNotReplyAuthor, http.StatusForbidden},

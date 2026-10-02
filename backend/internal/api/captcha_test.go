@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 )
 
@@ -99,7 +100,7 @@ func TestCaptcha_GenerateShapeLock(t *testing.T) {
 	setTestGinMode()
 	store := newMemCodeStore()
 	r := gin.New()
-	RegisterCaptchaRoutes(r, captcha.NewService(store))
+	auth.RegisterCaptchaRoutes(r, captcha.NewService(store))
 
 	w := codeAuthRequest(r, http.MethodGet, "/api/captcha", nil, "")
 	if w.Code != http.StatusOK {

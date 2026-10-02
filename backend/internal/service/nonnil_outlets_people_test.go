@@ -48,19 +48,19 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	// ===== 简历 / 招聘 =====
 	"service.RecruitResumeCard.resume_certifications": outletRecruitCardNoCerts,
 	"service.RecruiterApplicationListResult.items":    outletRecruiterApplicationListEmpty,
-	"service.RecruiterListResult.items":               outletRecruiterListEmpty,
-	"service.JobListResult.items":                     outletJobListEmpty,
-	"service.HrwaiUserPageResult.list":                outletHrwaiUserPageEmpty,
-	"service.TutorListDTO.tutors":                     outletTutorListEmpty,
+	// 招聘者列表（auth.RecruiterListResult.items）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
+	"service.JobListResult.items":      outletJobListEmpty,
+	"service.HrwaiUserPageResult.list": outletHrwaiUserPageEmpty,
+	"service.TutorListDTO.tutors":      outletTutorListEmpty,
 
 	// ===== 投稿 / 资料 / 打卡 / 资料库 / 搜索 / 导师 =====
 	// 通知域的 items 举证已随域包搬去 internal/notification/nonnil_outlets_test.go（ADR-0070）。
 	// 积分域的 items / tasks 举证已随域包搬去 internal/points/nonnil_outlets_test.go（ADR-0070）。
 	// 投稿域的 items 举证已随域包搬去 internal/contribution/nonnil_outlets_test.go（ADR-0070）。
-	"service.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
+	// 资料审核列表（auth.ProfileChangeRequestPageResult.requests）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
 	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
-	"service.SearchSectionDTO.items":          outletSearchSectionEmpty,
-	"service.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
+	"service.SearchSectionDTO.items":         outletSearchSectionEmpty,
+	"course.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
 
 	// 三格 handler 一行包出来的信封（见文件头那段）
 	"service.ApplicationListResult.items": outletStudentApplicationListEmpty,
@@ -129,17 +129,6 @@ func seedJobPosting(t *testing.T, db *gorm.DB, recruiterID int) *model.JobPostin
 	return &job
 }
 
-// outletRecruiterListEmpty 招聘者列表（#416 那条「硬编码空数组桩」的真实现）：空库发 `[]`。
-func outletRecruiterListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewAuthService(testutil.NewMemoryDB(t), nil, nil, "", "", "", zap.NewNop())
-	res, err := svc.ListRecruiters(1, 20, "")
-	if err != nil {
-		t.Fatalf("招聘者列表失败: %v", err)
-	}
-	return res
-}
-
 // outletJobListEmpty 职位列表：无职位时 items 是空集。
 func outletJobListEmpty(t *testing.T) any {
 	t.Helper()
@@ -174,17 +163,6 @@ func outletTutorListEmpty(t *testing.T) any {
 }
 
 // ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
-
-// outletProfileChangeRequestPageEmpty 资料审核列表：零申请时 requests 是空集。
-func outletProfileChangeRequestPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewProfileReviewService(testutil.NewMemoryDB(t), nil, nil, zap.NewNop())
-	res, err := svc.ListRequests("", 1, 20)
-	if err != nil {
-		t.Fatalf("资料审核列表失败: %v", err)
-	}
-	return res
-}
 
 // outletSearchSectionEmpty 聚合搜索的单个分区：SearchAllDTO 的五个分区字段共用这一条出口、
 // 各自 marshal（同一处 make，一格一证）。

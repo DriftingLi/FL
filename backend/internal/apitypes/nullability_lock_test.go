@@ -65,7 +65,7 @@ const (
 //	（ADR-0064 原记「8 处早已带 x-nullable」由批③ 更正为 5 + 3，那 3 处是把标量指针字段上的
 //	x-nullable 也计了进来。）
 //
-// 那 12 处里有 1 处是这一批改判时**顺手捞出来的**：`service.ChapterSlidesDTO.slides` 的 null 出口
+// 那 12 处里有 1 处是这一批改判时**顺手捞出来的**：`course.ChapterSlidesDTO.slides` 的 null 出口
 // 早在批①′ 就举到了（当时全仓唯一一条正向证据），可它的 x-nullable 一直没落——因为这条判据
 // 历史上只报一个数、不点名，而批①-B 的清单是从判据 4 的「待举证」名单推出来的，它不在那份上。
 // ⇒ 下面 Scan 现在把欠账逐条 Logf 出来，与判据 4 对称。
@@ -94,6 +94,7 @@ var (
 	nullableEvidenceSources = []outletSource{
 		{"internal/service", "nullableOutlets"},
 		{"internal/aiassistant", "nullableOutlets"},
+		{"internal/course", "nullableOutlets"},
 	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
@@ -102,6 +103,7 @@ var (
 	nonNilEvidenceSources = []outletSource{
 		{"internal/service", "nonnilOutlets"},
 		{"internal/api", "nonnilOutlets"},
+		{"internal/auth", "nonnilOutlets"},
 		{"internal/faq", "nonnilOutlets"},
 		{"internal/notification", "nonnilOutlets"},
 		{"internal/material", "nonnilOutlets"},
@@ -110,6 +112,7 @@ var (
 		{"internal/checkin", "nonnilOutlets"},
 		{"internal/contribution", "nonnilOutlets"},
 		{"internal/forum", "nonnilOutlets"},
+		{"internal/course", "nonnilOutlets"},
 	}
 )
 
@@ -184,7 +187,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 // null 出口的那些」；射程内总数 96，其中 5 处当时已带 x-nullable）。
 //
 //	99 处 nullable 声明 − 3 处落在 2xx 响应闭包外 = 96 在射程内；当时走过真实出口、marshal 出过
-//	`null` 的只有 1 处（service.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档） ⇒ 96 − 1 = 95
+//	`null` 的只有 1 处（course.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档） ⇒ 96 − 1 = 95
 //	    − 68（批①-A 改判 nonnil，它们本就不该说可空）  = 27
 //	    − 20（批①-B：15 处走真实出口 marshal 出 null 并进 nullableOutlets 表，5 处改判 nonnil） = 7
 //
@@ -218,6 +221,7 @@ func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
 var sweptDirs = map[string]string{
 	"service":      "../service",
 	"api":          "../api",
+	"auth":         "../auth",
 	"faq":          "../faq",
 	"notification": "../notification",
 	"model":        "../model",
@@ -229,6 +233,7 @@ var sweptDirs = map[string]string{
 	"contribution": "../contribution",
 	"forum":        "../forum",
 	"aiassistant":  "../aiassistant",
+	"course":       "../course",
 	"repository":   "../valuation/repository",
 }
 

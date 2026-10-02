@@ -6,6 +6,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -38,6 +39,43 @@ func seedStudyRecords(t *testing.T, db *gorm.DB, courseID int, students int) {
 	}
 }
 
+// seedCatalogCourse 建一门已挂载课程（含章节与前置课程），返回课程与其前置课程。
+// 逐字复制 internal/course/retirement_test.go 的同一助手：两个包各持一份，
+// 域包测试与 service 测试互不 import（波 3b-1 该助手随课程域搬走）。
+func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course) {
+	t.Helper()
+	spec := model.Specialty{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	prereq := model.Course{Name: "前置课程", Status: 1,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&prereq).Error; err != nil {
+		t.Fatalf("创建前置课程失败: %v", err)
+	}
+	crs := model.Course{Name: "主课程", Status: 1,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&crs).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	for i := 1; i <= 2; i++ {
+		ch := model.Chapter{CourseID: crs.CourseID, Title: "章节", OrderNum: i, CreatedAt: testutil.Now()}
+		if err := db.Create(&ch).Error; err != nil {
+			t.Fatalf("创建章节失败: %v", err)
+		}
+	}
+	if err := db.Create(&model.CoursePrerequisite{
+		CourseID: crs.CourseID, PrerequisiteCourseID: prereq.CourseID, CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("创建前置关联失败: %v", err)
+	}
+	return &crs, &prereq
+}
+
 // TestTutorCourseListHidesUnmounted 锁定 ADR-0012 §2 行为变更：
 // 导师端列表与学员端口径统一，未挂方向/等级的课程不可见。
 func TestTutorCourseListHidesUnmounted(t *testing.T) {
@@ -64,15 +102,15 @@ func TestTutorCourseListHidesUnmounted(t *testing.T) {
 func TestTutorCourseListBatchFills(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := newTutorServiceForTest(t, db)
-	course, _ := seedCatalogCourse(t, db)
-	seedStudyRecords(t, db, course.CourseID, 3)
+	crs, _ := seedCatalogCourse(t, db)
+	seedStudyRecords(t, db, crs.CourseID, 3)
 
 	list, err := svc.GetCourses(1, 10, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
 	for _, c := range list.Courses {
-		if c.CourseID != course.CourseID {
+		if c.CourseID != crs.CourseID {
 			continue
 		}
 		if c.ChapterCount == nil || *c.ChapterCount != 2 {

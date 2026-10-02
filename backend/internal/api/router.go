@@ -13,6 +13,7 @@ import (
 
 	_ "forklift-training/docs"
 
+	"forklift-training/internal/auth"
 	"forklift-training/internal/config"
 	"forklift-training/internal/filestore"
 	applogger "forklift-training/internal/logger"
@@ -44,7 +45,7 @@ func NewRouter(deps *Deps) *gin.Engine {
 	r.GET("/api", APIRoot)
 
 	// 图形验证码（人机验证）：无需鉴权
-	RegisterCaptchaRoutes(r, deps.CaptchaSvc)
+	auth.RegisterCaptchaRoutes(r, deps.CaptchaSvc)
 
 	// Swagger 文档（gin-swagger，C 方案：SWAGGER_ENABLED + BasicAuth）
 	// dev 默认开启、prod 默认关闭；开启且配置 User/Pass 时走 BasicAuth
@@ -62,7 +63,6 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// /static/*         其他静态资源从本地 static/ 目录提供
 	registerStaticRoutes(r, cfg)
 
-	authH := deps.AuthH
 	rd := deps.RouterDeps()
 
 	// ===== API 路由组 =====
@@ -72,24 +72,6 @@ func NewRouter(deps *Deps) *gin.Engine {
 	// 判空必须在装配点做（见 AuditWriter 的注释）。
 	if deps.AuditSvc != nil {
 		api.Use(middleware.AuditLog(deps.AuditSvc, deps.Logger))
-	}
-
-	// 认证蓝图 /api/auth/*
-	auth := api.Group("/auth")
-	{
-		auth.POST("/login", authH.Login)
-		auth.POST("/admin-login", authH.AdminLogin)
-		auth.POST("/tutor-login", authH.TutorLogin)
-		auth.POST("/recruiter-login", authH.RecruiterLogin)
-		// 双令牌会话（ADR-0012）：/refresh 用 refresh token 自身鉴权（不经过 JWTAuth）；
-		// /logout 撤销 refresh token（Cookie 优先、请求体兜底，与 /refresh 同口径），不依赖 JWTAuth（access 过期时也能撤销 refresh / 登出）。
-		auth.POST("/refresh", authH.Refresh)
-		auth.POST("/logout", authH.Logout)
-		auth.GET("/me", middleware.JWTAuth(deps.Session), authH.Me)
-		// 个人资料：昵称 / 头像 / 单位 / 注销
-		auth.PUT("/profile", middleware.JWTAuth(deps.Session), authH.UpdateProfile)
-		auth.POST("/avatar", middleware.JWTAuth(deps.Session), authH.UploadAvatar)
-		auth.DELETE("/account", middleware.JWTAuth(deps.Session), authH.DeleteAccount)
 	}
 
 	// 邮箱验证码注册/登录（发码需过图形验证码）

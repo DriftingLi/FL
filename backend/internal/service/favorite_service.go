@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
@@ -105,7 +106,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 	switch targetType {
 	case FavoriteTargetCourse:
 		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
-		visible, err := CourseVisibleByID(db, targetID)
+		visible, err := course.CourseVisibleByID(db, targetID)
 		if err != nil {
 			return err
 		}
@@ -115,7 +116,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 	case FavoriteTargetChapter:
 		var cnt int64
 		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
-		mounted := MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		mounted := course.MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
 		if err := db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt).Error; err != nil {
 			return err
 		}

@@ -341,7 +341,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	mock.Score = coerce.FloatPtr(totalScore)
 	accuracy := 0.0
 	if len(ids) > 0 {
-		accuracy = roundFloat1(float64(correctCount) / float64(len(ids)) * 100)
+		accuracy = coerce.RoundFloat1(float64(correctCount) / float64(len(ids)) * 100)
 	}
 	result := MockExamSubmitDTO{
 		TotalScore:     totalScore,

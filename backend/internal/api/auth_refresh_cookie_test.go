@@ -32,7 +32,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/middleware"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -235,18 +235,14 @@ func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
 	}
-	authSvc := service.NewAuthService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
-	h := NewAuthHandler(sess, authSvc, nil, nil, nil, zap.NewNop())
+	authSvc := auth.NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := gin.New()
-	g := r.Group("/api/auth", func(c *gin.Context) {
-		c.Set(string(middleware.CtxUserID), u.ID)
-		c.Next()
-	})
-	g.POST("/refresh", h.Refresh)
-	g.DELETE("/account", h.DeleteAccount)
+	// P2 波 3a：DELETE /api/auth/account 挂在 JWT 中间件后面（生产同一条链），不再手工
+	// 注入 CtxUserID——改为签发真 access 并带 Bearer 头，判据落在真实认证路径上。
+	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 
 	// 注销前先在会话中段轮换一次（Cookie 通道），手上剩下的是新那支
-	_, first, _ := sess.IssuePair(u.ID, u.Account, service.HrwaiRole)
+	tok, first, _ := sess.IssuePair(u.ID, u.Account, service.HrwaiRole)
 	w := doRefreshCookie(r, first, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("注销前应能正常轮换: %d body=%s", w.Code, w.Body.String())
@@ -254,7 +250,7 @@ func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
 	out, _ := decodeRefresh(t, w)
 	live := out.Data.RefreshToken
 
-	rec := performRequest(r, "DELETE", "/api/auth/account")
+	rec := codeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("注销应 200，实际 %d", rec.Code)
 	}

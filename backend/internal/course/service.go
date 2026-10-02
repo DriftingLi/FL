@@ -1,0 +1,1172 @@
+// Package service 学员侧课程与章节。
+package course
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"go.uber.org/zap"
+
+	"gorm.io/gorm"
+
+	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
+	"forklift-training/internal/entitlement"
+	"forklift-training/internal/model"
+	"forklift-training/internal/slicesx"
+	"forklift-training/internal/timefmt"
+)
+
+// CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
+type CoursePageResult struct {
+	Courses []CourseDTO `json:"courses" nullability:"nonnil"`
+	Page    int         `json:"page"`
+	Pages   int         `json:"pages"`
+	Total   int64       `json:"total"`
+}
+
+// ===== DTO（JSON 契约与 B5 前的 map key 逐字一致，前端零改动约束）=====
+
+// CourseDTO 课程。可选字段（chapter_count 等）在未填充路径省略，与旧 map 行为一致。
+// 字段声明按 key 字母序，保持与旧 map 序列化的字节序一致。
+type CourseDTO struct {
+	CertificateName       string                  `json:"certificate_name,omitempty" extensions:"x-optional"`
+	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty" extensions:"x-optional"`
+	CertificateTemplateID *int                    `json:"certificate_template_id" extensions:"x-nullable"`
+	ChapterCount          *int64                  `json:"chapter_count,omitempty" extensions:"x-optional"`
+	CoverImage            string                  `json:"cover_image"`
+	CourseID              int                     `json:"course_id"`
+	CreatedAt             string                  `json:"created_at"`
+	Credential            *CredentialBriefDTO     `json:"credential,omitempty" extensions:"x-optional"`
+	CredentialID          *int                    `json:"credential_id" extensions:"x-nullable"`
+	Description           string                  `json:"description"`
+	Duration              int                     `json:"duration"`
+	// Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。
+	// 只在**有主体**的读路径填（课程详情）——`GET /api/courses` 是公开面无主体，
+	// 列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」
+	// 与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。
+	Entitled              *bool              `json:"entitled,omitempty" extensions:"x-optional"`
+	IsFeatured            bool               `json:"is_featured"`
+	IsHot                 bool               `json:"is_hot"`
+	Level                 *LevelBriefDTO     `json:"level,omitempty" extensions:"x-optional"`
+	LevelID               *int               `json:"level_id" extensions:"x-nullable"`
+	Name                  string             `json:"name"`
+	PointsPrice           *int               `json:"points_price,omitempty" extensions:"x-optional"`
+	PracticeHours         int                `json:"practice_hours"`
+	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	SortOrder             int                `json:"sort_order"`
+	Specialty             *SpecialtyBriefDTO `json:"specialty,omitempty" extensions:"x-optional"`
+	SpecialtyID           *int               `json:"specialty_id" extensions:"x-nullable"`
+	Status                int16              `json:"status"`
+	StudentCount          *int64             `json:"student_count,omitempty" extensions:"x-optional"`
+	TheoryHours           int                `json:"theory_hours"`
+	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional" nullability:"nonnil"`
+}
+
+// CredentialBriefDTO 目标证件简述（课程详情元数据）。
+type CredentialBriefDTO struct {
+	Category string `json:"category"`
+	Code     string `json:"code"`
+	ID       int    `json:"id"`
+	Level    *int   `json:"level" extensions:"x-nullable"`
+	Name     string `json:"name"`
+}
+
+// SpecialtyBriefDTO 专业方向简述（详情元数据）。
+type SpecialtyBriefDTO struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	SpecialtyID int    `json:"specialty_id"`
+}
+
+// LevelBriefDTO 课程等级简述（详情元数据）。
+type LevelBriefDTO struct {
+	Code    string `json:"code"`
+	LevelID int    `json:"level_id"`
+	Name    string `json:"name"`
+}
+
+// CertificateTemplateDTO 证书模板（详情元数据）。
+type CertificateTemplateDTO struct {
+	Code         string `json:"code"`
+	Description  string `json:"description"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	TemplateURL  string `json:"template_url"`
+	ValidityDays int    `json:"validity_days"`
+}
+
+// CourseBriefDTO 前置课程简述（仅 id/name，避免嵌套过深）。
+type CourseBriefDTO struct {
+	CourseID int    `json:"course_id"`
+	Name     string `json:"name"`
+}
+
+// ChapterDTO 章节。
+type ChapterDTO struct {
+	ChapterID   int    `json:"chapter_id"`
+	Content     string `json:"content"`
+	ContentType string `json:"content_type"`
+
+	CourseID    int               `json:"course_id"`
+	CreatedAt   string            `json:"created_at"`
+	Description string            `json:"description"`
+	Duration    int               `json:"duration"`
+	FileURL     string            `json:"file_url"`
+	OrderNum    int               `json:"order_num"`
+	Title       string            `json:"title"`
+	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
+}
+
+// ChapterFileDTO 章节文件（chapter_file 表条目与旧版 chapter.file_url 兼容条目同构）。
+type ChapterFileDTO struct {
+	ChapterID   *int   `json:"chapter_id" extensions:"x-nullable"`
+	ContentType string `json:"content_type"`
+	CreatedAt   string `json:"created_at"`
+	FileID      int    `json:"file_id"`
+	FileName    string `json:"file_name"`
+	FileSize    int64  `json:"file_size"`
+	FileURL     string `json:"file_url"`
+}
+
+// ChapterDetailDTO 章节详情（含上下章 ID 与文件列表；study_status 仅学员端路径填充）。
+type ChapterDetailDTO struct {
+	ChapterDTO
+	Files             []ChapterFileDTO `json:"files" nullability:"nonnil"`
+	NextChapterID     *int             `json:"next_chapter_id" extensions:"x-nullable"`
+	PreviousChapterID *int             `json:"previous_chapter_id" extensions:"x-nullable"`
+	StudyStatus       string           `json:"study_status,omitempty" extensions:"x-optional"`
+	// ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。
+	// ADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读
+	// 另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播
+	// （词表「学习位置」的承诺在最常用的入口上不成立）。
+	ResumePosition int `json:"resume_position"`
+}
+
+// CourseDetailDTO 学员端课程详情信封。
+// 学习位置与完成状态（ADR-0017）：is_enrolled 以「存在学习记录」代理报名语义；
+// 未登录 / 未学时为零值。
+type CourseDetailDTO struct {
+	CourseInfo        CourseDTO    `json:"course_info"`
+	Chapters          []ChapterDTO `json:"chapters" nullability:"nonnil"`
+	Progress          float64      `json:"progress"`
+	IsEnrolled        bool         `json:"is_enrolled"`
+	CompletedChapters int64        `json:"completed_chapters"`
+	LastChapterID     *int         `json:"last_chapter_id" extensions:"x-nullable"`
+	LastPosition      int          `json:"last_position"`
+	LastStudiedAt     string       `json:"last_studied_at"`
+}
+
+// AdminCourseDetailDTO 管理端课程详情（course 字段平铺 + chapters）。
+type AdminCourseDetailDTO struct {
+	CourseDTO
+	Chapters []ChapterDTO `json:"chapters" nullability:"nonnil"`
+}
+
+// TutorCourseChaptersDTO 导师端课程章节列表信封。
+type TutorCourseChaptersDTO struct {
+	Course   CourseDTO    `json:"course"`
+	Chapters []ChapterDTO `json:"chapters" nullability:"nonnil"`
+}
+
+// ChapterSlidesDTO 章节幻灯片。
+type ChapterSlidesDTO struct {
+	ChapterID int `json:"chapter_id"`
+	// Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。
+	Slides []string `json:"slides" extensions:"x-nullable" nullability:"nullable"`
+}
+
+// StudyProgressDTO 学习进度更新结果。
+type StudyProgressDTO struct {
+	Progress          float64 `json:"progress"`
+	RecordID          int     `json:"record_id"`
+	StudyDuration     int64   `json:"study_duration"`
+	CompletedChapters int64   `json:"completed_chapters"`
+}
+
+// StudyProgressInput 学习进度上报入参（ADR-0017）。
+// Duration 为分钟；DurationSecs 为秒（>0 时优先，按 ceil 换算分钟累加，秒级精度不落库）；
+// VideoPosition 为该章节最后播放位置（秒；nil 表示本次上报不含位置）；
+// Completed 为显式完成（直接置章节 progress=100，与时长自动完成收敛到同一事实源）。
+type StudyProgressInput struct {
+	ChapterID     int
+	Duration      int
+	DurationSecs  int
+	VideoPosition *int
+	Completed     bool
+}
+
+// ===== 课程挂载不变式（唯一事实源）见 course_mount_scope.go（ADR-0050 决策 1）=====
+
+// 挂载不变式的三个「必填」事实（ADR-0064 决策 2/3）：此前创建面与编辑面各写一遍同文案裸
+// errors.New（同一事实两份实现），且编辑面那两条落端点默认面 500（客户端以为服务端坏了）。
+// 「必填」（字段没给 / 给了非正数）与「给了但那个 id 不存在」是两件事，后者不在这三个里。
+var (
+	ErrCourseNameRequired  = errors.New("课程名称不能为空")
+	ErrSpecialtyRequired   = errors.New("专业方向不能为空")
+	ErrCourseLevelRequired = errors.New("课程等级不能为空")
+)
+
+// validateMountedCourseInputUpdate 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
+// 语义与旧 map 版一致：Create 由 CreateCourse 显式校验，此处收编「编辑携带 0/负数」分支。
+func validateMountedCourseInputUpdate(in *CourseInput) error {
+	if in.SpecialtyID != nil && *in.SpecialtyID <= 0 {
+		return ErrSpecialtyRequired
+	}
+	if in.LevelID != nil && *in.LevelID <= 0 {
+		return ErrCourseLevelRequired
+	}
+	return nil
+}
+
+// ===== 课程详情共享实现（学员端/管理端同源）=====
+
+// loadCourseWithChapters 课程 + 章节列表共享装载（学员端/管理端详情同源）。
+func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []ChapterDTO, error) {
+	var course model.Course
+	if err := fetchRow(db.Where("course_id = ?", courseID), &course, model.ErrCourseNotFound); err != nil {
+		return nil, nil, err
+	}
+	var chapters []model.Chapter
+	// 章节列表的「查不动」如实上抛（ADR-0062 票6）：原先这句不查 error ⇒ 表坏了也返回
+	// 「课程在、章节为空」，学员端与讲师端的章节列表都会静默变成空列表（200 假绿）。
+	if err := db.Where("course_id = ?", courseID).Order("order_num").Find(&chapters).Error; err != nil {
+		return nil, nil, err
+	}
+	chapterList := make([]ChapterDTO, 0, len(chapters))
+	for i := range chapters {
+		chapterList = append(chapterList, ChapterToDTO(&chapters[i]))
+	}
+	return &course, chapterList, nil
+}
+
+// Service 学员课程服务。
+type Service struct {
+	db            *gorm.DB
+	slideRenderer *SlideRenderer
+	logger        *zap.Logger
+}
+
+// NewService 创建课程服务实例。
+func NewService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Logger) *Service {
+	return &Service{db: db, slideRenderer: slideRenderer, logger: logger}
+}
+
+// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，空串 = 全部）。
+// 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
+// 可选位一律**显式命名形参**（#1096：原 filter ...string 变参改为显式参数，arity 在签名处自明）。
+func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter, DefaultPageSize: 12,
+	})
+}
+
+// 「这一份内容此刻读不到」是一个**外显结论**，不是事实（词表「不可读（unreadable）及其成因」）。
+// 底下四件事实必须各有**独立的 error value** —— 注意不能写成 `ErrCourseNotVisible = ErrChapterNotFound`
+// 这种别名：那在编译期与运行期都「对」，但 errors.Is 会把四态认成同一件，分档当场失效。
+// （本次就是这样写错、而 404 映射测试照样全绿，靠 TestCourseReadabilityFactsAreDistinct 才照出来。）
+//
+// 「真不存在」的两件复用全仓唯一载体：model.ErrCourseNotFound（**已移入 internal/model/training.go**：
+// 它同时是积分域课程兑换与讲师/学员读面要用的那件事实，而 points 域先于本域搬包 ⇒ 载体留在本
+// 域包里会让积分域反向依赖本域）、ErrChapterNotFound（forum_service 侧原有 —— 论坛发帖挂的也是
+// 课程章节，同一对象，不另立）。
+//
+// **文案各自的规矩**：Error() 说出的是「哪一件事实」，四件两两不同名（同一测试锁的就是这一点）。
+// 对外统一那句「课程不存在 / 章节不存在」不在这里——它由 api 层各端点经 WithSentinelsMsg
+// 给出。把它们写成同一句曾让「课程未兑换」在章节面上冒充「章节不存在」、又在课程面上说错对象，
+// 等于把呈现决定沉到判据层（ADR-0064 不变式）。
+// fetchRow 取单行并把「不存在」与「查不动」分开（ADR-0062 票6 / ADR-0064 决策 1）：
+// 只把 gorm.ErrRecordNotFound 换成 given 哨兵，其余错误如实上抛。
+// 本域原先四处手写 if err != nil { return Err…NotFound } ⇒ 「表根本查不动」被答成
+// 「这个对象不存在」，四处同一个成因、四处都要各自记得分开，所以收成一份实现。
+func fetchRow(q *gorm.DB, dest any, notFound error) error {
+	if err := q.First(dest).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return notFound
+		}
+		return err
+	}
+	return nil
+}
+
+var (
+	// ErrChapterNotFound 课程章节行不存在的全仓唯一载体（论坛发帖挂的也是课程章节）。
+	ErrChapterNotFound = errors.New("章节不存在")
+	// ErrCourseNotVisible：不在平台上（未发布或未满足挂载不变式，判据见 ADR-0058）。
+	ErrCourseNotVisible = errors.New("课程不在平台上")
+	// ErrCourseLocked：在平台上、也可见，但这个学员没为它付过（权益，见词表「权益」）。
+	ErrCourseLocked = errors.New("课程未兑换")
+	// ErrChapterNotInCourse 章节存在、但不挂在路径里那个课程下：输入冲突（400），
+	// 不是「不存在」也不是「读不到」（本批之前它是裸 errors.New ⇒ 落默认面 500）。
+	ErrChapterNotInCourse = errors.New("章节不属于该课程")
+)
+
+// courseEntitled 权益判据（唯一出处）：非付费课程恒 true；付费课程看该学员是否已兑换。
+// 只经权益读面单点（internal/entitlement）查，不在调用侧手拼 user_entitlement 查询。
+func courseEntitled(db *gorm.DB, courseID, studentID int, pointsPrice *int) (bool, error) {
+	if pointsPrice == nil || *pointsPrice <= 0 {
+		return true, nil
+	}
+	return entitlement.Holds(db, studentID, entitlement.CourseSKU(courseID), strconv.Itoa(courseID))
+}
+
+// studentCanReadCourse 学员能否读这门课的内容：**可见性 ∧ 权益**（ADR-0062 决策 3）。
+// 权益这一半走 courseEntitled，**不并进 CourseVisibleByID**——那条谓词有四个无主体的
+// 共用 caller（课程列表、全局搜索、收藏目标校验、章节可见性）。
+// 消费方 = 「内容读 + 进度写」一族：章节详情、幻灯片 GET/POST、学习进度上报
+// ——上报会在 study_record 上留下学习事实（喂给进度、完成态与「已拥有」判据），所以同样要拦。
+func (s *Service) studentCanReadCourse(courseID, studentID int) error {
+	// 先取行、再判可见性：反过来的话「这门课根本不存在」会先被 CourseVisibleByID 判成
+	// 「不在平台上」，model.ErrCourseNotFound 那一支永远走不到 —— 两件事实名义上分了档、实际不可达
+	// （TestStudentCanReadCoursePicksTheRightFact 第一次跑就照出了这个顺序问题）。
+	var course model.Course
+	if err := s.db.Select("points_price").First(&course, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.ErrCourseNotFound
+		}
+		return err // 查不动不得被读成「不可读」（ADR-0062 票6 同判据）
+	}
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return err // 问不出可见性不得被读成「不在平台上」（ADR-0065 决策 7）
+	}
+	if !visible {
+		return ErrCourseNotVisible
+	}
+	entitled, err := courseEntitled(s.db, courseID, studentID, course.PointsPrice)
+	if err != nil {
+		return err
+	}
+	if !entitled {
+		return ErrCourseLocked
+	}
+	return nil
+}
+
+// GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
+// 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
+func (s *Service) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
+	// 可见性谓词仍 fail-closed（问不出可见性时不把内容交出去），但**把 err 交出去**：
+	// 旧写法把「读不动 courses」演成 404「课程不存在」，Web 的 `.catch(()=>null)` 会把它缓存成
+	// 「这门课没了」——故障被收成空态就再没人报警（ADR-0065 决策 7；档位台账从此声明 500 档）。
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, model.ErrCourseNotFound
+	}
+	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	progress := 0.0
+	lp := LearningPosition{}
+	if studentID > 0 {
+		lp = LoadLearningPosition(s.db, studentID, courseID)
+		progress = lp.Progress
+	}
+	lastStudiedAt := ""
+	if lp.LastStudiedAt != nil {
+		lastStudiedAt = timefmt.FormatISO(*lp.LastStudiedAt)
+	}
+	detail := CourseToDTO(course)
+	// 权益投影只在有主体的读路径填（见 CourseDTO.Entitled 的注释）：
+	// 此前「已解锁」只存在于前端内存（兑换成功后把 points_price 抹成 null），
+	// 刷新即被打回「请先兑换」⇒ 付过分的学员反而进不去。
+	if studentID > 0 {
+		entitled, err := courseEntitled(s.db, course.CourseID, studentID, course.PointsPrice)
+		if err != nil {
+			return nil, err
+		}
+		detail.Entitled = &entitled
+	}
+	fillChapterCount(s.db, course.CourseID, &detail)
+	fillCourseMeta(s.db, course, &detail)
+	return &CourseDetailDTO{
+		CourseInfo:        detail,
+		Chapters:          chapterList,
+		Progress:          progress,
+		IsEnrolled:        lp.RecordID > 0,
+		CompletedChapters: lp.CompletedChapters,
+		LastChapterID:     lp.LastChapterID,
+		LastPosition:      lp.LastPosition,
+		LastStudiedAt:     lastStudiedAt,
+	}, nil
+}
+
+// GetChapterDetail 章节详情（学员端路径回填 study_status）。
+// 可见性：章节可见性跟随所属课程（ADR-0058）——未发布 / 未挂载课程的章节按「不存在」返回，
+// 与搜索的章节分区、以及收藏的写时校验同一谓词。
+func (s *Service) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
+	var chapter model.Chapter
+	if err := fetchRow(s.db.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
+		return nil, err
+	}
+	if chapter.CourseID != courseID {
+		return nil, ErrChapterNotInCourse
+	}
+	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
+		return nil, err
+	}
+	return ChapterDetailShared(s.db, &chapter, true, studentID)
+}
+
+// GetChapterSlides 章节幻灯片。
+// 优先读取 DB 中持久化的 slide_urls；为空则从 PPT 文件下载并触发转图，
+// 转图成功后把 URL 列表回写 chapter.slide_urls。
+// 可见性：与章节详情同一谓词（ADR-0058）——否则幻灯片会成为未发布章节内容的旁路；
+// 付费课程的权益半边同经 studentCanReadCourse（ADR-0062 决策 3）。
+func (s *Service) GetChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
+	var chapter model.Chapter
+	if err := fetchRow(s.db.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
+		return nil, err
+	}
+	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
+		return nil, err
+	}
+
+	// 1. 优先读 DB 持久化的 slide_urls
+	if chapter.SlideUrls != "" {
+		var urls []string
+		if err := json.Unmarshal([]byte(chapter.SlideUrls), &urls); err == nil && len(urls) > 0 {
+			return &ChapterSlidesDTO{ChapterID: chapterID, Slides: urls}, nil
+		}
+	}
+
+	// 2. 查找 PPT 文件 URL
+	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
+	if pptURL == "" {
+		return &ChapterSlidesDTO{ChapterID: chapterID, Slides: []string{}}, nil
+	}
+
+	// 3. 下载 PPT 并转图
+	slideURLs := s.generateSlides(chapterID, pptURL)
+	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
+}
+
+// RegenerateChapterSlides 重新生成幻灯片（学员端 PptViewer 的刷新按钮也在调它 ⇒ 消费者不只是
+// 管理面，正解是同一条可读性判据，不是能力守卫）。旧写法一条判据都没有：任意登录学员按章节 id
+// 即可让服务端下载 PPT + 转图并把 URL 回给自己，等于未发布/未兑换章节正文幻灯片的旁路
+// （同文件 GET 半边早在 ADR-0058 堵过同一个洞）。
+func (s *Service) RegenerateChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
+	var chapter model.Chapter
+	if err := fetchRow(s.db.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
+		return nil, err
+	}
+	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
+		return nil, err
+	}
+	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
+	if pptURL == "" {
+		return nil, errors.New("该章节没有PPT文件")
+	}
+	slideURLs := s.generateSlides(chapterID, pptURL)
+	if len(slideURLs) == 0 {
+		return nil, errors.New("PPT转图失败，请检查文件是否损坏")
+	}
+	return &ChapterSlidesDTO{ChapterID: chapterID, Slides: slideURLs}, nil
+}
+
+// generateSlides 下载 PPT bytes 并调 SlideRenderer 转图，把 URL 列表持久化到 chapter.slide_urls。
+func (s *Service) generateSlides(chapterID int, pptURL string) []string {
+	if s.slideRenderer == nil {
+		return nil
+	}
+	pptBytes, err := downloadFile(pptURL)
+	if err != nil {
+		s.logger.Error("下载 PPT 失败", zap.String("url", pptURL), zap.Error(err))
+		return nil
+	}
+	slideURLs := s.slideRenderer.Render(pptBytes, chapterID)
+	if len(slideURLs) > 0 {
+		slideURLsJSON, _ := json.Marshal(slideURLs)
+		s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
+	}
+	return slideURLs
+}
+
+// resolveChapterPPTURL 查找章节的 PPT 文件 URL（优先 chapter_file 表，其次 chapter.file_url）。
+func resolveChapterPPTURL(db *gorm.DB, chapter *model.Chapter, chapterID int) string {
+	var pptFile model.ChapterFile
+	if err := db.Where("chapter_id = ? AND content_type = ?", chapterID, "ppt").First(&pptFile).Error; err == nil {
+		return pptFile.FileURL
+	}
+	if chapter.ContentType == "ppt" && chapter.FileURL != "" {
+		return chapter.FileURL
+	}
+	return ""
+}
+
+// downloadFile 通过 HTTP GET 下载文件内容（R2 公开访问 URL 可直接下载）。
+func downloadFile(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP GET 失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("下载失败,状态码: %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// UpdateStudyProgress 更新学习进度（按学习时长自动完成章节，无需手动点击"完成"）。
+// 每次上报把 duration（分钟）累加到对应章节记录；当章节累计学习时长达到章节时长
+// （chapter.duration 分钟；未设置时按 1 分钟）自动标记完成（progress=100）。
+// 课程级进度 = 已完成章节数 / 总章节数。
+// ADR-0017：支持秒级时长（DurationSecs 优先）、章节播放位置（VideoPosition）与
+// 显式完成（Completed）；带章节的上报同步刷新课程级记录 last_chapter_id / last_studied_at。
+func (s *Service) UpdateStudyProgress(studentID, courseID int, in StudyProgressInput) (*StudyProgressDTO, error) {
+	// 付费课程未兑换即不得写学习事实（ADR-0062 决策 3 列的第三处：进度写）。
+	// 不拦的话，白看的人照样能攒出进度、完成态与「已报名」判据。
+	if err := s.studentCanReadCourse(courseID, studentID); err != nil {
+		return nil, err
+	}
+	duration := in.Duration
+	if in.DurationSecs > 0 {
+		duration = (in.DurationSecs + 59) / 60
+	}
+	if duration < 0 {
+		duration = 0
+	}
+	chapterID := in.ChapterID
+
+	var totalChapters int64
+	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&totalChapters)
+	if totalChapters == 0 {
+		totalChapters = 1
+	}
+
+	// 1. 课程级记录（chapter_id IS NULL）：承载课程学习时长与课程进度。
+	// 历史数据中不存在 NULL 记录时，从旧主记录（首条任意章节记录）继承时长，避免学习时长丢失。
+	var record model.StudyRecord
+	if err := s.db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
+		Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
+		var legacy model.StudyRecord
+		if e := s.db.Where("student_id = ? AND course_id = ?", studentID, courseID).
+			Order("record_id ASC").Limit(1).Find(&legacy).Error; e == nil && legacy.RecordID > 0 {
+			record.StudyDuration = legacy.StudyDuration
+		}
+		record = model.StudyRecord{
+			StudentID:     studentID,
+			CourseID:      courseID,
+			StudyDuration: record.StudyDuration,
+			Progress:      0,
+			StudyDate:     clock.Now(),
+		}
+		if err := s.db.Create(&record).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	// 2. 章节级记录：累加学习时长，达到阈值自动标记完成；记录播放位置与显式完成。
+	if chapterID > 0 {
+		threshold := 1
+		var chapter model.Chapter
+		if err := s.db.Select("duration").First(&chapter, chapterID).Error; err == nil && chapter.Duration > 0 {
+			threshold = chapter.Duration
+		}
+		var ch model.StudyRecord
+		if e := s.db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).
+			Order("record_id ASC").Limit(1).Find(&ch).Error; e == nil && ch.RecordID > 0 {
+			ch.StudyDuration += duration
+			ch.StudyDate = clock.Now()
+			updates := map[string]any{
+				"study_duration": ch.StudyDuration,
+				"study_date":     ch.StudyDate,
+			}
+			if in.VideoPosition != nil && *in.VideoPosition >= 0 {
+				updates["video_position"] = *in.VideoPosition
+			}
+			if ch.StudyDuration >= threshold || in.Completed {
+				updates["progress"] = 100
+			}
+			if err := s.db.Model(&model.StudyRecord{}).Where("record_id = ?", ch.RecordID).
+				Updates(updates).Error; err != nil {
+				return nil, err
+			}
+		} else {
+			chProgress := 0.0
+			if duration >= threshold || in.Completed {
+				chProgress = 100
+			}
+			videoPosition := 0
+			if in.VideoPosition != nil && *in.VideoPosition > 0 {
+				videoPosition = *in.VideoPosition
+			}
+			newChapter := model.StudyRecord{
+				StudentID:     studentID,
+				CourseID:      courseID,
+				ChapterID:     &chapterID,
+				StudyDuration: duration,
+				Progress:      chProgress,
+				VideoPosition: videoPosition,
+				StudyDate:     clock.Now(),
+			}
+			if err := s.db.Create(&newChapter).Error; err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// 3. 重算课程进度：统计 progress >= 100 的不同章节数。
+	var completedChapters int64
+	s.db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL AND progress >= 100", studentID, courseID).
+		Distinct("chapter_id").Count(&completedChapters)
+
+	// 4. 刷新课程级学习位置（ADR-0017）：带章节的上报即最后学习位置。
+	if chapterID > 0 {
+		record.LastChapterID = &chapterID
+		now := clock.Now()
+		record.LastStudiedAt = &now
+	}
+	record.Progress = coerce.RoundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
+	if err := s.db.Save(&record).Error; err != nil {
+		return nil, err
+	}
+	// 总学习时长 = 课程级历史时长 + 各章节累计时长（避免重复统计）
+	var totalDuration int64
+	s.db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ?", studentID, courseID).
+		Select("COALESCE(SUM(study_duration), 0)").Scan(&totalDuration)
+	return &StudyProgressDTO{
+		RecordID:          record.RecordID,
+		Progress:          record.Progress,
+		StudyDuration:     totalDuration,
+		CompletedChapters: completedChapters,
+	}, nil
+}
+
+// LearningPosition 学员在某课程的学习状态快照（ADR-0017 共享查询，
+// 「我的课程」与课程详情 continue-learning 数据源）。
+type LearningPosition struct {
+	RecordID          int
+	Progress          float64
+	LastChapterID     *int
+	LastPosition      int
+	LastStudiedAt     *time.Time
+	CompletedChapters int64
+}
+
+// LoadLearningPosition 装载学员在某课程的学习状态（课程级记录 + 完成章节数 +
+// 最后章节播放位置）。未学时 RecordID=0；课程级记录缺失时回退任意一条记录
+// （历史数据兼容，与旧课程详情进度读取同语义）。
+func LoadLearningPosition(db *gorm.DB, studentID, courseID int) LearningPosition {
+	var lp LearningPosition
+	var record model.StudyRecord
+	if err := db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
+		Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
+		db.Where("student_id = ? AND course_id = ?", studentID, courseID).
+			Order("record_id ASC").Limit(1).Find(&record)
+	}
+	if record.RecordID == 0 {
+		return lp
+	}
+	lp.RecordID = record.RecordID
+	lp.Progress = record.Progress
+	lp.LastChapterID = record.LastChapterID
+	lp.LastStudiedAt = record.LastStudiedAt
+	db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ? AND chapter_id IS NOT NULL AND progress >= 100", studentID, courseID).
+		Distinct("chapter_id").Count(&lp.CompletedChapters)
+	if record.LastChapterID != nil {
+		var ch model.StudyRecord
+		db.Select("video_position").
+			Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, *record.LastChapterID).
+			Limit(1).Find(&ch)
+		lp.LastPosition = ch.VideoPosition
+	}
+	return lp
+}
+
+// ===== DTO 构造（原 courseToDict/chapterToDict/chapterFileToDict/LegacyFileEntry 折叠入内）=====
+
+func CourseToDTO(c *model.Course) CourseDTO {
+	return CourseDTO{
+		CourseID:              c.CourseID,
+		Name:                  c.Name,
+		Description:           c.Description,
+		CoverImage:            c.CoverImage,
+		Duration:              c.Duration,
+		CredentialID:          c.CredentialID,
+		SpecialtyID:           c.SpecialtyID,
+		LevelID:               c.LevelID,
+		TheoryHours:           c.TheoryHours,
+		PracticeHours:         c.PracticeHours,
+		CertificateTemplateID: c.CertificateTemplateID,
+		SortOrder:             c.SortOrder,
+		Status:                c.Status,
+		IsHot:                 c.IsHot,
+		IsFeatured:            c.IsFeatured,
+		PointsPrice:           c.PointsPrice,
+		CreatedAt:             timefmt.FormatISO(c.CreatedAt),
+	}
+}
+
+// fillChapterCount 填充课程章节数。
+func fillChapterCount(db *gorm.DB, courseID int, dto *CourseDTO) {
+	var count int64
+	db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&count)
+	dto.ChapterCount = &count
+}
+
+// FillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。
+// 无前置课程时填空数组（与旧 map 行为一致：[] 而非 null；omitempty 对空切片也省略，
+// 故用指针区分"未填充"与"空数组"两种状态）。
+func FillPrereqIDs(db *gorm.DB, courseID int, dto *CourseDTO) {
+	var ids []int
+	db.Model(&model.CoursePrerequisite{}).Where("course_id = ?", courseID).
+		Order("prerequisite_course_id ASC").Pluck("prerequisite_course_id", &ids)
+	if ids == nil {
+		ids = []int{}
+	}
+	dto.PrerequisiteCourseIDs = &ids
+}
+
+func ChapterToDTO(c *model.Chapter) ChapterDTO {
+	return ChapterDTO{
+		ChapterID:   c.ChapterID,
+		CourseID:    c.CourseID,
+		Title:       c.Title,
+		Content:     c.Content,
+		ContentType: c.ContentType,
+		FileURL:     c.FileURL,
+		Description: c.Description,
+		Duration:    c.Duration,
+		OrderNum:    c.OrderNum,
+		CreatedAt:   timefmt.FormatISO(c.CreatedAt),
+	}
+}
+
+func ChapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
+	return ChapterFileDTO{
+		FileID:      f.FileID,
+		ChapterID:   f.ChapterID,
+		FileURL:     f.FileURL,
+		FileName:    f.FileName,
+		ContentType: f.ContentType,
+		FileSize:    f.FileSize,
+		CreatedAt:   timefmt.FormatISO(f.CreatedAt),
+	}
+}
+
+func LegacyFileEntry(ch *model.Chapter) ChapterFileDTO {
+	fileName := ""
+	if ch.FileURL != "" {
+		parts := strings.Split(ch.FileURL, "/")
+		fileName = parts[len(parts)-1]
+	}
+	contentType := ch.ContentType
+	if contentType == "" {
+		contentType = "document"
+	}
+	return ChapterFileDTO{
+		FileID:      0,
+		ChapterID:   &ch.ChapterID,
+		FileURL:     ch.FileURL,
+		FileName:    fileName,
+		ContentType: contentType,
+		FileSize:    0,
+		CreatedAt:   timefmt.FormatISO(ch.CreatedAt),
+	}
+}
+
+// ===== 章节详情共享实现（学员端/导师端同源，Ticket #214 C4）=====
+
+// chapterPrevNext 按章节 order_num 顺序计算给定章节的 prev/next 章节 ID。
+// 首章节 prev=0、末章节 next=0（调用方转为 nil 指针）。
+func chapterPrevNext(chapters []model.Chapter, chapterID int) (prevID, nextID int) {
+	for i, ch := range chapters {
+		if ch.ChapterID == chapterID {
+			if i > 0 {
+				prevID = chapters[i-1].ChapterID
+			}
+			if i < len(chapters)-1 {
+				nextID = chapters[i+1].ChapterID
+			}
+			break
+		}
+	}
+	return
+}
+
+// loadChapterFiles 装载单个章节的文件列表（chapter_file 表条目；无条目且 chapter.file_url 非空时
+// 折叠 legacy 兼容条目）。两者两端详情共用。
+func loadChapterFiles(db *gorm.DB, chapter *model.Chapter) []ChapterFileDTO {
+	var files []model.ChapterFile
+	db.Where("chapter_id = ?", chapter.ChapterID).Order("created_at").Find(&files)
+	fileList := make([]ChapterFileDTO, 0, len(files))
+	if len(files) == 0 && chapter.FileURL != "" {
+		fileList = append(fileList, LegacyFileEntry(chapter))
+	} else {
+		for i := range files {
+			fileList = append(fileList, ChapterFileToDTO(&files[i]))
+		}
+	}
+	return fileList
+}
+
+// LoadChapterFilesBulk 批量装载多个章节的文件列表（一次 IN 查询），消除逐章节 N+1。
+// 返回 map[chapterID][]ChapterFileDTO；无文件的章节不在 map 中（legacy 兼容在调用侧合并）。
+func LoadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]ChapterFileDTO {
+	if len(chapters) == 0 {
+		return map[int][]ChapterFileDTO{}
+	}
+	ids := make([]int, 0, len(chapters))
+	for i := range chapters {
+		ids = append(ids, chapters[i].ChapterID)
+	}
+	var files []model.ChapterFile
+	db.Where("chapter_id IN ?", ids).Order("created_at").Find(&files)
+	result := make(map[int][]ChapterFileDTO, len(chapters))
+	for i := range files {
+		if files[i].ChapterID == nil {
+			continue
+		}
+		cid := *files[i].ChapterID
+		result[cid] = append(result[cid], ChapterFileToDTO(&files[i]))
+	}
+	return result
+}
+
+// chapterStudyStatus 计算章节学习状态（仅学员端路径使用；studentID<=0 时返回空串省略）。
+// 无学习记录 → not_started；progress>=100 → completed；其余 → studying。
+func chapterStudyStatus(db *gorm.DB, studentID, courseID, chapterID int) string {
+	if studentID <= 0 {
+		return ""
+	}
+	var record model.StudyRecord
+	// Limit(1).Find() 避免首次访问章节时 GORM 误报 record not found。
+	if err := db.Where("student_id = ? AND course_id = ? AND chapter_id = ?", studentID, courseID, chapterID).
+		Limit(1).Find(&record).Error; err != nil || record.RecordID == 0 {
+		return "not_started"
+	}
+	if record.Progress >= 100 {
+		return "completed"
+	}
+	return "studying"
+}
+
+// ChapterDetailShared 章节详情共享实现：prev/next 计算、文件列表装载 + legacy 兼容、
+// 可选 study_status 回填（fillStudyStatus=true 且 studentID>0 时）。
+// 学员端与导师端详情响应 shape 零漂移；两端唯一差异是学员端回填 study_status。
+func ChapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) (*ChapterDetailDTO, error) {
+	var chapters []model.Chapter
+	db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
+	prevID, nextID := chapterPrevNext(chapters, chapter.ChapterID)
+
+	var prevIDPtr, nextIDPtr *int
+	if prevID != 0 {
+		prevIDPtr = &prevID
+	}
+	if nextID != 0 {
+		nextIDPtr = &nextID
+	}
+
+	d := &ChapterDetailDTO{
+		ChapterDTO:        ChapterToDTO(chapter),
+		Files:             loadChapterFiles(db, chapter),
+		PreviousChapterID: prevIDPtr,
+		NextChapterID:     nextIDPtr,
+	}
+	if fillStudyStatus {
+		d.StudyStatus = chapterStudyStatus(db, studentID, chapter.CourseID, chapter.ChapterID)
+		if studentID > 0 {
+			pos, err := chapterResumePosition(db, studentID, chapter.ChapterID)
+			if err != nil {
+				return nil, err
+			}
+			d.ResumePosition = pos
+		}
+	}
+	return d, nil
+}
+
+// chapterResumePosition 该学员在该章节的最后播放位置（秒）。
+// 查不动即上抛（ADR-0062 票6 同判据）：静默回 0 会被读成「没看过」，等于把人的进度抹掉。
+func chapterResumePosition(db *gorm.DB, studentID, chapterID int) (int, error) {
+	var pos int
+	if err := db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND chapter_id = ?", studentID, chapterID).
+		Select("COALESCE(MAX(video_position), 0)").Scan(&pos).Error; err != nil {
+		return 0, err
+	}
+	return pos, nil
+}
+
+// ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
+
+// applyCourseTrainingFields 应用课程培训扩展字段（目标证件/专业方向/等级/学时/证书模板，typed）。
+// credential_id / specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
+var (
+	// 第 3 族（ADR-0065 决策 3）：applyCourseTrainingFields 里 11 条裸 errors.New 的具名载体。
+	// 「ID 无效」与「不能为负」是本写面独有的输入形状；三条「引用对象不存在」**不自建**，
+	// 复用目录域同一载体（catalog_specs.go:15-17）—— 它们说的是同一行记录，两名即二实现。
+	ErrCourseCredentialIDInvalid    = errors.New("所属证件ID无效")
+	ErrCourseSpecialtyIDInvalid     = errors.New("专业方向ID无效")
+	ErrCourseLevelIDInvalid         = errors.New("课程等级ID无效")
+	ErrCertificateTemplateIDInvalid = errors.New("证书模板ID无效")
+	// ErrCourseCredentialRefNotFound 与题库域的 ErrQuestionCredentialNotFound
+	// （question_service.go:31）逐字同文案，但**有意不合并**：合并会把「题目挂在哪儿」与
+	// 「课程写面引用了谁」耦成一次改动，并连带改那条端点的默认码（ADR-0065 决策 9）。
+	ErrCourseCredentialRefNotFound = errors.New("所属证件不存在")
+	ErrCourseTheoryHoursNegative   = errors.New("理论学时不能为负数")
+	ErrCoursePracticeHoursNegative = errors.New("实操学时不能为负数")
+	ErrCourseSortOrderNegative     = errors.New("课程排序值不能为负数")
+	// 前置课程那一支同属第 3 族（登记时漏了这 3 条）：它们此前靠 Create 的 400 默认面遮着，
+	// 默认面翻成 500 后必须逐条点名，否则就是「修一处塌缩造三处新塌缩」。
+	ErrCoursePrerequisiteSelf     = errors.New("课程不能设置为自己的前置课程")
+	ErrCoursePrerequisiteNotFound = errors.New("前置课程不存在")
+	ErrCoursePrerequisiteCycle    = errors.New("前置课程关系存在循环依赖")
+)
+
+func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInput) error {
+	if in.CredentialID != nil {
+		id := *in.CredentialID
+		if id < 0 {
+			return ErrCourseCredentialIDInvalid
+		}
+		if id == 0 {
+			course.CredentialID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.Credential{}).Where("id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return ErrCourseCredentialRefNotFound
+			}
+			course.CredentialID = coerce.IntPtr(id)
+		}
+	}
+	if in.SpecialtyID != nil {
+		id := *in.SpecialtyID
+		if id < 0 {
+			return ErrCourseSpecialtyIDInvalid
+		}
+		if id == 0 {
+			course.SpecialtyID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.Specialty{}).Where("specialty_id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return model.ErrSpecialtyNotFound
+			}
+			course.SpecialtyID = coerce.IntPtr(id)
+		}
+	}
+	if in.LevelID != nil {
+		id := *in.LevelID
+		if id < 0 {
+			return ErrCourseLevelIDInvalid
+		}
+		if id == 0 {
+			course.LevelID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.CourseLevel{}).Where("level_id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return model.ErrCourseLevelNotFound
+			}
+			course.LevelID = coerce.IntPtr(id)
+		}
+	}
+	if in.CertificateTemplateID != nil {
+		id := *in.CertificateTemplateID
+		if id < 0 {
+			return ErrCertificateTemplateIDInvalid
+		}
+		if id == 0 {
+			course.CertificateTemplateID = nil
+		} else {
+			var count int64
+			if err := db.Model(&model.CertificateTemplate{}).Where("id = ?", id).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return model.ErrCertificateTemplateNotFound
+			}
+			course.CertificateTemplateID = coerce.IntPtr(id)
+		}
+	}
+	if in.TheoryHours != nil {
+		if *in.TheoryHours < 0 {
+			return ErrCourseTheoryHoursNegative
+		}
+		course.TheoryHours = *in.TheoryHours
+	}
+	if in.PracticeHours != nil {
+		if *in.PracticeHours < 0 {
+			return ErrCoursePracticeHoursNegative
+		}
+		course.PracticeHours = *in.PracticeHours
+	}
+	if in.SortOrder != nil {
+		if *in.SortOrder < 0 {
+			return ErrCourseSortOrderNegative
+		}
+		course.SortOrder = *in.SortOrder
+	}
+	if in.IsHot != nil {
+		course.IsHot = *in.IsHot
+	}
+	if in.IsFeatured != nil {
+		course.IsFeatured = *in.IsFeatured
+	}
+	return nil
+}
+
+// replaceCoursePrerequisites 全量替换课程前置课程关联。
+func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) error {
+	prereqIDs = slicesx.Ints(prereqIDs)
+	// 校验前置课程存在且不能指向自己
+	for _, id := range prereqIDs {
+		if id == courseID {
+			return ErrCoursePrerequisiteSelf
+		}
+		var count int64
+		if err := db.Model(&model.Course{}).Where("course_id = ?", id).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return ErrCoursePrerequisiteNotFound
+		}
+	}
+	if err := checkPrerequisiteCycle(db, courseID, prereqIDs); err != nil {
+		return err
+	}
+	if len(prereqIDs) == 0 {
+		return db.Where("course_id = ?", courseID).Delete(&model.CoursePrerequisite{}).Error
+	}
+	rels := make([]model.CoursePrerequisite, 0, len(prereqIDs))
+	for _, id := range prereqIDs {
+		rels = append(rels, model.CoursePrerequisite{
+			CourseID:             courseID,
+			PrerequisiteCourseID: id,
+			CreatedAt:            clock.Now(),
+		})
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("course_id = ?", courseID).Delete(&model.CoursePrerequisite{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&rels).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// checkPrerequisiteCycle 检测前置课程依赖是否成环（A→B→A 等）。
+// 从每个新前置课程出发，沿"它的前置课程"向下游遍历，若能回到 courseID 则成环；
+// visited 防止既有数据中已存在的环导致死循环。
+func checkPrerequisiteCycle(db *gorm.DB, courseID int, prereqIDs []int) error {
+	if len(prereqIDs) == 0 {
+		return nil
+	}
+	visited := make(map[int]bool, len(prereqIDs))
+	stack := make([]int, 0, len(prereqIDs))
+	stack = append(stack, prereqIDs...)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if cur == courseID {
+			return ErrCoursePrerequisiteCycle
+		}
+		if visited[cur] {
+			continue
+		}
+		visited[cur] = true
+		var next []int
+		if err := db.Model(&model.CoursePrerequisite{}).
+			Where("course_id = ?", cur).
+			Pluck("prerequisite_course_id", &next).Error; err != nil {
+			return err
+		}
+		stack = append(stack, next...)
+	}
+	return nil
+}
+
+// fillCourseMeta 填充课程详情的扩展元数据：
+// credential / specialty / level / certificate_template / prerequisites（前置课程列表）。
+func fillCourseMeta(db *gorm.DB, course *model.Course, dto *CourseDTO) {
+	if course.CredentialID != nil {
+		var cred model.Credential
+		if err := db.First(&cred, *course.CredentialID).Error; err == nil {
+			dto.Credential = &CredentialBriefDTO{
+				ID:       cred.ID,
+				Code:     cred.Code,
+				Name:     cred.Name,
+				Category: cred.Category,
+				Level:    cred.Level,
+			}
+		}
+	}
+	if course.SpecialtyID != nil {
+		var spec model.Specialty
+		if err := db.First(&spec, *course.SpecialtyID).Error; err == nil {
+			dto.Specialty = &SpecialtyBriefDTO{
+				SpecialtyID: spec.SpecialtyID,
+				Code:        spec.Code,
+				Name:        spec.Name,
+			}
+		}
+	}
+	if course.LevelID != nil {
+		var level model.CourseLevel
+		if err := db.First(&level, *course.LevelID).Error; err == nil {
+			dto.Level = &LevelBriefDTO{
+				LevelID: level.LevelID,
+				Code:    level.Code,
+				Name:    level.Name,
+			}
+		}
+	}
+	if course.CertificateTemplateID != nil {
+		var tpl model.CertificateTemplate
+		if err := db.First(&tpl, *course.CertificateTemplateID).Error; err == nil {
+			dto.CertificateTemplate = &CertificateTemplateDTO{
+				ID:           tpl.ID,
+				Code:         tpl.Code,
+				Name:         tpl.Name,
+				Description:  tpl.Description,
+				ValidityDays: tpl.ValidityDays,
+				TemplateURL:  tpl.TemplateURL,
+			}
+		}
+	}
+	// 前置课程（仅返回 id/name，避免嵌套过深）
+	type prereqRow struct {
+		CourseID int
+		Name     string
+	}
+	var prereqs []prereqRow
+	db.Table("course_prerequisite AS cp").
+		Select("cp.prerequisite_course_id AS course_id, c.name").
+		Joins("JOIN course AS c ON c.course_id = cp.prerequisite_course_id").
+		Where("cp.course_id = ?", course.CourseID).
+		Order("c.created_at DESC, c.course_id ASC").
+		Scan(&prereqs)
+	prereqList := make([]CourseBriefDTO, 0, len(prereqs))
+	prereqIDList := make([]int, 0, len(prereqs))
+	for _, p := range prereqs {
+		prereqList = append(prereqList, CourseBriefDTO(p))
+		prereqIDList = append(prereqIDList, p.CourseID)
+	}
+	dto.Prerequisites = &prereqList
+	dto.PrerequisiteCourseIDs = &prereqIDList
+}

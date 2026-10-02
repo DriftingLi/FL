@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/auth"
 	mainmodel "forklift-training/internal/model"
 	"forklift-training/internal/security"
-	vmain "forklift-training/internal/service"
 	vservice "forklift-training/internal/valuation/service"
 )
 
@@ -20,7 +20,7 @@ type fakeValuationAuth struct {
 	user *mainmodel.HrwaiUser
 }
 
-func (f *fakeValuationAuth) HrwaiLogin(account, password string) (*vmain.LoginResult, error) {
+func (f *fakeValuationAuth) HrwaiLogin(account, password string) (*auth.LoginResult, error) {
 	return nil, nil
 }
 

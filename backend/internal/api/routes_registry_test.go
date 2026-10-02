@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/config"
+
 	"go.uber.org/zap"
 
 	"forklift-training/internal/testutil"

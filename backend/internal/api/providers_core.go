@@ -5,9 +5,11 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -30,17 +32,17 @@ type coreSingletons struct {
 	sess    *security.Session
 	forumCn service.ForumCounter
 
-	authSvc       *service.AuthService
-	codeSvc       *service.VerifyCodeService
+	authSvc       *auth.Service
+	codeSvc       *auth.VerifyCodeService
 	captchaSvc    *captcha.Service
-	emailCh       service.CodeChannel
-	phoneCh       service.CodeChannel
+	emailCh       auth.CodeChannel
+	phoneCh       auth.CodeChannel
 	mailSender    service.MailSender
-	wechatAuthSvc *service.WechatAuthService
+	wechatAuthSvc *auth.WechatService
 	fileSvc       *filestore.FileStore
-	slideRenderer *service.SlideRenderer
+	slideRenderer *course.SlideRenderer
 	notifSvc      *notification.Service
-	reviewSvc     *service.ProfileReviewService
+	reviewSvc     *auth.ProfileReviewService
 	aiConfigSvc   *aiassistant.ConfigService
 	pointsSvc     *points.Service
 	aiModelPort   aiassistant.ModelPort
@@ -59,19 +61,19 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	c.sess = security.SessionFromConfig(cfg)
 	// 论坛计数器唯一实例：ForumService / ForumModerationService 与 AuthService 共享（计数列唯一写入口，spec #297）
 	c.forumCn = service.NewForumCounter()
-	c.authSvc = service.NewAuthService(db, c.sess, c.forumCn,
+	c.authSvc = auth.NewService(db, c.sess, c.forumCn,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
-	c.codeSvc = service.NewVerifyCodeService(db, c.authSvc, cfg.EmailCodeTTL, &service.RedisAuthCodeStore{}, logger)
+	c.codeSvc = auth.NewVerifyCodeService(db, c.authSvc, cfg.EmailCodeTTL, &auth.RedisAuthCodeStore{}, logger)
 	c.captchaSvc = captcha.NewService(captcha.RedisStore{})
-	c.emailCh = service.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
+	c.emailCh = auth.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
 	// 邮件发送器单点（spec #449 决定 15）：联系方式交换与投递通知共用，不再注入 nil 只写日志。
 	c.mailSender = service.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
-	c.phoneCh = service.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
-	c.wechatAuthSvc = service.NewWechatAuthService(cfg.Wechat.MiniProgram, db, c.authSvc, logger)
+	c.phoneCh = auth.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
+	c.wechatAuthSvc = auth.NewWechatService(cfg.Wechat.MiniProgram, db, c.authSvc, logger)
 	c.fileSvc = filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
-	c.slideRenderer = service.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
+	c.slideRenderer = course.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
 	c.notifSvc = notification.NewService(db, logger)
-	c.reviewSvc = service.NewProfileReviewService(db, c.notifSvc, st, logger)
+	c.reviewSvc = auth.NewProfileReviewService(db, c.notifSvc, st, logger)
 	c.authSvc.SetProfileReviewService(c.reviewSvc)
 	c.aiConfigSvc = aiassistant.NewConfigService(db, cfg.SecretKey, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用

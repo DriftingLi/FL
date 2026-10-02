@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/timefmt"
@@ -149,7 +150,7 @@ func (s *AdminService) CreateHrwaiUser(phone, password, account, username, email
 		}
 	} else {
 		var err error
-		account, err = generateRandomAccount()
+		account, err = GenerateRandomAccount()
 		if err != nil {
 			return nil, errors.New("注册失败，请稍后再试")
 		}
@@ -437,7 +438,7 @@ func (s *AdminService) queryStatistics() *AdminStatisticsDTO {
 			Name:          r.Name,
 			StudyCount:    r.StudyCount,
 			TotalDuration: r.TotalDuration,
-			AvgProgress:   roundFloat2(r.AvgProgress),
+			AvgProgress:   coerce.RoundFloat2(r.AvgProgress),
 		})
 	}
 
