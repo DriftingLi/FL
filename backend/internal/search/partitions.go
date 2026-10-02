@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：全局搜索分区声明（ADR-0050 决策 2）——course / chapter / question / content / topic
 // 五个分区的六槽位半描述符。引擎骨架在 search_service.go（searchPartitionPage）：
 // count → 命中排序（标题命中优先 + 分区二级键）→ 分页 scan → DTO 装配。
@@ -9,7 +8,7 @@
 //
 // 加一个分区 = 写一份 partitionSpec + 在 searchPartitions 登记一行；分发（查表）与聚合
 // （遍历声明表）自动跟上，「switch / DTO / 方法体 / handler 四处同步」的手拼面被关闭。
-package service
+package search
 
 import (
 	"gorm.io/gorm"
@@ -18,6 +17,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
+	"forklift-training/internal/textx"
 )
 
 // partitionSpec 分区声明（泛型行类型 R）：六个语义槽位 + 两个机械槽位（scan 列 / 标题命中判据）。
@@ -26,13 +26,13 @@ type partitionSpec[R any] struct {
 	key string
 
 	// 槽位②：匹配面（WHERE 形状，含 gorm Model 与 LIKE 匹配列）。
-	match func(s *SearchService, p searchParams) *gorm.DB
+	match func(s *Service, p searchParams) *gorm.DB
 	// 槽位③：可见性 scope 谓词。ADR-0050 决策 1 的具名 scope 在这里接入
 	// （course.MountedCourseScope / questionbank.QuestionPoolScope）；nil = 该分区无额外可见性谓词。
-	scope func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB
+	scope func(s *Service, q *gorm.DB, p searchParams) *gorm.DB
 
 	// 槽位④：hit 函数——命中位置与片段（hitOf / hitOfTopic）。
-	hit func(s *SearchService, r *R, p searchParams) (string, string)
+	hit func(s *Service, r *R, p searchParams) (string, string)
 	// 槽位⑤：二级排序键——按内容性质分派（常青内容用编辑信号，时效内容用活跃度）。
 	secondary string
 	// 槽位⑥：DTO 装配函数。
@@ -53,11 +53,11 @@ const (
 
 var coursePartition = partitionSpec[model.Course]{
 	key: SearchTypeCourse,
-	match: func(s *SearchService, p searchParams) *gorm.DB {
+	match: func(s *Service, p searchParams) *gorm.DB {
 		return s.db.Model(&model.Course{}).
 			Where("("+searchCourseTitleHit+" OR "+searchCourseBodyHit+")", p.like, p.like)
 	},
-	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
+	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
 		// 挂载不变式（ADR-0006 / ADR-0050 决策 1）叠加已发布；证件分区由读面给定。
 		q = course.MountedCourseScope(q.Where("status = 1"))
 		return scope.EntityOwnedBy(q, "credential_id", p.cred)
@@ -65,13 +65,13 @@ var coursePartition = partitionSpec[model.Course]{
 	selects:   "course_id, name, cover_image, description",
 	titleHit:  searchCourseTitleHit,
 	secondary: "sort_order ASC, is_hot DESC, is_featured DESC, course_id ASC",
-	hit: func(s *SearchService, r *model.Course, p searchParams) (string, string) {
+	hit: func(s *Service, r *model.Course, p searchParams) (string, string) {
 		return hitOf(r.Name, r.Description, p.keyword)
 	},
 	assemble: func(r model.Course, hitField, snippet string) SearchItemDTO {
 		return SearchItemDTO{
 			Type: SearchTypeCourse, ID: int64(r.CourseID), Title: r.Name, Cover: r.CoverImage,
-			Summary: snippetOf(r.Description, 80), Snippet: snippet, HitField: hitField,
+			Summary: textx.Snippet(r.Description, 80), Snippet: snippet, HitField: hitField,
 		}
 	},
 }
@@ -86,11 +86,11 @@ const (
 
 var chapterPartition = partitionSpec[model.Chapter]{
 	key: SearchTypeChapter,
-	match: func(s *SearchService, p searchParams) *gorm.DB {
+	match: func(s *Service, p searchParams) *gorm.DB {
 		return s.db.Model(&model.Chapter{}).
 			Where("("+searchChapterTitleHit+" OR "+searchChapterContentHit+" OR "+searchChapterDescHit+")", p.like, p.like, p.like)
 	},
-	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
+	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
 		// 章节可见性跟随课程：同一挂载不变式 scope（不是手拼谓词）。
 		mounted := course.MountedCourseScope(s.db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
 		mounted = scope.EntityOwnedBy(mounted, "credential_id", p.cred)
@@ -99,7 +99,7 @@ var chapterPartition = partitionSpec[model.Chapter]{
 	selects:   "chapter_id, course_id, title, content, description",
 	titleHit:  searchChapterTitleHit,
 	secondary: "order_num ASC, chapter_id ASC",
-	hit: func(s *SearchService, r *model.Chapter, p searchParams) (string, string) {
+	hit: func(s *Service, r *model.Chapter, p searchParams) (string, string) {
 		body := r.Content
 		if body == "" {
 			body = r.Description
@@ -120,7 +120,7 @@ var chapterPartition = partitionSpec[model.Chapter]{
 		}
 		return SearchItemDTO{
 			Type: SearchTypeChapter, ID: int64(r.ChapterID), ParentID: int64(r.CourseID),
-			Title: r.Title, Summary: snippetOf(body, 80), Snippet: snippet, HitField: hitField,
+			Title: r.Title, Summary: textx.Snippet(body, 80), Snippet: snippet, HitField: hitField,
 		}
 	},
 }
@@ -131,10 +131,10 @@ const searchQuestionContentHit = "LOWER(content) LIKE ? ESCAPE '\\'"
 
 var questionPartition = partitionSpec[model.Question]{
 	key: SearchTypeQuestion,
-	match: func(s *SearchService, p searchParams) *gorm.DB {
+	match: func(s *Service, p searchParams) *gorm.DB {
 		return s.db.Model(&model.Question{}).Where(searchQuestionContentHit, p.like)
 	},
-	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
+	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
 		// 题库池口径单点（published + 排源标记真题题 + 当前证件），ADR-0050 决策 1。
 		return questionbank.QuestionPoolScope(q, p.cred)
 	},
@@ -142,11 +142,11 @@ var questionPartition = partitionSpec[model.Question]{
 	// 无标题面：题目以题干为标题，命中判据就是题干本身 → 一级排序恒同，直接按 id 倒序。
 	titleHit:  "",
 	secondary: "id DESC",
-	hit: func(s *SearchService, r *model.Question, p searchParams) (string, string) {
+	hit: func(s *Service, r *model.Question, p searchParams) (string, string) {
 		return hitOf("", r.Content, p.keyword)
 	},
 	assemble: func(r model.Question, hitField, snippet string) SearchItemDTO {
-		summary := snippetOf(r.Content, 50)
+		summary := textx.Snippet(r.Content, 50)
 		return SearchItemDTO{
 			Type: SearchTypeQuestion, ID: int64(r.ID),
 			Title: summary, Summary: summary, Snippet: snippet, HitField: hitField,
@@ -164,17 +164,17 @@ const (
 
 var contentPartition = partitionSpec[model.FeaturedContent]{
 	key: SearchTypeContent,
-	match: func(s *SearchService, p searchParams) *gorm.DB {
+	match: func(s *Service, p searchParams) *gorm.DB {
 		return s.db.Model(&model.FeaturedContent{}).
 			Where("("+searchContentTitleHit+" OR "+searchContentSummaryHit+" OR "+searchContentBodyHit+")", p.like, p.like, p.like)
 	},
-	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
+	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
 		return q.Where("status = 1")
 	},
 	selects:   "content_id, title, cover_image, summary, content",
 	titleHit:  searchContentTitleHit,
 	secondary: "COALESCE(published_at, created_at) DESC, content_id DESC",
-	hit: func(s *SearchService, r *model.FeaturedContent, p searchParams) (string, string) {
+	hit: func(s *Service, r *model.FeaturedContent, p searchParams) (string, string) {
 		body := r.Content
 		if body == "" {
 			body = r.Summary
@@ -191,7 +191,7 @@ var contentPartition = partitionSpec[model.FeaturedContent]{
 	assemble: func(r model.FeaturedContent, hitField, snippet string) SearchItemDTO {
 		return SearchItemDTO{
 			Type: SearchTypeContent, ID: int64(r.ContentID), Title: r.Title, Cover: r.CoverImage,
-			Summary: snippetOf(r.Summary, 80), Snippet: snippet, HitField: hitField,
+			Summary: textx.Snippet(r.Summary, 80), Snippet: snippet, HitField: hitField,
 		}
 	},
 }
@@ -207,7 +207,7 @@ const (
 
 var topicPartition = partitionSpec[model.ForumTopic]{
 	key: SearchTypeTopic,
-	match: func(s *SearchService, p searchParams) *gorm.DB {
+	match: func(s *Service, p searchParams) *gorm.DB {
 		return s.db.Model(&model.ForumTopic{}).
 			Where("("+searchTopicTitleHit+" OR "+searchTopicBodyHit+" OR "+searchTopicReplyHit+")", p.like, p.like, p.like)
 	},
@@ -216,7 +216,7 @@ var topicPartition = partitionSpec[model.ForumTopic]{
 	titleHit: searchTopicTitleHit,
 	secondary: "is_featured DESC, CASE WHEN accepted_reply_id IS NOT NULL THEN 0 ELSE 1 END, " +
 		"COALESCE(last_reply_at, created_at) DESC, id DESC",
-	hit: func(s *SearchService, r *model.ForumTopic, p searchParams) (string, string) {
+	hit: func(s *Service, r *model.ForumTopic, p searchParams) (string, string) {
 		// 命中在回复时必须能标注 reply 并给出回复片段：标题与正文都未命中时回查首条命中回复。
 		reply := ""
 		if !containsFold(r.Title, p.keyword) && !containsFold(r.Content, p.keyword) {
@@ -232,7 +232,7 @@ var topicPartition = partitionSpec[model.ForumTopic]{
 	assemble: func(r model.ForumTopic, hitField, snippet string) SearchItemDTO {
 		return SearchItemDTO{
 			Type: SearchTypeTopic, ID: r.ID, Title: r.Title,
-			Summary: snippetOf(r.Content, 80), Snippet: snippet, HitField: hitField,
+			Summary: textx.Snippet(r.Content, 80), Snippet: snippet, HitField: hitField,
 		}
 	},
 }

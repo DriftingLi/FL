@@ -1,5 +1,5 @@
 // Package service 搜索读路径的题库池 scope 测试（3c-1 接缝拆分的 service 一侧）。
-package service
+package search
 
 import (
 	"testing"
@@ -13,10 +13,10 @@ import (
 // TestQuestionSearchScopeCoversPool 搜索题目分区 = 题库池口径（ADR-0050 决策 1）：
 // 只有池内题命中，命中数与返回条目一致——draft 与来源标记真题题在任何入口都不可见。
 // 3c-1 接缝拆分：原用例（questionbank/pool_test.go 的池三元组扩展）跨了「标签计数」（域内可测）
-// 与「搜索分区」（要 SearchService，留在本包）两条读路径，按接缝一分为二，夹具各带一份。
+// 与「搜索分区」（要 Service，留在本包）两条读路径，按接缝一分为二，夹具各带一份。
 func TestQuestionSearchScopeCoversPool(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	searchSvc := NewSearchService(db, zap.NewNop())
+	searchSvc := NewService(db, zap.NewNop())
 
 	cred := &model.Credential{Code: "forklift_n1", Name: "N1证"}
 	if err := db.Create(cred).Error; err != nil {

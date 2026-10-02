@@ -252,9 +252,9 @@ var Domains = []Domain{
 		Name:  "favorite",
 		Title: "收藏（/api/favorites/*：多态收藏列表 / 收藏 / 取消 / 状态查询，ADR-0018）",
 		Roots: []string{
-			"service.FavoritePageResult",
-			"service.FavoriteDTO",
-			"service.FavoriteCheckDTO",
+			"favorite.FavoritePageResult",
+			"favorite.FavoriteDTO",
+			"favorite.FavoriteCheckDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/favorites"},
@@ -497,10 +497,10 @@ var Domains = []Domain{
 		Name:  "search",
 		Title: "全局搜索（/api/search：type 缺省为分区聚合，指定 type 为分页结果）",
 		Roots: []string{
-			"service.SearchAllDTO",
-			"service.SearchPageDTO",
+			"search.SearchAllDTO",
+			"search.SearchPageDTO",
 			// #982 / ADR-0049 决策 7：零结果词（运营面）。端点指认了它，故必须进覆盖类型。
-			"service.ZeroResultKeywordDTO",
+			"search.ZeroResultKeywordDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/search"},
@@ -561,11 +561,11 @@ var Domains = []Domain{
 		Name:  "student",
 		Title: "学员学习中心（/api/student/*：档案 / 学习记录 / 按天统计 / 我的课程）",
 		Roots: []string{
-			"service.StudentCourseDetailDTO",
-			"service.StudentCoursesDTO",
-			"service.StudentProfileDTO",
-			"service.StudyDailyStatsDTO",
-			"service.StudyRecordPageResult",
+			"student.StudentCourseDetailDTO",
+			"student.StudentCoursesDTO",
+			"student.StudentProfileDTO",
+			"student.StudyDailyStatsDTO",
+			"student.StudyRecordPageResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/student/profile"},

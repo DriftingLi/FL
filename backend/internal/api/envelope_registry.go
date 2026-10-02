@@ -23,6 +23,7 @@ import (
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/course"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
@@ -32,7 +33,9 @@ import (
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/search"
 	"forklift-training/internal/service"
+	"forklift-training/internal/student"
 	vmodel "forklift-training/internal/valuation/model"
 	"forklift-training/pkg/paging"
 )
@@ -93,9 +96,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "aiassistant.DiagnosisFaultCodePage", Endpoints: []string{"GET /ai-assistant/diagnosis/fault-codes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
 		Sample: aiassistant.DiagnosisFaultCodePage{}},
-	{Result: "service.FavoritePageResult", Endpoints: []string{"GET /favorites"},
+	{Result: "favorite.FavoritePageResult", Endpoints: []string{"GET /favorites"},
 		Keys: []string{"page", "pages", "total", "favorites"}, Dialect: paging.DialectPages,
-		Sample: service.FavoritePageResult{}},
+		Sample: favorite.FavoritePageResult{}},
 	{Result: "featured.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents", "GET /admin/featured-contents"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: featured.FeaturedContentPageResult{}},
@@ -158,12 +161,12 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: service.ReportListResult{}},
-	{Result: "service.SearchPageDTO", Endpoints: []string{"GET /search"},
+	{Result: "search.SearchPageDTO", Endpoints: []string{"GET /search"},
 		Keys: []string{"keyword", "type", "total", "page", "pages", "items"}, Dialect: paging.DialectPages,
-		Sample: service.SearchPageDTO{}},
-	{Result: "service.StudyRecordPageResult", Endpoints: []string{"GET /student/records"},
+		Sample: search.SearchPageDTO{}},
+	{Result: "student.StudyRecordPageResult", Endpoints: []string{"GET /student/records"},
 		Keys: []string{"page", "pages", "records", "total"}, Dialect: paging.DialectPages,
-		Sample: service.StudyRecordPageResult{}},
+		Sample: student.StudyRecordPageResult{}},
 	{Result: "service.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
 		Keys: []string{"total", "page", "tutors"}, Dialect: paging.DialectNone,
 		Sample: service.TutorListDTO{}},
@@ -180,7 +183,7 @@ var totalPayloadRegistry = []PayloadSpec{
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
 	{Result: "practicemode.PracticeStartResultDTO",
 		Reason: "练习会话载荷：questions 是本次会话题集、total/completed 是会话进度，不是列表页"},
-	{Result: "service.SearchSectionDTO",
+	{Result: "search.SearchSectionDTO",
 		Reason: "搜索分区片段：由 SearchPageDTO 信封承载，分区自身不分页（无 page 元数据、无独立端点）"},
 }
 

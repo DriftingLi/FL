@@ -2,7 +2,7 @@
 // 本文件：按天统计序列的单一组装实现（BuildDailySeries），学员学习统计与导师阅卷统计共用。
 // 把 days 钳制（7/30）、startOfDay 归零、起点、补 0 序列、activeDays 计数、total 累加全藏进 implementation，
 // 调用方只保留各自 SQL 聚合出的 day→count map（ADR-0013 候选 5）。
-package service
+package student
 
 import (
 	"time"

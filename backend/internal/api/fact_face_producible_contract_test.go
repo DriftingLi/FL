@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
@@ -85,13 +86,13 @@ func TestFavoriteErrStatusFacesAreProducible(t *testing.T) {
 		t.Fatalf("播种精选失败: %v", err)
 	}
 
-	assertFacesAgainstTable(t, f, "favoriteErrStatus", favoriteErrStatus, []factFace{
-		{service.ErrFavTargetCourseRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "course", "target_id": off.CourseID}, "课程不存在或不可收藏"},
-		{service.ErrFavTargetChapterRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "chapter", "target_id": offCh.ChapterID}, "章节不存在或不可收藏"},
-		{service.ErrFavTargetQuestionRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "question", "target_id": 999999}, "题目不存在或不可收藏"},
-		{service.ErrFavTargetFeaturedRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "featured", "target_id": draftFeat.ContentID}, "内容不存在或不可收藏"},
-		{service.ErrFavTargetTopicNotFound, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "topic", "target_id": 999999}, "帖子不存在"},
-		{service.ErrFavTargetTypeUnsupported, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "nope", "target_id": 1}, "收藏类型仅支持"},
+	assertFacesAgainstTable(t, f, "favorite.ErrStatus", favorite.ErrStatus, []factFace{
+		{favorite.ErrFavTargetCourseRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "course", "target_id": off.CourseID}, "课程不存在或不可收藏"},
+		{favorite.ErrFavTargetChapterRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "chapter", "target_id": offCh.ChapterID}, "章节不存在或不可收藏"},
+		{favorite.ErrFavTargetQuestionRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "question", "target_id": 999999}, "题目不存在或不可收藏"},
+		{favorite.ErrFavTargetFeaturedRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "featured", "target_id": draftFeat.ContentID}, "内容不存在或不可收藏"},
+		{favorite.ErrFavTargetTopicNotFound, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "topic", "target_id": 999999}, "帖子不存在"},
+		{favorite.ErrFavTargetTypeUnsupported, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "nope", "target_id": 1}, "收藏类型仅支持"},
 	})
 }
 

@@ -1,4 +1,4 @@
-package service
+package search
 
 import (
 	"strings"
@@ -12,7 +12,7 @@ import (
 // 这三条用例按「用户输入什么就搜什么」断言，与实现无关（不校验 SQL 形状）。
 func TestSearchKeywordWildcardsAreLiteral(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	spID, lvID := 1, 1
 	mk := func(name string) {
 		c := model.Course{Name: name, Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
@@ -56,7 +56,7 @@ func TestSearchKeywordWildcardsAreLiteral(t *testing.T) {
 // #980：关键词长度上限（超长拒绝，边界内放行）。
 func TestSearchKeywordLengthCap(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 
 	if _, err := svc.Search(strings.Repeat("液", maxSearchKeywordLen), SearchTypeCourse, 1, 20, nil); err != nil {
 		t.Fatalf("恰好 %d 字符应放行, got %v", maxSearchKeywordLen, err)

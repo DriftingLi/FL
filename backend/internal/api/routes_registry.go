@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/course"
 	"forklift-training/internal/faq"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
@@ -19,6 +20,8 @@ import (
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/realexam"
+	"forklift-training/internal/search"
+	"forklift-training/internal/student"
 	"forklift-training/internal/training"
 )
 
@@ -54,7 +57,7 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "培训工作区",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			course.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.CourseSvc)
-			RegisterStudentRoutes(api, rd, deps.StudentSvc)
+			student.RegisterRoutes(api, rd.Session, deps.StudentSvc)
 			questionbank.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 			practicemode.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.PracticeModeSvc)
 		},
@@ -127,9 +130,9 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "个人与检索",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			// 移动端 P1 通用能力（ADR-0018）：通用收藏 / 全局搜索 / 学习资料聚合
-			RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
-			RegisterSearchRoutes(api, rd, deps.SearchSvc)
-			RegisterSearchAdminRoutes(api, rd, deps.SearchSvc)
+			favorite.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.FavoriteSvc)
+			search.RegisterRoutes(api, rd.CredentialScope, deps.SearchSvc)
+			search.RegisterAdminRoutes(api, rd.Session, deps.SearchSvc)
 			material.RegisterRoutes(api, rd.Session, deps.MaterialSvc)
 			// 学员笔记（ADR-0055）：题目笔记 + 独立笔记的汇集读面与独立笔记 CRUD
 			RegisterNoteRoutes(api, rd, deps.NoteSvc)

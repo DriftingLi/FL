@@ -1,5 +1,5 @@
 // Package service 学员信息与学习记录。
-package service
+package student
 
 import (
 	"errors"
@@ -16,16 +16,16 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// StudentService 学员服务。
-type StudentService struct {
+// Service 学员服务。
+type Service struct {
 	db *gorm.DB
 
 	logger *zap.Logger
 }
 
-// NewStudentService 创建学员服务实例。
-func NewStudentService(db *gorm.DB, logger *zap.Logger) *StudentService {
-	return &StudentService{db: db, logger: logger}
+// NewService 创建学员服务实例。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // ===== DTO（JSON 契约与 B8 前的 map key 逐字一致，前端零改动约束）=====
@@ -100,12 +100,12 @@ type StudyRecordDTO struct {
 var ErrStudentNotFound = errors.New("学员不存在")
 
 // GetProfile 学员档案。
-func (s *StudentService) GetProfile(studentID int) (*StudentProfileDTO, error) {
+func (s *Service) GetProfile(studentID int) (*StudentProfileDTO, error) {
 	return s.queryProfile(studentID)
 }
 
 // queryProfile 执行实际的学员档案查询。
-func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error) {
+func (s *Service) queryProfile(studentID int) (*StudentProfileDTO, error) {
 	var student model.HrwaiUser
 	if err := s.db.First(&student, studentID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -201,12 +201,12 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 
 // GetStudyStats 学习统计（按天分组），用于学员仪表盘图表。
 // days 仅允许 7 或 30，其他值统一回退为 7。
-func (s *StudentService) GetStudyStats(studentID, days int) *StudyDailyStatsDTO {
+func (s *Service) GetStudyStats(studentID, days int) *StudyDailyStatsDTO {
 	return s.queryStudyStats(studentID, days)
 }
 
 // queryStudyStats 执行实际的学习统计查询。
-func (s *StudentService) queryStudyStats(studentID, days int) *StudyDailyStatsDTO {
+func (s *Service) queryStudyStats(studentID, days int) *StudyDailyStatsDTO {
 	// 按天聚合学习时长（study_date 为 timestamp without time zone，按存储值即北京时间分组）
 	// 起点由 BuildDailySeries 内部的 days 钳制 + startOfDay 归零 + 起点统一计算，此处仅 SQL 聚合出 day→分钟 map。
 	start := dailySeriesStart(days)
@@ -246,7 +246,7 @@ type StudyRecordPageResult struct {
 }
 
 // GetRecords 学习记录列表。
-func (s *StudentService) GetRecords(studentID, page, pageSize int, startDate, endDate string) (StudyRecordPageResult, error) {
+func (s *Service) GetRecords(studentID, page, pageSize int, startDate, endDate string) (StudyRecordPageResult, error) {
 	records, total, page, pageSize, err := paging.Query[model.StudyRecord](s.db, page, pageSize, 10, "study_date DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
 		if startDate != "" {
@@ -370,7 +370,7 @@ type StudentCourseDetailDTO struct {
 // GetStudentCourses 我的课程列表（按最后学习时间倒序）+ 继续学习 top1。
 // 课程级记录驱动（chapter_id IS NULL 一行一课程），课程元信息/章节计数/完成计数/
 // 最后章节标题与播放位置全部 batch 回填（batch_backfill 模式，无逐课程 N+1）。
-func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, error) {
+func (s *Service) GetStudentCourses(studentID int) (*StudentCoursesDTO, error) {
 	type courseRow struct {
 		CourseID      int        `gorm:"column:course_id"`
 		Progress      float64    `gorm:"column:progress"`
@@ -504,7 +504,7 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 
 // GetStudentCourseDetail 单课程学习详情（含每章进度/播放位置/完成状态）。
 // 共享 course.LoadLearningPosition（课程详情增强同一数据源）。
-func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
+func (s *Service) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
 	// 局部变量不叫 course：包名 course 已被课程域包占用（P2 波 3b-1），同名会遮蔽它。
 	var c model.Course
 	if err := s.db.First(&c, courseID).Error; err != nil {

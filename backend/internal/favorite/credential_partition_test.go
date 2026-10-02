@@ -1,4 +1,4 @@
-package service
+package favorite
 
 import (
 	"testing"
@@ -35,7 +35,7 @@ func TestFavoriteTargetSubqueryShape(t *testing.T) {
 // 收敛前这条路径是内联子查询字面量，收敛后由谓词片段拼装——本用例是它的行级证据。
 func TestFavoriteListEntityOwnedByCredential(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewFavoriteService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	credA, credB := 21, 22
 	courseA := model.Course{Name: "课程A", CredentialID: &credA, CreatedAt: testutil.Now()}

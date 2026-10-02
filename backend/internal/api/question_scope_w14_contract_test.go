@@ -16,6 +16,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"forklift-training/internal/favorite"
 	"net/http"
 	"strings"
 	"testing"
@@ -114,7 +115,7 @@ func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	RegisterNoteRoutes(api, deps.RouterDeps(), deps.NoteSvc)
 	RegisterQuestionInteractionRoutes(api, deps.RouterDeps(), deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
-	RegisterFavoriteRoutes(api, deps.RouterDeps(), deps.FavoriteSvc)
+	favorite.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.FavoriteSvc)
 	f.r = r
 	return f
 }

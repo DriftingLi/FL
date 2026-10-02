@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/student"
 	"forklift-training/pkg/paging"
 )
 
@@ -258,7 +259,7 @@ func (s *ContactService) Create(recruiterID, studentUserID int, message string) 
 	var stu model.HrwaiUser
 	if err := s.db.First(&stu, studentUserID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrStudentNotFound
+			return nil, student.ErrStudentNotFound
 		}
 		return nil, err
 	}

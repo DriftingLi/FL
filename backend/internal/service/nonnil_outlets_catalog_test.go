@@ -67,12 +67,6 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	"questionbank.QuestionBankStatsDTO.by_type":   outletQuestionBankStatsEmpty,
 	"questionbank.QuestionBankStatsDTO.by_status": outletQuestionBankStatsEmpty,
 	"service.WrongQuestionStatsDTO.by_type":       outletWrongQuestionStatsEmpty,
-
-	"service.StudentCoursesDTO.courses":       outletStudentCoursesEmpty,
-	"service.StudentCourseDetailDTO.chapters": outletStudentCourseDetailNoChapters,
-	"service.StudyRecordPageResult.records":   outletStudyRecordsEmpty,
-	"service.StudyDailyStatsDTO.labels":       outletStudyDailyStats,
-	"service.StudyDailyStatsDTO.data":         outletStudyDailyStats,
 }
 
 func init() {
@@ -103,46 +97,6 @@ func outletWrongQuestionStatsEmpty(t *testing.T) any {
 	return NewWrongQuestionService(db, nil, zap.NewNop()).GetStats(student.ID)
 }
 
-// ===== 学员侧四格 =====
-
-func outletStudentCoursesEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "我的课程学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetStudentCourses(student.ID)
-	if err != nil {
-		t.Fatalf("我的课程列表失败: %v", err)
-	}
-	return res
-}
-
-func outletStudentCourseDetailNoChapters(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "课程详情学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetStudentCourseDetail(student.ID, seedVisibleCourse(t, db))
-	if err != nil {
-		t.Fatalf("单课程学习详情失败: %v", err)
-	}
-	return res
-}
-
-func outletStudyRecordsEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "学习记录学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetRecords(student.ID, 1, 20, "", "")
-	if err != nil {
-		t.Fatalf("学习记录分页失败: %v", err)
-	}
-	return res
-}
-
-// outletStudyDailyStats 按天学习统计：BuildDailySeries 恒补齐 7 或 30 格 ⇒ labels 与 data
-// 都是**非空**数组（`[]` 这一形状在这条线上根本发不出，判据要的是「不是 null」）。
-func outletStudyDailyStats(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "日统计学员", "x")
-	return NewStudentService(db, zap.NewNop()).GetStudyStats(student.ID, 7)
-}
+// 学员侧四格（StudentCoursesDTO.courses / StudentCourseDetailDTO.chapters / StudyRecordPageResult.records /
+// StudyDailyStatsDTO.labels / StudyDailyStatsDTO.data / StudentProfileDTO.course_progress）
+// 已随域包搬去 internal/student/nonnil_outlets_test.go（ADR-0070 波 4b）。

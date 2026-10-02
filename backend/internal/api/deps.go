@@ -17,6 +17,7 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/forum"
@@ -29,9 +30,11 @@ import (
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/realexam"
+	"forklift-training/internal/search"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/student"
 	"forklift-training/internal/training"
 )
 
@@ -79,11 +82,11 @@ type Deps struct {
 	CheckInSvc           *checkin.Service
 	ForumImageSvc        *forum.ImageService
 	FeaturedSvc          *featured.Service
-	FavoriteSvc          *service.FavoriteService
-	SearchSvc            *service.SearchService
+	FavoriteSvc          *favorite.Service
+	SearchSvc            *search.Service
 	MaterialSvc          *material.Service
 	ExportSvc            *service.ExportService
-	StudentSvc           *service.StudentService
+	StudentSvc           *student.Service
 	QuestionBankSvc      *questionbank.Service
 	PracticeModeSvc      *practicemode.Service
 	MockExamSvc          *mockexam.Service

@@ -1,13 +1,12 @@
 // Package service 实现业务服务层。
 // 本文件：通用收藏（ADR-0018）—— target_type + target_id 多态收藏，
 // 覆盖 course/chapter/question/featured/topic；user+type+id 唯一约束保证幂等。
-package service
+package favorite
 
 import (
 	"errors"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -17,6 +16,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
+	"forklift-training/internal/textx"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -31,15 +31,15 @@ const (
 	FavoriteTargetTopic    = "topic"
 )
 
-// FavoriteService 通用收藏服务。
-type FavoriteService struct {
+// Service 通用收藏服务。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-// NewFavoriteService 构造通用收藏服务。
-func NewFavoriteService(db *gorm.DB, logger *zap.Logger) *FavoriteService {
-	return &FavoriteService{db: db, logger: logger}
+// NewService 构造通用收藏服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // FavoriteDTO 收藏条目（带目标快照：标题/封面，目标已删除时该行不出现）。
@@ -179,7 +179,7 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 		var rows []model.Question
 		db.Select("id, content, image_url").Where("id IN ?", ids).Find(&rows)
 		for _, r := range rows {
-			result[r.ID] = favoriteTargetMeta{Title: snippetOf(r.Content, 50), Cover: r.ImageURL, Found: true}
+			result[r.ID] = favoriteTargetMeta{Title: textx.Snippet(r.Content, 50), Cover: r.ImageURL, Found: true}
 		}
 	case FavoriteTargetFeatured:
 		var rows []model.FeaturedContent
@@ -199,7 +199,7 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 
 // Add 收藏（幂等：已收藏直接返回既有条目）。
 // qScope 由入口装配（ADR-0062 决策 4）：只有题目支消费它，其余目标类型不读该参数。
-func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope questionbank.QuestionReadScope) (*FavoriteDTO, error) {
+func (s *Service) Add(userID int, targetType string, targetID int, qScope questionbank.QuestionReadScope) (*FavoriteDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
 		return nil, ErrFavTargetIDInvalid
@@ -229,7 +229,7 @@ func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScop
 }
 
 // Remove 取消收藏（仅本人；条目不存在报错）。
-func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
+func (s *Service) Remove(userID int, favoriteID int64) error {
 	res := s.db.Where("favorite_id = ? AND user_id = ?", favoriteID, userID).
 		Delete(&model.Favorite{})
 	if res.Error != nil {
@@ -257,7 +257,7 @@ func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any
 }
 
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
-func (s *FavoriteService) List(userID int, targetType string, page, pageSize int, credentialID *int) (*FavoritePageResult, error) {
+func (s *Service) List(userID int, targetType string, page, pageSize int, credentialID *int) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
 	rows, total, page, pageSize, err := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
 		"created_at DESC, favorite_id DESC",
@@ -313,7 +313,7 @@ type FavoriteCheckDTO struct {
 }
 
 // Check 查询目标是否已收藏。
-func (s *FavoriteService) Check(userID int, targetType string, targetID int) (*FavoriteCheckDTO, error) {
+func (s *Service) Check(userID int, targetType string, targetID int) (*FavoriteCheckDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
 		return nil, ErrFavTargetIDInvalid
@@ -334,15 +334,6 @@ func favoriteToDTO(f *model.Favorite) FavoriteDTO {
 		TargetID:   f.TargetID,
 		CreatedAt:  timefmt.FormatISO(f.CreatedAt),
 	}
-}
-
-// snippetOf 截取前 n 个 rune 作为摘要（超出加省略号）。
-func snippetOf(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	runes := []rune(s)
-	return string(runes[:n]) + "…"
 }
 
 var _ = time.Now

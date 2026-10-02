@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"forklift-training/internal/favorite"
+	"forklift-training/internal/search"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,8 +50,8 @@ func TestForumAcceptNotifyContract(t *testing.T) {
 	forum.RegisterAdminRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
 	forum.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 	points.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.PointsSvc)
-	RegisterFavoriteRoutes(apiGroup, deps.RouterDeps(), deps.FavoriteSvc)
-	RegisterSearchRoutes(apiGroup, deps.RouterDeps(), deps.SearchSvc)
+	favorite.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.FavoriteSvc)
+	search.RegisterRoutes(apiGroup, deps.RouterDeps().CredentialScope, deps.SearchSvc)
 	notification.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.NotificationSvc)
 
 	issueToken := func(u model.HrwaiUser) string {

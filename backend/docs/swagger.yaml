@@ -1141,6 +1141,47 @@ definitions:
           $ref: '#/definitions/faq.FaqCategoryDTO'
         type: array
     type: object
+  favorite.FavoriteCheckDTO:
+    properties:
+      favorite_id:
+        type: integer
+      favorited:
+        type: boolean
+    type: object
+  favorite.FavoriteDTO:
+    properties:
+      course_id:
+        description: |-
+          CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
+          `chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。
+          其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。
+        type: integer
+      cover:
+        type: string
+      created_at:
+        type: string
+      favorite_id:
+        type: integer
+      target_id:
+        type: integer
+      target_type:
+        type: string
+      title:
+        type: string
+    type: object
+  favorite.FavoritePageResult:
+    properties:
+      favorites:
+        items:
+          $ref: '#/definitions/favorite.FavoriteDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
   featured.FeaturedContentAdminDetailDTO:
     properties:
       category:
@@ -2862,6 +2903,79 @@ definitions:
       message:
         type: string
     type: object
+  search.SearchAllDTO:
+    properties:
+      chapters:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      contents:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      courses:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      keyword:
+        type: string
+      questions:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      topics:
+        $ref: '#/definitions/search.SearchSectionDTO'
+    type: object
+  search.SearchItemDTO:
+    properties:
+      cover:
+        type: string
+      hit_field:
+        description: HitField 命中位置：title | body | reply。
+        type: string
+      id:
+        type: integer
+      parent_id:
+        description: ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。
+        type: integer
+      snippet:
+        description: Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。
+        type: string
+      summary:
+        description: Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  search.SearchPageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/search.SearchItemDTO'
+        type: array
+      keyword:
+        type: string
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+      type:
+        type: string
+    type: object
+  search.SearchSectionDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/search.SearchItemDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  search.ZeroResultKeywordDTO:
+    properties:
+      keyword:
+        type: string
+      last_seen_at:
+        type: string
+      times:
+        type: integer
+    type: object
   service.AdminOverviewDTO:
     properties:
       active_today:
@@ -3053,21 +3167,6 @@ definitions:
       total:
         type: integer
     type: object
-  service.CourseProgressDTO:
-    properties:
-      course_id:
-        type: integer
-      course_name:
-        type: string
-      progress:
-        type: number
-      study_date:
-        type: string
-      study_duration:
-        type: integer
-      total_chapters:
-        type: integer
-    type: object
   service.CourseStatDTO:
     properties:
       avg_progress:
@@ -3086,47 +3185,6 @@ definitions:
       deleted:
         type: boolean
       file_id:
-        type: integer
-    type: object
-  service.FavoriteCheckDTO:
-    properties:
-      favorite_id:
-        type: integer
-      favorited:
-        type: boolean
-    type: object
-  service.FavoriteDTO:
-    properties:
-      course_id:
-        description: |-
-          CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
-          `chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。
-          其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。
-        type: integer
-      cover:
-        type: string
-      created_at:
-        type: string
-      favorite_id:
-        type: integer
-      target_id:
-        type: integer
-      target_type:
-        type: string
-      title:
-        type: string
-    type: object
-  service.FavoritePageResult:
-    properties:
-      favorites:
-        items:
-          $ref: '#/definitions/service.FavoriteDTO'
-        type: array
-      page:
-        type: integer
-      pages:
-        type: integer
-      total:
         type: integer
     type: object
   service.GenTaskStatus:
@@ -3548,262 +3606,9 @@ definitions:
       total:
         type: integer
     type: object
-  service.SearchAllDTO:
-    properties:
-      chapters:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      contents:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      courses:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      keyword:
-        type: string
-      questions:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      topics:
-        $ref: '#/definitions/service.SearchSectionDTO'
-    type: object
-  service.SearchItemDTO:
-    properties:
-      cover:
-        type: string
-      hit_field:
-        description: HitField 命中位置：title | body | reply。
-        type: string
-      id:
-        type: integer
-      parent_id:
-        description: ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。
-        type: integer
-      snippet:
-        description: Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。
-        type: string
-      summary:
-        description: Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。
-        type: string
-      title:
-        type: string
-      type:
-        type: string
-    type: object
-  service.SearchPageDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.SearchItemDTO'
-        type: array
-      keyword:
-        type: string
-      page:
-        type: integer
-      pages:
-        type: integer
-      total:
-        type: integer
-      type:
-        type: string
-    type: object
-  service.SearchSectionDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.SearchItemDTO'
-        type: array
-      total:
-        type: integer
-    type: object
   service.StatusResultDTO:
     properties:
       status:
-        type: integer
-    type: object
-  service.StudentCourseChapterDTO:
-    properties:
-      chapter_id:
-        type: integer
-      completed:
-        type: boolean
-      progress:
-        type: number
-      title:
-        type: string
-      video_position:
-        type: integer
-    type: object
-  service.StudentCourseDTO:
-    properties:
-      completed_chapters:
-        type: integer
-      course_id:
-        type: integer
-      course_name:
-        type: string
-      cover:
-        type: string
-      last_chapter_id:
-        type: integer
-        x-nullable: true
-      last_chapter_title:
-        type: string
-      last_position:
-        type: integer
-      last_studied_at:
-        type: string
-      level_id:
-        type: integer
-        x-nullable: true
-      progress:
-        type: number
-      specialty_id:
-        type: integer
-        x-nullable: true
-      study_duration:
-        type: integer
-      total_chapters:
-        type: integer
-    type: object
-  service.StudentCourseDetailDTO:
-    properties:
-      chapters:
-        items:
-          $ref: '#/definitions/service.StudentCourseChapterDTO'
-        type: array
-      completed_chapters:
-        type: integer
-      course_id:
-        type: integer
-      course_name:
-        type: string
-      cover:
-        type: string
-      last_chapter_id:
-        type: integer
-        x-nullable: true
-      last_chapter_title:
-        type: string
-      last_position:
-        type: integer
-      last_studied_at:
-        type: string
-      level_id:
-        type: integer
-        x-nullable: true
-      progress:
-        type: number
-      specialty_id:
-        type: integer
-        x-nullable: true
-      study_duration:
-        type: integer
-      total_chapters:
-        type: integer
-    type: object
-  service.StudentCoursesDTO:
-    properties:
-      continue_learning:
-        allOf:
-        - $ref: '#/definitions/service.StudentCourseDTO'
-        x-nullable: true
-      courses:
-        items:
-          $ref: '#/definitions/service.StudentCourseDTO'
-        type: array
-    type: object
-  service.StudentDTO:
-    properties:
-      account:
-        type: string
-      avatar_url:
-        type: string
-      created_at:
-        type: string
-      status:
-        type: integer
-      student_id:
-        type: integer
-      uid:
-        description: UID 在 JSON 里是字符串（json:",string"）：swag 只看到 int64，用 swaggertype
-          钉住真实线上类型。
-        example: ""
-        type: string
-      username:
-        type: string
-    type: object
-  service.StudentProfileDTO:
-    properties:
-      course_progress:
-        items:
-          $ref: '#/definitions/service.CourseProgressDTO'
-        type: array
-      student_info:
-        $ref: '#/definitions/service.StudentDTO'
-      study_stats:
-        $ref: '#/definitions/service.StudyStatsDTO'
-    type: object
-  service.StudyDailyStatsDTO:
-    properties:
-      active_days:
-        type: integer
-      data:
-        items:
-          type: integer
-        type: array
-      days:
-        type: integer
-      labels:
-        items:
-          type: string
-        type: array
-      total_minutes:
-        type: integer
-    type: object
-  service.StudyRecordDTO:
-    properties:
-      chapter_id:
-        type: integer
-        x-nullable: true
-      chapter_title:
-        type: string
-        x-nullable: true
-      course_id:
-        type: integer
-      course_name:
-        type: string
-      progress:
-        type: number
-      record_id:
-        type: integer
-      student_id:
-        type: integer
-      study_date:
-        type: string
-      study_duration:
-        type: integer
-    type: object
-  service.StudyRecordPageResult:
-    properties:
-      page:
-        type: integer
-      pages:
-        type: integer
-      records:
-        items:
-          $ref: '#/definitions/service.StudyRecordDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.StudyStatsDTO:
-    properties:
-      completed_courses:
-        type: integer
-      latest_study_time:
-        type: string
-      learning_courses:
-        type: integer
-      total_courses:
-        type: integer
-      total_study_duration:
         type: integer
     type: object
   service.TutorDTO:
@@ -3896,13 +3701,208 @@ definitions:
       total:
         type: integer
     type: object
-  service.ZeroResultKeywordDTO:
+  student.CourseProgressDTO:
     properties:
-      keyword:
+      course_id:
+        type: integer
+      course_name:
         type: string
-      last_seen_at:
+      progress:
+        type: number
+      study_date:
         type: string
-      times:
+      study_duration:
+        type: integer
+      total_chapters:
+        type: integer
+    type: object
+  student.StudentCourseChapterDTO:
+    properties:
+      chapter_id:
+        type: integer
+      completed:
+        type: boolean
+      progress:
+        type: number
+      title:
+        type: string
+      video_position:
+        type: integer
+    type: object
+  student.StudentCourseDTO:
+    properties:
+      completed_chapters:
+        type: integer
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      cover:
+        type: string
+      last_chapter_id:
+        type: integer
+        x-nullable: true
+      last_chapter_title:
+        type: string
+      last_position:
+        type: integer
+      last_studied_at:
+        type: string
+      level_id:
+        type: integer
+        x-nullable: true
+      progress:
+        type: number
+      specialty_id:
+        type: integer
+        x-nullable: true
+      study_duration:
+        type: integer
+      total_chapters:
+        type: integer
+    type: object
+  student.StudentCourseDetailDTO:
+    properties:
+      chapters:
+        items:
+          $ref: '#/definitions/student.StudentCourseChapterDTO'
+        type: array
+      completed_chapters:
+        type: integer
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      cover:
+        type: string
+      last_chapter_id:
+        type: integer
+        x-nullable: true
+      last_chapter_title:
+        type: string
+      last_position:
+        type: integer
+      last_studied_at:
+        type: string
+      level_id:
+        type: integer
+        x-nullable: true
+      progress:
+        type: number
+      specialty_id:
+        type: integer
+        x-nullable: true
+      study_duration:
+        type: integer
+      total_chapters:
+        type: integer
+    type: object
+  student.StudentCoursesDTO:
+    properties:
+      continue_learning:
+        allOf:
+        - $ref: '#/definitions/student.StudentCourseDTO'
+        x-nullable: true
+      courses:
+        items:
+          $ref: '#/definitions/student.StudentCourseDTO'
+        type: array
+    type: object
+  student.StudentDTO:
+    properties:
+      account:
+        type: string
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      status:
+        type: integer
+      student_id:
+        type: integer
+      uid:
+        description: UID 在 JSON 里是字符串（json:",string"）：swag 只看到 int64，用 swaggertype
+          钉住真实线上类型。
+        example: ""
+        type: string
+      username:
+        type: string
+    type: object
+  student.StudentProfileDTO:
+    properties:
+      course_progress:
+        items:
+          $ref: '#/definitions/student.CourseProgressDTO'
+        type: array
+      student_info:
+        $ref: '#/definitions/student.StudentDTO'
+      study_stats:
+        $ref: '#/definitions/student.StudyStatsDTO'
+    type: object
+  student.StudyDailyStatsDTO:
+    properties:
+      active_days:
+        type: integer
+      data:
+        items:
+          type: integer
+        type: array
+      days:
+        type: integer
+      labels:
+        items:
+          type: string
+        type: array
+      total_minutes:
+        type: integer
+    type: object
+  student.StudyRecordDTO:
+    properties:
+      chapter_id:
+        type: integer
+        x-nullable: true
+      chapter_title:
+        type: string
+        x-nullable: true
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      progress:
+        type: number
+      record_id:
+        type: integer
+      student_id:
+        type: integer
+      study_date:
+        type: string
+      study_duration:
+        type: integer
+    type: object
+  student.StudyRecordPageResult:
+    properties:
+      page:
+        type: integer
+      pages:
+        type: integer
+      records:
+        items:
+          $ref: '#/definitions/student.StudyRecordDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  student.StudyStatsDTO:
+    properties:
+      completed_courses:
+        type: integer
+      latest_study_time:
+        type: string
+      learning_courses:
+        type: integer
+      total_courses:
+        type: integer
+      total_study_duration:
         type: integer
     type: object
   training.CatalogLevelNode:
@@ -7963,7 +7963,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.ZeroResultKeywordDTO'
+                    $ref: '#/definitions/search.ZeroResultKeywordDTO'
                   type: array
               type: object
         "401":
@@ -10436,7 +10436,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.FavoritePageResult'
+                  $ref: '#/definitions/favorite.FavoritePageResult'
               type: object
         "401":
           description: 未认证
@@ -10468,7 +10468,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.FavoriteDTO'
+                  $ref: '#/definitions/favorite.FavoriteDTO'
               type: object
         "400":
           description: 参数错误
@@ -10544,7 +10544,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.FavoriteCheckDTO'
+                  $ref: '#/definitions/favorite.FavoriteCheckDTO'
               type: object
         "400":
           description: 参数错误
@@ -14894,7 +14894,7 @@ paths:
       description: |-
         公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），
         指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；
-        分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。
+        分页形状 SearchPageDTO 同域生成，前端以联合类型消费）。
         每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。
       parameters:
       - description: 关键词
@@ -14926,7 +14926,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SearchAllDTO'
+                  $ref: '#/definitions/search.SearchAllDTO'
               type: object
         "400":
           description: 参数错误
@@ -14950,7 +14950,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudentCoursesDTO'
+                  $ref: '#/definitions/student.StudentCoursesDTO'
               type: object
         "401":
           description: 未认证
@@ -14982,7 +14982,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudentCourseDetailDTO'
+                  $ref: '#/definitions/student.StudentCourseDetailDTO'
               type: object
         "401":
           description: 未认证
@@ -15054,7 +15054,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudentProfileDTO'
+                  $ref: '#/definitions/student.StudentProfileDTO'
               type: object
         "401":
           description: 未认证
@@ -15103,7 +15103,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudyRecordPageResult'
+                  $ref: '#/definitions/student.StudyRecordPageResult'
               type: object
         "401":
           description: 未认证
@@ -15138,7 +15138,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudyDailyStatsDTO'
+                  $ref: '#/definitions/student.StudyDailyStatsDTO'
               type: object
         "401":
           description: 未认证
