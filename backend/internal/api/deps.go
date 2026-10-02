@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/contribution"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
@@ -97,7 +98,7 @@ type Deps struct {
 	JobApplicationSvc    *service.JobApplicationService
 	JobReportSvc         *service.JobReportService
 	InspectionSvc        *inspection.Service
-	ContributionSvc      *service.ContributionService
+	ContributionSvc      *contribution.Service
 
 	// Daemons 进程内周期守护的**登记表**（ADR-0061 §1）：NewDeps 声明，cmd/server 经 daemon.StartAll 启动。
 	// 登记 ≠ 启动——契约测试构造 Deps 时不会拉起任何 goroutine，而漏登记会被 daemons_contract_test.go 判红。

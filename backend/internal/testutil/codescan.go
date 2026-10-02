@@ -162,6 +162,7 @@ func ResponsePackages() []ScanDir {
 		{"internal/notification", "notification"},
 		{"internal/material", "material"},
 		{"internal/inspection", "inspection"},
+		{"internal/contribution", "contribution"},
 		{"internal/featured", "featured"},
 		{"internal/checkin", "checkin"},
 		{"internal/points", "points"},

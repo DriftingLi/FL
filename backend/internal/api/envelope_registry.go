@@ -19,6 +19,7 @@ package api
 
 import (
 	"forklift-training/internal/checkin"
+	"forklift-training/internal/contribution"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
@@ -73,12 +74,12 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.ContactRequestListResult", Endpoints: []string{"GET /recruit/contact-requests", "GET /resume/contact-requests"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.ContactRequestListResult{}},
-	{Result: "service.ContributionPageResult", Endpoints: []string{"GET /contributions", "GET /contributions/mine", "GET /admin/contributions/pending"},
+	{Result: "contribution.ContributionPageResult", Endpoints: []string{"GET /contributions", "GET /contributions/mine", "GET /admin/contributions/pending"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ContributionPageResult{}},
-	{Result: "service.ContributionReportPageResult", Endpoints: []string{"GET /admin/contributions/reports"},
+		Sample: contribution.ContributionPageResult{}},
+	{Result: "contribution.ContributionReportPageResult", Endpoints: []string{"GET /admin/contributions/reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ContributionReportPageResult{}},
+		Sample: contribution.ContributionReportPageResult{}},
 	{Result: "service.CoursePageResult", Endpoints: []string{"GET /courses", "GET /admin/courses", "GET /tutor/courses"},
 		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: service.CoursePageResult{}},
