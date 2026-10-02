@@ -574,12 +574,24 @@ func (c *Config) Validate() error {
 }
 
 // JWTExpiry 返回 access token 过期时长（JWT_EXPIRES_HOURS，默认 2h）。
+//
+// 零值按 Load 的同一口径回退 2h，而不是签出零长度的 token：环境变量那条路走 positiveInt
+// （config.go:600，<=0 即回退默认值），到不了 0；能到 0 的只有 config.Config 字面量（测试装配），
+// 而零长度的 access 一签发就已过期（ExpiresAt = now）、经 middleware.JWTAuth 一律 401 ——
+// 那是没有任何调用方想要的状态（P2 波 3a 血账）。
 func (c *Config) JWTExpiry() time.Duration {
+	if c.JWTExpiresHours <= 0 {
+		return 2 * time.Hour
+	}
 	return time.Duration(c.JWTExpiresHours) * time.Hour
 }
 
 // JWTRefreshExpiry 返回 refresh token 过期时长（JWT_REFRESH_EXPIRES_DAYS，默认 7 天）。
+// 零值回退 7 天的理由同 JWTExpiry。
 func (c *Config) JWTRefreshExpiry() time.Duration {
+	if c.JWTRefreshExpiresDays <= 0 {
+		return 7 * 24 * time.Hour
+	}
 	return time.Duration(c.JWTRefreshExpiresDays) * 24 * time.Hour
 }
 
