@@ -24,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/geolocation"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -85,7 +86,8 @@ func TestForumIPRegionContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	now := testutil.Now()
 	mkUser := func(account, phone, name string) model.HrwaiUser {

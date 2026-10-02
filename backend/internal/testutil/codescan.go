@@ -16,7 +16,7 @@ var BackendCodeRoots = []string{"internal", "pkg"}
 // CodeFile 一个待静态扫描的后端源文件。Path 是**模块根相对**的斜杠路径（报告与白名单都拿它作键），
 // 于是报告不随「测试文件住在哪一层」漂。
 type CodeFile struct {
-	Path string // 例：internal/service/forum_service.go
+	Path string // 例：internal/forum/service.go
 	Dir  string // 例：internal/service
 	Name string // 例：forum_service.go
 	Pkg  string // package 子句
@@ -165,6 +165,7 @@ func ResponsePackages() []ScanDir {
 		{"internal/contribution", "contribution"},
 		{"internal/featured", "featured"},
 		{"internal/checkin", "checkin"},
+		{"internal/forum", "forum"},
 		{"internal/points", "points"},
 		{"internal/model", "model"},
 		// valuation/model 的 Go 包名也叫 model，swagger 定义键同样落在 `model.` 前缀下（两边类型名

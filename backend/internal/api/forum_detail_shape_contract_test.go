@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -68,7 +69,8 @@ func TestForumTopicDetailShapeContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterForumRoutes(api, deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	now := testutil.Now()
 	author := model.HrwaiUser{Account: "shape_author", Phone: "13800000901", Username: "楼主", Status: 1, CreatedAt: now}

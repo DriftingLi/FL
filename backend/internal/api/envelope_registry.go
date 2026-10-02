@@ -21,6 +21,7 @@ import (
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
@@ -92,17 +93,17 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "featured.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents", "GET /admin/featured-contents"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: featured.FeaturedContentPageResult{}},
-	{Result: "service.ForumReportPageResult", Endpoints: []string{"GET /admin/forum/reports"},
+	{Result: "forum.ForumReportPageResult", Endpoints: []string{"GET /admin/forum/reports"},
 		Keys: []string{"page", "pages", "total", "reports"}, Dialect: paging.DialectPages,
-		Sample: service.ForumReportPageResult{}},
-	{Result: "service.ForumTopicDetailDTO", Endpoints: []string{"GET /forum/topics/{id}", "GET /admin/forum/topics/{id}"},
+		Sample: forum.ForumReportPageResult{}},
+	{Result: "forum.ForumTopicDetailDTO", Endpoints: []string{"GET /forum/topics/{id}", "GET /admin/forum/topics/{id}"},
 		Keys: []string{"page", "pages", "replies", "topic", "total"}, Dialect: paging.DialectPages,
-		Sample: service.ForumTopicDetailDTO{}},
-	{Result: "service.ForumTopicPageResult", Endpoints: []string{
+		Sample: forum.ForumTopicDetailDTO{}},
+	{Result: "forum.ForumTopicPageResult", Endpoints: []string{
 		"GET /forum/topics", "GET /admin/forum/topics", "GET /forum/my-topics",
 		"GET /forum/my-liked-topics", "GET /forum/my-observed", "GET /forum/my-view-history"},
 		Keys: []string{"page", "pages", "topics", "total"}, Dialect: paging.DialectPages,
-		Sample: service.ForumTopicPageResult{}},
+		Sample: forum.ForumTopicPageResult{}},
 	{Result: "service.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
 		Keys: []string{"total", "page", "page_size", "records"}, Dialect: paging.DialectPageSize,
 		Sample: service.HistoryResultDTO{}},
@@ -118,9 +119,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
 		Keys: []string{"total", "page", "page_size", "exams"}, Dialect: paging.DialectPageSize,
 		Sample: service.MockExamHistoryDTO{}},
-	{Result: "service.MyReplyPageResult", Endpoints: []string{"GET /forum/my-replies"},
+	{Result: "forum.MyReplyPageResult", Endpoints: []string{"GET /forum/my-replies"},
 		Keys: []string{"page", "pages", "total", "replies"}, Dialect: paging.DialectPages,
-		Sample: service.MyReplyPageResult{}},
+		Sample: forum.MyReplyPageResult{}},
 	{Result: "service.NotePageDTO", Endpoints: []string{"GET /notes"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.NotePageDTO{}},

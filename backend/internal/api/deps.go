@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/filestore"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
@@ -66,10 +67,10 @@ type Deps struct {
 	CourseSvc            *service.CourseService
 	AdminSvc             *service.AdminService
 	AdminCourseSvc       *service.AdminCourseService
-	ForumSvc             *service.ForumService
-	ForumModSvc          *service.ForumModerationService
+	ForumSvc             *forum.Service
+	ForumModSvc          *forum.ModerationService
 	CheckInSvc           *checkin.Service
-	ForumImageSvc        *service.ForumImageService
+	ForumImageSvc        *forum.ImageService
 	FeaturedSvc          *featured.Service
 	FavoriteSvc          *service.FavoriteService
 	SearchSvc            *service.SearchService

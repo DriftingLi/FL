@@ -45,7 +45,7 @@ func init() {
 func outletAIChatMessageWithoutImages(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	owner := seedForumUser(t, db, "对话学员")
+	owner := testutil.SeedStudent(t, db, "对话学员", "hash")
 	session := model.AIChatSession{UserID: owner.ID, Title: "无图无来源会话", ModelName: "m", FeatureKey: "ai_assistant"}
 	if err := db.Create(&session).Error; err != nil {
 		t.Fatalf("播会话失败: %v", err)

@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：论坛治理（ADR-0050 决策 3；词表见 CONTEXT.md「论坛治理」）——管理端对论坛内容的
 // 处置动作族：举报处置、意图认定（帖子精选 / 备考经验）、管理端强制删除与违规回收。
 //
@@ -6,9 +5,9 @@
 // （forum_service.go），HandleReport / ListReports（处置与队列）归本 module。
 // 命名 Moderation 对齐能力表既有 forum.moderate（ADR-0047 §3），词汇零新增。
 //
-// 同包分文件：与 ForumService 共享 forumCore（依赖 + 私有 helper），实例分离；
+// 同包分文件：与 Service 共享 forumCore（依赖 + 私有 helper），实例分离；
 // api 层管理端路由依赖本 module，学员端 handler 零改动。
-package service
+package forum
 
 import (
 	"errors"
@@ -22,19 +21,20 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/service"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
 
-// ForumModerationService 论坛治理服务。
-type ForumModerationService struct {
+// ModerationService 论坛治理服务。
+type ModerationService struct {
 	forumCore
 }
 
-// NewForumModerationService 构造论坛治理服务（依赖与 ForumService 同源，实例分离）。
-func NewForumModerationService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters ForumCounter, points *points.Service, logger *zap.Logger) *ForumModerationService {
-	return &ForumModerationService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
+// NewModerationService 构造论坛治理服务（依赖与 Service 同源，实例分离）。
+func NewModerationService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters service.ForumCounter, points *points.Service, logger *zap.Logger) *ModerationService {
+	return &ModerationService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 
 // ForumReportDTO 管理端举报条目。
@@ -61,7 +61,7 @@ type ForumReportPageResult struct {
 // AdminDeleteTopic 管理员删除任意主题（不校验作者）。图片一并清理；站内信通知作者。
 // 若该帖产生过任一直记奖励（被采纳 / 采纳动作 / 认定），则按 rollback 原因写对冲流水并扣减余额
 // （封底 0，幂等，按 user_id 分组各自追回）。
-func (s *ForumModerationService) AdminDeleteTopic(topicID int64) error {
+func (s *ModerationService) AdminDeleteTopic(topicID int64) error {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -102,7 +102,7 @@ func (s *ForumModerationService) AdminDeleteTopic(topicID int64) error {
 // AdminDeleteReply 管理员删除任意回复（不校验作者；其下级回复随外键级联删除）。图片一并清理；站内信通知回复作者。
 // 若删的是被采纳的回答，只把主题打回未解决（清 accepted_reply_id/solved_at），**不回收积分**——
 // 奖励处置的唯一出口是 AdminDeleteTopic（见奖励政策 module Reclaim 的 ref 级一次性说明）。
-func (s *ForumModerationService) AdminDeleteReply(replyID int64) error {
+func (s *ModerationService) AdminDeleteReply(replyID int64) error {
 	var reply model.ForumReply
 	if err := s.db.First(&reply, replyID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -138,7 +138,7 @@ func (s *ForumModerationService) AdminDeleteReply(replyID int64) error {
 }
 
 // ListReports 管理端举报列表（status: nil 全部 / 0 待处理 / 1 已处理）。
-func (s *ForumModerationService) ListReports(page, pageSize int, status *int16) (*ForumReportPageResult, error) {
+func (s *ModerationService) ListReports(page, pageSize int, status *int16) (*ForumReportPageResult, error) {
 	type reportRow struct {
 		ID         int64
 		ReporterID int
@@ -181,7 +181,7 @@ func (s *ForumModerationService) ListReports(page, pageSize int, status *int16) 
 }
 
 // HandleReport 管理端处理举报（status: 0 待处理 / 1 已处理）；标记已处理时站内信通知举报人。
-func (s *ForumModerationService) HandleReport(reportID int64, status int16) error {
+func (s *ModerationService) HandleReport(reportID int64, status int16) error {
 	if status != 0 && status != 1 {
 		return ErrReportStatusValue
 	}
@@ -205,7 +205,7 @@ func (s *ForumModerationService) HandleReport(reportID int64, status int16) erro
 
 // notifyReportHandled 举报处理完成站内信。举报对象可能已被删除：
 // 主题已删时降级文案（不带标题与链接）；文案/链接/payload 由事件构造器单点（ADR-0027 C1）。
-func (s *ForumModerationService) notifyReportHandled(report *model.ForumReport) {
+func (s *ModerationService) notifyReportHandled(report *model.ForumReport) {
 	topicID := report.TopicID
 	topicTitle := ""
 	if report.TopicID != nil {
@@ -223,7 +223,7 @@ func (s *ForumModerationService) notifyReportHandled(report *model.ForumReport) 
 // 并按「认定奖励每帖一次」发 +30 —— 与加精共用同一条流水，故先加精后认定不会重复发分
 // （奖励政策 module 的发放事实判定短路），先认定后加精亦然。
 // 状态已一致时幂等短路（重复认定不发分不改状态）。
-func (s *ForumModerationService) DesignateExperience(topicID int64) (*ForumTopicDTO, error) {
+func (s *ModerationService) DesignateExperience(topicID int64) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -272,7 +272,7 @@ func (s *ForumModerationService) DesignateExperience(topicID int64) (*ForumTopic
 // **保留精选位**（撤的是归类不是质量认可，管理员可继续让它挂着精选）；已发分不回滚
 // （与撤精同政策：认定动作不是违规，回滚会让管理员不敢认定）。
 // 状态已一致时幂等短路。
-func (s *ForumModerationService) RevokeExperience(topicID int64) (*ForumTopicDTO, error) {
+func (s *ModerationService) RevokeExperience(topicID int64) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -298,7 +298,7 @@ func (s *ForumModerationService) RevokeExperience(topicID int64) (*ForumTopicDTO
 // （幂等键 featured_bonus:{topicID} + 流水存在判定双保险，取消重精不重复发分，
 // 沿用 accepted_bonus 同模式）；featured=false 只改状态，已发分不回滚。
 // 状态已一致时幂等短路，不触发任何副作用。
-func (s *ForumModerationService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO, error) {
+func (s *ModerationService) SetFeatured(topicID int64, featured bool) (*ForumTopicDTO, error) {
 	var topic model.ForumTopic
 	if err := s.db.First(&topic, topicID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -1,8 +1,8 @@
-// Package service #384 回归：删帖时答主余额为 0 的违规回收路径。
+// #384 回归：删帖时答主余额为 0 的违规回收路径。
 // 修复前 rollbackAcceptedBonusTx 在余额为 0 时写 Delta:0 流水，违反
 // points_ledger CHECK (delta <> 0)，整笔删帖事务失败；修复后仅落占坑行
 // （占坑行即「已处理」标记），删帖成功且回收幂等（ADR-0023）。
-package service
+package forum
 
 import (
 	"strconv"
@@ -14,13 +14,14 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	// 管理端强删属治理动作：经 ForumModerationService 自己的 interface 装配（ADR-0050 决策 3）
-	mod := NewForumModerationService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
+	// 管理端强删属治理动作：经 ModerationService 自己的 interface 装配（ADR-0050 决策 3）
+	mod := NewModerationService(db, nil, notification.NewService(db, zap.NewNop()), service.NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "zero_bal_answerer", "x")
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", answerer.ID).UpdateColumn("points_balance", 0).Error; err != nil {
@@ -77,7 +78,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 // 同帖重复发放（占坑冲突）静默跳过且不影响状态迁移。
 func TestAcceptReplyRewardIdempotentOccupy(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewForumService(db, nil, notification.NewService(db, zap.NewNop()), NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
+	svc := NewService(db, nil, notification.NewService(db, zap.NewNop()), service.NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "occ_answerer", "x")
 	asker := testutil.SeedStudent(t, db, "occ_asker", "x")

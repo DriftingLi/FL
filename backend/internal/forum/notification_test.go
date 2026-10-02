@@ -1,5 +1,5 @@
 // 论坛事件站内信通知测试（回复通知楼主/被回复人、举报处理、管理端删帖/删回复）。
-package service
+package forum
 
 import (
 	"strconv"
