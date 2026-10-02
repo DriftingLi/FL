@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — 一次性代码，回答 ADR-0025 修订段 ⑩/⑪ 的问题。不是实现，别参照它写生产代码。
+  票一（⑩ 行内渲染）的算法切片按 utils/markdown.uts 真码移植；结论写回 handoff / issue。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 论坛行内渲染（⑩）+ 回复栏浮层（⑪）</title>
+<style>
+  :root { --ink:#1e293b; --mut:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#fff; --ok:#059669; --bad:#dc2626; --warn:#d97706; --acc:#2563eb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:#0f172a; color:#fff; padding:14px 20px; }
+  header h1 { margin:0 0 4px; font-size:16px; }
+  header .dep { color:#fbbf24; font-weight:600; font-size:12px; }
+  header p { margin:4px 0 0; color:#94a3b8; font-size:12px; }
+  nav { display:flex; gap:6px; padding:10px 20px 0; flex-wrap:wrap; }
+  nav button { border:1px solid var(--line); background:var(--card); padding:7px 14px; border-radius:8px 8px 0 0; cursor:pointer; font-size:13px; }
+  nav button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  main { padding:16px 20px 60px; max-width:1280px; }
+  section.tab { display:none; }
+  section.tab.on { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  .card h3 { margin:0 0 8px; font-size:14px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .grid3 { display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:14px; }
+  textarea { width:100%; min-height:200px; font:12.5px/1.5 Consolas,monospace; border:1px solid var(--line); border-radius:8px; padding:10px; resize:vertical; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .row label { font-size:12.5px; color:var(--mut); }
+  .row select,.row input[type=text] { border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; }
+  button.act { border:1px solid var(--acc); background:var(--acc); color:#fff; border-radius:6px; padding:5px 12px; cursor:pointer; font-size:12.5px; }
+  button.ghost { border:1px solid var(--line); background:#fff; color:var(--ink); }
+  pre.state { background:#0f172a; color:#e2e8f0; font:11.5px/1.5 Consolas,monospace; padding:10px 12px; border-radius:8px; overflow:auto; max-height:360px; margin:0; white-space:pre-wrap; }
+  .flag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; margin-left:6px; vertical-align:1px; }
+  .pass { background:#ecfdf5; color:var(--ok); }
+  .fail { background:#fef2f2; color:var(--bad); }
+  .note { background:#fffbeb; color:var(--warn); }
+  .bb { border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fafafa; }
+  .bb .muted { color:var(--mut); font-size:11.5px; }
+  .render .heading { font-weight:700; }
+  .render .h1{font-size:20px}.render .h2{font-size:18px}.render .h3{font-size:16px}
+  .render .paragraph { margin:6px 0; }
+  .render .code { background:#0f172a; color:#e2e8f0; font:12px/1.5 Consolas,monospace; padding:8px 10px; border-radius:6px; white-space:pre-wrap; margin:6px 0; }
+  .render .quote { border-left:3px solid var(--line); color:var(--mut); padding:2px 10px; margin:6px 0; background:#f8fafc; }
+  .render .divider { border-top:1px solid var(--line); margin:10px 0; }
+  .render .li { display:flex; gap:6px; margin:3px 0; }
+  .render .li .mark { min-width:22px; text-align:right; color:var(--acc); font-weight:600; }
+  .r-b{font-weight:700}.r-i{font-style:italic}.r-s{text-decoration:line-through}
+  .r-c{font-family:Consolas,monospace;background:#e2e8f0;border-radius:4px;padding:0 3px}
+  .r-l{color:var(--acc)}
+  .r-l.u{text-decoration:underline}
+    .run { font-size:inherit; }   /* 模拟 uvue「子 text 自带字号」；写成 font 简写会把 r-b/r-i/r-c 全部重置（浏览器实测踩过）。
+                                       这里**不能**再写 color:inherit —— 它与 .r-l 同权重且源码在后，会把链接蓝色盖成正文色（第二轮实测踩过）。 */
+  .bb.appconstrained .r-c { padding:0 !important; border-radius:0; }
+  .bb.appconstrained .r-l.u { text-decoration:none !important; }
+  .bb.appconstrained .r-s { text-decoration:none !important; }
+  table.cases { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.cases th,table.cases td { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+  table.cases th { background:#f8fafc; }
+  .mono { font-family:Consolas,monospace; font-size:12px; }
+  .phone { width:340px; height:640px; border:10px solid #0f172a; border-radius:26px; overflow:hidden; position:relative; background:#fff; flex:0 0 auto; }
+  .appbar { height:44px; background:var(--acc); color:#fff; display:flex; align-items:center; padding:0 12px; font-size:13px; }
+  .feed { position:absolute; top:44px; left:0; right:0; bottom:48px; overflow-y:auto; background:#fff; padding:10px; }
+  .feed.locked { overflow:hidden; }
+  .feed .topic { border-bottom:1px solid var(--line); padding:8px 2px; font-size:12.5px; }
+  .triggerbar { position:absolute; left:0; right:0; bottom:0; height:48px; border-top:1px solid var(--line); background:#f8fafc; display:flex; align-items:center; padding:0 10px; gap:8px; z-index:4; }
+  .triggerbar .fake { flex:1; border:1px solid var(--line); border-radius:16px; background:#fff; color:var(--mut); padding:6px 12px; font-size:12.5px; }
+  .mask { position:absolute; inset:0; background:rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .18s; z-index:5; }
+  .mask.show { opacity:1; pointer-events:auto; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:14px 14px 0 0; box-shadow:0 -6px 24px rgba(0,0,0,.18); transform:translateY(110%); transition:transform .2s,bottom .12s; z-index:6; display:flex; flex-direction:column; max-height:320px; }
+  .sheet.show { transform:translateY(0); }
+  .sheet .hd { padding:8px 12px; font-size:12px; color:var(--mut); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  .sheet .body { padding:8px 12px; overflow-y:auto; flex:1; }
+  .kbd { position:absolute; left:0; right:0; bottom:0; height:150px; background:#111827; z-index:7; display:none; align-items:center; justify-content:center; color:#9ca3af; font-size:12px; letter-spacing:2px; }
+  .kbd.show { display:flex; }
+  .pillrow { display:flex; gap:6px; margin:6px 0; flex-wrap:wrap; }
+  .pill { border:1px solid var(--line); border-radius:99px; padding:2px 10px; font-size:11.5px; }
+  .pill.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .tbtn { border:1px solid var(--line); border-radius:6px; padding:2px 8px; font-size:11.5px; background:#fff; cursor:pointer; }
+  .sheet textarea { min-height:64px; font-size:12.5px; }
+  .legend { font-size:11.5px; color:var(--mut); }
+</style>
+</head>
+<body>
+<header>
+  <h1>论坛行内渲染（⑩）+ 回复栏浮层（⑪）<span class="dep">　PROTOTYPE · 一次性代码 · 结论写回 issue，代码不进 main</span></h1>
+  <p>要回答的两个问题：①「行内源串 + runs + 零形状变更 + 摘要再剥」这套状态模型站得住吗？②「遮罩 + 贴键盘上沿面板」是什么联动？
+     算法切片按 <span class="mono">utils/markdown.uts</span> 真码移植，改动点仅 ⑩ 要验证的分叉本身（D1–D4，见脚本头注释）。</p>
+</header>
+
+<nav>
+  <button data-tab="play" class="on">① 自由试验台</button>
+  <button data-tab="cases">② 疑难用例</button>
+  <button data-tab="regress">③ 零回归对账</button>
+  <button data-tab="sheet">④ 票二浮层模拟</button>
+  <button data-tab="verdict">⑤ 待验格 & 结论</button>
+</nav>
+
+<main>
+<!-- ① 自由试验台 -->
+<section class="tab on" id="tab-play">
+  <div class="grid3">
+    <div class="card">
+      <h3>Markdown 源</h3>
+      <textarea id="src" spellcheck="false"></textarea>
+      <div class="row">
+        <label>档位</label>
+        <select id="subset">
+          <option value="forum" selected>forum（声明 inline）</option>
+          <option value="chapter">chapter（不声明 inline）</option>
+          <option value="featured">featured（不声明 inline）</option>
+        </select>
+      </div>
+      <div class="row"><label><input type="checkbox" id="fork" checked> ⑩ 分叉：声明 inline ⇒ 块存行内源串</label></div>
+      <div class="row"><label><input type="checkbox" id="appmode"> App 受限模式（uvue：子 text 的 margin/padding 不生效；text-decoration 待验 ⇒ 按「样式不出」演示）</label></div>
+      <div class="row">
+        <button class="act" id="btn-run">跑一遍</button>
+        <button class="act ghost" id="btn-copy-state">复制状态 JSON</button>
+      </div>
+      <p class="legend">渲染面模拟 <span class="mono">forum-markdown-blocks.uvue</span> 的嵌套 <span class="mono">&lt;text&gt;</span>：每个 run 自带全部样式（App 端子节点不继承父样式）。链接点击在渲染面上点。</p>
+    </div>
+    <div class="card">
+      <h3>渲染结果<span class="flag note" id="mode-flag">CSS 全能力</span></h3>
+      <div class="bb render" id="render"></div>
+      <h3 style="margin-top:12px">列表摘要投影（⑩-5：对源串再剥记号）</h3>
+      <div class="bb" id="preview"></div>
+      <h3 style="margin-top:12px">链接协议闸（⑩-8）</h3>
+      <div class="bb" id="linklog">（渲染面上点链接看这里）</div>
+    </div>
+    <div class="card">
+      <h3>全量状态（块 → runs）</h3>
+      <pre class="state" id="state"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ② 疑难用例 -->
+<section class="tab" id="tab-cases">
+  <div class="card">
+    <h3>逐条驱动修订段的判据（点「装入」进 ① 看全量状态；「直跑」在本行展开结果）</h3>
+    <table class="cases" id="case-table"></table>
+  </div>
+  <div class="card">
+    <h3>⑥-1 / ⑥-5 判据自动机检（对当前试验台源串）</h3>
+    <table class="cases" id="ac-table"></table>
+    <p class="legend">口径：渲染面不得出现记号本体 <span class="mono">** * ` ~~ ](</span>（围栏/分隔线已成块、不在文本里）；摘要面不得出现记号、但文字要在。</p>
+  </div>
+</section>
+
+<!-- ③ 零回归对账 -->
+<section class="tab" id="tab-regress">
+  <div class="card">
+    <h3>⑩-6：chapter / featured 不声明 inline ⇒ 分叉前后逐字不变（JSON 深度相等）</h3>
+    <table class="cases" id="regress-table"></table>
+    <p class="legend">A = 现生产算法（恒抹平，无 fork 参数）；B = 加分叉后、在「未声明 inline 的档」上的输出。两列必须完全一致 —— 这就是票一 ③ 门「零回归」组的原型版。forum 档不在此表（它本来就该变）。</p>
+  </div>
+</section>
+
+<!-- ④ 票二浮层模拟 -->
+<section class="tab" id="tab-sheet">
+  <div class="grid2">
+    <div class="card">
+      <h3>形态模拟（浏览器合成键盘 —— 真机键盘归票二 ①a）</h3>
+      <div class="row">
+        <button class="act" id="s-trigger">点触发条</button>
+        <button class="act ghost" id="s-kbd">切换合成键盘</button>
+        <button class="act ghost" id="s-close">收起</button>
+      </div>
+      <div class="phone">
+        <div class="appbar">‹　话题详情（标题栏）</div>
+        <div class="feed" id="feed"></div>
+        <div class="triggerbar"><div class="fake">写下你的回复…</div><button class="tbtn" id="s-trigger2">回复</button></div>
+        <div class="mask" id="mask"></div>
+        <div class="sheet" id="sheet">
+          <div class="hd"><span id="sheet-hd">回复面板</span><span><button class="tbtn" id="s-send">发送</button></span></div>
+          <div class="body">
+            <div class="pillrow"><span class="pill on" id="p-text">纯文本</span><span class="pill" id="p-md">Markdown</span></div>
+            <div class="pillrow md-only" style="display:none"><span class="tbtn">###</span><span class="tbtn">-</span><span class="tbtn">&gt;</span><span class="tbtn">```</span><span class="tbtn">---</span><span class="tbtn">＋图</span></div>
+            <textarea id="s-text" placeholder="贴故障码、写步骤…"></textarea>
+            <div class="legend md-only" style="display:none">边界提示行（⑩-10 新文案）：表格与图表显示原文 · 图片用下方入口 · 链接点开需确认</div>
+          </div>
+        </div>
+        <div class="kbd" id="kbd">合成键盘 150px</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>每一步的完整状态</h3>
+      <pre class="state" id="sheet-state"></pre>
+      <h3 style="margin-top:12px">这条模拟能答 / 不能答</h3>
+      <div class="bb">
+        ✅ 能答：遮罩阻断阅读（⑪-1）、面板 bottom 跟键盘高度的三段联动（⑪-4）、删掉「下滑收起」后触发条常驻是否成立（⑪-3）、面板内滚动兜半屏上限（⑪-2）。<br>
+        ❌ 不能答：<span class="mono">uni.onKeyboardHeightChange</span> 的真机时序与高度、<span class="mono">adjustPan</span> 整页上推是否真被 <span class="mono">:adjust-position="false"</span> 关掉、页面容器写死 <span class="mono">height: windowHeight px</span> 的交互 —— 全留票二 ①a（handoff §6：全仓 0 先例）。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ⑤ 待验格 & 结论 -->
+<section class="tab" id="tab-verdict">
+  <div class="card">
+    <h3>原型只能演示、必须真机判的格（别拿这些过门）</h3>
+    <table class="cases">
+      <tr><th>格</th><th>原型里的演示</th><th>真机才能定的</th></tr>
+      <tr><td>链接下划线 / 删除线样式</td><td>App 受限模式按最坏渲染：记号消失、样式不出</td><td><b>已由一手文档回答</b>（<span class="mono">.scratch/md-inline-render-facts.md</span>）：简写 <span class="mono">text-decoration</span> App 端 x，长形态 <span class="mono">text-decoration-line</span> Android 3.9+ 支持（underline / line-through / overline / none）⇒ 本行"最坏渲染"降级为<b>兜底口径</b>；只剩「长形态在<b>嵌套子 text</b> 上的实际出图」待真机判</td></tr>
+      <tr><td>行内代码胶囊观感</td><td>受限模式去掉 padding，只剩底色 + 字符空格</td><td>嵌套 <span class="mono">&lt;text&gt;</span> 子节点不继承父样式的实际表现</td></tr>
+      <tr><td>子 text 点击 → 确认弹窗</td><td>浏览器 showModal：显示域名 + 确认/取消（mp-weixin 分支=复制+toast）</td><td>HBuilderX ≥ 4.51 下子 text 的 <span class="mono">@click</span> 是否真响应</td></tr>
+      <tr><td>键盘 + fixed 面板</td><td>④ 的合成键盘联动</td><td><span class="mono">uni.onKeyboardHeightChange</span> 全仓 0 先例</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>原型答出来的（node 自查 41 条断言全绿，脚本 <span class="mono">_verify-forum-inline.js</span>）</h3>
+    <table class="cases">
+      <tr><th>发现</th><th>实测证据</th><th>要回写给 ADR / 票一 AC 的东西</th></tr>
+      <tr>
+        <td><b>⑩-2 的分词器必须递归，单趟扁平匹配会漏</b></td>
+        <td class="mono">**粗体里有 [链接](…) 和 `码`** → v1 产出一个粗体 run，其 text 里**原样带着** <span class="mono">[链接](…)</span> 与反引号（INV-6）</td>
+        <td><span class="mono">markdownInline.uts</span> 的 run 需要 <span class="mono">kids</span>（嵌套子 run），否则「粗体里套链接」正好把 ⑥-1 打破 —— 而论坛帖里这是常见写法</td>
+      </tr>
+      <tr>
+        <td><b>⑥-1 的判据对象是 run 的叶子文字，不是拼接后的整段</b></td>
+        <td class="mono">跨 run 拼接时，代码内容 <span class="mono">`a**b`</span> 与远处一个裸 <span class="mono">**</span> 会被成对正则连成一次误报（INV-1 首轮假红）</td>
+        <td>票一 AC 与 ③ 门用例都应写成「逐 run 断言」；行为守护若按整段 <span class="mono">toContain</span> 判会既假红又漏判</td>
+      </tr>
+      <tr>
+        <td><b>现状正则会「吃掉」不成对记号与词内下划线的字符（既有缺陷，非 ⑩ 引入）</b></td>
+        <td class="mono"><span class="mono">2 * 3 = 6，* 是乘号</span> → 现状产物 <span class="mono">2  3 = 6， 是乘号</span>（星号被吃）；<span class="mono">a_b_c</span> → <span class="mono">abc</span></td>
+        <td>⑩ 之后这族缺陷会从「静默丢字符」升级成「可见错斜体」⇒ 分词器要带 flanking 约束；代价是 ⑩-5「产物逐字不变」**不成立**</td>
+      </tr>
+      <tr>
+        <td><b>⑩-5 的正确落点：摘要与渲染共用同一次分词的叶子</b></td>
+        <td class="mono">投影改为取 runs 叶子后，6 类源串产物变化，逐条都是「不再丢字符 / 不再漏残括号 / 不再误剥代码内容」（INV-2 修复集）</td>
+        <td>把 ADR 那句改成「摘要产物只允许等于<b>修复集</b>的变化，其余逐字不变」，并同步 #1273 那条「预览不含星号」判据（裸星号现在会合法出现在预览里）</td>
+      </tr>
+      <tr>
+        <td><b>⑩-3 零形状变更站得住</b></td>
+        <td class="mono">有序列表落 <span class="mono">list.level=1</span>、无序 0；块字段仍只有 <span class="mono">type/level/text/items</span>（INV-8）</td>
+        <td>血账（自定义类型数组字段被 UTS 改名）射程内一条都不碰 —— 这条可以照 ⑩-3 落</td>
+      </tr>
+      <tr>
+        <td><b>⑩-6 零回归在「分叉只在 hasMember(inline) 时生效」下成立</b></td>
+        <td class="mono">chapter / featured 全部源串在 fork 开关两侧 JSON 完全相同（INV-3）；块结构也相同（INV-3b）</td>
+        <td>实现纪律：分叉闸门只问 <span class="mono">hasMember(MEMBER_INLINE)</span>，<b>不要</b>顺手把新分词器接进章节/精选的投影（INV-10 实测本语料上二次剥是幂等的 ⇒ 风险低但不是零，别拿它当许可）</td>
+      </tr>
+      <tr>
+        <td><b>⑩-8 协议闸的口径比 ADR 写的更窄</b></td>
+        <td class="mono"><span class="mono">mailto:</span> / <span class="mono">//evil.com</span> / 相对路径都被判「降级为不可点」，只有 http(s) 过闸（INV-7）</td>
+        <td>ADR 只点名 <span class="mono">javascript:/data:/file:</span> ⇒ 实际口径是<b>白名单</b>（mailto 也拦）。要放 mailto 得在票一里明确加，别让实现自己猜</td>
+      </tr>
+      <tr>
+        <td><b>URL 含括号时现状留残括号（顺带修）</b></td>
+        <td class="mono"><span class="mono">[a](javascript:alert(1))</span> 现状产物 <span class="mono">a)</span>；<span class="mono">x_(y)</span> 类维基链接同</td>
+        <td>链接正则需允许一层括号；这是既有缺陷，可在票一顺手修并登记</td>
+      </tr>
+      <tr>
+        <td><b>「样式类挂上了 ≠ 样式生效」——原型自己踩到了 uvue 那条规则要防的同一族 bug</b></td>
+        <td class="mono">浏览器读数：外层 <span class="mono">class="run r-b"</span> 齐备，computed <span class="mono">font-weight</span> 却是 <span class="mono">400</span>（<span class="mono">font:inherit</span> 简写重置）；链接 <span class="mono">.r-l</span> 的蓝色被 <span class="mono">.run{color:inherit}</span> 按源码顺序盖掉。两处都必须 computed 读数才看得见</td>
+        <td>票一的 ⑥-1 / ①a 判据不能停在「嵌套 <span class="mono">&lt;text&gt;</span> 上挂了 <span class="mono">r-b</span>」——要能证明<b>计算后的样式</b>真的生效（Web 侧 computed style / App 侧只能靠真机像素或 a11y 读数）。这条正是移动端 <span class="mono">text-decoration</span> 待验格<b>同一个判据形状</b>：别拿"写了"当"出了"</td>
+      </tr>
+      <tr>
+        <td><b>摘要里的成对记号只有一个成因：围栏代码块原样入摘要</b></td>
+        <td class="mono"><span class="mono">```…code **block**…```</span> 的帖子，列表摘要带着 <span class="mono">**block**</span>（<span class="mono">#1273</span> 投影对 code 块「用块 text、不再剥」）。<b>生产既有行为</b>，与 ⑩ 无关</td>
+        <td>票一要么沿用并在回记里具名（「摘要含代码原文」是设计不是缺陷），要么让摘要跳过 code 块 —— 但别让它继续默默撞 <span class="mono">#1273</span> 那条「预览不含星号」的判据</td>
+      </tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>原型答不出来的（见上一卡的「必须真机判」表）＋ 票二浮层的结论</h3>
+    <div class="bb">
+      ⑪ 的联动逻辑（遮罩阻断阅读、面板 bottom 跟键盘高度、删掉「下滑收起」后触发条常驻、面板内滚动兜半屏）在 ④ 的合成键盘模拟里<b>自洽</b>：面板开着时 feed 不可滚 ⇒ #1300 那条判据的触发场景确实消失，删得对。<br>
+      但「面板真能贴住键盘上沿、标题栏不被顶走」是 <span class="mono">uni.onKeyboardHeightChange</span> + <span class="mono">adjust-position=false</span> + 写死 <span class="mono">height: windowHeight px</span> 三者的交互，全仓 0 先例 ⇒ <b>浏览器模拟不能替代</b>，票二 ①a 必须出像素/a11y 证据。
+    </div>
+  </div>
+  <div class="card">
+    <h3>结论（人填：站得住 / 哪里塌，以及要不要按上面的回写改 ADR）</h3>
+    <textarea id="verdict" style="min-height:180px" placeholder="问题①（⑩ 状态模型）：站得住 / 哪里塌 …&#10;问题②（⑪ 形态）：…"></textarea>
+    <div class="row"><button class="act" id="btn-save-verdict">存进 localStorage（本会话草稿）</button></div>
+    <p class="legend">按 prototype 纪律：结论折进真码与 issue，本文件留在 <span class="mono">.scratch/prototype/</span>（gitignore 内）当一次性产物。</p>
+  </div>
+</section>
+</main>
+
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════════════════════════
+   utils/markdown.uts 的 JS 移植（原型切片，非实现）。
+   与真码的全部差异 = ⑩ 要验证的分叉本身：
+   D1  声明表新增 MEMBER_INLINE，仅 forum 档声明（⑩-2）
+   D2  stripInline(text, keepInline) —— keepInline ⇒ 原样返回源串（⑩-2）
+   D3  stripInlinePlain 补 ~~删除线~~ 规则（⑩-5：修现状的源串泄漏）
+   D4  list 块有序信息落进既有 level 槽（⑩-3 零形状变更：0=无序 1=有序）
+   ═══════════════════════════════════════════════════════════════════════ */
+var MEMBER_HEADING='heading',MEMBER_LIST='list',MEMBER_QUOTE='quote',MEMBER_CODE='code',
+    MEMBER_DIVIDER='divider',MEMBER_IMAGE='image',MEMBER_TABLE='table',MEMBER_INLINE='inline';
+var SUBSET_MEMBERS={
+  chapter:[MEMBER_HEADING,MEMBER_LIST,MEMBER_QUOTE,MEMBER_CODE,MEMBER_DIVIDER,MEMBER_IMAGE,MEMBER_TABLE],
+  featured:[MEMBER_HEADING,MEMBER_LIST,MEMBER_QUOTE,MEMBER_CODE,MEMBER_DIVIDER,MEMBER_IMAGE],
+  forum:[MEMBER_HEADING,MEMBER_LIST,MEMBER_QUOTE,MEMBER_CODE,MEMBER_DIVIDER,MEMBER_INLINE]
+};
+function subsetMembers(s){ return SUBSET_MEMBERS[s]||SUBSET_MEMBERS.chapter; }
+function trim(l){ return l.replace(/^\s+|\s+$/g,''); }
+
+function stripInlinePlainJs(text){
+  var s=text;
+  s=s.replace(/!\[([^\]]*)\]\([^)]*\)/g,'$1');
+  s=s.replace(/\[([^\]]*)\]\([^)]*\)/g,'$1');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'$1');
+  s=s.replace(/__([^_]+)__/g,'$1');
+  s=s.replace(/\*([^*]+)\*/g,'$1');
+  s=s.replace(/_([^_]+)_/g,'$1');
+  s=s.replace(/`([^`]+)`/g,'$1');
+  s=s.replace(/~~([^~]+)~~/g,'$1');            // D3
+  return s;
+}
+function dollarRun(t,from){ var n=0; while(from+n<t.length && t.substring(from+n,from+n+1)==='$') n++; return n; }
+function collectMathSpans(text){
+  var spans=[],i=0;
+  while(i<text.length){
+    if(text.substring(i,i+1)!=='$'){ i++; continue; }
+    var run=dollarRun(text,i), want=(run>=2?2:1), cursor=i+want, close=-1;
+    while(cursor<text.length){
+      if(text.substring(cursor,cursor+1)!=='$'){ cursor++; continue; }
+      var cr=dollarRun(text,cursor);
+      if(cr>=want){ close=cursor; break; }
+      cursor=cursor+cr;
+    }
+    if(close>i+want){ spans.push(i); spans.push(close+want); i=close+want; } else { i=i+want; }
+  }
+  return spans;
+}
+function stripInline(text, keepInline){        // D2
+  if(keepInline) return text;
+  var spans=collectMathSpans(text);
+  if(spans.length===0) return stripInlinePlainJs(text);
+  var out='',cur=0;
+  for(var k=0;k+1<spans.length;k+=2){
+    out+=stripInlinePlainJs(text.substring(cur,spans[k]));
+    out+=text.substring(spans[k],spans[k+1]);
+    cur=spans[k+1];
+  }
+  out+=stripInlinePlainJs(text.substring(cur));
+  return out;
+}
+var ESCAPED_PIPE='\u0001';
+function hasTablePipe(l){ return l.indexOf('|')>=0; }
+function splitTableRowRaw(line){
+  var s=trim(line);
+  if(s.charAt(0)==='|') s=s.substring(1);
+  if(s.charAt(s.length-1)==='|') s=s.substring(0,s.length-1);
+  return s.replace(/\\\|/g,ESCAPED_PIPE).split('|').map(function(p){ return trim(p.split(ESCAPED_PIPE).join('|')); });
+}
+function isTableDelimiterRow(line){
+  if(!hasTablePipe(line)) return false;
+  var c=splitTableRowRaw(line);
+  if(c.length===0) return false;
+  for(var x=0;x<c.length;x++){ if(c[x].match(/^:?-+:?$/)==null) return false; }
+  return true;
+}
+function normalizeTableRow(raw,width,keepInline){
+  var cells=[];
+  for(var x=0;x<width;x++) cells.push(x<raw.length?stripInline(raw[x],keepInline):'');
+  return cells;
+}
+function parseMarkdown(md, subset, fork){
+  var blocks=[];
+  if(!md || md.length===0) return blocks;
+  var members=subsetMembers(subset);
+  function hasMember(m){ return members.indexOf(m)>=0; }
+  var keepInline = !!fork && hasMember(MEMBER_INLINE);
+  var lines=md.split('\n'), i=0, inCode=false, codeLines=[], listItems=[], listType='', quoteLines=[];
+  function flushList(){
+    if(listItems.length>0){
+      blocks.push({ type:'list', level:(listType==='ol'?1:0), text:'', items:listItems });   // D4
+      listItems=[]; listType='';
+    }
+  }
+  function flushQuote(){
+    if(quoteLines.length>0){ blocks.push({type:'quote',level:0,text:quoteLines.join('\n'),items:[]}); quoteLines=[]; }
+  }
+  function pushTableRow(cells,isHead){ blocks.push({type:'table',level:(isHead?1:0),text:cells.join(' '),items:cells}); }
+  while(i<lines.length){
+    var rawLine=lines[i], line=trim(rawLine);
+    if(hasMember(MEMBER_CODE) && line.indexOf('```')===0){
+      if(inCode){ blocks.push({type:'code',level:0,text:codeLines.join('\n'),items:[]}); codeLines=[]; inCode=false; }
+      else { flushList(); flushQuote(); inCode=true; }
+      i++; continue;
+    }
+    if(inCode){ codeLines.push(rawLine); i++; continue; }
+    if(line.length===0){ flushList(); flushQuote(); i++; continue; }
+    if(line.indexOf('$$')===0){
+      flushList(); flushQuote();
+      var f=[rawLine]; i++;
+      if(!(line.length>4 && line.slice(-2)==='$$')){
+        while(i<lines.length){
+          var nl=lines[i]; f.push(nl); i++;
+          var c=trim(nl);
+          if(c==='$$' || c.length>2 && c.slice(-2)==='$$') break;
+        }
+      }
+      blocks.push({type:'paragraph',level:0,text:f.join('\n'),items:[]});   // 公式恒原样源码，两态一致
+      continue;
+    }
+    if(hasMember(MEMBER_TABLE) && hasTablePipe(line) && !isTableDelimiterRow(line)
+       && i+1<lines.length && isTableDelimiterRow(trim(lines[i+1]))){
+      flushList(); flushQuote();
+      var hr=splitTableRowRaw(line), w=hr.length;
+      pushTableRow(normalizeTableRow(hr,w,keepInline),true); i=i+2;
+      while(i<lines.length){
+        var bl=trim(lines[i]);
+        if(bl.length===0 || !hasTablePipe(bl) || isTableDelimiterRow(bl)) break;
+        pushTableRow(normalizeTableRow(splitTableRowRaw(bl),w,keepInline),false); i++;
+      }
+      continue;
+    }
+    if(hasMember(MEMBER_DIVIDER) && (line==='---'||line==='***'||line==='___')){
+      flushList(); flushQuote(); blocks.push({type:'divider',level:0,text:'',items:[]}); i++; continue;
+    }
+    var hm=line.match(/^(#{1,6})\s+(.*)$/);
+    if(hasMember(MEMBER_HEADING) && hm){
+      flushList(); flushQuote();
+      blocks.push({type:'heading',level:hm[1].length,text:stripInline(hm[2],keepInline),items:[]}); i++; continue;
+    }
+    if(hasMember(MEMBER_QUOTE) && line.indexOf('>')===0){
+      flushList();
+      quoteLines.push(stripInline(trim(line.substring(1)),keepInline)); i++; continue;
+    }
+    var um=line.match(/^[-*+]\s+(.*)$/);
+    if(hasMember(MEMBER_LIST) && um){
+      flushQuote();
+      if(listType!=='ul'){ flushList(); listType='ul'; }
+      listItems.push(stripInline(um[1],keepInline)); i++; continue;
+    }
+    var om=line.match(/^\d+\.\s+(.*)$/);
+    if(hasMember(MEMBER_LIST) && om){
+      flushQuote();
+      if(listType!=='ol'){ flushList(); listType='ol'; }
+      listItems.push(stripInline(om[1],keepInline)); i++; continue;
+    }
+    var im=line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if(hasMember(MEMBER_IMAGE) && im){
+      flushList(); flushQuote();
+      blocks.push({type:'image',level:0,text:im[2],items:[im[1]]}); i++; continue;
+    }
+    flushList(); flushQuote();
+    blocks.push({type:'paragraph',level:0,text:stripInline(line,keepInline),items:[]}); i++;
+  }
+  if(inCode && codeLines.length>0) blocks.push({type:'code',level:0,text:codeLines.join('\n'),items:[]});
+  flushList(); flushQuote();
+  return blocks;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ⑩-2 新模块 utils/markdownInline.uts 的原型：源串 → runs
+   run = { text, b, i, c, s, link }
+   优先级照 stripInlinePlain 的顺序：image > link > ** > __ > * > _ > ` > ~~
+   公式跨度跳过（原样保留，降级为源码 —— 两态一致）。
+   ═══════════════════════════════════════════════════════════════════════ */
+function inlineSafeUrl(url){
+  var u=trim(url).toLowerCase();
+  return u.indexOf('http://')===0 || u.indexOf('https://')===0;   // ⑩-8 协议闸
+}
+/* v2 分词器：递归 + flanking 约束 + URL 内允许一层括号。
+   run = { text, b,i,c,s, link, kids[] }  —— kids 是「粗体里还有链接」这类嵌套的载体。 */
+var RE_IMAGE=/^!\[([^\]]*)\]\(([^)]*)\)/;
+var RE_LINK  =/^\[([^\]]*)\]\(((?:[^()]|\([^()]*\))*)\)/;   // 支持 (a(b)c) 一层，修 javascript:alert(1) 的残括号
+var RE_CODE  =/^`([^`]+)`/;
+var RE_BOLD  =/^\*\*([^\s*](?:[^*]*[^\s*])?)\*\*/;
+var RE_BOLD2 =/^__([^\s_](?:[^_]*[^\s_])?)__/;
+var RE_STRIKE=/^~~([^\s~](?:[^~]*[^\s~])?)~~/;
+var RE_ITAL  =/^\*([^\s*](?:[^*]*[^\s*])?)\*/;
+var RE_UNDER =/^_([^\s_](?:[^_]*[^\s_])?)_/;
+function wordChar(c){ return /[A-Za-z0-9]/.test(c||''); }
+function tokenizeInline(src, mathSpans){
+  var runs=[], buf='';
+  function flush(){ if(buf.length){ runs.push({text:buf}); buf=''; } }
+  function inMath(p){
+    for(var m=0;m+1<mathSpans.length;m+=2){ if(p>=mathSpans[m] && p<mathSpans[m+1]) return m; }
+    return -1;
+  }
+  var n=src.length, i=0;
+  while(i<n){
+    var mi=inMath(i);
+    if(mi>=0){ buf+=src.substring(mathSpans[mi],mathSpans[mi+1]); i=mathSpans[mi+1]; continue; }
+    var rest=src.slice(i), m;
+    if((m=rest.match(RE_IMAGE))){                    // 图片（论坛档未声明 image）→ alt 文本地板
+      flush();                                       // 先把前文吐出来，alt 才能落在原位（否则顺序倒置）
+      var altKids=tokenizeInline(m[1], collectMathSpans(m[1]));
+      for(var q=0;q<altKids.length;q++) runs.push(altKids[q]);
+      i+=m[0].length; continue;
+    }
+    if((m=rest.match(RE_LINK))){
+      flush();
+      var kids=tokenizeInline(m[1], collectMathSpans(m[1]));
+      if(inlineSafeUrl(m[2])) runs.push({text:m[1], link:trim(m[2]), kids:kids});
+      else runs.push({text:m[1], kids:kids});        // ⑩-8 非法协议 → 不可点，但内层样式仍在
+      i+=m[0].length; continue;
+    }
+    if((m=rest.match(RE_CODE))){ flush(); runs.push({text:m[1], c:true}); i+=m[0].length; continue; }
+    if((m=rest.match(RE_BOLD))){ flush(); runs.push({text:m[1], b:true, kids:tokenizeInline(m[1],collectMathSpans(m[1]))}); i+=m[0].length; continue; }
+    if((m=rest.match(RE_BOLD2))){ flush(); runs.push({text:m[1], b:true, kids:tokenizeInline(m[1],collectMathSpans(m[1]))}); i+=m[0].length; continue; }
+    if((m=rest.match(RE_STRIKE))){ flush(); runs.push({text:m[1], s:true, kids:tokenizeInline(m[1],collectMathSpans(m[1]))}); i+=m[0].length; continue; }
+    if((m=rest.match(RE_ITAL))){ flush(); runs.push({text:m[1], i:true, kids:tokenizeInline(m[1],collectMathSpans(m[1]))}); i+=m[0].length; continue; }
+    if((m=rest.match(RE_UNDER)) && !wordChar(src.charAt(i-1))){   // 词内下划线 a_b_c 不当记号
+      flush(); runs.push({text:m[1], i:true, kids:tokenizeInline(m[1],collectMathSpans(m[1]))}); i+=m[0].length; continue;
+    }
+    buf+=src.charAt(i); i++;
+  }
+  flush();
+  return runs;
+}
+function forumInlineRuns(text){ return tokenizeInline(text, collectMathSpans(text)); }
+/* runs 的叶子拼接 = 「只要文字」的那一投影 —— 与渲染共用同一次分词（⑩-5 的落点） */
+function plainFromRuns(runs){
+  var out='';
+  for(var r=0;r<runs.length;r++){
+    var run=runs[r];
+    out += (run.kids && run.kids.length) ? plainFromRuns(run.kids) : run.text;
+  }
+  return out;
+}
+function plainOf(text){ return plainFromRuns(forumInlineRuns(text)); }
+
+/* ⑩-5 摘要投影：源串 → 同一分词器的叶子。
+   skipCode=false（缺省，= 现状 #1273 行为）时把围栏代码内容原样带进摘要 —— 第二轮浏览器实测发现
+   「摘要含成对记号」的唯一真成因就是这一条（生产既有行为，非 ⑩ 引入）。 */
+function projectPlainText(blocks, skipCode){
+  var parts=[];
+  for(var b=0;b<blocks.length;b++){
+    var blk=blocks[b];
+    if(blk.type==='divider') continue;
+    if(blk.type==='list'){
+      for(var x=0;x<blk.items.length;x++) parts.push(plainOf(blk.items[x]));
+    } else if(blk.type==='table'){
+      for(var y=0;y<blk.items.length;y++) parts.push(plainOf(blk.items[y]));
+    } else if(blk.type==='code'){
+      if(!skipCode) parts.push(blk.text);
+    } else if(blk.text && blk.text.length){
+      parts.push(plainOf(blk.text));
+    }
+  }
+  return parts.join(' ').replace(/\n/g,' ');
+}
+
+/* ═══════════ 渲染：模拟 forum-markdown-blocks 的嵌套 <text> ═══════════ */
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function renderRun(r, inh, base){
+  var st={b:inh.b||r.b, i:inh.i||r.i, c:inh.c||r.c, s:inh.s||r.s};
+  var cls='run';
+  if(st.b) cls+=' r-b';
+  if(st.i) cls+=' r-i';
+  if(st.c) cls+=' r-c';
+  if(st.s) cls+=' r-s';
+  if(r.link) cls+=' r-l u';
+  var pad = st.c ? ' ' : '';                    // ⑩：胶囊靠 background + 字符空格（margin/padding 不生效）
+  // 坑位（浏览器实测）：这里绝不能写 `font:inherit` —— font 简写会重置 weight/style/family，
+  // 把 .r-b/.r-i/.r-c 全部覆盖掉，于是「加粗/斜体/等宽」在原型里一次都没显示出来。
+  // 链接不能带内联 color:inherit（会把 .r-l 的蓝色盖成正文色）—— 这正是 uvue「子 text 自带样式」要逐条摆对的坑。
+  var styleAttrs='font-size:inherit';
+  var attrs=' class="'+cls+'" style="'+styleAttrs+(base||'')+'"';
+  if(r.link) attrs+=' data-link="'+esc(r.link)+'" role="button" tabindex="0"';
+  var inner;
+  if(r.c){ inner=esc(pad+r.text); }             // 行内代码内容不再解析（源串就是内容）
+  else if(r.kids && r.kids.length){ inner=renderRuns(r.kids, st, base); }
+  else { inner=esc(pad+r.text+pad); }
+  return '<span'+attrs+'>'+inner+'</span>';
+}
+function renderRuns(runs, inh, base){
+  var out='';
+  inh=inh||{};
+  for(var r=0;r<runs.length;r++) out+=renderRun(runs[r], inh, base);
+  return out;
+}
+function renderText(line, base){
+  return renderRuns(forumInlineRuns(line), {}, base);
+}
+var ORDER_START_NOTE='（⑩-4：编号一律从 1 起，作者写的起始值不保留）';
+function renderBlocks(blocks, appMode){
+  var html='';
+  for(var b=0;b<blocks.length;b++){
+    var blk=blocks[b], txt='';
+    switch(blk.type){
+      case 'heading':
+        var lv=Math.min(6,Math.max(1,blk.level));
+        html+='<div class="heading h'+lv+'">'+renderText(blk.text,';font-size:'+(21-lv*2)+'px')+'</div>';
+        break;
+      case 'code':
+        html+='<div class="code">'+esc(blk.text)+'</div>';       // 代码块整体等宽，内部不再解析
+        break;
+      case 'quote':
+        // 坑位（浏览器实测）：这里原先走 esc(blk.text) 不消费 runs ⇒ 引用块把 ** 与反引号原样吐出来，
+        // 而「按 runs 判」的机检看不见。判据必须同时打在渲染面上（见 ⑥-1 判据表的第二行）。
+        var qLines=blk.text.split('\n'), qHtml='';
+        for(var ql=0;ql<qLines.length;ql++) qHtml+=(ql?'<br>':'')+renderText(qLines[ql],'');
+        html+='<div class="quote">'+qHtml+'</div>';
+        break;
+      case 'divider':
+        html+='<div class="divider"></div>';
+        break;
+      case 'list':
+        var ol=(blk.level===1);                                  // D4
+        var marks=[];
+        html+='<div class="list">';
+        for(var x=0;x<blk.items.length;x++){
+          var mark = ol ? (x+1)+'.' : '•';
+          html+='<div class="li"><span class="mark">'+mark+'</span><span style="flex:1">'+renderText(blk.items[x],'')+'</span></div>';
+        }
+        if(ol) html+='<div class="muted">'+ORDER_START_NOTE+'</div>';
+        html+='</div>';
+        break;
+      case 'table':
+        html+='<div class="paragraph muted">[表格 · 论坛档未声明 ⇒ 退回逐行原文]</div><div class="paragraph">'+esc(blk.items.join(' | '))+'</div>';
+        break;
+      default:
+        html+='<div class="paragraph">'+renderText(blk.text,'')+'</div>';
+    }
+  }
+  return html;
+}
+
+/* ═══════════ ⑩-8 链接确认弹窗（模拟 uni.showModal / mp-weixin 复制） ═══════════ */
+var linkLog=[];
+function onLinkClick(url){
+  var host='(解析失败)';
+  try{ host=new URL(url).hostname; }catch(e){}
+  var ok=window.confirm('打开链接？\n\n目标域名：'+host+'\n\n（App：确认后 uni.openURL；mp-weixin：复制链接 + toast）');
+  if(ok){
+    linkLog.unshift('确认 → App uni.openURL('+url+')  [域名 '+host+']');
+  } else {
+    linkLog.unshift('取消 → 留在站内（mp-weixin 分支：复制链接 + toast）');
+  }
+  if(linkLog.length>6) linkLog.pop();
+  document.getElementById('linklog').innerHTML=linkLog.map(function(l){return '<div class="mono">'+esc(l)+'</div>';}).join('');
+}
+
+/* ═══════════ 用例库 ═══════════ */
+var CASES=[
+  { name:'⑥-1 记号不再原样显示', md:'**故障码** P0420 与 [手册](https://gccsmile.com/manual) 以及 `ERR-7`\n\n~~作废条款~~', why:'③ 当年判据「贴故障码要等宽、给手册要能点」—— 记号该变成样式而不是消失' },
+  { name:'⑩-3 有序编号落 level 槽（零形状变更）', md:'3. 起步\n4. 打火\n5. 交车\n\n- 无序\n- 仍无序', why:'MarkdownBlock 只有 {type,level,text,items}；用 list 块恒 0 的 level 承载 0=无序/1=有序（照 table 用 level 分表头先例）' },
+  { name:'⑩-4 起始值不保留（具名降级）', md:'7. 七\n8. 八', why:'CommonMark 保留起始值，移动端从 1 起 —— 属「仍可读的降级」，须具名登记' },
+  { name:'⑩-5 删除线不再泄漏源串', md:'~~这条已作废~~，但 **这条** 有效', why:'现状 stripInlinePlain 没有 ~~ 规则 ⇒ 原样吐 ~~x~~（handoff §4 已核实）；渲染要划掉、摘要要剥净' },
+  { name:'⑩-8 协议闸 javascript:', md:'点 [坏链接](javascript:alert(1)) 试试；好链接 [这里](https://gccsmile.com/a)', why:'论坛正文是不可信面：非 http(s) 一律降级为不可点文本（渲染层根本不该产 link run）' },
+  { name:'⑩-8 协议闸 data: / 相对协议', md:'[a](data:text/html,hi) 与 [b](//evil.com/x) 与 [c](mailto:a@b.com)', why:'同 ⑩-8；相对协议 // 与 mailto 按「只放 http(s)」的口径都不点 —— 原型要如实反映这个收窄' },
+  { name:'⑩-9 站内链接也弹确认', md:'站内话题 [话题 1240](https://gccsmile.com/training/forum/1240)', why:'根 CONTEXT.md 那句「站内直连不打断」按端分档收窄为 Web；app 内任何外链都是离开 app' },
+  { name:'公式跨度保护（既有语义回归面）', md:'价格 $a_1 + b_2$ 与 $5 到 $10 元，还有 **粗** 在旁', why:'inline 分叉后公式仍原样：不能因为「不抹平了」就让 _ 规则把公式里的下划线吃掉' },
+  { name:'未声明语法落段落地板（降级可读）', md:'| 列A | 列B |\n| --- | --- |\n| 1 | **2** |\n\n```mermaid\ngraph TD; A-->B;\n```', why:'表格/mermaid 在论坛档不声明 ⇒ 退回可见原文，绝不允许「声明里没有 ⇒ 内容消失」' },
+  { name:'任务列表仍是 • [ ]（登记过）', md:'- [ ] 待办\n- [x] 已完成', why:'⑥-6 已具名：清单里勾不勾都显示原始 [ ] 符号' },
+  { name:'混合嵌套（最难读的一行）', md:'**粗体里有 [链接](https://gccsmile.com/x) 和 `码`** 与 *斜体 ~~删~~*', why:'单行里粗体、链接、行内代码、删除线交织 —— tokenizeInline 优先级是否够用，看这条' },
+  { name:'裸记号不是记号（flanking）', md:'2 * 3 = 6，* 是乘号；a ** b 也应原样可见；变量 a_b_c 与 snake_case_name', why:'实测发现：现状正则会把裸星号/词内下划线当记号**吃掉字符**（`a_b_c`→`abc`）。⑩ 之后若不做 flanking，这格会从「静默丢字符」升级成「可见错斜体」' },
+  { name:'代码内容里的记号（不得二次剥）', md:'变量 `a**b` 与 反引号里的 ** 号', why:'根 ADR-0044 把「用正则剥」列为被否决做法的理由就在这格：代码内的 `**` 必须原样；判据也因此**只能按单个 run 判**，跨 run 拼接会误报' },
+  { name:'图片 alt 的落位（本轮修的真 bug）', md:'看图 ![故障铭牌](https://x.com/1.png) 结束', why:'分词器若不先 flush 前文就 push alt，alt 会跑到「看图」之前 —— 顺序倒置' },
+  { name:'URL 里带括号（残括号泄漏）', md:'坏 [a](javascript:alert(1)) 与好 [维基](https://zh.wikipedia.org/wiki/x_(y))', why:'现状 `[^)]*` 在第一个 ) 就截断 ⇒ 摘要与渲染都多出一个游离 )（生产既有缺陷，⑩-8 顺带修）' }
+];
+/* 渲染面自查：把 HTML 按 span/div 边界切段后逐段判 —— 这样既不会被「跨 run 的两个裸记号」误报，
+   又能抓到「某个渲染分支根本没用 runs」（引用块就是这条，浏览器实测踩过）。代码类内容整段剔除。 */
+function surfaceFragments(html){
+  var s=html
+    .replace(/<div class="code">[\s\S]*?<\/div>/g,'')            // 围栏代码：内容按口径原样
+    .replace(/<span class="run[^"]*\br-c\b[^"]*"[^>]*>[\s\S]*?<\/span>/g,'') // 行内代码内容：原样
+  var frags=s.replace(/<\/(span|div)>/g,'\u0000').replace(/<[^>]+>/g,'')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+    .split('\u0000').filter(function(t){ return t.trim().length>0; });
+  return frags;
+}
+
+var AC_LEAK=/\*\*[^*]+\*\*|~~[^~]+~~|`[^`]+`|\[[^\]]*\]\([^)]*\)/;
+function checkAC(md, blocks, leafTexts, preview, previewNoCode, surfaceFrags){
+  var rows=[];
+  // 判据按单个 run 判：跨 run 拼接会把「代码内容里的 **」与「远处另一个裸 **」连成一次误报（node 自查实测）
+  var bad=leafTexts.filter(function(t){ return t.match(AC_LEAK); });
+  rows.push(['⑥-1 渲染面（逐 run）不含成对记号', bad.length?'✗ 泄漏':'✓', bad.length?('此 run 仍有记号：'+JSON.stringify(bad[0])):'记号都变成样式；裸记号字符（作者真意）允许可见']);
+  var sbad=surfaceFrags.filter(function(t){ return t.match(AC_LEAK); });
+  rows.push(['⑥-1 渲染面（实际画出来的 HTML，按元素切段）', sbad.length?'✗ 泄漏':'✓', sbad.length?('这段源串被直接画出了：'+JSON.stringify(sbad[0])):'这条才抓得住「某分支没接 runs」——引用块曾经的漏网处']);
+  var starInPreview=/\*\*[^*]+\*\*|~~[^~]+~~/.test(previewNoCode);
+  rows.push(['#1273 预览不含成对记号（摘要再剥）', starInPreview?'✗':'✓', starInPreview?'摘要漏记号':'摘要与渲染共用同一次分词的叶子']);
+  var codeInPreview=/\*\*[^*]+\*\*|~~[^~]+~~|`[^`]+`/.test(preview);
+  rows.push(['摘要是否携带围栏代码原文', codeInPreview?'⚠ 带':'— 无代码块', codeInPreview?('成因只有一条：#1273 的投影对 code 块「原样带上不剥」⇒ 摘要里出现 '+JSON.stringify((preview.match(AC_LEAK)||[''])[0])+'。这是**生产既有行为**、非 ⑩ 引入 ⇒ 票一要裁定：沿用（并在回记里具名）还是让摘要跳过代码块'):'本串没有围栏代码块']);
+  rows.push(['⑩-5「产物逐字不变」是否成立', '✗ 不成立', '实测 6 类源串投影会变（裸 */_ 不再丢字符、URL 括号不再残留、嵌套 ~~ 被剥、代码内容不再被误剥）——全是修现状缺陷，但 ADR 那句须按实改写']);
+  rows.push(['⑩-5 删除线不再进摘要', /~~/.test(previewNoCode)?'✗ 仍泄漏':'✓', '现状 stripInlinePlain 没有 ~~ 规则 ⇒ ~~x~~ 原样吐；补规则后摘要干净']);
+  return rows;
+}
+
+/* ═══════════ 状态与交互 ═══════════ */
+var DEFAULT_SRC='## 测试 Markdown 渲染\n\n**故障码** P0420，先看 [手册](https://gccsmile.com/manual)，报错码 `ERR-7` 是等宽。\n\n~~这条已作废~~\n\n3. 起步\n4. 打火\n5. 交车\n\n- 有序里 [坏链接](javascript:alert(1)) 不点\n- 公式 $a_1 + b_2$ 保留源码\n\n> 引用里的 **粗体** 与 `码`\n\n```\ncode **block** 内记号原样\n```\n\n---\n\n| A | B |\n| --- | --- |\n| 1 | **2** |\n';
+function $(id){ return document.getElementById(id); }
+var lastState=null;
+function runProto(){
+  var md=$('src').value, subset=$('subset').value, fork=$('fork').checked, appMode=$('appmode').checked;
+  var blocks=parseMarkdown(md, subset, fork);
+  var view={subset:subset, fork:fork, appMode:appMode, blocks:[]};
+  var html='';
+  for(var b=0;b<blocks.length;b++){
+    var blk=blocks[b];
+    var vb={type:blk.type, level:blk.level, text:blk.text, items:blk.items};
+    if(blk.type==='list'){
+      vb.itemRuns=blk.items.map(function(it){ return forumInlineRuns(it); });
+    } else if(blk.text && blk.type!=='code'){
+      vb.runs=forumInlineRuns(blk.text);
+    }
+    view.blocks.push(vb);
+  }
+  var previewText=projectPlainText(blocks);
+  var previewNoCode=projectPlainText(blocks, true);
+  // 逐 run 的可见叶子文字（代码内容除外）—— ⑥-1 判据的正确判据对象
+  var leafTexts=[];
+  function walkLeaves(runs, inCode){
+    for(var r=0;r<runs.length;r++){
+      var code=inCode||!!runs[r].c;
+      if(runs[r].kids && runs[r].kids.length) walkLeaves(runs[r].kids, code);
+      else if(!code) leafTexts.push(runs[r].text);
+    }
+  }
+  for(var q=0;q<view.blocks.length;q++){
+    var vbq=view.blocks[q];
+    if(vbq.type==='code') continue;
+    if(vbq.itemRuns) for(var z=0;z<vbq.itemRuns.length;z++) walkLeaves(vbq.itemRuns[z], false);
+    else if(vbq.runs) walkLeaves(vbq.runs, false);
+  }
+  view.leafTexts=leafTexts;
+  view.summaryPreview=previewText;
+  var renderedHtml=renderBlocks(blocks, appMode);
+  $('render').className='bb render'+(appMode?' appconstrained':'');
+  $('render').innerHTML=renderedHtml;
+  $('mode-flag').textContent = appMode?'App 受限模式（最坏渲染）':'CSS 全能力';
+  $('mode-flag').className='flag '+(appMode?'fail':'note');
+  $('preview').innerHTML=esc(previewText)+(previewText!==previewNoCode
+    ? '<div class="muted">↑ 其中这段来自围栏代码块（原样带上、不剥记号）：去掉后 = '+esc(previewNoCode)+'</div>' : '');
+  lastState=view;
+  $('state').textContent=JSON.stringify(view,null,1);
+  var rows=checkAC(md,blocks,leafTexts,previewText,previewNoCode,surfaceFragments(renderedHtml));
+  $('ac-table').innerHTML='<tr><th>判据</th><th>结果</th><th>说明</th></tr>'+rows.map(function(r){
+    return '<tr><td>'+esc(r[0])+'</td><td class="res">'+r[1]+'</td><td class="mono">'+esc(r[2])+'</td></tr>';
+  }).join('');
+  $('render').querySelectorAll('[data-link]').forEach(function(el){
+    el.addEventListener('click', function(){ onLinkClick(el.getAttribute('data-link')); });
+  });
+}
+
+/* ② 疑难用例表 */
+function buildCases(){
+  var t=$('case-table');
+  var html='<tr><th>用例</th><th>为什么难</th><th>源串</th><th>操作</th></tr>';
+  CASES.forEach(function(c,idx){
+    html+='<tr><td><b>'+esc(c.name)+'</b></td><td class="legend">'+esc(c.why)+'</td>'+
+          '<td class="mono">'+esc(c.md)+'</td>'+
+          '<td><button class="act ghost" data-load="'+idx+'">装入</button> <button class="act ghost" data-diff="'+idx+'">两态对照</button></td></tr>'+
+          '<tr data-into="'+idx+'" style="display:none"><td colspan="4"><div class="grid2">'+
+          '<div class="bb"><div class="muted">现状（未分叉，forum 档）</div><div class="render">'+renderBlocks(parseMarkdown(CASES[idx].md,'forum',false),false)+'</div>'+
+          '<div class="muted">摘要：</div><div class="mono">'+esc(projectPlainText(parseMarkdown(CASES[idx].md,'forum',false)))+'</div></div>'+
+          '<div class="bb"><div class="muted">⑩ 分叉后（forum 档声明 inline）</div><div class="render">'+renderBlocks(parseMarkdown(CASES[idx].md,'forum',true),false)+'</div>'+
+          '<div class="muted">摘要：</div><div class="mono">'+esc(projectPlainText(parseMarkdown(CASES[idx].md,'forum',true)))+'</div></div>'+
+          '</div></td></tr>';
+  });
+  t.innerHTML=html;
+  t.querySelectorAll('[data-load]').forEach(function(b){
+    b.addEventListener('click', function(){ $('src').value=CASES[+b.getAttribute('data-load')].md; switchTab('play'); runProto(); });
+  });
+  t.querySelectorAll('[data-diff]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var r=t.querySelector('[data-into="'+b.getAttribute('data-diff')+'"]');
+      r.style.display = (r.style.display==='none'?'':'none');
+    });
+  });
+}
+
+/* ③ 零回归：全用例 × {chapter,featured} × {fork:false,true} 深度相等 */
+function buildRegress(){
+  var rows=[], allOK=true;
+  var corpus=CASES.map(function(c){return c.md;}).concat([DEFAULT_SRC]);
+  ['chapter','featured'].forEach(function(sub){
+    var same=true, demo='';
+    corpus.forEach(function(md){
+      var a=JSON.stringify(parseMarkdown(md,sub,false));
+      var b=JSON.stringify(parseMarkdown(md,sub,true));
+      if(a!==b){ same=false; demo=md.slice(0,60); }
+    });
+    if(!same) allOK=false;
+    rows.push('<tr><td>'+sub+'</td><td class="res"><span class="flag '+(same?'pass':'fail')+'">'+(same?'✓ 逐字不变':'✗ 有漂移')+'</span></td>'+
+              '<td class="mono">'+(same?'全部 '+corpus.length+' 源串在 fork=true / false 下输出 JSON 完全相同':'漂移源串起头：'+esc(demo))+'</td></tr>');
+  });
+  var forumChanged='';
+  (function(){
+    var a=JSON.stringify(parseMarkdown(DEFAULT_SRC,'forum',false));
+    var b=JSON.stringify(parseMarkdown(DEFAULT_SRC,'forum',true));
+    forumChanged = (a!==b)?'<span class="flag pass">✓ forum 档确实变了（说明分叉不是空转）</span>':'<span class="flag fail">✗ forum 档也没变 ⇒ 分叉没生效</span>';
+  })();
+  $('regress-table').innerHTML='<tr><th>档位</th><th>⑩-6 判据</th><th>覆盖</th></tr>'+rows.join('')+
+    '<tr><td>forum</td><td class="res">'+forumChanged+'</td><td class="mono">分叉的正向证据（声明了 inline ⇒ 行为必须变）</td></tr>';
+}
+
+/* ④ 浮层状态机 */
+var sheet={open:false, keyboard:false, format:'text'};
+function sheetRender(){
+  var ph=$('phone')||document.querySelector('.phone');
+  var mask=$('mask'), sl=$('sheet'), feed=$('feed'), kbd=$('kbd');
+  mask.className='mask'+(sheet.open?' show':'');
+  sl.className='sheet'+(sheet.open?' show':'');
+  sl.style.bottom = (sheet.open && sheet.keyboard) ? '150px' : '0px';
+  feed.className='feed'+(sheet.open?' locked':'');
+  kbd.className='kbd'+(sheet.keyboard?' show':'');
+  $('sheet-hd').textContent='回复面板 · bottom='+(sheet.keyboard?'150px（贴键盘上沿）':'0px')+(sheet.open?'':'（未开）');
+  document.querySelectorAll('.md-only').forEach(function(e){ e.style.display=(sheet.format==='markdown'?'':'none'); });
+  $('p-text').className='pill'+(sheet.format==='text'?' on':'');
+  $('p-md').className='pill'+(sheet.format==='markdown'?' on':'');
+  var state={
+    sheet_open:sheet.open,
+    keyboard_height:sheet.keyboard?150:0,
+    sheet_bottom:sl.style.bottom,
+    feed_scrollable:!sheet.open,
+    mask_blocks_read:sheet.open,
+    author_format:sheet.format,
+    面板内含:sheet.format==='markdown'?['档位胶囊','编写/预览 tab','工具栏 5 枚','图片单入口','边界提示行','textarea','发送']:['档位胶囊','textarea','发送'],
+    下滑收起判据:'已整条删除（⑪-3）—— 遮罩下根本没有可滚的列表'
+  };
+  $('sheet-state').textContent=JSON.stringify(state,null,1);
+}
+function openSheet(){ sheet.open=true; sheet.keyboard=true; sheetRender(); }
+function closeSheet(){ sheet.open=false; sheetRender(); }
+
+/* Tab 切换 */
+function switchTab(name){
+  document.querySelectorAll('nav button').forEach(function(b){ b.className=(b.getAttribute('data-tab')===name?'on':''); });
+  document.querySelectorAll('section.tab').forEach(function(s){ s.className='tab'+(s.id==='tab-'+name?' on':''); });
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  $('src').value=DEFAULT_SRC;
+  var fd=$('feed'); var t='';
+  for(var x=1;x<=9;x++) t+='<div class="topic">话题 '+x+'：叉车怠速抖动怎么排查？<div class="legend">摘要：先查 P0420 再…</div></div>';
+  fd.innerHTML=t;
+  $('btn-run').addEventListener('click', runProto);
+  $('src').addEventListener('input', runProto);
+  ['subset','fork','appmode'].forEach(function(id){ $(id).addEventListener('change', runProto); });
+  $('btn-copy-state').addEventListener('click', function(){
+    navigator.clipboard.writeText(JSON.stringify(lastState,null,1)).then(function(){ alert('状态 JSON 已复制'); });
+  });
+  document.querySelectorAll('nav button').forEach(function(b){
+    b.addEventListener('click', function(){ switchTab(b.getAttribute('data-tab')); });
+  });
+  $('s-trigger').addEventListener('click', openSheet);
+  $('s-trigger2').addEventListener('click', openSheet);
+  $('s-close').addEventListener('click', closeSheet);
+  $('mask').addEventListener('click', closeSheet);
+  $('s-kbd').addEventListener('click', function(){ sheet.keyboard=!sheet.keyboard; sheetRender(); });
+  $('s-send').addEventListener('click', function(){ sheet.open=false; sheet.keyboard=false; sheetRender(); });
+  $('p-text').addEventListener('click', function(){ sheet.format='text'; sheetRender(); });
+  $('p-md').addEventListener('click', function(){ sheet.format='markdown'; sheetRender(); });
+  $('btn-save-verdict').addEventListener('click', function(){
+    try{ localStorage.setItem('proto-forum-1011-verdict', $('verdict').value); }catch(e){}
+    try{ localStorage.setItem('proto-forum-1011-state', JSON.stringify({sheet:sheet})); }catch(e){}
+    alert('已存草稿（本浏览器）');
+  });
+  buildCases(); buildRegress(); runProto(); sheetRender();
+  var saved='';
+  try{ saved=localStorage.getItem('proto-forum-1011-verdict')||''; }catch(e){}
+  if(saved) $('verdict').value=saved;
+});
+</script>
+</body>
+</html>

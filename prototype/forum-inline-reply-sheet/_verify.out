@@ -1,0 +1,123 @@
+PASS INV-0  whole inline script compiles
+PASS INV-1  render surface has no marker (per-run): nested
+      ok | leaves=["绮椾綋閲屾湁 ","閾炬帴"," 鍜?"," 涓?","鏂滀綋 ","鍒?]
+PASS INV-1  render surface has no marker (per-run): bareStar
+      ok | leaves=["2 * 3 = 6锛? 鏄箻鍙凤紱a ** b 涔熷簲鍘熸牱鍙"]
+PASS INV-1  render surface has no marker (per-run): intraWord
+      ok | leaves=["鍙橀噺 a_b_c 涓?snake_case_name 涓嶈鍙樻枩浣?]
+PASS INV-1  render surface has no marker (per-run): parenUrl
+      ok | leaves=["鍧?","a"," 涓庡ソ ","缁村熀"]
+PASS INV-1  render surface has no marker (per-run): math
+      ok | leaves=["浠锋牸 $a_1 + b_2$ 涓?$5 鍒?$10 鍏冿紝杩樻湁 ","绮?," 鍦ㄦ梺"]
+PASS INV-1  render surface has no marker (per-run): strike
+      ok | leaves=["杩欐潯宸蹭綔搴?,"锛屼絾 ","杩欐潯"," 鏈夋晥"]
+PASS INV-1  render surface has no marker (per-run): basic
+      ok | leaves=["鏁呴殰鐮?," P0420 涓?","鎵嬪唽"," 浠ュ強 "]
+PASS INV-1  render surface has no marker (per-run): ol
+      ok | leaves=["璧锋","鎵撶伀","浜よ溅","鏃犲簭","浠嶆棤搴?]
+PASS INV-1  render surface has no marker (per-run): tableFloor
+      ok | leaves=["| 鍒桝 | 鍒桞 |","| --- | --- |","| 1 | ","2"," |"]
+PASS INV-1  render surface has no marker (per-run): mermaid
+      ok | leaves=[]
+PASS INV-1  render surface has no marker (per-run): task
+      ok | leaves=["[ ] 寰呭姙","[x] 宸插畬鎴?]
+PASS INV-1  render surface has no marker (per-run): imgAlt
+      ok | leaves=["鐪嬪浘 ","鏁呴殰閾墝"," 缁撴潫"]
+PASS INV-1  render surface has no marker (per-run): codeFence
+      ok | leaves=[]
+PASS INV-1  render surface has no marker (per-run): quote
+      ok | leaves=["寮曠敤閲岀殑 ","绮椾綋"," 涓?","閾炬帴","\n绗簩琛?"]
+PASS INV-1  render surface has no marker (per-run): heading
+      ok | leaves=["绮?," 鏍囬 涓?","鎵嬪唽"]
+PASS INV-1  render surface has no marker (per-run): tight
+      ok | leaves=["a","b","c"," 涓夎繛"]
+PASS INV-1  render surface has no marker (per-run): emptyAlt
+      ok | leaves=[" 绌?alt 鐨勫浘"]
+PASS INV-1  render surface has no marker (per-run): codeMarks
+      ok | leaves=["鍙橀噺 "," 涓?鍙嶅紩鍙烽噷鐨?** 鍙?]
+PASS INV-1  render surface has no marker (per-run): listItem
+      ok | leaves=["绮?," 椤逛笌 ","閾炬帴","鏅€氶」"]
+PASS INV-2  projection drifts == exactly the bug-fix set
+      got=["bareStar","codeMarks","intraWord","nested","parenUrl","strike"]
+      [
+       {
+        "k": "nested",
+        "old": "绮椾綋閲屾湁 閾炬帴 鍜?鐮?涓?鏂滀綋 ~~鍒爚~",
+        "neu": "绮椾綋閲屾湁 閾炬帴 鍜?鐮?涓?鏂滀綋 鍒?
+       },
+       {
+        "k": "bareStar",
+        "old": "2  3 = 6锛?鏄箻鍙凤紱a ** b 涔熷簲鍘熸牱鍙",
+        "neu": "2 * 3 = 6锛? 鏄箻鍙凤紱a ** b 涔熷簲鍘熸牱鍙"
+       },
+       {
+        "k": "intraWord",
+        "old": "鍙橀噺 abc 涓?snakecasename 涓嶈鍙樻枩浣?,
+        "neu": "鍙橀噺 a_b_c 涓?snake_case_name 涓嶈鍙樻枩浣?
+       },
+       {
+        "k": "parenUrl",
+        "old": "鍧?a) 涓庡ソ 缁村熀)",
+        "neu": "鍧?a 涓庡ソ 缁村熀"
+       },
+       {
+        "k": "strike",
+        "old": "~~杩欐潯宸蹭綔搴焴~锛屼絾 杩欐潯 鏈夋晥",
+        "neu": "杩欐潯宸蹭綔搴燂紝浣?杩欐潯 鏈夋晥"
+       },
+       {
+        "k": "codeMarks",
+        "old": "鍙橀噺 ab 涓?鍙嶅紩鍙烽噷鐨? 鍙?,
+        "neu": "鍙橀噺 a**b 涓?鍙嶅紩鍙烽噷鐨?** 鍙?
+       }
+      ]
+PASS INV-3  chapter zero-regression under fork
+      []
+PASS INV-3b  chapter block structure identical fork on/off
+      structure-only diff
+PASS INV-3  featured zero-regression under fork
+      []
+PASS INV-3b  featured block structure identical fork on/off
+      structure-only diff
+PASS INV-3  forum fork is NOT a no-op
+      forum changed: true
+PASS INV-4  math span survives projection with subscripts
+      "浠锋牸 $a_1 + b_2$ 涓?$5 鍒?$10 鍏冿紝杩樻湁 绮?鍦ㄦ梺"
+PASS INV-4  math span not eaten by italic rule at tokenize
+      [{"text":"浠锋牸 $a_1 + b_2$ 涓?$5 鍒?$10 鍏冿紝杩樻湁 "},{"text":"绮?,"b":true,"kids":[{"text":"绮?}]},{"text":" 鍦ㄦ梺"}]
+PASS INV-5  bare asterisks produce no italic run
+      [{"text":"2 * 3 = 6锛? 鏄箻鍙凤紱a ** b 涔熷簲鍘熸牱鍙"}]
+PASS INV-5  intra-word underscores stay literal
+      [{"text":"鍙橀噺 a_b_c 涓?snake_case_name 涓嶈鍙樻枩浣?}]
+PASS INV-6  bold contains link+code as children (recursion needed)
+      [{"text":"绮椾綋閲屾湁 [閾炬帴](https://x.com/a) 鍜?`鐮乣","b":true,"kids":[{"text":"绮椾綋閲屾湁 "},{"text":"閾炬帴","link":"https://x.com/a","kids":[{"text":"閾炬帴"}]},{"text":" 鍜?"},{"text":"鐮?,"c":true}]},{"text":" 涓?"},{"text":"鏂滀綋 ~~鍒爚~","i":true,"kids":[{"text":"鏂滀綋 "},{"text":"鍒?,"s":true,"kids":[{"text":"鍒?}]}]}]
+PASS INV-6  italic contains strike as child
+      found=true
+PASS INV-7  no stray ) leaked from url with parens
+      [{"text":"鍧?"},{"text":"a","kids":[{"text":"a"}]},{"text":" 涓庡ソ "},{"text":"缁村熀","link":"https://zh.wikipedia.org/wiki/x_(y)","kids":[{"text":"缁村熀"}]}]
+PASS INV-7  only http(s) became clickable
+      ["https://zh.wikipedia.org/wiki/x_(y)"]
+PASS INV-8  ol=1 / ul=0 carried in existing level slot
+      [1,0]
+PASS INV-8  no new field on MarkdownBlock
+      ["type","level","text","items"]
+PASS INV-9  undecleared syntax still visible on floor: tableFloor
+      [{"type":"paragraph","level":0,"text":"| 鍒桝 | 鍒桞 |","items":[]},{"type":"paragraph","level":0,"text":"| --- | --- |","items":[]},{"type":"paragraph","level":0,"text":"| 1 | **2** |","items":[]}]
+PASS INV-9  undecleared syntax still visible on floor: mermaid
+      [{"type":"code","level":0,"text":"graph TD; A-->B;","items":[]}]
+PASS INV-9  undecleared syntax still visible on floor: task
+      [{"type":"list","level":0,"text":"","items":["[ ] 寰呭姙","[x] 宸插畬鎴?]}]
+PASS INV-9  undecleared syntax still visible on floor: imgAlt
+      [{"type":"paragraph","level":0,"text":"鐪嬪浘 ![鏁呴殰閾墝](https://x.com/1.png) 缁撴潫","items":[]}]
+PASS INV-9  undecleared syntax still visible on floor: codeFence
+      [{"type":"code","level":0,"text":"code **block** 鍐呰鍙峰師鏍?,"items":[]}]
+PASS INV-10  new tokenizer must NOT be wired into chapter/featured projection
+      鑻ユ帴鍏ュ垯婕傜Щ鐨勬。浣?鐢ㄤ緥锛堚噿 瀹炵幇蹇呴』鍙粰璁哄潧鎺ワ級锛歔]
+PASS INV-12  fenced code content reaches summary (pre-existing behavior)
+      甯︿笂浠ｇ爜鍧?"code **block** 鍐呰鍙峰師鏍? / 璺宠繃浠ｇ爜鍧?""
+PASS INV-11  rendered HTML surface is marker-clean (per element)
+      []
+PASS INV-11b  bold/italic/code runs actually carry their style hooks
+      <div class="paragraph"><span class="run r-b" style="font-size:inherit"><span class="run r-b" style="font-size:inherit">鏁呴殰鐮?/span></span><span class="run" style="font-size:inherit"> P0420 涓?</span><span class="run r-l u" 
+
+44 pass / 0 fail  (鍚?INV-0)
