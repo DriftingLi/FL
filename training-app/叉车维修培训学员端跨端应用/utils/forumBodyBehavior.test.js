@@ -331,10 +331,12 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
 
 describe('模块契约：只桥到 `utils/markdown.uts` 与 `utils/markdownInline.uts`，不自持解析或档位', () => {
   it('运行期 import 恰为两个上游的入口（没有第二份子集声明 / 第二份归一）', () => {
-    // #1472 起第二个上游（行内分词器）进来了。这里钉**恰为这四个**：多一个名字就说明有人
-    // 在格式轴里自行声明档位或剥记号（第二份事实），少一个名字说明渲染绕过了格式轴。
+    // #1472 起第二个上游（行内分词器）进来了；⑩-8 又经它转发**域名投影**。这里钉**恰为这五个**：
+    // 五个名字全部来自 `markdown.uts`（解析 + 档位）或 `markdownInline.uts`（分词 / 投影 / 域名）
+    // 这两个上游 —— 多一个**来源不同的**名字就说明有人在格式轴里自行声明档位或剥记号（第二份事实），
+    // 少一个名字说明渲染绕过了格式轴。
     expect(importedNames(readText(BODY_UTS)).sort())
-      .toEqual(['SUBSET_FORUM', 'inlineRunsPlainText', 'parseMarkdown', 'splitInlineRuns']);
+      .toEqual(['SUBSET_FORUM', 'inlineLinkDomain', 'inlineRunsPlainText', 'parseMarkdown', 'splitInlineRuns']);
     // 且**确实**没把成员声明表抄过来（成员表只有 `markdown.uts` 一份，⑤ 决策⑤）
     const code = readText(BODY_UTS);
     expect(code).not.toContain('SUBSET_MEMBERS');

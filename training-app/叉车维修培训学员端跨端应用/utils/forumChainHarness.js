@@ -45,6 +45,7 @@ function forumBodyModule(md, file, inline) {
     SUBSET_CHAPTER: m.SUBSET_CHAPTER,
     splitInlineRuns: k.splitInlineRuns,
     inlineRunsPlainText: k.inlineRunsPlainText,
+    inlineLinkDomain: k.inlineLinkDomain,
   });
 }
 

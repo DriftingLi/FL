@@ -153,6 +153,27 @@ describe('④ 只有 http(s) 可点（白名单，不是拉黑三个坏协议）
   });
 });
 
+// ===== ④b 域名投影（⑩-8：确认弹窗喂「目标域名」，不喂整条 URL）=====
+
+describe('⑩-8 的域名投影：只取主机名，切不出就退回原串', () => {
+  const domain = (u) => mod().inlineLinkDomain(u);
+  it('常见形态各取其主机名（去 scheme / 截 authority / 去 userinfo / 去端口）', () => {
+    expect(domain('https://gccsmile.com/forum/123?x=1')).toBe('gccsmile.com');
+    expect(domain('http://sub.example.cn:8080/a')).toBe('sub.example.cn');
+    expect(domain('https://user:pw@example.org/p#frag')).toBe('example.org');
+    expect(domain('https://example.org')).toBe('example.org');
+  });
+  it('切不出主机名 ⇒ 退回整条 URL（宁可多显示，不可谎报成别的域名）', () => {
+    expect(domain('https:///nopath')).toBe('https:///nopath');
+  });
+  it('与协议闸同源：可点 run 的 link 必过闸，域名是其显示投影', () => {
+    const m = mod();
+    const linkRun = m.splitInlineRuns('[x](https://a.com/y)').filter((r) => r.link.length > 0)[0];
+    expect(m.inlineLinkSafe(linkRun.link)).toBe(true);
+    expect(m.inlineLinkDomain(linkRun.link)).toBe('a.com');
+  });
+});
+
 // ===== ⑤ 成对取证：判据在坏实现上必须红 =====
 
 /** 读真源 → 注入变异 → 落临时目录 → 真执行（不改工作树，不进仓） */

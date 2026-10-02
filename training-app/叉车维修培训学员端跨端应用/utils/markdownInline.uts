@@ -60,6 +60,40 @@ export function inlineLinkSafe(url : string) : boolean {
     return u.indexOf('http://') == 0 || u.indexOf('https://') == 0
 }
 
+/**
+ * 链接的**目标域名**（⑩-8：点击确认弹窗显示的是域名，不是整条 URL —— 少一屏路径噪音、
+ * 多一眼「我要离开 app 去哪个站」）。输入已被 {@link inlineLinkSafe} 闸成 http(s)，这里不再判协议。
+ *
+ * 纯串切、**不吃 DOM/URL API**（跨端通用 + 可进 UTS 编译，与 `inlineLinkSafe` 同一条约束）：
+ * 去首尾空白 → 去 `scheme://` → 截到首个 `/?#`（authority 边界）→ 去 userinfo（最后一个 `@` 右段）
+ * → 去端口（首个 `:` 左段）。切不出主机名时**退回整条 URL**（宁可多显示，不可谎报成别的域名）。
+ */
+export function inlineLinkDomain(url : string) : string {
+    let s = url.replace(/^\s+|\s+$/g, '')
+    const scheme = s.indexOf('://')
+    if (scheme >= 0) s = s.substring(scheme + 3)
+    // authority 终点 = 首个 `/?#`（三者最小的非负下标；都没有则到串尾）。
+    // ⚠️ 每个 substring 的终点都**直接取 indexOf 结果**（UTS 里是 Number）：别拿 `s.length`（Int）
+    // 当 end 变量再赋 indexOf —— Int/Number 混指会 ④c「assignment type mismatch: 'Number' vs 'Int'」。
+    const slash = s.indexOf('/')
+    const qmark = s.indexOf('?')
+    const hash = s.indexOf('#')
+    let host = s
+    if (slash >= 0 && (qmark < 0 || slash <= qmark) && (hash < 0 || slash <= hash)) {
+        host = s.substring(0, slash)
+    } else if (qmark >= 0 && (hash < 0 || qmark <= hash)) {
+        host = s.substring(0, qmark)
+    } else if (hash >= 0) {
+        host = s.substring(0, hash)
+    }
+    const at = host.lastIndexOf('@')
+    if (at >= 0) host = host.substring(at + 1)
+    const colon = host.indexOf(':')
+    if (colon >= 0) host = host.substring(0, colon)
+    if (host.length == 0) return url
+    return host
+}
+
 /** 行首连续 `$` 的个数（与 `utils/markdown.uts` 的 `dollarRun` 同语义） */
 function dollarRun(text : string, from : number) : number {
     let n = 0

@@ -1,0 +1,32 @@
+/**
+ * 在**系统浏览器**打开一条外链（ADR-0025 ⑩-8：确认弹窗之后的 App 分支）。
+ *
+ * 为什么不是 `uni.openURL`：uni-app x **不支持 plus**，官方「其它 api」明写
+ * `plus.runtime.openURL` 在 uni-app x **无内置替代、见插件市场**
+ * （doc.dcloud.net.cn/uni-app-x/api/ext.html）；④c 实测 `uni.openURL` 报
+ * `unresolved reference 'openURL'`。故按官方 kotlin→uts 混编示例，App-Android 走原生
+ * `Intent.ACTION_VIEW` + `Uri.parse`，用 `UTSAndroid.getUniActivity()` 拿框架建好的 activity。
+ *
+ * 平台边界（fail-safe，别在跨端页里混原生）：只有 **APP-ANDROID** 真开浏览器；其余端
+ * （mp-weixin / iOS / 鸿蒙 / H5）本函数是**空实现** —— 由调用方（论坛块组件）在 mp-weixin
+ * 等端改走「复制链接 + toast」，不在这一层兜（⑩-8 的按端分叉具名在调用处）。
+ *
+ * @note 具名导入：error15 规定原生/插件必须逐个具名引入，`import *` 会 Kotlin 编译失败。
+ */
+// #ifdef APP-ANDROID
+import Intent from 'android.content.Intent'
+import Uri from 'android.net.Uri'
+// #endif
+
+/**
+ * 打开一条**已过协议闸**的 http(s) 链接（调用方负责只在 App-Android 触发）。
+ * 拿不到 activity（极端时机）时**静默返回** —— 论坛正文是 UGC 面，绝不因打开失败崩页面。
+ */
+export function openExternalBrowser(url : string) : void {
+    // #ifdef APP-ANDROID
+    const activity = UTSAndroid.getUniActivity()
+    if (activity == null) return
+    const intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    activity.startActivity(intent)
+    // #endif
+}
