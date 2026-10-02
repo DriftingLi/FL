@@ -57,5 +57,7 @@ function Get-ContractTestPattern {
     #                    只钉纯逻辑，副作用由带真机证据的那个 PR 验）
     # aiAnswerBody     → aiAnswerBodyBehavior（#1443：AI 回答渲染壳层真执行 + 成对变异取证——
     #                    档位/展开前置被改坏必须红；与 markdownContract 的登记用例互为接线/行为两层）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody'
+    # frontierRun      → frontierRunPlan（#1435 ④2-3：轮转计划的**归属与顺序**——
+    #                    「门不交给 agent」「建树 cwd 在主树」「StopOn=2 即整轮停」）
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun'
 }
