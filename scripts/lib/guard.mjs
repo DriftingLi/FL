@@ -14,7 +14,7 @@
  *     name,            // 诊断前缀，如 'check-api-seam'
  *     usage,           // argv 不合法时打印的用法
  *     cli,             // 入口形态（无参数 / --help / --all 是否收目录 / 未知参数，见 parseArgs）
- *     all,             // --all 的走查面与报告措辞
+ *     all,             // --all 的走查面与报告措辞（可选 minChecked：判定面文件数下界，防空转）
  *     diff,            // --diff 的 pathspec、默认 base 与报告措辞
  *     isGuardedPath,   // (仓库相对路径) => 是否进判定面（**不得**把 allowlist 吞进来：例外由 runner 承载）
  *     scanSource,      // (源码, 仓库相对路径) => 违规项（至少含 line）
@@ -131,11 +131,21 @@ function runAll(spec, plan, io) {
     for (const v of spec.scanSource(io.readSource(abs), file)) violations.push({ ...v, file })
   }
   ctx.count = violations.length
-  if (violations.length === 0) {
+  // 射程防空转（#1445 P0-A）：判定面文件数低于登记下界即红。
+  // 为什么必须有：`checked` 掉到 0（前缀改名 / 目录搬走 / 判据写错）时，报告读起来与「零违规」
+  // 一模一样 —— 这正是静态守卫最容易静默失效的那一格。各守卫在自己的 all 里登记 `minChecked`
+  // （取当前实测射程的下界）：射程变大不必改，变小即红。
+  const shortfall = typeof cfg.minChecked === 'number' && ctx.checked < cfg.minChecked
+  if (violations.length === 0 && !shortfall) {
     io.out(cfg.ok(ctx))
     return 0
   }
   for (const v of violations) emit(io, cfg.stream, cfg.violation(v, ctx))
+  if (shortfall) {
+    emit(io, cfg.stream, '[防空转] ' + spec.name + '：判定面只有 ' + ctx.checked + ' 个文件，低于登记下界 ' +
+      cfg.minChecked + ' —— 射程漂了（改名 / 搬目录 / 判据写错），这不是「无违规」。' +
+      '请核对 isGuardedPath 的射程，并同步修改这一下界。')
+  }
   for (const line of cfg.footer ? cfg.footer(ctx) : []) emit(io, cfg.stream, line)
   return 1
 }

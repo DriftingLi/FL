@@ -17,7 +17,9 @@ import {
   ALLOWLIST,
   ERROR_ENVELOPE_FNS,
   FORBIDDEN,
-  GUARDED_DIR_PREFIX,
+  GUARDED_FILE_PREFIXES,
+  GUARDED_FILE_ROOT,
+  GUARDED_PACKAGE_PREFIXES,
   GUARD_SPEC,
   SKELETON_FILE,
   SUCCESS_ENVELOPE_FNS,
@@ -67,11 +69,11 @@ test('正例：五个错误信封写在 Render 闭包里都报，行号精确', 
   })
 })
 
-test('正例：renderStatus 与 .renderError（旧「闭包自查域表」）同样判红', () => {
+test('正例：renderStatus 与 .RenderError（旧「闭包自查域表」）同样判红', () => {
   const a = scanSource(legacySrc(['renderStatus(c, http.StatusBadRequest, err.Error())']), API_FILE)
   assert.equal(a.length, 1)
   assert.match(a[0].why, /单一咽喉/)
-  const b = scanSource(legacySrc(['if err != nil {', 'forumErrStatus.renderError(c, err)', 'return', '}']), API_FILE)
+  const b = scanSource(legacySrc(['if err != nil {', 'forumErrStatus.RenderError(c, err)', 'return', '}']), API_FILE)
   assert.equal(b.length, 1)
   assert.match(b[0].why, /不再自查域表/)
 })
@@ -160,7 +162,7 @@ test('负例：闭包之后的错误信封不再算在闭包内（深度回到 0
   assert.deepEqual(scanSource(src, API_FILE), [])
 })
 
-test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它层 / 非 Go）', () => {
+test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它层 / 非 Go / 域实现文件）', () => {
   const line = 'response.ServerError(c, err.Error())'
   for (const p of [
     SKELETON_FILE,
@@ -168,16 +170,33 @@ test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它�
     'backend/internal/api/forum_contract_test.go',
     'backend/internal/service/forum_service.go',
     'backend/pkg/response/response.go',
-    'frontend/src/api/forum.ts'
+    'frontend/src/api/forum.ts',
+    // 域包里只有 handler*.go 算 HTTP 面；域实现与域测试不进面。
+    'backend/internal/faq/service.go',
+    'backend/internal/faq/dto.go',
+    'backend/internal/faq/handler_test.go',
+    // 文件名规则只在域包根内生效。
+    'backend/cmd/server/handler.go',
+    'backend/internal/valuation/handler/evaluation.go'
   ]) {
     assert.equal(isGuardedPath(p), false, p + ' 不在守卫面')
     assert.deepEqual(scanSource(legacySrc([line]), p), [], p + ' 不进判定面')
   }
-  for (const p of [API_FILE, 'backend/internal/api/admin.go', 'backend/internal/api/training_catalog.go']) {
+  for (const p of [
+    API_FILE,
+    'backend/internal/api/admin.go',
+    'backend/internal/training/handler.go',
+    // 域包的 HTTP 出口（#1445 P1 起）：handler*.go 一律进面，加域不必改清单。
+    'backend/internal/faq/handler.go',
+    'backend/internal/forum/handler.go',
+    'backend/internal/forum/handler_admin.go'
+  ]) {
     assert.equal(isGuardedPath(p), true, p + ' 应在守卫面')
   }
   assert.equal(isTestFile('backend/internal/api/endpoint_test.go'), true)
-  assert.equal(GUARDED_DIR_PREFIX, 'backend/internal/api/')
+  assert.deepEqual(GUARDED_PACKAGE_PREFIXES, ['backend/internal/api/'])
+  assert.deepEqual(GUARDED_FILE_PREFIXES, ['handler'])
+  assert.equal(GUARDED_FILE_ROOT, 'backend/internal/')
 })
 
 test('一致性锁：错误/成功信封两份名单与 pkg/response 的导出函数互等（判据不许改回双份）', () => {
@@ -223,7 +242,10 @@ test('端到端：守卫在当前工作树上判绿（票1b 已收编全部 Rend
   assert.equal(out.status, 0, out.stdout + out.stderr)
   assert.match(out.stdout, /无违规/)
   // 守卫面非空：守卫坏了（例如把扫描目录或文件名判据写错）时不能靠「一个文件都没扫到」判绿
-  assert.match(out.stdout, /[1-9][0-9]* 个 api 文件的 Render 闭包内均未出现错误信封调用/)
+  assert.match(out.stdout, /[1-9][0-9]* 个 HTTP 面文件的 Render 闭包内均未出现错误信封调用/)
+  // 射程要在报告里自白：两种圈法都印出来，读日志的人才知道域包 handler 也在面内。
+  assert.match(out.stdout, /backend\/internal\/api\//)
+  assert.match(out.stdout, /backend\/internal\/\*\*\/handler\*\.go/)
 })
 
 test('端到端：合成违规 api 文件必须报红（守卫真的扫得动，不是恒绿）', () => {
@@ -246,6 +268,40 @@ test('端到端：合成违规 api 文件必须报红（守卫真的扫得动，
     assert.equal(code, 1, '有违规必须非零退出：' + lines.join('\n'))
     assert.match(lines.join('\n'), /api[/\\]stub\.go:7: Render 闭包（起于 :6）内错误信封 response\.ServerError/)
     assert.match(lines.join('\n'), /共 1 处/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('端到端：域包的 handler*.go 真的在判定面内（拆包不许把 Render 闭包带出射程）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-render-error-face-domain-'))
+  try {
+    const rel = join('backend', 'internal', 'forum')
+    mkdirSync(join(dir, rel), { recursive: true })
+    writeFileSync(
+      join(dir, rel, 'handler.go'),
+      'package forum\n\nfunc (h *handler) Get(c *gin.Context) {\n' +
+        legacySrc(['response.ServerError(c, err.Error())', 'return', '}']) +
+        '\n}\n',
+      'utf8'
+    )
+    writeFileSync(
+      join(dir, rel, 'service.go'),
+      'package forum\n\nfunc (s *Service) Do() {\n\tresponse.ServerError(nil, "域实现里的错误面不管")\n}\n',
+      'utf8'
+    )
+    const lines = []
+    const code = runGuard(GUARD_SPEC, {
+      root: dir,
+      argv: ['--all'],
+      stdout: (l) => lines.push(l),
+      stderr: (l) => lines.push(l)
+    })
+    const text = lines.join('\n')
+    assert.equal(code, 1, '域包 handler 里的违规必须报红：' + text)
+    assert.match(text, /forum[/\\]handler\.go:7: Render 闭包（起于 :6）内错误信封 response\.ServerError/)
+    assert.doesNotMatch(text, /forum[/\\]service\.go/, '域实现文件不在 HTTP 面内：' + text)
+    assert.match(text, /共 1 处/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -11,26 +11,30 @@ import (
 	"fmt"
 	"testing"
 
-	"forklift-training/internal/service"
+	"forklift-training/internal/course"
+	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/sortorder"
+	"forklift-training/internal/training"
 )
 
 // courseWaveFacts 本批在课程写面上点名的全部事实。
 var courseWaveFacts = []error{
-	service.ErrCourseNameRequired, service.ErrSpecialtyRequired, service.ErrCourseLevelRequired,
-	service.ErrCourseCredentialIDInvalid, service.ErrCourseSpecialtyIDInvalid,
-	service.ErrCourseLevelIDInvalid, service.ErrCertificateTemplateIDInvalid,
-	service.ErrCourseCredentialRefNotFound, service.ErrSpecialtyNotFound,
-	service.ErrCourseLevelNotFound, service.ErrCertificateTemplateNotFound,
-	service.ErrCourseTheoryHoursNegative, service.ErrCoursePracticeHoursNegative,
-	service.ErrCourseSortOrderNegative,
-	service.ErrCoursePrerequisiteSelf, service.ErrCoursePrerequisiteNotFound,
-	service.ErrCoursePrerequisiteCycle, service.ErrCourseNotFound,
-	service.ErrEntityNotSortable, service.ErrSwapItemNotFound,
-	service.ErrCourseNotMountedForSort, service.ErrCourseSortGroupMismatch,
-	service.ErrCourseSwapTargetNotFound,
+	course.ErrCourseNameRequired, course.ErrSpecialtyRequired, course.ErrCourseLevelRequired,
+	course.ErrCourseCredentialIDInvalid, course.ErrCourseSpecialtyIDInvalid,
+	course.ErrCourseLevelIDInvalid, course.ErrCertificateTemplateIDInvalid,
+	course.ErrCourseCredentialRefNotFound, model.ErrSpecialtyNotFound,
+	model.ErrCourseLevelNotFound, model.ErrCertificateTemplateNotFound,
+	course.ErrCourseTheoryHoursNegative, course.ErrCoursePracticeHoursNegative,
+	course.ErrCourseSortOrderNegative,
+	course.ErrCoursePrerequisiteSelf, course.ErrCoursePrerequisiteNotFound,
+	course.ErrCoursePrerequisiteCycle, model.ErrCourseNotFound,
+	training.ErrEntityNotSortable, sortorder.ErrSwapItemNotFound,
+	course.ErrCourseNotMountedForSort, course.ErrCourseSortGroupMismatch,
+	course.ErrCourseSwapTargetNotFound,
 	// 同文案对的**另一侧**也进表：只放一侧会让豁免分支永远走不到（本表内不出现第二次），
 	// 「登记过」就成了空话。题库域那枚与课程侧逐字同句而有意不合并（ADR-0065 决策 9）。
-	service.ErrQuestionCredentialNotFound,
+	questionbank.ErrQuestionCredentialNotFound,
 }
 
 // allowedSameText 是**登记过**的同文案不同事实（ADR-0065 决策 9）：同一句话确实地属于两件
@@ -65,9 +69,9 @@ func TestCourseWriteFactsArePairwiseDistinct(t *testing.T) {
 	}
 	// 有意分裂的那对必须仍然同句且不同值：只钉「不许合并」而不钉「句子别乱改」，
 	// 会让下一个人以为改文案是免费的（文案一致是决策 5 的「同措辞」半边）。
-	q := fmt.Sprint(service.ErrQuestionCredentialNotFound)
-	c := fmt.Sprint(service.ErrCourseCredentialRefNotFound)
-	if q != c || service.ErrQuestionCredentialNotFound == service.ErrCourseCredentialRefNotFound {
+	q := fmt.Sprint(questionbank.ErrQuestionCredentialNotFound)
+	c := fmt.Sprint(course.ErrCourseCredentialRefNotFound)
+	if q != c || questionbank.ErrQuestionCredentialNotFound == course.ErrCourseCredentialRefNotFound {
 		t.Fatalf("证件那对同文案双载体现状变了（question=%q course=%q）⇒ 要么被合并了（决策 9 否掉），"+
 			"要么句子分家了（决策 5 的「同措辞」半边）", q, c)
 	}

@@ -7,7 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -49,20 +51,20 @@ func RegisterQuestionInteractionRoutes(rg *gin.RouterGroup, rd RouterDeps, comme
 // 是其余业务事实**各有名字**——两件事必须同时做，不是二选一。
 //
 // ErrQuestionNotFound 带 message：呈现层要说「题目不存在」（越权不泄漏存在性），不是哨兵自己那句；
-// 这正是 errStatusEntry.message 这一格存在的理由（WithSentinelsMsg 的同形规则在裸 handler 一侧）。
+// 这正是 httpx.ErrStatusEntry.Message 这一格存在的理由（WithSentinelsMsg 的同形规则在裸 handler 一侧）。
 // 旧的那枚 helper `renderOutOfPoolQuestion` 被本表第一条 entry 完整取代，随本批删除——留在文件里
 // 就是一处「两个宿主说同一件事」，而且 CI 的 unused 检查也当场把它点了出来。
-var interactionErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound, message: "题目不存在"},
-		{sentinel: service.ErrCommentContentEmpty, status: http.StatusBadRequest},
-		{sentinel: service.ErrCommentTooLong, status: http.StatusBadRequest},
-		{sentinel: service.ErrCommentNotFound, status: http.StatusBadRequest},
-		{sentinel: service.ErrCommentNotOwned, status: http.StatusBadRequest},
-		{sentinel: service.ErrNoteContentEmpty, status: http.StatusBadRequest},
-		{sentinel: service.ErrNoteContentTooLong, status: http.StatusBadRequest},
+var interactionErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: questionbank.ErrQuestionNotFound, Status: http.StatusNotFound, Message: "题目不存在"},
+		{Sentinel: service.ErrCommentContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCommentTooLong, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCommentNotFound, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrCommentNotOwned, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrNoteContentEmpty, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrNoteContentTooLong, Status: http.StatusBadRequest},
 	},
-	fallback: http.StatusInternalServerError,
+	Fallback: http.StatusInternalServerError,
 }
 
 // ListComments 题目评论列表
@@ -80,16 +82,16 @@ var interactionErrStatus = &errStatusTable{
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [get]
 func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 10)
-	items, total, err := h.commentSvc.List(qid, page, pageSize, studentQuestionScope(c))
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 10)
+	items, total, err := h.commentSvc.List(qid, page, pageSize, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, service.QuestionCommentPageResult{Items: items, Page: page, PageSize: pageSize, Total: total})
@@ -109,7 +111,7 @@ func (h *QuestionInteractionHandler) ListComments(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/comments [post]
 func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -122,9 +124,9 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	m, err := h.commentSvc.Create(qid, uid, req.Content, studentQuestionScope(c))
+	m, err := h.commentSvc.Create(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.Created(c, "评论成功", m)
@@ -140,7 +142,7 @@ func (h *QuestionInteractionHandler) CreateComment(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/comments/{comment_id} [delete]
 func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
-	cid, err := pathInt(c, "comment_id", "评论ID无效")
+	cid, err := httpx.PathInt(c, "comment_id", "评论ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -151,7 +153,7 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 		// 「评论不存在」⇒ 两处叠起来，故障与业务事实同形。两面一起改（决策 7 的同一条）。
 		// 这一格是本批第二版补上的：第一版漏改，由 TestFaultFacesAllSayFault 注故障当场判红
 		// （它报出的正是 400 + `SQL logic error: no such table: question_comment`）。
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)
@@ -167,15 +169,15 @@ func (h *QuestionInteractionHandler) DeleteComment(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [get]
 func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 	uid := middleware.CurrentUserID(c)
-	n, err := h.noteSvc.GetForQuestion(qid, uid, studentQuestionScope(c))
+	n, err := h.noteSvc.GetForQuestion(qid, uid, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	if n == nil {
@@ -198,7 +200,7 @@ func (h *QuestionInteractionHandler) GetNote(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [put]
 func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -211,9 +213,9 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, studentQuestionScope(c))
+	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		interactionErrStatus.renderError(c, err)
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.Success(c, n)
@@ -229,14 +231,14 @@ func (h *QuestionInteractionHandler) UpsertNote(c *gin.Context) {
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [delete]
 func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 	uid := middleware.CurrentUserID(c)
-	if err := h.noteSvc.DeleteForQuestion(qid, uid, studentQuestionScope(c)); err != nil {
-		interactionErrStatus.renderError(c, err)
+	if err := h.noteSvc.DeleteForQuestion(qid, uid, questionbank.StudentQuestionScope(c)); err != nil {
+		interactionErrStatus.RenderError(c, err)
 		return
 	}
 	response.SuccessWithMsg(c, "已删除", nil)
@@ -252,7 +254,7 @@ func (h *QuestionInteractionHandler) DeleteNote(c *gin.Context) {
 // @Failure 400 {object} response.R "题目ID无效"
 // @Router /questions/{question_id}/knowledge [get]
 func (h *QuestionInteractionHandler) ListKnowledge(c *gin.Context) {
-	qid, err := pathInt(c, "question_id", "题目ID无效")
+	qid, err := httpx.PathInt(c, "question_id", "题目ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

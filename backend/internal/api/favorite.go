@@ -9,7 +9,9 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -56,7 +58,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	credID := middleware.CredentialIDPtr(c)
 	resp, err := h.svc.List(userID, c.Query("target_type"),
-		atoiDefault(c.Query("page"), 1), atoiDefault(c.Query("page_size"), 20), credID)
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -86,9 +88,9 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, studentQuestionScope(c))
+	resp, err := h.svc.Add(middleware.CurrentUserID(c), body.TargetType, body.TargetID, questionbank.StudentQuestionScope(c))
 	if err != nil {
-		favoriteErrStatus.renderError(c, err)
+		favoriteErrStatus.RenderError(c, err)
 		return
 	}
 	response.Created(c, "收藏成功", resp)
@@ -102,16 +104,16 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 // ErrFavTargetIDInvalid 不在本表：Add 的 handler 在进 service 之前就把 target_id <= 0 挡成
 // 「请求参数错误」，那条哨兵只有 Check 走得到——而 Check 是另一张面。本批第一版把它登记进来过，
 // 反向那半条锁（fact_face_producible_contract_test.go）当场判它「登记了却打不出」。
-var favoriteErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrFavTargetCourseRejected, status: http.StatusBadRequest},
-		{sentinel: service.ErrFavTargetChapterRejected, status: http.StatusBadRequest},
-		{sentinel: service.ErrFavTargetQuestionRejected, status: http.StatusBadRequest},
-		{sentinel: service.ErrFavTargetFeaturedRejected, status: http.StatusBadRequest},
-		{sentinel: service.ErrFavTargetTopicNotFound, status: http.StatusBadRequest},
-		{sentinel: service.ErrFavTargetTypeUnsupported, status: http.StatusBadRequest},
+var favoriteErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrFavTargetCourseRejected, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrFavTargetChapterRejected, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrFavTargetQuestionRejected, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrFavTargetFeaturedRejected, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrFavTargetTopicNotFound, Status: http.StatusBadRequest},
+		{Sentinel: service.ErrFavTargetTypeUnsupported, Status: http.StatusBadRequest},
 	},
-	fallback: http.StatusInternalServerError,
+	Fallback: http.StatusInternalServerError,
 }
 
 // Remove 取消收藏
@@ -127,7 +129,7 @@ var favoriteErrStatus = &errStatusTable{
 // @Failure 401 {object} response.R "未认证"
 // @Router /favorites/{id} [delete]
 func (h *FavoriteHandler) Remove(c *gin.Context) {
-	id, err := pathInt64(c, "id", "收藏 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "收藏 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

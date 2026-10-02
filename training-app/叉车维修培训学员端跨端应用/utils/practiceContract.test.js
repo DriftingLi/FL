@@ -138,10 +138,10 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     return out;
   }
 
-  it('practice 域 api 的每个路由都在 practice_mode.go / question_bank.go 已注册', () => {
+  it('practice 域 api 的每个路由都在 practicemode/handler.go / questionbank/handler.go 已注册', () => {
     const registered = [
-      ...registeredRoutes('../../backend/internal/api/practice_mode.go', '/practice-mode'),
-      ...registeredRoutes('../../backend/internal/api/question_bank.go', '/question-bank'),
+      ...registeredRoutes('../../backend/internal/practicemode/handler.go', '/practice-mode'),
+      ...registeredRoutes('../../backend/internal/questionbank/handler.go', '/question-bank'),
     ];
     expect(registered.length).toBeGreaterThan(10);
 

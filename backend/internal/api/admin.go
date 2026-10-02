@@ -7,23 +7,29 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/authz"
+	"forklift-training/internal/course"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/internal/training"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 // AdminHandler 管理员后台 handler。
 type AdminHandler struct {
 	adminSvc      *service.AdminService
-	courseSvc     *service.AdminCourseService
-	authSvc       *service.AuthService
-	aiConfigSvc   *service.AIConfigService
+	courseSvc     *course.AdminService
+	authSvc       *auth.Service
+	aiConfigSvc   *aiassistant.ConfigService
 	contentGenSvc *service.ContentGenerateService
 }
 
 // NewAdminHandler 创建管理员后台 handler。
-func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *service.AIConfigService, contentGenSvc *service.ContentGenerateService) *AdminHandler {
+func NewAdminHandler(adminSvc *service.AdminService, courseSvc *course.AdminService, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) *AdminHandler {
 	return &AdminHandler{
 		adminSvc: adminSvc, courseSvc: courseSvc, authSvc: authSvc,
 		aiConfigSvc: aiConfigSvc, contentGenSvc: contentGenSvc,
@@ -31,13 +37,13 @@ func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCou
 }
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *service.AIConfigService, contentGenSvc *service.ContentGenerateService) {
+func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *course.AdminService, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) {
 	h := NewAdminHandler(adminSvc, courseSvc, authSvc, aiConfigSvc, contentGenSvc)
 
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAdminAccess))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
-	NewAIConfigHandler(aiConfigSvc).registerAIConfigRoutes(g)
+	aiassistant.RegisterAdminRoutes(g, aiConfigSvc)
 
 	// ===== 课程管理 =====
 	g.GET("/courses", h.ListCourses)
@@ -85,38 +91,38 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.A
 // @Param specialty_id query int false "专业方向 ID"
 // @Param level_id query int false "等级 ID"
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
-// @Success 200 {object} response.R{data=service.CoursePageResult} "success"
+// @Success 200 {object} response.R{data=course.CoursePageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/courses [get]
 // ListCourses 课程列表 GET /api/admin/courses（filter=hot|featured|all，缺省 all）
 func (h *AdminHandler) ListCourses(c *gin.Context) {
-	Endpoint[adminCourseListReq, service.CoursePageResult]{
+	httpx.Endpoint[adminCourseListReq, course.CoursePageResult]{
 		Parse: func(c *gin.Context) (*adminCourseListReq, error) {
 			f := c.Query("filter")
 			if f != "" && f != "hot" && f != "featured" && f != "all" {
-				return nil, badRequest("filter 仅支持 hot|featured|all")
+				return nil, httpx.BadRequest("filter 仅支持 hot|featured|all")
 			}
 			if f == "" {
 				f = "all"
 			}
 			return &adminCourseListReq{
-				Page:         atoiDefault(c.Query("page"), 1),
-				PageSize:     atoiDefault(c.Query("page_size"), 10),
+				Page:         httpx.QueryIntDefault(c, "page", 1),
+				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 				Keyword:      c.Query("keyword"),
-				CredentialID: queryIDPtr(c, "credential_id"),
-				SpecialtyID:  queryIDPtr(c, "specialty_id"),
-				LevelID:      queryIDPtr(c, "level_id"),
+				CredentialID: httpx.QueryIDPtr(c, "credential_id"),
+				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
+				LevelID:      httpx.QueryIDPtr(c, "level_id"),
 				Filter:       f,
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *adminCourseListReq) (*service.CoursePageResult, error) {
+		Invoke: func(ctx context.Context, req *adminCourseListReq) (*course.CoursePageResult, error) {
 			result, err := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // courseWriteFacts400 是课程两条写面（Create/Update）**共用**的「输入不合法」事实集
@@ -127,15 +133,15 @@ func (h *AdminHandler) ListCourses(c *gin.Context) {
 //
 // 三条「引用对象不存在」复用目录域的同一载体（`catalog_specs.go:15-17`），不另起名字。
 var courseWriteFacts400 = []error{
-	service.ErrCourseNameRequired, service.ErrSpecialtyRequired, service.ErrCourseLevelRequired,
-	service.ErrCourseCredentialIDInvalid, service.ErrCourseSpecialtyIDInvalid,
-	service.ErrCourseLevelIDInvalid, service.ErrCertificateTemplateIDInvalid,
-	service.ErrCourseCredentialRefNotFound, service.ErrSpecialtyNotFound,
-	service.ErrCourseLevelNotFound, service.ErrCertificateTemplateNotFound,
-	service.ErrCourseTheoryHoursNegative, service.ErrCoursePracticeHoursNegative,
-	service.ErrCourseSortOrderNegative,
-	service.ErrCoursePrerequisiteSelf, service.ErrCoursePrerequisiteNotFound,
-	service.ErrCoursePrerequisiteCycle,
+	course.ErrCourseNameRequired, course.ErrSpecialtyRequired, course.ErrCourseLevelRequired,
+	course.ErrCourseCredentialIDInvalid, course.ErrCourseSpecialtyIDInvalid,
+	course.ErrCourseLevelIDInvalid, course.ErrCertificateTemplateIDInvalid,
+	course.ErrCourseCredentialRefNotFound, model.ErrSpecialtyNotFound,
+	model.ErrCourseLevelNotFound, model.ErrCertificateTemplateNotFound,
+	course.ErrCourseTheoryHoursNegative, course.ErrCoursePracticeHoursNegative,
+	course.ErrCourseSortOrderNegative,
+	course.ErrCoursePrerequisiteSelf, course.ErrCoursePrerequisiteNotFound,
+	course.ErrCoursePrerequisiteCycle,
 }
 
 // @Summary 创建课程
@@ -145,21 +151,21 @@ var courseWriteFacts400 = []error{
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
-// @Success 201 {object} response.R{data=service.CourseDTO} "课程创建成功"
+// @Success 201 {object} response.R{data=course.CourseDTO} "课程创建成功"
 // @Failure 400 {object} response.R "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course [post]
 // CreateCourse 创建课程 POST /api/admin/course
 func (h *AdminHandler) CreateCourse(c *gin.Context) {
-	Endpoint[service.CourseInput, service.CourseDTO]{
-		Parse: func(c *gin.Context) (*service.CourseInput, error) {
-			return bindJSONMsg[service.CourseInput](c, "请求数据无效")
+	httpx.Endpoint[course.CourseInput, course.CourseDTO]{
+		Parse: func(c *gin.Context) (*course.CourseInput, error) {
+			return httpx.BindJSONMsg[course.CourseInput](c, "请求数据无效")
 		},
-		Invoke: func(ctx context.Context, req *service.CourseInput) (*service.CourseDTO, error) {
+		Invoke: func(ctx context.Context, req *course.CourseInput) (*course.CourseDTO, error) {
 			return h.courseSvc.CreateCourse(req)
 		},
-	}.WithSuccess(created("课程创建成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.Created("课程创建成功"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
 }
 
@@ -169,25 +175,25 @@ func (h *AdminHandler) CreateCourse(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param course_id path int true "课程 ID"
-// @Success 200 {object} response.R{data=service.AdminCourseDetailDTO} "success"
+// @Success 200 {object} response.R{data=course.AdminCourseDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /admin/course/{course_id} [get]
 // GetCourseDetail 课程详情 GET /api/admin/course/:course_id
 func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
-	Endpoint[idParam, service.AdminCourseDetailDTO]{
+	httpx.Endpoint[idParam, course.AdminCourseDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*service.AdminCourseDetailDTO, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*course.AdminCourseDetailDTO, error) {
 			return h.courseSvc.GetCourseDetail(req.ID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 更新课程
@@ -198,7 +204,7 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 // @Security BearerAuth
 // @Param course_id path int true "课程 ID"
 // @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
-// @Success 200 {object} response.R{data=service.CourseDTO} "课程更新成功"
+// @Success 200 {object} response.R{data=course.CourseDTO} "课程更新成功"
 // @Failure 400 {object} response.R "请求数据无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
@@ -206,23 +212,23 @@ func (h *AdminHandler) GetCourseDetail(c *gin.Context) {
 // @Router /admin/course/{course_id} [put]
 // UpdateCourse 更新课程 PUT /api/admin/course/:course_id
 func (h *AdminHandler) UpdateCourse(c *gin.Context) {
-	Endpoint[courseIDInput, service.CourseDTO]{
+	httpx.Endpoint[courseIDInput, course.CourseDTO]{
 		Parse: func(c *gin.Context) (*courseIDInput, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
-			data, err := bindJSONMsg[service.CourseInput](c, "请求数据无效")
+			data, err := httpx.BindJSONMsg[course.CourseInput](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
 			return &courseIDInput{ID: id, Input: data}, nil
 		},
-		Invoke: func(ctx context.Context, req *courseIDInput) (*service.CourseDTO, error) {
+		Invoke: func(ctx context.Context, req *courseIDInput) (*course.CourseDTO, error) {
 			return h.courseSvc.UpdateCourse(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("课程更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+	}.WithSuccess(httpx.OkMsg("课程更新成功"), http.StatusInternalServerError).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).
 		// 与 Create 面共用同一份表（ADR-0065 决策 3）：此前这里只挂了「必填」两条，
 		// 于是「方向被引用成一张不存在的行」在编辑面上是 500。
 		WithSentinels(http.StatusBadRequest, courseWriteFacts400...).Handle(c)
@@ -230,13 +236,13 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 
 // courseSortFacts400 是课程交换排序端的表：目录侧那两件（不支持排序 / 待交换的项不存在）
 // 加上课程侧独有的两件（未挂载、跨组）。用两次 append 而不是直接抄，是为了让目录侧那两条
-// 只有一份出处；第一个 append 落进新 backing array，不与 sortFacts400 共享底层数组。
-// 其中 ErrEntityNotSortable 与 ErrSwapItemNotFound 从课程这条链上**构造不出来**（课程开了排序；
+// 只有一份出处；第一个 append 落进新 backing array，不与 training.SortFacts400 共享底层数组。
+// 其中 ErrEntityNotSortable 与 sortorder.ErrSwapItemNotFound 从课程这条链上**构造不出来**（课程开了排序；
 // 两行都在函数里先 First 过）——仍留在共用表里，是因为「这一族的输入事实」应该只有一份清单；
 // 真正可达性归零这件事写在这里，而不是靠测试去假装打过它。
-var courseSortFacts400 = append(append([]error{}, sortFacts400...),
-	service.ErrCourseNotMountedForSort, service.ErrCourseSortGroupMismatch,
-	service.ErrCourseSwapTargetNotFound)
+var courseSortFacts400 = append(append([]error{}, training.SortFacts400...),
+	course.ErrCourseNotMountedForSort, course.ErrCourseSortGroupMismatch,
+	course.ErrCourseSwapTargetNotFound)
 
 // @Summary 交换课程排序
 // @Description 同一方向+等级组内交换 sort_order，响应 data 为 null
@@ -254,9 +260,9 @@ var courseSortFacts400 = append(append([]error{}, sortFacts400...),
 // @Router /admin/course/{course_id}/sort [put]
 // SwapCourseSort 交换课程排序 PUT /api/admin/course/:course_id/sort（同一方向+等级组内，body: {"swap_with": <id>}）
 func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
-	Endpoint[swapCourseSortReq, struct{}]{
+	httpx.Endpoint[swapCourseSortReq, struct{}]{
 		Parse: func(c *gin.Context) (*swapCourseSortReq, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -264,7 +270,7 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 				SwapWith int `json:"swap_with"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil || body.SwapWith <= 0 {
-				return nil, badRequest("swap_with 参数无效")
+				return nil, httpx.BadRequest("swap_with 参数无效")
 			}
 			return &swapCourseSortReq{ID: id, SwapWith: body.SwapWith}, nil
 		},
@@ -274,9 +280,9 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("排序已交换"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("排序已交换"), http.StatusInternalServerError).
 		// 路径那门课不存在 ⇒ 404（此前落默认面 400：「你换的这门课没有」被说成「参数错了」）。
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).
 		WithSentinels(http.StatusBadRequest, courseSortFacts400...).Handle(c)
 }
 
@@ -286,26 +292,26 @@ func (h *AdminHandler) SwapCourseSort(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param course_id path int true "课程 ID"
-// @Success 200 {object} response.R{data=service.DeleteCourseResult} "课程删除成功"
+// @Success 200 {object} response.R{data=course.DeleteCourseResult} "课程删除成功"
 // @Failure 400 {object} response.R "课程ID无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /admin/course/{course_id} [delete]
 // DeleteCourse 删除课程 DELETE /api/admin/course/:course_id
 func (h *AdminHandler) DeleteCourse(c *gin.Context) {
-	Endpoint[idParam, service.DeleteCourseResult]{
+	httpx.Endpoint[idParam, course.DeleteCourseResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteCourseResult, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*course.DeleteCourseResult, error) {
 			return h.courseSvc.DeleteCourse(req.ID)
 		},
-	}.WithSuccess(okMsg("课程删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+	}.WithSuccess(httpx.OkMsg("课程删除成功"), http.StatusInternalServerError).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 创建章节
@@ -316,28 +322,28 @@ func (h *AdminHandler) DeleteCourse(c *gin.Context) {
 // @Security BearerAuth
 // @Param course_id path int true "课程 ID"
 // @Param body body object false "章节输入 {title,content,duration,order_num,description}"
-// @Success 201 {object} response.R{data=service.ChapterDTO} "章节创建成功"
+// @Success 201 {object} response.R{data=course.ChapterDTO} "章节创建成功"
 // @Failure 400 {object} response.R "请求数据无效"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/course/{course_id}/chapter [post]
 // CreateChapter 创建章节 POST /api/admin/course/:course_id/chapter
 func (h *AdminHandler) CreateChapter(c *gin.Context) {
-	Endpoint[chapterIDInput, service.ChapterDTO]{
+	httpx.Endpoint[chapterIDInput, course.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
-			id, err := pathInt(c, "course_id", "课程ID无效")
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
 				return nil, err
 			}
-			data, err := bindJSONMsg[service.ChapterInput](c, "请求数据无效")
+			data, err := httpx.BindJSONMsg[course.ChapterInput](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
 			return &chapterIDInput{ID: id, Input: data}, nil
 		},
-		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
+		Invoke: func(ctx context.Context, req *chapterIDInput) (*course.ChapterDTO, error) {
 			return h.courseSvc.CreateChapter(req.ID, req.Input)
 		},
-	}.WithSuccess(created("章节创建成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.Created("章节创建成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新章节
@@ -348,30 +354,30 @@ func (h *AdminHandler) CreateChapter(c *gin.Context) {
 // @Security BearerAuth
 // @Param chapter_id path int true "章节 ID"
 // @Param body body object false "章节输入 {title,content,duration,order_num,description}"
-// @Success 200 {object} response.R{data=service.ChapterDTO} "章节更新成功"
+// @Success 200 {object} response.R{data=course.ChapterDTO} "章节更新成功"
 // @Failure 400 {object} response.R "请求数据无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /admin/chapter/{chapter_id} [put]
 // UpdateChapter 更新章节 PUT /api/admin/chapter/:chapter_id
 func (h *AdminHandler) UpdateChapter(c *gin.Context) {
-	Endpoint[chapterIDInput, service.ChapterDTO]{
+	httpx.Endpoint[chapterIDInput, course.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
-			data, err := bindJSONMsg[service.ChapterInput](c, "请求数据无效")
+			data, err := httpx.BindJSONMsg[course.ChapterInput](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
 			return &chapterIDInput{ID: id, Input: data}, nil
 		},
-		Invoke: func(ctx context.Context, req *chapterIDInput) (*service.ChapterDTO, error) {
+		Invoke: func(ctx context.Context, req *chapterIDInput) (*course.ChapterDTO, error) {
 			return h.courseSvc.UpdateChapter(req.ID, req.Input)
 		},
-	}.WithSuccess(okMsg("章节更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
+	}.WithSuccess(httpx.OkMsg("章节更新成功"), http.StatusInternalServerError).
+		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 删除章节
@@ -380,25 +386,25 @@ func (h *AdminHandler) UpdateChapter(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param chapter_id path int true "章节 ID"
-// @Success 200 {object} response.R{data=service.DeleteChapterResult} "章节删除成功"
+// @Success 200 {object} response.R{data=course.DeleteChapterResult} "章节删除成功"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /admin/chapter/{chapter_id} [delete]
 // DeleteChapter 删除章节 DELETE /api/admin/chapter/:chapter_id
 func (h *AdminHandler) DeleteChapter(c *gin.Context) {
-	Endpoint[idParam, service.DeleteChapterResult]{
+	httpx.Endpoint[idParam, course.DeleteChapterResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "chapter_id", "章节ID无效")
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
 				return nil, err
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteChapterResult, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*course.DeleteChapterResult, error) {
 			return h.courseSvc.DeleteChapter(req.ID)
 		},
-	}.WithSuccess(okMsg("章节删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrChapterNotFound, http.StatusNotFound).Handle(c)
+	}.WithSuccess(httpx.OkMsg("章节删除成功"), http.StatusInternalServerError).
+		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // @Summary 启动课程内容异步生成
@@ -414,17 +420,17 @@ func (h *AdminHandler) DeleteChapter(c *gin.Context) {
 // @Router /admin/course/generate-content [post]
 // GenerateContent 异步生成课程内容 POST /api/admin/course/generate-content
 func (h *AdminHandler) GenerateContent(c *gin.Context) {
-	Endpoint[generateContentReq, service.GenerateContentResultDTO]{
+	httpx.Endpoint[generateContentReq, service.GenerateContentResultDTO]{
 		Parse: func(c *gin.Context) (*generateContentReq, error) {
 			var req struct {
 				CourseID   int   `json:"course_id"`
 				ChapterIDs []int `json:"chapter_ids"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil || req.CourseID == 0 {
-				return nil, badRequest("请选择课程")
+				return nil, httpx.BadRequest("请选择课程")
 			}
 			if len(req.ChapterIDs) == 0 {
-				return nil, badRequest("请选择至少一个章节")
+				return nil, httpx.BadRequest("请选择至少一个章节")
 			}
 			return &generateContentReq{CourseID: req.CourseID, ChapterIDs: req.ChapterIDs, UserID: c.GetInt("user_id")}, nil
 		},
@@ -435,7 +441,7 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 			}
 			return &service.GenerateContentResultDTO{TaskID: taskID}, nil
 		},
-	}.WithSuccess(created("生成任务已启动"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.Created("生成任务已启动"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 查询内容生成任务状态
@@ -451,14 +457,14 @@ func (h *AdminHandler) GenerateContent(c *gin.Context) {
 // @Router /admin/course/generate-content/{task_id} [get]
 // GetGenerationTask 查询生成任务状态（前端轮询）GET /api/admin/course/generate-content/:task_id
 func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
-	Endpoint[taskIDParam, service.GenTaskStatus]{
+	httpx.Endpoint[taskIDParam, service.GenTaskStatus]{
 		Parse: func(c *gin.Context) (*taskIDParam, error) {
 			return &taskIDParam{TaskID: c.Param("task_id")}, nil
 		},
 		Invoke: func(ctx context.Context, req *taskIDParam) (*service.GenTaskStatus, error) {
 			return h.contentGenSvc.GetTaskStatus(req.TaskID)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).
 		WithSentinel(service.ErrGenTaskIDInvalid, http.StatusBadRequest).Handle(c)
 }
@@ -477,18 +483,18 @@ func (h *AdminHandler) GetGenerationTask(c *gin.Context) {
 // @Router /admin/hrwai-users [get]
 // ListHrwaiUsers HRWAI 用户列表 GET /api/admin/hrwai-users
 func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
-	Endpoint[hrwaiUserListReq, service.HrwaiUserPageResult]{
+	httpx.Endpoint[hrwaiUserListReq, service.HrwaiUserPageResult]{
 		Parse: func(c *gin.Context) (*hrwaiUserListReq, error) {
 			return &hrwaiUserListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 				Keyword:  c.Query("keyword"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *hrwaiUserListReq) (*service.HrwaiUserPageResult, error) {
 			return h.adminSvc.ListHrwaiUsers(req.Page, req.PageSize, req.Keyword)
 		},
-		ErrStatus: errStatusAllMsg(http.StatusBadRequest, "查询用户列表失败"),
+		ErrStatus: httpx.ErrStatusAllMsg(http.StatusBadRequest, "查询用户列表失败"),
 	}.Handle(c)
 }
 
@@ -505,9 +511,9 @@ func (h *AdminHandler) ListHrwaiUsers(c *gin.Context) {
 // @Router /admin/hrwai-users [post]
 // CreateHrwaiUser 新增 HRWAI 用户 POST /api/admin/hrwai-users
 func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
-	Endpoint[createHrwaiUserReq, service.HrwaiUserCreatedDTO]{
+	httpx.Endpoint[createHrwaiUserReq, service.HrwaiUserCreatedDTO]{
 		Parse: func(c *gin.Context) (*createHrwaiUserReq, error) {
-			return bindJSON[createHrwaiUserReq](c)
+			return httpx.BindJSON[createHrwaiUserReq](c)
 		},
 		Invoke: func(ctx context.Context, req *createHrwaiUserReq) (*service.HrwaiUserCreatedDTO, error) {
 			u, err := h.adminSvc.CreateHrwaiUser(req.Phone, req.Password, req.Account, req.Username, req.Email, req.Company)
@@ -517,7 +523,7 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 			dto := service.NewHrwaiUserCreatedDTO(u)
 			return &dto, nil
 		},
-	}.WithSuccess(created("用户添加成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.Created("用户添加成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新 HRWAI 用户资料
@@ -534,9 +540,9 @@ func (h *AdminHandler) CreateHrwaiUser(c *gin.Context) {
 // @Router /admin/hrwai-users/{id} [put]
 // UpdateHrwaiUser 更新 HRWAI 用户资料(不含密码) PUT /api/admin/hrwai-users/:id
 func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
-	Endpoint[updateHrwaiUserReq, struct{}]{
+	httpx.Endpoint[updateHrwaiUserReq, struct{}]{
 		Parse: func(c *gin.Context) (*updateHrwaiUserReq, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -547,10 +553,10 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 				Status   int16  `json:"status"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if body.Status != 0 && body.Status != 1 {
-				return nil, badRequest("状态值非法(仅支持 0/1)")
+				return nil, httpx.BadRequest("状态值非法(仅支持 0/1)")
 			}
 			return &updateHrwaiUserReq{ID: id, Username: body.Username, Email: body.Email, Company: body.Company, Status: body.Status}, nil
 		},
@@ -560,7 +566,7 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("用户资料已更新"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("用户资料已更新"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 重置 HRWAI 用户密码
@@ -578,9 +584,9 @@ func (h *AdminHandler) UpdateHrwaiUser(c *gin.Context) {
 // @Router /admin/hrwai-users/{id}/password [put]
 // ResetHrwaiUserPassword 重置 HRWAI 用户密码 PUT /api/admin/hrwai-users/:id/password
 func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
-	Endpoint[resetPasswordReq, struct{}]{
+	httpx.Endpoint[resetPasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*resetPasswordReq, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -588,10 +594,10 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 				Password string `json:"password"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if len(body.Password) < 6 || len(body.Password) > 20 {
-				return nil, badRequest("密码长度需为 6-20 个字符")
+				return nil, httpx.BadRequest("密码长度需为 6-20 个字符")
 			}
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
@@ -601,8 +607,8 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
-		WithSentinel(service.ErrHrwaiUserNotFound, http.StatusNotFound).
+	}.WithSuccess(httpx.OkMsgNoData("密码已重置"), http.StatusInternalServerError).
+		WithSentinel(model.ErrHrwaiUserNotFound, http.StatusNotFound).
 		WithSentinel(service.ErrInvalidHrwaiUserID, http.StatusBadRequest).Handle(c)
 }
 
@@ -618,9 +624,9 @@ func (h *AdminHandler) ResetHrwaiUserPassword(c *gin.Context) {
 // @Router /admin/hrwai-users/{id}/status [put]
 // ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态 PUT /api/admin/hrwai-users/:id/status
 func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
-	Endpoint[idParam, service.StatusResultDTO]{
+	httpx.Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -633,10 +639,10 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 			}
 			return &service.StatusResultDTO{Status: int(next)}, nil
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
-			{sentinel: service.ErrInvalidHrwaiUserID, status: http.StatusBadRequest},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
+			{Sentinel: service.ErrInvalidHrwaiUserID, Status: http.StatusBadRequest},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "用户已启用"
@@ -660,9 +666,9 @@ func (h *AdminHandler) ToggleHrwaiUserStatus(c *gin.Context) {
 // @Router /admin/hrwai-users/{id} [delete]
 // DeleteHrwaiUser 删除 HRWAI 用户 DELETE /api/admin/hrwai-users/:id
 func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
-	Endpoint[idParam, struct{}]{
+	httpx.Endpoint[idParam, struct{}]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "id", "用户ID无效")
+			id, err := httpx.PathInt(c, "id", "用户ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -674,7 +680,7 @@ func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("用户删除成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsgNoData("用户删除成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 导师列表
@@ -690,18 +696,18 @@ func (h *AdminHandler) DeleteHrwaiUser(c *gin.Context) {
 // @Router /admin/tutors [get]
 // ListTutors 导师列表 GET /api/admin/tutors
 func (h *AdminHandler) ListTutors(c *gin.Context) {
-	Endpoint[tutorListReq, service.TutorListDTO]{
+	httpx.Endpoint[tutorListReq, service.TutorListDTO]{
 		Parse: func(c *gin.Context) (*tutorListReq, error) {
 			return &tutorListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 10),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 				Keyword:  c.Query("keyword"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorListReq) (*service.TutorListDTO, error) {
 			return h.adminSvc.GetTutors(req.Page, req.PageSize, req.Keyword)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
 // @Summary 添加导师
@@ -711,27 +717,27 @@ func (h *AdminHandler) ListTutors(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "建号请求 {username,password,name}"
-// @Success 201 {object} response.R{data=service.TutorRegisterResultDTO} "讲师添加成功"
+// @Success 201 {object} response.R{data=auth.TutorRegisterResultDTO} "讲师添加成功"
 // @Failure 400 {object} response.R "参数错误/用户名已被注册"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/tutor [post]
 // CreateTutor 添加导师 POST /api/admin/tutor
 func (h *AdminHandler) CreateTutor(c *gin.Context) {
-	Endpoint[createTutorReq, service.TutorRegisterResultDTO]{
+	httpx.Endpoint[createTutorReq, auth.TutorRegisterResultDTO]{
 		Parse: func(c *gin.Context) (*createTutorReq, error) {
-			req, err := bindJSON[createTutorReq](c)
+			req, err := httpx.BindJSON[createTutorReq](c)
 			if err != nil {
 				return nil, err
 			}
 			if req.Username == "" || req.Password == "" || req.Name == "" {
-				return nil, badRequest("用户名、密码和姓名不能为空")
+				return nil, httpx.BadRequest("用户名、密码和姓名不能为空")
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *createTutorReq) (*service.TutorRegisterResultDTO, error) {
+		Invoke: func(ctx context.Context, req *createTutorReq) (*auth.TutorRegisterResultDTO, error) {
 			return h.authSvc.TutorRegister(req.Username, req.Password, req.Name)
 		},
-	}.WithSuccess(created("讲师添加成功"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.Created("讲师添加成功"), http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 删除导师
@@ -746,9 +752,9 @@ func (h *AdminHandler) CreateTutor(c *gin.Context) {
 // @Router /admin/tutor/{tutor_id} [delete]
 // DeleteTutor 删除导师 DELETE /api/admin/tutor/:tutor_id
 func (h *AdminHandler) DeleteTutor(c *gin.Context) {
-	Endpoint[idParam, service.TutorDeletedDTO]{
+	httpx.Endpoint[idParam, service.TutorDeletedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "tutor_id", "讲师ID无效")
+			id, err := httpx.PathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -757,7 +763,7 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *idParam) (*service.TutorDeletedDTO, error) {
 			return h.adminSvc.DeleteTutor(req.ID)
 		},
-	}.WithSuccess(okMsg("讲师删除成功"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsg("讲师删除成功"), http.StatusInternalServerError).
 		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
 		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
@@ -777,9 +783,9 @@ func (h *AdminHandler) DeleteTutor(c *gin.Context) {
 // @Router /admin/tutor/{tutor_id}/password [put]
 // ResetTutorPassword 重置导师密码 PUT /api/admin/tutor/:tutor_id/password
 func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
-	Endpoint[resetPasswordReq, struct{}]{
+	httpx.Endpoint[resetPasswordReq, struct{}]{
 		Parse: func(c *gin.Context) (*resetPasswordReq, error) {
-			id, err := pathInt(c, "tutor_id", "讲师ID无效")
+			id, err := httpx.PathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -787,10 +793,10 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 				Password string `json:"password"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			if len(body.Password) < 6 || len(body.Password) > 20 {
-				return nil, badRequest("密码长度需为 6-20 个字符")
+				return nil, httpx.BadRequest("密码长度需为 6-20 个字符")
 			}
 			return &resetPasswordReq{ID: id, Password: body.Password}, nil
 		},
@@ -800,7 +806,7 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 			}
 			return &struct{}{}, nil
 		},
-	}.WithSuccess(okMsgNoData("密码已重置"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.OkMsgNoData("密码已重置"), http.StatusInternalServerError).
 		WithSentinel(service.ErrTutorNotFound, http.StatusNotFound).
 		WithSentinel(service.ErrInvalidTutorID, http.StatusBadRequest).Handle(c)
 }
@@ -817,9 +823,9 @@ func (h *AdminHandler) ResetTutorPassword(c *gin.Context) {
 // @Router /admin/tutor/{tutor_id}/status [put]
 // ToggleTutorStatus 切换导师启用/禁用状态 PUT /api/admin/tutor/:tutor_id/status
 func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
-	Endpoint[idParam, service.StatusResultDTO]{
+	httpx.Endpoint[idParam, service.StatusResultDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
-			id, err := pathInt(c, "tutor_id", "讲师ID无效")
+			id, err := httpx.PathInt(c, "tutor_id", "讲师ID无效")
 			if err != nil {
 				return nil, err
 			}
@@ -834,10 +840,10 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 		},
 		// 与 ToggleHrwaiUserStatus 同一判定：admin_service 的「讲师不存在」是裸 errors.New，
 		// 无哨兵可名 ⇒ 本批不动（参数错误那半边已随票8 归位 400）。
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrTutorNotFound, status: http.StatusNotFound},
-			{sentinel: service.ErrInvalidTutorID, status: http.StatusBadRequest},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: service.ErrTutorNotFound, Status: http.StatusNotFound},
+			{Sentinel: service.ErrInvalidTutorID, Status: http.StatusBadRequest},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *idParam, resp *service.StatusResultDTO) {
 			msg := "讲师已启用"
@@ -859,7 +865,7 @@ func (h *AdminHandler) ToggleTutorStatus(c *gin.Context) {
 // @Router /admin/statistics [get]
 // GetStatistics 统计看板 GET /api/admin/statistics
 func (h *AdminHandler) GetStatistics(c *gin.Context) {
-	Endpoint[struct{}, service.AdminStatisticsDTO]{
+	httpx.Endpoint[struct{}, service.AdminStatisticsDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.AdminStatisticsDTO, error) {
 			return h.adminSvc.GetStatistics(), nil
 		},
@@ -878,16 +884,16 @@ type taskIDParam struct {
 	TaskID string
 }
 
-// courseIDInput 路径课程 ID + CourseInput 请求体（创建/更新课程）。
+// courseIDInput 路径课程 ID + course.CourseInput 请求体（创建/更新课程）。
 type courseIDInput struct {
 	ID    int
-	Input *service.CourseInput
+	Input *course.CourseInput
 }
 
-// chapterIDInput 路径章节 ID + ChapterInput 请求体（创建/更新章节）。
+// chapterIDInput 路径章节 ID + course.ChapterInput 请求体（创建/更新章节）。
 type chapterIDInput struct {
 	ID    int
-	Input *service.ChapterInput
+	Input *course.ChapterInput
 }
 
 // swapCourseSortReq 交换课程排序请求（路径 course_id + body swap_with）。

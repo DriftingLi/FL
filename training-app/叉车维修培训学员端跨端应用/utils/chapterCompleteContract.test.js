@@ -7,7 +7,7 @@
  *
  * 根因不是前端显示错，而是**移动端缺了 web 一直有的那条上报路径**：
  * 后端课程进度 = 完成章节数 / 总章节数，而「完成」判据是章节 `progress >= 100`；
- * 章节置 100 有两条路（`backend/internal/service/course_service.go:438`）：
+ * 章节置 100 有两条路（`backend/internal/course/service.go:589/:598`）：
  *   ① `in.Completed` —— **移动端此前从不发送** ⇒ 不可达
  *   ② `StudyDuration >= chapter.Duration` —— 要学满整章才自动完成
  * 两条都不通 ⇒ 完成章节数恒 0 ⇒ 课程进度恒 0。
@@ -157,7 +157,7 @@ describe('#1111 承载面：章节课有「标记完成」入口且接线正确'
 
 describe('#1111 兼容性：后端既有自动完成路径不得被本次改动破坏', () => {
   it('本次不触碰后端的时长阈值自动完成逻辑（改口径需另立票并改 Go 测试）', () => {
-    const backend = readText(path.join(ROOT, '..', '..', 'backend', 'internal', 'service', 'course_service.go'));
+    const backend = readText(path.join(ROOT, '..', '..', 'backend', 'internal', 'course', 'service.go'));
     // 两条置 100 路径必须同时还在：① 学满时长自动 ② 显式 completed
     expect(backend).toMatch(/ch\.StudyDuration\s*>=\s*threshold\s*\|\|\s*in\.Completed/);
     expect(backend).toMatch(/duration\s*>=\s*threshold\s*\|\|\s*in\.Completed/);

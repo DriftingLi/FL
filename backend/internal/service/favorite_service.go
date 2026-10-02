@@ -12,7 +12,12 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -94,7 +99,7 @@ var (
 	ErrFavoriteNotFound          = errors.New("收藏不存在")
 )
 
-func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope QuestionReadScope) error {
+func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope questionbank.QuestionReadScope) error {
 	// 五条支的「查不动」一律上抛，不再被 `cnt == 0` 咽成「不存在」（ADR-0065 决策 7）。
 	// 这里原本是**同一个函数里五种漏法**：course/question 两支把错误丢在单点内部、
 	// chapter/featured/topic 三支把错误丢在 Count 的返回值上——只修其中两支，剩下三支仍会让
@@ -102,7 +107,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 	switch targetType {
 	case FavoriteTargetCourse:
 		// 复用学员可见性单点的 by-id 形态（ADR-0058），不在此手拼谓词。
-		visible, err := CourseVisibleByID(db, targetID)
+		visible, err := course.CourseVisibleByID(db, targetID)
 		if err != nil {
 			return err
 		}
@@ -112,7 +117,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 	case FavoriteTargetChapter:
 		var cnt int64
 		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
-		mounted := MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		mounted := course.MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
 		if err := db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt).Error; err != nil {
 			return err
 		}
@@ -194,7 +199,7 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 
 // Add 收藏（幂等：已收藏直接返回既有条目）。
 // qScope 由入口装配（ADR-0062 决策 4）：只有题目支消费它，其余目标类型不读该参数。
-func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope QuestionReadScope) (*FavoriteDTO, error) {
+func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScope questionbank.QuestionReadScope) (*FavoriteDTO, error) {
 	targetType = strings.TrimSpace(targetType)
 	if targetID <= 0 {
 		return nil, ErrFavTargetIDInvalid
@@ -209,7 +214,7 @@ func (s *FavoriteService) Add(userID int, targetType string, targetID int, qScop
 	}
 	if existing.FavoriteID == 0 {
 		existing = model.Favorite{
-			UserID: userID, TargetType: targetType, TargetID: targetID, CreatedAt: beijingNow(),
+			UserID: userID, TargetType: targetType, TargetID: targetID, CreatedAt: clock.Now(),
 		}
 		if err := s.db.Create(&existing).Error; err != nil {
 			return nil, err
@@ -240,7 +245,7 @@ func (s *FavoriteService) Remove(userID int, favoriteID int64) error {
 // 谓词由归属分区具名谓词给出（ADR-0056 §2）；credentialID 为 nil 时返回空串（调用方整支跳过，
 // 不生成半截 SQL）。
 func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any) {
-	clause, args := entityOwnedByClause("credential_id", credentialID)
+	clause, args := scope.EntityOwnedByClause("credential_id", credentialID)
 	if clause == "" {
 		return "", nil
 	}
@@ -327,7 +332,7 @@ func favoriteToDTO(f *model.Favorite) FavoriteDTO {
 		FavoriteID: f.FavoriteID,
 		TargetType: f.TargetType,
 		TargetID:   f.TargetID,
-		CreatedAt:  formatISO(f.CreatedAt),
+		CreatedAt:  timefmt.FormatISO(f.CreatedAt),
 	}
 }
 

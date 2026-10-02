@@ -24,7 +24,7 @@
 //     是举证装置照不到；下一波要么给这两个包加证据源，要么把它们从判据 4 的分母里显式移出。
 //   - 键缺席而非 null：*[]T + omitempty 的那几格（CourseDTO.chapters / prerequisites /
 //     prerequisite_course_ids、ContributionItemDTO.files）。诚实形状是 nonnil + 既有 x-optional，
-//     marshalKey 在键缺席时判红，所以它们必须走一条**填得上**的出口才算举证。
+//     testutil.MarshalKey 在键缺席时判红，所以它们必须走一条**填得上**的出口才算举证。
 package service
 
 import (
@@ -38,12 +38,12 @@ import (
 )
 
 var nonnilOutletsStats = map[string]func(t *testing.T) any{
-	"service.AdminStatisticsDTO.course_stats":         outletAdminStatisticsNoCourses,
-	"service.WrongQuestionPageDTO.items":              outletWrongQuestionPageEmpty,
-	"service.MockExamResumeDTO.questions":             outletMockExamResume,
-	"service.GroupedCredentialsDTO.skill_level":       outletGroupedCredentialsNone,
-	"service.GroupedCredentialsDTO.special_operation": outletGroupedCredentialsNone,
-	"service.StudentProfileDTO.course_progress":       outletStudentProfileNoStudy,
+	"service.AdminStatisticsDTO.course_stats": outletAdminStatisticsNoCourses,
+	"service.WrongQuestionPageDTO.items":      outletWrongQuestionPageEmpty,
+	"service.MockExamResumeDTO.questions":     outletMockExamResume,
+	// 证件分组两格（skill_level / special_operation）的举证已随域包搬去
+	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
+	"service.StudentProfileDTO.course_progress": outletStudentProfileNoStudy,
 }
 
 func init() {
@@ -81,12 +81,6 @@ func outletMockExamResume(t *testing.T) any {
 		t.Fatalf("续考失败: %v", err)
 	}
 	return res
-}
-
-// outletGroupedCredentialsNone 证件分组：两组都以 []CredentialDict{} 起手，空集也发 `[]`。
-func outletGroupedCredentialsNone(t *testing.T) any {
-	t.Helper()
-	return NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop()).ListGroupedCredentials()
 }
 
 // outletStudentProfileNoStudy 学员档案：有账号、零学习记录时 course_progress 是空集。

@@ -16,7 +16,7 @@
 //   GET  /practice-mode/stats
 //   GET  /practice-mode/history
 //
-// 覆盖的 Go 类型：HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / QuestionDTO / SubmitResultDTO
+// 覆盖的 Go 类型：HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / QuestionDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -86,6 +86,24 @@ export interface ProgressSaveResultDTO {
   saved: boolean
 }
 
+export interface SubmitResultDTO {
+  accuracy_rate?: number
+  ai_comment?: string
+  ai_explanation?: string
+  ai_fallback?: boolean
+  ai_score?: number
+  common_wrong?: string
+  correct_answer: string
+  explanation: string
+  is_correct: boolean | null
+  max_score?: number
+  question_id: number
+  reference_answer?: string
+  scoring_criteria?: string
+  total_attempts?: number
+  user_answer: unknown
+}
+
 export interface QuestionDTO {
   answer?: string
   content: string
@@ -105,22 +123,4 @@ export interface QuestionDTO {
   tags?: unknown
   type: string
   updated_at: string
-}
-
-export interface SubmitResultDTO {
-  accuracy_rate?: number
-  ai_comment?: string
-  ai_explanation?: string
-  ai_fallback?: boolean
-  ai_score?: number
-  common_wrong?: string
-  correct_answer: string
-  explanation: string
-  is_correct: boolean | null
-  max_score?: number
-  question_id: number
-  reference_answer?: string
-  scoring_criteria?: string
-  total_attempts?: number
-  user_answer: unknown
 }

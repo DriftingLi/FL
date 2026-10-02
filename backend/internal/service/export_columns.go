@@ -1,5 +1,7 @@
 package service
 
+import "forklift-training/internal/timefmt"
+
 // EvaluationExportColumn 描述评估导出的一列（#229 列描述单点）。
 //
 // 该 spec 是评估导出的唯一列序真值：repository 的 SELECT 列序与 position Scan、
@@ -17,7 +19,7 @@ type EvaluationExportColumn struct {
 	Scan func(r *EvaluationExportRow) (dest any, commit func())
 	// Value 将该列转为导出单元格值，保持既有中间形状逐字一致：
 	// ID/数值等原始字段直接透传（测试锁定 ID 为 int64），bool/指针/时间列走
-	// yesNo / coeff / nullableFloat / formatISO 格式化。
+	// yesNo / coeff / nullableFloat / timefmt.FormatISO 格式化。
 	Value func(r EvaluationExportRow) any
 }
 
@@ -143,7 +145,7 @@ var EvaluationExportColumns = []EvaluationExportColumn{
 		Value: func(r EvaluationExportRow) any { return r.ReportPDFPath }},
 	{Header: "创建时间", Select: "e.created_at",
 		Scan:  func(r *EvaluationExportRow) (any, func()) { return &r.CreatedAt, nil },
-		Value: func(r EvaluationExportRow) any { return formatISO(r.CreatedAt) }},
+		Value: func(r EvaluationExportRow) any { return timefmt.FormatISO(r.CreatedAt) }},
 }
 
 // ScanEvalExportDestinations 依 spec 顺序收集该行各列的 Scan 落位与提交动作。

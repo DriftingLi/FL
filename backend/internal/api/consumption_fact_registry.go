@@ -50,7 +50,7 @@
 //     比对（改键必然让 committed 的 TS 与注解渲染结果不符 ⇒ 红），移动端靠跨端契约（它手写
 //     `.uts` 类型、不吃 codegen，所以本仓没有任何锁能替它发现——只能靠 #1265 那条同步流程）。
 //   - 只证到「这枚哨兵接在 api 层的错误面上」，证不到「那句话这次真发出去了」。判据 (b) 会推导
-//     宿主标识符并确认它出现在某处 `errors.Is` 或某张 `errStatusTable` 里，但接线不等于可达；
+//     宿主标识符并确认它出现在某处 `errors.Is` 或某张 `httpx.ErrStatusTable` 里，但接线不等于可达；
 //     那一半归 `contact_company_disable_contract_test.go` 的 HTTP 断言（它要求 403 正文逐字带着
 //     这句话）。两半谁都替不了谁——所以登记表认领一个错误载体时，必须同时有一条 HTTP 级断言钉它。
 package api

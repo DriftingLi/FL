@@ -3,24 +3,31 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
 )
 
 // RealExamService 真题套卷服务。
 type RealExamService struct {
 	db     *gorm.DB
-	points *PointsService
+	points *points.Service
 	logger *zap.Logger
 }
 
 // NewRealExamService 创建真题套卷服务。
-func NewRealExamService(db *gorm.DB, points *PointsService, logger *zap.Logger) *RealExamService {
+func NewRealExamService(db *gorm.DB, points *points.Service, logger *zap.Logger) *RealExamService {
 	return &RealExamService{db: db, points: points, logger: logger}
 }
 
@@ -38,7 +45,7 @@ type RealExamPaperDTO struct {
 
 // paperQuestionIDs 卷内题目 id（按 order_num 升序，仅 published）。
 // 按卷练习/开考链路上「三件不同的事」各自的载体（ADR-0064 决策 1/2）。此前它们与
-// ErrRealPaperUnavailable 混在一格 errStatusAll(404) 里，A 批在 real_exam.go 的注释里
+// points.ErrRealPaperUnavailable 混在一格 errStatusAll(404) 里，A 批在 real_exam.go 的注释里
 // 把这件事登记为「正解在 service 侧升哨兵」：
 //   - ErrRealPaperNotRedeemed：这份内容**在平台上、也可见**，只是当前主体没为它付过 ——
 //     与「不存在」是两件事；真题卷的可见性本来就是公开的（列表里能看见），所以这里不必
@@ -90,17 +97,17 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 	}
 	var papers []model.RealExamPaper
 	// 套卷按自身证件列分区（归属分区，ADR-0056 §2）：上方 credentialID<=0 已早退，不存在 nil 分支。
-	if err := EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID).
+	if err := scope.EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID).
 		Where("status = 1").
 		Order("year DESC NULLS LAST, paper_id DESC").
 		Find(&papers).Error; err != nil {
 		s.logger.Warn("查询真题卷列表失败", zap.Int("credential_id", credentialID), zap.Error(err))
 		return out
 	}
-	price := s.points.realPaperPrice()
+	price := s.points.RealPaperPrice()
 	for i := range papers {
 		p := &papers[i]
-		entitled, entErr := s.points.HasEntitlement(userID, RealPaperSKU(p.PaperID), strconv.Itoa(p.PaperID))
+		entitled, entErr := s.points.HasEntitlement(userID, entitlement.RealPaperSKU(p.PaperID), strconv.Itoa(p.PaperID))
 		if entErr != nil {
 			// 有意尽力而为（ADR-0062 票6 的声明式例外，故记日志）：列表上的「已解锁」徽标查不到
 			// 时按未解锁显示，只少一个标记；真正的门禁在 StartPractice / StartExam 两条读路径上
@@ -122,13 +129,13 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 }
 
 // StartPaperPractice 按卷练习开始/续练：固定卷序（不随机），断点续练复用 practice_progress。
-// 装配形态（#385）：续练协商（同集沿用卷序与游标/集合变化刷新复位）走 ResumeSet 单点。
-func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeStartResultDTO, error) {
+// 装配形态（#385）：续练协商（同集沿用卷序与游标/集合变化刷新复位）走 practicemode.ResumeSet 单点。
+func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*practicemode.PracticeStartResultDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, ErrRealPaperUnavailable
+		return nil, points.ErrRealPaperUnavailable
 	}
-	entitled, entErr := s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID))
+	entitled, entErr := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
 	if entErr != nil {
 		return nil, entErr
 	}
@@ -147,8 +154,8 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		byID[all[i].ID] = all[i]
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, nil, ResumeSetSpec{
-		Mode:       string(PracticeModePaper(paperID)),
+	ids, startIdx, err := practicemode.ResumeSet(s.db, studentID, nil, practicemode.ResumeSetSpec{
+		Mode:       string(practicemode.PracticeModePaper(paperID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
 	})
@@ -156,13 +163,13 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		return nil, err
 	}
 
-	out := make([]QuestionDTO, 0, len(ids))
+	out := make([]questionbank.QuestionDTO, 0, len(ids))
 	for _, id := range ids {
 		if q, ok := byID[id]; ok {
-			out = append(out, newQuestionDTO(&q, false))
+			out = append(out, questionbank.NewQuestionDTO(&q, false))
 		}
 	}
-	return &PracticeStartResultDTO{
+	return &practicemode.PracticeStartResultDTO{
 		Questions:    out,
 		CurrentIndex: startIdx,
 		Total:        len(ids),
@@ -175,9 +182,9 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStartDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, ErrRealPaperUnavailable
+		return nil, points.ErrRealPaperUnavailable
 	}
-	entitled, entErr := s.points.HasEntitlement(studentID, RealPaperSKU(paperID), strconv.Itoa(paperID))
+	entitled, entErr := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
 	if entErr != nil {
 		return nil, entErr
 	}
@@ -195,7 +202,7 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 	// 清理废弃未交卷记录（与随机模拟考同口径）。
 	if err := s.db.
 		Where("student_id = ? AND status <> ? AND created_at < ?",
-			studentID, mockExamStatusSubmitted, beijingNow().Add(-mockExamAbandonTTL)).
+			studentID, mockExamStatusSubmitted, clock.Now().Add(-mockExamAbandonTTL)).
 		Delete(&model.MockExam{}).Error; err != nil {
 		s.logger.Warn("清理废弃模拟考试记录失败", zap.Int("student_id", studentID), zap.Error(err))
 	}
@@ -209,9 +216,9 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 		totalScore += int(mockExamMaxScore(&ordered[i]))
 	}
 
-	idsJSON, _ := jsonMarshal(questionIDs)
-	emptyJSON, _ := jsonMarshal(map[string]any{})
-	startTime := beijingNow()
+	idsJSON, _ := json.Marshal(questionIDs)
+	emptyJSON, _ := json.Marshal(map[string]any{})
+	startTime := clock.Now()
 	paperIDCopy := paperID
 	mock := model.MockExam{
 		StudentID: studentID,
@@ -230,9 +237,9 @@ func (s *RealExamService) StartPaperExam(studentID, paperID int) (*MockExamStart
 		return nil, err
 	}
 
-	questionsOut := make([]QuestionDTO, 0, len(ordered))
+	questionsOut := make([]questionbank.QuestionDTO, 0, len(ordered))
 	for i := range ordered {
-		questionsOut = append(questionsOut, newQuestionDTO(&ordered[i], false))
+		questionsOut = append(questionsOut, questionbank.NewQuestionDTO(&ordered[i], false))
 	}
 	return &MockExamStartDTO{
 		MockExamID:     mock.ID,

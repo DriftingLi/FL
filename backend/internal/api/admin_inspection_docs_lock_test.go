@@ -1,6 +1,6 @@
 // 巡检两条列表端点的注解 ↔ paging.ItemsPage 键序锁（ADR-0056 §3 / #1097、§11 / #1100）。
 //
-// 背景：CI 钉住的 swag v1.16.4 展不开泛型实例化，故 admin_inspection.go 的两条 @Success 用
+// 背景：CI 钉住的 swag v1.16.4 展不开泛型实例化，故 handler.go 的两条 @Success 用
 // **内联 object{}** 手抄信封字段（items/page/page_size/total）。手抄就是第二份事实源：漏一个字段、
 // 换一下顺序，注解与运行时输出（paging.ItemsPage 的键序，ADR-0009 §2 的字节契约）会静默分叉——
 // 而 swagger 新鲜度锁与 apitypes 全等锁只看「注解 → 生成物」，看不见「注解 vs 运行时」。
@@ -20,7 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"forklift-training/internal/service"
+	"forklift-training/internal/inspection"
+	"forklift-training/internal/testutil"
 	"forklift-training/pkg/paging"
 )
 
@@ -28,7 +29,7 @@ import (
 const inlineObjectMarker = "data=object{"
 
 // inlineEnvelopeFields 取一条注解里内联 object{} 的字段名（声明序）。
-// 非内联 object 形态（data=service.Foo 这类命名类型）返回 nil, nil —— 本锁只管内联手抄面。
+// 非内联 object 形态（data=inspection.Foo 这类命名类型）返回 nil, nil —— 本锁只管内联手抄面。
 func inlineEnvelopeFields(line string) ([]string, error) {
 	i := strings.Index(line, inlineObjectMarker)
 	if i < 0 {
@@ -74,12 +75,15 @@ func inlineEnvelopeFields(line string) ([]string, error) {
 func TestAdminInspectionInlineEnvelopeKeyOrder(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "admin_inspection.go", nil, parser.ParseComments)
+	// 判据宿主按**模块根相对路径**取，不再靠「测试进程的 cwd 恰好是本包」：拆包后测试随实现移动，
+	// cwd 相对路径会静默指向别的文件（或直接解析失败）。
+	host := testutil.FindCode(t, testutil.ScanBackendCode(t), "internal/inspection/handler.go")
+	file, err := parser.ParseFile(fset, host.Path, host.Src, parser.ParseComments)
 	if err != nil {
-		t.Fatalf("解析 admin_inspection.go 失败: %v", err)
+		t.Fatalf("解析 %s 失败: %v", host.Path, err)
 	}
 	// 运行时事实源：与 envelope_registry_test.go 的形状锁同一条 marshal 路径。
-	want := jsonKeyOrder(t, paging.ItemsPage[service.RecruitResumeViewDTO]{})
+	want := jsonKeyOrder(t, paging.ItemsPage[inspection.RecruitResumeViewDTO]{})
 	if strings.Join(want, ",") != "items,page,page_size,total" {
 		t.Fatalf("ItemsPage 键序 = %v（期望 items,page,page_size,total）—— 本锁的前提变了", want)
 	}
@@ -117,10 +121,10 @@ func TestAdminInspectionInlineEnvelopeKeyOrder(t *testing.T) {
 // 换序 / 少字段必须与事实源不等，逐字同形必须相等；命名类型注解不得被误当内联信封。
 func TestAdminInspectionInlineEnvelopeKeyOrderProbe(t *testing.T) {
 	t.Parallel()
-	want := jsonKeyOrder(t, paging.ItemsPage[service.RecruitResumeViewDTO]{})
+	want := jsonKeyOrder(t, paging.ItemsPage[inspection.RecruitResumeViewDTO]{})
 	for _, bad := range []string{
-		`@Success 200 {object} response.R{data=object{page=int,items=[]service.RecruitResumeViewDTO,page_size=int,total=int}} "success"`,
-		`@Success 200 {object} response.R{data=object{items=[]service.RecruitResumeViewDTO,page=int,total=int}} "success"`,
+		`@Success 200 {object} response.R{data=object{page=int,items=[]inspection.RecruitResumeViewDTO,page_size=int,total=int}} "success"`,
+		`@Success 200 {object} response.R{data=object{items=[]inspection.RecruitResumeViewDTO,page=int,total=int}} "success"`,
 	} {
 		names, err := inlineEnvelopeFields(bad)
 		if err != nil {
@@ -130,7 +134,7 @@ func TestAdminInspectionInlineEnvelopeKeyOrderProbe(t *testing.T) {
 			t.Fatalf("负样本必须与 ItemsPage 键序不等（否则本锁空转）: %s", bad)
 		}
 	}
-	good := `@Success 200 {object} response.R{data=object{items=[]service.RecruitResumeViewDTO,page=int,page_size=int,total=int}} "success"`
+	good := `@Success 200 {object} response.R{data=object{items=[]inspection.RecruitResumeViewDTO,page=int,page_size=int,total=int}} "success"`
 	names, err := inlineEnvelopeFields(good)
 	if err != nil {
 		t.Fatalf("正样本不可解析: %v", err)
@@ -138,7 +142,7 @@ func TestAdminInspectionInlineEnvelopeKeyOrderProbe(t *testing.T) {
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("正样本字段序必须等于 ItemsPage 键序\n  注解      = %v\n  ItemsPage = %v", names, want)
 	}
-	if named, err := inlineEnvelopeFields(`@Success 200 {object} response.R{data=service.PointsLedgerResult} "success"`); err != nil || named != nil {
+	if named, err := inlineEnvelopeFields(`@Success 200 {object} response.R{data=points.PointsLedgerResult} "success"`); err != nil || named != nil {
 		t.Fatalf("命名类型注解不得被判为内联信封，实得 %v / %v", named, err)
 	}
 }

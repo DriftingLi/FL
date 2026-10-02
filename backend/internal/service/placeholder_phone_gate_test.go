@@ -4,9 +4,10 @@
 package service
 
 import (
-	"os"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 func TestPlaceholderPhonePrefix_SentinelValue(t *testing.T) {
@@ -54,27 +55,26 @@ func TestIsPlaceholderPhone(t *testing.T) {
 // 门禁测试自身允许出现字面量，故排除二者。匹配精确到带右引号的 "email_"，避免误报验证码缓存 key
 // "email_code"（KeyPrefix）等含 email_ 开头子串的合法字符串。
 func TestNoBareEmailPlaceholderLiteral(t *testing.T) {
+	// 射程 = 生产代码全域 + 本包测试（原先是「本包目录」）：拆包后新的域包自动进射程。
+	selfDir := testutil.SelfDir(t)
 	exempt := map[string]bool{
-		"placeholder_phone.go":           true, // 常量定义点
-		"placeholder_phone_gate_test.go": true, // 测试自身
+		"internal/service/placeholder_phone.go":           true, // 常量定义点
+		"internal/service/placeholder_phone_gate_test.go": true, // 测试自身
 	}
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("读取包目录失败: %v", err)
-	}
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || exempt[name] {
+	scanned := 0
+	for _, f := range testutil.ScanBackendCode(t) {
+		if !testutil.ProductionOrSelfTests(f, selfDir) || exempt[f.Path] {
 			continue
 		}
-		data, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatalf("读取 %s 失败: %v", name, err)
-		}
-		for i, line := range strings.Split(string(data), "\n") {
+		scanned++
+		for i, line := range strings.Split(f.Src, "\n") {
 			if strings.Contains(line, "\"email_\"") {
-				t.Errorf("%s:%d 含游离的 email_ 占位字面量，应改用 PlaceholderPhonePrefix / IsPlaceholderPhone: %s", name, i+1, strings.TrimSpace(line))
+				t.Errorf("%s:%d 含游离的 email_ 占位字面量，应改用 PlaceholderPhonePrefix / IsPlaceholderPhone: %s", f.Path, i+1, strings.TrimSpace(line))
 			}
 		}
+	}
+	// 本锁原先没有防空转判据：扫描面变空时会静默全绿，而全域实测 0 命中 ⇒ 更需要这一条。
+	if scanned < 300 {
+		t.Fatalf("扫描面异常：只扫到 %d 个源文件（排除两处豁免）", scanned)
 	}
 }

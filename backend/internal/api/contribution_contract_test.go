@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/contribution"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
@@ -35,7 +36,8 @@ func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, 
 	deps := newContractDepsWithStorage(t, db, cfg, st)
 	r := gin.New()
 	api := r.Group("/api")
-	RegisterContributionRoutes(api, deps.RouterDeps(), deps.ContributionSvc)
+	contribution.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.ContributionSvc)
+	contribution.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ContributionSvc)
 	// 学员（已选证件）
 	cred := &model.Credential{Code: "N1", Name: "叉车司机"}
 	if err := db.Create(cred).Error; err != nil {

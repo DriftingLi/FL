@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/material"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -96,7 +97,7 @@ func seedP1Env(t *testing.T) (*gin.Engine, *config.Config, int) {
 	deps := newContractDeps(t, db, cfg)
 	RegisterFavoriteRoutes(api, deps.RouterDeps(), deps.FavoriteSvc)
 	RegisterSearchRoutes(api, deps.RouterDeps(), deps.SearchSvc)
-	RegisterMaterialRoutes(api, deps.RouterDeps(), deps.MaterialSvc)
+	material.RegisterRoutes(api, deps.RouterDeps().Session, deps.MaterialSvc)
 
 	return r, cfg, int(user.ID)
 }

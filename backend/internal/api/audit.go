@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -70,12 +71,12 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditS
 // List 审计日志列表 GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 func (h *AuditHandler) List(c *gin.Context) {
 	// 分页钳制（含页大小上限 100）收进 AuditService.List，handler 只负责传参。
-	Endpoint[auditLogListReq, AuditLogPageResult]{
+	httpx.Endpoint[auditLogListReq, AuditLogPageResult]{
 		Parse: func(c *gin.Context) (*auditLogListReq, error) {
 			return &auditLogListReq{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
-				ActorID:  atoiDefault(c.Query("actor_id"), 0),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
+				ActorID:  httpx.QueryIntDefault(c, "actor_id", 0),
 				Role:     strings.TrimSpace(c.Query("role")),
 				Keyword:  strings.TrimSpace(c.Query("keyword")),
 			}, nil
@@ -92,5 +93,5 @@ func (h *AuditHandler) List(c *gin.Context) {
 				Total: total,
 			}, nil
 		},
-	}.WithSuccess(okMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }

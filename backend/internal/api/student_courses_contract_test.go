@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -36,16 +37,16 @@ func TestLearningPositionContract(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	course := model.Course{Name: "契约课程", CoverImage: "/static/covers/c1.png", Status: 1,
+	c := model.Course{Name: "契约课程", CoverImage: "/static/covers/c1.png", Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
-	if err := db.Create(&course).Error; err != nil {
+	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	ch1 := model.Chapter{CourseID: course.CourseID, Title: "第一章", Duration: 10, OrderNum: 1, CreatedAt: testutil.Now()}
+	ch1 := model.Chapter{CourseID: c.CourseID, Title: "第一章", Duration: 10, OrderNum: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch1).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
-	ch2 := model.Chapter{CourseID: course.CourseID, Title: "第二章", Duration: 5, OrderNum: 2, CreatedAt: testutil.Now()}
+	ch2 := model.Chapter{CourseID: c.CourseID, Title: "第二章", Duration: 5, OrderNum: 2, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch2).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestLearningPositionContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterCoursesRoutes(api, deps.RouterDeps(), deps.CourseSvc)
+	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
 	RegisterStudentRoutes(api, deps.RouterDeps(), deps.StudentSvc)
 
 	const studentID = 7
@@ -81,7 +82,7 @@ func TestLearningPositionContract(t *testing.T) {
 		r.ServeHTTP(w, req)
 		return w
 	}
-	progressPath := fmt.Sprintf("/api/course/%d/progress", course.CourseID)
+	progressPath := fmt.Sprintf("/api/course/%d/progress", c.CourseID)
 
 	// 1. 秒级时长 + 播放位置上报：95 秒 → 2 分钟累计，未完成。
 	rec := do(http.MethodPost, progressPath, map[string]any{
@@ -169,12 +170,12 @@ func TestLearningPositionContract(t *testing.T) {
 	if item["last_studied_at"] == nil || item["last_studied_at"] == "" {
 		t.Fatalf("最后学习时间不应为空: %+v", item)
 	}
-	if mine.Data.ContinueLearning["course_id"] != float64(course.CourseID) {
+	if mine.Data.ContinueLearning["course_id"] != float64(c.CourseID) {
 		t.Fatalf("continue_learning 应指向最新学习课程: %+v", mine.Data.ContinueLearning)
 	}
 
 	// 5. 单课程学习详情：每章状态与播放位置。
-	rec = do(http.MethodGet, fmt.Sprintf("/api/student/courses/%d", course.CourseID), nil)
+	rec = do(http.MethodGet, fmt.Sprintf("/api/student/courses/%d", c.CourseID), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("课程学习详情期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -198,7 +199,7 @@ func TestLearningPositionContract(t *testing.T) {
 	}
 
 	// 6. 课程详情增强：学习位置字段。
-	rec = do(http.MethodGet, fmt.Sprintf("/api/course/%d", course.CourseID), nil)
+	rec = do(http.MethodGet, fmt.Sprintf("/api/course/%d", c.CourseID), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("课程详情期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -236,9 +237,9 @@ func TestLearningPositionEmptyContract(t *testing.T) {
 	db.Create(&spec)
 	lv := model.CourseLevel{Code: "b", Name: "入门", SortOrder: 1, Status: 1}
 	db.Create(&lv)
-	course := model.Course{Name: "空契约课程", Status: 1,
+	c := model.Course{Name: "空契约课程", Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
-	db.Create(&course)
+	db.Create(&c)
 
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
@@ -247,7 +248,7 @@ func TestLearningPositionEmptyContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterCoursesRoutes(api, deps.RouterDeps(), deps.CourseSvc)
+	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
 	RegisterStudentRoutes(api, deps.RouterDeps(), deps.StudentSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
@@ -279,7 +280,7 @@ func TestLearningPositionEmptyContract(t *testing.T) {
 		t.Fatalf("未学学员 continue_learning 应为 null, got %v", mine.Data.ContinueLearning)
 	}
 
-	req, _ = http.NewRequest(http.MethodGet, fmt.Sprintf("/api/course/%d", course.CourseID), nil)
+	req, _ = http.NewRequest(http.MethodGet, fmt.Sprintf("/api/course/%d", c.CourseID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)

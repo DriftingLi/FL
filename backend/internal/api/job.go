@@ -15,17 +15,18 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 // jobErrStatus 职位域哨兵→状态码表（#611）：职位不存在 → 404，非本人职位 → 403，
 // 其余（被强制下架/超上限等业务校验）兜底 400。
-var jobErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrJobNotYours, status: http.StatusForbidden},
+var jobErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrJobNotYours, Status: http.StatusForbidden},
 	},
-	fallback: http.StatusBadRequest,
+	Fallback: http.StatusBadRequest,
 }
 
 // JobHandler 职位 handler。
@@ -69,9 +70,9 @@ func RegisterJobRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobPosti
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/jobs [post]
 func (h *JobHandler) Create(c *gin.Context) {
-	Endpoint[service.JobPostingInput, service.JobPostingDTO]{
+	httpx.Endpoint[service.JobPostingInput, service.JobPostingDTO]{
 		Parse: func(c *gin.Context) (*service.JobPostingInput, error) {
-			return bindJSON[service.JobPostingInput](c)
+			return httpx.BindJSON[service.JobPostingInput](c)
 		},
 		Invoke: func(ctx context.Context, req *service.JobPostingInput) (*service.JobPostingDTO, error) {
 			return h.svc.Create(middleware.CurrentUserID(c), req)
@@ -98,16 +99,16 @@ func (h *JobHandler) Create(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/jobs/{id} [put]
 func (h *JobHandler) Update(c *gin.Context) {
-	Endpoint[service.JobPostingInput, service.JobPostingDTO]{
+	httpx.Endpoint[service.JobPostingInput, service.JobPostingDTO]{
 		Parse: func(c *gin.Context) (*service.JobPostingInput, error) {
-			req, err := bindJSON[service.JobPostingInput](c)
+			req, err := httpx.BindJSON[service.JobPostingInput](c)
 			if err != nil {
 				return nil, err
 			}
 			return req, nil
 		},
 		Invoke: func(ctx context.Context, req *service.JobPostingInput) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -133,9 +134,9 @@ func (h *JobHandler) Update(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/jobs/{id}/toggle-status [post]
 func (h *JobHandler) ToggleStatus(c *gin.Context) {
-	Endpoint[struct{}, service.JobPostingDTO]{
+	httpx.Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -164,15 +165,15 @@ func (h *JobHandler) ToggleStatus(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/jobs [get]
 func (h *JobHandler) ListMine(c *gin.Context) {
-	Endpoint[struct{}, service.JobListResult]{
+	httpx.Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
 			params := service.JobListParams{
-				Page:          atoiDefault(c.Query("page"), 1),
-				PageSize:      atoiDefault(c.Query("page_size"), 20),
+				Page:          httpx.QueryIntDefault(c, "page", 1),
+				PageSize:      httpx.QueryIntDefault(c, "page_size", 20),
 				MineOnly:      true,
 				IncludeHidden: true,
 			}
-			if v := queryIDPtr(c, "position_id"); v != nil {
+			if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 				params.PositionID = v
 			}
 			return h.svc.List(middleware.CurrentUserID(c), params)
@@ -192,9 +193,9 @@ func (h *JobHandler) ListMine(c *gin.Context) {
 // @Failure 403 {object} response.R "无权操作"
 // @Router /recruit/jobs/{id} [get]
 func (h *JobHandler) GetMine(c *gin.Context) {
-	Endpoint[struct{}, service.JobPostingDTO]{
+	httpx.Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -222,19 +223,19 @@ func (h *JobHandler) GetMine(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证（L1 不公开）"
 // @Router /jobs [get]
 func (h *JobHandler) ListPublic(c *gin.Context) {
-	Endpoint[struct{}, service.JobListResult]{
+	httpx.Endpoint[struct{}, service.JobListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
 			params := service.JobListParams{
-				Page:     atoiDefault(c.Query("page"), 1),
-				PageSize: atoiDefault(c.Query("page_size"), 20),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 			}
-			if v := queryIDPtr(c, "position_id"); v != nil {
+			if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 				params.PositionID = v
 			}
-			if v := queryIDPtr(c, "salary_min"); v != nil {
+			if v := httpx.QueryIDPtr(c, "salary_min"); v != nil {
 				params.SalaryMin = v
 			}
-			if v := queryIDPtr(c, "salary_max"); v != nil {
+			if v := httpx.QueryIDPtr(c, "salary_max"); v != nil {
 				params.SalaryMax = v
 			}
 			params.Region = c.Query("region")
@@ -258,9 +259,9 @@ func (h *JobHandler) ListPublic(c *gin.Context) {
 // @Failure 404 {object} response.R "不存在或已下架"
 // @Router /jobs/{id} [get]
 func (h *JobHandler) GetPublic(c *gin.Context) {
-	Endpoint[struct{}, service.JobPostingDTO]{
+	httpx.Endpoint[struct{}, service.JobPostingDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}

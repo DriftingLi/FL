@@ -65,7 +65,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.AIConfigDTO"
+                                                "$ref": "#/definitions/aiassistant.AIConfigDTO"
                                             }
                                         }
                                     }
@@ -318,7 +318,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.FeatureBindingDTO"
+                                                "$ref": "#/definitions/aiassistant.FeatureBindingDTO"
                                             }
                                         }
                                     }
@@ -555,7 +555,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CatalogTreeDTO"
+                                            "$ref": "#/definitions/training.CatalogTreeDTO"
                                         }
                                     }
                                 }
@@ -596,7 +596,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CertificateTemplateInput"
+                            "$ref": "#/definitions/training.CertificateTemplateInput"
                         }
                     }
                 ],
@@ -612,7 +612,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CertificateTemplateDict"
+                                            "$ref": "#/definitions/training.CertificateTemplateDict"
                                         }
                                     }
                                 }
@@ -666,7 +666,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CertificateTemplateInput"
+                            "$ref": "#/definitions/training.CertificateTemplateInput"
                         }
                     }
                 ],
@@ -682,7 +682,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CertificateTemplateDict"
+                                            "$ref": "#/definitions/training.CertificateTemplateDict"
                                         }
                                     }
                                 }
@@ -775,7 +775,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CertificateTemplateListDTO"
+                                            "$ref": "#/definitions/training.CertificateTemplateListDTO"
                                         }
                                     }
                                 }
@@ -838,7 +838,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDTO"
+                                            "$ref": "#/definitions/course.ChapterDTO"
                                         }
                                     }
                                 }
@@ -900,7 +900,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DeleteChapterResult"
+                                            "$ref": "#/definitions/course.DeleteChapterResult"
                                         }
                                     }
                                 }
@@ -965,7 +965,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionPageResult"
                                         }
                                     }
                                 }
@@ -1024,7 +1024,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionReportPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionReportPageResult"
                                         }
                                     }
                                 }
@@ -1066,7 +1066,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.handleReportReq"
+                            "$ref": "#/definitions/contribution.handleReportReq"
                         }
                     }
                 ],
@@ -1116,7 +1116,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -1164,7 +1164,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.contributionRejectReq"
+                            "$ref": "#/definitions/contribution.contributionRejectReq"
                         }
                     }
                 ],
@@ -1180,7 +1180,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -1228,7 +1228,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.contributionRejectReq"
+                            "$ref": "#/definitions/contribution.contributionRejectReq"
                         }
                     }
                 ],
@@ -1244,7 +1244,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -1300,7 +1300,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CourseDTO"
+                                            "$ref": "#/definitions/course.CourseDTO"
                                         }
                                     }
                                 }
@@ -1490,7 +1490,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminCourseDetailDTO"
+                                            "$ref": "#/definitions/course.AdminCourseDetailDTO"
                                         }
                                     }
                                 }
@@ -1557,7 +1557,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CourseDTO"
+                                            "$ref": "#/definitions/course.CourseDTO"
                                         }
                                     }
                                 }
@@ -1625,7 +1625,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DeleteCourseResult"
+                                            "$ref": "#/definitions/course.DeleteCourseResult"
                                         }
                                     }
                                 }
@@ -1700,7 +1700,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDTO"
+                                            "$ref": "#/definitions/course.ChapterDTO"
                                         }
                                     }
                                 }
@@ -1865,7 +1865,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CoursePageResult"
+                                            "$ref": "#/definitions/course.CoursePageResult"
                                         }
                                     }
                                 }
@@ -1906,7 +1906,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CredentialInput"
+                            "$ref": "#/definitions/training.CredentialInput"
                         }
                     }
                 ],
@@ -1922,7 +1922,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialDict"
+                                            "$ref": "#/definitions/training.CredentialDict"
                                         }
                                     }
                                 }
@@ -1976,7 +1976,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CredentialInput"
+                            "$ref": "#/definitions/training.CredentialInput"
                         }
                     }
                 ],
@@ -1992,7 +1992,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialDict"
+                                            "$ref": "#/definitions/training.CredentialDict"
                                         }
                                     }
                                 }
@@ -2155,7 +2155,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialListDTO"
+                                            "$ref": "#/definitions/training.CredentialListDTO"
                                         }
                                     }
                                 }
@@ -2309,7 +2309,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqCategoriesResult"
+                                            "$ref": "#/definitions/faq.AdminFaqCategoriesResult"
                                         }
                                     }
                                 }
@@ -2369,7 +2369,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqCategoryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqCategoryDTO"
                                         }
                                     }
                                 }
@@ -2433,7 +2433,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqCategoryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqCategoryDTO"
                                         }
                                     }
                                 }
@@ -2528,7 +2528,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqEntriesResult"
+                                            "$ref": "#/definitions/faq.AdminFaqEntriesResult"
                                         }
                                     }
                                 }
@@ -2582,7 +2582,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqEntryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqEntryDTO"
                                         }
                                     }
                                 }
@@ -2652,7 +2652,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminFaqEntryDTO"
+                                            "$ref": "#/definitions/faq.AdminFaqEntryDTO"
                                         }
                                     }
                                 }
@@ -2751,7 +2751,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -2859,7 +2859,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -2926,7 +2926,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -2994,7 +2994,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedDeleteResult"
+                                            "$ref": "#/definitions/featured.FeaturedDeleteResult"
                                         }
                                     }
                                 }
@@ -3052,7 +3052,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -3129,7 +3129,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentPageResult"
+                                            "$ref": "#/definitions/featured.FeaturedContentPageResult"
                                         }
                                     }
                                 }
@@ -3246,7 +3246,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumReportPageResult"
+                                            "$ref": "#/definitions/forum.ForumReportPageResult"
                                         }
                                     }
                                 }
@@ -3417,7 +3417,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -3475,7 +3475,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDetailDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDetailDTO"
                                         }
                                     }
                                 }
@@ -3583,7 +3583,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -3651,7 +3651,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -3721,7 +3721,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -3789,7 +3789,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -4203,7 +4203,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.InspectionCountDTO"
+                                            "$ref": "#/definitions/inspection.InspectionCountDTO"
                                         }
                                     }
                                 }
@@ -4509,7 +4509,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.LevelInput"
+                            "$ref": "#/definitions/training.LevelInput"
                         }
                     }
                 ],
@@ -4525,7 +4525,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelDict"
+                                            "$ref": "#/definitions/training.LevelDict"
                                         }
                                     }
                                 }
@@ -4579,7 +4579,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.LevelInput"
+                            "$ref": "#/definitions/training.LevelInput"
                         }
                     }
                 ],
@@ -4595,7 +4595,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelDict"
+                                            "$ref": "#/definitions/training.LevelDict"
                                         }
                                     }
                                 }
@@ -4752,7 +4752,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelListDTO"
+                                            "$ref": "#/definitions/training.LevelListDTO"
                                         }
                                     }
                                 }
@@ -4829,7 +4829,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsLedgerResult"
+                                            "$ref": "#/definitions/points.PointsLedgerResult"
                                         }
                                     }
                                 }
@@ -4876,7 +4876,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.PositionInput"
+                            "$ref": "#/definitions/training.PositionInput"
                         }
                     }
                 ],
@@ -4892,7 +4892,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionDict"
+                                            "$ref": "#/definitions/training.PositionDict"
                                         }
                                     }
                                 }
@@ -4946,7 +4946,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.PositionInput"
+                            "$ref": "#/definitions/training.PositionInput"
                         }
                     }
                 ],
@@ -4962,7 +4962,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionDict"
+                                            "$ref": "#/definitions/training.PositionDict"
                                         }
                                     }
                                 }
@@ -5119,7 +5119,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionListDTO"
+                                            "$ref": "#/definitions/training.PositionListDTO"
                                         }
                                     }
                                 }
@@ -5185,7 +5185,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestPageResult"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestPageResult"
                                         }
                                     }
                                 }
@@ -5243,7 +5243,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -5312,7 +5312,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -5359,7 +5359,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionTagInput"
+                            "$ref": "#/definitions/training.QuestionTagInput"
                         }
                     }
                 ],
@@ -5375,7 +5375,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagDict"
+                                            "$ref": "#/definitions/training.QuestionTagDict"
                                         }
                                     }
                                 }
@@ -5429,7 +5429,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionTagInput"
+                            "$ref": "#/definitions/training.QuestionTagInput"
                         }
                     }
                 ],
@@ -5445,7 +5445,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagDict"
+                                            "$ref": "#/definitions/training.QuestionTagDict"
                                         }
                                     }
                                 }
@@ -5538,7 +5538,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagListDTO"
+                                            "$ref": "#/definitions/training.QuestionTagListDTO"
                                         }
                                     }
                                 }
@@ -5602,7 +5602,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagsResultDTO"
+                                            "$ref": "#/definitions/training.QuestionTagsResultDTO"
                                         }
                                     }
                                 }
@@ -5690,7 +5690,7 @@ const docTemplate = `{
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
-                                                        "$ref": "#/definitions/service.ContactRequestRowDTO"
+                                                        "$ref": "#/definitions/inspection.ContactRequestRowDTO"
                                                     }
                                                 },
                                                 "page": {
@@ -5784,7 +5784,7 @@ const docTemplate = `{
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
-                                                        "$ref": "#/definitions/service.RecruitResumeViewDTO"
+                                                        "$ref": "#/definitions/inspection.RecruitResumeViewDTO"
                                                     }
                                                 },
                                                 "page": {
@@ -5867,7 +5867,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterListResult"
+                                            "$ref": "#/definitions/auth.RecruiterListResult"
                                         }
                                     }
                                 }
@@ -5927,7 +5927,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterCreatedDTO"
+                                            "$ref": "#/definitions/auth.RecruiterCreatedDTO"
                                         }
                                     }
                                 }
@@ -5996,7 +5996,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterUpdatedDTO"
+                                            "$ref": "#/definitions/auth.RecruiterUpdatedDTO"
                                         }
                                     }
                                 }
@@ -6065,7 +6065,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterPasswordResetResult"
+                                            "$ref": "#/definitions/auth.RecruiterPasswordResetResult"
                                         }
                                     }
                                 }
@@ -6237,7 +6237,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SpecialtyListDTO"
+                                            "$ref": "#/definitions/training.SpecialtyListDTO"
                                         }
                                     }
                                 }
@@ -6278,7 +6278,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.SpecialtyInput"
+                            "$ref": "#/definitions/training.SpecialtyInput"
                         }
                     }
                 ],
@@ -6294,7 +6294,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SpecialtyDict"
+                                            "$ref": "#/definitions/training.SpecialtyDict"
                                         }
                                     }
                                 }
@@ -6348,7 +6348,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.SpecialtyInput"
+                            "$ref": "#/definitions/training.SpecialtyInput"
                         }
                     }
                 ],
@@ -6364,7 +6364,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SpecialtyDict"
+                                            "$ref": "#/definitions/training.SpecialtyDict"
                                         }
                                     }
                                 }
@@ -6577,7 +6577,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorRegisterResultDTO"
+                                            "$ref": "#/definitions/auth.TutorRegisterResultDTO"
                                         }
                                     }
                                 }
@@ -6910,7 +6910,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.DiagnosisBrandOption"
+                                                "$ref": "#/definitions/aiassistant.DiagnosisBrandOption"
                                             }
                                         }
                                     }
@@ -6980,7 +6980,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DiagnosisFaultCodePage"
+                                            "$ref": "#/definitions/aiassistant.DiagnosisFaultCodePage"
                                         }
                                     }
                                 }
@@ -7107,7 +7107,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.ModelOption"
+                                                "$ref": "#/definitions/aiassistant.ModelOption"
                                             }
                                         }
                                     }
@@ -7140,7 +7140,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AIAssistantModeModels"
+                                            "$ref": "#/definitions/aiassistant.AIAssistantModeModels"
                                         }
                                     }
                                 }
@@ -7182,7 +7182,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.AIChatSessionDTO"
+                                                "$ref": "#/definitions/aiassistant.AIChatSessionDTO"
                                             }
                                         }
                                     }
@@ -7237,7 +7237,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AIChatSessionDTO"
+                                            "$ref": "#/definitions/aiassistant.AIChatSessionDTO"
                                         }
                                     }
                                 }
@@ -7343,7 +7343,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.AIChatMessageDTO"
+                                                "$ref": "#/definitions/aiassistant.AIChatMessageDTO"
                                             }
                                         }
                                     }
@@ -7414,7 +7414,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AISessionRenameResultDTO"
+                                            "$ref": "#/definitions/aiassistant.AISessionRenameResultDTO"
                                         }
                                     }
                                 }
@@ -7470,7 +7470,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AIImageUploadResultDTO"
+                                            "$ref": "#/definitions/aiassistant.AIImageUploadResultDTO"
                                         }
                                     }
                                 }
@@ -7518,7 +7518,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.UserModelDTO"
+                                                "$ref": "#/definitions/aiassistant.UserModelDTO"
                                             }
                                         }
                                     }
@@ -7674,7 +7674,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -7798,7 +7798,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -7853,7 +7853,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -7911,7 +7911,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -7963,7 +7963,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8095,7 +8095,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8174,7 +8174,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileDTO"
+                                            "$ref": "#/definitions/auth.ProfileDTO"
                                         }
                                     }
                                 }
@@ -8226,7 +8226,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8278,7 +8278,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8415,7 +8415,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -8711,7 +8711,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8762,7 +8762,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RefreshResultDTO"
+                                            "$ref": "#/definitions/auth.RefreshResultDTO"
                                         }
                                     }
                                 }
@@ -8814,7 +8814,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8866,7 +8866,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8907,7 +8907,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WechatQRCodeInfoDTO"
+                                            "$ref": "#/definitions/auth.WechatQRCodeInfoDTO"
                                         }
                                     }
                                 }
@@ -8953,7 +8953,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WxLoginResult"
+                                            "$ref": "#/definitions/auth.WxLoginResult"
                                         }
                                     }
                                 }
@@ -8991,7 +8991,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/api.GenerateCaptchaDTO"
+                                            "$ref": "#/definitions/auth.GenerateCaptchaDTO"
                                         }
                                     }
                                 }
@@ -9037,7 +9037,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CatalogTreeDTO"
+                                            "$ref": "#/definitions/training.CatalogTreeDTO"
                                         }
                                     }
                                 }
@@ -9086,7 +9086,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterSlidesDTO"
+                                            "$ref": "#/definitions/course.ChapterSlidesDTO"
                                         }
                                     }
                                 }
@@ -9153,7 +9153,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterSlidesDTO"
+                                            "$ref": "#/definitions/course.ChapterSlidesDTO"
                                         }
                                     }
                                 }
@@ -9211,7 +9211,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CheckInResult"
+                                            "$ref": "#/definitions/checkin.CheckInResult"
                                         }
                                     }
                                 }
@@ -9277,7 +9277,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CheckInCalendarResult"
+                                            "$ref": "#/definitions/checkin.CheckInCalendarResult"
                                         }
                                     }
                                 }
@@ -9339,7 +9339,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CheckInRankResult"
+                                            "$ref": "#/definitions/checkin.CheckInRankResult"
                                         }
                                     }
                                 }
@@ -9412,7 +9412,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionPageResult"
                                         }
                                     }
                                 }
@@ -9457,7 +9457,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.createContributionReq"
+                            "$ref": "#/definitions/contribution.createContributionReq"
                         }
                     }
                 ],
@@ -9473,7 +9473,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -9550,7 +9550,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionPageResult"
                                         }
                                     }
                                 }
@@ -9605,7 +9605,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionFileDTO"
+                                            "$ref": "#/definitions/contribution.ContributionFileDTO"
                                         }
                                     }
                                 }
@@ -9663,7 +9663,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -9753,7 +9753,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DownloadResult"
+                                            "$ref": "#/definitions/contribution.DownloadResult"
                                         }
                                     }
                                 }
@@ -9801,7 +9801,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.reportContributionReq"
+                            "$ref": "#/definitions/contribution.reportContributionReq"
                         }
                     }
                 ],
@@ -9860,7 +9860,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CourseDetailDTO"
+                                            "$ref": "#/definitions/course.CourseDetailDTO"
                                         }
                                     }
                                 }
@@ -9934,7 +9934,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDetailDTO"
+                                            "$ref": "#/definitions/course.ChapterDetailDTO"
                                         }
                                     }
                                 }
@@ -10010,7 +10010,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudyProgressDTO"
+                                            "$ref": "#/definitions/course.StudyProgressDTO"
                                         }
                                     }
                                 }
@@ -10110,7 +10110,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CoursePageResult"
+                                            "$ref": "#/definitions/course.CoursePageResult"
                                         }
                                     }
                                 }
@@ -10147,7 +10147,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialListDTO"
+                                            "$ref": "#/definitions/training.CredentialListDTO"
                                         }
                                     }
                                 }
@@ -10184,7 +10184,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.GroupedCredentialsDTO"
+                                            "$ref": "#/definitions/training.GroupedCredentialsDTO"
                                         }
                                     }
                                 }
@@ -10221,7 +10221,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FaqResult"
+                                            "$ref": "#/definitions/faq.FaqResult"
                                         }
                                     }
                                 }
@@ -10529,7 +10529,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentDetailDTO"
                                         }
                                     }
                                 }
@@ -10681,7 +10681,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -10743,7 +10743,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -10805,7 +10805,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MyReplyPageResult"
+                                            "$ref": "#/definitions/forum.MyReplyPageResult"
                                         }
                                     }
                                 }
@@ -10867,7 +10867,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -10929,7 +10929,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -11045,7 +11045,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11110,7 +11110,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11290,7 +11290,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicPageResult"
+                                            "$ref": "#/definitions/forum.ForumTopicPageResult"
                                         }
                                     }
                                 }
@@ -11351,7 +11351,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11444,7 +11444,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDetailDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDetailDTO"
                                         }
                                     }
                                 }
@@ -11503,7 +11503,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11644,7 +11644,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11715,7 +11715,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumTopicDTO"
+                                            "$ref": "#/definitions/forum.ForumTopicDTO"
                                         }
                                     }
                                 }
@@ -11782,7 +11782,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11847,7 +11847,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumLikeResultDTO"
+                                            "$ref": "#/definitions/forum.ForumLikeResultDTO"
                                         }
                                     }
                                 }
@@ -11923,7 +11923,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumReplyDTO"
+                                            "$ref": "#/definitions/forum.ForumReplyDTO"
                                         }
                                     }
                                 }
@@ -12054,7 +12054,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ForumImageUploadResultDTO"
+                                            "$ref": "#/definitions/forum.ForumImageUploadResultDTO"
                                         }
                                     }
                                 }
@@ -12432,7 +12432,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelListDTO"
+                                            "$ref": "#/definitions/training.LevelListDTO"
                                         }
                                     }
                                 }
@@ -12494,7 +12494,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MaterialPageResult"
+                                            "$ref": "#/definitions/material.MaterialPageResult"
                                         }
                                     }
                                 }
@@ -12635,7 +12635,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CurrentCredentialDTO"
+                                            "$ref": "#/definitions/training.CurrentCredentialDTO"
                                         }
                                     }
                                 }
@@ -12690,7 +12690,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CurrentCredentialDTO"
+                                            "$ref": "#/definitions/training.CurrentCredentialDTO"
                                         }
                                     }
                                 }
@@ -13409,7 +13409,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NotificationListPageResult"
+                                            "$ref": "#/definitions/notification.NotificationListPageResult"
                                         }
                                     }
                                 }
@@ -13489,7 +13489,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NotificationUnreadCountDTO"
+                                            "$ref": "#/definitions/notification.NotificationUnreadCountDTO"
                                         }
                                     }
                                 }
@@ -13581,7 +13581,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsBalanceResult"
+                                            "$ref": "#/definitions/points.PointsBalanceResult"
                                         }
                                     }
                                 }
@@ -13638,7 +13638,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsLedgerResult"
+                                            "$ref": "#/definitions/points.PointsLedgerResult"
                                         }
                                     }
                                 }
@@ -13690,7 +13690,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RedeemResult"
+                                            "$ref": "#/definitions/points.RedeemResult"
                                         }
                                     }
                                 }
@@ -13748,7 +13748,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RedeemResult"
+                                            "$ref": "#/definitions/points.RedeemResult"
                                         }
                                     }
                                 }
@@ -13797,7 +13797,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsTasksResult"
+                                            "$ref": "#/definitions/points.PointsTasksResult"
                                         }
                                     }
                                 }
@@ -13849,7 +13849,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PointsClaimResult"
+                                            "$ref": "#/definitions/points.PointsClaimResult"
                                         }
                                     }
                                 }
@@ -13898,7 +13898,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionListDTO"
+                                            "$ref": "#/definitions/training.PositionListDTO"
                                         }
                                     }
                                 }
@@ -13955,7 +13955,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.QuestionDTO"
+                                                "$ref": "#/definitions/questionbank.QuestionDTO"
                                             }
                                         }
                                     }
@@ -14042,7 +14042,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HistoryResultDTO"
+                                            "$ref": "#/definitions/practicemode.HistoryResultDTO"
                                         }
                                     }
                                 }
@@ -14097,7 +14097,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticePracticeStatsDTO"
+                                            "$ref": "#/definitions/practicemode.PracticePracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -14152,7 +14152,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -14213,7 +14213,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressSaveResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressSaveResultDTO"
                                         }
                                     }
                                 }
@@ -14265,7 +14265,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -14311,7 +14311,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -14365,7 +14365,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStatsDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -14422,7 +14422,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SubmitResultDTO"
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -14490,7 +14490,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -14594,7 +14594,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionPageDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionPageDTO"
                                         }
                                     }
                                 }
@@ -14639,7 +14639,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionCreateInput"
+                            "$ref": "#/definitions/questionbank.QuestionCreateInput"
                         }
                     }
                 ],
@@ -14655,7 +14655,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -14708,7 +14708,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionBatchImportInput"
+                            "$ref": "#/definitions/questionbank.QuestionBatchImportInput"
                         }
                     }
                 ],
@@ -14724,7 +14724,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionImportResultDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionImportResultDTO"
                                         }
                                     }
                                 }
@@ -14787,7 +14787,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionPublishResultDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionPublishResultDTO"
                                         }
                                     }
                                 }
@@ -14850,7 +14850,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionRejectResultDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionRejectResultDTO"
                                         }
                                     }
                                 }
@@ -14911,7 +14911,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -14957,7 +14957,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionUpdateInput"
+                            "$ref": "#/definitions/questionbank.QuestionUpdateInput"
                         }
                     }
                 ],
@@ -14973,7 +14973,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15075,7 +15075,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15145,7 +15145,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15206,7 +15206,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionDTO"
                                         }
                                     }
                                 }
@@ -15264,7 +15264,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionBankStatsDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionBankStatsDTO"
                                         }
                                     }
                                 }
@@ -15319,7 +15319,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionImageUploadDTO"
+                                            "$ref": "#/definitions/questionbank.QuestionImageUploadDTO"
                                         }
                                     }
                                 }
@@ -15888,7 +15888,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -15946,7 +15946,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RedeemResult"
+                                            "$ref": "#/definitions/points.RedeemResult"
                                         }
                                     }
                                 }
@@ -17923,7 +17923,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MaterialPageResult"
+                                            "$ref": "#/definitions/material.MaterialPageResult"
                                         }
                                     }
                                 }
@@ -18154,7 +18154,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagListDTO"
+                                            "$ref": "#/definitions/training.QuestionTagListDTO"
                                         }
                                     }
                                 }
@@ -18203,7 +18203,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDetailDTO"
+                                            "$ref": "#/definitions/course.ChapterDetailDTO"
                                         }
                                     }
                                 }
@@ -18255,7 +18255,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.ChapterInput"
+                            "$ref": "#/definitions/course.ChapterInput"
                         }
                     }
                 ],
@@ -18271,7 +18271,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDTO"
+                                            "$ref": "#/definitions/course.ChapterDTO"
                                         }
                                     }
                                 }
@@ -18339,7 +18339,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterFileDTO"
+                                            "$ref": "#/definitions/course.ChapterFileDTO"
                                         }
                                     }
                                 }
@@ -18400,7 +18400,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorCourseChaptersDTO"
+                                            "$ref": "#/definitions/course.TutorCourseChaptersDTO"
                                         }
                                     }
                                 }
@@ -18486,7 +18486,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CoursePageResult"
+                                            "$ref": "#/definitions/course.CoursePageResult"
                                         }
                                     }
                                 }
@@ -23352,7 +23352,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SubmitResultDTO"
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -23437,6 +23437,293 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "aiassistant.AIAssistantModeModels": {
+            "type": "object",
+            "properties": {
+                "expert": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/aiassistant.ModelOption"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "normal": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/aiassistant.ModelOption"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "aiassistant.AIChatMessageDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "description": "用户消息附带的图片 URL（无图时键在、值为 null）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "role": {
+                    "type": "string"
+                },
+                "sources": {
+                    "description": "助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aiassistant.DiagnosisSource"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "aiassistant.AIChatSessionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "feature_key": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model_name": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.AIConfigDTO": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "脱敏后的 API Key（如 sk-da...9b3）",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.AIImageUploadResultDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.AISessionRenameResultDTO": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisBrandOption": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisFaultCodeItem": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "brand_cn": {
+                    "type": "string"
+                },
+                "causes": {
+                    "type": "string"
+                },
+                "fault_code": {
+                    "type": "string"
+                },
+                "fault_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model_series": {
+                    "type": "string"
+                },
+                "page_num": {
+                    "type": "integer"
+                },
+                "part_numbers": {
+                    "type": "string"
+                },
+                "safety_warning": {
+                    "type": "string"
+                },
+                "sop_steps": {
+                    "type": "string"
+                },
+                "source_file": {
+                    "type": "string"
+                },
+                "symptom": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisFaultCodePage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aiassistant.DiagnosisFaultCodeItem"
+                    },
+                    "x-nullable": true
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "aiassistant.DiagnosisSource": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/aiassistant.DiagnosisSourceMetadata"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisSourceMetadata": {
+            "type": "object",
+            "properties": {
+                "page_end": {
+                    "type": "integer"
+                },
+                "page_start": {
+                    "type": "integer"
+                },
+                "source_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.FeatureBindingDTO": {
+            "type": "object",
+            "properties": {
+                "config_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "config_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "feature_key": {
+                    "type": "string"
+                },
+                "feature_label": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.ModelOption": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.UserModelDTO": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "脱敏后的 API Key",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "api.AuditLogPageResult": {
             "type": "object",
             "properties": {
@@ -23458,7 +23745,7 @@ const docTemplate = `{
                 }
             }
         },
-        "api.GenerateCaptchaDTO": {
+        "auth.GenerateCaptchaDTO": {
             "type": "object",
             "properties": {
                 "id": {
@@ -23469,7 +23756,612 @@ const docTemplate = `{
                 }
             }
         },
-        "api.contributionRejectReq": {
+        "auth.LoginResult": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ProfileChangeRequestDTO": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "field_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "new_value": {
+                    "type": "string"
+                },
+                "old_value": {
+                    "type": "string"
+                },
+                "reject_reason": {
+                    "type": "string"
+                },
+                "reviewed_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reviewed_by": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ProfileChangeRequestPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "requests": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "auth.ProfileDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "avatar_url": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "company": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "email": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "has_password": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "pending_profile_change": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
+                        }
+                    ],
+                    "x-nullable": true,
+                    "x-optional": true
+                },
+                "phone": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "role": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string",
+                    "x-optional": true
+                }
+            }
+        },
+        "auth.RecruiterCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RecruiterListItem": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RecruiterListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/auth.RecruiterListItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "auth.RecruiterPasswordResetResult": {
+            "type": "object"
+        },
+        "auth.RecruiterUpdatedDTO": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RefreshResultDTO": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.TutorRegisterResultDTO": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.WechatQRCodeInfoDTO": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "qr_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.WxLoginResult": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "avatar": {
+                    "type": "string"
+                },
+                "isNew": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "checkin.CheckInCalendarResult": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/checkin.CheckInDay"
+                    }
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "checkin.CheckInDay": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "boolean"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                }
+            }
+        },
+        "checkin.CheckInRankItem": {
+            "type": "object",
+            "properties": {
+                "rank": {
+                    "type": "integer"
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                }
+            }
+        },
+        "checkin.CheckInRankResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/checkin.CheckInRankItem"
+                    }
+                },
+                "me": {
+                    "description": "Me 是 Go 指针：未上榜时为 null。extensions 把这条可空性**表达进注解层**，\ncodegen 据此渲染 me: CheckInRankItem | null（spec #940 片五③）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/checkin.CheckInRankItem"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "checkin.CheckInResult": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "boolean"
+                },
+                "points": {
+                    "description": "Points 今日实发积分（基础 + 跨档阶梯，合并单笔；已打卡/重复请求时为 0）。",
+                    "type": "integer"
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.ContributionAuthor": {
+            "type": "object",
+            "properties": {
+                "anonymous": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.ContributionFileDTO": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "description": "FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.ContributionItemDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "description": "Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，\n生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/contribution.ContributionAuthor"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential_id": {
+                    "type": "integer"
+                },
+                "downloads_count": {
+                    "type": "integer"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/contribution.ContributionFileDTO"
+                    },
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "intro": {
+                    "type": "string"
+                },
+                "is_anonymous": {
+                    "type": "boolean"
+                },
+                "reject_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.ContributionPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/contribution.ContributionItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.ContributionReportItemDTO": {
+            "type": "object",
+            "properties": {
+                "contribution_id": {
+                    "type": "integer"
+                },
+                "contribution_title": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "reporter_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "0 待处理 / 1 已处理",
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.ContributionReportPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/contribution.ContributionReportItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.DownloadResult": {
+            "type": "object",
+            "properties": {
+                "is_new": {
+                    "description": "是否新增一次计数（重复点击=false）",
+                    "type": "boolean"
+                },
+                "tier_awarded": {
+                    "description": "本次触发的达阶奖励（0=未触发）",
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.contributionRejectReq": {
             "type": "object",
             "properties": {
                 "reason": {
@@ -23477,7 +24369,7 @@ const docTemplate = `{
                 }
             }
         },
-        "api.createContributionReq": {
+        "contribution.createContributionReq": {
             "type": "object",
             "properties": {
                 "credential_id": {
@@ -23514,7 +24406,7 @@ const docTemplate = `{
                 }
             }
         },
-        "api.handleReportReq": {
+        "contribution.handleReportReq": {
             "type": "object",
             "properties": {
                 "action": {
@@ -23523,11 +24415,1382 @@ const docTemplate = `{
                 }
             }
         },
-        "api.reportContributionReq": {
+        "contribution.reportContributionReq": {
             "type": "object",
             "properties": {
                 "reason": {
                     "type": "string"
+                }
+            }
+        },
+        "course.AdminCourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "certificate_template": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CertificateTemplateDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "certificate_template_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    }
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CredentialBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "credential_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_hot": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.LevelBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "practice_hours": {
+                    "type": "integer"
+                },
+                "prerequisite_course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-optional": true
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseBriefDTO"
+                    },
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.SpecialtyBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "student_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "theory_hours": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CertificateTemplateDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "template_url": {
+                    "type": "string"
+                },
+                "validity_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.ChapterDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterFileDTO"
+                    },
+                    "x-optional": true
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterDetailDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterFileDTO"
+                    }
+                },
+                "next_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "previous_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "resume_position": {
+                    "description": "ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。\nADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读\n另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播\n（词表「学习位置」的承诺在最常用的入口上不成立）。",
+                    "type": "integer"
+                },
+                "study_status": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterFileDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterInput": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterSlidesDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "slides": {
+                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "course.CourseBriefDTO": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.CourseDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "certificate_template": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CertificateTemplateDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "certificate_template_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    },
+                    "x-optional": true
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CredentialBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "credential_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_hot": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.LevelBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "practice_hours": {
+                    "type": "integer"
+                },
+                "prerequisite_course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-optional": true
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseBriefDTO"
+                    },
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.SpecialtyBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "student_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "theory_hours": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    }
+                },
+                "completed_chapters": {
+                    "type": "integer"
+                },
+                "course_info": {
+                    "$ref": "#/definitions/course.CourseDTO"
+                },
+                "is_enrolled": {
+                    "type": "boolean"
+                },
+                "last_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "last_position": {
+                    "type": "integer"
+                },
+                "last_studied_at": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "number"
+                }
+            }
+        },
+        "course.CoursePageResult": {
+            "type": "object",
+            "properties": {
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CredentialBriefDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.DeleteChapterResult": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.DeleteCourseResult": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.LevelBriefDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.SpecialtyBriefDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.StudyProgressDTO": {
+            "type": "object",
+            "properties": {
+                "completed_chapters": {
+                    "type": "integer"
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "record_id": {
+                    "type": "integer"
+                },
+                "study_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.TutorCourseChaptersDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    }
+                },
+                "course": {
+                    "$ref": "#/definitions/course.CourseDTO"
+                }
+            }
+        },
+        "faq.AdminFaqCategoriesResult": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.AdminFaqCategoryDTO"
+                    }
+                }
+            }
+        },
+        "faq.AdminFaqCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "entry_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "faq.AdminFaqEntriesResult": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.AdminFaqEntryDTO"
+                    }
+                }
+            }
+        },
+        "faq.AdminFaqEntryDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "category_code": {
+                    "type": "string"
+                },
+                "category_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "published": {
+                    "type": "boolean"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "faq.FaqCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.FaqEntryDTO"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "faq.FaqEntryDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "faq.FaqResult": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/faq.FaqCategoryDTO"
+                    }
+                }
+            }
+        },
+        "featured.FeaturedContentAdminDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "next": {
+                    "$ref": "#/definitions/featured.FeaturedNavDTO"
+                },
+                "prev": {
+                    "$ref": "#/definitions/featured.FeaturedNavDTO"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "related": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/featured.FeaturedContentDTO"
+                    }
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/featured.FeaturedContentDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedDeleteResult": {
+            "type": "object",
+            "properties": {
+                "content_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedNavDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.ForumImageUploadResultDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.ForumLikeResultDTO": {
+            "type": "object",
+            "properties": {
+                "liked": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumReplyDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                },
+                "can_delete": {
+                    "type": "boolean"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip_city": {
+                    "type": "string"
+                },
+                "ip_province": {
+                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：\n空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。",
+                    "type": "string"
+                },
+                "is_accepted": {
+                    "type": "boolean"
+                },
+                "liked_by_me": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
+                },
+                "parent_avatar_url": {
+                    "description": "ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。\n与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "parent_name": {
+                    "description": "被回复人的展示名",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "topic_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumReportDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "reply_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "reporter": {
+                    "type": "string"
+                },
+                "reporter_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "topic_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "topic_title": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.ForumReportPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "reports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.ForumReportDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumTopicDTO": {
+            "type": "object",
+            "properties": {
+                "accepted_reply_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "author": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                },
+                "can_delete": {
+                    "type": "boolean"
+                },
+                "category": {
+                    "description": "意图：discussion | question（ADR-0040）",
+                    "type": "string"
+                },
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip_city": {
+                    "type": "string"
+                },
+                "ip_province": {
+                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，\n展示侧据此**整段不渲染**（不显示「未知」、不留占位）。\n位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。",
+                    "type": "string"
+                },
+                "is_experience": {
+                    "description": "认定：备考经验（蕴含 is_featured）",
+                    "type": "boolean"
+                },
+                "is_featured": {
+                    "description": "认定：精选位",
+                    "type": "boolean"
+                },
+                "last_reply_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "liked_by_me": {
+                    "type": "boolean"
+                },
+                "likes_count": {
+                    "type": "integer"
+                },
+                "reply_count": {
+                    "type": "integer"
+                },
+                "reward_issued": {
+                    "type": "boolean"
+                },
+                "solved_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumTopicDetailDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.ForumReplyDTO"
+                    }
+                },
+                "topic": {
+                    "$ref": "#/definitions/forum.ForumTopicDTO"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.ForumTopicPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.ForumTopicDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "forum.MyReplyDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_format": {
+                    "description": "ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "topic_id": {
+                    "type": "integer"
+                },
+                "topic_title": {
+                    "type": "string"
+                }
+            }
+        },
+        "forum.MyReplyPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/forum.MyReplyDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "inspection.ContactRequestRowDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "description": "DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；\n漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expires_at": {
+                    "description": "ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。\n与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "inspection.InspectionCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "inspection.RecruitResumeViewDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "resume_user_id": {
+                    "type": "integer"
+                },
+                "viewed_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "material.MaterialDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "material.MaterialPageResult": {
+            "type": "object",
+            "properties": {
+                "materials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/material.MaterialDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -24166,6 +26429,20 @@ const docTemplate = `{
                 }
             }
         },
+        "model.ForumAuthor": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "model.ListBatteryResponse": {
             "type": "object",
             "properties": {
@@ -24268,6 +26545,602 @@ const docTemplate = `{
                     "type": "number"
                 }
             }
+        },
+        "notification.NotificationDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_read": {
+                    "type": "boolean"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "payload": {
+                    "description": "Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，\n故用 swaggertype 钉成不透明 object（生成物渲染 Record\u003cstring, unknown\u003e），\n具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。",
+                    "type": "object",
+                    "x-optional": true
+                },
+                "read_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "notification.NotificationListPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/notification.NotificationDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "notification.NotificationUnreadCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsBalanceResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "total_earned": {
+                    "type": "integer"
+                },
+                "total_spent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsClaimResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "task_status": {
+                    "type": "string"
+                },
+                "total_earned": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsLedgerItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "delta": {
+                    "type": "integer"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "ref_id": {
+                    "type": "string"
+                },
+                "ref_type": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsLedgerResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.PointsLedgerItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsTaskItem": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "desc": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "todo/claimable/claimed",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "points.PointsTasksResult": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.PointsTaskItem"
+                    }
+                }
+            }
+        },
+        "points.RedeemResult": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "integer"
+                },
+                "ref_id": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "total_earned": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.HistoryItemDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_correct": {
+                    "type": "boolean"
+                },
+                "practice_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "user_answer": {
+                    "type": "string"
+                }
+            }
+        },
+        "practicemode.HistoryResultDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/practicemode.HistoryItemDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticePracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "today_count": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "total_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeStartResultDTO": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/practicemode.PracticeTypeStat"
+                    }
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "wrong": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeTypeStat": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.ProgressResultDTO": {
+            "type": "object",
+            "properties": {
+                "answers_state": {
+                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
+                    "type": "object",
+                    "additionalProperties": {},
+                    "x-nullable": true
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "pool_total": {
+                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.ProgressSaveResultDTO": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer"
+                },
+                "saved": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "practicemode.SubmitResultDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy_rate": {
+                    "type": "number",
+                    "x-optional": true
+                },
+                "ai_comment": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_explanation": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_fallback": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "ai_score": {
+                    "type": "number",
+                    "x-optional": true
+                },
+                "common_wrong": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "correct_answer": {
+                    "type": "string"
+                },
+                "explanation": {
+                    "type": "string"
+                },
+                "is_correct": {
+                    "type": "boolean",
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "reference_answer": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "scoring_criteria": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "total_attempts": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "user_answer": {}
+            }
+        },
+        "questionbank.QuestionBankStatsDTO": {
+            "type": "object",
+            "properties": {
+                "by_status": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionBatchImportInput": {
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionCreateInput"
+                    }
+                }
+            }
+        },
+        "questionbank.QuestionCreateInput": {
+            "type": "object"
+        },
+        "questionbank.QuestionDTO": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "description": "学员侧（includeAnswer=false）省略以下四个字段。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "created_by_type": {
+                    "type": "string"
+                },
+                "credential_id": {
+                    "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "explanation": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "options": {},
+                "reference_answer": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reject_reason": {
+                    "type": "string"
+                },
+                "score": {
+                    "type": "integer"
+                },
+                "scoring_criteria": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。",
+                    "x-optional": true
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "questionbank.QuestionImageUploadDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "questionbank.QuestionImportErrorDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "index": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionImportResultDTO": {
+            "type": "object",
+            "properties": {
+                "error_count": {
+                    "type": "integer"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionImportErrorDTO"
+                    }
+                },
+                "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionPageDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionPublishResultDTO": {
+            "type": "object",
+            "properties": {
+                "published_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionRejectResultDTO": {
+            "type": "object",
+            "properties": {
+                "rejected_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "questionbank.QuestionUpdateInput": {
+            "type": "object"
         },
         "repository.AlgorithmParameters": {
             "type": "object",
@@ -24553,333 +27426,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.AIAssistantModeModels": {
-            "type": "object",
-            "properties": {
-                "expert": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ModelOption"
-                        }
-                    ],
-                    "x-nullable": true
-                },
-                "normal": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ModelOption"
-                        }
-                    ],
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.AIChatMessageDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "description": "用户消息附带的图片 URL（无图时键在、值为 null）",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "role": {
-                    "type": "string"
-                },
-                "sources": {
-                    "description": "助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.DiagnosisSource"
-                    },
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.AIChatSessionDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "feature_key": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model_name": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AIConfigDTO": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "description": "脱敏后的 API Key（如 sk-da...9b3）",
-                    "type": "string"
-                },
-                "base_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AIImageUploadResultDTO": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AISessionRenameResultDTO": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AdminCourseDetailDTO": {
-            "type": "object",
-            "properties": {
-                "certificate_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "certificate_template": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CertificateTemplateDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "certificate_template_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    }
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credential": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CredentialBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "credential_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "entitled": {
-                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "is_featured": {
-                    "type": "boolean"
-                },
-                "is_hot": {
-                    "type": "boolean"
-                },
-                "level": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.LevelBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "level_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "points_price": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "practice_hours": {
-                    "type": "integer"
-                },
-                "prerequisite_course_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    },
-                    "x-optional": true
-                },
-                "prerequisites": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseBriefDTO"
-                    },
-                    "x-optional": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.SpecialtyBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "specialty_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "student_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "theory_hours": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.AdminFaqCategoriesResult": {
-            "type": "object",
-            "properties": {
-                "categories": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.AdminFaqCategoryDTO"
-                    }
-                }
-            }
-        },
-        "service.AdminFaqCategoryDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "entry_count": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AdminFaqEntriesResult": {
-            "type": "object",
-            "properties": {
-                "entries": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.AdminFaqEntryDTO"
-                    }
-                }
-            }
-        },
-        "service.AdminFaqEntryDTO": {
-            "type": "object",
-            "properties": {
-                "answer": {
-                    "type": "string"
-                },
-                "category_code": {
-                    "type": "string"
-                },
-                "category_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "published": {
-                    "type": "boolean"
-                },
-                "question": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.AdminOverviewDTO": {
             "type": "object",
             "properties": {
@@ -25004,296 +27550,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CatalogLevelNode": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "courses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseDTO"
-                    }
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CatalogSpecialtyNode": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "levels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CatalogLevelNode"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CatalogTreeDTO": {
-            "type": "object",
-            "properties": {
-                "specialties": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CatalogSpecialtyNode"
-                    }
-                }
-            }
-        },
-        "service.CertificateTemplateDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "template_url": {
-                    "type": "string"
-                },
-                "validity_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CertificateTemplateDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "template_url": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "validity_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CertificateTemplateInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "template_url": {
-                    "type": "string"
-                },
-                "validity_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CertificateTemplateListDTO": {
-            "type": "object",
-            "properties": {
-                "certificate_templates": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CertificateTemplateDict"
-                    }
-                }
-            }
-        },
-        "service.ChapterDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterFileDTO"
-                    },
-                    "x-optional": true
-                },
-                "order_num": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ChapterDetailDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterFileDTO"
-                    }
-                },
-                "next_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "order_num": {
-                    "type": "integer"
-                },
-                "previous_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "resume_position": {
-                    "description": "ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。\nADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读\n另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播\n（词表「学习位置」的承诺在最常用的入口上不成立）。",
-                    "type": "integer"
-                },
-                "study_status": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ChapterFileDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "file_id": {
-                    "type": "integer"
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                }
-            }
-        },
         "service.ChapterGenResult": {
             "type": "object",
             "properties": {
@@ -25314,146 +27570,6 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
-                }
-            }
-        },
-        "service.ChapterInput": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "order_num": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ChapterSlidesDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "slides": {
-                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.CheckInCalendarResult": {
-            "type": "object",
-            "properties": {
-                "days": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CheckInDay"
-                    }
-                },
-                "streak": {
-                    "type": "integer"
-                },
-                "today_checked": {
-                    "type": "boolean"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CheckInDay": {
-            "type": "object",
-            "properties": {
-                "checked": {
-                    "type": "boolean"
-                },
-                "date": {
-                    "type": "string"
-                },
-                "points": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CheckInRankItem": {
-            "type": "object",
-            "properties": {
-                "rank": {
-                    "type": "integer"
-                },
-                "streak": {
-                    "type": "integer"
-                },
-                "today_checked": {
-                    "type": "boolean"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "user": {
-                    "$ref": "#/definitions/service.ForumAuthor"
-                }
-            }
-        },
-        "service.CheckInRankResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CheckInRankItem"
-                    }
-                },
-                "me": {
-                    "description": "Me 是 Go 指针：未上榜时为 null。extensions 把这条可空性**表达进注解层**，\ncodegen 据此渲染 me: CheckInRankItem | null（spec #940 片五③）。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CheckInRankItem"
-                        }
-                    ],
-                    "x-nullable": true
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CheckInResult": {
-            "type": "object",
-            "properties": {
-                "checked": {
-                    "type": "boolean"
-                },
-                "points": {
-                    "description": "Points 今日实发积分（基础 + 跨档阶梯，合并单笔；已打卡/重复请求时为 0）。",
-                    "type": "integer"
-                },
-                "streak": {
-                    "type": "integer"
-                },
-                "today_checked": {
-                    "type": "boolean"
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
@@ -25575,391 +27691,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.ContactRequestRowDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "decided_at": {
-                    "description": "DecidedAt 未决申请为 nil：**键整个不出现**（omitempty）→ x-optional；\n漏标会让 swag 把它渲染成必填（ADR-0056 §11 / #1100 的契约撒谎面）。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "expires_at": {
-                    "description": "ExpiresAt 裁决窗口，**仅 pending 有值**（ADR-0061 §2 / 迁移 000039 的 CHECK）。\n与 DecidedAt 同形：标量非空会让新产生的 approved 行输出 0001-01-01T00:00:00Z 的假日期。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_user_id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionAuthor": {
-            "type": "object",
-            "properties": {
-                "anonymous": {
-                    "type": "boolean"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionFileDTO": {
-            "type": "object",
-            "properties": {
-                "content_type": {
-                    "type": "string"
-                },
-                "file_id": {
-                    "description": "FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionItemDTO": {
-            "type": "object",
-            "properties": {
-                "author": {
-                    "description": "Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，\n生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ContributionAuthor"
-                        }
-                    ]
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credential_id": {
-                    "type": "integer"
-                },
-                "downloads_count": {
-                    "type": "integer"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ContributionFileDTO"
-                    },
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "intro": {
-                    "type": "string"
-                },
-                "is_anonymous": {
-                    "type": "boolean"
-                },
-                "reject_reason": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ContributionItemDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ContributionReportItemDTO": {
-            "type": "object",
-            "properties": {
-                "contribution_id": {
-                    "type": "integer"
-                },
-                "contribution_title": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "reporter_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "description": "0 待处理 / 1 已处理",
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ContributionReportPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ContributionReportItemDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CourseBriefDTO": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.CourseDTO": {
-            "type": "object",
-            "properties": {
-                "certificate_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "certificate_template": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CertificateTemplateDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "certificate_template_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    },
-                    "x-optional": true
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credential": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CredentialBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "credential_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "entitled": {
-                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "is_featured": {
-                    "type": "boolean"
-                },
-                "is_hot": {
-                    "type": "boolean"
-                },
-                "level": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.LevelBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "level_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "points_price": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "practice_hours": {
-                    "type": "integer"
-                },
-                "prerequisite_course_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    },
-                    "x-optional": true
-                },
-                "prerequisites": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseBriefDTO"
-                    },
-                    "x-optional": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.SpecialtyBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "specialty_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "student_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "theory_hours": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CourseDetailDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    }
-                },
-                "completed_chapters": {
-                    "type": "integer"
-                },
-                "course_info": {
-                    "$ref": "#/definitions/service.CourseDTO"
-                },
-                "is_enrolled": {
-                    "type": "boolean"
-                },
-                "last_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "last_position": {
-                    "type": "integer"
-                },
-                "last_studied_at": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "number"
-                }
-            }
-        },
-        "service.CoursePageResult": {
-            "type": "object",
-            "properties": {
-                "courses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.CourseProgressDTO": {
             "type": "object",
             "properties": {
@@ -26003,129 +27734,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CredentialBriefDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.CredentialDict": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.CredentialInput": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "level": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CredentialListDTO": {
-            "type": "object",
-            "properties": {
-                "credentials": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CredentialDict"
-                    }
-                }
-            }
-        },
-        "service.CurrentCredentialDTO": {
-            "type": "object",
-            "properties": {
-                "credential": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CredentialDict"
-                        }
-                    ],
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.DeleteChapterResult": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.DeleteCourseResult": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.DeleteFileResult": {
             "type": "object",
             "properties": {
@@ -26134,168 +27742,6 @@ const docTemplate = `{
                 },
                 "file_id": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.DiagnosisBrandOption": {
-            "type": "object",
-            "properties": {
-                "label": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DiagnosisFaultCodeItem": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "brand_cn": {
-                    "type": "string"
-                },
-                "causes": {
-                    "type": "string"
-                },
-                "fault_code": {
-                    "type": "string"
-                },
-                "fault_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model_series": {
-                    "type": "string"
-                },
-                "page_num": {
-                    "type": "integer"
-                },
-                "part_numbers": {
-                    "type": "string"
-                },
-                "safety_warning": {
-                    "type": "string"
-                },
-                "sop_steps": {
-                    "type": "string"
-                },
-                "source_file": {
-                    "type": "string"
-                },
-                "symptom": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DiagnosisFaultCodePage": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.DiagnosisFaultCodeItem"
-                    },
-                    "x-nullable": true
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.DiagnosisSource": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/service.DiagnosisSourceMetadata"
-                },
-                "text": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DiagnosisSourceMetadata": {
-            "type": "object",
-            "properties": {
-                "page_end": {
-                    "type": "integer"
-                },
-                "page_start": {
-                    "type": "integer"
-                },
-                "source_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DownloadResult": {
-            "type": "object",
-            "properties": {
-                "is_new": {
-                    "description": "是否新增一次计数（重复点击=false）",
-                    "type": "boolean"
-                },
-                "tier_awarded": {
-                    "description": "本次触发的达阶奖励（0=未触发）",
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FaqCategoryDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "entries": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FaqEntryDTO"
-                    }
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.FaqEntryDTO": {
-            "type": "object",
-            "properties": {
-                "answer": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FaqResult": {
-            "type": "object",
-            "properties": {
-                "categories": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FaqCategoryDTO"
-                    }
                 }
             }
         },
@@ -26357,505 +27803,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.FeatureBindingDTO": {
-            "type": "object",
-            "properties": {
-                "config_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "config_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "feature_key": {
-                    "type": "string"
-                },
-                "feature_label": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.FeaturedContentAdminDetailDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "published_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedContentDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "published_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedContentDetailDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "next": {
-                    "$ref": "#/definitions/service.FeaturedNavDTO"
-                },
-                "prev": {
-                    "$ref": "#/definitions/service.FeaturedNavDTO"
-                },
-                "published_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "related": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FeaturedContentDTO"
-                    }
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedContentPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FeaturedContentDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedDeleteResult": {
-            "type": "object",
-            "properties": {
-                "content_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedNavDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "published_at": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumAuthor": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumImageUploadResultDTO": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumLikeResultDTO": {
-            "type": "object",
-            "properties": {
-                "liked": {
-                    "type": "boolean"
-                },
-                "likes_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumReplyDTO": {
-            "type": "object",
-            "properties": {
-                "author": {
-                    "$ref": "#/definitions/service.ForumAuthor"
-                },
-                "can_delete": {
-                    "type": "boolean"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_format": {
-                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。与主题同口径。",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "ip_city": {
-                    "type": "string"
-                },
-                "ip_province": {
-                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045），与主题同口径：\n空串 = 无属地，展示侧接在相对时间之后（「18 小时前 · 上海」），为空则整段不渲染。",
-                    "type": "string"
-                },
-                "is_accepted": {
-                    "type": "boolean"
-                },
-                "liked_by_me": {
-                    "type": "boolean"
-                },
-                "likes_count": {
-                    "type": "integer"
-                },
-                "parent_avatar_url": {
-                    "description": "ParentAvatarURL 被回复人的头像（ADR-0042「昵称 › 被回复人」行内形态所需）。\n与 ParentName 同口径 omitempty：顶层回复（无被回复人）两个字段都不出现。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "parent_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "parent_name": {
-                    "description": "被回复人的展示名",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "topic_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumReportDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "reply_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "reporter": {
-                    "type": "string"
-                },
-                "reporter_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "topic_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "topic_title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumReportPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "reports": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ForumReportDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumTopicDTO": {
-            "type": "object",
-            "properties": {
-                "accepted_reply_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "author": {
-                    "$ref": "#/definitions/service.ForumAuthor"
-                },
-                "can_delete": {
-                    "type": "boolean"
-                },
-                "category": {
-                    "description": "意图：discussion | question（ADR-0040）",
-                    "type": "string"
-                },
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_title": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_format": {
-                    "description": "ContentFormat 正文格式声明（ADR-0044）：text | markdown。前端据此选渲染方式。",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "ip_city": {
-                    "type": "string"
-                },
-                "ip_province": {
-                    "description": "IPProvince / IPCity 发布那一刻的属地快照（ADR-0045）。空串 = 无属地，\n展示侧据此**整段不渲染**（不显示「未知」、不留占位）。\n位置在作者行：它是「这条帖子的作者当时在哪」，不是用户资料。",
-                    "type": "string"
-                },
-                "is_experience": {
-                    "description": "认定：备考经验（蕴含 is_featured）",
-                    "type": "boolean"
-                },
-                "is_featured": {
-                    "description": "认定：精选位",
-                    "type": "boolean"
-                },
-                "last_reply_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "liked_by_me": {
-                    "type": "boolean"
-                },
-                "likes_count": {
-                    "type": "integer"
-                },
-                "reply_count": {
-                    "type": "integer"
-                },
-                "reward_issued": {
-                    "type": "boolean"
-                },
-                "solved_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumTopicDetailDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "replies": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ForumReplyDTO"
-                    }
-                },
-                "topic": {
-                    "$ref": "#/definitions/service.ForumTopicDTO"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ForumTopicPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "topics": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ForumTopicDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.GenTaskStatus": {
             "type": "object",
             "properties": {
@@ -26886,77 +27833,6 @@ const docTemplate = `{
             "properties": {
                 "task_id": {
                     "type": "string"
-                }
-            }
-        },
-        "service.GroupedCredentialsDTO": {
-            "type": "object",
-            "properties": {
-                "skill_level": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CredentialDict"
-                    }
-                },
-                "special_operation": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CredentialDict"
-                    }
-                }
-            }
-        },
-        "service.HistoryItemDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_correct": {
-                    "type": "boolean"
-                },
-                "practice_type": {
-                    "type": "string"
-                },
-                "question": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.QuestionDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "user_answer": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.HistoryResultDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.HistoryItemDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
@@ -27030,14 +27906,6 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
-                }
-            }
-        },
-        "service.InspectionCountDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
                 }
             }
         },
@@ -27261,156 +28129,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.LevelBriefDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.LevelDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.LevelInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.LevelListDTO": {
-            "type": "object",
-            "properties": {
-                "levels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.LevelDict"
-                    }
-                }
-            }
-        },
-        "service.LoginResult": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MaterialDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_title": {
-                    "type": "string"
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "file_id": {
-                    "type": "integer"
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MaterialPageResult": {
-            "type": "object",
-            "properties": {
-                "materials": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MaterialDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.MockExamAnswerDetailDTO": {
             "type": "object",
             "properties": {
@@ -27564,7 +28282,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
                     }
                 },
                 "remaining_time": {
@@ -27587,7 +28305,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
                     }
                 },
                 "remaining_time": {
@@ -27625,80 +28343,6 @@ const docTemplate = `{
                 },
                 "total_score": {
                     "type": "number"
-                }
-            }
-        },
-        "service.ModelOption": {
-            "type": "object",
-            "properties": {
-                "base_url": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MyReplyDTO": {
-            "type": "object",
-            "properties": {
-                "author": {
-                    "$ref": "#/definitions/service.ForumAuthor"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_format": {
-                    "description": "ContentFormat 正文格式声明（ADR-0044）：列表摘要据此决定是否剥成纯文本。",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "parent_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "topic_id": {
-                    "type": "integer"
-                },
-                "topic_title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MyReplyPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "replies": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MyReplyDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
@@ -27740,503 +28384,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.NotificationDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_read": {
-                    "type": "boolean"
-                },
-                "link": {
-                    "type": "string"
-                },
-                "payload": {
-                    "description": "Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，\n故用 swaggertype 钉成不透明 object（生成物渲染 Record\u003cstring, unknown\u003e），\n具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。",
-                    "type": "object",
-                    "x-optional": true
-                },
-                "read_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.NotificationListPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.NotificationDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "unread_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.NotificationUnreadCountDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsBalanceResult": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "integer"
-                },
-                "total_earned": {
-                    "type": "integer"
-                },
-                "total_spent": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsClaimResult": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "integer"
-                },
-                "task_status": {
-                    "type": "string"
-                },
-                "total_earned": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsLedgerItem": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "delta": {
-                    "type": "integer"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "ref_id": {
-                    "type": "string"
-                },
-                "ref_type": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsLedgerResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.PointsLedgerItem"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsTaskItem": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "desc": {
-                    "type": "string"
-                },
-                "group": {
-                    "type": "string"
-                },
-                "points": {
-                    "type": "integer"
-                },
-                "progress": {
-                    "type": "integer"
-                },
-                "status": {
-                    "description": "todo/claimable/claimed",
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PointsTasksResult": {
-            "type": "object",
-            "properties": {
-                "tasks": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.PointsTaskItem"
-                    }
-                }
-            }
-        },
-        "service.PositionDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "position_id": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PositionInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PositionListDTO": {
-            "type": "object",
-            "properties": {
-                "positions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.PositionDict"
-                    }
-                }
-            }
-        },
-        "service.PracticePracticeStatsDTO": {
-            "type": "object",
-            "properties": {
-                "today_count": {
-                    "type": "integer"
-                },
-                "total_count": {
-                    "type": "integer"
-                },
-                "total_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeStartResultDTO": {
-            "type": "object",
-            "properties": {
-                "completed": {
-                    "type": "integer"
-                },
-                "current_index": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeStatsDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/service.PracticeTypeStat"
-                    }
-                },
-                "correct": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "wrong": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeTypeStat": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProfileChangeRequestDTO": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "field_type": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "new_value": {
-                    "type": "string"
-                },
-                "old_value": {
-                    "type": "string"
-                },
-                "reject_reason": {
-                    "type": "string"
-                },
-                "reviewed_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "reviewed_by": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ProfileChangeRequestPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "requests": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ProfileChangeRequestDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProfileDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "avatar_url": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "company": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "email": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "has_password": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "pending_profile_change": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
-                        }
-                    ],
-                    "x-nullable": true,
-                    "x-optional": true
-                },
-                "phone": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "role": {
-                    "type": "string"
-                },
-                "uid": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string",
-                    "x-optional": true
-                }
-            }
-        },
-        "service.ProgressResultDTO": {
-            "type": "object",
-            "properties": {
-                "answers_state": {
-                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
-                    "type": "object",
-                    "additionalProperties": {},
-                    "x-nullable": true
-                },
-                "completed": {
-                    "type": "integer"
-                },
-                "current_index": {
-                    "type": "integer"
-                },
-                "pool_total": {
-                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProgressSaveResultDTO": {
-            "type": "object",
-            "properties": {
-                "index": {
-                    "type": "integer"
-                },
-                "saved": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "service.QuestionBankStatsDTO": {
-            "type": "object",
-            "properties": {
-                "by_status": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionBatchImportInput": {
-            "type": "object",
-            "properties": {
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionCreateInput"
-                    }
                 }
             }
         },
@@ -28285,226 +28432,6 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
-        },
-        "service.QuestionCreateInput": {
-            "type": "object"
-        },
-        "service.QuestionDTO": {
-            "type": "object",
-            "properties": {
-                "answer": {
-                    "description": "学员侧（includeAnswer=false）省略以下四个字段。",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "created_by_type": {
-                    "type": "string"
-                },
-                "credential_id": {
-                    "description": "CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "explanation": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "image_url": {
-                    "type": "string"
-                },
-                "options": {},
-                "reference_answer": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "reject_reason": {
-                    "type": "string"
-                },
-                "score": {
-                    "type": "integer"
-                },
-                "scoring_criteria": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "tags": {
-                    "description": "Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。",
-                    "x-optional": true
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionImageUploadDTO": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionImportErrorDTO": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "index": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionImportResultDTO": {
-            "type": "object",
-            "properties": {
-                "error_count": {
-                    "type": "integer"
-                },
-                "errors": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionImportErrorDTO"
-                    }
-                },
-                "success_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionPageDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionPublishResultDTO": {
-            "type": "object",
-            "properties": {
-                "published_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionRejectResultDTO": {
-            "type": "object",
-            "properties": {
-                "rejected_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionTagDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "question_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionTagInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionTagListDTO": {
-            "type": "object",
-            "properties": {
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionTagDict"
-                    }
-                }
-            }
-        },
-        "service.QuestionTagsResultDTO": {
-            "type": "object",
-            "properties": {
-                "tag_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    },
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.QuestionUpdateInput": {
-            "type": "object"
         },
         "service.RealExamPaperDTO": {
             "type": "object",
@@ -28650,23 +28577,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.RecruitResumeViewDTO": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "resume_user_id": {
-                    "type": "integer"
-                },
-                "viewed_at": {
-                    "type": "string"
-                }
-            }
-        },
         "service.RecruiterApplicationListResult": {
             "type": "object",
             "properties": {
@@ -28690,159 +28600,6 @@ const docTemplate = `{
                 },
                 "unread_count": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.RecruiterCreatedDTO": {
-            "type": "object",
-            "properties": {
-                "business_scope": {
-                    "type": "string"
-                },
-                "company_name": {
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "credit_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RecruiterListItem": {
-            "type": "object",
-            "properties": {
-                "business_scope": {
-                    "type": "string"
-                },
-                "company_name": {
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credit_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RecruiterListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.RecruiterListItem"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruiterPasswordResetResult": {
-            "type": "object"
-        },
-        "service.RecruiterUpdatedDTO": {
-            "type": "object",
-            "properties": {
-                "business_scope": {
-                    "type": "string"
-                },
-                "company_name": {
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "credit_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RedeemResult": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "integer"
-                },
-                "ref_id": {
-                    "type": "string"
-                },
-                "sku": {
-                    "type": "string"
-                },
-                "total_earned": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RefreshResultDTO": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
                 }
             }
         },
@@ -28998,77 +28755,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyBriefDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "specialty_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyListDTO": {
-            "type": "object",
-            "properties": {
-                "specialties": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.SpecialtyDict"
-                    }
                 }
             }
         },
@@ -29290,23 +28976,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudyProgressDTO": {
-            "type": "object",
-            "properties": {
-                "completed_chapters": {
-                    "type": "integer"
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "record_id": {
-                    "type": "integer"
-                },
-                "study_duration": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.StudyRecordDTO": {
             "type": "object",
             "properties": {
@@ -29381,79 +29050,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.SubmitResultDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy_rate": {
-                    "type": "number",
-                    "x-optional": true
-                },
-                "ai_comment": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_explanation": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_fallback": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "ai_score": {
-                    "type": "number",
-                    "x-optional": true
-                },
-                "common_wrong": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "correct_answer": {
-                    "type": "string"
-                },
-                "explanation": {
-                    "type": "string"
-                },
-                "is_correct": {
-                    "type": "boolean",
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "reference_answer": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "scoring_criteria": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "total_attempts": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "user_answer": {}
-            }
-        },
-        "service.TutorCourseChaptersDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    }
-                },
-                "course": {
-                    "$ref": "#/definitions/service.CourseDTO"
-                }
-            }
-        },
         "service.TutorDTO": {
             "type": "object",
             "properties": {
@@ -29499,61 +29095,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.TutorRegisterResultDTO": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "tutor_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.UserModelDTO": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "description": "脱敏后的 API Key",
-                    "type": "string"
-                },
-                "base_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.WechatQRCodeInfoDTO": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "qr_url": {
-                    "type": "string"
-                }
-            }
-        },
         "service.WrongQuestionBatchRemoveResultDTO": {
             "type": "object",
             "properties": {
@@ -29592,7 +29133,7 @@ const docTemplate = `{
                 "question": {
                     "allOf": [
                         {
-                            "$ref": "#/definitions/service.QuestionDTO"
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
                         }
                     ],
                     "x-optional": true
@@ -29650,38 +29191,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.WxLoginResult": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "avatar": {
-                    "type": "string"
-                },
-                "isNew": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "service.ZeroResultKeywordDTO": {
             "type": "object",
             "properties": {
@@ -29693,6 +29202,497 @@ const docTemplate = `{
                 },
                 "times": {
                     "type": "integer"
+                }
+            }
+        },
+        "training.CatalogLevelNode": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseDTO"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CatalogSpecialtyNode": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "levels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CatalogLevelNode"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CatalogTreeDTO": {
+            "type": "object",
+            "properties": {
+                "specialties": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CatalogSpecialtyNode"
+                    }
+                }
+            }
+        },
+        "training.CertificateTemplateDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "template_url": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "validity_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CertificateTemplateInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "template_url": {
+                    "type": "string"
+                },
+                "validity_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CertificateTemplateListDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_templates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CertificateTemplateDict"
+                    }
+                }
+            }
+        },
+        "training.CredentialDict": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "training.CredentialInput": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "level": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CredentialListDTO": {
+            "type": "object",
+            "properties": {
+                "credentials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CredentialDict"
+                    }
+                }
+            }
+        },
+        "training.CurrentCredentialDTO": {
+            "type": "object",
+            "properties": {
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/training.CredentialDict"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "training.GroupedCredentialsDTO": {
+            "type": "object",
+            "properties": {
+                "skill_level": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CredentialDict"
+                    }
+                },
+                "special_operation": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CredentialDict"
+                    }
+                }
+            }
+        },
+        "training.LevelDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.LevelInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.LevelListDTO": {
+            "type": "object",
+            "properties": {
+                "levels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.LevelDict"
+                    }
+                }
+            }
+        },
+        "training.PositionDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.PositionInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.PositionListDTO": {
+            "type": "object",
+            "properties": {
+                "positions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.PositionDict"
+                    }
+                }
+            }
+        },
+        "training.QuestionTagDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "question_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "training.QuestionTagInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.QuestionTagListDTO": {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.QuestionTagDict"
+                    }
+                }
+            }
+        },
+        "training.QuestionTagsResultDTO": {
+            "type": "object",
+            "properties": {
+                "tag_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "training.SpecialtyDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.SpecialtyInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.SpecialtyListDTO": {
+            "type": "object",
+            "properties": {
+                "specialties": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.SpecialtyDict"
+                    }
                 }
             }
         }

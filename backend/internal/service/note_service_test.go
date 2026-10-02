@@ -10,12 +10,13 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
 // studentScope 测试用学员题目读 scope：未选证件（nil）= 池不分区、看全部。
 // 夹具题（testutil.SeedQuestion）是 published 且无证件、无源标记 ⇒ 恒在池内。
-func studentScope() QuestionReadScope { return NewQuestionReadScope(nil) }
+func studentScope() questionbank.QuestionReadScope { return questionbank.NewQuestionReadScope(nil) }
 
 func newNoteSvc(t *testing.T) (*NoteService, *gorm.DB) {
 	t.Helper()
@@ -78,7 +79,7 @@ func TestNoteListScopeAndOrder(t *testing.T) {
 	if _, err := svc.Create(1, "独立笔记较早"); err != nil {
 		t.Fatal(err)
 	}
-	// 拉开时间：Create 取 beijingNow()，这里直接改库里的 updated_at 以稳定断言
+	// 拉开时间：Create 取 clock.Now()，这里直接改库里的 updated_at 以稳定断言
 	if err := db.Model(&model.Note{}).Where("user_id = ? AND question_id IS NULL", 1).
 		UpdateColumn("updated_at", time.Now().Add(-2*time.Hour)).Error; err != nil {
 		t.Fatal(err)

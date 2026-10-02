@@ -3,27 +3,31 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
 // seedInProgressMockExam 落一条进行中的模考记录（题目集 / 作答快照都经 JSONB，与线上同形）。
 func seedInProgressMockExam(t *testing.T, db *gorm.DB, studentID int, ids []int, answers map[string]any) *model.MockExam {
 	t.Helper()
-	idsJSON, err := jsonMarshal(ids)
+	idsJSON, err := json.Marshal(ids)
 	if err != nil {
 		t.Fatalf("序列化题目集失败: %v", err)
 	}
-	answersJSON, err := jsonMarshal(answers)
+	answersJSON, err := json.Marshal(answers)
 	if err != nil {
 		t.Fatalf("序列化作答快照失败: %v", err)
 	}
-	now := beijingNow()
+	now := clock.Now()
 	mock := &model.MockExam{
 		StudentID:     studentID,
 		QuestionIDs:   model.JSONB(idsJSON),
@@ -57,7 +61,7 @@ func assertTotalIsSumOfDetails(t *testing.T, got *MockExamSubmitDTO) {
 func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewMockExamService(db, nil, zap.NewNop())
-	svc.grader = &fakeGrader{res: &AIGradeResult{Score: 8, Comment: "回答到位"}}
+	svc.grader = &fakeGrader{res: &aiassistant.GradeResult{Score: 8, Comment: "回答到位"}}
 
 	multi := testutil.SeedQuestion(t, db, "multi_choice", "多选", "A,B,C")
 	short := testutil.SeedQuestion(t, db, "short_answer", "简答", "参考答案")
@@ -65,9 +69,9 @@ func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 	student := testutil.SeedStudent(t, db, "李四", "x")
 
 	mock := seedInProgressMockExam(t, db, student.ID, []int{multi.ID, short.ID, single.ID}, map[string]any{
-		intToString(multi.ID):  []string{"A"}, // 3 选 1 ⇒ 4×1/3×0.5 ≈ 0.7（round1）
-		intToString(short.ID):  "我的作答",
-		intToString(single.ID): "A",
+		questionbank.IntToString(multi.ID):  []string{"A"}, // 3 选 1 ⇒ 4×1/3×0.5 ≈ 0.7（round1）
+		questionbank.IntToString(short.ID):  "我的作答",
+		questionbank.IntToString(single.ID): "A",
 	})
 
 	got, err := svc.Submit(mock.ID, student.ID)
@@ -115,7 +119,7 @@ func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 		t.Errorf("mock_exam.score = %v, want %v", saved.Score, got.TotalScore)
 	}
 	var persisted MockExamSubmitDTO
-	if err := jsonUnmarshal(saved.Result, &persisted); err != nil {
+	if err := json.Unmarshal(saved.Result, &persisted); err != nil {
 		t.Fatalf("解析落库 result 失败: %v", err)
 	}
 	assertTotalIsSumOfDetails(t, &persisted)
@@ -132,8 +136,8 @@ func TestMockExamSubmitShortAnswerWithoutAIScoresZero(t *testing.T) {
 	student := testutil.SeedStudent(t, db, "王五", "x")
 
 	mock := seedInProgressMockExam(t, db, student.ID, []int{multi.ID, short.ID}, map[string]any{
-		intToString(multi.ID): []string{"A"},
-		intToString(short.ID): "我的作答",
+		questionbank.IntToString(multi.ID): []string{"A"},
+		questionbank.IntToString(short.ID): "我的作答",
 	})
 
 	got, err := svc.Submit(mock.ID, student.ID)
@@ -151,4 +155,21 @@ func TestMockExamSubmitShortAnswerWithoutAIScoresZero(t *testing.T) {
 	if sa.IsCorrect != nil {
 		t.Errorf("短答 is_correct 应保持 nil, got %v", boolPtrVal(sa.IsCorrect))
 	}
+}
+
+// fakeGrader 短答 AI 判分 adapter 的测试替身（留驻 service 侧的就地内联副本：原定义随判分内核
+// 搬去 internal/practicemode/grading_test.go，ADR-0070 波 3c-2；生产侧接口现为
+// practicemode.ShortAnswerGrader，本替身只对着它实现，别在两个包里各改一半）。
+type fakeGrader struct {
+	res              *aiassistant.GradeResult
+	called           int
+	gotStudentAnswer string
+	gotMaxScore      float64
+}
+
+func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore float64) *aiassistant.GradeResult {
+	f.called++
+	f.gotStudentAnswer = studentAnswer
+	f.gotMaxScore = maxScore
+	return f.res
 }

@@ -46,7 +46,7 @@ const readRepo = (rel) => readText(path.join(REPO, rel));
 
 const DESCRIPTOR_REL = 'utils/contributionStatus.uts';
 const CONSUMER_REL = 'pages/resources/my-uploads.uvue';
-const GO_REL = 'backend/internal/service/contribution_service.go';
+const GO_REL = 'backend/internal/contribution/service.go';
 const WEB_REL = 'frontend/src/pages/student/ContributionTab.vue';
 
 /** 投稿状态文案（唯一判定处之外不得出现；注释不算） */

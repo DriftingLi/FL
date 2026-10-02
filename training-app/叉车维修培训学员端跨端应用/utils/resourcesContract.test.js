@@ -342,9 +342,10 @@ describe('api/contribution.uts 裸出口白名单（#653：multipart 无 mapped 
 });
 
 describe('幻影路由锁（#662 口径）：material 域路由必须落在后端已注册清单内', () => {
-  /** 后端注册表：material.go 的 `g.METHOD("<path>")`（组前缀为空串，见该文件 rg.Group("")） */
+  /** 后端注册表：资料域 handler 的 `g.METHOD("<path>")`（组前缀为空串，见该文件 rg.Group("")；
+   *  文件已随 ADR-0070 域包迁移搬到 internal/material/handler.go） */
   function registeredRoutes() {
-    const go = stripComments(read('../../backend/internal/api/material.go'));
+    const go = stripComments(read('../../backend/internal/material/handler.go'));
     return [...go.matchAll(/\bg\.(?:GET|POST|PUT|DELETE|PATCH)\("([^"]+)"[^)]*\)/g)].map((m) => m[1]);
   }
 
@@ -356,7 +357,7 @@ describe('幻影路由锁（#662 口径）：material 域路由必须落在后�
     return [...normalized.matchAll(/'((?:\/materials|\/student\/materials)[^']*)'/g)].map((m) => m[1]);
   }
 
-  it('四条路由全部命中 material.go 注册面（收紧只换出口、不改请求形态）', () => {
+  it('四条路由全部命中 handler.go 注册面（收紧只换出口、不改请求形态）', () => {
     const registered = registeredRoutes();
     expect(registered.length).toBeGreaterThan(3);
     const used = apiRoutes();

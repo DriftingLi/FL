@@ -12,7 +12,7 @@
 //   - 「请指定题库标签」「该标签不支持专项练习」同为 404 ⇒ 请求本身不成立被说成资源不存在。
 //   - real_exam 的「未兑换」「卷内无已发布题」与「卷不可用」挤在同一格 404。
 //   - 模考三处 `First` 失败一律「模拟考试不存在」⇒ 查不动冒充不存在。
-//   - practice SubmitAnswer 的「题目不存在」是同文案的第二载体（ErrQuestionNotFound 早已存在），
+//   - practice SubmitAnswer 的「题目不存在」是同文案的第二载体（questionbank.ErrQuestionNotFound 早已存在），
 //     且同样不分成因。
 package service
 
@@ -23,6 +23,10 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -31,20 +35,20 @@ import (
 func TestPracticeFailureIsNotLaundered(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		call func(s *PracticeModeService) error
+		call func(s *practicemode.Service) error
 	}{
-		{"GetFreeQuestions", func(s *PracticeModeService) error {
+		{"GetFreeQuestions", func(s *practicemode.Service) error {
 			_, err := s.GetFreeQuestions("", 5, nil)
 			return err
 		}},
-		{"StartSequential", func(s *PracticeModeService) error {
+		{"StartSequential", func(s *practicemode.Service) error {
 			_, err := s.StartSequential(1, nil)
 			return err
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testutil.NewMemoryDB(t)
-			svc := NewPracticeModeService(db, nil, zap.NewNop())
+			svc := practicemode.NewService(db, nil, zap.NewNop())
 			if err := db.Exec("DROP TABLE question").Error; err != nil {
 				t.Fatalf("注入故障（删 question 表）失败: %v", err)
 			}
@@ -52,7 +56,7 @@ func TestPracticeFailureIsNotLaundered(t *testing.T) {
 			if err == nil {
 				t.Fatal("抽题查不动却返回成功")
 			}
-			if errors.Is(err, ErrQuestionNotFound) {
+			if errors.Is(err, questionbank.ErrQuestionNotFound) {
 				t.Fatalf("查不动被打扮成「题目不存在」: %v", err)
 			}
 			if msg := err.Error(); msg == "查询题目失败" {
@@ -66,18 +70,18 @@ func TestPracticeFailureIsNotLaundered(t *testing.T) {
 // 它们此前与「资源不存在」共用 404。
 func TestStartTagPracticeInputFacesAreNamed(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewPracticeModeService(db, nil, zap.NewNop())
+	svc := practicemode.NewService(db, nil, zap.NewNop())
 
-	if _, err := svc.StartTagPractice(1, 0, 5, nil); !errors.Is(err, ErrPracticeTagRequired) {
-		t.Fatalf("缺标签应报具名 ErrPracticeTagRequired，实际 %v", err)
+	if _, err := svc.StartTagPractice(1, 0, 5, nil); !errors.Is(err, practicemode.ErrPracticeTagRequired) {
+		t.Fatalf("缺标签应报具名 practicemode.ErrPracticeTagRequired，实际 %v", err)
 	}
 
 	src := model.QuestionTag{Name: "源标记标签", IsSourceTag: true}
 	if err := db.Create(&src).Error; err != nil {
 		t.Fatalf("播种真题源标签失败: %v", err)
 	}
-	if _, err := svc.StartTagPractice(1, src.ID, 5, nil); !errors.Is(err, ErrPracticeTagUnsupported) {
-		t.Fatalf("源标记标签应报具名 ErrPracticeTagUnsupported，实际 %v", err)
+	if _, err := svc.StartTagPractice(1, src.ID, 5, nil); !errors.Is(err, practicemode.ErrPracticeTagUnsupported) {
+		t.Fatalf("源标记标签应报具名 practicemode.ErrPracticeTagUnsupported，实际 %v", err)
 	}
 }
 
@@ -105,7 +109,7 @@ func TestMockExamNotFoundIsOnlyForMissingRows(t *testing.T) {
 // 此前它们挤在同一格 errStatusAll(404)，A 批在端点注释里把「升哨兵再换表」登记为正解。
 func TestRealPaperThreeFacts(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewRealExamService(db, NewPointsService(db, zap.NewNop(), nil, NewNotificationService(db, zap.NewNop())), zap.NewNop())
+	svc := NewRealExamService(db, points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	paper := model.RealExamPaper{Title: "2026 叉车真题", SourceRef: "RP-LEDGER", Status: 1}
 	if err := db.Create(&paper).Error; err != nil {
@@ -113,8 +117,8 @@ func TestRealPaperThreeFacts(t *testing.T) {
 	}
 
 	// 1) 卷不在（含未发布）= 不存在。
-	if _, err := svc.StartPaperPractice(1, 999999); !errors.Is(err, ErrRealPaperUnavailable) {
-		t.Fatalf("不存在的卷应报 ErrRealPaperUnavailable，实际 %v", err)
+	if _, err := svc.StartPaperPractice(1, 999999); !errors.Is(err, points.ErrRealPaperUnavailable) {
+		t.Fatalf("不存在的卷应报 points.ErrRealPaperUnavailable，实际 %v", err)
 	}
 	// 2) 卷在、可见，但这个人没付过 = 无权益，与「不存在」是两件事。
 	if _, err := svc.StartPaperPractice(1, paper.PaperID); !errors.Is(err, ErrRealPaperNotRedeemed) {
@@ -123,23 +127,23 @@ func TestRealPaperThreeFacts(t *testing.T) {
 	if _, err := svc.StartPaperExam(1, paper.PaperID); !errors.Is(err, ErrRealPaperNotRedeemed) {
 		t.Fatalf("开考侧同判，实际 %v", err)
 	}
-	if errors.Is(ErrRealPaperNotRedeemed, ErrRealPaperUnavailable) {
+	if errors.Is(ErrRealPaperNotRedeemed, points.ErrRealPaperUnavailable) {
 		t.Fatal("两个哨兵可互相顶替 —— 分档失效")
 	}
 }
 
 // TestPracticeSubmitUsesExistingQuestionCarrier 「题目不存在」早有一个具名载体
-// （ErrQuestionNotFound，笔记/评论读路径都在用），practice 侧此前又写了一遍同文案裸错误
+// （questionbank.ErrQuestionNotFound，笔记/评论读路径都在用），practice 侧此前又写了一遍同文案裸错误
 // ⇒ 同一个事实两个住处（ADR-0064 决策 2）。
 func TestPracticeSubmitUsesExistingQuestionCarrier(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewPracticeModeService(db, nil, zap.NewNop())
+	svc := practicemode.NewService(db, nil, zap.NewNop())
 
 	_, err := svc.SubmitAnswer(1, 999999, "A", "free", nil)
-	if !errors.Is(err, ErrQuestionNotFound) {
-		t.Fatalf("应复用既有载体 ErrQuestionNotFound，实际 %v", err)
+	if !errors.Is(err, questionbank.ErrQuestionNotFound) {
+		t.Fatalf("应复用既有载体 questionbank.ErrQuestionNotFound，实际 %v", err)
 	}
-	if err != nil && err.Error() == "题目不存在" && !errors.Is(err, ErrQuestionNotFound) {
+	if err != nil && err.Error() == "题目不存在" && !errors.Is(err, questionbank.ErrQuestionNotFound) {
 		t.Fatalf("同文案第二载体又出现了: %v", err)
 	}
 }

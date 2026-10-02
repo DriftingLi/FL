@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 )
 
@@ -51,11 +52,11 @@ func (j *JSONArray) UnmarshalJSON(b []byte) error {
 
 type JobCardService struct {
 	db      *gorm.DB
-	fileSvc *FileStore
+	fileSvc *filestore.FileStore
 	logger  *zap.Logger
 }
 
-func NewJobCardService(db *gorm.DB, fileSvc *FileStore, logger *zap.Logger) *JobCardService {
+func NewJobCardService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *JobCardService {
 	return &JobCardService{db: db, fileSvc: fileSvc, logger: logger}
 }
 
@@ -248,7 +249,7 @@ func validateAttachmentOwnership(card *model.JobCard, in JobCardInput) error {
 		if u == "" || known[u] {
 			return nil
 		}
-		if !IsSiteAttachmentURL(u, ResumeImageDirPrefix) {
+		if !filestore.IsSiteAttachmentURL(u, filestore.ResumeImageDirPrefix) {
 			return errors.New("图片地址无效（仅支持本站上传的简历图片）")
 		}
 		return nil
@@ -423,7 +424,7 @@ func (s *JobCardService) validateInput(in JobCardInput) error {
 	}
 	if in.ResumeFileURL != nil && strings.TrimSpace(*in.ResumeFileURL) != "" {
 		url := strings.TrimSpace(*in.ResumeFileURL)
-		ext := fileExtension(url)
+		ext := filestore.FileExtension(url)
 		if ext != "pdf" {
 			return errors.New("简历附件仅支持 PDF")
 		}
@@ -470,17 +471,17 @@ func (s *JobCardService) DeleteResumeFile(userID int) error {
 }
 
 func (s *JobCardService) ValidateAndStorePDF(filename string, size int64, content []byte) (string, error) {
-	ext := fileExtension(filename)
+	ext := filestore.FileExtension(filename)
 	if ext != "pdf" {
 		return "", errors.New("仅支持 PDF 文件")
 	}
-	if !allowedFile(filename) {
+	if !filestore.AllowedFile(filename) {
 		return "", errors.New("仅支持 PDF 文件")
 	}
-	if !validateFileSize(size, filename) {
-		return "", fmt.Errorf("文件大小超出限制，最大允许%dMB", maxFileSizes["default"]/(1024*1024))
+	if !filestore.ValidateFileSize(size, filename) {
+		return "", fmt.Errorf("文件大小超出限制，最大允许%dMB", filestore.MaxFileSize(filename)/(1024*1024))
 	}
-	url, err := s.fileSvc.Save(content, filename, ResumeFileDirPrefix)
+	url, err := s.fileSvc.Save(content, filename, filestore.ResumeFileDirPrefix)
 	if err != nil {
 		return "", err
 	}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/auth"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -44,9 +45,9 @@ type recruiterCreateResp struct {
 
 // loginResp 登录响应（LoginResult）。
 type loginResp struct {
-	Code    int                 `json:"code"`
-	Message string              `json:"message"`
-	Data    service.LoginResult `json:"data"`
+	Code    int              `json:"code"`
+	Message string           `json:"message"`
+	Data    auth.LoginResult `json:"data"`
 }
 
 func TestRecruiterContract_FullFlow(t *testing.T) {

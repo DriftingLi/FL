@@ -11,22 +11,39 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
-func newRealExamSvc(t *testing.T) (*RealExamService, *PointsService, *QuestionBankService, *gorm.DB) {
+func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *questionbank.Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	points := NewPointsService(db, zap.NewNop(), clock.Real(), NewNotificationService(db, zap.NewNop()))
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-	return NewRealExamService(db, points, zap.NewNop()), points, qsvc, db
+	pointsSvc := points.NewService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
+	qsvc := questionbank.NewService(db, nil, zap.NewNop())
+	return NewRealExamService(db, pointsSvc, zap.NewNop()), pointsSvc, qsvc, db
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
+// mustListQuestionTags 标签读面的测试取用（#1445 P2 波 3b-2：定义曾随域包搬去 internal/training，
+// 留驻侧按「就地内联」处理——域包的测试文件不能被 internal/service 反向 import）。
+func mustListQuestionTags(t *testing.T, svc *training.Service, activeOnly, includeSourceTags bool, credentialID *int) []training.QuestionTagDict {
+	t.Helper()
+	tags, err := svc.ListQuestionTags(activeOnly, includeSourceTags, credentialID)
+	if err != nil {
+		t.Fatalf("取标签列表失败: %v", err)
+	}
+	return tags
+}
+
 // seedPaper 建证件 + 卷 + 卷题关联，返回 (paperID, 卷内题目按卷序的 ID)。
-func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents ...string) (int, []int) {
+func seedPaper(t *testing.T, db *gorm.DB, qsvc *questionbank.Service, qContents ...string) (int, []int) {
 	t.Helper()
 	cred := &model.Credential{Code: "forklift_n1", Name: "叉车司机N1证", Category: "special_operation"}
 	if err := db.Create(cred).Error; err != nil {
@@ -45,7 +62,7 @@ func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents .
 	}
 	ids := make([]int, 0, len(qContents))
 	for i, c := range qContents {
-		q := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		q := createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 			Type: "single_choice", Content: c, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		}, "published")
 		ids = append(ids, q.ID)
@@ -59,33 +76,33 @@ func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents .
 // entitle 直接写入权益（绕过兑换扣分流程，模拟已兑换状态）。
 func entitle(t *testing.T, db *gorm.DB, userID, paperID int) {
 	t.Helper()
-	if err := db.Create(&model.UserEntitlement{UserID: userID, SKU: RealPaperSKU(paperID), RefID: itoa(paperID)}).Error; err != nil {
+	if err := db.Create(&model.UserEntitlement{UserID: userID, SKU: entitlement.RealPaperSKU(paperID), RefID: itoa(paperID)}).Error; err != nil {
 		t.Fatalf("写权益失败: %v", err)
 	}
 }
 
 func TestRealPaperPoolIsolation(t *testing.T) {
 	_, _, qsvc, db := newRealExamSvc(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	catalogSvc := training.NewService(db, zap.NewNop())
 
-	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题"})
+	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}
-	normalTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
+	normalTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "regulation", Name: "法规"})
 
 	// 真题题（source 标签）+ 普通题
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "真题独有题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{srcTag.ID},
 	}, "published")
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "普通题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{normalTag.ID},
 	}, "published")
 
 	// 随机/专项抽题池不含真题题
-	psvc := NewPracticeModeService(db, nil, zap.NewNop())
+	psvc := practicemode.NewService(db, nil, zap.NewNop())
 	free, err := psvc.GetFreeQuestions("", 0, nil)
 	if err != nil {
 		t.Fatalf("随机抽题失败: %v", err)
@@ -157,7 +174,7 @@ func TestRealPaperPractice(t *testing.T) {
 	}
 
 	// 断点续练：保存游标后再进入，从游标处恢复
-	pm := NewPracticeModeService(db, nil, zap.NewNop())
+	pm := practicemode.NewService(db, nil, zap.NewNop())
 	if err := pm.SaveProgress(1, 2, "paper:"+itoa(paperID), 3, nil, nil); err != nil {
 		t.Fatalf("保存进度失败: %v", err)
 	}
@@ -222,7 +239,7 @@ func TestRealPaperExam(t *testing.T) {
 }
 
 func TestRedeemRealPaper(t *testing.T) {
-	svc, points, qsvc, db := newRealExamSvc(t)
+	svc, pointsSvc, qsvc, db := newRealExamSvc(t)
 	paperID, _ := seedPaper(t, db, qsvc, "兑换卷题一", "兑换卷题二")
 
 	student := testutil.SeedStudent(t, db, "redeemer", "pwd")
@@ -235,18 +252,18 @@ func TestRedeemRealPaper(t *testing.T) {
 		t.Fatalf("建商城项失败: %v", err)
 	}
 
-	res, err := points.RedeemRealPaper(context.Background(), student.ID, paperID)
+	res, err := pointsSvc.RedeemRealPaper(context.Background(), student.ID, paperID)
 	if err != nil {
 		t.Fatalf("兑换失败: %v", err)
 	}
-	if res.SKU != RealPaperSKU(paperID) || res.RefID != itoa(paperID) {
+	if res.SKU != entitlement.RealPaperSKU(paperID) || res.RefID != itoa(paperID) {
 		t.Fatalf("兑换 sku/ref_id 不符: %+v", res)
 	}
 	if res.Balance != 200 {
 		t.Fatalf("扣费后余额应为 200, got %d", res.Balance)
 	}
 	// 幂等：重复兑换报已兑换
-	if _, err := points.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil || err.Error() != "已兑换" {
+	if _, err := pointsSvc.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil || err.Error() != "已兑换" {
 		t.Fatalf("重复兑换应报已兑换, got %v", err)
 	}
 	// 兑换后可按卷练习
@@ -257,7 +274,7 @@ func TestRedeemRealPaper(t *testing.T) {
 	if err := db.Model(&model.RealExamPaper{}).Where("paper_id = ?", paperID).Update("status", 0).Error; err != nil {
 		t.Fatalf("下架失败: %v", err)
 	}
-	if _, err := points.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil {
+	if _, err := pointsSvc.RedeemRealPaper(context.Background(), student.ID, paperID); err == nil {
 		t.Fatal("下架卷应不可兑换")
 	}
 	_ = svc

@@ -10,7 +10,7 @@
 //   GET  /admin/inspection/deleted-after-accepted
 //   GET  /admin/points/ledger
 //
-// 覆盖的 Go 类型：ContactRequestRowDTO / InspectionCountDTO / PointsLedgerItem / PointsLedgerResult / RecruitResumeViewDTO
+// 覆盖的 Go 类型：ContactRequestRowDTO / InspectionCountDTO / RecruitResumeViewDTO / PointsLedgerItem / PointsLedgerResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -39,6 +39,13 @@ export interface InspectionCountDTO {
   count: number
 }
 
+export interface RecruitResumeViewDTO {
+  id: number
+  recruiter_id: number
+  resume_user_id: number
+  viewed_at: string
+}
+
 export interface PointsLedgerItem {
   created_at: string
   delta: number
@@ -55,11 +62,4 @@ export interface PointsLedgerResult {
   page: number
   pages: number
   total: number
-}
-
-export interface RecruitResumeViewDTO {
-  id: number
-  recruiter_id: number
-  resume_user_id: number
-  viewed_at: string
 }

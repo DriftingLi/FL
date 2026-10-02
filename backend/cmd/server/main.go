@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"forklift-training/internal/api"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/db"
@@ -39,6 +40,7 @@ import (
 	"forklift-training/internal/valuation/pdf"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -142,9 +144,9 @@ func main() {
 
 	// 5.7 检查腾讯云短信签名/模板审核状态（已配置时自检，失败仅告警不阻断启动）
 	// 模板清单由验证码用途表派生，新增用途不必改这里
-	if cfg.SMS.Configured(svc.CodePurposeSMSTemplates()...) {
+	if cfg.SMS.Configured(auth.CodePurposeSMSTemplates()...) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if smsCh, ok := deps.PhoneCh.(*svc.SmsChannel); ok {
+		if smsCh, ok := deps.PhoneCh.(*auth.SmsChannel); ok {
 			if err := smsCh.ValidateReady(ctx); err != nil {
 				logger.Warn("腾讯云短信签名/模板自检未通过", zap.Error(err))
 			} else {

@@ -14,7 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
+	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -91,8 +93,9 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
+		forum.RegisterAdminRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+		forum.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+		points.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.PointsSvc)
 		author := model.HrwaiUser{Account: "caps_self", Phone: "13800001001", Username: "自答楼主", Status: 1, CreatedAt: testutil.Now()}
 		if err := db.Create(&author).Error; err != nil {
 			t.Fatal(err)
@@ -131,8 +134,9 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
+		forum.RegisterAdminRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+		forum.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+		points.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.PointsSvc)
 		ans := model.HrwaiUser{Account: "caps_ans_daily", Phone: "13800001002", Username: "答主日封", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&ans)
 		ansTok := issueTok(cfg, ans)
@@ -169,8 +173,9 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
+		forum.RegisterAdminRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+		forum.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+		points.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.PointsSvc)
 		asker := model.HrwaiUser{Account: "caps_asker_daily", Phone: "13800001003", Username: "楼主日封", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&asker)
 		askerTok := issueTok(cfg, asker)
@@ -195,8 +200,9 @@ func TestForumAcceptCapsContract(t *testing.T) {
 		cfg := &config.Config{JWTSecretKey: "caps-contract-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 		r := gin.New()
 		deps := newContractDeps(t, db, cfg)
-		RegisterForumRoutes(r.Group("/api"), deps.RouterDeps(), deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-		RegisterPointsRoutes(r.Group("/api"), deps.RouterDeps(), deps.PointsSvc)
+		forum.RegisterAdminRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
+		forum.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+		points.RegisterRoutes(r.Group("/api"), deps.RouterDeps().Session, deps.PointsSvc)
 		asker := model.HrwaiUser{Account: "caps_pair_asker", Phone: "13800001004", Username: "配对楼主", Status: 1, CreatedAt: testutil.Now()}
 		db.Create(&asker)
 		ans := model.HrwaiUser{Account: "caps_pair_ans", Phone: "13800001005", Username: "配对答主", Status: 1, CreatedAt: testutil.Now()}

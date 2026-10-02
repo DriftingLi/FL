@@ -8,7 +8,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -68,7 +71,7 @@ func NoteToDTO(n *model.Note, questionContent string) NoteDTO {
 		ID:              n.ID,
 		QuestionContent: questionContent,
 		QuestionID:      n.QuestionID,
-		UpdatedAt:       formatISO(n.UpdatedAt),
+		UpdatedAt:       timefmt.FormatISO(n.UpdatedAt),
 	}
 }
 
@@ -98,8 +101,8 @@ func normalizeNoteContent(content string) (string, error) {
 // GetForQuestion 取本人对某题的笔记；没有则返回 (nil, nil)（不是错误）。
 // 题目须在本 scope 内可见（ADR-0062 决策 4：题目维度的学员读面一律收 scope）——
 // 池外题按「不存在」处理，与题目 by-id 读面同口径（笔记行本身仍是本人的私有数据，列表照列）。
-func (s *NoteService) GetForQuestion(questionID, userID int, scope QuestionReadScope) (*model.Note, error) {
-	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+func (s *NoteService) GetForQuestion(questionID, userID int, scope questionbank.QuestionReadScope) (*model.Note, error) {
+	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return nil, err
 	}
 	var n model.Note
@@ -115,12 +118,12 @@ func (s *NoteService) GetForQuestion(questionID, userID int, scope QuestionReadS
 // UpsertForQuestion 保存本人对某题的笔记（每人每题一条，UNIQUE(question_id, user_id) 兜底）。
 // scope 必传（ADR-0062 决策 4）：**写**在题上的东西也要先证明这道题对这位学员可读——
 // 否则「挂到不可见题上」就成了绕过池的第二条通道（列表读面会把题干带回来）。
-func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, scope QuestionReadScope) (*model.Note, error) {
+func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, scope questionbank.QuestionReadScope) (*model.Note, error) {
 	content, err := normalizeNoteContent(content)
 	if err != nil {
 		return nil, err
 	}
-	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return nil, err
 	}
 	var n model.Note
@@ -130,14 +133,14 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, 
 	}
 	if n.ID != 0 {
 		n.Content = content
-		n.UpdatedAt = beijingNow()
+		n.UpdatedAt = clock.Now()
 		if err := s.db.Save(&n).Error; err != nil {
 			return nil, err
 		}
 		return &n, nil
 	}
 	qid := questionID
-	n = model.Note{QuestionID: &qid, UserID: userID, Content: content, UpdatedAt: beijingNow()}
+	n = model.Note{QuestionID: &qid, UserID: userID, Content: content, UpdatedAt: clock.Now()}
 	if err := s.db.Create(&n).Error; err != nil {
 		return nil, err
 	}
@@ -146,8 +149,8 @@ func (s *NoteService) UpsertForQuestion(questionID, userID int, content string, 
 
 // DeleteForQuestion 删除本人对某题的笔记（不存在时静默成功，与旧口径一致）。
 // 题目维度同 GetForQuestion：池外题按「不存在」，判据由 scope 承载。
-func (s *NoteService) DeleteForQuestion(questionID, userID int, scope QuestionReadScope) error {
-	if err := questionVisibleOrErr(scope, s.db, questionID); err != nil {
+func (s *NoteService) DeleteForQuestion(questionID, userID int, scope questionbank.QuestionReadScope) error {
+	if err := questionbank.QuestionVisibleOrErr(scope, s.db, questionID); err != nil {
 		return err
 	}
 	return s.db.Where("question_id = ? AND user_id = ?", questionID, userID).Delete(&model.Note{}).Error
@@ -159,7 +162,7 @@ func (s *NoteService) Create(userID int, content string) (*model.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	n := model.Note{UserID: userID, Content: content, UpdatedAt: beijingNow()}
+	n := model.Note{UserID: userID, Content: content, UpdatedAt: clock.Now()}
 	if err := s.db.Create(&n).Error; err != nil {
 		return nil, err
 	}
@@ -180,7 +183,7 @@ func (s *NoteService) Update(id, userID int, content string) (*model.Note, error
 		return nil, err
 	}
 	n.Content = content
-	n.UpdatedAt = beijingNow()
+	n.UpdatedAt = clock.Now()
 	if err := s.db.Save(&n).Error; err != nil {
 		return nil, err
 	}
@@ -207,7 +210,7 @@ func (s *NoteService) Delete(id, userID int) error {
 // 修复前 JOIN 不带池谓词 ⇒ 学员历史上（或经其他写面）挂在 draft / pending / 源标记真题题 /
 // 非当前证件题上的笔记，可以经这一条批量收割题干。笔记行本身是本人的私有数据，
 // 照常列出（摘要为空），与「题目已删除」同形态——不靠隐藏条目来判。
-func (s *NoteService) List(userID int, noteScope string, page, pageSize int, qScope QuestionReadScope) (*NotePageDTO, error) {
+func (s *NoteService) List(userID int, noteScope string, page, pageSize int, qScope questionbank.QuestionReadScope) (*NotePageDTO, error) {
 	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
 	// 先归一化再交给 paging（其钳制对已归一化的值成为空操作）。
 	if page <= 0 {

@@ -2,6 +2,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,7 +10,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -17,19 +24,19 @@ import (
 type WrongQuestionService struct {
 	db *gorm.DB
 	// grader 短答 AI 判分 adapter（nil 时简答重做降级，与练习流口径一致）。
-	grader ShortAnswerGrader
+	grader practicemode.ShortAnswerGrader
 	// explainer AI 解析 module（与练习提交共用同一 get-or-generate 入口，spec #295/#300）。
-	explainer *QuestionExplanation
+	explainer *aiassistant.QuestionExplanation
 
 	logger *zap.Logger
 }
 
 // NewWrongQuestionService 创建错题本服务实例。ai 可为 nil（简答判分与解析降级）。
-func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *WrongQuestionService {
+func NewWrongQuestionService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *WrongQuestionService {
 	return &WrongQuestionService{
 		db:        db,
-		grader:    shortAnswerGraderOf(ai),
-		explainer: NewQuestionExplanation(db, ai, logger),
+		grader:    practicemode.ShortAnswerGraderOf(ai),
+		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 	}
 }
@@ -44,18 +51,18 @@ func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *Wr
 // LastUserAnswer（#1077）：学员**最近一次**作答这道题时提交的答案原文，供错题本卡片在
 // 折叠态直接做「我的答案 vs 正确答案」对照。从未作答过（错题来自何处无记录）为空串。
 type WrongQuestionDTO struct {
-	CreatedAt      string       `json:"created_at"`
-	FavoriteID     int64        `json:"favorite_id"`
-	Favorited      bool         `json:"favorited"`
-	ID             int          `json:"id"`
-	IsRedone       bool         `json:"is_redone"`
-	IsRemoved      bool         `json:"is_removed"`
-	LastUserAnswer string       `json:"last_user_answer"`
-	LastWrongAt    string       `json:"last_wrong_at"`
-	Question       *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
-	QuestionID     int          `json:"question_id"`
-	StudentID      int          `json:"student_id"`
-	WrongCount     int          `json:"wrong_count"`
+	CreatedAt      string                    `json:"created_at"`
+	FavoriteID     int64                     `json:"favorite_id"`
+	Favorited      bool                      `json:"favorited"`
+	ID             int                       `json:"id"`
+	IsRedone       bool                      `json:"is_redone"`
+	IsRemoved      bool                      `json:"is_removed"`
+	LastUserAnswer string                    `json:"last_user_answer"`
+	LastWrongAt    string                    `json:"last_wrong_at"`
+	Question       *questionbank.QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
+	QuestionID     int                       `json:"question_id"`
+	StudentID      int                       `json:"student_id"`
+	WrongCount     int                       `json:"wrong_count"`
 }
 
 // WrongQuestionPageDTO 错题本分页（字段按 JSON key 字母序：items / page / page_size / total）。
@@ -97,7 +104,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 		if qType != "" {
 			q = q.Where("question.type = ?", qType)
 		}
-		q = EntityOwnedBy(q, "question.credential_id", credentialID)
+		q = scope.EntityOwnedBy(q, "question.credential_id", credentialID)
 		if minWrongCount != nil {
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
 		}
@@ -114,7 +121,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	for i := range items {
 		questionIDs = append(questionIDs, items[i].QuestionID)
 	}
-	questions := loadQuestionsByIDs(s.db, questionIDs)
+	questions := questionbank.LoadQuestionsByIDs(s.db, questionIDs)
 	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
 	lastAnswers := s.loadLastUserAnswers(studentID, questionIDs)
 
@@ -122,20 +129,20 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 	for i := range items {
 		wq := &items[i]
 		favoriteID := favoriteIDs[wq.QuestionID]
-		var question *QuestionDTO
+		var question *questionbank.QuestionDTO
 		if q, ok := questions[wq.QuestionID]; ok {
-			dto := newQuestionDTO(q, true)
+			dto := questionbank.NewQuestionDTO(q, true)
 			question = &dto
 		}
 		result = append(result, WrongQuestionDTO{
-			CreatedAt:      formatISO(wq.CreatedAt),
+			CreatedAt:      timefmt.FormatISO(wq.CreatedAt),
 			FavoriteID:     favoriteID,
 			Favorited:      favoriteID > 0,
 			ID:             wq.ID,
 			IsRedone:       wq.IsRedone,
 			IsRemoved:      wq.IsRemoved,
 			LastUserAnswer: lastAnswers[wq.QuestionID],
-			LastWrongAt:    formatISO(wq.LastWrongAt),
+			LastWrongAt:    timefmt.FormatISO(wq.LastWrongAt),
 			Question:       question,
 			QuestionID:     wq.QuestionID,
 			StudentID:      wq.StudentID,
@@ -206,20 +213,20 @@ func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int)
 // 与练习记录同口径。
 // 有意**不**施加完整池 scope（published / 排真题）：错题本是「我曾经做错的题」的历史面，题目下架或改标后若
 // 在这里被拦，列表会出现点不动的死链 —— 那是错题本读面 scope 的独立议题，不在本票范围。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*SubmitResultDTO, error) {
+func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*practicemode.SubmitResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
 	}
-	q := EntityOwnedBy(s.db.Model(&model.Question{}), "credential_id", credentialID).Where("id = ?", questionID)
+	q := scope.EntityOwnedBy(s.db.Model(&model.Question{}), "credential_id", credentialID).Where("id = ?", questionID)
 	var question model.Question
 	if err := q.First(&question).Error; err != nil {
 		return nil, errors.New("题目不存在")
 	}
 
-	engine := newGradingEngine(s.db)
-	flow := gradingFlow{ai: s.grader, maxScore: practiceMaxScore}
-	gr := engine.gradeOne(flow, &question, userAnswer, studentID)
+	engine := practicemode.NewGradingEngine(s.db)
+	flow := practicemode.GradingFlow{AI: s.grader, MaxScore: practicemode.PracticeMaxScore}
+	gr := engine.GradeOne(flow, &question, userAnswer, studentID)
 
 	// 重做结果与练习同口径落练习记录（统计事实源单一）。
 	rec := model.QuestionPracticeRecord{
@@ -228,8 +235,8 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: "redo",
-		UserAnswer:   stringifyAnswer(userAnswer),
-		CreatedAt:    beijingNow(),
+		UserAnswer:   questionbank.StringifyAnswer(userAnswer),
+		CreatedAt:    clock.Now(),
 	}
 	if err := s.db.Create(&rec).Error; err != nil {
 		return nil, err
@@ -243,14 +250,14 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		}
 	}
 
-	result := &SubmitResultDTO{
+	result := &practicemode.SubmitResultDTO{
 		IsCorrect:     gr.IsCorrect,
 		CorrectAnswer: question.Answer,
 		Explanation:   question.Explanation,
 		QuestionID:    questionID,
 		UserAnswer:    userAnswer,
 	}
-	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &question)
+	practicemode.FinalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &question)
 	return result, nil
 }
 
@@ -270,7 +277,7 @@ func (s *WrongQuestionService) RemoveWrongQuestion(studentID, questionID int) (*
 func (s *WrongQuestionService) GetStats(studentID int) *WrongQuestionStatsDTO {
 	var total int64
 	s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false).Count(&total)
-	byType := groupByCount(
+	byType := questionbank.GroupByCount(
 		s.db.Model(&model.WrongQuestion{}).
 			Joins("JOIN question ON question.id = wrong_question.question_id").
 			Where("wrong_question.student_id = ? AND wrong_question.is_removed = ?", studentID, false),
@@ -288,7 +295,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 	for i := range items {
 		qIDs = append(qIDs, items[i].QuestionID)
 	}
-	questions := loadQuestionsByIDs(s.db, qIDs)
+	questions := questionbank.LoadQuestionsByIDs(s.db, qIDs)
 
 	exportData := make([]map[string]any, 0, len(items))
 	for i := range items {
@@ -299,7 +306,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 		}
 		var options interface{}
 		if len(question.Options) > 0 {
-			_ = jsonUnmarshal(question.Options, &options)
+			_ = json.Unmarshal(question.Options, &options)
 		}
 		item := map[string]any{
 			"question_id":    question.ID,
@@ -310,7 +317,7 @@ func (s *WrongQuestionService) ExportWrongQuestions(studentID int) []map[string]
 			"explanation":    question.Explanation,
 			"wrong_count":    wq.WrongCount,
 			"image_url":      question.ImageURL,
-			"last_wrong_at":  formatISO(wq.LastWrongAt),
+			"last_wrong_at":  timefmt.FormatISO(wq.LastWrongAt),
 		}
 		exportData = append(exportData, item)
 	}
@@ -326,7 +333,7 @@ func FormatWrongQuestionsText(exportData []map[string]any) string {
 		"fault_image":   "故障识图",
 		"short_answer":  "简答题",
 	}
-	now := beijingNow().Format("2006-01-02 15:04:05")
+	now := clock.Now().Format("2006-01-02 15:04:05")
 	var sb strings.Builder
 	sb.WriteString(strings.Repeat("=", 50))
 	sb.WriteString("\n错题本导出\n")
@@ -361,7 +368,7 @@ func FormatWrongQuestionsText(exportData []map[string]any) string {
 		if explanation, ok := item["explanation"].(string); ok && explanation != "" {
 			fmt.Fprintf(&sb, "解析: %s\n", explanation)
 		}
-		wrongCount := toInt(item["wrong_count"])
+		wrongCount := questionbank.ToInt(item["wrong_count"])
 		fmt.Fprintf(&sb, "错误次数: %d\n", wrongCount)
 		if lastWrong, ok := item["last_wrong_at"].(string); ok && lastWrong != "" {
 			fmt.Fprintf(&sb, "最近错误时间: %s\n", lastWrong)

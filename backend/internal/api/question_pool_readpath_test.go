@@ -16,6 +16,8 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -28,8 +30,8 @@ func TestQuestionByIdReadPathEnforcesPool(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterQuestionBankRoutes(api, deps.RouterDeps(), deps.QuestionBankSvc, deps.FileSvc)
-	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
+	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
+	practicemode.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.PracticeModeSvc)
 
 	credA, credB := 1, 2
 	student := model.HrwaiUser{Account: "pool_read_user", Phone: "13800000777", Username: "学员", Status: 1, CurrentCredentialID: &credA, CreatedAt: testutil.Now()}

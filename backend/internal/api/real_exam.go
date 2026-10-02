@@ -9,22 +9,25 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // RealExamHandler 真题套卷 handler。
 type RealExamHandler struct {
 	svc    *service.RealExamService
-	points *service.PointsService
+	points *points.Service
 }
 
 // NewRealExamHandler 创建真题套卷 handler。
-func NewRealExamHandler(svc *service.RealExamService, points *service.PointsService) *RealExamHandler {
+func NewRealExamHandler(svc *service.RealExamService, points *points.Service) *RealExamHandler {
 	return &RealExamHandler{svc: svc, points: points}
 }
 
 // RegisterRealExamRoutes 注册 /api/real-exam 蓝图。
-func RegisterRealExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RealExamService, points *service.PointsService) {
+func RegisterRealExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RealExamService, points *points.Service) {
 	h := NewRealExamHandler(svc, points)
 
 	g := rg.Group("/real-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRealExamTake), middleware.CredentialScoped(rd.CredentialScope))
@@ -56,7 +59,7 @@ type listPapersReq struct {
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers [get]
 func (h *RealExamHandler) ListPapers(c *gin.Context) {
-	Endpoint[listPapersReq, []service.RealExamPaperDTO]{
+	httpx.Endpoint[listPapersReq, []service.RealExamPaperDTO]{
 		Parse: func(c *gin.Context) (*listPapersReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -79,9 +82,9 @@ type paperActionReq struct {
 }
 
 func parsePaperAction(c *gin.Context) (*paperActionReq, error) {
-	// 走 pathInt 而不是 requiredPositiveID + 手写 badRequest：后者是查询参数侧的单点守卫，
+	// 走 httpx.PathInt 而不是 httpx.PositiveID + 手写 badRequest：后者是查询参数侧的纯字符串解析单点，
 	// 用在这里等价但仍是第二份实现（ADR-0065 批⑤）。
-	id, err := pathInt(c, "paper_id", "真题卷ID无效")
+	id, err := httpx.PathInt(c, "paper_id", "真题卷ID无效")
 	if err != nil {
 		return nil, err
 	}
@@ -97,20 +100,20 @@ func parsePaperAction(c *gin.Context) (*paperActionReq, error) {
 // @Produce json
 // @Security BearerAuth
 // @Param paper_id path int true "真题卷ID"
-// @Success 200 {object} response.R{data=service.RedeemResult} "success"
+// @Success 200 {object} response.R{data=points.RedeemResult} "success"
 // @Failure 400 {object} response.R "参数错误或积分不足"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/redeem [post]
 func (h *RealExamHandler) Redeem(c *gin.Context) {
-	Endpoint[paperActionReq, service.RedeemResult]{
+	httpx.Endpoint[paperActionReq, points.RedeemResult]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
-		Invoke: func(ctx context.Context, req *paperActionReq) (*service.RedeemResult, error) {
+		Invoke: func(ctx context.Context, req *paperActionReq) (*points.RedeemResult, error) {
 			return h.points.RedeemRealPaper(ctx, req.UserID, req.PaperID)
 		},
 		// 同域同判（ADR-0062 票9）：本端点抛的就是积分域那批哨兵（积分不足 / 已兑换 / 卷不可用），
-		// 故直接复用 pointsErrStatus——旧写法 errStatusAll(404) 让同一事件在
+		// 故直接复用 points.ErrStatus——旧写法 errStatusAll(404) 让同一事件在
 		// /points/shop/course/:id/redeem 与这里给出两个码，消费端只能靠文案猜语义。
-		ErrStatus: pointsErrStatus,
+		ErrStatus: points.ErrStatus,
 	}.Handle(c)
 }
 
@@ -121,24 +124,24 @@ func (h *RealExamHandler) Redeem(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param paper_id path int true "真题卷ID"
-// @Success 200 {object} response.R{data=service.PracticeStartResultDTO} "success"
+// @Success 200 {object} response.R{data=practicemode.PracticeStartResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误或未兑换"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/practice [get]
 func (h *RealExamHandler) StartPractice(c *gin.Context) {
-	Endpoint[paperActionReq, service.PracticeStartResultDTO]{
+	httpx.Endpoint[paperActionReq, practicemode.PracticeStartResultDTO]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
-		Invoke: func(ctx context.Context, req *paperActionReq) (*service.PracticeStartResultDTO, error) {
+		Invoke: func(ctx context.Context, req *paperActionReq) (*practicemode.PracticeStartResultDTO, error) {
 			return h.svc.StartPaperPractice(req.UserID, req.PaperID)
 		},
 		// A 批把这里登记为「正解在 service 侧升哨兵，升完再换表」——第②批 B 段做的正是那件事。
 		// 三件事各归其位：卷不可用=404；未兑换=400（真题卷的存在性是公开的，这里不套
 		// ADR-0062 决策 3 的「按不存在答」）；卷内无已发布题=400；其余（含查不动）=500。
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrRealPaperUnavailable, status: http.StatusNotFound},
-			{sentinel: service.ErrRealPaperNotRedeemed, status: http.StatusBadRequest},
-			{sentinel: service.ErrRealPaperEmpty, status: http.StatusBadRequest},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: points.ErrRealPaperUnavailable, Status: http.StatusNotFound},
+			{Sentinel: service.ErrRealPaperNotRedeemed, Status: http.StatusBadRequest},
+			{Sentinel: service.ErrRealPaperEmpty, Status: http.StatusBadRequest},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
 }
@@ -155,17 +158,17 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/exam [post]
 func (h *RealExamHandler) StartExam(c *gin.Context) {
-	Endpoint[paperActionReq, service.MockExamStartDTO]{
+	httpx.Endpoint[paperActionReq, service.MockExamStartDTO]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
 		Invoke: func(ctx context.Context, req *paperActionReq) (*service.MockExamStartDTO, error) {
 			return h.svc.StartPaperExam(req.UserID, req.PaperID)
 		},
 		// 与 StartPractice 同一判定（同一张表、同一理由，见 StartPractice 处注释）。
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: service.ErrRealPaperUnavailable, status: http.StatusNotFound},
-			{sentinel: service.ErrRealPaperNotRedeemed, status: http.StatusBadRequest},
-			{sentinel: service.ErrRealPaperEmpty, status: http.StatusBadRequest},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: points.ErrRealPaperUnavailable, Status: http.StatusNotFound},
+			{Sentinel: service.ErrRealPaperNotRedeemed, Status: http.StatusBadRequest},
+			{Sentinel: service.ErrRealPaperEmpty, Status: http.StatusBadRequest},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
 }

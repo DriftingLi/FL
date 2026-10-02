@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -91,9 +92,9 @@ var contactCreateFacts400 = []error{
 // @Failure 500 {object} response.R "服务端内部错误（DB 故障；不外发驱动原文）"
 // @Router /recruit/contact-requests [post]
 func (h *ContactHandler) Create(c *gin.Context) {
-	Endpoint[contactCreateReq, service.ContactRequestDTO]{
+	httpx.Endpoint[contactCreateReq, service.ContactRequestDTO]{
 		Parse: func(c *gin.Context) (*contactCreateReq, error) {
-			body, err := bindJSON[contactCreateBody](c)
+			body, err := httpx.BindJSON[contactCreateBody](c)
 			if err != nil {
 				return nil, err
 			}
@@ -106,7 +107,7 @@ func (h *ContactHandler) Create(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *contactCreateReq) (*service.ContactRequestDTO, error) {
 			return h.svc.Create(req.RecruiterID, req.StudentUserID, req.Message)
 		},
-	}.WithSuccess(created("申请已提交"), http.StatusInternalServerError).
+	}.WithSuccess(httpx.Created("申请已提交"), http.StatusInternalServerError).
 		WithSentinels(http.StatusBadRequest, contactCreateFacts400...).Handle(c)
 }
 
@@ -123,8 +124,8 @@ func (h *ContactHandler) Create(c *gin.Context) {
 // @Router /recruit/contact-requests [get]
 func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 	recruiterID := middleware.CurrentUserID(c)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	items, total, err := h.svc.ListForRecruiter(recruiterID, page, pageSize)
 	if err != nil {
 		response.ServerErrorCause(c, "", err)
@@ -146,7 +147,7 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 // @Failure 403 {object} response.R "无有效授权"
 // @Router /recruit/resumes/{id}/contact [get]
 func (h *ContactHandler) GetContact(c *gin.Context) {
-	uid, err := pathInt(c, "id", "学员 ID 无效")
+	uid, err := httpx.PathInt(c, "id", "学员 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -190,8 +191,8 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 // @Router /resume/contact-requests [get]
 func (h *ContactHandler) ListForStudent(c *gin.Context) {
 	studentID := middleware.CurrentUserID(c)
-	page := atoiDefault(c.Query("page"), 1)
-	pageSize := atoiDefault(c.Query("page_size"), 20)
+	page := httpx.QueryIntDefault(c, "page", 1)
+	pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 	items, total, err := h.svc.ListForStudent(studentID, page, pageSize)
 	if err != nil {
 		response.ServerErrorCause(c, "", err)
@@ -213,7 +214,7 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/approve [post]
 func (h *ContactHandler) Approve(c *gin.Context) {
-	id, err := pathInt64(c, "id", "申请 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "申请 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -239,7 +240,7 @@ func (h *ContactHandler) Approve(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/reject [post]
 func (h *ContactHandler) Reject(c *gin.Context) {
-	id, err := pathInt64(c, "id", "申请 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "申请 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -265,7 +266,7 @@ func (h *ContactHandler) Reject(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/revoke [post]
 func (h *ContactHandler) Revoke(c *gin.Context) {
-	id, err := pathInt64(c, "id", "申请 ID 无效")
+	id, err := httpx.PathInt64(c, "id", "申请 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

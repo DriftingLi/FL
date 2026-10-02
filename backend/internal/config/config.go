@@ -30,7 +30,7 @@ type Config struct {
 	// 为空时降级到本地 exec 调用(向后兼容)。
 	LibreOfficeSidecarURL string
 	// DiagnosisAssistantURL 外部诊断 RAG 助手（forklift-assistant 交付包）HTTP 地址。
-	// 为空时故障诊断功能经模型端口返回「未配置」友好错误（见 ai_diagnosis_adapter.go）。
+	// 为空时故障诊断功能经模型端口返回「未配置」友好错误（见 internal/aiassistant/diagnosis_adapter.go）。
 	DiagnosisAssistantURL string
 	// Storage 文件存储配置（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
 	Storage StorageConfig
@@ -128,7 +128,7 @@ func (c SMSConfig) Template(key SMSTemplateKey) string {
 // Configured 返回短信通道是否已完整配置（生产发送必需）：凭证齐全，且 required 里的
 // 每个模板键都已配模板 ID。
 //
-// required 由验证码用途表派生（`service.CodePurposeSMSTemplates()`）——这里刻意不写死
+// required 由验证码用途表派生（`auth.CodePurposeSMSTemplates()`）——这里刻意不写死
 // 模板清单，新增用途（或新增模板键）不必改本函数。调用方必须传入派生结果，否则等于只校验凭证。
 func (c SMSConfig) Configured(required ...SMSTemplateKey) bool {
 	if c.SecretID == "" || c.SecretKey == "" || c.SdkAppID == "" || c.SignName == "" {
@@ -574,12 +574,24 @@ func (c *Config) Validate() error {
 }
 
 // JWTExpiry 返回 access token 过期时长（JWT_EXPIRES_HOURS，默认 2h）。
+//
+// 零值按 Load 的同一口径回退 2h，而不是签出零长度的 token：环境变量那条路走 positiveInt
+// （config.go:600，<=0 即回退默认值），到不了 0；能到 0 的只有 config.Config 字面量（测试装配），
+// 而零长度的 access 一签发就已过期（ExpiresAt = now）、经 middleware.JWTAuth 一律 401 ——
+// 那是没有任何调用方想要的状态（P2 波 3a 血账）。
 func (c *Config) JWTExpiry() time.Duration {
+	if c.JWTExpiresHours <= 0 {
+		return 2 * time.Hour
+	}
 	return time.Duration(c.JWTExpiresHours) * time.Hour
 }
 
 // JWTRefreshExpiry 返回 refresh token 过期时长（JWT_REFRESH_EXPIRES_DAYS，默认 7 天）。
+// 零值回退 7 天的理由同 JWTExpiry。
 func (c *Config) JWTRefreshExpiry() time.Duration {
+	if c.JWTRefreshExpiresDays <= 0 {
+		return 7 * 24 * time.Hour
+	}
 	return time.Duration(c.JWTRefreshExpiresDays) * 24 * time.Hour
 }
 

@@ -3,10 +3,13 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -16,13 +19,13 @@ func seedSubmittedMockExamWithResult(t *testing.T, db *gorm.DB, studentID int, s
 	t.Helper()
 	var raw model.JSONB
 	if result != nil {
-		buf, err := jsonMarshal(result)
+		buf, err := json.Marshal(result)
 		if err != nil {
 			t.Fatalf("序列化 result 失败: %v", err)
 		}
 		raw = model.JSONB(buf)
 	}
-	now := beijingNow()
+	now := clock.Now()
 	mock := &model.MockExam{
 		StudentID:  studentID,
 		Status:     mockExamStatusSubmitted,
@@ -96,10 +99,10 @@ func TestBackfillMockExamTotalScores(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := jsonUnmarshal(saved.Result, &payload); err != nil {
+	if err := json.Unmarshal(saved.Result, &payload); err != nil {
 		t.Fatalf("解析 result 失败: %v", err)
 	}
-	if got := toFloat(payload["total_score"]); got != 8.7 {
+	if got := coerce.ToFloat(payload["total_score"]); got != 8.7 {
 		t.Errorf("result.total_score = %v, want 8.7", got)
 	}
 	details, _ := payload["details"].([]any)
@@ -108,10 +111,10 @@ func TestBackfillMockExamTotalScores(t *testing.T) {
 	}
 	// 短答明细：score 写成与 ai_score 同源的数（决策 3 明细同源）。
 	sa, _ := details[1].(map[string]any)
-	if got := toFloat(sa["score"]); got != 8 {
+	if got := coerce.ToFloat(sa["score"]); got != 8 {
 		t.Errorf("短答明细 score = %v, want 8", got)
 	}
-	if got := toFloat(sa["ai_score"]); got != 8 {
+	if got := coerce.ToFloat(sa["ai_score"]); got != 8 {
 		t.Errorf("ai_score 是判分事实，回填不得改动, got %v", got)
 	}
 	// 不是改判：对错、AI 注释、满分、作答口径一律不动。
@@ -121,10 +124,10 @@ func TestBackfillMockExamTotalScores(t *testing.T) {
 	if sa["ai_comment"] != "回答到位" {
 		t.Errorf("ai_comment 不应被改动, got %v", sa["ai_comment"])
 	}
-	if got := toFloat(payload["correct_count"]); got != 0 {
+	if got := coerce.ToFloat(payload["correct_count"]); got != 0 {
 		t.Errorf("correct_count 不应被改动, got %v", got)
 	}
-	if got := toFloat(payload["max_score"]); got != 14 {
+	if got := coerce.ToFloat(payload["max_score"]); got != 14 {
 		t.Errorf("max_score 不应被改动, got %v", got)
 	}
 
@@ -159,7 +162,7 @@ func TestBackfillMockExamTotalScoresSkipsRecordsWithoutFacts(t *testing.T) {
 	})
 
 	// 未交卷：即使带明细也不在回填面内。
-	now := beijingNow()
+	now := clock.Now()
 	inProgress := &model.MockExam{
 		StudentID: student.ID,
 		Status:    mockExamStatusInProgress,

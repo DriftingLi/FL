@@ -42,7 +42,7 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 		&model.Chapter{CourseID: course.CourseID, Title: "液压章节", Content: "液压正文", CreatedAt: testutil.Now()},
 		&model.Question{Type: "single_choice", Content: "液压题干", Answer: "A", Status: "published", CredentialID: &credID},
 		&model.FeaturedContent{Title: "液压精选", Summary: "液压", Content: "液压正文", Status: 1, CreatedAt: testutil.Now()},
-		&model.ForumTopic{Title: "液压主题", Content: "液压正文", Category: ForumCategoryDiscussion, ContentFormat: ForumContentFormatText, CreatedAt: testutil.Now()},
+		&model.ForumTopic{Title: "液压主题", Content: "液压正文", Category: "discussion", ContentFormat: "text", CreatedAt: testutil.Now()},
 	} {
 		if err := db.Create(row).Error; err != nil {
 			t.Fatalf("建行失败: %v", err)

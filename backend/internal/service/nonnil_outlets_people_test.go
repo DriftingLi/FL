@@ -5,7 +5,7 @@
 //
 // 本域的出口有两种形状，两种都不是偷懒：
 //   - 分页信封（topics / reports / items / …）：空库直接跑，量到的就是 make(…,0,0) 发出的 `[]`；
-//   - **住在列表条目里的数组**（images / resume_certifications / …）：marshalKey 只看顶层键，
+//   - **住在列表条目里的数组**（images / resume_certifications / …）：testutil.MarshalKey 只看顶层键，
 //     所以出口返回那条条目本身（先例：course 表的 outletCatalogLevelNodeNoCourses 返回等级节点）。
 //     播的那一行**不带图、不带证件**——要证的恰恰是「这一格空着时发的是什么」，
 //     给它塞满数据就等于什么都没证。
@@ -22,7 +22,7 @@
 //     「列里存 JSON null」并非只存在于想象：job_cards 的四列是 `NOT NULL DEFAULT '[]'`，
 //     NOT NULL 挡得住 SQL NULL、挡不住 `'null'::jsonb`。
 //   - ContributionItemDTO.files ⇒ `json:"files,omitempty"`：空集时**键整个缺席**，
-//     marshalKey 判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」）。
+//     testutil.MarshalKey 判红（它自己写明「被加了 omitempty ⇒ nonnil 表态就不成立了」）。
 //     要举出非 null 只能投一份带文件的稿，那证的是「有内容」那一档，不是「空集也不为 null」。
 //   - FavoritePageResult.favorites / NotePageDTO.items ⇒ 宿主文件由另一在飞分支持有，本波不改。
 //
@@ -43,163 +43,36 @@ import (
 )
 
 var nonnilOutletsPeople = map[string]func(t *testing.T) any{
-	// ===== 论坛读面（images 三格走 imageURLsForWire 归一，ADR-0062 决策 12）=====
-	"service.ForumTopicPageResult.topics":   outletForumTopicPageEmpty,
-	"service.ForumTopicDTO.images":          outletForumTopicNoImages,
-	"service.ForumTopicDetailDTO.replies":   outletForumTopicDetailNoReplies,
-	"service.ForumReplyDTO.images":          outletForumReplyNoImages,
-	"service.MyReplyPageResult.replies":     outletMyReplyPageEmpty,
-	"service.MyReplyDTO.images":             outletMyReplyNoImages,
-	"service.ForumReportPageResult.reports": outletForumReportPageEmpty,
+	// 论坛读面（topics / images / replies / reports）的举证已随域包搬去 internal/forum/nonnil_outlets_test.go（ADR-0070 波 2b-2）。
 
 	// ===== 简历 / 招聘 =====
 	"service.RecruitResumeCard.resume_certifications": outletRecruitCardNoCerts,
 	"service.RecruiterApplicationListResult.items":    outletRecruiterApplicationListEmpty,
-	"service.RecruiterListResult.items":               outletRecruiterListEmpty,
-	"service.JobListResult.items":                     outletJobListEmpty,
-	"service.HrwaiUserPageResult.list":                outletHrwaiUserPageEmpty,
-	"service.TutorListDTO.tutors":                     outletTutorListEmpty,
+	// 招聘者列表（auth.RecruiterListResult.items）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
+	"service.JobListResult.items":      outletJobListEmpty,
+	"service.HrwaiUserPageResult.list": outletHrwaiUserPageEmpty,
+	"service.TutorListDTO.tutors":      outletTutorListEmpty,
 
-	// ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
-	"service.ContributionPageResult.items":            outletContributionPageEmpty,
-	"service.ContributionReportPageResult.items":      outletContributionReportPageEmpty,
-	"service.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
-	"service.NotificationListPageResult.items":        outletNotificationListEmpty,
-	"service.PointsLedgerResult.items":                outletPointsLedgerEmpty,
-	"service.PointsTasksResult.tasks":                 outletPointsTasksNone,
-	"service.CheckInCalendarResult.days":              outletCheckInCalendar,
-	"service.CheckInRankResult.items":                 outletCheckInRankEmpty,
-	"service.MaterialPageResult.materials":            outletMaterialPageEmpty,
-	"service.SearchSectionDTO.items":                  outletSearchSectionEmpty,
-	"service.TutorCourseChaptersDTO.chapters":         outletTutorCourseChaptersEmpty,
+	// ===== 投稿 / 资料 / 打卡 / 资料库 / 搜索 / 导师 =====
+	// 通知域的 items 举证已随域包搬去 internal/notification/nonnil_outlets_test.go（ADR-0070）。
+	// 积分域的 items / tasks 举证已随域包搬去 internal/points/nonnil_outlets_test.go（ADR-0070）。
+	// 投稿域的 items 举证已随域包搬去 internal/contribution/nonnil_outlets_test.go（ADR-0070）。
+	// 资料审核列表（auth.ProfileChangeRequestPageResult.requests）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
+	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
+	"service.SearchSectionDTO.items":         outletSearchSectionEmpty,
+	"course.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
 
+	// 岗位字典的 positions 举证已随域包搬去 internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
 	// 三格 handler 一行包出来的信封（见文件头那段）
 	"service.ApplicationListResult.items": outletStudentApplicationListEmpty,
 	"service.ReportListResult.items":      outletJobReportQueueEmpty,
-	"service.PositionListDTO.positions":   outletPositionListEmpty,
 }
 
 func init() {
 	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsPeople)
 }
 
-// ===== 论坛 =====
-
-// outletForumTopicPageEmpty 主题列表：一行帖子都没有时 topics 仍是 make 出来的空集。
-func outletForumTopicPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewForumService(testutil.NewMemoryDB(t), nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.ListTopics(TopicListInput{Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("空库拉主题列表失败: %v", err)
-	}
-	return res
-}
-
-// outletForumTopicNoImages 主题条目里的 images：帖子的 images 列为 NULL（发帖未带图）时，
-// 读面出口经 imageURLsForWire 归一成 `[]` —— 这条正是「契约说数组、出口却发 null」那个坑的正面证据。
-func outletForumTopicNoImages(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	author := seedForumUser(t, db, "无图楼主")
-	topic := seedRewardTopic(t, db, author.ID, "无图主题")
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.ListTopics(TopicListInput{Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("拉主题列表失败: %v", err)
-	}
-	if len(res.Topics) == 0 {
-		t.Fatalf("列表里没有取到刚播的主题: %v", topic.ID)
-	}
-	return res.Topics[0]
-}
-
-// outletForumTopicDetailNoReplies 主题详情：有帖无回复时 replies 是 make(0,pageSize) 的空集。
-func outletForumTopicDetailNoReplies(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	author := seedForumUser(t, db, "无人回复楼主")
-	topic := seedRewardTopic(t, db, author.ID, "无人回复的主题")
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.GetTopic(TopicDetailInput{TopicID: topic.ID, Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("主题详情失败: %v", err)
-	}
-	return res
-}
-
-// outletForumReplyNoImages 回复条目里的 images：与主题同一条归一判据（replyRow.toDTO 也走
-// imageURLsForWire），故出口单独占一键、各自 marshal。
-func outletForumReplyNoImages(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	replier := seedForumUser(t, db, "无图回复人")
-	topic := seedRewardTopic(t, db, replier.ID, "被回复的主题")
-	seedPlainReply(t, db, topic.ID, replier.ID)
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.GetTopic(TopicDetailInput{TopicID: topic.ID, Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("主题详情失败: %v", err)
-	}
-	if len(res.Replies) == 0 {
-		t.Fatalf("详情里没取到刚播的回复：出口取不到 ForumReplyDTO，这条证据没有落地")
-	}
-	return res.Replies[0]
-}
-
-// outletMyReplyPageEmpty 「我的回复」：零回复时 replies 是空集。
-func outletMyReplyPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewForumService(testutil.NewMemoryDB(t), nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.MyReplies(1, 1, 20)
-	if err != nil {
-		t.Fatalf("空回复列表失败: %v", err)
-	}
-	return res
-}
-
-// outletMyReplyNoImages 「我的回复」条目里的 images：与主题/回复同一条归一判据。
-func outletMyReplyNoImages(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	replier := seedForumUser(t, db, "我的无图回复人")
-	topic := seedRewardTopic(t, db, replier.ID, "我的回复所属主题")
-	seedPlainReply(t, db, topic.ID, replier.ID)
-	svc := NewForumService(db, nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.MyReplies(replier.ID, 1, 20)
-	if err != nil {
-		t.Fatalf("我的回复列表失败: %v", err)
-	}
-	if len(res.Replies) == 0 {
-		t.Fatalf("我的回复里没取到刚播的那条：出口取不到 MyReplyDTO，这条证据没有落地")
-	}
-	return res.Replies[0]
-}
-
-// outletForumReportPageEmpty 管理端举报列表：无举报时 reports 是空集。
-func outletForumReportPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewForumModerationService(testutil.NewMemoryDB(t), nil, nil, nil, nil, zap.NewNop())
-	res, err := svc.ListReports(1, 20, nil)
-	if err != nil {
-		t.Fatalf("空举报列表失败: %v", err)
-	}
-	return res
-}
-
-// seedPlainReply 播一条**不带图**的回复（images 列留空），返回其行。
-func seedPlainReply(t *testing.T, db *gorm.DB, topicID int64, userID int) *model.ForumReply {
-	t.Helper()
-	reply := model.ForumReply{
-		TopicID: topicID, UserID: userID, Content: "无图回复正文",
-		ContentFormat: ForumContentFormatText, CreatedAt: testutil.Now(),
-	}
-	if err := db.Create(&reply).Error; err != nil {
-		t.Fatalf("播回复失败: %v", err)
-	}
-	return &reply
-}
-
+// 论坛读面（topics / images / replies / reports）的举证已随域包搬去 internal/forum/nonnil_outlets_test.go（ADR-0070 波 2b-2）。
 // ===== 简历 / 招聘 =====
 
 // outletRecruitCardNoCerts 脱敏简历卡：持证那一格由 maskCertifications 兜底——脏数据 / 空列
@@ -208,7 +81,7 @@ func seedPlainReply(t *testing.T, db *gorm.DB, topicID int64, userID int) *model
 func outletRecruitCardNoCerts(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	owner := seedForumUser(t, db, "公开简历卡主")
+	owner := testutil.SeedStudent(t, db, "公开简历卡主", "hash")
 	seedBlankJobCard(t, db, owner.ID, "open")
 	svc := NewRecruitService(db, zap.NewNop())
 	res, err := svc.Get(owner.ID)
@@ -256,17 +129,6 @@ func seedJobPosting(t *testing.T, db *gorm.DB, recruiterID int) *model.JobPostin
 	return &job
 }
 
-// outletRecruiterListEmpty 招聘者列表（#416 那条「硬编码空数组桩」的真实现）：空库发 `[]`。
-func outletRecruiterListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewAuthService(testutil.NewMemoryDB(t), nil, nil, "", "", "", zap.NewNop())
-	res, err := svc.ListRecruiters(1, 20, "")
-	if err != nil {
-		t.Fatalf("招聘者列表失败: %v", err)
-	}
-	return res
-}
-
 // outletJobListEmpty 职位列表：无职位时 items 是空集。
 func outletJobListEmpty(t *testing.T) any {
 	t.Helper()
@@ -301,109 +163,6 @@ func outletTutorListEmpty(t *testing.T) any {
 }
 
 // ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
-
-// outletContributionPageEmpty 投稿审核队列：零投稿时 items 是空集。
-func outletContributionPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewContributionService(testutil.NewMemoryDB(t), nil, nil, nil, zap.NewNop(), nil)
-	res, err := svc.ListPending(1, 20)
-	if err != nil {
-		t.Fatalf("投稿队列失败: %v", err)
-	}
-	return res
-}
-
-// outletContributionReportPageEmpty 投稿举报队列：零举报时 items 是空集。
-func outletContributionReportPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewContributionService(testutil.NewMemoryDB(t), nil, nil, nil, zap.NewNop(), nil)
-	res, err := svc.ListReports(1, 20, nil)
-	if err != nil {
-		t.Fatalf("投稿举报队列失败: %v", err)
-	}
-	return res
-}
-
-// outletProfileChangeRequestPageEmpty 资料审核列表：零申请时 requests 是空集。
-func outletProfileChangeRequestPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewProfileReviewService(testutil.NewMemoryDB(t), nil, nil, zap.NewNop())
-	res, err := svc.ListRequests("", 1, 20)
-	if err != nil {
-		t.Fatalf("资料审核列表失败: %v", err)
-	}
-	return res
-}
-
-// outletNotificationListEmpty 站内信列表：零消息时 items 是空集。
-func outletNotificationListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewNotificationService(testutil.NewMemoryDB(t), zap.NewNop())
-	res, err := svc.List(1, 1, 20)
-	if err != nil {
-		t.Fatalf("站内信列表失败: %v", err)
-	}
-	return res
-}
-
-// outletPointsLedgerEmpty 积分流水：零流水时 items 是空集。
-func outletPointsLedgerEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewPointsService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
-	res, err := svc.GetLedger(1, 1, 20, "")
-	if err != nil {
-		t.Fatalf("积分流水失败: %v", err)
-	}
-	return res
-}
-
-// outletPointsTasksNone 任务列表：一条任务配置都没有时 tasks 是空集。
-// 播一个用户不是为了让 tasks 有内容，而是 loadTaskMeta 先读资料（读不到就 error）。
-func outletPointsTasksNone(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "任务学员", "x")
-	svc := NewPointsService(db, zap.NewNop(), nil, nil)
-	res, err := svc.GetTasks(student.ID)
-	if err != nil {
-		t.Fatalf("任务列表失败: %v", err)
-	}
-	return res
-}
-
-// outletCheckInCalendar 打卡日历：days 恒是**整月每一天**（未打卡日 checked=false），
-// 结构上不存在空月，所以这条举的是「非 null」而不是「空集」——断言放宽后才举得出来。
-func outletCheckInCalendar(t *testing.T) any {
-	t.Helper()
-	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
-	res, err := svc.GetCheckInCalendar(1, 2026, 9)
-	if err != nil {
-		t.Fatalf("打卡日历失败: %v", err)
-	}
-	return res
-}
-
-// outletCheckInRankEmpty 打卡排行榜：没人打卡时 items 是空集。
-func outletCheckInRankEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
-	res, err := svc.GetCheckInRank(0, 1, 20)
-	if err != nil {
-		t.Fatalf("打卡排行榜失败: %v", err)
-	}
-	return res
-}
-
-// outletMaterialPageEmpty 资料列表：零挂载资料时 materials 是空集。
-func outletMaterialPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewMaterialService(testutil.NewMemoryDB(t), zap.NewNop())
-	res, err := svc.ListMaterials(1, 20, 0)
-	if err != nil {
-		t.Fatalf("资料列表失败: %v", err)
-	}
-	return res
-}
 
 // outletSearchSectionEmpty 聚合搜索的单个分区：SearchAllDTO 的五个分区字段共用这一条出口、
 // 各自 marshal（同一处 make，一格一证）。
@@ -460,10 +219,4 @@ func outletJobReportQueueEmpty(t *testing.T) any {
 		t.Fatalf("职位举报队列失败: %v", err)
 	}
 	return &ReportListResult{Items: items, Total: total, Page: page, PageSize: pageSize}
-}
-
-// outletPositionListEmpty 岗位字典：空库时 positions 是空集（catalogList 的 make(0,n)）。
-func outletPositionListEmpty(t *testing.T) any {
-	t.Helper()
-	return PositionListDTO{Positions: NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop()).ListPositions(false)}
 }

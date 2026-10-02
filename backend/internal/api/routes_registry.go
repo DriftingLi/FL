@@ -2,6 +2,22 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
+	"forklift-training/internal/checkin"
+	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
+	"forklift-training/internal/faq"
+	"forklift-training/internal/featured"
+	"forklift-training/internal/forum"
+	"forklift-training/internal/inspection"
+	"forklift-training/internal/material"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/training"
 )
 
 // 域路由注册表（ADR-0047 §6 / spec #933）：一行一域，顺序即注册顺序。
@@ -21,22 +37,24 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "认证与账号",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
+			// 认证蓝图 /api/auth/*：登录/刷新/登出/me/资料/注销（域包自持 handler）
+			auth.RegisterRoutes(api, rd.Session, deps.AuthSvc, deps.FileSvc, deps.Storage, deps.ReviewSvc, deps.Logger)
 			// 邮箱/手机号验证码注册登录（发码需过图形验证码）
-			RegisterEmailAuthRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
-			RegisterPhoneAuthRoutes(api, rd, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
+			auth.RegisterEmailAuthRoutes(api, rd.Session, deps.CodeSvc, deps.EmailCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
+			auth.RegisterPhoneAuthRoutes(api, rd.Session, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
 			// 微信扫码登录（框架占位）
-			RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
+			auth.RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
 			// 个人信息页：手机号/邮箱绑定修改
-			RegisterProfileBindRoutes(api, rd, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+			auth.RegisterProfileBindRoutes(api, rd.Session, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 		},
 	},
 	{
 		Domain: "培训工作区",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterCoursesRoutes(api, rd, deps.CourseSvc)
+			course.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.CourseSvc)
 			RegisterStudentRoutes(api, rd, deps.StudentSvc)
-			RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
-			RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
+			questionbank.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
+			practicemode.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.PracticeModeSvc)
 		},
 	},
 	{
@@ -69,33 +87,37 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "内容与 AI",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterFeaturedRoutes(api, rd, deps.FeaturedSvc, deps.FileSvc)
-			RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc)
-			RegisterDiagnosisRoutes(api.Group("/ai-assistant"), rd, deps.DiagnosisProxySvc)
+			featured.RegisterRoutes(api, rd.Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
+			aiassistant.RegisterRoutes(api, rd.Session, deps.AIAssistantSvc, deps.DiagnosisProxySvc)
 		},
 	},
 	{
 		Domain: "论坛与打卡",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-			RegisterCheckInRoutes(api, rd, deps.CheckInSvc)
+			forum.RegisterAdminRoutes(api, rd.Session, deps.ForumSvc, deps.ForumModSvc)
+			forum.RegisterRoutes(api, rd.Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+			checkin.RegisterRoutes(api, rd.Session, deps.CheckInSvc)
 		},
 	},
 	{
 		Domain: "积分",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminPointsRoutes(api, rd, deps.PointsSvc)
-			RegisterPointsRoutes(api, rd, deps.PointsSvc)
+			points.RegisterAdminRoutes(api, rd.Session, deps.PointsSvc)
+			points.RegisterRoutes(api, rd.Session, deps.PointsSvc)
 		},
 	},
 	{
 		Domain: "审核与治理",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterProfileReviewRoutes(api, rd, deps.ReviewSvc)
-			RegisterNotificationRoutes(api, rd, deps.NotificationSvc)
+			auth.RegisterAdminRoutes(api, rd.Session, deps.ReviewSvc)
+			notification.RegisterRoutes(api, rd.Session, deps.NotificationSvc)
 			RegisterAuditRoutes(api, rd, deps.AuditSvc)
 			RegisterExportRoutes(api, rd, deps.ExportSvc)
-			RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
+			// 培训域 HTTP 出口三分（handler.go / handler_admin.go / handler_credential.go），
+			// 三行合并等价原单条 RegisterTrainingCatalogRoutes（ADR-0070）：学员端读面 → 管理端目录面 → 证件面。
+			training.RegisterRoutes(api, rd.Session, deps.TrainingCatalogSvc)
+			training.RegisterAdminRoutes(api, rd.Session, deps.TrainingCatalogSvc)
+			training.RegisterCredentialRoutes(api, rd.Session, deps.TrainingCatalogSvc)
 			RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
 		},
 	},
@@ -106,7 +128,7 @@ var routeRegistrars = []routeRegistrar{
 			RegisterFavoriteRoutes(api, rd, deps.FavoriteSvc)
 			RegisterSearchRoutes(api, rd, deps.SearchSvc)
 			RegisterSearchAdminRoutes(api, rd, deps.SearchSvc)
-			RegisterMaterialRoutes(api, rd, deps.MaterialSvc)
+			material.RegisterRoutes(api, rd.Session, deps.MaterialSvc)
 			// 学员笔记（ADR-0055）：题目笔记 + 独立笔记的汇集读面与独立笔记 CRUD
 			RegisterNoteRoutes(api, rd, deps.NoteSvc)
 		},
@@ -115,7 +137,7 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "帮助中心",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			// #1079：学员端只读整页（faq.read）+ 管理端分类与条目 CRUD（faq.manage）
-			RegisterFaqRoutes(api, rd, deps.FaqSvc)
+			faq.RegisterRoutes(api, rd.Session, deps.FaqSvc)
 		},
 	},
 	{
@@ -134,8 +156,9 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "巡检与投稿",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminInspectionRoutes(api, rd, deps.InspectionSvc, deps.PointsSvc)
-			RegisterContributionRoutes(api, rd, deps.ContributionSvc)
+			inspection.RegisterRoutes(api, rd.Session, deps.InspectionSvc, deps.PointsSvc)
+			contribution.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.ContributionSvc)
+			contribution.RegisterAdminRoutes(api, rd.Session, deps.ContributionSvc)
 		},
 	},
 }

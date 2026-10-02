@@ -1,0 +1,305 @@
+// AI 配置解析与模型端口回归（#397、ADR-0029 T2）：
+// 降级阶梯三档（专项单绑定/双模式/遗留回退）、热点缓存失效、
+// 单一 ModelPort 端口注入与各消费端到端（评分/解析/对话）。
+package aiassistant
+
+import (
+	"context"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/cloudwego/eino/schema"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/filestore"
+	"forklift-training/internal/model"
+	"forklift-training/internal/testutil"
+)
+
+// newAIStack 构建 AI 消费方测试栈。用文件库而非 :memory:：流式对话端到端会派生
+// 异步命名 goroutine 并发读库，:memory: 每连接独立库（连接池扩连即空库）存在
+// 「no such table」竞态（testutil/db.go NewFileDB 注释自认的风险），文件库以
+// busy_timeout 串行化，CI 高负载下不 flake。
+func newAIStack(t *testing.T) (*ConfigService, *Service, *GenerationService, *gorm.DB) {
+	t.Helper()
+	db := testutil.NewFileDB(t)
+	cfgSvc := NewConfigService(db, "test-master-key", zap.NewNop())
+	port := NewEinoModel(cfgSvc, zap.NewNop())
+	assistant := NewService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
+	aiSvc := NewGenerationService(db, port, zap.NewNop())
+	return cfgSvc, assistant, aiSvc, db
+}
+
+// TestResolveAssistantLadderThreeTiers 降级阶梯三档：
+// ① 专项单绑定 → ② normal/expert 双模式 → ③ 遗留 ai_assistant 回退。
+func TestResolveAssistantLadderThreeTiers(t *testing.T) {
+	cfgSvc, assistant, _, db := newAIStack(t)
+	ctx := context.Background()
+
+	mkConfig := func(name string) int {
+		if err := cfgSvc.CreateConfig(ctx, name, "sk-"+name, "https://api.example.com/v1", "m-"+name, ""); err != nil {
+			t.Fatalf("CreateConfig(%s) 失败: %v", name, err)
+		}
+		cfgs, err := cfgSvc.ListConfigs(ctx)
+		if err != nil {
+			t.Fatalf("ListConfigs 失败: %v", err)
+		}
+		for _, c := range cfgs {
+			if c.Name == name {
+				return c.ID
+			}
+		}
+		t.Fatal("未找到新建配置")
+		return 0
+	}
+
+	// ③ 遗留回退：仅遗留 ai_assistant 两条绑定（多绑定改造前的存量数据形态）
+	if err := db.Create(&model.AIFeatureBinding{FeatureKey: FeatureAIAssistant, ConfigID: mkConfig("legacy0")}).Error; err != nil {
+		t.Fatalf("建遗留绑定失败: %v", err)
+	}
+	if err := db.Create(&model.AIFeatureBinding{FeatureKey: FeatureAIAssistant, ConfigID: mkConfig("legacy1")}).Error; err != nil {
+		t.Fatalf("建遗留绑定失败: %v", err)
+	}
+	modes, err := assistant.ListAssistantModes(ctx)
+	if err != nil {
+		t.Fatalf("ListAssistantModes 失败: %v", err)
+	}
+	if modes.Normal == nil || modes.Normal.Name != "legacy0" || modes.Expert == nil || modes.Expert.Name != "legacy1" {
+		t.Fatalf("遗留回退映射异常: %+v", modes)
+	}
+	mc, err := cfgSvc.ResolveChatSettings(ctx, ModelSelector{Mode: ModeExpert})
+	if err != nil {
+		t.Fatalf("ResolveChatSettings(expert) 失败: %v", err)
+	}
+	if !strings.Contains(mc.APIKey, "legacy1") {
+		t.Fatalf("expert 模式应解析到遗留第二条配置: %+v", mc)
+	}
+
+	// ② 双模式：normal 单绑定后，expert 未绑定 → 报错（展示与解析同一阶梯）
+	normalID := mkConfig("normal-bind")
+	if err := cfgSvc.SetBinding(ctx, FeatureAIAssistantNormal, normalID); err != nil {
+		t.Fatalf("SetBinding(normal) 失败: %v", err)
+	}
+	modes, err = assistant.ListAssistantModes(ctx)
+	if err != nil {
+		t.Fatalf("ListAssistantModes 失败: %v", err)
+	}
+	if modes.Normal == nil || modes.Normal.Name != "normal-bind" || modes.Expert != nil {
+		t.Fatalf("双模式解析异常: %+v", modes)
+	}
+	if _, err := cfgSvc.ResolveChatSettings(ctx, ModelSelector{Mode: ModeExpert}); err == nil {
+		t.Fatal("expert 未绑定应报错")
+	}
+	mc, err = cfgSvc.ResolveChatSettings(ctx, ModelSelector{Mode: ModeNormal})
+	if err != nil || !strings.Contains(mc.APIKey, "normal-bind") {
+		t.Fatalf("normal 模式解析异常: %+v err=%v", mc, err)
+	}
+
+	// ① 专项单绑定：FeatureKey 单绑定优先，忽略请求模型来源字段（防绕过）
+	faultID := mkConfig("fault-bind")
+	if err := cfgSvc.SetBinding(ctx, FeatureMaintenanceKnowledge, faultID); err != nil {
+		t.Fatalf("SetBinding(fault) 失败: %v", err)
+	}
+	mc, err = cfgSvc.ResolveChatSettings(ctx, ModelSelector{
+		FeatureKey: FeatureMaintenanceKnowledge, ModelSource: "custom",
+		CustomAPIKey: "sk-bypass", CustomBaseURL: "https://evil.example.com", CustomModel: "evil",
+	})
+	if err != nil || !strings.Contains(mc.APIKey, "fault-bind") {
+		t.Fatalf("专项单绑定应忽略请求侧模型来源: %+v err=%v", mc, err)
+	}
+
+	// 专项未绑定 → 报错
+	if _, err := cfgSvc.ResolveChatSettings(ctx, ModelSelector{FeatureKey: FeatureExerciseSolving}); err == nil {
+		t.Fatal("专项未绑定应报错")
+	}
+}
+
+// TestResolveHotCacheInvalidation 热路径缓存：改绑后立即生效（写路径主动失效），
+// 未命中 DB 时同键二次解析命中缓存（结果一致）。
+func TestResolveHotCacheInvalidation(t *testing.T) {
+	cfgSvc, _, _, _ := newAIStack(t)
+	ctx := context.Background()
+
+	if err := cfgSvc.CreateConfig(ctx, "cfg-a", "sk-aaa", "https://a.example.com/v1", "m-a", ""); err != nil {
+		t.Fatalf("CreateConfig 失败: %v", err)
+	}
+	cfgs, _ := cfgSvc.ListConfigs(ctx)
+	if err := cfgSvc.SetBinding(ctx, FeatureGradeShortAnswer, cfgs[0].ID); err != nil {
+		t.Fatalf("SetBinding 失败: %v", err)
+	}
+	if got := cfgSvc.ResolveConfig(ctx, FeatureGradeShortAnswer); got.APIKey != "sk-aaa" {
+		t.Fatalf("首次解析异常: %+v", got)
+	}
+
+	// 改绑 → 缓存失效，立即解析到新配置
+	if err := cfgSvc.CreateConfig(ctx, "cfg-b", "sk-bbb", "https://b.example.com/v1", "m-b", ""); err != nil {
+		t.Fatalf("CreateConfig 失败: %v", err)
+	}
+	cfgs, _ = cfgSvc.ListConfigs(ctx)
+	if len(cfgs) != 2 {
+		t.Fatalf("应有两条配置: %d", len(cfgs))
+	}
+	var cfgBID int
+	for _, c := range cfgs {
+		if c.Name == "cfg-b" {
+			cfgBID = c.ID
+		}
+	}
+	if err := cfgSvc.SetBinding(ctx, FeatureGradeShortAnswer, cfgBID); err != nil {
+		t.Fatalf("改绑失败: %v", err)
+	}
+	if got := cfgSvc.ResolveConfig(ctx, FeatureGradeShortAnswer); got.APIKey != "sk-bbb" {
+		t.Fatalf("改绑后应立即生效: %+v", got)
+	}
+	// 展示缓存（Redis 不可用时降级直查）与热点缓存一致
+	bindings, err := cfgSvc.ListBindings(ctx)
+	if err != nil {
+		t.Fatalf("ListBindings 失败: %v", err)
+	}
+	for _, b := range bindings {
+		if b.FeatureKey == FeatureGradeShortAnswer && b.ConfigID != nil && *b.ConfigID != cfgBID {
+			t.Fatalf("绑定展示应指向新配置: %+v", b)
+		}
+	}
+}
+
+// fakeAIModelPort 单一模型端口 fake（第二 adapter，与 eino 生产 adapter 坐实 seam）。
+// 互斥保护：StreamChat 的异步命名 goroutine 也可能进入端口（CI -race 下验证）。
+type fakeAIModelPort struct {
+	mu        sync.Mutex
+	content   string
+	err       error
+	gotSel    ModelSelector
+	gotMsgs   []*schema.Message
+	gotKey    string
+	gotOpts   CompleteOptions
+	chunks    []string
+	streamN   int
+	completeN int
+}
+
+func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, opts CompleteOptions) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.completeN++
+	f.gotKey = featureKey
+	f.gotMsgs = msgs
+	f.gotOpts = opts
+	return f.content, f.err
+}
+
+func (f *fakeAIModelPort) Stream(_ context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.streamN++
+	f.gotSel = sel
+	f.gotMsgs = msgs
+	if onChunk != nil {
+		onChunk(f.content)
+		f.chunks = append(f.chunks, f.content)
+	}
+	return f.content, nil, f.err
+}
+
+// snapshot 读取 fake 记录（与后台 goroutine 同步）。
+func (f *fakeAIModelPort) snapshot() (sel ModelSelector, msgs []*schema.Message, chunks []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.gotSel, f.gotMsgs, f.chunks
+}
+
+// TestStreamingPortInjectedEndToEnd 对话端到端（fake 模型端口）：
+// prompt 组装（功能系统提示词在首位）与持久化真语义不回归。
+// 会话标题用非占位符：阻断异步命名 goroutine 走真实生成路径（其仅做一次 DB 读即退出）。
+func TestStreamingPortInjectedEndToEnd(t *testing.T) {
+	_, assistant, _, db := newAIStack(t)
+	ctx := context.Background()
+	fake := &fakeAIModelPort{content: "模拟回复"}
+	assistant.port = fake
+
+	session, err := assistant.CreateSession(ctx, 7, "已命名会话", "", FeatureMaintenanceKnowledge)
+	if err != nil {
+		t.Fatalf("CreateSession 失败: %v", err)
+	}
+	var chunks []string
+	full, _, err := assistant.StreamChat(ctx, 7, StreamChatReq{
+		SessionID:    session.ID,
+		ModelSource:  "custom",
+		CustomAPIKey: "sk-custom", CustomBaseURL: "https://custom.example.com/v1", CustomModel: "gpt-4o",
+		Messages: []StreamMessage{{Role: "user", Content: "叉车启动困难怎么办"}},
+	}, func(c string) { chunks = append(chunks, c) })
+	if err != nil {
+		t.Fatalf("StreamChat 失败: %v", err)
+	}
+	if full != "模拟回复" || len(chunks) != 1 {
+		t.Fatalf("流式回调/完整回复不符: full=%q chunks=%v", full, chunks)
+	}
+
+	// prompt 组装：首位为通用专家系统提示词（FeatureKey 为空），末位为用户消息
+	gotSel, gotMsgs, _ := fake.snapshot()
+	if fake.streamN != 1 {
+		t.Fatalf("端口应仅被主对话调用一次, got %d", fake.streamN)
+	}
+	// 选择子投影：请求的模型来源字段应原样透传给槽位（解析在槽位内完成）
+	if gotSel.ModelSource != "custom" || gotSel.CustomAPIKey != "sk-custom" ||
+		gotSel.CustomBaseURL != "https://custom.example.com/v1" || gotSel.CustomModel != "gpt-4o" || gotSel.UserID != 7 {
+		t.Fatalf("选择子投影异常: %+v", gotSel)
+	}
+	if len(gotMsgs) != 2 || gotMsgs[0].Role != schema.System || gotMsgs[0].Content != forkliftExpertSystemPrompt {
+		t.Fatalf("系统提示词组装异常: %+v", gotMsgs)
+	}
+	if gotMsgs[1].Content != "叉车启动困难怎么办" {
+		t.Fatalf("用户消息组装异常: %+v", gotMsgs[1])
+	}
+
+	// 持久化：用户/助手消息各一行，会话时间被刷新
+	var msgs []model.AIChatMessage
+	if err := db.Where("session_id = ?", session.ID).Order("id ASC").Find(&msgs).Error; err != nil {
+		t.Fatalf("查询消息失败: %v", err)
+	}
+	if len(msgs) != 2 || msgs[0].Role != "user" || msgs[1].Role != "assistant" || msgs[1].Content != "模拟回复" {
+		t.Fatalf("持久化消息不符: %+v", msgs)
+	}
+	if msgs[1].Sources != "" {
+		t.Fatalf("非诊断对话不应持久化来源: %q", msgs[1].Sources)
+	}
+
+	// 回放：GetSessionMessages 下发 sources（T5；此处为空，与存量 NULL 同口径）
+	got, err := assistant.GetSessionMessages(ctx, 7, session.ID)
+	if err != nil {
+		t.Fatalf("GetSessionMessages 失败: %v", err)
+	}
+	if len(got) != 2 || len(got[1].Sources) != 0 {
+		t.Fatalf("非诊断回放 sources 应为空: %+v", got)
+	}
+}
+
+// TestBlockingPortInjectedEndToEnd 评分/解析端到端（fake 模型端口）：
+// 端口注入生效、生成参数透传、评分 JSON 解析与解析文本裁剪真语义不回归。
+func TestBlockingPortInjectedEndToEnd(t *testing.T) {
+	_, _, aiSvc, _ := newAIStack(t)
+	aiSvc.port = &fakeAIModelPort{content: `{"score": 8, "comment": "要点齐全"}`}
+
+	res := aiSvc.GradeShortAnswer("题干", "参考答案", "评分标准", "学员作答", 10, nil)
+	if res == nil || res.Score != 8 || res.Comment != "要点齐全" {
+		t.Fatalf("评分端到端结果异常: %+v", res)
+	}
+
+	fake := &fakeAIModelPort{content: "  解析正文  "}
+	aiSvc.port = fake
+	expl, err := aiSvc.GenerateQuestionExplanation("题干", "答案", "参考解析")
+	if err != nil || expl != "解析正文" {
+		t.Fatalf("解析端到端结果异常: %q err=%v", expl, err)
+	}
+	if fake.completeN != 1 || fake.gotKey != FeatureQuestionExplanation {
+		t.Fatalf("端口调用记录异常: n=%d key=%q", fake.completeN, fake.gotKey)
+	}
+	if fake.gotOpts.MaxTokens != 800 || fake.gotOpts.Temperature != 0.5 {
+		t.Fatalf("生成参数透传异常: %+v", fake.gotOpts)
+	}
+	if len(fake.gotMsgs) != 2 || fake.gotMsgs[0].Role != schema.System || fake.gotMsgs[1].Role != schema.User {
+		t.Fatalf("消息组装异常: %+v", fake.gotMsgs)
+	}
+}

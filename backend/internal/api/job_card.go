@@ -8,21 +8,23 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 type JobCardHandler struct {
 	svc     *service.JobCardService
-	fileSvc *service.FileStore
+	fileSvc *filestore.FileStore
 }
 
-func NewJobCardHandler(svc *service.JobCardService, fileSvc *service.FileStore) *JobCardHandler {
+func NewJobCardHandler(svc *service.JobCardService, fileSvc *filestore.FileStore) *JobCardHandler {
 	return &JobCardHandler{svc: svc, fileSvc: fileSvc}
 }
 
-func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *service.FileStore) {
+func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *filestore.FileStore) {
 	h := NewJobCardHandler(svc, fileSvc)
 	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
 	g.GET("", h.Get)
@@ -44,16 +46,16 @@ func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobC
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /resume [get]
 func (h *JobCardHandler) Get(c *gin.Context) {
-	Endpoint[resumeGetReq, service.JobCardDTO]{
+	httpx.Endpoint[resumeGetReq, service.JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeGetReq, error) {
 			return &resumeGetReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
 		Invoke: func(ctx context.Context, req *resumeGetReq) (*service.JobCardDTO, error) {
 			return h.svc.Get(req.UserID)
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: gorm.ErrRecordNotFound, status: http.StatusNotFound, message: "简历不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: gorm.ErrRecordNotFound, Status: http.StatusNotFound, Message: "简历不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
 }
@@ -71,19 +73,19 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume [put]
 func (h *JobCardHandler) Upsert(c *gin.Context) {
-	Endpoint[resumeUpsertReq, service.JobCardDTO]{
+	httpx.Endpoint[resumeUpsertReq, service.JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeUpsertReq, error) {
 			uid := middleware.CurrentUserID(c)
 			var body service.JobCardInput
 			if err := c.ShouldBindJSON(&body); err != nil {
-				return nil, badRequest("请求参数错误")
+				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &resumeUpsertReq{UserID: uid, Input: body}, nil
 		},
 		Invoke: func(ctx context.Context, req *resumeUpsertReq) (*service.JobCardDTO, error) {
 			return h.svc.Upsert(req.UserID, req.Input)
 		},
-	}.WithSuccess(okMsg("success"), http.StatusBadRequest).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
 }
 
 // UpdateVisibility 切换简历公开 PUT /api/resume/visibility
@@ -137,7 +139,7 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 		response.BadRequest(c, "文件大小超出限制，最大允许50MB")
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件读取失败")
 		return
@@ -189,12 +191,12 @@ func (h *JobCardHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		response.ServerError(c, "文件读取失败")
 		return
 	}
-	url, err := h.fileSvc.Save(content, file.Filename, service.ResumeImageDirPrefix)
+	url, err := h.fileSvc.Save(content, file.Filename, filestore.ResumeImageDirPrefix)
 	if err != nil {
 		response.ServerErrorCause(c, "保存失败: ", err)
 		return

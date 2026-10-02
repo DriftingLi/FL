@@ -1,0 +1,35 @@
+/**
+ * AI 助手回答的渲染壳层：把模型回串的 Markdown 源文本翻成**渲染块**（#1443，ADR-0046 决定 6 的回填面）。
+ *
+ * 为什么单独成模块而不是写在 `.uvue` 里（`utils/forumBody.uts` 同判据）：这条**决策**落在模板里
+ * 就只能靠读源码文本的接线守护去守，而 `docs/agents/guards.md` 明说接线守护**不构成 ③ 门证据**
+ * （算法被改坏而字面量还在时不会红）。抽到 `utils/` 后它可被 `utils/utsHarness.js` 的 `loadUts`
+ * **真执行**：`utils/aiAnswerBodyBehavior.test.js` 断言的是跑起来的产出物（块数组），不是字面量。
+ *
+ * 口径：
+ * - **恒走解析**：AI 回答没有「作者声明格式」这条轴（论坛的 `content_format` 在这里不存在），
+ *   模型回串按 Markdown 呈现就是本票的裁定（用户翻案决定：回答大量含列表/代码/引用，纯文本难读）；
+ *   空串由 `parseMarkdown` 自然产出空数组，渲染出空气泡 —— 与旧纯文本行为等价，不设特判。
+ * - **档位 = `SUBSET_FORUM`**（heading / list / quote / code / divider 五成员 + 段落地板）：
+ *   与论坛正文同档。表格按行退回原始文本、公式源码原样（「降级仍可读」），`![alt](url)` 在展开后
+ *   成 image 块（**不在**该档声明里 ⇒ 退化 alt 文本，#1279 语义原样保留）。
+ * - **顺序是硬的**：`expandImageMarkers` 必须在 `parseMarkdown` **之前**（#1279 在先：`![alt](url)`
+ *   与 `<<IMAGE:…>>` 直出的内网百分号编码路径不能进任何渲染器）。写反的形态由行为测试的成对变异钉死。
+ *
+ * 层次约束：本模块**不 import `.uvue`**、不依赖 DOM；`expandImageMarkers` 取真源
+ * `utils/aiSourcesDisplay.uts`（loadUts 真执行时需同时注入 markdown 与 display 两层的真绑定）。
+ *
+ * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
+ */
+import { parseMarkdown, SUBSET_FORUM } from './markdown'
+import { expandImageMarkers } from './aiSourcesDisplay'
+import type { MarkdownBlock } from '../types/index'
+
+/**
+ * 助手回答的渲染块：先展开图片表达（#1279），再按**论坛档**解析（#1443）。
+ *
+ * @param raw 模型回串原文（未做任何预处理；空串 ⇒ 空数组）
+ */
+export function aiAnswerBlocks(raw : string) : MarkdownBlock[] {
+	return parseMarkdown(expandImageMarkers(raw), SUBSET_FORUM)
+}

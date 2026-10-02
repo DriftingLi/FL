@@ -1,0 +1,1016 @@
+// Package points 积分域：余额与流水、任务中心、课程/真题卷/商城兑换、AI 计费、管理员扣罚
+// （ADR-0023 幂等簿记、ADR-0024 错误哨兵、ADR-0054 任务中心、ADR-0062 兑换对账）。
+//
+// 本包是 internal/<域> 形态（ADR-0070）：handler.go / handler_admin.go 是 HTTP 出口，
+// service.go 是域实现，idem_keys.go 是幂等键构造器单点，sku_registry.go 是商城 sku 对账表。
+package points
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strconv"
+	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/cache"
+	"forklift-training/internal/clock"
+	"forklift-training/internal/dberr"
+	"forklift-training/internal/entitlement"
+	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/pkg/paging"
+	"forklift-training/pkg/response"
+)
+
+// PointsBalanceResult 余额结果。TotalSpent 为流水支出绝对值聚合（#509 明细页累计支出）。
+type PointsBalanceResult struct {
+	Balance     int `json:"balance"`
+	TotalEarned int `json:"total_earned"`
+	TotalSpent  int `json:"total_spent"`
+}
+
+// PointsLedgerItem 流水条目。ExpiresAt 过期时间设计位（#509）：首版恒 nil（永久有效），
+// 未来启用过期策略后随模型列 expires_at 点亮。
+type PointsLedgerItem struct {
+	ID        int64      `json:"id"`
+	UserID    int        `json:"user_id"`
+	Delta     int        `json:"delta"`
+	Reason    string     `json:"reason"`
+	RefType   string     `json:"ref_type"`
+	RefID     string     `json:"ref_id"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at" extensions:"x-nullable"`
+}
+
+// PointsLedgerResult 流水分页
+type PointsLedgerResult struct {
+	Items []PointsLedgerItem `json:"items" nullability:"nonnil"`
+	Total int64              `json:"total"`
+	Page  int                `json:"page"`
+	Pages int                `json:"pages"`
+}
+
+// PointsTaskItem 任务项
+type PointsTaskItem struct {
+	Code     string `json:"code"`
+	Group    string `json:"group"`
+	Title    string `json:"title"`
+	Desc     string `json:"desc"`
+	Points   int    `json:"points"`
+	Status   string `json:"status"` // todo/claimable/claimed
+	Progress int    `json:"progress"`
+	Total    int    `json:"total"`
+}
+
+// PointsTasksResult 任务列表
+type PointsTasksResult struct {
+	Tasks []PointsTaskItem `json:"tasks" nullability:"nonnil"`
+}
+
+// taskMeta 行为判定需要的「聚合行为快照 + 用户资料」一次性取齐（GetTasks/Claim 共用）。
+type taskMeta struct {
+	User model.HrwaiUser
+	// 今日（Asia/Shanghai 自然日）内行为计数
+	TodayQuiz       bool // 完成练习 ≥1（daily_quiz 语义）
+	TodayMock       bool // 完成模考 ≥1（growth_mock 语义）
+	TodayPost       bool // 发布帖子 ≥1
+	TodayOtherReply int  // 回复他人主题数（自帖回复不计，上限 3）
+	TodayBrowse     int  // 浏览他人帖子数（上限 3）
+	CourseDone      bool // 完成过 ≥1 节课程
+}
+
+// loadTaskMeta 一次查询取齐全部行为判定所需数据（读错误向上传播，沿用 #409 口径）。
+func (s *Service) loadTaskMeta(userID int) (*taskMeta, error) {
+	today := s.shanghaiDate()
+	todayStart := s.shanghaiDateTime()
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	m := &taskMeta{User: user}
+	var n int64
+	if err := s.db.Model(&model.QuestionPracticeRecord{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.TodayQuiz = n > 0
+	if err := s.db.Model(&model.MockExam{}).Where("student_id = ? AND created_at >= ?", userID, todayStart).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.TodayMock = n > 0
+	if err := s.db.Model(&model.ForumTopic{}).Where("user_id = ? AND created_at >= ?", userID, todayStart).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.TodayPost = n > 0
+	// growth_reply：只算回复「他人主题」（B 面防自刷，spec：自问自答不可计分；口径照 daily_browse 排除自帖）
+	var otherReplies int64
+	if err := s.db.Table("forum_replies AS r").Joins("JOIN forum_topics AS t ON t.id = r.topic_id").
+		Where("r.user_id = ? AND r.created_at >= ? AND t.user_id <> ?", userID, todayStart, userID).
+		Count(&otherReplies).Error; err != nil {
+		return nil, err
+	}
+	m.TodayOtherReply = int(otherReplies)
+	if m.TodayOtherReply > 3 {
+		m.TodayOtherReply = 3
+	}
+	var browse int64
+	if err := s.db.Raw("SELECT COUNT(*) FROM forum_topic_views v JOIN forum_topics t ON t.id = v.topic_id WHERE v.user_id = ? AND v.view_date = ? AND t.user_id != ?", userID, today, userID).Scan(&browse).Error; err != nil {
+		return nil, err
+	}
+	m.TodayBrowse = int(browse)
+	if m.TodayBrowse > 3 {
+		m.TodayBrowse = 3
+	}
+	if err := s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	m.CourseDone = n > 0
+	return m, nil
+}
+
+// taskProgress 行为达成判定的结果：claimable 是否可领；progress/total 展示进度。
+type taskProgress struct {
+	Claimable bool
+	Progress  int
+	Total     int
+}
+
+// profileBasicProgress 完善基础资料进度：头像、昵称（且非登录账号默认值）两个子项。
+func profileBasicProgress(u *model.HrwaiUser) (done int) {
+	if u.AvatarURL != "" {
+		done++
+	}
+	if u.Username != "" && u.Username != u.Account {
+		done++
+	}
+	return done
+}
+
+// profileContactProgress 完善联系资料进度：单位、手机/邮箱 两个子项。
+func profileContactProgress(u *model.HrwaiUser) (done int) {
+	if u.Company != "" {
+		done++
+	}
+	if u.Phone != "" || u.Email != "" {
+		done++
+	}
+	return done
+}
+
+// taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
+// 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
+// 全部任务都是纯规则判定，GetTasks 与 Claim 直接调用本函数（「同一判定单实现」纪律）。
+//
+// 历史：原有一层 resolveTaskProgress 包装，用于 growth_first_experience 的查库判定；
+// 该任务随 ADR-0040 退役（配置行由迁移 000027 删除）后包装只剩纯转发，已内联删除。
+// 将来若出现需要查库的截止类任务，再加回包装层即可。
+func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
+	switch cfg.Code {
+	case "daily_quiz":
+		return &taskProgress{Claimable: m.TodayQuiz || m.TodayMock, Progress: 0, Total: 1}
+	case "daily_browse":
+		return &taskProgress{Claimable: m.TodayBrowse >= 3, Progress: m.TodayBrowse, Total: 3}
+	case "daily_login":
+		// 无行为前置（ADR-0054）：每日进任务中心即可领。原判定挂在「当日 user_daily_login 行
+		// 存在」上，而落表取决于客户端是否续期会话（Web 端「本地 token 未过期就直接用」）——
+		// 客户端实现细节在决定一项每日任务的可用性。事实源表与两条落表路径已随之退役
+		// （迁移 000034）。每日限领一次仍由配置 daily_limit=1 承担。
+		return nil
+	case "newbie_profile_basic":
+		done := profileBasicProgress(&m.User)
+		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
+	case "newbie_profile_contact":
+		done := profileContactProgress(&m.User)
+		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
+	case "newbie_credential":
+		return &taskProgress{Claimable: m.User.CurrentCredentialID != nil, Progress: 0, Total: 1}
+	case "newbie_first_course":
+		return &taskProgress{Claimable: m.CourseDone, Progress: 0, Total: 1}
+	case "growth_post":
+		return &taskProgress{Claimable: m.TodayPost, Progress: 0, Total: 1}
+	case "growth_reply":
+		return &taskProgress{Claimable: m.TodayOtherReply >= 3, Progress: m.TodayOtherReply, Total: 3}
+	case "growth_mock":
+		return &taskProgress{Claimable: m.TodayMock, Progress: 0, Total: 1}
+	default:
+		// 未知任务：无行为前置（GetTasks 顶层按可领处理，与旧 default 语义一致）
+		return nil
+	}
+}
+
+// PointsClaimResult 领取结果
+type PointsClaimResult struct {
+	Balance     int    `json:"balance"`
+	TotalEarned int    `json:"total_earned"`
+	TaskStatus  string `json:"task_status"`
+}
+
+// Service 积分服务
+type Service struct {
+	db     *gorm.DB
+	logger *zap.Logger
+	clk    clock.Clock
+	// notificationSvc 站内信域单点（#1098）：AdminPenalty 在扣罚事务内经事件构造器发信，
+	// 文案/payload 口径不落积分域。
+	notificationSvc *notification.Service
+}
+
+func NewService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSvc *notification.Service) *Service {
+	if clk == nil {
+		clk = clock.Real()
+	}
+	return &Service{db: db, logger: logger, clk: clk, notificationSvc: notificationSvc}
+}
+
+// tryLock 瞬态并发护栏锁单点（#609 内聚，直记入口 Claim/redeem/DeductAI/AdminPenalty 共用，
+// 前奏仅锁键/TTL 不同）：Redis SetNX 占锁成功返回释放函数（调用方 defer）；Redis 不可用或
+// 已被占时不阻断主流程——锁只是进程级双写护栏，最终裁决由唯一索引/占坑表承担（ADR-0023）。
+// 锁键为瞬态锁面（points:grant:* / shop:* / ai:tokens:* / points:penalty:*），不属幂等占坑键，格式保持现状。
+func (s *Service) tryLock(ctx context.Context, key string, ttl time.Duration) (release func()) {
+	if ok, err := cache.SetNX(ctx, key, "1", ttl); err == nil && ok {
+		return func() { _ = cache.Del(ctx, key) }
+	}
+	return func() {}
+}
+
+// shanghaiDate 当前业务自然日日期字符串（Asia/Shanghai）。
+func (s *Service) shanghaiDate() string {
+	return clock.DayKey(s.clk.Now())
+}
+
+// shanghaiDateTime 当前业务自然日起点（Asia/Shanghai）。
+func (s *Service) shanghaiDateTime() time.Time {
+	return clock.DayStart(s.clk.Now())
+}
+
+// 每日登录事实源（MarkDailyLogin / hasDailyLogin）已于 ADR-0054 退役：daily_login 任务
+// 不再有行为前置，落表路径（登录签发、/auth/refresh 轮换、注销清理）与表本身一并删除
+// （迁移 000034）。
+
+// claimCounts 单用户领取计数：按 task_code 分组一次取「终身计数 + 当日计数」。
+// 当日臂在 SQL 内用 FILTER（claim_date = 今日 或 无标记遗留行）完成，日期参数以文本传入、
+// 由数据库自身做类型转换——Postgres DATE 与 SQLite TEXT 的形态差异不再进入 Go 的比较路径（#409）。
+// 读取错误向上传播，不再静默降级为「没人领过」。遗留 (claim_date IS NULL AND ref_id IS NULL) 行
+// 视为当日已领占坑，维持修复前「有领取标记即 claimed」的可观测口径，不产生额度漂移。
+func (s *Service) claimCounts(userID int, today string) (map[string]claimCounts, error) {
+	type claimCountRow struct {
+		TaskCode string
+		Lifetime int64
+		Today    int64
+	}
+	var rows []claimCountRow
+	if err := s.db.Raw(
+		`SELECT task_code, COUNT(*) AS lifetime,
+				COUNT(*) FILTER (WHERE claim_date = ? OR (claim_date IS NULL AND ref_id IS NULL)) AS today
+			FROM points_task_claim
+			WHERE user_id = ?
+			GROUP BY task_code`,
+		today, userID,
+	).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	m := make(map[string]claimCounts, len(rows))
+	for _, r := range rows {
+		m[r.TaskCode] = claimCounts{Lifetime: r.Lifetime, Today: r.Today}
+	}
+	return m, nil
+}
+
+// canClaim 额度判定唯一实现（#410）：输入任务配置与两个计数，输出「本任务当前可否领 / 是否已领完额度」。
+// 终身额度用尽（total_limit 非空且终身计数 ≥ 额度）或当日额度用尽（当日计数 ≥ daily_limit）→ 不可领。
+// 写路径（Claim）与读路径（GetTasks）共用本实现，不各写一套判定。
+func (s *Service) canClaim(cfg model.PointsTaskConfig, todayCount, lifetimeCount int64) claimDecision {
+	if cfg.TotalLimit != nil && lifetimeCount >= int64(*cfg.TotalLimit) {
+		return claimDecision{Exhausted: true}
+	}
+	if todayCount >= int64(cfg.DailyLimit) {
+		return claimDecision{Exhausted: true}
+	}
+	return claimDecision{Claimable: true}
+}
+
+// claimCounts 分组取数结果。
+type claimCounts struct {
+	Lifetime int64
+	Today    int64
+}
+
+// claimDecision canClaim 的输出：Claimable=可领；Exhausted=额度已用尽（当日或终身）。
+type claimDecision struct {
+	Claimable bool
+	Exhausted bool
+}
+
+// ErrPointsProcessed 幂等占坑冲突（ADR-0023）：幂等键已存在，事件已处理过。
+// 调用方据此把「二次提交」映射为各自的既有语义（已兑换/已领取/跳过回收等），整笔事务回滚。
+var ErrPointsProcessed = errors.New("积分事件已处理")
+
+// 积分域业务错误哨兵（ADR-0024）：一语义一哨兵，文案是哨兵属性而非契约。
+// handler 以 errors.Is 映射状态码；禁止 err.Error() == "…" 字符串比对。
+var (
+	// ErrAlreadyClaimed 终身已领（newbie 一次性任务重复领取）。
+	ErrAlreadyClaimed = errors.New("已领取")
+	// ErrDailyClaimLimit 今日已领（每日任务重复领取）。
+	ErrDailyClaimLimit = errors.New("今日已领取")
+	// ErrAlreadyRedeemed 已兑换（兑换权益重复/幂等冲突，service 内三处统一）。
+	ErrAlreadyRedeemed = errors.New("已兑换")
+	// ErrTaskNotFound 任务不存在。
+	ErrTaskNotFound = errors.New("任务不存在")
+	// ErrCourseNotRedeemable 该课程无需兑换。
+	ErrCourseNotRedeemable = errors.New("该课程无需兑换")
+	// ErrRealPaperUnavailable 真题卷不存在或已下架。
+	ErrRealPaperUnavailable = errors.New("真题卷不存在或已下架")
+	// ErrShopItemUnavailable 商城商品不存在或已下架。
+	ErrShopItemUnavailable = errors.New("商品不存在或已下架")
+	// ErrInvalidPenalty 扣罚分值非法。
+	ErrInvalidPenalty = errors.New("扣罚分值需在 1-500 之间")
+	// ErrEmptyPenaltyReason 扣罚事由为空。
+	ErrEmptyPenaltyReason = errors.New("扣罚事由不能为空")
+	// ErrTaskNotDone 行为未达成（Claim 前校验：todo 任务不可空领）。
+	ErrTaskNotDone = errors.New("任务未完成")
+	// ErrPenaltyNotifyFailed 扣罚站内信写入失败（#1098 强一致族）：通知与扣罚同事务，
+	// 写失败即扣罚整体不生效；管理端经 ErrStatus 看到 500 + 可见原因，可原样重试。
+	ErrPenaltyNotifyFailed = errors.New("扣罚未生效：站内信写入失败，请重试")
+)
+
+// PointsEntry 单笔积分簿记的参数面（ADR-0023 事务内簿记核心 applyTx 的唯一入参）。
+type PointsEntry struct {
+	UserID  int
+	Delta   int    // 增减分：>0 赚取，<0 消耗/扣罚（0 不写流水——points_ledger CHECK (delta <> 0)）
+	Reason  string // 流水原因：task_code / ai_tokens / redeem_* / admin_penalty / rollback / accepted_bonus ...
+	RefType string
+	RefID   string
+	// IdemKey 可选幂等占坑键（points_entry_idem 主键）。非空时占坑冲突返回
+	// ErrPointsProcessed（占坑行即「已处理」标记）；键不可得的路径如实留空（ADR-0023 §5）。
+	IdemKey string
+	// FloorZero 封底 0：扣减量按事务内余额截断、余额钳 0（管理员罚分/违规回收语义）；
+	// false（兑换/AI 扣费）走守卫扣减，余额不足报「积分不足」。
+	FloorZero bool
+}
+
+// ApplyTx 事务内簿记核心（ADR-0023）：占坑（可选）→ 流水 → 余额增减。
+// 封底 0 单一写法（GREATEST 钳 0）；非封底扣减一律带 `points_balance >= ?` 守卫并校验
+// RowsAffected（并发双花窗口在此收口）。返回 applied=false 表示占坑冲突（事件已处理，
+// 本笔簿记跳过）；调用方在事务闭包里把 ErrPointsProcessed 映射为各自语义。
+func ApplyTx(tx *gorm.DB, e PointsEntry) (bool, error) {
+	if e.IdemKey != "" {
+		if err := tx.Create(&model.PointsEntryIdem{IdemKey: e.IdemKey}).Error; err != nil {
+			if dberr.IsDuplicateError(err) {
+				return false, ErrPointsProcessed
+			}
+			return false, err
+		}
+	}
+	delta := e.Delta
+	if delta < 0 && e.FloorZero {
+		// 封底 0：扣减量按事务内余额截断；余额为 0 时无流水可写（占坑行即标记）
+		var user model.HrwaiUser
+		if err := tx.Select("points_balance").First(&user, e.UserID).Error; err != nil {
+			return false, err
+		}
+		if user.PointsBalance <= 0 {
+			return true, nil
+		}
+		if user.PointsBalance < -delta {
+			delta = -user.PointsBalance
+		}
+	}
+	if delta != 0 {
+		ledger := model.PointsLedger{UserID: e.UserID, Delta: delta, Reason: e.Reason, RefType: e.RefType, RefID: e.RefID}
+		if err := tx.Create(&ledger).Error; err != nil {
+			return false, err
+		}
+	}
+	switch {
+	case delta < 0 && e.FloorZero:
+		// 封底 0 单一写法：CASE 钳 0（扣减量已按余额截断，残余并发窗口由钳位兜底；
+		// CASE 形态 PG/SQLite 双方言可用）
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", e.UserID).
+			UpdateColumn("points_balance", gorm.Expr("CASE WHEN points_balance >= ? THEN points_balance - ? ELSE 0 END", -delta, -delta)).Error; err != nil {
+			return false, err
+		}
+	case delta < 0:
+		// 守卫扣减：余额不足（并发双花）0 行受影响 → 报错整笔回滚
+		res := tx.Model(&model.HrwaiUser{}).Where("id = ? AND points_balance >= ?", e.UserID, -delta).
+			UpdateColumn("points_balance", gorm.Expr("points_balance - ?", -delta))
+		if res.Error != nil {
+			return false, res.Error
+		}
+		if res.RowsAffected == 0 {
+			return false, ErrInsufficientPoints
+		}
+		// 截断到 0 的兜底（并发窗口残余，维持既有兜底语义）
+		_ = tx.Exec("UPDATE hrwai_users SET points_balance = GREATEST(points_balance, 0) WHERE id = ?", e.UserID).Error
+	case delta > 0:
+		if err := tx.Model(&model.HrwaiUser{}).Where("id = ?", e.UserID).
+			UpdateColumn("points_balance", gorm.Expr("points_balance + ?", delta)).Error; err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// GetBalance 获取余额与累计
+func (s *Service) GetBalance(userID int) (*PointsBalanceResult, error) {
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	var totalEarned int64
+	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND delta > 0", userID).Select("COALESCE(SUM(delta),0)").Scan(&totalEarned).Error
+	// #509：累计支出 = delta<0 流水绝对值聚合（兑换/AI/违规扣减；rollback 为 + 方向对冲不计入）
+	var totalSpent int64
+	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND delta < 0", userID).Select("COALESCE(SUM(-delta),0)").Scan(&totalSpent).Error
+	return &PointsBalanceResult{Balance: user.PointsBalance, TotalEarned: int(totalEarned), TotalSpent: int(totalSpent)}, nil
+}
+
+// GetLedger 流水分页。userID=0 不过滤用户（admin 巡检全量视角）；reason 可选筛选
+// （空=不过滤，变参保持既有调用方零 diff，同 AdminCourseService.GetCourses 的 filter 惯例）。
+// 委托 GetLedgerFiltered（direction 空串）。
+func (s *Service) GetLedger(userID, page, pageSize int, reason string, refType ...string) (*PointsLedgerResult, error) {
+	return s.GetLedgerFiltered(userID, page, pageSize, reason, "", refType...)
+}
+
+// GetLedgerFiltered 流水分页 + 收支方向筛选（#512 积分明细页）——direction: "" 全部 /
+// "in" 仅收入(delta>0) / "out" 仅支出(delta<0)；其余参数语义同 GetLedger。
+func (s *Service) GetLedgerFiltered(userID, page, pageSize int, reason, direction string, refType ...string) (*PointsLedgerResult, error) {
+	// count 与 find 同走 paging.QueryWithMax（过滤条件单一出处）
+	build := func(q *gorm.DB) *gorm.DB {
+		if userID > 0 {
+			q = q.Where("user_id = ?", userID)
+		}
+		if reason != "" {
+			q = q.Where("reason = ?", reason)
+		}
+		// #512：收支方向——in 仅收入（delta>0）、out 仅支出（delta<0）
+		switch direction {
+		case "in":
+			q = q.Where("delta > 0")
+		case "out":
+			q = q.Where("delta < 0")
+		}
+		// #411：按业务域（ref_type）过滤——问答域一行锁死，不维护原因白名单。
+		if len(refType) > 0 && refType[0] != "" {
+			q = q.Where("ref_type = ?", refType[0])
+		}
+		return q
+	}
+	rows, total, page, pageSize, err := paging.QueryWithMax[model.PointsLedger](s.db, page, pageSize, 20, 100,
+		"created_at DESC", build)
+	if err != nil {
+		return nil, err
+	}
+	pages := response.PageCount(total, pageSize)
+	// 越界页回退末页（既有语义，收编 #1095 时原样保留）：total 已知后按末页重取一次。
+	if page > pages && pages > 0 {
+		page = pages
+		if rows, _, _, _, err = paging.QueryWithMax[model.PointsLedger](s.db, page, pageSize, 20, 100, "created_at DESC", build); err != nil {
+			return nil, err
+		}
+	}
+	items := make([]PointsLedgerItem, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, PointsLedgerItem{
+			ID:        r.ID,
+			UserID:    r.UserID,
+			Delta:     r.Delta,
+			Reason:    r.Reason,
+			RefType:   r.RefType,
+			RefID:     r.RefID,
+			CreatedAt: r.CreatedAt,
+			ExpiresAt: r.ExpiresAt,
+		})
+	}
+	return &PointsLedgerResult{Items: items, Total: total, Page: page, Pages: pages}, nil
+}
+
+// GetTasks 获取任务列表（实时算 todo/claimable/claimed，基于真实行为表）
+func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
+	var configs []model.PointsTaskConfig
+	if err := s.db.Order("code ASC").Find(&configs).Error; err != nil {
+		return nil, err
+	}
+	today := s.shanghaiDate()
+	cc, err := s.claimCounts(userID, today)
+	if err != nil {
+		return nil, err
+	}
+	// 行为快照一次取齐（GetTasks/Claim 共用，读错误向上传播 #409）
+	m, err := s.loadTaskMeta(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	tasks := make([]PointsTaskItem, 0, len(configs))
+	for _, cfg := range configs {
+		// 行为达成判定（#410 单实现，与 Claim 同源）
+		p := taskProgressFor(cfg, m)
+		// 额度判定单点（#410）：不可领（当日/终身额度用尽）即视为已领取，不再回落 claimable
+		if !s.canClaim(cfg, cc[cfg.Code].Today, cc[cfg.Code].Lifetime).Claimable {
+			// 已领取时 progress/total 对齐达成口径：资料任务 2/2，其余已达成任务 1/1
+			prog := 1
+			total := 1
+			if p != nil {
+				prog, total = p.Progress, p.Total
+				if prog == 0 {
+					prog = total
+				}
+			}
+			tasks = append(tasks, PointsTaskItem{
+				Code: cfg.Code, Group: cfg.Group, Title: cfg.Title, Desc: cfg.Description,
+				Points: cfg.Points, Status: "claimed", Progress: prog, Total: total,
+			})
+			continue
+		}
+		status := "todo"
+		progress := 0
+		total := 1
+		if p != nil {
+			progress, total = p.Progress, p.Total
+			if p.Claimable {
+				status = "claimable"
+				if progress == 0 {
+					progress = total
+				}
+			}
+		} else {
+			// 未知任务无行为前置：照旧默认可领
+			status = "claimable"
+			progress = 1
+		}
+		tasks = append(tasks, PointsTaskItem{
+			Code: cfg.Code, Group: cfg.Group, Title: cfg.Title, Desc: cfg.Description,
+			Points: cfg.Points, Status: status, Progress: progress, Total: total,
+		})
+	}
+	return &PointsTasksResult{Tasks: tasks}, nil
+}
+
+// Claim 领取任务
+func (s *Service) Claim(ctx context.Context, userID int, taskCode string) (*PointsClaimResult, error) {
+	var cfg model.PointsTaskConfig
+	if err := s.db.Where("code = ?", taskCode).First(&cfg).Error; err != nil {
+		return nil, ErrTaskNotFound
+	}
+	today := s.shanghaiDate()
+	// 读取计数：与 GetTasks 同一分组取数形态，写路径不另写一套「是否已领」判定
+	cc, err := s.claimCounts(userID, today)
+	if err != nil {
+		return nil, err
+	}
+	// 额度判定单点（#410）：写路径与读路径共用 canClaim，语义按配置 daily_limit/total_limit 驱动
+	if !s.canClaim(cfg, cc[taskCode].Today, cc[taskCode].Lifetime).Claimable {
+		if cfg.Group == "newbie" {
+			return nil, ErrAlreadyClaimed
+		}
+		return nil, ErrDailyClaimLimit
+	}
+	// 行为达成校验（ADR-0028）：与 GetTasks 同源判定单实现，未达成（todo）不可空领。
+	// 未知任务（taskProgressFor 返回 nil）无行为前置，放行（与 GetTasks 默认可领口径一致）。
+	meta, err := s.loadTaskMeta(userID)
+	if err != nil {
+		return nil, err
+	}
+	if p := taskProgressFor(cfg, meta); p != nil && !p.Claimable {
+		return nil, ErrTaskNotDone
+	}
+	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
+	lockKey := fmt.Sprintf("points:grant:%d:%s", userID, taskCode)
+	if cfg.Group != "newbie" {
+		lockKey += ":" + today
+	} else {
+		lockKey += ":once"
+	}
+	release := s.tryLock(ctx, lockKey, 5*time.Second)
+	defer release()
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// 1. 占坑（唯一索引并发裁决；幂等冲突按任务臂映射为对应文案）
+		claim := model.PointsTaskClaim{UserID: userID, TaskCode: taskCode}
+		if cfg.Group == "newbie" {
+			once := "once"
+			claim.RefID = &once
+		} else {
+			claim.ClaimDate = &today
+		}
+		if err := tx.Create(&claim).Error; err != nil {
+			if dberr.IsDuplicateError(err) {
+				if cfg.Group == "newbie" {
+					return ErrAlreadyClaimed
+				}
+				return ErrDailyClaimLimit
+			}
+			return err
+		}
+		// 2. 簿记核心（流水 + 余额）：占坑由 points_task_claim 承载，无通用幂等键。
+		//    #408/#410：删除 points_user_progress「只写不读」的进度快照写入，避免第二个「谁已领取」真相源。
+		if _, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: cfg.Points, Reason: taskCode, RefType: "task", RefID: taskCode,
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	bal, err := s.GetBalance(userID)
+	if err != nil {
+		return nil, err
+	}
+	return &PointsClaimResult{Balance: bal.Balance, TotalEarned: bal.TotalEarned, TaskStatus: "claimed"}, nil
+}
+
+// SettleRewardTx 事务内「一事件一分」直记落账（ADR-0023 forum 收编通道）：
+// 占坑冲突（同键已处理）视为已处理静默跳过、事务继续——「每帖只发一次」由调用方
+// 状态 CAS + 占坑双保险；封底/守卫语义由 PointsEntry 声明，其余错误上抛整笔回滚。
+func (s *Service) SettleRewardTx(tx *gorm.DB, e PointsEntry) error {
+	_, err := ApplyTx(tx, e)
+	if errors.Is(err, ErrPointsProcessed) {
+		return nil
+	}
+	return err
+}
+
+// ReasonRollback 回收对冲流水的统一 reason（#376 起；#609 起由 RollbackByRef 单点写入）。
+// 常量随回收实现收编移入积分域（原定义在 forum_service）：回收语义归 points 所有，
+// forum/contribution 只是声明方。
+const ReasonRollback = "rollback"
+
+// PointsRollback 回收对冲的声明面（#609）：调用方声明「回收哪个 ref 的哪些 reasons」，
+// 原账聚合取反、封底 0、占坑防双扣全部由 RollbackByRef 内部完成，域内不再手写对冲。
+type PointsRollback struct {
+	RefType string
+	RefID   string
+	// Reasons 要回收的原账流水 reason 集（如 [accepted_bonus]；[contribution_approved, contribution_tier]）。
+	Reasons []string
+	// IdemKey 幂等占坑键（points_entry_idem 主键），由调用方经 #608 域构造器传入
+	// （ForumRollbackIdemKey / ContributionRollbackIdemKey）——回收事件是终态事件，
+	// 键格式逐字节不动（改格式 = 同一事件重放拿到新键 → 双重追回），积分域不感知各域键规则。
+	IdemKey string
+}
+
+// RollbackByRef 回收对冲深方法（#609，ADR-0023 回收臂单点）：按 (refType, refID, reasons)
+// 聚合原账正向流水（SUM，按用户分组）取反入账，封底 0（FloorZero），占坑防双扣，事务内落账。
+// 返回声明回收的分值（原账合计，封底截断前——实际扣减按余额截断、余额为 0 时仅落占坑行无流水）。
+// 幂等三层：同 ref 已有 rollback 流水（存量数据标记，先于占坑表存在）→ 已对冲过跳过不双扣；
+// 原账为零 → 无事可收不占坑；占坑冲突 → ErrPointsProcessed（事件已处理过，调用方按各自
+// 语义映射——ADR-0023 契约）。
+func (s *Service) RollbackByRef(tx *gorm.DB, r PointsRollback) (int, error) {
+	// 存量标记：占坑表上线前的 rollback 流水无占坑行，有标记即已对冲过
+	var rolledBack int64
+	if err := tx.Model(&model.PointsLedger{}).
+		Where("reason = ? AND ref_type = ? AND ref_id = ?", ReasonRollback, r.RefType, r.RefID).
+		Count(&rolledBack).Error; err != nil {
+		return 0, err
+	}
+	if rolledBack > 0 {
+		return 0, nil
+	}
+	// 原账聚合：ref 全局唯一、正常恰属一个用户；防御性按用户分组（多组共享同一事件坑，
+	// 坑随首组占，余组不再传键——同事务同键会自冲突）
+	type origUser struct {
+		UserID int
+		Earned int64
+	}
+	var groups []origUser
+	if err := tx.Model(&model.PointsLedger{}).
+		Select("user_id, COALESCE(SUM(delta),0) AS earned").
+		Where("ref_type = ? AND ref_id = ? AND reason IN ? AND delta > 0", r.RefType, r.RefID, r.Reasons).
+		Group("user_id").
+		Scan(&groups).Error; err != nil {
+		return 0, err
+	}
+	if len(groups) == 0 {
+		return 0, nil
+	}
+	clawed := 0
+	for i, g := range groups {
+		entry := PointsEntry{
+			UserID: g.UserID, Delta: -int(g.Earned), Reason: ReasonRollback,
+			RefType: r.RefType, RefID: r.RefID, FloorZero: true,
+		}
+		if i == 0 {
+			entry.IdemKey = r.IdemKey
+		}
+		if _, err := ApplyTx(tx, entry); err != nil {
+			return 0, err
+		}
+		clawed += int(g.Earned)
+	}
+	return clawed, nil
+}
+
+// RedeemResult 兑换结果
+type RedeemResult struct {
+	Balance     int    `json:"balance"`
+	TotalEarned int    `json:"total_earned"`
+	SKU         string `json:"sku"`
+	RefID       string `json:"ref_id"`
+}
+
+// redeemOpts 兑换三胞胎（Course / RealPaper / Shop）的参数化差异面（ADR-0023）：
+// 仅锁键 / sku / 权益 ref / 价格 / 流水 reason+refType 不同，簿记与并发守卫收敛于 redeem 单点。
+type redeemOpts struct {
+	lockKey string
+	sku     string
+	refID   string
+	price   int
+	reason  string
+	refType string
+}
+
+// redeem 兑换唯一实现：锁 → 已拥有校验 → 余额预检 → 事务{权益 + 簿记核心}。
+// 幂等键 redeem:{sku}:{userID}（ADR-0062 票1）：占坑冲突映射为「已兑换」，整笔事务回滚；
+// 余额扣减经 ApplyTx 守卫（`points_balance >= ?` + RowsAffected 校验），并发双花不击穿余额。
+func (s *Service) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
+	release := s.tryLock(ctx, o.lockKey, 5*time.Second)
+	defer release()
+	// 已拥有校验
+	var entCnt int64
+	_ = s.db.Model(&model.UserEntitlement{}).Where("user_id = ? AND sku = ? AND ref_id = ?", userID, o.sku, o.refID).Count(&entCnt).Error
+	if entCnt > 0 {
+		return nil, ErrAlreadyRedeemed
+	}
+	// 余额预检
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	if user.PointsBalance < o.price {
+		return nil, ErrInsufficientPoints
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		ent := model.UserEntitlement{UserID: userID, SKU: o.sku, RefID: o.refID}
+		if err := tx.Create(&ent).Error; err != nil {
+			if dberr.IsDuplicateError(err) {
+				return ErrAlreadyRedeemed
+			}
+			return err
+		}
+		if _, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: -o.price, Reason: o.reason, RefType: o.refType, RefID: o.refID,
+			IdemKey: RedeemIdemKey(o.sku, userID),
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
+	if errors.Is(err, ErrPointsProcessed) {
+		return nil, ErrAlreadyRedeemed
+	}
+	if err != nil {
+		return nil, err
+	}
+	bal, _ := s.GetBalance(userID)
+	res := &RedeemResult{SKU: o.sku, RefID: o.refID}
+	if bal != nil {
+		res.Balance = bal.Balance
+		res.TotalEarned = bal.TotalEarned
+	}
+	return res, nil
+}
+
+// RedeemCourse 兑换课程（课程级整锁）。
+func (s *Service) RedeemCourse(ctx context.Context, userID, courseID int) (*RedeemResult, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		return nil, model.ErrCourseNotFound
+	}
+	if course.PointsPrice == nil || *course.PointsPrice <= 0 {
+		return nil, ErrCourseNotRedeemable
+	}
+	return s.redeem(ctx, userID, redeemOpts{
+		lockKey: fmt.Sprintf("shop:course:%d:%d", userID, courseID),
+		sku:     entitlement.CourseSKU(courseID),
+		refID:   fmt.Sprintf("%d", courseID),
+		price:   *course.PointsPrice,
+		reason:  "redeem_course",
+		refType: "course",
+	})
+}
+
+// realPaperUnlockSKU 商城里真题解锁项的 SKU（价格单点：管理员调整该项即调整全部卷价）。
+// 这一行**不是可兑换商品**——它只是价格；对账表与拒兑判据见 sku_registry.go（ADR-0062 票2 D1）。
+const realPaperUnlockSKU = "unlock_real_paper"
+
+// realPaperPriceFallback 商城项缺失时的兜底单价。
+const realPaperPriceFallback = 300
+
+// RealPaperPrice 读取真题解锁单价（商城项缺失/停用时回退兜底价）。
+// 只认 enabled=true 的行 ⇒ 停售这一行等于把卷价悄悄改回硬编码，管理员改的是一行读不到的数据：
+// 要停「解锁真题」的兑换请走对账表（ErrRealPaperUnlockNotRedeemable），别动 enabled。
+func (s *Service) RealPaperPrice() int {
+	var item model.PointsShopItem
+	if err := s.db.Where("sku = ? AND enabled = true", realPaperUnlockSKU).First(&item).Error; err != nil {
+		return realPaperPriceFallback
+	}
+	if item.Price <= 0 {
+		return realPaperPriceFallback
+	}
+	return item.Price
+}
+
+// RedeemRealPaper 兑换单套真题卷（卷级整锁，语义同 RedeemCourse）。
+func (s *Service) RedeemRealPaper(ctx context.Context, userID, paperID int) (*RedeemResult, error) {
+	var paper model.RealExamPaper
+	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
+		return nil, ErrRealPaperUnavailable
+	}
+	return s.redeem(ctx, userID, redeemOpts{
+		lockKey: fmt.Sprintf("shop:real_paper:%d:%d", userID, paperID),
+		sku:     entitlement.RealPaperSKU(paperID),
+		refID:   strconv.Itoa(paperID),
+		price:   s.RealPaperPrice(),
+		reason:  "redeem_real_paper",
+		refType: "real_exam_paper",
+	})
+}
+
+// RedeemShop 兑换商城物品。
+// 放行判据 = 对账表（sku_registry.go）：表里有一行 enabled=true 只说明「有这件商品」，
+// 不说明「兑出去的权益有人读」⇒ 未登记读者的 sku 一律拒兑，扣分为零
+// （ADR-0062 票2 的 unlock_real_paper 死端就是这么漏出来的）。
+func (s *Service) RedeemShop(ctx context.Context, userID int, sku string) (*RedeemResult, error) {
+	var item model.PointsShopItem
+	if err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error; err != nil {
+		return nil, ErrShopItemUnavailable
+	}
+	entSKU, entRefID, err := shopRedeemEntitlementKey(sku)
+	if err != nil {
+		return nil, err
+	}
+	return s.redeem(ctx, userID, redeemOpts{
+		lockKey: fmt.Sprintf("shop:sku:%d:%s", userID, sku),
+		sku:     entSKU,
+		refID:   entRefID,
+		price:   item.Price,
+		reason:  "redeem_" + sku,
+		refType: "shop",
+	})
+}
+
+// HasEntitlement 校验是否已兑换（权益读面单点见 internal/entitlement，ADR-0062 决策 3）。
+func (s *Service) HasEntitlement(userID int, sku, refID string) (bool, error) {
+	return entitlement.Holds(s.db, userID, sku, refID)
+}
+
+// ErrInsufficientPoints 积分余额不足（哨兵错误，ADR-0023）：调用方一律 errors.Is 判定，
+// 禁止再做「积分不足」字符串匹配（守卫扣减/兑换预检/AI 扣费同源）。
+var ErrInsufficientPoints = errors.New("积分不足")
+
+// aiMinPoints AI 对话扣费下限：余额预检门槛与扣费下限同源单点（调用侧不得另立常量）。
+const aiMinPoints = 5
+
+// AITokensResult AI 对话扣费结果（usage 事件的数据面，JSON 字段即事件负载）。
+type AITokensResult struct {
+	Points           int `json:"points_cost"`
+	TotalTokens      int `json:"total_tokens"`
+	Balance          int `json:"balance"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
+// estimateAITokens 按字符长度估算 tokens（口径单点）：total = ceil((prompt+completion)/4)，
+// 合计 <10 时兜底 100；prompt/completion 各自 ceil(len/4)。调用侧不得重复估算。
+func estimateAITokens(promptChars, completionChars int) (total, prompt, completion int) {
+	prompt = (promptChars + 3) / 4
+	completion = (completionChars + 3) / 4
+	total = (promptChars + completionChars + 3) / 4
+	if total < 10 {
+		total = 100
+	}
+	return total, prompt, completion
+}
+
+// aiPointsForTokens tokens → 积分：ceil(tokens/1000)×10，下限 aiMinPoints 上限 100。
+func aiPointsForTokens(tokens int) int {
+	points := (tokens + 999) / 1000 * 10
+	if points < aiMinPoints {
+		points = aiMinPoints
+	}
+	if points > 100 {
+		points = 100
+	}
+	return points
+}
+
+// AIPreflight AI 对话余额预检：余额低于下限返回 ErrInsufficientPoints（阻断对话）。
+// 余额查询失败时放行——后计量模式下真正的闸门在末端扣费，与既有 fail-open 语义一致。
+func (s *Service) AIPreflight(userID int) error {
+	bal, err := s.GetBalance(userID)
+	if err != nil || bal == nil {
+		return nil
+	}
+	if bal.Balance < aiMinPoints {
+		return ErrInsufficientPoints
+	}
+	return nil
+}
+
+// DeductAI AI 按 tokens 后计量扣费（ADR-0062 票1）。调用方只传事实（prompt/completion
+// 字符长度 + 服务端铸造的 requestID），tokens 估算、分桶换算、上下限与幂等全部内聚在积分域：
+// 估算见 estimateAITokens，积分换算见 aiPointsForTokens；幂等键 ai_tokens:{userID}:{requestID}，
+// 一次服务端请求只扣一次（重放即新请求、新消费）。
+func (s *Service) DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*AITokensResult, error) {
+	total, prompt, completion := estimateAITokens(promptChars, completionChars)
+	points := aiPointsForTokens(total)
+	lockKey := fmt.Sprintf("ai:tokens:%d:%s", userID, requestID)
+	release := s.tryLock(ctx, lockKey, 60*time.Second)
+	defer release()
+	// 幂等：同一 requestId 已扣过则直接返回
+	var cnt int64
+	_ = s.db.Model(&model.PointsLedger{}).Where("user_id = ? AND ref_id = ? AND reason = ?", userID, requestID, "ai_tokens").Count(&cnt).Error
+	if cnt > 0 {
+		return s.aiTokensResult(points, total, prompt, completion, userID), nil
+	}
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	if user.PointsBalance < points {
+		// 余额不足（预检后的并发窗口或直连路径）：AI 场景直接拒绝
+		return nil, ErrInsufficientPoints
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 幂等键 ai_tokens:{userID}:{requestID}（ADR-0062 票1）：requestID 由服务端铸造
+		_, err := ApplyTx(tx, PointsEntry{
+			UserID: userID, Delta: -points, Reason: "ai_tokens", RefType: "ai_chat", RefID: requestID,
+			IdemKey: AITokensIdemKey(userID, requestID),
+		})
+		if errors.Is(err, ErrPointsProcessed) {
+			// 并发窗口同键已扣：与既有 IsDuplicateError 分支语义一致，视为成功
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.aiTokensResult(points, total, prompt, completion, userID), nil
+}
+
+// aiTokensResult 组装扣费结果（余额实时读取，读取失败时余额置 0 维持既有语义）。
+func (s *Service) aiTokensResult(points, total, prompt, completion, userID int) *AITokensResult {
+	res := &AITokensResult{Points: points, TotalTokens: total, PromptTokens: prompt, CompletionTokens: completion}
+	if bal, _ := s.GetBalance(userID); bal != nil {
+		res.Balance = bal.Balance
+	}
+	return res
+}
+
+// PointsPenaltyResultDTO 管理员扣罚的响应 {"deducted": N}（实际扣减额，#954 片二）。
+type PointsPenaltyResultDTO struct {
+	Deducted int `json:"deducted"`
+}
+
+// AdminPenalty 管理员扣罚（自定义 1-500，截断到 0）。
+//
+// #1098：站内信回归积分域并与扣罚流水同事务（强一致族）——通知写失败则整笔扣罚不生效，
+// 管理端经 ErrStatus 看到 500 + 可见原因并可重试；审计仍由中间件承载，不在此处。
+func (s *Service) AdminPenalty(ctx context.Context, adminID, userID, delta int, reason string) (int, error) {
+	if delta <= 0 || delta > 500 {
+		return 0, ErrInvalidPenalty
+	}
+	if reason == "" {
+		return 0, ErrEmptyPenaltyReason
+	}
+	lockKey := fmt.Sprintf("points:penalty:%d", userID)
+	release := s.tryLock(ctx, lockKey, 5*time.Second)
+	defer release()
+	var user model.HrwaiUser
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return 0, model.ErrHrwaiUserNotFound
+	}
+	actualDeduct := delta
+	if user.PointsBalance < delta {
+		actualDeduct = user.PointsBalance
+	}
+	if actualDeduct < 0 {
+		// 余额列约定非负（脏数据兜底）：非正数即不扣、不发负额文案——与既有
+		// 「actualDeduct <= 0 直接返回 0」的行为逐字一致。
+		actualDeduct = 0
+	}
+	requestID := fmt.Sprintf("penalty-%d-%d", userID, time.Now().UnixNano())
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 余额不足时按余额截断（截断后为 0 则无流水可写——points_ledger CHECK (delta <> 0)），
+		// 通知照发（既有语义：扣 0 分也告知）。不传幂等键（ADR-0023 §5）：有意重复罚分合法。
+		if actualDeduct > 0 {
+			if _, err := ApplyTx(tx, PointsEntry{
+				UserID: userID, Delta: -actualDeduct, Reason: "admin_penalty", RefType: "admin", RefID: requestID,
+				FloorZero: true,
+			}); err != nil {
+				return err
+			}
+		}
+		if err := s.notificationSvc.CreateAdminPenaltyEvent(tx, notification.NewAdminPenaltyEvent(userID, actualDeduct, reason), time.Now()); err != nil {
+			return fmt.Errorf("%w：%v", ErrPenaltyNotifyFailed, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return actualDeduct, nil
+}

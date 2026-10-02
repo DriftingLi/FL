@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -19,7 +20,7 @@ func init() {
 }
 
 // doEndpoint 构造 gin 引擎并命中单条路由，返回响应。
-func doEndpoint(t *testing.T, e Endpoint[int, string]) *httptest.ResponseRecorder {
+func doEndpoint(t *testing.T, e httpx.Endpoint[int, string]) *httptest.ResponseRecorder {
 	t.Helper()
 	r := gin.New()
 	r.POST("/x", e.Handle)
@@ -32,15 +33,15 @@ func doEndpoint(t *testing.T, e Endpoint[int, string]) *httptest.ResponseRecorde
 // renderSuccessOnly 测试用显式 Render：只写成功面（票1b 后 err 不在签名上，错误面归骨架）。
 // 用于对照断言「挂 Render 与否，错误面与默认信封逐字节一致」。
 func renderSuccessOnly[Resp any](c *gin.Context, _ *int, resp *Resp) {
-	response.Success(c, deref(resp))
+	response.Success(c, httpx.Deref(resp))
 }
 
 // TestEndpoint_ParseFailure_BadRequest parse 返回 badRequest → 400 + 原文案。
 func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, badRequest("参数非法")
+			return nil, httpx.BadRequest("参数非法")
 		},
 		// Render 省略：走默认信封（ADR-0024 C2）
 	}
@@ -56,7 +57,7 @@ func TestEndpoint_ParseFailure_BadRequest(t *testing.T) {
 // TestEndpoint_InvokeServiceError_ServerError invoke 返回普通 error → 500 + err.Error()。
 func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errors.New("服务崩了")
 		},
@@ -76,9 +77,9 @@ func TestEndpoint_InvokeServiceError_ServerError(t *testing.T) {
 // TestEndpoint_ParseNotFound parse 返回 404 ParseError → 404。
 func TestEndpoint_ParseNotFound(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusNotFound, Message: "不存在"}
+			return nil, &httpx.ParseError{Status: http.StatusNotFound, Message: "不存在"}
 		},
 		// Render 省略：ParseError 404 → 404
 	}
@@ -91,7 +92,7 @@ func TestEndpoint_ParseNotFound(t *testing.T) {
 // TestEndpoint_Success_200 invoke 成功 → 200 + data。
 func TestEndpoint_Success_200(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			v := "ok"
 			return &v, nil
@@ -110,7 +111,7 @@ func TestEndpoint_Success_200(t *testing.T) {
 // TestEndpoint_PanicRecovery_ServerError invoke panic → 恢复为 500 信封。
 func TestEndpoint_PanicRecovery_ServerError(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			panic("boom")
 		},
@@ -128,7 +129,7 @@ func TestEndpoint_PanicRecovery_ServerError(t *testing.T) {
 // TestEndpoint_NilParse_UsesZeroReq Parse 为 nil 时用零值 Req，invoke 正常。
 func TestEndpoint_NilParse_UsesZeroReq(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			if *req != 0 {
 				t.Fatalf("零值 Req 期望 0, got %d", *req)
@@ -154,11 +155,11 @@ func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 		v := "ok"
 		return &v, nil
 	}
-	explicit := Endpoint[int, string]{
+	explicit := httpx.Endpoint[int, string]{
 		Invoke: okInvoke,
 		Render: renderSuccessOnly[string],
 	}
-	implicit := Endpoint[int, string]{
+	implicit := httpx.Endpoint[int, string]{
 		Invoke: okInvoke,
 		// Render 省略 → 默认信封
 	}
@@ -170,18 +171,18 @@ func TestEndpoint_DefaultRender_ByteEquivalent(t *testing.T) {
 	errInvoke := func(ctx context.Context, req *int) (*string, error) {
 		return nil, errors.New("服务崩了")
 	}
-	explicit = Endpoint[int, string]{Invoke: errInvoke, Render: renderSuccessOnly[string]}
-	implicit = Endpoint[int, string]{Invoke: errInvoke}
+	explicit = httpx.Endpoint[int, string]{Invoke: errInvoke, Render: renderSuccessOnly[string]}
+	implicit = httpx.Endpoint[int, string]{Invoke: errInvoke}
 	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
 		t.Fatalf("500 信封不一致:\n显式=%s\n默认=%s", a, b)
 	}
 
 	// 解析错误路径
 	parseErr := func(c *gin.Context) (*int, error) {
-		return nil, badRequest("参数非法")
+		return nil, httpx.BadRequest("参数非法")
 	}
-	explicit = Endpoint[int, string]{Parse: parseErr, Render: renderSuccessOnly[string]}
-	implicit = Endpoint[int, string]{Parse: parseErr}
+	explicit = httpx.Endpoint[int, string]{Parse: parseErr, Render: renderSuccessOnly[string]}
+	implicit = httpx.Endpoint[int, string]{Parse: parseErr}
 	if a, b := doEndpoint(t, explicit).Body.String(), doEndpoint(t, implicit).Body.String(); a != b {
 		t.Fatalf("400 信封不一致:\n显式=%s\n默认=%s", a, b)
 	}

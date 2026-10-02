@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -80,7 +81,7 @@ func TestCourseReadVisibilityContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterCoursesRoutes(apiGroup, deps.RouterDeps(), deps.CourseSvc)
+	course.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(user.ID), user.Account, "hrwai_user")

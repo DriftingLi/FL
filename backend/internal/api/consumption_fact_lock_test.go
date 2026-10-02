@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // factTag 是投影位一侧的声明：响应字段上的 `fact:"<key>"`。
@@ -32,16 +34,14 @@ const factTag = "fact"
 // 这一份与 apitypes 那把锁的 sweptDirs 必须同步（两份都是测试内常量，共享不了）。漂移由
 // `TestFactScanDirsCoverTheContractUniverse` 管：它从生成物里数出「定义键出现过哪几个包名」，
 // 少一个就红——所以忘了加目录的后果不是悄悄漏扫，是一条指名道姓的红。
-var factScanDirs = []struct{ dir, pkg string }{
-	{".", "api"},
-	{"../service", "service"},
-	{"../model", "model"},
-	// valuation/model 的 Go 包名也叫 model，swagger 定义键同样落在 `model.` 前缀下（两边类型名
-	// 不重叠，swag 自己在重名时会报），所以 pkg 列必须同为 "model" 才对得上生成物。
-	// 少这一条就是实打实的漏口：投影位长在残值侧的 DTO 上时，(a)(c)(d) 一条都碰不到它。
-	{"../valuation/model", "model"},
-	{"../valuation/repository", "repository"},
-	{"../../pkg/response", "response"},
+// 目录宇宙来自 testutil.ResponsePackages()（模块根相对）：与 apitypes 那把可达性锁共用同一份 ——
+// 两把锁的**论域**不同（过滤条件不同），但「哪些包可能承载响应类型」是同一件事，各抄一份会漂。
+var factScanDirs = testutil.ResponsePackages()
+
+// scanDirAbs 把清单里的模块根相对目录解析成绝对路径（各锁按模块根定位，不靠 cwd）。
+func scanDirAbs(t *testing.T, rel string) string {
+	t.Helper()
+	return filepath.Join(testutil.ModuleRoot(t), filepath.FromSlash(rel))
 }
 
 // TestFactScanDirsCoverTheContractUniverse 是上面那条「两份清单会漂」的绊线。
@@ -51,14 +51,14 @@ func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
 	t.Parallel()
 	// 先数清单：绊线比的是**前缀**，而 `../model` 与 `../valuation/model` 同前缀 ⇒ 删掉其中一枚
 	// 绊线看不出来。这条计数断言补的就是那一条（与批⑤「pathInt* 名字族必须恰好两枚」同形）。
-	if n := len(factScanDirs); n != 6 {
-		t.Fatalf("fact 扫描面应是 6 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
+	if n := len(factScanDirs); n != 21 {
+		t.Fatalf("fact 扫描面应是 21 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
 			"多一枚就回来把这条数与注释一起改。", n, factScanDirs)
 	}
 	defs := factDescriptions(t)
 	scanned := map[string]bool{}
 	for _, src := range factScanDirs {
-		scanned[src.pkg] = true
+		scanned[src.Pkg] = true
 	}
 	for defName := range defs {
 		pkg, _, ok := strings.Cut(defName, ".")
@@ -87,9 +87,10 @@ func taggedFactFields(t *testing.T) map[string][]factFieldInfo {
 	t.Helper()
 	out := map[string][]factFieldInfo{}
 	for _, src := range factScanDirs {
-		entries, err := os.ReadDir(src.dir)
+		dir := scanDirAbs(t, src.Dir)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			t.Fatalf("读 fact tag 扫描目录 %s 失败: %v", src.dir, err)
+			t.Fatalf("读 fact tag 扫描目录 %s 失败: %v", src.Dir, err)
 		}
 		fset := token.NewFileSet()
 		n := 0
@@ -98,17 +99,17 @@ func taggedFactFields(t *testing.T) map[string][]factFieldInfo {
 			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 				continue
 			}
-			f, err := parser.ParseFile(fset, filepath.Join(src.dir, name), nil, parser.ParseComments)
+			f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ParseComments)
 			if err != nil {
-				t.Fatalf("解析 %s/%s 失败: %v", src.dir, name, err)
+				t.Fatalf("解析 %s/%s 失败: %v", src.Dir, name, err)
 			}
 			n++
 			// 投影位键的前缀取**包子句**（那才是 swagger 定义键的前缀），不取清单里的标签列；
 			// 两者必须相等，否则说明有一行目录贴错了前缀——标签写错会让绊线以为覆盖了、实际按
 			// 另一个前缀去查契约，正是要防的那种「清单与生成物各说各话」。
-			if f.Name.Name != src.pkg {
-				t.Errorf("%s/%s 的包子句是 %q，factScanDirs 却把它标成 %q：投影位键前缀按包子句算，"+
-					"这一行的 pkg 列要改。", src.dir, name, f.Name.Name, src.pkg)
+			if f.Name.Name != src.Pkg {
+				t.Errorf("%s/%s 的包子句是 %q，扫描清单却把它标成 %q：投影位键前缀按包子句算，"+
+					"这一行的 Pkg 列要改。", src.Dir, name, f.Name.Name, src.Pkg)
 			}
 			for _, d := range f.Decls {
 				gd, ok := d.(*ast.GenDecl)
@@ -140,13 +141,13 @@ func taggedFactFields(t *testing.T) map[string][]factFieldInfo {
 						if jsonKey == "" || jsonKey == "-" {
 							t.Errorf("%s/%s 的 %s.%s 上挂了 %s:%q 却没有 json 键：投影位是按键对外露出的，"+
 								"没有键就不是消费点，别挂这个 tag。",
-								src.dir, name, f.Name.Name, ts.Name.Name, factTag, factVal)
+								src.Dir, name, f.Name.Name, ts.Name.Name, factTag, factVal)
 							continue
 						}
 						if !ts.Name.IsExported() || !fld.Names[0].IsExported() {
 							t.Errorf("%s/%s 的 %s.%s.%s 挂了 fact:%q 但类型或字段是小写的——"+
 								"它进不了 swagger 定义，不是对外投影位。",
-								src.dir, name, f.Name.Name, ts.Name.Name, fld.Names[0].Name, factVal)
+								src.Dir, name, f.Name.Name, ts.Name.Name, fld.Names[0].Name, factVal)
 							continue
 						}
 						key := f.Name.Name + "." + ts.Name.Name + "." + jsonKey
@@ -156,7 +157,7 @@ func taggedFactFields(t *testing.T) map[string][]factFieldInfo {
 			}
 		}
 		if n == 0 {
-			t.Fatalf("fact tag 扫描面 %s 里一个 .go 文件都没有——目录被改名还是搬走了？（扫不到不等于无违规）", src.dir)
+			t.Fatalf("fact tag 扫描面 %s 里一个 .go 文件都没有——目录被改名还是搬走了？（扫不到不等于无违规）", src.Dir)
 		}
 	}
 	return out
@@ -303,7 +304,8 @@ func TestConsumptionFactsAreAligned(t *testing.T) {
 func sentinelHosts(t *testing.T) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	entries, err := os.ReadDir("../service")
+	serviceDir := scanDirAbs(t, "internal/service")
+	entries, err := os.ReadDir(serviceDir)
 	if err != nil {
 		t.Fatalf("读 internal/service 失败: %v", err)
 	}
@@ -315,9 +317,9 @@ func sentinelHosts(t *testing.T) map[string]string {
 			continue
 		}
 		n++
-		f, err := parser.ParseFile(fset, filepath.Join("../service", name), nil, 0)
+		f, err := parser.ParseFile(fset, filepath.Join(serviceDir, name), nil, 0)
 		if err != nil {
-			t.Fatalf("解析 ../service/%s 失败: %v", name, err)
+			t.Fatalf("解析 internal/service/%s 失败: %v", name, err)
 		}
 		for _, d := range f.Decls {
 			gd, ok := d.(*ast.GenDecl)
@@ -468,10 +470,13 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 				}
 			case *ast.CompositeLit:
 				// 整张表的**子树**都收下。第一版只遍历 `x.Elts`，实测数出 17 个标识符而按字面量
-				// 数是 100+：哨兵实际写在 `entries: []errStatusEntry{{sentinel: service.ErrX, …}}`
+				// 数是 100+：哨兵实际写在 `Entries: []httpx.ErrStatusEntry{{Sentinel: service.ErrX, …}}`
 				// 里，`x.Elts` 拿到的那个 KeyValueExpr 被 add 直接丢掉了。一条认法太窄的可达性判据
 				// 会「报红得多」，看着像收紧，其实是把没接线的和接线了的混在一起靠运气分。
-				if id, ok := x.Type.(*ast.Ident); ok && (id.Name == "errStatusTable" || id.Name == "errStatusEntry") {
+				// 名字在 #1445 P0-B 随骨架搬到 pkg/httpx 并导出首位：表字面量的类型从裸标识符
+				// `errStatusTable` 变成限定名 `httpx.ErrStatusTable`（SelectorExpr）——只认 Ident
+				// 会让这条判据静默匹配 0 处（下方 len(out) < 50 的防空转把它抓成红，本批即如此）。
+				if n := compositeLitTypeName(x.Type); n == "ErrStatusTable" || n == "ErrStatusEntry" {
 					ast.Inspect(x, func(n ast.Node) bool {
 						if sel, ok := n.(*ast.SelectorExpr); ok {
 							add(sel)
@@ -492,6 +497,18 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 			"（实测基线 100+：errStatusTable 子树里的选择器 99 种 + errors.Is 实参 5 种）", len(out))
 	}
 	return out
+}
+
+// compositeLitTypeName 取复合字面量的类型名：裸标识符（本包类型）与限定名（搬去 pkg/httpx 之后）
+// 都要认 —— 只认一种写法的判据会在搬家后静默匹配 0 处。
+func compositeLitTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		return t.Sel.Name
+	}
+	return ""
 }
 
 // identifierWiredIntoErrorFace 问「这枚哨兵是不是某个端点错误面的一部分」。

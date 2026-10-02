@@ -1,5 +1,5 @@
 // 契约测（ADR-0062 票9）：同一批积分哨兵在三个兑换面上必须同一个码。
-// seam S1（HTTP 契约层）。旧形状：/points/* 走 pointsErrStatus（积分不足/已兑换 → 400），
+// seam S1（HTTP 契约层）。旧形状：/points/* 走 points.ErrStatus（积分不足/已兑换 → 400），
 // 而 /real-exam/papers/:id/redeem 挂 errStatusAll(404) ⇒ 同一事件两处不同码，
 // 消费端只能靠 message 文案猜语义（前端据此弹过「已解锁本卷」的成功提示）。
 package api
@@ -42,7 +42,7 @@ func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
 	recCourse := doWithToken(t, r, token, http.MethodPost, "/api/points/shop/course/1/redeem", nil)
 
 	if recCourse.Code != http.StatusBadRequest {
-		t.Fatalf("课程兑换的积分族错误应 400（pointsErrStatus 现状）, got %d %s", recCourse.Code, recCourse.Body.String())
+		t.Fatalf("课程兑换的积分族错误应 400（points.ErrStatus 现状）, got %d %s", recCourse.Code, recCourse.Body.String())
 	}
 	if recPaper.Code != recCourse.Code {
 		t.Fatalf("同一事件两处不同码：real-exam=%d points=%d（%s）",

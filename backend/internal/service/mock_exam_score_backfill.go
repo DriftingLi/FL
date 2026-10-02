@@ -2,8 +2,11 @@
 package service
 
 import (
+	"encoding/json"
+
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 )
 
@@ -73,7 +76,7 @@ func rewriteMockExamDerivedScore(exam *model.MockExam) (changed bool, hasFacts b
 		return false, false
 	}
 	var payload map[string]any
-	if err := jsonUnmarshal(exam.Result, &payload); err != nil || payload == nil {
+	if err := json.Unmarshal(exam.Result, &payload); err != nil || payload == nil {
 		return false, false
 	}
 	rawDetails, ok := payload["details"].([]any)
@@ -87,30 +90,30 @@ func rewriteMockExamDerivedScore(exam *model.MockExam) (changed bool, hasFacts b
 		if !ok {
 			continue
 		}
-		best := toFloat(detail["score"])
-		if aiScore, exists := detail["ai_score"]; exists && toFloat(aiScore) > best {
-			best = toFloat(aiScore)
+		best := coerce.ToFloat(detail["score"])
+		if aiScore, exists := detail["ai_score"]; exists && coerce.ToFloat(aiScore) > best {
+			best = coerce.ToFloat(aiScore)
 		}
-		if toFloat(detail["score"]) != best {
+		if coerce.ToFloat(detail["score"]) != best {
 			detail["score"] = best
 			changed = true
 		}
 		total += best
 	}
 
-	if toFloat(payload["total_score"]) != total {
+	if coerce.ToFloat(payload["total_score"]) != total {
 		payload["total_score"] = total
 		changed = true
 	}
 	if exam.Score == nil || *exam.Score != total {
-		exam.Score = floatPtr(total)
+		exam.Score = coerce.FloatPtr(total)
 		changed = true
 	}
 	if !changed {
 		return false, true
 	}
 
-	buf, err := jsonMarshal(payload)
+	buf, err := json.Marshal(payload)
 	if err != nil {
 		// 序列化失败：本行回滚成「不动」（changed/字段都还没被外层写库，因为外层只读改写后的值）
 		return false, false

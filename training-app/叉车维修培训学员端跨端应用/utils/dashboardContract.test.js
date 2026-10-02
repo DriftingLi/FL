@@ -141,9 +141,9 @@ describe('credential 域收紧（dashboard 证件切换数据源）', () => {
 
 /* ══ 幻影路由锁（#662 口径，先例 coursesContract / resumeContract）══ */
 describe('幻影路由锁（#662）：credential 域路由必须落在后端已注册清单内（#1349 新建）', () => {
-  /** 后端注册面：training_catalog.go 学员端段直接挂 `rg.`（无子组前缀） */
+  /** 后端注册面：internal/training/handler_credential.go 学员端段直接挂 `rg.`（无子组前缀；随 P2 波 3b-2 搬包） */
   function registeredCredentialRoutes() {
-    const go = stripComments(read('../../backend/internal/api/training_catalog.go'));
+    const go = stripComments(read('../../backend/internal/training/handler_credential.go'));
     return [...go.matchAll(/\brg\.(GET|POST|PUT|PATCH|DELETE)\("([^"]+)"/g)]
       .map((m) => `${m[1]} ${m[2]}`);
   }

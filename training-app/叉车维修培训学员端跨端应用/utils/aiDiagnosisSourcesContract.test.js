@@ -342,7 +342,7 @@ describe('#988 诊断来源资料消费契约', () => {
 
     // ── #1279：20260921 第二根（中文案例目录）与 `| 描述:` 后缀的产物形状 ──────────
     it('⑦d 产物形状：中文案例目录逐段转义后 == 2026-09-24 直连生产 200 的那条 URL', () => {
-      // 来源正文经后端换形后长这样（逐字取自 `ai_diagnosis_wire_fixture_test.go:156`）：
+      // 来源正文经后端换形后长这样（逐字取自 `diagnosis_wire_fixture_test.go:160`）：
       //   `<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png>>`
       // strip 之后留给代理的是**带根**形状 `fault_images/<中文目录>/<文件名>` —— 后端
       // `resolveStaticSubpath` 的 staticRoots 认它（绝对形状一律拒）。

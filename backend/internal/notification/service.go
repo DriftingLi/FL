@@ -1,0 +1,369 @@
+// Package notification 站内信通知域：站内信写入、事件构造器与列表/已读接口。
+//
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，
+// service.go / events.go 是域实现，包内分层靠文件名而非子目录。
+// 本文件：站内信通知写入与读取（P0 通知基础设施，当前仅站内信渠道）。
+package notification
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/model"
+	"forklift-training/internal/timefmt"
+	"forklift-training/pkg/paging"
+	"forklift-training/pkg/response"
+)
+
+// NotificationDTO 站内信通知展示对象。
+// Payload 为结构化业务标记（JSONB，加性字段，如 review_status），旧契约字段不变。
+type NotificationDTO struct {
+	ID      int64  `json:"id"`
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Link    string `json:"link"`
+	// Payload 站内信结构化标记（JSONB 落库 payload）。ADR-0048 决策 6：非响应面不定型，
+	// 故用 swaggertype 钉成不透明 object（生成物渲染 Record<string, unknown>），
+	// 具体键的形状（review_status / topic_id / reply_id / points / reason）由前端 UI 收窄类型声明。
+	Payload   model.JSONB `json:"payload,omitempty" swaggertype:"object" extensions:"x-optional"`
+	IsRead    bool        `json:"is_read"`
+	CreatedAt string      `json:"created_at"`
+	ReadAt    *string     `json:"read_at,omitempty" extensions:"x-optional"`
+}
+
+// GormCreator 通知写入执行器（*gorm.DB 与 *gorm.Tx 均满足，事务内写入用）。
+type GormCreator interface {
+	Create(value interface{}) *gorm.DB
+}
+
+// Service 站内信通知服务。
+type Service struct {
+	db *gorm.DB
+
+	logger *zap.Logger
+}
+
+// NewService 构造通知服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
+}
+
+// Create 创建一条站内信通知（payload 为可选结构化标记，nil 表示无）。
+func (s *Service) Create(userID int, typ, title, content, link string, payload model.JSONB) error {
+	return s.CreateWithTx(s.db, userID, typ, title, content, link, payload, time.Now())
+}
+
+// CreateWithTx 在指定事务/连接内创建站内信。
+// 业务事件（如资料审核）与业务写同事务提交，避免通知丢失；createdAt 由调用方控制时区语义。
+func (s *Service) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, payload model.JSONB, createdAt time.Time) error {
+	n := model.Notification{
+		UserID:    userID,
+		Type:      typ,
+		Title:     title,
+		Content:   content,
+		Link:      link,
+		Payload:   payload,
+		CreatedAt: createdAt,
+	}
+	return tx.Create(&n).Error
+}
+
+// 论坛采纳通知类型（#369）。
+const (
+	NotifTypeForumAcceptAnswerer = "forum_accept_answerer" // 答主：你的回答被采纳 +40
+	NotifTypeForumAcceptOwner    = "forum_accept_owner"    // 楼主：你采纳了答案 +5
+)
+
+// forumTopicPayload 构造论坛事件通知结构化标记（{"topic_id": N}），
+// 供前端/移动端确定性定位帖子（不依赖 link 文案解析）。
+func forumTopicPayload(topicID int64) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64 `json:"topic_id"`
+	}{TopicID: topicID})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// forumAcceptPayload 构造采纳事件结构化标记（topic_id + reply_id + points + reason），
+// 加性扩展 forumTopicPayload，不依赖标题文案判定（#369）。
+func forumAcceptPayload(topicID, replyID int64, points int, reason string) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64  `json:"topic_id"`
+		ReplyID int64  `json:"reply_id"`
+		Points  int    `json:"points"`
+		Reason  string `json:"reason"`
+	}{TopicID: topicID, ReplyID: replyID, Points: points, Reason: reason})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// ForumAcceptEvent 问答采纳事件通知参数（ADR-0024 C3）：站内信域单点构造
+// title/content/link/payload 口径，业务侧一行触发。
+type ForumAcceptEvent struct {
+	// UserID 收件人（答主或楼主）。
+	UserID int
+	// Type 通知类型：NotifTypeForumAcceptAnswerer / NotifTypeForumAcceptOwner。
+	Type string
+	// TopicTitle 问答标题（用于文案）。
+	TopicTitle string
+	// TopicID 主题 ID。
+	TopicID int64
+	// ReplyID 被采纳回复 ID。
+	ReplyID int64
+	// Points 到账分值（与实际入账一致）。
+	Points int
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
+	Reason string
+}
+
+// answererAcceptTitle 答主被采纳标题。
+const answererAcceptTitle = "你的回答被采纳"
+
+// ownerAcceptTitle 楼主采纳动作标题。
+const ownerAcceptTitle = "你采纳了答案"
+
+// NewAnswererAcceptEvent 构造答主被采纳通知事件（+40 分到账，link 锚到回答）。
+// reason 由调用方传入（与同一事务入账的流水原因同源；流水原因归积分/论坛域所有，站内信只记录它）。
+func NewAnswererAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int, reason string) ForumAcceptEvent {
+	return ForumAcceptEvent{
+		UserID:     userID,
+		Type:       NotifTypeForumAcceptAnswerer,
+		TopicTitle: topicTitle,
+		TopicID:    topicID,
+		ReplyID:    replyID,
+		Points:     points,
+		Reason:     reason,
+	}
+}
+
+// NewOwnerAcceptEvent 构造楼主采纳动作通知事件（+5 分到账，link 锚到回答）。
+// reason 由调用方传入（同 NewAnswererAcceptEvent）。
+func NewOwnerAcceptEvent(userID int, topicTitle string, topicID, replyID int64, points int, reason string) ForumAcceptEvent {
+	return ForumAcceptEvent{
+		UserID:     userID,
+		Type:       NotifTypeForumAcceptOwner,
+		TopicTitle: topicTitle,
+		TopicID:    topicID,
+		ReplyID:    replyID,
+		Points:     points,
+		Reason:     reason,
+	}
+}
+
+// CreateForumAcceptEvent 在指定事务/连接内创建一条问答采纳事件站内信。
+// 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
+func (s *Service) CreateForumAcceptEvent(tx GormCreator, ev ForumAcceptEvent, createdAt time.Time) error {
+	link := fmt.Sprintf("/training/forum/%d#reply-%d", ev.TopicID, ev.ReplyID)
+	title := answererAcceptTitle
+	if ev.Type == NotifTypeForumAcceptOwner {
+		title = ownerAcceptTitle
+	}
+	content := fmt.Sprintf("你在问答「%s」中的回答被采纳，+%d 分已到账", ev.TopicTitle, ev.Points)
+	if ev.Type == NotifTypeForumAcceptOwner {
+		content = fmt.Sprintf("你在问答「%s」中采纳了回答，+%d 分已到账", ev.TopicTitle, ev.Points)
+	}
+	return s.CreateWithTx(tx, ev.UserID, ev.Type, title, content, link, forumAcceptPayload(ev.TopicID, ev.ReplyID, ev.Points, ev.Reason), createdAt)
+}
+
+// 论坛加精通知类型（#742）。
+const (
+	NotifTypeForumFeatured = "forum_featured" // 帖主：帖子被加精 / 被认定为备考经验，+30（ADR-0040 两种认定共用同一类型与流水）
+)
+
+// forumFeaturedPayload 构造加精事件结构化标记（topic_id + points + reason）。
+func forumFeaturedPayload(topicID int64, points int, reason string) model.JSONB {
+	b, err := json.Marshal(struct {
+		TopicID int64  `json:"topic_id"`
+		Points  int    `json:"points"`
+		Reason  string `json:"reason"`
+	}{TopicID: topicID, Points: points, Reason: reason})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// 认定类型（ADR-0040）：加精与「认定备考经验」共用同一笔 featured_bonus 流水，
+// 但**文案必须区分**——把「被认定为备考经验」写成「被加精」会让帖主看不懂发生了什么。
+const (
+	DesignationFeatured   = "featured"   // 精选位认定
+	DesignationExperience = "experience" // 备考经验认定（蕴含精选）
+)
+
+// ForumFeaturedEvent 帖子认定事件通知参数（ADR-0024 C3，#742 / ADR-0040）。
+type ForumFeaturedEvent struct {
+	// UserID 收件人（帖主）。
+	UserID int
+	// TopicTitle 帖子标题（用于文案）。
+	TopicTitle string
+	// TopicID 主题 ID。
+	TopicID int64
+	// Points 到账分值（与实际入账一致）。
+	Points int
+	// Reason 流水原因（由调用方传入：它是积分域的流水事实，站内信只把它记进 payload）。
+	Reason string
+	// Designation 认定类型（DesignationFeatured | DesignationExperience），决定文案。
+	Designation string
+}
+
+// NewTopicFeaturedEvent 构造**加精**通知事件（+30 分到账，link 锚到帖子）。
+// reason 由调用方传入（与同一事务入账的流水原因同源）。
+func NewTopicFeaturedEvent(userID int, topicTitle string, topicID int64, points int, reason string) ForumFeaturedEvent {
+	return ForumFeaturedEvent{
+		UserID:      userID,
+		TopicTitle:  topicTitle,
+		TopicID:     topicID,
+		Points:      points,
+		Reason:      reason,
+		Designation: DesignationFeatured,
+	}
+}
+
+// NewTopicExperienceEvent 构造**认定备考经验**通知事件（同一笔 +30，文案不同）。
+// 与 NewTopicFeaturedEvent 拆成两个构造函数，遵 ADR-0027 C1「每个业务事件一个构造函数」：
+// 流水 reason 相同不代表业务事件相同，文案口径内聚在站内信域，业务方一行触发。
+func NewTopicExperienceEvent(userID int, topicTitle string, topicID int64, points int, reason string) ForumFeaturedEvent {
+	return ForumFeaturedEvent{
+		UserID:      userID,
+		TopicTitle:  topicTitle,
+		TopicID:     topicID,
+		Points:      points,
+		Reason:      reason,
+		Designation: DesignationExperience,
+	}
+}
+
+// CreateTopicFeaturedEvent 在指定事务/连接内创建一条帖子认定事件站内信。
+// 与积分入账同事务提交/回滚（ADR-0023）：通知与到账积分一致。
+func (s *Service) CreateTopicFeaturedEvent(tx GormCreator, ev ForumFeaturedEvent, createdAt time.Time) error {
+	link := fmt.Sprintf("/training/forum/%d", ev.TopicID)
+	var title, content string
+	switch ev.Designation {
+	case DesignationExperience:
+		title = "你的帖子被认定为备考经验"
+		content = fmt.Sprintf("你的帖子「%s」已被认定为备考经验并进入经验区，+%d 分已到账", ev.TopicTitle, ev.Points)
+	default:
+		title = "你的帖子被加精"
+		content = fmt.Sprintf("你的帖子「%s」被加精精选，+%d 分已到账", ev.TopicTitle, ev.Points)
+	}
+	return s.CreateWithTx(tx, ev.UserID, NotifTypeForumFeatured, title, content, link, forumFeaturedPayload(ev.TopicID, ev.Points, ev.Reason), createdAt)
+}
+
+// reviewStatusPayload 构造审核状态结构化标记，如 {"review_status":"approved"}。
+func reviewStatusPayload(reviewStatus string) model.JSONB {
+	b, err := json.Marshal(struct {
+		ReviewStatus string `json:"review_status"`
+	}{ReviewStatus: reviewStatus})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
+// NotificationListPageResult 站内信分页结果（含未读数）。
+type NotificationListPageResult struct {
+	Items       []NotificationDTO `json:"items" nullability:"nonnil"`
+	Page        int               `json:"page"`
+	Pages       int               `json:"pages"`
+	Total       int64             `json:"total"`
+	UnreadCount int64             `json:"unread_count"`
+}
+
+// NotificationUnreadCountDTO 未读通知数（spec #962 片四：收口自 handler 内联 gin.H）。
+type NotificationUnreadCountDTO struct {
+	Count int64 `json:"count"`
+}
+
+// List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。
+func (s *Service) List(userID int, page, pageSize int) (*NotificationListPageResult, error) {
+	var unread int64
+	if err := s.db.Model(&model.Notification{}).
+		Where("user_id = ? AND is_read = ?", userID, false).Count(&unread).Error; err != nil {
+		return nil, err
+	}
+
+	rows, total, page, pageSize, err := paging.QueryWithScan[model.Notification](s.db, page, pageSize, 10, 50,
+		"id DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Model(&model.Notification{}).Where("user_id = ?", userID)
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]NotificationDTO, 0, len(rows))
+	for i := range rows {
+		items = append(items, toNotificationDTO(&rows[i]))
+	}
+	return &NotificationListPageResult{
+		Items:       items,
+		Page:        page,
+		Pages:       response.PageCount(total, pageSize),
+		Total:       total,
+		UnreadCount: unread,
+	}, nil
+}
+
+// UnreadCount 查询当前用户未读通知数。
+func (s *Service) UnreadCount(userID int) (int64, error) {
+	var count int64
+	err := s.db.Model(&model.Notification{}).
+		Where("user_id = ? AND is_read = ?", userID, false).
+		Count(&count).Error
+	return count, err
+}
+
+// MarkRead 将单条通知标记为已读（仅限本人；已读或不存在均幂等成功，非本人报错）。
+func (s *Service) MarkRead(userID int, id int64) error {
+	res := s.db.Model(&model.Notification{}).
+		Where("id = ? AND user_id = ? AND is_read = ?", id, userID, false).
+		Updates(map[string]any{"is_read": true, "read_at": time.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		return nil
+	}
+	// 未更新：校验是否属于本人（不存在或已读都返回成功，保持幂等）
+	var count int64
+	if err := s.db.Model(&model.Notification{}).
+		Where("id = ? AND user_id = ?", id, userID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("通知不存在")
+	}
+	return nil
+}
+
+// MarkAllRead 将当前用户全部未读通知标记为已读。
+func (s *Service) MarkAllRead(userID int) error {
+	return s.db.Model(&model.Notification{}).
+		Where("user_id = ? AND is_read = ?", userID, false).
+		Updates(map[string]any{"is_read": true, "read_at": time.Now()}).Error
+}
+
+// toNotificationDTO 组装展示对象。
+func toNotificationDTO(n *model.Notification) NotificationDTO {
+	return NotificationDTO{
+		ID:        n.ID,
+		Type:      n.Type,
+		Title:     n.Title,
+		Content:   n.Content,
+		Link:      n.Link,
+		Payload:   n.Payload,
+		IsRead:    n.IsRead,
+		CreatedAt: timefmt.FormatISO(n.CreatedAt),
+		ReadAt:    timefmt.FormatTimePtr(n.ReadAt),
+	}
+}

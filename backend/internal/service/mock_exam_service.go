@@ -2,13 +2,21 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
+	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
@@ -30,39 +38,39 @@ const mockExamAbandonTTL = 24 * time.Hour
 // MockExamService 模拟考试服务。
 type MockExamService struct {
 	db *gorm.DB
-	ai *AIService
-	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 PracticeModeService.grader）。
+	ai *aiassistant.GenerationService
+	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 practicemode.Service.grader）。
 	// nil 时简答降级：不进 AI 分，Earned 记 0（ADR-0068 决策 1）。测试可注入 fake。
-	grader ShortAnswerGrader
+	grader practicemode.ShortAnswerGrader
 
 	logger *zap.Logger
 }
 
 // NewMockExamService 创建模拟考试服务实例。
-func NewMockExamService(db *gorm.DB, ai *AIService, logger *zap.Logger) *MockExamService {
-	return &MockExamService{db: db, ai: ai, grader: shortAnswerGraderOf(ai), logger: logger}
+func NewMockExamService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *MockExamService {
+	return &MockExamService{db: db, ai: ai, grader: practicemode.ShortAnswerGraderOf(ai), logger: logger}
 }
 
 // ===== DTO（JSON 契约与 B6 前的 map key 逐字一致，前端零改动约束）=====
 
 // MockExamStartDTO 开始模拟考试返回。
 type MockExamStartDTO struct {
-	MockExamID     int           `json:"mock_exam_id"`
-	Duration       int           `json:"duration"`
-	TotalScore     int           `json:"total_score"`
-	TotalQuestions int           `json:"total_questions"`
-	RemainingTime  int           `json:"remaining_time"`
-	Questions      []QuestionDTO `json:"questions" nullability:"nonnil"`
+	MockExamID     int                        `json:"mock_exam_id"`
+	Duration       int                        `json:"duration"`
+	TotalScore     int                        `json:"total_score"`
+	TotalQuestions int                        `json:"total_questions"`
+	RemainingTime  int                        `json:"remaining_time"`
+	Questions      []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
 }
 
 // MockExamResumeDTO 恢复考试返回。
 type MockExamResumeDTO struct {
-	MockExamID    int           `json:"mock_exam_id"`
-	Duration      int           `json:"duration"`
-	RemainingTime int           `json:"remaining_time"`
-	Questions     []QuestionDTO `json:"questions" nullability:"nonnil"`
-	Answers       any           `json:"answers"`
-	StartTime     string        `json:"start_time"`
+	MockExamID    int                        `json:"mock_exam_id"`
+	Duration      int                        `json:"duration"`
+	RemainingTime int                        `json:"remaining_time"`
+	Questions     []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
+	Answers       any                        `json:"answers"`
+	StartTime     string                     `json:"start_time"`
 }
 
 // MockExamAnswerDetailDTO 交卷逐题明细。
@@ -143,7 +151,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		duration = 90
 	}
 
-	selected, err := sampleQuestions(s.db, "", count, credentialID)
+	selected, err := questionbank.SampleQuestions(s.db, "", count, credentialID)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -155,7 +163,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 	// 失败不阻断主流程：清理只是数据卫生，用户此刻要的是「开始考试」。
 	if err := s.db.
 		Where("student_id = ? AND status <> ? AND created_at < ?",
-			studentID, mockExamStatusSubmitted, beijingNow().Add(-mockExamAbandonTTL)).
+			studentID, mockExamStatusSubmitted, clock.Now().Add(-mockExamAbandonTTL)).
 		Delete(&model.MockExam{}).Error; err != nil {
 		s.logger.Warn("清理废弃模拟考试记录失败",
 			zap.Int("student_id", studentID), zap.Error(err))
@@ -168,9 +176,9 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		totalScore += int(mockExamMaxScore(&q))
 	}
 
-	idsJSON, _ := jsonMarshal(questionIDs)
-	emptyJSON, _ := jsonMarshal(map[string]any{})
-	startTime := beijingNow()
+	idsJSON, _ := json.Marshal(questionIDs)
+	emptyJSON, _ := json.Marshal(map[string]any{})
+	startTime := clock.Now()
 	mock := model.MockExam{
 		StudentID: studentID,
 		// 抽题与落库共用同一个值（#1003）：不两处各算。
@@ -186,9 +194,9 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		return nil, err
 	}
 
-	ordered := make([]QuestionDTO, 0, len(selected))
+	ordered := make([]questionbank.QuestionDTO, 0, len(selected))
 	for i := range selected {
-		ordered = append(ordered, newQuestionDTO(&selected[i], false))
+		ordered = append(ordered, questionbank.NewQuestionDTO(&selected[i], false))
 	}
 	return &MockExamStartDTO{
 		MockExamID:     mock.ID,
@@ -211,7 +219,7 @@ func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[st
 			return m, db.First(&m, mockExamID).Error
 		},
 		guard: func(m model.MockExam) error {
-			return guardOwnedInProgress(m.StudentID, m.Status, studentID, "无权操作此考试", "考试不在进行中")
+			return practicemode.GuardOwnedInProgress(m.StudentID, m.Status, studentID, "无权操作此考试", "考试不在进行中")
 		},
 		write: func(m *model.MockExam, snapshot model.JSONB, rt int) {
 			m.Answers = snapshot
@@ -229,23 +237,23 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 		}
 		return nil, err
 	}
-	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
+	if err := practicemode.GuardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
 		return nil, err
 	}
 
 	var ids []int
 	if len(mock.QuestionIDs) > 0 {
-		_ = jsonUnmarshal(mock.QuestionIDs, &ids)
+		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
-	ordered, _ := loadOrderedQuestions(s.db, ids)
-	questions := make([]QuestionDTO, 0, len(ordered))
+	ordered, _ := practicemode.LoadOrderedQuestions(s.db, ids)
+	questions := make([]questionbank.QuestionDTO, 0, len(ordered))
 	for i := range ordered {
-		questions = append(questions, newQuestionDTO(&ordered[i], false))
+		questions = append(questions, questionbank.NewQuestionDTO(&ordered[i], false))
 	}
-	answers := answersMapRoundTrip(mock.Answers)
+	answers := practicemode.AnswersMapRoundTrip(mock.Answers)
 	startISO := ""
 	if mock.StartTime != nil {
-		startISO = formatISO(*mock.StartTime)
+		startISO = timefmt.FormatISO(*mock.StartTime)
 	}
 	return &MockExamResumeDTO{
 		MockExamID:    mock.ID,
@@ -266,23 +274,23 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		}
 		return nil, err
 	}
-	if err := guardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
+	if err := practicemode.GuardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
 		return nil, err
 	}
 
-	answersMap := answersMapRoundTrip(mock.Answers)
+	answersMap := practicemode.AnswersMapRoundTrip(mock.Answers)
 	var ids []int
 	if len(mock.QuestionIDs) > 0 {
-		_ = jsonUnmarshal(mock.QuestionIDs, &ids)
+		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
-	_, qMap := loadOrderedQuestions(s.db, ids)
+	_, qMap := practicemode.LoadOrderedQuestions(s.db, ids)
 
-	engine := newGradingEngine(s.db)
-	flow := gradingFlow{
-		ai:       s.grader,
-		maxScore: mockExamMaxScore,
+	engine := practicemode.NewGradingEngine(s.db)
+	flow := practicemode.GradingFlow{
+		AI:       s.grader,
+		MaxScore: mockExamMaxScore,
 	}
-	results := engine.gradeSet(flow, qMap, ids, answersMap, studentID)
+	results := engine.GradeSet(flow, qMap, ids, answersMap, studentID)
 
 	totalScore := 0.0
 	maxScore := 0.0
@@ -313,7 +321,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		}
 		var options interface{}
 		if len(question.Options) > 0 {
-			_ = jsonUnmarshal(question.Options, &options)
+			_ = json.Unmarshal(question.Options, &options)
 		}
 		detail.Options = options
 
@@ -330,12 +338,12 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	}
 
 	mock.Status = mockExamStatusSubmitted
-	submitTime := beijingNow()
+	submitTime := clock.Now()
 	mock.SubmitTime = &submitTime
-	mock.Score = floatPtr(totalScore)
+	mock.Score = coerce.FloatPtr(totalScore)
 	accuracy := 0.0
 	if len(ids) > 0 {
-		accuracy = roundFloat1(float64(correctCount) / float64(len(ids)) * 100)
+		accuracy = coerce.RoundFloat1(float64(correctCount) / float64(len(ids)) * 100)
 	}
 	result := MockExamSubmitDTO{
 		TotalScore:     totalScore,
@@ -345,7 +353,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		Accuracy:       accuracy,
 		Details:        details,
 	}
-	resultJSON, _ := jsonMarshal(result)
+	resultJSON, _ := json.Marshal(result)
 	mock.Result = model.JSONB(resultJSON)
 	if err := s.db.Save(&mock).Error; err != nil {
 		return nil, err
@@ -367,11 +375,11 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 	}
 	var result MockExamSubmitDTO
 	if len(mock.Result) > 0 {
-		_ = jsonUnmarshal(mock.Result, &result)
+		_ = json.Unmarshal(mock.Result, &result)
 	}
 	submitISO := ""
 	if mock.SubmitTime != nil {
-		submitISO = formatISO(*mock.SubmitTime)
+		submitISO = timefmt.FormatISO(*mock.SubmitTime)
 	}
 	return &MockExamResultDTO{
 		MockExamSubmitDTO: result,
@@ -390,7 +398,7 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
 	exams, total, page, pageSize, err := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
-		q = RecordPartitionOf(q, "credential_id", credentialID)
+		q = scope.RecordPartitionOf(q, "credential_id", credentialID)
 		return q
 	})
 	if err != nil {
@@ -414,27 +422,27 @@ func mockExamMaxScore(q *model.Question) float64 {
 	if q.Score > 0 {
 		return float64(q.Score)
 	}
-	return questionMaxScore("mock_exam", q.Type)
+	return questionbank.QuestionMaxScore("mock_exam", q.Type)
 }
 
 // mockExamToDTO 历史条目构造（原 mockExamToDict 折叠入内）。
 func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 	var ids, answers, result any
 	if len(m.QuestionIDs) > 0 {
-		_ = jsonUnmarshal(m.QuestionIDs, &ids)
+		_ = json.Unmarshal(m.QuestionIDs, &ids)
 	}
 	if len(m.Answers) > 0 {
-		_ = jsonUnmarshal(m.Answers, &answers)
+		_ = json.Unmarshal(m.Answers, &answers)
 	}
 	if len(m.Result) > 0 {
-		_ = jsonUnmarshal(m.Result, &result)
+		_ = json.Unmarshal(m.Result, &result)
 	}
 	startISO, submitISO := "", ""
 	if m.StartTime != nil {
-		startISO = formatISO(*m.StartTime)
+		startISO = timefmt.FormatISO(*m.StartTime)
 	}
 	if m.SubmitTime != nil {
-		submitISO = formatISO(*m.SubmitTime)
+		submitISO = timefmt.FormatISO(*m.SubmitTime)
 	}
 	return MockExamHistoryItemDTO{
 		ID:            m.ID,
@@ -447,7 +455,7 @@ func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 		Duration:      m.Duration,
 		Status:        m.Status,
 		Result:        result,
-		CreatedAt:     formatISO(m.CreatedAt),
+		CreatedAt:     timefmt.FormatISO(m.CreatedAt),
 		Score:         m.Score,
 		PaperID:       m.PaperID,
 	}

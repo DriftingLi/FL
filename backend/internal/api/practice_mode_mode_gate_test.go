@@ -12,9 +12,12 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 // TestSearchQuestionExcludesSourceTagged 搜索 question 分区走题库池口径：
@@ -23,15 +26,15 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	t.Parallel()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	catalogSvc := service.NewTrainingCatalogService(db, nil)
-	qsvc := service.NewQuestionBankService(db, nil, nil)
+	catalogSvc := training.NewService(db, nil)
+	qsvc := questionbank.NewService(db, nil, nil)
 
-	srcTag, _ := catalogSvc.CreateQuestionTag(service.QuestionTagInput{Code: "real_exam", Name: "真题"})
+	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}
 	mk := func(tagIDs []int, content string) {
-		q, err := qsvc.CreateQuestion(service.QuestionCreateInput{
+		q, err := qsvc.CreateQuestion(questionbank.QuestionCreateInput{
 			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 			TagIDs: tagIDs,
 		}, nil, "tutor")
@@ -92,7 +95,7 @@ func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
+	practicemode.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.PracticeModeSvc)
 
 	student := model.HrwaiUser{Account: "mode_gate_user", Phone: "13800000999", Username: "学员", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&student).Error; err != nil {

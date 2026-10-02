@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
@@ -57,31 +58,31 @@ func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Recr
 // 默认排序 updated_at DESC（service 层保证）；读写最新，无缓存；读取后审计留痕。
 func (h *RecruitHandler) ListResumes(c *gin.Context) {
 	params := service.RecruitListParams{
-		Page:        atoiDefault(c.Query("page"), 1),
-		PageSize:    atoiDefault(c.Query("page_size"), 20),
+		Page:        httpx.QueryIntDefault(c, "page", 1),
+		PageSize:    httpx.QueryIntDefault(c, "page_size", 20),
 		Region:      c.Query("region"),
 		AvailableIn: c.Query("available_in"),
 		JobNature:   c.Query("job_nature"),
 	}
-	if v := queryIDPtr(c, "position_id"); v != nil {
+	if v := httpx.QueryIDPtr(c, "position_id"); v != nil {
 		params.PositionID = v
 	}
-	if v := queryIDPtr(c, "credential_id"); v != nil {
+	if v := httpx.QueryIDPtr(c, "credential_id"); v != nil {
 		params.CredentialID = v
 	}
-	if v := queryIntPtr(c, "salary_min"); v != nil {
+	if v := httpx.QueryIntPtr(c, "salary_min"); v != nil {
 		params.SalaryMin = v
 	}
-	if v := queryIntPtr(c, "salary_max"); v != nil {
+	if v := httpx.QueryIntPtr(c, "salary_max"); v != nil {
 		params.SalaryMax = v
 	}
-	if v := queryIntPtr(c, "experience_years"); v != nil {
+	if v := httpx.QueryIntPtr(c, "experience_years"); v != nil {
 		params.ExperienceYears = v
 	} else {
-		if v := queryIntPtr(c, "experience_min"); v != nil {
+		if v := httpx.QueryIntPtr(c, "experience_min"); v != nil {
 			params.ExperienceMin = v
 		}
-		if v := queryIntPtr(c, "experience_max"); v != nil {
+		if v := httpx.QueryIntPtr(c, "experience_max"); v != nil {
 			params.ExperienceMax = v
 		}
 	}
@@ -118,7 +119,7 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 // @Router /recruit/resumes/{id} [get]
 // 与列表共用同一脱敏实现（service 层 desensitize），不存在两套逻辑；隐藏卡 404。
 func (h *RecruitHandler) GetResume(c *gin.Context) {
-	uid, err := pathInt(c, "id", "简历 ID 无效")
+	uid, err := httpx.PathInt(c, "id", "简历 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -149,7 +150,7 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 // 响应形状是 service.RecruitMeDTO —— **不是** /auth/me 的 ProfileDTO（只回 3 个字段）；
 // #954 片二把它从裸 handler 迁到 Endpoint 骨架，与其余端点同一条守卫链。
 func recruitMe(c *gin.Context) {
-	Endpoint[struct{}, service.RecruitMeDTO]{
+	httpx.Endpoint[struct{}, service.RecruitMeDTO]{
 		Invoke: func(_ context.Context, _ *struct{}) (*service.RecruitMeDTO, error) {
 			return &service.RecruitMeDTO{
 				UserID:  middleware.CurrentUserID(c),

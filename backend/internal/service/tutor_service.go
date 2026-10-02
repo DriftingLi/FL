@@ -9,6 +9,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
+	"forklift-training/internal/course"
+	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 )
 
@@ -16,27 +19,27 @@ import (
 type TutorService struct {
 	db            *gorm.DB
 	uploadFolder  string
-	fileStore     *FileStore
-	slideRenderer *SlideRenderer
+	fileStore     *filestore.FileStore
+	slideRenderer *course.SlideRenderer
 
 	logger *zap.Logger
 }
 
 // NewTutorService 创建导师服务实例。
-func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *FileStore, slideRenderer *SlideRenderer, logger *zap.Logger) *TutorService {
+func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore, slideRenderer *course.SlideRenderer, logger *zap.Logger) *TutorService {
 	return &TutorService{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
 }
 
 // ErrChapterFileNotFound 章节文件行不存在（课程章节的附件，与「章节不存在」是两件事）。
-// 本文件的「课程/章节不存在」直接用课程域的唯一载体 ErrCourseNotFound / ErrChapterNotFound。
+// 本文件的「课程/章节不存在」直接用课程域的唯一载体 model.ErrCourseNotFound / course.ErrChapterNotFound。
 // （声明必须留在函数文档块之外：它一度夹在下面那条注释与 func 之间，把 godoc 抢走了 ——
 // 同形缺陷在 api 层会让整条 swagger 路由消失，见 4c488c3c。）
 var ErrChapterFileNotFound = errors.New("文件不存在")
 
 // GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级/证件，ADR-0012 §2），
 // 附学习学员数；实现收敛到课程列表 module（ListCourses）。
-func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) (CoursePageResult, error) {
-	return ListCourses(s.db, page, pageSize, CourseListOptions{
+func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) (course.CoursePageResult, error) {
+	return course.ListCourses(s.db, page, pageSize, course.CourseListOptions{
 		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
 		WithStudentCount: true, DefaultPageSize: 10,
 	})
@@ -44,11 +47,12 @@ func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID,
 
 // GetCourseChapters 导师章节列表（含文件）。
 // 文件列表批量装载（一次 IN 查询）消除逐章节 N+1。
-func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO, error) {
-	var course model.Course
-	if err := s.db.First(&course, courseID).Error; err != nil {
+func (s *TutorService) GetCourseChapters(courseID int) (*course.TutorCourseChaptersDTO, error) {
+	// 局部变量不叫 course：包名 course 已被课程域包占用（P2 波 3b-1）。
+	var c model.Course
+	if err := s.db.First(&c, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrCourseNotFound
+			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
@@ -59,25 +63,25 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 		return nil, err
 	}
 
-	filesByChapter := loadChapterFilesBulk(s.db, chapters)
-	resultChapters := make([]ChapterDTO, 0, len(chapters))
+	filesByChapter := course.LoadChapterFilesBulk(s.db, chapters)
+	resultChapters := make([]course.ChapterDTO, 0, len(chapters))
 	for i := range chapters {
 		ch := &chapters[i]
 		fileList := filesByChapter[ch.ChapterID]
 		// legacy 兼容：无 chapter_file 条目且 chapter.file_url 非空时折叠 legacy 条目
 		if len(fileList) == 0 && ch.FileURL != "" {
-			legacy := legacyFileEntry(ch)
-			fileList = []ChapterFileDTO{legacy}
+			legacy := course.LegacyFileEntry(ch)
+			fileList = []course.ChapterFileDTO{legacy}
 		}
 		if fileList == nil {
-			fileList = []ChapterFileDTO{}
+			fileList = []course.ChapterFileDTO{}
 		}
-		chDTO := chapterToDTO(ch)
+		chDTO := course.ChapterToDTO(ch)
 		chDTO.Files = &fileList
 		resultChapters = append(resultChapters, chDTO)
 	}
-	cd := courseToDTO(&course)
-	return &TutorCourseChaptersDTO{
+	cd := course.CourseToDTO(&c)
+	return &course.TutorCourseChaptersDTO{
 		Course:   cd,
 		Chapters: resultChapters,
 	}, nil
@@ -85,23 +89,23 @@ func (s *TutorService) GetCourseChapters(courseID int) (*TutorCourseChaptersDTO,
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表，供导师端编辑页使用）。
 // 实现收敛到共享章节详情 module；导师端不回填 study_status（fillStudyStatus=false）。
-func (s *TutorService) GetChapterDetail(chapterID int) (*ChapterDetailDTO, error) {
+func (s *TutorService) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrChapterNotFound
+			return nil, course.ErrChapterNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
-	return chapterDetailShared(s.db, &chapter, false, 0)
+	return course.ChapterDetailShared(s.db, &chapter, false, 0)
 }
 
 // UploadChapterFile 上传章节文件。
-func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*ChapterFileDTO, error) {
+func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*course.ChapterFileDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrChapterNotFound
+			return nil, course.ErrChapterNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
@@ -111,15 +115,15 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 	if s.fileStore == nil {
 		return nil, errors.New("文件服务不可用")
 	}
-	if !allowedFile(filename) {
+	if !filestore.AllowedFile(filename) {
 		return nil, errors.New("不支持的文件格式")
 	}
-	if !validateFileSize(int64(len(fileContent)), filename) {
+	if !filestore.ValidateFileSize(int64(len(fileContent)), filename) {
 		return nil, errors.New("文件大小超出限制")
 	}
 
-	contentType := fileContentType(filename)
-	fileURL, err := s.fileStore.Save(fileContent, filename, ChapterFileDirPrefix)
+	contentType := filestore.FileContentType(filename)
+	fileURL, err := s.fileStore.Save(fileContent, filename, filestore.ChapterFileDirPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("保存文件失败: %w", err)
 	}
@@ -130,7 +134,7 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 		FileName:    filename,
 		ContentType: contentType,
 		FileSize:    int64(len(fileContent)),
-		CreatedAt:   beijingNow(),
+		CreatedAt:   clock.Now(),
 	}
 	if err := s.db.Create(&chapterFile).Error; err != nil {
 		return nil, err
@@ -151,21 +155,21 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 		}
 	}
 
-	d := chapterFileToDTO(&chapterFile)
+	d := course.ChapterFileToDTO(&chapterFile)
 	return &d, nil
 }
 
 // UpdateChapterInfo 更新章节信息。
-func (s *TutorService) UpdateChapterInfo(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
+func (s *TutorService) UpdateChapterInfo(chapterID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrChapterNotFound
+			return nil, course.ErrChapterNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
 	if in == nil {
-		in = &ChapterInput{}
+		in = &course.ChapterInput{}
 	}
 	if in.Title != nil && *in.Title != "" {
 		chapter.Title = *in.Title
@@ -185,7 +189,7 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, in *ChapterInput) (*Chap
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
 	}
-	d := chapterToDTO(&chapter)
+	d := course.ChapterToDTO(&chapter)
 	return &d, nil
 }
 

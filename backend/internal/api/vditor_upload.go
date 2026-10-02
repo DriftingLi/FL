@@ -1,17 +1,13 @@
 // Package api 实现 HTTP handlers。
 // 本文件：Vditor 图片上传适配器——File 读取 → 校验 → 保存 → Vditor 信封响应的单点实现。
-// tutor.go 与 featured.go 的 UploadImage 只注入保存目标（saver）+ 各自差异，信封协议不再复制。
+// tutor.go 与 internal/featured/handler.go 的 UploadImage 只注入保存目标（saver）+ 各自差异，信封协议不再复制。
 package api
 
 import (
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/service"
+	"forklift-training/internal/filestore"
 )
-
-// vditorUploadSaver 上传保存目标：content → 返回可访问 URL。
-// tutor 按章节分目录存储（images/chapters/<id>），featured 存封面目录（SaveImage），差异经此 hook 注入。
-type vditorUploadSaver func(content []byte, filename string) (string, error)
 
 // vditorError 构造 Vditor 期望的错误响应体（协议单点：code=1 + errFiles/succMap 信封）。
 func vditorError(msg string, errFiles []string) gin.H {
@@ -21,7 +17,7 @@ func vditorError(msg string, errFiles []string) gin.H {
 // uploadVditorImage 统一的 Vditor 图片上传适配器。
 // 公共骨架：FormFile 读取 → 空文件名守卫 → Open/ReadAll → ValidateImage → 保存（saver 注入）→ 信封。
 // 返回 Vditor 期望格式：{ msg:"", code:0, data:{ errFiles:[], succMap:{"name":"url"} } }。
-func uploadVditorImage(c *gin.Context, fileSvc *service.FileStore, saver vditorUploadSaver) {
+func uploadVditorImage(c *gin.Context, fileSvc *filestore.FileStore, saver func(content []byte, filename string) (string, error)) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(200, vditorError("未找到上传文件", []string{}))
@@ -31,7 +27,7 @@ func uploadVditorImage(c *gin.Context, fileSvc *service.FileStore, saver vditorU
 		c.JSON(200, vditorError("未选择文件", []string{}))
 		return
 	}
-	content, err := service.ReadMultipartFile(file)
+	content, err := filestore.ReadMultipartFile(file)
 	if err != nil {
 		c.JSON(200, vditorError("文件读取失败", []string{file.Filename}))
 		return

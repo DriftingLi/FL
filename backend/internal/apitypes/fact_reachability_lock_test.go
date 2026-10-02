@@ -10,9 +10,12 @@ package apitypes
 import (
 	"go/ast"
 	"go/token"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // factTagKey 与 internal/api/consumption_fact_lock_test.go 里的 `fact` 是同一个 tag。
@@ -32,28 +35,33 @@ const factTagKey = "fact"
 // 的锁的判据（信封三个字段全是标量，对表态锁没有意义；残值 model 会新增一批要求表态的字段，
 // 那是另一件事、该另立一条决策）。两把锁的论域不同，就别共用一张清单——但两边各自加了什么，
 // 下面那条论域自检会把「闭包里有、清单里没扫」变成一条指名道姓的红。
-var factScopeDirs = []string{
-	"../api",
-	"../service",
-	"../model",
-	"../valuation/model",
-	"../valuation/repository",
-	"../../pkg/response",
-}
+// 目录宇宙来自 testutil.ResponsePackages()（模块根相对），与 internal/api 那把 tag 扫描锁**共用同一份**：
+// 两把锁的**论域**不同（这里比的是「投影位所在类型必须在 2xx 闭包里」，过滤条件与那边不同），
+// 但「哪些包可能承载响应类型」是同一件事 —— 各抄一份的结果是搬一次包要改两处、且两处会漂。
+var factScopeDirs = func() []string {
+	pkgs := testutil.ResponsePackages()
+	dirs := make([]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		dirs = append(dirs, p.Dir)
+	}
+	return dirs
+}()
 
 func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 	// 数一遍目录：论域自检比的是**前缀**，删掉 `../valuation/model` 它看不出来（下一段写这条盲区），
 	// 所以这里补一条「清单本身有几枚」的断言——与批⑤ 那条「pathInt* 名字族必须恰好两枚」同形。
 	// 加一枚目录时这条会红，逼着回来一起改数并想清楚为什么加。
-	if n := len(factScopeDirs); n != 6 {
-		t.Fatalf("fact 射程应是 6 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的两个目录），"+
+	if n := len(factScopeDirs); n != 21 {
+		t.Fatalf("fact 射程应是 21 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的两个目录），"+
 			"多了就回来把这条数和上面的注释一起改。", n, factScopeDirs)
 	}
 	closure := responseDefinitions(t)
 	scanned := map[string]bool{}
 	found := 0
+	root := testutil.ModuleRoot(t)
 	for _, dir := range factScopeDirs {
-		p, err := parsePackage(dir, false)
+		abs := filepath.Join(root, filepath.FromSlash(dir))
+		p, err := parsePackage(abs, false)
 		if err != nil {
 			t.Fatalf("读 fact 可达性扫描面 %s 失败: %v", dir, err)
 		}

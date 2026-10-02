@@ -1,0 +1,199 @@
+// 培训目录 typed surface：专业方向/课程等级/证书模板/题库标签的
+// Input 与 DTO 结构体（JSON 字段名与前端契约保持完全一致）。
+package training
+
+// SpecialtyInput 专业方向创建/更新入参。
+// 更新语义（与旧 map 接口一致）：Code/Name 为空表示不改动；指针字段为 nil 表示不改动。
+type SpecialtyInput struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	SortOrder   *int    `json:"sort_order"`
+	Status      *int16  `json:"status"`
+}
+
+// SpecialtyDict 专业方向字典（列表/创建/更新返回）。
+// 字段声明顺序与旧 map 字典的 JSON 键序（按键排序）一致，保证契约字节级不变。
+type SpecialtyDict struct {
+	Code        string `json:"code"`
+	CreatedAt   string `json:"created_at"`
+	Description string `json:"description"`
+	Name        string `json:"name"`
+	SortOrder   int    `json:"sort_order"`
+	SpecialtyID int    `json:"specialty_id"`
+	Status      int16  `json:"status"`
+}
+
+// LevelInput 课程等级创建/更新入参。
+type LevelInput struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	SortOrder   *int    `json:"sort_order"`
+	Status      *int16  `json:"status"`
+}
+
+// LevelDict 课程等级字典。
+type LevelDict struct {
+	Code        string `json:"code"`
+	CreatedAt   string `json:"created_at"`
+	Description string `json:"description"`
+	LevelID     int    `json:"level_id"`
+	Name        string `json:"name"`
+	SortOrder   int    `json:"sort_order"`
+	Status      int16  `json:"status"`
+}
+
+// CertificateTemplateInput 证书模板创建/更新入参。
+type CertificateTemplateInput struct {
+	Code         string  `json:"code"`
+	Name         string  `json:"name"`
+	Description  *string `json:"description"`
+	ValidityDays *int    `json:"validity_days"`
+	TemplateURL  *string `json:"template_url"`
+	Status       *int16  `json:"status"`
+}
+
+// CertificateTemplateDict 证书模板字典。
+type CertificateTemplateDict struct {
+	Code         string `json:"code"`
+	CreatedAt    string `json:"created_at"`
+	Description  string `json:"description"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Status       int16  `json:"status"`
+	TemplateURL  string `json:"template_url"`
+	UpdatedAt    string `json:"updated_at"`
+	ValidityDays int    `json:"validity_days"`
+}
+
+// QuestionTagInput 题库标签创建/更新入参。
+type QuestionTagInput struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	SortOrder   *int    `json:"sort_order"`
+	Status      *int16  `json:"status"`
+}
+
+// QuestionTagDict 题库标签字典。
+// QuestionCount 仅列表返回（含 0 计数），创建/更新返回时省略（旧 map 契约同）。
+type QuestionTagDict struct {
+	Code          string `json:"code"`
+	CreatedAt     string `json:"created_at"`
+	Description   string `json:"description"`
+	ID            int    `json:"id"`
+	Name          string `json:"name"`
+	QuestionCount *int64 `json:"question_count,omitempty" extensions:"x-optional"`
+	SortOrder     int    `json:"sort_order"`
+	Status        int16  `json:"status"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+// CredentialInput 目标证件创建/更新入参。
+// 更新语义：Code/Name/Category 为空表示不改动；Level/SortOrder/Status 为 nil 表示不改动（Level 传 0 表示清空，仅 skill_level 传 1-5 有效语义在 Validate 中收敛）。
+type CredentialInput struct {
+	Code        string  `json:"code"`
+	Name        string  `json:"name"`
+	Category    string  `json:"category"`
+	Level       *int    `json:"level"`
+	Description *string `json:"description"`
+	SortOrder   *int    `json:"sort_order"`
+	Status      *int16  `json:"status"`
+}
+
+// CredentialDict 目标证件字典（列表/创建/更新返回）。
+// 字段声明顺序按 JSON 键字母序，保证契约字节级不变。
+type CredentialDict struct {
+	Category    string `json:"category"`
+	Code        string `json:"code"`
+	CreatedAt   string `json:"created_at"`
+	Description string `json:"description"`
+	ID          int    `json:"id"`
+	Level       *int   `json:"level" extensions:"x-nullable"`
+	Name        string `json:"name"`
+	SortOrder   int    `json:"sort_order"`
+	Status      int16  `json:"status"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+// ===== 列表信封（ADR-0048 片六：handler 内联 gin.H 收口为 typed DTO，序列化字节不变）=====
+//
+// 这些端点的响应体此前是 handler 里手工拼的 gin.H{"<key>": …}；注解要指认 data 类型
+// 就必须先有具名类型（swag 无法表达「内联对象」），故按域片收口，字节锁见
+// internal/service/envelope_dto_shape_test.go 的 TestInlineResponseDTOBytes。
+
+// LevelListDTO 课程等级列表响应 {"levels": [...]}（公开 /levels 与管理端 /admin/levels 共用形状）。
+type LevelListDTO struct {
+	Levels []LevelDict `json:"levels" nullability:"nonnil"`
+}
+
+// SpecialtyListDTO 专业方向列表响应 {"specialties": [...]}。
+//
+// 来源是 handler 里手工拼的 gin.H{"specialties": …}（ADR-0053 §1 把这两个列表端点补进契约：
+// 注解要指认 data 类型就必须先有具名类型，故补此 DTO，字节形状不变）。
+type SpecialtyListDTO struct {
+	Specialties []SpecialtyDict `json:"specialties" nullability:"nonnil"`
+}
+
+// QuestionTagListDTO 题库标签列表响应 {"tags": [...]}（公开 /tags 与管理端 /admin/question-tags 共用形状）。
+type QuestionTagListDTO struct {
+	Tags []QuestionTagDict `json:"tags" nullability:"nonnil"`
+}
+
+// CertificateTemplateListDTO 证书模板列表响应 {"certificate_templates": [...]}。
+type CertificateTemplateListDTO struct {
+	CertificateTemplates []CertificateTemplateDict `json:"certificate_templates" nullability:"nonnil"`
+}
+
+// CredentialListDTO 目标证件列表响应 {"credentials": [...]}（公开 /credentials 与管理端 /admin/credentials 共用形状）。
+type CredentialListDTO struct {
+	Credentials []CredentialDict `json:"credentials" nullability:"nonnil"`
+}
+
+// CurrentCredentialDTO 当前证件响应 {"credential": <dict|null>}：未选择证件时 data.credential 为 null
+// （键一定在，值可空 —— 对应 x-nullable）。
+type CurrentCredentialDTO struct {
+	Credential *CredentialDict `json:"credential" extensions:"x-nullable"`
+}
+
+// GroupedCredentialsDTO 目标证件分组响应。
+// 字段声明序 = 旧 map 的 JSON 键序（encoding/json 对 map 按 key 排序：skill_level < special_operation），
+// 且两个字段恒非 nil（ListGroupedCredentials 空集也初始化 []），故字节序与旧 map 逐字节一致（shape-lock 冻结）。
+type GroupedCredentialsDTO struct {
+	SkillLevel       []CredentialDict `json:"skill_level" nullability:"nonnil"`
+	SpecialOperation []CredentialDict `json:"special_operation" nullability:"nonnil"`
+}
+
+// QuestionTagRef 题目-标签关联摘要（id/code/name/sort_order/status，无时间戳等扩展字段）。
+type QuestionTagRef struct {
+	Code      string `json:"code"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	SortOrder int    `json:"sort_order"`
+	Status    int16  `json:"status"`
+}
+
+// inputString 解引用 *string，nil 返回空串。
+func inputString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// inputInt 解引用 *int，nil 返回 def。
+func inputInt(p *int, def int) int {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
+// inputInt16 解引用 *int16，nil 返回 def。
+func inputInt16(p *int16, def int16) int16 {
+	if p == nil {
+		return def
+	}
+	return *p
+}

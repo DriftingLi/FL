@@ -49,7 +49,7 @@
 //   GET  /admin/export/questions
 //   GET  /admin/export/evaluations
 //
-// 覆盖的 Go 类型：AuditLogPageResult / AuditLog / AIConfigDTO / AdminCourseDetailDTO / AdminOverviewDTO / AdminStatisticsDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterGenResult / CourseBriefDTO / CourseDTO / CoursePageResult / CourseStatDTO / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / FeatureBindingDTO / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / LevelBriefDTO / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / SpecialtyBriefDTO / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / TutorRegisterResultDTO
+// 覆盖的 Go 类型：AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / AdminCourseDetailDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog / AdminOverviewDTO / AdminStatisticsDTO / ChapterGenResult / CourseStatDTO / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -60,28 +60,6 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
-
-export interface AuditLogPageResult {
-  items: AuditLog[]
-  page: number
-  pages: number
-  total: number
-}
-
-export interface AuditLog {
-  action: string
-  actor_id: number
-  actor_name: string
-  actor_role: string
-  created_at: string
-  detail?: Record<string, unknown>
-  id: number
-  ip: string
-  method: string
-  path: string
-  request_id: string
-  status: number
-}
 
 export interface AIConfigDTO {
   api_key: string
@@ -95,157 +73,6 @@ export interface AIConfigDTO {
   updated_at: string
 }
 
-export interface AdminCourseDetailDTO {
-  certificate_name?: string
-  certificate_template?: CertificateTemplateDTO
-  certificate_template_id: number | null
-  chapter_count?: number
-  chapters: ChapterDTO[]
-  course_id: number
-  cover_image: string
-  created_at: string
-  credential?: CredentialBriefDTO
-  credential_id: number | null
-  description: string
-  duration: number
-  entitled?: boolean
-  is_featured: boolean
-  is_hot: boolean
-  level?: LevelBriefDTO
-  level_id: number | null
-  name: string
-  points_price?: number
-  practice_hours: number
-  prerequisite_course_ids?: number[]
-  prerequisites?: CourseBriefDTO[]
-  sort_order: number
-  specialty?: SpecialtyBriefDTO
-  specialty_id: number | null
-  status: number
-  student_count?: number
-  theory_hours: number
-}
-
-export interface AdminOverviewDTO {
-  active_today: number
-  total_courses: number
-  total_students: number
-  total_study_duration: number
-}
-
-export interface AdminStatisticsDTO {
-  course_stats: CourseStatDTO[]
-  overview: AdminOverviewDTO
-}
-
-export interface CertificateTemplateDTO {
-  code: string
-  description: string
-  id: number
-  name: string
-  template_url: string
-  validity_days: number
-}
-
-export interface ChapterDTO {
-  chapter_id: number
-  content: string
-  content_type: string
-  course_id: number
-  created_at: string
-  description: string
-  duration: number
-  file_url: string
-  files?: ChapterFileDTO[]
-  order_num: number
-  title: string
-}
-
-export interface ChapterFileDTO {
-  chapter_id: number | null
-  content_type: string
-  created_at: string
-  file_id: number
-  file_name: string
-  file_size: number
-  file_url: string
-}
-
-export interface ChapterGenResult {
-  chapter_id: number
-  content?: string
-  error?: string
-  status: string
-  title: string
-}
-
-export interface CourseBriefDTO {
-  course_id: number
-  name: string
-}
-
-export interface CourseDTO {
-  certificate_name?: string
-  certificate_template?: CertificateTemplateDTO
-  certificate_template_id: number | null
-  chapter_count?: number
-  chapters?: ChapterDTO[]
-  course_id: number
-  cover_image: string
-  created_at: string
-  credential?: CredentialBriefDTO
-  credential_id: number | null
-  description: string
-  duration: number
-  entitled?: boolean
-  is_featured: boolean
-  is_hot: boolean
-  level?: LevelBriefDTO
-  level_id: number | null
-  name: string
-  points_price?: number
-  practice_hours: number
-  prerequisite_course_ids?: number[]
-  prerequisites?: CourseBriefDTO[]
-  sort_order: number
-  specialty?: SpecialtyBriefDTO
-  specialty_id: number | null
-  status: number
-  student_count?: number
-  theory_hours: number
-}
-
-export interface CoursePageResult {
-  courses: CourseDTO[]
-  page: number
-  pages: number
-  total: number
-}
-
-export interface CourseStatDTO {
-  avg_progress: number
-  course_id: number
-  name: string
-  study_count: number
-  total_duration: number
-}
-
-export interface CredentialBriefDTO {
-  category: string
-  code: string
-  id: number
-  level: number | null
-  name: string
-}
-
-export interface DeleteChapterResult {
-  chapter_id: number
-}
-
-export interface DeleteCourseResult {
-  course_id: number
-}
-
 export interface FeatureBindingDTO {
   config_id?: number
   config_name?: string
@@ -253,49 +80,11 @@ export interface FeatureBindingDTO {
   feature_label: string
 }
 
-export interface GenTaskStatus {
-  completed: number
-  results: ChapterGenResult[] | null
-  status: string
-  task_id: string
-  total: number
-}
-
-export interface GenerateContentResultDTO {
-  task_id: string
-}
-
-export interface HrwaiUserCreatedDTO {
-  account: string
-  id: number
-  phone: string
-  uid: string
-  username: string
-}
-
-export interface HrwaiUserPageResult {
-  list: HrwaiUserSummary[]
+export interface AuditLogPageResult {
+  items: AuditLog[]
   page: number
-  page_size: number
+  pages: number
   total: number
-}
-
-export interface HrwaiUserSummary {
-  account: string
-  company: string
-  created_at: string
-  email: string
-  id: number
-  phone: string
-  status: number
-  uid: string
-  username: string
-}
-
-export interface LevelBriefDTO {
-  code: string
-  level_id: number
-  name: string
 }
 
 export interface ProfileChangeRequestDTO {
@@ -368,10 +157,227 @@ export interface RecruiterUpdatedDTO {
   wechat: string
 }
 
+export interface TutorRegisterResultDTO {
+  name: string
+  tutor_id: number
+  username: string
+}
+
+export interface AdminCourseDetailDTO {
+  certificate_name?: string
+  certificate_template?: CertificateTemplateDTO
+  certificate_template_id: number | null
+  chapter_count?: number
+  chapters: ChapterDTO[]
+  course_id: number
+  cover_image: string
+  created_at: string
+  credential?: CredentialBriefDTO
+  credential_id: number | null
+  description: string
+  duration: number
+  entitled?: boolean
+  is_featured: boolean
+  is_hot: boolean
+  level?: LevelBriefDTO
+  level_id: number | null
+  name: string
+  points_price?: number
+  practice_hours: number
+  prerequisite_course_ids?: number[]
+  prerequisites?: CourseBriefDTO[]
+  sort_order: number
+  specialty?: SpecialtyBriefDTO
+  specialty_id: number | null
+  status: number
+  student_count?: number
+  theory_hours: number
+}
+
+export interface CertificateTemplateDTO {
+  code: string
+  description: string
+  id: number
+  name: string
+  template_url: string
+  validity_days: number
+}
+
+export interface ChapterDTO {
+  chapter_id: number
+  content: string
+  content_type: string
+  course_id: number
+  created_at: string
+  description: string
+  duration: number
+  file_url: string
+  files?: ChapterFileDTO[]
+  order_num: number
+  title: string
+}
+
+export interface ChapterFileDTO {
+  chapter_id: number | null
+  content_type: string
+  created_at: string
+  file_id: number
+  file_name: string
+  file_size: number
+  file_url: string
+}
+
+export interface CourseBriefDTO {
+  course_id: number
+  name: string
+}
+
+export interface CourseDTO {
+  certificate_name?: string
+  certificate_template?: CertificateTemplateDTO
+  certificate_template_id: number | null
+  chapter_count?: number
+  chapters?: ChapterDTO[]
+  course_id: number
+  cover_image: string
+  created_at: string
+  credential?: CredentialBriefDTO
+  credential_id: number | null
+  description: string
+  duration: number
+  entitled?: boolean
+  is_featured: boolean
+  is_hot: boolean
+  level?: LevelBriefDTO
+  level_id: number | null
+  name: string
+  points_price?: number
+  practice_hours: number
+  prerequisite_course_ids?: number[]
+  prerequisites?: CourseBriefDTO[]
+  sort_order: number
+  specialty?: SpecialtyBriefDTO
+  specialty_id: number | null
+  status: number
+  student_count?: number
+  theory_hours: number
+}
+
+export interface CoursePageResult {
+  courses: CourseDTO[]
+  page: number
+  pages: number
+  total: number
+}
+
+export interface CredentialBriefDTO {
+  category: string
+  code: string
+  id: number
+  level: number | null
+  name: string
+}
+
+export interface DeleteChapterResult {
+  chapter_id: number
+}
+
+export interface DeleteCourseResult {
+  course_id: number
+}
+
+export interface LevelBriefDTO {
+  code: string
+  level_id: number
+  name: string
+}
+
 export interface SpecialtyBriefDTO {
   code: string
   name: string
   specialty_id: number
+}
+
+export interface AuditLog {
+  action: string
+  actor_id: number
+  actor_name: string
+  actor_role: string
+  created_at: string
+  detail?: Record<string, unknown>
+  id: number
+  ip: string
+  method: string
+  path: string
+  request_id: string
+  status: number
+}
+
+export interface AdminOverviewDTO {
+  active_today: number
+  total_courses: number
+  total_students: number
+  total_study_duration: number
+}
+
+export interface AdminStatisticsDTO {
+  course_stats: CourseStatDTO[]
+  overview: AdminOverviewDTO
+}
+
+export interface ChapterGenResult {
+  chapter_id: number
+  content?: string
+  error?: string
+  status: string
+  title: string
+}
+
+export interface CourseStatDTO {
+  avg_progress: number
+  course_id: number
+  name: string
+  study_count: number
+  total_duration: number
+}
+
+export interface GenTaskStatus {
+  completed: number
+  results: ChapterGenResult[] | null
+  status: string
+  task_id: string
+  total: number
+}
+
+export interface GenerateContentResultDTO {
+  task_id: string
+}
+
+export interface HrwaiUserCreatedDTO {
+  account: string
+  id: number
+  phone: string
+  uid: string
+  username: string
+}
+
+export interface HrwaiUserPageResult {
+  list: HrwaiUserSummary[]
+  page: number
+  page_size: number
+  total: number
+}
+
+export interface HrwaiUserSummary {
+  account: string
+  company: string
+  created_at: string
+  email: string
+  id: number
+  phone: string
+  status: number
+  uid: string
+  username: string
 }
 
 export interface StatusResultDTO {
@@ -394,10 +400,4 @@ export interface TutorListDTO {
   page: number
   total: number
   tutors: TutorDTO[]
-}
-
-export interface TutorRegisterResultDTO {
-  name: string
-  tutor_id: number
-  username: string
 }

@@ -1,0 +1,287 @@
+// Package service 管理端课程 CRUD。
+package course
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/clock"
+	"forklift-training/internal/filestore"
+	"forklift-training/internal/model"
+	"forklift-training/internal/sortorder"
+)
+
+// AdminService 管理端课程服务。
+type AdminService struct {
+	db      *gorm.DB
+	fileSvc *filestore.FileStore
+
+	logger *zap.Logger
+}
+
+// NewAdminService 创建管理端课程服务实例。fileSvc 用于删除章节时清理幻灯片/图文图片（可 nil，nil 时跳过）。
+func NewAdminService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *AdminService {
+	return &AdminService{db: db, fileSvc: fileSvc, logger: logger}
+}
+
+// GetCourses 管理端课程列表。filter 支持 hot|featured|all（空串 = all；#1096：显式参数，不再是变参）。
+func (s *AdminService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
+	return ListCourses(s.db, page, pageSize, CourseListOptions{
+		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter, DefaultPageSize: 10,
+	})
+}
+
+// GetCourseDetail 管理端课程详情。
+func (s *AdminService) GetCourseDetail(courseID int) (*AdminCourseDetailDTO, error) {
+	course, chapterList, err := loadCourseWithChapters(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	detail := CourseToDTO(course)
+	fillCourseMeta(s.db, course, &detail)
+	return &AdminCourseDetailDTO{
+		CourseDTO: detail,
+		Chapters:  chapterList,
+	}, nil
+}
+
+// CreateCourse 创建课程。专业方向与课程等级必填（挂载不变式，旧 category 已退役）。
+// 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
+func (s *AdminService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
+	if in == nil || in.Name == nil || *in.Name == "" {
+		return nil, ErrCourseNameRequired
+	}
+	// 挂载不变式：创建必填方向与等级
+	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
+		return nil, ErrSpecialtyRequired
+	}
+	if in.LevelID == nil || *in.LevelID <= 0 {
+		return nil, ErrCourseLevelRequired
+	}
+	status := int16(1)
+	if in.Status != nil {
+		status = *in.Status
+	}
+	course := model.Course{
+		Name:      *in.Name,
+		Status:    status,
+		CreatedAt: clock.Now(),
+	}
+	if in.Description != nil {
+		course.Description = *in.Description
+	}
+	if in.CoverImage != nil {
+		course.CoverImage = *in.CoverImage
+	}
+	if in.Duration != nil {
+		course.Duration = *in.Duration
+	}
+	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
+		return nil, err
+	}
+	// 未显式传 sort_order 时，自动排到所属方向+等级组的末尾（max+1）
+	if in.SortOrder == nil && course.SpecialtyID != nil && course.LevelID != nil {
+		course.SortOrder = sortorder.NextValue(s.db, "course",
+			map[string]any{"specialty_id": *course.SpecialtyID, "level_id": *course.LevelID})
+	}
+	if err := s.db.Create(&course).Error; err != nil {
+		return nil, err
+	}
+	if err := replaceCoursePrerequisites(s.db, course.CourseID, in.PrerequisiteCourseIDs); err != nil {
+		return nil, err
+	}
+	result := CourseToDTO(&course)
+	fillChapterCount(s.db, course.CourseID, &result)
+	FillPrereqIDs(s.db, course.CourseID, &result)
+	return &result, nil
+}
+
+// UpdateCourse 更新课程。
+func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if in == nil {
+		in = &CourseInput{}
+	}
+	if in.Name != nil && *in.Name != "" {
+		course.Name = *in.Name
+	}
+	if in.Description != nil {
+		course.Description = *in.Description
+	}
+	if in.CoverImage != nil {
+		course.CoverImage = *in.CoverImage
+	}
+	if in.Duration != nil {
+		course.Duration = *in.Duration
+	}
+	if in.Status != nil {
+		course.Status = *in.Status
+	}
+	// 编辑时若携带方向/等级字段则不允许清空（挂载不变式；DB 列保持可空以兼容存量）
+	if err := validateMountedCourseInputUpdate(in); err != nil {
+		return nil, err
+	}
+	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
+		return nil, err
+	}
+	if err := s.db.Save(&course).Error; err != nil {
+		return nil, err
+	}
+	if in.PrerequisiteCourseIDs != nil {
+		if err := replaceCoursePrerequisites(s.db, courseID, in.PrerequisiteCourseIDs); err != nil {
+			return nil, err
+		}
+	}
+	result := CourseToDTO(&course)
+	fillChapterCount(s.db, courseID, &result)
+	FillPrereqIDs(s.db, courseID, &result)
+	return &result, nil
+}
+
+// 交换排序的三件课程侧输入事实（ADR-0065 决策 3）。此前它们是裸 errors.New ⇒ 落在
+// 端点默认面 400，与「查不动」「待交换的项不存在」挤成同一格；现在各自有名，两面共用一张表。
+var (
+	ErrCourseNotMountedForSort = errors.New("未挂载方向/等级的课程不能参与排序")
+	ErrCourseSortGroupMismatch = errors.New("只能交换同一方向+等级组内的课程")
+	// ErrCourseSwapTargetNotFound 指 body 里 `swap_with` 指向的那门课不存在 —— 与「路径里那门课
+	// 不存在」（model.ErrCourseNotFound ⇒ 404）是两件事实。改之前两次 First 都回同一个哨兵，于是
+	// 「你要换的东西没有」对外答 404「课程不存在」，与前置课程那一支的 400 也不一致（ADR-0065 决策 3）。
+	ErrCourseSwapTargetNotFound = errors.New("待交换的课程不存在")
+)
+
+// SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
+func (s *AdminService) SwapCourseSort(a, b int) error {
+	var ca, cb model.Course
+	if err := s.db.First(&ca, a).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.ErrCourseNotFound
+		}
+		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if err := s.db.First(&cb, b).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCourseSwapTargetNotFound // 坏引用是输入不合法(400)，不是「路径资源没有」(404)
+		}
+		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if !CourseMounted(ca.SpecialtyID, ca.LevelID) || !CourseMounted(cb.SpecialtyID, cb.LevelID) {
+		return ErrCourseNotMountedForSort
+	}
+	if *ca.SpecialtyID != *cb.SpecialtyID || *ca.LevelID != *cb.LevelID {
+		return ErrCourseSortGroupMismatch
+	}
+	return sortorder.SwapPositions(s.db, &model.Course{}, "course_id", a, b,
+		map[string]any{"specialty_id": *ca.SpecialtyID, "level_id": *ca.LevelID})
+}
+
+// DeleteCourse 删除课程。
+func (s *AdminService) DeleteCourse(courseID int) (*DeleteCourseResult, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if err := s.db.Delete(&course).Error; err != nil {
+		return nil, err
+	}
+	return &DeleteCourseResult{CourseID: courseID}, nil
+}
+
+// CreateChapter 创建章节。
+func (s *AdminService) CreateChapter(courseID int, in *ChapterInput) (*ChapterDTO, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrCourseNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if in == nil || in.Title == nil || *in.Title == "" {
+		return nil, errors.New("章节标题不能为空")
+	}
+
+	var maxOrder int
+	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).
+		Select("COALESCE(MAX(order_num), 0)").Scan(&maxOrder)
+
+	chapter := model.Chapter{
+		CourseID:  courseID,
+		Title:     *in.Title,
+		OrderNum:  maxOrder + 1,
+		CreatedAt: clock.Now(),
+	}
+	if in.Content != nil {
+		chapter.Content = *in.Content
+	}
+	if in.Duration != nil {
+		chapter.Duration = *in.Duration
+	}
+	if err := s.db.Create(&chapter).Error; err != nil {
+		return nil, err
+	}
+	d := ChapterToDTO(&chapter)
+	return &d, nil
+}
+
+// UpdateChapter 更新章节。
+func (s *AdminService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
+	var chapter model.Chapter
+	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if in == nil {
+		in = &ChapterInput{}
+	}
+	if in.Title != nil && *in.Title != "" {
+		chapter.Title = *in.Title
+	}
+	if in.Content != nil {
+		chapter.Content = *in.Content
+	}
+	if in.Duration != nil {
+		chapter.Duration = *in.Duration
+	}
+	if in.OrderNum != nil {
+		chapter.OrderNum = *in.OrderNum
+	}
+	if err := s.db.Save(&chapter).Error; err != nil {
+		return nil, err
+	}
+	d := ChapterToDTO(&chapter)
+	return &d, nil
+}
+
+// DeleteChapter 删除章节，并清理章节关联的存储文件：
+// PPT 幻灯片（slides/<chapterID>/ 前缀）与图文 Markdown 图片（images/chapters/<chapterID>/ 前缀）。
+func (s *AdminService) DeleteChapter(chapterID int) (*DeleteChapterResult, error) {
+	var chapter model.Chapter
+	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrChapterNotFound
+		}
+		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
+	}
+	if err := s.db.Delete(&chapter).Error; err != nil {
+		return nil, err
+	}
+	if s.fileSvc != nil {
+		s.fileSvc.DeleteFiles(s.fileSvc.List(fmt.Sprintf("%s/%d", slideRenderDir, chapterID)))
+		s.fileSvc.DeleteFiles(s.fileSvc.List(filestore.ChapterImageDirPrefix + "/" + strconv.Itoa(chapterID)))
+	}
+	return &DeleteChapterResult{ChapterID: chapterID}, nil
+}

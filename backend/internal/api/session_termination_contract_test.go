@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/middleware"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -72,18 +72,14 @@ func newDeleteAccountRouter(t *testing.T, store security.BlacklistStore) (*gin.E
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, store)
-	authSvc := service.NewAuthService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	u := model.HrwaiUser{UID: 900001, Account: "gone-soon", Username: "即将注销", Password: "x", Phone: "13900000001", Status: 1}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
 	}
-	h := NewAuthHandler(sess, authSvc, nil, nil, nil, zap.NewNop())
 	r := gin.New()
-	g := r.Group("/api/auth", func(c *gin.Context) {
-		c.Set(string(middleware.CtxUserID), u.ID)
-		c.Next()
-	})
-	g.DELETE("/account", h.DeleteAccount)
+	// P2 波 3a：注册真实路由面（/account 带 JWT 中间件），用例自己签 access 带上。
+	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 	return r, sess, db, u.ID
 }
 
@@ -93,7 +89,7 @@ func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 	r, sess, db, uid := newDeleteAccountRouter(t, newValBlacklist())
 	ctx := context.Background()
 
-	_, rotated, err := sess.IssuePair(uid, "gone-soon", "hrwai_user")
+	tok, rotated, err := sess.IssuePair(uid, "gone-soon", "hrwai_user")
 	if err != nil {
 		t.Fatalf("签发 refresh 失败: %v", err)
 	}
@@ -106,7 +102,7 @@ func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 		t.Fatal("轮换未返回新 refresh")
 	}
 
-	if rec := performRequest(r, "DELETE", "/api/auth/account"); rec.Code != http.StatusOK {
+	if rec := codeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok); rec.Code != http.StatusOK {
 		t.Fatalf("注销应 200，实际 %d", rec.Code)
 	}
 	var cnt int64
@@ -123,9 +119,13 @@ func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 // 吊销标记写不进去 ⇒ 注销整体不生效，账号仍在（不留「资料已删、凭证仍活」的半成品）。
 func TestDeleteAccount_吊销写失败则整体不生效(t *testing.T) {
 	t.Parallel()
-	r, _, db, uid := newDeleteAccountRouter(t, rejectBlacklist{})
+	r, sess, db, uid := newDeleteAccountRouter(t, rejectBlacklist{})
+	tok, _, err := sess.IssuePair(uid, "gone-soon", service.HrwaiRole)
+	if err != nil {
+		t.Fatalf("签发 access 失败: %v", err)
+	}
 
-	rec := performRequest(r, "DELETE", "/api/auth/account")
+	rec := codeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("吊销标记写失败时注销应 400，实际 %d", rec.Code)
 	}

@@ -1,0 +1,676 @@
+// Package training 培训目录（专业方向/等级/证书模板/题库标签/目录树）测试。
+package training
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/coerce"
+	"forklift-training/internal/model"
+	"forklift-training/internal/testutil"
+)
+
+func newCatalogSvc(t *testing.T) (*Service, *gorm.DB) {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	return NewService(db, zap.NewNop()), db
+}
+
+// p16 构造 *int16 指针（测试用）。
+func p16(v int16) *int16 { return &v }
+
+// createQuestionAs 测试 fixture 单点（培训域自带最小建题：ADR-0070 决策 9 —— 域包测试不得依赖
+// internal/service 的测试面，也不绕题库域的 typed 写面）。培训域读的是 question 表的 status /
+// credential_id 与 question_tag_relation 的挂接，所以直接落库这两处即可（#1445 P2 波 3b-2 D18）。
+func createQuestionAs(t *testing.T, db *gorm.DB, q model.Question, tagIDs []int, status string) model.Question {
+	t.Helper()
+	q.Status = status
+	if q.CreatedByType == "" {
+		q.CreatedByType = "tutor"
+	}
+	if err := db.Create(&q).Error; err != nil {
+		t.Fatalf("fixture 建题失败: %v", err)
+	}
+	for _, tagID := range tagIDs {
+		if err := db.Create(&model.QuestionTagRelation{QuestionID: q.ID, TagID: tagID}).Error; err != nil {
+			t.Fatalf("fixture 挂标签失败: %v", err)
+		}
+	}
+	return q
+}
+
+// --- 专业方向 ---
+
+func TestSpecialtyCRUD(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	// 创建
+	result, err := svc.CreateSpecialty(SpecialtyInput{Code: "operation", Name: "操作", SortOrder: coerce.IntPtr(1)})
+	if err != nil {
+		t.Fatalf("创建专业方向失败: %v", err)
+	}
+	specID := result.SpecialtyID
+	if result.Name != "操作" || result.Status != 1 {
+		t.Fatalf("创建结果不匹配: %+v", result)
+	}
+
+	// 编码/名称为空校验
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Name: "x"}); err == nil {
+		t.Fatal("编码为空应报错")
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x"}); err == nil {
+		t.Fatal("名称为空应报错")
+	}
+
+	// 更新
+	updated, err := svc.UpdateSpecialty(specID, SpecialtyInput{Name: "操作方向", Status: p16(0)})
+	if err != nil {
+		t.Fatalf("更新失败: %v", err)
+	}
+	if updated.Name != "操作方向" || updated.Status != 0 {
+		t.Fatalf("更新结果不匹配: %+v", updated)
+	}
+
+	// 列表：管理端含停用项，学员端仅启用项
+	all := svc.ListSpecialties(false)
+	if len(all) != 1 {
+		t.Fatal("管理端应看到 1 条（含停用）")
+	}
+	active := svc.ListSpecialties(true)
+	if len(active) != 0 {
+		t.Fatal("学员端应看不到停用项")
+	}
+
+	// 删除 + 不存在
+	if err := svc.DeleteSpecialty(specID); err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+	if err := svc.DeleteSpecialty(specID); err == nil {
+		t.Fatal("重复删除应报错")
+	}
+	if _, err := svc.UpdateSpecialty(9999, SpecialtyInput{Name: "x"}); err == nil {
+		t.Fatal("更新不存在的专业方向应报错")
+	}
+}
+
+// TestSpecialtyValidation 专业方向校验（收口在 service）：编码/名称必填、编码唯一、状态枚举。
+func TestSpecialtyValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "", Name: "x"}); err == nil || err.Error() != "专业方向编码不能为空" {
+		t.Fatalf("编码为空应报「专业方向编码不能为空」, got %v", err)
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x", Name: ""}); err == nil || err.Error() != "专业方向名称不能为空" {
+		t.Fatalf("名称为空应报「专业方向名称不能为空」, got %v", err)
+	}
+
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "op", Name: "操作"}); err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "op", Name: "重复"}); err == nil || err.Error() != "专业方向编码已存在" {
+		t.Fatalf("重复编码应报「专业方向编码已存在」, got %v", err)
+	}
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x2", Name: "x", Status: p16(5)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+
+	created, _ := svc.CreateSpecialty(SpecialtyInput{Code: "x3", Name: "x"})
+	if _, err := svc.UpdateSpecialty(created.SpecialtyID, SpecialtyInput{Status: p16(2)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("更新非法状态应报「状态值无效」, got %v", err)
+	}
+	if _, err := svc.UpdateSpecialty(created.SpecialtyID, SpecialtyInput{Code: "op"}); err == nil || err.Error() != "专业方向编码已存在" {
+		t.Fatalf("更新撞码应报「专业方向编码已存在」, got %v", err)
+	}
+	if _, err := svc.UpdateSpecialty(created.SpecialtyID, SpecialtyInput{Code: "x3"}); err != nil {
+		t.Fatalf("更新为自身编码应成功: %v", err)
+	}
+}
+
+// --- 课程等级 ---
+
+func TestLevelCRUD(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+	result, err := svc.CreateLevel(LevelInput{Code: "beginner", Name: "入门", SortOrder: coerce.IntPtr(1)})
+	if err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	levelID := result.LevelID
+
+	if _, err := svc.CreateLevel(LevelInput{Name: "x"}); err == nil {
+		t.Fatal("编码为空应报错")
+	}
+	updated, err := svc.UpdateLevel(levelID, LevelInput{Name: "初级"})
+	if err != nil {
+		t.Fatalf("更新失败: %v", err)
+	}
+	if updated.Name != "初级" {
+		t.Fatalf("更新结果不匹配: %+v", updated)
+	}
+	all := svc.ListLevels(false)
+	if len(all) != 1 {
+		t.Fatal("应看到 1 条等级")
+	}
+	if err := svc.DeleteLevel(levelID); err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+	if err := svc.DeleteLevel(levelID); err == nil {
+		t.Fatal("重复删除应报错")
+	}
+}
+
+// TestLevelValidation 课程等级校验（收口在 service）：编码唯一 + 状态枚举。
+func TestLevelValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateLevel(LevelInput{Code: "bg", Name: "入门"}); err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateLevel(LevelInput{Code: "bg", Name: "重复"}); err == nil || err.Error() != "课程等级编码已存在" {
+		t.Fatalf("重复编码应报「课程等级编码已存在」, got %v", err)
+	}
+	if _, err := svc.CreateLevel(LevelInput{Code: "x", Name: "x", Status: p16(9)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+}
+
+// --- 证书模板 ---
+
+func TestCertificateTemplateCRUD(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+	result, err := svc.CreateCertificateTemplate(CertificateTemplateInput{
+		Code: "CERT_1", Name: "叉车培训证书", ValidityDays: coerce.IntPtr(1460),
+	})
+	if err != nil {
+		t.Fatalf("创建模板失败: %v", err)
+	}
+	tplID := result.ID
+	if result.ValidityDays != 1460 {
+		t.Fatalf("有效期不匹配: %+v", result)
+	}
+
+	// 无效有效期
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C", Name: "x", ValidityDays: coerce.IntPtr(0)}); err == nil {
+		t.Fatal("有效期为 0 应报错")
+	}
+	if _, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: coerce.IntPtr(-5)}); err == nil {
+		t.Fatal("负有效期应报错")
+	}
+
+	// 默认有效期 365
+	def, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "CERT_2", Name: "默认模板"})
+	if err != nil {
+		t.Fatalf("创建默认模板失败: %v", err)
+	}
+	if def.ValidityDays != 365 {
+		t.Fatalf("默认有效期应为 365, got %d", def.ValidityDays)
+	}
+
+	updated, err := svc.UpdateCertificateTemplate(tplID, CertificateTemplateInput{ValidityDays: coerce.IntPtr(730)})
+	if err != nil {
+		t.Fatalf("更新失败: %v", err)
+	}
+	if updated.ValidityDays != 730 {
+		t.Fatalf("更新后有效期不匹配: %+v", updated)
+	}
+	list := svc.ListCertificateTemplates(false)
+	if len(list) != 2 {
+		t.Fatal("应看到 2 条模板")
+	}
+	if err := svc.DeleteCertificateTemplate(tplID); err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+}
+
+// TestCertificateTemplateValidation 证书模板校验（收口在 service）：编码唯一 + 状态枚举。
+func TestCertificateTemplateValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C1", Name: "模板"}); err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C1", Name: "重复"}); err == nil || err.Error() != "证书模板编码已存在" {
+		t.Fatalf("重复编码应报「证书模板编码已存在」, got %v", err)
+	}
+	if _, err := svc.CreateCertificateTemplate(CertificateTemplateInput{Code: "C2", Name: "x", Status: p16(2)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+}
+
+// --- 题库标签与题目关联 ---
+
+func TestQuestionTagCRUD(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+	result, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	if err != nil {
+		t.Fatalf("创建标签失败: %v", err)
+	}
+	tagID := result.ID
+
+	if _, err := svc.CreateQuestionTag(QuestionTagInput{Name: "x"}); err == nil {
+		t.Fatal("编码为空应报错")
+	}
+	updated, err := svc.UpdateQuestionTag(tagID, QuestionTagInput{Name: "液压系统"})
+	if err != nil {
+		t.Fatalf("更新失败: %v", err)
+	}
+	if updated.Name != "液压系统" {
+		t.Fatalf("更新结果不匹配: %+v", updated)
+	}
+	active := mustListQuestionTags(t, svc, true, true, nil)
+	if len(active) != 1 {
+		t.Fatal("应看到 1 条标签")
+	}
+	if err := svc.DeleteQuestionTag(tagID); err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+}
+
+// TestQuestionTagValidation 题库标签校验（收口在 service）：状态枚举。
+func TestQuestionTagValidation(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+
+	if _, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", Status: p16(5)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("非法状态应报「状态值无效」, got %v", err)
+	}
+	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	if _, err := svc.UpdateQuestionTag(tag.ID, QuestionTagInput{Status: p16(2)}); err == nil || err.Error() != "状态值无效" {
+		t.Fatalf("更新非法状态应报「状态值无效」, got %v", err)
+	}
+}
+
+// TestQuestionTagCodeUnique 标签编码唯一性：创建/更新重复编码均返回友好错误。
+func TestQuestionTagCodeUnique(t *testing.T) {
+	svc, _ := newCatalogSvc(t)
+	tag1, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "重复"}); err == nil || err.Error() != "标签编码已存在" {
+		t.Fatalf("重复编码创建应报「标签编码已存在」, got %v", err)
+	}
+	if _, err := svc.UpdateQuestionTag(tag1.ID, QuestionTagInput{Code: "hydraulic"}); err != nil {
+		t.Fatalf("更新为自身编码应成功: %v", err)
+	}
+	tag2, err := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if _, err := svc.UpdateQuestionTag(tag2.ID, QuestionTagInput{Code: "hydraulic"}); err == nil || err.Error() != "标签编码已存在" {
+		t.Fatalf("改编码撞车应报「标签编码已存在」, got %v", err)
+	}
+}
+
+// TestListQuestionTags_QuestionCount 标签列表 question_count：
+// 学员端仅统计已发布题目，管理端统计全部题目。
+func TestListQuestionTags_QuestionCount(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
+
+	// 1 道已发布 + 1 道草稿（未发布）
+	published := createQuestionAs(t, db, model.Question{
+		Type: "single_choice", Content: "已发布题",
+		Options: model.JSONB(json.RawMessage(`["A","B"]`)), Answer: `"A"`,
+	}, []int{tag.ID}, "published")
+	_ = published
+	draft := createQuestionAs(t, db, model.Question{
+		Type: "true_false", Content: "草稿题", Answer: `true`,
+	}, []int{tag.ID}, "draft")
+	_ = draft
+	// 另一个无题目标签
+	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
+
+	studentTags := mustListQuestionTags(t, svc, true, false, nil)
+	byID := map[int]QuestionTagDict{}
+	for _, d := range studentTags {
+		byID[d.ID] = d
+	}
+	if byID[tag.ID].QuestionCount == nil || *byID[tag.ID].QuestionCount != 1 {
+		t.Fatalf("学员端应统计 1 道已发布题, got %v", byID[tag.ID].QuestionCount)
+	}
+	if byID[empty.ID].QuestionCount == nil || *byID[empty.ID].QuestionCount != 0 {
+		t.Fatalf("无题目标签应为 0, got %v", byID[empty.ID].QuestionCount)
+	}
+
+	adminTags := mustListQuestionTags(t, svc, false, true, nil)
+	byID2 := map[int]QuestionTagDict{}
+	for _, d := range adminTags {
+		byID2[d.ID] = d
+	}
+	if byID2[tag.ID].QuestionCount == nil || *byID2[tag.ID].QuestionCount != 2 {
+		t.Fatalf("管理端应统计全部 2 道题, got %v", byID2[tag.ID].QuestionCount)
+	}
+}
+
+// TestListQuestionTags_CredentialPartition 标签计数按目标证件分区（#702）：
+// 学员端传证件时只统计该证件的已发布非真题题；不传保持全局口径。
+func TestListQuestionTags_CredentialPartition(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
+	credA := model.Credential{Code: "N1", Name: "叉车司机N1"}
+	if err := db.Create(&credA).Error; err != nil {
+		t.Fatalf("建证件A失败: %v", err)
+	}
+	credB := model.Credential{Code: "ELEC", Name: "低压电工"}
+	if err := db.Create(&credB).Error; err != nil {
+		t.Fatalf("建证件B失败: %v", err)
+	}
+
+	mkQ := func(content string, credID int) {
+		t.Helper()
+		q := model.Question{
+			Type: "single_choice", Content: content,
+			Options: model.JSONB(json.RawMessage(`["A","B"]`)), Answer: `"A"`,
+		}
+		if credID > 0 {
+			q.CredentialID = &credID
+		}
+		createQuestionAs(t, db, q, []int{tag.ID}, "published")
+	}
+	// A 证件 2 道、证件为空 1 道
+	mkQ("A证件题1", credA.ID)
+	mkQ("A证件题2", credA.ID)
+	mkQ("无证件题", 0)
+
+	got := mustListQuestionTags(t, svc, true, false, &credA.ID)
+	byID := map[int]QuestionTagDict{}
+	for _, d := range got {
+		byID[d.ID] = d
+	}
+	if byID[tag.ID].QuestionCount == nil || *byID[tag.ID].QuestionCount != 2 {
+		t.Fatalf("A证件分区应统计 2 道, got %v", byID[tag.ID].QuestionCount)
+	}
+	gotB := mustListQuestionTags(t, svc, true, false, &credB.ID)
+	for _, d := range gotB {
+		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 0) {
+			t.Fatalf("B证件分区应为 0, got %v", d.QuestionCount)
+		}
+	}
+	global := mustListQuestionTags(t, svc, true, false, nil)
+	for _, d := range global {
+		if d.ID == tag.ID && (d.QuestionCount == nil || *d.QuestionCount != 3) {
+			t.Fatalf("不分区应统计全部 3 道, got %v", d.QuestionCount)
+		}
+	}
+}
+
+func TestSetQuestionTags(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	q := testutil.SeedQuestion(t, db, "single_choice", "液压相关题目", "A")
+	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
+	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动", SortOrder: coerce.IntPtr(2)})
+
+	// 设置两个标签
+	if err := svc.SetQuestionTags(q.ID, []int{tag1.ID, tag2.ID}); err != nil {
+		t.Fatalf("设置标签失败: %v", err)
+	}
+	tags := svc.loadQuestionTags(q.ID)
+	if len(tags) != 2 {
+		t.Fatalf("应 2 个标签, got %d", len(tags))
+	}
+	if tags[0].Name != "液压" {
+		t.Fatalf("应按 sort_order 排序: %+v", tags)
+	}
+
+	// 全量替换为 1 个
+	if err := svc.SetQuestionTags(q.ID, []int{tag2.ID}); err != nil {
+		t.Fatalf("替换标签失败: %v", err)
+	}
+	tags = svc.loadQuestionTags(q.ID)
+	if len(tags) != 1 {
+		t.Fatal("替换后应只剩 1 个标签")
+	}
+
+	// 清空
+	if err := svc.SetQuestionTags(q.ID, []int{}); err != nil {
+		t.Fatalf("清空标签失败: %v", err)
+	}
+	tags = svc.loadQuestionTags(q.ID)
+	if len(tags) != 0 {
+		t.Fatal("清空后应为 0 个标签")
+	}
+
+	// 不存在的标签
+	if err := svc.SetQuestionTags(q.ID, []int{9999}); err == nil {
+		t.Fatal("不存在的标签应报错")
+	}
+	// 不存在的题目
+	if err := svc.SetQuestionTags(9999, []int{1}); err == nil {
+		t.Fatal("不存在的题目应报错")
+	}
+}
+
+// --- 目录树 ---
+
+func TestGetCatalogTree(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建专业方向失败: %v", err)
+	}
+	disabledSpec := model.Specialty{Code: "off", Name: "停用方向", Status: 0, SortOrder: 2, CreatedAt: testutil.Now()}
+	db.Create(&disabledSpec)
+	// GORM 对带 default 标签的零值字段会省略，改用显式更新设置停用状态
+	db.Model(&disabledSpec).Update("status", 0)
+
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+
+	c1 := model.Course{Name: "叉车基础", Status: 1, TheoryHours: 20,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&c1).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	c2 := model.Course{Name: "下架课程", Status: 0,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	db.Create(&c2)
+	db.Model(&c2).Update("status", 0)
+	ch := model.Chapter{CourseID: c1.CourseID, Title: "第一章", Duration: 10, CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatalf("创建章节失败: %v", err)
+	}
+
+	tree := svc.GetCatalogTree(nil)
+	if len(tree.Specialties) != 1 {
+		t.Fatalf("应只返回启用的专业方向, got %d", len(tree.Specialties))
+	}
+	if tree.Specialties[0].Name != "操作" {
+		t.Fatalf("专业方向名称不匹配: %+v", tree.Specialties[0])
+	}
+	levels := tree.Specialties[0].Levels
+	if len(levels) != 1 {
+		t.Fatalf("应 1 个等级, got %d", len(levels))
+	}
+	courses := levels[0].Courses
+	if len(courses) != 1 {
+		t.Fatalf("应只返回上架课程, got %d", len(courses))
+	}
+	if courses[0].Name != "叉车基础" || *courses[0].ChapterCount != 1 {
+		t.Fatalf("课程数据不匹配: %+v", courses[0])
+	}
+}
+
+// TestGetCatalogTree_CredentialPartition 目录树按目标证件分区（#702）：
+// 传证件只返回该证件课程；空证件分区返回空树（调用方走内容建设中空状态）。
+func TestGetCatalogTree_CredentialPartition(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	db.Create(&spec)
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	db.Create(&lv)
+	credA := model.Credential{Code: "N1", Name: "叉车司机N1"}
+	db.Create(&credA)
+	credB := model.Credential{Code: "ELEC", Name: "低压电工"}
+	db.Create(&credB)
+	db.Create(&model.Course{Name: "A课", Status: 1, CredentialID: &credA.ID,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()})
+
+	countCourses := func(tree *CatalogTreeDTO) int {
+		n := 0
+		for _, s := range tree.Specialties {
+			for _, l := range s.Levels {
+				n += len(l.Courses)
+			}
+		}
+		return n
+	}
+	if n := countCourses(svc.GetCatalogTree(&credA.ID)); n != 1 {
+		t.Fatalf("A证件分区应 1 门课, got %d", n)
+	}
+	if n := countCourses(svc.GetCatalogTree(&credB.ID)); n != 0 {
+		t.Fatalf("B证件分区应 0 门课, got %d", n)
+	}
+	if n := countCourses(svc.GetCatalogTree(nil)); n != 1 {
+		t.Fatalf("不分区应 1 门课, got %d", n)
+	}
+}
+
+// TestGetAdminCatalogTree 管理端目录树：含停用项、课程章节节点，课程按 sort_order 排序。
+func TestGetAdminCatalogTree(t *testing.T) {
+	svc, db := newCatalogSvc(t)
+	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建专业方向失败: %v", err)
+	}
+	disabledSpec := model.Specialty{Code: "off", Name: "停用方向", Status: 0, SortOrder: 2, CreatedAt: testutil.Now()}
+	db.Create(&disabledSpec)
+	db.Model(&disabledSpec).Update("status", 0)
+
+	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, SortOrder: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	// 2 门课程：sort_order 2 在前、1 在后，验证按 sort_order 排序；另 1 门下架课程
+	c1 := model.Course{Name: "晚建但排序靠前", Status: 1, SortOrder: 1,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&c1).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	c2 := model.Course{Name: "早建但排序靠后", Status: 1, SortOrder: 2,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now().Add(-time.Hour)}
+	if err := db.Create(&c2).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	c3 := model.Course{Name: "下架课程", Status: 0, SortOrder: 3,
+		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	db.Create(&c3)
+	db.Model(&c3).Update("status", 0)
+
+	ch1 := model.Chapter{CourseID: c1.CourseID, Title: "第一章", Duration: 10, OrderNum: 2, CreatedAt: testutil.Now()}
+	db.Create(&ch1)
+	ch2 := model.Chapter{CourseID: c1.CourseID, Title: "第二章", Duration: 20, OrderNum: 1, CreatedAt: testutil.Now()}
+	db.Create(&ch2)
+
+	tree := svc.GetAdminCatalogTree()
+	specialties := tree.Specialties
+	if len(specialties) != 2 {
+		t.Fatalf("管理端应包含停用方向, got %d", len(specialties))
+	}
+	if specialties[0].Name != "操作" || specialties[1].Name != "停用方向" {
+		t.Fatalf("方向排序不匹配: %+v", specialties)
+	}
+	courses := specialties[0].Levels[0].Courses
+	if len(courses) != 3 {
+		t.Fatalf("管理端应包含下架课程, got %d", len(courses))
+	}
+	if courses[0].Name != "晚建但排序靠前" || courses[1].Name != "早建但排序靠后" {
+		t.Fatalf("课程应按 sort_order 排序: %+v", courses)
+	}
+	chapters := *courses[0].Chapters
+	if len(chapters) != 2 {
+		t.Fatalf("课程应含章节节点, got %d", len(chapters))
+	}
+	if chapters[0].Title != "第二章" || chapters[1].Title != "第一章" {
+		t.Fatalf("章节应按 order_num 排序: %+v", chapters)
+	}
+	if courses[2].Name != "下架课程" {
+		t.Fatalf("下架课程应保留: %+v", courses[2])
+	}
+}
+
+// --- 字典 JSON 契约（字节级） ---
+// 旧实现以 map[string]any 返回字典，encoding/json 按键排序序列化；
+// typed DTO 的字段声明顺序必须与排序后键序一致，保证响应 JSON 字节级不变。
+
+func TestSpecialtyDictJSON(t *testing.T) {
+	got, _ := json.Marshal(SpecialtyDict{
+		Code: "op", CreatedAt: "2026-08-08T08:00:00.000000", Description: "方向说明",
+		Name: "操作", SortOrder: 1, SpecialtyID: 3, Status: 1,
+	})
+	want := `{"code":"op","created_at":"2026-08-08T08:00:00.000000","description":"方向说明","name":"操作","sort_order":1,"specialty_id":3,"status":1}`
+	if string(got) != want {
+		t.Fatalf("专业方向字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestLevelDictJSON(t *testing.T) {
+	got, _ := json.Marshal(LevelDict{
+		Code: "bg", CreatedAt: "2026-08-08T08:00:00.000000", Description: "",
+		LevelID: 2, Name: "入门", SortOrder: 1, Status: 1,
+	})
+	want := `{"code":"bg","created_at":"2026-08-08T08:00:00.000000","description":"","level_id":2,"name":"入门","sort_order":1,"status":1}`
+	if string(got) != want {
+		t.Fatalf("课程等级字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestCertificateTemplateDictJSON(t *testing.T) {
+	got, _ := json.Marshal(CertificateTemplateDict{
+		Code: "C1", CreatedAt: "2026-08-08T08:00:00.000000", Description: "模板",
+		ID: 1, Name: "证书", Status: 1, TemplateURL: "https://x/t.pdf",
+		UpdatedAt: "2026-08-09T08:00:00.000000", ValidityDays: 365,
+	})
+	want := `{"code":"C1","created_at":"2026-08-08T08:00:00.000000","description":"模板","id":1,"name":"证书","status":1,"template_url":"https://x/t.pdf","updated_at":"2026-08-09T08:00:00.000000","validity_days":365}`
+	if string(got) != want {
+		t.Fatalf("证书模板字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+func TestQuestionTagDictJSON(t *testing.T) {
+	// 创建/更新返回：无 question_count
+	got, _ := json.Marshal(QuestionTagDict{
+		Code: "hydraulic", CreatedAt: "2026-08-08T08:00:00.000000", Description: "",
+		ID: 1, Name: "液压", SortOrder: 1, Status: 1,
+		UpdatedAt: "2026-08-08T08:00:00.000000",
+	})
+	want := `{"code":"hydraulic","created_at":"2026-08-08T08:00:00.000000","description":"","id":1,"name":"液压","sort_order":1,"status":1,"updated_at":"2026-08-08T08:00:00.000000"}`
+	if string(got) != want {
+		t.Fatalf("题库标签字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+
+	// 列表返回：question_count 恒存在（含 0）
+	zero := int64(0)
+	withCount, _ := json.Marshal(QuestionTagDict{
+		Code: "hydraulic", CreatedAt: "2026-08-08T08:00:00.000000", Description: "",
+		ID: 1, Name: "液压", QuestionCount: &zero, SortOrder: 1, Status: 1,
+		UpdatedAt: "2026-08-08T08:00:00.000000",
+	})
+	wantCount := `{"code":"hydraulic","created_at":"2026-08-08T08:00:00.000000","description":"","id":1,"name":"液压","question_count":0,"sort_order":1,"status":1,"updated_at":"2026-08-08T08:00:00.000000"}`
+	if string(withCount) != wantCount {
+		t.Fatalf("题库标签列表字典 JSON 与旧 map 契约不符\n got: %s\nwant: %s", withCount, wantCount)
+	}
+}
+
+func TestQuestionTagRefJSON(t *testing.T) {
+	got, _ := json.Marshal(QuestionTagRef{Code: "hydraulic", ID: 1, Name: "液压", SortOrder: 1, Status: 1})
+	want := `{"code":"hydraulic","id":1,"name":"液压","sort_order":1,"status":1}`
+	if string(got) != want {
+		t.Fatalf("题目-标签关联 JSON 与旧 map 契约不符\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// mustListQuestionTags 标签读面的测试内取用：该读面自 ADR-0062 票6 起带 error 出口，
+// 查不动即让测试失败，不得被读成「没有标签」。
+func mustListQuestionTags(t *testing.T, svc *Service, activeOnly, includeSourceTags bool, credentialID *int) []QuestionTagDict {
+	t.Helper()
+	list, err := svc.ListQuestionTags(activeOnly, includeSourceTags, credentialID)
+	if err != nil {
+		t.Fatalf("标签列表查询失败: %v", err)
+	}
+	return list
+}

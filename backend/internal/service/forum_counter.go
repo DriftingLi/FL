@@ -5,7 +5,6 @@ package service
 
 import (
 	"fmt"
-	"strings"
 
 	"gorm.io/gorm"
 
@@ -59,18 +58,4 @@ func adjustForumCount(exec *gorm.DB, dst any, idCol string, id int64, col string
 		fmt.Sprintf("CASE WHEN %s + ? < 0 THEN 0 ELSE %s + ? END", col, col),
 		delta, delta,
 	)).Error
-}
-
-// isDuplicateError 判断数据库错误是否为唯一约束冲突——幂等写入点共享谓词，
-// 收敛原多处字符串匹配复制；小写归一后兼容 PG（duplicate key / uq_ 约束名）
-// 与 SQLite（UNIQUE constraint failed）双方言。
-func isDuplicateError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "duplicate") ||
-		strings.Contains(msg, "unique") ||
-		strings.Contains(msg, "uq_") ||
-		strings.Contains(msg, "pk_")
 }

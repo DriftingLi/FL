@@ -1,0 +1,238 @@
+// Package course 测试：章节详情共享实现（学员端一节，Ticket #214 C4）。
+// 导师端（TutorService）一节留在 internal/service/tutor_chapter_detail_test.go：
+// 那几条用例的接缝是 TutorService，而域包测试不能 import internal/service 的测试助手（会成环）。
+// seam：testutil.NewMemoryDB 内存 sqlite。
+// 锁定行为：
+//   - 学员端 GetChapterDetail 的 prev/next 边界、文件列表、legacy 兼容字段；
+//   - study_status 仅在学员端路径回填（not_started/completed/studying）。
+package course
+
+import (
+	"encoding/json"
+	"testing"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/model"
+	"forklift-training/internal/testutil"
+)
+
+// seedChapterWithMeta 建一门课程并返回其中 3 个章节（order_num 1/2/3）。
+// 第一个章节挂一个 chapter_file 表条目；第三个章节带 legacy file_url（无 chapter_file 行）。
+func seedChapterWithMeta(t *testing.T, db *gorm.DB) (*model.Course, []model.Chapter) {
+	t.Helper()
+	// 课程必须是「已发布 + 已挂载」：按 id 取章节详情的读路径已纳入学员可见性谓词
+	// （ADR-0058），否则本夹具下的详情读取会按「不存在」返回。不可见面另由
+	// TestCourseReadVisibilityContract 覆盖（api 层）。
+	spec := model.Specialty{Code: "chapter-detail", Name: "章节详情", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("创建方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "chapter-detail-lv", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("创建等级失败: %v", err)
+	}
+	course := model.Course{Name: "章节详情课程", Status: 1,
+		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
+	if err := db.Create(&course).Error; err != nil {
+		t.Fatalf("创建课程失败: %v", err)
+	}
+	chapters := make([]model.Chapter, 0, 3)
+	for i := 1; i <= 3; i++ {
+		ch := model.Chapter{CourseID: course.CourseID, Title: "章节", OrderNum: i, CreatedAt: testutil.Now()}
+		if err := db.Create(&ch).Error; err != nil {
+			t.Fatalf("创建章节失败: %v", err)
+		}
+		chapters = append(chapters, ch)
+	}
+	// 第一章：chapter_file 表条目
+	if err := db.Create(&model.ChapterFile{
+		ChapterID: &chapters[0].ChapterID, FileName: "a.pdf",
+		FileURL: "/static/uploads/chapters/a.pdf", ContentType: "document",
+		FileSize: 100, CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("创建 chapter_file 失败: %v", err)
+	}
+	// 第三章：legacy file_url（无 chapter_file 行）
+	if err := db.Model(&chapters[2]).Updates(map[string]any{
+		"file_url": "/static/uploads/chapters/c.pdf", "content_type": "ppt",
+	}).Error; err != nil {
+		t.Fatalf("更新 legacy file_url 失败: %v", err)
+	}
+	return &course, chapters
+}
+
+// cloneDetailToMap 将 ChapterDetailDTO 序列化为 map，便于比对两端 shape 零漂移。
+func cloneDetailToMap(t *testing.T, d *ChapterDetailDTO) map[string]any {
+	t.Helper()
+	b, err := marshalJSON(t, d)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	return m
+}
+
+func newServiceForTest(t *testing.T, db *gorm.DB) *Service {
+	t.Helper()
+	return NewService(db, nil, zap.NewNop())
+}
+
+// ===== 学员端 Service.GetChapterDetail =====
+
+// TestStudentChapterDetailPrevNextBoundaries 学员端详情 prev/next 边界。
+func TestStudentChapterDetailPrevNextBoundaries(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := newServiceForTest(t, db)
+	course, chapters := seedChapterWithMeta(t, db)
+
+	first, err := svc.GetChapterDetail(course.CourseID, chapters[0].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("首个章节详情失败: %v", err)
+	}
+	if first.PreviousChapterID != nil {
+		t.Fatalf("首章节 prev 应 nil")
+	}
+	if first.NextChapterID == nil || *first.NextChapterID != chapters[1].ChapterID {
+		t.Fatalf("首章节 next 应为 %d", chapters[1].ChapterID)
+	}
+
+	mid, err := svc.GetChapterDetail(course.CourseID, chapters[1].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("中间章节详情失败: %v", err)
+	}
+	if mid.PreviousChapterID == nil || *mid.PreviousChapterID != chapters[0].ChapterID {
+		t.Fatalf("中间章节 prev 应为 %d", chapters[0].ChapterID)
+	}
+	if mid.NextChapterID == nil || *mid.NextChapterID != chapters[2].ChapterID {
+		t.Fatalf("中间章节 next 应为 %d", chapters[2].ChapterID)
+	}
+
+	last, err := svc.GetChapterDetail(course.CourseID, chapters[2].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("末章节详情失败: %v", err)
+	}
+	if last.PreviousChapterID == nil || *last.PreviousChapterID != chapters[1].ChapterID {
+		t.Fatalf("末章节 prev 应为 %d", chapters[1].ChapterID)
+	}
+	if last.NextChapterID != nil {
+		t.Fatalf("末章节 next 应 nil")
+	}
+}
+
+// TestStudentChapterDetailFilesAndLegacy 学员端详情文件列表 + legacy 兼容。
+func TestStudentChapterDetailFilesAndLegacy(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := newServiceForTest(t, db)
+	course, chapters := seedChapterWithMeta(t, db)
+
+	first, err := svc.GetChapterDetail(course.CourseID, chapters[0].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("第一章详情失败: %v", err)
+	}
+	if len(first.Files) != 1 || first.Files[0].FileName != "a.pdf" {
+		t.Fatalf("第一章 files 不符: %#v", first.Files)
+	}
+
+	last, err := svc.GetChapterDetail(course.CourseID, chapters[2].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("第三章详情失败: %v", err)
+	}
+	if len(last.Files) != 1 || last.Files[0].FileID != 0 ||
+		last.Files[0].ChapterID == nil || *last.Files[0].ChapterID != chapters[2].ChapterID ||
+		last.Files[0].FileName != "c.pdf" || last.Files[0].ContentType != "ppt" {
+		t.Fatalf("第三章 legacy 折叠不符: %#v", last.Files)
+	}
+
+	mid, err := svc.GetChapterDetail(course.CourseID, chapters[1].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("第二章详情失败: %v", err)
+	}
+	if mid.Files == nil || len(mid.Files) != 0 {
+		t.Fatalf("第二章 files 应为空数组, got %#v", mid.Files)
+	}
+}
+
+// TestStudentChapterDetailStudyStatus 学员端 study_status 回填（studentID>0 时）。
+func TestStudentChapterDetailStudyStatus(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := newServiceForTest(t, db)
+	course, chapters := seedChapterWithMeta(t, db)
+
+	d, err := svc.GetChapterDetail(course.CourseID, chapters[0].ChapterID, 1)
+	if err != nil {
+		t.Fatalf("详情失败: %v", err)
+	}
+	if d.StudyStatus != "not_started" {
+		t.Fatalf("无记录 study_status 应为 not_started, got %q", d.StudyStatus)
+	}
+
+	if err := db.Create(&model.StudyRecord{
+		StudentID: 1, CourseID: course.CourseID, ChapterID: &chapters[1].ChapterID,
+		Progress: 50, StudyDate: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("创建学习记录失败: %v", err)
+	}
+	d, err = svc.GetChapterDetail(course.CourseID, chapters[1].ChapterID, 1)
+	if err != nil {
+		t.Fatalf("详情失败: %v", err)
+	}
+	if d.StudyStatus != "studying" {
+		t.Fatalf("progress<100 study_status 应为 studying, got %q", d.StudyStatus)
+	}
+
+	if err := db.Model(&model.StudyRecord{}).
+		Where("student_id = ? AND course_id = ? AND chapter_id = ?", 1, course.CourseID, chapters[1].ChapterID).
+		Update("progress", 100).Error; err != nil {
+		t.Fatalf("更新 progress 失败: %v", err)
+	}
+	d, err = svc.GetChapterDetail(course.CourseID, chapters[1].ChapterID, 1)
+	if err != nil {
+		t.Fatalf("详情失败: %v", err)
+	}
+	if d.StudyStatus != "completed" {
+		t.Fatalf("progress=100 study_status 应为 completed, got %q", d.StudyStatus)
+	}
+}
+
+// TestStudentChapterDetailNoStudentNoStatus studentID<=0 时 study_status 省略（omitempty）。
+func TestStudentChapterDetailNoStudentNoStatus(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := newServiceForTest(t, db)
+	course, chapters := seedChapterWithMeta(t, db)
+
+	d, err := svc.GetChapterDetail(course.CourseID, chapters[0].ChapterID, 0)
+	if err != nil {
+		t.Fatalf("详情失败: %v", err)
+	}
+	if d.StudyStatus != "" {
+		t.Fatalf("studentID<=0 时 study_status 应为空, got %q", d.StudyStatus)
+	}
+	m := cloneDetailToMap(t, d)
+	if _, ok := m["study_status"]; ok {
+		t.Fatal("studentID<=0 时 study_status 不应出现在 JSON 中")
+	}
+}
+
+// TestStudentChapterDetailErrors 章节不存在/不属于该课程报错。
+func TestStudentChapterDetailErrors(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := newServiceForTest(t, db)
+	course, chapters := seedChapterWithMeta(t, db)
+
+	if _, err := svc.GetChapterDetail(course.CourseID, 99999, 0); err == nil {
+		t.Fatal("不存在的章节应报错")
+	}
+	other := model.Course{Name: "其他课程", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&other).Error; err != nil {
+		t.Fatalf("创建其他课程失败: %v", err)
+	}
+	if _, err := svc.GetChapterDetail(other.CourseID, chapters[0].ChapterID, 0); err == nil ||
+		err.Error() != "章节不属于该课程" {
+		t.Fatalf("期望 '章节不属于该课程', got %v", err)
+	}
+}

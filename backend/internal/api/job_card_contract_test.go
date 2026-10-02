@@ -4,19 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"forklift-training/internal/config"
-	"forklift-training/internal/model"
-	"forklift-training/internal/security"
-	"forklift-training/internal/service"
-	"forklift-training/internal/storage"
-	"forklift-training/internal/testutil"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"forklift-training/internal/config"
+	"forklift-training/internal/filestore"
+	"forklift-training/internal/model"
+	"forklift-training/internal/security"
+	"forklift-training/internal/service"
+	"forklift-training/internal/storage"
+	"forklift-training/internal/testutil"
 )
 
 func TestJobCardContract(t *testing.T) {
@@ -40,7 +43,7 @@ func TestJobCardContract(t *testing.T) {
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	st := storage.NewLocalStorage(t.TempDir())
-	fileSvc := service.NewFileStore("", st, zap.NewNop())
+	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	jobSvc := service.NewJobCardService(db, fileSvc, zap.NewNop())
 	deps.FileSvc = fileSvc
 	deps.JobCardSvc = jobSvc

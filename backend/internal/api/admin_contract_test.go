@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -52,7 +53,7 @@ func newAdminContractDeps(t *testing.T) (*Deps, *gorm.DB, string) {
 		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
 		RecruiterCookie:       config.RecruiterCookieConfig{Name: "recruiter_token", Domain: "", Secure: false},
 	}
-	// 用真实本地存储装配（不是 newContractDeps 的 nil）：章节/课程删除与图片上传会走 FileStore，
+	// 用真实本地存储装配（不是 newContractDeps 的 nil）：章节/课程删除与图片上传会走 filestore.FileStore，
 	// nil storage 只会在那些路径上 panic（片七契约测试要覆盖它们）。
 	deps := NewDeps(cfg, db, storage.NewLocalStorage(t.TempDir()), zap.NewNop(), stubExportStore{})
 
@@ -378,12 +379,12 @@ func TestAdminContract_AIConfigsBindingsReviewAudit(t *testing.T) {
 	if err := json.Unmarshal(raw, &bindings); err != nil {
 		t.Fatalf("data 不是数组: %v raw=%s", err, string(raw))
 	}
-	if len(bindings) != len(service.AllAIFeatures) {
-		t.Fatalf("绑定列表条数 = %d, 期望全部功能 %d 条", len(bindings), len(service.AllAIFeatures))
+	if len(bindings) != len(aiassistant.AllAIFeatures) {
+		t.Fatalf("绑定列表条数 = %d, 期望全部功能 %d 条", len(bindings), len(aiassistant.AllAIFeatures))
 	}
 	assertHasKeys(t, bindings[0], "feature_key", "feature_label")
 
-	featureKey := service.AllAIFeatures[0]
+	featureKey := aiassistant.AllAIFeatures[0]
 	rec = doWithToken(t, r, token, http.MethodPut, "/api/admin/ai-feature-bindings/"+featureKey,
 		map[string]any{"config_id": configID})
 	assertDataNull(t, rec, http.StatusOK)
@@ -398,8 +399,8 @@ func TestAdminContract_AIConfigsBindingsReviewAudit(t *testing.T) {
 	// ===== 资料审核 =====
 	student := seedAdminContractStudent(t, db, "stu1")
 	pending := model.ProfileChangeRequest{
-		UserID: student.ID, FieldType: service.ProfileFieldNickname,
-		OldValue: "旧昵称", NewValue: "新昵称", Status: service.ProfileStatusPending, CreatedAt: testutil.Now(),
+		UserID: student.ID, FieldType: model.ProfileFieldNickname,
+		OldValue: "旧昵称", NewValue: "新昵称", Status: model.ProfileStatusPending, CreatedAt: testutil.Now(),
 	}
 	if err := db.Create(&pending).Error; err != nil {
 		t.Fatalf("插入待审请求失败: %v", err)

@@ -14,7 +14,10 @@ package service
 import (
 	"gorm.io/gorm"
 
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
 )
 
 // partitionSpec 分区声明（泛型行类型 R）：六个语义槽位 + 两个机械槽位（scan 列 / 标题命中判据）。
@@ -25,7 +28,7 @@ type partitionSpec[R any] struct {
 	// 槽位②：匹配面（WHERE 形状，含 gorm Model 与 LIKE 匹配列）。
 	match func(s *SearchService, p searchParams) *gorm.DB
 	// 槽位③：可见性 scope 谓词。ADR-0050 决策 1 的具名 scope 在这里接入
-	// （MountedCourseScope / QuestionPoolScope）；nil = 该分区无额外可见性谓词。
+	// （course.MountedCourseScope / questionbank.QuestionPoolScope）；nil = 该分区无额外可见性谓词。
 	scope func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB
 
 	// 槽位④：hit 函数——命中位置与片段（hitOf / hitOfTopic）。
@@ -56,8 +59,8 @@ var coursePartition = partitionSpec[model.Course]{
 	},
 	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
 		// 挂载不变式（ADR-0006 / ADR-0050 决策 1）叠加已发布；证件分区由读面给定。
-		q = MountedCourseScope(q.Where("status = 1"))
-		return EntityOwnedBy(q, "credential_id", p.cred)
+		q = course.MountedCourseScope(q.Where("status = 1"))
+		return scope.EntityOwnedBy(q, "credential_id", p.cred)
 	},
 	selects:   "course_id, name, cover_image, description",
 	titleHit:  searchCourseTitleHit,
@@ -89,8 +92,8 @@ var chapterPartition = partitionSpec[model.Chapter]{
 	},
 	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
 		// 章节可见性跟随课程：同一挂载不变式 scope（不是手拼谓词）。
-		mounted := MountedCourseScope(s.db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
-		mounted = EntityOwnedBy(mounted, "credential_id", p.cred)
+		mounted := course.MountedCourseScope(s.db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		mounted = scope.EntityOwnedBy(mounted, "credential_id", p.cred)
 		return q.Where("course_id IN (?)", mounted)
 	},
 	selects:   "chapter_id, course_id, title, content, description",
@@ -133,7 +136,7 @@ var questionPartition = partitionSpec[model.Question]{
 	},
 	scope: func(s *SearchService, q *gorm.DB, p searchParams) *gorm.DB {
 		// 题库池口径单点（published + 排源标记真题题 + 当前证件），ADR-0050 决策 1。
-		return QuestionPoolScope(q, p.cred)
+		return questionbank.QuestionPoolScope(q, p.cred)
 	},
 	selects: "id, content",
 	// 无标题面：题目以题干为标题，命中判据就是题干本身 → 一级排序恒同，直接按 id 倒序。

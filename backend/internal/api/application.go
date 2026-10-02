@@ -13,18 +13,19 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 // applicationErrStatus 投递域哨兵→状态码表（#611）：职位不可投/不存在 → 404，非本人 → 403，
 // 其余（重复投递/冷却/日限/简历不完整等业务校验）兜底 400。
-var applicationErrStatus = &errStatusTable{
-	entries: []errStatusEntry{
-		{sentinel: service.ErrApplyJobInactive, status: http.StatusNotFound},
-		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
+var applicationErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrApplyJobInactive, Status: http.StatusNotFound},
+		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
 	},
-	fallback: http.StatusBadRequest,
+	Fallback: http.StatusBadRequest,
 }
 
 // RegisterApplicationRoutes 注册投递相关路由。
@@ -62,9 +63,9 @@ func NewApplicationHandler(svc *service.JobApplicationService) *ApplicationHandl
 // @Failure 404 {object} response.R "职位不可投递"
 // @Router /jobs/{id}/apply [post]
 func (h *ApplicationHandler) Apply(c *gin.Context) {
-	Endpoint[struct{}, service.ApplicationDTO]{
+	httpx.Endpoint[struct{}, service.ApplicationDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
-			id, err := pathInt(c, "id", "职位 ID 无效")
+			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
@@ -89,10 +90,10 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/applications [get]
 func (h *ApplicationHandler) ListMine(c *gin.Context) {
-	Endpoint[struct{}, service.ApplicationListResult]{
+	httpx.Endpoint[struct{}, service.ApplicationListResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationListResult, error) {
-			page := atoiDefault(c.Query("page"), 1)
-			pageSize := atoiDefault(c.Query("page_size"), 20)
+			page := httpx.QueryIntDefault(c, "page", 1)
+			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			items, total, err := h.svc.ListForStudent(middleware.CurrentUserID(c), page, pageSize)
 			if err != nil {
 				return nil, err
@@ -118,12 +119,12 @@ func (h *ApplicationHandler) ListMine(c *gin.Context) {
 // @Router /resume/applications/{id}/withdraw [post]
 // body: { revoke_contact?: boolean } 默认 false——撤回投递默认不连带收回联系方式授权。
 func (h *ApplicationHandler) Withdraw(c *gin.Context) {
-	Endpoint[struct{}, service.ApplicationDTO]{
+	httpx.Endpoint[struct{}, service.ApplicationDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) {
 			return &struct{}{}, nil
 		},
 		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
-			id, err := pathInt64(c, "id", "投递 ID 无效")
+			id, err := httpx.PathInt64(c, "id", "投递 ID 无效")
 			if err != nil {
 				return nil, err
 			}

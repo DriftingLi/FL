@@ -6,13 +6,14 @@
 //     到 service，于是 `GET /course/0` 对外答 404「课程不存在」（拿非法输入冒充不存在的资源），
 //     而用户/讲师面因 service 有 `id <= 0` guard 答 400、用的又是另一句文案（「用户 ID 非法」）；
 //   - 37 处自定义实现：36 处裸 `strconv.(Atoi|ParseInt)` 读 `c.Param`（散在 10 个文件），另 1 处
-//     把路径参数喂给查询侧守卫 `requiredPositiveID`。其中 `question_interaction.go` 那 7 处
+//     把路径参数喂给查询侧守卫（原 `requiredPositiveID`，今 `httpx.PositiveID`）。其中 `question_interaction.go` 那 7 处
 //     **整个丢弃解析错误**且无 `<= 0` ⇒ 非数字 id 以 `0` 进 service：6 个端点经
 //     `renderOutOfPoolQuestion` 答 404「题目不存在」，`GET /questions/:question_id/knowledge`
 //     更答 **200 + 空数组**（下面那三行就是钉这一格的）。
 //
-// 对比之下，**查询**参数侧早就有单点（`queryIDPtr` / `requiredPositiveID`，helpers.go 的注释自称
-// 「id>0 守卫的单点实现」）⇒ 同一类事实在两个入口上一个是单点、一个是三份实现，
+// 对比之下，**查询**参数侧早就有单点（原 `internal/api/helpers.go` 的 `queryIDPtr` / `requiredPositiveID`
+// 注释自称「id>0 守卫的单点实现」；波 0a 尾款已升级进 `pkg/httpx` 的 `QueryIDPtr` / `PositiveID`，该文件随之删除）⇒
+// 同一类事实在两个入口上一个是单点、一个是三份实现，
 // 这正是本波判据要抓的形状。
 //
 // 两道断言各有分工：
@@ -28,6 +29,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"forklift-training/pkg/httpx"
 )
 
 // TestPathIntRejectsNonPositive 解析层的判定表：正整数放行，非数字/0/负数一律 400 且带本端点文案。
@@ -52,7 +55,7 @@ func TestPathIntRejectsNonPositive(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Params = gin.Params{{Key: "id", Value: tc.raw}}
 
-			v, err := pathInt(c, "id", "ID无效")
+			v, err := httpx.PathInt(c, "id", "ID无效")
 			if tc.wantOK {
 				if err != nil {
 					t.Fatalf("合法值 %q 被拒：%v", tc.raw, err)
@@ -65,9 +68,9 @@ func TestPathIntRejectsNonPositive(t *testing.T) {
 			if err == nil {
 				t.Fatalf("非正整数 %q 未被拒（v=%d）⇒ 它会继续走到 service，跨域档位就此分叉", tc.raw, v)
 			}
-			pe, ok := err.(*ParseError)
+			pe, ok := err.(*httpx.ParseError)
 			if !ok {
-				t.Fatalf("%q 的错误类型不是 *ParseError：%T（默认错误面会因此而不是 400）", tc.raw, err)
+				t.Fatalf("%q 的错误类型不是 *httpx.ParseError：%T（默认错误面会因此而不是 400）", tc.raw, err)
 			}
 			if pe.Status != http.StatusBadRequest || pe.Message != "ID无效" {
 				t.Fatalf("%q 应为 400 + 本端点文案，实得 %d %q", tc.raw, pe.Status, pe.Message)

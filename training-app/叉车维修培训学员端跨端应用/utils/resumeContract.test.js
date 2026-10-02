@@ -382,7 +382,8 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     expect(registered).toContain('/resume/image');
     expect(registered.length).toBe(7);
 
-    const catalog = stripComments(readText(path.join(API_DIR, 'training_catalog.go')));
+    // 培训域随 P2 波 3b-2 搬进 internal/training/（handler.go 挂公开读面 /positions）
+    const catalog = stripComments(readText(path.join(ROOT, '..', '..', 'backend', 'internal', 'training', 'handler.go')));
     expect(catalog).toMatch(/rg\.GET\("\/positions"/);
   });
 

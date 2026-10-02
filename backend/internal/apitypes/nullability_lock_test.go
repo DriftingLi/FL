@@ -46,6 +46,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // nullabilityTag 是表态所在的 struct tag key；值域两个（可为 null / 出口恒非 null）。
@@ -63,7 +65,7 @@ const (
 //	（ADR-0064 原记「8 处早已带 x-nullable」由批③ 更正为 5 + 3，那 3 处是把标量指针字段上的
 //	x-nullable 也计了进来。）
 //
-// 那 12 处里有 1 处是这一批改判时**顺手捞出来的**：`service.ChapterSlidesDTO.slides` 的 null 出口
+// 那 12 处里有 1 处是这一批改判时**顺手捞出来的**：`course.ChapterSlidesDTO.slides` 的 null 出口
 // 早在批①′ 就举到了（当时全仓唯一一条正向证据），可它的 x-nullable 一直没落——因为这条判据
 // 历史上只报一个数、不点名，而批①-B 的清单是从判据 4 的「待举证」名单推出来的，它不在那份上。
 // ⇒ 下面 Scan 现在把欠账逐条 Logf 出来，与判据 4 对称。
@@ -87,10 +89,35 @@ type outletSource struct {
 }
 
 var (
-	nullableEvidenceSources = []outletSource{{"../service", "nullableOutlets"}}
+	// 目录按**模块根相对**登记（不再是 ../service）：测试文件随域包搬家后 cwd 相对路径会静默指偏。
+	// 2c 后 AI 域的 3 枚 nullable 声明由 internal/aiassistant 举证（internal/service 仍留 GenTaskStatus 一枚）。
+	nullableEvidenceSources = []outletSource{
+		{"internal/service", "nullableOutlets"},
+		{"internal/aiassistant", "nullableOutlets"},
+		{"internal/course", "nullableOutlets"},
+		{"internal/training", "nullableOutlets"},
+		{"internal/practicemode", "nullableOutlets"},
+	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
-	nonNilEvidenceSources = []outletSource{{"../service", "nonnilOutlets"}, {"../api", "nonnilOutlets"}}
+	// 域包拆出去之后多一行 internal/faq（表住在域包里，见 internal/faq/nonnil_outlets_test.go）——
+	// 「哪个域举证、证据在哪」跟着域走，这个清单是它唯一的登记处。
+	nonNilEvidenceSources = []outletSource{
+		{"internal/service", "nonnilOutlets"},
+		{"internal/api", "nonnilOutlets"},
+		{"internal/auth", "nonnilOutlets"},
+		{"internal/faq", "nonnilOutlets"},
+		{"internal/notification", "nonnilOutlets"},
+		{"internal/material", "nonnilOutlets"},
+		{"internal/points", "nonnilOutlets"},
+		{"internal/featured", "nonnilOutlets"},
+		{"internal/checkin", "nonnilOutlets"},
+		{"internal/contribution", "nonnilOutlets"},
+		{"internal/forum", "nonnilOutlets"},
+		{"internal/course", "nonnilOutlets"},
+		{"internal/training", "nonnilOutlets"},
+		{"internal/practicemode", "nonnilOutlets"},
+	}
 )
 
 // outletEvidenceKeys 收集来源目录里所有名字以 prefix 开头的复合字面量变量的键。
@@ -99,8 +126,14 @@ var (
 func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
+	// 一个键只许有一个举证地（跨包也算）：证据表拆进各域包之后，同一把钥匙若在两个包里各写
+	// 一遍，合并后的 map 会把重复悄悄吃掉 —— 运行时那条「同名键出现在两张表即 Fatal」只管得住
+	// 同一个包内（见 testutil.AssertNonNilOutlets），跨包这半边由这里补上。
+	owner := map[string]string{}
+	root := testutil.ModuleRoot(t)
 	for _, src := range sources {
-		entries, err := os.ReadDir(src.dir)
+		dir := filepath.Join(root, filepath.FromSlash(src.dir))
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatalf("读%s的证据目录 %s 失败: %v", what, src.dir, err)
 		}
@@ -110,7 +143,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 			if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") {
 				continue
 			}
-			f, err := parser.ParseFile(fset, filepath.Join(src.dir, e.Name()), nil, parser.ParseComments)
+			f, err := parser.ParseFile(fset, filepath.Join(dir, e.Name()), nil, parser.ParseComments)
 			if err != nil {
 				continue // 编译不过由 go build 报，这里不重复报
 			}
@@ -122,7 +155,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 				lit, ok := firstCompositeLit(vs)
 				if !ok {
 					t.Fatalf("%s 里的 %s 不是复合字面量：证据表被改成运行期构造了？",
-						filepath.Join(src.dir, e.Name()), vs.Names[0].Name)
+						filepath.Join(dir, e.Name()), vs.Names[0].Name)
 				}
 				found++
 				for _, el := range lit.Elts {
@@ -134,7 +167,13 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 					if !ok {
 						continue
 					}
-					out[strings.Trim(key.Value, `"`)] = true
+					k := strings.Trim(key.Value, `"`)
+					if prev, ok := owner[k]; ok && prev != src.dir {
+						t.Fatalf("%s 里的 %q 同时在 %s 举证：一条事实只许有一个举证地（跨包同一把钥匙会让「谁欠证据」失去唯一答案）",
+							src.dir, k, prev)
+					}
+					owner[k] = src.dir
+					out[k] = true
 				}
 				return false
 			})
@@ -152,7 +191,7 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 // null 出口的那些」；射程内总数 96，其中 5 处当时已带 x-nullable）。
 //
 //	99 处 nullable 声明 − 3 处落在 2xx 响应闭包外 = 96 在射程内；当时走过真实出口、marshal 出过
-//	`null` 的只有 1 处（service.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档） ⇒ 96 − 1 = 95
+//	`null` 的只有 1 处（course.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档） ⇒ 96 − 1 = 95
 //	    − 68（批①-A 改判 nonnil，它们本就不该说可空）  = 27
 //	    − 20（批①-B：15 处走真实出口 marshal 出 null 并进 nullableOutlets 表，5 处改判 nonnil） = 7
 //
@@ -184,10 +223,25 @@ func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
 // sweptDirs 扫哪些包目录。键 = 包名（swagger 的 definition 名前缀），值 = 目录。
 // 加新包就加一行；不在表里的包里的 DTO 不会被扫（因此也不会被误报）。
 var sweptDirs = map[string]string{
-	"service":    "../service",
-	"api":        "../api",
-	"model":      "../model",
-	"repository": "../valuation/repository",
+	"service":      "../service",
+	"api":          "../api",
+	"auth":         "../auth",
+	"faq":          "../faq",
+	"notification": "../notification",
+	"model":        "../model",
+	"material":     "../material",
+	"points":       "../points",
+	"inspection":   "../inspection",
+	"featured":     "../featured",
+	"checkin":      "../checkin",
+	"contribution": "../contribution",
+	"forum":        "../forum",
+	"aiassistant":  "../aiassistant",
+	"course":       "../course",
+	"training":     "../training",
+	"questionbank": "../questionbank",
+	"practicemode": "../practicemode",
+	"repository":   "../valuation/repository",
 }
 
 var (

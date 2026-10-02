@@ -13,8 +13,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/timefmt"
 )
 
 func newStudentServiceForTest(t *testing.T, db *gorm.DB) *StudentService {
@@ -185,7 +187,7 @@ func TestQueryProfileCourseProgressBatchBackfill(t *testing.T) {
 
 	// 课程级进度 + 章节级时长：progress 只看课程级(MAX)，时长汇总全部
 	seedStudyRecord(t, db, student.ID, course.CourseID, nil, 60, 20, d1)
-	seedStudyRecord(t, db, student.ID, course.CourseID, ptrInt(1), 0, 30, d2)
+	seedStudyRecord(t, db, student.ID, course.CourseID, coerce.IntPtr(1), 0, 30, d2)
 
 	// 未知课程的学习记录（course 已删）：档案进度行应被跳过（与逐行 First 失败 continue 同语义）
 	seedStudyRecord(t, db, student.ID, 7777, nil, 40, 10, d1)
@@ -214,10 +216,10 @@ func TestQueryProfileCourseProgressBatchBackfill(t *testing.T) {
 	if p.StudyDuration != 50 {
 		t.Fatalf("study_duration = %d, want 50（汇总全部记录）", p.StudyDuration)
 	}
-	if p.StudyDate != formatISO(d2) {
+	if p.StudyDate != timefmt.FormatISO(d2) {
 		// StudyDate 来自 MAX(study_date) 聚合，与批量回填无关；本测试环境（sqlite 内存库）
 		// 对聚合列按零时间扫描（生产 PostgreSQL 返回真值）。此处仅校验聚合被保留、不产生 panic。
-		t.Logf("study_date = %q, want %q（sqlite 聚合列按零时间扫描属环境行为，非本 ticket 变更）", p.StudyDate, formatISO(d2))
+		t.Logf("study_date = %q, want %q（sqlite 聚合列按零时间扫描属环境行为，非本 ticket 变更）", p.StudyDate, timefmt.FormatISO(d2))
 	}
 }
 

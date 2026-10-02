@@ -15,7 +15,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
+	"forklift-training/internal/forum"
+	"forklift-training/internal/model"
+	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
+	"forklift-training/pkg/httpx"
 )
 
 // 测试哨兵（与域表无交集，专测骨架行为）。
@@ -25,15 +32,15 @@ var (
 )
 
 // testTable 命中 A → 404，其余兜底 400。
-var testTable = &errStatusTable{
-	entries:  []errStatusEntry{{sentinel: errSentinelA, status: http.StatusNotFound}},
-	fallback: http.StatusBadRequest,
+var testTable = &httpx.ErrStatusTable{
+	Entries:  []httpx.ErrStatusEntry{{Sentinel: errSentinelA, Status: http.StatusNotFound}},
+	Fallback: http.StatusBadRequest,
 }
 
 // TestEndpointErrStatus_TableHit errors.Is 命中表内哨兵 → 表内状态码 + err.Error() 文案。
 func TestEndpointErrStatus_TableHit(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, fmt.Errorf("service wrap: %w", errSentinelA) // wrap 后仍须命中
 		},
@@ -51,7 +58,7 @@ func TestEndpointErrStatus_TableHit(t *testing.T) {
 // TestEndpointErrStatus_TableMiss_Fallback 未命中 → fallback 状态码。
 func TestEndpointErrStatus_TableMiss_Fallback(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errSentinelB
 		},
@@ -66,11 +73,11 @@ func TestEndpointErrStatus_TableMiss_Fallback(t *testing.T) {
 // TestEndpointErrStatus_TableMiss_NoFallback_500 未命中且未设 fallback → 500 默认信封。
 func TestEndpointErrStatus_TableMiss_NoFallback_500(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			return nil, errSentinelB
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{{sentinel: errSentinelA, status: http.StatusNotFound}}},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{{Sentinel: errSentinelA, Status: http.StatusNotFound}}},
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusInternalServerError {
@@ -85,10 +92,10 @@ func TestEndpointErrStatus_RenderCannotOverrideTable(t *testing.T) {
 	rendered := 0
 	render := func(c *gin.Context, _ *int, resp *string) {
 		rendered++
-		c.JSON(http.StatusTeapot, gin.H{"code": 418, "message": deref(resp)})
+		c.JSON(http.StatusTeapot, gin.H{"code": 418, "message": httpx.Deref(resp)})
 	}
 	// 错误面：testTable 命中 404，Render 不参与
-	w := doEndpoint(t, Endpoint[int, string]{
+	w := doEndpoint(t, httpx.Endpoint[int, string]{
 		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, errSentinelA },
 		ErrStatus: testTable,
 		Render:    render,
@@ -100,7 +107,7 @@ func TestEndpointErrStatus_RenderCannotOverrideTable(t *testing.T) {
 		t.Fatalf("错误面调用了 Render %d 次，期望 0（票1b：err 不在 Render 签名上）", rendered)
 	}
 	// 成功面：Render 全权
-	w = doEndpoint(t, Endpoint[int, string]{
+	w = doEndpoint(t, httpx.Endpoint[int, string]{
 		Invoke: func(ctx context.Context, req *int) (*string, error) {
 			v := "ok"
 			return &v, nil
@@ -120,9 +127,9 @@ func TestEndpointErrStatus_RenderCannotOverrideTable(t *testing.T) {
 // ParseError 404 不得被 fallback 400 吞掉。
 func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
+			return nil, &httpx.ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
 		},
 		ErrStatus: testTable,
 	}
@@ -138,11 +145,11 @@ func TestEndpointErrStatus_ParseError_PrecedesTable(t *testing.T) {
 // 无条件条目仍然命中**其余**一切错误（业务错误与 DB 故障保持该端点既有的单一码形状）。
 func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
 	t.Parallel()
-	e := Endpoint[int, string]{
+	e := httpx.Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
+			return nil, &httpx.ParseError{Status: http.StatusNotFound, Message: "路径参数无效"}
 		},
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: httpx.ErrStatusAll(http.StatusInternalServerError),
 	}
 	w := doEndpoint(t, e)
 	if w.Code != http.StatusNotFound {
@@ -152,9 +159,9 @@ func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
 		t.Fatalf("文案必须是解析错误自己的话: %s", w.Body.String())
 	}
 	// 同一张表的非解析错误仍是那个固定码（无条件条目没有被削弱，只是不再吃 ParseError）
-	w = doEndpoint(t, Endpoint[int, string]{
+	w = doEndpoint(t, httpx.Endpoint[int, string]{
 		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, errSentinelB },
-		ErrStatus: errStatusAll(http.StatusInternalServerError),
+		ErrStatus: httpx.ErrStatusAll(http.StatusInternalServerError),
 	})
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("状态码 = %d, 期望 500（无条件条目仍兜住其余错误）", w.Code)
@@ -166,13 +173,13 @@ func TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry(t *testing.T) {
 // 免得翻转被读成「域表语义变了」）。
 func TestEndpointErrStatus_ParseError_PrecedesSentinelTableEntries(t *testing.T) {
 	t.Parallel()
-	w := doEndpoint(t, Endpoint[int, string]{
+	w := doEndpoint(t, httpx.Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, badRequest("查询参数无效")
+			return nil, httpx.BadRequest("查询参数无效")
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: errSentinelA, status: http.StatusNotFound, message: "主题不存在"},
-			{sentinel: nil, status: http.StatusInternalServerError},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: errSentinelA, Status: http.StatusNotFound, Message: "主题不存在"},
+			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	})
 	if w.Code != http.StatusBadRequest {
@@ -186,11 +193,11 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 	t.Parallel()
 	// 「哨兵 + 尾部无条件条目」= 旧 if-chain 的形状：先命中先用，尾部 else 兜一切
 	// （票8 起解析错误不再归它兜，见 TestEndpointErrStatus_ParseError_PrecedesUnconditionalEntry）
-	tbl := &errStatusTable{entries: []errStatusEntry{
-		{sentinel: errSentinelA, status: http.StatusNotFound, message: "主题不存在"},
-		{sentinel: nil, status: http.StatusBadRequest, message: "查询用户列表失败"},
+	tbl := &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+		{Sentinel: errSentinelA, Status: http.StatusNotFound, Message: "主题不存在"},
+		{Sentinel: nil, Status: http.StatusBadRequest, Message: "查询用户列表失败"},
 	}}
-	w := doEndpoint(t, Endpoint[int, string]{
+	w := doEndpoint(t, httpx.Endpoint[int, string]{
 		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, errors.New("底层噪声") },
 		ErrStatus: tbl,
 	})
@@ -198,7 +205,7 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 		t.Fatalf("未命中哨兵应落尾部无条件条目: %d %s", w.Code, w.Body.String())
 	}
 	// 哨兵命中 → 固定文案（err.Error() 不外泄）
-	w = doEndpoint(t, Endpoint[int, string]{
+	w = doEndpoint(t, httpx.Endpoint[int, string]{
 		Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, fmt.Errorf("ctx: %w", errSentinelA) },
 		ErrStatus: tbl,
 	})
@@ -206,13 +213,13 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 		t.Fatalf("哨兵条目应先于无条件条目命中: %d %s", w.Code, w.Body.String())
 	}
 	// 真哨兵仍优先于 fallback（解析错误永远先判，不进 fallback）
-	w = doEndpoint(t, Endpoint[int, string]{
+	w = doEndpoint(t, httpx.Endpoint[int, string]{
 		Parse: func(c *gin.Context) (*int, error) {
-			return nil, &ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
+			return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 		},
-		ErrStatus: &errStatusTable{entries: []errStatusEntry{
-			{sentinel: errSentinelA, status: http.StatusNotFound},
-		}, fallback: http.StatusBadRequest},
+		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
+			{Sentinel: errSentinelA, Status: http.StatusNotFound},
+		}, Fallback: http.StatusBadRequest},
 	})
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("状态码 = %d, 期望 401（ParseError 是规则 1，不进表也不进 fallback）", w.Code)
@@ -221,29 +228,29 @@ func TestEndpointErrStatus_FixedMessageEntry(t *testing.T) {
 
 // assertTableSnapshot 钉住域表全集：条数、顺序、哨兵身份、状态码、固定文案、fallback。
 // 表内容变更时本测试即红——须有意识地同步更新快照（防状态码语义漂移）。
-func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []errStatusEntry, wantFallback int) {
+func assertTableSnapshot(t *testing.T, name string, got *httpx.ErrStatusTable, want []httpx.ErrStatusEntry, wantFallback int) {
 	t.Helper()
 	if got == nil {
 		t.Fatalf("%s 表不存在", name)
 	}
-	if got.fallback != wantFallback {
-		t.Fatalf("%s fallback = %d, 期望 %d", name, got.fallback, wantFallback)
+	if got.Fallback != wantFallback {
+		t.Fatalf("%s fallback = %d, 期望 %d", name, got.Fallback, wantFallback)
 	}
-	if len(got.entries) != len(want) {
-		t.Fatalf("%s 条目数 = %d, 期望 %d（表内容漂移，须同步快照）", name, len(got.entries), len(want))
+	if len(got.Entries) != len(want) {
+		t.Fatalf("%s 条目数 = %d, 期望 %d（表内容漂移，须同步快照）", name, len(got.Entries), len(want))
 	}
 	for i, w := range want {
-		g := got.entries[i]
-		if g.sentinel != w.sentinel {
-			t.Fatalf("%s entries[%d] 哨兵身份漂移: got %v, want %v", name, i, g.sentinel, w.sentinel)
+		g := got.Entries[i]
+		if g.Sentinel != w.Sentinel {
+			t.Fatalf("%s entries[%d] 哨兵身份漂移: got %v, want %v", name, i, g.Sentinel, w.Sentinel)
 		}
-		if g.status != w.status {
-			t.Fatalf("%s entries[%d] %v 状态码 = %d, 期望 %d", name, i, g.sentinel, g.status, w.status)
+		if g.Status != w.Status {
+			t.Fatalf("%s entries[%d] %v 状态码 = %d, 期望 %d", name, i, g.Sentinel, g.Status, w.Status)
 		}
-		if g.message != w.message {
-			t.Fatalf("%s entries[%d] %v 固定文案 = %q, 期望 %q", name, i, g.sentinel, g.message, w.message)
+		if g.Message != w.Message {
+			t.Fatalf("%s entries[%d] %v 固定文案 = %q, 期望 %q", name, i, g.Sentinel, g.Message, w.Message)
 		}
-		if g.sentinel == nil {
+		if g.Sentinel == nil {
 			t.Fatalf("%s entries[%d] 为无条件条目（sentinel==nil）：域表是「一语义一码」的具名集合，"+
 				"无条件条目会把不属于任何哨兵的错误（DB 故障在内）压成同一个码，"+
 				"只允许出现在端点自带的 errStatusAll / WithSuccess 表里", name, i)
@@ -255,16 +262,16 @@ func assertTableSnapshot(t *testing.T, name string, got *errStatusTable, want []
 // #1098 追加：扣罚目标不存在 404、通知写失败 500）。
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "pointsErrStatus", pointsErrStatus, []errStatusEntry{
-		{sentinel: service.ErrTaskNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrHrwaiUserNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrCourseNotFound, status: http.StatusBadRequest},
-		{sentinel: service.ErrCourseNotRedeemable, status: http.StatusBadRequest},
-		{sentinel: service.ErrAlreadyClaimed, status: http.StatusBadRequest},
-		{sentinel: service.ErrDailyClaimLimit, status: http.StatusBadRequest},
-		{sentinel: service.ErrInsufficientPoints, status: http.StatusBadRequest},
-		{sentinel: service.ErrAlreadyRedeemed, status: http.StatusBadRequest},
-		{sentinel: service.ErrPenaltyNotifyFailed, status: http.StatusInternalServerError},
+	assertTableSnapshot(t, "points.ErrStatus", points.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: points.ErrTaskNotFound, Status: http.StatusNotFound},
+		{Sentinel: model.ErrHrwaiUserNotFound, Status: http.StatusNotFound},
+		{Sentinel: model.ErrCourseNotFound, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrCourseNotRedeemable, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrDailyClaimLimit, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrInsufficientPoints, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrAlreadyRedeemed, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
 	}, http.StatusBadRequest)
 }
 
@@ -272,82 +279,82 @@ func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 // #1361 追加暂存文件四校验的落档：越权 403 / 类型与已登记 400 / 文件不存在 404）。
 func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "contributionErrStatus", contributionErrStatus, []errStatusEntry{
-		{sentinel: service.ErrContributionNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrContributionFileMissing, status: http.StatusNotFound},
-		{sentinel: service.ErrContributionStagedNotOwner, status: http.StatusForbidden},
-		{sentinel: service.ErrContributionNotOwner, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionNotPending, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionNotApproved, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionQuotaDaily, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionQuotaPending, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionNoCredential, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionTitleRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionIntroRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFilesRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFilesTooMany, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileTooLarge, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionTotalTooLarge, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileExtNotAllowed, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionFileAlreadyClaimed, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionRejectReason, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionArchiveReason, status: http.StatusBadRequest},
-		{sentinel: service.ErrContributionInvalidReportReason, status: http.StatusBadRequest},
+	assertTableSnapshot(t, "contribution.ErrStatus", contribution.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: contribution.ErrContributionNotFound, Status: http.StatusNotFound},
+		{Sentinel: contribution.ErrContributionFileMissing, Status: http.StatusNotFound},
+		{Sentinel: contribution.ErrContributionStagedNotOwner, Status: http.StatusForbidden},
+		{Sentinel: contribution.ErrContributionNotOwner, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionNotPending, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionNotApproved, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionQuotaDaily, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionQuotaPending, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionNoCredential, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionTitleRequired, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionIntroRequired, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFilesRequired, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFilesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileTooLarge, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionTotalTooLarge, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileInvalid, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileExtNotAllowed, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionRejectReason, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionArchiveReason, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionInvalidReportReason, Status: http.StatusBadRequest},
 	}, 0)
 }
 
 // TestErrStatusTable_Snapshot_Application 投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_Application(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "applicationErrStatus", applicationErrStatus, []errStatusEntry{
-		{sentinel: service.ErrApplyJobInactive, status: http.StatusNotFound},
-		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
+	assertTableSnapshot(t, "applicationErrStatus", applicationErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrApplyJobInactive, Status: http.StatusNotFound},
+		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_JobReport 举报治理域表快照（#611）。
 func TestErrStatusTable_Snapshot_JobReport(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "jobReportErrStatus", jobReportErrStatus, []errStatusEntry{
-		{sentinel: service.ErrReportJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrReportNotFound, status: http.StatusNotFound},
+	assertTableSnapshot(t, "jobReportErrStatus", jobReportErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrReportJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrReportNotFound, Status: http.StatusNotFound},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_RecruiterApplication 企业侧投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_RecruiterApplication(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "recruiterApplicationErrStatus", recruiterApplicationErrStatus, []errStatusEntry{
-		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrApplyNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrApplyNotYours, status: http.StatusForbidden},
+	assertTableSnapshot(t, "recruiterApplicationErrStatus", recruiterApplicationErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrApplyNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_Job 职位域表快照（#611）。
 func TestErrStatusTable_Snapshot_Job(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "jobErrStatus", jobErrStatus, []errStatusEntry{
-		{sentinel: service.ErrJobNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrJobNotYours, status: http.StatusForbidden},
+	assertTableSnapshot(t, "jobErrStatus", jobErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: service.ErrJobNotYours, Status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_QuestionBank 题库域表快照（#611；第十二波票 6 补写面哨兵族并撤 fallback——未命中即 500）。
 func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "questionBankErrStatus", questionBankErrStatus, []errStatusEntry{
-		{sentinel: service.ErrQuestionNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrQuestionCredentialNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrQuestionTypeInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionContentRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionAnswerRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionOptionsRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionAnswerInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrSubmitNotDraft, status: http.StatusBadRequest},
-		{sentinel: service.ErrRejectReasonRequired, status: http.StatusBadRequest},
+	assertTableSnapshot(t, "questionbank.ErrStatus", questionbank.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: questionbank.ErrQuestionNotFound, Status: http.StatusNotFound},
+		{Sentinel: questionbank.ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
+		{Sentinel: questionbank.ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionContentRequired, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionOptionsRequired, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrSubmitNotDraft, Status: http.StatusBadRequest},
+		{Sentinel: questionbank.ErrRejectReasonRequired, Status: http.StatusBadRequest},
 	}, 0)
 }
 
@@ -359,19 +366,19 @@ func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
 		err  error
 		want int
 	}{
-		{"题目不存在 404", service.ErrQuestionNotFound, http.StatusNotFound},
-		{"证件不存在 404", service.ErrQuestionCredentialNotFound, http.StatusNotFound},
-		{"证件不存在 wrap 后仍命中 404", fmt.Errorf("ctx: %w", service.ErrQuestionCredentialNotFound), http.StatusNotFound},
-		{"非 draft 提交 400", service.ErrSubmitNotDraft, http.StatusBadRequest},
-		{"驳回缺理由 400", service.ErrRejectReasonRequired, http.StatusBadRequest},
-		{"题型无效含列表 400", fmt.Errorf("%w，支持的题型：%s", service.ErrQuestionTypeInvalid, "single_choice"), http.StatusBadRequest},
+		{"题目不存在 404", questionbank.ErrQuestionNotFound, http.StatusNotFound},
+		{"证件不存在 404", questionbank.ErrQuestionCredentialNotFound, http.StatusNotFound},
+		{"证件不存在 wrap 后仍命中 404", fmt.Errorf("ctx: %w", questionbank.ErrQuestionCredentialNotFound), http.StatusNotFound},
+		{"非 draft 提交 400", questionbank.ErrSubmitNotDraft, http.StatusBadRequest},
+		{"驳回缺理由 400", questionbank.ErrRejectReasonRequired, http.StatusBadRequest},
+		{"题型无效含列表 400", fmt.Errorf("%w，支持的题型：%s", questionbank.ErrQuestionTypeInvalid, "single_choice"), http.StatusBadRequest},
 		{"DB 故障未命中 500", errors.New("dial tcp: db down"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := Endpoint[int, string]{
+			e := httpx.Endpoint[int, string]{
 				Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, c.err },
-				ErrStatus: questionBankErrStatus,
+				ErrStatus: questionbank.ErrStatus,
 			}
 			w := doEndpoint(t, e)
 			if w.Code != c.want {
@@ -385,39 +392,39 @@ func TestQuestionBankErrStatus_Spectrum(t *testing.T) {
 // （存在性 404 / 所有权 403 / 状态前置与校验 400 / 未设 fallback → 未命中即 500）。
 func TestErrStatusTable_Snapshot_Forum(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "forumErrStatus", forumErrStatus, []errStatusEntry{
-		{sentinel: service.ErrTopicNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrReplyNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrForumReportNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrChapterNotFound, status: http.StatusNotFound},
-		{sentinel: service.ErrNotTopicOwner, status: http.StatusForbidden},
-		{sentinel: service.ErrNotTopicAuthor, status: http.StatusForbidden},
-		{sentinel: service.ErrNotReplyAuthor, status: http.StatusForbidden},
-		{sentinel: service.ErrAcceptOwnReply, status: http.StatusBadRequest},
-		{sentinel: service.ErrAcceptNotQuestion, status: http.StatusBadRequest},
-		{sentinel: service.ErrCancelAcceptNotQuestion, status: http.StatusBadRequest},
-		{sentinel: service.ErrAcceptExperienceTopic, status: http.StatusBadRequest},
-		{sentinel: service.ErrDesignateAcceptedTopic, status: http.StatusBadRequest},
-		{sentinel: service.ErrUnfeatureExperienceTopic, status: http.StatusBadRequest},
-		{sentinel: service.ErrCategoryLockedByAccept, status: http.StatusBadRequest},
-		{sentinel: service.ErrQuestionChapterConflict, status: http.StatusBadRequest},
-		{sentinel: service.ErrParentReplyMismatch, status: http.StatusBadRequest},
-		{sentinel: service.ErrReplyTopicMismatch, status: http.StatusBadRequest},
-		{sentinel: service.ErrContentFormatInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrCategoryInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrSolvedArgInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrFeaturedArgInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrExperienceArgInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrSolvedFilterScope, status: http.StatusBadRequest},
-		{sentinel: service.ErrChapterIDRequired, status: http.StatusBadRequest},
-		{sentinel: service.ErrTitleLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrContentLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrReplyContentLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrImagesTooMany, status: http.StatusBadRequest},
-		{sentinel: service.ErrImageURLInvalid, status: http.StatusBadRequest},
-		{sentinel: service.ErrReportReasonLength, status: http.StatusBadRequest},
-		{sentinel: service.ErrReportTarget, status: http.StatusBadRequest},
-		{sentinel: service.ErrReportStatusValue, status: http.StatusBadRequest},
+	assertTableSnapshot(t, "forum.ErrStatus", forum.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: forum.ErrTopicNotFound, Status: http.StatusNotFound},
+		{Sentinel: forum.ErrReplyNotFound, Status: http.StatusNotFound},
+		{Sentinel: forum.ErrForumReportNotFound, Status: http.StatusNotFound},
+		{Sentinel: course.ErrChapterNotFound, Status: http.StatusNotFound},
+		{Sentinel: forum.ErrNotTopicOwner, Status: http.StatusForbidden},
+		{Sentinel: forum.ErrNotTopicAuthor, Status: http.StatusForbidden},
+		{Sentinel: forum.ErrNotReplyAuthor, Status: http.StatusForbidden},
+		{Sentinel: forum.ErrAcceptOwnReply, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrAcceptNotQuestion, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrCancelAcceptNotQuestion, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrAcceptExperienceTopic, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrDesignateAcceptedTopic, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrUnfeatureExperienceTopic, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrCategoryLockedByAccept, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrQuestionChapterConflict, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrParentReplyMismatch, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReplyTopicMismatch, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrContentFormatInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrCategoryInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrSolvedArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrFeaturedArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrExperienceArgInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrSolvedFilterScope, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrChapterIDRequired, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrTitleLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrContentLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReplyContentLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrImagesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrImageURLInvalid, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReportReasonLength, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReportTarget, Status: http.StatusBadRequest},
+		{Sentinel: forum.ErrReportStatusValue, Status: http.StatusBadRequest},
 	}, 0)
 }
 
@@ -430,24 +437,24 @@ func TestForumErrStatus_Spectrum(t *testing.T) {
 		err  error
 		want int
 	}{
-		{"存在性：主题 404", service.ErrTopicNotFound, http.StatusNotFound},
-		{"存在性：回复 404", service.ErrReplyNotFound, http.StatusNotFound},
-		{"存在性：举报 404", service.ErrForumReportNotFound, http.StatusNotFound},
-		{"存在性：章节 404", service.ErrChapterNotFound, http.StatusNotFound},
-		{"所有权：楼主动作 403", service.ErrNotTopicOwner, http.StatusForbidden},
-		{"所有权：删主题 403", service.ErrNotTopicAuthor, http.StatusForbidden},
-		{"所有权：删回复 403", service.ErrNotReplyAuthor, http.StatusForbidden},
-		{"状态前置：自采纳 400", service.ErrAcceptOwnReply, http.StatusBadRequest},
-		{"状态前置：撤精镜像 400", service.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
-		{"校验：包装详情命中 400", fmt.Errorf("%w: discussion2", service.ErrCategoryInvalid), http.StatusBadRequest},
-		{"校验：图片张数包装 400", fmt.Errorf("%w（最多 9 张）", service.ErrImagesTooMany), http.StatusBadRequest},
+		{"存在性：主题 404", forum.ErrTopicNotFound, http.StatusNotFound},
+		{"存在性：回复 404", forum.ErrReplyNotFound, http.StatusNotFound},
+		{"存在性：举报 404", forum.ErrForumReportNotFound, http.StatusNotFound},
+		{"存在性：章节 404", course.ErrChapterNotFound, http.StatusNotFound},
+		{"所有权：楼主动作 403", forum.ErrNotTopicOwner, http.StatusForbidden},
+		{"所有权：删主题 403", forum.ErrNotTopicAuthor, http.StatusForbidden},
+		{"所有权：删回复 403", forum.ErrNotReplyAuthor, http.StatusForbidden},
+		{"状态前置：自采纳 400", forum.ErrAcceptOwnReply, http.StatusBadRequest},
+		{"状态前置：撤精镜像 400", forum.ErrUnfeatureExperienceTopic, http.StatusBadRequest},
+		{"校验：包装详情命中 400", fmt.Errorf("%w: discussion2", forum.ErrCategoryInvalid), http.StatusBadRequest},
+		{"校验：图片张数包装 400", fmt.Errorf("%w（最多 9 张）", forum.ErrImagesTooMany), http.StatusBadRequest},
 		{"未命中：DB 故障 500", errors.New("dial tcp 127.0.0.1: db down"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := Endpoint[int, string]{
+			e := httpx.Endpoint[int, string]{
 				Invoke:    func(ctx context.Context, req *int) (*string, error) { return nil, c.err },
-				ErrStatus: forumErrStatus,
+				ErrStatus: forum.ErrStatus,
 			}
 			w := doEndpoint(t, e)
 			if w.Code != c.want {

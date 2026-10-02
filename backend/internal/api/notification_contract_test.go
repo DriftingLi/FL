@@ -18,7 +18,6 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -84,7 +83,7 @@ func TestNotificationContract_ApprovedPayload(t *testing.T) {
 
 	// 2. 管理员通过该审核请求
 	var req model.ProfileChangeRequest
-	if err := deps.DB.Where("user_id = ? AND status = ?", student.ID, service.ProfileStatusPending).First(&req).Error; err != nil {
+	if err := deps.DB.Where("user_id = ? AND status = ?", student.ID, model.ProfileStatusPending).First(&req).Error; err != nil {
 		t.Fatalf("查询 pending 审核请求失败: %v", err)
 	}
 	w = contractJSONRequest(t, r, http.MethodPost, fmt.Sprintf("/api/admin/profile-reviews/%d/approve", req.ID), adminToken, "")

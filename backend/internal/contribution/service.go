@@ -1,0 +1,1010 @@
+// Package contribution 资料投稿与审核域（#517 / ADR-0026；ADR-0070 域包形态）。
+//
+// 本包是 internal/<域> 形态（ADR-0070）：handler.go / handler_admin.go 是 HTTP 出口（公开 8 条 + 管理端 6 条），
+// service.go 是域实现，dto.go 是对外 DTO。
+// 本文件：资料投稿（contribution）域（#517 / ADR-0026）——学员上传资料换积分。
+//
+// 词汇（CONTEXT.md）：投稿（contribution）≠ 学习资料（material）。material 是课程附件
+// （讲师/管理员发布），contribution 是学员提交、平台审核的独立浏览面。
+//
+// 生命周期：pending → approved / rejected；pending → withdrawn（作者撤回）；
+// approved → archived（管理员下架）。rejected 不可恢复——重提 = 新建投稿（新行新审核）。
+// 过审分与达阶分是「审核/达阶时点即发」的预付奖励；违规下架必须追回（与问答采纳的
+// 「删帖不回滚」有意相反，见 ADR-0026）。
+package contribution
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"mime/multipart"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/clock"
+	"forklift-training/internal/dberr"
+	"forklift-training/internal/filestore"
+	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
+	"forklift-training/internal/points"
+	"forklift-training/internal/scope"
+	"forklift-training/internal/storage"
+	"forklift-training/pkg/paging"
+)
+
+// 投稿域常量（单一事实源，调用侧不得另立）。前缀登记归附件归属 module（internal/filestore/attachment.go）：
+// 先传后交——文件先落 contributions/ 前缀，提交后由 user_contribution_file 行引用即转正式
+// （无物理搬移——引用即归属）；悬空文件由扫描守护按 ContributionOrphanTTL 回收（与论坛图片同模式）。
+const (
+	ContributionMaxFiles     = 5
+	ContributionMaxFileSize  = 20 * 1024 * 1024 // 单文件 20MB
+	ContributionMaxTotalSize = 50 * 1024 * 1024 // 合计 50MB
+	ContributionTitleMaxLen  = 120
+	ContributionIntroMaxLen  = 2000
+	ContributionOrphanTTL    = 24 * time.Hour
+
+	// 配额背压（供给侧防刷，以 user_contribution 表为计数事实源）。
+	ContributionDailyMax   = 3 // 自然日（Asia/Shanghai）最多提交份数
+	ContributionPendingMax = 5 // 名下 pending 积压上限（达此数不能再投）
+
+	// 状态值域。
+	ContributionStatusPending   = "pending"
+	ContributionStatusApproved  = "approved"
+	ContributionStatusRejected  = "rejected"
+	ContributionStatusWithdrawn = "withdrawn"
+	ContributionStatusArchived  = "archived"
+)
+
+// 过审奖励（#517 定价）：过审 +50（略高于问答采纳 +40，体现重贡献）。
+const ContributionApprovedPoints = 50
+
+// 积分流水原因（投稿域）。
+const (
+	ReasonContributionApproved = "contribution_approved" // 过审直记
+	ReasonContributionTier     = "contribution_tier"     // 达阶追加（幂等键含档位）
+	RefTypeContribution        = "contribution"          // 投稿域 ref_type
+)
+
+// ContributionTier 达阶档位。
+type ContributionTier struct {
+	Threshold int // 下载量达到该阈值
+	Points    int // 追加奖励
+}
+
+// ContributionTiers 达阶档位（升序）。跨档判定：下载落库后当次判定是否刚好跨过阈值，
+// 幂等键含档位（contribution_tier:{id}:{threshold}），一天然只发一档。
+var ContributionTiers = []ContributionTier{
+	{Threshold: 10, Points: 30},
+	{Threshold: 50, Points: 80},
+	{Threshold: 200, Points: 200},
+}
+
+// 错误哨兵（ADR-0024：一语义一哨兵；handler 以 errors.Is 映射 HTTP 状态码）。
+var (
+	ErrContributionNotFound            = errors.New("投稿不存在")
+	ErrContributionNotOwner            = errors.New("只有投稿作者可以执行此操作")
+	ErrContributionNotPending          = errors.New("只有待审核投稿可执行此操作")
+	ErrContributionNotApproved         = errors.New("只有已上架投稿可执行此操作")
+	ErrContributionQuotaDaily          = errors.New("今日投稿已达上限（3 份），请明天再试")
+	ErrContributionQuotaPending        = errors.New("待审核投稿已达 5 份，请等待审核后再投")
+	ErrContributionNoCredential        = errors.New("请先选定目标证件再投稿")
+	ErrContributionTitleRequired       = errors.New("标题不能为空")
+	ErrContributionIntroRequired       = errors.New("简介不能为空")
+	ErrContributionFilesRequired       = errors.New("请至少上传 1 个文件")
+	ErrContributionFilesTooMany        = errors.New("一份投稿最多 5 个文件")
+	ErrContributionFileTooLarge        = errors.New("单文件不能超过 20MB")
+	ErrContributionTotalTooLarge       = errors.New("投稿文件合计不能超过 50MB")
+	ErrContributionFileInvalid         = errors.New("不支持的文件格式")
+	ErrContributionRejectReason        = errors.New("驳回原因不能为空")
+	ErrContributionArchiveReason       = errors.New("下架原因不能为空")
+	ErrContributionInvalidReportReason = errors.New("举报理由无效")
+
+	// ===== 投稿暂存文件的四校验（ADR-0066 决策 5 / #1361）=====
+	// 一句话一条事实：四条判据各落一枚哨兵，档位由 api 侧的域表决定（403 / 400 / 400 / 404）。
+
+	// ErrContributionStagedNotOwner 引用的暂存文件不在本人的暂存目录下（别人的分区，或干脆是外部 URL）。
+	ErrContributionStagedNotOwner = errors.New("该暂存文件不属于当前用户的投稿目录")
+	// ErrContributionFileExtNotAllowed 扩展名不在投稿白名单内（绕过上传接口直接造 URL 的情形）。
+	ErrContributionFileExtNotAllowed = errors.New("该文件类型不在投稿白名单内")
+	// ErrContributionFileAlreadyClaimed 同一 URL 已被某篇投稿登记过（一份暂存文件只许被引用一次）。
+	ErrContributionFileAlreadyClaimed = errors.New("该文件已被其它投稿登记，请重新上传")
+	// ErrContributionFileMissing 存储侧查不到这个文件（未上传、已过期被回收，或路径是编的）。
+	ErrContributionFileMissing = errors.New("暂存文件不存在，请重新上传")
+	// ErrContributionStorageUnconfigured 没配存储后端时**无法**校验「文件确实存在」——
+	// 这一格在生产装配里不存在（cmd/server 一律注入 local 或 r2），出现即装配漏了，
+	// 报出来而不是静默跳过第四校验（跳过等于把判据换成「客户端说了算」，正是本票要消掉的形状）。
+	ErrContributionStorageUnconfigured = errors.New("投稿存储未配置，无法校验暂存文件")
+)
+
+// Service 投稿服务。
+type Service struct {
+	db              *gorm.DB
+	fileSvc         *filestore.FileStore
+	notificationSvc *notification.Service
+	points          *points.Service
+	logger          *zap.Logger
+	clk             clock.Clock
+}
+
+// NewService 构造投稿服务。clk 为空时回退生产实钟（Asia/Shanghai）。
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, points *points.Service, logger *zap.Logger, clk clock.Clock) *Service {
+	if clk == nil {
+		clk = clock.Real()
+	}
+	return &Service{
+		db:              db,
+		fileSvc:         fileSvc,
+		notificationSvc: notificationSvc,
+		points:          points,
+		logger:          logger,
+		clk:             clk,
+	}
+}
+
+// ===== 文件暂存（先传后交）=====
+
+// allowedContributionExt 投稿文件扩展名白名单。
+var allowedContributionExt = map[string]bool{
+	"pdf": true, "doc": true, "docx": true,
+	"ppt": true, "pptx": true,
+	"xls": true, "xlsx": true,
+	"zip": true,
+	"mp4": true,
+}
+
+// contributionStagedDir 某位学员的投稿暂存前缀（ADR-0066 决策 5：归属由路径承载）。
+// 登记仍在 internal/filestore/attachment.go 的 filestore.ContributionFileDirPrefix（域前缀单点），这里只在它下面按用户分一层：
+// 扁平的 contributions/ 让任何人只要猜中文件名就能把别人的暂存文件登记进自己的投稿，
+// 而 contributions/<uid>/ 把「谁的」写进路径 ⇒ Create 的四校验第 ① 条才有判据可读。
+func contributionStagedDir(userID int) string {
+	return fmt.Sprintf("%s/%d", filestore.ContributionFileDirPrefix, userID)
+}
+
+// contributionStagedOwner 从暂存文件 URL 里取出「这是谁的暂存位」（contributions/<uid>/<name>）。
+// 不属于任何学员（外部 URL、扁平老路径、目录段不是数字、带 . / .. 的段）一律回 0。
+//
+// 为什么不用「URL 里含 /contributions/<uid>/ 子串」这种宽松判据：那挡不住
+// `https://x/contributions/9/../../contributions/8/a.pdf` 这类形状——local 存储把 key 直接拼成
+// 文件路径（storage.LocalStorage.urlToKey），段级穿越会把别人的文件读成「我的」。
+// 本站形态判定仍走 internal/filestore/attachment.go 的单点（filestore.IsSiteAttachmentURL），这里只补「归属段」这一层。
+func contributionStagedOwner(url string) int {
+	if !filestore.IsSiteAttachmentURL(url, filestore.ContributionFileDirPrefix) {
+		return 0
+	}
+	key := filestore.AttachmentKey(url, filestore.ContributionFileDirPrefix) // contributions/<uid>/<name>
+	parts := strings.Split(key, "/")
+	if len(parts) < 3 {
+		return 0 // 扁平的 contributions/x.pdf（老路径）不再被认成任何人的暂存位
+	}
+	for _, p := range parts[1:] {
+		if p == ".." || p == "." || p == "" {
+			return 0
+		}
+	}
+	uid, err := strconv.Atoi(parts[1])
+	if err != nil || uid <= 0 {
+		return 0
+	}
+	return uid
+}
+
+// stagedFileExists 校验暂存文件在存储侧真实存在（第四校验）。
+// 未配置存储后端时**报错而不是放行**：放行等于把这一校验变成「测试装配下的空洞」，
+// 而本仓的装配根（cmd/server → api.NewDeps）永远会带一个真存储上来。
+// 存在性本身归 filestore（只有它知道自己的适配器装没装）：这里只把它的
+// ErrStorageUnconfigured 翻成本域的 500 哨兵，别让「没配存储」被读成「文件不存在」。
+func (s *Service) stagedFileExists(fileURL string) (bool, error) {
+	if s.fileSvc == nil {
+		return false, ErrContributionStorageUnconfigured
+	}
+	exists, err := s.fileSvc.Exists(context.Background(), fileURL)
+	if errors.Is(err, filestore.ErrStorageUnconfigured) {
+		return false, ErrContributionStorageUnconfigured
+	}
+	return exists, err
+}
+
+// validateStagedFiles 投稿创建的四校验（ADR-0066 决策 5 / #1361）：
+// ① 前缀属本人 ② 扩展名在白名单内 ③ 该 URL 未被任何投稿登记过 ④ 文件在存储侧真实存在。
+//
+// 承重的是「服务端不再相信客户端提交的 file_url/file_name/file_size/content_type」这一句：
+// 此前的 Create 只校验大小，归属与类型都不判 ⇒ 任何人都能把别人的暂存文件、
+// 非白名单类型、或凭空的 URL 登记进自己的投稿（真实缺陷 #13）。
+// ② 判的是 **URL 的扩展名**（上传时由服务端铸造），不是客户端传来的 file_name。
+func (s *Service) validateStagedFiles(userID int, files []ContributionFileDTO) error {
+	for _, f := range files {
+		// ① 归属
+		if contributionStagedOwner(f.FileURL) != userID {
+			return fmt.Errorf("%w：%s", ErrContributionStagedNotOwner, f.FileURL)
+		}
+		// ② 类型（读服务端写的 URL，不读客户端写的 file_name / content_type）
+		if ext := filestore.FileExtension(f.FileURL); !allowedContributionExt[ext] {
+			return fmt.Errorf("%w：%s", ErrContributionFileExtNotAllowed, f.FileURL)
+		}
+		// ③ 未被登记过（一份暂存文件只许被引用一次；引用即归属，见 internal/filestore/attachment.go 的注释）
+		var claimed int64
+		if err := s.db.Model(&model.UserContributionFile{}).
+			Where("file_url = ?", f.FileURL).Count(&claimed).Error; err != nil {
+			return fmt.Errorf("查投稿文件登记失败: %w", err)
+		}
+		if claimed > 0 {
+			return fmt.Errorf("%w：%s", ErrContributionFileAlreadyClaimed, f.FileURL)
+		}
+		// ④ 真实存在
+		exists, err := s.stagedFileExists(f.FileURL)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("%w：%s", ErrContributionFileMissing, f.FileURL)
+		}
+	}
+	return nil
+}
+
+// contributionContentType 从扩展名推导内容类型（列表图标/展示用）。
+func contributionContentType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	if ext != "" {
+		ext = ext[1:]
+	}
+	switch ext {
+	case "pdf", "doc", "docx", "xls", "xlsx":
+		return "document"
+	case "ppt", "pptx":
+		return "ppt"
+	case "mp4":
+		return "video"
+	case "zip":
+		return "zip"
+	default:
+		return "other"
+	}
+}
+
+// UploadFile 上传投稿暂存文件：校验扩展名与单文件大小，落 contributions/<uid>/ 前缀（ADR-0066 决策 5）。
+//
+// 按用户分区是「归属由路径承载」的那一半：Create 侧的「前缀属本人」校验只能读得出路径里写了什么，
+// 所以上传这一刻就必须把 uid 写进去（此前的扁平 contributions/ 里，归属这件事在数据里根本不存在）。
+func (s *Service) UploadFile(ctx context.Context, userID int, fileHeader *multipart.FileHeader) (*ContributionFileDTO, error) {
+	if userID <= 0 {
+		return nil, errors.New("未认证")
+	}
+	if fileHeader.Filename == "" {
+		return nil, errors.New("未选择文件")
+	}
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileHeader.Filename), "."))
+	if !allowedContributionExt[ext] {
+		return nil, ErrContributionFileInvalid
+	}
+	if fileHeader.Size > ContributionMaxFileSize {
+		return nil, ErrContributionFileTooLarge
+	}
+	content, err := filestore.ReadMultipartFile(fileHeader)
+	if err != nil {
+		return nil, fmt.Errorf("读取文件失败: %w", err)
+	}
+	url, err := s.fileSvc.Save(content, fileHeader.Filename, contributionStagedDir(userID))
+	if err != nil {
+		return nil, fmt.Errorf("文件保存失败: %w", err)
+	}
+	return &ContributionFileDTO{
+		FileName:    fileHeader.Filename,
+		FileURL:     url,
+		FileSize:    fileHeader.Size,
+		ContentType: contributionContentType(fileHeader.Filename),
+	}, nil
+}
+
+// collectReferencedContributionFiles 收集全部投稿引用文件 key 集合（悬空回收差集用）。
+// 查不动即返回 error，sweep 据此整轮放弃（ADR-0062 票5，与论坛图片同一判据）。
+func (s *Service) collectReferencedContributionFiles() (map[string]bool, error) {
+	ref := map[string]bool{}
+	var urls []string
+	if err := s.db.Model(&model.UserContributionFile{}).Pluck("file_url", &urls).Error; err != nil {
+		return nil, fmt.Errorf("收集投稿文件引用失败: %w", err)
+	}
+	for _, u := range urls {
+		if key := filestore.AttachmentKey(u, filestore.ContributionFileDirPrefix); key != "" {
+			ref[key] = true
+		}
+	}
+	return ref, nil
+}
+
+// CleanupOrphanFiles 清理投稿悬空文件（薄配置壳，算法单点见 internal/filestore/orphan_sweep.go / ADR-0027 C2）：
+// ListWithInfo(contributions/) 与全量引用集差集，仅删存储侧 LastModified 超过
+// ContributionOrphanTTL 且未被任何投稿文件行引用的文件。
+// 返回清理数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；ctx 取消语义贯穿到存储调用。
+func (s *Service) CleanupOrphanFiles(ctx context.Context) int {
+	if s.fileSvc == nil {
+		return 0
+	}
+	return filestore.RunOrphanSweep(ctx, filestore.OrphanSweepConfig{
+		Domain: "contribution",
+		TTL:    ContributionOrphanTTL,
+		List: func(c context.Context) ([]storage.FileInfo, error) {
+			return s.fileSvc.ListWithInfoWithContext(c, filestore.ContributionFileDirPrefix)
+		},
+		Referenced: s.collectReferencedContributionFiles,
+		KeyOf:      func(u string) string { return filestore.AttachmentKey(u, filestore.ContributionFileDirPrefix) },
+		DeleteFile: s.fileSvc.DeleteWithContext,
+		Logger:     s.logger,
+	})
+}
+
+// ===== 资格与配额 =====
+
+// countDaily 当日提交数（Asia/Shanghai 自然日起点之后的行数；time.Time 边界双方言可用）。
+func (s *Service) countDaily(userID int) (int64, error) {
+	var cnt int64
+	err := s.db.Model(&model.UserContribution{}).
+		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
+	return cnt, err
+}
+
+// countPending 名下 pending 积压数。
+func (s *Service) countPending(userID int) (int64, error) {
+	var cnt int64
+	err := s.db.Model(&model.UserContribution{}).
+		Where("user_id = ? AND status = ?", userID, ContributionStatusPending).Count(&cnt).Error
+	return cnt, err
+}
+
+// checkQuota 校验投稿配额两臂（读路径/写路径共用单实现）。
+func (s *Service) checkQuota(userID int) error {
+	daily, err := s.countDaily(userID)
+	if err != nil {
+		return err
+	}
+	if daily >= ContributionDailyMax {
+		return ErrContributionQuotaDaily
+	}
+	pending, err := s.countPending(userID)
+	if err != nil {
+		return err
+	}
+	if pending >= ContributionPendingMax {
+		return ErrContributionQuotaPending
+	}
+	return nil
+}
+
+// ===== 创建 / 列表 / 详情 / 撤回 =====
+
+// checkCredential 校验投稿资格与目标证件（#702）：投稿者须已选定当前证件
+// （淘汰未过 onboarding 的空白号，对真实学员零摩擦）；目标证件只需有效存在，
+// 不必等于当前证件（投稿是供给侧写入，不再被浏览侧全局过滤器绑死；列表仍按当前证件过滤）。
+func (s *Service) checkCredential(userID, credentialID int) error {
+	if credentialID <= 0 {
+		return ErrContributionNoCredential
+	}
+	var user model.HrwaiUser
+	if err := s.db.Select("current_credential_id").First(&user, userID).Error; err != nil {
+		return err
+	}
+	if user.CurrentCredentialID == nil {
+		return ErrContributionNoCredential
+	}
+	var cnt int64
+	if err := s.db.Model(&model.Credential{}).Where("id = ?", credentialID).Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return errors.New("目标证件不存在")
+	}
+	return nil
+}
+
+// Create 创建投稿（pending）。配额两臂 + 证件校验在事务外先查一遍，事务内再守卫（防并发超投）。
+func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, error) {
+	// 标题/简介校验
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		return nil, ErrContributionTitleRequired
+	}
+	if utf8.RuneCountInString(title) > ContributionTitleMaxLen {
+		return nil, errors.New("标题不能超过 120 字")
+	}
+	intro := strings.TrimSpace(in.Intro)
+	if intro == "" {
+		return nil, ErrContributionIntroRequired
+	}
+	if utf8.RuneCountInString(intro) > ContributionIntroMaxLen {
+		return nil, errors.New("简介不能超过 2000 字")
+	}
+	if err := s.checkCredential(in.UserID, in.CredentialID); err != nil {
+		return nil, err
+	}
+	if err := s.checkQuota(in.UserID); err != nil {
+		return nil, err
+	}
+	if len(in.Files) == 0 {
+		return nil, ErrContributionFilesRequired
+	}
+	if len(in.Files) > ContributionMaxFiles {
+		return nil, ErrContributionFilesTooMany
+	}
+	var totalSize int64
+	for _, f := range in.Files {
+		if f.FileSize <= 0 {
+			return nil, ErrContributionFileInvalid
+		}
+		if f.FileSize > ContributionMaxFileSize {
+			return nil, ErrContributionFileTooLarge
+		}
+		totalSize += f.FileSize
+	}
+	if totalSize > ContributionMaxTotalSize {
+		return nil, ErrContributionTotalTooLarge
+	}
+	// 暂存文件四校验（#1361 / ADR-0066 决策 5）：归属、类型、未登记、真实存在。
+	// 排在张数与体积那些「输入不合法」之后、事务之前——事务里只做配额守卫与落库，
+	// 不让一次存储侧 Exists 落在事务持有期内。
+	if err := s.validateStagedFiles(in.UserID, in.Files); err != nil {
+		return nil, err
+	}
+	now := s.clk.Now()
+	var created model.UserContribution
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 事务内配额守卫（防并发超投）
+		daily, err := s.countDailyTx(tx, in.UserID)
+		if err != nil {
+			return err
+		}
+		if daily >= ContributionDailyMax {
+			return ErrContributionQuotaDaily
+		}
+		pending, err := s.countPendingTx(tx, in.UserID)
+		if err != nil {
+			return err
+		}
+		if pending >= ContributionPendingMax {
+			return ErrContributionQuotaPending
+		}
+		created = model.UserContribution{
+			UserID:       in.UserID,
+			CredentialID: in.CredentialID,
+			Title:        title,
+			Intro:        intro,
+			Status:       ContributionStatusPending,
+			IsAnonymous:  in.IsAnonymous,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if err := tx.Create(&created).Error; err != nil {
+			return err
+		}
+		for _, f := range in.Files {
+			fi := model.UserContributionFile{
+				ContributionID: created.ID,
+				FileURL:        f.FileURL,
+				FileName:       f.FileName,
+				FileSize:       f.FileSize,
+				ContentType:    f.ContentType,
+				CreatedAt:      now,
+			}
+			if err := tx.Create(&fi).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetDetail(created.ID, in.UserID)
+}
+
+// countDailyTx / countPendingTx 事务内配额计数（与事务外共用条件形态）。
+func (s *Service) countDailyTx(tx *gorm.DB, userID int) (int64, error) {
+	var cnt int64
+	err := tx.Model(&model.UserContribution{}).
+		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
+	return cnt, err
+}
+
+func (s *Service) countPendingTx(tx *gorm.DB, userID int) (int64, error) {
+	var cnt int64
+	err := tx.Model(&model.UserContribution{}).
+		Where("user_id = ? AND status = ?", userID, ContributionStatusPending).Count(&cnt).Error
+	return cnt, err
+}
+
+// ListPublic 公开广场列表：仅 approved（非 archived——archived 是 approved 的下游状态，
+// 列表口径「仅 approved」，archived 不出现）。按证件过滤 + 排序。
+func (s *Service) ListPublic(in ListPublicInput) (*ContributionPageResult, error) {
+	order := "created_at DESC"
+	if in.Sort == "hot" {
+		order = "downloads_count DESC, created_at DESC"
+	}
+	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
+		s.db, in.Page, in.PageSize, 20, 50, order,
+		func(q *gorm.DB) *gorm.DB {
+			// 投稿浏览按目标证件分区（归属分区，ADR-0056 §2）：CredentialID 是必填位，
+			// 不存在「未选证件」的 nil 分支。
+			return scope.EntityOwnedBy(q, "credential_id", &in.CredentialID).
+				Where("status = ?", ContributionStatusApproved)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	dto := make([]ContributionItemDTO, 0, len(items))
+	for i := range items {
+		dto = append(dto, *s.toDTO(&items[i], false))
+	}
+	return &ContributionPageResult{Items: dto, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// ListMine 我的投稿：全部状态，按创建时间倒序。
+func (s *Service) ListMine(userID, page, pageSize int) (*ContributionPageResult, error) {
+	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
+		s.db, page, pageSize, 20, 50, "created_at DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Where("user_id = ?", userID)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	dto := make([]ContributionItemDTO, 0, len(items))
+	for i := range items {
+		dto = append(dto, *s.toDTO(&items[i], true))
+	}
+	return &ContributionPageResult{Items: dto, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// GetDetail 投稿详情（含文件清单）。公开仅 approved；作者本人可见全部状态（含驳回原因）。
+func (s *Service) GetDetail(contributionID int64, viewerID int) (*ContributionItemDTO, error) {
+	var c model.UserContribution
+	if err := s.db.First(&c, contributionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrContributionNotFound
+		}
+		return nil, err
+	}
+	if c.Status != ContributionStatusApproved && c.UserID != viewerID {
+		// 非公开状态仅作者可见（防未上架稿件被路人打探）
+		return nil, ErrContributionNotFound
+	}
+	return s.toDTO(&c, true), nil
+}
+
+// toDTO 装配 DTO（author 与 files 可选加载）。
+func (s *Service) toDTO(c *model.UserContribution, includeAuthorFiles bool) *ContributionItemDTO {
+	dto := &ContributionItemDTO{
+		ID:             c.ID,
+		CredentialID:   c.CredentialID,
+		Title:          c.Title,
+		Intro:          c.Intro,
+		Status:         c.Status,
+		IsAnonymous:    c.IsAnonymous,
+		DownloadsCount: c.DownloadsCount,
+		CreatedAt:      c.CreatedAt.Format("2006-01-02 15:04:05"),
+	}
+	if c.Status == ContributionStatusRejected || c.Status == ContributionStatusArchived {
+		dto.RejectReason = c.RejectReason
+	}
+	dto.Author = ContributionAuthor{UserID: c.UserID, Anonymous: c.IsAnonymous}
+	if !c.IsAnonymous {
+		var u model.HrwaiUser
+		if err := s.db.Select("username").First(&u, c.UserID).Error; err == nil {
+			dto.Author.Username = u.Username
+		}
+	}
+	if includeAuthorFiles {
+		var files []model.UserContributionFile
+		if err := s.db.Where("contribution_id = ?", c.ID).Order("id ASC").Find(&files).Error; err == nil {
+			for _, f := range files {
+				dto.Files = append(dto.Files, ContributionFileDTO{
+					FileID:      f.ID,
+					FileName:    f.FileName,
+					FileURL:     f.FileURL,
+					FileSize:    f.FileSize,
+					ContentType: f.ContentType,
+				})
+			}
+		}
+	}
+	return dto
+}
+
+// Withdraw 作者撤回 pending 投稿（withdrawn）。
+func (s *Service) Withdraw(userID int, contributionID int64) error {
+	res := s.db.Model(&model.UserContribution{}).
+		Where("id = ? AND user_id = ? AND status = ?", contributionID, userID, ContributionStatusPending).
+		Updates(map[string]any{"status": ContributionStatusWithdrawn, "updated_at": s.clk.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		var c model.UserContribution
+		if err := s.db.Select("user_id", "status").First(&c, contributionID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrContributionNotFound
+			}
+			return err
+		}
+		if c.UserID != userID {
+			return ErrContributionNotOwner
+		}
+		return ErrContributionNotPending
+	}
+	return nil
+}
+
+// ===== 审核（T2：approve/reject 与积分直记）=====
+
+// ListPending 审核队列（pending 分页；管理端/讲师端共用）。
+func (s *Service) ListPending(page, pageSize int) (*ContributionPageResult, error) {
+	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
+		s.db, page, pageSize, 20, 50, "created_at ASC",
+		func(q *gorm.DB) *gorm.DB {
+			return q.Where("status = ?", ContributionStatusPending)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	dto := make([]ContributionItemDTO, 0, len(items))
+	for i := range items {
+		dto = append(dto, *s.toDTO(&items[i], true))
+	}
+	return &ContributionPageResult{Items: dto, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// Approve 通过投稿：pending → approved（CAS 防并发），直记 +50（幂等占坑防双发），
+// 站内信同事务。审核者信息落 reviewed_by/reviewed_at。
+func (s *Service) Approve(reviewerID int, contributionID int64) (*ContributionItemDTO, error) {
+	var c model.UserContribution
+	if err := s.db.Select("id", "user_id", "title", "status").First(&c, contributionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrContributionNotFound
+		}
+		return nil, err
+	}
+	if c.Status != ContributionStatusPending {
+		return nil, ErrContributionNotPending
+	}
+	now := s.clk.Now()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：仅当仍 pending 时置 approved（并发双审由 RowsAffected 守卫）
+		res := tx.Model(&model.UserContribution{}).
+			Where("id = ? AND status = ?", contributionID, ContributionStatusPending).
+			Updates(map[string]any{
+				"status":      ContributionStatusApproved,
+				"reviewed_by": reviewerID,
+				"reviewed_at": now,
+				"updated_at":  now,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrContributionNotPending
+		}
+		// 过审 +50 直记（幂等占坑：contribution_approved:{id}，重复/并发只发一次）
+		if err := s.points.SettleRewardTx(tx, points.PointsEntry{
+			UserID: c.UserID, Delta: ContributionApprovedPoints,
+			Reason: ReasonContributionApproved, RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
+			IdemKey: points.ContributionApprovedIdemKey(contributionID),
+		}); err != nil {
+			return err
+		}
+		// 站内信（与入账同事务；事件构造器单点，ADR-0027 C1）
+		if err := s.notificationSvc.CreateContributionApprovedEvent(tx,
+			notification.NewContributionApprovedEvent(c.UserID, c.Title, contributionID, ContributionApprovedPoints, ReasonContributionApproved), now); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetDetail(contributionID, c.UserID)
+}
+
+// Reject 驳回投稿：pending → rejected（必填原因），不发分。驳回原因站内信送达。
+func (s *Service) Reject(reviewerID int, contributionID int64, reason string) (*ContributionItemDTO, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil, ErrContributionRejectReason
+	}
+	var c model.UserContribution
+	if err := s.db.Select("id", "user_id", "title", "status").First(&c, contributionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrContributionNotFound
+		}
+		return nil, err
+	}
+	if c.Status != ContributionStatusPending {
+		return nil, ErrContributionNotPending
+	}
+	now := s.clk.Now()
+	res := s.db.Model(&model.UserContribution{}).
+		Where("id = ? AND status = ?", contributionID, ContributionStatusPending).
+		Updates(map[string]any{
+			"status":        ContributionStatusRejected,
+			"reject_reason": reason,
+			"reviewed_by":   reviewerID,
+			"reviewed_at":   now,
+			"updated_at":    now,
+		})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, ErrContributionNotPending
+	}
+	// 驳回站内信（含原因；link 到我的投稿；维持「通知失败返回 error」的强一致语义）
+	if err := s.notificationSvc.CreateContributionRejectedEvent(s.db,
+		notification.NewContributionRejectedEvent(c.UserID, c.Title, contributionID, reason), now); err != nil {
+		return nil, err
+	}
+	return s.GetDetail(contributionID, c.UserID)
+}
+
+// ===== 下载与达阶（T3/T4）=====
+
+// Download 下载投稿：仅 approved 可下载。
+// - 落 contribution_download（user_id+contribution_id 唯一 = 下载量唯一事实源）。
+// - 作者本人下载不计（不落表、不加计数）。
+// - 同一事务维护 downloads_count 反范式列。
+// - 达阶判定：跨过哪档补哪档（幂等键含档位，并发/重试不多发）。
+func (s *Service) Download(userID int, contributionID int64) (*DownloadResult, error) {
+	var c model.UserContribution
+	if err := s.db.Select("id", "user_id", "title", "status", "downloads_count").First(&c, contributionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrContributionNotFound
+		}
+		return nil, err
+	}
+	if c.Status != ContributionStatusApproved {
+		return nil, ErrContributionNotApproved
+	}
+	// 作者本人不计
+	if c.UserID == userID {
+		return &DownloadResult{IsNew: false}, nil
+	}
+	now := s.clk.Now()
+	var result DownloadResult
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 1. 落事实源（唯一约束幂等：同人重复点只算 1 次）
+		dl := model.ContributionDownload{UserID: userID, ContributionID: contributionID, CreatedAt: now}
+		if err := tx.Create(&dl).Error; err != nil {
+			if dberr.IsDuplicateError(err) {
+				// 已下载过：幂等返回（不新增计数）
+				return nil
+			}
+			return err
+		}
+		result.IsNew = true
+		// 2. 反范式计数 +1（与事实源同事务）
+		if err := tx.Model(&model.UserContribution{}).Where("id = ?", contributionID).
+			UpdateColumn("downloads_count", gorm.Expr("downloads_count + 1")).Error; err != nil {
+			return err
+		}
+		newCount := c.DownloadsCount + 1
+		// 3. 达阶判定：是否刚好跨过某档（跨多档只发最高一档——每次下载只可能跨一档）
+		for _, tier := range ContributionTiers {
+			if c.DownloadsCount < tier.Threshold && newCount >= tier.Threshold {
+				if err := s.points.SettleRewardTx(tx, points.PointsEntry{
+					UserID: c.UserID, Delta: tier.Points,
+					Reason: ReasonContributionTier, RefType: RefTypeContribution, RefID: fmt.Sprintf("%d", contributionID),
+					IdemKey: points.ContributionTierIdemKey(contributionID, tier.Threshold),
+				}); err != nil {
+					return err
+				}
+				result.TierAwarded = tier.Points
+				if err := s.notificationSvc.CreateContributionTierEvent(tx,
+					notification.NewContributionTierEvent(c.UserID, c.Title, contributionID, tier.Threshold, tier.Points, ReasonContributionTier), now); err != nil {
+					return err
+				}
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ===== 举报与处置（T5）=====
+
+// 举报理由枚举（与前端选项对齐）。
+const (
+	ReportReasonPiracy       = "piracy"        // 盗版
+	ReportReasonContentError = "content_error" // 内容错误
+	ReportReasonViolation    = "violation"     // 违规
+	ReportReasonStale        = "stale"         // 已失效
+)
+
+// validReportReason 校验举报理由。
+func validReportReason(reason string) bool {
+	switch reason {
+	case ReportReasonPiracy, ReportReasonContentError, ReportReasonViolation, ReportReasonStale:
+		return true
+	}
+	return false
+}
+
+// Report 举报已上架投稿（同一学员对同一投稿唯一；重复举报合并更新理由）。
+func (s *Service) Report(reporterID int, contributionID int64, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if !validReportReason(reason) {
+		return ErrContributionInvalidReportReason
+	}
+	var c model.UserContribution
+	if err := s.db.Select("status").First(&c, contributionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrContributionNotFound
+		}
+		return err
+	}
+	if c.Status != ContributionStatusApproved {
+		return ErrContributionNotApproved
+	}
+	now := s.clk.Now()
+	// 唯一约束兜底并发：先查后插不幂等（重复举报合并语义），直接尝试插入，
+	// 唯一冲突则更新既有行理由（不新增计数）。
+	rep := model.ContributionReport{
+		ReporterID: reporterID, ContributionID: contributionID, Reason: reason,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.db.Create(&rep).Error; err != nil {
+		if !dberr.IsDuplicateError(err) {
+			return err
+		}
+		// 重复举报：合并（更新理由与状态回待处理），不新增行
+		if err := s.db.Model(&model.ContributionReport{}).
+			Where("reporter_id = ? AND contribution_id = ?", reporterID, contributionID).
+			Updates(map[string]any{"reason": reason, "status": 0, "updated_at": now}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ListReports 举报队列（status 0 待处理 / 1 已处理；nil=全部）。
+func (s *Service) ListReports(page, pageSize int, status *int) (*ContributionReportPageResult, error) {
+	items, total, page, pageSize, err := paging.QueryWithMax[model.ContributionReport](
+		s.db, page, pageSize, 20, 50, "created_at DESC",
+		func(q *gorm.DB) *gorm.DB {
+			if status != nil {
+				q = q.Where("status = ?", *status)
+			}
+			return q
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	dto := make([]ContributionReportItemDTO, 0, len(items))
+	for i := range items {
+		it := &items[i]
+		title := ""
+		var c model.UserContribution
+		if err := s.db.Select("title").First(&c, it.ContributionID).Error; err == nil {
+			title = c.Title
+		}
+		dto = append(dto, ContributionReportItemDTO{
+			ID: it.ID, ReporterID: it.ReporterID, ContributionID: it.ContributionID,
+			ContributionTitle: title, Reason: it.Reason, Status: it.Status,
+			CreatedAt: it.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	return &ContributionReportPageResult{Items: dto, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// HandleReport 处置举报：action=archive 下架被举报投稿（追回积分）并标记处理；
+// action=dismiss 驳回举报（标记处理，不动作）。
+func (s *Service) HandleReport(reviewerID int, reportID int64, action string) error {
+	var rep model.ContributionReport
+	if err := s.db.First(&rep, reportID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("举报不存在")
+		}
+		return err
+	}
+	switch action {
+	case "archive":
+		// 下架被举报投稿（举报理由作为下架原因；审核者 = 处置人）
+		if _, err := s.Archive(reviewerID, rep.ContributionID, reportReasonLabel(rep.Reason)); err != nil {
+			return err
+		}
+	case "dismiss":
+		// 驳回举报：不动投稿
+	default:
+		return errors.New("无效的处置动作")
+	}
+	return s.db.Model(&model.ContributionReport{}).Where("id = ?", reportID).
+		Updates(map[string]any{"status": 1, "updated_at": s.clk.Now()}).Error
+}
+
+// reportReasonLabel 举报理由的中文标签（作下架原因用）。
+func reportReasonLabel(reason string) string {
+	switch reason {
+	case ReportReasonPiracy:
+		return "被举报盗版"
+	case ReportReasonContentError:
+		return "被举报内容错误"
+	case ReportReasonViolation:
+		return "被举报违规"
+	case ReportReasonStale:
+		return "被举报已失效"
+	}
+	return "被举报"
+}
+
+// ===== 下架与追回（T5：archive + rollback）=====
+
+// Archive 下架已上架投稿：approved → archived（必填原因，写 reject_reason 列复用）
+// 并追回该投稿累计投稿分（过审 +50 与达阶分，rollback 对冲封底 0，幂等占坑防双扣）。
+func (s *Service) Archive(reviewerID int, contributionID int64, reason string) (*ContributionItemDTO, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil, ErrContributionArchiveReason
+	}
+	var c model.UserContribution
+	if err := s.db.Select("id", "user_id", "title", "status").First(&c, contributionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrContributionNotFound
+		}
+		return nil, err
+	}
+	if c.Status != ContributionStatusApproved {
+		return nil, ErrContributionNotApproved
+	}
+	now := s.clk.Now()
+	var clawedBack int
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// CAS：仅当仍 approved 时置 archived
+		res := tx.Model(&model.UserContribution{}).
+			Where("id = ? AND status = ?", contributionID, ContributionStatusApproved).
+			Updates(map[string]any{
+				"status":        ContributionStatusArchived,
+				"reject_reason": reason,
+				"reviewed_by":   reviewerID,
+				"reviewed_at":   now,
+				"updated_at":    now,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrContributionNotApproved
+		}
+		// 追回累计投稿分（过审 + 达阶）：声明式回收（#609）——原账 SUM 取反、封底 0、
+		// 占坑防双扣在 points.Service.RollbackByRef 单点；返回值为原账合计（封底截断前）。
+		// 占坑冲突（已追回过）静默放行：CAS 已保证单次下架，此处仅防御重试路径。
+		clawed, rbErr := s.points.RollbackByRef(tx, points.PointsRollback{
+			RefType: RefTypeContribution,
+			RefID:   fmt.Sprintf("%d", contributionID),
+			Reasons: []string{ReasonContributionApproved, ReasonContributionTier},
+			IdemKey: points.ContributionRollbackIdemKey(contributionID),
+		})
+		if rbErr != nil && !errors.Is(rbErr, points.ErrPointsProcessed) {
+			return rbErr
+		}
+		clawedBack = clawed
+		// 下架站内信（含原因与扣减；同事务；事件构造器单点）
+		if err := s.notificationSvc.CreateContributionArchivedEvent(tx,
+			notification.NewContributionArchivedEvent(c.UserID, c.Title, contributionID, reason, clawedBack, points.ReasonRollback), now); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetDetail(contributionID, c.UserID)
+}

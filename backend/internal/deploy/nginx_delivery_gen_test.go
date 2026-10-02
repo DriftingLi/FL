@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/codegen"
-	"forklift-training/internal/service"
+	"forklift-training/internal/filestore"
 )
 
 // deliveryLinePat 解析生成区里的一行映射：`~*\.ext$  inline;` 与 `default  attachment;`。
@@ -72,7 +72,7 @@ func TestNginxDeliveryMapCoversFileTypeTable(t *testing.T) {
 	delete(got, "default")
 
 	// 正向：表里每一行都必须在生成区里，且档位正确。
-	wantByClass := map[service.FileTypeClass]int{}
+	wantByClass := map[filestore.FileTypeClass]int{}
 	for _, r := range rows {
 		wantByClass[r.class]++
 		want := deliveryOf(r.class)
@@ -93,10 +93,10 @@ func TestNginxDeliveryMapCoversFileTypeTable(t *testing.T) {
 
 	// 三档都要有内容：某档解析成 0 行说明解析失配，不许静默产出一份缺档的 map。
 	t.Logf("投递分档：safe %d 项 / unsafe %d 项 / unknown 显式登记 %d 项（另有 default 兜底）",
-		wantByClass[service.FileTypeSafe], wantByClass[service.FileTypeUnsafe], wantByClass[service.FileTypeUnknown])
-	for cls, name := range map[service.FileTypeClass]string{
-		service.FileTypeSafe:   "safe",
-		service.FileTypeUnsafe: "unsafe",
+		wantByClass[filestore.FileTypeSafe], wantByClass[filestore.FileTypeUnsafe], wantByClass[filestore.FileTypeUnknown])
+	for cls, name := range map[filestore.FileTypeClass]string{
+		filestore.FileTypeSafe:   "safe",
+		filestore.FileTypeUnsafe: "unsafe",
 	} {
 		if wantByClass[cls] == 0 {
 			t.Errorf("类型表里 %s 档解析到 0 行：生成器与表已不同形（本锁需要跟着改，不是放宽）", name)
@@ -114,9 +114,9 @@ func TestNginxDeliveryMapCoversFileTypeTable(t *testing.T) {
 // 新增 unsafe 行 → 出现 attachment；空档不输出抬头（不留悬空注释）。
 func TestNginxDeliveryMapPropagation(t *testing.T) {
 	region, err := renderDeliveryRegion([]deliveryRow{
-		{"tif", service.FileTypeSafe},
-		{"exe", service.FileTypeUnsafe},
-		{"bin", service.FileTypeUnknown},
+		{"tif", filestore.FileTypeSafe},
+		{"exe", filestore.FileTypeUnsafe},
+		{"bin", filestore.FileTypeUnknown},
 	})
 	if err != nil {
 		t.Fatalf("渲染合成表失败: %v", err)
@@ -131,9 +131,9 @@ func TestNginxDeliveryMapPropagation(t *testing.T) {
 	}
 	// 确定性：同一份表两次渲染必须逐字节相同（否则 CI 的新鲜度比对会随机红）。
 	again, err := renderDeliveryRegion([]deliveryRow{
-		{"exe", service.FileTypeUnsafe},
-		{"bin", service.FileTypeUnknown},
-		{"tif", service.FileTypeSafe},
+		{"exe", filestore.FileTypeUnsafe},
+		{"bin", filestore.FileTypeUnknown},
+		{"tif", filestore.FileTypeSafe},
 	})
 	if err != nil {
 		t.Fatalf("二次渲染失败: %v", err)
@@ -143,7 +143,7 @@ func TestNginxDeliveryMapPropagation(t *testing.T) {
 	}
 
 	// fail-closed：非法扩展名键（正则元字符）必须拒绝生成，不能原样拼进 nginx 正则。
-	if _, err := renderDeliveryRegion([]deliveryRow{{"tar.gz", service.FileTypeSafe}}); err == nil {
+	if _, err := renderDeliveryRegion([]deliveryRow{{"tar.gz", filestore.FileTypeSafe}}); err == nil {
 		t.Error("含正则元字符的扩展名键没被拒绝：会被原样拼进 nginx 正则键")
 	}
 }

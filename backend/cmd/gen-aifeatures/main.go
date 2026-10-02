@@ -11,10 +11,10 @@
 package main
 
 import (
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/codegen"
-	"forklift-training/internal/service"
 )
 
 func main() {
-	codegen.Main(service.FrontendAIFeaturesGen)
+	codegen.Main(aiassistant.FrontendAIFeaturesGen)
 }
