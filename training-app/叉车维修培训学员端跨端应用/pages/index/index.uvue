@@ -1,101 +1,74 @@
+<!-- PROTOTYPE（#1467 方向验证，throwaway，勿直接进主干）：
+     开屏欢迎页 → 改「一键登录/注册」页；拿掉开屏动画/倒计时；点按钮保留到登录。
+     目的：在 App 与微信小程序两端验证这套布局渲染是否正确。吉祥物暂用 logo.png 占位（真机/小程序图片资产两端一致）。 -->
 <template>
-    <view class="welcome-page">
-        <!-- 背景光晕装饰 -->
+    <view class="login-page">
         <view class="glow glow-top"></view>
         <view class="glow glow-bottom"></view>
 
-        <!-- 状态栏占位 -->
         <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 
-        <!-- 顶部标签 -->
-        <view class="page-tag">
-            <text class="page-tag-text">欢迎页</text>
+        <!-- 顶部返回（原型示意；小程序端右上角胶囊由系统提供） -->
+        <view class="nav-row">
+            <text class="nav-back" @click="onBack">‹</text>
         </view>
 
-        <!-- 中部品牌区 -->
-        <view class="brand">
-            <view class="logo-box">
-                <image src="/static/logo.png" mode="aspectFit" style="width: 176rpx; height: 140rpx;"></image>
+        <view class="hero">
+            <text class="hi">Hi，您好！</text>
+            <text class="welcome">欢迎使用叉车维修培训系统</text>
+            <view class="mascot-box">
+                <image class="mascot" src="/static/logo.png" mode="aspectFit"></image>
             </view>
-
-            <text class="title">叉车维修培训系统</text>
-            <text class="subtitle">专业维修技能成长平台</text>
         </view>
 
-        <!-- 底部：吉祥物 + 入口 -->
-        <view class="footer">
-            <view class="mascot">
-                <view class="antenna-stick"></view>
-                <view class="antenna-ball"></view>
-                <view class="m-head">
-                    <view class="m-face"></view>
-                    <view class="m-ear m-ear-l"></view>
-                    <view class="m-ear m-ear-r"></view>
-                    <view class="m-eye m-eye-l"></view>
-                    <view class="m-eye m-eye-r"></view>
-                    <view class="m-eye-glow m-eye-glow-l"></view>
-                    <view class="m-eye-glow m-eye-glow-r"></view>
-                    <view class="m-mouth"></view>
-                </view>
-                <view class="m-body">
-                    <view class="m-chest">
-                        <text class="m-chest-text">C</text>
-                    </view>
-                </view>
-                <view class="m-arm m-arm-l"></view>
-                <view class="m-arm m-arm-r"></view>
-                <view class="m-leg m-leg-l"></view>
-                <view class="m-leg m-leg-r"></view>
+        <view class="actions">
+            <view class="oneclick-btn" @click="onOneClickLogin">
+                <text class="oneclick-text">一键登录/注册</text>
             </view>
-
-            <button class="enter-btn" @click="goLogin">进入系统</button>
+            <view class="agreement" @click="toggleAgree">
+                <text class="checkbox">{{ agreed ? '☑' : '☐' }}</text>
+                <text class="agree-text">我已阅读并同意</text>
+                <text class="agree-link">《用户协议》</text>
+                <text class="agree-text">和</text>
+                <text class="agree-link">《隐私协议》</text>
+            </view>
         </view>
     </view>
 </template>
 
 <script>
-    import { useAuthStore } from '../../stores/auth'
-
     export default {
         data() {
             return {
-                statusBarHeight: 20
+                statusBarHeight: 20,
+                agreed: false
             }
         },
         onLoad() {
             const sysInfo = uni.getSystemInfoSync()
             this.statusBarHeight = sysInfo.statusBarHeight
-
-            const auth = useAuthStore()
-            const restored = auth.restoreFromStorage()
-            console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
-            if (auth.isLoggedIn.value) {
-                console.log('[welcome] redirect to dashboard')
-                uni.reLaunch({
-                    url: '/pages/dashboard/dashboard',
-                    fail: (err) => {
-                        console.error('[welcome] reLaunch to dashboard failed:', err)
-                    }
-                })
-            }
-
-            // 未登录：停留在欢迎页，点击「进入系统」进入登录页
         },
         methods: {
-            goLogin() {
-                uni.navigateTo({
-                    url: '/pages/login/login',
-                    fail: (err) => {
-                        console.error('[welcome] navigateTo login failed:', err)
-                    }
-                })
+            toggleAgree() {
+                this.agreed = !this.agreed
+            },
+            onOneClickLogin() {
+                if (!this.agreed) {
+                    uni.showToast({ title: '请先阅读并同意用户协议', icon: 'none' })
+                    return
+                }
+                // 原型 stub：一键登录真实实现待接（保留到登录页）。
+                uni.navigateTo({ url: '/pages/login/login' })
+            },
+            onBack() {
+                uni.navigateBack()
             }
         }
     }
 </script>
 
 <style>
-    .welcome-page {
+    .login-page {
         flex: 1;
         flex-direction: column;
         position: relative;
@@ -104,7 +77,6 @@
         background-color: #00CC99;
     }
 
-    /* 背景光晕装饰 */
     .glow {
         position: absolute;
         border-radius: 50%;
@@ -130,236 +102,96 @@
         background-color: transparent;
     }
 
-    /* 顶部标签 */
-    .page-tag {
-        align-self: flex-start;
-        margin: 20rpx 0 0 40rpx;
-        padding: 10rpx 28rpx;
-        border-radius: 999rpx;
-        background-color: rgba(255, 255, 255, 0.20);
+    .nav-row {
+        height: 88rpx;
+        flex-direction: row;
         align-items: center;
-        justify-content: center;
+        padding-left: 24rpx;
     }
 
-    .page-tag-text {
-        font-size: 24rpx;
-        color: rgba(255, 255, 255, 0.95);
-        text-align: center;
+    .nav-back {
+        font-size: 56rpx;
+        color: #FFFFFF;
+        line-height: 56rpx;
     }
 
-    /* 中部品牌区 */
-    .brand {
+    .hero {
         flex: 1;
-        align-items: center;
-        justify-content: center;
         flex-direction: column;
-        padding-top: 40rpx;
-    }
-
-    .logo-box {
-        position: relative;
-        width: 176rpx;
-        height: 176rpx;
-        border-radius: 40rpx;
-        background-color: #ffffff;
-        box-shadow: 0 16rpx 40rpx rgba(8, 90, 120, 0.35);
-    }
-
-    .title {
-        margin-top: 40rpx;
-        font-size: 48rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .subtitle {
-        margin-top: 18rpx;
-        font-size: 27rpx;
-        color: #CCCCCC;
-        text-align: center;
-    }
-
-    /* 底部：吉祥物 + 入口 */
-    .footer {
-        align-items: center;
-        flex-direction: column;
-        padding-bottom: 90rpx;
-    }
-
-    /* 纯 view 绘制的机器人吉祥物（坐标系 0-190rpx 宽 / 0-210rpx 高） */
-    .mascot {
-        position: relative;
-        width: 190rpx;
-        height: 210rpx;
-    }
-
-    .antenna-stick {
-        position: absolute;
-        left: 91rpx;
-        top: 6rpx;
-        width: 8rpx;
-        height: 24rpx;
-        border-radius: 4rpx;
-        background-color: #22C55E;
-    }
-
-    .antenna-ball {
-        position: absolute;
-        left: 86rpx;
-        top: 0rpx;
-        width: 18rpx;
-        height: 18rpx;
-        border-radius: 50%;
-        background-color: #4ADE80;
-    }
-
-    .m-head {
-        position: absolute;
-        left: 55rpx;
-        top: 30rpx;
-        width: 80rpx;
-        height: 64rpx;
-        border-radius: 32rpx;
-        background-color: #FFFFFF;
-        box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.28);
-    }
-
-    /* 脸部显示屏（深蓝屏幕，置于白色圆头内底部） */
-    .m-face {
-        position: absolute;
-        left: 63rpx;
-        top: 44rpx;
-        width: 64rpx;
-        height: 40rpx;
-        border-radius: 22rpx;
-        background-color: #1E3A8A;
-    }
-
-    .m-ear {
-        position: absolute;
-        top: 46rpx;
-        width: 12rpx;
-        height: 28rpx;
-        border-radius: 6rpx;
-        background-color: #3B82F6;
-    }
-
-    .m-ear-l {
-        left: 43rpx;
-    }
-
-    .m-ear-r {
-        left: 135rpx;
-    }
-
-    /* 眼：青色发光圆形 */
-    .m-eye {
-        position: absolute;
-        top: 56rpx;
-        width: 13rpx;
-        height: 13rpx;
-        border-radius: 50%;
-        background-color: #22D3EE;
-        box-shadow: 0 0 10rpx #67E8F9;
-    }
-
-    .m-eye-l {
-        left: 76rpx;
-    }
-
-    .m-eye-r {
-        left: 101rpx;
-    }
-
-    /* 微笑嘴：浅蓝弧 */
-    .m-mouth {
-        position: absolute;
-        left: 85rpx;
-        top: 80rpx;
-        width: 18rpx;
-        height: 8rpx;
-        border-radius: 50% 50% 8rpx 8rpx;
-        background-color: #93C5FD;
-    }
-
-    .m-body {
-        position: absolute;
-        left: 62rpx;
-        top: 98rpx;
-        width: 66rpx;
-        height: 66rpx;
-        border-radius: 22rpx;
-        background-color: #FFFFFF;
-        box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.22);
-    }
-
-    .m-chest {
-        position: absolute;
-        left: 76rpx;
-        top: 110rpx;
-        width: 38rpx;
-        height: 38rpx;
-        border-radius: 50%;
-        background-color: #FFFFFF;
-        align-items: center;
         justify-content: center;
-        box-shadow: 0 2rpx 8rpx rgba(8, 90, 120, 0.18);
+        padding: 0 56rpx;
     }
 
-    .m-chest-text {
-        font-size: 24rpx;
+    .hi {
+        font-size: 60rpx;
         font-weight: bold;
-        color: #15803D;
+        color: #FFFFFF;
     }
 
-    .m-arm {
-        position: absolute;
-        top: 104rpx;
-        width: 20rpx;
-        height: 44rpx;
-        border-radius: 10rpx;
-        background-color: #3B82F6;
-    }
-
-    .m-arm-l {
-        left: 40rpx;
-    }
-
-    .m-arm-r {
-        left: 130rpx;
-    }
-
-    .m-leg {
-        position: absolute;
-        top: 164rpx;
-        width: 18rpx;
-        height: 22rpx;
-        border-radius: 9rpx;
-        background-color: #2563EB;
-    }
-
-    .m-leg-l {
-        left: 76rpx;
-    }
-
-    .m-leg-r {
-        left: 96rpx;
-    }
-
-    /* 进入按钮 */
-    .enter-btn {
-        margin-top: 56rpx;
-        width: 420rpx;
-        height: 92rpx;
-        line-height: 92rpx;
-        border-radius: 999rpx;
-        background-color: #ffffff;
-        color: #1E9FFF;
+    .welcome {
+        margin-top: 20rpx;
         font-size: 32rpx;
+        color: rgba(255, 255, 255, 0.95);
+    }
+
+    .mascot-box {
+        margin-top: 60rpx;
+        align-self: center;
+        width: 360rpx;
+        height: 360rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mascot {
+        width: 320rpx;
+        height: 320rpx;
+    }
+
+    .actions {
+        flex-direction: column;
+        align-items: center;
+        padding: 0 56rpx 80rpx 56rpx;
+    }
+
+    .oneclick-btn {
+        width: 100%;
+        height: 96rpx;
+        border-radius: 999rpx;
+        background-color: #22C55E;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.28);
+    }
+
+    .oneclick-text {
+        font-size: 34rpx;
         font-weight: bold;
+        color: #FFFFFF;
         text-align: center;
-        border: none;
-        box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.35);
+    }
+
+    .agreement {
+        margin-top: 32rpx;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .checkbox {
+        font-size: 30rpx;
+        color: #FFFFFF;
+        margin-right: 8rpx;
+    }
+
+    .agree-text {
+        font-size: 24rpx;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .agree-link {
+        font-size: 24rpx;
+        color: #E6FFFA;
     }
 </style>
