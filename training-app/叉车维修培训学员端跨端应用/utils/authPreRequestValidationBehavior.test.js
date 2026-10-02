@@ -116,7 +116,7 @@ const forgotSrc = () => readText(FORGOT_UTS);
  */
 function loginApp(source) {
   const { toasts, uni } = makeUni();
-  const calls = { login: [], loginByCode: [], loginByWechat: [], sendCodeApi: [] };
+  const calls = { login: [], loginByCode: [], loginByWechat: [], sendCodeApi: [], afterLoginSuccess: [] };
   const bindings = {
     ...vueShim(),
     useAuthStore: () => ({
@@ -130,6 +130,10 @@ function loginApp(source) {
     saveSecureCredentials: () => {},
     saveAccountOnly: () => {},
     clearSecureCredentials: () => {},
+    // #1478：登录成功出口不再是本文件的私有函数，而是共享件 `utils/loginOutlet.uts`
+    // （着陆页与登录页同一条出口）。这里注入的是**它的桩**，记录实参 isNew ——
+    // 「成功出口被调了几次、带的是哪个分支」由此变成可断言的行为面，不再只是文本锁。
+    afterLoginSuccess: (isNew) => { calls.afterLoginSuccess.push(isNew); },
     uni,
     setInterval: () => 0,
     clearInterval: () => {},
@@ -288,6 +292,9 @@ describe('C. #1262 边界：新档位不渗进其余登录通道', () => {
     expect(app.toasts).not.toContain(MSG_PWD);
     expect(app.calls.loginByWechat.length).toBe(1);
     expect(app.calls.login.length).toBe(0);
+    // #1478 追加的口径：微信通道成功后走的是**那条共享出口**，且老用户（isNew=false）
+    // 分支由出口决定，登录页本身不再持有 reLaunch
+    expect(app.calls.afterLoginSuccess).toEqual([false]);
   });
 
   test('C2 邮箱验证码登录：空口令照样直达 loginByCode(channel=email)', async () => {

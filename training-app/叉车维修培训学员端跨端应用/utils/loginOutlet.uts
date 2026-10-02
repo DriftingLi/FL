@@ -1,0 +1,38 @@
+/**
+ * 登录成功出口（#1478：从登录页私有 composable 提为**两页可共享的出口**）
+ *
+ * 为什么要有这个文件：#1478 把启动页从「品牌开屏 → 登录页」两跳改成未登录着陆页，着陆页
+ * 直接消费 `loginByWechat()`。成功链路（toast 文案 + 延时 + 落点）必须与登录页**一条出口**，
+ * 而不是在启动页再抄一份 —— 那两处会漂移（新用户是否仍走 choose-cert 是票面判据 4 的硬约束）。
+ *
+ * 函数体逐字搬自 `pages/login/composables/useLoginForm.uts` 的同名函数：
+ * 两条 toast 文案、`duration` 1500/1000、`setTimeout` 延时 800/500、两条 `reLaunch` 字面量
+ * 一字未改。搬家的唯一变化是它不再是 login 模块的私有件（`composables/` 的私有 composable
+ * 若被 `pages/index` 直接 import 会命中移动端跨模块 import 的连锁契约锁，见 #1478 P3 裁定）。
+ *
+ * 落位理由：`utils/**` 是既有的跨切面基础设施面（`utils/system.uts` 带 uni 副作用、
+ * `utils/navigation.uts` 带跳转、`utils/coursePointsCta.uts` 是共享展示件），
+ * 「多消费、无单一主消费方」⇒ 不归任何模块私有。
+ *
+ * 执法面：`utils/loginContract.test.js` 的「成功跳转两分支」用例现在指向本文件；
+ * 「全仓不存在第二套登录成功跳转」由 `utils/landingLoginContract.test.js` 锁。
+ */
+
+/**
+ * 登录成功后的落地分叉。
+ * @param isNew 后端 `/auth/wx-login` 回的 `is_new`：新用户**必须**仍走 choose-cert（票面判据 4），
+ *              老用户才直接进 dashboard。
+ */
+export function afterLoginSuccess(isNew : boolean) : void {
+    if (isNew) {
+        uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })
+        setTimeout(() => {
+            uni.reLaunch({ url: '/pages/guide/choose-cert' })
+        }, 800)
+    } else {
+        uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
+        setTimeout(() => {
+            uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+        }, 500)
+    }
+}

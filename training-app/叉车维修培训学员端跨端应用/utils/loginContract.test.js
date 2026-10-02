@@ -44,6 +44,8 @@ const PAGE = 'pages/login/login.uvue';
 const FORM = 'pages/login/composables/useLoginForm.uts';
 const GATE = 'pages/login/composables/useBiometricGate.uts';
 const AUTH_API = 'api/auth.uts';
+/** #1478：登录成功出口从 FORM 提为跨切面共享件（着陆页与登录页一条出口），「成功跳转两分支」那条锁随之指向这里 */
+const OUTLET = 'utils/loginOutlet.uts';
 
 /** 软预算口径（ADR-0007）。模块全量预算已由声明面执法（login 的 budget 已从 pending 翻成 600） */
 const LINE_BUDGET = 600;
@@ -51,9 +53,15 @@ const LINE_BUDGET = 600;
 /**
  * 术前 = 术后的块级 sha256（术前值取自 `origin/master` 的 `pages/login/login.uvue`，逐字节）。
  * 模板与样式**一行未动**是本票的硬交付：解构让模板绑定名保持原样，所以这两把锁可以是整块 sha。
+ *
+ * ⚠️ **#1478 显式变更（经批准的改，不是绕过）**：协议勾选行被抽成共享件
+ * `components/login-agreement/login-agreement.uvue`（票面判据 7 要求启动页与登录页同源同文案），
+ * 模板必然少那 11 行、样式必然少三条 `.agree-*` 规则 ⇒ 两把 sha 同步更新。
+ * 下面两个值是 #1478 之后的逐字节 sha；判别力自检（原样重算必等、改一字符必换值）照旧。
+ * 变更理由与「为什么不把协议行复制两份避开这把锁」见 `docs` 侧 issue #1478 与本仓 commit message。
  */
-const TEMPLATE_SHA256 = '042b6fb3c06dafa61181be2ae0d2cddeb2ea23f7e8a121b613ed5e04e40f59c1';
-const STYLE_SHA256 = '04fa44fccbd995e237742c5f0ceefee0d8815d974f5ef0cb4983d69eb161a20a';
+const TEMPLATE_SHA256 = 'c30ef3895db558fe3b7934be6821c9334c393dd3d601936939b248d2969d4871';
+const STYLE_SHA256 = '214949d8a2798b7e582068a121cb6ed9e582bbc6902bfb33fd03e78e8eb0c581';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -112,10 +120,14 @@ function templateRoots(tpl) {
   return [...out].sort();
 }
 
-/** 页面作用域：两个 composable 的解构名 + 壳层自有函数 + `biometric` 实例 */
+/**
+ * 页面作用域：两个模块私有 composable 的解构名 + 跨切面探测件的解构名 + 壳层自有函数 + `biometric` 实例
+ * （`useLoginProviders` 是 #1478 起的共享探测件，登记在 `INFRA.files`，模板绑的 `wechatAvailable`
+ * 由它解构而来 —— 加进来是**扩大**判据面：模板多一个根标识符，少一个定义即红）
+ */
 function pageScope() {
   const page = read(PAGE);
-  const names = new Set([...destructuredNames(page, 'useLoginForm'), ...destructuredNames(page, 'useBiometricGate')]);
+  const names = new Set([...destructuredNames(page, 'useLoginForm'), ...destructuredNames(page, 'useBiometricGate'), ...destructuredNames(page, 'useLoginProviders')]);
   for (const m of page.matchAll(/function ([A-Za-z_$][\w$]*)\(/g)) names.add(m[1]);
   for (const m of page.matchAll(/const ([A-Za-z_$][\w$]*)\s*=/g)) names.add(m[1]);
   return names;
@@ -460,14 +472,25 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(body).toContain("let msg = '登录失败，请重试'");
   });
 
-  it('成功跳转两分支：新用户选证件、老用户进首页（含延时逐字）', () => {
-    const body = fnBodyOf(form, 'afterLoginSuccess');
-    expect(body).toContain("uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })");
-    expect(body).toContain("uni.reLaunch({ url: '/pages/guide/choose-cert' })");
-    expect(body).toContain("uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })");
-    expect(body).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
-    expect(body).toContain('}, 800)');
-    expect(body).toContain('}, 500)');
+  it('成功跳转两分支：新用户选证件、老用户进首页（含延时逐字）——#1478 起出口在 utils/loginOutlet.uts', () => {
+    // 断言面从「表单 composable 内的局部函数」平移到「共享出口文件」，六处字面量逐字仍在。
+    // ⚠️ 这里**刻意不用** `fnBodyOf()`：它是为「4 空格收尾的局部函数」写的，对顶层函数会在
+    // `    } else {` 那行提前截断（老用户分支整块拿不到）⇒ 断言会退化成恒真的一半。共享出口是
+    // 顶层函数，整文件文本就是它的函数体面，直接按文件断言更强（改坏任一字面量必红）。
+    const outlet = read(OUTLET);
+    // 登录页不再自持那份实现（否则就是第二套跳转）
+    expect(form).not.toContain('function afterLoginSuccess');
+    expect(outlet).toContain('export function afterLoginSuccess(isNew : boolean) : void {');
+    expect(outlet).toContain("uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })");
+    expect(outlet).toContain("uni.reLaunch({ url: '/pages/guide/choose-cert' })");
+    expect(outlet).toContain("uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })");
+    expect(outlet).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
+    expect(outlet).toContain('}, 800)');
+    expect(outlet).toContain('}, 500)');
+    // 判别力：新出口在出口文件里**恰好一处**（多一处 = 分叉被人复制，少一处 = 票面判据 4 被破）
+    const chooseCertAt = (src) => [...src.matchAll(/\/pages\/guide\/choose-cert/g)].length;
+    expect(chooseCertAt(outlet)).toBe(1);
+    expect(chooseCertAt(outlet.replace('uni.reLaunch({ url: \'/pages/guide/choose-cert\' })', 'uni.reLaunch({ url: \'/pages/dashboard/dashboard\' })'))).toBe(0);
   });
 
   it('主按钮文案三态与验证码提示三档逐字仍在', () => {

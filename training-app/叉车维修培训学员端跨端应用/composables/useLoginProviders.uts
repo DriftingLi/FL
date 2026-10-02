@@ -1,0 +1,40 @@
+/**
+ * 登录提供方能力探测（#1478 首次建立的共享探测件）
+ *
+ * 为什么存在：启动页（pages/index）与登录页（pages/login）都要知道「微信登录这台设备
+ * 上到底能不能用」。旧做法是用 `#ifdef MP-WEIXIN` 在编译期把入口整条包掉，但 #1478
+ * 裁定 2 要求 `#ifdef` 指令行增删数为 0（② 门触发面），故改为**运行期探测**。
+ *
+ * 返回面是「能力可用性判断」，不是「要不要渲染」的布尔：消费方自行决定渲染分支，
+ * 后续 #1484 可用同一个判断决定按钮 disabled。
+ *
+ * 落位说明：放根 composables/（INFRA 中立位置），两页各自 import 同一符号，
+ * 不构成跨模块私有件消费（避免移动端跨模块 import 的连锁契约锁）。
+ */
+import { computed } from 'vue'
+import type { ComputedRef } from 'vue'
+
+export type UseLoginProvidersResult = {
+    wechatAvailable : ComputedRef<boolean>
+    wechatUnavailableReason : ComputedRef<string>
+}
+
+/**
+ * 探测微信登录可用性。
+ * 判据取 uni.getSystemInfoSync().uniPlatform：仅 'mp-weixin' 判可用；
+ * 其余（app / web / 任何未知值）一律保守判不可用——宁可不给入口，不可给了点不动。
+ */
+export function useLoginProviders() : UseLoginProvidersResult {
+    const platform = uni.getSystemInfoSync().uniPlatform
+    const wechatAvailable = computed<boolean>(() : boolean => {
+        return platform == 'mp-weixin'
+    })
+    const wechatUnavailableReason = computed<string>(() : string => {
+        if (platform == 'mp-weixin') return ''
+        return '当前客户端不支持微信登录'
+    })
+    return {
+        wechatAvailable: wechatAvailable,
+        wechatUnavailableReason: wechatUnavailableReason
+    } as UseLoginProvidersResult
+}

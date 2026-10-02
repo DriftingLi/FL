@@ -108,18 +108,10 @@
                 </view>
             </template>
 
-            <!-- 协议勾选 + 注册引导（手机号/邮箱/微信方式展示） -->
-            <view class="form-item agree-row" v-if="mode != 'password'" @click="toggleAgree">
-                <view class="checkbox" :class="{ 'checkbox-checked': agreed }">
-                    <text v-if="agreed" class="check-mark">✓</text>
-                </view>
-                <text class="agree-text">同意</text>
-                <text class="agree-link" @click.stop="showAgreement('用户协议')">《用户协议》</text>
-                <text class="agree-text">和</text>
-                <text class="agree-link" @click.stop="showAgreement('用户隐私')">《用户隐私》</text>
-                <text class="agree-text">{{ mode == 'email' ? '若邮箱未注册，' : '若手机号未注册，' }}</text>
-                <text class="agree-link" @click.stop="goRegister">立即注册</text>
-            </view>
+            <!-- 协议勾选 + 注册引导（手机号/邮箱/微信方式展示）
+                 #1478 抽成共享件 components/login-agreement（与着陆页同源同文案）；
+                 「非 password 模式才显示」的门槛条件留在本页，口径由 loginContract 继续执法 -->
+            <LoginAgreement v-if="mode != 'password'" :channel="mode" :agreed="agreed" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
             <!-- 登录按钮 -->
             <button class="btn-login" :class="{ 'btn-login-disabled': loading, 'btn-wechat': mode == 'wechat' }"
                 :disabled="loading" @click="onSubmit">
@@ -149,8 +141,12 @@
         <view class="mode-switch">
             <text class="mode-link" :class="{ 'mode-link-active': mode == 'phone' }" @click="switchMode('phone')">手机验证码</text>
             <!-- #ifdef MP-WEIXIN -->
-            <text class="mode-sep">|</text>
-            <text class="mode-link" :class="{ 'mode-link-active': mode == 'wechat' }" @click="switchMode('wechat')">微信登录</text>
+            <!-- #1478 裁定 2：本块两条**指令行**一字不动（增删数 = 0，② 门触发面），改用运行期
+                 探测件决定显隐 —— 编译面仍只有小程序端有这行，运行面再加一道「能力可用」判断，
+                 探测结论与着陆页取的是同一符号 —— 根 composables/useLoginProviders 解构出的
+                 `wechatAvailable`（模板里不得出现「import 函数 + 左括号」形态，Kotlin error18）。 -->
+            <text class="mode-sep" v-if="wechatAvailable">|</text>
+            <text class="mode-link" v-if="wechatAvailable" :class="{ 'mode-link-active': mode == 'wechat' }" @click="switchMode('wechat')">微信登录</text>
             <!-- #endif -->
             <text class="mode-sep">|</text>
             <text class="mode-link" :class="{ 'mode-link-active': mode == 'email' }" @click="switchMode('email')">邮箱验证码</text>
@@ -172,10 +168,15 @@
     import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
     import { useAuthStore } from '../../stores/auth'
     import { useBiometric } from '../../composables/useBiometric'
+    import { useLoginProviders } from '../../composables/useLoginProviders'
     import { useLoginForm } from './composables/useLoginForm'
     import { useBiometricGate } from './composables/useBiometricGate'
+    import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
 
     const auth = useAuthStore()
+    // 微信登录入口的显隐由**运行期能力探测**决定（#1478 裁定 2：条件编译指令行增删数为 0）；
+    // 着陆页 `pages/index/index.uvue` 引用的是同一个符号，两页不各写一份探测逻辑
+    const { wechatAvailable } = useLoginProviders()
     // 生物识别实例只有一个：门控 checkSupport 写入的 isSupported 与模板读取的必须是同一份
     const biometric = useBiometric()
 
@@ -424,14 +425,9 @@
         padding: 60rpx 0 40rpx 0;
     }
 
-    /* 协议行 */
-    .agree-row {
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        margin-top: 8rpx;
-    }
-
+    /* 协议行样式（.agree-row / .agree-text / .agree-link）已于 #1478 随协议件抽走，
+       落点 components/login-agreement/login-agreement.uvue 的 .la-* 规则；
+       下面 .checkbox / .checkbox-checked / .check-mark 仍被「记住密码」行使用，不得跟着删。 */
     .checkbox {
         width: 34rpx;
         height: 34rpx;
@@ -451,15 +447,6 @@
     .check-mark {
         font-size: 24rpx;
         color: #ffffff;
-    }
-
-    .agree-text {
-        font-size: 25rpx;
-        color: #666666;
-    }
-
-    .agree-link {
-        color: #2979ff;
     }
 
     /* 记住账号 + 注册引导（左侧勾选，右侧链接） */

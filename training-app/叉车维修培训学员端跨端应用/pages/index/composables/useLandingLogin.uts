@@ -1,0 +1,108 @@
+/**
+ * 着陆页登录逻辑（#1478：启动页从「品牌开屏 → 登录页」两跳改为未登录着陆页）
+ *
+ * 职责边界：只管「协议勾选 + 微信登录 + 次级入口导航」这条着陆页独有的最小链。
+ * 微信登录**可用与否的判断不在这里**——那是共享探测件 `composables/useLoginProviders`
+ * 的活，由页面直接引用同一符号（票面判据：探测件被两页共享，而非两份实现）。
+ *
+ * 成功出口复用 `utils/loginOutlet.afterLoginSuccess(isNew)`：全仓一条登录成功跳转，
+ * 本文件**不得**出现 `reLaunch('/pages/dashboard/dashboard')` 之类的第二套落地逻辑。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { useAuthStore } from '../../../stores/auth'
+import { afterLoginSuccess } from '../../../utils/loginOutlet'
+
+export type UseLandingLoginResult = {
+    statusBarHeight : Ref<number>
+    agreed : Ref<boolean>
+    loading : Ref<boolean>
+    errorHint : Ref<string>
+    toggleAgree : () => void
+    showAgreement : (name : string) => void
+    goRegister : () => void
+    goOtherLogin : () => void
+    onWechatLogin : () => Promise<void>
+}
+
+export function useLandingLogin() : UseLandingLoginResult {
+    const auth = useAuthStore()
+    const statusBarHeight = ref<number>(20)
+    const agreed = ref<boolean>(false)
+    const loading = ref<boolean>(false)
+    const errorHint = ref<string>('')
+
+    function toggleAgree() : void {
+        agreed.value = !agreed.value
+    }
+
+    /** 协议详情本票不改：沿用登录页口径（返回「详情页建设中」toast） */
+    function showAgreement(name : string) : void {
+        uni.showToast({ title: name + '详情页建设中', icon: 'none' })
+    }
+
+    function goRegister() : void {
+        uni.navigateTo({ url: '/pages/register/register' })
+    }
+
+    /** 次级入口：App 端探测不到微信登录时走独立登录页（该页保留、降级为次级落点，不退役 #1483） */
+    function goOtherLogin() : void {
+        uni.navigateTo({
+            url: '/pages/login/login',
+            fail: (err) => {
+                console.error('[welcome] navigateTo login failed:', err)
+            }
+        })
+    }
+
+    /**
+     * 微信一键登录。
+     * 硬顺序：协议未勾选 ⇒ 在**任何网络请求发出之前**拦截（口径与登录页
+     * 「请先同意用户协议和隐私政策」逐字一致）；勾选后才调 `loginByWechat()`。
+     * 失败不得静默：文案同时进 toast 和 `errorHint`（页面有可见渲染位）。
+     */
+    async function onWechatLogin() : Promise<void> {
+        errorHint.value = ''
+        if (agreed.value == false) {
+            uni.showToast({ title: '请先同意用户协议和隐私政策', icon: 'none' })
+            return
+        }
+        if (loading.value) return
+        loading.value = true
+        uni.showLoading({ title: '登录中...', mask: true })
+        try {
+            const result = await auth.loginByWechat()
+            uni.hideLoading()
+            const isNew = result != null && result.isNew === true
+            afterLoginSuccess(isNew)
+            return
+        } catch (e) {
+            uni.hideLoading()
+            console.error('[welcome] wechat login failed:', e)
+            let msg = '登录失败，请重试'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            errorHint.value = msg
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    return {
+        statusBarHeight: statusBarHeight,
+        agreed: agreed,
+        loading: loading,
+        errorHint: errorHint,
+        toggleAgree: () => toggleAgree(),
+        showAgreement: (name : string) => showAgreement(name),
+        goRegister: () => goRegister(),
+        goOtherLogin: () => goOtherLogin(),
+        onWechatLogin: () => onWechatLogin(),
+    } as UseLandingLoginResult
+}

@@ -18,12 +18,16 @@ import type { Ref, ComputedRef } from 'vue'
 import { useAuthStore } from '../../../stores/auth'
 import { sendCodeApi, getCaptchaApi } from '../../../api/auth'
 import { saveSecureCredentials, saveAccountOnly, clearSecureCredentials } from '../../../utils/secureStorage'
+// #1478：登录成功出口提为共享件（着陆页与本页一条出口），本页不再自持那份 toast + reLaunch
+import { afterLoginSuccess } from '../../../utils/loginOutlet'
 import type { UseBiometricResult } from '../../../composables/useBiometric'
 
 /**
  * 本 composable 的显式返回类型（Kotlin error18 规避，先例 useRegisterForm / useResumeEdit）。
  * 返回面只暴露被消费的符号（T05 死代码消费面核对口径）：`validate` / `validatePhoneNum` /
- * `startCountdown` / `afterLoginSuccess` / `captchaId` / `wrongAttempts` 页面与门控均不读，故不入面。
+ * `startCountdown` / `captchaId` / `wrongAttempts` 页面与门控均不读，故不入面。
+ * （`afterLoginSuccess` 原也在此列，#1478 起它已是 `utils/loginOutlet.uts` 的共享出口，
+ * 不再是本文件的内部函数 —— 两页都从那里取，全仓不存在第二套登录成功跳转。）
  */
 export type UseLoginFormResult = {
     statusBarHeight : Ref<number>
@@ -262,24 +266,11 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     }
 
     /**
-     * 微信登录成功后跳转：
-     * - 新用户（isNew=true）→ 选择证书页面
-     * - 老用户 → 直接进入首页
+     * 微信登录成功后的落地分叉已搬出本文件（#1478）：现居 `utils/loginOutlet.uts` 的
+     * `afterLoginSuccess(isNew)` —— 新用户走 choose-cert、老用户进 dashboard 两条分支
+     * **逐字未改**（连同两条 toast 文案与 800/500ms 延时），搬走的动机是着陆页要复用同一条
+     * 出口，而不是在 `pages/index` 再抄一份。本文件两处调用点因此指向那个共享符号。
      */
-    function afterLoginSuccess(isNew : boolean) : void {
-        if (isNew) {
-            uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })
-            setTimeout(() => {
-                uni.reLaunch({ url: '/pages/guide/choose-cert' })
-            }, 800)
-        } else {
-            uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })
-            setTimeout(() => {
-                uni.reLaunch({ url: '/pages/dashboard/dashboard' })
-            }, 500)
-        }
-    }
-
     async function onSubmit() : Promise<void> {
         // 账号密码登录不强制勾选协议（账号已是注册过的用户）
         if (mode.value != 'password') {
