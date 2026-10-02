@@ -1,8 +1,8 @@
-// Package service 前端 AI 功能配置生成器测试（ADR-0030 决策 3，#613）：渲染纯函数的
+// 前端 AI 功能配置生成器测试（ADR-0030 决策 3，#613）：渲染纯函数的
 // 快照断言（注册表样例 → 输出快照）与生成物一致性契约——真实注册表的渲染结果与
 // frontend/src/config/aiFeatures.ts 字节级全等，生成物过期或注册表变更未再生成即红
 // （无需改 CI workflow）；另钉住空收录集拒绝与功能键形态防御。
-package service
+package aiassistant
 
 import (
 	"strings"
@@ -13,8 +13,8 @@ import (
 
 // sampleRegistry 注册表样例（非真实注册表）：覆盖收录规则四态——
 // admin-single∧billed 进生成面（声明序保留，freePreview 位透出）；免费阻塞行、双模式行、遗留兼容位被过滤。
-func sampleRegistry() []AIFeatureExport {
-	return []AIFeatureExport{
+func sampleRegistry() []FeatureExport {
+	return []FeatureExport{
 		{Name: "grade_short_answer", Label: "简答题 AI 评分", BindingKind: string(bindingAdminSingle), Billed: false},
 		{Name: "fault_consult", Label: "故障咨询", BindingKind: string(bindingAdminSingle), Billed: true, FreePreview: true, Slug: "fault-consult", Adapter: string(aiAdapterDiagnosis)},
 		{Name: "ai_assistant_normal", Label: "AI 助手 · 普通模式", BindingKind: string(bindingAssistantMode), Billed: true},
@@ -68,7 +68,7 @@ func TestRenderFrontendAIFeaturesEmptyRejected(t *testing.T) {
 		t.Fatal("空收录集应拒绝生成")
 	}
 	// 全部被过滤（免费/双模式/遗留）同样拒绝
-	free := []AIFeatureExport{
+	free := []FeatureExport{
 		{Name: "grade_short_answer", Label: "简答题 AI 评分", BindingKind: string(bindingAdminSingle), Billed: false},
 		{Name: "ai_assistant", Label: "AI 助手对话", BindingKind: string(bindingAssistantLegacy), Billed: true},
 	}
@@ -79,7 +79,7 @@ func TestRenderFrontendAIFeaturesEmptyRejected(t *testing.T) {
 
 // TestRenderFrontendAIFeaturesKeyShape 功能键形态防御：非法键使渲染报错，不产出坏 TS。
 func TestRenderFrontendAIFeaturesKeyShape(t *testing.T) {
-	bad := []AIFeatureExport{{Name: "Bad-Key", Label: "x", BindingKind: string(bindingAdminSingle), Billed: true}}
+	bad := []FeatureExport{{Name: "Bad-Key", Label: "x", BindingKind: string(bindingAdminSingle), Billed: true}}
 	if _, err := RenderFrontendAIFeaturesTS(bad); err == nil {
 		t.Fatal("非 snake_case 功能键应报错")
 	}
@@ -108,7 +108,7 @@ func TestFrontendIncludeMatchesChatKeys(t *testing.T) {
 		if !ok {
 			t.Fatalf("featureChatKeys 键 %q 不在注册表中", k)
 		}
-		if !aiFrontendFeatureInclude(AIFeatureExport{Name: f.name, BindingKind: string(f.bindingKind), Billed: f.billed}) {
+		if !aiFrontendFeatureInclude(FeatureExport{Name: f.name, BindingKind: string(f.bindingKind), Billed: f.billed}) {
 			t.Fatalf("featureChatKeys 键 %q 未被收录谓词命中", k)
 		}
 	}

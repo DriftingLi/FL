@@ -18,6 +18,7 @@
 package api
 
 import (
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/featured"
@@ -84,9 +85,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.CoursePageResult", Endpoints: []string{"GET /courses", "GET /admin/courses", "GET /tutor/courses"},
 		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: service.CoursePageResult{}},
-	{Result: "service.DiagnosisFaultCodePage", Endpoints: []string{"GET /ai-assistant/diagnosis/fault-codes"},
+	{Result: "aiassistant.DiagnosisFaultCodePage", Endpoints: []string{"GET /ai-assistant/diagnosis/fault-codes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.DiagnosisFaultCodePage{}},
+		Sample: aiassistant.DiagnosisFaultCodePage{}},
 	{Result: "service.FavoritePageResult", Endpoints: []string{"GET /favorites"},
 		Keys: []string{"page", "pages", "total", "favorites"}, Dialect: paging.DialectPages,
 		Sample: service.FavoritePageResult{}},

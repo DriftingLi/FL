@@ -1,8 +1,8 @@
-// Package service 诊断助手**线上传真值**夹具测试（ADR-0063）：夹具是 2026-09-22 在
+// 诊断助手**线上传真值**夹具测试（ADR-0063）：夹具是 2026-09-22 在
 // lxc101 实包抓下来的原始响应体（20260904 / 20260921 两版，长文本与数组按原样键裁剪、
 // 不新增键），经 fakeDiagnosisServer.raw **原样回写**后驱动真实 adapter —— 与既有
 // 「用 Go 类型回编码」的 fake 互补：后者厂商一改键名就恒绿，本文件不会。
-package service
+package aiassistant
 
 import (
 	"context"
@@ -117,7 +117,7 @@ func streamWithWire(t *testing.T, raw string) (content string, chunks []string, 
 	server := httptest.NewServer(fake.handler())
 	defer server.Close()
 	ctx := WithDiagnosisSources(context.Background())
-	got, _, err := newDiagnosisForTest(server).Stream(ctx, AIModelSelector{FeatureKey: FeatureFaultDiagnosis},
+	got, _, err := newDiagnosisForTest(server).Stream(ctx, ModelSelector{FeatureKey: FeatureFaultDiagnosis},
 		[]*schema.Message{schema.UserMessage("制动系统异响怎么排查")}, func(c string) { chunks = append(chunks, c) })
 	if err != nil {
 		t.Fatalf("Stream 异常: %v", err)

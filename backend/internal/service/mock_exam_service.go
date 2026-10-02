@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
@@ -35,7 +36,7 @@ const mockExamAbandonTTL = 24 * time.Hour
 // MockExamService 模拟考试服务。
 type MockExamService struct {
 	db *gorm.DB
-	ai *AIService
+	ai *aiassistant.GenerationService
 	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 PracticeModeService.grader）。
 	// nil 时简答降级：不进 AI 分，Earned 记 0（ADR-0068 决策 1）。测试可注入 fake。
 	grader ShortAnswerGrader
@@ -44,7 +45,7 @@ type MockExamService struct {
 }
 
 // NewMockExamService 创建模拟考试服务实例。
-func NewMockExamService(db *gorm.DB, ai *AIService, logger *zap.Logger) *MockExamService {
+func NewMockExamService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *MockExamService {
 	return &MockExamService{db: db, ai: ai, grader: shortAnswerGraderOf(ai), logger: logger}
 }
 

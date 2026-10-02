@@ -1,10 +1,10 @@
-// Package service 外部诊断 RAG 助手只读代理（计划 批次2）：
+// 外部诊断 RAG 助手只读代理（计划 批次2）：
 // 供学员端「智能维修诊断」周边面板（品牌/车型联动、故障码查询、手册与案例静态资源）使用。
-// 与 diagnosis adapter（ai_diagnosis_adapter.go）同源但不同消费面：本 service 直连助手
+// 与 diagnosis adapter（diagnosis_adapter.go）同源但不同消费面：本 service 直连助手
 // 只读 GET 端点（绕过 nginx Basic Auth 层——后端直连 172.17.1.23），鉴权由 handler 层
 // 与 chat 一致（OptionalAuth）。SSRF 防御：子路径按段做 Unicode 白名单校验 + 扩展名白名单，
 // 静态根只允许 manual 与 fault_images（见 resolveStaticSubpath）。
-package service
+package aiassistant
 
 import (
 	"context"

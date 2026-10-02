@@ -19,7 +19,7 @@
  *   ① `manual` 那串 = 2026-09-16 直连生产 `sources` 事件原文（`BMS` 一问，13 条来源）；
  *   ② `fault_images` 那串 = 2026-09-24 直连生产代理实测 HTTP 200 / image/png 的那张图，
  *      左串同时是后端 `canonicalizeDiagnosisSources` 换形后的来源正文原文
- *      （`backend/internal/service/ai_diagnosis_wire_fixture_test.go:156`）；
+ *      （`backend/internal/aiassistant/diagnosis_wire_fixture_test.go:156`）；
  *   ③ `DEVICE_MD_IMG` = 2026-09-24 小米真机（`192.168.0.212:37611`）`BMS` 一问**回答气泡**的
  *      `content-desc` 原文（`uiautomator dump` 17,542 B / sha256 `da126982…`，同一条里这样的
  *      串出现 **11 次**）—— 它证明「正文面移动端零改动即安全」这条票面假设不成立。
@@ -216,7 +216,7 @@ describe('aiSourcesDisplay：标记解析（真行为）', () => {
       expect(out).not.toContain('<<IMAGE:');
     });
     it('占位词与后端正文归一的 alt 缺省同词（三端一致，不各造一个占位词）', () => {
-      // 判据源：`backend/internal/service/ai_diagnosis_adapter.go` 的 `normalizeDiagnosisImages`
+      // 判据源：`backend/internal/aiassistant/diagnosis_adapter.go` 的 `normalizeDiagnosisImages`
       // 在 alt 为空时写「诊断配图」。这里断言**产出物**，不是模块内私有常量的字面量。
       expect(expandImageMarkers(FAULT_MARKER)).toBe('诊断配图');
     });

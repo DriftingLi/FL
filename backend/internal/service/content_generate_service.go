@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
 )
 
@@ -49,12 +50,12 @@ type genTaskResult struct {
 // ContentGenerateService 课程内容异步生成服务。
 type ContentGenerateService struct {
 	db     *gorm.DB
-	ai     *AIService
+	ai     *aiassistant.GenerationService
 	logger *zap.Logger
 }
 
 // NewContentGenerateService 构造 ContentGenerateService。
-func NewContentGenerateService(db *gorm.DB, ai *AIService, logger *zap.Logger) *ContentGenerateService {
+func NewContentGenerateService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *ContentGenerateService {
 	return &ContentGenerateService{db: db, ai: ai, logger: logger}
 }
 

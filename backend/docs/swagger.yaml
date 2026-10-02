@@ -1,5 +1,192 @@
 basePath: /api
 definitions:
+  aiassistant.AIAssistantModeModels:
+    properties:
+      expert:
+        allOf:
+        - $ref: '#/definitions/aiassistant.ModelOption'
+        x-nullable: true
+      normal:
+        allOf:
+        - $ref: '#/definitions/aiassistant.ModelOption'
+        x-nullable: true
+    type: object
+  aiassistant.AIChatMessageDTO:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      images:
+        description: 用户消息附带的图片 URL（无图时键在、值为 null）
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      role:
+        type: string
+      sources:
+        description: 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
+        items:
+          $ref: '#/definitions/aiassistant.DiagnosisSource'
+        type: array
+        x-nullable: true
+    type: object
+  aiassistant.AIChatSessionDTO:
+    properties:
+      created_at:
+        type: string
+      feature_key:
+        type: string
+      id:
+        type: integer
+      model_name:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  aiassistant.AIConfigDTO:
+    properties:
+      api_key:
+        description: 脱敏后的 API Key（如 sk-da...9b3）
+        type: string
+      base_url:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      model:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  aiassistant.AIImageUploadResultDTO:
+    properties:
+      url:
+        type: string
+    type: object
+  aiassistant.AISessionRenameResultDTO:
+    properties:
+      message:
+        type: string
+    type: object
+  aiassistant.DiagnosisBrandOption:
+    properties:
+      label:
+        type: string
+      value:
+        type: string
+    type: object
+  aiassistant.DiagnosisFaultCodeItem:
+    properties:
+      brand:
+        type: string
+      brand_cn:
+        type: string
+      causes:
+        type: string
+      fault_code:
+        type: string
+      fault_name:
+        type: string
+      id:
+        type: integer
+      model_series:
+        type: string
+      page_num:
+        type: integer
+      part_numbers:
+        type: string
+      safety_warning:
+        type: string
+      sop_steps:
+        type: string
+      source_file:
+        type: string
+      symptom:
+        type: string
+    type: object
+  aiassistant.DiagnosisFaultCodePage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/aiassistant.DiagnosisFaultCodeItem'
+        type: array
+        x-nullable: true
+      total:
+        type: integer
+    type: object
+  aiassistant.DiagnosisSource:
+    properties:
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/aiassistant.DiagnosisSourceMetadata'
+      text:
+        type: string
+    type: object
+  aiassistant.DiagnosisSourceMetadata:
+    properties:
+      page_end:
+        type: integer
+      page_start:
+        type: integer
+      source_url:
+        type: string
+    type: object
+  aiassistant.FeatureBindingDTO:
+    properties:
+      config_id:
+        type: integer
+        x-optional: true
+      config_name:
+        type: string
+        x-optional: true
+      feature_key:
+        type: string
+      feature_label:
+        type: string
+    type: object
+  aiassistant.ModelOption:
+    properties:
+      base_url:
+        type: string
+      id:
+        type: integer
+      model:
+        type: string
+      name:
+        type: string
+    type: object
+  aiassistant.UserModelDTO:
+    properties:
+      api_key:
+        description: 脱敏后的 API Key
+        type: string
+      base_url:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      model:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
   api.AuditLogPageResult:
     properties:
       items:
@@ -1603,87 +1790,6 @@ definitions:
       message:
         type: string
     type: object
-  service.AIAssistantModeModels:
-    properties:
-      expert:
-        allOf:
-        - $ref: '#/definitions/service.ModelOption'
-        x-nullable: true
-      normal:
-        allOf:
-        - $ref: '#/definitions/service.ModelOption'
-        x-nullable: true
-    type: object
-  service.AIChatMessageDTO:
-    properties:
-      content:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: integer
-      images:
-        description: 用户消息附带的图片 URL（无图时键在、值为 null）
-        items:
-          type: string
-        type: array
-        x-nullable: true
-      role:
-        type: string
-      sources:
-        description: 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
-        items:
-          $ref: '#/definitions/service.DiagnosisSource'
-        type: array
-        x-nullable: true
-    type: object
-  service.AIChatSessionDTO:
-    properties:
-      created_at:
-        type: string
-      feature_key:
-        type: string
-      id:
-        type: integer
-      model_name:
-        type: string
-      title:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  service.AIConfigDTO:
-    properties:
-      api_key:
-        description: 脱敏后的 API Key（如 sk-da...9b3）
-        type: string
-      base_url:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      id:
-        type: integer
-      is_active:
-        type: boolean
-      model:
-        type: string
-      name:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  service.AIImageUploadResultDTO:
-    properties:
-      url:
-        type: string
-    type: object
-  service.AISessionRenameResultDTO:
-    properties:
-      message:
-        type: string
-    type: object
   service.AdminCourseDetailDTO:
     properties:
       certificate_name:
@@ -2431,70 +2537,6 @@ definitions:
       file_id:
         type: integer
     type: object
-  service.DiagnosisBrandOption:
-    properties:
-      label:
-        type: string
-      value:
-        type: string
-    type: object
-  service.DiagnosisFaultCodeItem:
-    properties:
-      brand:
-        type: string
-      brand_cn:
-        type: string
-      causes:
-        type: string
-      fault_code:
-        type: string
-      fault_name:
-        type: string
-      id:
-        type: integer
-      model_series:
-        type: string
-      page_num:
-        type: integer
-      part_numbers:
-        type: string
-      safety_warning:
-        type: string
-      sop_steps:
-        type: string
-      source_file:
-        type: string
-      symptom:
-        type: string
-    type: object
-  service.DiagnosisFaultCodePage:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.DiagnosisFaultCodeItem'
-        type: array
-        x-nullable: true
-      total:
-        type: integer
-    type: object
-  service.DiagnosisSource:
-    properties:
-      id:
-        type: string
-      metadata:
-        $ref: '#/definitions/service.DiagnosisSourceMetadata'
-      text:
-        type: string
-    type: object
-  service.DiagnosisSourceMetadata:
-    properties:
-      page_end:
-        type: integer
-      page_start:
-        type: integer
-      source_url:
-        type: string
-    type: object
   service.FavoriteCheckDTO:
     properties:
       favorite_id:
@@ -2535,19 +2577,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  service.FeatureBindingDTO:
-    properties:
-      config_id:
-        type: integer
-        x-optional: true
-      config_name:
-        type: string
-        x-optional: true
-      feature_key:
-        type: string
-      feature_label:
-        type: string
     type: object
   service.GenTaskStatus:
     properties:
@@ -3026,17 +3055,6 @@ definitions:
         type: integer
       total_score:
         type: number
-    type: object
-  service.ModelOption:
-    properties:
-      base_url:
-        type: string
-      id:
-        type: integer
-      model:
-        type: string
-      name:
-        type: string
     type: object
   service.NoteDTO:
     properties:
@@ -4106,24 +4124,6 @@ definitions:
       username:
         type: string
     type: object
-  service.UserModelDTO:
-    properties:
-      api_key:
-        description: 脱敏后的 API Key
-        type: string
-      base_url:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: integer
-      model:
-        type: string
-      name:
-        type: string
-      updated_at:
-        type: string
-    type: object
   service.WechatQRCodeInfoDTO:
     properties:
       enabled:
@@ -4261,7 +4261,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.AIConfigDTO'
+                    $ref: '#/definitions/aiassistant.AIConfigDTO'
                   type: array
               type: object
         "401":
@@ -4418,7 +4418,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.FeatureBindingDTO'
+                    $ref: '#/definitions/aiassistant.FeatureBindingDTO'
                   type: array
               type: object
         "401":
@@ -8396,7 +8396,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.DiagnosisBrandOption'
+                    $ref: '#/definitions/aiassistant.DiagnosisBrandOption'
                   type: array
               type: object
         "500":
@@ -8440,7 +8440,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.DiagnosisFaultCodePage'
+                  $ref: '#/definitions/aiassistant.DiagnosisFaultCodePage'
               type: object
         "500":
           description: 诊断服务不可用
@@ -8518,7 +8518,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.ModelOption'
+                    $ref: '#/definitions/aiassistant.ModelOption'
                   type: array
               type: object
       summary: AI 可用模型（公开）
@@ -8537,7 +8537,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.AIAssistantModeModels'
+                  $ref: '#/definitions/aiassistant.AIAssistantModeModels'
               type: object
       summary: AI 双模式模型（公开）
       tags:
@@ -8558,7 +8558,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.AIChatSessionDTO'
+                    $ref: '#/definitions/aiassistant.AIChatSessionDTO'
                   type: array
               type: object
         "401":
@@ -8590,7 +8590,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.AIChatSessionDTO'
+                  $ref: '#/definitions/aiassistant.AIChatSessionDTO'
               type: object
         "401":
           description: 未认证
@@ -8654,7 +8654,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.AIChatMessageDTO'
+                    $ref: '#/definitions/aiassistant.AIChatMessageDTO'
                   type: array
               type: object
         "401":
@@ -8697,7 +8697,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.AISessionRenameResultDTO'
+                  $ref: '#/definitions/aiassistant.AISessionRenameResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -8733,7 +8733,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.AIImageUploadResultDTO'
+                  $ref: '#/definitions/aiassistant.AIImageUploadResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -8758,7 +8758,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.UserModelDTO'
+                    $ref: '#/definitions/aiassistant.UserModelDTO'
                   type: array
               type: object
         "401":

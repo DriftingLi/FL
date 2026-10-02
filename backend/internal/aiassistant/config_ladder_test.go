@@ -1,7 +1,7 @@
-// Package service AI 配置解析与模型端口回归（#397、ADR-0029 T2）：
+// AI 配置解析与模型端口回归（#397、ADR-0029 T2）：
 // 降级阶梯三档（专项单绑定/双模式/遗留回退）、热点缓存失效、
-// 单一 AIModelPort 端口注入与各消费端到端（评分/解析/对话）。
-package service
+// 单一 ModelPort 端口注入与各消费端到端（评分/解析/对话）。
+package aiassistant
 
 import (
 	"context"
@@ -22,13 +22,13 @@ import (
 // 异步命名 goroutine 并发读库，:memory: 每连接独立库（连接池扩连即空库）存在
 // 「no such table」竞态（testutil/db.go NewFileDB 注释自认的风险），文件库以
 // busy_timeout 串行化，CI 高负载下不 flake。
-func newAIStack(t *testing.T) (*AIConfigService, *AIAssistantService, *AIService, *gorm.DB) {
+func newAIStack(t *testing.T) (*ConfigService, *Service, *GenerationService, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewFileDB(t)
-	cfgSvc := NewAIConfigService(db, "test-master-key", zap.NewNop())
-	port := NewEinoAIModel(cfgSvc, zap.NewNop())
-	assistant := NewAIAssistantService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
-	aiSvc := NewAIService(db, port, zap.NewNop())
+	cfgSvc := NewConfigService(db, "test-master-key", zap.NewNop())
+	port := NewEinoModel(cfgSvc, zap.NewNop())
+	assistant := NewService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), port)
+	aiSvc := NewGenerationService(db, port, zap.NewNop())
 	return cfgSvc, assistant, aiSvc, db
 }
 
@@ -69,7 +69,7 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	if modes.Normal == nil || modes.Normal.Name != "legacy0" || modes.Expert == nil || modes.Expert.Name != "legacy1" {
 		t.Fatalf("遗留回退映射异常: %+v", modes)
 	}
-	mc, err := cfgSvc.ResolveChatSettings(ctx, AIModelSelector{Mode: ModeExpert})
+	mc, err := cfgSvc.ResolveChatSettings(ctx, ModelSelector{Mode: ModeExpert})
 	if err != nil {
 		t.Fatalf("ResolveChatSettings(expert) 失败: %v", err)
 	}
@@ -89,10 +89,10 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	if modes.Normal == nil || modes.Normal.Name != "normal-bind" || modes.Expert != nil {
 		t.Fatalf("双模式解析异常: %+v", modes)
 	}
-	if _, err := cfgSvc.ResolveChatSettings(ctx, AIModelSelector{Mode: ModeExpert}); err == nil {
+	if _, err := cfgSvc.ResolveChatSettings(ctx, ModelSelector{Mode: ModeExpert}); err == nil {
 		t.Fatal("expert 未绑定应报错")
 	}
-	mc, err = cfgSvc.ResolveChatSettings(ctx, AIModelSelector{Mode: ModeNormal})
+	mc, err = cfgSvc.ResolveChatSettings(ctx, ModelSelector{Mode: ModeNormal})
 	if err != nil || !strings.Contains(mc.APIKey, "normal-bind") {
 		t.Fatalf("normal 模式解析异常: %+v err=%v", mc, err)
 	}
@@ -102,7 +102,7 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	if err := cfgSvc.SetBinding(ctx, FeatureMaintenanceKnowledge, faultID); err != nil {
 		t.Fatalf("SetBinding(fault) 失败: %v", err)
 	}
-	mc, err = cfgSvc.ResolveChatSettings(ctx, AIModelSelector{
+	mc, err = cfgSvc.ResolveChatSettings(ctx, ModelSelector{
 		FeatureKey: FeatureMaintenanceKnowledge, ModelSource: "custom",
 		CustomAPIKey: "sk-bypass", CustomBaseURL: "https://evil.example.com", CustomModel: "evil",
 	})
@@ -111,7 +111,7 @@ func TestResolveAssistantLadderThreeTiers(t *testing.T) {
 	}
 
 	// 专项未绑定 → 报错
-	if _, err := cfgSvc.ResolveChatSettings(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}); err == nil {
+	if _, err := cfgSvc.ResolveChatSettings(ctx, ModelSelector{FeatureKey: FeatureExerciseSolving}); err == nil {
 		t.Fatal("专项未绑定应报错")
 	}
 }
@@ -171,16 +171,16 @@ type fakeAIModelPort struct {
 	mu        sync.Mutex
 	content   string
 	err       error
-	gotSel    AIModelSelector
+	gotSel    ModelSelector
 	gotMsgs   []*schema.Message
 	gotKey    string
-	gotOpts   AICompleteOptions
+	gotOpts   CompleteOptions
 	chunks    []string
 	streamN   int
 	completeN int
 }
 
-func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error) {
+func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, opts CompleteOptions) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.completeN++
@@ -190,7 +190,7 @@ func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, op
 	return f.content, f.err
 }
 
-func (f *fakeAIModelPort) Stream(_ context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
+func (f *fakeAIModelPort) Stream(_ context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.streamN++
@@ -204,7 +204,7 @@ func (f *fakeAIModelPort) Stream(_ context.Context, sel AIModelSelector, msgs []
 }
 
 // snapshot 读取 fake 记录（与后台 goroutine 同步）。
-func (f *fakeAIModelPort) snapshot() (sel AIModelSelector, msgs []*schema.Message, chunks []string) {
+func (f *fakeAIModelPort) snapshot() (sel ModelSelector, msgs []*schema.Message, chunks []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.gotSel, f.gotMsgs, f.chunks
@@ -228,7 +228,7 @@ func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 		SessionID:    session.ID,
 		ModelSource:  "custom",
 		CustomAPIKey: "sk-custom", CustomBaseURL: "https://custom.example.com/v1", CustomModel: "gpt-4o",
-		Messages: []AIStreamMessage{{Role: "user", Content: "叉车启动困难怎么办"}},
+		Messages: []StreamMessage{{Role: "user", Content: "叉车启动困难怎么办"}},
 	}, func(c string) { chunks = append(chunks, c) })
 	if err != nil {
 		t.Fatalf("StreamChat 失败: %v", err)

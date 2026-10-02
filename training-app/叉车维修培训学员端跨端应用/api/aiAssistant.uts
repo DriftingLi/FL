@@ -235,7 +235,7 @@ export function getAiModesApi() : Promise<UTSJSONObject> {
  * 会话列表（按功能键**分区**）。
  *
  * `featureKey` 为空串 ⇒ **不发** `feature_key` ⇒ 后端落遗留 `ai_assistant` 区
- * （`ai_assistant_service.go` 的 `ListSessions`：`featureKey == ""` → `FeatureAIAssistant`），
+ * （`service.go` 的 `ListSessions`：`featureKey == ""` → `FeatureAIAssistant`），
  * 与从前逐字一致 —— 通用页零回归。非空 ⇒ 只列该功能区会话（专项页）。
  *
  * ⚠️ **不变式（移动端 ADR-0013）：带键必有「列该区」的界面。** 给会话带键却没有任何界面列该区
@@ -308,14 +308,14 @@ export function getAiSessionMessagesApi(id : number) : Promise<AiSessionMessage[
 
 // ===== 智能维修诊断（fault_diagnosis）周边只读代理 =====
 //
-// 三个端点与 chat 同簇（`/api/ai-assistant/diagnosis/*`，后端 `internal/api/diagnosis.go`），
+// 三个端点与 chat 同簇（`/api/ai-assistant/diagnosis/*`，后端 `internal/aiassistant/handler_diagnosis.go`），
 // 均可选认证。它们是专项页**筛选面板的数据源**，与「本轮对话」的请求体无耦合：面板只负责
 // 把用户选的品牌/车型写进请求体、把搜到的故障码写进输入框。
 //
 // **过滤为什么必须走结构化字段（#1042 的裁定，别照 ADR-0009 修订 ② 那句字面改回文本拼接）**：
-// 品牌/车型由后端 `AIAssistantChatRequest.Brand/Model`（`ai_assistant_service.go:109`）经
+// 品牌/车型由后端 `AIAssistantChatRequest.Brand/Model`（`service.go:108`）经
 // `WithDiagnosisParams` 透传给诊断适配器，适配器再塞进外部助手请求体的 `brand`/`model` 字段
-// （`ai_diagnosis_adapter.go:272-278`，**缺省 `brand=all`**）。⇒ 把「杭叉」拼进消息**文本**，
+// （`diagnosis_adapter.go:292`，**缺省 `brand=all`**）。⇒ 把「杭叉」拼进消息**文本**，
 // 外部助手的结构过滤位依旧是「全部」，筛选不真生效。web 侧同样走结构化（`api/aiAssistant.ts:93`
 // 原文「结构化传参，不走文本注入」）。故本页文本只承载用户问题本身。
 

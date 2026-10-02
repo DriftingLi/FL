@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/scope"
@@ -23,17 +24,17 @@ type WrongQuestionService struct {
 	// grader 短答 AI 判分 adapter（nil 时简答重做降级，与练习流口径一致）。
 	grader ShortAnswerGrader
 	// explainer AI 解析 module（与练习提交共用同一 get-or-generate 入口，spec #295/#300）。
-	explainer *QuestionExplanation
+	explainer *aiassistant.QuestionExplanation
 
 	logger *zap.Logger
 }
 
 // NewWrongQuestionService 创建错题本服务实例。ai 可为 nil（简答判分与解析降级）。
-func NewWrongQuestionService(db *gorm.DB, ai *AIService, logger *zap.Logger) *WrongQuestionService {
+func NewWrongQuestionService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *WrongQuestionService {
 	return &WrongQuestionService{
 		db:        db,
 		grader:    shortAnswerGraderOf(ai),
-		explainer: NewQuestionExplanation(db, ai, logger),
+		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 	}
 }

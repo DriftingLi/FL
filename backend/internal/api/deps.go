@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/clock"
@@ -59,7 +60,7 @@ type Deps struct {
 	NotificationSvc *notification.Service
 	ReviewSvc       *service.ProfileReviewService
 	AuditSvc        *service.AuditService
-	AIConfigSvc     *service.AIConfigService
+	AIConfigSvc     *aiassistant.ConfigService
 	ContentGenSvc   *service.ContentGenerateService
 	ExportStore     service.ExportStore
 	AuthH           *AuthHandler
@@ -84,8 +85,8 @@ type Deps struct {
 	TutorSvc             *service.TutorService
 	WrongQuestionSvc     *service.WrongQuestionService
 	TrainingCatalogSvc   *service.TrainingCatalogService
-	AIAssistantSvc       *service.AIAssistantService
-	DiagnosisProxySvc    *service.DiagnosisProxyService
+	AIAssistantSvc       *aiassistant.Service
+	DiagnosisProxySvc    *aiassistant.DiagnosisProxyService
 	QuestionCommentSvc   *service.QuestionCommentService
 	NoteSvc              *service.NoteService
 	QuestionKnowledgeSvc *service.QuestionKnowledgeService

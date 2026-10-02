@@ -1,7 +1,7 @@
-// Package service 诊断只读代理测试（计划 批次2）：httptest fake 助手覆盖
+// 诊断只读代理测试（计划 批次2）：httptest fake 助手覆盖
 // brands/models/fault-codes 解析、分页参数透传、手册资源代理与 SSRF/路径防御、
 // 未配置与失败降级。
-package service
+package aiassistant
 
 import (
 	"context"

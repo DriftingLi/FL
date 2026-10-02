@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
@@ -20,12 +21,12 @@ type AdminHandler struct {
 	adminSvc      *service.AdminService
 	courseSvc     *service.AdminCourseService
 	authSvc       *service.AuthService
-	aiConfigSvc   *service.AIConfigService
+	aiConfigSvc   *aiassistant.ConfigService
 	contentGenSvc *service.ContentGenerateService
 }
 
 // NewAdminHandler 创建管理员后台 handler。
-func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *service.AIConfigService, contentGenSvc *service.ContentGenerateService) *AdminHandler {
+func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) *AdminHandler {
 	return &AdminHandler{
 		adminSvc: adminSvc, courseSvc: courseSvc, authSvc: authSvc,
 		aiConfigSvc: aiConfigSvc, contentGenSvc: contentGenSvc,
@@ -33,13 +34,13 @@ func NewAdminHandler(adminSvc *service.AdminService, courseSvc *service.AdminCou
 }
 
 // RegisterAdminRoutes 注册 /api/admin 蓝图（管理员后台）。
-func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *service.AIConfigService, contentGenSvc *service.ContentGenerateService) {
+func RegisterAdminRoutes(rg *gin.RouterGroup, rd RouterDeps, adminSvc *service.AdminService, courseSvc *service.AdminCourseService, authSvc *service.AuthService, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) {
 	h := NewAdminHandler(adminSvc, courseSvc, authSvc, aiConfigSvc, contentGenSvc)
 
 	g := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAdminAccess))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
-	NewAIConfigHandler(aiConfigSvc).registerAIConfigRoutes(g)
+	aiassistant.RegisterAdminRoutes(g, aiConfigSvc)
 
 	// ===== 课程管理 =====
 	g.GET("/courses", h.ListCourses)

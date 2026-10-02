@@ -4,7 +4,7 @@
 //   - 口径函数本身的边界（末尾非用户消息 / 无用户消息 / 空列表）
 //   - 两个 adapter 各自的投影规则（DTO 取 Content；端口消息多模态取首个文本 part）
 //   - **行为变更**：尾消息为非用户角色时，扣费字符数按「最后一条用户消息」而不是最后一条消息
-package service
+package aiassistant
 
 import (
 	"context"
@@ -47,7 +47,7 @@ func TestAIPromptCharsOf_NeutralForm(t *testing.T) {
 
 // TestAIPromptMessagesFromDTO 请求体 adapter：角色与 Content 直接映射，Images 不参与口径。
 func TestAIPromptMessagesFromDTO(t *testing.T) {
-	got := aiPromptMessagesFromDTO([]AIStreamMessage{
+	got := aiPromptMessagesFromDTO([]StreamMessage{
 		{Role: "system", Content: "s"},
 		{Role: "user", Content: "你好"},
 		{Role: "user", Content: "", Images: []string{"a.png", "b.png"}}, // 纯图片
@@ -112,7 +112,7 @@ func TestAIPromptMessagesFromPort(t *testing.T) {
 // 请求体以非用户消息结尾时，扣费字符数按**最后一条用户消息**，不再按最后一条消息。
 //
 // 这条路径在公开 API 上不可达——handler 已拒绝「最后一条不是 user」的请求
-// （api/ai_assistant.go 的「消息不能为空」），所以它是纵深防御：口径与词表一致，
+// （handler.go 的「消息不能为空」），所以它是纵深防御：口径与词表一致，
 // 且直连端口的内部消费方也不会算错。
 func TestAIPromptChars_TailNotUser_Billed_BehaviorChange(t *testing.T) {
 	ctx := context.Background()
@@ -120,13 +120,13 @@ func TestAIPromptChars_TailNotUser_Billed_BehaviorChange(t *testing.T) {
 	// 声明路径（请求 DTO）：末尾是超长助手消息
 	meter := &fakeAIMeter{}
 	port, _ := newMeteredStack("回复", meter)
-	dtoMsgs := []AIStreamMessage{
+	dtoMsgs := []StreamMessage{
 		{Role: "user", Content: "1234567890"},
 		{Role: "assistant", Content: strings.Repeat("x", 999)},
 	}
-	callCtx := withAIPromptMessages(WithAIRequestID(ctx, "req-tail"), aiPromptMessagesFromDTO(dtoMsgs))
+	callCtx := withAIPromptMessages(WithRequestID(ctx, "req-tail"), aiPromptMessagesFromDTO(dtoMsgs))
 	msgs := []*schema.Message{schema.UserMessage("端口侧文本很长很长很长很长很长很长")}
-	if _, _, err := port.Stream(callCtx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil); err != nil {
+	if _, _, err := port.Stream(callCtx, ModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, msgs, nil); err != nil {
 		t.Fatalf("调用失败: %v", err)
 	}
 	if _, _, pc, _, _ := meter.snapshot(); pc != 10 {
@@ -140,8 +140,8 @@ func TestAIPromptChars_TailNotUser_Billed_BehaviorChange(t *testing.T) {
 		schema.UserMessage("用户问题"),
 		{Role: schema.Assistant, Content: strings.Repeat("y", 500)},
 	}
-	if _, _, err := port2.Stream(WithAIRequestID(ctx, "req-tail-2"),
-		AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, portMsgs, nil); err != nil {
+	if _, _, err := port2.Stream(WithRequestID(ctx, "req-tail-2"),
+		ModelSelector{FeatureKey: FeatureMaintenanceKnowledge, UserID: 7}, portMsgs, nil); err != nil {
 		t.Fatalf("调用失败: %v", err)
 	}
 	if _, _, pc, _, _ := meter2.snapshot(); pc != len("用户问题") {

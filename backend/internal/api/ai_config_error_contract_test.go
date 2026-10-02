@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -46,7 +46,7 @@ func TestUpdateMissingAIConfigRenders404(t *testing.T) {
 		t.Fatalf("改判后不应再走「更新失败: 」前缀: %s", body)
 	}
 	// 文案必须是具名业务语义（与 service 哨兵同源）
-	if !strings.Contains(body, service.ErrAIConfigNotFound.Error()) {
-		t.Fatalf("响应文案应为「%s」: %s", service.ErrAIConfigNotFound.Error(), body)
+	if !strings.Contains(body, aiassistant.ErrAIConfigNotFound.Error()) {
+		t.Fatalf("响应文案应为「%s」: %s", aiassistant.ErrAIConfigNotFound.Error(), body)
 	}
 }

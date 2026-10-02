@@ -1,7 +1,6 @@
-// Package api 实现 HTTP handlers。
 // 本文件：智能维修诊断周边只读代理（品牌/车型联动、故障码查询、手册静态资源），
 // 与 chat 同簇（/api/ai-assistant/diagnosis/*），鉴权沿用 OptionalAuth。
-package api
+package aiassistant
 
 import (
 	"io"
@@ -11,26 +10,26 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/response"
 )
 
-// DiagnosisHandler 诊断周边代理 handler。
+// diagnosisHandler 诊断周边代理 handler。
 // 数据源为外部 RAG 助手（DiagnosisProxyService 直连，绕过 nginx Basic Auth 层）。
-type DiagnosisHandler struct {
-	proxy *service.DiagnosisProxyService
+type diagnosisHandler struct {
+	proxy *DiagnosisProxyService
 }
 
-// NewDiagnosisHandler 构造 DiagnosisHandler。
-func NewDiagnosisHandler(proxy *service.DiagnosisProxyService) *DiagnosisHandler {
-	return &DiagnosisHandler{proxy: proxy}
+// newDiagnosisHandler 构造 diagnosisHandler。
+func newDiagnosisHandler(proxy *DiagnosisProxyService) *diagnosisHandler {
+	return &diagnosisHandler{proxy: proxy}
 }
 
-// RegisterDiagnosisRoutes 注册 /api/ai-assistant/diagnosis 路由（均可选认证，与 chat 一致）。
-func RegisterDiagnosisRoutes(g *gin.RouterGroup, rd RouterDeps, proxy *service.DiagnosisProxyService) {
-	h := NewDiagnosisHandler(proxy)
+// registerDiagnosisRoutes 注册 /api/ai-assistant/diagnosis 路由（均可选认证，与 chat 一致）。
+func registerDiagnosisRoutes(g *gin.RouterGroup, session *security.Session, proxy *DiagnosisProxyService) {
+	h := newDiagnosisHandler(proxy)
 	group := g.Group("/diagnosis")
-	group.Use(middleware.OptionalAuth(rd.Session))
+	group.Use(middleware.OptionalAuth(session))
 	group.GET("/brands", h.ListBrands)
 	group.GET("/models", h.ListModels)
 	group.GET("/fault-codes", h.ListFaultCodes)
@@ -43,11 +42,11 @@ func RegisterDiagnosisRoutes(g *gin.RouterGroup, rd RouterDeps, proxy *service.D
 // @Tags 学员端-AI助手
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=[]service.DiagnosisBrandOption} "success"
+// @Success 200 {object} response.R{data=[]aiassistant.DiagnosisBrandOption} "success"
 // @Failure 500 {object} response.R "诊断服务不可用"
 // @Router /ai-assistant/diagnosis/brands [get]
 // ListBrands GET /diagnosis/brands 品牌列表（全量，无级联依赖）。
-func (h *DiagnosisHandler) ListBrands(c *gin.Context) {
+func (h *diagnosisHandler) ListBrands(c *gin.Context) {
 	brands, err := h.proxy.ListBrands(c.Request.Context())
 	if err != nil {
 		response.ServerErrorCause(c, "", err)
@@ -67,7 +66,7 @@ func (h *DiagnosisHandler) ListBrands(c *gin.Context) {
 // @Failure 500 {object} response.R "诊断服务不可用"
 // @Router /ai-assistant/diagnosis/models [get]
 // ListModels GET /diagnosis/models?brand= 某品牌车型列表；brand 缺省为全部（助手返回全量车型）。
-func (h *DiagnosisHandler) ListModels(c *gin.Context) {
+func (h *diagnosisHandler) ListModels(c *gin.Context) {
 	models, err := h.proxy.ListModels(c.Request.Context(), c.Query("brand"))
 	if err != nil {
 		response.ServerErrorCause(c, "", err)
@@ -86,11 +85,11 @@ func (h *DiagnosisHandler) ListModels(c *gin.Context) {
 // @Param keyword query string false "关键词（故障码/名称/现象）"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数（上限 100）" default(20)
-// @Success 200 {object} response.R{data=service.DiagnosisFaultCodePage} "success"
+// @Success 200 {object} response.R{data=aiassistant.DiagnosisFaultCodePage} "success"
 // @Failure 500 {object} response.R "诊断服务不可用"
 // @Router /ai-assistant/diagnosis/fault-codes [get]
 // ListFaultCodes GET /diagnosis/fault-codes?brand&keyword&page&page_size 故障码分页查询。
-func (h *DiagnosisHandler) ListFaultCodes(c *gin.Context) {
+func (h *diagnosisHandler) ListFaultCodes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))
 	pageSize, _ := strconv.Atoi(c.Query("page_size"))
 	resp, err := h.proxy.ListFaultCodes(c.Request.Context(), c.Query("brand"), c.Query("keyword"), page, pageSize)
@@ -112,7 +111,7 @@ func (h *DiagnosisHandler) ListFaultCodes(c *gin.Context) {
 // @Router /ai-assistant/diagnosis/manual/{filepath} [get]
 // OpenManual GET /diagnosis/manual/* 静态资源流式代理（溯源图片 <<IMAGE:...>> 与案例图渲染面）。
 // 子路径白名单（防 SSRF）在 proxy 层；可选认证可达，缓存 1 天（静态文件不可变）。
-func (h *DiagnosisHandler) OpenManual(c *gin.Context) {
+func (h *diagnosisHandler) OpenManual(c *gin.Context) {
 	subpath := c.Param("filepath")
 	body, contentType, err := h.proxy.OpenManual(c.Request.Context(), subpath)
 	if err != nil {

@@ -90,7 +90,11 @@ type outletSource struct {
 
 var (
 	// 目录按**模块根相对**登记（不再是 ../service）：测试文件随域包搬家后 cwd 相对路径会静默指偏。
-	nullableEvidenceSources = []outletSource{{"internal/service", "nullableOutlets"}}
+	// 2c 后 AI 域的 3 枚 nullable 声明由 internal/aiassistant 举证（internal/service 仍留 GenTaskStatus 一枚）。
+	nullableEvidenceSources = []outletSource{
+		{"internal/service", "nullableOutlets"},
+		{"internal/aiassistant", "nullableOutlets"},
+	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
 	// 域包拆出去之后多一行 internal/faq（表住在域包里，见 internal/faq/nonnil_outlets_test.go）——
@@ -224,6 +228,7 @@ var sweptDirs = map[string]string{
 	"checkin":      "../checkin",
 	"contribution": "../contribution",
 	"forum":        "../forum",
+	"aiassistant":  "../aiassistant",
 	"repository":   "../valuation/repository",
 }
 

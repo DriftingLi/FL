@@ -49,7 +49,7 @@
 //   GET  /admin/export/questions
 //   GET  /admin/export/evaluations
 //
-// 覆盖的 Go 类型：AuditLogPageResult / AuditLog / AIConfigDTO / AdminCourseDetailDTO / AdminOverviewDTO / AdminStatisticsDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterGenResult / CourseBriefDTO / CourseDTO / CoursePageResult / CourseStatDTO / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / FeatureBindingDTO / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / LevelBriefDTO / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / SpecialtyBriefDTO / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / TutorRegisterResultDTO
+// 覆盖的 Go 类型：AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / AuditLog / AdminCourseDetailDTO / AdminOverviewDTO / AdminStatisticsDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterGenResult / CourseBriefDTO / CourseDTO / CoursePageResult / CourseStatDTO / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / LevelBriefDTO / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / SpecialtyBriefDTO / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / TutorRegisterResultDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -60,6 +60,25 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
+
+export interface AIConfigDTO {
+  api_key: string
+  base_url: string
+  created_at: string
+  description: string
+  id: number
+  is_active: boolean
+  model: string
+  name: string
+  updated_at: string
+}
+
+export interface FeatureBindingDTO {
+  config_id?: number
+  config_name?: string
+  feature_key: string
+  feature_label: string
+}
 
 export interface AuditLogPageResult {
   items: AuditLog[]
@@ -81,18 +100,6 @@ export interface AuditLog {
   path: string
   request_id: string
   status: number
-}
-
-export interface AIConfigDTO {
-  api_key: string
-  base_url: string
-  created_at: string
-  description: string
-  id: number
-  is_active: boolean
-  model: string
-  name: string
-  updated_at: string
 }
 
 export interface AdminCourseDetailDTO {
@@ -244,13 +251,6 @@ export interface DeleteChapterResult {
 
 export interface DeleteCourseResult {
   course_id: number
-}
-
-export interface FeatureBindingDTO {
-  config_id?: number
-  config_name?: string
-  feature_key: string
-  feature_label: string
 }
 
 export interface GenTaskStatus {

@@ -30,7 +30,7 @@ type Config struct {
 	// 为空时降级到本地 exec 调用(向后兼容)。
 	LibreOfficeSidecarURL string
 	// DiagnosisAssistantURL 外部诊断 RAG 助手（forklift-assistant 交付包）HTTP 地址。
-	// 为空时故障诊断功能经模型端口返回「未配置」友好错误（见 ai_diagnosis_adapter.go）。
+	// 为空时故障诊断功能经模型端口返回「未配置」友好错误（见 internal/aiassistant/diagnosis_adapter.go）。
 	DiagnosisAssistantURL string
 	// Storage 文件存储配置（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
 	Storage StorageConfig

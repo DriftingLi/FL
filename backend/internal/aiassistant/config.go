@@ -1,5 +1,5 @@
-// Package service 实现业务服务层。
-package service
+// 实现业务服务层。
+package aiassistant
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 )
 
 // AI 功能键常量、AllAIFeatures / FeatureLabel / featureChatKeys / featureSystemPrompt
-// 均为注册表派生面，单点在 ai_feature_registry.go（ADR-0030 决策 1）。
+// 均为注册表派生面，单点在 feature_registry.go（ADR-0030 决策 1）。
 
 // ErrAIConfigNotFound AI 配置不存在（ADR-0062 票9）。旧写法在 RowsAffected==0 时返回裸
 // gorm.ErrRecordNotFound，经「更新失败: 」前缀把驱动原文（record not found）送进中文界面。
@@ -103,21 +103,21 @@ func (c *aiResolveCache) invalidate() {
 	c.entries = nil
 }
 
-// AIConfigService 多 AI 配置管理 + 功能绑定。
-type AIConfigService struct {
+// ConfigService 多 AI 配置管理 + 功能绑定。
+type ConfigService struct {
 	db           *gorm.DB
 	secretKey    string // 用于加密 API Key 的主密钥（SECRET_KEY）
 	logger       *zap.Logger
 	resolveCache *aiResolveCache
 }
 
-// NewAIConfigService 构造 AIConfigService。
-func NewAIConfigService(db *gorm.DB, secretKey string, logger *zap.Logger) *AIConfigService {
-	return &AIConfigService{db: db, secretKey: secretKey, logger: logger, resolveCache: &aiResolveCache{}}
+// NewConfigService 构造 ConfigService。
+func NewConfigService(db *gorm.DB, secretKey string, logger *zap.Logger) *ConfigService {
+	return &ConfigService{db: db, secretKey: secretKey, logger: logger, resolveCache: &aiResolveCache{}}
 }
 
 // ListConfigs 返回所有 AI 配置（API Key 脱敏）。
-func (s *AIConfigService) ListConfigs(ctx context.Context) ([]AIConfigDTO, error) {
+func (s *ConfigService) ListConfigs(ctx context.Context) ([]AIConfigDTO, error) {
 	var rows []model.AIConfig
 	if err := s.db.WithContext(ctx).Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func (s *AIConfigService) ListConfigs(ctx context.Context) ([]AIConfigDTO, error
 }
 
 // GetConfigByID 按 ID 查询配置（含完整 api_key，仅供后端内部使用）。
-func (s *AIConfigService) GetConfigByID(ctx context.Context, id int) (*model.AIConfig, error) {
+func (s *ConfigService) GetConfigByID(ctx context.Context, id int) (*model.AIConfig, error) {
 	var cfg model.AIConfig
 	if err := s.db.WithContext(ctx).First(&cfg, id).Error; err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (s *AIConfigService) GetConfigByID(ctx context.Context, id int) (*model.AIC
 }
 
 // decryptAPIKey 解密配置的 API Key（解密切点单点，内部消费路径统一走此）。
-func (s *AIConfigService) decryptAPIKey(cfg *model.AIConfig) (string, error) {
+func (s *ConfigService) decryptAPIKey(cfg *model.AIConfig) (string, error) {
 	key, err := security.DecryptSecret(cfg.APIKey, s.secretKey)
 	if err != nil {
 		return "", fmt.Errorf("解密配置 %d 的 API Key 失败: %w", cfg.ID, err)
@@ -159,7 +159,7 @@ func (s *AIConfigService) decryptAPIKey(cfg *model.AIConfig) (string, error) {
 
 // maskKeyForDisplay 脱敏展示用解密：解密失败记日志并按原样脱敏（历史脏数据容忍，
 // 仅列表展示路径使用；内部消费路径用 decryptAPIKey 直接报错）。
-func (s *AIConfigService) maskKeyForDisplay(cfg *model.AIConfig) string {
+func (s *ConfigService) maskKeyForDisplay(cfg *model.AIConfig) string {
 	key, err := security.DecryptSecret(cfg.APIKey, s.secretKey)
 	if err != nil {
 		s.logger.Warn("解密 API Key 失败，按原样脱敏展示", zap.Int("id", cfg.ID), zap.Error(err))
@@ -170,7 +170,7 @@ func (s *AIConfigService) maskKeyForDisplay(cfg *model.AIConfig) string {
 
 // CreateConfig 新建配置。modelName 对应数据库 model 字段。
 // 允许创建同 model 的多个配置（用户可能用不同 api_key/base_url 重复配置同款模型）。
-func (s *AIConfigService) CreateConfig(ctx context.Context, name, apiKey, baseURL, modelName, description string) error {
+func (s *ConfigService) CreateConfig(ctx context.Context, name, apiKey, baseURL, modelName, description string) error {
 	encKey, err := security.EncryptSecret(apiKey, s.secretKey)
 	if err != nil {
 		return fmt.Errorf("加密 API Key 失败: %w", err)
@@ -188,7 +188,7 @@ func (s *AIConfigService) CreateConfig(ctx context.Context, name, apiKey, baseUR
 
 // UpdateConfig 更新配置。apiKey 为空表示不修改。modelName 对应数据库 model 字段。
 // 允许配置更新成与其它配置相同的 model（用户可能用不同 api_key/base_url 重复配置同款模型）。
-func (s *AIConfigService) UpdateConfig(ctx context.Context, id int, name, apiKey, baseURL, modelName, description string, isActive *bool) error {
+func (s *ConfigService) UpdateConfig(ctx context.Context, id int, name, apiKey, baseURL, modelName, description string, isActive *bool) error {
 	updates := map[string]any{
 		"name":        name,
 		"base_url":    baseURL,
@@ -218,7 +218,7 @@ func (s *AIConfigService) UpdateConfig(ctx context.Context, id int, name, apiKey
 }
 
 // DeleteConfig 删除配置。若被功能绑定则拒绝（需先解除绑定）。
-func (s *AIConfigService) DeleteConfig(ctx context.Context, id int) error {
+func (s *ConfigService) DeleteConfig(ctx context.Context, id int) error {
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&model.AIFeatureBinding{}).
 		Where("config_id = ?", id).Count(&count).Error; err != nil {
@@ -239,7 +239,7 @@ func (s *AIConfigService) DeleteConfig(ctx context.Context, id int) error {
 }
 
 // ListBindings 返回所有 AI 功能的绑定情况（未绑定功能也展示，config_id 为 null）。
-func (s *AIConfigService) ListBindings(ctx context.Context) ([]FeatureBindingDTO, error) {
+func (s *ConfigService) ListBindings(ctx context.Context) ([]FeatureBindingDTO, error) {
 	// 优先查 Redis 缓存
 	var cached []FeatureBindingDTO
 	err := cache.GetOrSetJSON(ctx, bindingsCacheKey, bindingsCacheTTL, &cached, func() (any, error) {
@@ -254,7 +254,7 @@ func (s *AIConfigService) ListBindings(ctx context.Context) ([]FeatureBindingDTO
 	return s.loadBindingsFromDB(ctx)
 }
 
-func (s *AIConfigService) loadBindingsFromDB(ctx context.Context) ([]FeatureBindingDTO, error) {
+func (s *ConfigService) loadBindingsFromDB(ctx context.Context) ([]FeatureBindingDTO, error) {
 	// 一次性查出所有绑定 + 配置信息
 	type joinRow struct {
 		FeatureKey string  `gorm:"column:feature_key"`
@@ -298,7 +298,7 @@ func (s *AIConfigService) loadBindingsFromDB(ctx context.Context) ([]FeatureBind
 
 // ListConfigsForFeature 查询指定功能绑定的配置（含解密后 api_key；进程内热点缓存）。
 // 全部功能均为单绑定，至多返回 1 条；保留切片形状便于回退列表消费。
-func (s *AIConfigService) ListConfigsForFeature(ctx context.Context, featureKey string) ([]model.AIConfig, error) {
+func (s *ConfigService) ListConfigsForFeature(ctx context.Context, featureKey string) ([]model.AIConfig, error) {
 	if !isValidFeature(featureKey) {
 		return nil, fmt.Errorf("无效的功能键: %s", featureKey)
 	}
@@ -327,7 +327,7 @@ func (s *AIConfigService) ListConfigsForFeature(ctx context.Context, featureKey 
 }
 
 // UnbindConfig 解除指定功能的配置绑定（等效于 SetBinding(featureKey, 0)）。
-func (s *AIConfigService) UnbindConfig(ctx context.Context, featureKey string, configID int) error {
+func (s *ConfigService) UnbindConfig(ctx context.Context, featureKey string, configID int) error {
 	if !isValidFeature(featureKey) {
 		return fmt.Errorf("无效的功能键: %s", featureKey)
 	}
@@ -349,7 +349,7 @@ func (s *AIConfigService) UnbindConfig(ctx context.Context, featureKey string, c
 
 // SetBinding 绑定功能到指定配置。
 // configID=0 表示解除绑定（清空该功能的所有绑定），configID>0 表示 UPSERT（覆盖原绑定）。
-func (s *AIConfigService) SetBinding(ctx context.Context, featureKey string, configID int) error {
+func (s *ConfigService) SetBinding(ctx context.Context, featureKey string, configID int) error {
 	if !isValidFeature(featureKey) {
 		return fmt.Errorf("无效的功能键: %s", featureKey)
 	}
@@ -394,7 +394,7 @@ func (s *AIConfigService) SetBinding(ctx context.Context, featureKey string, con
 }
 
 // invalidateBindings 绑定写路径的缓存失效：Redis 展示缓存 + 进程内热点解析缓存。
-func (s *AIConfigService) invalidateBindings(ctx context.Context) {
+func (s *ConfigService) invalidateBindings(ctx context.Context) {
 	if err := cache.Del(ctx, bindingsCacheKey); err != nil {
 		s.logger.Warn("失效绑定缓存失败（不影响 DB 写入结果）", zap.Error(err))
 	}
@@ -403,10 +403,10 @@ func (s *AIConfigService) invalidateBindings(ctx context.Context) {
 
 // ResolveConfig 根据 feature_key 解析绑定的配置（进程内热点缓存，对话热路径直查 DB 的替代）。
 // 仅查找 ai_feature_bindings → ai_configs（is_active=true），未绑定时返回空配置（APIKey 为空，调用方据此报错）。
-func (s *AIConfigService) ResolveConfig(ctx context.Context, featureKey string) AISettings {
+func (s *ConfigService) ResolveConfig(ctx context.Context, featureKey string) ChatSettings {
 	cacheKey := "resolve:" + featureKey
 	if v, ok := s.resolveCache.get(cacheKey); ok {
-		return v.(AISettings)
+		return v.(ChatSettings)
 	}
 	resolved := s.loadResolveConfig(ctx, featureKey)
 	s.resolveCache.set(cacheKey, resolved)
@@ -414,7 +414,7 @@ func (s *AIConfigService) ResolveConfig(ctx context.Context, featureKey string) 
 }
 
 // loadResolveConfig ResolveConfig 的 DB 路径。
-func (s *AIConfigService) loadResolveConfig(ctx context.Context, featureKey string) AISettings {
+func (s *ConfigService) loadResolveConfig(ctx context.Context, featureKey string) ChatSettings {
 	var b model.AIFeatureBinding
 	err := s.db.WithContext(ctx).Where("feature_key = ?", featureKey).Limit(1).Find(&b).Error
 	if err == nil && b.ConfigID > 0 {
@@ -423,23 +423,23 @@ func (s *AIConfigService) loadResolveConfig(ctx context.Context, featureKey stri
 			key, err := s.decryptAPIKey(&cfg)
 			if err != nil {
 				s.logger.Warn("ResolveConfig 解密 API Key 失败，配置不可用", zap.Int("config_id", b.ConfigID), zap.Error(err))
-				return AISettings{Source: "decrypt-failed"}
+				return ChatSettings{Source: "decrypt-failed"}
 			}
-			return AISettings{
+			return ChatSettings{
 				APIKey: key, BaseURL: cfg.BaseURL, Model: cfg.Model,
 				Source: "binding:" + cfg.Name,
 			}
 		}
 	}
 	// 未绑定或绑定失效，返回空配置（APIKey 为空，调用方据此报错）
-	return AISettings{Source: "unbound"}
+	return ChatSettings{Source: "unbound"}
 }
 
 // ResolveAssistantPair AI 助手双模式绑定解析（降级阶梯单点，#397）：
 // ① normal/expert 各自单绑定 → ② 双双未绑定时回退遗留 ai_assistant 多绑定
 // （第一条→normal，第二条→expert，仅一条时 expert 复用 normal）。
 // 展示（ListAssistantModes）与对话凭证解析（ResolveChatSettings）共用，不再各写一份阶梯。
-func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, expert *model.AIConfig, err error) {
+func (s *ConfigService) ResolveAssistantPair(ctx context.Context) (normal, expert *model.AIConfig, err error) {
 	normalCfgs, err := s.ListConfigsForFeature(ctx, FeatureAIAssistantNormal)
 	if err != nil {
 		return nil, nil, err
@@ -474,32 +474,32 @@ func (s *AIConfigService) ResolveAssistantPair(ctx context.Context) (normal, exp
 	return normal, expert, nil
 }
 
-// AIConfigResolver 由 *AIConfigService 提供唯一实现（ADR-0029 决策 2：解析知识不泄出配置 service）。
-var _ AIConfigResolver = (*AIConfigService)(nil)
+// ConfigResolver 由 *ConfigService 提供唯一实现（ADR-0029 决策 2：解析知识不泄出配置 service）。
+var _ ConfigResolver = (*ConfigService)(nil)
 
-// featureChatKeys 注册表派生面（专项对话功能键集合），声明在 ai_feature_registry.go；
+// featureChatKeys 注册表派生面（专项对话功能键集合），声明在 feature_registry.go；
 // 此处唯一消费：对话凭证解析的专项功能优先分支。
 
-// ResolveFeatureSettings 阻塞栈凭证解析（AIConfigResolver 实现；自 AIService.ensureClient
+// ResolveFeatureSettings 阻塞栈凭证解析（ConfigResolver 实现；自 GenerationService.ensureClient
 // 的解析段迁入）：featureKey → 管理端单绑定；空键/未绑定报错（不再降级到环境变量）。
-func (s *AIConfigService) ResolveFeatureSettings(ctx context.Context, featureKey string) (AISettings, error) {
+func (s *ConfigService) ResolveFeatureSettings(ctx context.Context, featureKey string) (ChatSettings, error) {
 	// 空键查不到绑定（ResolveConfig 返回 unbound），与未绑定共用同一报错分支
 	cur := s.ResolveConfig(ctx, featureKey)
 	if cur.APIKey == "" {
-		return AISettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
+		return ChatSettings{}, fmt.Errorf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", featureKey)
 	}
 	return cur, nil
 }
 
-// ResolveChatSettings 对话凭证解析（AIConfigResolver 实现；自 AIAssistantService.resolveModelConfig
+// ResolveChatSettings 对话凭证解析（ConfigResolver 实现；自 Service.resolveModelConfig
 // 迁入，三重 switch 的知识内聚在配置 service，#606）。
 // 优先级：专项功能（FeatureKey，管理端单绑定）→ Mode 双模式（normal/expert）→ 兼容旧 ModelSource。
-func (s *AIConfigService) ResolveChatSettings(ctx context.Context, sel AIModelSelector) (AISettings, error) {
+func (s *ConfigService) ResolveChatSettings(ctx context.Context, sel ModelSelector) (ChatSettings, error) {
 	// 专项功能：由管理端单绑定解析，忽略选择子中的模型来源字段（防绕过）
 	if featureChatKeys[sel.FeatureKey] {
 		mc := s.ResolveConfig(ctx, sel.FeatureKey)
 		if mc.APIKey == "" {
-			return AISettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
+			return ChatSettings{}, errors.New("管理员未配置该功能的模型，请联系管理员")
 		}
 		return mc, nil
 	}
@@ -507,16 +507,16 @@ func (s *AIConfigService) ResolveChatSettings(ctx context.Context, sel AIModelSe
 	if sel.Mode == ModeNormal || sel.Mode == ModeExpert {
 		normal, expert, err := s.ResolveAssistantPair(ctx)
 		if err != nil {
-			return AISettings{}, fmt.Errorf("校验可用模型失败: %w", err)
+			return ChatSettings{}, fmt.Errorf("校验可用模型失败: %w", err)
 		}
 		cfg := normal
 		if sel.Mode == ModeExpert {
 			cfg = expert
 		}
 		if cfg == nil {
-			return AISettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
+			return ChatSettings{}, errors.New("该模式未绑定模型，请联系管理员配置")
 		}
-		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+		return ChatSettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
 	}
 	switch sel.ModelSource {
 	case "admin":
@@ -533,45 +533,45 @@ func (s *AIConfigService) ResolveChatSettings(ctx context.Context, sel AIModelSe
 			}
 		}
 		if cfg == nil {
-			return AISettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
+			return ChatSettings{}, errors.New("该模型未绑定到 AI 助手，请联系管理员或选择自定义模型")
 		}
-		return AISettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
+		return ChatSettings{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model, Source: "binding:" + cfg.Name}, nil
 	case "user":
 		if sel.UserID == 0 {
-			return AISettings{}, errors.New("未登录不能使用用户自定义模型")
+			return ChatSettings{}, errors.New("未登录不能使用用户自定义模型")
 		}
 		var m model.AIUserModel
 		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sel.UserModelID, sel.UserID).
 			Limit(1).Find(&m).Error; err != nil {
-			return AISettings{}, err
+			return ChatSettings{}, err
 		}
 		if m.ID == 0 {
-			return AISettings{}, gorm.ErrRecordNotFound
+			return ChatSettings{}, gorm.ErrRecordNotFound
 		}
 		key, err := security.DecryptSecret(m.APIKey, s.secretKey)
 		if err != nil {
-			return AISettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
+			return ChatSettings{}, fmt.Errorf("解密用户自定义模型 API Key 失败: %w", err)
 		}
-		return AISettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
+		return ChatSettings{APIKey: key, BaseURL: m.BaseURL, Model: m.Model, Source: "user:" + m.Name}, nil
 	case "custom":
 		if sel.CustomAPIKey == "" || sel.CustomBaseURL == "" || sel.CustomModel == "" {
-			return AISettings{}, errors.New("自定义模型配置不完整")
+			return ChatSettings{}, errors.New("自定义模型配置不完整")
 		}
-		return AISettings{APIKey: sel.CustomAPIKey, BaseURL: sel.CustomBaseURL, Model: sel.CustomModel, Source: "custom"}, nil
+		return ChatSettings{APIKey: sel.CustomAPIKey, BaseURL: sel.CustomBaseURL, Model: sel.CustomModel, Source: "custom"}, nil
 	}
-	return AISettings{}, fmt.Errorf("未知的 model_source: %s", sel.ModelSource)
+	return ChatSettings{}, fmt.Errorf("未知的 model_source: %s", sel.ModelSource)
 }
 
 // TestConfig 管理端配置连通性测试：解密配置后建 eino client 发最小补全请求
 // （30s 超时纪律单点在 service；一次性诊断调用，不经 adapter 签名缓存）。
-func (s *AIConfigService) TestConfig(ctx context.Context, id int) error {
+func (s *ConfigService) TestConfig(ctx context.Context, id int) error {
 	row, err := s.GetConfigByID(ctx, id)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	chatModel, err := newEinoChatModel(ctx, AISettings{APIKey: row.APIKey, BaseURL: row.BaseURL, Model: row.Model})
+	chatModel, err := newEinoChatModel(ctx, ChatSettings{APIKey: row.APIKey, BaseURL: row.BaseURL, Model: row.Model})
 	if err != nil {
 		return fmt.Errorf("构建模型失败: %w", err)
 	}
@@ -583,7 +583,7 @@ func (s *AIConfigService) TestConfig(ctx context.Context, id int) error {
 
 // HasActiveConfigs 是否存在已启用的 AI 配置。
 // 服务启动时用于告警：若未配置任何模型，简答题评分等 AI 功能将走导师人工评分。
-func (s *AIConfigService) HasActiveConfigs(ctx context.Context) bool {
+func (s *ConfigService) HasActiveConfigs(ctx context.Context) bool {
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&model.AIConfig{}).
 		Where("is_active = ?", true).Count(&count).Error; err != nil {

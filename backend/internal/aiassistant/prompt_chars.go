@@ -12,7 +12,7 @@
 //
 // 在此之前，字符数由调用方算好后经 ctx 声明、meter 未取到时再自己推导一遍——两份实现只靠
 // 注释说明「为什么不同」，而测试断言的是测试文件里自建的镜像，分叉永远测不红。
-package service
+package aiassistant
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func aiPromptCharsOf(msgs []aiPromptMessage) int {
 
 // aiPromptMessagesFromDTO 请求体消息列表 → 中立形态。
 // 文本取 DTO 的 Content（多模态原文也在这里；图片本身不计）。
-func aiPromptMessagesFromDTO(msgs []AIStreamMessage) []aiPromptMessage {
+func aiPromptMessagesFromDTO(msgs []StreamMessage) []aiPromptMessage {
 	out := make([]aiPromptMessage, 0, len(msgs))
 	for _, m := range msgs {
 		out = append(out, aiPromptMessage{Role: m.Role, Text: m.Content})

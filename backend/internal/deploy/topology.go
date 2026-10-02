@@ -2,7 +2,7 @@
 //
 // 背景：同一份 .env 默认值此前在 `.github/workflows/cd.yml`、`scripts/deploy-remote.sh`、
 // `docker-compose.prod.yml` 各写一遍，且已经漂移（REDIS_POOL_SIZE 20/10/20）。本包把「变量名 +
-// 默认值」收成一张 Go 声明表（与 internal/service/ai_feature_registry.go 同构），由
+// 默认值」收成一张 Go 声明表（与 internal/aiassistant/feature_registry.go 同构），由
 // cmd/gen-deploy 渲染出 shell 可 source 的 `deploy/env.defaults`，并由测试断言三份部署文件
 // 与声明表逐字一致——漂移从「人工 diff 发现」变成「go test 报红」。
 //

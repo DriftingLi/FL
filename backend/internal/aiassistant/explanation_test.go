@@ -1,6 +1,6 @@
-// Package service AI 解析 module 测试：缓存命中 / miss 同步生成回写 / 生成失败与未配置降级。
+// AI 解析 module 测试：缓存命中 / miss 同步生成回写 / 生成失败与未配置降级。
 // 期望值为独立字面量；fake 生成器记录调用，验证「练习与错题重做共用同一入口」的策略单点。
-package service
+package aiassistant
 
 import (
 	"errors"
