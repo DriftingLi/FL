@@ -15,7 +15,7 @@ import (
 
 	"forklift-training/internal/db"
 	applogger "forklift-training/internal/logger"
-	"forklift-training/internal/service"
+	"forklift-training/internal/mockexam"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 	}
 	defer db.Close(gormDB, logger)
 
-	report, err := service.BackfillMockExamTotalScores(gormDB)
+	report, err := mockexam.BackfillMockExamTotalScores(gormDB)
 	if err != nil {
 		logger.Error("回填失败", zap.Error(err))
 		os.Exit(1)

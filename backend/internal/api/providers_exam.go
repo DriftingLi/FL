@@ -1,8 +1,10 @@
 package api
 
 import (
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/realexam"
 	"forklift-training/internal/service"
 	"forklift-training/internal/training"
 )
@@ -11,8 +13,8 @@ import (
 func provideExam(c *coreSingletons, d *Deps) {
 	d.QuestionBankSvc = questionbank.NewService(c.db, c.fileSvc, c.logger)
 	d.PracticeModeSvc = practicemode.NewService(c.db, c.aiSvc, c.logger)
-	d.MockExamSvc = service.NewMockExamService(c.db, c.aiSvc, c.logger)
-	d.RealExamSvc = service.NewRealExamService(c.db, c.pointsSvc, c.logger)
+	d.MockExamSvc = mockexam.NewService(c.db, c.aiSvc, c.logger)
+	d.RealExamSvc = realexam.NewService(c.db, c.pointsSvc, c.logger)
 	d.WrongQuestionSvc = service.NewWrongQuestionService(c.db, c.aiSvc, c.logger)
 	d.QuestionCommentSvc = service.NewQuestionCommentService(c.db, c.logger)
 	d.NoteSvc = service.NewNoteService(c.db, c.logger)

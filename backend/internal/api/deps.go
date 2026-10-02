@@ -23,10 +23,12 @@ import (
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/realexam"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -84,8 +86,8 @@ type Deps struct {
 	StudentSvc           *service.StudentService
 	QuestionBankSvc      *questionbank.Service
 	PracticeModeSvc      *practicemode.Service
-	MockExamSvc          *service.MockExamService
-	RealExamSvc          *service.RealExamService
+	MockExamSvc          *mockexam.Service
+	RealExamSvc          *realexam.Service
 	TutorSvc             *service.TutorService
 	WrongQuestionSvc     *service.WrongQuestionService
 	TrainingCatalogSvc   *training.Service

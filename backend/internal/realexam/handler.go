@@ -1,5 +1,6 @@
-// 真题套卷 API（学员端）：列表 / 兑换 / 按卷练习 / 按卷考试（ADR-0022）。
-package api
+// Package realexam 真题域 HTTP 出口（/api/real-exam 蓝图，ADR-0070 的 handler.go 形态）：
+// 列表 / 兑换 / 按卷练习 / 按卷考试（ADR-0022）。
+package realexam
 
 import (
 	"context"
@@ -9,28 +10,29 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
 
-// RealExamHandler 真题套卷 handler。
-type RealExamHandler struct {
-	svc    *service.RealExamService
+// handler 真题套卷 handler。
+type handler struct {
+	svc    *Service
 	points *points.Service
 }
 
-// NewRealExamHandler 创建真题套卷 handler。
-func NewRealExamHandler(svc *service.RealExamService, points *points.Service) *RealExamHandler {
-	return &RealExamHandler{svc: svc, points: points}
+// newHandler 创建真题套卷 handler。
+func newHandler(svc *Service, points *points.Service) *handler {
+	return &handler{svc: svc, points: points}
 }
 
-// RegisterRealExamRoutes 注册 /api/real-exam 蓝图。
-func RegisterRealExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RealExamService, points *points.Service) {
-	h := NewRealExamHandler(svc, points)
+// RegisterRoutes 注册 /api/real-exam 蓝图。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service, points *points.Service) {
+	h := newHandler(svc, points)
 
-	g := rg.Group("/real-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRealExamTake), middleware.CredentialScoped(rd.CredentialScope))
+	g := rg.Group("/real-exam", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapRealExamTake), middleware.CredentialScoped(credRes))
 
 	// GET /api/real-exam/papers  当前证件的套卷列表（含兑换状态与单价）
 	g.GET("/papers", h.ListPapers)
@@ -55,11 +57,11 @@ type listPapersReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param credential_id query int true "目标证件ID"
-// @Success 200 {object} response.R{data=[]service.RealExamPaperDTO} "success"
+// @Success 200 {object} response.R{data=[]RealExamPaperDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers [get]
-func (h *RealExamHandler) ListPapers(c *gin.Context) {
-	httpx.Endpoint[listPapersReq, []service.RealExamPaperDTO]{
+func (h *handler) ListPapers(c *gin.Context) {
+	httpx.Endpoint[listPapersReq, []RealExamPaperDTO]{
 		Parse: func(c *gin.Context) (*listPapersReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			userID, _ := uid.(int)
@@ -68,7 +70,7 @@ func (h *RealExamHandler) ListPapers(c *gin.Context) {
 				CredentialID: middleware.CredentialIDValue(c),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *listPapersReq) (*[]service.RealExamPaperDTO, error) {
+		Invoke: func(ctx context.Context, req *listPapersReq) (*[]RealExamPaperDTO, error) {
 			result := h.svc.ListPapers(req.UserID, req.CredentialID)
 			return &result, nil
 		},
@@ -104,7 +106,7 @@ func parsePaperAction(c *gin.Context) (*paperActionReq, error) {
 // @Failure 400 {object} response.R "参数错误或积分不足"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/redeem [post]
-func (h *RealExamHandler) Redeem(c *gin.Context) {
+func (h *handler) Redeem(c *gin.Context) {
 	httpx.Endpoint[paperActionReq, points.RedeemResult]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
 		Invoke: func(ctx context.Context, req *paperActionReq) (*points.RedeemResult, error) {
@@ -128,7 +130,7 @@ func (h *RealExamHandler) Redeem(c *gin.Context) {
 // @Failure 400 {object} response.R "参数错误或未兑换"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/practice [get]
-func (h *RealExamHandler) StartPractice(c *gin.Context) {
+func (h *handler) StartPractice(c *gin.Context) {
 	httpx.Endpoint[paperActionReq, practicemode.PracticeStartResultDTO]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
 		Invoke: func(ctx context.Context, req *paperActionReq) (*practicemode.PracticeStartResultDTO, error) {
@@ -139,8 +141,8 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 		// ADR-0062 决策 3 的「按不存在答」）；卷内无已发布题=400；其余（含查不动）=500。
 		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
 			{Sentinel: points.ErrRealPaperUnavailable, Status: http.StatusNotFound},
-			{Sentinel: service.ErrRealPaperNotRedeemed, Status: http.StatusBadRequest},
-			{Sentinel: service.ErrRealPaperEmpty, Status: http.StatusBadRequest},
+			{Sentinel: ErrRealPaperNotRedeemed, Status: http.StatusBadRequest},
+			{Sentinel: ErrRealPaperEmpty, Status: http.StatusBadRequest},
 			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)
@@ -153,21 +155,21 @@ func (h *RealExamHandler) StartPractice(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param paper_id path int true "真题卷ID"
-// @Success 200 {object} response.R{data=service.MockExamStartDTO} "success"
+// @Success 200 {object} response.R{data=mockexam.MockExamStartDTO} "success"
 // @Failure 400 {object} response.R "参数错误或未兑换"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/exam [post]
-func (h *RealExamHandler) StartExam(c *gin.Context) {
-	httpx.Endpoint[paperActionReq, service.MockExamStartDTO]{
+func (h *handler) StartExam(c *gin.Context) {
+	httpx.Endpoint[paperActionReq, mockexam.MockExamStartDTO]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
-		Invoke: func(ctx context.Context, req *paperActionReq) (*service.MockExamStartDTO, error) {
+		Invoke: func(ctx context.Context, req *paperActionReq) (*mockexam.MockExamStartDTO, error) {
 			return h.svc.StartPaperExam(req.UserID, req.PaperID)
 		},
 		// 与 StartPractice 同一判定（同一张表、同一理由，见 StartPractice 处注释）。
 		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
 			{Sentinel: points.ErrRealPaperUnavailable, Status: http.StatusNotFound},
-			{Sentinel: service.ErrRealPaperNotRedeemed, Status: http.StatusBadRequest},
-			{Sentinel: service.ErrRealPaperEmpty, Status: http.StatusBadRequest},
+			{Sentinel: ErrRealPaperNotRedeemed, Status: http.StatusBadRequest},
+			{Sentinel: ErrRealPaperEmpty, Status: http.StatusBadRequest},
 			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 	}.Handle(c)

@@ -1,10 +1,10 @@
-// 练习域留驻测试夹具（#1445 P2 波 3c-2）。
+// 模拟考域测试夹具（#1445 P2 波 4a）。
 //
 // createQuestionAs 按接缝就地内联（同 3b-2 先例）——原留驻 internal/service/questionbank_fixture_test.go
 // 已随波 4a 删除（模拟考试与真题套卷的消费者都搬进了域包），故各域自持一份。
-// 各一份（域包测试不得反向 import internal/service，同 3b-2 先例）；seed 出的题目供练习抽题/
-// 会话续练测试用。
-package practicemode
+// 各一份（域包测试不得反向 import internal/service，同 3b-2 / 3c-2 先例）；seed 出的题目供按卷练习/
+// 按卷考试测试用。
+package mockexam
 
 import (
 	"testing"

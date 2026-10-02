@@ -201,7 +201,7 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
   }
 
   it('api/mockExam.uts 的每条路由都在 backend mock_exam.go 已注册', () => {
-    const backend = stripComments(read('../../backend/internal/api/mock_exam.go'));
+    const backend = stripComments(read('../../backend/internal/mockexam/handler.go'));
     expect(backend).toContain('rg.Group("/mock-exam"');
     const registered = [];
     const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]+)"/g;

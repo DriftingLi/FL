@@ -1,5 +1,5 @@
-// Package api 实现 HTTP handlers。
-package api
+// Package mockexam 模拟考试域 HTTP 出口（/api/mock-exam 蓝图，ADR-0070 的 handler.go 形态）。
+package mockexam
 
 import (
 	"context"
@@ -9,25 +9,25 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
 
-// MockExamHandler 模拟考试 handler。
-type MockExamHandler struct {
-	svc *service.MockExamService
+// handler 模拟考试 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewMockExamHandler 创建模拟考试 handler。
-func NewMockExamHandler(svc *service.MockExamService) *MockExamHandler {
-	return &MockExamHandler{svc: svc}
+// newHandler 创建模拟考试 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterMockExamRoutes 注册 /api/mock-exam 蓝图。
-func RegisterMockExamRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.MockExamService) {
-	h := NewMockExamHandler(svc)
+// RegisterRoutes 注册 /api/mock-exam 蓝图。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
+	h := newHandler(svc)
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapMockExamTake), middleware.CredentialScoped(rd.CredentialScope))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapMockExamTake), middleware.CredentialScoped(credRes))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
 	g.POST("/start", h.Start)
@@ -60,12 +60,12 @@ type startReq struct {
 // @Security BearerAuth
 // @Param credential_id query int false "目标证件ID"
 // @Param body body object false "参数" example({"count":20,"duration":90})
-// @Success 200 {object} response.R{data=service.MockExamStartDTO} "success"
+// @Success 200 {object} response.R{data=MockExamStartDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /mock-exam/start [post]
-func (h *MockExamHandler) Start(c *gin.Context) {
-	httpx.Endpoint[startReq, service.MockExamStartDTO]{
+func (h *handler) Start(c *gin.Context) {
+	httpx.Endpoint[startReq, MockExamStartDTO]{
 		Parse: func(c *gin.Context) (*startReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -89,7 +89,7 @@ func (h *MockExamHandler) Start(c *gin.Context) {
 			}
 			return &startReq{StudentID: studentID, Count: count, Duration: duration, CredentialID: middleware.CredentialIDPtr(c)}, nil
 		},
-		Invoke: func(ctx context.Context, req *startReq) (*service.MockExamStartDTO, error) {
+		Invoke: func(ctx context.Context, req *startReq) (*MockExamStartDTO, error) {
 			return h.svc.Start(req.StudentID, req.Count, req.Duration, req.CredentialID)
 		},
 	}.WithSuccess(httpx.OkMsg("模拟考试开始"), http.StatusBadRequest).Handle(c)
@@ -116,7 +116,7 @@ type saveProgressReq struct {
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /mock-exam/{mock_exam_id}/save [post]
-func (h *MockExamHandler) SaveProgress(c *gin.Context) {
+func (h *handler) SaveProgress(c *gin.Context) {
 	httpx.Endpoint[saveProgressReq, struct{}]{
 		Parse: func(c *gin.Context) (*saveProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
@@ -162,14 +162,14 @@ type mockExamIDReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param mock_exam_id path int true "模拟考试ID"
-// @Success 200 {object} response.R{data=service.MockExamResumeDTO} "success"
+// @Success 200 {object} response.R{data=MockExamResumeDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /mock-exam/{mock_exam_id}/resume [get]
-func (h *MockExamHandler) Resume(c *gin.Context) {
-	httpx.Endpoint[mockExamIDReq, service.MockExamResumeDTO]{
+func (h *handler) Resume(c *gin.Context) {
+	httpx.Endpoint[mockExamIDReq, MockExamResumeDTO]{
 		Parse: h.parseMockExamID,
-		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamResumeDTO, error) {
+		Invoke: func(ctx context.Context, req *mockExamIDReq) (*MockExamResumeDTO, error) {
 			return h.svc.Resume(req.MockExamID, req.StudentID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
@@ -183,14 +183,14 @@ func (h *MockExamHandler) Resume(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param mock_exam_id path int true "模拟考试ID"
-// @Success 200 {object} response.R{data=service.MockExamSubmitDTO} "success"
+// @Success 200 {object} response.R{data=MockExamSubmitDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /mock-exam/{mock_exam_id}/submit [post]
-func (h *MockExamHandler) Submit(c *gin.Context) {
-	httpx.Endpoint[mockExamIDReq, service.MockExamSubmitDTO]{
+func (h *handler) Submit(c *gin.Context) {
+	httpx.Endpoint[mockExamIDReq, MockExamSubmitDTO]{
 		Parse: h.parseMockExamID,
-		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamSubmitDTO, error) {
+		Invoke: func(ctx context.Context, req *mockExamIDReq) (*MockExamSubmitDTO, error) {
 			return h.svc.Submit(req.MockExamID, req.StudentID)
 		},
 	}.WithSuccess(httpx.OkMsg("交卷成功"), http.StatusBadRequest).Handle(c)
@@ -204,18 +204,18 @@ func (h *MockExamHandler) Submit(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param mock_exam_id path int true "模拟考试ID"
-// @Success 200 {object} response.R{data=service.MockExamResultDTO} "success"
+// @Success 200 {object} response.R{data=MockExamResultDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /mock-exam/{mock_exam_id}/result [get]
-func (h *MockExamHandler) GetResult(c *gin.Context) {
-	httpx.Endpoint[mockExamIDReq, service.MockExamResultDTO]{
+func (h *handler) GetResult(c *gin.Context) {
+	httpx.Endpoint[mockExamIDReq, MockExamResultDTO]{
 		Parse: h.parseMockExamID,
-		Invoke: func(ctx context.Context, req *mockExamIDReq) (*service.MockExamResultDTO, error) {
+		Invoke: func(ctx context.Context, req *mockExamIDReq) (*MockExamResultDTO, error) {
 			return h.svc.GetResult(req.MockExamID, req.StudentID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrMockExamNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(ErrMockExamNotFound, http.StatusNotFound).Handle(c)
 }
 
 // GetHistory 模拟考试历史
@@ -228,11 +228,11 @@ func (h *MockExamHandler) GetResult(c *gin.Context) {
 // @Param credential_id query int false "目标证件ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Success 200 {object} response.R{data=service.MockExamHistoryDTO} "success"
+// @Success 200 {object} response.R{data=MockExamHistoryDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /mock-exam/history [get]
-func (h *MockExamHandler) GetHistory(c *gin.Context) {
-	httpx.Endpoint[mockExamHistoryReq, service.MockExamHistoryDTO]{
+func (h *handler) GetHistory(c *gin.Context) {
+	httpx.Endpoint[mockExamHistoryReq, MockExamHistoryDTO]{
 		Parse: func(c *gin.Context) (*mockExamHistoryReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -243,7 +243,7 @@ func (h *MockExamHandler) GetHistory(c *gin.Context) {
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*service.MockExamHistoryDTO, error) {
+		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*MockExamHistoryDTO, error) {
 			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
@@ -260,7 +260,7 @@ type mockExamHistoryReq struct {
 }
 
 // parseMockExamID 解析 mock_exam_id 路径参数与学员 ID。
-func (h *MockExamHandler) parseMockExamID(c *gin.Context) (*mockExamIDReq, error) {
+func (h *handler) parseMockExamID(c *gin.Context) (*mockExamIDReq, error) {
 	uid, _ := c.Get(string(middleware.CtxUserID))
 	studentID, _ := uid.(int)
 	mockExamID, err := httpx.PathInt(c, "mock_exam_id", "考试ID无效")

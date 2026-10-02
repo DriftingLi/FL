@@ -1,5 +1,5 @@
 // 存量回填：模拟考试总分（ADR-0068 决策 4）。
-package service
+package mockexam
 
 import (
 	"encoding/json"
@@ -43,7 +43,7 @@ func BackfillMockExamTotalScores(db *gorm.DB) (MockExamScoreBackfillReport, erro
 	var report MockExamScoreBackfillReport
 	var exams []model.MockExam
 	err := db.
-		Where("status = ?", mockExamStatusSubmitted).
+		Where("status = ?", StatusSubmitted).
 		Order("id").
 		FindInBatches(&exams, mockExamScoreBackfillBatch, func(_ *gorm.DB, _ int) error {
 			for i := range exams {

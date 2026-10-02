@@ -1,5 +1,7 @@
-// Package service 模拟考试。
-package service
+// Package mockexam 模拟考试域：开考、进度保存、续考、交卷判分、结果与历史（ADR-0068）。
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，
+// service.go / backfill.go / progress.go 是域实现。
+package mockexam
 
 import (
 	"encoding/json"
@@ -25,18 +27,18 @@ const mockExamDefaultCount = 40
 
 // 模拟考试状态取值（与 mock_exam.status 列一一对应，禁止散写字面量）。
 const (
-	mockExamStatusInProgress = "in_progress"
-	mockExamStatusSubmitted  = "submitted"
+	StatusInProgress = "in_progress"
+	StatusSubmitted  = "submitted"
 )
 
-// mockExamAbandonTTL 未完成记录的保留时长。
+// AbandonTTL 未完成记录的保留时长。
 // 用户点「开始考试」即刻建记录（status=in_progress），但可能直接关页面不交卷，
 // 这类记录既没有成绩也没有保留价值。超过本期限的未完成记录视为废弃，
 // 在下次开始考试时清理，避免 mock_exam 表无限堆积、并污染历史列表。
-const mockExamAbandonTTL = 24 * time.Hour
+const AbandonTTL = 24 * time.Hour
 
-// MockExamService 模拟考试服务。
-type MockExamService struct {
+// Service 模拟考试服务。
+type Service struct {
 	db *gorm.DB
 	ai *aiassistant.GenerationService
 	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 practicemode.Service.grader）。
@@ -46,9 +48,9 @@ type MockExamService struct {
 	logger *zap.Logger
 }
 
-// NewMockExamService 创建模拟考试服务实例。
-func NewMockExamService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *MockExamService {
-	return &MockExamService{db: db, ai: ai, grader: practicemode.ShortAnswerGraderOf(ai), logger: logger}
+// NewService 创建模拟考试服务实例。
+func NewService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *Service {
+	return &Service{db: db, ai: ai, grader: practicemode.ShortAnswerGraderOf(ai), logger: logger}
 }
 
 // ===== DTO（JSON 契约与 B6 前的 map key 逐字一致，前端零改动约束）=====
@@ -143,7 +145,7 @@ type MockExamHistoryDTO struct {
 // 此前是三个函数各写一遍同文案裸 errors.New，且把「查不动」一并塌进来。
 var ErrMockExamNotFound = errors.New("模拟考试不存在")
 
-func (s *MockExamService) Start(studentID, count, duration int, credentialID *int) (*MockExamStartDTO, error) {
+func (s *Service) Start(studentID, count, duration int, credentialID *int) (*MockExamStartDTO, error) {
 	if count <= 0 {
 		count = mockExamDefaultCount
 	}
@@ -159,11 +161,11 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		return nil, errors.New("题库暂无可用的题目")
 	}
 
-	// 开新考试前先清掉该学生超过 mockExamAbandonTTL 仍未交卷的旧记录。
+	// 开新考试前先清掉该学生超过 AbandonTTL 仍未交卷的旧记录。
 	// 失败不阻断主流程：清理只是数据卫生，用户此刻要的是「开始考试」。
 	if err := s.db.
 		Where("student_id = ? AND status <> ? AND created_at < ?",
-			studentID, mockExamStatusSubmitted, clock.Now().Add(-mockExamAbandonTTL)).
+			studentID, StatusSubmitted, clock.Now().Add(-AbandonTTL)).
 		Delete(&model.MockExam{}).Error; err != nil {
 		s.logger.Warn("清理废弃模拟考试记录失败",
 			zap.Int("student_id", studentID), zap.Error(err))
@@ -173,7 +175,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 	totalScore := 0
 	for i, q := range selected {
 		questionIDs[i] = q.ID
-		totalScore += int(mockExamMaxScore(&q))
+		totalScore += int(MaxScore(&q))
 	}
 
 	idsJSON, _ := json.Marshal(questionIDs)
@@ -186,7 +188,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,
-		Status:        mockExamStatusInProgress,
+		Status:        StatusInProgress,
 		StartTime:     &startTime,
 		RemainingTime: duration * 60,
 	}
@@ -211,7 +213,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 // SaveProgress 保存进度。
 // 经保存会话进度深模块（session_progress.go）唯一实现：load → 守卫（本人+进行中）→
 // 快照 JSONB 三态归一 → db.Save。提交后/已结束的会话不再接受进度保存（对齐 level 最严口径）。
-func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[string]any, remainingTime int) error {
+func (s *Service) SaveProgress(mockExamID, studentID int, answers map[string]any, remainingTime int) error {
 	return saveSessionProgress(s.db, SessionProgressSpec[model.MockExam]{
 		notFoundErr: "模拟考试不存在",
 		load: func(db *gorm.DB) (model.MockExam, error) {
@@ -229,7 +231,7 @@ func (s *MockExamService) SaveProgress(mockExamID, studentID int, answers map[st
 }
 
 // Resume 恢复考试。
-func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO, error) {
+func (s *Service) Resume(mockExamID, studentID int) (*MockExamResumeDTO, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -266,7 +268,7 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 }
 
 // Submit 交卷。
-func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) {
+func (s *Service) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -288,7 +290,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 	engine := practicemode.NewGradingEngine(s.db)
 	flow := practicemode.GradingFlow{
 		AI:       s.grader,
-		MaxScore: mockExamMaxScore,
+		MaxScore: MaxScore,
 	}
 	results := engine.GradeSet(flow, qMap, ids, answersMap, studentID)
 
@@ -337,7 +339,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 		details = append(details, detail)
 	}
 
-	mock.Status = mockExamStatusSubmitted
+	mock.Status = StatusSubmitted
 	submitTime := clock.Now()
 	mock.SubmitTime = &submitTime
 	mock.Score = coerce.FloatPtr(totalScore)
@@ -362,7 +364,7 @@ func (s *MockExamService) Submit(mockExamID, studentID int) (*MockExamSubmitDTO,
 }
 
 // GetResult 获取结果。
-func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultDTO, error) {
+func (s *Service) GetResult(mockExamID, studentID int) (*MockExamResultDTO, error) {
 	var mock model.MockExam
 	if err := s.db.First(&mock, mockExamID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -395,9 +397,9 @@ func (s *MockExamService) GetResult(mockExamID, studentID int) (*MockExamResultD
 // credentialID 非 nil 时按证件分区过滤（#1003）：分区是**开考那一刻**的当前证件（Start 落库），
 // 故切到别的证件不会看到别的证件的模考 —— 与「当前证件 = 全局过滤器」同口径。
 // nil = 不分区、看全部：与错题本 / 题库池的既有 nil 语义一致（未选证件的学员不该看不到自己的历史）。
-func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
+func (s *Service) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
 	exams, total, page, pageSize, err := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
-		q = q.Where("student_id = ? AND status = ?", studentID, mockExamStatusSubmitted)
+		q = q.Where("student_id = ? AND status = ?", studentID, StatusSubmitted)
 		q = scope.RecordPartitionOf(q, "credential_id", credentialID)
 		return q
 	})
@@ -418,7 +420,7 @@ func (s *MockExamService) GetHistory(studentID int, credentialID *int, page, pag
 
 // ===== 辅助 =====
 
-func mockExamMaxScore(q *model.Question) float64 {
+func MaxScore(q *model.Question) float64 {
 	if q.Score > 0 {
 		return float64(q.Score)
 	}

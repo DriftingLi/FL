@@ -1,6 +1,6 @@
-// Package service 存量回填的行为锁（ADR-0068 决策 4）：
+// mockexam 包测试：存量回填的行为锁（ADR-0068 决策 4）：
 // 按逐题事实重算派生分值、幂等、且不动对错与 AI 原始分。
-package service
+package mockexam
 
 import (
 	"encoding/json"
@@ -28,7 +28,7 @@ func seedSubmittedMockExamWithResult(t *testing.T, db *gorm.DB, studentID int, s
 	now := clock.Now()
 	mock := &model.MockExam{
 		StudentID:  studentID,
-		Status:     mockExamStatusSubmitted,
+		Status:     StatusSubmitted,
 		StartTime:  &now,
 		SubmitTime: &now,
 		CreatedAt:  now,
@@ -165,7 +165,7 @@ func TestBackfillMockExamTotalScoresSkipsRecordsWithoutFacts(t *testing.T) {
 	now := clock.Now()
 	inProgress := &model.MockExam{
 		StudentID: student.ID,
-		Status:    mockExamStatusInProgress,
+		Status:    StatusInProgress,
 		StartTime: &now,
 		CreatedAt: now,
 		Result:    model.JSONB([]byte(`{"total_score":0,"details":[{"score":0,"ai_score":9}]}`)),

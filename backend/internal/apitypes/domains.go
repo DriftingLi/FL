@@ -124,11 +124,11 @@ var Domains = []Domain{
 		Name:  "mockExam",
 		Title: "模拟考试（/api/mock-exam/*，含真题卷整卷复用链路）",
 		Roots: []string{
-			"service.MockExamStartDTO",
-			"service.MockExamResumeDTO",
-			"service.MockExamSubmitDTO",
-			"service.MockExamResultDTO",
-			"service.MockExamHistoryDTO",
+			"mockexam.MockExamStartDTO",
+			"mockexam.MockExamResumeDTO",
+			"mockexam.MockExamSubmitDTO",
+			"mockexam.MockExamResultDTO",
+			"mockexam.MockExamHistoryDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/mock-exam/start"},
@@ -544,9 +544,9 @@ var Domains = []Domain{
 		Name:  "realExam",
 		Title: "真题套卷（/api/real-exam/*：列表 / 按卷练习 / 按卷开考 / 积分兑换）",
 		Roots: []string{
-			"service.MockExamStartDTO",
+			"mockexam.MockExamStartDTO",
 			"practicemode.PracticeStartResultDTO",
-			"service.RealExamPaperDTO",
+			"realexam.RealExamPaperDTO",
 			"points.RedeemResult",
 		},
 		Endpoints: []Endpoint{

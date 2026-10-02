@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/model"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
@@ -144,7 +145,7 @@ func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 func TestMockExamHistoryCarriesPaperID(t *testing.T) {
 	t.Parallel()
 	db := testutil.NewMemoryDB(t)
-	svc := service.NewMockExamService(db, nil, nil)
+	svc := mockexam.NewService(db, nil, nil)
 	student := seedStudent(t, db, "paper_src_student", "x")
 
 	now := time.Now()

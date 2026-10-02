@@ -62,8 +62,8 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	// 练习域的三格（HistoryResultDTO.records / PracticeStartResultDTO.questions / PracticeStatsDTO.by_type）
 	// 已随域包搬去 internal/practicemode/nonnil_outlets_test.go（ADR-0070 波 3c-2）。
 
-	"service.MockExamHistoryDTO.exams":            outletMockExamHistoryEmpty,
-	"service.MockExamStartDTO.questions":          outletMockExamStart,
+	// 模考域三格（MockExamHistoryDTO.exams / MockExamStartDTO.questions / MockExamResumeDTO.questions）
+	// 已随域包搬去 internal/mockexam/nonnil_outlets_test.go（ADR-0070 波 4a）。
 	"questionbank.QuestionBankStatsDTO.by_type":   outletQuestionBankStatsEmpty,
 	"questionbank.QuestionBankStatsDTO.by_status": outletQuestionBankStatsEmpty,
 	"service.WrongQuestionStatsDTO.by_type":       outletWrongQuestionStatsEmpty,
@@ -87,30 +87,7 @@ func outletBatchDeleteFilesEmpty(t *testing.T) any {
 	return svc.BatchDeleteChapterFiles(nil)
 }
 
-// ===== 模考 / 统计 =====
-
-func outletMockExamHistoryEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "模考历史学员", "x")
-	res, err := NewMockExamService(db, nil, zap.NewNop()).GetHistory(student.ID, nil, 1, 20)
-	if err != nil {
-		t.Fatalf("空模考历史失败: %v", err)
-	}
-	return res
-}
-
-func outletMockExamStart(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "模考开科学员", "x")
-	testutil.SeedQuestion(t, db, "single", "模考抽题源", "A")
-	res, err := NewMockExamService(db, nil, zap.NewNop()).Start(student.ID, 1, 90, nil)
-	if err != nil {
-		t.Fatalf("模拟考试开考失败: %v", err)
-	}
-	return res
-}
+// ===== 题目域统计 =====
 
 // outletQuestionBankStatsEmpty 一次调用举证 by_type 与 by_status 两格：两个 map 都取自
 // questionbank.GroupByCount 的 make(map,...) 再按合法维度零填充 ⇒ 恒 `{}` 起、只会更满。

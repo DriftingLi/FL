@@ -1,9 +1,8 @@
-// Package service 保存会话进度 module：练习/模拟考试共享的
-// 「保存会话进度快照」语义 —— 守卫裁定（本人+在途校验策略由调用方声明）、
+// 本文件：模拟考的「保存会话进度」深模块（Ticket #232 C3）——守卫裁定（本人 + 在途策略由调用方声明）、
 // 答案快照 JSONB 三态归一、快照写回（load → 改 JSONB → db.Save）。
-// 存储形态保持存量表不变（practice_progress / mock_exam），
-// 守卫统一为最严口径：提交后/已结束的会话不再接受进度保存（提交晚到静默忽略）。
-package service
+// 存储形态保持存量表不变（mock_exam），守卫为最严口径：提交后/已结束的会话不再接受进度保存（提交晚到静默忽略）。
+// 练习流曾在同一 spec 上（practice_progress），3c-2 已随 internal/practicemode 分家自持。
+package mockexam
 
 import (
 	"encoding/json"
