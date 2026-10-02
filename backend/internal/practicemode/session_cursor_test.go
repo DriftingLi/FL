@@ -1,5 +1,5 @@
-// Package service #504 回归：SaveSet 进度保存流游标「只进不退」守卫。
-package service
+// #504 回归：SaveSet 进度保存流游标「只进不退」守卫。
+package practicemode
 
 import (
 	"encoding/json"

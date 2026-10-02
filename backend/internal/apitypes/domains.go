@@ -98,13 +98,13 @@ var Domains = []Domain{
 		Name:  "practiceMode",
 		Title: "题库练习模式（/api/practice-mode/*：随机 / 标签 / 顺序 / 进度 / 判定 / 统计 / 历史）",
 		Roots: []string{
-			"service.PracticeStartResultDTO",
-			"service.ProgressResultDTO",
-			"service.ProgressSaveResultDTO",
-			"service.SubmitResultDTO",
-			"service.PracticePracticeStatsDTO",
-			"service.PracticeStatsDTO",
-			"service.HistoryResultDTO",
+			"practicemode.PracticeStartResultDTO",
+			"practicemode.ProgressResultDTO",
+			"practicemode.ProgressSaveResultDTO",
+			"practicemode.SubmitResultDTO",
+			"practicemode.PracticePracticeStatsDTO",
+			"practicemode.PracticeStatsDTO",
+			"practicemode.HistoryResultDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/practice-mode/free"},
@@ -272,7 +272,7 @@ var Domains = []Domain{
 			"service.WrongQuestionRemoveResultDTO",
 			"service.WrongQuestionBatchRemoveResultDTO",
 			"service.WrongQuestionStatsDTO",
-			"service.SubmitResultDTO",
+			"practicemode.SubmitResultDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/wrong-questions"},
@@ -545,7 +545,7 @@ var Domains = []Domain{
 		Title: "真题套卷（/api/real-exam/*：列表 / 按卷练习 / 按卷开考 / 积分兑换）",
 		Roots: []string{
 			"service.MockExamStartDTO",
-			"service.PracticeStartResultDTO",
+			"practicemode.PracticeStartResultDTO",
 			"service.RealExamPaperDTO",
 			"points.RedeemResult",
 		},

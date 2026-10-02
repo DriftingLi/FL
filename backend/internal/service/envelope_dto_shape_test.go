@@ -8,6 +8,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 )
 
@@ -208,9 +209,9 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 		},
 		// RecruiterPasswordResetResult 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
-			name:   "ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",
+			name:   "practicemode.ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",
 			legacy: map[string]any{"saved": true, "index": 5},
-			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
+			dto:    &practicemode.ProgressSaveResultDTO{Index: 5, Saved: true},
 		},
 		// ForumImageUploadResultDTO / ForumLikeResultDTO 的信封形状用例已随域包搬去 internal/forum/（ADR-0070 波 2b-2）。
 		{

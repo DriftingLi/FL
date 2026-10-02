@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
@@ -23,7 +24,7 @@ import (
 type WrongQuestionService struct {
 	db *gorm.DB
 	// grader 短答 AI 判分 adapter（nil 时简答重做降级，与练习流口径一致）。
-	grader ShortAnswerGrader
+	grader practicemode.ShortAnswerGrader
 	// explainer AI 解析 module（与练习提交共用同一 get-or-generate 入口，spec #295/#300）。
 	explainer *aiassistant.QuestionExplanation
 
@@ -34,7 +35,7 @@ type WrongQuestionService struct {
 func NewWrongQuestionService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *WrongQuestionService {
 	return &WrongQuestionService{
 		db:        db,
-		grader:    shortAnswerGraderOf(ai),
+		grader:    practicemode.ShortAnswerGraderOf(ai),
 		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 	}
@@ -212,7 +213,7 @@ func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int)
 // 与练习记录同口径。
 // 有意**不**施加完整池 scope（published / 排真题）：错题本是「我曾经做错的题」的历史面，题目下架或改标后若
 // 在这里被拦，列表会出现点不动的死链 —— 那是错题本读面 scope 的独立议题，不在本票范围。
-func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*SubmitResultDTO, error) {
+func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*practicemode.SubmitResultDTO, error) {
 	var wq model.WrongQuestion
 	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
@@ -223,9 +224,9 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		return nil, errors.New("题目不存在")
 	}
 
-	engine := newGradingEngine(s.db)
-	flow := gradingFlow{ai: s.grader, maxScore: practiceMaxScore}
-	gr := engine.gradeOne(flow, &question, userAnswer, studentID)
+	engine := practicemode.NewGradingEngine(s.db)
+	flow := practicemode.GradingFlow{AI: s.grader, MaxScore: practicemode.PracticeMaxScore}
+	gr := engine.GradeOne(flow, &question, userAnswer, studentID)
 
 	// 重做结果与练习同口径落练习记录（统计事实源单一）。
 	rec := model.QuestionPracticeRecord{
@@ -249,14 +250,14 @@ func (s *WrongQuestionService) RedoWrongQuestion(studentID, questionID int, user
 		}
 	}
 
-	result := &SubmitResultDTO{
+	result := &practicemode.SubmitResultDTO{
 		IsCorrect:     gr.IsCorrect,
 		CorrectAnswer: question.Answer,
 		Explanation:   question.Explanation,
 		QuestionID:    questionID,
 		UserAnswer:    userAnswer,
 	}
-	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &question)
+	practicemode.FinalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &question)
 	return result, nil
 }
 

@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 )
@@ -128,8 +129,8 @@ func (s *RealExamService) ListPapers(userID, credentialID int) []RealExamPaperDT
 }
 
 // StartPaperPractice 按卷练习开始/续练：固定卷序（不随机），断点续练复用 practice_progress。
-// 装配形态（#385）：续练协商（同集沿用卷序与游标/集合变化刷新复位）走 ResumeSet 单点。
-func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeStartResultDTO, error) {
+// 装配形态（#385）：续练协商（同集沿用卷序与游标/集合变化刷新复位）走 practicemode.ResumeSet 单点。
+func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*practicemode.PracticeStartResultDTO, error) {
 	var paper model.RealExamPaper
 	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
 		return nil, points.ErrRealPaperUnavailable
@@ -153,8 +154,8 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 		byID[all[i].ID] = all[i]
 	}
 
-	ids, startIdx, err := ResumeSet(s.db, studentID, nil, ResumeSetSpec{
-		Mode:       string(PracticeModePaper(paperID)),
+	ids, startIdx, err := practicemode.ResumeSet(s.db, studentID, nil, practicemode.ResumeSetSpec{
+		Mode:       string(practicemode.PracticeModePaper(paperID)),
 		FreshIDs:   allIDs,
 		ReuseSaved: true,
 	})
@@ -168,7 +169,7 @@ func (s *RealExamService) StartPaperPractice(studentID, paperID int) (*PracticeS
 			out = append(out, questionbank.NewQuestionDTO(&q, false))
 		}
 	}
-	return &PracticeStartResultDTO{
+	return &practicemode.PracticeStartResultDTO{
 		Questions:    out,
 		CurrentIndex: startIdx,
 		Total:        len(ids),

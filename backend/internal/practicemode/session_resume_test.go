@@ -1,6 +1,6 @@
-// Package service #385 回归：答题会话 ResumeSet/SaveSet 断点续练协商语义
+// #385 回归：答题会话 ResumeSet/SaveSet 断点续练协商语义
 // 与抽题池单点（questionbank.SampleQuestionsByOpts）。
-package service
+package practicemode
 
 import (
 	"encoding/json"
@@ -139,7 +139,7 @@ func TestQuestionPoolOptsUnified(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	catalogSvc := training.NewService(db, zap.NewNop())
 	qsvc := questionbank.NewService(db, nil, zap.NewNop())
-	psvc := NewPracticeModeService(db, nil, zap.NewNop())
+	psvc := NewService(db, nil, zap.NewNop())
 
 	tag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
 	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题", SortOrder: coerce.IntPtr(2)})

@@ -1,5 +1,8 @@
-// Package service 题库练习模式。
-package service
+// Package practicemode 练习域：自由/标签/顺序/试卷四种练习流、答题会话与判分编排。
+//
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，service.go / dto.go /
+// session.go / grading.go 是域实现。
+package practicemode
 
 import (
 	"encoding/json"
@@ -54,8 +57,8 @@ func ParsePracticeMode(s string) (PracticeMode, bool) {
 	return "", false
 }
 
-// PracticeModeService 题库练习模式服务。
-type PracticeModeService struct {
+// Service 题库练习模式服务。
+type Service struct {
 	db *gorm.DB
 	// grader 短答 AI 判分 adapter（nil 时简答降级，与错题重做口径一致）。
 	grader ShortAnswerGrader
@@ -66,25 +69,25 @@ type PracticeModeService struct {
 	clk    clock.Clock
 }
 
-// NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题与解析降级）。
-func NewPracticeModeService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *PracticeModeService {
-	return &PracticeModeService{
+// NewService 创建题库练习服务，ai 可为 nil（简答题与解析降级）。
+func NewService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *Service {
+	return &Service{
 		db:        db,
-		grader:    shortAnswerGraderOf(ai),
+		grader:    ShortAnswerGraderOf(ai),
 		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 		clk:       clock.Real(),
 	}
 }
 
-// NewPracticeModeServiceWithClock 注入式构造（测试用 Clock 定格，生产仍用 Real）。
-func NewPracticeModeServiceWithClock(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger, clk clock.Clock) *PracticeModeService {
+// NewServiceWithClock 注入式构造（测试用 Clock 定格，生产仍用 Real）。
+func NewServiceWithClock(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger, clk clock.Clock) *Service {
 	if clk == nil {
 		clk = clock.Real()
 	}
-	return &PracticeModeService{
+	return &Service{
 		db:        db,
-		grader:    shortAnswerGraderOf(ai),
+		grader:    ShortAnswerGraderOf(ai),
 		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 		clk:       clk,
@@ -92,7 +95,7 @@ func NewPracticeModeServiceWithClock(db *gorm.DB, ai *aiassistant.GenerationServ
 }
 
 // SetClock 覆写时钟（测试用，参考 internal/checkin.Service 的 clk 注入形态）。
-func (s *PracticeModeService) SetClock(clk clock.Clock) {
+func (s *Service) SetClock(clk clock.Clock) {
 	if clk != nil {
 		s.clk = clk
 	}
@@ -107,7 +110,7 @@ var (
 	ErrPracticeTagUnsupported = errors.New("该标签不支持专项练习")
 )
 
-func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credentialID *int) ([]questionbank.QuestionDTO, error) {
+func (s *Service) GetFreeQuestions(qType string, count int, credentialID *int) ([]questionbank.QuestionDTO, error) {
 	selected, err := questionbank.SampleQuestions(s.db, qType, count, credentialID)
 	if err != nil {
 		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
@@ -129,7 +132,7 @@ func (s *PracticeModeService) GetFreeQuestions(qType string, count int, credenti
 // 再次进入复用已保存顺序与游标（断点续练）；已完成则重新抽题。
 // mode = "tag:<tagID>"，count <= 0 表示该标签全部题目。
 // 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
-func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, credentialID *int) (*PracticeStartResultDTO, error) {
+func (s *Service) StartTagPractice(studentID, tagID, count int, credentialID *int) (*PracticeStartResultDTO, error) {
 	if tagID <= 0 {
 		return nil, ErrPracticeTagRequired
 	}
@@ -189,7 +192,7 @@ func (s *PracticeModeService) StartTagPractice(studentID, tagID, count int, cred
 // StartSequential 顺序练习：加载全部 published 题目（按 id 升序），
 // 复用已有 practice_progress 游标续练；一次性返回全部题目，前端从游标处开始作答。
 // 装配形态（#385）：抽题走池单点（sampleQuestionsByOpts），续练协商走 ResumeSet 单点。
-func (s *PracticeModeService) StartSequential(studentID int, credentialID *int) (*PracticeStartResultDTO, error) {
+func (s *Service) StartSequential(studentID int, credentialID *int) (*PracticeStartResultDTO, error) {
 	questions, err := questionbank.SampleQuestionsByOpts(s.db, questionbank.SampleQuestionsOpts{Cred: credentialID})
 	if err != nil {
 		// 抽题查不动就是服务端故障，如实上抛。此前这里 errors.New("查询题目失败") 把真错误
@@ -234,7 +237,7 @@ func (s *PracticeModeService) StartSequential(studentID int, credentialID *int) 
 // 守卫口径（session_progress.go）：practice_progress 无 status 字段（schema 冻结
 // ADR-0010），经 (student_id, practice_mode) 定位即天然归属本人，且无终端状态，
 // 恒视为在途——故无需在途校验。
-func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage, credentialID *int) error {
+func (s *Service) SaveProgress(studentID, index int, practiceMode string, total int, answersState json.RawMessage, credentialID *int) error {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
@@ -243,12 +246,12 @@ func (s *PracticeModeService) SaveProgress(studentID, index int, practiceMode st
 	if practiceMode == "sequential" {
 		cred = credentialID
 	}
-	return SaveSet(s.db, studentID, practiceMode, cred, nil, index, total, initAnswersState(answersState))
+	return SaveSet(s.db, studentID, practiceMode, cred, nil, index, total, InitAnswersState(answersState))
 }
 
 // GetProgress 查询任意模式的练习进度（卡片展示/断点续练用）。
 // 使用 Limit(1).Find() 替代 First()，避免首次进入时 GORM logger 误报 record not found
-func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, credentialID *int) *ProgressResultDTO {
+func (s *Service) GetProgress(studentID int, practiceMode string, credentialID *int) *ProgressResultDTO {
 	if practiceMode == "" {
 		practiceMode = "sequential"
 	}
@@ -311,7 +314,7 @@ func (s *PracticeModeService) GetProgress(studentID int, practiceMode string, cr
 
 // poolTotalForMode 按模式取池计数（#413）：sequential → 证件分区池；tag:<id> → 标签 + 证件；
 // 其余模式（paper 等）返回 0——池口径只对顺序/标签练习有意义。
-func (s *PracticeModeService) poolTotalForMode(mode string, credentialID *int) int64 {
+func (s *Service) poolTotalForMode(mode string, credentialID *int) int64 {
 	o := questionbank.SampleQuestionsOpts{Cred: credentialID}
 	if pm, ok := ParsePracticeMode(mode); ok {
 		if tagID, ok := pmTagID(pm); ok {
@@ -339,12 +342,12 @@ func pmTagID(pm PracticeMode) (int, bool) {
 
 // GetSequentialProgress 查询顺序练习进度（卡片展示用，向后兼容）。
 // #413：credentialID 透传——进度返回体附带实时池总数 pool_total。
-func (s *PracticeModeService) GetSequentialProgress(studentID int, credentialID *int) *ProgressResultDTO {
+func (s *Service) GetSequentialProgress(studentID int, credentialID *int) *ProgressResultDTO {
 	return s.GetProgress(studentID, "sequential", credentialID)
 }
 
-// SubmitAnswer 提交答案并判定。判分经 grading_engine.gradeOne 单题入口（错题入库/分值表经 flow 注入）。
-func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string, credentialID *int) (*SubmitResultDTO, error) {
+// SubmitAnswer 提交答案并判定。判分经 grading_engine.GradeOne 单题入口（错题入库/分值表经 flow 注入）。
+func (s *Service) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string, credentialID *int) (*SubmitResultDTO, error) {
 	// 池口径守卫（ADR-0049 约束：题库池覆盖每条读路径）：提交即回传答案与解析，
 	// 故按 id 直取的提交路径同样不得越过 published / 排源标记真题题 / 当前证件。
 	// credentialID 是**必填形参**（nil = 不分区）：可见性口径不许做成 fail-open 的可选变参。
@@ -358,19 +361,19 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6）
 	}
 
-	engine := newGradingEngine(s.db)
-	flow := gradingFlow{
-		ai:       s.grader,
-		maxScore: practiceMaxScore,
+	engine := NewGradingEngine(s.db)
+	flow := GradingFlow{
+		AI:       s.grader,
+		MaxScore: PracticeMaxScore,
 	}
-	gr := engine.gradeOne(flow, &q, userAnswer, studentID)
+	gr := engine.GradeOne(flow, &q, userAnswer, studentID)
 
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
 		CredentialID: credentialID, // 写入时冻结（ADR-0051）：落作答那一刻的当前证件，读面按它分区
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
-		PracticeType: orDefault(practiceType, "free"),
+		PracticeType: questionbank.OrDefault(practiceType, "free"),
 		UserAnswer:   questionbank.StringifyAnswer(userAnswer),
 		CreatedAt:    clock.Now(),
 	}
@@ -385,14 +388,14 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 		QuestionID:    questionID,
 		UserAnswer:    userAnswer,
 	}
-	finalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &q)
+	FinalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &q)
 	return result, nil
 }
 
-// finalizeSubmitResult 练习提交/错题重做共享的结果装配尾段（spec #295/#300 装配单点）：
+// FinalizeSubmitResult 练习提交/错题重做共享的结果装配尾段（spec #295/#300 装配单点）：
 // 全站统计回填 → AI 解析（aiassistant.QuestionExplanation module 单点）→ 简答分支
 // （AI 及格覆写 IsCorrect 并二次 Save 同步练习记录，降级时 AIFallback 同写）。
-func finalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
+func FinalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
 	if stats := questionStats(db, q.ID, q.Type); stats != nil {
 		result.AccuracyRate = stats.accuracyRate
 		result.CommonWrong = stats.commonWrong
@@ -418,9 +421,9 @@ func finalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanatio
 	}
 }
 
-// practiceMaxScore 练习流单题满分解析：客观题按练习分值表（原定级表，已正名 practice），简答题按题目自定义分（默认 10）。
+// PracticeMaxScore 练习流单题满分解析：客观题按练习分值表（原定级表，已正名 practice），简答题按题目自定义分（默认 10）。
 // 与 SubmitAnswer 既有语义一致（客观走 practice 分值表、简答走 q.Score）。
-func practiceMaxScore(q *model.Question) float64 {
+func PracticeMaxScore(q *model.Question) float64 {
 	if q.Type == "short_answer" {
 		if q.Score > 0 {
 			return float64(q.Score)
@@ -438,7 +441,7 @@ func practiceMaxScore(q *model.Question) float64 {
 // 均按 student_id 过滤；credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）——
 // 不再 JOIN question：分区是「作答那一刻的证件」，不是题目当前的归属；题目改归属不该让历史统计搬家。
 // 索引说明：idx_qpr_student_credential (student_id, credential_id, created_at DESC) 覆盖本查询的过滤与排序（迁移 000033）。
-func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int) (*PracticePracticeStatsDTO, error) {
+func (s *Service) GetPracticeStats(studentID int, credentialID *int) (*PracticePracticeStatsDTO, error) {
 	clk := s.clk
 	if clk == nil {
 		clk = clock.Real()
@@ -485,7 +488,7 @@ func (s *PracticeModeService) GetPracticeStats(studentID int, credentialID *int)
 // 本端点的消费者（移动端「数据报告」页）把总览与 by_type 明细渲染在同一页 —— 口径不一致就是同页自相矛盾。
 // 查询失败一律上抛 error：旧签名没有 error 出口，DB 抖动时返回「0 题、正确率 0%」的 200，
 // 而同页另一侧的 /practice-stats 却 500（ADR-0062 票6「查不动 ≠ 查得空」）。
-func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*PracticeStatsDTO, error) {
+func (s *Service) GetStats(studentID int, credentialID *int) (*PracticeStatsDTO, error) {
 	base := func() *gorm.DB {
 		return scope.RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
 			Where("question_practice_record.student_id = ?", studentID)
@@ -504,7 +507,7 @@ func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*Pract
 	}
 	byTypeBase := base().
 		Joins("JOIN question ON question.id = question_practice_record.question_id")
-	all, filtered, err := groupByCountWithFilter(byTypeBase, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
+	all, filtered, err := GroupByCountWithFilter(byTypeBase, "question.type", "CASE WHEN question_practice_record.is_correct THEN 1 ELSE 0 END")
 	if err != nil {
 		return nil, err
 	}
@@ -573,7 +576,7 @@ func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResul
 // credentialID 非空时按**记录上的分区列**过滤（写入时冻结，ADR-0051）：练习历史是学习内容读面，
 // 与 /practice-stats、/stats 同口径；nil = 不分区、看全部（与题库池 / 错题本的既有 nil 语义一致）。
 // 认下的代价：切到「没练过的证件」会看到空历史（空态而非数据丢失）。
-func (s *PracticeModeService) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) (*HistoryResultDTO, error) {
+func (s *Service) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) (*HistoryResultDTO, error) {
 	records, total, page, pageSize, err := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "question_practice_record.created_at DESC", func(q *gorm.DB) *gorm.DB {
 		q = q.Where("student_id = ?", studentID)
 		// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）

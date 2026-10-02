@@ -16,7 +16,7 @@
 //   GET  /practice-mode/stats
 //   GET  /practice-mode/history
 //
-// 覆盖的 Go 类型：QuestionDTO / HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO
+// 覆盖的 Go 类型：HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / QuestionDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -27,27 +27,6 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
-
-export interface QuestionDTO {
-  answer?: string
-  content: string
-  created_at: string
-  created_by: number | null
-  created_by_type: string
-  credential_id?: number
-  explanation?: string
-  id: number
-  image_url: string
-  options: unknown
-  reference_answer?: string
-  reject_reason: string
-  score: number
-  scoring_criteria?: string
-  status: string
-  tags?: unknown
-  type: string
-  updated_at: string
-}
 
 export interface HistoryItemDTO {
   created_at: string
@@ -123,4 +102,25 @@ export interface SubmitResultDTO {
   scoring_criteria?: string
   total_attempts?: number
   user_answer: unknown
+}
+
+export interface QuestionDTO {
+  answer?: string
+  content: string
+  created_at: string
+  created_by: number | null
+  created_by_type: string
+  credential_id?: number
+  explanation?: string
+  id: number
+  image_url: string
+  options: unknown
+  reference_answer?: string
+  reject_reason: string
+  score: number
+  scoring_criteria?: string
+  status: string
+  tags?: unknown
+  type: string
+  updated_at: string
 }

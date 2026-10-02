@@ -1,4 +1,4 @@
-// Package service 测试：练习族的证件分区口径（#1007 / ADR-0051）。
+// 测试：练习族的证件分区口径（#1007 / ADR-0051）。
 //
 // 锁定三件事：
 //  1. 写入时冻结：SubmitAnswer / 错题重做落的记录带「作答那一刻的当前证件」；
@@ -6,7 +6,7 @@
 //     在「传证件 / 不传证件」两种读法下给出一致的可见集合；
 //  3. 口径对账不变式：同一证件下 practice-stats.TotalCount == history.Total == stats.Total
 //     （#1007 的缺陷形态正是这条不成立的 0 vs 15）。
-package service
+package practicemode
 
 import (
 	"testing"

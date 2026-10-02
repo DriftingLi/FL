@@ -156,3 +156,20 @@ func TestMockExamSubmitShortAnswerWithoutAIScoresZero(t *testing.T) {
 		t.Errorf("短答 is_correct 应保持 nil, got %v", boolPtrVal(sa.IsCorrect))
 	}
 }
+
+// fakeGrader 短答 AI 判分 adapter 的测试替身（留驻 service 侧的就地内联副本：原定义随判分内核
+// 搬去 internal/practicemode/grading_test.go，ADR-0070 波 3c-2；生产侧接口现为
+// practicemode.ShortAnswerGrader，本替身只对着它实现，别在两个包里各改一半）。
+type fakeGrader struct {
+	res              *aiassistant.GradeResult
+	called           int
+	gotStudentAnswer string
+	gotMaxScore      float64
+}
+
+func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore float64) *aiassistant.GradeResult {
+	f.called++
+	f.gotStudentAnswer = studentAnswer
+	f.gotMaxScore = maxScore
+	return f.res
+}

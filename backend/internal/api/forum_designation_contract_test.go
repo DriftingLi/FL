@@ -57,7 +57,7 @@ func newDesignationEnv(t *testing.T) *designationEnv {
 }
 
 // newDesignationEnvWithDB 允许注入 db：并发用例需用文件库——内存库无法承载并发连接
-// （仓库既有先例 answering_session_cursor_concurrent_test.go 同样使用 NewFileDB）。
+// （仓库既有先例 internal/practicemode/session_cursor_concurrent_test.go 同样使用 NewFileDB）。
 func newDesignationEnvWithDB(t *testing.T, db *gorm.DB) *designationEnv {
 	t.Helper()
 	setTestGinMode()

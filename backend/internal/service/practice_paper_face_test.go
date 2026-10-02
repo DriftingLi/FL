@@ -25,6 +25,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
@@ -34,20 +35,20 @@ import (
 func TestPracticeFailureIsNotLaundered(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		call func(s *PracticeModeService) error
+		call func(s *practicemode.Service) error
 	}{
-		{"GetFreeQuestions", func(s *PracticeModeService) error {
+		{"GetFreeQuestions", func(s *practicemode.Service) error {
 			_, err := s.GetFreeQuestions("", 5, nil)
 			return err
 		}},
-		{"StartSequential", func(s *PracticeModeService) error {
+		{"StartSequential", func(s *practicemode.Service) error {
 			_, err := s.StartSequential(1, nil)
 			return err
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testutil.NewMemoryDB(t)
-			svc := NewPracticeModeService(db, nil, zap.NewNop())
+			svc := practicemode.NewService(db, nil, zap.NewNop())
 			if err := db.Exec("DROP TABLE question").Error; err != nil {
 				t.Fatalf("注入故障（删 question 表）失败: %v", err)
 			}
@@ -69,18 +70,18 @@ func TestPracticeFailureIsNotLaundered(t *testing.T) {
 // 它们此前与「资源不存在」共用 404。
 func TestStartTagPracticeInputFacesAreNamed(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewPracticeModeService(db, nil, zap.NewNop())
+	svc := practicemode.NewService(db, nil, zap.NewNop())
 
-	if _, err := svc.StartTagPractice(1, 0, 5, nil); !errors.Is(err, ErrPracticeTagRequired) {
-		t.Fatalf("缺标签应报具名 ErrPracticeTagRequired，实际 %v", err)
+	if _, err := svc.StartTagPractice(1, 0, 5, nil); !errors.Is(err, practicemode.ErrPracticeTagRequired) {
+		t.Fatalf("缺标签应报具名 practicemode.ErrPracticeTagRequired，实际 %v", err)
 	}
 
 	src := model.QuestionTag{Name: "源标记标签", IsSourceTag: true}
 	if err := db.Create(&src).Error; err != nil {
 		t.Fatalf("播种真题源标签失败: %v", err)
 	}
-	if _, err := svc.StartTagPractice(1, src.ID, 5, nil); !errors.Is(err, ErrPracticeTagUnsupported) {
-		t.Fatalf("源标记标签应报具名 ErrPracticeTagUnsupported，实际 %v", err)
+	if _, err := svc.StartTagPractice(1, src.ID, 5, nil); !errors.Is(err, practicemode.ErrPracticeTagUnsupported) {
+		t.Fatalf("源标记标签应报具名 practicemode.ErrPracticeTagUnsupported，实际 %v", err)
 	}
 }
 
@@ -136,7 +137,7 @@ func TestRealPaperThreeFacts(t *testing.T) {
 // ⇒ 同一个事实两个住处（ADR-0064 决策 2）。
 func TestPracticeSubmitUsesExistingQuestionCarrier(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewPracticeModeService(db, nil, zap.NewNop())
+	svc := practicemode.NewService(db, nil, zap.NewNop())
 
 	_, err := svc.SubmitAnswer(1, 999999, "A", "free", nil)
 	if !errors.Is(err, questionbank.ErrQuestionNotFound) {

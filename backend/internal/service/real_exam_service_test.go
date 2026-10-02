@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/training"
@@ -101,7 +102,7 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 	}, "published")
 
 	// 随机/专项抽题池不含真题题
-	psvc := NewPracticeModeService(db, nil, zap.NewNop())
+	psvc := practicemode.NewService(db, nil, zap.NewNop())
 	free, err := psvc.GetFreeQuestions("", 0, nil)
 	if err != nil {
 		t.Fatalf("随机抽题失败: %v", err)
@@ -173,7 +174,7 @@ func TestRealPaperPractice(t *testing.T) {
 	}
 
 	// 断点续练：保存游标后再进入，从游标处恢复
-	pm := NewPracticeModeService(db, nil, zap.NewNop())
+	pm := practicemode.NewService(db, nil, zap.NewNop())
 	if err := pm.SaveProgress(1, 2, "paper:"+itoa(paperID), 3, nil, nil); err != nil {
 		t.Fatalf("保存进度失败: %v", err)
 	}

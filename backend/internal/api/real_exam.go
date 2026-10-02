@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -123,14 +124,14 @@ func (h *RealExamHandler) Redeem(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param paper_id path int true "真题卷ID"
-// @Success 200 {object} response.R{data=service.PracticeStartResultDTO} "success"
+// @Success 200 {object} response.R{data=practicemode.PracticeStartResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误或未兑换"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers/{paper_id}/practice [get]
 func (h *RealExamHandler) StartPractice(c *gin.Context) {
-	httpx.Endpoint[paperActionReq, service.PracticeStartResultDTO]{
+	httpx.Endpoint[paperActionReq, practicemode.PracticeStartResultDTO]{
 		Parse: func(c *gin.Context) (*paperActionReq, error) { return parsePaperAction(c) },
-		Invoke: func(ctx context.Context, req *paperActionReq) (*service.PracticeStartResultDTO, error) {
+		Invoke: func(ctx context.Context, req *paperActionReq) (*practicemode.PracticeStartResultDTO, error) {
 			return h.svc.StartPaperPractice(req.UserID, req.PaperID)
 		},
 		// A 批把这里登记为「正解在 service 侧升哨兵，升完再换表」——第②批 B 段做的正是那件事。
