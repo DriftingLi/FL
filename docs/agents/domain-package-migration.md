@@ -251,7 +251,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **`git grep` 的路径口径是仓库根**：worktree 里后端路径要写 `backend/internal/...`；只写 `internal/...` **静默零命中**，会被误读成「无残留」。本波差点据此提前收工。
 - **本机 `gofmt` 可能比 CI 宽松：判据要用 CI 口径的工具链**。本机 go1.27.1 的 `gofmt` **不再折叠顶层连续空行**，而 CI `backend-lint` 用 Go 1.26 的 `gofmt -l .`（`GO_VERSION: 1.26`）⇒ 本波 `internal/contribution/dto_shape_test.go` 手拼 helper 段留了两个空行，本机 `gofmt -l` 报干净、CI 红在 9 秒。本机已另装 CI 口径工具链：`%USERPROFILE%\sdk\go1.26.6\bin\gofmt.exe`（同目录还有 `go1.27.0`）⇒ 提交前跑 `& "$env:USERPROFILE\sdk\go1.26.6\bin\gofmt.exe" -l .`（workdir `backend/`）**并且**本机那份也要空，两手都空才算过。
 
-第十批（P2 波 2b-2：forum 域搬包，5 个 git mv + HTTP 面一拆二 + 证据表随域走）再添六条：
+第十批（P2 波 2b-2：forum 域搬包，5 个 git mv + HTTP 面一拆二 + 证据表随域走）再添七条：
 
 - **19 处契约调用点要拆成两行注册，漏 RegisterAdminRoutes 时管理端 10 条端点静默 404**：产线路由与契约测试自建引擎是两套注册，routes_registry_test 的 expectedRouteCount 只护前者 —— 管理端漏注册时它照样绿。判据是 git grep -n "RegisterAdminRoutes" -- backend 的命中数（1 装配 + 1 定义 + 19 调用 = 21），不是测试颜色。
 - **留驻 internal/service 的测试文件不得 import 域包**：内部/论坛 → 内部/服务 是生产包依赖，测试文件再加一条反向边就是 import cycle not allowed in test。本次的命中点是注销回扣用例（它直接构造 NewForumService），修法是**脱开域包构造**（直插赞行 + NewForumCounter 造数），不是把用例搬回。
@@ -283,5 +283,6 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **多文件拆散的重命名件相似度会掉到 57%~83%**：`git diff -M` 下这些搬运件仍按改写行计入 diff，不是「纯重命名计 0」⇒ 规模估算别按纯重命名外推。本波实测手工面 **1698 行**（口径 = 总插入 − `backend/docs` 插入），超手册 §10 的 1500 上限 198 行，超出部分全部是两处新建证据表（229 行）、两个新叶子包（123 行）、`internal/course/batch_backfill.go`（79 行）与两处随域/回迁用例（450 行）。
 - **计划外的「助手搬回自己的域」要把方向写进 PR**：三枚批量加载器（`BatchChapterCounts` / `BatchPrereqIDs` / `BatchStudentCounts`）从留驻 `internal/service/batch_backfill.go` 搬进 `internal/course/batch_backfill.go`，留驻侧写限定名 —— 这是 `service → course` 的**单向边**（与 auth 波同型）；反向 `course → service` 必须仍是 0 命中，这才是硬判据。
 - **工具行号差 1**：`read` 工具报的行号比 Node `fs.readFileSync(...).split('\n')` 的下标**大 1**（read 说 `:649` 的注释，数组下标 649 = 第 650 行；`totalLines=938` 而 split 长度 939）⇒ 用行号做切片前先 print 数组元素核对锚点。
+- **跨端直读后端源码的用例要全量 grep，不能照计划点名单**：3b-1 只按计划改了 `training-app/叉车维修培训学员端跨端应用/utils/coursesContract.test.js` 的锚点，漏了同目录 `utils/chapterCompleteContract.test.js:160` 直读 `path.join(ROOT, '..', '..', 'backend', 'internal', 'service', 'course_service.go')` 的用例 ⇒ PR #1470 的 `mobile-test` 首轮红（`Tests: 1 failed, 2821 passed`）。判据：搬包前把 `training-app/**` 与 `frontend/**` 里所有 `path.join(...)` 含 `backend` 的调用解析成绝对路径逐一 `existsSync`（本次 9 处，唯一功能性命中即此处；`.uts` / `.uvue` 里的旧路径注释按「只披露不改」留着 —— 改它们会把 PR 拉进运行时面）。
 
 ```
