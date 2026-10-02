@@ -838,7 +838,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDTO"
+                                            "$ref": "#/definitions/course.ChapterDTO"
                                         }
                                     }
                                 }
@@ -900,7 +900,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DeleteChapterResult"
+                                            "$ref": "#/definitions/course.DeleteChapterResult"
                                         }
                                     }
                                 }
@@ -1300,7 +1300,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CourseDTO"
+                                            "$ref": "#/definitions/course.CourseDTO"
                                         }
                                     }
                                 }
@@ -1490,7 +1490,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminCourseDetailDTO"
+                                            "$ref": "#/definitions/course.AdminCourseDetailDTO"
                                         }
                                     }
                                 }
@@ -1557,7 +1557,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CourseDTO"
+                                            "$ref": "#/definitions/course.CourseDTO"
                                         }
                                     }
                                 }
@@ -1625,7 +1625,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DeleteCourseResult"
+                                            "$ref": "#/definitions/course.DeleteCourseResult"
                                         }
                                     }
                                 }
@@ -1700,7 +1700,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDTO"
+                                            "$ref": "#/definitions/course.ChapterDTO"
                                         }
                                     }
                                 }
@@ -1865,7 +1865,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CoursePageResult"
+                                            "$ref": "#/definitions/course.CoursePageResult"
                                         }
                                     }
                                 }
@@ -9086,7 +9086,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterSlidesDTO"
+                                            "$ref": "#/definitions/course.ChapterSlidesDTO"
                                         }
                                     }
                                 }
@@ -9153,7 +9153,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterSlidesDTO"
+                                            "$ref": "#/definitions/course.ChapterSlidesDTO"
                                         }
                                     }
                                 }
@@ -9860,7 +9860,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CourseDetailDTO"
+                                            "$ref": "#/definitions/course.CourseDetailDTO"
                                         }
                                     }
                                 }
@@ -9934,7 +9934,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDetailDTO"
+                                            "$ref": "#/definitions/course.ChapterDetailDTO"
                                         }
                                     }
                                 }
@@ -10010,7 +10010,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudyProgressDTO"
+                                            "$ref": "#/definitions/course.StudyProgressDTO"
                                         }
                                     }
                                 }
@@ -10110,7 +10110,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CoursePageResult"
+                                            "$ref": "#/definitions/course.CoursePageResult"
                                         }
                                     }
                                 }
@@ -18203,7 +18203,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDetailDTO"
+                                            "$ref": "#/definitions/course.ChapterDetailDTO"
                                         }
                                     }
                                 }
@@ -18255,7 +18255,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.ChapterInput"
+                            "$ref": "#/definitions/course.ChapterInput"
                         }
                     }
                 ],
@@ -18271,7 +18271,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterDTO"
+                                            "$ref": "#/definitions/course.ChapterDTO"
                                         }
                                     }
                                 }
@@ -18339,7 +18339,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ChapterFileDTO"
+                                            "$ref": "#/definitions/course.ChapterFileDTO"
                                         }
                                     }
                                 }
@@ -18400,7 +18400,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorCourseChaptersDTO"
+                                            "$ref": "#/definitions/course.TutorCourseChaptersDTO"
                                         }
                                     }
                                 }
@@ -18486,7 +18486,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CoursePageResult"
+                                            "$ref": "#/definitions/course.CoursePageResult"
                                         }
                                     }
                                 }
@@ -24423,6 +24423,612 @@ const docTemplate = `{
                 }
             }
         },
+        "course.AdminCourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "certificate_template": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CertificateTemplateDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "certificate_template_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    }
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CredentialBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "credential_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_hot": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.LevelBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "practice_hours": {
+                    "type": "integer"
+                },
+                "prerequisite_course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-optional": true
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseBriefDTO"
+                    },
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.SpecialtyBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "student_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "theory_hours": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CertificateTemplateDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "template_url": {
+                    "type": "string"
+                },
+                "validity_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.ChapterDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterFileDTO"
+                    },
+                    "x-optional": true
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterDetailDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterFileDTO"
+                    }
+                },
+                "next_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "previous_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "resume_position": {
+                    "description": "ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。\nADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读\n另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播\n（词表「学习位置」的承诺在最常用的入口上不成立）。",
+                    "type": "integer"
+                },
+                "study_status": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterFileDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterInput": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.ChapterSlidesDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "slides": {
+                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "course.CourseBriefDTO": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.CourseDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "certificate_template": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CertificateTemplateDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "certificate_template_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    },
+                    "x-optional": true
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CredentialBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "credential_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_hot": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.LevelBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "practice_hours": {
+                    "type": "integer"
+                },
+                "prerequisite_course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-optional": true
+                },
+                "prerequisites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseBriefDTO"
+                    },
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.SpecialtyBriefDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "student_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "theory_hours": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    }
+                },
+                "completed_chapters": {
+                    "type": "integer"
+                },
+                "course_info": {
+                    "$ref": "#/definitions/course.CourseDTO"
+                },
+                "is_enrolled": {
+                    "type": "boolean"
+                },
+                "last_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "last_position": {
+                    "type": "integer"
+                },
+                "last_studied_at": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "number"
+                }
+            }
+        },
+        "course.CoursePageResult": {
+            "type": "object",
+            "properties": {
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CredentialBriefDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.DeleteChapterResult": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.DeleteCourseResult": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.LevelBriefDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.SpecialtyBriefDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.StudyProgressDTO": {
+            "type": "object",
+            "properties": {
+                "completed_chapters": {
+                    "type": "integer"
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "record_id": {
+                    "type": "integer"
+                },
+                "study_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.TutorCourseChaptersDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterDTO"
+                    }
+                },
+                "course": {
+                    "$ref": "#/definitions/course.CourseDTO"
+                }
+            }
+        },
         "faq.AdminFaqCategoriesResult": {
             "type": "object",
             "properties": {
@@ -26426,136 +27032,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.AdminCourseDetailDTO": {
-            "type": "object",
-            "properties": {
-                "certificate_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "certificate_template": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CertificateTemplateDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "certificate_template_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    }
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credential": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CredentialBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "credential_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "entitled": {
-                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "is_featured": {
-                    "type": "boolean"
-                },
-                "is_hot": {
-                    "type": "boolean"
-                },
-                "level": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.LevelBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "level_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "points_price": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "practice_hours": {
-                    "type": "integer"
-                },
-                "prerequisite_course_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    },
-                    "x-optional": true
-                },
-                "prerequisites": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseBriefDTO"
-                    },
-                    "x-optional": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.SpecialtyBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "specialty_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "student_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "theory_hours": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.AdminOverviewDTO": {
             "type": "object",
             "properties": {
@@ -26689,7 +27165,7 @@ const docTemplate = `{
                 "courses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.CourseDTO"
+                        "$ref": "#/definitions/course.CourseDTO"
                     }
                 },
                 "created_at": {
@@ -26752,29 +27228,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/service.CatalogSpecialtyNode"
                     }
-                }
-            }
-        },
-        "service.CertificateTemplateDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "template_url": {
-                    "type": "string"
-                },
-                "validity_days": {
-                    "type": "integer"
                 }
             }
         },
@@ -26844,132 +27297,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.ChapterDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterFileDTO"
-                    },
-                    "x-optional": true
-                },
-                "order_num": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ChapterDetailDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterFileDTO"
-                    }
-                },
-                "next_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "order_num": {
-                    "type": "integer"
-                },
-                "previous_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "resume_position": {
-                    "description": "ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。\nADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读\n另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播\n（词表「学习位置」的承诺在最常用的入口上不成立）。",
-                    "type": "integer"
-                },
-                "study_status": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ChapterFileDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "content_type": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "file_id": {
-                    "type": "integer"
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                }
-            }
-        },
         "service.ChapterGenResult": {
             "type": "object",
             "properties": {
@@ -26990,42 +27317,6 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
-                }
-            }
-        },
-        "service.ChapterInput": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "order_num": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ChapterSlidesDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "slides": {
-                    "description": "Slides 可为 null：未注入 slideRenderer、或 PPT 转图失败时 generateSlides 返回 nil 切片。",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
                 }
             }
         },
@@ -27147,201 +27438,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CourseBriefDTO": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.CourseDTO": {
-            "type": "object",
-            "properties": {
-                "certificate_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "certificate_template": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CertificateTemplateDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "certificate_template_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    },
-                    "x-optional": true
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credential": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CredentialBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "credential_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "description": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "entitled": {
-                    "description": "Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。\n只在**有主体**的读路径填（课程详情）——` + "`" + `GET /api/courses` + "`" + ` 是公开面无主体，\n列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」\n与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。",
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "is_featured": {
-                    "type": "boolean"
-                },
-                "is_hot": {
-                    "type": "boolean"
-                },
-                "level": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.LevelBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "level_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "points_price": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "practice_hours": {
-                    "type": "integer"
-                },
-                "prerequisite_course_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    },
-                    "x-optional": true
-                },
-                "prerequisites": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseBriefDTO"
-                    },
-                    "x-optional": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.SpecialtyBriefDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "specialty_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "student_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "theory_hours": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CourseDetailDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    }
-                },
-                "completed_chapters": {
-                    "type": "integer"
-                },
-                "course_info": {
-                    "$ref": "#/definitions/service.CourseDTO"
-                },
-                "is_enrolled": {
-                    "type": "boolean"
-                },
-                "last_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "last_position": {
-                    "type": "integer"
-                },
-                "last_studied_at": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "number"
-                }
-            }
-        },
-        "service.CoursePageResult": {
-            "type": "object",
-            "properties": {
-                "courses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.CourseProgressDTO": {
             "type": "object",
             "properties": {
@@ -27382,27 +27478,6 @@ const docTemplate = `{
                 },
                 "total_duration": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.CredentialBriefDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
                 }
             }
         },
@@ -27489,22 +27564,6 @@ const docTemplate = `{
                         }
                     ],
                     "x-nullable": true
-                }
-            }
-        },
-        "service.DeleteChapterResult": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.DeleteCourseResult": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "integer"
                 }
             }
         },
@@ -27970,20 +28029,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.LevelBriefDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer"
-                },
-                "name": {
                     "type": "string"
                 }
             }
@@ -29088,20 +29133,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.SpecialtyBriefDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "specialty_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.SpecialtyDict": {
             "type": "object",
             "properties": {
@@ -29377,23 +29408,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudyProgressDTO": {
-            "type": "object",
-            "properties": {
-                "completed_chapters": {
-                    "type": "integer"
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "record_id": {
-                    "type": "integer"
-                },
-                "study_duration": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.StudyRecordDTO": {
             "type": "object",
             "properties": {
@@ -29525,20 +29539,6 @@ const docTemplate = `{
                     "x-optional": true
                 },
                 "user_answer": {}
-            }
-        },
-        "service.TutorCourseChaptersDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ChapterDTO"
-                    }
-                },
-                "course": {
-                    "$ref": "#/definitions/service.CourseDTO"
-                }
             }
         },
         "service.TutorDTO": {

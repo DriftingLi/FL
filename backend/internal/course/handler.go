@@ -1,5 +1,8 @@
-// Package api 实现 HTTP handlers。
-package api
+// Package course 课程域：HTTP 出口（handler）与课程/章节读面。
+//
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，go / admin_go
+// 是域实现，list.go / mount_scope.go / slide_renderer.go 是同域协作件。
+package course
 
 import (
 	"context"
@@ -9,35 +12,35 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// CourseHandler 学员侧课程 handler。
-type CourseHandler struct {
-	svc *service.CourseService
+// handler 学员侧课程 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewCourseHandler 创建学员侧课程 handler。
-func NewCourseHandler(svc *service.CourseService) *CourseHandler {
-	return &CourseHandler{svc: svc}
+// newHandler 创建学员侧课程 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterCoursesRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
-func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.CourseService) {
-	h := NewCourseHandler(svc)
+// RegisterRoutes 注册 /api/courses 蓝图（学员侧课程浏览与学习进度）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
+	h := newHandler(svc)
 
 	// 证件作用域（ADR-0047 §4）：显式 credential_id 优先，学员缺省用服务端当前证件。
 	// **必须挂在本蓝图自己的 group 上**：挂在共享的 /api group 会隐式作用于其后注册的所有蓝图，
 	// 覆盖范围由注册顺序决定（还会给它们各加一次证件查询）。
-	g := rg.Group("", middleware.CredentialScoped(rd.CredentialScope))
+	g := rg.Group("", middleware.CredentialScoped(credRes))
 
 	// 公开访问
 	g.GET("/courses", h.ListCourses)
 
 	// 需要登录
-	auth := g.Group("", middleware.JWTAuth(rd.Session))
+	auth := g.Group("", middleware.JWTAuth(session))
 	auth.GET("/course/:course_id", h.GetCourseDetail)
 	auth.GET("/course/:course_id/chapter/:chapter_id", h.GetChapterDetail)
 	// 章节幻灯片：与章节详情**同一鉴权面**（#1132 复审）。此前它挂在公开组 ⇒ 任意章节 id 可无凭证
@@ -63,10 +66,10 @@ func RegisterCoursesRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cour
 // @Router 与 func 之间，swag 于是把注解块挂给了这个 var ⇒ /courses 整条路由从
 // swagger.json 消失（CI 的 codegen_test 判红，本地只跑 api/service 三个包看不见）。
 var unreadableFaces404 = []error{
-	service.ErrCourseNotVisible, // 不在平台上：未发布 / 未挂载
-	service.ErrCourseLocked,     // 在平台上、可见，但这个人没兑换
-	model.ErrCourseNotFound,     // 课程行真不存在
-	service.ErrChapterNotFound,  // 章节行真不存在
+	ErrCourseNotVisible,     // 不在平台上：未发布 / 未挂载
+	ErrCourseLocked,         // 在平台上、可见，但这个人没兑换
+	model.ErrCourseNotFound, // 课程行真不存在
+	ErrChapterNotFound,      // 章节行真不存在
 }
 
 // ListCourses 课程列表
@@ -81,10 +84,10 @@ var unreadableFaces404 = []error{
 // @Param level_id query int false "等级ID"
 // @Param credential_id query int false "目标证件ID"
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
-// @Success 200 {object} response.R{data=service.CoursePageResult} "success"
+// @Success 200 {object} response.R{data=CoursePageResult} "success"
 // @Router /courses [get]
-func (h *CourseHandler) ListCourses(c *gin.Context) {
-	httpx.Endpoint[courseListReq, service.CoursePageResult]{
+func (h *handler) ListCourses(c *gin.Context) {
+	httpx.Endpoint[courseListReq, CoursePageResult]{
 		Parse: func(c *gin.Context) (*courseListReq, error) {
 			f := c.Query("filter")
 			if f != "" && f != "hot" && f != "featured" && f != "all" {
@@ -102,7 +105,7 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 				Filter:       f,
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *courseListReq) (*service.CoursePageResult, error) {
+		Invoke: func(ctx context.Context, req *courseListReq) (*CoursePageResult, error) {
 			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
 			if err != nil {
 				return nil, err
@@ -120,13 +123,13 @@ func (h *CourseHandler) ListCourses(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param chapter_id path int true "章节ID"
-// @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
+// @Success 200 {object} response.R{data=ChapterSlidesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /chapter/{chapter_id}/slides [get]
-func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
-	httpx.Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
+func (h *handler) GetChapterSlides(c *gin.Context) {
+	httpx.Endpoint[chapterSlidesReq, ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
@@ -136,7 +139,7 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 			studentID, _ := uid.(int)
 			return &chapterSlidesReq{ChapterID: id, StudentID: studentID}, nil
 		},
-		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
+		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*ChapterSlidesDTO, error) {
 			return h.svc.GetChapterSlides(req.ChapterID, req.StudentID)
 		},
 		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）；
@@ -153,13 +156,13 @@ func (h *CourseHandler) GetChapterSlides(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param course_id path int true "课程ID"
-// @Success 200 {object} response.R{data=service.CourseDetailDTO} "success"
+// @Success 200 {object} response.R{data=CourseDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /course/{course_id} [get]
-func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
-	httpx.Endpoint[courseDetailReq, service.CourseDetailDTO]{
+func (h *handler) GetCourseDetail(c *gin.Context) {
+	httpx.Endpoint[courseDetailReq, CourseDetailDTO]{
 		Parse: func(c *gin.Context) (*courseDetailReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -169,7 +172,7 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 			}
 			return &courseDetailReq{CourseID: id, StudentID: studentID}, nil
 		},
-		Invoke: func(ctx context.Context, req *courseDetailReq) (*service.CourseDetailDTO, error) {
+		Invoke: func(ctx context.Context, req *courseDetailReq) (*CourseDetailDTO, error) {
 			return h.svc.GetCourseDetail(req.CourseID, req.StudentID)
 		},
 		// 详情是发现面：只判可见性、不判权益（未发布 / 未挂载按「不存在」返回，ADR-0058），
@@ -188,13 +191,13 @@ func (h *CourseHandler) GetCourseDetail(c *gin.Context) {
 // @Security BearerAuth
 // @Param course_id path int true "课程ID"
 // @Param chapter_id path int true "章节ID"
-// @Success 200 {object} response.R{data=service.ChapterDetailDTO} "success"
+// @Success 200 {object} response.R{data=ChapterDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /course/{course_id}/chapter/{chapter_id} [get]
-func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
-	httpx.Endpoint[chapterDetailReq, service.ChapterDetailDTO]{
+func (h *handler) GetChapterDetail(c *gin.Context) {
+	httpx.Endpoint[chapterDetailReq, ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*chapterDetailReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -208,13 +211,13 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 			}
 			return &chapterDetailReq{CourseID: courseID, ChapterID: chapterID, StudentID: studentID}, nil
 		},
-		Invoke: func(ctx context.Context, req *chapterDetailReq) (*service.ChapterDetailDTO, error) {
+		Invoke: func(ctx context.Context, req *chapterDetailReq) (*ChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.CourseID, req.ChapterID, req.StudentID)
 		},
 		// 四条「读不到」的事实统一答 404 + 本节的外显文案（呈现层显式决定，见 unreadableFaces404）。
 		// 「章节不属于该课程」是输入冲突（路径里两个 id 互相矛盾），具名后归位 400。
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrChapterNotInCourse, http.StatusBadRequest).
+		WithSentinel(ErrChapterNotInCourse, http.StatusBadRequest).
 		WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
 }
 
@@ -226,13 +229,13 @@ func (h *CourseHandler) GetChapterDetail(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param chapter_id path int true "章节ID"
-// @Success 200 {object} response.R{data=service.ChapterSlidesDTO} "success"
+// @Success 200 {object} response.R{data=ChapterSlidesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在（未发布 / 未挂载 / 未兑换也按这一句答，不泄漏是哪一态）"
 // @Failure 500 {object} response.R "服务器内部错误（该章节没有 PPT、转图失败、权益查询查不动）"
 // @Router /chapter/{chapter_id}/slides/regenerate [post]
-func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
-	httpx.Endpoint[chapterSlidesReq, service.ChapterSlidesDTO]{
+func (h *handler) RegenerateChapterSlides(c *gin.Context) {
+	httpx.Endpoint[chapterSlidesReq, ChapterSlidesDTO]{
 		Parse: func(c *gin.Context) (*chapterSlidesReq, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
@@ -242,7 +245,7 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 			studentID, _ := uid.(int)
 			return &chapterSlidesReq{ChapterID: id, StudentID: studentID}, nil
 		},
-		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*service.ChapterSlidesDTO, error) {
+		Invoke: func(ctx context.Context, req *chapterSlidesReq) (*ChapterSlidesDTO, error) {
 			return h.svc.RegenerateChapterSlides(req.ChapterID, req.StudentID)
 		},
 		// 只有「被可读性判据拦下」（未发布 / 未挂载 / 未兑换）才是「不存在」；下游失败
@@ -250,7 +253,7 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 		// 旧形状 WithSuccess(ok, 404) 把门禁与下游故障压成同一个 404 ⇒ 门禁从外部不可分辨、
 		// 无测可建（ADR-0062 复核登记 #4），并把 DB 故障答成「这个章节不存在」。
 		ErrStatus: httpx.ErrStatusAll(http.StatusInternalServerError),
-		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *service.ChapterSlidesDTO) {
+		Render: func(c *gin.Context, _ *chapterSlidesReq, resp *ChapterSlidesDTO) {
 			response.SuccessWithMsg(c, "幻灯片重新生成成功", resp)
 		},
 	}.WithSentinelsMsg(http.StatusNotFound, "章节不存在", unreadableFaces404...).Handle(c)
@@ -265,14 +268,14 @@ func (h *CourseHandler) RegenerateChapterSlides(c *gin.Context) {
 // @Security BearerAuth
 // @Param course_id path int true "课程ID"
 // @Param body body object true "进度" example({"chapter_id":1,"duration_seconds":120,"video_position":60,"completed":false})
-// @Success 200 {object} response.R{data=service.StudyProgressDTO} "success"
+// @Success 200 {object} response.R{data=StudyProgressDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在（未发布 / 未挂载 / 未兑换也按这一句答）"
 // @Failure 500 {object} response.R "更新进度失败（写库故障等真故障；5xx 一律不外发下游原文）"
 // @Router /course/{course_id}/progress [post]
-func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
-	httpx.Endpoint[studyProgressReq, service.StudyProgressDTO]{
+func (h *handler) UpdateStudyProgress(c *gin.Context) {
+	httpx.Endpoint[studyProgressReq, StudyProgressDTO]{
 		Parse: func(c *gin.Context) (*studyProgressReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
@@ -300,7 +303,7 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 			if body.ChapterID != nil {
 				chapterID = *body.ChapterID
 			}
-			return &studyProgressReq{StudentID: studentID, CourseID: courseID, Input: service.StudyProgressInput{
+			return &studyProgressReq{StudentID: studentID, CourseID: courseID, Input: StudyProgressInput{
 				ChapterID:     chapterID,
 				Duration:      body.Duration,
 				DurationSecs:  body.DurationSeconds,
@@ -308,13 +311,13 @@ func (h *CourseHandler) UpdateStudyProgress(c *gin.Context) {
 				Completed:     body.Completed,
 			}}, nil
 		},
-		Invoke: func(ctx context.Context, req *studyProgressReq) (*service.StudyProgressDTO, error) {
+		Invoke: func(ctx context.Context, req *studyProgressReq) (*StudyProgressDTO, error) {
 			return h.svc.UpdateStudyProgress(req.StudentID, req.CourseID, req.Input)
 		},
 		// 不可读（未发布 / 未挂载 / 未兑换）按 404，与另外三条内容路径同判（ADR-0062 决策 3）；
 		// 其余错误落 500，前缀「更新进度失败」保留、错误原文不再外发（ADR-0064 决策 9）。
 		ErrStatus: httpx.ErrStatusAllPrefix(http.StatusInternalServerError, "更新进度失败: "),
-		Render: func(c *gin.Context, _ *studyProgressReq, resp *service.StudyProgressDTO) {
+		Render: func(c *gin.Context, _ *studyProgressReq, resp *StudyProgressDTO) {
 			response.SuccessWithMsg(c, "学习进度更新成功", resp)
 		},
 	}.WithSentinelsMsg(http.StatusNotFound, "课程不存在", unreadableFaces404...).Handle(c)
@@ -339,11 +342,11 @@ type chapterDetailReq struct {
 	StudentID int
 }
 
-// studyProgressReq 学习进度请求（上报参数经 service.StudyProgressInput 承载，ADR-0017）。
+// studyProgressReq 学习进度请求（上报参数经 StudyProgressInput 承载，ADR-0017）。
 type studyProgressReq struct {
 	StudentID int
 	CourseID  int
-	Input     service.StudyProgressInput
+	Input     StudyProgressInput
 }
 
 // courseListReq 学员端课程列表查询参数。

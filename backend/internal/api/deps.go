@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
@@ -57,7 +58,7 @@ type Deps struct {
 	CaptchaSvc      *captcha.Service
 	WechatAuthSvc   *auth.WechatService
 	FileSvc         *filestore.FileStore
-	SlideRenderer   *service.SlideRenderer
+	SlideRenderer   *course.SlideRenderer
 	NotificationSvc *notification.Service
 	ReviewSvc       *auth.ProfileReviewService
 	AuditSvc        *service.AuditService
@@ -65,9 +66,9 @@ type Deps struct {
 	ContentGenSvc   *service.ContentGenerateService
 	ExportStore     service.ExportStore
 
-	CourseSvc            *service.CourseService
+	CourseSvc            *course.Service
 	AdminSvc             *service.AdminService
-	AdminCourseSvc       *service.AdminCourseService
+	AdminCourseSvc       *course.AdminService
 	ForumSvc             *forum.Service
 	ForumModSvc          *forum.ModerationService
 	CheckInSvc           *checkin.Service

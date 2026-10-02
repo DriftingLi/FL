@@ -1,8 +1,9 @@
 package service
 
 import (
-	"forklift-training/internal/notification"
 	"testing"
+
+	"forklift-training/internal/notification"
 )
 
 // paging_shape_lock_test 锁定两处 QueryWithScan 列表接口的分页信封 shape：

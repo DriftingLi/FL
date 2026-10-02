@@ -1,4 +1,4 @@
-package service
+package course
 
 import (
 	"gorm.io/gorm"
@@ -75,16 +75,16 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 	}
 
 	// 批量回填：章节数 / 前置课程 / 学习学员数各一次查询
-	chapterCountByCourse := batchChapterCounts(db, ids)
-	prereqByCourse := batchPrereqIDs(db, ids)
+	chapterCountByCourse := BatchChapterCounts(db, ids)
+	prereqByCourse := BatchPrereqIDs(db, ids)
 	var studentCountByCourse map[int]int64
 	if opts.WithStudentCount && len(courses) > 0 {
-		studentCountByCourse = batchStudentCounts(db, ids)
+		studentCountByCourse = BatchStudentCounts(db, ids)
 	}
 
 	items := make([]CourseDTO, 0, len(courses))
 	for i := range courses {
-		item := courseToDTO(&courses[i])
+		item := CourseToDTO(&courses[i])
 		count := chapterCountByCourse[courses[i].CourseID]
 		item.ChapterCount = &count
 		ids := prereqByCourse[courses[i].CourseID]

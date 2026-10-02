@@ -10,7 +10,7 @@
 //
 // 呈现层仍然统一：四件事实由各消费端点显式映射成 404 + 该端点自己的那句话
 // （ADR-0062 决策 3 的不泄漏口径）。本文件验的是**类型层分开**，不是码不同。
-package service
+package course
 
 import (
 	"errors"
@@ -61,7 +61,7 @@ func TestCourseReadabilityFactsAreDistinct(t *testing.T) {
 // 夹具照 course_chapter_detail_test.go 的既有形状（课程须「已发布 + 已挂载」才走得到权益那一半）。
 func TestStudentCanReadCoursePicksTheRightFact(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	student := testutil.SeedStudent(t, db, "readscope_stu", "hash")
 
 	spec := model.Specialty{Code: "readscope", Name: "读档", SortOrder: 1, Status: 1}

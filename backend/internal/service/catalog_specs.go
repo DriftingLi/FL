@@ -12,12 +12,11 @@ import (
 // 目录实体「行不存在」的具名哨兵（ADR-0064 决策 1/2）：文案与原 NotFoundMsg 逐字相同
 // （不改 wire 文本），换的是**载体**——api 侧据此才能把「不存在」与「查不动」分档。
 // 住在 descriptor 旁边：新增目录实体时必须在这里同时立一个名字，漏了就编译不过。
+// 例外：三个**课程写面**的哨兵（专业方向 / 课程等级 / 证书模板）在 P2 波 3b-1 挪进了
+// internal/model/training.go —— 它们同时被 internal/course 消费，贴在实体旁才不会让两个域互相 import。
 var (
-	ErrSpecialtyNotFound           = errors.New("专业方向不存在")
-	ErrCourseLevelNotFound         = errors.New("课程等级不存在")
-	ErrCertificateTemplateNotFound = errors.New("证书模板不存在")
-	ErrQuestionTagNotFound         = errors.New("题库标签不存在")
-	ErrCredentialNotFound          = errors.New("证件不存在")
+	ErrQuestionTagNotFound = errors.New("题库标签不存在")
+	ErrCredentialNotFound  = errors.New("证件不存在")
 )
 
 func specialtyCatalogSpec() CatalogEntitySpec[model.Specialty, SpecialtyInput, SpecialtyDict] {
@@ -28,7 +27,7 @@ func specialtyCatalogSpec() CatalogEntitySpec[model.Specialty, SpecialtyInput, S
 		CodeErr:    "专业方向编码不能为空",
 		NameErr:    "专业方向名称不能为空",
 		DupMsg:     "专业方向编码已存在",
-		NotFound:   ErrSpecialtyNotFound,
+		NotFound:   model.ErrSpecialtyNotFound,
 		Sortable:   true,
 		Code:       func(in *SpecialtyInput) string { return in.Code },
 		ModelCode:  func(m *model.Specialty) string { return m.Code },
@@ -71,7 +70,7 @@ func levelCatalogSpec() CatalogEntitySpec[model.CourseLevel, LevelInput, LevelDi
 		CodeErr:    "课程等级编码不能为空",
 		NameErr:    "课程等级名称不能为空",
 		DupMsg:     "课程等级编码已存在",
-		NotFound:   ErrCourseLevelNotFound,
+		NotFound:   model.ErrCourseLevelNotFound,
 		Sortable:   true,
 		Code:       func(in *LevelInput) string { return in.Code },
 		ModelCode:  func(m *model.CourseLevel) string { return m.Code },
@@ -114,7 +113,7 @@ func certificateCatalogSpec() CatalogEntitySpec[model.CertificateTemplate, Certi
 		CodeErr:   "证书模板编码不能为空",
 		NameErr:   "证书模板名称不能为空",
 		DupMsg:    "证书模板编码已存在",
-		NotFound:  ErrCertificateTemplateNotFound,
+		NotFound:  model.ErrCertificateTemplateNotFound,
 		Sortable:  false,
 		Code:      func(in *CertificateTemplateInput) string { return in.Code },
 		ModelCode: func(m *model.CertificateTemplate) string { return m.Code },

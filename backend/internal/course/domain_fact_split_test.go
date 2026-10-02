@@ -11,7 +11,7 @@
 // 建在 service 层而非 HTTP 码：这批端点分属管理端 / 讲师端 / 学员端三套能力位，HTTP 档要造
 // 「角色×能力×证件×种子」的笛卡尔积；api 侧那 17 处 WithSentinel 只是把这里的错误身份映射成码，
 // 映射机制本身已由第①批 HTTP 台账与 errstatus 测试覆盖。
-package service
+package course
 
 import (
 	"errors"
@@ -65,20 +65,20 @@ func TestCourseDomainFactSplit(t *testing.T) {
 			}},
 		{"课程", model.ErrCourseNotFound, "course",
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminCourseService(db, nil, zap.NewNop()).UpdateCourse(999999, &CourseInput{})
+				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateCourse(999999, &CourseInput{})
 				return e
 			},
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminCourseService(db, nil, zap.NewNop()).UpdateCourse(1, &CourseInput{})
+				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateCourse(1, &CourseInput{})
 				return e
 			}},
 		{"章节", ErrChapterNotFound, "chapter",
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminCourseService(db, nil, zap.NewNop()).UpdateChapter(999999, &ChapterInput{})
+				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateChapter(999999, &ChapterInput{})
 				return e
 			},
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminCourseService(db, nil, zap.NewNop()).UpdateChapter(1, &ChapterInput{})
+				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateChapter(1, &ChapterInput{})
 				return e
 			}},
 	}

@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
@@ -498,7 +499,7 @@ func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*Pract
 	wrong := total - correct
 	accuracy := 0.0
 	if total > 0 {
-		accuracy = roundFloat1(float64(correct) / float64(total) * 100)
+		accuracy = coerce.RoundFloat1(float64(correct) / float64(total) * 100)
 	}
 	byTypeBase := base().
 		Joins("JOIN question ON question.id = question_practice_record.question_id")
@@ -513,7 +514,7 @@ func (s *PracticeModeService) GetStats(studentID int, credentialID *int) (*Pract
 		tc := filtered[t]
 		acc := 0.0
 		if tt > 0 {
-			acc = roundFloat1(float64(tc) / float64(tt) * 100)
+			acc = coerce.RoundFloat1(float64(tc) / float64(tt) * 100)
 		}
 		byType[t] = PracticeTypeStat{Total: tt, Correct: tc, Accuracy: acc}
 	}
@@ -543,7 +544,7 @@ func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResul
 	}
 	var correct int64
 	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
-	acc := roundFloat1(float64(correct) / float64(total) * 100)
+	acc := coerce.RoundFloat1(float64(correct) / float64(total) * 100)
 	res.accuracyRate = &acc
 	if qType == "short_answer" {
 		return res

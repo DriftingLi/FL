@@ -35,7 +35,7 @@
 //   PUT  /admin/position/{position_id}/sort
 //   DELETE /admin/position/{position_id}
 //
-// 覆盖的 Go 类型：CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDTO / CertificateTemplateDict / CertificateTemplateListDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyBriefDTO / SpecialtyDict / SpecialtyListDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDict / CertificateTemplateListDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyDict / SpecialtyListDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -47,32 +47,6 @@
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
-export interface CatalogLevelNode {
-  code: string
-  courses: CourseDTO[]
-  created_at: string
-  description: string
-  level_id: number
-  name: string
-  sort_order: number
-  status: number
-}
-
-export interface CatalogSpecialtyNode {
-  code: string
-  created_at: string
-  description: string
-  levels: CatalogLevelNode[]
-  name: string
-  sort_order: number
-  specialty_id: number
-  status: number
-}
-
-export interface CatalogTreeDTO {
-  specialties: CatalogSpecialtyNode[]
-}
-
 export interface CertificateTemplateDTO {
   code: string
   description: string
@@ -80,22 +54,6 @@ export interface CertificateTemplateDTO {
   name: string
   template_url: string
   validity_days: number
-}
-
-export interface CertificateTemplateDict {
-  code: string
-  created_at: string
-  description: string
-  id: number
-  name: string
-  status: number
-  template_url: string
-  updated_at: string
-  validity_days: number
-}
-
-export interface CertificateTemplateListDTO {
-  certificate_templates: CertificateTemplateDict[]
 }
 
 export interface ChapterDTO {
@@ -172,6 +130,54 @@ export interface LevelBriefDTO {
   name: string
 }
 
+export interface SpecialtyBriefDTO {
+  code: string
+  name: string
+  specialty_id: number
+}
+
+export interface CatalogLevelNode {
+  code: string
+  courses: CourseDTO[]
+  created_at: string
+  description: string
+  level_id: number
+  name: string
+  sort_order: number
+  status: number
+}
+
+export interface CatalogSpecialtyNode {
+  code: string
+  created_at: string
+  description: string
+  levels: CatalogLevelNode[]
+  name: string
+  sort_order: number
+  specialty_id: number
+  status: number
+}
+
+export interface CatalogTreeDTO {
+  specialties: CatalogSpecialtyNode[]
+}
+
+export interface CertificateTemplateDict {
+  code: string
+  created_at: string
+  description: string
+  id: number
+  name: string
+  status: number
+  template_url: string
+  updated_at: string
+  validity_days: number
+}
+
+export interface CertificateTemplateListDTO {
+  certificate_templates: CertificateTemplateDict[]
+}
+
 export interface LevelDict {
   code: string
   created_at: string
@@ -218,12 +224,6 @@ export interface QuestionTagListDTO {
 
 export interface QuestionTagsResultDTO {
   tag_ids: number[] | null
-}
-
-export interface SpecialtyBriefDTO {
-  code: string
-  name: string
-  specialty_id: number
 }
 
 export interface SpecialtyDict {

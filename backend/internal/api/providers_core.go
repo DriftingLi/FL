@@ -9,6 +9,7 @@ import (
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -39,7 +40,7 @@ type coreSingletons struct {
 	mailSender    service.MailSender
 	wechatAuthSvc *auth.WechatService
 	fileSvc       *filestore.FileStore
-	slideRenderer *service.SlideRenderer
+	slideRenderer *course.SlideRenderer
 	notifSvc      *notification.Service
 	reviewSvc     *auth.ProfileReviewService
 	aiConfigSvc   *aiassistant.ConfigService
@@ -70,7 +71,7 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	c.phoneCh = auth.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	c.wechatAuthSvc = auth.NewWechatService(cfg.Wechat.MiniProgram, db, c.authSvc, logger)
 	c.fileSvc = filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
-	c.slideRenderer = service.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
+	c.slideRenderer = course.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
 	c.notifSvc = notification.NewService(db, logger)
 	c.reviewSvc = auth.NewProfileReviewService(db, c.notifSvc, st, logger)
 	c.authSvc.SetProfileReviewService(c.reviewSvc)

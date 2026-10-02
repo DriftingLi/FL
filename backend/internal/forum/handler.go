@@ -11,9 +11,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/course"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -45,7 +45,7 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrTopicNotFound, Status: http.StatusNotFound},
 		{Sentinel: ErrReplyNotFound, Status: http.StatusNotFound},
 		{Sentinel: ErrForumReportNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrChapterNotFound, Status: http.StatusNotFound},
+		{Sentinel: course.ErrChapterNotFound, Status: http.StatusNotFound},
 		// 所有权 → 403
 		{Sentinel: ErrNotTopicOwner, Status: http.StatusForbidden},
 		{Sentinel: ErrNotTopicAuthor, Status: http.StatusForbidden},

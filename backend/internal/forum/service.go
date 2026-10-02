@@ -21,6 +21,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/course"
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/geolocation"
@@ -130,7 +131,7 @@ var ErrReplyNotFound = errors.New("回复不存在")
 // ErrForumReportNotFound 论坛举报记录不存在（名带 Forum 前缀避开求职举报域既有 ErrReportNotFound 的包级撞名）。
 var ErrForumReportNotFound = errors.New("举报不存在")
 
-// service.ErrChapterNotFound 的载体在 course_service.go（发帖/筛选挂的就是课程章节 —— 同一对象，
+// course.ErrChapterNotFound 的载体在 course_service.go（发帖/筛选挂的就是课程章节 —— 同一对象，
 // 不在论坛域另立一个同文案副本，ADR-0064 决策 2）。
 
 // —— 所有权（→403）——
@@ -840,7 +841,7 @@ func (s *Service) CreateTopic(in CreateTopicInput) (*ForumTopicDTO, error) {
 			return nil, err
 		}
 		if cnt == 0 {
-			return nil, service.ErrChapterNotFound
+			return nil, course.ErrChapterNotFound
 		}
 		cid = chapterID
 	}

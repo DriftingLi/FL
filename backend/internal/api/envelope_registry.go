@@ -22,6 +22,7 @@ import (
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
@@ -83,9 +84,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "contribution.ContributionReportPageResult", Endpoints: []string{"GET /admin/contributions/reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: contribution.ContributionReportPageResult{}},
-	{Result: "service.CoursePageResult", Endpoints: []string{"GET /courses", "GET /admin/courses", "GET /tutor/courses"},
+	{Result: "course.CoursePageResult", Endpoints: []string{"GET /courses", "GET /admin/courses", "GET /tutor/courses"},
 		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
-		Sample: service.CoursePageResult{}},
+		Sample: course.CoursePageResult{}},
 	{Result: "aiassistant.DiagnosisFaultCodePage", Endpoints: []string{"GET /ai-assistant/diagnosis/fault-codes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
 		Sample: aiassistant.DiagnosisFaultCodePage{}},

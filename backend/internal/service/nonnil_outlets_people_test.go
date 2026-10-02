@@ -59,8 +59,8 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	// 投稿域的 items 举证已随域包搬去 internal/contribution/nonnil_outlets_test.go（ADR-0070）。
 	// 资料审核列表（auth.ProfileChangeRequestPageResult.requests）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
 	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
-	"service.SearchSectionDTO.items":          outletSearchSectionEmpty,
-	"service.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
+	"service.SearchSectionDTO.items":         outletSearchSectionEmpty,
+	"course.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
 
 	// 三格 handler 一行包出来的信封（见文件头那段）
 	"service.ApplicationListResult.items": outletStudentApplicationListEmpty,

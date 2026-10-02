@@ -5,6 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/testutil"
 )
 
@@ -21,7 +22,7 @@ func TestCredentialCRUD(t *testing.T) {
 	svc := newCredSvc(t)
 
 	// Create special_operation without level
-	c1, err := svc.CreateCredential(CredentialInput{Code: "forklift_n1", Name: "叉车N1", Category: "special_operation", Description: ptrStr("desc")})
+	c1, err := svc.CreateCredential(CredentialInput{Code: "forklift_n1", Name: "叉车N1", Category: "special_operation", Description: coerce.StrPtr("desc")})
 	if err != nil {
 		t.Fatalf("create special failed: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/timefmt"
@@ -437,7 +438,7 @@ func (s *AdminService) queryStatistics() *AdminStatisticsDTO {
 			Name:          r.Name,
 			StudyCount:    r.StudyCount,
 			TotalDuration: r.TotalDuration,
-			AvgProgress:   roundFloat2(r.AvgProgress),
+			AvgProgress:   coerce.RoundFloat2(r.AvgProgress),
 		})
 	}
 

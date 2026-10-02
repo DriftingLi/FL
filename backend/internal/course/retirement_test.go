@@ -4,7 +4,7 @@
 //   - 学生端列表/详情返回 chapter_count 与 prerequisite_course_ids，不含 category
 //   - 管理端列表返回 chapter_count 与 prerequisite_course_ids，不含 category
 //   - 编辑课程未携带 prerequisite_course_ids 时前置课程不被清空
-package service
+package course
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ import (
 // TestCreateCourseRequiresSpecialtyAndLevel 创建课程必须填专业方向与课程等级。
 func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
 	if err := db.Create(&spec).Error; err != nil {
@@ -35,15 +35,15 @@ func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
 	}
 
 	// 只给名称（旧体系曾要求 category，新体系改为方向/等级必填）
-	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A")}); err == nil || !strings.Contains(err.Error(), "专业方向不能为空") {
+	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("课程A")}); err == nil || !strings.Contains(err.Error(), "专业方向不能为空") {
 		t.Fatalf("缺少专业方向应报错, got: %v", err)
 	}
-	if _, err := svc.CreateCourse(&CourseInput{Name: ptrStr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID)}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
+	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID)}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
 		t.Fatalf("缺少课程等级应报错, got: %v", err)
 	}
 
 	created, err := svc.CreateCourse(&CourseInput{
-		Name: ptrStr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID),
+		Name: coerce.StrPtr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID),
 	})
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
@@ -92,7 +92,7 @@ func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course)
 // TestStudentCourseListHasChapterCountAndPrereqIDs 学生端列表返回章节数与前置课程ID，且无 category。
 func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
 	// 关联证书模板后，列表应返回 certificate_name（卡片证书标签用）
@@ -138,7 +138,7 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 // TestStudentCourseListOmitsUnmountedCourses 未挂方向/等级的课程不出现在学生端列表（与目录树口径统一）。
 func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	seedCatalogCourse(t, db)
 
 	unmounted := model.Course{Name: "未挂载课程", Status: 1, CreatedAt: testutil.Now()}
@@ -161,7 +161,7 @@ func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 // TestStudentCourseDetailHasChapterCountAndPrereqIDs 学生端详情返回章节数，且无 category。
 func TestStudentCourseDetailHasChapterCountAndPrereqIDs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
 	detail, err := svc.GetCourseDetail(course.CourseID, 0)
@@ -185,7 +185,7 @@ func TestStudentCourseDetailHasChapterCountAndPrereqIDs(t *testing.T) {
 // TestAdminCourseListHasChapterCountAndPrereqIDs 管理端列表返回章节数与前置课程ID。
 func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
 	list, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
@@ -219,12 +219,14 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 }
 
 // TestTutorCourseListHasChapterCount 导师端课程列表返回章节数。
+// 导师端 GetCourses 是 course.ListCourses 的薄包装（internal/service/tutor_service.go:41），
+// 其行为在 internal/service/tutor_service_test.go 覆盖；本域包测试直接打底层函数
+// （域包测试不能 import internal/service 的测试助手，会成环）。
 func TestTutorCourseListHasChapterCount(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTutorService(db, "", nil, nil, zap.NewNop())
 	course, _ := seedCatalogCourse(t, db)
 
-	list, err := svc.GetCourses(1, 10, nil, nil, nil)
+	list, err := ListCourses(db, 1, 10, CourseListOptions{OnlyMounted: true, WithStudentCount: true, DefaultPageSize: 10})
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -246,10 +248,10 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 // TestUpdateCourseWithoutPrereqKeyKeepsPrereqs 编辑课程不携带前置课程字段时，前置课程保持原样。
 func TestUpdateCourseWithoutPrereqKeyKeepsPrereqs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
-	updated, err := svc.UpdateCourse(course.CourseID, &CourseInput{Name: ptrStr("改名")})
+	updated, err := svc.UpdateCourse(course.CourseID, &CourseInput{Name: coerce.StrPtr("改名")})
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}

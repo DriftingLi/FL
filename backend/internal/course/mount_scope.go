@@ -12,7 +12,7 @@
 //
 // 「已发布（status = 1）」不是挂载不变式的一部分：调用方按读面语义另行叠加
 // （CourseVisibleByID 是本单点里唯一把两者叠好的形态，读面一律用它，不手拼谓词）。
-package service
+package course
 
 import (
 	"gorm.io/gorm"

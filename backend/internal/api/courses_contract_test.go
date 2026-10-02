@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -33,12 +34,12 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	course := model.Course{Name: "契约课程", Status: 1,
+	c := model.Course{Name: "契约课程", Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
-	if err := db.Create(&course).Error; err != nil {
+	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	ch := model.Chapter{CourseID: course.CourseID, Title: "第一章", OrderNum: 1, CreatedAt: testutil.Now()}
+	ch := model.Chapter{CourseID: c.CourseID, Title: "第一章", OrderNum: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
@@ -46,7 +47,7 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, nil)
-	RegisterCoursesRoutes(api, deps.RouterDeps(), deps.CourseSvc)
+	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
 
 	// 传入已退役的 category 参数：应被忽略，课程仍返回
 	rec := performRequest(r, "GET", "/api/courses?category=CATEGORY_01")
@@ -190,12 +191,12 @@ func TestChapterSlidesRequireAuthContract(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	course := model.Course{Name: "幻灯片课程", Status: 1,
+	c := model.Course{Name: "幻灯片课程", Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
-	if err := db.Create(&course).Error; err != nil {
+	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	ch := model.Chapter{CourseID: course.CourseID, Title: "幻灯片章节", OrderNum: 1, CreatedAt: testutil.Now()}
+	ch := model.Chapter{CourseID: c.CourseID, Title: "幻灯片章节", OrderNum: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
@@ -208,7 +209,7 @@ func TestChapterSlidesRequireAuthContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterCoursesRoutes(api, deps.RouterDeps(), deps.CourseSvc)
+	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
 
 	path := "/api/chapter/" + strconv.Itoa(ch.ChapterID) + "/slides"
 
