@@ -1,6 +1,5 @@
-// Package api 实现 HTTP handlers。
 // 本文件：AI 助手模块（会话管理 + 流式对话）Handler 与路由注册。
-package api
+package aiassistant
 
 import (
 	"context"
@@ -15,28 +14,29 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/points"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// AIAssistantHandler AI 助手模块 Handler。
+// handler AI 助手模块 Handler。
 // 计量闸门内移模型端口（ADR-0031）：本 Handler 无预检/扣费编排、无 prompt 事实选取，
 // 只透传请求标识与转发 SSE 事件——积分域依赖不再进入 HTTP 层。
-type AIAssistantHandler struct {
-	svc *service.AIAssistantService
+type handler struct {
+	svc *Service
 }
 
-// NewAIAssistantHandler 构造 AIAssistantHandler。
-func NewAIAssistantHandler(svc *service.AIAssistantService) *AIAssistantHandler {
-	return &AIAssistantHandler{svc: svc}
+// newHandler 构造 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterAIAssistantRoutes 注册 /api/ai-assistant 路由。
-// 公开路由：GET /models、POST /chat（可选认证）。
-// 登录路由：sessions CRUD、user-models CRUD（强制 middleware.JWTAuth + role=hrwai_user）。
-func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AIAssistantService) {
-	h := NewAIAssistantHandler(svc)
+// RegisterRoutes 注册 /api/ai-assistant 蓝图（公开面 + 登录面）与诊断只读代理子组。
+// 公开路由：GET /models、GET /modes、POST /chat、POST /upload-image（可选认证）。
+// 登录路由：sessions CRUD、user-models CRUD（JWTAuth + CapabilityRequired(authz.CapAIAssistantUse)）。
+// 诊断子组（/diagnosis/*）沿用 OptionalAuth，见 handler_diagnosis.go。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, proxy *DiagnosisProxyService) {
+	h := newHandler(svc)
 
 	g := rg.Group("/ai-assistant")
 
@@ -44,13 +44,13 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 	g.GET("/models", h.ListPublicModels)
 	g.GET("/modes", h.ListAssistantModes)
 	// 流式对话：可选认证（未登录可临时对话，登录则可保存会话）
-	g.POST("/chat", middleware.OptionalAuth(rd.Session), h.StreamChat)
+	g.POST("/chat", middleware.OptionalAuth(session), h.StreamChat)
 	// 对话图片上传：可选认证（与 chat 一致，游客可上传）
-	g.POST("/upload-image", middleware.OptionalAuth(rd.Session), h.UploadImage)
+	g.POST("/upload-image", middleware.OptionalAuth(session), h.UploadImage)
 
 	// 需登录路由：会话管理 + 用户自定义模型管理（HRWAI 账号鉴权）
 	authed := g.Group("")
-	authed.Use(middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAIAssistantUse))
+	authed.Use(middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapAIAssistantUse))
 	authed.GET("/sessions", h.ListSessions)
 	authed.POST("/sessions", h.CreateSession)
 	authed.DELETE("/sessions/:id", h.DeleteSession)
@@ -59,6 +59,8 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 	authed.GET("/user-models", h.ListUserModels)
 	authed.POST("/user-models", h.SaveUserModel)
 	authed.DELETE("/user-models/:id", h.DeleteUserModel)
+
+	registerDiagnosisRoutes(g, session, proxy)
 }
 
 // ===== Handler 方法 =====
@@ -68,11 +70,11 @@ func RegisterAIAssistantRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.
 // @Description 列出管理员配置的 is_active=true 模型
 // @Tags 学员端-AI助手
 // @Produce json
-// @Success 200 {object} response.R{data=[]service.ModelOption} "success"
+// @Success 200 {object} response.R{data=[]aiassistant.ModelOption} "success"
 // @Router /ai-assistant/models [get]
-func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
-	httpx.Endpoint[struct{}, []service.ModelOption]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*[]service.ModelOption, error) {
+func (h *handler) ListPublicModels(c *gin.Context) {
+	httpx.Endpoint[struct{}, []ModelOption]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*[]ModelOption, error) {
 			models, err := h.svc.ListPublicModels(ctx)
 			if err != nil {
 				return nil, err
@@ -87,11 +89,11 @@ func (h *AIAssistantHandler) ListPublicModels(c *gin.Context) {
 // @Description 返回普通/专家分别绑定的可用模型（隐藏底层 model 细节，前端仅暴露模式）
 // @Tags 学员端-AI助手
 // @Produce json
-// @Success 200 {object} response.R{data=service.AIAssistantModeModels} "success"
+// @Success 200 {object} response.R{data=aiassistant.AIAssistantModeModels} "success"
 // @Router /ai-assistant/modes [get]
-func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.AIAssistantModeModels]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.AIAssistantModeModels, error) {
+func (h *handler) ListAssistantModes(c *gin.Context) {
+	httpx.Endpoint[struct{}, AIAssistantModeModels]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*AIAssistantModeModels, error) {
 			modes, err := h.svc.ListAssistantModes(ctx)
 			if err != nil {
 				return nil, err
@@ -108,11 +110,11 @@ func (h *AIAssistantHandler) ListAssistantModes(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=[]service.UserModelDTO} "success"
+// @Success 200 {object} response.R{data=[]aiassistant.UserModelDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/user-models [get]
-func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
-	httpx.Endpoint[aiUserIDReq, []service.UserModelDTO]{
+func (h *handler) ListUserModels(c *gin.Context) {
+	httpx.Endpoint[aiUserIDReq, []UserModelDTO]{
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -120,7 +122,7 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 			}
 			return &aiUserIDReq{UserID: uid}, nil
 		},
-		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]service.UserModelDTO, error) {
+		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]UserModelDTO, error) {
 			models, err := h.svc.ListUserModels(c.Request.Context(), req.UserID)
 			if err != nil {
 				return nil, err
@@ -142,14 +144,14 @@ func (h *AIAssistantHandler) ListUserModels(c *gin.Context) {
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/user-models [post]
-func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
+func (h *handler) SaveUserModel(c *gin.Context) {
 	httpx.Endpoint[aiUserModelSaveReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiUserModelSaveReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
 				return nil, &httpx.ParseError{Status: http.StatusUnauthorized, Message: "请先登录"}
 			}
-			req, err := httpx.BindJSONMsg[service.SaveUserModelReq](c, "请求数据无效")
+			req, err := httpx.BindJSONMsg[SaveUserModelReq](c, "请求数据无效")
 			if err != nil {
 				return nil, err
 			}
@@ -183,7 +185,7 @@ func (h *AIAssistantHandler) SaveUserModel(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/user-models/{id} [delete]
-func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
+func (h *handler) DeleteUserModel(c *gin.Context) {
 	httpx.Endpoint[aiModelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
@@ -219,11 +221,11 @@ func (h *AIAssistantHandler) DeleteUserModel(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=[]service.AIChatSessionDTO} "success"
+// @Success 200 {object} response.R{data=[]aiassistant.AIChatSessionDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions [get]
-func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
-	httpx.Endpoint[aiUserIDReq, []service.AIChatSessionDTO]{
+func (h *handler) ListSessions(c *gin.Context) {
+	httpx.Endpoint[aiUserIDReq, []AIChatSessionDTO]{
 		Parse: func(c *gin.Context) (*aiUserIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -231,7 +233,7 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 			}
 			return &aiUserIDReq{UserID: uid}, nil
 		},
-		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]service.AIChatSessionDTO, error) {
+		Invoke: func(ctx context.Context, req *aiUserIDReq) (*[]AIChatSessionDTO, error) {
 			sessions, err := h.svc.ListSessions(c.Request.Context(), req.UserID, c.Query("feature_key"))
 			if err != nil {
 				return nil, err
@@ -249,11 +251,11 @@ func (h *AIAssistantHandler) ListSessions(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "标题/模型" example({"title":"新对话","model_name":"gpt-4"})
-// @Success 200 {object} response.R{data=service.AIChatSessionDTO} "success"
+// @Success 200 {object} response.R{data=aiassistant.AIChatSessionDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions [post]
-func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
-	httpx.Endpoint[aiSessionCreateReq, service.AIChatSessionDTO]{
+func (h *handler) CreateSession(c *gin.Context) {
+	httpx.Endpoint[aiSessionCreateReq, AIChatSessionDTO]{
 		Parse: func(c *gin.Context) (*aiSessionCreateReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -267,7 +269,7 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 			_ = c.ShouldBindJSON(&body)
 			return &aiSessionCreateReq{UserID: uid, Title: body.Title, ModelName: body.ModelName, FeatureKey: body.FeatureKey}, nil
 		},
-		Invoke: func(ctx context.Context, req *aiSessionCreateReq) (*service.AIChatSessionDTO, error) {
+		Invoke: func(ctx context.Context, req *aiSessionCreateReq) (*AIChatSessionDTO, error) {
 			return h.svc.CreateSession(c.Request.Context(), req.UserID, req.Title, req.ModelName, req.FeatureKey)
 		},
 	}.Handle(c)
@@ -285,7 +287,7 @@ func (h *AIAssistantHandler) CreateSession(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/sessions/{id} [delete]
-func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
+func (h *handler) DeleteSession(c *gin.Context) {
 	httpx.Endpoint[aiModelIDReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
@@ -323,11 +325,11 @@ func (h *AIAssistantHandler) DeleteSession(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "会话ID"
 // @Param body body object true "标题" example({"title":"新标题"})
-// @Success 200 {object} response.R{data=service.AISessionRenameResultDTO} "success"
+// @Success 200 {object} response.R{data=aiassistant.AISessionRenameResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /ai-assistant/sessions/{id}/title [patch]
-func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
+func (h *handler) RenameSession(c *gin.Context) {
 	httpx.Endpoint[aiSessionRenameReq, struct{}]{
 		Parse: func(c *gin.Context) (*aiSessionRenameReq, error) {
 			uid := middleware.CurrentUserID(c)
@@ -355,7 +357,7 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 			{Sentinel: nil, Status: http.StatusBadRequest},
 		}},
 		Render: func(c *gin.Context, _ *aiSessionRenameReq, _ *struct{}) {
-			response.Success(c, service.AISessionRenameResultDTO{Message: "已更新会话标题"})
+			response.Success(c, AISessionRenameResultDTO{Message: "已更新会话标题"})
 		},
 	}.Handle(c)
 }
@@ -368,12 +370,12 @@ func (h *AIAssistantHandler) RenameSession(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "会话ID"
-// @Success 200 {object} response.R{data=[]service.AIChatMessageDTO} "success"
+// @Success 200 {object} response.R{data=[]aiassistant.AIChatMessageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "不存在"
 // @Router /ai-assistant/sessions/{id}/messages [get]
-func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
-	httpx.Endpoint[aiModelIDReq, []service.AIChatMessageDTO]{
+func (h *handler) GetSessionMessages(c *gin.Context) {
+	httpx.Endpoint[aiModelIDReq, []AIChatMessageDTO]{
 		Parse: func(c *gin.Context) (*aiModelIDReq, error) {
 			uid := middleware.CurrentUserID(c)
 			if uid == 0 {
@@ -385,7 +387,7 @@ func (h *AIAssistantHandler) GetSessionMessages(c *gin.Context) {
 			}
 			return &aiModelIDReq{UserID: uid, ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *aiModelIDReq) (*[]service.AIChatMessageDTO, error) {
+		Invoke: func(ctx context.Context, req *aiModelIDReq) (*[]AIChatMessageDTO, error) {
 			msgs, err := h.svc.GetSessionMessages(c.Request.Context(), req.UserID, req.ID)
 			if err != nil {
 				return nil, err
@@ -418,10 +420,10 @@ func writeSSEHeaders(c *gin.Context) {
 // @Success 200 {string} string "SSE stream"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /ai-assistant/chat [post]
-func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
+func (h *handler) StreamChat(c *gin.Context) {
 	userID := middleware.CurrentUserID(c) // 可选认证，未登录为 0
 
-	var req service.StreamChatReq
+	var req StreamChatReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求数据无效")
 		return
@@ -451,10 +453,10 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 	// RequestID 中间件注入）并按产出转发 SSE 事件。
 	ctx := c.Request.Context()
 	if requestID := c.GetString(string(middleware.CtxRequestID)); requestID != "" {
-		ctx = service.WithAIRequestID(ctx, requestID)
+		ctx = WithRequestID(ctx, requestID)
 	}
 	// 诊断来源容器初始化（fault_diagnosis 响应 answer_sources 经此透传；其他功能恒空）
-	ctx = service.WithDiagnosisSources(ctx)
+	ctx = WithDiagnosisSources(ctx)
 
 	_, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
 		sendEvent("message", map[string]string{"content": content})
@@ -470,7 +472,7 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 		return
 	}
 	// 智能维修诊断来源资料（answer_sources）透传：message 事件只搬 content，来源独立事件
-	if sources := service.DiagnosisSourcesFrom(ctx); len(sources) > 0 {
+	if sources := DiagnosisSourcesFrom(ctx); len(sources) > 0 {
 		sendEvent("sources", map[string]any{"sources": sources})
 	}
 	// usage 事件与扣费结果形状不变（移动端契约无感）：扣费失败时沿用迁移前行为——
@@ -492,10 +494,10 @@ func (h *AIAssistantHandler) StreamChat(c *gin.Context) {
 // @Accept multipart/form-data
 // @Produce json
 // @Param file formData file true "图片文件"
-// @Success 200 {object} response.R{data=service.AIImageUploadResultDTO} "success"
+// @Success 200 {object} response.R{data=aiassistant.AIImageUploadResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Router /ai-assistant/upload-image [post]
-func (h *AIAssistantHandler) UploadImage(c *gin.Context) {
+func (h *handler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.BadRequest(c, "未找到上传文件")
@@ -506,7 +508,7 @@ func (h *AIAssistantHandler) UploadImage(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.SuccessWithMsg(c, "图片上传成功", service.AIImageUploadResultDTO{URL: url})
+	response.SuccessWithMsg(c, "图片上传成功", AIImageUploadResultDTO{URL: url})
 }
 
 // ===== typed request structs =====
@@ -525,7 +527,7 @@ type aiModelIDReq struct {
 // aiUserModelSaveReq 保存用户模型请求（含用户 ID + service 请求体）。
 type aiUserModelSaveReq struct {
 	UserID int
-	Req    service.SaveUserModelReq
+	Req    SaveUserModelReq
 }
 
 // aiSessionCreateReq 创建会话请求。

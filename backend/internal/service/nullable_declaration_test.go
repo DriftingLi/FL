@@ -36,6 +36,8 @@ var nullableOutlets = map[string]func(t *testing.T) any{
 // **从 AST 读**，而「读得到名字」不等于「跑过」——一张只有 AST 在看的表就是花名册
 // （HEAD 那笔 CI 修红修的就是 nonnil 那侧的这个洞）。这里的表被下面的 runner 逐条执行，
 // 所以新加一个 `nullableOutlets<域名>` 文件只需在自己的 init 里 append 一行。
+//
+// 2c 后 AI 域的三格住在 `internal/aiassistant/nullable_outlets_test.go`（域包自带同形 runner，见该文件头注释）。
 var nullableOutletTables []map[string]func(t *testing.T) any
 
 func init() {

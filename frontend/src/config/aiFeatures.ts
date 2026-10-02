@@ -1,7 +1,7 @@
 // 生成文件，勿手改（ADR-0030 前端 AI 功能配置窄域 codegen 试点，#613）。
-// 唯一事实源：后端 AI 功能注册表 backend/internal/service/ai_feature_registry.go。
+// 唯一事实源：后端 AI 功能注册表 backend/internal/aiassistant/feature_registry.go。
 // 再生成：cd backend && go run ./cmd/gen-aifeatures
-// 同步契约：backend/internal/service/ai_features_codegen_test.go 将本文件与注册表渲染结果
+// 同步契约：backend/internal/aiassistant/features_codegen_test.go 将本文件与注册表渲染结果
 // 全等比对，手改或注册表变更未再生成时后端测试即红。功能键与展示名由注册表派生；
 // 路由/文案/图标等展示数据在 aiFeatureUI.ts 手写维护，新增功能键时需同步补齐。
 import type { Component } from 'vue'

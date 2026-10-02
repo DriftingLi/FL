@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -378,12 +379,12 @@ func TestAdminContract_AIConfigsBindingsReviewAudit(t *testing.T) {
 	if err := json.Unmarshal(raw, &bindings); err != nil {
 		t.Fatalf("data 不是数组: %v raw=%s", err, string(raw))
 	}
-	if len(bindings) != len(service.AllAIFeatures) {
-		t.Fatalf("绑定列表条数 = %d, 期望全部功能 %d 条", len(bindings), len(service.AllAIFeatures))
+	if len(bindings) != len(aiassistant.AllAIFeatures) {
+		t.Fatalf("绑定列表条数 = %d, 期望全部功能 %d 条", len(bindings), len(aiassistant.AllAIFeatures))
 	}
 	assertHasKeys(t, bindings[0], "feature_key", "feature_label")
 
-	featureKey := service.AllAIFeatures[0]
+	featureKey := aiassistant.AllAIFeatures[0]
 	rec = doWithToken(t, r, token, http.MethodPut, "/api/admin/ai-feature-bindings/"+featureKey,
 		map[string]any{"config_id": configID})
 	assertDataNull(t, rec, http.StatusOK)

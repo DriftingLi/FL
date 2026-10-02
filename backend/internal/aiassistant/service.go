@@ -1,6 +1,6 @@
-// Package service 实现业务服务层。
+// 实现业务服务层。
 // 本文件：AI 助手模块（会话管理 + eino 流式对话）。
-package service
+package aiassistant
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 	"forklift-training/internal/security"
 )
 
-// 功能系统提示词与 featureSystemPrompt 均为注册表派生面，单点在 ai_feature_registry.go
+// 功能系统提示词与 featureSystemPrompt 均为注册表派生面，单点在 feature_registry.go
 // （ADR-0030 决策 1：功能声明知识 = 一张表）。
 
 // UserModelDTO 用户自定义模型展示对象（api_key 脱敏）。
@@ -76,12 +76,12 @@ type AIImageUploadResultDTO struct {
 	URL string `json:"url"`
 }
 
-// AIAssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
-type AIAssistantMode string
+// AssistantMode AI 助手模式（隐藏底层模型，对用户仅暴露双模式）。
+type AssistantMode string
 
 const (
-	ModeNormal AIAssistantMode = "normal"
-	ModeExpert AIAssistantMode = "expert"
+	ModeNormal AssistantMode = "normal"
+	ModeExpert AssistantMode = "expert"
 )
 
 // AIAssistantModeModels 双模式可用模型（按普通/专家分别返回，null 表示未绑定）。
@@ -94,49 +94,49 @@ type AIAssistantModeModels struct {
 // 专项功能：FeatureKey=fault_consult 等（管理端单绑定模型）；
 // 通用助手：Mode=normal|expert（隐藏底层模型，推荐）；兼容旧前端：ModelSource=admin|user|custom + ConfigID
 type StreamChatReq struct {
-	SessionID     int             `json:"session_id"`     // 可选，登录用户指定会话
-	FeatureKey    string          `json:"feature_key"`    // 专项功能键（空/"ai_assistant"=通用对话；专项功能走单绑定模型）
-	Mode          AIAssistantMode `json:"mode"`           // 通用助手：normal | expert
-	ModelSource   string          `json:"model_source"`   // 兼容旧： "admin" | "user" | "custom"
-	ConfigID      int             `json:"config_id"`      // 兼容旧：ModelSource="admin" 时引用管理员配置
-	UserModelID   int             `json:"user_model_id"`  // 兼容旧：ModelSource="user" 时引用用户自定义模型
-	CustomAPIKey  string          `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
-	CustomBaseURL string          `json:"custom_base_url"`
-	CustomModel   string          `json:"custom_model"`
+	SessionID     int           `json:"session_id"`     // 可选，登录用户指定会话
+	FeatureKey    string        `json:"feature_key"`    // 专项功能键（空/"ai_assistant"=通用对话；专项功能走单绑定模型）
+	Mode          AssistantMode `json:"mode"`           // 通用助手：normal | expert
+	ModelSource   string        `json:"model_source"`   // 兼容旧： "admin" | "user" | "custom"
+	ConfigID      int           `json:"config_id"`      // 兼容旧：ModelSource="admin" 时引用管理员配置
+	UserModelID   int           `json:"user_model_id"`  // 兼容旧：ModelSource="user" 时引用用户自定义模型
+	CustomAPIKey  string        `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
+	CustomBaseURL string        `json:"custom_base_url"`
+	CustomModel   string        `json:"custom_model"`
 	// Brand/Model 智能维修诊断（fault_diagnosis）专用可选参数：品牌/车型过滤（空 = 全部）。
 	// 经 ctx 透传到 diagnosis adapter（withDiagnosisParams），仅该功能消费；通用对话忽略。
-	Brand    string            `json:"brand,omitempty"`
-	Model    string            `json:"model,omitempty"`
-	Messages []AIStreamMessage `json:"messages"`
+	Brand    string          `json:"brand,omitempty"`
+	Model    string          `json:"model,omitempty"`
+	Messages []StreamMessage `json:"messages"`
 }
 
-// AIStreamMessage 对话请求体里的一条消息（具名类型：计费口径的 DTO adapter 需要它，
+// StreamMessage 对话请求体里的一条消息（具名类型：计费口径的 DTO adapter 需要它，
 // 且具名后 swagger 能给出可引用的定义）。
-type AIStreamMessage struct {
+type StreamMessage struct {
 	Role    string   `json:"role"`
 	Content string   `json:"content"`
 	Images  []string `json:"images"` // 用户消息附带的图片 URL（仅最后一条用户消息生效）
 }
 
-// AIAssistantService AI 助手模块服务。
-type AIAssistantService struct {
+// Service AI 助手模块服务。
+type Service struct {
 	db          *gorm.DB
-	aiConfigSvc *AIConfigService
+	aiConfigSvc *ConfigService
 	fileSvc     *filestore.FileStore // 图片上传/读取（多模态对话）
 	secretKey   string               // 用于加密用户自定义 API Key 的主密钥（SECRET_KEY）
 	logger      *zap.Logger
-	port        AIModelPort // 单一模型端口（与阻塞侧共享同一 adapter，ADR-0029 T2；测试可注入 fake）
+	port        ModelPort // 单一模型端口（与阻塞侧共享同一 adapter，ADR-0029 T2；测试可注入 fake）
 }
 
-// NewAIAssistantService 构造 AIAssistantService。port 为单一模型端口
-// （NewEinoAIModel 产物与阻塞侧共享同一 client 缓存），必须非 nil：构造期注入是不变量。
-func NewAIAssistantService(db *gorm.DB, aiConfigSvc *AIConfigService, fileSvc *filestore.FileStore, secretKey string, logger *zap.Logger, port AIModelPort) *AIAssistantService {
-	return &AIAssistantService{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger, port: port}
+// NewService 构造 Service。port 为单一模型端口
+// （NewEinoModel 产物与阻塞侧共享同一 client 缓存），必须非 nil：构造期注入是不变量。
+func NewService(db *gorm.DB, aiConfigSvc *ConfigService, fileSvc *filestore.FileStore, secretKey string, logger *zap.Logger, port ModelPort) *Service {
+	return &Service{db: db, aiConfigSvc: aiConfigSvc, fileSvc: fileSvc, secretKey: secretKey, logger: logger, port: port}
 }
 
 // ListPublicModels 返回管理员绑定到 AI 助手功能的可用配置列表（不含 api_key）。
 // 兼容旧前端：优先返回 normal/expert 双绑定的配置；若未配置则回退到遗留 ai_assistant 多绑定。
-func (s *AIAssistantService) ListPublicModels(ctx context.Context) ([]ModelOption, error) {
+func (s *Service) ListPublicModels(ctx context.Context) ([]ModelOption, error) {
 	modes, err := s.ListAssistantModes(ctx)
 	if err != nil {
 		return nil, err
@@ -163,8 +163,8 @@ func (s *AIAssistantService) ListPublicModels(ctx context.Context) ([]ModelOptio
 }
 
 // ListAssistantModes 返回双模式（普通/专家）分别绑定的配置（不含 api_key），新前端专用。
-// 降级阶梯在 AIConfigService.ResolveAssistantPair 单点。
-func (s *AIAssistantService) ListAssistantModes(ctx context.Context) (AIAssistantModeModels, error) {
+// 降级阶梯在 ConfigService.ResolveAssistantPair 单点。
+func (s *Service) ListAssistantModes(ctx context.Context) (AIAssistantModeModels, error) {
 	var res AIAssistantModeModels
 	normal, expert, err := s.aiConfigSvc.ResolveAssistantPair(ctx)
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *AIAssistantService) ListAssistantModes(ctx context.Context) (AIAssistan
 }
 
 // ListUserModels 返回登录用户的自定义模型列表（api_key 脱敏）。
-func (s *AIAssistantService) ListUserModels(ctx context.Context, userID int) ([]UserModelDTO, error) {
+func (s *Service) ListUserModels(ctx context.Context, userID int) ([]UserModelDTO, error) {
 	var rows []model.AIUserModel
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func (s *AIAssistantService) ListUserModels(ctx context.Context, userID int) ([]
 }
 
 // SaveUserModel UPSERT 用户自定义模型（同用户同 model 唯一）。
-func (s *AIAssistantService) SaveUserModel(ctx context.Context, userID int, req SaveUserModelReq) error {
+func (s *Service) SaveUserModel(ctx context.Context, userID int, req SaveUserModelReq) error {
 	// 唯一性校验：同用户同 model 只能有一个
 	var count int64
 	q := s.db.WithContext(ctx).Model(&model.AIUserModel{}).
@@ -248,7 +248,7 @@ func (s *AIAssistantService) SaveUserModel(ctx context.Context, userID int, req 
 }
 
 // DeleteUserModel 删除用户自定义模型（校验归属）。
-func (s *AIAssistantService) DeleteUserModel(ctx context.Context, userID, modelID int) error {
+func (s *Service) DeleteUserModel(ctx context.Context, userID, modelID int) error {
 	res := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", modelID, userID).
 		Delete(&model.AIUserModel{})
 	if res.Error != nil {
@@ -261,7 +261,7 @@ func (s *AIAssistantService) DeleteUserModel(ctx context.Context, userID, modelI
 }
 
 // CreateSession 创建会话（需登录）。featureKey 为空时归入通用 AI 助手。
-func (s *AIAssistantService) CreateSession(ctx context.Context, userID int, title, modelName, featureKey string) (*AIChatSessionDTO, error) {
+func (s *Service) CreateSession(ctx context.Context, userID int, title, modelName, featureKey string) (*AIChatSessionDTO, error) {
 	if title == "" {
 		title = "新会话"
 	}
@@ -280,7 +280,7 @@ func (s *AIAssistantService) CreateSession(ctx context.Context, userID int, titl
 
 // RenameSession 修改会话标题（校验归属）。
 // 标题长度限制 100 字符；非空校验。
-func (s *AIAssistantService) RenameSession(ctx context.Context, userID, sessionID int, title string) error {
+func (s *Service) RenameSession(ctx context.Context, userID, sessionID int, title string) error {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return errors.New("标题不能为空")
@@ -307,7 +307,7 @@ const autoTitlePlaceholder = "新会话"
 // maybeGenerateSessionTitle 异步生成会话标题。
 // 仅当会话标题为占位符 "新会话" 时才生成；已被 AI 命名或用户手动改名后不再覆盖。
 // 失败仅记录日志，不影响主流程。
-func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, sel AIModelSelector) {
+func (s *Service) maybeGenerateSessionTitle(ctx context.Context, userID, sessionID int, sel ModelSelector) {
 	// 查询会话，校验归属和标题
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).
@@ -366,7 +366,7 @@ func (s *AIAssistantService) maybeGenerateSessionTitle(ctx context.Context, user
 // 计量意图显式声明免费（ADR-0031 决策 2）：自动命名无独立功能键、随对话选择子发起，
 // 若随注册表默认（其所属对话 billed=true）会与主对话双扣——CONTEXT.md「AI 计费」
 // 免费清单收录本消费，显式声明使其从隐式漏网转为登记。
-func (s *AIAssistantService) generateTitleWithModel(ctx context.Context, sel AIModelSelector, userMessage string) (string, error) {
+func (s *Service) generateTitleWithModel(ctx context.Context, sel ModelSelector, userMessage string) (string, error) {
 	const titlePrompt = `请根据用户的问题，生成一个简短的中文会话标题。
 要求：
 1. 不超过 20 个字
@@ -423,7 +423,7 @@ func sanitizeTitle(raw string) string {
 }
 
 // DeleteSession 删除会话及其消息（校验归属，ON DELETE CASCADE 自动删消息）。
-func (s *AIAssistantService) DeleteSession(ctx context.Context, userID, sessionID int) error {
+func (s *Service) DeleteSession(ctx context.Context, userID, sessionID int) error {
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sessionID, userID).
 		Limit(1).Find(&session).Error; err != nil {
@@ -437,7 +437,7 @@ func (s *AIAssistantService) DeleteSession(ctx context.Context, userID, sessionI
 
 // ListSessions 返回登录用户指定功能的会话列表（按创建时间倒序）。
 // featureKey 为空时归入通用 AI 助手。
-func (s *AIAssistantService) ListSessions(ctx context.Context, userID int, featureKey string) ([]AIChatSessionDTO, error) {
+func (s *Service) ListSessions(ctx context.Context, userID int, featureKey string) ([]AIChatSessionDTO, error) {
 	if featureKey == "" {
 		featureKey = FeatureAIAssistant
 	}
@@ -457,7 +457,7 @@ func (s *AIAssistantService) ListSessions(ctx context.Context, userID int, featu
 }
 
 // GetSessionMessages 返回指定会话的消息列表（按时间升序，校验归属）。
-func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, sessionID int) ([]AIChatMessageDTO, error) {
+func (s *Service) GetSessionMessages(ctx context.Context, userID, sessionID int) ([]AIChatMessageDTO, error) {
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sessionID, userID).
 		Limit(1).Find(&session).Error; err != nil {
@@ -491,13 +491,13 @@ func (s *AIAssistantService) GetSessionMessages(ctx context.Context, userID, ses
 }
 
 // StreamChat 流式对话。
-// onChunk 回调用于推送增量内容；返回完整回复内容与计量产出（*AIUsage，闸门在端口装饰器
+// onChunk 回调用于推送增量内容；返回完整回复内容与计量产出（*Usage，闸门在端口装饰器
 // 内单点，ADR-0031——预检/扣费/prompt 事实/请求标识降级均不在本服务，调用方透传请求标识
-// 即可）。此处只把请求的模型选择字段投影为 AIModelSelector（纯数据、零解析知识）并组装消息；
+// 即可）。此处只把请求的模型选择字段投影为 ModelSelector（纯数据、零解析知识）并组装消息；
 // 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（client 签名缓存/超时/Recv 收集）
 // 全部在单一模型端口 Stream 内经注入 resolver 单点完成（ADR-0029 T2）。
-func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, *AIUsage, error) {
-	sel := AIModelSelector{
+func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, *Usage, error) {
+	sel := ModelSelector{
 		FeatureKey:    req.FeatureKey,
 		Mode:          req.Mode,
 		ModelSource:   req.ModelSource,
@@ -539,7 +539,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 	}
 
 	// 计费事实随计费意图交给闸门：**传消息列表而不是算好的字符数**——口径（取哪一条用户
-	// 消息、怎么取文本）只允许有一份实现（ai_prompt_chars.go）。多模态消息经
+	// 消息、怎么取文本）只允许有一份实现（prompt_chars.go）。多模态消息经
 	// buildImageUserMessage 重组，图片全部加载失败时注入的注记文本只存在于传输层消息——
 	// DTO 才是口径事实源，注记不参与计费（ADR-0031 / ADR-0053 §5）。
 	// 诊断参数（品牌/车型）经 ctx 透传到 diagnosis adapter（fault_diagnosis 消费）
@@ -619,7 +619,7 @@ func (s *AIAssistantService) StreamChat(ctx context.Context, userID int, req Str
 
 // buildImageUserMessage 构建带图片的多模态用户消息。
 // 仅接受本站 images/ai-assistant/ 前缀的 URL（防 SSRF）；单张读取失败时跳过并在文本中注明，不中断对话。
-func (s *AIAssistantService) buildImageUserMessage(ctx context.Context, content string, images []string) (*schema.Message, error) {
+func (s *Service) buildImageUserMessage(ctx context.Context, content string, images []string) (*schema.Message, error) {
 	parts := make([]schema.MessageInputPart, 0, len(images)+2)
 	if content != "" {
 		parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: content})
@@ -660,7 +660,7 @@ func (s *AIAssistantService) buildImageUserMessage(ctx context.Context, content 
 }
 
 // UploadImage 上传 AI 助手对话图片：校验格式/大小后保存到 images/ai-assistant/ 子目录，返回可访问 URL。
-func (s *AIAssistantService) UploadImage(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
+func (s *Service) UploadImage(ctx context.Context, fileHeader *multipart.FileHeader) (string, error) {
 	if fileHeader.Filename == "" {
 		return "", errors.New("未选择文件")
 	}

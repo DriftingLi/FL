@@ -65,7 +65,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.AIConfigDTO"
+                                                "$ref": "#/definitions/aiassistant.AIConfigDTO"
                                             }
                                         }
                                     }
@@ -318,7 +318,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.FeatureBindingDTO"
+                                                "$ref": "#/definitions/aiassistant.FeatureBindingDTO"
                                             }
                                         }
                                     }
@@ -6910,7 +6910,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.DiagnosisBrandOption"
+                                                "$ref": "#/definitions/aiassistant.DiagnosisBrandOption"
                                             }
                                         }
                                     }
@@ -6980,7 +6980,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DiagnosisFaultCodePage"
+                                            "$ref": "#/definitions/aiassistant.DiagnosisFaultCodePage"
                                         }
                                     }
                                 }
@@ -7107,7 +7107,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.ModelOption"
+                                                "$ref": "#/definitions/aiassistant.ModelOption"
                                             }
                                         }
                                     }
@@ -7140,7 +7140,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AIAssistantModeModels"
+                                            "$ref": "#/definitions/aiassistant.AIAssistantModeModels"
                                         }
                                     }
                                 }
@@ -7182,7 +7182,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.AIChatSessionDTO"
+                                                "$ref": "#/definitions/aiassistant.AIChatSessionDTO"
                                             }
                                         }
                                     }
@@ -7237,7 +7237,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AIChatSessionDTO"
+                                            "$ref": "#/definitions/aiassistant.AIChatSessionDTO"
                                         }
                                     }
                                 }
@@ -7343,7 +7343,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.AIChatMessageDTO"
+                                                "$ref": "#/definitions/aiassistant.AIChatMessageDTO"
                                             }
                                         }
                                     }
@@ -7414,7 +7414,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AISessionRenameResultDTO"
+                                            "$ref": "#/definitions/aiassistant.AISessionRenameResultDTO"
                                         }
                                     }
                                 }
@@ -7470,7 +7470,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AIImageUploadResultDTO"
+                                            "$ref": "#/definitions/aiassistant.AIImageUploadResultDTO"
                                         }
                                     }
                                 }
@@ -7518,7 +7518,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.UserModelDTO"
+                                                "$ref": "#/definitions/aiassistant.UserModelDTO"
                                             }
                                         }
                                     }
@@ -23437,6 +23437,293 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "aiassistant.AIAssistantModeModels": {
+            "type": "object",
+            "properties": {
+                "expert": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/aiassistant.ModelOption"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "normal": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/aiassistant.ModelOption"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "aiassistant.AIChatMessageDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "description": "用户消息附带的图片 URL（无图时键在、值为 null）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "role": {
+                    "type": "string"
+                },
+                "sources": {
+                    "description": "助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aiassistant.DiagnosisSource"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "aiassistant.AIChatSessionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "feature_key": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model_name": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.AIConfigDTO": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "脱敏后的 API Key（如 sk-da...9b3）",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.AIImageUploadResultDTO": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.AISessionRenameResultDTO": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisBrandOption": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisFaultCodeItem": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "brand_cn": {
+                    "type": "string"
+                },
+                "causes": {
+                    "type": "string"
+                },
+                "fault_code": {
+                    "type": "string"
+                },
+                "fault_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model_series": {
+                    "type": "string"
+                },
+                "page_num": {
+                    "type": "integer"
+                },
+                "part_numbers": {
+                    "type": "string"
+                },
+                "safety_warning": {
+                    "type": "string"
+                },
+                "sop_steps": {
+                    "type": "string"
+                },
+                "source_file": {
+                    "type": "string"
+                },
+                "symptom": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisFaultCodePage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aiassistant.DiagnosisFaultCodeItem"
+                    },
+                    "x-nullable": true
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "aiassistant.DiagnosisSource": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/aiassistant.DiagnosisSourceMetadata"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.DiagnosisSourceMetadata": {
+            "type": "object",
+            "properties": {
+                "page_end": {
+                    "type": "integer"
+                },
+                "page_start": {
+                    "type": "integer"
+                },
+                "source_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.FeatureBindingDTO": {
+            "type": "object",
+            "properties": {
+                "config_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "config_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "feature_key": {
+                    "type": "string"
+                },
+                "feature_label": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.ModelOption": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "aiassistant.UserModelDTO": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "脱敏后的 API Key",
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "api.AuditLogPageResult": {
             "type": "object",
             "properties": {
@@ -25802,132 +26089,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.AIAssistantModeModels": {
-            "type": "object",
-            "properties": {
-                "expert": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ModelOption"
-                        }
-                    ],
-                    "x-nullable": true
-                },
-                "normal": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ModelOption"
-                        }
-                    ],
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.AIChatMessageDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "images": {
-                    "description": "用户消息附带的图片 URL（无图时键在、值为 null）",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "role": {
-                    "type": "string"
-                },
-                "sources": {
-                    "description": "助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.DiagnosisSource"
-                    },
-                    "x-nullable": true
-                }
-            }
-        },
-        "service.AIChatSessionDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "feature_key": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model_name": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AIConfigDTO": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "description": "脱敏后的 API Key（如 sk-da...9b3）",
-                    "type": "string"
-                },
-                "base_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AIImageUploadResultDTO": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.AISessionRenameResultDTO": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
         "service.AdminCourseDetailDTO": {
             "type": "object",
             "properties": {
@@ -27021,104 +27182,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.DiagnosisBrandOption": {
-            "type": "object",
-            "properties": {
-                "label": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DiagnosisFaultCodeItem": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "brand_cn": {
-                    "type": "string"
-                },
-                "causes": {
-                    "type": "string"
-                },
-                "fault_code": {
-                    "type": "string"
-                },
-                "fault_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model_series": {
-                    "type": "string"
-                },
-                "page_num": {
-                    "type": "integer"
-                },
-                "part_numbers": {
-                    "type": "string"
-                },
-                "safety_warning": {
-                    "type": "string"
-                },
-                "sop_steps": {
-                    "type": "string"
-                },
-                "source_file": {
-                    "type": "string"
-                },
-                "symptom": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DiagnosisFaultCodePage": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.DiagnosisFaultCodeItem"
-                    },
-                    "x-nullable": true
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.DiagnosisSource": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/service.DiagnosisSourceMetadata"
-                },
-                "text": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.DiagnosisSourceMetadata": {
-            "type": "object",
-            "properties": {
-                "page_end": {
-                    "type": "integer"
-                },
-                "page_start": {
-                    "type": "integer"
-                },
-                "source_url": {
-                    "type": "string"
-                }
-            }
-        },
         "service.FavoriteCheckDTO": {
             "type": "object",
             "properties": {
@@ -27174,25 +27237,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.FeatureBindingDTO": {
-            "type": "object",
-            "properties": {
-                "config_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "config_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "feature_key": {
-                    "type": "string"
-                },
-                "feature_label": {
-                    "type": "string"
                 }
             }
         },
@@ -27901,23 +27945,6 @@ const docTemplate = `{
                 },
                 "total_score": {
                     "type": "number"
-                }
-            }
-        },
-        "service.ModelOption": {
-            "type": "object",
-            "properties": {
-                "base_url": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
                 }
             }
         },
@@ -29509,33 +29536,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.UserModelDTO": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "description": "脱敏后的 API Key",
-                    "type": "string"
-                },
-                "base_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
                     "type": "string"
                 }
             }

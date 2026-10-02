@@ -1,9 +1,9 @@
-// Package service 前端 AI 功能配置窄域生成器（ADR-0030 决策 3，#613）：把功能注册表的
+// 前端 AI 功能配置窄域生成器（ADR-0030 决策 3，#613）：把功能注册表的
 // 派生面（专项对话功能键与展示名）渲染为 frontend/src/config/aiFeatures.ts（生成勿改）。
 // 渲染是纯函数（注册表快照 → 输出字符串）：输出确定性（无时间戳、无随机序）是契约测试
-// 「字节级全等比对」的前提，生成物过期由 backend/internal/service/ai_features_codegen_test.go
+// 「字节级全等比对」的前提，生成物过期由 backend/internal/aiassistant/features_codegen_test.go
 // 直接变红暴露，无需改 CI workflow；再生成入口在 cmd/gen-aifeatures。
-package service
+package aiassistant
 
 import (
 	"errors"
@@ -14,8 +14,8 @@ import (
 	"forklift-training/internal/codegen"
 )
 
-// AIFeatureExport 注册表 → 生成管道的结构化导出行（ADR-0030「读后端注册表的结构化导出」）。
-type AIFeatureExport struct {
+// FeatureExport 注册表 → 生成管道的结构化导出行（ADR-0030「读后端注册表的结构化导出」）。
+type FeatureExport struct {
 	Name        string // 功能键（ai_feature_bindings.feature_key）
 	Label       string // 展示名（与后端 FeatureLabel 同源）
 	BindingKind string // 绑定形态（string(aiBindingKind)）
@@ -26,10 +26,10 @@ type AIFeatureExport struct {
 }
 
 // ExportAIFeatureRegistry 导出注册表快照：声明序、全行（含遗留兼容位），收录过滤由渲染方按规则做。
-func ExportAIFeatureRegistry() []AIFeatureExport {
-	out := make([]AIFeatureExport, 0, len(aiFeatureRegistry))
+func ExportAIFeatureRegistry() []FeatureExport {
+	out := make([]FeatureExport, 0, len(aiFeatureRegistry))
 	for _, f := range aiFeatureRegistry {
-		out = append(out, AIFeatureExport{
+		out = append(out, FeatureExport{
 			Name: f.name, Label: f.label, BindingKind: string(f.bindingKind), Billed: f.billed, FreePreview: f.freePreview,
 			Slug: f.slug, Adapter: string(f.adapter),
 		})
@@ -38,10 +38,10 @@ func ExportAIFeatureRegistry() []AIFeatureExport {
 }
 
 // aiFrontendFeatureInclude 前端功能配置收录规则 = aiFeatureIsChat（管理端单绑定 ∧ 声明计费，
-// 规则唯一编码于 ai_feature_registry.go，与 deriveFeatureChatKeys 同一谓词；组合关系由
-// ai_features_codegen_test.go 全表互等断言钉住）：学员可直接发起专项对话的功能。
+// 规则唯一编码于 feature_registry.go，与 deriveFeatureChatKeys 同一谓词；组合关系由
+// features_codegen_test.go 全表互等断言钉住）：学员可直接发起专项对话的功能。
 // 路由/文案/图标等展示数据属前端域，在 aiFeatureUI.ts 手写维护，不进生成面。
-func aiFrontendFeatureInclude(f AIFeatureExport) bool {
+func aiFrontendFeatureInclude(f FeatureExport) bool {
 	return aiFeatureIsChat(aiBindingKind(f.BindingKind), f.Billed)
 }
 
@@ -51,9 +51,9 @@ var aiFeatureKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 // aiFeaturesTSTemplate 生成物模板（第一个 %s = 功能键联合类型成员，第二个 %s = 注册表派生对）。
 // 无生成时间戳：时间戳使再生成永不幂等，全等契约随之失效——过期改由契约测试暴露。
 const aiFeaturesTSTemplate = `// 生成文件，勿手改（ADR-0030 前端 AI 功能配置窄域 codegen 试点，#613）。
-// 唯一事实源：后端 AI 功能注册表 backend/internal/service/ai_feature_registry.go。
+// 唯一事实源：后端 AI 功能注册表 backend/internal/aiassistant/feature_registry.go。
 // 再生成：cd backend && go run ./cmd/gen-aifeatures
-// 同步契约：backend/internal/service/ai_features_codegen_test.go 将本文件与注册表渲染结果
+// 同步契约：backend/internal/aiassistant/features_codegen_test.go 将本文件与注册表渲染结果
 // 全等比对，手改或注册表变更未再生成时后端测试即红。功能键与展示名由注册表派生；
 // 路由/文案/图标等展示数据在 aiFeatureUI.ts 手写维护，新增功能键时需同步补齐。
 import type { Component } from 'vue'
@@ -135,7 +135,7 @@ func tsQuote(s string) string {
 
 // RenderFrontendAIFeaturesTS 渲染前端功能配置文件内容（纯函数，确定性输出）。
 // 收录规则筛出 0 行时报错拒绝生成——前端专项对话清单为空属注册表事故，不应静默产出空配置。
-func RenderFrontendAIFeaturesTS(rows []AIFeatureExport) (string, error) {
+func RenderFrontendAIFeaturesTS(rows []FeatureExport) (string, error) {
 	var union, pairs, slugs, modes strings.Builder
 	n := 0
 	seenSlug := map[string]string{}
@@ -184,7 +184,7 @@ func GenerateFrontendAIFeaturesTS() (string, error) {
 }
 
 // FrontendAIFeaturesGen gen-aifeatures 的生成器声明：输出定位与渲染函数同源，
-// cmd/gen-aifeatures 与 ai_features_codegen_test.go 的同步断言共用一份（ADR-0053 §9）。
+// cmd/gen-aifeatures 与 features_codegen_test.go 的同步断言共用一份（ADR-0053 §9）。
 var FrontendAIFeaturesGen = codegen.Spec{
 	Name: "gen-aifeatures",
 	Hint: "frontend/src/config/aiFeatures.ts",

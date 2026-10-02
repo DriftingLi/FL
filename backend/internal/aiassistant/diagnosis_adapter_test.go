@@ -1,7 +1,7 @@
-// Package service 外部诊断 RAG 助手 adapter 测试（计划 批次1）：
+// 外部诊断 RAG 助手 adapter 测试（计划 批次1）：
 // httptest fake 助手钉死契约转译（chat_history array / with-image multipart JSON-string /
 // 伪流式切块 / sources 透传 / 错误降级），并验证 routing adapter 按功能键分发。
-package service
+package aiassistant
 
 import (
 	"context"
@@ -68,7 +68,7 @@ func (f *fakeDiagnosisServer) handler() http.Handler {
 	})
 }
 
-func newDiagnosisForTest(server *httptest.Server) AIModelPort {
+func newDiagnosisForTest(server *httptest.Server) ModelPort {
 	return NewDiagnosisAssistantModel(server.URL, zap.NewNop())
 }
 
@@ -102,7 +102,7 @@ func TestDiagnosisAdapterStream_PseudostreamAndSources(t *testing.T) {
 	var chunks []string
 	ctx := context.Background()
 	callCtx := WithDiagnosisSources(ctx)
-	content, usage, err := adapter.Stream(callCtx, AIModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgsSample("叉车无法行驶怎么排查？", 2), func(c string) {
+	content, usage, err := adapter.Stream(callCtx, ModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgsSample("叉车无法行驶怎么排查？", 2), func(c string) {
 		chunks = append(chunks, c)
 	})
 	if err != nil {
@@ -171,7 +171,7 @@ func TestDiagnosisAdapterStream_WithImage(t *testing.T) {
 		last,
 	}
 
-	_, _, err := adapter.Stream(context.Background(), AIModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgs, func(string) {})
+	_, _, err := adapter.Stream(context.Background(), ModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgs, func(string) {})
 	if err != nil {
 		t.Fatalf("Stream 异常: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestDiagnosisAdapterStream_BrandModel(t *testing.T) {
 	adapter := newDiagnosisForTest(server)
 
 	ctx := WithDiagnosisParams(context.Background(), "杭叉", "H3C-30")
-	_, _, err := adapter.Stream(ctx, AIModelSelector{}, msgsSample("提升缓慢？", 0), func(string) {})
+	_, _, err := adapter.Stream(ctx, ModelSelector{}, msgsSample("提升缓慢？", 0), func(string) {})
 	if err != nil {
 		t.Fatalf("Stream 异常: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestDiagnosisAdapterStream_Errors(t *testing.T) {
 	if unconf.baseURL != "" {
 		t.Fatal("空地址应被 trim 后保持空")
 	}
-	_, _, err := NewDiagnosisAssistantModel("", zap.NewNop()).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), nil)
+	_, _, err := NewDiagnosisAssistantModel("", zap.NewNop()).Stream(context.Background(), ModelSelector{}, msgsSample("x", 0), nil)
 	if err == nil || !strings.Contains(err.Error(), "未配置") {
 		t.Fatalf("未配置应返回友好错误: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestDiagnosisAdapterStream_Errors(t *testing.T) {
 	// 2. 助手返回非 200（detail 透出）
 	server := httptest.NewServer((&fakeDiagnosisServer{t: t, retCode: 503, retDetail: "service overloaded"}).handler())
 	defer server.Close()
-	_, _, err = newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), nil)
+	_, _, err = newDiagnosisForTest(server).Stream(context.Background(), ModelSelector{}, msgsSample("x", 0), nil)
 	if err == nil || !strings.Contains(err.Error(), "service overloaded") {
 		t.Fatalf("非 200 应透出 detail: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestDiagnosisAdapterStream_BadPayload(t *testing.T) {
 				_, _ = w.Write([]byte(c.body))
 			}))
 			defer server.Close()
-			content, _, err := newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), nil)
+			content, _, err := newDiagnosisForTest(server).Stream(context.Background(), ModelSelector{}, msgsSample("x", 0), nil)
 			if c.want == "" {
 				if err != nil {
 					t.Fatalf("code 字符串两态应容忍，got err=%v", err)
@@ -314,7 +314,7 @@ func TestDiagnosisAdapterStream_TruncatedSalvage(t *testing.T) {
 	}))
 	defer server.Close()
 	var chunks []string
-	content, _, err := newDiagnosisForTest(server).Stream(context.Background(), AIModelSelector{}, msgsSample("x", 0), func(c string) {
+	content, _, err := newDiagnosisForTest(server).Stream(context.Background(), ModelSelector{}, msgsSample("x", 0), func(c string) {
 		chunks = append(chunks, c)
 	})
 	if err != nil {
@@ -340,7 +340,7 @@ func TestDiagnosisAdapterSourceID(t *testing.T) {
 			_, _ = w.Write([]byte(body))
 		}))
 		content, _, err := NewDiagnosisAssistantModel(server.URL, zap.NewNop()).Stream(
-			WithDiagnosisSources(context.Background()), AIModelSelector{}, msgsSample("x", 0), nil)
+			WithDiagnosisSources(context.Background()), ModelSelector{}, msgsSample("x", 0), nil)
 		server.Close()
 		if err != nil {
 			t.Fatalf("两态 ID 不断流，body=%s err=%v", body, err)
@@ -357,10 +357,10 @@ func TestRoutingAIModel_Dispatch(t *testing.T) {
 	server := httptest.NewServer((&fakeDiagnosisServer{t: t, sopText: "SOP 内容"}).handler())
 	defer server.Close()
 	diag := newDiagnosisForTest(server)
-	r := NewRoutingAIModel(normal, diag)
+	r := NewRoutingModel(normal, diag)
 
 	// 非诊断键走 eino
-	c, _, err := r.Stream(context.Background(), AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge}, msgsSample("x", 0), nil)
+	c, _, err := r.Stream(context.Background(), ModelSelector{FeatureKey: FeatureMaintenanceKnowledge}, msgsSample("x", 0), nil)
 	if err != nil || c != "eino 回复" {
 		t.Fatalf("non-diagnosis 应走 normal: content=%q err=%v", c, err)
 	}
@@ -368,7 +368,7 @@ func TestRoutingAIModel_Dispatch(t *testing.T) {
 		t.Fatal("normal adapter 应被调用")
 	}
 	// 诊断键走 diagnosis
-	c, _, err = r.Stream(context.Background(), AIModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgsSample("x", 0), nil)
+	c, _, err = r.Stream(context.Background(), ModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgsSample("x", 0), nil)
 	if err != nil || c != "SOP 内容" {
 		t.Fatalf("diagnosis 应走助手 adapter: content=%q err=%v", c, err)
 	}
@@ -376,11 +376,11 @@ func TestRoutingAIModel_Dispatch(t *testing.T) {
 		t.Fatalf("diagnosis 不应走 normal，got streamN=%d", n)
 	}
 	// Complete：诊断不支持、其他走 normal
-	if _, err := r.Complete(FeatureFaultDiagnosis, nil, AICompleteOptions{}); err == nil {
+	if _, err := r.Complete(FeatureFaultDiagnosis, nil, CompleteOptions{}); err == nil {
 		t.Fatal("诊断功能 Complete 应报不支持")
 	}
 	if before := normal.completeN; true {
-		if _, err := r.Complete(FeatureGradeShortAnswer, nil, AICompleteOptions{}); err != nil {
+		if _, err := r.Complete(FeatureGradeShortAnswer, nil, CompleteOptions{}); err != nil {
 			t.Fatalf("非诊断 Complete 应走 normal: %v", err)
 		}
 		if normal.completeN <= before {

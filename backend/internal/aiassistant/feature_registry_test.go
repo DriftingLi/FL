@@ -1,9 +1,9 @@
-// Package service 实现业务服务层。
+// 实现业务服务层。
 // 本文件：AI 功能注册表的派生面行为等价测试（ADR-0030 决策 1/2）——
 // 钉住 AllAIFeatures / FeatureLabel / featureChatKeys / featureSystemPrompt /
 // isValidFeature 与注册表声明的逐一对应，以及 billed 声明与 CONTEXT.md
 // 「AI 计费」免费清单的一致性。
-package service
+package aiassistant
 
 import (
 	"reflect"

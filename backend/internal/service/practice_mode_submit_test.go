@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -41,7 +42,7 @@ func TestSubmitAnswer_ShortAnswer_AIPassed_OverridesRecord(t *testing.T) {
 	db.Model(&model.Question{}).Where("id = ?", q.ID).Updates(map[string]any{"reference_answer": "参考答案", "scoring_criteria": "要点齐全", "score": 5})
 	student := testutil.SeedStudent(t, db, "王五", "x")
 
-	svc.grader = &fakeGrader{res: &AIGradeResult{Score: 4, Comment: "回答到位"}} // 题目自定义满分 5，4≥3 及格
+	svc.grader = &fakeGrader{res: &aiassistant.GradeResult{Score: 4, Comment: "回答到位"}} // 题目自定义满分 5，4≥3 及格
 
 	result, err := svc.SubmitAnswer(student.ID, q.ID, "我的作答", "free", nil)
 	if err != nil {
@@ -105,6 +106,21 @@ func TestSubmitAnswer_QuestionMissing(t *testing.T) {
 	}
 }
 
+// fakeExplGen 可注入的解析生成 adapter，记录调用并按预设结果返回。
+// （波 2c 后域包自带的 fake 是未导出的测试符号，跨包拿不到 ⇒ 留驻侧自带一份同形实现。）
+type fakeExplGen struct {
+	content string
+	err     error
+	called  int
+	gotQA   string
+}
+
+func (f *fakeExplGen) GenerateQuestionExplanation(questionContent, answer, explanation string) (string, error) {
+	f.called++
+	f.gotQA = questionContent
+	return f.content, f.err
+}
+
 // TestSubmitAnswer_AIExplanation_GeneratedAndPersisted 生成分支穿过 service seam：
 // miss → 同步生成 → 回写缓存列（spec #294 Testing Decisions 的 AI 三分支之一）。
 func TestSubmitAnswer_AIExplanation_GeneratedAndPersisted(t *testing.T) {
@@ -113,7 +129,7 @@ func TestSubmitAnswer_AIExplanation_GeneratedAndPersisted(t *testing.T) {
 	student := testutil.SeedStudent(t, db, "周八", "x")
 
 	gen := &fakeExplGen{content: "现场生成的解析"}
-	svc.explainer = &QuestionExplanation{db: db, gen: gen, logger: zap.NewNop()}
+	svc.explainer = aiassistant.NewQuestionExplanationWith(db, gen, zap.NewNop())
 
 	result, err := svc.SubmitAnswer(student.ID, q.ID, "A", "free", nil)
 	if err != nil {

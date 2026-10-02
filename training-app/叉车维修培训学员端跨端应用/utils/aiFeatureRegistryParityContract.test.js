@@ -32,7 +32,7 @@ const ROOT = path.join(__dirname, '..');
 const read = (p) => readText(path.join(ROOT, p));
 
 const CONSTANTS_PATH = 'pages/ai-assistant/ai-assistant-constants.uts';
-const REGISTRY_PATH = '../../backend/internal/service/ai_feature_registry.go';
+const REGISTRY_PATH = '../../backend/internal/aiassistant/feature_registry.go';
 
 /**
  * 解析注册表的**功能键常量**（`FeatureXxx = "xxx"`）。

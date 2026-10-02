@@ -8,19 +8,20 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
 // fakeGrader 可注入的短答 AI adapter，记录调用参数并按预设结果返回。
 type fakeGrader struct {
-	res              *AIGradeResult
+	res              *aiassistant.GradeResult
 	called           int
 	gotStudentAnswer string
 	gotMaxScore      float64
 }
 
-func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore float64) *AIGradeResult {
+func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore float64) *aiassistant.GradeResult {
 	f.called++
 	f.gotStudentAnswer = studentAnswer
 	f.gotMaxScore = maxScore
@@ -44,7 +45,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 		flow       string
 		qType      string
 		answer     any
-		aiRes      *AIGradeResult // nil 表示 adapter 返回 nil（无 AI 分）
+		aiRes      *aiassistant.GradeResult // nil 表示 adapter 返回 nil（无 AI 分）
 		wantResult GradeResult
 		wantWrong  bool // 是否应落入错题库
 		wantAICall bool // 短答是否触发 AI adapter
@@ -73,7 +74,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			flow:   "practice",
 			qType:  "short_answer",
 			answer: "我的作答",
-			aiRes:  &AIGradeResult{Score: 8, Comment: "回答到位"},
+			aiRes:  &aiassistant.GradeResult{Score: 8, Comment: "回答到位"},
 			wantResult: GradeResult{
 				IsCorrect:   nil,
 				Earned:      8,
@@ -87,7 +88,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			flow:   "practice",
 			qType:  "short_answer",
 			answer: "答非所问",
-			aiRes:  &AIGradeResult{Score: 2, Comment: "偏题"},
+			aiRes:  &aiassistant.GradeResult{Score: 2, Comment: "偏题"},
 			wantResult: GradeResult{
 				IsCorrect:   nil,
 				Earned:      2,
@@ -101,7 +102,7 @@ func TestGradingEngineGradeSet(t *testing.T) {
 			flow:   "mock_exam",
 			qType:  "short_answer",
 			answer: "作答",
-			aiRes:  &AIGradeResult{Score: 0, Comment: "AI评分暂不可用，请等待讲师人工评分", Fallback: true},
+			aiRes:  &aiassistant.GradeResult{Score: 0, Comment: "AI评分暂不可用，请等待讲师人工评分", Fallback: true},
 			wantResult: GradeResult{
 				IsCorrect: nil,
 				Earned:    0,

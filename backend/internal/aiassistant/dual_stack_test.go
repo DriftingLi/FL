@@ -1,8 +1,8 @@
-// Package service 单一 AIModelPort 契约测试（ADR-0029 T2，#607；前身：Blocking/Streaming
+// 单一 ModelPort 契约测试（ADR-0029 T2，#607；前身：Blocking/Streaming
 // 双栈契约测试）。覆盖：同一绑定两方法解析同配置、Complete 与 Stream 收集结果一致、
 // client 签名缓存命中（阻塞/流式共享，client 不重建）、超时纪律单点分化断言（120s/300s）、
 // resolver 分支覆盖（decrypt-failed/空 featureKey/custom 不完整/未知来源）经新 port 路径走通。
-package service
+package aiassistant
 
 import (
 	"context"
@@ -27,21 +27,21 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// recordingResolver 凭证 resolver 记录包装：转发到 *AIConfigService，同时记录
+// recordingResolver 凭证 resolver 记录包装：转发到 *ConfigService，同时记录
 // 两流向的调用次数、解析结果与收到的 ctx 剩余时长（超时纪律断言通道）。
 type recordingResolver struct {
-	AIConfigResolver
+	ConfigResolver
 	mu              sync.Mutex
 	featureCalls    int
 	chatCalls       int
-	lastFeature     AISettings
-	lastChat        AISettings
+	lastFeature     ChatSettings
+	lastChat        ChatSettings
 	featureDeadline time.Duration
 	chatDeadline    time.Duration
 }
 
-func (r *recordingResolver) ResolveFeatureSettings(ctx context.Context, featureKey string) (AISettings, error) {
-	s, err := r.AIConfigResolver.ResolveFeatureSettings(ctx, featureKey)
+func (r *recordingResolver) ResolveFeatureSettings(ctx context.Context, featureKey string) (ChatSettings, error) {
+	s, err := r.ConfigResolver.ResolveFeatureSettings(ctx, featureKey)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.featureCalls++
@@ -54,8 +54,8 @@ func (r *recordingResolver) ResolveFeatureSettings(ctx context.Context, featureK
 	return s, err
 }
 
-func (r *recordingResolver) ResolveChatSettings(ctx context.Context, sel AIModelSelector) (AISettings, error) {
-	s, err := r.AIConfigResolver.ResolveChatSettings(ctx, sel)
+func (r *recordingResolver) ResolveChatSettings(ctx context.Context, sel ModelSelector) (ChatSettings, error) {
+	s, err := r.ConfigResolver.ResolveChatSettings(ctx, sel)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.chatCalls++
@@ -69,19 +69,19 @@ func (r *recordingResolver) ResolveChatSettings(ctx context.Context, sel AIModel
 }
 
 // snapshot 便捷读取（契约测试用）。
-func (r *recordingResolver) snapshot() (feat, chat AISettings, featDL, chatDL time.Duration) {
+func (r *recordingResolver) snapshot() (feat, chat ChatSettings, featDL, chatDL time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.lastFeature, r.lastChat, r.featureDeadline, r.chatDeadline
 }
 
-func (r *recordingResolver) chatSettings() AISettings {
+func (r *recordingResolver) chatSettings() ChatSettings {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.lastChat
 }
 
-func (r *recordingResolver) featureSettings() AISettings {
+func (r *recordingResolver) featureSettings() ChatSettings {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.lastFeature
@@ -160,15 +160,15 @@ func newStubOpenAIServer(t *testing.T, h *stubAIHandler) *httptest.Server {
 }
 
 // newPortStack 构建经 recordingResolver 注入的 eino 生产 adapter（契约测试骨架）。
-func newPortStack(t *testing.T) (*AIConfigService, *recordingResolver, AIModelPort, *gorm.DB) {
+func newPortStack(t *testing.T) (*ConfigService, *recordingResolver, ModelPort, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	if err := db.AutoMigrate(&model.AIConfig{}, &model.AIFeatureBinding{}, &model.AIUserModel{}); err != nil {
 		t.Fatalf("AutoMigrate AI 表失败: %v", err)
 	}
-	cfgSvc := NewAIConfigService(db, "test-master-key", zap.NewNop())
-	rec := &recordingResolver{AIConfigResolver: cfgSvc}
-	adapter := NewEinoAIModel(rec, zap.NewNop())
+	cfgSvc := NewConfigService(db, "test-master-key", zap.NewNop())
+	rec := &recordingResolver{ConfigResolver: cfgSvc}
+	adapter := NewEinoModel(rec, zap.NewNop())
 	return cfgSvc, rec, adapter, db
 }
 
@@ -203,8 +203,8 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 
 	// 阻塞与流式消费方共享同一端口实例（client 签名缓存跨方法复用的前提；
 	// 承接 T1 双栈测试「两栈共用同一 resolver 实例」的断言）
-	aiSvc := NewAIService(db, adapter, zap.NewNop())
-	assistant := NewAIAssistantService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), adapter)
+	aiSvc := NewGenerationService(db, adapter, zap.NewNop())
+	assistant := NewService(db, cfgSvc, filestore.NewFileStore("", nil, zap.NewNop()), "test-master-key", zap.NewNop(), adapter)
 	if aiSvc.port != adapter || assistant.port != adapter {
 		t.Fatal("阻塞与流式消费方应共享同一模型端口实例")
 	}
@@ -212,14 +212,14 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	// 阻塞补全：resolver 解析 → 签名缓存建 client → stub 完整回复
 	gotComplete, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{
 		schema.UserMessage("叉车液压异常"),
-	}, AICompleteOptions{MaxTokens: 16, Temperature: 0.2})
+	}, CompleteOptions{MaxTokens: 16, Temperature: 0.2})
 	if err != nil || gotComplete != full {
 		t.Fatalf("Complete 异常: %q err=%v", gotComplete, err)
 	}
 
 	// 流式：同一配置解析 → Stream → 分片回调 + 累积结果
 	var gotChunks []string
-	gotStream, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge},
+	gotStream, _, err := adapter.Stream(ctx, ModelSelector{FeatureKey: FeatureMaintenanceKnowledge},
 		[]*schema.Message{schema.UserMessage("叉车液压异常")},
 		func(c string) { gotChunks = append(gotChunks, c) })
 	if err != nil || gotStream != full {
@@ -254,7 +254,7 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	// 签名缓存命中：Complete+Stream（及二次解析）同一签名 → client 仅重建一次
 	gotComplete2, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{
 		schema.UserMessage("再次提问"),
-	}, AICompleteOptions{MaxTokens: 16, Temperature: 0.2})
+	}, CompleteOptions{MaxTokens: 16, Temperature: 0.2})
 	if err != nil || gotComplete2 != full {
 		t.Fatalf("二次 Complete 异常: %q err=%v", gotComplete2, err)
 	}
@@ -284,18 +284,18 @@ func TestAIModelPortClientCacheAcrossMethods(t *testing.T) {
 
 	// 重建日志经构造期注入的 observer logger 计数（adapter 经接口返回，不摸具体字段）
 	core, logs := observer.New(zapcore.InfoLevel)
-	adapter := NewEinoAIModel(rec, zap.New(core))
+	adapter := NewEinoModel(rec, zap.New(core))
 
-	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8}); err != nil {
+	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, CompleteOptions{MaxTokens: 8}); err != nil {
 		t.Fatalf("首次 Complete 失败: %v", err)
 	}
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
 		t.Fatalf("Stream 失败: %v", err)
 	}
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{FeatureKey: FeatureExerciseSolving}, []*schema.Message{schema.UserMessage("q")}, nil); err != nil {
 		t.Fatalf("二次 Stream 失败: %v", err)
 	}
-	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8}); err != nil {
+	if _, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, CompleteOptions{MaxTokens: 8}); err != nil {
 		t.Fatalf("二次 Complete 失败: %v", err)
 	}
 
@@ -329,7 +329,7 @@ func TestAIModelPortCompleteRetryOnServerError(t *testing.T) {
 		t.Fatalf("SetBinding 失败: %v", err)
 	}
 
-	got, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8})
+	got, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, CompleteOptions{MaxTokens: 8})
 	if err != nil || got != "重试成功" {
 		t.Fatalf("重试后应成功: %q err=%v", got, err)
 	}
@@ -354,7 +354,7 @@ func TestAIModelPortCompleteRetryOnServerError(t *testing.T) {
 	if err := cfgSvc.SetBinding(ctx, FeatureQuestionExplanation, cfg2ID); err != nil {
 		t.Fatalf("SetBinding 失败: %v", err)
 	}
-	if _, err := adapter.Complete(FeatureQuestionExplanation, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8}); err == nil {
+	if _, err := adapter.Complete(FeatureQuestionExplanation, []*schema.Message{schema.UserMessage("q")}, CompleteOptions{MaxTokens: 8}); err == nil {
 		t.Fatal("持续失败应返回错误")
 	}
 	if got := h2.callCount(); got != 2 {
@@ -378,7 +378,7 @@ func TestAIModelPortCompleteContentFilter(t *testing.T) {
 		t.Fatalf("SetBinding 失败: %v", err)
 	}
 
-	got, err := adapter.Complete(FeatureGenerateChapterContent, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8})
+	got, err := adapter.Complete(FeatureGenerateChapterContent, []*schema.Message{schema.UserMessage("q")}, CompleteOptions{MaxTokens: 8})
 	if err != nil || got != "" {
 		t.Fatalf("content_filter 应返回空内容无错误: %q err=%v", got, err)
 	}
@@ -388,8 +388,8 @@ func TestAIModelPortCompleteContentFilter(t *testing.T) {
 }
 
 // TestAIConfigResolverBranchesViaPort resolver 分支覆盖（#606 起，T2 起经新 port 路径走通）：
-// featureKey/选择子 → AISettings 的旧 ModelSource 兼容与解析失败分支
-// （专项单绑定/双模式/遗留回退三档阶梯见 ai_config_ladder_test.go）。
+// featureKey/选择子 → ChatSettings 的旧 ModelSource 兼容与解析失败分支
+// （专项单绑定/双模式/遗留回退三档阶梯见 config_ladder_test.go）。
 func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	ctx := context.Background()
 	cfgSvc, rec, adapter, db := newPortStack(t)
@@ -407,7 +407,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("插入用户模型失败: %v", err)
 	}
-	gotStream, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserID: 7, UserModelID: 1},
+	gotStream, _, err := adapter.Stream(ctx, ModelSelector{ModelSource: "user", UserID: 7, UserModelID: 1},
 		[]*schema.Message{schema.UserMessage("q")}, nil)
 	if err != nil || gotStream != "分支回复" {
 		t.Fatalf("user 来源流式调用异常: %q err=%v", gotStream, err)
@@ -417,12 +417,12 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}
 
 	// 未登录不能使用用户自定义模型
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserModelID: 1}, nil, nil); err == nil || err.Error() != "未登录不能使用用户自定义模型" {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{ModelSource: "user", UserModelID: 1}, nil, nil); err == nil || err.Error() != "未登录不能使用用户自定义模型" {
 		t.Errorf("未登录使用 user 来源应报原文案: %v", err)
 	}
 
 	// 旧 ModelSource=custom：选择子字段直接透传
-	gotStream, _, err = adapter.Stream(ctx, AIModelSelector{
+	gotStream, _, err = adapter.Stream(ctx, ModelSelector{
 		ModelSource:  "custom",
 		CustomAPIKey: "sk-custom", CustomBaseURL: baseURL, CustomModel: "gpt-4o",
 	}, []*schema.Message{schema.UserMessage("q")}, nil)
@@ -434,12 +434,12 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}
 
 	// custom 来源字段不完整 → 报错（文案逐字保留）
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "custom", CustomAPIKey: "sk-custom"}, nil, nil); err == nil || err.Error() != "自定义模型配置不完整" {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{ModelSource: "custom", CustomAPIKey: "sk-custom"}, nil, nil); err == nil || err.Error() != "自定义模型配置不完整" {
 		t.Errorf("custom 配置不完整应报原文案: %v", err)
 	}
 
 	// 未知来源报错（文案逐字保留）
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "unknown"}, nil, nil); err == nil || err.Error() != "未知的 model_source: unknown" {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{ModelSource: "unknown"}, nil, nil); err == nil || err.Error() != "未知的 model_source: unknown" {
 		t.Errorf("未知 model_source 应报原文案: %v", err)
 	}
 
@@ -473,7 +473,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	if err := cfgSvc.SetBinding(ctx, FeatureGradeShortAnswer, gradingID); err != nil {
 		t.Fatalf("SetBinding 失败: %v", err)
 	}
-	gotComplete, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, AICompleteOptions{MaxTokens: 8})
+	gotComplete, err := adapter.Complete(FeatureGradeShortAnswer, []*schema.Message{schema.UserMessage("q")}, CompleteOptions{MaxTokens: 8})
 	if err != nil || gotComplete != "分支回复" {
 		t.Fatalf("阻塞流向 Complete 异常: %q err=%v", gotComplete, err)
 	}
@@ -483,11 +483,11 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 
 	// 未绑定功能 / 空 featureKey：报错而非降级（文案逐字保留）
 	unboundMsg := fmt.Sprintf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", FeatureQuestionExplanation)
-	if _, err := adapter.Complete(FeatureQuestionExplanation, nil, AICompleteOptions{}); err == nil || err.Error() != unboundMsg {
+	if _, err := adapter.Complete(FeatureQuestionExplanation, nil, CompleteOptions{}); err == nil || err.Error() != unboundMsg {
 		t.Errorf("未绑定功能应报原文案: %v", err)
 	}
 	emptyKeyMsg := fmt.Sprintf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", "")
-	if _, err := adapter.Complete("", nil, AICompleteOptions{}); err == nil || err.Error() != emptyKeyMsg {
+	if _, err := adapter.Complete("", nil, CompleteOptions{}); err == nil || err.Error() != emptyKeyMsg {
 		t.Errorf("空 featureKey 应报原文案: %v", err)
 	}
 
@@ -499,12 +499,12 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 		t.Fatalf("解密失败应标记 decrypt-failed: %+v", got)
 	}
 	dirtyMsg := fmt.Sprintf("AI 功能 %q 未绑定配置，请在管理员后台 AI 配置页面绑定", FeatureGenerateChapterContent)
-	if _, err := adapter.Complete(FeatureGenerateChapterContent, nil, AICompleteOptions{}); err == nil || err.Error() != dirtyMsg {
+	if _, err := adapter.Complete(FeatureGenerateChapterContent, nil, CompleteOptions{}); err == nil || err.Error() != dirtyMsg {
 		t.Errorf("解密失败时 port 路径应报未绑定文案: %v", err)
 	}
 
 	// 专项功能未绑定应报错（防绕过：custom 字段不得兜底；文案逐字保留）
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{FeatureKey: FeatureMaintenanceKnowledge, ModelSource: "custom", CustomAPIKey: "sk-bypass"}, nil, nil); err == nil || err.Error() != "管理员未配置该功能的模型，请联系管理员" {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{FeatureKey: FeatureMaintenanceKnowledge, ModelSource: "custom", CustomAPIKey: "sk-bypass"}, nil, nil); err == nil || err.Error() != "管理员未配置该功能的模型，请联系管理员" {
 		t.Errorf("专项功能未绑定应报原文案: %v", err)
 	}
 
@@ -515,7 +515,7 @@ func TestAIConfigResolverBranchesViaPort(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("插入脏用户模型失败: %v", err)
 	}
-	if _, _, err := adapter.Stream(ctx, AIModelSelector{ModelSource: "user", UserID: 8, UserModelID: 2}, nil, nil); err == nil || !strings.Contains(err.Error(), "解密用户自定义模型 API Key 失败") {
+	if _, _, err := adapter.Stream(ctx, ModelSelector{ModelSource: "user", UserID: 8, UserModelID: 2}, nil, nil); err == nil || !strings.Contains(err.Error(), "解密用户自定义模型 API Key 失败") {
 		t.Errorf("用户模型解密失败应报错: %v", err)
 	}
 }

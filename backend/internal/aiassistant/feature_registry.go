@@ -1,10 +1,10 @@
-// Package service 实现业务服务层。
+// 实现业务服务层。
 // 本文件：AI 功能注册表单点（ADR-0030 决策 1/2）——功能键常量、系统提示词与
 // {name, label, systemPrompt, bindingKind, billed} 五字段注册表收敛在一个文件；
 // 四个导出面（AllAIFeatures / FeatureLabel / featureChatKeys / featureSystemPrompt，
 // 连同 isValidFeature）全部由表派生，新增功能 = 声明一个功能键 + 追加一行注册。
 // 计量闸门接线不在本文件（见 AI 计量闸门决策 #619）：billed 目前只是声明位。
-package service
+package aiassistant
 
 // AI 功能键（与前端展示一致）。新增功能时在此追加常量，并在 aiFeatureRegistry 注册一行。
 const (
@@ -98,7 +98,7 @@ const questionExplainSystemPrompt = `你是一名叉车维修培训专家，请�
 const diagnosisSystemPrompt = `你是一名叉车维修诊断专家：基于维修手册与故障码知识库生成标准排查作业指导书（SOP），
 回答须包含可能原因、排查步骤、处理方法与安全警示。`
 
-// aiBindingKind 功能绑定形态（消费面如何取到模型配置；解析阶梯本身在 AIConfigResolver，不在注册表）。
+// aiBindingKind 功能绑定形态（消费面如何取到模型配置；解析阶梯本身在 ConfigResolver，不在注册表）。
 type aiBindingKind string
 
 const (
@@ -194,9 +194,9 @@ func deriveFeatureLabel(reg []aiFeature) map[string]string {
 }
 
 // aiFeatureIsChat 专项对话功能判定（规则唯一编码）：管理端单绑定且声明计费。
-// deriveFeatureChatKeys（会话键派生）、前端功能配置收录谓词（ai_features_codegen.go）与
+// deriveFeatureChatKeys（会话键派生）、前端功能配置收录谓词（features_codegen.go）与
 // 对话计费声明查询（aiFeatureChatBilled 的对话形态分支）全部经本谓词取用，消除规则双写；
-// 组合关系（收录集合 ⟺ featureChatKeys 键集）由 ai_features_codegen_test.go 全表互等断言钉住。
+// 组合关系（收录集合 ⟺ featureChatKeys 键集）由 features_codegen_test.go 全表互等断言钉住。
 func aiFeatureIsChat(kind aiBindingKind, billed bool) bool {
 	return kind == bindingAdminSingle && billed
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -299,14 +300,14 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &RefreshResultDTO{RefreshToken: "ref-1", Token: "acc-1"},
 		},
 		{
-			name:   "AISessionRenameResultDTO（PATCH /ai-assistant/sessions/{id}/title：原 handler 内联 map[string]string）",
+			name:   "aiassistant.AISessionRenameResultDTO（PATCH /ai-assistant/sessions/{id}/title：原 handler 内联 map[string]string）",
 			legacy: map[string]string{"message": "已更新会话标题"},
-			dto:    &AISessionRenameResultDTO{Message: "已更新会话标题"},
+			dto:    &aiassistant.AISessionRenameResultDTO{Message: "已更新会话标题"},
 		},
 		{
-			name:   "AIImageUploadResultDTO（POST /ai-assistant/upload-image：原 handler 内联 gin.H{url}）",
+			name:   "aiassistant.AIImageUploadResultDTO（POST /ai-assistant/upload-image：原 handler 内联 gin.H{url}）",
 			legacy: map[string]any{"url": "https://cdn.test/images/ai-assistant/chat_1.png"},
-			dto:    &AIImageUploadResultDTO{URL: "https://cdn.test/images/ai-assistant/chat_1.png"},
+			dto:    &aiassistant.AIImageUploadResultDTO{URL: "https://cdn.test/images/ai-assistant/chat_1.png"},
 		},
 		// ===== ADR-0048 片六（#964）：培训目录 / 题库 / 证件域的 handler 内联 map 收口 =====
 		{
@@ -452,11 +453,11 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 //
 // swag 对匿名嵌套对象只吐内联 object，而渲染规则对「带 properties 的 object」只给
 // { [key: string]: unknown } —— 前端 metadata.source_url 会退化成 unknown，故必须命名
-// （service.DiagnosisSourceMetadata）。命名不得改动任何字节：字段序 / json tag / 可空性都不动。
+// （service.aiassistant.DiagnosisSourceMetadata）。命名不得改动任何字节：字段序 / json tag / 可空性都不动。
 func TestDiagnosisSourceMetadataShapeLock(t *testing.T) {
 	type legacyDiagnosisSource struct {
-		ID       diagnosisSourceID `json:"id"`
-		Text     string            `json:"text"`
+		ID       aiassistant.DiagnosisSourceID `json:"id"`
+		Text     string                        `json:"text"`
 		Metadata struct {
 			SourceURL string `json:"source_url"`
 			PageStart int    `json:"page_start"`
@@ -466,7 +467,7 @@ func TestDiagnosisSourceMetadataShapeLock(t *testing.T) {
 	legacy := legacyDiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
 	legacy.Metadata.SourceURL = "https://example.com/manual/x.pdf"
 	legacy.Metadata.PageStart, legacy.Metadata.PageEnd = 3, 4
-	dto := DiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
+	dto := aiassistant.DiagnosisSource{ID: "fault-15", Text: "手册第 3 页"}
 	dto.Metadata.SourceURL = "https://example.com/manual/x.pdf"
 	dto.Metadata.PageStart, dto.Metadata.PageEnd = 3, 4
 

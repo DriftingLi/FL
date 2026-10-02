@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
@@ -59,7 +60,7 @@ func assertTotalIsSumOfDetails(t *testing.T, got *MockExamSubmitDTO) {
 func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewMockExamService(db, nil, zap.NewNop())
-	svc.grader = &fakeGrader{res: &AIGradeResult{Score: 8, Comment: "回答到位"}}
+	svc.grader = &fakeGrader{res: &aiassistant.GradeResult{Score: 8, Comment: "回答到位"}}
 
 	multi := testutil.SeedQuestion(t, db, "multi_choice", "多选", "A,B,C")
 	short := testutil.SeedQuestion(t, db, "short_answer", "简答", "参考答案")

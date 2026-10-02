@@ -1,16 +1,16 @@
-// Package service 外部诊断 RAG 助手 adapter（计划 批次1）：
-// 第二个生产 AIModelPort adapter（ADR-0029 T2，"单一端口、多实现"）——调用 forklift-assistant
+// 外部诊断 RAG 助手 adapter（计划 批次1）：
+// 第二个生产 ModelPort adapter（ADR-0029 T2，"单一端口、多实现"）——调用 forklift-assistant
 // 交付包（FastAPI + bge-m3 本地向量 RAG）的阻塞 JSON /chat 与 /chat/with-image，经 onChunk
-// 伪流式转译为 AIModelPort.Stream 回调（助手不支持 SSE，2026-09-05 契约钉死）。
+// 伪流式转译为 ModelPort.Stream 回调（助手不支持 SSE，2026-09-05 契约钉死）。
 // 特性：
-//   - 凭证不入 AIConfigResolver：baseURL 来自 config.DiagnosisAssistantURL（直接注入），
+//   - 凭证不入 ConfigResolver：baseURL 来自 config.DiagnosisAssistantURL（直接注入），
 //     不走管理端模型绑定（端口签名只传 selector，解析全在 adapter 内部）。
 //   - 图片路径：复用 StreamChat 的多模态消息重组（text + base64 image part），adapter 从
 //     part 还原字节后 re-post multipart 到 /chat/with-image（无需新增转发端点）。
 //   - 图片表达归一：20260921 起正文图片是 [IMG:image_id] 裸令牌、URL 另在 data.answer_images[]，
 //     出站前统一成 ![...](本站代理 URL)（normalizeDiagnosisImages，ADR-0063）——契约事实源
 //     2026-09-05 首次钉死于 lxc101 openapi，2026-09-22 按 20260904/20260921 两版实包复核。
-package service
+package aiassistant
 
 import (
 	"bytes"
@@ -56,8 +56,8 @@ func diagnosisParamsFrom(ctx context.Context) diagnosisParams {
 }
 
 // diagnosisSourcesCtxKey ctx 键：诊断响应来源数据容器（可变指针——adapter 与调用方共享）。
-// ctx value 存指针容器是既有灰色地带的显式使用：AIModelPort.Stream 返回签名固定
-// (string, *AIUsage, error)，sources 属助手专用产物，不污染通用端口语义——用 box 完成
+// ctx value 存指针容器是既有灰色地带的显式使用：ModelPort.Stream 返回签名固定
+// (string, *Usage, error)，sources 属助手专用产物，不污染通用端口语义——用 box 完成
 // adapter（写）→ handler（读）的跨层透传，并发安全。
 type diagnosisSourcesCtxKey struct{}
 
@@ -102,27 +102,27 @@ type DiagnosisSourceMetadata struct {
 // DiagnosisSource 来源资料条目（answer_sources）：文本内嵌 <<IMAGE:/assistant/static/manual/...>>
 // 溯源标记；metadata.source_url 为 PDF 原文外链，page_start/end 为页码。
 // ID 兼容数字/字符串两态（实测结构化故障码来源吐 "fault-15" 字符串；数字仍原样透出）——
-// 出站恒为 JSON 字符串（diagnosisSourceID 底层是 string，只自定义了 UnmarshalJSON）。
+// 出站恒为 JSON 字符串（DiagnosisSourceID 底层是 string，只自定义了 UnmarshalJSON）。
 type DiagnosisSource struct {
-	ID       diagnosisSourceID       `json:"id"`
+	ID       DiagnosisSourceID       `json:"id"`
 	Text     string                  `json:"text"`
 	Metadata DiagnosisSourceMetadata `json:"metadata"`
 }
 
-// diagnosisSourceID 来源 ID：数字与字符串两态（与 diagnosisCode 同形问题的同族修复）。
-type diagnosisSourceID string
+// DiagnosisSourceID 来源 ID：数字与字符串两态（与 diagnosisCode 同形问题的同族修复）。
+type DiagnosisSourceID string
 
-func (id *diagnosisSourceID) UnmarshalJSON(raw []byte) error {
+func (id *DiagnosisSourceID) UnmarshalJSON(raw []byte) error {
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
-		*id = diagnosisSourceID(s)
+		*id = DiagnosisSourceID(s)
 		return nil
 	}
 	var n json.Number
 	if err := json.Unmarshal(raw, &n); err != nil {
 		return err
 	}
-	*id = diagnosisSourceID(n.String())
+	*id = DiagnosisSourceID(n.String())
 	return nil
 }
 
@@ -187,7 +187,7 @@ func (c *diagnosisCode) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// diagnosisAssistantAdapter 诊断 RAG 助手 adapter（第二个生产 AIModelPort 实现）。
+// diagnosisAssistantAdapter 诊断 RAG 助手 adapter（第二个生产 ModelPort 实现）。
 // 自有 HTTP client：baseURL 构造期注入（config），不经 resolver、无 client 签名缓存
 // （助手仅一个端点，无凭证切换）。
 type diagnosisAssistantAdapter struct {
@@ -198,7 +198,7 @@ type diagnosisAssistantAdapter struct {
 
 // NewDiagnosisAssistantModel 构建诊断 adapter。baseURL 为空时 Stream 返回「未配置」友好错误
 // （功能不可用不炸栈）。
-func NewDiagnosisAssistantModel(baseURL string, logger *zap.Logger) AIModelPort {
+func NewDiagnosisAssistantModel(baseURL string, logger *zap.Logger) ModelPort {
 	return &diagnosisAssistantAdapter{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		client:  &http.Client{Timeout: aiStreamTimeout}, // 与 eino 流式 300s 纪律一致
@@ -206,17 +206,17 @@ func NewDiagnosisAssistantModel(baseURL string, logger *zap.Logger) AIModelPort 
 	}
 }
 
-var _ AIModelPort = (*diagnosisAssistantAdapter)(nil)
+var _ ModelPort = (*diagnosisAssistantAdapter)(nil)
 
 // Complete 诊断功能无阻塞补全消费：返回不支持错误（routing adapter 兜底到 eino 前先声明）。
-func (a *diagnosisAssistantAdapter) Complete(_ string, _ []*schema.Message, _ AICompleteOptions) (string, error) {
+func (a *diagnosisAssistantAdapter) Complete(_ string, _ []*schema.Message, _ CompleteOptions) (string, error) {
 	return "", errors.New("智能维修诊断不支持阻塞补全")
 }
 
 // Stream 阻塞调用助手 → 伪流式：整包响应到达后按段落切块经 onChunk 回调，
 // 返回完整回复与计量产出（nil——计量闸门在本 adapter 外层装饰器）。响应 answer_sources
 // 写入 ctx 来源容器（handler 发 SSE sources 事件）。
-func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
+func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
 	if a.baseURL == "" {
 		return "", nil, errors.New("智能维修诊断服务未配置，请联系管理员")
 	}
@@ -614,7 +614,7 @@ func foldHistoryIntoQuery(history []diagnosisChatTurn, query string) string {
 // 归一发生在伪流式切块与落库之前 ⇒ SSE、历史回放、Web 与移动端读到的都是同一份归一后
 // 正文，三端零改动（移动端正文是纯文本渲染，尤其需要裸令牌被抹掉）。未知 image_id
 // **丢令牌**而不是原样透出：宁可少一张图，也不把 img_ab12cd34 这种内部标识露给学员。
-// diagnosisAssetRoute 是归一后正文里图片的本站路径前缀，与 api/diagnosis.go 注册的
+// diagnosisAssetRoute 是归一后正文里图片的本站路径前缀，与 handler_diagnosis.go 注册的
 // `/api/ai-assistant/diagnosis/manual/*filepath` 同源（改路由要同时改这里，契约测试经真实
 // 路由命中该路径，会先红）。
 const diagnosisAssetRoute = "/api/ai-assistant/diagnosis/manual/"
@@ -810,22 +810,22 @@ func canonicalizeDiagnosisSources(sources []DiagnosisSource, idx map[string]diag
 //	普通 AI（eino 解析管理端/双绑定凭证）   ——完整/流式一切既往
 //	智能维修诊断（外部 RAG 助手，自持凭证）——仅流式消费
 //
-// 消耗面（AIAssistantService.StreamChat 等）无感知：仍面对单一 AIModelPort。
+// 消耗面（Service.StreamChat 等）无感知：仍面对单一 ModelPort。
 type routingAIModel struct {
-	normal    AIModelPort
-	diagnosis AIModelPort
+	normal    ModelPort
+	diagnosis ModelPort
 }
 
-// NewRoutingAIModel 构建分发端口。normal/diagnosis 均必须非 nil（构造期注入是不变量）。
-func NewRoutingAIModel(normal, diagnosis AIModelPort) AIModelPort {
+// NewRoutingModel 构建分发端口。normal/diagnosis 均必须非 nil（构造期注入是不变量）。
+func NewRoutingModel(normal, diagnosis ModelPort) ModelPort {
 	return &routingAIModel{normal: normal, diagnosis: diagnosis}
 }
 
-var _ AIModelPort = (*routingAIModel)(nil)
+var _ ModelPort = (*routingAIModel)(nil)
 
 // Complete 走外部诊断适配器的功能不支持阻塞补全；其余走 normal（评分/解析/章节生成等）。
 // 分发判据来自注册表 adapter 列（ADR-0047 §7），不再是功能键字符串比较。
-func (r *routingAIModel) Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error) {
+func (r *routingAIModel) Complete(featureKey string, msgs []*schema.Message, opts CompleteOptions) (string, error) {
 	if aiFeatureAdapterOf(featureKey) == aiAdapterDiagnosis {
 		return r.diagnosis.Complete(featureKey, msgs, opts)
 	}
@@ -833,7 +833,7 @@ func (r *routingAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 }
 
 // Stream 按注册表 adapter 分发：diagnosis 走外部诊断 RAG，其余走 eino（含未注册键回退路径）。
-func (r *routingAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
+func (r *routingAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
 	if aiFeatureAdapterOf(sel.FeatureKey) == aiAdapterDiagnosis {
 		return r.diagnosis.Stream(ctx, sel, msgs, onChunk)
 	}

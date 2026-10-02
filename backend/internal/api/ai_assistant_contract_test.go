@@ -1,6 +1,6 @@
 // ADR-0048 契约 codegen 片八（#966）：aiAssistant 域**信封端点**的顶层 key 锁。
 //
-// 本片把这些端点的 @Success 从「无 data 指认」改为 `data=service.Xxx`（SSE 端点除外），
+// 本片把这些端点的 @Success 从「无 data 指认」改为 `data=aiassistant.Xxx`（SSE 端点除外），
 // 注解从此是前端响应类型的唯一事实源 —— 本测试用真实 router + 装配根断言**实际返回**的
 // data 顶层 key 与指认一致（先例：片一在 internal/api/*_contract_test.go 里断言 JSON keys）。
 //
@@ -126,13 +126,13 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 		t.Fatalf("签发 token 失败: %v", err)
 	}
 
-	// ---- GET /models（公开）：data=[]service.ModelOption ----
+	// ---- GET /models（公开）：data=[]aiassistant.ModelOption ----
 	env := aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/models"))
 	if arr := aiArray(t, env.Data); len(arr) != 0 {
 		t.Fatalf("未配置模型时 /models 的 data 应为空数组，got %s", string(env.Data))
 	}
 
-	// ---- GET /modes（公开）：data=service.AIAssistantModeModels（两个键在、值可 null） ----
+	// ---- GET /modes（公开）：data=aiassistant.AIAssistantModeModels（两个键在、值可 null） ----
 	env = aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/modes"))
 	aiWantKeys(t, aiKeys(t, env.Data), "expert", "normal")
 	var modes map[string]json.RawMessage
@@ -145,7 +145,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 		}
 	}
 
-	// ---- POST /sessions（登录）：data=service.AIChatSessionDTO ----
+	// ---- POST /sessions（登录）：data=aiassistant.AIChatSessionDTO ----
 	env = aiOK(t, doWithToken(t, r, token, http.MethodPost, "/api/ai-assistant/sessions",
 		map[string]any{"title": "契约会话", "feature_key": "ai_assistant"}))
 	aiWantKeys(t, aiKeys(t, env.Data), "created_at", "feature_key", "id", "model_name", "title", "updated_at")
@@ -163,7 +163,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 		t.Fatalf("创建会话 title = %q，期望 契约会话", sessionTitle)
 	}
 
-	// ---- GET /sessions（登录）：data=[]service.AIChatSessionDTO ----
+	// ---- GET /sessions（登录）：data=[]aiassistant.AIChatSessionDTO ----
 	env = aiOK(t, doWithToken(t, r, token, http.MethodGet, "/api/ai-assistant/sessions", nil))
 	sessions := aiArray(t, env.Data)
 	if len(sessions) != 1 {
@@ -171,7 +171,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 	}
 	aiWantKeys(t, aiKeys(t, sessions[0]), "created_at", "feature_key", "id", "model_name", "title", "updated_at")
 
-	// ---- GET /sessions/{id}/messages（登录）：data=[]service.AIChatMessageDTO ----
+	// ---- GET /sessions/{id}/messages（登录）：data=[]aiassistant.AIChatMessageDTO ----
 	// 空 images/sources 的落库形态：键一定在、值为 null（x-nullable 的字节级事实）。
 	msg := model.AIChatMessage{SessionID: sessionID, Role: "user", Content: "你好", CreatedAt: testutil.Now()}
 	if err := db.Create(&msg).Error; err != nil {
@@ -208,7 +208,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 		t.Fatalf("带图消息 images 应回放 URL 数组，got %s", second["images"])
 	}
 
-	// ---- PATCH /sessions/{id}/title（登录）：data=service.AISessionRenameResultDTO ----
+	// ---- PATCH /sessions/{id}/title（登录）：data=aiassistant.AISessionRenameResultDTO ----
 	env = aiOK(t, doWithToken(t, r, token, http.MethodPatch, "/api/ai-assistant/sessions/"+strconv.Itoa(sessionID)+"/title",
 		map[string]any{"title": "改过的标题"}))
 	aiWantKeys(t, aiKeys(t, env.Data), "message")
@@ -241,7 +241,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 	var modelID int
 	_ = json.Unmarshal(userModel["id"], &modelID)
 
-	// ---- POST /upload-image（可选认证）：裸 fetch 也走信封，data=service.AIImageUploadResultDTO ----
+	// ---- POST /upload-image（可选认证）：裸 fetch 也走信封，data=aiassistant.AIImageUploadResultDTO ----
 	env = aiOK(t, uploadAIImage(t, r, "chat.png"))
 	aiWantKeys(t, aiKeys(t, env.Data), "url")
 	var uploaded map[string]string
@@ -274,7 +274,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: "ai-diagnosis-contract-secret", DiagnosisAssistantURL: stub.URL}
 	r := NewRouter(NewDeps(cfg, db, &fakeUploadStorage{}, zap.NewNop(), nil))
 
-	// ---- GET /diagnosis/brands：data=[]service.DiagnosisBrandOption ----
+	// ---- GET /diagnosis/brands：data=[]aiassistant.DiagnosisBrandOption ----
 	env := aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/brands"))
 	brands := aiArray(t, env.Data)
 	if len(brands) != 2 {
@@ -292,7 +292,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 		t.Fatalf("车型列表 = %v，期望 [CPCD30 CPD15]", modelNames)
 	}
 
-	// ---- GET /diagnosis/fault-codes：data=service.DiagnosisFaultCodePage ----
+	// ---- GET /diagnosis/fault-codes：data=aiassistant.DiagnosisFaultCodePage ----
 	env = aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/fault-codes?brand=heli&page=1&page_size=5"))
 	aiWantKeys(t, aiKeys(t, env.Data), "items", "total")
 	var page map[string]json.RawMessage

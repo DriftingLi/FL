@@ -1,12 +1,12 @@
-// Package service AI 计量闸门（ADR-0031，#619）：AIMeter adapter 挂在 AIModelPort 上，
+// AI 计量闸门（ADR-0031，#619）：AIMeter adapter 挂在 ModelPort 上，
 // 所有经端口的 LLM 消费过同一道闸——是否计费由功能注册表 billed 声明驱动（ADR-0030，
 // Stream 流向查询单点 aiFeatureChatBilled），请求标识降级键生成内移进本文件。
-// 「什么算 prompt」的**唯一实现**在 ai_prompt_chars.go：调用方（请求 DTO 可见作用域）把
+// 「什么算 prompt」的**唯一实现**在 prompt_chars.go：调用方（请求 DTO 可见作用域）把
 // 消息列表交给闸门，未声明时回退端口消息推导，两条路径投影到同一中立形态后走同一个函数
 // （ADR-0053 §5：此前是「调用方算好数字 + 闸门自己再推导一遍」两份实现，测试断言的是镜像）。
 // HTTP 层不持有计费编排。计费金额口径单点仍在积分域
 // （estimateAITokens / aiPointsForTokens / AIPreflight / DeductAI），本文件零口径知识、零常量。
-package service
+package aiassistant
 
 import (
 	"context"
@@ -19,22 +19,22 @@ import (
 	"forklift-training/internal/points"
 )
 
-// AIMetering 计量闸门 seam（ADR-0031 决策 1）：生产实现 = 积分域 *points.Service
+// Metering 计量闸门 seam（ADR-0031 决策 1）：生产实现 = 积分域 *points.Service
 // （AIPreflight/DeductAI 方法签名原样满足——余额预检与扣费下限同源，不另立实现），
 // 测试 fake 为第二实现。meter 只认这两个动作，金额换算与幂等全部留在积分域。
-type AIMetering interface {
+type Metering interface {
 	AIPreflight(userID int) error
 	DeductAI(ctx context.Context, userID int, requestID string, promptChars, completionChars int) (*points.AITokensResult, error)
 }
 
 // 积分域实现即生产 meter：签名同源，零适配代码。
-var _ AIMetering = (*points.Service)(nil)
+var _ Metering = (*points.Service)(nil)
 
-// AIUsage 单次经闸调用的计量产出（仅计费调用非 nil）。
+// Usage 单次经闸调用的计量产出（仅计费调用非 nil）。
 // Res = 扣费数据面（即 SSE usage 事件负载，json 形状与迁移前逐字节一致，移动端契约无感）；
 // Err = 扣费失败（points.ErrInsufficientPoints → 调用方映射既有「积分不足」文案；其余错误沿用
 // 迁移前行为：静默跳过 usage 事件）。内容错误与扣费失败互斥（内容失败不扣费）。
-type AIUsage struct {
+type Usage struct {
 	Res *points.AITokensResult
 	Err error
 }
@@ -47,9 +47,9 @@ type aiRequestIDCtxKey struct{}
 // aiMeterFreeCtxKey ctx 键：显式免费声明（内部二次消费）。
 type aiMeterFreeCtxKey struct{}
 
-// WithAIRequestID 透传请求标识（handler 从 RequestID 中间件取值后注入调用 ctx）；
+// WithRequestID 透传请求标识（handler 从 RequestID 中间件取值后注入调用 ctx）；
 // meter 取之作幂等键事实，缺失时由 meter 生成降级键（aiFallbackRequestID）。
-func WithAIRequestID(ctx context.Context, requestID string) context.Context {
+func WithRequestID(ctx context.Context, requestID string) context.Context {
 	return context.WithValue(ctx, aiRequestIDCtxKey{}, requestID)
 }
 
@@ -76,7 +76,7 @@ func aiMeterFreeDeclared(ctx context.Context) bool {
 
 // ---- billed 判定路径（调用方声明 > 注册表默认）----
 
-// Stream 流向的 billed 注册表默认查询 = aiFeatureChatBilled（ai_feature_registry.go 单点：
+// Stream 流向的 billed 注册表默认查询 = aiFeatureChatBilled（feature_registry.go 单点：
 // 对话形态知识与解析阶梯同处注册表，meter 不编码绑定形态知识）；阻塞补全默认见 aiCompleteBilled。
 
 // aiCompleteBilled 阻塞补全的 billed 注册表默认：按 featureKey 查声明。
@@ -97,27 +97,27 @@ func aiFallbackRequestID(userID int) string {
 
 // ---- metered adapter：闸门即端口装饰器 ----
 
-// meteredAIModel 计量闸门 adapter（ADR-0031 决策 1）：包装任一 AIModelPort，所有经端口的
-// 消费先过闸再传输。生产装配在 deps.go 单点：NewMeteredAIModel(NewEinoAIModel(...), pointsSvc)，
+// meteredAIModel 计量闸门 adapter（ADR-0031 决策 1）：包装任一 ModelPort，所有经端口的
+// 消费先过闸再传输。生产装配在 deps.go 单点：NewMeteredModel(NewEinoModel(...), pointsSvc)，
 // 不依赖调用方自觉；测试注入 fake inner + fake meter。
 type meteredAIModel struct {
-	next   AIModelPort
-	meter  AIMetering
+	next   ModelPort
+	meter  Metering
 	logger *zap.Logger
 }
 
-// NewMeteredAIModel 构建计量闸门端口。next 为裸传输 adapter（NewEinoAIModel 产物），
+// NewMeteredModel 构建计量闸门端口。next 为裸传输 adapter（NewEinoModel 产物），
 // meter 为积分域实现（生产 = *points.Service），均必须非 nil：构造期注入是不变量。
-func NewMeteredAIModel(next AIModelPort, meter AIMetering, logger *zap.Logger) AIModelPort {
+func NewMeteredModel(next ModelPort, meter Metering, logger *zap.Logger) ModelPort {
 	return &meteredAIModel{next: next, meter: meter, logger: logger}
 }
 
-var _ AIModelPort = (*meteredAIModel)(nil)
+var _ ModelPort = (*meteredAIModel)(nil)
 
 // Complete 阻塞补全过闸：注册表按 featureKey 查 billed；billed=false（评分/章节生成/解析，
 // 现状全部阻塞消费）直接放行。billed=true 而端口签名又无计费主体（user/requestID）时，
 // 显式报错拒绝静默免费——迫使新计费功能先给端口补主体，堵住第二个漏网消费点。
-func (m *meteredAIModel) Complete(featureKey string, msgs []*schema.Message, opts AICompleteOptions) (string, error) {
+func (m *meteredAIModel) Complete(featureKey string, msgs []*schema.Message, opts CompleteOptions) (string, error) {
 	if !aiCompleteBilled(featureKey) {
 		if _, ok := lookupAIFeature(aiFeatureRegistry, featureKey); !ok {
 			m.logger.Warn("阻塞补全使用未注册功能键，按免费放行（请核对功能注册表）", zap.String("feature", featureKey))
@@ -131,7 +131,7 @@ func (m *meteredAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 // ctx 显式免费声明（内部二次消费）> 注册表对话计费声明（aiFeatureChatBilled 单点）；
 // 计费事实 = 调用方声明的 DTO 层消息列表优先，未声明回退端口消息推导（同一口径函数）；
 // 请求标识与降级键见 aiFallbackRequestID。usage 事件数据面原样回传，形状不变。
-func (m *meteredAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *AIUsage, error) {
+func (m *meteredAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
 	billed := !aiMeterFreeDeclared(ctx) && aiFeatureChatBilled(sel.FeatureKey)
 
 	// 余额预检（迁移前 handler 原位语义）：billed 且已登录才预检，不足即阻断且不发起传输
@@ -154,7 +154,7 @@ func (m *meteredAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs [
 	if requestID == "" {
 		requestID = aiFallbackRequestID(sel.UserID)
 	}
-	// 计费事实：口径唯一实现在 ai_prompt_chars.go。调用方（请求 DTO 可见作用域）声明消息列表
+	// 计费事实：口径唯一实现在 prompt_chars.go。调用方（请求 DTO 可见作用域）声明消息列表
 	// 时用它，未声明才回退端口消息推导——两条路径投影到同一中立形态后走同一个函数。
 	promptMsgs, declared := aiPromptMessagesDeclared(ctx)
 	if !declared {
@@ -163,7 +163,7 @@ func (m *meteredAIModel) Stream(ctx context.Context, sel AIModelSelector, msgs [
 	promptChars := aiPromptCharsOf(promptMsgs)
 	res, err := m.meter.DeductAI(ctx, sel.UserID, requestID, promptChars, len(content))
 	if err != nil {
-		return content, &AIUsage{Err: err}, nil
+		return content, &Usage{Err: err}, nil
 	}
-	return content, &AIUsage{Res: res}, nil
+	return content, &Usage{Res: res}, nil
 }

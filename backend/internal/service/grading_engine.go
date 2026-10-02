@@ -5,6 +5,7 @@ package service
 import (
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
 )
 
@@ -12,21 +13,23 @@ import (
 const fallbackCommentPrefix = "[AI评分降级] "
 
 // ShortAnswerGrader AI 简答判分 adapter。测试可注入 fake；
-// *AIService 经 aiShortAnswerGrader 包装接入（剥离其 userID 日志形参，练习/重做流恒传 nil）。
+// *aiassistant.GenerationService 经 aiShortAnswerGrader 包装接入（剥离其 userID 日志形参，练习/重做流恒传 nil）。
 type ShortAnswerGrader interface {
-	GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64) *AIGradeResult
+	GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64) *aiassistant.GradeResult
 }
 
-// aiShortAnswerGrader *AIService 的判分 adapter 包装。
-type aiShortAnswerGrader struct{ ai *AIService }
+// aiShortAnswerGrader *aiassistant.GenerationService 的判分 adapter 包装。
+type aiShortAnswerGrader struct {
+	ai *aiassistant.GenerationService
+}
 
-func (a aiShortAnswerGrader) GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64) *AIGradeResult {
+func (a aiShortAnswerGrader) GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer string, maxScore float64) *aiassistant.GradeResult {
 	return a.ai.GradeShortAnswer(questionContent, referenceAnswer, scoringCriteria, studentAnswer, maxScore, nil)
 }
 
-// shortAnswerGraderOf 将 *AIService 转换为 adapter 接口，nil 归一为 nil 接口
+// shortAnswerGraderOf 将 *aiassistant.GenerationService 转换为 adapter 接口，nil 归一为 nil 接口
 // （避免「nil 指针包进非 nil 接口」导致 gradeShortAnswer 误判可用）。
-func shortAnswerGraderOf(ai *AIService) ShortAnswerGrader {
+func shortAnswerGraderOf(ai *aiassistant.GenerationService) ShortAnswerGrader {
 	if ai == nil {
 		return nil
 	}

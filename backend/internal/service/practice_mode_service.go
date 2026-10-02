@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/scope"
@@ -57,32 +58,32 @@ type PracticeModeService struct {
 	// grader 短答 AI 判分 adapter（nil 时简答降级，与错题重做口径一致）。
 	grader ShortAnswerGrader
 	// explainer AI 解析 module（缓存/生成/降级策略单点，spec #295）。
-	explainer *QuestionExplanation
+	explainer *aiassistant.QuestionExplanation
 
 	logger *zap.Logger
 	clk    clock.Clock
 }
 
 // NewPracticeModeService 创建题库练习服务，ai 可为 nil（简答题与解析降级）。
-func NewPracticeModeService(db *gorm.DB, ai *AIService, logger *zap.Logger) *PracticeModeService {
+func NewPracticeModeService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *PracticeModeService {
 	return &PracticeModeService{
 		db:        db,
 		grader:    shortAnswerGraderOf(ai),
-		explainer: NewQuestionExplanation(db, ai, logger),
+		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 		clk:       clock.Real(),
 	}
 }
 
 // NewPracticeModeServiceWithClock 注入式构造（测试用 Clock 定格，生产仍用 Real）。
-func NewPracticeModeServiceWithClock(db *gorm.DB, ai *AIService, logger *zap.Logger, clk clock.Clock) *PracticeModeService {
+func NewPracticeModeServiceWithClock(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger, clk clock.Clock) *PracticeModeService {
 	if clk == nil {
 		clk = clock.Real()
 	}
 	return &PracticeModeService{
 		db:        db,
 		grader:    shortAnswerGraderOf(ai),
-		explainer: NewQuestionExplanation(db, ai, logger),
+		explainer: aiassistant.NewQuestionExplanation(db, ai, logger),
 		logger:    logger,
 		clk:       clk,
 	}
@@ -387,9 +388,9 @@ func (s *PracticeModeService) SubmitAnswer(studentID, questionID int, userAnswer
 }
 
 // finalizeSubmitResult 练习提交/错题重做共享的结果装配尾段（spec #295/#300 装配单点）：
-// 全站统计回填 → AI 解析（QuestionExplanation module 单点）→ 简答分支
+// 全站统计回填 → AI 解析（aiassistant.QuestionExplanation module 单点）→ 简答分支
 // （AI 及格覆写 IsCorrect 并二次 Save 同步练习记录，降级时 AIFallback 同写）。
-func finalizeSubmitResult(db *gorm.DB, explainer *QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
+func finalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
 	if stats := questionStats(db, q.ID, q.Type); stats != nil {
 		result.AccuracyRate = stats.accuracyRate
 		result.CommonWrong = stats.commonWrong

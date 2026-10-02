@@ -4,6 +4,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
@@ -40,10 +41,10 @@ type coreSingletons struct {
 	slideRenderer *service.SlideRenderer
 	notifSvc      *notification.Service
 	reviewSvc     *service.ProfileReviewService
-	aiConfigSvc   *service.AIConfigService
+	aiConfigSvc   *aiassistant.ConfigService
 	pointsSvc     *points.Service
-	aiModelPort   service.AIModelPort
-	aiSvc         *service.AIService
+	aiModelPort   aiassistant.ModelPort
+	aiSvc         *aiassistant.GenerationService
 	contentGenSvc *service.ContentGenerateService
 	contactSvc    *service.ContactService
 }
@@ -72,7 +73,7 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	c.notifSvc = notification.NewService(db, logger)
 	c.reviewSvc = service.NewProfileReviewService(db, c.notifSvc, st, logger)
 	c.authSvc.SetProfileReviewService(c.reviewSvc)
-	c.aiConfigSvc = service.NewAIConfigService(db, cfg.SecretKey, logger)
+	c.aiConfigSvc = aiassistant.NewConfigService(db, cfg.SecretKey, logger)
 	// 积分服务唯一实例：积分端点与真题卷权益校验共用
 	c.pointsSvc = points.NewService(db, logger, clock.Real(), c.notifSvc)
 	// 单一模型端口（ADR-0029 T2）：唯一 eino adapter 实例，阻塞/流式消费方共享同一 client 签名缓存。
@@ -80,12 +81,12 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	// 生产 meter 即积分域 *points.Service（预检与扣费下限同源），装配单点在此。
 	// 第二实现：外部诊断 RAG 助手（fault_diagnosis）经 routing adapter 按功能键分发
 	// （baseURL 来自 cfg.DiagnosisAssistantURL，不走管理端模型绑定）。
-	aiRouting := service.NewRoutingAIModel(
-		service.NewEinoAIModel(c.aiConfigSvc, logger),
-		service.NewDiagnosisAssistantModel(cfg.DiagnosisAssistantURL, logger),
+	aiRouting := aiassistant.NewRoutingModel(
+		aiassistant.NewEinoModel(c.aiConfigSvc, logger),
+		aiassistant.NewDiagnosisAssistantModel(cfg.DiagnosisAssistantURL, logger),
 	)
-	c.aiModelPort = service.NewMeteredAIModel(aiRouting, c.pointsSvc, logger)
-	c.aiSvc = service.NewAIService(db, c.aiModelPort, logger)
+	c.aiModelPort = aiassistant.NewMeteredModel(aiRouting, c.pointsSvc, logger)
+	c.aiSvc = aiassistant.NewGenerationService(db, c.aiModelPort, logger)
 	c.contentGenSvc = service.NewContentGenerateService(db, c.aiSvc, logger)
 	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
 	c.contactSvc = service.NewContactService(db, logger, c.notifSvc, c.mailSender)
