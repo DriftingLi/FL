@@ -1,4 +1,5 @@
-package service
+// Package tutor 测试：导师端课程/章节/附件实现（P2 波 4d 随 tutor 域包搬来）。
+package tutor
 
 import (
 	"testing"
@@ -11,9 +12,9 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newTutorServiceForTest(t *testing.T, db *gorm.DB) *TutorService {
+func newTutorServiceForTest(t *testing.T, db *gorm.DB) *Service {
 	t.Helper()
-	return NewTutorService(db, "", nil, nil, zap.NewNop())
+	return NewService(db, "", nil, nil, zap.NewNop())
 }
 
 // seedUnmountedCourse 建一门未挂方向/等级的已上架课程（导师端旧口径可见，新口径不可见）。

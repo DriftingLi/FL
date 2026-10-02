@@ -1,5 +1,120 @@
 basePath: /api
 definitions:
+  admin.AdminOverviewDTO:
+    properties:
+      active_today:
+        type: integer
+      total_courses:
+        type: integer
+      total_students:
+        type: integer
+      total_study_duration:
+        type: integer
+    type: object
+  admin.AdminStatisticsDTO:
+    properties:
+      course_stats:
+        items:
+          $ref: '#/definitions/admin.CourseStatDTO'
+        type: array
+      overview:
+        $ref: '#/definitions/admin.AdminOverviewDTO'
+    type: object
+  admin.CourseStatDTO:
+    properties:
+      avg_progress:
+        type: number
+      course_id:
+        type: integer
+      name:
+        type: string
+      study_count:
+        type: integer
+      total_duration:
+        type: integer
+    type: object
+  admin.HrwaiUserCreatedDTO:
+    properties:
+      account:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      uid:
+        type: string
+      username:
+        type: string
+    type: object
+  admin.HrwaiUserPageResult:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/admin.HrwaiUserSummary'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  admin.HrwaiUserSummary:
+    properties:
+      account:
+        type: string
+      company:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      status:
+        type: integer
+      uid:
+        example: "0"
+        type: string
+      username:
+        type: string
+    type: object
+  admin.StatusResultDTO:
+    properties:
+      status:
+        type: integer
+    type: object
+  admin.TutorDTO:
+    properties:
+      created_at:
+        type: string
+      name:
+        type: string
+      status:
+        type: integer
+      tutor_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  admin.TutorDeletedDTO:
+    properties:
+      tutor_id:
+        type: integer
+    type: object
+  admin.TutorListDTO:
+    properties:
+      page:
+        type: integer
+      total:
+        type: integer
+      tutors:
+        items:
+          $ref: '#/definitions/admin.TutorDTO'
+        type: array
+    type: object
   aiassistant.AIAssistantModeModels:
     properties:
       expert:
@@ -3033,26 +3148,6 @@ definitions:
       times:
         type: integer
     type: object
-  service.AdminOverviewDTO:
-    properties:
-      active_today:
-        type: integer
-      total_courses:
-        type: integer
-      total_students:
-        type: integer
-      total_study_duration:
-        type: integer
-    type: object
-  service.AdminStatisticsDTO:
-    properties:
-      course_stats:
-        items:
-          $ref: '#/definitions/service.CourseStatDTO'
-        type: array
-      overview:
-        $ref: '#/definitions/service.AdminOverviewDTO'
-    type: object
   service.ApplicationDTO:
     properties:
       company_name:
@@ -3104,17 +3199,6 @@ definitions:
       page_size:
         type: integer
       total:
-        type: integer
-    type: object
-  service.BatchDeleteFilesResult:
-    properties:
-      failed_count:
-        type: integer
-      failed_ids:
-        items:
-          type: integer
-        type: array
-      success_count:
         type: integer
     type: object
   service.ChapterGenResult:
@@ -3224,26 +3308,6 @@ definitions:
       total:
         type: integer
     type: object
-  service.CourseStatDTO:
-    properties:
-      avg_progress:
-        type: number
-      course_id:
-        type: integer
-      name:
-        type: string
-      study_count:
-        type: integer
-      total_duration:
-        type: integer
-    type: object
-  service.DeleteFileResult:
-    properties:
-      deleted:
-        type: boolean
-      file_id:
-        type: integer
-    type: object
   service.GenTaskStatus:
     properties:
       completed:
@@ -3264,54 +3328,6 @@ definitions:
   service.GenerateContentResultDTO:
     properties:
       task_id:
-        type: string
-    type: object
-  service.HrwaiUserCreatedDTO:
-    properties:
-      account:
-        type: string
-      id:
-        type: integer
-      phone:
-        type: string
-      uid:
-        type: string
-      username:
-        type: string
-    type: object
-  service.HrwaiUserPageResult:
-    properties:
-      list:
-        items:
-          $ref: '#/definitions/service.HrwaiUserSummary'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.HrwaiUserSummary:
-    properties:
-      account:
-        type: string
-      company:
-        type: string
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: integer
-      phone:
-        type: string
-      status:
-        type: integer
-      uid:
-        example: "0"
-        type: string
-      username:
         type: string
     type: object
   service.JobCardDTO:
@@ -3605,40 +3621,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  service.StatusResultDTO:
-    properties:
-      status:
-        type: integer
-    type: object
-  service.TutorDTO:
-    properties:
-      created_at:
-        type: string
-      name:
-        type: string
-      status:
-        type: integer
-      tutor_id:
-        type: integer
-      username:
-        type: string
-    type: object
-  service.TutorDeletedDTO:
-    properties:
-      tutor_id:
-        type: integer
-    type: object
-  service.TutorListDTO:
-    properties:
-      page:
-        type: integer
-      total:
-        type: integer
-      tutors:
-        items:
-          $ref: '#/definitions/service.TutorDTO'
-        type: array
     type: object
   student.CourseProgressDTO:
     properties:
@@ -4162,6 +4144,24 @@ definitions:
         items:
           $ref: '#/definitions/training.SpecialtyDict'
         type: array
+    type: object
+  tutor.BatchDeleteFilesResult:
+    properties:
+      failed_count:
+        type: integer
+      failed_ids:
+        items:
+          type: integer
+        type: array
+      success_count:
+        type: integer
+    type: object
+  tutor.DeleteFileResult:
+    properties:
+      deleted:
+        type: boolean
+      file_id:
+        type: integer
     type: object
   wrongquestion.WrongQuestionBatchRemoveResultDTO:
     properties:
@@ -6565,7 +6565,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.HrwaiUserPageResult'
+                  $ref: '#/definitions/admin.HrwaiUserPageResult'
               type: object
         "400":
           description: 查询用户列表失败
@@ -6600,7 +6600,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.HrwaiUserCreatedDTO'
+                  $ref: '#/definitions/admin.HrwaiUserCreatedDTO'
               type: object
         "400":
           description: 参数错误/手机号已注册
@@ -6738,7 +6738,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StatusResultDTO'
+                  $ref: '#/definitions/admin.StatusResultDTO'
               type: object
         "401":
           description: 未认证
@@ -7921,7 +7921,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StatusResultDTO'
+                  $ref: '#/definitions/admin.StatusResultDTO'
               type: object
         "401":
           description: 未认证
@@ -8160,7 +8160,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.AdminStatisticsDTO'
+                  $ref: '#/definitions/admin.AdminStatisticsDTO'
               type: object
         "401":
           description: 未认证
@@ -8226,7 +8226,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.TutorDeletedDTO'
+                  $ref: '#/definitions/admin.TutorDeletedDTO'
               type: object
         "401":
           description: 未认证
@@ -8300,7 +8300,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StatusResultDTO'
+                  $ref: '#/definitions/admin.StatusResultDTO'
               type: object
         "401":
           description: 未认证
@@ -8343,7 +8343,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.TutorListDTO'
+                  $ref: '#/definitions/admin.TutorListDTO'
               type: object
         "401":
           description: 未认证
@@ -15396,7 +15396,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.DeleteFileResult'
+                  $ref: '#/definitions/tutor.DeleteFileResult'
               type: object
         "401":
           description: 未认证
@@ -15433,7 +15433,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.BatchDeleteFilesResult'
+                  $ref: '#/definitions/tutor.BatchDeleteFilesResult'
               type: object
         "400":
           description: 参数错误

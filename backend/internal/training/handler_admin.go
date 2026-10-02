@@ -519,12 +519,12 @@ func (h *handler) DeleteQuestionTag(c *gin.Context) {
 }
 
 // SortFacts400 是「交换排序」这一族端点共用的输入不合法事实（ADR-0065 决策 3）。
-// 导出给 internal/api 的课程交换排序表复用：目录侧那不支持的排序 / 待交换项不存在两件
-// 只有一份出处，跨域抄一份就会长出第二真源。
+// 课程域与培训域各自建表；两枚哨兵的唯一出处是本包依赖的 internal/sortorder（波 4d 起，
+// 不再跨包复用本表 —— 课程域 import 不了本包：internal/training/catalog_service.go 已 import 它）。
 // 5 个端点挂同一份表，默认面一律 500：改之前它们是 `WithSuccess(…, 400)`，于是
 // 「写库/查库失败」与「不支持排序」「待交换的项不存在」挤在同一格，还把驱动原文
 // （`SQL logic error: no such table: …`）当 400 的说明发给客户端。
-var SortFacts400 = []error{ErrEntityNotSortable, sortorder.ErrSwapItemNotFound}
+var SortFacts400 = []error{sortorder.ErrEntityNotSortable, sortorder.ErrSwapItemNotFound}
 
 // catalogSwapSortReq 交换排序请求（ID 来自路径，SwapWith 来自 body）。
 // 三个可排序的目录实体（专业方向 / 课程等级 / 目标证件）的 swap 请求完全同形，

@@ -8,8 +8,8 @@
 // stats 的证件分组两格），判据是「生产者是谁」——这些出口的服务方法本体就在本包。
 // 另有两格键名前缀不归本域、但出口在本包：course.CourseDTO.chapters（管理端目录树的课程节点，
 // 波 3b-2 从 internal/service 搬来）与 training.CatalogLevelNode.courses（学员端目录树的等级节点）。
-// 证据跟真实出口走、不跟类型名的前缀走；留驻 service 的 course.ChapterDTO.files 生产者是 TutorService，
-// 故仍在 internal/service/nonnil_outlets_course_test.go。
+// 证据跟真实出口走、不跟类型名的前缀走；course.ChapterDTO.files 的生产者是导师域的服务
+// （TutorService.GetCourseChapters），波 4d 起该出口与它的证据都在 internal/tutor/nonnil_outlets_test.go。
 package training
 
 import (

@@ -1,5 +1,5 @@
-// Package service 导师端课程与文件管理。
-package service
+// Package tutor 讲师域：HTTP 出口（handler.go）与导师端课程 / 章节 / 附件实现（service.go）。
+package tutor
 
 import (
 	"encoding/json"
@@ -15,8 +15,8 @@ import (
 	"forklift-training/internal/model"
 )
 
-// TutorService 导师服务。
-type TutorService struct {
+// Service 导师服务。
+type Service struct {
 	db            *gorm.DB
 	uploadFolder  string
 	fileStore     *filestore.FileStore
@@ -25,9 +25,9 @@ type TutorService struct {
 	logger *zap.Logger
 }
 
-// NewTutorService 创建导师服务实例。
-func NewTutorService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore, slideRenderer *course.SlideRenderer, logger *zap.Logger) *TutorService {
-	return &TutorService{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
+// NewService 创建导师服务实例。
+func NewService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore, slideRenderer *course.SlideRenderer, logger *zap.Logger) *Service {
+	return &Service{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
 }
 
 // ErrChapterFileNotFound 章节文件行不存在（课程章节的附件，与「章节不存在」是两件事）。
@@ -38,7 +38,7 @@ var ErrChapterFileNotFound = errors.New("文件不存在")
 
 // GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级/证件，ADR-0012 §2），
 // 附学习学员数；实现收敛到课程列表 module（ListCourses）。
-func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) (course.CoursePageResult, error) {
+func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) (course.CoursePageResult, error) {
 	return course.ListCourses(s.db, page, pageSize, course.CourseListOptions{
 		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
 		WithStudentCount: true, DefaultPageSize: 10,
@@ -47,7 +47,7 @@ func (s *TutorService) GetCourses(page, pageSize int, credentialID, specialtyID,
 
 // GetCourseChapters 导师章节列表（含文件）。
 // 文件列表批量装载（一次 IN 查询）消除逐章节 N+1。
-func (s *TutorService) GetCourseChapters(courseID int) (*course.TutorCourseChaptersDTO, error) {
+func (s *Service) GetCourseChapters(courseID int) (*course.TutorCourseChaptersDTO, error) {
 	// 局部变量不叫 course：包名 course 已被课程域包占用（P2 波 3b-1）。
 	var c model.Course
 	if err := s.db.First(&c, courseID).Error; err != nil {
@@ -89,7 +89,7 @@ func (s *TutorService) GetCourseChapters(courseID int) (*course.TutorCourseChapt
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表，供导师端编辑页使用）。
 // 实现收敛到共享章节详情 module；导师端不回填 study_status（fillStudyStatus=false）。
-func (s *TutorService) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, error) {
+func (s *Service) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -101,7 +101,7 @@ func (s *TutorService) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO
 }
 
 // UploadChapterFile 上传章节文件。
-func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*course.ChapterFileDTO, error) {
+func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*course.ChapterFileDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -160,7 +160,7 @@ func (s *TutorService) UploadChapterFile(chapterID int, filename string, fileCon
 }
 
 // UpdateChapterInfo 更新章节信息。
-func (s *TutorService) UpdateChapterInfo(chapterID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
+func (s *Service) UpdateChapterInfo(chapterID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -194,7 +194,7 @@ func (s *TutorService) UpdateChapterInfo(chapterID int, in *course.ChapterInput)
 }
 
 // DeleteChapterFileByID 删除章节文件。
-func (s *TutorService) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
+func (s *Service) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 	var chapterFile model.ChapterFile
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -227,7 +227,7 @@ func (s *TutorService) DeleteChapterFileByID(fileID int) (*DeleteFileResult, err
 }
 
 // BatchDeleteChapterFiles 批量删除文件。
-func (s *TutorService) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult {
+func (s *Service) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult {
 	successCount := 0
 	failedIDs := make([]int, 0)
 	for _, fid := range fileIDs {

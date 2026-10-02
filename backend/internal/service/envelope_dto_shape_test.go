@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"forklift-training/internal/aiassistant"
-	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
@@ -110,34 +109,16 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 // 本片就是那一片，因此沿用同一个机制与同一个参照物：左边是**改造前的 map 形态**
 // （不是手抄的 JSON 字面量，否则抄错即与 DTO 同错），右边是收口后的 DTO。
 func TestInlineResponseDTOBytes(t *testing.T) {
-	user := &model.HrwaiUser{ID: 12, UID: 20260012, Account: "hrwai012", Username: "张三", Phone: "13800000001"}
 	// created / updated 与 rec 夹具随 RecruiterCreatedDTO/RecruiterUpdatedDTO 用例搬去 internal/auth/。
-	newUser := NewHrwaiUserCreatedDTO(user)
+	// HrwaiUserCreatedDTO / StatusResultDTO 两枚 DTO 及其三例已随管理域搬去 internal/admin/（ADR-0070 波 4d）。
 
 	cases := []struct {
 		name   string
 		legacy any
 		dto    any
 	}{
-		{
-			name:   "StatusResultDTO（HRWAI 用户 / 导师 / 招聘者三个开关端点共用；来源 int16）",
-			legacy: map[string]any{"status": int16(1)},
-			dto:    &StatusResultDTO{Status: 1},
-		},
-		{
-			name:   "StatusResultDTO（来源 int，零值也不省略）",
-			legacy: map[string]any{"status": 0},
-			dto:    &StatusResultDTO{},
-		},
 		// RecruiterCreatedDTO / RecruiterUpdatedDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
-		{
-			name: "HrwaiUserCreatedDTO（新增 HRWAI 用户 201：password 不入响应，uid 走 FormatUID）",
-			legacy: map[string]any{
-				"id": user.ID, "uid": FormatUID(user.UID), "account": user.Account,
-				"username": user.Username, "phone": user.Phone,
-			},
-			dto: &newUser,
-		},
+		// StatusResultDTO ×2 与 HrwaiUserCreatedDTO 的用例已随管理域搬去 internal/admin/envelope_dto_shape_test.go（ADR-0070 波 4d）。
 		{
 			name:   "GenerateContentResultDTO",
 			legacy: map[string]any{"task_id": "task-abc"},

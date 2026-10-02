@@ -1,6 +1,6 @@
 // Package api 实现 HTTP handlers。
 // 本文件：Vditor 图片上传适配器——File 读取 → 校验 → 保存 → Vditor 信封响应的单点实现。
-// tutor.go 与 internal/featured/handler.go 的 UploadImage 只注入保存目标（saver）+ 各自差异，信封协议不再复制。
+// internal/tutor/handler.go 与 internal/featured/handler.go 的 UploadImage 只注入保存目标（saver）+ 各自差异，信封协议不再复制。
 package api
 
 import (

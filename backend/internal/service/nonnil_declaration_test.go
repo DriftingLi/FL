@@ -15,9 +15,6 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
-	"gorm.io/gorm"
-
-	"forklift-training/internal/model"
 
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
@@ -29,9 +26,10 @@ import (
 //	JSONArray（recruit_service.go 的脱敏卡）就是例子：重建过的那格恒 `[]`，只加 len==0 守卫的
 //	两格在列里存着 JSON `null` 时照样发出 null。⇒ 改判 JSONArray / JSONB 字段前必须去读那条投影，
 //	而不是只跑一次出口（盲区在同处登记：testutil/nonnil.go 的 MarshalKey）。
-//	repository.AlgorithmParameters 那四格也在改判范围之外：判据 5 的证据源只扫
-//	../service、../api 与 ../faq 三处的 `nonnilOutlets*` 表（这些包没有可脱离真库跑的出口），
-//	所以它们会一直留在判据 4 的账上——那是结构性的够不着，不是没人去举证。
+//	repository.AlgorithmParameters 那四格也在改判范围之外：判据 5 的证据源只扫登记在
+//	apitypes/nullability_lock_test.go 的 nonNilEvidenceSources 里的那些目录（含 ../service、
+//	../api；这些包没有可脱离真库跑的出口），所以它们会一直留在判据 4 的账上——那是结构性的够不着，
+//	不是没人去举证。
 //
 // nonnilOutletTables 是**分域的若干张表**的汇总点。
 //
@@ -86,22 +84,5 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 	testutil.AssertNonNilOutlets(t, nonnilOutletTables)
 }
 
-// seedVisibleCourse 播一门「已发布 + 已挂载」但**没有章节**的课程，返回其 id。
-func seedVisibleCourse(t *testing.T, db *gorm.DB) int {
-	t.Helper()
-	spec := model.Specialty{Code: "nonnil", Name: "非空方向", SortOrder: 1, Status: 1}
-	if err := db.Create(&spec).Error; err != nil {
-		t.Fatalf("播种方向失败: %v", err)
-	}
-	lv := model.CourseLevel{Code: "nonnil-lv", Name: "非空等级", SortOrder: 1, Status: 1}
-	if err := db.Create(&lv).Error; err != nil {
-		t.Fatalf("播种等级失败: %v", err)
-	}
-	pos := spec.SpecialtyID
-	lvl := lv.LevelID
-	course := model.Course{Name: "非空课程", Status: 1, SpecialtyID: &pos, LevelID: &lvl, CreatedAt: testutil.Now()}
-	if err := db.Create(&course).Error; err != nil {
-		t.Fatalf("播种课程失败: %v", err)
-	}
-	return course.CourseID
-}
+// seedVisibleCourse 的逐字副本已随唯一消费它的出口（TutorService.GetCourseChapters）搬去
+// internal/tutor/nonnil_outlets_test.go（ADR-0070 波 4d）：本包不再留一个无人调用的播种助手。

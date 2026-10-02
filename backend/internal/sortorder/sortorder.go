@@ -19,6 +19,11 @@ import (
 // 它是输入不合法（400）而不是 404：404 说的是「路径里那个资源没有」，而路径资源在这里是好的。
 var ErrSwapItemNotFound = errors.New("待交换的项不存在")
 
+// ErrEntityNotSortable 对一张没开排序的目录表请求 swap（ADR-0065 决策 3：输入不合法，400）。
+// 与 ErrSwapItemNotFound 同属「交换排序这一族的输入事实」，同住本叶子包：课程域与培训域都要拿
+// 这一族事实建各自的 400 表，谁住谁的域包都会让另一边反向依赖（波 4d 破 course↔training 环）。
+var ErrEntityNotSortable = errors.New("该实体不支持排序交换")
+
 // NextValue 返回表内（可选按组过滤）当前最大 sort_order + 1，新项排末尾。
 func NextValue(db *gorm.DB, table string, where map[string]any) int {
 	q := db.Table(table).Select("COALESCE(MAX(sort_order), 0)")

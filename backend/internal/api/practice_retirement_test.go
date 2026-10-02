@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/tutor"
 )
 
 func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
@@ -74,7 +75,7 @@ func TestTutorCourseRoutesAbsent(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterTutorRoutes(api, deps.RouterDeps(), deps.TutorSvc, deps.FileSvc)
+	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
 
 	for _, tc := range []struct {
 		method string

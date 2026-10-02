@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
@@ -25,6 +26,7 @@ import (
 	"forklift-training/internal/search"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/tutor"
 	"forklift-training/internal/wrongquestion"
 )
 
@@ -68,8 +70,9 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "管理端",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
-			RegisterAdminRecruiterRoutes(api, rd, deps.AuthSvc)
+			admin.RegisterRoutes(api, rd.Session, deps.AdminSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
+			admin.RegisterAdminRecruiterRoutes(api, rd.Session, deps.AuthSvc)
+			course.RegisterAdminRoutes(api, rd.Session, deps.AdminCourseSvc)
 		},
 	},
 	{
@@ -81,7 +84,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "讲师端",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
+			tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
 		},
 	},
 	{

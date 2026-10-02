@@ -13,8 +13,10 @@ import (
 	"forklift-training/internal/model"
 )
 
-// generateDefaultNickname 生成默认昵称：叉车人 + 6 位随机数字，创建前查重，冲突重试。
-func generateDefaultNickname(db *gorm.DB) string {
+// GenerateDefaultNickname 生成不重复的默认昵称（叉车人 + 随机编码）。原为包私有 generateDefaultNickname，
+// 波 4d 因唯一消费者（管理域的建号面）搬进 internal/admin 而升导出留驻 —— 与 GenerateRandomAccount 同口径
+// （手册 §10.1 :181）：只吃 *gorm.DB、判重规则自带，留驻面不依赖任何域包。
+func GenerateDefaultNickname(db *gorm.DB) string {
 	for i := 0; i < 10; i++ {
 		nickname := "叉车人" + randomDigits(6)
 		var count int64

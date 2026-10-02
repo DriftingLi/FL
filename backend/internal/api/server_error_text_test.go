@@ -88,7 +88,7 @@ func TestServerErrorTextNoDriverLeak(t *testing.T) {
 			tok: func(e *serverErrorEnv) string { return e.recruiterTok },
 		},
 		{
-			name: "GET /admin/recruiters（admin_recruiter.go List）",
+			name: "GET /admin/recruiters（internal/admin/handler_recruiter.go List）",
 			drop: "recruiter_users", method: http.MethodGet, path: "/api/admin/recruiters",
 			tok: func(e *serverErrorEnv) string { return e.adminTok },
 		},
