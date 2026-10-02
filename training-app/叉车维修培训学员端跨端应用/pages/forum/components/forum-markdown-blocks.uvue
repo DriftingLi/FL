@@ -8,9 +8,9 @@
         <view v-for="(block, idx) in blocks" :key="idx" class="md-block">
             <!-- 标题（⑩-2：文字按 runs 出嵌套 text，逐 run 自带样式 —— C1） -->
             <text v-if="block.type == 'heading'"
-                :class="['md-heading', 'md-h' + block.level]"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ run.text }}</text></text>
+                :class="['md-heading', 'md-h' + block.level]"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
             <!-- 段落 -->
-            <text v-else-if="block.type == 'paragraph'" class="md-paragraph"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ run.text }}</text></text>
+            <text v-else-if="block.type == 'paragraph'" class="md-paragraph"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
             <!-- 代码块（整体等宽，内部不解析） -->
             <view v-else-if="block.type == 'code'" class="md-code-wrap">
                 <text class="md-code">{{ block.text }}</text>
@@ -19,12 +19,12 @@
             <view v-else-if="block.type == 'list'" class="md-list">
                 <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
                     <text class="md-list-bullet">{{ block.level == 1 ? (li + 1) + '.' : '•' }}</text>
-                    <text class="md-list-text"><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ run.text }}</text></text>
+                    <text class="md-list-text"><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
                 </view>
             </view>
             <!-- 引用（⚠️ 这条分支曾直出 `block.text`：引用块因此漏记号，判据按 runs 看不见 —— 现同样走 runs） -->
             <view v-else-if="block.type == 'quote'" class="md-quote">
-                <text class="md-quote-text"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, true)" @click="onRunTap(run)">{{ run.text }}</text></text>
+                <text class="md-quote-text"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, true)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
             </view>
             <!-- 分隔线 -->
             <view v-else-if="block.type == 'divider'" class="md-divider"></view>
@@ -71,6 +71,13 @@
         if (run.link.length > 0) cls.push('md-run-l')
         return cls
     }
+
+    /**
+     * C3：行内代码胶囊靠 `background-color` + **前后字符空格** —— 子 `<text>` 上 `padding/margin`
+     * 不生效（官方文档明写，见 ADR-0025 C3），只能用字符空格撑出呼吸感。空格**只给 code run**，
+     * 其余 run 原样；纯文本投影（`inlineRunsPlainText` 走 `run.text`）不受这里影响。
+     */
+    const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
 
     /**
      * ⑩-8：点可点 run（`link` 非空 ⇒ 已过协议闸，只可能 http(s)）弹 `showModal` 显示**目标域名**，
