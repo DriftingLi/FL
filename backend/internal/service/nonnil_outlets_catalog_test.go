@@ -18,11 +18,10 @@
 //     GetResult（未交卷记录 result 列为空）发 `null`，且 MockExamResultDTO 内嵌本 DTO 共用它。
 //   - ProgressResultDTO.answers_state ⇒ 从未存过进度时是 nil map ⇒ `null`（已带 x-nullable，
 //     GetProgress 无 error 出口：「没进度」是 200 不是失败）。
-//   - QuestionTagsResultDTO.tag_ids ⇒ 该键是**请求体回显**（api 侧
-//     `service.QuestionTagsResultDTO{TagIDs: req.TagIDs}`），客户端发 `"tag_ids": null`
-//     或不发该键就拿 `null`。它不是「服务算出来恒非 null」那类字段，改判会把入参形状
-//     谎报成出参承诺。
+//   - QuestionTagsResultDTO.tag_ids ⇒ 该键的证据已随域包搬去
+//     internal/training/nullable_outlets_test.go（ADR-0070 波 3b-2），判词原文随之搬走，不在这里复述。
 //
+// 本段**没跑**因而也没改判的三组//
 // 本段**没跑**因而也没改判的三组，原因各不相同（都不是「嫌麻烦」）：
 //   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items、
 //     api.AuditLogPageResult.items ⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
@@ -46,19 +45,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"forklift-training/internal/model"
-
 	"forklift-training/internal/testutil"
 )
 
 var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
-	"service.CatalogTreeDTO.specialties":                       outletCatalogTreeEmpty,
-	"service.CatalogSpecialtyNode.levels":                      outletCatalogSpecialtyNoLevels,
-	"service.LevelListDTO.levels":                              outletLevelListEmpty,
-	"service.SpecialtyListDTO.specialties":                     outletSpecialtyListEmpty,
-	"service.QuestionTagListDTO.tags":                          outletQuestionTagListEmpty,
-	"service.CertificateTemplateListDTO.certificate_templates": outletCertificateTemplateListEmpty,
-	"service.CredentialListDTO.credentials":                    outletCredentialListEmpty,
+	// 培训域的 7 格（目录树两层 + 五个字典列表信封）已随域包搬去
+	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）；岗位字典与证件分组两处同批搬走。
 
 	// 课程域的课程 DTO 字段已随域包搬去 internal/course/nonnil_outlets_test.go；
 	// 本包仍留 course.ChapterDTO.files 与 course.CourseDTO.chapters 两键 —— 见 nonnil_outlets_course_test.go。
@@ -85,68 +77,6 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 
 func init() {
 	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsCatalog)
-}
-
-// ===== 目录树两层 =====
-
-// outletCatalogTreeEmpty 学员端目录树：空库时 specialties 由 make(0,0) 起手 ⇒ `[]`。
-func outletCatalogTreeEmpty(t *testing.T) any {
-	t.Helper()
-	return NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop()).GetCatalogTree(nil)
-}
-
-// outletCatalogSpecialtyNoLevels 方向节点的 levels：**不播等级**，让 make([]CatalogLevelNode,0,n)
-// 以 0 容量落地。方向得存在（目录树按方向建节点，没方向就没有节点可举证这一格）。
-func outletCatalogSpecialtyNoLevels(t *testing.T) any {
-	t.Helper()
-	svc, db := newCatalogSvc(t)
-	spec := model.Specialty{Code: "nonnil-lv0", Name: "零等级方向", SortOrder: 1, Status: 1}
-	if err := db.Create(&spec).Error; err != nil {
-		t.Fatalf("播种方向失败: %v", err)
-	}
-	tree := svc.GetCatalogTree(nil)
-	if len(tree.Specialties) == 0 {
-		t.Fatal("目录树里没有方向节点：这条证据没有落地")
-	}
-	return tree.Specialties[0]
-}
-
-// ===== 五个字典列表信封 =====
-//
-// 这些响应此前是 handler 里 `response.Success(c, service.XxxListDTO{...})` 一字段包出来的，
-// 包体就在 internal/api/（本段不碰）。这里按 handler 那一行**逐字**复现包装，被包的切片
-// 仍取自同一条服务方法（catalogList 的 make([]D,0,n)），所以举的是同一个事实。
-
-func outletLevelListEmpty(t *testing.T) any {
-	t.Helper()
-	return LevelListDTO{Levels: NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop()).ListLevels(false)}
-}
-
-func outletSpecialtyListEmpty(t *testing.T) any {
-	t.Helper()
-	return SpecialtyListDTO{Specialties: NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop()).ListSpecialties(false)}
-}
-
-func outletQuestionTagListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop())
-	tags, err := svc.ListQuestionTags(false, true, nil)
-	if err != nil {
-		t.Fatalf("空标签列表失败: %v", err)
-	}
-	return QuestionTagListDTO{Tags: tags}
-}
-
-func outletCertificateTemplateListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop())
-	return CertificateTemplateListDTO{CertificateTemplates: svc.ListCertificateTemplates(false)}
-}
-
-func outletCredentialListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop())
-	return CredentialListDTO{Credentials: svc.ListCredentials(false)}
 }
 
 // ===== 批量删文件 =====

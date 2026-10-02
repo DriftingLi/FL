@@ -251,11 +251,11 @@ describe('域 api 收紧（T08 / ADR-0007）：DTO 函数经 mapper-callback 出
 describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已注册清单内', () => {
   const apiSrc = stripComments(read('api/course.uts'));
 
-  /** 后端已注册路由的唯一事实源（课程域 handler.go + training_catalog.go 的 .GET/.POST 注册行）
-   *  —— 课程域随 P2 波 3b-1 搬进 internal/course/handler.go；training_catalog.go 待波 3b-2。 */
+  /** 后端已注册路由的唯一事实源（课程域 handler.go + 培训域 handler.go 的 .GET/.POST 注册行）
+   *  —— 课程域随 P2 波 3b-1 搬进 internal/course/handler.go；培训域随波 3b-2 搬进 internal/training/。 */
   function backendRoutes() {
     const out = [];
-    for (const rel of ['../../backend/internal/course/handler.go', '../../backend/internal/api/training_catalog.go']) {
+    for (const rel of ['../../backend/internal/course/handler.go', '../../backend/internal/training/handler.go']) {
       for (const m of read(rel).matchAll(/\.(?:GET|POST|PUT|DELETE)\("([^"]+)"/g)) out.push(m[1]);
     }
     return out;

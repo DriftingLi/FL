@@ -4,7 +4,7 @@
  *
  * 背景：课程目录的排序串有一处**声明**（catalog_specs.go / position_catalog.go 的 descriptor
  * `OrderBy` 字段，经 catalog_engine.go 的 `q.Order(spec.OrderBy)` 消费），但目录树的读面
- * （training_catalog_service.go 的 getCatalogTree）曾把专业方向与课程等级那两条串**逐字再抄一遍**
+ * （internal/training/catalog_service.go 的 getCatalogTree）曾把专业方向与课程等级那两条串**逐字再抄一遍**
  * 写进 `q.Order("sort_order ASC, specialty_id ASC")` —— 同一判据两个宿主：改了 spec 表忘了改读面，
  * 列表与树的顺序就静默分叉，没有任何测试接得住。本票把读面改成引用 spec 声明，本守卫把
  * 「读面不得再出现与 spec 逐字同串的裸排序串」变成 CI 可核验的事实。
@@ -36,7 +36,7 @@
  */
 import { isDirectRun, runGuardCli } from './lib/guard.mjs'
 
-/** 守卫面：文件名含该片段的 .go（catalog_specs / catalog_engine / training_catalog_* / position_catalog）。 */
+/** 守卫面：文件名含该片段的 .go（training/catalog_specs.go、catalog_engine.go、catalog_service.go、position_catalog.go 等目录面文件）。 */
 export const GUARDED_PATH_SEGMENT = 'catalog'
 
 /** 扫描面后缀（Go 侧只有 .go）。 */
@@ -51,27 +51,27 @@ export const SPEC_ORDER_BY_DECLARATIONS = [
   {
     orderBy: 'sort_order ASC, specialty_id ASC',
     entity: '专业方向 specialty',
-    declaredIn: 'backend/internal/service/catalog_specs.go'
+    declaredIn: 'backend/internal/training/catalog_specs.go'
   },
   {
     orderBy: 'sort_order ASC, level_id ASC',
     entity: '课程等级 course_level',
-    declaredIn: 'backend/internal/service/catalog_specs.go'
+    declaredIn: 'backend/internal/training/catalog_specs.go'
   },
   {
     orderBy: 'sort_order ASC, id ASC',
     entity: '题库标签 question_tag / 目标证件 credential',
-    declaredIn: 'backend/internal/service/catalog_specs.go'
+    declaredIn: 'backend/internal/training/catalog_specs.go'
   },
   {
     orderBy: 'id ASC',
     entity: '证书模板 certificate_template',
-    declaredIn: 'backend/internal/service/catalog_specs.go'
+    declaredIn: 'backend/internal/training/catalog_specs.go'
   },
   {
     orderBy: 'sort_order ASC, position_id ASC',
     entity: '岗位 positions',
-    declaredIn: 'backend/internal/service/position_catalog.go'
+    declaredIn: 'backend/internal/training/position_catalog.go'
   }
 ]
 

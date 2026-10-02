@@ -1,4 +1,4 @@
-package service
+package training
 
 import (
 	"testing"
@@ -9,10 +9,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newCredSvc(t *testing.T) *TrainingCatalogService {
+func newCredSvc(t *testing.T) *Service {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewTrainingCatalogService(db, zap.NewNop())
+	return NewService(db, zap.NewNop())
 }
 
 func ptrLevel(v int) *int      { return &v }

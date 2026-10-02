@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *QuestionBankService, *gorm.DB) {
@@ -27,6 +28,17 @@ func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *QuestionB
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// mustListQuestionTags 标签读面的测试取用（#1445 P2 波 3b-2：定义曾随域包搬去 internal/training，
+// 留驻侧按「就地内联」处理——域包的测试文件不能被 internal/service 反向 import）。
+func mustListQuestionTags(t *testing.T, svc *training.Service, activeOnly, includeSourceTags bool, credentialID *int) []training.QuestionTagDict {
+	t.Helper()
+	tags, err := svc.ListQuestionTags(activeOnly, includeSourceTags, credentialID)
+	if err != nil {
+		t.Fatalf("取标签列表失败: %v", err)
+	}
+	return tags
+}
 
 // seedPaper 建证件 + 卷 + 卷题关联，返回 (paperID, 卷内题目按卷序的 ID)。
 func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents ...string) (int, []int) {
@@ -69,13 +81,13 @@ func entitle(t *testing.T, db *gorm.DB, userID, paperID int) {
 
 func TestRealPaperPoolIsolation(t *testing.T) {
 	_, _, qsvc, db := newRealExamSvc(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	catalogSvc := training.NewService(db, zap.NewNop())
 
-	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题"})
+	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}
-	normalTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
+	normalTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "regulation", Name: "法规"})
 
 	// 真题题（source 标签）+ 普通题
 	createQuestionAs(t, qsvc, db, QuestionCreateInput{

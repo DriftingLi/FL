@@ -62,10 +62,10 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	"service.SearchSectionDTO.items":         outletSearchSectionEmpty,
 	"course.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
 
+	// 岗位字典的 positions 举证已随域包搬去 internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
 	// 三格 handler 一行包出来的信封（见文件头那段）
 	"service.ApplicationListResult.items": outletStudentApplicationListEmpty,
 	"service.ReportListResult.items":      outletJobReportQueueEmpty,
-	"service.PositionListDTO.positions":   outletPositionListEmpty,
 }
 
 func init() {
@@ -219,10 +219,4 @@ func outletJobReportQueueEmpty(t *testing.T) any {
 		t.Fatalf("职位举报队列失败: %v", err)
 	}
 	return &ReportListResult{Items: items, Total: total, Page: page, PageSize: pageSize}
-}
-
-// outletPositionListEmpty 岗位字典：空库时 positions 是空集（catalogList 的 make(0,n)）。
-func outletPositionListEmpty(t *testing.T) any {
-	t.Helper()
-	return PositionListDTO{Positions: NewTrainingCatalogService(testutil.NewMemoryDB(t), zap.NewNop()).ListPositions(false)}
 }

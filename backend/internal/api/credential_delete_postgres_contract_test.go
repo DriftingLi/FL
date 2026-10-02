@@ -24,8 +24,8 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 // credPKGFKey 两条 credential 外键的约束名（000013/000040 与 000020 的列级匿名 FK 命名惯例）。
@@ -100,7 +100,7 @@ func TestCredentialDeleteCascadesPracticeProgressOnPostgres(t *testing.T) {
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置，跳过 Postgres 契约测试")
 	}
-	svc := service.NewTrainingCatalogService(db, zap.NewNop())
+	svc := training.NewService(db, zap.NewNop())
 
 	doomed := seedCredForPGDelete(t, db, "N1_pg_cascade")
 	keeper := seedCredForPGDelete(t, db, "N1_pg_keeper")
@@ -157,7 +157,7 @@ func TestCredentialDeleteBlockedByContributionsOnPostgres(t *testing.T) {
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置，跳过 Postgres 契约测试")
 	}
-	svc := service.NewTrainingCatalogService(db, zap.NewNop())
+	svc := training.NewService(db, zap.NewNop())
 
 	cred := seedCredForPGDelete(t, db, "N1_pg_contrib")
 	student := seedStudent(t, db, "cred_del_pg_block", "x")
@@ -168,7 +168,7 @@ func TestCredentialDeleteBlockedByContributionsOnPostgres(t *testing.T) {
 	if err == nil {
 		t.Fatal("证件下仍有投稿时删除必须被拒")
 	}
-	if !errors.Is(err, service.ErrCredentialHasContributions) {
+	if !errors.Is(err, training.ErrCredentialHasContributions) {
 		t.Fatalf("应可被哨兵 ErrCredentialHasContributions 命中（api 侧据此落 400），实得 %v", err)
 	}
 	if !strings.Contains(err.Error(), "2 篇投稿") {

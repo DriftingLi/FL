@@ -1,7 +1,7 @@
 // Ticket 1b（issue #54）：目录维护修正——新建项排同级末尾（sort_order=max+1）、
 // 相邻交换真实生效（相等默认值也成立）、方向/等级/证书/标签编码必填。
 // seam：service 层（sqlite 内存库）。
-package service
+package training
 
 import (
 	"strings"
@@ -18,7 +18,7 @@ import (
 // TestCreateCatalogItemsAppendToEnd 新建方向/等级/标签自动排同级末尾（max+1），不再默认 0。
 func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTrainingCatalogService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	// 专业方向
 	s1, err := svc.CreateSpecialty(SpecialtyInput{Code: "op", Name: "操作"})
@@ -110,7 +110,7 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 // TestSwapCatalogSortWithEqualValues 相邻交换在 sort_order 相同（默认 0）时也真实生效。
 func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTrainingCatalogService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	a := model.Specialty{Code: "a", Name: "A", SortOrder: 0, Status: 1, CreatedAt: testutil.Now()}
 	b := model.Specialty{Code: "b", Name: "B", SortOrder: 0, Status: 1, CreatedAt: testutil.Now()}
@@ -201,7 +201,7 @@ func TestSwapCourseSortGroupBoundary(t *testing.T) {
 // TestCatalogCodeRequired 方向/等级/证书/标签创建时编码必填（与 UI 提示一致）。
 func TestCatalogCodeRequired(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewTrainingCatalogService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	cases := []struct {
 		name string

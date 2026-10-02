@@ -18,7 +18,7 @@ var (
 	// 裸谓词：字符串里直接出现「证件列 + 比较符」（等值 / 不等 / NULL 判定）。
 	bareCredentialPredicateRE = regexp.MustCompile(`(?i)credential_id\s*(?:=|!=|<>|IS\s+NOT\s+NULL|IS\s+NULL)`)
 	// 列常量拼接：把证件列表达式与运算符字面量拼起来（内联谓词的第二形态，
-	// 如 QuestionPoolCredentialColumn + " = ?"）。只允许出现在谓词实现处。
+	// 如 questionpool.CredentialColumn + " = ?"）。只允许出现在谓词实现处。
 	credentialColumnConcatRE = regexp.MustCompile(`(?i)credentialcolumn\s*\+`)
 )
 
@@ -101,9 +101,9 @@ func TestCredentialPredicateScanProbes(t *testing.T) {
 		{"正向探针：带表名前缀", "q = q.Where(\"question.credential_id = ?\", *credentialID)", 1},
 		{"正向探针：NULL 桶分支", "return \"credential_id IS NULL\", nil", 1},
 		{"正向探针：非空 NULL 分支", "return \"credential_id IS NOT NULL\", nil", 1},
-		{"正向探针：列常量拼接", "query += \" AND \" + QuestionPoolCredentialColumn + \" = ?\"", 1},
+		{"正向探针：列常量拼接", "query += \" AND \" + questionpool.CredentialColumn + \" = ?\"", 1},
 		{"负向样本：具名谓词调用（含域包限定名）", "q = scope.EntityOwnedBy(q, \"question.credential_id\", credentialID)", 0},
-		{"负向样本：列名常量定义", "const QuestionPoolCredentialColumn = \"question.credential_id\"", 0},
+		{"负向样本：列名常量定义", "const CredentialColumn = \"question.credential_id\"", 0},
 		{"负向样本：无关谓词", "q = q.Where(\"status = ?\", 1)", 0},
 		{"负向样本：整行注释", "// 旧实现：q.Where(\"credential_id = ?\", cred)", 0},
 	}

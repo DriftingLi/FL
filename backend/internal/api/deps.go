@@ -28,6 +28,7 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/training"
 )
 
 // RouterDeps 聚合蓝图注册所需的横切依赖（Session/DB/Logger）。
@@ -85,7 +86,7 @@ type Deps struct {
 	RealExamSvc          *service.RealExamService
 	TutorSvc             *service.TutorService
 	WrongQuestionSvc     *service.WrongQuestionService
-	TrainingCatalogSvc   *service.TrainingCatalogService
+	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service
 	DiagnosisProxySvc    *aiassistant.DiagnosisProxyService
 	QuestionCommentSvc   *service.QuestionCommentService

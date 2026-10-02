@@ -1,6 +1,6 @@
-// Package service 岗位字典（问题4：岗位与专业方向解绑，管理员配置）。
+// 岗位字典（问题4：岗位与专业方向解绑，管理员配置）。
 // 复用课程目录 catalog 引擎（ADR-0015 descriptor 驱动），与专业方向/等级同构。
-package service
+package training
 
 import (
 	"errors"
@@ -97,26 +97,26 @@ func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, Posi
 }
 
 // ListPositions 岗位列表（管理端含停用项，学员/招聘端仅启用项）。
-func (s *TrainingCatalogService) ListPositions(activeOnly bool) []PositionDict {
+func (s *Service) ListPositions(activeOnly bool) []PositionDict {
 	return catalogList(s.db, positionCatalogSpec(), activeOnly)
 }
 
 // CreatePosition 创建岗位。
-func (s *TrainingCatalogService) CreatePosition(in PositionInput) (PositionDict, error) {
+func (s *Service) CreatePosition(in PositionInput) (PositionDict, error) {
 	return catalogCreate(s.db, positionCatalogSpec(), &in)
 }
 
 // SwapPositionSort 交换两个岗位的排序位置。
-func (s *TrainingCatalogService) SwapPositionSort(a, b int) error {
+func (s *Service) SwapPositionSort(a, b int) error {
 	return catalogSwap(s.db, positionCatalogSpec(), a, b)
 }
 
 // UpdatePosition 更新岗位。
-func (s *TrainingCatalogService) UpdatePosition(id int, in PositionInput) (PositionDict, error) {
+func (s *Service) UpdatePosition(id int, in PositionInput) (PositionDict, error) {
 	return catalogUpdate(s.db, positionCatalogSpec(), id, &in)
 }
 
 // DeletePosition 删除岗位（已关联职位/简历置空 position_id，不级联删除）。
-func (s *TrainingCatalogService) DeletePosition(id int) error {
+func (s *Service) DeletePosition(id int) error {
 	return catalogDelete(s.db, positionCatalogSpec(), id)
 }

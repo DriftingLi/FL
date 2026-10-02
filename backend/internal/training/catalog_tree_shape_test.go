@@ -1,4 +1,4 @@
-package service
+package training
 
 import (
 	"encoding/json"

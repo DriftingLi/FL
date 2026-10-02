@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 // TestPoolCountConsistency 池计数单点（#413）：同参下 countPoolByOpts 与抽题数量一致，
@@ -89,12 +90,12 @@ func TestPoolCountConsistency(t *testing.T) {
 // 本用例是 question_pool_test.go 池三元组断言向两个新落点的扩展。
 func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	catalogSvc := training.NewService(db, zap.NewNop())
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	searchSvc := NewSearchService(db, zap.NewNop())
 
-	tag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
-	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题"})
+	tag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}

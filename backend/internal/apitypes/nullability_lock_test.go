@@ -95,6 +95,7 @@ var (
 		{"internal/service", "nullableOutlets"},
 		{"internal/aiassistant", "nullableOutlets"},
 		{"internal/course", "nullableOutlets"},
+		{"internal/training", "nullableOutlets"},
 	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
@@ -113,6 +114,7 @@ var (
 		{"internal/contribution", "nonnilOutlets"},
 		{"internal/forum", "nonnilOutlets"},
 		{"internal/course", "nonnilOutlets"},
+		{"internal/training", "nonnilOutlets"},
 	}
 )
 
@@ -234,6 +236,7 @@ var sweptDirs = map[string]string{
 	"forum":        "../forum",
 	"aiassistant":  "../aiassistant",
 	"course":       "../course",
+	"training":     "../training",
 	"repository":   "../valuation/repository",
 }
 

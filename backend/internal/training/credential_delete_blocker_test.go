@@ -4,7 +4,7 @@
 // 「练习分区随证件删除」那一半是库层 ON DELETE CASCADE，SQLite 测试库不建外键（模型侧映射不出
 // REFERENCES 的动作），只有 PG 契约测试与迁移文本锁能回答 —— 见
 // internal/api/credential_delete_postgres_contract_test.go 与 internal/migrate/credential_fk_test.go。
-package service
+package training
 
 import (
 	"errors"
@@ -21,10 +21,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newCredDeleteSvc(t *testing.T) (*TrainingCatalogService, *gorm.DB) {
+func newCredDeleteSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewTrainingCatalogService(db, zap.NewNop()), db
+	return NewService(db, zap.NewNop()), db
 }
 
 // seedCredForDelete 建一枚证件（编码唯一，逐个错开）。

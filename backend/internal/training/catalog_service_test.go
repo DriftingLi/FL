@@ -1,5 +1,5 @@
-// Package service 培训目录（专业方向/等级/证书模板/题库标签/目录树）测试。
-package service
+// Package training 培训目录（专业方向/等级/证书模板/题库标签/目录树）测试。
+package training
 
 import (
 	"encoding/json"
@@ -14,14 +14,34 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newCatalogSvc(t *testing.T) (*TrainingCatalogService, *gorm.DB) {
+func newCatalogSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewTrainingCatalogService(db, zap.NewNop()), db
+	return NewService(db, zap.NewNop()), db
 }
 
 // p16 构造 *int16 指针（测试用）。
 func p16(v int16) *int16 { return &v }
+
+// createQuestionAs 测试 fixture 单点（培训域自带最小建题：ADR-0070 决策 9 —— 域包测试不得依赖
+// internal/service 的测试面，也不绕题库域的 typed 写面）。培训域读的是 question 表的 status /
+// credential_id 与 question_tag_relation 的挂接，所以直接落库这两处即可（#1445 P2 波 3b-2 D18）。
+func createQuestionAs(t *testing.T, db *gorm.DB, q model.Question, tagIDs []int, status string) model.Question {
+	t.Helper()
+	q.Status = status
+	if q.CreatedByType == "" {
+		q.CreatedByType = "tutor"
+	}
+	if err := db.Create(&q).Error; err != nil {
+		t.Fatalf("fixture 建题失败: %v", err)
+	}
+	for _, tagID := range tagIDs {
+		if err := db.Create(&model.QuestionTagRelation{QuestionID: q.ID, TagID: tagID}).Error; err != nil {
+			t.Fatalf("fixture 挂标签失败: %v", err)
+		}
+	}
+	return q
+}
 
 // --- 专业方向 ---
 
@@ -289,18 +309,16 @@ func TestQuestionTagCodeUnique(t *testing.T) {
 func TestListQuestionTags_QuestionCount(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 
 	// 1 道已发布 + 1 道草稿（未发布）
-	published := createQuestionAs(t, qsvc, db, QuestionCreateInput{
-		Type: "single_choice", Content: "已发布题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
-		TagIDs: []int{tag.ID},
-	}, "published")
+	published := createQuestionAs(t, db, model.Question{
+		Type: "single_choice", Content: "已发布题",
+		Options: model.JSONB(json.RawMessage(`["A","B"]`)), Answer: `"A"`,
+	}, []int{tag.ID}, "published")
 	_ = published
-	draft := createQuestionAs(t, qsvc, db, QuestionCreateInput{
-		Type: "true_false", Content: "草稿题", Answer: json.RawMessage(`"true"`),
-		TagIDs: []int{tag.ID},
-	}, "draft")
+	draft := createQuestionAs(t, db, model.Question{
+		Type: "true_false", Content: "草稿题", Answer: `true`,
+	}, []int{tag.ID}, "draft")
 	_ = draft
 	// 另一个无题目标签
 	empty, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
@@ -332,7 +350,6 @@ func TestListQuestionTags_QuestionCount(t *testing.T) {
 func TestListQuestionTags_CredentialPartition(t *testing.T) {
 	svc, db := newCatalogSvc(t)
 	tag, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规"})
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	credA := model.Credential{Code: "N1", Name: "叉车司机N1"}
 	if err := db.Create(&credA).Error; err != nil {
 		t.Fatalf("建证件A失败: %v", err)
@@ -344,14 +361,14 @@ func TestListQuestionTags_CredentialPartition(t *testing.T) {
 
 	mkQ := func(content string, credID int) {
 		t.Helper()
-		in := QuestionCreateInput{
-			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
-			TagIDs: []int{tag.ID},
+		q := model.Question{
+			Type: "single_choice", Content: content,
+			Options: model.JSONB(json.RawMessage(`["A","B"]`)), Answer: `"A"`,
 		}
 		if credID > 0 {
-			in.CredentialID = credID
+			q.CredentialID = &credID
 		}
-		createQuestionAs(t, qsvc, db, in, "published")
+		createQuestionAs(t, db, q, []int{tag.ID}, "published")
 	}
 	// A 证件 2 道、证件为空 1 道
 	mkQ("A证件题1", credA.ID)
@@ -647,73 +664,9 @@ func TestQuestionTagRefJSON(t *testing.T) {
 	}
 }
 
-// --- 题库标签查询 ---
-
-func TestQuestionBank_Tags(t *testing.T) {
-	svc, db := newCatalogSvc(t)
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-
-	tag1, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
-	tag2, _ := svc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
-
-	// 创建题目时打标
-	q1, err := qsvc.CreateQuestion(QuestionCreateInput{
-		Type: "single_choice", Content: "法规题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
-		TagIDs: []int{tag1.ID},
-	}, nil, "tutor")
-	if err != nil {
-		t.Fatalf("创建题目失败: %v", err)
-	}
-	q2, err := qsvc.CreateQuestion(QuestionCreateInput{
-		Type: "true_false", Content: "液压题", Answer: json.RawMessage(`"true"`),
-		TagIDs: []int{tag2.ID},
-	}, nil, "tutor")
-	if err != nil {
-		t.Fatalf("创建题目失败: %v", err)
-	}
-	if len(q1.Tags.([]map[string]any)) != 1 || q1.Tags.([]map[string]any)[0]["name"] != "法规" {
-		t.Fatalf("创建返回的标签不匹配: %+v", q1.Tags)
-	}
-
-	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil), "")
-	if err != nil {
-		t.Fatalf("ListQuestions 失败: %v", err)
-	}
-	if byTag.Total != 1 {
-		t.Fatalf("按标签过滤应 1 条, got %v", byTag.Total)
-	}
-	q := byTag.Questions[0]
-	if q.Content != "液压题" {
-		t.Fatalf("过滤结果不匹配: %+v", q)
-	}
-	if len(q.Tags.([]map[string]any)) != 1 {
-		t.Fatalf("列表应附带标签: %+v", q.Tags)
-	}
-
-	// 更新题目时替换标签
-	tagIDs2 := []int{tag2.ID}
-	updated, err := qsvc.UpdateQuestion(q1.ID, QuestionUpdateInput{TagIDs: &tagIDs2}, "tutor")
-	if err != nil {
-		t.Fatalf("更新题目失败: %v", err)
-	}
-	if len(updated.Tags.([]map[string]any)) != 1 || updated.Tags.([]map[string]any)[0]["name"] != "液压" {
-		t.Fatalf("更新后标签不匹配: %+v", updated.Tags)
-	}
-
-	// 详情含标签
-	got, err := qsvc.GetQuestion(q2.ID)
-	if err != nil {
-		t.Fatalf("获取题目失败: %v", err)
-	}
-	if len(got.Tags.([]map[string]any)) != 1 {
-		t.Fatalf("详情应含标签: %+v", got.Tags)
-	}
-}
-
 // mustListQuestionTags 标签读面的测试内取用：该读面自 ADR-0062 票6 起带 error 出口，
 // 查不动即让测试失败，不得被读成「没有标签」。
-func mustListQuestionTags(t *testing.T, svc *TrainingCatalogService, activeOnly, includeSourceTags bool, credentialID *int) []QuestionTagDict {
+func mustListQuestionTags(t *testing.T, svc *Service, activeOnly, includeSourceTags bool, credentialID *int) []QuestionTagDict {
 	t.Helper()
 	list, err := svc.ListQuestionTags(activeOnly, includeSourceTags, credentialID)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 // TestResumeSetTagSemantics 标签练习协商：首次进入抽样固定顺序；同集续练沿用
@@ -135,12 +136,12 @@ func TestResumeSetSequentialCursorAcrossRefresh(t *testing.T) {
 // 在标签专项与顺序练习两入口同样生效（内联重复已收编）。
 func TestQuestionPoolOptsUnified(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	catalogSvc := training.NewService(db, zap.NewNop())
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	psvc := NewPracticeModeService(db, nil, zap.NewNop())
 
-	tag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
-	srcTag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "real_exam", Name: "真题", SortOrder: coerce.IntPtr(2)})
+	tag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
+	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题", SortOrder: coerce.IntPtr(2)})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}

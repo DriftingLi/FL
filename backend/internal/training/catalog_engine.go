@@ -1,7 +1,7 @@
-// Package service 课程目录 CRUD engine：四个目录实体共享的
+// 培训目录 CRUD engine：四个目录实体共享的
 // List/Create/Update/Delete/Swap 实现。descriptor 使用 typed 回调，
 // 不引入 generic map（ADR-0015）。engine 是 internal seam，不对外暴露。
-package service
+package training
 
 import (
 	"errors"
