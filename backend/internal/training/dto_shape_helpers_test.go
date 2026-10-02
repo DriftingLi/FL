@@ -2,6 +2,8 @@
 // P2 波 3b-2 随培训目录 DTO 搬进本域包；域包测试不得 import internal/service 的测试文件，先例 internal/course/dto_shape_helpers_test.go）。
 // 断言 JSON key 集合与转换前的 map 契约逐字一致——前端契约零改动是最高优先级约束，
 // 任何 DTO 字段增删都会在这里暴露，需同步评估前端影响。
+// 只搬本包真正调用的两件（topLevelKeys / assertShapeLock）：跨包复制 helper 要按**调用点**裁剪 ——
+// 多搬的那件（原 marshalJSON）只有 CI backend-lint 的 unused 抓得到，本地 go build / go vet 不报（手册 §11 第十四批）。
 package training
 
 import (
@@ -25,16 +27,6 @@ func topLevelKeys(t *testing.T, v any) map[string]bool {
 		keys[k] = true
 	}
 	return keys
-}
-
-// marshalJSON 序列化 v（shape-lock 字节断言辅助）。
-func marshalJSON(t *testing.T, v any) ([]byte, error) {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("序列化失败: %v", err)
-	}
-	return b, nil
 }
 
 // assertShapeLock 断言 key 集合与期望完全一致（不多不少）。

@@ -10,9 +10,6 @@ import (
 	"forklift-training/internal/points"
 )
 
-// intPtr 本地 helper：原先复用积分域测试文件里的同名函数，随域包搬走（#1445 P2 波 1b）。
-func intPtr(v int) *int { return &v }
-
 // spec #940 片三（含片二）：信封 DTO 的 shape-lock。
 //
 // 每张表都是「收口前的 map 形态 ↔ 收口后的 typed DTO」：两者的 json.Marshal 结果必须**逐字节相等**。
