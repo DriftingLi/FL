@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
 	"forklift-training/internal/sortorder"
+	"forklift-training/internal/training"
 )
 
 // courseWaveFacts 本批在课程写面上点名的全部事实。
@@ -28,7 +29,7 @@ var courseWaveFacts = []error{
 	course.ErrCourseSortOrderNegative,
 	course.ErrCoursePrerequisiteSelf, course.ErrCoursePrerequisiteNotFound,
 	course.ErrCoursePrerequisiteCycle, model.ErrCourseNotFound,
-	service.ErrEntityNotSortable, sortorder.ErrSwapItemNotFound,
+	training.ErrEntityNotSortable, sortorder.ErrSwapItemNotFound,
 	course.ErrCourseNotMountedForSort, course.ErrCourseSortGroupMismatch,
 	course.ErrCourseSwapTargetNotFound,
 	// 同文案对的**另一侧**也进表：只放一侧会让豁免分支永远走不到（本表内不出现第二次），

@@ -1,6 +1,6 @@
-// Package service 培训目录 typed surface：专业方向/课程等级/证书模板/题库标签的
+// 培训目录 typed surface：专业方向/课程等级/证书模板/题库标签的
 // Input 与 DTO 结构体（JSON 字段名与前端契约保持完全一致）。
-package service
+package training
 
 // SpecialtyInput 专业方向创建/更新入参。
 // 更新语义（与旧 map 接口一致）：Code/Name 为空表示不改动；指针字段为 nil 表示不改动。

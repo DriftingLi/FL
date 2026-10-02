@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 func newPracticeSvc(t *testing.T) (*PracticeModeService, *gorm.DB) {
@@ -23,10 +24,10 @@ func newPracticeSvc(t *testing.T) (*PracticeModeService, *gorm.DB) {
 // TestStartTagPractice 标签练习开始/续练：抽题、顺序固定（断点续练）、完成后重新抽、错误分支。
 func TestStartTagPractice(t *testing.T) {
 	svc, db := newPracticeSvc(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
+	catalogSvc := training.NewService(db, zap.NewNop())
 
-	tag1, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
-	tag2, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
+	tag1, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
+	tag2, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
 
 	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
 	q1 := createQuestionAs(t, qsvc, db, QuestionCreateInput{
@@ -121,7 +122,7 @@ func TestStartTagPractice(t *testing.T) {
 	}
 
 	// 错误分支
-	empty, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "emergency", Name: "应急"})
+	empty, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "emergency", Name: "应急"})
 	if _, err := svc.StartTagPractice(3, empty.ID, 0, nil); err == nil {
 		t.Fatal("无题目标签应报错")
 	}
@@ -131,7 +132,7 @@ func TestStartTagPractice(t *testing.T) {
 	if _, err := svc.StartTagPractice(3, 0, 0, nil); err == nil {
 		t.Fatal("非法标签 ID 应报错")
 	}
-	disabled, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "off", Name: "停用", Status: p16(0)})
+	disabled, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "off", Name: "停用", Status: p16(0)})
 	if _, err := svc.StartTagPractice(3, disabled.ID, 0, nil); err == nil {
 		t.Fatal("停用标签应报错")
 	}
@@ -140,8 +141,8 @@ func TestStartTagPractice(t *testing.T) {
 // TestStartTagPractice_QuestionToDict 校验题目 dict 中带标签字段所需字段完整。
 func TestGetTagQuestions_QuestionToDict(t *testing.T) {
 	svc, db := newPracticeSvc(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
-	tag, _ := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "brake", Name: "制动"})
+	catalogSvc := training.NewService(db, zap.NewNop())
+	tag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "brake", Name: "制动"})
 	q := model.Question{Type: "single_choice", Content: "制动题", Answer: "A",
 		Options: model.JSONB([]byte(`["A","B"]`)), Status: "published",
 		CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
@@ -163,3 +164,6 @@ func TestGetTagQuestions_QuestionToDict(t *testing.T) {
 		t.Fatalf("题目字段不完整: %+v", qs[0])
 	}
 }
+
+// p16 构造 *int16 指针（#1445 P2 波 3b-2：定义曾随域包搬去 internal/training，留驻侧就地补）。
+func p16(v int16) *int16 { return &v }

@@ -18,6 +18,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/training"
 	"forklift-training/pkg/paging"
 )
 
@@ -410,7 +411,7 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 		return QuestionDTO{}, err
 	}
 	if in.TagIDs != nil {
-		if err := replaceQuestionTags(s.db, q.ID, in.TagIDs); err != nil {
+		if err := training.ReplaceQuestionTags(s.db, q.ID, in.TagIDs); err != nil {
 			return QuestionDTO{}, err
 		}
 	}
@@ -485,7 +486,7 @@ func (s *QuestionBankService) UpdateQuestion(id int, in QuestionUpdateInput, act
 		return QuestionDTO{}, err
 	}
 	if in.TagIDs != nil {
-		if err := replaceQuestionTags(s.db, id, *in.TagIDs); err != nil {
+		if err := training.ReplaceQuestionTags(s.db, id, *in.TagIDs); err != nil {
 			return QuestionDTO{}, err
 		}
 	}

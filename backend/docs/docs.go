@@ -555,7 +555,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CatalogTreeDTO"
+                                            "$ref": "#/definitions/training.CatalogTreeDTO"
                                         }
                                     }
                                 }
@@ -596,7 +596,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CertificateTemplateInput"
+                            "$ref": "#/definitions/training.CertificateTemplateInput"
                         }
                     }
                 ],
@@ -612,7 +612,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CertificateTemplateDict"
+                                            "$ref": "#/definitions/training.CertificateTemplateDict"
                                         }
                                     }
                                 }
@@ -666,7 +666,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CertificateTemplateInput"
+                            "$ref": "#/definitions/training.CertificateTemplateInput"
                         }
                     }
                 ],
@@ -682,7 +682,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CertificateTemplateDict"
+                                            "$ref": "#/definitions/training.CertificateTemplateDict"
                                         }
                                     }
                                 }
@@ -775,7 +775,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CertificateTemplateListDTO"
+                                            "$ref": "#/definitions/training.CertificateTemplateListDTO"
                                         }
                                     }
                                 }
@@ -1906,7 +1906,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CredentialInput"
+                            "$ref": "#/definitions/training.CredentialInput"
                         }
                     }
                 ],
@@ -1922,7 +1922,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialDict"
+                                            "$ref": "#/definitions/training.CredentialDict"
                                         }
                                     }
                                 }
@@ -1976,7 +1976,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CredentialInput"
+                            "$ref": "#/definitions/training.CredentialInput"
                         }
                     }
                 ],
@@ -1992,7 +1992,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialDict"
+                                            "$ref": "#/definitions/training.CredentialDict"
                                         }
                                     }
                                 }
@@ -2155,7 +2155,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialListDTO"
+                                            "$ref": "#/definitions/training.CredentialListDTO"
                                         }
                                     }
                                 }
@@ -4509,7 +4509,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.LevelInput"
+                            "$ref": "#/definitions/training.LevelInput"
                         }
                     }
                 ],
@@ -4525,7 +4525,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelDict"
+                                            "$ref": "#/definitions/training.LevelDict"
                                         }
                                     }
                                 }
@@ -4579,7 +4579,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.LevelInput"
+                            "$ref": "#/definitions/training.LevelInput"
                         }
                     }
                 ],
@@ -4595,7 +4595,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelDict"
+                                            "$ref": "#/definitions/training.LevelDict"
                                         }
                                     }
                                 }
@@ -4752,7 +4752,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelListDTO"
+                                            "$ref": "#/definitions/training.LevelListDTO"
                                         }
                                     }
                                 }
@@ -4876,7 +4876,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.PositionInput"
+                            "$ref": "#/definitions/training.PositionInput"
                         }
                     }
                 ],
@@ -4892,7 +4892,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionDict"
+                                            "$ref": "#/definitions/training.PositionDict"
                                         }
                                     }
                                 }
@@ -4946,7 +4946,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.PositionInput"
+                            "$ref": "#/definitions/training.PositionInput"
                         }
                     }
                 ],
@@ -4962,7 +4962,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionDict"
+                                            "$ref": "#/definitions/training.PositionDict"
                                         }
                                     }
                                 }
@@ -5119,7 +5119,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionListDTO"
+                                            "$ref": "#/definitions/training.PositionListDTO"
                                         }
                                     }
                                 }
@@ -5359,7 +5359,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionTagInput"
+                            "$ref": "#/definitions/training.QuestionTagInput"
                         }
                     }
                 ],
@@ -5375,7 +5375,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagDict"
+                                            "$ref": "#/definitions/training.QuestionTagDict"
                                         }
                                     }
                                 }
@@ -5429,7 +5429,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.QuestionTagInput"
+                            "$ref": "#/definitions/training.QuestionTagInput"
                         }
                     }
                 ],
@@ -5445,7 +5445,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagDict"
+                                            "$ref": "#/definitions/training.QuestionTagDict"
                                         }
                                     }
                                 }
@@ -5538,7 +5538,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagListDTO"
+                                            "$ref": "#/definitions/training.QuestionTagListDTO"
                                         }
                                     }
                                 }
@@ -5602,7 +5602,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagsResultDTO"
+                                            "$ref": "#/definitions/training.QuestionTagsResultDTO"
                                         }
                                     }
                                 }
@@ -6237,7 +6237,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SpecialtyListDTO"
+                                            "$ref": "#/definitions/training.SpecialtyListDTO"
                                         }
                                     }
                                 }
@@ -6278,7 +6278,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.SpecialtyInput"
+                            "$ref": "#/definitions/training.SpecialtyInput"
                         }
                     }
                 ],
@@ -6294,7 +6294,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SpecialtyDict"
+                                            "$ref": "#/definitions/training.SpecialtyDict"
                                         }
                                     }
                                 }
@@ -6348,7 +6348,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.SpecialtyInput"
+                            "$ref": "#/definitions/training.SpecialtyInput"
                         }
                     }
                 ],
@@ -6364,7 +6364,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SpecialtyDict"
+                                            "$ref": "#/definitions/training.SpecialtyDict"
                                         }
                                     }
                                 }
@@ -9037,7 +9037,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CatalogTreeDTO"
+                                            "$ref": "#/definitions/training.CatalogTreeDTO"
                                         }
                                     }
                                 }
@@ -10147,7 +10147,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CredentialListDTO"
+                                            "$ref": "#/definitions/training.CredentialListDTO"
                                         }
                                     }
                                 }
@@ -10184,7 +10184,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.GroupedCredentialsDTO"
+                                            "$ref": "#/definitions/training.GroupedCredentialsDTO"
                                         }
                                     }
                                 }
@@ -12432,7 +12432,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LevelListDTO"
+                                            "$ref": "#/definitions/training.LevelListDTO"
                                         }
                                     }
                                 }
@@ -12635,7 +12635,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CurrentCredentialDTO"
+                                            "$ref": "#/definitions/training.CurrentCredentialDTO"
                                         }
                                     }
                                 }
@@ -12690,7 +12690,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CurrentCredentialDTO"
+                                            "$ref": "#/definitions/training.CurrentCredentialDTO"
                                         }
                                     }
                                 }
@@ -13898,7 +13898,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PositionListDTO"
+                                            "$ref": "#/definitions/training.PositionListDTO"
                                         }
                                     }
                                 }
@@ -18154,7 +18154,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionTagListDTO"
+                                            "$ref": "#/definitions/training.QuestionTagListDTO"
                                         }
                                     }
                                 }
@@ -27156,147 +27156,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CatalogLevelNode": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "courses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/course.CourseDTO"
-                    }
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CatalogSpecialtyNode": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "levels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CatalogLevelNode"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CatalogTreeDTO": {
-            "type": "object",
-            "properties": {
-                "specialties": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CatalogSpecialtyNode"
-                    }
-                }
-            }
-        },
-        "service.CertificateTemplateDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "template_url": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "validity_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CertificateTemplateInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "template_url": {
-                    "type": "string"
-                },
-                "validity_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CertificateTemplateListDTO": {
-            "type": "object",
-            "properties": {
-                "certificate_templates": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CertificateTemplateDict"
-                    }
-                }
-            }
-        },
         "service.ChapterGenResult": {
             "type": "object",
             "properties": {
@@ -27481,92 +27340,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CredentialDict": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.CredentialInput": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "level": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CredentialListDTO": {
-            "type": "object",
-            "properties": {
-                "credentials": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CredentialDict"
-                    }
-                }
-            }
-        },
-        "service.CurrentCredentialDTO": {
-            "type": "object",
-            "properties": {
-                "credential": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CredentialDict"
-                        }
-                    ],
-                    "x-nullable": true
-                }
-            }
-        },
         "service.DeleteFileResult": {
             "type": "object",
             "properties": {
@@ -27666,23 +27439,6 @@ const docTemplate = `{
             "properties": {
                 "task_id": {
                     "type": "string"
-                }
-            }
-        },
-        "service.GroupedCredentialsDTO": {
-            "type": "object",
-            "properties": {
-                "skill_level": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CredentialDict"
-                    }
-                },
-                "special_operation": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CredentialDict"
-                    }
                 }
             }
         },
@@ -28033,63 +27789,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.LevelDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.LevelInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.LevelListDTO": {
-            "type": "object",
-            "properties": {
-                "levels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.LevelDict"
-                    }
-                }
-            }
-        },
         "service.MockExamAnswerDetailDTO": {
             "type": "object",
             "properties": {
@@ -28345,63 +28044,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.PositionDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "position_id": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PositionInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PositionListDTO": {
-            "type": "object",
-            "properties": {
-                "positions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.PositionDict"
-                    }
                 }
             }
         },
@@ -28726,82 +28368,6 @@ const docTemplate = `{
             "properties": {
                 "rejected_count": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.QuestionTagDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "question_count": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionTagInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.QuestionTagListDTO": {
-            "type": "object",
-            "properties": {
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionTagDict"
-                    }
-                }
-            }
-        },
-        "service.QuestionTagsResultDTO": {
-            "type": "object",
-            "properties": {
-                "tag_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    },
-                    "x-nullable": true
                 }
             }
         },
@@ -29130,63 +28696,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyDict": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "specialty_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyInput": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SpecialtyListDTO": {
-            "type": "object",
-            "properties": {
-                "specialties": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.SpecialtyDict"
-                    }
                 }
             }
         },
@@ -29693,6 +29202,497 @@ const docTemplate = `{
                 },
                 "times": {
                     "type": "integer"
+                }
+            }
+        },
+        "training.CatalogLevelNode": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseDTO"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CatalogSpecialtyNode": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "levels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CatalogLevelNode"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CatalogTreeDTO": {
+            "type": "object",
+            "properties": {
+                "specialties": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CatalogSpecialtyNode"
+                    }
+                }
+            }
+        },
+        "training.CertificateTemplateDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "template_url": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "validity_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CertificateTemplateInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "template_url": {
+                    "type": "string"
+                },
+                "validity_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CertificateTemplateListDTO": {
+            "type": "object",
+            "properties": {
+                "certificate_templates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CertificateTemplateDict"
+                    }
+                }
+            }
+        },
+        "training.CredentialDict": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "training.CredentialInput": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "level": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.CredentialListDTO": {
+            "type": "object",
+            "properties": {
+                "credentials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CredentialDict"
+                    }
+                }
+            }
+        },
+        "training.CurrentCredentialDTO": {
+            "type": "object",
+            "properties": {
+                "credential": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/training.CredentialDict"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "training.GroupedCredentialsDTO": {
+            "type": "object",
+            "properties": {
+                "skill_level": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CredentialDict"
+                    }
+                },
+                "special_operation": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.CredentialDict"
+                    }
+                }
+            }
+        },
+        "training.LevelDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.LevelInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.LevelListDTO": {
+            "type": "object",
+            "properties": {
+                "levels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.LevelDict"
+                    }
+                }
+            }
+        },
+        "training.PositionDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.PositionInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.PositionListDTO": {
+            "type": "object",
+            "properties": {
+                "positions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.PositionDict"
+                    }
+                }
+            }
+        },
+        "training.QuestionTagDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "question_count": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "training.QuestionTagInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.QuestionTagListDTO": {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.QuestionTagDict"
+                    }
+                }
+            }
+        },
+        "training.QuestionTagsResultDTO": {
+            "type": "object",
+            "properties": {
+                "tag_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "training.SpecialtyDict": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "specialty_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.SpecialtyInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.SpecialtyListDTO": {
+            "type": "object",
+            "properties": {
+                "specialties": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.SpecialtyDict"
+                    }
                 }
             }
         }

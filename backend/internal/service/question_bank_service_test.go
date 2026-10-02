@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 func newQuestionBankSvc(t *testing.T) (*QuestionBankService, *gorm.DB) {
@@ -133,8 +134,8 @@ func TestCreateQuestion_MultiChoice_AnswerArray(t *testing.T) {
 
 func TestCreateQuestion_WithTagIDs(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
-	tag, err := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "hydraulic", Name: "液压"})
+	catalogSvc := training.NewService(db, zap.NewNop())
+	tag, err := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压"})
 	if err != nil {
 		t.Fatalf("创建标签失败: %v", err)
 	}
@@ -238,8 +239,8 @@ func TestUpdateQuestion_ReviewInvariant(t *testing.T) {
 
 func TestUpdateQuestion_TagOnlyKeepsStatus(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	catalogSvc := NewTrainingCatalogService(db, zap.NewNop())
-	tag, err := catalogSvc.CreateQuestionTag(QuestionTagInput{Code: "t5", Name: "标签五"})
+	catalogSvc := training.NewService(db, zap.NewNop())
+	tag, err := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "t5", Name: "标签五"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,5 +511,73 @@ func TestGetStats_WithData(t *testing.T) {
 	result := svc.GetStats(nil)
 	if result.Total != 3 {
 		t.Fatalf("总数应为 3, got %v", result.Total)
+	}
+}
+
+// TestQuestionBank_Tags 题目-标签挂接（#1445 P2 波 3b-2 从培训域测试文件搬回）：
+// 这条用例的接缝是**题库域的写面**（CreateQuestion / ListQuestions / UpdateQuestion / GetQuestion），
+// 而域包 internal/training 不得 import internal/service（反向边），所以它留在 service 侧 ——
+// 标签 CRUD 走 training.NewService，题目写面走题库域自己的服务。
+// --- 题库标签查询 ---
+
+func TestQuestionBank_Tags(t *testing.T) {
+	qsvc, db := newQuestionBankSvc(t)
+	tagSvc := training.NewService(db, zap.NewNop())
+
+	tag1, _ := tagSvc.CreateQuestionTag(training.QuestionTagInput{Code: "regulation", Name: "法规", SortOrder: coerce.IntPtr(1)})
+	tag2, _ := tagSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(2)})
+
+	// 创建题目时打标
+	q1, err := qsvc.CreateQuestion(QuestionCreateInput{
+		Type: "single_choice", Content: "法规题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
+		TagIDs: []int{tag1.ID},
+	}, nil, "tutor")
+	if err != nil {
+		t.Fatalf("创建题目失败: %v", err)
+	}
+	q2, err := qsvc.CreateQuestion(QuestionCreateInput{
+		Type: "true_false", Content: "液压题", Answer: json.RawMessage(`"true"`),
+		TagIDs: []int{tag2.ID},
+	}, nil, "tutor")
+	if err != nil {
+		t.Fatalf("创建题目失败: %v", err)
+	}
+	if len(q1.Tags.([]map[string]any)) != 1 || q1.Tags.([]map[string]any)[0]["name"] != "法规" {
+		t.Fatalf("创建返回的标签不匹配: %+v", q1.Tags)
+	}
+
+	// 按标签过滤
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil), "")
+	if err != nil {
+		t.Fatalf("ListQuestions 失败: %v", err)
+	}
+	if byTag.Total != 1 {
+		t.Fatalf("按标签过滤应 1 条, got %v", byTag.Total)
+	}
+	q := byTag.Questions[0]
+	if q.Content != "液压题" {
+		t.Fatalf("过滤结果不匹配: %+v", q)
+	}
+	if len(q.Tags.([]map[string]any)) != 1 {
+		t.Fatalf("列表应附带标签: %+v", q.Tags)
+	}
+
+	// 更新题目时替换标签
+	tagIDs2 := []int{tag2.ID}
+	updated, err := qsvc.UpdateQuestion(q1.ID, QuestionUpdateInput{TagIDs: &tagIDs2}, "tutor")
+	if err != nil {
+		t.Fatalf("更新题目失败: %v", err)
+	}
+	if len(updated.Tags.([]map[string]any)) != 1 || updated.Tags.([]map[string]any)[0]["name"] != "液压" {
+		t.Fatalf("更新后标签不匹配: %+v", updated.Tags)
+	}
+
+	// 详情含标签
+	got, err := qsvc.GetQuestion(q2.ID)
+	if err != nil {
+		t.Fatalf("获取题目失败: %v", err)
+	}
+	if len(got.Tags.([]map[string]any)) != 1 {
+		t.Fatalf("详情应含标签: %+v", got.Tags)
 	}
 }

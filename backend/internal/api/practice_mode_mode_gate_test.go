@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/training"
 )
 
 // TestSearchQuestionExcludesSourceTagged 搜索 question 分区走题库池口径：
@@ -23,10 +24,10 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	t.Parallel()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	catalogSvc := service.NewTrainingCatalogService(db, nil)
+	catalogSvc := training.NewService(db, nil)
 	qsvc := service.NewQuestionBankService(db, nil, nil)
 
-	srcTag, _ := catalogSvc.CreateQuestionTag(service.QuestionTagInput{Code: "real_exam", Name: "真题"})
+	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
 	if err := db.Model(&model.QuestionTag{}).Where("id = ?", srcTag.ID).Update("is_source_tag", true).Error; err != nil {
 		t.Fatalf("置 source 标签失败: %v", err)
 	}

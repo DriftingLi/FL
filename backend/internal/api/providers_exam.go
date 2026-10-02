@@ -1,6 +1,9 @@
 package api
 
-import "forklift-training/internal/service"
+import (
+	"forklift-training/internal/service"
+	"forklift-training/internal/training"
+)
 
 // provideExam 练习与考试域（题库/练习/模考/真题/错题/互动/目录）。
 func provideExam(c *coreSingletons, d *Deps) {
@@ -12,6 +15,6 @@ func provideExam(c *coreSingletons, d *Deps) {
 	d.QuestionCommentSvc = service.NewQuestionCommentService(c.db, c.logger)
 	d.NoteSvc = service.NewNoteService(c.db, c.logger)
 	d.QuestionKnowledgeSvc = service.NewQuestionKnowledgeService(c.db)
-	d.TrainingCatalogSvc = service.NewTrainingCatalogService(c.db, c.logger)
+	d.TrainingCatalogSvc = training.NewService(c.db, c.logger)
 	d.PointsSvc = c.pointsSvc
 }

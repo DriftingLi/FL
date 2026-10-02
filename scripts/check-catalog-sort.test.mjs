@@ -26,12 +26,12 @@ import {
 } from './check-catalog-sort.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const READ_PATH = 'backend/internal/service/training_catalog_service.go'
-const SPECS = 'backend/internal/service/catalog_specs.go'
+const READ_PATH = 'backend/internal/training/catalog_service.go'
+const SPECS = 'backend/internal/training/catalog_specs.go'
 
 /** 收口后的读面形态（票 10 (a)）：引用 spec 声明，不重抄字面量。 */
 const FIXED_SRC = [
-  'func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, cred *int) *CatalogTreeDTO {',
+  'func (s *Service) getCatalogTree(activeOnly, withChapters bool, cred *int) *CatalogTreeDTO {',
   '\tq.Order(specialtyCatalogSpec().OrderBy).Find(&specialties)',
   '\tq.Order(levelCatalogSpec().OrderBy).Find(&levels)',
   '\tq.Order("course.sort_order ASC, course.course_id ASC").Find(&rows)',
@@ -99,7 +99,7 @@ test('负例：spec 声明自身（OrderBy 字段）是合法宿主，不报', (
   ].join('\n')
   assert.deepEqual(scanSource(src, SPECS), [])
   // engine 消费声明（q.Order(spec.OrderBy)）同样不报
-  assert.deepEqual(scanSource('\tq.Order(spec.OrderBy).Find(&rows)', 'backend/internal/service/catalog_engine.go'), [])
+  assert.deepEqual(scanSource('\tq.Order(spec.OrderBy).Find(&rows)', 'backend/internal/training/catalog_engine.go'), [])
 })
 
 test('负例：整行注释与文档说明不是调用', () => {
@@ -117,29 +117,28 @@ test('负例：非目录面文件与 Go 测试文件整体不进判定面', () =
     'backend/internal/service/faq_service.go',
     'backend/internal/course/service.go',
     'backend/internal/api/admin.go',
-    'backend/internal/service/catalog_tree_shape_test.go',
+    'backend/internal/training/catalog_tree_shape_test.go',
     'backend/internal/api/training_catalog_contract_test.go'
   ]) {
     assert.equal(isGuardedPath(p), false, p + ' 不在守卫面')
     assert.deepEqual(scanSource(line, p), [], p + ' 不进判定面')
   }
   for (const p of [
-    'backend/internal/service/training_catalog_service.go',
-    'backend/internal/service/training_catalog_types.go',
-    'backend/internal/service/catalog_specs.go',
-    'backend/internal/service/catalog_engine.go',
-    'backend/internal/service/position_catalog.go',
-    'backend/internal/api/training_catalog.go'
+    'backend/internal/training/catalog_service.go',
+    'backend/internal/training/catalog_types.go',
+    'backend/internal/training/catalog_specs.go',
+    'backend/internal/training/catalog_engine.go',
+    'backend/internal/training/position_catalog.go'
   ]) {
     assert.equal(isGuardedPath(p), true, p + ' 应在守卫面')
   }
-  assert.equal(isTestFile('backend/internal/service/catalog_sort_test.go'), true)
+  assert.equal(isTestFile('backend/internal/training/catalog_sort_test.go'), true)
   assert.equal(GUARDED_PATH_SEGMENT, 'catalog')
 })
 
 test('一致性锁：本脚本的声明表与 spec 文件的真实 OrderBy 互等（判据不许改回双份）', () => {
   const declared = new Set()
-  for (const rel of ['backend/internal/service/catalog_specs.go', 'backend/internal/service/position_catalog.go']) {
+  for (const rel of ['backend/internal/training/catalog_specs.go', 'backend/internal/training/position_catalog.go']) {
     for (const lit of declaredOrderByLiterals(readFileSync(join(ROOT, rel), 'utf8'))) declared.add(lit)
   }
   const mine = new Set(SPEC_ORDER_BY_DECLARATIONS.map((d) => d.orderBy))
@@ -187,7 +186,7 @@ test('端到端：合成违规目录必须报红（守卫真的扫得动，不�
   try {
     writeFileSync(
       join(dir, 'catalog_stub.go'),
-      'package service\n\nfunc f() {\n\tq.Order("sort_order ASC, specialty_id ASC").Find(&rows)\n}\n',
+      'package training\n\nfunc f() {\n\tq.Order("sort_order ASC, specialty_id ASC").Find(&rows)\n}\n',
       'utf8'
     )
     const out = spawnSync(process.execPath, ['scripts/check-catalog-sort.mjs', '--all', dir], {

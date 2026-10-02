@@ -1,5 +1,11 @@
-// Package service 培训目录服务：专业方向 / 课程等级 / 证书模板 / 题库标签。
-package service
+// Package training 培训域：培训目录（专业方向 / 课程等级 / 证书模板 / 题库标签）与目标证件的
+// 读面与管理面实现，以及 HTTP 出口。
+//
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go / handler_admin.go /
+// handler_credential.go 是 HTTP 出口（学员公开读面 / 管理面 / 证件面三分），catalog_service.go
+// 是域实现入口，catalog_types.go / catalog_specs.go / catalog_engine.go / position_catalog.go
+// 是同域协作件。
+package training
 
 import (
 	"errors"
@@ -11,21 +17,22 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/course"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionpool"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/slicesx"
 	"forklift-training/internal/timefmt"
 )
 
-// TrainingCatalogService 培训目录（课程目录树与管理数据）服务。
-type TrainingCatalogService struct {
+// Service 培训目录（课程目录树与管理数据）服务。
+type Service struct {
 	db *gorm.DB
 
 	logger *zap.Logger
 }
 
-// NewTrainingCatalogService 创建培训目录服务实例。
-func NewTrainingCatalogService(db *gorm.DB, logger *zap.Logger) *TrainingCatalogService {
-	return &TrainingCatalogService{db: db, logger: logger}
+// NewService 创建培训目录服务实例。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // ===== 专业方向 =====
@@ -90,72 +97,72 @@ func ensureCodeUnique(db *gorm.DB, table, idCol, code string, excludeID int, dup
 }
 
 // ListSpecialties 专业方向列表（管理端含停用项，学员端仅启用项）。
-func (s *TrainingCatalogService) ListSpecialties(activeOnly bool) []SpecialtyDict {
+func (s *Service) ListSpecialties(activeOnly bool) []SpecialtyDict {
 	return catalogList(s.db, specialtyCatalogSpec(), activeOnly)
 }
 
 // CreateSpecialty 创建专业方向。
-func (s *TrainingCatalogService) CreateSpecialty(in SpecialtyInput) (SpecialtyDict, error) {
+func (s *Service) CreateSpecialty(in SpecialtyInput) (SpecialtyDict, error) {
 	return catalogCreate(s.db, specialtyCatalogSpec(), &in)
 }
 
 // SwapSpecialtySort 交换两个专业方向的排序位置（真实生效，含同值默认）。
-func (s *TrainingCatalogService) SwapSpecialtySort(a, b int) error {
+func (s *Service) SwapSpecialtySort(a, b int) error {
 	return catalogSwap(s.db, specialtyCatalogSpec(), a, b)
 }
 
 // UpdateSpecialty 更新专业方向。
-func (s *TrainingCatalogService) UpdateSpecialty(id int, in SpecialtyInput) (SpecialtyDict, error) {
+func (s *Service) UpdateSpecialty(id int, in SpecialtyInput) (SpecialtyDict, error) {
 	return catalogUpdate(s.db, specialtyCatalogSpec(), id, &in)
 }
 
 // DeleteSpecialty 删除专业方向（已关联课程置空 specialty_id，不级联删除课程）。
-func (s *TrainingCatalogService) DeleteSpecialty(id int) error {
+func (s *Service) DeleteSpecialty(id int) error {
 	return catalogDelete(s.db, specialtyCatalogSpec(), id)
 }
 
 // ListLevels 课程等级列表（activeOnly=true 仅启用项）。
-func (s *TrainingCatalogService) ListLevels(activeOnly bool) []LevelDict {
+func (s *Service) ListLevels(activeOnly bool) []LevelDict {
 	return catalogList(s.db, levelCatalogSpec(), activeOnly)
 }
 
 // CreateLevel 创建课程等级。
-func (s *TrainingCatalogService) CreateLevel(in LevelInput) (LevelDict, error) {
+func (s *Service) CreateLevel(in LevelInput) (LevelDict, error) {
 	return catalogCreate(s.db, levelCatalogSpec(), &in)
 }
 
 // SwapLevelSort 交换两个课程等级的排序位置（真实生效，含同值默认）。
-func (s *TrainingCatalogService) SwapLevelSort(a, b int) error {
+func (s *Service) SwapLevelSort(a, b int) error {
 	return catalogSwap(s.db, levelCatalogSpec(), a, b)
 }
 
 // UpdateLevel 更新课程等级。
-func (s *TrainingCatalogService) UpdateLevel(id int, in LevelInput) (LevelDict, error) {
+func (s *Service) UpdateLevel(id int, in LevelInput) (LevelDict, error) {
 	return catalogUpdate(s.db, levelCatalogSpec(), id, &in)
 }
 
 // DeleteLevel 删除课程等级（已关联课程置空 level_id，不级联删除课程）。
-func (s *TrainingCatalogService) DeleteLevel(id int) error {
+func (s *Service) DeleteLevel(id int) error {
 	return catalogDelete(s.db, levelCatalogSpec(), id)
 }
 
 // ListCertificateTemplates 证书模板列表（activeOnly=true 仅启用项）。
-func (s *TrainingCatalogService) ListCertificateTemplates(activeOnly bool) []CertificateTemplateDict {
+func (s *Service) ListCertificateTemplates(activeOnly bool) []CertificateTemplateDict {
 	return catalogList(s.db, certificateCatalogSpec(), activeOnly)
 }
 
 // CreateCertificateTemplate 创建证书模板。
-func (s *TrainingCatalogService) CreateCertificateTemplate(in CertificateTemplateInput) (CertificateTemplateDict, error) {
+func (s *Service) CreateCertificateTemplate(in CertificateTemplateInput) (CertificateTemplateDict, error) {
 	return catalogCreate(s.db, certificateCatalogSpec(), &in)
 }
 
 // UpdateCertificateTemplate 更新证书模板。
-func (s *TrainingCatalogService) UpdateCertificateTemplate(id int, in CertificateTemplateInput) (CertificateTemplateDict, error) {
+func (s *Service) UpdateCertificateTemplate(id int, in CertificateTemplateInput) (CertificateTemplateDict, error) {
 	return catalogUpdate(s.db, certificateCatalogSpec(), id, &in)
 }
 
 // DeleteCertificateTemplate 删除证书模板（已关联课程置空 certificate_template_id）。
-func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
+func (s *Service) DeleteCertificateTemplate(id int) error {
 	return catalogDelete(s.db, certificateCatalogSpec(), id)
 }
 
@@ -166,7 +173,7 @@ func (s *TrainingCatalogService) DeleteCertificateTemplate(id int) error {
 // 已发布 + 排除来源标记标签 + 证件分区；nil = 不分区，保持管理端全局口径）。
 // 查询失败上抛 error（ADR-0062 票6）：旧写法把来源标签的排除查询失败咽掉 ⇒ 学员端
 // 专项练习里冒出「真题」标签，选了就是空池（判据被读成「没有要排除的标签」）。
-func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID *int) ([]QuestionTagDict, error) {
+func (s *Service) ListQuestionTags(activeOnly, includeSourceTags bool, credentialID *int) ([]QuestionTagDict, error) {
 	list := catalogList(s.db, questionTagCatalogSpec(), activeOnly)
 	if len(list) == 0 {
 		return list, nil
@@ -201,23 +208,23 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 
 	// 一次查询全部标签的题目数（LEFT JOIN 保证无题目标签也返回 0，避免 N+1）。
 	// 分区语义（#702）：学员端（activeOnly）在 published 计数上叠加题库池 scope——
-	// 与抽题/搜索/按 id 取详情逐字同源（question_pool_scope.go，ADR-0050 决策 1）；
+	// 与抽题/搜索/按 id 取详情逐字同源（叶子包 internal/questionpool，ADR-0050 决策 1）；
 	// 管理端（activeOnly=false）保持全量。
 	type countRow struct {
 		TagID          int
 		TotalCount     int64
 		PublishedCount int64
 	}
-	// 池谓词 raw 形态：直接拼接题库池 scope 导出的 SQL 片段（表别名对齐为 question），
+	// 池谓词 raw 形态：直接拼接叶子包 internal/questionpool 的 SQL 片段（表别名对齐为 question），
 	// 不就地重写——「raw 重写与常量脱钩」是漂移窗口（ADR-0050 决策 1）。
 	// 带证件与不带证件两个分支由此同源同口径：#702 的原始声明就是「学员端在 published 计数上
 	// 叠加排除来源标记标签题 + 可选证件分区」，原实现只在带证件分支做了排除，
 	// 不带证件分支（GET /api/tags 不传 credential_id）漏了——本票按该声明口径补齐。
 	query := "SELECT t.id AS tag_id, COUNT(qtr.question_id) AS total_count, " +
-		"COUNT(qtr.question_id) FILTER (WHERE " + QuestionPoolPublishedSQL + " AND " + QuestionPoolExcludeSourceTagsSQL
+		"COUNT(qtr.question_id) FILTER (WHERE " + questionpool.PublishedSQL + " AND " + questionpool.ExcludeSourceTagsSQL
 	var args []any
 	// 池的证件分区走归属分区具名谓词的 SQL 片段形态（ADR-0056 §2）：nil → 空片段 = 不分区。
-	if clause, credArgs := scope.EntityOwnedByClause(QuestionPoolCredentialColumn, credentialID); clause != "" {
+	if clause, credArgs := scope.EntityOwnedByClause(questionpool.CredentialColumn, credentialID); clause != "" {
 		query += " AND " + clause
 		args = append(args, credArgs...)
 	}
@@ -248,34 +255,34 @@ func (s *TrainingCatalogService) ListQuestionTags(activeOnly, includeSourceTags 
 }
 
 // CreateQuestionTag 创建题库标签。
-func (s *TrainingCatalogService) CreateQuestionTag(in QuestionTagInput) (QuestionTagDict, error) {
+func (s *Service) CreateQuestionTag(in QuestionTagInput) (QuestionTagDict, error) {
 	return catalogCreate(s.db, questionTagCatalogSpec(), &in)
 }
 
 // UpdateQuestionTag 更新题库标签。
-func (s *TrainingCatalogService) UpdateQuestionTag(id int, in QuestionTagInput) (QuestionTagDict, error) {
+func (s *Service) UpdateQuestionTag(id int, in QuestionTagInput) (QuestionTagDict, error) {
 	return catalogUpdate(s.db, questionTagCatalogSpec(), id, &in)
 }
 
 // DeleteQuestionTag 删除题库标签（自动清理题目关联）。
-func (s *TrainingCatalogService) DeleteQuestionTag(id int) error {
+func (s *Service) DeleteQuestionTag(id int) error {
 	return catalogDelete(s.db, questionTagCatalogSpec(), id)
 }
 
 // ===== 目标证件 =====
 
 // ListCredentials 目标证件列表（activeOnly=true 仅启用项）。
-func (s *TrainingCatalogService) ListCredentials(activeOnly bool) []CredentialDict {
+func (s *Service) ListCredentials(activeOnly bool) []CredentialDict {
 	return catalogList(s.db, credentialCatalogSpec(), activeOnly)
 }
 
 // CreateCredential 创建目标证件。
-func (s *TrainingCatalogService) CreateCredential(in CredentialInput) (CredentialDict, error) {
+func (s *Service) CreateCredential(in CredentialInput) (CredentialDict, error) {
 	return catalogCreate(s.db, credentialCatalogSpec(), &in)
 }
 
 // UpdateCredential 更新目标证件。
-func (s *TrainingCatalogService) UpdateCredential(id int, in CredentialInput) (CredentialDict, error) {
+func (s *Service) UpdateCredential(id int, in CredentialInput) (CredentialDict, error) {
 	return catalogUpdate(s.db, credentialCatalogSpec(), id, &in)
 }
 
@@ -293,7 +300,7 @@ func (s *TrainingCatalogService) UpdateCredential(id int, in CredentialInput) (C
 // 外键不看状态，预检少算一档就等于放行后被 FK 判红，那条 500 正是本票要消掉的东西。
 // 预检与删除之间存在插入投稿的窗口（配额与状态机在投稿侧另有守卫），真撞上了由 FK 兜底，
 // 那是「并发写入撞上删除」的窄窗，不是口径缺口。
-func (s *TrainingCatalogService) DeleteCredential(id int) error {
+func (s *Service) DeleteCredential(id int) error {
 	if err := s.checkCredentialDeleteBlockers(id); err != nil {
 		return err
 	}
@@ -305,7 +312,7 @@ func (s *TrainingCatalogService) DeleteCredential(id int) error {
 //
 // 分区谓词走 internal/scope 的具名谓词 EntityOwnedBy（归属分区：读被检索对象自身的证件列），
 // 不在调用点手写 credential_id 谓词——那条静态扫描锁（credential_scope_guard_test.go）正是为此立的。
-func (s *TrainingCatalogService) checkCredentialDeleteBlockers(id int) error {
+func (s *Service) checkCredentialDeleteBlockers(id int) error {
 	var contributions int64
 	if err := scope.EntityOwnedBy(s.db.Model(&model.UserContribution{}), "credential_id", &id).
 		Count(&contributions).Error; err != nil {
@@ -318,12 +325,12 @@ func (s *TrainingCatalogService) checkCredentialDeleteBlockers(id int) error {
 }
 
 // SwapCredentialSort 交换两个目标证件的排序位置。
-func (s *TrainingCatalogService) SwapCredentialSort(a, b int) error {
+func (s *Service) SwapCredentialSort(a, b int) error {
 	return catalogSwap(s.db, credentialCatalogSpec(), a, b)
 }
 
 // GetCurrentCredential 获取学员当前目标证件（未设置时返回 nil）。
-func (s *TrainingCatalogService) GetCurrentCredential(userID int) (*CredentialDict, error) {
+func (s *Service) GetCurrentCredential(userID int) (*CredentialDict, error) {
 	var u model.HrwaiUser
 	if err := s.db.Select("current_credential_id").First(&u, userID).Error; err != nil {
 		return nil, errors.New("用户不存在")
@@ -340,7 +347,7 @@ func (s *TrainingCatalogService) GetCurrentCredential(userID int) (*CredentialDi
 }
 
 // SetCurrentCredential 设置学员当前目标证件（校验证件存在且启用）。
-func (s *TrainingCatalogService) SetCurrentCredential(userID int, credentialID int) (*CredentialDict, error) {
+func (s *Service) SetCurrentCredential(userID int, credentialID int) (*CredentialDict, error) {
 	var c model.Credential
 	if err := s.db.First(&c, credentialID).Error; err != nil {
 		return nil, ErrCredentialNotFound
@@ -356,7 +363,7 @@ func (s *TrainingCatalogService) SetCurrentCredential(userID int, credentialID i
 }
 
 // ListGroupedCredentials 分组返回启用证件（特种作业/技能等级各一组，按 sort_order）。
-func (s *TrainingCatalogService) ListGroupedCredentials() GroupedCredentialsDTO {
+func (s *Service) ListGroupedCredentials() GroupedCredentialsDTO {
 	list := s.ListCredentials(true)
 	grouped := GroupedCredentialsDTO{
 		SkillLevel:       []CredentialDict{},
@@ -380,16 +387,16 @@ type QuestionTagsResultDTO struct {
 // ===== 题目-标签关联 =====
 
 // SetQuestionTags 全量替换题目标签关联。
-func (s *TrainingCatalogService) SetQuestionTags(questionID int, tagIDs []int) error {
+func (s *Service) SetQuestionTags(questionID int, tagIDs []int) error {
 	var q model.Question
 	if err := s.db.First(&q, questionID).Error; err != nil {
 		return errors.New("题目不存在")
 	}
-	return replaceQuestionTags(s.db, questionID, tagIDs)
+	return ReplaceQuestionTags(s.db, questionID, tagIDs)
 }
 
-// replaceQuestionTags 全量替换题目标签关联（校验标签存在）。
-func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
+// ReplaceQuestionTags 全量替换题目标签关联（校验标签存在）。
+func ReplaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 	tagIDs = slicesx.Ints(tagIDs)
 	if len(tagIDs) > 0 {
 		var count int64
@@ -425,13 +432,13 @@ func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
 
 // GetCatalogTree 目录树（学员端）：专业方向 → 等级 → 课程（仅启用项，课程含章节数）。
 // credentialID 非 nil 时按目标证件分区（#702：与课程列表同口径；nil = 不分区）。
-func (s *TrainingCatalogService) GetCatalogTree(credentialID *int) *CatalogTreeDTO {
+func (s *Service) GetCatalogTree(credentialID *int) *CatalogTreeDTO {
 	return s.getCatalogTree(true, false, credentialID)
 }
 
 // GetAdminCatalogTree 目录树（管理端）：专业方向 → 等级 → 课程 → 章节。
 // 含停用项与全部课程，课程节点附带章节列表（章节拖拽排序用 order_num）。
-func (s *TrainingCatalogService) GetAdminCatalogTree() *CatalogTreeDTO {
+func (s *Service) GetAdminCatalogTree() *CatalogTreeDTO {
 	return s.getCatalogTree(false, true, nil)
 }
 
@@ -439,7 +446,7 @@ func (s *TrainingCatalogService) GetAdminCatalogTree() *CatalogTreeDTO {
 // activeOnly=true 时仅返回启用项（学员端）；withChapters=true 时课程节点附带章节列表（管理端）。
 // cred 非 nil 时课程按目标证件分区（学员端 #702）；管理端传 nil 保持全量。
 // 节点字段按 key 字母序声明，与旧 map 投影字节序一致（shape-lock 测试锁定）。
-func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, cred *int) *CatalogTreeDTO {
+func (s *Service) getCatalogTree(activeOnly, withChapters bool, cred *int) *CatalogTreeDTO {
 	var specialties []model.Specialty
 	{
 		q := s.db.Model(&model.Specialty{})
@@ -527,7 +534,7 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 // ===== 辅助 =====
 
 // loadQuestionTags 加载单题标签列表（题目-标签关联摘要）。
-func (s *TrainingCatalogService) loadQuestionTags(questionID int) []QuestionTagRef {
+func (s *Service) loadQuestionTags(questionID int) []QuestionTagRef {
 	var rows []struct {
 		TagID     int    `gorm:"column:tag_id"`
 		TagCode   string `gorm:"column:tag_code"`
@@ -683,7 +690,7 @@ func newCatalogLevelNode(l *model.CourseLevel) CatalogLevelNode {
 
 // CurrentCredentialID 当前证件的事实源查询（ADR-0047 §4）：供证件作用域守卫解析「本次请求
 // 按哪个证件过滤」。一次主键查询；未选证件返回 ok=false（端点按不分区处理）。
-func (s *TrainingCatalogService) CurrentCredentialID(userID int) (int, bool) {
+func (s *Service) CurrentCredentialID(userID int) (int, bool) {
 	var u model.HrwaiUser
 	if err := s.db.Select("current_credential_id").First(&u, userID).Error; err != nil {
 		return 0, false

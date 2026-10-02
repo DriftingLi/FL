@@ -185,7 +185,7 @@ test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它�
   for (const p of [
     API_FILE,
     'backend/internal/api/admin.go',
-    'backend/internal/api/training_catalog.go',
+    'backend/internal/training/handler.go',
     // 域包的 HTTP 出口（#1445 P1 起）：handler*.go 一律进面，加域不必改清单。
     'backend/internal/faq/handler.go',
     'backend/internal/forum/handler.go',

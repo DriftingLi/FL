@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/training"
 )
 
 // 域路由注册表（ADR-0047 §6 / spec #933）：一行一域，顺序即注册顺序。
@@ -110,7 +111,11 @@ var routeRegistrars = []routeRegistrar{
 			notification.RegisterRoutes(api, rd.Session, deps.NotificationSvc)
 			RegisterAuditRoutes(api, rd, deps.AuditSvc)
 			RegisterExportRoutes(api, rd, deps.ExportSvc)
-			RegisterTrainingCatalogRoutes(api, rd, deps.TrainingCatalogSvc)
+			// 培训域 HTTP 出口三分（handler.go / handler_admin.go / handler_credential.go），
+			// 三行合并等价原单条 RegisterTrainingCatalogRoutes（ADR-0070）：学员端读面 → 管理端目录面 → 证件面。
+			training.RegisterRoutes(api, rd.Session, deps.TrainingCatalogSvc)
+			training.RegisterAdminRoutes(api, rd.Session, deps.TrainingCatalogSvc)
+			training.RegisterCredentialRoutes(api, rd.Session, deps.TrainingCatalogSvc)
 			RegisterQuestionInteractionRoutes(api, rd, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
 		},
 	},

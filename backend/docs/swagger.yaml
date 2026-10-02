@@ -2509,98 +2509,6 @@ definitions:
       success_count:
         type: integer
     type: object
-  service.CatalogLevelNode:
-    properties:
-      code:
-        type: string
-      courses:
-        items:
-          $ref: '#/definitions/course.CourseDTO'
-        type: array
-      created_at:
-        type: string
-      description:
-        type: string
-      level_id:
-        type: integer
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.CatalogSpecialtyNode:
-    properties:
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      levels:
-        items:
-          $ref: '#/definitions/service.CatalogLevelNode'
-        type: array
-      name:
-        type: string
-      sort_order:
-        type: integer
-      specialty_id:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.CatalogTreeDTO:
-    properties:
-      specialties:
-        items:
-          $ref: '#/definitions/service.CatalogSpecialtyNode'
-        type: array
-    type: object
-  service.CertificateTemplateDict:
-    properties:
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-      status:
-        type: integer
-      template_url:
-        type: string
-      updated_at:
-        type: string
-      validity_days:
-        type: integer
-    type: object
-  service.CertificateTemplateInput:
-    properties:
-      code:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      status:
-        type: integer
-      template_url:
-        type: string
-      validity_days:
-        type: integer
-    type: object
-  service.CertificateTemplateListDTO:
-    properties:
-      certificate_templates:
-        items:
-          $ref: '#/definitions/service.CertificateTemplateDict'
-        type: array
-    type: object
   service.ChapterGenResult:
     properties:
       chapter_id:
@@ -2736,61 +2644,6 @@ definitions:
       total_duration:
         type: integer
     type: object
-  service.CredentialDict:
-    properties:
-      category:
-        type: string
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      id:
-        type: integer
-      level:
-        type: integer
-        x-nullable: true
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  service.CredentialInput:
-    properties:
-      category:
-        type: string
-      code:
-        type: string
-      description:
-        type: string
-      level:
-        type: integer
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.CredentialListDTO:
-    properties:
-      credentials:
-        items:
-          $ref: '#/definitions/service.CredentialDict'
-        type: array
-    type: object
-  service.CurrentCredentialDTO:
-    properties:
-      credential:
-        allOf:
-        - $ref: '#/definitions/service.CredentialDict'
-        x-nullable: true
-    type: object
   service.DeleteFileResult:
     properties:
       deleted:
@@ -2860,17 +2713,6 @@ definitions:
     properties:
       task_id:
         type: string
-    type: object
-  service.GroupedCredentialsDTO:
-    properties:
-      skill_level:
-        items:
-          $ref: '#/definitions/service.CredentialDict'
-        type: array
-      special_operation:
-        items:
-          $ref: '#/definitions/service.CredentialDict'
-        type: array
     type: object
   service.HistoryItemDTO:
     properties:
@@ -3106,43 +2948,6 @@ definitions:
       title:
         type: string
     type: object
-  service.LevelDict:
-    properties:
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      level_id:
-        type: integer
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.LevelInput:
-    properties:
-      code:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.LevelListDTO:
-    properties:
-      levels:
-        items:
-          $ref: '#/definitions/service.LevelDict'
-        type: array
-    type: object
   service.MockExamAnswerDetailDTO:
     properties:
       ai_comment:
@@ -3319,43 +3124,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  service.PositionDict:
-    properties:
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      position_id:
-        type: integer
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.PositionInput:
-    properties:
-      code:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.PositionListDTO:
-    properties:
-      positions:
-        items:
-          $ref: '#/definitions/service.PositionDict'
-        type: array
     type: object
   service.PracticePracticeStatsDTO:
     properties:
@@ -3573,56 +3341,6 @@ definitions:
     properties:
       rejected_count:
         type: integer
-    type: object
-  service.QuestionTagDict:
-    properties:
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-      question_count:
-        type: integer
-        x-optional: true
-      sort_order:
-        type: integer
-      status:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  service.QuestionTagInput:
-    properties:
-      code:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.QuestionTagListDTO:
-    properties:
-      tags:
-        items:
-          $ref: '#/definitions/service.QuestionTagDict'
-        type: array
-    type: object
-  service.QuestionTagsResultDTO:
-    properties:
-      tag_ids:
-        items:
-          type: integer
-        type: array
-        x-nullable: true
     type: object
   service.QuestionUpdateInput:
     type: object
@@ -3850,43 +3568,6 @@ definitions:
         type: array
       total:
         type: integer
-    type: object
-  service.SpecialtyDict:
-    properties:
-      code:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      sort_order:
-        type: integer
-      specialty_id:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.SpecialtyInput:
-    properties:
-      code:
-        type: string
-      description:
-        type: string
-      name:
-        type: string
-      sort_order:
-        type: integer
-      status:
-        type: integer
-    type: object
-  service.SpecialtyListDTO:
-    properties:
-      specialties:
-        items:
-          $ref: '#/definitions/service.SpecialtyDict'
-        type: array
     type: object
   service.StatusResultDTO:
     properties:
@@ -4223,6 +3904,325 @@ definitions:
         type: string
       times:
         type: integer
+    type: object
+  training.CatalogLevelNode:
+    properties:
+      code:
+        type: string
+      courses:
+        items:
+          $ref: '#/definitions/course.CourseDTO'
+        type: array
+      created_at:
+        type: string
+      description:
+        type: string
+      level_id:
+        type: integer
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.CatalogSpecialtyNode:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      levels:
+        items:
+          $ref: '#/definitions/training.CatalogLevelNode'
+        type: array
+      name:
+        type: string
+      sort_order:
+        type: integer
+      specialty_id:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.CatalogTreeDTO:
+    properties:
+      specialties:
+        items:
+          $ref: '#/definitions/training.CatalogSpecialtyNode'
+        type: array
+    type: object
+  training.CertificateTemplateDict:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      status:
+        type: integer
+      template_url:
+        type: string
+      updated_at:
+        type: string
+      validity_days:
+        type: integer
+    type: object
+  training.CertificateTemplateInput:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      status:
+        type: integer
+      template_url:
+        type: string
+      validity_days:
+        type: integer
+    type: object
+  training.CertificateTemplateListDTO:
+    properties:
+      certificate_templates:
+        items:
+          $ref: '#/definitions/training.CertificateTemplateDict'
+        type: array
+    type: object
+  training.CredentialDict:
+    properties:
+      category:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      level:
+        type: integer
+        x-nullable: true
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  training.CredentialInput:
+    properties:
+      category:
+        type: string
+      code:
+        type: string
+      description:
+        type: string
+      level:
+        type: integer
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.CredentialListDTO:
+    properties:
+      credentials:
+        items:
+          $ref: '#/definitions/training.CredentialDict'
+        type: array
+    type: object
+  training.CurrentCredentialDTO:
+    properties:
+      credential:
+        allOf:
+        - $ref: '#/definitions/training.CredentialDict'
+        x-nullable: true
+    type: object
+  training.GroupedCredentialsDTO:
+    properties:
+      skill_level:
+        items:
+          $ref: '#/definitions/training.CredentialDict'
+        type: array
+      special_operation:
+        items:
+          $ref: '#/definitions/training.CredentialDict'
+        type: array
+    type: object
+  training.LevelDict:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      level_id:
+        type: integer
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.LevelInput:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.LevelListDTO:
+    properties:
+      levels:
+        items:
+          $ref: '#/definitions/training.LevelDict'
+        type: array
+    type: object
+  training.PositionDict:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      position_id:
+        type: integer
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.PositionInput:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.PositionListDTO:
+    properties:
+      positions:
+        items:
+          $ref: '#/definitions/training.PositionDict'
+        type: array
+    type: object
+  training.QuestionTagDict:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      question_count:
+        type: integer
+        x-optional: true
+      sort_order:
+        type: integer
+      status:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  training.QuestionTagInput:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.QuestionTagListDTO:
+    properties:
+      tags:
+        items:
+          $ref: '#/definitions/training.QuestionTagDict'
+        type: array
+    type: object
+  training.QuestionTagsResultDTO:
+    properties:
+      tag_ids:
+        items:
+          type: integer
+        type: array
+        x-nullable: true
+    type: object
+  training.SpecialtyDict:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      specialty_id:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.SpecialtyInput:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.SpecialtyListDTO:
+    properties:
+      specialties:
+        items:
+          $ref: '#/definitions/training.SpecialtyDict'
+        type: array
     type: object
 info:
   contact: {}
@@ -4564,7 +4564,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CatalogTreeDTO'
+                  $ref: '#/definitions/training.CatalogTreeDTO'
               type: object
         "401":
           description: 未认证
@@ -4586,7 +4586,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.CertificateTemplateInput'
+          $ref: '#/definitions/training.CertificateTemplateInput'
       produces:
       - application/json
       responses:
@@ -4597,7 +4597,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CertificateTemplateDict'
+                  $ref: '#/definitions/training.CertificateTemplateDict'
               type: object
         "400":
           description: 参数错误
@@ -4656,7 +4656,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.CertificateTemplateInput'
+          $ref: '#/definitions/training.CertificateTemplateInput'
       produces:
       - application/json
       responses:
@@ -4667,7 +4667,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CertificateTemplateDict'
+                  $ref: '#/definitions/training.CertificateTemplateDict'
               type: object
         "401":
           description: 未认证
@@ -4695,7 +4695,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CertificateTemplateListDTO'
+                  $ref: '#/definitions/training.CertificateTemplateListDTO'
               type: object
         "401":
           description: 未认证
@@ -5370,7 +5370,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.CredentialInput'
+          $ref: '#/definitions/training.CredentialInput'
       produces:
       - application/json
       responses:
@@ -5381,7 +5381,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CredentialDict'
+                  $ref: '#/definitions/training.CredentialDict'
               type: object
         "400":
           description: 参数错误
@@ -5445,7 +5445,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.CredentialInput'
+          $ref: '#/definitions/training.CredentialInput'
       produces:
       - application/json
       responses:
@@ -5456,7 +5456,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CredentialDict'
+                  $ref: '#/definitions/training.CredentialDict'
               type: object
         "401":
           description: 未认证
@@ -5525,7 +5525,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CredentialListDTO'
+                  $ref: '#/definitions/training.CredentialListDTO'
               type: object
         "401":
           description: 未认证
@@ -6946,7 +6946,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.LevelInput'
+          $ref: '#/definitions/training.LevelInput'
       produces:
       - application/json
       responses:
@@ -6957,7 +6957,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.LevelDict'
+                  $ref: '#/definitions/training.LevelDict'
               type: object
         "400":
           description: 参数错误
@@ -7016,7 +7016,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.LevelInput'
+          $ref: '#/definitions/training.LevelInput'
       produces:
       - application/json
       responses:
@@ -7027,7 +7027,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.LevelDict'
+                  $ref: '#/definitions/training.LevelDict'
               type: object
         "401":
           description: 未认证
@@ -7096,7 +7096,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.LevelListDTO'
+                  $ref: '#/definitions/training.LevelListDTO'
               type: object
         "401":
           description: 未认证
@@ -7169,7 +7169,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.PositionInput'
+          $ref: '#/definitions/training.PositionInput'
       produces:
       - application/json
       responses:
@@ -7180,7 +7180,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PositionDict'
+                  $ref: '#/definitions/training.PositionDict'
               type: object
         "400":
           description: 参数错误
@@ -7239,7 +7239,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.PositionInput'
+          $ref: '#/definitions/training.PositionInput'
       produces:
       - application/json
       responses:
@@ -7250,7 +7250,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PositionDict'
+                  $ref: '#/definitions/training.PositionDict'
               type: object
         "400":
           description: 参数错误
@@ -7319,7 +7319,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PositionListDTO'
+                  $ref: '#/definitions/training.PositionListDTO'
               type: object
         "401":
           description: 未认证
@@ -7460,7 +7460,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.QuestionTagInput'
+          $ref: '#/definitions/training.QuestionTagInput'
       produces:
       - application/json
       responses:
@@ -7471,7 +7471,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionTagDict'
+                  $ref: '#/definitions/training.QuestionTagDict'
               type: object
         "400":
           description: 参数错误
@@ -7530,7 +7530,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.QuestionTagInput'
+          $ref: '#/definitions/training.QuestionTagInput'
       produces:
       - application/json
       responses:
@@ -7541,7 +7541,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionTagDict'
+                  $ref: '#/definitions/training.QuestionTagDict'
               type: object
         "401":
           description: 未认证
@@ -7569,7 +7569,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionTagListDTO'
+                  $ref: '#/definitions/training.QuestionTagListDTO'
               type: object
         "401":
           description: 未认证
@@ -7607,7 +7607,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionTagsResultDTO'
+                  $ref: '#/definitions/training.QuestionTagsResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -7988,7 +7988,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SpecialtyListDTO'
+                  $ref: '#/definitions/training.SpecialtyListDTO'
               type: object
         "401":
           description: 未认证
@@ -8010,7 +8010,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.SpecialtyInput'
+          $ref: '#/definitions/training.SpecialtyInput'
       produces:
       - application/json
       responses:
@@ -8021,7 +8021,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SpecialtyDict'
+                  $ref: '#/definitions/training.SpecialtyDict'
               type: object
         "400":
           description: 参数错误
@@ -8080,7 +8080,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.SpecialtyInput'
+          $ref: '#/definitions/training.SpecialtyInput'
       produces:
       - application/json
       responses:
@@ -8091,7 +8091,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SpecialtyDict'
+                  $ref: '#/definitions/training.SpecialtyDict'
               type: object
         "401":
           description: 未认证
@@ -9686,7 +9686,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CatalogTreeDTO'
+                  $ref: '#/definitions/training.CatalogTreeDTO'
               type: object
       summary: 培训目录树（公开）
       tags:
@@ -10355,7 +10355,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CredentialListDTO'
+                  $ref: '#/definitions/training.CredentialListDTO'
               type: object
       security:
       - BearerAuth: []
@@ -10375,7 +10375,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.GroupedCredentialsDTO'
+                  $ref: '#/definitions/training.GroupedCredentialsDTO'
               type: object
       security:
       - BearerAuth: []
@@ -11753,7 +11753,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.LevelListDTO'
+                  $ref: '#/definitions/training.LevelListDTO'
               type: object
       summary: 课程等级（公开）
       tags:
@@ -11875,7 +11875,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CurrentCredentialDTO'
+                  $ref: '#/definitions/training.CurrentCredentialDTO'
               type: object
         "401":
           description: 未认证
@@ -11907,7 +11907,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.CurrentCredentialDTO'
+                  $ref: '#/definitions/training.CurrentCredentialDTO'
               type: object
         "400":
           description: 证件不存在
@@ -12627,7 +12627,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PositionListDTO'
+                  $ref: '#/definitions/training.PositionListDTO'
               type: object
       security:
       - BearerAuth: []
@@ -15167,7 +15167,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionTagListDTO'
+                  $ref: '#/definitions/training.QuestionTagListDTO'
               type: object
       summary: 题库标签（公开）
       tags:

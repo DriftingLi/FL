@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/internal/training"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -235,11 +236,11 @@ func (h *AdminHandler) UpdateCourse(c *gin.Context) {
 
 // courseSortFacts400 是课程交换排序端的表：目录侧那两件（不支持排序 / 待交换的项不存在）
 // 加上课程侧独有的两件（未挂载、跨组）。用两次 append 而不是直接抄，是为了让目录侧那两条
-// 只有一份出处；第一个 append 落进新 backing array，不与 sortFacts400 共享底层数组。
+// 只有一份出处；第一个 append 落进新 backing array，不与 training.SortFacts400 共享底层数组。
 // 其中 ErrEntityNotSortable 与 sortorder.ErrSwapItemNotFound 从课程这条链上**构造不出来**（课程开了排序；
 // 两行都在函数里先 First 过）——仍留在共用表里，是因为「这一族的输入事实」应该只有一份清单；
 // 真正可达性归零这件事写在这里，而不是靠测试去假装打过它。
-var courseSortFacts400 = append(append([]error{}, sortFacts400...),
+var courseSortFacts400 = append(append([]error{}, training.SortFacts400...),
 	course.ErrCourseNotMountedForSort, course.ErrCourseSortGroupMismatch,
 	course.ErrCourseSwapTargetNotFound)
 

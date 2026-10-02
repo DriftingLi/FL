@@ -1,6 +1,6 @@
-// Package service 课程目录实体的 descriptor 定义（ADR-0015）。
+// 培训目录实体的 descriptor 定义（ADR-0015）。
 // 每个 descriptor 只声明该实体的字段差异；共享行为在 catalog engine 中实现。
-package service
+package training
 
 import (
 	"errors"
