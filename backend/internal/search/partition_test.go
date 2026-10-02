@@ -1,4 +1,4 @@
-package service
+package search
 
 import (
 	"reflect"
@@ -22,7 +22,7 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 	}
 
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 	for _, key := range want {
 		if _, _, err := svc.searchItems(key, "液压", 1, 20, nil); err != nil {
 			t.Fatalf("分区 %s 已声明但分发不认识: %v", key, err)

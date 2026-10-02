@@ -1,4 +1,4 @@
-package service
+package search
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 // 章节分区：可见性跟随所属课程（已发布 + 挂载不变式），并按当前证件分区。
 func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	credA, credB := 1, 2
 	spID, lvID := 1, 1
 
@@ -74,7 +74,7 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 // 命中位置与命中片段：标题命中优先于正文命中；片段是命中窗口而非开头截断。
 func TestSearchHitPositionOrderingAndSnippet(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	spID, lvID := 1, 1
 	mk := func(name, desc string) model.Course {
 		c := model.Course{Name: name, Description: desc, Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
@@ -120,7 +120,7 @@ func TestSearchHitPositionOrderingAndSnippet(t *testing.T) {
 // 匹配面补全：课程简介、内容精选正文。
 func TestSearchMatchesCourseDescriptionAndFeaturedBody(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	spID, lvID := 1, 1
 	c := model.Course{Name: "无关键词的课名", Description: "本课讲液压泵的检修", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
@@ -144,7 +144,7 @@ func TestSearchMatchesCourseDescriptionAndFeaturedBody(t *testing.T) {
 // 论坛回复命中：结果仍指向主题，但必须标注命中在回复并给出回复上下文。
 func TestSearchTopicMatchesReplyContent(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	topic := model.ForumTopic{UserID: 1, Title: "变速箱异响", Content: "换了油还是响", Category: "discussion", ContentFormat: "text", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
 	if err := db.Create(&topic).Error; err != nil {
 		t.Fatalf("建帖失败: %v", err)
@@ -173,7 +173,7 @@ func TestSearchTopicMatchesReplyContent(t *testing.T) {
 // 聚合响应新增章节分区。
 func TestSearchAllIncludesChapterSection(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	spID, lvID := 1, 1
 	course := model.Course{Name: "课", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
@@ -195,7 +195,7 @@ func TestSearchAllIncludesChapterSection(t *testing.T) {
 // 检索事实：匿名（结构上不得有 user / credential / ip 列），零结果词可查。
 func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 
 	// 结构性锁：事实表不得指向人（字段名里出现 user / credential / ip 即红）
 	ft := reflect.TypeOf(model.SearchFact{})
@@ -276,7 +276,7 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 // 二级排序键真正生效（一级键是命中位置，这里固定为同一级再比二级键）。
 func TestSearchSecondaryOrderKeys(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	spID, lvID := 1, 1
 	mk := func(name string, sortOrder int) model.Course {
 		c := model.Course{Name: name, Status: 1, SpecialtyID: &spID, LevelID: &lvID, SortOrder: sortOrder, CreatedAt: testutil.Now()}
@@ -323,7 +323,7 @@ func TestSearchSecondaryOrderKeys(t *testing.T) {
 // 页码 <=0 回退第 1 页；total 口径与钳制无关（永远是匹配总数）。响应里的 page/pages 仍按原始入参算。
 func TestSearchPageClampFallsBackToDefaults(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewSearchService(db, nil)
+	svc := NewService(db, nil)
 	for i := 0; i < 25; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", fmt.Sprintf("液压滤芯 %02d", i), "A")
 	}

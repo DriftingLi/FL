@@ -174,6 +174,9 @@ func ResponsePackages() []ScanDir {
 		{"internal/practicemode", "practicemode"},
 		{"internal/mockexam", "mockexam"},
 		{"internal/realexam", "realexam"},
+		{"internal/favorite", "favorite"},
+		{"internal/search", "search"},
+		{"internal/student", "student"},
 		{"internal/auth", "auth"},
 		{"internal/model", "model"},
 		// valuation/model 的 Go 包名也叫 model，swagger 定义键同样落在 `model.` 前缀下（两边类型名

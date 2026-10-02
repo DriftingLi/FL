@@ -6193,7 +6193,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.ZeroResultKeywordDTO"
+                                                "$ref": "#/definitions/search.ZeroResultKeywordDTO"
                                             }
                                         }
                                     }
@@ -10289,7 +10289,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FavoritePageResult"
+                                            "$ref": "#/definitions/favorite.FavoritePageResult"
                                         }
                                     }
                                 }
@@ -10344,7 +10344,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FavoriteDTO"
+                                            "$ref": "#/definitions/favorite.FavoriteDTO"
                                         }
                                     }
                                 }
@@ -10418,7 +10418,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FavoriteCheckDTO"
+                                            "$ref": "#/definitions/favorite.FavoriteCheckDTO"
                                         }
                                     }
                                 }
@@ -17696,7 +17696,7 @@ const docTemplate = `{
         },
         "/search": {
             "get": {
-                "description": "公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），\n指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；\n分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。\n每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。",
+                "description": "公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），\n指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；\n分页形状 SearchPageDTO 同域生成，前端以联合类型消费）。\n每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。",
                 "consumes": [
                     "application/json"
                 ],
@@ -17748,7 +17748,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SearchAllDTO"
+                                            "$ref": "#/definitions/search.SearchAllDTO"
                                         }
                                     }
                                 }
@@ -17794,7 +17794,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudentCoursesDTO"
+                                            "$ref": "#/definitions/student.StudentCoursesDTO"
                                         }
                                     }
                                 }
@@ -17849,7 +17849,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudentCourseDetailDTO"
+                                            "$ref": "#/definitions/student.StudentCourseDetailDTO"
                                         }
                                     }
                                 }
@@ -17969,7 +17969,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudentProfileDTO"
+                                            "$ref": "#/definitions/student.StudentProfileDTO"
                                         }
                                     }
                                 }
@@ -18049,7 +18049,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudyRecordPageResult"
+                                            "$ref": "#/definitions/student.StudyRecordPageResult"
                                         }
                                     }
                                 }
@@ -18108,7 +18108,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudyDailyStatsDTO"
+                                            "$ref": "#/definitions/student.StudyDailyStatsDTO"
                                         }
                                     }
                                 }
@@ -25151,6 +25151,64 @@ const docTemplate = `{
                 }
             }
         },
+        "favorite.FavoriteCheckDTO": {
+            "type": "object",
+            "properties": {
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "favorited": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "favorite.FavoriteDTO": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n` + "`" + `chapter-view` + "`" + ` 要 ` + "`" + `course_id` + "`" + ` + ` + "`" + `chapter_id` + "`" + ` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
+                    "type": "integer"
+                },
+                "cover": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "target_id": {
+                    "type": "integer"
+                },
+                "target_type": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "favorite.FavoritePageResult": {
+            "type": "object",
+            "properties": {
+                "favorites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/favorite.FavoriteDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "featured.FeaturedContentAdminDetailDTO": {
             "type": "object",
             "properties": {
@@ -27674,6 +27732,116 @@ const docTemplate = `{
                 }
             }
         },
+        "search.SearchAllDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "contents": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "courses": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "keyword": {
+                    "type": "string"
+                },
+                "questions": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "topics": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                }
+            }
+        },
+        "search.SearchItemDTO": {
+            "type": "object",
+            "properties": {
+                "cover": {
+                    "type": "string"
+                },
+                "hit_field": {
+                    "description": "HitField 命中位置：title | body | reply。",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "parent_id": {
+                    "description": "ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。",
+                    "type": "integer"
+                },
+                "snippet": {
+                    "description": "Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。",
+                    "type": "string"
+                },
+                "summary": {
+                    "description": "Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "search.SearchPageDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/search.SearchItemDTO"
+                    }
+                },
+                "keyword": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "search.SearchSectionDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/search.SearchItemDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "search.ZeroResultKeywordDTO": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "times": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.AdminOverviewDTO": {
             "type": "object",
             "properties": {
@@ -27939,29 +28107,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CourseProgressDTO": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "study_date": {
-                    "type": "string"
-                },
-                "study_duration": {
-                    "type": "integer"
-                },
-                "total_chapters": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.CourseStatDTO": {
             "type": "object",
             "properties": {
@@ -27989,64 +28134,6 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "file_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FavoriteCheckDTO": {
-            "type": "object",
-            "properties": {
-                "favorite_id": {
-                    "type": "integer"
-                },
-                "favorited": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "service.FavoriteDTO": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n` + "`" + `chapter-view` + "`" + ` 要 ` + "`" + `course_id` + "`" + ` + ` + "`" + `chapter_id` + "`" + ` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
-                    "type": "integer"
-                },
-                "cover": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "favorite_id": {
-                    "type": "integer"
-                },
-                "target_id": {
-                    "type": "integer"
-                },
-                "target_type": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.FavoritePageResult": {
-            "type": "object",
-            "properties": {
-                "favorites": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FavoriteDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
                     "type": "integer"
                 }
             }
@@ -28662,390 +28749,10 @@ const docTemplate = `{
                 }
             }
         },
-        "service.SearchAllDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "contents": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "courses": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "keyword": {
-                    "type": "string"
-                },
-                "questions": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "topics": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                }
-            }
-        },
-        "service.SearchItemDTO": {
-            "type": "object",
-            "properties": {
-                "cover": {
-                    "type": "string"
-                },
-                "hit_field": {
-                    "description": "HitField 命中位置：title | body | reply。",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "parent_id": {
-                    "description": "ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。",
-                    "type": "integer"
-                },
-                "snippet": {
-                    "description": "Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。",
-                    "type": "string"
-                },
-                "summary": {
-                    "description": "Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。",
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.SearchPageDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.SearchItemDTO"
-                    }
-                },
-                "keyword": {
-                    "type": "string"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.SearchSectionDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.SearchItemDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.StatusResultDTO": {
             "type": "object",
             "properties": {
                 "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudentCourseChapterDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer"
-                },
-                "completed": {
-                    "type": "boolean"
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "video_position": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudentCourseDTO": {
-            "type": "object",
-            "properties": {
-                "completed_chapters": {
-                    "type": "integer"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "cover": {
-                    "type": "string"
-                },
-                "last_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "last_chapter_title": {
-                    "type": "string"
-                },
-                "last_position": {
-                    "type": "integer"
-                },
-                "last_studied_at": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "specialty_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "study_duration": {
-                    "type": "integer"
-                },
-                "total_chapters": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudentCourseDetailDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.StudentCourseChapterDTO"
-                    }
-                },
-                "completed_chapters": {
-                    "type": "integer"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "cover": {
-                    "type": "string"
-                },
-                "last_chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "last_chapter_title": {
-                    "type": "string"
-                },
-                "last_position": {
-                    "type": "integer"
-                },
-                "last_studied_at": {
-                    "type": "string"
-                },
-                "level_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "specialty_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "study_duration": {
-                    "type": "integer"
-                },
-                "total_chapters": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudentCoursesDTO": {
-            "type": "object",
-            "properties": {
-                "continue_learning": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.StudentCourseDTO"
-                        }
-                    ],
-                    "x-nullable": true
-                },
-                "courses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.StudentCourseDTO"
-                    }
-                }
-            }
-        },
-        "service.StudentDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "avatar_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "uid": {
-                    "description": "UID 在 JSON 里是字符串（json:\",string\"）：swag 只看到 int64，用 swaggertype 钉住真实线上类型。",
-                    "type": "string",
-                    "example": ""
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.StudentProfileDTO": {
-            "type": "object",
-            "properties": {
-                "course_progress": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseProgressDTO"
-                    }
-                },
-                "student_info": {
-                    "$ref": "#/definitions/service.StudentDTO"
-                },
-                "study_stats": {
-                    "$ref": "#/definitions/service.StudyStatsDTO"
-                }
-            }
-        },
-        "service.StudyDailyStatsDTO": {
-            "type": "object",
-            "properties": {
-                "active_days": {
-                    "type": "integer"
-                },
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "days": {
-                    "type": "integer"
-                },
-                "labels": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "total_minutes": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudyRecordDTO": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "chapter_title": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "record_id": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "study_date": {
-                    "type": "string"
-                },
-                "study_duration": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudyRecordPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.StudyRecordDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudyStatsDTO": {
-            "type": "object",
-            "properties": {
-                "completed_courses": {
-                    "type": "integer"
-                },
-                "latest_study_time": {
-                    "type": "string"
-                },
-                "learning_courses": {
-                    "type": "integer"
-                },
-                "total_courses": {
-                    "type": "integer"
-                },
-                "total_study_duration": {
                     "type": "integer"
                 }
             }
@@ -29191,16 +28898,309 @@ const docTemplate = `{
                 }
             }
         },
-        "service.ZeroResultKeywordDTO": {
+        "student.CourseProgressDTO": {
             "type": "object",
             "properties": {
-                "keyword": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
                     "type": "string"
                 },
-                "last_seen_at": {
+                "progress": {
+                    "type": "number"
+                },
+                "study_date": {
                     "type": "string"
                 },
-                "times": {
+                "study_duration": {
+                    "type": "integer"
+                },
+                "total_chapters": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudentCourseChapterDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "completed": {
+                    "type": "boolean"
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "video_position": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudentCourseDTO": {
+            "type": "object",
+            "properties": {
+                "completed_chapters": {
+                    "type": "integer"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "cover": {
+                    "type": "string"
+                },
+                "last_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "last_chapter_title": {
+                    "type": "string"
+                },
+                "last_position": {
+                    "type": "integer"
+                },
+                "last_studied_at": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "study_duration": {
+                    "type": "integer"
+                },
+                "total_chapters": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudentCourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/student.StudentCourseChapterDTO"
+                    }
+                },
+                "completed_chapters": {
+                    "type": "integer"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "cover": {
+                    "type": "string"
+                },
+                "last_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "last_chapter_title": {
+                    "type": "string"
+                },
+                "last_position": {
+                    "type": "integer"
+                },
+                "last_studied_at": {
+                    "type": "string"
+                },
+                "level_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "specialty_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "study_duration": {
+                    "type": "integer"
+                },
+                "total_chapters": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudentCoursesDTO": {
+            "type": "object",
+            "properties": {
+                "continue_learning": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/student.StudentCourseDTO"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/student.StudentCourseDTO"
+                    }
+                }
+            }
+        },
+        "student.StudentDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "uid": {
+                    "description": "UID 在 JSON 里是字符串（json:\",string\"）：swag 只看到 int64，用 swaggertype 钉住真实线上类型。",
+                    "type": "string",
+                    "example": ""
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "student.StudentProfileDTO": {
+            "type": "object",
+            "properties": {
+                "course_progress": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/student.CourseProgressDTO"
+                    }
+                },
+                "student_info": {
+                    "$ref": "#/definitions/student.StudentDTO"
+                },
+                "study_stats": {
+                    "$ref": "#/definitions/student.StudyStatsDTO"
+                }
+            }
+        },
+        "student.StudyDailyStatsDTO": {
+            "type": "object",
+            "properties": {
+                "active_days": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "days": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "total_minutes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudyRecordDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "chapter_title": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "record_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "study_date": {
+                    "type": "string"
+                },
+                "study_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudyRecordPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/student.StudyRecordDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "student.StudyStatsDTO": {
+            "type": "object",
+            "properties": {
+                "completed_courses": {
+                    "type": "integer"
+                },
+                "latest_study_time": {
+                    "type": "string"
+                },
+                "learning_courses": {
+                    "type": "integer"
+                },
+                "total_courses": {
+                    "type": "integer"
+                },
+                "total_study_duration": {
                     "type": "integer"
                 }
             }

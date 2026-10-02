@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/model"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
@@ -109,7 +110,7 @@ func (s *WrongQuestionService) GetWrongQuestions(studentID, page, pageSize int, 
 			q = q.Where("wrong_question.wrong_count >= ?", *minWrongCount)
 		}
 		if favorited {
-			q = q.Joins("JOIN favorite ON favorite.user_id = wrong_question.student_id AND favorite.target_type = ? AND favorite.target_id = wrong_question.question_id", FavoriteTargetQuestion)
+			q = q.Joins("JOIN favorite ON favorite.user_id = wrong_question.student_id AND favorite.target_type = ? AND favorite.target_id = wrong_question.question_id", favorite.FavoriteTargetQuestion)
 		}
 		return q
 	})
@@ -198,7 +199,7 @@ func (s *WrongQuestionService) loadFavoriteIDs(studentID int, questionIDs []int)
 		return result
 	}
 	var rows []model.Favorite
-	s.db.Where("user_id = ? AND target_type = ? AND target_id IN ?", studentID, FavoriteTargetQuestion, questionIDs).Find(&rows)
+	s.db.Where("user_id = ? AND target_type = ? AND target_id IN ?", studentID, favorite.FavoriteTargetQuestion, questionIDs).Find(&rows)
 	for i := range rows {
 		result[rows[i].TargetID] = rows[i].FavoriteID
 	}

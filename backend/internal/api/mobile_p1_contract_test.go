@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"forklift-training/internal/favorite"
+	"forklift-training/internal/search"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -95,8 +97,8 @@ func seedP1Env(t *testing.T) (*gin.Engine, *config.Config, int) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterFavoriteRoutes(api, deps.RouterDeps(), deps.FavoriteSvc)
-	RegisterSearchRoutes(api, deps.RouterDeps(), deps.SearchSvc)
+	favorite.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.FavoriteSvc)
+	search.RegisterRoutes(api, deps.RouterDeps().CredentialScope, deps.SearchSvc)
 	material.RegisterRoutes(api, deps.RouterDeps().Session, deps.MaterialSvc)
 
 	return r, cfg, int(user.ID)

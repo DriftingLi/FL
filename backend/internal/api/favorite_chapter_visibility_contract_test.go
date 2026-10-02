@@ -11,6 +11,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"forklift-training/internal/favorite"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,7 +77,7 @@ func TestFavoriteChapterVisibilityContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterFavoriteRoutes(apiGroup, deps.RouterDeps(), deps.FavoriteSvc)
+	favorite.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.FavoriteSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(user.ID), user.Account, "hrwai_user")
 	if err != nil {

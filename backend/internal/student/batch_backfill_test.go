@@ -4,7 +4,7 @@
 // 改走批量回填（去 N+1），响应 shape 零漂移。以下测试先锁定现状外部行为
 // （课程名回填、章节标题回填、未知课程缺省文案、课程级记录 chapter_title=null），
 // 重构后仍须全绿。
-package service
+package student
 
 import (
 	"testing"
@@ -19,9 +19,9 @@ import (
 	"forklift-training/internal/timefmt"
 )
 
-func newStudentServiceForTest(t *testing.T, db *gorm.DB) *StudentService {
+func newStudentServiceForTest(t *testing.T, db *gorm.DB) *Service {
 	t.Helper()
-	return NewStudentService(db, zap.NewNop())
+	return NewService(db, zap.NewNop())
 }
 
 func seedCourseWithChapters(t *testing.T, db *gorm.DB, name string, chapters int) *model.Course {

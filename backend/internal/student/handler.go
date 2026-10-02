@@ -1,5 +1,8 @@
-// Package api 实现 HTTP handlers。
-package api
+// Package student 学员端学习域（ADR-0017）：档案、学习记录、学习统计与课程进度。
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口（/api/student 蓝图，JWT + hrwai_user），
+// go 是域实现，batch_backfill.go / daily_series.go 是随域助手。
+// 装配点：internal/api/routes_registry.go 调 student.RegisterRoutes(api, rd.Session, deps.StudentSvc)。
+package student
 
 import (
 	"context"
@@ -10,25 +13,25 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
 
-// StudentHandler 学员端 handler。
-type StudentHandler struct {
-	svc *service.StudentService
+// handler 学员端 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewStudentHandler 创建学员端 handler。
-func NewStudentHandler(svc *service.StudentService) *StudentHandler {
-	return &StudentHandler{svc: svc}
+// newHandler 创建学员端 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterStudentRoutes 注册 /api/student 蓝图。
-func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.StudentService) {
-	h := NewStudentHandler(svc)
+// RegisterRoutes 注册 /api/student 蓝图（JWT + hrwai_user）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
 
-	g := rg.Group("/student", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapStudentAccess))
+	g := rg.Group("/student", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapStudentAccess))
 
 	// GET /api/student/profile  学员信息+学习统计+课程进度
 	g.GET("/profile", h.GetProfile)
@@ -49,20 +52,20 @@ func RegisterStudentRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Stud
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.StudentProfileDTO} "success"
+// @Success 200 {object} response.R{data=StudentProfileDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "学员不存在"
 // @Router /student/profile [get]
-func (h *StudentHandler) GetProfile(c *gin.Context) {
-	httpx.Endpoint[studentUserIDReq, service.StudentProfileDTO]{
+func (h *handler) GetProfile(c *gin.Context) {
+	httpx.Endpoint[studentUserIDReq, StudentProfileDTO]{
 		Parse: func(c *gin.Context) (*studentUserIDReq, error) {
 			return &studentUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
-		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentProfileDTO, error) {
+		Invoke: func(ctx context.Context, req *studentUserIDReq) (*StudentProfileDTO, error) {
 			return h.svc.GetProfile(req.UserID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrStudentNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(ErrStudentNotFound, http.StatusNotFound).Handle(c)
 }
 
 // GetRecords 学员学习记录分页
@@ -76,11 +79,11 @@ func (h *StudentHandler) GetProfile(c *gin.Context) {
 // @Param page_size query int false "每页条数" default(10)
 // @Param start_date query string false "开始日期 YYYY-MM-DD"
 // @Param end_date query string false "结束日期 YYYY-MM-DD"
-// @Success 200 {object} response.R{data=service.StudyRecordPageResult} "success"
+// @Success 200 {object} response.R{data=StudyRecordPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /student/records [get]
-func (h *StudentHandler) GetRecords(c *gin.Context) {
-	httpx.Endpoint[studyRecordsReq, service.StudyRecordPageResult]{
+func (h *handler) GetRecords(c *gin.Context) {
+	httpx.Endpoint[studyRecordsReq, StudyRecordPageResult]{
 		Parse: func(c *gin.Context) (*studyRecordsReq, error) {
 			return &studyRecordsReq{
 				UserID:    middleware.CurrentUserID(c),
@@ -90,7 +93,7 @@ func (h *StudentHandler) GetRecords(c *gin.Context) {
 				EndDate:   c.Query("end_date"),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *studyRecordsReq) (*service.StudyRecordPageResult, error) {
+		Invoke: func(ctx context.Context, req *studyRecordsReq) (*StudyRecordPageResult, error) {
 			result, err := h.svc.GetRecords(req.UserID, req.Page, req.PageSize, req.StartDate, req.EndDate)
 			if err != nil {
 				return nil, err
@@ -128,15 +131,15 @@ type studyStatsReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param days query int false "统计天数" Enums(7,30) default(7)
-// @Success 200 {object} response.R{data=service.StudyDailyStatsDTO} "success"
+// @Success 200 {object} response.R{data=StudyDailyStatsDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /student/study-stats [get]
-func (h *StudentHandler) GetStudyStats(c *gin.Context) {
-	httpx.Endpoint[studyStatsReq, service.StudyDailyStatsDTO]{
+func (h *handler) GetStudyStats(c *gin.Context) {
+	httpx.Endpoint[studyStatsReq, StudyDailyStatsDTO]{
 		Parse: func(c *gin.Context) (*studyStatsReq, error) {
 			return &studyStatsReq{UserID: middleware.CurrentUserID(c), Days: httpx.QueryIntDefault(c, "days", 7)}, nil
 		},
-		Invoke: func(ctx context.Context, req *studyStatsReq) (*service.StudyDailyStatsDTO, error) {
+		Invoke: func(ctx context.Context, req *studyStatsReq) (*StudyDailyStatsDTO, error) {
 			return h.svc.GetStudyStats(req.UserID, req.Days), nil
 		},
 	}.Handle(c)
@@ -155,15 +158,15 @@ type studentCourseReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.StudentCoursesDTO} "success"
+// @Success 200 {object} response.R{data=StudentCoursesDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /student/courses [get]
-func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
-	httpx.Endpoint[studentUserIDReq, service.StudentCoursesDTO]{
+func (h *handler) GetStudentCourses(c *gin.Context) {
+	httpx.Endpoint[studentUserIDReq, StudentCoursesDTO]{
 		Parse: func(c *gin.Context) (*studentUserIDReq, error) {
 			return &studentUserIDReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
-		Invoke: func(ctx context.Context, req *studentUserIDReq) (*service.StudentCoursesDTO, error) {
+		Invoke: func(ctx context.Context, req *studentUserIDReq) (*StudentCoursesDTO, error) {
 			return h.svc.GetStudentCourses(req.UserID)
 		},
 		// 不挂 ErrStudentNotFound：GetStudentCourses 只读 study_records/course，从不取 hrwai_users
@@ -179,12 +182,12 @@ func (h *StudentHandler) GetStudentCourses(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param course_id path int true "课程ID"
-// @Success 200 {object} response.R{data=service.StudentCourseDetailDTO} "success"
+// @Success 200 {object} response.R{data=StudentCourseDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /student/courses/{course_id} [get]
-func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
-	httpx.Endpoint[studentCourseReq, service.StudentCourseDetailDTO]{
+func (h *handler) GetStudentCourseDetail(c *gin.Context) {
+	httpx.Endpoint[studentCourseReq, StudentCourseDetailDTO]{
 		Parse: func(c *gin.Context) (*studentCourseReq, error) {
 			courseID, err := httpx.PathInt(c, "course_id", "课程ID无效")
 			if err != nil {
@@ -192,7 +195,7 @@ func (h *StudentHandler) GetStudentCourseDetail(c *gin.Context) {
 			}
 			return &studentCourseReq{UserID: middleware.CurrentUserID(c), CourseID: courseID}, nil
 		},
-		Invoke: func(ctx context.Context, req *studentCourseReq) (*service.StudentCourseDetailDTO, error) {
+		Invoke: func(ctx context.Context, req *studentCourseReq) (*StudentCourseDetailDTO, error) {
 			return h.svc.GetStudentCourseDetail(req.UserID, req.CourseID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).

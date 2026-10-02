@@ -41,7 +41,7 @@ var nonnilOutletsStats = map[string]func(t *testing.T) any{
 	// 模考的 ResumeDTO.questions 已随域包搬去 internal/mockexam/nonnil_outlets_test.go（波 4a）。
 	// 证件分组两格（skill_level / special_operation）的举证已随域包搬去
 	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
-	"service.StudentProfileDTO.course_progress": outletStudentProfileNoStudy,
+	// 学员档案（StudentProfileDTO.course_progress）的举证已随域包搬去 internal/student/nonnil_outlets_test.go（波 4b）。
 }
 
 func init() {
@@ -61,18 +61,6 @@ func outletWrongQuestionPageEmpty(t *testing.T) any {
 		GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("空错题本分页失败: %v", err)
-	}
-	return res
-}
-
-// outletStudentProfileNoStudy 学员档案：有账号、零学习记录时 course_progress 是空集。
-func outletStudentProfileNoStudy(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "档案学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetProfile(student.ID)
-	if err != nil {
-		t.Fatalf("取档案失败: %v", err)
 	}
 	return res
 }

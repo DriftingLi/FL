@@ -29,12 +29,12 @@ import (
 // 红过一次）。而那恰好也是这张表该有的形状——**证据必须真的被跑过**，不是一个供人查名字的花名册。
 var nonnilOutlets = map[string]func(t *testing.T) string{
 	"service.ContactRequestListResult.items": contactRequestListBody,
-	// 三条分页壳：service 侧的切片由 gorm 的 Find 填，恒非 null，但「整份响应里 items /
-	// favorites 这一格」是 handler 拼出来的 ⇒ 举证必须在路由这一层（批①-A 委托时也确认过一次：
-	// 同一个 items，服务层跑不到）。
+	// 两条分页壳：service 侧的切片由 gorm 的 Find 填，恒非 null，但「整份响应里 items 这一格」
+	// 是 handler 拼出来的 ⇒ 举证必须在路由这一层（批①-A 委托时也确认过一次：同一个 items，服务层跑不到）。
+	// 收藏那格（FavoritePageResult.favorites）波 4b 核对后确认组装点其实在 favorite.Service.List，
+	// 已随域包搬去 internal/favorite/nonnil_outlets_test.go。
 	"service.NotePageDTO.items":               notePageBody,
 	"service.QuestionCommentPageResult.items": commentPageBody,
-	"service.FavoritePageResult.favorites":    favoritePageBody,
 	// 反方向的谎：这一格从前声明 nullable 且契约上落了 x-nullable，而空审计表拉列表实测发的是
 	// `[]` —— 契约在承诺一个永远不来的 null。批①-B 把它改判 nonnil 并摘掉 x-nullable
 	//（判据 2 不许两者同在；摘掉后生成的 TS 从 `T[] | null` 收回 `T[]`，是收窄不是加负担）。
@@ -71,11 +71,6 @@ func commentPageBody(t *testing.T) string {
 	t.Helper()
 	f := newPoolLeakFixture(t)
 	return getJSON(t, f, "/api/questions/"+strconv.Itoa(f.poolQ.ID)+"/comments?page_size=10")
-}
-
-func favoritePageBody(t *testing.T) string {
-	t.Helper()
-	return getJSON(t, newPoolLeakFixture(t), "/api/favorites?page_size=10")
 }
 
 func TestNonNilOutletsNeverEmitNull(t *testing.T) {

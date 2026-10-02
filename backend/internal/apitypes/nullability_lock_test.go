@@ -119,6 +119,9 @@ var (
 		{"internal/training", "nonnilOutlets"},
 		{"internal/practicemode", "nonnilOutlets"},
 		{"internal/mockexam", "nonnilOutlets"},
+		{"internal/favorite", "nonnilOutlets"},
+		{"internal/search", "nonnilOutlets"},
+		{"internal/student", "nonnilOutlets"},
 	}
 )
 
@@ -245,6 +248,9 @@ var sweptDirs = map[string]string{
 	"practicemode": "../practicemode",
 	"mockexam":     "../mockexam",
 	"realexam":     "../realexam",
+	"favorite":     "../favorite",
+	"search":       "../search",
+	"student":      "../student",
 	"repository":   "../valuation/repository",
 }
 

@@ -59,7 +59,7 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	// 投稿域的 items 举证已随域包搬去 internal/contribution/nonnil_outlets_test.go（ADR-0070）。
 	// 资料审核列表（auth.ProfileChangeRequestPageResult.requests）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
 	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
-	"service.SearchSectionDTO.items":         outletSearchSectionEmpty,
+	// 搜索域分区（SearchSectionDTO.items）的举证已随域包搬去 internal/search/nonnil_outlets_test.go（波 4b）。
 	"course.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
 
 	// 岗位字典的 positions 举证已随域包搬去 internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
@@ -163,22 +163,6 @@ func outletTutorListEmpty(t *testing.T) any {
 }
 
 // ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
-
-// outletSearchSectionEmpty 聚合搜索的单个分区：SearchAllDTO 的五个分区字段共用这一条出口、
-// 各自 marshal（同一处 make，一格一证）。
-func outletSearchSectionEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewSearchService(testutil.NewMemoryDB(t), zap.NewNop())
-	res, err := svc.Search("液压泵压力不足", "", 1, 20, nil)
-	if err != nil {
-		t.Fatalf("聚合搜索失败: %v", err)
-	}
-	all, ok := res.(*SearchAllDTO)
-	if !ok {
-		t.Fatalf("聚合搜索返回了意料之外的类型 %T", res)
-	}
-	return all.Courses
-}
 
 // outletTutorCourseChaptersEmpty 导师端章节列表：有课程、零章节时 chapters 是空集。
 func outletTutorCourseChaptersEmpty(t *testing.T) any {

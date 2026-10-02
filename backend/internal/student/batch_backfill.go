@@ -1,4 +1,4 @@
-package service
+package student
 
 import (
 	"gorm.io/gorm"

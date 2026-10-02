@@ -11,7 +11,7 @@
 //
 // 分发与聚合都走分区声明表（searchPartitions）：加分区只写一份声明，不存在
 // 「switch / DTO / 方法体 / handler 四处同步」的手拼面。
-package service
+package search
 
 import (
 	"errors"
@@ -27,6 +27,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/textx"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -76,15 +77,15 @@ func likePattern(keyword string) string {
 	return "%" + escapeLike(strings.ToLower(keyword)) + "%"
 }
 
-// SearchService 全局搜索服务。
-type SearchService struct {
+// Service 全局搜索服务。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-// NewSearchService 构造全局搜索服务。
-func NewSearchService(db *gorm.DB, logger *zap.Logger) *SearchService {
-	return &SearchService{db: db, logger: logger}
+// NewService 构造全局搜索服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // SearchItemDTO 搜索结果条目。
@@ -194,12 +195,12 @@ func hitOf(title, body, keyword string) (string, string) {
 		if s, bodyHit := snippetAround(body, keyword); bodyHit {
 			return SearchHitTitle, s
 		}
-		return SearchHitTitle, snippetOf(body, snippetWidth)
+		return SearchHitTitle, textx.Snippet(body, snippetWidth)
 	}
 	if s, ok := snippetAround(body, keyword); ok {
 		return SearchHitBody, s
 	}
-	return SearchHitBody, snippetOf(body, snippetWidth)
+	return SearchHitBody, textx.Snippet(body, snippetWidth)
 }
 
 // hitOfTopic 论坛主题三轴命中：标题 > 正文 > 回复（回复只有在标题与正文都未命中时才算回复命中）。
@@ -211,7 +212,7 @@ func hitOfTopic(title, body, reply, keyword string) (string, string) {
 		if s, replyHit := snippetAround(reply, keyword); replyHit {
 			return SearchHitTitle, s
 		}
-		return SearchHitTitle, snippetOf(body, snippetWidth)
+		return SearchHitTitle, textx.Snippet(body, snippetWidth)
 	}
 	if s, ok := snippetAround(body, keyword); ok {
 		return SearchHitBody, s
@@ -219,7 +220,7 @@ func hitOfTopic(title, body, reply, keyword string) (string, string) {
 	if s, ok := snippetAround(reply, keyword); ok {
 		return SearchHitReply, s
 	}
-	return SearchHitBody, snippetOf(body, snippetWidth)
+	return SearchHitBody, textx.Snippet(body, snippetWidth)
 }
 
 // orderWithHitRank 一级排序「标题命中优先」+ 分区二级键。标题命中判据带占位符（用户串必须参数化）。
@@ -259,13 +260,13 @@ func newSearchParams(keyword string, page, pageSize int, cred *int) searchParams
 // 引擎与聚合循环只看得到「键 + 分页入口」，因此分区表可以是同质切片。
 type searchPartitionRunner struct {
 	key    string
-	search func(s *SearchService, p searchParams) ([]SearchItemDTO, int64, error)
+	search func(s *Service, p searchParams) ([]SearchItemDTO, int64, error)
 }
 
 // bind 把泛型分区声明与引擎骨架实例化为一个类型擦除的分区条目。
 // 新增分区 = 写一份 partitionSpec（search_partitions.go）+ 在 searchPartitions 登记一行。
 func bind[R any](spec partitionSpec[R]) searchPartitionRunner {
-	return searchPartitionRunner{key: spec.key, search: func(s *SearchService, p searchParams) ([]SearchItemDTO, int64, error) {
+	return searchPartitionRunner{key: spec.key, search: func(s *Service, p searchParams) ([]SearchItemDTO, int64, error) {
 		return searchPartitionPage(s, spec, p)
 	}}
 }
@@ -284,7 +285,7 @@ func bind[R any](spec partitionSpec[R]) searchPartitionRunner {
 //     QueryWithScan 的 order 形参（后者是字符串，塞不下带 Vars 的 CASE 表达式）。
 //   - 响应里的 page/pages 不经过本函数：Search 仍按**原始**入参算 response.PageCount(total, pageSize)
 //     （越界页的响应字节零漂移；钳制只影响这一页取哪几行）。
-func searchPartitionPage[R any](s *SearchService, spec partitionSpec[R], p searchParams) ([]SearchItemDTO, int64, error) {
+func searchPartitionPage[R any](s *Service, spec partitionSpec[R], p searchParams) ([]SearchItemDTO, int64, error) {
 	rows, total, _, _, err := paging.QueryWithScan[R](s.db, p.page, p.pageSize, searchDefaultPageSize, searchMaxPageSize, "",
 		func(_ *gorm.DB) *gorm.DB {
 			q := spec.match(s, p)
@@ -305,7 +306,7 @@ func searchPartitionPage[R any](s *SearchService, spec partitionSpec[R], p searc
 }
 
 // searchItems 单类型分页搜索：分发 = 分区表查表（无 switch——加分区不会漏改分发分支）。
-func (s *SearchService) searchItems(searchType, keyword string, page, pageSize int, credentialID *int) ([]SearchItemDTO, int64, error) {
+func (s *Service) searchItems(searchType, keyword string, page, pageSize int, credentialID *int) ([]SearchItemDTO, int64, error) {
 	part, ok := searchPartitionByKey(searchType)
 	if !ok {
 		return nil, 0, fmt.Errorf("搜索类型仅支持 %s", strings.Join(searchPartitionKeys(), "/"))
@@ -319,7 +320,7 @@ func containsFold(haystack, needle string) bool {
 }
 
 // Search 全局搜索。searchType 为空时返回各分区 top 5；否则该类型分页结果。
-func (s *SearchService) Search(keyword, searchType string, page, pageSize int, credentialID *int) (any, error) {
+func (s *Service) Search(keyword, searchType string, page, pageSize int, credentialID *int) (any, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, errors.New("关键词不能为空")
@@ -392,7 +393,7 @@ func (c searchFactCounts) total() int64 {
 
 // recordSearchFact 检索事实（ADR-0049 决策 7）：匿名、尽力而为——
 // 埋点失败绝不影响搜索本身，也绝不记录 user / 证件 / 设备。
-func (s *SearchService) recordSearchFact(keyword, searchType string, counts searchFactCounts) {
+func (s *Service) recordSearchFact(keyword, searchType string, counts searchFactCounts) {
 	fact := model.SearchFact{
 		Keyword: keyword, SearchType: searchType,
 		CourseHits: counts.course, ChapterHits: counts.chapter, QuestionHits: counts.question,
@@ -422,7 +423,7 @@ func normalizeDBTime(raw string) string {
 
 // ZeroResultKeywords 零结果词（运营面）：按关键词聚合次数与最近出现时间。
 // days <= 0 取 30 天；limit 缺省 50，越界（<=0 或 >200）同样回落到 50。
-func (s *SearchService) ZeroResultKeywords(days, limit int) ([]ZeroResultKeywordDTO, error) {
+func (s *Service) ZeroResultKeywords(days, limit int) ([]ZeroResultKeywordDTO, error) {
 	if days <= 0 {
 		days = 30
 	}
