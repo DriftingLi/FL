@@ -2751,7 +2751,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -2859,7 +2859,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -2926,7 +2926,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -2994,7 +2994,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedDeleteResult"
+                                            "$ref": "#/definitions/featured.FeaturedDeleteResult"
                                         }
                                     }
                                 }
@@ -3052,7 +3052,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentAdminDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminDetailDTO"
                                         }
                                     }
                                 }
@@ -3129,7 +3129,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentPageResult"
+                                            "$ref": "#/definitions/featured.FeaturedContentPageResult"
                                         }
                                     }
                                 }
@@ -9211,7 +9211,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CheckInResult"
+                                            "$ref": "#/definitions/checkin.CheckInResult"
                                         }
                                     }
                                 }
@@ -9277,7 +9277,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CheckInCalendarResult"
+                                            "$ref": "#/definitions/checkin.CheckInCalendarResult"
                                         }
                                     }
                                 }
@@ -9339,7 +9339,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.CheckInRankResult"
+                                            "$ref": "#/definitions/checkin.CheckInRankResult"
                                         }
                                     }
                                 }
@@ -10529,7 +10529,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FeaturedContentDetailDTO"
+                                            "$ref": "#/definitions/featured.FeaturedContentDetailDTO"
                                         }
                                     }
                                 }
@@ -23531,6 +23531,110 @@ const docTemplate = `{
                 }
             }
         },
+        "checkin.CheckInCalendarResult": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/checkin.CheckInDay"
+                    }
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "checkin.CheckInDay": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "boolean"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                }
+            }
+        },
+        "checkin.CheckInRankItem": {
+            "type": "object",
+            "properties": {
+                "rank": {
+                    "type": "integer"
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/model.ForumAuthor"
+                }
+            }
+        },
+        "checkin.CheckInRankResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/checkin.CheckInRankItem"
+                    }
+                },
+                "me": {
+                    "description": "Me 是 Go 指针：未上榜时为 null。extensions 把这条可空性**表达进注解层**，\ncodegen 据此渲染 me: CheckInRankItem | null（spec #940 片五③）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/checkin.CheckInRankItem"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "checkin.CheckInResult": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "boolean"
+                },
+                "points": {
+                    "description": "Points 今日实发积分（基础 + 跨档阶梯，合并单笔；已打卡/重复请求时为 0）。",
+                    "type": "integer"
+                },
+                "streak": {
+                    "type": "integer"
+                },
+                "today_checked": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "faq.AdminFaqCategoriesResult": {
             "type": "object",
             "properties": {
@@ -23650,6 +23754,207 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/faq.FaqCategoryDTO"
                     }
+                }
+            }
+        },
+        "featured.FeaturedContentAdminDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "next": {
+                    "$ref": "#/definitions/featured.FeaturedNavDTO"
+                },
+                "prev": {
+                    "$ref": "#/definitions/featured.FeaturedNavDTO"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "related": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/featured.FeaturedContentDTO"
+                    }
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/featured.FeaturedContentDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedDeleteResult": {
+            "type": "object",
+            "properties": {
+                "content_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedNavDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -24405,6 +24710,20 @@ const docTemplate = `{
                 },
                 "weight": {
                     "type": "number"
+                }
+            }
+        },
+        "model.ForumAuthor": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
@@ -25726,110 +26045,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CheckInCalendarResult": {
-            "type": "object",
-            "properties": {
-                "days": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CheckInDay"
-                    }
-                },
-                "streak": {
-                    "type": "integer"
-                },
-                "today_checked": {
-                    "type": "boolean"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CheckInDay": {
-            "type": "object",
-            "properties": {
-                "checked": {
-                    "type": "boolean"
-                },
-                "date": {
-                    "type": "string"
-                },
-                "points": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CheckInRankItem": {
-            "type": "object",
-            "properties": {
-                "rank": {
-                    "type": "integer"
-                },
-                "streak": {
-                    "type": "integer"
-                },
-                "today_checked": {
-                    "type": "boolean"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "user": {
-                    "$ref": "#/definitions/service.ForumAuthor"
-                }
-            }
-        },
-        "service.CheckInRankResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CheckInRankItem"
-                    }
-                },
-                "me": {
-                    "description": "Me 是 Go 指针：未上榜时为 null。extensions 把这条可空性**表达进注解层**，\ncodegen 据此渲染 me: CheckInRankItem | null（spec #940 片五③）。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.CheckInRankItem"
-                        }
-                    ],
-                    "x-nullable": true
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CheckInResult": {
-            "type": "object",
-            "properties": {
-                "checked": {
-                    "type": "boolean"
-                },
-                "points": {
-                    "description": "Points 今日实发积分（基础 + 跨档阶梯，合并单笔；已打卡/重复请求时为 0）。",
-                    "type": "integer"
-                },
-                "streak": {
-                    "type": "integer"
-                },
-                "today_checked": {
-                    "type": "boolean"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.ContactPlainDTO": {
             "type": "object",
             "properties": {
@@ -26659,221 +26874,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.FeaturedContentAdminDetailDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "published_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedContentDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "published_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedContentDetailDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "cover_image": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "next": {
-                    "$ref": "#/definitions/service.FeaturedNavDTO"
-                },
-                "prev": {
-                    "$ref": "#/definitions/service.FeaturedNavDTO"
-                },
-                "published_at": {
-                    "type": "string",
-                    "x-nullable": true
-                },
-                "related": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FeaturedContentDTO"
-                    }
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedContentPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FeaturedContentDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedDeleteResult": {
-            "type": "object",
-            "properties": {
-                "content_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FeaturedNavDTO": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "category_label": {
-                    "type": "string"
-                },
-                "content_id": {
-                    "type": "integer"
-                },
-                "published_at": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ForumAuthor": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "service.ForumImageUploadResultDTO": {
             "type": "object",
             "properties": {
@@ -26897,7 +26897,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "author": {
-                    "$ref": "#/definitions/service.ForumAuthor"
+                    "$ref": "#/definitions/model.ForumAuthor"
                 },
                 "can_delete": {
                     "type": "boolean"
@@ -27018,7 +27018,7 @@ const docTemplate = `{
                     "x-optional": true
                 },
                 "author": {
-                    "$ref": "#/definitions/service.ForumAuthor"
+                    "$ref": "#/definitions/model.ForumAuthor"
                 },
                 "can_delete": {
                     "type": "boolean"
@@ -27868,7 +27868,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "author": {
-                    "$ref": "#/definitions/service.ForumAuthor"
+                    "$ref": "#/definitions/model.ForumAuthor"
                 },
                 "content": {
                     "type": "string"

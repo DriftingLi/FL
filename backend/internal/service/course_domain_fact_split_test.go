@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/featured"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -53,13 +54,13 @@ func TestCourseDomainFactSplit(t *testing.T) {
 	}
 
 	rows := []readabilityRow{
-		{"精选内容", ErrFeaturedContentNotFound, "featured_content",
+		{"精选内容", featured.ErrFeaturedContentNotFound, "featured_content",
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewFeaturedService(db, nil, zap.NewNop()).AdminDetail(999999)
+				_, e := featured.NewService(db, nil, zap.NewNop()).AdminDetail(999999)
 				return e
 			},
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewFeaturedService(db, nil, zap.NewNop()).AdminDetail(1)
+				_, e := featured.NewService(db, nil, zap.NewNop()).AdminDetail(1)
 				return e
 			}},
 		{"课程", model.ErrCourseNotFound, "course",

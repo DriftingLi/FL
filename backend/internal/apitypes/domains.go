@@ -55,9 +55,9 @@ var Domains = []Domain{
 		Name:  "checkin",
 		Title: "每日打卡（/api/check-in/*，ADR-0028 独立蓝图）",
 		Roots: []string{
-			"service.CheckInResult",
-			"service.CheckInCalendarResult",
-			"service.CheckInRankResult",
+			"checkin.CheckInResult",
+			"checkin.CheckInCalendarResult",
+			"checkin.CheckInRankResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/check-in"},
@@ -700,10 +700,10 @@ var Domains = []Domain{
 		// 的主要消费者是独立 Nuxt 门户仓（ADR-0001）；**详情**自 ADR-0049 决策 4 起多了一个
 		// 消费者：训练域 Web 的「内容精选详情页」（搜索结果落点），故详情类型与端点在此登记。
 		Roots: []string{
-			"service.FeaturedContentPageResult",
-			"service.FeaturedContentAdminDetailDTO",
-			"service.FeaturedContentDetailDTO",
-			"service.FeaturedDeleteResult",
+			"featured.FeaturedContentPageResult",
+			"featured.FeaturedContentAdminDetailDTO",
+			"featured.FeaturedContentDetailDTO",
+			"featured.FeaturedDeleteResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/featured-content/{id}"},

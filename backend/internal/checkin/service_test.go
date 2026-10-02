@@ -1,6 +1,6 @@
-// Package service 每日打卡服务测试：时间经 internal/clock Fake 定格（spec #296），
+// Package checkin 每日打卡服务测试：时间经 internal/clock Fake 定格（spec #296），
 // 覆盖签到幂等、日历 BETWEEN、连击起点、排行榜 tie-break 与 Me 名次合并、400 天截断窗口。
-package service
+package checkin
 
 import (
 	"testing"
@@ -21,26 +21,26 @@ func shDay(y int, m time.Month, d int) time.Time {
 }
 
 // newCheckInSvcAt 构造内存库 + 定格时钟服务（不带积分簿记，纯记录口径），返回 Fake 以便跨日推进。
-func newCheckInSvcAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake) {
+func newCheckInSvcAt(t *testing.T, now time.Time) (*Service, *clock.Fake) {
 	t.Helper()
 	f := clock.At(now)
-	svc := NewCheckInService(testutil.NewMemoryDB(t), zap.NewNop(), f, nil)
+	svc := NewService(testutil.NewMemoryDB(t), zap.NewNop(), f, nil)
 	return svc, f
 }
 
 // newCheckInSvcWithPointsAt 构造带积分簿记的打卡服务（ADR-0028 直记发分口径）。
-func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*CheckInService, *clock.Fake, *points.Service) {
+func newCheckInSvcWithPointsAt(t *testing.T, now time.Time) (*Service, *clock.Fake, *points.Service) {
 	t.Helper()
 	f := clock.At(now)
 	db := testutil.NewMemoryDB(t)
 	pointsSvc := points.NewService(db, zap.NewNop(), f, notification.NewService(db, zap.NewNop()))
-	svc := NewCheckInService(db, zap.NewNop(), f, pointsSvc)
+	svc := NewService(db, zap.NewNop(), f, pointsSvc)
 	return svc, f, pointsSvc
 }
 
-func TestNewCheckInService_NilClockFallsBackToReal(t *testing.T) {
+func TestNewService_NilClockFallsBackToReal(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewCheckInService(db, zap.NewNop(), nil, nil)
+	svc := NewService(db, zap.NewNop(), nil, nil)
 	if svc == nil || svc.clk == nil {
 		t.Fatal("nil Clock 应回退生产实钟，svc/clk 不应为 nil")
 	}

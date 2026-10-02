@@ -3,7 +3,9 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/checkin"
 	"forklift-training/internal/faq"
+	"forklift-training/internal/featured"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
 	"forklift-training/internal/notification"
@@ -75,7 +77,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "内容与 AI",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterFeaturedRoutes(api, rd, deps.FeaturedSvc, deps.FileSvc)
+			featured.RegisterRoutes(api, rd.Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
 			RegisterAIAssistantRoutes(api, rd, deps.AIAssistantSvc)
 			RegisterDiagnosisRoutes(api.Group("/ai-assistant"), rd, deps.DiagnosisProxySvc)
 		},
@@ -84,7 +86,7 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "论坛与打卡",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			RegisterForumRoutes(api, rd, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
-			RegisterCheckInRoutes(api, rd, deps.CheckInSvc)
+			checkin.RegisterRoutes(api, rd.Session, deps.CheckInSvc)
 		},
 	},
 	{

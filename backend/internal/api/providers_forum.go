@@ -1,6 +1,7 @@
 package api
 
 import (
+	"forklift-training/internal/checkin"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/service"
 )
@@ -10,5 +11,5 @@ func provideForum(c *coreSingletons, d *Deps) {
 	d.ForumSvc = service.NewForumService(c.db, c.fileSvc, c.notifSvc, c.forumCn, c.pointsSvc, c.logger)
 	d.ForumModSvc = service.NewForumModerationService(c.db, c.fileSvc, c.notifSvc, c.forumCn, c.pointsSvc, c.logger)
 	d.ForumImageSvc = service.NewForumImageService(c.db, c.fileSvc, c.logger)
-	d.CheckInSvc = service.NewCheckInService(c.db, c.logger, clock.Real(), c.pointsSvc)
+	d.CheckInSvc = checkin.NewService(c.db, c.logger, clock.Real(), c.pointsSvc)
 }

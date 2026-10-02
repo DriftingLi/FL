@@ -1,5 +1,5 @@
-// Package service 内容精选（公司动态/行业新闻等）服务。
-package service
+// Package featured 内容精选（公司动态/行业新闻等）服务。
+package featured
 
 import (
 	"errors"
@@ -14,17 +14,17 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// FeaturedService 内容精选服务。
-type FeaturedService struct {
+// Service 内容精选服务。
+type Service struct {
 	db      *gorm.DB
 	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
-// NewFeaturedService 创建内容精选服务实例。
-func NewFeaturedService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *FeaturedService {
-	return &FeaturedService{db: db, fileSvc: fileSvc, logger: logger}
+// NewService 创建内容精选服务实例。
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *Service {
+	return &Service{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // featuredCategoryLabels 分类中文标签映射。
@@ -49,18 +49,18 @@ var (
 )
 
 // CategoryLabel 返回分类的中文标签。
-func (s *FeaturedService) CategoryLabel(category string) string {
+func (s *Service) CategoryLabel(category string) string {
 	return featuredCategoryLabel(category)
 }
 
 // IsValidCategory 校验分类是否合法。
-func (s *FeaturedService) IsValidCategory(category string) bool {
+func (s *Service) IsValidCategory(category string) bool {
 	_, ok := featuredCategoryLabels[category]
 	return ok
 }
 
 // GetPublicList 公开列表（仅已发布），支持排序：latest（按时间，默认）/ hot（按浏览量）。
-func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sort ...string) (FeaturedContentPageResult, error) {
+func (s *Service) GetPublicList(page, pageSize int, category string, sort ...string) (FeaturedContentPageResult, error) {
 	sorted := ""
 	if len(sort) > 0 && sort[0] == "hot" {
 		sorted = "view_count DESC, published_at DESC, content_id DESC"
@@ -91,7 +91,7 @@ func (s *FeaturedService) GetPublicList(page, pageSize int, category string, sor
 
 // GetPublicDetail 公开详情（含相关资讯 + 上一篇/下一篇）。
 // countView=false 时不改变 view_count（SSR/爬虫路径），true 时自增阅读量（现网既有行为）。
-func (s *FeaturedService) GetPublicDetail(id int, countView bool) (*FeaturedContentDetailDTO, error) {
+func (s *Service) GetPublicDetail(id int, countView bool) (*FeaturedContentDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -145,7 +145,7 @@ func (s *FeaturedService) GetPublicDetail(id int, countView bool) (*FeaturedCont
 }
 
 // AdminList 管理端列表（含草稿）。
-func (s *FeaturedService) AdminList(page, pageSize int, category, status string) (FeaturedContentPageResult, error) {
+func (s *Service) AdminList(page, pageSize int, category, status string) (FeaturedContentPageResult, error) {
 	items, total, page, pageSize, err := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
 		if category != "" {
 			q = q.Where("category = ?", category)
@@ -171,7 +171,7 @@ func (s *FeaturedService) AdminList(page, pageSize int, category, status string)
 }
 
 // AdminDetail 管理端详情（含正文 Markdown）。
-func (s *FeaturedService) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, error) {
+func (s *Service) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -184,7 +184,7 @@ func (s *FeaturedService) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, e
 }
 
 // Create 创建内容精选（默认草稿；status=1 时写入 published_at）。
-func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDTO, error) {
+func (s *Service) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDTO, error) {
 	if in.Title == "" {
 		return nil, ErrFeaturedTitleRequired
 	}
@@ -230,7 +230,7 @@ func (s *FeaturedService) Create(in FeaturedContentInput) (*FeaturedContentAdmin
 
 // Update 更新内容精选。
 // 若从草稿改为已发布，则补写当前时间；已发布 → 草稿保留 published_at。
-func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*FeaturedContentAdminDetailDTO, error) {
+func (s *Service) Update(id int, in FeaturedContentUpdateInput) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -300,7 +300,7 @@ func (s *FeaturedService) Update(id int, in FeaturedContentUpdateInput) (*Featur
 }
 
 // Delete 删除内容精选，并清理封面与正文内本站图片（featured/ 前缀）的存储文件。
-func (s *FeaturedService) Delete(id int) (*FeaturedDeleteResult, error) {
+func (s *Service) Delete(id int) (*FeaturedDeleteResult, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -319,7 +319,7 @@ func (s *FeaturedService) Delete(id int) (*FeaturedDeleteResult, error) {
 // deleteFeaturedImages 清理精选内容关联的图片存储文件。
 // cover 为封面 URL；content 正文中 ![...](url) 语法引用的图片 URL 会被提取。
 // 仅删除 featured/ 子目录（local /static/uploads/featured/、R2 <domain>/featured/）下的文件。
-func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
+func (s *Service) deleteFeaturedImages(cover, content string) {
 	if s.fileSvc == nil {
 		return
 	}
@@ -336,7 +336,7 @@ func (s *FeaturedService) deleteFeaturedImages(cover, content string) {
 }
 
 // Publish 发布内容精选（草稿 → 已发布）。
-func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error) {
+func (s *Service) Publish(id int) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -366,7 +366,7 @@ func (s *FeaturedService) Publish(id int) (*FeaturedContentAdminDetailDTO, error
 // IncrementViewCount 客户端计数：仅已发布内容可计数，返回最新阅读量。
 // 「不存在」与「查不动」分开（ADR-0062 票6）：本域 12 处塌缩里最后漏掉的一处，
 // 由第③批档位台账的 500 档注入照出。
-func (s *FeaturedService) IncrementViewCount(id int) (int, error) {
+func (s *Service) IncrementViewCount(id int) (int, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -388,7 +388,7 @@ func (s *FeaturedService) IncrementViewCount(id int) (int, error) {
 }
 
 // SaveImage 保存图片到 featured 子目录，返回访问 URL。
-func (s *FeaturedService) SaveImage(content []byte, filename string) (string, error) {
+func (s *Service) SaveImage(content []byte, filename string) (string, error) {
 	if s.fileSvc == nil {
 		return "", errors.New("文件服务未初始化")
 	}

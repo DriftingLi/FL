@@ -32,7 +32,7 @@ python -m deepsec shield scan <path> [--layer all|l1|l2] [--format text|json|sar
 - `docker-compose.prod.yml` 的 `DATABASE_URL: postgres://${DB_USER:-forklift}:${DB_PASSWORD}@...` —— 环境变量占位符，密码经 `.env` 注入，非硬编码
 - `docker-compose.yml` / `docker-compose.local.yml` 的本地开发密码 `forklift123` —— 开发栈已知密码，非生产泄漏（生产走 `.env`）
 - `backend/cmd/import-reference-content/courses.go` 的 `n1CredentialCode = "forklift_n1"` 等证件 code 常量被误判为硬编码密钥 —— 常量是证件分区标识（CONTEXT.md 术语），非凭据
-- `backend/internal/service/checkin_service.go:34` 的 SQL 字符串拼接 —— 表名/列为代码内白名单常量，无用户输入参与拼接，参数值全部走占位符
+- `backend/internal/checkin/service.go:37` 的 SQL 字符串拼接 —— 表名/列为代码内白名单常量，无用户输入参与拼接，参数值全部走占位符
 
 ## 使用时机
 

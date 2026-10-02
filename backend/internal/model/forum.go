@@ -5,6 +5,19 @@ import "time"
 
 // ===== 24. 论坛模块 =====
 
+// ForumAuthor 论坛作者信息（展示名为昵称）。
+// 跨域共享：论坛域与打卡域都发它，留在任一域包都会让另一域反向 import ⇒ 按 ADR-0070 波 2a 贴着论坛实体放 model。
+type ForumAuthor struct {
+	UserID    int    `json:"user_id"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+// DisplayName 返回论坛展示名（昵称）。
+func (a ForumAuthor) DisplayName() string {
+	return a.Username
+}
+
 // ForumTopic 论坛主题。
 //
 // 两个正交维度中，chapter_id 只服务讨论帖：

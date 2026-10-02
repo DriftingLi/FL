@@ -66,8 +66,7 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	"service.CourseDTO.prerequisites":           outletAdminCourseDetailMeta,
 	"service.CourseDTO.prerequisite_course_ids": outletAdminCourseDetailMeta,
 
-	"service.FeaturedContentPageResult.items":  outletFeaturedPageEmpty,
-	"service.FeaturedContentDetailDTO.related": outletFeaturedDetailNoRelated,
+	// 精选域的 items / related 举证已随域包搬去 internal/featured/nonnil_outlets_test.go（ADR-0070）。
 
 	"service.BatchDeleteFilesResult.failed_ids": outletBatchDeleteFilesEmpty,
 
@@ -207,31 +206,6 @@ func outletAdminCourseDetailMeta(t *testing.T) any {
 	res, err := NewAdminCourseService(db, nil, zap.NewNop()).GetCourseDetail(seedVisibleCourse(t, db))
 	if err != nil {
 		t.Fatalf("管理端课程详情失败: %v", err)
-	}
-	return res
-}
-
-// ===== 精选两格 =====
-
-func outletFeaturedPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc, _ := newFeaturedTestSvc(t)
-	res, err := svc.GetPublicList(1, 20, "")
-	if err != nil {
-		t.Fatalf("精选公开列表失败: %v", err)
-	}
-	return res
-}
-
-// outletFeaturedDetailNoRelated related 的初值是 []FeaturedContentDTO{}，随后被
-// `make(0,len(related))` 整格覆盖 ⇒ 同分类没有第二篇时发 `[]`（不是保留初值，故播一篇就够）。
-func outletFeaturedDetailNoRelated(t *testing.T) any {
-	t.Helper()
-	svc, db := newFeaturedTestSvc(t)
-	id := seedPublishedFeatured(t, db, "相关资讯为空", 0)
-	res, err := svc.GetPublicDetail(id, false)
-	if err != nil {
-		t.Fatalf("精选公开详情失败: %v", err)
 	}
 	return res
 }

@@ -88,7 +88,7 @@ func NewPracticeModeServiceWithClock(db *gorm.DB, ai *AIService, logger *zap.Log
 	}
 }
 
-// SetClock 覆写时钟（测试用，参考 CheckInService 的 clk 注入形态）。
+// SetClock 覆写时钟（测试用，参考 internal/checkin.Service 的 clk 注入形态）。
 func (s *PracticeModeService) SetClock(clk clock.Clock) {
 	if clk != nil {
 		s.clk = clk

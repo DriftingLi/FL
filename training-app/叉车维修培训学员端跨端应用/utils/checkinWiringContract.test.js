@@ -14,7 +14,7 @@
  * 1) 消费面：打卡三页面的 checkInApi/getCheckInCalendarApi 必须 import 自 api/checkin
  * 2) 死路由清零：api/ 与 pages/ 全域不得再引用 /forum/check-in
  * 3) 类型对齐后端 ADR-0028：CheckInResult/CheckInCalendarResult 字段与
- *    后端 checkin_service.go 的 json tag 一致（streak/total/today_checked/points）
+ *    后端 internal/checkin/service.go 的 json tag 一致（streak/total/today_checked/points）
  * 4) 页面对新契约的字段消费闭环：不残留旧字段名（consecutive_days 等）
  */
 const fs = require('fs');
