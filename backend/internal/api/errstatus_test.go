@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/contribution"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/service"
@@ -275,28 +276,28 @@ func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 // #1361 追加暂存文件四校验的落档：越权 403 / 类型与已登记 400 / 文件不存在 404）。
 func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "contributionErrStatus", contributionErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrContributionNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrContributionFileMissing, Status: http.StatusNotFound},
-		{Sentinel: service.ErrContributionStagedNotOwner, Status: http.StatusForbidden},
-		{Sentinel: service.ErrContributionNotOwner, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionNotPending, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionNotApproved, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionQuotaDaily, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionQuotaPending, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionNoCredential, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionTitleRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionIntroRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionFilesRequired, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionFilesTooMany, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionFileTooLarge, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionTotalTooLarge, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionFileInvalid, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionFileExtNotAllowed, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionFileAlreadyClaimed, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionRejectReason, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionArchiveReason, Status: http.StatusBadRequest},
-		{Sentinel: service.ErrContributionInvalidReportReason, Status: http.StatusBadRequest},
+	assertTableSnapshot(t, "contribution.ErrStatus", contribution.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: contribution.ErrContributionNotFound, Status: http.StatusNotFound},
+		{Sentinel: contribution.ErrContributionFileMissing, Status: http.StatusNotFound},
+		{Sentinel: contribution.ErrContributionStagedNotOwner, Status: http.StatusForbidden},
+		{Sentinel: contribution.ErrContributionNotOwner, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionNotPending, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionNotApproved, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionQuotaDaily, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionQuotaPending, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionNoCredential, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionTitleRequired, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionIntroRequired, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFilesRequired, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFilesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileTooLarge, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionTotalTooLarge, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileInvalid, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileExtNotAllowed, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionFileAlreadyClaimed, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionRejectReason, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionArchiveReason, Status: http.StatusBadRequest},
+		{Sentinel: contribution.ErrContributionInvalidReportReason, Status: http.StatusBadRequest},
 	}, 0)
 }
 

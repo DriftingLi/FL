@@ -63,8 +63,7 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	// ===== 投稿 / 资料 / 打卡 / 资料库 / 搜索 / 导师 =====
 	// 通知域的 items 举证已随域包搬去 internal/notification/nonnil_outlets_test.go（ADR-0070）。
 	// 积分域的 items / tasks 举证已随域包搬去 internal/points/nonnil_outlets_test.go（ADR-0070）。
-	"service.ContributionPageResult.items":            outletContributionPageEmpty,
-	"service.ContributionReportPageResult.items":      outletContributionReportPageEmpty,
+	// 投稿域的 items 举证已随域包搬去 internal/contribution/nonnil_outlets_test.go（ADR-0070）。
 	"service.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
 	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
 	"service.SearchSectionDTO.items":          outletSearchSectionEmpty,
@@ -298,28 +297,6 @@ func outletTutorListEmpty(t *testing.T) any {
 }
 
 // ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
-
-// outletContributionPageEmpty 投稿审核队列：零投稿时 items 是空集。
-func outletContributionPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewContributionService(testutil.NewMemoryDB(t), nil, nil, nil, zap.NewNop(), nil)
-	res, err := svc.ListPending(1, 20)
-	if err != nil {
-		t.Fatalf("投稿队列失败: %v", err)
-	}
-	return res
-}
-
-// outletContributionReportPageEmpty 投稿举报队列：零举报时 items 是空集。
-func outletContributionReportPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewContributionService(testutil.NewMemoryDB(t), nil, nil, nil, zap.NewNop(), nil)
-	res, err := svc.ListReports(1, 20, nil)
-	if err != nil {
-		t.Fatalf("投稿举报队列失败: %v", err)
-	}
-	return res
-}
 
 // outletProfileChangeRequestPageEmpty 资料审核列表：零申请时 requests 是空集。
 func outletProfileChangeRequestPageEmpty(t *testing.T) any {

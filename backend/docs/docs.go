@@ -965,7 +965,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionPageResult"
                                         }
                                     }
                                 }
@@ -1024,7 +1024,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionReportPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionReportPageResult"
                                         }
                                     }
                                 }
@@ -1066,7 +1066,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.handleReportReq"
+                            "$ref": "#/definitions/contribution.handleReportReq"
                         }
                     }
                 ],
@@ -1116,7 +1116,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -1164,7 +1164,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.contributionRejectReq"
+                            "$ref": "#/definitions/contribution.contributionRejectReq"
                         }
                     }
                 ],
@@ -1180,7 +1180,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -1228,7 +1228,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.contributionRejectReq"
+                            "$ref": "#/definitions/contribution.contributionRejectReq"
                         }
                     }
                 ],
@@ -1244,7 +1244,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -9412,7 +9412,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionPageResult"
                                         }
                                     }
                                 }
@@ -9457,7 +9457,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.createContributionReq"
+                            "$ref": "#/definitions/contribution.createContributionReq"
                         }
                     }
                 ],
@@ -9473,7 +9473,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -9550,7 +9550,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionPageResult"
+                                            "$ref": "#/definitions/contribution.ContributionPageResult"
                                         }
                                     }
                                 }
@@ -9605,7 +9605,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionFileDTO"
+                                            "$ref": "#/definitions/contribution.ContributionFileDTO"
                                         }
                                     }
                                 }
@@ -9663,7 +9663,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ContributionItemDTO"
+                                            "$ref": "#/definitions/contribution.ContributionItemDTO"
                                         }
                                     }
                                 }
@@ -9753,7 +9753,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DownloadResult"
+                                            "$ref": "#/definitions/contribution.DownloadResult"
                                         }
                                     }
                                 }
@@ -9801,7 +9801,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.reportContributionReq"
+                            "$ref": "#/definitions/contribution.reportContributionReq"
                         }
                     }
                 ],
@@ -23469,68 +23469,6 @@ const docTemplate = `{
                 }
             }
         },
-        "api.contributionRejectReq": {
-            "type": "object",
-            "properties": {
-                "reason": {
-                    "type": "string"
-                }
-            }
-        },
-        "api.createContributionReq": {
-            "type": "object",
-            "properties": {
-                "credential_id": {
-                    "type": "integer"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "content_type": {
-                                "type": "string"
-                            },
-                            "file_name": {
-                                "type": "string"
-                            },
-                            "file_size": {
-                                "type": "integer"
-                            },
-                            "file_url": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                },
-                "intro": {
-                    "type": "string"
-                },
-                "is_anonymous": {
-                    "type": "boolean"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "api.handleReportReq": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "description": "archive=下架被举报投稿 / dismiss=驳回举报",
-                    "type": "string"
-                }
-            }
-        },
-        "api.reportContributionReq": {
-            "type": "object",
-            "properties": {
-                "reason": {
-                    "type": "string"
-                }
-            }
-        },
         "checkin.CheckInCalendarResult": {
             "type": "object",
             "properties": {
@@ -23632,6 +23570,232 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "contribution.ContributionAuthor": {
+            "type": "object",
+            "properties": {
+                "anonymous": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.ContributionFileDTO": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "description": "FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.ContributionItemDTO": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "description": "Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，\n生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/contribution.ContributionAuthor"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credential_id": {
+                    "type": "integer"
+                },
+                "downloads_count": {
+                    "type": "integer"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/contribution.ContributionFileDTO"
+                    },
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "intro": {
+                    "type": "string"
+                },
+                "is_anonymous": {
+                    "type": "boolean"
+                },
+                "reject_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.ContributionPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/contribution.ContributionItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.ContributionReportItemDTO": {
+            "type": "object",
+            "properties": {
+                "contribution_id": {
+                    "type": "integer"
+                },
+                "contribution_title": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "reporter_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "0 待处理 / 1 已处理",
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.ContributionReportPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/contribution.ContributionReportItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.DownloadResult": {
+            "type": "object",
+            "properties": {
+                "is_new": {
+                    "description": "是否新增一次计数（重复点击=false）",
+                    "type": "boolean"
+                },
+                "tier_awarded": {
+                    "description": "本次触发的达阶奖励（0=未触发）",
+                    "type": "integer"
+                }
+            }
+        },
+        "contribution.contributionRejectReq": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.createContributionReq": {
+            "type": "object",
+            "properties": {
+                "credential_id": {
+                    "type": "integer"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "content_type": {
+                                "type": "string"
+                            },
+                            "file_name": {
+                                "type": "string"
+                            },
+                            "file_size": {
+                                "type": "integer"
+                            },
+                            "file_url": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "intro": {
+                    "type": "string"
+                },
+                "is_anonymous": {
+                    "type": "boolean"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.handleReportReq": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "archive=下架被举报投稿 / dismiss=驳回举报",
+                    "type": "string"
+                }
+            }
+        },
+        "contribution.reportContributionReq": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
                 }
             }
         },
@@ -26163,157 +26327,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.ContributionAuthor": {
-            "type": "object",
-            "properties": {
-                "anonymous": {
-                    "type": "boolean"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionFileDTO": {
-            "type": "object",
-            "properties": {
-                "content_type": {
-                    "type": "string"
-                },
-                "file_id": {
-                    "description": "FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
-                "file_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionItemDTO": {
-            "type": "object",
-            "properties": {
-                "author": {
-                    "description": "Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，\n生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ContributionAuthor"
-                        }
-                    ]
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credential_id": {
-                    "type": "integer"
-                },
-                "downloads_count": {
-                    "type": "integer"
-                },
-                "files": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ContributionFileDTO"
-                    },
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "intro": {
-                    "type": "string"
-                },
-                "is_anonymous": {
-                    "type": "boolean"
-                },
-                "reject_reason": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ContributionPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ContributionItemDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ContributionReportItemDTO": {
-            "type": "object",
-            "properties": {
-                "contribution_id": {
-                    "type": "integer"
-                },
-                "contribution_title": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "reporter_id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "description": "0 待处理 / 1 已处理",
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ContributionReportPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ContributionReportItemDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.CourseBriefDTO": {
             "type": "object",
             "properties": {
@@ -26781,19 +26794,6 @@ const docTemplate = `{
                 },
                 "source_url": {
                     "type": "string"
-                }
-            }
-        },
-        "service.DownloadResult": {
-            "type": "object",
-            "properties": {
-                "is_new": {
-                    "description": "是否新增一次计数（重复点击=false）",
-                    "type": "boolean"
-                },
-                "tier_awarded": {
-                    "description": "本次触发的达阶奖励（0=未触发）",
-                    "type": "integer"
                 }
             }
         },

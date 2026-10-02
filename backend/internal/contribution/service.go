@@ -1,4 +1,7 @@
-// Package service 实现业务服务层。
+// Package contribution 资料投稿与审核域（#517 / ADR-0026；ADR-0070 域包形态）。
+//
+// 本包是 internal/<域> 形态（ADR-0070）：handler.go / handler_admin.go 是 HTTP 出口（公开 8 条 + 管理端 6 条），
+// service.go 是域实现，dto.go 是对外 DTO。
 // 本文件：资料投稿（contribution）域（#517 / ADR-0026）——学员上传资料换积分。
 //
 // 词汇（CONTEXT.md）：投稿（contribution）≠ 学习资料（material）。material 是课程附件
@@ -8,7 +11,7 @@
 // approved → archived（管理员下架）。rejected 不可恢复——重提 = 新建投稿（新行新审核）。
 // 过审分与达阶分是「审核/达阶时点即发」的预付奖励；违规下架必须追回（与问答采纳的
 // 「删帖不回滚」有意相反，见 ADR-0026）。
-package service
+package contribution
 
 import (
 	"context"
@@ -119,50 +122,8 @@ var (
 	ErrContributionStorageUnconfigured = errors.New("投稿存储未配置，无法校验暂存文件")
 )
 
-// ContributionAuthor 投稿作者信息（展示名 = 昵称；匿名投稿不展示）。
-type ContributionAuthor struct {
-	UserID    int    `json:"user_id"`
-	Username  string `json:"username"`
-	Anonymous bool   `json:"anonymous"`
-}
-
-// ContributionFileDTO 投稿文件对象。
-type ContributionFileDTO struct {
-	// FileID 暂存文件尚未落库：key 不存在（omitempty）→ x-optional。
-	FileID      int64  `json:"file_id,omitempty" extensions:"x-optional"`
-	FileName    string `json:"file_name"`
-	FileURL     string `json:"file_url"`
-	FileSize    int64  `json:"file_size"`
-	ContentType string `json:"content_type"`
-}
-
-// ContributionItemDTO 投稿对象。
-type ContributionItemDTO struct {
-	ID             int64                 `json:"id"`
-	CredentialID   int                   `json:"credential_id"`
-	Title          string                `json:"title"`
-	Intro          string                `json:"intro"`
-	Status         string                `json:"status"`
-	IsAnonymous    bool                  `json:"is_anonymous"`
-	DownloadsCount int                   `json:"downloads_count"`
-	RejectReason   string                `json:"reject_reason,omitempty" extensions:"x-optional"`
-	Files          []ContributionFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
-	// Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，
-	// 生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。
-	Author    ContributionAuthor `json:"author,omitempty"`
-	CreatedAt string             `json:"created_at"`
-}
-
-// ContributionPageResult 分页结果。
-type ContributionPageResult struct {
-	Items    []ContributionItemDTO `json:"items" nullability:"nonnil"`
-	Total    int64                 `json:"total"`
-	Page     int                   `json:"page"`
-	PageSize int                   `json:"page_size"`
-}
-
-// ContributionService 投稿服务。
-type ContributionService struct {
+// Service 投稿服务。
+type Service struct {
 	db              *gorm.DB
 	fileSvc         *filestore.FileStore
 	notificationSvc *notification.Service
@@ -171,12 +132,12 @@ type ContributionService struct {
 	clk             clock.Clock
 }
 
-// NewContributionService 构造投稿服务。clk 为空时回退生产实钟（Asia/Shanghai）。
-func NewContributionService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, points *points.Service, logger *zap.Logger, clk clock.Clock) *ContributionService {
+// NewService 构造投稿服务。clk 为空时回退生产实钟（Asia/Shanghai）。
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, points *points.Service, logger *zap.Logger, clk clock.Clock) *Service {
 	if clk == nil {
 		clk = clock.Real()
 	}
-	return &ContributionService{
+	return &Service{
 		db:              db,
 		fileSvc:         fileSvc,
 		notificationSvc: notificationSvc,
@@ -238,7 +199,7 @@ func contributionStagedOwner(url string) int {
 // 而本仓的装配根（cmd/server → api.NewDeps）永远会带一个真存储上来。
 // 存在性本身归 filestore（只有它知道自己的适配器装没装）：这里只把它的
 // ErrStorageUnconfigured 翻成本域的 500 哨兵，别让「没配存储」被读成「文件不存在」。
-func (s *ContributionService) stagedFileExists(fileURL string) (bool, error) {
+func (s *Service) stagedFileExists(fileURL string) (bool, error) {
 	if s.fileSvc == nil {
 		return false, ErrContributionStorageUnconfigured
 	}
@@ -256,7 +217,7 @@ func (s *ContributionService) stagedFileExists(fileURL string) (bool, error) {
 // 此前的 Create 只校验大小，归属与类型都不判 ⇒ 任何人都能把别人的暂存文件、
 // 非白名单类型、或凭空的 URL 登记进自己的投稿（真实缺陷 #13）。
 // ② 判的是 **URL 的扩展名**（上传时由服务端铸造），不是客户端传来的 file_name。
-func (s *ContributionService) validateStagedFiles(userID int, files []ContributionFileDTO) error {
+func (s *Service) validateStagedFiles(userID int, files []ContributionFileDTO) error {
 	for _, f := range files {
 		// ① 归属
 		if contributionStagedOwner(f.FileURL) != userID {
@@ -311,7 +272,7 @@ func contributionContentType(filename string) string {
 //
 // 按用户分区是「归属由路径承载」的那一半：Create 侧的「前缀属本人」校验只能读得出路径里写了什么，
 // 所以上传这一刻就必须把 uid 写进去（此前的扁平 contributions/ 里，归属这件事在数据里根本不存在）。
-func (s *ContributionService) UploadFile(ctx context.Context, userID int, fileHeader *multipart.FileHeader) (*ContributionFileDTO, error) {
+func (s *Service) UploadFile(ctx context.Context, userID int, fileHeader *multipart.FileHeader) (*ContributionFileDTO, error) {
 	if userID <= 0 {
 		return nil, errors.New("未认证")
 	}
@@ -343,7 +304,7 @@ func (s *ContributionService) UploadFile(ctx context.Context, userID int, fileHe
 
 // collectReferencedContributionFiles 收集全部投稿引用文件 key 集合（悬空回收差集用）。
 // 查不动即返回 error，sweep 据此整轮放弃（ADR-0062 票5，与论坛图片同一判据）。
-func (s *ContributionService) collectReferencedContributionFiles() (map[string]bool, error) {
+func (s *Service) collectReferencedContributionFiles() (map[string]bool, error) {
 	ref := map[string]bool{}
 	var urls []string
 	if err := s.db.Model(&model.UserContributionFile{}).Pluck("file_url", &urls).Error; err != nil {
@@ -361,7 +322,7 @@ func (s *ContributionService) collectReferencedContributionFiles() (map[string]b
 // ListWithInfo(contributions/) 与全量引用集差集，仅删存储侧 LastModified 超过
 // ContributionOrphanTTL 且未被任何投稿文件行引用的文件。
 // 返回清理数（存储错误不中断）；引用集查不动或为空时整轮不清理（ADR-0062 票5）；ctx 取消语义贯穿到存储调用。
-func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
+func (s *Service) CleanupOrphanFiles(ctx context.Context) int {
 	if s.fileSvc == nil {
 		return 0
 	}
@@ -381,7 +342,7 @@ func (s *ContributionService) CleanupOrphanFiles(ctx context.Context) int {
 // ===== 资格与配额 =====
 
 // countDaily 当日提交数（Asia/Shanghai 自然日起点之后的行数；time.Time 边界双方言可用）。
-func (s *ContributionService) countDaily(userID int) (int64, error) {
+func (s *Service) countDaily(userID int) (int64, error) {
 	var cnt int64
 	err := s.db.Model(&model.UserContribution{}).
 		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
@@ -389,7 +350,7 @@ func (s *ContributionService) countDaily(userID int) (int64, error) {
 }
 
 // countPending 名下 pending 积压数。
-func (s *ContributionService) countPending(userID int) (int64, error) {
+func (s *Service) countPending(userID int) (int64, error) {
 	var cnt int64
 	err := s.db.Model(&model.UserContribution{}).
 		Where("user_id = ? AND status = ?", userID, ContributionStatusPending).Count(&cnt).Error
@@ -397,7 +358,7 @@ func (s *ContributionService) countPending(userID int) (int64, error) {
 }
 
 // checkQuota 校验投稿配额两臂（读路径/写路径共用单实现）。
-func (s *ContributionService) checkQuota(userID int) error {
+func (s *Service) checkQuota(userID int) error {
 	daily, err := s.countDaily(userID)
 	if err != nil {
 		return err
@@ -417,22 +378,10 @@ func (s *ContributionService) checkQuota(userID int) error {
 
 // ===== 创建 / 列表 / 详情 / 撤回 =====
 
-// CreateContributionInput 创建投稿入参。
-type CreateContributionInput struct {
-	UserID       int
-	CredentialID int
-	Title        string
-	Intro        string
-	IsAnonymous  bool
-	Files        []ContributionFileDTO
-	// FileURLs 直接传文件 URL 列表（已上传暂存）时使用（后端二次校验归属）。
-	FileURLs []string
-}
-
 // checkCredential 校验投稿资格与目标证件（#702）：投稿者须已选定当前证件
 // （淘汰未过 onboarding 的空白号，对真实学员零摩擦）；目标证件只需有效存在，
 // 不必等于当前证件（投稿是供给侧写入，不再被浏览侧全局过滤器绑死；列表仍按当前证件过滤）。
-func (s *ContributionService) checkCredential(userID, credentialID int) error {
+func (s *Service) checkCredential(userID, credentialID int) error {
 	if credentialID <= 0 {
 		return ErrContributionNoCredential
 	}
@@ -454,7 +403,7 @@ func (s *ContributionService) checkCredential(userID, credentialID int) error {
 }
 
 // Create 创建投稿（pending）。配额两臂 + 证件校验在事务外先查一遍，事务内再守卫（防并发超投）。
-func (s *ContributionService) Create(in CreateContributionInput) (*ContributionItemDTO, error) {
+func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, error) {
 	// 标题/简介校验
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
@@ -554,31 +503,23 @@ func (s *ContributionService) Create(in CreateContributionInput) (*ContributionI
 }
 
 // countDailyTx / countPendingTx 事务内配额计数（与事务外共用条件形态）。
-func (s *ContributionService) countDailyTx(tx *gorm.DB, userID int) (int64, error) {
+func (s *Service) countDailyTx(tx *gorm.DB, userID int) (int64, error) {
 	var cnt int64
 	err := tx.Model(&model.UserContribution{}).
 		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
 	return cnt, err
 }
 
-func (s *ContributionService) countPendingTx(tx *gorm.DB, userID int) (int64, error) {
+func (s *Service) countPendingTx(tx *gorm.DB, userID int) (int64, error) {
 	var cnt int64
 	err := tx.Model(&model.UserContribution{}).
 		Where("user_id = ? AND status = ?", userID, ContributionStatusPending).Count(&cnt).Error
 	return cnt, err
 }
 
-// ListPublicInput 公开广场列表入参。
-type ListPublicInput struct {
-	CredentialID int
-	Sort         string // latest / hot
-	Page         int
-	PageSize     int
-}
-
 // ListPublic 公开广场列表：仅 approved（非 archived——archived 是 approved 的下游状态，
 // 列表口径「仅 approved」，archived 不出现）。按证件过滤 + 排序。
-func (s *ContributionService) ListPublic(in ListPublicInput) (*ContributionPageResult, error) {
+func (s *Service) ListPublic(in ListPublicInput) (*ContributionPageResult, error) {
 	order := "created_at DESC"
 	if in.Sort == "hot" {
 		order = "downloads_count DESC, created_at DESC"
@@ -603,7 +544,7 @@ func (s *ContributionService) ListPublic(in ListPublicInput) (*ContributionPageR
 }
 
 // ListMine 我的投稿：全部状态，按创建时间倒序。
-func (s *ContributionService) ListMine(userID, page, pageSize int) (*ContributionPageResult, error) {
+func (s *Service) ListMine(userID, page, pageSize int) (*ContributionPageResult, error) {
 	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
 		s.db, page, pageSize, 20, 50, "created_at DESC",
 		func(q *gorm.DB) *gorm.DB {
@@ -621,7 +562,7 @@ func (s *ContributionService) ListMine(userID, page, pageSize int) (*Contributio
 }
 
 // GetDetail 投稿详情（含文件清单）。公开仅 approved；作者本人可见全部状态（含驳回原因）。
-func (s *ContributionService) GetDetail(contributionID int64, viewerID int) (*ContributionItemDTO, error) {
+func (s *Service) GetDetail(contributionID int64, viewerID int) (*ContributionItemDTO, error) {
 	var c model.UserContribution
 	if err := s.db.First(&c, contributionID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -637,7 +578,7 @@ func (s *ContributionService) GetDetail(contributionID int64, viewerID int) (*Co
 }
 
 // toDTO 装配 DTO（author 与 files 可选加载）。
-func (s *ContributionService) toDTO(c *model.UserContribution, includeAuthorFiles bool) *ContributionItemDTO {
+func (s *Service) toDTO(c *model.UserContribution, includeAuthorFiles bool) *ContributionItemDTO {
 	dto := &ContributionItemDTO{
 		ID:             c.ID,
 		CredentialID:   c.CredentialID,
@@ -676,7 +617,7 @@ func (s *ContributionService) toDTO(c *model.UserContribution, includeAuthorFile
 }
 
 // Withdraw 作者撤回 pending 投稿（withdrawn）。
-func (s *ContributionService) Withdraw(userID int, contributionID int64) error {
+func (s *Service) Withdraw(userID int, contributionID int64) error {
 	res := s.db.Model(&model.UserContribution{}).
 		Where("id = ? AND user_id = ? AND status = ?", contributionID, userID, ContributionStatusPending).
 		Updates(map[string]any{"status": ContributionStatusWithdrawn, "updated_at": s.clk.Now()})
@@ -702,7 +643,7 @@ func (s *ContributionService) Withdraw(userID int, contributionID int64) error {
 // ===== 审核（T2：approve/reject 与积分直记）=====
 
 // ListPending 审核队列（pending 分页；管理端/讲师端共用）。
-func (s *ContributionService) ListPending(page, pageSize int) (*ContributionPageResult, error) {
+func (s *Service) ListPending(page, pageSize int) (*ContributionPageResult, error) {
 	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
 		s.db, page, pageSize, 20, 50, "created_at ASC",
 		func(q *gorm.DB) *gorm.DB {
@@ -721,7 +662,7 @@ func (s *ContributionService) ListPending(page, pageSize int) (*ContributionPage
 
 // Approve 通过投稿：pending → approved（CAS 防并发），直记 +50（幂等占坑防双发），
 // 站内信同事务。审核者信息落 reviewed_by/reviewed_at。
-func (s *ContributionService) Approve(reviewerID int, contributionID int64) (*ContributionItemDTO, error) {
+func (s *Service) Approve(reviewerID int, contributionID int64) (*ContributionItemDTO, error) {
 	var c model.UserContribution
 	if err := s.db.Select("id", "user_id", "title", "status").First(&c, contributionID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -771,7 +712,7 @@ func (s *ContributionService) Approve(reviewerID int, contributionID int64) (*Co
 }
 
 // Reject 驳回投稿：pending → rejected（必填原因），不发分。驳回原因站内信送达。
-func (s *ContributionService) Reject(reviewerID int, contributionID int64, reason string) (*ContributionItemDTO, error) {
+func (s *Service) Reject(reviewerID int, contributionID int64, reason string) (*ContributionItemDTO, error) {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		return nil, ErrContributionRejectReason
@@ -812,18 +753,12 @@ func (s *ContributionService) Reject(reviewerID int, contributionID int64, reaso
 
 // ===== 下载与达阶（T3/T4）=====
 
-// DownloadResult 下载结果。
-type DownloadResult struct {
-	IsNew       bool `json:"is_new"`       // 是否新增一次计数（重复点击=false）
-	TierAwarded int  `json:"tier_awarded"` // 本次触发的达阶奖励（0=未触发）
-}
-
 // Download 下载投稿：仅 approved 可下载。
 // - 落 contribution_download（user_id+contribution_id 唯一 = 下载量唯一事实源）。
 // - 作者本人下载不计（不落表、不加计数）。
 // - 同一事务维护 downloads_count 反范式列。
 // - 达阶判定：跨过哪档补哪档（幂等键含档位，并发/重试不多发）。
-func (s *ContributionService) Download(userID int, contributionID int64) (*DownloadResult, error) {
+func (s *Service) Download(userID int, contributionID int64) (*DownloadResult, error) {
 	var c model.UserContribution
 	if err := s.db.Select("id", "user_id", "title", "status", "downloads_count").First(&c, contributionID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -903,7 +838,7 @@ func validReportReason(reason string) bool {
 }
 
 // Report 举报已上架投稿（同一学员对同一投稿唯一；重复举报合并更新理由）。
-func (s *ContributionService) Report(reporterID int, contributionID int64, reason string) error {
+func (s *Service) Report(reporterID int, contributionID int64, reason string) error {
 	reason = strings.TrimSpace(reason)
 	if !validReportReason(reason) {
 		return ErrContributionInvalidReportReason
@@ -939,27 +874,8 @@ func (s *ContributionService) Report(reporterID int, contributionID int64, reaso
 	return nil
 }
 
-// ContributionReportItemDTO 举报条目（管理端队列）。
-type ContributionReportItemDTO struct {
-	ID                int64  `json:"id"`
-	ReporterID        int    `json:"reporter_id"`
-	ContributionID    int64  `json:"contribution_id"`
-	ContributionTitle string `json:"contribution_title"`
-	Reason            string `json:"reason"`
-	Status            int16  `json:"status"` // 0 待处理 / 1 已处理
-	CreatedAt         string `json:"created_at"`
-}
-
-// ContributionReportPageResult 举报分页结果。
-type ContributionReportPageResult struct {
-	Items    []ContributionReportItemDTO `json:"items" nullability:"nonnil"`
-	Total    int64                       `json:"total"`
-	Page     int                         `json:"page"`
-	PageSize int                         `json:"page_size"`
-}
-
 // ListReports 举报队列（status 0 待处理 / 1 已处理；nil=全部）。
-func (s *ContributionService) ListReports(page, pageSize int, status *int) (*ContributionReportPageResult, error) {
+func (s *Service) ListReports(page, pageSize int, status *int) (*ContributionReportPageResult, error) {
 	items, total, page, pageSize, err := paging.QueryWithMax[model.ContributionReport](
 		s.db, page, pageSize, 20, 50, "created_at DESC",
 		func(q *gorm.DB) *gorm.DB {
@@ -991,7 +907,7 @@ func (s *ContributionService) ListReports(page, pageSize int, status *int) (*Con
 
 // HandleReport 处置举报：action=archive 下架被举报投稿（追回积分）并标记处理；
 // action=dismiss 驳回举报（标记处理，不动作）。
-func (s *ContributionService) HandleReport(reviewerID int, reportID int64, action string) error {
+func (s *Service) HandleReport(reviewerID int, reportID int64, action string) error {
 	var rep model.ContributionReport
 	if err := s.db.First(&rep, reportID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1033,7 +949,7 @@ func reportReasonLabel(reason string) string {
 
 // Archive 下架已上架投稿：approved → archived（必填原因，写 reject_reason 列复用）
 // 并追回该投稿累计投稿分（过审 +50 与达阶分，rollback 对冲封底 0，幂等占坑防双扣）。
-func (s *ContributionService) Archive(reviewerID int, contributionID int64, reason string) (*ContributionItemDTO, error) {
+func (s *Service) Archive(reviewerID int, contributionID int64, reason string) (*ContributionItemDTO, error) {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		return nil, ErrContributionArchiveReason

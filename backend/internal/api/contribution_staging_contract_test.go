@@ -1,11 +1,11 @@
 // 投稿暂存文件四校验的 HTTP 面（#1361 / ADR-0066 决策 5，真实缺陷 #13）。
 //
-// 服务层锁（internal/service/contribution_staging_partition_test.go）判的是「哪枚哨兵」；
+// 服务层锁（internal/contribution/staging_partition_test.go）判的是「哪枚哨兵」；
 // 本文件判的是「哨兵有没有落成明确的 4xx、那句话有没有原样出门」。两者缺一都不算做完：
 // 只测服务层，域表把越权配成 400、把不存在配成 500 都测不出来；只测 HTTP 面，
 // 「同一档里挤了两条不同事实」这种压不成一句的漂移无人认领。
 //
-// 档位台账（contributionErrStatus）本身另由 errstatus_test.go 的快照钉住；本文件是它的行为面。
+// 档位台账（contribution.ErrStatus）本身另由 errstatus_test.go 的快照钉住；本文件是它的行为面。
 package api
 
 import (

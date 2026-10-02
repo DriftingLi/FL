@@ -70,11 +70,11 @@ var Domains = []Domain{
 		Name:  "contribution",
 		Title: "投稿与审核（/api/contributions/*、/api/admin/contributions/*，含举报队列）",
 		Roots: []string{
-			"service.ContributionFileDTO",
-			"service.ContributionItemDTO",
-			"service.ContributionPageResult",
-			"service.ContributionReportPageResult",
-			"service.DownloadResult",
+			"contribution.ContributionFileDTO",
+			"contribution.ContributionItemDTO",
+			"contribution.ContributionPageResult",
+			"contribution.ContributionReportPageResult",
+			"contribution.DownloadResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/contributions/upload-file"},

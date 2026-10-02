@@ -7,7 +7,7 @@
 //
 // 本文件逐条锁四校验各自的事实，外加「老路径不再被写入」（上传落 contributions/<uid>/）。
 // HTTP 档位（403 / 400 / 400 / 404）的锁在 internal/api/contribution_staging_contract_test.go。
-package service
+package contribution
 
 import (
 	"bytes"
@@ -50,14 +50,14 @@ func (m *stagedStorage) Exists(_ context.Context, url string) (bool, error) {
 }
 
 // newStagedSvc 构造一套「存储可控」的投稿服务（四校验要问存储侧与文件表，不能用默认替身）。
-func newStagedSvc(t *testing.T) (*ContributionService, *gorm.DB, *stagedStorage) {
+func newStagedSvc(t *testing.T) (*Service, *gorm.DB, *stagedStorage) {
 	t.Helper()
 	db := testutil.NewFileDB(t)
 	st := &stagedStorage{missing: map[string]bool{}}
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notif := notification.NewService(db, zap.NewNop())
 	pointsSvc := points.NewService(db, zap.NewNop(), nil, notif)
-	svc := NewContributionService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
+	svc := NewService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
 	return svc, db, st
 }
 
@@ -256,7 +256,7 @@ func TestCreateFailsClosedWithoutStorageBackend(t *testing.T) {
 	db := testutil.NewFileDB(t)
 	cred := seedCredential(t, db)
 	u := seedContributionUser(t, db, "stage_nostore", cred.ID)
-	bare := NewContributionService(db, filestore.NewFileStore("", nil, zap.NewNop()), nil, nil, zap.NewNop(), clock.Real())
+	bare := NewService(db, filestore.NewFileStore("", nil, zap.NewNop()), nil, nil, zap.NewNop(), clock.Real())
 	_, err := bare.Create(stagedInput(u, cred.ID, oneFile(stagedURL(u.ID, "a.pdf"), 1024)))
 	if !errors.Is(err, ErrContributionStorageUnconfigured) {
 		t.Fatalf("未配置存储时应回 ErrContributionStorageUnconfigured（落 500），实得 %v", err)

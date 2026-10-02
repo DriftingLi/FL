@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/contribution"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -55,7 +56,7 @@ func seedContributionForDelete(t *testing.T, db *gorm.DB, userID, credID int, n 
 	for i := 0; i < n; i++ {
 		st := status
 		if st == "" {
-			st = ContributionStatusPending
+			st = contribution.ContributionStatusPending
 		}
 		row := model.UserContribution{
 			UserID: userID, CredentialID: credID, Title: fmt.Sprintf("投稿-%d-%s", credID, st),
@@ -107,8 +108,8 @@ func TestDeleteCredentialBlockerCountsEveryStatus(t *testing.T) {
 	student := testutil.SeedStudent(t, db, "cred_del_states", "x")
 	cred := seedCredForDelete(t, db, "N1_states")
 	for _, st := range []string{
-		ContributionStatusPending, ContributionStatusApproved,
-		ContributionStatusRejected, ContributionStatusWithdrawn, ContributionStatusArchived,
+		contribution.ContributionStatusPending, contribution.ContributionStatusApproved,
+		contribution.ContributionStatusRejected, contribution.ContributionStatusWithdrawn, contribution.ContributionStatusArchived,
 	} {
 		seedContributionForDelete(t, db, student.ID, cred.ID, 1, st)
 	}

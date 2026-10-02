@@ -1,11 +1,14 @@
-// Package service 测试：投稿域 DTO shape-lock（spec #952 片一）。
+// Package contribution 测试：投稿域 DTO shape-lock（spec #952 片一）。
 //
 // 与 mock_exam_dto_test.go / practice_mode_dto_shape_test.go 同构。它同时是**注解层可空性标注的
 // 证据**：x-optional（键可能不存在）与 x-nullable（键在、值为 null）标错时，生成物会与真实响应
 // 分头漂移，而前端 type-check 抓不到这类错误——所以把「哪些 key 恒在」钉在这里。
-package service
+package contribution
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // 投稿条目：author 恒在（omitempty 对结构体取值无效，encoding/json 不省略零值结构体）；
 // files / reject_reason 是 omitempty，未装配时**键不存在**（→ 注解层 x-optional）。
@@ -53,4 +56,38 @@ func TestContributionEnvelopeShapeLock(t *testing.T) {
 		"id", "reporter_id", "contribution_id", "contribution_title", "reason", "status", "created_at",
 	)
 	assertShapeLock(t, DownloadResult{IsNew: true, TierAwarded: 0}, "is_new", "tier_awarded")
+}
+
+// ---- 域包自带的测试脚手架副本（域包不得 import internal/service 的测试文件；原定义留在 internal/service）----
+
+// assertShapeLock 断言 key 集合与期望完全一致（不多不少）。
+func assertShapeLock(t *testing.T, v any, want ...string) {
+	t.Helper()
+	got := topLevelKeys(t, v)
+	if len(got) != len(want) {
+		t.Errorf("key 数量 = %d, 期望 %d\n实际: %v\n期望: %v", len(got), len(want), got, want)
+	}
+	for _, k := range want {
+		if !got[k] {
+			t.Errorf("缺少 key: %s", k)
+		}
+	}
+}
+
+// topLevelKeys 返回 v 序列化后的顶层 key 集合。
+func topLevelKeys(t *testing.T, v any) map[string]bool {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
+	keys := map[string]bool{}
+	for k := range m {
+		keys[k] = true
+	}
+	return keys
 }

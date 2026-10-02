@@ -1,10 +1,11 @@
-package service
+package contribution
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -58,13 +59,13 @@ func (m *memContributionStorage) Get(_ context.Context, url string) (io.ReadClos
 }
 
 // newContributionTestSvc 构造投稿服务（含真 points.Service 与通知）。
-func newContributionTestSvc(t *testing.T) (*ContributionService, *gorm.DB) {
+func newContributionTestSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewFileDB(t)
 	fileSvc := filestore.NewFileStore("", &memContributionStorage{}, zap.NewNop())
 	notif := notification.NewService(db, zap.NewNop())
 	pointsSvc := points.NewService(db, zap.NewNop(), nil, notif)
-	svc := NewContributionService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
+	svc := NewService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
 	return svc, db
 }
 
@@ -416,7 +417,7 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
 	notif := notification.NewService(db, zap.NewNop())
 	pointsSvc := points.NewService(db, zap.NewNop(), nil, notif)
-	svc := NewContributionService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
+	svc := NewService(db, fileSvc, notif, pointsSvc, zap.NewNop(), clock.Real())
 	// 一条已提交投稿引用 used 文件
 	cred := seedCredential(t, db)
 	u := seedContributionUser(t, db, "cleanup", cred.ID)
@@ -438,4 +439,31 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	if len(st.deleted) != 1 || st.deleted[0] != stagedFor(1, "orphan_1699999999999.pdf") {
 		t.Fatalf("应删旧孤儿, deleted=%v", st.deleted)
 	}
+}
+
+// ---- 域包自带的测试脚手架副本（域包不得 import internal/service 的测试文件；原定义留在 internal/service）----
+
+func itoa(n int) string { return strconv.Itoa(n) }
+
+// fileStampToTime 测试 helper：从测试文件 URL 的命名契约（<name>_<ms>.<ext>）解析毫秒时间戳
+// 作为 LastModified；无法解析（无内嵌时间戳）返回零值（sweep 对零值保守保留）。
+// 仅测试用——生产代码时间戳来自 storage 层真实元数据，不反向解析文件名（ADR-0027 C2）。
+func fileStampToTime(url string) time.Time {
+	base := url
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	dot := strings.LastIndex(base, ".")
+	if dot < 0 {
+		return time.Time{}
+	}
+	underscore := strings.LastIndex(base[:dot], "_")
+	if underscore < 0 {
+		return time.Time{}
+	}
+	ms, err := strconv.ParseInt(base[underscore+1:dot], 10, 64)
+	if err != nil || ms <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(ms)
 }
