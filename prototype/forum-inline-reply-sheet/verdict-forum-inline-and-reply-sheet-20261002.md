@@ -39,9 +39,18 @@
 - `text-decoration` 在 app(uvue) 端是否生效＝**未过**；原型的「App 受限模式」只是按最坏情况**演示**退化口径「记号消失、样式不出」。
 - 行内代码胶囊观感、子 `<text>` 点击是否真响应＝**未过**。
 
-## 归档待办（需授权，本会话未做）
+## 归档（2026-10-02 · 维护者指示「做吧」后执行）
 
-按 `prototype` 纪律第 6 条，原型自身应作为**一手资料**提交到一次性分支（如 `prototype/forum-inline-reply-sheet`），并在两张 issue 上留该分支指针；main 只留折进真码的决定。**本会话没有提交任何东西**（主树当前有他人未提交改动，见 handoff §2）。要归档时说一声。
+按 `prototype` 纪律第 6 条，本产物已作为**一手资料**入库：
+
+- **分支**：`prototype/forum-inline-reply-sheet`（已推 `origin`；**一次性分支，不并主**）
+- **目录**：`prototype/forum-inline-reply-sheet/`，含 `README.md`（射程声明）、HTML 原型、`_verify-forum-inline.js`、`_verify.out`、本 verdict、`md-inline-render-facts.md`、`shots/`（5 张复验屏证），共 11 个文件
+- **建法**：`GIT_INDEX_FILE` 临时索引 + `hash-object` / `update-index` / `commit-tree` / `update-ref` ⇒ **全程不碰主树工作区与真实 index**（主树当时挂着别的会话的未提交改动，裁定 B 要求不并入）。脚本：`.scratch/archive-prototype-branch.ps1`
+- **入库后独立复跑**：从分支 `git show` 取出的两个文件在临时目录跑 `node _verify-forum-inline.js` ⇒ **44 pass / 0 fail**（证明归档件是自足可运行的，不是残本）
+- **票上指针**：#1472 / #1473 的上下文评论已从 `.scratch` 路径改指该分支（`gh api -X PATCH issues/comments/…`，两条均回读确认）
+- **CI 副作用**：本仓 `ci.yml` 对**任何非 master 分支 push** 都跑全量 CI；先例 `prototype/1389-cookie-jar` 那轮 **2 分 49 秒 / success**。孤儿分支不派 `cd.yml`（`docs/agents/release.md:9`）⇒ 不占 testing、不动生产。
+
+> 本段所属的第二个提交（`docs: 归档后更新 verdict 与 handoff`）追加在分支上，**不改写已推送的历史**。
 
 ---
 
