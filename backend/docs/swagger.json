@@ -12757,7 +12757,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamHistoryDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamHistoryDTO"
                                         }
                                     }
                                 }
@@ -12819,7 +12819,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamStartDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamStartDTO"
                                         }
                                     }
                                 }
@@ -12880,7 +12880,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamResultDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamResultDTO"
                                         }
                                     }
                                 }
@@ -12941,7 +12941,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamResumeDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamResumeDTO"
                                         }
                                     }
                                 }
@@ -13060,7 +13060,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamSubmitDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamSubmitDTO"
                                         }
                                     }
                                 }
@@ -15770,7 +15770,7 @@
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.RealExamPaperDTO"
+                                                "$ref": "#/definitions/realexam.RealExamPaperDTO"
                                             }
                                         }
                                     }
@@ -15823,7 +15823,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamStartDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamStartDTO"
                                         }
                                     }
                                 }
@@ -25787,6 +25787,223 @@
                 }
             }
         },
+        "mockexam.MockExamAnswerDetailDTO": {
+            "type": "object",
+            "properties": {
+                "ai_comment": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_fallback": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "ai_score": {
+                    "description": "AI 评分字段仅在短答 AI 评分成功时出现。",
+                    "type": "number",
+                    "x-optional": true
+                },
+                "content": {
+                    "type": "string"
+                },
+                "correct_answer": {
+                    "type": "string"
+                },
+                "explanation": {
+                    "type": "string"
+                },
+                "is_correct": {
+                    "type": "boolean",
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "number"
+                },
+                "options": {},
+                "question_id": {
+                    "type": "integer"
+                },
+                "score": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "user_answer": {}
+            }
+        },
+        "mockexam.MockExamHistoryDTO": {
+            "type": "object",
+            "properties": {
+                "exams": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mockexam.MockExamHistoryItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "mockexam.MockExamHistoryItemDTO": {
+            "type": "object",
+            "properties": {
+                "answers": {},
+                "created_at": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "paper_id": {
+                    "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "question_ids": {},
+                "remaining_time": {
+                    "type": "integer"
+                },
+                "result": {},
+                "score": {
+                    "description": "Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "submit_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "mockexam.MockExamResultDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct_count": {
+                    "type": "integer"
+                },
+                "details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mockexam.MockExamAnswerDetailDTO"
+                    },
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "number"
+                },
+                "mock_exam_id": {
+                    "type": "integer"
+                },
+                "submit_time": {
+                    "type": "string"
+                },
+                "total_questions": {
+                    "type": "integer"
+                },
+                "total_score": {
+                    "type": "number"
+                }
+            }
+        },
+        "mockexam.MockExamResumeDTO": {
+            "type": "object",
+            "properties": {
+                "answers": {},
+                "duration": {
+                    "type": "integer"
+                },
+                "mock_exam_id": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "remaining_time": {
+                    "type": "integer"
+                },
+                "start_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "mockexam.MockExamStartDTO": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "integer"
+                },
+                "mock_exam_id": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "remaining_time": {
+                    "type": "integer"
+                },
+                "total_questions": {
+                    "type": "integer"
+                },
+                "total_score": {
+                    "type": "integer"
+                }
+            }
+        },
+        "mockexam.MockExamSubmitDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct_count": {
+                    "type": "integer"
+                },
+                "details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mockexam.MockExamAnswerDetailDTO"
+                    },
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "number"
+                },
+                "total_questions": {
+                    "type": "integer"
+                },
+                "total_score": {
+                    "type": "number"
+                }
+            }
+        },
         "model.AuditLog": {
             "type": "object",
             "properties": {
@@ -27135,6 +27352,37 @@
         "questionbank.QuestionUpdateInput": {
             "type": "object"
         },
+        "realexam.RealExamPaperDTO": {
+            "type": "object",
+            "properties": {
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "type": "boolean"
+                },
+                "paper_id": {
+                    "type": "integer"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "question_count": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "year": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
         "repository.AlgorithmParameters": {
             "type": "object",
             "properties": {
@@ -28122,223 +28370,6 @@
                 }
             }
         },
-        "service.MockExamAnswerDetailDTO": {
-            "type": "object",
-            "properties": {
-                "ai_comment": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_fallback": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "ai_score": {
-                    "description": "AI 评分字段仅在短答 AI 评分成功时出现。",
-                    "type": "number",
-                    "x-optional": true
-                },
-                "content": {
-                    "type": "string"
-                },
-                "correct_answer": {
-                    "type": "string"
-                },
-                "explanation": {
-                    "type": "string"
-                },
-                "is_correct": {
-                    "type": "boolean",
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "number"
-                },
-                "options": {},
-                "question_id": {
-                    "type": "integer"
-                },
-                "score": {
-                    "type": "number"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "user_answer": {}
-            }
-        },
-        "service.MockExamHistoryDTO": {
-            "type": "object",
-            "properties": {
-                "exams": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MockExamHistoryItemDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.MockExamHistoryItemDTO": {
-            "type": "object",
-            "properties": {
-                "answers": {},
-                "created_at": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "paper_id": {
-                    "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "question_ids": {},
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "result": {},
-                "score": {
-                    "description": "Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。",
-                    "type": "number",
-                    "x-nullable": true
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "submit_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MockExamResultDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct_count": {
-                    "type": "integer"
-                },
-                "details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    },
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "number"
-                },
-                "mock_exam_id": {
-                    "type": "integer"
-                },
-                "submit_time": {
-                    "type": "string"
-                },
-                "total_questions": {
-                    "type": "integer"
-                },
-                "total_score": {
-                    "type": "number"
-                }
-            }
-        },
-        "service.MockExamResumeDTO": {
-            "type": "object",
-            "properties": {
-                "answers": {},
-                "duration": {
-                    "type": "integer"
-                },
-                "mock_exam_id": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/questionbank.QuestionDTO"
-                    }
-                },
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "start_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MockExamStartDTO": {
-            "type": "object",
-            "properties": {
-                "duration": {
-                    "type": "integer"
-                },
-                "mock_exam_id": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/questionbank.QuestionDTO"
-                    }
-                },
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "total_questions": {
-                    "type": "integer"
-                },
-                "total_score": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.MockExamSubmitDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct_count": {
-                    "type": "integer"
-                },
-                "details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    },
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "number"
-                },
-                "total_questions": {
-                    "type": "integer"
-                },
-                "total_score": {
-                    "type": "number"
-                }
-            }
-        },
         "service.NoteDTO": {
             "type": "object",
             "properties": {
@@ -28423,37 +28454,6 @@
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.RealExamPaperDTO": {
-            "type": "object",
-            "properties": {
-                "duration_minutes": {
-                    "type": "integer"
-                },
-                "entitled": {
-                    "type": "boolean"
-                },
-                "paper_id": {
-                    "type": "integer"
-                },
-                "price": {
-                    "type": "integer"
-                },
-                "question_count": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                },
-                "year": {
-                    "type": "integer",
-                    "x-optional": true
                 }
             }
         },

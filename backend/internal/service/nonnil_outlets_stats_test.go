@@ -32,15 +32,13 @@ import (
 
 	"go.uber.org/zap"
 
-	"forklift-training/internal/model"
-
 	"forklift-training/internal/testutil"
 )
 
 var nonnilOutletsStats = map[string]func(t *testing.T) any{
 	"service.AdminStatisticsDTO.course_stats": outletAdminStatisticsNoCourses,
 	"service.WrongQuestionPageDTO.items":      outletWrongQuestionPageEmpty,
-	"service.MockExamResumeDTO.questions":     outletMockExamResume,
+	// 模考的 ResumeDTO.questions 已随域包搬去 internal/mockexam/nonnil_outlets_test.go（波 4a）。
 	// 证件分组两格（skill_level / special_operation）的举证已随域包搬去
 	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
 	"service.StudentProfileDTO.course_progress": outletStudentProfileNoStudy,
@@ -63,22 +61,6 @@ func outletWrongQuestionPageEmpty(t *testing.T) any {
 		GetWrongQuestions(1, 1, 20, "", nil, false, "", nil)
 	if err != nil {
 		t.Fatalf("空错题本分页失败: %v", err)
-	}
-	return res
-}
-
-// outletMockExamResume 断点续考：卷面存的题号指向**已被删除的题目**时 loadOrderedQuestions
-// 取不到任何一行，questions 走 make(0,0) 而不是 nil —— 这条正是「题被下架后学员还在考试中途」的线上形状。
-func outletMockExamResume(t *testing.T) any {
-	t.Helper()
-	svc, db, mockExamID, studentID := seedMockInProgress(t)
-	if err := db.Model(&model.MockExam{}).Where("id = ?", mockExamID).
-		Update("question_ids", model.JSONB("[999999]")).Error; err != nil {
-		t.Fatalf("改写考卷题号失败: %v", err)
-	}
-	res, err := svc.Resume(mockExamID, studentID)
-	if err != nil {
-		t.Fatalf("续考失败: %v", err)
 	}
 	return res
 }

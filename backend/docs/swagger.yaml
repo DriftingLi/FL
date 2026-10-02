@@ -1583,6 +1583,156 @@ definitions:
       total:
         type: integer
     type: object
+  mockexam.MockExamAnswerDetailDTO:
+    properties:
+      ai_comment:
+        type: string
+        x-optional: true
+      ai_fallback:
+        type: boolean
+        x-optional: true
+      ai_score:
+        description: AI 评分字段仅在短答 AI 评分成功时出现。
+        type: number
+        x-optional: true
+      content:
+        type: string
+      correct_answer:
+        type: string
+      explanation:
+        type: string
+      is_correct:
+        type: boolean
+        x-nullable: true
+      max_score:
+        type: number
+      options: {}
+      question_id:
+        type: integer
+      score:
+        type: number
+      type:
+        type: string
+      user_answer: {}
+    type: object
+  mockexam.MockExamHistoryDTO:
+    properties:
+      exams:
+        items:
+          $ref: '#/definitions/mockexam.MockExamHistoryItemDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  mockexam.MockExamHistoryItemDTO:
+    properties:
+      answers: {}
+      created_at:
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      paper_id:
+        description: |-
+          PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
+          （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
+        type: integer
+        x-optional: true
+      question_ids: {}
+      remaining_time:
+        type: integer
+      result: {}
+      score:
+        description: Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
+        type: number
+        x-nullable: true
+      start_time:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: integer
+      submit_time:
+        type: string
+    type: object
+  mockexam.MockExamResultDTO:
+    properties:
+      accuracy:
+        type: number
+      correct_count:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/mockexam.MockExamAnswerDetailDTO'
+        type: array
+        x-nullable: true
+      max_score:
+        type: number
+      mock_exam_id:
+        type: integer
+      submit_time:
+        type: string
+      total_questions:
+        type: integer
+      total_score:
+        type: number
+    type: object
+  mockexam.MockExamResumeDTO:
+    properties:
+      answers: {}
+      duration:
+        type: integer
+      mock_exam_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      remaining_time:
+        type: integer
+      start_time:
+        type: string
+    type: object
+  mockexam.MockExamStartDTO:
+    properties:
+      duration:
+        type: integer
+      mock_exam_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      remaining_time:
+        type: integer
+      total_questions:
+        type: integer
+      total_score:
+        type: integer
+    type: object
+  mockexam.MockExamSubmitDTO:
+    properties:
+      accuracy:
+        type: number
+      correct_count:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/mockexam.MockExamAnswerDetailDTO'
+        type: array
+        x-nullable: true
+      max_score:
+        type: number
+      total_questions:
+        type: integer
+      total_score:
+        type: number
+    type: object
   model.AuditLog:
     properties:
       action:
@@ -2507,6 +2657,27 @@ definitions:
     type: object
   questionbank.QuestionUpdateInput:
     type: object
+  realexam.RealExamPaperDTO:
+    properties:
+      duration_minutes:
+        type: integer
+      entitled:
+        type: boolean
+      paper_id:
+        type: integer
+      price:
+        type: integer
+      question_count:
+        type: integer
+      source:
+        type: string
+        x-optional: true
+      title:
+        type: string
+      year:
+        type: integer
+        x-optional: true
+    type: object
   repository.AlgorithmParameters:
     properties:
       brands:
@@ -3180,156 +3351,6 @@ definitions:
       title:
         type: string
     type: object
-  service.MockExamAnswerDetailDTO:
-    properties:
-      ai_comment:
-        type: string
-        x-optional: true
-      ai_fallback:
-        type: boolean
-        x-optional: true
-      ai_score:
-        description: AI 评分字段仅在短答 AI 评分成功时出现。
-        type: number
-        x-optional: true
-      content:
-        type: string
-      correct_answer:
-        type: string
-      explanation:
-        type: string
-      is_correct:
-        type: boolean
-        x-nullable: true
-      max_score:
-        type: number
-      options: {}
-      question_id:
-        type: integer
-      score:
-        type: number
-      type:
-        type: string
-      user_answer: {}
-    type: object
-  service.MockExamHistoryDTO:
-    properties:
-      exams:
-        items:
-          $ref: '#/definitions/service.MockExamHistoryItemDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.MockExamHistoryItemDTO:
-    properties:
-      answers: {}
-      created_at:
-        type: string
-      duration:
-        type: integer
-      id:
-        type: integer
-      paper_id:
-        description: |-
-          PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
-          （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
-        type: integer
-        x-optional: true
-      question_ids: {}
-      remaining_time:
-        type: integer
-      result: {}
-      score:
-        description: Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
-        type: number
-        x-nullable: true
-      start_time:
-        type: string
-      status:
-        type: string
-      student_id:
-        type: integer
-      submit_time:
-        type: string
-    type: object
-  service.MockExamResultDTO:
-    properties:
-      accuracy:
-        type: number
-      correct_count:
-        type: integer
-      details:
-        items:
-          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
-        type: array
-        x-nullable: true
-      max_score:
-        type: number
-      mock_exam_id:
-        type: integer
-      submit_time:
-        type: string
-      total_questions:
-        type: integer
-      total_score:
-        type: number
-    type: object
-  service.MockExamResumeDTO:
-    properties:
-      answers: {}
-      duration:
-        type: integer
-      mock_exam_id:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/questionbank.QuestionDTO'
-        type: array
-      remaining_time:
-        type: integer
-      start_time:
-        type: string
-    type: object
-  service.MockExamStartDTO:
-    properties:
-      duration:
-        type: integer
-      mock_exam_id:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/questionbank.QuestionDTO'
-        type: array
-      remaining_time:
-        type: integer
-      total_questions:
-        type: integer
-      total_score:
-        type: integer
-    type: object
-  service.MockExamSubmitDTO:
-    properties:
-      accuracy:
-        type: number
-      correct_count:
-        type: integer
-      details:
-        items:
-          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
-        type: array
-        x-nullable: true
-      max_score:
-        type: number
-      total_questions:
-        type: integer
-      total_score:
-        type: number
-    type: object
   service.NoteDTO:
     properties:
       content:
@@ -3386,27 +3407,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  service.RealExamPaperDTO:
-    properties:
-      duration_minutes:
-        type: integer
-      entitled:
-        type: boolean
-      paper_id:
-        type: integer
-      price:
-        type: integer
-      question_count:
-        type: integer
-      source:
-        type: string
-        x-optional: true
-      title:
-        type: string
-      year:
-        type: integer
-        x-optional: true
     type: object
   service.RecruitListResult:
     properties:
@@ -11943,7 +11943,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamResultDTO'
+                  $ref: '#/definitions/mockexam.MockExamResultDTO'
               type: object
         "401":
           description: 未认证
@@ -11979,7 +11979,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamResumeDTO'
+                  $ref: '#/definitions/mockexam.MockExamResumeDTO'
               type: object
         "400":
           description: 参数错误
@@ -12052,7 +12052,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamSubmitDTO'
+                  $ref: '#/definitions/mockexam.MockExamSubmitDTO'
               type: object
         "400":
           description: 参数错误
@@ -12097,7 +12097,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamHistoryDTO'
+                  $ref: '#/definitions/mockexam.MockExamHistoryDTO'
               type: object
         "401":
           description: 未认证
@@ -12133,7 +12133,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamStartDTO'
+                  $ref: '#/definitions/mockexam.MockExamStartDTO'
               type: object
         "400":
           description: 参数错误
@@ -13747,7 +13747,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.RealExamPaperDTO'
+                    $ref: '#/definitions/realexam.RealExamPaperDTO'
                   type: array
               type: object
         "401":
@@ -13778,7 +13778,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamStartDTO'
+                  $ref: '#/definitions/mockexam.MockExamStartDTO'
               type: object
         "400":
           description: 参数错误或未兑换

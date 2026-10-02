@@ -1,6 +1,6 @@
-// Package service 模拟考试总分口径（ADR-0068 决策 1-3）的行为锁：
+// mockexam 包测试：模拟考试总分口径（ADR-0068 决策 1-3）的行为锁：
 // total_score 必须等于 Σ details[].score —— 多选半对与简答 AI 分都要进总分。
-package service
+package mockexam
 
 import (
 	"encoding/json"
@@ -33,7 +33,7 @@ func seedInProgressMockExam(t *testing.T, db *gorm.DB, studentID int, ids []int,
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(answersJSON),
 		Duration:      90,
-		Status:        mockExamStatusInProgress,
+		Status:        StatusInProgress,
 		StartTime:     &now,
 		RemainingTime: 5400,
 		CreatedAt:     now,
@@ -60,7 +60,7 @@ func assertTotalIsSumOfDetails(t *testing.T, got *MockExamSubmitDTO) {
 // 多选半对（IsCorrect=false 但有部分分）、简答 AI 分（IsCorrect 恒 nil）、单选整题判对。
 func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewMockExamService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	svc.grader = &fakeGrader{res: &aiassistant.GradeResult{Score: 8, Comment: "回答到位"}}
 
 	multi := testutil.SeedQuestion(t, db, "multi_choice", "多选", "A,B,C")
@@ -129,7 +129,7 @@ func TestMockExamSubmitTotalScoreCountsPartialAndAIScore(t *testing.T) {
 // 且 ai_score 键缺席（omitempty 契约：无 AI 分就没有这个字段）。
 func TestMockExamSubmitShortAnswerWithoutAIScoresZero(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewMockExamService(db, nil, zap.NewNop()) // ai=nil ⇒ grader=nil ⇒ 短答降级
+	svc := NewService(db, nil, zap.NewNop()) // ai=nil ⇒ grader=nil ⇒ 短答降级
 
 	multi := testutil.SeedQuestion(t, db, "multi_choice", "多选", "A,B,C")
 	short := testutil.SeedQuestion(t, db, "short_answer", "简答", "参考答案")

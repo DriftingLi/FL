@@ -13,10 +13,12 @@ import (
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/realexam"
 	"forklift-training/internal/training"
 )
 
@@ -80,8 +82,8 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "练习与考试",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			RegisterWrongQuestionRoutes(api, rd, deps.WrongQuestionSvc)
-			RegisterMockExamRoutes(api, rd, deps.MockExamSvc)
-			RegisterRealExamRoutes(api, rd, deps.RealExamSvc, deps.PointsSvc)
+			mockexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.MockExamSvc)
+			realexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.RealExamSvc, deps.PointsSvc)
 		},
 	},
 	{

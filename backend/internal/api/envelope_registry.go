@@ -27,6 +27,7 @@ import (
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/material"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
@@ -121,9 +122,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "material.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
 		Keys: []string{"page", "pages", "total", "materials"}, Dialect: paging.DialectPages,
 		Sample: material.MaterialPageResult{}},
-	{Result: "service.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
+	{Result: "mockexam.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
 		Keys: []string{"total", "page", "page_size", "exams"}, Dialect: paging.DialectPageSize,
-		Sample: service.MockExamHistoryDTO{}},
+		Sample: mockexam.MockExamHistoryDTO{}},
 	{Result: "forum.MyReplyPageResult", Endpoints: []string{"GET /forum/my-replies"},
 		Keys: []string{"page", "pages", "total", "replies"}, Dialect: paging.DialectPages,
 		Sample: forum.MyReplyPageResult{}},

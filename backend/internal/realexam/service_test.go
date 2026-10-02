@@ -1,5 +1,5 @@
-// Package service 真题套卷测试：全池隔离、按卷练习/考试、按套兑换。
-package service
+// realexam 包测试：真题套卷 —— 全池隔离、按卷练习/考试、按套兑换。
+package realexam
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/entitlement"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -21,12 +22,12 @@ import (
 	"forklift-training/internal/training"
 )
 
-func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *questionbank.Service, *gorm.DB) {
+func newRealExamSvc(t *testing.T) (*Service, *points.Service, *questionbank.Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	pointsSvc := points.NewService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
 	qsvc := questionbank.NewService(db, nil, zap.NewNop())
-	return NewRealExamService(db, pointsSvc, zap.NewNop()), pointsSvc, qsvc, db
+	return NewService(db, pointsSvc, zap.NewNop()), pointsSvc, qsvc, db
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
@@ -229,7 +230,7 @@ func TestRealPaperExam(t *testing.T) {
 		t.Fatalf("mock_exam.credential_id 应为卷所属证件 %d, got %v", paper.CredentialID, mock.CredentialID)
 	}
 	// 交卷走模拟考链路（客观题判分）
-	msvc := NewMockExamService(db, nil, zap.NewNop())
+	msvc := mockexam.NewService(db, nil, zap.NewNop())
 	if err := msvc.SaveProgress(got.MockExamID, 1, map[string]any{itoa(qIDs[0]): "A"}, 80*60); err != nil {
 		t.Fatalf("保存考试进度失败: %v", err)
 	}

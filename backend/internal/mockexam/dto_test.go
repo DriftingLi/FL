@@ -1,6 +1,6 @@
-// Package service 测试：模拟考试 DTO shape-lock（B6 决策 D6）。
+// mockexam 包测试：模拟考试 DTO shape-lock（B6 决策 D6）。
 // 断言 JSON key 集合与 B6 前的 map 契约逐字一致——前端契约零改动是最高优先级约束。
-package service
+package mockexam
 
 import "forklift-training/internal/questionbank"
 

@@ -1,8 +1,8 @@
-// Package service 测试：会话进度保存深模块（Ticket #232 C3）。
+// mockexam 包测试：会话进度保存深模块（Ticket #232 C3）。
 // 锁定三类新口径行为：提交晚到静默忽略、JSONB null 三态归一、守卫分支（本人+在途）。
-// 测试只穿公共 seam（MockExamService.SaveProgress / LevelExamService.SaveAnswer），
+// 测试只穿公共 seam（Service.SaveProgress），
 // 与深模块 session_progress.go 的内部实现解耦（重构后全绿、契约零漂移）。
-package service
+package mockexam
 
 import (
 	"encoding/json"
@@ -17,10 +17,10 @@ import (
 )
 
 // seedMockInProgress 造一条 in_progress 模拟考试记录，返回 (svc, db, mockExamID, studentID)。
-func seedMockInProgress(t *testing.T) (*MockExamService, *gorm.DB, int, int) {
+func seedMockInProgress(t *testing.T) (*Service, *gorm.DB, int, int) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	svc := NewMockExamService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 
 	student := testutil.SeedStudent(t, db, "张三", "x")
 	now := time.Now()

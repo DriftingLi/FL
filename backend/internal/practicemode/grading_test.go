@@ -29,8 +29,8 @@ func (f *fakeGrader) GradeShortAnswer(_, _, _, studentAnswer string, maxScore fl
 	return f.res
 }
 
-// mockExamMaxScoreFixture mock 流单题满分解析的测试副本（留驻 internal/service/mock_exam_service.go:420
-// 的 mockExamMaxScore 按接缝就地内联；域包测试不能反向 import internal/service，防漂移看该处）。
+// mockExamMaxScoreFixture mock 流单题满分解析的测试副本（留驻 internal/mockexam/service.go:423 的
+// MaxScore 按接缝就地内联；域包测试不能反向 import 别的域包，防漂移看该处）。
 func mockExamMaxScoreFixture(q *model.Question) float64 {
 	if q.Score > 0 {
 		return float64(q.Score)
