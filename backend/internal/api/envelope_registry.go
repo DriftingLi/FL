@@ -18,6 +18,7 @@
 package api
 
 import (
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
@@ -119,9 +120,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "practicemode.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
 		Keys: []string{"total", "page", "page_size", "records"}, Dialect: paging.DialectPageSize,
 		Sample: practicemode.HistoryResultDTO{}},
-	{Result: "service.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
+	{Result: "admin.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
 		Keys: []string{"list", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.HrwaiUserPageResult{}},
+		Sample: admin.HrwaiUserPageResult{}},
 	{Result: "service.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
 		Sample: service.JobListResult{}},
@@ -170,9 +171,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "student.StudyRecordPageResult", Endpoints: []string{"GET /student/records"},
 		Keys: []string{"page", "pages", "records", "total"}, Dialect: paging.DialectPages,
 		Sample: student.StudyRecordPageResult{}},
-	{Result: "service.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
+	{Result: "admin.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
 		Keys: []string{"total", "page", "tutors"}, Dialect: paging.DialectNone,
-		Sample: service.TutorListDTO{}},
+		Sample: admin.TutorListDTO{}},
 	{Result: "wrongquestion.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: wrongquestion.WrongQuestionPageDTO{}},

@@ -49,9 +49,9 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	"service.RecruitResumeCard.resume_certifications": outletRecruitCardNoCerts,
 	"service.RecruiterApplicationListResult.items":    outletRecruiterApplicationListEmpty,
 	// 招聘者列表（auth.RecruiterListResult.items）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
-	"service.JobListResult.items":      outletJobListEmpty,
-	"service.HrwaiUserPageResult.list": outletHrwaiUserPageEmpty,
-	"service.TutorListDTO.tutors":      outletTutorListEmpty,
+	"service.JobListResult.items": outletJobListEmpty,
+	// 管理域两格（HrwaiUserPageResult.list / TutorListDTO.tutors）与统计看板的 course_stats
+	// 已随域包搬去 internal/admin/nonnil_outlets_test.go（ADR-0070 波 4d）。
 
 	// ===== 投稿 / 资料 / 打卡 / 资料库 / 搜索 / 导师 =====
 	// 通知域的 items 举证已随域包搬去 internal/notification/nonnil_outlets_test.go（ADR-0070）。
@@ -60,7 +60,8 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	// 资料审核列表（auth.ProfileChangeRequestPageResult.requests）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
 	// 打卡域的 days / items 举证已随域包搬去 internal/checkin/nonnil_outlets_test.go（ADR-0070）。
 	// 搜索域分区（SearchSectionDTO.items）的举证已随域包搬去 internal/search/nonnil_outlets_test.go（波 4b）。
-	"course.TutorCourseChaptersDTO.chapters": outletTutorCourseChaptersEmpty,
+	// 导师端章节列表两格（course.TutorCourseChaptersDTO.chapters / course.ChapterDTO.files）
+	// 已随出口搬去 internal/tutor/nonnil_outlets_test.go（ADR-0070 波 4d）。
 
 	// 岗位字典的 positions 举证已随域包搬去 internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）。
 	// 三格 handler 一行包出来的信封（见文件头那段）
@@ -140,40 +141,7 @@ func outletJobListEmpty(t *testing.T) any {
 	return res
 }
 
-// outletHrwaiUserPageEmpty 管理端用户列表：空库时 list 是空集。
-func outletHrwaiUserPageEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop())
-	res, err := svc.ListHrwaiUsers(1, 20, "")
-	if err != nil {
-		t.Fatalf("用户列表失败: %v", err)
-	}
-	return res
-}
-
-// outletTutorListEmpty 导师列表：空库时 tutors 是空集。
-func outletTutorListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop())
-	res, err := svc.GetTutors(1, 20, "")
-	if err != nil {
-		t.Fatalf("导师列表失败: %v", err)
-	}
-	return res
-}
-
 // ===== 投稿 / 资料 / 通知 / 积分 / 打卡 / 资料库 / 搜索 / 导师 =====
-
-// outletTutorCourseChaptersEmpty 导师端章节列表：有课程、零章节时 chapters 是空集。
-func outletTutorCourseChaptersEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	res, err := newTutorServiceForTest(t, db).GetCourseChapters(seedVisibleCourse(t, db))
-	if err != nil {
-		t.Fatalf("导师端章节列表失败: %v", err)
-	}
-	return res
-}
 
 // ===== 三格「handler 一行包出来」的信封 =====
 //

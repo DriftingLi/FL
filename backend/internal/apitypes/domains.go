@@ -421,12 +421,12 @@ var Domains = []Domain{
 		Name:  "tutor",
 		Title: "讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除）",
 		Roots: []string{
-			"service.BatchDeleteFilesResult",
+			"tutor.BatchDeleteFilesResult",
 			"course.ChapterDTO",
 			"course.ChapterDetailDTO",
 			"course.ChapterFileDTO",
 			"course.CoursePageResult",
-			"service.DeleteFileResult",
+			"tutor.DeleteFileResult",
 			"course.TutorCourseChaptersDTO",
 		},
 		Endpoints: []Endpoint{
@@ -604,17 +604,17 @@ var Domains = []Domain{
 		// 本域根类型 = 全部 Web 消费端点的 data 指认（渲染取传递闭包：课程域类型随之重复包含，
 		// 跨域共享文件不在本片范围，先例见 ADR-0048 片一「生成物按域重复包含共享类型」）。
 		Roots: []string{
-			"service.HrwaiUserPageResult",
-			"service.HrwaiUserCreatedDTO",
-			"service.StatusResultDTO",
-			"service.TutorListDTO",
+			"admin.HrwaiUserPageResult",
+			"admin.HrwaiUserCreatedDTO",
+			"admin.StatusResultDTO",
+			"admin.TutorListDTO",
 			"auth.TutorRegisterResultDTO",
-			"service.TutorDeletedDTO",
+			"admin.TutorDeletedDTO",
 			"auth.RecruiterListResult",
 			"auth.RecruiterCreatedDTO",
 			"auth.RecruiterUpdatedDTO",
 			"auth.RecruiterPasswordResetResult",
-			"service.AdminStatisticsDTO",
+			"admin.AdminStatisticsDTO",
 			"service.GenerateContentResultDTO",
 			"service.GenTaskStatus",
 			"course.CoursePageResult",

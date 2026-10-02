@@ -3872,7 +3872,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HrwaiUserPageResult"
+                                            "$ref": "#/definitions/admin.HrwaiUserPageResult"
                                         }
                                     }
                                 }
@@ -3932,7 +3932,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HrwaiUserCreatedDTO"
+                                            "$ref": "#/definitions/admin.HrwaiUserCreatedDTO"
                                         }
                                     }
                                 }
@@ -4154,7 +4154,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                            "$ref": "#/definitions/admin.StatusResultDTO"
                                         }
                                     }
                                 }
@@ -6123,7 +6123,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                            "$ref": "#/definitions/admin.StatusResultDTO"
                                         }
                                     }
                                 }
@@ -6521,7 +6521,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminStatisticsDTO"
+                                            "$ref": "#/definitions/admin.AdminStatisticsDTO"
                                         }
                                     }
                                 }
@@ -6635,7 +6635,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorDeletedDTO"
+                                            "$ref": "#/definitions/admin.TutorDeletedDTO"
                                         }
                                     }
                                 }
@@ -6756,7 +6756,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                            "$ref": "#/definitions/admin.StatusResultDTO"
                                         }
                                     }
                                 }
@@ -6827,7 +6827,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorListDTO"
+                                            "$ref": "#/definitions/admin.TutorListDTO"
                                         }
                                     }
                                 }
@@ -18541,7 +18541,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DeleteFileResult"
+                                            "$ref": "#/definitions/tutor.DeleteFileResult"
                                         }
                                     }
                                 }
@@ -18604,7 +18604,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.BatchDeleteFilesResult"
+                                            "$ref": "#/definitions/tutor.BatchDeleteFilesResult"
                                         }
                                     }
                                 }
@@ -23437,6 +23437,183 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "admin.AdminOverviewDTO": {
+            "type": "object",
+            "properties": {
+                "active_today": {
+                    "type": "integer"
+                },
+                "total_courses": {
+                    "type": "integer"
+                },
+                "total_students": {
+                    "type": "integer"
+                },
+                "total_study_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.AdminStatisticsDTO": {
+            "type": "object",
+            "properties": {
+                "course_stats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.CourseStatDTO"
+                    }
+                },
+                "overview": {
+                    "$ref": "#/definitions/admin.AdminOverviewDTO"
+                }
+            }
+        },
+        "admin.CourseStatDTO": {
+            "type": "object",
+            "properties": {
+                "avg_progress": {
+                    "type": "number"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "study_count": {
+                    "type": "integer"
+                },
+                "total_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.HrwaiUserCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.HrwaiUserPageResult": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.HrwaiUserSummary"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.HrwaiUserSummary": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "company": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "uid": {
+                    "type": "string",
+                    "example": "0"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.StatusResultDTO": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.TutorDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.TutorDeletedDTO": {
+            "type": "object",
+            "properties": {
+                "tutor_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.TutorListDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "tutors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.TutorDTO"
+                    }
+                }
+            }
+        },
         "aiassistant.AIAssistantModeModels": {
             "type": "object",
             "properties": {
@@ -27929,37 +28106,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.AdminOverviewDTO": {
-            "type": "object",
-            "properties": {
-                "active_today": {
-                    "type": "integer"
-                },
-                "total_courses": {
-                    "type": "integer"
-                },
-                "total_students": {
-                    "type": "integer"
-                },
-                "total_study_duration": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.AdminStatisticsDTO": {
-            "type": "object",
-            "properties": {
-                "course_stats": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseStatDTO"
-                    }
-                },
-                "overview": {
-                    "$ref": "#/definitions/service.AdminOverviewDTO"
-                }
-            }
-        },
         "service.ApplicationDTO": {
             "type": "object",
             "properties": {
@@ -28032,23 +28178,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.BatchDeleteFilesResult": {
-            "type": "object",
-            "properties": {
-                "failed_count": {
-                    "type": "integer"
-                },
-                "failed_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "success_count": {
                     "type": "integer"
                 }
             }
@@ -28194,37 +28323,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CourseStatDTO": {
-            "type": "object",
-            "properties": {
-                "avg_progress": {
-                    "type": "number"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "study_count": {
-                    "type": "integer"
-                },
-                "total_duration": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.DeleteFileResult": {
-            "type": "object",
-            "properties": {
-                "deleted": {
-                    "type": "boolean"
-                },
-                "file_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.GenTaskStatus": {
             "type": "object",
             "properties": {
@@ -28254,79 +28352,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "task_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.HrwaiUserCreatedDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "uid": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.HrwaiUserPageResult": {
-            "type": "object",
-            "properties": {
-                "list": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.HrwaiUserSummary"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.HrwaiUserSummary": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "company": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "uid": {
-                    "type": "string",
-                    "example": "0"
-                },
-                "username": {
                     "type": "string"
                 }
             }
@@ -28746,59 +28771,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.StatusResultDTO": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.TutorDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "tutor_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.TutorDeletedDTO": {
-            "type": "object",
-            "properties": {
-                "tutor_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.TutorListDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "tutors": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.TutorDTO"
-                    }
                 }
             }
         },
@@ -29597,6 +29569,34 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/training.SpecialtyDict"
                     }
+                }
+            }
+        },
+        "tutor.BatchDeleteFilesResult": {
+            "type": "object",
+            "properties": {
+                "failed_count": {
+                    "type": "integer"
+                },
+                "failed_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutor.DeleteFileResult": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "boolean"
+                },
+                "file_id": {
+                    "type": "integer"
                 }
             }
         },

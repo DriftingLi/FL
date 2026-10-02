@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
@@ -38,6 +39,7 @@ import (
 	"forklift-training/internal/storage"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/tutor"
 	"forklift-training/internal/wrongquestion"
 )
 
@@ -78,7 +80,7 @@ type Deps struct {
 	ExportStore     service.ExportStore
 
 	CourseSvc            *course.Service
-	AdminSvc             *service.AdminService
+	AdminSvc             *admin.Service
 	AdminCourseSvc       *course.AdminService
 	ForumSvc             *forum.Service
 	ForumModSvc          *forum.ModerationService
@@ -94,7 +96,7 @@ type Deps struct {
 	PracticeModeSvc      *practicemode.Service
 	MockExamSvc          *mockexam.Service
 	RealExamSvc          *realexam.Service
-	TutorSvc             *service.TutorService
+	TutorSvc             *tutor.Service
 	WrongQuestionSvc     *wrongquestion.Service
 	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service

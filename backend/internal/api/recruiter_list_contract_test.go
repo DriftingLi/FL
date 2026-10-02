@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admin"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -50,7 +51,7 @@ func fetchRecruiters(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 func assertRecruiterList(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
 	pwd, _ := service.HashPassword(`admin123`)
-	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
+	adminUser := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := service.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, stuPwd)
 	// 种 3 个招聘者（2 个企业名含「叉车」，1 个不含）
@@ -69,9 +70,9 @@ func assertRecruiterList(t *testing.T, db *gorm.DB) {
 	r := gin.New()
 	api := r.Group(`/api`)
 	deps := newContractDeps(t, db, cfg)
-	RegisterAdminRecruiterRoutes(api, deps.RouterDeps(), deps.AuthSvc)
+	admin.RegisterAdminRecruiterRoutes(api, deps.RouterDeps().Session, deps.AuthSvc)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
-	adminToken, err := adminSess.Issue(admin.AdminID, admin.Username, `admin`)
+	adminToken, err := adminSess.Issue(adminUser.AdminID, adminUser.Username, `admin`)
 	if err != nil {
 		t.Fatalf(`issue admin token failed: %v`, err)
 	}

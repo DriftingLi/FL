@@ -12,10 +12,11 @@
 //
 // 共享的是动作，声明权留在调用方：两个导出包装把吊销的成败**如实返回**（照 Session.RevokeIdentity
 // 的既有约定「失败策略由调用方决定，本动作只如实返回」），由每条入口各自记日志。
-// 新增口令写面时走 ApplyHrwaiPassword / ApplyRecruiterPassword / applyNewPassword 即同时拿到落库与吊销，拿不到
-// 「只落哈希不吊销」的捷径：学员侧两条自助入口（登录态改密 AuthService.UpdatePassword、
-// 验证码重置口令 VerifyCodeService.ResetPasswordWithCode）与管理员侧一条代重置
-// （AdminService.ResetHrwaiUserPassword，ADR-0064 决策 4 接进来）都收在此处。
+// 新增口令写面时走 ApplyHrwaiPassword / ApplyTutorPassword / ApplyRecruiterPassword / applyNewPassword 即同时拿到
+// 落库与吊销，拿不到「只落哈希不吊销」的捷径：学员侧两条自助入口（登录态改密 AuthService.UpdatePassword、
+// 验证码重置口令 VerifyCodeService.ResetPasswordWithCode）与管理员侧两条代重置
+// （AdminService.ResetHrwaiUserPassword、AdminService.ResetTutorPassword，ADR-0064 决策 4 接进来，
+// 波 4d 起后者经 ApplyTutorPassword）都收在此处。
 package service
 
 import (
@@ -53,7 +54,7 @@ type passwordSubject struct {
 
 var (
 	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole, notFound: model.ErrHrwaiUserNotFound}
-	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole, notFound: ErrTutorNotFound}
+	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole, notFound: model.ErrTutorNotFound}
 	// 招聘者写面此前是本动作之外的第三份哈希副本（自建 Count + 哈希 + 落库 + 吊销），
 	// 且那句 Count 的 error 没查 ⇒ 查不动会被读成「招聘者不存在」（ADR-0062 票6 的同形）。
 	recruiterPasswordSubject = passwordSubject{dest: &model.RecruiterUser{}, key: "id", role: RecruiterRole, notFound: ErrRecruiterNotFound}
@@ -90,6 +91,12 @@ func ApplyHrwaiPassword(ctx context.Context, db *gorm.DB, session *security.Sess
 	return applyNewPassword(ctx, db, session, hrwaiPasswordSubject, userID, password)
 }
 
+// ApplyTutorPassword 讲师口令代重置（管理员面）。与另两个包装同形：动作留本包、声明权归调用方，
+// 吊销成败如实返回（PasswordWriteResult）。tutorPasswordSubject 仍住本文件，不从 caller 收列名。
+func ApplyTutorPassword(ctx context.Context, db *gorm.DB, session *security.Session, tutorID int, password string) PasswordWriteResult {
+	return applyNewPassword(ctx, db, session, tutorPasswordSubject, tutorID, password)
+}
+
 // ApplyRecruiterPassword 招聘者口令写面的唯一动作（同一条动作、主体换成 recruiter_users）。
 func ApplyRecruiterPassword(ctx context.Context, db *gorm.DB, session *security.Session, id int, password string) PasswordWriteResult {
 	return applyNewPassword(ctx, db, session, recruiterPasswordSubject, id, password)
@@ -97,7 +104,7 @@ func ApplyRecruiterPassword(ctx context.Context, db *gorm.DB, session *security.
 
 // applyNewPassword 是「落新口令」这一动作的实现体。五个入口共用（ADR-0064 决策 4 把它从
 // 「学员专属」扩成「按主体参数化」）：学员自助改密与验证码重置（经 ApplyHrwaiPassword）、
-// 管理员代重置学员口令、管理员代重置讲师口令。
+// 管理员代重置学员口令、管理员代重置讲师口令（波 4d 起经 ApplyTutorPassword）。
 //
 // 之所以是包内函数而不是某个服务的方法：它唯一的两个依赖（db、session）由 caller 各自持有，
 // 做成方法就会逼 AdminService 依赖 AuthService —— 那是两个服务之间的横向耦合，

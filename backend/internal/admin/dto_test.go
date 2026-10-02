@@ -1,6 +1,6 @@
-// Package service 测试：管理端 DTO shape-lock（B7 决策 D6）。
+// Package admin 测试：管理端 DTO shape-lock（B7 决策 D6；P2 波 4d 随管理域 DTO 搬进本域包）。
 // 断言 JSON key 集合与 B7 前的 map 契约逐字一致——前端契约零改动是最高优先级约束。
-package service
+package admin
 
 import "testing"
 

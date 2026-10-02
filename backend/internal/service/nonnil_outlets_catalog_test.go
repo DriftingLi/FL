@@ -52,12 +52,12 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	// 培训域的 7 格（目录树两层 + 五个字典列表信封）已随域包搬去
 	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）；岗位字典与证件分组两处同批搬走。
 
-	// 课程域的课程 DTO 字段已随域包搬去 internal/course/nonnil_outlets_test.go；
-	// 本包仍留 course.ChapterDTO.files 与 course.CourseDTO.chapters 两键 —— 见 nonnil_outlets_course_test.go。
+	// 课程域的两个课程 DTO 字段键已按「生产者是谁」各归其位：course.ChapterDTO.files 随导师端出口搬去
+	// internal/tutor/nonnil_outlets_test.go、course.CourseDTO.chapters 随目录树出口在 internal/training/nonnil_outlets_test.go。
 
 	// 精选域的 items / related 举证已随域包搬去 internal/featured/nonnil_outlets_test.go（ADR-0070）。
 
-	"service.BatchDeleteFilesResult.failed_ids": outletBatchDeleteFilesEmpty,
+	// 导师域那一格（BatchDeleteFilesResult.failed_ids）已随域包搬去 internal/tutor/nonnil_outlets_test.go（ADR-0070 波 4d）。
 
 	// 练习域的三格（HistoryResultDTO.records / PracticeStartResultDTO.questions / PracticeStatsDTO.by_type）
 	// 已随域包搬去 internal/practicemode/nonnil_outlets_test.go（ADR-0070 波 3c-2）。
@@ -70,14 +70,6 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 
 func init() {
 	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsCatalog)
-}
-
-// ===== 批量删文件 =====
-
-func outletBatchDeleteFilesEmpty(t *testing.T) any {
-	t.Helper()
-	svc := newTutorServiceForTest(t, testutil.NewMemoryDB(t))
-	return svc.BatchDeleteChapterFiles(nil)
 }
 
 // ===== 题目域统计 =====

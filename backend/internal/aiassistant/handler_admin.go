@@ -307,7 +307,7 @@ func (h *configHandler) UnbindConfig(c *gin.Context) {
 
 // ===== Endpoint 请求类型 =====
 
-// idParam :id 路径整型请求（原 internal/api/admin.go:874 的共享私有类型；域包不得引用装配根的私有名，
+// idParam :id 路径整型请求（域包各自持有同名私有副本；管理域那份在 internal/admin/handler.go:544 原 internal/api/admin.go:874 的共享私有类型；域包不得引用装配根的私有名，
 // 故在本包落一份 1 字段副本 —— 形状与语义逐字一致）。
 type idParam struct {
 	ID int

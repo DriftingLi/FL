@@ -1,5 +1,6 @@
-// Package api 实现 HTTP handlers。
-package api
+// 本文件：讲师域 HTTP 出口（/api/tutor 蓝图）。
+// 装配点：internal/api/routes_registry.go 调 tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)。
+package tutor
 
 import (
 	"context"
@@ -13,27 +14,31 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// TutorHandler 导师端 handler。
-type TutorHandler struct {
-	svc     *service.TutorService
-	fileSvc *filestore.FileStore
+// VditorUploader 注入的 Vditor 上传适配器（实现在 backend/internal/api/vditor_upload.go，信封单点）。
+type VditorUploader func(c *gin.Context, fileSvc *filestore.FileStore, saver func(content []byte, filename string) (string, error))
+
+// handler 导师端 handler。
+type handler struct {
+	svc      *Service
+	fileSvc  *filestore.FileStore
+	uploader VditorUploader
 }
 
-// NewTutorHandler 创建导师端 handler。
-func NewTutorHandler(svc *service.TutorService, fileSvc *filestore.FileStore) *TutorHandler {
-	return &TutorHandler{svc: svc, fileSvc: fileSvc}
+// newHandler 创建导师端 handler。
+func newHandler(svc *Service, fileSvc *filestore.FileStore, uploader VditorUploader) *handler {
+	return &handler{svc: svc, fileSvc: fileSvc, uploader: uploader}
 }
 
-// RegisterTutorRoutes 注册 /api/tutor 蓝图。
-func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorService, fileSvc *filestore.FileStore) {
-	h := NewTutorHandler(svc, fileSvc)
+// RegisterRoutes 注册 /api/tutor 蓝图。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, fileSvc *filestore.FileStore, uploader VditorUploader) {
+	h := newHandler(svc, fileSvc, uploader)
 
-	g := rg.Group("/tutor", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapTutorAccess))
+	g := rg.Group("/tutor", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapTutorAccess))
 
 	// GET /api/tutor/courses  导师课程列表
 	g.GET("/courses", h.ListCourses)
@@ -68,7 +73,7 @@ func RegisterTutorRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.TutorS
 // @Success 200 {object} response.R{data=course.CoursePageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/courses [get]
-func (h *TutorHandler) ListCourses(c *gin.Context) {
+func (h *handler) ListCourses(c *gin.Context) {
 	httpx.Endpoint[tutorCourseListReq, course.CoursePageResult]{
 		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
 			return &tutorCourseListReq{
@@ -101,7 +106,7 @@ func (h *TutorHandler) ListCourses(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "课程不存在"
 // @Router /tutor/course/{course_id}/chapters [get]
-func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
+func (h *handler) GetCourseChapters(c *gin.Context) {
 	httpx.Endpoint[idParam, course.TutorCourseChaptersDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
@@ -129,7 +134,7 @@ func (h *TutorHandler) GetCourseChapters(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /tutor/chapter/{chapter_id} [get]
-func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
+func (h *handler) GetChapterDetail(c *gin.Context) {
 	httpx.Endpoint[idParam, course.ChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
@@ -158,7 +163,7 @@ func (h *TutorHandler) GetChapterDetail(c *gin.Context) {
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/chapter/{chapter_id}/upload [post]
-func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
+func (h *handler) UploadChapterFile(c *gin.Context) {
 	chapterID, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -200,10 +205,10 @@ func (h *TutorHandler) UploadChapterFile(c *gin.Context) {
 // @Success 200 {object} map[string]any "Vditor 响应（非统一信封）"
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/upload-image [post]
-func (h *TutorHandler) UploadImage(c *gin.Context) {
+func (h *handler) UploadImage(c *gin.Context) {
 	// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
 	// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
-	uploadVditorImage(c, h.fileSvc, func(content []byte, filename string) (string, error) {
+	h.uploader(c, h.fileSvc, func(content []byte, filename string) (string, error) {
 		subfolder := filestore.ChapterImageDirPrefix
 		chapterIDStr := c.Query("chapter_id")
 		if chapterIDStr == "" {
@@ -229,7 +234,7 @@ func (h *TutorHandler) UploadImage(c *gin.Context) {
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /tutor/chapter/{chapter_id} [put]
-func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
+func (h *handler) UpdateChapterInfo(c *gin.Context) {
 	httpx.Endpoint[chapterIDInput, course.ChapterDTO]{
 		Parse: func(c *gin.Context) (*chapterIDInput, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
@@ -257,12 +262,12 @@ func (h *TutorHandler) UpdateChapterInfo(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param file_id path int true "文件ID"
-// @Success 200 {object} response.R{data=service.DeleteFileResult} "success"
+// @Success 200 {object} response.R{data=tutor.DeleteFileResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "文件不存在"
 // @Router /tutor/file/{file_id} [delete]
-func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
-	httpx.Endpoint[idParam, service.DeleteFileResult]{
+func (h *handler) DeleteChapterFile(c *gin.Context) {
+	httpx.Endpoint[idParam, DeleteFileResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "file_id", "文件ID无效")
 			if err != nil {
@@ -270,11 +275,11 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*service.DeleteFileResult, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*DeleteFileResult, error) {
 			return h.svc.DeleteChapterFileByID(req.ID)
 		},
 	}.WithSuccess(httpx.OkMsg("文件删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrChapterFileNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(ErrChapterFileNotFound, http.StatusNotFound).Handle(c)
 }
 
 // BatchDeleteChapterFiles 批量删除文件
@@ -285,12 +290,12 @@ func (h *TutorHandler) DeleteChapterFile(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "文件ID列表" example({"file_ids":[1,2]})
-// @Success 200 {object} response.R{data=service.BatchDeleteFilesResult} "success"
+// @Success 200 {object} response.R{data=tutor.BatchDeleteFilesResult} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/files/batch-delete [post]
-func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
-	httpx.Endpoint[batchDeleteFilesReq, service.BatchDeleteFilesResult]{
+func (h *handler) BatchDeleteChapterFiles(c *gin.Context) {
+	httpx.Endpoint[batchDeleteFilesReq, BatchDeleteFilesResult]{
 		Parse: func(c *gin.Context) (*batchDeleteFilesReq, error) {
 			req, err := httpx.BindJSON[batchDeleteFilesReq](c)
 			if err != nil {
@@ -301,10 +306,10 @@ func (h *TutorHandler) BatchDeleteChapterFiles(c *gin.Context) {
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *batchDeleteFilesReq) (*service.BatchDeleteFilesResult, error) {
+		Invoke: func(ctx context.Context, req *batchDeleteFilesReq) (*BatchDeleteFilesResult, error) {
 			return h.svc.BatchDeleteChapterFiles(req.FileIDs), nil
 		},
-		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *service.BatchDeleteFilesResult) {
+		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *BatchDeleteFilesResult) {
 			response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(resp.SuccessCount)+"个文件", resp)
 		},
 	}.Handle(c)
@@ -322,4 +327,14 @@ type tutorCourseListReq struct {
 	CredentialID *int
 	SpecialtyID  *int
 	LevelID      *int
+}
+
+// idParam :id 路径整型请求（原 internal/api/admin.go:878 的共享私有类型；域包不得引用装配根的私有名，
+// 故在本包落一份 1 字段副本 —— 形状与语义逐字一致）。
+type idParam struct{ ID int }
+
+// chapterIDInput 章节路径 id + 章节请求体（原 internal/api/admin.go:894 的共享私有类型，同上）。
+type chapterIDInput struct {
+	ID    int
+	Input *course.ChapterInput
 }
