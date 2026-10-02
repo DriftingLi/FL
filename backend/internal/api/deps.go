@@ -25,6 +25,7 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
@@ -80,7 +81,7 @@ type Deps struct {
 	MaterialSvc          *material.Service
 	ExportSvc            *service.ExportService
 	StudentSvc           *service.StudentService
-	QuestionBankSvc      *service.QuestionBankService
+	QuestionBankSvc      *questionbank.Service
 	PracticeModeSvc      *service.PracticeModeService
 	MockExamSvc          *service.MockExamService
 	RealExamSvc          *service.RealExamService

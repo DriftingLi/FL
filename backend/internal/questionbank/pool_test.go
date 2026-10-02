@@ -1,4 +1,4 @@
-package service
+package questionbank
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 	"forklift-training/internal/training"
 )
 
-// TestPoolCountConsistency 池计数单点（#413）：同参下 countPoolByOpts 与抽题数量一致，
+// TestPoolCountConsistency 池计数单点（#413）：同参下 CountPoolByOpts 与抽题数量一致，
 // 并验证池三元组（已发布 + 排除来源标记标签 + 证件分区）。
 func TestPoolCountConsistency(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
@@ -48,12 +48,12 @@ func TestPoolCountConsistency(t *testing.T) {
 	}
 
 	// 同参一致性：计数 == 抽题数量
-	o := sampleQuestionsOpts{cred: &cred1}
-	cnt, err := countPoolByOpts(db, o)
+	o := SampleQuestionsOpts{Cred: &cred1}
+	cnt, err := CountPoolByOpts(db, o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	all, err := sampleQuestionsByOpts(db, o)
+	all, err := SampleQuestionsByOpts(db, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,11 +65,11 @@ func TestPoolCountConsistency(t *testing.T) {
 		t.Fatalf("证件1池应为 3, got %d", cnt)
 	}
 	// 证件分区：不带证件参数与带不同证件参数返回不同集合
-	noCred, err := sampleQuestionsByOpts(db, sampleQuestionsOpts{})
+	noCred, err := SampleQuestionsByOpts(db, SampleQuestionsOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cred2All, err := sampleQuestionsByOpts(db, sampleQuestionsOpts{cred: &cred2})
+	cred2All, err := SampleQuestionsByOpts(db, SampleQuestionsOpts{Cred: &cred2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,15 +84,14 @@ func TestPoolCountConsistency(t *testing.T) {
 	}
 }
 
-// TestQuestionPoolScopeCoversTagCountAndSearch 题库池 scope 单点落到「标签计数」与
-// 「搜索题目分区」两个读路径（ADR-0050 决策 1）：四条读路径（作答抽题 / 搜索结果 /
-// 按 id 取详情 / 标签计数）同走一个 scope——draft 与源标记真题题在任何入口都不可见。
-// 本用例是 question_pool_test.go 池三元组断言向两个新落点的扩展。
-func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
+// TestQuestionPoolScopeCoversTagCount 题库池 scope 单点落到「标签计数」读路径（ADR-0050 决策 1）：
+// 带证件与不带证件两个分支同源——不带证件（全局池）同样排源标记题，不再有漂移窗口。
+// 3c-1 接缝拆分：原用例另一半「搜索题目分区」依赖留在 internal/service 的 SearchService，
+// 随接缝搬去 service/question_pool_search_scope_test.go；域包这边只留不依赖 service 的标签计数。
+func TestQuestionPoolScopeCoversTagCount(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	catalogSvc := training.NewService(db, zap.NewNop())
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
-	searchSvc := NewSearchService(db, zap.NewNop())
+	qsvc := NewService(db, nil, zap.NewNop())
 
 	tag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压"})
 	srcTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "real_exam", Name: "真题"})
@@ -104,22 +103,19 @@ func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
 	if err := db.Create(cred).Error; err != nil {
 		t.Fatalf("建证件失败: %v", err)
 	}
-	mk := func(status string, tagIDs []int, content string) int {
+	mk := func(status string, tagIDs []int, content string) {
 		t.Helper()
-		q := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		createQuestionAs(t, qsvc, db, QuestionCreateInput{
 			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 			TagIDs: tagIDs, CredentialID: cred.ID,
 		}, status)
-		return q.ID
 	}
-	inPool := mk("published", []int{tag.ID}, "液压泵池内题")
+	mk("published", []int{tag.ID}, "液压泵池内题")
 	mk("draft", []int{tag.ID}, "液压泵草稿题")
 	mk("published", []int{srcTag.ID}, "液压泵真题题")
 	// 同带主题标签与来源标记标签：源标记排除必须压过主题标签（无证件分区时的漂移点）
 	mk("published", []int{tag.ID, srcTag.ID}, "液压泵双标签真题题")
 
-	// 落点一：catalog 标签池计数 = 池口径（1 道池内题；草稿与两道源标记题都不计）。
-	// 带证件与不带证件两个分支同源——不带证件（全局池）同样排源标记题，不再有漂移窗口。
 	for _, tc := range []struct {
 		name string
 		cred *int
@@ -140,16 +136,6 @@ func TestQuestionPoolScopeCoversTagCountAndSearch(t *testing.T) {
 		if counts[tag.ID] != 1 {
 			t.Fatalf("%s：标签计数应走池口径 = 1（草稿与源标记题不计）, got %d", tc.name, counts[tag.ID])
 		}
-	}
-
-	// 落点二：搜索题目分区 = 池口径（只有池内题命中，且命中数与返回条目一致）
-	got, err := searchSvc.Search("液压泵", SearchTypeQuestion, 1, 20, &cred.ID)
-	if err != nil {
-		t.Fatalf("题目分区搜索失败: %v", err)
-	}
-	page := got.(*SearchPageDTO)
-	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != int64(inPool) {
-		t.Fatalf("题目分区应只含池内题 %d, got total=%d items=%+v", inPool, page.Total, page.Items)
 	}
 }
 

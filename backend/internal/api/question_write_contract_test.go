@@ -17,6 +17,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -29,7 +30,7 @@ func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterQuestionBankRoutes(api, deps.RouterDeps(), deps.QuestionBankSvc, deps.FileSvc)
+	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	return r, cfg, db
 }
 

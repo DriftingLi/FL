@@ -1,4 +1,4 @@
-package service
+package questionbank
 
 import (
 	"encoding/json"
@@ -72,13 +72,13 @@ func sampleQuestionForShape() *model.Question {
 func TestQuestionDTO_BytesMatchLegacy(t *testing.T) {
 	q := sampleQuestionForShape()
 
-	gotStudent, _ := json.Marshal(newQuestionDTO(q, false))
+	gotStudent, _ := json.Marshal(NewQuestionDTO(q, false))
 	wantStudent, _ := json.Marshal(legacyQuestionDict(q, false))
 	if string(gotStudent) != string(wantStudent) {
 		t.Errorf("学员侧契约漂移\n got: %s\nwant: %s", gotStudent, wantStudent)
 	}
 
-	gotAnswer, _ := json.Marshal(newQuestionDTO(q, true))
+	gotAnswer, _ := json.Marshal(NewQuestionDTO(q, true))
 	wantAnswer, _ := json.Marshal(legacyQuestionDict(q, true))
 	if string(gotAnswer) != string(wantAnswer) {
 		t.Errorf("含答案侧契约漂移\n got: %s\nwant: %s", gotAnswer, wantAnswer)
@@ -90,13 +90,13 @@ func TestQuestionDTO_BytesMatchLegacy(t *testing.T) {
 func TestQuestionDTO_BytesMatchLegacy_EmptyFields(t *testing.T) {
 	q := &model.Question{Type: "single_choice", Status: "draft"}
 
-	got, _ := json.Marshal(newQuestionDTO(q, false))
+	got, _ := json.Marshal(NewQuestionDTO(q, false))
 	want, _ := json.Marshal(legacyQuestionDict(q, false))
 	if string(got) != string(want) {
 		t.Errorf("空字段契约漂移\n got: %s\nwant: %s", got, want)
 	}
 
-	gotAnswer, _ := json.Marshal(newQuestionDTO(q, true))
+	gotAnswer, _ := json.Marshal(NewQuestionDTO(q, true))
 	wantAnswer, _ := json.Marshal(legacyQuestionDict(q, true))
 	if string(gotAnswer) != string(wantAnswer) {
 		t.Errorf("空字段含答案契约漂移\n got: %s\nwant: %s", gotAnswer, wantAnswer)
@@ -107,7 +107,7 @@ func TestQuestionDTO_BytesMatchLegacy_EmptyFields(t *testing.T) {
 func TestQuestionDTO_Tags(t *testing.T) {
 	q := sampleQuestionForShape()
 
-	withTags := newQuestionDTO(q, true)
+	withTags := NewQuestionDTO(q, true)
 	withTags.Tags = []map[string]any{{"id": 1, "name": "法规"}}
 	got, _ := json.Marshal(withTags)
 	var asMap map[string]any
@@ -118,7 +118,7 @@ func TestQuestionDTO_Tags(t *testing.T) {
 		t.Error("设置 Tags 后 JSON 应包含 tags key")
 	}
 
-	withoutTags := newQuestionDTO(q, false)
+	withoutTags := NewQuestionDTO(q, false)
 	gotNoTags, _ := json.Marshal(withoutTags)
 	var asMap2 map[string]any
 	if err := json.Unmarshal(gotNoTags, &asMap2); err != nil {
@@ -129,7 +129,7 @@ func TestQuestionDTO_Tags(t *testing.T) {
 	}
 
 	// 设置 typed-nil 切片（题库管理面无标签路径）：emit "tags":null，与历史 map 一致
-	nilSlice := newQuestionDTO(q, true)
+	nilSlice := NewQuestionDTO(q, true)
 	nilSlice.Tags = []map[string]any(nil)
 	gotNil, _ := json.Marshal(nilSlice)
 	var asMap3 map[string]any

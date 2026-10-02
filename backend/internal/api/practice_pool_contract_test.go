@@ -18,6 +18,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
@@ -50,8 +51,9 @@ func assertPracticePoolCaliber(t *testing.T, db *gorm.DB) {
 	r := gin.New()
 	api := r.Group(`/api`)
 	deps := newContractDeps(t, db, cfg)
-	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
-	RegisterQuestionBankRoutes(api, deps.RouterDeps(), deps.QuestionBankSvc, deps.FileSvc)
+	rd := deps.RouterDeps()
+	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
+	questionbank.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(student.ID, student.Username, `hrwai_user`)
 	if err != nil {
 		t.Fatalf(`issue token failed: %v`, err)

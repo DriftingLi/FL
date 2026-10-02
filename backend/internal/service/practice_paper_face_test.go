@@ -12,7 +12,7 @@
 //   - 「请指定题库标签」「该标签不支持专项练习」同为 404 ⇒ 请求本身不成立被说成资源不存在。
 //   - real_exam 的「未兑换」「卷内无已发布题」与「卷不可用」挤在同一格 404。
 //   - 模考三处 `First` 失败一律「模拟考试不存在」⇒ 查不动冒充不存在。
-//   - practice SubmitAnswer 的「题目不存在」是同文案的第二载体（ErrQuestionNotFound 早已存在），
+//   - practice SubmitAnswer 的「题目不存在」是同文案的第二载体（questionbank.ErrQuestionNotFound 早已存在），
 //     且同样不分成因。
 package service
 
@@ -25,6 +25,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -54,7 +55,7 @@ func TestPracticeFailureIsNotLaundered(t *testing.T) {
 			if err == nil {
 				t.Fatal("抽题查不动却返回成功")
 			}
-			if errors.Is(err, ErrQuestionNotFound) {
+			if errors.Is(err, questionbank.ErrQuestionNotFound) {
 				t.Fatalf("查不动被打扮成「题目不存在」: %v", err)
 			}
 			if msg := err.Error(); msg == "查询题目失败" {
@@ -131,17 +132,17 @@ func TestRealPaperThreeFacts(t *testing.T) {
 }
 
 // TestPracticeSubmitUsesExistingQuestionCarrier 「题目不存在」早有一个具名载体
-// （ErrQuestionNotFound，笔记/评论读路径都在用），practice 侧此前又写了一遍同文案裸错误
+// （questionbank.ErrQuestionNotFound，笔记/评论读路径都在用），practice 侧此前又写了一遍同文案裸错误
 // ⇒ 同一个事实两个住处（ADR-0064 决策 2）。
 func TestPracticeSubmitUsesExistingQuestionCarrier(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewPracticeModeService(db, nil, zap.NewNop())
 
 	_, err := svc.SubmitAnswer(1, 999999, "A", "free", nil)
-	if !errors.Is(err, ErrQuestionNotFound) {
-		t.Fatalf("应复用既有载体 ErrQuestionNotFound，实际 %v", err)
+	if !errors.Is(err, questionbank.ErrQuestionNotFound) {
+		t.Fatalf("应复用既有载体 questionbank.ErrQuestionNotFound，实际 %v", err)
 	}
-	if err != nil && err.Error() == "题目不存在" && !errors.Is(err, ErrQuestionNotFound) {
+	if err != nil && err.Error() == "题目不存在" && !errors.Is(err, questionbank.ErrQuestionNotFound) {
 		t.Fatalf("同文案第二载体又出现了: %v", err)
 	}
 }

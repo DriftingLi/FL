@@ -10,12 +10,13 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
 // studentScope 测试用学员题目读 scope：未选证件（nil）= 池不分区、看全部。
 // 夹具题（testutil.SeedQuestion）是 published 且无证件、无源标记 ⇒ 恒在池内。
-func studentScope() QuestionReadScope { return NewQuestionReadScope(nil) }
+func studentScope() questionbank.QuestionReadScope { return questionbank.NewQuestionReadScope(nil) }
 
 func newNoteSvc(t *testing.T) (*NoteService, *gorm.DB) {
 	t.Helper()

@@ -4,20 +4,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// 统计聚合 module（Ticket #226）。三套并行统计（题库/练习/错题）收敛为同一依赖：
-// 一次 GROUP BY + 过滤描述符，产出 typed StatsDTO。
+// 统计聚合 module（Ticket #226）：一次 GROUP BY + 过滤描述符，产出 typed StatsDTO。
+// 三套并行统计（题库/练习/错题）收敛为同一依赖；题库那套（questionbank.QuestionBankStatsDTO / questionbank.GroupByCount）
+// 已随 3c-1 搬进 internal/questionbank，本文件只剩练习与错题两套。
 // 各消费方保留各自业务语义（是否零填充维度 / 是否含正确率），shape-lock 测试冻结契约。
-
-// QuestionBankStatsDTO 题库统计（旧 question_service GetStats map 输出）。
-//
-// 两个 map 与 WrongQuestionStatsDTO 同因同解：swag 对 map[string]int64 的 format 推断不稳定
-// （同一份代码在不同环境会生成 有/无 "format: int64" 两种产物），显式 swaggertype 钉住值类型即消除
-// —— 该定义在片六随 questionBank 端点首次进入 swagger，随即把新鲜度锁变成随机红（CI 实测）。
-type QuestionBankStatsDTO struct {
-	Total    int64            `json:"total"`
-	ByType   map[string]int64 `json:"by_type" swaggertype:"object,integer" nullability:"nonnil"`
-	ByStatus map[string]int64 `json:"by_status" swaggertype:"object,integer" nullability:"nonnil"`
-}
 
 // PracticeTypeStat 练习统计按题型明细（旧内层 map {total, correct}），accuracy 为加性新增 key（#226）。
 type PracticeTypeStat struct {
@@ -44,30 +34,11 @@ type WrongQuestionStatsDTO struct {
 	ByType map[string]int64 `json:"by_type" swaggertype:"object,integer" nullability:"nonnil"`
 }
 
-// statGroupRow GROUP BY 单维结果行（key=维度值，count=行数）。
-type statGroupRow struct {
-	Key   string
-	Count int64
-}
-
 // statGroupPairRow GROUP BY 双计数结果行（key + count + pairCount，练习按题型统计 total/correct 用）。
 type statGroupPairRow struct {
 	Key       string
 	Count     int64
 	PairCount int64
-}
-
-// groupByCount 聚合引擎：按 dimension 列对 base 查询一次 GROUP BY，返回维度→计数字典
-// （仅含实际存在分组的维度；零填充由调用方按业务语义决定）。
-// base 为已含 WHERE/JOIN 的查询骨架，dimension 为分组列（可带限定如 question.type）。
-func groupByCount(base *gorm.DB, dimension string) map[string]int64 {
-	var rows []statGroupRow
-	base.Select(dimension + " AS key, COUNT(*) AS count").Group(dimension).Scan(&rows)
-	m := make(map[string]int64, len(rows))
-	for _, r := range rows {
-		m[r.Key] = r.Count
-	}
-	return m
 }
 
 // groupByCountWithFilter 聚合引擎：按 dimension 一次 GROUP BY，同时统计维度总数与满足 filterExpr 的计数。

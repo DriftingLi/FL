@@ -26,6 +26,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -110,7 +111,7 @@ func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterQuestionBankRoutes(api, deps.RouterDeps(), deps.QuestionBankSvc, deps.FileSvc)
+	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	RegisterNoteRoutes(api, deps.RouterDeps(), deps.NoteSvc)
 	RegisterQuestionInteractionRoutes(api, deps.RouterDeps(), deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
 	RegisterFavoriteRoutes(api, deps.RouterDeps(), deps.FavoriteSvc)

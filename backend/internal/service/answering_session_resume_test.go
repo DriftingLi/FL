@@ -1,5 +1,5 @@
 // Package service #385 回归：答题会话 ResumeSet/SaveSet 断点续练协商语义
-// 与抽题池单点（sampleQuestionsByOpts）。
+// 与抽题池单点（questionbank.SampleQuestionsByOpts）。
 package service
 
 import (
@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/training"
 )
@@ -25,7 +26,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	// 首次进入（count 抽样：3 抽 2）：固定顺序、游标 0
 	ids1, idx, err := ResumeSet(db, 1, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: []int{11, 22, 33}, ReuseSaved: true,
-		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
+		Sample: func(ids []int) []int { return questionbank.ShuffleTruncate(ids, 2) },
 	})
 	if err != nil {
 		t.Fatalf("首次进入失败: %v", err)
@@ -37,7 +38,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	// 同集续练（count=0 全量场景）：沿用已存顺序（顺序协商保持，游标才有效）
 	ids2, idx2, err := ResumeSet(db, 1, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: ids1, ReuseSaved: true,
-		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
+		Sample: func(ids []int) []int { return questionbank.ShuffleTruncate(ids, 2) },
 	})
 	if err != nil {
 		t.Fatalf("续练失败: %v", err)
@@ -66,7 +67,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	// 集合变化（题目下架）：刷新为新集合、游标复位 0、不重抽样（中途变化）
 	ids4, idx4, err := ResumeSet(db, 1, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: []int{11, 44}, ReuseSaved: true,
-		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
+		Sample: func(ids []int) []int { return questionbank.ShuffleTruncate(ids, 2) },
 	})
 	if err != nil {
 		t.Fatalf("集合变化续练失败: %v", err)
@@ -84,7 +85,7 @@ func TestResumeSetTagSemantics(t *testing.T) {
 	}
 	ids5, idx5, err := ResumeSet(db, 2, nil, ResumeSetSpec{
 		Mode: mode, FreshIDs: []int{11, 44}, ReuseSaved: true,
-		Sample: func(ids []int) []int { return shuffleTruncate(ids, 2) },
+		Sample: func(ids []int) []int { return questionbank.ShuffleTruncate(ids, 2) },
 	})
 	if err != nil {
 		t.Fatalf("完成后重进失败: %v", err)
@@ -137,7 +138,7 @@ func TestResumeSetSequentialCursorAcrossRefresh(t *testing.T) {
 func TestQuestionPoolOptsUnified(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	catalogSvc := training.NewService(db, zap.NewNop())
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
+	qsvc := questionbank.NewService(db, nil, zap.NewNop())
 	psvc := NewPracticeModeService(db, nil, zap.NewNop())
 
 	tag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "hydraulic", Name: "液压", SortOrder: coerce.IntPtr(1)})
@@ -151,7 +152,7 @@ func TestQuestionPoolOptsUnified(t *testing.T) {
 		t.Fatalf("建证件失败: %v", err)
 	}
 	mk := func(credID *int, tagIDs []int, content string) int {
-		in := QuestionCreateInput{
+		in := questionbank.QuestionCreateInput{
 			Type: "single_choice", Content: content, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 			TagIDs: tagIDs,
 		}

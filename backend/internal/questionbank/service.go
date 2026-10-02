@@ -1,5 +1,8 @@
-// Package service 题目相关共享逻辑与题库 CRUD。
-package service
+// Package questionbank 题库域：题目 CRUD 与审核状态机、池抽样、读写 scope 与统计聚合。
+//
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，service.go / dto.go /
+// loader.go / pool_scope.go / stats.go 是域实现；or_default.go 是出域后自带的纯函数副本（P3 收编）。
+package questionbank
 
 import (
 	"bytes"
@@ -75,7 +78,7 @@ type QuestionBatchImportInput struct {
 }
 
 // stringifyAnswerJSON 把 typed 入参里的 answer 原始 JSON（字符串或数组）归一为存储字符串
-// （口径与旧 stringifyAnswer(any) 逐字一致：数组以逗号连接）。
+// （口径与旧 StringifyAnswer(any) 逐字一致：数组以逗号连接）。
 func stringifyAnswerJSON(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 {
 		return "", nil
@@ -86,7 +89,7 @@ func stringifyAnswerJSON(raw json.RawMessage) (string, error) {
 	}
 	var arr []any
 	if err := json.Unmarshal(raw, &arr); err == nil {
-		return stringifyAnswer(arr), nil
+		return StringifyAnswer(arr), nil
 	}
 	return "", ErrQuestionAnswerInvalid
 }
@@ -102,70 +105,70 @@ func effectiveOptions(raw json.RawMessage) json.RawMessage {
 
 // 题型与课程分类常量（已取消等级制度）。
 var (
-	validQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
+	ValidQuestionTypes  = []string{"single_choice", "multi_choice", "true_false", "fault_image", "short_answer"}
 	validQuestionStatus = []string{"draft", "pending", "published"}
 )
 
-// sampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
+// SampleQuestions 统一抽题函数：从 published 题库按条件随机抽取 count 题。
 // qType 为空表示不限题型。始终排除来源标记标签的题目。
-func sampleQuestions(db *gorm.DB, qType string, count int, credentialID *int) ([]model.Question, error) {
-	return sampleQuestionsByOpts(db, sampleQuestionsOpts{qType: qType, count: count, cred: credentialID, shuffle: true})
+func SampleQuestions(db *gorm.DB, qType string, count int, credentialID *int) ([]model.Question, error) {
+	return SampleQuestionsByOpts(db, SampleQuestionsOpts{QType: qType, Count: count, Cred: credentialID, Shuffle: true})
 }
 
-// sampleQuestionsOpts 抽题参数面（#385）：题库池口径（published + 排真题 + 证件分区）
+// SampleQuestionsOpts 抽题参数面（#385）：题库池口径（published + 排真题 + 证件分区）
 // 之上叠加 全量/抽样、洗牌/排序 两个正交开关。
-type sampleQuestionsOpts struct {
-	qType   string // 题型过滤（空 = 不限）
-	tagID   int    // >0：限定标签（专项练习）
-	count   int    // >0 且 shuffle：抽样截断数
-	shuffle bool   // true：洗牌后按 count 截断（随机抽样）；false：按 id 升序全量
-	cred    *int   // 非 nil：按当前证件分区
+type SampleQuestionsOpts struct {
+	QType   string // 题型过滤（空 = 不限）
+	TagID   int    // >0：限定标签（专项练习）
+	Count   int    // >0 且 Shuffle：抽样截断数
+	Shuffle bool   // true：洗牌后按 Count 截断（随机抽样）；false：按 id 升序全量
+	Cred    *int   // 非 nil：按当前证件分区
 }
 
-// sampleQuestionsByOpts 抽题池统一实现（#385 单点）：收编随机练习、标签专项、
+// SampleQuestionsByOpts 抽题池统一实现（#385 单点）：收编随机练习、标签专项、
 // 顺序练习与模拟考抽题的题库池 scope（question_pool_scope.go，ADR-0050 决策 1）。
 // shuffle=false 时按 id 升序返回全量（顺序练习/标签专项的固定顺序来源）；
 // shuffle=true 时洗牌、count>0 且超额则截断（随机练习/模拟考的抽样语义）。
-// poolFilter 抽题侧在题库池 scope（question_pool_scope.go，唯一出处）之上叠加题型/标签读面差异。
-// sampleQuestionsByOpts（抽题）与 countPoolByOpts（计数）共用，保证同参下「计数 == 抽题数量」
+// PoolFilter 抽题侧在题库池 scope（question_pool_scope.go，唯一出处）之上叠加题型/标签读面差异。
+// SampleQuestionsByOpts（抽题）与 CountPoolByOpts（计数）共用，保证同参下「计数 == 抽题数量」
 // 的一致性断言成立（#413 池计数单点，口径定义见 CONTEXT.md「题库池」）。
-func poolFilter(q *gorm.DB, o sampleQuestionsOpts) *gorm.DB {
-	q = QuestionPoolScope(q, o.cred)
-	if o.tagID > 0 {
-		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", o.tagID)
+func PoolFilter(q *gorm.DB, o SampleQuestionsOpts) *gorm.DB {
+	q = QuestionPoolScope(q, o.Cred)
+	if o.TagID > 0 {
+		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", o.TagID)
 	}
-	if o.qType != "" {
-		q = q.Where("type = ?", o.qType)
+	if o.QType != "" {
+		q = q.Where("type = ?", o.QType)
 	}
 	return q
 }
 
-// countPoolByOpts 池计数单点（#413）：与抽题共用 poolFilter，语义即「当前证件题库池数量」。
-func countPoolByOpts(db *gorm.DB, o sampleQuestionsOpts) (int64, error) {
+// CountPoolByOpts 池计数单点（#413）：与抽题共用 PoolFilter，语义即「当前证件题库池数量」。
+func CountPoolByOpts(db *gorm.DB, o SampleQuestionsOpts) (int64, error) {
 	var total int64
-	if err := poolFilter(db.Model(&model.Question{}), o).Count(&total).Error; err != nil {
+	if err := PoolFilter(db.Model(&model.Question{}), o).Count(&total).Error; err != nil {
 		return 0, err
 	}
 	return total, nil
 }
 
-func sampleQuestionsByOpts(db *gorm.DB, o sampleQuestionsOpts) ([]model.Question, error) {
-	q := poolFilter(db.Model(&model.Question{}), o)
-	if !o.shuffle {
+func SampleQuestionsByOpts(db *gorm.DB, o SampleQuestionsOpts) ([]model.Question, error) {
+	q := PoolFilter(db.Model(&model.Question{}), o)
+	if !o.Shuffle {
 		q = q.Order("id ASC")
 	}
 	var all []model.Question
 	if err := q.Find(&all).Error; err != nil {
 		return nil, err
 	}
-	if o.shuffle {
-		all = shuffleTruncate(all, o.count)
+	if o.Shuffle {
+		all = ShuffleTruncate(all, o.Count)
 	}
 	return all, nil
 }
 
-// shuffleTruncate 洗牌截断（抽样固定顺序）：count<=0 或题量不足时原样返回。
-func shuffleTruncate[T any](items []T, count int) []T {
+// ShuffleTruncate 洗牌截断（抽样固定顺序）：count<=0 或题量不足时原样返回。
+func ShuffleTruncate[T any](items []T, count int) []T {
 	if count > 0 && len(items) > count {
 		rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
 		items = items[:count]
@@ -173,19 +176,19 @@ func shuffleTruncate[T any](items []T, count int) []T {
 	return items
 }
 
-// gradeQuestion 评分（判题唯一实现）。
+// GradeQuestion 评分（判题唯一实现）。
 // 返回 (isCorrect, earned)：isCorrect 为 nil 表示无法判定（简答题/未作答），earned 为得分。
 // maxScore 为 0 时按练习分值表取默认值。
-func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) (*bool, float64) {
+func GradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) (*bool, float64) {
 	if userAnswer == nil {
 		return nil, 0
 	}
 	if maxScore == 0 {
-		maxScore = questionMaxScore("practice", q.Type)
+		maxScore = QuestionMaxScore("practice", q.Type)
 	}
 	switch q.Type {
 	case "single_choice", "true_false", "fault_image":
-		ua := stringifyAnswer(userAnswer)
+		ua := StringifyAnswer(userAnswer)
 		//nolint:staticcheck
 		correct := strings.EqualFold(strings.TrimSpace(ua), strings.TrimSpace(q.Answer))
 		if correct {
@@ -193,7 +196,7 @@ func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 		}
 		return &correct, 0
 	case "multi_choice":
-		correct := normalizeAnswerList(q.Answer)
+		correct := NormalizeAnswerList(q.Answer)
 		user := normalizeUserAnswerList(userAnswer)
 		if user == nil {
 			b := false
@@ -218,9 +221,9 @@ func gradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 	return &b, 0
 }
 
-// addToWrongQuestions 错题入库（去重、计数）。
+// AddToWrongQuestions 错题入库（去重、计数）。
 // 使用 Limit(1).Find() 替代 First()，避免首次错题入库时 GORM logger 误报 record not found
-func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
+func AddToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	var wq model.WrongQuestion
 	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).Limit(1).Find(&wq).Error
 	if err != nil {
@@ -242,8 +245,8 @@ func addToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
 	return db.Create(&wq).Error
 }
 
-// stringifyAnswer 将用户答案（字符串/列表）转为字符串。
-func stringifyAnswer(a interface{}) string {
+// StringifyAnswer 将用户答案（字符串/列表）转为字符串。
+func StringifyAnswer(a interface{}) string {
 	if a == nil {
 		return ""
 	}
@@ -262,8 +265,8 @@ func stringifyAnswer(a interface{}) string {
 	return ""
 }
 
-// normalizeAnswerList 将 "A,B,C" 拆分并排序。
-func normalizeAnswerList(s string) []string {
+// NormalizeAnswerList 将 "A,B,C" 拆分并排序。
+func NormalizeAnswerList(s string) []string {
 	parts := strings.Split(s, ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
@@ -293,7 +296,7 @@ func normalizeUserAnswerList(a interface{}) []string {
 		sort.Strings(out)
 		return out
 	case string:
-		return normalizeAnswerList(v)
+		return NormalizeAnswerList(v)
 	}
 	return nil
 }
@@ -305,7 +308,7 @@ func toString(v interface{}) string {
 	case float64:
 		return floatToString(x)
 	case int:
-		return intToString(x)
+		return IntToString(x)
 	}
 	b, _ := json.Marshal(v)
 	return string(b)
@@ -342,24 +345,24 @@ func round1(f *float64) {
 
 // ===== 题库服务（question_bank_service） =====
 
-// QuestionBankService 题库 CRUD 与知识点管理。
-type QuestionBankService struct {
+// Service 题库 CRUD 与知识点管理。
+type Service struct {
 	db      *gorm.DB
 	fileSvc *filestore.FileStore
 
 	logger *zap.Logger
 }
 
-// NewQuestionBankService 创建题库服务。fileSvc 用于删除题目时清理题图（可 nil，nil 时跳过）。
-func NewQuestionBankService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *QuestionBankService {
-	return &QuestionBankService{db: db, fileSvc: fileSvc, logger: logger}
+// NewService 创建题库服务。fileSvc 用于删除题目时清理题图（可 nil，nil 时跳过）。
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *Service {
+	return &Service{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 // CreateQuestion 创建题目（票 6 typed 面）：字段类型不符在绑定层即失败；status 通道不存在，
 // 创建固定入 pending 审核队列；证件校验遇 DB 故障如实上抛（旧实现 fail-open 吞错）。
-func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *int, createdByType string) (QuestionDTO, error) {
-	if !slices.Contains(validQuestionTypes, in.Type) {
-		return QuestionDTO{}, fmt.Errorf("%w，支持的题型：%s", ErrQuestionTypeInvalid, strings.Join(validQuestionTypes, ", "))
+func (s *Service) CreateQuestion(in QuestionCreateInput, createdBy *int, createdByType string) (QuestionDTO, error) {
+	if !slices.Contains(ValidQuestionTypes, in.Type) {
+		return QuestionDTO{}, fmt.Errorf("%w，支持的题型：%s", ErrQuestionTypeInvalid, strings.Join(ValidQuestionTypes, ", "))
 	}
 	if in.Content == "" {
 		return QuestionDTO{}, ErrQuestionContentRequired
@@ -403,7 +406,7 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 		CredentialID:    credentialID,
 		Status:          "pending",
 		CreatedBy:       createdBy,
-		CreatedByType:   orDefault(createdByType, "tutor"),
+		CreatedByType:   OrDefault(createdByType, "tutor"),
 		CreatedAt:       clock.Now(),
 		UpdatedAt:       clock.Now(),
 	}
@@ -415,7 +418,7 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 			return QuestionDTO{}, err
 		}
 	}
-	d := newQuestionDTO(&q, true)
+	d := NewQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
@@ -423,24 +426,24 @@ func (s *QuestionBankService) CreateQuestion(in QuestionCreateInput, createdBy *
 // GetQuestionForStudent 学员侧按 id 取题（ADR-0049「题库池是可见性口径，覆盖每条读路径」）：
 // 池口径由入参 scope 承载（ADR-0062 决策 4 的必传形态）；不满足一律 ErrQuestionNotFound ——
 // 404 而不是 403，避免把「这题存在但不能看」变成存在性泄露。
-func (s *QuestionBankService) GetQuestionForStudent(id int, scope QuestionReadScope) (QuestionDTO, error) {
+func (s *Service) GetQuestionForStudent(id int, scope QuestionReadScope) (QuestionDTO, error) {
 	var q model.Question
 	err := scope.Apply(s.db.Model(&model.Question{})).Where("id = ?", id).First(&q).Error
 	if err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
-	d := newQuestionDTO(&q, true)
+	d := NewQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
 
 // GetQuestion 查询题目详情（编辑面：作者/审核者，含 draft）。
-func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
+func (s *Service) GetQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
-	d := newQuestionDTO(&q, true)
+	d := NewQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
@@ -450,12 +453,12 @@ func (s *QuestionBankService) GetQuestion(id int) (QuestionDTO, error) {
 //   - 讲师（非 admin）修改已发布题的内容 → 回 pending 重审（暂离题库池），并清驳回理由；
 //   - 管理员即审核者，修改保持原状态即时生效（自审无意义）；
 //   - 纯分区属性（标签）修改不动状态。
-func (s *QuestionBankService) UpdateQuestion(id int, in QuestionUpdateInput, actorType string) (QuestionDTO, error) {
+func (s *Service) UpdateQuestion(id int, in QuestionUpdateInput, actorType string) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
-	if in.Type != nil && !slices.Contains(validQuestionTypes, *in.Type) {
+	if in.Type != nil && !slices.Contains(ValidQuestionTypes, *in.Type) {
 		return QuestionDTO{}, ErrQuestionTypeInvalid
 	}
 	answerChanged := false
@@ -490,7 +493,7 @@ func (s *QuestionBankService) UpdateQuestion(id int, in QuestionUpdateInput, act
 			return QuestionDTO{}, err
 		}
 	}
-	d := newQuestionDTO(&q, true)
+	d := NewQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(id)
 	return d, nil
 }
@@ -578,7 +581,7 @@ func applyQuestionUpdateFields(q *model.Question, in QuestionUpdateInput) {
 
 // SubmitQuestion 显式「提交审核」动作（票 6）：draft → pending，清空驳回理由。
 // 取代旧「编辑时顺手把 status 传回去」的实现巧合（前端 QuestionManage 的提交按钮改接本端点）。
-func (s *QuestionBankService) SubmitQuestion(id int) (QuestionDTO, error) {
+func (s *Service) SubmitQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
@@ -592,13 +595,13 @@ func (s *QuestionBankService) SubmitQuestion(id int) (QuestionDTO, error) {
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	d := newQuestionDTO(&q, true)
+	d := NewQuestionDTO(&q, true)
 	d.Tags = s.loadTagsByQuestion(q.ID)
 	return d, nil
 }
 
 // DeleteQuestion 删除题目，并清理题图存储文件。
-func (s *QuestionBankService) DeleteQuestion(id int) error {
+func (s *Service) DeleteQuestion(id int) error {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -660,7 +663,7 @@ type QuestionRejectResultDTO struct {
 //
 // 为什么不把两个公开入口也合并成一个：「池的已发布不可被入参绕开」这道锁靠的是**签名差异**
 // ——学员面不收 status、编辑面收 QuestionEditScope（ADR-0062 决策 4）。合并入口就是把那道锁拆了。
-func (s *QuestionBankService) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int,
+func (s *Service) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int,
 	narrow func(*gorm.DB) *gorm.DB, sortBy string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
@@ -694,7 +697,7 @@ func (s *QuestionBankService) listQuestions(page, pageSize int, qType, status, k
 // 不排源标记真题题，status 由调用方按需筛——这些正是审核队列与题目管理页的本职。
 // 编辑面 scope 必传（ADR-0062 决策 4）：证件轴是筛选而非可见性，形态与学员面不同名、不可互换。
 // 学员侧列表走 ListPoolQuestions（同一入口按能力分流，见 api/question_bank.go）。
-func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
+func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
 	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, sortBy)
 }
 
@@ -702,16 +705,16 @@ func (s *QuestionBankService) ListQuestions(page, pageSize int, qType string, st
 // 因此这里既没有 status 入参（池的「已发布」不在入参里可被绕开），也不接受裸证件。
 // 出口 DTO 形态与按 id 直取的学员面一致（含答案/解析——池内的题本就可以作答并看到解析），
 // 差异只在行集：draft / pending / 源标记真题题 / 非当前证件一律不出现在结果里。
-func (s *QuestionBankService) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
+func (s *Service) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
 	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, sortBy)
 }
 
 // questionPage 题目分页信封装配（两条列表路径共用：DTO 出口与标签批量附加只有一处实现）。
-func (s *QuestionBankService) questionPage(list []model.Question, page, pageSize int, total int64) *QuestionPageDTO {
+func (s *Service) questionPage(list []model.Question, page, pageSize int, total int64) *QuestionPageDTO {
 	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {
-		out = append(out, newQuestionDTO(&list[i], true))
+		out = append(out, NewQuestionDTO(&list[i], true))
 		ids = append(ids, list[i].ID)
 	}
 	s.attachTagsBatch(ids, out)
@@ -724,12 +727,12 @@ func (s *QuestionBankService) questionPage(list []model.Question, page, pageSize
 }
 
 // loadTagsByQuestion 加载单题标签列表。
-func (s *QuestionBankService) loadTagsByQuestion(questionID int) []map[string]any {
+func (s *Service) loadTagsByQuestion(questionID int) []map[string]any {
 	return s.loadTagsBatch([]int{questionID})[questionID]
 }
 
 // attachTagsBatch 批量附加标签到题目 DTO（避免逐题查询 N+1）。
-func (s *QuestionBankService) attachTagsBatch(questionIDs []int, dtos []QuestionDTO) {
+func (s *Service) attachTagsBatch(questionIDs []int, dtos []QuestionDTO) {
 	if len(questionIDs) == 0 {
 		return
 	}
@@ -744,7 +747,7 @@ func (s *QuestionBankService) attachTagsBatch(questionIDs []int, dtos []Question
 }
 
 // loadTagsBatch 批量加载题目标签，key 为题目 ID。
-func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[string]any {
+func (s *Service) loadTagsBatch(questionIDs []int) map[int][]map[string]any {
 	result := make(map[int][]map[string]any, len(questionIDs))
 	if len(questionIDs) == 0 {
 		return result
@@ -779,7 +782,7 @@ func (s *QuestionBankService) loadTagsBatch(questionIDs []int) map[int][]map[str
 }
 
 // PublishQuestion 发布题目（管理员审核通过）。同时清空驳回理由。
-func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
+func (s *Service) PublishQuestion(id int) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
@@ -790,11 +793,11 @@ func (s *QuestionBankService) PublishQuestion(id int) (QuestionDTO, error) {
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	return newQuestionDTO(&q, true), nil
+	return NewQuestionDTO(&q, true), nil
 }
 
 // BatchPublish 批量发布（管理员审核通过）。同时清空驳回理由。
-func (s *QuestionBankService) BatchPublish(ids []int) *QuestionPublishResultDTO {
+func (s *Service) BatchPublish(ids []int) *QuestionPublishResultDTO {
 	count := 0
 	if len(ids) > 0 {
 		count64 := s.db.Model(&model.Question{}).
@@ -807,7 +810,7 @@ func (s *QuestionBankService) BatchPublish(ids []int) *QuestionPublishResultDTO 
 }
 
 // RejectQuestion 驳回题目（管理员审核）。状态回退为 draft，记录驳回理由供导师查看修改。
-func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO, error) {
+func (s *Service) RejectQuestion(id int, reason string) (QuestionDTO, error) {
 	if reason == "" {
 		return QuestionDTO{}, ErrRejectReasonRequired
 	}
@@ -821,11 +824,11 @@ func (s *QuestionBankService) RejectQuestion(id int, reason string) (QuestionDTO
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	return newQuestionDTO(&q, true), nil
+	return NewQuestionDTO(&q, true), nil
 }
 
 // BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。
-func (s *QuestionBankService) BatchReject(ids []int, reason string) (*QuestionRejectResultDTO, error) {
+func (s *Service) BatchReject(ids []int, reason string) (*QuestionRejectResultDTO, error) {
 	if reason == "" {
 		return nil, ErrRejectReasonRequired
 	}
@@ -840,7 +843,7 @@ func (s *QuestionBankService) BatchReject(ids []int, reason string) (*QuestionRe
 }
 
 // BatchImport 批量导入题目（票 6 typed 面：逐条 QuestionCreateInput，类型不符整条计入 errors）。
-func (s *QuestionBankService) BatchImport(items []QuestionCreateInput, createdBy *int) *QuestionImportResultDTO {
+func (s *Service) BatchImport(items []QuestionCreateInput, createdBy *int) *QuestionImportResultDTO {
 	success, errs := 0, make([]QuestionImportErrorDTO, 0)
 	for i, item := range items {
 		if _, err := s.CreateQuestion(item, createdBy, "tutor"); err != nil {
@@ -859,16 +862,16 @@ func (s *QuestionBankService) BatchImport(items []QuestionCreateInput, createdBy
 // GetStats 题库统计（经统计聚合 module，一次 GROUP BY + 维度零填充）。
 // Total 为题库池数量（#413）：已发布 + 排除来源标记标签 + 可选证件分区，非全表计数；
 // 学员端顺序练习卡片分母的唯一消费方。by_type / by_status 保留全局口径。
-func (s *QuestionBankService) GetStats(credentialID *int) *QuestionBankStatsDTO {
-	total, err := countPoolByOpts(s.db, sampleQuestionsOpts{cred: credentialID})
+func (s *Service) GetStats(credentialID *int) *QuestionBankStatsDTO {
+	total, err := CountPoolByOpts(s.db, SampleQuestionsOpts{Cred: credentialID})
 	if err != nil {
 		total = 0
 	}
-	byType := groupByCount(s.db.Model(&model.Question{}), "type")
-	byStatus := groupByCount(s.db.Model(&model.Question{}), "status")
+	byType := GroupByCount(s.db.Model(&model.Question{}), "type")
+	byStatus := GroupByCount(s.db.Model(&model.Question{}), "status")
 	// 保留旧语义：by_type / by_status 对合法维度零填充（未出现的维度以 0 呈现）。
-	byt := make(map[string]int64, len(validQuestionTypes))
-	for _, t := range validQuestionTypes {
+	byt := make(map[string]int64, len(ValidQuestionTypes))
+	for _, t := range ValidQuestionTypes {
 		byt[t] = byType[t]
 	}
 	bys := make(map[string]int64, len(validQuestionStatus))
@@ -878,8 +881,8 @@ func (s *QuestionBankService) GetStats(credentialID *int) *QuestionBankStatsDTO 
 	return &QuestionBankStatsDTO{Total: total, ByType: byt, ByStatus: bys}
 }
 
-// toInt 将任意数值转为 int。
-func toInt(v interface{}) int {
+// ToInt 将任意数值转为 int。
+func ToInt(v interface{}) int {
 	switch n := v.(type) {
 	case float64:
 		return int(n)
@@ -894,7 +897,7 @@ func toInt(v interface{}) int {
 	return 0
 }
 
-func intToString(i int) string       { return toStringHelper(i) }
+func IntToString(i int) string       { return toStringHelper(i) }
 func floatToString(f float64) string { return toStringHelper(f) }
 
 func toStringHelper(v interface{}) string {

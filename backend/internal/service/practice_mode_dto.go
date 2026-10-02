@@ -1,15 +1,17 @@
 package service
 
+import "forklift-training/internal/questionbank"
+
 // 练习流 typed DTO（Ticket #225）。JSON key 与重构前 map 输出逐字一致
 // （shape-lock 测试冻结：practice_mode_dto_shape_test.go）。字段声明按 key 字母序。
 
 // PracticeStartResultDTO 标签/顺序练习开始或续练结果
 // （旧 StartTagPractice/StartSequential map 输出）。
 type PracticeStartResultDTO struct {
-	Questions    []QuestionDTO `json:"questions" nullability:"nonnil"`
-	CurrentIndex int           `json:"current_index"`
-	Total        int           `json:"total"`
-	Completed    int           `json:"completed"`
+	Questions    []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
+	CurrentIndex int                        `json:"current_index"`
+	Total        int                        `json:"total"`
+	Completed    int                        `json:"completed"`
 }
 
 // ProgressResultDTO 任意模式练习进度（旧 GetProgress/GetSequentialProgress map 输出）。
@@ -64,14 +66,14 @@ type HistoryResultDTO struct {
 
 // HistoryItemDTO 练习历史条目（旧 GetHistory items 内每条 map 输出；命中题目时追加 question）。
 type HistoryItemDTO struct {
-	ID           int          `json:"id"`
-	StudentID    int          `json:"student_id"`
-	QuestionID   int          `json:"question_id"`
-	IsCorrect    bool         `json:"is_correct"`
-	PracticeType string       `json:"practice_type"`
-	UserAnswer   string       `json:"user_answer"`
-	CreatedAt    string       `json:"created_at"`
-	Question     *QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
+	ID           int                       `json:"id"`
+	StudentID    int                       `json:"student_id"`
+	QuestionID   int                       `json:"question_id"`
+	IsCorrect    bool                      `json:"is_correct"`
+	PracticeType string                    `json:"practice_type"`
+	UserAnswer   string                    `json:"user_answer"`
+	CreatedAt    string                    `json:"created_at"`
+	Question     *questionbank.QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
 }
 
 // PracticePracticeStatsDTO 刷题练习聚合统计（Ticket #329，独立于 stats_aggregate 的 PracticeStatsDTO）。

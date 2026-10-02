@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -171,8 +172,8 @@ func TestQuestionMaxScore_TablesLocked(t *testing.T) {
 	}
 	for flow, rows := range want {
 		for qType, v := range rows {
-			if got := questionMaxScore(flow, qType); got != v {
-				t.Errorf("questionMaxScore(%q,%q) = %v want %v", flow, qType, got, v)
+			if got := questionbank.QuestionMaxScore(flow, qType); got != v {
+				t.Errorf("questionbank.QuestionMaxScore(%q,%q) = %v want %v", flow, qType, got, v)
 			}
 		}
 	}

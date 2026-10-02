@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 )
 
@@ -30,7 +31,7 @@ func guardOwnedInProgress(recordStudentID int, status string, studentID int, msg
 // 返回 (ordered, qMap)：ordered 保持传入顺序，qMap 供逐题取用。
 // 批量加载复用 loadQuestionsByIDs；列选择由 loadQuestionsByIDs 的 columns 参数承载。
 func loadOrderedQuestions(db *gorm.DB, ids []int) ([]model.Question, map[int]*model.Question) {
-	qMap := loadQuestionsByIDs(db, ids)
+	qMap := questionbank.LoadQuestionsByIDs(db, ids)
 	ordered := make([]model.Question, 0, len(ids))
 	for _, qid := range ids {
 		if q, ok := qMap[qid]; ok {

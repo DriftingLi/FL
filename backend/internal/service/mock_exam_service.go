@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -53,22 +54,22 @@ func NewMockExamService(db *gorm.DB, ai *aiassistant.GenerationService, logger *
 
 // MockExamStartDTO 开始模拟考试返回。
 type MockExamStartDTO struct {
-	MockExamID     int           `json:"mock_exam_id"`
-	Duration       int           `json:"duration"`
-	TotalScore     int           `json:"total_score"`
-	TotalQuestions int           `json:"total_questions"`
-	RemainingTime  int           `json:"remaining_time"`
-	Questions      []QuestionDTO `json:"questions" nullability:"nonnil"`
+	MockExamID     int                        `json:"mock_exam_id"`
+	Duration       int                        `json:"duration"`
+	TotalScore     int                        `json:"total_score"`
+	TotalQuestions int                        `json:"total_questions"`
+	RemainingTime  int                        `json:"remaining_time"`
+	Questions      []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
 }
 
 // MockExamResumeDTO 恢复考试返回。
 type MockExamResumeDTO struct {
-	MockExamID    int           `json:"mock_exam_id"`
-	Duration      int           `json:"duration"`
-	RemainingTime int           `json:"remaining_time"`
-	Questions     []QuestionDTO `json:"questions" nullability:"nonnil"`
-	Answers       any           `json:"answers"`
-	StartTime     string        `json:"start_time"`
+	MockExamID    int                        `json:"mock_exam_id"`
+	Duration      int                        `json:"duration"`
+	RemainingTime int                        `json:"remaining_time"`
+	Questions     []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
+	Answers       any                        `json:"answers"`
+	StartTime     string                     `json:"start_time"`
 }
 
 // MockExamAnswerDetailDTO 交卷逐题明细。
@@ -149,7 +150,7 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		duration = 90
 	}
 
-	selected, err := sampleQuestions(s.db, "", count, credentialID)
+	selected, err := questionbank.SampleQuestions(s.db, "", count, credentialID)
 	if err != nil {
 		return nil, errors.New("查询题目失败")
 	}
@@ -192,9 +193,9 @@ func (s *MockExamService) Start(studentID, count, duration int, credentialID *in
 		return nil, err
 	}
 
-	ordered := make([]QuestionDTO, 0, len(selected))
+	ordered := make([]questionbank.QuestionDTO, 0, len(selected))
 	for i := range selected {
-		ordered = append(ordered, newQuestionDTO(&selected[i], false))
+		ordered = append(ordered, questionbank.NewQuestionDTO(&selected[i], false))
 	}
 	return &MockExamStartDTO{
 		MockExamID:     mock.ID,
@@ -244,9 +245,9 @@ func (s *MockExamService) Resume(mockExamID, studentID int) (*MockExamResumeDTO,
 		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
 	ordered, _ := loadOrderedQuestions(s.db, ids)
-	questions := make([]QuestionDTO, 0, len(ordered))
+	questions := make([]questionbank.QuestionDTO, 0, len(ordered))
 	for i := range ordered {
-		questions = append(questions, newQuestionDTO(&ordered[i], false))
+		questions = append(questions, questionbank.NewQuestionDTO(&ordered[i], false))
 	}
 	answers := answersMapRoundTrip(mock.Answers)
 	startISO := ""
@@ -420,7 +421,7 @@ func mockExamMaxScore(q *model.Question) float64 {
 	if q.Score > 0 {
 		return float64(q.Score)
 	}
-	return questionMaxScore("mock_exam", q.Type)
+	return questionbank.QuestionMaxScore("mock_exam", q.Type)
 }
 
 // mockExamToDTO 历史条目构造（原 mockExamToDict 折叠入内）。

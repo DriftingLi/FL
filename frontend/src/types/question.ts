@@ -1,5 +1,5 @@
 // 题目、练习、考试相关类型定义
-// 题目字段与后端 typed QuestionDTO 契约逐字对齐（见 backend/internal/service/question_dto.go）。
+// 题目字段与后端 typed QuestionDTO 契约逐字对齐（见 backend/internal/questionbank/dto.go）。
 
 export type QuestionType = 'single_choice' | 'multi_choice' | 'true_false' | 'fault_image' | 'short_answer'
 

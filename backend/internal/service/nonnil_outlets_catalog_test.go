@@ -45,6 +45,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 )
 
@@ -59,14 +60,14 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 
 	"service.BatchDeleteFilesResult.failed_ids": outletBatchDeleteFilesEmpty,
 
-	"service.HistoryResultDTO.records":         outletPracticeHistoryEmpty,
-	"service.PracticeStartResultDTO.questions": outletPracticeStartSequential,
-	"service.MockExamHistoryDTO.exams":         outletMockExamHistoryEmpty,
-	"service.MockExamStartDTO.questions":       outletMockExamStart,
-	"service.PracticeStatsDTO.by_type":         outletPracticeStatsEmpty,
-	"service.QuestionBankStatsDTO.by_type":     outletQuestionBankStatsEmpty,
-	"service.QuestionBankStatsDTO.by_status":   outletQuestionBankStatsEmpty,
-	"service.WrongQuestionStatsDTO.by_type":    outletWrongQuestionStatsEmpty,
+	"service.HistoryResultDTO.records":            outletPracticeHistoryEmpty,
+	"service.PracticeStartResultDTO.questions":    outletPracticeStartSequential,
+	"service.MockExamHistoryDTO.exams":            outletMockExamHistoryEmpty,
+	"service.MockExamStartDTO.questions":          outletMockExamStart,
+	"service.PracticeStatsDTO.by_type":            outletPracticeStatsEmpty,
+	"questionbank.QuestionBankStatsDTO.by_type":   outletQuestionBankStatsEmpty,
+	"questionbank.QuestionBankStatsDTO.by_status": outletQuestionBankStatsEmpty,
+	"service.WrongQuestionStatsDTO.by_type":       outletWrongQuestionStatsEmpty,
 
 	"service.StudentCoursesDTO.courses":       outletStudentCoursesEmpty,
 	"service.StudentCourseDetailDTO.chapters": outletStudentCourseDetailNoChapters,
@@ -149,10 +150,10 @@ func outletPracticeStatsEmpty(t *testing.T) any {
 }
 
 // outletQuestionBankStatsEmpty 一次调用举证 by_type 与 by_status 两格：两个 map 都取自
-// groupByCount 的 make(map,...) 再按合法维度零填充 ⇒ 恒 `{}` 起、只会更满。
+// questionbank.GroupByCount 的 make(map,...) 再按合法维度零填充 ⇒ 恒 `{}` 起、只会更满。
 func outletQuestionBankStatsEmpty(t *testing.T) any {
 	t.Helper()
-	return NewQuestionBankService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStats(nil)
+	return questionbank.NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStats(nil)
 }
 
 func outletWrongQuestionStatsEmpty(t *testing.T) any {

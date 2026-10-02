@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
@@ -58,11 +59,11 @@ type freeQuestionsReq struct {
 // @Security BearerAuth
 // @Param count query int false "题量" default(20)
 // @Param type query string false "题型 single_choice 等"
-// @Success 200 {object} response.R{data=[]service.QuestionDTO} "success"
+// @Success 200 {object} response.R{data=[]questionbank.QuestionDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/free [get]
 func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
-	httpx.Endpoint[freeQuestionsReq, []service.QuestionDTO]{
+	httpx.Endpoint[freeQuestionsReq, []questionbank.QuestionDTO]{
 		Parse: func(c *gin.Context) (*freeQuestionsReq, error) {
 			return &freeQuestionsReq{
 				QType:        c.Query("type"),
@@ -70,7 +71,7 @@ func (h *PracticeModeHandler) GetFreeQuestions(c *gin.Context) {
 				CredentialID: middleware.CredentialIDPtr(c),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *freeQuestionsReq) (*[]service.QuestionDTO, error) {
+		Invoke: func(ctx context.Context, req *freeQuestionsReq) (*[]questionbank.QuestionDTO, error) {
 			result, err := h.svc.GetFreeQuestions(req.QType, req.Count, req.CredentialID)
 			if err != nil {
 				return nil, err

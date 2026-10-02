@@ -1,4 +1,4 @@
-package service
+package questionbank
 
 import (
 	"encoding/json"
@@ -33,9 +33,9 @@ type QuestionDTO struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// newQuestionDTO 将题目转为契约 DTO。
+// NewQuestionDTO 将题目转为契约 DTO。
 // includeAnswer=false 时省略答案/解析/参考答案/评分标准（学员侧）。
-func newQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
+func NewQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 	var options any
 	if len(q.Options) > 0 {
 		_ = json.Unmarshal(q.Options, &options)
@@ -71,8 +71,8 @@ var questionScoreByFlow = map[string]map[string]float64{
 	"mock_exam": {"single_choice": 3, "multi_choice": 4, "true_false": 2, "fault_image": 4, "short_answer": 10},
 }
 
-// questionMaxScore 按流取题型满分；未知流/题型返回 0。
-func questionMaxScore(flow, qType string) float64 {
+// QuestionMaxScore 按流取题型满分；未知流/题型返回 0。
+func QuestionMaxScore(flow, qType string) float64 {
 	if scores, ok := questionScoreByFlow[flow]; ok {
 		if v, ok := scores[qType]; ok {
 			return v
@@ -84,9 +84,9 @@ func questionMaxScore(flow, qType string) float64 {
 // shortAnswerPassRatio 简答题及格线：得分 ≥ 满分 × 0.6 记为正确（阅卷/练习共用）。
 const shortAnswerPassRatio = 0.6
 
-// shortAnswerPassed 简答题及格判定：score ≥ maxScore × shortAnswerPassRatio。
+// ShortAnswerPassed 简答题及格判定：score ≥ maxScore × shortAnswerPassRatio。
 // 0.6 及格公式的唯一实现——阅卷/复核/AI 确认/练习提交均经此推导，不各自重写。
-func shortAnswerPassed(score, maxScore float64) bool {
+func ShortAnswerPassed(score, maxScore float64) bool {
 	return score >= maxScore*shortAnswerPassRatio
 }
 

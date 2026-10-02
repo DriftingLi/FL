@@ -15,15 +15,16 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/training"
 )
 
-func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *QuestionBankService, *gorm.DB) {
+func newRealExamSvc(t *testing.T) (*RealExamService, *points.Service, *questionbank.Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	pointsSvc := points.NewService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
-	qsvc := NewQuestionBankService(db, nil, zap.NewNop())
+	qsvc := questionbank.NewService(db, nil, zap.NewNop())
 	return NewRealExamService(db, pointsSvc, zap.NewNop()), pointsSvc, qsvc, db
 }
 
@@ -41,7 +42,7 @@ func mustListQuestionTags(t *testing.T, svc *training.Service, activeOnly, inclu
 }
 
 // seedPaper 建证件 + 卷 + 卷题关联，返回 (paperID, 卷内题目按卷序的 ID)。
-func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents ...string) (int, []int) {
+func seedPaper(t *testing.T, db *gorm.DB, qsvc *questionbank.Service, qContents ...string) (int, []int) {
 	t.Helper()
 	cred := &model.Credential{Code: "forklift_n1", Name: "叉车司机N1证", Category: "special_operation"}
 	if err := db.Create(cred).Error; err != nil {
@@ -60,7 +61,7 @@ func seedPaper(t *testing.T, db *gorm.DB, qsvc *QuestionBankService, qContents .
 	}
 	ids := make([]int, 0, len(qContents))
 	for i, c := range qContents {
-		q := createQuestionAs(t, qsvc, db, QuestionCreateInput{
+		q := createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 			Type: "single_choice", Content: c, Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		}, "published")
 		ids = append(ids, q.ID)
@@ -90,11 +91,11 @@ func TestRealPaperPoolIsolation(t *testing.T) {
 	normalTag, _ := catalogSvc.CreateQuestionTag(training.QuestionTagInput{Code: "regulation", Name: "法规"})
 
 	// 真题题（source 标签）+ 普通题
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "真题独有题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{srcTag.ID},
 	}, "published")
-	createQuestionAs(t, qsvc, db, QuestionCreateInput{
+	createQuestionAs(t, qsvc, db, questionbank.QuestionCreateInput{
 		Type: "single_choice", Content: "普通题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{normalTag.ID},
 	}, "published")
