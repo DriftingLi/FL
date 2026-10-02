@@ -5185,7 +5185,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestPageResult"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestPageResult"
                                         }
                                     }
                                 }
@@ -5243,7 +5243,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -5312,7 +5312,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -5867,7 +5867,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterListResult"
+                                            "$ref": "#/definitions/auth.RecruiterListResult"
                                         }
                                     }
                                 }
@@ -5927,7 +5927,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterCreatedDTO"
+                                            "$ref": "#/definitions/auth.RecruiterCreatedDTO"
                                         }
                                     }
                                 }
@@ -5996,7 +5996,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterUpdatedDTO"
+                                            "$ref": "#/definitions/auth.RecruiterUpdatedDTO"
                                         }
                                     }
                                 }
@@ -6065,7 +6065,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterPasswordResetResult"
+                                            "$ref": "#/definitions/auth.RecruiterPasswordResetResult"
                                         }
                                     }
                                 }
@@ -6577,7 +6577,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorRegisterResultDTO"
+                                            "$ref": "#/definitions/auth.TutorRegisterResultDTO"
                                         }
                                     }
                                 }
@@ -7674,7 +7674,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -7798,7 +7798,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -7853,7 +7853,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -7911,7 +7911,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -7963,7 +7963,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8095,7 +8095,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8174,7 +8174,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileDTO"
+                                            "$ref": "#/definitions/auth.ProfileDTO"
                                         }
                                     }
                                 }
@@ -8226,7 +8226,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8278,7 +8278,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8415,7 +8415,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
+                                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
                                         }
                                     }
                                 }
@@ -8711,7 +8711,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8762,7 +8762,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RefreshResultDTO"
+                                            "$ref": "#/definitions/auth.RefreshResultDTO"
                                         }
                                     }
                                 }
@@ -8814,7 +8814,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8866,7 +8866,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginResult"
+                                            "$ref": "#/definitions/auth.LoginResult"
                                         }
                                     }
                                 }
@@ -8907,7 +8907,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WechatQRCodeInfoDTO"
+                                            "$ref": "#/definitions/auth.WechatQRCodeInfoDTO"
                                         }
                                     }
                                 }
@@ -8953,7 +8953,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WxLoginResult"
+                                            "$ref": "#/definitions/auth.WxLoginResult"
                                         }
                                     }
                                 }
@@ -8991,7 +8991,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/api.GenerateCaptchaDTO"
+                                            "$ref": "#/definitions/auth.GenerateCaptchaDTO"
                                         }
                                     }
                                 }
@@ -23745,13 +23745,350 @@ const docTemplate = `{
                 }
             }
         },
-        "api.GenerateCaptchaDTO": {
+        "auth.GenerateCaptchaDTO": {
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string"
                 },
                 "image": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.LoginResult": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ProfileChangeRequestDTO": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "field_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "new_value": {
+                    "type": "string"
+                },
+                "old_value": {
+                    "type": "string"
+                },
+                "reject_reason": {
+                    "type": "string"
+                },
+                "reviewed_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reviewed_by": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ProfileChangeRequestPageResult": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "requests": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "auth.ProfileDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "avatar_url": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "company": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "email": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "has_password": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "pending_profile_change": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/auth.ProfileChangeRequestDTO"
+                        }
+                    ],
+                    "x-nullable": true,
+                    "x-optional": true
+                },
+                "phone": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "role": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string",
+                    "x-optional": true
+                }
+            }
+        },
+        "auth.RecruiterCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RecruiterListItem": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RecruiterListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/auth.RecruiterListItem"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "auth.RecruiterPasswordResetResult": {
+            "type": "object"
+        },
+        "auth.RecruiterUpdatedDTO": {
+            "type": "object",
+            "properties": {
+                "business_scope": {
+                    "type": "string"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "contact_email": {
+                    "type": "string"
+                },
+                "contact_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "credit_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RefreshResultDTO": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.TutorRegisterResultDTO": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.WechatQRCodeInfoDTO": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "qr_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.WxLoginResult": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "avatar": {
+                    "type": "string"
+                },
+                "isNew": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -27708,29 +28045,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.LoginResult": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "service.MockExamAnswerDetailDTO": {
             "type": "object",
             "properties": {
@@ -28114,124 +28428,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.ProfileChangeRequestDTO": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "field_type": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "new_value": {
-                    "type": "string"
-                },
-                "old_value": {
-                    "type": "string"
-                },
-                "reject_reason": {
-                    "type": "string"
-                },
-                "reviewed_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "reviewed_by": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ProfileChangeRequestPageResult": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "requests": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ProfileChangeRequestDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProfileDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "avatar_url": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "company": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "email": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "has_password": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "pending_profile_change": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/service.ProfileChangeRequestDTO"
-                        }
-                    ],
-                    "x-nullable": true,
-                    "x-optional": true
-                },
-                "phone": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "role": {
-                    "type": "string"
-                },
-                "uid": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string",
-                    "x-optional": true
                 }
             }
         },
@@ -28734,142 +28930,6 @@ const docTemplate = `{
                 },
                 "unread_count": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.RecruiterCreatedDTO": {
-            "type": "object",
-            "properties": {
-                "business_scope": {
-                    "type": "string"
-                },
-                "company_name": {
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "credit_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RecruiterListItem": {
-            "type": "object",
-            "properties": {
-                "business_scope": {
-                    "type": "string"
-                },
-                "company_name": {
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credit_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RecruiterListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.RecruiterListItem"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruiterPasswordResetResult": {
-            "type": "object"
-        },
-        "service.RecruiterUpdatedDTO": {
-            "type": "object",
-            "properties": {
-                "business_scope": {
-                    "type": "string"
-                },
-                "company_name": {
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "credit_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RefreshResultDTO": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
                 }
             }
         },
@@ -29526,34 +29586,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.TutorRegisterResultDTO": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "tutor_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.WechatQRCodeInfoDTO": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "qr_url": {
-                    "type": "string"
-                }
-            }
-        },
         "service.WrongQuestionBatchRemoveResultDTO": {
             "type": "object",
             "properties": {
@@ -29647,38 +29679,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "service.WxLoginResult": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "avatar": {
-                    "type": "string"
-                },
-                "isNew": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         },

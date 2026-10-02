@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/auth"
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/service"
@@ -16,7 +17,7 @@ import (
 )
 
 // RegisterAdminRecruiterRoutes 注册 /api/admin/recruiters 蓝图（管理员邀约制创建招聘者）。
-func RegisterAdminRecruiterRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *service.AuthService) {
+func RegisterAdminRecruiterRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *auth.Service) {
 	g := rg.Group("/admin/recruiters", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRecruiterManage))
 	g.POST("", NewAdminRecruiterHandler(authSvc).Create)
 	g.PUT("/:id/status", NewAdminRecruiterHandler(authSvc).ToggleStatus)
@@ -27,11 +28,11 @@ func RegisterAdminRecruiterRoutes(rg *gin.RouterGroup, rd RouterDeps, authSvc *s
 
 // AdminRecruiterHandler 企业招聘者管理 handler（邀约制）。
 type AdminRecruiterHandler struct {
-	authSvc *service.AuthService
+	authSvc *auth.Service
 }
 
 // NewAdminRecruiterHandler 创建 handler。
-func NewAdminRecruiterHandler(authSvc *service.AuthService) *AdminRecruiterHandler {
+func NewAdminRecruiterHandler(authSvc *auth.Service) *AdminRecruiterHandler {
 	return &AdminRecruiterHandler{authSvc: authSvc}
 }
 
@@ -42,26 +43,26 @@ func NewAdminRecruiterHandler(authSvc *service.AuthService) *AdminRecruiterHandl
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "创建请求 {username,password,company_name,credit_code,business_scope,contact_name,contact_phone,contact_email,wechat}"
-// @Success 201 {object} response.R{data=service.RecruiterCreatedDTO} "招聘者账号创建成功"
+// @Success 201 {object} response.R{data=auth.RecruiterCreatedDTO} "招聘者账号创建成功"
 // @Failure 400 {object} response.R "参数校验失败"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/recruiters [post]
 // Create 创建招聘者账号 POST /api/admin/recruiters
 func (h *AdminRecruiterHandler) Create(c *gin.Context) {
-	httpx.Endpoint[service.RecruiterCreateInput, service.RecruiterCreatedDTO]{
-		Parse: func(c *gin.Context) (*service.RecruiterCreateInput, error) {
-			req, err := httpx.BindJSON[service.RecruiterCreateInput](c)
+	httpx.Endpoint[auth.RecruiterCreateInput, auth.RecruiterCreatedDTO]{
+		Parse: func(c *gin.Context) (*auth.RecruiterCreateInput, error) {
+			req, err := httpx.BindJSON[auth.RecruiterCreateInput](c)
 			if err != nil {
 				return nil, err
 			}
 			return req, nil
 		},
-		Invoke: func(ctx context.Context, req *service.RecruiterCreateInput) (*service.RecruiterCreatedDTO, error) {
+		Invoke: func(ctx context.Context, req *auth.RecruiterCreateInput) (*auth.RecruiterCreatedDTO, error) {
 			rec, err := h.authSvc.CreateRecruiter(*req)
 			if err != nil {
 				return nil, err
 			}
-			dto := service.NewRecruiterCreatedDTO(rec)
+			dto := auth.NewRecruiterCreatedDTO(rec)
 			return &dto, nil
 		},
 	}.WithSuccess(httpx.Created("招聘者账号创建成功"), http.StatusBadRequest).Handle(c)
@@ -118,13 +119,13 @@ func (h *AdminRecruiterHandler) ToggleStatus(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "招聘者 ID"
 // @Param body body object false "编辑请求 {username,company_name,credit_code,business_scope,contact_name,contact_phone,contact_email,wechat}"
-// @Success 200 {object} response.R{data=service.RecruiterUpdatedDTO} "招聘者信息已更新"
+// @Success 200 {object} response.R{data=auth.RecruiterUpdatedDTO} "招聘者信息已更新"
 // @Failure 400 {object} response.R "参数校验失败"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/recruiters/{id} [put]
 // Edit 编辑招聘者企业信息 PUT /api/admin/recruiters/:id（#417）。
 func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
-	httpx.Endpoint[idParam, service.RecruiterUpdatedDTO]{
+	httpx.Endpoint[idParam, auth.RecruiterUpdatedDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -132,8 +133,8 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*service.RecruiterUpdatedDTO, error) {
-			var in service.RecruiterEditInput
+		Invoke: func(ctx context.Context, req *idParam) (*auth.RecruiterUpdatedDTO, error) {
+			var in auth.RecruiterEditInput
 			if err := c.ShouldBindJSON(&in); err != nil {
 				return nil, httpx.BadRequest("请求数据无效")
 			}
@@ -141,7 +142,7 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			dto := service.NewRecruiterUpdatedDTO(rec)
+			dto := auth.NewRecruiterUpdatedDTO(rec)
 			return &dto, nil
 		},
 	}.WithSuccess(httpx.OkMsg("招聘者信息已更新"), http.StatusBadRequest).Handle(c)
@@ -155,13 +156,13 @@ func (h *AdminRecruiterHandler) Edit(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "招聘者 ID"
 // @Param body body object false "重置请求 {password}"
-// @Success 200 {object} response.R{data=service.RecruiterPasswordResetResult} "密码已重置"
+// @Success 200 {object} response.R{data=auth.RecruiterPasswordResetResult} "密码已重置"
 // @Failure 400 {object} response.R "新密码不能为空/长度非法"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/recruiters/{id}/password [put]
 // ResetPassword 重置招聘者密码 PUT /api/admin/recruiters/:id/password（#417）。
 func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
-	httpx.Endpoint[idParam, service.RecruiterPasswordResetResult]{
+	httpx.Endpoint[idParam, auth.RecruiterPasswordResetResult]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "id", "招聘者ID无效")
 			if err != nil {
@@ -169,7 +170,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*service.RecruiterPasswordResetResult, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*auth.RecruiterPasswordResetResult, error) {
 			var body struct {
 				Password string `json:"password"`
 			}
@@ -179,7 +180,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 			if err := h.authSvc.ResetRecruiterPassword(ctx, req.ID, body.Password); err != nil {
 				return nil, err
 			}
-			return &service.RecruiterPasswordResetResult{}, nil
+			return &auth.RecruiterPasswordResetResult{}, nil
 		},
 	}.WithSuccess(httpx.OkMsg("密码已重置"), http.StatusBadRequest).Handle(c)
 }
@@ -192,7 +193,7 @@ func (h *AdminRecruiterHandler) ResetPassword(c *gin.Context) {
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Param keyword query string false "关键字（企业名/账号）"
-// @Success 200 {object} response.R{data=service.RecruiterListResult} "success"
+// @Success 200 {object} response.R{data=auth.RecruiterListResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "查询失败"
 // @Router /admin/recruiters [get]

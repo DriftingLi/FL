@@ -1,10 +1,9 @@
-// Package service 实现业务服务层。
-package service
+// Package auth 认证与账号域：注册登录、双令牌会话（ADR-0012）、验证码/短信/邮件通道、微信登录、资料绑定与资料审核。
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler*.go 是 HTTP 出口，service.go / code_service.go / wechat_service.go / profile_review_service.go 是域实现。
+package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -12,9 +11,10 @@ import (
 	"time"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
+	"forklift-training/internal/service"
 
 	"go.uber.org/zap"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
@@ -33,12 +33,12 @@ var (
 // recruiterUsernameRe 招聘者用户名格式：4-20 位字母/数字/下划线（与登录表单 usernameRules 一致）。
 var recruiterUsernameRe = regexp.MustCompile("^[a-zA-Z0-9_]{4,20}$")
 
-// AuthService 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
-type AuthService struct {
+// Service 认证服务，处理学员/管理员/导师的登录、注册与令牌签发。
+type Service struct {
 	db        *gorm.DB
 	session   *security.Session
 	reviewSvc *ProfileReviewService
-	forumCnt  ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
+	forumCnt  service.ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
 
 	defaultAdminPwd   string
 	defaultTutorPwd   string
@@ -47,10 +47,10 @@ type AuthService struct {
 	logger *zap.Logger
 }
 
-// NewAuthService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）；
+// NewService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）；
 // forumCnt 与 ForumService 共享同一计数器实例（构造注入，注销同事务回扣 likes_count）。
-func NewAuthService(db *gorm.DB, sess *security.Session, forumCnt ForumCounter, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *AuthService {
-	return &AuthService{
+func NewService(db *gorm.DB, sess *security.Session, forumCnt service.ForumCounter, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *Service {
+	return &Service{
 		db:                db,
 		session:           sess,
 		forumCnt:          forumCnt,
@@ -62,57 +62,57 @@ func NewAuthService(db *gorm.DB, sess *security.Session, forumCnt ForumCounter, 
 }
 
 // SetProfileReviewService 注入资料审核服务（GetProfile 组装待审资料状态用）。
-func (s *AuthService) SetProfileReviewService(rs *ProfileReviewService) { s.reviewSvc = rs }
+func (s *Service) SetProfileReviewService(rs *ProfileReviewService) { s.reviewSvc = rs }
 
 // GetProfile 组装 /auth/me 返回的用户资料（按角色查询对应账号表）。
 // 响应字段为前端约定（auth store 依赖 user_id/account/role/uid/username、
 // 学员资料字段与 has_password / pending_profile_change），保持稳定。
-func (s *AuthService) GetProfile(userID int, role, account string) *ProfileDTO {
+func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 	dto := &ProfileDTO{
 		UserID:  userID,
 		Account: account,
 		Role:    role,
 	}
 	switch role {
-	case HrwaiRole:
+	case service.HrwaiRole:
 		var u model.HrwaiUser
 		if err := s.db.First(&u, userID).Error; err == nil {
 			dto.Account = u.Account
-			dto.UID = ptr(FormatUID(u.UID))
-			dto.Username = ptr(u.Username)
-			dto.AvatarURL = ptr(u.AvatarURL)
-			dto.Phone = ptr(MaskedPhone(u.Phone))
-			dto.Email = ptr(u.Email)
-			dto.Company = ptr(u.Company)
+			dto.UID = coerce.Ptr(service.FormatUID(u.UID))
+			dto.Username = coerce.Ptr(u.Username)
+			dto.AvatarURL = coerce.Ptr(u.AvatarURL)
+			dto.Phone = coerce.Ptr(service.MaskedPhone(u.Phone))
+			dto.Email = coerce.Ptr(u.Email)
+			dto.Company = coerce.Ptr(u.Company)
 			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
-			dto.HasPassword = ptr(u.Password != "")
+			dto.HasPassword = coerce.Ptr(u.Password != "")
 		}
 		// 待审核的资料修改（昵称/头像），供前端展示"审核中"状态。
 		// GetPendingForUser 无待审时返回 nil -> 序列化为 null（键存在）；出错时键缺失。
 		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
 			dto.PendingProfileChange = &pending
 		}
-	case TutorRole:
+	case service.TutorRole:
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
-			dto.Name = ptr(t.Name)
-			dto.Username = ptr(t.Username)
+			dto.Name = coerce.Ptr(t.Name)
+			dto.Username = coerce.Ptr(t.Username)
 		}
 	case "admin":
 		var a model.Admin
 		if err := s.db.First(&a, userID).Error; err == nil {
-			dto.Name = ptr(a.Name)
-			dto.Username = ptr(a.Username)
+			dto.Name = coerce.Ptr(a.Name)
+			dto.Username = coerce.Ptr(a.Username)
 		}
-	case RecruiterRole:
+	case service.RecruiterRole:
 		var r model.RecruiterUser
 		if err := s.db.First(&r, userID).Error; err == nil {
 			dto.Account = r.Username
-			dto.Username = ptr(r.Username)
-			dto.Name = ptr(r.ContactName)
-			dto.Company = ptr(r.CompanyName)
-			dto.Email = ptr(r.ContactEmail)
-			dto.Phone = ptr(r.ContactPhone)
+			dto.Username = coerce.Ptr(r.Username)
+			dto.Name = coerce.Ptr(r.ContactName)
+			dto.Company = coerce.Ptr(r.CompanyName)
+			dto.Email = coerce.Ptr(r.ContactEmail)
+			dto.Phone = coerce.Ptr(r.ContactPhone)
 		}
 	}
 	return dto
@@ -136,33 +136,6 @@ type ProfileDTO struct {
 	Username             *string                   `json:"username,omitempty" extensions:"x-optional"`
 }
 
-// ptr 构造 T 的指针（ProfileDTO 指针字段表达键缺失/存在两态）。
-func ptr[T any](v T) *T { return &v }
-
-// MaskedPhone 隐藏占位手机号（邮箱注册 email_ / 微信建号 wxp_ / 注销哨兵 deleted__sentinel，
-// IsPlaceholderPhone 单点判定），/auth/me 源头过滤不下发客户端——修复微信建号用户
-// /auth/me 泄漏 wxp_ 串的问题。
-func MaskedPhone(phone string) string {
-	if IsPlaceholderPhone(phone) {
-		return ""
-	}
-	return phone
-}
-
-// HashPassword 使用 bcrypt 加密密码。
-func HashPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hash), nil
-}
-
-// VerifyPassword 校验密码。
-func VerifyPassword(password, hashed string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)) == nil
-}
-
 // RefreshResultDTO 双令牌轮换的响应 {"refresh_token": "...", "token": "..."}。
 // 字段声明按 JSON key 字母序 —— 与改造前 raw handler 里 map[string]string 的序列化字节序一致（#959 auth 域收口）。
 type RefreshResultDTO struct {
@@ -183,22 +156,6 @@ type LoginResult struct {
 	Role         string `json:"role"`
 }
 
-// HrwaiRole 统一 HRWAI 账号角色名(替代原 "student" 和 "valuation_user")。
-const HrwaiRole = "hrwai_user"
-
-// RecruiterRole 企业招聘者角色名（第四角色，独立表 recruiter_users，邀约制）。
-const RecruiterRole = "recruiter"
-
-// TutorRole 讲师角色名。**与 HrwaiRole/RecruiterRole 同住一处**（ADR-0064 判据）：这个字符串
-// 同时是 JWT 的角色 claim 与全会话吊销的命名空间键片段，此前只以字面量散在登录分派
-// （auth_service.go:94 / :307），吊销侧一用就得再抄一遍——同一个事实的两个住处。
-// 注意与 authz.RoleTutor 不是一回事：那一层是能力角色名，这一层是凭证命名空间。
-const TutorRole = "tutor"
-
-// ErrRecruiterNotFound 「招聘者账号不存在」这一事实的唯一载体（ADR-0064 决策 1/2）。
-// 与吊销命名空间 RecruiterRole 同处一地，api 侧据此把它与「查不动」分档。
-var ErrRecruiterNotFound = errors.New("招聘者不存在")
-
 // loginCredentials 登录骨架按角色差异点：查表结果（密码/禁用语义）。
 // status 为 nil 表示该角色无禁用语义（admin 表无 status 字段）。
 type loginCredentials struct {
@@ -211,8 +168,8 @@ type loginCredentials struct {
 
 // verifyAndIssue 登录共享骨架：验密 → 禁用校验 → 签发 → 组结果。
 // plainPassword 为用户输入的明文，errMessage 为验密失败的统一文案（防账号枚举）。
-func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
-	if !VerifyPassword(plainPassword, c.password) {
+func (s *Service) verifyAndIssue(plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
+	if !service.VerifyPassword(plainPassword, c.password) {
 		return nil, errors.New(errMessage)
 	}
 	return s.issueLogin(c, role)
@@ -220,7 +177,7 @@ func (s *AuthService) verifyAndIssue(plainPassword string, c loginCredentials, r
 
 // issueLogin 登录骨架后半段：禁用校验 → 签发 → 组结果。
 // 密码三入口与验证码登录/注册共用（ADR-0011 向验证码路径的延伸，ADR-0012 §5）。
-func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult, error) {
+func (s *Service) issueLogin(c loginCredentials, role string) (*LoginResult, error) {
 	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
@@ -240,7 +197,7 @@ func (s *AuthService) issueLogin(c loginCredentials, role string) (*LoginResult,
 
 // HrwaiLogin 统一 HRWAI 账号登录,支持账号或手机号。
 // 三套前端(培训学员端 / 残值评估 / AI 助手)共用此登录方法。
-func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error) {
+func (s *Service) HrwaiLogin(account, password string) (*LoginResult, error) {
 	var user model.HrwaiUser
 	// 同一输入既可能是登录账号也可能是手机号，二者择一命中即可
 	if err := s.db.Where("account = ? OR phone = ?", account, account).First(&user).Error; err != nil {
@@ -253,20 +210,11 @@ func (s *AuthService) HrwaiLogin(account, password string) (*LoginResult, error)
 	return s.verifyAndIssue(password, loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username,
 		password: user.Password, status: &status,
-	}, HrwaiRole, "账号或密码错误")
-}
-
-// generateRandomAccount 生成随机登录账号（如 hr1a2b3c4d5e6f78）。
-func generateRandomAccount() (string, error) {
-	b := make([]byte, 9)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "hr" + hex.EncodeToString(b), nil
+	}, service.HrwaiRole, "账号或密码错误")
 }
 
 // GetHrwaiUserByID 用于 /me 接口查询用户信息。
-func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
+func (s *Service) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
 	var user model.HrwaiUser
 	if err := s.db.First(&user, id).Error; err != nil {
 		return nil, err
@@ -276,7 +224,7 @@ func (s *AuthService) GetHrwaiUserByID(id int) (*model.HrwaiUser, error) {
 
 // UpdatePassword 登录态改密入口（账号密码登录用）：口令落库与全会话吊销都交给
 // SetNewPassword（ADR-0062 票7 两条口令写面合一），本方法只声明自己这一族的失败策略。
-func (s *AuthService) UpdatePassword(ctx context.Context, userID int, password string) error {
+func (s *Service) UpdatePassword(ctx context.Context, userID int, password string) error {
 	res := s.SetNewPassword(ctx, userID, password)
 	if !res.Applied() {
 		return res.Err
@@ -289,8 +237,18 @@ func (s *AuthService) UpdatePassword(ctx context.Context, userID int, password s
 	return nil
 }
 
+// SetNewPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →
+// 全会话吊销（RevokeIdentity，身份命名空间 hrwai_user）。
+//
+// P2 波 3a（ADR-0070）：动作本体留在 internal/service（ApplyHrwaiPassword）——留驻的
+// AdminService 代重置也要走同一条动作，而 service → auth 会成环（单向边 auth → service）；
+// 本方法只是域内调用点（UpdatePassword / VerifyCodeService）的稳定名字。
+func (s *Service) SetNewPassword(ctx context.Context, userID int, password string) service.PasswordWriteResult {
+	return service.ApplyHrwaiPassword(ctx, s.db, s.session, userID, password)
+}
+
 // AdminLogin 管理员登录（admin 表无 status 字段，无禁用语义）。
-func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error) {
+func (s *Service) AdminLogin(username, password string) (*LoginResult, error) {
 	var admin model.Admin
 	if err := s.db.Where("username = ?", username).First(&admin).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -305,7 +263,7 @@ func (s *AuthService) AdminLogin(username, password string) (*LoginResult, error
 }
 
 // TutorLogin 导师登录。
-func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error) {
+func (s *Service) TutorLogin(username, password string) (*LoginResult, error) {
 	var tutor model.Tutor
 	if err := s.db.Where("username = ?", username).First(&tutor).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -317,7 +275,7 @@ func (s *AuthService) TutorLogin(username, password string) (*LoginResult, error
 	return s.verifyAndIssue(password, loginCredentials{
 		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
 		password: tutor.Password, status: &status,
-	}, TutorRole, "讲师账号或密码错误")
+	}, service.TutorRole, "讲师账号或密码错误")
 }
 
 // TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
@@ -331,13 +289,13 @@ type TutorRegisterResultDTO struct {
 }
 
 // TutorRegister 导师注册。
-func (s *AuthService) TutorRegister(username, password, name string) (*TutorRegisterResultDTO, error) {
+func (s *Service) TutorRegister(username, password, name string) (*TutorRegisterResultDTO, error) {
 	var count int64
 	s.db.Model(&model.Tutor{}).Where("username = ?", username).Count(&count)
 	if count > 0 {
 		return nil, errors.New("用户名已被注册")
 	}
-	hashed, err := HashPassword(password)
+	hashed, err := service.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +317,7 @@ func (s *AuthService) TutorRegister(username, password, name string) (*TutorRegi
 }
 
 // RecruiterLogin 企业招聘者登录（第四角色，邀约制独立表）。
-func (s *AuthService) RecruiterLogin(username, password string) (*LoginResult, error) {
+func (s *Service) RecruiterLogin(username, password string) (*LoginResult, error) {
 	var r model.RecruiterUser
 	if err := s.db.Where("username = ?", username).First(&r).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -371,7 +329,7 @@ func (s *AuthService) RecruiterLogin(username, password string) (*LoginResult, e
 	return s.verifyAndIssue(password, loginCredentials{
 		id: r.ID, account: r.Username, username: r.Username,
 		password: r.Password, status: &status,
-	}, RecruiterRole, "招聘者账号或密码错误")
+	}, service.RecruiterRole, "招聘者账号或密码错误")
 }
 
 // RecruiterCreateInput 管理员创建招聘者账号的输入（企业信息全部必填）。
@@ -490,7 +448,7 @@ func NewRecruiterUpdatedDTO(rec *model.RecruiterUser) RecruiterUpdatedDTO {
 }
 
 // CreateRecruiter 管理员创建招聘者账号（邀约制，企业字段全部必填）。
-func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.RecruiterUser, error) {
+func (s *Service) CreateRecruiter(in RecruiterCreateInput) (*model.RecruiterUser, error) {
 	if err := ValidateRecruiterInput(in); err != nil {
 		return nil, err
 	}
@@ -513,7 +471,7 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 	if creditCnt > 0 {
 		return nil, ErrCreditCodeTaken
 	}
-	hashed, err := HashPassword(in.Password)
+	hashed, err := service.HashPassword(in.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -541,11 +499,11 @@ func (s *AuthService) CreateRecruiter(in RecruiterCreateInput) (*model.Recruiter
 // 禁用同时吊销该身份全部 refresh（ADR-0060 票2，spec #1201 场景 29）：只改状态列
 // 不构成「停用真实生效」——手上仍持 refresh 的会话能继续换新 access。与改密同族，
 // 状态列已生效故吊销失败只记日志、不回退。
-func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16, error) {
+func (s *Service) ToggleRecruiterStatus(ctx context.Context, id int) (int16, error) {
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, ErrRecruiterNotFound
+			return 0, service.ErrRecruiterNotFound
 		}
 		return 0, err
 	}
@@ -557,7 +515,7 @@ func (s *AuthService) ToggleRecruiterStatus(ctx context.Context, id int) (int16,
 		return 0, err
 	}
 	if next == 0 {
-		if err := s.session.RevokeIdentity(ctx, RecruiterRole, id); err != nil {
+		if err := s.session.RevokeIdentity(ctx, service.RecruiterRole, id); err != nil {
 			s.logger.Warn("招聘员禁用后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
 		}
 	}
@@ -588,7 +546,7 @@ type RecruiterListResult struct {
 
 // ListRecruiters 招聘者列表（分页 + 关键字过滤企业名/账号；#416 真实现替换硬编码空数组桩）。
 // 响应只含白名单字段（无 Password 等凭据）。
-func (s *AuthService) ListRecruiters(page, pageSize int, keyword string) (*RecruiterListResult, error) {
+func (s *Service) ListRecruiters(page, pageSize int, keyword string) (*RecruiterListResult, error) {
 	rows, total, page, _, err := paging.QueryWithMax[model.RecruiterUser](s.db, page, pageSize, 20, 100,
 		"created_at DESC", func(q *gorm.DB) *gorm.DB {
 			if keyword != "" {
@@ -634,7 +592,7 @@ type RecruiterEditInput struct {
 
 // EditRecruiter 编辑招聘者企业信息与联系人（#417）：与创建同源校验（必填判定单点），
 // 不允许改动账号归属与角色；启停仍走 ToggleRecruiterStatus 独立端点。
-func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.RecruiterUser, error) {
+func (s *Service) EditRecruiter(id int, in RecruiterEditInput) (*model.RecruiterUser, error) {
 	// 必填校验复用 ValidateRecruiterInput 的字段集（账号/密码位忽略，企业字段逐条同源）
 	if err := ValidateRecruiterInput(RecruiterCreateInput{
 		Username:      "keep",
@@ -651,7 +609,7 @@ func (s *AuthService) EditRecruiter(id int, in RecruiterEditInput) (*model.Recru
 	}
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
-		return nil, ErrRecruiterNotFound
+		return nil, service.ErrRecruiterNotFound
 	}
 	// #450：编辑把信用代码改成别家已占用的值 → 同样被拒（自己保持原值不算占用）。
 	credit := strings.TrimSpace(in.CreditCode)
@@ -702,9 +660,10 @@ type RecruiterPasswordResetResult struct{}
 
 // ResetRecruiterPassword 重置招聘者口令（#417）：旧口令立即失效，响应不回显任何口令字段。
 // 招聘者写面在 recruiter 命名空间里自建（SetNewPassword 落的是 hrwai_users），但长度规则
-// 与吊销族策略同源：validatePasswordLength + 落库后尽力而为吊销。
-func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
-	res := applyNewPassword(ctx, s.db, s.session, recruiterPasswordSubject, id, password)
+// 与吊销族策略同源：service.ApplyRecruiterPassword（动作本体与 service.ValidatePasswordLength 同在
+// internal/service，P2 波 3a 后反向边不许存在）。
+func (s *Service) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
+	res := service.ApplyRecruiterPassword(ctx, s.db, s.session, id, password)
 	if !res.Applied() {
 		return res.Err
 	}
@@ -716,14 +675,14 @@ func (s *AuthService) ResetRecruiterPassword(ctx context.Context, id int, passwo
 
 // EnsureDefaultUsers 确保默认账号存在（admin/tutor/student），密码由环境变量配置。
 // 已存在的账号会被跳过（不会重置密码）。
-func (s *AuthService) EnsureDefaultUsers() error {
+func (s *Service) EnsureDefaultUsers() error {
 	// 1. 默认管理员 admin
 	var adminCount int64
 	if err := s.db.Model(&model.Admin{}).Where("username = ?", "admin").Count(&adminCount).Error; err != nil {
 		return err
 	}
 	if adminCount == 0 {
-		hashed, err := HashPassword(s.defaultAdminPwd)
+		hashed, err := service.HashPassword(s.defaultAdminPwd)
 		if err != nil {
 			return err
 		}
@@ -744,7 +703,7 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		return err
 	}
 	if tutorCount == 0 {
-		hashed, err := HashPassword(s.defaultTutorPwd)
+		hashed, err := service.HashPassword(s.defaultTutorPwd)
 		if err != nil {
 			return err
 		}
@@ -766,12 +725,12 @@ func (s *AuthService) EnsureDefaultUsers() error {
 		return err
 	}
 	if studentCount == 0 {
-		hashed, err := HashPassword(s.defaultStudentPwd)
+		hashed, err := service.HashPassword(s.defaultStudentPwd)
 		if err != nil {
 			return err
 		}
 		student := model.HrwaiUser{
-			UID:       NextUID(),
+			UID:       service.NextUID(),
 			Account:   "student",
 			Username:  "测试学员",
 			Password:  hashed,
@@ -788,7 +747,7 @@ func (s *AuthService) EnsureDefaultUsers() error {
 }
 
 // UpdateCompany 更新学员单位信息，立即生效不走审核。
-func (s *AuthService) UpdateCompany(userID int, company string) error {
+func (s *Service) UpdateCompany(userID int, company string) error {
 	if len(company) > 50 {
 		return errors.New("单位名称不能超过 50 个字符")
 	}
@@ -846,7 +805,7 @@ var accountCleanupSteps = []accountCleanupStep{
 // 两段自证（spec #1345 决策 10）：事务内一次（失败即整笔回滚）、提交后再一次（失败即报错）。
 // 旧形态里逐条手写的删除**从不读 .Error**，PG 上一旦某条语句把事务打进 aborted 态、后续语句与
 // 提交全部空转，接口却照样回 200「注销成功」而数据仍在（真实缺陷 #6）。
-func (s *AuthService) DeleteAccount(userID int) error {
+func (s *Service) DeleteAccount(userID int) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		var user model.HrwaiUser
 		if err := tx.First(&user, userID).Error; err != nil {
@@ -856,7 +815,7 @@ func (s *AuthService) DeleteAccount(userID int) error {
 		var sentinel model.HrwaiUser
 		if err := tx.Where("account = ?", "__deleted_user").First(&sentinel).Error; err != nil {
 			sentinel = model.HrwaiUser{
-				UID:       NextUID(),
+				UID:       service.NextUID(),
 				Account:   "__deleted_user",
 				Username:  "已注销用户",
 				Password:  "",
@@ -895,7 +854,7 @@ func (s *AuthService) DeleteAccount(userID int) error {
 
 // runAccountCleanup 单点执行清理表：逐条删除、逐条判错。
 // 判错统一在这里做（旧实现逐条手写、错误各判各的，13 条删除里只有 2 条读了 .Error）。
-func (s *AuthService) runAccountCleanup(tx *gorm.DB, userID int) error {
+func (s *Service) runAccountCleanup(tx *gorm.DB, userID int) error {
 	for i := range accountCleanupSteps {
 		step := accountCleanupSteps[i]
 		var err error
@@ -913,7 +872,7 @@ func (s *AuthService) runAccountCleanup(tx *gorm.DB, userID int) error {
 }
 
 // proveAccountGone 自证主行已不存在。exec 由调用方给（事务内传 tx、提交后传 s.db）。
-func (s *AuthService) proveAccountGone(exec *gorm.DB, userID int) error {
+func (s *Service) proveAccountGone(exec *gorm.DB, userID int) error {
 	var left int64
 	if err := exec.Model(&model.HrwaiUser{}).Where("id = ?", userID).Count(&left).Error; err != nil {
 		return fmt.Errorf("注销自证读不出用户 %d 的主行状态（表 hrwai_users）: %w", userID, err)
@@ -927,7 +886,7 @@ func (s *AuthService) proveAccountGone(exec *gorm.DB, userID int) error {
 // deleteLikesWithRefund 执行带计数回扣的那两行（forum_topic_like / forum_reply_like）：
 // 先聚合（删之前才知道回扣多少）、再删、最后同事务回扣目标计数列，保证删除行数与
 // 受影响主题/回复集合一一对应（spec #297）。列名全部取自行声明，不另抄清单。
-func (s *AuthService) deleteLikesWithRefund(tx *gorm.DB, userID int, step accountCleanupStep) error {
+func (s *Service) deleteLikesWithRefund(tx *gorm.DB, userID int, step accountCleanupStep) error {
 	var agg []struct {
 		TargetID int64
 		Cnt      int
@@ -951,7 +910,7 @@ func (s *AuthService) deleteLikesWithRefund(tx *gorm.DB, userID int, step accoun
 }
 
 // applyLikesRefund 按行声明的回扣目标列选计数出口（新增点赞表时的唯一分派点）。
-func (s *AuthService) applyLikesRefund(tx *gorm.DB, step accountCleanupStep, targetID int64, count int) error {
+func (s *Service) applyLikesRefund(tx *gorm.DB, step accountCleanupStep, targetID int64, count int) error {
 	switch step.likesTarget {
 	case "topic_id":
 		return s.forumCnt.AdjustLikes(tx, targetID, -count)

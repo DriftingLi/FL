@@ -102,6 +102,7 @@ var (
 	nonNilEvidenceSources = []outletSource{
 		{"internal/service", "nonnilOutlets"},
 		{"internal/api", "nonnilOutlets"},
+		{"internal/auth", "nonnilOutlets"},
 		{"internal/faq", "nonnilOutlets"},
 		{"internal/notification", "nonnilOutlets"},
 		{"internal/material", "nonnilOutlets"},
@@ -218,6 +219,7 @@ func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
 var sweptDirs = map[string]string{
 	"service":      "../service",
 	"api":          "../api",
+	"auth":         "../auth",
 	"faq":          "../faq",
 	"notification": "../notification",
 	"model":        "../model",

@@ -1,6 +1,6 @@
-// Package service 微信登录服务测试。
+// Package auth 微信登录服务测试。
 // code2session 外呼用 httptest server 注入 apiBase 模拟（同包测试可直接改私有字段）。
-package service
+package auth
 
 import (
 	"context"
@@ -18,12 +18,13 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 // newWxSvc 构建注入 mock code2session 端点的微信登录服务。
 // mock 端点按入参返回 openID/unionID/errCode；lastQuery 记录最近一次请求参数供断言。
-func newWxSvc(t *testing.T, openID, unionID string, errCode int, lastQuery *url.Values) (*WechatAuthService, *gorm.DB) {
+func newWxSvc(t *testing.T, openID, unionID string, errCode int, lastQuery *url.Values) (*WechatService, *gorm.DB) {
 	t.Helper()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if lastQuery != nil {
@@ -42,9 +43,9 @@ func newWxSvc(t *testing.T, openID, unionID string, errCode int, lastQuery *url.
 	t.Cleanup(ts.Close)
 
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), NewForumCounter(),
+	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), service.NewForumCounter(),
 		"admin123", "tutor123", "student123", zap.NewNop())
-	svc := NewWechatAuthService(config.WechatAppConfig{AppID: "wx-appid", AppSecret: "wx-secret"}, db, authSvc, zap.NewNop())
+	svc := NewWechatService(config.WechatAppConfig{AppID: "wx-appid", AppSecret: "wx-secret"}, db, authSvc, zap.NewNop())
 	svc.apiBase = ts.URL
 	return svc, db
 }
@@ -60,9 +61,9 @@ func TestWechatMiniProgramLogin_MissingCode(t *testing.T) {
 
 func TestWechatMiniProgramLogin_NotConfigured(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewAuthService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), NewForumCounter(),
+	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), service.NewForumCounter(),
 		"admin123", "tutor123", "student123", zap.NewNop())
-	svc := NewWechatAuthService(config.WechatAppConfig{}, db, authSvc, zap.NewNop())
+	svc := NewWechatService(config.WechatAppConfig{}, db, authSvc, zap.NewNop())
 	_, err := svc.MiniProgramLogin(context.Background(), "code")
 	if err == nil || !strings.Contains(err.Error(), "未配置") {
 		t.Fatalf("未配置 AppID/Secret 应明确报错, got: %v", err)
@@ -91,8 +92,8 @@ func TestWechatMiniProgramLogin_NewUser(t *testing.T) {
 	if res.Token == "" || res.RefreshToken == "" {
 		t.Fatal("应签发双令牌（access + refresh）")
 	}
-	if res.Role != HrwaiRole {
-		t.Fatalf("角色应为 %s, got %s", HrwaiRole, res.Role)
+	if res.Role != service.HrwaiRole {
+		t.Fatalf("角色应为 %s, got %s", service.HrwaiRole, res.Role)
 	}
 	if res.Name != res.Username {
 		t.Fatalf("平铺契约 name 取 username: name=%s username=%s", res.Name, res.Username)

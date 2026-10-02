@@ -1,24 +1,22 @@
-// Package service 实现业务服务层。
 // 本文件：验证码 engine（邮箱/短信/绑定共用一套验证码状态机）。
 // 邮箱与短信是同一状态机两侧的 channel adapter：唯一差异是归一化、
 // 账号查询、文案与发送通道。
-package service
+package auth
 
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"math/big"
 	"net/mail"
-	"net/smtp"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"go.uber.org/zap"
 
 	"gorm.io/gorm"
 
@@ -26,6 +24,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/service"
 )
 
 // CodePurpose 验证码用途（注册 / 登录 / 绑定 / 修改账号）。
@@ -94,83 +93,6 @@ func (RedisAuthCodeStore) Set(ctx context.Context, key, value string, ttl time.D
 // Del 删除验证码。
 func (RedisAuthCodeStore) Del(ctx context.Context, keys ...string) error {
 	return cache.Del(ctx, keys...)
-}
-
-// MailSender 邮件发送接口（SMTP 生产实现 / 日志降级实现 / 测试替身）。
-type MailSender interface {
-	Send(to, subject, body string) error
-}
-
-// SMTPMailSender 通过 SMTP 发送邮件。
-type SMTPMailSender struct {
-	cfg config.SMTPConfig
-}
-
-// Send 发送一封 UTF-8 纯文本邮件。
-// 端口 465 走隐式 SSL（sendSMTPS）；其余端口走 smtp.SendMail（587 为 STARTTLS）。
-// 部分网络环境（透明 SMTP 代理/防火墙）会阻断 587 的 STARTTLS 握手，465 可绕过。
-func (s SMTPMailSender) Send(to, subject, body string) error {
-	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
-	auth := smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
-	from := s.cfg.From
-	msg := fmt.Sprintf(
-		"From: %s <%s>\r\nTo: <%s>\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		s.cfg.FromName, from, to, subject, body,
-	)
-
-	if s.cfg.Port == 465 {
-		return sendSMTPS(addr, s.cfg.Host, auth, from, to, []byte(msg), nil)
-	}
-	return smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
-}
-
-// sendSMTPS 通过隐式 SSL（465）发送邮件：先建立 TLS 连接，再走完整 SMTP 会话。
-// 独立成函数以便用本地 TLS SMTP 假服务器做单元测试；tlsCfg 为 nil 时使用默认配置。
-func sendSMTPS(addr, serverName string, auth smtp.Auth, from, to string, msg []byte, tlsCfg *tls.Config) error {
-	if tlsCfg == nil {
-		tlsCfg = &tls.Config{ServerName: serverName}
-	}
-	conn, err := tls.Dial("tcp", addr, tlsCfg)
-	if err != nil {
-		return err
-	}
-	client, err := smtp.NewClient(conn, serverName)
-	if err != nil {
-		conn.Close()
-		return err
-	}
-	defer client.Close()
-	if err := client.Auth(auth); err != nil {
-		return err
-	}
-	if err := client.Mail(from); err != nil {
-		return err
-	}
-	if err := client.Rcpt(to); err != nil {
-		return err
-	}
-	w, err := client.Data()
-	if err != nil {
-		return err
-	}
-	if _, err := w.Write(msg); err != nil {
-		return err
-	}
-	if err := w.Close(); err != nil {
-		return err
-	}
-	return client.Quit()
-}
-
-// LogMailSender 开发环境降级实现：验证码写入服务日志（未配置 SMTP 时便于本地验证）。
-type LogMailSender struct {
-	logger *zap.Logger
-}
-
-// Send 将邮件内容写入日志。
-func (s LogMailSender) Send(to, subject, body string) error {
-	s.logger.Info("邮件发送（开发环境降级为日志）", zap.String("to", to), zap.String("subject", subject), zap.String("body", body))
-	return nil
 }
 
 // SMSProvider 短信发送接口。Send 接收目标手机号、验证码、有效期（分钟）与用途，
@@ -253,27 +175,14 @@ func generateEmailCode() (string, error) {
 
 // EmailChannel 邮箱验证码通道。
 type EmailChannel struct {
-	mailer MailSender
+	mailer service.MailSender
 	logger *zap.Logger
 }
 
 // NewEmailChannel 构造邮箱通道。
 // 未配置 SMTP 时：开发环境降级为日志发送验证码，生产环境发送接口返回明确错误。
-// NewMailSender 邮件发送器工厂（spec #449 决定 15 的单点）：
-// 生产配置了 SMTP → SMTP 实现；未配置且是生产 → nil（调用方降级日志）；
-// 开发/测试 → 日志降级实现。验证码通道与招聘域（联系方式交换/投递通知）共用此单点。
-func NewMailSender(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) MailSender {
-	if smtpCfg.Host != "" && smtpCfg.From != "" {
-		return SMTPMailSender{cfg: smtpCfg}
-	}
-	if isProd {
-		return nil
-	}
-	return LogMailSender{logger: logger}
-}
-
 func NewEmailChannel(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) *EmailChannel {
-	return &EmailChannel{mailer: NewMailSender(smtpCfg, isProd, logger), logger: logger}
+	return &EmailChannel{mailer: service.NewMailSender(smtpCfg, isProd, logger), logger: logger}
 }
 
 // SenderReady 邮件服务未配置时报错。
@@ -454,7 +363,7 @@ func (c *SmsChannel) BindColumn() string { return "phone" }
 // VerifyCodeService 验证码服务，邮箱/手机号/绑定共用一套状态机。
 type VerifyCodeService struct {
 	db      *gorm.DB
-	authSvc *AuthService
+	authSvc *Service
 	store   AuthCodeStore
 	codeTTL time.Duration
 	logger  *zap.Logger
@@ -463,7 +372,7 @@ type VerifyCodeService struct {
 // NewVerifyCodeService 构造验证码服务。
 // NewVerifyCodeService 构造验证码 engine。
 // store 为验证码存储 adapter（生产 Redis，测试内存），接口存在即接线。
-func NewVerifyCodeService(db *gorm.DB, authSvc *AuthService, codeTTL time.Duration, store AuthCodeStore, logger *zap.Logger) *VerifyCodeService {
+func NewVerifyCodeService(db *gorm.DB, authSvc *Service, codeTTL time.Duration, store AuthCodeStore, logger *zap.Logger) *VerifyCodeService {
 	if codeTTL <= 0 {
 		codeTTL = 5 * time.Minute
 	}
@@ -594,7 +503,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 	if utf8.RuneCountInString(nickname) > 30 {
 		return nil, errors.New("昵称不能超过 30 个字符")
 	}
-	if err := validatePasswordLength(password); err != nil {
+	if err := service.ValidatePasswordLength(password); err != nil {
 		return nil, err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeRegister, target, code); err != nil {
@@ -610,16 +519,16 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		return nil, errors.New("该" + ch.Noun() + "已注册，请直接登录")
 	}
 
-	account, err := generateRandomAccount()
+	account, err := service.GenerateRandomAccount()
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
-	hashed, err := HashPassword(password)
+	hashed, err := service.HashPassword(password)
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
 	user := model.HrwaiUser{
-		UID:       NextUID(),
+		UID:       service.NextUID(),
 		Account:   account,
 		Username:  nickname,
 		Password:  hashed,
@@ -634,7 +543,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, HrwaiRole)
+	}, service.HrwaiRole)
 }
 
 // LoginWithCode 验证码登录：校验通过后签发登录令牌。
@@ -653,7 +562,7 @@ func (s *VerifyCodeService) LoginWithCode(ctx context.Context, ch CodeChannel, t
 	}
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, HrwaiRole)
+	}, service.HrwaiRole)
 }
 
 // ResetPasswordWithCode 忘记密码（匿名、凭验证码认领账号）：验证码校验通过后落新口令，
@@ -670,7 +579,7 @@ func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeCh
 	}
 	// 长度前置校验（与 SetNewPassword 同一规则源）刻意在 Verify 之前：验证码是一次性资源，
 	// 不该被一个填错的口令烧掉（既有口径，见 TestPhoneResetPassword）。
-	if err := validatePasswordLength(password); err != nil {
+	if err := service.ValidatePasswordLength(password); err != nil {
 		return err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeResetPassword, target, code); err != nil {
@@ -725,7 +634,7 @@ func (s *VerifyCodeService) SendAccountChange(ctx context.Context, ch CodeChanne
 // 成功后重签 JWT（claim 随新账号同步，审计与 /me 口径不再陈旧，ADR-0012 §5）。
 func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, userID int, newAccount, code string) (*LoginResult, error) {
 	newAccount = strings.TrimSpace(newAccount)
-	if !IsValidAccount(newAccount) {
+	if !service.IsValidAccount(newAccount) {
 		return nil, errors.New("账号需为 4-20 位字母、数字或下划线")
 	}
 	phone, err := s.currentUserPhone(ctx, userID)
@@ -753,7 +662,7 @@ func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, u
 	}
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, HrwaiRole)
+	}, service.HrwaiRole)
 }
 
 // SendChangePasswordCode 发送修改登录密码验证码到当前用户已绑定手机号（短信通道）。
@@ -769,7 +678,7 @@ func (s *VerifyCodeService) SendChangePasswordCode(ctx context.Context, ch CodeC
 // authSvc.UpdatePassword（即口令族的唯一动作 SetNewPassword，ADR-0062 票7）。
 func (s *VerifyCodeService) ChangePassword(ctx context.Context, ch CodeChannel, userID int, code, password string) error {
 	// 刻意在 Verify 之前拒掉非法口令：不烧一次性验证码（与 ResetPasswordWithCode 同口径）。
-	if err := validatePasswordLength(password); err != nil {
+	if err := service.ValidatePasswordLength(password); err != nil {
 		return err
 	}
 	phone, err := s.currentUserPhone(ctx, userID)
@@ -790,7 +699,7 @@ func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (s
 	}
 	// 显式拒绝占位手机号（IsPlaceholderPhone 单点：email_ / wxp_ / deleted__sentinel），
 	// 不依赖 IsValidPhone 巧合兜底
-	if IsPlaceholderPhone(user.Phone) || !IsValidPhone(user.Phone) {
+	if service.IsPlaceholderPhone(user.Phone) || !IsValidPhone(user.Phone) {
 		return "", errors.New("请先绑定手机号")
 	}
 	return user.Phone, nil

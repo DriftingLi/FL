@@ -25,15 +25,7 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 		legacy any
 		dto    any
 	}{
-		{
-			name: "TutorRegisterResultDTO",
-			legacy: map[string]any{
-				"tutor_id": 7,
-				"username": "tutor1",
-				"name":     "张老师",
-			},
-			dto: &TutorRegisterResultDTO{Name: "张老师", TutorID: 7, Username: "tutor1"},
-		},
+		// TutorRegisterResultDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			name: "QuestionPageDTO",
 			legacy: map[string]any{
@@ -134,15 +126,7 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 			legacy: map[string]any{"removed": 3},
 			dto:    &WrongQuestionBatchRemoveResultDTO{Removed: 3},
 		},
-		{
-			name: "WechatQRCodeInfoDTO",
-			legacy: map[string]any{
-				"enabled": false,
-				"qr_url":  "",
-				"message": "微信授权暂未配置，请等待开放平台配置完成后使用",
-			},
-			dto: &WechatQRCodeInfoDTO{Enabled: false, Message: "微信授权暂未配置，请等待开放平台配置完成后使用", QRURL: ""},
-		},
+		// WechatQRCodeInfoDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			// #1095：ContactRequestListResult 从「只服务 swagger 的类型」变真返回类型。
 			// 左边是改造前 handler 里的 gin.H（map 按 key 排序），右边是 typed page —— 字节必须相等。
@@ -181,13 +165,8 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 // 本片就是那一片，因此沿用同一个机制与同一个参照物：左边是**改造前的 map 形态**
 // （不是手抄的 JSON 字面量，否则抄错即与 DTO 同错），右边是收口后的 DTO。
 func TestInlineResponseDTOBytes(t *testing.T) {
-	rec := &model.RecruiterUser{
-		ID: 7, Username: "hr001", CompanyName: "叉车租赁有限公司", CreditCode: "91310000MA1K3XYZ",
-		BusinessScope: "叉车租赁与维修", ContactName: "王工", ContactPhone: "13800000000",
-		ContactEmail: "hr@example.com", Wechat: "wx_hr001", Status: 1,
-	}
 	user := &model.HrwaiUser{ID: 12, UID: 20260012, Account: "hrwai012", Username: "张三", Phone: "13800000001"}
-	created, updated := NewRecruiterCreatedDTO(rec), NewRecruiterUpdatedDTO(rec)
+	// created / updated 与 rec 夹具随 RecruiterCreatedDTO/RecruiterUpdatedDTO 用例搬去 internal/auth/。
 	newUser := NewHrwaiUserCreatedDTO(user)
 
 	cases := []struct {
@@ -205,35 +184,7 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{"status": 0},
 			dto:    &StatusResultDTO{},
 		},
-		{
-			name: "RecruiterCreatedDTO（创建 201：含 status）",
-			legacy: map[string]any{
-				"id": rec.ID, "username": rec.Username, "company_name": rec.CompanyName,
-				"credit_code": rec.CreditCode, "business_scope": rec.BusinessScope,
-				"contact_name": rec.ContactName, "contact_phone": rec.ContactPhone,
-				"contact_email": rec.ContactEmail, "wechat": rec.Wechat, "status": rec.Status,
-			},
-			dto: &created,
-		},
-		{
-			name: "RecruiterCreatedDTO（零值：无 omitempty，10 个 key 一个不少）",
-			legacy: map[string]any{
-				"id": 0, "username": "", "company_name": "", "credit_code": "",
-				"business_scope": "", "contact_name": "", "contact_phone": "",
-				"contact_email": "", "wechat": "", "status": int16(0),
-			},
-			dto: &RecruiterCreatedDTO{},
-		},
-		{
-			name: "RecruiterUpdatedDTO（编辑 200：与创建同一个投影少一个 status —— 现状差异按字节保留）",
-			legacy: map[string]any{
-				"id": rec.ID, "username": rec.Username, "company_name": rec.CompanyName,
-				"credit_code": rec.CreditCode, "business_scope": rec.BusinessScope,
-				"contact_name": rec.ContactName, "contact_phone": rec.ContactPhone,
-				"contact_email": rec.ContactEmail, "wechat": rec.Wechat,
-			},
-			dto: &updated,
-		},
+		// RecruiterCreatedDTO / RecruiterUpdatedDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			name: "HrwaiUserCreatedDTO（新增 HRWAI 用户 201：password 不入响应，uid 走 FormatUID）",
 			legacy: map[string]any{
@@ -267,11 +218,7 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{"user_id": 9, "account": "hr009", "role": "recruiter"},
 			dto:    &RecruitMeDTO{UserID: 9, Account: "hr009", Role: "recruiter"},
 		},
-		{
-			name:   "RecruiterPasswordResetResult（改造前是空 map：data 必须是 {} 而不是 null）",
-			legacy: map[string]any{},
-			dto:    &RecruiterPasswordResetResult{},
-		},
+		// RecruiterPasswordResetResult 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			name:   "ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",
 			legacy: map[string]any{"saved": true, "index": 5},
@@ -294,11 +241,7 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 				Page:  1, PageSize: 10, Total: 1,
 			},
 		},
-		{
-			name:   "RefreshResultDTO（POST /auth/refresh：原 raw handler 内联 map[string]string）",
-			legacy: map[string]string{"token": "acc-1", "refresh_token": "ref-1"},
-			dto:    &RefreshResultDTO{RefreshToken: "ref-1", Token: "acc-1"},
-		},
+		// RefreshResultDTO（/api/auth/refresh）的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			name:   "aiassistant.AISessionRenameResultDTO（PATCH /ai-assistant/sessions/{id}/title：原 handler 内联 map[string]string）",
 			legacy: map[string]string{"message": "已更新会话标题"},

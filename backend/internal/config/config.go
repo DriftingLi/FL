@@ -128,7 +128,7 @@ func (c SMSConfig) Template(key SMSTemplateKey) string {
 // Configured 返回短信通道是否已完整配置（生产发送必需）：凭证齐全，且 required 里的
 // 每个模板键都已配模板 ID。
 //
-// required 由验证码用途表派生（`service.CodePurposeSMSTemplates()`）——这里刻意不写死
+// required 由验证码用途表派生（`auth.CodePurposeSMSTemplates()`）——这里刻意不写死
 // 模板清单，新增用途（或新增模板键）不必改本函数。调用方必须传入派生结果，否则等于只校验凭证。
 func (c SMSConfig) Configured(required ...SMSTemplateKey) bool {
 	if c.SecretID == "" || c.SecretKey == "" || c.SdkAppID == "" || c.SignName == "" {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -42,9 +43,9 @@ func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Eng
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, bl)
-	authSvc := service.NewAuthService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
-	codeSvc := service.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
 
 	hashed, err := service.HashPassword(resetOldPassword)
@@ -61,12 +62,9 @@ func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Eng
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	RegisterPhoneAuthRoutes(r.Group("/api"),
-		RouterDeps{Session: sess, DB: db, Logger: zap.NewNop()}, codeSvc, phoneCh, captcha.NewService(store), false)
-	authH := NewAuthHandler(sess, authSvc, nil, nil, nil, zap.NewNop())
-	g := r.Group("/api/auth")
-	g.POST("/refresh", authH.Refresh)
-	g.POST("/login", authH.Login)
+	auth.RegisterPhoneAuthRoutes(r.Group("/api"), sess, codeSvc, phoneCh, captcha.NewService(store), false)
+	// P2 波 3a：/api/auth 的刷新与登录端点由域包注册（refresh/login 均非 JWT 端点）。
+	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 	return r, sess, store, phoneCh, u.ID
 }
 
@@ -77,7 +75,7 @@ func resetPasswordViaCode(t *testing.T, r *gin.Engine, store *memCodeStore, ch *
 		map[string]interface{}{"phone": resetPhone, "purpose": "reset_password"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("找回发码应 200，实际 %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, ch, service.CodePurposeResetPassword, resetPhone)
+	code := extractStoredCode(t, store, ch, auth.CodePurposeResetPassword, resetPhone)
 	return codeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
 		map[string]interface{}{"phone": resetPhone, "code": code, "password": newPassword}, "")
 }

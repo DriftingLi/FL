@@ -10,7 +10,7 @@
 //
 // 表里只有纯数据，不放闭包——邮件正文拼接、短信 API 调用、占用校验动作仍留在各消费面。
 // 完整性由 code_purpose_table_test.go 的三条锁把住：结构完整性、行为级逐字、单向不变式。
-package service
+package auth
 
 import (
 	"strings"

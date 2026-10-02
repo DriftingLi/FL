@@ -1,6 +1,5 @@
-// Package api 实现 HTTP handlers。
 // 本文件：图形验证码（人机验证）接口。
-package api
+package auth
 
 import (
 	"context"
@@ -18,20 +17,20 @@ type GenerateCaptchaDTO struct {
 	Image string `json:"image"`
 }
 
-// CaptchaHandler 图形验证码 handler。
-type CaptchaHandler struct {
+// captchaHandler 图形验证码 handler。
+type captchaHandler struct {
 	svc *captcha.Service
 }
 
-// NewCaptchaHandler 构造图形验证码 handler。
-func NewCaptchaHandler(svc *captcha.Service) *CaptchaHandler {
-	return &CaptchaHandler{svc: svc}
+// newCaptchaHandler 构造图形验证码 handler。
+func newCaptchaHandler(svc *captcha.Service) *captchaHandler {
+	return &captchaHandler{svc: svc}
 }
 
 // RegisterCaptchaRoutes 注册 GET /api/captcha（无需鉴权）。
 // 返回 {id, image}；image 为 PNG 的 base64 data URL，id 随 send-code 请求提交。
 func RegisterCaptchaRoutes(r *gin.Engine, svc *captcha.Service) {
-	h := NewCaptchaHandler(svc)
+	h := newCaptchaHandler(svc)
 	r.GET("/api/captcha", h.Generate)
 }
 
@@ -43,7 +42,7 @@ func RegisterCaptchaRoutes(r *gin.Engine, svc *captcha.Service) {
 // @Success 200 {object} response.R{data=GenerateCaptchaDTO} "success"
 // @Failure 500 {object} response.R "失败"
 // @Router /captcha [get]
-func (h *CaptchaHandler) Generate(c *gin.Context) {
+func (h *captchaHandler) Generate(c *gin.Context) {
 	httpx.Endpoint[struct{}, GenerateCaptchaDTO]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*GenerateCaptchaDTO, error) {
 			id, imageURL, err := h.svc.Generate(ctx)

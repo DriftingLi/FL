@@ -5,14 +5,14 @@
 // 全会话吊销（identity revoke）有两族终止语义（CONTEXT.md「会话（session）」），两族的
 // **失败策略不同且不许互相顶替**，故本文件只提供口令族那一条：
 //
-//   - 口令族（本文件的 SetNewPassword）：改密与验证码重置口令。口令一落库即不可回退，
+//   - 口令族（本文件的 applyNewPassword 与两个导出包装）：改密与验证码重置口令。口令一落库即不可回退，
 //     吊销标记写失败**不阻断**口令，只记日志暴露缺口（尽力而为）。
 //   - 注销族（不在本文件）：先写吊销标记、标记失败即整体不生效——那里没有任何已生效的
 //     动作值得牺牲凭证失效（见 AuthHandler.DeleteAccount）。
 //
-// 共享的是动作，声明权留在调用方：SetNewPassword 把吊销的成败**如实返回**（照 Session.RevokeIdentity
+// 共享的是动作，声明权留在调用方：两个导出包装把吊销的成败**如实返回**（照 Session.RevokeIdentity
 // 的既有约定「失败策略由调用方决定，本动作只如实返回」），由每条入口各自记日志。
-// 新增口令写面时走 SetNewPassword / applyNewPassword 即同时拿到落库与吊销，拿不到
+// 新增口令写面时走 ApplyHrwaiPassword / ApplyRecruiterPassword / applyNewPassword 即同时拿到落库与吊销，拿不到
 // 「只落哈希不吊销」的捷径：学员侧两条自助入口（登录态改密 AuthService.UpdatePassword、
 // 验证码重置口令 VerifyCodeService.ResetPasswordWithCode）与管理员侧一条代重置
 // （AdminService.ResetHrwaiUserPassword，ADR-0064 决策 4 接进来）都收在此处。
@@ -28,10 +28,11 @@ import (
 	"forklift-training/internal/security"
 )
 
-// validatePasswordLength 口令长度规则（6-20 位，包内唯一实现；学员与招聘者的口令写面共用）。
-// 入口的前置校验与 SetNewPassword 共用它：前置那一次是为了**在消费验证码之前**拒掉非法口令
+// ValidatePasswordLength 口令长度规则（6-20 位，包内唯一实现；学员与招聘者的口令写面共用）。
+// P2 波 3a：口令写面的调用方有一半在 internal/auth（先于验证码消费做前置校验）⇒ 导出。
+// 入口的前置校验与落库动作共用它：前置那一次是为了**在消费验证码之前**拒掉非法口令
 // （验证码是一次性资源，不该被一个填错的口令烧掉），落库前那一次是兜底。
-func validatePasswordLength(password string) error {
+func ValidatePasswordLength(password string) error {
 	if len(password) < 6 || len(password) > 20 {
 		return errors.New("密码长度需为 6-20 位")
 	}
@@ -63,7 +64,7 @@ var (
 // 为什么不是一个 (revokeErr, err) 双 error 元组：两条 error 在签名上读不出「谁非空代表什么」，
 // 而这里的两格语义正好相反——一格是「口令根本没落成」（整次动作失败），另一格是
 // 「口令已成、不可回退，只有吊销标记没写上」（尽力而为族，由 caller 决定暴露还是记日志）。
-// 顺序也易记错：SetNewPassword 旧签名是 (revokeErr, err)，即**反直觉的那个在前**。
+// 顺序也易记错：这个动作的旧签名（当年的 SetNewPassword）是 (revokeErr, err)，即**反直觉的那个在前**。
 type PasswordWriteResult struct {
 	// Err 口令**没有**落库的原因：长度非法 / 哈希失败 / 写库失败 / 主体不存在。
 	// 非空时 RevokeErr 恒为 nil（还没走到吊销那一步）。
@@ -76,18 +77,26 @@ type PasswordWriteResult struct {
 // Applied 口令是否已落库生效（true ⇒ 不可回退，此时只剩 RevokeErr 这一格需要 caller 表态）。
 func (r PasswordWriteResult) Applied() bool { return r.Err == nil }
 
-// SetNewPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →
+// ApplyHrwaiPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →
 // 全会话吊销（RevokeIdentity，身份命名空间 hrwai_user）。
 //
 // 结果的读法见 PasswordWriteResult：Err 非空 = 口令没落成；Err 空而 RevokeErr 非空 =
 // 口令已成、只有吊销标记没写上。四条既有入口都属尽力而为族（记 zap 日志、不因吊销失败
 // 而拒绝口令），注销族的「先写标记、失败即整体不生效」刻意不在这里出现。
-func (s *AuthService) SetNewPassword(ctx context.Context, userID int, password string) PasswordWriteResult {
-	return applyNewPassword(ctx, s.db, s.session, hrwaiPasswordSubject, userID, password)
+//
+// P2 波 3a（ADR-0070）：auth 域搬进 internal/auth 后，动作留给本包、声明权仍归调用方——
+// auth.AuthService.SetNewPassword 与 auth.VerifyCodeService.ResetPasswordWithCode 是两个包装调用点。
+func ApplyHrwaiPassword(ctx context.Context, db *gorm.DB, session *security.Session, userID int, password string) PasswordWriteResult {
+	return applyNewPassword(ctx, db, session, hrwaiPasswordSubject, userID, password)
+}
+
+// ApplyRecruiterPassword 招聘者口令写面的唯一动作（同一条动作、主体换成 recruiter_users）。
+func ApplyRecruiterPassword(ctx context.Context, db *gorm.DB, session *security.Session, id int, password string) PasswordWriteResult {
+	return applyNewPassword(ctx, db, session, recruiterPasswordSubject, id, password)
 }
 
 // applyNewPassword 是「落新口令」这一动作的实现体。五个入口共用（ADR-0064 决策 4 把它从
-// 「学员专属」扩成「按主体参数化」）：学员自助改密与验证码重置（经 SetNewPassword）、
+// 「学员专属」扩成「按主体参数化」）：学员自助改密与验证码重置（经 ApplyHrwaiPassword）、
 // 管理员代重置学员口令、管理员代重置讲师口令。
 //
 // 之所以是包内函数而不是某个服务的方法：它唯一的两个依赖（db、session）由 caller 各自持有，
@@ -98,10 +107,10 @@ func (s *AuthService) SetNewPassword(ctx context.Context, userID int, password s
 //
 //	AuthService.UpdatePassword、VerifyCodeService.ResetPasswordWithCode、
 //	AdminService.ResetHrwaiUserPassword、AdminService.ResetTutorPassword、
-//	AuthService.ResetRecruiterPassword；SetNewPassword 与 applyNewPassword 各是其中一条中转。
+//	AuthService.ResetRecruiterPassword；两个导出包装与 applyNewPassword 各是其中一条中转。
 func applyNewPassword(ctx context.Context, db *gorm.DB, session *security.Session,
 	subject passwordSubject, id int, password string) PasswordWriteResult {
-	if err := validatePasswordLength(password); err != nil {
+	if err := ValidatePasswordLength(password); err != nil {
 		return PasswordWriteResult{Err: err}
 	}
 	hashed, err := HashPassword(password)

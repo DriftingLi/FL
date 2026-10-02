@@ -1,9 +1,7 @@
-package api
+package auth
 
 import (
 	"testing"
-
-	"forklift-training/internal/service"
 )
 
 // 本文件：匿名发码口用途白名单的两条锁。
@@ -18,7 +16,7 @@ func TestAnonymousSendPurposes_SubsetOfSessionFree(t *testing.T) {
 		t.Fatal("匿名发码白名单为空")
 	}
 	for _, p := range anonymousSendPurposes {
-		if service.CodePurposeRequiresSession(p) {
+		if CodePurposeRequiresSession(p) {
 			t.Errorf("用途 %q 要求已登录会话，不得出现在匿名发码白名单里", p)
 		}
 	}
@@ -43,10 +41,10 @@ func TestAnonymousSendPurposes_Accepted(t *testing.T) {
 // 不得从匿名发码口发出——它们不经 `/auth/<通道>/send-code`，目标也是当前用户自己的账号。
 func TestAnonymousSendPurposes_RejectsSessionScoped(t *testing.T) {
 	t.Parallel()
-	for _, p := range []service.CodePurpose{
-		service.CodePurposeBind,
-		service.CodePurposeAccountChange,
-		service.CodePurposeChangePassword,
+	for _, p := range []CodePurpose{
+		CodePurposeBind,
+		CodePurposeAccountChange,
+		CodePurposeChangePassword,
 	} {
 		if _, err := resolvePurpose(string(p)); err == nil {
 			t.Errorf("要求会话的用途 %q 不应被匿名发码口接受", p)

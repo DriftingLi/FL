@@ -9,5 +9,4 @@ func provideAuth(c *coreSingletons, d *Deps) {
 	d.PhoneCh = c.phoneCh
 	d.WechatAuthSvc = c.wechatAuthSvc
 	d.ReviewSvc = c.reviewSvc
-	d.AuthH = NewAuthHandler(d.Session, c.authSvc, c.fileSvc, c.st, c.reviewSvc, c.logger)
 }

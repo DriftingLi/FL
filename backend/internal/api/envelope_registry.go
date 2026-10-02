@@ -19,6 +19,7 @@ package api
 
 import (
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/featured"
@@ -132,9 +133,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "points.PointsLedgerResult", Endpoints: []string{"GET /points/ledger", "GET /admin/points/ledger"},
 		Keys: []string{"items", "total", "page", "pages"}, Dialect: paging.DialectPages,
 		Sample: points.PointsLedgerResult{}},
-	{Result: "service.ProfileChangeRequestPageResult", Endpoints: []string{"GET /admin/profile-reviews"},
+	{Result: "auth.ProfileChangeRequestPageResult", Endpoints: []string{"GET /admin/profile-reviews"},
 		Keys: []string{"page", "pages", "requests", "total"}, Dialect: paging.DialectPages,
-		Sample: service.ProfileChangeRequestPageResult{}},
+		Sample: auth.ProfileChangeRequestPageResult{}},
 	{Result: "service.QuestionCommentPageResult", Endpoints: []string{"GET /questions/{question_id}/comments"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: service.QuestionCommentPageResult{}},
@@ -147,9 +148,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "service.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
 		Keys: []string{"items", "total", "page", "page_size", "unread_count", "job_title"}, Dialect: paging.DialectPageSize,
 		Sample: service.RecruiterApplicationListResult{}},
-	{Result: "service.RecruiterListResult", Endpoints: []string{"GET /admin/recruiters"},
+	{Result: "auth.RecruiterListResult", Endpoints: []string{"GET /admin/recruiters"},
 		Keys: []string{"total", "page", "items"}, Dialect: paging.DialectNone,
-		Sample: service.RecruiterListResult{}},
+		Sample: auth.RecruiterListResult{}},
 	{Result: "service.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: service.ReportListResult{}},
