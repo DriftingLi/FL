@@ -1,9 +1,12 @@
 // Package service 测试：课程 DTO shape-lock（B5 决策 D6）。
 // 断言 JSON key 集合与 B5 前的 map 契约逐字一致——前端契约零改动是最高优先级约束。
-package service
+package course
 
-import "testing"
-import "forklift-training/internal/coerce"
+import (
+	"testing"
+
+	"forklift-training/internal/coerce"
+)
 
 func sampleCourseDTO() CourseDTO {
 	return CourseDTO{

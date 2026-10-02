@@ -29,7 +29,7 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 		"auth.RegisterWechatAuthRoutes":     "认证入口：同上",
 		"auth.RegisterProfileBindRoutes":    "认证入口：手机号/邮箱绑定，属账号自身而非资源域",
 		"auth.RegisterRoutes":               "公开登录/刷新/登出面 + 本人资料与注销（任何已登录角色都是自己的资料），无资源域能力位",
-		"RegisterCoursesRoutes":             "课程读面横跨学员/讲师/管理端（讲师与管理员读同一份章节详情），挂学员能力会误伤；能力位细化留待后续",
+		"course.RegisterRoutes":             "课程读面横跨学员/讲师/管理端（讲师与管理员读同一份章节详情），挂学员能力会误伤；能力位细化留待后续",
 		"RegisterSearchRoutes":              "公开搜索端点（无 JWTAuth）",
 		"notification.RegisterRoutes":       "站内信按收件人鉴权（任何已登录角色都可能收到），不是资源域能力",
 		"aiassistant.RegisterAdminRoutes":   "AI 配置管理面：挂 internal/api/admin.go:39 的 /admin 组（组级 JWTAuth + CapabilityRequired(authz.CapAdminAccess)），函数体内不再重复守卫",

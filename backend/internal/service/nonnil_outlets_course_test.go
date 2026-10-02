@@ -1,7 +1,16 @@
-// 课程 / 目录域的 nonnil 行为例（批①-A）。
+// 课程 / 目录域的 nonnil 行为例（批①-A）；域包拆出去之后（ADR-0070）本文件只留
+// **真实出口在 service** 的那几格。
 //
 // 为什么单独成文件：判据 5 的证据要跟着出口走，一个域一张表比一张巨型表更好读，
 // 也让并行推进的改判批次不在同一个文件里互相覆盖（汇总表机制见 nonnil_declaration_test.go）。
+//
+// 课程域自己的表在 internal/course/nonnil_outlets_test.go（course.CoursePageResult.courses /
+// course.AdminCourseDetailDTO.chapters / course.CourseDTO.prerequisites /
+// course.CourseDTO.prerequisite_course_ids / course.CourseDetailDTO.chapters /
+// course.ChapterDetailDTO.files）——那几格的生产者都在课程域包里。留在这里的三格生产者在
+// **service**：导师端章节列表（TutorService.GetCourseChapters）、管理端目录树的课程节点
+// （TrainingCatalogService.GetAdminCatalogTree 的 withChapters 分支）、目录树的等级节点。
+// 证据跟真实出口走，不跟类型名的前缀走。
 package service
 
 import (
@@ -14,37 +23,45 @@ import (
 )
 
 var nonnilOutletsCourse = map[string]func(t *testing.T) any{
-	"service.CoursePageResult.courses":      outletCoursePageNoCourses,
-	"service.AdminCourseDetailDTO.chapters": outletAdminCourseDetailNoChapters,
-	"service.CatalogLevelNode.courses":      outletCatalogLevelNodeNoCourses,
+	"course.ChapterDTO.files":          outletTutorChapterNoFiles,
+	"course.CourseDTO.chapters":        outletAdminCatalogCourseNode,
+	"service.CatalogLevelNode.courses": outletCatalogLevelNodeNoCourses,
 }
 
 func init() {
 	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsCourse)
 }
 
-// outletCoursePageNoCourses 空库拉学员端课程列表：无一行课程时 courses 发 `[]`。
-func outletCoursePageNoCourses(t *testing.T) any {
-	t.Helper()
-	svc := NewCourseService(testutil.NewMemoryDB(t), nil, zap.NewNop())
-	res, err := svc.GetCourses(1, 20, nil, nil, nil, "")
-	if err != nil {
-		t.Fatalf("空库拉课程列表失败: %v", err)
-	}
-	return res
-}
-
-// outletAdminCourseDetailNoChapters 管理端课程详情：章节由 loadCourseWithChapters 一次性 make 出来，
-// 无章节时也发 `[]`（与学员端 CourseDetailDTO.chapters 同一个装载实现）。
-func outletAdminCourseDetailNoChapters(t *testing.T) any {
+// outletTutorChapterNoFiles 导师端章节列表的 files：**挑那条既无 chapter_file 行、file_url 也是空**
+// 的章节（夹具里第 2 条）——两条 legacy/表条目分支都不进，才落在 `fileList == nil ⇒ []` 那格。
+func outletTutorChapterNoFiles(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminCourseService(db, nil, zap.NewNop())
-	res, err := svc.GetCourseDetail(seedVisibleCourse(t, db))
+	_, chapters := seedChapterWithMeta(t, db)
+	res, err := newTutorServiceForTest(t, db).GetCourseChapters(chapters[0].CourseID)
 	if err != nil {
-		t.Fatalf("管理端课程详情失败: %v", err)
+		t.Fatalf("导师端章节列表失败: %v", err)
 	}
-	return res
+	if len(res.Chapters) < 2 {
+		t.Fatalf("章节列表不足 2 条，取不到无文件的那条: %d", len(res.Chapters))
+	}
+	return res.Chapters[1]
+}
+
+// outletAdminCatalogCourseNode CourseDTO.chapters 是 `*[]ChapterDTO,omitempty`：
+// 键缺席（未填充路径）与值为 null 是两件事，前者由 extensions:"x-optional" 表达、不改判，
+// 这里要证的是**填充路径**——管理端目录树是仓里唯一走 withChapters=true 的出口，
+// 它对「有章节」与「无章节」两种课程都显式赋一个非 nil 指针（后者赋 []ChapterDTO{}）。
+func outletAdminCatalogCourseNode(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	seedVisibleCourse(t, db)
+	tree := NewTrainingCatalogService(db, zap.NewNop()).GetAdminCatalogTree()
+	if len(tree.Specialties) == 0 || len(tree.Specialties[0].Levels) == 0 ||
+		len(tree.Specialties[0].Levels[0].Courses) == 0 {
+		t.Fatal("管理端目录树里没有课程节点：这条证据没有落地")
+	}
+	return tree.Specialties[0].Levels[0].Courses[0]
 }
 
 // outletCatalogLevelNodeNoCourses 目录树的等级节点：courses 每格都以 make([]CourseDTO, 0) 起手，

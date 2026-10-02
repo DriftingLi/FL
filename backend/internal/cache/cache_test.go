@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"go.uber.org/zap"
 	"time"
+
+	"go.uber.org/zap"
 
 	"forklift-training/internal/config"
 )

@@ -10,7 +10,9 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/model"
 	"forklift-training/internal/service"
+	"forklift-training/internal/sortorder"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -372,7 +374,7 @@ func (h *TrainingCatalogHandler) UpdateSpecialty(c *gin.Context) {
 			return h.svc.UpdateSpecialty(req.ID, req.In)
 		}),
 	}.WithSuccess(httpx.OkMsg("专业方向更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UpdateLevel 更新课程等级
@@ -405,7 +407,7 @@ func (h *TrainingCatalogHandler) UpdateLevel(c *gin.Context) {
 			return h.svc.UpdateLevel(req.ID, req.In)
 		}),
 	}.WithSuccess(httpx.OkMsg("课程等级更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UpdateCertificateTemplate 更新证书模板
@@ -438,7 +440,7 @@ func (h *TrainingCatalogHandler) UpdateCertificateTemplate(c *gin.Context) {
 			return h.svc.UpdateCertificateTemplate(req.ID, req.In)
 		}),
 	}.WithSuccess(httpx.OkMsg("证书模板更新成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
 }
 
 // UpdateQuestionTag 更新题库标签
@@ -503,7 +505,7 @@ func (h *TrainingCatalogHandler) DeleteSpecialty(c *gin.Context) {
 			return struct{}{}, h.svc.DeleteSpecialty(req.ID)
 		}),
 	}.WithSuccess(httpx.OkMsgNoData("专业方向删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrSpecialtyNotFound, http.StatusNotFound).Handle(c)
 }
 
 // levelIDReq ID 路径参数请求。
@@ -535,7 +537,7 @@ func (h *TrainingCatalogHandler) DeleteLevel(c *gin.Context) {
 			return struct{}{}, h.svc.DeleteLevel(req.ID)
 		}),
 	}.WithSuccess(httpx.OkMsgNoData("课程等级删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCourseLevelNotFound, http.StatusNotFound).Handle(c)
 }
 
 // certificateTemplateIDReq ID 路径参数请求。
@@ -567,7 +569,7 @@ func (h *TrainingCatalogHandler) DeleteCertificateTemplate(c *gin.Context) {
 			return struct{}{}, h.svc.DeleteCertificateTemplate(req.ID)
 		}),
 	}.WithSuccess(httpx.OkMsgNoData("证书模板删除成功"), http.StatusInternalServerError).
-		WithSentinel(service.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(model.ErrCertificateTemplateNotFound, http.StatusNotFound).Handle(c)
 }
 
 // questionTagIDReq ID 路径参数请求。
@@ -606,7 +608,7 @@ func (h *TrainingCatalogHandler) DeleteQuestionTag(c *gin.Context) {
 // 5 个端点挂同一份表，默认面一律 500：改之前它们是 `WithSuccess(…, 400)`，于是
 // 「写库/查库失败」与「不支持排序」「待交换的项不存在」挤在同一格，还把驱动原文
 // （`SQL logic error: no such table: …`）当 400 的说明发给客户端。
-var sortFacts400 = []error{service.ErrEntityNotSortable, service.ErrSwapItemNotFound}
+var sortFacts400 = []error{service.ErrEntityNotSortable, sortorder.ErrSwapItemNotFound}
 
 // catalogSwapSortReq 交换排序请求（ID 来自路径，SwapWith 来自 body）。
 // 三个可排序的目录实体（专业方向 / 课程等级 / 目标证件）的 swap 请求完全同形，

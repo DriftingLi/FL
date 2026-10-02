@@ -7,8 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"go.uber.org/zap"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 

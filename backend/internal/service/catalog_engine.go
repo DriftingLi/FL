@@ -6,6 +6,8 @@ package service
 import (
 	"errors"
 
+	"forklift-training/internal/sortorder"
+
 	"gorm.io/gorm"
 )
 
@@ -79,7 +81,7 @@ func catalogCreate[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I
 
 	sortOrder := 0
 	if spec.Sortable {
-		sortOrder = inputInt(spec.SortOrder(in), nextSortOrderValue(db, spec.Table, nil))
+		sortOrder = inputInt(spec.SortOrder(in), sortorder.NextValue(db, spec.Table, nil))
 	}
 	m := spec.NewModel(in, sortOrder)
 	if err := db.Create(&m).Error; err != nil {
@@ -146,5 +148,5 @@ func catalogSwap[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I, 
 	if !spec.Sortable {
 		return ErrEntityNotSortable
 	}
-	return swapGroupPositions(db, spec.EmptyModel(), spec.IDColumn, a, b, nil)
+	return sortorder.SwapPositions(db, spec.EmptyModel(), spec.IDColumn, a, b, nil)
 }

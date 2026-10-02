@@ -1,6 +1,6 @@
 // Package service PPT 转图 module：Render(ppt, chapter) 收敛 sidecar 与本地 LibreOffice
 // 两个 adapter 以及占位图 fallback（ADR-0015）。
-package service
+package course
 
 import (
 	"bytes"

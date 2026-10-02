@@ -3,6 +3,8 @@ package service
 import (
 	"encoding/json"
 	"testing"
+
+	"forklift-training/internal/course"
 )
 
 // TestCatalogTreeDTOShapeLock 目录树契约冻结：根/方向/等级节点的 key 集合与旧 map 投影一致。
@@ -10,7 +12,7 @@ func TestCatalogTreeDTOShapeLock(t *testing.T) {
 	assertShapeLock(t, CatalogTreeDTO{Specialties: nil}, "specialties")
 
 	leaf := CatalogLevelNode{
-		Code: "beginner", Courses: []CourseDTO{}, LevelID: 1, Name: "入门",
+		Code: "beginner", Courses: []course.CourseDTO{}, LevelID: 1, Name: "入门",
 	}
 	assertShapeLock(t, leaf,
 		"code", "created_at", "courses", "description", "level_id", "name", "sort_order", "status",
@@ -34,7 +36,7 @@ func TestCatalogTreeDTO_BytesMatchLegacy(t *testing.T) {
 		Levels: []CatalogLevelNode{{
 			Code:        "beginner",
 			CreatedAt:   now,
-			Courses:     []CourseDTO{},
+			Courses:     []course.CourseDTO{},
 			Description: "入门",
 			LevelID:     1,
 			Name:        "入门",
@@ -60,7 +62,7 @@ func TestCatalogTreeDTO_BytesMatchLegacy(t *testing.T) {
 			"levels": []map[string]any{{
 				"code":        "beginner",
 				"created_at":  now,
-				"courses":     []CourseDTO{},
+				"courses":     []course.CourseDTO{},
 				"description": "入门",
 				"level_id":    1,
 				"name":        "入门",

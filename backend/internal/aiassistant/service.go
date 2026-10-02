@@ -8,10 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"mime/multipart"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/cloudwego/eino/schema"
 	"gorm.io/gorm"

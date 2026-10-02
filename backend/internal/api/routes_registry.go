@@ -7,6 +7,7 @@ import (
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/course"
 	"forklift-training/internal/faq"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
@@ -47,7 +48,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "培训工作区",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterCoursesRoutes(api, rd, deps.CourseSvc)
+			course.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.CourseSvc)
 			RegisterStudentRoutes(api, rd, deps.StudentSvc)
 			RegisterQuestionBankRoutes(api, rd, deps.QuestionBankSvc, deps.FileSvc)
 			RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)

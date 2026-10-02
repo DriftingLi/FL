@@ -2,7 +2,7 @@
 //   - duration_seconds 优先并按 ceil 换算分钟
 //   - completed 显式完成收敛 progress=100
 //   - video_position 落库；带章节上报刷新课程级 last_chapter_id / last_studied_at
-package service
+package course
 
 import (
 	"testing"
@@ -14,10 +14,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-func newProgressTestEnv(t *testing.T) (*CourseService, *model.Course, *model.Chapter) {
+func newProgressTestEnv(t *testing.T) (*Service, *model.Course, *model.Chapter) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	svc := NewCourseService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 	// 进度上报自 ADR-0062 决策 3 起与三条内容读路径共用同一条判据（可见性 ∧ 权益），
 	// 故本夹具必须造「已挂载」课程（有方向 + 等级）——不挂载的课程对学员本就不可见。
 	spec := model.Specialty{Code: "prog-mount", Name: "换算方向", SortOrder: 1, Status: 1}
@@ -119,7 +119,7 @@ func TestLoadLearningPositionLegacyFallback(t *testing.T) {
 	if err := db.Create(&legacy).Error; err != nil {
 		t.Fatalf("创建历史记录失败: %v", err)
 	}
-	lp := loadLearningPosition(db, 2, course.CourseID)
+	lp := LoadLearningPosition(db, 2, course.CourseID)
 	if lp.RecordID == 0 {
 		t.Fatal("历史数据回退应命中记录")
 	}
@@ -128,7 +128,7 @@ func TestLoadLearningPositionLegacyFallback(t *testing.T) {
 	}
 
 	// 未学学员零值。
-	lp = loadLearningPosition(db, 3, course.CourseID)
+	lp = LoadLearningPosition(db, 3, course.CourseID)
 	if lp.RecordID != 0 || lp.CompletedChapters != 0 {
 		t.Fatalf("未学学员应为零值, got %+v", lp)
 	}

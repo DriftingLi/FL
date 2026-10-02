@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -163,7 +164,7 @@ func (s *StudentService) queryProfile(studentID int) (*StudentProfileDTO, error)
 		courseIDs = append(courseIDs, r.CourseID)
 	}
 	courseNames := batchCourseNames(s.db, courseIDs)
-	chapterCounts := batchChapterCounts(s.db, courseIDs)
+	chapterCounts := course.BatchChapterCounts(s.db, courseIDs)
 
 	courseProgressList := make([]CourseProgressDTO, 0, len(rows))
 	for _, r := range rows {
@@ -401,7 +402,7 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 			metas[m.CourseID] = m
 		}
 	}
-	chapterCounts := batchChapterCounts(s.db, courseIDs)
+	chapterCounts := course.BatchChapterCounts(s.db, courseIDs)
 
 	// 学习时长（该课程全部记录求和，与 profile 口径一致）。
 	durationByCourse := make(map[int]int64, len(rows))
@@ -502,16 +503,17 @@ func (s *StudentService) GetStudentCourses(studentID int) (*StudentCoursesDTO, e
 }
 
 // GetStudentCourseDetail 单课程学习详情（含每章进度/播放位置/完成状态）。
-// 共享 loadLearningPosition（课程详情增强同一数据源）。
+// 共享 course.LoadLearningPosition（课程详情增强同一数据源）。
 func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*StudentCourseDetailDTO, error) {
-	var course model.Course
-	if err := s.db.First(&course, courseID).Error; err != nil {
+	// 局部变量不叫 course：包名 course 已被课程域包占用（P2 波 3b-1），同名会遮蔽它。
+	var c model.Course
+	if err := s.db.First(&c, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrCourseNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
-	lp := loadLearningPosition(s.db, studentID, courseID)
+	lp := course.LoadLearningPosition(s.db, studentID, courseID)
 
 	var chapters []model.Chapter
 	s.db.Where("course_id = ?", courseID).Order("order_num ASC").Find(&chapters)
@@ -550,11 +552,11 @@ func (s *StudentService) GetStudentCourseDetail(studentID, courseID int) (*Stude
 
 	detail := &StudentCourseDetailDTO{
 		StudentCourseDTO: StudentCourseDTO{
-			CourseID:          course.CourseID,
-			CourseName:        course.Name,
-			Cover:             course.CoverImage,
-			SpecialtyID:       course.SpecialtyID,
-			LevelID:           course.LevelID,
+			CourseID:          c.CourseID,
+			CourseName:        c.Name,
+			Cover:             c.CoverImage,
+			SpecialtyID:       c.SpecialtyID,
+			LevelID:           c.LevelID,
 			Progress:          lp.Progress,
 			CompletedChapters: lp.CompletedChapters,
 			TotalChapters:     int64(len(chapters)),

@@ -9,8 +9,10 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/scope"
+	"forklift-training/internal/slicesx"
 	"forklift-training/internal/timefmt"
 )
 
@@ -28,82 +30,12 @@ func NewTrainingCatalogService(db *gorm.DB, logger *zap.Logger) *TrainingCatalog
 
 // ===== 专业方向 =====
 
-// nextSortOrderValue 返回表内（可选按组过滤）当前最大 sort_order + 1，新项排末尾。
-func nextSortOrderValue(db *gorm.DB, table string, where map[string]any) int {
-	q := db.Table(table).Select("COALESCE(MAX(sort_order), 0)")
-	for k, v := range where {
-		q = q.Where(k+" = ?", v)
-	}
-	var max int
-	if err := q.Scan(&max).Error; err != nil {
-		return 1
-	}
-	return max + 1
-}
-
-// renumberSortGroup 按 (sort_order, id) 升序把组内全部项重新顺序编号（1..N），返回新序 ID 列表。
-// 消除同值 sort_order（默认 0）导致的顺序不可控。
-func renumberSortGroup(db *gorm.DB, entity any, idCol string, where map[string]any) ([]int, error) {
-	var rows []map[string]any
-	q := db.Model(entity).Select(idCol + ", sort_order")
-	for k, v := range where {
-		q = q.Where(k+" = ?", v)
-	}
-	q.Order("sort_order ASC, " + idCol + " ASC")
-	if err := q.Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	ids := make([]int, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, toInt(r[idCol]))
-	}
-	return ids, nil
-}
-
-// ErrSwapItemNotFound 是 `swap_with` 指向的那一行不在本组序列里（ADR-0065 决策 3）。
-// 它是输入不合法（400）而不是 404：404 说的是「路径里那个资源没有」，而路径资源在这里是好的。
-var ErrSwapItemNotFound = errors.New("待交换的项不存在")
-
 // ErrCredentialHasContributions 是证件删除的投稿阻塞（#1360 / CONTEXT.md「证件删除的阻塞项」）。
 // 本枚哨兵只认领「该证件下挂着投稿行、删除会被挡住」这件事；**条数在包装它的那句文案里**
 // （`fmt.Errorf("该证件下仍有 %d 篇投稿，请先迁移或下架：%w", n, ...)`），
 // api 侧按哨兵落 400、按 ADR-0064 决策 9 把那句话原样发出去。
 // 之所以不把整句写进哨兵常量：哨兵是 errors.Is 的判据，句子随条数变，两者不能混在一枚值里。
 var ErrCredentialHasContributions = errors.New("该证件下仍有投稿")
-
-// swapGroupPositions 把组内两项交换位置：重编号后交换 a/b 在新序中的下标，再整体落库。
-// 即使两项 sort_order 相同（默认 0）也真实生效。
-func swapGroupPositions(db *gorm.DB, entity any, idCol string, idA, idB int, where map[string]any) error {
-	ids, err := renumberSortGroup(db, entity, idCol, where)
-	if err != nil {
-		return err
-	}
-	ia, ib := -1, -1
-	for i, id := range ids {
-		if id == idA {
-			ia = i
-		}
-		if id == idB {
-			ib = i
-		}
-	}
-	if ia < 0 || ib < 0 {
-		// 与「前置课程不存在」同判（都指向 body 里给的一枚坏引用 ⇒ 400），不是「路径上那个对象没有」。
-		return ErrSwapItemNotFound
-	}
-	if ia == ib {
-		return nil
-	}
-	ids[ia], ids[ib] = ids[ib], ids[ia]
-	return db.Transaction(func(tx *gorm.DB) error {
-		for i, id := range ids {
-			if err := tx.Model(entity).Where(idCol+" = ?", id).Update("sort_order", i+1).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
 
 // validateStatus 校验状态枚举（0 停用 / 1 启用），nil 视为未提供。
 func validateStatus(status *int16) error {
@@ -458,7 +390,7 @@ func (s *TrainingCatalogService) SetQuestionTags(questionID int, tagIDs []int) e
 
 // replaceQuestionTags 全量替换题目标签关联（校验标签存在）。
 func replaceQuestionTags(db *gorm.DB, questionID int, tagIDs []int) error {
-	tagIDs = dedupeInts(tagIDs)
+	tagIDs = slicesx.Ints(tagIDs)
 	if len(tagIDs) > 0 {
 		var count int64
 		if err := db.Model(&model.QuestionTag{}).Where("id IN ?", tagIDs).Count(&count).Error; err != nil {
@@ -546,13 +478,13 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 	}
 
 	// 管理端：一次性加载全部章节，按课程分组（避免逐课程查询的 N+1）
-	var chaptersByCourse map[int][]ChapterDTO
+	var chaptersByCourse map[int][]course.ChapterDTO
 	if withChapters {
 		var chapters []model.Chapter
 		s.db.Order("order_num ASC, chapter_id ASC").Find(&chapters)
-		chaptersByCourse = make(map[int][]ChapterDTO, len(chapters))
+		chaptersByCourse = make(map[int][]course.ChapterDTO, len(chapters))
 		for i := range chapters {
-			chaptersByCourse[chapters[i].CourseID] = append(chaptersByCourse[chapters[i].CourseID], chapterToDTO(&chapters[i]))
+			chaptersByCourse[chapters[i].CourseID] = append(chaptersByCourse[chapters[i].CourseID], course.ChapterToDTO(&chapters[i]))
 		}
 	}
 
@@ -562,22 +494,22 @@ func (s *TrainingCatalogService) getCatalogTree(activeOnly, withChapters bool, c
 		levelItems := make([]CatalogLevelNode, 0, len(levels))
 		for j := range levels {
 			lv := newCatalogLevelNode(&levels[j])
-			courses := make([]CourseDTO, 0)
+			courses := make([]course.CourseDTO, 0)
 			for k := range rows {
-				if !CourseMounted(rows[k].SpecialtyID, rows[k].LevelID) {
+				if !course.CourseMounted(rows[k].SpecialtyID, rows[k].LevelID) {
 					continue
 				}
 				if *rows[k].SpecialtyID != specialties[i].SpecialtyID || *rows[k].LevelID != levels[j].LevelID {
 					continue
 				}
-				cd := courseToDTO(&rows[k].Course)
+				cd := course.CourseToDTO(&rows[k].Course)
 				cd.ChapterCount = &rows[k].ChapterCount
 				if withChapters {
-					fillPrereqIDs(s.db, rows[k].CourseID, &cd)
+					course.FillPrereqIDs(s.db, rows[k].CourseID, &cd)
 					if chs, ok := chaptersByCourse[rows[k].CourseID]; ok {
 						cd.Chapters = &chs
 					} else {
-						empty := []ChapterDTO{}
+						empty := []course.ChapterDTO{}
 						cd.Chapters = &empty
 					}
 				}
@@ -620,20 +552,6 @@ func (s *TrainingCatalogService) loadQuestionTags(questionID int) []QuestionTagR
 			SortOrder: rows[i].SortOrder,
 			Status:    rows[i].Status,
 		})
-	}
-	return out
-}
-
-// dedupeInts 去重并保持顺序。
-func dedupeInts(vals []int) []int {
-	seen := make(map[int]struct{}, len(vals))
-	out := make([]int, 0, len(vals))
-	for _, v := range vals {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
 	}
 	return out
 }
@@ -727,14 +645,14 @@ type CatalogSpecialtyNode struct {
 
 // CatalogLevelNode 目录树课程等级节点。
 type CatalogLevelNode struct {
-	Code        string      `json:"code"`
-	Courses     []CourseDTO `json:"courses" nullability:"nonnil"`
-	CreatedAt   string      `json:"created_at"`
-	Description string      `json:"description"`
-	LevelID     int         `json:"level_id"`
-	Name        string      `json:"name"`
-	SortOrder   int         `json:"sort_order"`
-	Status      int16       `json:"status"`
+	Code        string             `json:"code"`
+	Courses     []course.CourseDTO `json:"courses" nullability:"nonnil"`
+	CreatedAt   string             `json:"created_at"`
+	Description string             `json:"description"`
+	LevelID     int                `json:"level_id"`
+	Name        string             `json:"name"`
+	SortOrder   int                `json:"sort_order"`
+	Status      int16              `json:"status"`
 }
 
 // newCatalogSpecialtyNode 构造目录树专业方向节点。

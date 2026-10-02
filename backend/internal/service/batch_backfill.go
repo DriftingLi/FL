@@ -14,73 +14,12 @@ import (
 //   - 章节数缺省 0（与旧有 count=0 语义一致）；空结果回填空切片而非 null。
 //
 // 未来新增「按若干 course_id / chapter_id 回填附属字段」一律走本 module，禁止逐行 N+1。
+//
+// P2 波 3b-1：三个**课程附属**加载器（BatchChapterCounts / BatchPrereqIDs / BatchStudentCounts）
+// 随课程列表一起搬进 internal/course/batch_backfill.go（课程域包定义，本包反向调用）。
 
 // UnknownCourseName 未知课程的缺省回填文案（学习记录课程名缺省值，集中单点）。
 const UnknownCourseName = "未知课程"
-
-// batchChapterCounts 一次查询全部课程章节数（缺省 0，消除逐课程 N+1）。
-func batchChapterCounts(db *gorm.DB, courseIDs []int) map[int]int64 {
-	result := make(map[int]int64, len(courseIDs))
-	for _, id := range courseIDs {
-		result[id] = 0
-	}
-	if len(courseIDs) == 0 {
-		return result
-	}
-	rows := make([]struct {
-		CourseID int   `gorm:"column:course_id"`
-		N        int64 `gorm:"column:n"`
-	}, 0)
-	db.Model(&model.Chapter{}).
-		Select("course_id, COUNT(*) AS n").
-		Where("course_id IN ?", courseIDs).
-		Group("course_id").
-		Scan(&rows)
-	for _, r := range rows {
-		result[r.CourseID] = r.N
-	}
-	return result
-}
-
-// batchPrereqIDs 一次查询全部课程前置课程 ID（缺省空切片，与旧 map 行为一致：[] 而非 null）。
-func batchPrereqIDs(db *gorm.DB, courseIDs []int) map[int][]int {
-	result := make(map[int][]int, len(courseIDs))
-	if len(courseIDs) == 0 {
-		return result
-	}
-	var rows []model.CoursePrerequisite
-	db.Where("course_id IN ?", courseIDs).
-		Order("course_id ASC, prerequisite_course_id ASC").
-		Find(&rows)
-	for _, r := range rows {
-		result[r.CourseID] = append(result[r.CourseID], r.PrerequisiteCourseID)
-	}
-	return result
-}
-
-// batchStudentCounts 一次查询全部课程学习学员数（study_record 去重 student_id）。
-func batchStudentCounts(db *gorm.DB, courseIDs []int) map[int]int64 {
-	result := make(map[int]int64, len(courseIDs))
-	for _, id := range courseIDs {
-		result[id] = 0
-	}
-	if len(courseIDs) == 0 {
-		return result
-	}
-	rows := make([]struct {
-		CourseID int   `gorm:"column:course_id"`
-		N        int64 `gorm:"column:n"`
-	}, 0)
-	db.Table("study_record").
-		Select("course_id, COUNT(DISTINCT student_id) AS n").
-		Where("course_id IN ?", courseIDs).
-		Group("course_id").
-		Scan(&rows)
-	for _, r := range rows {
-		result[r.CourseID] = r.N
-	}
-	return result
-}
 
 // batchCourseNames 一次查询全部课程名（仅返回存在的课程；缺省解析由
 // courseName / courseNameFound 统一处理，避免调用方各自写差集）。

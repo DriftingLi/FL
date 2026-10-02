@@ -1,5 +1,5 @@
 // Package service 学员侧课程与章节。
-package service
+package course
 
 import (
 	"encoding/json"
@@ -19,6 +19,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
+	"forklift-training/internal/slicesx"
 	"forklift-training/internal/timefmt"
 )
 
@@ -241,27 +242,27 @@ func loadCourseWithChapters(db *gorm.DB, courseID int) (*model.Course, []Chapter
 	}
 	chapterList := make([]ChapterDTO, 0, len(chapters))
 	for i := range chapters {
-		chapterList = append(chapterList, chapterToDTO(&chapters[i]))
+		chapterList = append(chapterList, ChapterToDTO(&chapters[i]))
 	}
 	return &course, chapterList, nil
 }
 
-// CourseService 学员课程服务。
-type CourseService struct {
+// Service 学员课程服务。
+type Service struct {
 	db            *gorm.DB
 	slideRenderer *SlideRenderer
 	logger        *zap.Logger
 }
 
-// NewCourseService 创建课程服务实例。
-func NewCourseService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Logger) *CourseService {
-	return &CourseService{db: db, slideRenderer: slideRenderer, logger: logger}
+// NewService 创建课程服务实例。
+func NewService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Logger) *Service {
+	return &Service{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
 // GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，空串 = 全部）。
 // 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
 // 可选位一律**显式命名形参**（#1096：原 filter ...string 变参改为显式参数，arity 在签名处自明）。
-func (s *CourseService) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
+func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
 		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter, DefaultPageSize: 12,
 	})
@@ -321,7 +322,7 @@ func courseEntitled(db *gorm.DB, courseID, studentID int, pointsPrice *int) (boo
 // 共用 caller（课程列表、全局搜索、收藏目标校验、章节可见性）。
 // 消费方 = 「内容读 + 进度写」一族：章节详情、幻灯片 GET/POST、学习进度上报
 // ——上报会在 study_record 上留下学习事实（喂给进度、完成态与「已拥有」判据），所以同样要拦。
-func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
+func (s *Service) studentCanReadCourse(courseID, studentID int) error {
 	// 先取行、再判可见性：反过来的话「这门课根本不存在」会先被 CourseVisibleByID 判成
 	// 「不在平台上」，model.ErrCourseNotFound 那一支永远走不到 —— 两件事实名义上分了档、实际不可达
 	// （TestStudentCanReadCoursePicksTheRightFact 第一次跑就照出了这个顺序问题）。
@@ -351,7 +352,7 @@ func (s *CourseService) studentCanReadCourse(courseID, studentID int) error {
 
 // GetCourseDetail 课程详情（含学员学习位置与完成状态，ADR-0017）。
 // 可见性：按 id 读路径纳入学员可见性谓词（ADR-0058）——未发布 / 未挂载课程一律按「不存在」返回。
-func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
+func (s *Service) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, error) {
 	// 可见性谓词仍 fail-closed（问不出可见性时不把内容交出去），但**把 err 交出去**：
 	// 旧写法把「读不动 courses」演成 404「课程不存在」，Web 的 `.catch(()=>null)` 会把它缓存成
 	// 「这门课没了」——故障被收成空态就再没人报警（ADR-0065 决策 7；档位台账从此声明 500 档）。
@@ -367,16 +368,16 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 		return nil, err
 	}
 	progress := 0.0
-	lp := learningPosition{}
+	lp := LearningPosition{}
 	if studentID > 0 {
-		lp = loadLearningPosition(s.db, studentID, courseID)
+		lp = LoadLearningPosition(s.db, studentID, courseID)
 		progress = lp.Progress
 	}
 	lastStudiedAt := ""
 	if lp.LastStudiedAt != nil {
 		lastStudiedAt = timefmt.FormatISO(*lp.LastStudiedAt)
 	}
-	detail := courseToDTO(course)
+	detail := CourseToDTO(course)
 	// 权益投影只在有主体的读路径填（见 CourseDTO.Entitled 的注释）：
 	// 此前「已解锁」只存在于前端内存（兑换成功后把 points_price 抹成 null），
 	// 刷新即被打回「请先兑换」⇒ 付过分的学员反而进不去。
@@ -404,7 +405,7 @@ func (s *CourseService) GetCourseDetail(courseID, studentID int) (*CourseDetailD
 // GetChapterDetail 章节详情（学员端路径回填 study_status）。
 // 可见性：章节可见性跟随所属课程（ADR-0058）——未发布 / 未挂载课程的章节按「不存在」返回，
 // 与搜索的章节分区、以及收藏的写时校验同一谓词。
-func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
+func (s *Service) GetChapterDetail(courseID, chapterID, studentID int) (*ChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := fetchRow(s.db.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
 		return nil, err
@@ -415,7 +416,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err
 	}
-	return chapterDetailShared(s.db, &chapter, true, studentID)
+	return ChapterDetailShared(s.db, &chapter, true, studentID)
 }
 
 // GetChapterSlides 章节幻灯片。
@@ -423,7 +424,7 @@ func (s *CourseService) GetChapterDetail(courseID, chapterID, studentID int) (*C
 // 转图成功后把 URL 列表回写 chapter.slide_urls。
 // 可见性：与章节详情同一谓词（ADR-0058）——否则幻灯片会成为未发布章节内容的旁路；
 // 付费课程的权益半边同经 studentCanReadCourse（ADR-0062 决策 3）。
-func (s *CourseService) GetChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
+func (s *Service) GetChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := fetchRow(s.db.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
 		return nil, err
@@ -455,7 +456,7 @@ func (s *CourseService) GetChapterSlides(chapterID, studentID int) (*ChapterSlid
 // 管理面，正解是同一条可读性判据，不是能力守卫）。旧写法一条判据都没有：任意登录学员按章节 id
 // 即可让服务端下载 PPT + 转图并把 URL 回给自己，等于未发布/未兑换章节正文幻灯片的旁路
 // （同文件 GET 半边早在 ADR-0058 堵过同一个洞）。
-func (s *CourseService) RegenerateChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
+func (s *Service) RegenerateChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO, error) {
 	var chapter model.Chapter
 	if err := fetchRow(s.db.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
 		return nil, err
@@ -475,7 +476,7 @@ func (s *CourseService) RegenerateChapterSlides(chapterID, studentID int) (*Chap
 }
 
 // generateSlides 下载 PPT bytes 并调 SlideRenderer 转图，把 URL 列表持久化到 chapter.slide_urls。
-func (s *CourseService) generateSlides(chapterID int, pptURL string) []string {
+func (s *Service) generateSlides(chapterID int, pptURL string) []string {
 	if s.slideRenderer == nil {
 		return nil
 	}
@@ -523,7 +524,7 @@ func downloadFile(url string) ([]byte, error) {
 // 课程级进度 = 已完成章节数 / 总章节数。
 // ADR-0017：支持秒级时长（DurationSecs 优先）、章节播放位置（VideoPosition）与
 // 显式完成（Completed）；带章节的上报同步刷新课程级记录 last_chapter_id / last_studied_at。
-func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyProgressInput) (*StudyProgressDTO, error) {
+func (s *Service) UpdateStudyProgress(studentID, courseID int, in StudyProgressInput) (*StudyProgressDTO, error) {
 	// 付费课程未兑换即不得写学习事实（ADR-0062 决策 3 列的第三处：进度写）。
 	// 不拦的话，白看的人照样能攒出进度、完成态与「已报名」判据。
 	if err := s.studentCanReadCourse(courseID, studentID); err != nil {
@@ -628,7 +629,7 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyPro
 		now := clock.Now()
 		record.LastStudiedAt = &now
 	}
-	record.Progress = roundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
+	record.Progress = coerce.RoundFloat2(float64(completedChapters) / float64(totalChapters) * 100)
 	if err := s.db.Save(&record).Error; err != nil {
 		return nil, err
 	}
@@ -645,9 +646,9 @@ func (s *CourseService) UpdateStudyProgress(studentID, courseID int, in StudyPro
 	}, nil
 }
 
-// learningPosition 学员在某课程的学习状态快照（ADR-0017 共享查询，
+// LearningPosition 学员在某课程的学习状态快照（ADR-0017 共享查询，
 // 「我的课程」与课程详情 continue-learning 数据源）。
-type learningPosition struct {
+type LearningPosition struct {
 	RecordID          int
 	Progress          float64
 	LastChapterID     *int
@@ -656,11 +657,11 @@ type learningPosition struct {
 	CompletedChapters int64
 }
 
-// loadLearningPosition 装载学员在某课程的学习状态（课程级记录 + 完成章节数 +
+// LoadLearningPosition 装载学员在某课程的学习状态（课程级记录 + 完成章节数 +
 // 最后章节播放位置）。未学时 RecordID=0；课程级记录缺失时回退任意一条记录
 // （历史数据兼容，与旧课程详情进度读取同语义）。
-func loadLearningPosition(db *gorm.DB, studentID, courseID int) learningPosition {
-	var lp learningPosition
+func LoadLearningPosition(db *gorm.DB, studentID, courseID int) LearningPosition {
+	var lp LearningPosition
 	var record model.StudyRecord
 	if err := db.Where("student_id = ? AND course_id = ? AND chapter_id IS NULL", studentID, courseID).
 		Order("record_id ASC").Limit(1).Find(&record).Error; err == nil && record.RecordID == 0 {
@@ -687,21 +688,9 @@ func loadLearningPosition(db *gorm.DB, studentID, courseID int) learningPosition
 	return lp
 }
 
-// ===== 辅助 =====
+// ===== DTO 构造（原 courseToDict/chapterToDict/chapterFileToDict/LegacyFileEntry 折叠入内）=====
 
-// roundFloat2 保留 2 位小数。
-func roundFloat2(f float64) float64 {
-	return float64(int(f*100+0.5)) / 100
-}
-
-// roundFloat1 保留 1 位小数。
-func roundFloat1(f float64) float64 {
-	return float64(int(f*10+0.5)) / 10
-}
-
-// ===== DTO 构造（原 courseToDict/chapterToDict/chapterFileToDict/legacyFileEntry 折叠入内）=====
-
-func courseToDTO(c *model.Course) CourseDTO {
+func CourseToDTO(c *model.Course) CourseDTO {
 	return CourseDTO{
 		CourseID:              c.CourseID,
 		Name:                  c.Name,
@@ -730,10 +719,10 @@ func fillChapterCount(db *gorm.DB, courseID int, dto *CourseDTO) {
 	dto.ChapterCount = &count
 }
 
-// fillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。
+// FillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。
 // 无前置课程时填空数组（与旧 map 行为一致：[] 而非 null；omitempty 对空切片也省略，
 // 故用指针区分"未填充"与"空数组"两种状态）。
-func fillPrereqIDs(db *gorm.DB, courseID int, dto *CourseDTO) {
+func FillPrereqIDs(db *gorm.DB, courseID int, dto *CourseDTO) {
 	var ids []int
 	db.Model(&model.CoursePrerequisite{}).Where("course_id = ?", courseID).
 		Order("prerequisite_course_id ASC").Pluck("prerequisite_course_id", &ids)
@@ -743,7 +732,7 @@ func fillPrereqIDs(db *gorm.DB, courseID int, dto *CourseDTO) {
 	dto.PrerequisiteCourseIDs = &ids
 }
 
-func chapterToDTO(c *model.Chapter) ChapterDTO {
+func ChapterToDTO(c *model.Chapter) ChapterDTO {
 	return ChapterDTO{
 		ChapterID:   c.ChapterID,
 		CourseID:    c.CourseID,
@@ -758,7 +747,7 @@ func chapterToDTO(c *model.Chapter) ChapterDTO {
 	}
 }
 
-func chapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
+func ChapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
 	return ChapterFileDTO{
 		FileID:      f.FileID,
 		ChapterID:   f.ChapterID,
@@ -770,7 +759,7 @@ func chapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
 	}
 }
 
-func legacyFileEntry(ch *model.Chapter) ChapterFileDTO {
+func LegacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 	fileName := ""
 	if ch.FileURL != "" {
 		parts := strings.Split(ch.FileURL, "/")
@@ -817,18 +806,18 @@ func loadChapterFiles(db *gorm.DB, chapter *model.Chapter) []ChapterFileDTO {
 	db.Where("chapter_id = ?", chapter.ChapterID).Order("created_at").Find(&files)
 	fileList := make([]ChapterFileDTO, 0, len(files))
 	if len(files) == 0 && chapter.FileURL != "" {
-		fileList = append(fileList, legacyFileEntry(chapter))
+		fileList = append(fileList, LegacyFileEntry(chapter))
 	} else {
 		for i := range files {
-			fileList = append(fileList, chapterFileToDTO(&files[i]))
+			fileList = append(fileList, ChapterFileToDTO(&files[i]))
 		}
 	}
 	return fileList
 }
 
-// loadChapterFilesBulk 批量装载多个章节的文件列表（一次 IN 查询），消除逐章节 N+1。
+// LoadChapterFilesBulk 批量装载多个章节的文件列表（一次 IN 查询），消除逐章节 N+1。
 // 返回 map[chapterID][]ChapterFileDTO；无文件的章节不在 map 中（legacy 兼容在调用侧合并）。
-func loadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]ChapterFileDTO {
+func LoadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]ChapterFileDTO {
 	if len(chapters) == 0 {
 		return map[int][]ChapterFileDTO{}
 	}
@@ -844,7 +833,7 @@ func loadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]Chapt
 			continue
 		}
 		cid := *files[i].ChapterID
-		result[cid] = append(result[cid], chapterFileToDTO(&files[i]))
+		result[cid] = append(result[cid], ChapterFileToDTO(&files[i]))
 	}
 	return result
 }
@@ -867,10 +856,10 @@ func chapterStudyStatus(db *gorm.DB, studentID, courseID, chapterID int) string 
 	return "studying"
 }
 
-// chapterDetailShared 章节详情共享实现：prev/next 计算、文件列表装载 + legacy 兼容、
+// ChapterDetailShared 章节详情共享实现：prev/next 计算、文件列表装载 + legacy 兼容、
 // 可选 study_status 回填（fillStudyStatus=true 且 studentID>0 时）。
 // 学员端与导师端详情响应 shape 零漂移；两端唯一差异是学员端回填 study_status。
-func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) (*ChapterDetailDTO, error) {
+func ChapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) (*ChapterDetailDTO, error) {
 	var chapters []model.Chapter
 	db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
 	prevID, nextID := chapterPrevNext(chapters, chapter.ChapterID)
@@ -884,7 +873,7 @@ func chapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bo
 	}
 
 	d := &ChapterDetailDTO{
-		ChapterDTO:        chapterToDTO(chapter),
+		ChapterDTO:        ChapterToDTO(chapter),
 		Files:             loadChapterFiles(db, chapter),
 		PreviousChapterID: prevIDPtr,
 		NextChapterID:     nextIDPtr,
@@ -972,7 +961,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return ErrSpecialtyNotFound
+				return model.ErrSpecialtyNotFound
 			}
 			course.SpecialtyID = coerce.IntPtr(id)
 		}
@@ -990,7 +979,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return ErrCourseLevelNotFound
+				return model.ErrCourseLevelNotFound
 			}
 			course.LevelID = coerce.IntPtr(id)
 		}
@@ -1008,7 +997,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 				return err
 			}
 			if count == 0 {
-				return ErrCertificateTemplateNotFound
+				return model.ErrCertificateTemplateNotFound
 			}
 			course.CertificateTemplateID = coerce.IntPtr(id)
 		}
@@ -1042,7 +1031,7 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 
 // replaceCoursePrerequisites 全量替换课程前置课程关联。
 func replaceCoursePrerequisites(db *gorm.DB, courseID int, prereqIDs []int) error {
-	prereqIDs = dedupeInts(prereqIDs)
+	prereqIDs = slicesx.Ints(prereqIDs)
 	// 校验前置课程存在且不能指向自己
 	for _, id := range prereqIDs {
 		if id == courseID {

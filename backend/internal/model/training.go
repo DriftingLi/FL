@@ -14,6 +14,16 @@ import (
 // 「真不存在」与「查不动」必须分开（ADR-0064 决策 1）：只有 gorm.ErrRecordNotFound 才换成它。
 var ErrCourseNotFound = errors.New("课程不存在")
 
+// ErrSpecialtyNotFound / ErrCourseLevelNotFound / ErrCertificateTemplateNotFound 是课程写面挂载
+// 三个培训字典时「这枚字典行不存在」的跨域载体（P2 波 3b-1 从 internal/service/catalog_specs.go 挪来）：
+// 培训域的 spec 校验与课程域的 applyCourseTrainingFields 指向同一件事实，而两域互为强环 ⇒
+// 贴着实体放（同上，ADR-0070「跨域共享的词汇贴着实体放 internal/model」）。
+var (
+	ErrSpecialtyNotFound           = errors.New("专业方向不存在")
+	ErrCourseLevelNotFound         = errors.New("课程等级不存在")
+	ErrCertificateTemplateNotFound = errors.New("证书模板不存在")
+)
+
 type Course struct {
 	CourseID    int    `gorm:"column:course_id;primaryKey" json:"course_id"`
 	Name        string `gorm:"column:name" json:"name"`
