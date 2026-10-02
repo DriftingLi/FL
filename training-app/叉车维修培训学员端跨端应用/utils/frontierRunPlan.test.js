@@ -273,4 +273,15 @@ describe('串行轮转外层的计划面（运行期）', () => {
     ].join('\n'));
     expect(kv(okLines, 'n')).toEqual(['worktree', 'agent', 'self-test', 'gate']);
   });
+
+  test('FP11: 执行器对 .ps1 步必须经子 `pwsh -File` 分派（#1467 首跑实测：`& $s.File @($s.Args)` 把参数数组当成一个实参绑给脚本 ⇒ -Task 收到数组、转 System.String 失败，整轮崩在建树步）', () => {
+    const src = readText(path.join(ROOT, ENTRY_REL));
+    // 正锁：入口必须按 .ps1 分派到子 `pwsh -File`（worktree / gate 两步都是 .ps1）。
+    expect(src).toMatch(/-like\s+'\*\.ps1'/);
+    expect(src).toMatch(/-File\s+\$s\.File/);
+    // 反锁：旧的「直接 & 脚本传数组」写法不得复活（改回这行，本用例即红）。
+    expect(src).not.toMatch(/&\s+\$s\.File\s+@\(\$s\.Args\)/);
+    // 外部命令（npm / agent CLI）仍走直接调用 —— 数组对 exe 天然拆成 argv，不能被 -File 化。
+    expect(src).toMatch(/&\s+\$s\.File\s+\$s\.Args/);
+  });
 });

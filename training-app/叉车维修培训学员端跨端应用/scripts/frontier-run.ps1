@@ -193,7 +193,15 @@ foreach ($s in $plan) {
             $code = 0
         }
         else {
-            & $s.File @($s.Args)
+            # .ps1 目标必须经子 `pwsh -File` 调用：直接把参数数组甩给脚本调用（`&` 脚本 + 数组）
+            # 会把整个数组当成**一个实参**绑给脚本（-Task 收到数组 ⇒「无法将值转换为 System.String」，
+            # #1467 首跑实测崩在建树步；此前只跑过取票/DryRun，都在本循环之前 exit，故从未暴露）。
+            # 外部命令（npm / agent CLI）数组天然拆成 argv，保持直接调用。守护：FP11。
+            if ($s.File -like '*.ps1') {
+                & pwsh -NoProfile -ExecutionPolicy Bypass -File $s.File $s.Args
+            } else {
+                & $s.File $s.Args
+            }
             $code = $LASTEXITCODE
         }
     }
