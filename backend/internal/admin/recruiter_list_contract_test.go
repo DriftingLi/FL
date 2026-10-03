@@ -1,7 +1,7 @@
 // #416 管理端企业招聘者列表契约测试：真列表（分页+关键字）替换硬编码空数组桩；
 // 响应字段白名单不含任何凭据（口令哈希）；非管理员 403。
 // 双适配器：SQLite 恒绿 + Postgres（真实迁移建表，无 DATABASE_URL 时跳过）。
-package api
+package admin
 
 import (
 	"encoding/json"
@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/admin"
 	"forklift-training/internal/config"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
@@ -27,7 +26,7 @@ func fetchRecruiters(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 	if query != `` {
 		path += `?` + query
 	}
-	rec := doWithToken(t, r, token, http.MethodGet, path, nil)
+	rec := testutil.DoWithToken(t, r, token, http.MethodGet, path, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf(`GET %s should be 200, got %d body=%s`, path, rec.Code, rec.Body.String())
 	}
@@ -53,7 +52,7 @@ func assertRecruiterList(t *testing.T, db *gorm.DB) {
 	pwd, _ := core.HashPassword(`admin123`)
 	adminUser := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := core.HashPassword(`student123`)
-	student := seedStudent(t, db, `stu1`, stuPwd)
+	student := testutil.SeedStudent(t, db, `stu1`, stuPwd)
 	// 种 3 个招聘者（2 个企业名含「叉车」，1 个不含）
 	seed := []model.RecruiterUser{
 		{Username: `recruit_a`, Password: pwd, CompanyName: `上海叉车租赁`, CreditCode: `CC1`, BusinessScope: `叉车维修`, ContactName: `甲`, ContactPhone: `13800000001`, ContactEmail: `a@ex.com`, Status: 1, CreatedAt: time.Now()},
@@ -67,10 +66,7 @@ func assertRecruiterList(t *testing.T, db *gorm.DB) {
 	cfg := &config.Config{
 		JWTSecretKey: `recruiter-list-secret`,
 	}
-	r := gin.New()
-	api := r.Group(`/api`)
-	deps := newContractDeps(t, db, cfg)
-	admin.RegisterAdminRecruiterRoutes(api, deps.RouterDeps().Session, deps.AuthSvc)
+	r := newAdminRecruiterContractEnv(t, db, cfg)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	adminToken, err := adminSess.Issue(adminUser.AdminID, adminUser.Username, `admin`)
 	if err != nil {
@@ -83,7 +79,7 @@ func assertRecruiterList(t *testing.T, db *gorm.DB) {
 	}
 
 	// 1. 非管理员 403
-	rec := doWithToken(t, r, stuToken, http.MethodGet, `/api/admin/recruiters`, nil)
+	rec := testutil.DoWithToken(t, r, stuToken, http.MethodGet, `/api/admin/recruiters`, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf(`non-admin should be 403, got %d`, rec.Code)
 	}

@@ -1,5 +1,5 @@
 // #517 契约测试：资料投稿蓝图——创建/列表/详情/下载/审核/举报端点的请求形状与信封。
-package api
+package contribution
 
 import (
 	"bytes"
@@ -13,43 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
-	"forklift-training/internal/contribution"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
-
-// newContributionRouter 装配投稿蓝图测试路由器。
-//
-// 第五个返回值是投稿暂存位的本地存储：#1361 之后 Create 要问它「那个暂存文件在不在」，
-// 用例必须先往本人的分区 contributions/<uid>/ 里种一个真文件，才谈得上提交成功。
-func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, *model.Credential, *storage.LocalStorage) {
-	t.Helper()
-	testutil.SetTestGinMode()
-	db := testutil.NewFileDB(t)
-	cfg := &config.Config{
-		JWTSecretKey: "contract-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	st := storage.NewLocalStorage(t.TempDir())
-	deps := newContractDepsWithStorage(t, db, cfg, st)
-	r := gin.New()
-	api := r.Group("/api")
-	contribution.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.ContributionSvc)
-	contribution.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ContributionSvc)
-	// 学员（已选证件）
-	cred := &model.Credential{Code: "N1", Name: "叉车司机"}
-	if err := db.Create(cred).Error; err != nil {
-		t.Fatalf("建证件失败: %v", err)
-	}
-	cid := cred.ID
-	stu := &model.HrwaiUser{Account: "acct_c", Phone: "13800000001", Username: "学员丙", Status: 1, CurrentCredentialID: &cid, CreatedAt: testutil.Now()}
-	if err := db.Create(stu).Error; err != nil {
-		t.Fatalf("建学员失败: %v", err)
-	}
-	return r, deps, stu, cred, st
-}
 
 // issueContributionToken 签发学员 token。
 func issueContributionToken(t *testing.T, cfg *config.Config, u *model.HrwaiUser) string {

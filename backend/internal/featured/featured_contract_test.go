@@ -2,7 +2,7 @@
 //   - GET /api/featured-content/:id?no_view=1 不改变 view_count（SSR/爬虫路径）
 //   - 不带 no_view 的详情请求保持计数行为
 //   - POST /api/featured-content/:id/view 自增并返回最新阅读量；不存在返回 404
-package api
+package featured
 
 import (
 	"encoding/json"
@@ -10,10 +10,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/featured"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -45,10 +43,7 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	id := seedContractFeatured(t, db, "no_view 契约", 7)
 
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, nil)
-	featured.RegisterRoutes(api, deps.RouterDeps().Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
+	r := newFeaturedContractEnv(t, db)
 
 	// no_view=1：阅读量不变
 	rec := testutil.PerformRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id)+"?no_view=1")
@@ -87,10 +82,7 @@ func TestFeaturedViewEndpoint(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	id := seedContractFeatured(t, db, "view 端点契约", 10)
 
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, nil)
-	featured.RegisterRoutes(api, deps.RouterDeps().Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
+	r := newFeaturedContractEnv(t, db)
 
 	rec := testutil.PerformRequest(r, "POST", "/api/featured-content/"+strconv.Itoa(id)+"/view")
 	if rec.Code != http.StatusOK {
