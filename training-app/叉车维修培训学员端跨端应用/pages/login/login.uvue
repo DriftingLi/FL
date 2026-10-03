@@ -176,7 +176,7 @@
     const auth = useAuthStore()
     // 微信登录入口的显隐由**运行期能力探测**决定（#1478 裁定 2：条件编译指令行增删数为 0）；
     // 着陆页 `pages/index/index.uvue` 引用的是同一个符号，两页不各写一份探测逻辑
-    const { wechatAvailable } = useLoginProviders()
+    const { wechatAvailable, wechatLoginReady } = useLoginProviders()
     // 生物识别实例只有一个：门控 checkSupport 写入的 isSupported 与模板读取的必须是同一份
     const biometric = useBiometric()
 
@@ -215,7 +215,7 @@
         goRegister,
         goForgotPassword,
         goRecruiterLogin,
-    } = useLoginForm(biometric)
+    } = useLoginForm(biometric, wechatLoginReady.value)
 
     // 生物识别门控面（回填 / 快捷登录 / 取消勾选清除），凭据 ref 由表单态注入
     const { showedStored, quickLoginLabel, initBiometricGate, onQuickLogin, toggleRemember } = useBiometricGate(biometric, username, password, rememberMe)

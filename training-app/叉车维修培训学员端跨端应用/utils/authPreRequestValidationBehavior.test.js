@@ -113,12 +113,20 @@ function mutate(rel, from, to) {
 const loginSrc = () => readText(LOGIN_UTS);
 const forgotSrc = () => readText(FORGOT_UTS);
 
+/** 与真源 `composables/useLoginProviders.uts` 的 `WECHAT_NOT_WIRED_NOTICE` 逐字一致（文案单点） */
+const WECHAT_NOT_WIRED_NOTICE = '微信登录暂未开通';
+
 /**
  * 起一个**真的**登录页表单 composable（`pages/login/composables/useLoginForm.uts`）。
  * `calls` 记录请求层被打到几次 —— I1/I2/I3 的「零请求」判据就看它。
+ *
+ * @param source 变异源（缺省 = 磁盘真源）
+ * @param opts.loginReady 共享探测件的**接通面**快照。缺省 true = 小程序端形态（老判据全测「链路已接通」
+ *   的行为）；显式 false = App 端样式位形态（#1487 ①a 真机口径：点击只给友好提示、零请求）。
  */
-function loginApp(source) {
+function loginApp(source, opts) {
   const { toasts, uni } = makeUni();
+  const loginReady = !(opts != null && opts.loginReady === false);
   const calls = { login: [], loginByCode: [], loginByWechat: [], sendCodeApi: [], afterLoginSuccess: [], showAgreementNotice: [] };
   const bindings = {
     ...vueShim(),
@@ -141,13 +149,16 @@ function loginApp(source) {
     // 全仓单点 `utils/agreementNotice.uts`。这里记录**转投实参** ⇒「登录页只交协议名」
     // 成为可断言的行为面（文案本身由 `landingLoginBehavior` 用真单点端到端跑）。
     showAgreementNotice: (name) => { calls.showAgreementNotice.push(name); },
+    // #1487 ①a 真机口径：入口展示但链路未接通时的唯一提示文案（真源 `composables/useLoginProviders`）。
+    // 按导出名绑定，缺一个就抛（`utils/utsHarness.js` 的缺绑定守卫）—— 这里必须给。
+    WECHAT_NOT_WIRED_NOTICE: WECHAT_NOT_WIRED_NOTICE,
     uni,
     setInterval: () => 0,
     clearInterval: () => {},
     setTimeout: () => 0,
   };
   const mod = source == null ? loadUts(LOGIN_UTS, bindings) : loadFromSource(source, 'useLoginForm.uts', bindings);
-  return { face: mod.useLoginForm({ isSupported: { value: false } }), calls, toasts };
+  return { face: mod.useLoginForm({ isSupported: { value: false } }, loginReady), calls, toasts, loginReady: loginReady };
 }
 
 /** 起一个**真的**找回密码页 composable（`pages/forgot-password/composables/useForgotPasswordForm.uts`） */
@@ -330,6 +341,18 @@ describe('C. #1262 边界：新档位不渗进其余登录通道', () => {
     app.face.showAgreement('用户隐私');
     expect(app.calls.showAgreementNotice).toEqual(['用户协议', '用户隐私']);
     expect(app.toasts).toEqual([]); // 这句话的出口在 utils/agreementNotice.uts，不在本页（全仓单点）
+  });
+
+  test('C5 #1487 ①a 真机口径：接通面为假（App 端样式位）⇒ 微信模式点击只出单点提示，零请求、零出口、不进 loading', async () => {
+    const app = loginApp(null, { loginReady: false });
+    app.face.mode.value = 'wechat';
+    app.face.agreed.value = true;
+    await app.face.onSubmit();
+    expect(app.toasts).toEqual([WECHAT_NOT_WIRED_NOTICE]);
+    expect(app.calls.loginByWechat.length).toBe(0); // 样式位不是坏按钮：一次都不打
+    expect(app.calls.login.length).toBe(0);
+    expect(app.calls.afterLoginSuccess).toEqual([]);
+    expect(app.face.loading.value).toBe(false);
   });
 });
 

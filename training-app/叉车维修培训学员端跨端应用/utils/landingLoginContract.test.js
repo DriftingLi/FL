@@ -11,13 +11,13 @@
  * | AC | 这里锁什么 | 锁不住什么（归谁） |
  * |---|---|---|
  * | 1 已登录冷启动直达 dashboard | `onLoad` 里那条 `if (auth.isLoggedIn.value)` 守卫 + 块内**唯一**一条 `uni.reLaunch` 指向 dashboard，且守卫块内**零**嵌套条件 | — |
- * | 2 分端出主 CTA | **结构事实**：主 CTA 带 `v-if="wechatAvailable"`、次级入口**不受探测门禁**（探测不可用仍在）⇒「不可用 ⇒ 次级分支」「可用 ⇒ 微信分支」两端都成立 | 「App 端**不露出**『一键』二字」是**运行期渲染事实**：同一份 `index.uvue` 同时承载两端分支，小程序 CTA 文案本身就是「微信一键登录」⇒ 静态不可验证（控制器裁定 R1），**禁止**在此写"源码不含一键"这种恒假断言 ⇒ 归维护者真机门 |
+ * | 2 分端出主 CTA | **结构事实**：主 CTA 带 `v-if="wechatAvailable"`（**展示面**：App 与小程序一律展示 —— 2026-10-03 维护者口径「移动端也展示，有个样式即可」）、次级入口**不受探测门禁**（探测不可用仍在）；**接通面** `wechatLoginReady` 单独门禁点击链（App 端 = 友好提示、零请求） | 「App 端**不露出**『一键』二字」**已作废**（2026-10-03 ①a 真机判红后维护者改口径：App 端**允许**展示该入口，只要求点击不空转）⇒ 该断言及其反向断言都不在此写，运行期渲染事实归真机门 |
  * | 3 未勾选协议拦在请求之前 | 拦截文案与登录页**同一字面量** + 源码顺序（拦截 return 早于 `loginByWechat()`） | 「真的零请求」由 behavior 套件按桩计数断言 |
  * | 4 两入口一条成功出口 | 着陆页 composable **零** `reLaunch`、`afterLoginSuccess` 定义全仓**唯一**、新用户 toast 全仓**唯一** | 出口两条分支的行为 = behavior 套件真跑 |
  * | 5 失败可见 | `errorHint` 有写入点 **且** 页面有可见渲染位（两条都要，缺一即红） | 渲染出来长什么样 = 真机门 |
  * | 6 删手绘吉祥物 | 原手绘 class 名族零命中 + `logo.png` 图像槽位在位 | 图片视觉 = 真机门 |
  * | 7 协议行抽共享件 | 两页 import **同一件**、两页模板不再自持《用户协议》文案、共享件最小面（props/emits 清单 + 表单态不得入内）、**注册入口按 BASE 各通道都在**（F4：判据 7 只授权换文案，未授权增删入口） | 同视觉（`loginContract` 的模板 sha 锁已批准变更） |
- * | 探测件两页共享 | 两页 import **同一符号** + 两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）全仓**只出现在探测件里**（两份实现即红） | 探测结论在真机上对不对 = 真机门（且 `getProviderSync` 在本仓的**编译面**未验，见报告 ④c） |
+ * | 探测件两页共享 | 两页 import **同一符号** + 两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）全仓**只出现在探测件里**（两份实现即红）；返回面是**两个**能力判断（展示面 / 接通面），能力半**已停用**（#1482 接回） | 探测结论在真机上对不对 = 真机门（且 `getProviderSync` 在本仓的**编译面**未验，见报告 ④c） |
  * | 协议详情提示一句文案 | 「详情页建设中」在内联面上**只住 `utils/agreementNotice.uts`**，三页只是转投（F2：曾有三个副本） | 端到端文案由 `landingLoginBehavior` C3-C6 真跑单点 |
  * | `#ifdef` 增删 = 0 | 两个运行时面文件的条件编译**指令行计数**锁到 BASE 值（index 0 行、login 2 行），且 login 那条 `MP-WEIXIN` + `#endif` 成对仍在（不许拆） | — |
  * | 零配置面改动 | `pages.json` 路由事实：启动页仍是第一条、独立登录页**仍在路由表**（保留页降级、不退役） | 「文件一字未动」由 commit 的 `--name-only` 证明（jest 读不到 git），见 task-1-report |
@@ -192,7 +192,7 @@ function ctaFacts(src) {
     secondaryTextShown: /<text[^>]*class="[^"]*cta-secondary-text[^"]*">其他登录方式<\/text>/.test(tpl),
     probeGateUses: (tpl.match(/v-if="wechatAvailable"/g) || []).length,
     probeImported: /from '[^']*composables\/useLoginProviders'/.test(src),
-    probeDestructured: /const \{ wechatAvailable \} = useLoginProviders\(\)/.test(src),
+    probeDestructured: /const \{ wechatAvailable, wechatLoginReady \} = useLoginProviders\(\)/.test(src),
   };
 }
 
@@ -574,10 +574,10 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
 describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两份实现即红）', () => {
   const sources = allSources();
 
-  it('两页都 import 根 composables/useLoginProviders 并解构 wechatAvailable', () => {
+  it('两页都 import 根 composables/useLoginProviders 并解构**两个面**（展示面 + 接通面）', () => {
     for (const rel of [PAGE, LOGIN_PAGE]) {
       expect(read(rel)).toContain("import { useLoginProviders } from '../../composables/useLoginProviders'");
-      expect(read(rel)).toContain('const { wechatAvailable } = useLoginProviders()');
+      expect(read(rel)).toContain('const { wechatAvailable, wechatLoginReady } = useLoginProviders()');
     }
   });
 
@@ -592,20 +592,29 @@ describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两�
     }
   });
 
-  it('复合判据的接线面（F1）：探测件同时持有端别常量与 provider 常量，且两者以「或」相连', () => {
+  it('两个面的接线面（F1）：展示面 = 端别(小程序 || App)、接通面 = 端别(仅小程序)；能力半**不接**任何一面', () => {
     const code = stripJs(read(PROBE));
     expect(code).toContain("const PLATFORM_MP_WEIXIN = 'mp-weixin'");
+    expect(code).toContain("const PLATFORM_APP = 'app'");
     expect(code).toContain("const PROVIDER_OAUTH_WEIXIN = 'weixin'");
     expect(code).toContain("uni.getProviderSync({ service: 'oauth' })");
-    expect(code).toMatch(/return onMpWeixin \|\| providerFound/);
+    // 展示面：App 与小程序一律展示该入口（2026-10-03 维护者口径「移动端也展示，有个样式即可」）
+    expect(code).toMatch(/return onMpWeixin \|\| onApp/);
+    // 接通面：只有小程序端为真（App 端 manifest 未配微信 SDK，见 #1482）
+    expect(code).toMatch(/const wechatLoginReady = computed<boolean>\(\(\) : boolean => \{\s*return onMpWeixin\s*\}/);
+    // 能力半函数仍在（#1482 的接缝 + ④c 的零先例 API 证据面），但**不得**被任何一面调用 ——
+    // 它接回判据就是 2026-10-03 ①a 真机判红的那个假阳性（未配 SDK 的 Android 上 providerIds 恒含 weixin）
+    expect(code).toMatch(/function hasWechatOauthProvider\(\) : boolean \{/);
+    expect(code).not.toMatch(/return onMpWeixin \|\| hasWechatOauthProvider\(\)/);
     expect(code).toMatch(/try \{[\s\S]*?\} catch \(e\) \{\s*return false\s*\}/);
   });
 
-  it('探测件返回面是**能力可用性判断**（供 #1484 决定 disabled），不是「要不要渲染」的布尔', () => {
+  it('探测件返回面是**两个能力判断**（展示面 / 接通面，供 #1484 决定 disabled），不是「要不要渲染」的布尔', () => {
     const src = read(PROBE);
     const declared = [...src.matchAll(/^\s{4}([A-Za-z_$][\w$]*)\s*:/gm)].map((m) => m[1]).sort();
-    expect(declared).toEqual(['wechatAvailable', 'wechatUnavailableReason']);
+    expect(declared).toEqual(['wechatAvailable', 'wechatLoginReady', 'wechatUnavailableReason']);
     expect(src).toContain('wechatAvailable : ComputedRef<boolean>');
+    expect(src).toContain('wechatLoginReady : ComputedRef<boolean>');
     expect(src).not.toMatch(/shouldRender|showWechat|visible\b/);
   });
 
@@ -710,7 +719,8 @@ describe('#1478 新增件的 computed 回调形态（utsHarness 可解析 + ④ 
   });
 
   it('本票新增件确有 computed 站点（防止上面那条退化成空集恒真）', () => {
-    expect(computedSites(read(PROBE))).toHaveLength(2);
+    // 探测件三处：展示面 / 接通面（#1487 ①a 真机口径新增）/ 不可用原因
+    expect(computedSites(read(PROBE))).toHaveLength(3);
     // F4 返工后协议件只剩一处 computed（按通道的引导**文案**）：原先那处「按通道收掉入口」
     // 的 showRegisterLink 已删除 —— 站点数从 2 掉到 1 正是那次越界被收回的证据。
     expect(computedSites(read(AGREEMENT))).toHaveLength(1);

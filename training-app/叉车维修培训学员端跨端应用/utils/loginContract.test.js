@@ -177,12 +177,12 @@ describe('composable 接线契约（T13 拆分：两个模块私有 composable �
     const page = read(PAGE);
     expect(page).toContain("from './composables/useLoginForm'");
     expect(page).toContain("from './composables/useBiometricGate'");
-    expect(page).toContain('= useLoginForm(biometric)');
+    expect(page).toContain('= useLoginForm(biometric, wechatLoginReady.value)');
     expect(page).toContain('= useBiometricGate(biometric, username, password, rememberMe)');
   });
 
   it('两个 composable 都有显式返回类型与 `as` 标注（Kotlin error18 规避）', () => {
-    expect(read(FORM)).toMatch(/export function useLoginForm\(biometric : UseBiometricResult\) : UseLoginFormResult \{/);
+    expect(read(FORM)).toMatch(/export function useLoginForm\(biometric : UseBiometricResult, wechatLoginReady : boolean\) : UseLoginFormResult \{/);
     expect(read(FORM)).toContain('} as UseLoginFormResult');
     expect(read(GATE)).toMatch(/export function useBiometricGate\(/);
     expect(read(GATE)).toContain(') : UseBiometricGateResult {');

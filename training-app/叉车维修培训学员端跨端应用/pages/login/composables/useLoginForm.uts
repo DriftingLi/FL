@@ -22,6 +22,8 @@ import { saveSecureCredentials, saveAccountOnly, clearSecureCredentials } from '
 import { afterLoginSuccess } from '../../../utils/loginOutlet'
 // #1478 第 1 轮评审 F2：「详情页建设中」这句 toast 同样提为全仓单点（三页共用，见 utils/agreementNotice）
 import { showAgreementNotice } from '../../../utils/agreementNotice'
+// #1487 ①a 真机口径（2026-10-03）：入口展示但链路未接通时的提示文案 —— 与着陆页点击链共用同一单点
+import { WECHAT_NOT_WIRED_NOTICE } from '../../../composables/useLoginProviders'
 import type { UseBiometricResult } from '../../../composables/useBiometric'
 
 /**
@@ -69,7 +71,7 @@ export type UseLoginFormResult = {
 /**
  * @param biometric 页面壳层持有的唯一生物识别实例（提交时按设备支持性决定「存完整凭据」还是「仅记住账号」）
  */
-export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResult {
+export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : boolean) : UseLoginFormResult {
     const auth = useAuthStore()
 
     // 登录方式：password（账号密码，默认） | phone（手机验证码） | wechat（微信一键） | email（邮箱验证码）
@@ -281,6 +283,13 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
                 uni.showToast({ title: errAgree, icon: 'none' })
                 return
             }
+        }
+        // #1487 ①a 真机口径（2026-10-03）：微信入口在移动端**保留样式**，但真实链路尚未接通
+        // （App 端微信 SDK 未配置，见 #1482）⇒ 与着陆页同一口径：友好提示、**不发请求**。
+        // 位置与着陆页一致：协议拦截之后、任何副作用之前。
+        if (mode.value == 'wechat' && wechatLoginReady == false) {
+            uni.showToast({ title: WECHAT_NOT_WIRED_NOTICE, icon: 'none' })
+            return
         }
         const err = validate()
         if (err.length > 0) {

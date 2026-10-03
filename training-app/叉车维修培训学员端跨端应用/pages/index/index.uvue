@@ -32,14 +32,15 @@
                 <text class="error-text">{{ errorHint }}</text>
             </view>
 
-            <!-- 探测到微信登录可用（小程序端）→ 主 CTA -->
+            <!-- 展示面：两端（小程序 / App）一律直出主 CTA；点击链的可达性另由接通面门禁
+                 （#1487 ①a 真机口径 2026-10-03 ⇒ 原「探测到可用（小程序端）」表述已作废） -->
             <button class="cta-wechat" v-if="wechatAvailable" :disabled="loading" @click="onWechatLogin">微信一键登录</button>
 
             <!-- 协议行与登录页同源同文案（共享件，判据 7）；它只门禁微信登录，故随主 CTA 同进同退 -->
             <LoginAgreement v-if="wechatAvailable" :channel="'wechat'" :agreed="agreed" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
 
-            <!-- 次级入口：App 端（探测不可用）的唯一入口，小程序端也保留通往独立登录页的路
-                 （登录页保留、降级为次级落点，不退役 #1483） -->
+            <!-- 次级入口：通往独立登录页的路（登录页保留、降级为次级落点，不退役 #1483）
+                 两端都在位，不受探测门禁 -->
             <view class="cta-secondary" @click="goOtherLogin">
                 <text class="cta-secondary-text">其他登录方式</text>
             </view>
@@ -57,7 +58,9 @@
     const auth = useAuthStore()
 
     // 探测件与登录页引用**同一符号**（判据：两页共享，不是两份实现）
-    const { wechatAvailable } = useLoginProviders()
+    // 两个面：#1487 ①a 真机口径（2026-10-03）—— 移动端**也展示**该入口（`wechatAvailable`），
+    // 但真实链路尚未接通（`wechatLoginReady`），点击只给友好提示、不发请求
+    const { wechatAvailable, wechatLoginReady } = useLoginProviders()
 
     const {
         statusBarHeight,
@@ -69,7 +72,7 @@
         goRegister,
         goOtherLogin,
         onWechatLogin,
-    } = useLandingLogin()
+    } = useLandingLogin(wechatLoginReady.value)
 
     onLoad((_options : OnLoadOptions) => {
         const sysInfo = uni.getSystemInfoSync()

@@ -13,10 +13,12 @@
  *      且**延后**（执行当场不得出现 reLaunch）。
  *   I3 **失败不得静默**（AC 5）。`errorHint` 必须被写成人类可读原因（含 Error.message 透传、
  *      空 message 走兜底文案两条路径），`hideLoading` 必须发生，成功链路不得被触发。
- *   I4 **探测件是能力判断且保守回退**（AC 2 的运行期那一半；第 1 轮评审 F1 返工后为**复合判据**）：
- *      `wechatAvailable = 端别（mp-weixin）|| provider 能力（oauth 列出 weixin）`。
- *      两半各自单独可判可用 ⇒ #1482 配好微信 SDK 后接缝能翻（只用端别 = 恒判不可用，是被破的那条）；
- *      探测抛错 / API 缺失 / 返回空 / 未列 weixin ⇒ 一律保守判不可用并给原因，异常**不得冒出**探测件。
+ *   I4 **探测件是能力判断且保守回退**（AC 2 的运行期那一半；**2026-10-03 由复合判据收敛为端别单半**）：
+ *      `wechatAvailable = 端别（mp-weixin）`。能力半 provider 探测**已停用**——#1487 ①a 真机实测：
+ *      未配微信 SDK 的 Android 上 `getProviderSync({service:'oauth'})` 恒返回 `["weixin"]`（工程 manifest
+ *      无 App 侧 oauth、uni_modules 无微信模块）⇒ 假阳性，App 端渲染出「微信一键登录」且点击即失败。
+ *      函数与异常塌陷**保留待 #1482 接回**（接回前 F8 必须能抓到「误接回判据」这个形态）。
+ *      保守回退不变：非 mp-weixin ⇒ 判不可用并给原因，异常**不得冒出**探测件。
  *   I5 **探测判断不在着陆页 composable 里**（判据 4「探测件被两页共享」的反面）。
  *      着陆页的 `uni` fake 里 `getSystemInfoSync` 与 `getProviderSync` 都抛错：
  *      着陆页自己抄一份端别判断或 provider 判断即红。
@@ -59,6 +61,8 @@ const MSG_FALLBACK = '登录失败，请重试';
 const CHOOSE_CERT = '/pages/guide/choose-cert';
 const DASHBOARD = '/pages/dashboard/dashboard';
 const NO_SUPPORT = '当前客户端不支持微信登录';
+/** 入口展示但链路未接通时的单点文案（真源 = `composables/useLoginProviders.WECHAT_NOT_WIRED_NOTICE`） */
+const NOT_WIRED = '微信登录暂未开通';
 /** 协议详情提示的后缀：F2 返工后全仓只住 `utils/agreementNotice.uts` 一份 */
 const NOTICE_SUFFIX = '详情页建设中';
 
@@ -80,7 +84,7 @@ const vueShim = () => ({
  */
 function makeUni(opts) {
   const o = opts || {};
-  const log = { toast: [], loading: [], hideLoading: 0, navigateTo: [], reLaunch: [], redirectTo: [], getProvider: 0 };
+  const log = { toast: [], loading: [], hideLoading: 0, navigateTo: [], reLaunch: [], redirectTo: [], getProvider: 0, getSystemInfo: 0 };
   const uni = {
     showToast: (a) => { log.toast.push(a); },
     showLoading: (a) => { log.loading.push(a); },
@@ -89,6 +93,7 @@ function makeUni(opts) {
     redirectTo: (a) => { log.redirectTo.push(a.url); },
     reLaunch: (a) => { log.reLaunch.push(a.url); },
     getSystemInfoSync: () => {
+      log.getSystemInfo += 1;
       if (o.systemInfo) return o.systemInfo;
       throw new Error('着陆页 composable 不得自行探测平台（共享探测件的活，#1478 判据 4）');
     },
@@ -163,6 +168,8 @@ function landingApp(opts) {
     ...vueShim(),
     uni,
     showAgreementNotice: notice,
+    // #1487 ①a 真机口径：未接通提示文案是探测件导出的单点，注入位与协议提示同形
+    WECHAT_NOT_WIRED_NOTICE: NOT_WIRED,
     useAuthStore: () => ({
       loginByWechat: () => {
         calls.loginByWechat += 1;
@@ -176,7 +183,9 @@ function landingApp(opts) {
   };
   const src = o.source == null ? null : o.source;
   const mod = src == null ? loadUts(LANDING_UTS, bindings) : loadFromSource(src, 'useLandingLogin.uts', bindings);
-  return { face: mod.useLandingLogin(), log, calls, timer };
+  // 接通面默认喂 true（= 真跑原链路）；A2 组显式喂 false 走「样式位」路径。
+  // 缺省 true 是刻意的：老判据全部测的是「接通后」的行为，喂错默认值会让它们悄悄变成假绿
+  return { face: mod.useLandingLogin(o.loginReady !== false), log, calls, timer };
 }
 
 /** 起一个**真的**成功出口（`utils/loginOutlet.uts`），定时器与跳转都可断言 */
@@ -277,6 +286,39 @@ describe('A. 协议门槛：未勾选 ⇒ 请求层零调用（真跑 useLanding
     expect(() => landingApp().face.goOtherLogin()).not.toThrow();
     expect(landingSrc()).not.toContain('getSystemInfoSync');
     expect(landingSrc()).not.toContain('getProviderSync');
+  });
+});
+
+// ── #1487 ①a 真机口径（2026-10-03）：移动端保留入口**样式**，点击只给友好提示 ──
+
+describe('A2. 样式位：接通面为假时点击零请求、零副作用，只给单点提示', () => {
+  test('A2-1 未接通 + 已勾选协议：toast 是单点文案原文，请求/loading/errorHint 全不受影响', async () => {
+    const app = landingApp({ loginReady: false });
+    app.face.agreed.value = true;
+    await app.face.onWechatLogin();
+    expect(titles(app.log)).toEqual([NOT_WIRED]);
+    expect(app.calls.loginByWechat).toBe(0);
+    expect(app.log.loading.length).toBe(0);
+    expect(app.log.hideLoading).toBe(0);
+    expect(app.face.errorHint.value).toBe('');
+    expect(app.face.loading.value).toBe(false);
+    expect(app.calls.afterLoginSuccess).toEqual([]);
+  });
+
+  test('A2-2 硬顺序不变：未勾选协议时先撞协议门槛（样式位不得把协议口径顶掉）', async () => {
+    const app = landingApp({ loginReady: false });
+    await app.face.onWechatLogin();
+    expect(titles(app.log)).toEqual([MSG_AGREE]);
+    expect(titles(app.log)).not.toContain(NOT_WIRED);
+    expect(app.calls.loginByWechat).toBe(0);
+  });
+
+  test('A2-3 对照组：接通面为真时同一条路径照旧真发请求（样式位不是把整条链掐死）', async () => {
+    const app = landingApp({ loginReady: true });
+    app.face.agreed.value = true;
+    await app.face.onWechatLogin();
+    expect(app.calls.loginByWechat).toBe(1);
+    expect(titles(app.log)).not.toContain(NOT_WIRED);
   });
 });
 
@@ -422,35 +464,40 @@ describe('D. 成功出口端到端：着陆页 → 真 loginOutlet → 分叉落
 
 // ── I4：共享探测件的能力判断与保守回退 ─────────────────────────────────────
 
-describe('E. 探测件真跑：复合判据（端别 || provider），两半各自独立成立且失败面保守回退', () => {
-  test('E1 mp-weixin ⇒ 可用且无原因文案（provider 探测抛错也不影响 —— 本期功能面不赌新 API）', () => {
+describe('E. 探测件真跑：展示面（小程序 || App）与接通面（仅小程序）各自独立，能力半停用且失败面保守回退', () => {
+  test('E1 mp-weixin ⇒ 两个面都为真、无原因文案（provider 探测抛错也不影响 —— 本期功能面不赌新 API）', () => {
     const app = probeApp('mp-weixin');
     expect(app.face.wechatAvailable.value).toBe(true);
+    expect(app.face.wechatLoginReady.value).toBe(true);
     expect(app.face.wechatUnavailableReason.value).toBe('');
     expect(app.log.toast).toEqual([]);
   });
 
-  test('E2 app 且探测不到 provider ⇒ 不可用 + 人类可读原因（App 端因此走次级入口分支）', () => {
+  test('E2 app ⇒ 展示面为真（2026-10-03 口径：移动端也展示该入口）、接通面为假（微信 SDK 未配置）', () => {
     const app = probeApp('app');
-    expect(app.face.wechatAvailable.value).toBe(false);
-    expect(app.face.wechatUnavailableReason.value).toBe(NO_SUPPORT);
+    expect(app.face.wechatAvailable.value).toBe(true);
+    expect(app.face.wechatLoginReady.value).toBe(false);
+    expect(app.face.wechatUnavailableReason.value).toBe('');
   });
 
-  test('E3 未知/缺失端别值 + 探测不到 provider ⇒ 一律不可用（保守回退：宁可不给入口，不可给了点不动）', () => {
+  test('E3 未知/缺失端别值 ⇒ 两个面都为假 + 人类可读原因（保守回退：宁可不给入口，不可给了点不动）', () => {
     for (const platform of ['web', 'mp-toutiao', 'MP-WEIXIN', '', null, undefined]) {
       const app = probeApp(platform);
       expect([String(platform), app.face.wechatAvailable.value]).toEqual([String(platform), false]);
+      expect([String(platform), app.face.wechatLoginReady.value]).toEqual([String(platform), false]);
       expect(app.face.wechatUnavailableReason.value).toBe(NO_SUPPORT);
     }
   });
 
-  test('E4 接缝（F1 返工的本体）：app 端 provider 列出 weixin ⇒ 判可用、无原因（#1482 配好 SDK 后 #1484 的 disabled 才翻得动）', () => {
+  test('E4 能力半已停用（#1487 ①a 真机判红的成因）：app 端即便 provider 列出 weixin，也不得把接通面翻成真', () => {
+    // 2026-10-03 真机实测：未配微信 SDK 的 Android 上 providerIds 恒为 ["weixin"]（工程 manifest
+    // 无 App 侧 oauth、uni_modules 无微信模块）⇒ 接回判据即假阳性：点击真发请求然后失败
     const app = probeApp('app', { providerResult: { service: 'oauth', providerIds: ['weixin'] } });
     expect(app.face.wechatAvailable.value).toBe(true);
-    expect(app.face.wechatUnavailableReason.value).toBe('');
+    expect(app.face.wechatLoginReady.value).toBe(false);
   });
 
-  test('E5 provider 探测的失败面：抛错 / API 不存在 / 未列 weixin / 空数组 / 形态不合 ⇒ 全判不可用', () => {
+  test('E5 能力半停用 ⇒ provider 探测的六种失败面都不参与任何一个面（App 展示面仍真、接通面仍假）', () => {
     const cases = [
       ['provider 抛错', { providerThrows: true }],
       ['该端没有这个 API', { noProviderApi: true }],
@@ -461,8 +508,8 @@ describe('E. 探测件真跑：复合判据（端别 || provider），两半各�
     ];
     for (const [label, probe] of cases) {
       const app = probeApp('app', probe);
-      expect([label, app.face.wechatAvailable.value]).toEqual([label, false]);
-      expect([label, app.face.wechatUnavailableReason.value]).toEqual([label, NO_SUPPORT]);
+      expect([label, app.face.wechatAvailable.value, app.face.wechatLoginReady.value]).toEqual([label, true, false]);
+      expect([label, app.log.getProvider]).toEqual([label, 0]); // 停用 = 一次都不调，而不是调了再丢掉
     }
   });
 
@@ -471,18 +518,20 @@ describe('E. 探测件真跑：复合判据（端别 || provider），两半各�
     expect(() => probeApp('mp-weixin', { providerThrows: true })).not.toThrow();
   });
 
-  test('E7 端别那半不许被 provider 那半赌掉：mp-weixin + provider 判不出 ⇒ 仍可用（被否决的方案是「只用 provider 替代」）', () => {
+  test('E7 端别那半不许被 provider 那半赌掉：mp-weixin + provider 判不出 ⇒ 两个面仍都为真', () => {
     for (const probe of [{ providerThrows: true }, { noProviderApi: true }, { providerResult: { providerIds: [] } }]) {
       const app = probeApp('mp-weixin', probe);
       expect(app.face.wechatAvailable.value).toBe(true);
+      expect(app.face.wechatLoginReady.value).toBe(true);
     }
   });
 
-  test('E8 探测只在装配期各做一次（不在 computed 里反复打 uni）', () => {
+  test('E8 探测只在装配期取一次数（不在 computed 里反复打 uni）；能力半停用 ⇒ provider 零调用', () => {
     const app = probeApp('app', { providerResult: { providerIds: ['weixin'] } });
-    const reads = [app.face.wechatAvailable.value, app.face.wechatAvailable.value, app.face.wechatUnavailableReason.value];
-    expect(reads).toEqual([true, true, '']);
-    expect(app.log.getProvider).toBe(1);
+    const reads = [app.face.wechatAvailable.value, app.face.wechatAvailable.value, app.face.wechatUnavailableReason.value, app.face.wechatLoginReady.value];
+    expect(reads).toEqual([true, true, '', false]);
+    expect(app.log.getSystemInfo).toBe(1);
+    expect(app.log.getProvider).toBe(0);
   });
 });
 
@@ -490,16 +539,21 @@ describe('E. 探测件真跑：复合判据（端别 || provider），两半各�
 
 describe('F. 注入变异：每一种改坏形态都必须被上面同一条判据抓到', () => {
   const GUARD_BLOCK = `        if (agreed.value == false) {\n            uni.showToast({ title: '${MSG_AGREE}', icon: 'none' })\n            return\n        }\n`;
+  const NOT_WIRED_BLOCK = `        if (wechatLoginReady == false) {\n            uni.showToast({ title: WECHAT_NOT_WIRED_NOTICE, icon: 'none' })\n            return\n        }\n`;
   const REQUEST_LINE = '            const result = await auth.loginByWechat()';
+  const SHOW_LINE = 'return onMpWeixin || onApp';
+  const READY_LINE = '        return onMpWeixin\n';
 
   test('F0 锚点存在性（变异落空即抛，不假绿）', () => {
     expect(landingSrc().split(GUARD_BLOCK).length - 1).toBe(1);
+    expect(landingSrc().split(NOT_WIRED_BLOCK).length - 1).toBe(1);
     expect(landingSrc().split(REQUEST_LINE).length - 1).toBe(1);
     expect(landingSrc().split('        showAgreementNotice(name)').length - 1).toBe(1);
     expect(noticeSrc().split(`const AGREEMENT_NOTICE_SUFFIX = '${NOTICE_SUFFIX}'`).length - 1).toBe(1);
     expect(outletSrc().split(`uni.reLaunch({ url: '${CHOOSE_CERT}' })`).length - 1).toBe(1);
     expect(probeSrc().split('const onMpWeixin = platform == PLATFORM_MP_WEIXIN').length - 1).toBe(1);
-    expect(probeSrc().split('return onMpWeixin || providerFound').length - 1).toBe(1);
+    expect(probeSrc().split(SHOW_LINE).length - 1).toBe(1);
+    expect(probeSrc().split(READY_LINE).length - 1).toBe(1);
     expect(probeSrc().split('return providerIds.indexOf(PROVIDER_OAUTH_WEIXIN) >= 0').length - 1).toBe(1);
     expect(probeSrc().split('        return false\n').length - 1).toBe(1);
   });
@@ -527,6 +581,16 @@ describe('F. 注入变异：每一种改坏形态都必须被上面同一条判�
     const app = landingApp({ source: moved });
     await app.face.onWechatLogin();
     expect(app.calls.loginByWechat).toBe(1);
+  });
+
+  test('F3b 接通门槛搬到请求之后 ⇒ 样式位上请求已发、提示迟到（A2-1 的顺序判据翻红）', async () => {
+    const moved = mutate(LANDING_REL, NOT_WIRED_BLOCK, '')
+      .replace(REQUEST_LINE, `${REQUEST_LINE}\n${NOT_WIRED_BLOCK.replace('        ', '            ').trimEnd()}`);
+    const app = landingApp({ source: moved, loginReady: false });
+    app.face.agreed.value = true; // 否则先撞协议门槛，走不到请求
+    await app.face.onWechatLogin();
+    expect(app.calls.loginByWechat).toBe(1);
+    expect(titles(app.log)).toContain(NOT_WIRED);
   });
 
   test('F4 出口把新用户分支改成直进 dashboard ⇒ 新用户丢认证引导（D2 的成因）', async () => {
@@ -561,7 +625,7 @@ describe('F. 注入变异：每一种改坏形态都必须被上面同一条判�
   test('F7 端别判据取反 ⇒ mp-weixin 反被判不可用（E1 的成因）', () => {
     const broken = mutate(PROBE_REL, 'const onMpWeixin = platform == PLATFORM_MP_WEIXIN', 'const onMpWeixin = platform != PLATFORM_MP_WEIXIN');
     const app = probeApp('mp-weixin', { source: broken, providerThrows: true });
-    expect(app.face.wechatAvailable.value).toBe(false); // E1 期望 true ⇒ 必红
+    expect([app.face.wechatAvailable.value, app.face.wechatLoginReady.value]).toEqual([false, false]); // E1 期望 [true,true] ⇒ 必红
   });
 
   test('F7b 端别判据放宽成「非 app 即可用」⇒ web/未知值误判可用（E3 的成因，也是 R1 的「给了点不动」）', () => {
@@ -570,24 +634,36 @@ describe('F. 注入变异：每一种改坏形态都必须被上面同一条判�
     expect(app.face.wechatAvailable.value).toBe(true); // E3 期望 false ⇒ 必红
   });
 
-  test('F8 摘掉端别那半、只留 provider 探测（= 被否决的方案）⇒ 小程序端探测不出时误判不可用（E1/E7 的成因）', () => {
-    const broken = mutate(PROBE_REL, 'return onMpWeixin || providerFound', 'return providerFound');
-    const app = probeApp('mp-weixin', { source: broken, providerThrows: true });
-    expect(app.face.wechatAvailable.value).toBe(false); // 接缝被破回到 F1 之前的形态 ⇒ E1/E7 必红
+  test('F8 探测件里保留能力半函数但**不许接回任何一面**（#1482 前的接缝形态）⇒ App 端被误判可接通（E2/E4 的成因）', () => {
+    // 误接形态就是 2026-10-03 真机判红的那个写法：把 providerFound 拉回 || 一侧
+    const broken = mutate(PROBE_REL, READY_LINE, '        return onMpWeixin || hasWechatOauthProvider()\n');
+    const app = probeApp('app', { source: broken, providerResult: { providerIds: ['weixin'] } });
+    expect(app.face.wechatLoginReady.value).toBe(true); // 误接即得 true ⇒ E2/E4 的 false 必红
   });
 
-  test('F9 provider 探测不吞异常（异常冒出探测件）⇒ 装配当场抛到渲染路径（E5/E6 的成因）', () => {
-    const broken = mutate(PROBE_REL, '        return false\n', '        throw e\n');
-    expect(() => probeApp('app', { source: broken, providerThrows: true })).toThrow();
-    // 对照组：真源同一条喂法不抛（保守回退在位）
-    expect(() => probeApp('app', { providerThrows: true })).not.toThrow();
+  test('F9 能力半函数的异常塌陷不得被摘（④c 的零先例 API 证据与 #1482 接缝都在它身上）⇒ 强制接回后探测异常冒出', () => {
+    const wired = mutate(PROBE_REL, READY_LINE, '        return onMpWeixin || hasWechatOauthProvider()\n');
+    // 能力半已停用，塌陷只有接回后才可达 —— 先接回，再摘塌陷（唯一性由 F0 的专用锚点断言担保）
+    const noCatch = wired.split('        return false\n').join('        throw e\n');
+    // 接通面是 computed（懒求值）：必须真读一次才走得到 hasWechatOauthProvider 的 catch
+    expect(() => probeApp('app', { source: noCatch, providerThrows: true }).face.wechatLoginReady.value).toThrow();
+    // 对照组一：真源（能力半未接回）同一条喂法不抛
+    expect(() => probeApp('app', { providerThrows: true }).face.wechatLoginReady.value).not.toThrow();
+    // 对照组二：只接回、不摘塌陷 ⇒ 也不抛（F9 抓的是「摘掉塌陷」，不是「接回」）
+    expect(() => probeApp('app', { source: wired, providerThrows: true }).face.wechatLoginReady.value).not.toThrow();
   });
 
-  test('F10 provider 判据丢掉「列出 weixin」这一半（任何返回都可用的假探测）⇒ E5 的 alipay/空数组误判可用', () => {
-    const broken = mutate(PROBE_REL, 'providerIds.indexOf(PROVIDER_OAUTH_WEIXIN) >= 0', 'providerIds.length >= 0');
-    for (const result of [{ providerIds: ['alipay'] }, { providerIds: [] }]) {
-      const app = probeApp('app', { source: broken, providerResult: result });
-      expect([JSON.stringify(result), app.face.wechatAvailable.value]).toEqual([JSON.stringify(result), true]); // E5 期望 false ⇒ 必红
-    }
+  test('F10 展示面把 App 那半丢掉（= 「移动端不展示」的旧口径）⇒ App 端入口消失（E2 的成因）', () => {
+    const broken = mutate(PROBE_REL, SHOW_LINE, 'return onMpWeixin');
+    const app = probeApp('app', { source: broken });
+    expect(app.face.wechatAvailable.value).toBe(false); // E2 期望 true ⇒ 必红
+  });
+
+  test('F11 接通门槛写反（`== false` 改成 `== true`）⇒ 样式位上真发请求（A2-1 的成因）', async () => {
+    const broken = mutate(LANDING_REL, 'if (wechatLoginReady == false) {', 'if (wechatLoginReady == true) {');
+    const app = landingApp({ source: broken, loginReady: false });
+    app.face.agreed.value = true;
+    await app.face.onWechatLogin();
+    expect(app.calls.loginByWechat).toBe(1);
   });
 });
