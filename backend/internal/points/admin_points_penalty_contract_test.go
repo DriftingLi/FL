@@ -1,7 +1,7 @@
 // #1098 管理员扣罚端点契约：
 //   - 目标学员不存在 → 404（points.ErrStatus 域表，不再压成 400）；
 //   - 成功路径：响应形状 {"deducted": N} 不变，且扣罚流水与站内信同事务落库。
-package api
+package points
 
 import (
 	"encoding/json"
@@ -10,12 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
-	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -25,24 +21,22 @@ func TestAdminPenaltyContract(t *testing.T) {
 	t.Parallel()
 	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	adminPwd, _ := core.HashPassword("admin123")
-	admin := testutil.SeedAdmin(t, db, "penalty_admin", adminPwd)
-	stuPwd, _ := core.HashPassword("student123")
+	// 口令在本用例里只作落库字段（管理员 token 由 Session 直接签发、学员从不登录），
+	// 故不取 core.HashPassword —— 域包测试 import internal/core 会成环
+	// （core → aiassistant → points，vet 实测），与 points 既有测试同一写法（见 service_apply_test.go "x"）。
+	admin := testutil.SeedAdmin(t, db, "penalty_admin", "admin123")
 	// 直接建学员行而不走 testutil.SeedStudent：后者会推进进程级 uid 计数器，
 	// 使 auth_me 契约测试（在 .001 上锁形状）随本测试文件的存在而漂移。
 	student := &model.HrwaiUser{
 		UID: 9000000000000000001, Account: "acct_penalty_stu", Username: "penalty_stu",
-		Password: stuPwd, Phone: "test_penalty_stu", Status: 1, PointsBalance: 50, CreatedAt: testutil.Now(),
+		Password: "student123", Phone: "test_penalty_stu", Status: 1, PointsBalance: 50, CreatedAt: testutil.Now(),
 	}
 	if err := db.Create(student).Error; err != nil {
 		t.Fatalf("建测试学员失败: %v", err)
 	}
 
 	cfg := &config.Config{JWTSecretKey: "penalty-contract-secret"}
-	deps := newContractDeps(t, db, cfg)
-	r := gin.New()
-	api := r.Group("/api")
-	points.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.PointsSvc)
+	r := newPointsContractRouter(t, db, cfg)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	adminToken, err := adminSess.Issue(admin.AdminID, admin.Username, "admin")
 	if err != nil {
@@ -50,7 +44,7 @@ func TestAdminPenaltyContract(t *testing.T) {
 	}
 
 	// 1. 学员不存在 → 404（域表；旧实现一律 400）
-	rec := doWithToken(t, r, adminToken, http.MethodPost, "/api/admin/points/penalty",
+	rec := testutil.DoWithToken(t, r, adminToken, http.MethodPost, "/api/admin/points/penalty",
 		map[string]any{"user_id": 999999, "delta": 10, "reason": "违规"})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("扣罚目标不存在应 404, got %d body=%s", rec.Code, rec.Body.String())
@@ -60,7 +54,7 @@ func TestAdminPenaltyContract(t *testing.T) {
 	}
 
 	// 2. 成功：扣 20 → {"deducted":20}；流水 + 站内信同事务落库
-	rec = doWithToken(t, r, adminToken, http.MethodPost, "/api/admin/points/penalty",
+	rec = testutil.DoWithToken(t, r, adminToken, http.MethodPost, "/api/admin/points/penalty",
 		map[string]any{"user_id": student.ID, "delta": 20, "reason": "违规操作"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("扣罚应 200, got %d body=%s", rec.Code, rec.Body.String())

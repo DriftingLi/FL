@@ -217,6 +217,140 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 
 **核验**：`git show HEAD:backend/internal/api/<f>` 与域包新文件归一化（去 package / import 块与夹具行、去 `forum.` 前缀、折叠空行）后，**逐 `func Test` 且全文逐行比对：10/10 逐字相同**。验收：`gofmt -l ./internal` 无输出、`go vet` exit 0、`go test ./internal/forum/... ./internal/api/... ./internal/testutil/...` 全 ok、全量只剩 §8.5 那两条基线失败、三条守卫脚本无违规、`internal/layers` 五条结构守卫全 PASS。
 
+### 8.8 批 4（第 1 小批）：服务层 3 个文件（已下沉）
+
+§8.4 点名的三条「不走 HTTP」用例就是本小批，按该节处置「域内单元测试随域搬」（`docs/agents/domain-package-migration.md` §4），从 `backend/internal/api/` 搬到各自域包（文件名不变，api 侧不留副本）：
+
+| 旧路径 | 新路径 | 行数 | `func Test` |
+| --- | --- | --- | --- |
+| `backend/internal/api/search_credential_test.go` | `backend/internal/search/search_credential_test.go` | 93 | 1 |
+| `backend/internal/api/credential_delete_postgres_contract_test.go` | `backend/internal/training/credential_delete_postgres_contract_test.go` | 246 | 3 |
+| `backend/internal/api/disposition_revoke_contract_test.go` | `backend/internal/admin/disposition_revoke_contract_test.go` | 357 | 9 |
+
+**机械改写清单（断言零改动）**：
+
+1. 包子句与 import：`package api` → 目标域包；删自包 import；域内自限定符去前缀（`search.` / `training.` / `admin.`）。
+2. 夹具：`credential_delete_postgres_contract_test.go` 两处 `seedStudent(t, db, ...)` 改用 `testutil.SeedStudent(t, db, ...)`。api 侧那份（`backend/internal/api/router_test_helper_test.go:26-34`）只多一把并发互斥锁，域包内无 `t.Parallel` 用例（已核），无需带锁复制。
+3. 文件头：`search_credential_test.go:1` 的「Package api」改为「Package search」。这是 `check-comment-cleanliness.mjs` 的 package-doc-mismatch 判据（基线 0）要求的，不是断言改动。
+4. 指向被搬文件的注释：`backend/internal/training/credential_delete_blocker_test.go:6` 原写「`internal/api/credential_delete_postgres_contract_test.go`」，该文件搬进同包后改为「`credential_delete_postgres_contract_test.go`（同包）」，不留悬空旧路径。
+
+**核验方式**：`git show HEAD:backend/internal/api/<f>` 与域包新文件归一化（去 package/import 块、去空行、去自包前缀）后**全文逐行比对** —— `search_credential_test.go` 与 `disposition_revoke_contract_test.go` **0 处差异**；`credential_delete_postgres_contract_test.go` **仅上面第 2 条那 2 行**。13 个 `func Test` 无一处断言/期望表达式被改。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./...` exit 0；`go test ./internal/search/... ./internal/training/... ./internal/admin/... ./internal/api/...` 全 `ok`；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败（`internal/deploy` 的 `TestDeployEnvChainPreservesProvidedValues`、`internal/logger` 的 `TestNew_FileOutput` + `TestRedactHook_AppliedByFactory`）；`internal/layers` 五条结构守卫全 PASS；`check-render-error-face.mjs --all` 无违规（69 个面）、`check-comment-cleanliness.mjs --all` ✓（732 文件 0 欠账）、`check-catalog-sort.mjs --all` 无违规。
+
+**PG 面照 §8.6 的两条教训**：`internal/training` 三条 `*OnPostgres` 在本机（无 `DATABASE_URL`）干净 SKIP，故本机绿对它们零信息量，只由 CI 判。本小批**没有重写任何 PG 夹具**（只把 `seedStudent` 换成 `testutil.SeedStudent`），不存在批 1 那类「替身换错」；但 CI `backend-test` 仍是它们唯一的真实判据。
+
+### 8.9 批 4 第 2 小批：points / favorite / wrongquestion（三个 HTTP 用例）
+
+> 编号说明：§8.8 是第 1 小批（服务层 3 个）、§8.9 是第 2 小批（points / favorite / wrongquestion）。
+
+**搬迁**（文件名不变，api 侧删净）：
+
+| 旧路径 | 新路径 | 行数 |
+| --- | --- | --- |
+| `backend/internal/api/admin_points_penalty_contract_test.go` | `backend/internal/points/admin_points_penalty_contract_test.go` | 95 → 90 |
+| `backend/internal/api/favorite_chapter_visibility_contract_test.go` | `backend/internal/favorite/favorite_chapter_visibility_contract_test.go` | 171 → 166 |
+| `backend/internal/api/wrong_question_redo_contract_test.go` | `backend/internal/wrongquestion/wrong_question_redo_contract_test.go` | 100 → 95 |
+
+**域内 HTTP 夹具**（各域新增 `contract_helper_test.go`）：`newPointsContractRouter` / `newFavoriteContractRouter` / `newWrongQuestionContractRouter`，签名统一 `(t *testing.T, db *gorm.DB, cfg *config.Config) *gin.Engine` —— `db`/`cfg` 仍由测试体自己建，于是测试体**只换装配块那一行**（`deps := newContractDeps(...)` + `gin.New()` + `Group("/api")` + `Register*Routes` 四行 → 一行夹具调用）。
+装配与装配根同义：会话 `security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（**内存黑名单**，§8.6）；points service 按 `providers_core.go` 实参（`clock.Real()` + notification 单点）；favorite / wrongquestion 的 `CredentialScope` 用 `training.NewService(db, zap.NewNop())`（装配根 `RouterDeps()` 的 CredentialScope 就是它），wrongquestion 的 `ai` 传 nil（`explanation.go` 在 nil 时恒降级静态解析）。
+
+**`internal/testutil` 新增 `DoWithToken(t, r, token, method, path string, body any)`**：api 侧那份 `doWithToken` 有 441 处调用点、不在本批射程，故两份并存（api 侧留原样，域包侧一律走 testutil —— 后续若要收成一份，是独立一票的机械改动）。points 的两处调用点改成 `testutil.DoWithToken`。
+
+**唯一超出「机械改写」的一处（points）**：原 `adminPwd, _ := core.HashPassword("admin123")` / `stuPwd, _ := core.HashPassword("student123")` 必须去掉 —— 域包测试 import `internal/core` **实测成环**（`points(test) → core → aiassistant → points`，`aiassistant/handler.go:16` 反向依赖 points）。口令在本用例里只作落库字段（管理员 token 由 `Session.Issue` 直接签发、学员从不登录），故直接写字面量，与 points 既有测试同一写法（`service_apply_test.go` 的 `"x"`）。**未触碰任何断言/期望值**。
+
+**核验**：`git show HEAD:<旧路径>` 与域包新文件归一化（去 package / import 块 / 夹具行、去自包前缀、`testutil.DoWithToken(`→`doWithToken(`、折叠空行）后逐 `func Test` 且全文逐行比对 —— `favorite_chapter_visibility_contract_test.go` 与 `wrong_question_redo_contract_test.go` **逐字相同**；`admin_points_penalty_contract_test.go` 的差异**只有上面那处口令字面量 + 一条说明注释**。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./internal/{points,favorite,wrongquestion,api,testutil}/` exit 0；三个用例逐个 `-v` 实跑 **PASS**（非 skip）；`go test` 三包 + api + testutil 全 ok；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败；三条守卫脚本无违规（`check-comment-cleanliness.mjs --all` ✓ 735 个 .go 文件 0 欠账）；`internal/layers` 五条结构守卫全 PASS。
+
+**遗留（本批未动，属史述）**：`docs/adr/ADR-0070-域包形态与目录即射程的收口.md:303` 与移动端 `training-app/叉车维修培训学员端跨端应用/docs/verification/device/1162/README.md:66` 仍按旧路径提到这三个文件 —— 按 `docs/agents/domain-package-migration.md` 的口径（历史记录不追改）保留。
+
+### 8.10 批 4（第 3 小批）：4 个域各 1 个文件（已下沉）
+
+| 旧路径 | 新路径 | 行数 | `func Test` |
+| --- | --- | --- | --- |
+| `backend/internal/api/job_card_contract_test.go` | `backend/internal/resume/job_card_contract_test.go` | 248 | 1 |
+| `backend/internal/api/course_read_visibility_contract_test.go` | `backend/internal/course/course_read_visibility_contract_test.go` | 137 | 1 |
+| `backend/internal/api/question_write_contract_test.go` | `backend/internal/questionbank/question_write_contract_test.go` | 196 | 5 |
+| `backend/internal/api/points_ledger_contract_test.go` | `backend/internal/inspection/points_ledger_contract_test.go` | 142 | 2 |
+
+每个目标域新增一个 `contract_helper_test.go`（自装 HTTP 面，范式同 §8.7 的 `internal/forum/contract_helper_test.go`）：`newCourseContractRouter` / `newQuestionBankContractRouter` / `newInspectionContractRouter` / `newResumeContractDeps`。会话一律走 `security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（§8.6 的教训）；域 service 实参照 `internal/api/providers_{core,training,exam,jobs,contribution}.go` 逐字复刻（含 fileSvc 的 nil 存储、points 的 `clock.Real()`）。
+
+三条值得记下的判断：
+
+1. **`course` 的 CredentialScope 必须自带替身**：`course` 在 `internal/core` 的传递闭包内（core → … → course），而 `training` 依赖 `course` ⇒ `course` 的包内测试 import 任一者都会 `import cycle not allowed in test`。新增 `courseContractCredResolver`（恒返 `(0,false)`——该用例的学员没有 `current_credential_id`，与 `training.Service.CurrentCredentialID` 真实行为同义；窄接口见 `internal/middleware/credential_scope.go:17-20`）。
+2. **`resume` 用外部测试包 `package resume_test`**：用例末尾要调 `auth.Service.DeleteAccount` 验级联删除，而 `auth` 的传递闭包包含 `resume`（auth → core → … → resume）⇒ 包内测试（`package resume`）import `auth` 同样成环。外部测试包住在被测包之外、两条边都能拿（先例 `internal/middleware/audit_ip_test.go`；`internal/layers` 的 `importEdges` 对包名以 `_test` 收尾者直接跳过）。夹具返回 `*resumeContractDeps{AuthSvc}`，让用例体里 `deps.AuthSvc.DeleteAccount(...)` 那一行**逐字不动**。
+3. **`doWithToken` 收成 `testutil.DoWithToken`**：`testutil.PerformRequest` 不带 token、`testutil.CodeAuthRequest` 在 `body=nil` 时发 `{}`（与「不带请求体」不等价），故这两个都顶替不了。本小批最初在 questionbank / inspection 各带一份逐字同口径的局部 `doWithToken`（照 `internal/api/recruiter_contract_test.go:266` 抄）；合并 master 后 `#1511` 已把 `testutil.DoWithToken` 落进 testutil，于是**收成一处** —— 删掉那两份局部定义、16 处调用点改 `testutil.DoWithToken`（与同批 points 一致；api 侧那份 441 处调用点仍留原样）。
+
+另一处文件头同步：`question_write_contract_test.go:1` 的「Package api」改为「Package questionbank」（`check-comment-cleanliness.mjs` 的 package-doc-mismatch，基线 0；同 §8.8 第 3 条）。
+
+**核验**：归一化（去 `package` / import 块、去自包前缀、把装配块换成夹具那一行、`seedStudent`→`testutil.SeedStudent`）后逐 `func Test` 且**全文逐行比对 ⇒ 4/4 文件逐字相同**；9 个 `func Test` 无一处断言/期望表达式被改。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./internal/{resume,course,questionbank,inspection,api}/` exit 0；`go test` 同上五包全 `ok`（8 PASS + 1 SKIP）；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败；`internal/layers` 五条结构守卫全 PASS；`check-render-error-face.mjs --all`（69 面）、`check-comment-cleanliness.mjs --all`（736 文件 0 欠账）、`check-catalog-sort.mjs --all`（5 面）、`check-api-seam.mjs --all`（170 文件）均无违规。
+
+**PG 面照 §8.6 的两条教训**：`points_ledger_contract_test.go` 的 `TestPointsLedgerContract_DomainFilterOnPostgres` 在本机（无 `DATABASE_URL`）干净 SKIP —— 本机绿对它们零信息量，CI `backend-test` 是唯一判据。
+
+
+### 8.11 批 4（第 4 小批，收尾）：contribution 2 件 / recruiter_list / featured
+
+> 编号说明：§8.8 = 第 1 小批（3 个服务层用例）、§8.9 = 第 2 小批（points / favorite / wrongquestion）；本小批把审计 §6「批 4」名单里剩下的 contribution / recruiter_list / featured 一次收完。
+
+**搬迁**（文件名不变，api 侧删净）：
+
+| 旧路径 | 新路径 | 行数 | `func Test` |
+| --- | --- | --- | --- |
+| `backend/internal/api/contribution_contract_test.go` | `backend/internal/contribution/contribution_contract_test.go` | 244 → 211 | 1 |
+| `backend/internal/api/contribution_staging_contract_test.go` | `backend/internal/contribution/contribution_staging_contract_test.go` | 264 → 264 | 3 |
+| `backend/internal/api/recruiter_list_contract_test.go` | `backend/internal/admin/recruiter_list_contract_test.go` | 126 → 122 | 2 |
+| `backend/internal/api/featured_contract_test.go` | `backend/internal/featured/featured_contract_test.go` | 117 → 109 | 2 |
+
+**闭包仍比审计名单大一件**（同 §8.1 的教训）：审计附录把 `contribution_staging_contract_test.go` 判为 **C 桶「留」**，但它与 `contribution_contract_test.go` 是**双向闭包** —— staging 用后者的 `newContributionRouter` / `issueContributionToken` / `contributionDo`，后者又用 staging 的 `stageLocalFile` / `stagingCfg` / `stagingCreateBody` / `stagingEnvelope`。只搬一个必然留未定义符号 ⇒ 两个一起搬。它**不用 `NewRouter`**（只自建 gin 引擎 + 两个域注册入口），故 ADR-0070 决策 8 不构成留驻理由。
+
+**域内夹具**（各域新增 `contract_helper_test.go`，装配与装配根同义）：
+- `contribution/contract_helper_test.go` 的 `newContributionRouter`：`credRes` 用 `training.NewService(db, logger)`（装配根 `RouterDeps()` 的 CredentialScope 就是它）；`fileSvc = filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)` —— storage 传的是**那份本地存储**（`newContractDepsWithStorage` 的 st 参数不是 nil，投稿第四校验要读它）；会话 `SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（内存黑名单，§8.6）；service 实参照 `providers_contribution.go:12`（`clock.Real()`）。原夹具第 2 个返回值是 `*Deps`，域包够不到 ⇒ 按调用点裁剪成 `*contributionContractDeps{DB *gorm.DB}`（两个用例只用 `.DB`），于是**测试体逐字不动**。
+- `admin/contract_helper_test.go` 的 `newAdminRecruiterContractEnv(t, db, cfg) *gin.Engine`（`authSvc` 按 `providers_core.go:65` 实参构造；`internal/admin` 非测试已依赖 auth/core，实测无环）。
+- `featured/contract_helper_test.go` 的 `newFeaturedContractEnv(t, db) *gin.Engine`：cfg 走零值（原链 `newContractDeps(t, db, nil)` 就是 `&config.Config{}`）、fileSvc 传 `st=nil`、service 按 `providers_training.go:27`。
+- **vditor 注入口不复制**：`uploadVditorImage`（非测试单点 `backend/internal/api/vditor_upload.go:20`，tutor 与 featured 共用）不进域包；这两个用例只打 `GET` 详情与 `POST /view`、从不走上传路由，故按同一注入点传**替身**（被调用即 `t.Errorf` + 500，将来有人真打通上传面会立刻暴露），夹具注释写明真实现仍在 api。
+
+**api 侧留了一份 `fetchRecruiters`**（`backend/internal/api/recruiter_list_helpers_test.go`，41 行）：留在 api 的 `recruiter_edit_contract_test.go:78` 仍用它读列表，而那个文件走全量装配链、本轮不动 —— 先例是 `forum_topic_list_resp_test.go`（§8.7）。正文逐字来自原文件（只保留 api 侧的 `doWithToken`）。
+
+**唯一有意保留的「重复」**：`contributionDo` 留在搬迁文件的文件私有件里，**没有**换成 `testutil.DoWithToken`。两者签名相同、实现近乎一致，但 `testutil.DoWithToken` **恒设** `Authorization: Bearer <token>`（token 为空时也设），而 `contributionDo` 只在 `token != ""` 时设；`contribution_contract_test.go` 有一处刻意的**空 token 未认证 401** 用例，换掉会改变那条请求的形状 ⇒ 按「断言逐字不变」优先保留本地实现（它不依赖 api 包，不是第二真源）。
+
+**核验**：`git show HEAD:<旧路径>` 与域包新文件归一化（去 package / import 块 / 装配行、去自包前缀、`testutil.DoWithToken(`→`doWithToken(`、`testutil.SeedStudent(`→`seedStudent(`、折叠空行）后逐 `func Test` 且全文逐行比对 —— **8/8 个 `func Test` 逐字相同**；`contribution_staging_contract_test.go` / `recruiter_list_contract_test.go` / `featured_contract_test.go` 全文 **0 处差异**；`contribution_contract_test.go` 把「搬到 `contract_helper_test.go` 的那个 fixture 函数」从旧文里整体摘掉后同样 **0 处差异**（旧 180 行 / 新 180 行）。无一处断言/期望表达式被改。
+
+**另一处「不留悬空旧路径」**：`backend/internal/contribution/staging_partition_test.go:9` 原写「HTTP 档位的锁在 `internal/api/contribution_staging_contract_test.go`」，该文件搬进同包后改为「同包的 `contribution_staging_contract_test.go`（#1445 批 4 随域下沉）」。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./...` exit 0；`go test ./internal/contribution/... ./internal/admin/... ./internal/featured/... ./internal/api/...` 全 `ok`；搬入用例逐个 `-v` 实跑 —— contribution 4 个 **PASS**、featured 2 个 **PASS**、admin 的 `TestRecruiterListContract_OnSqlite` **PASS** 而 `TestRecruiterListContract_OnPostgres` **SKIP**（本机无 `DATABASE_URL`，按 §8.6 由 CI 判）；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败；`internal/layers` 五条结构守卫全 PASS；三条守卫脚本无违规（`check-comment-cleanliness.mjs --all` ✓ **739** 个 .go 文件 0 欠账）。
+
+**遗留（史述，不追改）**：`docs/adr/ADR-0070-域包形态与目录即射程的收口.md`（:161/:162/:173/:319）与 `docs/agents/domain-package-migration.md`（:254/:368）仍按旧路径提到这四个文件 —— 它们是当波的历史记账/血账，按 §8.9 同一口径保留。
+
+**批 4 余量**：审计 §6 的 13 件里已下沉 10 件（`search_credential`、`credential_delete_postgres`、`disposition_revoke`、`admin_points_penalty`、`favorite_chapter_visibility`、`wrong_question_redo`、`contribution_contract`（+闭包 `contribution_staging`）、`recruiter_list`、`featured`），**还剩 4 件**：`job_card_contract_test.go`→`internal/resume`、`question_write_contract_test.go`→`internal/questionbank`、`points_ledger_contract_test.go`→`internal/inspection`、`course_read_visibility_contract_test.go`→`internal/course`（后者要自带 CredentialScope 替身：course 不能 import `internal/training`，会成环；`featured` 的 vditor 注入口本小批已用替身法解过，可循）。
+
+## 9. 收口统计（审计落地完毕，2026-10-03）
+
+| 指标 | 落地前（§1 口径） | 落地后 | 差 |
+| --- | --- | --- | --- |
+| `backend/internal/api` 的 .go 文件 | 159 | **128** | −31 |
+| 其中生产 .go / 行 | 17 / 1,635 | 17 / 1,635 | 0 |
+| 其中测试 .go / 行 | **142 / 28,290** | **111 / 21,237** | **−31 / −7,053** |
+
+落地动作 = 批 1（auth 9 件）＋ 批 2（forum 10 件）＋ 批 4（14 件）＝ **搬出 33 件测试文件**；同时在 api 侧留了 2 份「被留驻用例引用的定义」副本（`forum_topic_list_resp_test.go` 32 行、`recruiter_list_helpers_test.go` 42 行）⇒ 测试文件净减 31。
+
+落地序列（每批 1 PR，均 CI 全绿后 squash 合并，PR 正文都带了 production 部署披露）：
+
+| 批 | PR | 内容 | 文件数 |
+| --- | --- | --- | --- |
+| 1 | #1505 | auth 闭包（含审计 §6 计划里的「批 3」3 件） | 9 |
+| 2 | #1508 | forum | 10 |
+| 4-1 | #1510 | 服务层 3 件（search / training / admin） | 3 |
+| 4-2 | #1511 | points / favorite / wrongquestion | 3 |
+| 4-3 | #1512 | resume / course / questionbank / inspection | 4 |
+| 4-4 | 本 PR | contribution 2 件 / recruiter_list / featured | 4 |
+
+**与审计原文的偏差（§8 逐条记明）**：① 搬迁单元是**按域依赖闭包**，故批 1 是 9 件（§2.1 写 8 件）、批 2 的 api 侧要多留一份 DTO、批 4 的 contribution 要多带 1 件（§2 判它 C 桶「留」）；② 跨包共享的测试脚手架落 `internal/testutil`（`SetTestGinMode` / `PerformRequest` / `CodeAuthRequest` / `DoWithToken` / `ExtractToken` / `AssertDictKeys` / `KeysOf` / `ValueBlacklist`），并为此在 `internal/layers` 的 gin 宿主白名单登记 `internal/testutil`（测试脚手架、非生产面，判据同时收窄为「生产文件」）；③ 三条「不走 HTTP」的服务层用例按「域内单元测试随域搬」下沉，**没有**为了凑验收判据③改写成路由测试。
+
+**未动**：A 桶（走 `NewRouter` 全量装配链的装配面证据）与 C 桶（跨域契约 / 锁 / 账本 / 骨架与单一出处）仍原样留在 `internal/api`；§2 名单之外的用例一律未碰。
+
 ## 附录：142 个文件逐条
 
 | 文件 | 行 | 桶 | 建议 |

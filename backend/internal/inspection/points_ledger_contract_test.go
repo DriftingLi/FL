@@ -4,7 +4,7 @@
 //   - 分页生效且页间不重叠；非管理员 403。
 //
 // 双适配器：SQLite 恒绿 + Postgres（真实迁移建表，无 DATABASE_URL 时跳过）。
-package api
+package inspection
 
 import (
 	"encoding/json"
@@ -17,7 +17,6 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/core"
-	"forklift-training/internal/inspection"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -30,7 +29,7 @@ func fetchLedgerPage(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 	if query != `` {
 		path += `?` + query
 	}
-	rec := doWithToken(t, r, token, http.MethodGet, path, nil)
+	rec := testutil.DoWithToken(t, r, token, http.MethodGet, path, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf(`GET %s should be 200, got %d body=%s`, path, rec.Code, rec.Body.String())
 	}
@@ -60,14 +59,11 @@ func assertLedgerDomainFilter(t *testing.T, db *gorm.DB) {
 	pwd, _ := core.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := core.HashPassword(`student123`)
-	student := seedStudent(t, db, `stu1`, stuPwd)
+	student := testutil.SeedStudent(t, db, `stu1`, stuPwd)
 	cfg := &config.Config{
 		JWTSecretKey: `ledger-contract-secret`,
 	}
-	r := gin.New()
-	api := r.Group(`/api`)
-	deps := newContractDeps(t, db, cfg)
-	inspection.RegisterRoutes(api, deps.Session, deps.InspectionSvc, deps.PointsSvc)
+	r := newInspectionContractRouter(t, db, cfg)
 
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 	adminToken, err := adminSess.Issue(admin.AdminID, admin.Username, `admin`)
@@ -91,7 +87,7 @@ func assertLedgerDomainFilter(t *testing.T, db *gorm.DB) {
 	}
 
 	// 1. 非管理员 403
-	rec := doWithToken(t, r, stuToken, http.MethodGet, `/api/admin/points/ledger`, nil)
+	rec := testutil.DoWithToken(t, r, stuToken, http.MethodGet, `/api/admin/points/ledger`, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf(`non-admin should be 403, got %d`, rec.Code)
 	}

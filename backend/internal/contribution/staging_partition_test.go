@@ -6,7 +6,7 @@
 // 「登记一个不存在的 URL」三件事全都无判据可拒。
 //
 // 本文件逐条锁四校验各自的事实，外加「老路径不再被写入」（上传落 contributions/<uid>/）。
-// HTTP 档位（403 / 400 / 400 / 404）的锁在 internal/api/contribution_staging_contract_test.go。
+// HTTP 档位（403 / 400 / 400 / 404）的锁在同包的 contribution_staging_contract_test.go（#1445 批 4 随域下沉）。
 package contribution
 
 import (
