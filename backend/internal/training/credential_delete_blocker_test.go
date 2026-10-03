@@ -3,7 +3,7 @@
 // 本文件锁服务层那半（SQLite 面）：预检算出条数、句子带条数、哨兵可 errors.Is、挡住时不删证件。
 // 「练习分区随证件删除」那一半是库层 ON DELETE CASCADE，SQLite 测试库不建外键（模型侧映射不出
 // REFERENCES 的动作），只有 PG 契约测试与迁移文本锁能回答 —— 见
-// internal/api/credential_delete_postgres_contract_test.go 与 internal/migrate/credential_fk_test.go。
+// credential_delete_postgres_contract_test.go（同包）与 internal/migrate/credential_fk_test.go。
 package training
 
 import (
