@@ -27,27 +27,24 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, importedNames, readText } = require('./utsHarness');
-const { forumDisplayModule, forumChain, DISPLAY_UTS } = require('./forumChainHarness');
+const { forumDisplayModule, forumChain, forumBodyModule, markdownModule, DISPLAY_UTS } = require('./forumChainHarness');
 
 const BODY_UTS = path.join(__dirname, 'forumBody.uts');
 const MD_UTS = path.join(__dirname, 'markdown.uts');
 
+/**
+ * 注入表**不在本文件里**：#1472 起 `forumBody` 有**两个**运行期上游（解析器 + 行内分词器），
+ * 在这里再抄一份绑定表就是第二处需要同步的事实（夹具的存在理由，见 `forumChainHarness.js` 头注）。
+ * 缺绑定是 fail-closed 的（抛 `forumBody.uts 缺绑定：…`），所以抄漏一处 = 本套件整片红，
+ * 而不是静默假绿 —— 这条按 ADR-0023 的「声明与机制分家」口径收在夹具里。
+ */
+const md = () => markdownModule();
+const body = () => forumBodyModule(md());
+
 const TABLE = '| 故障码 | 含义 |\n| --- | --- |\n| E01 | 电压过低 |';
 const MERMAID = '```mermaid\ngraph TD;\nA-->B;\n```';
 
-/** 真源依赖注入表：解析器与档位常量都取自**真执行**出来的 `utils/markdown.uts` */
-function markdownBindings() {
-  const m = loadUts(MD_UTS, {});
-  return {
-    parseMarkdown: m.parseMarkdown,
-    SUBSET_FORUM: m.SUBSET_FORUM,
-    SUBSET_CHAPTER: m.SUBSET_CHAPTER,
-  };
-}
-
-/** 每次取一个**全新模块实例**（模块级常量不可变，互不串） */
-const body = () => loadUts(BODY_UTS, markdownBindings());
-
+/** 真源依赖注入表已收进 `forumChainHarness`（见文件头）；本文件只留**取块/取文本**的小工具 */
 const types = (blocks) => blocks.map((b) => b.type);
 const textOf = (blocks) => blocks.map((b) => b.text).join('\n');
 const itemsOf = (blocks) => blocks.reduce((acc, b) => acc.concat(b.items || []), []).join('\n');
@@ -76,16 +73,37 @@ describe('档位闸门：`markdown` 是唯一会走解析的取值', () => {
   });
 });
 
-// ===== ② Markdown 档：源串不再出现，且按论坛子集成块（ADR-0025 ⑥-1）=====
+// ===== ② Markdown 档：按论坛子集成块；行内记号**交给分词器**消化（ADR-0025 ⑥-1 / ⑩-2）=====
 
-describe('Markdown 档：解析成块，源串（星号 / 链接语法 / 图片语法）不再显示', () => {
-  it('行内标记被剥离而不是原样显示（本票的原始故障：读者看见 `**故障码 E01**`）', () => {
+describe('Markdown 档：解析成块，行内记号由分词器消化（⑥-1 的两层落点）', () => {
+  /*
+   * #1240 P2 时这条判的是「解析器把记号剥净」。**⑩-2 之后职责分家**：论坛档声明 `inline` ⇒
+   * 解析器**故意**交出源串（样式信息要有地方落），「读者不再看见 `**故障码**`」这件事
+   * 改由**分词器 + 渲染层**承担。所以本组现在钉两层，缺任一层都红：
+   *   层一（本套件）：块 text 是源串、且同一份源串经分词器投影后记号全消 ⇒ 摘要面成立；
+   *   层二（接线组 + ①a）：渲染组件真按 runs 出嵌套 `<text>` ⇒ 正文面成立。
+   * ⚠️ 这不是放宽：#1273 的「列表卡片不显示星号」判据在下面 ④ 组原样保留。
+   */
+  const stripped = (src) => {
     const b = body();
-    expect(textOf(b.forumContentBlocks('**故障码 E01**', 'markdown'))).toBe('故障码 E01');
+    return b.forumContentPlainText(src, 'markdown');
+  };
+
+  it('解析器交出**源串**（分叉成立；记号不再被抹平才有样式可挂）', () => {
+    const b = body();
+    expect(textOf(b.forumContentBlocks('**故障码 E01**', 'markdown'))).toBe('**故障码 E01**');
     expect(textOf(b.forumContentBlocks('见 [维修手册](https://e.com/m) 第 3 节', 'markdown')))
-      .toBe('见 维修手册 第 3 节');
-    // 行内代码同理（本批不做行内渲染，但也不许显示反引号）
-    expect(textOf(b.forumContentBlocks('参数 `torque` 见铭牌', 'markdown'))).toBe('参数 torque 见铭牌');
+      .toBe('见 [维修手册](https://e.com/m) 第 3 节');
+  });
+
+  it('同一份源串经分词器后记号全消 ⇒ ⑥-1「读者不看见源串」在投影面成立', () => {
+    expect(stripped('**故障码 E01**')).toBe('故障码 E01');
+    expect(stripped('见 [维修手册](https://e.com/m) 第 3 节')).toBe('见 维修手册 第 3 节');
+    expect(stripped('参数 `torque` 见铭牌')).toBe('参数 torque 见铭牌');
+    // ⑥-6 新增：删除线不再泄漏（#1240 P2 的原始故障之一）
+    expect(stripped('~~已作废~~ 条款')).toBe('已作废 条款');
+    // ⑥-3 有序编号：编号本身不进 items（渲染层由 level 现算），文字剥净
+    expect(stripped('1. 起步\n2. 打火')).toBe('起步 打火');
   });
 
   it('论坛档声明的五个成员都真成块（标题 / 列表 / 引用 / 代码块 / 分隔线）', () => {
@@ -104,10 +122,12 @@ describe('Markdown 档：解析成块，源串（星号 / 链接语法 / 图片�
     expect(textOf(table)).toContain('E01');        // 逐行原始文本仍在
     expect(textOf(table)).toContain('|');          // 连表格的竖线都在（「退回原始文本」的字面口径）
 
+    // 内嵌图片：分叉后块内存的是源串（图文分离 ⇒ 不产 image 块这条**没变**），
+    // 「读者最终只看见 alt、URL 不外泄」由分词器那一层守（④ 组的投影判据原样在）。
     const img = b.forumContentBlocks('见 ![故障图](https://e.com/a.png) 这张', 'markdown');
     expect(types(img)).not.toContain('image');     // 图文分离：正文内嵌图片不产 image 块
-    expect(textOf(img)).toContain('故障图');        // 但 alt 文本可见（与 Web 同口径）
-    expect(textOf(img)).not.toContain('https://e.com/a.png');
+    expect(textOf(img)).toContain('故障图');        // alt 文本在（内容不丢）
+    expect(stripped('见 ![故障图](https://e.com/a.png) 这张')).toBe('见 故障图 这张');
   });
 
   it('mermaid 是**真降级**且已具名：围栏源码原样可见（不是空白，也不是渲染）', () => {
@@ -214,7 +234,7 @@ describe('摘要层：投影 + 80 字截断 + **全局**去换行（`utils/forum
     const before = display().getContentPreview(TABLE, 'markdown');
     // 把 table 收进论坛档（真实将来动作，非虚构：ADR-0025 ③ 的「另立一票」就是它）
     const file = mutatedCopy(MD_UTS, [
-      ['MEMBER_CODE, MEMBER_DIVIDER,\n]', 'MEMBER_CODE, MEMBER_DIVIDER, MEMBER_TABLE,\n]'],
+      ['MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE,\n]', 'MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE, MEMBER_TABLE,\n]'],
     ], 'forum-md-');
     const after = forumChain({ md: file }).display.getContentPreview(TABLE, 'markdown');
     expect(before).toContain('|');       // 今天：未声明 ⇒ 退回原始文本，竖线可见
@@ -241,7 +261,7 @@ function mutatedCopy(absFile, replacements, prefix) {
 
 /** 读真源 → 注入变异 → 真执行（格式轴那一层） */
 function loadMutated(replacements) {
-  return loadUts(mutatedCopy(BODY_UTS, replacements, 'forum-body-'), markdownBindings());
+  return forumBodyModule(md(), mutatedCopy(BODY_UTS, replacements, 'forum-body-'));
 }
 
 describe('成对取证（必红）：本套件的判据在坏实现上确实会红', () => {
@@ -309,9 +329,18 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
 
 // ===== ⑥ 模块契约：`forumBody.uts` 是薄桥，不持第二份声明 =====
 
-describe('模块契约：只桥到 `utils/markdown.uts`，不自持解析或档位', () => {
-  it('运行期 import 恰为解析入口与论坛档常量（没有第二份子集声明 / 第二份归一）', () => {
-    expect(importedNames(readText(BODY_UTS)).sort()).toEqual(['SUBSET_FORUM', 'parseMarkdown']);
+describe('模块契约：只桥到 `utils/markdown.uts` 与 `utils/markdownInline.uts`，不自持解析或档位', () => {
+  it('运行期 import 恰为两个上游的入口（没有第二份子集声明 / 第二份归一）', () => {
+    // #1472 起第二个上游（行内分词器）进来了；⑩-8 又经它转发**域名投影**。这里钉**恰为这五个**：
+    // 五个名字全部来自 `markdown.uts`（解析 + 档位）或 `markdownInline.uts`（分词 / 投影 / 域名）
+    // 这两个上游 —— 多一个**来源不同的**名字就说明有人在格式轴里自行声明档位或剥记号（第二份事实），
+    // 少一个名字说明渲染绕过了格式轴。
+    expect(importedNames(readText(BODY_UTS)).sort())
+      .toEqual(['SUBSET_FORUM', 'inlineLinkDomain', 'inlineRunsPlainText', 'parseMarkdown', 'splitInlineRuns']);
+    // 且**确实**没把成员声明表抄过来（成员表只有 `markdown.uts` 一份，⑤ 决策⑤）
+    const code = readText(BODY_UTS);
+    expect(code).not.toContain('SUBSET_MEMBERS');
+    expect(code).not.toContain('MEMBER_');
   });
 
   it('每次载入都是新实例，档位闸门不是可变共享状态', () => {

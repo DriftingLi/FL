@@ -624,7 +624,7 @@ var Domains = []Domain{
 			"aiassistant.AIConfigDTO",
 			"aiassistant.FeatureBindingDTO",
 			"auth.ProfileChangeRequestPageResult",
-			"api.AuditLogPageResult",
+			"audit.AuditLogPageResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/admin/hrwai-users"},

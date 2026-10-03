@@ -1,4 +1,4 @@
-package service
+package audit
 
 import (
 	"testing"
@@ -7,12 +7,12 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// TestAuditService_DescribeAction 锁定 DescribeAction 的命名契约：
+// TestService_DescribeAction 锁定 DescribeAction 的命名契约：
 // 后缀动作短语优先 → 资源关键词匹配（按关键词长度降序）→ 兜底 verb → 无匹配兜底「verb+数据」。
 // 期望值来自既定文案（/approve→通过审核、/reject→驳回申请、/password→重置密码、/status→调整状态），
 // 不重算实现逻辑。
-func TestAuditService_DescribeAction(t *testing.T) {
-	svc := NewAuditService(nil)
+func TestService_DescribeAction(t *testing.T) {
+	svc := NewService(nil)
 
 	tests := []struct {
 		name   string
@@ -63,19 +63,19 @@ func TestAuditService_DescribeAction(t *testing.T) {
 	}
 }
 
-// TestAuditService_DescribeAction_UnknownMethod 未知方法（GET 等非写操作）一律原样返回 method + path。
-func TestAuditService_DescribeAction_UnknownMethod(t *testing.T) {
-	svc := NewAuditService(nil)
+// TestService_DescribeAction_UnknownMethod 未知方法（GET 等非写操作）一律原样返回 method + path。
+func TestService_DescribeAction_UnknownMethod(t *testing.T) {
+	svc := NewService(nil)
 	if got := svc.DescribeAction("GET", "/api/forum/topics"); got != "GET /api/forum/topics" {
 		t.Errorf("GET 期望原样返回，得到 %q", got)
 	}
 }
 
-// TestAuditService_List_PageSizeCap 页大小上限 100 收进 service 后：超上限回退默认值（ClampMax 语义）。
+// TestService_List_PageSizeCap 页大小上限 100 收进 service 后：超上限回退默认值（ClampMax 语义）。
 // 同时验证分页返回的 page/pageSize 钳制结果与 total 正确。
-func TestAuditService_List_PageSizeCap(t *testing.T) {
+func TestService_List_PageSizeCap(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAuditService(db)
+	svc := NewService(db)
 
 	if err := svc.Write(model.AuditLog{ActorID: 1, ActorRole: "admin", ActorName: "管理员A", Action: "新增课程", Path: "/courses", Method: "POST", RequestID: "r1", IP: "1.1.1.1", Status: 200}); err != nil {
 		t.Fatalf("写入审计记录失败: %v", err)

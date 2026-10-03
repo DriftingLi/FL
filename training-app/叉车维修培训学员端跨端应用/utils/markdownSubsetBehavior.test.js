@@ -23,16 +23,25 @@ const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
 
 const MD_UTS = path.join(__dirname, 'markdown.uts');
+const INLINE_UTS = path.join(__dirname, 'markdownInline.uts');
 
 /** 每次取一个**全新模块实例**（模块级声明表是常量，互不串） */
 const md = () => loadUts(MD_UTS, {});
+/** 行内分词器（#1472 的第二个被测物：语义类成员 `inline` 的行为落点在这一层） */
+const inline = () => loadUts(INLINE_UTS, {});
 
 const TABLE = '| 故障码 | 含义 |\n| --- | --- |\n| E01 | 电压过低 |';
 const MERMAID = '```mermaid\ngraph TD;\nA-->B;\n```';
 
 /**
- * 探针：声明表里的每个成员 → 一段**只用该语法**的 markdown + 它该产出的块类型。
+ * 探针：声明表里的每个成员 → 一段**只用该语法**的 markdown + 它该产出的行为。
  * 新成员进了声明表却没进这张表 ⇒ 正向对账组判红（「声明了但没人知道它该产出什么」）。
+ *
+ * 两种探针形状，因为成员本就分两类：
+ * - `type`：**块类成员**（多数）—— 声明了就必须真出对应类型的块；
+ * - `holds`：**语义类成员**（`inline`，⑩-2）—— 它不产新块，改的是**块内文本的语义**
+ *   （交出源串而不是抹平文本）。对账判据因此按「块内文本还留不留记号」成立。
+ *   这一形不是给 `inline` 开后门：任何未来的语义类成员都得同样自带判据，否则这里红。
  */
 const PROBES = {
   heading: { md: '### 三级标题', type: 'heading' },
@@ -42,7 +51,14 @@ const PROBES = {
   divider: { md: '---', type: 'divider' },
   image: { md: '![故障图](https://e.com/a.png)', type: 'image' },
   table: { md: TABLE, type: 'table' },
+  inline: {
+    md: '**粗体** 里的 [手册](https://e.com/m)',
+    holds: (blocks) => blocks.map((b) => b.text).join('').includes('**'),
+  },
 };
+
+/** 该探针在给定块上是否成立（块类看类型，语义类看 holds） */
+const probeFires = (probe, blocks) => (probe.holds ? probe.holds(blocks) : types(blocks).includes(probe.type));
 
 const SUBSETS = ['chapter', 'featured', 'forum'];
 const types = (blocks) => blocks.map((b) => b.type);
@@ -90,10 +106,11 @@ describe('行为对账 · 正向：声明表里有的成员，解析器必须真
     describe(`${subset} 档`, () => {
       const m = md();
       for (const member of declared(m, subset)) {
-        it(`成员 ${member} 有探针，且探针真产出 ${member} 块`, () => {
+        it(`成员 ${member} 有探针，且探针真产出 ${member} 的行为`, () => {
           // 声明了一行却没人知道它该产出什么 ⇒ 这里判红（「声明即行为」的入口）
           expect([member, typeof PROBES[member]]).toEqual([member, 'object']);
-          expect(types(m.parseMarkdown(PROBES[member].md, subset))).toContain(PROBES[member].type);
+          expect([subset, member, probeFires(PROBES[member], m.parseMarkdown(PROBES[member].md, subset))])
+            .toEqual([subset, member, true]);
         });
       }
     });
@@ -106,11 +123,10 @@ describe('行为对账 · 反向：未声明的成员不得出块，且内容退
   for (const subset of SUBSETS) {
     const m = md();
     const missing = Object.keys(PROBES).filter((member) => !declared(m, subset).includes(member));
-    it(`${subset} 档：未声明成员 ${missing.join('/') || '(无)'} 一律不出对应块`, () => {
+    it(`${subset} 档：未声明成员 ${missing.join('/') || '(无)'} 一律不产对应行为`, () => {
       for (const member of missing) {
         const blocks = m.parseMarkdown(PROBES[member].md, subset);
-        expect([subset, member, types(blocks).includes(PROBES[member].type)])
-          .toEqual([subset, member, false]);
+        expect([subset, member, probeFires(PROBES[member], blocks)]).toEqual([subset, member, false]);
       }
     });
 
@@ -140,21 +156,31 @@ describe('行为对账 · 反向：未声明的成员不得出块，且内容退
 
   it('论坛档与内容精选档**块集接近但不等同、且是各自的声明**（按端分档：允许不同、各自成文）', () => {
     const m = md();
-    // 两者都不含 table（各自的理由不同）；论坛档另少一个 image（图文分离，与 Web 同口径）
+    // 两者都不含 table（各自的理由不同）；论坛档少一个 image（图文分离，与 Web 同口径）、
+    // 多一个 inline（⑩-2 重开 ③ 第一条：唯一声明行内格式的档）。**两个方向都不许相等**，
+    // 所以这两行是「按端分档」的正反面对账 —— 有人把 inline 顺手加进精选档，这里就红。
     const forum = declared(m, m.SUBSET_FORUM);
     const featured = declared(m, m.SUBSET_FEATURED);
     expect(forum).not.toContain(m.MEMBER_TABLE);
     expect(featured).not.toContain(m.MEMBER_TABLE);
     expect(featured.filter((x) => !forum.includes(x))).toEqual([m.MEMBER_IMAGE]);
-    expect(forum.filter((x) => !featured.includes(x))).toEqual([]);
+    expect(forum.filter((x) => !featured.includes(x))).toEqual([m.MEMBER_INLINE]);
     expect(m.SUBSET_FORUM).not.toBe(m.SUBSET_FEATURED);
   });
 
-  it('论坛档的正文内嵌图片退回 **alt 文本**（图文分离；与 Web「`![]()` 展开成 alt」同口径）', () => {
+  it('论坛档的正文内嵌图片：解析器交出**源串**，alt 展开落在分词器那一层（⑩-2/⑩-5 的两处落点）', () => {
+    // #1240 P1 时这条判的是「解析器把 `![]()` 剥成 alt」；#1472 声明 inline 后，剥的职责
+    // 整体上移到分词器（渲染与摘要共用同一次分词，⑩-5）。**判据没放宽，是搬了家**：
+    // 两层各钉一次，且「读者最终看到 alt」这一条仍被完整守住。
     const m = md();
-    const blocks = m.parseMarkdown('见 ![故障图](https://e.com/a.png) 这张', m.SUBSET_FORUM);
-    expect(types(blocks)).not.toContain('image');
-    expect(blocks[0].text).toBe('见 故障图 这张');
+    const k = inline();
+    const SRC = '见 ![故障图](https://e.com/a.png) 这张';
+    const blocks = m.parseMarkdown(SRC, m.SUBSET_FORUM);
+    expect(types(blocks)).not.toContain('image');          // 仍不产 image 块（图文分离不变）
+    expect(blocks[0].text).toBe(SRC);                       // 块内存源串（分叉成立）
+    expect(k.inlineRunsPlainText(k.splitInlineRuns(blocks[0].text))).toBe('见 故障图 这张');
+    // 未声明 inline 的档：仍在解析器里剥成 alt（逐字不变，⑩-6）
+    expect(m.parseMarkdown(SRC, m.SUBSET_CHAPTER)[0].text).toBe('见 故障图 这张');
   });
 });
 

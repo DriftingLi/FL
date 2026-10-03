@@ -266,6 +266,7 @@ var sweptDirs = map[string]string{
 	"job":                 "../job",
 	"tutor":               "../tutor",
 	"admin":               "../admin",
+	"audit":               "../audit",
 	"repository":          "../valuation/repository",
 }
 

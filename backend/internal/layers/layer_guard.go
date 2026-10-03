@@ -67,7 +67,7 @@ func importEdges(files []SourceFile) ([]Edge, error) {
 			return nil, err
 		}
 		// 外部测试包（`package foo_test`）不进依赖图：它住在被测包之外，两条边都能拿，不构成生产图里的
-		// 三角。middleware 的外部测试包正是靠这一点继续用**真实** service.AuditService 落库举证
+		// 三角。middleware 的外部测试包正是靠这一点继续用**真实** audit.Service 落库举证
 		// （见 internal/middleware/audit_ip_test.go 的文件头）。内部测试包（`package foo`）仍要判：
 		// 它反向 import 会在 test 构建里成环——编译器会报，这里判是为了给出一条指名的错而不是指到无关的包。
 		if strings.HasSuffix(pkgName, "_test") {
@@ -94,7 +94,7 @@ func importEdges(files []SourceFile) ([]Edge, error) {
 //     ——「middleware → service → 域包 → middleware」是个三角，这条边把三角闭合成 import cycle
 //     （ADR-0070 之后第一次拆 notification 时实测撞上，且编译器把错报在无关的 cmd 上）。
 //     审计写依赖用 AuditWriter 接口反转：接口声明在 middleware（消费方），实现仍是
-//     service.AuditService 单点，装配点注入前判 nil（typed nil 装进接口不等于 nil 接口）。
+//     audit.Service 单点，装配点注入前判 nil（typed nil 装进接口不等于 nil 接口）。
 //
 // 射程里的文件由 importEdges 决定（外部测试包不进图，理由见那里）。
 func directionViolations(edges []Edge) []string {

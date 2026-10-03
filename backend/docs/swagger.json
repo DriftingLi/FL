@@ -505,7 +505,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/api.AuditLogPageResult"
+                                            "$ref": "#/definitions/audit.AuditLogPageResult"
                                         }
                                     }
                                 }
@@ -23894,7 +23894,7 @@
                 }
             }
         },
-        "api.AuditLogPageResult": {
+        "audit.AuditLogPageResult": {
             "type": "object",
             "properties": {
                 "items": {

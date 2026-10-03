@@ -1,6 +1,12 @@
-// Package service 实现业务服务层。
-// 本文件：数据导出取数（xlsx 由 handler 层生成，本服务只负责取数）。
-package service
+// Package export 估值导出域（估值域内的叶子子包）：列 spec（columns.go）、取数 seam（store.go）
+// 与三条导出取数（service.go）；HTTP 出口在 internal/valuation/handler/export.go。
+// 本文件：数据导出取数（CSV 由 HTTP 出口生成，本服务只负责取数）。
+//
+// 为什么是叶子子包而不是 internal/valuation/service：后者 import internal/valuation/repository，
+// 而 repository 的导出 adapter 必须看见本包的 EvaluationExportRow / BuildEvalExportSelect /
+// ScanEvalExportDestinations（它实现本包 ExportStore）⇒ 同包必成环。放叶子子包后
+// repository → export 单向（先例 internal/valuation/dictcrud，ADR-0070 破法三）。
+package export
 
 import (
 	"context"
@@ -13,21 +19,21 @@ import (
 	"forklift-training/internal/timefmt"
 )
 
-// ExportService 数据导出服务。
-type ExportService struct {
+// Service 数据导出服务。
+type Service struct {
 	db      *gorm.DB
 	exports ExportStore
 
 	logger *zap.Logger
 }
 
-// NewExportService 构造导出服务（exports 经 ExportStore seam 注入，生产为估值模块 adapter）。
-func NewExportService(db *gorm.DB, exports ExportStore, logger *zap.Logger) *ExportService {
-	return &ExportService{db: db, exports: exports, logger: logger}
+// NewService 构造导出服务（exports 经 ExportStore seam 注入，生产为估值侧 repository adapter）。
+func NewService(db *gorm.DB, exports ExportStore, logger *zap.Logger) *Service {
+	return &Service{db: db, exports: exports, logger: logger}
 }
 
 // Students 学员名单导出行（首行为表头）。
-func (s *ExportService) Students() ([][]any, error) {
+func (s *Service) Students() ([][]any, error) {
 	var rows []struct {
 		ID        int
 		Account   string
@@ -55,7 +61,7 @@ func (s *ExportService) Students() ([][]any, error) {
 }
 
 // Questions 题库导出行。
-func (s *ExportService) Questions() ([][]any, error) {
+func (s *Service) Questions() ([][]any, error) {
 	var rows []struct {
 		ID          int
 		Type        string
@@ -88,9 +94,9 @@ func (s *ExportService) Questions() ([][]any, error) {
 	return out, nil
 }
 
-// Evaluations 残值评估记录导出行（数据经 ExportStore seam 取自估值模块，见 spec #75 D4）。
+// Evaluations 残值评估记录导出行（数据经 ExportStore seam 取自估值侧 repository，见 spec #75 D4）。
 // 表头与取值均从 EvaluationExportColumns 单点 spec 派生（#229），与既有输出逐字一致。
-func (s *ExportService) Evaluations() ([][]any, error) {
+func (s *Service) Evaluations() ([][]any, error) {
 	rows, err := s.exports.ListEvaluationExports(context.Background())
 	if err != nil {
 		return nil, err
