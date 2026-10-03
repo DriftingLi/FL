@@ -16,8 +16,9 @@
  * | 4 两入口一条成功出口 | 着陆页 composable **零** `reLaunch`、`afterLoginSuccess` 定义全仓**唯一**、新用户 toast 全仓**唯一** | 出口两条分支的行为 = behavior 套件真跑 |
  * | 5 失败可见 | `errorHint` 有写入点 **且** 页面有可见渲染位（两条都要，缺一即红） | 渲染出来长什么样 = 真机门 |
  * | 6 删手绘吉祥物 | 原手绘 class 名族零命中 + `logo.png` 图像槽位在位 | 图片视觉 = 真机门 |
- * | 7 协议行抽共享件 | 两页 import **同一件**、两页模板不再自持《用户协议》文案、共享件最小面（props/emits 清单 + 表单态不得入内） | 同视觉（`loginContract` 的模板 sha 锁已批准变更） |
- * | 探测件两页共享 | 两页 import **同一符号** + 平台判据（`uniPlatform`）全仓**只出现在探测件里**（两份实现即红） | 探测结论在真机上对不对 = 真机门 |
+ * | 7 协议行抽共享件 | 两页 import **同一件**、两页模板不再自持《用户协议》文案、共享件最小面（props/emits 清单 + 表单态不得入内）、**注册入口按 BASE 各通道都在**（F4：判据 7 只授权换文案，未授权增删入口） | 同视觉（`loginContract` 的模板 sha 锁已批准变更） |
+ * | 探测件两页共享 | 两页 import **同一符号** + 两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）全仓**只出现在探测件里**（两份实现即红） | 探测结论在真机上对不对 = 真机门（且 `getProviderSync` 在本仓的**编译面**未验，见报告 ④c） |
+ * | 协议详情提示一句文案 | 「详情页建设中」在内联面上**只住 `utils/agreementNotice.uts`**，三页只是转投（F2：曾有三个副本） | 端到端文案由 `landingLoginBehavior` C3-C6 真跑单点 |
  * | `#ifdef` 增删 = 0 | 两个运行时面文件的条件编译**指令行计数**锁到 BASE 值（index 0 行、login 2 行），且 login 那条 `MP-WEIXIN` + `#endif` 成对仍在（不许拆） | — |
  * | 零配置面改动 | `pages.json` 路由事实：启动页仍是第一条、独立登录页**仍在路由表**（保留页降级、不退役） | 「文件一字未动」由 commit 的 `--name-only` 证明（jest 读不到 git），见 task-1-report |
  *
@@ -29,7 +30,9 @@
  * ## 刻意不做的事（越界即违规）
  * - 不锁 `pages.json` / `manifest.json` / `platformConfig.json` 的字节 sha（那三把锁会让下一张改路由的票无故变红）
  * - 不动 `loginContract.test.js` 的模板/样式 sha（本票那次变更已在该文件内注明「经批准」）
- * - 不锁 register 页的协议行（#1478 只管启动页 + 登录页两页同源；register 那份是**已登记的遗留**，见报告薄弱点）
+ * - 不锁 register 页协议行的**渲染面**（#1478 只管启动页 + 登录页两页同源；那份 UI 是已登记的
+ *   遗留，归 #1483）。但第 1 轮评审 F2 把「详情页建设中」这句**文案来源**收成全局单点，
+ *   register 的 composable 只是一行转投 ⇒ 可观测行为逐字不变，本套件的单点锁因此三页都管。
  */
 const h = require('./contractHarness');
 const read = h.read;
@@ -41,6 +44,8 @@ const PROBE = 'composables/useLoginProviders.uts';
 const AGREEMENT = 'components/login-agreement/login-agreement.uvue';
 const LOGIN_PAGE = 'pages/login/login.uvue';
 const LOGIN_FORM = 'pages/login/composables/useLoginForm.uts';
+const REGISTER_FORM = 'pages/register/composables/useRegisterForm.uts';
+const NOTICE = 'utils/agreementNotice.uts';
 const PAGES_JSON = 'pages.json';
 
 /** 登录页现有口径（AC 3「口径一致」的字面基准；两处必须同一个字符串，不许各造同义词） */
@@ -83,6 +88,38 @@ function braceBlock(src, anchor) {
 }
 
 // ── AC 1：已登录冷启动落地路由（判据本体） ──────────────────────────────────
+
+/**
+ * 取一次函数调用的**实参文本**：`openIdx` 指向左括号之后第一个字符，按圆括号平衡读到收尾。
+ *
+ * 为什么要这个函数（第 1 轮评审 F3）：旧版 `landingJump` 用一条正则
+ * `uni\.reLaunch\(\{?\s*url: '…'` 一步吃完，那要求 `url` 是调用对象的**第一个属性**。
+ * `uni.reLaunch({ fail: () => {…}, url: '/pages/dashboard/dashboard' })` 这类换序 / 嵌套形态
+ * 会**绕过检测** —— 第二套落地跳转漏检而测试仍绿（假绿）。现在先把整段实参摘出来，
+ * 再在里面找 `url`，**属性序无关**。
+ */
+function callArgs(code, openIdx) {
+  let depth = 1;
+  for (let i = openIdx; i < code.length; i += 1) {
+    if (code[i] === '(') depth += 1;
+    else if (code[i] === ')') {
+      depth -= 1;
+      if (depth === 0) return code.slice(openIdx, i);
+    }
+  }
+  return code.slice(openIdx);
+}
+
+/** 四个导航 API 每次调用带上的 `/pages/...` 落点（嵌套回调里的也算进去，宁可多抓不可漏抓） */
+function navUrls(code) {
+  const urls = [];
+  const re = /uni\.(reLaunch|switchTab|redirectTo|navigateTo)\(/g;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    for (const u of callArgs(code, re.lastIndex).matchAll(/url:\s*'(\/pages\/[^']*)'/g)) urls.push(u[1]);
+  }
+  return urls;
+}
 
 const COLDSTART_GUARD = 'if (auth.isLoggedIn.value) {';
 const DASHBOARD = '/pages/dashboard/dashboard';
@@ -286,23 +323,31 @@ describe('AC 3 协议未勾选拦在请求之前（接线面；零请求的行�
 
 /** 新用户 toast 与出口定义都是「全仓唯一」的东西：多一处 = 有人复制了成功链路 */
 const NEW_USER_TOAST = '已为您自动注册账号';
+/** 新用户落点（出口的第一条分支）：着陆页若自持一份指向它的跳转就是第二套成功链路 */
+const CHOOSE_CERT = '/pages/guide/choose-cert';
 
 /**
  * 判据本体：源文件集合 → 违例清单（真源与注入自检共用）。
  * `landingJump` 的口径要说清：着陆页**允许**的那条 reLaunch 是 AC 1 的已登录冷启动守卫，
  * 它不属于「登录成功跳转」⇒ 扫描前先把那条守卫块摘掉，剩下的任何指向 dashboard / choose-cert
  * 的跳转都是第二套成功链路（判据 4 要抓的就是它）。
+ * 匹配形态（第 1 轮评审 F3）：**属性序无关** —— 逐条调用摘出实参再看 `url`，
+ * 不再要求 `url` 是第一个属性（旧正则对 `{ fail: …, url: … }` 形态漏检）。
  */
 function outletFacts(sources) {
-  const hits = { toast: [], define: [], landingJump: [] };
+  const hits = { toast: [], define: [], landingJump: [], landingJumpUrls: [] };
   for (const [rel, src] of sources) {
     let code = stripAll(src);
     const guard = braceBlock(code, COLDSTART_GUARD);
     if (guard !== null) code = code.replace(guard, '');
     if (code.includes(NEW_USER_TOAST)) hits.toast.push(rel);
     if (/export function afterLoginSuccess\s*\(/.test(code)) hits.define.push(rel);
-    if (rel.startsWith('pages/index/') && /uni\.(reLaunch|switchTab|redirectTo|navigateTo)\(\{?\s*url: '\/pages\/(dashboard|guide)/.test(code)) {
-      hits.landingJump.push(rel);
+    if (rel.startsWith('pages/index/')) {
+      const landed = navUrls(code).filter((u) => u.startsWith('/pages/dashboard') || u.startsWith('/pages/guide'));
+      if (landed.length > 0) {
+        hits.landingJump.push(rel);
+        hits.landingJumpUrls.push([rel, landed]);
+      }
     }
   }
   return hits;
@@ -345,6 +390,23 @@ describe('AC 4 成功出口唯一（着陆页不持有第二套跳转；两页�
     const gutted = read(OUTLET).replace("uni.reLaunch({ url: '/pages/guide/choose-cert' })", 'void 0');
     expect(count(stripJs(gutted), 'uni.reLaunch(')).toBe(1);
     expect(outletFacts(sources)).toEqual(facts);
+  });
+
+  it('判别力（F3：属性序无关）：url 不在首位 / 嵌在 fail 之后 / switchTab 换 API，三种形态同样必红', () => {
+    // 旧的正则 `uni\.reLaunch\(\{?\s*url: '…'` 要求 url 是**第一个**属性，下面第一条就会静默漏检 ⇒ 测试假绿。
+    const reordered = [[LANDING, `${read(LANDING)}\n    uni.reLaunch({\n        fail: (err) => { console.error(err) },\n        url: '${DASHBOARD}'\n    })\n`]];
+    const f1 = outletFacts(reordered);
+    expect(f1.landingJump).toEqual([LANDING]);
+    expect(f1.landingJumpUrls).toEqual([[LANDING, [DASHBOARD]]]);
+    // 换 API 也抓（第二条判据 4 的另一套落地形态）
+    const switched = [[LANDING, `${read(LANDING)}\n    uni.switchTab({\n        success: () => {},\n        url: '${DASHBOARD}'\n    })\n`]];
+    expect(outletFacts(switched).landingJump).toEqual([LANDING]);
+    // 引导页落点（choose-cert）走嵌套 fail 也抓
+    const cert = [[LANDING, `${read(LANDING)}\n    uni.redirectTo({ fail: () => {}, url: '${CHOOSE_CERT}' })\n`]];
+    expect(outletFacts(cert).landingJumpUrls).toEqual([[LANDING, [CHOOSE_CERT]]]);
+    // 对照组：真源同一条判据必须仍是空集（防判据被改宽成「任何跳转都算」的恒红/恒绿两用）
+    expect(outletFacts(sources).landingJump).toEqual([]);
+    expect(navUrls(stripAll(read(LANDING)))).toEqual(['/pages/register/register', '/pages/login/login']);
   });
 });
 
@@ -426,6 +488,7 @@ describe('AC 6 启动页不再有纯 view 手绘吉祥物，图像槽位取现�
 
 /** 协议共享件的最小面（票面划线：`agreed` 双向 + 协议名回调 + 按通道引导文案；表单态不得入内） */
 function agreementFacts(src) {
+  const tpl = stripTpl(block(src, 'template'));
   const props = (/withDefaults\(defineProps<\{([\s\S]*?)\}>\(\)/.exec(src) || [null, ''])[1];
   const emits = (/defineEmits\(\[([^\]]*)\]\)/.exec(src) || [null, ''])[1];
   return {
@@ -434,15 +497,19 @@ function agreementFacts(src) {
     formState: ['countdown', 'sendingCode', 'captcha', 'phoneCode', 'emailCode', 'password', 'loading']
       .filter((token) => src.includes(token)),
     links: {
-      agreement: count(stripTpl(block(src, 'template')), '《用户协议》'),
-      privacy: count(stripTpl(block(src, 'template')), '《用户隐私》'),
+      agreement: count(tpl, '《用户协议》'),
+      privacy: count(tpl, '《用户隐私》'),
     },
     channelHints: {
-      wechat: src.includes("'未注册的微信号将自动注册账号'"),
+      wechat: src.includes("'未注册的微信号将自动注册账号，'"),
       email: src.includes("'若邮箱未注册，'"),
       phone: src.includes("'若手机号未注册，'"),
     },
-    registerLinkHiddenForWechat: /return props\.channel != 'wechat'/.test(src),
+    // 「立即注册」入口（第 1 轮评审 F4）：BASE 里它是**无条件**存在的（登录页那行没有按通道的
+    // v-if），brief 判据 7 授权的只有「同源同文案 + 按通道切换的注册引导**文案**」⇒ 入口不许按通道收掉。
+    registerLinkCount: count(tpl, '立即注册'),
+    registerLinkWired: /<text class="la-link" @click\.stop="onRegister">立即注册<\/text>/.test(tpl),
+    registerLinkGated: /\bv-(?:if|show)="[^"]*"\s+@click\.stop="onRegister"/.test(tpl) || src.includes('showRegisterLink'),
   };
 }
 
@@ -473,9 +540,11 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
     expect(facts.formState).toEqual([]);
   });
 
-  it('注册引导按通道分叉（三条通道语义不同的硬口径），微信不给「立即注册」', () => {
+  it('注册引导按通道分叉（判据 7 授权的就是这一件事：换**文案**），而「立即注册」入口各通道都在（F4 返工）', () => {
     expect(facts.channelHints).toEqual({ wechat: true, email: true, phone: true });
-    expect(facts.registerLinkHiddenForWechat).toBe(true);
+    expect(facts.registerLinkCount).toBe(1);
+    expect(facts.registerLinkWired).toBe(true);
+    expect(facts.registerLinkGated).toBe(false);
   });
 
   it('判别力：页面把文案抄回来 / 共享件多塞一个表单态字段，两种都必红', () => {
@@ -484,6 +553,21 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
     const fattened = read(AGREEMENT).replace("channel? : string", "channel? : string\n        countdown? : number");
     expect(agreementFacts(fattened).propNames).toContain('countdown');
     expect(agreementFacts(read(AGREEMENT))).toEqual(facts);
+  });
+
+  it('判别力（F4）：把入口再按通道收回去（评审越界的那一版）/ 删掉入口，两种都必红', () => {
+    const src = read(AGREEMENT);
+    const gatedByChannel = src.replace('<text class="la-link" @click.stop="onRegister">立即注册</text>',
+      '<text class="la-link" v-if="channel != \'wechat\'" @click.stop="onRegister">立即注册</text>');
+    expect(gatedByChannel).not.toBe(src);
+    expect(agreementFacts(gatedByChannel).registerLinkGated).toBe(true);
+    const removed = src.replace('        <text class="la-link" @click.stop="onRegister">立即注册</text>\n', '');
+    expect(removed).not.toBe(src);
+    expect(agreementFacts(removed).registerLinkCount).toBe(0);
+    expect(agreementFacts(removed).registerLinkWired).toBe(false);
+    // 对照组：真源跑同一条判据不红（入口在、无门禁）
+    expect(agreementFacts(src).registerLinkGated).toBe(false);
+    expect(agreementFacts(src).registerLinkCount).toBe(1);
   });
 });
 
@@ -497,11 +581,24 @@ describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两�
     }
   });
 
-  it('平台判据（uniPlatform）只出现在探测件里 —— 出现第二个文件即「两份实现」', () => {
-    const holders = sources
-      .filter(([, src]) => stripAll(src).includes('uniPlatform'))
-      .map(([rel]) => rel);
-    expect(holders).toEqual([PROBE]);
+  it('两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）只出现在探测件里 —— 多一个文件即「两份实现」', () => {
+    // F1 返工后判据是复合的（端别 || provider），所以**两个**取数入口都得守：
+    // 只守 uniPlatform 会放行「着陆页自己再打一次 getProviderSync」这种第二套探测。
+    for (const token of ['uniPlatform', 'getProviderSync']) {
+      const holders = sources
+        .filter(([, src]) => stripAll(src).includes(token))
+        .map(([rel]) => rel);
+      expect([token, holders]).toEqual([token, [PROBE]]);
+    }
+  });
+
+  it('复合判据的接线面（F1）：探测件同时持有端别常量与 provider 常量，且两者以「或」相连', () => {
+    const code = stripJs(read(PROBE));
+    expect(code).toContain("const PLATFORM_MP_WEIXIN = 'mp-weixin'");
+    expect(code).toContain("const PROVIDER_OAUTH_WEIXIN = 'weixin'");
+    expect(code).toContain("uni.getProviderSync({ service: 'oauth' })");
+    expect(code).toMatch(/return onMpWeixin \|\| providerFound/);
+    expect(code).toMatch(/try \{[\s\S]*?\} catch \(e\) \{\s*return false\s*\}/);
   });
 
   it('探测件返回面是**能力可用性判断**（供 #1484 决定 disabled），不是「要不要渲染」的布尔', () => {
@@ -512,11 +609,86 @@ describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两�
     expect(src).not.toMatch(/shouldRender|showWechat|visible\b/);
   });
 
-  it('判别力：着陆页自己抄一份平台判断必红（计数从 1 变 2）', () => {
+  it('判别力：着陆页自己抄一份平台判断、或自己再打一次 provider 探测，两种都必红（计数从 1 变 2）', () => {
     const copied = sources.concat([['pages/whatever/whatever.uts', "const p = uni.getSystemInfoSync().uniPlatform\nexport const x = p == 'mp-weixin'"]]);
     const holders = copied.filter(([, src]) => stripAll(src).includes('uniPlatform')).map(([rel]) => rel);
     expect(holders).toContain('pages/whatever/whatever.uts');
     expect(holders.length).toBeGreaterThan(1);
+    const secondProbe = sources.concat([['pages/whatever/whatever.uts', "const r = uni.getProviderSync({ service: 'oauth' })\nexport const y = r.providerIds.indexOf('weixin')"]]);
+    const probeHolders = secondProbe.filter(([, src]) => stripAll(src).includes('getProviderSync')).map(([rel]) => rel);
+    expect(probeHolders).toEqual([PROBE, 'pages/whatever/whatever.uts']);
+  });
+});
+
+// ── 协议详情提示全仓单点（第 1 轮评审 F2：那句 toast 在本票之前已被抄成第三份） ──
+
+/** 这句 toast 的唯一字面量来源（三页都只是转投；副本数 = 内联面上命中该文案的文件数） */
+const NOTICE_TEXT = '详情页建设中';
+
+/**
+ * 判据本体：谁**内联**了这句文案（= 副本），谁**引用**了单点（= 消费者）。
+ * 执法形态与本仓 `recruitWorkspaceContract`「这句话只住在 utils/recruitDisplay.uts」同房：
+ * 内联处必须**恰为单点自己一处** ⇒ 白名单为空，「再来一份」不需要改判据就会红。
+ * 注册页也在消费者名单里：F2 收的是**文案来源**，它的可观测行为逐字不变（UI/行为面留给 #1483）。
+ */
+function noticeFacts(sources) {
+  const inliners = [];
+  const consumers = [];
+  for (const [rel, src] of sources) {
+    const code = stripAll(src);
+    if (code.includes(NOTICE_TEXT)) inliners.push(rel);
+    if (code.includes('utils/agreementNotice')) consumers.push(rel);
+  }
+  return { inliners, consumers };
+}
+
+/** 判据本体：某个 `showAgreement` 是真委派还是自带一份（`calls`=转投次数，`localToast`=本地又 toast 了一遍） */
+function delegateFacts(src) {
+  const body = braceBlock(stripJs(src), 'function showAgreement(');
+  if (body === null) return { found: false, calls: 0, localToast: false };
+  return { found: true, calls: count(body, 'showAgreementNotice(name)'), localToast: /uni\.showToast/.test(body) };
+}
+
+describe('F2 协议详情提示收成全仓单点：三页只转投，副本数 = 0（单一事实源硬判据）', () => {
+  const sources = allSources();
+  const facts = noticeFacts(sources);
+  const DELEGATED = { found: true, calls: 1, localToast: false };
+
+  it('这句文案在内联面上只住 utils/agreementNotice.uts 一处（登录页 / 注册页 / 着陆页都不再自持）', () => {
+    expect(facts.inliners).toEqual([NOTICE]);
+  });
+
+  it('三页都引用同一个件（本票的两页 + 注册页只收文案来源）', () => {
+    expect(facts.consumers).toEqual([LANDING, LOGIN_FORM, REGISTER_FORM].sort());
+  });
+
+  it('三个 `showAgreement` 都是纯转投：把协议名交出去，本地不再拼那句 toast', () => {
+    for (const rel of [LANDING, LOGIN_FORM, REGISTER_FORM]) {
+      expect([rel, delegateFacts(read(rel))]).toEqual([rel, DELEGATED]);
+    }
+  });
+
+  it('单点自己的出口形态与搬走前逐字一致（一次 toast、icon none、协议名 + 后缀）⇒ 行为不变是判据的一部分', () => {
+    const code = stripJs(read(NOTICE));
+    expect(code).toContain(`const AGREEMENT_NOTICE_SUFFIX = '${NOTICE_TEXT}'`);
+    expect(code).toContain("uni.showToast({ title: name + AGREEMENT_NOTICE_SUFFIX, icon: 'none' })");
+    expect(count(code, 'uni.showToast(')).toBe(1);
+    expect(count(code, NOTICE_TEXT)).toBe(1);
+  });
+
+  it('判别力：抄回着陆页 / 新开第四副本 / 摘掉委派，三种都必红（对照：真源跑同一条判据全绿）', () => {
+    const copied = sources.concat([[LANDING, `${read(LANDING)}\n    const dup = '${NOTICE_TEXT}'\n`]]);
+    expect(noticeFacts(copied).inliners).toContain(LANDING);
+    const fourth = sources.concat([['pages/whatever/whatever.uts', `uni.showToast({ title: name + '${NOTICE_TEXT}', icon: 'none' })\n`]]);
+    expect(noticeFacts(fourth).inliners).toEqual([NOTICE, 'pages/whatever/whatever.uts']);
+    const unlinked = sources.filter(([rel]) => rel !== LANDING).concat([[LANDING, read(LANDING).replace("import { showAgreementNotice } from '../../../utils/agreementNotice'", 'void 0')]]);
+    expect(noticeFacts(unlinked).consumers).not.toContain(LANDING);
+    const reverted = delegateFacts(read(LANDING).replace('        showAgreementNotice(name)',
+      `        uni.showToast({ title: name + '${NOTICE_TEXT}', icon: 'none' })`));
+    expect(reverted).toEqual({ found: true, calls: 0, localToast: true }); // = 评审前的第三副本形态 ⇒ 上面那条必红
+    // 对照组
+    expect(noticeFacts(sources)).toEqual(facts);
+    expect(delegateFacts(read(LANDING))).toEqual(DELEGATED);
   });
 });
 
@@ -539,7 +711,9 @@ describe('#1478 新增件的 computed 回调形态（utsHarness 可解析 + ④ 
 
   it('本票新增件确有 computed 站点（防止上面那条退化成空集恒真）', () => {
     expect(computedSites(read(PROBE))).toHaveLength(2);
-    expect(computedSites(read(AGREEMENT))).toHaveLength(2);
+    // F4 返工后协议件只剩一处 computed（按通道的引导**文案**）：原先那处「按通道收掉入口」
+    // 的 showRegisterLink 已删除 —— 站点数从 2 掉到 1 正是那次越界被收回的证据。
+    expect(computedSites(read(AGREEMENT))).toHaveLength(1);
   });
 
   it('判别力：把探测件的一处 => 摘掉（= 半成品的原始形态），同一条筛子必须抓到', () => {

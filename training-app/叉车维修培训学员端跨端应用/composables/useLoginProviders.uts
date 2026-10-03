@@ -2,8 +2,22 @@
  * 登录提供方能力探测（#1478 首次建立的共享探测件）
  *
  * 为什么存在：启动页（pages/index）与登录页（pages/login）都要知道「微信登录这台设备
- * 上到底能不能用」。旧做法是用 `#ifdef MP-WEIXIN` 在编译期把入口整条包掉，但 #1478
- * 裁定 2 要求 `#ifdef` 指令行增删数为 0（② 门触发面），故改为**运行期探测**。
+ * 上到底能不能用」。旧做法是用条件编译指令行把入口整条包掉，但 #1478 裁定 2 要求
+ * `#ifdef` 指令行增删数为 0（② 门触发面），故改为**运行期能力探测**。
+ *
+ * 判据形态（#1478 补充裁定，第 1 轮评审 F1 返工）：**复合判据**，两半各管一件事 ——
+ *   ① 端别那半 `platform == 'mp-weixin'`：小程序端是本期唯一要交付的功能面，**不许**拿它
+ *      去赌一个新 API 的行为（「只用 provider 探测替代端别判断」是被否决的方案）。
+ *   ② 能力那半 provider 探测：oauth 服务里注册了 `weixin` 就判可用。没有这半，接缝是破的 ——
+ *      App 端即便日后（#1482）配好微信 SDK，本件仍恒判不可用，#1484 的按钮 `disabled` 永不翻。
+ *
+ * ⚠️ 编译面诚实声明（④c 未验）：调研一手结论是 uni-app x 的 `uni.getProviderSync` 兼容性只列
+ *   Android/iOS 4.25（HarmonyOS 4.61）、**未列小程序** ⇒ 小程序侧不可依赖它（故 ① 那半必须在位）。
+ *   「本仓此前零先例、④ Kotlin/UTS 编译门是否接受这个 API」未经编译验证：若 ④c 在此处判红，
+ *   退路是摘掉 ② 那半 + 留 TODO 指向 #1482，而不是改动 ① 那半。
+ *
+ * 保守口径：探测**失败 / 抛错 / 返回空 / 未列 weixin ⇒ 一律判不可用**（宁可不给入口，
+ *   不可给了点不动）。异常一律在 try/catch 内消化，**不得冒到渲染路径**。
  *
  * 返回面是「能力可用性判断」，不是「要不要渲染」的布尔：消费方自行决定渲染分支，
  * 后续 #1484 可用同一个判断决定按钮 disabled。
@@ -19,19 +33,42 @@ export type UseLoginProvidersResult = {
     wechatUnavailableReason : ComputedRef<string>
 }
 
+/** 端别判据的合法值（uni.getSystemInfoSync().uniPlatform：仅小程序微信端写作 'mp-weixin'） */
+const PLATFORM_MP_WEIXIN = 'mp-weixin'
+/** provider 判据的合法值（uni.getProviderSync({ service: 'oauth' }) 的 weixin 授权登录） */
+const PROVIDER_OAUTH_WEIXIN = 'weixin'
+/** 不可用原因：探测不到能力时的唯一口径（#1484 可直接展示） */
+const REASON_UNAVAILABLE = '当前客户端不支持微信登录'
+
 /**
- * 探测微信登录可用性。
- * 判据取 uni.getSystemInfoSync().uniPlatform：仅 'mp-weixin' 判可用；
- * 其余（app / web / 任何未知值）一律保守判不可用——宁可不给入口，不可给了点不动。
+ * provider 能力探测：oauth 服务里有没有注册 weixin。
+ * 取数分步写（不把 `.providerIds.indexOf(...)` 串在一个表达式里）—— 本仓无同类先例的新 API，
+ * 编译面按最朴素形态写；任何异常（含该 API 在本端不存在）都在这里塌成 false，不外抛。
+ */
+function hasWechatOauthProvider() : boolean {
+    try {
+        const result = uni.getProviderSync({ service: 'oauth' })
+        const providerIds = result.providerIds
+        return providerIds.indexOf(PROVIDER_OAUTH_WEIXIN) >= 0
+    } catch (e) {
+        return false
+    }
+}
+
+/**
+ * 探测微信登录可用性 = 端别判据 **或** provider 能力判据（任一成立即可用）。
+ * 两次取数都在装配时做一次（页面 setup 期），两个 computed 只读结论，不再触碰 uni。
  */
 export function useLoginProviders() : UseLoginProvidersResult {
     const platform = uni.getSystemInfoSync().uniPlatform
+    const onMpWeixin = platform == PLATFORM_MP_WEIXIN
+    const providerFound = hasWechatOauthProvider()
     const wechatAvailable = computed<boolean>(() : boolean => {
-        return platform == 'mp-weixin'
+        return onMpWeixin || providerFound
     })
     const wechatUnavailableReason = computed<string>(() : string => {
-        if (platform == 'mp-weixin') return ''
-        return '当前客户端不支持微信登录'
+        if (wechatAvailable.value) return ''
+        return REASON_UNAVAILABLE
     })
     return {
         wechatAvailable: wechatAvailable,

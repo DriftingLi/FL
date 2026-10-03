@@ -9,7 +9,7 @@
         <text class="la-text">和</text>
         <text class="la-link" @click.stop="onAgreementTap('用户隐私')">《用户隐私》</text>
         <text class="la-text">{{ registerHint }}</text>
-        <text class="la-link" v-if="showRegisterLink" @click.stop="onRegister">立即注册</text>
+        <text class="la-link" @click.stop="onRegister">立即注册</text>
     </view>
 </template>
 
@@ -34,16 +34,17 @@
 
     const emit = defineEmits(['toggle', 'agreement', 'register'])
 
-    /** 三条通道注册语义不同（brief 的硬依据）：只有微信是「登录即注册」，
-     *  手机/邮箱未注册则发码即报错，故引导文案与「立即注册」入口按通道分叉。 */
+    /**
+     * 三条通道注册语义不同（brief 的硬依据）：只有微信是「登录即注册」，手机/邮箱未注册则
+     * 发码即报错 ⇒ brief 判据 7 授权的是**按通道切换注册引导文案**。
+     * 「立即注册」**入口**不在授权范围内：它在 BASE 的登录页模板里是无条件存在的（同一段
+     * `agree-text` + `agree-link`），第 1 轮评审 F4 认定「按通道收掉入口」超出本票授权 ⇒ 各通道都在。
+     * 微信档文案以「，」收尾，与另两档同形 —— 它后面紧跟的就是那个入口。
+     */
     const registerHint = computed<string>(() : string => {
-        if (props.channel == 'wechat') return '未注册的微信号将自动注册账号'
+        if (props.channel == 'wechat') return '未注册的微信号将自动注册账号，'
         if (props.channel == 'email') return '若邮箱未注册，'
         return '若手机号未注册，'
-    })
-
-    const showRegisterLink = computed<boolean>(() : boolean => {
-        return props.channel != 'wechat'
     })
 
     function onToggle() : void {

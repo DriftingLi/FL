@@ -24,6 +24,9 @@ import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useAuthStore } from '../../../stores/auth'
 import { registerApi, emailRegisterApi, sendPhoneCodeApi, sendCodeApi, getCaptchaApi } from '../../../api/auth'
+// #1478 第 1 轮评审 F2：这句 toast 全仓只住一处（与登录页/着陆页同一单点）；本文件的
+// 可观测行为逐字不变，变的只是文案来源（页面壳层与调用形态一行未动，register 的 UI/行为面留给 #1483）
+import { showAgreementNotice } from '../../../utils/agreementNotice'
 import type { RegisterParams, EmailRegisterParams, LoginResult } from '../../../types/index'
 
 /** 注册表单数据类型（UTS 必须显式声明，否则字段会被推断为 Any?） */
@@ -162,7 +165,7 @@ export function useRegisterForm() : UseRegisterFormResult {
     }
 
     function showAgreement(name : string) : void {
-        uni.showToast({ title: name + '详情页建设中', icon: 'none' })
+        showAgreementNotice(name)
     }
 
     function refreshCaptcha() : void {

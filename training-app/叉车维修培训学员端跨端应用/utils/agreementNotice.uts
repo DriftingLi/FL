@@ -1,0 +1,33 @@
+/**
+ * 协议详情提示（#1478 第 1 轮评审 F2 返工：把「详情页建设中」这句 toast 收成**全仓单点**）
+ *
+ * 为什么存在：这句 toast 在评审前有三个副本 —— 登录页 `useLoginForm.uts`、注册页
+ * `useRegisterForm.uts`，加上本票着陆页新抄的第三份（`useLandingLogin.uts`）。三份同源文案
+ * 就是三个真源，改一处漏两处（本仓硬判据「单一事实源」命中项，台账 Minor 3）。
+ *
+ * 形态：函数体逐字取自那三处既有实现（`title: name + '详情页建设中'`、`icon: 'none'`），
+ * 一字未改 ⇒ 三页的**可观测行为完全不变**，变的只是「这句话住在哪里」。
+ * 本件不带任何判断逻辑（不是门禁、不是路由），只是文案与一次 toast 出口。
+ *
+ * ⚠️ 本票不改的是 `showAgreement()` 的**行为**（brief 判据 7 明写「本票不改它」）；
+ *   F2 要收的是**文案来源**。因此这里只动 composable 内部的那一行实现，
+ *   页面壳层（`login.uvue` / `register.uvue` / `index.uvue`）的模板与调用形态一行未动。
+ *
+ * 落位理由：与 `utils/loginOutlet.uts` 同一条口径 —— `utils/**` 是既有的跨切面基础设施面，
+ *   「多消费、无单一主消费方」⇒ 不归任何模块私有（放 `pages/login/composables/` 会让着陆页
+ *   命中移动端跨模块私有件消费的连锁契约锁，见 #1478 P3 裁定）。
+ *
+ * 执法面：`utils/landingLoginContract.test.js` 的「协议详情提示全仓单点」组 ——
+ *   内联该文案的文件必须恰为本件一处，且三页都必须是 import 本件；注入自检给「再抄一份必红」。
+ */
+
+/** 提示后缀：协议名 + 这一段 = 完整 toast 文案（全仓唯一一份这个字面量） */
+const AGREEMENT_NOTICE_SUFFIX = '详情页建设中'
+
+/**
+ * 弹「<协议名>详情页建设中」toast。
+ * @param name 协议名（《用户协议》/《用户隐私》两个入口各传自己的名字，页面不拼后缀）
+ */
+export function showAgreementNotice(name : string) : void {
+    uni.showToast({ title: name + AGREEMENT_NOTICE_SUFFIX, icon: 'none' })
+}

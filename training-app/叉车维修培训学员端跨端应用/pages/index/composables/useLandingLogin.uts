@@ -12,6 +12,9 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { useAuthStore } from '../../../stores/auth'
 import { afterLoginSuccess } from '../../../utils/loginOutlet'
+// #1478 第 1 轮评审 F2：协议详情提示不是本页私有的一份 toast —— 与登录页/注册页共用同一单点
+// （着陆页自己抄一份就是第三真源，评审命中的「单一事实源」硬判据）
+import { showAgreementNotice } from '../../../utils/agreementNotice'
 
 export type UseLandingLoginResult = {
     statusBarHeight : Ref<number>
@@ -36,9 +39,9 @@ export function useLandingLogin() : UseLandingLoginResult {
         agreed.value = !agreed.value
     }
 
-    /** 协议详情本票不改：沿用登录页口径（返回「详情页建设中」toast） */
+    /** 协议详情本票不改行为：沿用既有口径（「详情页建设中」toast），文案取自全仓单点 `utils/agreementNotice` */
     function showAgreement(name : string) : void {
-        uni.showToast({ title: name + '详情页建设中', icon: 'none' })
+        showAgreementNotice(name)
     }
 
     function goRegister() : void {
