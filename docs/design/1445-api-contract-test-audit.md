@@ -240,6 +240,31 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 
 **PG 面照 §8.6 的两条教训**：`internal/training` 三条 `*OnPostgres` 在本机（无 `DATABASE_URL`）干净 SKIP，故本机绿对它们零信息量，只由 CI 判。本小批**没有重写任何 PG 夹具**（只把 `seedStudent` 换成 `testutil.SeedStudent`），不存在批 1 那类「替身换错」；但 CI `backend-test` 仍是它们唯一的真实判据。
 
+### 8.10 批 4（第 3 小批）：4 个域各 1 个文件（已下沉）
+
+| 旧路径 | 新路径 | 行数 | `func Test` |
+| --- | --- | --- | --- |
+| `backend/internal/api/job_card_contract_test.go` | `backend/internal/resume/job_card_contract_test.go` | 248 | 1 |
+| `backend/internal/api/course_read_visibility_contract_test.go` | `backend/internal/course/course_read_visibility_contract_test.go` | 137 | 1 |
+| `backend/internal/api/question_write_contract_test.go` | `backend/internal/questionbank/question_write_contract_test.go` | 196 | 5 |
+| `backend/internal/api/points_ledger_contract_test.go` | `backend/internal/inspection/points_ledger_contract_test.go` | 142 | 2 |
+
+每个目标域新增一个 `contract_helper_test.go`（自装 HTTP 面，范式同 §8.7 的 `internal/forum/contract_helper_test.go`）：`newCourseContractRouter` / `newQuestionBankContractRouter` / `newInspectionContractRouter` / `newResumeContractDeps`。会话一律走 `security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（§8.6 的教训）；域 service 实参照 `internal/api/providers_{core,training,exam,jobs,contribution}.go` 逐字复刻（含 fileSvc 的 nil 存储、points 的 `clock.Real()`）。
+
+三条值得记下的判断：
+
+1. **`course` 的 CredentialScope 必须自带替身**：`course` 在 `internal/core` 的传递闭包内（core → … → course），而 `training` 依赖 `course` ⇒ `course` 的包内测试 import 任一者都会 `import cycle not allowed in test`。新增 `courseContractCredResolver`（恒返 `(0,false)`——该用例的学员没有 `current_credential_id`，与 `training.Service.CurrentCredentialID` 真实行为同义；窄接口见 `internal/middleware/credential_scope.go:17-20`）。
+2. **`resume` 用外部测试包 `package resume_test`**：用例末尾要调 `auth.Service.DeleteAccount` 验级联删除，而 `auth` 的传递闭包包含 `resume`（auth → core → … → resume）⇒ 包内测试（`package resume`）import `auth` 同样成环。外部测试包住在被测包之外、两条边都能拿（先例 `internal/middleware/audit_ip_test.go`；`internal/layers` 的 `importEdges` 对包名以 `_test` 收尾者直接跳过）。夹具返回 `*resumeContractDeps{AuthSvc}`，让用例体里 `deps.AuthSvc.DeleteAccount(...)` 那一行**逐字不动**。
+3. **`doWithToken` 随文件搬**：`testutil.PerformRequest` 不带 token、`testutil.CodeAuthRequest` 在 `body=nil` 时发 `{}`（与「不带请求体」不等价）⇒ questionbank / inspection 各带一份**逐字同口径**的局部 `doWithToken`（照 `internal/api/recruiter_contract_test.go:266` 抄）。
+
+另一处文件头同步：`question_write_contract_test.go:1` 的「Package api」改为「Package questionbank」（`check-comment-cleanliness.mjs` 的 package-doc-mismatch，基线 0；同 §8.8 第 3 条）。
+
+**核验**：归一化（去 `package` / import 块、去自包前缀、把装配块换成夹具那一行、`seedStudent`→`testutil.SeedStudent`）后逐 `func Test` 且**全文逐行比对 ⇒ 4/4 文件逐字相同**；9 个 `func Test` 无一处断言/期望表达式被改。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./internal/{resume,course,questionbank,inspection,api}/` exit 0；`go test` 同上五包全 `ok`（8 PASS + 1 SKIP）；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败；`internal/layers` 五条结构守卫全 PASS；`check-render-error-face.mjs --all`（69 面）、`check-comment-cleanliness.mjs --all`（736 文件 0 欠账）、`check-catalog-sort.mjs --all`（5 面）、`check-api-seam.mjs --all`（170 文件）均无违规。
+
+**PG 面照 §8.6 的两条教训**：`points_ledger_contract_test.go` 的 `TestPointsLedgerContract_DomainFilterOnPostgres` 在本机（无 `DATABASE_URL`）干净 SKIP —— 本机绿对它们零信息量，CI `backend-test` 是唯一判据。
+
 ## 附录：142 个文件逐条
 
 | 文件 | 行 | 桶 | 建议 |

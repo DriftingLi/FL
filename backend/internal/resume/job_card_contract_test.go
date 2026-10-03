@@ -1,4 +1,4 @@
-package api
+package resume_test
 
 import (
 	"bytes"
@@ -10,15 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-
 	"forklift-training/internal/config"
-	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
-	"forklift-training/internal/resume"
 	"forklift-training/internal/security"
-	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
@@ -39,15 +33,7 @@ func TestJobCardContract(t *testing.T) {
 		t.Fatalf("创建作者失败: %v", err)
 	}
 	cfg := &config.Config{JWTSecretKey: "contract-test-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
-	r := gin.New()
-	apiGroup := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	st := storage.NewLocalStorage(t.TempDir())
-	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
-	jobSvc := resume.NewService(db, fileSvc, zap.NewNop())
-	deps.FileSvc = fileSvc
-	deps.JobCardSvc = jobSvc
-	resume.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.JobCardSvc, deps.FileSvc)
+	r, deps := newResumeContractDeps(t, db, cfg)
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(author.ID), author.Account, "hrwai_user")
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)

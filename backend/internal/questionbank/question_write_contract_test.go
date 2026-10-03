@@ -1,9 +1,9 @@
-// Package api 第十二波票 6 契约：题库 typed 写面——
+// Package questionbank 第十二波票 6 契约：题库 typed 写面——
 //   - 写面拒收 status 通道（状态迁移只经显式动作）；
 //   - 字段类型不符即 400（不再静默落零值）；
 //   - 新增「提交审核」端点（draft→pending）；
 //   - 审核不变式：讲师改已发布题内容回 pending，管理员改动即时生效。
-package api
+package questionbank
 
 import (
 	"encoding/json"
@@ -17,7 +17,6 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
-	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -27,10 +26,7 @@ func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "qwrite-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
+	r := newQuestionBankContractRouter(t, db, cfg)
 	return r, cfg, db
 }
 
