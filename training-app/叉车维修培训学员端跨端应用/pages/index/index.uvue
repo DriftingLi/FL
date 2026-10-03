@@ -225,7 +225,7 @@
         border: none;
     }
 
-    /* 次级入口：App 端唯一入口 / 小程序端通往独立登录页 */
+    /* 次级入口：通往独立登录页的路，两端都在位 */
     .cta-secondary {
         margin-top: 28rpx;
         width: 560rpx;
