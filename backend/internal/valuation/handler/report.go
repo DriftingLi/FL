@@ -1,5 +1,5 @@
 // Package handler 实现 HTTP 处理器
-// 本文件：评估报告生成与下载接口（流程由 report.Coordinator 单点实现，此处只做注册）
+// 本文件：评估报告生成与下载接口（流程由 valuation.ReportCoordinator 单点实现，此处只做注册）
 // 重构后使用 valuation.EvaluationDetail + DimensionScores + Suggestions 作为 PDF 输入
 package handler
 
@@ -11,13 +11,12 @@ import (
 
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/report"
 	"forklift-training/internal/valuation/service"
 )
 
 // ReportHandler 报告 HTTP 处理器（薄壳：协调器装配 + 端点注册）。
 type ReportHandler struct {
-	coord   *report.Coordinator[valuation.EvaluationDetail]
+	coord   *valuation.ReportCoordinator[valuation.EvaluationDetail]
 	storage storage.Storage
 	logger  *zap.Logger
 }
@@ -28,7 +27,7 @@ func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logg
 	return &ReportHandler{
 		logger:  l,
 		storage: st,
-		coord: report.New(report.Spec[valuation.EvaluationDetail]{
+		coord: valuation.NewReportCoordinator(valuation.ReportSpec[valuation.EvaluationDetail]{
 			Logger:    l,
 			Storage:   st,
 			KeyPrefix: "reports/evaluation_report_",
