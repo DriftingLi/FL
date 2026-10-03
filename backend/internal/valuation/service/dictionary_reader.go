@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -50,7 +50,7 @@ func (s *CoefficientSnapshot) Get(_ context.Context, key string) (float64, error
 	if v, ok := s.values[key]; ok {
 		return v, nil
 	}
-	return 0, fmt.Errorf("%w: %s", model.ErrCoefficientNotFound, key)
+	return 0, fmt.Errorf("%w: %s", valuation.ErrCoefficientNotFound, key)
 }
 
 // ReadFloat 从快照读取系数，失败或非正数时返回 fallback（与 provider 语义一致）。

@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -125,8 +125,8 @@ func newTestValuationService(t *testing.T, dict DictionaryReader) *ValuationServ
 	return svc
 }
 
-func baseRequest() *model.EvaluationRequest {
-	return &model.EvaluationRequest{
+func baseRequest() *valuation.EvaluationRequest {
+	return &valuation.EvaluationRequest{
 		Brand: "林德", VehicleType: "电动叉车", Series: "K系列",
 		Tonnage: 3, ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000,
 		FactoryYear: 2019, SaleYear: 2024, UsageHours: 1000,
@@ -266,12 +266,12 @@ func TestEvaluateSnapshotFailureFallback(t *testing.T) {
 
 // memBackfillStore 内存回填存储（与生产仓储同形：返回完整评估详情）。
 type memBackfillStore struct {
-	rows    []model.EvaluationDetail
+	rows    []valuation.EvaluationDetail
 	updates map[int64][]string
 }
 
-func (m *memBackfillStore) ListEvaluationsForBackfill(context.Context) ([]model.EvaluationDetail, error) {
-	out := make([]model.EvaluationDetail, len(m.rows))
+func (m *memBackfillStore) ListEvaluationsForBackfill(context.Context) ([]valuation.EvaluationDetail, error) {
+	out := make([]valuation.EvaluationDetail, len(m.rows))
 	copy(out, m.rows)
 	for i := range out {
 		if s, ok := m.updates[out[i].ID]; ok {
@@ -291,7 +291,7 @@ func (m *memBackfillStore) UpdateEvaluationSuggestions(_ context.Context, id int
 func TestBackfillEvaluationSuggestions_Idempotent(t *testing.T) {
 	dict := newFullMemDictReader()
 	store := &memBackfillStore{
-		rows: []model.EvaluationDetail{
+		rows: []valuation.EvaluationDetail{
 			{ID: 1, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
 			{ID: 2, KCondition: 0.9, KHours: 1.1, KBrand: 1.0, KTime: 0.7, KMarket: 1.0, OriginalPrice: 80000, EstimatedValue: 40000, Suggestions: []string{"已锁定"}},
 			{ID: 3, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
@@ -328,7 +328,7 @@ func TestBackfillEvaluationSuggestions_Idempotent(t *testing.T) {
 // 回填是离线运维命令，宁可失败暴露问题也不静默跳过）。
 func TestBackfillEvaluationSuggestions_SnapshotFailure(t *testing.T) {
 	dict := &failSnapshotDict{DictionaryReader: newFullMemDictReader()}
-	store := &memBackfillStore{rows: []model.EvaluationDetail{
+	store := &memBackfillStore{rows: []valuation.EvaluationDetail{
 		{ID: 1, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
 	}, updates: map[int64][]string{}}
 

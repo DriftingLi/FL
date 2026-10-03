@@ -282,8 +282,9 @@ const valuationPathParseDebt = 6
 // 源文件从 30 掉到 27 —— 只盯一个目录的话，域包 handler 里长出本地解析助手时这条锁**看不见**
 // （静默失配），与「目录即射程」正好相反。扫描面因此扩到「哪里还有 handler，哪里就在射程内」，
 // 热源只有一处：testutil.ResponsePackages()（与两把 fact 锁共用同一份目录宇宙）。
-// 注意 ../valuation/handler 不在 ResponsePackages() 里（只有 valuation/model 与 valuation/repository），
-// 故下面那条债务分支仍单独扫它、不会与这里重复计数。
+// 注意 ../valuation/handler 不在 ResponsePackages() 里（估值域进的是 internal/valuation —— 其下
+// 还没有 handler*.go —— 与 internal/valuation/repository），故下面那条债务分支仍单独扫它、
+// 不会与这里重复计数。
 func pathParseScopeDirs(t *testing.T) []string {
 	t.Helper()
 	dirs := []string{"."}

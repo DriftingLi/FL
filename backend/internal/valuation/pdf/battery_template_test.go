@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // sampleBatteryEvaluation 最小电池评估记录：五段模板（封面/基本信息/结论/特征/免责）都有数据可渲染。
-func sampleBatteryEvaluation() *model.BatteryEvaluation {
-	return &model.BatteryEvaluation{
+func sampleBatteryEvaluation() *valuation.BatteryEvaluation {
+	return &valuation.BatteryEvaluation{
 		ID:             123,
-		BatteryType:    model.BatteryTypeLFP,
+		BatteryType:    valuation.BatteryTypeLFP,
 		BatteryModel:   "CATL-280Ah",
 		CycleCount:     860,
 		RulCycles:      2400,
@@ -21,7 +21,7 @@ func sampleBatteryEvaluation() *model.BatteryEvaluation {
 		Confidence:     0.88,
 		ConfidenceLow:  2100,
 		ConfidenceHigh: 2700,
-		FeatureImportance: []model.FeatureImportance{
+		FeatureImportance: []valuation.FeatureImportance{
 			{Index: 1, Name: "容量衰减速率", Group: "capacity", Weight: 0.32, Normalized: 0.95},
 			{Index: 2, Name: "内阻增长", Group: "resistance", Weight: 0.24, Normalized: 0.71},
 		},

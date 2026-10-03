@@ -18,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/storage"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // memStorage 计数存储 fake：统计 Save/Delete 次数（断言并发下载不重复上传、再生成清理旧 PDF）。
@@ -184,17 +184,17 @@ func TestReportDownload_ConcurrentSingleGeneration(t *testing.T) {
 }
 
 // batteryCreateRequest 电池评估创建请求（10 个循环，满足业务校验）。
-func batteryCreateRequest() model.CreateBatteryRequest {
-	cycles := make([]model.CycleData, 0, 10)
+func batteryCreateRequest() valuation.CreateBatteryRequest {
+	cycles := make([]valuation.CycleData, 0, 10)
 	for i := 1; i <= 10; i++ {
-		cycles = append(cycles, model.CycleData{
+		cycles = append(cycles, valuation.CycleData{
 			CycleIndex:    i,
 			VoltageSeries: []float64{3.2, 3.3, 3.4, 3.5, 3.6},
 			CurrentSeries: []float64{1.0, 1.0, 1.0, 1.0, 1.0},
 			Capacity:      100 - float64(i),
 		})
 	}
-	return model.CreateBatteryRequest{BatteryType: model.BatteryTypeLFP, BatteryModel: "LFP-100A", Cycles: cycles}
+	return valuation.CreateBatteryRequest{BatteryType: valuation.BatteryTypeLFP, BatteryModel: "LFP-100A", Cycles: cycles}
 }
 
 // createBatteryForReport 创建电池评估并断言成功，返回记录 ID。

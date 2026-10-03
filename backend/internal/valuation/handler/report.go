@@ -1,6 +1,6 @@
 // Package handler 实现 HTTP 处理器
 // 本文件：评估报告生成与下载接口（流程由 report.Coordinator 单点实现，此处只做注册）
-// 重构后使用 model.EvaluationDetail + DimensionScores + Suggestions 作为 PDF 输入
+// 重构后使用 valuation.EvaluationDetail + DimensionScores + Suggestions 作为 PDF 输入
 package handler
 
 import (
@@ -10,14 +10,14 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/storage"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/report"
 	"forklift-training/internal/valuation/service"
 )
 
 // ReportHandler 报告 HTTP 处理器（薄壳：协调器装配 + 端点注册）。
 type ReportHandler struct {
-	coord   *report.Coordinator[model.EvaluationDetail]
+	coord   *report.Coordinator[valuation.EvaluationDetail]
 	storage storage.Storage
 	logger  *zap.Logger
 }
@@ -28,20 +28,20 @@ func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logg
 	return &ReportHandler{
 		logger:  l,
 		storage: st,
-		coord: report.New(report.Spec[model.EvaluationDetail]{
+		coord: report.New(report.Spec[valuation.EvaluationDetail]{
 			Logger:    l,
 			Storage:   st,
 			KeyPrefix: "reports/evaluation_report_",
 			Loader:    evalRepo.GetEvaluation,
-			PathOf:    func(d *model.EvaluationDetail) string { return d.ReportPdfPath },
+			PathOf:    func(d *valuation.EvaluationDetail) string { return d.ReportPdfPath },
 			Writer:    evalRepo.UpdateEvaluationReportPath,
-			Prepare: func(ctx context.Context, d *model.EvaluationDetail) {
+			Prepare: func(ctx context.Context, d *valuation.EvaluationDetail) {
 				// 单一装配点：KTimeAdjusted + 维度分（建议为评估时点锁定值，ADR-0004）
 				service.RebuildDerivedFromDetail(d)
 				service.EnsureSuggestions(ctx, d, resolver)
 			},
-			Render: func(_ context.Context, d *model.EvaluationDetail) ([]byte, error) {
-				// 维度分为 typed 切片直传（顺序契约在 model.DimensionLabels，不再经 label 拼接）
+			Render: func(_ context.Context, d *valuation.EvaluationDetail) ([]byte, error) {
+				// 维度分为 typed 切片直传（顺序契约在 valuation.DimensionLabels，不再经 label 拼接）
 				return gen.GenerateReport(d, d.DimensionScores, d.Suggestions)
 			},
 		}),

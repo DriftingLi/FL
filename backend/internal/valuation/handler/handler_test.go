@@ -22,8 +22,8 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/dictcrud"
-	"forklift-training/internal/valuation/model"
 	"forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 )
@@ -283,7 +283,7 @@ func (m *memDictStore) Delete(_ context.Context, d dictcrud.Descriptor, id int64
 type memEvalStore struct {
 	mu      sync.Mutex
 	nextID  int64
-	records map[int64]model.EvaluationDetail
+	records map[int64]valuation.EvaluationDetail
 	// lastFilter 最近一次 List/Count 收到的过滤参数（handler 透传断言用）。
 	lastFilter evalListFilter
 }
@@ -296,7 +296,7 @@ type evalListFilter struct {
 }
 
 func newMemEvalStore() *memEvalStore {
-	return &memEvalStore{nextID: 1, records: map[int64]model.EvaluationDetail{}}
+	return &memEvalStore{nextID: 1, records: map[int64]valuation.EvaluationDetail{}}
 }
 
 func (m *memEvalStore) CreateEvaluation(_ context.Context, p *repository.CreateEvaluationParams) (int64, error) {
@@ -304,7 +304,7 @@ func (m *memEvalStore) CreateEvaluation(_ context.Context, p *repository.CreateE
 	defer m.mu.Unlock()
 	id := m.nextID
 	m.nextID++
-	m.records[id] = model.EvaluationDetail{
+	m.records[id] = valuation.EvaluationDetail{
 		ID: id, Brand: p.Brand, VehicleType: p.VehicleType, Series: p.Series, Tonnage: p.Tonnage,
 		ConfigType: p.ConfigType, MastType: p.MastType, MastHeightMM: p.MastHeightMM,
 		FactoryYear: p.FactoryYear, SaleYear: p.SaleYear, UsageHours: p.UsageHours,
@@ -319,7 +319,7 @@ func (m *memEvalStore) CreateEvaluation(_ context.Context, p *repository.CreateE
 	return id, nil
 }
 
-func (m *memEvalStore) GetEvaluation(_ context.Context, id int64) (*model.EvaluationDetail, error) {
+func (m *memEvalStore) GetEvaluation(_ context.Context, id int64) (*valuation.EvaluationDetail, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	d, ok := m.records[id]
@@ -329,7 +329,7 @@ func (m *memEvalStore) GetEvaluation(_ context.Context, id int64) (*model.Evalua
 	return &d, nil
 }
 
-func (m *memEvalStore) GetEvaluationByUser(ctx context.Context, id int64, _ int) (*model.EvaluationDetail, error) {
+func (m *memEvalStore) GetEvaluationByUser(ctx context.Context, id int64, _ int) (*valuation.EvaluationDetail, error) {
 	return m.GetEvaluation(ctx, id)
 }
 
@@ -340,11 +340,11 @@ func (m *memEvalStore) CountEvaluations(_ context.Context, brand, vehicleType st
 	return len(m.records), nil
 }
 
-func (m *memEvalStore) ListEvaluations(_ context.Context, brand, vehicleType string, userID, limit, offset int) ([]model.EvaluationDetail, error) {
+func (m *memEvalStore) ListEvaluations(_ context.Context, brand, vehicleType string, userID, limit, offset int) ([]valuation.EvaluationDetail, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastFilter = evalListFilter{Brand: brand, VehicleType: vehicleType, UserID: userID}
-	out := make([]model.EvaluationDetail, 0, len(m.records))
+	out := make([]valuation.EvaluationDetail, 0, len(m.records))
 	for _, d := range m.records {
 		out = append(out, d)
 	}
@@ -367,16 +367,16 @@ func (m *memEvalStore) UpdateEvaluationReportPath(_ context.Context, id int64, p
 type memBatteryStore struct {
 	mu      sync.Mutex
 	nextID  int64
-	records map[int64]*model.BatteryEvaluation
+	records map[int64]*valuation.BatteryEvaluation
 }
 
 func (m *memBatteryStore) init() {
 	if m.records == nil {
-		m.records = map[int64]*model.BatteryEvaluation{}
+		m.records = map[int64]*valuation.BatteryEvaluation{}
 	}
 }
 
-func (m *memBatteryStore) CreateEvaluation(_ context.Context, eval *model.BatteryEvaluation, _ []model.CycleFeature, _ int) (*model.BatteryEvaluation, error) {
+func (m *memBatteryStore) CreateEvaluation(_ context.Context, eval *valuation.BatteryEvaluation, _ []valuation.CycleFeature, _ int) (*valuation.BatteryEvaluation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.init()
@@ -387,7 +387,7 @@ func (m *memBatteryStore) CreateEvaluation(_ context.Context, eval *model.Batter
 	return &cp, nil
 }
 
-func (m *memBatteryStore) GetEvaluation(_ context.Context, id int64) (*model.BatteryEvaluation, error) {
+func (m *memBatteryStore) GetEvaluation(_ context.Context, id int64) (*valuation.BatteryEvaluation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.init()
@@ -398,17 +398,17 @@ func (m *memBatteryStore) GetEvaluation(_ context.Context, id int64) (*model.Bat
 	return nil, pgx.ErrNoRows
 }
 
-func (m *memBatteryStore) GetEvaluationByUser(ctx context.Context, id int64, _ int) (*model.BatteryEvaluation, error) {
+func (m *memBatteryStore) GetEvaluationByUser(ctx context.Context, id int64, _ int) (*valuation.BatteryEvaluation, error) {
 	return m.GetEvaluation(ctx, id)
 }
 
-func (m *memBatteryStore) ListEvaluations(_ context.Context, _ string, _ int, _, _ int) ([]model.BatteryEvaluationSummary, int, error) {
+func (m *memBatteryStore) ListEvaluations(_ context.Context, _ string, _ int, _, _ int) ([]valuation.BatteryEvaluationSummary, int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.init()
-	var items []model.BatteryEvaluationSummary
+	var items []valuation.BatteryEvaluationSummary
 	for _, r := range m.records {
-		items = append(items, model.BatteryEvaluationSummary{
+		items = append(items, valuation.BatteryEvaluationSummary{
 			ID: r.ID, BatteryType: r.BatteryType, BatteryModel: r.BatteryModel,
 			CycleCount: r.CycleCount, RulCycles: r.RulCycles, SohPercent: r.SohPercent,
 			Confidence: r.Confidence, CreatedAt: r.CreatedAt,
@@ -429,7 +429,7 @@ func (m *memBatteryStore) UpdateReportPath(_ context.Context, id int64, path str
 
 type memReportGenerator struct{}
 
-func (m *memReportGenerator) GenerateReport(*model.EvaluationDetail, []model.DimensionScore, []string) ([]byte, error) {
+func (m *memReportGenerator) GenerateReport(*valuation.EvaluationDetail, []valuation.DimensionScore, []string) ([]byte, error) {
 	return []byte("fake-pdf"), nil
 }
 
@@ -688,8 +688,8 @@ func TestEvaluationFactuality_LockedSuggestionsAndLambda(t *testing.T) {
 }
 
 // baseEvalRequest 评估创建请求（与冒烟测试共用）。
-func baseEvalRequest() model.EvaluationRequest {
-	return model.EvaluationRequest{
+func baseEvalRequest() valuation.EvaluationRequest {
+	return valuation.EvaluationRequest{
 		Brand: "合力", VehicleType: "电动叉车", Series: "K系列",
 		Tonnage: 3, ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000,
 		FactoryYear: 2019, SaleYear: 2024, UsageHours: 1000,

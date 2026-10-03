@@ -55,7 +55,7 @@ func TestValuationEndpointTopLevelKeys(t *testing.T) {
 		assertTopLevelKeys(t, data, "total", "page", "page_size", "list")
 	})
 
-	// POST /api/valuation/evaluations —— data=model.EvaluationResponse（33 键）
+	// POST /api/valuation/evaluations —— data=valuation.EvaluationResponse（33 键）
 	t.Run("evaluations_create", func(t *testing.T) {
 		r, _, _ := newTestValuationEngine(t)
 		w := performRequest(r, http.MethodPost, "/api/valuation/evaluations", baseEvalRequest())
@@ -63,7 +63,7 @@ func TestValuationEndpointTopLevelKeys(t *testing.T) {
 			t.Fatalf("状态码 = %d: %s", w.Code, w.Body.String())
 		}
 		id := int64(mustDecodeData(t, w)["id"].(float64))
-		// GET /api/valuation/evaluations/:id —— data=model.EvaluationDetail（35 键，比创建多 created_at/updated_at/report_pdf_path）
+		// GET /api/valuation/evaluations/:id —— data=valuation.EvaluationDetail（35 键，比创建多 created_at/updated_at/report_pdf_path）
 		w = performRequestWithAuth(r, http.MethodGet, fmt.Sprintf("/api/valuation/evaluations/%d", id), nil, authHeader(t, 1))
 		if w.Code != http.StatusOK {
 			t.Fatalf("详情状态码 = %d: %s", w.Code, w.Body.String())
@@ -111,7 +111,7 @@ func TestValuationEndpointTopLevelKeys(t *testing.T) {
 		assertTopLevelKeys(t, data, "evaluation_id", "pdf_url", "file_size")
 	})
 
-	// GET /api/valuation/battery/evaluations —— data=model.ListBatteryResponse
+	// GET /api/valuation/battery/evaluations —— data=valuation.ListBatteryResponse
 	t.Run("battery_list", func(t *testing.T) {
 		r, _, _, _ := newTestValuationEngineWithStorage(t, newMemStorage())
 		_ = createBatteryForReport(t, r, authHeader(t, 1))

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // 计数 PDF 中的页面对象 /Type /Page (排除 /Type /Pages 父节点)
@@ -58,8 +58,8 @@ func containAny(haystack string, expected ...string) bool {
 
 // sampleDetail 构造电动叉车样例 EvaluationDetail(贴近设计稿示例)
 // 各 K 系数与维度评分一一对应,保证测试数据自洽
-func sampleDetail() *model.EvaluationDetail {
-	return &model.EvaluationDetail{
+func sampleDetail() *valuation.EvaluationDetail {
+	return &valuation.EvaluationDetail{
 		ID:                         1,
 		Brand:                      "合力 (HELI)",
 		VehicleType:                "电动叉车",
@@ -91,8 +91,8 @@ func sampleDetail() *model.EvaluationDetail {
 }
 
 // sampleDimensionScores 5 维评分(与雷达图顺序一致)
-func sampleDimensionScores() []model.DimensionScore {
-	return []model.DimensionScore{
+func sampleDimensionScores() []valuation.DimensionScore {
+	return []valuation.DimensionScore{
 		{Label: "出厂时间", Value: 0.74},
 		{Label: "使用强度", Value: 0.90},
 		{Label: "品牌价值", Value: 1.00},
@@ -173,7 +173,7 @@ func TestGenerateReport(t *testing.T) {
 func TestGenerateReportCombustion(t *testing.T) {
 	gen := NewGenerator()
 
-	detail := &model.EvaluationDetail{
+	detail := &valuation.EvaluationDetail{
 		ID:                         2002,
 		Brand:                      "三菱 MITSUBISHI",
 		VehicleType:                "内燃叉车",
@@ -202,12 +202,12 @@ func TestGenerateReportCombustion(t *testing.T) {
 		ConfidenceLow:              4.28,
 		ConfidenceHigh:             4.73,
 	}
-	dimScores := []model.DimensionScore{
-		{Label: model.DimensionLabelTime, Value: 0.61},
-		{Label: model.DimensionLabelHours, Value: 0.90},
-		{Label: model.DimensionLabelBrand, Value: 1.00},
-		{Label: model.DimensionLabelCondition, Value: 0.75},
-		{Label: model.DimensionLabelMarket, Value: 0.98},
+	dimScores := []valuation.DimensionScore{
+		{Label: valuation.DimensionLabelTime, Value: 0.61},
+		{Label: valuation.DimensionLabelHours, Value: 0.90},
+		{Label: valuation.DimensionLabelBrand, Value: 1.00},
+		{Label: valuation.DimensionLabelCondition, Value: 0.75},
+		{Label: valuation.DimensionLabelMarket, Value: 0.98},
 	}
 	suggestions := []string{
 		"车况一般,多个维度有折损,建议折价处理",
@@ -230,7 +230,7 @@ func TestGenerateReportCombustion(t *testing.T) {
 func TestGenerateReportEmptySuggestions(t *testing.T) {
 	gen := NewGenerator()
 
-	detail := &model.EvaluationDetail{
+	detail := &valuation.EvaluationDetail{
 		ID:                         3,
 		Brand:                      "永恒力 JUNGHEINRICH",
 		VehicleType:                "电动叉车",
@@ -259,12 +259,12 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 		ConfidenceLow:              9.32,
 		ConfidenceHigh:             11.40,
 	}
-	dimScores := []model.DimensionScore{
-		{Label: model.DimensionLabelTime, Value: 0.85},
-		{Label: model.DimensionLabelHours, Value: 1.10},
-		{Label: model.DimensionLabelBrand, Value: 1.10},
-		{Label: model.DimensionLabelCondition, Value: 1.10},
-		{Label: model.DimensionLabelMarket, Value: 1.00},
+	dimScores := []valuation.DimensionScore{
+		{Label: valuation.DimensionLabelTime, Value: 0.85},
+		{Label: valuation.DimensionLabelHours, Value: 1.10},
+		{Label: valuation.DimensionLabelBrand, Value: 1.10},
+		{Label: valuation.DimensionLabelCondition, Value: 1.10},
+		{Label: valuation.DimensionLabelMarket, Value: 1.00},
 	}
 
 	data, err := gen.GenerateReport(detail, dimScores, nil)

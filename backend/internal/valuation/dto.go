@@ -1,6 +1,8 @@
-// Package model 定义业务层 DTO（数据传输对象）
-// 与 HTTP 请求/响应、数据库实体解耦，便于前后端对接与单元测试
-package model
+// Package valuation 残值评估域（/api/valuation/*：字典 / 评估 / 电池 RUL / 报告 / 平行 auth / 管理端 CRUD）。
+//
+// 本包是 internal/<域> 形态（ADR-0070 决策 3）：HTTP 出口住在 handler*.go，域实现与 DTO 同包。
+// 这里的 DTO 与 HTTP 请求/响应、数据库实体解耦，便于前后端对接与单元测试。
+package valuation
 
 // PowerType 动力类型枚举（从 vehicle_types.power_type 派生）
 type PowerType string

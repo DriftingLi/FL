@@ -21288,7 +21288,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.ListBatteryResponse"
+                                            "$ref": "#/definitions/valuation.ListBatteryResponse"
                                         }
                                     }
                                 }
@@ -21334,7 +21334,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.CreateBatteryRequest"
+                            "$ref": "#/definitions/valuation.CreateBatteryRequest"
                         }
                     }
                 ],
@@ -21350,7 +21350,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.CreateBatteryResponse"
+                                            "$ref": "#/definitions/valuation.CreateBatteryResponse"
                                         }
                                     }
                                 }
@@ -21411,7 +21411,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.BatteryEvaluation"
+                                            "$ref": "#/definitions/valuation.BatteryEvaluation"
                                         }
                                     }
                                 }
@@ -22728,7 +22728,7 @@
                                                 "list": {
                                                     "type": "array",
                                                     "items": {
-                                                        "$ref": "#/definitions/model.EvaluationDetail"
+                                                        "$ref": "#/definitions/valuation.EvaluationDetail"
                                                     }
                                                 },
                                                 "page": {
@@ -22780,7 +22780,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.EvaluationRequest"
+                            "$ref": "#/definitions/valuation.EvaluationRequest"
                         }
                     }
                 ],
@@ -22796,7 +22796,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.EvaluationResponse"
+                                            "$ref": "#/definitions/valuation.EvaluationResponse"
                                         }
                                     }
                                 }
@@ -22903,7 +22903,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.EvaluationDetail"
+                                            "$ref": "#/definitions/valuation.EvaluationDetail"
                                         }
                                     }
                                 }
@@ -26744,598 +26744,6 @@
                 }
             }
         },
-        "model.BatteryEvaluation": {
-            "type": "object",
-            "properties": {
-                "battery_model": {
-                    "type": "string"
-                },
-                "battery_type": {
-                    "$ref": "#/definitions/model.BatteryType"
-                },
-                "confidence": {
-                    "type": "number"
-                },
-                "confidence_high": {
-                    "type": "integer"
-                },
-                "confidence_low": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "cycle_count": {
-                    "type": "integer"
-                },
-                "cycle_features": {
-                    "description": "详情时填充",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.CycleFeature"
-                    },
-                    "x-optional": true
-                },
-                "feature_importance": {
-                    "description": "omitempty：键可能整个不存在",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.FeatureImportance"
-                    },
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "report_pdf_path": {
-                    "type": "string"
-                },
-                "rul_cycles": {
-                    "type": "integer"
-                },
-                "soh_percent": {
-                    "type": "number"
-                },
-                "suggestions": {
-                    "description": "评估建议（基于 SOH/RUL/电池类型生成）",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-optional": true
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.BatteryEvaluationSummary": {
-            "type": "object",
-            "properties": {
-                "battery_model": {
-                    "type": "string"
-                },
-                "battery_type": {
-                    "$ref": "#/definitions/model.BatteryType"
-                },
-                "confidence": {
-                    "type": "number"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "cycle_count": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "rul_cycles": {
-                    "type": "integer"
-                },
-                "soh_percent": {
-                    "type": "number"
-                }
-            }
-        },
-        "model.BatteryType": {
-            "type": "string",
-            "enum": [
-                "lfp",
-                "ncm",
-                "other"
-            ],
-            "x-enum-varnames": [
-                "BatteryTypeLFP",
-                "BatteryTypeNCM",
-                "BatteryTypeOther"
-            ]
-        },
-        "model.CreateBatteryRequest": {
-            "type": "object",
-            "required": [
-                "battery_type",
-                "cycles"
-            ],
-            "properties": {
-                "battery_model": {
-                    "description": "BatteryModel 电池型号（可选）",
-                    "type": "string"
-                },
-                "battery_type": {
-                    "description": "BatteryType 电池类型",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.BatteryType"
-                        }
-                    ]
-                },
-                "cycles": {
-                    "description": "Cycles 充放电循环数据，至少 10 条",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.CycleData"
-                    }
-                }
-            }
-        },
-        "model.CreateBatteryResponse": {
-            "type": "object",
-            "properties": {
-                "battery_type": {
-                    "$ref": "#/definitions/model.BatteryType"
-                },
-                "confidence": {
-                    "type": "number"
-                },
-                "confidence_high": {
-                    "type": "integer"
-                },
-                "confidence_low": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "cycle_count": {
-                    "type": "integer"
-                },
-                "evaluation_id": {
-                    "type": "integer"
-                },
-                "rul_cycles": {
-                    "type": "integer"
-                },
-                "soh_percent": {
-                    "type": "number"
-                },
-                "suggestions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "model.CycleData": {
-            "type": "object",
-            "required": [
-                "capacity",
-                "current_series",
-                "cycle_index",
-                "voltage_series"
-            ],
-            "properties": {
-                "capacity": {
-                    "description": "Capacity 本次循环放电容量（Ah）",
-                    "type": "number"
-                },
-                "current_series": {
-                    "description": "CurrentSeries 充电阶段电流时序（A），长度应与 VoltageSeries 一致",
-                    "type": "array",
-                    "items": {
-                        "type": "number"
-                    }
-                },
-                "cycle_index": {
-                    "description": "CycleIndex 循环序号（从 1 开始）",
-                    "type": "integer"
-                },
-                "voltage_series": {
-                    "description": "VoltageSeries 充电阶段电压时序（V），长度应与 CurrentSeries 一致",
-                    "type": "array",
-                    "items": {
-                        "type": "number"
-                    }
-                }
-            }
-        },
-        "model.CycleFeature": {
-            "type": "object",
-            "properties": {
-                "cycle_index": {
-                    "type": "integer"
-                },
-                "evaluation_id": {
-                    "type": "integer"
-                },
-                "feature_vector": {
-                    "type": "array",
-                    "items": {
-                        "type": "number"
-                    }
-                },
-                "id": {
-                    "description": "omitempty：键可能整个不存在",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "raw_stats": {
-                    "$ref": "#/definitions/model.RawStats"
-                },
-                "soh_at_cycle": {
-                    "type": "number"
-                }
-            }
-        },
-        "model.DimensionScore": {
-            "type": "object",
-            "properties": {
-                "label": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "number"
-                }
-            }
-        },
-        "model.EvaluationDetail": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "description": "输入字段（与 EvaluationRequest 一致）",
-                    "type": "string"
-                },
-                "city": {
-                    "type": "string"
-                },
-                "condition_rating": {
-                    "type": "string"
-                },
-                "confidence_high": {
-                    "type": "number"
-                },
-                "confidence_low": {
-                    "type": "number"
-                },
-                "config_type": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "decay_anchor": {
-                    "description": "未来价值曲线锚点（ADR-0012 §8，评估时点锁定）",
-                    "type": "number"
-                },
-                "dimension_scores": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.DimensionScore"
-                    }
-                },
-                "estimated_value": {
-                    "type": "number"
-                },
-                "factory_year": {
-                    "type": "integer"
-                },
-                "has_license_plate": {
-                    "type": "boolean"
-                },
-                "has_maintenance_records": {
-                    "type": "boolean"
-                },
-                "has_registration_certificate": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "description": "主键与时间戳",
-                    "type": "integer"
-                },
-                "k_brand": {
-                    "type": "number"
-                },
-                "k_condition": {
-                    "type": "number"
-                },
-                "k_hours": {
-                    "type": "number"
-                },
-                "k_market": {
-                    "type": "number"
-                },
-                "k_time": {
-                    "type": "number"
-                },
-                "k_time_adjusted": {
-                    "type": "number"
-                },
-                "lambda_combustion": {
-                    "type": "number"
-                },
-                "lambda_electric": {
-                    "type": "number"
-                },
-                "mast_height_mm": {
-                    "type": "integer"
-                },
-                "mast_type": {
-                    "type": "string"
-                },
-                "original_paint": {
-                    "type": "boolean"
-                },
-                "original_price": {
-                    "description": "结果字段",
-                    "type": "number"
-                },
-                "province": {
-                    "type": "string"
-                },
-                "report_pdf_path": {
-                    "description": "omitempty：键可能整个不存在",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "sale_year": {
-                    "type": "integer"
-                },
-                "series": {
-                    "type": "string"
-                },
-                "suggestions": {
-                    "description": "评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tonnage": {
-                    "type": "number"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "usage_hours": {
-                    "type": "integer"
-                },
-                "vehicle_type": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.EvaluationRequest": {
-            "type": "object",
-            "required": [
-                "brand",
-                "city",
-                "condition_rating",
-                "config_type",
-                "factory_year",
-                "mast_type",
-                "province",
-                "sale_year",
-                "series",
-                "tonnage",
-                "vehicle_type"
-            ],
-            "properties": {
-                "brand": {
-                    "description": "字典字段",
-                    "type": "string"
-                },
-                "city": {
-                    "description": "城市",
-                    "type": "string"
-                },
-                "condition_rating": {
-                    "description": "车况",
-                    "type": "string"
-                },
-                "config_type": {
-                    "description": "配置类型",
-                    "type": "string"
-                },
-                "factory_year": {
-                    "description": "使用信息",
-                    "type": "integer"
-                },
-                "has_license_plate": {
-                    "description": "证件状态",
-                    "type": "boolean"
-                },
-                "has_maintenance_records": {
-                    "description": "是否有维保记录",
-                    "type": "boolean"
-                },
-                "has_registration_certificate": {
-                    "description": "是否有登记证",
-                    "type": "boolean"
-                },
-                "mast_height_mm": {
-                    "description": "门架高度(mm)，0 表示\"无\"，由 Validate 校验",
-                    "type": "integer"
-                },
-                "mast_type": {
-                    "description": "门架类型",
-                    "type": "string"
-                },
-                "original_paint": {
-                    "description": "是否原厂漆",
-                    "type": "boolean"
-                },
-                "province": {
-                    "description": "区域信息",
-                    "type": "string"
-                },
-                "sale_year": {
-                    "description": "成交年份",
-                    "type": "integer"
-                },
-                "series": {
-                    "description": "系列",
-                    "type": "string"
-                },
-                "tonnage": {
-                    "description": "吨位",
-                    "type": "number"
-                },
-                "usage_hours": {
-                    "description": "累计使用小时数，0 表示新车，由 Validate 校验",
-                    "type": "integer"
-                },
-                "vehicle_type": {
-                    "description": "车型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.EvaluationResponse": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "description": "输入参数（与 EvaluationRequest / evaluations 表字段一致）",
-                    "type": "string"
-                },
-                "city": {
-                    "type": "string"
-                },
-                "condition_rating": {
-                    "type": "string"
-                },
-                "confidence_high": {
-                    "type": "number"
-                },
-                "confidence_low": {
-                    "type": "number"
-                },
-                "config_type": {
-                    "type": "string"
-                },
-                "decay_anchor": {
-                    "description": "未来价值曲线锚点（ADR-0012 §8，评估时点锁定）",
-                    "type": "number"
-                },
-                "dimension_scores": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.DimensionScore"
-                    }
-                },
-                "estimated_value": {
-                    "type": "number"
-                },
-                "factory_year": {
-                    "type": "integer"
-                },
-                "has_license_plate": {
-                    "type": "boolean"
-                },
-                "has_maintenance_records": {
-                    "type": "boolean"
-                },
-                "has_registration_certificate": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "k_brand": {
-                    "type": "number"
-                },
-                "k_condition": {
-                    "type": "number"
-                },
-                "k_hours": {
-                    "type": "number"
-                },
-                "k_market": {
-                    "type": "number"
-                },
-                "k_time": {
-                    "type": "number"
-                },
-                "k_time_adjusted": {
-                    "type": "number"
-                },
-                "lambda_combustion": {
-                    "type": "number"
-                },
-                "lambda_electric": {
-                    "description": "本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）",
-                    "type": "number"
-                },
-                "mast_height_mm": {
-                    "type": "integer"
-                },
-                "mast_type": {
-                    "type": "string"
-                },
-                "original_paint": {
-                    "type": "boolean"
-                },
-                "original_price": {
-                    "description": "计算结果",
-                    "type": "number"
-                },
-                "province": {
-                    "type": "string"
-                },
-                "sale_year": {
-                    "type": "integer"
-                },
-                "series": {
-                    "type": "string"
-                },
-                "suggestions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tonnage": {
-                    "type": "number"
-                },
-                "usage_hours": {
-                    "type": "integer"
-                },
-                "vehicle_type": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.FeatureImportance": {
-            "type": "object",
-            "properties": {
-                "group": {
-                    "type": "string"
-                },
-                "index": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "normalized": {
-                    "description": "归一化到 0~1",
-                    "type": "number"
-                },
-                "weight": {
-                    "type": "number"
-                }
-            }
-        },
         "model.ForumAuthor": {
             "type": "object",
             "properties": {
@@ -27347,20 +26755,6 @@
                 },
                 "username": {
                     "type": "string"
-                }
-            }
-        },
-        "model.ListBatteryResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.BatteryEvaluationSummary"
-                    }
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
@@ -27414,42 +26808,6 @@
                 },
                 "updated_at": {
                     "type": "string"
-                }
-            }
-        },
-        "model.RawStats": {
-            "type": "object",
-            "properties": {
-                "capacity": {
-                    "type": "number"
-                },
-                "cc_duration": {
-                    "description": "恒流段采样点数",
-                    "type": "integer"
-                },
-                "current_mean": {
-                    "type": "number"
-                },
-                "current_std": {
-                    "type": "number"
-                },
-                "cv_duration": {
-                    "description": "恒压段采样点数",
-                    "type": "integer"
-                },
-                "ic_peak": {
-                    "description": "增量容量峰值",
-                    "type": "number"
-                },
-                "ic_peak_voltage": {
-                    "description": "峰值对应电压",
-                    "type": "number"
-                },
-                "voltage_mean": {
-                    "type": "number"
-                },
-                "voltage_std": {
-                    "type": "number"
                 }
             }
         },
@@ -29590,6 +28948,648 @@
                 },
                 "file_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "valuation.BatteryEvaluation": {
+            "type": "object",
+            "properties": {
+                "battery_model": {
+                    "type": "string"
+                },
+                "battery_type": {
+                    "$ref": "#/definitions/valuation.BatteryType"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "confidence_high": {
+                    "type": "integer"
+                },
+                "confidence_low": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "cycle_count": {
+                    "type": "integer"
+                },
+                "cycle_features": {
+                    "description": "详情时填充",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.CycleFeature"
+                    },
+                    "x-optional": true
+                },
+                "feature_importance": {
+                    "description": "omitempty：键可能整个不存在",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.FeatureImportance"
+                    },
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "report_pdf_path": {
+                    "type": "string"
+                },
+                "rul_cycles": {
+                    "type": "integer"
+                },
+                "soh_percent": {
+                    "type": "number"
+                },
+                "suggestions": {
+                    "description": "评估建议（基于 SOH/RUL/电池类型生成）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-optional": true
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.BatteryEvaluationSummary": {
+            "type": "object",
+            "properties": {
+                "battery_model": {
+                    "type": "string"
+                },
+                "battery_type": {
+                    "$ref": "#/definitions/valuation.BatteryType"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "cycle_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "rul_cycles": {
+                    "type": "integer"
+                },
+                "soh_percent": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.BatteryType": {
+            "type": "string",
+            "enum": [
+                "lfp",
+                "ncm",
+                "other"
+            ],
+            "x-enum-varnames": [
+                "BatteryTypeLFP",
+                "BatteryTypeNCM",
+                "BatteryTypeOther"
+            ]
+        },
+        "valuation.CreateBatteryRequest": {
+            "type": "object",
+            "required": [
+                "battery_type",
+                "cycles"
+            ],
+            "properties": {
+                "battery_model": {
+                    "description": "BatteryModel 电池型号（可选）",
+                    "type": "string"
+                },
+                "battery_type": {
+                    "description": "BatteryType 电池类型",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.BatteryType"
+                        }
+                    ]
+                },
+                "cycles": {
+                    "description": "Cycles 充放电循环数据，至少 10 条",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.CycleData"
+                    }
+                }
+            }
+        },
+        "valuation.CreateBatteryResponse": {
+            "type": "object",
+            "properties": {
+                "battery_type": {
+                    "$ref": "#/definitions/valuation.BatteryType"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "confidence_high": {
+                    "type": "integer"
+                },
+                "confidence_low": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "cycle_count": {
+                    "type": "integer"
+                },
+                "evaluation_id": {
+                    "type": "integer"
+                },
+                "rul_cycles": {
+                    "type": "integer"
+                },
+                "soh_percent": {
+                    "type": "number"
+                },
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "valuation.CycleData": {
+            "type": "object",
+            "required": [
+                "capacity",
+                "current_series",
+                "cycle_index",
+                "voltage_series"
+            ],
+            "properties": {
+                "capacity": {
+                    "description": "Capacity 本次循环放电容量（Ah）",
+                    "type": "number"
+                },
+                "current_series": {
+                    "description": "CurrentSeries 充电阶段电流时序（A），长度应与 VoltageSeries 一致",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "cycle_index": {
+                    "description": "CycleIndex 循环序号（从 1 开始）",
+                    "type": "integer"
+                },
+                "voltage_series": {
+                    "description": "VoltageSeries 充电阶段电压时序（V），长度应与 CurrentSeries 一致",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "valuation.CycleFeature": {
+            "type": "object",
+            "properties": {
+                "cycle_index": {
+                    "type": "integer"
+                },
+                "evaluation_id": {
+                    "type": "integer"
+                },
+                "feature_vector": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "id": {
+                    "description": "omitempty：键可能整个不存在",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "raw_stats": {
+                    "$ref": "#/definitions/valuation.RawStats"
+                },
+                "soh_at_cycle": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.DimensionScore": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.EvaluationDetail": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "description": "输入字段（与 EvaluationRequest 一致）",
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "condition_rating": {
+                    "type": "string"
+                },
+                "confidence_high": {
+                    "type": "number"
+                },
+                "confidence_low": {
+                    "type": "number"
+                },
+                "config_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "decay_anchor": {
+                    "description": "未来价值曲线锚点（ADR-0012 §8，评估时点锁定）",
+                    "type": "number"
+                },
+                "dimension_scores": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.DimensionScore"
+                    }
+                },
+                "estimated_value": {
+                    "type": "number"
+                },
+                "factory_year": {
+                    "type": "integer"
+                },
+                "has_license_plate": {
+                    "type": "boolean"
+                },
+                "has_maintenance_records": {
+                    "type": "boolean"
+                },
+                "has_registration_certificate": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "description": "主键与时间戳",
+                    "type": "integer"
+                },
+                "k_brand": {
+                    "type": "number"
+                },
+                "k_condition": {
+                    "type": "number"
+                },
+                "k_hours": {
+                    "type": "number"
+                },
+                "k_market": {
+                    "type": "number"
+                },
+                "k_time": {
+                    "type": "number"
+                },
+                "k_time_adjusted": {
+                    "type": "number"
+                },
+                "lambda_combustion": {
+                    "type": "number"
+                },
+                "lambda_electric": {
+                    "type": "number"
+                },
+                "mast_height_mm": {
+                    "type": "integer"
+                },
+                "mast_type": {
+                    "type": "string"
+                },
+                "original_paint": {
+                    "type": "boolean"
+                },
+                "original_price": {
+                    "description": "结果字段",
+                    "type": "number"
+                },
+                "province": {
+                    "type": "string"
+                },
+                "report_pdf_path": {
+                    "description": "omitempty：键可能整个不存在",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "sale_year": {
+                    "type": "integer"
+                },
+                "series": {
+                    "type": "string"
+                },
+                "suggestions": {
+                    "description": "评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "usage_hours": {
+                    "type": "integer"
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.EvaluationRequest": {
+            "type": "object",
+            "required": [
+                "brand",
+                "city",
+                "condition_rating",
+                "config_type",
+                "factory_year",
+                "mast_type",
+                "province",
+                "sale_year",
+                "series",
+                "tonnage",
+                "vehicle_type"
+            ],
+            "properties": {
+                "brand": {
+                    "description": "字典字段",
+                    "type": "string"
+                },
+                "city": {
+                    "description": "城市",
+                    "type": "string"
+                },
+                "condition_rating": {
+                    "description": "车况",
+                    "type": "string"
+                },
+                "config_type": {
+                    "description": "配置类型",
+                    "type": "string"
+                },
+                "factory_year": {
+                    "description": "使用信息",
+                    "type": "integer"
+                },
+                "has_license_plate": {
+                    "description": "证件状态",
+                    "type": "boolean"
+                },
+                "has_maintenance_records": {
+                    "description": "是否有维保记录",
+                    "type": "boolean"
+                },
+                "has_registration_certificate": {
+                    "description": "是否有登记证",
+                    "type": "boolean"
+                },
+                "mast_height_mm": {
+                    "description": "门架高度(mm)，0 表示\"无\"，由 Validate 校验",
+                    "type": "integer"
+                },
+                "mast_type": {
+                    "description": "门架类型",
+                    "type": "string"
+                },
+                "original_paint": {
+                    "description": "是否原厂漆",
+                    "type": "boolean"
+                },
+                "province": {
+                    "description": "区域信息",
+                    "type": "string"
+                },
+                "sale_year": {
+                    "description": "成交年份",
+                    "type": "integer"
+                },
+                "series": {
+                    "description": "系列",
+                    "type": "string"
+                },
+                "tonnage": {
+                    "description": "吨位",
+                    "type": "number"
+                },
+                "usage_hours": {
+                    "description": "累计使用小时数，0 表示新车，由 Validate 校验",
+                    "type": "integer"
+                },
+                "vehicle_type": {
+                    "description": "车型",
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.EvaluationResponse": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "description": "输入参数（与 EvaluationRequest / evaluations 表字段一致）",
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "condition_rating": {
+                    "type": "string"
+                },
+                "confidence_high": {
+                    "type": "number"
+                },
+                "confidence_low": {
+                    "type": "number"
+                },
+                "config_type": {
+                    "type": "string"
+                },
+                "decay_anchor": {
+                    "description": "未来价值曲线锚点（ADR-0012 §8，评估时点锁定）",
+                    "type": "number"
+                },
+                "dimension_scores": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.DimensionScore"
+                    }
+                },
+                "estimated_value": {
+                    "type": "number"
+                },
+                "factory_year": {
+                    "type": "integer"
+                },
+                "has_license_plate": {
+                    "type": "boolean"
+                },
+                "has_maintenance_records": {
+                    "type": "boolean"
+                },
+                "has_registration_certificate": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "k_brand": {
+                    "type": "number"
+                },
+                "k_condition": {
+                    "type": "number"
+                },
+                "k_hours": {
+                    "type": "number"
+                },
+                "k_market": {
+                    "type": "number"
+                },
+                "k_time": {
+                    "type": "number"
+                },
+                "k_time_adjusted": {
+                    "type": "number"
+                },
+                "lambda_combustion": {
+                    "type": "number"
+                },
+                "lambda_electric": {
+                    "description": "本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）",
+                    "type": "number"
+                },
+                "mast_height_mm": {
+                    "type": "integer"
+                },
+                "mast_type": {
+                    "type": "string"
+                },
+                "original_paint": {
+                    "type": "boolean"
+                },
+                "original_price": {
+                    "description": "计算结果",
+                    "type": "number"
+                },
+                "province": {
+                    "type": "string"
+                },
+                "sale_year": {
+                    "type": "integer"
+                },
+                "series": {
+                    "type": "string"
+                },
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hours": {
+                    "type": "integer"
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.FeatureImportance": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "type": "string"
+                },
+                "index": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "normalized": {
+                    "description": "归一化到 0~1",
+                    "type": "number"
+                },
+                "weight": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.ListBatteryResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.BatteryEvaluationSummary"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "valuation.RawStats": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "type": "number"
+                },
+                "cc_duration": {
+                    "description": "恒流段采样点数",
+                    "type": "integer"
+                },
+                "current_mean": {
+                    "type": "number"
+                },
+                "current_std": {
+                    "type": "number"
+                },
+                "cv_duration": {
+                    "description": "恒压段采样点数",
+                    "type": "integer"
+                },
+                "ic_peak": {
+                    "description": "增量容量峰值",
+                    "type": "number"
+                },
+                "ic_peak_voltage": {
+                    "description": "峰值对应电压",
+                    "type": "number"
+                },
+                "voltage_mean": {
+                    "type": "number"
+                },
+                "voltage_std": {
+                    "type": "number"
                 }
             }
         },

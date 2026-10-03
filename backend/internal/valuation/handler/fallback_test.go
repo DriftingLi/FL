@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -46,8 +46,8 @@ func TestEvaluationDetailKeepsLockedSuggestions(t *testing.T) {
 // 高置信度记录不触发「特征波动」稳定性提示（与预测口径一致）。
 func TestBatteryDetailFillsEmptySuggestions(t *testing.T) {
 	r, _, _, batteryStore := newTestValuationEngineWithStorage(t, nil)
-	if _, err := batteryStore.CreateEvaluation(context.TODO(), &model.BatteryEvaluation{
-		ID: 1, BatteryType: model.BatteryTypeLFP, SohPercent: 90,
+	if _, err := batteryStore.CreateEvaluation(context.TODO(), &valuation.BatteryEvaluation{
+		ID: 1, BatteryType: valuation.BatteryTypeLFP, SohPercent: 90,
 		RulCycles: 500, ConfidenceLow: 400, ConfidenceHigh: 600,
 		Confidence: 0.92, Suggestions: nil,
 	}, nil, 1); err != nil {
