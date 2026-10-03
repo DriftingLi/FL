@@ -44,7 +44,7 @@ type featuredResp struct {
 
 func TestForumFeaturedContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "feat_author", Phone: "13800000103", Username: "精选作者", Status: 1, CreatedAt: testutil.Now()}

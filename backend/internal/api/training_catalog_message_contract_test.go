@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // assertEnvelope 断言 HTTP 状态、信封 code 与**成功文案**（本文件的存在理由）。
@@ -188,6 +190,6 @@ func TestCatalogContract_PublicPositions(t *testing.T) {
 	if len(body.Positions) != 1 {
 		t.Fatalf("公开岗位列表应有 1 项: %+v", body.Positions)
 	}
-	assertDictKeys(t, body.Positions[0],
+	testutil.AssertDictKeys(t, body.Positions[0],
 		[]string{"code", "created_at", "description", "name", "position_id", "sort_order", "status"})
 }

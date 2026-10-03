@@ -37,7 +37,7 @@ type personalListResp struct {
 
 func TestForumPersonalListsContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	mkUser := func(account, phone, name string) model.HrwaiUser {

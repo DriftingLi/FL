@@ -1,7 +1,7 @@
 // Ticket #137（T2 修改账号）契约测试：
 // PUT /api/auth/account 行为锁定——无登录态被拒、验证码错误被拒、格式非法被拒、
 // 账号被占用被拒、成功后 account 变更且可用新账号+密码登录。
-package api
+package auth
 
 import (
 	"bytes"
@@ -15,10 +15,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
-	"forklift-training/internal/config"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -26,48 +24,28 @@ import (
 )
 
 // newAccountChangeTestRouter 装配手机注册 + profile 绑定 + 修改账号路由（内存库 + 内存验证码存储）。
-func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChannel, *gorm.DB) {
+func newAccountChangeTestRouter(t *testing.T) (*gin.Engine, *codeAuthStoreN, *codeAuthChannelN, *gorm.DB) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
-	store := newMemCodeStore()
-	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	sess := security.NewSession("test-secret", 2*time.Hour, security.CookieConfig{Name: "hrwai_token", Domain: "example.com"})
+	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	store := newCodeAuthStoreN()
+	codeSvc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	captchaSvc := captcha.NewService(store)
 
-	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
-	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
-
-	// 补 JWT 过期默认值（同 config.Load 的 2h/7d）：config.Config 字面量不会走 Load 的默认值，
-	// 缺了它 SessionFromConfig 签出的 token 立即过期（ExpiresAt = now），域包服务的签发就全成 401。
-	cfg := &config.Config{
-		JWTSecretKey:          "test-secret",
-		JWTExpiresHours:       2,
-		JWTRefreshExpiresDays: 7,
-		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
-	}
-
-	deps := &Deps{
-		Cfg:     cfg,
-		DB:      db,
-		Logger:  zap.NewNop(),
-		Session: security.SessionFromConfig(cfg),
-		AuthSvc: authSvc,
-		CodeSvc: codeSvc,
-		EmailCh: emailCh,
-		PhoneCh: phoneCh,
-	}
+	phoneCh := &codeAuthChannelN{column: "phone", keyPref: "phone_code", noun: "手机号"}
+	emailCh := &codeAuthChannelN{column: "email", keyPref: "email_code", noun: "邮箱"}
 
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	// /auth/login（新账号+密码登录断言用）
-	// P2 波 3a：/api/auth 的登录面由域包注册（handler 已包私有）；传 deps.Session 让服务内
-	// 那份会话与注入的中间件同对象（否则吊销标记写不到同一条链上）。
-	auth.RegisterRoutes(api, deps.Session, authSvc, nil, nil, nil, zap.NewNop())
-	auth.RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh, captchaSvc, false)
-	auth.RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh, captchaSvc, false)
-	auth.RegisterProfileBindRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	// /auth/login（新账号+密码登录断言用）：注册函数把 sess 同步进服务，
+	// 保证服务内那份会话与注入的中间件同对象（否则吊销标记写不到同一条链上）。
+	RegisterRoutes(api, sess, authSvc, nil, nil, nil, zap.NewNop())
+	RegisterEmailAuthRoutes(api, sess, codeSvc, emailCh, captchaSvc, false)
+	RegisterPhoneAuthRoutes(api, sess, codeSvc, phoneCh, captchaSvc, false)
+	RegisterProfileBindRoutes(api, sess, codeSvc, emailCh, phoneCh)
 
 	return r, store, phoneCh, db
 }
@@ -83,7 +61,7 @@ func TestAuthAccountChange_NoAuthRejected(t *testing.T) {
 		{http.MethodPost, "/api/auth/account/send-code"},
 		{http.MethodPut, "/api/auth/account"},
 	} {
-		w := codeAuthRequest(r, tc.method, tc.path, map[string]interface{}{"account": "new_acct"}, "")
+		w := testutil.CodeAuthRequest(r, tc.method, tc.path, map[string]interface{}{"account": "new_acct"}, "")
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s 无登录态状态码 = %d, 期望 401", tc.method, tc.path, w.Code)
 		}
@@ -96,34 +74,34 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 	r, store, phoneCh, db := newAccountChangeTestRouter(t)
 
 	// 1. 手机验证码注册（绑定手机号 + 密码）
-	if w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	if w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": "13800138000", "purpose": "register"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	regCode := extractStoredCode(t, store, phoneCh, auth.CodePurposeRegister, "13800138000")
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
+	regCode := extractStoredCode(t, store, phoneCh, CodePurposeRegister, "13800138000")
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
 		map[string]interface{}{"phone": "13800138000", "code": regCode, "nickname": "改号学员", "password": "pass123456"}, "")
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	token := extractToken(t, w)
+	token := testutil.ExtractToken(t, w)
 
 	// 2. 发送修改账号验证码（发往已绑定手机号）
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token)
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, phoneCh, auth.CodePurposeAccountChange, "13800138000")
+	code := extractStoredCode(t, store, phoneCh, CodePurposeAccountChange, "13800138000")
 
 	// 3. 验证码错误被拒
-	w = codeAuthRequest(r, http.MethodPut, "/api/auth/account",
+	w = testutil.CodeAuthRequest(r, http.MethodPut, "/api/auth/account",
 		map[string]interface{}{"account": "new_acct_1", "code": "000000"}, token)
 	if w.Code != http.StatusBadRequest || !bytes.Contains(w.Body.Bytes(), []byte("验证码错误")) {
 		t.Errorf("验证码错误应被拒: 状态码=%d body=%s", w.Code, w.Body.String())
 	}
 
 	// 4. 格式非法被拒（<4 位）
-	w = codeAuthRequest(r, http.MethodPut, "/api/auth/account",
+	w = testutil.CodeAuthRequest(r, http.MethodPut, "/api/auth/account",
 		map[string]interface{}{"account": "ab", "code": code}, token)
 	if w.Code != http.StatusBadRequest || !bytes.Contains(w.Body.Bytes(), []byte("4-20 位")) {
 		t.Errorf("格式非法应被拒: 状态码=%d body=%s", w.Code, w.Body.String())
@@ -131,7 +109,7 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 
 	// 5. 账号已被占用被拒（另一账号持有 new_acct_1）
 	seedOccupiedAccount(t, db, "new_acct_1")
-	w = codeAuthRequest(r, http.MethodPut, "/api/auth/account",
+	w = testutil.CodeAuthRequest(r, http.MethodPut, "/api/auth/account",
 		map[string]interface{}{"account": "new_acct_1", "code": code}, token)
 	if w.Code != http.StatusBadRequest || !bytes.Contains(w.Body.Bytes(), []byte("已被占用")) {
 		t.Errorf("账号占用应被拒: 状态码=%d body=%s", w.Code, w.Body.String())
@@ -140,13 +118,13 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 	// 5b. 验证码校验成功后即失效（被占用分支已消费），成功分支需重新获取；
 	// 先清掉发送节流 key（真实场景等待 60s 即可）
 	_ = store.Del(context.Background(), cache.SafeKey("phone_code_send", "account_change", "13800138000"))
-	if w := codeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token); w.Code != http.StatusOK {
+	if w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token); w.Code != http.StatusOK {
 		t.Fatalf("重发 send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code = extractStoredCode(t, store, phoneCh, auth.CodePurposeAccountChange, "13800138000")
+	code = extractStoredCode(t, store, phoneCh, CodePurposeAccountChange, "13800138000")
 
 	// 6. 成功：账号变更为 new_acct_2
-	w = codeAuthRequest(r, http.MethodPut, "/api/auth/account",
+	w = testutil.CodeAuthRequest(r, http.MethodPut, "/api/auth/account",
 		map[string]interface{}{"account": "new_acct_2", "code": code}, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("修改账号状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -181,12 +159,12 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 	}
 
 	// 8. 新账号 + 密码可登录，原手机号登录仍可用
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/login",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/login",
 		map[string]interface{}{"username": "new_acct_2", "password": "pass123456", "role": "hrwai_user"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("新账号登录状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/login",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/login",
 		map[string]interface{}{"username": "13800138000", "password": "pass123456", "role": "hrwai_user"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("手机号登录状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -199,20 +177,20 @@ func TestAuthAccountChange_UnboundPhone(t *testing.T) {
 	r, store, _, _ := newAccountChangeTestRouter(t)
 
 	// 邮箱注册：phone 为 email_ 占位值
-	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
-	if w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
+	emailCh := &codeAuthChannelN{column: "email", keyPref: "email_code", noun: "邮箱"}
+	if w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "acct@example.com", "purpose": "register"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	regCode := extractStoredCode(t, store, emailCh, auth.CodePurposeRegister, "acct@example.com")
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
+	regCode := extractStoredCode(t, store, emailCh, CodePurposeRegister, "acct@example.com")
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
 		map[string]interface{}{"email": "acct@example.com", "code": regCode, "nickname": "邮箱学员", "password": "pass123456"}, "")
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	token := extractToken(t, w)
+	token := testutil.ExtractToken(t, w)
 
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token)
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token)
 	if w.Code != http.StatusBadRequest || !bytes.Contains(w.Body.Bytes(), []byte("请先绑定手机号")) {
 		t.Errorf("未绑定手机号应被拒: 状态码=%d body=%s", w.Code, w.Body.String())
 	}

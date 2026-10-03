@@ -39,7 +39,7 @@ func securitySession(cfg *config.Config) *security.Session {
 
 func failureTestRouter(t *testing.T) (*gin.Engine, *gorm.DB, *config.Config) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "readpath-failure-secret",

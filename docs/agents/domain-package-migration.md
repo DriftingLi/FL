@@ -75,7 +75,9 @@
 
 ## 4. 契约测试的归属
 
-**契约测试留在 `backend/internal/api`**，不随域搬。理由：它走 `newContractDeps` + `NewRouter` 的全量装配链，而 `backend/internal/api/router_test_helper_test.go` 已明文反对另起测试装配链（「装配链分叉 = 测试装配与生产装配各测各的」）。faq 批实测：`internal/api/faq_contract_test.go` 只引用包内脚手架与 `NewRouter`，不引用任何 `service.Faq*` 类型 ⇒ 迁移后只改一处注释。
+**走全量装配链（`newContractDeps` + `NewRouter`）的契约测试留在 `backend/internal/api`**，不随域搬。理由：`backend/internal/api/router_test_helper_test.go` 已明文反对另起测试装配链（「装配链分叉 = 测试装配与生产装配各测各的」），而装配面本身是 ADR-0070 决策 8 要保护的那份证据。faq 批实测：`internal/api/faq_contract_test.go` 只引用包内脚手架与 `NewRouter`，不引用任何 `service.Faq*` 类型 ⇒ 迁移后只改一处注释。
+
+**例外口径（#1445 审计收窄，见 `docs/design/1445-api-contract-test-audit.md`）**：只挂本域路由、引擎自建的单域用例不依赖装配根（不 import `internal/api`、不引用 `Deps` / `RouterDeps`），判为可随域下沉；下沉单元是**按域的依赖闭包**而非单文件（同域文件互相引用时一起走），跨文件共享的测试脚手架（引擎设置 / 请求构造 / 断言工具）落 `internal/testutil`。落地记录与分桶修正见该审计 §8。
 
 **域内单元测试与证据表随域搬**（`service.go` 的单测、`nonnilOutlets*` 表）。域包测试**不得**引用 `internal/core` 的测试脚手架——Go 的 in-package test 会成环；共享 runner 要提成 `internal/testutil` 的普通 `.go`（先例：`testutil/nonnil.go`、`testutil/codescan.go`）。
 

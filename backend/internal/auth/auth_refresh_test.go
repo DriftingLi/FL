@@ -1,6 +1,6 @@
 // POST /api/auth/refresh 双令牌刷新端点测试（ADR-0012）：
 // 轮换（旧 refresh 立即失效防重放）、黑名单拒绝、access 传入被拒、登出撤销 refresh。
-package api
+package auth
 
 import (
 	"bytes"
@@ -17,8 +17,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/security"
+	"forklift-training/internal/testutil"
 )
 
 // memBlacklist 内存黑名单存储（本测试专用；生产走 Redis）。
@@ -61,10 +61,10 @@ func (s *memBlacklist) PutIfAbsent(_ context.Context, key, _ string, _ time.Dura
 // P2 波 3a：handler 随域包收进 internal/auth（包私有），这里改走域包的注册入口；
 // refresh/logout 本身不带 JWT 中间件（无需 token），Service 只为承载会话实例（db 等依赖 nil）。
 func newRefreshRouter(sess *security.Session) *gin.Engine {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	r := gin.New()
-	svc := auth.NewService(nil, sess, nil, "", "", "", zap.NewNop())
-	auth.RegisterRoutes(r.Group("/api"), sess, svc, nil, nil, nil, zap.NewNop())
+	svc := NewService(nil, sess, nil, "", "", "", zap.NewNop())
+	RegisterRoutes(r.Group("/api"), sess, svc, nil, nil, nil, zap.NewNop())
 	return r
 }
 

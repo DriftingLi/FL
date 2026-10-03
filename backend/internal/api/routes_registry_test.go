@@ -16,7 +16,7 @@ import (
 //     反过来，重复登记会在 gin 注册期直接 panic（同一路径重复注册），由本测试触发暴露。
 func TestRouteRegistryCoverage(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	seen := map[string]bool{}
 	for _, reg := range routeRegistrars {
 		if reg.Domain == "" || reg.Register == nil {

@@ -60,7 +60,7 @@ func newDesignationEnv(t *testing.T) *designationEnv {
 // （仓库既有先例 internal/practicemode/session_cursor_concurrent_test.go 同样使用 NewFileDB）。
 func newDesignationEnvWithDB(t *testing.T, db *gorm.DB) *designationEnv {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},

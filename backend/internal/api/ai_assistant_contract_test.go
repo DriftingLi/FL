@@ -106,7 +106,7 @@ func aiArray(t *testing.T, raw json.RawMessage) []json.RawMessage {
 
 func TestAIAssistantEnvelopeContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	stu := model.HrwaiUser{Account: "ai_contract_stu", Phone: "13800002001", Username: "AI契约", Status: 1, CreatedAt: testutil.Now()}
@@ -127,13 +127,13 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 	}
 
 	// ---- GET /models（公开）：data=[]aiassistant.ModelOption ----
-	env := aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/models"))
+	env := aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/models"))
 	if arr := aiArray(t, env.Data); len(arr) != 0 {
 		t.Fatalf("未配置模型时 /models 的 data 应为空数组，got %s", string(env.Data))
 	}
 
 	// ---- GET /modes（公开）：data=aiassistant.AIAssistantModeModels（两个键在、值可 null） ----
-	env = aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/modes"))
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/modes"))
 	aiWantKeys(t, aiKeys(t, env.Data), "expert", "normal")
 	var modes map[string]json.RawMessage
 	if err := json.Unmarshal(env.Data, &modes); err != nil {
@@ -267,7 +267,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 // 本片给这 4 条此前**零注解**的路由补了完整注解块，故一并锁顶层 key。
 func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	stub := newDiagnosisStub(t)
 
@@ -275,7 +275,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	r := NewRouter(NewDeps(cfg, db, &fakeUploadStorage{}, zap.NewNop(), nil))
 
 	// ---- GET /diagnosis/brands：data=[]aiassistant.DiagnosisBrandOption ----
-	env := aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/brands"))
+	env := aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/brands"))
 	brands := aiArray(t, env.Data)
 	if len(brands) != 2 {
 		t.Fatalf("品牌列表应有 2 条，got %s", string(env.Data))
@@ -283,7 +283,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	aiWantKeys(t, aiKeys(t, brands[0]), "label", "value")
 
 	// ---- GET /diagnosis/models：data=[]string（标量数组，无根类型） ----
-	env = aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/models?brand=heli"))
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/models?brand=heli"))
 	var modelNames []string
 	if err := json.Unmarshal(env.Data, &modelNames); err != nil {
 		t.Fatalf("车型列表应为字符串数组: %v（%s）", err, string(env.Data))
@@ -293,7 +293,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	}
 
 	// ---- GET /diagnosis/fault-codes：data=aiassistant.DiagnosisFaultCodePage ----
-	env = aiOK(t, performRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/fault-codes?brand=heli&page=1&page_size=5"))
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/fault-codes?brand=heli&page=1&page_size=5"))
 	aiWantKeys(t, aiKeys(t, env.Data), "items", "total")
 	var page map[string]json.RawMessage
 	if err := json.Unmarshal(env.Data, &page); err != nil {
@@ -307,7 +307,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 		"id", "model_series", "page_num", "part_numbers", "safety_warning", "sop_steps", "source_file", "symptom")
 
 	// ---- GET /diagnosis/manual/{filepath}：原样字节流（**非信封**）----
-	rec := performRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/manual/doc/page_1.png")
+	rec := testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/manual/doc/page_1.png")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("手册代理期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -322,7 +322,7 @@ func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
 	}
 
 	// ---- 案例配图（fault_images 根 + 中文段，客户端按段 encodeURIComponent）----
-	rec = performRequest(r, http.MethodGet,
+	rec = testutil.PerformRequest(r, http.MethodGet,
 		"/api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/%E5%9B%BE_1.jpg")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("案例图代理期望 200, got %d: %s", rec.Code, rec.Body.String())

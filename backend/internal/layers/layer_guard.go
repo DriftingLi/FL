@@ -128,6 +128,12 @@ var ginHostAllowed = map[string]string{
 	"internal/logger":     "请求日志与 panic 恢复中间件，同属 HTTP 基建",
 	"pkg/httpx":           "HTTP 骨架本体（Endpoint / 渲染 / 解析出口），gin 的第一宿主",
 	"pkg/response":        "响应信封渲染，与骨架同一层",
+	// 测试脚手架：**不是生产面**，唯一的 gin 用途是「造一台测试引擎并把它切到 TestMode」
+	// （testutil/http.go 的 SetTestGinMode / CodeAuthRequest）。域包的契约测试需要与装配根测试
+	// 同一份引擎设置（两边都不得各写一遍 SetMode，那正是 #1366 收掉的数据竞态）；
+	// 而域包不得 import internal/api，故只能落在这里。判据本身的射程因此收窄一句：
+	// 非测试非 HTTP 面的**生产**文件里不得 import gin —— 测试脚手架不在论域内。
+	"internal/testutil": "测试脚手架（引擎设置 / 请求构造），零生产依赖，不进二进制",
 }
 
 // ginImported 报告一份源码是否 import 了 gin（白名单活性自测也用它）。
@@ -144,7 +150,7 @@ func ginImported(fset *token.FileSet, f SourceFile) (bool, error) {
 	return false, nil
 }
 
-// ginImportViolations 报告「非测试文件 import 了 gin，却不属于 HTTP 面」。
+// ginImportViolations 报告「非测试、非 HTTP 面、也非登记测试脚手架的**生产**文件 import 了 gin」。
 //
 // isHTTP 由调用方注入（测试里传 testutil.HTTPSurface）：本包不重复定义「什么算 HTTP 面」——
 // 判据改回双份正是本仓反复点名要避开的老病。今天 HTTP 面 = internal/api 整目录，

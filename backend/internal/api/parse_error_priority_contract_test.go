@@ -36,7 +36,7 @@ type parseErrFixture struct {
 
 func parseErrRouter(t *testing.T) (*gin.Engine, *parseErrFixture) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "parse-priority-secret",

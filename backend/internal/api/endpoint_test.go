@@ -13,10 +13,12 @@ import (
 
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
+
+	"forklift-training/internal/testutil"
 )
 
 func init() {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 }
 
 // doEndpoint 构造 gin 引擎并命中单条路由，返回响应。

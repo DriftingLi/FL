@@ -57,7 +57,7 @@ type poolLeakFixture struct {
 // newPoolLeakFixture 播种夹具。当前证件 = credA；学员选 credA。
 func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "scope-w14-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 

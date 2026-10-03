@@ -19,7 +19,7 @@ import (
 
 func TestForumImagesArrayNeverNull(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "images-wire-secret",

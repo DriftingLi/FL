@@ -29,7 +29,7 @@ import (
 
 func TestPracticeCredentialPartitionContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "practice-credential-contract"}
 	r := NewRouter(newContractDeps(t, db, cfg))

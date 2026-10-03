@@ -24,7 +24,7 @@ import (
 // newNotificationContractEnv 装配全路由 + 种子 admin，返回路由器、config 与 service 装配根。
 func newNotificationContractEnv(t *testing.T) (*gin.Engine, *config.Config, *Deps) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-notif-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
