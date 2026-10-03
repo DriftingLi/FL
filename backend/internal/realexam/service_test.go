@@ -33,7 +33,7 @@ func newRealExamSvc(t *testing.T) (*Service, *points.Service, *questionbank.Serv
 func itoa(n int) string { return strconv.Itoa(n) }
 
 // mustListQuestionTags 标签读面的测试取用（#1445 P2 波 3b-2：定义曾随域包搬去 internal/training，
-// 留驻侧按「就地内联」处理——域包的测试文件不能被 internal/service 反向 import）。
+// 留驻侧按「就地内联」处理——域包的测试文件不能被 internal/core 反向 import）。
 func mustListQuestionTags(t *testing.T, svc *training.Service, activeOnly, includeSourceTags bool, credentialID *int) []training.QuestionTagDict {
 	t.Helper()
 	tags, err := svc.ListQuestionTags(activeOnly, includeSourceTags, credentialID)

@@ -126,7 +126,7 @@ describe('A. 简历库列表：page_size=20 + 8 维筛选的形状', () => {
     expect(calls[1].params.region).toBe('杭州市');
   });
 
-  test('A3：8 维筛选逐维落到 query（键名与后端 api/recruit.go 的参数名逐字一致）', async () => {
+  test('A3：8 维筛选逐维落到 query（键名与后端 internal/recruit/handler.go 的参数名逐字一致）', async () => {
     const { mod, calls } = loadRecruit({ data: { items: [], total: 0 } });
     await mod.getRecruitResumesApi({
       region: '杭州市',
@@ -409,9 +409,9 @@ describe('D. 发起交换与我的交换申请', () => {
 });
 
 // E1 / E2：同一格键现在也挂在**驱动角标的简历卡面**（后端第十五波第④批 = PR #1298，
-// `recruit_service.go:75` 的 `RecruitResumeCard.CompanyDisabled`）。它是**另一个赋值点**：
-// 卡面填在 `fillContactStates`（`recruit_service.go:86`，赋值 `:106`；列表 `:225` 与详情
-// `:251` 共用这一处），明文位置那条在 `contact_service.go:215-218` —— 两处同键同判据
+// `internal/resume/projection.go:286` 的 `RecruitResumeCard.CompanyDisabled`）。它是**另一个赋值点**：
+// 卡面填在 `fillContactStates`（`internal/recruit/service.go:64`，赋值 `:84`；列表 `:203` 与详情
+// `:229` 共用这一处），明文位置那条在 `internal/core/contact_service.go:237` —— 两处同键同判据
 // （approved ∧ 企业不可用），但**不是同一段代码**。票面 #1267 的列表角标那半此前被这条契约
 // 卡住：卡面收不到这一维，列表页就只能显示一个说谎的「已授权」。
 describe('E. 简历卡面的可用性那一格（#1267 后半）', () => {

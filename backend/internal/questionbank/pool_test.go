@@ -86,7 +86,7 @@ func TestPoolCountConsistency(t *testing.T) {
 
 // TestQuestionPoolScopeCoversTagCount 题库池 scope 单点落到「标签计数」读路径（ADR-0050 决策 1）：
 // 带证件与不带证件两个分支同源——不带证件（全局池）同样排源标记题，不再有漂移窗口。
-// 3c-1 接缝拆分：原用例另一半「搜索题目分区」依赖留在 internal/service 的 SearchService，
+// 3c-1 接缝拆分：原用例另一半「搜索题目分区」依赖留在 internal/core 的 SearchService，
 // 随接缝搬去 service/question_pool_search_scope_test.go；域包这边只留不依赖 service 的标签计数。
 func TestQuestionPoolScopeCoversTagCount(t *testing.T) {
 	db := testutil.NewMemoryDB(t)

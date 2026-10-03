@@ -33,7 +33,7 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 		"training.RegisterRoutes":            "培训目录读面同样横跨学员/管理端（目录树、等级、标签、岗位、证件都是同一份），挂学员能力会误伤；能力位细化留待后续",
 		"search.RegisterRoutes":              "公开搜索端点（无 JWTAuth）",
 		"notification.RegisterRoutes":        "站内信按收件人鉴权（任何已登录角色都可能收到），不是资源域能力",
-		"aiassistant.RegisterAdminRoutes":    "AI 配置管理面：挂 internal/api/admin.go:39 的 /admin 组（组级 JWTAuth + CapabilityRequired(authz.CapAdminAccess)），函数体内不再重复守卫",
+		"aiassistant.RegisterAdminRoutes":    "AI 配置管理面：挂 internal/admin/handler.go:43 的 /admin 组（组级 JWTAuth + CapabilityRequired(authz.CapAdminAccess)），函数体内不再重复守卫",
 		"questioninteraction.RegisterRoutes": "题目评论/笔记/考点为学员面，但讲师与管理端审核读同一份；能力位细化留待后续",
 		"questionbank.RegisterRoutes":        "题库蓝图混合学员读写与管理端审核：管理端路由逐条挂能力守卫，学员侧继承组级 JWTAuth",
 		"note.RegisterRoutes":                "学员笔记：纯用户私有数据（读写一律以 user_id 收口，越权按「不存在」处理），门禁与既有题目笔记端点一致——只要求登录；同一资源的两条路径挂两套门才是真不一致（ADR-0055）",

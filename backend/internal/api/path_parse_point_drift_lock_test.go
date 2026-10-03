@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // allowedPathParseFuncs 是允许的那两处实现（都在 pkg/httpx）。加第三个名字等于把这件事重新分散。
@@ -274,31 +276,73 @@ func countQueryHelpers(t *testing.T, dir string) (named, prefixed, files int) {
 // 请把本行与 ADR 一起改小。
 const valuationPathParseDebt = 6
 
+// pathParseScopeDirs 扫描面 = 本包 + 所有「含 handler*.go 的响应包目录」（域包 HTTP 出口跟着 handler 走）。
+//
+// 为什么不再只扫本包：ADR-0070 把 HTTP 出口逐域搬进 internal/<域> 之后，internal/api 的非测试
+// 源文件从 30 掉到 27 —— 只盯一个目录的话，域包 handler 里长出本地解析助手时这条锁**看不见**
+// （静默失配），与「目录即射程」正好相反。扫描面因此扩到「哪里还有 handler，哪里就在射程内」，
+// 热源只有一处：testutil.ResponsePackages()（与两把 fact 锁共用同一份目录宇宙）。
+// 注意 ../valuation/handler 不在 ResponsePackages() 里（只有 valuation/model 与 valuation/repository），
+// 故下面那条债务分支仍单独扫它、不会与这里重复计数。
+func pathParseScopeDirs(t *testing.T) []string {
+	t.Helper()
+	dirs := []string{"."}
+	for _, p := range testutil.ResponsePackages(t) {
+		if p.Dir == "internal/api" {
+			continue
+		}
+		rel := ""
+		if strings.HasPrefix(p.Dir, "internal/") {
+			rel = filepath.Join("..", strings.TrimPrefix(p.Dir, "internal/"))
+		} else {
+			rel = filepath.Join("..", "..", filepath.FromSlash(p.Dir))
+		}
+		if m, _ := filepath.Glob(filepath.Join(rel, "handler*.go")); len(m) > 0 {
+			dirs = append(dirs, rel)
+		}
+	}
+	return dirs
+}
+
 // TestPathIntHasASingleParsePoint 锁本体：路径整型 id 的唯一宿主是 pkg/httpx 那两枚实现；
-// internal/api 与 valuation/handler 两侧各有一条「不许再长第二份」的断言。
+// 扫描面（本包 + 各域包的 handler*.go 所在目录）与 valuation/handler 各有一条「不许再长第二份」的断言。
 func TestPathIntHasASingleParsePoint(t *testing.T) {
 	t.Parallel()
-	sites, files := scanDir(t, ".")
+	dirs := pathParseScopeDirs(t)
 
-	// 空转判据：扫到的文件数远低于本包实际数量 ⇒ 目录或判据变了，不许当成「无违规」。
-	if files < 30 {
-		t.Fatalf("只扫到 %d 个源文件，说明目录或判据变了（本包实际有 50+ 个）⇒ 这条锁现在不构成保护", files)
+	// 逐目录收集：违规点与两类本地 helper 都按目录断言（域包各自零容忍）。
+	var sites []pathParseSite
+	totalFiles := 0
+	for _, dir := range dirs {
+		dirSites, files := scanDir(t, dir)
+		totalFiles += files
+		for i := range dirSites {
+			dirSites[i].file = filepath.Join(dir, dirSites[i].file)
+		}
+		sites = append(sites, dirSites...)
+		if named, prefixed, _ := countPathHelpers(t, dir); named != 0 || prefixed != 0 {
+			t.Fatalf("扫描面（%s）里又长出 %d 枚 pathInt* 本地实现（其中 %d 枚与 %s 同名）⇒ 解析点必须有唯一宿主："+
+				"两个包各一份就是第二处实现，改一处忘另一处就回来了", dir, prefixed, named, pathParseHome)
+		}
+		if named, prefixed, _ := countQueryHelpers(t, dir); named != 0 || prefixed != 0 {
+			t.Fatalf("扫描面（%s）里又长出 %d 枚查询侧解析 helper（其中 %d 枚与 httpx 的 QueryIntPtr 同名）⇒ "+
+				"解析出口必须有唯一宿主：域包自带 handler 后，本地再来一份就是第二处实现", dir, prefixed, named)
+		}
 	}
-	if named, prefixed, _ := countPathHelpers(t, "."); named != 0 || prefixed != 0 {
-		t.Fatalf("internal/api 里又长出 %d 枚 pathInt* 本地实现（其中 %d 枚与 %s 同名）⇒ 解析点必须有唯一宿主："+
-			"两个包各一份就是第二处实现，改一处忘另一处就回来了", prefixed, named, pathParseHome)
-	}
-	if named, prefixed, _ := countQueryHelpers(t, "."); named != 0 || prefixed != 0 {
-		t.Fatalf("internal/api 里又长出 %d 枚查询侧解析 helper（其中 %d 枚与 httpx 的 QueryIntPtr 同名）⇒ "+
-			"解析出口必须有唯一宿主：域包自带 handler 后，本地再来一份就是第二处实现", prefixed, named)
+
+	// 空转判据：射程跟着 HTTP 出口走，所以度量的是**目录数 + 源文件总数**（实测 26 个目录 / 145 个
+	// 源文件），不再是「单目录文件数」——拆包之后那个数下降是设计使然，拿它当阈值会把「射程跟着
+	// 出口扩大」误判成「射程塌了」。两个阈值取「远低于实测、又远离 0」的描述性下界。
+	if len(dirs) < 8 || totalFiles < 60 {
+		t.Fatalf("扫描面只覆盖 %d 个目录 / %d 个源文件（域包 HTTP 出口跟着 handler 走）⇒ 这条锁不再构成保护",
+			len(dirs), totalFiles)
 	}
 	if len(sites) > 0 {
-		t.Errorf("internal/api 里发现 %d 处自定义的路径整数解析点（ADR-0065 批⑤ 已清零，只能保持 0）：\n  %s\n"+
+		t.Errorf("扫描面（%s）里发现 %d 处自定义的路径整数解析点（ADR-0065 批⑤ 已清零，只能保持 0）：\n  %s\n"+
 			"⇒ 同一件「路径 id 不是正整数」的事实有了第二份实现：它少挡一档、换一套文案，"+
 			"且不会随解析点一起改。正解是调 httpx.PathInt / httpx.PathInt64 并把本端点那句文案传进去。",
-			len(sites), joinSites(sites))
+			strings.Join(dirs, " "), len(sites), joinSites(sites))
 	}
-
 	named, _, homeFiles := countPathHelpers(t, pathParseHome)
 	if homeFiles == 0 {
 		t.Fatalf("宿主包 %s 一个源文件都没扫到 ⇒ 上面那条「不许本地实现」的断言是空的", pathParseHome)
@@ -328,9 +372,9 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 		t.Errorf("valuation/handler 实测只剩 %d 处（登记常量是 %d）⇒ 有人先收了这批债，"+
 			"请同步把常量改小并在 ADR-0065 决策 1 末段记一笔", len(vSites), valuationPathParseDebt)
 	}
-	t.Logf("扫描面：internal/api %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / 路径 helper %d 枚 / 查询出口 %d 枚；"+
+	t.Logf("扫描面：%d 个目录 %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / 路径 helper %d 枚 / 查询出口 %d 枚；"+
 		"valuation/handler %d 个文件 / 债务 %d 处（登记 %d）",
-		files, len(sites), pathParseHome, homeFiles, named, qNamed, vFiles, len(vSites), valuationPathParseDebt)
+		len(dirs), totalFiles, len(sites), pathParseHome, homeFiles, named, qNamed, vFiles, len(vSites), valuationPathParseDebt)
 }
 
 // TestPathParseDetectorFiresOnPlantedSources 自证扫描器不是空转：三种坏形状各被抓到、

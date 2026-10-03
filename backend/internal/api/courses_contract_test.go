@@ -18,6 +18,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/tutor"
 )
 
 func TestCoursesListCategoryParamRetired(t *testing.T) {
@@ -126,7 +127,7 @@ func TestTutorCoursesListContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterTutorRoutes(api, deps.RouterDeps(), deps.TutorSvc, deps.FileSvc)
+	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(1, "tutor1", "tutor")

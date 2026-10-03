@@ -36,7 +36,11 @@ const factTag = "fact"
 // 少一个就红——所以忘了加目录的后果不是悄悄漏扫，是一条指名道姓的红。
 // 目录宇宙来自 testutil.ResponsePackages()（模块根相对）：与 apitypes 那把可达性锁共用同一份 ——
 // 两把锁的**论域**不同（过滤条件不同），但「哪些包可能承载响应类型」是同一件事，各抄一份会漂。
-var factScanDirs = testutil.ResponsePackages()
+// 域包那一半自 #1445 P3-B 起由 testutil 现读域声明表现算，这里不再手抄目录。
+func factScanDirs(t *testing.T) []testutil.ScanDir {
+	t.Helper()
+	return testutil.ResponsePackages(t)
+}
 
 // scanDirAbs 把清单里的模块根相对目录解析成绝对路径（各锁按模块根定位，不靠 cwd）。
 func scanDirAbs(t *testing.T, rel string) string {
@@ -49,15 +53,16 @@ func scanDirAbs(t *testing.T, rel string) string {
 // 生成物不会（它由 handler 注解生成，且 CI 有新鲜度锁）。
 func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
 	t.Parallel()
+	dirs := factScanDirs(t)
 	// 先数清单：绊线比的是**前缀**，而 `../model` 与 `../valuation/model` 同前缀 ⇒ 删掉其中一枚
 	// 绊线看不出来。这条计数断言补的就是那一条（与批⑤「pathInt* 名字族必须恰好两枚」同形）。
-	if n := len(factScanDirs); n != 29 {
-		t.Fatalf("fact 扫描面应是 29 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
-			"多一枚就回来把这条数与注释一起改。", n, factScanDirs)
+	if n := len(dirs); n != 35 {
+		t.Fatalf("fact 扫描面应是 35 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
+			"多一枚就回来把这条数与注释一起改。", n, dirs)
 	}
 	defs := factDescriptions(t)
 	scanned := map[string]bool{}
-	for _, src := range factScanDirs {
+	for _, src := range dirs {
 		scanned[src.Pkg] = true
 	}
 	for defName := range defs {
@@ -68,7 +73,8 @@ func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
 		}
 		if !scanned[pkg] {
 			t.Errorf("对外契约里出现了 %q 包的类型，但 factScanDirs 不扫它：那一类投影位会拿到 (f)"+
-				"（可达性，那份射程是全的）却拿不到 (a)(c)(d)（对齐本身）。把目录补进 factScanDirs。", pkg)
+				"（可达性，那份射程是全的）却拿不到 (a)(c)(d)（对齐本身）。把域登记进 "+
+				"internal/apitypes/domains.go —— 非域包的静态面登记在 testutil.responseStaticPackages。", pkg)
 		}
 	}
 }
@@ -86,7 +92,7 @@ type factFieldInfo struct {
 func taggedFactFields(t *testing.T) map[string][]factFieldInfo {
 	t.Helper()
 	out := map[string][]factFieldInfo{}
-	for _, src := range factScanDirs {
+	for _, src := range factScanDirs(t) {
 		dir := scanDirAbs(t, src.Dir)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -304,10 +310,10 @@ func TestConsumptionFactsAreAligned(t *testing.T) {
 func sentinelHosts(t *testing.T) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	serviceDir := scanDirAbs(t, "internal/service")
+	serviceDir := scanDirAbs(t, "internal/core")
 	entries, err := os.ReadDir(serviceDir)
 	if err != nil {
-		t.Fatalf("读 internal/service 失败: %v", err)
+		t.Fatalf("读 internal/core 失败: %v", err)
 	}
 	fset := token.NewFileSet()
 	n := 0
@@ -319,7 +325,7 @@ func sentinelHosts(t *testing.T) map[string]string {
 		n++
 		f, err := parser.ParseFile(fset, filepath.Join(serviceDir, name), nil, 0)
 		if err != nil {
-			t.Fatalf("解析 internal/service/%s 失败: %v", name, err)
+			t.Fatalf("解析 internal/core/%s 失败: %v", name, err)
 		}
 		for _, d := range f.Decls {
 			gd, ok := d.(*ast.GenDecl)
@@ -396,7 +402,7 @@ func checkSentinelFaces(reg []FactSpec, hosts map[string]string, used func(strin
 			name, ok := hosts[errv.Error()]
 			if !ok {
 				out = append(out, "事实 "+spec.Key+" 登记的句子 "+errv.Error()+
-					" 在 internal/service 里找不到 `errors.New(\"…\")` / `fmt.Errorf(\"…\")` 的宿主标识符："+
+					" 在 internal/core 里找不到 `errors.New(\"…\")` / `fmt.Errorf(\"…\")` 的宿主标识符："+
 					"明文面载体必须是一枚具名哨兵——藏在拼装出来的 error 里既没法被 errors.Is 分档，"+
 					"也就谈不上「这一句是这件事实的身份」")
 				continue
@@ -416,8 +422,8 @@ func checkSentinelFaces(reg []FactSpec, hosts map[string]string, used func(strin
 // apiErrorFaceRefs 收集「被接进端点错误面」的标识符。两种接法都算，因为它们就是本仓错误面
 // 仅有的两种写法：
 //
-//	`errors.Is(err, service.ErrX)`          —— 手写分支（raw handler 那一侧）
-//	`errStatusTable{… {sentinel: service.ErrX, …}}` —— 声明式档位表（endpoint.go 那一侧）
+//	`errors.Is(err, core.ErrX)`          —— 手写分支（raw handler 那一侧）
+//	`errStatusTable{… {sentinel: core.ErrX, …}}` —— 声明式档位表（endpoint.go 那一侧）
 //
 // 判据问的是「这枚哨兵有没有被接到某个端点的错误出口」，不是「某层有没有提到它」——第一版
 // 按「提到」做，连踩两个假绿：① 注释里写了哨兵名；② **登记表自己** `Sentinels: []error{…}`
@@ -444,7 +450,7 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 			out[x.Name] = true
 		}
 	}
-	for _, src := range factScanDirs {
+	for _, src := range factScanDirs(t) {
 		dir := scanDirAbs(t, src.Dir)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -452,7 +458,7 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 		}
 		for _, e := range entries {
 			name := e.Name()
-			// 登记表自己**不算**引用方：它写 `Sentinels: []error{service.ErrX}`，那是登记而不是接线，
+			// 登记表自己**不算**引用方：它写 `Sentinels: []error{core.ErrX}`，那是登记而不是接线，
 			// 若把它算进来，每登记一枚哨兵都会自动满足自己的可达性判据（红证时实测到的假绿）。
 			// 一条会自己点亮自己的可达性判据比没有更坏：它把「登记」冒充成「接线」。
 			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
@@ -477,7 +483,7 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 					}
 				case *ast.CompositeLit:
 					// 整张表的**子树**都收下。第一版只遍历 `x.Elts`，实测数出 17 个标识符而按字面量
-					// 数是 100+：哨兵实际写在 `Entries: []httpx.ErrStatusEntry{{Sentinel: service.ErrX, …}}`
+					// 数是 100+：哨兵实际写在 `Entries: []httpx.ErrStatusEntry{{Sentinel: core.ErrX, …}}`
 					// 里，`x.Elts` 拿到的那个 KeyValueExpr 被 add 直接丢掉了。一条认法太窄的可达性判据
 					// 会「报红得多」，看着像收紧，其实是把没接线的和接线了的混在一起靠运气分。
 					// 名字在 #1445 P0-B 随骨架搬到 pkg/httpx 并导出首位：表字面量的类型从裸标识符
@@ -606,7 +612,7 @@ func hasFactKey(reg []FactSpec, key string) bool {
 }
 
 // splitProjection 拆 `包名.类型名.json键`，恰好三段。前半段就是 swagger 的定义键
-// （本仓的定义键带包名前缀，如 `service.RecruitResumeCard`），故直接拿它查表。
+// （本仓的定义键带包名前缀，如 `core.RecruitResumeCard`），故直接拿它查表。
 func splitProjection(p string) (defName, jsonKey string, ok bool) {
 	if strings.Count(p, ".") != 2 {
 		return "", "", false

@@ -24,9 +24,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -102,7 +102,7 @@ func intPtr(v int) *int { return &v }
 func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
 	seedPointsTaskConfigs(t, db)
-	pwd, _ := service.HashPassword("student123")
+	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "stu1", pwd)
 	cfg := &config.Config{
 		JWTSecretKey:          "points-claim-contract-secret",

@@ -439,7 +439,7 @@ describe('C. 交换段：客户端判过期、过期项无操作入口', () => {
 
 describe('C2. 可用性那一格：与 Web/后端同源、全仓单点、列表卡面并排投影', () => {
   const WEB_CONTACT = path.join(REPO, 'frontend/src/utils/contactRequestStatus.ts');
-  const GO_CONTACT_SERVICE = path.join(REPO, 'backend/internal/service/contact_service.go');
+  const GO_CONTACT_SERVICE = path.join(REPO, 'backend/internal/core/contact_service.go');
 
   it('对照③：措辞与 Web `companyAvailability()` 逐字相等，首句等于后端具名错误（同键同措辞）', () => {
     // 三端各自 fail-closed：任何一端搬家/改名 ⇒ 解析出 null ⇒ 判红，而不是静默跳过对账
@@ -610,8 +610,8 @@ const JOB_ROWS = parseDescriptorRows(read(DISPLAY), 'RECRUIT_JOB_STATUS_DESCRIPT
 describe('F. 状态词单点 + 两端同源（ADR-0018 口径）', () => {
   const WEB_CONTACT = path.join(REPO, 'frontend/src/utils/contactRequestStatus.ts');
   const WEB_APPLICATION = path.join(REPO, 'frontend/src/utils/applicationStatus.ts');
-  const GO_CONTACT = path.join(REPO, 'backend/internal/service/contact_authz.go');
-  const GO_APPLICATION = path.join(REPO, 'backend/internal/service/job_application_service.go');
+  const GO_CONTACT = path.join(REPO, 'backend/internal/core/contact_authz.go');
+  const GO_APPLICATION = path.join(REPO, 'backend/internal/job/application.go');
 
   it('三张表都解析得出来且非空（fail-closed：解析不到 = 锁失效，不是通过）', () => {
     expect(CONTACT_ROWS).not.toBeNull();
@@ -1010,7 +1010,7 @@ describe('I. 锁自检：合成违规必须被判出来（否则本文件是空�
  * 背景（血账，别删）：`getRecruitJobsApi` 曾写
  *   `offline_reason: (obj['offline_reason'] as string) ?? ''`
  * 后端 `JobPostingDTO.OfflineReason` 带 `json:"offline_reason,omitempty"`
- * （`backend/internal/service/job_posting_service.go:74`）⇒ 未强制下架时**该键根本不存在**。
+ * （`backend/internal/job/service_posting.go:75`）⇒ 未强制下架时**该键根本不存在**。
  * UTS 的 `as string` 编到 Kotlin 是**运行时非空断言**（ADR-0003）：
  * 生成代码实测为 `(obj["offline_reason"] as String) ?: ""`
  * （`unpackage/cache/.app-android/src/index.kt:10674`）⇒ 先抛
@@ -1026,7 +1026,7 @@ describe('I. 锁自检：合成违规必须被判出来（否则本文件是空�
 describe('J. 可缺省键先判空再强转（真机 NPE「假空态」缺陷的回归锁）', () => {
   const api = read(API_RECRUIT);
   const apiClean = stripComments(api);
-  const BACKEND_JOB_POSTING = path.join(REPO, 'backend', 'internal', 'service', 'job_posting_service.go');
+  const BACKEND_JOB_POSTING = path.join(REPO, 'backend', 'internal', 'job', 'service_posting.go');
 
   it('`offline_reason` 走「先取值再判空」的可空安全形态（不再裸强转）', () => {
     // 唯一真源：先落一个中间变量，再判空

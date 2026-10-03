@@ -28,7 +28,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/service"
+	"forklift-training/internal/core"
 	"forklift-training/internal/testutil"
 )
 
@@ -85,7 +85,7 @@ const negID = "/-5"
 
 func seedAll(t *testing.T, db *gorm.DB) subjectIDs {
 	t.Helper()
-	hashed, err := service.HashPassword("seedpass123")
+	hashed, err := core.HashPassword("seedpass123")
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}

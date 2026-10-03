@@ -21,6 +21,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/filestore"
@@ -28,7 +29,6 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
-	"forklift-training/internal/service"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -292,7 +292,7 @@ type Service struct {
 // notificationSvc 用于论坛事件站内信（回复/举报处理/管理端删帖，见各触发点）；
 // counters 为 likes_count / reply_count 唯一写入口（与 AuthService 共享同一实例）；
 // points 为积分簿记通道（采纳奖励/违规回收经其事务内导出方法落账，ADR-0023）。
-func NewService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters service.ForumCounter, points *points.Service, logger *zap.Logger) *Service {
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters core.ForumCounter, points *points.Service, logger *zap.Logger) *Service {
 	return &Service{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 

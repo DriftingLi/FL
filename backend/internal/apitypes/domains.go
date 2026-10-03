@@ -33,7 +33,7 @@ type Endpoint struct {
 
 // Domain 一个域的生成声明。
 //
-// Roots 是该域消费的根类型（swagger definitions 里的键，如 service.CheckInResult）：
+// Roots 是该域消费的根类型（swagger definitions 里的键，如 core.CheckInResult）：
 // 渲染时取它们的**传递闭包**（引用到的类型一并生成），故新增嵌套类型不必改声明表。
 // 只增不改：域内新增端点/字段由注解层驱动，声明表只在「新增一个域」时动。
 type Domain struct {
@@ -308,11 +308,11 @@ var Domains = []Domain{
 		Name:  "recruit",
 		Title: "招聘者工作区（/api/recruit/me、/api/recruit/resumes*、/api/recruit/contact-requests：简历库与联系方式交换）",
 		Roots: []string{
-			"service.RecruitResumeCard",
-			"service.RecruitListResult",
-			"service.ContactRequestListResult",
-			"service.ContactPlainDTO",
-			"service.RecruitMeDTO",
+			"resume.RecruitResumeCard",
+			"recruit.RecruitListResult",
+			"core.ContactRequestListResult",
+			"core.ContactPlainDTO",
+			"recruit.RecruitMeDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/recruit/me"},
@@ -330,13 +330,13 @@ var Domains = []Domain{
 		Name:  "job",
 		Title: "职位与投递（/api/recruit/jobs*、/api/jobs*、/api/resume/applications*、/api/recruit/applications*、/api/admin/jobs* 巡检与举报治理）",
 		Roots: []string{
-			"service.JobPostingDTO",
-			"service.JobListResult",
-			"service.ApplicationDTO",
-			"service.ApplicationListResult",
-			"service.RecruiterApplicationListResult",
-			"service.ReportDTO",
-			"service.ReportListResult",
+			"job.JobPostingDTO",
+			"job.JobListResult",
+			"job.ApplicationDTO",
+			"job.ApplicationListResult",
+			"job.RecruiterApplicationListResult",
+			"job.ReportDTO",
+			"job.ReportListResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/recruit/jobs"},
@@ -354,7 +354,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/recruit/applications/{id}"},
 			{Method: "POST", Path: "/recruit/applications/{id}/reject"},
 			// 管理端巡检面（#1100：此前注解未指认 data、也不在任何域声明表；
-			// frontend/src/api/inspection.ts 的 4 个巡检端点即这四条，handler 在 internal/api/job_report.go）。
+			// frontend/src/api/inspection.ts 的 4 个巡检端点即这四条，handler 在 internal/job/handler_report.go）。
 			{Method: "GET", Path: "/admin/jobs"},
 			{Method: "GET", Path: "/admin/job-reports"},
 			{Method: "POST", Path: "/admin/jobs/{id}/force-offline"},
@@ -366,8 +366,8 @@ var Domains = []Domain{
 		Name:  "resume",
 		Title: "学员简历卡（/api/resume/*：简历 CRUD / 可见性 / PDF 与工作照附件 / 查看留痕 / 收到的联系方式申请）",
 		Roots: []string{
-			"service.JobCardDTO",
-			"service.ContactRequestListResult",
+			"resume.JobCardDTO",
+			"core.ContactRequestListResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/resume"},
@@ -421,12 +421,12 @@ var Domains = []Domain{
 		Name:  "tutor",
 		Title: "讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除）",
 		Roots: []string{
-			"service.BatchDeleteFilesResult",
+			"tutor.BatchDeleteFilesResult",
 			"course.ChapterDTO",
 			"course.ChapterDetailDTO",
 			"course.ChapterFileDTO",
 			"course.CoursePageResult",
-			"service.DeleteFileResult",
+			"tutor.DeleteFileResult",
 			"course.TutorCourseChaptersDTO",
 		},
 		Endpoints: []Endpoint{
@@ -604,19 +604,19 @@ var Domains = []Domain{
 		// 本域根类型 = 全部 Web 消费端点的 data 指认（渲染取传递闭包：课程域类型随之重复包含，
 		// 跨域共享文件不在本片范围，先例见 ADR-0048 片一「生成物按域重复包含共享类型」）。
 		Roots: []string{
-			"service.HrwaiUserPageResult",
-			"service.HrwaiUserCreatedDTO",
-			"service.StatusResultDTO",
-			"service.TutorListDTO",
+			"admin.HrwaiUserPageResult",
+			"admin.HrwaiUserCreatedDTO",
+			"admin.StatusResultDTO",
+			"admin.TutorListDTO",
 			"auth.TutorRegisterResultDTO",
-			"service.TutorDeletedDTO",
+			"admin.TutorDeletedDTO",
 			"auth.RecruiterListResult",
 			"auth.RecruiterCreatedDTO",
 			"auth.RecruiterUpdatedDTO",
 			"auth.RecruiterPasswordResetResult",
-			"service.AdminStatisticsDTO",
-			"service.GenerateContentResultDTO",
-			"service.GenTaskStatus",
+			"admin.AdminStatisticsDTO",
+			"core.GenerateContentResultDTO",
+			"core.GenTaskStatus",
 			"course.CoursePageResult",
 			"course.AdminCourseDetailDTO",
 			"course.DeleteCourseResult",
@@ -624,7 +624,7 @@ var Domains = []Domain{
 			"aiassistant.AIConfigDTO",
 			"aiassistant.FeatureBindingDTO",
 			"auth.ProfileChangeRequestPageResult",
-			"api.AuditLogPageResult",
+			"audit.AuditLogPageResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/admin/hrwai-users"},

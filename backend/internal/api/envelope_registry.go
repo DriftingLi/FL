@@ -18,15 +18,19 @@
 package api
 
 import (
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
 	"forklift-training/internal/note"
@@ -35,8 +39,8 @@ import (
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
+	"forklift-training/internal/recruit"
 	"forklift-training/internal/search"
-	"forklift-training/internal/service"
 	"forklift-training/internal/student"
 	vmodel "forklift-training/internal/valuation/model"
 	"forklift-training/internal/wrongquestion"
@@ -66,9 +70,9 @@ type PayloadSpec struct {
 
 // envelopeRegistry 信封登记表（按 Result 字典序）。
 var envelopeRegistry = []EnvelopeSpec{
-	{Result: "api.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
+	{Result: "audit.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
-		Sample: AuditLogPageResult{}},
+		Sample: audit.AuditLogPageResult{}},
 	{Result: "model.ListBatteryResponse", Endpoints: []string{"GET /valuation/battery/evaluations"},
 		Keys: []string{"total", "items"}, Dialect: paging.DialectNone,
 		Sample: vmodel.ListBatteryResponse{}},
@@ -78,15 +82,15 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "paging.ItemsPage[inspection.RecruitResumeViewDTO]", Endpoints: []string{"GET /admin/recruit/views"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: paging.ItemsPage[inspection.RecruitResumeViewDTO]{}},
-	{Result: "service.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
+	{Result: "job.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ApplicationListResult{}},
+		Sample: job.ApplicationListResult{}},
 	{Result: "checkin.CheckInRankResult", Endpoints: []string{"GET /check-in/rank"},
 		Keys: []string{"items", "total", "page", "pages", "me"}, Dialect: paging.DialectPages,
 		Sample: checkin.CheckInRankResult{}},
-	{Result: "service.ContactRequestListResult", Endpoints: []string{"GET /recruit/contact-requests", "GET /resume/contact-requests"},
+	{Result: "core.ContactRequestListResult", Endpoints: []string{"GET /recruit/contact-requests", "GET /resume/contact-requests"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.ContactRequestListResult{}},
+		Sample: core.ContactRequestListResult{}},
 	{Result: "contribution.ContributionPageResult", Endpoints: []string{"GET /contributions", "GET /contributions/mine", "GET /admin/contributions/pending"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: contribution.ContributionPageResult{}},
@@ -119,12 +123,12 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "practicemode.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
 		Keys: []string{"total", "page", "page_size", "records"}, Dialect: paging.DialectPageSize,
 		Sample: practicemode.HistoryResultDTO{}},
-	{Result: "service.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
+	{Result: "admin.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
 		Keys: []string{"list", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.HrwaiUserPageResult{}},
-	{Result: "service.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
+		Sample: admin.HrwaiUserPageResult{}},
+	{Result: "job.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.JobListResult{}},
+		Sample: job.JobListResult{}},
 	{Result: "material.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
 		Keys: []string{"page", "pages", "total", "materials"}, Dialect: paging.DialectPages,
 		Sample: material.MaterialPageResult{}},
@@ -152,27 +156,27 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "questionbank.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
 		Keys: []string{"page", "page_size", "questions", "total"}, Dialect: paging.DialectPageSize,
 		Sample: questionbank.QuestionPageDTO{}},
-	{Result: "service.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
+	{Result: "recruit.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.RecruitListResult{}},
-	{Result: "service.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
+		Sample: recruit.RecruitListResult{}},
+	{Result: "job.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
 		Keys: []string{"items", "total", "page", "page_size", "unread_count", "job_title"}, Dialect: paging.DialectPageSize,
-		Sample: service.RecruiterApplicationListResult{}},
+		Sample: job.RecruiterApplicationListResult{}},
 	{Result: "auth.RecruiterListResult", Endpoints: []string{"GET /admin/recruiters"},
 		Keys: []string{"total", "page", "items"}, Dialect: paging.DialectNone,
 		Sample: auth.RecruiterListResult{}},
-	{Result: "service.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
+	{Result: "job.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ReportListResult{}},
+		Sample: job.ReportListResult{}},
 	{Result: "search.SearchPageDTO", Endpoints: []string{"GET /search"},
 		Keys: []string{"keyword", "type", "total", "page", "pages", "items"}, Dialect: paging.DialectPages,
 		Sample: search.SearchPageDTO{}},
 	{Result: "student.StudyRecordPageResult", Endpoints: []string{"GET /student/records"},
 		Keys: []string{"page", "pages", "records", "total"}, Dialect: paging.DialectPages,
 		Sample: student.StudyRecordPageResult{}},
-	{Result: "service.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
+	{Result: "admin.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
 		Keys: []string{"total", "page", "tutors"}, Dialect: paging.DialectNone,
-		Sample: service.TutorListDTO{}},
+		Sample: admin.TutorListDTO{}},
 	{Result: "wrongquestion.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: wrongquestion.WrongQuestionPageDTO{}},
@@ -182,7 +186,7 @@ var envelopeRegistry = []EnvelopeSpec{
 var totalPayloadRegistry = []PayloadSpec{
 	{Result: "checkin.CheckInCalendarResult",
 		Reason: "打卡日历：days 是整月逐日数组、total 是累计打卡天数，不是列表页"},
-	{Result: "service.GenTaskStatus",
+	{Result: "core.GenTaskStatus",
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
 	{Result: "practicemode.PracticeStartResultDTO",
 		Reason: "练习会话载荷：questions 是本次会话题集、total/completed 是会话进度，不是列表页"},

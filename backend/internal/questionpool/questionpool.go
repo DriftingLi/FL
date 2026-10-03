@@ -7,14 +7,14 @@
 // 即可逐字复用。
 //
 // **为什么是叶子包（ADR-0070 第三种破法：无状态纯片段进叶子包）**：两个域用同一份判据——
-// 留驻 internal/service 的题库池 scope（internal/service/question_pool_scope.go：gorm 链式
-// 形态 QuestionPoolScope 与 QuestionReadScope / QuestionEditScope 值对象）与
+// 题库域的池 scope（internal/questionbank/pool_scope.go：gorm 链式形态 QuestionPoolScope
+// 与 QuestionReadScope / QuestionEditScope 值对象，3c-1 随题目域收口迁入）与
 // internal/training 的标签题目计数（GET /api/tags 的 published 计数，见
 // internal/training/catalog_service.go）。载体留任一域包都会让另一域反向依赖它，而域包不得
-// import internal/service（3b-2 起 internal/service 反向 import internal/training）。
+// import internal/core（3b-2 起 internal/core 反向 import internal/training）。
 //
-// 池的另外两形态（gorm 链式 / scope 值对象）暂留 internal/service/question_pool_scope.go，
-// 待题目域收口时同迁。
+// 池的另外两形态（gorm 链式 / scope 值对象）已随 3c-1 题目域收口迁进
+// internal/questionbank/pool_scope.go。
 package questionpool
 
 const (

@@ -1,8 +1,8 @@
 // 审计日志 IP 口径（ticket #888）：写进审计表的是服务端认定的客户端 IP，
 // 不是请求头里自称的那个。
 //
-// 本文件是全仓唯一一处外部测试包（middleware_test）：它要拿真实的 service.AuditService 落库举证，
-// 而 middleware 包本身不得 import internal/service（见 middleware.AuditWriter 的注释：service →
+// 本文件是全仓唯一一处外部测试包（middleware_test）：它要拿真实的 audit.Service 落库举证，
+// 而 middleware 包本身不得 import internal/core（见 middleware.AuditWriter 的注释：core →
 // 域包 → middleware 是个三角，本包一 import service 就成环）。外部测试包不受这条边约束。
 package middleware_test
 
@@ -16,9 +16,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/audit"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -27,7 +27,7 @@ import (
 func newAuditRouter(t *testing.T, trusted []string) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	svc := service.NewAuditService(db)
+	svc := audit.NewService(db)
 	r := gin.New()
 	if err := r.SetTrustedProxies(trusted); err != nil {
 		t.Fatalf("SetTrustedProxies(%v) 失败: %v", trusted, err)

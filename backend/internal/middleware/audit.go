@@ -15,16 +15,16 @@ import (
 	"forklift-training/internal/model"
 )
 
-// AuditWriter 审计写入口：中间件只认这两个动作，不认 `*service.AuditService` 这个具体类型。
+// AuditWriter 审计写入口：中间件只认这两个动作，不认 `*audit.Service` 这个具体类型。
 //
-// 为什么接口声明在消费方而不是直接 import internal/service（ADR-0070）：域包要被 internal/service
+// 为什么接口声明在消费方而不是直接 import internal/core（ADR-0070）：域包要被 internal/core
 // import（那 7 个事件构造器），域包的 handler*.go 又要 import 本包拿 JWTAuth / CapabilityRequired
 // ——「middleware → service → 域包 → middleware」是个三角，而这条边编译器只在有人撞上时报，
-// 报出来的还是无关的 cmd（第一次拆 notification 时就撞上了）。实现仍是单点：service.AuditService 的
+// 报出来的还是无关的 cmd（第一次拆 notification 时就撞上了）。实现仍是单点：audit.Service 的
 // Write / DescribeAction 原样满足本接口，装配点传的就是它。
 //
 // 注意 typed nil：装配点必须先判空具体实现再传进来（internal/api/router.go 与
-// internal/valuation/handler/router.go 都在注入前判 nil）——(*service.AuditService)(nil) 装进接口
+// internal/valuation/handler/router.go 都在注入前判 nil）——(*audit.Service)(nil) 装进接口
 // 不等于 nil 接口，下面的 svc == nil 拦不住它。
 type AuditWriter interface {
 	// Write 落一条审计记录。
@@ -36,7 +36,7 @@ type AuditWriter interface {
 // AuditLog 管理员/讲师写操作审计中间件。
 // 挂载在 /api 路由组，不依赖中间件顺序：请求处理完成后读取 JWT 上下文，
 // 仅记录 admin / tutor 角色的 POST/PUT/PATCH/DELETE 请求。
-// 审计写（Write）与操作命名（DescribeAction）由 svc 背后的 service.AuditService 单点实现（见 AuditWriter）。
+// 审计写（Write）与操作命名（DescribeAction）由 svc 背后的 audit.Service 单点实现（见 AuditWriter）。
 func AuditLog(svc AuditWriter, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 兜底：装配点已按 nil 具体实现决定挂不挂（见 AuditWriter 的 typed nil 注释），

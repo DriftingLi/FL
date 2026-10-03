@@ -17,11 +17,11 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/core"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
-	"forklift-training/internal/service"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -33,7 +33,7 @@ type ModerationService struct {
 }
 
 // NewModerationService 构造论坛治理服务（依赖与 Service 同源，实例分离）。
-func NewModerationService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters service.ForumCounter, points *points.Service, logger *zap.Logger) *ModerationService {
+func NewModerationService(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters core.ForumCounter, points *points.Service, logger *zap.Logger) *ModerationService {
 	return &ModerationService{forumCore: newForumCore(db, fileSvc, notificationSvc, counters, points, logger)}
 }
 

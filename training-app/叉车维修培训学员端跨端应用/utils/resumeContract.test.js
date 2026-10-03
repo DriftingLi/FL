@@ -12,7 +12,7 @@
  *    执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  * 6) 零直发请求：pages/resume/** 不直接 uni.request；请求只经 api/resume.uts
  * 7) 域 api 收紧：5 个 DTO 出口经 mapper-callback 家族，3 个裸透传在白名单内（multipart 上传 ×2 + void 删除）
- * 8) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（job_card.go / resume_view.go / training_catalog.go）
+ * 8) 幻影路由锁（#662 口径）：api 层每条路由都落在后端已注册清单内（`internal/resume/{handler,handler_view,handler_pdf}.go` / `internal/training/handler.go`）
  * 9) 删除禁区「resume 不用删」的行为保持点：草稿回填 / 服务端回显 / 完善度 12 项 / 三处 actionSheet /
  *    教育·工作经历增删 / 保存四条校验 / 本地草稿双 key / 保存成功回列表 / 保存栏双入口逐项仍在
  * 10) 拆分判据锁（T09 新增）：页面壳层不得自持编辑态 ref；教育·工作列表（v-model 风险区）留在壳层
@@ -358,13 +358,13 @@ describe('域 api 收紧（T09 / ADR-0007）：DTO 出口走 mapper-callback 家
 });
 
 describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已注册清单内', () => {
-  const API_DIR = path.join(ROOT, '..', '..', 'backend', 'internal', 'api');
-
-  /** `/resume` 组的已注册路由：job_card.go（同组 6 条）+ resume_view.go（查看聚合，另一处注册） */
+  /** `/resume` 组的已注册路由：三条注册文件同属 `internal/resume` —— handler.go（同组 6 条）+ handler_view.go
+   *  （查看聚合）+ handler_pdf.go（学员预览 PDF；P2 波 4e 从 `api/resume_pdf.go` 拆出后并入本域包）。 */
   function registeredResumeRoutes() {
+    const RESUME_DIR = path.join(ROOT, '..', '..', 'backend', 'internal', 'resume');
     const out = [];
-    for (const file of ['job_card.go', 'resume_view.go']) {
-      const src = stripComments(readText(path.join(API_DIR, file)));
+    for (const file of ['handler.go', 'handler_view.go', 'handler_pdf.go']) {
+      const src = stripComments(readText(path.join(RESUME_DIR, file)));
       expect(src).toContain('Group("/resume"');
       const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]*)"/g;
       let m;
@@ -373,14 +373,14 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     return out;
   }
 
-  it('后端 /resume 组已注册 7 条（6 + view-stats），且 /positions 公开读已注册', () => {
+  it('后端 /resume 组已注册 8 条（6 + view-stats + 学员预览 pdf），且 /positions 公开读已注册', () => {
     const registered = registeredResumeRoutes();
     expect(registered).toContain('/resume');
     expect(registered).toContain('/resume/visibility');
     expect(registered).toContain('/resume/view-stats');
     expect(registered).toContain('/resume/pdf');
     expect(registered).toContain('/resume/image');
-    expect(registered.length).toBe(7);
+    expect(registered.length).toBe(8);
 
     // 培训域随 P2 波 3b-2 搬进 internal/training/（handler.go 挂公开读面 /positions）
     const catalog = stripComments(readText(path.join(ROOT, '..', '..', 'backend', 'internal', 'training', 'handler.go')));

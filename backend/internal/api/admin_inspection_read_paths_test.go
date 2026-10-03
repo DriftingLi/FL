@@ -14,9 +14,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -30,7 +30,7 @@ func setupInspectionRouter(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
-	pwd, err := service.HashPassword("admin123")
+	pwd, err := core.HashPassword("admin123")
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}

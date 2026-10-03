@@ -58,7 +58,7 @@ func TestContributionEnvelopeShapeLock(t *testing.T) {
 	assertShapeLock(t, DownloadResult{IsNew: true, TierAwarded: 0}, "is_new", "tier_awarded")
 }
 
-// ---- 域包自带的测试脚手架副本（域包不得 import internal/service 的测试文件；原定义留在 internal/service）----
+// ---- 域包自带的测试脚手架副本（域包不得 import internal/core 的测试文件；原定义留在 internal/core）----
 
 // assertShapeLock 断言 key 集合与期望完全一致（不多不少）。
 func assertShapeLock(t *testing.T, v any, want ...string) {

@@ -121,7 +121,7 @@ type CredentialDict struct {
 //
 // 这些端点的响应体此前是 handler 里手工拼的 gin.H{"<key>": …}；注解要指认 data 类型
 // 就必须先有具名类型（swag 无法表达「内联对象」），故按域片收口，字节锁见
-// internal/service/envelope_dto_shape_test.go 的 TestInlineResponseDTOBytes。
+// internal/core/envelope_dto_shape_test.go 的 TestInlineResponseDTOBytes。
 
 // LevelListDTO 课程等级列表响应 {"levels": [...]}（公开 /levels 与管理端 /admin/levels 共用形状）。
 type LevelListDTO struct {

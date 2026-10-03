@@ -21,9 +21,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -64,7 +64,7 @@ func newContactDisableEnv(t *testing.T) *contactDisableEnv {
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
 
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuDisable", pwd)
 	card := model.JobCard{
 		UserID: stu.ID, RealName: "李四", ContactPhone: disabledStudentPhone, Wechat: disabledStudentWechat,
@@ -75,7 +75,7 @@ func newContactDisableEnv(t *testing.T) *contactDisableEnv {
 		t.Fatalf("建简历卡失败: %v", err)
 	}
 
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminDisable", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{
 		Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: cfg.AuthCookie.Secure})
@@ -216,7 +216,7 @@ func TestContactCompanyDisableContract(t *testing.T) {
 			t.Fatalf("启用中的企业应向已授权学员透出明文 %q, body=%s", needle, body)
 		}
 	}
-	if rows[0].Status != string(service.ContactGrantApproved) {
+	if rows[0].Status != string(core.ContactGrantApproved) {
 		t.Fatalf("夹具应为 approved, 实际 %s", rows[0].Status)
 	}
 	if rows[0].CompanyDisabled != nil {
@@ -233,7 +233,7 @@ func TestContactCompanyDisableContract(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("禁用企业不该让申请条目消失（那是授权事实），实际 %d body=%s", len(rows), body)
 	}
-	if rows[0].Status != string(service.ContactGrantApproved) {
+	if rows[0].Status != string(core.ContactGrantApproved) {
 		t.Fatalf("禁用企业不改写授权事实，status 仍应为 approved, 实际 %s", rows[0].Status)
 	}
 	if rows[0].CompanyName != "停用测试企业" {
@@ -252,9 +252,9 @@ func TestContactCompanyDisableContract(t *testing.T) {
 	// 那句错误必须真的走到对外：登记表把 ErrCompanyUnavailable 认作 company_unavailable 的
 	// **明文面载体**（ADR-0065 决策 8），而消费点对齐锁只核到「投影位的契约描述里含这句话」。
 	// 这一行补的是另一半——这句话确实发得出去，不是一枚只活在 Go 里的哨兵。
-	if !strings.Contains(rec.Body.String(), service.ErrCompanyUnavailable.Error()) {
+	if !strings.Contains(rec.Body.String(), core.ErrCompanyUnavailable.Error()) {
 		t.Fatalf("403 的正文要带那件事实的具名句子 %q, 实际 %s",
-			service.ErrCompanyUnavailable.Error(), rec.Body.String())
+			core.ErrCompanyUnavailable.Error(), rec.Body.String())
 	}
 	if strings.Contains(rec.Body.String(), disabledStudentPhone) ||
 		strings.Contains(rec.Body.String(), disabledStudentWechat) {

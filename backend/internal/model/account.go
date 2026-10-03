@@ -54,6 +54,13 @@ func (Admin) TableName() string { return "admin" }
 
 // ===== 3. 导师 =====
 
+// ErrTutorNotFound 讲师账号「真不存在」这一件事的唯一载体（ADR-0064 决策 1/2）。
+// 它同时被留驻的口令写面（internal/core/password_write.go 的 tutorPasswordSubject）与管理域
+// （internal/admin/service.go 的 ResetTutorPassword / ToggleTutorStatus）消费 —— 贴实体放 internal/model
+// 才不成环（ADR-0070 五种破环手法的第一种；先例 model/account.go:15 的 ErrHrwaiUserNotFound、
+// model/training.go:15 的 ErrCourseNotFound）。同一个事实不得有两个载体。
+var ErrTutorNotFound = errors.New("讲师不存在")
+
 type Tutor struct {
 	TutorID   int       `gorm:"column:tutor_id;primaryKey" json:"tutor_id"`
 	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`

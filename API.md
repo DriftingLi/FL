@@ -6,7 +6,7 @@
 >
 > **事实源优先级（ADR-0019 专项第一步 / spec #940 片五，2026-09-13）**：本清单是**人类可读叙述面**（业务语义、示例、调用顺序）；**字段级契约以注解产物 `backend/docs/swagger.json` 为准** —— 它由 `cd backend && make swagger` 从 handler 注解生成、CI 有新鲜度锁（生成物过期即红），前端类型再由 `cd backend && go run ./cmd/gen-apitypes` 从它生成。**两者冲突时以注解产物为准**，并请顺手把本清单改回来。
 
-> **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/service` 的 typed DTO 契约为准（2026-09-04，#517 投稿域后；2026-09-13 起字段级以注解产物为准，见上）。与历史文档的差异（已下线端点等）见文末「变更记录」；与注解产物的**端点差集**可用 `node scripts/audit-api-annotations.mjs` 随时复核。
+> **准确性基准**：本清单以 `backend/internal/api` 实际注册的路由与 `backend/internal/core`（#1445 P3 起由 `internal/service` 更名）的 typed DTO 契约为准（2026-09-04，#517 投稿域后；2026-09-13 起字段级以注解产物为准，见上）。与历史文档的差异（已下线端点等）见文末「变更记录」；与注解产物的**端点差集**可用 `node scripts/audit-api-annotations.mjs` 随时复核。
 
 ## 0. 通用约定
 

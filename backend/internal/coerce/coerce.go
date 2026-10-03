@@ -1,10 +1,10 @@
 // Package coerce 共享的宽松数值 / 指针转换（#1445 P2 波 0b 的共享叶子之一）。
 //
 // 落点理由：原住 internal/service/helpers.go。域包搬走后还要用它们（模拟考、课程、题库、
-// 顺序练习都有老数据回填与查询参数兜底），留在 service 就是「域包 → service」的反向依赖；
+// 顺序练习都有老数据回填与查询参数兜底），留在 core 就是「域包 → core」的反向依赖；
 // 它们是无状态纯函数 —— P2 五种破环手法的第三种（无状态纯函数进叶子包）。
 //
-// 波 3b-1 追加 `StrPtr` / `RoundFloat1` / `RoundFloat2`：课程域搬包时发现留驻 `internal/service` 仍在用
+// 波 3b-1 追加 `StrPtr` / `RoundFloat1` / `RoundFloat2`：课程域搬包时发现留驻 `internal/core` 仍在用
 // 同名助手（`ptrStr` / `roundFloat1` / `roundFloat2`），与 `Ptr` 同理由收编 —— 本包自述仍是
 // 「数值 / 指针转换」，取整属于数值族、不稀释命名族。
 //

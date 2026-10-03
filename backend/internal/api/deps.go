@@ -7,13 +7,16 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
@@ -22,6 +25,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/mockexam"
@@ -32,12 +36,15 @@ import (
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/realexam"
+	"forklift-training/internal/recruit"
+	"forklift-training/internal/resume"
 	"forklift-training/internal/search"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/tutor"
+	vexport "forklift-training/internal/valuation/export"
 	"forklift-training/internal/wrongquestion"
 )
 
@@ -72,13 +79,13 @@ type Deps struct {
 	SlideRenderer   *course.SlideRenderer
 	NotificationSvc *notification.Service
 	ReviewSvc       *auth.ProfileReviewService
-	AuditSvc        *service.AuditService
+	AuditSvc        *audit.Service
 	AIConfigSvc     *aiassistant.ConfigService
-	ContentGenSvc   *service.ContentGenerateService
-	ExportStore     service.ExportStore
+	ContentGenSvc   *core.ContentGenerateService
+	ExportStore     vexport.ExportStore
 
 	CourseSvc            *course.Service
-	AdminSvc             *service.AdminService
+	AdminSvc             *admin.Service
 	AdminCourseSvc       *course.AdminService
 	ForumSvc             *forum.Service
 	ForumModSvc          *forum.ModerationService
@@ -88,13 +95,13 @@ type Deps struct {
 	FavoriteSvc          *favorite.Service
 	SearchSvc            *search.Service
 	MaterialSvc          *material.Service
-	ExportSvc            *service.ExportService
+	ExportSvc            *vexport.Service
 	StudentSvc           *student.Service
 	QuestionBankSvc      *questionbank.Service
 	PracticeModeSvc      *practicemode.Service
 	MockExamSvc          *mockexam.Service
 	RealExamSvc          *realexam.Service
-	TutorSvc             *service.TutorService
+	TutorSvc             *tutor.Service
 	WrongQuestionSvc     *wrongquestion.Service
 	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service
@@ -104,13 +111,13 @@ type Deps struct {
 	QuestionKnowledgeSvc *questioninteraction.KnowledgeService
 	FaqSvc               *faq.Service
 	PointsSvc            *points.Service
-	JobCardSvc           *service.JobCardService
-	ResumePDFRenderer    *service.ResumePDFRenderer
-	RecruitSvc           *service.RecruitService
-	ContactSvc           *service.ContactService
-	JobPostingSvc        *service.JobPostingService
-	JobApplicationSvc    *service.JobApplicationService
-	JobReportSvc         *service.JobReportService
+	JobCardSvc           *resume.Service
+	ResumePDFRenderer    *resume.PDFRenderer
+	RecruitSvc           *recruit.Service
+	ContactSvc           *core.ContactService
+	JobPostingSvc        *job.Service
+	JobApplicationSvc    *job.ApplicationService
+	JobReportSvc         *job.ReportService
 	InspectionSvc        *inspection.Service
 	ContributionSvc      *contribution.Service
 
@@ -127,29 +134,29 @@ type Deps struct {
 // 各域 provider 只写「自己那几个 service」，横切单例一律从 coreSingletons 取（providers_core.go），
 // 于是「全进程只有一份的东西」与「某域自己的东西」在文件层面就分得开。
 // exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
-func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
-	core := provideCore(cfg, db, st, logger, exportStore)
+func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore vexport.ExportStore) *Deps {
+	shared := provideCore(cfg, db, st, logger, exportStore)
 
 	d := &Deps{
 		Cfg:     cfg,
 		DB:      db,
 		Storage: st,
 		Logger:  logger,
-		Session: core.sess,
+		Session: shared.sess,
 		// 横切单例在 Deps 上的投影（路由装配与蓝图注册直接读这几个字段）
-		FileSvc:         core.fileSvc,
-		SlideRenderer:   core.slideRenderer,
-		NotificationSvc: core.notifSvc,
+		FileSvc:         shared.fileSvc,
+		SlideRenderer:   shared.slideRenderer,
+		NotificationSvc: shared.notifSvc,
 	}
 
 	// 各域装配：一行一域，顺序即依赖序（域之间只经 core 的共享单例交互）。
-	provideAuth(core, d)
-	provideAI(core, d)
-	provideForum(core, d)
-	provideTraining(core, d)
-	provideExam(core, d)
-	provideJobs(core, d)
-	provideContribution(core, d)
+	provideAuth(shared, d)
+	provideAI(shared, d)
+	provideForum(shared, d)
+	provideTraining(shared, d)
+	provideExam(shared, d)
+	provideJobs(shared, d)
+	provideContribution(shared, d)
 
 	// 守护登记（ADR-0061 §1）：加守护 = 往这张表加一条，不需要在 cmd/server 里再手写一次 start。
 	// 闭包读 d 上的 service 字段（此刻已构造完），故登记排在各域装配之后。
@@ -176,11 +183,11 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	}
 
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
-	if d.JobApplicationSvc != nil && core.mailSender != nil {
-		d.JobApplicationSvc.SetMailer(core.mailSender)
+	if d.JobApplicationSvc != nil && shared.mailSender != nil {
+		d.JobApplicationSvc.SetMailer(shared.mailSender)
 	}
-	if d.JobReportSvc != nil && core.mailSender != nil {
-		d.JobReportSvc.SetMailer(core.mailSender)
+	if d.JobReportSvc != nil && shared.mailSender != nil {
+		d.JobReportSvc.SetMailer(shared.mailSender)
 	}
 	return d
 }

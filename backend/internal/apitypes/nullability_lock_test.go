@@ -21,12 +21,12 @@
 //  4. **声明 `nullable` 要举得出一个真会发 `null` 的出口**（ADR-0065 决策 5，本波推论的直接形状）：
 //     第 3 条管「说了可空、契约有没有跟着改」，管不着「这句可空是不是真的」。一句没人能举证的
 //     `nullable` 与第 1 条那种漏标同级——它让每个消费端为一条不存在的分支写 `?? []`。
-//     正向证据住在 `../service/nullable_declaration_test.go` 的 `nullableOutlets` 那张表里
+//     正向证据住在 `../core/nullable_declaration_test.go` 的 `nullableOutlets` 那张表里
 //     （走真实出口 marshal 一次、断言发出的就是 `null`），本条只数「声明了却没进表的字段」，
 //     同样钉成只能减的常量。**表在这里、判据也在这里，但证据只有一份**——不另建第二张登记表。
 //  5. **声明 `nonnil` 要举得出一个真发 `[]` / `{}` 的出口**（ADR-0064 决策 8）：与第 4 条同形、
 //     方向相反——一句没人跑过的 `nonnil` 向每个消费方承诺「这一格永远不为 null」。**零容忍、
-//     不设债务常量**（理由见下面判据 5 那段）。证据住在 `../service` 与 `../api` 的
+//     不设债务常量**（理由见下面判据 5 那段）。证据住在 `../core` 与 `../api` 的
 //     `nonnilOutlets*` 那张表里，同样是「表在此、判据在此，证据只有一份」。
 //
 // 锁自己先被验：TestNullabilityCheckerFires 用合成夹具证明 checker 那三条（漏标 / 取值非法 /
@@ -71,7 +71,7 @@ const (
 // ⇒ 下面 Scan 现在把欠账逐条 Logf 出来，与判据 4 对称。
 //
 // 剩下这 7 处全在 **valuation/repository**（AlgorithmParameters 四格 + SeriesConfigOptions 三格）。
-// 它们不是「没人去举证」，是**举证装置照不到**：判据 4/5 的证据源只有 ../service 与 ../api，
+// 它们不是「没人去举证」，是**举证装置照不到**：判据 4/5 的证据源只有 ../core 与 ../api，
 // 而那个包只握 *pgxpool.Pool，没有可脱离真库跑的出口。留给下一波的选择是「给这两个包加证据源
 // （含一个能跑真库的测试装置）」或「把它们从判据 3/4 的分母里显式移出并写明理由」——继续留在
 // 这个数上，就等于让一个结构性事实看起来像一件没干完的活。
@@ -90,21 +90,23 @@ type outletSource struct {
 
 var (
 	// 目录按**模块根相对**登记（不再是 ../service）：测试文件随域包搬家后 cwd 相对路径会静默指偏。
-	// 2c 后 AI 域的 3 枚 nullable 声明由 internal/aiassistant 举证（internal/service 仍留 GenTaskStatus 一枚）。
+	// 2c 后 AI 域的 3 枚 nullable 声明由 internal/aiassistant 举证（internal/core 仍留 GenTaskStatus 一枚）。
 	nullableEvidenceSources = []outletSource{
-		{"internal/service", "nullableOutlets"},
+		{"internal/core", "nullableOutlets"},
 		{"internal/aiassistant", "nullableOutlets"},
 		{"internal/course", "nullableOutlets"},
 		{"internal/training", "nullableOutlets"},
 		{"internal/practicemode", "nullableOutlets"},
 		{"internal/mockexam", "nullableOutlets"},
+		{"internal/recruit", "nullableOutlets"},
+		{"internal/resume", "nullableOutlets"},
 	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
 	// 域包拆出去之后多一行 internal/faq（表住在域包里，见 internal/faq/nonnil_outlets_test.go）——
 	// 「哪个域举证、证据在哪」跟着域走，这个清单是它唯一的登记处。
 	nonNilEvidenceSources = []outletSource{
-		{"internal/service", "nonnilOutlets"},
+		{"internal/core", "nonnilOutlets"},
 		{"internal/api", "nonnilOutlets"},
 		{"internal/auth", "nonnilOutlets"},
 		{"internal/faq", "nonnilOutlets"},
@@ -123,6 +125,10 @@ var (
 		{"internal/search", "nonnilOutlets"},
 		{"internal/student", "nonnilOutlets"},
 		{"internal/wrongquestion", "nonnilOutlets"},
+		{"internal/tutor", "nonnilOutlets"},
+		{"internal/admin", "nonnilOutlets"},
+		{"internal/recruit", "nonnilOutlets"},
+		{"internal/job", "nonnilOutlets"},
 	}
 )
 
@@ -229,7 +235,7 @@ func firstCompositeLit(vs *ast.ValueSpec) (*ast.CompositeLit, bool) {
 // sweptDirs 扫哪些包目录。键 = 包名（swagger 的 definition 名前缀），值 = 目录。
 // 加新包就加一行；不在表里的包里的 DTO 不会被扫（因此也不会被误报）。
 var sweptDirs = map[string]string{
-	"service":             "../service",
+	"core":                "../core",
 	"api":                 "../api",
 	"auth":                "../auth",
 	"faq":                 "../faq",
@@ -255,6 +261,12 @@ var sweptDirs = map[string]string{
 	"note":                "../note",
 	"questioninteraction": "../questioninteraction",
 	"wrongquestion":       "../wrongquestion",
+	"recruit":             "../recruit",
+	"resume":              "../resume",
+	"job":                 "../job",
+	"tutor":               "../tutor",
+	"admin":               "../admin",
+	"audit":               "../audit",
 	"repository":          "../valuation/repository",
 }
 
@@ -314,7 +326,7 @@ func responseDefinitions(t *testing.T) map[string]bool {
 }
 
 // namedCollections 收集「具名集合类型」（type X []Y / map[K]V），键为 包名.X，
-// 这样 `JSONArray`（service 包内）与 `model.JSONB`（跨包）都能被认成集合。
+// 这样 `JSONArray`（resume 包内）与 `model.JSONB`（跨包）都能被认成集合。
 func namedCollections(pkgs map[string]parsedPackage) map[string]bool {
 	out := map[string]bool{}
 	for pkgName, p := range pkgs {

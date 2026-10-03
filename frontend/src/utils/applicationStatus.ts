@@ -1,6 +1,6 @@
 // 投递状态词表单点（ADR-0056 §8，issue #1103）。
 //
-// 取值域是后端 service.ApplicationStatus* 常量表（backend/internal/service/job_application_service.go）；
+// 取值域是后端 job.ApplicationStatus* 常量表（backend/internal/job/application.go）；
 // 对账锁在 __tests__/statusWords.spec.ts——后端新增状态而这里忘了加，测试报红。
 //
 // label / tone 只在这里判定一份：学员侧「我的投递」（MyApplications）、企业侧投递列表

@@ -4,10 +4,10 @@
 // 域包拆出去之后域的实现与它的举证住在同一个包里，改名/搬目录不会让两侧各自漂。
 // 断言本体只有一份：testutil.AssertNonNilOutlets。
 //
-// 两个课程 DTO 字段**不在这里**（证据仍留在 internal/service/nonnil_outlets_course_test.go）：
-// 它们的生产者是 service —— course.ChapterDTO.files 只由 TutorService.GetCourseChapters 填，
-// course.CourseDTO.chapters 只由 TrainingCatalogService.GetAdminCatalogTree 的 withChapters
-// 分支填。证据跟真实出口走，不跟类型名的前缀走。
+// 两个课程 DTO 字段**不在这里**：它们的生产者不是本包 —— course.ChapterDTO.files 只由
+// TutorService.GetCourseChapters 填（波 4d 起该出口与它的证据都在 internal/tutor/nonnil_outlets_test.go），
+// course.CourseDTO.chapters 只由 TrainingCatalogService.GetAdminCatalogTree 的 withChapters 分支填
+// （证据在 internal/training/nonnil_outlets_test.go）。证据跟真实出口走，不跟类型名的前缀走。
 package course
 
 import (
@@ -89,8 +89,8 @@ func outletCourseDetailNoChapters(t *testing.T) any {
 // file_url 也是空的章节（夹具里第 2 条）——两条 legacy/表条目分支都不进，才落在 `fileList == nil ⇒ []` 那格。
 //
 // 直接调 ChapterDetailShared 而不是某个服务的包装：它就是真实出口本体
-// （TutorService.GetChapterDetail 回的是它、学员端 Service.GetChapterDetail
-// 只是多一道可见性谓词后回它），域包内也不需要 TutorService。
+// （tutor.Service.GetChapterDetail 回的是它、学员端 Service.GetChapterDetail
+// 只是多一道可见性谓词后回它），域包内也不需要导师域的服务。
 func outletChapterDetailNoFiles(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
@@ -103,7 +103,7 @@ func outletChapterDetailNoFiles(t *testing.T) any {
 }
 
 // seedVisibleCourse 播一门「已发布 + 已挂载」但**没有章节**的课程，返回其 id。
-// （与 internal/service 的同名夹具各持一份：两包互不 import 对方的测试文件。）
+// （与 internal/core 的同名夹具各持一份：两包互不 import 对方的测试文件。）
 func seedVisibleCourse(t *testing.T, db *gorm.DB) int {
 	t.Helper()
 	spec := model.Specialty{Code: "nonnil", Name: "非空方向", SortOrder: 1, Status: 1}

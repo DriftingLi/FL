@@ -63,7 +63,7 @@ const (
 	DefaultRefreshCookieName          = "hrwai_refresh"
 	DefaultRecruiterRefreshCookieName = "recruiter_refresh"
 
-	// roleRecruiter 与 service.RecruiterRole 同值：分流 refresh cookie 归属用。
+	// roleRecruiter 与 core.RecruiterRole 同值：分流 refresh cookie 归属用。
 	// 不直接引用 service 是因为依赖方向是 service → security，反向引用成环。
 	roleRecruiter = "recruiter"
 )

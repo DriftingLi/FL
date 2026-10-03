@@ -17,11 +17,11 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -44,7 +44,7 @@ func fetchMap(t *testing.T, r *gin.Engine, token, path string) map[string]any {
 
 func assertPracticePoolCaliber(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
-	pwd, _ := service.HashPassword(`student123`)
+	pwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, pwd)
 	cfg := &config.Config{
 		JWTSecretKey: `pool-contract-secret`,

@@ -8,7 +8,7 @@
 // —— 判据改回双份正是本仓反复点名要避开的老病。
 //
 // 三条规矩：① 单向依赖（pkg/httpx 是叶子、internal/api 只许 cmd/ 依赖、
-// internal/middleware 不得 import internal/service）；
+// internal/middleware 不得 import internal/core）；
 // ② 测试与实现同居；③ gin 只许出现在 HTTP 面与登记的 HTTP 基建里。
 // 「哪些文件算 HTTP 面」这件事**不在本包定义**：判据由调用方以 isHTTP 注入（测试里传
 // testutil.HTTPSurface —— 全仓唯一出处）。本包不 import testutil，否则 layers 的包内测试
@@ -67,7 +67,7 @@ func importEdges(files []SourceFile) ([]Edge, error) {
 			return nil, err
 		}
 		// 外部测试包（`package foo_test`）不进依赖图：它住在被测包之外，两条边都能拿，不构成生产图里的
-		// 三角。middleware 的外部测试包正是靠这一点继续用**真实** service.AuditService 落库举证
+		// 三角。middleware 的外部测试包正是靠这一点继续用**真实** audit.Service 落库举证
 		// （见 internal/middleware/audit_ip_test.go 的文件头）。内部测试包（`package foo`）仍要判：
 		// 它反向 import 会在 test 构建里成环——编译器会报，这里判是为了给出一条指名的错而不是指到无关的包。
 		if strings.HasSuffix(pkgName, "_test") {
@@ -87,14 +87,14 @@ func importEdges(files []SourceFile) ([]Edge, error) {
 //
 //  1. `pkg/httpx` 是 HTTP 骨架叶子：**不得** import 任何 `internal/...`。域包与 internal/api 都要
 //     import 它 —— 它反向依赖内部层就把叶子变成中继站，拆包时立刻成环。
-//  2. `internal/api` 是装配面：只允许 `cmd/...`（装配根）依赖它。域包与 service 一旦 import 它，
+//  2. `internal/api` 是装配面：只允许 `cmd/...`（装配根）依赖它。域包与 core 一旦 import 它，
 //     「handler → service」的单向就断了；而这条断法在编译器那里不报错（只要不成环），只能靠判据。
-//  3. `internal/middleware` 是 HTTP 基建，**不得** import `internal/service`：service 要 import 域包
+//  3. `internal/middleware` 是 HTTP 基建，**不得** import `internal/core`：core 要 import 域包
 //     （事件构造器），域包的 handler*.go 要 import middleware（JWTAuth / CapabilityRequired）
-//     ——「middleware → service → 域包 → middleware」是个三角，这条边把三角闭合成 import cycle
+//     ——「middleware → core → 域包 → middleware」是个三角，这条边把三角闭合成 import cycle
 //     （ADR-0070 之后第一次拆 notification 时实测撞上，且编译器把错报在无关的 cmd 上）。
 //     审计写依赖用 AuditWriter 接口反转：接口声明在 middleware（消费方），实现仍是
-//     service.AuditService 单点，装配点注入前判 nil（typed nil 装进接口不等于 nil 接口）。
+//     audit.Service 单点，装配点注入前判 nil（typed nil 装进接口不等于 nil 接口）。
 //
 // 射程里的文件由 importEdges 决定（外部测试包不进图，理由见那里）。
 func directionViolations(edges []Edge) []string {
@@ -106,9 +106,9 @@ func directionViolations(edges []Edge) []string {
 		if e.To == "internal/api" && !strings.HasPrefix(e.From, "cmd/") {
 			out = append(out, e.From+" 不得 import internal/api（装配面只允许 cmd/ 依赖）")
 		}
-		if e.From == "internal/middleware" && e.To == "internal/service" {
+		if e.From == "internal/middleware" && e.To == "internal/core" {
 			out = append(out, e.From+" 不得 import "+e.To+
-				"（三角：service → 域包 → middleware，中间件反向依赖业务层会成环；审计写走 AuditWriter 接口反转）")
+				"（三角：core → 域包 → middleware，中间件反向依赖业务层会成环；审计写走 AuditWriter 接口反转）")
 		}
 	}
 	return out

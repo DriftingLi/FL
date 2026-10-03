@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -30,7 +30,7 @@ func TestRecruitViewStatsContract(t *testing.T) {
 	r := NewRouter(newContractDeps(t, db, cfg))
 
 	// 准备学员与公开简历
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuViewStats", pwd)
 	card := model.JobCard{UserID: stu.ID, RealName: "测试员", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`))}
 	if err := db.Create(&card).Error; err != nil {
@@ -38,7 +38,7 @@ func TestRecruitViewStatsContract(t *testing.T) {
 	}
 
 	// 创建两个招聘者
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminViewStats", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: cfg.AuthCookie.Secure})
 	adminToken, _ := adminSess.Issue(admin.AdminID, admin.Username, "admin")

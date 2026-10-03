@@ -3,7 +3,7 @@
 // 背景：本片为 50 个此前不在 swagger 的端点补了注解，并把响应体定型为 service / api DTO。
 // 注解里 `data=` 指认的类型与 handler 实际返回是否一致，swag 侧看不出来（它只校验类型存在），
 // 故这里走真实路由 + httptest，把信封 data 的**顶层 key 集合**钉在注解产物上
-// （片一先例：internal/api/*_contract_test.go；DTO 字节级保形另见 internal/service 的 shape-lock）。
+// （片一先例：internal/api/*_contract_test.go；DTO 字节级保形另见 internal/core 的 shape-lock）。
 //
 // 覆盖：用户 / 导师 / 招聘者 / 统计 / 课程 / 章节 / AI 配置与功能绑定 / 资料审核 / 审计 /
 // 精选内容管理端 / 导出路由。
@@ -28,11 +28,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	vexport "forklift-training/internal/valuation/export"
+
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -43,7 +45,7 @@ func newAdminContractDeps(t *testing.T) (*Deps, *gorm.DB, string) {
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "admin1", adminPwd)
 
 	cfg := &config.Config{
@@ -78,7 +80,7 @@ func newAdminContractEnv(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 // （newContractDeps 传 nil），给一条空结果即可让 /admin/export/evaluations 走通 CSV 分支。
 type stubExportStore struct{}
 
-func (stubExportStore) ListEvaluationExports(context.Context) ([]service.EvaluationExportRow, error) {
+func (stubExportStore) ListEvaluationExports(context.Context) ([]vexport.EvaluationExportRow, error) {
 	return nil, nil
 }
 

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -35,7 +35,7 @@ func TestOrphanProgressMergeOnPostgres(t *testing.T) {
 		t.Fatalf("建证C失败: %v", err)
 	}
 
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 
 	// 学员1（有当前证件 credA）：桶行 + 孤儿行并存（#505 前崩溃形状）
 	stu1 := seedStudent(t, db, "mergeStu1", pwd)

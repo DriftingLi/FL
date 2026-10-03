@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -50,7 +50,7 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 		t.Fatalf("建章节失败: %v", err)
 	}
 
-	pwd, _ := service.HashPassword("student123")
+	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "paid_gate_stu", pwd)
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", student.ID).UpdateColumn("points_balance", 500).Error; err != nil {
 		t.Fatalf("预置余额失败: %v", err)

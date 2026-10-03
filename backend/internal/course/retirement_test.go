@@ -219,9 +219,9 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 }
 
 // TestTutorCourseListHasChapterCount 导师端课程列表返回章节数。
-// 导师端 GetCourses 是 course.ListCourses 的薄包装（internal/service/tutor_service.go:41），
-// 其行为在 internal/service/tutor_service_test.go 覆盖；本域包测试直接打底层函数
-// （域包测试不能 import internal/service 的测试助手，会成环）。
+// 导师端 GetCourses 是 course.ListCourses 的薄包装（internal/tutor/service.go:41），
+// 其行为在 internal/tutor/service_test.go 覆盖（波 4d 随导师域包搬走）；本域包测试直接打底层函数
+// （域包测试不能 import internal/core 的测试助手，会成环）。
 func TestTutorCourseListHasChapterCount(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	course, _ := seedCatalogCourse(t, db)

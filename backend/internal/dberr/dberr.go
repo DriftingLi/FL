@@ -1,7 +1,7 @@
 // Package dberr 数据库错误的共享谓词叶子包。
 //
-// 为什么不留在 internal/service：唯一约束冲突的判定散落在打卡 / 积分 / 投稿 / 论坛等幂等写入点，
-// 而域包一旦 import internal/service，只要 service 里还有一处引用该域，就成 import cycle
+// 为什么不留在 internal/core：唯一约束冲突的判定散落在打卡 / 积分 / 投稿 / 论坛等幂等写入点，
+// 而域包一旦 import internal/core，只要 core 里还有一处引用该域，就成 import cycle
 // （见 docs/agents/domain-package-migration.md §10）。谓词无状态、只吃 error，天然是叶子。
 package dberr
 

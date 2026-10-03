@@ -21,10 +21,10 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -117,7 +117,7 @@ func TestUndeclaredShopSKUCannotBeRedeemed(t *testing.T) {
 // shopRedeemStudent 带余额的学员 + 其 access token。
 func shopRedeemStudent(t *testing.T, db *gorm.DB, cfg *config.Config, account string, balance int) (string, int) {
 	t.Helper()
-	pwd, err := service.HashPassword("student123")
+	pwd, err := core.HashPassword("student123")
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)
 	}

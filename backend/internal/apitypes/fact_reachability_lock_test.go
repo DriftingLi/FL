@@ -38,28 +38,31 @@ const factTagKey = "fact"
 // 目录宇宙来自 testutil.ResponsePackages()（模块根相对），与 internal/api 那把 tag 扫描锁**共用同一份**：
 // 两把锁的**论域**不同（这里比的是「投影位所在类型必须在 2xx 闭包里」，过滤条件与那边不同），
 // 但「哪些包可能承载响应类型」是同一件事 —— 各抄一份的结果是搬一次包要改两处、且两处会漂。
-var factScopeDirs = func() []string {
-	pkgs := testutil.ResponsePackages()
+// 域包那一半自 #1445 P3-B 起由 testutil 现读域声明表现算（声明表加一个域，这里自动跟上）。
+func factScopeDirs(t *testing.T) []string {
+	t.Helper()
+	pkgs := testutil.ResponsePackages(t)
 	dirs := make([]string, 0, len(pkgs))
 	for _, p := range pkgs {
 		dirs = append(dirs, p.Dir)
 	}
 	return dirs
-}()
+}
 
 func TestFactProjectionsAreInResponseClosure(t *testing.T) {
+	dirs := factScopeDirs(t)
 	// 数一遍目录：论域自检比的是**前缀**，删掉 `../valuation/model` 它看不出来（下一段写这条盲区），
 	// 所以这里补一条「清单本身有几枚」的断言——与批⑤ 那条「pathInt* 名字族必须恰好两枚」同形。
 	// 加一枚目录时这条会红，逼着回来一起改数并想清楚为什么加。
-	if n := len(factScopeDirs); n != 29 {
-		t.Fatalf("fact 射程应是 29 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的两个目录），"+
-			"多了就回来把这条数和上面的注释一起改。", n, factScopeDirs)
+	if n := len(dirs); n != 35 {
+		t.Fatalf("fact 射程应是 35 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的两个目录），"+
+			"多了就回来把这条数和上面的注释一起改。", n, dirs)
 	}
 	closure := responseDefinitions(t)
 	scanned := map[string]bool{}
 	found := 0
 	root := testutil.ModuleRoot(t)
-	for _, dir := range factScopeDirs {
+	for _, dir := range dirs {
 		abs := filepath.Join(root, filepath.FromSlash(dir))
 		p, err := parsePackage(abs, false)
 		if err != nil {

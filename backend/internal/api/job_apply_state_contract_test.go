@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -20,7 +20,7 @@ func TestJobApplyStateContract(t *testing.T) {
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuApplyState", pwd)
 	now := time.Now()
 	pos := model.Position{Code: "apply_pos", Name: "叉车司机", Status: 1}

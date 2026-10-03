@@ -18,7 +18,7 @@
 //
 //	(a) 每个 `fact:` tag 的 key 必须登记在表里          —— consumption_fact_lock_test.go
 //	(b) 每个 key 至少两个载体，且**同时**有 ≥1 个明文面载体与 ≥1 个投影位；一句错误不能同时
-//	    是两件事的身份；而且每个明文面载体必须是 internal/service 里一枚**具名**哨兵
+//	    是两件事的身份；而且每个明文面载体必须是 internal/core 里一枚**具名**哨兵
 //	    （`errors.New("…")` / `fmt.Errorf("…")` 的字面量）并**真被接进** api 层某个端点的错误面
 //	    ——「可达」到这里才不是形容词
 //	                                  —— checkFactTable + checkSentinelFaces（同上文件）
@@ -56,7 +56,7 @@
 package api
 
 import (
-	"forklift-training/internal/service"
+	"forklift-training/internal/core"
 )
 
 // FactSpec 一条「同一事实的多个消费点」登记。
@@ -82,10 +82,10 @@ var consumptionFacts = []FactSpec{
 		//   错误面 —— 被禁用的企业自己去取学员明文时的那句 403；
 		//   投影位 —— 学员侧交换申请列表的那一格，与招聘者简历卡（列表 + 详情共用一个装配点）的那一格。
 		// 后两格必须同名：消费方读的是同一个 key，不是一行两处各起一名。
-		Sentinels: []error{service.ErrCompanyUnavailable},
+		Sentinels: []error{core.ErrCompanyUnavailable},
 		Projections: []string{
-			"service.ContactRequestDTO.company_disabled",
-			"service.RecruitResumeCard.company_disabled",
+			"core.ContactRequestDTO.company_disabled",
+			"resume.RecruitResumeCard.company_disabled",
 		},
 	},
 }

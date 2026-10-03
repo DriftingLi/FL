@@ -3,7 +3,9 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
@@ -13,6 +15,7 @@ import (
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
 	"forklift-training/internal/note"
@@ -22,9 +25,13 @@ import (
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/realexam"
+	"forklift-training/internal/recruit"
+	"forklift-training/internal/resume"
 	"forklift-training/internal/search"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/tutor"
+	vhandler "forklift-training/internal/valuation/handler"
 	"forklift-training/internal/wrongquestion"
 )
 
@@ -68,20 +75,21 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "管理端",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterAdminRoutes(api, rd, deps.AdminSvc, deps.AdminCourseSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
-			RegisterAdminRecruiterRoutes(api, rd, deps.AuthSvc)
+			admin.RegisterRoutes(api, rd.Session, deps.AdminSvc, deps.AuthSvc, deps.AIConfigSvc, deps.ContentGenSvc)
+			admin.RegisterAdminRecruiterRoutes(api, rd.Session, deps.AuthSvc)
+			course.RegisterAdminRoutes(api, rd.Session, deps.AdminCourseSvc)
 		},
 	},
 	{
 		Domain: "招聘域",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterRecruitRoutes(api, rd, deps.RecruitSvc)
+			recruit.RegisterRoutes(api, rd.Session, deps.RecruitSvc)
 		},
 	},
 	{
 		Domain: "讲师端",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterTutorRoutes(api, rd, deps.TutorSvc, deps.FileSvc)
+			tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
 		},
 	},
 	{
@@ -119,8 +127,8 @@ var routeRegistrars = []routeRegistrar{
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			auth.RegisterAdminRoutes(api, rd.Session, deps.ReviewSvc)
 			notification.RegisterRoutes(api, rd.Session, deps.NotificationSvc)
-			RegisterAuditRoutes(api, rd, deps.AuditSvc)
-			RegisterExportRoutes(api, rd, deps.ExportSvc)
+			audit.RegisterRoutes(api, rd.Session, deps.AuditSvc)
+			vhandler.RegisterExportRoutes(api, rd.Session, deps.ExportSvc)
 			// 培训域 HTTP 出口三分（handler.go / handler_admin.go / handler_credential.go），
 			// 三行合并等价原单条 RegisterTrainingCatalogRoutes（ADR-0070）：学员端读面 → 管理端目录面 → 证件面。
 			training.RegisterRoutes(api, rd.Session, deps.TrainingCatalogSvc)
@@ -151,14 +159,16 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "简历与职位",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)
-			RegisterResumeViewRoutes(api, rd, deps.RecruitSvc)
-			RegisterResumePDFRoutes(api, rd, deps.RecruitSvc, deps.ResumePDFRenderer)
+			resume.RegisterRoutes(api, rd.Session, deps.JobCardSvc, deps.FileSvc)
+			resume.RegisterViewRoutes(api, rd.Session, deps.JobCardSvc)
+			// 两条 PDF 出口分居两域：学员侧在本包（resume），招聘者侧在 recruit（要 RecruitService）。
+			resume.RegisterPDFRoutes(api, rd.Session, deps.JobCardSvc, deps.ResumePDFRenderer)
+			recruit.RegisterPDFRoutes(api, rd.Session, deps.RecruitSvc, deps.ResumePDFRenderer)
 			RegisterContactRoutes(api, rd, deps.ContactSvc)
-			RegisterJobRoutes(api, rd, deps.JobPostingSvc)
-			RegisterApplicationRoutes(api, rd, deps.JobApplicationSvc)
-			RegisterJobReportRoutes(api, rd, deps.JobReportSvc, deps.JobPostingSvc)
-			RegisterRecruiterApplicationRoutes(api, rd, deps.JobApplicationSvc)
+			job.RegisterRoutes(api, rd.Session, deps.JobPostingSvc)
+			job.RegisterApplicationRoutes(api, rd.Session, deps.JobApplicationSvc)
+			job.RegisterReportRoutes(api, rd.Session, deps.JobReportSvc, deps.JobPostingSvc)
+			job.RegisterRecruiterApplicationRoutes(api, rd.Session, deps.JobApplicationSvc)
 		},
 	},
 	{

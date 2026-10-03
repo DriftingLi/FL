@@ -2,7 +2,7 @@
 //
 // 落点理由：原住 internal/service/training_catalog_service.go。课程域的 admin_course_service.go
 // 与培训域的 catalog_engine.go 都要用它们，而两域互为强环（15 条边）⇒ 载体留在任一域包里都会
-// 让另一个域反向依赖它；留 internal/service 导出也不行 —— 留驻 service → 域包是单向边，反过来
+// 让另一个域反向依赖它；留 internal/core 导出也不行 —— 留驻 core → 域包是单向边，反过来
 // 又要求 service 把它导出给域包用就成环。它们是无状态纯函数（只吃 *gorm.DB 与参数）——
 // P2 五种破环手法的第三种（无状态纯函数进叶子包），同 internal/coerce / internal/timefmt 先例。
 package sortorder
@@ -18,6 +18,11 @@ import (
 // ErrSwapItemNotFound 是 `swap_with` 指向的那一行不在本组序列里（ADR-0065 决策 3）。
 // 它是输入不合法（400）而不是 404：404 说的是「路径里那个资源没有」，而路径资源在这里是好的。
 var ErrSwapItemNotFound = errors.New("待交换的项不存在")
+
+// ErrEntityNotSortable 对一张没开排序的目录表请求 swap（ADR-0065 决策 3：输入不合法，400）。
+// 与 ErrSwapItemNotFound 同属「交换排序这一族的输入事实」，同住本叶子包：课程域与培训域都要拿
+// 这一族事实建各自的 400 表，谁住谁的域包都会让另一边反向依赖（波 4d 破 course↔training 环）。
+var ErrEntityNotSortable = errors.New("该实体不支持排序交换")
 
 // NextValue 返回表内（可选按组过滤）当前最大 sort_order + 1，新项排末尾。
 func NextValue(db *gorm.DB, table string, where map[string]any) int {

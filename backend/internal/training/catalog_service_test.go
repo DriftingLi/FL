@@ -24,7 +24,7 @@ func newCatalogSvc(t *testing.T) (*Service, *gorm.DB) {
 func p16(v int16) *int16 { return &v }
 
 // createQuestionAs 测试 fixture 单点（培训域自带最小建题：ADR-0070 决策 9 —— 域包测试不得依赖
-// internal/service 的测试面，也不绕题库域的 typed 写面）。培训域读的是 question 表的 status /
+// internal/core 的测试面，也不绕题库域的 typed 写面）。培训域读的是 question 表的 status /
 // credential_id 与 question_tag_relation 的挂接，所以直接落库这两处即可（#1445 P2 波 3b-2 D18）。
 func createQuestionAs(t *testing.T, db *gorm.DB, q model.Question, tagIDs []int, status string) model.Question {
 	t.Helper()

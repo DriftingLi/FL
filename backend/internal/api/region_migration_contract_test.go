@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/region"
 	"forklift-training/internal/testutil"
 )
 
@@ -19,7 +20,7 @@ func TestRegionMigrationOnPostgres(t *testing.T) {
 		t.Skip("DATABASE_URL 未设置")
 	}
 	// 迁移链执行成功即验证。写入一段契约样本验证列可读写。
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuMig", pwd)
 	min_ := 6000
 	max_ := 9000
@@ -53,7 +54,7 @@ func TestRegionMigrationSamplesOnSqlite(t *testing.T) {
 		{"江苏苏州精确地址123号", "江苏省", "苏州市"}, // 无分隔带后缀
 	}
 	for _, c := range cases {
-		parts := service.SplitRegionPath(c.in)
+		parts := region.SplitRegionPath(c.in)
 		if len(parts) >= 3 {
 			// 三段：前两段拼接（迁移的截断语义）
 			if parts[0] != c.prov || parts[1] != c.city {
@@ -61,7 +62,7 @@ func TestRegionMigrationSamplesOnSqlite(t *testing.T) {
 			}
 			continue
 		}
-		prov, city := service.SplitRegionNoSeparator(c.in)
+		prov, city := region.SplitRegionNoSeparator(c.in)
 		if prov != c.prov || city != c.city {
 			t.Errorf("拆分 %q → (%q,%q), want (%q,%q)", c.in, prov, city, c.prov, c.city)
 		}

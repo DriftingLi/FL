@@ -10,8 +10,8 @@ import { APPLICATION_STATUSES, describeApplication } from '../applicationStatus'
 /** 车道根（frontend/src/utils/__tests__ → frontend → 仓库根）。 */
 const ROOT = resolve(__dirname, '../../../..')
 
-const GO_CONTACT = 'backend/internal/service/contact_authz.go'
-const GO_APPLICATION = 'backend/internal/service/job_application_service.go'
+const GO_CONTACT = 'backend/internal/core/contact_authz.go'
+const GO_APPLICATION = 'backend/internal/job/application.go'
 
 // 命名约定（Go 侧注释冻结）：状态常量名为 `ContactGrantXxx`（类型 ContactGrantState）/
 // `ApplicationStatusXxx`。改名会让下面的正则一个也匹配不到，`not.toHaveLength(0)` 即报红。
@@ -35,7 +35,7 @@ describe('取值集合与后端常量表一致（#1103 对账锁）', () => {
     expect(sorted(values)).toEqual(sorted(CONTACT_REQUEST_STATUSES))
   })
 
-  it('application：TS union == service.ApplicationStatus*', () => {
+  it('application：TS union == job.ApplicationStatus*', () => {
     const values = goConstantValues(readFileSync(resolve(ROOT, GO_APPLICATION), 'utf8'), APPLICATION_CONST_RE)
     expect(values).not.toHaveLength(0)
     expect(sorted(values)).toEqual(sorted(APPLICATION_STATUSES))
