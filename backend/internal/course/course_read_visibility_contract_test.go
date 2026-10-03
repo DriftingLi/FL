@@ -6,7 +6,7 @@
 // 为什么值得单独立锁：收紧前这三个面只校验「课程/章节存在」，未发布或未挂载的课程
 // 只要知道 id 就能被学员读到（题干、正文、PPT 全量）；而发现面一直是过滤的
 // ⇒ 「列表/搜索看不到，直链能看」的静默不一致没有任何东西会变红。
-package api
+package course
 
 import (
 	"encoding/json"
@@ -16,10 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
-	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -78,10 +75,7 @@ func TestCourseReadVisibilityContract(t *testing.T) {
 	}
 
 	cfg := &config.Config{JWTSecretKey: "contract-test-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
-	r := gin.New()
-	apiGroup := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	course.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
+	r := newCourseContractRouter(t, db, cfg)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(user.ID), user.Account, "hrwai_user")

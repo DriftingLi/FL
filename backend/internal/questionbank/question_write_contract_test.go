@@ -1,9 +1,9 @@
-// Package api 第十二波票 6 契约：题库 typed 写面——
+// Package questionbank 第十二波票 6 契约：题库 typed 写面——
 //   - 写面拒收 status 通道（状态迁移只经显式动作）；
 //   - 字段类型不符即 400（不再静默落零值）；
 //   - 新增「提交审核」端点（draft→pending）；
 //   - 审核不变式：讲师改已发布题内容回 pending，管理员改动即时生效。
-package api
+package questionbank
 
 import (
 	"encoding/json"
@@ -17,7 +17,6 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
-	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -27,10 +26,7 @@ func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "qwrite-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
+	r := newQuestionBankContractRouter(t, db, cfg)
 	return r, cfg, db
 }
 
@@ -51,14 +47,14 @@ func TestQuestionWriteSurfaceRejectsStatus(t *testing.T) {
 	tutor := qwriteIssue(t, cfg, "tutor")
 
 	body := map[string]any{"type": "single_choice", "content": "带 status 的创建", "options": map[string]string{"A": "甲", "B": "乙"}, "answer": "A", "status": "published"}
-	rec := doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions", body)
+	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions", body)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("创建携带 status 应 400, got %d %s", rec.Code, rec.Body.String())
 	}
 
 	// 正常创建：typed 入参、固定 pending
 	delete(body, "status")
-	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions", body)
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions", body)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("合法创建应 201, got %d %s", rec.Code, rec.Body.String())
 	}
@@ -77,7 +73,7 @@ func TestQuestionWriteSurfaceRejectsStatus(t *testing.T) {
 	qURL := "/api/question-bank/questions/" + strconv.Itoa(created.Data.ID)
 
 	// 更新携带 status 同样拒收
-	rec = doWithToken(t, r, tutor, http.MethodPut, qURL, map[string]any{"status": "draft"})
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPut, qURL, map[string]any{"status": "draft"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("更新携带 status 应 400, got %d %s", rec.Code, rec.Body.String())
 	}
@@ -88,19 +84,19 @@ func TestQuestionWriteTypedFieldMismatchFails(t *testing.T) {
 	r, cfg, _ := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
 	// score 传字符串：typed 绑定必须拒绝（旧 map 面会静默落零值）
-	rec := doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
+	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
 		map[string]any{"type": "single_choice", "content": "分值类型不符", "options": map[string]string{"A": "甲"}, "answer": "A", "score": "abc"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("score 类型不符应 400, got %d %s", rec.Code, rec.Body.String())
 	}
 	// answer 传数字：形态哨兵 → 400（撤 fallback 后不得渲染成 500）
-	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
 		map[string]any{"type": "single_choice", "content": "答案形态不符", "options": map[string]string{"A": "甲"}, "answer": 123})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("answer 形态不符应 400, got %d %s", rec.Code, rec.Body.String())
 	}
 	// options 传 JSON null：归一入空选项桶，选择题必须 400（不得把 "null" 落库）
-	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
 		map[string]any{"type": "single_choice", "content": "选项为 null", "options": nil, "answer": "A"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("options 为 null 应 400, got %d %s", rec.Code, rec.Body.String())
@@ -111,7 +107,7 @@ func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
 	t.Parallel()
 	r, cfg, _ := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, "tutor")
-	rec := doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
+	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
 		map[string]any{"questions": []any{
 			map[string]any{"type": "true_false", "content": "条目级 status 旁路探针", "answer": "true", "status": "published"},
 		}})
@@ -119,7 +115,7 @@ func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
 		t.Fatalf("导入条目携带 status 应 400, got %d %s", rec.Code, rec.Body.String())
 	}
 	// 不带 status 的合法导入不受影响
-	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
 		map[string]any{"questions": []any{
 			map[string]any{"type": "true_false", "content": "合法导入题", "answer": "true"},
 		}})
@@ -136,16 +132,16 @@ func TestQuestionSubmitAction(t *testing.T) {
 	if err := db.Create(&q).Error; err != nil {
 		t.Fatal(err)
 	}
-	rec := doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/"+strconv.Itoa(q.ID)+"/submit", nil)
+	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/"+strconv.Itoa(q.ID)+"/submit", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("draft 提交应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 	// 再提交：非 draft → 400（状态前置哨兵）
-	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/"+strconv.Itoa(q.ID)+"/submit", nil)
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/"+strconv.Itoa(q.ID)+"/submit", nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("pending 再提交应 400, got %d", rec.Code)
 	}
-	rec = doWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/999999/submit", nil)
+	rec = testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/999999/submit", nil)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("不存在提交应 404, got %d", rec.Code)
 	}
@@ -174,7 +170,7 @@ func TestQuestionReviewInvariantOverHTTP(t *testing.T) {
 
 	// 讲师改已发布题内容 → 回 pending
 	q1 := mkPublished("讲师会改的题")
-	if rec := doWithToken(t, r, tutor, http.MethodPut, "/api/question-bank/questions/"+strconv.Itoa(q1), map[string]any{"content": "改后的题干"}); rec.Code != http.StatusOK {
+	if rec := testutil.DoWithToken(t, r, tutor, http.MethodPut, "/api/question-bank/questions/"+strconv.Itoa(q1), map[string]any{"content": "改后的题干"}); rec.Code != http.StatusOK {
 		t.Fatalf("讲师更新应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 	if got := statusOf(q1); got != "pending" {
@@ -182,7 +178,7 @@ func TestQuestionReviewInvariantOverHTTP(t *testing.T) {
 	}
 	// 讲师重提交相同内容 → 编辑未改不动，留在池内
 	q2 := mkPublished("原样重交的题")
-	if rec := doWithToken(t, r, tutor, http.MethodPut, "/api/question-bank/questions/"+strconv.Itoa(q2), map[string]any{"content": "原样重交的题"}); rec.Code != http.StatusOK {
+	if rec := testutil.DoWithToken(t, r, tutor, http.MethodPut, "/api/question-bank/questions/"+strconv.Itoa(q2), map[string]any{"content": "原样重交的题"}); rec.Code != http.StatusOK {
 		t.Fatalf("原样更新应 200, got %d", rec.Code)
 	}
 	if got := statusOf(q2); got != "published" {
@@ -190,7 +186,7 @@ func TestQuestionReviewInvariantOverHTTP(t *testing.T) {
 	}
 	// 管理员改已发布题内容 → 即时生效保持 published
 	q3 := mkPublished("管理员改错字的题")
-	if rec := doWithToken(t, r, admin, http.MethodPut, "/api/question-bank/questions/"+strconv.Itoa(q3), map[string]any{"content": "改了错字"}); rec.Code != http.StatusOK {
+	if rec := testutil.DoWithToken(t, r, admin, http.MethodPut, "/api/question-bank/questions/"+strconv.Itoa(q3), map[string]any{"content": "改了错字"}); rec.Code != http.StatusOK {
 		t.Fatalf("管理员更新应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 	if got := statusOf(q3); got != "published" {
