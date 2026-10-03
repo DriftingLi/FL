@@ -93,15 +93,9 @@ node_modules_old/
 # docs/README.md（docs 目录索引）同步入库
 # 2026-09-21 追加例外：docs/verification/（验收产物）。pr-evidence 认「仓库内 docs/verification/<模块>/<PR号>/」
 # 为可核验产物路径，但这里一直没有例外——存量 4 张图是靠 git add -f 进去的，下一个人照路径提交会被静默忽略。
-# 2026-10-03 追加例外：docs/design/（调研与设计产物，#1488）。#1482 的 App 端微信登录调研要落
-# docs/design/1482-app-wechat-login.md 并版本化——它标了自己不知道什么（9 条「一手来源未找到/未证实」登记），
-# 删树即永久丢失，故不能继续留在 gitignored 的 .scratch/。此前那份是靠 git add -f 进去的：文件一旦跟踪
-# gitignore 对它永久失效，但下一个新落同目录的文件会被静默吞掉（git status 连 ?? 都不显示），与上面
-# docs/verification/ 那条是同一种失败模式，这次把例外写在这里而不是留给下一个人踩。
 docs/*
 !docs/adr/
 !docs/agents/
-!docs/design/
 !docs/README.md
 !docs/verification/
 
