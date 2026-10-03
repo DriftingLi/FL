@@ -272,7 +272,8 @@ func ContactStatesOf(db *gorm.DB, recruiterID int, studentUserIDs []int) (map[in
 	}
 	out := make(map[int]ContactStateOf, len(grants))
 	for id, g := range grants {
-		out[id] = ContactStateOf{State: g.State, Source: g.Source}
+		// gosimple S1016：两结构字段同名同型同序（无 tag），直接转换而非字面量重建。
+		out[id] = ContactStateOf(g)
 	}
 	return out, nil
 }

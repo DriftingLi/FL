@@ -1,5 +1,5 @@
 // 精选域的附件归属写面门禁（第十二波票 4）：featuredImageGate 纯函数表驱动 + 精选写面端到端
-// （Create 拒绝外链、编辑未改不动）。简历域的同类门禁留在 internal/service/attachment_gate_test.go。
+// （Create 拒绝外链、编辑未改不动）。简历域的同类门禁留在 internal/resume/attachment_gate_test.go。
 package featured
 
 import (

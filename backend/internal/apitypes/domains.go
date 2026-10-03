@@ -354,7 +354,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/recruit/applications/{id}"},
 			{Method: "POST", Path: "/recruit/applications/{id}/reject"},
 			// 管理端巡检面（#1100：此前注解未指认 data、也不在任何域声明表；
-			// frontend/src/api/inspection.ts 的 4 个巡检端点即这四条，handler 在 internal/api/job_report.go）。
+			// frontend/src/api/inspection.ts 的 4 个巡检端点即这四条，handler 在 internal/job/handler_report.go）。
 			{Method: "GET", Path: "/admin/jobs"},
 			{Method: "GET", Path: "/admin/job-reports"},
 			{Method: "POST", Path: "/admin/jobs/{id}/force-offline"},
