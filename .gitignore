@@ -98,6 +98,12 @@ docs/*
 !docs/agents/
 !docs/README.md
 !docs/verification/
+# 2026-10-03 追加例外：docs/design/（调研与实测账本的入库点，#1494）。
+# #1488 那份（docs/design/1482-app-wechat-login.md）是靠 `git add -f` 进去的，当时写明
+# 「目录级例外需另票补，否则下一份 docs/design/*.md 重蹈」——本票补上这道例外。
+# 判据：.scratch/ 与 *.log 均被忽略（本文件 :62 :81），调研产物留在 .scratch 即
+# PR 审查不到、树没了就没了；入库路径要有目录例外，否则下一个提交者被静默忽略。
+!docs/design/
 
 # ===== WorkBuddy 相关文件 =====
 .workbuddy/

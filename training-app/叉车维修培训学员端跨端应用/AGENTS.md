@@ -304,6 +304,8 @@ git status --porcelain | Select-String 'training-app/'
 - 每次微调都**跑全量门 + 提交**——门按中循环跑（每个视觉满意点一次），提交按「一个视觉主题一个 commit」。
 - **kill `cli` 或 HBuilderX 主程序**——违反 ADR-0008 的「HBuilderX 是单实例串行资源」坑位：**忙就等**（`scripts/lib/hx-busy.ps1` 的「锁 + 忙探测 + 等待上限」），超时 `exit 2` 并改跑不需要 HBuilderX 的检查（`npm run test:unit` / `build:kotlin-all -SkipPublish` / `smoke:emulator`）；`hx-run.ps1` 内不含任何强杀调用。
 - 拿**仿真机当热刷新用**——仿真机是**前置冒烟**（`npm run smoke:emulator`，非门、不替代 ①），装一次 SDK 3–4 GB / 20–40 分钟，不适合秒级迭代。
+- **sha 一无害前进就重跑整道门**（2026-10-03 立，实测账见 `docs/design/1494-mobile-dev-wallclock-audit.md`）——绑定判据的**真源是 `.github/workflows/pr-evidence.yml` 的校验器源码**（2026-09-12 放宽那次就是为了「免去 master 前进一次就重跑重贴的 churn」，PR 模板也照此写），本条**不复述那份文件清单**（复述品会漂移，模板顶部已为此写过警告）。本条只补**手法**：贴证据前现测一次 `git diff --name-only <旧证据sha> <head>` 看改动集，判据不满足才重跑；**「我觉得没改」不算判据**（校验器对 compare 拿不到 / 超大 diff 截断是 fail-closed，那种情况仍须重跑）。**为什么还要立这条**：放宽早于本仓的实测返工——#1443 为绑 `c3adc58` 重跑了一次完整 ④c（publish 53 s + kotlinc 全模块 ≈2.9 min），而其间只动了一个 `docs/verification/*.jpg`；#1467 的 merge 只带进两个 Go 域搬包，② 与 ④c 仍各重跑一次。判据改了，取门侧没有跟着改，默认动作就退化成「重跑」。
+- **② 门失败后不带 `-SkipBuild` 重试**（同上账本）——② 的失败轮实测 **9–26 分钟/次**（`mp-weixin-check.ps1:6` 自述的「≈4.5 分钟」是**成功那次**、不是预期值），构成是 `close→open→auto` 整段重试（`-AutoAttempts`，默认 3）里**每轮都重新 publish**。产物没变时，第二次起带 `-SkipBuild` 复用产物重试**实测 ≈2 分钟**（#1443 01:14→01:16、#1422 第三次靠它才过）。**边界**：门结论只对当前那份产物成立（脚本 `:33` 自述）⇒ 改动碰了 `mp-weixin` 构建面就不许带，宁可重编。
 
 **HBuilderX 回写坑位同样适用**：跑完任何 HBuilderX 步骤（含 `hx-run.ps1`）先 `git status` 看 `manifest.json` **与 `pages.json`** 是否被改脏，脏了就还原再继续 —— 后者会被写入一段 `condition`（GUI 选的启动页，注释自述「仅开发期间生效」），**属本地开发配置、禁止提交**；而 `pages.json` 同时是「运行时面 / 打包面」判据来源，误提交会让 PR 凭空命中 ④b 云打包门（详见 `docs/adr/0008-移动端验收门与证据.md`）。
 
