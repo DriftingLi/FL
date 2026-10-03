@@ -189,6 +189,22 @@
 - 守卫：`check-render-error-face.mjs --all` 无违规（69 个面）、`check-comment-cleanliness.mjs --all` ✓（730 文件 0 欠账）、`check-catalog-sort.mjs --all` 无违规、`internal/layers` 三条守卫 PASS。
 - 断言不变的核验方式：`git show HEAD:<旧路径>` 与域包新文件做**归一化**（`testutil.*` 与改名的测试替身还原成旧名）后**逐测试函数体比对**。9 个文件 35 个 `func Test`：5 个文件的用例体逐字相同；其余 4 个文件（`auth_refresh_cookie_test.go` 1 个、`captcha_test.go` 1 个、`code_auth_test.go` 5 个、`account_change_contract_test.go` 2 个）的差异**只有三类机械改写**——去自包限定符（`auth.CodePurposeRegister` → `CodePurposeRegister`）、测试替身改名（`memCodeStore` → `codeAuthStoreN`）、`gin.SetMode(gin.TestMode)` → `setTestGinMode()`；**没有一处断言/期望表达式被改**。另 4 个 fixture 构造函数（`newCodeAuthTestRouterX` / `newAccountChangeTestRouter` / `newDeleteAccountPGRouter` / 会话构造）为去 `Deps` 重写，属预期差异。
 
+### 8.6 教训：PG 用例的夹具改动本机测不出（批 1 CI 首轮红的唯一原因）
+
+批 1 推送后 CI `backend-test` 红，唯一失败用例是 `internal/auth` 的 `TestDeleteAccountOnPostgres_无故障时注销真的生效`：
+
+```
+account_deletion_postgres_contract_test.go:115: 无故障时注销应 200，实际 400，
+body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重试","data":null}
+```
+
+根因：该 PG 用例原走 `newContractDeps(t, db, nil)` ⇒ `newContractDepsWithStorage` 把 `d.Session` 换成 `security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（**内存黑名单**）；重写夹具时改用 `security.NewSession(...)`，而 `NewSession` 装的是 `RedisBlacklistStore{}`（`backend/internal/security/session.go:139-141`），测试链路没有 Redis ⇒ `backend/internal/auth/handler.go:393` 的 `RevokeIdentity` 写不进吊销标记 ⇒ :394 回 400。修复：改回 `security.SessionFromConfigWithBlacklist(&config.Config{}, testutil.NewValueBlacklist())`（`config` 的 `JWTExpiry()` / `JWTRefreshExpiry()` 自带默认值，零值字面量等价旧链）。
+
+两条教训（后续批次照做）：
+
+1. **PG 契约用例在本机（无 `DATABASE_URL`）干净 skip ⇒ 本机「全绿」对它们零信息量**。凡动到 `*postgres*_test.go` 的夹具，只能靠 CI 判；不要在本地绿了就宣称那批绿。
+2. **重写夹具时要逐一对照原链注入过的替身**（黑名单 / storage / logger），不能只补「看得见的功能依赖」。对照源：`router_test_helper_test.go` 的 `newContractDepsWithStorage`（`if cfg == nil { cfg = &config.Config{} }` + `SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`）。
+
 ## 附录：142 个文件逐条
 
 | 文件 | 行 | 桶 | 建议 |

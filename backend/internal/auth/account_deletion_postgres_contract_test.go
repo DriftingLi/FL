@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/config"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -29,7 +29,10 @@ import (
 func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) (*gin.Engine, string) {
 	t.Helper()
 	testutil.SetTestGinMode()
-	sess := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	// 黑名单必须走内存实现，与装配链的 newContractDepsWithStorage 同一份构造：测试链路没有 Redis，
+	// 少了它「注销先写吊销标记」这条判据恒红（#1445 批 1 下沉后 CI 实测：注销应 200 实际 400
+	// 「会话吊销未生效」；本机因 PG 用例 skip 而测不出）。
+	sess := security.SessionFromConfigWithBlacklist(&config.Config{}, testutil.NewValueBlacklist())
 	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := gin.New()
 	// 注册真实路由面（/account 带 JWT 中间件）——用例带真 access，不再手工注入 CtxUserID。
