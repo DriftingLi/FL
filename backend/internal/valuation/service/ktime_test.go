@@ -8,7 +8,7 @@ import (
 	"math"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // TestCalcKTime_BoundaryCases 覆盖 Kt 各典型年限与两种动力类型
@@ -21,23 +21,23 @@ func TestCalcKTime_BoundaryCases(t *testing.T) {
 
 	type testCase struct {
 		name     string
-		pt       model.PowerType
+		pt       valuation.PowerType
 		years    int
 		expected float64
 	}
 	cases := []testCase{
 		// 电动
-		{"electric_1y", model.PowerTypeElectric, 1, 0.887},
-		{"electric_3y", model.PowerTypeElectric, 3, 0.698},
-		{"electric_5y", model.PowerTypeElectric, 5, 0.549},
-		{"electric_8y", model.PowerTypeElectric, 8, 0.382},
-		{"electric_10y", model.PowerTypeElectric, 10, 0.301},
+		{"electric_1y", valuation.PowerTypeElectric, 1, 0.887},
+		{"electric_3y", valuation.PowerTypeElectric, 3, 0.698},
+		{"electric_5y", valuation.PowerTypeElectric, 5, 0.549},
+		{"electric_8y", valuation.PowerTypeElectric, 8, 0.382},
+		{"electric_10y", valuation.PowerTypeElectric, 10, 0.301},
 		// 内燃
-		{"combustion_1y", model.PowerTypeCombustion, 1, 0.905},
-		{"combustion_3y", model.PowerTypeCombustion, 3, 0.741},
-		{"combustion_5y", model.PowerTypeCombustion, 5, 0.607},
-		{"combustion_8y", model.PowerTypeCombustion, 8, 0.449},
-		{"combustion_10y", model.PowerTypeCombustion, 10, 0.368},
+		{"combustion_1y", valuation.PowerTypeCombustion, 1, 0.905},
+		{"combustion_3y", valuation.PowerTypeCombustion, 3, 0.741},
+		{"combustion_5y", valuation.PowerTypeCombustion, 5, 0.607},
+		{"combustion_8y", valuation.PowerTypeCombustion, 8, 0.449},
+		{"combustion_10y", valuation.PowerTypeCombustion, 10, 0.368},
 	}
 
 	ctx := context.Background()
@@ -59,7 +59,7 @@ func TestCalcKTime_ZeroYear(t *testing.T) {
 	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	res, err := CalcKTime(ctx, model.PowerTypeElectric, 2025, 2025, provider)
+	res, err := CalcKTime(ctx, valuation.PowerTypeElectric, 2025, 2025, provider)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,20 +76,20 @@ func TestCalcKTime_NegativeYear(t *testing.T) {
 	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	_, err := CalcKTime(ctx, model.PowerTypeElectric, 2025, 2024, provider)
-	if err != model.ErrInvalidYear {
+	_, err := CalcKTime(ctx, valuation.PowerTypeElectric, 2025, 2024, provider)
+	if err != valuation.ErrInvalidYear {
 		t.Errorf("expected ErrInvalidYear, got %v", err)
 	}
 }
 
 // TestCalcKTime_UnknownPowerType 异常：未知动力类型
 // 重构后 Kt 直接接收 PowerType，由上层 vehicle_types 派生
-// 未知类型在 Kt 内部返回错误（不再使用 model.ErrInvalidForkliftType）
+// 未知类型在 Kt 内部返回错误（不再使用 valuation.ErrInvalidForkliftType）
 func TestCalcKTime_UnknownPowerType(t *testing.T) {
 	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	_, err := CalcKTime(ctx, model.PowerType("hybrid"), 2020, 2025, provider)
+	_, err := CalcKTime(ctx, valuation.PowerType("hybrid"), 2020, 2025, provider)
 	if err == nil {
 		t.Error("expected error for unknown power type, got nil")
 	}

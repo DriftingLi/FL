@@ -1,6 +1,5 @@
-// Package model - 电池 RUL 评估模块 DTO
-// 与现有 evaluation.go 物理隔离，独立维护
-package model
+// 电池 RUL 评估模块 DTO（与评估 DTO 分文件维护）。
+package valuation
 
 import "errors"
 

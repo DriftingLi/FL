@@ -14,7 +14,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/pdf"
 	"forklift-training/internal/valuation/report"
 	"forklift-training/internal/valuation/service"
@@ -29,14 +29,14 @@ type BatteryHandler struct {
 	logger  *zap.Logger
 	storage storage.Storage
 	// coord 电池报告流程协调器（生成/下载/再生成单点实现，gin-free）
-	coord *report.Coordinator[model.BatteryEvaluation]
+	coord *report.Coordinator[valuation.BatteryEvaluation]
 	// prepareSuggestions 建议 fallback 单点：详情端点与报告生成共用（不再两处复制）
-	prepareSuggestions func(ctx context.Context, e *model.BatteryEvaluation)
+	prepareSuggestions func(ctx context.Context, e *valuation.BatteryEvaluation)
 }
 
 // NewBatteryHandler 构造电池处理器
 func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
-	prepareSuggestions := func(_ context.Context, e *model.BatteryEvaluation) {
+	prepareSuggestions := func(_ context.Context, e *valuation.BatteryEvaluation) {
 		// 旧记录建议 fallback 单入口：health 由记录置信度反推（缺失默认 1.0）
 		service.EnsureBatterySuggestions(e)
 	}
@@ -46,15 +46,15 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 		logger:             l,
 		storage:            st,
 		prepareSuggestions: prepareSuggestions,
-		coord: report.New(report.Spec[model.BatteryEvaluation]{
+		coord: report.New(report.Spec[valuation.BatteryEvaluation]{
 			Logger:    l,
 			Storage:   st,
 			KeyPrefix: "reports/battery_report_",
 			Loader:    repo.GetEvaluation,
-			PathOf:    func(e *model.BatteryEvaluation) string { return e.ReportPdfPath },
+			PathOf:    func(e *valuation.BatteryEvaluation) string { return e.ReportPdfPath },
 			Writer:    repo.UpdateReportPath,
 			Prepare:   prepareSuggestions,
-			Render: func(_ context.Context, e *model.BatteryEvaluation) ([]byte, error) {
+			Render: func(_ context.Context, e *valuation.BatteryEvaluation) ([]byte, error) {
 				return pdf.GenerateBatteryReportBytes(e)
 			},
 		}),
@@ -68,13 +68,13 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 // @Tags 估值-电池
 // @Accept json
 // @Produce json
-// @Param body body model.CreateBatteryRequest true "电池循环数据（至少 10 个完整循环）"
-// @Success 200 {object} response.R{data=model.CreateBatteryResponse} "success"
+// @Param body body valuation.CreateBatteryRequest true "电池循环数据（至少 10 个完整循环）"
+// @Success 200 {object} response.R{data=valuation.CreateBatteryResponse} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/battery/evaluations [post]
 func (h *BatteryHandler) Create(c *gin.Context) {
-	var req model.CreateBatteryRequest
+	var req valuation.CreateBatteryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数格式错误: "+err.Error())
 		return
@@ -94,7 +94,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	}
 
 	// 构造评估主记录
-	eval := &model.BatteryEvaluation{
+	eval := &valuation.BatteryEvaluation{
 		BatteryType:       req.BatteryType,
 		BatteryModel:      req.BatteryModel,
 		CycleCount:        len(req.Cycles),
@@ -117,7 +117,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 	}
 
 	// 返回响应
-	response.Success(c, model.CreateBatteryResponse{
+	response.Success(c, valuation.CreateBatteryResponse{
 		EvaluationID:   saved.ID,
 		BatteryType:    saved.BatteryType,
 		CycleCount:     saved.CycleCount,
@@ -142,7 +142,7 @@ func (h *BatteryHandler) Create(c *gin.Context) {
 // @Param page query integer false "页码（默认 1）"
 // @Param page_size query integer false "每页条数（默认 20，上限 100）"
 // @Param battery_type query string false "电池类型筛选（lfp / ncm / other）"
-// @Success 200 {object} response.R{data=model.ListBatteryResponse} "success"
+// @Success 200 {object} response.R{data=valuation.ListBatteryResponse} "success"
 // @Failure 400 {object} response.R "电池类型非法"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务器内部错误"
@@ -156,7 +156,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 	batteryType := c.Query("battery_type")
 	// 简单校验：必须是合法值
 	if batteryType != "" {
-		if !model.BatteryType(batteryType).IsValid() {
+		if !valuation.BatteryType(batteryType).IsValid() {
 			response.BadRequest(c, "电池类型非法：仅支持 lfp / ncm / other")
 			return
 		}
@@ -171,7 +171,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, model.ListBatteryResponse{
+	response.Success(c, valuation.ListBatteryResponse{
 		Total: total,
 		Items: items,
 	})
@@ -186,7 +186,7 @@ func (h *BatteryHandler) List(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path integer true "电池评估记录 ID"
-// @Success 200 {object} response.R{data=model.BatteryEvaluation} "success"
+// @Success 200 {object} response.R{data=valuation.BatteryEvaluation} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "电池评估记录不存在"

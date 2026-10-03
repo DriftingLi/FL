@@ -3,5 +3,5 @@
 package repository
 
 // 本文件原本由 sqlc 生成，重构后已无 sqlc 模型。
-// battery 相关持久化直接使用 model.BatteryEvaluation 等业务 DTO，
+// battery 相关持久化直接使用 valuation.BatteryEvaluation 等业务 DTO，
 // 故此处不再保留任何数据库实体结构体，避免冗余。

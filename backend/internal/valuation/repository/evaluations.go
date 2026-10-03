@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"forklift-training/internal/cache"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // EvaluationRepository 评估记录仓储
@@ -117,9 +117,9 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 
 // GetEvaluation 按 ID 查询评估详情（不按用户过滤）
 // 用于公开的报告生成/下载场景（report.go），鉴权详情请用 GetEvaluationByUser
-func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error) {
+func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*valuation.EvaluationDetail, error) {
 	cacheKey := evalGetKey(id)
-	var result model.EvaluationDetail
+	var result valuation.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
 		return r.scanEvaluationByID(ctx, id, 0, false)
 	})
@@ -131,10 +131,10 @@ func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*mo
 
 // GetEvaluationByUser 按 ID 查询评估详情，并校验归属（user_id 必须等于 userID）
 // 用于登录用户查看自己的历史详情；不属于该用户的记录返回 pgx.ErrNoRows
-func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.EvaluationDetail, error) {
+func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*valuation.EvaluationDetail, error) {
 	// 详情缓存 key 带上 userID，避免跨用户串缓存
 	cacheKey := evalGetUserKey(userID, id)
-	var result model.EvaluationDetail
+	var result valuation.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
 		return r.scanEvaluationByID(ctx, id, userID, true)
 	})
@@ -158,9 +158,9 @@ const evaluationDetailColumns = `id, brand, vehicle_type, series, tonnage,
 
 // scanEvaluationDetailRow 按 evaluationDetailColumns 顺序扫描一行完整列为 EvaluationDetail
 // （详情/列表/回填读路径共用；pgx.Rows 满足 pgx.Row 接口，单行与多行扫描同源）。
-func scanEvaluationDetailRow(row pgx.Row) (model.EvaluationDetail, error) {
+func scanEvaluationDetailRow(row pgx.Row) (valuation.EvaluationDetail, error) {
 	var (
-		d               model.EvaluationDetail
+		d               valuation.EvaluationDetail
 		reportPath      *string
 		suggestionsJSON *[]string
 		createdAt       time.Time
@@ -193,7 +193,7 @@ func scanEvaluationDetailRow(row pgx.Row) (model.EvaluationDetail, error) {
 
 // scanEvaluationByID 执行单行查询并扫描为 EvaluationDetail。
 // enforceOwner=true 时追加 user_id = $userID 过滤；=false 时仅按 id 查询（公开场景）
-func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64, userID int, enforceOwner bool) (model.EvaluationDetail, error) {
+func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64, userID int, enforceOwner bool) (valuation.EvaluationDetail, error) {
 	var row pgx.Row
 	if enforceOwner {
 		row = r.pool.QueryRow(ctx,
@@ -207,9 +207,9 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 
 // ListEvaluations 分页查询评估列表
 // brand/vehicleType 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部（公开统计场景）
-func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]model.EvaluationDetail, error) {
+func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]valuation.EvaluationDetail, error) {
 	cacheKey := evalListKey(brand, vehicleType, userID, limit, offset)
-	var result []model.EvaluationDetail
+	var result []valuation.EvaluationDetail
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
 		// 动态拼装 WHERE：brand / vehicle_type / user_id 均为可选过滤
 		where := make([]string, 0, 3)
@@ -244,7 +244,7 @@ func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand, vehic
 			return nil, fmt.Errorf("查询评估列表失败: %w", err)
 		}
 		defer rows.Close()
-		out := make([]model.EvaluationDetail, 0, limit)
+		out := make([]valuation.EvaluationDetail, 0, limit)
 		for rows.Next() {
 			d, scanErr := scanEvaluationDetailRow(rows)
 			if scanErr != nil {
@@ -350,14 +350,14 @@ func (r *EvaluationRepository) EvaluationExists(ctx context.Context, id int64) (
 // ListEvaluationsForBackfill 列出全部评估记录的完整详情（幂等建议回填使用）。
 // 返回完整详情而非窄投影：建议输入与 PDF 重建同源走 FromDetail 单一映射，
 // 不再维护第三份 SuggestionsInput 字段拷贝（#400）。
-func (r *EvaluationRepository) ListEvaluationsForBackfill(ctx context.Context) ([]model.EvaluationDetail, error) {
+func (r *EvaluationRepository) ListEvaluationsForBackfill(ctx context.Context) ([]valuation.EvaluationDetail, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT `+evaluationDetailColumns+` FROM evaluations ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("查询回填记录失败: %w", err)
 	}
 	defer rows.Close()
-	out := make([]model.EvaluationDetail, 0, 16)
+	out := make([]valuation.EvaluationDetail, 0, 16)
 	for rows.Next() {
 		d, scanErr := scanEvaluationDetailRow(rows)
 		if scanErr != nil {

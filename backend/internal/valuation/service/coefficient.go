@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // CoefficientProvider 系数配置提供者（实时查 DB）
@@ -22,11 +22,11 @@ func NewCoefficientProvider(dictRepo DictionaryReader) *CoefficientProvider {
 }
 
 // Get 按 key 读取系数
-// 未找到时返回 model.ErrCoefficientNotFound
+// 未找到时返回 valuation.ErrCoefficientNotFound
 func (p *CoefficientProvider) Get(ctx context.Context, key string) (float64, error) {
 	c, err := p.dictRepo.GetCoefficientByKey(ctx, key)
 	if err != nil {
-		return 0, fmt.Errorf("%w: %s", model.ErrCoefficientNotFound, key)
+		return 0, fmt.Errorf("%w: %s", valuation.ErrCoefficientNotFound, key)
 	}
 	return c.Value, nil
 }

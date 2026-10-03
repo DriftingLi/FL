@@ -7,31 +7,31 @@ import (
 	"context"
 
 	mainmodel "forklift-training/internal/model"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // EvaluationStore 评估记录存储接口（EvaluationHandler / ReportHandler 消费）。
 type EvaluationStore interface {
-	GetEvaluation(ctx context.Context, id int64) (*model.EvaluationDetail, error)
-	GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.EvaluationDetail, error)
+	GetEvaluation(ctx context.Context, id int64) (*valuation.EvaluationDetail, error)
+	GetEvaluationByUser(ctx context.Context, id int64, userID int) (*valuation.EvaluationDetail, error)
 	CountEvaluations(ctx context.Context, brand, vehicleType string, userID int) (int, error)
-	ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]model.EvaluationDetail, error)
+	ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]valuation.EvaluationDetail, error)
 	UpdateEvaluationReportPath(ctx context.Context, id int64, path string) error
 }
 
 // BatteryStore 电池 RUL 评估存储接口（BatteryHandler 消费）。
 type BatteryStore interface {
-	CreateEvaluation(ctx context.Context, eval *model.BatteryEvaluation, features []model.CycleFeature, userID int) (*model.BatteryEvaluation, error)
-	GetEvaluation(ctx context.Context, id int64) (*model.BatteryEvaluation, error)
-	GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.BatteryEvaluation, error)
-	ListEvaluations(ctx context.Context, batteryType string, userID int, limit, offset int) ([]model.BatteryEvaluationSummary, int, error)
+	CreateEvaluation(ctx context.Context, eval *valuation.BatteryEvaluation, features []valuation.CycleFeature, userID int) (*valuation.BatteryEvaluation, error)
+	GetEvaluation(ctx context.Context, id int64) (*valuation.BatteryEvaluation, error)
+	GetEvaluationByUser(ctx context.Context, id int64, userID int) (*valuation.BatteryEvaluation, error)
+	ListEvaluations(ctx context.Context, batteryType string, userID int, limit, offset int) ([]valuation.BatteryEvaluationSummary, int, error)
 	UpdateReportPath(ctx context.Context, id int64, path string) error
 }
 
 // ReportGenerator PDF 报告生成接口（ReportHandler 消费；生产为 pdf.Generator，测试为内存替身）。
-// dimensionScores 为 typed 维度评分切片（标签契约见 model.DimensionLabels）。
+// dimensionScores 为 typed 维度评分切片（标签契约见 valuation.DimensionLabels）。
 type ReportGenerator interface {
-	GenerateReport(r *model.EvaluationDetail, dimensionScores []model.DimensionScore, suggestions []string) ([]byte, error)
+	GenerateReport(r *valuation.EvaluationDetail, dimensionScores []valuation.DimensionScore, suggestions []string) ([]byte, error)
 }
 
 // ValuationAuth 估值模块消费的认证窄接口（主体系 AuthService 直接满足，

@@ -5,12 +5,12 @@ package service
 import (
 	"context"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // EvaluationBackfillStore 回填所需的评估记录读取/更新面（生产为 pgx 仓储，测试为内存替身）。
 type EvaluationBackfillStore interface {
-	ListEvaluationsForBackfill(ctx context.Context) ([]model.EvaluationDetail, error)
+	ListEvaluationsForBackfill(ctx context.Context) ([]valuation.EvaluationDetail, error)
 	UpdateEvaluationSuggestions(ctx context.Context, id int64, suggestions []string) error
 }
 

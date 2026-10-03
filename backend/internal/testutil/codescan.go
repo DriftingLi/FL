@@ -156,16 +156,14 @@ type ScanDir struct {
 // responseStaticPackages 是「响应面」里**不由域声明表派生**的那一半（模块根相对）。
 //
 // 三类：装配根与共享层（internal/api、internal/core、internal/model、pkg/response）、残值模块
-// 按技术分层留下的两个包（valuation/model 与 valuation/repository —— 它们的定义键前缀是
-// `model.` / `repository.`，不叫 `valuation.`），以及 audit —— 它虽已出包（P2 波 4f），却
-// **不在域声明表**里（审计面没有 Web 消费方、不进 codegen），派生器看不到它，只能在这里登记。
+// 按技术分层**尚未**收口的那一个包（valuation/repository —— 它的定义键前缀是 `repository.`，
+// 不叫 `valuation.`；同批的 valuation/model 已在 issue #1514 波 1 并回域包，valuation 域因此
+// 从这一份转到派生面），以及 audit —— 它虽已出包（P2 波 4f），却**不在域声明表**里（审计面
+// 没有 Web 消费方、不进 codegen），派生器看不到它，只能在这里登记。
 var responseStaticPackages = []ScanDir{
 	{"internal/api", "api"},
 	{"internal/core", "core"},
 	{"internal/model", "model"},
-	// valuation/model 的 Go 包名也叫 model，swagger 定义键同样落在 `model.` 前缀下（两边类型名
-	// 不重叠，swag 自己在重名时会报），所以 Pkg 列必须同为 "model" 才对得上生成物。
-	{"internal/valuation/model", "model"},
 	{"internal/valuation/repository", "repository"},
 	{"internal/audit", "audit"},
 	{"pkg/response", "response"},
@@ -206,8 +204,8 @@ func ResponsePackages(t *testing.T) []ScanDir {
 // 为什么现读而不是抄一份：域名的唯一出处是 internal/apitypes/domains.go（ADR-0070 决策 3）。
 // 为什么用 go/parser 而不是 import：apitypes 的包内测试 import testutil，testutil 再 import
 // apitypes 就是 Go 的 `import cycle not allowed in test`。
-// 声明了却没有 internal/<域> 目录的域（credential 无目录、valuation 只有子包）自动略过 —— 它们
-// 由 responseStaticPackages 兜住；目录在而包名不符则判红（那是声明表与目录漂了，不是「还没搬」）。
+// 声明了却没有 internal/<域> 目录的域（credential 无目录）自动略过 —— 它们由
+// responseStaticPackages 兜住；目录在而包名不符则判红（那是声明表与目录漂了，不是「还没搬」）。
 func domainPackages(t *testing.T) []ScanDir {
 	t.Helper()
 	root := ModuleRoot(t)

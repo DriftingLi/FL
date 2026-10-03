@@ -8,7 +8,7 @@ import (
 	"math"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // TestInferPowerType 覆盖动力类型推断的各类输入
@@ -17,15 +17,15 @@ func TestInferPowerType(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
-		want model.PowerType
+		want valuation.PowerType
 	}{
-		{"explicit_electric", "电动叉车", model.PowerTypeElectric},
-		{"battery_type", "蓄电池叉车", model.PowerTypeElectric},
-		{"empty_string", "", model.PowerTypeElectric},
-		{"combustion_explicit", "内燃叉车", model.PowerTypeCombustion},
-		{"combustion_balanced", "平衡重内燃叉车", model.PowerTypeCombustion},
-		{"combustion_keyword_only", "内燃", model.PowerTypeCombustion},
-		{"unknown_defaults_electric", "前移式叉车", model.PowerTypeElectric},
+		{"explicit_electric", "电动叉车", valuation.PowerTypeElectric},
+		{"battery_type", "蓄电池叉车", valuation.PowerTypeElectric},
+		{"empty_string", "", valuation.PowerTypeElectric},
+		{"combustion_explicit", "内燃叉车", valuation.PowerTypeCombustion},
+		{"combustion_balanced", "平衡重内燃叉车", valuation.PowerTypeCombustion},
+		{"combustion_keyword_only", "内燃", valuation.PowerTypeCombustion},
+		{"unknown_defaults_electric", "前移式叉车", valuation.PowerTypeElectric},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
