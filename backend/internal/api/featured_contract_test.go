@@ -41,7 +41,7 @@ func seedContractFeatured(t *testing.T, db *gorm.DB, title string, viewCount int
 
 func TestFeaturedDetailNoViewParam(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	id := seedContractFeatured(t, db, "no_view 契约", 7)
 
@@ -51,7 +51,7 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 	featured.RegisterRoutes(api, deps.RouterDeps().Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
 
 	// no_view=1：阅读量不变
-	rec := performRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id)+"?no_view=1")
+	rec := testutil.PerformRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id)+"?no_view=1")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -66,7 +66,7 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 	}
 
 	// 不带参数：保持计数行为（自增）
-	rec2 := performRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id))
+	rec2 := testutil.PerformRequest(r, "GET", "/api/featured-content/"+strconv.Itoa(id))
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("期望 200, got %d: %s", rec2.Code, rec2.Body.String())
 	}
@@ -83,7 +83,7 @@ func TestFeaturedDetailNoViewParam(t *testing.T) {
 
 func TestFeaturedViewEndpoint(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	id := seedContractFeatured(t, db, "view 端点契约", 10)
 
@@ -92,7 +92,7 @@ func TestFeaturedViewEndpoint(t *testing.T) {
 	deps := newContractDeps(t, db, nil)
 	featured.RegisterRoutes(api, deps.RouterDeps().Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
 
-	rec := performRequest(r, "POST", "/api/featured-content/"+strconv.Itoa(id)+"/view")
+	rec := testutil.PerformRequest(r, "POST", "/api/featured-content/"+strconv.Itoa(id)+"/view")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -110,7 +110,7 @@ func TestFeaturedViewEndpoint(t *testing.T) {
 	}
 
 	// 不存在的 ID → 404
-	rec404 := performRequest(r, "POST", "/api/featured-content/99999/view")
+	rec404 := testutil.PerformRequest(r, "POST", "/api/featured-content/99999/view")
 	if rec404.Code != http.StatusNotFound {
 		t.Errorf("不存在的 ID 期望 404, got %d", rec404.Code)
 	}

@@ -17,7 +17,7 @@ import (
 
 func newWxLoginEnv(t *testing.T) *gin.Engine {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	return NewRouter(newContractDeps(t, db, nil))
 }

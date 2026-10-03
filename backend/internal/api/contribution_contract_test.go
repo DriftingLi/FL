@@ -26,7 +26,7 @@ import (
 // 用例必须先往本人的分区 contributions/<uid>/ 里种一个真文件，才谈得上提交成功。
 func newContributionRouter(t *testing.T) (*gin.Engine, *Deps, *model.HrwaiUser, *model.Credential, *storage.LocalStorage) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewFileDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-secret",

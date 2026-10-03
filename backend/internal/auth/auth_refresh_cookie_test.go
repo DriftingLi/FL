@@ -15,7 +15,7 @@
 //	③ Cookie 属性（HttpOnly / SameSite=Lax / 生产 Secure / Path=/api/auth 认证族前缀）逐字锁死，
 //	   SameSite 写成 None 必须判红；Path 收窄回单端点也要判红（那会让登出拿不到凭证，
 //	   见 TestLogout_Cookie通道的refresh被吊销且响应清除Cookie 的第 ① 段）。
-package api
+package auth
 
 import (
 	"encoding/base64"
@@ -32,7 +32,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -44,7 +43,7 @@ import (
 // 因此这里断言的 Domain 就是 access cookie 的 Domain——两者只能同源。
 func cookieSession(secure bool) *security.Session {
 	return security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*24*time.Hour,
-		security.CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: secure}, newValBlacklist())
+		security.CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: secure}, testutil.NewValueBlacklist())
 }
 
 // familyClue 拼一枚「客户端自认属于哪一族」的声明令牌。
@@ -228,18 +227,18 @@ func TestRefresh_Cookie与请求体都缺或都无效仍401(t *testing.T) {
 // 吊销族之一（ADR-0016 / ADR-0060 票2）：全会话吊销后，Cookie 里那支 refresh 必须被拒。
 // 触发面走真实端点 DELETE /api/auth/account（注销 = RevokeIdentity），不是直接调函数。
 func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	sess := cookieSession(false)
 	u := model.HrwaiUser{UID: 900002, Account: "gone-cookie", Username: "注销带Cookie", Password: "x", Phone: "13900000002", Status: 1}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
 	}
-	authSvc := auth.NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := gin.New()
 	// P2 波 3a：DELETE /api/auth/account 挂在 JWT 中间件后面（生产同一条链），不再手工
 	// 注入 CtxUserID——改为签发真 access 并带 Bearer 头，判据落在真实认证路径上。
-	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
+	RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 
 	// 注销前先在会话中段轮换一次（Cookie 通道），手上剩下的是新那支
 	tok, first, _ := sess.IssuePair(u.ID, u.Account, core.HrwaiRole)
@@ -250,7 +249,7 @@ func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
 	out, _ := decodeRefresh(t, w)
 	live := out.Data.RefreshToken
 
-	rec := codeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok)
+	rec := testutil.CodeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("注销应 200，实际 %d", rec.Code)
 	}
@@ -384,7 +383,7 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 		// 招聘者：access 是 host-only，refresh 也必须 host-only（不许把轮换凭证发到父域）
 		rec := security.NewSessionWithRecruiterCookie("test-secret", time.Hour, 7*time.Hour,
 			security.CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: true},
-			security.CookieConfig{Name: "recruiter_token", Domain: "", Secure: true}, newValBlacklist())
+			security.CookieConfig{Name: "recruiter_token", Domain: "", Secure: true}, testutil.NewValueBlacklist())
 		_, refRT, _ := rec.IssuePair(5, "hr001", core.RecruiterRole)
 		rr := newRefreshRouter(rec)
 		req, _ := http.NewRequest("POST", "/api/auth/refresh", strings.NewReader(`{"refresh_token":"`+refRT+`"}`))

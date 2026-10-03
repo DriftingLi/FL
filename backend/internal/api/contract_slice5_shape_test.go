@@ -225,7 +225,7 @@ func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 }
 
 func TestSlice5ContractShape_OnSqlite(t *testing.T) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	assertSlice5Shape(t, testutil.NewMemoryDB(t))
 }
 

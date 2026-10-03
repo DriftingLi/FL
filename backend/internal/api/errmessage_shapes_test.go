@@ -14,11 +14,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/pkg/httpx"
+
+	"forklift-training/internal/testutil"
 )
 
 func renderWithTable(t *testing.T, tbl *httpx.ErrStatusTable, err error) (int, string) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	tbl.RenderError(c, err)

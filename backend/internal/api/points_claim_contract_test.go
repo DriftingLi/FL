@@ -100,7 +100,7 @@ func seedPointsTaskConfigs(t *testing.T, db *gorm.DB) {
 func intPtr(v int) *int { return &v }
 
 func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	seedPointsTaskConfigs(t, db)
 	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "stu1", pwd)

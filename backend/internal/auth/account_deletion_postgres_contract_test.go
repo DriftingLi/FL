@@ -4,20 +4,21 @@
 // 全部空转（aborted 事务上的 COMMIT 等价 ROLLBACK 且不报错），接口照旧回 200，数据一行没少」。
 // SQLite 的语句报错不废整笔事务，内存库测不到这一层（同 ADR-0044 / #1197 的口径）。
 // 本机无 DATABASE_URL 时 testutil.NewPostgresDB 干净 skip ⇒ 这条的首跑在 CI（backend-test 带 PG 15）。
-package api
+package auth
 
 import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
+	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
 
@@ -27,12 +28,13 @@ import (
 // 「播种在一个 schema、注销打在另一个 schema」，判据恒绿。
 func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) (*gin.Engine, string) {
 	t.Helper()
-	setTestGinMode()
-	deps := newContractDeps(t, db, nil)
+	testutil.SetTestGinMode()
+	sess := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := gin.New()
-	// P2 波 3a：注册真实路由面（/account 带 JWT 中间件）——用例带真 access，不再手工注入 CtxUserID。
-	auth.RegisterRoutes(r.Group("/api"), deps.Session, deps.AuthSvc, nil, nil, nil, zap.NewNop())
-	tok, _, err := deps.Session.IssuePair(uid, "del_pg_stu", core.HrwaiRole)
+	// 注册真实路由面（/account 带 JWT 中间件）——用例带真 access，不再手工注入 CtxUserID。
+	RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
+	tok, _, err := sess.IssuePair(uid, "del_pg_stu", core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发 access 失败: %v", err)
 	}
@@ -42,7 +44,7 @@ func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) (*gin.Engine, 
 // 判据 1：注入某一条删除失败 ⇒ 接口非 2xx，且主行仍在（整笔回滚，不是半删）。
 func TestDeleteAccountOnPostgres_注入清理失败则非2xx且主行仍在(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
-	student := seedStudent(t, db, "del_pg_stu", "hash")
+	student := testutil.SeedStudent(t, db, "del_pg_stu", "hash")
 	now := testutil.Now()
 
 	// 清理表靠前的一张表（favorite 在第 1 行、note 在第 16 行）：note 失败时它已被删过，
@@ -58,7 +60,7 @@ func TestDeleteAccountOnPostgres_注入清理失败则非2xx且主行仍在(t *t
 	}
 
 	r, tok := newDeleteAccountPGRouter(t, db, student.ID)
-	rec := codeAuthRequest(r, http.MethodDelete, "/api/auth/account", nil, tok)
+	rec := testutil.CodeAuthRequest(r, http.MethodDelete, "/api/auth/account", nil, tok)
 	if rec.Code >= http.StatusOK && rec.Code < http.StatusMultipleChoices {
 		t.Fatalf("清理语句失败时注销不得回 2xx，实际 %d，body=%s", rec.Code, rec.Body.String())
 	}
@@ -93,7 +95,7 @@ func TestDeleteAccountOnPostgres_注入清理失败则非2xx且主行仍在(t *t
 // 从来就失败」通过。判据是 200 + 主行确实不在 + 论坛内容已匿名化（占位用户接管）。
 func TestDeleteAccountOnPostgres_无故障时注销真的生效(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
-	student := seedStudent(t, db, "del_pg_ok", "hash")
+	student := testutil.SeedStudent(t, db, "del_pg_ok", "hash")
 	now := testutil.Now()
 	topic := model.ForumTopic{
 		Category: "discussion", UserID: student.ID, Title: "注销前发的帖子", Content: "c",
@@ -109,7 +111,7 @@ func TestDeleteAccountOnPostgres_无故障时注销真的生效(t *testing.T) {
 	}
 
 	r, tok := newDeleteAccountPGRouter(t, db, student.ID)
-	if rec := codeAuthRequest(r, http.MethodDelete, "/api/auth/account", nil, tok); rec.Code != http.StatusOK {
+	if rec := testutil.CodeAuthRequest(r, http.MethodDelete, "/api/auth/account", nil, tok); rec.Code != http.StatusOK {
 		t.Fatalf("无故障时注销应 200，实际 %d，body=%s", rec.Code, rec.Body.String())
 	}
 

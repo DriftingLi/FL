@@ -18,7 +18,7 @@ import (
 
 func TestResumeContactStateContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	pwd, _ := core.HashPassword("pass1234")

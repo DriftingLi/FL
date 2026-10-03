@@ -10,12 +10,14 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+
+	"forklift-training/internal/testutil"
 )
 
 // newTestRouter 创建仅含静态路由的测试路由器，避免依赖数据库。
 func newTestRouter(t *testing.T, cfg *config.Config) *gin.Engine {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	r := gin.New()
 	registerStaticRoutes(r, cfg)
 	return r
@@ -39,7 +41,7 @@ func TestStaticUploadsFromLocal(t *testing.T) {
 	r := newTestRouter(t, cfg)
 
 	// 请求 /static/uploads/chapters/test.txt
-	w := performRequest(r, "GET", "/static/uploads/chapters/test.txt")
+	w := testutil.PerformRequest(r, "GET", "/static/uploads/chapters/test.txt")
 	if w.Code != 200 {
 		t.Fatalf("期望 200，得到 %d", w.Code)
 	}
@@ -65,7 +67,7 @@ func TestStaticUploadsFromVolume(t *testing.T) {
 	cfg := &config.Config{VolumeMountPath: volDir, UploadFolder: "should-not-use-this"}
 	r := newTestRouter(t, cfg)
 
-	w := performRequest(r, "GET", "/static/uploads/slides/page1.png")
+	w := testutil.PerformRequest(r, "GET", "/static/uploads/slides/page1.png")
 	if w.Code != 200 {
 		t.Fatalf("期望 200，得到 %d", w.Code)
 	}
@@ -81,7 +83,7 @@ func TestStaticNotFound(t *testing.T) {
 	cfg := &config.Config{UploadFolder: t.TempDir()}
 	r := newTestRouter(t, cfg)
 
-	w := performRequest(r, "GET", "/static/uploads/nonexistent.txt")
+	w := testutil.PerformRequest(r, "GET", "/static/uploads/nonexistent.txt")
 	if w.Code != 404 {
 		t.Fatalf("期望 404，得到 %d", w.Code)
 	}
@@ -93,7 +95,7 @@ func TestStaticPathTraversal(t *testing.T) {
 	cfg := &config.Config{UploadFolder: t.TempDir()}
 	r := newTestRouter(t, cfg)
 
-	w := performRequest(r, "GET", "/static/uploads/../../../etc/passwd")
+	w := testutil.PerformRequest(r, "GET", "/static/uploads/../../../etc/passwd")
 	if w.Code != 404 {
 		t.Fatalf("期望 404 防路径穿越，得到 %d", w.Code)
 	}
@@ -114,7 +116,7 @@ func TestStaticOtherResource(t *testing.T) {
 	cfg := &config.Config{UploadFolder: t.TempDir()}
 	r := newTestRouter(t, cfg)
 
-	w := performRequest(r, "GET", "/static/favicon.ico")
+	w := testutil.PerformRequest(r, "GET", "/static/favicon.ico")
 	if w.Code != 200 {
 		t.Fatalf("期望 200，得到 %d", w.Code)
 	}

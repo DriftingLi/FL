@@ -24,7 +24,7 @@ import (
 
 func TestMockExamHistoryCredentialPartition(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "mock-exam-credential-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))

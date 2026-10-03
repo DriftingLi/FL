@@ -23,7 +23,7 @@ import (
 
 func TestCoursesListCategoryParamRetired(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
@@ -51,7 +51,7 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
 
 	// 传入已退役的 category 参数：应被忽略，课程仍返回
-	rec := performRequest(r, "GET", "/api/courses?category=CATEGORY_01")
+	rec := testutil.PerformRequest(r, "GET", "/api/courses?category=CATEGORY_01")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -90,7 +90,7 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 // 且附 student_count；未挂载课程不可见（ADR-0012 §2 行为变更锁定）。
 func TestTutorCoursesListContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
@@ -180,7 +180,7 @@ func TestTutorCoursesListContract(t *testing.T) {
 // 未挂载课程的章节）。消费方只有 Web 章节页的 PptViewer（走已鉴权的请求层），故收紧为零破坏面。
 func TestChapterSlidesRequireAuthContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }
@@ -215,7 +215,7 @@ func TestChapterSlidesRequireAuthContract(t *testing.T) {
 	path := "/api/chapter/" + strconv.Itoa(ch.ChapterID) + "/slides"
 
 	// 无凭证：401（本票收紧的判据）
-	if rec := performRequest(r, "GET", path); rec.Code != http.StatusUnauthorized {
+	if rec := testutil.PerformRequest(r, "GET", path); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("无凭证拉取章节幻灯片应 401, got %d: %s", rec.Code, rec.Body.String())
 	}
 

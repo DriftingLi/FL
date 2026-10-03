@@ -15,7 +15,7 @@ import (
 )
 
 func TestOrphanProgressMergeOnPostgres(t *testing.T) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")

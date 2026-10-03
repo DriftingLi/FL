@@ -53,7 +53,7 @@ type contactDisableEnv struct {
 
 func newContactDisableEnv(t *testing.T) *contactDisableEnv {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:          "contact-disable-secret",

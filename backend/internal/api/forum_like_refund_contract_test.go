@@ -19,7 +19,7 @@ import (
 
 func TestForumLikeRefundOnAccountDeletionContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "acct_ref_a", Phone: "13800000011", Username: "楼主", Status: 1, CreatedAt: testutil.Now()}

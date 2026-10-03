@@ -23,7 +23,7 @@ import (
 // newUploadEnv 建一个带真实本地存储的路由环境（上传端点会写盘）。
 func newUploadEnv(t *testing.T) *gin.Engine {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	cfg := &config.Config{JWTSecretKey: "upload-gate-secret", UploadFolder: t.TempDir()}
 	deps := NewDeps(cfg, testutil.NewMemoryDB(t), storage.NewLocalStorage(t.TempDir()), zap.NewNop(), stubExportStore{})
 	return NewRouter(deps)
@@ -49,7 +49,7 @@ func TestUploadEndpointRejectsSvg(t *testing.T) {
 // newStaticDeliveryEnv 建一个上传目录可控的路由环境（静态面不需要任何登录态）。
 func newStaticDeliveryEnv(t *testing.T, files map[string]string) *gin.Engine {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	dir := t.TempDir()
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {

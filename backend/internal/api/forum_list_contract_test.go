@@ -39,7 +39,7 @@ type listContractEnv struct {
 
 func newListContractEnv(t *testing.T) *listContractEnv {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",

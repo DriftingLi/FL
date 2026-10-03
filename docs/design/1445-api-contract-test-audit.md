@@ -145,6 +145,8 @@
 | 4 | 其余 13 个单文件域（admin 2 / training 1 / search 1 / resume 1 / contribution 1 / questionbank 1 / favorite 1 / inspection 1 / course 1 / featured 1 / wrongquestion 1 / points 1） | 2,309 行 | 每个域 1 个，适合与各域自己的改造顺路做 |
 
 > 每批的验收判据：① 该域包能自装被测路由（不 import `internal/api`）；② 断言逐字不变；③ 仍走 HTTP；④ `go test ./...` 与 CI 全绿；⑤ `internal/api` 里对应文件删除（不留副本）。
+>
+> 落地记录与分桶的实证修正见 **§8**（批 1 实际搬 9 个文件，不是 8 个）。
 
 ## 7. 局限
 
@@ -152,6 +154,40 @@
 2. `*_face_ledger_test.go`（3 个）与 `*_lock_test.go`（6 个）按规则一律留；个别账本理论上有「域内那一半」，但拆账本会引入「一条事实两个举证地」，与 nullability 锁的「一条事实一个证据」相冲，故不建议拆。
 3. 行数是文件总行数（含 fixture 与注释），不等于搬迁成本；B2 的真实成本主要在 §5 第 1 条那份域内夹具。
 4. 「自建引擎 = 否」的 B1/B2 用例仍会挂域路由（只是引擎来自 `httptest.NewServer` 之类的宿主），故「是否自建引擎」只作参考，不作判据。
+
+## 8. 落地记录
+
+### 8.1 批 1：auth 闭包 —— 实际搬 9 个，不是 §2.1 的 8 个
+
+实测「谁引用了谁」后发现：**§2 的分桶不是依赖闭合的**，搬迁单元必须是**按域的依赖闭包**。
+
+- `code_auth_test.go` 定义跨文件共享的 `codeAuthRequest` / `extractToken` / `newCodeAuthTestRouter(X)` / `memCodeStore` / `fakeChannel`；`auth_refresh_test.go` 定义 `refreshResp` / `doRefresh` / `newRefreshRouter`；`auth_refresh_cookie_test.go` 反向依赖 `auth_refresh_family_test.go`（本表 C 桶「留」）；`session_termination_contract_test.go` 的 `newDeleteAccountRouter` 被 `account_deletion_postgres_contract_test.go` 使用。
+- ⇒ 批 1 落到 `backend/internal/auth` 的是 **9 个**：`auth_refresh_test.go`、`auth_refresh_cookie_test.go`、`auth_refresh_family_test.go`、`captcha_test.go`、`code_auth_test.go`、`reset_password_revoke_contract_test.go`、`session_termination_contract_test.go`、`account_change_contract_test.go`、`account_deletion_postgres_contract_test.go`（后两个是 §2.2 的 B2 项，因闭包被并入）。
+- 方法沉淀：**开工前先跑一遍跨文件符号引用统计**（哪个 helper 被谁用、定义在哪），再决定搬哪些；只按文件名分桶会留下未定义符号。
+
+### 8.2 跨包共享的测试脚手架落 `internal/testutil`
+
+- 新增 `backend/internal/testutil/http.go`（无 gorm / sqlite 依赖）：`SetTestGinMode`（sync.OnceFunc 内 `gin.SetMode(gin.TestMode)`，即原 `setTestGinMode`）、`PerformRequest`、`CodeAuthRequest`、`ExtractToken`、`AssertDictKeys` / `KeysOf`、`ValueBlacklist` / `NewValueBlacklist`（保留写入值的 SETNX 语义，等价原 `newValBlacklist`）。
+- 必要性来自引用计数：`setTestGinMode` 被 110 个文件引用、`newContractDeps` 92、`seedStudent` 56；搬迁后留在 `internal/api` 的 `contract_deps_access_guard_test.go` 仍用 `codeAuthRequest`，`training_catalog_contract_test.go` / `search_upgrade_contract_test.go` / `slice6_contract_test.go` / `training_catalog_message_contract_test.go` 仍用 `assertDictKeys`，`router_test_helper_test.go` 仍用 `newValBlacklist`。域包不得 import `internal/api` ⇒ 共享件只能落 testutil。
+- `internal/api/router_test_helper_test.go` 相应删除 `setTestGinMode` 与 `performRequest` 两个定义（并删 `net/http`、`net/http/httptest`、`gin` import），`newContractDepsWithStorage` 改用 `testutil.NewValueBlacklist()`；`internal/api` 其余 110 个文件的 `setTestGinMode()` 机械改为 `testutil.SetTestGinMode()`。
+
+### 8.3 `internal/layers` gin 面守卫：登记 `internal/testutil` 入白名单
+
+- 症状：`TestBackendGinStaysOnHTTPSurface` 报「`internal/testutil/http.go` 不是 HTTP 面却 import 了 gin」。
+- 取舍：① 入 `ginHostAllowed` 白名单，并把判据表述收窄为「非测试、非 HTTP 面、也非登记测试脚手架的**生产**文件 import 了 gin」——gin 依赖本来就都在 `*_test.go` 与测试辅助里，守卫本就跳过测试文件，不构成「换框架要全仓改」；② 备选是每域各写 4 行本地 `gin.SetMode(gin.TestMode)` helper，代价是重复。取 ①。
+- 副作用：白名单多一条 ⇒ 新增 gin 生产宿主仍需单独登记，射程不因测试脚手架扩大（`TestGinHostWhitelistIsLive` 仍绿）。
+
+### 8.4 分桶的实证修正（影响后续批次的验收判据）
+
+- `credential_delete_postgres_contract_test.go`（直接调 `training.Service.DeleteCredential`）与 `search_credential_test.go`（直接调 `search.Service.Search`）**不走 HTTP**；`disposition_revoke_contract_test.go` 同样是服务层（`admin.Service.ToggleHrwaiUserStatus` / `ResetHrwaiUserPassword`）。
+- ⇒ 三者的目标包（`internal/training` / `internal/search` / `internal/admin`）成立，但**不能用它们演示验收判据 ③「仍走 HTTP」**；判据 ③ 只对 HTTP 面用例生效，服务层用例按「域内单元测试随域搬」（`docs/agents/domain-package-migration.md` §4）处理。
+
+### 8.5 批 1 验收证据
+
+- `gofmt -l ./internal` 无输出；`go vet ./...` exit 0。
+- `go test ./internal/auth/... ./internal/api/... ./internal/testutil/...` 全 `ok`；全量 `go test ./...` 只剩基线环境性失败（`internal/deploy` 的 WSL 用例、`internal/logger` 的 Windows 文件锁两条），与本改无关。
+- 守卫：`check-render-error-face.mjs --all` 无违规（69 个面）、`check-comment-cleanliness.mjs --all` ✓（730 文件 0 欠账）、`check-catalog-sort.mjs --all` 无违规、`internal/layers` 三条守卫 PASS。
+- 断言不变的核验方式：`git show HEAD:<旧路径>` 与域包新文件做**归一化**（`testutil.*` 与改名的测试替身还原成旧名）后**逐测试函数体比对**。9 个文件 35 个 `func Test`：5 个文件的用例体逐字相同；其余 4 个文件（`auth_refresh_cookie_test.go` 1 个、`captcha_test.go` 1 个、`code_auth_test.go` 5 个、`account_change_contract_test.go` 2 个）的差异**只有三类机械改写**——去自包限定符（`auth.CodePurposeRegister` → `CodePurposeRegister`）、测试替身改名（`memCodeStore` → `codeAuthStoreN`）、`gin.SetMode(gin.TestMode)` → `setTestGinMode()`；**没有一处断言/期望表达式被改**。另 4 个 fixture 构造函数（`newCodeAuthTestRouterX` / `newAccountChangeTestRouter` / `newDeleteAccountPGRouter` / 会话构造）为去 `Deps` 重写，属预期差异。
 
 ## 附录：142 个文件逐条
 

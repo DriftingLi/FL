@@ -1,12 +1,9 @@
 package api
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -16,15 +13,6 @@ import (
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
-
-// setTestGinMode 幂等地把 gin 切到 TestMode（#1366 测试面瘦身）。
-//
-// 契约测试改用 t.Parallel 后，若每个并行用例各自直接调 gin.SetMode(gin.TestMode)，
-// 会并发写 gin 的包级全局（运行模式位与错误 writer），在 CI 的 -race 下即数据竞态。
-// 用 sync.Once 把整个测试进程里的这次设置收敛成「只真正发生一次」：Once 让各调用点
-// 相互串行并建立 happens-before，模式位一旦落定不再被并发改写。它不引入第二份事实源——
-// 只是把「每个文件各写一遍 SetMode」收成「同一条链上设置一次」。
-var setTestGinMode = sync.OnceFunc(func() { gin.SetMode(gin.TestMode) })
 
 // seedMu 串行化本测试包对 testutil.SeedStudent 的调用（#1366）。
 //
@@ -45,14 +33,6 @@ func seedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *mo
 	return testutil.SeedStudent(t, db, username, hashedPassword)
 }
 
-// performRequest 向测试路由器发起 HTTP 请求并返回响应记录器。
-func performRequest(r *gin.Engine, method, path string) *httptest.ResponseRecorder {
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(method, path, nil)
-	r.ServeHTTP(w, req)
-	return w
-}
-
 // newContractDeps 构建契约测试用的完整装配根（storage 与导出 store 传 nil，被测蓝图不使用）。
 //
 // 「被测蓝图不使用 storage」这句从 #1361 起对投稿蓝图不再成立：Create 的第四校验要问存储侧
@@ -71,7 +51,7 @@ func newContractDepsWithStorage(t *testing.T, db *gorm.DB, cfg *config.Config, s
 	d := NewDeps(cfg, db, st, zap.NewNop(), nil)
 	// 测试链路没有 Redis：会话模块的黑名单存储换成内存实现，否则「注销先写吊销标记」
 	// 这类要真实写凭证状态的端点只能判红（ADR-0060 票2）。Cookie 与有效期口径不变。
-	d.Session = security.SessionFromConfigWithBlacklist(cfg, newValBlacklist())
+	d.Session = security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())
 	// P2 波 3a：handler 随域包收进 internal/auth（包私有），会话改由域包的注册入口注给服务
 	// （auth.RegisterRoutes 内把 session 同步进 Service），此处不再改指任何 handler 字段。
 	return d

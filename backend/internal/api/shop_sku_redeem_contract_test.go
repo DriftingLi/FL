@@ -32,7 +32,7 @@ const realPaperUnlockPrice = 300
 
 func TestPriceOnlyShopSKUCannotBeRedeemed(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "shop-sku-redeem-secret",
@@ -84,7 +84,7 @@ func TestPriceOnlyShopSKUCannotBeRedeemed(t *testing.T) {
 
 func TestUndeclaredShopSKUCannotBeRedeemed(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "shop-sku-undeclared-secret",

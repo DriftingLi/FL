@@ -6,7 +6,7 @@
 //
 // 缺陷本体：两族 refresh cookie 在同一 host 上并存时，按 Cookie 名序选族会让招聘者面的续期
 // 轮换掉学员那一族（UI 还停在招聘者身份 ⇒ 静默换身份）。旧实现在本文件第 1、3 条上判红。
-package api
+package auth
 
 import (
 	"net/http"
@@ -20,6 +20,7 @@ import (
 	"forklift-training/internal/core"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
+	"forklift-training/internal/testutil"
 )
 
 // twoFamilySession 两族都配齐的会话：主站 refresh 落父域、招聘者 refresh 落 host-only
@@ -30,7 +31,7 @@ func twoFamilySession(t *testing.T) *security.Session {
 	t.Helper()
 	return security.NewSessionWithRecruiterCookie("test-secret", time.Hour, 7*24*time.Hour,
 		security.CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: true},
-		security.CookieConfig{Name: "recruiter_token", Domain: "", Secure: true}, newValBlacklist())
+		security.CookieConfig{Name: "recruiter_token", Domain: "", Secure: true}, testutil.NewValueBlacklist())
 }
 
 // familyHTTP 向真实路由发一枚带两族 Cookie 的请求。

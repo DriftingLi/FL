@@ -26,7 +26,7 @@ import (
 )
 
 func assertJobPostingContract(t *testing.T, db *gorm.DB) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	pwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminJob", pwd)
 	stuPwd, _ := core.HashPassword("student123")
