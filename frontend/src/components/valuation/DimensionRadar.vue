@@ -7,7 +7,7 @@ import { useECharts } from '@/composables/useECharts'
 import type { DimensionScore } from '@/types/valuation/evaluation'
 
 interface Props {
-  /** 维度评分（label + value，顺序由后端契约 model.DimensionLabels 决定） */
+  /** 维度评分（label + value，顺序由后端契约 valuation.DimensionLabels 决定） */
   scores: DimensionScore[]
   height?: string
 }

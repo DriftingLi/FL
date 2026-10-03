@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -39,13 +39,13 @@ func NewEvaluationHandler(v *service.ValuationService, evalRepo EvaluationStore,
 // @Tags 估值-评估
 // @Accept json
 // @Produce json
-// @Param body body model.EvaluationRequest true "评估请求"
-// @Success 200 {object} response.R{data=model.EvaluationResponse} "success"
+// @Param body body valuation.EvaluationRequest true "评估请求"
+// @Success 200 {object} response.R{data=valuation.EvaluationResponse} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/evaluations [post]
 func (h *EvaluationHandler) Create(c *gin.Context) {
-	var req model.EvaluationRequest
+	var req valuation.EvaluationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数格式错误: "+err.Error())
 		return
@@ -84,7 +84,7 @@ func (h *EvaluationHandler) Create(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path integer true "评估记录 ID"
-// @Success 200 {object} response.R{data=model.EvaluationDetail} "success"
+// @Success 200 {object} response.R{data=valuation.EvaluationDetail} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "评估记录不存在"
@@ -130,7 +130,7 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 // @Param page_size query integer false "每页条数（默认 20，上限 100）"
 // @Param brand query string false "品牌筛选"
 // @Param vehicle_type query string false "车型筛选"
-// @Success 200 {object} response.R{data=object{total=integer,page=integer,page_size=integer,list=[]model.EvaluationDetail}} "success"
+// @Success 200 {object} response.R{data=object{total=integer,page=integer,page_size=integer,list=[]valuation.EvaluationDetail}} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/evaluations [get]
@@ -198,17 +198,17 @@ func (h *EvaluationHandler) Stats(c *gin.Context) {
 
 // buildEvaluationResponse 把 EvaluationRequest + EvaluationResult + 持久化 ID 转换为响应 DTO
 // 维度评分顺序与雷达图保持一致（由 service.BuildDimensionScores 单一装配，此处不再排序）
-func buildEvaluationResponse(id int64, r *model.EvaluationResult, req *model.EvaluationRequest) model.EvaluationResponse {
+func buildEvaluationResponse(id int64, r *valuation.EvaluationResult, req *valuation.EvaluationRequest) valuation.EvaluationResponse {
 	// 兜底：若维度评分缺失，返回空切片（避免 JSON null）
 	dimScores := r.DimensionScores
 	if dimScores == nil {
-		dimScores = []model.DimensionScore{}
+		dimScores = []valuation.DimensionScore{}
 	}
 	suggestions := r.Suggestions
 	if suggestions == nil {
 		suggestions = []string{}
 	}
-	return model.EvaluationResponse{
+	return valuation.EvaluationResponse{
 		ID:                         id,
 		Brand:                      req.Brand,
 		VehicleType:                req.VehicleType,

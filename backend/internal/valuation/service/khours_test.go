@@ -8,7 +8,7 @@ import (
 	"math"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // TestCalcKHours_RangeMapping 覆盖 5 段强度区间的查表结果
@@ -90,7 +90,7 @@ func TestCalcKHours_NegativeHours(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := CalcKHours(ctx, 5, -100, provider)
-	if err != model.ErrInvalidUsageHours {
+	if err != valuation.ErrInvalidUsageHours {
 		t.Errorf("expected ErrInvalidUsageHours, got %v", err)
 	}
 }
@@ -101,7 +101,7 @@ func TestCalcKHours_NegativeAge(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := CalcKHours(ctx, -1, 1000, provider)
-	if err != model.ErrInvalidYear {
+	if err != valuation.ErrInvalidYear {
 		t.Errorf("expected ErrInvalidYear, got %v", err)
 	}
 }

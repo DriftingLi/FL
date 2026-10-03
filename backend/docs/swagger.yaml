@@ -2247,416 +2247,6 @@ definitions:
       status:
         type: integer
     type: object
-  model.BatteryEvaluation:
-    properties:
-      battery_model:
-        type: string
-      battery_type:
-        $ref: '#/definitions/model.BatteryType'
-      confidence:
-        type: number
-      confidence_high:
-        type: integer
-      confidence_low:
-        type: integer
-      created_at:
-        type: string
-      cycle_count:
-        type: integer
-      cycle_features:
-        description: 详情时填充
-        items:
-          $ref: '#/definitions/model.CycleFeature'
-        type: array
-        x-optional: true
-      feature_importance:
-        description: omitempty：键可能整个不存在
-        items:
-          $ref: '#/definitions/model.FeatureImportance'
-        type: array
-        x-optional: true
-      id:
-        type: integer
-      report_pdf_path:
-        type: string
-      rul_cycles:
-        type: integer
-      soh_percent:
-        type: number
-      suggestions:
-        description: 评估建议（基于 SOH/RUL/电池类型生成）
-        items:
-          type: string
-        type: array
-        x-optional: true
-      updated_at:
-        type: string
-    type: object
-  model.BatteryEvaluationSummary:
-    properties:
-      battery_model:
-        type: string
-      battery_type:
-        $ref: '#/definitions/model.BatteryType'
-      confidence:
-        type: number
-      created_at:
-        type: string
-      cycle_count:
-        type: integer
-      id:
-        type: integer
-      rul_cycles:
-        type: integer
-      soh_percent:
-        type: number
-    type: object
-  model.BatteryType:
-    enum:
-    - lfp
-    - ncm
-    - other
-    type: string
-    x-enum-varnames:
-    - BatteryTypeLFP
-    - BatteryTypeNCM
-    - BatteryTypeOther
-  model.CreateBatteryRequest:
-    properties:
-      battery_model:
-        description: BatteryModel 电池型号（可选）
-        type: string
-      battery_type:
-        allOf:
-        - $ref: '#/definitions/model.BatteryType'
-        description: BatteryType 电池类型
-      cycles:
-        description: Cycles 充放电循环数据，至少 10 条
-        items:
-          $ref: '#/definitions/model.CycleData'
-        type: array
-    required:
-    - battery_type
-    - cycles
-    type: object
-  model.CreateBatteryResponse:
-    properties:
-      battery_type:
-        $ref: '#/definitions/model.BatteryType'
-      confidence:
-        type: number
-      confidence_high:
-        type: integer
-      confidence_low:
-        type: integer
-      created_at:
-        type: string
-      cycle_count:
-        type: integer
-      evaluation_id:
-        type: integer
-      rul_cycles:
-        type: integer
-      soh_percent:
-        type: number
-      suggestions:
-        items:
-          type: string
-        type: array
-    type: object
-  model.CycleData:
-    properties:
-      capacity:
-        description: Capacity 本次循环放电容量（Ah）
-        type: number
-      current_series:
-        description: CurrentSeries 充电阶段电流时序（A），长度应与 VoltageSeries 一致
-        items:
-          type: number
-        type: array
-      cycle_index:
-        description: CycleIndex 循环序号（从 1 开始）
-        type: integer
-      voltage_series:
-        description: VoltageSeries 充电阶段电压时序（V），长度应与 CurrentSeries 一致
-        items:
-          type: number
-        type: array
-    required:
-    - capacity
-    - current_series
-    - cycle_index
-    - voltage_series
-    type: object
-  model.CycleFeature:
-    properties:
-      cycle_index:
-        type: integer
-      evaluation_id:
-        type: integer
-      feature_vector:
-        items:
-          type: number
-        type: array
-      id:
-        description: omitempty：键可能整个不存在
-        type: integer
-        x-optional: true
-      raw_stats:
-        $ref: '#/definitions/model.RawStats'
-      soh_at_cycle:
-        type: number
-    type: object
-  model.DimensionScore:
-    properties:
-      label:
-        type: string
-      value:
-        type: number
-    type: object
-  model.EvaluationDetail:
-    properties:
-      brand:
-        description: 输入字段（与 EvaluationRequest 一致）
-        type: string
-      city:
-        type: string
-      condition_rating:
-        type: string
-      confidence_high:
-        type: number
-      confidence_low:
-        type: number
-      config_type:
-        type: string
-      created_at:
-        type: string
-      decay_anchor:
-        description: 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
-        type: number
-      dimension_scores:
-        items:
-          $ref: '#/definitions/model.DimensionScore'
-        type: array
-      estimated_value:
-        type: number
-      factory_year:
-        type: integer
-      has_license_plate:
-        type: boolean
-      has_maintenance_records:
-        type: boolean
-      has_registration_certificate:
-        type: boolean
-      id:
-        description: 主键与时间戳
-        type: integer
-      k_brand:
-        type: number
-      k_condition:
-        type: number
-      k_hours:
-        type: number
-      k_market:
-        type: number
-      k_time:
-        type: number
-      k_time_adjusted:
-        type: number
-      lambda_combustion:
-        type: number
-      lambda_electric:
-        type: number
-      mast_height_mm:
-        type: integer
-      mast_type:
-        type: string
-      original_paint:
-        type: boolean
-      original_price:
-        description: 结果字段
-        type: number
-      province:
-        type: string
-      report_pdf_path:
-        description: omitempty：键可能整个不存在
-        type: string
-        x-optional: true
-      sale_year:
-        type: integer
-      series:
-        type: string
-      suggestions:
-        description: 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
-        items:
-          type: string
-        type: array
-      tonnage:
-        type: number
-      updated_at:
-        type: string
-      usage_hours:
-        type: integer
-      vehicle_type:
-        type: string
-    type: object
-  model.EvaluationRequest:
-    properties:
-      brand:
-        description: 字典字段
-        type: string
-      city:
-        description: 城市
-        type: string
-      condition_rating:
-        description: 车况
-        type: string
-      config_type:
-        description: 配置类型
-        type: string
-      factory_year:
-        description: 使用信息
-        type: integer
-      has_license_plate:
-        description: 证件状态
-        type: boolean
-      has_maintenance_records:
-        description: 是否有维保记录
-        type: boolean
-      has_registration_certificate:
-        description: 是否有登记证
-        type: boolean
-      mast_height_mm:
-        description: 门架高度(mm)，0 表示"无"，由 Validate 校验
-        type: integer
-      mast_type:
-        description: 门架类型
-        type: string
-      original_paint:
-        description: 是否原厂漆
-        type: boolean
-      province:
-        description: 区域信息
-        type: string
-      sale_year:
-        description: 成交年份
-        type: integer
-      series:
-        description: 系列
-        type: string
-      tonnage:
-        description: 吨位
-        type: number
-      usage_hours:
-        description: 累计使用小时数，0 表示新车，由 Validate 校验
-        type: integer
-      vehicle_type:
-        description: 车型
-        type: string
-    required:
-    - brand
-    - city
-    - condition_rating
-    - config_type
-    - factory_year
-    - mast_type
-    - province
-    - sale_year
-    - series
-    - tonnage
-    - vehicle_type
-    type: object
-  model.EvaluationResponse:
-    properties:
-      brand:
-        description: 输入参数（与 EvaluationRequest / evaluations 表字段一致）
-        type: string
-      city:
-        type: string
-      condition_rating:
-        type: string
-      confidence_high:
-        type: number
-      confidence_low:
-        type: number
-      config_type:
-        type: string
-      decay_anchor:
-        description: 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
-        type: number
-      dimension_scores:
-        items:
-          $ref: '#/definitions/model.DimensionScore'
-        type: array
-      estimated_value:
-        type: number
-      factory_year:
-        type: integer
-      has_license_plate:
-        type: boolean
-      has_maintenance_records:
-        type: boolean
-      has_registration_certificate:
-        type: boolean
-      id:
-        type: integer
-      k_brand:
-        type: number
-      k_condition:
-        type: number
-      k_hours:
-        type: number
-      k_market:
-        type: number
-      k_time:
-        type: number
-      k_time_adjusted:
-        type: number
-      lambda_combustion:
-        type: number
-      lambda_electric:
-        description: 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
-        type: number
-      mast_height_mm:
-        type: integer
-      mast_type:
-        type: string
-      original_paint:
-        type: boolean
-      original_price:
-        description: 计算结果
-        type: number
-      province:
-        type: string
-      sale_year:
-        type: integer
-      series:
-        type: string
-      suggestions:
-        items:
-          type: string
-        type: array
-      tonnage:
-        type: number
-      usage_hours:
-        type: integer
-      vehicle_type:
-        type: string
-    type: object
-  model.FeatureImportance:
-    properties:
-      group:
-        type: string
-      index:
-        type: integer
-      name:
-        type: string
-      normalized:
-        description: 归一化到 0~1
-        type: number
-      weight:
-        type: number
-    type: object
   model.ForumAuthor:
     properties:
       avatar_url:
@@ -2665,15 +2255,6 @@ definitions:
         type: integer
       username:
         type: string
-    type: object
-  model.ListBatteryResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/model.BatteryEvaluationSummary'
-        type: array
-      total:
-        type: integer
     type: object
   model.Note:
     properties:
@@ -2711,31 +2292,6 @@ definitions:
         type: integer
       updated_at:
         type: string
-    type: object
-  model.RawStats:
-    properties:
-      capacity:
-        type: number
-      cc_duration:
-        description: 恒流段采样点数
-        type: integer
-      current_mean:
-        type: number
-      current_std:
-        type: number
-      cv_duration:
-        description: 恒压段采样点数
-        type: integer
-      ic_peak:
-        description: 增量容量峰值
-        type: number
-      ic_peak_voltage:
-        description: 峰值对应电压
-        type: number
-      voltage_mean:
-        type: number
-      voltage_std:
-        type: number
     type: object
   note.NoteDTO:
     properties:
@@ -4162,6 +3718,450 @@ definitions:
         type: boolean
       file_id:
         type: integer
+    type: object
+  valuation.BatteryEvaluation:
+    properties:
+      battery_model:
+        type: string
+      battery_type:
+        $ref: '#/definitions/valuation.BatteryType'
+      confidence:
+        type: number
+      confidence_high:
+        type: integer
+      confidence_low:
+        type: integer
+      created_at:
+        type: string
+      cycle_count:
+        type: integer
+      cycle_features:
+        description: 详情时填充
+        items:
+          $ref: '#/definitions/valuation.CycleFeature'
+        type: array
+        x-optional: true
+      feature_importance:
+        description: omitempty：键可能整个不存在
+        items:
+          $ref: '#/definitions/valuation.FeatureImportance'
+        type: array
+        x-optional: true
+      id:
+        type: integer
+      report_pdf_path:
+        type: string
+      rul_cycles:
+        type: integer
+      soh_percent:
+        type: number
+      suggestions:
+        description: 评估建议（基于 SOH/RUL/电池类型生成）
+        items:
+          type: string
+        type: array
+        x-optional: true
+      updated_at:
+        type: string
+    type: object
+  valuation.BatteryEvaluationSummary:
+    properties:
+      battery_model:
+        type: string
+      battery_type:
+        $ref: '#/definitions/valuation.BatteryType'
+      confidence:
+        type: number
+      created_at:
+        type: string
+      cycle_count:
+        type: integer
+      id:
+        type: integer
+      rul_cycles:
+        type: integer
+      soh_percent:
+        type: number
+    type: object
+  valuation.BatteryType:
+    enum:
+    - lfp
+    - ncm
+    - other
+    type: string
+    x-enum-varnames:
+    - BatteryTypeLFP
+    - BatteryTypeNCM
+    - BatteryTypeOther
+  valuation.CreateBatteryRequest:
+    properties:
+      battery_model:
+        description: BatteryModel 电池型号（可选）
+        type: string
+      battery_type:
+        allOf:
+        - $ref: '#/definitions/valuation.BatteryType'
+        description: BatteryType 电池类型
+      cycles:
+        description: Cycles 充放电循环数据，至少 10 条
+        items:
+          $ref: '#/definitions/valuation.CycleData'
+        type: array
+    required:
+    - battery_type
+    - cycles
+    type: object
+  valuation.CreateBatteryResponse:
+    properties:
+      battery_type:
+        $ref: '#/definitions/valuation.BatteryType'
+      confidence:
+        type: number
+      confidence_high:
+        type: integer
+      confidence_low:
+        type: integer
+      created_at:
+        type: string
+      cycle_count:
+        type: integer
+      evaluation_id:
+        type: integer
+      rul_cycles:
+        type: integer
+      soh_percent:
+        type: number
+      suggestions:
+        items:
+          type: string
+        type: array
+    type: object
+  valuation.CycleData:
+    properties:
+      capacity:
+        description: Capacity 本次循环放电容量（Ah）
+        type: number
+      current_series:
+        description: CurrentSeries 充电阶段电流时序（A），长度应与 VoltageSeries 一致
+        items:
+          type: number
+        type: array
+      cycle_index:
+        description: CycleIndex 循环序号（从 1 开始）
+        type: integer
+      voltage_series:
+        description: VoltageSeries 充电阶段电压时序（V），长度应与 CurrentSeries 一致
+        items:
+          type: number
+        type: array
+    required:
+    - capacity
+    - current_series
+    - cycle_index
+    - voltage_series
+    type: object
+  valuation.CycleFeature:
+    properties:
+      cycle_index:
+        type: integer
+      evaluation_id:
+        type: integer
+      feature_vector:
+        items:
+          type: number
+        type: array
+      id:
+        description: omitempty：键可能整个不存在
+        type: integer
+        x-optional: true
+      raw_stats:
+        $ref: '#/definitions/valuation.RawStats'
+      soh_at_cycle:
+        type: number
+    type: object
+  valuation.DimensionScore:
+    properties:
+      label:
+        type: string
+      value:
+        type: number
+    type: object
+  valuation.EvaluationDetail:
+    properties:
+      brand:
+        description: 输入字段（与 EvaluationRequest 一致）
+        type: string
+      city:
+        type: string
+      condition_rating:
+        type: string
+      confidence_high:
+        type: number
+      confidence_low:
+        type: number
+      config_type:
+        type: string
+      created_at:
+        type: string
+      decay_anchor:
+        description: 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
+        type: number
+      dimension_scores:
+        items:
+          $ref: '#/definitions/valuation.DimensionScore'
+        type: array
+      estimated_value:
+        type: number
+      factory_year:
+        type: integer
+      has_license_plate:
+        type: boolean
+      has_maintenance_records:
+        type: boolean
+      has_registration_certificate:
+        type: boolean
+      id:
+        description: 主键与时间戳
+        type: integer
+      k_brand:
+        type: number
+      k_condition:
+        type: number
+      k_hours:
+        type: number
+      k_market:
+        type: number
+      k_time:
+        type: number
+      k_time_adjusted:
+        type: number
+      lambda_combustion:
+        type: number
+      lambda_electric:
+        type: number
+      mast_height_mm:
+        type: integer
+      mast_type:
+        type: string
+      original_paint:
+        type: boolean
+      original_price:
+        description: 结果字段
+        type: number
+      province:
+        type: string
+      report_pdf_path:
+        description: omitempty：键可能整个不存在
+        type: string
+        x-optional: true
+      sale_year:
+        type: integer
+      series:
+        type: string
+      suggestions:
+        description: 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
+        items:
+          type: string
+        type: array
+      tonnage:
+        type: number
+      updated_at:
+        type: string
+      usage_hours:
+        type: integer
+      vehicle_type:
+        type: string
+    type: object
+  valuation.EvaluationRequest:
+    properties:
+      brand:
+        description: 字典字段
+        type: string
+      city:
+        description: 城市
+        type: string
+      condition_rating:
+        description: 车况
+        type: string
+      config_type:
+        description: 配置类型
+        type: string
+      factory_year:
+        description: 使用信息
+        type: integer
+      has_license_plate:
+        description: 证件状态
+        type: boolean
+      has_maintenance_records:
+        description: 是否有维保记录
+        type: boolean
+      has_registration_certificate:
+        description: 是否有登记证
+        type: boolean
+      mast_height_mm:
+        description: 门架高度(mm)，0 表示"无"，由 Validate 校验
+        type: integer
+      mast_type:
+        description: 门架类型
+        type: string
+      original_paint:
+        description: 是否原厂漆
+        type: boolean
+      province:
+        description: 区域信息
+        type: string
+      sale_year:
+        description: 成交年份
+        type: integer
+      series:
+        description: 系列
+        type: string
+      tonnage:
+        description: 吨位
+        type: number
+      usage_hours:
+        description: 累计使用小时数，0 表示新车，由 Validate 校验
+        type: integer
+      vehicle_type:
+        description: 车型
+        type: string
+    required:
+    - brand
+    - city
+    - condition_rating
+    - config_type
+    - factory_year
+    - mast_type
+    - province
+    - sale_year
+    - series
+    - tonnage
+    - vehicle_type
+    type: object
+  valuation.EvaluationResponse:
+    properties:
+      brand:
+        description: 输入参数（与 EvaluationRequest / evaluations 表字段一致）
+        type: string
+      city:
+        type: string
+      condition_rating:
+        type: string
+      confidence_high:
+        type: number
+      confidence_low:
+        type: number
+      config_type:
+        type: string
+      decay_anchor:
+        description: 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
+        type: number
+      dimension_scores:
+        items:
+          $ref: '#/definitions/valuation.DimensionScore'
+        type: array
+      estimated_value:
+        type: number
+      factory_year:
+        type: integer
+      has_license_plate:
+        type: boolean
+      has_maintenance_records:
+        type: boolean
+      has_registration_certificate:
+        type: boolean
+      id:
+        type: integer
+      k_brand:
+        type: number
+      k_condition:
+        type: number
+      k_hours:
+        type: number
+      k_market:
+        type: number
+      k_time:
+        type: number
+      k_time_adjusted:
+        type: number
+      lambda_combustion:
+        type: number
+      lambda_electric:
+        description: 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
+        type: number
+      mast_height_mm:
+        type: integer
+      mast_type:
+        type: string
+      original_paint:
+        type: boolean
+      original_price:
+        description: 计算结果
+        type: number
+      province:
+        type: string
+      sale_year:
+        type: integer
+      series:
+        type: string
+      suggestions:
+        items:
+          type: string
+        type: array
+      tonnage:
+        type: number
+      usage_hours:
+        type: integer
+      vehicle_type:
+        type: string
+    type: object
+  valuation.FeatureImportance:
+    properties:
+      group:
+        type: string
+      index:
+        type: integer
+      name:
+        type: string
+      normalized:
+        description: 归一化到 0~1
+        type: number
+      weight:
+        type: number
+    type: object
+  valuation.ListBatteryResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/valuation.BatteryEvaluationSummary'
+        type: array
+      total:
+        type: integer
+    type: object
+  valuation.RawStats:
+    properties:
+      capacity:
+        type: number
+      cc_duration:
+        description: 恒流段采样点数
+        type: integer
+      current_mean:
+        type: number
+      current_std:
+        type: number
+      cv_duration:
+        description: 恒压段采样点数
+        type: integer
+      ic_peak:
+        description: 增量容量峰值
+        type: number
+      ic_peak_voltage:
+        description: 峰值对应电压
+        type: number
+      voltage_mean:
+        type: number
+      voltage_std:
+        type: number
     type: object
   wrongquestion.WrongQuestionBatchRemoveResultDTO:
     properties:
@@ -17068,7 +17068,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.ListBatteryResponse'
+                  $ref: '#/definitions/valuation.ListBatteryResponse'
               type: object
         "400":
           description: 电池类型非法
@@ -17098,7 +17098,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/model.CreateBatteryRequest'
+          $ref: '#/definitions/valuation.CreateBatteryRequest'
       produces:
       - application/json
       responses:
@@ -17109,7 +17109,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.CreateBatteryResponse'
+                  $ref: '#/definitions/valuation.CreateBatteryResponse'
               type: object
         "400":
           description: 参数错误
@@ -17143,7 +17143,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.BatteryEvaluation'
+                  $ref: '#/definitions/valuation.BatteryEvaluation'
               type: object
         "400":
           description: 参数错误
@@ -17946,7 +17946,7 @@ paths:
                   properties:
                     list:
                       items:
-                        $ref: '#/definitions/model.EvaluationDetail'
+                        $ref: '#/definitions/valuation.EvaluationDetail'
                       type: array
                     page:
                       type: integer
@@ -17980,7 +17980,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/model.EvaluationRequest'
+          $ref: '#/definitions/valuation.EvaluationRequest'
       produces:
       - application/json
       responses:
@@ -17991,7 +17991,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.EvaluationResponse'
+                  $ref: '#/definitions/valuation.EvaluationResponse'
               type: object
         "400":
           description: 参数错误
@@ -18025,7 +18025,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.EvaluationDetail'
+                  $ref: '#/definitions/valuation.EvaluationDetail'
               type: object
         "400":
           description: 参数错误

@@ -42,7 +42,7 @@ import (
 	"forklift-training/internal/recruit"
 	"forklift-training/internal/search"
 	"forklift-training/internal/student"
-	vmodel "forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/wrongquestion"
 	"forklift-training/pkg/paging"
 )
@@ -73,9 +73,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "audit.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: audit.AuditLogPageResult{}},
-	{Result: "model.ListBatteryResponse", Endpoints: []string{"GET /valuation/battery/evaluations"},
+	{Result: "valuation.ListBatteryResponse", Endpoints: []string{"GET /valuation/battery/evaluations"},
 		Keys: []string{"total", "items"}, Dialect: paging.DialectNone,
-		Sample: vmodel.ListBatteryResponse{}},
+		Sample: valuation.ListBatteryResponse{}},
 	{Result: "paging.ItemsPage[inspection.ContactRequestRowDTO]", Endpoints: []string{"GET /admin/recruit/requests"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: paging.ItemsPage[inspection.ContactRequestRowDTO]{}},

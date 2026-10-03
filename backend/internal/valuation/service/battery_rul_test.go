@@ -6,14 +6,14 @@ import (
 	"math"
 	"testing"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // makeSyntheticCycles 生成 N 个循环的合成充放电数据
 // 容量从 nominal 按线性衰减；电压/电流时序做合理形状
-func makeSyntheticCycles(n int, bt model.BatteryType, baseCapacity float64) []model.CycleData {
+func makeSyntheticCycles(n int, bt valuation.BatteryType, baseCapacity float64) []valuation.CycleData {
 	_ = bt // 当前未使用，后续可扩展
-	cycles := make([]model.CycleData, n)
+	cycles := make([]valuation.CycleData, n)
 	for i := 0; i < n; i++ {
 		// 容量从 100% 衰减到 80%，跨度为 n
 		soh := 1.0 - 0.2*float64(i)/float64(n-1)
@@ -34,7 +34,7 @@ func makeSyntheticCycles(n int, bt model.BatteryType, baseCapacity float64) []mo
 				curr[p] = 0.3 * math.Exp(-float64(p-70)/20.0) * (1 + 0.1*float64(i)/float64(n))
 			}
 		}
-		cycles[i] = model.CycleData{
+		cycles[i] = valuation.CycleData{
 			CycleIndex:    i + 1,
 			VoltageSeries: volt,
 			CurrentSeries: curr,
@@ -62,7 +62,7 @@ func TestExtractCCCVFeatures_Shape(t *testing.T) {
 			curr[i] = 0.3 * math.Exp(-float64(i-70)/20.0)
 		}
 	}
-	base := svc.computeRawStats(model.CycleData{
+	base := svc.computeRawStats(valuation.CycleData{
 		VoltageSeries: volt, CurrentSeries: curr, Capacity: 1.1, CycleIndex: 1,
 	})
 	fv, stats := svc.extractCCCVFeatures(volt, curr, 1.1, base)
@@ -98,9 +98,9 @@ func TestExtractCCCVFeatures_Shape(t *testing.T) {
 // TestPredict_LFP_FullLifecycle 完整生命周期预测 SOH 与 RUL
 func TestPredict_LFP_FullLifecycle(t *testing.T) {
 	svc := newTestBatteryService()
-	cycles := makeSyntheticCycles(50, model.BatteryTypeLFP, 1.1)
-	req := &model.CreateBatteryRequest{
-		BatteryType:  model.BatteryTypeLFP,
+	cycles := makeSyntheticCycles(50, valuation.BatteryTypeLFP, 1.1)
+	req := &valuation.CreateBatteryRequest{
+		BatteryType:  valuation.BatteryTypeLFP,
 		BatteryModel: "Test-LFP-1.1Ah",
 		Cycles:       cycles,
 	}
@@ -141,9 +141,9 @@ func TestPredict_LFP_FullLifecycle(t *testing.T) {
 // TestPredict_NCM_ShortLifecycle NCM 短寿命电池预测
 func TestPredict_NCM_ShortLifecycle(t *testing.T) {
 	svc := newTestBatteryService()
-	cycles := makeSyntheticCycles(20, model.BatteryTypeNCM, 2.0)
-	req := &model.CreateBatteryRequest{
-		BatteryType:  model.BatteryTypeNCM,
+	cycles := makeSyntheticCycles(20, valuation.BatteryTypeNCM, 2.0)
+	req := &valuation.CreateBatteryRequest{
+		BatteryType:  valuation.BatteryTypeNCM,
 		BatteryModel: "Test-NCM-2.0Ah",
 		Cycles:       cycles,
 	}
@@ -164,13 +164,13 @@ func TestPredict_NCM_ShortLifecycle(t *testing.T) {
 // TestPredict_BelowEOL 容量已低于 60% 触发更换建议
 func TestPredict_BelowEOL(t *testing.T) {
 	svc := newTestBatteryService()
-	cycles := makeSyntheticCycles(20, model.BatteryTypeLFP, 1.1)
+	cycles := makeSyntheticCycles(20, valuation.BatteryTypeLFP, 1.1)
 	// 把所有循环容量强制设为 0.5（即 ~45% SOH，远低于 60% EOL）
 	for i := range cycles {
 		cycles[i].Capacity = 0.5
 	}
-	req := &model.CreateBatteryRequest{
-		BatteryType: model.BatteryTypeLFP,
+	req := &valuation.CreateBatteryRequest{
+		BatteryType: valuation.BatteryTypeLFP,
 		Cycles:      cycles,
 	}
 	ctx := context.TODO()

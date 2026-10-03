@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"math"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // KtResult 时间衰减系数计算结果
@@ -30,18 +30,18 @@ type KtResult struct {
 // factoryYear: 出厂年份
 // saleYear: 成交年份
 // provider: 系数提供者，提供 λ
-func CalcKTime(ctx context.Context, powerType model.PowerType, factoryYear, saleYear int, provider CoefficientResolver) (KtResult, error) {
+func CalcKTime(ctx context.Context, powerType valuation.PowerType, factoryYear, saleYear int, provider CoefficientResolver) (KtResult, error) {
 	age := saleYear - factoryYear
 	if age < 0 {
-		return KtResult{}, model.ErrInvalidYear
+		return KtResult{}, valuation.ErrInvalidYear
 	}
 
 	// 根据动力类型选取衰减率 λ 的 key
 	var key string
 	switch powerType {
-	case model.PowerTypeElectric:
+	case valuation.PowerTypeElectric:
 		key = KeyLambdaElectric
-	case model.PowerTypeCombustion:
+	case valuation.PowerTypeCombustion:
 		key = KeyLambdaCombustion
 	default:
 		return KtResult{}, fmt.Errorf("未知的动力类型: %s", powerType)

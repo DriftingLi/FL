@@ -10,7 +10,7 @@ import (
 	"math"
 	"sort"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // BatteryRULService 电池 RUL 评估服务
@@ -26,7 +26,7 @@ type BatteryRULService struct {
 	// 特征重要性权重（MVP 内置默认值）
 	featureWeights [20]float64
 	// 电池类型 → 基准循环寿命（用于 RUL 估算）
-	nominalLifecycles map[model.BatteryType]int
+	nominalLifecycles map[valuation.BatteryType]int
 }
 
 // NewBatteryRULService 构造默认参数的服务
@@ -66,10 +66,10 @@ func NewBatteryRULService() *BatteryRULService {
 			0.06, 0.04, 0.04, 0.04, 0.04, // 差分 5 维
 		},
 		// 不同电池类型的标称循环寿命（用于把归一化得分映射回 RUL 循环数）
-		nominalLifecycles: map[model.BatteryType]int{
-			model.BatteryTypeLFP:   3000, // LFP 长寿命
-			model.BatteryTypeNCM:   1500, // NCM 中寿命
-			model.BatteryTypeOther: 2000, // 其他保守估值
+		nominalLifecycles: map[valuation.BatteryType]int{
+			valuation.BatteryTypeLFP:   3000, // LFP 长寿命
+			valuation.BatteryTypeNCM:   1500, // NCM 中寿命
+			valuation.BatteryTypeOther: 2000, // 其他保守估值
 		},
 	}
 	return s
@@ -77,8 +77,8 @@ func NewBatteryRULService() *BatteryRULService {
 
 // PredictResult 预测结果
 type PredictResult struct {
-	CycleFeatures     []model.CycleFeature
-	FeatureImportance []model.FeatureImportance
+	CycleFeatures     []valuation.CycleFeature
+	FeatureImportance []valuation.FeatureImportance
 	RulCycles         int
 	SohPercent        float64
 	Confidence        float64
@@ -88,7 +88,7 @@ type PredictResult struct {
 }
 
 // Predict 完整 RUL 预测：特征提取 → 滑窗聚合 → 估算 SOH/RUL
-func (s *BatteryRULService) Predict(_ context.Context, req *model.CreateBatteryRequest) (*PredictResult, error) {
+func (s *BatteryRULService) Predict(_ context.Context, req *valuation.CreateBatteryRequest) (*PredictResult, error) {
 	cycles := req.Cycles
 	// 1. 排序保证按 cycle_index 升序
 	sort.SliceStable(cycles, func(i, j int) bool {
@@ -96,7 +96,7 @@ func (s *BatteryRULService) Predict(_ context.Context, req *model.CreateBatteryR
 	})
 
 	// 2. 提取每个循环的 20 维特征
-	cycleFeatures := make([]model.CycleFeature, 0, len(cycles))
+	cycleFeatures := make([]valuation.CycleFeature, 0, len(cycles))
 	// 3. 用第 10 个循环（或第一个）作为基准循环（论文 S2 提到"以第 10 次循环作为参考基准"）
 	baselineIdx := 9
 	if len(cycles) <= baselineIdx {
@@ -106,7 +106,7 @@ func (s *BatteryRULService) Predict(_ context.Context, req *model.CreateBatteryR
 	for _, c := range cycles {
 		fv, stats := s.extractCCCVFeatures(c.VoltageSeries, c.CurrentSeries, c.Capacity, baseStats)
 		soh := s.estimateSOHFromCapacity(stats.Capacity, req.BatteryType)
-		cf := model.CycleFeature{
+		cf := valuation.CycleFeature{
 			CycleIndex:    c.CycleIndex,
 			FeatureVector: fv,
 			RawStats:      stats,
@@ -148,9 +148,9 @@ func (s *BatteryRULService) Predict(_ context.Context, req *model.CreateBatteryR
 // 顺序：恒流电压 5 + 恒压电流 5 + 阶段时间 2 + 恒压容量 1 + ICA 2 + 差分 5
 func (s *BatteryRULService) extractCCCVFeatures(
 	voltage, current []float64, capacity float64,
-	baseStats model.RawStats,
-) (model.FeatureVector, model.RawStats) {
-	var fv model.FeatureVector
+	baseStats valuation.RawStats,
+) (valuation.FeatureVector, valuation.RawStats) {
+	var fv valuation.FeatureVector
 
 	// 1) CC-CV 分段（论文图 2 启发：电压在 CC 段单调上升至截止电压，CV 段电流衰减）
 	// 简化策略：找到最大电压索引作为 CC→CV 分界点
@@ -193,7 +193,7 @@ func (s *BatteryRULService) extractCCCVFeatures(
 	fv[14] = icPeakV
 
 	// 7) 循环演化差分（5 维）
-	cur := model.RawStats{
+	cur := valuation.RawStats{
 		VoltageMean: fv[0], VoltageStd: fv[1],
 		CurrentMean: fv[5], CurrentStd: fv[6],
 		Capacity: capacity, ICPeak: icPeak,
@@ -205,7 +205,7 @@ func (s *BatteryRULService) extractCCCVFeatures(
 	fv[19] = cur.ICPeak - baseStats.ICPeak
 
 	// 原始统计
-	stats := model.RawStats{
+	stats := valuation.RawStats{
 		VoltageMean: fv[0], VoltageStd: fv[1],
 		CurrentMean: fv[5], CurrentStd: fv[6],
 		Capacity: capacity, CCDuration: ccEnd, CVDuration: total - ccEnd,
@@ -215,7 +215,7 @@ func (s *BatteryRULService) extractCCCVFeatures(
 }
 
 // computeRawStats 计算指定循环的 RawStats（用于构造基准循环）
-func (s *BatteryRULService) computeRawStats(c model.CycleData) model.RawStats {
+func (s *BatteryRULService) computeRawStats(c valuation.CycleData) valuation.RawStats {
 	ccEnd := splitCCCV(c.VoltageSeries)
 	ccVolt := c.VoltageSeries[:ccEnd]
 	cvCurr := c.CurrentSeries[ccEnd:]
@@ -225,7 +225,7 @@ func (s *BatteryRULService) computeRawStats(c model.CycleData) model.RawStats {
 		cMean, cStd = mean(cvCurr), std(cvCurr)
 	}
 	icPeak, icPeakV := icaPeak(c.VoltageSeries, c.CurrentSeries)
-	return model.RawStats{
+	return valuation.RawStats{
 		VoltageMean: vMean, VoltageStd: vStd,
 		CurrentMean: cMean, CurrentStd: cStd,
 		Capacity: c.Capacity, CCDuration: ccEnd, CVDuration: len(c.VoltageSeries) - ccEnd,
@@ -234,7 +234,7 @@ func (s *BatteryRULService) computeRawStats(c model.CycleData) model.RawStats {
 }
 
 // aggregateSlidingWindow 滑窗聚合（MVP：返回最后一个窗口的均值与标准差）
-func (s *BatteryRULService) aggregateSlidingWindow(cfs []model.CycleFeature) [20][2]float64 {
+func (s *BatteryRULService) aggregateSlidingWindow(cfs []valuation.CycleFeature) [20][2]float64 {
 	var agg [20][2]float64
 	if len(cfs) == 0 {
 		return agg
@@ -262,14 +262,14 @@ func (s *BatteryRULService) aggregateSlidingWindow(cfs []model.CycleFeature) [20
 }
 
 // estimateSOHFromCapacity 仅用容量估算 SOH
-func (s *BatteryRULService) estimateSOHFromCapacity(capacity float64, bt model.BatteryType) float64 {
+func (s *BatteryRULService) estimateSOHFromCapacity(capacity float64, bt valuation.BatteryType) float64 {
 	// 标称容量假设：LFP=1.1*NCM/Other=1.0（论文实验 NCM=2.0Ah LFP=1.1Ah）
 	// 这里用电池类型映射一个"标称值"作为 SOH 100% 的参考
 	var nominal float64
 	switch bt {
-	case model.BatteryTypeLFP:
+	case valuation.BatteryTypeLFP:
 		nominal = 1.1
-	case model.BatteryTypeNCM:
+	case valuation.BatteryTypeNCM:
 		nominal = 2.0
 	default:
 		nominal = 1.5
@@ -285,7 +285,7 @@ func (s *BatteryRULService) estimateSOHFromCapacity(capacity float64, bt model.B
 }
 
 // computeOverallSOH 综合 SOH：容量 SOH 与特征健康度加权
-func (s *BatteryRULService) computeOverallSOH(latest model.CycleFeature, agg [20][2]float64, bt model.BatteryType) float64 {
+func (s *BatteryRULService) computeOverallSOH(latest valuation.CycleFeature, agg [20][2]float64, bt valuation.BatteryType) float64 {
 	capSOH := s.estimateSOHFromCapacity(latest.RawStats.Capacity, bt)
 	// 特征健康度：归一化容量差分、电压差分、IC 差分到 0~1 范围，再加权
 	capDrop := math.Abs(agg[15][0])   // 容量均值差分（最新 - 基准）
@@ -307,7 +307,7 @@ func (s *BatteryRULService) computeOverallSOH(latest model.CycleFeature, agg [20
 }
 
 // computeHealthScore 健康度评分 0~1：用于调整置信度与 RUL 边界
-func (s *BatteryRULService) computeHealthScore(agg [20][2]float64, latest model.CycleFeature) float64 {
+func (s *BatteryRULService) computeHealthScore(agg [20][2]float64, latest valuation.CycleFeature) float64 {
 	// 用标准差总和的倒数作为"稳定度"代理
 	var totalStd float64
 	for dim := 0; dim < 20; dim++ {
@@ -325,7 +325,7 @@ func (s *BatteryRULService) computeHealthScore(agg [20][2]float64, latest model.
 // estimateRUL 估算剩余循环数
 // EOL 阈值 60%（业内"梯次利用"边界；80% 退役线对 demo 过于严苛）
 // RUL = 标称寿命 × (当前SOH - 60%) / (100% - 60%)
-func (s *BatteryRULService) estimateRUL(soh, healthScore float64, bt model.BatteryType) (int, int, int) {
+func (s *BatteryRULService) estimateRUL(soh, healthScore float64, bt valuation.BatteryType) (int, int, int) {
 	nominal := s.nominalLifecycles[bt]
 	const eolPercent = 60.0
 	eolRatio := (soh - eolPercent) / (100.0 - eolPercent)
@@ -347,7 +347,7 @@ func (s *BatteryRULService) estimateRUL(soh, healthScore float64, bt model.Batte
 }
 
 // computeFeatureImportance 计算 20 维特征重要性并归一化
-func (s *BatteryRULService) computeFeatureImportance(agg [20][2]float64) []model.FeatureImportance {
+func (s *BatteryRULService) computeFeatureImportance(agg [20][2]float64) []valuation.FeatureImportance {
 	weights := s.featureWeights
 	// 重要性 = 静态权重 * (1 + 归一化标准差)
 	var raw [20]float64
@@ -356,9 +356,9 @@ func (s *BatteryRULService) computeFeatureImportance(agg [20][2]float64) []model
 		raw[i] = weights[i] * (1.0 + math.Min(agg[i][1], 1.0))
 		total += raw[i]
 	}
-	out := make([]model.FeatureImportance, 20)
+	out := make([]valuation.FeatureImportance, 20)
 	for i := 0; i < 20; i++ {
-		out[i] = model.FeatureImportance{
+		out[i] = valuation.FeatureImportance{
 			Index:      i,
 			Name:       s.featureNames[i],
 			Group:      s.featureGroupMap[i],

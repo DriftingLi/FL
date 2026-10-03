@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 )
 
 // BatteryRepository 电池 RUL 评估仓储
@@ -28,7 +28,7 @@ func NewBatteryRepository(pool *pgxpool.Pool) *BatteryRepository {
 
 // CreateEvaluation 插入评估主记录，返回完整行（含 id/timestamps）
 // userID>0 时写入归属；userID=0 时落 NULL（匿名/历史数据）
-func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *model.BatteryEvaluation, features []model.CycleFeature, userID int) (*model.BatteryEvaluation, error) {
+func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *valuation.BatteryEvaluation, features []valuation.CycleFeature, userID int) (*valuation.BatteryEvaluation, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("开启事务失败: %w", err)
@@ -93,19 +93,19 @@ func (r *BatteryRepository) CreateEvaluation(ctx context.Context, eval *model.Ba
 
 // GetEvaluation 查询评估详情（含周期特征，不按用户过滤）
 // 用于公开的报告生成/下载场景；鉴权详情请用 GetEvaluationByUser
-func (r *BatteryRepository) GetEvaluation(ctx context.Context, id int64) (*model.BatteryEvaluation, error) {
+func (r *BatteryRepository) GetEvaluation(ctx context.Context, id int64) (*valuation.BatteryEvaluation, error) {
 	return r.getBatteryEvaluation(ctx, id, 0, false)
 }
 
 // GetEvaluationByUser 查询评估详情并校验归属（user_id 必须等于 userID）
 // 用于登录用户查看自己的电池评估详情；不属于该用户的记录返回 pgx.ErrNoRows
-func (r *BatteryRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*model.BatteryEvaluation, error) {
+func (r *BatteryRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*valuation.BatteryEvaluation, error) {
 	return r.getBatteryEvaluation(ctx, id, userID, true)
 }
 
 // getBatteryEvaluation 主表查询 + 周期特征加载。
 // enforceOwner=true 时追加 user_id 过滤；=false 时仅按 id 查询（公开场景）
-func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, userID int, enforceOwner bool) (*model.BatteryEvaluation, error) {
+func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, userID int, enforceOwner bool) (*valuation.BatteryEvaluation, error) {
 	var (
 		bid           int64
 		batteryType   string
@@ -144,9 +144,9 @@ func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, 
 			return nil, err
 		}
 	}
-	eval := &model.BatteryEvaluation{
+	eval := &valuation.BatteryEvaluation{
 		ID:             bid,
-		BatteryType:    model.BatteryType(batteryType),
+		BatteryType:    valuation.BatteryType(batteryType),
 		CycleCount:     int(cycleCount),
 		RulCycles:      int(rulCycles),
 		SohPercent:     soh,
@@ -163,7 +163,7 @@ func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, 
 		eval.ReportPdfPath = *reportPath
 	}
 	if len(importanceRaw) > 0 {
-		var imp []model.FeatureImportance
+		var imp []valuation.FeatureImportance
 		if err := json.Unmarshal(importanceRaw, &imp); err == nil {
 			eval.FeatureImportance = imp
 		}
@@ -192,15 +192,15 @@ func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, 
 		if err := json.Unmarshal(fvJSON, &fvSlice); err != nil {
 			return nil, fmt.Errorf("解析特征向量失败: %w", err)
 		}
-		var fv model.FeatureVector
+		var fv valuation.FeatureVector
 		for i := 0; i < 20 && i < len(fvSlice); i++ {
 			fv[i] = fvSlice[i]
 		}
-		var stats model.RawStats
+		var stats valuation.RawStats
 		if err := json.Unmarshal(statsJSON, &stats); err != nil {
 			return nil, fmt.Errorf("解析原始统计失败: %w", err)
 		}
-		eval.CycleFeatures = append(eval.CycleFeatures, model.CycleFeature{
+		eval.CycleFeatures = append(eval.CycleFeatures, valuation.CycleFeature{
 			ID:            fid,
 			EvaluationID:  bid,
 			CycleIndex:    int(cycleIdx),
@@ -214,7 +214,7 @@ func (r *BatteryRepository) getBatteryEvaluation(ctx context.Context, id int64, 
 
 // ListEvaluations 分页查询摘要
 // batteryType 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部
-func (r *BatteryRepository) ListEvaluations(ctx context.Context, batteryType string, userID int, limit, offset int) ([]model.BatteryEvaluationSummary, int, error) {
+func (r *BatteryRepository) ListEvaluations(ctx context.Context, batteryType string, userID int, limit, offset int) ([]valuation.BatteryEvaluationSummary, int, error) {
 	// 动态拼装 WHERE：battery_type / user_id 均为可选过滤
 	where := make([]string, 0, 2)
 	args := make([]any, 0, 3)
@@ -253,7 +253,7 @@ func (r *BatteryRepository) ListEvaluations(ctx context.Context, batteryType str
 		return nil, 0, err
 	}
 	defer rows.Close()
-	out := make([]model.BatteryEvaluationSummary, 0, limit)
+	out := make([]valuation.BatteryEvaluationSummary, 0, limit)
 	for rows.Next() {
 		var (
 			id        int64
@@ -268,9 +268,9 @@ func (r *BatteryRepository) ListEvaluations(ctx context.Context, batteryType str
 		if err := rows.Scan(&id, &bt, &modelPtr, &count, &rul, &soh, &conf, &createdAt); err != nil {
 			return nil, 0, err
 		}
-		s := model.BatteryEvaluationSummary{
+		s := valuation.BatteryEvaluationSummary{
 			ID:          id,
-			BatteryType: model.BatteryType(bt),
+			BatteryType: valuation.BatteryType(bt),
 			CycleCount:  int(count),
 			RulCycles:   int(rul),
 			SohPercent:  soh,

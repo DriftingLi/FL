@@ -1,5 +1,5 @@
-// Package model 定义业务层错误
-package model
+// 估值域业务错误哨兵（供 service / handler 透传）。
+package valuation
 
 import "errors"
 

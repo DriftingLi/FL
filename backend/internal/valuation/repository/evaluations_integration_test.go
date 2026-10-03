@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 
 	migratedb "forklift-training/internal/migrate"
 )
@@ -212,7 +212,7 @@ func TestEvaluationsRepository_BackfillIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("二次列出失败: %v", err)
 	}
-	byID := map[int64]model.EvaluationDetail{}
+	byID := map[int64]valuation.EvaluationDetail{}
 	for _, r := range rows2 {
 		byID[r.ID] = r
 	}

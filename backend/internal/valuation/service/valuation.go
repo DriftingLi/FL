@@ -21,7 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"forklift-training/internal/cache"
-	"forklift-training/internal/valuation/model"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -79,13 +79,13 @@ func NewValuationService(
 // Resolver 暴露系数配置读取器（详情接口旧记录建议 fallback 与报告 Prepare 同源）。
 func (s *ValuationService) Resolver() CoefficientResolver { return s.provider }
 
-func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
+func (s *ValuationService) Evaluate(ctx context.Context, req *valuation.EvaluationRequest) (*valuation.EvaluationResult, error) {
 	// 构造缓存 key：对规范化后的 req JSON 做 SHA256
 	reqBytes, _ := json.Marshal(req)
 	hash := sha256.Sum256(reqBytes)
 	cacheKey := cache.SafeKey("valuation", "result", hex.EncodeToString(hash[:]))
 
-	var result model.EvaluationResult
+	var result valuation.EvaluationResult
 	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLValuation, &result, func() (any, error) {
 		return s.evaluateInternal(ctx, req)
 	})
@@ -96,7 +96,7 @@ func (s *ValuationService) Evaluate(ctx context.Context, req *model.EvaluationRe
 }
 
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
-func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.EvaluationRequest) (*model.EvaluationResult, error) {
+func (s *ValuationService) evaluateInternal(ctx context.Context, req *valuation.EvaluationRequest) (*valuation.EvaluationResult, error) {
 	// 0. 系数快照：一次全表读取替代逐 key 串行缓存往返（失败时回退逐 key provider，保持既有容错）
 	var coeff CoefficientResolver = s.provider
 	if snap, err := LoadCoefficientSnapshot(ctx, s.dictRepo); err == nil {
@@ -113,7 +113,7 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	//    （含"内燃"→combustion，其他→electric），原价表车型名不再受字典表约束
 	powerType := inferPowerType(req.VehicleType)
 	if vt, err := s.dictRepo.GetVehicleTypeByName(ctx, req.VehicleType); err == nil {
-		powerType = model.PowerType(vt.PowerType)
+		powerType = valuation.PowerType(vt.PowerType)
 	}
 
 	// 3. 查询基准原价：精确匹配 → 模糊匹配
@@ -174,7 +174,7 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	confHigh := estimated * (1 + confRange)
 
 	// 11. 装配结果
-	result := &model.EvaluationResult{
+	result := &valuation.EvaluationResult{
 		EvaluationRequest: *req,
 		OriginalPrice:     originalPrice,
 		PowerType:         powerType,
@@ -199,7 +199,7 @@ func (s *ValuationService) evaluateInternal(ctx context.Context, req *model.Eval
 	// 13. 未来价值曲线锚点（ADR-0012 §8）：公式唯一实现在此，
 	//     future(n) = estimated × d^n；d 与评估时点系数/λ 一并锁定
 	anchorLambda := result.LambdaElectric
-	if powerType == model.PowerTypeCombustion {
+	if powerType == valuation.PowerTypeCombustion {
 		anchorLambda = result.LambdaCombustion
 	}
 	result.DecayAnchor = roundTo4(DecayAnchor(ktAdjusted, khRes.KHours, kbRes.KBrand, ktRes.Age, anchorLambda))
@@ -222,17 +222,17 @@ func DecayAnchor(ktAdjusted, kHours, kBrand float64, age int, lambda float64) fl
 // inferPowerType 从车型名推断动力类型
 // 含"内燃"→combustion，其他→electric（电动为仓储车主流派系）
 // 仅在 vehicle_types 字典表未命中时作为兜底，避免原价表自由输入的车型名导致评估失败
-func inferPowerType(vehicleType string) model.PowerType {
+func inferPowerType(vehicleType string) valuation.PowerType {
 	if strings.Contains(vehicleType, "内燃") {
-		return model.PowerTypeCombustion
+		return valuation.PowerTypeCombustion
 	}
-	return model.PowerTypeElectric
+	return valuation.PowerTypeElectric
 }
 
 // Persist 持久化评估结果到 evaluations 表，返回新 ID
 // 由 handler 在拿到 EvaluationResult 后调用
 // userID>0 时写入归属（登录用户提交）；userID=0 时落 NULL（匿名提交）
-func (s *ValuationService) Persist(ctx context.Context, result *model.EvaluationResult, userID int) (int64, error) {
+func (s *ValuationService) Persist(ctx context.Context, result *valuation.EvaluationResult, userID int) (int64, error) {
 	if s.evalRepo == nil {
 		return 0, fmt.Errorf("evalRepo 未装配")
 	}
@@ -275,7 +275,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *model.Evaluation
 
 // lookupOriginalPrice 查询基准原价：先精确匹配，未命中则模糊匹配
 // 当字段值为 "无"（字符串）或 0（mast_height_mm）时，模糊匹配会忽略该字段
-func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.EvaluationRequest) (float64, error) {
+func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *valuation.EvaluationRequest) (float64, error) {
 	// 1. 精确匹配
 	op, err := s.dictRepo.FindOriginalPriceMatch(ctx,
 		req.Brand, req.VehicleType, req.Series,
@@ -296,7 +296,7 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 		req.Brand, req.VehicleType, seriesForFuzzy, req.Tonnage)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return 0, model.ErrOriginalPriceNotFound
+			return 0, valuation.ErrOriginalPriceNotFound
 		}
 		return 0, fmt.Errorf("模糊匹配原价失败: %w", err)
 	}
@@ -304,23 +304,23 @@ func (s *ValuationService) lookupOriginalPrice(ctx context.Context, req *model.E
 }
 
 // BuildDimensionScores 由结果字段派生 5 维度评分切片。
-// 标签与顺序来自 model 包单一契约（与 PDF 雷达图同源，model.DimensionLabels）。
+// 标签与顺序来自 model 包单一契约（与 PDF 雷达图同源，valuation.DimensionLabels）。
 // 每个维度值钳制到 [0, 1]，对应前端雷达图 max=1
 // 供 handler.Get 在详情接口实时计算维度评分（dimension_scores 未入库）
-func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []model.DimensionScore {
-	return []model.DimensionScore{
-		{Label: model.DimensionLabelTime, Value: roundTo4(clamp01(kTime))},
-		{Label: model.DimensionLabelHours, Value: roundTo4(clamp01(kHours))},
-		{Label: model.DimensionLabelBrand, Value: roundTo4(clamp01(kBrand))},
-		{Label: model.DimensionLabelMarket, Value: roundTo4(clamp01(kMarket))},
-		{Label: model.DimensionLabelCondition, Value: roundTo4(clamp01(kCondition))},
+func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []valuation.DimensionScore {
+	return []valuation.DimensionScore{
+		{Label: valuation.DimensionLabelTime, Value: roundTo4(clamp01(kTime))},
+		{Label: valuation.DimensionLabelHours, Value: roundTo4(clamp01(kHours))},
+		{Label: valuation.DimensionLabelBrand, Value: roundTo4(clamp01(kBrand))},
+		{Label: valuation.DimensionLabelMarket, Value: roundTo4(clamp01(kMarket))},
+		{Label: valuation.DimensionLabelCondition, Value: roundTo4(clamp01(kCondition))},
 	}
 }
 
 // RebuildDerivedFromDetail 从持久化记录重建派生字段（单一装配点）：
 // KTimeAdjusted 与维度评分是入库 K 系数的纯函数（不漂移，ADR-0004），
 // 建议直接读持久化值。详情/列表/报告/创建响应全部经过这里，装配只实现一次。
-func RebuildDerivedFromDetail(d *model.EvaluationDetail) {
+func RebuildDerivedFromDetail(d *valuation.EvaluationDetail) {
 	d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
 	d.DimensionScores = BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
 	// 旧记录无锚点：从已锁定的 Kt/Kh/Kb/λ 重推（age=0 边界用电动 λ，主流车型口径）

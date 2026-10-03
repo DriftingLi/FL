@@ -258,7 +258,7 @@ func TestEnvelopeCoverageDetectsMissingRegistration(t *testing.T) {
 	found := scanTotalListTypes(t, moduleRoot(t))
 	for _, want := range []string{
 		"audit.AuditLogPageResult",
-		"model.ListBatteryResponse",
+		"valuation.ListBatteryResponse",
 		"questionbank.QuestionPageDTO",
 		"favorite.FavoritePageResult",
 	} {
