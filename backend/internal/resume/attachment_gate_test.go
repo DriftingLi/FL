@@ -1,6 +1,7 @@
 // 简历域的附件归属写面门禁（第十二波票 4）：JobCard 写面端到端（Create 拒绝外链、编辑未改不动）。
-// 精选域的同类门禁已随域包搬去 internal/featured/attachment_gate_test.go（ADR-0070）。
-package service
+// 精选域的同类门禁已随域包搬去 internal/featured/attachment_gate_test.go（ADR-0070）；
+// 本文件随简历域搬进 internal/resume（P2 波 4e：JobCard 写面的实现与举证住同一个包）。
+package resume
 
 import (
 	"encoding/json"
@@ -14,7 +15,7 @@ import (
 
 func TestJobCardAttachmentOwnershipGate(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewJobCardService(db, nil, zap.NewNop())
+	svc := NewService(db, nil, zap.NewNop())
 
 	const own = "/static/uploads/resumes/images/p_1.webp"
 	const external = "https://evil.example.com/p.jpg"

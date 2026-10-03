@@ -3,7 +3,7 @@
 // fillContactStates 是列表与详情卡的**唯一装配点**，所以「企业可用性」这一维也只在这里落一次；
 // 本文件钉的是它的三个边界：可用 ⇒ 缺席；被禁用 ⇒ 出现且只出现在 approved 上；
 // **查不动 ⇒ 不猜成「已停用」**（把 DB 故障报成一个处置事实，比少说一格更坏）。
-package service
+package recruit
 
 import (
 	"testing"
@@ -11,12 +11,14 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/resume"
+	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func seedGrantPair(t *testing.T, db *gorm.DB, status, source string) (recruiterID, studentID int) {
 	t.Helper()
-	pwd, err := HashPassword("seedpass123")
+	pwd, err := service.HashPassword("seedpass123")
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -30,8 +32,8 @@ func seedGrantPair(t *testing.T, db *gorm.DB, status, source string) (recruiterI
 }
 
 // cardsOf 以 caller 企业身份装配一批卡（与 List/GetForRecruiter 同一条路径）。
-func cardsOf(db *gorm.DB, recruiterID, studentID int) []RecruitResumeCard {
-	cards := []RecruitResumeCard{{UserID: studentID}}
+func cardsOf(db *gorm.DB, recruiterID, studentID int) []resume.RecruitResumeCard {
+	cards := []resume.RecruitResumeCard{{UserID: studentID}}
 	fillContactStates(db, recruiterID, cards)
 	return cards
 }
@@ -41,7 +43,7 @@ func TestFillContactStatesCardAvailability(t *testing.T) {
 		db := testutil.NewMemoryDB(t)
 		recID, stuID := seedGrantPair(t, db, "approved", "recruiter")
 		cards := cardsOf(db, recID, stuID)
-		if cards[0].ContactState != string(ContactGrantApproved) {
+		if cards[0].ContactState != string(service.ContactGrantApproved) {
 			t.Fatalf("夹具应是 approved，实际 %q", cards[0].ContactState)
 		}
 		if cards[0].CompanyDisabled {
@@ -56,7 +58,7 @@ func TestFillContactStatesCardAvailability(t *testing.T) {
 			t.Fatalf("置禁用失败: %v", err)
 		}
 		cards := cardsOf(db, recID, stuID)
-		if cards[0].ContactState != string(ContactGrantApproved) {
+		if cards[0].ContactState != string(service.ContactGrantApproved) {
 			t.Fatalf("处置不改写授权事实 ⇒ 徽章仍应是 approved，实际 %q", cards[0].ContactState)
 		}
 		if !cards[0].CompanyDisabled {
@@ -85,7 +87,7 @@ func TestFillContactStatesCardAvailability(t *testing.T) {
 			t.Fatalf("注入故障（删 recruiter_users 表）失败: %v", err)
 		}
 		cards := cardsOf(db, recID, stuID)
-		if cards[0].ContactState != string(ContactGrantApproved) {
+		if cards[0].ContactState != string(service.ContactGrantApproved) {
 			t.Fatalf("徽章那一维不依赖 recruiter_users，应保持 approved，实际 %q", cards[0].ContactState)
 		}
 		if cards[0].CompanyDisabled {

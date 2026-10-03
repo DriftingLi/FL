@@ -308,11 +308,11 @@ var Domains = []Domain{
 		Name:  "recruit",
 		Title: "招聘者工作区（/api/recruit/me、/api/recruit/resumes*、/api/recruit/contact-requests：简历库与联系方式交换）",
 		Roots: []string{
-			"service.RecruitResumeCard",
-			"service.RecruitListResult",
+			"resume.RecruitResumeCard",
+			"recruit.RecruitListResult",
 			"service.ContactRequestListResult",
 			"service.ContactPlainDTO",
-			"service.RecruitMeDTO",
+			"recruit.RecruitMeDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/recruit/me"},
@@ -330,13 +330,13 @@ var Domains = []Domain{
 		Name:  "job",
 		Title: "职位与投递（/api/recruit/jobs*、/api/jobs*、/api/resume/applications*、/api/recruit/applications*、/api/admin/jobs* 巡检与举报治理）",
 		Roots: []string{
-			"service.JobPostingDTO",
-			"service.JobListResult",
-			"service.ApplicationDTO",
-			"service.ApplicationListResult",
-			"service.RecruiterApplicationListResult",
-			"service.ReportDTO",
-			"service.ReportListResult",
+			"job.JobPostingDTO",
+			"job.JobListResult",
+			"job.ApplicationDTO",
+			"job.ApplicationListResult",
+			"job.RecruiterApplicationListResult",
+			"job.ReportDTO",
+			"job.ReportListResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/recruit/jobs"},
@@ -354,7 +354,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/recruit/applications/{id}"},
 			{Method: "POST", Path: "/recruit/applications/{id}/reject"},
 			// 管理端巡检面（#1100：此前注解未指认 data、也不在任何域声明表；
-			// frontend/src/api/inspection.ts 的 4 个巡检端点即这四条，handler 在 internal/api/job_report.go）。
+			// frontend/src/api/inspection.ts 的 4 个巡检端点即这四条，handler 在 internal/job/handler_report.go）。
 			{Method: "GET", Path: "/admin/jobs"},
 			{Method: "GET", Path: "/admin/job-reports"},
 			{Method: "POST", Path: "/admin/jobs/{id}/force-offline"},
@@ -366,7 +366,7 @@ var Domains = []Domain{
 		Name:  "resume",
 		Title: "学员简历卡（/api/resume/*：简历 CRUD / 可见性 / PDF 与工作照附件 / 查看留痕 / 收到的联系方式申请）",
 		Roots: []string{
-			"service.JobCardDTO",
+			"resume.JobCardDTO",
 			"service.ContactRequestListResult",
 		},
 		Endpoints: []Endpoint{

@@ -28,6 +28,7 @@ import (
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
 	"forklift-training/internal/note"
@@ -36,6 +37,7 @@ import (
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
+	"forklift-training/internal/recruit"
 	"forklift-training/internal/search"
 	"forklift-training/internal/service"
 	"forklift-training/internal/student"
@@ -79,9 +81,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "paging.ItemsPage[inspection.RecruitResumeViewDTO]", Endpoints: []string{"GET /admin/recruit/views"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: paging.ItemsPage[inspection.RecruitResumeViewDTO]{}},
-	{Result: "service.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
+	{Result: "job.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ApplicationListResult{}},
+		Sample: job.ApplicationListResult{}},
 	{Result: "checkin.CheckInRankResult", Endpoints: []string{"GET /check-in/rank"},
 		Keys: []string{"items", "total", "page", "pages", "me"}, Dialect: paging.DialectPages,
 		Sample: checkin.CheckInRankResult{}},
@@ -123,9 +125,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "admin.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
 		Keys: []string{"list", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: admin.HrwaiUserPageResult{}},
-	{Result: "service.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
+	{Result: "job.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.JobListResult{}},
+		Sample: job.JobListResult{}},
 	{Result: "material.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
 		Keys: []string{"page", "pages", "total", "materials"}, Dialect: paging.DialectPages,
 		Sample: material.MaterialPageResult{}},
@@ -153,18 +155,18 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "questionbank.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
 		Keys: []string{"page", "page_size", "questions", "total"}, Dialect: paging.DialectPageSize,
 		Sample: questionbank.QuestionPageDTO{}},
-	{Result: "service.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
+	{Result: "recruit.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.RecruitListResult{}},
-	{Result: "service.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
+		Sample: recruit.RecruitListResult{}},
+	{Result: "job.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
 		Keys: []string{"items", "total", "page", "page_size", "unread_count", "job_title"}, Dialect: paging.DialectPageSize,
-		Sample: service.RecruiterApplicationListResult{}},
+		Sample: job.RecruiterApplicationListResult{}},
 	{Result: "auth.RecruiterListResult", Endpoints: []string{"GET /admin/recruiters"},
 		Keys: []string{"total", "page", "items"}, Dialect: paging.DialectNone,
 		Sample: auth.RecruiterListResult{}},
-	{Result: "service.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
+	{Result: "job.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ReportListResult{}},
+		Sample: job.ReportListResult{}},
 	{Result: "search.SearchPageDTO", Endpoints: []string{"GET /search"},
 		Keys: []string{"keyword", "type", "total", "page", "pages", "items"}, Dialect: paging.DialectPages,
 		Sample: search.SearchPageDTO{}},

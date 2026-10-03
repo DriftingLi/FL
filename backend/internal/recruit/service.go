@@ -1,8 +1,11 @@
-// Package service 招聘端脱敏简历（L2）。
-// List/Get 均只返回 visibility=open 的卡；响应经同一脱敏路径，不含手机/微信/PDF/未打码姓名/证书原图/现居地精确值。
-// 过滤轴：意向地区/期望岗位/证书/薪资区间/经验年限/到岗时间；默认排序 updated_at DESC（不按注册时间）。
-// 浏览留痕：Detail（及 List 按需）写入 recruit_resume_views 供审计。
-package service
+// Package recruit 招聘域：招聘者工作区的**简历库读面**（脱敏卡列表/详情/筛选/浏览留痕）。
+// List/Get 均只返回 visibility=open 的卡；响应经同一脱敏路径（resume.Desensitize），不含手机/微信/PDF/
+// 未打码姓名/证书原图/现居地精确值。过滤轴：意向地区/期望岗位/证书/薪资区间/经验年限/到岗时间；
+// 默认排序 updated_at DESC（不按注册时间）。浏览留痕：Detail（及 List 按需）写入 recruit_resume_views。
+//
+// 域边界（P2 波 4e）：本包单向依赖 internal/resume（简历卡实体与其三处投影都在彼处）与
+// internal/service（留驻的联系方式授权读面）。HTTP 出口见 handler.go / handler_pdf.go。
+package recruit
 
 import (
 	"errors"
@@ -15,17 +18,20 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/region"
+	"forklift-training/internal/resume"
+	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
-// RecruitService 招聘端简历服务（脱敏读）。
-type RecruitService struct {
+// Service 招聘端简历服务（脱敏读）。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-func NewRecruitService(db *gorm.DB, logger *zap.Logger) *RecruitService {
-	return &RecruitService{db: db, logger: logger}
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // RecruitListParams 招聘端列表筛选参数（全部可选；page/pageSize 由 handler 归一）。
@@ -47,44 +53,15 @@ type RecruitListParams struct {
 	RecruiterID int
 }
 
-// RecruitResumeCard 脱敏卡（L2 可见字段；打码姓名，无 phone/wechat/region/PDF/cert image）。
-type RecruitResumeCard struct {
-	UserID                int       `json:"user_id"`
-	RealName              string    `json:"real_name"`        // 已打码（如 张* 或 张*丰）
-	RealNameMasked        string    `json:"real_name_masked"` // 同上，兼容验收对打码字段的显式断言
-	ExpectedPositionID    *int      `json:"expected_position_id,omitempty" extensions:"x-optional"`
-	ExpectedPositionExtra string    `json:"expected_position_extra"`
-	ExpectedRegions       JSONArray `json:"expected_regions" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
-	SalaryMin             *int      `json:"salary_min,omitempty" extensions:"x-optional"`
-	SalaryMax             *int      `json:"salary_max,omitempty" extensions:"x-optional"`
-	SalaryNegotiable      bool      `json:"salary_negotiable"`
-	AvailableIn           string    `json:"available_in"`
-	JobNature             string    `json:"job_nature"`
-	ExperienceYears       int       `json:"experience_years"`
-	SelfIntro             string    `json:"self_intro"`
-	ResumeExperiences     JSONArray `json:"resume_experiences" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
-	ResumeCertifications  JSONArray `json:"resume_certifications" swaggertype:"array,object" nullability:"nonnil"` // 已去 image_urls
-	UpdatedAt             string    `json:"updated_at"`
-	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
-	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
-	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application
-	// CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
-	// 同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
-	// 本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
-	// （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
-	// 移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。
-	CompanyDisabled bool `json:"company_disabled,omitempty" extensions:"x-optional" fact:"company_unavailable"`
-}
-
 // RecruitListResult 列表结果。
 type RecruitListResult struct {
-	Items []RecruitResumeCard `json:"items" nullability:"nonnil"`
-	Total int64               `json:"total"`
+	Items []resume.RecruitResumeCard `json:"items" nullability:"nonnil"`
+	Total int64                      `json:"total"`
 }
 
 // fillContactStates 批量回填企业视角联系状态（#489，禁止 N+1）。
 // 状态：none 无授权 / pending 有待处理申请 / approved 已授权（含投递产生）。
-func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) {
+func fillContactStates(db *gorm.DB, recruiterID int, cards []resume.RecruitResumeCard) {
 	if recruiterID <= 0 || len(cards) == 0 {
 		return
 	}
@@ -94,7 +71,7 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 	}
 	// 授权态单点在 contact_authz.go（ADR-0053 §3）：徽章是「有效授权态」的三值投影，
 	// 不再自带「approved > pending」优先级，也不再自己判「学员注销即失效」。
-	grants, err := contactGrantOfManyEffective(db, recruiterID, ids)
+	grants, err := service.ContactStatesOf(db, recruiterID, ids)
 	if err != nil {
 		return
 	}
@@ -103,7 +80,7 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
 			cards[i].ContactState = string(g.State)
 			cards[i].ContactSource = string(g.Source)
-			if companyUnavailable && g.State == ContactGrantApproved {
+			if companyUnavailable && g.State == service.ContactGrantApproved {
 				cards[i].CompanyDisabled = true
 			}
 		}
@@ -114,8 +91,8 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []RecruitResumeCard) 
 // 只有**确证**被禁用或已注销才返回 true；「查不动」返回 false——
 // 把 DB 故障报成一条处置事实，比少说一格更坏（ADR-0062 票6 同判据）。
 func companyUnavailableForCards(db *gorm.DB, recruiterID int) bool {
-	err := recruiterAccountUsable(db, recruiterID)
-	return errors.Is(err, ErrCompanyUnavailable)
+	err := service.RecruiterAccountUsable(db, recruiterID)
+	return errors.Is(err, service.ErrCompanyUnavailable)
 }
 
 // resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id
@@ -131,7 +108,7 @@ func resumeHoldsCredential(q *gorm.DB, credentialID int) *gorm.DB {
 }
 
 // applyFilters 在查询上叠加筛选轴（visibility=open 已由调用方保证）。
-func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB {
+func (s *Service) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB {
 	if v := strings.TrimSpace(p.Region); v != "" {
 		// #486：地区筛选改为与录入同源的市级精确匹配——候选 expected_regions 任一元素
 		// 的「市名」（第 2 段；直辖市取整段）等于筛选值（即市名）。
@@ -180,17 +157,17 @@ func (s *RecruitService) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB 
 //
 // CAST AS TEXT 兼容 pg(jsonb) 与 sqlite 内存库(BLOB)；LIKE 用于跨引擎等价，
 // 模式两侧锚定（斜杠/引号）实现「精确匹配第 2 段」而非任意子串。
-func applyRegionCityFilter(region string) any {
-	city := strings.TrimSpace(region)
+func applyRegionCityFilter(regionStr string) any {
+	city := strings.TrimSpace(regionStr)
 	if city == "" {
 		return nil
 	}
 	// 归一：短名 → 规范市全名（苏州市）
-	city = RegionCityName(city)
+	city = region.RegionCityName(city)
 	if city == "" {
 		return nil
 	}
-	if regionMunicipalities[city] {
+	if region.Municipalities[city] {
 		// 直辖市一段式元素：["北京市"]
 		return gorm.Expr("CAST(expected_regions AS TEXT) LIKE ?", `%"`+city+`"%`)
 	}
@@ -199,7 +176,7 @@ func applyRegionCityFilter(region string) any {
 }
 
 // List 脱敏列表：仅 open，叠筛选，updated_at DESC，分页，无缓存（读最新）。
-func (s *RecruitService) List(p RecruitListParams) (*RecruitListResult, error) {
+func (s *Service) List(p RecruitListParams) (*RecruitListResult, error) {
 	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
 	// 先归一化再交给 paging：钳制在本层做，查询骨架（count/find/offset）收编到 paging.Query。
 	if p.Page <= 0 {
@@ -218,9 +195,9 @@ func (s *RecruitService) List(p RecruitListParams) (*RecruitListResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	items := make([]RecruitResumeCard, 0, len(cards))
+	items := make([]resume.RecruitResumeCard, 0, len(cards))
 	for i := range cards {
-		items = append(items, desensitize(&cards[i]))
+		items = append(items, resume.Desensitize(&cards[i]))
 	}
 	// #489：批量回填企业视角联系状态
 	fillContactStates(s.db, p.RecruiterID, items)
@@ -228,7 +205,7 @@ func (s *RecruitService) List(p RecruitListParams) (*RecruitListResult, error) {
 }
 
 // Get 脱敏详情：仅 open 可见，同一脱敏路径；关闭或不存在返回 ErrRecordNotFound。
-func (s *RecruitService) Get(userID int) (*RecruitResumeCard, error) {
+func (s *Service) Get(userID int) (*resume.RecruitResumeCard, error) {
 	return s.GetForRecruiter(userID, 0)
 }
 
@@ -241,14 +218,14 @@ type RecruitMeDTO struct {
 }
 
 // GetForRecruiter 脱敏详情（#489）：带企业视角联系状态。recruiterID>0 时回填。
-func (s *RecruitService) GetForRecruiter(userID, recruiterID int) (*RecruitResumeCard, error) {
+func (s *Service) GetForRecruiter(userID, recruiterID int) (*resume.RecruitResumeCard, error) {
 	var card model.JobCard
 	if err := s.db.Where("user_id = ? AND visibility = ?", userID, "open").First(&card).Error; err != nil {
 		return nil, err
 	}
-	dto := desensitize(&card)
+	dto := resume.Desensitize(&card)
 	if recruiterID > 0 {
-		cards := []RecruitResumeCard{dto}
+		cards := []resume.RecruitResumeCard{dto}
 		fillContactStates(s.db, recruiterID, cards)
 		dto = cards[0]
 	}
@@ -258,7 +235,7 @@ func (s *RecruitService) GetForRecruiter(userID, recruiterID int) (*RecruitResum
 // GetRaw 取原始简历卡（在线简历 PDF 渲染用）。
 // 招聘者路径：仅 open 卡可见（与 Get 同门禁）；学员本人路径由 handler 保证本人鉴权，不受 visibility 限制。
 // 返回原始模型（含敏感字段），调用方负责打码口径（本包 RenderResumePDF 统一处理）。
-func (s *RecruitService) GetRaw(userID int) (*model.JobCard, error) {
+func (s *Service) GetRaw(userID int) (*model.JobCard, error) {
 	var card model.JobCard
 	if err := s.db.Where("user_id = ? AND visibility = ?", userID, "open").First(&card).Error; err != nil {
 		return nil, err
@@ -266,18 +243,9 @@ func (s *RecruitService) GetRaw(userID int) (*model.JobCard, error) {
 	return &card, nil
 }
 
-// GetRawAny 取原始简历卡（学员本人路径：本人鉴权，不校验 visibility）。
-func (s *RecruitService) GetRawAny(userID int) (*model.JobCard, error) {
-	var card model.JobCard
-	if err := s.db.Where("user_id = ?", userID).First(&card).Error; err != nil {
-		return nil, err
-	}
-	return &card, nil
-}
-
 // LogView 写入浏览审计（best-effort，失败仅日志）。
 // 粒度为同一招聘方对同一学员每日一次（Asia/Shanghai 自然日），避免翻页刷量。
-func (s *RecruitService) LogView(recruiterID, resumeUserID int) {
+func (s *Service) LogView(recruiterID, resumeUserID int) {
 	if recruiterID <= 0 || resumeUserID <= 0 {
 		return
 	}
@@ -302,24 +270,8 @@ func (s *RecruitService) LogView(recruiterID, resumeUserID int) {
 }
 
 // LogViews 批量留痕（列表场景，每项一条，同样受每日一次约束）。
-func (s *RecruitService) LogViews(recruiterID int, resumeUserIDs []int) {
+func (s *Service) LogViews(recruiterID int, resumeUserIDs []int) {
 	for _, id := range resumeUserIDs {
 		s.LogView(recruiterID, id)
 	}
-}
-
-// StudentViewStats 学员侧聚合：近 7 天查看过我的企业数（按企业去重计数），不返回企业名。
-func (s *RecruitService) StudentViewStats(studentUserID int) (int64, error) {
-	if studentUserID <= 0 {
-		return 0, nil
-	}
-	since := clock.Now().AddDate(0, 0, -7)
-	var cnt int64
-	// 按企业去重计数，7 天窗口需走索引 (resume_user_id, viewed_at)
-	if err := s.db.Model(&model.RecruitResumeView{}).
-		Where("resume_user_id = ? AND viewed_at >= ?", studentUserID, since).
-		Distinct("recruiter_id").Count(&cnt).Error; err != nil {
-		return 0, err
-	}
-	return cnt, nil
 }

@@ -85,7 +85,7 @@ var consumptionFacts = []FactSpec{
 		Sentinels: []error{service.ErrCompanyUnavailable},
 		Projections: []string{
 			"service.ContactRequestDTO.company_disabled",
-			"service.RecruitResumeCard.company_disabled",
+			"resume.RecruitResumeCard.company_disabled",
 		},
 	},
 }

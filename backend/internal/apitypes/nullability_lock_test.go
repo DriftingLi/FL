@@ -98,6 +98,8 @@ var (
 		{"internal/training", "nullableOutlets"},
 		{"internal/practicemode", "nullableOutlets"},
 		{"internal/mockexam", "nullableOutlets"},
+		{"internal/recruit", "nullableOutlets"},
+		{"internal/resume", "nullableOutlets"},
 	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
@@ -125,6 +127,8 @@ var (
 		{"internal/wrongquestion", "nonnilOutlets"},
 		{"internal/tutor", "nonnilOutlets"},
 		{"internal/admin", "nonnilOutlets"},
+		{"internal/recruit", "nonnilOutlets"},
+		{"internal/job", "nonnilOutlets"},
 	}
 )
 
@@ -257,6 +261,9 @@ var sweptDirs = map[string]string{
 	"note":                "../note",
 	"questioninteraction": "../questioninteraction",
 	"wrongquestion":       "../wrongquestion",
+	"recruit":             "../recruit",
+	"resume":              "../resume",
+	"job":                 "../job",
 	"tutor":               "../tutor",
 	"admin":               "../admin",
 	"repository":          "../valuation/repository",

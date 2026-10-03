@@ -1,5 +1,5 @@
 // 单测 #486 地区契约工具：无分隔串拆分、市名提取、路径拆分。
-package service
+package region
 
 import "testing"
 

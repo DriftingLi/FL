@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/region"
 	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
@@ -53,7 +54,7 @@ func TestRegionMigrationSamplesOnSqlite(t *testing.T) {
 		{"江苏苏州精确地址123号", "江苏省", "苏州市"}, // 无分隔带后缀
 	}
 	for _, c := range cases {
-		parts := service.SplitRegionPath(c.in)
+		parts := region.SplitRegionPath(c.in)
 		if len(parts) >= 3 {
 			// 三段：前两段拼接（迁移的截断语义）
 			if parts[0] != c.prov || parts[1] != c.city {
@@ -61,7 +62,7 @@ func TestRegionMigrationSamplesOnSqlite(t *testing.T) {
 			}
 			continue
 		}
-		prov, city := service.SplitRegionNoSeparator(c.in)
+		prov, city := region.SplitRegionNoSeparator(c.in)
 		if prov != c.prov || city != c.city {
 			t.Errorf("拆分 %q → (%q,%q), want (%q,%q)", c.in, prov, city, c.prov, c.city)
 		}

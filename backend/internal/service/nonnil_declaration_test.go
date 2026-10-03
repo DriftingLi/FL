@@ -46,19 +46,8 @@ func init() {
 // nonnilOutletsCore 键 = 包名.类型名.json键，值 = 走真实出口取到的结果。
 // 一条键对应一次真实调用；同一类型多条字段可以共用一次调用（各占一键、各自 marshal）。
 var nonnilOutletsCore = map[string]func(t *testing.T) any{
-	"service.RecruitListResult.items":             outletRecruitListEmpty,
 	"questionbank.QuestionPageDTO.questions":      outletQuestionPageEmptyPool,
 	"questionbank.QuestionImportResultDTO.errors": outletQuestionImportEmpty,
-}
-
-func outletRecruitListEmpty(t *testing.T) any {
-	t.Helper()
-	svc := NewRecruitService(testutil.NewMemoryDB(t), zap.NewNop())
-	res, err := svc.List(RecruitListParams{Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("空库拉列表失败: %v", err)
-	}
-	return res
 }
 
 func outletQuestionPageEmptyPool(t *testing.T) any {

@@ -2,7 +2,7 @@
 // 本文件：招聘域举报与强制下架（spec #449 T5 #454）。
 //   - 学员侧 POST /api/jobs/:id/report：举报职位
 //   - 管理端 /api/admin/jobs*：只读巡检职位列表（可按企业筛）+ 举报队列 + 强制下架 + 标记已处理
-package api
+package job
 
 import (
 	"context"
@@ -12,30 +12,30 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// jobReportErrStatus 举报治理域哨兵→状态码表（#611）：职位/举报不存在 → 404，
+// ReportErrStatus 举报治理域哨兵→状态码表（#611）：职位/举报不存在 → 404，
 // 其余（原因为空等业务校验）兜底 400。
-var jobReportErrStatus = &httpx.ErrStatusTable{
+var ReportErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrReportJobNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrReportNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrReportJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrReportNotFound, Status: http.StatusNotFound},
 	},
 	Fallback: http.StatusBadRequest,
 }
 
 // RegisterJobReportRoutes 注册举报与治理路由。
-// jobSvc 提供职位巡检列表（JobReportService 只管举报与下架动作）。
-func RegisterJobReportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobReportService, jobSvc *service.JobPostingService) {
-	h := NewJobReportHandler(svc, jobSvc)
+// jobSvc 提供职位巡检列表（*ReportService 只管举报与下架动作）。
+func RegisterReportRoutes(rg *gin.RouterGroup, session *security.Session, svc *ReportService, jobSvc *Service) {
+	h := newReportHandler(svc, jobSvc)
 	// 学员侧举报
-	studentG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobReport))
+	studentG := rg.Group("/jobs", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapJobReport))
 	studentG.POST("/:id/report", h.Report)
 	// 管理端只读巡检 + 处置
-	adminG := rg.Group("/admin", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobReportHandle))
+	adminG := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapJobReportHandle))
 	adminG.GET("/jobs", h.ListAll)
 	adminG.GET("/job-reports", h.ListReports)
 	adminG.POST("/job-reports/:id/handle", h.MarkHandled)
@@ -43,14 +43,14 @@ func RegisterJobReportRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Jo
 }
 
 // JobReportHandler 举报治理 handler。
-type JobReportHandler struct {
-	svc    *service.JobReportService
-	jobSvc *service.JobPostingService
+type reportHandler struct {
+	svc    *ReportService
+	jobSvc *Service
 }
 
 // NewJobReportHandler 创建举报治理 handler。
-func NewJobReportHandler(svc *service.JobReportService, jobSvc *service.JobPostingService) *JobReportHandler {
-	return &JobReportHandler{svc: svc, jobSvc: jobSvc}
+func newReportHandler(svc *ReportService, jobSvc *Service) *reportHandler {
+	return &reportHandler{svc: svc, jobSvc: jobSvc}
 }
 
 // Report 学员举报职位 POST /api/jobs/:id/report
@@ -61,26 +61,26 @@ func NewJobReportHandler(svc *service.JobReportService, jobSvc *service.JobPosti
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
-// @Param body body service.ReportInput true "举报原因"
-// @Success 201 {object} response.R{data=service.ReportDTO} "举报已提交"
+// @Param body body ReportInput true "举报原因"
+// @Success 201 {object} response.R{data=job.ReportDTO} "举报已提交"
 // @Failure 400 {object} response.R "原因不能为空"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "职位不存在或已下架"
 // @Router /jobs/{id}/report [post]
-func (h *JobReportHandler) Report(c *gin.Context) {
-	httpx.Endpoint[service.ReportInput, service.ReportDTO]{
-		Parse: func(c *gin.Context) (*service.ReportInput, error) {
-			return httpx.BindJSON[service.ReportInput](c)
+func (h *reportHandler) Report(c *gin.Context) {
+	httpx.Endpoint[ReportInput, ReportDTO]{
+		Parse: func(c *gin.Context) (*ReportInput, error) {
+			return httpx.BindJSON[ReportInput](c)
 		},
-		Invoke: func(ctx context.Context, req *service.ReportInput) (*service.ReportDTO, error) {
+		Invoke: func(ctx context.Context, req *ReportInput) (*ReportDTO, error) {
 			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
 			return h.svc.Report(middleware.CurrentUserID(c), id, req.Reason)
 		},
-		ErrStatus: jobReportErrStatus,
-		Render: func(c *gin.Context, _ *service.ReportInput, resp *service.ReportDTO) {
+		ErrStatus: ReportErrStatus,
+		Render: func(c *gin.Context, _ *ReportInput, resp *ReportDTO) {
 			response.Created(c, "举报已提交，感谢你的反馈", *resp)
 		},
 	}.Handle(c)
@@ -96,13 +96,13 @@ func (h *JobReportHandler) Report(c *gin.Context) {
 // @Param specialty_id query int false "专业方向 ID"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R{data=service.JobListResult} "列表"
+// @Success 200 {object} response.R{data=job.JobListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/jobs [get]
-func (h *JobReportHandler) ListAll(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.JobListResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobListResult, error) {
-			params := service.JobListParams{
+func (h *reportHandler) ListAll(c *gin.Context) {
+	httpx.Endpoint[struct{}, JobListResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*JobListResult, error) {
+			params := JobListParams{
 				Page:     httpx.QueryIntDefault(c, "page", 1),
 				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
 				All:      true,
@@ -127,19 +127,19 @@ func (h *JobReportHandler) ListAll(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R{data=service.ReportListResult} "列表"
+// @Success 200 {object} response.R{data=job.ReportListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/job-reports [get]
-func (h *JobReportHandler) ListReports(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.ReportListResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportListResult, error) {
+func (h *reportHandler) ListReports(c *gin.Context) {
+	httpx.Endpoint[struct{}, ReportListResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*ReportListResult, error) {
 			page := httpx.QueryIntDefault(c, "page", 1)
 			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			items, total, err := h.svc.ListPendingReports(page, pageSize)
 			if err != nil {
 				return nil, err
 			}
-			return &service.ReportListResult{Items: items, Total: total, Page: page, PageSize: pageSize}, nil
+			return &ReportListResult{Items: items, Total: total, Page: page, PageSize: pageSize}, nil
 		},
 	}.Handle(c)
 }
@@ -151,21 +151,21 @@ func (h *JobReportHandler) ListReports(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "举报 ID"
-// @Success 200 {object} response.R{data=service.ReportDTO} "已处理（响应为处理后的举报行）"
+// @Success 200 {object} response.R{data=job.ReportDTO} "已处理（响应为处理后的举报行）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "举报不存在"
 // @Router /admin/job-reports/{id}/handle [post]
-func (h *JobReportHandler) MarkHandled(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.ReportDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.ReportDTO, error) {
+func (h *reportHandler) MarkHandled(c *gin.Context) {
+	httpx.Endpoint[struct{}, ReportDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*ReportDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "举报 ID 无效")
 			if err != nil {
 				return nil, err
 			}
 			return h.svc.MarkHandled(id)
 		},
-		ErrStatus: jobReportErrStatus,
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ReportDTO) {
+		ErrStatus: ReportErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *ReportDTO) {
 			response.SuccessWithMsg(c, "举报已标记为已处理", *resp)
 		},
 	}.Handle(c)
@@ -180,18 +180,18 @@ func (h *JobReportHandler) MarkHandled(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
 // @Param body body object false "下架原因 {reason: string}"
-// @Success 200 {object} response.R{data=service.JobPostingDTO} "已强制下架（响应为下架后的职位行）"
+// @Success 200 {object} response.R{data=job.JobPostingDTO} "已强制下架（响应为下架后的职位行）"
 // @Failure 400 {object} response.R "原因不能为空"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "职位不存在"
 // @Router /admin/jobs/{id}/force-offline [post]
 // body: { reason: string }。处置动作经 AuditLog 中间件自动记入审计日志。
-func (h *JobReportHandler) ForceOffline(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.JobPostingDTO]{
+func (h *reportHandler) ForceOffline(c *gin.Context) {
+	httpx.Endpoint[struct{}, JobPostingDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) {
 			return &struct{}{}, nil
 		},
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.JobPostingDTO, error) {
+		Invoke: func(ctx context.Context, _ *struct{}) (*JobPostingDTO, error) {
 			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
@@ -202,8 +202,8 @@ func (h *JobReportHandler) ForceOffline(c *gin.Context) {
 			_ = c.ShouldBindJSON(&body)
 			return h.svc.ForceOffline(id, body.Reason)
 		},
-		ErrStatus: jobReportErrStatus,
-		Render: func(c *gin.Context, _ *struct{}, resp *service.JobPostingDTO) {
+		ErrStatus: ReportErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *JobPostingDTO) {
 			response.SuccessWithMsg(c, "职位已强制下架", *resp)
 		},
 	}.Handle(c)

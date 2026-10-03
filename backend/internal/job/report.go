@@ -1,7 +1,7 @@
 // Package service 招聘域：职位举报与强制下架（spec #449 T5 #454）。
 // 先发后审：学员可举报职位，管理员可带原因强制下架；被强制下架的职位企业不能自行重新上架。
 // 举报用招聘域自己的存储（job_reports），不挂到论坛举报表上（那是论坛域的两列形状）。
-package service
+package job
 
 import (
 	"errors"
@@ -13,6 +13,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
@@ -28,20 +29,20 @@ var (
 	ErrReportReasonRequired = errors.New("举报原因不能为空")
 )
 
-// JobReportService 职位举报服务。
-type JobReportService struct {
+// ReportService 职位举报服务。
+type ReportService struct {
 	db     *gorm.DB
 	logger *zap.Logger
-	mailer MailSender
+	mailer service.MailSender
 }
 
-// NewJobReportService 创建职位举报服务。
-func NewJobReportService(db *gorm.DB, logger *zap.Logger) *JobReportService {
-	return &JobReportService{db: db, logger: logger}
+// NewReportService 创建职位举报服务。
+func NewReportService(db *gorm.DB, logger *zap.Logger) *ReportService {
+	return &ReportService{db: db, logger: logger}
 }
 
 // SetMailer 注入邮件发送器（装配根经邮件单点构建后注入）。
-func (s *JobReportService) SetMailer(m MailSender) { s.mailer = m }
+func (s *ReportService) SetMailer(m service.MailSender) { s.mailer = m }
 
 // ReportListResult 举报队列分页结果。
 type ReportListResult struct {
@@ -69,7 +70,7 @@ type ReportDTO struct {
 }
 
 // Report 学员举报职位；同一学员对同一职位唯一，重复举报被合并而非堆叠。
-func (s *JobReportService) Report(studentUserID, jobPostingID int, reason string) (*ReportDTO, error) {
+func (s *ReportService) Report(studentUserID, jobPostingID int, reason string) (*ReportDTO, error) {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		return nil, ErrReportReasonRequired
@@ -117,7 +118,7 @@ func (s *JobReportService) Report(studentUserID, jobPostingID int, reason string
 }
 
 // ListPendingReports 管理端待处理举报队列（分页）。
-func (s *JobReportService) ListPendingReports(page, pageSize int) ([]ReportDTO, int64, error) {
+func (s *ReportService) ListPendingReports(page, pageSize int) ([]ReportDTO, int64, error) {
 	rows, total, _, _, err := paging.QueryWithMax[model.JobReport](s.db, page, pageSize, 20, 50,
 		"created_at DESC", func(q *gorm.DB) *gorm.DB {
 			return q.Where("status = ?", "pending")
@@ -138,7 +139,7 @@ func (s *JobReportService) ListPendingReports(page, pageSize int) ([]ReportDTO, 
 }
 
 // MarkHandled 管理员把举报标记为已处理。
-func (s *JobReportService) MarkHandled(reportID int64) (*ReportDTO, error) {
+func (s *ReportService) MarkHandled(reportID int64) (*ReportDTO, error) {
 	var m model.JobReport
 	if err := s.db.First(&m, reportID).Error; err != nil {
 		return nil, ErrReportNotFound
@@ -161,7 +162,7 @@ func (s *JobReportService) MarkHandled(reportID int64) (*ReportDTO, error) {
 
 // ForceOffline 管理员带原因强制下架职位；对学员侧立即不可见（forced_offline=true），
 // 企业不能自行重新上架（ToggleStatus 已拦）。处置动作由 handler 记入审计日志。
-func (s *JobReportService) ForceOffline(jobPostingID int, reason string) (*JobPostingDTO, error) {
+func (s *ReportService) ForceOffline(jobPostingID int, reason string) (*JobPostingDTO, error) {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		return nil, errors.New("下架原因不能为空")
@@ -182,14 +183,14 @@ func (s *JobReportService) ForceOffline(jobPostingID int, reason string) (*JobPo
 	_ = s.db.First(&job, jobPostingID).Error
 	// 邮件通知企业（被强制下架的原因）
 	s.notifyEmployerOffline(job.ID, job.Title, reason)
-	// 复用 JobPostingService 的 DTO 转换
-	ps := &JobPostingService{db: s.db, logger: s.logger}
+	// 复用 Service 的 DTO 转换
+	ps := &Service{db: s.db, logger: s.logger}
 	dto := ps.toDTO(&job)
 	return &dto, nil
 }
 
 // notifyEmployerOffline 邮件通知企业职位被强制下架。
-func (s *JobReportService) notifyEmployerOffline(jobPostingID int, jobTitle, reason string) {
+func (s *ReportService) notifyEmployerOffline(jobPostingID int, jobTitle, reason string) {
 	var job model.JobPosting
 	if err := s.db.First(&job, jobPostingID).Error; err != nil {
 		return
@@ -211,7 +212,7 @@ func (s *JobReportService) notifyEmployerOffline(jobPostingID int, jobTitle, rea
 	}
 }
 
-func (s *JobReportService) toDTO(m *model.JobReport) ReportDTO {
+func (s *ReportService) toDTO(m *model.JobReport) ReportDTO {
 	dto := ReportDTO{
 		ID:            m.ID,
 		JobPostingID:  m.JobPostingID,

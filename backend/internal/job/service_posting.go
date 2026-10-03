@@ -2,7 +2,7 @@
 // 企业供给侧表达「我在招什么人」：职位名（岗位字典 + 可选自由细化）+ 地区/薪资/经验要求/职位描述
 // + 地区/薪资/经验要求/职位描述，open/closed 二态，按发布新鲜度排序。
 // 学员侧只见 open 且未被强制下架的职位；closed/强制下架职位企业自己仍能看到历史。
-package service
+package job
 
 import (
 	"errors"
@@ -31,15 +31,15 @@ var (
 	ErrJobPositionRequired = errors.New("岗位不能为空")
 )
 
-// JobPostingService 职位服务。
-type JobPostingService struct {
+// Service 职位服务。
+type Service struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-// NewJobPostingService 创建职位服务。
-func NewJobPostingService(db *gorm.DB, logger *zap.Logger) *JobPostingService {
-	return &JobPostingService{db: db, logger: logger}
+// NewService 创建职位服务。
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
 }
 
 // maxActiveJobs 单企业活跃职位上限（宽松值，只防误操作不防人）。
@@ -106,7 +106,7 @@ func validateJobPostingInput(in *JobPostingInput) error {
 }
 
 // toDTO 转换 DB 行为 DTO，带企业信息（学员侧可见字段）。
-func (s *JobPostingService) toDTO(m *model.JobPosting) JobPostingDTO {
+func (s *Service) toDTO(m *model.JobPosting) JobPostingDTO {
 	dto := JobPostingDTO{
 		ID:            m.ID,
 		RecruiterID:   m.RecruiterID,
@@ -141,7 +141,7 @@ func (s *JobPostingService) toDTO(m *model.JobPosting) JobPostingDTO {
 }
 
 // Create 企业发布职位（recruiterID 即企业，账号即企业）。
-func (s *JobPostingService) Create(recruiterID int, in *JobPostingInput) (*JobPostingDTO, error) {
+func (s *Service) Create(recruiterID int, in *JobPostingInput) (*JobPostingDTO, error) {
 	if err := validateJobPostingInput(in); err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (s *JobPostingService) Create(recruiterID int, in *JobPostingInput) (*JobPo
 }
 
 // Update 企业编辑自己的职位（title/岗位/地区/薪资/经验/描述；状态走 ToggleStatus）。
-func (s *JobPostingService) Update(recruiterID, jobID int, in *JobPostingInput) (*JobPostingDTO, error) {
+func (s *Service) Update(recruiterID, jobID int, in *JobPostingInput) (*JobPostingDTO, error) {
 	if err := validateJobPostingInput(in); err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func (s *JobPostingService) Update(recruiterID, jobID int, in *JobPostingInput) 
 }
 
 // ToggleStatus 企业上架/下架自己的职位（open<->closed；强制下架职位不能自行重新上架）。
-func (s *JobPostingService) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO, error) {
+func (s *Service) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO, error) {
 	var m model.JobPosting
 	if err := s.db.First(&m, jobID).Error; err != nil {
 		return nil, ErrJobNotFound
@@ -248,7 +248,7 @@ func jobVisibleToStudent(m *model.JobPosting) bool {
 	return m.Status == "open" && !m.ForcedOffline
 }
 
-func (s *JobPostingService) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error) {
+func (s *Service) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error) {
 	var m model.JobPosting
 	if err := s.db.First(&m, jobID).Error; err != nil {
 		return nil, ErrJobNotFound
@@ -296,7 +296,7 @@ type JobListResult struct {
 
 // List 职位列表。学员侧：只见 open 且未强制下架，按新鲜度排序；
 // 企业侧（MineOnly）：含 closed/强制下架历史，同样按新鲜度排序。
-func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResult, error) {
+func (s *Service) List(recruiterID int, p JobListParams) (*JobListResult, error) {
 	rows, total, _, _, err := paging.QueryWithMax[model.JobPosting](s.db, p.Page, p.PageSize, 20, 50,
 		"published_at DESC, id DESC", func(q *gorm.DB) *gorm.DB {
 			if p.MineOnly {
@@ -346,7 +346,7 @@ func (s *JobPostingService) List(recruiterID int, p JobListParams) (*JobListResu
 // 入参 dtos 为学员可见的职位列表；对每个职位批量查该学员的投递记录判定状态。
 // 查不动即上抛 error（ADR-0062 票6）：咽掉错误会让整列表回成「可投递」（旧写法 `return` 一丢，
 // 前端按钮全绿，点了才 400）。
-func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPostingDTO) error {
+func (s *Service) fillApplyStates(studentUserID int, dtos []JobPostingDTO) error {
 	if studentUserID <= 0 || len(dtos) == 0 {
 		return nil
 	}
@@ -394,7 +394,7 @@ func (s *JobPostingService) fillApplyStates(studentUserID int, dtos []JobPosting
 
 // Get 职位详情。recruiterID>0 表示企业侧（可看自己的 closed/强制下架历史），
 // recruiterID=0 表示学员侧（仅 open 且未强制下架）。
-func (s *JobPostingService) Get(recruiterID, jobID int) (*JobPostingDTO, error) {
+func (s *Service) Get(recruiterID, jobID int) (*JobPostingDTO, error) {
 	var m model.JobPosting
 	if err := s.db.First(&m, jobID).Error; err != nil {
 		return nil, ErrJobNotFound

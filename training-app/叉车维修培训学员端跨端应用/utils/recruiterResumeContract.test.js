@@ -6,7 +6,7 @@
  * 行为测试自己搭依赖，接线断了它照样可能绿。
  *
  * 守护分组（A–D 是 P3 本票的四条判据；E / R6 / R7 / F 是后续票加在同一个文件上的锁）：
- *   A. **脱敏字段清单与真源逐项对齐**：真源 = `backend/internal/service/resume_projection.go`
+ *   A. **脱敏字段清单与真源逐项对齐**：真源 = `backend/internal/resume/projection.go`
  *      的 `desensitize()`（ADR-0053 §4 / spec #1051）。**不是硬编码清单** ——
  *      本测试现读那个文件，把它的返回字段与移动端模型/映射/页面逐项对账：
  *      两端各自增一个字段都会被判红（票面要求「不得增删」）。
@@ -18,7 +18,7 @@
  *   F. **#1267 后半**：卡面 `company_disabled` 与后端 json tag 逐字对账（缺席式键 ⇒ 只认真值），
  *      且详情页在「授权在、明文已收回」那一支**不给**「发起交换」入口。
  *
- * 真源读取假设（fail-closed）：`backend/internal/service/resume_projection.go` 必须
+ * 真源读取假设（fail-closed）：`backend/internal/resume/projection.go` 必须
  * 在**本分支的工作树里**且与 `origin/master` 逐字节一致（本票分支从 P1 切出时已带上）。
  * 读不到或读不出 `desensitize` 的返回块 ⇒ 直接判红，不静默跳过（静默跳过等于假的绿）。
  */
@@ -42,7 +42,7 @@ const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
 const LIBRARY_UVUE = path.join(ROOT, 'pages', 'recruiter', 'resumes.uvue');
 const DETAIL_UVUE = path.join(ROOT, 'pages', 'recruiter', 'resume-detail.uvue');
 const DRAWER_UVUE = path.join(ROOT, 'pages', 'recruiter', 'components', 'recruiter-filter-drawer.uvue');
-const PROJECTION_GO = path.join(REPO_ROOT, 'backend', 'internal', 'service', 'resume_projection.go');
+const PROJECTION_GO = path.join(REPO_ROOT, 'backend', 'internal', 'resume', 'projection.go');
 
 const recruitSrc = readText(RECRUIT_UTS);
 const requestSrc = readText(REQUEST_UTS);
@@ -58,12 +58,12 @@ function desensitizeFieldsFromTruth() {
   if (!fs.existsSync(PROJECTION_GO)) {
     throw new Error(
       `真源不在此工作树：${PROJECTION_GO}\n`
-      + '本票的字段清单必须与 resume_projection.go 逐项对账，读不到就不判（fail-closed，不静默跳过）。'
+      + '本票的字段清单必须与 resume/projection.go 逐项对账，读不到就不判（fail-closed，不静默跳过）。'
     );
   }
   const src = readText(PROJECTION_GO);
-  const start = src.indexOf('func desensitize(');
-  if (start === -1) throw new Error('resume_projection.go 里找不到 desensitize()');
+  const start = src.indexOf('func Desensitize(');
+  if (start === -1) throw new Error('resume/projection.go 里找不到 Desensitize()');
   const retIdx = src.indexOf('return RecruitResumeCard{', start);
   if (retIdx === -1) throw new Error('desensitize() 里找不到 return RecruitResumeCard{');
   const end = src.indexOf('\n\t}', retIdx);
@@ -103,7 +103,7 @@ const FORBIDDEN_IN_DESENSITIZE = [
   'ContactPhone', 'Wechat', 'Region', 'ResumeFileURL', 'Photos', 'Visibility', 'CreatedAt',
 ];
 
-describe('A. 脱敏字段清单与真源 resume_projection.go 逐项对账', () => {
+describe('A. 脱敏字段清单与真源 resume/projection.go 逐项对账', () => {
   test('A1：真源可读，且 desensitize() 的字段集与票面 11 项口径一致', () => {
     const fields = desensitizeFieldsFromTruth();
     // 真源当前的实际字段（16 个 Go 字段 / 14 个业务面 + 2 个姓名别名 = 票面 11 项清单）
@@ -276,7 +276,7 @@ describe('C. 已授权态：6 键明文 + 工作照可点开 + 同一个 PDF 出
 });
 
 describe('D. 筛选抽屉 = 后端 8 维（不多不少）+ 列表加载更多 page_size=20', () => {
-  test('D1：抽屉渲染 8 个筛选维度，恰好对应后端 api/recruit.go:60-88 的参数名', () => {
+  test('D1：抽屉渲染 8 个筛选维度，恰好对应后端 internal/recruit/handler.go 的参数名', () => {
     // 每个维度一个输入/一组 chip
     expect(drawerSrc).toContain('onRegionInput');       // region
     expect(drawerSrc).toContain('onPositionIdInput');   // position_id
@@ -542,7 +542,7 @@ describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit �
     expect(camelToSnake('positionId')).toBe('position_id'); // 归一器自检（归一错 ⇒ 对账全盘失真）
     const dims = dp.names.filter((n) => n !== 'show').map(camelToSnake);
     expect(dims).toEqual(api);
-    // 8 维的硬约束（后端 api/recruit.go 的参数面）—— 两处都必须是这 8 个
+    // 8 维的硬约束（后端 internal/recruit/handler.go 的参数面）—— 两处都必须是这 8 个
     expect(api).toEqual([
       'region', 'position_id', 'credential_id', 'salary_min',
       'salary_max', 'experience_min', 'job_nature', 'available_in',
@@ -603,15 +603,16 @@ describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit �
 // F. 企业可用性那一格（#1267 后半）：卡面键的字段边界 + 详情页的收口
 // ---------------------------------------------------------------------------
 
-const RECRUIT_SERVICE_GO = path.join(REPO_ROOT, 'backend', 'internal', 'service', 'recruit_service.go');
+const CARD_TYPE_GO = path.join(REPO_ROOT, 'backend', 'internal', 'resume', 'projection.go');
 
 /**
  * 真源侧：后端 `RecruitResumeCard.CompanyDisabled` 的 json tag（含 `omitempty`）。
+ * 卡类型随投影住 `backend/internal/resume/projection.go`（P2 波 4e 起；原先在 `internal/service/recruit_service.go`）。
  * 读不到 ⇒ 返回 null 由用例判红：真源搬家要**改锁**，不是把锁删掉当成通过。
  */
 function cardCompanyDisabledTagFromTruth() {
-  if (!fs.existsSync(RECRUIT_SERVICE_GO)) return null;
-  return cardCompanyDisabledTagFrom(readText(RECRUIT_SERVICE_GO));
+  if (!fs.existsSync(CARD_TYPE_GO)) return null;
+  return cardCompanyDisabledTagFrom(readText(CARD_TYPE_GO));
 }
 
 /** 同一套解析，暴露给自检（自检必须跑在锁真正用的那个解析器上，不是跑在它的手抄副本上） */

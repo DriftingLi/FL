@@ -18,10 +18,10 @@ import (
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/course"
 	"forklift-training/internal/forum"
+	"forklift-training/internal/job"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/questionbank"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 )
 
@@ -307,38 +307,38 @@ func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 // TestErrStatusTable_Snapshot_Application 投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_Application(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "applicationErrStatus", applicationErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrApplyJobInactive, Status: http.StatusNotFound},
-		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
+	assertTableSnapshot(t, "job.ApplicationErrStatus", job.ApplicationErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: job.ErrApplyJobInactive, Status: http.StatusNotFound},
+		{Sentinel: job.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: job.ErrApplyNotYours, Status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_JobReport 举报治理域表快照（#611）。
 func TestErrStatusTable_Snapshot_JobReport(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "jobReportErrStatus", jobReportErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrReportJobNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrReportNotFound, Status: http.StatusNotFound},
+	assertTableSnapshot(t, "job.ReportErrStatus", job.ReportErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: job.ErrReportJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: job.ErrReportNotFound, Status: http.StatusNotFound},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_RecruiterApplication 企业侧投递域表快照（#611）。
 func TestErrStatusTable_Snapshot_RecruiterApplication(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "recruiterApplicationErrStatus", recruiterApplicationErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrApplyNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
+	assertTableSnapshot(t, "job.RecruiterApplicationErrStatus", job.RecruiterApplicationErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: job.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: job.ErrApplyNotFound, Status: http.StatusNotFound},
+		{Sentinel: job.ErrApplyNotYours, Status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 
 // TestErrStatusTable_Snapshot_Job 职位域表快照（#611）。
 func TestErrStatusTable_Snapshot_Job(t *testing.T) {
 	t.Parallel()
-	assertTableSnapshot(t, "jobErrStatus", jobErrStatus, []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrJobNotYours, Status: http.StatusForbidden},
+	assertTableSnapshot(t, "job.ErrStatus", job.ErrStatus, []httpx.ErrStatusEntry{
+		{Sentinel: job.ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: job.ErrJobNotYours, Status: http.StatusForbidden},
 	}, http.StatusBadRequest)
 }
 

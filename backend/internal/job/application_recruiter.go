@@ -1,7 +1,7 @@
 // Package service 招聘域：企业处理投递（spec #449 T4 #453）。
 // 已读、漂移、拒绝与徽标：按职位分页查看投递（越权 403）、打开详情即记录已读、
 // 候选人走既有唯一脱敏路径、回显投递时刻简历更新时间（版本指针）、标记不合适→rejected（30 天冷却）。
-package service
+package job
 
 import (
 	"errors"
@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/resume"
 	"forklift-training/pkg/paging"
 )
 
@@ -27,7 +28,7 @@ type RecruiterApplicationListResult struct {
 // ListForRecruiter 企业侧按职位分页查看投递（只能看自己职位的投递，越权 → ErrApplyNotYours）。
 // 列表返回未读投递数（判据：企业尚未打开过该投递）；候选人仍走既有唯一脱敏路径
 // （姓名打码、无手机号/微信/PDF/证书原图——明文只经既有的联系方式端点取得）。
-func (s *JobApplicationService) ListForRecruiter(recruiterID, jobPostingID, page, pageSize int) (*RecruiterApplicationListResult, error) {
+func (s *ApplicationService) ListForRecruiter(recruiterID, jobPostingID, page, pageSize int) (*RecruiterApplicationListResult, error) {
 	var job model.JobPosting
 	if err := s.db.First(&job, jobPostingID).Error; err != nil {
 		return nil, ErrJobNotFound
@@ -52,7 +53,7 @@ func (s *JobApplicationService) ListForRecruiter(recruiterID, jobPostingID, page
 		// 脱敏学员信息（唯一脱敏路径：姓名打码，无手机/微信/PDF/证书原图）
 		var card model.JobCard
 		if err := s.db.First(&card, "user_id = ?", rows[i].StudentUserID).Error; err == nil {
-			d.StudentRealNameMasked = MaskRealName(card.RealName)
+			d.StudentRealNameMasked = resume.MaskRealName(card.RealName)
 			d.StudentResumeUpdatedAt = card.UpdatedAt.Format(time.RFC3339)
 			d.ResumeUpdatedAtSnapshot = rows[i].ResumeUpdatedAt.Format(time.RFC3339)
 		}
@@ -69,7 +70,7 @@ func (s *JobApplicationService) ListForRecruiter(recruiterID, jobPostingID, page
 }
 
 // GetForRecruiter 企业查看投递详情：记录已读（employer_viewed_at），返回脱敏候选人信息 + 简历更新时间指针。
-func (s *JobApplicationService) GetForRecruiter(recruiterID int, applicationID int64) (*ApplicationDTO, error) {
+func (s *ApplicationService) GetForRecruiter(recruiterID int, applicationID int64) (*ApplicationDTO, error) {
 	var app model.JobApplication
 	if err := s.db.First(&app, applicationID).Error; err != nil {
 		return nil, ErrApplyNotFound
@@ -94,7 +95,7 @@ func (s *JobApplicationService) GetForRecruiter(recruiterID int, applicationID i
 	}
 	var card model.JobCard
 	if err := s.db.First(&card, "user_id = ?", app.StudentUserID).Error; err == nil {
-		dto.StudentRealNameMasked = MaskRealName(card.RealName)
+		dto.StudentRealNameMasked = resume.MaskRealName(card.RealName)
 		dto.StudentResumeUpdatedAt = card.UpdatedAt.Format(time.RFC3339)
 		dto.ResumeUpdatedAtSnapshot = app.ResumeUpdatedAt.Format(time.RFC3339)
 	}
@@ -103,7 +104,7 @@ func (s *JobApplicationService) GetForRecruiter(recruiterID int, applicationID i
 
 // Reject 企业标记投递为不合适 → 终态 rejected；同一学员对该职位 30 天内再投被拒（冷却）。
 // 企业不能把已拒绝的投递改回待处理以外的状态（仅 applied 可拒）；学员不能替企业标记（handler 角色守卫）。
-func (s *JobApplicationService) Reject(recruiterID int, applicationID int64) (*ApplicationDTO, error) {
+func (s *ApplicationService) Reject(recruiterID int, applicationID int64) (*ApplicationDTO, error) {
 	var app model.JobApplication
 	if err := s.db.First(&app, applicationID).Error; err != nil {
 		return nil, ErrApplyNotFound

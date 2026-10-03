@@ -4266,7 +4266,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ReportListResult"
+                                            "$ref": "#/definitions/job.ReportListResult"
                                         }
                                     }
                                 }
@@ -4318,7 +4318,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ReportDTO"
+                                            "$ref": "#/definitions/job.ReportDTO"
                                         }
                                     }
                                 }
@@ -4393,7 +4393,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobListResult"
+                                            "$ref": "#/definitions/job.JobListResult"
                                         }
                                     }
                                 }
@@ -4456,7 +4456,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -12196,7 +12196,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobListResult"
+                                            "$ref": "#/definitions/job.JobListResult"
                                         }
                                     }
                                 }
@@ -12248,7 +12248,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -12306,7 +12306,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -12366,7 +12366,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.ReportInput"
+                            "$ref": "#/definitions/job.ReportInput"
                         }
                     }
                 ],
@@ -12382,7 +12382,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ReportDTO"
+                                            "$ref": "#/definitions/job.ReportDTO"
                                         }
                                     }
                                 }
@@ -16004,7 +16004,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -16062,7 +16062,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -16255,7 +16255,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobListResult"
+                                            "$ref": "#/definitions/job.JobListResult"
                                         }
                                     }
                                 }
@@ -16294,7 +16294,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.JobPostingInput"
+                            "$ref": "#/definitions/job.JobPostingInput"
                         }
                     }
                 ],
@@ -16310,7 +16310,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16368,7 +16368,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16420,7 +16420,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.JobPostingInput"
+                            "$ref": "#/definitions/job.JobPostingInput"
                         }
                     }
                 ],
@@ -16436,7 +16436,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16512,7 +16512,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterApplicationListResult"
+                                            "$ref": "#/definitions/job.RecruiterApplicationListResult"
                                         }
                                     }
                                 }
@@ -16570,7 +16570,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16625,7 +16625,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruitMeDTO"
+                                            "$ref": "#/definitions/recruit.RecruitMeDTO"
                                         }
                                     }
                                 }
@@ -16730,7 +16730,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruitListResult"
+                                            "$ref": "#/definitions/recruit.RecruitListResult"
                                         }
                                     }
                                 }
@@ -16782,7 +16782,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruitResumeCard"
+                                            "$ref": "#/definitions/resume.RecruitResumeCard"
                                         }
                                     }
                                 }
@@ -16941,7 +16941,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobCardDTO"
+                                            "$ref": "#/definitions/resume.JobCardDTO"
                                         }
                                     }
                                 }
@@ -16986,7 +16986,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.JobCardInput"
+                            "$ref": "#/definitions/resume.JobCardInput"
                         }
                     }
                 ],
@@ -17002,7 +17002,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobCardDTO"
+                                            "$ref": "#/definitions/resume.JobCardDTO"
                                         }
                                     }
                                 }
@@ -17065,7 +17065,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationListResult"
+                                            "$ref": "#/definitions/job.ApplicationListResult"
                                         }
                                     }
                                 }
@@ -17128,7 +17128,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -17672,7 +17672,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobCardDTO"
+                                            "$ref": "#/definitions/resume.JobCardDTO"
                                         }
                                     }
                                 }
@@ -25973,6 +25973,294 @@ const docTemplate = `{
                 }
             }
         },
+        "job.ApplicationDTO": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "description": "企业信息（学员侧可见）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "employer_viewed_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_posting_id": {
+                    "type": "integer"
+                },
+                "job_title": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "resume_updated_at": {
+                    "type": "string"
+                },
+                "resume_updated_at_snapshot": {
+                    "description": "投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_real_name_masked": {
+                    "description": "学员信息（企业侧可见，走脱敏路径）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "student_resume_updated_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.ApplicationListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.ApplicationDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.JobListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.JobPostingDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.JobPostingDTO": {
+            "type": "object",
+            "properties": {
+                "apply_state": {
+                    "description": "学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "business_scope": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "company_name": {
+                    "description": "企业信息（学员侧可见，不含电话/邮箱/信用代码）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "cooldown_days": {
+                    "description": "not_hired 时距可再投天数（向上取整）",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "experience_req": {
+                    "type": "string"
+                },
+                "forced_offline": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "offline_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "position_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_text": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.JobPostingInput": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "experience_req": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer"
+                },
+                "salary_min": {
+                    "type": "integer"
+                },
+                "salary_text": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.RecruiterApplicationListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.ApplicationDTO"
+                    }
+                },
+                "job_title": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.ReportDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "handled_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_posting_id": {
+                    "type": "integer"
+                },
+                "job_title": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.ReportInput": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.ReportListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.ReportDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "material.MaterialDTO": {
             "type": "object",
             "properties": {
@@ -27712,6 +28000,34 @@ const docTemplate = `{
                 }
             }
         },
+        "recruit.RecruitListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/resume.RecruitResumeCard"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "recruit.RecruitMeDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "repository.AlgorithmParameters": {
             "type": "object",
             "properties": {
@@ -27996,6 +28312,184 @@ const docTemplate = `{
                 }
             }
         },
+        "resume.JobCardDTO": {
+            "type": "object",
+            "properties": {
+                "available_in": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expected_position_extra": {
+                    "type": "string"
+                },
+                "expected_position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "expected_regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "experience_years": {
+                    "type": "integer"
+                },
+                "job_nature": {
+                    "type": "string"
+                },
+                "photos": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "real_name": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    },
+                    "x-nullable": true
+                },
+                "resume_experiences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    },
+                    "x-nullable": true
+                },
+                "resume_file_url": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_negotiable": {
+                    "type": "boolean"
+                },
+                "self_intro": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "visibility": {
+                    "type": "string"
+                },
+                "wechat": {
+                    "type": "string"
+                }
+            }
+        },
+        "resume.JobCardInput": {
+            "type": "object"
+        },
+        "resume.RecruitResumeCard": {
+            "type": "object",
+            "properties": {
+                "available_in": {
+                    "type": "string"
+                },
+                "company_disabled": {
+                    "description": "CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的\n同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：\n本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影\n（授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。\n移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "contact_source": {
+                    "description": "recruiter/application",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_state": {
+                    "description": "#489：企业视角联系状态（none/pending/approved，approved 带来源）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expected_position_extra": {
+                    "type": "string"
+                },
+                "expected_position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "expected_regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "experience_years": {
+                    "type": "integer"
+                },
+                "job_nature": {
+                    "type": "string"
+                },
+                "real_name": {
+                    "description": "已打码（如 张* 或 张*丰）",
+                    "type": "string"
+                },
+                "real_name_masked": {
+                    "description": "同上，兼容验收对打码字段的显式断言",
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "description": "已去 image_urls",
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "resume_experiences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    },
+                    "x-nullable": true
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_negotiable": {
+                    "type": "boolean"
+                },
+                "self_intro": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "search.SearchAllDTO": {
             "type": "object",
             "properties": {
@@ -28102,82 +28596,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "times": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ApplicationDTO": {
-            "type": "object",
-            "properties": {
-                "company_name": {
-                    "description": "企业信息（学员侧可见）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "employer_viewed_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "job_posting_id": {
-                    "type": "integer"
-                },
-                "job_title": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "resume_updated_at": {
-                    "type": "string"
-                },
-                "resume_updated_at_snapshot": {
-                    "description": "投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_real_name_masked": {
-                    "description": "学员信息（企业侧可见，走脱敏路径）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "student_resume_updated_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "student_user_id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ApplicationListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ApplicationDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
                     "type": "integer"
                 }
             }
@@ -28353,424 +28771,6 @@ const docTemplate = `{
             "properties": {
                 "task_id": {
                     "type": "string"
-                }
-            }
-        },
-        "service.JobCardDTO": {
-            "type": "object",
-            "properties": {
-                "available_in": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "expected_position_extra": {
-                    "type": "string"
-                },
-                "expected_position_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "expected_regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "experience_years": {
-                    "type": "integer"
-                },
-                "job_nature": {
-                    "type": "string"
-                },
-                "photos": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "real_name": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "resume_certifications": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    },
-                    "x-nullable": true
-                },
-                "resume_experiences": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    },
-                    "x-nullable": true
-                },
-                "resume_file_url": {
-                    "type": "string"
-                },
-                "salary_max": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_min": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_negotiable": {
-                    "type": "boolean"
-                },
-                "self_intro": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "visibility": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.JobCardInput": {
-            "type": "object"
-        },
-        "service.JobListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.JobPostingDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.JobPostingDTO": {
-            "type": "object",
-            "properties": {
-                "apply_state": {
-                    "description": "学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "business_scope": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "company_name": {
-                    "description": "企业信息（学员侧可见，不含电话/邮箱/信用代码）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "contact_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "cooldown_days": {
-                    "description": "not_hired 时距可再投天数（向上取整）",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "experience_req": {
-                    "type": "string"
-                },
-                "forced_offline": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "offline_reason": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "position_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "position_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "published_at": {
-                    "type": "string"
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "salary_max": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_min": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_text": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.JobPostingInput": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "experience_req": {
-                    "type": "string"
-                },
-                "position_id": {
-                    "type": "integer"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "salary_max": {
-                    "type": "integer"
-                },
-                "salary_min": {
-                    "type": "integer"
-                },
-                "salary_text": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.RecruitListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.RecruitResumeCard"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruitMeDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruitResumeCard": {
-            "type": "object",
-            "properties": {
-                "available_in": {
-                    "type": "string"
-                },
-                "company_disabled": {
-                    "description": "CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的\n同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：\n本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影\n（授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。\n移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。",
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "contact_source": {
-                    "description": "recruiter/application",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "contact_state": {
-                    "description": "#489：企业视角联系状态（none/pending/approved，approved 带来源）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "expected_position_extra": {
-                    "type": "string"
-                },
-                "expected_position_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "expected_regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "experience_years": {
-                    "type": "integer"
-                },
-                "job_nature": {
-                    "type": "string"
-                },
-                "real_name": {
-                    "description": "已打码（如 张* 或 张*丰）",
-                    "type": "string"
-                },
-                "real_name_masked": {
-                    "description": "同上，兼容验收对打码字段的显式断言",
-                    "type": "string"
-                },
-                "resume_certifications": {
-                    "description": "已去 image_urls",
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    }
-                },
-                "resume_experiences": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    },
-                    "x-nullable": true
-                },
-                "salary_max": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_min": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_negotiable": {
-                    "type": "boolean"
-                },
-                "self_intro": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruiterApplicationListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ApplicationDTO"
-                    }
-                },
-                "job_title": {
-                    "type": "string"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "unread_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ReportDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "handled_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "job_posting_id": {
-                    "type": "integer"
-                },
-                "job_title": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ReportInput": {
-            "type": "object",
-            "properties": {
-                "reason": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ReportListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ReportDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },

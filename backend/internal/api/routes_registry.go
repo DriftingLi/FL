@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
 	"forklift-training/internal/note"
@@ -23,6 +24,8 @@ import (
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/realexam"
+	"forklift-training/internal/recruit"
+	"forklift-training/internal/resume"
 	"forklift-training/internal/search"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
@@ -78,7 +81,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "招聘域",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterRecruitRoutes(api, rd, deps.RecruitSvc)
+			recruit.RegisterRoutes(api, rd.Session, deps.RecruitSvc)
 		},
 	},
 	{
@@ -154,14 +157,16 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "简历与职位",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			RegisterJobCardRoutes(api, rd, deps.JobCardSvc, deps.FileSvc)
-			RegisterResumeViewRoutes(api, rd, deps.RecruitSvc)
-			RegisterResumePDFRoutes(api, rd, deps.RecruitSvc, deps.ResumePDFRenderer)
+			resume.RegisterRoutes(api, rd.Session, deps.JobCardSvc, deps.FileSvc)
+			resume.RegisterViewRoutes(api, rd.Session, deps.JobCardSvc)
+			// 两条 PDF 出口分居两域：学员侧在本包（resume），招聘者侧在 recruit（要 RecruitService）。
+			resume.RegisterPDFRoutes(api, rd.Session, deps.JobCardSvc, deps.ResumePDFRenderer)
+			recruit.RegisterPDFRoutes(api, rd.Session, deps.RecruitSvc, deps.ResumePDFRenderer)
 			RegisterContactRoutes(api, rd, deps.ContactSvc)
-			RegisterJobRoutes(api, rd, deps.JobPostingSvc)
-			RegisterApplicationRoutes(api, rd, deps.JobApplicationSvc)
-			RegisterJobReportRoutes(api, rd, deps.JobReportSvc, deps.JobPostingSvc)
-			RegisterRecruiterApplicationRoutes(api, rd, deps.JobApplicationSvc)
+			job.RegisterRoutes(api, rd.Session, deps.JobPostingSvc)
+			job.RegisterApplicationRoutes(api, rd.Session, deps.JobApplicationSvc)
+			job.RegisterReportRoutes(api, rd.Session, deps.JobReportSvc, deps.JobPostingSvc)
+			job.RegisterRecruiterApplicationRoutes(api, rd.Session, deps.JobApplicationSvc)
 		},
 	},
 	{

@@ -2,7 +2,7 @@
 // 本文件：招聘域投递端点（spec #449 T3 #452）。
 //   - 学员侧 /api/jobs/:id/apply：投递即授权
 //   - 学员侧 /api/resume/applications*：我的投递（列表/撤回），对齐既有「学员侧招聘数据挂在简历前缀下」
-package api
+package job
 
 import (
 	"context"
@@ -12,42 +12,42 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// applicationErrStatus 投递域哨兵→状态码表（#611）：职位不可投/不存在 → 404，非本人 → 403，
+// ApplicationErrStatus 投递域哨兵→状态码表（#611）：职位不可投/不存在 → 404，非本人 → 403，
 // 其余（重复投递/冷却/日限/简历不完整等业务校验）兜底 400。
-var applicationErrStatus = &httpx.ErrStatusTable{
+var ApplicationErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
-		{Sentinel: service.ErrApplyJobInactive, Status: http.StatusNotFound},
-		{Sentinel: service.ErrJobNotFound, Status: http.StatusNotFound},
-		{Sentinel: service.ErrApplyNotYours, Status: http.StatusForbidden},
+		{Sentinel: ErrApplyJobInactive, Status: http.StatusNotFound},
+		{Sentinel: ErrJobNotFound, Status: http.StatusNotFound},
+		{Sentinel: ErrApplyNotYours, Status: http.StatusForbidden},
 	},
 	Fallback: http.StatusBadRequest,
 }
 
 // RegisterApplicationRoutes 注册投递相关路由。
-func RegisterApplicationRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobApplicationService) {
-	h := NewApplicationHandler(svc)
+func RegisterApplicationRoutes(rg *gin.RouterGroup, session *security.Session, svc *ApplicationService) {
+	h := newApplicationHandler(svc)
 	// 学员侧职位投递动作挂在 /api/jobs 下
-	studentJobG := rg.Group("/jobs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapJobApply))
+	studentJobG := rg.Group("/jobs", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapJobApply))
 	studentJobG.POST("/:id/apply", h.Apply)
 	// 我的投递挂在 /api/resume 前缀下（对齐既有「学员侧招聘数据挂在简历前缀下」的写法）
-	studentG := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
+	studentG := rg.Group("/resume", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapResumeManage))
 	studentG.GET("/applications", h.ListMine)
 	studentG.POST("/applications/:id/withdraw", h.Withdraw)
 }
 
 // ApplicationHandler 投递 handler。
-type ApplicationHandler struct {
-	svc *service.JobApplicationService
+type applicationHandler struct {
+	svc *ApplicationService
 }
 
 // NewApplicationHandler 创建投递 handler。
-func NewApplicationHandler(svc *service.JobApplicationService) *ApplicationHandler {
-	return &ApplicationHandler{svc: svc}
+func newApplicationHandler(svc *ApplicationService) *applicationHandler {
+	return &applicationHandler{svc: svc}
 }
 
 // Apply 学员投递职位 POST /api/jobs/:id/apply
@@ -57,22 +57,22 @@ func NewApplicationHandler(svc *service.JobApplicationService) *ApplicationHandl
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "职位 ID"
-// @Success 201 {object} response.R{data=service.ApplicationDTO} "投递成功"
+// @Success 201 {object} response.R{data=job.ApplicationDTO} "投递成功"
 // @Failure 400 {object} response.R "重复投递/冷却/日限/简历不完整"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "职位不可投递"
 // @Router /jobs/{id}/apply [post]
-func (h *ApplicationHandler) Apply(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.ApplicationDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
+func (h *applicationHandler) Apply(c *gin.Context) {
+	httpx.Endpoint[struct{}, ApplicationDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*ApplicationDTO, error) {
 			id, err := httpx.PathInt(c, "id", "职位 ID 无效")
 			if err != nil {
 				return nil, err
 			}
 			return h.svc.Apply(middleware.CurrentUserID(c), id)
 		},
-		ErrStatus: applicationErrStatus,
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO) {
+		ErrStatus: ApplicationErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *ApplicationDTO) {
 			response.Created(c, "投递成功，企业已可查看你的联系方式", *resp)
 		},
 	}.Handle(c)
@@ -86,19 +86,19 @@ func (h *ApplicationHandler) Apply(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R{data=service.ApplicationListResult} "列表"
+// @Success 200 {object} response.R{data=job.ApplicationListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/applications [get]
-func (h *ApplicationHandler) ListMine(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.ApplicationListResult]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationListResult, error) {
+func (h *applicationHandler) ListMine(c *gin.Context) {
+	httpx.Endpoint[struct{}, ApplicationListResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*ApplicationListResult, error) {
 			page := httpx.QueryIntDefault(c, "page", 1)
 			pageSize := httpx.QueryIntDefault(c, "page_size", 20)
 			items, total, err := h.svc.ListForStudent(middleware.CurrentUserID(c), page, pageSize)
 			if err != nil {
 				return nil, err
 			}
-			return &service.ApplicationListResult{Items: items, Total: total, Page: page, PageSize: pageSize}, nil
+			return &ApplicationListResult{Items: items, Total: total, Page: page, PageSize: pageSize}, nil
 		},
 	}.Handle(c)
 }
@@ -112,18 +112,18 @@ func (h *ApplicationHandler) ListMine(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "投递 ID"
 // @Param body body object false "撤回选项 {revoke_contact?: boolean}"
-// @Success 200 {object} response.R{data=service.ApplicationDTO} "已撤回"
+// @Success 200 {object} response.R{data=job.ApplicationDTO} "已撤回"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无权操作"
 // @Router /resume/applications/{id}/withdraw [post]
 // body: { revoke_contact?: boolean } 默认 false——撤回投递默认不连带收回联系方式授权。
-func (h *ApplicationHandler) Withdraw(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.ApplicationDTO]{
+func (h *applicationHandler) Withdraw(c *gin.Context) {
+	httpx.Endpoint[struct{}, ApplicationDTO]{
 		Parse: func(c *gin.Context) (*struct{}, error) {
 			return &struct{}{}, nil
 		},
-		Invoke: func(ctx context.Context, _ *struct{}) (*service.ApplicationDTO, error) {
+		Invoke: func(ctx context.Context, _ *struct{}) (*ApplicationDTO, error) {
 			id, err := httpx.PathInt64(c, "id", "投递 ID 无效")
 			if err != nil {
 				return nil, err
@@ -134,8 +134,8 @@ func (h *ApplicationHandler) Withdraw(c *gin.Context) {
 			_ = c.ShouldBindJSON(&body)
 			return h.svc.Withdraw(middleware.CurrentUserID(c), id, body.RevokeContact)
 		},
-		ErrStatus: applicationErrStatus,
-		Render: func(c *gin.Context, _ *struct{}, resp *service.ApplicationDTO) {
+		ErrStatus: ApplicationErrStatus,
+		Render: func(c *gin.Context, _ *struct{}, resp *ApplicationDTO) {
 			response.SuccessWithMsg(c, "投递已撤回", *resp)
 		},
 	}.Handle(c)
