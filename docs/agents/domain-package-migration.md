@@ -5,6 +5,7 @@
 > 定案：[ADR-0070](../adr/ADR-0070-域包形态与目录即射程的收口.md)。样板：faq（2026-10-01，P1 试点批）、notification（同日，试点批第二域 —— 跨域词汇、事件构造器与依赖倒置的完整样本，见第 7.1 与第 11 节）。
 >
 > **#1445 P3（2026-10-03）更名**：共享助手层由 `internal/service` 更名为 `internal/core`（包名 `core`）。第 1–9 节的现状描述已随之更新；§10.1 与 §11 里的波次记录保留当时的 `internal/service` 字样（历史记账），当前路径一律在 `backend/internal/core/`。
+> **#1445 P3-B（同日）射程收口**：响应面清单不再手抄 —— `testutil.ResponsePackages(t)` 现读 `internal/apitypes/domains.go` 的域声明表现算域包目录，只把非域包的静态面登记在 `testutil.responseStaticPackages`。新增一个域（声明表 + `internal/<域>/` 目录）即自动进射程；下面第 3 节表里「域包要往 `ResponsePackages()` 里加一行」的说法已作废，改为「域登记进声明表」。
 
 ## 1. 目标形态
 
@@ -47,14 +48,14 @@
 5. **装配三处**：`internal/api/deps.go` 的字段类型（`FaqSvc *faq.Service`）、`internal/api/providers_*.go` 的构造（`d.FaqSvc = faq.NewService(c.db, c.logger)`，新增 import）、`internal/api/routes_registry.go` 的一行（`faq.RegisterRoutes(api, rd.Session, deps.FaqSvc)`）。
 6. **域声明表**：`internal/apitypes/domains.go` 该域 `Roots` 的 `service.*` 改 `<域>.*`。
 7. **证据表随域搬**：见第 6 节。
-8. **同步锁与清单**：见第 3 节（尤其 `ResponsePackages()` 与两把 fact 计数锁）。
+8. **同步锁与清单**：见第 3 节（尤其域声明表、`testutil.responseStaticPackages` 与两把 fact 计数锁）。
 9. **重生成与验证**：见第 5 节。顺序是硬的：gofmt/vet → `make swagger` → `go run ./cmd/gen-apitypes` → `go test ./...` → 前端检查。
 
 ## 3. 必须同步的锁与清单
 
 | 文件 | 改什么 | 不改的后果 |
 | --- | --- | --- |
-| `backend/internal/testutil/codescan.go` | `ResponsePackages()` 加一项 `{"internal/<域>","<域>"}` | fact 两把锁不扫新域包（**漏扫**，静默）；`HTTPSurface` 无需改（文件名规则自动纳入） |
+| `backend/internal/testutil/codescan.go` | **域包不必登记**：#1445 P3-B 起 `ResponsePackages(t)` 现读 `internal/apitypes/domains.go` 的域声明表现算域包目录（域里有同名 package 的非测试 `.go` 才收）。只有**非域包的静态面**要登记在 `responseStaticPackages`（现状 7 条：`internal/api`·api、`internal/core`·core、`internal/model`·model、`internal/valuation/model`·model、`internal/valuation/repository`·repository、`internal/audit`·audit、`pkg/response`·response；`audit` 已出包但不进 codegen，声明表里没有它） | 静态面漏一条 ⇒ 那个包静默不进射程（`len(out) < 30` 的防空转 Fatal 是最后一道网）；域包不登记也自动纳入，`HTTPSurface` 无需改（文件名规则自动纳入） |
 | `backend/internal/api/consumption_fact_lock_test.go`、`backend/internal/apitypes/fact_reachability_lock_test.go` | 各自的 `n != <计数>` 与 Fatal 文案里的数字（迁一域 +1；faq 批 6→7） | 红——这是刻意的：数清单本身就是断言（ADR-0065 批⑤ 的规矩） |
 | `backend/internal/apitypes/nullability_lock_test.go` | `nonNilEvidenceSources` 加 `{"internal/<域>","nonnilOutlets"}`；`sweptDirs` 加 `"<域>": "../<域>"` | 域包里声明的 `nonnil` 找不到证据（判据 5 零容忍）／旧键变幽灵键。**漏加 `sweptDirs` 的症状会骗人**：报的是「证据表里的 `notification.X.items` 并不是一条『射程内声明 nonnil』的字段」，看起来像字段改名，其实是被扫目录没进去 |
 | `backend/internal/api/authz_coverage_lock_test.go` | `allow` 表**键是裸函数名**（12 条）；域包把注册函数改名 `RegisterRoutes` 后裸名会**静默失配** ⇒ 键改限定名（`notification.RegisterRoutes`） | 红（该表只在被点名函数上生效，改错名字即从判据里消失） |
@@ -143,7 +144,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] `gofmt -l .` 空；`go build ./...`；`go vet ./...`
 - [ ] `go test ./internal/<域>/... ./internal/layers/... ./internal/apitypes/... ./internal/core/... ./internal/api/...`
 - [ ] `node scripts/check-render-error-face.mjs --all`；涉目录读面时另跑 `node scripts/check-catalog-sort.mjs --all`
-- [ ] `ResponsePackages()` 已加域包；两把 fact 计数锁与文案已同步
+- [ ] 该域已在 `internal/apitypes/domains.go` 声明（域包自动进 `ResponsePackages`）；两把 fact 计数锁与文案已同步（多一域即 35→36，红是刻意的签字位）
 - [ ] `nullability_lock_test.go` 的 `nonNilEvidenceSources` / `sweptDirs` 已加域包；域内证据表键已换包前缀；旧表里的键已删
 - [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
