@@ -326,6 +326,31 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 
 **批 4 余量**：审计 §6 的 13 件里已下沉 10 件（`search_credential`、`credential_delete_postgres`、`disposition_revoke`、`admin_points_penalty`、`favorite_chapter_visibility`、`wrong_question_redo`、`contribution_contract`（+闭包 `contribution_staging`）、`recruiter_list`、`featured`），**还剩 4 件**：`job_card_contract_test.go`→`internal/resume`、`question_write_contract_test.go`→`internal/questionbank`、`points_ledger_contract_test.go`→`internal/inspection`、`course_read_visibility_contract_test.go`→`internal/course`（后者要自带 CredentialScope 替身：course 不能 import `internal/training`，会成环；`featured` 的 vditor 注入口本小批已用替身法解过，可循）。
 
+## 9. 收口统计（审计落地完毕，2026-10-03）
+
+| 指标 | 落地前（§1 口径） | 落地后 | 差 |
+| --- | --- | --- | --- |
+| `backend/internal/api` 的 .go 文件 | 159 | **128** | −31 |
+| 其中生产 .go / 行 | 17 / 1,635 | 17 / 1,635 | 0 |
+| 其中测试 .go / 行 | **142 / 28,290** | **111 / 21,237** | **−31 / −7,053** |
+
+落地动作 = 批 1（auth 9 件）＋ 批 2（forum 10 件）＋ 批 4（14 件）＝ **搬出 33 件测试文件**；同时在 api 侧留了 2 份「被留驻用例引用的定义」副本（`forum_topic_list_resp_test.go` 32 行、`recruiter_list_helpers_test.go` 42 行）⇒ 测试文件净减 31。
+
+落地序列（每批 1 PR，均 CI 全绿后 squash 合并，PR 正文都带了 production 部署披露）：
+
+| 批 | PR | 内容 | 文件数 |
+| --- | --- | --- | --- |
+| 1 | #1505 | auth 闭包（含审计 §6 计划里的「批 3」3 件） | 9 |
+| 2 | #1508 | forum | 10 |
+| 4-1 | #1510 | 服务层 3 件（search / training / admin） | 3 |
+| 4-2 | #1511 | points / favorite / wrongquestion | 3 |
+| 4-3 | #1512 | resume / course / questionbank / inspection | 4 |
+| 4-4 | 本 PR | contribution 2 件 / recruiter_list / featured | 4 |
+
+**与审计原文的偏差（§8 逐条记明）**：① 搬迁单元是**按域依赖闭包**，故批 1 是 9 件（§2.1 写 8 件）、批 2 的 api 侧要多留一份 DTO、批 4 的 contribution 要多带 1 件（§2 判它 C 桶「留」）；② 跨包共享的测试脚手架落 `internal/testutil`（`SetTestGinMode` / `PerformRequest` / `CodeAuthRequest` / `DoWithToken` / `ExtractToken` / `AssertDictKeys` / `KeysOf` / `ValueBlacklist`），并为此在 `internal/layers` 的 gin 宿主白名单登记 `internal/testutil`（测试脚手架、非生产面，判据同时收窄为「生产文件」）；③ 三条「不走 HTTP」的服务层用例按「域内单元测试随域搬」下沉，**没有**为了凑验收判据③改写成路由测试。
+
+**未动**：A 桶（走 `NewRouter` 全量装配链的装配面证据）与 C 桶（跨域契约 / 锁 / 账本 / 骨架与单一出处）仍原样留在 `internal/api`；§2 名单之外的用例一律未碰。
+
 ## 附录：142 个文件逐条
 
 | 文件 | 行 | 桶 | 建议 |
