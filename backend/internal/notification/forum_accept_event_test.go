@@ -1,4 +1,4 @@
-// Package service 站内信问答采纳事件构造器测试（ADR-0024 C3）：
+// Package notification 站内信问答采纳事件构造器测试（ADR-0024 C3）：
 // title/content/link/payload 口径内聚站内信域，事务内使用形状验证，与积分入账一致。
 package notification
 

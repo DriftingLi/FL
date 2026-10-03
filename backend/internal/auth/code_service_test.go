@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"forklift-training/internal/cache"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 
 	"go.uber.org/zap"
@@ -89,13 +89,13 @@ func (f *fakeSMSProvider) Send(to, code string, _ int, _ CodePurpose) error {
 func newCodeTestSvc(t *testing.T) (*VerifyCodeService, *memCodeStore) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "a", "t", "s", zap.NewNop())
+	authSvc := NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), core.NewForumCounter(), "a", "t", "s", zap.NewNop())
 	store := newMemCodeStore()
 	svc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	return svc, store
 }
 
-func testEmailChannel(mailer service.MailSender) *EmailChannel {
+func testEmailChannel(mailer core.MailSender) *EmailChannel {
 	return &EmailChannel{mailer: mailer}
 }
 
@@ -260,7 +260,7 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("注册失败: %v", err)
 	}
-	if regRes.Token == "" || regRes.Role != service.HrwaiRole || regRes.Account == "" || regRes.Account == email || regRes.Username != "张三" {
+	if regRes.Token == "" || regRes.Role != core.HrwaiRole || regRes.Account == "" || regRes.Account == email || regRes.Username != "张三" {
 		t.Errorf("注册结果异常: %+v", regRes)
 	}
 	var created model.HrwaiUser
@@ -428,7 +428,7 @@ func TestPhoneRegisterAndLogin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("手机号注册失败: %v", err)
 	}
-	if regRes.Token == "" || regRes.Role != service.HrwaiRole || regRes.Account == "" || regRes.Account == phone || regRes.Username != "张三" {
+	if regRes.Token == "" || regRes.Role != core.HrwaiRole || regRes.Account == "" || regRes.Account == phone || regRes.Username != "张三" {
 		t.Errorf("注册结果异常（账号应随机生成）: %+v", regRes)
 	}
 	var created model.HrwaiUser
@@ -502,10 +502,10 @@ func TestPhoneResetPassword(t *testing.T) {
 	if err := svc.db.Where("phone = ?", phone).First(&user).Error; err != nil {
 		t.Fatalf("查询用户失败: %v", err)
 	}
-	if !service.VerifyPassword("newpass123", user.Password) {
+	if !core.VerifyPassword("newpass123", user.Password) {
 		t.Error("新密码未生效")
 	}
-	if service.VerifyPassword("oldpass123", user.Password) {
+	if core.VerifyPassword("oldpass123", user.Password) {
 		t.Error("旧密码仍有效")
 	}
 
@@ -556,10 +556,10 @@ func TestPhoneChangePassword(t *testing.T) {
 	if err := svc.db.Where("phone = ?", phone).First(&user).Error; err != nil {
 		t.Fatalf("查询用户失败: %v", err)
 	}
-	if !service.VerifyPassword("newpass123", user.Password) {
+	if !core.VerifyPassword("newpass123", user.Password) {
 		t.Error("新密码未生效")
 	}
-	if service.VerifyPassword("oldpass123", user.Password) {
+	if core.VerifyPassword("oldpass123", user.Password) {
 		t.Error("旧密码仍有效")
 	}
 }

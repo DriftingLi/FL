@@ -11,14 +11,14 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/core"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
 // RegisterContactRoutes 注册联系方式交换相关路由（#375）。
-func RegisterContactRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.ContactService) {
+func RegisterContactRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *core.ContactService) {
 	h := NewContactHandler(svc)
 	// 招聘方：发起与查看我的申请 + 读取明文
 	recruitG := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapContactRequest))
@@ -36,11 +36,11 @@ func RegisterContactRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Cont
 
 // ContactHandler 联系方式交换 handler。
 type ContactHandler struct {
-	svc *service.ContactService
+	svc *core.ContactService
 }
 
 // NewContactHandler 创建联系方式交换 handler。
-func NewContactHandler(svc *service.ContactService) *ContactHandler {
+func NewContactHandler(svc *core.ContactService) *ContactHandler {
 	return &ContactHandler{svc: svc}
 }
 
@@ -68,15 +68,15 @@ type contactCreateReq struct {
 //   - 其余 400 条各说一件事实，压成一句会丢掉「是哪一件」。
 //   - 表里没有的（`expireClosed` / 计数 / 写入 等 DB 故障）走端点默认面 500，不再冒充上面任何一句。
 var contactCreateFacts400 = []error{
-	service.ErrContactMessageEmpty,
-	service.ErrContactMessageTooLong,
-	service.ErrContactReqInvalid,
+	core.ErrContactMessageEmpty,
+	core.ErrContactMessageTooLong,
+	core.ErrContactReqInvalid,
 	student.ErrStudentNotFound,
-	service.ErrRecruiterNotFound,
-	service.ErrRecruiterDisabled,
-	service.ErrContactPendingExists,
-	service.ErrContactInCooldown,
-	service.ErrContactDailyLimit,
+	core.ErrRecruiterNotFound,
+	core.ErrRecruiterDisabled,
+	core.ErrContactPendingExists,
+	core.ErrContactInCooldown,
+	core.ErrContactDailyLimit,
 }
 
 // Create 企业发起交换申请 POST /api/recruit/contact-requests
@@ -87,13 +87,13 @@ var contactCreateFacts400 = []error{
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "申请 {student_user_id, message(1-200)}"
-// @Success 201 {object} response.R{data=service.ContactRequestDTO} "申请已提交"
+// @Success 201 {object} response.R{data=core.ContactRequestDTO} "申请已提交"
 // @Failure 400 {object} response.R "附言为空 / 附言超 200 字 / 参数错误 / 学员不存在 / 招聘者不存在 / 招聘者账号已禁用 / 已存在待处理的申请 / 冷却期内 / 今日申请已达上限"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务端内部错误（DB 故障；不外发驱动原文）"
 // @Router /recruit/contact-requests [post]
 func (h *ContactHandler) Create(c *gin.Context) {
-	httpx.Endpoint[contactCreateReq, service.ContactRequestDTO]{
+	httpx.Endpoint[contactCreateReq, core.ContactRequestDTO]{
 		Parse: func(c *gin.Context) (*contactCreateReq, error) {
 			body, err := httpx.BindJSON[contactCreateBody](c)
 			if err != nil {
@@ -105,7 +105,7 @@ func (h *ContactHandler) Create(c *gin.Context) {
 				Message:       body.Message,
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *contactCreateReq) (*service.ContactRequestDTO, error) {
+		Invoke: func(ctx context.Context, req *contactCreateReq) (*core.ContactRequestDTO, error) {
 			return h.svc.Create(req.RecruiterID, req.StudentUserID, req.Message)
 		},
 	}.WithSuccess(httpx.Created("申请已提交"), http.StatusInternalServerError).
@@ -120,7 +120,7 @@ func (h *ContactHandler) Create(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R{data=service.ContactRequestListResult} "列表"
+// @Success 200 {object} response.R{data=core.ContactRequestListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/contact-requests [get]
 func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
@@ -132,8 +132,8 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 		response.ServerErrorCause(c, "", err)
 		return
 	}
-	// typed page（#1095）：键序 = 旧 gin.H 的 map 键序，响应字节不变（登记表 service.ContactRequestListResult）。
-	response.Success(c, service.ContactRequestListResult{Items: items, Page: page, PageSize: pageSize, Total: total})
+	// typed page（#1095）：键序 = 旧 gin.H 的 map 键序，响应字节不变（登记表 core.ContactRequestListResult）。
+	response.Success(c, core.ContactRequestListResult{Items: items, Page: page, PageSize: pageSize, Total: total})
 }
 
 // GetContact 明文联系方式 GET /api/recruit/resumes/:id/contact
@@ -143,7 +143,7 @@ func (h *ContactHandler) ListForRecruiter(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "学员 ID"
-// @Success 200 {object} response.R{data=service.ContactPlainDTO} "明文 {real_name, contact_phone, wechat, resume_file_url}"
+// @Success 200 {object} response.R{data=core.ContactPlainDTO} "明文 {real_name, contact_phone, wechat, resume_file_url}"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 403 {object} response.R "无有效授权"
 // @Router /recruit/resumes/{id}/contact [get]
@@ -159,8 +159,8 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 		// 三个失败原因一律答 403，但各按自己的具名哨兵给文案（ADR-0062 决策 9 对称化后新增第三态）：
 		// ErrContactNoAuth 从未授权 / ErrStudentGone 学员已注销 / ErrCompanyUnavailable 企业自身被停用。
 		// 「授权存在」与「授权可用」不混为一谈——被禁用的企业手上确有 approved，报的却是企业已停用。
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, service.ErrContactNoAuth) ||
-			errors.Is(err, service.ErrStudentGone) || errors.Is(err, service.ErrCompanyUnavailable) {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, core.ErrContactNoAuth) ||
+			errors.Is(err, core.ErrStudentGone) || errors.Is(err, core.ErrCompanyUnavailable) {
 			response.Forbidden(c, err.Error())
 			return
 		}
@@ -187,7 +187,7 @@ func (h *ContactHandler) GetContact(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Success 200 {object} response.R{data=service.ContactRequestListResult} "列表"
+// @Success 200 {object} response.R{data=core.ContactRequestListResult} "列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests [get]
 func (h *ContactHandler) ListForStudent(c *gin.Context) {
@@ -200,7 +200,7 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 		return
 	}
 	// typed page（#1095）：同上，学员侧共用同一 DTO。
-	response.Success(c, service.ContactRequestListResult{Items: items, Page: page, PageSize: pageSize, Total: total})
+	response.Success(c, core.ContactRequestListResult{Items: items, Page: page, PageSize: pageSize, Total: total})
 }
 
 // Approve 学员同意申请 POST /api/resume/contact-requests/:id/approve
@@ -210,7 +210,7 @@ func (h *ContactHandler) ListForStudent(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "申请 ID"
-// @Success 200 {object} response.R{data=service.ContactRequestDTO} "已同意"
+// @Success 200 {object} response.R{data=core.ContactRequestDTO} "已同意"
 // @Failure 400 {object} response.R "状态不允许/已过期"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/approve [post]
@@ -236,7 +236,7 @@ func (h *ContactHandler) Approve(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "申请 ID"
-// @Success 200 {object} response.R{data=service.ContactRequestDTO} "已拒绝"
+// @Success 200 {object} response.R{data=core.ContactRequestDTO} "已拒绝"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/reject [post]
@@ -262,7 +262,7 @@ func (h *ContactHandler) Reject(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "申请 ID"
-// @Success 200 {object} response.R{data=service.ContactRequestDTO} "已撤回"
+// @Success 200 {object} response.R{data=core.ContactRequestDTO} "已撤回"
 // @Failure 400 {object} response.R "状态不允许"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/contact-requests/{id}/revoke [post]

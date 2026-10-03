@@ -77,7 +77,7 @@ func TestNullableDeclaredOutletsEmitNull(t *testing.T) {
 // seedJobCardWithJSONNullColumns 播一张简历卡，再把四个 JSONB 列写成 4 字节的 JSON 字面量
 // `null`（`'null'::jsonb` 在 Postgres 与 sqlite 上都是合法值，NOT NULL 不拦它）。
 // 刻意走**裸 SQL**：应用内任何写路径都会被 applyInput 归一成 `[]`，用 DTO 入口种脏列
-// 就量不到列的真实形状了。逐字副本（registry 与 internal/service 各一份，域包测试不互相 import）。
+// 就量不到列的真实形状了。逐字副本（registry 与 internal/core 各一份，域包测试不互相 import）。
 func seedJobCardWithJSONNullColumns(t *testing.T, db *gorm.DB, visibility string) int {
 	t.Helper()
 	owner := testutil.SeedStudent(t, db, "脏列卡主", "hash")

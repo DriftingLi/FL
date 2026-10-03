@@ -1,4 +1,4 @@
-// Package service 学员信息与学习记录。
+// Package student 学员信息与学习记录。
 package student
 
 import (

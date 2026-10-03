@@ -24,6 +24,7 @@ import (
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
@@ -40,7 +41,6 @@ import (
 	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/recruit"
 	"forklift-training/internal/search"
-	"forklift-training/internal/service"
 	"forklift-training/internal/student"
 	vmodel "forklift-training/internal/valuation/model"
 	"forklift-training/internal/wrongquestion"
@@ -88,9 +88,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "checkin.CheckInRankResult", Endpoints: []string{"GET /check-in/rank"},
 		Keys: []string{"items", "total", "page", "pages", "me"}, Dialect: paging.DialectPages,
 		Sample: checkin.CheckInRankResult{}},
-	{Result: "service.ContactRequestListResult", Endpoints: []string{"GET /recruit/contact-requests", "GET /resume/contact-requests"},
+	{Result: "core.ContactRequestListResult", Endpoints: []string{"GET /recruit/contact-requests", "GET /resume/contact-requests"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.ContactRequestListResult{}},
+		Sample: core.ContactRequestListResult{}},
 	{Result: "contribution.ContributionPageResult", Endpoints: []string{"GET /contributions", "GET /contributions/mine", "GET /admin/contributions/pending"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
 		Sample: contribution.ContributionPageResult{}},
@@ -186,7 +186,7 @@ var envelopeRegistry = []EnvelopeSpec{
 var totalPayloadRegistry = []PayloadSpec{
 	{Result: "checkin.CheckInCalendarResult",
 		Reason: "打卡日历：days 是整月逐日数组、total 是累计打卡天数，不是列表页"},
-	{Result: "service.GenTaskStatus",
+	{Result: "core.GenTaskStatus",
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
 	{Result: "practicemode.PracticeStartResultDTO",
 		Reason: "练习会话载荷：questions 是本次会话题集、total/completed 是会话进度，不是列表页"},

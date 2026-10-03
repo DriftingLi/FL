@@ -1,4 +1,4 @@
-// Package service 搜索读路径的题库池 scope 测试（3c-1 接缝拆分的 service 一侧）。
+// Package search 搜索读路径的题库池 scope 测试（3c-1 接缝拆分的 service 一侧）。
 package search
 
 import (

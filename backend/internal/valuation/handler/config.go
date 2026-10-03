@@ -41,9 +41,7 @@ func NewConfigHandler(dictRepo DictionaryConfigStore, l *zap.Logger) *ConfigHand
 	return &ConfigHandler{dictRepo: dictRepo, logger: l}
 }
 
-// =====================================================
 // 学生端字典查询接口（GET，无需 admin 权限）
-// =====================================================
 
 // ListBrands 处理 GET /api/valuation/dictionaries/brands
 // 返回全部启用品牌（按 k_brand 倒序）
@@ -486,11 +484,9 @@ func (h *ConfigHandler) ListOriginalPrices(c *gin.Context) {
 	})
 }
 
-// =====================================================
 // 管理员 CRUD 写面（/api/valuation/admin/*，要求 JWT role=admin）
 // 全部由描述符注册表驱动（dictcrud 包 + registerDictCRUDRoutes，见 router.go），
 // 不再逐实体手写骨架。
-// =====================================================
 
 // GetEarliestFactoryYear 处理 GET /api/valuation/dictionaries/earliest-factory-year
 // Query: brand, vehicle_type, series(可选), tonnage

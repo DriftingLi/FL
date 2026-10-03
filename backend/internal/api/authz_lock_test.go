@@ -70,7 +70,7 @@ func isRoleGuardCall(fun ast.Expr) bool {
 func TestAuthzLock_NoUpwardImports(t *testing.T) {
 	t.Parallel()
 	forbidden := []string{
-		"forklift-training/internal/service",
+		"forklift-training/internal/core",
 		"forklift-training/internal/api",
 		"forklift-training/internal/security",
 		"forklift-training/internal/middleware",

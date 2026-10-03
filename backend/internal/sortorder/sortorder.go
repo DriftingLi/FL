@@ -2,7 +2,7 @@
 //
 // 落点理由：原住 internal/service/training_catalog_service.go。课程域的 admin_course_service.go
 // 与培训域的 catalog_engine.go 都要用它们，而两域互为强环（15 条边）⇒ 载体留在任一域包里都会
-// 让另一个域反向依赖它；留 internal/service 导出也不行 —— 留驻 service → 域包是单向边，反过来
+// 让另一个域反向依赖它；留 internal/core 导出也不行 —— 留驻 core → 域包是单向边，反过来
 // 又要求 service 把它导出给域包用就成环。它们是无状态纯函数（只吃 *gorm.DB 与参数）——
 // P2 五种破环手法的第三种（无状态纯函数进叶子包），同 internal/coerce / internal/timefmt 先例。
 package sortorder

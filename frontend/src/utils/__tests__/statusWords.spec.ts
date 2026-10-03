@@ -10,7 +10,7 @@ import { APPLICATION_STATUSES, describeApplication } from '../applicationStatus'
 /** 车道根（frontend/src/utils/__tests__ → frontend → 仓库根）。 */
 const ROOT = resolve(__dirname, '../../../..')
 
-const GO_CONTACT = 'backend/internal/service/contact_authz.go'
+const GO_CONTACT = 'backend/internal/core/contact_authz.go'
 const GO_APPLICATION = 'backend/internal/job/application.go'
 
 // 命名约定（Go 侧注释冻结）：状态常量名为 `ContactGrantXxx`（类型 ContactGrantState）/

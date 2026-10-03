@@ -1,6 +1,6 @@
 // 联络授权状态词表单点（ADR-0056 §8，issue #1103）。
 //
-// 取值域是后端 service.ContactGrantState 常量表（backend/internal/service/contact_authz.go 五态）；
+// 取值域是后端 core.ContactGrantState 常量表（backend/internal/core/contact_authz.go 五态）；
 // 对账锁在 __tests__/statusWords.spec.ts——后端新增状态而这里忘了加，测试报红。
 //
 // label / tone 只在这里判定一份：学员侧列表（ResumePage）、企业侧列表（MyRequests）、

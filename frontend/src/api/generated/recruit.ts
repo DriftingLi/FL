@@ -13,7 +13,7 @@
 //   POST /recruit/contact-requests
 //   GET  /recruit/resumes/{id}/pdf
 //
-// 覆盖的 Go 类型：RecruitListResult / RecruitMeDTO / RecruitResumeCard / ContactPlainDTO / ContactRequestDTO / ContactRequestListResult
+// 覆盖的 Go 类型：ContactPlainDTO / ContactRequestDTO / ContactRequestListResult / RecruitListResult / RecruitMeDTO / RecruitResumeCard
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -24,39 +24,6 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
-
-export interface RecruitListResult {
-  items: RecruitResumeCard[]
-  total: number
-}
-
-export interface RecruitMeDTO {
-  account: string
-  role: string
-  user_id: number
-}
-
-export interface RecruitResumeCard {
-  available_in: string
-  company_disabled?: boolean
-  contact_source?: string
-  contact_state?: string
-  expected_position_extra: string
-  expected_position_id?: number
-  expected_regions: string[] | null
-  experience_years: number
-  job_nature: string
-  real_name: string
-  real_name_masked: string
-  resume_certifications: Record<string, unknown>[]
-  resume_experiences: Record<string, unknown>[] | null
-  salary_max?: number
-  salary_min?: number
-  salary_negotiable: boolean
-  self_intro: string
-  updated_at: string
-  user_id: number
-}
 
 export interface ContactPlainDTO {
   contact_phone: string
@@ -91,4 +58,37 @@ export interface ContactRequestListResult {
   page: number
   page_size: number
   total: number
+}
+
+export interface RecruitListResult {
+  items: RecruitResumeCard[]
+  total: number
+}
+
+export interface RecruitMeDTO {
+  account: string
+  role: string
+  user_id: number
+}
+
+export interface RecruitResumeCard {
+  available_in: string
+  company_disabled?: boolean
+  contact_source?: string
+  contact_state?: string
+  expected_position_extra: string
+  expected_position_id?: number
+  expected_regions: string[] | null
+  experience_years: number
+  job_nature: string
+  real_name: string
+  real_name_masked: string
+  resume_certifications: Record<string, unknown>[]
+  resume_experiences: Record<string, unknown>[] | null
+  salary_max?: number
+  salary_min?: number
+  salary_negotiable: boolean
+  self_intro: string
+  updated_at: string
+  user_id: number
 }

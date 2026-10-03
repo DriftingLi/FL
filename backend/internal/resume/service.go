@@ -3,7 +3,7 @@
 // 本文件是域实现（HTTP 出口见 handler.go / handler_view.go / handler_pdf.go）。
 //
 // 域边界（P2 波 4e）：简历域**持有 JobCard 实体与其全部投影**，因此
-// recruit（招聘者读面）与 job（投递面）都单向依赖本包；本包对 internal/service 零依赖
+// recruit（招聘者读面）与 job（投递面）都单向依赖本包；本包对 internal/core 零依赖
 // —— 地区助手走叶子包 internal/region。
 package resume
 

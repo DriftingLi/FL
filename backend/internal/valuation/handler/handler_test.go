@@ -28,9 +28,7 @@ import (
 	vservice "forklift-training/internal/valuation/service"
 )
 
-// =====================================================
 // 内存 adapter：字典（评估路径读方法显式实现，其余读面未实现——调用即 panic）
-// =====================================================
 
 // memTable 描述符驱动写面的通用内存表：id 自增 + 值按 JSON 字段名存放。
 type memTable struct {
@@ -180,10 +178,8 @@ func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]repository.C
 	return out, nil
 }
 
-// =====================================================
 // 描述符驱动写面内存替身（DictWriter；契约测试走此路径）
 // 区域系数保持 typed 存储（既有契约测试断言 dict.regions）；其余实体走通用内存表。
-// =====================================================
 
 func (m *memDictStore) Create(_ context.Context, d dictcrud.Descriptor, fields map[string]any) (int64, error) {
 	if d.Name == "region_coefficients" {
@@ -282,9 +278,7 @@ func (m *memDictStore) Delete(_ context.Context, d dictcrud.Descriptor, id int64
 	return pgx.ErrNoRows
 }
 
-// =====================================================
 // 内存 adapter：评估存储 / 电池存储 / PDF 生成
-// =====================================================
 
 type memEvalStore struct {
 	mu      sync.Mutex
@@ -439,9 +433,7 @@ func (m *memReportGenerator) GenerateReport(*model.EvaluationDetail, []model.Dim
 	return []byte("fake-pdf"), nil
 }
 
-// =====================================================
 // 测试引擎装配 + 请求 helper
-// =====================================================
 
 // newTestValuationEngine 用内存 adapter 装配生产路由（与 main 相同的 RegisterRoutes）。
 // 返回引擎与各 store 引用，测试可按需断言或注入数据。
@@ -540,9 +532,7 @@ func adminAuthHeader(t *testing.T) string {
 	return "Bearer " + token
 }
 
-// =====================================================
 // 冒烟测试：评估创建成功路径穿过整个 seam
-// =====================================================
 
 func TestEvaluationCreate_Smoke(t *testing.T) {
 	r, _, _ := newTestValuationEngine(t)

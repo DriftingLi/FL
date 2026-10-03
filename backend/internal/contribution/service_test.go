@@ -441,7 +441,7 @@ func TestContribution_CleanupOrphans(t *testing.T) {
 	}
 }
 
-// ---- 域包自带的测试脚手架副本（域包不得 import internal/service 的测试文件；原定义留在 internal/service）----
+// ---- 域包自带的测试脚手架副本（域包不得 import internal/core 的测试文件；原定义留在 internal/core）----
 
 func itoa(n int) string { return strconv.Itoa(n) }
 

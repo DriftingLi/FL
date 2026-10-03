@@ -42,6 +42,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | [`docs/agents/checks.md`](docs/agents/checks.md) | 测试与检查流程：后端四件套（**Windows 本机 golangci-lint 暂不可用，由 CI 兜底** / WSL 双环境）、生成链顺序（swagger → gen-apitypes → 再跑测试）、PG 契约测试纪律（随机 schema / 目录查询按 `current_schema()` 收窄）、前端 type-check + vitest、部署配置校验、DeepSec 安全检测 | 每次提交前 |
 | [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律；**合并后的分支与 worktree 收尾顺序**见其 :13 | push / PR / merge / 清理工作树前 |
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
+| [`docs/agents/comments.md`](docs/agents/comments.md) | 注释标准：三类判据（保留 / 删除 / 不可动）、本仓先例、「只减不增」棘轮锁哪些类与为什么 | 增删改注释前（后端 `backend/**/*.go`；底数与逐包实测见 [`docs/design/1445-p4-comment-audit.md`](docs/design/1445-p4-comment-audit.md)） |
 
 > **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**）。它在创建处校验参数、并在新目录里实测 `jest --listTests` 必须列出套件 —— 目录名不合规会让 ③ 门**静默匹配 0 个套件**（血账 #1144；闸门见 #1185）。新树建好后的初始化（共享 `node_modules` + 路径判据）由 `training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1` 承担，闸门 `new-worktree.ps1` 已接线（在仓内，可被 ③ 门守护）。**Qoder 的「本地任务的 Worktree 配置」框由宿主维护、PR 审查不到，本仓文档不校验其现值**：该框**必须且只能填下面这一行调用**（填逻辑＝开了第二真源）——`pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`；要确认框里已同步成这一行，读回 `%APPDATA%\Qoder\logs\<run>\questWindow\renderer.log` 里 `worktreeSetup` 键的值与之比对（**别拿「应该已填」当作已填**）。**移动端交付不用 Qoder 托管树**（③ 门在其默认落点会静默假绿），边界见移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」。
 
@@ -50,8 +51,8 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 构建 / lint / 全量测试 / 生成链 / 迁移 / 部署的**权威命令**在 [`README.md`](README.md)（常用命令、快速开始）与 [`docs/agents/checks.md`](docs/agents/checks.md)（提交前四件套与守卫）。本处**不重复那些表**——它们靠指路而非抄写，抄过来正是历史上漂移的来源。这里只补一件两表都没写、又几乎每次会话都要用的：**如何只跑一个测试**。
 
 - **后端**（`backend/`；全量 `make test` = `go test ./... -race -cover`）
-  - 单包：`go test ./internal/service/ -race`
-  - 单用例：`go test ./internal/service/ -run TestXxx -race`（`-run` 接正则，可前缀匹配一簇）
+  - 单包：`go test ./internal/core/ -race`
+  - 单用例：`go test ./internal/core/ -run TestXxx -race`（`-run` 接正则，可前缀匹配一簇）
   - ⚠️ 命中 `testutil.NewPostgresDB` 的 Postgres 契约用例，本机无 `DATABASE_URL` 会**干净 skip** ⇒ 看到 `ok` ≠ 测过，首跑在 CI（详见 checks.md「两条纪律」）。
 - **前端**（`frontend/`；全量 `npm test` = `vitest run`）
   - 单文件：`npx vitest run src/api/__tests__/page.spec.ts`

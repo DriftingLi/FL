@@ -16,9 +16,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/auth"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -72,7 +72,7 @@ func newDeleteAccountRouter(t *testing.T, store security.BlacklistStore) (*gin.E
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, store)
-	authSvc := auth.NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	u := model.HrwaiUser{UID: 900001, Account: "gone-soon", Username: "即将注销", Password: "x", Phone: "13900000001", Status: 1}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
@@ -120,7 +120,7 @@ func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 func TestDeleteAccount_吊销写失败则整体不生效(t *testing.T) {
 	t.Parallel()
 	r, sess, db, uid := newDeleteAccountRouter(t, rejectBlacklist{})
-	tok, _, err := sess.IssuePair(uid, "gone-soon", service.HrwaiRole)
+	tok, _, err := sess.IssuePair(uid, "gone-soon", core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发 access 失败: %v", err)
 	}

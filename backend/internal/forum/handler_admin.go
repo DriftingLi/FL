@@ -307,7 +307,6 @@ func (h *handler) ListReports(c *gin.Context) {
 }
 
 // HandleReport 处理举报 PUT /api/admin/forum/reports/:id
-// HandleReport 处理举报 PUT /api/admin/forum/reports/:id
 // @Summary 处理论坛举报
 // @Description 管理端处理论坛举报（status: 1 标记已处理）
 // @Tags 管理端-论坛

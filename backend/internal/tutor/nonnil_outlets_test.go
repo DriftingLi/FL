@@ -70,7 +70,7 @@ func outletBatchDeleteFilesEmpty(t *testing.T) any {
 
 // seedVisibleCourse 播一门「已发布 + 已挂载」但**没有章节**的课程，返回其 id。
 // （逐字副本：源 internal/service/nonnil_declaration_test.go，波 4d 随唯一消费它的出口搬来，
-// 留驻侧那份已删 —— 域包测试不 import internal/service 的测试文件。）
+// 留驻侧那份已删 —— 域包测试不 import internal/core 的测试文件。）
 func seedVisibleCourse(t *testing.T, db *gorm.DB) int {
 	t.Helper()
 	spec := model.Specialty{Code: "nonnil", Name: "非空方向", SortOrder: 1, Status: 1}

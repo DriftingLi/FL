@@ -1,4 +1,4 @@
-// Package service 招聘域：职位举报与强制下架（spec #449 T5 #454）。
+// Package job 招聘域：职位举报与强制下架（spec #449 T5 #454）。
 // 先发后审：学员可举报职位，管理员可带原因强制下架；被强制下架的职位企业不能自行重新上架。
 // 举报用招聘域自己的存储（job_reports），不挂到论坛举报表上（那是论坛域的两列形状）。
 package job
@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
@@ -33,7 +33,7 @@ var (
 type ReportService struct {
 	db     *gorm.DB
 	logger *zap.Logger
-	mailer service.MailSender
+	mailer core.MailSender
 }
 
 // NewReportService 创建职位举报服务。
@@ -42,7 +42,7 @@ func NewReportService(db *gorm.DB, logger *zap.Logger) *ReportService {
 }
 
 // SetMailer 注入邮件发送器（装配根经邮件单点构建后注入）。
-func (s *ReportService) SetMailer(m service.MailSender) { s.mailer = m }
+func (s *ReportService) SetMailer(m core.MailSender) { s.mailer = m }
 
 // ReportListResult 举报队列分页结果。
 type ReportListResult struct {

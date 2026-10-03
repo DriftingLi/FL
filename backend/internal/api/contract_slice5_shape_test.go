@@ -20,9 +20,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -79,9 +79,9 @@ func assertSlice5MissingKeys(t *testing.T, label string, body []byte, absent ...
 // assertSlice5Shape 与既有契约测试同形：SQLite 恒绿 + Postgres（真实迁移建表，无 DATABASE_URL 时跳过）。
 func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuSlice5", pwd)
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminSlice5", adminPwd)
 
 	cfg := &config.Config{
@@ -124,21 +124,21 @@ func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 		t.Fatalf("创建简历卡失败: %v", err)
 	}
 
-	// ===== 1. GET /api/recruit/me：注解 data=service.RecruitMeDTO（本片新增注解）=====
+	// ===== 1. GET /api/recruit/me：注解 data=core.RecruitMeDTO（本片新增注解）=====
 	rec = doWithToken(t, r, recToken, http.MethodGet, "/api/recruit/me", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("recruit/me 应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 	assertSlice5Keys(t, "GET /recruit/me", rec.Body.Bytes(), "account", "role", "user_id")
 
-	// ===== 2. GET /api/recruit/resumes：注解 data=service.RecruitListResult =====
+	// ===== 2. GET /api/recruit/resumes：注解 data=core.RecruitListResult =====
 	rec = doWithToken(t, r, recToken, http.MethodGet, "/api/recruit/resumes", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("recruit/resumes 应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 	assertSlice5Keys(t, "GET /recruit/resumes", rec.Body.Bytes(), "items", "total")
 
-	// ===== 3. GET /api/recruit/resumes/{id}：注解 data=service.RecruitResumeCard =====
+	// ===== 3. GET /api/recruit/resumes/{id}：注解 data=core.RecruitResumeCard =====
 	rec = doWithToken(t, r, recToken, http.MethodGet, "/api/recruit/resumes/"+itoa(int(stu.ID)), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("recruit/resumes/:id 应 200, got %d %s", rec.Code, rec.Body.String())
@@ -151,7 +151,7 @@ func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 	assertSlice5MissingKeys(t, "GET /recruit/resumes/{id}", rec.Body.Bytes(),
 		"contact_phone", "wechat", "region", "resume_file_url", "photos", "visibility")
 
-	// ===== 4. POST /api/recruit/contact-requests：注解 201 data=service.ContactRequestDTO =====
+	// ===== 4. POST /api/recruit/contact-requests：注解 201 data=core.ContactRequestDTO =====
 	rec = doWithToken(t, r, recToken, http.MethodPost, "/api/recruit/contact-requests",
 		map[string]any{"student_user_id": stu.ID, "message": "请考虑"})
 	if rec.Code != http.StatusCreated {
@@ -171,14 +171,14 @@ func assertSlice5Shape(t *testing.T, db *gorm.DB) {
 		t.Fatalf("解析交换申请失败: %v", err)
 	}
 
-	// ===== 5. GET /api/recruit/contact-requests：注解 data=service.ContactRequestListResult =====
+	// ===== 5. GET /api/recruit/contact-requests：注解 data=core.ContactRequestListResult =====
 	rec = doWithToken(t, r, recToken, http.MethodGet, "/api/recruit/contact-requests", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("招聘方申请列表应 200, got %d %s", rec.Code, rec.Body.String())
 	}
 	assertSlice5Keys(t, "GET /recruit/contact-requests", rec.Body.Bytes(), "items", "total", "page", "page_size")
 
-	// ===== 6. GET /api/recruit/resumes/{id}/contact：批准前 403，批准后 data=service.ContactPlainDTO =====
+	// ===== 6. GET /api/recruit/resumes/{id}/contact：批准前 403，批准后 data=core.ContactPlainDTO =====
 	rec = doWithToken(t, r, recToken, http.MethodGet, "/api/recruit/resumes/"+itoa(int(stu.ID))+"/contact", nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("未授权读明文应 403, got %d %s", rec.Code, rec.Body.String())

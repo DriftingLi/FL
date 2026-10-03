@@ -1,13 +1,13 @@
 // 本文件：简历卡投影模块（ADR-0053 §4）——打码规则与**三处投影的字段清单**同文件。
 // 随简历域搬进 internal/resume（P2 波 4e）：三处投影的两个非留驻消费者（internal/recruit 的
-// 招聘者读面、internal/job 的投递面）都单向依赖本包；留驻的 internal/service/contact_service.go
+// 招聘者读面、internal/job 的投递面）都单向依赖本包；留驻的 internal/core/contact_service.go
 // 取明文卡也写 resume.ToJobCardDTO。
 //
 // 为什么并排放：这三处投影的口径**有意不同**（词表已区分），但「新增一个简历字段时要在三处
 // 各决定一次（露 / 不露 / 怎么露）」这件事没法靠记忆。把三份清单摆在一起，改动时一眼可见。
 //
 //  1. desensitize   企业浏览用脱敏卡（L2）：姓名打码、无现居地、无电话微信、无上传 PDF、无证件原图
-//  2. ToJobCardDTO  本人与已授权方用明文卡：全字段（授权门禁在 internal/service/contact_authz.go）
+//  2. ToJobCardDTO  本人与已授权方用明文卡：全字段（授权门禁在 internal/core/contact_authz.go）
 //  3. resumePDFView 打码版在线简历 PDF：姓名打码、无电话微信、现居地到市、无工作照与证件原图
 //     （版式与字体留在 pdf.go，本文件只给**取值**）
 //
@@ -278,7 +278,7 @@ type RecruitResumeCard struct {
 	// #489：企业视角联系状态（none/pending/approved，approved 带来源）
 	ContactState  string `json:"contact_state,omitempty" extensions:"x-optional"`
 	ContactSource string `json:"contact_source,omitempty" extensions:"x-optional"` // recruiter/application
-	// CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
+	// CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（core.ContactRequestDTO 的
 	// 同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
 	// 本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
 	// （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。

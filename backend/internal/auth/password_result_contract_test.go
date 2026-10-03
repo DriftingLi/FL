@@ -7,7 +7,7 @@
 // 缺口如实出现在 RevokeErr 上由 caller 记日志。
 //
 // P2 波 3a（ADR-0070）：本文件随域搬进 internal/auth —— 口令写面的入口方法（SetNewPassword /
-// UpdatePassword）是 auth 的，动作本体（ApplyHrwaiPassword）留在 internal/service；留在 internal/service
+// UpdatePassword）是 auth 的，动作本体（ApplyHrwaiPassword）留在 internal/core；留在 internal/core
 // 会让该包的测试文件 import internal/auth ⇒ 「import cycle not allowed in test」（实测）。
 package auth
 
@@ -20,9 +20,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -49,7 +49,7 @@ func newBrokenRevokeAuth(t *testing.T, db *gorm.DB) *Service {
 // Applied() 为真、缺口如实出现在 RevokeErr（尽力而为族，不升级为整体失败）。
 func TestPasswordWriteResultKeepsPasswordOnRevokeFailure(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	old, _ := service.HashPassword("oldpass123")
+	old, _ := core.HashPassword("oldpass123")
 	stu := testutil.SeedStudent(t, db, "pwdres_stu", old)
 	svc := newBrokenRevokeAuth(t, db)
 
@@ -64,7 +64,7 @@ func TestPasswordWriteResultKeepsPasswordOnRevokeFailure(t *testing.T) {
 	if err := db.First(&stored, stu.ID).Error; err != nil {
 		t.Fatalf("回读学员行失败: %v", err)
 	}
-	if !service.VerifyPassword("newpass123", stored.Password) {
+	if !core.VerifyPassword("newpass123", stored.Password) {
 		t.Fatal("口令没落库 ⇒ 本测试要钉的「口令已成」这一半不成立")
 	}
 	// 入口方法的表态：同族尽力而为 ⇒ 对 caller 返回 nil（用户找不回账号才是更坏的后果）。
@@ -77,7 +77,7 @@ func TestPasswordWriteResultKeepsPasswordOnRevokeFailure(t *testing.T) {
 // 两格互斥是结果类型的不变式（否则 caller 无法判断该不该记「已改密但没吊销」这条日志）。
 func TestPasswordWriteResultErrIsExclusive(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	old, _ := service.HashPassword("oldpass123")
+	old, _ := core.HashPassword("oldpass123")
 	stu := testutil.SeedStudent(t, db, "pwdres_excl", old)
 	svc := newBrokenRevokeAuth(t, db)
 
@@ -93,7 +93,7 @@ func TestPasswordWriteResultErrIsExclusive(t *testing.T) {
 	if err := db.First(&still, stu.ID).Error; err != nil {
 		t.Fatalf("回读失败: %v", err)
 	}
-	if !service.VerifyPassword("oldpass123", still.Password) {
+	if !core.VerifyPassword("oldpass123", still.Password) {
 		t.Fatal("非法入参的这一次把口令改掉了 ⇒ 「没落成」那一格不可信")
 	}
 }

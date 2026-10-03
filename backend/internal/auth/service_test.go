@@ -12,9 +12,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -23,15 +23,15 @@ const testJWTSecret = "test-secret-key-for-unit-test"
 func newAuthSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
+	return NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), core.NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
 }
 
-// --- service.HashPassword / service.VerifyPassword ---
+// --- core.HashPassword / core.VerifyPassword ---
 
 func TestHashPassword_Success(t *testing.T) {
-	hash, err := service.HashPassword("mypassword")
+	hash, err := core.HashPassword("mypassword")
 	if err != nil {
-		t.Fatalf("service.HashPassword 失败: %v", err)
+		t.Fatalf("core.HashPassword 失败: %v", err)
 	}
 	if hash == "" || hash == "mypassword" {
 		t.Fatalf("哈希值不合法: %q", hash)
@@ -39,29 +39,29 @@ func TestHashPassword_Success(t *testing.T) {
 }
 
 func TestHashPassword_DifferentSalt(t *testing.T) {
-	h1, _ := service.HashPassword("same")
-	h2, _ := service.HashPassword("same")
+	h1, _ := core.HashPassword("same")
+	h2, _ := core.HashPassword("same")
 	if h1 == h2 {
 		t.Fatal("相同密码两次哈希应不同（随机盐）")
 	}
 }
 
 func TestVerifyPassword_Correct(t *testing.T) {
-	hash, _ := service.HashPassword("correct-pwd")
-	if !service.VerifyPassword("correct-pwd", hash) {
+	hash, _ := core.HashPassword("correct-pwd")
+	if !core.VerifyPassword("correct-pwd", hash) {
 		t.Fatal("正确密码应校验通过")
 	}
 }
 
 func TestVerifyPassword_Wrong(t *testing.T) {
-	hash, _ := service.HashPassword("correct-pwd")
-	if service.VerifyPassword("wrong-pwd", hash) {
+	hash, _ := core.HashPassword("correct-pwd")
+	if core.VerifyPassword("wrong-pwd", hash) {
 		t.Fatal("错误密码应校验失败")
 	}
 }
 
 func TestVerifyPassword_EmptyHash(t *testing.T) {
-	if service.VerifyPassword("any", "") {
+	if core.VerifyPassword("any", "") {
 		t.Fatal("空哈希应校验失败")
 	}
 }
@@ -70,14 +70,14 @@ func TestVerifyPassword_EmptyHash(t *testing.T) {
 
 func TestHrwaiLogin_Success(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("pwd123")
+	hash, _ := core.HashPassword("pwd123")
 	testutil.SeedStudent(t, tdb, "student1", hash)
 
 	result, err := svc.HrwaiLogin("acct_student1", "pwd123")
 	if err != nil {
 		t.Fatalf("登录失败: %v", err)
 	}
-	if result.Account != "acct_student1" || result.Username != "student1" || result.Role != service.HrwaiRole {
+	if result.Account != "acct_student1" || result.Username != "student1" || result.Role != core.HrwaiRole {
 		t.Fatalf("登录结果不匹配: %+v", result)
 	}
 	if result.Token == "" {
@@ -87,7 +87,7 @@ func TestHrwaiLogin_Success(t *testing.T) {
 
 func TestHrwaiLogin_WrongPassword(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("pwd123")
+	hash, _ := core.HashPassword("pwd123")
 	testutil.SeedStudent(t, tdb, "student1", hash)
 
 	_, err := svc.HrwaiLogin("acct_student1", "wrong")
@@ -106,7 +106,7 @@ func TestHrwaiLogin_NotFound(t *testing.T) {
 
 func TestHrwaiLogin_Disabled(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("pwd123")
+	hash, _ := core.HashPassword("pwd123")
 	s := testutil.SeedStudent(t, tdb, "disabled", hash)
 	s.Status = 0 // 禁用
 	tdb.Save(s)
@@ -121,7 +121,7 @@ func TestHrwaiLogin_Disabled(t *testing.T) {
 
 func TestUpdatePassword(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("old123")
+	hash, _ := core.HashPassword("old123")
 	s := testutil.SeedStudent(t, tdb, "pwduser", hash)
 	if err := svc.UpdatePassword(context.Background(), s.ID, "new123"); err != nil {
 		t.Fatalf("修改密码失败: %v", err)
@@ -138,7 +138,7 @@ func TestUpdatePassword(t *testing.T) {
 
 func TestAdminLogin_Success(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("adminpwd")
+	hash, _ := core.HashPassword("adminpwd")
 	testutil.SeedAdmin(t, tdb, "admin1", hash)
 
 	result, err := svc.AdminLogin("admin1", "adminpwd")
@@ -152,7 +152,7 @@ func TestAdminLogin_Success(t *testing.T) {
 
 func TestAdminLogin_WrongPassword(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("adminpwd")
+	hash, _ := core.HashPassword("adminpwd")
 	testutil.SeedAdmin(t, tdb, "admin1", hash)
 
 	_, err := svc.AdminLogin("admin1", "wrong")
@@ -173,7 +173,7 @@ func TestAdminLogin_NotFound(t *testing.T) {
 
 func TestTutorLogin_Success(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("tutorpwd")
+	hash, _ := core.HashPassword("tutorpwd")
 	testutil.SeedTutor(t, tdb, "tutor1", hash)
 
 	result, err := svc.TutorLogin("tutor1", "tutorpwd")
@@ -187,7 +187,7 @@ func TestTutorLogin_Success(t *testing.T) {
 
 func TestTutorLogin_WrongPassword(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("tutorpwd")
+	hash, _ := core.HashPassword("tutorpwd")
 	testutil.SeedTutor(t, tdb, "tutor1", hash)
 
 	_, err := svc.TutorLogin("tutor1", "wrong")
@@ -198,7 +198,7 @@ func TestTutorLogin_WrongPassword(t *testing.T) {
 
 func TestTutorLogin_Disabled(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("tutorpwd")
+	hash, _ := core.HashPassword("tutorpwd")
 	tu := testutil.SeedTutor(t, tdb, "disabled", hash)
 	tu.Status = 0
 	tdb.Save(tu)
@@ -275,7 +275,7 @@ func newGetProfileSvc(t *testing.T) (*Service, *gorm.DB) {
 
 func TestGetProfile_HrwaiUser(t *testing.T) {
 	svc, tdb := newGetProfileSvc(t)
-	hash, _ := service.HashPassword("pwd123")
+	hash, _ := core.HashPassword("pwd123")
 	u := testutil.SeedStudent(t, tdb, "alice", hash)
 	u.Username = "小爱"
 	u.AvatarURL = "https://example.com/avatar.png"
@@ -283,14 +283,14 @@ func TestGetProfile_HrwaiUser(t *testing.T) {
 	u.Company = "和润"
 	tdb.Save(u)
 
-	dto := svc.GetProfile(u.ID, service.HrwaiRole, u.Account)
-	if dto.UserID != u.ID || dto.Account != "acct_alice" || dto.Role != service.HrwaiRole {
+	dto := svc.GetProfile(u.ID, core.HrwaiRole, u.Account)
+	if dto.UserID != u.ID || dto.Account != "acct_alice" || dto.Role != core.HrwaiRole {
 		t.Fatalf("基础字段异常: %+v", dto)
 	}
 	if dto.Username == nil || *dto.Username != "小爱" {
 		t.Fatalf("昵称字段异常: %+v", dto.Username)
 	}
-	if dto.UID == nil || *dto.UID != service.FormatUID(u.UID) {
+	if dto.UID == nil || *dto.UID != core.FormatUID(u.UID) {
 		t.Fatalf("uid 字段异常: %+v", dto.UID)
 	}
 	if dto.AvatarURL == nil || *dto.AvatarURL != "https://example.com/avatar.png" {
@@ -317,7 +317,7 @@ func TestGetProfile_HasPasswordFalse(t *testing.T) {
 	svc, tdb := newGetProfileSvc(t)
 	u := testutil.SeedStudent(t, tdb, "nopwd", "") // 未设置密码
 
-	dto := svc.GetProfile(u.ID, service.HrwaiRole, u.Account)
+	dto := svc.GetProfile(u.ID, core.HrwaiRole, u.Account)
 	if dto.HasPassword == nil || *dto.HasPassword {
 		t.Fatalf("未设置密码时应 has_password=false: %+v", dto.HasPassword)
 	}
@@ -325,14 +325,14 @@ func TestGetProfile_HasPasswordFalse(t *testing.T) {
 
 func TestGetProfile_PendingReview(t *testing.T) {
 	svc, tdb := newGetProfileSvc(t)
-	hash, _ := service.HashPassword("pwd123")
+	hash, _ := core.HashPassword("pwd123")
 	u := testutil.SeedStudent(t, tdb, "pending", hash)
 	req, err := svc.reviewSvc.CreateRequest(u.ID, model.ProfileFieldNickname, "新昵称")
 	if err != nil {
 		t.Fatalf("提交待审请求失败: %v", err)
 	}
 
-	dto := svc.GetProfile(u.ID, service.HrwaiRole, u.Account)
+	dto := svc.GetProfile(u.ID, core.HrwaiRole, u.Account)
 	if dto.PendingProfileChange == nil || *dto.PendingProfileChange == nil {
 		t.Fatalf("应有待审资料对象: %v", dto.PendingProfileChange)
 	}
@@ -344,7 +344,7 @@ func TestGetProfile_PendingReview(t *testing.T) {
 
 func TestGetProfile_Tutor(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("tutorpwd")
+	hash, _ := core.HashPassword("tutorpwd")
 	tu := testutil.SeedTutor(t, tdb, "tutor1", hash)
 
 	dto := svc.GetProfile(tu.TutorID, "tutor", tu.Username)
@@ -355,7 +355,7 @@ func TestGetProfile_Tutor(t *testing.T) {
 
 func TestGetProfile_Admin(t *testing.T) {
 	svc, tdb := newAuthSvc(t)
-	hash, _ := service.HashPassword("adminpwd")
+	hash, _ := core.HashPassword("adminpwd")
 	a := testutil.SeedAdmin(t, tdb, "admin1", hash)
 
 	dto := svc.GetProfile(a.AdminID, "admin", a.Username)
@@ -366,7 +366,7 @@ func TestGetProfile_Admin(t *testing.T) {
 
 func TestGetProfile_UserNotFound(t *testing.T) {
 	svc, _ := newGetProfileSvc(t)
-	dto := svc.GetProfile(999, service.HrwaiRole, "ghost")
+	dto := svc.GetProfile(999, core.HrwaiRole, "ghost")
 	if dto.Name != nil {
 		t.Fatalf("用户不存在时不应有 name 字段: %+v", dto.Name)
 	}
@@ -412,14 +412,14 @@ func newAuthSvcWithBlacklist(t *testing.T, bl security.BlacklistStore) (*Service
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh(testJWTSecret, time.Hour, 7*24*time.Hour, security.CookieConfig{}, bl)
-	return NewService(db, sess, service.NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
+	return NewService(db, sess, core.NewForumCounter(), "admin123", "tutor123", "student123", zap.NewNop()), db
 }
 
 // 改密成功后必须写入用户级 refresh 吊销标记（#622）：快捷登录静默续登随之失效。
 func TestUpdatePassword_RevokesRefreshMarker(t *testing.T) {
 	bl := &spyBlacklist{m: make(map[string]string)}
 	svc, tdb := newAuthSvcWithBlacklist(t, bl)
-	hash, _ := service.HashPassword("old123")
+	hash, _ := core.HashPassword("old123")
 	s := testutil.SeedStudent(t, tdb, "revuser", hash)
 
 	if err := svc.UpdatePassword(context.Background(), s.ID, "new123"); err != nil {
@@ -435,7 +435,7 @@ func TestUpdatePassword_RevokesRefreshMarker(t *testing.T) {
 func TestResetRecruiterPassword_RevokesRefreshMarker(t *testing.T) {
 	bl := &spyBlacklist{m: make(map[string]string)}
 	svc, tdb := newAuthSvcWithBlacklist(t, bl)
-	hash, _ := service.HashPassword("old123")
+	hash, _ := core.HashPassword("old123")
 	rec := &model.RecruiterUser{Username: "rec_rev", Password: hash, CompanyName: "公司", Status: 1}
 	if err := tdb.Create(rec).Error; err != nil {
 		t.Fatalf("造数失败: %v", err)

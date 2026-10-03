@@ -373,9 +373,7 @@ func (s *BatteryRULService) computeFeatureImportance(agg [20][2]float64) []model
 	return out
 }
 
-// =====================================================
 // 统计工具函数
-// =====================================================
 
 // mean 平均值
 func mean(xs []float64) float64 {

@@ -17,9 +17,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -59,7 +59,7 @@ func TestFaqContract(t *testing.T) {
 	deps := newContractDeps(t, db, cfg)
 	r := NewRouter(deps)
 
-	pwd, _ := service.HashPassword("student123")
+	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "faq_stu", pwd)
 	admin := testutil.SeedAdmin(t, db, "faq_admin", pwd)
 	sess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})

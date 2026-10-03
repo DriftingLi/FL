@@ -21,9 +21,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -58,10 +58,10 @@ func newContactCreateEnv(t *testing.T) *contactCreateEnv {
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
 
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuCreateShape", pwd)
 
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminCreateShape", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{
 		Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: cfg.AuthCookie.Secure})
@@ -150,7 +150,7 @@ func TestContactCreateFace_BytesPreservedAcrossSeamMigration(t *testing.T) {
 		now := time.Now()
 		if err := e.db.Create(&model.ContactRequest{
 			RecruiterID: e.recruiterID, StudentUserID: cooldownStu.ID, Message: "旧申请",
-			Status:    string(service.ContactGrantRejected),
+			Status:    string(core.ContactGrantRejected),
 			CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now, DecidedAt: &now,
 		}).Error; err != nil {
 			t.Fatalf("播种被拒授权失败: %v", err)

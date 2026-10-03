@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -28,13 +28,13 @@ import (
 // 值不能省：一张只被 AST 读、没有任何 Go 代码引用的表会被 unused 判死（CI backend-lint 实测
 // 红过一次）。而那恰好也是这张表该有的形状——**证据必须真的被跑过**，不是一个供人查名字的花名册。
 var nonnilOutlets = map[string]func(t *testing.T) string{
-	"service.ContactRequestListResult.items": contactRequestListBody,
+	"core.ContactRequestListResult.items": contactRequestListBody,
 	// 两条分页壳：service 侧的切片由 gorm 的 Find 填，恒非 null，但「整份响应里 items 这一格」
 	// 是 handler 拼出来的 ⇒ 举证必须在路由这一层（批①-A 委托时也确认过一次：同一个 items，服务层跑不到）。
 	// 收藏那格（FavoritePageResult.favorites）波 4b 核对后确认组装点其实在 favorite.Service.List，
 	// 已随域包搬去 internal/favorite/nonnil_outlets_test.go。
 	// 笔记 / 题内评论两格的键前缀随波 4c 的域包改名（note. / questioninteraction.）：组装点已不在
-	// internal/service，但这两条证据走的是一整条真实路由 ⇒ 仍留在本文件。
+	// internal/core，但这两条证据走的是一整条真实路由 ⇒ 仍留在本文件。
 	"note.NotePageDTO.items":                              notePageBody,
 	"questioninteraction.QuestionCommentPageResult.items": commentPageBody,
 	// 反方向的谎：这一格从前声明 nullable 且契约上落了 x-nullable，而空审计表拉列表实测发的是
@@ -93,7 +93,7 @@ func contactRequestListBody(t *testing.T) string {
 	t.Helper()
 	r, db, _ := newAdminContractEnv(t)
 
-	hashed, err := service.HashPassword("nonnil123")
+	hashed, err := core.HashPassword("nonnil123")
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -105,7 +105,7 @@ func contactRequestListBody(t *testing.T) string {
 	}
 
 	token, err := security.NewSession(contractJWTSecret, time.Hour, security.CookieConfig{}).
-		Issue(stu.ID, stu.Account, service.HrwaiRole)
+		Issue(stu.ID, stu.Account, core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发学员 token 失败: %v", err)
 	}

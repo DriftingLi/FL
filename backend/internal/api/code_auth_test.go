@@ -22,17 +22,15 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 var errCodeNotFound = errors.New("code not found")
 
-// =====================================================
 // 测试替身：内存验证码存储 + 测试通道
-// =====================================================
 
 type memCodeStore struct {
 	m map[string]string
@@ -119,9 +117,7 @@ func (c *fakeChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 
 func (c *fakeChannel) BindColumn() string { return c.column }
 
-// =====================================================
 // 路由装配 + 请求 helper
-// =====================================================
 
 func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel) {
 	r, store, emailCh, phoneCh, _ := newCodeAuthTestRouterX(t, false)
@@ -134,7 +130,7 @@ func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *me
 	t.Helper()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	captchaSvc := captcha.NewService(store) // memCodeStore 实现 captcha.Store（Get/Set/Del 同构）
@@ -205,9 +201,7 @@ func extractStoredCode(t *testing.T, store *memCodeStore, ch *fakeChannel, purpo
 	return v.Code
 }
 
-// =====================================================
 // 测试
-// =====================================================
 
 // TestCodeAuth_EmailRegisterLogin 邮箱通道：send-code → register → login 全流程。
 func TestCodeAuth_EmailRegisterLogin(t *testing.T) {

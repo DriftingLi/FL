@@ -17,9 +17,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 )
 
 // twoFamilySession 两族都配齐的会话：主站 refresh 落父域、招聘者 refresh 落 host-only
@@ -93,8 +93,8 @@ func TestRefreshFamily_招聘者线索轮换招聘者族(t *testing.T) {
 	sess := twoFamilySession(t)
 	r := newRefreshRouter(sess)
 
-	recAcc, recRT, _ := sess.IssuePair(9, "hr001", service.RecruiterRole)
-	_, mainRT, _ := sess.IssuePair(1, "u1", service.HrwaiRole)
+	recAcc, recRT, _ := sess.IssuePair(9, "hr001", core.RecruiterRole)
+	_, mainRT, _ := sess.IssuePair(1, "u1", core.HrwaiRole)
 
 	w := doFamily(t, r, "/api/auth/refresh", familyHTTP{header: recAcc, mainRT: mainRT, recRT: recRT})
 	if w.Code != http.StatusOK {
@@ -125,8 +125,8 @@ func TestRefreshFamily_学员线索轮换学员族(t *testing.T) {
 	sess := twoFamilySession(t)
 	r := newRefreshRouter(sess)
 
-	mainAcc, mainRT, _ := sess.IssuePair(1, "u1", service.HrwaiRole)
-	recAcc, recRT, _ := sess.IssuePair(9, "hr001", service.RecruiterRole)
+	mainAcc, mainRT, _ := sess.IssuePair(1, "u1", core.HrwaiRole)
+	recAcc, recRT, _ := sess.IssuePair(9, "hr001", core.RecruiterRole)
 
 	w := doFamily(t, r, "/api/auth/refresh", familyHTTP{header: mainAcc, mainRT: mainRT, recRT: recRT})
 	if w.Code != http.StatusOK {
@@ -155,8 +155,8 @@ func TestRefreshFamily_无线索不回退名序(t *testing.T) {
 	sess := twoFamilySession(t)
 	r := newRefreshRouter(sess)
 
-	_, mainRT, _ := sess.IssuePair(1, "u1", service.HrwaiRole)
-	_, recRT, _ := sess.IssuePair(9, "hr001", service.RecruiterRole)
+	_, mainRT, _ := sess.IssuePair(1, "u1", core.HrwaiRole)
+	_, recRT, _ := sess.IssuePair(9, "hr001", core.RecruiterRole)
 
 	// 不带 Authorization、不带任何 access cookie，只带两枚 refresh；请求体也没有凭证。
 	w := doFamily(t, r, "/api/auth/refresh", familyHTTP{mainRT: mainRT, recRT: recRT})
@@ -182,7 +182,7 @@ func TestRefreshFamily_无线索不回退名序(t *testing.T) {
 func TestRefreshFamily_单族行为不变(t *testing.T) {
 	sess := twoFamilySession(t)
 	r := newRefreshRouter(sess)
-	mainAcc, mainRT, _ := sess.IssuePair(1, "u1", service.HrwaiRole)
+	mainAcc, mainRT, _ := sess.IssuePair(1, "u1", core.HrwaiRole)
 
 	w := doFamily(t, r, "/api/auth/refresh", familyHTTP{header: mainAcc, mainRT: mainRT})
 	if w.Code != http.StatusOK {
@@ -214,8 +214,8 @@ func TestRefreshFamily_与鉴权面同源(t *testing.T) {
 		c.String(http.StatusOK, "%v", role)
 	})
 
-	mainAcc, mainRT, _ := sess.IssuePair(1, "u1", service.HrwaiRole)
-	recAcc, recRT, _ := sess.IssuePair(9, "hr001", service.RecruiterRole)
+	mainAcc, mainRT, _ := sess.IssuePair(1, "u1", core.HrwaiRole)
+	recAcc, recRT, _ := sess.IssuePair(9, "hr001", core.RecruiterRole)
 
 	preq, _ := http.NewRequest(http.MethodGet, "/p", nil)
 	preq.AddCookie(&http.Cookie{Name: "hrwai_token", Value: mainAcc})
@@ -223,7 +223,7 @@ func TestRefreshFamily_与鉴权面同源(t *testing.T) {
 	pw := httptest.NewRecorder()
 	probe.ServeHTTP(pw, preq)
 	authed := pw.Body.String()
-	if !strings.Contains(authed, service.HrwaiRole) {
+	if !strings.Contains(authed, core.HrwaiRole) {
 		t.Fatalf("夹具前提不成立：鉴权面对两枚 access cookie 并存认的不是学员，实得 %q", authed)
 	}
 
@@ -248,8 +248,8 @@ func TestRefreshFamily_登出同口径(t *testing.T) {
 	sess := twoFamilySession(t)
 	r := newRefreshRouter(sess)
 
-	recAcc, recRT, _ := sess.IssuePair(9, "hr001", service.RecruiterRole)
-	_, mainRT, _ := sess.IssuePair(1, "u1", service.HrwaiRole)
+	recAcc, recRT, _ := sess.IssuePair(9, "hr001", core.RecruiterRole)
+	_, mainRT, _ := sess.IssuePair(1, "u1", core.HrwaiRole)
 
 	w := doFamily(t, r, "/api/auth/logout", familyHTTP{header: recAcc, mainRT: mainRT, recRT: recRT})
 	if w.Code != http.StatusOK {

@@ -1,8 +1,11 @@
 # 域包迁移手册
 
-> 读者：把后端一个功能域从 `internal/service` + `internal/api` 搬进 `internal/<域>/` 的实施者。
+> 读者：把后端一个功能域从 `internal/core`（更名前为 `internal/service`）+ `internal/api` 搬进 `internal/<域>/` 的实施者。
 > 每次搬家前读第 2、3 节；搬完逐条走第 9 节的验收清单。
 > 定案：[ADR-0070](../adr/ADR-0070-域包形态与目录即射程的收口.md)。样板：faq（2026-10-01，P1 试点批）、notification（同日，试点批第二域 —— 跨域词汇、事件构造器与依赖倒置的完整样本，见第 7.1 与第 11 节）。
+>
+> **#1445 P3（2026-10-03）更名**：共享助手层由 `internal/service` 更名为 `internal/core`（包名 `core`）。第 1–9 节的现状描述已随之更新；§10.1 与 §11 里的波次记录保留当时的 `internal/service` 字样（历史记账），当前路径一律在 `backend/internal/core/`。
+> **#1445 P3-B（同日）射程收口**：响应面清单不再手抄 —— `testutil.ResponsePackages(t)` 现读 `internal/apitypes/domains.go` 的域声明表现算域包目录，只把非域包的静态面登记在 `testutil.responseStaticPackages`。新增一个域（声明表 + `internal/<域>/` 目录）即自动进射程；下面第 3 节表里「域包要往 `ResponsePackages()` 里加一行」的说法已作废，改为「域登记进声明表」。
 
 ## 1. 目标形态
 
@@ -17,7 +20,7 @@
 
 - **包名 = 域名**，域名取自 `backend/internal/apitypes/domains.go` 的域声明表（30 个域）。那张表同时是 swagger definitions 前缀与前端生成物的域边界，别另立一份域清单。
 - **分层靠文件名约定，不靠子目录**：先例是 `scripts/check-catalog-sort.mjs` 的 `GUARDED_PATH_SEGMENT`（按文件名判定）。子目录 = 多包 = 导出面被迫扩大，且会让「目录即射程」的守卫再次失明。
-- 域包允许依赖：`internal/model`、`internal/service`（共享助手，P3 收进 `internal/core`）、`internal/timefmt`（时间格式化叶子包）、`internal/security`、`internal/middleware`、`pkg/httpx`、`pkg/response`、第三方。
+- 域包允许依赖：`internal/model`、`internal/core`（共享助手，#1445 P3 由 `internal/service` 更名）、`internal/timefmt`（时间格式化叶子包）、`internal/security`、`internal/middleware`、`pkg/httpx`、`pkg/response`、第三方。
 - 域包**不得** import `internal/api`（装配根在那里，反向依赖成环），也不得 import gin（HTTP 形状归 `handler.go`，见第 3 节）。
 - **跨域共享的词汇贴着实体放 `internal/model`**（notification 批的裁决）：两个域都要读的常量塞进任一个域包，就会让两个域互相 import ⇒ 贴着实体定义。`ProfileFieldNickname` / `ProfileStatusPending` 等因此从 `internal/service/profile_review_service.go` 挪到 `internal/model/account.go`（紧挨 `ProfileChangeRequest`）。**只被一个域读**的常量仍留在域包。
 - 不新建 `test/`、`tests/` 目录（`internal/layers` 的同居规矩）。
@@ -28,7 +31,7 @@
 2. **共享件先出包**（否则会造出没有消费者的导出 API；notification 批把五种情形都走了一遍）：
    - 域实现用到的**同包非导出助手**，先在该包里导出、调用点机械改名、原包不退场（faq 批：`BeijingNow`（`internal/service/auth_service.go:966`）、`IsDuplicateError`（`internal/service/forum_counter.go:67`），119 处 / 37 文件）。**P2 波 0a 已把这两者分别收编进叶子包 `internal/clock`（`clock.Now` / `clock.DayStart` / `clock.DayKey`）与 `internal/dberr`（`dberr.IsDuplicateError`），原一行委托与包装函数全部删除** —— 「原包不退场」只是过渡态，找到稳定落点后要收编干净，别让委托长期挂着；
    - **解析类**助手升级到 `pkg/httpx`（先例：`httpx.QueryIntPtr`，票 #1452；notification 批新增 `httpx.QueryIntDefault` —— 域包 import 不到 `internal/api` 的私有 `atoiDefault`，各域再抄一份就是第二处实现）；
-   - **无状态纯函数**进叶子包：`internal/timefmt`（`FormatISO` / `FormatTimePtr`，原 `internal/service/helpers.go` 的私有函数）—— 域包与 `internal/service` 都取它，比塞回服务层轻（P3 收 `internal/core` 时再议去留）；
+   - **无状态纯函数**进叶子包：`internal/timefmt`（`FormatISO` / `FormatTimePtr`，原 `internal/service/helpers.go` 的私有函数）—— 域包与 `internal/core` 都取它，比塞回服务层轻（#1445 P3 由 `internal/service` 更名；本批去留仍待议）；
    - **数值 / 指针助手**进叶子包：`internal/coerce`（`ToFloat` / `ClampFloat` / `ParseFloat` / `ParseInt` / `IntPtr` / `FloatPtr`，原 `internal/service/helpers.go`）—— 只 import `strconv`；同批删掉两枚只转发标准库的助手（`withTimeout` → `context.WithTimeout`、`containsString` → `slices.Contains`）与 `internal/service/json_helpers.go`（8 行纯转发 ⇒ 调用点直接 `encoding/json`）（P2 波 0b）；
    - **吃 `*gorm.DB` 的分区谓词**也能进叶子包：`internal/scope`（`RecordPartitionOf` / `PartitionBucket` / `EntityOwnedBy` 三谓词 + 三枚导出片段 `RecordPartitionClause` / `PartitionBucketClause` / `EntityOwnedByClause`，原 `internal/service/credential_scope.go`，11 个 service 文件改限定名）—— 只 import `gorm.io/gorm`；判别句是「**它读参数还是读服务状态**」，不是「它碰没碰 DB」（P2 波 0b；**搬它必须同步静态扫描锁的白名单**，见第 3 节）；
    - **一族文件存取件整包搬**：`internal/filestore`（`FileStore` 的上传/删除/列表/读取 + 类型表 `fileTypeTable` + 附件归属判定 + 悬空回收单点，原 `internal/service/{file_store,attachment,file_type_table,image_cleanup_helpers,orphan_sweep}.go`，只 import `internal/storage` / zap / stdlib）。三条子规矩：**跨文件被用的私有闸门件升导出**（`FileExtension` / `FileContentType` / `AllowedFile` / `ValidateFileSize`，大小表不裸导出、改出纯函数 `MaxFileSize(filename)`）；**伸手进结构体私有字段的调用点换成导出方法**（新增 `FileStore.Exists(ctx, url)` + 哨兵 `ErrStorageUnconfigured`，调用方保住「没配存储 ⇒ 本域 500 哨兵，不读成文件不存在」）；**只转发标准库的私有助手保持私有**（`base64Encode`/`base64Decode` ⇒ 调用点直接用 `encoding/base64`）。**生成链里有它的硬编码路径**，见第 3 节（P2 波 0c）；
@@ -36,7 +39,7 @@
    - **跨域的读面单点进叶子包**：`internal/entitlement`（`CourseSKU` / `RealPaperSKU` / `Holds(db, userID, sku, refID)`，原 `internal/service/entitlement_read.go` 的 `CourseSKU` / 私有 `holdsEntitlement` + `points_service.go:796` 的 `RealPaperSKU`）—— 只 import `gorm.io/gorm` / `internal/model`；它是「这一份是否被这个人兑换过」与 sku 词汇表的唯一出处（ADR-0062 决策 3），points 域先搬 ⇒ 载体不能留在任一域包里。同批把两枚**跨域哨兵**贴实体进 `internal/model`：`ErrCourseNotFound`（`internal/model/training.go`）、`ErrHrwaiUserNotFound`（`internal/model/account.go`）——**model 里第一次出现包级哨兵**，依据是 ADR-0064 的跨域文案锁（同一 wire 文案不得由两个域的哨兵发出）而两者都被 points 域与 course / admin / 讲师 / 学员域同时引用（P2 波 1b-0）；
    - **别域的事实常量**改成**调用方传参**：站内信事件构造器收 `reason string`（`NewContributionApprovedEvent(userID int, title string, contributionID int64, points int, reason string)` 等 7 个）—— 积分流水原因是积分域的事实，通知域只把它记进 payload，于是不必 import 别域或服务层的常量；
    - **跨域共享词汇**贴着实体放 `internal/model`（第 1 节）。
-3. **搬服务**：`git mv backend/internal/service/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（先例 `service.BeijingNow`，P2 波 0a 收编后写 `clock.Now()`）。DTO、哨兵、校验函数名原样不动。
+3. **搬服务**：`git mv backend/internal/core/<域>_service.go backend/internal/<域>/service.go`；改 `package`；`XxxService`→`Service`、`NewXxxService`→`NewService`；共享助手写限定名（先例 `service.BeijingNow`，P2 波 0a 收编后写 `clock.Now()`）。DTO、哨兵、校验函数名原样不动。
 4. **搬 HTTP 出口**：`git mv backend/internal/api/<域>.go backend/internal/<域>/handler.go`；改 `package`；`XxxHandler`→`handler`、`NewXxxHandler`→`newHandler`、`RegisterXxxRoutes(rg, rd RouterDeps, svc)`→`RegisterRoutes(rg *gin.RouterGroup, <只收它真正需要的依赖>, svc *Service)`。faq 只用了 `rd.Session`，于是签名就是 `RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service)`，由 `routes_registry.go` 的闭包注入 `rd.Session`。
    - **不要把 `RouterDeps` 搬进域包**：它住在 `internal/api/deps.go`。
    - swagger 注解的 `data=service.X` 改成 `data=<域>.X`。
@@ -45,22 +48,22 @@
 5. **装配三处**：`internal/api/deps.go` 的字段类型（`FaqSvc *faq.Service`）、`internal/api/providers_*.go` 的构造（`d.FaqSvc = faq.NewService(c.db, c.logger)`，新增 import）、`internal/api/routes_registry.go` 的一行（`faq.RegisterRoutes(api, rd.Session, deps.FaqSvc)`）。
 6. **域声明表**：`internal/apitypes/domains.go` 该域 `Roots` 的 `service.*` 改 `<域>.*`。
 7. **证据表随域搬**：见第 6 节。
-8. **同步锁与清单**：见第 3 节（尤其 `ResponsePackages()` 与两把 fact 计数锁）。
+8. **同步锁与清单**：见第 3 节（尤其域声明表、`testutil.responseStaticPackages` 与两把 fact 计数锁）。
 9. **重生成与验证**：见第 5 节。顺序是硬的：gofmt/vet → `make swagger` → `go run ./cmd/gen-apitypes` → `go test ./...` → 前端检查。
 
 ## 3. 必须同步的锁与清单
 
 | 文件 | 改什么 | 不改的后果 |
 | --- | --- | --- |
-| `backend/internal/testutil/codescan.go` | `ResponsePackages()` 加一项 `{"internal/<域>","<域>"}` | fact 两把锁不扫新域包（**漏扫**，静默）；`HTTPSurface` 无需改（文件名规则自动纳入） |
+| `backend/internal/testutil/codescan.go` | **域包不必登记**：#1445 P3-B 起 `ResponsePackages(t)` 现读 `internal/apitypes/domains.go` 的域声明表现算域包目录（域里有同名 package 的非测试 `.go` 才收）。只有**非域包的静态面**要登记在 `responseStaticPackages`（现状 7 条：`internal/api`·api、`internal/core`·core、`internal/model`·model、`internal/valuation/model`·model、`internal/valuation/repository`·repository、`internal/audit`·audit、`pkg/response`·response；`audit` 已出包但不进 codegen，声明表里没有它） | 静态面漏一条 ⇒ 那个包静默不进射程（`len(out) < 30` 的防空转 Fatal 是最后一道网）；域包不登记也自动纳入，`HTTPSurface` 无需改（文件名规则自动纳入） |
 | `backend/internal/api/consumption_fact_lock_test.go`、`backend/internal/apitypes/fact_reachability_lock_test.go` | 各自的 `n != <计数>` 与 Fatal 文案里的数字（迁一域 +1；faq 批 6→7） | 红——这是刻意的：数清单本身就是断言（ADR-0065 批⑤ 的规矩） |
 | `backend/internal/apitypes/nullability_lock_test.go` | `nonNilEvidenceSources` 加 `{"internal/<域>","nonnilOutlets"}`；`sweptDirs` 加 `"<域>": "../<域>"` | 域包里声明的 `nonnil` 找不到证据（判据 5 零容忍）／旧键变幽灵键。**漏加 `sweptDirs` 的症状会骗人**：报的是「证据表里的 `notification.X.items` 并不是一条『射程内声明 nonnil』的字段」，看起来像字段改名，其实是被扫目录没进去 |
 | `backend/internal/api/authz_coverage_lock_test.go` | `allow` 表**键是裸函数名**（12 条）；域包把注册函数改名 `RegisterRoutes` 后裸名会**静默失配** ⇒ 键改限定名（`notification.RegisterRoutes`） | 红（该表只在被点名函数上生效，改错名字即从判据里消失） |
 | `backend/internal/api/path_parse_point_drift_lock_test.go` | `queryHelpers` / `allowedPathParseFuncs` 等按名字圈射程的清单（#1452 已允许限定名 `httpx.QueryIntPtr`）；**在 `pkg/httpx` 新增解析出口**（如 notification 批的 `QueryIntDefault`）要同时加进 `queryParseHelperNames` —— 那张表断言「宿主 `pkg/httpx` 里恰好这么多枚」 | 域包自带解析助手时判据看不见（**静默**）：解析类一律走 `pkg/httpx` |
 | `scripts/check-render-error-face.mjs` | 无需改：`GUARDED_FILE_PREFIXES=['handler']` + `GUARDED_FILE_ROOT='backend/internal/'` 自动纳入域包 `handler*.go` | 若 HTTP 出口文件**不以 handler 开头**（如 `admin.go`），判据看不见（**静默**）⇒ 命名必须带 handler |
-| `backend/internal/layers/layer_guard.go` | gin 面**无需改**（自动纳入域包 `handler*.go`）；但**依赖方向的三条硬规矩**要过一眼：① `pkg/httpx` 不 import `internal/...`；② `internal/api` 只许 `cmd/...` 依赖；③ **`internal/middleware` 不得 import `internal/service`**（notification 批新增，见第 7.1 节） | 域包 `handler.go` 一引 middleware，三角 `service → 域包 → middleware` 就成环：`go build` 直接报 `import cycle not allowed`（不是红一条判据） |
-| `backend/internal/service/credential_scope_guard_test.go` | 白名单常量 `implementation` 改指实现处（波 0b 起 `internal/scope/scope.go`）、负向探针与失败文案同步；实现处每族谓词要留足命中（`implementationHits < 3` 判「扫描规则失灵」） | 锁的射程 = 整条 `internal/service` 生产代码：实现搬走后不指新家，判据会对旧路径零命中而报「规则失灵」—— **会红，但文案说的是扫描器坏，容易误诊** |
-| `backend/internal/service/nonnil_outlets_*_test.go` | 属于该域的键与 outlet 函数**删掉**（不是复制），头部注释里的域名列表同步 | `testutil.AssertNonNilOutlets` 报「同名键出现在两张表」 |
+| `backend/internal/layers/layer_guard.go` | gin 面**无需改**（自动纳入域包 `handler*.go`）；但**依赖方向的三条硬规矩**要过一眼：① `pkg/httpx` 不 import `internal/...`；② `internal/api` 只许 `cmd/...` 依赖；③ **`internal/middleware` 不得 import `internal/core`**（notification 批新增，见第 7.1 节） | 域包 `handler.go` 一引 middleware，三角 `service → 域包 → middleware` 就成环：`go build` 直接报 `import cycle not allowed`（不是红一条判据） |
+| `backend/internal/core/credential_scope_guard_test.go` | 白名单常量 `implementation` 改指实现处（波 0b 起 `internal/scope/scope.go`）、负向探针与失败文案同步；实现处每族谓词要留足命中（`implementationHits < 3` 判「扫描规则失灵」） | 锁的射程 = 整条 `internal/core` 生产代码：实现搬走后不指新家，判据会对旧路径零命中而报「规则失灵」—— **会红，但文案说的是扫描器坏，容易误诊** |
+| `backend/internal/core/nonnil_outlets_*_test.go` | 属于该域的键与 outlet 函数**删掉**（不是复制），头部注释里的域名列表同步 | `testutil.AssertNonNilOutlets` 报「同名键出现在两张表」 |
 | `scripts/check-catalog-sort.mjs` 的 5 条 `declaredIn`、`backend/internal/deploy/nginx_delivery_gen.go` 的硬编码路径（:154 生成注释文案、:231 `filepath.Join(root, "backend", "internal", "<包>", "file_type_table.go")`）与 AST 判据（按变量名 `fileTypeTable` 找表 ⇒ 变量名不许改） | 只在被点名的文件真搬家时改 | 缺文件即 Fatal（不静默），会在 CI 点名 |
 | `frontend/nginx-host.conf`（生成物，两处提到路径：:15 手写表头 + :22 生成区） | 搬 `file_type_table.go` 后 `cd backend && go run ./cmd/gen-deploy -only nginx` 重生成（只动生成区那行）；**:15 在手写区，生成器不管**，要手改 | 两把锁 `TestNginxDeliveryMapInSync`（`codegen.AssertInSync`）与 `TestNginxDeliveryMapCoversFileTypeTable` 直接红（不静默）|
 | `training-app/叉车维修培训学员端跨端应用/utils/*Contract.test.js` 里**硬编码的后端文件路径**（`resourcesContract.test.js:347` 直读 `backend/internal/api/material.go` 做幻影路由对照） | 搬 handler / service 时全仓 grep 这类路径（**含 `training-app/**`**；`frontend/` 与 `scripts/` 目前没有直读后端源码的写法），改指新家 | 该 ③ 门套件读不到文件即 fail-closed 判红（不静默），但只在 CI `mobile-test` 里红 |
@@ -74,7 +77,7 @@
 
 **契约测试留在 `backend/internal/api`**，不随域搬。理由：它走 `newContractDeps` + `NewRouter` 的全量装配链，而 `backend/internal/api/router_test_helper_test.go` 已明文反对另起测试装配链（「装配链分叉 = 测试装配与生产装配各测各的」）。faq 批实测：`internal/api/faq_contract_test.go` 只引用包内脚手架与 `NewRouter`，不引用任何 `service.Faq*` 类型 ⇒ 迁移后只改一处注释。
 
-**域内单元测试与证据表随域搬**（`service.go` 的单测、`nonnilOutlets*` 表）。域包测试**不得**引用 `internal/service` 的测试脚手架——Go 的 in-package test 会成环；共享 runner 要提成 `internal/testutil` 的普通 `.go`（先例：`testutil/nonnil.go`、`testutil/codescan.go`）。
+**域内单元测试与证据表随域搬**（`service.go` 的单测、`nonnilOutlets*` 表）。域包测试**不得**引用 `internal/core` 的测试脚手架——Go 的 in-package test 会成环；共享 runner 要提成 `internal/testutil` 的普通 `.go`（先例：`testutil/nonnil.go`、`testutil/codescan.go`）。
 
 ## 5. 响应 DTO、swagger 键与前端生成物
 
@@ -111,20 +114,20 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 
 1. **注入**：`RegisterRoutes` 的参数（faq：`session *security.Session`），由装配根闭包注入。
 2. **升级到 `pkg/httpx`**：HTTP 形状与请求解析（`ParseError` / `BadRequest` / `PathInt` / `PathInt64` / `QueryIntPtr` / `QueryIntDefault` / `QueryIDPtr` / `PositiveID` / `Endpoint` / 错误状态表）。`pkg/httpx` 不得 import 任何 `internal/...`（`internal/layers` 判据 ①）。解析类助手**一律**走这条（`internal/api/helpers.go` 最后三枚包私有助手已随波 0a 尾款搬完并删除该文件）；`PositiveID` 只吃字符串、不带 HTTP 语义，专给「已取到原文、要自己分流缺失与非法」的调用方。
-3. **留在 `internal/service` 并导出**：一时找不到更轻落点的 DB / 业务助手 —— 但要先试完前两条与「叶子包」。**三类曾经留在这里的共享件已在 P1 / P2 波 0a 各自归位**：时钟（`clock.Now` / `clock.DayStart` / `clock.DayKey` → `internal/clock`）、唯一冲突谓词（`dberr.IsDuplicateError` → `internal/dberr`）、时间格式化（`timefmt.FormatISO` / `timefmt.FormatTimePtr` → `internal/timefmt`，见第 2 节）。三者的共性是**无状态、不碰 DB、只吃参数**，所以本出口只该剩「真的要 `*gorm.DB` 或服务内部状态」的件，P3 随 `internal/core` 收编。数值 / 指针助手与 `json_helpers.go` 这类的落点见第 10.1 节（波 0b）。波 0b 又证明**吃 `*gorm.DB` 不构成「必须留在服务层」的理由**：`internal/scope` 的三族谓词只吃 `*gorm.DB`、列名与证件 ID 三个参数，不碰任何服务实例状态 ⇒ 同样落进叶子包。判别句是「**它读参数还是读服务状态**」，不是「它碰没碰 DB」。
+3. **留在 `internal/core` 并导出**（#1445 P3 由 `internal/service` 更名）：一时找不到更轻落点的 DB / 业务助手 —— 但要先试完前两条与「叶子包」。**三类曾经留在这里的共享件已在 P1 / P2 波 0a 各自归位**：时钟（`clock.Now` / `clock.DayStart` / `clock.DayKey` → `internal/clock`）、唯一冲突谓词（`dberr.IsDuplicateError` → `internal/dberr`）、时间格式化（`timefmt.FormatISO` / `timefmt.FormatTimePtr` → `internal/timefmt`，见第 2 节）。三者的共性是**无状态、不碰 DB、只吃参数**，所以本出口只该剩「真的要 `*gorm.DB` 或服务内部状态」的件，现随 `internal/core` 留驻。数值 / 指针助手与 `json_helpers.go` 这类的落点见第 10.1 节（波 0b）。波 0b 又证明**吃 `*gorm.DB` 不构成「必须留在服务层」的理由**：`internal/scope` 的三族谓词只吃 `*gorm.DB`、列名与证件 ID 三个参数，不碰任何服务实例状态 ⇒ 同样落进叶子包。判别句是「**它读参数还是读服务状态**」，不是「它碰没碰 DB」。
 
 ### 7.1 反向依赖（下游要业务层类型）：消费方接口反转
 
 上面三条讲的是「域包要别处的东西」。反过来 —— **HTTP 基建要业务层类型**时，绝不能在基建包里 import 业务包，否则三角成立（notification 批实测）：
 
-    cmd/*  →  internal/logger  →  internal/middleware  →  internal/service  →  internal/notification  →  internal/middleware
+    cmd/*  →  internal/logger  →  internal/middleware  →  internal/core  →  internal/notification  →  internal/middleware
                                                                                     ↑ import cycle not allowed
 
 做法是**消费方定义接口**（先例：`internal/middleware/audit.go`）：
 
 - `type AuditWriter interface { Write(record model.AuditLog) error; DescribeAction(method, path string) string }`，`AuditLog(svc AuditWriter, logger *zap.Logger)` —— 基建只认自己需要的那两个方法，实现仍是单点 `*audit.Service`（`internal/audit/service.go` 原样满足），由装配点注入。
-- **typed nil 陷阱**：`(*service.AuditService)(nil)` 装进接口**不等于** nil 接口，`svc == nil` 拦不住 ⇒ 判空上移到装配点（`internal/api/router.go:70-75`、`internal/valuation/handler/router.go:151` 都写成 `if auditSvc != nil { ... }`），基建里只留「真传进来的 nil 接口」兜底。
-- 这条因此被钉成方向规矩 ③（`internal/layers/layer_guard.go` 的 `directionViolations`）：`internal/middleware` 不得 import `internal/service`；合成违规自测在 `layer_guard_test.go`。
+- **typed nil 陷阱**：`(*audit.Service)(nil)` 装进接口**不等于** nil 接口，`svc == nil` 拦不住 ⇒ 判空上移到装配点（`internal/api/router.go:70-75`、`internal/valuation/handler/router.go:151` 都写成 `if auditSvc != nil { ... }`），基建里只留「真传进来的 nil 接口」兜底。
+- 这条因此被钉成方向规矩 ③（`internal/layers/layer_guard.go` 的 `directionViolations`）：`internal/middleware` 不得 import `internal/core`；合成违规自测在 `layer_guard_test.go`。
 
 **外部测试包例外**：`package foo_test` 住在被测包之外，两条边都能拿（import cycle 只发生在同一构建里）⇒ 它**不进依赖图**：`layer_guard.go` 的 `importEdges` 见到包名以 `_test` 结尾就跳过。这条例外是必要的 —— `internal/middleware/audit_ip_test.go` 就得拿**真实**的 `service.AuditService` 落库举证（本次成为全仓唯一一处外部测试包）。内部测试包（`package foo`）仍判：反向 import 在 test 构建里就是 import cycle。
 
@@ -139,9 +142,9 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 ## 9. 单域验收清单
 
 - [ ] `gofmt -l .` 空；`go build ./...`；`go vet ./...`
-- [ ] `go test ./internal/<域>/... ./internal/layers/... ./internal/apitypes/... ./internal/service/... ./internal/api/...`
+- [ ] `go test ./internal/<域>/... ./internal/layers/... ./internal/apitypes/... ./internal/core/... ./internal/api/...`
 - [ ] `node scripts/check-render-error-face.mjs --all`；涉目录读面时另跑 `node scripts/check-catalog-sort.mjs --all`
-- [ ] `ResponsePackages()` 已加域包；两把 fact 计数锁与文案已同步
+- [ ] 该域已在 `internal/apitypes/domains.go` 声明（域包自动进 `ResponsePackages`）；两把 fact 计数锁与文案已同步（多一域即 35→36，红是刻意的签字位）
 - [ ] `nullability_lock_test.go` 的 `nonNilEvidenceSources` / `sweptDirs` 已加域包；域内证据表键已换包前缀；旧表里的键已删
 - [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
 - [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
@@ -159,7 +162,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 
 ### 10.1 共享叶子与跨文件共享件的落点（P2 判据：出边为零，或单向无环）
 
-域包能不能单独搬，看出边 —— 域实现引用的每个残留符号都会逼它 import `internal/service`（只要 service 里还有一处引用该域，就是 import cycle）。**判据（3a 修订）**：出边为零，**或**出边单向无环（`internal/service` 对该域的引用已清零、不再回头），并把这批出边逐枚写进 PR 正文与 ADR —— forum（2b-2）是第一个实例（1 枚 `ForumCounter`），auth（3a）是第二个（20 枚，见下表）。入边只决定 diff 大小与合批。拆波前先扫一遍**跨文件私有引用**（同包内 A 文件用 B 文件的私有符号；共享扫描器的正式出处是 `internal/testutil/codescan.go`，别在调用点手抄判据）。
+域包能不能单独搬，看出边 —— 域实现引用的每个残留符号都会逼它 import `internal/core`（只要 service 里还有一处引用该域，就是 import cycle）。**判据（3a 修订）**：出边为零，**或**出边单向无环（`internal/core` 对该域的引用已清零、不再回头），并把这批出边逐枚写进 PR 正文与 ADR —— forum（2b-2）是第一个实例（1 枚 `ForumCounter`），auth（3a）是第二个（20 枚，见下表）。入边只决定 diff 大小与合批。拆波前先扫一遍**跨文件私有引用**（同包内 A 文件用 B 文件的私有符号；共享扫描器的正式出处是 `internal/testutil/codescan.go`，别在调用点手抄判据）。
 
 | 件 | 落点 | 状态与说明 |
 | --- | --- | --- |
