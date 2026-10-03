@@ -36,8 +36,8 @@ func TestAdminDomainEnvelopeDTOBytes(t *testing.T) {
 		{
 			name: "HrwaiUserCreatedDTO（新增 HRWAI 用户 201：password 不入响应，uid 走 FormatUID）",
 			legacy: map[string]any{
-				// service.FormatUID(user.UID) 的十进制展开（uid.go:36 就是 strconv.FormatInt(uid, 10)）：
-				// 域包测试不 import internal/service —— 留驻侧的单点已在留驻侧自己的用例里锁过。
+				// core.FormatUID(user.UID) 的十进制展开（uid.go:36 就是 strconv.FormatInt(uid, 10)）：
+				// 域包测试不 import internal/core —— 留驻侧的单点已在留驻侧自己的用例里锁过。
 				"id": user.ID, "uid": "20260012", "account": user.Account,
 				"username": user.Username, "phone": user.Phone,
 			},

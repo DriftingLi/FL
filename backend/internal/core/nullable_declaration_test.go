@@ -8,7 +8,7 @@
 // 与 nonnil_declaration_test.go 是对称的两半：那边断言「声明 nonnil 的出口发 `[]`」，
 // 这边断言「声明 nullable 的出口发 `null`」。两张表都只能是**跑过**的，
 // apitypes 那把锁按本文件的表键核账（见 nullability_lock_test.go 判据 4）。
-package service
+package core
 
 import (
 	"strings"

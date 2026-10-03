@@ -16,9 +16,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -43,7 +43,7 @@ func newWxSvc(t *testing.T, openID, unionID string, errCode int, lastQuery *url.
 	t.Cleanup(ts.Close)
 
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), service.NewForumCounter(),
+	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), core.NewForumCounter(),
 		"admin123", "tutor123", "student123", zap.NewNop())
 	svc := NewWechatService(config.WechatAppConfig{AppID: "wx-appid", AppSecret: "wx-secret"}, db, authSvc, zap.NewNop())
 	svc.apiBase = ts.URL
@@ -61,7 +61,7 @@ func TestWechatMiniProgramLogin_MissingCode(t *testing.T) {
 
 func TestWechatMiniProgramLogin_NotConfigured(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), service.NewForumCounter(),
+	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), core.NewForumCounter(),
 		"admin123", "tutor123", "student123", zap.NewNop())
 	svc := NewWechatService(config.WechatAppConfig{}, db, authSvc, zap.NewNop())
 	_, err := svc.MiniProgramLogin(context.Background(), "code")
@@ -92,8 +92,8 @@ func TestWechatMiniProgramLogin_NewUser(t *testing.T) {
 	if res.Token == "" || res.RefreshToken == "" {
 		t.Fatal("应签发双令牌（access + refresh）")
 	}
-	if res.Role != service.HrwaiRole {
-		t.Fatalf("角色应为 %s, got %s", service.HrwaiRole, res.Role)
+	if res.Role != core.HrwaiRole {
+		t.Fatalf("角色应为 %s, got %s", core.HrwaiRole, res.Role)
 	}
 	if res.Name != res.Username {
 		t.Fatalf("平铺契约 name 取 username: name=%s username=%s", res.Name, res.Username)

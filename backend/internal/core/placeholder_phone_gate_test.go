@@ -1,7 +1,7 @@
 // Package service 业务服务层测试：phone 占位 sentinel 单点（PlaceholderPhonePrefix）与静态扫描门禁。
 // 仿 ADR-0013 §2 dict 缓存契约门禁（repository/dict_cache_keys_test.go）：用静态测试把
 // 散落的裸 "email_" 字面量挡在包外，强制所有 email_ 占位判定收敛到 IsPlaceholderPhone。
-package service
+package core
 
 import (
 	"strings"
@@ -58,8 +58,8 @@ func TestNoBareEmailPlaceholderLiteral(t *testing.T) {
 	// 射程 = 生产代码全域 + 本包测试（原先是「本包目录」）：拆包后新的域包自动进射程。
 	selfDir := testutil.SelfDir(t)
 	exempt := map[string]bool{
-		"internal/service/placeholder_phone.go":           true, // 常量定义点
-		"internal/service/placeholder_phone_gate_test.go": true, // 测试自身
+		"internal/core/placeholder_phone.go":           true, // 常量定义点
+		"internal/core/placeholder_phone_gate_test.go": true, // 测试自身
 	}
 	scanned := 0
 	for _, f := range testutil.ScanBackendCode(t) {

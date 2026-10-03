@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/contribution"
+	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
@@ -39,7 +40,6 @@ import (
 	"forklift-training/internal/resume"
 	"forklift-training/internal/search"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
@@ -81,7 +81,7 @@ type Deps struct {
 	ReviewSvc       *auth.ProfileReviewService
 	AuditSvc        *audit.Service
 	AIConfigSvc     *aiassistant.ConfigService
-	ContentGenSvc   *service.ContentGenerateService
+	ContentGenSvc   *core.ContentGenerateService
 	ExportStore     vexport.ExportStore
 
 	CourseSvc            *course.Service
@@ -114,7 +114,7 @@ type Deps struct {
 	JobCardSvc           *resume.Service
 	ResumePDFRenderer    *resume.PDFRenderer
 	RecruitSvc           *recruit.Service
-	ContactSvc           *service.ContactService
+	ContactSvc           *core.ContactService
 	JobPostingSvc        *job.Service
 	JobApplicationSvc    *job.ApplicationService
 	JobReportSvc         *job.ReportService
@@ -135,28 +135,28 @@ type Deps struct {
 // 于是「全进程只有一份的东西」与「某域自己的东西」在文件层面就分得开。
 // exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
 func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore vexport.ExportStore) *Deps {
-	core := provideCore(cfg, db, st, logger, exportStore)
+	shared := provideCore(cfg, db, st, logger, exportStore)
 
 	d := &Deps{
 		Cfg:     cfg,
 		DB:      db,
 		Storage: st,
 		Logger:  logger,
-		Session: core.sess,
+		Session: shared.sess,
 		// 横切单例在 Deps 上的投影（路由装配与蓝图注册直接读这几个字段）
-		FileSvc:         core.fileSvc,
-		SlideRenderer:   core.slideRenderer,
-		NotificationSvc: core.notifSvc,
+		FileSvc:         shared.fileSvc,
+		SlideRenderer:   shared.slideRenderer,
+		NotificationSvc: shared.notifSvc,
 	}
 
 	// 各域装配：一行一域，顺序即依赖序（域之间只经 core 的共享单例交互）。
-	provideAuth(core, d)
-	provideAI(core, d)
-	provideForum(core, d)
-	provideTraining(core, d)
-	provideExam(core, d)
-	provideJobs(core, d)
-	provideContribution(core, d)
+	provideAuth(shared, d)
+	provideAI(shared, d)
+	provideForum(shared, d)
+	provideTraining(shared, d)
+	provideExam(shared, d)
+	provideJobs(shared, d)
+	provideContribution(shared, d)
 
 	// 守护登记（ADR-0061 §1）：加守护 = 往这张表加一条，不需要在 cmd/server 里再手写一次 start。
 	// 闭包读 d 上的 service 字段（此刻已构造完），故登记排在各域装配之后。
@@ -183,11 +183,11 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 	}
 
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
-	if d.JobApplicationSvc != nil && core.mailSender != nil {
-		d.JobApplicationSvc.SetMailer(core.mailSender)
+	if d.JobApplicationSvc != nil && shared.mailSender != nil {
+		d.JobApplicationSvc.SetMailer(shared.mailSender)
 	}
-	if d.JobReportSvc != nil && core.mailSender != nil {
-		d.JobReportSvc.SetMailer(core.mailSender)
+	if d.JobReportSvc != nil && shared.mailSender != nil {
+		d.JobReportSvc.SetMailer(shared.mailSender)
 	}
 	return d
 }

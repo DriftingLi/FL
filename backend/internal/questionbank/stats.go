@@ -5,7 +5,7 @@ import (
 )
 
 // 统计聚合（Ticket #226）：一次 GROUP BY + 过滤描述符，产出 typed StatsDTO。
-// 题库侧只留 QuestionBankStatsDTO / GroupByCount；练习与错题两套仍留在 internal/service
+// 题库侧只留 QuestionBankStatsDTO / GroupByCount；练习与错题两套仍留在 internal/core
 // （3c-2 随练习域搬 PracticeStatsDTO / PracticeTypeStat / GroupByCountWithFilter）。
 
 // QuestionBankStatsDTO 题库统计（旧 question_service GetStats map 输出）。

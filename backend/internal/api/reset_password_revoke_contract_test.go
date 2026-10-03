@@ -22,9 +22,9 @@ import (
 
 	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -43,12 +43,12 @@ func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Eng
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, bl)
-	authSvc := auth.NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
 
-	hashed, err := service.HashPassword(resetOldPassword)
+	hashed, err := core.HashPassword(resetOldPassword)
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestResetPassword_旧refresh在重置后被拒(t *testing.T) {
 	t.Parallel()
 	r, sess, store, ch, uid := newPasswordFamilyRouter(t, newValBlacklist())
 
-	_, staleRefresh, err := sess.IssuePair(uid, resetAccount, service.HrwaiRole)
+	_, staleRefresh, err := sess.IssuePair(uid, resetAccount, core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发 refresh 失败: %v", err)
 	}

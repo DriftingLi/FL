@@ -7,7 +7,7 @@ import (
 
 // paging_shape_lock_test 锁定 profile_review ListRequests 的分页信封 shape：
 // 字段名零漂移（前端契约是最高优先级约束）。本用例随域包搬来（ADR-0070 波 3a），
-// 同一把锁的 notification List 分支留在 internal/service/paging_shape_lock_test.go。
+// 同一把锁的 notification List 分支留在 internal/core/paging_shape_lock_test.go。
 
 func TestPagingResultShapeLock(t *testing.T) {
 	assertShapeLock(t, &ProfileChangeRequestPageResult{}, "page", "pages", "requests", "total")

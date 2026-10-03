@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -20,7 +20,7 @@ func TestResumeEnhancedFilterContract(t *testing.T) {
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stuA := seedStudent(t, db, "stuFiltA", pwd)
 	stuB := seedStudent(t, db, "stuFiltB", pwd)
 	stuC := seedStudent(t, db, "stuFiltC", pwd)
@@ -59,7 +59,7 @@ func TestResumeEnhancedFilterContract(t *testing.T) {
 		RecruiterCookie:       config.RecruiterCookieConfig{Name: "recruiter_token", Domain: "", Secure: false},
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminFilt", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: cfg.AuthCookie.Secure})
 	adminToken, _ := adminSess.Issue(admin.AdminID, admin.Username, "admin")

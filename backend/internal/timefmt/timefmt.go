@@ -1,8 +1,8 @@
 // Package timefmt 是 API 契约时间格式的**单点**（ADR-0043）：业务时区墙钟 + 显式偏移 + 微秒定长。
 //
-// 为什么是独立叶子包：域包（internal/<域>）与残余的 internal/service 都要输出同一套时间串，
-// 而残余 internal/service 里仍有引用域包的代码（站内信写入等）。格式函数若留在
-// internal/service，域包 import 它就会与该引用形成 import 环，故收到只依赖
+// 为什么是独立叶子包：域包（internal/<域>）与残余的 internal/core 都要输出同一套时间串，
+// 而残余 internal/core 里仍有引用域包的代码（站内信写入等）。格式函数若留在
+// internal/core，域包 import 它就会与该引用形成 import 环，故收到只依赖
 // internal/clock 与标准库的叶子里。
 package timefmt
 

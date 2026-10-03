@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/region"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -20,7 +20,7 @@ func TestRegionMigrationOnPostgres(t *testing.T) {
 		t.Skip("DATABASE_URL 未设置")
 	}
 	// 迁移链执行成功即验证。写入一段契约样本验证列可读写。
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuMig", pwd)
 	min_ := 6000
 	max_ := 9000

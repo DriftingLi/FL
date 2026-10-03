@@ -15,9 +15,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -29,9 +29,9 @@ var forbiddenCredentialKeys = []string{
 
 func assertRecruitTrail(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
-	pwd, _ := service.HashPassword(`admin123`)
+	pwd, _ := core.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
-	stuPwd, _ := service.HashPassword(`student123`)
+	stuPwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, stuPwd)
 	// 种招聘者 + 查看留痕 + 申请记录
 	recruiter := testutil.SeedRecruiter(t, db, `rec1`, pwd)

@@ -20,8 +20,8 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -43,7 +43,7 @@ func newServerErrorEnv(t *testing.T) *serverErrorEnv {
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
 
-	hashed, err := service.HashPassword("seedpass123")
+	hashed, err := core.HashPassword("seedpass123")
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -62,7 +62,7 @@ func newServerErrorEnv(t *testing.T) *serverErrorEnv {
 		db:           db,
 		r:            r,
 		studentTok:   issue(stu.ID, stu.Account, "hrwai_user"),
-		recruiterTok: issue(rec.ID, rec.Username, service.RecruiterRole),
+		recruiterTok: issue(rec.ID, rec.Username, core.RecruiterRole),
 		adminTok:     issue(adm.AdminID, adm.Username, "admin"),
 	}
 }

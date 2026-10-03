@@ -19,9 +19,9 @@
 // 私有片段它够不着。公开面因此是 3 谓词 + 3 片段，但拼接点仍只在本文件的 4 行。
 //
 // 落点（#1445 P2 波 0b）：本文件原为 internal/service/credential_scope.go。域包离开
-// internal/service 后仍要用这三族谓词，留在 service 就是「域包 → service」的反向依赖
+// internal/core 后仍要用这三族谓词，留在 core 就是「域包 → core」的反向依赖
 // （P2 判据：出边为零才搬得动），故整文件搬进叶子包 internal/scope。静态扫描锁
-// （internal/service/credential_scope_guard_test.go）的白名单随它改指本文件——「不许在
+// （internal/core/credential_scope_guard_test.go）的白名单随它改指本文件——「不许在
 // 调用点手写 credential_id 谓词」这条规矩的射程与实现处一起走，不因搬包而放宽。
 //
 // _Avoid_：

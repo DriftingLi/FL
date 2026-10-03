@@ -49,7 +49,7 @@
 //   GET  /admin/export/questions
 //   GET  /admin/export/evaluations
 //
-// 覆盖的 Go 类型：AdminOverviewDTO / AdminStatisticsDTO / CourseStatDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / AdminCourseDetailDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog / ChapterGenResult / GenTaskStatus / GenerateContentResultDTO
+// 覆盖的 Go 类型：AdminOverviewDTO / AdminStatisticsDTO / CourseStatDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / ChapterGenResult / GenTaskStatus / GenerateContentResultDTO / AdminCourseDetailDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -232,6 +232,26 @@ export interface TutorRegisterResultDTO {
   username: string
 }
 
+export interface ChapterGenResult {
+  chapter_id: number
+  content?: string
+  error?: string
+  status: string
+  title: string
+}
+
+export interface GenTaskStatus {
+  completed: number
+  results: ChapterGenResult[] | null
+  status: string
+  task_id: string
+  total: number
+}
+
+export interface GenerateContentResultDTO {
+  task_id: string
+}
+
 export interface AdminCourseDetailDTO {
   certificate_name?: string
   certificate_template?: CertificateTemplateDTO
@@ -380,24 +400,4 @@ export interface AuditLog {
   path: string
   request_id: string
   status: number
-}
-
-export interface ChapterGenResult {
-  chapter_id: number
-  content?: string
-  error?: string
-  status: string
-  title: string
-}
-
-export interface GenTaskStatus {
-  completed: number
-  results: ChapterGenResult[] | null
-  status: string
-  task_id: string
-  total: number
-}
-
-export interface GenerateContentResultDTO {
-  task_id: string
 }

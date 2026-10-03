@@ -2,7 +2,7 @@
 // 逐条断言信封与 data 顶层 key（片一先例）。
 //
 // 与既有契约测试的分工：键序 / 可空性由 service 层 DTO 字节锁
-// （internal/service/envelope_dto_shape_test.go 的 TestInlineResponseDTOBytes）冻结；
+// （internal/core/envelope_dto_shape_test.go 的 TestInlineResponseDTOBytes）冻结；
 // 本文件锁定「注解声明的类型 == handler 实际渲染的信封形状」—— 注解成为唯一事实源后，
 // 这条断言是「指认错类型」的直接护栏。
 package api

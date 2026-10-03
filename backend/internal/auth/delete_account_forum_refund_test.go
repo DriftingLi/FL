@@ -2,7 +2,7 @@
 //
 // P2 波 3a（ADR-0070）：本用例原住 internal/service/forum_counter_test.go，随注销动作
 // （Service.DeleteAccount）搬进 internal/auth —— 判的是「注销时按行数回扣计数」，与论坛域无关；
-// ForumCounter 本体是留驻面（internal/service/forum_counter.go），故以 service.NewForumCounter() 注入。
+// ForumCounter 本体是留驻面（internal/core/forum_counter.go），故以 core.NewForumCounter() 注入。
 package auth
 
 import (
@@ -11,8 +11,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -36,7 +36,7 @@ func TestDeleteAccount_RefundsForumLikeCounts(t *testing.T) {
 
 	// 点赞行直插 + 计数走 ForumCounter：本用例判的是「注销时按行数回扣计数」，与论坛域无关；
 	// 域包不得被留驻测试反向 import（ADR-0070 波 2b-2），故不经 NewForumService 的点赞入口。
-	cnt := service.NewForumCounter()
+	cnt := core.NewForumCounter()
 	if err := db.Create(&model.ForumTopicLike{TopicID: topic.ID, UserID: liker.ID, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}

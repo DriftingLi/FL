@@ -16,10 +16,10 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -57,9 +57,9 @@ func fetchLedgerPage(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 
 func assertLedgerDomainFilter(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
-	pwd, _ := service.HashPassword(`admin123`)
+	pwd, _ := core.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
-	stuPwd, _ := service.HashPassword(`student123`)
+	stuPwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, stuPwd)
 	cfg := &config.Config{
 		JWTSecretKey: `ledger-contract-secret`,

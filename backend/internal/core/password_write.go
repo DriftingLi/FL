@@ -17,7 +17,7 @@
 // 验证码重置口令 VerifyCodeService.ResetPasswordWithCode）与管理员侧两条代重置
 // （AdminService.ResetHrwaiUserPassword、AdminService.ResetTutorPassword，ADR-0064 决策 4 接进来，
 // 波 4d 起后者经 ApplyTutorPassword）都收在此处。
-package service
+package core
 
 import (
 	"context"

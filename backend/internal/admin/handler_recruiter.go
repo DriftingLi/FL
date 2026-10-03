@@ -10,9 +10,9 @@ import (
 
 	"forklift-training/internal/auth"
 	"forklift-training/internal/authz"
+	"forklift-training/internal/core"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -101,7 +101,7 @@ func (h *recruiterHandler) ToggleStatus(c *gin.Context) {
 		// 判定不动（票8 逐端点判过，同 handler.go 的两处 Toggle）：AuthService.ToggleRecruiterStatus
 		// 的「招聘者不存在」是裸 errors.New、后面的 UPDATE/回写错误原样上抛 ⇒ 无哨兵可分档。
 		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
-			{Sentinel: service.ErrRecruiterNotFound, Status: http.StatusNotFound},
+			{Sentinel: core.ErrRecruiterNotFound, Status: http.StatusNotFound},
 			{Sentinel: nil, Status: http.StatusInternalServerError},
 		}},
 		Render: func(c *gin.Context, _ *idParam, resp *StatusResultDTO) {

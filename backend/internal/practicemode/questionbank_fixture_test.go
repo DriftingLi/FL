@@ -2,7 +2,7 @@
 //
 // createQuestionAs 按接缝就地内联（同 3b-2 先例）——原留驻 internal/service/questionbank_fixture_test.go
 // 已随波 4a 删除（模拟考试与真题套卷的消费者都搬进了域包），故各域自持一份。
-// 各一份（域包测试不得反向 import internal/service，同 3b-2 先例）；seed 出的题目供练习抽题/
+// 各一份（域包测试不得反向 import internal/core，同 3b-2 先例）；seed 出的题目供练习抽题/
 // 会话续练测试用。
 package practicemode
 

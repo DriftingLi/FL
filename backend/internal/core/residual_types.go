@@ -1,7 +1,7 @@
-// 留在 internal/service 的 typed 契约（P2 波 3b-1 拆自 course_types.go）：
+// 留在 internal/core 的 typed 契约（P2 波 3b-1 拆自 course_types.go）：
 // 它们定义在课程域文件里，但归属域不是课程域，随课程域搬包会让别域反向依赖课程包。
 // 波 4d：讲师域两类随 tutor 域包搬走（internal/tutor/dto.go），本文件只剩阅卷域这一枚。
-package service
+package core
 
 // GradingStatsDTO 阅卷统计（原 GetGradingStats map 的 typed 形态）。
 // 归属阅卷域；全仓当前零生产引用，本波不做「顺手删」（删它要同步 nullability_lock 的债务算式）。

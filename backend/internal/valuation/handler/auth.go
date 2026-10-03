@@ -6,9 +6,9 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
+	vcore "forklift-training/internal/core"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
-	vmain "forklift-training/internal/service"
 	"forklift-training/pkg/response"
 )
 
@@ -47,13 +47,13 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 	}
 	response.Success(c, map[string]interface{}{
 		"user_id":  user.ID,
-		"uid":      vmain.FormatUID(user.UID),
+		"uid":      vcore.FormatUID(user.UID),
 		"account":  user.Account,
 		"username": user.Username,
-		"phone":    vmain.MaskedPhone(user.Phone),
+		"phone":    vcore.MaskedPhone(user.Phone),
 		"email":    user.Email,
 		"company":  user.Company,
-		"role":     vmain.HrwaiRole,
+		"role":     vcore.HrwaiRole,
 	})
 }
 

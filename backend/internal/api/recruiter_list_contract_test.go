@@ -15,9 +15,9 @@ import (
 
 	"forklift-training/internal/admin"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -50,9 +50,9 @@ func fetchRecruiters(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 
 func assertRecruiterList(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
-	pwd, _ := service.HashPassword(`admin123`)
+	pwd, _ := core.HashPassword(`admin123`)
 	adminUser := testutil.SeedAdmin(t, db, `admin1`, pwd)
-	stuPwd, _ := service.HashPassword(`student123`)
+	stuPwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, stuPwd)
 	// 种 3 个招聘者（2 个企业名含「叉车」，1 个不含）
 	seed := []model.RecruiterUser{

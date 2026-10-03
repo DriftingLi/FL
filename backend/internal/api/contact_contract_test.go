@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -31,7 +31,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	r := NewRouter(deps)
 
 	// 学员与简历
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuContact", pwd)
 	// 给简历
 	card := model.JobCard{UserID: stu.ID, RealName: "张三丰", ContactPhone: "13800009999", Wechat: "zhang_wx", Region: "江苏苏州精确", ResumeFileURL: "/static/uploads/resumes/a.pdf", Visibility: "open", ExpectedRegions: model.JSONB([]byte(`["江苏苏州"]`))}
@@ -40,7 +40,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	}
 
 	// 管理员建企业招聘者
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminContact", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: cfg.AuthCookie.Secure})
 	adminToken, _ := adminSess.Issue(admin.AdminID, admin.Username, "admin")
@@ -311,7 +311,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	setPastPending := func(id int64) {
 		t.Helper()
 		if err := db.Model(&model.ContactRequest{}).Where("id = ?", id).
-			Updates(map[string]any{"status": string(service.ContactGrantPending), "expires_at": time.Now().Add(-time.Hour)}).Error; err != nil {
+			Updates(map[string]any{"status": string(core.ContactGrantPending), "expires_at": time.Now().Add(-time.Hour)}).Error; err != nil {
 			t.Fatalf("置为超期 pending: %v", err)
 		}
 	}
@@ -332,7 +332,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "已过期") {
 		t.Fatalf("超期同意应 400 且提示已过期, 实际 %d %s", rec.Code, rec.Body.String())
 	}
-	if got := statusOf(secondID); got != string(service.ContactGrantExpired) {
+	if got := statusOf(secondID); got != string(core.ContactGrantExpired) {
 		t.Fatalf("approve 的按行出口应把超期 pending 落为 expired, 实际 %s", got)
 	}
 
@@ -357,7 +357,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("Create 应先定向落态再判唯一, 实际 %d %s", rec.Code, rec.Body.String())
 	}
-	if got := statusOf(thirdID); got != string(service.ContactGrantExpired) {
+	if got := statusOf(thirdID); got != string(core.ContactGrantExpired) {
 		t.Fatalf("定向落态应把闭窗 pending 置 expired, 实际 %s", got)
 	}
 
@@ -380,7 +380,7 @@ func TestContactContract_FullFlow(t *testing.T) {
 	if affected < 1 {
 		t.Fatalf("守护收敛应至少落 1 条, 实际 %d", affected)
 	}
-	if got := statusOf(fourthID); got != string(service.ContactGrantExpired) {
+	if got := statusOf(fourthID); got != string(core.ContactGrantExpired) {
 		t.Fatalf("守护应把闭窗 pending 落为 expired, 实际 %s", got)
 	}
 

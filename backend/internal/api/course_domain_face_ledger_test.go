@@ -22,9 +22,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -68,23 +68,23 @@ func tokenFor(t *testing.T, db *gorm.DB, who string) string {
 	)
 	switch who {
 	case "tutor":
-		hashed, err := service.HashPassword("seedpass123")
+		hashed, err := core.HashPassword("seedpass123")
 		if err != nil {
 			t.Fatalf("哈希种子口令失败: %v", err)
 		}
 		tu := testutil.SeedTutor(t, db, "cledger_tutor", hashed)
-		uid, account, role = tu.TutorID, tu.Username, service.TutorRole
+		uid, account, role = tu.TutorID, tu.Username, core.TutorRole
 	case "ghost":
-		uid, account, role = 999998, "cledger_ghost", service.HrwaiRole
+		uid, account, role = 999998, "cledger_ghost", core.HrwaiRole
 	case "public":
 		return ""
 	default:
-		hashed, err := service.HashPassword("seedpass123")
+		hashed, err := core.HashPassword("seedpass123")
 		if err != nil {
 			t.Fatalf("哈希种子口令失败: %v", err)
 		}
 		stu := seedStudent(t, db, "cledger_stu", hashed)
-		uid, account, role = stu.ID, stu.Account, service.HrwaiRole
+		uid, account, role = stu.ID, stu.Account, core.HrwaiRole
 	}
 	tok, err := sess.Issue(uid, account, role)
 	if err != nil {

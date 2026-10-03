@@ -1,4 +1,4 @@
-package service
+package core
 
 // sendSMTPS（SMTP 465 隐式 SSL）单元测试：
 // 本地 TLS SMTP 假服务器走完整 SMTP 会话（EHLO→AUTH→MAIL→RCPT→DATA→QUIT），

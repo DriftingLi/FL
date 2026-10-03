@@ -20,9 +20,9 @@ import (
 
 	"forklift-training/internal/auth"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -55,9 +55,9 @@ func TestRecruiterContract_FullFlow(t *testing.T) {
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "admin1", adminPwd)
-	studentPwd, _ := service.HashPassword("student123")
+	studentPwd, _ := core.HashPassword("student123")
 	_ = seedStudent(t, db, "stu1", studentPwd)
 
 	cfg := &config.Config{
@@ -234,7 +234,7 @@ func TestRecruiterCookieIsolation_HostOnly(t *testing.T) {
 		RecruiterCookie: config.RecruiterCookieConfig{Name: "recruiter_token", Domain: "", Secure: false},
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminA", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: false})
 	adminToken, _ := adminSess.Issue(admin.AdminID, admin.Username, "admin")

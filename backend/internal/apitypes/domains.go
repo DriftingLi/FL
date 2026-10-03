@@ -33,7 +33,7 @@ type Endpoint struct {
 
 // Domain 一个域的生成声明。
 //
-// Roots 是该域消费的根类型（swagger definitions 里的键，如 service.CheckInResult）：
+// Roots 是该域消费的根类型（swagger definitions 里的键，如 core.CheckInResult）：
 // 渲染时取它们的**传递闭包**（引用到的类型一并生成），故新增嵌套类型不必改声明表。
 // 只增不改：域内新增端点/字段由注解层驱动，声明表只在「新增一个域」时动。
 type Domain struct {
@@ -310,8 +310,8 @@ var Domains = []Domain{
 		Roots: []string{
 			"resume.RecruitResumeCard",
 			"recruit.RecruitListResult",
-			"service.ContactRequestListResult",
-			"service.ContactPlainDTO",
+			"core.ContactRequestListResult",
+			"core.ContactPlainDTO",
 			"recruit.RecruitMeDTO",
 		},
 		Endpoints: []Endpoint{
@@ -367,7 +367,7 @@ var Domains = []Domain{
 		Title: "学员简历卡（/api/resume/*：简历 CRUD / 可见性 / PDF 与工作照附件 / 查看留痕 / 收到的联系方式申请）",
 		Roots: []string{
 			"resume.JobCardDTO",
-			"service.ContactRequestListResult",
+			"core.ContactRequestListResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/resume"},
@@ -615,8 +615,8 @@ var Domains = []Domain{
 			"auth.RecruiterUpdatedDTO",
 			"auth.RecruiterPasswordResetResult",
 			"admin.AdminStatisticsDTO",
-			"service.GenerateContentResultDTO",
-			"service.GenTaskStatus",
+			"core.GenerateContentResultDTO",
+			"core.GenTaskStatus",
 			"course.CoursePageResult",
 			"course.AdminCourseDetailDTO",
 			"course.DeleteCourseResult",

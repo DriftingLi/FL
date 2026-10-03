@@ -103,7 +103,7 @@ func outletChapterDetailNoFiles(t *testing.T) any {
 }
 
 // seedVisibleCourse 播一门「已发布 + 已挂载」但**没有章节**的课程，返回其 id。
-// （与 internal/service 的同名夹具各持一份：两包互不 import 对方的测试文件。）
+// （与 internal/core 的同名夹具各持一份：两包互不 import 对方的测试文件。）
 func seedVisibleCourse(t *testing.T, db *gorm.DB) int {
 	t.Helper()
 	spec := model.Specialty{Code: "nonnil", Name: "非空方向", SortOrder: 1, Status: 1}

@@ -21,7 +21,7 @@
 //   - `toDTOs` + `contactPairUsable`：行级形态（一次批量取回后逐行判）——两侧列表用，不产生 N+1。
 //
 // 这是 **internal seam**：三个 caller 全在 service 包内，故不新增导出面、不改 deps 装配。
-package service
+package core
 
 import (
 	"errors"

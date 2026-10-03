@@ -10,15 +10,15 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/resume"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func seedGrantPair(t *testing.T, db *gorm.DB, status, source string) (recruiterID, studentID int) {
 	t.Helper()
-	pwd, err := service.HashPassword("seedpass123")
+	pwd, err := core.HashPassword("seedpass123")
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestFillContactStatesCardAvailability(t *testing.T) {
 		db := testutil.NewMemoryDB(t)
 		recID, stuID := seedGrantPair(t, db, "approved", "recruiter")
 		cards := cardsOf(db, recID, stuID)
-		if cards[0].ContactState != string(service.ContactGrantApproved) {
+		if cards[0].ContactState != string(core.ContactGrantApproved) {
 			t.Fatalf("夹具应是 approved，实际 %q", cards[0].ContactState)
 		}
 		if cards[0].CompanyDisabled {
@@ -58,7 +58,7 @@ func TestFillContactStatesCardAvailability(t *testing.T) {
 			t.Fatalf("置禁用失败: %v", err)
 		}
 		cards := cardsOf(db, recID, stuID)
-		if cards[0].ContactState != string(service.ContactGrantApproved) {
+		if cards[0].ContactState != string(core.ContactGrantApproved) {
 			t.Fatalf("处置不改写授权事实 ⇒ 徽章仍应是 approved，实际 %q", cards[0].ContactState)
 		}
 		if !cards[0].CompanyDisabled {
@@ -87,7 +87,7 @@ func TestFillContactStatesCardAvailability(t *testing.T) {
 			t.Fatalf("注入故障（删 recruiter_users 表）失败: %v", err)
 		}
 		cards := cardsOf(db, recID, stuID)
-		if cards[0].ContactState != string(service.ContactGrantApproved) {
+		if cards[0].ContactState != string(core.ContactGrantApproved) {
 			t.Fatalf("徽章那一维不依赖 recruiter_users，应保持 approved，实际 %q", cards[0].ContactState)
 		}
 		if cards[0].CompanyDisabled {

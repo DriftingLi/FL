@@ -516,7 +516,7 @@ func TestGetStats_WithData(t *testing.T) {
 
 // TestQuestionBank_Tags 题目-标签挂接（#1445 P2 波 3b-2 从培训域测试文件搬回）：
 // 这条用例的接缝是**题库域的写面**（CreateQuestion / ListQuestions / UpdateQuestion / GetQuestion），
-// 而域包 internal/training 不得 import internal/service（反向边），所以它留在 service 侧 ——
+// 而域包 internal/training 不得 import internal/core（反向边），所以它留在 core 侧 ——
 // 标签 CRUD 走 training.NewService，题目写面走题库域自己的服务。
 // --- 题库标签查询 ---
 
