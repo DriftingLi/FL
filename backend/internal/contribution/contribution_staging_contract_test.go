@@ -6,7 +6,7 @@
 // 「同一档里挤了两条不同事实」这种压不成一句的漂移无人认领。
 //
 // 档位台账（contribution.ErrStatus）本身另由 errstatus_test.go 的快照钉住；本文件是它的行为面。
-package api
+package contribution
 
 import (
 	"bytes"
