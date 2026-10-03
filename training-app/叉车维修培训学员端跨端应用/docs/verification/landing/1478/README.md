@@ -122,13 +122,18 @@
 
 ## 截图产物
 
-原始截图与 dump 落在本 worktree 的 `.ci-verify/`（**未随提交入库**，因 `dev:finish` 的自动截图
-步骤在本次运行中失败，见下）：
+**入库的截图**（`docs/verification/landing/1478/`，可直接核验）：
 
 | 文件 | 说明 |
 | --- | --- |
-| `.ci-verify/landing-01-index.png` | 冷启落定的着陆页 |
-| `.ci-verify/landing-04-agreed.png` | 勾选协议后（`✓` 出现） |
+| `index.png` | 冷启落定的着陆页（主 CTA + 次级入口都在） |
+| `index-agreed.png` | 点协议勾选行后（`✓` 出现） |
+| `index-tap-cta.png` | 勾选后点主 CTA（零请求、无异常栈） |
+
+原始 a11y dump 与中间产物落在本 worktree 的 `.ci-verify/`（**未入库**，仅留痕）：
+
+| 文件 | 说明 |
+| --- | --- |
 | `.ci-verify/a11y-landing-before.xml` | 判据 2/3 的 a11y 原始树 |
 | `.ci-verify/a11y-after-agree.xml` | 勾选后的 a11y 原始树 |
 | `.ci-verify/a11y-tap-cta-after-agree.xml` | 点 CTA 后的 a11y 原始树 |
@@ -138,3 +143,4 @@
 `[6/9] 自动截图` 两张都报「导航未在 420 秒内落定」⇒ `❌ 没有任何页面截图成功` ⇒ 整条命令 exit 1。
 根因见上文**陷阱 3**（`cli launch` 常驻 + 项目重复导入导致两次 launch 抢占）。
 第 3–5 步（单测 / ④c 编译门 / 真机部署）**全部通过**，部署实测耗时 457s、页面真起来了。
+上表三张截图是**用 `adb exec-out screencap` 手工取的**，不是该脚本的产物。
