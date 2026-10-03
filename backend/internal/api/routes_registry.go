@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/mockexam"
 	"forklift-training/internal/note"
@@ -162,10 +163,10 @@ var routeRegistrars = []routeRegistrar{
 			resume.RegisterPDFRoutes(api, rd.Session, deps.JobCardSvc, deps.ResumePDFRenderer)
 			recruit.RegisterPDFRoutes(api, rd.Session, deps.RecruitSvc, deps.ResumePDFRenderer)
 			RegisterContactRoutes(api, rd, deps.ContactSvc)
-			RegisterJobRoutes(api, rd, deps.JobPostingSvc)
-			RegisterApplicationRoutes(api, rd, deps.JobApplicationSvc)
-			RegisterJobReportRoutes(api, rd, deps.JobReportSvc, deps.JobPostingSvc)
-			RegisterRecruiterApplicationRoutes(api, rd, deps.JobApplicationSvc)
+			job.RegisterRoutes(api, rd.Session, deps.JobPostingSvc)
+			job.RegisterApplicationRoutes(api, rd.Session, deps.JobApplicationSvc)
+			job.RegisterReportRoutes(api, rd.Session, deps.JobReportSvc, deps.JobPostingSvc)
+			job.RegisterRecruiterApplicationRoutes(api, rd.Session, deps.JobApplicationSvc)
 		},
 	},
 	{

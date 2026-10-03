@@ -182,6 +182,7 @@ func ResponsePackages() []ScanDir {
 		{"internal/wrongquestion", "wrongquestion"},
 		{"internal/recruit", "recruit"},
 		{"internal/resume", "resume"},
+		{"internal/job", "job"},
 		{"internal/tutor", "tutor"},
 		{"internal/admin", "admin"},
 		{"internal/auth", "auth"},

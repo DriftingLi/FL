@@ -2,7 +2,7 @@
 // 核心不变式：投递在学员点下那一刻，在同一事务内写入投递记录 + 写入/复活一条 approved 的
 // 联系方式交换授权（source=application），明文的载体仍然只有联系方式交换一个——GetContact
 // 与授权撤回的实现一行都不改（这是验收点，不是巧合）。
-package service
+package job
 
 import (
 	"errors"
@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
@@ -48,26 +49,26 @@ var (
 	ErrApplyResumeIncomplete = errors.New("简历缺少真实姓名或联系电话，无法投递")
 )
 
-// JobApplicationService 投递服务。
-type JobApplicationService struct {
-	contactSvc      *ContactService
+// ApplicationService 投递服务。
+type ApplicationService struct {
+	contactSvc      *service.ContactService
 	db              *gorm.DB
 	logger          *zap.Logger
 	notificationSvc *notification.Service
-	mailer          MailSender
+	mailer          service.MailSender
 	dailyLimit      int
 }
 
-// NewJobApplicationService 创建投递服务。contact 收口授权状态机（ADR-0027 C5）；mailer 可为 nil。
-func NewJobApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *notification.Service, contact *ContactService) *JobApplicationService {
-	return &JobApplicationService{db: db, logger: logger, notificationSvc: notificationSvc, contactSvc: contact, dailyLimit: 10}
+// NewApplicationService 创建投递服务。contact 收口授权状态机（ADR-0027 C5）；mailer 可为 nil。
+func NewApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *notification.Service, contact *service.ContactService) *ApplicationService {
+	return &ApplicationService{db: db, logger: logger, notificationSvc: notificationSvc, contactSvc: contact, dailyLimit: 10}
 }
 
 // SetDailyLimit 测试用：覆盖每日投递上限。
-func (s *JobApplicationService) SetDailyLimit(n int) { s.dailyLimit = n }
+func (s *ApplicationService) SetDailyLimit(n int) { s.dailyLimit = n }
 
 // SetMailer 注入邮件发送器（装配根经邮件单点构建后注入）。
-func (s *JobApplicationService) SetMailer(m MailSender) { s.mailer = m }
+func (s *ApplicationService) SetMailer(m service.MailSender) { s.mailer = m }
 
 // ApplicationDTO 投递展示对象。
 type ApplicationDTO struct {
@@ -99,7 +100,7 @@ type ApplicationListResult struct {
 }
 
 // toDTO 转换 DB 行为 DTO。
-func (s *JobApplicationService) toDTO(m *model.JobApplication) ApplicationDTO {
+func (s *ApplicationService) toDTO(m *model.JobApplication) ApplicationDTO {
 	dto := ApplicationDTO{
 		ID:              m.ID,
 		JobPostingID:    m.JobPostingID,
@@ -132,7 +133,7 @@ func applyMessage(jobTitle string) string {
 //  2. 写入/复活一条 approved 的联系方式交换授权（source=application）；
 //     该企业对该学员已有 pending 申请时，把它覆盖为 approved（学员主动投递优先于待决申请）；
 //  3. 投递产生的授权不计入企业日限（那是防企业骚扰的）。
-func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*ApplicationDTO, error) {
+func (s *ApplicationService) Apply(studentUserID, jobPostingID int) (*ApplicationDTO, error) {
 	var job model.JobPosting
 	if err := s.db.First(&job, jobPostingID).Error; err != nil {
 		return nil, ErrApplyJobInactive
@@ -143,7 +144,7 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 	// 学员是否存在且未注销
 	var stu model.HrwaiUser
 	if err := s.db.First(&stu, studentUserID).Error; err != nil {
-		return nil, ErrStudentGone
+		return nil, service.ErrStudentGone
 	}
 	// 简历完整性：缺真实姓名或缺联系电话 → 拒（否则企业收到空简历）
 	var card model.JobCard
@@ -216,7 +217,7 @@ func (s *JobApplicationService) Apply(studentUserID, jobPostingID int) (*Applica
 }
 
 // notifyEmployer 邮件通知企业（发到企业联系邮箱；mailer 为 nil 时降级日志）。
-func (s *JobApplicationService) notifyEmployer(recruiterID int, jobTitle string, studentUserID int) {
+func (s *ApplicationService) notifyEmployer(recruiterID int, jobTitle string, studentUserID int) {
 	var rec model.RecruiterUser
 	if err := s.db.First(&rec, recruiterID).Error; err != nil {
 		return
@@ -237,7 +238,7 @@ func (s *JobApplicationService) notifyEmployer(recruiterID int, jobTitle string,
 // Withdraw 学员撤回投递。revokeContact 默认 false：撤回投递不连带收回联系方式授权；
 // 仅当显式带上连带意图才置授权 revoked（此后明文端点 403）。
 // 撤回后可立即重新投递同一职位。
-func (s *JobApplicationService) Withdraw(studentUserID int, applicationID int64, revokeContact bool) (*ApplicationDTO, error) {
+func (s *ApplicationService) Withdraw(studentUserID int, applicationID int64, revokeContact bool) (*ApplicationDTO, error) {
 	var app model.JobApplication
 	if err := s.db.First(&app, applicationID).Error; err != nil {
 		return nil, ErrApplyNotFound
@@ -275,7 +276,7 @@ func (s *JobApplicationService) Withdraw(studentUserID int, applicationID int64,
 }
 
 // ListForStudent 学员「我的投递」列表。
-func (s *JobApplicationService) ListForStudent(studentUserID, page, pageSize int) ([]ApplicationDTO, int64, error) {
+func (s *ApplicationService) ListForStudent(studentUserID, page, pageSize int) ([]ApplicationDTO, int64, error) {
 	rows, total, _, _, err := paging.QueryWithMax[model.JobApplication](s.db, page, pageSize, 20, 50,
 		"created_at DESC", func(q *gorm.DB) *gorm.DB {
 			return q.Where("student_user_id = ?", studentUserID)

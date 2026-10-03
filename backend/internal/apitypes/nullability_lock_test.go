@@ -128,6 +128,7 @@ var (
 		{"internal/tutor", "nonnilOutlets"},
 		{"internal/admin", "nonnilOutlets"},
 		{"internal/recruit", "nonnilOutlets"},
+		{"internal/job", "nonnilOutlets"},
 	}
 )
 
@@ -262,6 +263,7 @@ var sweptDirs = map[string]string{
 	"wrongquestion":       "../wrongquestion",
 	"recruit":             "../recruit",
 	"resume":              "../resume",
+	"job":                 "../job",
 	"tutor":               "../tutor",
 	"admin":               "../admin",
 	"repository":          "../valuation/repository",

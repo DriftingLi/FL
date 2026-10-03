@@ -1702,6 +1702,203 @@ definitions:
       viewed_at:
         type: string
     type: object
+  job.ApplicationDTO:
+    properties:
+      company_name:
+        description: 企业信息（学员侧可见）
+        type: string
+        x-optional: true
+      created_at:
+        type: string
+      employer_viewed_at:
+        type: string
+        x-optional: true
+      id:
+        type: integer
+      job_posting_id:
+        type: integer
+      job_title:
+        type: string
+        x-optional: true
+      recruiter_id:
+        type: integer
+      resume_updated_at:
+        type: string
+      resume_updated_at_snapshot:
+        description: 投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」
+        type: string
+        x-optional: true
+      status:
+        type: string
+      student_real_name_masked:
+        description: 学员信息（企业侧可见，走脱敏路径）
+        type: string
+        x-optional: true
+      student_resume_updated_at:
+        type: string
+        x-optional: true
+      student_user_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  job.ApplicationListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.ApplicationDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  job.JobListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.JobPostingDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  job.JobPostingDTO:
+    properties:
+      apply_state:
+        description: 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
+        type: string
+        x-optional: true
+      business_scope:
+        type: string
+        x-optional: true
+      company_name:
+        description: 企业信息（学员侧可见，不含电话/邮箱/信用代码）
+        type: string
+        x-optional: true
+      contact_name:
+        type: string
+        x-optional: true
+      cooldown_days:
+        description: not_hired 时距可再投天数（向上取整）
+        type: integer
+        x-optional: true
+      created_at:
+        type: string
+      description:
+        type: string
+      experience_req:
+        type: string
+      forced_offline:
+        type: boolean
+      id:
+        type: integer
+      offline_reason:
+        type: string
+        x-optional: true
+      position_id:
+        type: integer
+        x-optional: true
+      position_name:
+        type: string
+        x-optional: true
+      published_at:
+        type: string
+      recruiter_id:
+        type: integer
+      region:
+        type: string
+      salary_max:
+        type: integer
+        x-optional: true
+      salary_min:
+        type: integer
+        x-optional: true
+      salary_text:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  job.JobPostingInput:
+    properties:
+      description:
+        type: string
+      experience_req:
+        type: string
+      position_id:
+        type: integer
+      region:
+        type: string
+      salary_max:
+        type: integer
+      salary_min:
+        type: integer
+      salary_text:
+        type: string
+      title:
+        type: string
+    type: object
+  job.RecruiterApplicationListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.ApplicationDTO'
+        type: array
+      job_title:
+        type: string
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      unread_count:
+        type: integer
+    type: object
+  job.ReportDTO:
+    properties:
+      created_at:
+        type: string
+      handled_at:
+        type: string
+        x-optional: true
+      id:
+        type: integer
+      job_posting_id:
+        type: integer
+      job_title:
+        type: string
+        x-optional: true
+      reason:
+        type: string
+      status:
+        type: string
+      student_user_id:
+        type: integer
+    type: object
+  job.ReportInput:
+    properties:
+      reason:
+        type: string
+    type: object
+  job.ReportListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.ReportDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   material.MaterialDTO:
     properties:
       chapter_id:
@@ -3296,59 +3493,6 @@ definitions:
       times:
         type: integer
     type: object
-  service.ApplicationDTO:
-    properties:
-      company_name:
-        description: 企业信息（学员侧可见）
-        type: string
-        x-optional: true
-      created_at:
-        type: string
-      employer_viewed_at:
-        type: string
-        x-optional: true
-      id:
-        type: integer
-      job_posting_id:
-        type: integer
-      job_title:
-        type: string
-        x-optional: true
-      recruiter_id:
-        type: integer
-      resume_updated_at:
-        type: string
-      resume_updated_at_snapshot:
-        description: 投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」
-        type: string
-        x-optional: true
-      status:
-        type: string
-      student_real_name_masked:
-        description: 学员信息（企业侧可见，走脱敏路径）
-        type: string
-        x-optional: true
-      student_resume_updated_at:
-        type: string
-        x-optional: true
-      student_user_id:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  service.ApplicationListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.ApplicationDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
   service.ChapterGenResult:
     properties:
       chapter_id:
@@ -3477,150 +3621,6 @@ definitions:
     properties:
       task_id:
         type: string
-    type: object
-  service.JobListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.JobPostingDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.JobPostingDTO:
-    properties:
-      apply_state:
-        description: 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
-        type: string
-        x-optional: true
-      business_scope:
-        type: string
-        x-optional: true
-      company_name:
-        description: 企业信息（学员侧可见，不含电话/邮箱/信用代码）
-        type: string
-        x-optional: true
-      contact_name:
-        type: string
-        x-optional: true
-      cooldown_days:
-        description: not_hired 时距可再投天数（向上取整）
-        type: integer
-        x-optional: true
-      created_at:
-        type: string
-      description:
-        type: string
-      experience_req:
-        type: string
-      forced_offline:
-        type: boolean
-      id:
-        type: integer
-      offline_reason:
-        type: string
-        x-optional: true
-      position_id:
-        type: integer
-        x-optional: true
-      position_name:
-        type: string
-        x-optional: true
-      published_at:
-        type: string
-      recruiter_id:
-        type: integer
-      region:
-        type: string
-      salary_max:
-        type: integer
-        x-optional: true
-      salary_min:
-        type: integer
-        x-optional: true
-      salary_text:
-        type: string
-      status:
-        type: string
-      title:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  service.JobPostingInput:
-    properties:
-      description:
-        type: string
-      experience_req:
-        type: string
-      position_id:
-        type: integer
-      region:
-        type: string
-      salary_max:
-        type: integer
-      salary_min:
-        type: integer
-      salary_text:
-        type: string
-      title:
-        type: string
-    type: object
-  service.RecruiterApplicationListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.ApplicationDTO'
-        type: array
-      job_title:
-        type: string
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-      unread_count:
-        type: integer
-    type: object
-  service.ReportDTO:
-    properties:
-      created_at:
-        type: string
-      handled_at:
-        type: string
-        x-optional: true
-      id:
-        type: integer
-      job_posting_id:
-        type: integer
-      job_title:
-        type: string
-        x-optional: true
-      reason:
-        type: string
-      status:
-        type: string
-      student_user_id:
-        type: integer
-    type: object
-  service.ReportInput:
-    properties:
-      reason:
-        type: string
-    type: object
-  service.ReportListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.ReportDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
     type: object
   student.CourseProgressDTO:
     properties:
@@ -6804,7 +6804,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ReportListResult'
+                  $ref: '#/definitions/job.ReportListResult'
               type: object
         "401":
           description: 未认证
@@ -6834,7 +6834,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ReportDTO'
+                  $ref: '#/definitions/job.ReportDTO'
               type: object
         "401":
           description: 未认证
@@ -6879,7 +6879,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobListResult'
+                  $ref: '#/definitions/job.JobListResult'
               type: object
         "401":
           description: 未认证
@@ -6916,7 +6916,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 原因不能为空
@@ -11610,7 +11610,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobListResult'
+                  $ref: '#/definitions/job.JobListResult'
               type: object
         "401":
           description: 未认证（L1 不公开）
@@ -11640,7 +11640,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "401":
           description: 未认证
@@ -11675,7 +11675,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "400":
           description: 重复投递/冷却/日限/简历不完整
@@ -11710,7 +11710,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.ReportInput'
+          $ref: '#/definitions/job.ReportInput'
       produces:
       - application/json
       responses:
@@ -11721,7 +11721,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ReportDTO'
+                  $ref: '#/definitions/job.ReportDTO'
               type: object
         "400":
           description: 原因不能为空
@@ -13880,7 +13880,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "401":
           description: 未认证
@@ -13914,7 +13914,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "400":
           description: 状态不允许
@@ -14029,7 +14029,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobListResult'
+                  $ref: '#/definitions/job.JobListResult'
               type: object
         "401":
           description: 未认证
@@ -14050,7 +14050,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.JobPostingInput'
+          $ref: '#/definitions/job.JobPostingInput'
       produces:
       - application/json
       responses:
@@ -14061,7 +14061,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 参数错误
@@ -14095,7 +14095,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "401":
           description: 未认证
@@ -14125,7 +14125,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.JobPostingInput'
+          $ref: '#/definitions/job.JobPostingInput'
       produces:
       - application/json
       responses:
@@ -14136,7 +14136,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 参数错误
@@ -14182,7 +14182,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.RecruiterApplicationListResult'
+                  $ref: '#/definitions/job.RecruiterApplicationListResult'
               type: object
         "401":
           description: 未认证
@@ -14216,7 +14216,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 被强制下架或超上限
@@ -14513,7 +14513,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationListResult'
+                  $ref: '#/definitions/job.ApplicationListResult'
               type: object
         "401":
           description: 未认证
@@ -14551,7 +14551,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "400":
           description: 状态不允许

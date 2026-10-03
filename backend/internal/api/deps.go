@@ -23,6 +23,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/mockexam"
@@ -112,9 +113,9 @@ type Deps struct {
 	ResumePDFRenderer    *resume.PDFRenderer
 	RecruitSvc           *recruit.Service
 	ContactSvc           *service.ContactService
-	JobPostingSvc        *service.JobPostingService
-	JobApplicationSvc    *service.JobApplicationService
-	JobReportSvc         *service.JobReportService
+	JobPostingSvc        *job.Service
+	JobApplicationSvc    *job.ApplicationService
+	JobReportSvc         *job.ReportService
 	InspectionSvc        *inspection.Service
 	ContributionSvc      *contribution.Service
 
