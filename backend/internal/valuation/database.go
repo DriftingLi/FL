@@ -1,5 +1,6 @@
-// Package config 提供 PostgreSQL 连接池的初始化能力
-package config
+// 估值子系统自己的 PostgreSQL 连接池工厂：主管线走 GORM（internal/db），估值域与三处消费点
+// —— cmd/server 的 setupValuation、backfill-evaluation-suggestions、import-reference-content —— 走这里。
+package valuation
 
 import (
 	"context"

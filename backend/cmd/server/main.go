@@ -35,7 +35,7 @@ import (
 	migratedb "forklift-training/internal/migrate"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
-	vconfig "forklift-training/internal/valuation/config"
+	"forklift-training/internal/valuation"
 	vhandler "forklift-training/internal/valuation/handler"
 	"forklift-training/internal/valuation/pdf"
 	vrepo "forklift-training/internal/valuation/repository"
@@ -211,7 +211,7 @@ func main() {
 func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	pool, err := vconfig.NewPostgresPool(ctx, cfg.DatabaseURL,
+	pool, err := valuation.NewPostgresPool(ctx, cfg.DatabaseURL,
 		cfg.Valuation.DBMaxOpenConns, cfg.Valuation.DBMaxIdleConns, cfg.Valuation.DBConnMaxLifetime)
 	if err != nil {
 		return nil, err

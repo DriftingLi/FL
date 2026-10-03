@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	applogger "forklift-training/internal/logger"
-	vconfig "forklift-training/internal/valuation/config"
+	"forklift-training/internal/valuation"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 )
@@ -36,7 +36,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	pool, err := vconfig.NewPostgresPool(ctx, dsn, 5, 5, 1800)
+	pool, err := valuation.NewPostgresPool(ctx, dsn, 5, 5, 1800)
 	if err != nil {
 		logger.Error("连接数据库失败", zap.Error(err))
 		os.Exit(1)

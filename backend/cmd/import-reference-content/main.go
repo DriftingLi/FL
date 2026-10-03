@@ -26,7 +26,7 @@ import (
 	"go.uber.org/zap"
 
 	applogger "forklift-training/internal/logger"
-	vconfig "forklift-training/internal/valuation/config"
+	"forklift-training/internal/valuation"
 )
 
 func main() {
@@ -71,7 +71,7 @@ func main() {
 
 	var pool *pgxpool.Pool
 	if dsn != "" && *mode != "survey" {
-		pool, err = vconfig.NewPostgresPool(ctx, dsn, 4, 2, 1800)
+		pool, err = valuation.NewPostgresPool(ctx, dsn, 4, 2, 1800)
 		if err != nil {
 			logger.Error("连接数据库失败", zap.Error(err))
 			os.Exit(1)
