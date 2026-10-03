@@ -308,11 +308,11 @@ var Domains = []Domain{
 		Name:  "recruit",
 		Title: "招聘者工作区（/api/recruit/me、/api/recruit/resumes*、/api/recruit/contact-requests：简历库与联系方式交换）",
 		Roots: []string{
-			"service.RecruitResumeCard",
-			"service.RecruitListResult",
+			"resume.RecruitResumeCard",
+			"recruit.RecruitListResult",
 			"service.ContactRequestListResult",
 			"service.ContactPlainDTO",
-			"service.RecruitMeDTO",
+			"recruit.RecruitMeDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/recruit/me"},
@@ -366,7 +366,7 @@ var Domains = []Domain{
 		Name:  "resume",
 		Title: "学员简历卡（/api/resume/*：简历 CRUD / 可见性 / PDF 与工作照附件 / 查看留痕 / 收到的联系方式申请）",
 		Roots: []string{
-			"service.JobCardDTO",
+			"resume.JobCardDTO",
 			"service.ContactRequestListResult",
 		},
 		Endpoints: []Endpoint{

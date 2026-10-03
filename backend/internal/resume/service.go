@@ -1,5 +1,11 @@
-// Package service 学员简历卡模块：1:1 常驻实体于 hrwai_users，无审核队列。
-package service
+// Package resume 简历域：学员简历卡（1:1 常驻实体于 hrwai_users，无审核队列）、
+// 打码/明文/PDF 三处投影（projection.go）与在线简历 PDF 渲染（pdf.go）。
+// 本文件是域实现（HTTP 出口见 handler.go / handler_view.go / handler_pdf.go）。
+//
+// 域边界（P2 波 4e）：简历域**持有 JobCard 实体与其全部投影**，因此
+// recruit（招聘者读面）与 job（投递面）都单向依赖本包；本包对 internal/service 零依赖
+// —— 地区助手走叶子包 internal/region。
+package resume
 
 import (
 	"bytes"
@@ -12,6 +18,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 )
@@ -50,14 +57,14 @@ func (j *JSONArray) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-type JobCardService struct {
+type Service struct {
 	db      *gorm.DB
 	fileSvc *filestore.FileStore
 	logger  *zap.Logger
 }
 
-func NewJobCardService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *JobCardService {
-	return &JobCardService{db: db, fileSvc: fileSvc, logger: logger}
+func NewService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *Service {
+	return &Service{db: db, fileSvc: fileSvc, logger: logger}
 }
 
 type JobCardDTO struct {
@@ -114,16 +121,16 @@ type resumeCertificationRow struct {
 	ImageURLs    []string `json:"image_urls"`
 }
 
-func (s *JobCardService) Get(userID int) (*JobCardDTO, error) {
+func (s *Service) Get(userID int) (*JobCardDTO, error) {
 	var card model.JobCard
 	if err := s.db.First(&card, "user_id = ?", userID).Error; err != nil {
 		return nil, err
 	}
-	dto := toJobCardDTO(&card)
+	dto := ToJobCardDTO(&card)
 	return &dto, nil
 }
 
-func (s *JobCardService) Upsert(userID int, in JobCardInput) (*JobCardDTO, error) {
+func (s *Service) Upsert(userID int, in JobCardInput) (*JobCardDTO, error) {
 	if err := s.validateInput(in); err != nil {
 		return nil, err
 	}
@@ -169,11 +176,11 @@ func (s *JobCardService) Upsert(userID int, in JobCardInput) (*JobCardDTO, error
 			return nil, err
 		}
 	}
-	dto := toJobCardDTO(&card)
+	dto := ToJobCardDTO(&card)
 	return &dto, nil
 }
 
-func (s *JobCardService) UpdateVisibility(userID int, visibility string) (*JobCardDTO, error) {
+func (s *Service) UpdateVisibility(userID int, visibility string) (*JobCardDTO, error) {
 	v := strings.TrimSpace(visibility)
 	if v != "hidden" && v != "open" {
 		return nil, errors.New("visibility 仅支持 hidden / open")
@@ -192,7 +199,7 @@ func (s *JobCardService) UpdateVisibility(userID int, visibility string) (*JobCa
 		if err := s.db.Create(&card).Error; err != nil {
 			return nil, err
 		}
-		dto := toJobCardDTO(&card)
+		dto := ToJobCardDTO(&card)
 		return &dto, nil
 	}
 	if err != nil {
@@ -203,7 +210,7 @@ func (s *JobCardService) UpdateVisibility(userID int, visibility string) (*JobCa
 	if err := s.db.Save(&card).Error; err != nil {
 		return nil, err
 	}
-	dto := toJobCardDTO(&card)
+	dto := ToJobCardDTO(&card)
 	return &dto, nil
 }
 
@@ -360,7 +367,7 @@ func applyInput(card *model.JobCard, in JobCardInput) {
 	}
 }
 
-func (s *JobCardService) validateInput(in JobCardInput) error {
+func (s *Service) validateInput(in JobCardInput) error {
 	if in.SelfIntro != nil && len([]rune(*in.SelfIntro)) > 1000 {
 		return errors.New("自我介绍不能超过 1000 字")
 	}
@@ -440,7 +447,7 @@ func (s *JobCardService) validateInput(in JobCardInput) error {
 
 // DeleteResumeFile 删除上传的 PDF 附件（#491：预览页操作区「删除 PDF 附件」）。
 // DB 置空为事实源；对象存储文件 best-effort 回收（沿用论坛「删除即清理」惯例，失败仅日志）。
-func (s *JobCardService) DeleteResumeFile(userID int) error {
+func (s *Service) DeleteResumeFile(userID int) error {
 	var card model.JobCard
 	if err := s.db.First(&card, "user_id = ?", userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -470,7 +477,7 @@ func (s *JobCardService) DeleteResumeFile(userID int) error {
 	return nil
 }
 
-func (s *JobCardService) ValidateAndStorePDF(filename string, size int64, content []byte) (string, error) {
+func (s *Service) ValidateAndStorePDF(filename string, size int64, content []byte) (string, error) {
 	ext := filestore.FileExtension(filename)
 	if ext != "pdf" {
 		return "", errors.New("仅支持 PDF 文件")
@@ -486,4 +493,37 @@ func (s *JobCardService) ValidateAndStorePDF(filename string, size int64, conten
 		return "", err
 	}
 	return url, nil
+}
+
+// GetRawAny 取原始简历卡（学员本人路径：本人鉴权，不校验 visibility）——在线简历 PDF 出口用。
+// 与 Get 的区别只在「不做可见性谓词」：本人看自己的卡不需要可见性门禁。
+// 位置说明（P2 波 4e）：它原本挂在招聘域的 RecruitService 上，但读的是**本域的实体**、
+// 唯一的非招聘消费者是学员侧 /api/resume/pdf ⇒ 随实体属主搬回本域，解掉 resume ↔ recruit 的双向边。
+func (s *Service) GetRawAny(userID int) (*model.JobCard, error) {
+	var card model.JobCard
+	if err := s.db.First(&card, "user_id = ?", userID).Error; err != nil {
+		return nil, err
+	}
+	return &card, nil
+}
+
+// ===== 查看留痕（学员侧聚合；P2 波 4e 从招聘域搬来）=====
+//
+// 表 recruit_resume_views 由两侧各持一半读写面：写入侧（招聘者预览留痕）在 internal/recruit 的
+// LogView / LogViews，读取侧（学员看自己被打扰了几次）在本域 —— 主语是学员自己的简历。
+
+// StudentViewStats 学员侧聚合：近 7 天查看过我的企业数（按企业去重计数），不返回企业名。
+func (s *Service) StudentViewStats(studentUserID int) (int64, error) {
+	if studentUserID <= 0 {
+		return 0, nil
+	}
+	since := clock.Now().AddDate(0, 0, -7)
+	var cnt int64
+	// 按企业去重计数，7 天窗口需走索引 (resume_user_id, viewed_at)
+	if err := s.db.Model(&model.RecruitResumeView{}).
+		Where("resume_user_id = ? AND viewed_at >= ?", studentUserID, since).
+		Distinct("recruiter_id").Count(&cnt).Error; err != nil {
+		return 0, err
+	}
+	return cnt, nil
 }

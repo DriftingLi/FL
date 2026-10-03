@@ -248,3 +248,37 @@ func contactGrantDropGoneStudents(db *gorm.DB, grants map[int]contactGrant) erro
 	}
 	return nil
 }
+
+// ===== 域包入口（P2 波 4e）=====
+//
+// 招聘域（internal/recruit）要用上面这两条读面，但它们各自的返回形态带包私有类型：
+// contactGrantOfManyEffective 回 map[int]contactGrant，直接导出会把 contactGrant 泄漏进域包签名。
+// 故只交出调用方真正需要的那部分（4d 的 ApplyTutorPassword 同型：动作留本包、声明权归调用方）。
+
+// ContactStateOf 一对 (企业, 学员) 在联系面读面上的授权态投影（值语义，两个字段都是已导出类型）。
+type ContactStateOf struct {
+	// State 展示态：approved / pending / 空串（未授权）——contactGrant.State 的原样投影。
+	State ContactGrantState
+	// Source 承载 State 的那条记录的来源。
+	Source ContactGrantSource
+}
+
+// ContactStatesOf 批量授权态读面（口径与 contactGrantOfManyEffective 逐字相同：
+// 批准的压过待裁决、学员注销即失效）。空 recruiterID / 空集合返回空 map 与 nil 错。
+func ContactStatesOf(db *gorm.DB, recruiterID int, studentUserIDs []int) (map[int]ContactStateOf, error) {
+	grants, err := contactGrantOfManyEffective(db, recruiterID, studentUserIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int]ContactStateOf, len(grants))
+	for id, g := range grants {
+		out[id] = ContactStateOf{State: g.State, Source: g.Source}
+	}
+	return out, nil
+}
+
+// RecruiterAccountUsable 企业账号是否可用（nil = 可用；确证不可用回 ErrCompanyUnavailable，
+// 「查不动」回原始错误）。招聘域用 errors.Is 区分这两档，故这里如实透传，不吞错。
+func RecruiterAccountUsable(db *gorm.DB, recruiterID int) error {
+	return recruiterAccountUsable(db, recruiterID)
+}

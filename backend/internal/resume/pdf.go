@@ -1,8 +1,8 @@
-// Package service 在线简历 PDF 渲染（spec #484 决定：单份打码口径）。
+// 本文件：在线简历 PDF 渲染（spec #484 决定：单份打码口径）—— 简历域实现的一部分。
 // 由简历卡结构化字段实时渲染，不落盘、不预生成缓存快照；姓名沿用简历库打码规则
 // （MaskRealName）、剔除电话/微信、现居地展示到市、不含工作照与证书原图。
 // 渲染复用共享 pdfutil（内嵌 simhei 字体，与残值域 PDF 资产同源）。
-package service
+package resume
 
 import (
 	"bytes"
@@ -15,12 +15,12 @@ import (
 	"forklift-training/internal/pdfutil"
 )
 
-// ResumePDFRenderer 在线简历 PDF 渲染器（无状态：每次调用返回新字节，不落盘）。
-type ResumePDFRenderer struct{}
+// PDFRenderer 在线简历 PDF 渲染器（无状态：每次调用返回新字节，不落盘）。
+type PDFRenderer struct{}
 
-// NewResumePDFRenderer 构造在线简历渲染器。
-func NewResumePDFRenderer() *ResumePDFRenderer {
-	return &ResumePDFRenderer{}
+// NewPDFRenderer 构造在线简历渲染器。
+func NewPDFRenderer() *PDFRenderer {
+	return &PDFRenderer{}
 }
 
 // RenderResumePDF 由简历卡实时渲染打码在线简历 PDF，返回二进制内容。
@@ -32,7 +32,7 @@ func NewResumePDFRenderer() *ResumePDFRenderer {
 //   - 意向地区/薪资/经验/到岗/用工性质/自我介绍保留
 //
 // 压缩开关 testCompress=false 时关闭 PDF 压缩，便于契约测试做字节级文本断言。
-func (g *ResumePDFRenderer) RenderResumePDF(m *model.JobCard, testCompress bool) ([]byte, error) {
+func (g *PDFRenderer) RenderResumePDF(m *model.JobCard, testCompress bool) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pdfutil.PageMarginMm, pdfutil.PageMarginMm, pdfutil.PageMarginMm)
 	pdf.SetAutoPageBreak(true, pdfutil.PageMarginMm)
@@ -77,7 +77,7 @@ var (
 )
 
 // renderHeader 页头：姓名（打码）+ 一句话定位（期望岗位/意向地区）。
-func (g *ResumePDFRenderer) renderHeader(pdf *gofpdf.Fpdf, v resumePDFView) {
+func (g *PDFRenderer) renderHeader(pdf *gofpdf.Fpdf, v resumePDFView) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 20)
 	pdf.SetTextColor(resumeText[0], resumeText[1], resumeText[2])
 	pdf.SetXY(pdfutil.PageMarginMm, pdfutil.PageMarginMm+2)
@@ -124,7 +124,7 @@ func headerLine(v resumePDFView) string {
 }
 
 // renderBasicInfo 基本信息区（无电话/微信；现居地已由投影截断到市）。
-func (g *ResumePDFRenderer) renderBasicInfo(pdf *gofpdf.Fpdf, v resumePDFView) {
+func (g *PDFRenderer) renderBasicInfo(pdf *gofpdf.Fpdf, v resumePDFView) {
 	g.sectionTitle(pdf, "基本信息")
 	rows := [][2]string{
 		{"现居地", v.RegionCity},
@@ -143,7 +143,7 @@ func (g *ResumePDFRenderer) renderBasicInfo(pdf *gofpdf.Fpdf, v resumePDFView) {
 
 // renderSections 分段：自我介绍 / 工作经历 / 持证（只出名称）。
 // 取值已由投影模块解析与打码，本函数只排版。
-func (g *ResumePDFRenderer) renderSections(pdf *gofpdf.Fpdf, v resumePDFView) {
+func (g *PDFRenderer) renderSections(pdf *gofpdf.Fpdf, v resumePDFView) {
 	if strings.TrimSpace(v.SelfIntro) != "" {
 		g.sectionTitle(pdf, "自我介绍")
 		pdf.SetFont(pdfutil.FontSimHei, "", resumeBodyPt)
@@ -209,7 +209,7 @@ func (g *ResumePDFRenderer) renderSections(pdf *gofpdf.Fpdf, v resumePDFView) {
 }
 
 // sectionTitle 区块标题（带左侧强调条）。
-func (g *ResumePDFRenderer) sectionTitle(pdf *gofpdf.Fpdf, title string) {
+func (g *PDFRenderer) sectionTitle(pdf *gofpdf.Fpdf, title string) {
 	pdf.Ln(1)
 	y := pdf.GetY()
 	pdf.SetFillColor(resumeAccent[0], resumeAccent[1], resumeAccent[2])
@@ -222,7 +222,7 @@ func (g *ResumePDFRenderer) sectionTitle(pdf *gofpdf.Fpdf, title string) {
 }
 
 // labelValueRow 标签-值行。
-func (g *ResumePDFRenderer) labelValueRow(pdf *gofpdf.Fpdf, label, value string) {
+func (g *PDFRenderer) labelValueRow(pdf *gofpdf.Fpdf, label, value string) {
 	pdf.SetFont(pdfutil.FontSimHei, "", resumeLabelPt)
 	pdf.SetTextColor(resumeTextLbl[0], resumeTextLbl[1], resumeTextLbl[2])
 	pdf.CellFormat(26, resumeLineH, label, "", 0, "L", false, 0, "")

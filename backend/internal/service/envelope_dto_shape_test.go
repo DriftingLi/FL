@@ -129,11 +129,7 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{"deducted": 30},
 			dto:    &points.PointsPenaltyResultDTO{Deducted: 30},
 		},
-		{
-			name:   "RecruitMeDTO（GET /api/recruit/me，原裸 handler）",
-			legacy: map[string]any{"user_id": 9, "account": "hr009", "role": "recruiter"},
-			dto:    &RecruitMeDTO{UserID: 9, Account: "hr009", Role: "recruiter"},
-		},
+		// RecruitMeDTO 的用例已随招聘域搬去 internal/recruit/envelope_dto_shape_test.go（ADR-0070 波 4e）。
 		// RecruiterPasswordResetResult 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			name:   "practicemode.ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",

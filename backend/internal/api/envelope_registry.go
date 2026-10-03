@@ -36,6 +36,7 @@ import (
 	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
+	"forklift-training/internal/recruit"
 	"forklift-training/internal/search"
 	"forklift-training/internal/service"
 	"forklift-training/internal/student"
@@ -153,9 +154,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "questionbank.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
 		Keys: []string{"page", "page_size", "questions", "total"}, Dialect: paging.DialectPageSize,
 		Sample: questionbank.QuestionPageDTO{}},
-	{Result: "service.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
+	{Result: "recruit.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.RecruitListResult{}},
+		Sample: recruit.RecruitListResult{}},
 	{Result: "service.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
 		Keys: []string{"items", "total", "page", "page_size", "unread_count", "job_title"}, Dialect: paging.DialectPageSize,
 		Sample: service.RecruiterApplicationListResult{}},

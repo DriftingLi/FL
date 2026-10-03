@@ -1,7 +1,8 @@
 // Code generated from element-china-area-data (pcTextArr). DO NOT EDIT.
-// Package service 地区字典：省/市两级中文名（直辖市为一段）。
+// Package region 地区字典：省/市两级中文名（直辖市为一段）。
 // 供在线简历 PDF 现居地截断、#486 存量迁移无分隔串拆分、简历库地区筛选精确匹配共用。
-package service
+// 落点理由见 region_util.go 的包注释（P2 波 4e 破环：三处消费者分居两域包与 internal/api）。
+package region
 
 // regionProvinceCity 省 → 市列表（pcTextArr 已剔除「市辖区」特例）。
 var regionProvinceCity = map[string][]string{
@@ -38,8 +39,9 @@ var regionProvinceCity = map[string][]string{
 	"新疆维吾尔自治区": {"乌鲁木齐市", "克拉玛依市", "吐鲁番市", "哈密市", "昌吉回族自治州", "博尔塔拉蒙古自治州", "巴音郭楞蒙古自治州", "阿克苏地区", "克孜勒苏柯尔克孜自治州", "喀什地区", "和田地区", "伊犁哈萨克自治州", "塔城地区", "阿勒泰地区", "石河子市", "阿拉尔市", "图木舒克市", "五家渠市", "北屯市", "铁门关市", "双河市", "可克达拉市", "昆玉市", "胡杨河市", "新星市", "白杨市"},
 }
 
-// regionMunicipalities 直辖市（存储为一段「北京市」式）。
-var regionMunicipalities = map[string]bool{"北京市": true, "天津市": true, "上海市": true, "重庆市": true}
+// Municipalities 直辖市（存储为一段「北京市」式）。**只读查找表**：消费方一律只做下标读取。
+// 波 4e 从包私有 regionMunicipalities 升导出 —— internal/recruit 与 internal/resume 两处都要用它。
+var Municipalities = map[string]bool{"北京市": true, "天津市": true, "上海市": true, "重庆市": true}
 
 // provinceList 省份列表（含直辖市），顺序稳定供级联渲染。
 var provinceList = []string{

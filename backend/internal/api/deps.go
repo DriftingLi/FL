@@ -33,6 +33,8 @@ import (
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/realexam"
+	"forklift-training/internal/recruit"
+	"forklift-training/internal/resume"
 	"forklift-training/internal/search"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -106,9 +108,9 @@ type Deps struct {
 	QuestionKnowledgeSvc *questioninteraction.KnowledgeService
 	FaqSvc               *faq.Service
 	PointsSvc            *points.Service
-	JobCardSvc           *service.JobCardService
-	ResumePDFRenderer    *service.ResumePDFRenderer
-	RecruitSvc           *service.RecruitService
+	JobCardSvc           *resume.Service
+	ResumePDFRenderer    *resume.PDFRenderer
+	RecruitSvc           *recruit.Service
 	ContactSvc           *service.ContactService
 	JobPostingSvc        *service.JobPostingService
 	JobApplicationSvc    *service.JobApplicationService

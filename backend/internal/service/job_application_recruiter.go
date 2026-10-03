@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/resume"
 	"forklift-training/pkg/paging"
 )
 
@@ -52,7 +53,7 @@ func (s *JobApplicationService) ListForRecruiter(recruiterID, jobPostingID, page
 		// 脱敏学员信息（唯一脱敏路径：姓名打码，无手机/微信/PDF/证书原图）
 		var card model.JobCard
 		if err := s.db.First(&card, "user_id = ?", rows[i].StudentUserID).Error; err == nil {
-			d.StudentRealNameMasked = MaskRealName(card.RealName)
+			d.StudentRealNameMasked = resume.MaskRealName(card.RealName)
 			d.StudentResumeUpdatedAt = card.UpdatedAt.Format(time.RFC3339)
 			d.ResumeUpdatedAtSnapshot = rows[i].ResumeUpdatedAt.Format(time.RFC3339)
 		}
@@ -94,7 +95,7 @@ func (s *JobApplicationService) GetForRecruiter(recruiterID int, applicationID i
 	}
 	var card model.JobCard
 	if err := s.db.First(&card, "user_id = ?", app.StudentUserID).Error; err == nil {
-		dto.StudentRealNameMasked = MaskRealName(card.RealName)
+		dto.StudentRealNameMasked = resume.MaskRealName(card.RealName)
 		dto.StudentResumeUpdatedAt = card.UpdatedAt.Format(time.RFC3339)
 		dto.ResumeUpdatedAtSnapshot = app.ResumeUpdatedAt.Format(time.RFC3339)
 	}

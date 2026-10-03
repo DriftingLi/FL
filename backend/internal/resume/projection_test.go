@@ -3,7 +3,7 @@
 //  2. 持证去图的白名单**集合断言**（fail-closed：新键默认不露面）
 //  3. 哨兵值行为断言：敏感字段填独特哨兵，脱敏卡与打码版 PDF 的取值都不得含它
 //  4. 三处投影的字段清单（L2 卡的 JSON 键集 = 有意投影面）
-package service
+package resume
 
 import (
 	"encoding/json"
@@ -118,7 +118,7 @@ func TestResumeProjections_NoSensitiveSentinels(t *testing.T) {
 	card := sentinelCard()
 
 	// 投影 1：L2 脱敏卡
-	l2, err := json.Marshal(desensitize(card))
+	l2, err := json.Marshal(Desensitize(card))
 	if err != nil {
 		t.Fatalf("marshal L2 卡失败: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestResumeProjections_NoSensitiveSentinels(t *testing.T) {
 	}
 
 	// 投影 2：明文卡（本人 / 已授权方）必须**保留**全部字段——两侧一起钉，防止误改成「全丢」
-	plain, err := json.Marshal(toJobCardDTO(card))
+	plain, err := json.Marshal(ToJobCardDTO(card))
 	if err != nil {
 		t.Fatalf("marshal 明文卡失败: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestResumeProjections_NoSensitiveSentinels(t *testing.T) {
 // TestDesensitize_FieldListPinned L2 脱敏卡的字段清单逐字锁定：
 // 新增字段必须显式出现在这里（reviewer 一眼看到「它会不会出现在企业浏览面」）。
 func TestDesensitize_FieldListPinned(t *testing.T) {
-	blob, err := json.Marshal(desensitize(sentinelCard()))
+	blob, err := json.Marshal(Desensitize(sentinelCard()))
 	if err != nil {
 		t.Fatalf("marshal 失败: %v", err)
 	}

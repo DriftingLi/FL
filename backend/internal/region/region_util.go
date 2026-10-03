@@ -1,7 +1,14 @@
-// Package service 地区契约工具（spec #484 / 子票 #486）。
+// Package region 地区契约工具（spec #484 / 子票 #486）—— 叶子包。
+//
 // 意向地区与现居地统一「仅精确到市级」：存储两段「省/市」中文串（直辖市一段），
 // 本文件提供回显拆分、无分隔串拆分、市名精确匹配等共享逻辑。
-package service
+//
+// 为什么是叶子包（P2 波 4e）：这套助手被**三处**同时消费 —— 搬进 internal/recruit 的
+// recruit_service.go（RegionCityName / Municipalities）、搬进 internal/resume 的
+// resume_projection.go（SplitRegionNoSeparator / Municipalities），以及留驻 internal/api 的
+// region_migration_contract_test.go。留任一个域包都会让另一处反向依赖它（ADR-0070 破法三：
+// 无状态纯函数进叶子包；先例 internal/sortorder、internal/textx）。本包只 import strings。
+package region
 
 import (
 	"strings"
@@ -73,7 +80,7 @@ func SplitRegionNoSeparator(s string) (string, string) {
 		return "", ""
 	}
 	// 直辖市整段：北京市/天津市/上海市/重庆市
-	if regionMunicipalities[r] {
+	if Municipalities[r] {
 		return r, ""
 	}
 	// 省前缀匹配（短名与全名都试，取最长命中）
@@ -89,7 +96,7 @@ func SplitRegionNoSeparator(s string) (string, string) {
 	provFull := regionShortProvince[matchedProv]
 	rest := strings.TrimPrefix(r, matchedProv)
 	// 直辖市：只有一段，剩余区级信息不可作为市
-	if regionMunicipalities[provFull] {
+	if Municipalities[provFull] {
 		return provFull, ""
 	}
 	if rest == "" {
@@ -121,7 +128,7 @@ func RegionCityName(region string) string {
 		city = parts[1]
 	}
 	// 直辖市一段：城市名即本身
-	if regionMunicipalities[city] {
+	if Municipalities[city] {
 		return city
 	}
 	// 短名 → 全名映射（在所有城市短名中找）

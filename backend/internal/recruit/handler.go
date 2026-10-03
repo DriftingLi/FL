@@ -1,6 +1,8 @@
-// Package api 实现 HTTP handlers。
-// 本文件：企业招聘端受保护接口（第四角色 recruiter，host-only cookie 隔离，脱敏简历列表与详情，审计留痕）。
-package api
+// 本文件：招聘域 HTTP 出口之一 —— 企业招聘者工作区（第四角色 recruiter，host-only cookie 隔离，
+// 脱敏简历列表与详情，审计留痕）。/api/recruit 蓝图的角色守卫在组上。
+// 在线简历 PDF（/recruit/resumes/:id/pdf）见 handler_pdf.go。
+// 装配点：internal/api/routes_registry.go 调 recruit.RegisterRoutes(api, rd.Session, deps.RecruitSvc)。
+package recruit
 
 import (
 	"context"
@@ -11,25 +13,25 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-// RecruitHandler 招聘端 handler（脱敏读）。
-type RecruitHandler struct {
-	svc *service.RecruitService
+// handler 招聘端 handler（脱敏读）。
+type handler struct {
+	svc *Service
 }
 
-// NewRecruitHandler 创建 handler。
-func NewRecruitHandler(svc *service.RecruitService) *RecruitHandler {
-	return &RecruitHandler{svc: svc}
+// newHandler 创建 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterRecruitRoutes 注册 /api/recruit 蓝图（企业招聘者工作区，角色守卫）。
-func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.RecruitService) {
-	h := NewRecruitHandler(svc)
-	g := rg.Group("/recruit", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapRecruitAccess))
+// RegisterRoutes 注册 /api/recruit 蓝图（企业招聘者工作区，角色守卫）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
+	g := rg.Group("/recruit", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapRecruitAccess))
 	g.GET("/resumes", h.ListResumes)
 	g.GET("/resumes/:id", h.GetResume)
 	g.GET("/me", recruitMe)
@@ -51,13 +53,13 @@ func RegisterRecruitRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.Recr
 // @Param experience_years query int false "经验年限"
 // @Param available_in query string false "到岗时间"
 // @Param job_nature query string false "用工性质"
-// @Success 200 {object} response.R{data=service.RecruitListResult} "简历列表"
+// @Success 200 {object} response.R{data=recruit.RecruitListResult} "简历列表"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/resumes [get]
 // 过滤轴：region / position_id / credential_id / salary_min / salary_max / experience_years / available_in
 // 默认排序 updated_at DESC（service 层保证）；读写最新，无缓存；读取后审计留痕。
-func (h *RecruitHandler) ListResumes(c *gin.Context) {
-	params := service.RecruitListParams{
+func (h *handler) ListResumes(c *gin.Context) {
+	params := RecruitListParams{
 		Page:        httpx.QueryIntDefault(c, "page", 1),
 		PageSize:    httpx.QueryIntDefault(c, "page_size", 20),
 		Region:      c.Query("region"),
@@ -112,13 +114,13 @@ func (h *RecruitHandler) ListResumes(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "学员 ID"
-// @Success 200 {object} response.R{data=service.RecruitResumeCard} "简历详情"
+// @Success 200 {object} response.R{data=resume.RecruitResumeCard} "简历详情"
 // @Failure 400 {object} response.R "简历 ID 无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /recruit/resumes/{id} [get]
 // 与列表共用同一脱敏实现（service 层 desensitize），不存在两套逻辑；隐藏卡 404。
-func (h *RecruitHandler) GetResume(c *gin.Context) {
+func (h *handler) GetResume(c *gin.Context) {
 	uid, err := httpx.PathInt(c, "id", "简历 ID 无效")
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -144,15 +146,15 @@ func (h *RecruitHandler) GetResume(c *gin.Context) {
 // @Tags 招聘域-招聘者
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.RecruitMeDTO} "招聘者信息"
+// @Success 200 {object} response.R{data=recruit.RecruitMeDTO} "招聘者信息"
 // @Failure 401 {object} response.R "未认证"
 // @Router /recruit/me [get]
-// 响应形状是 service.RecruitMeDTO —— **不是** /auth/me 的 ProfileDTO（只回 3 个字段）；
+// 响应形状是 RecruitMeDTO —— **不是** /auth/me 的 ProfileDTO（只回 3 个字段）；
 // #954 片二把它从裸 handler 迁到 Endpoint 骨架，与其余端点同一条守卫链。
 func recruitMe(c *gin.Context) {
-	httpx.Endpoint[struct{}, service.RecruitMeDTO]{
-		Invoke: func(_ context.Context, _ *struct{}) (*service.RecruitMeDTO, error) {
-			return &service.RecruitMeDTO{
+	httpx.Endpoint[struct{}, RecruitMeDTO]{
+		Invoke: func(_ context.Context, _ *struct{}) (*RecruitMeDTO, error) {
+			return &RecruitMeDTO{
 				UserID:  middleware.CurrentUserID(c),
 				Account: middleware.CurrentAccount(c),
 				Role:    middleware.CurrentRole(c),

@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/resume"
 	"forklift-training/internal/student"
 	"forklift-training/pkg/paging"
 )
@@ -114,15 +115,15 @@ type ContactRequestListResult struct {
 // ContactPlainDTO 明文联系方式及其补齐面（GET /api/recruit/resumes/{id}/contact）。
 //
 // 同样与 handler 既有内联 map 的字段集一致（仅注解层的形状声明，不改响应构造）。
-// Photos / ResumeCertifications 是 JSONB 直出的数组，用 service.JSONArray 承接
+// Photos / ResumeCertifications 是 JSONB 直出的数组，用 resume.JSONArray 承接（该类型随简历域搬包）
 // （json.RawMessage 会让 swag 解析失败，见该类型的注释）。
 type ContactPlainDTO struct {
-	RealName             string    `json:"real_name"`
-	ContactPhone         string    `json:"contact_phone"`
-	Wechat               string    `json:"wechat"`
-	ResumeFileURL        string    `json:"resume_file_url"`
-	Photos               JSONArray `json:"photos" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
-	ResumeCertifications JSONArray `json:"resume_certifications" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
+	RealName             string           `json:"real_name"`
+	ContactPhone         string           `json:"contact_phone"`
+	Wechat               string           `json:"wechat"`
+	ResumeFileURL        string           `json:"resume_file_url"`
+	Photos               resume.JSONArray `json:"photos" swaggertype:"array,string" extensions:"x-nullable" nullability:"nullable"`
+	ResumeCertifications resume.JSONArray `json:"resume_certifications" swaggertype:"array,object" extensions:"x-nullable" nullability:"nullable"`
 }
 
 // contactCompany 一家企业在联系面读面上的投影：一次批量查询同时带回「名片三段」
@@ -548,8 +549,8 @@ func (s *ContactService) ExpirePending(now time.Time) (int64, error) {
 
 // GetContact 明文联系方式与 PDF 仅在**授权有效**时返回（存在已批准授权 ∧ 双方账号均有效，
 // 实时校验、无缓存）。判据单点在 contact_authz.go：ADR-0053 §3 收成一条、ADR-0062 决策 9 补对称半边。
-// 返回的 JobCardDTO 包含明文 phone/wechat/real_name/resume_file_url。
-func (s *ContactService) GetContact(recruiterID, studentUserID int) (*JobCardDTO, error) {
+// 返回的 resume.JobCardDTO 包含明文 phone/wechat/real_name/resume_file_url。
+func (s *ContactService) GetContact(recruiterID, studentUserID int) (*resume.JobCardDTO, error) {
 	if _, err := contactGrantEffectiveOf(s.db, recruiterID, studentUserID); err != nil {
 		return nil, err
 	}
@@ -558,7 +559,7 @@ func (s *ContactService) GetContact(recruiterID, studentUserID int) (*JobCardDTO
 	if err := s.db.First(&card, "user_id = ?", studentUserID).Error; err != nil {
 		return nil, errors.New("简历不存在")
 	}
-	dto := toJobCardDTO(&card)
+	dto := resume.ToJobCardDTO(&card)
 	return &dto, nil
 }
 

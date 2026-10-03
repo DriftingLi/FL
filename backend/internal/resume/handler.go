@@ -1,4 +1,7 @@
-package api
+// 本文件：简历域 HTTP 出口之一 —— 学员简历卡 CRUD / 可见性 / PDF 与工作照附件（/api/resume 蓝图）。
+// 查看留痕聚合见 handler_view.go、在线简历 PDF 见 handler_pdf.go；招聘者读面在 internal/recruit。
+// 装配点：internal/api/routes_registry.go 调 resume.RegisterRoutes(api, rd.Session, deps.JobCardSvc, deps.FileSvc)。
+package resume
 
 import (
 	"context"
@@ -10,23 +13,26 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
 
-type JobCardHandler struct {
-	svc     *service.JobCardService
+// handler 简历卡 handler。
+type handler struct {
+	svc     *Service
 	fileSvc *filestore.FileStore
 }
 
-func NewJobCardHandler(svc *service.JobCardService, fileSvc *filestore.FileStore) *JobCardHandler {
-	return &JobCardHandler{svc: svc, fileSvc: fileSvc}
+// newHandler 创建简历卡 handler。
+func newHandler(svc *Service, fileSvc *filestore.FileStore) *handler {
+	return &handler{svc: svc, fileSvc: fileSvc}
 }
 
-func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobCardService, fileSvc *filestore.FileStore) {
-	h := NewJobCardHandler(svc, fileSvc)
-	g := rg.Group("/resume", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapResumeManage))
+// RegisterRoutes 注册 /api/resume 蓝图（简历卡 CRUD / 可见性 / PDF 与工作照附件）。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, fileSvc *filestore.FileStore) {
+	h := newHandler(svc, fileSvc)
+	g := rg.Group("/resume", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapResumeManage))
 	g.GET("", h.Get)
 	g.PUT("", h.Upsert)
 	g.PUT("/visibility", h.UpdateVisibility)
@@ -41,16 +47,16 @@ func RegisterJobCardRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.JobC
 // @Tags 学员端-简历卡
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=service.JobCardDTO} "简历"
+// @Success 200 {object} response.R{data=resume.JobCardDTO} "简历"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "简历不存在"
 // @Router /resume [get]
-func (h *JobCardHandler) Get(c *gin.Context) {
-	httpx.Endpoint[resumeGetReq, service.JobCardDTO]{
+func (h *handler) Get(c *gin.Context) {
+	httpx.Endpoint[resumeGetReq, JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeGetReq, error) {
 			return &resumeGetReq{UserID: middleware.CurrentUserID(c)}, nil
 		},
-		Invoke: func(ctx context.Context, req *resumeGetReq) (*service.JobCardDTO, error) {
+		Invoke: func(ctx context.Context, req *resumeGetReq) (*JobCardDTO, error) {
 			return h.svc.Get(req.UserID)
 		},
 		ErrStatus: &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntry{
@@ -67,22 +73,22 @@ func (h *JobCardHandler) Get(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body service.JobCardInput true "简历内容"
-// @Success 200 {object} response.R{data=service.JobCardDTO} "已保存"
+// @Param body body resume.JobCardInput true "简历内容"
+// @Success 200 {object} response.R{data=resume.JobCardDTO} "已保存"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume [put]
-func (h *JobCardHandler) Upsert(c *gin.Context) {
-	httpx.Endpoint[resumeUpsertReq, service.JobCardDTO]{
+func (h *handler) Upsert(c *gin.Context) {
+	httpx.Endpoint[resumeUpsertReq, JobCardDTO]{
 		Parse: func(c *gin.Context) (*resumeUpsertReq, error) {
 			uid := middleware.CurrentUserID(c)
-			var body service.JobCardInput
+			var body JobCardInput
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, httpx.BadRequest("请求参数错误")
 			}
 			return &resumeUpsertReq{UserID: uid, Input: body}, nil
 		},
-		Invoke: func(ctx context.Context, req *resumeUpsertReq) (*service.JobCardDTO, error) {
+		Invoke: func(ctx context.Context, req *resumeUpsertReq) (*JobCardDTO, error) {
 			return h.svc.Upsert(req.UserID, req.Input)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
@@ -96,11 +102,11 @@ func (h *JobCardHandler) Upsert(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body object true "可见性 {visibility: hidden|open}"
-// @Success 200 {object} response.R{data=service.JobCardDTO} "已切换"
+// @Success 200 {object} response.R{data=resume.JobCardDTO} "已切换"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/visibility [put]
-func (h *JobCardHandler) UpdateVisibility(c *gin.Context) {
+func (h *handler) UpdateVisibility(c *gin.Context) {
 	uid := middleware.CurrentUserID(c)
 	var body struct {
 		Visibility string `json:"visibility"`
@@ -129,7 +135,7 @@ func (h *JobCardHandler) UpdateVisibility(c *gin.Context) {
 // @Failure 400 {object} response.R "文件错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/pdf [post]
-func (h *JobCardHandler) UploadPDF(c *gin.Context) {
+func (h *handler) UploadPDF(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.BadRequest(c, "未找到上传文件")
@@ -161,7 +167,7 @@ func (h *JobCardHandler) UploadPDF(c *gin.Context) {
 // @Success 200 {object} response.R "已删除"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/pdf [delete]
-func (h *JobCardHandler) DeletePDF(c *gin.Context) {
+func (h *handler) DeletePDF(c *gin.Context) {
 	if err := h.svc.DeleteResumeFile(middleware.CurrentUserID(c)); err != nil {
 		response.ServerErrorCause(c, "", err)
 		return
@@ -181,7 +187,7 @@ func (h *JobCardHandler) DeletePDF(c *gin.Context) {
 // @Failure 400 {object} response.R "文件错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /resume/image [post]
-func (h *JobCardHandler) UploadImage(c *gin.Context) {
+func (h *handler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.BadRequest(c, "未找到上传文件")
@@ -210,7 +216,5 @@ type resumeGetReq struct {
 
 type resumeUpsertReq struct {
 	UserID int
-	Input  service.JobCardInput
+	Input  JobCardInput
 }
-
-var _ = http.StatusOK

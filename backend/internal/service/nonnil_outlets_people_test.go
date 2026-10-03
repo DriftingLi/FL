@@ -46,8 +46,7 @@ var nonnilOutletsPeople = map[string]func(t *testing.T) any{
 	// 论坛读面（topics / images / replies / reports）的举证已随域包搬去 internal/forum/nonnil_outlets_test.go（ADR-0070 波 2b-2）。
 
 	// ===== 简历 / 招聘 =====
-	"service.RecruitResumeCard.resume_certifications": outletRecruitCardNoCerts,
-	"service.RecruiterApplicationListResult.items":    outletRecruiterApplicationListEmpty,
+	"service.RecruiterApplicationListResult.items": outletRecruiterApplicationListEmpty,
 	// 招聘者列表（auth.RecruiterListResult.items）的举证已随域包搬去 internal/auth/nonnil_outlets_test.go（ADR-0070 波 3a）。
 	"service.JobListResult.items": outletJobListEmpty,
 	// 管理域两格（HrwaiUserPageResult.list / TutorListDTO.tutors）与统计看板的 course_stats
@@ -75,34 +74,6 @@ func init() {
 
 // 论坛读面（topics / images / replies / reports）的举证已随域包搬去 internal/forum/nonnil_outlets_test.go（ADR-0070 波 2b-2）。
 // ===== 简历 / 招聘 =====
-
-// outletRecruitCardNoCerts 脱敏简历卡：持证那一格由 maskCertifications 兜底——脏数据 / 空列
-// 都返回 make(0,0)，json.Marshal 出来恒是数组，所以这一格连「列里存 JSON null」那一档都发不出
-// null（同一条 desensitize 的另两格走 `len(x)==0` 守卫，那一档会漏，见文件头）。
-func outletRecruitCardNoCerts(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	owner := testutil.SeedStudent(t, db, "公开简历卡主", "hash")
-	seedBlankJobCard(t, db, owner.ID, "open")
-	svc := NewRecruitService(db, zap.NewNop())
-	res, err := svc.Get(owner.ID)
-	if err != nil {
-		t.Fatalf("取脱敏卡失败: %v", err)
-	}
-	return res
-}
-
-// seedBlankJobCard 播一张**四个 JSONB 列都没写过**的简历卡（visibility 由调用方给）。
-func seedBlankJobCard(t *testing.T, db *gorm.DB, userID int, visibility string) {
-	t.Helper()
-	card := model.JobCard{
-		UserID: userID, RealName: "张三丰", Visibility: visibility,
-		CreatedAt: testutil.Now(), UpdatedAt: testutil.Now(),
-	}
-	if err := db.Create(&card).Error; err != nil {
-		t.Fatalf("播简历卡失败: %v", err)
-	}
-}
 
 // outletRecruiterApplicationListEmpty 企业侧投递列表：职位存在、零投递时 items 是空集。
 func outletRecruiterApplicationListEmpty(t *testing.T) any {
