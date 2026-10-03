@@ -28,21 +28,9 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 ### 技能路由表（意图 → 唯一默认入口，#1504）
 
-本环境并存三套技能（`~/.qoder/skills` 的 Matt Pocock 集、`~/.agents/skills`、superpowers 插件），同一意图常有多个入口；而 superpowers 每次会话注入的是「有 1% 可能就必须调用」，**只有本文件压得住它**（该技能自述用户指令优先于技能）。规则：**本表列出的意图以本表为准，技能自身描述里的触发词冲突时让位**；表未覆盖的意图可自主选择。
+**表体已上收到根** [`docs/agents/skill-routing.md`](../../docs/agents/skill-routing.md)，常驻摘要在根 `AGENTS.md`「Skill routing」段——路由是全环境的事（三套技能都装在用户级，对本机所有会话生效），不该只挂移动端。
 
-| 意图 | 默认入口 | 什么时候换另一个 |
-| --- | --- | --- |
-| 需求/目标不清，要澄清 | `grilling`（人唤） | 只想发散、不落档 → `superpowers:brainstorming`；要出书面问卷 → `to-questionnaire` |
-| 把结论写成 spec / 拆成票 | `to-spec` → `to-tickets` | 无（链路节奏见下方「会话切分约定」，本表不改它） |
-| 调试疑难、报错归因 | `diagnosing-bugs`（它读 `CONTEXT.md` 与本区 ADR） | 不涉本仓领域词汇的通用流程题 → `superpowers:systematic-debugging` |
-| 测试先行实现行为 | `tdd` | 无 |
-| 审「是否符合本仓规范与 spec」 | `code-review`（显式给固定点） | 对实现做穷举式缺陷扫描 → `review-code`（六轮） |
-| 领域词汇 / ADR | `domain-modeling` + `docs/agents/domain.md` | ADR 文件名一律中文（上一节的在册裁定压过技能的英文命名习惯） |
-| 建隔离工作树 | **只走 `scripts/new-worktree.ps1 -Task <票号>`** | **禁止** `superpowers:using-git-worktrees` 的裸 `git worktree add` 兜底路径 —— 见下方「Qoder 托管 worktree 的使用边界」 |
-| 临时产物 / handoff 落点 | `.scratch/` | 压过 `handoff` 技能文档里「存 OS 临时目录、不进工作区」那条 |
-| 不知道用哪个技能 | 先查本表 | 表里没有 → `ask-matt`（它带「仅人唤」标记，模型永远不会自己想起它） |
-
-判据、实测用量与三套技能的重叠矩阵见 `docs/skill-语义负担与路由裁决-2026-10-03.md`。
+移动端只需记住两条**与本线相关**的偏差：建隔离工作树**只走** `scripts/new-worktree.ps1`（见下方「Qoder 托管 worktree 的使用边界」）、临时产物与 handoff 进 `.scratch/`。其余按根表；`grilling` 一类的多问产出改写成一次性书面产物，规则全文在根那份里。
 
 ### Domain docs
 
