@@ -6,18 +6,15 @@
 //
 // 读面（favoriteTargetsMeta / List）保持「写时校验、读到快照」的既有形状（course 支即如此），
 // 不在本测试的断言面内。
-package api
+package favorite
 
 import (
 	"bytes"
 	"encoding/json"
-	"forklift-training/internal/favorite"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
@@ -74,10 +71,7 @@ func TestFavoriteChapterVisibilityContract(t *testing.T) {
 	}
 
 	cfg := &config.Config{JWTSecretKey: "contract-test-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
-	r := gin.New()
-	apiGroup := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	favorite.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.FavoriteSvc)
+	r := newFavoriteContractRouter(t, db, cfg)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(user.ID), user.Account, "hrwai_user")
 	if err != nil {

@@ -29,7 +29,7 @@ func fetchLedgerPage(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 	if query != `` {
 		path += `?` + query
 	}
-	rec := doWithToken(t, r, token, http.MethodGet, path, nil)
+	rec := testutil.DoWithToken(t, r, token, http.MethodGet, path, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf(`GET %s should be 200, got %d body=%s`, path, rec.Code, rec.Body.String())
 	}
@@ -87,7 +87,7 @@ func assertLedgerDomainFilter(t *testing.T, db *gorm.DB) {
 	}
 
 	// 1. 非管理员 403
-	rec := doWithToken(t, r, stuToken, http.MethodGet, `/api/admin/points/ledger`, nil)
+	rec := testutil.DoWithToken(t, r, stuToken, http.MethodGet, `/api/admin/points/ledger`, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf(`non-admin should be 403, got %d`, rec.Code)
 	}

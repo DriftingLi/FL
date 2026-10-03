@@ -58,6 +58,26 @@ func CodeAuthRequest(r *gin.Engine, method, path string, body map[string]interfa
 	return rec
 }
 
+// DoWithToken 发一枚带 Bearer 头的请求：body 为 nil 时不带正文，否则按 JSON 编码。
+//
+// 与 internal/api 的 doWithToken 同一口径（那份的 441 处调用点不在本批射程，故仍留在 api；
+// 域包侧一律用这一份，避免每个域各抄一遍 —— #1445 批 4）。
+func DoWithToken(t *testing.T, r *gin.Engine, token, method, path string, body any) *httptest.ResponseRecorder {
+	t.Helper()
+	var req *http.Request
+	if body != nil {
+		b, _ := json.Marshal(body)
+		req, _ = http.NewRequest(method, path, bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req, _ = http.NewRequest(method, path, nil)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
 // ExtractToken 从响应正文里取 "token" 字段值（登录/注册响应的取值口径）。
 func ExtractToken(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
