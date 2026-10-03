@@ -430,9 +430,28 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(picker).toContain("'最多上传 ' + maxImages + ' 张图片'");
   });
 
-  it('onLoad 参数解析与 loadDetail 时序保留', () => {
+  it('onLoad 参数解析与 loadDetail 时序保留（⑪-4 键盘监听在 loadDetail 之后注册、onUnload 注销）', () => {
     expect(detailPage).toMatch(/topicId\.value = parseInt\(`\$\{id\}`\)/);
-    expect(detailPage).toMatch(/\}\s*loadDetail\(\)\s*\}\)/);
+    // loadDetail 仍在 onLoad 内被调用（其后追加键盘监听注册 ⇒ 不再要求它是收尾最后一句）
+    expect(detailPage).toMatch(/\}\s*loadDetail\(\)/);
+    expect(detailPage).toMatch(/uni\.onKeyboardHeightChange\(/);
+    expect(detailPage).toMatch(/keyboardTracker\(res\.height\)/);
+    expect(detailPage).toMatch(/uni\.offKeyboardHeightChange\(\)/);
+  });
+
+  it('⑪ 回复栏改半屏浮层：常驻触发条 + 遮罩 + 贴键盘面板（接线守护，像素判据归 ①a）', () => {
+    // 触发条常驻（不再 v-if 切换内联展开态）
+    expect(detailPage).toMatch(/class="reply-trigger" @click="onOpenReply"/);
+    // 遮罩 + 面板：面板 bottom/maxHeight 由键盘高度驱动；遮罩点击收起、面板 @click.stop 防误收
+    expect(detailPage).toMatch(/class="reply-panel-mask" @click="onCollapseReply"/);
+    expect(detailPage).toMatch(/:style="\{ marginBottom: panelBottom \+ 'px', maxHeight: panelMaxHeight \+ 'px' \}"/);
+    expect(detailPage).toMatch(/@click\.stop/);
+    // ⑪-3：#1300 的下滑收起整条删除（onContentScroll 函数与 @scroll 绑定都不再存在；注释里提及不算）
+    expect(detailPage).not.toMatch(/function onContentScroll/);
+    expect(detailPage).not.toMatch(/@scroll="onContentScroll"/);
+    // ⑪-4：adjust-position 按 reply 档关掉（发帖档维持系统默认）
+    const inputComp = read('pages/forum/components/forum-markdown-input.uvue');
+    expect(inputComp).toMatch(/:adjust-position="!isReply"/);
   });
 });
 
