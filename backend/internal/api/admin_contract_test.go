@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	vexport "forklift-training/internal/valuation/export"
+	"forklift-training/internal/valuation"
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/config"
@@ -80,7 +80,7 @@ func newAdminContractEnv(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 // （newContractDeps 传 nil），给一条空结果即可让 /admin/export/evaluations 走通 CSV 分支。
 type stubExportStore struct{}
 
-func (stubExportStore) ListEvaluationExports(context.Context) ([]vexport.EvaluationExportRow, error) {
+func (stubExportStore) ListEvaluationExports(context.Context) ([]valuation.EvaluationExportRow, error) {
 	return nil, nil
 }
 

@@ -1,5 +1,5 @@
 // 本文件：管理端数据导出（CSV 附件）—— 原住 internal/api/export.go，波 4f 按 ADR-0070 随取数实现
-// 收进估值域的 HTTP 出口面：取数在 internal/valuation/export，本文件只管路由 + CSV 序列化 + 响应头。
+// 收进估值域的 HTTP 出口面：取数在域包（export*.go），本文件只管路由 + CSV 序列化 + 响应头。
 // 装配点：internal/api/routes_registry.go 调 vhandler.RegisterExportRoutes(api, rd.Session, deps.ExportSvc)。
 package handler
 
@@ -16,24 +16,24 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
-	"forklift-training/internal/valuation/export"
+	"forklift-training/internal/valuation"
 	"forklift-training/pkg/response"
 )
 
 // exportHandler 管理端数据导出 handler。
 type exportHandler struct {
-	svc *export.Service
+	svc *valuation.ExportService
 }
 
 // newExportHandler 创建管理端数据导出 handler。
-func newExportHandler(svc *export.Service) *exportHandler {
+func newExportHandler(svc *valuation.ExportService) *exportHandler {
 	return &exportHandler{svc: svc}
 }
 
 // RegisterExportRoutes 注册 /api/admin/export 蓝图（仅管理员，返回 CSV 附件）。
 // 文件名为后端唯一真值（随 Content-Disposition 下发，前端优先读取、拿不到再回退，#230）。
 // 只吃 *security.Session：原来的 RouterDeps 形参在本文件里只用到 Session 一格。
-func RegisterExportRoutes(rg *gin.RouterGroup, session *security.Session, svc *export.Service) {
+func RegisterExportRoutes(rg *gin.RouterGroup, session *security.Session, svc *valuation.ExportService) {
 	h := newExportHandler(svc)
 
 	g := rg.Group("/admin/export", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapExportRun))

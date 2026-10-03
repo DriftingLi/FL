@@ -16,7 +16,7 @@ import (
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
-	vexport "forklift-training/internal/valuation/export"
+	"forklift-training/internal/valuation"
 )
 
 // coreSingletons 是**跨域共享**的单例与横切依赖：domain provider 都从它取，不再各自 new 一份。
@@ -29,7 +29,7 @@ type coreSingletons struct {
 	db      *gorm.DB
 	st      storage.Storage
 	logger  *zap.Logger
-	export  vexport.ExportStore
+	export  valuation.ExportStore
 	sess    *security.Session
 	forumCn core.ForumCounter
 
@@ -55,7 +55,7 @@ type coreSingletons struct {
 // provideCore 建横切单例。**构造顺序与原单函数逐字一致**（会话 → 计数器 → 认证 → 通道 →
 // 存储/渲染 → 通知/审核 → AI 配置 → 积分 → 模型端口 → AI → 内容生成 → 联系方式），
 // 因为其中夹着一条后置装配（authSvc.SetProfileReviewService）与若干「先有 A 才有 B」的单例。
-func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore vexport.ExportStore) *coreSingletons {
+func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore valuation.ExportStore) *coreSingletons {
 	c := &coreSingletons{cfg: cfg, db: db, st: st, logger: logger, export: exportStore}
 
 	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
