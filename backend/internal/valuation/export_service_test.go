@@ -1,4 +1,4 @@
-package export
+package valuation
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func TestExportEvaluations(t *testing.T) {
 	tm := time.Date(2026, 8, 8, 10, 30, 0, 0, time.UTC)
 	kt := 0.8123
 	var nilPtr *float64
-	svc := NewService(nil, &fakeExportStore{rows: []EvaluationExportRow{
+	svc := NewExportService(nil, &fakeExportStore{rows: []EvaluationExportRow{
 		{
 			ID: 1, Account: "alice", Username: "张三", Brand: "Toyota", VehicleType: "FBT",
 			Series: "Series-1", Tonnage: 3.5, ConfigType: "标准", MastType: "L型", MastHeightMM: 3000,

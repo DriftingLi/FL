@@ -44,7 +44,7 @@ import (
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
 	"forklift-training/internal/tutor"
-	vexport "forklift-training/internal/valuation/export"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/wrongquestion"
 )
 
@@ -82,7 +82,7 @@ type Deps struct {
 	AuditSvc        *audit.Service
 	AIConfigSvc     *aiassistant.ConfigService
 	ContentGenSvc   *core.ContentGenerateService
-	ExportStore     vexport.ExportStore
+	ExportStore     valuation.ExportStore
 
 	CourseSvc            *course.Service
 	AdminSvc             *admin.Service
@@ -95,7 +95,7 @@ type Deps struct {
 	FavoriteSvc          *favorite.Service
 	SearchSvc            *search.Service
 	MaterialSvc          *material.Service
-	ExportSvc            *vexport.Service
+	ExportSvc            *valuation.ExportService
 	StudentSvc           *student.Service
 	QuestionBankSvc      *questionbank.Service
 	PracticeModeSvc      *practicemode.Service
@@ -134,7 +134,7 @@ type Deps struct {
 // 各域 provider 只写「自己那几个 service」，横切单例一律从 coreSingletons 取（providers_core.go），
 // 于是「全进程只有一份的东西」与「某域自己的东西」在文件层面就分得开。
 // exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
-func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore vexport.ExportStore) *Deps {
+func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore valuation.ExportStore) *Deps {
 	shared := provideCore(cfg, db, st, logger, exportStore)
 
 	d := &Deps{
