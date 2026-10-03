@@ -15,7 +15,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/pdf"
 	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -54,7 +53,7 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 			Writer:    repo.UpdateReportPath,
 			Prepare:   prepareSuggestions,
 			Render: func(_ context.Context, e *valuation.BatteryEvaluation) ([]byte, error) {
-				return pdf.GenerateBatteryReportBytes(e)
+				return valuation.GenerateBatteryReportBytes(e)
 			},
 		}),
 	}

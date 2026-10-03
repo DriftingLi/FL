@@ -28,7 +28,7 @@ type BatteryStore interface {
 	UpdateReportPath(ctx context.Context, id int64, path string) error
 }
 
-// ReportGenerator PDF 报告生成接口（ReportHandler 消费；生产为 pdf.Generator，测试为内存替身）。
+// ReportGenerator PDF 报告生成接口（ReportHandler 消费；生产为 valuation.PDFGenerator，测试为内存替身）。
 // dimensionScores 为 typed 维度评分切片（标签契约见 valuation.DimensionLabels）。
 type ReportGenerator interface {
 	GenerateReport(r *valuation.EvaluationDetail, dimensionScores []valuation.DimensionScore, suggestions []string) ([]byte, error)
