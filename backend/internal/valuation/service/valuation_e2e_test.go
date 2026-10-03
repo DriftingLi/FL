@@ -262,9 +262,7 @@ func TestEvaluateSnapshotFailureFallback(t *testing.T) {
 	}
 }
 
-// =====================================================
 // 建议回填（ADR-0004）：幂等性
-// =====================================================
 
 // memBackfillStore 内存回填存储（与生产仓储同形：返回完整评估详情）。
 type memBackfillStore struct {

@@ -1,4 +1,4 @@
-// Package api 实现 HTTP handlers。
+// Package job 实现 HTTP handlers。
 // 本文件：招聘域职位端点（spec #449 T2 #451）。
 //   - 企业侧 /api/recruit/jobs*（角色守卫 recruiter）：发布/编辑/上下架/我的职位列表/详情
 //   - 学员侧 /api/jobs*（角色守卫 hrwai_user）：职位广场（open 且未强制下架）/详情

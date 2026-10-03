@@ -9,9 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// =====================================================
 // #94 简单实体（规格/品牌家族，无描述符核心扩展）
-// =====================================================
 
 // BrandDescriptor 品牌：三字段 + (name) 唯一 DO UPDATE + update 为 k_brand/is_active 子集。
 var BrandDescriptor = Descriptor{
@@ -215,9 +213,7 @@ var EngineTypeDescriptor = Descriptor{
 	InvalidateResult: true,
 }
 
-// =====================================================
 // #95 复杂实体
-// =====================================================
 
 // ConditionRatingDescriptor 车况评级：rating 唯一 DO UPDATE + update 无 rating（非对称子集）。
 var ConditionRatingDescriptor = Descriptor{

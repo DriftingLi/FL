@@ -30,9 +30,7 @@ import (
 
 var errCodeNotFound = errors.New("code not found")
 
-// =====================================================
 // 测试替身：内存验证码存储 + 测试通道
-// =====================================================
 
 type memCodeStore struct {
 	m map[string]string
@@ -119,9 +117,7 @@ func (c *fakeChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 
 func (c *fakeChannel) BindColumn() string { return c.column }
 
-// =====================================================
 // 路由装配 + 请求 helper
-// =====================================================
 
 func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel) {
 	r, store, emailCh, phoneCh, _ := newCodeAuthTestRouterX(t, false)
@@ -205,9 +201,7 @@ func extractStoredCode(t *testing.T, store *memCodeStore, ch *fakeChannel, purpo
 	return v.Code
 }
 
-// =====================================================
 // 测试
-// =====================================================
 
 // TestCodeAuth_EmailRegisterLogin 邮箱通道：send-code → register → login 全流程。
 func TestCodeAuth_EmailRegisterLogin(t *testing.T) {

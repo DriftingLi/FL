@@ -1,5 +1,4 @@
 // Package service 实现核心业务逻辑
-// Package service 实现核心业务逻辑
 // 本文件：车况系数 Kc 的单元测试
 // Kc 计算依赖 ConfigReader + DictionaryReader，测试用内存实现，无需真实 Postgres。
 package service

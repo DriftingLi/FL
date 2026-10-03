@@ -1,4 +1,4 @@
-// Package api 实现 HTTP handlers。
+// Package job 实现 HTTP handlers。
 // 本文件：招聘域举报与强制下架（spec #449 T5 #454）。
 //   - 学员侧 POST /api/jobs/:id/report：举报职位
 //   - 管理端 /api/admin/jobs*：只读巡检职位列表（可按企业筛）+ 举报队列 + 强制下架 + 标记已处理

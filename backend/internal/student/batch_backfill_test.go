@@ -1,4 +1,4 @@
-// Package service 测试：学员学习记录/档案曲线进度批量回填（Ticket #215 C5）。
+// Package student 测试：学员学习记录/档案曲线进度批量回填（Ticket #215 C5）。
 // seam：service 层（testutil.NewMemoryDB 内存 sqlite）。
 // 目标：把 course_list 的批量回填泛化为可复用 module，student queryProfile/GetRecords
 // 改走批量回填（去 N+1），响应 shape 零漂移。以下测试先锁定现状外部行为

@@ -9,9 +9,7 @@ import (
 	"forklift-training/internal/valuation/dictcrud"
 )
 
-// =====================================================
 // 字典 DTO 定义
-// =====================================================
 
 // Brand 品牌
 type Brand struct {
@@ -127,9 +125,7 @@ type CoefficientConfig struct {
 	UpdatedAt   string  `json:"updated_at"`
 }
 
-// =====================================================
 // 仓储入口
-// =====================================================
 
 // DictionaryRepository 字典与原价仓储
 // 持有 *pgxpool.Pool，所有方法均为线程安全（pgx 连接池内置并发控制）。

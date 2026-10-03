@@ -169,9 +169,7 @@ func generateEmailCode() (string, error) {
 	return string(b), nil
 }
 
-// =====================================================
 // 通道 adapter：邮箱
-// =====================================================
 
 // EmailChannel 邮箱验证码通道。
 type EmailChannel struct {
@@ -258,9 +256,7 @@ func (c *EmailChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 // BindColumn 绑定写入 email 字段。
 func (c *EmailChannel) BindColumn() string { return "email" }
 
-// =====================================================
 // 通道 adapter：短信
-// =====================================================
 
 // SmsChannel 手机号验证码通道。
 type SmsChannel struct {
@@ -356,9 +352,7 @@ func (c *SmsChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 // BindColumn 绑定写入 phone 字段。
 func (c *SmsChannel) BindColumn() string { return "phone" }
 
-// =====================================================
 // 验证码 engine：发送 / 校验 / 注册 / 登录 / 绑定
-// =====================================================
 
 // VerifyCodeService 验证码服务，邮箱/手机号/绑定共用一套状态机。
 type VerifyCodeService struct {

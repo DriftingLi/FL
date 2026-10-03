@@ -139,7 +139,7 @@
 
 > 注：`internal/valuation/service/*` 写「Package service 实现核心业务逻辑」**不算失真**（它的包名就是 `service`）；那批另有 2 处相邻重复（§5-C）。
 
-### B. 装饰分隔线 18 块（36 行，生产）
+### B. 装饰分隔线（本报告只列生产面 18 块 / 36 行；守卫的全量面 = **全部 backend .go**，实测 27 块 / 54 行，另 18 行在测试文件里）
 
 `internal/auth/code_service.go` :172,174 · :261,263 · :359,361；`internal/valuation/dictcrud/descriptors.go` :12,14 · :218,220；`internal/valuation/handler/config.go` :44,46 · :489,493；`internal/valuation/handler/dictcrud_docs.go` :30,32 · :88,90 · :128,130 · :151,157；`internal/valuation/pdf/template.go` :129,131 · :317,319 · :750,752 · :930,932；`internal/valuation/repository/dictionaries.go` :12,14 · :130,132；`internal/valuation/service/battery_rul.go` :376,378。
 
@@ -163,7 +163,7 @@
 
 ## 6. 棘轮与下一步
 
-- **棘轮（下一刀）**：`scripts/check-comment-cleanliness.mjs` + 同名 `.test.mjs`（本仓每个 `check-*.mjs` 都有配对测试），锁 §5-A/B/C 三类，基线 = 上表数字，**只减不增**；CI 接线与 `docs/agents/checks.md` 的登记同批。
+- **棘轮（已落地，2026-10-03 第二刀）**：`scripts/check-comment-cleanliness.mjs` + `scripts/check-comment-cleanliness.test.mjs`（13 条判定面用例），锁 §5-A/B/C 三类，**基线 0、allowlist 为空**（只减不增已减到底）；CI 接线在 `backend-lint`（`--all`，射程 729 个 `.go`，minChecked 600）与 `el-controls-selftest`（`node --test`），`docs/agents/checks.md` 已登记。§5-A/B/C 的清单一并清完（42 + 54 + 3 = 99 处，含测试文件里的 18 行分隔线）。
 - **收口（同一刀）**：42 处失真包文档 + 18 块分隔线 + 3 处重复行一起清；§5-D 的 29 处按「记账 / 指路」逐条判（预计只动其中一小撮）。
 - **之后才谈扩面**：把同一判据推到 `frontend/` 与移动端（各有自己的约定，需单独出报告）。
 

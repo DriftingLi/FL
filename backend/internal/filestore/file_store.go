@@ -1,4 +1,4 @@
-// Package service 文件存储 module：上传、校验、删除与列表。
+// Package filestore 文件存储 module：上传、校验、删除与列表。
 // 图片 WebP 压缩保留在 Save 的 implementation 内（ADR-0015）。
 package filestore
 
