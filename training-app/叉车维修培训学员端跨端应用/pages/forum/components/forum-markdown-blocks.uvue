@@ -6,25 +6,25 @@
          **段落地板**上由解析器处理）⇒ 本组件**不持**这两条分支，与 `featured-detail` 不持表格分支同例。 -->
     <view class="md-body">
         <view v-for="(block, idx) in blocks" :key="idx" class="md-block">
-            <!-- 标题 -->
+            <!-- 标题（⑩-2：文字按 runs 出嵌套 text，逐 run 自带样式 —— C1） -->
             <text v-if="block.type == 'heading'"
-                :class="['md-heading', 'md-h' + block.level]">{{ block.text }}</text>
+                :class="['md-heading', 'md-h' + block.level]"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
             <!-- 段落 -->
-            <text v-else-if="block.type == 'paragraph'" class="md-paragraph">{{ block.text }}</text>
-            <!-- 代码块 -->
+            <text v-else-if="block.type == 'paragraph'" class="md-paragraph"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
+            <!-- 代码块（整体等宽，内部不解析） -->
             <view v-else-if="block.type == 'code'" class="md-code-wrap">
                 <text class="md-code">{{ block.text }}</text>
             </view>
-            <!-- 列表 -->
+            <!-- 列表（⑩-3：`level` 槽带有序性 ⇒ 编号现算，起始值一律从 1 起，⑩-4） -->
             <view v-else-if="block.type == 'list'" class="md-list">
                 <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
-                    <text class="md-list-bullet">•</text>
-                    <text class="md-list-text">{{ item }}</text>
+                    <text class="md-list-bullet">{{ block.level == 1 ? (li + 1) + '.' : '•' }}</text>
+                    <text class="md-list-text"><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
                 </view>
             </view>
-            <!-- 引用 -->
+            <!-- 引用（⚠️ 这条分支曾直出 `block.text`：引用块因此漏记号，判据按 runs 看不见 —— 现同样走 runs） -->
             <view v-else-if="block.type == 'quote'" class="md-quote">
-                <text class="md-quote-text">{{ block.text }}</text>
+                <text class="md-quote-text"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, true)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
             </view>
             <!-- 分隔线 -->
             <view v-else-if="block.type == 'divider'" class="md-divider"></view>
@@ -34,12 +34,86 @@
 
 <script setup lang="uts">
     import type { MarkdownBlock } from '../../../types/index'
+    // 只经**格式轴**拿 runs（与「档位决策不收在模板里」同一条接线口径，ADR-0025 P2 新决策 1）：
+    // 本组件不许出现 `parseMarkdown` / `SUBSET_`，也不直引 utils/markdownInline —— 由
+    // markdownContract 的论坛面组钉住。
+    import { forumInlineRuns, forumLinkDomain } from '../../../utils/forumBody'
+    import { openExternalBrowser } from '../../../utils/systemBrowser'
+    import type { MarkdownInlineRun } from '../../../utils/markdownInline'
 
     const props = withDefaults(defineProps<{
         blocks? : MarkdownBlock[]
     }>(), {
         blocks: () => [] as MarkdownBlock[]
     })
+
+    const runsOf = (src : string) : MarkdownInlineRun[] => forumInlineRuns(src)
+
+    /**
+     * C1：App 端**子 `<text>` 不继承父样式** ⇒ 每个 run 必须自带字号字色行高，
+     * 再叠样式位。基线字号/色与所在块一致（正文 30rpx、引用 28rpx 的差异由外层
+     * `.md-quote-text` 的类**带不进**子节点，故子节点各自写死一份 —— 这是 uvue 的规则，不是啰嗦）。
+     *
+     * C2：修饰线只写长形态 `text-decoration-line`（`text-decoration` 简写 App 端不支持）。
+     * C3：行内代码不用 `padding/margin/width/display`（子 text 上不生效），改「底色 + 字符空格」。
+     * C4：等宽只给单一 `monospace`，不写逗号回退列表（App 端不支持分隔符列表）。
+     */
+    // ⚠️ 第二参**不给默认值**：UTS 匿名函数（箭头）编译成 Kotlin 后不允许参数默认值
+    // （`anonymous functions cannot specify default values for their parameters`，④c 实测）
+    // ⇒ 所有调用点显式传第二参（引用块 `true`，其余 `false`）。
+    const runClasses = (run : MarkdownInlineRun, inQuote : boolean) : string[] => {
+        const cls : string[] = ['md-run']
+        if (inQuote) cls.push('md-run-q')           // 排在后面 ⇒ 覆盖基线字号字色（uvue 只认同权重后来者）
+        if (run.bold) cls.push('md-run-b')
+        if (run.italic) cls.push('md-run-i')
+        if (run.strike) cls.push('md-run-s')
+        if (run.code) cls.push('md-run-c')
+        if (run.link.length > 0) cls.push('md-run-l')
+        return cls
+    }
+
+    /**
+     * C3：行内代码胶囊靠 `background-color` + **前后字符空格** —— 子 `<text>` 上 `padding/margin`
+     * 不生效（官方文档明写，见 ADR-0025 C3），只能用字符空格撑出呼吸感。空格**只给 code run**，
+     * 其余 run 原样；纯文本投影（`inlineRunsPlainText` 走 `run.text`）不受这里影响。
+     */
+    const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
+
+    /**
+     * ⑩-8：点可点 run（`link` 非空 ⇒ 已过协议闸，只可能 http(s)）弹 `showModal` 显示**目标域名**，
+     * 确认后 App-Android 走 `openExternalBrowser`（原生 Intent，见 `utils/systemBrowser.uts`：uni-app x
+     * **不支持 plus、`uni.openURL` ④c 判 unresolved**）、**mp-weixin 退化为复制链接 + toast**（小程序
+     * 打不开任意外链是平台事实，跨端分叉必须具名）。⑩-9：**站内链接也弹** —— app 内任何外链都是离开
+     * app，站内页在移动端没有对应路由，故**不设** `isSameSiteUrl` 直开快路径（那句的适用面收窄为 Web）。
+     *
+     * ⚠️ 嵌套**子 `<text>`** 的点击：App 端要 HBuilderX ≥ 4.51（本机 5.23 满足）；小程序端「子 text
+     * 能否被点」文档未承诺（ADR-0025 §6）⇒ 本段**只能真机 ①a 验**「点了确实响应」，jest/④c 测不出。
+     */
+    const onRunTap = (run : MarkdownInlineRun) : void => {
+        const link = run.link
+        if (link.length == 0) return
+        const domain = forumLinkDomain(link)
+        uni.showModal({
+            title: '打开外部链接',
+            content: '即将离开应用访问：' + domain,
+            confirmText: '打开',
+            cancelText: '取消',
+            success: (res) => {
+                if (!res.confirm) return
+                // #ifdef APP-ANDROID
+                openExternalBrowser(link)
+                // #endif
+                // #ifdef MP-WEIXIN
+                uni.setClipboardData({
+                    data: link,
+                    success: () => {
+                        uni.showToast({ title: '链接已复制', icon: 'none' })
+                    }
+                })
+                // #endif
+            }
+        })
+    }
 </script>
 
 <style lang="scss">
@@ -159,5 +233,49 @@
         height: 1rpx;
         background-color: #e0e0e0;
         margin: 24rpx 0;
+    }
+
+    /* ── 行内 run（⑩-2；C1–C4 的落点）──────────────────────────────
+       每条 run 自带字号 / 字色 / 行高：App 端子 `<text>` **不继承**父组件样式（C1）。
+       基线取正文的 30rpx / #333333；引用块内的 run 由下面的覆盖条改尺寸。 */
+    .md-run {
+        font-size: 30rpx;
+        color: #333333;
+        line-height: 52rpx;
+    }
+
+    .md-run-b {
+        font-weight: bold;
+    }
+
+    .md-run-i {
+        font-style: italic;
+    }
+
+    /* C2：只写长形态 —— `text-decoration` 简写在 app 端不支持（官方 tips 原话），
+       且值域只有 underline / line-through / overline / none。 */
+    .md-run-s {
+        text-decoration-line: line-through;
+    }
+
+    .md-run-l {
+        color: #2979ff;
+        text-decoration-line: underline;
+    }
+
+    /* C3：行内代码**不写 padding / margin / width / display**（子 text 上不生效），
+       胶囊感靠 background-color + 模板里的前后空格；C4：单一 monospace，不写逗号回退。 */
+    .md-run-c {
+        font-family: monospace;
+        background-color: #f0f0f0;
+        color: #d63384;
+    }
+
+    /* 引用块内的 run：父级样式带不下来（也没有后代选择器可依赖），只能**显式传进去**
+       —— 由 runClasses 的第二参决定，不靠 CSS 级联。 */
+    .md-run-q {
+        font-size: 28rpx;
+        color: #555555;
+        line-height: 48rpx;
     }
 </style>

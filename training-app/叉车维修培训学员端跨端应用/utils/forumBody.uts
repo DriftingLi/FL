@@ -19,6 +19,8 @@
  * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
  */
 import { parseMarkdown, SUBSET_FORUM } from './markdown'
+import { splitInlineRuns, inlineRunsPlainText, inlineLinkDomain } from './markdownInline'
+import type { MarkdownInlineRun } from './markdownInline'
 import type { MarkdownBlock } from '../types/index'
 
 /**
@@ -50,24 +52,39 @@ export function forumContentBlocks(content : string, format : string) : Markdown
 }
 
 /**
+ * 一段行内源串 → run 序列（渲染层拿样式的**唯一**入口，ADR-0025 ⑩-2）。
+ *
+ * 渲染层**不**直引 `utils/markdownInline`：与「档位决策收在格式轴」同一条接线口径
+ * （页面/组件自查会看到 `forumContentBlocks` 与 `forumInlineRuns` 成对出现，
+ * 而 `utils/markdown*` 只出现在本文件 —— `markdownContract` 的论坛面组钉这条）。
+ */
+export function forumInlineRuns(src : string) : MarkdownInlineRun[] {
+    return splitInlineRuns(src)
+}
+
+/**
+ * 链接的**目标域名**（⑩-8 确认弹窗用）：与 {@link forumInlineRuns} 同一条格式轴接线口径 ——
+ * 渲染组件**不直引** `utils/markdownInline` 的运行期函数，一律经本模块转发（`markdownContract`
+ * 的论坛面组钉这条）。输入是某个 run 已过协议闸的 `link`（只可能 http(s)）。
+ */
+export function forumLinkDomain(url : string) : string {
+    return inlineLinkDomain(url)
+}
+
+/**
  * 正文的**纯文本投影**：格式轴的第二条消费路径（列表摘要 —— 只要文字、不要记号）。
  *
  * - `text` 档 ⇒ **原样返回**（零回归：存量帖的预览一个字节都不变）；
- * - `markdown` 档 ⇒ 取 {@link forumContentBlocks} 的**块投影**：每块优先用它的 `text`
- *   （heading / paragraph / quote / code 都已是解析器算好的纯文本），`text` 为空的块
- *   （list）退到 `items` 拼接，divider 两者都空 ⇒ 自然不贡献字符；块间以空格相连。
+ * - `markdown` 档 ⇒ 取 {@link forumContentBlocks} 的块，**每块再经 {@link forumInlineRuns}
+ *   取叶子**（⑩-5：摘要与渲染**共用同一次分词**）。这条不是「顺手复用」：分叉后块 `text`
+ *   存的是行内源串，不剥就会把 `**故障码**` 直接送进列表；而「另写一份剥记号的正则」
+ *   则是第二套规则 —— 两处分道正是 ADR 反复要防的漂移（根 ADR-0044 明把正则列为被否决做法）。
  *
- * **为什么投影走解析器而不写正则**（根 `ADR-0044` 原话）：「剥离走与渲染同一个解析器的 AST 投影，
- * 不写正则 —— 正则与渲染器是两套规则，代码块内的符号、转义、嵌套标记都会与真实渲染不一致」。
- * 附带两个结果：① 预览与详情页正文**同源**（同一条格式轴、同一份成员声明表）；② 论坛档将来加成员
- * （例如把 `table` 收进来）预览**自动跟上**，不会多出第二处同步点 —— 故这里按**块形状**投影，
- * 不再抄一遍 `block.type == '…'` 的分支（那是渲染组件的词汇表，抄过来就是第二处事实）。
- *
- * 论坛档不声明 `table` / `image` ⇒ 表格退回逐行原文（`|` 仍在、内容不丢）、`![alt](url)` 展开成
- * alt —— 与详情页正文同口径（「降级仍可读」的段落地板在承重，见 `utils/markdown.uts` 的 `MEMBER_*`）。
- *
- * @param content 正文原文（后端 `content` 字段，未做任何预处理）
- * @param format  `content_format` 归一后的取值（`markdown` / `text`）
+ * 逐块的形状：`list` 走 `items`（每项各自分词）、divider 两者皆空 ⇒ 不贡献字符，其余走 `text`
+ * —— 这一句**不是**抄渲染器的类型词汇表（#1273 立的那条「按块形状投影、不写 `type` 分支」仍成立）。
+ * 唯一的例外是 `code`：它是**语义**豁免而不是形状分支 —— 围栏里的 `**` 是代码内容，
+ * 剥它等于把代码读破（根 ADR-0044 拒绝正则剥离的理由正落在这格），所以代码块**不过分词器**，
+ * 与改动前「代码块 text 原样进摘要」逐字一致。
  */
 export function forumContentPlainText(content : string, format : string) : string {
     if (!isMarkdownFormat(format)) return content
@@ -75,7 +92,14 @@ export function forumContentPlainText(content : string, format : string) : strin
     const pieces : string[] = []
     for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i]
-        const piece = block.text.length > 0 ? block.text : block.items.join(' ')
+        let piece = ''
+        if (block.type == 'code') {
+            piece = block.text
+        } else if (block.type == 'list') {
+            piece = inlineRunsPlainText(forumInlineRuns(block.items.join(' ')))
+        } else {
+            piece = inlineRunsPlainText(forumInlineRuns(block.text))
+        }
         if (piece.length > 0) pieces.push(piece)
     }
     return pieces.join(' ')

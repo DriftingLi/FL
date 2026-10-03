@@ -58,6 +58,18 @@ export const MEMBER_CODE = 'code'
 export const MEMBER_DIVIDER = 'divider'
 export const MEMBER_IMAGE = 'image'
 export const MEMBER_TABLE = 'table'
+/**
+ * 行内格式成员（ADR-0025 **⑩-2**，取代 ③ 第一条「不做行内渲染」）。
+ *
+ * 它与其他成员**不同类**：别的成员各产一种块，`inline` 改的是**块内文本的语义** ——
+ * 声明它 ⇒ 解析器不再把 `**粗**` / `[文](url)` / `` `码` `` / `~~删~~` 抹平成纯文本，
+ * 块 `text` 与 list `items` 存**行内源串**，由 `utils/markdownInline.uts` 切成 runs、
+ * 渲染层用嵌套 `<text>` 上样式（⑩-2 的官方口径：uvue 的 `<text>` 只允许嵌 `<text>`）。
+ *
+ * 因此它在「声明即行为」对账里的探针不是「出哪种块」，而是「块内文本还留不留记号」
+ * （见 `markdownSubsetBehavior.test.js` 的 `PROBES.inline.holds`）。
+ */
+export const MEMBER_INLINE = 'inline'
 
 /** 章节档声明：可信面全集（唯一的含表格档） */
 export const SUBSET_MEMBERS_CHAPTER : string[] = [
@@ -69,12 +81,15 @@ export const SUBSET_MEMBERS_FEATURED : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
 	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE,
 ]
-/** 论坛档声明（ADR-0025）：比内容精选档**少一个 image** —— 论坛是图文分离，正文内嵌 `![alt](url)`
- *  与 Web 同口径**展开成 alt 文本**（根 ADR-0044：图片一律走 `images` 数组），故不产 image 块；
- *  该语法落在段落地板上，`stripInline` 把它剥成 alt 文本（可见、不丢）。 */
+/** 论坛档声明（ADR-0025）：比内容精选档**少一个 image**（图文分离：正文内嵌 `![alt](url)`
+ *  与 Web 同口径**展开成 alt 文本**，图片走 `images` 数组），另**多一个 inline**（⑩-2：
+ *  唯一声明行内格式的档 —— 粗体 / 斜体 / 行内代码 / 链接 / 删除线 / 有序编号在论坛渲染）。
+ *  ⚠️ 后一条是 2026-10-02 对 ③ 第一条的重开：④ 当年「不给论坛改共享件」的理由仍成立，
+ *  走的是**按成员开关**这条不摊风险的路 —— `chapter` / `featured` 不声明 ⇒ 逐字不变（⑩-6）。
+ *  代价具名登记：同一个 app 里帖子有粗体、课程章节没有（一处新的跨面不一致）。 */
 export const SUBSET_MEMBERS_FORUM : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
-	MEMBER_CODE, MEMBER_DIVIDER,
+	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE,
 ]
 
 /**
@@ -96,6 +111,13 @@ export function subsetHasMember(subset : string, member : string) : boolean {
 export const TABLE_LEVEL_HEAD = 1
 /** 表格块的 level 取值：正文行 */
 export const TABLE_LEVEL_BODY = 0
+
+/**
+ * list 块的 level 取值：无序（`-` / `*` / `+`）—— 也是**改动前唯一**存在过的取值（⑩-3 复用该槽）
+ */
+export const LIST_LEVEL_UL = 0
+/** list 块的 level 取值：有序（`1. 2. 3.`）—— 仅在**声明了 `MEMBER_INLINE` 的档**才可能出现 */
+export const LIST_LEVEL_OL = 1
 
 /** 转义竖线的临时占位符：切分单元格前先替换，避免 `\|` 被当成列分隔符 */
 const ESCAPED_PIPE = '\u0001'
@@ -124,6 +146,10 @@ function stripInlinePlain(text : string) : string {
 	s = s.replace(/_([^_]+)_/g, '$1')
 	// 行内代码 `code` → code
 	s = s.replace(/`([^`]+)`/g, '$1')
+	// 删除线 ~~text~~ → text（ADR-0025 **⑩-5**：现状缺这条规则 ⇒ `~~x~~` **源串泄漏**，
+	// 比登记过的差异更难看。这条**三档共用**：论坛走分词器投影、另两档走这里，
+	// 产物都从「漏 `~~`」变成「剥净」，属修复集、不是回归。）
+	s = s.replace(/~~([^~]+)~~/g, '$1')
 	return s
 }
 
@@ -179,8 +205,17 @@ function collectMathSpans(text : string) : number[] {
 
 /**
  * 去除行内 markdown 标记符号，保留纯文本；**公式跨度原样跳过**（降级为源码的保证）。
+ *
+ * `keepInline`（ADR-0025 **⑩-2** 的分叉闸门）：本档声明了 `MEMBER_INLINE` 时为 `true`，
+ * 此时**一个记号都不剥**、原样返回源串 —— 样式的落点在渲染层（`utils/markdownInline.uts`
+ * 切 runs + 嵌套 `<text>`），而**摘要投影也走同一个分词器取叶子**（⑩-5），
+ * 所以「渲染剥了 / 摘要没剥」这类漂移在这一处被结构性堵住，不必靠用例逐条追。
+ *
+ * ⚠️ 分叉只由**声明表**决定，不看档位名字：将来谁把 `inline` 加进 `SUBSET_MEMBERS_CHAPTER`，
+ * 课程章节会同时获得行内渲染（那是重开 ⑩-6 的跨面不一致，得另立决定，不是手滑）。
  */
-function stripInline(text : string) : string {
+function stripInline(text : string, keepInline : boolean) : string {
+	if (keepInline) return text
 	const spans = collectMathSpans(text)
 	if (spans.length == 0) return stripInlinePlain(text)
 	let out = ''
@@ -227,10 +262,10 @@ function isTableDelimiterRow(line : string) : boolean {
 }
 
 /** 一行的单元格归一：少补空串、多则截断（列宽靠等宽单元格，多出的格子无处安放） */
-function normalizeTableRow(raw : string[], width : number) : string[] {
+function normalizeTableRow(raw : string[], width : number, keepInline : boolean) : string[] {
 	const cells : string[] = []
 	for (let i = 0; i < width; i++) {
-		cells.push(i < raw.length ? stripInline(raw[i]) : '')
+		cells.push(i < raw.length ? stripInline(raw[i], keepInline) : '')
 	}
 	return cells
 }
@@ -252,6 +287,15 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 	function hasMember(member : string) : boolean {
 		return members.indexOf(member) >= 0
 	}
+	/**
+	 * ⑩-2 的分叉闸门：本档声明 `inline` ⇒ 块内文本存**行内源串**（不抹平）。
+	 *
+	 * ⚠️ 它同时决定⑩-3 那条「有序落 `level` 槽」要不要生效：**两件事都只对本档声明走**，
+	 * 因为 ⑩-6 把「`chapter` / `featured` 逐字不变」定成了硬 AC —— 若把 `ol` 的 `level=1`
+	 * 无条件写上，那两档的块数组也会变（`level` 是块的一部分），那就不是「按成员开关」而是
+	 * 「把论坛的新行为摊到已上线面」，正是 ④ 当年否决的那条路。
+	 */
+	const keepInline = hasMember(MEMBER_INLINE)
 	const lines = markdown.split('\n')
 	let i = 0
 	let inCodeBlock = false
@@ -262,9 +306,12 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 
 	function flushList() {
 		if (listItems.length > 0) {
+			// ⑩-3 零形状变更：有序信息复用 list 块恒为 0 的 `level` 槽（0=无序 / 1=有序），
+			// 与 table 块用 `level` 区分表头行同形（根 ADR-0046 决定 6 的先例）——
+			// 血账（自定义类型数组字段被 UTS 编译期改名 ⇒ 整模块 unresolved reference）一条不碰。
 			blocks.push({
 				type: 'list',
-				level: 0,
+				level: (keepInline && listType == 'ol') ? LIST_LEVEL_OL : LIST_LEVEL_UL,
 				text: '',
 				items: listItems,
 			} as MarkdownBlock)
@@ -369,14 +416,14 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 			flushQuote()
 			const headerRaw = splitTableRowRaw(line)
 			const width = headerRaw.length
-			pushTableRow(normalizeTableRow(headerRaw, width), true)
+			pushTableRow(normalizeTableRow(headerRaw, width, keepInline), true)
 			i = i + 2
 			while (i < lines.length) {
 				const bodyLine = trim(lines[i])
 				if (bodyLine.length == 0) break
 				if (!hasTablePipe(bodyLine)) break
 				if (isTableDelimiterRow(bodyLine)) break
-				pushTableRow(normalizeTableRow(splitTableRowRaw(bodyLine), width), false)
+				pushTableRow(normalizeTableRow(splitTableRowRaw(bodyLine), width, keepInline), false)
 				i++
 			}
 			continue
@@ -404,7 +451,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 			const levelStr = headingMatch![1] ?? ''
 			const textStr = headingMatch![2] ?? ''
 			const level = levelStr.length
-			const text = stripInline(textStr)
+			const text = stripInline(textStr, keepInline)
 			blocks.push({
 				type: 'heading',
 				level: level,
@@ -419,7 +466,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 		if (hasMember(MEMBER_QUOTE) && line.startsWith('>')) {
 			flushList()
 			const content = trim(line.substring(1))
-			quoteLines.push(stripInline(content))
+			quoteLines.push(stripInline(content, keepInline))
 			i++
 			continue
 		}
@@ -432,7 +479,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 				flushList()
 				listType = 'ul'
 			}
-			listItems.push(stripInline(ulMatch![1] ?? ''))
+			listItems.push(stripInline(ulMatch![1] ?? '', keepInline))
 			i++
 			continue
 		}
@@ -445,7 +492,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 				flushList()
 				listType = 'ol'
 			}
-			listItems.push(stripInline(olMatch![1] ?? ''))
+			listItems.push(stripInline(olMatch![1] ?? '', keepInline))
 			i++
 			continue
 		}
@@ -471,7 +518,7 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 		blocks.push({
 			type: 'paragraph',
 			level: 0,
-			text: stripInline(line),
+			text: stripInline(line, keepInline),
 			items: [] as string[],
 		} as MarkdownBlock)
 		i++

@@ -1,0 +1,311 @@
+/**
+ * Markdown 的**行内分词器**（ADR-0025 **⑩-2**，票 #1472）
+ *
+ * 把一段「行内源串」切成带样式的 run 序列，供渲染层用**嵌套 `<text>`** 上样式
+ * （uvue 的 `<text>` 只允许嵌 `<text>`，这是 App 端做局部样式的原生路径 —— 不吃 HTML，
+ * 不给 UGC 面新开注入通道）。
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * **形状决定：runs 是扁平表，不是树**（本模块的地基，别改成树）
+ *
+ * 原型实测（见 `prototype/forum-inline-reply-sheet` 分支的 `_verify.out`）：
+ * `**粗 [链接](u) \`码\`**` 用**单趟扁平匹配**会把内层的 `[链接](u)` 原样留在粗体串里
+ * ⇒ 打破 ⑥-1。要修就得递归。但「递归 = 每个 run 挂一个子 run 数组」正是血账的形状 ——
+ * UTS 会把**自定义类型的数组字段**在编译期改名（`MarkdownTableRow__1` vs `MarkdownTableRow`，
+ * 整模块 kotlinc 60 条 unresolved reference，④c 实测；见 `utils/markdown.uts` 头注与
+ * 根 ADR-0046 决定 6）。
+ *
+ * 解法：**把递归压平**。内层内容仍然递归解析，但产出的 run 直接**追加进同一张扁平表**，
+ * 外层样式以 `bold` / `italic` / `strike` / `link` 位**继承**下去（样式彼此正交、可叠加，
+ * 所以嵌套的全部信息都在，不需要树）。渲染层因此只需**一层** `<text v-for>`，
+ * 比树形更贴 uvue 的规则（子 `<text>` 不继承父样式 ⇒ 逐 run 自带全量样式，即 C1）。
+ *
+ * 于是 #1472 的 AC「内层链接/代码必须成为**子 run**」在这个形状下的**可执行读法**是：
+ * 「链接那条 run 存在、`link` 有值、且它的 `bold` 为真，同时没有任何 run 的 `text` 还带着
+ * `[` / `](` / 反引号」—— 而不是「存在子数组」。改判据形状的原因已在 ADR-0025 的票面回记里具名。
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * 其余口径：
+ * - **公式跨度整体保留**（与 `utils/markdown.uts` 同一条降级）：移动端不做数学排版，
+ *   `$a_1 + b_2$` 必须还是源码，不能被斜体规则撕掉下划线；
+ * - **flanking**：记号两侧贴空白、或下划线出现在单词内部时**不认记号** ——
+ *   `2 * 3 = 6，* 是乘号` 与 `a_b_c` 里的星号/下划线是作者的正文。现状的 `stripInlinePlain`
+ *   用正则会把它们**当记号吃掉字符**（实测 `a_b_c` → `abc`），那是生产在跑的丢字符缺陷；
+ *   本模块按 flanking 判，正文一字不丢；
+ * - **协议闸**（⑩-8）：只有 `http(s)` 成为可点 run；`javascript:` / `data:` / `file:` /
+ *   `mailto:` / `//host` / 相对路径**一律降级为不可点的普通文本**；
+ * - 行内代码**不解析内容**（代码里的 `**` 是代码，不是记号 —— 根 ADR-0044 把「用正则乱剥」
+ *   列为被否决做法的理由正落在这格）。
+ *
+ * @note 纯函数、不依赖 DOM API，跨端通用（App / 小程序）
+ */
+
+/**
+ * 一个行内片段。渲染层逐条自带样式（C1），**没有**一条样式靠继承拿到。
+ *
+ * ⚠️ 字段全是标量与字符串 —— 刻意不放数组（见文件头的形状决定）。
+ */
+export type MarkdownInlineRun = {
+    text : string      // 可见文字（记号已摘；行内代码的内容原样）
+    bold : boolean     // **x** 或 __x__
+    italic : boolean   // *x* 或 _x_（单词内部的 `_` 不算）
+    strike : boolean   // ~~x~~
+    code : boolean     // `x`（内容不再解析，等宽由渲染层给）
+    link : string      // 非空 = 可点，值已过协议闸；空串 = 普通文字
+}
+
+/** 只有 http(s) 能成为可点链接（⑩-8 是**白名单**：不是「拉黑三个坏协议」，而是「只放两个好协议」） */
+export function inlineLinkSafe(url : string) : boolean {
+    const u = url.replace(/^\s+|\s+$/g, '').toLowerCase()
+    return u.indexOf('http://') == 0 || u.indexOf('https://') == 0
+}
+
+/**
+ * 链接的**目标域名**（⑩-8：点击确认弹窗显示的是域名，不是整条 URL —— 少一屏路径噪音、
+ * 多一眼「我要离开 app 去哪个站」）。输入已被 {@link inlineLinkSafe} 闸成 http(s)，这里不再判协议。
+ *
+ * 纯串切、**不吃 DOM/URL API**（跨端通用 + 可进 UTS 编译，与 `inlineLinkSafe` 同一条约束）：
+ * 去首尾空白 → 去 `scheme://` → 截到首个 `/?#`（authority 边界）→ 去 userinfo（最后一个 `@` 右段）
+ * → 去端口（首个 `:` 左段）。切不出主机名时**退回整条 URL**（宁可多显示，不可谎报成别的域名）。
+ */
+export function inlineLinkDomain(url : string) : string {
+    let s = url.replace(/^\s+|\s+$/g, '')
+    const scheme = s.indexOf('://')
+    if (scheme >= 0) s = s.substring(scheme + 3)
+    // authority 终点 = 首个 `/?#`（三者最小的非负下标；都没有则到串尾）。
+    // ⚠️ 每个 substring 的终点都**直接取 indexOf 结果**（UTS 里是 Number）：别拿 `s.length`（Int）
+    // 当 end 变量再赋 indexOf —— Int/Number 混指会 ④c「assignment type mismatch: 'Number' vs 'Int'」。
+    const slash = s.indexOf('/')
+    const qmark = s.indexOf('?')
+    const hash = s.indexOf('#')
+    let host = s
+    if (slash >= 0 && (qmark < 0 || slash <= qmark) && (hash < 0 || slash <= hash)) {
+        host = s.substring(0, slash)
+    } else if (qmark >= 0 && (hash < 0 || qmark <= hash)) {
+        host = s.substring(0, qmark)
+    } else if (hash >= 0) {
+        host = s.substring(0, hash)
+    }
+    const at = host.lastIndexOf('@')
+    if (at >= 0) host = host.substring(at + 1)
+    const colon = host.indexOf(':')
+    if (colon >= 0) host = host.substring(0, colon)
+    if (host.length == 0) return url
+    return host
+}
+
+/** 行首连续 `$` 的个数（与 `utils/markdown.uts` 的 `dollarRun` 同语义） */
+function dollarRun(text : string, from : number) : number {
+    let n = 0
+    while (from + n < text.length && text.substring(from + n, from + n + 1) == '$') {
+        n++
+    }
+    return n
+}
+
+/**
+ * 行内公式跨度表（扁平 `[start, end, ...]`）。判据与解析器同源：成对的 `$` / `$$`、内部非空。
+ * 移动端对公式只原样保留，所以这里**宽进** —— 误判的后果也只是「保留原文」。
+ */
+function mathSpansOf(text : string) : number[] {
+    const spans : number[] = []
+    let i = 0
+    while (i < text.length) {
+        if (text.substring(i, i + 1) != '$') {
+            i++
+            continue
+        }
+        const run = dollarRun(text, i)
+        const want = run >= 2 ? 2 : 1
+        let cursor = i + want
+        let close = -1
+        while (cursor < text.length) {
+            if (text.substring(cursor, cursor + 1) != '$') {
+                cursor++
+                continue
+            }
+            const closeRun = dollarRun(text, cursor)
+            if (closeRun >= want) {
+                close = cursor
+                break
+            }
+            cursor = cursor + closeRun
+        }
+        if (close > i + want) {
+            spans.push(i)
+            spans.push(close + want)
+            i = close + want
+        } else {
+            i = i + want
+        }
+    }
+    return spans
+}
+
+/** `at` 落在哪个公式跨度里（返回该跨度的起点下标，不在任何跨度内返回 -1） */
+function whichMathSpan(spans : number[], at : number) : number {
+    for (let m = 0; m + 1 < spans.length; m += 2) {
+        if (at >= spans[m] && at < spans[m + 1]) return m
+    }
+    return -1
+}
+
+/** 单词字符：用来挡「词内下划线」（`a_b_c` / `snake_case_name` 是变量名，不是斜体） */
+function isWordChar(c : string) : boolean {
+    return c.match(/^[A-Za-z0-9]$/) != null
+}
+
+/**
+ * 递归切内层，并把结果**平铺**进外层同一张表（样式位由调用处传下来，不建树）。
+ * 内层为空时什么都不加 —— 「空记号对」因此不会产出空 run 之外的副作用。
+ */
+function appendInner(runs : MarkdownInlineRun[], inner : string,
+    bold : boolean, italic : boolean, strike : boolean, link : string) {
+    const innerRuns = splitInner(inner, mathSpansOf(inner), bold, italic, strike, link)
+    for (let k = 0; k < innerRuns.length; k++) {
+        runs.push(innerRuns[k])
+    }
+}
+
+/**
+ * 内部实现：`inherits`（bold / italic / strike / link）是外层压下来的样式位；
+ * 每产出一条 run 都带上它们 —— C1「逐 run 自带全量样式」在数据层就已成立。
+ *
+ * 记号优先级：图片 → 链接 → 粗体 → 删除线 → 行内代码 → 斜体。
+ * 与 `utils/markdown.uts` 的 `stripInlinePlain` **刻意不同序**（那边先剥粗体再剥斜体，
+ * 因为它只需要「剥净」，不需要保住嵌套结构）；两处的共同契约只有一条：
+ * **成对记号都不留在可见文字里**。这条由 `markdownInlineBehavior.test.js` 与
+ * `markdownSubsetBehavior.test.js` 分别钉住，不靠注释维持。
+ */
+function splitInner(src : string, spans : number[],
+    bold : boolean, italic : boolean, strike : boolean, link : string) : MarkdownInlineRun[] {
+    const runs : MarkdownInlineRun[] = []
+    let buf = ''
+
+    // ⚠️ 下方各 `match()` 分支读整段匹配长度时写成 `(X![0] ?? '').length`：UTS 里数组
+    // 元素访问返回 `String?`，直接 `.length` 会让 ④c 报「only safe (?.) or non-null
+    // asserted (!!.) calls are allowed on a nullable receiver of type 'String?'」。
+    // `?? ''` 与各 group 读法（`X![n] ?? ''`）同源、是正解；**别改成 `!!`**（那是关类型系统）。
+
+    function flushPlain() {
+        if (buf.length > 0) {
+            runs.push({
+                text: buf, bold: bold, italic: italic, strike: strike, code: false, link: link,
+            } as MarkdownInlineRun)
+            buf = ''
+        }
+    }
+
+    let i = 0
+    while (i < src.length) {
+        // 公式跨度整体入正文（「降级仍可读」的那条地板，也是斜体规则的豁免区）
+        const mi = whichMathSpan(spans, i)
+        if (mi >= 0) {
+            buf += src.substring(spans[mi], spans[mi + 1])
+            i = spans[mi + 1]
+            continue
+        }
+        const rest = src.substring(i)
+
+        // ① 图片 `![alt](url)`：论坛图文分离 ⇒ 只留 alt，alt 内部继续解析
+        const img = rest.match(/^!\[([^\]]*)\]\(([^)]*)\)/)
+        if (img != null) {
+            flushPlain()
+            appendInner(runs, img![1] ?? '', bold, italic, strike, link)
+            i += (img![0] ?? '').length
+            continue
+        }
+
+        // ② 链接 `[text](url)`：URL 允许**一层**括号（`x_(y)` 这类维基式链接）——
+        //    现状的 `[^)]*` 在第一个 `)` 就截断，会留下一个游离 `)`（生产既有缺陷，⑩-8 顺带修）
+        const lnk = rest.match(/^\[([^\]]*)\]\(((?:[^()]|\([^()]*\))*)\)/)
+        if (lnk != null) {
+            flushPlain()
+            const rawUrl = lnk![2] ?? ''
+            const rawText = lnk![1] ?? ''
+            const safe = inlineLinkSafe(rawUrl)
+            // 文本为空时退化成显示 URL 本身；过不了协议闸的退化为**不可点的普通文字**（内层样式仍在）
+            const visible = rawText.length > 0 ? rawText : rawUrl
+            appendInner(runs, visible, bold, italic, strike, safe ? rawUrl.replace(/^\s+|\s+$/g, '') : '')
+            i += (lnk![0] ?? '').length
+            continue
+        }
+
+        // ③ 粗体 **x** / __x__
+        const b1 = rest.match(/^\*\*([^\s*](?:[^*]*[^\s*])?)\*\*/)
+        if (b1 != null) {
+            flushPlain(); appendInner(runs, b1![1] ?? '', true, italic, strike, link)
+            i += (b1![0] ?? '').length; continue
+        }
+        const b2 = rest.match(/^__([^\s_](?:[^_]*[^\s_])?)__/)
+        if (b2 != null && !isWordChar(src.substring(i > 0 ? i - 1 : 0, i))) {
+            flushPlain(); appendInner(runs, b2![1] ?? '', true, italic, strike, link)
+            i += (b2![0] ?? '').length; continue
+        }
+
+        // ④ 删除线 ~~x~~
+        const st = rest.match(/^~~([^\s~](?:[^~]*[^\s~])?)~~/)
+        if (st != null) {
+            flushPlain(); appendInner(runs, st![1] ?? '', bold, italic, true, link)
+            i += (st![0] ?? '').length; continue
+        }
+
+        // ⑤ 行内代码 `x`：内容**原样**、不再解析（代码里的 `**` 是代码）
+        const cd = rest.match(/^`([^`]+)`/)
+        if (cd != null) {
+            flushPlain()
+            runs.push({
+                text: cd![1] ?? '', bold: bold, italic: italic, strike: strike, code: true, link: link,
+            } as MarkdownInlineRun)
+            i += (cd![0] ?? '').length
+            continue
+        }
+
+        // ⑥ 斜体 *x*
+        const it1 = rest.match(/^\*([^\s*](?:[^*]*[^\s*])?)\*/)
+        if (it1 != null) {
+            flushPlain(); appendInner(runs, it1![1] ?? '', bold, true, strike, link)
+            i += (it1![0] ?? '').length; continue
+        }
+        // 斜体 _x_：另加两道 flanking —— 前一个字符不能是单词字符（挡 `a_b_c`），
+        // 且闭合侧的下一个字符不能是单词字符（挡 `snake_case_name` 这类把尾部也咬进去的形态）
+        const it2 = rest.match(/^_([^\s_](?:[^_]*[^\s_])?)_/)
+        const prevChar = i > 0 ? src.substring(i - 1, i) : ''
+        const nextIdx = i + (it2 != null ? (it2![0] ?? '').length : 0)
+        const nextChar = nextIdx < src.length ? src.substring(nextIdx, nextIdx + 1) : ''
+        if (it2 != null && !isWordChar(prevChar) && !isWordChar(nextChar)) {
+            flushPlain(); appendInner(runs, it2![1] ?? '', bold, true, strike, link)
+            i += (it2![0] ?? '').length; continue
+        }
+
+        buf += src.substring(i, i + 1)
+        i++
+    }
+
+    flushPlain()
+    return runs
+}
+
+/**
+ * 行内源串 → run 序列（渲染层的唯一入口，经 `utils/forumBody.forumInlineRuns` 转发）。
+ *
+ * @param src 块 `text` 或 list 的一条 `items` —— 解析器在声明 `MEMBER_INLINE` 的档交出的**源串**
+ * @returns 扁平 run 表；没有记号时恰一条；空串时为空表
+ */
+export function splitInlineRuns(src : string) : MarkdownInlineRun[] {
+    return splitInner(src, mathSpansOf(src), false, false, false, '')
+}
+
+/**
+ * run 表的**纯文本投影**（⑩-5：摘要与渲染共用同一次分词，取的就是这串叶子）。
+ *
+ * 记号全摘、正文一字不丢 —— 「不丢」正是与现状正则剥离的分水岭：现状会把
+ * `2 * 3 = 6，* 是乘号` 吞成 `2  3 = 6， 是乘号`。投影与渲染因此不可能分道。
+ */
+export function inlineRunsPlainText(runs : MarkdownInlineRun[]) : string {
+    let out = ''
+    for (let i = 0; i < runs.length; i++) {
+        out += runs[i].text
+    }
+    return out
+}

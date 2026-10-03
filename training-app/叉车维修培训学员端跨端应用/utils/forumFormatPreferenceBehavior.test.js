@@ -18,11 +18,11 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, importedNames, readText } = require('./utsHarness');
+// 格式轴（含其两个上游）只从夹具取，理由同 `forumContentFormatBehavior` 头部那条
+const { forumBodyModule } = require('./forumChainHarness');
 
 const PREF_UTS = path.join(__dirname, 'forumFormatPreference.uts');
 const STORAGE_UTS = path.join(__dirname, 'storage.uts');
-const BODY_UTS = path.join(__dirname, 'forumBody.uts');
-const MD_UTS = path.join(__dirname, 'markdown.uts');
 
 /** `utils/storage.uts` 引用的全局 `uni` —— 这里换成一份内存替身（键值都留在测试里，不碰真设备） */
 function fakeUni(store) {
@@ -33,15 +33,10 @@ function fakeUni(store) {
   };
 }
 
-/** 真源依赖注入表：存储层取**真执行的** `utils/storage.uts`，格式词汇取真执行的 `utils/forumBody.uts` */
+/** 真源依赖注入表：存储层取**真执行的** `utils/storage.uts`，格式词汇取真执行的格式轴（经夹具） */
 function preferenceBindings(store) {
   const storage = loadUts(STORAGE_UTS, { uni: fakeUni(store) });
-  const markdown = loadUts(MD_UTS, {});
-  const body = loadUts(BODY_UTS, {
-    parseMarkdown: markdown.parseMarkdown,
-    SUBSET_FORUM: markdown.SUBSET_FORUM,
-    SUBSET_CHAPTER: markdown.SUBSET_CHAPTER,
-  });
+  const body = forumBodyModule();
   return {
     getStorage: storage.getStorage,
     setStorage: storage.setStorage,
