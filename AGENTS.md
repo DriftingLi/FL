@@ -18,6 +18,10 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 ## Agent skills
 
+### Skill routing
+
+本环境**三套技能并存**（`~/.qoder/skills` 的 Matt Pocock 集 / `~/.agents/skills` / superpowers 插件），同一意图常有多个入口，而 superpowers 每次会话注入的是「有 1% 可能就必须调用」——**只有本文件压得住它**（该技能自述用户指令优先于技能）。三条最高频的默认入口在此常驻：**澄清需求 → `grilling`（人唤）· 写成 spec / 拆票 → `to-spec` → `to-tickets` · 调试归因 → `diagnosing-bugs`**。表未覆盖的意图可自主选择；其余六个意图、多问技能的落点改写与逐项实测见 [`docs/agents/skill-routing.md`](docs/agents/skill-routing.md)。
+
 ### Issue tracker
 
 Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.
