@@ -1,7 +1,7 @@
-// Package pdf 实现 PDF 报告生成
+// PDF 报告生成（原 internal/valuation/pdf，#1514 波 5 并回域包）。
 // 本文件：电池 RUL 评估报告模板（与现有叉车评估报告并存）
 // 不展示算法内部细节（与项目硬约束一致）
-package pdf
+package valuation
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"github.com/jung-kurt/gofpdf"
 
 	"forklift-training/internal/pdfutil"
-	"forklift-training/internal/valuation"
 )
 
 // batteryTitleSize 电池报告专用排版
@@ -25,7 +24,7 @@ const (
 
 // GenerateBatteryReportBytes 生成电池 RUL 评估报告 PDF，返回二进制内容。
 // 单一入口：handler 拿到 bytes 后上传到对象存储。
-func GenerateBatteryReportBytes(eval *valuation.BatteryEvaluation) ([]byte, error) {
+func GenerateBatteryReportBytes(eval *BatteryEvaluation) ([]byte, error) {
 	if eval == nil {
 		return nil, fmt.Errorf("评估记录不能为空")
 	}
@@ -35,7 +34,7 @@ func GenerateBatteryReportBytes(eval *valuation.BatteryEvaluation) ([]byte, erro
 	if err := pdfutil.EnsureFontLoaded(pdf); err != nil {
 		return nil, err
 	}
-	g := &Generator{}
+	g := &PDFGenerator{}
 	pdf.AddPage()
 	g.renderBatteryCover(pdf, eval)
 	pdf.AddPage()
@@ -52,7 +51,7 @@ func GenerateBatteryReportBytes(eval *valuation.BatteryEvaluation) ([]byte, erro
 }
 
 // renderBatteryCover 电池报告封面
-func (g *Generator) renderBatteryCover(pdf *gofpdf.Fpdf, eval *valuation.BatteryEvaluation) {
+func (g *PDFGenerator) renderBatteryCover(pdf *gofpdf.Fpdf, eval *BatteryEvaluation) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryTitleSize)
 	pdf.SetXY(pageMargin, 60)
 	pdf.CellFormat(contentWidth, 15, "锂电池 RUL 评估报告", "", 1, "C", false, 0, "")
@@ -78,7 +77,7 @@ func (g *Generator) renderBatteryCover(pdf *gofpdf.Fpdf, eval *valuation.Battery
 }
 
 // renderBatteryInfo 渲染电池基本信息
-func (g *Generator) renderBatteryInfo(pdf *gofpdf.Fpdf, eval *valuation.BatteryEvaluation) {
+func (g *PDFGenerator) renderBatteryInfo(pdf *gofpdf.Fpdf, eval *BatteryEvaluation) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "一、电池基本信息", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
@@ -100,7 +99,7 @@ func (g *Generator) renderBatteryInfo(pdf *gofpdf.Fpdf, eval *valuation.BatteryE
 }
 
 // renderBatteryConclusion 评估结论（健康度 + RUL）
-func (g *Generator) renderBatteryConclusion(pdf *gofpdf.Fpdf, eval *valuation.BatteryEvaluation) {
+func (g *PDFGenerator) renderBatteryConclusion(pdf *gofpdf.Fpdf, eval *BatteryEvaluation) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "二、评估结论", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
@@ -130,7 +129,7 @@ func (g *Generator) renderBatteryConclusion(pdf *gofpdf.Fpdf, eval *valuation.Ba
 }
 
 // renderBatteryTopFeatures Top-5 特征重要性
-func (g *Generator) renderBatteryTopFeatures(pdf *gofpdf.Fpdf, eval *valuation.BatteryEvaluation) {
+func (g *PDFGenerator) renderBatteryTopFeatures(pdf *gofpdf.Fpdf, eval *BatteryEvaluation) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "三、Top-5 关键特征", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
@@ -171,7 +170,7 @@ func (g *Generator) renderBatteryTopFeatures(pdf *gofpdf.Fpdf, eval *valuation.B
 }
 
 // renderBatteryConfidence 置信区间
-func (g *Generator) renderBatteryConfidence(pdf *gofpdf.Fpdf, eval *valuation.BatteryEvaluation) {
+func (g *PDFGenerator) renderBatteryConfidence(pdf *gofpdf.Fpdf, eval *BatteryEvaluation) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "四、置信区间与评估建议", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
@@ -194,7 +193,7 @@ func (g *Generator) renderBatteryConfidence(pdf *gofpdf.Fpdf, eval *valuation.Ba
 }
 
 // renderBatteryDisclaimer 免责声明
-func (g *Generator) renderBatteryDisclaimer(pdf *gofpdf.Fpdf) {
+func (g *PDFGenerator) renderBatteryDisclaimer(pdf *gofpdf.Fpdf) {
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", batteryH1Size)
 	pdf.CellFormat(contentWidth, 10, "五、免责声明", "", 1, "L", false, 0, "")
 	pdf.Ln(2)
@@ -211,13 +210,13 @@ func (g *Generator) renderBatteryDisclaimer(pdf *gofpdf.Fpdf) {
 }
 
 // batteryTypeName 电池类型中文名
-func batteryTypeName(t valuation.BatteryType) string {
+func batteryTypeName(t BatteryType) string {
 	switch t {
-	case valuation.BatteryTypeLFP:
+	case BatteryTypeLFP:
 		return "磷酸铁锂（LFP）"
-	case valuation.BatteryTypeNCM:
+	case BatteryTypeNCM:
 		return "三元锂（NCM）"
-	case valuation.BatteryTypeOther:
+	case BatteryTypeOther:
 		return "其他类型"
 	}
 	return string(t)

@@ -15,8 +15,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/pdf"
-	"forklift-training/internal/valuation/report"
 	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -29,7 +27,7 @@ type BatteryHandler struct {
 	logger  *zap.Logger
 	storage storage.Storage
 	// coord 电池报告流程协调器（生成/下载/再生成单点实现，gin-free）
-	coord *report.Coordinator[valuation.BatteryEvaluation]
+	coord *valuation.ReportCoordinator[valuation.BatteryEvaluation]
 	// prepareSuggestions 建议 fallback 单点：详情端点与报告生成共用（不再两处复制）
 	prepareSuggestions func(ctx context.Context, e *valuation.BatteryEvaluation)
 }
@@ -46,7 +44,7 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 		logger:             l,
 		storage:            st,
 		prepareSuggestions: prepareSuggestions,
-		coord: report.New(report.Spec[valuation.BatteryEvaluation]{
+		coord: valuation.NewReportCoordinator(valuation.ReportSpec[valuation.BatteryEvaluation]{
 			Logger:    l,
 			Storage:   st,
 			KeyPrefix: "reports/battery_report_",
@@ -55,7 +53,7 @@ func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap
 			Writer:    repo.UpdateReportPath,
 			Prepare:   prepareSuggestions,
 			Render: func(_ context.Context, e *valuation.BatteryEvaluation) ([]byte, error) {
-				return pdf.GenerateBatteryReportBytes(e)
+				return valuation.GenerateBatteryReportBytes(e)
 			},
 		}),
 	}

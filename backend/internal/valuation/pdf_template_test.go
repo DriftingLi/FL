@@ -1,6 +1,6 @@
-// Package pdf 实现 PDF 报告生成
+// PDF 报告生成（原 internal/valuation/pdf，#1514 波 5 并回域包）。
 // 本文件:PDF 生成器单元测试,使用内存样例数据验证字体加载 + 3 页简洁版渲染流程
-package pdf
+package valuation
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"forklift-training/internal/valuation"
 )
 
 // 计数 PDF 中的页面对象 /Type /Page (排除 /Type /Pages 父节点)
@@ -58,8 +56,8 @@ func containAny(haystack string, expected ...string) bool {
 
 // sampleDetail 构造电动叉车样例 EvaluationDetail(贴近设计稿示例)
 // 各 K 系数与维度评分一一对应,保证测试数据自洽
-func sampleDetail() *valuation.EvaluationDetail {
-	return &valuation.EvaluationDetail{
+func sampleDetail() *EvaluationDetail {
+	return &EvaluationDetail{
 		ID:                         1,
 		Brand:                      "合力 (HELI)",
 		VehicleType:                "电动叉车",
@@ -91,8 +89,8 @@ func sampleDetail() *valuation.EvaluationDetail {
 }
 
 // sampleDimensionScores 5 维评分(与雷达图顺序一致)
-func sampleDimensionScores() []valuation.DimensionScore {
-	return []valuation.DimensionScore{
+func sampleDimensionScores() []DimensionScore {
+	return []DimensionScore{
 		{Label: "出厂时间", Value: 0.74},
 		{Label: "使用强度", Value: 0.90},
 		{Label: "品牌价值", Value: 1.00},
@@ -113,7 +111,7 @@ func sampleSuggestions() []string {
 
 // TestGenerateReport 验证 PDF 生成器能成功生成内容、首字节为 PDF 魔数,且为 3 页
 func TestGenerateReport(t *testing.T) {
-	gen := NewGenerator()
+	gen := NewPDFGenerator()
 
 	detail := sampleDetail()
 	dimScores := sampleDimensionScores()
@@ -171,9 +169,9 @@ func TestGenerateReport(t *testing.T) {
 
 // TestGenerateReportCombustion 内燃叉车样例(无电池类型,无原厂漆加成)
 func TestGenerateReportCombustion(t *testing.T) {
-	gen := NewGenerator()
+	gen := NewPDFGenerator()
 
-	detail := &valuation.EvaluationDetail{
+	detail := &EvaluationDetail{
 		ID:                         2002,
 		Brand:                      "三菱 MITSUBISHI",
 		VehicleType:                "内燃叉车",
@@ -202,12 +200,12 @@ func TestGenerateReportCombustion(t *testing.T) {
 		ConfidenceLow:              4.28,
 		ConfidenceHigh:             4.73,
 	}
-	dimScores := []valuation.DimensionScore{
-		{Label: valuation.DimensionLabelTime, Value: 0.61},
-		{Label: valuation.DimensionLabelHours, Value: 0.90},
-		{Label: valuation.DimensionLabelBrand, Value: 1.00},
-		{Label: valuation.DimensionLabelCondition, Value: 0.75},
-		{Label: valuation.DimensionLabelMarket, Value: 0.98},
+	dimScores := []DimensionScore{
+		{Label: DimensionLabelTime, Value: 0.61},
+		{Label: DimensionLabelHours, Value: 0.90},
+		{Label: DimensionLabelBrand, Value: 1.00},
+		{Label: DimensionLabelCondition, Value: 0.75},
+		{Label: DimensionLabelMarket, Value: 0.98},
 	}
 	suggestions := []string{
 		"车况一般,多个维度有折损,建议折价处理",
@@ -228,9 +226,9 @@ func TestGenerateReportCombustion(t *testing.T) {
 
 // TestGenerateReportEmptySuggestions 建议列表为空时也应能生成(且仍为 3 页)
 func TestGenerateReportEmptySuggestions(t *testing.T) {
-	gen := NewGenerator()
+	gen := NewPDFGenerator()
 
-	detail := &valuation.EvaluationDetail{
+	detail := &EvaluationDetail{
 		ID:                         3,
 		Brand:                      "永恒力 JUNGHEINRICH",
 		VehicleType:                "电动叉车",
@@ -259,12 +257,12 @@ func TestGenerateReportEmptySuggestions(t *testing.T) {
 		ConfidenceLow:              9.32,
 		ConfidenceHigh:             11.40,
 	}
-	dimScores := []valuation.DimensionScore{
-		{Label: valuation.DimensionLabelTime, Value: 0.85},
-		{Label: valuation.DimensionLabelHours, Value: 1.10},
-		{Label: valuation.DimensionLabelBrand, Value: 1.10},
-		{Label: valuation.DimensionLabelCondition, Value: 1.10},
-		{Label: valuation.DimensionLabelMarket, Value: 1.00},
+	dimScores := []DimensionScore{
+		{Label: DimensionLabelTime, Value: 0.85},
+		{Label: DimensionLabelHours, Value: 1.10},
+		{Label: DimensionLabelBrand, Value: 1.10},
+		{Label: DimensionLabelCondition, Value: 1.10},
+		{Label: DimensionLabelMarket, Value: 1.00},
 	}
 
 	data, err := gen.GenerateReport(detail, dimScores, nil)

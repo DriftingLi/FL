@@ -1,19 +1,17 @@
-// Package pdf 实现 PDF 报告生成
+// PDF 报告生成（原 internal/valuation/pdf，#1514 波 5 并回域包）。
 // 本文件:电池 RUL 评估报告的最小渲染用例（#1105 判据「简历 + 两份估值报告」缺电池这条）。
-package pdf
+package valuation
 
 import (
 	"strings"
 	"testing"
-
-	"forklift-training/internal/valuation"
 )
 
 // sampleBatteryEvaluation 最小电池评估记录：五段模板（封面/基本信息/结论/特征/免责）都有数据可渲染。
-func sampleBatteryEvaluation() *valuation.BatteryEvaluation {
-	return &valuation.BatteryEvaluation{
+func sampleBatteryEvaluation() *BatteryEvaluation {
+	return &BatteryEvaluation{
 		ID:             123,
-		BatteryType:    valuation.BatteryTypeLFP,
+		BatteryType:    BatteryTypeLFP,
 		BatteryModel:   "CATL-280Ah",
 		CycleCount:     860,
 		RulCycles:      2400,
@@ -21,7 +19,7 @@ func sampleBatteryEvaluation() *valuation.BatteryEvaluation {
 		Confidence:     0.88,
 		ConfidenceLow:  2100,
 		ConfidenceHigh: 2700,
-		FeatureImportance: []valuation.FeatureImportance{
+		FeatureImportance: []FeatureImportance{
 			{Index: 1, Name: "容量衰减速率", Group: "capacity", Weight: 0.32, Normalized: 0.95},
 			{Index: 2, Name: "内阻增长", Group: "resistance", Weight: 0.24, Normalized: 0.71},
 		},

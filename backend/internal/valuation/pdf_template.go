@@ -1,11 +1,11 @@
-// Package pdf 实现 PDF 报告生成
+// PDF 报告生成（原 internal/valuation/pdf，#1514 波 5 并回域包）。
 // 本文件:简洁版叉车残值评估报告,3 页 A4 布局。
 //   - 第 1 页:封面(渐变蓝带 + Logo + 报告元信息卡片)
 //   - 第 2 页:评估基本信息 + 评估结果摘要(Hero 卡片 + 置信区间 + 雷达图/维度进度条)
 //   - 第 3 页:评估结论 + 处置建议 + 风险提示 + 免责声明
 //
 // 设计稿: .trae/design-exports/简洁版评估报告.html
-package pdf
+package valuation
 
 import (
 	"bytes"
@@ -16,7 +16,6 @@ import (
 	"github.com/jung-kurt/gofpdf"
 
 	"forklift-training/internal/pdfutil"
-	"forklift-training/internal/valuation"
 )
 
 // A4 排版常量
@@ -88,17 +87,17 @@ var (
 	gradeD = rgb{220, 38, 38}
 )
 
-// Generator 报告生成器（无状态：所有入口均返回 PDF 字节，不落盘）。
-type Generator struct{}
+// PDFGenerator 报告生成器（无状态：所有入口均返回 PDF 字节，不落盘）。
+type PDFGenerator struct{}
 
-// NewGenerator 构造报告生成器。
-func NewGenerator() *Generator {
-	return &Generator{}
+// NewPDFGenerator 构造报告生成器。
+func NewPDFGenerator() *PDFGenerator {
+	return &PDFGenerator{}
 }
 
 // GenerateReport 生成 3 页简洁版评估报告 PDF，返回 PDF 二进制内容。
 // 入参 r 含评估详情(含输入字段与计算结果);dimensionScores 为 5 维评分;suggestions 为处置建议文本列表。
-func (g *Generator) GenerateReport(r *valuation.EvaluationDetail, dimensionScores []valuation.DimensionScore, suggestions []string) ([]byte, error) {
+func (g *PDFGenerator) GenerateReport(r *EvaluationDetail, dimensionScores []DimensionScore, suggestions []string) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMargin, pageMargin, pageMargin)
 	// 关闭自动分页,由 3 个 render 方法自行控制 AddPage
@@ -128,7 +127,7 @@ func (g *Generator) GenerateReport(r *valuation.EvaluationDetail, dimensionScore
 
 // 第 1 页:封面
 
-func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *valuation.EvaluationDetail) {
+func (g *PDFGenerator) renderCover(pdf *gofpdf.Fpdf, r *EvaluationDetail) {
 	// 顶部蓝色渐变条(5mm)
 	drawHGradientBar(pdf, 0, 0, pageWidth, 5, primary, primaryLite, primary)
 
@@ -201,7 +200,7 @@ func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *valuation.EvaluationDetail)
 
 // coverVehicleLabel 封面"叉车类型"展示:车型 + 品牌(取品牌短名)
 // 例如:"电动叉车 / 合力 (HELI)"
-func coverVehicleLabel(r *valuation.EvaluationDetail) string {
+func coverVehicleLabel(r *EvaluationDetail) string {
 	if r == nil {
 		return "-"
 	}
@@ -314,7 +313,7 @@ func absF(v float64) float64 {
 
 // 第 2 页:评估基本信息 + 评估结果摘要
 
-func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *valuation.EvaluationDetail, dimensionScores []valuation.DimensionScore) {
+func (g *PDFGenerator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *EvaluationDetail, dimensionScores []DimensionScore) {
 	drawPageHeader(pdf, r)
 
 	// 评估基本信息
@@ -343,7 +342,7 @@ func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *valuation.Eva
 	drawPageFooter(pdf, 2, 3)
 }
 
-func drawPageHeader(pdf *gofpdf.Fpdf, r *valuation.EvaluationDetail) {
+func drawPageHeader(pdf *gofpdf.Fpdf, r *EvaluationDetail) {
 	y := 18.0
 	// 左:报告名
 	pdf.SetFont(pdfutil.FontSimHeiBold, "B", 14)
@@ -415,7 +414,7 @@ type basicInfoRow struct {
 //   - 原厂漆 / 车况评级
 //   - 区域 / 维保记录
 //   - 车牌 / 登记证
-func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *valuation.EvaluationDetail, x, y, w float64) float64 {
+func drawBasicInfoTable(pdf *gofpdf.Fpdf, r *EvaluationDetail, x, y, w float64) float64 {
 	rowH := 6.5
 	colLabelW := w * 0.18
 	colValueW := w * 0.32
@@ -538,7 +537,7 @@ func drawStatusBadge(pdf *gofpdf.Fpdf, x, y, w float64, text string) {
 }
 
 // drawValueHero 渲染蓝色 Hero 卡片,显示估算残值
-func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *valuation.EvaluationDetail) {
+func drawValueHero(pdf *gofpdf.Fpdf, x, y, w, h float64, r *EvaluationDetail) {
 	// 渐变背景(深蓝 → 中蓝)
 	pdf.LinearGradient(x, y, w, h,
 		primaryDk[0], primaryDk[1], primaryDk[2],
@@ -620,7 +619,7 @@ func gradeFromRate(rate float64) (gradeInfo, rgb) {
 }
 
 // drawConfidenceBar 置信区间可视化
-func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *valuation.EvaluationDetail) {
+func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *EvaluationDetail) {
 	// 文字行
 	pdf.SetFont(pdfutil.FontSimHei, "", 9.5)
 	pdf.SetTextColor(textLabel[0], textLabel[1], textLabel[2])
@@ -658,8 +657,8 @@ func drawConfidenceBar(pdf *gofpdf.Fpdf, x, y, w float64, r *valuation.Evaluatio
 }
 
 // drawRadarAndDimensions 雷达图 + 维度进度条(并排)
-func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores []valuation.DimensionScore) {
-	// 维度分 → 按标签取值（顺序固定为 valuation.DimensionLabels）
+func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores []DimensionScore) {
+	// 维度分 → 按标签取值（顺序固定为 DimensionLabels）
 	scoreByLabel := dimensionScoreByLabel(dimensionScores)
 	// 左侧雷达图
 	radarW := 70.0
@@ -694,7 +693,7 @@ func drawRadarAndDimensions(pdf *gofpdf.Fpdf, x, y, w float64, dimensionScores [
 	valW := 14.0
 	barW := dimW - labelW - valW
 
-	for i, dim := range valuation.DimensionLabels {
+	for i, dim := range DimensionLabels {
 		v := scoreByLabel[dim]
 		rowY := dimY0 + float64(i)*rowH
 		// 维度名
@@ -747,7 +746,7 @@ func dimensionBarColor(v float64) rgb {
 
 // renderCoefficientsAndConclusion 渲染第 3 页
 // 顺序:评估结论 → 处置建议 → 风险提示 → 免责声明
-func (g *Generator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *valuation.EvaluationDetail, suggestions []string) {
+func (g *PDFGenerator) renderCoefficientsAndConclusion(pdf *gofpdf.Fpdf, r *EvaluationDetail, suggestions []string) {
 	drawPageHeader(pdf, r)
 
 	// 评估结论:车况评级 + 估算残值双卡

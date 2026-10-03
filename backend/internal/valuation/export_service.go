@@ -1,12 +1,11 @@
-// Package export 估值导出域（估值域内的叶子子包）：列 spec（columns.go）、取数 seam（store.go）
-// 与三条导出取数（service.go）；HTTP 出口在 internal/valuation/handler/export.go。
-// 本文件：数据导出取数（CSV 由 HTTP 出口生成，本服务只负责取数）。
+// 本文件：管理端数据导出取数（CSV 由 HTTP 出口 internal/valuation/handler/export.go 生成，
+// export* 文件只负责取数）：列 spec 在 export_columns.go、取数 seam 在 export_store.go。
 //
-// 为什么是叶子子包而不是 internal/valuation/service：后者 import internal/valuation/repository，
-// 而 repository 的导出 adapter 必须看见本包的 EvaluationExportRow / BuildEvalExportSelect /
-// ScanEvalExportDestinations（它实现本包 ExportStore）⇒ 同包必成环。放叶子子包后
-// repository → export 单向（先例 internal/valuation/dictcrud，ADR-0070 破法三）。
-package export
+// 原为估值域内叶子子包 internal/valuation/export（波 4f 建；理由是 repository 的导出 adapter 要看见
+// EvaluationExportRow / BuildEvalExportSelect / ScanEvalExportDestinations，与 internal/valuation/service
+// 同包必成环）；#1514 波 3 起并回域包，环随之消失，ExportStore 作为**消费方定义的 seam** 保留
+// （测试替身仍经它注入）。
+package valuation
 
 import (
 	"context"
@@ -19,21 +18,21 @@ import (
 	"forklift-training/internal/timefmt"
 )
 
-// Service 数据导出服务。
-type Service struct {
+// ExportService 数据导出服务（学员名单 / 题库 / 评估记录三条取数）。
+type ExportService struct {
 	db      *gorm.DB
 	exports ExportStore
 
 	logger *zap.Logger
 }
 
-// NewService 构造导出服务（exports 经 ExportStore seam 注入，生产为估值侧 repository adapter）。
-func NewService(db *gorm.DB, exports ExportStore, logger *zap.Logger) *Service {
-	return &Service{db: db, exports: exports, logger: logger}
+// NewExportService 构造导出服务（exports 经 ExportStore seam 注入，生产为估值侧 repository adapter）。
+func NewExportService(db *gorm.DB, exports ExportStore, logger *zap.Logger) *ExportService {
+	return &ExportService{db: db, exports: exports, logger: logger}
 }
 
 // Students 学员名单导出行（首行为表头）。
-func (s *Service) Students() ([][]any, error) {
+func (s *ExportService) Students() ([][]any, error) {
 	var rows []struct {
 		ID        int
 		Account   string
@@ -61,7 +60,7 @@ func (s *Service) Students() ([][]any, error) {
 }
 
 // Questions 题库导出行。
-func (s *Service) Questions() ([][]any, error) {
+func (s *ExportService) Questions() ([][]any, error) {
 	var rows []struct {
 		ID          int
 		Type        string
@@ -96,7 +95,7 @@ func (s *Service) Questions() ([][]any, error) {
 
 // Evaluations 残值评估记录导出行（数据经 ExportStore seam 取自估值侧 repository，见 spec #75 D4）。
 // 表头与取值均从 EvaluationExportColumns 单点 spec 派生（#229），与既有输出逐字一致。
-func (s *Service) Evaluations() ([][]any, error) {
+func (s *ExportService) Evaluations() ([][]any, error) {
 	rows, err := s.exports.ListEvaluationExports(context.Background())
 	if err != nil {
 		return nil, err

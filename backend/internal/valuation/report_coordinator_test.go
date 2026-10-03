@@ -1,8 +1,8 @@
-// Package report 测试：以 Spec 槽位（loader/render/writer/prepare + 存储替身）
+// 报告流程协调器测试：以 ReportSpec 槽位（loader/render/writer/prepare + 存储替身）
 // 直接构造协调器，验证生成/下载/再生成/并发去重语义（决策 D5）。
 // 两个真实 producer（评估/电池）是 spec 槽位的 adapter；这里用假槽位做单元验证，
 // HTTP 层翻译由 handler 包契约测试覆盖。
-package report
+package valuation
 
 import (
 	"bytes"
@@ -93,8 +93,8 @@ type evalRec struct {
 
 // newEvalSpec 组装评估型 Spec（两个 producer 形状之一），返回 spec 与记录。
 // written 承载 Writer 的落库结果（模拟 DB 写），rec.path 保持加载时快照。
-func newEvalSpec(st *memStorage, rec *evalRec, written *string) Spec[evalRec] {
-	return Spec[evalRec]{
+func newEvalSpec(st *memStorage, rec *evalRec, written *string) ReportSpec[evalRec] {
+	return ReportSpec[evalRec]{
 		Loader: func(_ context.Context, id int64) (*evalRec, error) {
 			if rec == nil {
 				return nil, errors.New("record not found")
@@ -121,7 +121,7 @@ func TestGenerate_WritesPDFAndPath(t *testing.T) {
 	st := newMemStorage()
 	rec := &evalRec{}
 	var written string
-	c := New(newEvalSpec(st, rec, &written))
+	c := NewReportCoordinator(newEvalSpec(st, rec, &written))
 
 	res, err := c.Generate(context.Background(), 1)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestDownloadURL_UsesExistingWithoutRegenerate(t *testing.T) {
 	}
 	rec := &evalRec{path: "/static/uploads/reports/evaluation_report_1_old.pdf"}
 	var written string
-	c := New(newEvalSpec(st, rec, &written))
+	c := NewReportCoordinator(newEvalSpec(st, rec, &written))
 
 	url, err := c.DownloadURL(context.Background(), 1)
 	if err != nil {
@@ -165,7 +165,7 @@ func TestDownloadURL_RegeneratesWhenMissing(t *testing.T) {
 	oldPath := "/static/uploads/reports/evaluation_report_1_gone.pdf"
 	rec := &evalRec{path: oldPath}
 	var written string
-	c := New(newEvalSpec(st, rec, &written))
+	c := NewReportCoordinator(newEvalSpec(st, rec, &written))
 
 	url, err := c.DownloadURL(context.Background(), 1)
 	if err != nil {
@@ -189,7 +189,7 @@ func TestGenerate_DeletesOldPDFAfterWriteback(t *testing.T) {
 	}
 	rec := &evalRec{path: "/static/uploads/reports/evaluation_report_1_old.pdf"}
 	var written string
-	c := New(newEvalSpec(st, rec, &written))
+	c := NewReportCoordinator(newEvalSpec(st, rec, &written))
 
 	if _, err := c.Generate(context.Background(), 1); err != nil {
 		t.Fatalf("Generate 失败: %v", err)
@@ -214,7 +214,7 @@ func TestDownloadURL_ConcurrentSameID_SingleGeneration(t *testing.T) {
 		<-release
 		return origRender(ctx, r)
 	}
-	c := New(spec)
+	c := NewReportCoordinator(spec)
 
 	const n = 8
 	var arrived int32
@@ -257,13 +257,13 @@ func TestGenerate_ConcurrentSameID_SingleGeneration(t *testing.T) {
 		<-release
 		return origRender(ctx, r)
 	}
-	c := New(spec)
+	c := NewReportCoordinator(spec)
 
 	const n = 8
 	var arrived int32
 	arrivedCh := make(chan struct{})
 	var wg sync.WaitGroup
-	results := make([]GenerateResult, n)
+	results := make([]ReportGenerateResult, n)
 	errs := make([]error, n)
 	for i := 0; i < n; i++ {
 		wg.Add(1)

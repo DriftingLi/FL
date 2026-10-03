@@ -37,7 +37,6 @@ import (
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
 	vhandler "forklift-training/internal/valuation/handler"
-	"forklift-training/internal/valuation/pdf"
 	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 
@@ -239,7 +238,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	batteryRepo := vrepo.NewBatteryRepository(pool)
 
 	// 3. 装配 PDF 生成器（字节输出，不落盘；存储经 storage 抽象层）
-	pdfGen := pdf.NewGenerator()
+	pdfGen := valuation.NewPDFGenerator()
 
 	// 4. 注册路由（/api/valuation/*，公开组 + 估值独立鉴权组 + admin 组）
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）

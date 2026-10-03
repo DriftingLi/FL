@@ -1,6 +1,6 @@
 // Package handler 实现 HTTP 处理器
 // 本文件：报告端点翻译壳（评估与电池报告共用）——id 解析 + 协调器纯值结果 → HTTP 响应。
-// 协调器本体在 internal/valuation/report（gin-free），此处只做薄翻译。
+// 协调器本体在域包 report_coordinator.go（gin-free），此处只做薄翻译。
 package handler
 
 import (
@@ -17,12 +17,12 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/storage"
-	"forklift-training/internal/valuation/report"
+	"forklift-training/internal/valuation"
 	"forklift-training/pkg/response"
 )
 
 // serveReportGenerate 处理 POST <prefix>/:id/report（评估与电池报告端点共用翻译）。
-func serveReportGenerate[T any](c *gin.Context, coord *report.Coordinator[T], notFoundMsg string, logger *zap.Logger) {
+func serveReportGenerate[T any](c *gin.Context, coord *valuation.ReportCoordinator[T], notFoundMsg string, logger *zap.Logger) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "id 必须为整数")
@@ -53,7 +53,7 @@ func serveReportGenerate[T any](c *gin.Context, coord *report.Coordinator[T], no
 // 否则并发安全地再生成后返回。代理模式经 storage.Get 中转内容，
 // 绕开对象存储（R2）的浏览器跨域限制——R2 bucket 未配置 CORS 时浏览器跨域
 // 请求失败，后端中转后浏览器只与本域交互。
-func serveReportDownload[T any](c *gin.Context, coord *report.Coordinator[T], st storage.Storage, notFoundMsg string, logger *zap.Logger) {
+func serveReportDownload[T any](c *gin.Context, coord *valuation.ReportCoordinator[T], st storage.Storage, notFoundMsg string, logger *zap.Logger) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "id 必须为整数")
