@@ -1,0 +1,113 @@
+/**
+ * 登录提供方能力探测（#1478 首次建立的共享探测件）
+ *
+ * 为什么存在：启动页（pages/index）与登录页（pages/login）都要知道「微信登录这台设备
+ * 上到底能不能用」。旧做法是用条件编译指令行把入口整条包掉，但 #1478 裁定 2 要求
+ * `#ifdef` 指令行增删数为 0（② 门触发面），故改为**运行期能力探测**。
+ *
+ * 判据形态（**2026-10-03 二修：维护者口径 = 移动端也展示该入口、暂不配置微信登录、「有个样式即可」**）
+ *   返回面拆成两个**互不相同**的判断，消费方各取所需：
+ *   ① 展示面 `wechatAvailable`：**App 端与小程序端一律展示**该入口（样式位）。这不是能力探测的
+ *      结论，是维护者 2026-10-03 的口径 —— 移动端保留入口样式，暂不接通真实登录。
+ *   ② 接通面 `wechatLoginReady`：真实微信登录链路是否已接通。当前**只有小程序端为真**
+ *      （App 端 `manifest.json` 未配微信 SDK，见 #1482）。App 端消费方（着陆页 / 登录页）据此把
+ *      点击改成友好提示、**不发任何请求** —— 即「有个样式即可」与「不可给了点不动」两条口径的交点。
+ *
+ *   历史（#1487 ①a 真机判红）：原复合判据 `onMpWeixin || providerFound` 里的 provider 那半，在
+ *      未配微信 SDK 的 Android 上仍返回真 ⇒ App 端被误判「可用」、点击即失败。能力半**已停用**
+ *      （实测记录见 `hasWechatOauthProvider` 上方），**#1482 配好微信 SDK 后再接回**。
+ *      （这条与下面「编译面诚实声明」的退路是**两条独立理由**，落在同一个动作上。）
+ *
+ * ⚠️ 编译面诚实声明（**2026-10-03 已实测通过，本条降为历史**）：调研一手结论是 uni-app x 的
+ *   `uni.getProviderSync` 兼容性只列 Android/iOS 4.25（HarmonyOS 4.61）、**未列小程序** ⇒ 小程序侧
+ *   不可依赖它。本仓此前零先例，原担心「④ Kotlin/UTS 编译门是否接受这个 API」，④c 实测
+ *   **errors=0 / classes=1534 / files=123** ⇒ 退路未触发；且 ② 那半现已停用（见下），
+ *   「摘掉 ② 那半」这条退路**已无对象**，不再作为待决项。
+ *
+ * 保守口径：探测**失败 / 抛错 / 返回空 / 未列 weixin ⇒ 一律判不可用**（宁可不给入口，
+ *   不可给了点不动）。异常一律在 try/catch 内消化，**不得冒到渲染路径**。
+ *   ⚠️ 上面这条对**当前停用的能力半**仍然成立；但 2026-10-03 起**展示面不再受它约束**
+ *   （展示面 = 端别直出）。两条口径的交点写在接通面：入口可以「给了先不动」，**但不能「点了没反应」**。
+ *
+ * 返回面是两个**互不相同**的判断（展示面 / 接通面），两者的真源都暂时只是端别，
+ * 「要不要渲染」仍是消费方的决定，后续 #1484 可用同一个判断决定按钮 disabled。
+ *
+ * 落位说明：放根 composables/（INFRA 中立位置），两页各自 import 同一符号，
+ * 不构成跨模块私有件消费（避免移动端跨模块 import 的连锁契约锁）。
+ */
+import { computed } from 'vue'
+import type { ComputedRef } from 'vue'
+
+export type UseLoginProvidersResult = {
+    wechatAvailable : ComputedRef<boolean>
+    wechatUnavailableReason : ComputedRef<string>
+    wechatLoginReady : ComputedRef<boolean>
+}
+
+/** 端别判据的合法值（uni.getSystemInfoSync().uniPlatform：仅小程序微信端写作 'mp-weixin'） */
+const PLATFORM_MP_WEIXIN = 'mp-weixin'
+/** 端别判据的合法值（App 端；2026-10-03 真机实测 Xiaomi 23049RAD8C 上取出 "app"） */
+const PLATFORM_APP = 'app'
+/** provider 判据的合法值（uni.getProviderSync({ service: 'oauth' }) 的 weixin 授权登录） */
+const PROVIDER_OAUTH_WEIXIN = 'weixin'
+/** 不可用原因：探测不到能力时的唯一口径（#1484 可直接展示） */
+const REASON_UNAVAILABLE = '当前客户端不支持微信登录'
+/**
+ * 入口**展示但真实链路未接通**时的唯一文案（#1487 ①a 真机口径，2026-10-03）。
+ * 导出而不写成各页字面量：着陆页与登录页两条点击链都要用同一句话，
+ * 抄两份就是第三真源（同 `utils/agreementNotice` 被评审要求收成单点的理由）。
+ */
+export const WECHAT_NOT_WIRED_NOTICE = '微信登录暂未开通'
+
+/**
+ * provider 能力探测：oauth 服务里有没有注册 weixin。
+ * 取数分步写（不把 `.providerIds.indexOf(...)` 串在一个表达式里）—— 本仓无同类先例的新 API，
+ * 编译面按最朴素形态写；任何异常（含该 API 在本端不存在）都在这里塌成 false，不外抛。
+ *
+ * ⚠️ **已停用：函数与塌陷逻辑保留，但不再被 `useLoginProviders()` 调用（#1482 后接回）。**
+ *   2026-10-03 #1487 ①a 真机实测（Android 23049RAD8C，日志取完即还原）：
+ *     · `uni.getSystemInfoSync().uniPlatform` = `"app"`（端别那半取数正常）
+ *     · `uni.getProviderSync({ service: 'oauth' })` → `providerIds = ["weixin"]`，len=1
+ *     · 而该工程 `manifest.json` 无 App 侧 `oauth` / `sdkConfigs`，`uni_modules` 只有
+ *       `uni-secure-storage`（无任何微信登录模块）
+ *   ⇒ 这个 API 的 provider 列表**不反映工程配置**，区分不了「配了 SDK」与「没配」，
+ *   接进判据即假阳性。实测后果：着陆页渲染出「微信一键登录」按钮，`loginByWechat()`
+ *   抛错 → `errorHint` 兜出「登录失败，请重试」—— 正是「给了点不动」。
+ */
+function hasWechatOauthProvider() : boolean {
+    try {
+        const result = uni.getProviderSync({ service: 'oauth' })
+        const providerIds = result.providerIds
+        return providerIds.indexOf(PROVIDER_OAUTH_WEIXIN) >= 0
+    } catch (e) {
+        return false
+    }
+}
+
+/**
+ * 探测微信登录的两个面（展示面 / 接通面）。端别取数在装配时做一次（页面 setup 期），
+ * 三个 computed 只读结论，不再触碰 uni。
+ * 能力半（`hasWechatOauthProvider`）已停用、不参与任何一面，TODO(#1482) 接回前不得启用。
+ */
+export function useLoginProviders() : UseLoginProvidersResult {
+    const platform = uni.getSystemInfoSync().uniPlatform
+    const onMpWeixin = platform == PLATFORM_MP_WEIXIN
+    const onApp = platform == PLATFORM_APP
+    // 展示面：移动端（App）与小程序端一律展示该入口（2026-10-03 维护者口径）
+    const wechatAvailable = computed<boolean>(() : boolean => {
+        return onMpWeixin || onApp
+    })
+    // 接通面：真实微信登录链路是否已接通；App 端微信 SDK 未配置 ⇒ false（#1482）
+    const wechatLoginReady = computed<boolean>(() : boolean => {
+        return onMpWeixin
+    })
+    const wechatUnavailableReason = computed<string>(() : string => {
+        if (wechatAvailable.value) return ''
+        return REASON_UNAVAILABLE
+    })
+    return {
+        wechatAvailable: wechatAvailable,
+        wechatUnavailableReason: wechatUnavailableReason,
+        wechatLoginReady: wechatLoginReady
+    } as UseLoginProvidersResult
+}

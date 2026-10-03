@@ -76,6 +76,11 @@ const INFRA = {
     'components/app-list-item',
     'components/app-nav-bar',
     'components/app-tabs',
+    // 'components/login-agreement' —— #1478：协议勾选 + 注册引导的展示件，被 index（着陆页）与
+    // login（独立登录页）两个模块消费，且要求**同源同文案同视觉** ⇒ 按「多消费、无单一主消费方」
+    // 口径落跨切面基础设施（同款先例：`components/app-*` 整族）。登记为 INFRA 而非某模块私有，
+    // 是为了让另一页 import 它时**不构成跨模块私有件消费**（那会触发连锁消费者锁）。
+    'components/login-agreement',
     'config',
     'constants',
     'stores',
@@ -94,6 +99,9 @@ const INFRA = {
    * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**611 行，见 `oversized`**）
    * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），被 20+ 模块的列表页共用，
    *   无模块级消费者；与 `utils/**` 同属**跨切面基础设施**（登记不执法），预算面归它自己的票
+   * - `composables/useLoginProviders.uts` —— #1478 的登录提供方能力探测件：返回「微信登录可用吗」这一
+   *   **能力判断**，被 index（着陆页主 CTA 分叉）与 login（微信登录入口显隐，后续 #1484 的 disabled）
+   *   共同消费 ⇒ 落根 `composables/` 中立位置，两页 import **同一符号**（票面判据「不是两份实现」）。
    */
   files: [
     'App.uvue',
@@ -102,6 +110,7 @@ const INFRA = {
     'api/helpers.uts',
     'api/refreshGate.uts',
     'api/request.uts',
+    'composables/useLoginProviders.uts',
     'composables/usePagedList.uts',
     // 'utils/coursePointsCta.uts' —— #1421（移动端 ADR-0031 决策 7）：课程价格/兑换 CTA 的
     // 展示纯函数单点，被 mall 货架与 courses 详情两个模块消费 ⇒ 按「展示纯函数唯一实现」口径
@@ -323,8 +332,12 @@ const MODULES = {
 
   index: {
     extraDirs: [],
-    files: ['pages/index/index.uvue'],
-    extractDirs: [],
+    files: [
+      'pages/index/composables/useLandingLogin.uts',
+      'pages/index/index.uvue',
+    ],
+    extractDirs: ['pages/index/composables'],
+    /** #1478 着陆页：协议件与探测件都取跨切面基础设施（见 `INFRA`），本模块无私有件外销 */
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},

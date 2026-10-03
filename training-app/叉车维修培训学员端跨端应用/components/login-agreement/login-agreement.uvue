@@ -1,0 +1,104 @@
+<template>
+    <!-- 协议勾选 + 注册引导（#1478 抽自 pages/login/login.uvue，启动页与登录页同源同文案） -->
+    <view class="la-row" @click="onToggle">
+        <view class="la-checkbox" :class="{ 'la-checkbox--checked': agreed }">
+            <text v-if="agreed" class="la-check-mark">✓</text>
+        </view>
+        <text class="la-text">同意</text>
+        <text class="la-link" @click.stop="onAgreementTap('用户协议')">《用户协议》</text>
+        <text class="la-text">和</text>
+        <text class="la-link" @click.stop="onAgreementTap('用户隐私')">《用户隐私》</text>
+        <text class="la-text">{{ registerHint }}</text>
+        <text class="la-link" @click.stop="onRegister">立即注册</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 面很小且刻意不扩：只吃「是否勾选 + 通道」两个原始值，只吐三个事件（勾选切换 /
+     * 协议名点击 / 去注册）。验证码、倒计时、提交态等表单态**不进这里**（brief 明确划线）。
+     *
+     * 双向口径：props.agreed 单向流入 + emit('toggle') 让父页翻自己的 ref，
+     * 不用 v-model:agreed（仓内无先例，App 端 Kotlin 编译门未验过）。
+     * 事件形态取仓内已证可行的数组 defineEmits + payload 直传（先例 components/cert-selector）。
+     */
+    import { computed } from 'vue'
+
+    const props = withDefaults(defineProps<{
+        agreed? : boolean
+        channel? : string
+    }>(), {
+        agreed: false,
+        channel: 'phone',
+    })
+
+    const emit = defineEmits(['toggle', 'agreement', 'register'])
+
+    /**
+     * 三条通道注册语义不同（brief 的硬依据）：只有微信是「登录即注册」，手机/邮箱未注册则
+     * 发码即报错 ⇒ brief 判据 7 授权的是**按通道切换注册引导文案**。
+     * 「立即注册」**入口**不在授权范围内：它在 BASE 的登录页模板里是无条件存在的（同一段
+     * `agree-text` + `agree-link`），第 1 轮评审 F4 认定「按通道收掉入口」超出本票授权 ⇒ 各通道都在。
+     * 微信档文案以「，」收尾，与另两档同形 —— 它后面紧跟的就是那个入口。
+     */
+    const registerHint = computed<string>(() : string => {
+        if (props.channel == 'wechat') return '未注册的微信号将自动注册账号，'
+        if (props.channel == 'email') return '若邮箱未注册，'
+        return '若手机号未注册，'
+    })
+
+    function onToggle() : void {
+        emit('toggle')
+    }
+
+    function onAgreementTap(name : string) : void {
+        emit('agreement', name)
+    }
+
+    function onRegister() : void {
+        emit('register')
+    }
+</script>
+
+<style>
+    /* 前缀 la- = login-agreement，自带命名空间避免与宿主页 class 相撞；
+       margin-bottom 是从登录页 .form-item 吸收过来的（父页 .form-item 不再作用于组件根节点）。
+       数值逐字取自登录页原 .agree-row/.checkbox/.checkbox-checked/.check-mark/.agree-text/.agree-link。 */
+    .la-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 8rpx;
+        margin-bottom: 28rpx;
+    }
+
+    .la-checkbox {
+        width: 34rpx;
+        height: 34rpx;
+        border-radius: 50%;
+        border: 2rpx solid #C8CDD8;
+        align-items: center;
+        justify-content: center;
+        background-color: #ffffff;
+        margin-right: 12rpx;
+    }
+
+    .la-checkbox--checked {
+        background-color: #2979ff;
+        border-color: #2979ff;
+    }
+
+    .la-check-mark {
+        font-size: 24rpx;
+        color: #ffffff;
+    }
+
+    .la-text {
+        font-size: 25rpx;
+        color: #666666;
+    }
+
+    .la-link {
+        color: #2979ff;
+    }
+</style>

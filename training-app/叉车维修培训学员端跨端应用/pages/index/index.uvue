@@ -1,5 +1,9 @@
 <template>
-    <view class="welcome-page">
+    <!-- 未登录着陆页（#1478）：已登录仍无条件落 dashboard（下方 onLoad 里那条 reLaunch 是全应用
+         唯一的已登录冷启动落地路由，不得删改、不得条件化）；未登录按「微信登录能力」分叉出
+         主 CTA 或次级入口——分叉由运行期探测件 composables/useLoginProviders 决定，
+         本文件不新增任何条件编译指令行（② 门触发面，口径见 ADR-0008）。 -->
+    <view class="landing-page">
         <!-- 背景光晕装饰 -->
         <view class="glow glow-top"></view>
         <view class="glow glow-bottom"></view>
@@ -12,90 +16,86 @@
             <text class="page-tag-text">欢迎页</text>
         </view>
 
-        <!-- 中部品牌区 -->
-        <view class="brand">
-            <view class="logo-box">
-                <image src="/static/logo.png" mode="aspectFit" style="width: 176rpx; height: 140rpx;"></image>
+        <!-- 品牌区：吉祥物改 logo 占位（原整组纯 view 手绘已删，#1478 判据 6） -->
+        <view class="hero">
+            <text class="hi">Hi，您好！</text>
+            <text class="welcome">欢迎使用叉车维修培训系统</text>
+            <view class="mascot-box">
+                <image class="mascot-logo" src="/static/logo.png" mode="aspectFit"></image>
             </view>
-
-            <text class="title">叉车维修培训系统</text>
-            <text class="subtitle">专业维修技能成长平台</text>
         </view>
 
-        <!-- 底部：吉祥物 + 入口 -->
-        <view class="footer">
-            <view class="mascot">
-                <view class="antenna-stick"></view>
-                <view class="antenna-ball"></view>
-                <view class="m-head">
-                    <view class="m-face"></view>
-                    <view class="m-ear m-ear-l"></view>
-                    <view class="m-ear m-ear-r"></view>
-                    <view class="m-eye m-eye-l"></view>
-                    <view class="m-eye m-eye-r"></view>
-                    <view class="m-eye-glow m-eye-glow-l"></view>
-                    <view class="m-eye-glow m-eye-glow-r"></view>
-                    <view class="m-mouth"></view>
-                </view>
-                <view class="m-body">
-                    <view class="m-chest">
-                        <text class="m-chest-text">C</text>
-                    </view>
-                </view>
-                <view class="m-arm m-arm-l"></view>
-                <view class="m-arm m-arm-r"></view>
-                <view class="m-leg m-leg-l"></view>
-                <view class="m-leg m-leg-r"></view>
+        <!-- 登录入口区 -->
+        <view class="actions">
+            <!-- loginByWechat 失败原因可见（判据 5：不得被吞成静默） -->
+            <view class="error-box" v-if="errorHint.length > 0">
+                <text class="error-text">{{ errorHint }}</text>
             </view>
 
-            <button class="enter-btn" @click="goLogin">进入系统</button>
+            <!-- 展示面：两端（小程序 / App）一律直出主 CTA；点击链的可达性另由接通面门禁
+                 （#1487 ①a 真机口径 2026-10-03 ⇒ 原「探测到可用（小程序端）」表述已作废） -->
+            <button class="cta-wechat" v-if="wechatAvailable" :disabled="loading" @click="onWechatLogin">微信一键登录</button>
+
+            <!-- 协议行与登录页同源同文案（共享件，判据 7）；它只门禁微信登录，故随主 CTA 同进同退 -->
+            <LoginAgreement v-if="wechatAvailable" :channel="'wechat'" :agreed="agreed" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
+
+            <!-- 次级入口：通往独立登录页的路（登录页保留、降级为次级落点，不退役 #1483）
+                 两端都在位，不受探测门禁 -->
+            <view class="cta-secondary" @click="goOtherLogin">
+                <text class="cta-secondary-text">其他登录方式</text>
+            </view>
         </view>
     </view>
 </template>
 
-<script>
+<script setup lang="uts">
+    import { onLoad } from '@dcloudio/uni-app'
     import { useAuthStore } from '../../stores/auth'
+    import { useLoginProviders } from '../../composables/useLoginProviders'
+    import { useLandingLogin } from './composables/useLandingLogin'
+    import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
 
-    export default {
-        data() {
-            return {
-                statusBarHeight: 20
-            }
-        },
-        onLoad() {
-            const sysInfo = uni.getSystemInfoSync()
-            this.statusBarHeight = sysInfo.statusBarHeight
+    const auth = useAuthStore()
 
-            const auth = useAuthStore()
-            const restored = auth.restoreFromStorage()
-            console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
-            if (auth.isLoggedIn.value) {
-                console.log('[welcome] redirect to dashboard')
-                uni.reLaunch({
-                    url: '/pages/dashboard/dashboard',
-                    fail: (err) => {
-                        console.error('[welcome] reLaunch to dashboard failed:', err)
-                    }
-                })
-            }
+    // 探测件与登录页引用**同一符号**（判据：两页共享，不是两份实现）
+    // 两个面：#1487 ①a 真机口径（2026-10-03）—— 移动端**也展示**该入口（`wechatAvailable`），
+    // 但真实链路尚未接通（`wechatLoginReady`），点击只给友好提示、不发请求
+    const { wechatAvailable, wechatLoginReady } = useLoginProviders()
 
-            // 未登录：停留在欢迎页，点击「进入系统」进入登录页
-        },
-        methods: {
-            goLogin() {
-                uni.navigateTo({
-                    url: '/pages/login/login',
-                    fail: (err) => {
-                        console.error('[welcome] navigateTo login failed:', err)
-                    }
-                })
-            }
+    const {
+        statusBarHeight,
+        agreed,
+        loading,
+        errorHint,
+        toggleAgree,
+        showAgreement,
+        goRegister,
+        goOtherLogin,
+        onWechatLogin,
+    } = useLandingLogin(wechatLoginReady.value)
+
+    onLoad((_options : OnLoadOptions) => {
+        const sysInfo = uni.getSystemInfoSync()
+        statusBarHeight.value = sysInfo.statusBarHeight
+
+        const restored = auth.restoreFromStorage()
+        console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
+        if (auth.isLoggedIn.value) {
+            console.log('[welcome] redirect to dashboard')
+            uni.reLaunch({
+                url: '/pages/dashboard/dashboard',
+                fail: (err) => {
+                    console.error('[welcome] reLaunch to dashboard failed:', err)
+                }
+            })
         }
-    }
+
+        // 未登录：停留在本着陆页，由上方探测分支决定给出哪个入口
+    })
 </script>
 
 <style>
-    .welcome-page {
+    .landing-page {
         flex: 1;
         flex-direction: column;
         position: relative;
@@ -147,219 +147,98 @@
         text-align: center;
     }
 
-    /* 中部品牌区 */
-    .brand {
+    /* 品牌区（布局与配色取自 throwaway 原型 23409956，行为面未取） */
+    .hero {
         flex: 1;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        flex-direction: column;
-        padding-top: 40rpx;
+        padding: 0 56rpx;
     }
 
-    .logo-box {
-        position: relative;
-        width: 176rpx;
-        height: 176rpx;
+    .hi {
+        font-size: 60rpx;
+        font-weight: bold;
+        color: #FFFFFF;
+        text-align: center;
+    }
+
+    .welcome {
+        margin-top: 20rpx;
+        font-size: 32rpx;
+        color: rgba(255, 255, 255, 0.95);
+        text-align: center;
+    }
+
+    /* 吉祥物槽位：白底圆角盒 + logo 占位 */
+    .mascot-box {
+        margin-top: 60rpx;
+        width: 360rpx;
+        height: 360rpx;
         border-radius: 40rpx;
         background-color: #ffffff;
+        align-items: center;
+        justify-content: center;
         box-shadow: 0 16rpx 40rpx rgba(8, 90, 120, 0.35);
     }
 
-    .title {
-        margin-top: 40rpx;
-        font-size: 48rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
+    .mascot-logo {
+        width: 320rpx;
+        height: 320rpx;
     }
 
-    .subtitle {
-        margin-top: 18rpx;
-        font-size: 27rpx;
-        color: #CCCCCC;
-        text-align: center;
-    }
-
-    /* 底部：吉祥物 + 入口 */
-    .footer {
-        align-items: center;
+    /* 入口区白底卡片：让共享协议件的配色与登录页完全一致（同件同视觉，不给件加「深浅色」变体 prop） */
+    .actions {
         flex-direction: column;
-        padding-bottom: 90rpx;
-    }
-
-    /* 纯 view 绘制的机器人吉祥物（坐标系 0-190rpx 宽 / 0-210rpx 高） */
-    .mascot {
-        position: relative;
-        width: 190rpx;
-        height: 210rpx;
-    }
-
-    .antenna-stick {
-        position: absolute;
-        left: 91rpx;
-        top: 6rpx;
-        width: 8rpx;
-        height: 24rpx;
-        border-radius: 4rpx;
-        background-color: #22C55E;
-    }
-
-    .antenna-ball {
-        position: absolute;
-        left: 86rpx;
-        top: 0rpx;
-        width: 18rpx;
-        height: 18rpx;
-        border-radius: 50%;
-        background-color: #4ADE80;
-    }
-
-    .m-head {
-        position: absolute;
-        left: 55rpx;
-        top: 30rpx;
-        width: 80rpx;
-        height: 64rpx;
-        border-radius: 32rpx;
-        background-color: #FFFFFF;
-        box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.28);
-    }
-
-    /* 脸部显示屏（深蓝屏幕，置于白色圆头内底部） */
-    .m-face {
-        position: absolute;
-        left: 63rpx;
-        top: 44rpx;
-        width: 64rpx;
-        height: 40rpx;
-        border-radius: 22rpx;
-        background-color: #1E3A8A;
-    }
-
-    .m-ear {
-        position: absolute;
-        top: 46rpx;
-        width: 12rpx;
-        height: 28rpx;
-        border-radius: 6rpx;
-        background-color: #3B82F6;
-    }
-
-    .m-ear-l {
-        left: 43rpx;
-    }
-
-    .m-ear-r {
-        left: 135rpx;
-    }
-
-    /* 眼：青色发光圆形 */
-    .m-eye {
-        position: absolute;
-        top: 56rpx;
-        width: 13rpx;
-        height: 13rpx;
-        border-radius: 50%;
-        background-color: #22D3EE;
-        box-shadow: 0 0 10rpx #67E8F9;
-    }
-
-    .m-eye-l {
-        left: 76rpx;
-    }
-
-    .m-eye-r {
-        left: 101rpx;
-    }
-
-    /* 微笑嘴：浅蓝弧 */
-    .m-mouth {
-        position: absolute;
-        left: 85rpx;
-        top: 80rpx;
-        width: 18rpx;
-        height: 8rpx;
-        border-radius: 50% 50% 8rpx 8rpx;
-        background-color: #93C5FD;
-    }
-
-    .m-body {
-        position: absolute;
-        left: 62rpx;
-        top: 98rpx;
-        width: 66rpx;
-        height: 66rpx;
-        border-radius: 22rpx;
-        background-color: #FFFFFF;
-        box-shadow: 0 4rpx 14rpx rgba(8, 90, 120, 0.22);
-    }
-
-    .m-chest {
-        position: absolute;
-        left: 76rpx;
-        top: 110rpx;
-        width: 38rpx;
-        height: 38rpx;
-        border-radius: 50%;
-        background-color: #FFFFFF;
         align-items: center;
-        justify-content: center;
-        box-shadow: 0 2rpx 8rpx rgba(8, 90, 120, 0.18);
-    }
-
-    .m-chest-text {
-        font-size: 24rpx;
-        font-weight: bold;
-        color: #15803D;
-    }
-
-    .m-arm {
-        position: absolute;
-        top: 104rpx;
-        width: 20rpx;
-        height: 44rpx;
-        border-radius: 10rpx;
-        background-color: #3B82F6;
-    }
-
-    .m-arm-l {
-        left: 40rpx;
-    }
-
-    .m-arm-r {
-        left: 130rpx;
-    }
-
-    .m-leg {
-        position: absolute;
-        top: 164rpx;
-        width: 18rpx;
-        height: 22rpx;
-        border-radius: 9rpx;
-        background-color: #2563EB;
-    }
-
-    .m-leg-l {
-        left: 76rpx;
-    }
-
-    .m-leg-r {
-        left: 96rpx;
-    }
-
-    /* 进入按钮 */
-    .enter-btn {
-        margin-top: 56rpx;
-        width: 420rpx;
-        height: 92rpx;
-        line-height: 92rpx;
-        border-radius: 999rpx;
+        margin: 0 24rpx 24rpx 24rpx;
+        padding: 32rpx 40rpx 40rpx 40rpx;
+        border-radius: 40rpx;
         background-color: #ffffff;
-        color: #1E9FFF;
-        font-size: 32rpx;
+        box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.28);
+    }
+
+    .error-box {
+        margin-bottom: 20rpx;
+        padding: 12rpx 20rpx;
+        border-radius: 16rpx;
+        background-color: #FFF1F0;
+    }
+
+    .error-text {
+        font-size: 26rpx;
+        color: #D93025;
+        text-align: center;
+    }
+
+    /* 主 CTA：小程序端微信一键登录 */
+    .cta-wechat {
+        width: 560rpx;
+        height: 96rpx;
+        line-height: 96rpx;
+        border-radius: 999rpx;
+        background-color: #22C55E;
+        color: #FFFFFF;
+        font-size: 34rpx;
         font-weight: bold;
         text-align: center;
         border: none;
-        box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.35);
+    }
+
+    /* 次级入口：通往独立登录页的路，两端都在位 */
+    .cta-secondary {
+        margin-top: 28rpx;
+        width: 560rpx;
+        height: 88rpx;
+        border-radius: 999rpx;
+        background-color: #F2F4F7;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cta-secondary-text {
+        font-size: 30rpx;
+        color: #1E9FFF;
+        text-align: center;
     }
 </style>

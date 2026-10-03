@@ -18,6 +18,9 @@
  *      「这三条通道各自不出现口令那条 toast，且本通道请求照发恰一次」。**不是**「三通道行为逐字不变」：
  *      那一层由 `utils/loginContract.test.js` 的「四通道校验文案逐字仍在」承担，本文件够不到
  *      （同类「用例名比判据宽」的 over-claim 先例 #1313）。
+ *   I4（#1478 第 1 轮评审 F2 追加，与 #1262/#1286 主线无关，只是共用同一条注入缝）：登录页的
+ *      协议详情提示**转投**全仓单点 `utils/agreementNotice.uts`，本页不再自持那句 toast。
+ *      C4 断的是转投实参（协议名原样交出去）+ 本地零 toast；文案端到端在 `landingLoginBehavior` C3-C6。
  *
  * ⚠️ 与票面探针输入的偏差（现测所得，写下来防下一个会话照抄）：#1286 建议用 `'ddddddddddd'`
  *   作为「数字档生效」的输入，但本仓该函数的档位顺序是「长度 → `startsWith('1')` → 数字」，
@@ -110,13 +113,21 @@ function mutate(rel, from, to) {
 const loginSrc = () => readText(LOGIN_UTS);
 const forgotSrc = () => readText(FORGOT_UTS);
 
+/** 与真源 `composables/useLoginProviders.uts` 的 `WECHAT_NOT_WIRED_NOTICE` 逐字一致（文案单点） */
+const WECHAT_NOT_WIRED_NOTICE = '微信登录暂未开通';
+
 /**
  * 起一个**真的**登录页表单 composable（`pages/login/composables/useLoginForm.uts`）。
  * `calls` 记录请求层被打到几次 —— I1/I2/I3 的「零请求」判据就看它。
+ *
+ * @param source 变异源（缺省 = 磁盘真源）
+ * @param opts.loginReady 共享探测件的**接通面**快照。缺省 true = 小程序端形态（老判据全测「链路已接通」
+ *   的行为）；显式 false = App 端样式位形态（#1487 ①a 真机口径：点击只给友好提示、零请求）。
  */
-function loginApp(source) {
+function loginApp(source, opts) {
   const { toasts, uni } = makeUni();
-  const calls = { login: [], loginByCode: [], loginByWechat: [], sendCodeApi: [] };
+  const loginReady = !(opts != null && opts.loginReady === false);
+  const calls = { login: [], loginByCode: [], loginByWechat: [], sendCodeApi: [], afterLoginSuccess: [], showAgreementNotice: [] };
   const bindings = {
     ...vueShim(),
     useAuthStore: () => ({
@@ -130,13 +141,24 @@ function loginApp(source) {
     saveSecureCredentials: () => {},
     saveAccountOnly: () => {},
     clearSecureCredentials: () => {},
+    // #1478：登录成功出口不再是本文件的私有函数，而是共享件 `utils/loginOutlet.uts`
+    // （着陆页与登录页同一条出口）。这里注入的是**它的桩**，记录实参 isNew ——
+    // 「成功出口被调了几次、带的是哪个分支」由此变成可断言的行为面，不再只是文本锁。
+    afterLoginSuccess: (isNew) => { calls.afterLoginSuccess.push(isNew); },
+    // #1478 第 1 轮评审 F2：「详情页建设中」那句 toast 不再是本页自持的一份文案，而是转投
+    // 全仓单点 `utils/agreementNotice.uts`。这里记录**转投实参** ⇒「登录页只交协议名」
+    // 成为可断言的行为面（文案本身由 `landingLoginBehavior` 用真单点端到端跑）。
+    showAgreementNotice: (name) => { calls.showAgreementNotice.push(name); },
+    // #1487 ①a 真机口径：入口展示但链路未接通时的唯一提示文案（真源 `composables/useLoginProviders`）。
+    // 按导出名绑定，缺一个就抛（`utils/utsHarness.js` 的缺绑定守卫）—— 这里必须给。
+    WECHAT_NOT_WIRED_NOTICE: WECHAT_NOT_WIRED_NOTICE,
     uni,
     setInterval: () => 0,
     clearInterval: () => {},
     setTimeout: () => 0,
   };
   const mod = source == null ? loadUts(LOGIN_UTS, bindings) : loadFromSource(source, 'useLoginForm.uts', bindings);
-  return { face: mod.useLoginForm({ isSupported: { value: false } }), calls, toasts };
+  return { face: mod.useLoginForm({ isSupported: { value: false } }, loginReady), calls, toasts, loginReady: loginReady };
 }
 
 /** 起一个**真的**找回密码页 composable（`pages/forgot-password/composables/useForgotPasswordForm.uts`） */
@@ -288,6 +310,9 @@ describe('C. #1262 边界：新档位不渗进其余登录通道', () => {
     expect(app.toasts).not.toContain(MSG_PWD);
     expect(app.calls.loginByWechat.length).toBe(1);
     expect(app.calls.login.length).toBe(0);
+    // #1478 追加的口径：微信通道成功后走的是**那条共享出口**，且老用户（isNew=false）
+    // 分支由出口决定，登录页本身不再持有 reLaunch
+    expect(app.calls.afterLoginSuccess).toEqual([false]);
   });
 
   test('C2 邮箱验证码登录：空口令照样直达 loginByCode(channel=email)', async () => {
@@ -308,6 +333,26 @@ describe('C. #1262 边界：新档位不渗进其余登录通道', () => {
     await submitPhone(app, PHONE_OK);
     expect(app.toasts).not.toContain(MSG_PWD);
     expect(app.calls.loginByCode.length).toBe(1);
+  });
+
+  test('C4 #1478 F2：登录页的协议详情只交**协议名**给共享单点，不再自持那份 toast 文案', () => {
+    const app = loginApp();
+    app.face.showAgreement('用户协议');
+    app.face.showAgreement('用户隐私');
+    expect(app.calls.showAgreementNotice).toEqual(['用户协议', '用户隐私']);
+    expect(app.toasts).toEqual([]); // 这句话的出口在 utils/agreementNotice.uts，不在本页（全仓单点）
+  });
+
+  test('C5 #1487 ①a 真机口径：接通面为假（App 端样式位）⇒ 微信模式点击只出单点提示，零请求、零出口、不进 loading', async () => {
+    const app = loginApp(null, { loginReady: false });
+    app.face.mode.value = 'wechat';
+    app.face.agreed.value = true;
+    await app.face.onSubmit();
+    expect(app.toasts).toEqual([WECHAT_NOT_WIRED_NOTICE]);
+    expect(app.calls.loginByWechat.length).toBe(0); // 样式位不是坏按钮：一次都不打
+    expect(app.calls.login.length).toBe(0);
+    expect(app.calls.afterLoginSuccess).toEqual([]);
+    expect(app.face.loading.value).toBe(false);
   });
 });
 
