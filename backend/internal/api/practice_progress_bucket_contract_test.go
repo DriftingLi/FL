@@ -22,7 +22,7 @@ import (
 )
 
 func assertPracticeProgressBucketing(t *testing.T, db *gorm.DB) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	pwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, pwd)
 

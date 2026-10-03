@@ -23,7 +23,7 @@ import (
 // setupInspectionRouter 起一台含巡检路由的整机（内存库 + 管理员 token）。
 func setupInspectionRouter(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "inspection-shape-secret",

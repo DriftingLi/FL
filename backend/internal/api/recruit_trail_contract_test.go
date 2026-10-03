@@ -28,7 +28,7 @@ var forbiddenCredentialKeys = []string{
 }
 
 func assertRecruitTrail(t *testing.T, db *gorm.DB) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	pwd, _ := core.HashPassword(`admin123`)
 	admin := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := core.HashPassword(`student123`)

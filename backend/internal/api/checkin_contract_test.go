@@ -54,7 +54,7 @@ type calendarResp struct {
 
 func TestCheckInContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	stu := model.HrwaiUser{Account: "checkin_stu", Phone: "13800001001", Username: "打卡学员", Status: 1, CreatedAt: testutil.Now()}

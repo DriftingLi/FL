@@ -16,7 +16,7 @@ import (
 // newRateLimitedRouter 装配真实路由器，并把限流收紧到「第二个请求必被拒」。
 func newRateLimitedRouter(t *testing.T, trusted []string) *gin.Engine {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	cfg := &config.Config{
 		TrustedProxies: trusted,
 		RateLimit:      config.RateLimitConfig{Enabled: true, RPS: 0.0001, Burst: 1},

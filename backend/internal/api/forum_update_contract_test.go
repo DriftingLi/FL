@@ -44,7 +44,7 @@ type updateTopicResp struct {
 
 func TestForumUpdateTopicContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	author := model.HrwaiUser{Account: "edit_author", Phone: "13800000106", Username: "作者", Status: 1, CreatedAt: testutil.Now()}

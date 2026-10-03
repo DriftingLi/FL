@@ -24,7 +24,7 @@ import (
 
 func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "qwrite-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := gin.New()

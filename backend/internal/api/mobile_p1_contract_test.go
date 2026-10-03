@@ -123,7 +123,7 @@ func p1Request(r *gin.Engine, token, method, path string, body any) *httptest.Re
 
 func TestFavoritesContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	r, cfg, userID := seedP1Env(t)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
@@ -273,7 +273,7 @@ func TestFavoritesContract(t *testing.T) {
 
 func TestSearchContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	r, _, _ := seedP1Env(t)
 
 	// 全部搜索：各分区命中且隐藏内容不出现。
@@ -343,7 +343,7 @@ func TestSearchContract(t *testing.T) {
 
 func TestMaterialsContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	r, cfg, userID := seedP1Env(t)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).

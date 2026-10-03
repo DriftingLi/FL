@@ -25,7 +25,7 @@ const uidPlaceholder = "{{UID}}"
 
 func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	const secret = "contract-test-secret"
 
 	cases := []struct {
@@ -95,7 +95,7 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 // （email_ 前缀）在 /auth/me 源头过滤为空串，其余字段与形状不变。
 func TestAuthMeContract_EmailPlaceholderPhoneMasked(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	const secret = "contract-test-secret"
 
 	db := testutil.NewMemoryDB(t)

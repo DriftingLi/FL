@@ -24,7 +24,7 @@ import (
 
 func newCatalogContractEnv(t *testing.T) (*gin.Engine, *config.Config, *Deps) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -83,28 +83,6 @@ func unpackData(t *testing.T, rec *httptest.ResponseRecorder, wantCode int) (int
 	return body.Code, body.Message, string(body.Data)
 }
 
-// assertDictKeys 断言字典对象键集与旧 map 字典完全一致（map 序列化按键排序，
-// 反序列化后键集一致 + service 层键序测试 → 字节级契约锁定）。
-func assertDictKeys(t *testing.T, got map[string]any, want []string) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("字典键数不符: got %d keys %v, want %d", len(got), keysOf(got), len(want))
-	}
-	for _, k := range want {
-		if _, ok := got[k]; !ok {
-			t.Fatalf("缺少字段 %q: %v", k, keysOf(got))
-		}
-	}
-}
-
-func keysOf(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}
-
 // 时间字段的对外契约（ADR-0043）：业务时区（Asia/Shanghai）墙钟 + 微秒定长 + **显式 `+08:00` 偏移**。
 // 偏移是断言的一部分——历史实现输出裸 UTC，会被 JS 按本地时区解析，东八区恒差 8 小时。
 var isoMicroRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+08:00$`)
@@ -124,7 +102,7 @@ func TestCatalogContract_Specialty(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &created); err != nil {
 		t.Fatalf("解析创建响应失败: %v", err)
 	}
-	assertDictKeys(t, created, []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
+	testutil.AssertDictKeys(t, created, []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
 	if created["code"] != "operation" || created["name"] != "操作" ||
 		created["sort_order"] != float64(1) || created["status"] != float64(1) ||
 		created["description"] != "" {
@@ -162,7 +140,7 @@ func TestCatalogContract_Specialty(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &list); err != nil || len(list.Specialties) != 1 {
 		t.Fatalf("列表解析失败: %v, data=%s", err, data)
 	}
-	assertDictKeys(t, list.Specialties[0], []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
+	testutil.AssertDictKeys(t, list.Specialties[0], []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
 
 	// 更新（改名 + 停用）
 	rec = catalogRequest(t, r, token, "PUT", fmt.Sprintf("/api/admin/specialty/%d", specID),
@@ -172,7 +150,7 @@ func TestCatalogContract_Specialty(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &updated); err != nil {
 		t.Fatalf("解析更新响应失败: %v", err)
 	}
-	assertDictKeys(t, updated, []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
+	testutil.AssertDictKeys(t, updated, []string{"code", "created_at", "description", "name", "sort_order", "specialty_id", "status"})
 	if updated["name"] != "操作方向" || updated["status"] != float64(0) {
 		t.Fatalf("更新返回字段不匹配: %+v", updated)
 	}
@@ -226,7 +204,7 @@ func TestCatalogContract_Level(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &created); err != nil {
 		t.Fatalf("解析创建响应失败: %v", err)
 	}
-	assertDictKeys(t, created, []string{"code", "created_at", "description", "level_id", "name", "sort_order", "status"})
+	testutil.AssertDictKeys(t, created, []string{"code", "created_at", "description", "level_id", "name", "sort_order", "status"})
 	if created["code"] != "beginner" || created["name"] != "入门" || created["status"] != float64(1) {
 		t.Fatalf("创建返回字段不匹配: %+v", created)
 	}
@@ -240,7 +218,7 @@ func TestCatalogContract_Level(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &list); err != nil || len(list.Levels) != 1 {
 		t.Fatalf("学员端等级列表解析失败: %v, data=%s", err, data)
 	}
-	assertDictKeys(t, list.Levels[0], []string{"code", "created_at", "description", "level_id", "name", "sort_order", "status"})
+	testutil.AssertDictKeys(t, list.Levels[0], []string{"code", "created_at", "description", "level_id", "name", "sort_order", "status"})
 
 	rec = catalogRequest(t, r, token, "PUT", fmt.Sprintf("/api/admin/level/%d", levelID), `{"name":"初级"}`)
 	_, _, data = unpackData(t, rec, http.StatusOK)
@@ -275,7 +253,7 @@ func TestCatalogContract_CertificateTemplate(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &created); err != nil {
 		t.Fatalf("解析创建响应失败: %v", err)
 	}
-	assertDictKeys(t, created, []string{"code", "created_at", "description", "id", "name",
+	testutil.AssertDictKeys(t, created, []string{"code", "created_at", "description", "id", "name",
 		"status", "template_url", "updated_at", "validity_days"})
 	if created["code"] != "CERT_1" || created["validity_days"] != float64(1460) ||
 		created["template_url"] != "https://x/t.pdf" || created["status"] != float64(1) {
@@ -308,7 +286,7 @@ func TestCatalogContract_CertificateTemplate(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &list); err != nil || len(list.Templates) != 2 {
 		t.Fatalf("模板列表解析失败: %v, data=%s", err, data)
 	}
-	assertDictKeys(t, list.Templates[0], []string{"code", "created_at", "description", "id", "name",
+	testutil.AssertDictKeys(t, list.Templates[0], []string{"code", "created_at", "description", "id", "name",
 		"status", "template_url", "updated_at", "validity_days"})
 
 	rec = catalogRequest(t, r, token, "PUT", fmt.Sprintf("/api/admin/certificate-template/%d", tplID),
@@ -340,7 +318,7 @@ func TestCatalogContract_QuestionTag(t *testing.T) {
 		t.Fatalf("解析创建响应失败: %v", err)
 	}
 	// 创建返回不含 question_count
-	assertDictKeys(t, created, []string{"code", "created_at", "description", "id", "name", "sort_order", "status", "updated_at"})
+	testutil.AssertDictKeys(t, created, []string{"code", "created_at", "description", "id", "name", "sort_order", "status", "updated_at"})
 	if created["code"] != "hydraulic" || created["name"] != "液压" || created["sort_order"] != float64(1) {
 		t.Fatalf("创建返回字段不匹配: %+v", created)
 	}
@@ -355,7 +333,7 @@ func TestCatalogContract_QuestionTag(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &list); err != nil || len(list.Tags) != 1 {
 		t.Fatalf("学员端标签列表解析失败: %v, data=%s", err, data)
 	}
-	assertDictKeys(t, list.Tags[0], []string{"code", "created_at", "description", "id", "name",
+	testutil.AssertDictKeys(t, list.Tags[0], []string{"code", "created_at", "description", "id", "name",
 		"question_count", "sort_order", "status", "updated_at"})
 	if list.Tags[0]["question_count"] != float64(0) {
 		t.Fatalf("无题目标签 question_count 应为 0: %+v", list.Tags[0])
@@ -368,7 +346,7 @@ func TestCatalogContract_QuestionTag(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &updated); err != nil {
 		t.Fatalf("解析更新响应失败: %v", err)
 	}
-	assertDictKeys(t, updated, []string{"code", "created_at", "description", "id", "name", "sort_order", "status", "updated_at"})
+	testutil.AssertDictKeys(t, updated, []string{"code", "created_at", "description", "id", "name", "sort_order", "status", "updated_at"})
 	if updated["name"] != "液压系统" {
 		t.Fatalf("更新返回字段不匹配: %+v", updated)
 	}

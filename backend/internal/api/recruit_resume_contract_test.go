@@ -18,7 +18,7 @@ import (
 
 func TestRecruitResumesContract_Full(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	spec1 := model.Position{Code: "spec_forklift", Name: "叉车维修", Status: 1}

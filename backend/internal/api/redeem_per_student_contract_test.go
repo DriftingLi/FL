@@ -21,7 +21,7 @@ const redeemCoursePrice = 100
 
 func TestTwoStudentsRedeemSameCourse(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "redeem-per-student-secret",

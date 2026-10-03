@@ -34,7 +34,7 @@ func TestSearchUpgradeContract(t *testing.T) {
 		t.Fatalf("章节分区应有 1 条, got %v", chapters)
 	}
 	item, _ := items[0].(map[string]any)
-	assertDictKeys(t, item, []string{"cover", "hit_field", "id", "parent_id", "snippet", "summary", "title", "type"})
+	testutil.AssertDictKeys(t, item, []string{"cover", "hit_field", "id", "parent_id", "snippet", "summary", "title", "type"})
 	if item["hit_field"] != "title" {
 		t.Fatalf("章节命中位置应为 title, got %v", item["hit_field"])
 	}

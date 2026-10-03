@@ -136,7 +136,7 @@ func mustRotateOK(t *testing.T, sess *security.Session, refresh string) string {
 // TestDisableStudentRevokesAllSessions 禁用学员 = 全会话吊销（与禁用招聘者同判）。
 func TestDisableStudentRevokesAllSessions(t *testing.T) {
 	t.Parallel()
-	adminSvc, sess, _, uid := newDispositionFixture(t, newValBlacklist())
+	adminSvc, sess, _, uid := newDispositionFixture(t, testutil.NewValueBlacklist())
 	inHand := mustRotateOK(t, sess, issueStudentRefresh(t, sess, uid))
 
 	next, err := adminSvc.ToggleHrwaiUserStatus(context.Background(), uid)
@@ -155,7 +155,7 @@ func TestDisableStudentRevokesAllSessions(t *testing.T) {
 // （它不剥夺任何既有凭证，写标记反而会把「解除即恢复原状」做成二次惩罚）。
 func TestEnableStudentDoesNotRevoke(t *testing.T) {
 	t.Parallel()
-	adminSvc, sess, db, uid := newDispositionFixture(t, newValBlacklist())
+	adminSvc, sess, db, uid := newDispositionFixture(t, testutil.NewValueBlacklist())
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", uid).Update("status", 0).Error; err != nil {
 		t.Fatalf("预置禁用态失败: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestEnableStudentDoesNotRevoke(t *testing.T) {
 // TestAdminResetPasswordRevokesAllSessions 管理员代重置 = 与学员自助改密同一个动作 ⇒ 同样吊销。
 func TestAdminResetPasswordRevokesAllSessions(t *testing.T) {
 	t.Parallel()
-	adminSvc, sess, db, uid := newDispositionFixture(t, newValBlacklist())
+	adminSvc, sess, db, uid := newDispositionFixture(t, testutil.NewValueBlacklist())
 	before := storedPassword(t, db, uid)
 	inHand := mustRotateOK(t, sess, issueStudentRefresh(t, sess, uid))
 
@@ -198,7 +198,7 @@ func TestAdminResetPasswordRevokesAllSessions(t *testing.T) {
 // 否则任何绕过 handler 的 caller 都能落一个 3 位口令。非法口令不得留下任何副作用。
 func TestAdminResetPasswordSharesLengthRule(t *testing.T) {
 	t.Parallel()
-	adminSvc, _, db, uid := newDispositionFixture(t, newValBlacklist())
+	adminSvc, _, db, uid := newDispositionFixture(t, testutil.NewValueBlacklist())
 	before := storedPassword(t, db, uid)
 
 	if err := adminSvc.ResetHrwaiUserPassword(context.Background(), uid, "123"); err == nil {
@@ -214,7 +214,7 @@ func TestAdminResetPasswordSharesLengthRule(t *testing.T) {
 // 不是一票新增（ADR-0064 决策 4，维护者 2026-09-22 裁定并入第①批）。
 func TestDisableTutorRevokesAllSessions(t *testing.T) {
 	t.Parallel()
-	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
+	adminSvc, sess, db, tid := newTutorFixture(t, testutil.NewValueBlacklist())
 	inHand := mustRotateOK(t, sess, issueTutorRefresh(t, sess, tid))
 
 	next, err := adminSvc.ToggleTutorStatus(context.Background(), tid)
@@ -237,7 +237,7 @@ func TestDisableTutorRevokesAllSessions(t *testing.T) {
 // 收紧前它自己 First→哈希→落库，零吊销，且长度规则只在 handler。
 func TestAdminResetTutorPasswordRevokesAllSessions(t *testing.T) {
 	t.Parallel()
-	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
+	adminSvc, sess, db, tid := newTutorFixture(t, testutil.NewValueBlacklist())
 	before := storedTutorPassword(t, db, tid)
 	inHand := mustRotateOK(t, sess, issueTutorRefresh(t, sess, tid))
 
@@ -291,7 +291,7 @@ func TestDispositionRevokeFailureDoesNotRollBackAction(t *testing.T) {
 // TestEnableTutorDoesNotRevoke 讲师侧同判：只有转成禁用态才吊销，恢复启用不动凭证。
 func TestEnableTutorDoesNotRevoke(t *testing.T) {
 	t.Parallel()
-	adminSvc, sess, db, tid := newTutorFixture(t, newValBlacklist())
+	adminSvc, sess, db, tid := newTutorFixture(t, testutil.NewValueBlacklist())
 	if err := db.Model(&model.Tutor{}).Where("tutor_id = ?", tid).Update("status", 0).Error; err != nil {
 		t.Fatalf("预置禁用态失败: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestEnableTutorDoesNotRevoke(t *testing.T) {
 // 而那会把处置与退款合成一件事，并让「解除即恢复原状」失效。
 func TestDispositionDoesNotRewriteHistory(t *testing.T) {
 	t.Parallel()
-	adminSvc, _, db, uid := newDispositionFixture(t, newValBlacklist())
+	adminSvc, _, db, uid := newDispositionFixture(t, testutil.NewValueBlacklist())
 	if err := db.Create(&model.UserEntitlement{UserID: uid, SKU: entitlement.CourseSKU(1), RefID: "1"}).Error; err != nil {
 		t.Fatalf("播种权益行失败: %v", err)
 	}

@@ -24,7 +24,7 @@ import (
 // 主 seam：HTTP + 真实 JWT（现有契约测试的同一层）；被测端点是题库统计（受作用域、按证件分区）。
 func TestCredentialScopeContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -103,7 +103,7 @@ func TestCredentialScopeContract(t *testing.T) {
 // 让控制台请求被静默按别人的证件过滤。改造前客户端也从不给这三端注入证件，故语义是「非学员 = 不分区」。
 func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))
@@ -162,7 +162,7 @@ func TestCredentialScopeIgnoresNonStudentRoles(t *testing.T) {
 // 会让用例退化成语义不变式（挂不挂中间件都绿）。
 func TestPublicCatalogEndpointsAreNotCredentialScoped(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{JWTSecretKey: "credential-scope-secret"}
 	r := NewRouter(newContractDeps(t, db, cfg))

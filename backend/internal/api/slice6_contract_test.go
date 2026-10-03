@@ -27,7 +27,7 @@ import (
 
 func newSlice6Env(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -63,7 +63,7 @@ func slice6Data(t *testing.T, rec *httptest.ResponseRecorder, wantCode int) map[
 func slice6AssertKeys(t *testing.T, rec *httptest.ResponseRecorder, wantCode int, want ...string) map[string]any {
 	t.Helper()
 	m := slice6Data(t, rec, wantCode)
-	assertDictKeys(t, m, want)
+	testutil.AssertDictKeys(t, m, want)
 	return m
 }
 

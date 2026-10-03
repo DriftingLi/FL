@@ -8,7 +8,7 @@
 // 第二条用例锁失败策略那一半：口令族**尽力而为**（标记写不进去也不回退口令），与注销族
 // 「先写标记、失败即整体不生效」（session_termination_contract_test.go）有意不同，
 // 两族策略不许互相顶替。
-package api
+package auth
 
 import (
 	"net/http"
@@ -20,7 +20,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
@@ -37,16 +36,16 @@ const (
 
 // newPasswordFamilyRouter 装配最小真链路：手机号通道重置口令 + 双令牌轮换 + 账号密码登录，
 // 三者共用一个会话实例（黑名单存储由参数注入）。
-func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Engine, *security.Session, *memCodeStore, *fakeChannel, int) {
+func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Engine, *security.Session, *codeAuthStoreN, *codeAuthChannelN, int) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, bl)
-	authSvc := auth.NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
-	store := newMemCodeStore()
-	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
-	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
+	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	store := newCodeAuthStoreN()
+	codeSvc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	phoneCh := &codeAuthChannelN{column: "phone", keyPref: "phone_code", noun: "手机号"}
 
 	hashed, err := core.HashPassword(resetOldPassword)
 	if err != nil {
@@ -62,34 +61,34 @@ func newPasswordFamilyRouter(t *testing.T, bl security.BlacklistStore) (*gin.Eng
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	auth.RegisterPhoneAuthRoutes(r.Group("/api"), sess, codeSvc, phoneCh, captcha.NewService(store), false)
+	RegisterPhoneAuthRoutes(r.Group("/api"), sess, codeSvc, phoneCh, captcha.NewService(store), false)
 	// P2 波 3a：/api/auth 的刷新与登录端点由域包注册（refresh/login 均非 JWT 端点）。
-	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
+	RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 	return r, sess, store, phoneCh, u.ID
 }
 
 // resetPasswordViaCode 走真实两步：找回发码 → 带码重置，返回重置这一步的 recorder。
-func resetPasswordViaCode(t *testing.T, r *gin.Engine, store *memCodeStore, ch *fakeChannel, newPassword string) *httptest.ResponseRecorder {
+func resetPasswordViaCode(t *testing.T, r *gin.Engine, store *codeAuthStoreN, ch *codeAuthChannelN, newPassword string) *httptest.ResponseRecorder {
 	t.Helper()
-	if w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	if w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": resetPhone, "purpose": "reset_password"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("找回发码应 200，实际 %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, ch, auth.CodePurposeResetPassword, resetPhone)
-	return codeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
+	code := extractStoredCode(t, store, ch, CodePurposeResetPassword, resetPhone)
+	return testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
 		map[string]interface{}{"phone": resetPhone, "code": code, "password": newPassword}, "")
 }
 
 // postPasswordLogin 账号密码登录端点（口令是否真的生效，以能否登录为准）。
 func postPasswordLogin(r *gin.Engine, account, password string) int {
-	return codeAuthRequest(r, http.MethodPost, "/api/auth/login",
+	return testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/login",
 		map[string]interface{}{"username": account, "password": password}, "").Code
 }
 
 // 重置口令后，手上那枚 refresh（重置前一刻刚轮换出来的、本身完全有效）换不出新令牌 ⇒ 401。
 func TestResetPassword_旧refresh在重置后被拒(t *testing.T) {
 	t.Parallel()
-	r, sess, store, ch, uid := newPasswordFamilyRouter(t, newValBlacklist())
+	r, sess, store, ch, uid := newPasswordFamilyRouter(t, testutil.NewValueBlacklist())
 
 	_, staleRefresh, err := sess.IssuePair(uid, resetAccount, core.HrwaiRole)
 	if err != nil {

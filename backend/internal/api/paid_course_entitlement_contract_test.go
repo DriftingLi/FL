@@ -22,7 +22,7 @@ import (
 
 func TestPaidCourseEntitlementGate(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "paid-gate-secret",
@@ -108,7 +108,7 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 // 公开的课程列表无主体 ⇒ 该槽省略（见 CourseDTO.Entitled 注释），故只锁详情。
 func TestCourseDetailProjectsEntitlement(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "entitled-slot-secret",

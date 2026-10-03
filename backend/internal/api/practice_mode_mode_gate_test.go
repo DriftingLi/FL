@@ -25,7 +25,7 @@ import (
 // 来源标记标签的真题题退出搜索；公共池未打标真题题仍可搜。
 func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	catalogSvc := training.NewService(db, nil)
 	qsvc := questionbank.NewService(db, nil, nil)
@@ -87,7 +87,7 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 // 合法三形态（sequential / tag:<id> / paper:<id>）不受影响。
 func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "mode-gate-secret",

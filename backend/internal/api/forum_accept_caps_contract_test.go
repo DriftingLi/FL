@@ -23,7 +23,7 @@ import (
 
 func TestForumAcceptCapsContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	doReq := func(r *gin.Engine, tok, method, path string, body any) *httptest.ResponseRecorder {
 		var req *http.Request
 		if body != nil {
