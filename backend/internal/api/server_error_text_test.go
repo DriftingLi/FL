@@ -35,7 +35,7 @@ type serverErrorEnv struct {
 
 func newServerErrorEnv(t *testing.T) *serverErrorEnv {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "server-error-text-secret",

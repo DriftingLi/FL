@@ -21,7 +21,7 @@ import (
 // newTrustedProxyRouter 用给定可信代理装配真实路由器，并捕获访问日志。
 func newTrustedProxyRouter(t *testing.T, trusted []string) (*gin.Engine, *strings.Builder) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	var buf strings.Builder
 	enc := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 	logger := zap.New(zapcore.NewCore(enc, zapcore.AddSync(&buf), zapcore.InfoLevel))

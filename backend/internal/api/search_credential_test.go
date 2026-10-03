@@ -15,7 +15,7 @@ import (
 // 不带证件时不过滤（显式 type 路径本就正确，一并对齐断言）。
 func TestSearchAggregationFollowsCredential(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	svc := search.NewService(db, nil)
 

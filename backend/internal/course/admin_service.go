@@ -1,4 +1,4 @@
-// Package service 管理端课程 CRUD。
+// Package course 管理端课程 CRUD。
 package course
 
 import (

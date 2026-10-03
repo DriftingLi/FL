@@ -1,4 +1,4 @@
-// Package service 题库服务 CRUD 测试，使用内存 sqlite 数据库。
+// Package questionbank 题库服务 CRUD 测试，使用内存 sqlite 数据库。
 package questionbank
 
 import (

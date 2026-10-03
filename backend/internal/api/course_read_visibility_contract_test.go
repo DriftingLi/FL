@@ -27,7 +27,7 @@ import (
 
 func TestCourseReadVisibilityContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	ptr := func(v int) *int { return &v }

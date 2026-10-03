@@ -45,7 +45,7 @@ type rewardFactsEnv struct {
 
 func newRewardFactsEnv(t *testing.T) *rewardFactsEnv {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey: "contract-test-secret",

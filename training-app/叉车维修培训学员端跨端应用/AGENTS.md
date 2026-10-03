@@ -26,6 +26,12 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 技能的**生效面**（harness 扫描根止于 git 根 ⇒ 子树里的技能副本不生效）与四条约定：生成物不入库 / 第三方技能内容不入库 / 技能改动独立成 PR / 引用技能文档引小节名不引行号。See `docs/agents/skills.md`；决策与逐项实测见 `docs/adr/0024-技能供给与管线归属.md`.
 （**仅移动端**：前后端会话不读、不受约束；根 `D:\FL\.dsh\skills` 落点与根 `docs/agents/skills.md` 两项已裁定**不做**。）
 
+### 技能路由表（意图 → 唯一默认入口，#1504）
+
+**表体已上收到根** [`docs/agents/skill-routing.md`](../../docs/agents/skill-routing.md)，常驻摘要在根 `AGENTS.md`「Skill routing」段——路由是全环境的事（三套技能都装在用户级，对本机所有会话生效），不该只挂移动端。
+
+移动端只需记住两条**与本线相关**的偏差：建隔离工作树**只走** `scripts/new-worktree.ps1`（见下方「Qoder 托管 worktree 的使用边界」）、临时产物与 handoff 进 `.scratch/`。其余按根表；`grilling` 一类的多问产出改写成一次性书面产物，规则全文在根那份里。
+
 ### Domain docs
 
 Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.

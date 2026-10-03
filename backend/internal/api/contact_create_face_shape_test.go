@@ -47,7 +47,7 @@ type contactCreateEnv struct {
 
 func newContactCreateEnv(t *testing.T) *contactCreateEnv {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:          contactCreateSecret,

@@ -27,9 +27,7 @@ import (
 	"forklift-training/internal/valuation/dictcrud"
 )
 
-// =====================================================
 // original-prices（原价记录）
-// =====================================================
 
 // AdminCreateOriginalPrice 新增原价记录
 // @Summary 新增原价记录
@@ -85,9 +83,7 @@ func (h *ConfigHandler) AdminDeleteOriginalPrice(c *gin.Context) {
 	h.deleteDict(c, originalPriceDescriptor())
 }
 
-// =====================================================
 // region-coefficients（区域系数）
-// =====================================================
 
 // AdminCreateRegionCoefficient 新增区域系数
 // @Summary 新增区域系数
@@ -125,9 +121,7 @@ func (h *ConfigHandler) AdminUpdateRegionCoefficient(c *gin.Context) {
 	h.updateDict(c, regionCoefficientDescriptor())
 }
 
-// =====================================================
 // coefficient-configs（全局系数，按 key 更新）
-// =====================================================
 
 // AdminUpdateCoefficientConfig 按 key 更新全局系数
 // @Summary 更新全局系数
@@ -148,13 +142,11 @@ func (h *ConfigHandler) AdminUpdateCoefficientConfig(c *gin.Context) {
 	h.updateDict(c, coefficientConfigDescriptor())
 }
 
-// =====================================================
 // 其余字典实体（brands / vehicle-types / series / tonnages / mast-types /
 // mast-heights / battery-types / transmission-types / engine-types /
 // condition-ratings）：按同一形状逐实体登记（形状同构，仅字段并集不同）。
 // 规格族（tonnages / mast-types / mast-heights / battery-types / transmission-types /
 // engine-types）只有 create/delete 两条 —— 描述符无 Update，故没有 AdminUpdate* 注解。
-// =====================================================
 
 // AdminCreateBrand 新增品牌
 // @Summary 新增品牌

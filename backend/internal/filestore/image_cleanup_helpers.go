@@ -1,4 +1,4 @@
-// Package service 共享的文件清理辅助函数。
+// Package filestore 共享的文件清理辅助函数。
 // 本站图片归属判定已收编附件归属 module（attachment.go：IsSiteAttachmentURL）。
 package filestore
 

@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：题库池 scope（ADR-0050 决策 1）——学员端题目可见性口径的唯一出处。
 //
 // 口径（CONTEXT.md「题库池」）：已发布（published）+ 排除来源标记标签题（is_source_tag，

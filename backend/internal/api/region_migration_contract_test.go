@@ -14,7 +14,7 @@ import (
 
 // Postgres 适配器：真实 SQL 迁移（含 000017）全量 up 成功即迁移正确。
 func TestRegionMigrationOnPostgres(t *testing.T) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewPostgresDB(t)
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置")

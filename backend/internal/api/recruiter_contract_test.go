@@ -52,7 +52,7 @@ type loginResp struct {
 
 func TestRecruiterContract_FullFlow(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	adminPwd, _ := core.HashPassword("admin123")
@@ -226,7 +226,7 @@ func TestRecruiterContract_FullFlow(t *testing.T) {
 
 func TestRecruiterCookieIsolation_HostOnly(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "test-secret",

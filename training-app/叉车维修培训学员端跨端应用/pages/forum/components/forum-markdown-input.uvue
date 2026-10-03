@@ -38,11 +38,15 @@
 
         <view v-else class="editor-box">
             <!-- Markdown 档一律多行（结构语法要换行）；纯文本档的回复保持原来的单行输入形态（零回归） -->
+            <!-- 回复档（浮层内）关掉 adjust-position、开 fixed：面板 bottom 由本页 onKeyboardHeightChange
+                 去抖后自持（⑪-4），不让系统整页上推；发帖档维持系统默认（不受影响）。 -->
             <textarea v-if="isMarkdown || !isReply" class="md-textarea"
                 :class="isReply ? 'md-textarea-reply' : ''"
-                :value="content" :maxlength="maxlength" :placeholder="placeholder" @input="onContentInput" />
+                :value="content" :maxlength="maxlength" :placeholder="placeholder" @input="onContentInput"
+                :adjust-position="!isReply" />
             <input v-else class="md-input-line" type="text" :value="content" :maxlength="maxlength"
-                :placeholder="placeholder" @input="onContentInput" />
+                :placeholder="placeholder" @input="onContentInput"
+                :adjust-position="!isReply" />
 
             <!-- 视图档位为「编写」时的工具栏：一排可横滑的语法记号，**长按出中文提示**
                  （手机没有 hover，长按是最接近的既有手势且不占版面 —— ADR-0025 决策⑥）。 -->

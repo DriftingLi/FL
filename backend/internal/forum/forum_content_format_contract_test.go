@@ -11,7 +11,7 @@
 //
 // 注意：迁移里给两表加的 CHECK (content_format IN (...)) 不在本文件覆盖范围内 ——
 // 测试库由 AutoMigrate 建表、不执行 migrations/ 下的 SQL。该约束由 migration-check 验证。
-package api
+package forum
 
 import (
 	"bytes"
@@ -22,10 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -66,18 +62,7 @@ type contentFormatListResp struct {
 
 func TestForumContentFormatContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
-	db := testutil.NewMemoryDB(t)
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	now := testutil.Now()
 	mkUser := func(account, phone, name string) model.HrwaiUser {

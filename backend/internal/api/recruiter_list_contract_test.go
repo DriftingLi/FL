@@ -49,7 +49,7 @@ func fetchRecruiters(t *testing.T, r *gin.Engine, token, query string) ([]map[st
 }
 
 func assertRecruiterList(t *testing.T, db *gorm.DB) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	pwd, _ := core.HashPassword(`admin123`)
 	adminUser := testutil.SeedAdmin(t, db, `admin1`, pwd)
 	stuPwd, _ := core.HashPassword(`student123`)

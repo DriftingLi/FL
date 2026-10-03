@@ -9,7 +9,7 @@
 // 注意：迁移 SQL 给主题表加的 CHECK (category <> 'question' OR chapter_id IS NULL)
 // 不在本文件覆盖范围内 —— 测试库由 AutoMigrate 建表、不执行 migrations/ 下的 SQL，
 // 在此写"违反约束被拒"的测试只会因为约束不存在而假绿。该约束由 migration-check 验证。
-package api
+package forum
 
 import (
 	"bytes"
@@ -20,10 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -66,8 +62,7 @@ func (r topicListResp) titles() map[string]bool {
 
 func TestForumCategorySplitContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
-	db := testutil.NewMemoryDB(t)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	author := model.HrwaiUser{Account: "cat_author", Phone: "13800000101", Username: "分类作者", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&author).Error; err != nil {
@@ -79,16 +74,6 @@ func TestForumCategorySplitContract(t *testing.T) {
 	if err := db.Create(&chapter).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	apiGroup := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(author.ID), author.Account, "hrwai_user")

@@ -93,7 +93,7 @@ var ledgerParam = regexp.MustCompile(`:[A-Za-z0-9_]+|\*[A-Za-z0-9_]+`)
 // TestStudentReadableSurfaceLedger 用学员 token 打全量 GET 路由，凡 2xx 者必须已登记。
 func TestStudentReadableSurfaceLedger(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "student-readable-ledger-secret",

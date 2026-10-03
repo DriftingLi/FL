@@ -9,7 +9,7 @@
 //
 // 注：category 值域与「question 不得挂章节」的 DB CHECK 只在迁移 000005、测试库
 // AutoMigrate 不建，行为层必须由 service 校验守住——本文件即该行为层的契约。
-package api
+package forum
 
 import (
 	"bytes"
@@ -20,10 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -44,8 +40,7 @@ type updateTopicResp struct {
 
 func TestForumUpdateTopicContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
-	db := testutil.NewMemoryDB(t)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	author := model.HrwaiUser{Account: "edit_author", Phone: "13800000106", Username: "作者", Status: 1, CreatedAt: testutil.Now()}
 	other := model.HrwaiUser{Account: "edit_other", Phone: "13800000107", Username: "路人", Status: 1, CreatedAt: testutil.Now()}
@@ -59,16 +54,6 @@ func TestForumUpdateTopicContract(t *testing.T) {
 	if err := db.Create(&chapter).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	apiGroup := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	tokenOf := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(u.ID), u.Account, "hrwai_user")

@@ -42,7 +42,7 @@ import (
 // newAdminContractDeps 构建装配根（含 JWT + 能力位的真实路由依赖），返回 admin token。
 func newAdminContractDeps(t *testing.T) (*Deps, *gorm.DB, string) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	adminPwd, _ := core.HashPassword("admin123")

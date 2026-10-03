@@ -22,7 +22,7 @@ import (
 
 func TestResumePDFContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
 	spec1 := model.Position{Code: "pdf_forklift", Name: "叉车维修", Status: 1}
@@ -280,7 +280,7 @@ func indexBytes(data, needle []byte, from int) int {
 // #491：PDF 附件删除端点（学员本人；删除后 resume_file_url 置空）。
 func TestResumePDFDeleteContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	pwd, _ := core.HashPassword("pass1234")
 	stu := seedStudent(t, db, "stuPdfDel", pwd)

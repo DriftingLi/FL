@@ -2,7 +2,7 @@
 //
 // 覆盖不变式：三端点 200 且分页四件套与 my-topics 逐字一致；赞过按点赞时间倒序；
 // 浏览记录按主题去重、按最近浏览倒序；围观 = 浏览减去四项直接互动；删帖条目保留、标题回空串。
-package api
+package forum
 
 import (
 	"bytes"
@@ -13,10 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -37,8 +33,7 @@ type personalListResp struct {
 
 func TestForumPersonalListsContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
-	db := testutil.NewMemoryDB(t)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	mkUser := func(account, phone, name string) model.HrwaiUser {
 		u := model.HrwaiUser{Account: account, Phone: phone, Username: name, Status: 1, CreatedAt: testutil.Now()}
@@ -62,16 +57,6 @@ func TestForumPersonalListsContract(t *testing.T) {
 	viewedTopic := mkTopic(int(other.ID), "被看帖")
 	repliedTopic := mkTopic(int(other.ID), "被回帖")
 	ownTopic := mkTopic(int(me.ID), "自帖")
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).

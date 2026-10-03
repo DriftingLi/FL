@@ -51,7 +51,7 @@ func seedFaqFixture(t *testing.T, db *gorm.DB) (liveID, hiddenID int) {
 
 func TestFaqContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	liveID, hiddenID := seedFaqFixture(t, db)
 
@@ -73,7 +73,7 @@ func TestFaqContract(t *testing.T) {
 	}
 
 	// ===== 1. 未认证：学员面 401 =====
-	if rec := performRequest(r, http.MethodGet, "/api/faq"); rec.Code != http.StatusUnauthorized {
+	if rec := testutil.PerformRequest(r, http.MethodGet, "/api/faq"); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("未认证访问 /api/faq 应 401, got %d", rec.Code)
 	}
 
@@ -119,7 +119,7 @@ func TestFaqContract(t *testing.T) {
 	if rec := doWithToken(t, r, stuToken, http.MethodGet, "/api/admin/faq/categories", nil); rec.Code != http.StatusForbidden {
 		t.Fatalf("学员访问管理面应 403, got %d", rec.Code)
 	}
-	if rec := performRequest(r, http.MethodGet, "/api/admin/faq/categories"); rec.Code != http.StatusUnauthorized {
+	if rec := testutil.PerformRequest(r, http.MethodGet, "/api/admin/faq/categories"); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("未认证访问管理面应 401, got %d", rec.Code)
 	}
 

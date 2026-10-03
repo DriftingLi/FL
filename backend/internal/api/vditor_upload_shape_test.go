@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/filestore"
+
+	"forklift-training/internal/testutil"
 )
 
 // legacyVditorErrorEnvelope 历史 vditorError/vditorFeatureError 的 map 实现（shape-lock 参照物）。
@@ -52,7 +54,7 @@ func TestVditorErrorEnvelopeShapeLock(t *testing.T) {
 // TestVditorSuccessEnvelopeShapeLock 冻结 Vditor 成功信封：code=0、succMap 以文件名映射 URL。
 func TestVditorSuccessEnvelopeShapeLock(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	fs := filestore.NewFileStore("", nil, zap.NewNop())
 
 	r := gin.New()

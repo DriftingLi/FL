@@ -1,4 +1,4 @@
-// Package service 业务服务层测试：phone 占位 sentinel 单点（PlaceholderPhonePrefix）与静态扫描门禁。
+// Package core 业务服务层测试：phone 占位 sentinel 单点（PlaceholderPhonePrefix）与静态扫描门禁。
 // 仿 ADR-0013 §2 dict 缓存契约门禁（repository/dict_cache_keys_test.go）：用静态测试把
 // 散落的裸 "email_" 字面量挡在包外，强制所有 email_ 占位判定收敛到 IsPlaceholderPhone。
 package core

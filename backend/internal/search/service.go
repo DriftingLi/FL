@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：全局搜索（ADR-0018 引入，ADR-0049 定口径，ADR-0050 决策 2 收敛为分区半描述符）——
 // course/chapter/question/content/topic 五个分区的 LOWER LIKE 聚合（Postgres/SQLite 双兼容，
 // 元字符转义）。本文件是**引擎骨架 + 共享 helper**；五个分区的六槽位声明在 search_partitions.go。

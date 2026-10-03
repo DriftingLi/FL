@@ -19,7 +19,7 @@ import (
 // TestPointsSentinelStatusMapping 哨兵 → 状态码映射零漂移。
 func TestPointsSentinelStatusMapping(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "sentinel_stu", pwd)

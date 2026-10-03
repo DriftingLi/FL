@@ -43,7 +43,7 @@ func fetchMap(t *testing.T, r *gin.Engine, token, path string) map[string]any {
 }
 
 func assertPracticePoolCaliber(t *testing.T, db *gorm.DB) {
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	pwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, pwd)
 	cfg := &config.Config{

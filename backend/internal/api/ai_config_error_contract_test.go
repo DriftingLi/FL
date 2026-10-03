@@ -17,7 +17,7 @@ import (
 
 func TestUpdateMissingAIConfigRenders404(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "ai-config-404-secret",

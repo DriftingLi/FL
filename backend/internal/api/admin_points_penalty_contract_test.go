@@ -23,7 +23,7 @@ import (
 // TestAdminPenaltyContract 域表映射（404）+ 同事务发信（成功路径）。
 func TestAdminPenaltyContract(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "penalty_admin", adminPwd)

@@ -1,14 +1,11 @@
 // 验证码认证路由 handler 测试（#17 通道化收尾）：
 // 邮箱/手机注册登录走同一份骨架（CodeChannel 驱动生成器），路由形状与行为不变。
-package api
+package auth
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -18,31 +15,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
-	"forklift-training/internal/config"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
 
-var errCodeNotFound = errors.New("code not found")
-
-// =====================================================
 // 测试替身：内存验证码存储 + 测试通道
-// =====================================================
 
-type memCodeStore struct {
+type codeAuthStoreN struct {
 	m map[string]string
 }
 
-func newMemCodeStore() *memCodeStore {
-	return &memCodeStore{m: map[string]string{}}
+func newCodeAuthStoreN() *codeAuthStoreN {
+	return &codeAuthStoreN{m: map[string]string{}}
 }
 
-func (s *memCodeStore) Get(_ context.Context, key string) (string, error) {
+func (s *codeAuthStoreN) Get(_ context.Context, key string) (string, error) {
 	v, ok := s.m[key]
 	if !ok {
 		return "", errCodeNotFound
@@ -50,37 +41,37 @@ func (s *memCodeStore) Get(_ context.Context, key string) (string, error) {
 	return v, nil
 }
 
-func (s *memCodeStore) Set(_ context.Context, key, value string, ttl time.Duration) error {
+func (s *codeAuthStoreN) Set(_ context.Context, key, value string, ttl time.Duration) error {
 	s.m[key] = value
 	return nil
 }
 
-func (s *memCodeStore) Del(_ context.Context, keys ...string) error {
+func (s *codeAuthStoreN) Del(_ context.Context, keys ...string) error {
 	for _, k := range keys {
 		delete(s.m, k)
 	}
 	return nil
 }
 
-// fakeChannel 通用测试通道：按 column 查 hrwai_users（email / phone 两套）。
-type fakeChannel struct {
+// codeAuthChannelN 通用测试通道：按 column 查 hrwai_users（email / phone 两套）。
+type codeAuthChannelN struct {
 	column  string
 	keyPref string
 	noun    string
 }
 
-func (c *fakeChannel) SenderReady() error { return nil }
-func (c *fakeChannel) Normalize(target string) (string, error) {
+func (c *codeAuthChannelN) SenderReady() error { return nil }
+func (c *codeAuthChannelN) Normalize(target string) (string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return "", errCodeNotFound
 	}
 	return target, nil
 }
-func (c *fakeChannel) Noun() string      { return c.noun }
-func (c *fakeChannel) KeyPrefix() string { return c.keyPref }
+func (c *codeAuthChannelN) Noun() string      { return c.noun }
+func (c *codeAuthChannelN) KeyPrefix() string { return c.keyPref }
 
-func (c *fakeChannel) FindAccount(ctx context.Context, db *gorm.DB, target string, excludeUserID int) (int64, error) {
+func (c *codeAuthChannelN) FindAccount(ctx context.Context, db *gorm.DB, target string, excludeUserID int) (int64, error) {
 	var count int64
 	q := db.WithContext(ctx).Model(&model.HrwaiUser{}).Where(c.column+" = ?", target)
 	if excludeUserID > 0 {
@@ -92,7 +83,7 @@ func (c *fakeChannel) FindAccount(ctx context.Context, db *gorm.DB, target strin
 	return count, nil
 }
 
-func (c *fakeChannel) FindUser(ctx context.Context, db *gorm.DB, target string) (*model.HrwaiUser, error) {
+func (c *codeAuthChannelN) FindUser(ctx context.Context, db *gorm.DB, target string) (*model.HrwaiUser, error) {
 	var user model.HrwaiUser
 	if err := db.WithContext(ctx).Where(c.column+" = ?", target).First(&user).Error; err != nil {
 		return nil, err
@@ -100,15 +91,15 @@ func (c *fakeChannel) FindUser(ctx context.Context, db *gorm.DB, target string) 
 	return &user, nil
 }
 
-func (c *fakeChannel) Render(purpose auth.CodePurpose, code string, ttl time.Duration) (string, string) {
+func (c *codeAuthChannelN) Render(purpose CodePurpose, code string, ttl time.Duration) (string, string) {
 	return "title", "code=" + code
 }
 
-func (c *fakeChannel) Send(target, title, body, _ string, _ time.Duration, _ auth.CodePurpose) error {
+func (c *codeAuthChannelN) Send(target, title, body, _ string, _ time.Duration, _ CodePurpose) error {
 	return nil
 }
 
-func (c *fakeChannel) ApplyTarget(user *model.HrwaiUser, target string) {
+func (c *codeAuthChannelN) ApplyTarget(user *model.HrwaiUser, target string) {
 	switch c.column {
 	case "email":
 		user.Email = target
@@ -117,80 +108,46 @@ func (c *fakeChannel) ApplyTarget(user *model.HrwaiUser, target string) {
 	}
 }
 
-func (c *fakeChannel) BindColumn() string { return c.column }
+func (c *codeAuthChannelN) BindColumn() string { return c.column }
 
-// =====================================================
 // 路由装配 + 请求 helper
-// =====================================================
 
-func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel) {
+func newCodeAuthTestRouter(t *testing.T) (*gin.Engine, *codeAuthStoreN, *codeAuthChannelN, *codeAuthChannelN) {
 	r, store, emailCh, phoneCh, _ := newCodeAuthTestRouterX(t, false)
 	return r, store, emailCh, phoneCh
 }
 
 // newCodeAuthTestRouterX 构造测试路由（captchaEnabled 控制人机验证开关）。
 // 返回 captcha 服务供测试读取/注入验证码答案。
-func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *memCodeStore, *fakeChannel, *fakeChannel, *captcha.Service) {
+//
+// 会话超时按 config.Load 的默认口径（2h/7d）给足：零值会让签出的 token 立即过期
+// （ExpiresAt = now），域包服务的签发就全成 401。
+func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *codeAuthStoreN, *codeAuthChannelN, *codeAuthChannelN, *captcha.Service) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
-	store := newMemCodeStore()
-	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
-	captchaSvc := captcha.NewService(store) // memCodeStore 实现 captcha.Store（Get/Set/Del 同构）
+	sess := security.NewSession("test-secret", 2*time.Hour, security.CookieConfig{Name: "hrwai_token", Domain: "example.com"})
+	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	store := newCodeAuthStoreN()
+	codeSvc := NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
+	captchaSvc := captcha.NewService(store) // codeAuthStoreN 实现 captcha.Store（Get/Set/Del 同构）
 
-	emailCh := &fakeChannel{column: "email", keyPref: "email_code", noun: "邮箱"}
-	phoneCh := &fakeChannel{column: "phone", keyPref: "phone_code", noun: "手机号"}
-
-	// 补 JWT 过期默认值（同 config.Load 的 2h/7d）：config.Config 字面量不会走 Load 的默认值，
-	// 缺了它 SessionFromConfig 签出的 token 立即过期（ExpiresAt = now），域包服务的签发就全成 401。
-	cfg := &config.Config{
-		JWTSecretKey:          "test-secret",
-		JWTExpiresHours:       2,
-		JWTRefreshExpiresDays: 7,
-		AuthCookie:            config.AuthCookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: false},
-	}
-
-	deps := &Deps{
-		Cfg:     cfg,
-		DB:      db,
-		Logger:  zap.NewNop(),
-		Session: security.SessionFromConfig(cfg),
-		AuthSvc: authSvc,
-		CodeSvc: codeSvc,
-		EmailCh: emailCh,
-		PhoneCh: phoneCh,
-	}
+	emailCh := &codeAuthChannelN{column: "email", keyPref: "email_code", noun: "邮箱"}
+	phoneCh := &codeAuthChannelN{column: "phone", keyPref: "phone_code", noun: "手机号"}
 
 	r := gin.New()
 	r.Use(gin.Recovery())
 	api := r.Group("/api")
-	auth.RegisterCaptchaRoutes(r, captchaSvc)
-	auth.RegisterEmailAuthRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh, captchaSvc, captchaEnabled)
-	auth.RegisterPhoneAuthRoutes(api, deps.Session, deps.CodeSvc, deps.PhoneCh, captchaSvc, captchaEnabled)
-	auth.RegisterProfileBindRoutes(api, deps.Session, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
+	RegisterCaptchaRoutes(r, captchaSvc)
+	RegisterEmailAuthRoutes(api, sess, codeSvc, emailCh, captchaSvc, captchaEnabled)
+	RegisterPhoneAuthRoutes(api, sess, codeSvc, phoneCh, captchaSvc, captchaEnabled)
+	RegisterProfileBindRoutes(api, sess, codeSvc, emailCh, phoneCh)
 
 	return r, store, emailCh, phoneCh, captchaSvc
 }
 
-func codeAuthRequest(r *gin.Engine, method, path string, body map[string]interface{}, token string) *httptest.ResponseRecorder {
-	var buf bytes.Buffer
-	if body == nil {
-		body = map[string]interface{}{}
-	}
-	_ = json.NewEncoder(&buf).Encode(body)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(method, path, &buf)
-	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	r.ServeHTTP(rec, req)
-	return rec
-}
-
 // extractStoredCode 按与生产一致的 key 公式从内存 store 取验证码（存储值为 authCodeValue JSON）。
-func extractStoredCode(t *testing.T, store *memCodeStore, ch *fakeChannel, purpose auth.CodePurpose, target string) string {
+func extractStoredCode(t *testing.T, store *codeAuthStoreN, ch *codeAuthChannelN, purpose CodePurpose, target string) string {
 	t.Helper()
 	raw, ok := store.m[cache.SafeKey(ch.KeyPrefix(), string(purpose), target)]
 	if !ok {
@@ -205,9 +162,7 @@ func extractStoredCode(t *testing.T, store *memCodeStore, ch *fakeChannel, purpo
 	return v.Code
 }
 
-// =====================================================
 // 测试
-// =====================================================
 
 // TestCodeAuth_EmailRegisterLogin 邮箱通道：send-code → register → login 全流程。
 func TestCodeAuth_EmailRegisterLogin(t *testing.T) {
@@ -215,7 +170,7 @@ func TestCodeAuth_EmailRegisterLogin(t *testing.T) {
 	r, store, emailCh, _ := newCodeAuthTestRouter(t)
 
 	// 1. send-code
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "a@example.com", "purpose": "register"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -225,8 +180,8 @@ func TestCodeAuth_EmailRegisterLogin(t *testing.T) {
 	}
 
 	// 2. register（用 store 中的真实验证码）
-	code := extractStoredCode(t, store, emailCh, auth.CodePurposeRegister, "a@example.com")
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
+	code := extractStoredCode(t, store, emailCh, CodePurposeRegister, "a@example.com")
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
 		map[string]interface{}{"email": "a@example.com", "code": code, "nickname": "测试学员", "password": "pass123456"}, "")
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -236,13 +191,13 @@ func TestCodeAuth_EmailRegisterLogin(t *testing.T) {
 	}
 
 	// 3. login
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "a@example.com", "purpose": "login"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("login send-code 状态码 = %d", w.Code)
 	}
-	code = extractStoredCode(t, store, emailCh, auth.CodePurposeLogin, "a@example.com")
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/email/login",
+	code = extractStoredCode(t, store, emailCh, CodePurposeLogin, "a@example.com")
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/login",
 		map[string]interface{}{"email": "a@example.com", "code": code}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("login 状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -257,7 +212,7 @@ func TestCodeAuth_PhoneRegisterLogin(t *testing.T) {
 	t.Parallel()
 	r, store, _, phoneCh := newCodeAuthTestRouter(t)
 
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": "13800138000", "purpose": "register"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -266,20 +221,20 @@ func TestCodeAuth_PhoneRegisterLogin(t *testing.T) {
 		t.Errorf("发送文案不符: %s", w.Body.String())
 	}
 
-	code := extractStoredCode(t, store, phoneCh, auth.CodePurposeRegister, "13800138000")
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
+	code := extractStoredCode(t, store, phoneCh, CodePurposeRegister, "13800138000")
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
 		map[string]interface{}{"phone": "13800138000", "code": code, "nickname": "手机学员", "password": "pass123456"}, "")
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
 
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": "13800138000", "purpose": "login"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("login send-code 状态码 = %d", w.Code)
 	}
-	code = extractStoredCode(t, store, phoneCh, auth.CodePurposeLogin, "13800138000")
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/login",
+	code = extractStoredCode(t, store, phoneCh, CodePurposeLogin, "13800138000")
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/login",
 		map[string]interface{}{"phone": "13800138000", "code": code}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("login 状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -293,42 +248,42 @@ func TestCodeAuth_PhoneResetPassword(t *testing.T) {
 	phone := "13800138001"
 
 	// 注册手机号账号
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": phone, "purpose": "register"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("register send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, phoneCh, auth.CodePurposeRegister, phone)
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
+	code := extractStoredCode(t, store, phoneCh, CodePurposeRegister, phone)
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
 		map[string]interface{}{"phone": phone, "code": code, "nickname": "找回学员", "password": "oldpass123"}, "")
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
 
 	// 未注册手机号找回 → 400
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": "13700000000", "purpose": "reset_password"}, "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("未注册找回应 400\nbody=%s", w.Body.String())
 	}
 
 	// 发找回密码验证码
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": phone, "purpose": "reset_password"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("reset send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code = extractStoredCode(t, store, phoneCh, auth.CodePurposeResetPassword, phone)
+	code = extractStoredCode(t, store, phoneCh, CodePurposeResetPassword, phone)
 
 	// 错误验证码 → 400
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
 		map[string]interface{}{"phone": phone, "code": "000000", "password": "newpass123"}, "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("错误验证码应 400\nbody=%s", w.Body.String())
 	}
 
 	// 正确验证码 + 合法密码 → 200
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/reset-password",
 		map[string]interface{}{"phone": phone, "code": code, "password": "newpass123"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("reset-password 状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -339,7 +294,7 @@ func TestCodeAuth_PhoneResetPassword(t *testing.T) {
 func TestCodeAuth_InvalidPurpose(t *testing.T) {
 	t.Parallel()
 	r, _, _, _ := newCodeAuthTestRouter(t)
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "a@example.com", "purpose": "whatever"}, "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("非法 purpose 状态码 = %d, 期望 400\nbody=%s", w.Code, w.Body.String())
@@ -355,32 +310,32 @@ func TestCodeAuth_ProfileBind(t *testing.T) {
 	r, store, emailCh, phoneCh := newCodeAuthTestRouter(t)
 
 	// 先注册一个用户拿 token
-	if w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
+	if w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/send-code",
 		map[string]interface{}{"email": "bind@example.com", "purpose": "register"}, ""); w.Code != http.StatusOK {
 		t.Fatalf("send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, emailCh, auth.CodePurposeRegister, "bind@example.com")
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
+	code := extractStoredCode(t, store, emailCh, CodePurposeRegister, "bind@example.com")
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/email/register",
 		map[string]interface{}{"email": "bind@example.com", "code": code, "nickname": "绑定学员", "password": "pass123456"}, "")
-	token := extractToken(t, w)
+	token := testutil.ExtractToken(t, w)
 
 	// channel=phone → 手机通道发送
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/send-code",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/profile/send-code",
 		map[string]interface{}{"channel": "phone", "target": "13900139000"}, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("profile send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	phoneCode := extractStoredCode(t, store, phoneCh, auth.CodePurposeBind, "13900139000")
+	phoneCode := extractStoredCode(t, store, phoneCh, CodePurposeBind, "13900139000")
 
 	// 非法 channel → 400
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/send-code",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/profile/send-code",
 		map[string]interface{}{"channel": "fax", "target": "x"}, token)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("非法 channel 状态码 = %d, 期望 400", w.Code)
 	}
 
 	// 绑定手机号
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/phone",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/profile/phone",
 		map[string]interface{}{"phone": "13900139000", "code": phoneCode}, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("绑定手机状态码 = %d\nbody=%s", w.Code, w.Body.String())
@@ -397,52 +352,37 @@ func TestCodeAuth_ProfileChangePassword(t *testing.T) {
 	phone := "13900139001"
 
 	// 注册手机号账号（拿 token）
-	w := codeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
+	w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/send-code",
 		map[string]interface{}{"phone": phone, "purpose": "register"}, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("register send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	code := extractStoredCode(t, store, phoneCh, auth.CodePurposeRegister, phone)
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
+	code := extractStoredCode(t, store, phoneCh, CodePurposeRegister, phone)
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/phone/register",
 		map[string]interface{}{"phone": phone, "code": code, "nickname": "改密学员", "password": "oldpass123"}, "")
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	token := extractToken(t, w)
+	token := testutil.ExtractToken(t, w)
 
 	// 发修改密码验证码
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/password/send-code", nil, token)
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/profile/password/send-code", nil, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("password send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-	changeCode := extractStoredCode(t, store, phoneCh, auth.CodePurposeChangePassword, phone)
+	changeCode := extractStoredCode(t, store, phoneCh, CodePurposeChangePassword, phone)
 
 	// 错误验证码 → 400
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/password",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/profile/password",
 		map[string]interface{}{"code": "000000", "password": "newpass123"}, token)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("错误验证码应 400\nbody=%s", w.Body.String())
 	}
 
 	// 正确验证码 + 合法密码 → 200
-	w = codeAuthRequest(r, http.MethodPost, "/api/auth/profile/password",
+	w = testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/profile/password",
 		map[string]interface{}{"code": changeCode, "password": "newpass123"}, token)
 	if w.Code != http.StatusOK {
 		t.Fatalf("修改密码状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}
-}
-
-func extractToken(t *testing.T, w *httptest.ResponseRecorder) string {
-	t.Helper()
-	body := w.Body.String()
-	idx := strings.Index(body, `"token":"`)
-	if idx < 0 {
-		t.Fatalf("响应缺少 token: %s", body)
-	}
-	rest := body[idx+len(`"token":"`):]
-	end := strings.Index(rest, `"`)
-	if end < 0 {
-		t.Fatalf("token 解析失败: %s", body)
-	}
-	return rest[:end]
 }

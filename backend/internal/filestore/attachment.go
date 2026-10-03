@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：附件归属单 module（第十二波票 4，#1168）——前缀登记 + 本站判定 + URL→key + multipart 读取四件事全收。
 // 此前同一判据有五份互不一致的写法（isForumImageURL / isAIImageURL / isFeaturedImageURL 三份本站判定，
 // forumImageKey / contributionURLKey 两份 URL→key），由本 module 单点取代；判定语义与三份 is* 原文一致

@@ -19,7 +19,7 @@ import (
 
 func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
 
@@ -40,7 +40,7 @@ func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 		{"GET", "/api/question-bank/categories"},
 	}
 	for _, c := range cases {
-		rec := performRequest(r, c.method, c.path)
+		rec := testutil.PerformRequest(r, c.method, c.path)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s %s 应 404, got %d", c.method, c.path, rec.Code)
 		}
@@ -49,7 +49,7 @@ func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 
 func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
 
@@ -59,7 +59,7 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 
 	// 未登录访问会被 JWT 中间件拦下（401），但绝不应因已删的 knowledge_point_id 参数而 500
-	rec := performRequest(r, "GET", "/api/question-bank/questions?knowledge_point_id=1")
+	rec := testutil.PerformRequest(r, "GET", "/api/question-bank/questions?knowledge_point_id=1")
 	if rec.Code == http.StatusInternalServerError {
 		t.Fatalf("knowledge_point_id 参数不应导致 500: %d %s", rec.Code, rec.Body.String())
 	}
@@ -68,7 +68,7 @@ func TestQuestionBankQuestionsIgnoresKpParam(t *testing.T) {
 // TestTutorCourseRoutesAbsent 导师端不可建课/改课：/api/tutor/course 路由不存在（404）。
 func TestTutorCourseRoutesAbsent(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{}
 
@@ -84,7 +84,7 @@ func TestTutorCourseRoutesAbsent(t *testing.T) {
 		{"POST", "/api/tutor/course"},
 		{"PUT", "/api/tutor/course/1"},
 	} {
-		rec := performRequest(r, tc.method, tc.path)
+		rec := testutil.PerformRequest(r, tc.method, tc.path)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s %s 应 404（导师不可建课）, got %d", tc.method, tc.path, rec.Code)
 		}

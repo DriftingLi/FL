@@ -2,7 +2,7 @@
 // seam：DELETE /api/auth/account 的 HTTP 契约面 + security.Session 的轮换结果。
 // 修复前：硬删除不写吊销标记，而 RotateRefresh 不查用户是否存在——已注销身份最长仍有
 // 7 天可用凭证（换出的 access 只过 JWT 校验）。
-package api
+package auth
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/auth"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -37,56 +36,28 @@ func (rejectBlacklist) PutIfAbsent(context.Context, string, string, time.Duratio
 	return false, errors.New("blacklist down")
 }
 
-// valBlacklist 保留写入值的内存黑名单存储：用户级吊销标记的值是时间戳，
-// auth_refresh_test.go 的 memBlacklist 恒写 "1"（只用于按 key 存在性判定），
-// 用它测吊销标记会把标记读成 1970 年、判成「未吊销」。
-type valBlacklist struct{ m map[string]string }
-
-func newValBlacklist() *valBlacklist { return &valBlacklist{m: map[string]string{}} }
-
-func (s *valBlacklist) Get(_ context.Context, key string) (string, error) {
-	v, ok := s.m[key]
-	if !ok {
-		return "", errors.New("not found")
-	}
-	return v, nil
-}
-
-func (s *valBlacklist) Set(_ context.Context, key, value string, _ time.Duration) error {
-	s.m[key] = value
-	return nil
-}
-
-func (s *valBlacklist) PutIfAbsent(_ context.Context, key, value string, _ time.Duration) (bool, error) {
-	if _, ok := s.m[key]; ok {
-		return false, nil
-	}
-	s.m[key] = value
-	return true, nil
-}
-
 // newDeleteAccountRouter 装配一个带登录态的 DELETE /api/auth/account（黑名单存储可注入）。
 func newDeleteAccountRouter(t *testing.T, store security.BlacklistStore) (*gin.Engine, *security.Session, *gorm.DB, int) {
 	t.Helper()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, store)
-	authSvc := auth.NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	u := model.HrwaiUser{UID: 900001, Account: "gone-soon", Username: "即将注销", Password: "x", Phone: "13900000001", Status: 1}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
 	}
 	r := gin.New()
 	// P2 波 3a：注册真实路由面（/account 带 JWT 中间件），用例自己签 access 带上。
-	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
+	RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 	return r, sess, db, u.ID
 }
 
 // 注销成功后，该身份手上的 refresh（含注销前刚轮换出来的那枚）一律换不出新令牌。
 func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 	t.Parallel()
-	r, sess, db, uid := newDeleteAccountRouter(t, newValBlacklist())
+	r, sess, db, uid := newDeleteAccountRouter(t, testutil.NewValueBlacklist())
 	ctx := context.Background()
 
 	tok, rotated, err := sess.IssuePair(uid, "gone-soon", "hrwai_user")
@@ -102,7 +73,7 @@ func TestDeleteAccount_吊销后旧refresh被拒(t *testing.T) {
 		t.Fatal("轮换未返回新 refresh")
 	}
 
-	if rec := codeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok); rec.Code != http.StatusOK {
+	if rec := testutil.CodeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok); rec.Code != http.StatusOK {
 		t.Fatalf("注销应 200，实际 %d", rec.Code)
 	}
 	var cnt int64
@@ -125,7 +96,7 @@ func TestDeleteAccount_吊销写失败则整体不生效(t *testing.T) {
 		t.Fatalf("签发 access 失败: %v", err)
 	}
 
-	rec := codeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok)
+	rec := testutil.CodeAuthRequest(r, "DELETE", "/api/auth/account", nil, tok)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("吊销标记写失败时注销应 400，实际 %d", rec.Code)
 	}

@@ -16,7 +16,7 @@ import (
 
 func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "redeem-parity-secret",
@@ -64,7 +64,7 @@ func TestRedeemErrorParityAcrossSurfaces(t *testing.T) {
 // 与课程、真题卷两面同一族。三面同判据的锁若只钉两面，第四面（未来新增 sku）就会重新漂。
 func TestRedeemShopSurfaceSameCodeFamily(t *testing.T) {
 	t.Parallel()
-	setTestGinMode()
+	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	cfg := &config.Config{
 		JWTSecretKey:    "redeem-parity-shop-secret",

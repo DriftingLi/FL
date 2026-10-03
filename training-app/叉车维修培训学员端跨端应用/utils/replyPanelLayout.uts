@@ -1,0 +1,42 @@
+/**
+ * 回复半屏浮层的键盘 / 面板布局**纯逻辑**（ADR-0025 ⑪，票 #1473）
+ *
+ * 为什么单独成文件：③ 门不解析 `.uvue`（渲染层跑不了），而 ⑪ 的去抖 / 面板 bottom / 半屏上限
+ * 是「跑起来看驱动次数与数值」才算数的行为（接线守护不构成 ③ 证据，见 docs/agents/guards.md）。
+ * 把这三条抽成无依赖纯函数，`utils/replyPanelLayoutBehavior.test.js` 用 utsHarness 真执行它。
+ * `.uvue` 侧只**接线**这些函数（贴键盘上沿的像素判据归 ①a 真机）。
+ */
+
+/**
+ * 键盘高度去抖 tracker：返回一个事件处理函数，只在 height 相对上一次**变化**时才驱动 setter。
+ *
+ * 依据（微信文档，一手）：`keyboardheightchange` 可能多次触发相同 height，开发者对相同 height
+ * 值应忽略 —— 否则面板 `bottom` 会被反复重设（同值也触发一次布局）。初值 0（键盘未起）：
+ * 首个 0 事件与初值同 ⇒ 不驱动。
+ *
+ * @param setter 把「当前应生效的键盘高度」推给面板 bottom 的回调
+ */
+export function createKeyboardHeightTracker(setter : (h : number) => void) : (h : number) => void {
+	let last : number = 0
+	return function (h : number) : void {
+		if (h == last) {
+			return
+		}
+		last = h
+		setter(h)
+	}
+}
+
+/**
+ * 面板 bottom（px）：开着时贴键盘上沿 = 当前键盘高度；关闭时归 0（沉底、不占键盘位）。
+ */
+export function panelBottomPx(keyboardHeightPx : number, panelOpen : boolean) : number {
+	return panelOpen ? keyboardHeightPx : 0
+}
+
+/**
+ * 面板高度上限（px）：约半屏（向下取整），超出走面板内滚动（⑪-2）。
+ */
+export function panelMaxHeightPx(windowHeightPx : number) : number {
+	return Math.floor(windowHeightPx / 2)
+}
