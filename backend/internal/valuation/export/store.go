@@ -1,11 +1,12 @@
-package service
+package export
 
 import (
 	"context"
 	"time"
 )
 
-// EvaluationExportRow 评估记录导出行（ExportStore 契约的数据形状，由主 app 导出模块定义）。
+// EvaluationExportRow 评估记录导出行（本包 ExportStore 契约的数据形状：估值侧 repository 的
+// pgx adapter 按此形状取数，列序真值见 columns.go）。
 type EvaluationExportRow struct {
 	ID                    int64
 	Account               string
@@ -40,8 +41,8 @@ type EvaluationExportRow struct {
 	CreatedAt             time.Time
 }
 
-// ExportStore 是主 app 导出模块对估值数据访问的消费接口（seam 定义在消费方，
-// 估值侧 repository 提供 pgx adapter 实现，测试用 fake adapter）。
+// ExportStore 是估值数据访问的消费接口（seam 定义在消费方——本包；生产实现为估值侧
+// internal/valuation/repository 的 pgx adapter，测试用 fake adapter）。
 type ExportStore interface {
 	ListEvaluationExports(ctx context.Context) ([]EvaluationExportRow, error)
 }

@@ -20,6 +20,7 @@ package api
 import (
 	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
@@ -69,9 +70,9 @@ type PayloadSpec struct {
 
 // envelopeRegistry 信封登记表（按 Result 字典序）。
 var envelopeRegistry = []EnvelopeSpec{
-	{Result: "api.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
+	{Result: "audit.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
-		Sample: AuditLogPageResult{}},
+		Sample: audit.AuditLogPageResult{}},
 	{Result: "model.ListBatteryResponse", Endpoints: []string{"GET /valuation/battery/evaluations"},
 		Keys: []string{"total", "items"}, Dialect: paging.DialectNone,
 		Sample: vmodel.ListBatteryResponse{}},

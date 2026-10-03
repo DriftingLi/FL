@@ -1,6 +1,7 @@
-// Package api 实现 HTTP handlers。
+// Package audit 审计域：HTTP 出口（handler.go）与审计日志实现（service.go）。
 // 本文件：审计日志查询（管理员后台）。
-package api
+// 装配点：internal/api/routes_registry.go 调 audit.RegisterRoutes(api, rd.Session, deps.AuditSvc)。
+package audit
 
 import (
 	"context"
@@ -12,7 +13,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
+	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -35,21 +36,22 @@ type auditLogListReq struct {
 	Keyword  string
 }
 
-// AuditHandler 审计日志 handler。
-type AuditHandler struct {
-	svc *service.AuditService
+// handler 审计日志 handler。
+type handler struct {
+	svc *Service
 }
 
-// NewAuditHandler 创建审计日志 handler。
-func NewAuditHandler(svc *service.AuditService) *AuditHandler {
-	return &AuditHandler{svc: svc}
+// newHandler 创建审计日志 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
 }
 
-// RegisterAuditRoutes 注册 /api/admin/audit-logs 蓝图（仅管理员）。
-func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditService) {
-	h := NewAuditHandler(svc)
+// RegisterRoutes 注册 /api/admin/audit-logs 蓝图（仅管理员）。
+// 只吃 *security.Session：原来的 RouterDeps 形参在本文件里只用到 Session 一格。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
+	h := newHandler(svc)
 
-	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(rd.Session), middleware.CapabilityRequired(authz.CapAuditRead))
+	g := rg.Group("/admin/audit-logs", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapAuditRead))
 
 	// GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
 	g.GET("", h.List)
@@ -65,12 +67,12 @@ func RegisterAuditRoutes(rg *gin.RouterGroup, rd RouterDeps, svc *service.AuditS
 // @Param actor_id query int false "操作人 ID"
 // @Param role query string false "操作人角色"
 // @Param keyword query string false "关键字"
-// @Success 200 {object} response.R{data=api.AuditLogPageResult} "success"
+// @Success 200 {object} response.R{data=audit.AuditLogPageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/audit-logs [get]
 // List 审计日志列表 GET /api/admin/audit-logs?page=&page_size=&actor_id=&role=&keyword=
-func (h *AuditHandler) List(c *gin.Context) {
-	// 分页钳制（含页大小上限 100）收进 AuditService.List，handler 只负责传参。
+func (h *handler) List(c *gin.Context) {
+	// 分页钳制（含页大小上限 100）收进 audit.Service.List，handler 只负责传参。
 	httpx.Endpoint[auditLogListReq, AuditLogPageResult]{
 		Parse: func(c *gin.Context) (*auditLogListReq, error) {
 			return &auditLogListReq{

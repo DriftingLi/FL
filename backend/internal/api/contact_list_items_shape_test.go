@@ -40,7 +40,7 @@ var nonnilOutlets = map[string]func(t *testing.T) string{
 	// 反方向的谎：这一格从前声明 nullable 且契约上落了 x-nullable，而空审计表拉列表实测发的是
 	// `[]` —— 契约在承诺一个永远不来的 null。批①-B 把它改判 nonnil 并摘掉 x-nullable
 	//（判据 2 不许两者同在；摘掉后生成的 TS 从 `T[] | null` 收回 `T[]`，是收窄不是加负担）。
-	"api.AuditLogPageResult.items": auditLogPageBody,
+	"audit.AuditLogPageResult.items": auditLogPageBody,
 }
 
 // auditLogPageBody 空审计表拉列表的响应体。

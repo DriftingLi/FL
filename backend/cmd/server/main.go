@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"forklift-training/internal/api"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
@@ -33,7 +34,6 @@ import (
 	applogger "forklift-training/internal/logger"
 	migratedb "forklift-training/internal/migrate"
 	"forklift-training/internal/security"
-	svc "forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	vconfig "forklift-training/internal/valuation/config"
 	vhandler "forklift-training/internal/valuation/handler"
@@ -224,7 +224,7 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 // 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *svc.AuditService) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := vrepo.NewDictionaryRepository(pool)
 	evalRepo := vrepo.NewEvaluationRepository(pool)

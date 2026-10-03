@@ -512,7 +512,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/api.AuditLogPageResult"
+                                            "$ref": "#/definitions/audit.AuditLogPageResult"
                                         }
                                     }
                                 }
@@ -23901,7 +23901,7 @@ const docTemplate = `{
                 }
             }
         },
-        "api.AuditLogPageResult": {
+        "audit.AuditLogPageResult": {
             "type": "object",
             "properties": {
                 "items": {
