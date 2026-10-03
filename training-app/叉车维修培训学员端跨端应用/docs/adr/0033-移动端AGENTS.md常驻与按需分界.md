@@ -1,0 +1,60 @@
+# 0033 - 移动端 `AGENTS.md` 常驻与按需分界（判据留常驻，参考表下放）
+
+**状态**：已采纳（2026-10-03，#1509 根线式分层瘦身落地）
+
+> 本文属**移动端 ADR 编号体系**（`training-app/叉车维修培训学员端跨端应用/docs/adr/`），与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径。
+
+## ① 目标与范围
+
+把移动端 `AGENTS.md` 从 30,795 字符瘦到 ≤16,000，且**不丢每轮会话该 firing 的判据**——只动常驻层与本线 `docs/agents/`、`docs/adr/`，不碰任何 `*.uvue` / `*.uts` / 三份 json（命中运行时面即须走四门）。
+
+## ② 选型 + 一句理由
+
+**判据留常驻、参考表与同源副本下放按需层**：常驻层只保留「不看它这轮就会做错」的 firing 判据（门触发面、并发纪律骨架、uvue 四条红线、命令与引用），成段的对照表、实测原文、与根 `docs/agents/*` 逐字同源的内容搬到按需层或直接删作重复——一句理由：**常驻层按「每轮都付费」计价，按需层按「点到才付费」计价**，二者混放只会让 ③ 门与后续会话一起变贵。
+
+分界判据（写票与后续维护共用）：
+
+| 内容 | 归属 | 判据 |
+| --- | --- | --- |
+| 门触发面、验收证据结构、合并纪律（ADR-0008 骨架） | 常驻 | 每轮改票都可能触发 |
+| uvue CSS/UTS 限制**四条红线** | 常驻 | 改 `.uvue` 前不看就踩 |
+| 并发取锁上限、Qoder 树边界、反模式清单 | 常驻 | 并行会话每轮都适用 |
+| uvue CSS/UTS **全表**、Kotlin 编译错误对照 | 按需 `docs/agents/uvue-css.md` | 写样式/排编译错才查 |
+| 并发纪律**全文**（锁交接、攒批口径、时间预算） | 按需 `docs/agents/concurrency.md` | 要上真机/排并发才查 |
+| 时间账、三条原因、成本账、血账原文 | 按需 `docs/agents/dev-loop.md` | 质疑慢点/成本才查 |
+| 与根 `docs/agents/*` 逐字同源的段（发布流程、检查流程、UI 通则） | **删作重复**，段名留指针 | 权威在根，抄即漂 |
+| 别条线路径与文件树（`frontend/`、`gofmt`、`src/` 树等） | **删作失真** | 本仓没有，留着误导 |
+
+## ③ 明确不做的事
+
+- 不改 `## 开发内循环（移动端 UI 迭代）` 段名与 `hxRunContract` C10/C12/C13 锁定的 token；不动 `### Qoder 托管 worktree 的使用边界`、`## 验收门与合并纪律` 的触发面。
+- 不碰运行时面文件（`.uvue` / `.uts` / `manifest.json` / `pages.json` / `platformConfig.json`），不改根 `AGENTS.md` 与根 `docs/agents/skill-routing.md`。
+- 不给常驻预算留「按需层反正有」的后门：firing 判据不得下放。
+
+## ④ 拆分步骤
+
+1. 先写红线守护 `utils/agentsLayeringContract.test.js`（对改动前状态判红）。
+2. 下放：新建 `docs/agents/uvue-css.md`、`concurrency.md`、`dev-loop.md`；ADR-0008 补入被搬走的 ② 门细节（`islogin`、「唯一名」）。
+3. 重写 `AGENTS.md`：留判据、留段名、填指针；删同源段与失真段。
+4. `test:unit` 全绿 + 成对红/绿取证（改动前判红、改动后判绿）。
+5. 本 ADR 记录分界。
+
+## ⑤ 约束与代价
+
+- **预算硬线 ≤16,000 字符**（守护 L1，`RESIDENT_MAX = 16000`），后续往常驻层加内容必须先有「不看它这轮就会做错」的证明。
+- 代价一：多一次跳转（指针 → 按需层），换常驻上下文每轮变薄。
+- 代价二：指针可能腐烂 ⇒ 由守护 L4/L5（引用可达、指针可解析）与 L6（被搬走判据在新文件可 grep）兜底。
+- 别条线路径由守护 L7 钉死：常驻层不得出现 `frontend/`、`src/components/ui`、`gofmt`、`docker-compose`、`vue-tsc`。
+
+## ⑥ 关键判据
+
+| 判据 | 现值 | 怎么复算 |
+| --- | --- | --- |
+| 常驻字符 | 15,902 ≤ 16,000（222 行，旧 30,795 / 481 行） | `git show` 后按字符数量 |
+| 分层守护 | 22 例全绿（含注入必红 15 例） | `npx jest --config jest.config.unit.js utils/agentsLayeringContract.test.js` |
+| 成对取证 | 改动前判红（L1/L2/L6/L7，4 failed / 18 passed）、改动后判绿（22 passed） | 同上，先跑改动前状态再跑新版 |
+| 段名引用不断链 | `frontier-run.ps1`「并发会话纪律」、`forumDisplay.uts`「前端 UI 约定」、`create-issue.sh` / `create-pr.sh` / `TEMPLATE/README.md` "发布流程" 共 5 处可解析（票面 4 处 + `create-pr.sh` 第 5 处） | 守护 L4 + 人工 grep |
+
+**重审条件**：常驻字符再次逼近 16,000；或新增一类「每轮必 firing」的判据需要进常驻层。
+
+**术语**：常驻层 = 每轮会话自动注入的 `AGENTS.md`；按需层 = `docs/agents/` 下由指针到达、点到才读的文档。
