@@ -444,7 +444,7 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(detailPage).toMatch(/class="reply-trigger" @click="onOpenReply"/);
     // 遮罩 + 面板：面板 bottom/maxHeight 由键盘高度驱动；遮罩点击收起、面板 @click.stop 防误收
     expect(detailPage).toMatch(/class="reply-panel-mask" @click="onCollapseReply"/);
-    expect(detailPage).toMatch(/:style="\{ bottom: panelBottom \+ 'px', maxHeight: panelMaxHeight \+ 'px' \}"/);
+    expect(detailPage).toMatch(/:style="\{ marginBottom: panelBottom \+ 'px', maxHeight: panelMaxHeight \+ 'px' \}"/);
     expect(detailPage).toMatch(/@click\.stop/);
     // ⑪-3：#1300 的下滑收起整条删除（onContentScroll 函数与 @scroll 绑定都不再存在；注释里提及不算）
     expect(detailPage).not.toMatch(/function onContentScroll/);

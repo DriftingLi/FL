@@ -64,7 +64,7 @@
              面板 `bottom` 由 uni.onKeyboardHeightChange 去抖后驱动；输入区形态本身仍是共享组件
              ForumMarkdownInput，原样搬进、不改形态（⑪-2）。遮罩点击收起，面板 @click.stop 防误收。 -->
         <view v-if="replyExpanded" class="reply-panel-mask" @click="onCollapseReply">
-            <view class="reply-panel" :style="{ bottom: panelBottom + 'px', maxHeight: panelMaxHeight + 'px' }"
+            <view class="reply-panel" :style="{ marginBottom: panelBottom + 'px', maxHeight: panelMaxHeight + 'px' }"
                 @click.stop>
                 <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
                     :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
@@ -492,12 +492,13 @@
         right: 0;
         bottom: 0;
         background-color: rgba(0, 0, 0, 0.5);
+        justify-content: flex-end;
     }
 
+    /* 面板是遮罩的普通 flex 子（**不做 fixed**），靠 mask 的 flex-end 落到底、用 margin-bottom 抬到
+       键盘上沿 —— 照 practice-do .answer-card-sheet 的可用形态。旧写法把面板也做成 fixed，会被
+       fixed 遮罩在 z 序上盖住 ⇒ 点输入先命中遮罩而收起（①a 真机抓获）。 */
     .reply-panel {
-        position: fixed;
-        left: 0;
-        right: 0;
         background-color: #ffffff;
         border-radius: 24rpx 24rpx 0 0;
         padding: 24rpx;
