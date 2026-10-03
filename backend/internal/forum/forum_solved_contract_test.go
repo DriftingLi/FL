@@ -4,7 +4,7 @@
 // 已解决帖的详情中 accepted_reply_id 与某条回复 id 一致且该回复 is_accepted=true；
 // 非法 solved 参数 400；
 // 取消采纳后状态回退到求助。
-package api
+package forum
 
 import (
 	"bytes"
@@ -15,10 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -26,8 +22,7 @@ import (
 
 func TestForumSolvedContract(t *testing.T) {
 	t.Parallel()
-	testutil.SetTestGinMode()
-	db := testutil.NewMemoryDB(t)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	author := model.HrwaiUser{Account: "solved_author", Phone: "13800000201", Username: "楼主", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&author).Error; err != nil {
@@ -37,15 +32,6 @@ func TestForumSolvedContract(t *testing.T) {
 	if err := db.Create(&answerer).Error; err != nil {
 		t.Fatalf("创建答主失败: %v", err)
 	}
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	apiGroup := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	issueToken := func(u model.HrwaiUser) string {
 		tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(u.ID), u.Account, "hrwai_user")

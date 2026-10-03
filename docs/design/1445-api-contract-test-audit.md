@@ -205,6 +205,18 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 1. **PG 契约用例在本机（无 `DATABASE_URL`）干净 skip ⇒ 本机「全绿」对它们零信息量**。凡动到 `*postgres*_test.go` 的夹具，只能靠 CI 判；不要在本地绿了就宣称那批绿。
 2. **重写夹具时要逐一对照原链注入过的替身**（黑名单 / storage / logger），不能只补「看得见的功能依赖」。对照源：`router_test_helper_test.go` 的 `newContractDepsWithStorage`（`if cfg == nil { cfg = &config.Config{} }` + `SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`）。
 
+### 8.7 批 2：forum 10 个文件（已下沉，2026-10-03）
+
+搬到 `backend/internal/forum/`（文件名不变，api 侧不留副本）：`forum_ip_region_contract_test.go`、`forum_content_format_contract_test.go`、`forum_reply_pagination_contract_test.go`、`forum_update_contract_test.go`、`forum_category_contract_test.go`、`forum_interaction_contract_test.go`、`forum_solved_contract_test.go`、`forum_personal_contract_test.go`、`forum_detail_shape_contract_test.go`、`forum_reply_parent_contract_test.go`（合计 2,242 行）。
+
+**闭包比审计的 10 个多出「一份 DTO」，故 api 侧留了一个小文件**：`forum_category_contract_test.go` 定义的 `topicListResp`（:43-57）与 `titles()`（:59-65）被 3 个**必须留在 api** 的文件引用 —— `forum_list_contract_test.go:48` 与 `forum_designation_contract_test.go:68` 都走 `NewRouter(newContractDeps(t, db, cfg))` 全量装配链，`forum_featured_contract_test.go:61-64` 除 `newContractDeps` 外还注册 `points.RegisterRoutes`（跨域，属 C 桶）。处置：新建 `backend/internal/api/forum_topic_list_resp_test.go` 把这两个定义**逐字**保留一份（文件头写明来由）。这不是「留副本」——10 个被搬文件本身全部删除，重复的只是一个测试解码结构。
+
+**域内夹具**：新建 `backend/internal/forum/contract_helper_test.go`，`func newForumContractEnv(t *testing.T) (*gorm.DB, *gin.Engine, *security.Session, *config.Config)`——在域内既有的 `newForumTestEnv`（`internal/forum/service_test.go:65`，「与 deps.go 的装配同形」）之上补会话 + `gin` 引擎 + `RegisterAdminRoutes`/`RegisterRoutes`，会话走 `security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（**带内存黑名单**，§8.6 的教训）。不在域内起第二份构造链。
+
+**为什么夹具多返回 `cfg`**：10 个测试体里有 20 处沿用原有写法 `security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(...)` 自行签发 token。若改用夹具的 `session`，token 有效期会从测试体写的 1h 漂到 `cfg.JWTExpiry()` 的默认 2h，且要动 20 行测试体 ⇒ 判据②「断言逐字不变」优先，夹具把 `cfg` 一并返回。
+
+**核验**：`git show HEAD:backend/internal/api/<f>` 与域包新文件归一化（去 package / import 块与夹具行、去 `forum.` 前缀、折叠空行）后，**逐 `func Test` 且全文逐行比对：10/10 逐字相同**。验收：`gofmt -l ./internal` 无输出、`go vet` exit 0、`go test ./internal/forum/... ./internal/api/... ./internal/testutil/...` 全 ok、全量只剩 §8.5 那两条基线失败、三条守卫脚本无违规、`internal/layers` 五条结构守卫全 PASS。
+
 ## 附录：142 个文件逐条
 
 | 文件 | 行 | 桶 | 建议 |

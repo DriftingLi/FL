@@ -1,5 +1,5 @@
 // ADR-0018 契约测试：论坛互动——点赞 / 举报 / 我的帖子 / 我的回复。
-package api
+package forum
 
 import (
 	"bytes"
@@ -10,10 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -21,8 +17,7 @@ import (
 
 func TestForumInteractionContract(t *testing.T) {
 	t.Parallel()
-	testutil.SetTestGinMode()
-	db := testutil.NewMemoryDB(t)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	author := model.HrwaiUser{Account: "acct_a", Phone: "13800000001", Username: "作者甲", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&author).Error; err != nil {
@@ -41,16 +36,6 @@ func TestForumInteractionContract(t *testing.T) {
 	if err := db.Create(&reply).Error; err != nil {
 		t.Fatalf("创建回复失败: %v", err)
 	}
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(author.ID), author.Account, "hrwai_user")
