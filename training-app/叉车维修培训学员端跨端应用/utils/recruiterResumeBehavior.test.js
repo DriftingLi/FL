@@ -411,7 +411,7 @@ describe('D. 发起交换与我的交换申请', () => {
 // E1 / E2：同一格键现在也挂在**驱动角标的简历卡面**（后端第十五波第④批 = PR #1298，
 // `internal/resume/projection.go:286` 的 `RecruitResumeCard.CompanyDisabled`）。它是**另一个赋值点**：
 // 卡面填在 `fillContactStates`（`internal/recruit/service.go:64`，赋值 `:84`；列表 `:203` 与详情
-// `:229` 共用这一处），明文位置那条在 `internal/service/contact_service.go:237` —— 两处同键同判据
+// `:229` 共用这一处），明文位置那条在 `internal/core/contact_service.go:237` —— 两处同键同判据
 // （approved ∧ 企业不可用），但**不是同一段代码**。票面 #1267 的列表角标那半此前被这条契约
 // 卡住：卡面收不到这一维，列表页就只能显示一个说谎的「已授权」。
 describe('E. 简历卡面的可用性那一格（#1267 后半）', () => {

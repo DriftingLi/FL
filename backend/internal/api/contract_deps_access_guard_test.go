@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/auth"
-	"forklift-training/internal/service"
+	"forklift-training/internal/core"
 	"forklift-training/internal/testutil"
 )
 
@@ -33,7 +33,7 @@ func TestContractDepsAccessIsNotExpired(t *testing.T) {
 	r.Use(gin.Recovery())
 	auth.RegisterRoutes(r.Group("/api"), deps.Session, deps.AuthSvc, nil, nil, nil, zap.NewNop())
 
-	tok, _, err := deps.Session.IssuePair(student.ID, "dep_access_guard", service.HrwaiRole)
+	tok, _, err := deps.Session.IssuePair(student.ID, "dep_access_guard", core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发 access 失败: %v", err)
 	}

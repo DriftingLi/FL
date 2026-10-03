@@ -287,7 +287,7 @@ const valuationPathParseDebt = 6
 func pathParseScopeDirs(t *testing.T) []string {
 	t.Helper()
 	dirs := []string{"."}
-	for _, p := range testutil.ResponsePackages() {
+	for _, p := range testutil.ResponsePackages(t) {
 		if p.Dir == "internal/api" {
 			continue
 		}

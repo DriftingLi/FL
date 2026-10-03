@@ -1,7 +1,7 @@
 // Package service 测试共享辅助：DTO shape-lock 断言（B4–B8 决策 D2 共同使用）。
 // 断言 JSON key 集合与转换前的 map 契约逐字一致——前端契约零改动是最高优先级约束，
 // 任何 DTO 字段增删都会在这里暴露，需同步评估前端影响。
-package service
+package core
 
 import (
 	"encoding/json"

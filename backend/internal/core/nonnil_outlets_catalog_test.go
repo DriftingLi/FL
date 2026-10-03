@@ -25,10 +25,10 @@
 //   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items（键前缀随 4c 改 questioninteraction.）、
 //     audit.AuditLogPageResult.items（前缀随波 4f 域包改名）⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
 //     internal/questioninteraction/service.go、internal/api/），本段不改。前两格另有独立理由：
-//     service.JSONArray.MarshalJSON 在 `j == nil` 时**字面发出 `null`**，本就恒可空。
+//     resume.JSONArray.MarshalJSON 在 `j == nil` 时**字面发出 `null`**，本就恒可空。
 //   - repository.AlgorithmParameters 的 4 格与 repository.SeriesConfigOptions 的 3 格 ⇒ 两道
 //     硬阻塞，任一都足以让它留在原地：
-//     (1) 判据 5 的证据源只有 `../service` 与 `../api` 两个目录（见 nullability_lock_test.go
+//     (1) 判据 5 的证据源只有 `../core` 与 `../api` 两个目录（见 nullability_lock_test.go
 //     的 nonNilEvidenceSources），repository 包**不在扫描面内** ⇒ 在
 //     internal/valuation/repository/ 下建一张 nonnilOutlets* 表，锁一条也读不到，
 //     改判后判据 5 直接判红；
@@ -37,7 +37,7 @@
 //     行为例就成了「只在配了 DATABASE_URL 的机器上才跑」——判据 5 要的是一次真跑过。
 //     ⇒ 正解是给 nonNilEvidenceSources 加一个 repository 来源 + 给该包一条可跑 PG 的 seam，
 //     那是独立一件工具改动，不塞进本段。
-package service
+package core
 
 import (
 	"testing"

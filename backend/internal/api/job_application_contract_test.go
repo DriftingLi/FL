@@ -24,17 +24,17 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func assertJobApplicationContract(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
-	pwd, _ := service.HashPassword("admin123")
+	pwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminApp", pwd)
-	stuPwd, _ := service.HashPassword("student123")
+	stuPwd, _ := core.HashPassword("student123")
 	stu := seedStudent(t, db, "stuApp", stuPwd)
 
 	cfg := &config.Config{JWTSecretKey: "app-contract-secret", JWTExpiresHours: 2}

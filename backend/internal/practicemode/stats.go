@@ -7,7 +7,7 @@ import (
 // 练习统计 module（Ticket #226）：一次 GROUP BY + 过滤描述符，产出 typed StatsDTO。
 // 三套并行统计（题库/练习/错题）收敛为同一依赖；题库那套（questionbank.QuestionBankStatsDTO /
 // questionbank.GroupByCount）已随 3c-1 搬进 internal/questionbank，错题那套（WrongQuestionStatsDTO）
-// 随 3c-2 留驻 internal/service（4c 随错题域再搬）。
+// 4c 已随错题域搬进 internal/wrongquestion/stats.go。
 
 // PracticeTypeStat 练习统计按题型明细（旧内层 map {total, correct}），accuracy 为加性新增 key（#226）。
 type PracticeTypeStat struct {

@@ -1,7 +1,7 @@
 // 用户唯一标识（uid）生成：应用层雪花算法（bwmarrin/snowflake）。
 // uid 为 64 位雪花 ID，DB 列 BIGINT UNIQUE NOT NULL，API 层以字符串序列化
 // （超出 JS Number.MAX_SAFE_INTEGER，前端必须按字符串处理）。
-package service
+package core
 
 import (
 	"strconv"

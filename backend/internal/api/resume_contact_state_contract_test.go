@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -21,7 +21,7 @@ func TestResumeContactStateContract(t *testing.T) {
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
 
-	pwd, _ := service.HashPassword("pass1234")
+	pwd, _ := core.HashPassword("pass1234")
 	stuNone := seedStudent(t, db, "stuCsNone", pwd)
 	stuPending := seedStudent(t, db, "stuCsPending", pwd)
 	stuApproved := seedStudent(t, db, "stuCsApproved", pwd)
@@ -48,7 +48,7 @@ func TestResumeContactStateContract(t *testing.T) {
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
 
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminCs", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name, Domain: cfg.AuthCookie.Domain, Secure: cfg.AuthCookie.Secure})
 	adminToken, _ := adminSess.Issue(admin.AdminID, admin.Username, "admin")

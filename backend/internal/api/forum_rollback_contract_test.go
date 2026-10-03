@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -34,7 +34,7 @@ func TestForumRollbackContract(t *testing.T) {
 	if err := db.Create(&answerer).Error; err != nil {
 		t.Fatalf("create answerer: %v", err)
 	}
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminRollback", adminPwd)
 	adminSess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name})
 	adminToken, _ := adminSess.Issue(admin.AdminID, admin.Username, "admin")
@@ -237,7 +237,7 @@ func TestForumRollbackContract(t *testing.T) {
 	// 管理端可访问招聘查看与申请记录
 	// 先造一条 view 和 request
 	// 创建招聘者并产生 view
-	recruiterPwd, _ := service.HashPassword("recruit123")
+	recruiterPwd, _ := core.HashPassword("recruit123")
 	recruiter := testutil.SeedRecruiter(t, db, "recruitInsp", recruiterPwd)
 	// 手动插入 view
 	if err := db.Create(&model.RecruitResumeView{RecruiterID: recruiter.ID, ResumeUserID: author.ID, ViewedAt: time.Now()}).Error; err != nil {

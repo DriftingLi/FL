@@ -21,9 +21,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -54,7 +54,7 @@ func newListContractEnv(t *testing.T) *listContractEnv {
 			t.Fatalf("创建用户失败: %v", err)
 		}
 	}
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "adminListContract", adminPwd)
 
 	issue := func(id int, account, role string) string {

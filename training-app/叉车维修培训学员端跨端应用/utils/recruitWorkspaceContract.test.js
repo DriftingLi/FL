@@ -439,7 +439,7 @@ describe('C. 交换段：客户端判过期、过期项无操作入口', () => {
 
 describe('C2. 可用性那一格：与 Web/后端同源、全仓单点、列表卡面并排投影', () => {
   const WEB_CONTACT = path.join(REPO, 'frontend/src/utils/contactRequestStatus.ts');
-  const GO_CONTACT_SERVICE = path.join(REPO, 'backend/internal/service/contact_service.go');
+  const GO_CONTACT_SERVICE = path.join(REPO, 'backend/internal/core/contact_service.go');
 
   it('对照③：措辞与 Web `companyAvailability()` 逐字相等，首句等于后端具名错误（同键同措辞）', () => {
     // 三端各自 fail-closed：任何一端搬家/改名 ⇒ 解析出 null ⇒ 判红，而不是静默跳过对账
@@ -610,7 +610,7 @@ const JOB_ROWS = parseDescriptorRows(read(DISPLAY), 'RECRUIT_JOB_STATUS_DESCRIPT
 describe('F. 状态词单点 + 两端同源（ADR-0018 口径）', () => {
   const WEB_CONTACT = path.join(REPO, 'frontend/src/utils/contactRequestStatus.ts');
   const WEB_APPLICATION = path.join(REPO, 'frontend/src/utils/applicationStatus.ts');
-  const GO_CONTACT = path.join(REPO, 'backend/internal/service/contact_authz.go');
+  const GO_CONTACT = path.join(REPO, 'backend/internal/core/contact_authz.go');
   const GO_APPLICATION = path.join(REPO, 'backend/internal/job/application.go');
 
   it('三张表都解析得出来且非空（fail-closed：解析不到 = 锁失效，不是通过）', () => {

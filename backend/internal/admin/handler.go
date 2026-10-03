@@ -12,10 +12,10 @@ import (
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/authz"
+	"forklift-training/internal/core"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -25,11 +25,11 @@ type adminHandler struct {
 	adminSvc      *Service
 	authSvc       *auth.Service
 	aiConfigSvc   *aiassistant.ConfigService
-	contentGenSvc *service.ContentGenerateService
+	contentGenSvc *core.ContentGenerateService
 }
 
 // newHandler 创建管理员后台 handler。
-func newHandler(adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) *adminHandler {
+func newHandler(adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *core.ContentGenerateService) *adminHandler {
 	return &adminHandler{
 		adminSvc: adminSvc, authSvc: authSvc,
 		aiConfigSvc: aiConfigSvc, contentGenSvc: contentGenSvc,
@@ -37,7 +37,7 @@ func newHandler(adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassista
 }
 
 // RegisterRoutes 注册 /api/admin 蓝图（管理员后台：hrwai 用户、讲师、统计、内容生成）。
-func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *service.ContentGenerateService) {
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *core.ContentGenerateService) {
 	h := newHandler(adminSvc, authSvc, aiConfigSvc, contentGenSvc)
 
 	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapAdminAccess))
@@ -45,9 +45,9 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Se
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
 	aiassistant.RegisterAdminRoutes(g, aiConfigSvc)
 
-	// ===== 课程内容生成（留驻：实现仍在 internal/service，未随课程域搬包）=====
+	// ===== 课程内容生成（留驻：实现仍在 internal/core，未随课程域搬包）=====
 	// 原 :48-59 的九条课程 / 章节管理端点已搬进 internal/course/handler_admin.go（波 4d 裁决 D1）；
-	// 这两条生成面（含 service.ContentGenerateService）属管理域射程，路由留在本蓝图，
+	// 这两条生成面（含 core.ContentGenerateService）属管理域射程，路由留在本蓝图，
 	// 与课程域那份注册按完整路径并存（gin 只按完整路径匹配，两组同名 /admin 不冲突）。
 	g.POST("/course/generate-content", h.GenerateContent)
 	g.GET("/course/generate-content/:task_id", h.GetGenerationTask)
@@ -80,13 +80,13 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Se
 // @Produce json
 // @Security BearerAuth
 // @Param body body object false "生成请求 {course_id,chapter_ids}"
-// @Success 201 {object} response.R{data=service.GenerateContentResultDTO} "生成任务已启动"
+// @Success 201 {object} response.R{data=core.GenerateContentResultDTO} "生成任务已启动"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/course/generate-content [post]
 // GenerateContent 异步生成课程内容 POST /api/admin/course/generate-content
 func (h *adminHandler) GenerateContent(c *gin.Context) {
-	httpx.Endpoint[generateContentReq, service.GenerateContentResultDTO]{
+	httpx.Endpoint[generateContentReq, core.GenerateContentResultDTO]{
 		Parse: func(c *gin.Context) (*generateContentReq, error) {
 			var req struct {
 				CourseID   int   `json:"course_id"`
@@ -100,12 +100,12 @@ func (h *adminHandler) GenerateContent(c *gin.Context) {
 			}
 			return &generateContentReq{CourseID: req.CourseID, ChapterIDs: req.ChapterIDs, UserID: c.GetInt("user_id")}, nil
 		},
-		Invoke: func(ctx context.Context, req *generateContentReq) (*service.GenerateContentResultDTO, error) {
+		Invoke: func(ctx context.Context, req *generateContentReq) (*core.GenerateContentResultDTO, error) {
 			taskID, err := h.contentGenSvc.StartGeneration(req.CourseID, req.ChapterIDs, req.UserID)
 			if err != nil {
 				return nil, err
 			}
-			return &service.GenerateContentResultDTO{TaskID: taskID}, nil
+			return &core.GenerateContentResultDTO{TaskID: taskID}, nil
 		},
 	}.WithSuccess(httpx.Created("生成任务已启动"), http.StatusBadRequest).Handle(c)
 }
@@ -116,23 +116,23 @@ func (h *adminHandler) GenerateContent(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param task_id path string true "任务 ID"
-// @Success 200 {object} response.R{data=service.GenTaskStatus} "success"
+// @Success 200 {object} response.R{data=core.GenTaskStatus} "success"
 // @Failure 400 {object} response.R "task_id 无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "生成任务不存在"
 // @Router /admin/course/generate-content/{task_id} [get]
 // GetGenerationTask 查询生成任务状态（前端轮询）GET /api/admin/course/generate-content/:task_id
 func (h *adminHandler) GetGenerationTask(c *gin.Context) {
-	httpx.Endpoint[taskIDParam, service.GenTaskStatus]{
+	httpx.Endpoint[taskIDParam, core.GenTaskStatus]{
 		Parse: func(c *gin.Context) (*taskIDParam, error) {
 			return &taskIDParam{TaskID: c.Param("task_id")}, nil
 		},
-		Invoke: func(ctx context.Context, req *taskIDParam) (*service.GenTaskStatus, error) {
+		Invoke: func(ctx context.Context, req *taskIDParam) (*core.GenTaskStatus, error) {
 			return h.contentGenSvc.GetTaskStatus(req.TaskID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
-		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).
-		WithSentinel(service.ErrGenTaskIDInvalid, http.StatusBadRequest).Handle(c)
+		WithSentinel(core.ErrGenTaskNotFound, http.StatusNotFound).
+		WithSentinel(core.ErrGenTaskIDInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary HRWAI 用户列表

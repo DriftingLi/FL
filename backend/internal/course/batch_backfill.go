@@ -10,9 +10,9 @@ import (
 //
 // P2 波 3b-1（计划外漏项，见 ADR-0070 回写）：这三枚原本住在 internal/service，被课程列表与
 // 学员档案两条路径共用；课程域包化后服务侧仍要调它们，于是「助手搬回自己域」——定义归课程域，
-// internal/service 反向引用（service → course 是本波 DAG 允许的单向边）。其余课程/章节名回填助手
+// internal/core 反向引用（core → course 是本波 DAG 允许的单向边）。其余课程/章节名回填助手
 // （batchCourseNames / batchChapterTitles / courseName / courseNameFound / UnknownCourseName）留在
-// internal/service：它们服务的是学习记录与档案两条非课程域路径。
+// internal/core：它们服务的是学习记录与档案两条非课程域路径。
 
 // BatchChapterCounts 一次查询全部课程章节数（缺省 0，消除逐课程 N+1）。
 func BatchChapterCounts(db *gorm.DB, courseIDs []int) map[int]int64 {

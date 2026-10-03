@@ -4,7 +4,7 @@
 // 契约测试锁不住它。而复核时它就带着一个静默缺陷——`Count` 少了 `.Model()`，gorm 会报
 // 「Table not set」，调用方一咽掉错误就把「查不动」当成「没有 pending」。
 // 本文件直接问这两个函数，让这类形状错误不依赖调度也能红。
-package service
+package core
 
 import (
 	"testing"

@@ -6,14 +6,14 @@
 // 波 4e 的收窄：本文件原有八格，其中 JobCardDTO 四格随简历域搬去 internal/resume/nullable_outlets_test.go、
 // RecruitResumeCard 两格随招聘域搬去 internal/recruit/nullable_outlets_test.go；
 // 留下的两格属 `contact`——它**不是** 30 个声明域里的一个（domains.go 无 contact 域），
-// 联系方式交换闭环留驻 internal/service，故证据也留在这里。
+// 联系方式交换闭环留驻 internal/core，故证据也留在这里。
 //
 // 这两格为什么是 nullable：`ContactPlainDTO` 在生产里**只是 swagger 形状声明**
 // （GET /recruit/resumes/{id}/contact 的字节由 api/contact.go 那段 gin.H 直出，取的就是
 // resume.ToJobCardDTO 的同一份值），所以出口按 handler 那一行的字段清单复现包装，
 // 值仍来自真实读库。底层四列是 `JSONB NOT NULL DEFAULT '[]'`，NOT NULL 挡得住 SQL NULL、
 // 挡不住 `'null'::jsonb` —— 本文件证的是「列里存 JSON null 时这一格确实发出 null」。
-package service
+package core
 
 import (
 	"testing"
@@ -29,8 +29,8 @@ import (
 
 var nullableOutletsResume = map[string]func(t *testing.T) any{
 	// ===== 明文联系方式面（形状声明，值同 resume.ToJobCardDTO）=====
-	"service.ContactPlainDTO.photos":                outletContactPlainJSONNullColumn,
-	"service.ContactPlainDTO.resume_certifications": outletContactPlainJSONNullColumn,
+	"core.ContactPlainDTO.photos":                outletContactPlainJSONNullColumn,
+	"core.ContactPlainDTO.resume_certifications": outletContactPlainJSONNullColumn,
 }
 
 func init() {
@@ -75,7 +75,7 @@ func seedBlankJobCard(t *testing.T, db *gorm.DB, userID int, visibility string) 
 	}
 }
 
-// outletContactPlainJSONNullColumn 明文联系方式面：service.GetContact 的取值就是
+// outletContactPlainJSONNullColumn 明文联系方式面：core.GetContact 的取值就是
 // First(card) + resume.ToJobCardDTO（与明文卡同一份投影），handler 再按六个键直出。
 // 这里复现的是那六个键的形状声明，Photos / ResumeCertifications 两格取真实读库结果。
 func outletContactPlainJSONNullColumn(t *testing.T) any {

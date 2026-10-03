@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
@@ -33,7 +33,7 @@ var (
 type ReportService struct {
 	db     *gorm.DB
 	logger *zap.Logger
-	mailer service.MailSender
+	mailer core.MailSender
 }
 
 // NewReportService 创建职位举报服务。
@@ -42,7 +42,7 @@ func NewReportService(db *gorm.DB, logger *zap.Logger) *ReportService {
 }
 
 // SetMailer 注入邮件发送器（装配根经邮件单点构建后注入）。
-func (s *ReportService) SetMailer(m service.MailSender) { s.mailer = m }
+func (s *ReportService) SetMailer(m core.MailSender) { s.mailer = m }
 
 // ReportListResult 举报队列分页结果。
 type ReportListResult struct {

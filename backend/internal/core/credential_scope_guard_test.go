@@ -1,4 +1,4 @@
-package service
+package core
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 
 // 本文件 = 「生产代码不得再出现裸 credential_id 谓词」的静态扫描锁（ADR-0056 §2 锁之一）。
 // 用 Go 测试实现（读包内源码），不新增 CI 步骤、不动 scripts/ 与 .github/workflows。
-// 本文件住在 internal/service 是**射程**选择（装配与读面都在这），与谓词实现处无关——
+// 本文件住在 internal/core 是**射程**选择（装配与读面都在这），与谓词实现处无关——
 // P2 波 0b 起三族谓词住在叶子包 internal/scope，白名单随实现处改指那里。
 
 var (
@@ -55,7 +55,7 @@ func TestNoBareCredentialPredicate(t *testing.T) {
 	const implementation = "internal/scope/scope.go"
 	allowlist := map[string]bool{
 		implementation: true,
-		"internal/service/credential_scope_guard_test.go": true,
+		"internal/core/credential_scope_guard_test.go": true,
 	}
 	var scanned, implementationHits int
 	var violations []string

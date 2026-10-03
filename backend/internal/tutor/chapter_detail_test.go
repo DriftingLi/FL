@@ -1,5 +1,5 @@
 // Package tutor 测试：章节详情的导师端读面（P2 波 3b-1 实施中拆回本包，波 4d 随 tutor 域包搬来）。
-// 这几条用例的接缝是 tutor.Service，而域包测试不能 import internal/service 的测试助手（会成环），
+// 这几条用例的接缝是 tutor.Service，而域包测试不能 import internal/core 的测试助手（会成环），
 // 故导师端一节留在本包；学员端一节随课程域走 internal/course/chapter_detail_test.go。
 // seam：service 层（testutil.NewMemoryDB 内存 sqlite）。
 // 锁定行为：导师端详情 prev/next/文件/legacy 与学员端 shape 零漂移；GetCourseChapters 文件批量装载（无 N+1）。

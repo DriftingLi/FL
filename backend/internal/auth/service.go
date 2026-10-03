@@ -12,7 +12,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
-	"forklift-training/internal/service"
+	"forklift-training/internal/core"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -38,7 +38,7 @@ type Service struct {
 	db        *gorm.DB
 	session   *security.Session
 	reviewSvc *ProfileReviewService
-	forumCnt  service.ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
+	forumCnt  core.ForumCounter // 论坛计数唯一写入口（注销回扣点赞数用，spec #297）
 
 	defaultAdminPwd   string
 	defaultTutorPwd   string
@@ -49,7 +49,7 @@ type Service struct {
 
 // NewService 创建认证服务。sess 为装配根创建的唯一会话实例（签发/校验同实例）；
 // forumCnt 与 ForumService 共享同一计数器实例（构造注入，注销同事务回扣 likes_count）。
-func NewService(db *gorm.DB, sess *security.Session, forumCnt service.ForumCounter, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *Service {
+func NewService(db *gorm.DB, sess *security.Session, forumCnt core.ForumCounter, adminPwd, tutorPwd, studentPwd string, logger *zap.Logger) *Service {
 	return &Service{
 		db:                db,
 		session:           sess,
@@ -74,14 +74,14 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 		Role:    role,
 	}
 	switch role {
-	case service.HrwaiRole:
+	case core.HrwaiRole:
 		var u model.HrwaiUser
 		if err := s.db.First(&u, userID).Error; err == nil {
 			dto.Account = u.Account
-			dto.UID = coerce.Ptr(service.FormatUID(u.UID))
+			dto.UID = coerce.Ptr(core.FormatUID(u.UID))
 			dto.Username = coerce.Ptr(u.Username)
 			dto.AvatarURL = coerce.Ptr(u.AvatarURL)
-			dto.Phone = coerce.Ptr(service.MaskedPhone(u.Phone))
+			dto.Phone = coerce.Ptr(core.MaskedPhone(u.Phone))
 			dto.Email = coerce.Ptr(u.Email)
 			dto.Company = coerce.Ptr(u.Company)
 			// 是否已设置密码（决定个人资料页"账号密码"卡片提示文案）
@@ -92,7 +92,7 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
 			dto.PendingProfileChange = &pending
 		}
-	case service.TutorRole:
+	case core.TutorRole:
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
 			dto.Name = coerce.Ptr(t.Name)
@@ -104,7 +104,7 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 			dto.Name = coerce.Ptr(a.Name)
 			dto.Username = coerce.Ptr(a.Username)
 		}
-	case service.RecruiterRole:
+	case core.RecruiterRole:
 		var r model.RecruiterUser
 		if err := s.db.First(&r, userID).Error; err == nil {
 			dto.Account = r.Username
@@ -169,7 +169,7 @@ type loginCredentials struct {
 // verifyAndIssue 登录共享骨架：验密 → 禁用校验 → 签发 → 组结果。
 // plainPassword 为用户输入的明文，errMessage 为验密失败的统一文案（防账号枚举）。
 func (s *Service) verifyAndIssue(plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
-	if !service.VerifyPassword(plainPassword, c.password) {
+	if !core.VerifyPassword(plainPassword, c.password) {
 		return nil, errors.New(errMessage)
 	}
 	return s.issueLogin(c, role)
@@ -210,7 +210,7 @@ func (s *Service) HrwaiLogin(account, password string) (*LoginResult, error) {
 	return s.verifyAndIssue(password, loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username,
 		password: user.Password, status: &status,
-	}, service.HrwaiRole, "账号或密码错误")
+	}, core.HrwaiRole, "账号或密码错误")
 }
 
 // GetHrwaiUserByID 用于 /me 接口查询用户信息。
@@ -240,11 +240,11 @@ func (s *Service) UpdatePassword(ctx context.Context, userID int, password strin
 // SetNewPassword 落新口令（学员口令写面的唯一动作）：长度校验 → bcrypt 哈希 → 落库 →
 // 全会话吊销（RevokeIdentity，身份命名空间 hrwai_user）。
 //
-// P2 波 3a（ADR-0070）：动作本体留在 internal/service（ApplyHrwaiPassword）——留驻的
-// AdminService 代重置也要走同一条动作，而 service → auth 会成环（单向边 auth → service）；
+// P2 波 3a（ADR-0070）：动作本体留在 internal/core（ApplyHrwaiPassword）——留驻的
+// AdminService 代重置也要走同一条动作，而 core → auth 会成环（单向边 auth → core）；
 // 本方法只是域内调用点（UpdatePassword / VerifyCodeService）的稳定名字。
-func (s *Service) SetNewPassword(ctx context.Context, userID int, password string) service.PasswordWriteResult {
-	return service.ApplyHrwaiPassword(ctx, s.db, s.session, userID, password)
+func (s *Service) SetNewPassword(ctx context.Context, userID int, password string) core.PasswordWriteResult {
+	return core.ApplyHrwaiPassword(ctx, s.db, s.session, userID, password)
 }
 
 // AdminLogin 管理员登录（admin 表无 status 字段，无禁用语义）。
@@ -275,7 +275,7 @@ func (s *Service) TutorLogin(username, password string) (*LoginResult, error) {
 	return s.verifyAndIssue(password, loginCredentials{
 		id: tutor.TutorID, account: tutor.Username, username: tutor.Username,
 		password: tutor.Password, status: &status,
-	}, service.TutorRole, "讲师账号或密码错误")
+	}, core.TutorRole, "讲师账号或密码错误")
 }
 
 // TutorRegisterResultDTO 导师建号结果（ADR-0009 §2 typed DTO / spec #940 片三）。
@@ -295,7 +295,7 @@ func (s *Service) TutorRegister(username, password, name string) (*TutorRegister
 	if count > 0 {
 		return nil, errors.New("用户名已被注册")
 	}
-	hashed, err := service.HashPassword(password)
+	hashed, err := core.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func (s *Service) RecruiterLogin(username, password string) (*LoginResult, error
 	return s.verifyAndIssue(password, loginCredentials{
 		id: r.ID, account: r.Username, username: r.Username,
 		password: r.Password, status: &status,
-	}, service.RecruiterRole, "招聘者账号或密码错误")
+	}, core.RecruiterRole, "招聘者账号或密码错误")
 }
 
 // RecruiterCreateInput 管理员创建招聘者账号的输入（企业信息全部必填）。
@@ -471,7 +471,7 @@ func (s *Service) CreateRecruiter(in RecruiterCreateInput) (*model.RecruiterUser
 	if creditCnt > 0 {
 		return nil, ErrCreditCodeTaken
 	}
-	hashed, err := service.HashPassword(in.Password)
+	hashed, err := core.HashPassword(in.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +503,7 @@ func (s *Service) ToggleRecruiterStatus(ctx context.Context, id int) (int16, err
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, service.ErrRecruiterNotFound
+			return 0, core.ErrRecruiterNotFound
 		}
 		return 0, err
 	}
@@ -515,7 +515,7 @@ func (s *Service) ToggleRecruiterStatus(ctx context.Context, id int) (int16, err
 		return 0, err
 	}
 	if next == 0 {
-		if err := s.session.RevokeIdentity(ctx, service.RecruiterRole, id); err != nil {
+		if err := s.session.RevokeIdentity(ctx, core.RecruiterRole, id); err != nil {
 			s.logger.Warn("招聘员禁用后 refresh 吊销标记写入失败", zap.Int("recruiter_id", id), zap.Error(err))
 		}
 	}
@@ -609,7 +609,7 @@ func (s *Service) EditRecruiter(id int, in RecruiterEditInput) (*model.Recruiter
 	}
 	var r model.RecruiterUser
 	if err := s.db.First(&r, id).Error; err != nil {
-		return nil, service.ErrRecruiterNotFound
+		return nil, core.ErrRecruiterNotFound
 	}
 	// #450：编辑把信用代码改成别家已占用的值 → 同样被拒（自己保持原值不算占用）。
 	credit := strings.TrimSpace(in.CreditCode)
@@ -660,10 +660,10 @@ type RecruiterPasswordResetResult struct{}
 
 // ResetRecruiterPassword 重置招聘者口令（#417）：旧口令立即失效，响应不回显任何口令字段。
 // 招聘者写面在 recruiter 命名空间里自建（SetNewPassword 落的是 hrwai_users），但长度规则
-// 与吊销族策略同源：service.ApplyRecruiterPassword（动作本体与 service.ValidatePasswordLength 同在
-// internal/service，P2 波 3a 后反向边不许存在）。
+// 与吊销族策略同源：core.ApplyRecruiterPassword（动作本体与 core.ValidatePasswordLength 同在
+// internal/core，P2 波 3a 后反向边不许存在）。
 func (s *Service) ResetRecruiterPassword(ctx context.Context, id int, password string) error {
-	res := service.ApplyRecruiterPassword(ctx, s.db, s.session, id, password)
+	res := core.ApplyRecruiterPassword(ctx, s.db, s.session, id, password)
 	if !res.Applied() {
 		return res.Err
 	}
@@ -682,7 +682,7 @@ func (s *Service) EnsureDefaultUsers() error {
 		return err
 	}
 	if adminCount == 0 {
-		hashed, err := service.HashPassword(s.defaultAdminPwd)
+		hashed, err := core.HashPassword(s.defaultAdminPwd)
 		if err != nil {
 			return err
 		}
@@ -703,7 +703,7 @@ func (s *Service) EnsureDefaultUsers() error {
 		return err
 	}
 	if tutorCount == 0 {
-		hashed, err := service.HashPassword(s.defaultTutorPwd)
+		hashed, err := core.HashPassword(s.defaultTutorPwd)
 		if err != nil {
 			return err
 		}
@@ -725,12 +725,12 @@ func (s *Service) EnsureDefaultUsers() error {
 		return err
 	}
 	if studentCount == 0 {
-		hashed, err := service.HashPassword(s.defaultStudentPwd)
+		hashed, err := core.HashPassword(s.defaultStudentPwd)
 		if err != nil {
 			return err
 		}
 		student := model.HrwaiUser{
-			UID:       service.NextUID(),
+			UID:       core.NextUID(),
 			Account:   "student",
 			Username:  "测试学员",
 			Password:  hashed,
@@ -815,7 +815,7 @@ func (s *Service) DeleteAccount(userID int) error {
 		var sentinel model.HrwaiUser
 		if err := tx.Where("account = ?", "__deleted_user").First(&sentinel).Error; err != nil {
 			sentinel = model.HrwaiUser{
-				UID:       service.NextUID(),
+				UID:       core.NextUID(),
 				Account:   "__deleted_user",
 				Username:  "已注销用户",
 				Password:  "",

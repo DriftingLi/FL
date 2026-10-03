@@ -11,17 +11,17 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	// 管理端强删属治理动作：经 ModerationService 自己的 interface 装配（ADR-0050 决策 3）
-	mod := NewModerationService(db, nil, notification.NewService(db, zap.NewNop()), service.NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
+	mod := NewModerationService(db, nil, notification.NewService(db, zap.NewNop()), core.NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "zero_bal_answerer", "x")
 	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", answerer.ID).UpdateColumn("points_balance", 0).Error; err != nil {
@@ -78,7 +78,7 @@ func TestAdminDeleteTopicZeroBalanceRollback(t *testing.T) {
 // 同帖重复发放（占坑冲突）静默跳过且不影响状态迁移。
 func TestAcceptReplyRewardIdempotentOccupy(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewService(db, nil, notification.NewService(db, zap.NewNop()), service.NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
+	svc := NewService(db, nil, notification.NewService(db, zap.NewNop()), core.NewForumCounter(), points.NewService(db, zap.NewNop(), nil, notification.NewService(db, zap.NewNop())), zap.NewNop())
 
 	answerer := testutil.SeedStudent(t, db, "occ_answerer", "x")
 	asker := testutil.SeedStudent(t, db, "occ_asker", "x")

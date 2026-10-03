@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -124,7 +124,7 @@ func TestContactDecisionWindowOnPostgres(t *testing.T) {
 	// 4. expired 不占偏索引：窗口关闭后同一对可立即再挂一条 pending（§2 的「不挡重发」在库层成立）。
 	if err := db.Model(&model.ContactRequest{}).
 		Where("recruiter_id = ? AND student_user_id = ?", recruiter.ID, student.ID).
-		Update("status", string(service.ContactGrantExpired)).Error; err != nil {
+		Update("status", string(core.ContactGrantExpired)).Error; err != nil {
 		t.Fatalf("置 expired: %v", err)
 	}
 	if _, err := svc.Create(recruiter.ID, student.ID, "闭窗后重发"); err != nil {

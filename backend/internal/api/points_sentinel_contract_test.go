@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -21,7 +21,7 @@ func TestPointsSentinelStatusMapping(t *testing.T) {
 	t.Parallel()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	pwd, _ := service.HashPassword("student123")
+	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "sentinel_stu", pwd)
 
 	cfg := &config.Config{

@@ -14,9 +14,9 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
@@ -51,16 +51,16 @@ var (
 
 // ApplicationService 投递服务。
 type ApplicationService struct {
-	contactSvc      *service.ContactService
+	contactSvc      *core.ContactService
 	db              *gorm.DB
 	logger          *zap.Logger
 	notificationSvc *notification.Service
-	mailer          service.MailSender
+	mailer          core.MailSender
 	dailyLimit      int
 }
 
 // NewApplicationService 创建投递服务。contact 收口授权状态机（ADR-0027 C5）；mailer 可为 nil。
-func NewApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *notification.Service, contact *service.ContactService) *ApplicationService {
+func NewApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *notification.Service, contact *core.ContactService) *ApplicationService {
 	return &ApplicationService{db: db, logger: logger, notificationSvc: notificationSvc, contactSvc: contact, dailyLimit: 10}
 }
 
@@ -68,7 +68,7 @@ func NewApplicationService(db *gorm.DB, logger *zap.Logger, notificationSvc *not
 func (s *ApplicationService) SetDailyLimit(n int) { s.dailyLimit = n }
 
 // SetMailer 注入邮件发送器（装配根经邮件单点构建后注入）。
-func (s *ApplicationService) SetMailer(m service.MailSender) { s.mailer = m }
+func (s *ApplicationService) SetMailer(m core.MailSender) { s.mailer = m }
 
 // ApplicationDTO 投递展示对象。
 type ApplicationDTO struct {
@@ -144,7 +144,7 @@ func (s *ApplicationService) Apply(studentUserID, jobPostingID int) (*Applicatio
 	// 学员是否存在且未注销
 	var stu model.HrwaiUser
 	if err := s.db.First(&stu, studentUserID).Error; err != nil {
-		return nil, service.ErrStudentGone
+		return nil, core.ErrStudentGone
 	}
 	// 简历完整性：缺真实姓名或缺联系电话 → 拒（否则企业收到空简历）
 	var card model.JobCard

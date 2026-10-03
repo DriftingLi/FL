@@ -1,8 +1,8 @@
 // Package service 实现业务服务层。
 // 本文件：跨域共享的身份词汇与口令原语（P2 波 3a 收口）。
 // 这些符号同时被 auth 域（internal/auth）与留驻的 service 侧代码使用，所以留在这里，
-// 由 auth 侧以 service.X 限定引用——反向（service → auth）会成环，见 ADR-0070。
-package service
+// 由 auth 侧以 core.X 限定引用——反向（service → auth）会成环，见 ADR-0070。
+package core
 
 import (
 	"errors"

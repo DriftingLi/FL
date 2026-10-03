@@ -26,10 +26,10 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/admin"
+	"forklift-training/internal/core"
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -47,7 +47,7 @@ func newDispositionFixture(t *testing.T, bl security.BlacklistStore) (*admin.Ser
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, bl)
 
-	hashed, err := service.HashPassword(disposeOldPassword)
+	hashed, err := core.HashPassword(disposeOldPassword)
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -64,7 +64,7 @@ func newDispositionFixture(t *testing.T, bl security.BlacklistStore) (*admin.Ser
 // issueStudentRefresh 以学员角色命名空间签一枚 refresh（与登录签发的 claims.Role 同源）。
 func issueStudentRefresh(t *testing.T, sess *security.Session, uid int) string {
 	t.Helper()
-	_, refresh, err := sess.IssuePair(uid, disposeAccount, service.HrwaiRole)
+	_, refresh, err := sess.IssuePair(uid, disposeAccount, core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发学员令牌对失败: %v", err)
 	}
@@ -92,7 +92,7 @@ func newTutorFixture(t *testing.T, bl security.BlacklistStore) (*admin.Service, 
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "hrwai_token"}, bl)
-	hashed, err := service.HashPassword(disposeOldPassword)
+	hashed, err := core.HashPassword(disposeOldPassword)
 	if err != nil {
 		t.Fatalf("哈希种子口令失败: %v", err)
 	}
@@ -105,7 +105,7 @@ func newTutorFixture(t *testing.T, bl security.BlacklistStore) (*admin.Service, 
 
 func issueTutorRefresh(t *testing.T, sess *security.Session, tid int) string {
 	t.Helper()
-	_, refresh, err := sess.IssuePair(tid, "disposeducator", service.TutorRole)
+	_, refresh, err := sess.IssuePair(tid, "disposeducator", core.TutorRole)
 	if err != nil {
 		t.Fatalf("签发讲师令牌对失败: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestAdminResetPasswordRevokesAllSessions(t *testing.T) {
 	if rotationAccepted(sess, inHand) {
 		t.Fatal("代重置后旧 refresh 仍可轮换 ⇒ 管理员替用户自救，攻击者的链还活着")
 	}
-	if !service.VerifyPassword(disposeNewPassword, storedPassword(t, db, uid)) {
+	if !core.VerifyPassword(disposeNewPassword, storedPassword(t, db, uid)) {
 		t.Fatal("新口令验不过")
 	}
 }

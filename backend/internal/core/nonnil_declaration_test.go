@@ -9,7 +9,7 @@
 // 一条 `nullability:"nonnil"` 的响应字段若不在这里，锁当场红（零容忍，见 nullability_lock_test.go
 // 判据 5 的理由）。表按「出口」组织而不是按用例名组织，是因为一个出口常常同时举证多条字段
 // ——例如课程详情一次调用就把 chapters 与 prerequisites 两格都证明了。
-package service
+package core
 
 import (
 	"testing"
@@ -27,7 +27,7 @@ import (
 //	两格在列里存着 JSON `null` 时照样发出 null。⇒ 改判 JSONArray / JSONB 字段前必须去读那条投影，
 //	而不是只跑一次出口（盲区在同处登记：testutil/nonnil.go 的 MarshalKey）。
 //	repository.AlgorithmParameters 那四格也在改判范围之外：判据 5 的证据源只扫登记在
-//	apitypes/nullability_lock_test.go 的 nonNilEvidenceSources 里的那些目录（含 ../service、
+//	apitypes/nullability_lock_test.go 的 nonNilEvidenceSources 里的那些目录（含 ../core、
 //	../api；这些包没有可脱离真库跑的出口），所以它们会一直留在判据 4 的账上——那是结构性的够不着，
 //	不是没人去举证。
 //

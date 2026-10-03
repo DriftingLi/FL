@@ -3,10 +3,10 @@
 //
 // P2 波 3a（auth 域搬包）起本文件是**留驻面**：MailSender 一族不进 internal/auth，
 // 因为 contact_service.go / job_application_service.go / job_report_service.go 三个留驻消费者
-// 仍在这里用它；把它搬进域包会逼 internal/service import internal/auth，与
-// 「域包 → internal/service 单向边」构成 import cycle。auth 侧一律写 service.MailSender /
-// service.NewMailSender。
-package service
+// 仍在这里用它；把它搬进域包会逼 internal/core import internal/auth，与
+// 「域包 → internal/core 单向边」构成 import cycle。auth 侧一律写 core.MailSender /
+// core.NewMailSender。
+package core
 
 import (
 	"crypto/tls"

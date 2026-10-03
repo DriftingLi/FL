@@ -18,9 +18,9 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 )
 
 // 微信 code2session 端点与错误码语义（官方文档）。
@@ -103,7 +103,7 @@ func (s *WechatService) MiniProgramLogin(ctx context.Context, code string) (*WxL
 
 	login, err := s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, service.HrwaiRole)
+	}, core.HrwaiRole)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (s *WechatService) findOrCreateByOpenID(openID, unionID string) (*model.Hrw
 	var lastErr error
 	for idx, cand := range candidates {
 		newUser := model.HrwaiUser{
-			UID:           service.NextUID(),
+			UID:           core.NextUID(),
 			Account:       cand.account,
 			Username:      cand.username,
 			Phone:         phoneBase,
