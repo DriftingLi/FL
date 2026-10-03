@@ -17,6 +17,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/wrongquestion"
 )
 
 func TestWrongQuestionRedoContract(t *testing.T) {
@@ -41,7 +42,7 @@ func TestWrongQuestionRedoContract(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterWrongQuestionRoutes(api, deps.RouterDeps(), deps.WrongQuestionSvc)
+	wrongquestion.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.WrongQuestionSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(student.ID), student.Account, "hrwai_user")

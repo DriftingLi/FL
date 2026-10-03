@@ -18,6 +18,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
@@ -52,7 +53,7 @@ func assertPracticePoolCaliber(t *testing.T, db *gorm.DB) {
 	api := r.Group(`/api`)
 	deps := newContractDeps(t, db, cfg)
 	rd := deps.RouterDeps()
-	RegisterPracticeModeRoutes(api, rd, deps.PracticeModeSvc)
+	practicemode.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.PracticeModeSvc)
 	questionbank.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(student.ID, student.Username, `hrwai_user`)
 	if err != nil {

@@ -1,0 +1,281 @@
+// 本文件：错题本域的 HTTP 出口（ADR-0070）—— /api/wrong-questions 蓝图（列表 / 重做 / 移出 / 统计 / 导出）。
+//
+// 装配点：internal/api/routes_registry.go 的 RegisterRoutes 调用。
+package wrongquestion
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"forklift-training/internal/authz"
+	"forklift-training/internal/middleware"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/security"
+	"forklift-training/pkg/httpx"
+	"forklift-training/pkg/response"
+)
+
+// handler 错题本 HTTP 出口。
+type handler struct {
+	svc *Service
+}
+
+// newHandler 创建错题本 handler。
+func newHandler(svc *Service) *handler {
+	return &handler{svc: svc}
+}
+
+// RegisterRoutes 注册 /api/wrong-questions 蓝图。
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
+	h := newHandler(svc)
+
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapQuestionPractice), middleware.CredentialScoped(credRes))
+
+	// GET /api/wrong-questions  错题列表（分页+过滤）
+	g.GET("", h.List)
+	// POST /api/wrong-questions/:question_id/redo  重做错题
+	g.POST("/:question_id/redo", h.Redo)
+	// POST /api/wrong-questions/batch-remove  批量移出
+	g.POST("/batch-remove", h.BatchRemove)
+	// POST /api/wrong-questions/:question_id/remove  移出错题本
+	g.POST("/:question_id/remove", h.Remove)
+	// GET /api/wrong-questions/stats  错题统计
+	g.GET("/stats", h.GetStats)
+	// GET /api/wrong-questions/export  导出错题本（纯文本附件）
+	g.GET("/export", h.Export)
+}
+
+// listWrongQuestionsReq 错题列表查询请求。
+type listWrongQuestionsReq struct {
+	StudentID     int
+	Page          int
+	PageSize      int
+	QType         string
+	MinWrongCount *int
+	Favorited     bool
+	Sort          string
+	CredentialID  *int
+}
+
+// List 错题列表
+// @Summary 错题列表
+// @Description 分页查询错题，支持按题型/错误次数/收藏过滤与时间排序
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param type query string false "题型"
+// @Param min_wrong_count query int false "最小错误次数"
+// @Param favorited query bool false "仅看收藏"
+// @Param sort query string false "排序 time_desc/time_asc" default(time_desc)
+// @Param credential_id query int false "目标证件ID（按题目所属证件分区）"
+// @Success 200 {object} response.R{data=WrongQuestionPageDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions [get]
+func (h *handler) List(c *gin.Context) {
+	httpx.Endpoint[listWrongQuestionsReq, WrongQuestionPageDTO]{
+		Parse: func(c *gin.Context) (*listWrongQuestionsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &listWrongQuestionsReq{
+				StudentID:     studentID,
+				Page:          httpx.QueryIntDefault(c, "page", 1),
+				PageSize:      httpx.QueryIntDefault(c, "page_size", 20),
+				QType:         c.Query("type"),
+				MinWrongCount: httpx.QueryIntPtr(c, "min_wrong_count"),
+				Favorited:     c.Query("favorited") == "true",
+				Sort:          c.Query("sort"),
+				CredentialID:  middleware.CredentialIDPtr(c),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*WrongQuestionPageDTO, error) {
+			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
+}
+
+// redoWrongQuestionReq 重做错题请求。
+type redoWrongQuestionReq struct {
+	StudentID    int
+	QuestionID   int
+	UserAnswer   interface{}
+	CredentialID *int
+}
+
+// Redo 重做错题
+// @Summary 重做错题
+// @Description 提交错题重做答案并判分
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Param body body object true "答案" example({"user_answer":"A"})
+// @Success 200 {object} response.R{data=practicemode.SubmitResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/{question_id}/redo [post]
+func (h *handler) Redo(c *gin.Context) {
+	httpx.Endpoint[redoWrongQuestionReq, practicemode.SubmitResultDTO]{
+		Parse: func(c *gin.Context) (*redoWrongQuestionReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			questionID, err := httpx.PathInt(c, "question_id", "题目ID无效")
+			if err != nil {
+				return nil, err
+			}
+			var req struct {
+				UserAnswer interface{} `json:"user_answer"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				return nil, httpx.BadRequest("请求数据无效")
+			}
+			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer, CredentialID: middleware.CredentialIDPtr(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*practicemode.SubmitResultDTO, error) {
+			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
+		},
+		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
+		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *practicemode.SubmitResultDTO) {
+			response.Success(c, httpx.Deref(resp))
+		},
+	}.Handle(c)
+}
+
+// removeWrongQuestionReq 移出错题本请求。
+type removeWrongQuestionReq struct {
+	StudentID  int
+	QuestionID int
+}
+
+// Remove 移出错题本
+// @Summary 移出错题本
+// @Description 将指定题目移出错题本
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "题目ID"
+// @Success 200 {object} response.R{data=WrongQuestionRemoveResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/{question_id}/remove [post]
+func (h *handler) Remove(c *gin.Context) {
+	httpx.Endpoint[removeWrongQuestionReq, WrongQuestionRemoveResultDTO]{
+		Parse: func(c *gin.Context) (*removeWrongQuestionReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			questionID, err := httpx.PathInt(c, "question_id", "题目ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &removeWrongQuestionReq{StudentID: studentID, QuestionID: questionID}, nil
+		},
+		Invoke: func(ctx context.Context, req *removeWrongQuestionReq) (*WrongQuestionRemoveResultDTO, error) {
+			return h.svc.RemoveWrongQuestion(req.StudentID, req.QuestionID)
+		},
+	}.WithSuccess(httpx.OkMsg("已移出错题本"), http.StatusBadRequest).Handle(c)
+}
+
+// BatchRemove 批量移出错题本
+// @Summary 批量移出
+// @Description 批量将错题移出（is_removed=true）
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "题目IDs" example({"question_ids":[1,2,3]})
+// @Success 200 {object} response.R{data=WrongQuestionBatchRemoveResultDTO} "success"
+// @Router /wrong-questions/batch-remove [post]
+func (h *handler) BatchRemove(c *gin.Context) {
+	httpx.Endpoint[batchRemoveReq, WrongQuestionBatchRemoveResultDTO]{
+		Parse: func(c *gin.Context) (*batchRemoveReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			var req struct {
+				QuestionIDs []int `json:"question_ids"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				return nil, httpx.BadRequest("请求数据无效")
+			}
+			return &batchRemoveReq{StudentID: studentID, QuestionIDs: req.QuestionIDs}, nil
+		},
+		Invoke: func(ctx context.Context, req *batchRemoveReq) (*WrongQuestionBatchRemoveResultDTO, error) {
+			cnt, err := h.svc.BatchRemoveWrongQuestions(req.StudentID, req.QuestionIDs)
+			if err != nil {
+				return nil, err
+			}
+			return &WrongQuestionBatchRemoveResultDTO{Removed: cnt}, nil
+		},
+	}.WithSuccess(httpx.OkMsg("已批量移出"), http.StatusBadRequest).Handle(c)
+}
+
+type batchRemoveReq struct {
+	StudentID   int
+	QuestionIDs []int
+}
+
+// getWrongStatsReq 错题统计请求。
+type getWrongStatsReq struct {
+	StudentID int
+}
+
+// GetStats 错题统计
+// @Summary 错题统计
+// @Description 汇总错题数量/题型分布等
+// @Tags 学员端-错题本
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=WrongQuestionStatsDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/stats [get]
+func (h *handler) GetStats(c *gin.Context) {
+	httpx.Endpoint[getWrongStatsReq, WrongQuestionStatsDTO]{
+		Parse: func(c *gin.Context) (*getWrongStatsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &getWrongStatsReq{StudentID: studentID}, nil
+		},
+		Invoke: func(ctx context.Context, req *getWrongStatsReq) (*WrongQuestionStatsDTO, error) {
+			return h.svc.GetStats(req.StudentID), nil
+		},
+	}.Handle(c)
+}
+
+// exportWrongQuestionsReq 导出错题本请求。
+type exportWrongQuestionsReq struct {
+	StudentID int
+}
+
+// Export 导出错题本
+// @Summary 导出错题本
+// @Description 导出为纯文本附件（text/plain）
+// @Tags 学员端-错题本
+// @Produce plain
+// @Security BearerAuth
+// @Success 200 {string} string "错题文本"
+// @Failure 401 {object} response.R "未认证"
+// @Router /wrong-questions/export [get]
+func (h *handler) Export(c *gin.Context) {
+	httpx.Endpoint[exportWrongQuestionsReq, struct{}]{
+		Parse: func(c *gin.Context) (*exportWrongQuestionsReq, error) {
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &exportWrongQuestionsReq{StudentID: studentID}, nil
+		},
+		Invoke: func(ctx context.Context, req *exportWrongQuestionsReq) (*struct{}, error) {
+			data := h.svc.ExportWrongQuestions(req.StudentID)
+			text := FormatWrongQuestionsText(data)
+			c.Header("Content-Disposition", "attachment; filename=wrong_questions.txt")
+			c.Data(200, "text/plain; charset=utf-8", []byte(text))
+			return &struct{}{}, nil
+		},
+		Render: func(c *gin.Context, _ *exportWrongQuestionsReq, _ *struct{}) {
+		},
+	}.Handle(c)
+}

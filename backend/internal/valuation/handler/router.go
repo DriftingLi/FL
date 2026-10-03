@@ -33,10 +33,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/audit"
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation/dictcrud"
 	vservice "forklift-training/internal/valuation/service"
@@ -58,7 +58,7 @@ func RegisterRoutes(
 	r *gin.Engine,
 	sess *security.Session,
 	logger *zap.Logger,
-	auditSvc *service.AuditService,
+	auditSvc *audit.Service,
 	dictRepo DictionaryConfigStore,
 	evalRepo EvaluationStore,
 	batteryRepo BatteryStore,

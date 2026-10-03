@@ -18,20 +18,32 @@
 package api
 
 import (
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/checkin"
 	"forklift-training/internal/contribution"
 	"forklift-training/internal/course"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
+	"forklift-training/internal/mockexam"
+	"forklift-training/internal/note"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
+	"forklift-training/internal/recruit"
+	"forklift-training/internal/search"
 	"forklift-training/internal/service"
+	"forklift-training/internal/student"
 	vmodel "forklift-training/internal/valuation/model"
+	"forklift-training/internal/wrongquestion"
 	"forklift-training/pkg/paging"
 )
 
@@ -58,9 +70,9 @@ type PayloadSpec struct {
 
 // envelopeRegistry 信封登记表（按 Result 字典序）。
 var envelopeRegistry = []EnvelopeSpec{
-	{Result: "api.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
+	{Result: "audit.AuditLogPageResult", Endpoints: []string{"GET /admin/audit-logs"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
-		Sample: AuditLogPageResult{}},
+		Sample: audit.AuditLogPageResult{}},
 	{Result: "model.ListBatteryResponse", Endpoints: []string{"GET /valuation/battery/evaluations"},
 		Keys: []string{"total", "items"}, Dialect: paging.DialectNone,
 		Sample: vmodel.ListBatteryResponse{}},
@@ -70,9 +82,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "paging.ItemsPage[inspection.RecruitResumeViewDTO]", Endpoints: []string{"GET /admin/recruit/views"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: paging.ItemsPage[inspection.RecruitResumeViewDTO]{}},
-	{Result: "service.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
+	{Result: "job.ApplicationListResult", Endpoints: []string{"GET /resume/applications"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ApplicationListResult{}},
+		Sample: job.ApplicationListResult{}},
 	{Result: "checkin.CheckInRankResult", Endpoints: []string{"GET /check-in/rank"},
 		Keys: []string{"items", "total", "page", "pages", "me"}, Dialect: paging.DialectPages,
 		Sample: checkin.CheckInRankResult{}},
@@ -91,9 +103,9 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "aiassistant.DiagnosisFaultCodePage", Endpoints: []string{"GET /ai-assistant/diagnosis/fault-codes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
 		Sample: aiassistant.DiagnosisFaultCodePage{}},
-	{Result: "service.FavoritePageResult", Endpoints: []string{"GET /favorites"},
+	{Result: "favorite.FavoritePageResult", Endpoints: []string{"GET /favorites"},
 		Keys: []string{"page", "pages", "total", "favorites"}, Dialect: paging.DialectPages,
-		Sample: service.FavoritePageResult{}},
+		Sample: favorite.FavoritePageResult{}},
 	{Result: "featured.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents", "GET /admin/featured-contents"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: featured.FeaturedContentPageResult{}},
@@ -108,27 +120,27 @@ var envelopeRegistry = []EnvelopeSpec{
 		"GET /forum/my-liked-topics", "GET /forum/my-observed", "GET /forum/my-view-history"},
 		Keys: []string{"page", "pages", "topics", "total"}, Dialect: paging.DialectPages,
 		Sample: forum.ForumTopicPageResult{}},
-	{Result: "service.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
+	{Result: "practicemode.HistoryResultDTO", Endpoints: []string{"GET /practice-mode/history"},
 		Keys: []string{"total", "page", "page_size", "records"}, Dialect: paging.DialectPageSize,
-		Sample: service.HistoryResultDTO{}},
-	{Result: "service.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
+		Sample: practicemode.HistoryResultDTO{}},
+	{Result: "admin.HrwaiUserPageResult", Endpoints: []string{"GET /admin/hrwai-users"},
 		Keys: []string{"list", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.HrwaiUserPageResult{}},
-	{Result: "service.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
+		Sample: admin.HrwaiUserPageResult{}},
+	{Result: "job.JobListResult", Endpoints: []string{"GET /jobs", "GET /recruit/jobs"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.JobListResult{}},
+		Sample: job.JobListResult{}},
 	{Result: "material.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
 		Keys: []string{"page", "pages", "total", "materials"}, Dialect: paging.DialectPages,
 		Sample: material.MaterialPageResult{}},
-	{Result: "service.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
+	{Result: "mockexam.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
 		Keys: []string{"total", "page", "page_size", "exams"}, Dialect: paging.DialectPageSize,
-		Sample: service.MockExamHistoryDTO{}},
+		Sample: mockexam.MockExamHistoryDTO{}},
 	{Result: "forum.MyReplyPageResult", Endpoints: []string{"GET /forum/my-replies"},
 		Keys: []string{"page", "pages", "total", "replies"}, Dialect: paging.DialectPages,
 		Sample: forum.MyReplyPageResult{}},
-	{Result: "service.NotePageDTO", Endpoints: []string{"GET /notes"},
+	{Result: "note.NotePageDTO", Endpoints: []string{"GET /notes"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.NotePageDTO{}},
+		Sample: note.NotePageDTO{}},
 	{Result: "notification.NotificationListPageResult", Endpoints: []string{"GET /notifications"},
 		Keys: []string{"items", "page", "pages", "total", "unread_count"}, Dialect: paging.DialectPages,
 		Sample: notification.NotificationListPageResult{}},
@@ -138,36 +150,36 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "auth.ProfileChangeRequestPageResult", Endpoints: []string{"GET /admin/profile-reviews"},
 		Keys: []string{"page", "pages", "requests", "total"}, Dialect: paging.DialectPages,
 		Sample: auth.ProfileChangeRequestPageResult{}},
-	{Result: "service.QuestionCommentPageResult", Endpoints: []string{"GET /questions/{question_id}/comments"},
+	{Result: "questioninteraction.QuestionCommentPageResult", Endpoints: []string{"GET /questions/{question_id}/comments"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.QuestionCommentPageResult{}},
+		Sample: questioninteraction.QuestionCommentPageResult{}},
 	{Result: "questionbank.QuestionPageDTO", Endpoints: []string{"GET /question-bank/questions"},
 		Keys: []string{"page", "page_size", "questions", "total"}, Dialect: paging.DialectPageSize,
 		Sample: questionbank.QuestionPageDTO{}},
-	{Result: "service.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
+	{Result: "recruit.RecruitListResult", Endpoints: []string{"GET /recruit/resumes"},
 		Keys: []string{"items", "total"}, Dialect: paging.DialectNone,
-		Sample: service.RecruitListResult{}},
-	{Result: "service.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
+		Sample: recruit.RecruitListResult{}},
+	{Result: "job.RecruiterApplicationListResult", Endpoints: []string{"GET /recruit/jobs/{id}/applications"},
 		Keys: []string{"items", "total", "page", "page_size", "unread_count", "job_title"}, Dialect: paging.DialectPageSize,
-		Sample: service.RecruiterApplicationListResult{}},
+		Sample: job.RecruiterApplicationListResult{}},
 	{Result: "auth.RecruiterListResult", Endpoints: []string{"GET /admin/recruiters"},
 		Keys: []string{"total", "page", "items"}, Dialect: paging.DialectNone,
 		Sample: auth.RecruiterListResult{}},
-	{Result: "service.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
+	{Result: "job.ReportListResult", Endpoints: []string{"GET /admin/job-reports"},
 		Keys: []string{"items", "total", "page", "page_size"}, Dialect: paging.DialectPageSize,
-		Sample: service.ReportListResult{}},
-	{Result: "service.SearchPageDTO", Endpoints: []string{"GET /search"},
+		Sample: job.ReportListResult{}},
+	{Result: "search.SearchPageDTO", Endpoints: []string{"GET /search"},
 		Keys: []string{"keyword", "type", "total", "page", "pages", "items"}, Dialect: paging.DialectPages,
-		Sample: service.SearchPageDTO{}},
-	{Result: "service.StudyRecordPageResult", Endpoints: []string{"GET /student/records"},
+		Sample: search.SearchPageDTO{}},
+	{Result: "student.StudyRecordPageResult", Endpoints: []string{"GET /student/records"},
 		Keys: []string{"page", "pages", "records", "total"}, Dialect: paging.DialectPages,
-		Sample: service.StudyRecordPageResult{}},
-	{Result: "service.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
+		Sample: student.StudyRecordPageResult{}},
+	{Result: "admin.TutorListDTO", Endpoints: []string{"GET /admin/tutors"},
 		Keys: []string{"total", "page", "tutors"}, Dialect: paging.DialectNone,
-		Sample: service.TutorListDTO{}},
-	{Result: "service.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
+		Sample: admin.TutorListDTO{}},
+	{Result: "wrongquestion.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
-		Sample: service.WrongQuestionPageDTO{}},
+		Sample: wrongquestion.WrongQuestionPageDTO{}},
 }
 
 // totalPayloadRegistry 含 total + 切片字段、但不是分页信封的结果类型（理由逐条登记）。
@@ -176,9 +188,9 @@ var totalPayloadRegistry = []PayloadSpec{
 		Reason: "打卡日历：days 是整月逐日数组、total 是累计打卡天数，不是列表页"},
 	{Result: "service.GenTaskStatus",
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
-	{Result: "service.PracticeStartResultDTO",
+	{Result: "practicemode.PracticeStartResultDTO",
 		Reason: "练习会话载荷：questions 是本次会话题集、total/completed 是会话进度，不是列表页"},
-	{Result: "service.SearchSectionDTO",
+	{Result: "search.SearchSectionDTO",
 		Reason: "搜索分区片段：由 SearchPageDTO 信封承载，分区自身不分页（无 page 元数据、无独立端点）"},
 }
 

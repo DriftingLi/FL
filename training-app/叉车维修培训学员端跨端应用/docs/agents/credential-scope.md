@@ -20,7 +20,7 @@
 | `GET /search` | 公开 + `CredentialScoped`（**类别 B**，`api/search.go:28`） | query | `api/search.uts` 两出口 ← `pages/search/search.uvue` | 无 JWT ⇒ `roleOf(c)` 恒空 ⇒ 兜底永不生效；不传 = 全证件。**跟随当前** |
 | `GET /courses` | 公开 + `CredentialScoped`（**类别 B**，`api/courses.go:31` 挂在 courses 蓝图 group，公开路由 `:34`） | query | `api/course.uts#getCourseListApi` ← `pages/courses/courses.uvue`、`pages/mall/mall.uvue` | 同上（#1107 前移动端漏传，页面显示全证件课程） |
 | `GET /tags` | **公开、未挂** `CredentialScoped`，handler 自读 query（**类别 A**，`api/training_catalog.go:143`） | query | `api/course.uts#getTagsApi` ← `pages/practice/composables/usePracticeOverview.uts` | `question_count` 与**抽题池**同口径（`service.ListQuestionTags` 的 #702 注释）：不传是全证件计数，与学员能抽到的题量对不上（#1107 前移动端漏传） |
-| `POST /practice-mode/progress` | JWT + `CredentialScoped`，但证件**从 JSON body 解析**（`api/practice_mode.go:244`） | **body** | `api/practice.uts#savePracticeProgressApi`（仅 `sequential`）← `pages/practice/composables/usePracticeSession.uts` | 中间件对 body 无能为力 ⇒ 写路径无兜底。顺序练习是 **NULL 桶**分区，漏传即把游标写进 NULL 桶、续练读空（迁移史见 `000013` / `000019`） |
+| `POST /practice-mode/progress` | JWT + `CredentialScoped`，但证件**从 JSON body 解析**（`practicemode/handler.go:221`） | **body** | `api/practice.uts#savePracticeProgressApi`（仅 `sequential`）← `pages/practice/composables/usePracticeSession.uts` | 中间件对 body 无能为力 ⇒ 写路径无兜底。顺序练习是 **NULL 桶**分区，漏传即把游标写进 NULL 桶、续练读空（迁移史见 `000013` / `000019`） |
 | `POST /contributions`（创建） | JWT + `CredentialScoped` | **body（归属声明）** | `api/contribution.uts#createContributionApi` ← `pages/forum/components/forum-contribution-form.uvue` | 投稿必挂目标证件（`credential_id` 必填，表单默认当前）；这是**归属声明**，与分区参数同名不同义 |
 
 ## 二、依赖服务端兜底（JWT 面，**不传**）

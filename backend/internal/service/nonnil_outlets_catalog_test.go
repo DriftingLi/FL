@@ -1,4 +1,4 @@
-// 目录树 / 字典列表 / 章节文件 / 精选 / 练习与模考 / 学员侧读面的 nonnil 行为例
+// 目录树 / 字典列表 / 章节文件 / 精选 / 模考 / 学员侧读面的 nonnil 行为例
 // （批①-A 第④段「wave 16」）。
 //
 // 为什么单独成文件：判据 5 的证据跟着出口走，一个域一张表（汇总表机制见 nonnil_declaration_test.go）。
@@ -16,16 +16,15 @@
 //     `len(task.Result) > 0` 时才赋值 ⇒ 实测发 `null`（已带 x-nullable）。
 //   - MockExamSubmitDTO.details ⇒ Submit 那一侧是 `make(0,n)` 恒非 null，但同一条声明经
 //     GetResult（未交卷记录 result 列为空）发 `null`，且 MockExamResultDTO 内嵌本 DTO 共用它。
-//   - ProgressResultDTO.answers_state ⇒ 从未存过进度时是 nil map ⇒ `null`（已带 x-nullable，
-//     GetProgress 无 error 出口：「没进度」是 200 不是失败）。
+//   - ProgressResultDTO.answers_state ⇒ 该键的证据已随域包搬去
+//     internal/practicemode/nullable_outlets_test.go（ADR-0070 波 3c-2），判词原文随之搬走。
 //   - QuestionTagsResultDTO.tag_ids ⇒ 该键的证据已随域包搬去
 //     internal/training/nullable_outlets_test.go（ADR-0070 波 3b-2），判词原文随之搬走，不在这里复述。
 //
-// 本段**没跑**因而也没改判的三组//
 // 本段**没跑**因而也没改判的三组，原因各不相同（都不是「嫌麻烦」）：
-//   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items、
-//     api.AuditLogPageResult.items ⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
-//     question_interaction_service.go、internal/api/），本段不改。前两格另有独立理由：
+//   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items（键前缀随 4c 改 questioninteraction.）、
+//     audit.AuditLogPageResult.items（前缀随波 4f 域包改名）⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
+//     internal/questioninteraction/service.go、internal/api/），本段不改。前两格另有独立理由：
 //     service.JSONArray.MarshalJSON 在 `j == nil` 时**字面发出 `null`**，本就恒可空。
 //   - repository.AlgorithmParameters 的 4 格与 repository.SeriesConfigOptions 的 3 格 ⇒ 两道
 //     硬阻塞，任一都足以让它留在原地：
@@ -53,101 +52,28 @@ var nonnilOutletsCatalog = map[string]func(t *testing.T) any{
 	// 培训域的 7 格（目录树两层 + 五个字典列表信封）已随域包搬去
 	// internal/training/nonnil_outlets_test.go（ADR-0070 波 3b-2）；岗位字典与证件分组两处同批搬走。
 
-	// 课程域的课程 DTO 字段已随域包搬去 internal/course/nonnil_outlets_test.go；
-	// 本包仍留 course.ChapterDTO.files 与 course.CourseDTO.chapters 两键 —— 见 nonnil_outlets_course_test.go。
+	// 课程域的两个课程 DTO 字段键已按「生产者是谁」各归其位：course.ChapterDTO.files 随导师端出口搬去
+	// internal/tutor/nonnil_outlets_test.go、course.CourseDTO.chapters 随目录树出口在 internal/training/nonnil_outlets_test.go。
 
 	// 精选域的 items / related 举证已随域包搬去 internal/featured/nonnil_outlets_test.go（ADR-0070）。
 
-	"service.BatchDeleteFilesResult.failed_ids": outletBatchDeleteFilesEmpty,
+	// 导师域那一格（BatchDeleteFilesResult.failed_ids）已随域包搬去 internal/tutor/nonnil_outlets_test.go（ADR-0070 波 4d）。
 
-	"service.HistoryResultDTO.records":            outletPracticeHistoryEmpty,
-	"service.PracticeStartResultDTO.questions":    outletPracticeStartSequential,
-	"service.MockExamHistoryDTO.exams":            outletMockExamHistoryEmpty,
-	"service.MockExamStartDTO.questions":          outletMockExamStart,
-	"service.PracticeStatsDTO.by_type":            outletPracticeStatsEmpty,
+	// 练习域的三格（HistoryResultDTO.records / PracticeStartResultDTO.questions / PracticeStatsDTO.by_type）
+	// 已随域包搬去 internal/practicemode/nonnil_outlets_test.go（ADR-0070 波 3c-2）。
+
+	// 模考域三格（MockExamHistoryDTO.exams / MockExamStartDTO.questions / MockExamResumeDTO.questions）
+	// 已随域包搬去 internal/mockexam/nonnil_outlets_test.go（ADR-0070 波 4a）。
 	"questionbank.QuestionBankStatsDTO.by_type":   outletQuestionBankStatsEmpty,
 	"questionbank.QuestionBankStatsDTO.by_status": outletQuestionBankStatsEmpty,
-	"service.WrongQuestionStatsDTO.by_type":       outletWrongQuestionStatsEmpty,
-
-	"service.StudentCoursesDTO.courses":       outletStudentCoursesEmpty,
-	"service.StudentCourseDetailDTO.chapters": outletStudentCourseDetailNoChapters,
-	"service.StudyRecordPageResult.records":   outletStudyRecordsEmpty,
-	"service.StudyDailyStatsDTO.labels":       outletStudyDailyStats,
-	"service.StudyDailyStatsDTO.data":         outletStudyDailyStats,
 }
 
 func init() {
 	nonnilOutletTables = append(nonnilOutletTables, nonnilOutletsCatalog)
 }
 
-// ===== 批量删文件 =====
-
-func outletBatchDeleteFilesEmpty(t *testing.T) any {
-	t.Helper()
-	svc := newTutorServiceForTest(t, testutil.NewMemoryDB(t))
-	return svc.BatchDeleteChapterFiles(nil)
-}
-
-// ===== 练习 / 模考 / 统计 =====
-
-func outletPracticeHistoryEmpty(t *testing.T) any {
-	t.Helper()
-	svc, db := newPracticeSvc(t)
-	res, err := svc.GetHistory(testutil.SeedStudent(t, db, "练习历史学员", "x").ID, nil, 1, 20, "", "", "")
-	if err != nil {
-		t.Fatalf("空练习历史失败: %v", err)
-	}
-	return res
-}
-
-// outletPracticeStartSequential 顺序练习开考：池里 0 题直接走 error，所以这条出口最少发 1 题。
-// 恒非 null 的判据不靠「凑得出空集」——questions 由 make(0,len(questions)) 起手，
-// 而那段长度在 `len(questions)==0 ⇒ error` 守卫之后，两件事各自成立。
-func outletPracticeStartSequential(t *testing.T) any {
-	t.Helper()
-	svc, db := newPracticeSvc(t)
-	student := testutil.SeedStudent(t, db, "顺序练习学员", "x")
-	testutil.SeedQuestion(t, db, "single", "空池守卫前的第一题", "A")
-	res, err := svc.StartSequential(student.ID, nil)
-	if err != nil {
-		t.Fatalf("顺序练习开考失败: %v", err)
-	}
-	return res
-}
-
-func outletMockExamHistoryEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "模考历史学员", "x")
-	res, err := NewMockExamService(db, nil, zap.NewNop()).GetHistory(student.ID, nil, 1, 20)
-	if err != nil {
-		t.Fatalf("空模考历史失败: %v", err)
-	}
-	return res
-}
-
-func outletMockExamStart(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "模考开科学员", "x")
-	testutil.SeedQuestion(t, db, "single", "模考抽题源", "A")
-	res, err := NewMockExamService(db, nil, zap.NewNop()).Start(student.ID, 1, 90, nil)
-	if err != nil {
-		t.Fatalf("模拟考试开考失败: %v", err)
-	}
-	return res
-}
-
-func outletPracticeStatsEmpty(t *testing.T) any {
-	t.Helper()
-	svc, db := newPracticeSvc(t)
-	student := testutil.SeedStudent(t, db, "练习统计学员", "x")
-	res, err := svc.GetStats(student.ID, nil)
-	if err != nil {
-		t.Fatalf("练习统计失败: %v", err)
-	}
-	return res
-}
+// ===== 题目域统计 =====
+// （错题本那格已随域包搬去 internal/wrongquestion/nonnil_outlets_test.go，波 4c）
 
 // outletQuestionBankStatsEmpty 一次调用举证 by_type 与 by_status 两格：两个 map 都取自
 // questionbank.GroupByCount 的 make(map,...) 再按合法维度零填充 ⇒ 恒 `{}` 起、只会更满。
@@ -156,53 +82,6 @@ func outletQuestionBankStatsEmpty(t *testing.T) any {
 	return questionbank.NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStats(nil)
 }
 
-func outletWrongQuestionStatsEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "错题统计学员", "x")
-	return NewWrongQuestionService(db, nil, zap.NewNop()).GetStats(student.ID)
-}
-
-// ===== 学员侧四格 =====
-
-func outletStudentCoursesEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "我的课程学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetStudentCourses(student.ID)
-	if err != nil {
-		t.Fatalf("我的课程列表失败: %v", err)
-	}
-	return res
-}
-
-func outletStudentCourseDetailNoChapters(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "课程详情学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetStudentCourseDetail(student.ID, seedVisibleCourse(t, db))
-	if err != nil {
-		t.Fatalf("单课程学习详情失败: %v", err)
-	}
-	return res
-}
-
-func outletStudyRecordsEmpty(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "学习记录学员", "x")
-	res, err := NewStudentService(db, zap.NewNop()).GetRecords(student.ID, 1, 20, "", "")
-	if err != nil {
-		t.Fatalf("学习记录分页失败: %v", err)
-	}
-	return res
-}
-
-// outletStudyDailyStats 按天学习统计：BuildDailySeries 恒补齐 7 或 30 格 ⇒ labels 与 data
-// 都是**非空**数组（`[]` 这一形状在这条线上根本发不出，判据要的是「不是 null」）。
-func outletStudyDailyStats(t *testing.T) any {
-	t.Helper()
-	db := testutil.NewMemoryDB(t)
-	student := testutil.SeedStudent(t, db, "日统计学员", "x")
-	return NewStudentService(db, zap.NewNop()).GetStudyStats(student.ID, 7)
-}
+// 学员侧四格（StudentCoursesDTO.courses / StudentCourseDetailDTO.chapters / StudyRecordPageResult.records /
+// StudyDailyStatsDTO.labels / StudyDailyStatsDTO.data / StudentProfileDTO.course_progress）
+// 已随域包搬去 internal/student/nonnil_outlets_test.go（ADR-0070 波 4b）。

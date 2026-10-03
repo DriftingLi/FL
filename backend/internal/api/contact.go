@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"forklift-training/internal/student"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -70,7 +71,7 @@ var contactCreateFacts400 = []error{
 	service.ErrContactMessageEmpty,
 	service.ErrContactMessageTooLong,
 	service.ErrContactReqInvalid,
-	service.ErrStudentNotFound,
+	student.ErrStudentNotFound,
 	service.ErrRecruiterNotFound,
 	service.ErrRecruiterDisabled,
 	service.ErrContactPendingExists,

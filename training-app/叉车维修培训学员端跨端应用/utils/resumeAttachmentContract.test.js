@@ -24,7 +24,7 @@ const ROOT = path.join(__dirname, '..'); // training-app/<项目名>
 const RESUME_UTS = path.join(ROOT, 'api', 'resume.uts');
 const ATTACH_UVUE = path.join(ROOT, 'pages', 'resume', 'resume-attach.uvue');
 const API_DIR = path.join(ROOT, '..', '..', 'backend', 'internal', 'api');
-const JOB_CARD_GO = path.join(API_DIR, 'job_card.go');
+const JOB_CARD_GO = path.join(ROOT, '..', '..', 'backend', 'internal', 'resume', 'handler.go');
 const CONTACT_GO = path.join(API_DIR, 'contact.go');
 
 const resumeSrc = readText(RESUME_UTS);
@@ -50,7 +50,7 @@ describe('A1 移动端打的路径 = DELETE /resume/pdf', () => {
 });
 
 describe('A2 后端确实注册了该路由（两端同源）', () => {
-  test('backend/internal/api/job_card.go 的 resume 组注册了 DELETE /pdf', () => {
+  test('backend/internal/resume/handler.go 的 resume 组注册了 DELETE /pdf', () => {
     const src = readText(JOB_CARD_GO);
     expect(src).toMatch(/DELETE\("\/pdf"/);
   });

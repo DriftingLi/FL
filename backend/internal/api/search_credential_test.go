@@ -3,10 +3,10 @@
 package api
 
 import (
+	"forklift-training/internal/search"
 	"testing"
 
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -17,7 +17,7 @@ func TestSearchAggregationFollowsCredential(t *testing.T) {
 	t.Parallel()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	svc := service.NewSearchService(db, nil)
+	svc := search.NewService(db, nil)
 
 	credA, credB := 1, 2
 	spID, lvID := 1, 1
@@ -38,7 +38,7 @@ func TestSearchAggregationFollowsCredential(t *testing.T) {
 	mkQuestion("叉车题目证件A", &credA)
 	mkQuestion("叉车题目证件B", &credB)
 
-	titles := func(items []service.SearchItemDTO) map[string]bool {
+	titles := func(items []search.SearchItemDTO) map[string]bool {
 		seen := map[string]bool{}
 		for _, it := range items {
 			seen[it.Title] = true
@@ -51,7 +51,7 @@ func TestSearchAggregationFollowsCredential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
-	got := all.(*service.SearchAllDTO)
+	got := all.(*search.SearchAllDTO)
 	if got.Courses.Total != 1 || !titles(got.Courses.Items)["叉车课程证件A"] {
 		t.Fatalf("聚合 course 分区应只含证件 A, got %+v", got.Courses)
 	}
@@ -64,7 +64,7 @@ func TestSearchAggregationFollowsCredential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
-	got = all.(*service.SearchAllDTO)
+	got = all.(*search.SearchAllDTO)
 	if got.Courses.Total != 1 || !titles(got.Courses.Items)["叉车课程证件B"] {
 		t.Fatalf("聚合 course 分区应只含证件 B, got %+v", got.Courses)
 	}
@@ -77,17 +77,17 @@ func TestSearchAggregationFollowsCredential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
-	got = all.(*service.SearchAllDTO)
+	got = all.(*search.SearchAllDTO)
 	if got.Courses.Total != 2 || got.Questions.Total != 2 {
 		t.Fatalf("无证件聚合应各分区 2 条, got courses=%d questions=%d", got.Courses.Total, got.Questions.Total)
 	}
 
 	// 显式 type 路径（本就正确，对齐断言）：按证件过滤
-	page, err := svc.Search("叉车", service.SearchTypeCourse, 1, 20, &credB)
+	page, err := svc.Search("叉车", search.SearchTypeCourse, 1, 20, &credB)
 	if err != nil {
 		t.Fatalf("显式搜索失败: %v", err)
 	}
-	gotPage := page.(*service.SearchPageDTO)
+	gotPage := page.(*search.SearchPageDTO)
 	if gotPage.Total != 1 || !titles(gotPage.Items)["叉车课程证件B"] {
 		t.Fatalf("显式 course 路径应只含证件 B, got %+v", gotPage)
 	}

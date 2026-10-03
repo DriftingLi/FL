@@ -512,7 +512,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/api.AuditLogPageResult"
+                                            "$ref": "#/definitions/audit.AuditLogPageResult"
                                         }
                                     }
                                 }
@@ -3872,7 +3872,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HrwaiUserPageResult"
+                                            "$ref": "#/definitions/admin.HrwaiUserPageResult"
                                         }
                                     }
                                 }
@@ -3932,7 +3932,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HrwaiUserCreatedDTO"
+                                            "$ref": "#/definitions/admin.HrwaiUserCreatedDTO"
                                         }
                                     }
                                 }
@@ -4154,7 +4154,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                            "$ref": "#/definitions/admin.StatusResultDTO"
                                         }
                                     }
                                 }
@@ -4266,7 +4266,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ReportListResult"
+                                            "$ref": "#/definitions/job.ReportListResult"
                                         }
                                     }
                                 }
@@ -4318,7 +4318,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ReportDTO"
+                                            "$ref": "#/definitions/job.ReportDTO"
                                         }
                                     }
                                 }
@@ -4393,7 +4393,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobListResult"
+                                            "$ref": "#/definitions/job.JobListResult"
                                         }
                                     }
                                 }
@@ -4456,7 +4456,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -6123,7 +6123,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                            "$ref": "#/definitions/admin.StatusResultDTO"
                                         }
                                     }
                                 }
@@ -6193,7 +6193,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.ZeroResultKeywordDTO"
+                                                "$ref": "#/definitions/search.ZeroResultKeywordDTO"
                                             }
                                         }
                                     }
@@ -6521,7 +6521,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.AdminStatisticsDTO"
+                                            "$ref": "#/definitions/admin.AdminStatisticsDTO"
                                         }
                                     }
                                 }
@@ -6635,7 +6635,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorDeletedDTO"
+                                            "$ref": "#/definitions/admin.TutorDeletedDTO"
                                         }
                                     }
                                 }
@@ -6756,7 +6756,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StatusResultDTO"
+                                            "$ref": "#/definitions/admin.StatusResultDTO"
                                         }
                                     }
                                 }
@@ -6827,7 +6827,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.TutorListDTO"
+                                            "$ref": "#/definitions/admin.TutorListDTO"
                                         }
                                     }
                                 }
@@ -10289,7 +10289,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FavoritePageResult"
+                                            "$ref": "#/definitions/favorite.FavoritePageResult"
                                         }
                                     }
                                 }
@@ -10344,7 +10344,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FavoriteDTO"
+                                            "$ref": "#/definitions/favorite.FavoriteDTO"
                                         }
                                     }
                                 }
@@ -10418,7 +10418,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.FavoriteCheckDTO"
+                                            "$ref": "#/definitions/favorite.FavoriteCheckDTO"
                                         }
                                     }
                                 }
@@ -12196,7 +12196,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobListResult"
+                                            "$ref": "#/definitions/job.JobListResult"
                                         }
                                     }
                                 }
@@ -12248,7 +12248,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -12306,7 +12306,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -12366,7 +12366,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.ReportInput"
+                            "$ref": "#/definitions/job.ReportInput"
                         }
                     }
                 ],
@@ -12382,7 +12382,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ReportDTO"
+                                            "$ref": "#/definitions/job.ReportDTO"
                                         }
                                     }
                                 }
@@ -12764,7 +12764,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamHistoryDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamHistoryDTO"
                                         }
                                     }
                                 }
@@ -12826,7 +12826,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamStartDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamStartDTO"
                                         }
                                     }
                                 }
@@ -12887,7 +12887,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamResultDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamResultDTO"
                                         }
                                     }
                                 }
@@ -12948,7 +12948,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamResumeDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamResumeDTO"
                                         }
                                     }
                                 }
@@ -13067,7 +13067,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamSubmitDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamSubmitDTO"
                                         }
                                     }
                                 }
@@ -13142,7 +13142,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NotePageDTO"
+                                            "$ref": "#/definitions/note.NotePageDTO"
                                         }
                                     }
                                 }
@@ -13203,7 +13203,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NoteDTO"
+                                            "$ref": "#/definitions/note.NoteDTO"
                                         }
                                     }
                                 }
@@ -13279,7 +13279,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.NoteDTO"
+                                            "$ref": "#/definitions/note.NoteDTO"
                                         }
                                     }
                                 }
@@ -14042,7 +14042,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.HistoryResultDTO"
+                                            "$ref": "#/definitions/practicemode.HistoryResultDTO"
                                         }
                                     }
                                 }
@@ -14097,7 +14097,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticePracticeStatsDTO"
+                                            "$ref": "#/definitions/practicemode.PracticePracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -14152,7 +14152,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -14213,7 +14213,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressSaveResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressSaveResultDTO"
                                         }
                                     }
                                 }
@@ -14265,7 +14265,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -14311,7 +14311,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ProgressResultDTO"
+                                            "$ref": "#/definitions/practicemode.ProgressResultDTO"
                                         }
                                     }
                                 }
@@ -14365,7 +14365,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStatsDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStatsDTO"
                                         }
                                     }
                                 }
@@ -14422,7 +14422,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SubmitResultDTO"
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -14490,7 +14490,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -15436,7 +15436,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionCommentPageResult"
+                                            "$ref": "#/definitions/questioninteraction.QuestionCommentPageResult"
                                         }
                                     }
                                 }
@@ -15504,7 +15504,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.QuestionCommentDTO"
+                                            "$ref": "#/definitions/questioninteraction.QuestionCommentDTO"
                                         }
                                     }
                                 }
@@ -15777,7 +15777,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/service.RealExamPaperDTO"
+                                                "$ref": "#/definitions/realexam.RealExamPaperDTO"
                                             }
                                         }
                                     }
@@ -15830,7 +15830,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.MockExamStartDTO"
+                                            "$ref": "#/definitions/mockexam.MockExamStartDTO"
                                         }
                                     }
                                 }
@@ -15888,7 +15888,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.PracticeStartResultDTO"
+                                            "$ref": "#/definitions/practicemode.PracticeStartResultDTO"
                                         }
                                     }
                                 }
@@ -16004,7 +16004,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -16062,7 +16062,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -16255,7 +16255,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobListResult"
+                                            "$ref": "#/definitions/job.JobListResult"
                                         }
                                     }
                                 }
@@ -16294,7 +16294,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.JobPostingInput"
+                            "$ref": "#/definitions/job.JobPostingInput"
                         }
                     }
                 ],
@@ -16310,7 +16310,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16368,7 +16368,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16420,7 +16420,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.JobPostingInput"
+                            "$ref": "#/definitions/job.JobPostingInput"
                         }
                     }
                 ],
@@ -16436,7 +16436,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16512,7 +16512,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruiterApplicationListResult"
+                                            "$ref": "#/definitions/job.RecruiterApplicationListResult"
                                         }
                                     }
                                 }
@@ -16570,7 +16570,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobPostingDTO"
+                                            "$ref": "#/definitions/job.JobPostingDTO"
                                         }
                                     }
                                 }
@@ -16625,7 +16625,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruitMeDTO"
+                                            "$ref": "#/definitions/recruit.RecruitMeDTO"
                                         }
                                     }
                                 }
@@ -16730,7 +16730,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruitListResult"
+                                            "$ref": "#/definitions/recruit.RecruitListResult"
                                         }
                                     }
                                 }
@@ -16782,7 +16782,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.RecruitResumeCard"
+                                            "$ref": "#/definitions/resume.RecruitResumeCard"
                                         }
                                     }
                                 }
@@ -16941,7 +16941,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobCardDTO"
+                                            "$ref": "#/definitions/resume.JobCardDTO"
                                         }
                                     }
                                 }
@@ -16986,7 +16986,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.JobCardInput"
+                            "$ref": "#/definitions/resume.JobCardInput"
                         }
                     }
                 ],
@@ -17002,7 +17002,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobCardDTO"
+                                            "$ref": "#/definitions/resume.JobCardDTO"
                                         }
                                     }
                                 }
@@ -17065,7 +17065,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationListResult"
+                                            "$ref": "#/definitions/job.ApplicationListResult"
                                         }
                                     }
                                 }
@@ -17128,7 +17128,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.ApplicationDTO"
+                                            "$ref": "#/definitions/job.ApplicationDTO"
                                         }
                                     }
                                 }
@@ -17672,7 +17672,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.JobCardDTO"
+                                            "$ref": "#/definitions/resume.JobCardDTO"
                                         }
                                     }
                                 }
@@ -17696,7 +17696,7 @@ const docTemplate = `{
         },
         "/search": {
             "get": {
-                "description": "公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），\n指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；\n分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。\n每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。",
+                "description": "公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），\n指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；\n分页形状 SearchPageDTO 同域生成，前端以联合类型消费）。\n每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。",
                 "consumes": [
                     "application/json"
                 ],
@@ -17748,7 +17748,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SearchAllDTO"
+                                            "$ref": "#/definitions/search.SearchAllDTO"
                                         }
                                     }
                                 }
@@ -17794,7 +17794,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudentCoursesDTO"
+                                            "$ref": "#/definitions/student.StudentCoursesDTO"
                                         }
                                     }
                                 }
@@ -17849,7 +17849,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudentCourseDetailDTO"
+                                            "$ref": "#/definitions/student.StudentCourseDetailDTO"
                                         }
                                     }
                                 }
@@ -17969,7 +17969,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudentProfileDTO"
+                                            "$ref": "#/definitions/student.StudentProfileDTO"
                                         }
                                     }
                                 }
@@ -18049,7 +18049,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudyRecordPageResult"
+                                            "$ref": "#/definitions/student.StudyRecordPageResult"
                                         }
                                     }
                                 }
@@ -18108,7 +18108,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.StudyDailyStatsDTO"
+                                            "$ref": "#/definitions/student.StudyDailyStatsDTO"
                                         }
                                     }
                                 }
@@ -18541,7 +18541,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.DeleteFileResult"
+                                            "$ref": "#/definitions/tutor.DeleteFileResult"
                                         }
                                     }
                                 }
@@ -18604,7 +18604,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.BatchDeleteFilesResult"
+                                            "$ref": "#/definitions/tutor.BatchDeleteFilesResult"
                                         }
                                     }
                                 }
@@ -23160,7 +23160,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionPageDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionPageDTO"
                                         }
                                     }
                                 }
@@ -23217,7 +23217,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionBatchRemoveResultDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionBatchRemoveResultDTO"
                                         }
                                     }
                                 }
@@ -23288,7 +23288,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionStatsDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionStatsDTO"
                                         }
                                     }
                                 }
@@ -23352,7 +23352,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.SubmitResultDTO"
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
                                         }
                                     }
                                 }
@@ -23413,7 +23413,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.WrongQuestionRemoveResultDTO"
+                                            "$ref": "#/definitions/wrongquestion.WrongQuestionRemoveResultDTO"
                                         }
                                     }
                                 }
@@ -23437,6 +23437,183 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "admin.AdminOverviewDTO": {
+            "type": "object",
+            "properties": {
+                "active_today": {
+                    "type": "integer"
+                },
+                "total_courses": {
+                    "type": "integer"
+                },
+                "total_students": {
+                    "type": "integer"
+                },
+                "total_study_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.AdminStatisticsDTO": {
+            "type": "object",
+            "properties": {
+                "course_stats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.CourseStatDTO"
+                    }
+                },
+                "overview": {
+                    "$ref": "#/definitions/admin.AdminOverviewDTO"
+                }
+            }
+        },
+        "admin.CourseStatDTO": {
+            "type": "object",
+            "properties": {
+                "avg_progress": {
+                    "type": "number"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "study_count": {
+                    "type": "integer"
+                },
+                "total_duration": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.HrwaiUserCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.HrwaiUserPageResult": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.HrwaiUserSummary"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.HrwaiUserSummary": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "company": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "uid": {
+                    "type": "string",
+                    "example": "0"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.StatusResultDTO": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.TutorDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "admin.TutorDeletedDTO": {
+            "type": "object",
+            "properties": {
+                "tutor_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.TutorListDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "tutors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.TutorDTO"
+                    }
+                }
+            }
+        },
         "aiassistant.AIAssistantModeModels": {
             "type": "object",
             "properties": {
@@ -23724,7 +23901,7 @@ const docTemplate = `{
                 }
             }
         },
-        "api.AuditLogPageResult": {
+        "audit.AuditLogPageResult": {
             "type": "object",
             "properties": {
                 "items": {
@@ -25151,6 +25328,64 @@ const docTemplate = `{
                 }
             }
         },
+        "favorite.FavoriteCheckDTO": {
+            "type": "object",
+            "properties": {
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "favorited": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "favorite.FavoriteDTO": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n` + "`" + `chapter-view` + "`" + ` 要 ` + "`" + `course_id` + "`" + ` + ` + "`" + `chapter_id` + "`" + ` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
+                    "type": "integer"
+                },
+                "cover": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "target_id": {
+                    "type": "integer"
+                },
+                "target_type": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "favorite.FavoritePageResult": {
+            "type": "object",
+            "properties": {
+                "favorites": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/favorite.FavoriteDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "featured.FeaturedContentAdminDetailDTO": {
             "type": "object",
             "properties": {
@@ -25738,6 +25973,294 @@ const docTemplate = `{
                 }
             }
         },
+        "job.ApplicationDTO": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "description": "企业信息（学员侧可见）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "employer_viewed_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_posting_id": {
+                    "type": "integer"
+                },
+                "job_title": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "resume_updated_at": {
+                    "type": "string"
+                },
+                "resume_updated_at_snapshot": {
+                    "description": "投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_real_name_masked": {
+                    "description": "学员信息（企业侧可见，走脱敏路径）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "student_resume_updated_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "student_user_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.ApplicationListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.ApplicationDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.JobListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.JobPostingDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.JobPostingDTO": {
+            "type": "object",
+            "properties": {
+                "apply_state": {
+                    "description": "学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "business_scope": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "company_name": {
+                    "description": "企业信息（学员侧可见，不含电话/邮箱/信用代码）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "cooldown_days": {
+                    "description": "not_hired 时距可再投天数（向上取整）",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "experience_req": {
+                    "type": "string"
+                },
+                "forced_offline": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "offline_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "position_name": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "recruiter_id": {
+                    "type": "integer"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_text": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.JobPostingInput": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "experience_req": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer"
+                },
+                "salary_min": {
+                    "type": "integer"
+                },
+                "salary_text": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.RecruiterApplicationListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.ApplicationDTO"
+                    }
+                },
+                "job_title": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.ReportDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "handled_at": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_posting_id": {
+                    "type": "integer"
+                },
+                "job_title": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "job.ReportInput": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "job.ReportListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.ReportDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "material.MaterialDTO": {
             "type": "object",
             "properties": {
@@ -25791,6 +26314,223 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "mockexam.MockExamAnswerDetailDTO": {
+            "type": "object",
+            "properties": {
+                "ai_comment": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_fallback": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "ai_score": {
+                    "description": "AI 评分字段仅在短答 AI 评分成功时出现。",
+                    "type": "number",
+                    "x-optional": true
+                },
+                "content": {
+                    "type": "string"
+                },
+                "correct_answer": {
+                    "type": "string"
+                },
+                "explanation": {
+                    "type": "string"
+                },
+                "is_correct": {
+                    "type": "boolean",
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "number"
+                },
+                "options": {},
+                "question_id": {
+                    "type": "integer"
+                },
+                "score": {
+                    "type": "number"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "user_answer": {}
+            }
+        },
+        "mockexam.MockExamHistoryDTO": {
+            "type": "object",
+            "properties": {
+                "exams": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mockexam.MockExamHistoryItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "mockexam.MockExamHistoryItemDTO": {
+            "type": "object",
+            "properties": {
+                "answers": {},
+                "created_at": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "paper_id": {
+                    "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "question_ids": {},
+                "remaining_time": {
+                    "type": "integer"
+                },
+                "result": {},
+                "score": {
+                    "description": "Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。",
+                    "type": "number",
+                    "x-nullable": true
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "submit_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "mockexam.MockExamResultDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct_count": {
+                    "type": "integer"
+                },
+                "details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mockexam.MockExamAnswerDetailDTO"
+                    },
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "number"
+                },
+                "mock_exam_id": {
+                    "type": "integer"
+                },
+                "submit_time": {
+                    "type": "string"
+                },
+                "total_questions": {
+                    "type": "integer"
+                },
+                "total_score": {
+                    "type": "number"
+                }
+            }
+        },
+        "mockexam.MockExamResumeDTO": {
+            "type": "object",
+            "properties": {
+                "answers": {},
+                "duration": {
+                    "type": "integer"
+                },
+                "mock_exam_id": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "remaining_time": {
+                    "type": "integer"
+                },
+                "start_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "mockexam.MockExamStartDTO": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "integer"
+                },
+                "mock_exam_id": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "remaining_time": {
+                    "type": "integer"
+                },
+                "total_questions": {
+                    "type": "integer"
+                },
+                "total_score": {
+                    "type": "integer"
+                }
+            }
+        },
+        "mockexam.MockExamSubmitDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct_count": {
+                    "type": "integer"
+                },
+                "details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mockexam.MockExamAnswerDetailDTO"
+                    },
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "number"
+                },
+                "total_questions": {
+                    "type": "integer"
+                },
+                "total_score": {
+                    "type": "number"
                 }
             }
         },
@@ -26546,6 +27286,47 @@ const docTemplate = `{
                 }
             }
         },
+        "note.NoteDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question_content": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "note.NotePageDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/note.NoteDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "notification.NotificationDTO": {
             "type": "object",
             "properties": {
@@ -26748,6 +27529,225 @@ const docTemplate = `{
                 }
             }
         },
+        "practicemode.HistoryItemDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_correct": {
+                    "type": "boolean"
+                },
+                "practice_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "user_answer": {
+                    "type": "string"
+                }
+            }
+        },
+        "practicemode.HistoryResultDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/practicemode.HistoryItemDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticePracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "today_count": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "total_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeStartResultDTO": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeStatsDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/practicemode.PracticeTypeStat"
+                    }
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "wrong": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeTypeStat": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.ProgressResultDTO": {
+            "type": "object",
+            "properties": {
+                "answers_state": {
+                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
+                    "type": "object",
+                    "additionalProperties": {},
+                    "x-nullable": true
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "pool_total": {
+                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.ProgressSaveResultDTO": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer"
+                },
+                "saved": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "practicemode.SubmitResultDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy_rate": {
+                    "type": "number",
+                    "x-optional": true
+                },
+                "ai_comment": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_explanation": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "ai_fallback": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "ai_score": {
+                    "type": "number",
+                    "x-optional": true
+                },
+                "common_wrong": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "correct_answer": {
+                    "type": "string"
+                },
+                "explanation": {
+                    "type": "string"
+                },
+                "is_correct": {
+                    "type": "boolean",
+                    "x-nullable": true
+                },
+                "max_score": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "reference_answer": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "scoring_criteria": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "total_attempts": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "user_answer": {}
+            }
+        },
         "questionbank.QuestionBankStatsDTO": {
             "type": "object",
             "properties": {
@@ -26922,6 +27922,111 @@ const docTemplate = `{
         },
         "questionbank.QuestionUpdateInput": {
             "type": "object"
+        },
+        "questioninteraction.QuestionCommentDTO": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "questioninteraction.QuestionCommentPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questioninteraction.QuestionCommentDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "realexam.RealExamPaperDTO": {
+            "type": "object",
+            "properties": {
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "entitled": {
+                    "type": "boolean"
+                },
+                "paper_id": {
+                    "type": "integer"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "question_count": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
+                },
+                "year": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
+        "recruit.RecruitListResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/resume.RecruitResumeCard"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "recruit.RecruitMeDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
         },
         "repository.AlgorithmParameters": {
             "type": "object",
@@ -27207,126 +28312,290 @@ const docTemplate = `{
                 }
             }
         },
-        "service.AdminOverviewDTO": {
+        "resume.JobCardDTO": {
             "type": "object",
             "properties": {
-                "active_today": {
-                    "type": "integer"
+                "available_in": {
+                    "type": "string"
                 },
-                "total_courses": {
-                    "type": "integer"
-                },
-                "total_students": {
-                    "type": "integer"
-                },
-                "total_study_duration": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.AdminStatisticsDTO": {
-            "type": "object",
-            "properties": {
-                "course_stats": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.CourseStatDTO"
-                    }
-                },
-                "overview": {
-                    "$ref": "#/definitions/service.AdminOverviewDTO"
-                }
-            }
-        },
-        "service.ApplicationDTO": {
-            "type": "object",
-            "properties": {
-                "company_name": {
-                    "description": "企业信息（学员侧可见）",
-                    "type": "string",
-                    "x-optional": true
+                "contact_phone": {
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
-                "employer_viewed_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "job_posting_id": {
-                    "type": "integer"
-                },
-                "job_title": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "resume_updated_at": {
+                "expected_position_extra": {
                     "type": "string"
                 },
-                "resume_updated_at_snapshot": {
-                    "description": "投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」",
-                    "type": "string",
+                "expected_position_id": {
+                    "type": "integer",
                     "x-optional": true
                 },
-                "status": {
+                "expected_regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "experience_years": {
+                    "type": "integer"
+                },
+                "job_nature": {
                     "type": "string"
                 },
-                "student_real_name_masked": {
-                    "description": "学员信息（企业侧可见，走脱敏路径）",
-                    "type": "string",
+                "photos": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "real_name": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    },
+                    "x-nullable": true
+                },
+                "resume_experiences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    },
+                    "x-nullable": true
+                },
+                "resume_file_url": {
+                    "type": "string"
+                },
+                "salary_max": {
+                    "type": "integer",
                     "x-optional": true
                 },
-                "student_resume_updated_at": {
-                    "type": "string",
+                "salary_min": {
+                    "type": "integer",
                     "x-optional": true
                 },
-                "student_user_id": {
-                    "type": "integer"
+                "salary_negotiable": {
+                    "type": "boolean"
+                },
+                "self_intro": {
+                    "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "visibility": {
+                    "type": "string"
+                },
+                "wechat": {
                     "type": "string"
                 }
             }
         },
-        "service.ApplicationListResult": {
+        "resume.JobCardInput": {
+            "type": "object"
+        },
+        "resume.RecruitResumeCard": {
+            "type": "object",
+            "properties": {
+                "available_in": {
+                    "type": "string"
+                },
+                "company_disabled": {
+                    "description": "CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的\n同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：\n本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影\n（授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。\n移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "contact_source": {
+                    "description": "recruiter/application",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "contact_state": {
+                    "description": "#489：企业视角联系状态（none/pending/approved，approved 带来源）",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "expected_position_extra": {
+                    "type": "string"
+                },
+                "expected_position_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "expected_regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "x-nullable": true
+                },
+                "experience_years": {
+                    "type": "integer"
+                },
+                "job_nature": {
+                    "type": "string"
+                },
+                "real_name": {
+                    "description": "已打码（如 张* 或 张*丰）",
+                    "type": "string"
+                },
+                "real_name_masked": {
+                    "description": "同上，兼容验收对打码字段的显式断言",
+                    "type": "string"
+                },
+                "resume_certifications": {
+                    "description": "已去 image_urls",
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "resume_experiences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    },
+                    "x-nullable": true
+                },
+                "salary_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "salary_negotiable": {
+                    "type": "boolean"
+                },
+                "self_intro": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "search.SearchAllDTO": {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "contents": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "courses": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "keyword": {
+                    "type": "string"
+                },
+                "questions": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                },
+                "topics": {
+                    "$ref": "#/definitions/search.SearchSectionDTO"
+                }
+            }
+        },
+        "search.SearchItemDTO": {
+            "type": "object",
+            "properties": {
+                "cover": {
+                    "type": "string"
+                },
+                "hit_field": {
+                    "description": "HitField 命中位置：title | body | reply。",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "parent_id": {
+                    "description": "ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。",
+                    "type": "integer"
+                },
+                "snippet": {
+                    "description": "Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。",
+                    "type": "string"
+                },
+                "summary": {
+                    "description": "Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "search.SearchPageDTO": {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.ApplicationDTO"
+                        "$ref": "#/definitions/search.SearchItemDTO"
                     }
+                },
+                "keyword": {
+                    "type": "string"
                 },
                 "page": {
                     "type": "integer"
                 },
-                "page_size": {
+                "pages": {
                     "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "search.SearchSectionDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/search.SearchItemDTO"
+                    }
                 },
                 "total": {
                     "type": "integer"
                 }
             }
         },
-        "service.BatchDeleteFilesResult": {
+        "search.ZeroResultKeywordDTO": {
             "type": "object",
             "properties": {
-                "failed_count": {
-                    "type": "integer"
+                "keyword": {
+                    "type": "string"
                 },
-                "failed_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                "last_seen_at": {
+                    "type": "string"
                 },
-                "success_count": {
+                "times": {
                     "type": "integer"
                 }
             }
@@ -27472,118 +28741,6 @@ const docTemplate = `{
                 }
             }
         },
-        "service.CourseProgressDTO": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "type": "integer"
-                },
-                "course_name": {
-                    "type": "string"
-                },
-                "progress": {
-                    "type": "number"
-                },
-                "study_date": {
-                    "type": "string"
-                },
-                "study_duration": {
-                    "type": "integer"
-                },
-                "total_chapters": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CourseStatDTO": {
-            "type": "object",
-            "properties": {
-                "avg_progress": {
-                    "type": "number"
-                },
-                "course_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "study_count": {
-                    "type": "integer"
-                },
-                "total_duration": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.DeleteFileResult": {
-            "type": "object",
-            "properties": {
-                "deleted": {
-                    "type": "boolean"
-                },
-                "file_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.FavoriteCheckDTO": {
-            "type": "object",
-            "properties": {
-                "favorite_id": {
-                    "type": "integer"
-                },
-                "favorited": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "service.FavoriteDTO": {
-            "type": "object",
-            "properties": {
-                "course_id": {
-                    "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n` + "`" + `chapter-view` + "`" + ` 要 ` + "`" + `course_id` + "`" + ` + ` + "`" + `chapter_id` + "`" + ` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
-                    "type": "integer"
-                },
-                "cover": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "favorite_id": {
-                    "type": "integer"
-                },
-                "target_id": {
-                    "type": "integer"
-                },
-                "target_type": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.FavoritePageResult": {
-            "type": "object",
-            "properties": {
-                "favorites": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.FavoriteDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "service.GenTaskStatus": {
             "type": "object",
             "properties": {
@@ -27617,1097 +28774,30 @@ const docTemplate = `{
                 }
             }
         },
-        "service.HistoryItemDTO": {
+        "student.CourseProgressDTO": {
             "type": "object",
             "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
+                "course_id": {
                     "type": "integer"
                 },
-                "is_correct": {
-                    "type": "boolean"
-                },
-                "practice_type": {
+                "course_name": {
                     "type": "string"
                 },
-                "question": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/questionbank.QuestionDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "user_answer": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.HistoryResultDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.HistoryItemDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.HrwaiUserCreatedDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "uid": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.HrwaiUserPageResult": {
-            "type": "object",
-            "properties": {
-                "list": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.HrwaiUserSummary"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.HrwaiUserSummary": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "company": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "uid": {
-                    "type": "string",
-                    "example": "0"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.JobCardDTO": {
-            "type": "object",
-            "properties": {
-                "available_in": {
-                    "type": "string"
-                },
-                "contact_phone": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "expected_position_extra": {
-                    "type": "string"
-                },
-                "expected_position_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "expected_regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "experience_years": {
-                    "type": "integer"
-                },
-                "job_nature": {
-                    "type": "string"
-                },
-                "photos": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "real_name": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "resume_certifications": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    },
-                    "x-nullable": true
-                },
-                "resume_experiences": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    },
-                    "x-nullable": true
-                },
-                "resume_file_url": {
-                    "type": "string"
-                },
-                "salary_max": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_min": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_negotiable": {
-                    "type": "boolean"
-                },
-                "self_intro": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "visibility": {
-                    "type": "string"
-                },
-                "wechat": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.JobCardInput": {
-            "type": "object"
-        },
-        "service.JobListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.JobPostingDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.JobPostingDTO": {
-            "type": "object",
-            "properties": {
-                "apply_state": {
-                    "description": "学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "business_scope": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "company_name": {
-                    "description": "企业信息（学员侧可见，不含电话/邮箱/信用代码）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "contact_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "cooldown_days": {
-                    "description": "not_hired 时距可再投天数（向上取整）",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "experience_req": {
-                    "type": "string"
-                },
-                "forced_offline": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "offline_reason": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "position_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "position_name": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "published_at": {
-                    "type": "string"
-                },
-                "recruiter_id": {
-                    "type": "integer"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "salary_max": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_min": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_text": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.JobPostingInput": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "experience_req": {
-                    "type": "string"
-                },
-                "position_id": {
-                    "type": "integer"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "salary_max": {
-                    "type": "integer"
-                },
-                "salary_min": {
-                    "type": "integer"
-                },
-                "salary_text": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MockExamAnswerDetailDTO": {
-            "type": "object",
-            "properties": {
-                "ai_comment": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_fallback": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "ai_score": {
-                    "description": "AI 评分字段仅在短答 AI 评分成功时出现。",
-                    "type": "number",
-                    "x-optional": true
-                },
-                "content": {
-                    "type": "string"
-                },
-                "correct_answer": {
-                    "type": "string"
-                },
-                "explanation": {
-                    "type": "string"
-                },
-                "is_correct": {
-                    "type": "boolean",
-                    "x-nullable": true
-                },
-                "max_score": {
+                "progress": {
                     "type": "number"
                 },
-                "options": {},
-                "question_id": {
-                    "type": "integer"
-                },
-                "score": {
-                    "type": "number"
-                },
-                "type": {
+                "study_date": {
                     "type": "string"
                 },
-                "user_answer": {}
-            }
-        },
-        "service.MockExamHistoryDTO": {
-            "type": "object",
-            "properties": {
-                "exams": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MockExamHistoryItemDTO"
-                    }
-                },
-                "page": {
+                "study_duration": {
                     "type": "integer"
                 },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
+                "total_chapters": {
                     "type": "integer"
                 }
             }
         },
-        "service.MockExamHistoryItemDTO": {
-            "type": "object",
-            "properties": {
-                "answers": {},
-                "created_at": {
-                    "type": "string"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "paper_id": {
-                    "description": "PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil\n（omitempty——既有消费者对随机模考的响应零差异，向后兼容）。",
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "question_ids": {},
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "result": {},
-                "score": {
-                    "description": "Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。",
-                    "type": "number",
-                    "x-nullable": true
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "submit_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MockExamResultDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct_count": {
-                    "type": "integer"
-                },
-                "details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    },
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "number"
-                },
-                "mock_exam_id": {
-                    "type": "integer"
-                },
-                "submit_time": {
-                    "type": "string"
-                },
-                "total_questions": {
-                    "type": "integer"
-                },
-                "total_score": {
-                    "type": "number"
-                }
-            }
-        },
-        "service.MockExamResumeDTO": {
-            "type": "object",
-            "properties": {
-                "answers": {},
-                "duration": {
-                    "type": "integer"
-                },
-                "mock_exam_id": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/questionbank.QuestionDTO"
-                    }
-                },
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "start_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.MockExamStartDTO": {
-            "type": "object",
-            "properties": {
-                "duration": {
-                    "type": "integer"
-                },
-                "mock_exam_id": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/questionbank.QuestionDTO"
-                    }
-                },
-                "remaining_time": {
-                    "type": "integer"
-                },
-                "total_questions": {
-                    "type": "integer"
-                },
-                "total_score": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.MockExamSubmitDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct_count": {
-                    "type": "integer"
-                },
-                "details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.MockExamAnswerDetailDTO"
-                    },
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "number"
-                },
-                "total_questions": {
-                    "type": "integer"
-                },
-                "total_score": {
-                    "type": "number"
-                }
-            }
-        },
-        "service.NoteDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question_content": {
-                    "type": "string"
-                },
-                "question_id": {
-                    "type": "integer",
-                    "x-nullable": true
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.NotePageDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.NoteDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticePracticeStatsDTO": {
-            "type": "object",
-            "properties": {
-                "today_count": {
-                    "type": "integer"
-                },
-                "total_count": {
-                    "type": "integer"
-                },
-                "total_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeStartResultDTO": {
-            "type": "object",
-            "properties": {
-                "completed": {
-                    "type": "integer"
-                },
-                "current_index": {
-                    "type": "integer"
-                },
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/questionbank.QuestionDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeStatsDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/service.PracticeTypeStat"
-                    }
-                },
-                "correct": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "wrong": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.PracticeTypeStat": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "correct": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProgressResultDTO": {
-            "type": "object",
-            "properties": {
-                "answers_state": {
-                    "description": "AnswersState 无进度时为 null（键仍在）→ x-nullable。",
-                    "type": "object",
-                    "additionalProperties": {},
-                    "x-nullable": true
-                },
-                "completed": {
-                    "type": "integer"
-                },
-                "current_index": {
-                    "type": "integer"
-                },
-                "pool_total": {
-                    "description": "PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；\nTotal 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。",
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ProgressSaveResultDTO": {
-            "type": "object",
-            "properties": {
-                "index": {
-                    "type": "integer"
-                },
-                "saved": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "service.QuestionCommentDTO": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.QuestionCommentPageResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.QuestionCommentDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RealExamPaperDTO": {
-            "type": "object",
-            "properties": {
-                "duration_minutes": {
-                    "type": "integer"
-                },
-                "entitled": {
-                    "type": "boolean"
-                },
-                "paper_id": {
-                    "type": "integer"
-                },
-                "price": {
-                    "type": "integer"
-                },
-                "question_count": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "title": {
-                    "type": "string"
-                },
-                "year": {
-                    "type": "integer",
-                    "x-optional": true
-                }
-            }
-        },
-        "service.RecruitListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.RecruitResumeCard"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruitMeDTO": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruitResumeCard": {
-            "type": "object",
-            "properties": {
-                "available_in": {
-                    "type": "string"
-                },
-                "company_disabled": {
-                    "description": "CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的\n同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：\n本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影\n（授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。\n移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。",
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "contact_source": {
-                    "description": "recruiter/application",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "contact_state": {
-                    "description": "#489：企业视角联系状态（none/pending/approved，approved 带来源）",
-                    "type": "string",
-                    "x-optional": true
-                },
-                "expected_position_extra": {
-                    "type": "string"
-                },
-                "expected_position_id": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "expected_regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "x-nullable": true
-                },
-                "experience_years": {
-                    "type": "integer"
-                },
-                "job_nature": {
-                    "type": "string"
-                },
-                "real_name": {
-                    "description": "已打码（如 张* 或 张*丰）",
-                    "type": "string"
-                },
-                "real_name_masked": {
-                    "description": "同上，兼容验收对打码字段的显式断言",
-                    "type": "string"
-                },
-                "resume_certifications": {
-                    "description": "已去 image_urls",
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    }
-                },
-                "resume_experiences": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    },
-                    "x-nullable": true
-                },
-                "salary_max": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_min": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "salary_negotiable": {
-                    "type": "boolean"
-                },
-                "self_intro": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.RecruiterApplicationListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ApplicationDTO"
-                    }
-                },
-                "job_title": {
-                    "type": "string"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "unread_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ReportDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "handled_at": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "job_posting_id": {
-                    "type": "integer"
-                },
-                "job_title": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "student_user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ReportInput": {
-            "type": "object",
-            "properties": {
-                "reason": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.ReportListResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.ReportDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SearchAllDTO": {
-            "type": "object",
-            "properties": {
-                "chapters": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "contents": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "courses": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "keyword": {
-                    "type": "string"
-                },
-                "questions": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                },
-                "topics": {
-                    "$ref": "#/definitions/service.SearchSectionDTO"
-                }
-            }
-        },
-        "service.SearchItemDTO": {
-            "type": "object",
-            "properties": {
-                "cover": {
-                    "type": "string"
-                },
-                "hit_field": {
-                    "description": "HitField 命中位置：title | body | reply。",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "parent_id": {
-                    "description": "ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。",
-                    "type": "integer"
-                },
-                "snippet": {
-                    "description": "Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。",
-                    "type": "string"
-                },
-                "summary": {
-                    "description": "Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。",
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.SearchPageDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.SearchItemDTO"
-                    }
-                },
-                "keyword": {
-                    "type": "string"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "pages": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.SearchSectionDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.SearchItemDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StatusResultDTO": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.StudentCourseChapterDTO": {
+        "student.StudentCourseChapterDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -28727,7 +28817,7 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudentCourseDTO": {
+        "student.StudentCourseDTO": {
             "type": "object",
             "properties": {
                 "completed_chapters": {
@@ -28774,13 +28864,13 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudentCourseDetailDTO": {
+        "student.StudentCourseDetailDTO": {
             "type": "object",
             "properties": {
                 "chapters": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.StudentCourseChapterDTO"
+                        "$ref": "#/definitions/student.StudentCourseChapterDTO"
                     }
                 },
                 "completed_chapters": {
@@ -28827,13 +28917,13 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudentCoursesDTO": {
+        "student.StudentCoursesDTO": {
             "type": "object",
             "properties": {
                 "continue_learning": {
                     "allOf": [
                         {
-                            "$ref": "#/definitions/service.StudentCourseDTO"
+                            "$ref": "#/definitions/student.StudentCourseDTO"
                         }
                     ],
                     "x-nullable": true
@@ -28841,12 +28931,12 @@ const docTemplate = `{
                 "courses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.StudentCourseDTO"
+                        "$ref": "#/definitions/student.StudentCourseDTO"
                     }
                 }
             }
         },
-        "service.StudentDTO": {
+        "student.StudentDTO": {
             "type": "object",
             "properties": {
                 "account": {
@@ -28874,24 +28964,24 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudentProfileDTO": {
+        "student.StudentProfileDTO": {
             "type": "object",
             "properties": {
                 "course_progress": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.CourseProgressDTO"
+                        "$ref": "#/definitions/student.CourseProgressDTO"
                     }
                 },
                 "student_info": {
-                    "$ref": "#/definitions/service.StudentDTO"
+                    "$ref": "#/definitions/student.StudentDTO"
                 },
                 "study_stats": {
-                    "$ref": "#/definitions/service.StudyStatsDTO"
+                    "$ref": "#/definitions/student.StudyStatsDTO"
                 }
             }
         },
-        "service.StudyDailyStatsDTO": {
+        "student.StudyDailyStatsDTO": {
             "type": "object",
             "properties": {
                 "active_days": {
@@ -28917,7 +29007,7 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudyRecordDTO": {
+        "student.StudyRecordDTO": {
             "type": "object",
             "properties": {
                 "chapter_id": {
@@ -28951,7 +29041,7 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudyRecordPageResult": {
+        "student.StudyRecordPageResult": {
             "type": "object",
             "properties": {
                 "page": {
@@ -28963,7 +29053,7 @@ const docTemplate = `{
                 "records": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.StudyRecordDTO"
+                        "$ref": "#/definitions/student.StudyRecordDTO"
                     }
                 },
                 "total": {
@@ -28971,7 +29061,7 @@ const docTemplate = `{
                 }
             }
         },
-        "service.StudyStatsDTO": {
+        "student.StudyStatsDTO": {
             "type": "object",
             "properties": {
                 "completed_courses": {
@@ -28987,220 +29077,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "total_study_duration": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.SubmitResultDTO": {
-            "type": "object",
-            "properties": {
-                "accuracy_rate": {
-                    "type": "number",
-                    "x-optional": true
-                },
-                "ai_comment": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_explanation": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "ai_fallback": {
-                    "type": "boolean",
-                    "x-optional": true
-                },
-                "ai_score": {
-                    "type": "number",
-                    "x-optional": true
-                },
-                "common_wrong": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "correct_answer": {
-                    "type": "string"
-                },
-                "explanation": {
-                    "type": "string"
-                },
-                "is_correct": {
-                    "type": "boolean",
-                    "x-nullable": true
-                },
-                "max_score": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "reference_answer": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "scoring_criteria": {
-                    "type": "string",
-                    "x-optional": true
-                },
-                "total_attempts": {
-                    "type": "integer",
-                    "x-optional": true
-                },
-                "user_answer": {}
-            }
-        },
-        "service.TutorDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                },
-                "tutor_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "service.TutorDeletedDTO": {
-            "type": "object",
-            "properties": {
-                "tutor_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.TutorListDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "tutors": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.TutorDTO"
-                    }
-                }
-            }
-        },
-        "service.WrongQuestionBatchRemoveResultDTO": {
-            "type": "object",
-            "properties": {
-                "removed": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.WrongQuestionDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "favorite_id": {
-                    "type": "integer"
-                },
-                "favorited": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_redone": {
-                    "type": "boolean"
-                },
-                "is_removed": {
-                    "type": "boolean"
-                },
-                "last_user_answer": {
-                    "type": "string"
-                },
-                "last_wrong_at": {
-                    "type": "string"
-                },
-                "question": {
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/questionbank.QuestionDTO"
-                        }
-                    ],
-                    "x-optional": true
-                },
-                "question_id": {
-                    "type": "integer"
-                },
-                "student_id": {
-                    "type": "integer"
-                },
-                "wrong_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.WrongQuestionPageDTO": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/service.WrongQuestionDTO"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.WrongQuestionRemoveResultDTO": {
-            "type": "object",
-            "properties": {
-                "removed": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "service.WrongQuestionStatsDTO": {
-            "type": "object",
-            "properties": {
-                "by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.ZeroResultKeywordDTO": {
-            "type": "object",
-            "properties": {
-                "keyword": {
-                    "type": "string"
-                },
-                "last_seen_at": {
-                    "type": "string"
-                },
-                "times": {
                     "type": "integer"
                 }
             }
@@ -29693,6 +29569,130 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/training.SpecialtyDict"
                     }
+                }
+            }
+        },
+        "tutor.BatchDeleteFilesResult": {
+            "type": "object",
+            "properties": {
+                "failed_count": {
+                    "type": "integer"
+                },
+                "failed_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutor.DeleteFileResult": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "boolean"
+                },
+                "file_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionBatchRemoveResultDTO": {
+            "type": "object",
+            "properties": {
+                "removed": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "favorite_id": {
+                    "type": "integer"
+                },
+                "favorited": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_redone": {
+                    "type": "boolean"
+                },
+                "is_removed": {
+                    "type": "boolean"
+                },
+                "last_user_answer": {
+                    "type": "string"
+                },
+                "last_wrong_at": {
+                    "type": "string"
+                },
+                "question": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/questionbank.QuestionDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "wrong_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionPageDTO": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/wrongquestion.WrongQuestionDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionRemoveResultDTO": {
+            "type": "object",
+            "properties": {
+                "removed": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "wrongquestion.WrongQuestionStatsDTO": {
+            "type": "object",
+            "properties": {
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         }

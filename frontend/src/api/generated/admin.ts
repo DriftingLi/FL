@@ -49,7 +49,7 @@
 //   GET  /admin/export/questions
 //   GET  /admin/export/evaluations
 //
-// 覆盖的 Go 类型：AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / AdminCourseDetailDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog / AdminOverviewDTO / AdminStatisticsDTO / ChapterGenResult / CourseStatDTO / GenTaskStatus / GenerateContentResultDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO
+// 覆盖的 Go 类型：AdminOverviewDTO / AdminStatisticsDTO / CourseStatDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / AdminCourseDetailDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog / ChapterGenResult / GenTaskStatus / GenerateContentResultDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -60,6 +60,75 @@
 //   - Go 侧 any 字段在 swagger 里是空 schema，渲染 'unknown'（不猜结构）；
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
+
+export interface AdminOverviewDTO {
+  active_today: number
+  total_courses: number
+  total_students: number
+  total_study_duration: number
+}
+
+export interface AdminStatisticsDTO {
+  course_stats: CourseStatDTO[]
+  overview: AdminOverviewDTO
+}
+
+export interface CourseStatDTO {
+  avg_progress: number
+  course_id: number
+  name: string
+  study_count: number
+  total_duration: number
+}
+
+export interface HrwaiUserCreatedDTO {
+  account: string
+  id: number
+  phone: string
+  uid: string
+  username: string
+}
+
+export interface HrwaiUserPageResult {
+  list: HrwaiUserSummary[]
+  page: number
+  page_size: number
+  total: number
+}
+
+export interface HrwaiUserSummary {
+  account: string
+  company: string
+  created_at: string
+  email: string
+  id: number
+  phone: string
+  status: number
+  uid: string
+  username: string
+}
+
+export interface StatusResultDTO {
+  status: number
+}
+
+export interface TutorDTO {
+  created_at: string
+  name: string
+  status: number
+  tutor_id: number
+  username: string
+}
+
+export interface TutorDeletedDTO {
+  tutor_id: number
+}
+
+export interface TutorListDTO {
+  page: number
+  total: number
+  tutors: TutorDTO[]
+}
 
 export interface AIConfigDTO {
   api_key: string
@@ -313,32 +382,12 @@ export interface AuditLog {
   status: number
 }
 
-export interface AdminOverviewDTO {
-  active_today: number
-  total_courses: number
-  total_students: number
-  total_study_duration: number
-}
-
-export interface AdminStatisticsDTO {
-  course_stats: CourseStatDTO[]
-  overview: AdminOverviewDTO
-}
-
 export interface ChapterGenResult {
   chapter_id: number
   content?: string
   error?: string
   status: string
   title: string
-}
-
-export interface CourseStatDTO {
-  avg_progress: number
-  course_id: number
-  name: string
-  study_count: number
-  total_duration: number
 }
 
 export interface GenTaskStatus {
@@ -351,53 +400,4 @@ export interface GenTaskStatus {
 
 export interface GenerateContentResultDTO {
   task_id: string
-}
-
-export interface HrwaiUserCreatedDTO {
-  account: string
-  id: number
-  phone: string
-  uid: string
-  username: string
-}
-
-export interface HrwaiUserPageResult {
-  list: HrwaiUserSummary[]
-  page: number
-  page_size: number
-  total: number
-}
-
-export interface HrwaiUserSummary {
-  account: string
-  company: string
-  created_at: string
-  email: string
-  id: number
-  phone: string
-  status: number
-  uid: string
-  username: string
-}
-
-export interface StatusResultDTO {
-  status: number
-}
-
-export interface TutorDTO {
-  created_at: string
-  name: string
-  status: number
-  tutor_id: number
-  username: string
-}
-
-export interface TutorDeletedDTO {
-  tutor_id: number
-}
-
-export interface TutorListDTO {
-  page: number
-  total: number
-  tutors: TutorDTO[]
 }

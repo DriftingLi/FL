@@ -25,8 +25,11 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/model"
+	"forklift-training/internal/note"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -112,9 +115,9 @@ func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
-	RegisterNoteRoutes(api, deps.RouterDeps(), deps.NoteSvc)
-	RegisterQuestionInteractionRoutes(api, deps.RouterDeps(), deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
-	RegisterFavoriteRoutes(api, deps.RouterDeps(), deps.FavoriteSvc)
+	note.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.NoteSvc)
+	questioninteraction.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
+	favorite.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.FavoriteSvc)
 	f.r = r
 	return f
 }

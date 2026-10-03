@@ -16,8 +16,8 @@ import (
 	"forklift-training/internal/config"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/resume"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -44,10 +44,10 @@ func TestJobCardContract(t *testing.T) {
 	deps := newContractDeps(t, db, cfg)
 	st := storage.NewLocalStorage(t.TempDir())
 	fileSvc := filestore.NewFileStore("", st, zap.NewNop())
-	jobSvc := service.NewJobCardService(db, fileSvc, zap.NewNop())
+	jobSvc := resume.NewService(db, fileSvc, zap.NewNop())
 	deps.FileSvc = fileSvc
 	deps.JobCardSvc = jobSvc
-	RegisterJobCardRoutes(apiGroup, deps.RouterDeps(), deps.JobCardSvc, deps.FileSvc)
+	resume.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.JobCardSvc, deps.FileSvc)
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).Issue(int(author.ID), author.Account, "hrwai_user")
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)

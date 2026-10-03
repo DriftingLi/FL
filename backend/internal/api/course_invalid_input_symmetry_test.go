@@ -5,7 +5,7 @@
 // 它锁得住「某一端点某一档打得出」，锁不住**同一件输入错误在两个动词上分家**——
 // 而那正是本批的病灶：
 //
-//   - Create（`api/admin.go` 的 `WithSuccess(created(…), http.StatusBadRequest)`）默认面 **400**
+//   - Create（`internal/course/handler_admin.go` 的 `WithSuccess(httpx.Created(…), http.StatusBadRequest)`）默认面 **400**
 //     ⇒ `applyCourseTrainingFields` 里那 4 处 `Count()` 的「查不动」被答成**参数错误**
 //     （精选在第③批修过的镜像病，这一域漏了）；
 //   - Update（默认面 500 + 只挂 3 条哨兵）⇒ 11 条裸 `errors.New` 的输入不合法全被咽成 **500**。

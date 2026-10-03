@@ -4,7 +4,7 @@
  * 缺陷本体：投递态只活在页面本地（`job-detail.uvue` 的 `hasApplied = ref<boolean>(false)`），
  * 页面重建即归零 ⇒ 投过的职位按钮复活、再点吃 400（`not_hired` 时是 `ErrApplyCooldown`
  * 「该职位 30 天内暂不能再次投递」）。后端**早已**按学员视角回填 `apply_state` / `cooldown_days`
- * （`job_posting_service.go` 的 `fillApplyStates`，两个学员端点都带），缺的只是客户端消费。
+ * （`internal/job/service_posting.go:349` 的 `fillApplyStates`，两个学员端点都带），缺的只是客户端消费。
  *
  * 为什么是源码文本断言：状态逻辑在 `.uvue` 的 `<script setup>` 里，现有的 `.uts` 执行缝
  * （`utils/utsHarness.js`）跑不了页面脚本；真机逐页截图（①a）看的是渲染结果，看不到

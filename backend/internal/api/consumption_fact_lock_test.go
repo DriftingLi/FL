@@ -51,8 +51,8 @@ func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
 	t.Parallel()
 	// 先数清单：绊线比的是**前缀**，而 `../model` 与 `../valuation/model` 同前缀 ⇒ 删掉其中一枚
 	// 绊线看不出来。这条计数断言补的就是那一条（与批⑤「pathInt* 名字族必须恰好两枚」同形）。
-	if n := len(factScanDirs); n != 20 {
-		t.Fatalf("fact 扫描面应是 20 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
+	if n := len(factScanDirs); n != 35 {
+		t.Fatalf("fact 扫描面应是 35 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的两枚之间绊线分不开），"+
 			"多一枚就回来把这条数与注释一起改。", n, factScanDirs)
 	}
 	defs := factDescriptions(t)
@@ -413,22 +413,23 @@ func checkSentinelFaces(reg []FactSpec, hosts map[string]string, used func(strin
 	return out
 }
 
-// apiErrorFaceRefs 收集「被接进 api 层错误面」的标识符。两种接法都算，因为它们就是本仓错误面
+// apiErrorFaceRefs 收集「被接进端点错误面」的标识符。两种接法都算，因为它们就是本仓错误面
 // 仅有的两种写法：
 //
 //	`errors.Is(err, service.ErrX)`          —— 手写分支（raw handler 那一侧）
 //	`errStatusTable{… {sentinel: service.ErrX, …}}` —— 声明式档位表（endpoint.go 那一侧）
 //
-// 判据问的是「这枚哨兵有没有被接到某个端点的错误出口」，不是「api 层有没有提到它」——第一版
+// 判据问的是「这枚哨兵有没有被接到某个端点的错误出口」，不是「某层有没有提到它」——第一版
 // 按「提到」做，连踩两个假绿：① 注释里写了哨兵名；② **登记表自己** `Sentinels: []error{…}`
 // 就是全仓对它的第 2 处引用，于是每登记一枚哨兵都自动满足自己的可达性判据。一条会自己点亮自己的
 // 可达性判据比没有更坏：它把「登记」冒充成「接线」。
+//
+// 扫描面 = 承载响应类型的目录宇宙（factScanDirs / testutil.ResponsePackages()），**不是**
+// internal/api 一个目录：错误表随 handler 搬进域包（P2 波 1a 起），只扫 internal/api 会让
+// 「接线」在域包里发生时看不见——先是误判（域包里接了线仍报「没接线」），再是防空转的计数
+// 下限被判穿（波 4c 实测只数出 45 < 50，红得没道理）。域包里的写法与 api 里同形。
 func apiErrorFaceRefs(t *testing.T) map[string]bool {
 	t.Helper()
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("读 internal/api 失败: %v", err)
-	}
 	out := map[string]bool{}
 	fset := token.NewFileSet()
 	n := 0
@@ -443,58 +444,65 @@ func apiErrorFaceRefs(t *testing.T) map[string]bool {
 			out[x.Name] = true
 		}
 	}
-	for _, e := range entries {
-		name := e.Name()
-		// 登记表自己**不算**引用方：它写 `Sentinels: []error{service.ErrX}`，那是登记而不是接线，
-		// 若把它算进来，每登记一枚哨兵都会自动满足自己的可达性判据（红证时实测到的假绿）。
-		// 一条会自己点亮自己的可达性判据比没有更坏：它把「登记」冒充成「接线」。
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
-			name == "consumption_fact_registry.go" {
-			continue
-		}
-		f, err := parser.ParseFile(fset, name, nil, 0)
+	for _, src := range factScanDirs {
+		dir := scanDirAbs(t, src.Dir)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			t.Fatalf("解析 %s 失败: %v", name, err)
+			t.Fatalf("读错误面扫描目录 %s 失败: %v", src.Dir, err)
 		}
-		n++
-		ast.Inspect(f, func(node ast.Node) bool {
-			switch x := node.(type) {
-			case *ast.CallExpr:
-				// errors.Is 的**任一**实参都算接线：判据方向（Is(err, 哨兵)）与反写都不该成为漏口。
-				if sel, ok := x.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Is" {
-					if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "errors" {
-						for _, arg := range x.Args {
-							add(arg)
+		for _, e := range entries {
+			name := e.Name()
+			// 登记表自己**不算**引用方：它写 `Sentinels: []error{service.ErrX}`，那是登记而不是接线，
+			// 若把它算进来，每登记一枚哨兵都会自动满足自己的可达性判据（红证时实测到的假绿）。
+			// 一条会自己点亮自己的可达性判据比没有更坏：它把「登记」冒充成「接线」。
+			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
+				name == "consumption_fact_registry.go" {
+				continue
+			}
+			f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+			if err != nil {
+				t.Fatalf("解析 %s/%s 失败: %v", src.Dir, name, err)
+			}
+			n++
+			ast.Inspect(f, func(node ast.Node) bool {
+				switch x := node.(type) {
+				case *ast.CallExpr:
+					// errors.Is 的**任一**实参都算接线：判据方向（Is(err, 哨兵)）与反写都不该成为漏口。
+					if sel, ok := x.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Is" {
+						if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "errors" {
+							for _, arg := range x.Args {
+								add(arg)
+							}
 						}
 					}
+				case *ast.CompositeLit:
+					// 整张表的**子树**都收下。第一版只遍历 `x.Elts`，实测数出 17 个标识符而按字面量
+					// 数是 100+：哨兵实际写在 `Entries: []httpx.ErrStatusEntry{{Sentinel: service.ErrX, …}}`
+					// 里，`x.Elts` 拿到的那个 KeyValueExpr 被 add 直接丢掉了。一条认法太窄的可达性判据
+					// 会「报红得多」，看着像收紧，其实是把没接线的和接线了的混在一起靠运气分。
+					// 名字在 #1445 P0-B 随骨架搬到 pkg/httpx 并导出首位：表字面量的类型从裸标识符
+					// `errStatusTable` 变成限定名 `httpx.ErrStatusTable`（SelectorExpr）——只认 Ident
+					// 会让这条判据静默匹配 0 处（下方 len(out) < 50 的防空转把它抓成红，本批即如此）。
+					if n := compositeLitTypeName(x.Type); n == "ErrStatusTable" || n == "ErrStatusEntry" {
+						ast.Inspect(x, func(n ast.Node) bool {
+							if sel, ok := n.(*ast.SelectorExpr); ok {
+								add(sel)
+							}
+							return true
+						})
+					}
 				}
-			case *ast.CompositeLit:
-				// 整张表的**子树**都收下。第一版只遍历 `x.Elts`，实测数出 17 个标识符而按字面量
-				// 数是 100+：哨兵实际写在 `Entries: []httpx.ErrStatusEntry{{Sentinel: service.ErrX, …}}`
-				// 里，`x.Elts` 拿到的那个 KeyValueExpr 被 add 直接丢掉了。一条认法太窄的可达性判据
-				// 会「报红得多」，看着像收紧，其实是把没接线的和接线了的混在一起靠运气分。
-				// 名字在 #1445 P0-B 随骨架搬到 pkg/httpx 并导出首位：表字面量的类型从裸标识符
-				// `errStatusTable` 变成限定名 `httpx.ErrStatusTable`（SelectorExpr）——只认 Ident
-				// 会让这条判据静默匹配 0 处（下方 len(out) < 50 的防空转把它抓成红，本批即如此）。
-				if n := compositeLitTypeName(x.Type); n == "ErrStatusTable" || n == "ErrStatusEntry" {
-					ast.Inspect(x, func(n ast.Node) bool {
-						if sel, ok := n.(*ast.SelectorExpr); ok {
-							add(sel)
-						}
-						return true
-					})
-				}
-			}
-			return true
-		})
+				return true
+			})
+		}
 	}
 	if n == 0 {
-		t.Fatal("internal/api 里没有非测试 .go——错误面引用集建在空集上，(b) 的可达半边只会一条条报红，" +
+		t.Fatal("错误面扫描面里没有非测试 .go——错误面引用集建在空集上，(b) 的可达半边只会一条条报红，" +
 			"看着像收紧其实是锁坏了")
 	}
 	if len(out) < 50 {
-		t.Fatalf("整层只数出 %d 个接进错误面的标识符——两种接法的认法被改坏了？"+
-			"（实测基线 100+：errStatusTable 子树里的选择器 99 种 + errors.Is 实参 5 种）", len(out))
+		t.Fatalf("整个扫描面只数出 %d 个接进错误面的标识符——两种接法的认法被改坏了？"+
+			"（基线：只扫 internal/api 时 104 种；波 4c 起射程含域包，下限 50 是防空转而不是尺寸目标）", len(out))
 	}
 	return out
 }

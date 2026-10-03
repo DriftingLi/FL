@@ -7,7 +7,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admin"
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/checkin"
@@ -17,19 +19,33 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/daemon"
 	"forklift-training/internal/faq"
+	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
+	"forklift-training/internal/job"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/mockexam"
+	"forklift-training/internal/note"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
+	"forklift-training/internal/realexam"
+	"forklift-training/internal/recruit"
+	"forklift-training/internal/resume"
+	"forklift-training/internal/search"
 	"forklift-training/internal/security"
 	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
+	"forklift-training/internal/student"
 	"forklift-training/internal/training"
+	"forklift-training/internal/tutor"
+	vexport "forklift-training/internal/valuation/export"
+	"forklift-training/internal/wrongquestion"
 )
 
 // RouterDeps 聚合蓝图注册所需的横切依赖（Session/DB/Logger）。
@@ -63,45 +79,45 @@ type Deps struct {
 	SlideRenderer   *course.SlideRenderer
 	NotificationSvc *notification.Service
 	ReviewSvc       *auth.ProfileReviewService
-	AuditSvc        *service.AuditService
+	AuditSvc        *audit.Service
 	AIConfigSvc     *aiassistant.ConfigService
 	ContentGenSvc   *service.ContentGenerateService
-	ExportStore     service.ExportStore
+	ExportStore     vexport.ExportStore
 
 	CourseSvc            *course.Service
-	AdminSvc             *service.AdminService
+	AdminSvc             *admin.Service
 	AdminCourseSvc       *course.AdminService
 	ForumSvc             *forum.Service
 	ForumModSvc          *forum.ModerationService
 	CheckInSvc           *checkin.Service
 	ForumImageSvc        *forum.ImageService
 	FeaturedSvc          *featured.Service
-	FavoriteSvc          *service.FavoriteService
-	SearchSvc            *service.SearchService
+	FavoriteSvc          *favorite.Service
+	SearchSvc            *search.Service
 	MaterialSvc          *material.Service
-	ExportSvc            *service.ExportService
-	StudentSvc           *service.StudentService
+	ExportSvc            *vexport.Service
+	StudentSvc           *student.Service
 	QuestionBankSvc      *questionbank.Service
-	PracticeModeSvc      *service.PracticeModeService
-	MockExamSvc          *service.MockExamService
-	RealExamSvc          *service.RealExamService
-	TutorSvc             *service.TutorService
-	WrongQuestionSvc     *service.WrongQuestionService
+	PracticeModeSvc      *practicemode.Service
+	MockExamSvc          *mockexam.Service
+	RealExamSvc          *realexam.Service
+	TutorSvc             *tutor.Service
+	WrongQuestionSvc     *wrongquestion.Service
 	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service
 	DiagnosisProxySvc    *aiassistant.DiagnosisProxyService
-	QuestionCommentSvc   *service.QuestionCommentService
-	NoteSvc              *service.NoteService
-	QuestionKnowledgeSvc *service.QuestionKnowledgeService
+	QuestionCommentSvc   *questioninteraction.Service
+	NoteSvc              *note.Service
+	QuestionKnowledgeSvc *questioninteraction.KnowledgeService
 	FaqSvc               *faq.Service
 	PointsSvc            *points.Service
-	JobCardSvc           *service.JobCardService
-	ResumePDFRenderer    *service.ResumePDFRenderer
-	RecruitSvc           *service.RecruitService
+	JobCardSvc           *resume.Service
+	ResumePDFRenderer    *resume.PDFRenderer
+	RecruitSvc           *recruit.Service
 	ContactSvc           *service.ContactService
-	JobPostingSvc        *service.JobPostingService
-	JobApplicationSvc    *service.JobApplicationService
-	JobReportSvc         *service.JobReportService
+	JobPostingSvc        *job.Service
+	JobApplicationSvc    *job.ApplicationService
+	JobReportSvc         *job.ReportService
 	InspectionSvc        *inspection.Service
 	ContributionSvc      *contribution.Service
 
@@ -118,7 +134,7 @@ type Deps struct {
 // 各域 provider 只写「自己那几个 service」，横切单例一律从 coreSingletons 取（providers_core.go），
 // 于是「全进程只有一份的东西」与「某域自己的东西」在文件层面就分得开。
 // exportStore 经 ExportStore seam 注入（生产为估值模块 pgx adapter）。
-func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore service.ExportStore) *Deps {
+func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore vexport.ExportStore) *Deps {
 	core := provideCore(cfg, db, st, logger, exportStore)
 
 	d := &Deps{

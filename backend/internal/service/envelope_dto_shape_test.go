@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"forklift-training/internal/aiassistant"
-	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/questioninteraction"
 )
 
 // spec #940 片三（含片二）：信封 DTO 的 shape-lock。
@@ -68,62 +69,7 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 			},
 			dto: &questionbank.QuestionImportResultDTO{ErrorCount: 0, Errors: []questionbank.QuestionImportErrorDTO{}, SuccessCount: 2},
 		},
-		{
-			name: "WrongQuestionPageDTO",
-			legacy: map[string]any{
-				"total":     int64(1),
-				"page":      1,
-				"page_size": 20,
-				"items": []map[string]any{
-					{
-						"id": 9, "student_id": 1, "question_id": 42, "wrong_count": 3,
-						"last_wrong_at":    "2026-09-13T10:00:00.000000+08:00",
-						"last_user_answer": "B",
-						"is_removed":       false, "is_redone": false,
-						"created_at":  "2026-09-13T09:00:00.000000+08:00",
-						"favorited":   true,
-						"favorite_id": int64(5),
-					},
-				},
-			},
-			dto: &WrongQuestionPageDTO{
-				Items: []WrongQuestionDTO{{
-					CreatedAt:      "2026-09-13T09:00:00.000000+08:00",
-					FavoriteID:     5,
-					Favorited:      true,
-					ID:             9,
-					IsRedone:       false,
-					IsRemoved:      false,
-					LastUserAnswer: "B",
-					LastWrongAt:    "2026-09-13T10:00:00.000000+08:00",
-					QuestionID:     42,
-					StudentID:      1,
-					WrongCount:     3,
-				}},
-				Page:     1,
-				PageSize: 20,
-				Total:    1,
-			},
-		},
-		{
-			name: "WrongQuestionDTO（question 缺失时整个 key 不出现）",
-			legacy: map[string]any{
-				"id": 9, "student_id": 1, "question_id": 42, "wrong_count": 3,
-				"last_wrong_at": "", "last_user_answer": "", "is_removed": false, "is_redone": false,
-				"created_at": "", "favorited": false, "favorite_id": int64(0),
-			},
-			dto: &WrongQuestionDTO{ID: 9, StudentID: 1, QuestionID: 42, WrongCount: 3},
-		},
-		{
-			name:   "WrongQuestionRemoveResultDTO",
-			legacy: map[string]any{"removed": true},
-			dto:    &WrongQuestionRemoveResultDTO{Removed: true},
-		},
-		{
-			name:   "WrongQuestionBatchRemoveResultDTO（同键不同类型：批量是条数）",
-			legacy: map[string]any{"removed": 3},
-			dto:    &WrongQuestionBatchRemoveResultDTO{Removed: 3},
-		},
+		// WrongQuestion* 的五条用例已随域包搬去 internal/wrongquestion/dto_shape_test.go（ADR-0070 波 4c）。
 		// WechatQRCodeInfoDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
 			// #1095：ContactRequestListResult 从「只服务 swagger 的类型」变真返回类型。
@@ -163,34 +109,16 @@ func TestEnvelopeDTOShapeLock(t *testing.T) {
 // 本片就是那一片，因此沿用同一个机制与同一个参照物：左边是**改造前的 map 形态**
 // （不是手抄的 JSON 字面量，否则抄错即与 DTO 同错），右边是收口后的 DTO。
 func TestInlineResponseDTOBytes(t *testing.T) {
-	user := &model.HrwaiUser{ID: 12, UID: 20260012, Account: "hrwai012", Username: "张三", Phone: "13800000001"}
 	// created / updated 与 rec 夹具随 RecruiterCreatedDTO/RecruiterUpdatedDTO 用例搬去 internal/auth/。
-	newUser := NewHrwaiUserCreatedDTO(user)
+	// HrwaiUserCreatedDTO / StatusResultDTO 两枚 DTO 及其三例已随管理域搬去 internal/admin/（ADR-0070 波 4d）。
 
 	cases := []struct {
 		name   string
 		legacy any
 		dto    any
 	}{
-		{
-			name:   "StatusResultDTO（HRWAI 用户 / 导师 / 招聘者三个开关端点共用；来源 int16）",
-			legacy: map[string]any{"status": int16(1)},
-			dto:    &StatusResultDTO{Status: 1},
-		},
-		{
-			name:   "StatusResultDTO（来源 int，零值也不省略）",
-			legacy: map[string]any{"status": 0},
-			dto:    &StatusResultDTO{},
-		},
 		// RecruiterCreatedDTO / RecruiterUpdatedDTO 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
-		{
-			name: "HrwaiUserCreatedDTO（新增 HRWAI 用户 201：password 不入响应，uid 走 FormatUID）",
-			legacy: map[string]any{
-				"id": user.ID, "uid": FormatUID(user.UID), "account": user.Account,
-				"username": user.Username, "phone": user.Phone,
-			},
-			dto: &newUser,
-		},
+		// StatusResultDTO ×2 与 HrwaiUserCreatedDTO 的用例已随管理域搬去 internal/admin/envelope_dto_shape_test.go（ADR-0070 波 4d）。
 		{
 			name:   "GenerateContentResultDTO",
 			legacy: map[string]any{"task_id": "task-abc"},
@@ -201,16 +129,12 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			legacy: map[string]any{"deducted": 30},
 			dto:    &points.PointsPenaltyResultDTO{Deducted: 30},
 		},
-		{
-			name:   "RecruitMeDTO（GET /api/recruit/me，原裸 handler）",
-			legacy: map[string]any{"user_id": 9, "account": "hr009", "role": "recruiter"},
-			dto:    &RecruitMeDTO{UserID: 9, Account: "hr009", Role: "recruiter"},
-		},
+		// RecruitMeDTO 的用例已随招聘域搬去 internal/recruit/envelope_dto_shape_test.go（ADR-0070 波 4e）。
 		// RecruiterPasswordResetResult 的用例已随域包搬去 internal/auth/（ADR-0070 波 3a）。
 		{
-			name:   "ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",
+			name:   "practicemode.ProgressSaveResultDTO（POST /practice-mode/progress：原 handler 内联 map）",
 			legacy: map[string]any{"saved": true, "index": 5},
-			dto:    &ProgressSaveResultDTO{Index: 5, Saved: true},
+			dto:    &practicemode.ProgressSaveResultDTO{Index: 5, Saved: true},
 		},
 		// ForumImageUploadResultDTO / ForumLikeResultDTO 的信封形状用例已随域包搬去 internal/forum/（ADR-0070 波 2b-2）。
 		{
@@ -219,13 +143,13 @@ func TestInlineResponseDTOBytes(t *testing.T) {
 			dto:    &notification.NotificationUnreadCountDTO{Count: 3},
 		},
 		{
-			name: "QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",
+			name: "questioninteraction.QuestionCommentPageResult（GET /questions/{id}/comments：原 handler 内联 gin.H）",
 			legacy: map[string]any{
-				"items": []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+				"items": []questioninteraction.QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
 				"total": int64(1), "page": 1, "page_size": 10,
 			},
-			dto: &QuestionCommentPageResult{
-				Items: []QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
+			dto: &questioninteraction.QuestionCommentPageResult{
+				Items: []questioninteraction.QuestionCommentDTO{{ID: 1, Content: "这题易错"}},
 				Page:  1, PageSize: 10, Total: 1,
 			},
 		},

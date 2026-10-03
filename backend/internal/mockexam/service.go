@@ -1,0 +1,464 @@
+// Package mockexam 模拟考试域：开考、进度保存、续考、交卷判分、结果与历史（ADR-0068）。
+// 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口，
+// service.go / backfill.go / progress.go 是域实现。
+package mockexam
+
+import (
+	"encoding/json"
+	"errors"
+	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
+	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
+	"forklift-training/internal/timefmt"
+	"forklift-training/pkg/paging"
+)
+
+// mockExamDefaultCount 模拟考试默认题量（取消等级后：固定题量随机抽）。
+const mockExamDefaultCount = 40
+
+// 模拟考试状态取值（与 mock_exam.status 列一一对应，禁止散写字面量）。
+const (
+	StatusInProgress = "in_progress"
+	StatusSubmitted  = "submitted"
+)
+
+// AbandonTTL 未完成记录的保留时长。
+// 用户点「开始考试」即刻建记录（status=in_progress），但可能直接关页面不交卷，
+// 这类记录既没有成绩也没有保留价值。超过本期限的未完成记录视为废弃，
+// 在下次开始考试时清理，避免 mock_exam 表无限堆积、并污染历史列表。
+const AbandonTTL = 24 * time.Hour
+
+// Service 模拟考试服务。
+type Service struct {
+	db *gorm.DB
+	ai *aiassistant.GenerationService
+	// grader 短答 AI 判分 adapter（在构造处单点包装，与练习流同形 —— 见 practicemode.Service.grader）。
+	// nil 时简答降级：不进 AI 分，Earned 记 0（ADR-0068 决策 1）。测试可注入 fake。
+	grader practicemode.ShortAnswerGrader
+
+	logger *zap.Logger
+}
+
+// NewService 创建模拟考试服务实例。
+func NewService(db *gorm.DB, ai *aiassistant.GenerationService, logger *zap.Logger) *Service {
+	return &Service{db: db, ai: ai, grader: practicemode.ShortAnswerGraderOf(ai), logger: logger}
+}
+
+// ===== DTO（JSON 契约与 B6 前的 map key 逐字一致，前端零改动约束）=====
+
+// MockExamStartDTO 开始模拟考试返回。
+type MockExamStartDTO struct {
+	MockExamID     int                        `json:"mock_exam_id"`
+	Duration       int                        `json:"duration"`
+	TotalScore     int                        `json:"total_score"`
+	TotalQuestions int                        `json:"total_questions"`
+	RemainingTime  int                        `json:"remaining_time"`
+	Questions      []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
+}
+
+// MockExamResumeDTO 恢复考试返回。
+type MockExamResumeDTO struct {
+	MockExamID    int                        `json:"mock_exam_id"`
+	Duration      int                        `json:"duration"`
+	RemainingTime int                        `json:"remaining_time"`
+	Questions     []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
+	Answers       any                        `json:"answers"`
+	StartTime     string                     `json:"start_time"`
+}
+
+// MockExamAnswerDetailDTO 交卷逐题明细。
+type MockExamAnswerDetailDTO struct {
+	QuestionID    int     `json:"question_id"`
+	Type          string  `json:"type"`
+	Content       string  `json:"content"`
+	UserAnswer    any     `json:"user_answer"`
+	CorrectAnswer string  `json:"correct_answer"`
+	Score         float64 `json:"score"`
+	MaxScore      float64 `json:"max_score"`
+	Explanation   string  `json:"explanation"`
+	Options       any     `json:"options"`
+	IsCorrect     *bool   `json:"is_correct" extensions:"x-nullable"`
+	// AI 评分字段仅在短答 AI 评分成功时出现。
+	AIScore    *float64 `json:"ai_score,omitempty" extensions:"x-optional"`
+	AIComment  *string  `json:"ai_comment,omitempty" extensions:"x-optional"`
+	AIFallback *bool    `json:"ai_fallback,omitempty" extensions:"x-optional"`
+}
+
+// MockExamSubmitDTO 交卷结果（同时落库为 result JSON）。
+type MockExamSubmitDTO struct {
+	TotalScore     float64                   `json:"total_score"`
+	MaxScore       float64                   `json:"max_score"`
+	CorrectCount   int                       `json:"correct_count"`
+	TotalQuestions int                       `json:"total_questions"`
+	Accuracy       float64                   `json:"accuracy"`
+	Details        []MockExamAnswerDetailDTO `json:"details" extensions:"x-nullable" nullability:"nullable"`
+}
+
+// MockExamResultDTO 结果详情（交卷结果 + mock_exam_id + submit_time）。
+type MockExamResultDTO struct {
+	MockExamSubmitDTO
+	MockExamID int    `json:"mock_exam_id"`
+	SubmitTime string `json:"submit_time"`
+}
+
+// MockExamHistoryItemDTO 历史列表条目。
+type MockExamHistoryItemDTO struct {
+	ID            int    `json:"id"`
+	StudentID     int    `json:"student_id"`
+	QuestionIDs   any    `json:"question_ids"`
+	Answers       any    `json:"answers"`
+	StartTime     string `json:"start_time"`
+	SubmitTime    string `json:"submit_time"`
+	RemainingTime int    `json:"remaining_time"`
+	Duration      int    `json:"duration"`
+	Status        string `json:"status"`
+	Result        any    `json:"result"`
+	CreatedAt     string `json:"created_at"`
+	// Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
+	Score *float64 `json:"score" extensions:"x-nullable"`
+	// PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
+	// （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
+	PaperID *int `json:"paper_id,omitempty" extensions:"x-optional"` // 随机模考无来源卷：**键不存在**（omitempty），故 x-optional 而非 x-nullable
+}
+
+// MockExamHistoryDTO 历史列表信封。
+type MockExamHistoryDTO struct {
+	Total    int64                    `json:"total"`
+	Page     int                      `json:"page"`
+	PageSize int                      `json:"page_size"`
+	Exams    []MockExamHistoryItemDTO `json:"exams" nullability:"nonnil"`
+}
+
+// Start 生成模拟考试：从 published 题库随机抽 count 题（不分等级、不分题型）。
+// credentialID 非 nil 时按当前证件分区（#702：与练习池同口径——已发布 + 排真题 + 证件分区），
+// 并把该证件**落进记录**（#1003）：历史读面按记录上的分区过滤，抽题与落库共用同一个值，不两处各算。
+// ErrMockExamNotFound 模拟考卷行不存在这一事实的唯一载体（ADR-0064 决策 1/2）；
+// 此前是三个函数各写一遍同文案裸 errors.New，且把「查不动」一并塌进来。
+var ErrMockExamNotFound = errors.New("模拟考试不存在")
+
+func (s *Service) Start(studentID, count, duration int, credentialID *int) (*MockExamStartDTO, error) {
+	if count <= 0 {
+		count = mockExamDefaultCount
+	}
+	if duration <= 0 {
+		duration = 90
+	}
+
+	selected, err := questionbank.SampleQuestions(s.db, "", count, credentialID)
+	if err != nil {
+		return nil, errors.New("查询题目失败")
+	}
+	if len(selected) == 0 {
+		return nil, errors.New("题库暂无可用的题目")
+	}
+
+	// 开新考试前先清掉该学生超过 AbandonTTL 仍未交卷的旧记录。
+	// 失败不阻断主流程：清理只是数据卫生，用户此刻要的是「开始考试」。
+	if err := s.db.
+		Where("student_id = ? AND status <> ? AND created_at < ?",
+			studentID, StatusSubmitted, clock.Now().Add(-AbandonTTL)).
+		Delete(&model.MockExam{}).Error; err != nil {
+		s.logger.Warn("清理废弃模拟考试记录失败",
+			zap.Int("student_id", studentID), zap.Error(err))
+	}
+
+	questionIDs := make([]int, len(selected))
+	totalScore := 0
+	for i, q := range selected {
+		questionIDs[i] = q.ID
+		totalScore += int(MaxScore(&q))
+	}
+
+	idsJSON, _ := json.Marshal(questionIDs)
+	emptyJSON, _ := json.Marshal(map[string]any{})
+	startTime := clock.Now()
+	mock := model.MockExam{
+		StudentID: studentID,
+		// 抽题与落库共用同一个值（#1003）：不两处各算。
+		CredentialID:  credentialID,
+		QuestionIDs:   model.JSONB(idsJSON),
+		Answers:       model.JSONB(emptyJSON),
+		Duration:      duration,
+		Status:        StatusInProgress,
+		StartTime:     &startTime,
+		RemainingTime: duration * 60,
+	}
+	if err := s.db.Create(&mock).Error; err != nil {
+		return nil, err
+	}
+
+	ordered := make([]questionbank.QuestionDTO, 0, len(selected))
+	for i := range selected {
+		ordered = append(ordered, questionbank.NewQuestionDTO(&selected[i], false))
+	}
+	return &MockExamStartDTO{
+		MockExamID:     mock.ID,
+		Duration:       duration,
+		TotalScore:     totalScore,
+		TotalQuestions: len(questionIDs),
+		RemainingTime:  mock.RemainingTime,
+		Questions:      ordered,
+	}, nil
+}
+
+// SaveProgress 保存进度。
+// 经保存会话进度深模块（session_progress.go）唯一实现：load → 守卫（本人+进行中）→
+// 快照 JSONB 三态归一 → db.Save。提交后/已结束的会话不再接受进度保存（对齐 level 最严口径）。
+func (s *Service) SaveProgress(mockExamID, studentID int, answers map[string]any, remainingTime int) error {
+	return saveSessionProgress(s.db, SessionProgressSpec[model.MockExam]{
+		notFoundErr: "模拟考试不存在",
+		load: func(db *gorm.DB) (model.MockExam, error) {
+			var m model.MockExam
+			return m, db.First(&m, mockExamID).Error
+		},
+		guard: func(m model.MockExam) error {
+			return practicemode.GuardOwnedInProgress(m.StudentID, m.Status, studentID, "无权操作此考试", "考试不在进行中")
+		},
+		write: func(m *model.MockExam, snapshot model.JSONB, rt int) {
+			m.Answers = snapshot
+			m.RemainingTime = rt
+		},
+	}, answers, remainingTime)
+}
+
+// Resume 恢复考试。
+func (s *Service) Resume(mockExamID, studentID int) (*MockExamResumeDTO, error) {
+	var mock model.MockExam
+	if err := s.db.First(&mock, mockExamID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMockExamNotFound
+		}
+		return nil, err
+	}
+	if err := practicemode.GuardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
+		return nil, err
+	}
+
+	var ids []int
+	if len(mock.QuestionIDs) > 0 {
+		_ = json.Unmarshal(mock.QuestionIDs, &ids)
+	}
+	ordered, _ := practicemode.LoadOrderedQuestions(s.db, ids)
+	questions := make([]questionbank.QuestionDTO, 0, len(ordered))
+	for i := range ordered {
+		questions = append(questions, questionbank.NewQuestionDTO(&ordered[i], false))
+	}
+	answers := practicemode.AnswersMapRoundTrip(mock.Answers)
+	startISO := ""
+	if mock.StartTime != nil {
+		startISO = timefmt.FormatISO(*mock.StartTime)
+	}
+	return &MockExamResumeDTO{
+		MockExamID:    mock.ID,
+		Duration:      mock.Duration,
+		RemainingTime: mock.RemainingTime,
+		Questions:     questions,
+		Answers:       answers,
+		StartTime:     startISO,
+	}, nil
+}
+
+// Submit 交卷。
+func (s *Service) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) {
+	var mock model.MockExam
+	if err := s.db.First(&mock, mockExamID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMockExamNotFound
+		}
+		return nil, err
+	}
+	if err := practicemode.GuardOwnedInProgress(mock.StudentID, mock.Status, studentID, "无权操作此考试", "考试不在进行中"); err != nil {
+		return nil, err
+	}
+
+	answersMap := practicemode.AnswersMapRoundTrip(mock.Answers)
+	var ids []int
+	if len(mock.QuestionIDs) > 0 {
+		_ = json.Unmarshal(mock.QuestionIDs, &ids)
+	}
+	_, qMap := practicemode.LoadOrderedQuestions(s.db, ids)
+
+	engine := practicemode.NewGradingEngine(s.db)
+	flow := practicemode.GradingFlow{
+		AI:       s.grader,
+		MaxScore: MaxScore,
+	}
+	results := engine.GradeSet(flow, qMap, ids, answersMap, studentID)
+
+	totalScore := 0.0
+	maxScore := 0.0
+	correctCount := 0
+	details := make([]MockExamAnswerDetailDTO, 0, len(results))
+
+	for _, r := range results {
+		question := r.Question
+		qid := question.ID
+		// ADR-0068 决策 2：correct_count 只认 IsCorrect（整题判对），总分无条件累加「本题得分」
+		// ——多选半对与简答 AI 分都是得分，此前被 IsCorrect 一并挡在总分之外。
+		if r.IsCorrect != nil && *r.IsCorrect {
+			correctCount++
+		}
+		totalScore += r.Earned
+		maxScore += r.MaxScore
+
+		detail := MockExamAnswerDetailDTO{
+			QuestionID:    qid,
+			Type:          question.Type,
+			Content:       question.Content,
+			UserAnswer:    r.UserAnswer,
+			CorrectAnswer: question.Answer,
+			Score:         r.Earned,
+			MaxScore:      r.MaxScore,
+			Explanation:   question.Explanation,
+			IsCorrect:     r.IsCorrect,
+		}
+		var options interface{}
+		if len(question.Options) > 0 {
+			_ = json.Unmarshal(question.Options, &options)
+		}
+		detail.Options = options
+
+		if r.ShortAnswer != nil {
+			detail.AIScore = &r.ShortAnswer.Score
+			comment := r.ShortAnswer.Comment
+			detail.AIComment = &comment
+			if r.ShortAnswer.Fallback {
+				fallback := true
+				detail.AIFallback = &fallback
+			}
+		}
+		details = append(details, detail)
+	}
+
+	mock.Status = StatusSubmitted
+	submitTime := clock.Now()
+	mock.SubmitTime = &submitTime
+	mock.Score = coerce.FloatPtr(totalScore)
+	accuracy := 0.0
+	if len(ids) > 0 {
+		accuracy = coerce.RoundFloat1(float64(correctCount) / float64(len(ids)) * 100)
+	}
+	result := MockExamSubmitDTO{
+		TotalScore:     totalScore,
+		MaxScore:       maxScore,
+		CorrectCount:   correctCount,
+		TotalQuestions: len(ids),
+		Accuracy:       accuracy,
+		Details:        details,
+	}
+	resultJSON, _ := json.Marshal(result)
+	mock.Result = model.JSONB(resultJSON)
+	if err := s.db.Save(&mock).Error; err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetResult 获取结果。
+func (s *Service) GetResult(mockExamID, studentID int) (*MockExamResultDTO, error) {
+	var mock model.MockExam
+	if err := s.db.First(&mock, mockExamID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMockExamNotFound
+		}
+		return nil, err
+	}
+	if mock.StudentID != studentID {
+		return nil, errors.New("无权查看此考试")
+	}
+	var result MockExamSubmitDTO
+	if len(mock.Result) > 0 {
+		_ = json.Unmarshal(mock.Result, &result)
+	}
+	submitISO := ""
+	if mock.SubmitTime != nil {
+		submitISO = timefmt.FormatISO(*mock.SubmitTime)
+	}
+	return &MockExamResultDTO{
+		MockExamSubmitDTO: result,
+		MockExamID:        mock.ID,
+		SubmitTime:        submitISO,
+	}, nil
+}
+
+// GetHistory 历史列表。
+// 只返回已交卷（submitted）的记录：未完成的废弃尝试没有成绩，展示出来只会让用户
+// 困惑（"我明明没考过，为什么有历史记录"）。废弃记录由 Start 中的清理逻辑兜底。
+//
+// credentialID 非 nil 时按证件分区过滤（#1003）：分区是**开考那一刻**的当前证件（Start 落库），
+// 故切到别的证件不会看到别的证件的模考 —— 与「当前证件 = 全局过滤器」同口径。
+// nil = 不分区、看全部：与错题本 / 题库池的既有 nil 语义一致（未选证件的学员不该看不到自己的历史）。
+func (s *Service) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
+	exams, total, page, pageSize, err := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		q = q.Where("student_id = ? AND status = ?", studentID, StatusSubmitted)
+		q = scope.RecordPartitionOf(q, "credential_id", credentialID)
+		return q
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]MockExamHistoryItemDTO, 0, len(exams))
+	for i := range exams {
+		items = append(items, mockExamToDTO(&exams[i]))
+	}
+	return &MockExamHistoryDTO{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Exams:    items,
+	}, nil
+}
+
+// ===== 辅助 =====
+
+func MaxScore(q *model.Question) float64 {
+	if q.Score > 0 {
+		return float64(q.Score)
+	}
+	return questionbank.QuestionMaxScore("mock_exam", q.Type)
+}
+
+// mockExamToDTO 历史条目构造（原 mockExamToDict 折叠入内）。
+func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
+	var ids, answers, result any
+	if len(m.QuestionIDs) > 0 {
+		_ = json.Unmarshal(m.QuestionIDs, &ids)
+	}
+	if len(m.Answers) > 0 {
+		_ = json.Unmarshal(m.Answers, &answers)
+	}
+	if len(m.Result) > 0 {
+		_ = json.Unmarshal(m.Result, &result)
+	}
+	startISO, submitISO := "", ""
+	if m.StartTime != nil {
+		startISO = timefmt.FormatISO(*m.StartTime)
+	}
+	if m.SubmitTime != nil {
+		submitISO = timefmt.FormatISO(*m.SubmitTime)
+	}
+	return MockExamHistoryItemDTO{
+		ID:            m.ID,
+		StudentID:     m.StudentID,
+		QuestionIDs:   ids,
+		Answers:       answers,
+		StartTime:     startISO,
+		SubmitTime:    submitISO,
+		RemainingTime: m.RemainingTime,
+		Duration:      m.Duration,
+		Status:        m.Status,
+		Result:        result,
+		CreatedAt:     timefmt.FormatISO(m.CreatedAt),
+		Score:         m.Score,
+		PaperID:       m.PaperID,
+	}
+}

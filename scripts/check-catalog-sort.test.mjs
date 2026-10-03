@@ -116,7 +116,7 @@ test('负例：非目录面文件与 Go 测试文件整体不进判定面', () =
   for (const p of [
     'backend/internal/service/faq_service.go',
     'backend/internal/course/service.go',
-    'backend/internal/api/admin.go',
+    'backend/internal/admin/handler.go',
     'backend/internal/training/catalog_tree_shape_test.go',
     'backend/internal/api/training_catalog_contract_test.go'
   ]) {

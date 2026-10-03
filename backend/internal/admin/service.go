@@ -1,0 +1,464 @@
+// Package admin 管理域：HTTP 出口（handler.go / handler_recruiter.go）与管理端实现（service.go）。
+package admin
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
+	"forklift-training/internal/model"
+	"forklift-training/internal/security"
+	"forklift-training/internal/service"
+	"forklift-training/internal/timefmt"
+	"forklift-training/pkg/paging"
+)
+
+// 讲师账号「真不存在」的载体已贴实体进 internal/model（波 4d 破环，ADR-0070 破法一）：
+// 留驻的口令写面（internal/service/password_write.go 的 tutorPasswordSubject）与本管理域都要用它。
+var (
+	// ErrRecruiterNotFound 见 auth_service.go 的 ToggleRecruiterStatus：招聘者账号不存在。
+	// ErrInvalidHrwaiUserID / ErrInvalidTutorID 是「id 根本不是个合法主体标识」，属输入不合法
+	// 一族（ADR-0064 决策 3，该族整批收口在后续批次）。本批先把分档建起来：此前这几处裸
+	// errors.New 撞上被改窄的默认错误面，会让 /admin/hrwai-users/-5/password 从 400 退成 500。
+	// 文案刻意与原字面量逐字相同，不改 wire 文本。
+	ErrInvalidHrwaiUserID = errors.New("用户 ID 非法")
+	ErrInvalidTutorID     = errors.New("讲师 ID 非法")
+)
+
+// Service 管理员服务。
+type Service struct {
+	db *gorm.DB
+
+	// session 只为「处置动作的后果集」而存在（ADR-0064 决策 4）：禁用学员必须与禁用招聘者
+	// 同样吊销其全部会话。管理面没有登录态，除吊销标记外不碰凭证生命周期。
+	session *security.Session
+
+	logger *zap.Logger
+}
+
+// NewService 创建管理员服务实例。
+func NewService(db *gorm.DB, session *security.Session, logger *zap.Logger) *Service {
+	return &Service{db: db, session: session, logger: logger}
+}
+
+// ===== HRWAI 用户管理(统一) =====
+// 操作 hrwai_users 表,合并原学员管理与评估用户管理两套接口。
+
+// HrwaiUserSummary HRWAI 用户摘要(列表项,不含密码)。
+type HrwaiUserSummary struct {
+	ID        int       `json:"id"`
+	UID       int64     `json:"uid,string"`
+	Account   string    `json:"account"`
+	Username  string    `json:"username"`
+	Phone     string    `json:"phone"`
+	Email     string    `json:"email"`
+	Company   string    `json:"company"`
+	Status    int16     `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// HrwaiUserPageResult HRWAI 用户分页结果（JSON 与既有契约一致，无 pages 字段）。
+type HrwaiUserPageResult struct {
+	List     []HrwaiUserSummary `json:"list" nullability:"nonnil"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"page_size"`
+	Total    int64              `json:"total"`
+}
+
+// ListHrwaiUsers 分页查询 HRWAI 用户,支持按账号/昵称/手机号模糊搜索。
+func (s *Service) ListHrwaiUsers(page, pageSize int, keyword string) (*HrwaiUserPageResult, error) {
+	users, total, page, pageSize, err := paging.QueryWithMax[model.HrwaiUser](s.db, page, pageSize, 20, 100,
+		"created_at DESC, id ASC", func(q *gorm.DB) *gorm.DB {
+			if keyword != "" {
+				like := "%" + keyword + "%"
+				q = q.Where("account LIKE ? OR username LIKE ? OR phone LIKE ?", like, like, like)
+			}
+			return q
+		})
+	if err != nil {
+		return nil, err
+	}
+	list := make([]HrwaiUserSummary, 0, len(users))
+	for _, u := range users {
+		list = append(list, HrwaiUserSummary{
+			ID:        u.ID,
+			UID:       u.UID,
+			Account:   u.Account,
+			Username:  u.Username,
+			Phone:     u.Phone,
+			Email:     u.Email,
+			Company:   u.Company,
+			Status:    u.Status,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+	return &HrwaiUserPageResult{
+		List:     list,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
+}
+
+// HrwaiUserCreatedDTO 新增 HRWAI 用户的响应：只回非敏感字段（password 不入响应）。
+// 字段声明按 JSON key 字母序 —— 与改造前 map[string]any 的序列化字节序一致（#954 片二）。
+type HrwaiUserCreatedDTO struct {
+	Account  string `json:"account"`
+	ID       int    `json:"id"`
+	Phone    string `json:"phone"`
+	UID      string `json:"uid"`
+	Username string `json:"username"`
+}
+
+// NewHrwaiUserCreatedDTO 把用户模型投影为「新增成功」的响应形状。
+// 投影折叠进 DTO 构造（ADR-0009 §2）：handler 不再手抄字段，UID 也走 FormatUID 单点。
+func NewHrwaiUserCreatedDTO(u *model.HrwaiUser) HrwaiUserCreatedDTO {
+	return HrwaiUserCreatedDTO{
+		Account:  u.Account,
+		ID:       u.ID,
+		Phone:    u.Phone,
+		UID:      service.FormatUID(u.UID),
+		Username: u.Username,
+	}
+}
+
+// CreateHrwaiUser 管理员新增 HRWAI 用户。account 缺省时随机生成，昵称缺省时自动生成。
+func (s *Service) CreateHrwaiUser(phone, password, account, username, email, company string) (*model.HrwaiUser, error) {
+	if phone == "" || password == "" {
+		return nil, errors.New("手机号、密码不能为空")
+	}
+	var count int64
+	s.db.Model(&model.HrwaiUser{}).Where("phone = ?", phone).Count(&count)
+	if count > 0 {
+		return nil, errors.New("手机号已被注册")
+	}
+	if account != "" {
+		if !service.IsValidAccount(account) {
+			return nil, errors.New("账号格式非法（4-20 位字母/数字/下划线）")
+		}
+		var acctCount int64
+		s.db.Model(&model.HrwaiUser{}).Where("account = ?", account).Count(&acctCount)
+		if acctCount > 0 {
+			return nil, errors.New("账号已被占用")
+		}
+	} else {
+		var err error
+		account, err = service.GenerateRandomAccount()
+		if err != nil {
+			return nil, errors.New("注册失败，请稍后再试")
+		}
+	}
+	if username == "" {
+		username = service.GenerateDefaultNickname(s.db)
+	}
+	hashed, err := service.HashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	user := model.HrwaiUser{
+		UID:       service.NextUID(),
+		Account:   account,
+		Username:  username,
+		Password:  hashed,
+		Phone:     phone,
+		Email:     email,
+		Company:   company,
+		Status:    1,
+		CreatedAt: clock.Now(),
+	}
+	if err := s.db.Create(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdateHrwaiUser 管理员更新 HRWAI 用户资料(不含密码)。
+func (s *Service) UpdateHrwaiUser(id int, username, email, company string, status int16) error {
+	if id <= 0 {
+		return ErrInvalidHrwaiUserID
+	}
+	updates := map[string]interface{}{
+		"username": username,
+		"email":    email,
+		"company":  company,
+		"status":   status,
+	}
+	return s.db.Model(&model.HrwaiUser{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// ResetHrwaiUserPassword 管理员重置 HRWAI 用户密码。
+// ResetHrwaiUserPassword 管理员代重置学员口令。**与学员自助改密是同一条动作**
+// （ADR-0064 决策 4）：交由 service.ApplyHrwaiPassword 做长度校验 + 哈希 + 落库 + 全会话吊销。
+// 收紧前这里自己 service.HashPassword + Update、零吊销，且长度规则只住在 handler
+// （admin.go 的 Parse）⇒ 动作层既没有兜底也没有终止语义。
+// 代重置的失败策略同口令族：口令一落库即不可回退，吊销写失败不阻断（尽力而为）。
+func (s *Service) ResetHrwaiUserPassword(ctx context.Context, id int, newPassword string) error {
+	if id <= 0 {
+		return ErrInvalidHrwaiUserID
+	}
+	res := service.ApplyHrwaiPassword(ctx, s.db, s.session, id, newPassword)
+	if !res.Applied() {
+		return res.Err
+	}
+	if res.RevokeErr != nil {
+		s.logger.Warn("代重置后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(res.RevokeErr))
+	}
+	return nil
+}
+
+// ResetTutorPassword 管理员代重置讲师口令。与学员侧同判（ADR-0064 决策 4）：走同一条
+// 「落新口令」动作，因此同时拿到长度兜底与全会话吊销。
+// 收紧前这里自行查存在 → 哈希 → 落库，零吊销 ⇒ 讲师的旧 refresh 链在口令被换掉后照样续登。
+func (s *Service) ResetTutorPassword(ctx context.Context, tutorID int, password string) error {
+	if tutorID <= 0 {
+		return ErrInvalidTutorID
+	}
+	res := service.ApplyTutorPassword(ctx, s.db, s.session, tutorID, password)
+	if !res.Applied() {
+		return res.Err
+	}
+	if res.RevokeErr != nil {
+		s.logger.Warn("讲师口令重置后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(res.RevokeErr))
+	}
+	return nil
+}
+
+// DeleteHrwaiUser 管理员删除 HRWAI 用户。
+func (s *Service) DeleteHrwaiUser(id int) error {
+	if id <= 0 {
+		return ErrInvalidHrwaiUserID
+	}
+	return s.db.Delete(&model.HrwaiUser{}, id).Error
+}
+
+// StatusResultDTO 开关类端点的响应形状 {"status": N}（HRWAI 用户 / 导师 / 招聘者三个端点共用）。
+// Status 统一为 int：来源有 int16 与 int 两种来源，JSON 表现一致（#954 片二；
+// 字节级 shape-lock 见 response_bytes_lock_test.go）。
+type StatusResultDTO struct {
+	Status int `json:"status"`
+}
+
+// ToggleHrwaiUserStatus 切换 HRWAI 用户启用/禁用状态,返回切换后的新状态。
+// ToggleHrwaiUserStatus 切换学员启用态。**禁用是一个处置动作，它的后果集必须齐全**
+// （ADR-0064 决策 4）：状态落库 + 全会话吊销，与 ToggleRecruiterStatus 同判。
+// 收紧前只有招聘者侧吊销 ⇒ issueLogin 会挡住被禁学员**重新登录**，却放过他手上已有的
+// refresh 链（最长 7 天静默续登）——「禁用挡住进来，不挡住留下」就是这么来的。
+// 失败策略沿用禁用族既有口径：吊销是「已生效处置之后的补救」⇒ 尽力而为，写不进只记日志
+// 不回退禁用本身（与注销族「先写标记、失败即整体不生效」有意不同）。
+// 只有转成禁用态才吊销：恢复启用不剥夺任何既有凭证，此时写标记等于二次惩罚。
+func (s *Service) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16, error) {
+	if id <= 0 {
+		return 0, ErrInvalidHrwaiUserID
+	}
+	var user model.HrwaiUser
+	if err := s.db.WithContext(ctx).First(&user, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, model.ErrHrwaiUserNotFound
+		}
+		return 0, err // 查不动不得被读成「不存在」（ADR-0064 决策 1，同 ADR-0062 票6 判据）
+	}
+	next := int16(1)
+	if user.Status == 1 {
+		next = 0
+	}
+	if err := s.db.WithContext(ctx).Model(&user).Update("status", next).Error; err != nil {
+		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, service.HrwaiRole, id); err != nil {
+			s.logger.Warn("学员禁用后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(err))
+		}
+	}
+	return next, nil
+}
+
+// ===== DTO（JSON 契约与 B7 前的 map key 逐字一致，前端零改动约束）=====
+
+// TutorDTO 导师（列表项）。
+type TutorDTO struct {
+	TutorID   int    `json:"tutor_id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	Status    int16  `json:"status"`
+	CreatedAt string `json:"created_at"`
+}
+
+// TutorListDTO 导师列表信封。
+type TutorListDTO struct {
+	Total  int64      `json:"total"`
+	Page   int        `json:"page"`
+	Tutors []TutorDTO `json:"tutors" nullability:"nonnil"`
+}
+
+// TutorDeletedDTO 删除导师结果。
+type TutorDeletedDTO struct {
+	TutorID int `json:"tutor_id"`
+}
+
+// AdminOverviewDTO 统计看板概览。
+type AdminOverviewDTO struct {
+	TotalStudents      int64 `json:"total_students"`
+	ActiveToday        int64 `json:"active_today"`
+	TotalCourses       int64 `json:"total_courses"`
+	TotalStudyDuration int64 `json:"total_study_duration"`
+}
+
+// CourseStatDTO 课程统计条目。
+type CourseStatDTO struct {
+	CourseID      int     `json:"course_id"`
+	Name          string  `json:"name"`
+	StudyCount    int64   `json:"study_count"`
+	TotalDuration int64   `json:"total_duration"`
+	AvgProgress   float64 `json:"avg_progress"`
+}
+
+// AdminStatisticsDTO 统计看板。
+type AdminStatisticsDTO struct {
+	Overview    AdminOverviewDTO `json:"overview"`
+	CourseStats []CourseStatDTO  `json:"course_stats" nullability:"nonnil"`
+}
+
+// GetTutors 导师列表。
+func (s *Service) GetTutors(page, pageSize int, keyword string) (*TutorListDTO, error) {
+	tutors, total, page, _, err := paging.Query[model.Tutor](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
+		if keyword != "" {
+			like := "%" + keyword + "%"
+			q = q.Where("username LIKE ? OR name LIKE ?", like, like)
+		}
+		return q
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]TutorDTO, 0, len(tutors))
+	for i := range tutors {
+		items = append(items, tutorToDTO(&tutors[i]))
+	}
+	return &TutorListDTO{
+		Total:  total,
+		Page:   page,
+		Tutors: items,
+	}, nil
+}
+
+// DeleteTutor 删除导师。
+func (s *Service) DeleteTutor(tutorID int) (*TutorDeletedDTO, error) {
+	var tutor model.Tutor
+	if err := s.db.First(&tutor, tutorID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrTutorNotFound
+		}
+		return nil, err
+	}
+	if err := s.db.Delete(&tutor).Error; err != nil {
+		return nil, err
+	}
+	return &TutorDeletedDTO{TutorID: tutorID}, nil
+}
+
+// ToggleTutorStatus 切换导师启用/禁用状态，返回切换后的新状态。
+// ToggleTutorStatus 切换讲师启用态。禁用即吊销其全部会话（ADR-0064 决策 4）——
+// 讲师走同一套双令牌链（登录角色 TutorRole），所以「禁用挡住进来、不挡住留下」这一族
+// 在学员侧修完时，讲师侧是它的另一半，不是一票新增。
+func (s *Service) ToggleTutorStatus(ctx context.Context, tutorID int) (int, error) {
+	var tutor model.Tutor
+	if err := s.db.WithContext(ctx).First(&tutor, tutorID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, model.ErrTutorNotFound
+		}
+		return 0, err
+	}
+	next := 1
+	if tutor.Status == 1 {
+		next = 0
+	}
+	if err := s.db.WithContext(ctx).Model(&tutor).Update("status", next).Error; err != nil {
+		return 0, err
+	}
+	if next == 0 {
+		if err := s.session.RevokeIdentity(ctx, service.TutorRole, tutorID); err != nil {
+			s.logger.Warn("讲师禁用后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(err))
+		}
+	}
+	return next, nil
+}
+
+// GetStatistics 统计看板。
+func (s *Service) GetStatistics() *AdminStatisticsDTO {
+	return s.queryStatistics()
+}
+
+// queryStatistics 执行实际的统计查询。
+func (s *Service) queryStatistics() *AdminStatisticsDTO {
+	var totalStudents, totalCourses, totalStudyDuration int64
+	s.db.Model(&model.HrwaiUser{}).Count(&totalStudents)
+	s.db.Model(&model.Course{}).Count(&totalCourses)
+	s.db.Model(&model.StudyRecord{}).Select("COALESCE(SUM(study_duration), 0)").Scan(&totalStudyDuration)
+
+	todayStart := clock.Now()
+	startOfDay := todayStart
+	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Hour()) * time.Hour)
+	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Minute()) * time.Minute)
+	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Second()) * time.Second)
+	startOfDay = startOfDay.Add(-time.Duration(startOfDay.Nanosecond()) * time.Nanosecond)
+
+	var activeToday int64
+	s.db.Model(&model.StudyRecord{}).Where("study_date >= ?", startOfDay).
+		Distinct("student_id").Count(&activeToday)
+
+	// 课程统计
+	type courseStatRow struct {
+		CourseID      int
+		Name          string
+		StudyCount    int64
+		AvgProgress   float64
+		TotalDuration int64
+	}
+	var rows []courseStatRow
+	s.db.Model(&model.Course{}).
+		Select(`course.course_id, course.name,
+			COUNT(DISTINCT study_record.student_id) as study_count,
+			COALESCE(AVG(study_record.progress), 0) as avg_progress,
+			COALESCE(SUM(study_record.study_duration), 0) as total_duration`).
+		Joins("LEFT JOIN study_record ON study_record.course_id = course.course_id").
+		Group("course.course_id").
+		Scan(&rows)
+
+	courseStats := make([]CourseStatDTO, 0, len(rows))
+	for _, r := range rows {
+		courseStats = append(courseStats, CourseStatDTO{
+			CourseID:      r.CourseID,
+			Name:          r.Name,
+			StudyCount:    r.StudyCount,
+			TotalDuration: r.TotalDuration,
+			AvgProgress:   coerce.RoundFloat2(r.AvgProgress),
+		})
+	}
+
+	return &AdminStatisticsDTO{
+		Overview: AdminOverviewDTO{
+			TotalStudents:      totalStudents,
+			ActiveToday:        activeToday,
+			TotalCourses:       totalCourses,
+			TotalStudyDuration: totalStudyDuration,
+		},
+		CourseStats: courseStats,
+	}
+}
+
+// ===== DTO 构造（原 tutorToDict 折叠入内）=====
+
+func tutorToDTO(t *model.Tutor) TutorDTO {
+	return TutorDTO{
+		TutorID:   t.TutorID,
+		Username:  t.Username,
+		Name:      t.Name,
+		Status:    t.Status,
+		CreatedAt: timefmt.FormatISO(t.CreatedAt),
+	}
+}

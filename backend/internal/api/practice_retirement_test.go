@@ -11,8 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/tutor"
 )
 
 func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
@@ -24,7 +26,7 @@ func TestRetiredPracticeEndpointsReturn404(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
+	practicemode.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.PracticeModeSvc)
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 
 	cases := []struct {
@@ -73,7 +75,7 @@ func TestTutorCourseRoutesAbsent(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterTutorRoutes(api, deps.RouterDeps(), deps.TutorSvc, deps.FileSvc)
+	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
 
 	for _, tc := range []struct {
 		method string

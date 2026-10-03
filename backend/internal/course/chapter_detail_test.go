@@ -1,6 +1,6 @@
 // Package course 测试：章节详情共享实现（学员端一节，Ticket #214 C4）。
-// 导师端（TutorService）一节留在 internal/service/tutor_chapter_detail_test.go：
-// 那几条用例的接缝是 TutorService，而域包测试不能 import internal/service 的测试助手（会成环）。
+// 导师端（tutor.Service）一节住在 internal/tutor/chapter_detail_test.go（波 4d 随导师域包搬走）：
+// 那几条用例的接缝是导师域的服务，而域包测试不能 import 别的域的测试助手（会成环）。
 // seam：testutil.NewMemoryDB 内存 sqlite。
 // 锁定行为：
 //   - 学员端 GetChapterDetail 的 prev/next 边界、文件列表、legacy 兼容字段；

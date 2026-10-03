@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"forklift-training/internal/student"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -59,7 +60,7 @@ func TestLearningPositionContract(t *testing.T) {
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
-	RegisterStudentRoutes(api, deps.RouterDeps(), deps.StudentSvc)
+	student.RegisterRoutes(api, deps.RouterDeps().Session, deps.StudentSvc)
 
 	const studentID = 7
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
@@ -249,7 +250,7 @@ func TestLearningPositionEmptyContract(t *testing.T) {
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
 	course.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.CourseSvc)
-	RegisterStudentRoutes(api, deps.RouterDeps(), deps.StudentSvc)
+	student.RegisterRoutes(api, deps.RouterDeps().Session, deps.StudentSvc)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(9, "13800000009", "hrwai_user")

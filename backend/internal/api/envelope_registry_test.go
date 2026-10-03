@@ -257,10 +257,10 @@ func TestEnvelopeCoverageDetectsMissingRegistration(t *testing.T) {
 	t.Parallel()
 	found := scanTotalListTypes(t, moduleRoot(t))
 	for _, want := range []string{
-		"api.AuditLogPageResult",
+		"audit.AuditLogPageResult",
 		"model.ListBatteryResponse",
 		"questionbank.QuestionPageDTO",
-		"service.FavoritePageResult",
+		"favorite.FavoritePageResult",
 	} {
 		if !containsString(found, want) {
 			t.Fatalf("覆盖锁判定面失效：扫描未报出 %s（扫描结果 %v）", want, found)

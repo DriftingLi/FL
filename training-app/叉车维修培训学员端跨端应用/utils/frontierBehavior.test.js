@@ -92,6 +92,18 @@ describe('串行轮转外层的判据真源（运行期）', () => {
     expect(verdict({ ...base, blockedBy: [{ number: 1421, state: 'MERGED' }] }).verdict).toBe('eligible');
   });
 
+  test('FR6: 「读到了空」不等于「读不出来」—— blocked_by: [] 必须判 eligible', () => {
+    // 本轮 TDD 抓出来的真 bug（不是测试写错）：取数面用 `if ($b) {…} else {$null}` 组装读数时，
+    // GitHub 返回的 `{"blocked_by": []}` 会被折成 $null ⇒ 一张**没有任何阻塞**的票判
+    // blocked_unknown ⇒ **取票面永远选不出票**，而 fail-closed 的方向看似「更安全」，所以它不报错、
+    // 只是静默地什么都不跑。判据必须把边界划在「读不出来」，不能顺手把空集合一起关掉。
+    expect(verdict({ ...base, blockedBy: [] }).verdict).toBe('eligible');
+    expect(verdict({ ...base, blockedBy: [] }).reason).toBe('');
+    // 反向锁：真的读不出来（字段缺 / 值为 null）仍然必须不取
+    expect(verdict({ number: 1400, state: 'OPEN', labels: ['ready-for-mobile-agent'], assignees: [] }).reason)
+      .toBe('blocked_unknown');
+  });
+
   test('FR2: fail-closed —— blocked_by 读不出来一律不取，不得静默当「没阻塞」', () => {
     // 「读数失败 ⇒ 当作没阻塞」的代价是跑一张中间态票，比「取不到票」严重得多。
     expect(verdict({ ...base, blockedBy: null }).reason).toBe('blocked_unknown');
@@ -155,10 +167,17 @@ describe('串行轮转外层的判据真源（运行期）', () => {
 
   test('FR5: 结构锁 —— 本守护的 token 确实登记进 Q-A 契约面（否则这是一份永不执行的守护）', () => {
     const src = readText(path.join(ROOT, 'scripts', 'lib', 'contract-tests.ps1'));
+    // 本文件覆盖的 token 是 `frontier`（不是 `frontierRun` —— 后者是计划面守护）：
+    // 两个 token 必须各自独立存在，否则「一个 token 顺带把另一个的守护带绿」的形态就回来了。
     expect(src).toContain('frontier');
-    // 反向断言：pattern 里那个 token 只能命中本文件（不得靠别的套件顺带绿）
     const pattern = src.match(/return\s*'([^']*frontier[^']*)'/)[1];
-    expect(pattern.split('|').filter((t) => t === 'frontier').length).toBe(1);
-    expect(pattern.split('|').filter((t) => /^frontier/.test(t)).length).toBe(1);
+    const tokens = pattern.split('|');
+    expect(tokens.filter((t) => t === 'frontier').length).toBe(1);
+    expect(tokens.filter((t) => t === 'frontierRun').length).toBe(1);
+    // 两个 token 都要能选中一个真实存在的套件文件（子串匹配，逐个独立验证）
+    const suites = fs.readdirSync(path.join(ROOT, 'utils')).filter((f) => f.endsWith('.test.js'));
+    for (const tok of ['frontier', 'frontierRun']) {
+      expect(suites.some((f) => f.includes(tok))).toBe(true);
+    }
   });
 });

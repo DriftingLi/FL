@@ -1,5 +1,120 @@
 basePath: /api
 definitions:
+  admin.AdminOverviewDTO:
+    properties:
+      active_today:
+        type: integer
+      total_courses:
+        type: integer
+      total_students:
+        type: integer
+      total_study_duration:
+        type: integer
+    type: object
+  admin.AdminStatisticsDTO:
+    properties:
+      course_stats:
+        items:
+          $ref: '#/definitions/admin.CourseStatDTO'
+        type: array
+      overview:
+        $ref: '#/definitions/admin.AdminOverviewDTO'
+    type: object
+  admin.CourseStatDTO:
+    properties:
+      avg_progress:
+        type: number
+      course_id:
+        type: integer
+      name:
+        type: string
+      study_count:
+        type: integer
+      total_duration:
+        type: integer
+    type: object
+  admin.HrwaiUserCreatedDTO:
+    properties:
+      account:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      uid:
+        type: string
+      username:
+        type: string
+    type: object
+  admin.HrwaiUserPageResult:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/admin.HrwaiUserSummary'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  admin.HrwaiUserSummary:
+    properties:
+      account:
+        type: string
+      company:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      status:
+        type: integer
+      uid:
+        example: "0"
+        type: string
+      username:
+        type: string
+    type: object
+  admin.StatusResultDTO:
+    properties:
+      status:
+        type: integer
+    type: object
+  admin.TutorDTO:
+    properties:
+      created_at:
+        type: string
+      name:
+        type: string
+      status:
+        type: integer
+      tutor_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  admin.TutorDeletedDTO:
+    properties:
+      tutor_id:
+        type: integer
+    type: object
+  admin.TutorListDTO:
+    properties:
+      page:
+        type: integer
+      total:
+        type: integer
+      tutors:
+        items:
+          $ref: '#/definitions/admin.TutorDTO'
+        type: array
+    type: object
   aiassistant.AIAssistantModeModels:
     properties:
       expert:
@@ -187,7 +302,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  api.AuditLogPageResult:
+  audit.AuditLogPageResult:
     properties:
       items:
         description: Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。
@@ -1141,6 +1256,47 @@ definitions:
           $ref: '#/definitions/faq.FaqCategoryDTO'
         type: array
     type: object
+  favorite.FavoriteCheckDTO:
+    properties:
+      favorite_id:
+        type: integer
+      favorited:
+        type: boolean
+    type: object
+  favorite.FavoriteDTO:
+    properties:
+      course_id:
+        description: |-
+          CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
+          `chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。
+          其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。
+        type: integer
+      cover:
+        type: string
+      created_at:
+        type: string
+      favorite_id:
+        type: integer
+      target_id:
+        type: integer
+      target_type:
+        type: string
+      title:
+        type: string
+    type: object
+  favorite.FavoritePageResult:
+    properties:
+      favorites:
+        items:
+          $ref: '#/definitions/favorite.FavoriteDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
   featured.FeaturedContentAdminDetailDTO:
     properties:
       category:
@@ -1546,6 +1702,203 @@ definitions:
       viewed_at:
         type: string
     type: object
+  job.ApplicationDTO:
+    properties:
+      company_name:
+        description: 企业信息（学员侧可见）
+        type: string
+        x-optional: true
+      created_at:
+        type: string
+      employer_viewed_at:
+        type: string
+        x-optional: true
+      id:
+        type: integer
+      job_posting_id:
+        type: integer
+      job_title:
+        type: string
+        x-optional: true
+      recruiter_id:
+        type: integer
+      resume_updated_at:
+        type: string
+      resume_updated_at_snapshot:
+        description: 投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」
+        type: string
+        x-optional: true
+      status:
+        type: string
+      student_real_name_masked:
+        description: 学员信息（企业侧可见，走脱敏路径）
+        type: string
+        x-optional: true
+      student_resume_updated_at:
+        type: string
+        x-optional: true
+      student_user_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  job.ApplicationListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.ApplicationDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  job.JobListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.JobPostingDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  job.JobPostingDTO:
+    properties:
+      apply_state:
+        description: 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
+        type: string
+        x-optional: true
+      business_scope:
+        type: string
+        x-optional: true
+      company_name:
+        description: 企业信息（学员侧可见，不含电话/邮箱/信用代码）
+        type: string
+        x-optional: true
+      contact_name:
+        type: string
+        x-optional: true
+      cooldown_days:
+        description: not_hired 时距可再投天数（向上取整）
+        type: integer
+        x-optional: true
+      created_at:
+        type: string
+      description:
+        type: string
+      experience_req:
+        type: string
+      forced_offline:
+        type: boolean
+      id:
+        type: integer
+      offline_reason:
+        type: string
+        x-optional: true
+      position_id:
+        type: integer
+        x-optional: true
+      position_name:
+        type: string
+        x-optional: true
+      published_at:
+        type: string
+      recruiter_id:
+        type: integer
+      region:
+        type: string
+      salary_max:
+        type: integer
+        x-optional: true
+      salary_min:
+        type: integer
+        x-optional: true
+      salary_text:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  job.JobPostingInput:
+    properties:
+      description:
+        type: string
+      experience_req:
+        type: string
+      position_id:
+        type: integer
+      region:
+        type: string
+      salary_max:
+        type: integer
+      salary_min:
+        type: integer
+      salary_text:
+        type: string
+      title:
+        type: string
+    type: object
+  job.RecruiterApplicationListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.ApplicationDTO'
+        type: array
+      job_title:
+        type: string
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      unread_count:
+        type: integer
+    type: object
+  job.ReportDTO:
+    properties:
+      created_at:
+        type: string
+      handled_at:
+        type: string
+        x-optional: true
+      id:
+        type: integer
+      job_posting_id:
+        type: integer
+      job_title:
+        type: string
+        x-optional: true
+      reason:
+        type: string
+      status:
+        type: string
+      student_user_id:
+        type: integer
+    type: object
+  job.ReportInput:
+    properties:
+      reason:
+        type: string
+    type: object
+  job.ReportListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/job.ReportDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   material.MaterialDTO:
     properties:
       chapter_id:
@@ -1582,6 +1935,156 @@ definitions:
         type: integer
       total:
         type: integer
+    type: object
+  mockexam.MockExamAnswerDetailDTO:
+    properties:
+      ai_comment:
+        type: string
+        x-optional: true
+      ai_fallback:
+        type: boolean
+        x-optional: true
+      ai_score:
+        description: AI 评分字段仅在短答 AI 评分成功时出现。
+        type: number
+        x-optional: true
+      content:
+        type: string
+      correct_answer:
+        type: string
+      explanation:
+        type: string
+      is_correct:
+        type: boolean
+        x-nullable: true
+      max_score:
+        type: number
+      options: {}
+      question_id:
+        type: integer
+      score:
+        type: number
+      type:
+        type: string
+      user_answer: {}
+    type: object
+  mockexam.MockExamHistoryDTO:
+    properties:
+      exams:
+        items:
+          $ref: '#/definitions/mockexam.MockExamHistoryItemDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  mockexam.MockExamHistoryItemDTO:
+    properties:
+      answers: {}
+      created_at:
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      paper_id:
+        description: |-
+          PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
+          （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
+        type: integer
+        x-optional: true
+      question_ids: {}
+      remaining_time:
+        type: integer
+      result: {}
+      score:
+        description: Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
+        type: number
+        x-nullable: true
+      start_time:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: integer
+      submit_time:
+        type: string
+    type: object
+  mockexam.MockExamResultDTO:
+    properties:
+      accuracy:
+        type: number
+      correct_count:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/mockexam.MockExamAnswerDetailDTO'
+        type: array
+        x-nullable: true
+      max_score:
+        type: number
+      mock_exam_id:
+        type: integer
+      submit_time:
+        type: string
+      total_questions:
+        type: integer
+      total_score:
+        type: number
+    type: object
+  mockexam.MockExamResumeDTO:
+    properties:
+      answers: {}
+      duration:
+        type: integer
+      mock_exam_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      remaining_time:
+        type: integer
+      start_time:
+        type: string
+    type: object
+  mockexam.MockExamStartDTO:
+    properties:
+      duration:
+        type: integer
+      mock_exam_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      remaining_time:
+        type: integer
+      total_questions:
+        type: integer
+      total_score:
+        type: integer
+    type: object
+  mockexam.MockExamSubmitDTO:
+    properties:
+      accuracy:
+        type: number
+      correct_count:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/mockexam.MockExamAnswerDetailDTO'
+        type: array
+        x-nullable: true
+      max_score:
+        type: number
+      total_questions:
+        type: integer
+      total_score:
+        type: number
     type: object
   model.AuditLog:
     properties:
@@ -2105,6 +2608,33 @@ definitions:
       voltage_std:
         type: number
     type: object
+  note.NoteDTO:
+    properties:
+      content:
+        type: string
+      id:
+        type: integer
+      question_content:
+        type: string
+      question_id:
+        type: integer
+        x-nullable: true
+      updated_at:
+        type: string
+    type: object
+  note.NotePageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/note.NoteDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   notification.NotificationDTO:
     properties:
       content:
@@ -2241,6 +2771,155 @@ definitions:
       total_earned:
         type: integer
     type: object
+  practicemode.HistoryItemDTO:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_correct:
+        type: boolean
+      practice_type:
+        type: string
+      question:
+        allOf:
+        - $ref: '#/definitions/questionbank.QuestionDTO'
+        x-optional: true
+      question_id:
+        type: integer
+      student_id:
+        type: integer
+      user_answer:
+        type: string
+    type: object
+  practicemode.HistoryResultDTO:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      records:
+        items:
+          $ref: '#/definitions/practicemode.HistoryItemDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  practicemode.PracticePracticeStatsDTO:
+    properties:
+      today_count:
+        type: integer
+      total_count:
+        type: integer
+      total_days:
+        type: integer
+    type: object
+  practicemode.PracticeStartResultDTO:
+    properties:
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+      total:
+        type: integer
+    type: object
+  practicemode.PracticeStatsDTO:
+    properties:
+      accuracy:
+        type: number
+      by_type:
+        additionalProperties:
+          $ref: '#/definitions/practicemode.PracticeTypeStat'
+        type: object
+      correct:
+        type: integer
+      total:
+        type: integer
+      wrong:
+        type: integer
+    type: object
+  practicemode.PracticeTypeStat:
+    properties:
+      accuracy:
+        type: number
+      correct:
+        type: integer
+      total:
+        type: integer
+    type: object
+  practicemode.ProgressResultDTO:
+    properties:
+      answers_state:
+        additionalProperties: {}
+        description: AnswersState 无进度时为 null（键仍在）→ x-nullable。
+        type: object
+        x-nullable: true
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      pool_total:
+        description: |-
+          PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
+          Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
+        type: integer
+      total:
+        type: integer
+    type: object
+  practicemode.ProgressSaveResultDTO:
+    properties:
+      index:
+        type: integer
+      saved:
+        type: boolean
+    type: object
+  practicemode.SubmitResultDTO:
+    properties:
+      accuracy_rate:
+        type: number
+        x-optional: true
+      ai_comment:
+        type: string
+        x-optional: true
+      ai_explanation:
+        type: string
+        x-optional: true
+      ai_fallback:
+        type: boolean
+        x-optional: true
+      ai_score:
+        type: number
+        x-optional: true
+      common_wrong:
+        type: string
+        x-optional: true
+      correct_answer:
+        type: string
+      explanation:
+        type: string
+      is_correct:
+        type: boolean
+        x-nullable: true
+      max_score:
+        type: integer
+        x-optional: true
+      question_id:
+        type: integer
+      reference_answer:
+        type: string
+        x-optional: true
+      scoring_criteria:
+        type: string
+        x-optional: true
+      total_attempts:
+        type: integer
+        x-optional: true
+      user_answer: {}
+    type: object
   questionbank.QuestionBankStatsDTO:
     properties:
       by_status:
@@ -2357,6 +3036,75 @@ definitions:
         type: integer
     type: object
   questionbank.QuestionUpdateInput:
+    type: object
+  questioninteraction.QuestionCommentDTO:
+    properties:
+      avatar_url:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      question_id:
+        type: integer
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  questioninteraction.QuestionCommentPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/questioninteraction.QuestionCommentDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  realexam.RealExamPaperDTO:
+    properties:
+      duration_minutes:
+        type: integer
+      entitled:
+        type: boolean
+      paper_id:
+        type: integer
+      price:
+        type: integer
+      question_count:
+        type: integer
+      source:
+        type: string
+        x-optional: true
+      title:
+        type: string
+      year:
+        type: integer
+        x-optional: true
+    type: object
+  recruit.RecruitListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/resume.RecruitResumeCard'
+        type: array
+      total:
+        type: integer
+    type: object
+  recruit.RecruitMeDTO:
+    properties:
+      account:
+        type: string
+      role:
+        type: string
+      user_id:
+        type: integer
     type: object
   repository.AlgorithmParameters:
     properties:
@@ -2542,88 +3290,207 @@ definitions:
       message:
         type: string
     type: object
-  service.AdminOverviewDTO:
+  resume.JobCardDTO:
     properties:
-      active_today:
-        type: integer
-      total_courses:
-        type: integer
-      total_students:
-        type: integer
-      total_study_duration:
-        type: integer
-    type: object
-  service.AdminStatisticsDTO:
-    properties:
-      course_stats:
-        items:
-          $ref: '#/definitions/service.CourseStatDTO'
-        type: array
-      overview:
-        $ref: '#/definitions/service.AdminOverviewDTO'
-    type: object
-  service.ApplicationDTO:
-    properties:
-      company_name:
-        description: 企业信息（学员侧可见）
+      available_in:
         type: string
-        x-optional: true
+      contact_phone:
+        type: string
       created_at:
         type: string
-      employer_viewed_at:
+      expected_position_extra:
         type: string
-        x-optional: true
-      id:
+      expected_position_id:
         type: integer
-      job_posting_id:
+        x-optional: true
+      expected_regions:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      experience_years:
         type: integer
-      job_title:
+      job_nature:
         type: string
-        x-optional: true
-      recruiter_id:
+      photos:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      real_name:
+        type: string
+      region:
+        type: string
+      resume_certifications:
+        items:
+          type: object
+        type: array
+        x-nullable: true
+      resume_experiences:
+        items:
+          type: object
+        type: array
+        x-nullable: true
+      resume_file_url:
+        type: string
+      salary_max:
         type: integer
-      resume_updated_at:
-        type: string
-      resume_updated_at_snapshot:
-        description: 投递那一刻的简历更新时间（版本指针），前端据此提示「收到后简历已更新」
-        type: string
         x-optional: true
-      status:
-        type: string
-      student_real_name_masked:
-        description: 学员信息（企业侧可见，走脱敏路径）
-        type: string
-        x-optional: true
-      student_resume_updated_at:
-        type: string
-        x-optional: true
-      student_user_id:
+      salary_min:
         type: integer
+        x-optional: true
+      salary_negotiable:
+        type: boolean
+      self_intro:
+        type: string
       updated_at:
         type: string
+      user_id:
+        type: integer
+      visibility:
+        type: string
+      wechat:
+        type: string
     type: object
-  service.ApplicationListResult:
+  resume.JobCardInput:
+    type: object
+  resume.RecruitResumeCard:
+    properties:
+      available_in:
+        type: string
+      company_disabled:
+        description: |-
+          CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
+          同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
+          本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
+          （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
+          移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。
+        type: boolean
+        x-optional: true
+      contact_source:
+        description: recruiter/application
+        type: string
+        x-optional: true
+      contact_state:
+        description: '#489：企业视角联系状态（none/pending/approved，approved 带来源）'
+        type: string
+        x-optional: true
+      expected_position_extra:
+        type: string
+      expected_position_id:
+        type: integer
+        x-optional: true
+      expected_regions:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      experience_years:
+        type: integer
+      job_nature:
+        type: string
+      real_name:
+        description: 已打码（如 张* 或 张*丰）
+        type: string
+      real_name_masked:
+        description: 同上，兼容验收对打码字段的显式断言
+        type: string
+      resume_certifications:
+        description: 已去 image_urls
+        items:
+          type: object
+        type: array
+      resume_experiences:
+        items:
+          type: object
+        type: array
+        x-nullable: true
+      salary_max:
+        type: integer
+        x-optional: true
+      salary_min:
+        type: integer
+        x-optional: true
+      salary_negotiable:
+        type: boolean
+      self_intro:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  search.SearchAllDTO:
+    properties:
+      chapters:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      contents:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      courses:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      keyword:
+        type: string
+      questions:
+        $ref: '#/definitions/search.SearchSectionDTO'
+      topics:
+        $ref: '#/definitions/search.SearchSectionDTO'
+    type: object
+  search.SearchItemDTO:
+    properties:
+      cover:
+        type: string
+      hit_field:
+        description: HitField 命中位置：title | body | reply。
+        type: string
+      id:
+        type: integer
+      parent_id:
+        description: ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。
+        type: integer
+      snippet:
+        description: Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。
+        type: string
+      summary:
+        description: Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  search.SearchPageDTO:
     properties:
       items:
         items:
-          $ref: '#/definitions/service.ApplicationDTO'
+          $ref: '#/definitions/search.SearchItemDTO'
         type: array
+      keyword:
+        type: string
       page:
         type: integer
-      page_size:
+      pages:
         type: integer
       total:
         type: integer
+      type:
+        type: string
     type: object
-  service.BatchDeleteFilesResult:
+  search.SearchSectionDTO:
     properties:
-      failed_count:
-        type: integer
-      failed_ids:
+      items:
         items:
-          type: integer
+          $ref: '#/definitions/search.SearchItemDTO'
         type: array
-      success_count:
+      total:
+        type: integer
+    type: object
+  search.ZeroResultKeywordDTO:
+    properties:
+      keyword:
+        type: string
+      last_seen_at:
+        type: string
+      times:
         type: integer
     type: object
   service.ChapterGenResult:
@@ -2733,82 +3600,6 @@ definitions:
       total:
         type: integer
     type: object
-  service.CourseProgressDTO:
-    properties:
-      course_id:
-        type: integer
-      course_name:
-        type: string
-      progress:
-        type: number
-      study_date:
-        type: string
-      study_duration:
-        type: integer
-      total_chapters:
-        type: integer
-    type: object
-  service.CourseStatDTO:
-    properties:
-      avg_progress:
-        type: number
-      course_id:
-        type: integer
-      name:
-        type: string
-      study_count:
-        type: integer
-      total_duration:
-        type: integer
-    type: object
-  service.DeleteFileResult:
-    properties:
-      deleted:
-        type: boolean
-      file_id:
-        type: integer
-    type: object
-  service.FavoriteCheckDTO:
-    properties:
-      favorite_id:
-        type: integer
-      favorited:
-        type: boolean
-    type: object
-  service.FavoriteDTO:
-    properties:
-      course_id:
-        description: |-
-          CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
-          `chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。
-          其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。
-        type: integer
-      cover:
-        type: string
-      created_at:
-        type: string
-      favorite_id:
-        type: integer
-      target_id:
-        type: integer
-      target_type:
-        type: string
-      title:
-        type: string
-    type: object
-  service.FavoritePageResult:
-    properties:
-      favorites:
-        items:
-          $ref: '#/definitions/service.FavoriteDTO'
-        type: array
-      page:
-        type: integer
-      pages:
-        type: integer
-      total:
-        type: integer
-    type: object
   service.GenTaskStatus:
     properties:
       completed:
@@ -2831,750 +3622,22 @@ definitions:
       task_id:
         type: string
     type: object
-  service.HistoryItemDTO:
+  student.CourseProgressDTO:
     properties:
-      created_at:
-        type: string
-      id:
+      course_id:
         type: integer
-      is_correct:
-        type: boolean
-      practice_type:
+      course_name:
         type: string
-      question:
-        allOf:
-        - $ref: '#/definitions/questionbank.QuestionDTO'
-        x-optional: true
-      question_id:
-        type: integer
-      student_id:
-        type: integer
-      user_answer:
-        type: string
-    type: object
-  service.HistoryResultDTO:
-    properties:
-      page:
-        type: integer
-      page_size:
-        type: integer
-      records:
-        items:
-          $ref: '#/definitions/service.HistoryItemDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.HrwaiUserCreatedDTO:
-    properties:
-      account:
-        type: string
-      id:
-        type: integer
-      phone:
-        type: string
-      uid:
-        type: string
-      username:
-        type: string
-    type: object
-  service.HrwaiUserPageResult:
-    properties:
-      list:
-        items:
-          $ref: '#/definitions/service.HrwaiUserSummary'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.HrwaiUserSummary:
-    properties:
-      account:
-        type: string
-      company:
-        type: string
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: integer
-      phone:
-        type: string
-      status:
-        type: integer
-      uid:
-        example: "0"
-        type: string
-      username:
-        type: string
-    type: object
-  service.JobCardDTO:
-    properties:
-      available_in:
-        type: string
-      contact_phone:
-        type: string
-      created_at:
-        type: string
-      expected_position_extra:
-        type: string
-      expected_position_id:
-        type: integer
-        x-optional: true
-      expected_regions:
-        items:
-          type: string
-        type: array
-        x-nullable: true
-      experience_years:
-        type: integer
-      job_nature:
-        type: string
-      photos:
-        items:
-          type: string
-        type: array
-        x-nullable: true
-      real_name:
-        type: string
-      region:
-        type: string
-      resume_certifications:
-        items:
-          type: object
-        type: array
-        x-nullable: true
-      resume_experiences:
-        items:
-          type: object
-        type: array
-        x-nullable: true
-      resume_file_url:
-        type: string
-      salary_max:
-        type: integer
-        x-optional: true
-      salary_min:
-        type: integer
-        x-optional: true
-      salary_negotiable:
-        type: boolean
-      self_intro:
-        type: string
-      updated_at:
-        type: string
-      user_id:
-        type: integer
-      visibility:
-        type: string
-      wechat:
-        type: string
-    type: object
-  service.JobCardInput:
-    type: object
-  service.JobListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.JobPostingDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.JobPostingDTO:
-    properties:
-      apply_state:
-        description: 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
-        type: string
-        x-optional: true
-      business_scope:
-        type: string
-        x-optional: true
-      company_name:
-        description: 企业信息（学员侧可见，不含电话/邮箱/信用代码）
-        type: string
-        x-optional: true
-      contact_name:
-        type: string
-        x-optional: true
-      cooldown_days:
-        description: not_hired 时距可再投天数（向上取整）
-        type: integer
-        x-optional: true
-      created_at:
-        type: string
-      description:
-        type: string
-      experience_req:
-        type: string
-      forced_offline:
-        type: boolean
-      id:
-        type: integer
-      offline_reason:
-        type: string
-        x-optional: true
-      position_id:
-        type: integer
-        x-optional: true
-      position_name:
-        type: string
-        x-optional: true
-      published_at:
-        type: string
-      recruiter_id:
-        type: integer
-      region:
-        type: string
-      salary_max:
-        type: integer
-        x-optional: true
-      salary_min:
-        type: integer
-        x-optional: true
-      salary_text:
-        type: string
-      status:
-        type: string
-      title:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  service.JobPostingInput:
-    properties:
-      description:
-        type: string
-      experience_req:
-        type: string
-      position_id:
-        type: integer
-      region:
-        type: string
-      salary_max:
-        type: integer
-      salary_min:
-        type: integer
-      salary_text:
-        type: string
-      title:
-        type: string
-    type: object
-  service.MockExamAnswerDetailDTO:
-    properties:
-      ai_comment:
-        type: string
-        x-optional: true
-      ai_fallback:
-        type: boolean
-        x-optional: true
-      ai_score:
-        description: AI 评分字段仅在短答 AI 评分成功时出现。
+      progress:
         type: number
-        x-optional: true
-      content:
+      study_date:
         type: string
-      correct_answer:
-        type: string
-      explanation:
-        type: string
-      is_correct:
-        type: boolean
-        x-nullable: true
-      max_score:
-        type: number
-      options: {}
-      question_id:
+      study_duration:
         type: integer
-      score:
-        type: number
-      type:
-        type: string
-      user_answer: {}
-    type: object
-  service.MockExamHistoryDTO:
-    properties:
-      exams:
-        items:
-          $ref: '#/definitions/service.MockExamHistoryItemDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
+      total_chapters:
         type: integer
     type: object
-  service.MockExamHistoryItemDTO:
-    properties:
-      answers: {}
-      created_at:
-        type: string
-      duration:
-        type: integer
-      id:
-        type: integer
-      paper_id:
-        description: |-
-          PaperID 真题卷来源（#386）：按卷开考时写入 mock_exam.paper_id，随机模考为 nil
-          （omitempty——既有消费者对随机模考的响应零差异，向后兼容）。
-        type: integer
-        x-optional: true
-      question_ids: {}
-      remaining_time:
-        type: integer
-      result: {}
-      score:
-        description: Score 未交卷时为 null（键仍在）：x-nullable 让生成物渲染 number | null。
-        type: number
-        x-nullable: true
-      start_time:
-        type: string
-      status:
-        type: string
-      student_id:
-        type: integer
-      submit_time:
-        type: string
-    type: object
-  service.MockExamResultDTO:
-    properties:
-      accuracy:
-        type: number
-      correct_count:
-        type: integer
-      details:
-        items:
-          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
-        type: array
-        x-nullable: true
-      max_score:
-        type: number
-      mock_exam_id:
-        type: integer
-      submit_time:
-        type: string
-      total_questions:
-        type: integer
-      total_score:
-        type: number
-    type: object
-  service.MockExamResumeDTO:
-    properties:
-      answers: {}
-      duration:
-        type: integer
-      mock_exam_id:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/questionbank.QuestionDTO'
-        type: array
-      remaining_time:
-        type: integer
-      start_time:
-        type: string
-    type: object
-  service.MockExamStartDTO:
-    properties:
-      duration:
-        type: integer
-      mock_exam_id:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/questionbank.QuestionDTO'
-        type: array
-      remaining_time:
-        type: integer
-      total_questions:
-        type: integer
-      total_score:
-        type: integer
-    type: object
-  service.MockExamSubmitDTO:
-    properties:
-      accuracy:
-        type: number
-      correct_count:
-        type: integer
-      details:
-        items:
-          $ref: '#/definitions/service.MockExamAnswerDetailDTO'
-        type: array
-        x-nullable: true
-      max_score:
-        type: number
-      total_questions:
-        type: integer
-      total_score:
-        type: number
-    type: object
-  service.NoteDTO:
-    properties:
-      content:
-        type: string
-      id:
-        type: integer
-      question_content:
-        type: string
-      question_id:
-        type: integer
-        x-nullable: true
-      updated_at:
-        type: string
-    type: object
-  service.NotePageDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.NoteDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.PracticePracticeStatsDTO:
-    properties:
-      today_count:
-        type: integer
-      total_count:
-        type: integer
-      total_days:
-        type: integer
-    type: object
-  service.PracticeStartResultDTO:
-    properties:
-      completed:
-        type: integer
-      current_index:
-        type: integer
-      questions:
-        items:
-          $ref: '#/definitions/questionbank.QuestionDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.PracticeStatsDTO:
-    properties:
-      accuracy:
-        type: number
-      by_type:
-        additionalProperties:
-          $ref: '#/definitions/service.PracticeTypeStat'
-        type: object
-      correct:
-        type: integer
-      total:
-        type: integer
-      wrong:
-        type: integer
-    type: object
-  service.PracticeTypeStat:
-    properties:
-      accuracy:
-        type: number
-      correct:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.ProgressResultDTO:
-    properties:
-      answers_state:
-        additionalProperties: {}
-        description: AnswersState 无进度时为 null（键仍在）→ x-nullable。
-        type: object
-        x-nullable: true
-      completed:
-        type: integer
-      current_index:
-        type: integer
-      pool_total:
-        description: |-
-          PoolTotal 实时题库池总数（#413）：当前证件分区口径，与开始练习返回的题目数一致；
-          Total 语义退回「上次会话数组长度」，仅供断点续练游标使用（字段名不变，新增字段零 diff）。
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.ProgressSaveResultDTO:
-    properties:
-      index:
-        type: integer
-      saved:
-        type: boolean
-    type: object
-  service.QuestionCommentDTO:
-    properties:
-      avatar_url:
-        type: string
-      content:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: integer
-      question_id:
-        type: integer
-      user_id:
-        type: integer
-      username:
-        type: string
-    type: object
-  service.QuestionCommentPageResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.QuestionCommentDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.RealExamPaperDTO:
-    properties:
-      duration_minutes:
-        type: integer
-      entitled:
-        type: boolean
-      paper_id:
-        type: integer
-      price:
-        type: integer
-      question_count:
-        type: integer
-      source:
-        type: string
-        x-optional: true
-      title:
-        type: string
-      year:
-        type: integer
-        x-optional: true
-    type: object
-  service.RecruitListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.RecruitResumeCard'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.RecruitMeDTO:
-    properties:
-      account:
-        type: string
-      role:
-        type: string
-      user_id:
-        type: integer
-    type: object
-  service.RecruitResumeCard:
-    properties:
-      available_in:
-        type: string
-      company_disabled:
-        description: |-
-          CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
-          同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
-          本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
-          （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
-          移动端 #1267 的退回诉求就是这一格：只挂在明文位置上时列表角标无从分辨。
-        type: boolean
-        x-optional: true
-      contact_source:
-        description: recruiter/application
-        type: string
-        x-optional: true
-      contact_state:
-        description: '#489：企业视角联系状态（none/pending/approved，approved 带来源）'
-        type: string
-        x-optional: true
-      expected_position_extra:
-        type: string
-      expected_position_id:
-        type: integer
-        x-optional: true
-      expected_regions:
-        items:
-          type: string
-        type: array
-        x-nullable: true
-      experience_years:
-        type: integer
-      job_nature:
-        type: string
-      real_name:
-        description: 已打码（如 张* 或 张*丰）
-        type: string
-      real_name_masked:
-        description: 同上，兼容验收对打码字段的显式断言
-        type: string
-      resume_certifications:
-        description: 已去 image_urls
-        items:
-          type: object
-        type: array
-      resume_experiences:
-        items:
-          type: object
-        type: array
-        x-nullable: true
-      salary_max:
-        type: integer
-        x-optional: true
-      salary_min:
-        type: integer
-        x-optional: true
-      salary_negotiable:
-        type: boolean
-      self_intro:
-        type: string
-      updated_at:
-        type: string
-      user_id:
-        type: integer
-    type: object
-  service.RecruiterApplicationListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.ApplicationDTO'
-        type: array
-      job_title:
-        type: string
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-      unread_count:
-        type: integer
-    type: object
-  service.ReportDTO:
-    properties:
-      created_at:
-        type: string
-      handled_at:
-        type: string
-        x-optional: true
-      id:
-        type: integer
-      job_posting_id:
-        type: integer
-      job_title:
-        type: string
-        x-optional: true
-      reason:
-        type: string
-      status:
-        type: string
-      student_user_id:
-        type: integer
-    type: object
-  service.ReportInput:
-    properties:
-      reason:
-        type: string
-    type: object
-  service.ReportListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.ReportDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.SearchAllDTO:
-    properties:
-      chapters:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      contents:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      courses:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      keyword:
-        type: string
-      questions:
-        $ref: '#/definitions/service.SearchSectionDTO'
-      topics:
-        $ref: '#/definitions/service.SearchSectionDTO'
-    type: object
-  service.SearchItemDTO:
-    properties:
-      cover:
-        type: string
-      hit_field:
-        description: HitField 命中位置：title | body | reply。
-        type: string
-      id:
-        type: integer
-      parent_id:
-        description: ParentID 章节结果所属课程 ID（其余类型为 0）——章节落点需要课程与章节两个参数。
-        type: integer
-      snippet:
-        description: Snippet 命中片段：源串中首个命中位置前后的窗口（ADR-0049 决策 6）。
-        type: string
-      summary:
-        description: Summary 开头截断的旧口径，**保留**：移动端老客户端仍读它（ADR-0048 契约只增不破）。
-        type: string
-      title:
-        type: string
-      type:
-        type: string
-    type: object
-  service.SearchPageDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.SearchItemDTO'
-        type: array
-      keyword:
-        type: string
-      page:
-        type: integer
-      pages:
-        type: integer
-      total:
-        type: integer
-      type:
-        type: string
-    type: object
-  service.SearchSectionDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.SearchItemDTO'
-        type: array
-      total:
-        type: integer
-    type: object
-  service.StatusResultDTO:
-    properties:
-      status:
-        type: integer
-    type: object
-  service.StudentCourseChapterDTO:
+  student.StudentCourseChapterDTO:
     properties:
       chapter_id:
         type: integer
@@ -3587,7 +3650,7 @@ definitions:
       video_position:
         type: integer
     type: object
-  service.StudentCourseDTO:
+  student.StudentCourseDTO:
     properties:
       completed_chapters:
         type: integer
@@ -3619,11 +3682,11 @@ definitions:
       total_chapters:
         type: integer
     type: object
-  service.StudentCourseDetailDTO:
+  student.StudentCourseDetailDTO:
     properties:
       chapters:
         items:
-          $ref: '#/definitions/service.StudentCourseChapterDTO'
+          $ref: '#/definitions/student.StudentCourseChapterDTO'
         type: array
       completed_chapters:
         type: integer
@@ -3655,18 +3718,18 @@ definitions:
       total_chapters:
         type: integer
     type: object
-  service.StudentCoursesDTO:
+  student.StudentCoursesDTO:
     properties:
       continue_learning:
         allOf:
-        - $ref: '#/definitions/service.StudentCourseDTO'
+        - $ref: '#/definitions/student.StudentCourseDTO'
         x-nullable: true
       courses:
         items:
-          $ref: '#/definitions/service.StudentCourseDTO'
+          $ref: '#/definitions/student.StudentCourseDTO'
         type: array
     type: object
-  service.StudentDTO:
+  student.StudentDTO:
     properties:
       account:
         type: string
@@ -3686,18 +3749,18 @@ definitions:
       username:
         type: string
     type: object
-  service.StudentProfileDTO:
+  student.StudentProfileDTO:
     properties:
       course_progress:
         items:
-          $ref: '#/definitions/service.CourseProgressDTO'
+          $ref: '#/definitions/student.CourseProgressDTO'
         type: array
       student_info:
-        $ref: '#/definitions/service.StudentDTO'
+        $ref: '#/definitions/student.StudentDTO'
       study_stats:
-        $ref: '#/definitions/service.StudyStatsDTO'
+        $ref: '#/definitions/student.StudyStatsDTO'
     type: object
-  service.StudyDailyStatsDTO:
+  student.StudyDailyStatsDTO:
     properties:
       active_days:
         type: integer
@@ -3714,7 +3777,7 @@ definitions:
       total_minutes:
         type: integer
     type: object
-  service.StudyRecordDTO:
+  student.StudyRecordDTO:
     properties:
       chapter_id:
         type: integer
@@ -3737,7 +3800,7 @@ definitions:
       study_duration:
         type: integer
     type: object
-  service.StudyRecordPageResult:
+  student.StudyRecordPageResult:
     properties:
       page:
         type: integer
@@ -3745,12 +3808,12 @@ definitions:
         type: integer
       records:
         items:
-          $ref: '#/definitions/service.StudyRecordDTO'
+          $ref: '#/definitions/student.StudyRecordDTO'
         type: array
       total:
         type: integer
     type: object
-  service.StudyStatsDTO:
+  student.StudyStatsDTO:
     properties:
       completed_courses:
         type: integer
@@ -3761,148 +3824,6 @@ definitions:
       total_courses:
         type: integer
       total_study_duration:
-        type: integer
-    type: object
-  service.SubmitResultDTO:
-    properties:
-      accuracy_rate:
-        type: number
-        x-optional: true
-      ai_comment:
-        type: string
-        x-optional: true
-      ai_explanation:
-        type: string
-        x-optional: true
-      ai_fallback:
-        type: boolean
-        x-optional: true
-      ai_score:
-        type: number
-        x-optional: true
-      common_wrong:
-        type: string
-        x-optional: true
-      correct_answer:
-        type: string
-      explanation:
-        type: string
-      is_correct:
-        type: boolean
-        x-nullable: true
-      max_score:
-        type: integer
-        x-optional: true
-      question_id:
-        type: integer
-      reference_answer:
-        type: string
-        x-optional: true
-      scoring_criteria:
-        type: string
-        x-optional: true
-      total_attempts:
-        type: integer
-        x-optional: true
-      user_answer: {}
-    type: object
-  service.TutorDTO:
-    properties:
-      created_at:
-        type: string
-      name:
-        type: string
-      status:
-        type: integer
-      tutor_id:
-        type: integer
-      username:
-        type: string
-    type: object
-  service.TutorDeletedDTO:
-    properties:
-      tutor_id:
-        type: integer
-    type: object
-  service.TutorListDTO:
-    properties:
-      page:
-        type: integer
-      total:
-        type: integer
-      tutors:
-        items:
-          $ref: '#/definitions/service.TutorDTO'
-        type: array
-    type: object
-  service.WrongQuestionBatchRemoveResultDTO:
-    properties:
-      removed:
-        type: integer
-    type: object
-  service.WrongQuestionDTO:
-    properties:
-      created_at:
-        type: string
-      favorite_id:
-        type: integer
-      favorited:
-        type: boolean
-      id:
-        type: integer
-      is_redone:
-        type: boolean
-      is_removed:
-        type: boolean
-      last_user_answer:
-        type: string
-      last_wrong_at:
-        type: string
-      question:
-        allOf:
-        - $ref: '#/definitions/questionbank.QuestionDTO'
-        x-optional: true
-      question_id:
-        type: integer
-      student_id:
-        type: integer
-      wrong_count:
-        type: integer
-    type: object
-  service.WrongQuestionPageDTO:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.WrongQuestionDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.WrongQuestionRemoveResultDTO:
-    properties:
-      removed:
-        type: boolean
-    type: object
-  service.WrongQuestionStatsDTO:
-    properties:
-      by_type:
-        additionalProperties:
-          type: integer
-        type: object
-      total:
-        type: integer
-    type: object
-  service.ZeroResultKeywordDTO:
-    properties:
-      keyword:
-        type: string
-      last_seen_at:
-        type: string
-      times:
         type: integer
     type: object
   training.CatalogLevelNode:
@@ -4224,6 +4145,85 @@ definitions:
           $ref: '#/definitions/training.SpecialtyDict'
         type: array
     type: object
+  tutor.BatchDeleteFilesResult:
+    properties:
+      failed_count:
+        type: integer
+      failed_ids:
+        items:
+          type: integer
+        type: array
+      success_count:
+        type: integer
+    type: object
+  tutor.DeleteFileResult:
+    properties:
+      deleted:
+        type: boolean
+      file_id:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionBatchRemoveResultDTO:
+    properties:
+      removed:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionDTO:
+    properties:
+      created_at:
+        type: string
+      favorite_id:
+        type: integer
+      favorited:
+        type: boolean
+      id:
+        type: integer
+      is_redone:
+        type: boolean
+      is_removed:
+        type: boolean
+      last_user_answer:
+        type: string
+      last_wrong_at:
+        type: string
+      question:
+        allOf:
+        - $ref: '#/definitions/questionbank.QuestionDTO'
+        x-optional: true
+      question_id:
+        type: integer
+      student_id:
+        type: integer
+      wrong_count:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionPageDTO:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/wrongquestion.WrongQuestionDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  wrongquestion.WrongQuestionRemoveResultDTO:
+    properties:
+      removed:
+        type: boolean
+    type: object
+  wrongquestion.WrongQuestionStatsDTO:
+    properties:
+      by_type:
+        additionalProperties:
+          type: integer
+        type: object
+      total:
+        type: integer
+    type: object
 info:
   contact: {}
   description: '学员端与公开端点：认证/验证码/微信登录/学员学习中心/课程/练习/考试/收藏/搜索/资料（课程附件 + 学员投稿）/论坛/通知/精选/AI助手/积分/培训目录；鉴权：`Authorization:
@@ -4540,7 +4540,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/api.AuditLogPageResult'
+                  $ref: '#/definitions/audit.AuditLogPageResult'
               type: object
         "401":
           description: 未认证
@@ -6565,7 +6565,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.HrwaiUserPageResult'
+                  $ref: '#/definitions/admin.HrwaiUserPageResult'
               type: object
         "400":
           description: 查询用户列表失败
@@ -6600,7 +6600,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.HrwaiUserCreatedDTO'
+                  $ref: '#/definitions/admin.HrwaiUserCreatedDTO'
               type: object
         "400":
           description: 参数错误/手机号已注册
@@ -6738,7 +6738,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StatusResultDTO'
+                  $ref: '#/definitions/admin.StatusResultDTO'
               type: object
         "401":
           description: 未认证
@@ -6804,7 +6804,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ReportListResult'
+                  $ref: '#/definitions/job.ReportListResult'
               type: object
         "401":
           description: 未认证
@@ -6834,7 +6834,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ReportDTO'
+                  $ref: '#/definitions/job.ReportDTO'
               type: object
         "401":
           description: 未认证
@@ -6879,7 +6879,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobListResult'
+                  $ref: '#/definitions/job.JobListResult'
               type: object
         "401":
           description: 未认证
@@ -6916,7 +6916,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 原因不能为空
@@ -7921,7 +7921,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StatusResultDTO'
+                  $ref: '#/definitions/admin.StatusResultDTO'
               type: object
         "401":
           description: 未认证
@@ -7963,7 +7963,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.ZeroResultKeywordDTO'
+                    $ref: '#/definitions/search.ZeroResultKeywordDTO'
                   type: array
               type: object
         "401":
@@ -8160,7 +8160,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.AdminStatisticsDTO'
+                  $ref: '#/definitions/admin.AdminStatisticsDTO'
               type: object
         "401":
           description: 未认证
@@ -8226,7 +8226,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.TutorDeletedDTO'
+                  $ref: '#/definitions/admin.TutorDeletedDTO'
               type: object
         "401":
           description: 未认证
@@ -8300,7 +8300,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StatusResultDTO'
+                  $ref: '#/definitions/admin.StatusResultDTO'
               type: object
         "401":
           description: 未认证
@@ -8343,7 +8343,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.TutorListDTO'
+                  $ref: '#/definitions/admin.TutorListDTO'
               type: object
         "401":
           description: 未认证
@@ -10436,7 +10436,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.FavoritePageResult'
+                  $ref: '#/definitions/favorite.FavoritePageResult'
               type: object
         "401":
           description: 未认证
@@ -10468,7 +10468,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.FavoriteDTO'
+                  $ref: '#/definitions/favorite.FavoriteDTO'
               type: object
         "400":
           description: 参数错误
@@ -10544,7 +10544,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.FavoriteCheckDTO'
+                  $ref: '#/definitions/favorite.FavoriteCheckDTO'
               type: object
         "400":
           description: 参数错误
@@ -11610,7 +11610,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobListResult'
+                  $ref: '#/definitions/job.JobListResult'
               type: object
         "401":
           description: 未认证（L1 不公开）
@@ -11640,7 +11640,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "401":
           description: 未认证
@@ -11675,7 +11675,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "400":
           description: 重复投递/冷却/日限/简历不完整
@@ -11710,7 +11710,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.ReportInput'
+          $ref: '#/definitions/job.ReportInput'
       produces:
       - application/json
       responses:
@@ -11721,7 +11721,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ReportDTO'
+                  $ref: '#/definitions/job.ReportDTO'
               type: object
         "400":
           description: 原因不能为空
@@ -11943,7 +11943,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamResultDTO'
+                  $ref: '#/definitions/mockexam.MockExamResultDTO'
               type: object
         "401":
           description: 未认证
@@ -11979,7 +11979,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamResumeDTO'
+                  $ref: '#/definitions/mockexam.MockExamResumeDTO'
               type: object
         "400":
           description: 参数错误
@@ -12052,7 +12052,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamSubmitDTO'
+                  $ref: '#/definitions/mockexam.MockExamSubmitDTO'
               type: object
         "400":
           description: 参数错误
@@ -12097,7 +12097,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamHistoryDTO'
+                  $ref: '#/definitions/mockexam.MockExamHistoryDTO'
               type: object
         "401":
           description: 未认证
@@ -12133,7 +12133,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamStartDTO'
+                  $ref: '#/definitions/mockexam.MockExamStartDTO'
               type: object
         "400":
           description: 参数错误
@@ -12179,7 +12179,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NotePageDTO'
+                  $ref: '#/definitions/note.NotePageDTO'
               type: object
         "401":
           description: 未认证
@@ -12215,7 +12215,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NoteDTO'
+                  $ref: '#/definitions/note.NoteDTO'
               type: object
         "400":
           description: 参数错误
@@ -12293,7 +12293,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.NoteDTO'
+                  $ref: '#/definitions/note.NoteDTO'
               type: object
         "400":
           description: 参数错误
@@ -12714,7 +12714,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.HistoryResultDTO'
+                  $ref: '#/definitions/practicemode.HistoryResultDTO'
               type: object
         "401":
           description: 未认证
@@ -12747,7 +12747,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticePracticeStatsDTO'
+                  $ref: '#/definitions/practicemode.PracticePracticeStatsDTO'
               type: object
         "401":
           description: 未认证
@@ -12779,7 +12779,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ProgressResultDTO'
+                  $ref: '#/definitions/practicemode.ProgressResultDTO'
               type: object
         "400":
           description: 参数错误（含未知练习模式）
@@ -12815,7 +12815,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ProgressSaveResultDTO'
+                  $ref: '#/definitions/practicemode.ProgressSaveResultDTO'
               type: object
         "400":
           description: 参数错误（含未知练习模式）
@@ -12845,7 +12845,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStartResultDTO'
+                  $ref: '#/definitions/practicemode.PracticeStartResultDTO'
               type: object
         "401":
           description: 未认证
@@ -12871,7 +12871,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ProgressResultDTO'
+                  $ref: '#/definitions/practicemode.ProgressResultDTO'
               type: object
         "401":
           description: 未认证
@@ -12902,7 +12902,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStatsDTO'
+                  $ref: '#/definitions/practicemode.PracticeStatsDTO'
               type: object
         "401":
           description: 未认证
@@ -12935,7 +12935,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SubmitResultDTO'
+                  $ref: '#/definitions/practicemode.SubmitResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -12976,7 +12976,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStartResultDTO'
+                  $ref: '#/definitions/practicemode.PracticeStartResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -13519,7 +13519,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionCommentPageResult'
+                  $ref: '#/definitions/questioninteraction.QuestionCommentPageResult'
               type: object
         "400":
           description: 题目ID无效
@@ -13560,7 +13560,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.QuestionCommentDTO'
+                  $ref: '#/definitions/questioninteraction.QuestionCommentDTO'
               type: object
         "400":
           description: 题目ID无效
@@ -13747,7 +13747,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/service.RealExamPaperDTO'
+                    $ref: '#/definitions/realexam.RealExamPaperDTO'
                   type: array
               type: object
         "401":
@@ -13778,7 +13778,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.MockExamStartDTO'
+                  $ref: '#/definitions/mockexam.MockExamStartDTO'
               type: object
         "400":
           description: 参数错误或未兑换
@@ -13812,7 +13812,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.PracticeStartResultDTO'
+                  $ref: '#/definitions/practicemode.PracticeStartResultDTO'
               type: object
         "400":
           description: 参数错误或未兑换
@@ -13880,7 +13880,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "401":
           description: 未认证
@@ -13914,7 +13914,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "400":
           description: 状态不允许
@@ -14029,7 +14029,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobListResult'
+                  $ref: '#/definitions/job.JobListResult'
               type: object
         "401":
           description: 未认证
@@ -14050,7 +14050,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.JobPostingInput'
+          $ref: '#/definitions/job.JobPostingInput'
       produces:
       - application/json
       responses:
@@ -14061,7 +14061,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 参数错误
@@ -14095,7 +14095,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "401":
           description: 未认证
@@ -14125,7 +14125,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.JobPostingInput'
+          $ref: '#/definitions/job.JobPostingInput'
       produces:
       - application/json
       responses:
@@ -14136,7 +14136,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 参数错误
@@ -14182,7 +14182,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.RecruiterApplicationListResult'
+                  $ref: '#/definitions/job.RecruiterApplicationListResult'
               type: object
         "401":
           description: 未认证
@@ -14216,7 +14216,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobPostingDTO'
+                  $ref: '#/definitions/job.JobPostingDTO'
               type: object
         "400":
           description: 被强制下架或超上限
@@ -14248,7 +14248,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.RecruitMeDTO'
+                  $ref: '#/definitions/recruit.RecruitMeDTO'
               type: object
         "401":
           description: 未认证
@@ -14314,7 +14314,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.RecruitListResult'
+                  $ref: '#/definitions/recruit.RecruitListResult'
               type: object
         "401":
           description: 未认证
@@ -14344,7 +14344,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.RecruitResumeCard'
+                  $ref: '#/definitions/resume.RecruitResumeCard'
               type: object
         "400":
           description: 简历 ID 无效
@@ -14439,7 +14439,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobCardDTO'
+                  $ref: '#/definitions/resume.JobCardDTO'
               type: object
         "401":
           description: 未认证
@@ -14465,7 +14465,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/service.JobCardInput'
+          $ref: '#/definitions/resume.JobCardInput'
       produces:
       - application/json
       responses:
@@ -14476,7 +14476,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobCardDTO'
+                  $ref: '#/definitions/resume.JobCardDTO'
               type: object
         "400":
           description: 参数错误
@@ -14513,7 +14513,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationListResult'
+                  $ref: '#/definitions/job.ApplicationListResult'
               type: object
         "401":
           description: 未认证
@@ -14551,7 +14551,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ApplicationDTO'
+                  $ref: '#/definitions/job.ApplicationDTO'
               type: object
         "400":
           description: 状态不允许
@@ -14872,7 +14872,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.JobCardDTO'
+                  $ref: '#/definitions/resume.JobCardDTO'
               type: object
         "400":
           description: 参数错误
@@ -14894,7 +14894,7 @@ paths:
       description: |-
         公开访问，keyword 模糊匹配 course/chapter/question/content/topic（LIKE 元字符按字面处理）；type 缺省返回各分区聚合（courses/chapters/questions/contents/topics），
         指定 type 时返回该类型的分页结果 —— 同一端点两种响应形状（swag 无联合类型表达力，data 取聚合形状；
-        分页形状 service.SearchPageDTO 同域生成，前端以联合类型消费）。
+        分页形状 SearchPageDTO 同域生成，前端以联合类型消费）。
         每条结果带命中位置 hit_field（title|body|reply）与命中片段 snippet（源串窗口，投影与高亮由各端自行处理，ADR-0049 决策 6）。
       parameters:
       - description: 关键词
@@ -14926,7 +14926,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SearchAllDTO'
+                  $ref: '#/definitions/search.SearchAllDTO'
               type: object
         "400":
           description: 参数错误
@@ -14950,7 +14950,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudentCoursesDTO'
+                  $ref: '#/definitions/student.StudentCoursesDTO'
               type: object
         "401":
           description: 未认证
@@ -14982,7 +14982,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudentCourseDetailDTO'
+                  $ref: '#/definitions/student.StudentCourseDetailDTO'
               type: object
         "401":
           description: 未认证
@@ -15054,7 +15054,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudentProfileDTO'
+                  $ref: '#/definitions/student.StudentProfileDTO'
               type: object
         "401":
           description: 未认证
@@ -15103,7 +15103,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudyRecordPageResult'
+                  $ref: '#/definitions/student.StudyRecordPageResult'
               type: object
         "401":
           description: 未认证
@@ -15138,7 +15138,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.StudyDailyStatsDTO'
+                  $ref: '#/definitions/student.StudyDailyStatsDTO'
               type: object
         "401":
           description: 未认证
@@ -15396,7 +15396,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.DeleteFileResult'
+                  $ref: '#/definitions/tutor.DeleteFileResult'
               type: object
         "401":
           description: 未认证
@@ -15433,7 +15433,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.BatchDeleteFilesResult'
+                  $ref: '#/definitions/tutor.BatchDeleteFilesResult'
               type: object
         "400":
           description: 参数错误
@@ -18211,7 +18211,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionPageDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionPageDTO'
               type: object
         "401":
           description: 未认证
@@ -18249,7 +18249,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.SubmitResultDTO'
+                  $ref: '#/definitions/practicemode.SubmitResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -18285,7 +18285,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionRemoveResultDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionRemoveResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -18322,7 +18322,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionBatchRemoveResultDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionBatchRemoveResultDTO'
               type: object
       security:
       - BearerAuth: []
@@ -18363,7 +18363,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.WrongQuestionStatsDTO'
+                  $ref: '#/definitions/wrongquestion.WrongQuestionStatsDTO'
               type: object
         "401":
           description: 未认证

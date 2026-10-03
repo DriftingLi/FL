@@ -4,6 +4,7 @@ package api
 
 import (
 	"encoding/json"
+	"forklift-training/internal/search"
 	"net/http"
 	"testing"
 	"time"
@@ -11,10 +12,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/mockexam"
 	"forklift-training/internal/model"
+	"forklift-training/internal/practicemode"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/training"
 )
@@ -48,12 +50,12 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	mk(nil, "液压系统普通关键词")
 	mk(nil, "液压系统真题卷关键词") // 去重折叠进公共池的未打标真题题
 
-	svc := service.NewSearchService(db, nil)
-	items, err := svc.Search("液压系统", service.SearchTypeQuestion, 1, 20, nil)
+	svc := search.NewService(db, nil)
+	items, err := svc.Search("液压系统", search.SearchTypeQuestion, 1, 20, nil)
 	if err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}
-	page := items.(*service.SearchPageDTO)
+	page := items.(*search.SearchPageDTO)
 	if page.Total != 2 {
 		t.Fatalf("应命中 2 条（排真题题）, got %d: %+v", page.Total, page.Items)
 	}
@@ -73,7 +75,7 @@ func TestSearchQuestionExcludesSourceTagged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
 	}
-	allDTO := all.(*service.SearchAllDTO)
+	allDTO := all.(*search.SearchAllDTO)
 	for _, it := range allDTO.Questions.Items {
 		if it.Title == "液压系统真题关键词" {
 			t.Fatal("聚合搜索不应出现来源标记真题题")
@@ -94,7 +96,7 @@ func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	RegisterPracticeModeRoutes(api, deps.RouterDeps(), deps.PracticeModeSvc)
+	practicemode.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.PracticeModeSvc)
 
 	student := model.HrwaiUser{Account: "mode_gate_user", Phone: "13800000999", Username: "学员", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&student).Error; err != nil {
@@ -143,7 +145,7 @@ func TestPracticeModeUnknownModeRejected400(t *testing.T) {
 func TestMockExamHistoryCarriesPaperID(t *testing.T) {
 	t.Parallel()
 	db := testutil.NewMemoryDB(t)
-	svc := service.NewMockExamService(db, nil, nil)
+	svc := mockexam.NewService(db, nil, nil)
 	student := seedStudent(t, db, "paper_src_student", "x")
 
 	now := time.Now()

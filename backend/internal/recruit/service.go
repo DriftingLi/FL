@@ -1,0 +1,277 @@
+// Package recruit 招聘域：招聘者工作区的**简历库读面**（脱敏卡列表/详情/筛选/浏览留痕）。
+// List/Get 均只返回 visibility=open 的卡；响应经同一脱敏路径（resume.Desensitize），不含手机/微信/PDF/
+// 未打码姓名/证书原图/现居地精确值。过滤轴：意向地区/期望岗位/证书/薪资区间/经验年限/到岗时间；
+// 默认排序 updated_at DESC（不按注册时间）。浏览留痕：Detail（及 List 按需）写入 recruit_resume_views。
+//
+// 域边界（P2 波 4e）：本包单向依赖 internal/resume（简历卡实体与其三处投影都在彼处）与
+// internal/service（留驻的联系方式授权读面）。HTTP 出口见 handler.go / handler_pdf.go。
+package recruit
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"forklift-training/internal/clock"
+	"forklift-training/internal/model"
+	"forklift-training/internal/region"
+	"forklift-training/internal/resume"
+	"forklift-training/internal/service"
+	"forklift-training/pkg/paging"
+)
+
+// Service 招聘端简历服务（脱敏读）。
+type Service struct {
+	db     *gorm.DB
+	logger *zap.Logger
+}
+
+func NewService(db *gorm.DB, logger *zap.Logger) *Service {
+	return &Service{db: db, logger: logger}
+}
+
+// RecruitListParams 招聘端列表筛选参数（全部可选；page/pageSize 由 handler 归一）。
+type RecruitListParams struct {
+	Page            int
+	PageSize        int
+	Region          string // 意向地区：expected_regions JSON 数组中含该串（LIKE）
+	PositionID      *int
+	CredentialID    *int // 持证：resume_certifications 中含该 credential_id
+	SalaryMin       *int
+	SalaryMax       *int
+	ExperienceMin   *int
+	ExperienceMax   *int
+	ExperienceYears *int
+	AvailableIn     string
+	// JobNature 用工性质（#492：fulltime/parttime/contract 精确匹配）
+	JobNature string
+	// RecruiterID 当前招聘者（#489：>0 时批量回填 contact_state）
+	RecruiterID int
+}
+
+// RecruitListResult 列表结果。
+type RecruitListResult struct {
+	Items []resume.RecruitResumeCard `json:"items" nullability:"nonnil"`
+	Total int64                      `json:"total"`
+}
+
+// fillContactStates 批量回填企业视角联系状态（#489，禁止 N+1）。
+// 状态：none 无授权 / pending 有待处理申请 / approved 已授权（含投递产生）。
+func fillContactStates(db *gorm.DB, recruiterID int, cards []resume.RecruitResumeCard) {
+	if recruiterID <= 0 || len(cards) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(cards))
+	for _, c := range cards {
+		ids = append(ids, c.UserID)
+	}
+	// 授权态单点在 contact_authz.go（ADR-0053 §3）：徽章是「有效授权态」的三值投影，
+	// 不再自带「approved > pending」优先级，也不再自己判「学员注销即失效」。
+	grants, err := service.ContactStatesOf(db, recruiterID, ids)
+	if err != nil {
+		return
+	}
+	companyUnavailable := companyUnavailableForCards(db, recruiterID)
+	for i := range cards {
+		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
+			cards[i].ContactState = string(g.State)
+			cards[i].ContactSource = string(g.Source)
+			if companyUnavailable && g.State == service.ContactGrantApproved {
+				cards[i].CompanyDisabled = true
+			}
+		}
+	}
+}
+
+// companyUnavailableForCards caller 企业自己那一维的可投影形态（ADR-0064 决策 5）：
+// 只有**确证**被禁用或已注销才返回 true；「查不动」返回 false——
+// 把 DB 故障报成一条处置事实，比少说一格更坏（ADR-0062 票6 同判据）。
+func companyUnavailableForCards(db *gorm.DB, recruiterID int) bool {
+	err := service.RecruiterAccountUsable(db, recruiterID)
+	return errors.Is(err, service.ErrCompanyUnavailable)
+}
+
+// resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id
+// （CAST 兼容 pg 与 sqlite；精确匹配 "credential_id":<id>，避免数字误匹配日期等）。
+//
+// **不是证件分区**：一张简历可持有多个证件，故不能并入 internal/scope 的归属分区谓词
+// （那个谓词按行自身的单个证件列过滤）；本谓词属招聘域的持证筛选口径（ADR-0056 §2 边界外）。
+func resumeHoldsCredential(q *gorm.DB, credentialID int) *gorm.DB {
+	idStr := strconv.Itoa(credentialID)
+	pat1 := fmt.Sprintf("%%\"credential_id\":%s%%", idStr)
+	pat2 := fmt.Sprintf("%%\"credential_id\": %s%%", idStr)
+	return q.Where("(CAST(resume_certifications AS TEXT) LIKE ? OR CAST(resume_certifications AS TEXT) LIKE ?)", pat1, pat2)
+}
+
+// applyFilters 在查询上叠加筛选轴（visibility=open 已由调用方保证）。
+func (s *Service) applyFilters(q *gorm.DB, p RecruitListParams) *gorm.DB {
+	if v := strings.TrimSpace(p.Region); v != "" {
+		// #486：地区筛选改为与录入同源的市级精确匹配——候选 expected_regions 任一元素
+		// 的「市名」（第 2 段；直辖市取整段）等于筛选值（即市名）。
+		// 存储格式：两段「省/市」（直辖市一段），筛选参数为市级值（可能带「市」后缀也可能不带）。
+		// 实现：CAST 全文后按 JSON 元素解析匹配市名（兼容 pg 与 sqlite 内存库）。
+		q = q.Where(applyRegionCityFilter(p.Region))
+	}
+	if p.PositionID != nil && *p.PositionID > 0 {
+		q = q.Where("expected_position_id = ?", *p.PositionID)
+	}
+	if p.CredentialID != nil && *p.CredentialID > 0 {
+		q = resumeHoldsCredential(q, *p.CredentialID)
+	}
+	if p.SalaryMin != nil {
+		// 候选期望不低于招聘方给出的下限视为匹配；面议视为通过
+		q = q.Where("(salary_negotiable = ? OR (salary_min IS NOT NULL AND salary_min >= ?))", true, *p.SalaryMin)
+	}
+	if p.SalaryMax != nil {
+		q = q.Where("(salary_negotiable = ? OR (salary_max IS NOT NULL AND salary_max <= ?))", true, *p.SalaryMax)
+	}
+	if p.ExperienceYears != nil {
+		q = q.Where("experience_years = ?", *p.ExperienceYears)
+	} else {
+		if p.ExperienceMin != nil {
+			q = q.Where("experience_years >= ?", *p.ExperienceMin)
+		}
+		if p.ExperienceMax != nil {
+			q = q.Where("experience_years <= ?", *p.ExperienceMax)
+		}
+	}
+	if v := strings.TrimSpace(p.AvailableIn); v != "" {
+		q = q.Where("available_in = ?", v)
+	}
+	if v := strings.TrimSpace(p.JobNature); v != "" {
+		// #492：用工性质精确匹配（fulltime/parttime/contract）
+		q = q.Where("job_nature = ?", v)
+	}
+	return q
+}
+
+// applyRegionCityFilter 构造地区市级精确匹配的 WHERE 子句（#486）。
+// 数据契约：expected_regions 数组元素为两段「省/市」中文串（直辖市一段）。
+// 筛选值归一为规范市全名（「苏州」→「苏州市」）后精确匹配元素第 2 段：
+//   - 普通市：模式 %/苏州市" 命中元素 "江苏省/苏州市" 结尾
+//   - 直辖市：模式 %"北京市" 命中一段式元素
+//
+// CAST AS TEXT 兼容 pg(jsonb) 与 sqlite 内存库(BLOB)；LIKE 用于跨引擎等价，
+// 模式两侧锚定（斜杠/引号）实现「精确匹配第 2 段」而非任意子串。
+func applyRegionCityFilter(regionStr string) any {
+	city := strings.TrimSpace(regionStr)
+	if city == "" {
+		return nil
+	}
+	// 归一：短名 → 规范市全名（苏州市）
+	city = region.RegionCityName(city)
+	if city == "" {
+		return nil
+	}
+	if region.Municipalities[city] {
+		// 直辖市一段式元素：["北京市"]
+		return gorm.Expr("CAST(expected_regions AS TEXT) LIKE ?", `%"`+city+`"%`)
+	}
+	// 普通市两段式元素：["江苏省/苏州市"] → 匹配 /苏州市"
+	return gorm.Expr("CAST(expected_regions AS TEXT) LIKE ?", `%/`+city+`"%`)
+}
+
+// List 脱敏列表：仅 open，叠筛选，updated_at DESC，分页，无缓存（读最新）。
+func (s *Service) List(p RecruitListParams) (*RecruitListResult, error) {
+	// 页大小上限保留既有「超上限截断到上限」语义（与 ClampMax 的「超上限回退默认」不同），
+	// 先归一化再交给 paging：钳制在本层做，查询骨架（count/find/offset）收编到 paging.Query。
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	if p.PageSize <= 0 {
+		p.PageSize = 20
+	}
+	if p.PageSize > 50 {
+		p.PageSize = 50
+	}
+	cards, total, _, _, err := paging.Query[model.JobCard](s.db, p.Page, p.PageSize, 20, "updated_at DESC",
+		func(q *gorm.DB) *gorm.DB {
+			return s.applyFilters(q.Where("visibility = ?", "open"), p)
+		})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]resume.RecruitResumeCard, 0, len(cards))
+	for i := range cards {
+		items = append(items, resume.Desensitize(&cards[i]))
+	}
+	// #489：批量回填企业视角联系状态
+	fillContactStates(s.db, p.RecruiterID, items)
+	return &RecruitListResult{Items: items, Total: total}, nil
+}
+
+// Get 脱敏详情：仅 open 可见，同一脱敏路径；关闭或不存在返回 ErrRecordNotFound。
+func (s *Service) Get(userID int) (*resume.RecruitResumeCard, error) {
+	return s.GetForRecruiter(userID, 0)
+}
+
+// RecruitMeDTO 招聘者自助信息 GET /api/recruit/me 的响应（#954 片二）。
+// 注意它**不是** /auth/me 的 ProfileDTO：只回 3 个字段，改造前后字节一致。
+type RecruitMeDTO struct {
+	Account string `json:"account"`
+	Role    string `json:"role"`
+	UserID  int    `json:"user_id"`
+}
+
+// GetForRecruiter 脱敏详情（#489）：带企业视角联系状态。recruiterID>0 时回填。
+func (s *Service) GetForRecruiter(userID, recruiterID int) (*resume.RecruitResumeCard, error) {
+	var card model.JobCard
+	if err := s.db.Where("user_id = ? AND visibility = ?", userID, "open").First(&card).Error; err != nil {
+		return nil, err
+	}
+	dto := resume.Desensitize(&card)
+	if recruiterID > 0 {
+		cards := []resume.RecruitResumeCard{dto}
+		fillContactStates(s.db, recruiterID, cards)
+		dto = cards[0]
+	}
+	return &dto, nil
+}
+
+// GetRaw 取原始简历卡（在线简历 PDF 渲染用）。
+// 招聘者路径：仅 open 卡可见（与 Get 同门禁）；学员本人路径由 handler 保证本人鉴权，不受 visibility 限制。
+// 返回原始模型（含敏感字段），调用方负责打码口径（本包 RenderResumePDF 统一处理）。
+func (s *Service) GetRaw(userID int) (*model.JobCard, error) {
+	var card model.JobCard
+	if err := s.db.Where("user_id = ? AND visibility = ?", userID, "open").First(&card).Error; err != nil {
+		return nil, err
+	}
+	return &card, nil
+}
+
+// LogView 写入浏览审计（best-effort，失败仅日志）。
+// 粒度为同一招聘方对同一学员每日一次（Asia/Shanghai 自然日），避免翻页刷量。
+func (s *Service) LogView(recruiterID, resumeUserID int) {
+	if recruiterID <= 0 || resumeUserID <= 0 {
+		return
+	}
+	now := clock.Now()
+	// 当日 0 点（Shanghai）
+	dayStart := clock.DayStart(now)
+	// 已存在当日记录则跳过（幂等，避免刷量）
+	var cnt int64
+	if err := s.db.Model(&model.RecruitResumeView{}).
+		Where("recruiter_id = ? AND resume_user_id = ? AND viewed_at >= ?", recruiterID, resumeUserID, dayStart).
+		Count(&cnt).Error; err == nil && cnt > 0 {
+		return
+	}
+	rec := model.RecruitResumeView{
+		RecruiterID:  recruiterID,
+		ResumeUserID: resumeUserID,
+		ViewedAt:     now,
+	}
+	if err := s.db.Create(&rec).Error; err != nil && s.logger != nil {
+		s.logger.Warn("recruit view audit 写入失败", zap.Error(err), zap.Int("recruiter", recruiterID), zap.Int("resume", resumeUserID))
+	}
+}
+
+// LogViews 批量留痕（列表场景，每项一条，同样受每日一次约束）。
+func (s *Service) LogViews(recruiterID int, resumeUserIDs []int) {
+	for _, id := range resumeUserIDs {
+		s.LogView(recruiterID, id)
+	}
+}
