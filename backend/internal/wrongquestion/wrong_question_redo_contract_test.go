@@ -1,6 +1,6 @@
 // 错题重做契约测试：POST /api/wrong-questions/:id/redo 返回 typed SubmitResultDTO
 // （练习/错题重做共用装配，spec #294/#300）。冻结 JSON key 形状与练习记录落库口径。
-package api
+package wrongquestion
 
 import (
 	"bytes"
@@ -11,13 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
-	"forklift-training/internal/wrongquestion"
 )
 
 func TestWrongQuestionRedoContract(t *testing.T) {
@@ -39,10 +36,7 @@ func TestWrongQuestionRedoContract(t *testing.T) {
 		JWTSecretKey: "contract-test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
 	}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	wrongquestion.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.WrongQuestionSvc)
+	r := newWrongQuestionContractRouter(t, db, cfg)
 
 	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(int(student.ID), student.Account, "hrwai_user")

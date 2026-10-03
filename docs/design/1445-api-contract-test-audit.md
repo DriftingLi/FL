@@ -240,6 +240,32 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 
 **PG 面照 §8.6 的两条教训**：`internal/training` 三条 `*OnPostgres` 在本机（无 `DATABASE_URL`）干净 SKIP，故本机绿对它们零信息量，只由 CI 判。本小批**没有重写任何 PG 夹具**（只把 `seedStudent` 换成 `testutil.SeedStudent`），不存在批 1 那类「替身换错」；但 CI `backend-test` 仍是它们唯一的真实判据。
 
+### 8.9 批 4 第 2 小批：points / favorite / wrongquestion（三个 HTTP 用例）
+
+> 编号说明：§8.8 是同一批的第 1 小批（三个**服务层**用例：search_credential / credential_delete_postgres / disposition_revoke）。
+
+**搬迁**（文件名不变，api 侧删净）：
+
+| 旧路径 | 新路径 | 行数 |
+| --- | --- | --- |
+| `backend/internal/api/admin_points_penalty_contract_test.go` | `backend/internal/points/admin_points_penalty_contract_test.go` | 95 → 90 |
+| `backend/internal/api/favorite_chapter_visibility_contract_test.go` | `backend/internal/favorite/favorite_chapter_visibility_contract_test.go` | 171 → 166 |
+| `backend/internal/api/wrong_question_redo_contract_test.go` | `backend/internal/wrongquestion/wrong_question_redo_contract_test.go` | 100 → 95 |
+
+**域内 HTTP 夹具**（各域新增 `contract_helper_test.go`）：`newPointsContractRouter` / `newFavoriteContractRouter` / `newWrongQuestionContractRouter`，签名统一 `(t *testing.T, db *gorm.DB, cfg *config.Config) *gin.Engine` —— `db`/`cfg` 仍由测试体自己建，于是测试体**只换装配块那一行**（`deps := newContractDeps(...)` + `gin.New()` + `Group("/api")` + `Register*Routes` 四行 → 一行夹具调用）。
+装配与装配根同义：会话 `security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())`（**内存黑名单**，§8.6）；points service 按 `providers_core.go` 实参（`clock.Real()` + notification 单点）；favorite / wrongquestion 的 `CredentialScope` 用 `training.NewService(db, zap.NewNop())`（装配根 `RouterDeps()` 的 CredentialScope 就是它），wrongquestion 的 `ai` 传 nil（`explanation.go` 在 nil 时恒降级静态解析）。
+
+**`internal/testutil` 新增 `DoWithToken(t, r, token, method, path string, body any)`**：api 侧那份 `doWithToken` 有 441 处调用点、不在本批射程，故两份并存（api 侧留原样，域包侧一律走 testutil —— 后续若要收成一份，是独立一票的机械改动）。points 的两处调用点改成 `testutil.DoWithToken`。
+
+**唯一超出「机械改写」的一处（points）**：原 `adminPwd, _ := core.HashPassword("admin123")` / `stuPwd, _ := core.HashPassword("student123")` 必须去掉 —— 域包测试 import `internal/core` **实测成环**（`points(test) → core → aiassistant → points`，`aiassistant/handler.go:16` 反向依赖 points）。口令在本用例里只作落库字段（管理员 token 由 `Session.Issue` 直接签发、学员从不登录），故直接写字面量，与 points 既有测试同一写法（`service_apply_test.go` 的 `"x"`）。**未触碰任何断言/期望值**。
+
+**核验**：`git show HEAD:<旧路径>` 与域包新文件归一化（去 package / import 块 / 夹具行、去自包前缀、`testutil.DoWithToken(`→`doWithToken(`、折叠空行）后逐 `func Test` 且全文逐行比对 —— `favorite_chapter_visibility_contract_test.go` 与 `wrong_question_redo_contract_test.go` **逐字相同**；`admin_points_penalty_contract_test.go` 的差异**只有上面那处口令字面量 + 一条说明注释**。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./internal/{points,favorite,wrongquestion,api,testutil}/` exit 0；三个用例逐个 `-v` 实跑 **PASS**（非 skip）；`go test` 三包 + api + testutil 全 ok；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败；三条守卫脚本无违规（`check-comment-cleanliness.mjs --all` ✓ 735 个 .go 文件 0 欠账）；`internal/layers` 五条结构守卫全 PASS。
+
+**遗留（本批未动，属史述）**：`docs/adr/ADR-0070-域包形态与目录即射程的收口.md:303` 与移动端 `training-app/叉车维修培训学员端跨端应用/docs/verification/device/1162/README.md:66` 仍按旧路径提到这三个文件 —— 按 `docs/agents/domain-package-migration.md` 的口径（历史记录不追改）保留。
+
+
 ## 附录：142 个文件逐条
 
 | 文件 | 行 | 桶 | 建议 |
