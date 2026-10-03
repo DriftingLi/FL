@@ -18,7 +18,7 @@
             </view>
         </view>
 
-        <scroll-view class="content-scroll" scroll-y="true" @scroll="onContentScroll">
+        <scroll-view class="content-scroll" scroll-y="true">
             <!-- 加载中 -->
             <view v-if="loading && topic == null" class="loading-wrap">
                 <text class="loading-text">加载中...</text>
@@ -51,19 +51,21 @@
                 @load-more="loadMoreReplies" />
         </scroll-view>
 
-        <!-- 底部回复栏：默认收起为一条极简触发条，点开才展开完整输入区（「别一进来就摊开」）；
-             展开态与发帖表单**共用同一份输入区形态**（ADR-0025 P3）。数据档位常驻一行（它是
-             「Markdown 完全 opt-in」下唯一的入口，可发现性靠它）；tab / 工具栏 / 边界提示行只在
-             Markdown 档出现（⑥-5）。 -->
+        <!-- 底部**常驻触发条**（⑪-1：形态不变，点它升起半屏浮层）。数据档位常驻一行是
+             「Markdown 完全 opt-in」下唯一入口；tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。 -->
         <view v-if="topic != null" class="reply-bar">
-            <!-- 收起态：极简触发条，点一下展开（进详情页默认即此态） -->
-            <view v-if="!replyExpanded" class="reply-trigger" @click="onOpenReply">
+            <view class="reply-trigger" @click="onOpenReply">
                 <text class="reply-trigger-ph">写下你的回复...</text>
                 <text class="reply-trigger-act">回复</text>
             </view>
+        </view>
 
-            <!-- 展开态：完整输入区 + 发送 / 收起（用并列 v-if，与本文件头部的互斥分支写法一致） -->
-            <view v-if="replyExpanded">
+        <!-- 半屏浮层（⑪-1/⑪-4）：全屏遮罩阻断阅读（列表滚不动）+ 从底部升起、贴键盘上沿的面板。
+             面板 `bottom` 由 uni.onKeyboardHeightChange 去抖后驱动；输入区形态本身仍是共享组件
+             ForumMarkdownInput，原样搬进、不改形态（⑪-2）。遮罩点击收起，面板 @click.stop 防误收。 -->
+        <view v-if="replyExpanded" class="reply-panel-mask" @click="onCollapseReply">
+            <view class="reply-panel" :style="{ marginBottom: panelBottom + 'px', maxHeight: panelMaxHeight + 'px' }"
+                @click.stop>
                 <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
                     :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
                     :maxlength="10000" placeholder="写下你的回复..."
@@ -92,7 +94,7 @@
 
 <script setup lang="uts">
     import { computed, ref, nextTick } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onUnload } from '@dcloudio/uni-app'
     import ForumTopicHeader from './components/forum-topic-header.uvue'
     import ForumTopicBody from './components/forum-topic-body.uvue'
     import ForumReplyList from './components/forum-reply-list.uvue'
@@ -107,6 +109,7 @@
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
     import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
     import { FORUM_MAX_REPLY_IMAGES } from '../../constants/app'
+    import { createKeyboardHeightTracker, panelBottomPx, panelMaxHeightPx } from '../../utils/replyPanelLayout'
     import type { ForumReply } from '../../types/index'
 
     /** 回复面的图片限额（`constants/app` 单点；组件不持缺省值，本页只报自己那一档） */
@@ -132,12 +135,15 @@
         onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
     } = composer
 
-    /** 底部回复栏展开态（默认收起为极简触发条；点触发条 / @某人 时展开，发送成功后收起） */
+    /** 底部回复浮层展开态（点常驻触发条 / @某人 升起半屏面板，遮罩点击或发送成功后收起） */
     const replyExpanded = ref<boolean>(false)
-    // 滑动收起用的非响应式游标：`lastScrollTop` 记录列表当前滚动位置，
-    // `expandAnchorTop` 锚定「展开那一刻」的位置，只有相对锚点下滑超阈值才收（挡键盘位移）。
-    const lastScrollTop = ref<number>(0)
-    const expandAnchorTop = ref<number>(0)
+    // ⑪-4：去抖后的键盘高度，驱动浮层面板 bottom 贴键盘上沿（replyPanelLayout 纯逻辑，③ 可执行）。
+    const keyboardHeight = ref<number>(0)
+    const keyboardTracker = createKeyboardHeightTracker((h : number) => {
+        keyboardHeight.value = h
+    })
+    const panelBottom = computed<number>(() : number => panelBottomPx(keyboardHeight.value, replyExpanded.value))
+    const panelMaxHeight = computed<number>(() : number => panelMaxHeightPx(windowHeight))
 
     /** 正文变更（组件上抛；工具栏插入也走这条回流，故草稿由 composable 持有） */
     function onReplyContentChange(value : string) : void {
@@ -329,30 +335,24 @@
         // 先展开、等输入组件挂载完成再写草稿：收起态下组件未挂载，原生 <input> 的
         // :value 不认「挂载那一帧之前」刚写的值（实测点回复后框是空的）。nextTick 后
         // 再写，走的是「已挂载后 :value 反应式更新」这条与工具栏插入同源、已验证可用的路径。
-        expandAnchorTop.value = lastScrollTop.value
         replyExpanded.value = true
         nextTick(() => {
             replyContent.value = '@' + name + ' '
         })
     }
 
-    /** 展开 / 收起底部回复栏（收起态见模板 `.reply-trigger`） */
+    /** 升起 / 收起半屏浮层（触发条见模板 `.reply-trigger`，浮层见 `.reply-panel`） */
     function onOpenReply() : void {
-        expandAnchorTop.value = lastScrollTop.value
         replyExpanded.value = true
     }
 
     function onCollapseReply() : void {
         replyExpanded.value = false
+        uni.hideKeyboard()
     }
 
-    /** 读回复时（相对展开锚点向下滑超阈值）自动收起展开的回复栏；向上滚/键盘位移不误收 */
-    function onContentScroll(e : UniScrollEvent) : void {
-        lastScrollTop.value = e.detail.scrollTop
-        if (replyExpanded.value && e.detail.scrollTop > expandAnchorTop.value + 60) {
-            replyExpanded.value = false
-        }
-    }
+    // ⑪-3：原 onContentScroll「相对展开锚点下滑 > 60px 自动收起」（来自 #1300）整条删除 ——
+    // 浮层带全屏遮罩，面板开着时列表滚不动 ⇒ 那条永不成立，#1300 的真机判据同批作废。
 
     function onSubmitReply() : void {
         composer.onSubmitReply(topicId.value, (reply : ForumReply) => {
@@ -378,6 +378,15 @@
             topicId.value = parseInt(`${id}`)
         }
         loadDetail()
+        // ⑪-4：监听键盘高度（回调给的是 `{ height }` 结果对象），取 height 交去抖 tracker 驱动面板 bottom。
+        uni.onKeyboardHeightChange((res) => {
+            keyboardTracker(res.height)
+        })
+    })
+
+    onUnload(() => {
+        // 注销键盘监听，避免离开本页后回调仍持有本页 ref。
+        uni.offKeyboardHeightChange()
     })
 </script>
 
@@ -472,6 +481,28 @@
         padding: 12rpx 24rpx;
         background-color: #ffffff;
         border-top: 1rpx solid #eeeeee;
+    }
+
+    /* 半屏浮层（⑪-1）：全屏遮罩阻断阅读（列表滚不动）；面板贴键盘上沿（bottom 由 :style 动态给）。
+       形状照仓内先例 pages/practice/practice-do.uvue 的 .answer-card-mask / .answer-card-sheet。 */
+    .reply-panel-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: flex-end;
+    }
+
+    /* 面板是遮罩的普通 flex 子（**不做 fixed**），靠 mask 的 flex-end 落到底、用 margin-bottom 抬到
+       键盘上沿 —— 照 practice-do .answer-card-sheet 的可用形态。旧写法把面板也做成 fixed，会被
+       fixed 遮罩在 z 序上盖住 ⇒ 点输入先命中遮罩而收起（①a 真机抓获）。 */
+    .reply-panel {
+        background-color: #ffffff;
+        border-radius: 24rpx 24rpx 0 0;
+        padding: 24rpx;
+        flex-direction: column;
     }
 
     .reply-actions {
