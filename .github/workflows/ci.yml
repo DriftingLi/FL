@@ -114,6 +114,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-render-error-face.mjs --all
 
+      # issue #1445 的 P4（注释治理）：锁三类机检得出、且与「代码写的事实」相矛盾的注释欠账 ——
+      # 失真包文档（文件头写 Package service 而包名不是它）/ 装饰分隔线 / 相邻重复注释行。
+      # 基线 0、只减不增；判据与三类理由见 docs/agents/comments.md 第 3、5 节。
+      - name: 注释三态守卫（失真包文档 / 装饰分隔线 / 相邻重复注释行）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-comment-cleanliness.mjs --all
+
   # ============================================================
   # Stage 3: 后端 - 单元测试
   # ============================================================
@@ -543,6 +550,11 @@ jobs:
       # 守卫本体跑在 backend-lint（扫 backend/internal/api 的 .go）。
       - name: 表驱动单测（端点错误面守卫判定逻辑）
         run: node --test scripts/check-render-error-face.test.mjs
+
+      # issue #1445 P4：注释三态守卫的判定面（失真包文档 / 装饰分隔线 / 相邻重复注释行，
+      # 且合成违规必须判红、干净 diff 必须判绿防恒绿）。守卫本体跑在 backend-lint（扫 backend 的 .go）。
+      - name: 表驱动单测（注释三态守卫判定逻辑）
+        run: node --test scripts/check-comment-cleanliness.test.mjs
 
       # ADR-0056 §5 / #1094：三个守卫共用的 runner 单点（argv / 走查 / --diff / allowlist /
       # 报告与退出码）—— 表驱动自测用合成 diff 端到端驱动，正样本必须红、负样本必须绿；

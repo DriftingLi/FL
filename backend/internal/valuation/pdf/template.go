@@ -126,9 +126,7 @@ func (g *Generator) GenerateReport(r *model.EvaluationDetail, dimensionScores []
 	return buf.Bytes(), nil
 }
 
-// =====================================================
 // 第 1 页:封面
-// =====================================================
 
 func (g *Generator) renderCover(pdf *gofpdf.Fpdf, r *model.EvaluationDetail) {
 	// 顶部蓝色渐变条(5mm)
@@ -314,9 +312,7 @@ func absF(v float64) float64 {
 	return v
 }
 
-// =====================================================
 // 第 2 页:评估基本信息 + 评估结果摘要
-// =====================================================
 
 func (g *Generator) renderBasicInfoAndSummary(pdf *gofpdf.Fpdf, r *model.EvaluationDetail, dimensionScores []model.DimensionScore) {
 	drawPageHeader(pdf, r)
@@ -747,9 +743,7 @@ func dimensionBarColor(v float64) rgb {
 	}
 }
 
-// =====================================================
 // 第 3 页:评估结论 + 处置建议 + 风险提示 + 免责声明
-// =====================================================
 
 // renderCoefficientsAndConclusion 渲染第 3 页
 // 顺序:评估结论 → 处置建议 → 风险提示 → 免责声明
@@ -927,9 +921,7 @@ func drawDisclaimer(pdf *gofpdf.Fpdf, x, y, w float64) {
 		"", "L", false)
 }
 
-// =====================================================
 // 工具函数
-// =====================================================
 
 func defaultIfEmpty(s, fallback string) string {
 	if s == "" {

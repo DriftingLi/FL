@@ -1,4 +1,4 @@
-// Package api 实现 HTTP handlers。
+// Package job 实现 HTTP handlers。
 // 本文件：招聘域企业处理投递（spec #449 T4 #453）。
 //   - GET /api/recruit/jobs/:id/applications：按职位分页查看投递（越权 403）+ 未读计数
 //   - GET /api/recruit/applications/:id：投递详情（记录已读，脱敏候选人）

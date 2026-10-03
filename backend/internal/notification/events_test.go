@@ -1,4 +1,4 @@
-// Package service 站内信事件构造器契约测试（ADR-0027 C1）：
+// Package notification 站内信事件构造器契约测试（ADR-0027 C1）：
 // 全域收编后 title/content/link/payload 口径在站内信域单点锁定，
 // 业务侧一行触发；本文件锁「逐字零漂移」契约（含 link 查询参数两种既有变体）。
 package notification

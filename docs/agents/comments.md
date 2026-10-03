@@ -48,7 +48,7 @@
 
 ## 5. 棘轮（只减不增）
 
-落地形态：`scripts/check-comment-cleanliness.mjs`（`--all` / `--diff`），基线表冻结在脚本里，**只许减**；加一项要连同「为什么加」写进脚本注释（口袋式棘轮，先例 `utils/uvueFontCarrierContract.test.js` 的 `DEFERRED`）。
+落地形态：`scripts/check-comment-cleanliness.mjs`（`--all` / `--diff`，runner 走 `scripts/lib/guard.mjs`），**基线 0、allowlist 为空**，即「只减不增」已经减到底；确有例外时逐条登记进 `allowlist` 并写明理由（口袋式棘轮，先例 `utils/uvueFontCarrierContract.test.js` 的 `DEFERRED`）。首刀实测：42 处失真包文档 + 54 行装饰分隔线（36 行生产 + 18 行测试）+ 3 处重复行 = **99 处已收口**（2026-10-03，PR 见 issue #1445）。
 
 只锁**可机检且无歧义**的三类：① 失真包文档；② 装饰分隔线；③ 相邻重复注释行。
 

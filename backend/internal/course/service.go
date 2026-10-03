@@ -1,4 +1,4 @@
-// Package service 学员侧课程与章节。
+// Package course 学员侧课程与章节。
 package course
 
 import (

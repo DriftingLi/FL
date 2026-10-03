@@ -1,4 +1,4 @@
-// Package api 实现 HTTP handlers。
+// Package job 实现 HTTP handlers。
 // 本文件：招聘域投递端点（spec #449 T3 #452）。
 //   - 学员侧 /api/jobs/:id/apply：投递即授权
 //   - 学员侧 /api/resume/applications*：我的投递（列表/撤回），对齐既有「学员侧招聘数据挂在简历前缀下」

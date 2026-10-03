@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：邮件发送器单点（spec #449 决定 15）——验证码通道与招聘域（联系方式交换/投递通知）共用。
 //
 // P2 波 3a（auth 域搬包）起本文件是**留驻面**：MailSender 一族不进 internal/auth，

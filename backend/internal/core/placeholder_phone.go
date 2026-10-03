@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：phone 占位值（sentinel）的单点定义与判定。
 // 三类占位：邮箱注册（"email_"+sha256(email)，email 列 NOT NULL 而真实手机号未知）、
 // 微信自动建号（"wxp_"+openID，满足 phone 唯一约束）、注销哨兵用户（deleted__sentinel）。

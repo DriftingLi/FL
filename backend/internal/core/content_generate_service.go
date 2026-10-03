@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 package core
 
 import (

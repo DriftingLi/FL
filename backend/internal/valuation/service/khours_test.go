@@ -1,5 +1,4 @@
 // Package service 实现核心业务逻辑
-// Package service 实现核心业务逻辑
 // 本文件：使用强度系数 Kh 的单元测试
 // Kh 计算依赖 ConfigReader（系数键读取），测试用内存实现，无需真实 Postgres。
 package service

@@ -1,4 +1,4 @@
-// Package service 联系方式交换闭环（#375）。
+// Package core 联系方式交换闭环（#375）。
 package core
 
 import (

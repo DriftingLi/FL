@@ -1,4 +1,3 @@
-// Package service 实现业务服务层。
 // 本文件：通用收藏（ADR-0018）—— target_type + target_id 多态收藏，
 // 覆盖 course/chapter/question/featured/topic；user+type+id 唯一约束保证幂等。
 package favorite
