@@ -217,9 +217,32 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 
 **核验**：`git show HEAD:backend/internal/api/<f>` 与域包新文件归一化（去 package / import 块与夹具行、去 `forum.` 前缀、折叠空行）后，**逐 `func Test` 且全文逐行比对：10/10 逐字相同**。验收：`gofmt -l ./internal` 无输出、`go vet` exit 0、`go test ./internal/forum/... ./internal/api/... ./internal/testutil/...` 全 ok、全量只剩 §8.5 那两条基线失败、三条守卫脚本无违规、`internal/layers` 五条结构守卫全 PASS。
 
+### 8.8 批 4（第 1 小批）：服务层 3 个文件（已下沉）
+
+§8.4 点名的三条「不走 HTTP」用例就是本小批，按该节处置「域内单元测试随域搬」（`docs/agents/domain-package-migration.md` §4），从 `backend/internal/api/` 搬到各自域包（文件名不变，api 侧不留副本）：
+
+| 旧路径 | 新路径 | 行数 | `func Test` |
+| --- | --- | --- | --- |
+| `backend/internal/api/search_credential_test.go` | `backend/internal/search/search_credential_test.go` | 93 | 1 |
+| `backend/internal/api/credential_delete_postgres_contract_test.go` | `backend/internal/training/credential_delete_postgres_contract_test.go` | 246 | 3 |
+| `backend/internal/api/disposition_revoke_contract_test.go` | `backend/internal/admin/disposition_revoke_contract_test.go` | 357 | 9 |
+
+**机械改写清单（断言零改动）**：
+
+1. 包子句与 import：`package api` → 目标域包；删自包 import；域内自限定符去前缀（`search.` / `training.` / `admin.`）。
+2. 夹具：`credential_delete_postgres_contract_test.go` 两处 `seedStudent(t, db, ...)` 改用 `testutil.SeedStudent(t, db, ...)`。api 侧那份（`backend/internal/api/router_test_helper_test.go:26-34`）只多一把并发互斥锁，域包内无 `t.Parallel` 用例（已核），无需带锁复制。
+3. 文件头：`search_credential_test.go:1` 的「Package api」改为「Package search」。这是 `check-comment-cleanliness.mjs` 的 package-doc-mismatch 判据（基线 0）要求的，不是断言改动。
+4. 指向被搬文件的注释：`backend/internal/training/credential_delete_blocker_test.go:6` 原写「`internal/api/credential_delete_postgres_contract_test.go`」，该文件搬进同包后改为「`credential_delete_postgres_contract_test.go`（同包）」，不留悬空旧路径。
+
+**核验方式**：`git show HEAD:backend/internal/api/<f>` 与域包新文件归一化（去 package/import 块、去空行、去自包前缀）后**全文逐行比对** —— `search_credential_test.go` 与 `disposition_revoke_contract_test.go` **0 处差异**；`credential_delete_postgres_contract_test.go` **仅上面第 2 条那 2 行**。13 个 `func Test` 无一处断言/期望表达式被改。
+
+**验收**：`gofmt -l ./internal` 无输出；`go vet ./...` exit 0；`go test ./internal/search/... ./internal/training/... ./internal/admin/... ./internal/api/...` 全 `ok`；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败（`internal/deploy` 的 `TestDeployEnvChainPreservesProvidedValues`、`internal/logger` 的 `TestNew_FileOutput` + `TestRedactHook_AppliedByFactory`）；`internal/layers` 五条结构守卫全 PASS；`check-render-error-face.mjs --all` 无违规（69 个面）、`check-comment-cleanliness.mjs --all` ✓（732 文件 0 欠账）、`check-catalog-sort.mjs --all` 无违规。
+
+**PG 面照 §8.6 的两条教训**：`internal/training` 三条 `*OnPostgres` 在本机（无 `DATABASE_URL`）干净 SKIP，故本机绿对它们零信息量，只由 CI 判。本小批**没有重写任何 PG 夹具**（只把 `seedStudent` 换成 `testutil.SeedStudent`），不存在批 1 那类「替身换错」；但 CI `backend-test` 仍是它们唯一的真实判据。
+
 ### 8.9 批 4 第 2 小批：points / favorite / wrongquestion（三个 HTTP 用例）
 
-> 编号说明：§8.8 是同一批的第 1 小批（三个**服务层**用例：search_credential / credential_delete_postgres / disposition_revoke），落在并行分支上；两支都进 master 后编号连续。
+> 编号说明：§8.8 是同一批的第 1 小批（三个**服务层**用例：search_credential / credential_delete_postgres / disposition_revoke）。
 
 **搬迁**（文件名不变，api 侧删净）：
 
@@ -241,6 +264,7 @@ body={"code":400,"message":"注销失败：会话吊销未生效，请稍后重�
 **验收**：`gofmt -l ./internal` 无输出；`go vet ./internal/{points,favorite,wrongquestion,api,testutil}/` exit 0；三个用例逐个 `-v` 实跑 **PASS**（非 skip）；`go test` 三包 + api + testutil 全 ok；全量 `go test ./...` 只剩 §8.5 那两条基线环境性失败；三条守卫脚本无违规（`check-comment-cleanliness.mjs --all` ✓ 735 个 .go 文件 0 欠账）；`internal/layers` 五条结构守卫全 PASS。
 
 **遗留（本批未动，属史述）**：`docs/adr/ADR-0070-域包形态与目录即射程的收口.md:303` 与移动端 `training-app/叉车维修培训学员端跨端应用/docs/verification/device/1162/README.md:66` 仍按旧路径提到这三个文件 —— 按 `docs/agents/domain-package-migration.md` 的口径（历史记录不追改）保留。
+
 
 ## 附录：142 个文件逐条
 

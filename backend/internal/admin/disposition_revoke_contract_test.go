@@ -13,7 +13,7 @@
 //
 // 失败策略沿用既有口径：禁用与代重置都属「已生效动作之后的补救」⇒ 尽力而为，标记写失败
 // 不回退处置本身（与注销族「先写标记、失败即整体不生效」有意不同）。
-package api
+package admin
 
 import (
 	"context"
@@ -25,7 +25,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/admin"
 	"forklift-training/internal/core"
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
@@ -41,7 +40,7 @@ const (
 
 // newDispositionFixture 装配「管理面处置动作 + 双令牌轮换」的最小真链路（共用一个 Session）。
 // 返回的学员处于启用态（status=1）——禁用态走不到签发，故令牌由 Session 直接签。
-func newDispositionFixture(t *testing.T, bl security.BlacklistStore) (*admin.Service, *security.Session, *gorm.DB, int) {
+func newDispositionFixture(t *testing.T, bl security.BlacklistStore) (*Service, *security.Session, *gorm.DB, int) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
@@ -58,7 +57,7 @@ func newDispositionFixture(t *testing.T, bl security.BlacklistStore) (*admin.Ser
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
 	}
-	return admin.NewService(db, sess, zap.NewNop()), sess, db, u.ID
+	return NewService(db, sess, zap.NewNop()), sess, db, u.ID
 }
 
 // issueStudentRefresh 以学员角色命名空间签一枚 refresh（与登录签发的 claims.Role 同源）。
@@ -87,7 +86,7 @@ func storedPassword(t *testing.T, db *gorm.DB, uid int) string {
 }
 
 // newTutorFixture 讲师侧同形夹具（表 tutor，主键 tutor_id）。
-func newTutorFixture(t *testing.T, bl security.BlacklistStore) (*admin.Service, *security.Session, *gorm.DB, int) {
+func newTutorFixture(t *testing.T, bl security.BlacklistStore) (*Service, *security.Session, *gorm.DB, int) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
@@ -100,7 +99,7 @@ func newTutorFixture(t *testing.T, bl security.BlacklistStore) (*admin.Service, 
 	if err := db.Create(&tu).Error; err != nil {
 		t.Fatalf("播种讲师失败: %v", err)
 	}
-	return admin.NewService(db, sess, zap.NewNop()), sess, db, tu.TutorID
+	return NewService(db, sess, zap.NewNop()), sess, db, tu.TutorID
 }
 
 func issueTutorRefresh(t *testing.T, sess *security.Session, tid int) string {

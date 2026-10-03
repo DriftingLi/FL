@@ -11,7 +11,7 @@
 //
 // 本机无 DATABASE_URL 时 testutil.NewPostgresDB 会 t.Skip ⇒ 首跑在 CI（checks.md 的两条纪律）。
 // 不依赖 PG 也能红的那半（迁移文本对账）在 internal/migrate/credential_fk_test.go。
-package api
+package training
 
 import (
 	"errors"
@@ -25,7 +25,6 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
-	"forklift-training/internal/training"
 )
 
 // credPKGFKey 两条 credential 外键的约束名（000013/000040 与 000020 的列级匿名 FK 命名惯例）。
@@ -100,11 +99,11 @@ func TestCredentialDeleteCascadesPracticeProgressOnPostgres(t *testing.T) {
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置，跳过 Postgres 契约测试")
 	}
-	svc := training.NewService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	doomed := seedCredForPGDelete(t, db, "N1_pg_cascade")
 	keeper := seedCredForPGDelete(t, db, "N1_pg_keeper")
-	student := seedStudent(t, db, "cred_del_pg", "x")
+	student := testutil.SeedStudent(t, db, "cred_del_pg", "x")
 
 	// 被删证件下：同一学员两种模式各一行（分区里不止一行时才看得出级联是整段消失）
 	seedPGProgress(t, db, student.ID, doomed.ID, "sequential")
@@ -157,10 +156,10 @@ func TestCredentialDeleteBlockedByContributionsOnPostgres(t *testing.T) {
 	if db == nil {
 		t.Skip("DATABASE_URL 未设置，跳过 Postgres 契约测试")
 	}
-	svc := training.NewService(db, zap.NewNop())
+	svc := NewService(db, zap.NewNop())
 
 	cred := seedCredForPGDelete(t, db, "N1_pg_contrib")
-	student := seedStudent(t, db, "cred_del_pg_block", "x")
+	student := testutil.SeedStudent(t, db, "cred_del_pg_block", "x")
 	seedPGContribution(t, db, student.ID, cred.ID, "pending")
 	seedPGContribution(t, db, student.ID, cred.ID, "withdrawn")
 
@@ -168,7 +167,7 @@ func TestCredentialDeleteBlockedByContributionsOnPostgres(t *testing.T) {
 	if err == nil {
 		t.Fatal("证件下仍有投稿时删除必须被拒")
 	}
-	if !errors.Is(err, training.ErrCredentialHasContributions) {
+	if !errors.Is(err, ErrCredentialHasContributions) {
 		t.Fatalf("应可被哨兵 ErrCredentialHasContributions 命中（api 侧据此落 400），实得 %v", err)
 	}
 	if !strings.Contains(err.Error(), "2 篇投稿") {
