@@ -23,7 +23,7 @@
 //
 // 本段**没跑**因而也没改判的三组，原因各不相同（都不是「嫌麻烦」）：
 //   - ContactPlainDTO.photos / .resume_certifications、QuestionCommentPageResult.items（键前缀随 4c 改 questioninteraction.）、
-//     api.AuditLogPageResult.items ⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
+//     audit.AuditLogPageResult.items（前缀随波 4f 域包改名）⇒ 宿主文件由另一条在飞的分支持有（contact_service.go、
 //     internal/questioninteraction/service.go、internal/api/），本段不改。前两格另有独立理由：
 //     service.JSONArray.MarshalJSON 在 `j == nil` 时**字面发出 `null`**，本就恒可空。
 //   - repository.AlgorithmParameters 的 4 格与 repository.SeriesConfigOptions 的 3 格 ⇒ 两道

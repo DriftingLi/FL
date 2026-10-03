@@ -1,4 +1,4 @@
-package service
+package export
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// fakeExportStore ExportStore 的测试替身（生产为估值模块 pgx adapter）。
+// fakeExportStore ExportStore 的测试替身（生产为估值侧 repository 的 pgx adapter）。
 type fakeExportStore struct {
 	rows []EvaluationExportRow
 }
@@ -21,7 +21,7 @@ func TestExportEvaluations(t *testing.T) {
 	tm := time.Date(2026, 8, 8, 10, 30, 0, 0, time.UTC)
 	kt := 0.8123
 	var nilPtr *float64
-	svc := NewExportService(nil, &fakeExportStore{rows: []EvaluationExportRow{
+	svc := NewService(nil, &fakeExportStore{rows: []EvaluationExportRow{
 		{
 			ID: 1, Account: "alice", Username: "张三", Brand: "Toyota", VehicleType: "FBT",
 			Series: "Series-1", Tonnage: 3.5, ConfigType: "标准", MastType: "L型", MastHeightMM: 3000,

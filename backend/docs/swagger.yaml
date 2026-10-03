@@ -302,7 +302,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  api.AuditLogPageResult:
+  audit.AuditLogPageResult:
     properties:
       items:
         description: Items 恒非 null：空表发出 []（pkg/paging 的 queryFind 走 gorm Find，零行给空切片）。
@@ -4540,7 +4540,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/api.AuditLogPageResult'
+                  $ref: '#/definitions/audit.AuditLogPageResult'
               type: object
         "401":
           description: 未认证

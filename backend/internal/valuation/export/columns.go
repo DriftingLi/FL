@@ -1,11 +1,11 @@
-package service
+package export
 
 import "forklift-training/internal/timefmt"
 
 // EvaluationExportColumn 描述评估导出的一列（#229 列描述单点）。
 //
 // 该 spec 是评估导出的唯一列序真值：repository 的 SELECT 列序与 position Scan、
-// service 的 CSV 表头与取值均由此派生——任何列增删/重排都在此处单点完成。
+// Service 的 CSV 表头与取值均由此派生——任何列增删/重排都在此处单点完成。
 // 一旦顺序漂移，既有 TestExportEvaluations 与评估导出 shape-lock 门禁立即变红，
 // 从而把「SQL 返回序」与「表头序」永久绑定、无法各自漂移。
 type EvaluationExportColumn struct {
