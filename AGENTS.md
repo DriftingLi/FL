@@ -10,7 +10,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 - **系统总览 / 技术栈 / 架构大图 / 运行与部署 / 全量命令**：`README.md`（第一次接触本仓先读它建立大图——子域名多工作区、统一账号双令牌、三部署面、CI 触发模型等——再回本文件读工作约定）
 
-- **领域词汇表**：`CONTEXT.md`（repo 根）
+- **领域词汇表**：**两份，各辖一侧** —— 根 `CONTEXT.md`（全站 / Web / 后端 / 跨端契约）· 移动端 `training-app/叉车维修培训学员端跨端应用/CONTEXT.md`（uni-app x 侧：生物识别、快捷登录、凭据存储等）。**无** `CONTEXT-MAP.md`；两份之间**未声明仲裁规则**，按改动所属侧取用那一份。
 
 - **架构评审范围**：architecture review 覆盖 Web 前端（`frontend/`）、后端（`backend/`）与部署面；**移动端**（`training-app/叉车维修培训学员端跨端应用/`）由 @zhengcookie 负责，其深化机会不在本仓评审范围——评审不重复提议移动端候选，移动端自身决策见其独立 ADR 体系。
 
@@ -28,7 +28,7 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 ### Domain docs
 
-Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
+词表与 ADR 都是「根 / 移动端」**两套并行**：动哪一侧就读那一份，落点见上方「领域文件」；通用规则看 `docs/agents/domain.md`。
 
 ### Security scan
 
