@@ -5,7 +5,7 @@
 //  2. 顶层回复两者均空——前端据此不渲染该片段。
 //  3. 被回复人无头像时 `parent_avatar_url` 为空，`parent_name` 仍回填（名字可用、头像降级）。
 //  4. 分页不影响回填：置顶条与其余页的楼中楼同样带被回复人信息。
-package api
+package forum
 
 import (
 	"encoding/json"
@@ -15,10 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -37,18 +33,7 @@ type replyParentResp struct {
 
 func TestForumReplyParentAvatarContract(t *testing.T) {
 	t.Parallel()
-	testutil.SetTestGinMode()
-	db := testutil.NewMemoryDB(t)
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	now := testutil.Now()
 	mkUser := func(account, phone, name, avatar string) model.HrwaiUser {

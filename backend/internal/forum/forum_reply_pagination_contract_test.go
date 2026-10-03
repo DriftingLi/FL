@@ -7,7 +7,7 @@
 //  4. `total` = 回复总数（含置顶条），与 `topic.reply_count` 一致。
 //  5. `page` 越界返回**空数组**而非 nil/报错（前端据此走空态）。
 //  6. 旧的全量路径已退役：不传 page_size 时默认 20，而非「返回全部」。
-package api
+package forum
 
 import (
 	"bytes"
@@ -18,10 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/config"
-	"forklift-training/internal/forum"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -46,18 +42,7 @@ type replyPageResp struct {
 
 func TestForumReplyPaginationContract(t *testing.T) {
 	t.Parallel()
-	testutil.SetTestGinMode()
-	db := testutil.NewMemoryDB(t)
-
-	cfg := &config.Config{
-		JWTSecretKey: "contract-test-secret",
-		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
-	}
-	r := gin.New()
-	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
-	forum.RegisterAdminRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
-	forum.RegisterRoutes(api, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
+	db, r, _, cfg := newForumContractEnv(t)
 
 	now := testutil.Now()
 	mkUser := func(account, phone, name string) model.HrwaiUser {
@@ -102,7 +87,7 @@ func TestForumReplyPaginationContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)
 	}
-	// 管理端详情走同一个 GetTopic，需 admin 角色才可达（管理端路由由 forum.RegisterAdminRoutes 注册）
+	// 管理端详情走同一个 GetTopic，需 admin 角色才可达（管理端路由由 RegisterAdminRoutes 注册）
 	adminTok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(1, "admin1", "admin")
 	if err != nil {
