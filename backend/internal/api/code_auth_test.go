@@ -22,9 +22,9 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -134,7 +134,7 @@ func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *me
 	t.Helper()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, security.NewSession("test-secret", time.Hour, security.CookieConfig{}), core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	store := newMemCodeStore()
 	codeSvc := auth.NewVerifyCodeService(db, authSvc, 5*time.Minute, store, zap.NewNop())
 	captchaSvc := captcha.NewService(store) // memCodeStore 实现 captcha.Store（Get/Set/Del 同构）

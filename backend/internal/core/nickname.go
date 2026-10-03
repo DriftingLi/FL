@@ -1,6 +1,6 @@
 // Package service 实现业务服务层。
 // 本文件：默认昵称生成（叉车人 + 随机编码，保证不重复）。
-package service
+package core
 
 import (
 	"crypto/rand"

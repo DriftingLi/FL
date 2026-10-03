@@ -4,7 +4,7 @@
 // 默认排序 updated_at DESC（不按注册时间）。浏览留痕：Detail（及 List 按需）写入 recruit_resume_views。
 //
 // 域边界（P2 波 4e）：本包单向依赖 internal/resume（简历卡实体与其三处投影都在彼处）与
-// internal/service（留驻的联系方式授权读面）。HTTP 出口见 handler.go / handler_pdf.go。
+// internal/core（留驻的联系方式授权读面）。HTTP 出口见 handler.go / handler_pdf.go。
 package recruit
 
 import (
@@ -17,10 +17,10 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/region"
 	"forklift-training/internal/resume"
-	"forklift-training/internal/service"
 	"forklift-training/pkg/paging"
 )
 
@@ -71,7 +71,7 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []resume.RecruitResum
 	}
 	// 授权态单点在 contact_authz.go（ADR-0053 §3）：徽章是「有效授权态」的三值投影，
 	// 不再自带「approved > pending」优先级，也不再自己判「学员注销即失效」。
-	grants, err := service.ContactStatesOf(db, recruiterID, ids)
+	grants, err := core.ContactStatesOf(db, recruiterID, ids)
 	if err != nil {
 		return
 	}
@@ -80,7 +80,7 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []resume.RecruitResum
 		if g, ok := grants[cards[i].UserID]; ok && g.State != "" {
 			cards[i].ContactState = string(g.State)
 			cards[i].ContactSource = string(g.Source)
-			if companyUnavailable && g.State == service.ContactGrantApproved {
+			if companyUnavailable && g.State == core.ContactGrantApproved {
 				cards[i].CompanyDisabled = true
 			}
 		}
@@ -91,8 +91,8 @@ func fillContactStates(db *gorm.DB, recruiterID int, cards []resume.RecruitResum
 // 只有**确证**被禁用或已注销才返回 true；「查不动」返回 false——
 // 把 DB 故障报成一条处置事实，比少说一格更坏（ADR-0062 票6 同判据）。
 func companyUnavailableForCards(db *gorm.DB, recruiterID int) bool {
-	err := service.RecruiterAccountUsable(db, recruiterID)
-	return errors.Is(err, service.ErrCompanyUnavailable)
+	err := core.RecruiterAccountUsable(db, recruiterID)
+	return errors.Is(err, core.ErrCompanyUnavailable)
 }
 
 // resumeHoldsCredential 简历持证筛选：简历卡的 resume_certifications JSONB 数组内含该 credential_id

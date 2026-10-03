@@ -1,7 +1,7 @@
 // Package forum 论坛计数用例：删楼中楼 reply_count 级联少减 N（spec #297）。
 //
 // 本用例原在 internal/service/forum_counter_test.go，随域包搬来（ADR-0070 波 2b-2）；
-// 它用到的 assertForumInt 在本文件尾部有私有副本 —— 域包不得 import internal/service 的测试文件。
+// 它用到的 assertForumInt 在本文件尾部有私有副本 —— 域包不得 import internal/core 的测试文件。
 package forum
 
 import (

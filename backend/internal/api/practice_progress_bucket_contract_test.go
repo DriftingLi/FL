@@ -15,15 +15,15 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 func assertPracticeProgressBucketing(t *testing.T, db *gorm.DB) {
 	setTestGinMode()
-	pwd, _ := service.HashPassword(`student123`)
+	pwd, _ := core.HashPassword(`student123`)
 	student := seedStudent(t, db, `stu1`, pwd)
 
 	cfg := &config.Config{

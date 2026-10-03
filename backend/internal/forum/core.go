@@ -12,11 +12,11 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
-	"forklift-training/internal/service"
 )
 
 // forumCore 论坛域共享依赖与私有 helper（接收者沿用 s，与两个 service 同形）。
@@ -24,7 +24,7 @@ type forumCore struct {
 	db              *gorm.DB
 	fileSvc         *filestore.FileStore
 	notificationSvc *notification.Service
-	counters        service.ForumCounter // 计数列唯一写入口（spec #297）
+	counters        core.ForumCounter // 计数列唯一写入口（spec #297）
 	// rewards 奖励政策 module（ADR-0047 §3 / spec #927）：发放、回收与发放事实判定的
 	// 唯一实现处——治理侧写（Award / Reclaim）、共享读（AcceptRewardIssued）都经它。
 	rewards *forumRewardPolicy
@@ -32,7 +32,7 @@ type forumCore struct {
 }
 
 // newForumCore 装配共享内核：两个 module 各调用一次（实例分离），依赖实例同源。
-func newForumCore(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters service.ForumCounter, points *points.Service, logger *zap.Logger) forumCore {
+func newForumCore(db *gorm.DB, fileSvc *filestore.FileStore, notificationSvc *notification.Service, counters core.ForumCounter, points *points.Service, logger *zap.Logger) forumCore {
 	return forumCore{db: db, fileSvc: fileSvc, notificationSvc: notificationSvc, counters: counters,
 		rewards: newForumRewardPolicy(points, notificationSvc), logger: logger}
 }

@@ -5,7 +5,7 @@
 //
 // 本格的形状：pending 阶段 async_task.result 列还没写过，GetTaskStatus 只在
 // len(task.Result) > 0 时才赋值 ⇒ 轮询第一次就打到的那一发就是 null。
-package service
+package core
 
 import (
 	"strconv"
@@ -19,7 +19,7 @@ import (
 )
 
 var nullableOutletsContent = map[string]func(t *testing.T) any{
-	"service.GenTaskStatus.results": outletGenTaskPending,
+	"core.GenTaskStatus.results": outletGenTaskPending,
 }
 
 func init() {

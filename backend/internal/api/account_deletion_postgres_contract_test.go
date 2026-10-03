@@ -16,8 +16,8 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/auth"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -32,7 +32,7 @@ func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) (*gin.Engine, 
 	r := gin.New()
 	// P2 波 3a：注册真实路由面（/account 带 JWT 中间件）——用例带真 access，不再手工注入 CtxUserID。
 	auth.RegisterRoutes(r.Group("/api"), deps.Session, deps.AuthSvc, nil, nil, nil, zap.NewNop())
-	tok, _, err := deps.Session.IssuePair(uid, "del_pg_stu", service.HrwaiRole)
+	tok, _, err := deps.Session.IssuePair(uid, "del_pg_stu", core.HrwaiRole)
 	if err != nil {
 		t.Fatalf("签发 access 失败: %v", err)
 	}

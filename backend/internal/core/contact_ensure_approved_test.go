@@ -1,7 +1,7 @@
 // Package service 投递即授权收口测试（ADR-0027 C5）：
 // EnsureApproved 单点锁定三分支状态迁移（pending 覆盖 / 新建 approved / revoked 复活），
 // 行为与投递事务内联迁移完全一致。
-package service
+package core
 
 import (
 	"testing"

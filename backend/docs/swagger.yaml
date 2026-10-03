@@ -765,6 +765,135 @@ definitions:
       reason:
         type: string
     type: object
+  core.ChapterGenResult:
+    properties:
+      chapter_id:
+        type: integer
+      content:
+        type: string
+        x-optional: true
+      error:
+        type: string
+        x-optional: true
+      status:
+        description: '"success" | "failed"'
+        type: string
+      title:
+        type: string
+    type: object
+  core.ContactPlainDTO:
+    properties:
+      contact_phone:
+        type: string
+      photos:
+        items:
+          type: string
+        type: array
+        x-nullable: true
+      real_name:
+        type: string
+      resume_certifications:
+        items:
+          type: object
+        type: array
+        x-nullable: true
+      resume_file_url:
+        type: string
+      wechat:
+        type: string
+    type: object
+  core.ContactRequestDTO:
+    properties:
+      company_disabled:
+        description: |-
+          CompanyDisabled 授权**在**而明文**不可用**的具名说明，那句可用性说的是「企业账号已停用或已注销」
+          ——与明文门禁拒同一件事时返回的那句错误逐字同一句（禁用是处置动作、注销是账号行没了，
+          两者在联系面上的后果相同）。此时上面三段明文一律缺失，但 status 仍是 approved
+          （徽章按授权事实投影，处置不改写授权事实）。
+          词表依据：CONTEXT.md「授权有效态」——「授权存在 ≠ 授权可用，可用性问题呈现在明文位置」；
+          「企业招聘者」条的 status 禁用位（ADR-0062 决策 9、ADR-0065 决策 8）。缺席即企业可用。
+        type: boolean
+        x-optional: true
+      company_name:
+        description: 企业信息（学员侧可见）
+        type: string
+        x-optional: true
+      contact_email:
+        type: string
+        x-optional: true
+      contact_name:
+        type: string
+        x-optional: true
+      contact_phone:
+        description: 企业联系信息（#487：仅 status=approved 时透出——电话/邮箱/微信；其余状态一律缺失）
+        type: string
+        x-optional: true
+      created_at:
+        type: string
+      decided_at:
+        type: string
+        x-optional: true
+      expires_at:
+        description: |-
+          ExpiresAt 裁决窗口的关闭时刻，**只对 pending 有意义**（ADR-0061 §2）：非 pending 行可能缺失，
+          消费方不得把它读成「授权的到期时刻」（approved 是永久授权）。
+        type: string
+        x-optional: true
+      id:
+        type: integer
+      message:
+        type: string
+      recruiter_id:
+        type: integer
+      source:
+        description: Source 授权来源（recruiter 企业发起 / application 投递产生）
+        type: string
+        x-optional: true
+      status:
+        type: string
+      student_user_id:
+        type: integer
+      updated_at:
+        type: string
+      wechat:
+        type: string
+        x-optional: true
+    type: object
+  core.ContactRequestListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/core.ContactRequestDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  core.GenTaskStatus:
+    properties:
+      completed:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/core.ChapterGenResult'
+        type: array
+        x-nullable: true
+      status:
+        description: '"pending"|"processing"|"completed"|"failed"'
+        type: string
+      task_id:
+        type: string
+      total:
+        type: integer
+    type: object
+  core.GenerateContentResultDTO:
+    properties:
+      task_id:
+        type: string
+    type: object
   course.AdminCourseDetailDTO:
     properties:
       certificate_name:
@@ -3360,7 +3489,7 @@ definitions:
         type: string
       company_disabled:
         description: |-
-          CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（service.ContactRequestDTO 的
+          CompanyDisabled 「企业账号已停用或已注销」——与学员侧那格（core.ContactRequestDTO 的
           同键字段）以及明文门禁拒同一件事时返回的那句错误同键同句（ADR-0065 决策 8）：
           本企业被禁用（处置动作）或已注销 ⇒ 明文取不到，但 contact_state 仍按授权事实投影
           （授权存在 ≠ 授权可用，词表「授权有效态」；ADR-0064 决策 5）。缺席即企业可用。
@@ -3492,135 +3621,6 @@ definitions:
         type: string
       times:
         type: integer
-    type: object
-  service.ChapterGenResult:
-    properties:
-      chapter_id:
-        type: integer
-      content:
-        type: string
-        x-optional: true
-      error:
-        type: string
-        x-optional: true
-      status:
-        description: '"success" | "failed"'
-        type: string
-      title:
-        type: string
-    type: object
-  service.ContactPlainDTO:
-    properties:
-      contact_phone:
-        type: string
-      photos:
-        items:
-          type: string
-        type: array
-        x-nullable: true
-      real_name:
-        type: string
-      resume_certifications:
-        items:
-          type: object
-        type: array
-        x-nullable: true
-      resume_file_url:
-        type: string
-      wechat:
-        type: string
-    type: object
-  service.ContactRequestDTO:
-    properties:
-      company_disabled:
-        description: |-
-          CompanyDisabled 授权**在**而明文**不可用**的具名说明，那句可用性说的是「企业账号已停用或已注销」
-          ——与明文门禁拒同一件事时返回的那句错误逐字同一句（禁用是处置动作、注销是账号行没了，
-          两者在联系面上的后果相同）。此时上面三段明文一律缺失，但 status 仍是 approved
-          （徽章按授权事实投影，处置不改写授权事实）。
-          词表依据：CONTEXT.md「授权有效态」——「授权存在 ≠ 授权可用，可用性问题呈现在明文位置」；
-          「企业招聘者」条的 status 禁用位（ADR-0062 决策 9、ADR-0065 决策 8）。缺席即企业可用。
-        type: boolean
-        x-optional: true
-      company_name:
-        description: 企业信息（学员侧可见）
-        type: string
-        x-optional: true
-      contact_email:
-        type: string
-        x-optional: true
-      contact_name:
-        type: string
-        x-optional: true
-      contact_phone:
-        description: 企业联系信息（#487：仅 status=approved 时透出——电话/邮箱/微信；其余状态一律缺失）
-        type: string
-        x-optional: true
-      created_at:
-        type: string
-      decided_at:
-        type: string
-        x-optional: true
-      expires_at:
-        description: |-
-          ExpiresAt 裁决窗口的关闭时刻，**只对 pending 有意义**（ADR-0061 §2）：非 pending 行可能缺失，
-          消费方不得把它读成「授权的到期时刻」（approved 是永久授权）。
-        type: string
-        x-optional: true
-      id:
-        type: integer
-      message:
-        type: string
-      recruiter_id:
-        type: integer
-      source:
-        description: Source 授权来源（recruiter 企业发起 / application 投递产生）
-        type: string
-        x-optional: true
-      status:
-        type: string
-      student_user_id:
-        type: integer
-      updated_at:
-        type: string
-      wechat:
-        type: string
-        x-optional: true
-    type: object
-  service.ContactRequestListResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/service.ContactRequestDTO'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  service.GenTaskStatus:
-    properties:
-      completed:
-        type: integer
-      results:
-        items:
-          $ref: '#/definitions/service.ChapterGenResult'
-        type: array
-        x-nullable: true
-      status:
-        description: '"pending"|"processing"|"completed"|"failed"'
-        type: string
-      task_id:
-        type: string
-      total:
-        type: integer
-    type: object
-  service.GenerateContentResultDTO:
-    properties:
-      task_id:
-        type: string
     type: object
   student.CourseProgressDTO:
     properties:
@@ -5250,7 +5250,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.GenerateContentResultDTO'
+                  $ref: '#/definitions/core.GenerateContentResultDTO'
               type: object
         "400":
           description: 参数错误
@@ -5284,7 +5284,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.GenTaskStatus'
+                  $ref: '#/definitions/core.GenTaskStatus'
               type: object
         "400":
           description: task_id 无效
@@ -13955,7 +13955,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactRequestListResult'
+                  $ref: '#/definitions/core.ContactRequestListResult'
               type: object
         "401":
           description: 未认证
@@ -13987,7 +13987,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactRequestDTO'
+                  $ref: '#/definitions/core.ContactRequestDTO'
               type: object
         "400":
           description: 附言为空 / 附言超 200 字 / 参数错误 / 学员不存在 / 招聘者不存在 / 招聘者账号已禁用 / 已存在待处理的申请
@@ -14382,7 +14382,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactPlainDTO'
+                  $ref: '#/definitions/core.ContactPlainDTO'
               type: object
         "401":
           description: 未认证
@@ -14592,7 +14592,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactRequestListResult'
+                  $ref: '#/definitions/core.ContactRequestListResult'
               type: object
         "401":
           description: 未认证
@@ -14622,7 +14622,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactRequestDTO'
+                  $ref: '#/definitions/core.ContactRequestDTO'
               type: object
         "400":
           description: 状态不允许/已过期
@@ -14656,7 +14656,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactRequestDTO'
+                  $ref: '#/definitions/core.ContactRequestDTO'
               type: object
         "400":
           description: 状态不允许
@@ -14690,7 +14690,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/service.ContactRequestDTO'
+                  $ref: '#/definitions/core.ContactRequestDTO'
               type: object
         "400":
           description: 状态不允许

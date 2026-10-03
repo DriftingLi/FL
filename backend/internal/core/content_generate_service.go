@@ -1,5 +1,5 @@
 // Package service 实现业务服务层。
-package service
+package core
 
 import (
 	"encoding/json"

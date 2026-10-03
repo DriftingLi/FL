@@ -327,7 +327,7 @@ func SuccessRenderer[Req, Resp any](ok *success) RenderFunc[Req, Resp] {
 // WithSentinel 在已装配的错误面上**前置**一条具名哨兵分档，返回自身便于链式声明：
 //
 //	}.WithSuccess(OkMsg("success"), http.StatusInternalServerError).
-//		WithSentinel(service.ErrGenTaskNotFound, http.StatusNotFound).Handle(c)
+//		WithSentinel(core.ErrGenTaskNotFound, http.StatusNotFound).Handle(c)
 //
 // 存在的理由就是本仓的主判据（ADR-0064 决策 1）：service 层把「不存在」「不可读」「查不动」
 // 分开成具名事实之后，api 层要能把它们**分别**落码，而呈现层若仍要统一（例如未兑换与

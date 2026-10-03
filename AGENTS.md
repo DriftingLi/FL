@@ -50,8 +50,8 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 构建 / lint / 全量测试 / 生成链 / 迁移 / 部署的**权威命令**在 [`README.md`](README.md)（常用命令、快速开始）与 [`docs/agents/checks.md`](docs/agents/checks.md)（提交前四件套与守卫）。本处**不重复那些表**——它们靠指路而非抄写，抄过来正是历史上漂移的来源。这里只补一件两表都没写、又几乎每次会话都要用的：**如何只跑一个测试**。
 
 - **后端**（`backend/`；全量 `make test` = `go test ./... -race -cover`）
-  - 单包：`go test ./internal/service/ -race`
-  - 单用例：`go test ./internal/service/ -run TestXxx -race`（`-run` 接正则，可前缀匹配一簇）
+  - 单包：`go test ./internal/core/ -race`
+  - 单用例：`go test ./internal/core/ -run TestXxx -race`（`-run` 接正则，可前缀匹配一簇）
   - ⚠️ 命中 `testutil.NewPostgresDB` 的 Postgres 契约用例，本机无 `DATABASE_URL` 会**干净 skip** ⇒ 看到 `ok` ≠ 测过，首跑在 CI（详见 checks.md「两条纪律」）。
 - **前端**（`frontend/`；全量 `npm test` = `vitest run`）
   - 单文件：`npx vitest run src/api/__tests__/page.spec.ts`

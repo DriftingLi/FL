@@ -1,5 +1,5 @@
 // Package service 联系方式交换闭环（#375）。
-package service
+package core
 
 import (
 	"errors"

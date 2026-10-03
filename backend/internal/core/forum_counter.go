@@ -1,7 +1,7 @@
 // Package service 实现业务服务层。
 // 本文件：forumCounter——论坛反范式计数列（likes_count / reply_count）增减的唯一写入口（spec #297）。
 // ForumService 与 AuthService 经构造注入同一接口，保证「点赞行数 ↔ 计数列」同步与下限护栏语义一致。
-package service
+package core
 
 import (
 	"fmt"

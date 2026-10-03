@@ -17,7 +17,7 @@ import (
 
 // AuditWriter 审计写入口：中间件只认这两个动作，不认 `*audit.Service` 这个具体类型。
 //
-// 为什么接口声明在消费方而不是直接 import internal/service（ADR-0070）：域包要被 internal/service
+// 为什么接口声明在消费方而不是直接 import internal/core（ADR-0070）：域包要被 internal/core
 // import（那 7 个事件构造器），域包的 handler*.go 又要 import 本包拿 JWTAuth / CapabilityRequired
 // ——「middleware → service → 域包 → middleware」是个三角，而这条边编译器只在有人撞上时报，
 // 报出来的还是无关的 cmd（第一次拆 notification 时就撞上了）。实现仍是单点：audit.Service 的

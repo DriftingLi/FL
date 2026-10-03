@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -25,9 +25,9 @@ func TestAdminPenaltyContract(t *testing.T) {
 	t.Parallel()
 	setTestGinMode()
 	db := testutil.NewMemoryDB(t)
-	adminPwd, _ := service.HashPassword("admin123")
+	adminPwd, _ := core.HashPassword("admin123")
 	admin := testutil.SeedAdmin(t, db, "penalty_admin", adminPwd)
-	stuPwd, _ := service.HashPassword("student123")
+	stuPwd, _ := core.HashPassword("student123")
 	// 直接建学员行而不走 testutil.SeedStudent：后者会推进进程级 uid 计数器，
 	// 使 auth_me 契约测试（在 .001 上锁形状）随本测试文件的存在而漂移。
 	student := &model.HrwaiUser{

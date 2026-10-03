@@ -9,12 +9,12 @@ import (
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/storage"
 	vexport "forklift-training/internal/valuation/export"
 )
@@ -31,14 +31,14 @@ type coreSingletons struct {
 	logger  *zap.Logger
 	export  vexport.ExportStore
 	sess    *security.Session
-	forumCn service.ForumCounter
+	forumCn core.ForumCounter
 
 	authSvc       *auth.Service
 	codeSvc       *auth.VerifyCodeService
 	captchaSvc    *captcha.Service
 	emailCh       auth.CodeChannel
 	phoneCh       auth.CodeChannel
-	mailSender    service.MailSender
+	mailSender    core.MailSender
 	wechatAuthSvc *auth.WechatService
 	fileSvc       *filestore.FileStore
 	slideRenderer *course.SlideRenderer
@@ -48,8 +48,8 @@ type coreSingletons struct {
 	pointsSvc     *points.Service
 	aiModelPort   aiassistant.ModelPort
 	aiSvc         *aiassistant.GenerationService
-	contentGenSvc *service.ContentGenerateService
-	contactSvc    *service.ContactService
+	contentGenSvc *core.ContentGenerateService
+	contactSvc    *core.ContactService
 }
 
 // provideCore 建横切单例。**构造顺序与原单函数逐字一致**（会话 → 计数器 → 认证 → 通道 →
@@ -61,14 +61,14 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
 	c.sess = security.SessionFromConfig(cfg)
 	// 论坛计数器唯一实例：ForumService / ForumModerationService 与 AuthService 共享（计数列唯一写入口，spec #297）
-	c.forumCn = service.NewForumCounter()
+	c.forumCn = core.NewForumCounter()
 	c.authSvc = auth.NewService(db, c.sess, c.forumCn,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
 	c.codeSvc = auth.NewVerifyCodeService(db, c.authSvc, cfg.EmailCodeTTL, &auth.RedisAuthCodeStore{}, logger)
 	c.captchaSvc = captcha.NewService(captcha.RedisStore{})
 	c.emailCh = auth.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
 	// 邮件发送器单点（spec #449 决定 15）：联系方式交换与投递通知共用，不再注入 nil 只写日志。
-	c.mailSender = service.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
+	c.mailSender = core.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
 	c.phoneCh = auth.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	c.wechatAuthSvc = auth.NewWechatService(cfg.Wechat.MiniProgram, db, c.authSvc, logger)
 	c.fileSvc = filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
@@ -90,8 +90,8 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	)
 	c.aiModelPort = aiassistant.NewMeteredModel(aiRouting, c.pointsSvc, logger)
 	c.aiSvc = aiassistant.NewGenerationService(db, c.aiModelPort, logger)
-	c.contentGenSvc = service.NewContentGenerateService(db, c.aiSvc, logger)
+	c.contentGenSvc = core.NewContentGenerateService(db, c.aiSvc, logger)
 	// 联系方式交换唯一实例：申请/授权状态机（EnsureApproved）与投递侧共用（ADR-0027 C5）
-	c.contactSvc = service.NewContactService(db, logger, c.notifSvc, c.mailSender)
+	c.contactSvc = core.NewContactService(db, logger, c.notifSvc, c.mailSender)
 	return c
 }

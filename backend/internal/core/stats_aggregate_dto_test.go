@@ -1,7 +1,7 @@
 // Package service 统计聚合 typed DTO shape-lock（Ticket #226）。
 // 断言 JSON key 集合与重构前的 map 输出契约逐字一致；练习那套（PracticeStatsDTO）随 3c-2 搬进 internal/practicemode，
 // 错题那套（WrongQuestionStatsDTO）随 4c 搬进 internal/wrongquestion。
-package service
+package core
 
 import "forklift-training/internal/questionbank"
 

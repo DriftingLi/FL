@@ -33,9 +33,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/auth"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -65,7 +65,7 @@ func doRefreshCookie(r *gin.Engine, cookie, bodyToken string) *httptest.Response
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/api/auth/refresh", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+familyClue(service.HrwaiRole))
+	req.Header.Set("Authorization", "Bearer "+familyClue(core.HrwaiRole))
 	if cookie != "" {
 		req.AddCookie(&http.Cookie{Name: security.DefaultRefreshCookieName, Value: cookie})
 	}
@@ -115,8 +115,8 @@ func TestRefresh_Cookie优先于请求体(t *testing.T) {
 	r := newRefreshRouter(sess)
 
 	// 同一身份手上两支**都合法**的 refresh：A 走 Cookie，B 走请求体。
-	_, refA, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
-	_, refB, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+	_, refA, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
+	_, refB, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 	w := doRefreshCookie(r, refA, refB)
 	if w.Code != http.StatusOK {
@@ -140,7 +140,7 @@ func TestRefresh_Cookie优先于请求体(t *testing.T) {
 func TestRefresh_仅请求体仍然可用_非浏览器客户端通道(t *testing.T) {
 	sess := cookieSession(false)
 	r := newRefreshRouter(sess)
-	_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+	_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 	w := doRefreshCookie(r, "", rt)
 	if w.Code != http.StatusOK {
@@ -164,7 +164,7 @@ func TestRefresh_仅请求体仍然可用_非浏览器客户端通道(t *testing
 func TestRefresh_仅Cookie成功且同时回写新Cookie与响应体(t *testing.T) {
 	sess := cookieSession(true)
 	r := newRefreshRouter(sess)
-	_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+	_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 	w := doRefreshCookie(r, rt, "")
 	if w.Code != http.StatusOK {
@@ -194,7 +194,7 @@ func TestRefresh_仅Cookie成功且同时回写新Cookie与响应体(t *testing.
 func TestRefresh_Cookie与请求体都缺或都无效仍401(t *testing.T) {
 	sess := cookieSession(false)
 	r := newRefreshRouter(sess)
-	_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+	_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 	cases := []struct {
 		name  string
@@ -219,7 +219,7 @@ func TestRefresh_Cookie与请求体都缺或都无效仍401(t *testing.T) {
 		t.Errorf("401 文案应保持既有口径，实际 %s", w.Body.String())
 	}
 	// access 传入刷新端点仍被拒（token_type 分流，ADR-0016）
-	access, _, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+	access, _, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 	if code := refreshStatus(r, access, ""); code != http.StatusUnauthorized {
 		t.Errorf("Cookie 里放 access 应 401，实际 %d", code)
 	}
@@ -235,14 +235,14 @@ func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("播种学员账号失败: %v", err)
 	}
-	authSvc := auth.NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	authSvc := auth.NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := gin.New()
 	// P2 波 3a：DELETE /api/auth/account 挂在 JWT 中间件后面（生产同一条链），不再手工
 	// 注入 CtxUserID——改为签发真 access 并带 Bearer 头，判据落在真实认证路径上。
 	auth.RegisterRoutes(r.Group("/api"), sess, authSvc, nil, nil, nil, zap.NewNop())
 
 	// 注销前先在会话中段轮换一次（Cookie 通道），手上剩下的是新那支
-	tok, first, _ := sess.IssuePair(u.ID, u.Account, service.HrwaiRole)
+	tok, first, _ := sess.IssuePair(u.ID, u.Account, core.HrwaiRole)
 	w := doRefreshCookie(r, first, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("注销前应能正常轮换: %d body=%s", w.Code, w.Body.String())
@@ -278,7 +278,7 @@ func TestRefresh_全会话吊销后Cookie那支被拒(t *testing.T) {
 func TestLogout_Cookie通道的refresh被吊销且响应清除Cookie(t *testing.T) {
 	sess := cookieSession(true)
 	r := newRefreshRouter(sess)
-	_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+	_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 	// ① 投递前提：取服务端真正下发的那枚 Cookie（只读属性，不消费 rt）。
 	issued := httptest.NewRecorder()
@@ -302,7 +302,7 @@ func TestLogout_Cookie通道的refresh被吊销且响应清除Cookie(t *testing.
 	// ② 吊销：浏览器据此把这枚 Cookie 投递到登出入口（带上族线索——登出与续期共用同一把定族钥匙）。
 	req, _ := http.NewRequest("POST", "/api/auth/logout", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+familyClue(service.HrwaiRole))
+	req.Header.Set("Authorization", "Bearer "+familyClue(core.HrwaiRole))
 	req.AddCookie(&http.Cookie{Name: ck.Name, Value: ck.Value})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -323,7 +323,7 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 	t.Run("生产（Secure=true）逐字口径", func(t *testing.T) {
 		sess := cookieSession(true)
 		r := newRefreshRouter(sess)
-		_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+		_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 		raw, ok := refreshCookieOf(t, doRefreshCookie(r, rt, ""), security.DefaultRefreshCookieName)
 		if !ok {
@@ -339,7 +339,7 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 	t.Run("本地开发（Secure=false）只少 Secure 一位", func(t *testing.T) {
 		sess := cookieSession(false)
 		r := newRefreshRouter(sess)
-		_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+		_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 
 		attrs := cookieAttrTail(t, mustRefreshCookie(t, doRefreshCookie(r, rt, "")))
 		if !strings.Contains(attrs, "HttpOnly") || !strings.Contains(attrs, "SameSite=Lax") {
@@ -353,7 +353,7 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 	t.Run("SameSite=None 必须判红（防跨站触发刷新）", func(t *testing.T) {
 		sess := cookieSession(true)
 		r := newRefreshRouter(sess)
-		_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+		_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 		attrs := cookieAttrTail(t, mustRefreshCookie(t, doRefreshCookie(r, rt, "")))
 		// 这一条就是「把 SameSite 写成 None 就得红」的形状：None 需要 Secure 才能落地，
 		// 一旦有人改成 None，跨站 POST 就能带着凭证触发轮换（ADR-0067 决策 2 明令不允许）。
@@ -365,7 +365,7 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 	t.Run("Path 必须收在该端点而非整站", func(t *testing.T) {
 		sess := cookieSession(true)
 		r := newRefreshRouter(sess)
-		_, rt, _ := sess.IssuePair(1, "user1", service.HrwaiRole)
+		_, rt, _ := sess.IssuePair(1, "user1", core.HrwaiRole)
 		attrs := cookieAttrTail(t, mustRefreshCookie(t, doRefreshCookie(r, rt, "")))
 		if strings.Contains(attrs, "; Path=/;") || strings.HasSuffix(attrs, "; Path=/") {
 			t.Errorf("Path 写成 / 会把 7 天凭证挂到全站每个请求上: %q", attrs)
@@ -385,7 +385,7 @@ func TestRefresh_Cookie属性锁(t *testing.T) {
 		rec := security.NewSessionWithRecruiterCookie("test-secret", time.Hour, 7*time.Hour,
 			security.CookieConfig{Name: "hrwai_token", Domain: "example.com", Secure: true},
 			security.CookieConfig{Name: "recruiter_token", Domain: "", Secure: true}, newValBlacklist())
-		_, refRT, _ := rec.IssuePair(5, "hr001", service.RecruiterRole)
+		_, refRT, _ := rec.IssuePair(5, "hr001", core.RecruiterRole)
 		rr := newRefreshRouter(rec)
 		req, _ := http.NewRequest("POST", "/api/auth/refresh", strings.NewReader(`{"refresh_token":"`+refRT+`"}`))
 		req.Header.Set("Content-Type", "application/json")

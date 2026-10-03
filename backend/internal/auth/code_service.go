@@ -23,8 +23,8 @@ import (
 	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
-	"forklift-training/internal/service"
 )
 
 // CodePurpose 验证码用途（注册 / 登录 / 绑定 / 修改账号）。
@@ -175,14 +175,14 @@ func generateEmailCode() (string, error) {
 
 // EmailChannel 邮箱验证码通道。
 type EmailChannel struct {
-	mailer service.MailSender
+	mailer core.MailSender
 	logger *zap.Logger
 }
 
 // NewEmailChannel 构造邮箱通道。
 // 未配置 SMTP 时：开发环境降级为日志发送验证码，生产环境发送接口返回明确错误。
 func NewEmailChannel(smtpCfg config.SMTPConfig, isProd bool, logger *zap.Logger) *EmailChannel {
-	return &EmailChannel{mailer: service.NewMailSender(smtpCfg, isProd, logger), logger: logger}
+	return &EmailChannel{mailer: core.NewMailSender(smtpCfg, isProd, logger), logger: logger}
 }
 
 // SenderReady 邮件服务未配置时报错。
@@ -503,7 +503,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 	if utf8.RuneCountInString(nickname) > 30 {
 		return nil, errors.New("昵称不能超过 30 个字符")
 	}
-	if err := service.ValidatePasswordLength(password); err != nil {
+	if err := core.ValidatePasswordLength(password); err != nil {
 		return nil, err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeRegister, target, code); err != nil {
@@ -519,16 +519,16 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 		return nil, errors.New("该" + ch.Noun() + "已注册，请直接登录")
 	}
 
-	account, err := service.GenerateRandomAccount()
+	account, err := core.GenerateRandomAccount()
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
-	hashed, err := service.HashPassword(password)
+	hashed, err := core.HashPassword(password)
 	if err != nil {
 		return nil, errors.New("注册失败，请稍后再试")
 	}
 	user := model.HrwaiUser{
-		UID:       service.NextUID(),
+		UID:       core.NextUID(),
 		Account:   account,
 		Username:  nickname,
 		Password:  hashed,
@@ -543,7 +543,7 @@ func (s *VerifyCodeService) RegisterWithCode(ctx context.Context, ch CodeChannel
 
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, service.HrwaiRole)
+	}, core.HrwaiRole)
 }
 
 // LoginWithCode 验证码登录：校验通过后签发登录令牌。
@@ -562,7 +562,7 @@ func (s *VerifyCodeService) LoginWithCode(ctx context.Context, ch CodeChannel, t
 	}
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, service.HrwaiRole)
+	}, core.HrwaiRole)
 }
 
 // ResetPasswordWithCode 忘记密码（匿名、凭验证码认领账号）：验证码校验通过后落新口令，
@@ -579,7 +579,7 @@ func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeCh
 	}
 	// 长度前置校验（与 SetNewPassword 同一规则源）刻意在 Verify 之前：验证码是一次性资源，
 	// 不该被一个填错的口令烧掉（既有口径，见 TestPhoneResetPassword）。
-	if err := service.ValidatePasswordLength(password); err != nil {
+	if err := core.ValidatePasswordLength(password); err != nil {
 		return err
 	}
 	if err := s.Verify(ctx, ch, CodePurposeResetPassword, target, code); err != nil {
@@ -634,7 +634,7 @@ func (s *VerifyCodeService) SendAccountChange(ctx context.Context, ch CodeChanne
 // 成功后重签 JWT（claim 随新账号同步，审计与 /me 口径不再陈旧，ADR-0012 §5）。
 func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, userID int, newAccount, code string) (*LoginResult, error) {
 	newAccount = strings.TrimSpace(newAccount)
-	if !service.IsValidAccount(newAccount) {
+	if !core.IsValidAccount(newAccount) {
 		return nil, errors.New("账号需为 4-20 位字母、数字或下划线")
 	}
 	phone, err := s.currentUserPhone(ctx, userID)
@@ -662,7 +662,7 @@ func (s *VerifyCodeService) ChangeAccount(ctx context.Context, ch CodeChannel, u
 	}
 	return s.authSvc.issueLogin(loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username, status: &user.Status,
-	}, service.HrwaiRole)
+	}, core.HrwaiRole)
 }
 
 // SendChangePasswordCode 发送修改登录密码验证码到当前用户已绑定手机号（短信通道）。
@@ -678,7 +678,7 @@ func (s *VerifyCodeService) SendChangePasswordCode(ctx context.Context, ch CodeC
 // authSvc.UpdatePassword（即口令族的唯一动作 SetNewPassword，ADR-0062 票7）。
 func (s *VerifyCodeService) ChangePassword(ctx context.Context, ch CodeChannel, userID int, code, password string) error {
 	// 刻意在 Verify 之前拒掉非法口令：不烧一次性验证码（与 ResetPasswordWithCode 同口径）。
-	if err := service.ValidatePasswordLength(password); err != nil {
+	if err := core.ValidatePasswordLength(password); err != nil {
 		return err
 	}
 	phone, err := s.currentUserPhone(ctx, userID)
@@ -699,7 +699,7 @@ func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (s
 	}
 	// 显式拒绝占位手机号（IsPlaceholderPhone 单点：email_ / wxp_ / deleted__sentinel），
 	// 不依赖 IsValidPhone 巧合兜底
-	if service.IsPlaceholderPhone(user.Phone) || !IsValidPhone(user.Phone) {
+	if core.IsPlaceholderPhone(user.Phone) || !IsValidPhone(user.Phone) {
 		return "", errors.New("请先绑定手机号")
 	}
 	return user.Phone, nil

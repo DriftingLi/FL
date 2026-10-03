@@ -11,15 +11,15 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
 
 // 讲师账号「真不存在」的载体已贴实体进 internal/model（波 4d 破环，ADR-0070 破法一）：
-// 留驻的口令写面（internal/service/password_write.go 的 tutorPasswordSubject）与本管理域都要用它。
+// 留驻的口令写面（internal/core/password_write.go 的 tutorPasswordSubject）与本管理域都要用它。
 var (
 	// ErrRecruiterNotFound 见 auth_service.go 的 ToggleRecruiterStatus：招聘者账号不存在。
 	// ErrInvalidHrwaiUserID / ErrInvalidTutorID 是「id 根本不是个合法主体标识」，属输入不合法
@@ -122,7 +122,7 @@ func NewHrwaiUserCreatedDTO(u *model.HrwaiUser) HrwaiUserCreatedDTO {
 		Account:  u.Account,
 		ID:       u.ID,
 		Phone:    u.Phone,
-		UID:      service.FormatUID(u.UID),
+		UID:      core.FormatUID(u.UID),
 		Username: u.Username,
 	}
 }
@@ -138,7 +138,7 @@ func (s *Service) CreateHrwaiUser(phone, password, account, username, email, com
 		return nil, errors.New("手机号已被注册")
 	}
 	if account != "" {
-		if !service.IsValidAccount(account) {
+		if !core.IsValidAccount(account) {
 			return nil, errors.New("账号格式非法（4-20 位字母/数字/下划线）")
 		}
 		var acctCount int64
@@ -148,20 +148,20 @@ func (s *Service) CreateHrwaiUser(phone, password, account, username, email, com
 		}
 	} else {
 		var err error
-		account, err = service.GenerateRandomAccount()
+		account, err = core.GenerateRandomAccount()
 		if err != nil {
 			return nil, errors.New("注册失败，请稍后再试")
 		}
 	}
 	if username == "" {
-		username = service.GenerateDefaultNickname(s.db)
+		username = core.GenerateDefaultNickname(s.db)
 	}
-	hashed, err := service.HashPassword(password)
+	hashed, err := core.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 	user := model.HrwaiUser{
-		UID:       service.NextUID(),
+		UID:       core.NextUID(),
 		Account:   account,
 		Username:  username,
 		Password:  hashed,
@@ -193,15 +193,15 @@ func (s *Service) UpdateHrwaiUser(id int, username, email, company string, statu
 
 // ResetHrwaiUserPassword 管理员重置 HRWAI 用户密码。
 // ResetHrwaiUserPassword 管理员代重置学员口令。**与学员自助改密是同一条动作**
-// （ADR-0064 决策 4）：交由 service.ApplyHrwaiPassword 做长度校验 + 哈希 + 落库 + 全会话吊销。
-// 收紧前这里自己 service.HashPassword + Update、零吊销，且长度规则只住在 handler
+// （ADR-0064 决策 4）：交由 core.ApplyHrwaiPassword 做长度校验 + 哈希 + 落库 + 全会话吊销。
+// 收紧前这里自己 core.HashPassword + Update、零吊销，且长度规则只住在 handler
 // （admin.go 的 Parse）⇒ 动作层既没有兜底也没有终止语义。
 // 代重置的失败策略同口令族：口令一落库即不可回退，吊销写失败不阻断（尽力而为）。
 func (s *Service) ResetHrwaiUserPassword(ctx context.Context, id int, newPassword string) error {
 	if id <= 0 {
 		return ErrInvalidHrwaiUserID
 	}
-	res := service.ApplyHrwaiPassword(ctx, s.db, s.session, id, newPassword)
+	res := core.ApplyHrwaiPassword(ctx, s.db, s.session, id, newPassword)
 	if !res.Applied() {
 		return res.Err
 	}
@@ -218,7 +218,7 @@ func (s *Service) ResetTutorPassword(ctx context.Context, tutorID int, password 
 	if tutorID <= 0 {
 		return ErrInvalidTutorID
 	}
-	res := service.ApplyTutorPassword(ctx, s.db, s.session, tutorID, password)
+	res := core.ApplyTutorPassword(ctx, s.db, s.session, tutorID, password)
 	if !res.Applied() {
 		return res.Err
 	}
@@ -270,7 +270,7 @@ func (s *Service) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16, err
 		return 0, err
 	}
 	if next == 0 {
-		if err := s.session.RevokeIdentity(ctx, service.HrwaiRole, id); err != nil {
+		if err := s.session.RevokeIdentity(ctx, core.HrwaiRole, id); err != nil {
 			s.logger.Warn("学员禁用后 refresh 吊销标记写入失败", zap.Int("user_id", id), zap.Error(err))
 		}
 	}
@@ -381,7 +381,7 @@ func (s *Service) ToggleTutorStatus(ctx context.Context, tutorID int) (int, erro
 		return 0, err
 	}
 	if next == 0 {
-		if err := s.session.RevokeIdentity(ctx, service.TutorRole, tutorID); err != nil {
+		if err := s.session.RevokeIdentity(ctx, core.TutorRole, tutorID); err != nil {
 			s.logger.Warn("讲师禁用后 refresh 吊销标记写入失败", zap.Int("tutor_id", tutorID), zap.Error(err))
 		}
 	}

@@ -12,16 +12,16 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
 // failureTestStudentToken 造一名学员并签发 access token（本文件三个用例共用）。
 func failureTestStudentToken(t *testing.T, db *gorm.DB, cfg *config.Config, account string) string {
 	t.Helper()
-	pwd, err := service.HashPassword("student123")
+	pwd, err := core.HashPassword("student123")
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)
 	}

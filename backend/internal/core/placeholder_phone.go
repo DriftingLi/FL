@@ -4,7 +4,7 @@
 // 微信自动建号（"wxp_"+openID，满足 phone 唯一约束）、注销哨兵用户（deleted__sentinel）。
 // 判定统一走 IsPlaceholderPhone，禁止在业务代码中散落字面量
 // （placeholder_phone_gate_test.go 静态扫描拦截裸 "email_"）。
-package service
+package core
 
 import "strings"
 

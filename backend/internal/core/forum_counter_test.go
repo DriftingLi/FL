@@ -1,6 +1,6 @@
 // Package service forumCounter 护栏语义单测（spec #297）。
 // 注销点赞回扣用例（TestDeleteAccount_RefundsForumLikeCounts）随注销动作搬去 internal/auth/（ADR-0070 波 3a）。
-package service
+package core
 
 import (
 	"testing"

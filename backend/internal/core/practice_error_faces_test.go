@@ -14,7 +14,7 @@
 //   - 「请指定题库标签」「该标签不支持专项练习」同为 404 ⇒ 请求本身不成立被说成资源不存在。
 //   - practice SubmitAnswer 的「题目不存在」是同文案的第二载体（questionbank.ErrQuestionNotFound 早已存在），
 //     且同样不分成因。
-package service
+package core
 
 import (
 	"errors"

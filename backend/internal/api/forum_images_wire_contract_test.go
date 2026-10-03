@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -28,7 +28,7 @@ func TestForumImagesArrayNeverNull(t *testing.T) {
 	}
 	r := NewRouter(newContractDeps(t, db, cfg))
 
-	pwd, err := service.HashPassword("student123")
+	pwd, err := core.HashPassword("student123")
 	if err != nil {
 		t.Fatalf("hash password failed: %v", err)
 	}

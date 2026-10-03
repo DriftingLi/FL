@@ -1,9 +1,9 @@
 // 模拟考域的 nullable 行为例（域包版本；由 internal/service/nullable_outlets_exam_test.go 随域搬来，波 4a）。
 //
 // 机制见本文件下半段的 nullableOutletTables（分域表 + init 并进汇总，runner 逐条执行，
-// 不是给 AST 查名字的花名册）。**域包不得 import internal/service 的测试文件**（ADR-0070 决策 9：
+// 不是给 AST 查名字的花名册）。**域包不得 import internal/core 的测试文件**（ADR-0070 决策 9：
 // 证据表可住域包），所以这里自带一份形状相同的 runner，照抄
-// internal/service/nullable_declaration_test.go。键格式 = <包名>.<类型>.<json键>，
+// internal/core/nullable_declaration_test.go。键格式 = <包名>.<类型>.<json键>，
 // 登记处是 internal/apitypes/nullability_lock_test.go 的 nullableEvidenceSources（它按**目录**收表）。
 //
 // 这一格为什么 nullable（原判词，随键一起搬来）：
@@ -28,7 +28,7 @@ var nullableOutlets = map[string]func(t *testing.T) any{
 }
 
 // nullableOutletTables 是域包这张 nullable 表的汇总点；runner 逐条执行它（理由同留驻侧
-// internal/service/nullable_declaration_test.go：一张只有 AST 在看的表就是花名册）。
+// internal/core/nullable_declaration_test.go：一张只有 AST 在看的表就是花名册）。
 var nullableOutletTables []map[string]func(t *testing.T) any
 
 func init() {

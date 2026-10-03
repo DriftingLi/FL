@@ -11,9 +11,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
-	"forklift-training/internal/service"
 	"forklift-training/internal/testutil"
 )
 
@@ -46,7 +46,7 @@ func newRecruiterFixture(t *testing.T) (*Service, *security.Session, int) {
 	db := testutil.NewMemoryDB(t)
 	sess := security.NewSessionWithBlacklistAndRefresh("test-secret", time.Hour, 7*time.Hour,
 		security.CookieConfig{Name: "recruiter_token"}, &valueBlacklist{m: map[string]string{}})
-	svc := NewService(db, sess, service.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
+	svc := NewService(db, sess, core.NewForumCounter(), "admin", "tutor", "student", zap.NewNop())
 	r := model.RecruiterUser{Username: "rec1", Password: "x", CompanyName: "禁用测试企业", Status: 1}
 	if err := db.Create(&r).Error; err != nil {
 		t.Fatalf("播种招聘者失败: %v", err)
