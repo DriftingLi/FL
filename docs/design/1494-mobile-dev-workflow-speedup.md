@@ -66,7 +66,11 @@
 
 ### C.1 票据与 PR 粒度
 - **现状（多为已存在实践，不重提）**：低风险运行时面（仅 `.uts`、无 `.uvue`/三份 json/`uni_modules`）免 ①②、③④ 仍必过（`AGENTS.md:328`）；①b 能力面白名单已落码 `capability-surface.ps1` + `capabilitySurfaceBehavior.test.js`（`ADR-0016:36,40`）；「一件事做完并验完才开 PR、一个 PR = 一件验证过的事」已裁定（`release.md:18-20`）。
-- **可执行增量**：把「顺手改 `scripts/*.ps1`/`utils/*.test.js` 会连带把 ①② 变必过」的工具改动**拆成非运行时面独立 PR**——`pr-evidence.yml` 的运行时面判据是 `isRuntimeFile`（`.uvue`/`.uts`/三份 json），工具/测试/文档 PR 在校验段前早退（`pr-evidence.yml:52` 附近；`release.md:27`）。
+- **可执行增量**：只动工具面的改动（`training-app/**/scripts/*.ps1`、`utils/*.test.js`、仓内文档）**拆成非运行时面独立 PR**。但这条增量的理由**不是**「顺手改一处 `.ps1` 就会让 ①② 变成必过」——本行此前正是这么写的，那是错话（已由 #1524 修正）：门归属由**两个不同源的过滤器各判各的**，谁也不从谁推出——
+  - **运行时面判定**（决定 ① 真机 / ② 微信 / ④ 编译是否必过）：判据源 = `pr-evidence.yml` 校验器里的 `isRuntimeFile` 与 `runtime.length === 0` 那条**早退分支**——早退排在读取正文验收证据段**之前**（校验器推入「缺验收证据段」错误的代码在其之后，未命中运行时面的 PR 走不到它）。所以只含工具文件的 PR 走「未命中运行时面 ⇒ 免 ①② 与 ④」，**不是**「①② 变必过」。文件清单本文**不复述**（复述＝第二真源；2026-10-04 现测到的漂移实例：根 `AGENTS.md` 那份拷贝只列了 `ci.yml` 移动过滤器的第一条 glob）。现取：`grep -n "isRuntimeFile\|免人工门\|runtime.length === 0" .github/workflows/pr-evidence.yml`；早退与证据段校验的先后用行序比对：`grep -n "验收证据\|runtime.length === 0" .github/workflows/pr-evidence.yml`。
+  - **CI 的 `mobile-test`（＝ ③ 契约门）**：判据在**另一个文件**——`ci.yml` 里 `changes` job 的 paths-filter `mobile` 输出，加 `mobile-test` job 的 `if`（同一 workflow 里 backend / frontend 各有自己的过滤器，互不相干）。这条命中面比运行时面**宽**：`training-app/` 下**任何**文件都算。glob 同样不抄，现取：`grep -n "mobile:" -A2 .github/workflows/ci.yml`。
+  - 别把第三条混进来：「低风险运行时面」的**逐文件白名单豁免**（同校验器的 `isLowRiskUtChange` / `lowRiskRuntime`）只在**已经命中运行时面**时才决定 ①② 减免，与上面第二个 CI 过滤器同样不同源 ⇒ `.ps1` 拿不到这条豁免 ≠ ①② 变必过。成员现取：`grep -n "isLowRiskUtChange" -A9 .github/workflows/pr-evidence.yml`——注意它对**非 `training-app/` 路径直接返回 true**，别照字面把根 `docs/**` 当成不豁免。
+  - ⇒ 结论不变、代价口径变：拆独立 PR 仍是正解（非运行时面 ⇒ 免证据段、可立即合并）。**代价按落点分两档**：改动在 `training-app/**` 下 ⇒ 多跑一次 ③（`.ps1` / `.md` 一样命中）；改动在 `training-app/` **之外**（例如本票 #1524 只动根 `docs/`）⇒ ③ 也不跑，代价为零。两档都**不是**「①② 双双变必过」。现行完整口径见根 `AGENTS.md`「验收门（合并前置）」里 2026-09-20 的「两条不看源码就读不出来的硬口径」与 `docs/agents/release.md`「验收门（合并前置，与上面的 CI/CD 机制是两道独立的门）」——**本文指回真源、只给现取命令，不复述 workflow 判据**（复述品会与权威定义漂移，本行此前正是这么漂的）。
 - **省哪段**：一次垂直切片合一张票 → 四门只跑一遍，不重复排队。
 - **前置/风险**：`release.md:22` 明确「未命中运行时面 ≠ 不需验证」——工具类 PR 仍要在真实链路验一次；**拆 PR 不能变成「为跳门把 `.uvue` 文案改动伪装成工具改动」**（那是假绿）。
 - **冲突点**：与「合批降等待」不冲突——`AGENTS.md:259` 已写「验证可合批、提交仍按主题拆」。
