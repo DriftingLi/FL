@@ -54,7 +54,12 @@ export const GUARDED_PACKAGE_PREFIXES = ['backend/internal/api/']
  */
 export const GUARDED_FILE_PREFIXES = ['handler']
 
-/** 文件名规则只在域包根内生效（模块根相对）：别处的同名文件不该被误纳。 */
+/**
+ * 文件名规则的**作用域**（模块根相对）：`GUARDED_FILE_ROOT` 之内、任意深度——不按「域包根」收窄。
+ * 域包再开子目录时，里面的 `handler*.go` 一样进面（与本文件 `--all` 报头打出的那条 glob 同口径）。
+ * 根外的同名文件不误纳，例如 `backend/cmd/server/handler.go` 不在面，只因它不在该根内。
+ * 两条边界都有用例钉着：见 `check-render-error-face.test.mjs` 正例里的深度探针与负例里的 cmd 那份。
+ */
 export const GUARDED_FILE_ROOT = 'backend/internal/'
 
 /** 骨架自身：错误面的合法唯一作者，不进判定面。 */
