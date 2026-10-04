@@ -1314,7 +1314,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 > 独立连接池（pgx）+ 独立响应格式（同样 `{code, message, data}` 信封）；鉴权分三档：公开 / 可选认证（登录则记录 user_id）/ hrwai_user JWT / admin JWT。
 >
-> **本子模块没有自己的登录与刷新端点**（#1388 实测：`internal/valuation/handler/router.go` 只注册 `/auth/logout` 与 `/auth/me`）—— 登录走主 `POST /api/auth/login`、续期走主 `POST /api/auth/refresh`，估值面的令牌与主体系同源；登出请用主 `POST /api/auth/logout`，`/api/valuation/auth/logout` 已标废弃（#1412）。
+> **本子模块没有自己的登录与刷新端点**（#1388 实测：估值域出口文件 `internal/valuation/handler.go` 只注册两枚鉴权端点——`public` 组的 `/auth/logout` 与 `valAuth` 组的 `/auth/me`）—— 登录走主 `POST /api/auth/login`、续期走主 `POST /api/auth/refresh`，估值面的令牌与主体系同源；登出请用主 `POST /api/auth/logout`，`/api/valuation/auth/logout` 已标废弃（#1412）。
 
 ### 17.1 公开（无需登录）
 

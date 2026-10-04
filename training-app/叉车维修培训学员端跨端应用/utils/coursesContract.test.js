@@ -575,7 +575,7 @@ describe('#1087 封面分类语义由 specialty_id 驱动（真实字段，非�
 
 /**
  * #1087 Q3 裁定：退役残留的 category 字段面。
- * 后端 CourseDTO 无 category（backend/internal/service/course_service.go 的 category 属 CredentialBriefDTO）
+ * 后端 CourseDTO 无 category（backend/internal/course/service.go 的 category 属 CredentialBriefDTO）
  * ⇒ 前端映射吃空值。经全仓核对**无第二消费面**后退役；本组断言防它被重新引入。
  */
 describe('#1087 Q3：课程域 category 残留面已退役', () => {

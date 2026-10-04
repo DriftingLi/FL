@@ -175,7 +175,8 @@ test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它�
     'backend/internal/faq/service.go',
     'backend/internal/faq/dto.go',
     'backend/internal/faq/handler_test.go',
-    // 文件名规则只在域包根内生效。
+    // 文件名规则的边界是 GUARDED_FILE_ROOT（backend/internal/）之内、任意深度——**不按「域包根」收窄**；
+    // cmd/ 那份 handler.go 豁免，只是因为它不在该根内。
     'backend/cmd/server/handler.go',
     'backend/internal/valuation/handler/evaluation.go'
   ]) {
@@ -189,7 +190,10 @@ test('负例：射程外的路径整体放行（骨架自身 / 测试 / 其它�
     // 域包的 HTTP 出口（#1445 P1 起）：handler*.go 一律进面，加域不必改清单。
     'backend/internal/faq/handler.go',
     'backend/internal/forum/handler.go',
-    'backend/internal/forum/handler_admin.go'
+    'backend/internal/forum/handler_admin.go',
+    // 深度钉（#1537）：文件名规则对 `backend/internal/` 下**任意深度**生效——域包若再开子目录，
+    // 里面的 `handler*.go` 一样进面。此路径是合成探针（实测仓内 `internal/*/*/handler*.go` = 0 个）。
+    'backend/internal/valuation/handler/handler.go'
   ]) {
     assert.equal(isGuardedPath(p), true, p + ' 应在守卫面')
   }
