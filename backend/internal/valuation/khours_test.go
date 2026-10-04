@@ -1,14 +1,12 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：使用强度系数 Kh 的单元测试
 // Kh 计算依赖 ConfigReader（系数键读取），测试用内存实现，无需真实 Postgres。
-package service
+package valuation
 
 import (
 	"context"
 	"math"
 	"testing"
-
-	"forklift-training/internal/valuation"
 )
 
 // TestCalcKHours_RangeMapping 覆盖 5 段强度区间的查表结果
@@ -90,7 +88,7 @@ func TestCalcKHours_NegativeHours(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := CalcKHours(ctx, 5, -100, provider)
-	if err != valuation.ErrInvalidUsageHours {
+	if err != ErrInvalidUsageHours {
 		t.Errorf("expected ErrInvalidUsageHours, got %v", err)
 	}
 }
@@ -101,7 +99,7 @@ func TestCalcKHours_NegativeAge(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := CalcKHours(ctx, -1, 1000, provider)
-	if err != valuation.ErrInvalidYear {
+	if err != ErrInvalidYear {
 		t.Errorf("expected ErrInvalidYear, got %v", err)
 	}
 }

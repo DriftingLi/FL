@@ -1,14 +1,12 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：建议（suggestions）生成器——评估流程与 PDF 重建共用同一实现。
 // 百分比从 coefficient_configs 动态读取（ConfigResolver），不再硬编码，避免
 // 新评估建议与重生成 PDF 建议分叉。
-package service
+package valuation
 
 import (
 	"context"
 	"fmt"
-
-	"forklift-training/internal/valuation"
 )
 
 // ReadFloat 从 provider 读取系数，失败或非正数时返回 fallback 默认值。
@@ -32,7 +30,7 @@ type SuggestionsInput struct {
 }
 
 // FromResult 从评估结果映射建议输入。
-func FromResult(r *valuation.EvaluationResult) SuggestionsInput {
+func FromResult(r *EvaluationResult) SuggestionsInput {
 	return SuggestionsInput{
 		KCondition:                 r.KCondition,
 		HasLicensePlate:            r.HasLicensePlate,
@@ -49,7 +47,7 @@ func FromResult(r *valuation.EvaluationResult) SuggestionsInput {
 }
 
 // FromDetail 从持久化评估详情映射建议输入（PDF 重建路径）。
-func FromDetail(d *valuation.EvaluationDetail) SuggestionsInput {
+func FromDetail(d *EvaluationDetail) SuggestionsInput {
 	return SuggestionsInput{
 		KCondition:                 d.KCondition,
 		HasLicensePlate:            d.HasLicensePlate,
@@ -166,7 +164,7 @@ func BuildSuggestions(ctx context.Context, in SuggestionsInput, resolver Coeffic
 // BuildBatterySuggestions 电池健康度建议（纯函数，EOL 阈值 60%）。
 // 预测流程（含特征稳定性提示）与详情记录 fallback 共用同一实现；
 // 记录中无特征稳定性分数时传入 health=1.0（不触发稳定性提示）。
-func BuildBatterySuggestions(bt valuation.BatteryType, soh float64, rul, low, high int, health float64) []string {
+func BuildBatterySuggestions(bt BatteryType, soh float64, rul, low, high int, health float64) []string {
 	out := []string{}
 	// 1) 健康度评估（EOL 阈值 60%）
 	switch {
@@ -183,9 +181,9 @@ func BuildBatterySuggestions(bt valuation.BatteryType, soh float64, rul, low, hi
 	out = append(out, fmt.Sprintf("预测剩余循环数约 %d 次（置信区间 %d~%d）。", rul, low, high))
 	// 3) 类型相关
 	switch bt {
-	case valuation.BatteryTypeLFP:
+	case BatteryTypeLFP:
 		out = append(out, "LFP 电池循环寿命长，安全性好；如 SOH 仍高，可考虑梯次利用。")
-	case valuation.BatteryTypeNCM:
+	case BatteryTypeNCM:
 		out = append(out, "NCM 电池能量密度高但循环寿命较短，注意高温环境与过充风险。")
 	}
 	// 4) 健康度稳定性
@@ -197,7 +195,7 @@ func BuildBatterySuggestions(bt valuation.BatteryType, soh float64, rul, low, hi
 
 // EnsureSuggestions 车辆评估旧记录建议 fallback 单一入口（ADR-0012 §6）：
 // 建议为空才填充（评估时点锁定值不被覆盖，ADR-0004）；详情接口与报告 Prepare 同源。
-func EnsureSuggestions(ctx context.Context, d *valuation.EvaluationDetail, resolver CoefficientResolver) {
+func EnsureSuggestions(ctx context.Context, d *EvaluationDetail, resolver CoefficientResolver) {
 	if len(d.Suggestions) > 0 {
 		return
 	}
@@ -225,7 +223,7 @@ func BatteryHealthFromRecord(confidence float64) float64 {
 
 // EnsureBatterySuggestions 电池评估旧记录建议 fallback 单一入口：
 // health 用记录内置信度反推（缺失默认 1.0），详情接口与报告 Prepare 同源。
-func EnsureBatterySuggestions(e *valuation.BatteryEvaluation) {
+func EnsureBatterySuggestions(e *BatteryEvaluation) {
 	if len(e.Suggestions) > 0 {
 		return
 	}

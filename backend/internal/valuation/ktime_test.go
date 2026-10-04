@@ -1,14 +1,12 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：时间衰减系数 Kt 的单元测试
 // Kt 计算依赖 ConfigReader（系数键读取），测试用内存实现，无需真实 Postgres。
-package service
+package valuation
 
 import (
 	"context"
 	"math"
 	"testing"
-
-	"forklift-training/internal/valuation"
 )
 
 // TestCalcKTime_BoundaryCases 覆盖 Kt 各典型年限与两种动力类型
@@ -21,23 +19,23 @@ func TestCalcKTime_BoundaryCases(t *testing.T) {
 
 	type testCase struct {
 		name     string
-		pt       valuation.PowerType
+		pt       PowerType
 		years    int
 		expected float64
 	}
 	cases := []testCase{
 		// 电动
-		{"electric_1y", valuation.PowerTypeElectric, 1, 0.887},
-		{"electric_3y", valuation.PowerTypeElectric, 3, 0.698},
-		{"electric_5y", valuation.PowerTypeElectric, 5, 0.549},
-		{"electric_8y", valuation.PowerTypeElectric, 8, 0.382},
-		{"electric_10y", valuation.PowerTypeElectric, 10, 0.301},
+		{"electric_1y", PowerTypeElectric, 1, 0.887},
+		{"electric_3y", PowerTypeElectric, 3, 0.698},
+		{"electric_5y", PowerTypeElectric, 5, 0.549},
+		{"electric_8y", PowerTypeElectric, 8, 0.382},
+		{"electric_10y", PowerTypeElectric, 10, 0.301},
 		// 内燃
-		{"combustion_1y", valuation.PowerTypeCombustion, 1, 0.905},
-		{"combustion_3y", valuation.PowerTypeCombustion, 3, 0.741},
-		{"combustion_5y", valuation.PowerTypeCombustion, 5, 0.607},
-		{"combustion_8y", valuation.PowerTypeCombustion, 8, 0.449},
-		{"combustion_10y", valuation.PowerTypeCombustion, 10, 0.368},
+		{"combustion_1y", PowerTypeCombustion, 1, 0.905},
+		{"combustion_3y", PowerTypeCombustion, 3, 0.741},
+		{"combustion_5y", PowerTypeCombustion, 5, 0.607},
+		{"combustion_8y", PowerTypeCombustion, 8, 0.449},
+		{"combustion_10y", PowerTypeCombustion, 10, 0.368},
 	}
 
 	ctx := context.Background()
@@ -59,7 +57,7 @@ func TestCalcKTime_ZeroYear(t *testing.T) {
 	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	res, err := CalcKTime(ctx, valuation.PowerTypeElectric, 2025, 2025, provider)
+	res, err := CalcKTime(ctx, PowerTypeElectric, 2025, 2025, provider)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,20 +74,20 @@ func TestCalcKTime_NegativeYear(t *testing.T) {
 	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	_, err := CalcKTime(ctx, valuation.PowerTypeElectric, 2025, 2024, provider)
-	if err != valuation.ErrInvalidYear {
+	_, err := CalcKTime(ctx, PowerTypeElectric, 2025, 2024, provider)
+	if err != ErrInvalidYear {
 		t.Errorf("expected ErrInvalidYear, got %v", err)
 	}
 }
 
 // TestCalcKTime_UnknownPowerType 异常：未知动力类型
 // 重构后 Kt 直接接收 PowerType，由上层 vehicle_types 派生
-// 未知类型在 Kt 内部返回错误（不再使用 valuation.ErrInvalidForkliftType）
+// 未知类型在 Kt 内部返回错误（不再使用 ErrInvalidForkliftType）
 func TestCalcKTime_UnknownPowerType(t *testing.T) {
 	provider := newDefaultConfigReader()
 
 	ctx := context.Background()
-	_, err := CalcKTime(ctx, valuation.PowerType("hybrid"), 2020, 2025, provider)
+	_, err := CalcKTime(ctx, PowerType("hybrid"), 2020, 2025, provider)
 	if err == nil {
 		t.Error("expected error for unknown power type, got nil")
 	}

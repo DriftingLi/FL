@@ -1,14 +1,12 @@
-// Package service 实现核心业务逻辑
-// 本文件：valuation.go 中纯函数的单元测试（不依赖数据库）
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
+// 本文件：go 中纯函数的单元测试（不依赖数据库）
 // 覆盖 inferPowerType / BuildDimensionScores / roundTo2 / roundTo4 / clamp01
 // 这些函数此前无测试覆盖，属于评估结果装配的关键路径
-package service
+package valuation
 
 import (
 	"math"
 	"testing"
-
-	"forklift-training/internal/valuation"
 )
 
 // TestInferPowerType 覆盖动力类型推断的各类输入
@@ -17,15 +15,15 @@ func TestInferPowerType(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
-		want valuation.PowerType
+		want PowerType
 	}{
-		{"explicit_electric", "电动叉车", valuation.PowerTypeElectric},
-		{"battery_type", "蓄电池叉车", valuation.PowerTypeElectric},
-		{"empty_string", "", valuation.PowerTypeElectric},
-		{"combustion_explicit", "内燃叉车", valuation.PowerTypeCombustion},
-		{"combustion_balanced", "平衡重内燃叉车", valuation.PowerTypeCombustion},
-		{"combustion_keyword_only", "内燃", valuation.PowerTypeCombustion},
-		{"unknown_defaults_electric", "前移式叉车", valuation.PowerTypeElectric},
+		{"explicit_electric", "电动叉车", PowerTypeElectric},
+		{"battery_type", "蓄电池叉车", PowerTypeElectric},
+		{"empty_string", "", PowerTypeElectric},
+		{"combustion_explicit", "内燃叉车", PowerTypeCombustion},
+		{"combustion_balanced", "平衡重内燃叉车", PowerTypeCombustion},
+		{"combustion_keyword_only", "内燃", PowerTypeCombustion},
+		{"unknown_defaults_electric", "前移式叉车", PowerTypeElectric},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -162,7 +160,7 @@ func TestBuildDimensionScores_Order(t *testing.T) {
 // 这是 #5 错误处理修复的回归测试：确保 nil 依赖不会 panic，而是返回可处理的 error
 func TestNewValuationService_NilGuards(t *testing.T) {
 	// 两个依赖任一为 nil 都应返回 error，且不 panic
-	if _, err := NewValuationService(nil, nil); err == nil {
+	if _, err := NewService(nil, nil); err == nil {
 		t.Error("expected error when dictRepo is nil")
 	}
 }

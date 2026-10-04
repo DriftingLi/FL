@@ -1,8 +1,8 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：市场系数 Km
 // 基于 region_coefficients 表，按 province + city 查询
 // 未命中时默认 1.0
-package service
+package valuation
 
 import (
 	"context"

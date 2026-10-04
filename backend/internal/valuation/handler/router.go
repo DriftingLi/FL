@@ -39,7 +39,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
-	vservice "forklift-training/internal/valuation/service"
 )
 
 // valuationAdminGroupPath 估值管理端路由组前缀。
@@ -62,15 +61,15 @@ func RegisterRoutes(
 	dictRepo DictionaryConfigStore,
 	evalRepo EvaluationStore,
 	batteryRepo BatteryStore,
-	valuationSvc *vservice.ValuationService,
-	batterySvc *vservice.BatteryRULService,
+	valuationSvc *valuation.Service,
+	batterySvc *valuation.BatteryRULService,
 	pdfGen ReportGenerator,
 	st storage.Storage,
 	valuationAuthSvc ValuationAuth,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
-	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, vservice.NewCoefficientProvider(dictRepo))
+	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, valuation.NewCoefficientProvider(dictRepo))
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()
 	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc, sess)

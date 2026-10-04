@@ -37,7 +37,6 @@ import (
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
 	vhandler "forklift-training/internal/valuation/handler"
-	vservice "forklift-training/internal/valuation/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -228,12 +227,12 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	evalRepo := valuation.NewEvaluationRepository(pool)
 
 	// 2. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
-	valuationSvc, err := vservice.NewValuationService(dictRepo, evalRepo)
+	valuationSvc, err := valuation.NewService(dictRepo, evalRepo)
 	if err != nil {
 		logger.Error("valuation 服务初始化失败", zap.Error(err))
 		os.Exit(1)
 	}
-	batterySvc := vservice.NewBatteryRULService()
+	batterySvc := valuation.NewBatteryRULService()
 	batteryRepo := valuation.NewBatteryRepository(pool)
 
 	// 3. 装配 PDF 生成器（字节输出，不落盘；存储经 storage 抽象层）

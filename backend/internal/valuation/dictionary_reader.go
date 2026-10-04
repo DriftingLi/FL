@@ -1,26 +1,24 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：系数表读取窄接口——service 只依赖 interface 而非具体仓储，
 // 公式计算（Kt/Kh/Kb/Kc/Km）由此脱离 Postgres，可纯内存单测。
-package service
+package valuation
 
 import (
 	"context"
 	"fmt"
-
-	"forklift-training/internal/valuation"
 )
 
 // DictionaryReader 系数表读取接口（评估服务与 K 系数计算消费的窄 interface）。
 type DictionaryReader interface {
-	GetBrandByName(ctx context.Context, name string) (valuation.Brand, error)
-	GetConditionRating(ctx context.Context, rating string) (valuation.ConditionRating, error)
-	GetRegionCoefficient(ctx context.Context, province, city string) (valuation.RegionCoefficient, error)
-	GetVehicleTypeByName(ctx context.Context, name string) (valuation.VehicleType, error)
-	FindOriginalPriceMatch(ctx context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (valuation.OriginalPrice, error)
-	FindOriginalPriceFuzzy(ctx context.Context, brand, vehicleType, series string, tonnage float64) (valuation.OriginalPrice, error)
-	GetCoefficientByKey(ctx context.Context, key string) (valuation.CoefficientConfig, error)
+	GetBrandByName(ctx context.Context, name string) (Brand, error)
+	GetConditionRating(ctx context.Context, rating string) (ConditionRating, error)
+	GetRegionCoefficient(ctx context.Context, province, city string) (RegionCoefficient, error)
+	GetVehicleTypeByName(ctx context.Context, name string) (VehicleType, error)
+	FindOriginalPriceMatch(ctx context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (OriginalPrice, error)
+	FindOriginalPriceFuzzy(ctx context.Context, brand, vehicleType, series string, tonnage float64) (OriginalPrice, error)
+	GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error)
 	// ListCoefficientConfigs 系数配置全表读取（快照加载用，一次缓存往返）。
-	ListCoefficientConfigs(ctx context.Context) ([]valuation.CoefficientConfig, error)
+	ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error)
 }
 
 // λ 兜底默认值（与迁移种子一致；仅在系数配置缺失时用于评估结果锁定的 λ 字段）。
@@ -36,7 +34,7 @@ type CoefficientSnapshot struct {
 }
 
 // NewCoefficientSnapshot 由全表系数配置构造快照。
-func NewCoefficientSnapshot(configs []valuation.CoefficientConfig) *CoefficientSnapshot {
+func NewCoefficientSnapshot(configs []CoefficientConfig) *CoefficientSnapshot {
 	m := make(map[string]float64, len(configs))
 	for _, c := range configs {
 		m[c.Key] = c.Value
@@ -49,7 +47,7 @@ func (s *CoefficientSnapshot) Get(_ context.Context, key string) (float64, error
 	if v, ok := s.values[key]; ok {
 		return v, nil
 	}
-	return 0, fmt.Errorf("%w: %s", valuation.ErrCoefficientNotFound, key)
+	return 0, fmt.Errorf("%w: %s", ErrCoefficientNotFound, key)
 }
 
 // ReadFloat 从快照读取系数，失败或非正数时返回 fallback（与 provider 语义一致）。

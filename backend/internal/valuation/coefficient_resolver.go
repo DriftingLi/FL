@@ -1,8 +1,8 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：系数解析单一 interface（ADR-0013 候选 3）——把「读系数 + 兜底」的 4 形态
 // （ConfigReader.Get / ConfigResolver.ReadFloat / 包级 readWithFallback / khours 手写兜底）
 // 收敛为单一 CoefficientResolver：Get 按 key 读系数，ReadFloat 失败或非正数时兜底。
-package service
+package valuation
 
 import "context"
 

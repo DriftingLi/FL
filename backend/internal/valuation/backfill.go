@@ -1,16 +1,14 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：评估建议历史回填（ADR-0004 评估事实性）。
-package service
+package valuation
 
 import (
 	"context"
-
-	"forklift-training/internal/valuation"
 )
 
 // EvaluationBackfillStore 回填所需的评估记录读取/更新面（生产为 pgx 仓储，测试为内存替身）。
 type EvaluationBackfillStore interface {
-	ListEvaluationsForBackfill(ctx context.Context) ([]valuation.EvaluationDetail, error)
+	ListEvaluationsForBackfill(ctx context.Context) ([]EvaluationDetail, error)
 	UpdateEvaluationSuggestions(ctx context.Context, id int64, suggestions []string) error
 }
 

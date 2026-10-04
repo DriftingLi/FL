@@ -1,4 +1,4 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：使用强度系数 Kh
 // 公式：ratio = usage_hours / (annual_usage_hours · age)
 // 按 ratio 落入的区间查表得到 Kh：
@@ -8,12 +8,10 @@
 //	1.0 ~ 1.3      → 0.95  高于平均
 //	1.3 ~ 1.6      → 0.90  接近重型使用
 //	ratio >= 1.6   → 0.85  超高强度使用
-package service
+package valuation
 
 import (
 	"context"
-
-	"forklift-training/internal/valuation"
 )
 
 // 默认年化使用小时数（与 coefficient_configs 中 annual_usage_hours 默认值一致）
@@ -34,10 +32,10 @@ type KhResult struct {
 // 区间阈值通过 provider 从 coefficient_configs 读取（key: k_hours_ratio_low/mid/high/max）
 func CalcKHours(ctx context.Context, age, usageHours int, provider CoefficientResolver) (KhResult, error) {
 	if usageHours < 0 {
-		return KhResult{}, valuation.ErrInvalidUsageHours
+		return KhResult{}, ErrInvalidUsageHours
 	}
 	if age < 0 {
-		return KhResult{}, valuation.ErrInvalidYear
+		return KhResult{}, ErrInvalidYear
 	}
 
 	// 读取年化标准小时数（失败时使用默认值 1750）

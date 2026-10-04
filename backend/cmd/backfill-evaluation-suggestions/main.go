@@ -15,7 +15,6 @@ import (
 
 	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/valuation"
-	vservice "forklift-training/internal/valuation/service"
 )
 
 func main() {
@@ -45,7 +44,7 @@ func main() {
 	dictRepo := valuation.NewDictionaryRepository(pool)
 	evalRepo := valuation.NewEvaluationRepository(pool)
 
-	updated, err := vservice.BackfillEvaluationSuggestions(ctx, dictRepo, evalRepo)
+	updated, err := valuation.BackfillEvaluationSuggestions(ctx, dictRepo, evalRepo)
 	if err != nil {
 		logger.Error("回填失败", zap.Error(err))
 		os.Exit(1)

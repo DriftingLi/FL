@@ -1,4 +1,4 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：时间衰减系数 Kt
 // 公式：Kt = e^(-λ·age)，age = sale_year - factory_year
 // λ 区分电动（默认 0.12）与内燃（默认 0.10），可通过 coefficient_configs 调整
@@ -9,14 +9,12 @@
 //	Kt_adj = e^(-λ_adj · age) = Kt^(Kh / Kb)
 //
 // 这样 age=0 时 Kt_adj 恒等于 1.0，从根本上避免残值率超过 100%
-package service
+package valuation
 
 import (
 	"context"
 	"fmt"
 	"math"
-
-	"forklift-training/internal/valuation"
 )
 
 // KtResult 时间衰减系数计算结果
@@ -30,18 +28,18 @@ type KtResult struct {
 // factoryYear: 出厂年份
 // saleYear: 成交年份
 // provider: 系数提供者，提供 λ
-func CalcKTime(ctx context.Context, powerType valuation.PowerType, factoryYear, saleYear int, provider CoefficientResolver) (KtResult, error) {
+func CalcKTime(ctx context.Context, powerType PowerType, factoryYear, saleYear int, provider CoefficientResolver) (KtResult, error) {
 	age := saleYear - factoryYear
 	if age < 0 {
-		return KtResult{}, valuation.ErrInvalidYear
+		return KtResult{}, ErrInvalidYear
 	}
 
 	// 根据动力类型选取衰减率 λ 的 key
 	var key string
 	switch powerType {
-	case valuation.PowerTypeElectric:
+	case PowerTypeElectric:
 		key = KeyLambdaElectric
-	case valuation.PowerTypeCombustion:
+	case PowerTypeCombustion:
 		key = KeyLambdaCombustion
 	default:
 		return KtResult{}, fmt.Errorf("未知的动力类型: %s", powerType)

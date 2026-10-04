@@ -11,7 +11,6 @@ import (
 
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/service"
 )
 
 // ReportHandler 报告 HTTP 处理器（薄壳：协调器装配 + 端点注册）。
@@ -23,7 +22,7 @@ type ReportHandler struct {
 
 // NewReportHandler 构造报告处理器
 // resolver 用于未回填历史记录重建建议时动态读取 coefficient_configs（与评估流程同一份配置）。
-func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver service.CoefficientResolver) *ReportHandler {
+func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logger, st storage.Storage, resolver valuation.CoefficientResolver) *ReportHandler {
 	return &ReportHandler{
 		logger:  l,
 		storage: st,
@@ -36,8 +35,8 @@ func NewReportHandler(evalRepo EvaluationStore, gen ReportGenerator, l *zap.Logg
 			Writer:    evalRepo.UpdateEvaluationReportPath,
 			Prepare: func(ctx context.Context, d *valuation.EvaluationDetail) {
 				// 单一装配点：KTimeAdjusted + 维度分（建议为评估时点锁定值，ADR-0004）
-				service.RebuildDerivedFromDetail(d)
-				service.EnsureSuggestions(ctx, d, resolver)
+				valuation.RebuildDerivedFromDetail(d)
+				valuation.EnsureSuggestions(ctx, d, resolver)
 			},
 			Render: func(_ context.Context, d *valuation.EvaluationDetail) ([]byte, error) {
 				// 维度分为 typed 切片直传（顺序契约在 valuation.DimensionLabels，不再经 label 拼接）
