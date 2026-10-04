@@ -27,12 +27,13 @@ import (
 // 持有字典读取窄接口与评估存储窄接口，所有系数从 DB 实时查询
 type Service struct {
 	dictRepo DictionaryReader
-	evalRepo EvaluationStore
+	evalRepo EvaluationWriter
 	provider *CoefficientProvider
 }
 
-// EvaluationStore 评估记录持久化接口（Persist 消费窄接口，生产为 pgx 仓储，测试为内存替身）。
-type EvaluationStore interface {
+// EvaluationWriter 评估记录**写入**窄接口（Persist 消费；#1514 波 9 并包后与 handler 侧的
+// EvaluationWriter（读/管理面）重名，故按消费方语义分成两个窄接口——ADR-0070 §7.1 的消费方定义接口）。
+type EvaluationWriter interface {
 	CreateEvaluation(ctx context.Context, p *CreateEvaluationParams) (int64, error)
 }
 
@@ -44,7 +45,7 @@ type EvaluationStore interface {
 // 改为返回 error，由调用方在装配阶段决定 fail-fast 策略（main.go 启动时 os.Exit）。
 func NewService(
 	dictRepo DictionaryReader,
-	evalRepo EvaluationStore,
+	evalRepo EvaluationWriter,
 ) (*Service, error) {
 	if dictRepo == nil {
 		return nil, fmt.Errorf("NewService: dictRepo 不能为 nil")

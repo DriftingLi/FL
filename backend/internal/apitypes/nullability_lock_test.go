@@ -109,7 +109,7 @@ var (
 	nonNilEvidenceSources = []outletSource{
 		{"internal/core", "nonnilOutlets"},
 		// #1514 波 7：估值域 DTO 整域进射程后，8 个集合字段的举证落在组装它们的 handler 层。
-		{"internal/valuation/handler", "nonnilOutlets"},
+		{"internal/valuation", "nonnilOutlets"},
 		{"internal/api", "nonnilOutlets"},
 		{"internal/auth", "nonnilOutlets"},
 		{"internal/faq", "nonnilOutlets"},

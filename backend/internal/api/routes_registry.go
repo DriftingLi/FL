@@ -31,7 +31,7 @@ import (
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
 	"forklift-training/internal/tutor"
-	vhandler "forklift-training/internal/valuation/handler"
+	"forklift-training/internal/valuation"
 	"forklift-training/internal/wrongquestion"
 )
 
@@ -128,7 +128,7 @@ var routeRegistrars = []routeRegistrar{
 			auth.RegisterAdminRoutes(api, rd.Session, deps.ReviewSvc)
 			notification.RegisterRoutes(api, rd.Session, deps.NotificationSvc)
 			audit.RegisterRoutes(api, rd.Session, deps.AuditSvc)
-			vhandler.RegisterExportRoutes(api, rd.Session, deps.ExportSvc)
+			valuation.RegisterExportRoutes(api, rd.Session, deps.ExportSvc)
 			// 培训域 HTTP 出口三分（handler.go / handler_admin.go / handler_credential.go），
 			// 三行合并等价原单条 RegisterTrainingCatalogRoutes（ADR-0070）：学员端读面 → 管理端目录面 → 证件面。
 			training.RegisterRoutes(api, rd.Session, deps.TrainingCatalogSvc)

@@ -21,22 +21,22 @@ import (
 	"forklift-training/internal/storage"
 )
 
-// memStorage 内存存储替身：满足 storage.Storage，key → 内容。
-type memStorage struct {
+// coordMemStorage 内存存储替身：满足 storage.Storage，key → 内容。
+type coordMemStorage struct {
 	mu sync.Mutex
 	m  map[string][]byte
 }
 
-func newMemStorage() *memStorage { return &memStorage{m: map[string][]byte{}} }
+func newCoordMemStorage() *coordMemStorage { return &coordMemStorage{m: map[string][]byte{}} }
 
-func (s *memStorage) Save(_ context.Context, key string, content []byte, _ string) (string, error) {
+func (s *coordMemStorage) Save(_ context.Context, key string, content []byte, _ string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m[key] = content
 	return "/static/uploads/" + key, nil
 }
 
-func (s *memStorage) Delete(_ context.Context, url string) error {
+func (s *coordMemStorage) Delete(_ context.Context, url string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for k := range s.m {
@@ -47,7 +47,7 @@ func (s *memStorage) Delete(_ context.Context, url string) error {
 	return nil
 }
 
-func (s *memStorage) Exists(_ context.Context, url string) (bool, error) {
+func (s *coordMemStorage) Exists(_ context.Context, url string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for k := range s.m {
@@ -58,14 +58,14 @@ func (s *memStorage) Exists(_ context.Context, url string) (bool, error) {
 	return false, nil
 }
 
-func (s *memStorage) List(context.Context, string) ([]string, error) { return nil, nil }
+func (s *coordMemStorage) List(context.Context, string) ([]string, error) { return nil, nil }
 
 // ListWithInfo 适配 storage.Storage 新增接口（ADR-0027 C2）；本域不消费列表。
-func (s *memStorage) ListWithInfo(context.Context, string) ([]storage.FileInfo, error) {
+func (s *coordMemStorage) ListWithInfo(context.Context, string) ([]storage.FileInfo, error) {
 	return nil, nil
 }
 
-func (s *memStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
+func (s *coordMemStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := strings.TrimPrefix(url, "/static/uploads/")
@@ -76,7 +76,7 @@ func (s *memStorage) Get(_ context.Context, url string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(content)), nil
 }
 
-func (s *memStorage) hasKey(key string) bool {
+func (s *coordMemStorage) hasKey(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, ok := s.m[key]
@@ -93,7 +93,7 @@ type evalRec struct {
 
 // newEvalSpec 组装评估型 Spec（两个 producer 形状之一），返回 spec 与记录。
 // written 承载 Writer 的落库结果（模拟 DB 写），rec.path 保持加载时快照。
-func newEvalSpec(st *memStorage, rec *evalRec, written *string) ReportSpec[evalRec] {
+func newEvalSpec(st *coordMemStorage, rec *evalRec, written *string) ReportSpec[evalRec] {
 	return ReportSpec[evalRec]{
 		Loader: func(_ context.Context, id int64) (*evalRec, error) {
 			if rec == nil {
@@ -118,7 +118,7 @@ func newEvalSpec(st *memStorage, rec *evalRec, written *string) ReportSpec[evalR
 }
 
 func TestGenerate_WritesPDFAndPath(t *testing.T) {
-	st := newMemStorage()
+	st := newCoordMemStorage()
 	rec := &evalRec{}
 	var written string
 	c := NewReportCoordinator(newEvalSpec(st, rec, &written))
@@ -139,7 +139,7 @@ func TestGenerate_WritesPDFAndPath(t *testing.T) {
 }
 
 func TestDownloadURL_UsesExistingWithoutRegenerate(t *testing.T) {
-	st := newMemStorage()
+	st := newCoordMemStorage()
 	if _, err := st.Save(context.Background(), "reports/evaluation_report_1_old.pdf", []byte("old"), ""); err != nil {
 		t.Fatalf("预置旧文件失败: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestDownloadURL_UsesExistingWithoutRegenerate(t *testing.T) {
 }
 
 func TestDownloadURL_RegeneratesWhenMissing(t *testing.T) {
-	st := newMemStorage()
+	st := newCoordMemStorage()
 	// path 指向存储中不存在的文件（旧记录 URL 失效）
 	oldPath := "/static/uploads/reports/evaluation_report_1_gone.pdf"
 	rec := &evalRec{path: oldPath}
@@ -183,7 +183,7 @@ func TestDownloadURL_RegeneratesWhenMissing(t *testing.T) {
 }
 
 func TestGenerate_DeletesOldPDFAfterWriteback(t *testing.T) {
-	st := newMemStorage()
+	st := newCoordMemStorage()
 	if _, err := st.Save(context.Background(), "reports/evaluation_report_1_old.pdf", []byte("old"), ""); err != nil {
 		t.Fatalf("预置旧文件失败: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestGenerate_DeletesOldPDFAfterWriteback(t *testing.T) {
 }
 
 func TestDownloadURL_ConcurrentSameID_SingleGeneration(t *testing.T) {
-	st := newMemStorage()
+	st := newCoordMemStorage()
 	rec := &evalRec{}
 	var written string
 	spec := newEvalSpec(st, rec, &written)
@@ -246,7 +246,7 @@ func TestDownloadURL_ConcurrentSameID_SingleGeneration(t *testing.T) {
 }
 
 func TestGenerate_ConcurrentSameID_SingleGeneration(t *testing.T) {
-	st := newMemStorage()
+	st := newCoordMemStorage()
 	rec := &evalRec{}
 	var written string
 	spec := newEvalSpec(st, rec, &written)

@@ -1,0 +1,158 @@
+// HTTP 出口（原 internal/valuation/handler 子包）：提供残值评估子模块的路由注册入口。
+// 路由结构：
+//
+//	/api/valuation                      公开组（无需登录）
+//	  ├── POST /evaluations             评估提交（匿名存储）
+//	  ├── GET  /evaluations/stats       评估统计
+//	  ├── POST /evaluations/:id/report  生成 PDF 报告
+//	  ├── GET  /evaluations/:id/report  下载 PDF 报告
+//	  ├── POST /battery/evaluations/:id/report   生成电池报告
+//	  ├── GET  /battery/evaluations/:id/report   下载电池报告
+//	  ├── POST /auth/register           估值模块独立注册
+//	  ├── /dictionaries/*               字典查询（只读 GET）
+//	  └── /health                       健康检查
+//
+//	/api/valuation                      可选认证组（登录与否都能用，登录则记录 user_id）
+//	  ├── POST /evaluations             评估提交
+//	  └── POST /battery/evaluations     电池 RUL 评估提交
+//
+//	/api/valuation                      估值鉴权组（统一主体系 JWT）
+//	  ├── GET  /evaluations             评估历史/详情（需登录）
+//	  ├── GET  /evaluations/:id
+//	  ├── /battery/evaluations          电池 RUL 评估历史（需登录）
+//	  └── GET  /auth/me                 获取当前估值用户
+//
+//	/api/valuation                      公开组补充（无需登录，ADR-0016）
+//	  └── POST /auth/logout             估值用户登出（refresh_token 自证身份吊销）
+//
+//	/api/valuation/admin                管理员组（主体系 JWTAuth + role=admin）
+//	  └── /admin/*                      管理员 CRUD（仍走主体系 admin JWT）
+package valuation
+
+import (
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"forklift-training/internal/audit"
+	"forklift-training/internal/authz"
+	"forklift-training/internal/middleware"
+	"forklift-training/internal/security"
+	"forklift-training/internal/storage"
+)
+
+// valuationAdminGroupPath 估值管理端路由组前缀。
+// 37 条 CRUD 注解的 @Router 去掉 swag 的 /api 前缀后必须与它逐字一致 ——
+// 锁测试（dictcrud_docs_lock_test.go）用它派生期望路径，改这里就必须同步注解。
+const valuationAdminGroupPath = "/api/valuation/admin"
+
+// RegisterRoutes 注册残值评估模块路由。
+// 路由分五组：
+//   - 公开组 /api/valuation：字典查询、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
+//   - 可选认证组 /api/valuation：评估提交、电池评估提交（匿名可提交，登录则记录 user_id）
+//   - 估值鉴权组 /api/valuation：评估历史/详情、电池历史、/auth/me（需登录）
+//   - 公开组补充：/auth/logout（refresh_token 自证身份，不依赖 JWTAuth，ADR-0016）
+//   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
+func RegisterRoutes(
+	r *gin.Engine,
+	sess *security.Session,
+	logger *zap.Logger,
+	auditSvc *audit.Service,
+	dictRepo DictionaryConfigStore,
+	evalRepo EvaluationStore,
+	batteryRepo BatteryStore,
+	valuationSvc *Service,
+	batterySvc *BatteryRULService,
+	pdfGen ReportGenerator,
+	st storage.Storage,
+	valuationAuthSvc ValuationAuth,
+) {
+	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
+	configHandler := NewConfigHandler(dictRepo, logger)
+	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, NewCoefficientProvider(dictRepo))
+	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
+	healthHandler := NewHealthHandler()
+	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc, sess)
+
+	// === 公开组（无需登录）：字典查询 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
+	// 评估提交（POST /evaluations）已移至"可选认证组"，登录用户提交时记录 user_id
+	// 报告生成/下载公开：未登录用户可下载已生成的评估报告
+	public := r.Group("/api/valuation")
+	{
+		public.GET("/evaluations/stats", evalHandler.Stats)
+		public.GET("/health", healthHandler.Check)
+
+		// 报告生成与下载（无需登录）
+		public.POST("/evaluations/:id/report", reportHandler.Generate)
+		public.GET("/evaluations/:id/report", reportHandler.Download)
+		public.POST("/battery/evaluations/:id/report", batteryHandler.GenerateReport)
+		public.GET("/battery/evaluations/:id/report", batteryHandler.DownloadReport)
+
+		dict := public.Group("/dictionaries")
+		{
+			dict.GET("/brands", configHandler.ListBrands)
+			dict.GET("/vehicle-types", configHandler.ListVehicleTypes)
+			dict.GET("/series", configHandler.ListSeries)
+			dict.GET("/tonnages", configHandler.ListTonnages)
+			dict.GET("/config-types", configHandler.ListConfigTypes)
+			dict.GET("/mast-types", configHandler.ListMastTypes)
+			dict.GET("/mast-heights", configHandler.ListMastHeights)
+			dict.GET("/battery-types", configHandler.ListBatteryTypes)
+			dict.GET("/transmission-types", configHandler.ListTransmissionTypes)
+			dict.GET("/engine-types", configHandler.ListEngineTypes)
+			dict.GET("/series-config-options", configHandler.ListSeriesConfigOptions)
+			dict.GET("/condition-ratings", configHandler.ListConditionRatings)
+			dict.GET("/region-coefficients", configHandler.ListRegionCoefficients)
+			dict.GET("/provinces", configHandler.ListProvinces)
+			dict.GET("/cities", configHandler.ListCities)
+			dict.GET("/coefficient-configs", configHandler.ListCoefficientConfigs)
+			dict.GET("/original-prices", configHandler.ListOriginalPrices)
+			dict.GET("/earliest-factory-year", configHandler.GetEarliestFactoryYear)
+			dict.GET("/algorithm-parameters", configHandler.ListAlgorithmParameters)
+		}
+
+		// 登出与主站 /auth/logout 同口径（ADR-0016）：以 refresh_token 自证身份吊销会话，
+		// 不依赖 JWTAuth（access 过期时也能登出）
+		public.POST("/auth/logout", valuationAuthHandler.Logout)
+	}
+
+	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
+	// 评估提交/电池评估：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
+	optional := r.Group("/api/valuation")
+	optional.Use(middleware.OptionalAuth(sess))
+	{
+		optional.POST("/evaluations", evalHandler.Create)
+		optional.POST("/battery/evaluations", batteryHandler.Create)
+	}
+
+	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
+	// 评估历史/详情 + 电池 RUL CRUD + /auth/me
+	// 已统一到主体系 JWT,与培训学员端共用同一 token
+	valAuth := r.Group("/api/valuation")
+	valAuth.Use(middleware.JWTAuth(sess), middleware.CapabilityRequired(authz.CapValuationUse))
+	{
+		valAuth.GET("/evaluations", evalHandler.List)
+		valAuth.GET("/evaluations/:id", evalHandler.Get)
+
+		valAuth.GET("/battery/evaluations", batteryHandler.List)
+		valAuth.GET("/battery/evaluations/:id", batteryHandler.Get)
+
+		valAuth.GET("/auth/me", valuationAuthHandler.Me)
+	}
+
+	// === 管理员 CRUD 接口（要求主体系 JWT role=admin） ===
+	// 残值配置管理仍走主体系 admin JWT，不参与此次独立化
+	// 全部字典写面由描述符注册表驱动（ADR-0008）：POST/PUT/DELETE 按描述符声明注册，
+	// 不再逐实体手写路由。失效 pattern 来自 repository 缓存契约单点（PatternsOf）。
+	admin := r.Group(valuationAdminGroupPath)
+	admin.Use(middleware.JWTAuth(sess))
+	admin.Use(middleware.CapabilityRequired(authz.CapValuationConfig))
+	// 管理员写操作审计：与主体系同一留痕口径（合规用途，ADR-0012 §7）。
+	// 未注入审计服务时不挂（测试装配传 nil）：typed nil 装进 middleware.AuditWriter 不等于 nil 接口，
+	// 判空必须在装配点做（见 AuditWriter 的注释）。
+	if auditSvc != nil {
+		admin.Use(middleware.AuditLog(auditSvc, logger))
+	}
+	{
+		configHandler.registerDictCRUDRoutes(admin, NewDictRegistry(AllDictDescriptors()...))
+	}
+}
