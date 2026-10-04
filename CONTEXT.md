@@ -1,8 +1,8 @@
 # CONTEXT.md — 领域词汇表（Domain Glossary）
 
-> **体量**：2026-10-05 登记时 `wc -lc` 现测 187 行 / 80,728 B。这个数会随词条增长而失真，**用时现测，别凭记忆** —— 所以别整读。
+> **体量**：2026-10-05 登记时 `wc -lc` 现测 187 行 / 80,728 B。这个数会随本文件增长而失真，**用时现测，别凭记忆** —— 所以别整读。
 > **按节切片读**，节区间现取、行号不入库：`grep -n '^#' CONTEXT.md`（在仓库根执行），只读你要的那一节。
-> **本三行只讲「怎么读这个文件」**，不含任何词条裁定：本份只管全站 / Web / 后端 / 跨端契约，uni-app x 侧词条在移动端 `CONTEXT.md`；动哪一侧读那一份，通用规则见 `docs/agents/domain.md`。
+> **本三行只讲「怎么读这个文件」**，不含任何词条判据：本份只管全站 / Web / 后端 / 跨端契约，uni-app x 侧词条在移动端 `CONTEXT.md`；动哪一侧读那一份，通用规则见 `docs/agents/domain.md`。
 
 本文件为架构评审、domain-modeling 与 AI 导航提供共享领域语言。架构术语见 codebase-design vocabulary（module / interface / seam / adapter / leverage / locality）。
 
