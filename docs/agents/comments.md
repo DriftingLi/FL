@@ -18,9 +18,9 @@
 | 判据与不变量 | 写清「为什么必须这样」，含 issue / ADR 号 | `internal/core/contact_authz.go:1`（「什么算有效授权」的单点）、`internal/core/password_write.go:5-11`（会话吊销两族失败策略不同且不许互相顶替） |
 | 血账 | 现象 + 成因 + 复发的后果 | 手册 §11、`internal/core/nonnil_declaration_test.go:23`（本文件用例测不到的边界登记） |
 | 跨文件真源 | 指向**符号**（可 grep），不写易漂的行号 | 「真源是 `internal/apitypes/domains.go` 的域声明表」式写法 |
-| 公式与推导 | 领域算法（残值系数、RUL） | `internal/valuation/service/kcondition.go:9-10`（`Kc = clamp(Kc_raw, 0.30, 1.15)`） |
+| 公式与推导 | 领域算法（残值系数、RUL） | `internal/valuation/kcondition.go` 的 `Kc = clamp(Kc_raw, 0.30, 1.15)` |
 | 词汇引用 | 指向词表而不是复述词义 | `CONTEXT.md` 的「会话（session）」「接口契约」引用 |
-| 包文档 | 包级导览（路由树、文件分工） | `internal/valuation/handler/router.go:1-31`（路由结构树） |
+| 包文档 | 包级导览（路由树、文件分工） | `internal/valuation/handler.go` 文件头的「路由结构」注释块 |
 
 判断「复述还是解释」的土办法：**把代码改名后这句话还成立吗？** 只在代码原样时成立的，多半是复述。
 
@@ -42,7 +42,7 @@
 - **指令性注释**：`//go:build` / `//go:embed` / `//go:generate` / `//nolint` —— 它们是编译与工具输入，删了会坏构建。
 - **swagger 注解**（`// @Summary` 等）：生成物（`backend/docs` 与前端生成物）的唯一事实源；动了要按 `docs/agents/checks.md` 的生成链顺序重跑，且会牵动若干注解锁。
 - **锁与守卫里的证明性注释**：计数算式、允许名单理由、`parser.ParseComments` 读到的那三处（`internal/apitypes/nullability_lock_test.go`、`internal/api/consumption_fact_lock_test.go` 的档位说明等）。数字与注释必须同批改。
-- **迁移记账与历史记录**：`docs/adr/*`、手册 §10.1/§11、「原住 `internal/service/…`，P2 波 4e 搬来」式句子（**69 处**）；丢了就找不到迁移的来龙去脉。
+- **迁移记账与历史记录**：`docs/adr/*`、`docs/design/1445-*`（注释审计底数——里面的旧路径与行号**本身就是取证**）、手册 §10.1/§11、「原住 `internal/service/…`，P2 波 4e 搬来」式句子（**69 处**）；丢了就找不到迁移的来龙去脉。⇒ **收口死链只改活约定文档，历史面原样保留**（明文判据见 `docs/adr/ADR-0070-域包形态与目录即射程的收口.md` P3-A 段）。
 - **移动端 `.uts` / `.uvue` 里的注释**：`pr-evidence` 的运行时面判据按文件路径与扩展名走，顺手改一处注释就会把 PR 拉进运行时面。
 - **生成物头部注释**：前端生成物的「覆盖的 Go 类型」清单由生成器写，手改即漂。
 

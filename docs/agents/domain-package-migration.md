@@ -128,7 +128,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 做法是**消费方定义接口**（先例：`internal/middleware/audit.go`）：
 
 - `type AuditWriter interface { Write(record model.AuditLog) error; DescribeAction(method, path string) string }`，`AuditLog(svc AuditWriter, logger *zap.Logger)` —— 基建只认自己需要的那两个方法，实现仍是单点 `*audit.Service`（`internal/audit/service.go` 原样满足），由装配点注入。
-- **typed nil 陷阱**：`(*audit.Service)(nil)` 装进接口**不等于** nil 接口，`svc == nil` 拦不住 ⇒ 判空上移到装配点（`internal/api/router.go:70-75`、`internal/valuation/handler/router.go:151` 都写成 `if auditSvc != nil { ... }`），基建里只留「真传进来的 nil 接口」兜底。
+- **typed nil 陷阱**：`(*audit.Service)(nil)` 装进接口**不等于** nil 接口，`svc == nil` 拦不住 ⇒ 判空上移到装配点（`internal/api/router.go` 的 `if deps.AuditSvc != nil` 与 `internal/valuation/handler.go` 的 `if auditSvc != nil`），基建里只留「真传进来的 nil 接口」兜底。
 - 这条因此被钉成方向规矩 ③（`internal/layers/layer_guard.go` 的 `directionViolations`）：`internal/middleware` 不得 import `internal/core`；合成违规自测在 `layer_guard_test.go`。
 
 **外部测试包例外**：`package foo_test` 住在被测包之外，两条边都能拿（import cycle 只发生在同一构建里）⇒ 它**不进依赖图**：`layer_guard.go` 的 `importEdges` 见到包名以 `_test` 结尾就跳过。这条例外是必要的 —— `internal/middleware/audit_ip_test.go` 就得拿**真实**的 `service.AuditService` 落库举证（本次成为全仓唯一一处外部测试包）。内部测试包（`package foo`）仍判：反向 import 在 test 构建里就是 import cycle。
