@@ -1,5 +1,5 @@
 // 缓存 key 契约 static 测试：读 key 前缀必须被失效 pattern 覆盖。
-package repository
+package valuation
 
 import (
 	"os"

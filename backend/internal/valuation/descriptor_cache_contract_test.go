@@ -1,7 +1,6 @@
-package repository
+package valuation
 
 import (
-	"forklift-training/internal/valuation"
 	"testing"
 )
 
@@ -9,7 +8,7 @@ import (
 // 描述符 Name 与 dictCacheContracts 的键一一对应，名称漂移会静默禁用写后失效（缓存永不更新）。
 // 描述符列表来自 AllDescriptors（路由注册与测试同源）。
 func TestDescriptorNamesMatchCacheContract(t *testing.T) {
-	reg := valuation.NewDictRegistry(valuation.AllDictDescriptors()...)
+	reg := NewDictRegistry(AllDictDescriptors()...)
 	descriptors := reg.All()
 	if len(descriptors) == 0 {
 		t.Fatal("AllDescriptors() 不应为空")

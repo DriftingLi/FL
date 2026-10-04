@@ -70,7 +70,8 @@ const (
 // 历史上只报一个数、不点名，而批①-B 的清单是从判据 4 的「待举证」名单推出来的，它不在那份上。
 // ⇒ 下面 Scan 现在把欠账逐条 Logf 出来，与判据 4 对称。
 //
-// 剩下这 7 处全在 **valuation/repository**（AlgorithmParameters 四格 + SeriesConfigOptions 三格）。
+// 剩下这 7 处全在 **valuation**（#1514 波 7 起 repository 与域包同包；AlgorithmParameters 四格 +
+// SeriesConfigOptions 三格在 dictionaries.go / dict_coefficients.go）。
 // 它们不是「没人去举证」，是**举证装置照不到**：判据 4/5 的证据源只有 ../core 与 ../api，
 // 而那个包只握 *pgxpool.Pool，没有可脱离真库跑的出口。留给下一波的选择是「给这两个包加证据源
 // （含一个能跑真库的测试装置）」或「把它们从判据 3/4 的分母里显式移出并写明理由」——继续留在
@@ -107,6 +108,8 @@ var (
 	// 「哪个域举证、证据在哪」跟着域走，这个清单是它唯一的登记处。
 	nonNilEvidenceSources = []outletSource{
 		{"internal/core", "nonnilOutlets"},
+		// #1514 波 7：估值域 DTO 整域进射程后，8 个集合字段的举证落在组装它们的 handler 层。
+		{"internal/valuation/handler", "nonnilOutlets"},
 		{"internal/api", "nonnilOutlets"},
 		{"internal/auth", "nonnilOutlets"},
 		{"internal/faq", "nonnilOutlets"},
@@ -267,7 +270,7 @@ var sweptDirs = map[string]string{
 	"tutor":               "../tutor",
 	"admin":               "../admin",
 	"audit":               "../audit",
-	"repository":          "../valuation/repository",
+	"valuation":           "../valuation",
 }
 
 var (

@@ -1,5 +1,5 @@
 // condition_ratings 车况评级 字典：只读方法（写面已迁至 dictcrud 描述符驱动，见 ADR-0008）。
-package repository
+package valuation
 
 import (
 	"context"

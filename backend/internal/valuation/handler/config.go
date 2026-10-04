@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/cache"
-	"forklift-training/internal/valuation/repository"
+	"forklift-training/internal/valuation"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -50,7 +50,7 @@ func NewConfigHandler(dictRepo DictionaryConfigStore, l *zap.Logger) *ConfigHand
 // @Tags 估值-字典
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=[]repository.Brand} "success"
+// @Success 200 {object} response.R{data=[]valuation.Brand} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/brands [get]
 func (h *ConfigHandler) ListBrands(c *gin.Context) {
@@ -91,13 +91,13 @@ func listCascadeOrFull[T any](h *ConfigHandler, c *gin.Context, paramsOK bool, c
 // @Accept json
 // @Produce json
 // @Param brand query string false "品牌名（级联过滤）"
-// @Success 200 {object} response.R{data=[]repository.VehicleType} "success"
+// @Success 200 {object} response.R{data=[]valuation.VehicleType} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/vehicle-types [get]
 func (h *ConfigHandler) ListVehicleTypes(c *gin.Context) {
 	brand := c.Query("brand")
 	listCascadeOrFull(h, c, brand != "",
-		func(ctx context.Context) ([]repository.VehicleType, error) {
+		func(ctx context.Context) ([]valuation.VehicleType, error) {
 			return h.dictRepo.ListVehicleTypesByBrand(ctx, brand)
 		},
 		h.dictRepo.ListVehicleTypes,
@@ -113,7 +113,7 @@ func (h *ConfigHandler) ListVehicleTypes(c *gin.Context) {
 // @Produce json
 // @Param brand query string false "品牌名"
 // @Param vehicle_type query string false "车型名"
-// @Success 200 {object} response.R{data=[]repository.Series} "success"
+// @Success 200 {object} response.R{data=[]valuation.Series} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/series [get]
 func (h *ConfigHandler) ListSeries(c *gin.Context) {
@@ -121,10 +121,10 @@ func (h *ConfigHandler) ListSeries(c *gin.Context) {
 	vehicleType := c.Query("vehicle_type")
 	paramsOK := brand != "" && vehicleType != ""
 	listCascadeOrFull(h, c, paramsOK,
-		func(ctx context.Context) ([]repository.Series, error) {
+		func(ctx context.Context) ([]valuation.Series, error) {
 			return h.dictRepo.ListSeriesByCascade(ctx, brand, vehicleType)
 		},
-		func(ctx context.Context) ([]repository.Series, error) {
+		func(ctx context.Context) ([]valuation.Series, error) {
 			return h.dictRepo.ListSeries(ctx, brand)
 		},
 		"查询系列失败")
@@ -140,7 +140,7 @@ func (h *ConfigHandler) ListSeries(c *gin.Context) {
 // @Param brand query string false "品牌名"
 // @Param vehicle_type query string false "车型名"
 // @Param series query string false "系列名"
-// @Success 200 {object} response.R{data=[]repository.Tonnage} "success"
+// @Success 200 {object} response.R{data=[]valuation.Tonnage} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/tonnages [get]
 func (h *ConfigHandler) ListTonnages(c *gin.Context) {
@@ -149,7 +149,7 @@ func (h *ConfigHandler) ListTonnages(c *gin.Context) {
 	series := c.Query("series")
 	paramsOK := brand != "" && vehicleType != "" && series != ""
 	listCascadeOrFull(h, c, paramsOK,
-		func(ctx context.Context) ([]repository.Tonnage, error) {
+		func(ctx context.Context) ([]valuation.Tonnage, error) {
 			return h.dictRepo.ListTonnagesByCascade(ctx, brand, vehicleType, series)
 		},
 		h.dictRepo.ListTonnages,
@@ -167,7 +167,7 @@ func (h *ConfigHandler) ListTonnages(c *gin.Context) {
 // @Param vehicle_type query string false "车型名"
 // @Param series query string false "系列名"
 // @Param tonnage query string false "吨位"
-// @Success 200 {object} response.R{data=[]repository.ConfigOption} "success"
+// @Success 200 {object} response.R{data=[]valuation.ConfigOption} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/config-types [get]
 func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
@@ -176,7 +176,7 @@ func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
 	series := c.Query("series")
 	tonnage := c.Query("tonnage")
 	if brand == "" || vehicleType == "" || series == "" || tonnage == "" {
-		response.Success(c, []repository.ConfigOption{})
+		response.Success(c, []valuation.ConfigOption{})
 		return
 	}
 	list, err := h.dictRepo.ListConfigOptionsByCascade(c.Request.Context(), brand, vehicleType, series, tonnage)
@@ -200,7 +200,7 @@ func (h *ConfigHandler) ListConfigTypes(c *gin.Context) {
 // @Param series query string false "系列名"
 // @Param tonnage query string false "吨位"
 // @Param config_type query string false "配置类型"
-// @Success 200 {object} response.R{data=[]repository.MastType} "success"
+// @Success 200 {object} response.R{data=[]valuation.MastType} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/mast-types [get]
 func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
@@ -211,7 +211,7 @@ func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
 	configType := c.Query("config_type")
 	paramsOK := brand != "" && vehicleType != "" && series != "" && tonnage != "" && configType != ""
 	listCascadeOrFull(h, c, paramsOK,
-		func(ctx context.Context) ([]repository.MastType, error) {
+		func(ctx context.Context) ([]valuation.MastType, error) {
 			return h.dictRepo.ListMastTypesByCascade(ctx, brand, vehicleType, series, tonnage, configType)
 		},
 		h.dictRepo.ListMastTypes,
@@ -231,7 +231,7 @@ func (h *ConfigHandler) ListMastTypes(c *gin.Context) {
 // @Param tonnage query string false "吨位"
 // @Param config_type query string false "配置类型"
 // @Param mast_type query string false "门架类型"
-// @Success 200 {object} response.R{data=[]repository.MastHeight} "success"
+// @Success 200 {object} response.R{data=[]valuation.MastHeight} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/mast-heights [get]
 func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
@@ -243,7 +243,7 @@ func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
 	mastType := c.Query("mast_type")
 	paramsOK := brand != "" && vehicleType != "" && series != "" && tonnage != "" && configType != "" && mastType != ""
 	listCascadeOrFull(h, c, paramsOK,
-		func(ctx context.Context) ([]repository.MastHeight, error) {
+		func(ctx context.Context) ([]valuation.MastHeight, error) {
 			return h.dictRepo.ListMastHeightsByCascade(ctx, brand, vehicleType, series, tonnage, configType, mastType)
 		},
 		h.dictRepo.ListMastHeights,
@@ -261,7 +261,7 @@ func (h *ConfigHandler) ListMastHeights(c *gin.Context) {
 // @Param vehicle_type query string false "车型名"
 // @Param series query string false "系列名"
 // @Param tonnage query string false "吨位"
-// @Success 200 {object} response.R{data=[]repository.BatteryTypeDict} "success"
+// @Success 200 {object} response.R{data=[]valuation.BatteryTypeDict} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/battery-types [get]
 func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
@@ -271,7 +271,7 @@ func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
 	tonnage := c.Query("tonnage")
 	paramsOK := brand != "" && vehicleType != "" && series != "" && tonnage != ""
 	listCascadeOrFull(h, c, paramsOK,
-		func(ctx context.Context) ([]repository.BatteryTypeDict, error) {
+		func(ctx context.Context) ([]valuation.BatteryTypeDict, error) {
 			return h.dictRepo.ListBatteryTypesByCascade(ctx, brand, vehicleType, series, tonnage)
 		},
 		h.dictRepo.ListBatteryTypes,
@@ -284,7 +284,7 @@ func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
 // @Tags 估值-字典
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=[]repository.TransmissionType} "success"
+// @Success 200 {object} response.R{data=[]valuation.TransmissionType} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/transmission-types [get]
 func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
@@ -303,7 +303,7 @@ func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
 // @Tags 估值-字典
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=[]repository.EngineType} "success"
+// @Success 200 {object} response.R{data=[]valuation.EngineType} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/engine-types [get]
 func (h *ConfigHandler) ListEngineTypes(c *gin.Context) {
@@ -325,7 +325,7 @@ func (h *ConfigHandler) ListEngineTypes(c *gin.Context) {
 // @Produce json
 // @Param brand query string true "品牌名"
 // @Param series query string true "系列名"
-// @Success 200 {object} response.R{data=repository.SeriesConfigOptions} "success"
+// @Success 200 {object} response.R{data=valuation.SeriesConfigOptions} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/series-config-options [get]
@@ -351,7 +351,7 @@ func (h *ConfigHandler) ListSeriesConfigOptions(c *gin.Context) {
 // @Tags 估值-字典
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=[]repository.ConditionRating} "success"
+// @Success 200 {object} response.R{data=[]valuation.ConditionRating} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/condition-ratings [get]
 func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
@@ -372,7 +372,7 @@ func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param province query string false "省份名"
-// @Success 200 {object} response.R{data=[]repository.RegionCoefficient} "success"
+// @Success 200 {object} response.R{data=[]valuation.RegionCoefficient} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/region-coefficients [get]
 func (h *ConfigHandler) ListRegionCoefficients(c *gin.Context) {
@@ -440,7 +440,7 @@ func (h *ConfigHandler) ListCities(c *gin.Context) {
 // @Tags 估值-字典
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=[]repository.CoefficientConfig} "success"
+// @Success 200 {object} response.R{data=[]valuation.CoefficientConfig} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/coefficient-configs [get]
 func (h *ConfigHandler) ListCoefficientConfigs(c *gin.Context) {
@@ -462,7 +462,7 @@ func (h *ConfigHandler) ListCoefficientConfigs(c *gin.Context) {
 // @Produce json
 // @Param page query integer false "页码（默认 1）"
 // @Param page_size query integer false "每页条数（默认 20，上限 100）"
-// @Success 200 {object} response.R{data=object{total=integer,page=integer,page_size=integer,list=[]repository.OriginalPrice}} "success"
+// @Success 200 {object} response.R{data=object{total=integer,page=integer,page_size=integer,list=[]valuation.OriginalPrice}} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/original-prices [get]
 func (h *ConfigHandler) ListOriginalPrices(c *gin.Context) {
@@ -535,7 +535,7 @@ func (h *ConfigHandler) GetEarliestFactoryYear(c *gin.Context) {
 // @Tags 估值-字典
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.R{data=repository.AlgorithmParameters} "success"
+// @Success 200 {object} response.R{data=valuation.AlgorithmParameters} "success"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/algorithm-parameters [get]
 func (h *ConfigHandler) ListAlgorithmParameters(c *gin.Context) {

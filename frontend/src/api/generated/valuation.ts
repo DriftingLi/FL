@@ -69,7 +69,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / EngineType / MastHeight / MastType / OriginalPrice / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / VehicleType / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / CreateBatteryResponse / CycleFeature / DimensionScore / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / RawStats
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / CreateBatteryResponse / CycleFeature / DimensionScore / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -86,104 +86,6 @@ export interface AlgorithmParameters {
   coefficients: CoefficientConfig[]
   condition_ratings: ConditionRating[]
   region_coefficients: RegionCoefficient[]
-}
-
-export interface BatteryTypeDict {
-  id: number
-  name: string
-}
-
-export interface Brand {
-  id: number
-  is_active: boolean
-  k_brand: number
-  name: string
-}
-
-export interface CoefficientConfig {
-  description: string
-  id: number
-  key: string
-  updated_at: string
-  value: number
-}
-
-export interface ConditionRating {
-  base_coefficient: number
-  id: number
-  label: string
-  rating: string
-}
-
-export interface ConfigOption {
-  id: number
-  name: string
-}
-
-export interface EngineType {
-  id: number
-  name: string
-}
-
-export interface MastHeight {
-  id: number
-  value_mm: number
-}
-
-export interface MastType {
-  id: number
-  name: string
-}
-
-export interface OriginalPrice {
-  brand: string
-  config_type: string
-  earliest_factory_year: number
-  id: number
-  mast_height_mm: number
-  mast_type: string
-  original_price: number
-  series: string
-  tonnage: number
-  updated_at: string
-  vehicle_type: string
-}
-
-export interface RegionCoefficient {
-  city: string
-  coefficient: number
-  id: number
-  province: string
-}
-
-export interface Series {
-  brand: string
-  earliest_factory_year: number
-  id: number
-  name: string
-}
-
-export interface SeriesConfigOptions {
-  battery: string[]
-  engine: string[]
-  transmission: string[]
-}
-
-export interface Tonnage {
-  id: number
-  value: number
-}
-
-export interface TransmissionType {
-  id: number
-  name: string
-}
-
-export interface VehicleType {
-  earliest_factory_year: number
-  id: number
-  name: string
-  power_type: string
 }
 
 export interface BatteryEvaluation {
@@ -218,6 +120,38 @@ export interface BatteryEvaluationSummary {
 export interface BatteryType {
 }
 
+export interface BatteryTypeDict {
+  id: number
+  name: string
+}
+
+export interface Brand {
+  id: number
+  is_active: boolean
+  k_brand: number
+  name: string
+}
+
+export interface CoefficientConfig {
+  description: string
+  id: number
+  key: string
+  updated_at: string
+  value: number
+}
+
+export interface ConditionRating {
+  base_coefficient: number
+  id: number
+  label: string
+  rating: string
+}
+
+export interface ConfigOption {
+  id: number
+  name: string
+}
+
 export interface CreateBatteryResponse {
   battery_type: BatteryType
   confidence: number
@@ -243,6 +177,11 @@ export interface CycleFeature {
 export interface DimensionScore {
   label: string
   value: number
+}
+
+export interface EngineType {
+  id: number
+  name: string
 }
 
 export interface EvaluationDetail {
@@ -333,6 +272,30 @@ export interface ListBatteryResponse {
   total: number
 }
 
+export interface MastHeight {
+  id: number
+  value_mm: number
+}
+
+export interface MastType {
+  id: number
+  name: string
+}
+
+export interface OriginalPrice {
+  brand: string
+  config_type: string
+  earliest_factory_year: number
+  id: number
+  mast_height_mm: number
+  mast_type: string
+  original_price: number
+  series: string
+  tonnage: number
+  updated_at: string
+  vehicle_type: string
+}
+
 export interface RawStats {
   capacity: number
   cc_duration: number
@@ -343,4 +306,41 @@ export interface RawStats {
   ic_peak_voltage: number
   voltage_mean: number
   voltage_std: number
+}
+
+export interface RegionCoefficient {
+  city: string
+  coefficient: number
+  id: number
+  province: string
+}
+
+export interface Series {
+  brand: string
+  earliest_factory_year: number
+  id: number
+  name: string
+}
+
+export interface SeriesConfigOptions {
+  battery: string[]
+  engine: string[]
+  transmission: string[]
+}
+
+export interface Tonnage {
+  id: number
+  value: number
+}
+
+export interface TransmissionType {
+  id: number
+  name: string
+}
+
+export interface VehicleType {
+  earliest_factory_year: number
+  id: number
+  name: string
+  power_type: string
 }

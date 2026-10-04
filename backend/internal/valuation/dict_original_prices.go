@@ -1,5 +1,5 @@
 // original_prices 原价表 CRUD 与精确/模糊匹配（骨架走 dict_helpers 共享实现）
-package repository
+package valuation
 
 import (
 	"context"

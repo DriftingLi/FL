@@ -6,7 +6,6 @@ import (
 	"context"
 	"forklift-training/internal/valuation"
 
-	"forklift-training/internal/valuation/repository"
 	"forklift-training/internal/valuation/service"
 )
 
@@ -27,29 +26,29 @@ type DictionaryConfigStore interface {
 	service.DictionaryReader
 	DictWriter
 
-	ListBrands(ctx context.Context) ([]repository.Brand, error)
-	ListVehicleTypes(ctx context.Context) ([]repository.VehicleType, error)
-	ListVehicleTypesByBrand(ctx context.Context, brand string) ([]repository.VehicleType, error)
-	ListSeries(ctx context.Context, brand string) ([]repository.Series, error)
-	ListSeriesByCascade(ctx context.Context, brand, vehicleType string) ([]repository.Series, error)
-	ListSeriesConfigOptions(ctx context.Context, brand, series string) (repository.SeriesConfigOptions, error)
-	ListTonnages(ctx context.Context) ([]repository.Tonnage, error)
-	ListTonnagesByCascade(ctx context.Context, brand, vehicleType, series string) ([]repository.Tonnage, error)
-	ListConfigOptionsByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]repository.ConfigOption, error)
-	ListMastTypes(ctx context.Context) ([]repository.MastType, error)
-	ListMastTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType string) ([]repository.MastType, error)
-	ListMastHeights(ctx context.Context) ([]repository.MastHeight, error)
-	ListMastHeightsByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType, mastType string) ([]repository.MastHeight, error)
-	ListBatteryTypes(ctx context.Context) ([]repository.BatteryTypeDict, error)
-	ListBatteryTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]repository.BatteryTypeDict, error)
-	ListTransmissionTypes(ctx context.Context) ([]repository.TransmissionType, error)
-	ListEngineTypes(ctx context.Context) ([]repository.EngineType, error)
-	ListConditionRatings(ctx context.Context) ([]repository.ConditionRating, error)
-	ListRegionCoefficients(ctx context.Context, province string) ([]repository.RegionCoefficient, error)
+	ListBrands(ctx context.Context) ([]valuation.Brand, error)
+	ListVehicleTypes(ctx context.Context) ([]valuation.VehicleType, error)
+	ListVehicleTypesByBrand(ctx context.Context, brand string) ([]valuation.VehicleType, error)
+	ListSeries(ctx context.Context, brand string) ([]valuation.Series, error)
+	ListSeriesByCascade(ctx context.Context, brand, vehicleType string) ([]valuation.Series, error)
+	ListSeriesConfigOptions(ctx context.Context, brand, series string) (valuation.SeriesConfigOptions, error)
+	ListTonnages(ctx context.Context) ([]valuation.Tonnage, error)
+	ListTonnagesByCascade(ctx context.Context, brand, vehicleType, series string) ([]valuation.Tonnage, error)
+	ListConfigOptionsByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]valuation.ConfigOption, error)
+	ListMastTypes(ctx context.Context) ([]valuation.MastType, error)
+	ListMastTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType string) ([]valuation.MastType, error)
+	ListMastHeights(ctx context.Context) ([]valuation.MastHeight, error)
+	ListMastHeightsByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType, mastType string) ([]valuation.MastHeight, error)
+	ListBatteryTypes(ctx context.Context) ([]valuation.BatteryTypeDict, error)
+	ListBatteryTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]valuation.BatteryTypeDict, error)
+	ListTransmissionTypes(ctx context.Context) ([]valuation.TransmissionType, error)
+	ListEngineTypes(ctx context.Context) ([]valuation.EngineType, error)
+	ListConditionRatings(ctx context.Context) ([]valuation.ConditionRating, error)
+	ListRegionCoefficients(ctx context.Context, province string) ([]valuation.RegionCoefficient, error)
 	ListProvinces(ctx context.Context) ([]string, error)
 	ListCities(ctx context.Context, province string) ([]string, error)
-	ListOriginalPrices(ctx context.Context, limit, offset int) ([]repository.OriginalPrice, int, error)
-	ListCoefficientConfigs(ctx context.Context) ([]repository.CoefficientConfig, error)
-	ListAlgorithmParameters(ctx context.Context) (repository.AlgorithmParameters, error)
+	ListOriginalPrices(ctx context.Context, limit, offset int) ([]valuation.OriginalPrice, int, error)
+	ListCoefficientConfigs(ctx context.Context) ([]valuation.CoefficientConfig, error)
+	ListAlgorithmParameters(ctx context.Context) (valuation.AlgorithmParameters, error)
 	GetEarliestFactoryYearByCascade(ctx context.Context, brand, vehicleType, series string, tonnage float64) (int, error)
 }

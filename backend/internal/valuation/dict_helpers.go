@@ -1,6 +1,6 @@
 // 字典仓储共享骨架：List/Get 的缓存 + 行扫描循环与写操作的
 // ErrNoRows 检查收敛于此，各实体方法只保留 SQL 与扫描列。
-package repository
+package valuation
 
 import (
 	"context"

@@ -21595,7 +21595,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/repository.AlgorithmParameters"
+                                            "$ref": "#/definitions/valuation.AlgorithmParameters"
                                         }
                                     }
                                 }
@@ -21664,7 +21664,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.BatteryTypeDict"
+                                                "$ref": "#/definitions/valuation.BatteryTypeDict"
                                             }
                                         }
                                     }
@@ -21708,7 +21708,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.Brand"
+                                                "$ref": "#/definitions/valuation.Brand"
                                             }
                                         }
                                     }
@@ -21811,7 +21811,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.CoefficientConfig"
+                                                "$ref": "#/definitions/valuation.CoefficientConfig"
                                             }
                                         }
                                     }
@@ -21855,7 +21855,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.ConditionRating"
+                                                "$ref": "#/definitions/valuation.ConditionRating"
                                             }
                                         }
                                     }
@@ -21925,7 +21925,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.ConfigOption"
+                                                "$ref": "#/definitions/valuation.ConfigOption"
                                             }
                                         }
                                     }
@@ -22050,7 +22050,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.EngineType"
+                                                "$ref": "#/definitions/valuation.EngineType"
                                             }
                                         }
                                     }
@@ -22132,7 +22132,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.MastHeight"
+                                                "$ref": "#/definitions/valuation.MastHeight"
                                             }
                                         }
                                     }
@@ -22208,7 +22208,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.MastType"
+                                                "$ref": "#/definitions/valuation.MastType"
                                             }
                                         }
                                     }
@@ -22269,7 +22269,7 @@ const docTemplate = `{
                                                 "list": {
                                                     "type": "array",
                                                     "items": {
-                                                        "$ref": "#/definitions/repository.OriginalPrice"
+                                                        "$ref": "#/definitions/valuation.OriginalPrice"
                                                     }
                                                 },
                                                 "page": {
@@ -22376,7 +22376,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.RegionCoefficient"
+                                                "$ref": "#/definitions/valuation.RegionCoefficient"
                                             }
                                         }
                                     }
@@ -22434,7 +22434,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.Series"
+                                                "$ref": "#/definitions/valuation.Series"
                                             }
                                         }
                                     }
@@ -22492,7 +22492,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/repository.SeriesConfigOptions"
+                                            "$ref": "#/definitions/valuation.SeriesConfigOptions"
                                         }
                                     }
                                 }
@@ -22561,7 +22561,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.Tonnage"
+                                                "$ref": "#/definitions/valuation.Tonnage"
                                             }
                                         }
                                     }
@@ -22605,7 +22605,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.TransmissionType"
+                                                "$ref": "#/definitions/valuation.TransmissionType"
                                             }
                                         }
                                     }
@@ -22657,7 +22657,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/repository.VehicleType"
+                                                "$ref": "#/definitions/valuation.VehicleType"
                                             }
                                         }
                                     }
@@ -27560,278 +27560,6 @@ const docTemplate = `{
                 }
             }
         },
-        "repository.AlgorithmParameters": {
-            "type": "object",
-            "properties": {
-                "brands": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/repository.Brand"
-                    }
-                },
-                "coefficients": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/repository.CoefficientConfig"
-                    }
-                },
-                "condition_ratings": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/repository.ConditionRating"
-                    }
-                },
-                "region_coefficients": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/repository.RegionCoefficient"
-                    }
-                }
-            }
-        },
-        "repository.BatteryTypeDict": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.Brand": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "k_brand": {
-                    "type": "number"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.CoefficientConfig": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "key": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "number"
-                }
-            }
-        },
-        "repository.ConditionRating": {
-            "type": "object",
-            "properties": {
-                "base_coefficient": {
-                    "type": "number"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "rating": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.ConfigOption": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.EngineType": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.MastHeight": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "value_mm": {
-                    "type": "integer"
-                }
-            }
-        },
-        "repository.MastType": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.OriginalPrice": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "config_type": {
-                    "type": "string"
-                },
-                "earliest_factory_year": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "mast_height_mm": {
-                    "type": "integer"
-                },
-                "mast_type": {
-                    "type": "string"
-                },
-                "original_price": {
-                    "type": "number"
-                },
-                "series": {
-                    "type": "string"
-                },
-                "tonnage": {
-                    "type": "number"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "vehicle_type": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.RegionCoefficient": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string"
-                },
-                "coefficient": {
-                    "type": "number"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "province": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.Series": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "earliest_factory_year": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.SeriesConfigOptions": {
-            "type": "object",
-            "properties": {
-                "battery": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "engine": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "transmission": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "repository.Tonnage": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "value": {
-                    "type": "number"
-                }
-            }
-        },
-        "repository.TransmissionType": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "repository.VehicleType": {
-            "type": "object",
-            "properties": {
-                "earliest_factory_year": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "power_type": {
-                    "type": "string"
-                }
-            }
-        },
         "response.R": {
             "type": "object",
             "properties": {
@@ -28958,6 +28686,35 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.AlgorithmParameters": {
+            "type": "object",
+            "properties": {
+                "brands": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.Brand"
+                    }
+                },
+                "coefficients": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.CoefficientConfig"
+                    }
+                },
+                "condition_ratings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.ConditionRating"
+                    }
+                },
+                "region_coefficients": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.RegionCoefficient"
+                    }
+                }
+            }
+        },
         "valuation.BatteryEvaluation": {
             "type": "object",
             "properties": {
@@ -29064,6 +28821,82 @@ const docTemplate = `{
                 "BatteryTypeNCM",
                 "BatteryTypeOther"
             ]
+        },
+        "valuation.BatteryTypeDict": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.Brand": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "k_brand": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.CoefficientConfig": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.ConditionRating": {
+            "type": "object",
+            "properties": {
+                "base_coefficient": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ConfigOption": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
         },
         "valuation.CreateBatteryRequest": {
             "type": "object",
@@ -29200,6 +29033,17 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                }
+            }
+        },
+        "valuation.EngineType": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -29564,6 +29408,66 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.MastHeight": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "value_mm": {
+                    "type": "integer"
+                }
+            }
+        },
+        "valuation.MastType": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.OriginalPrice": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "config_type": {
+                    "type": "string"
+                },
+                "earliest_factory_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mast_height_mm": {
+                    "type": "integer"
+                },
+                "mast_type": {
+                    "type": "string"
+                },
+                "original_price": {
+                    "type": "number"
+                },
+                "series": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
         "valuation.RawStats": {
             "type": "object",
             "properties": {
@@ -29597,6 +29501,102 @@ const docTemplate = `{
                 },
                 "voltage_std": {
                     "type": "number"
+                }
+            }
+        },
+        "valuation.RegionCoefficient": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "coefficient": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "province": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.Series": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "earliest_factory_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.SeriesConfigOptions": {
+            "type": "object",
+            "properties": {
+                "battery": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "engine": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "transmission": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "valuation.Tonnage": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.TransmissionType": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.VehicleType": {
+            "type": "object",
+            "properties": {
+                "earliest_factory_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "power_type": {
+                    "type": "string"
                 }
             }
         },

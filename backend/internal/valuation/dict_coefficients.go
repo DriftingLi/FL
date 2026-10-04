@@ -1,5 +1,5 @@
 // coefficient_configs 系数配置 CRUD 与算法参数聚合（骨架走 dict_helpers 共享实现）
-package repository
+package valuation
 
 import (
 	"context"
@@ -44,7 +44,7 @@ func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key stri
 }
 
 // 注：coefficient_configs 的写操作（按 key 更新）已迁至描述符驱动核心
-// （valuation.CoefficientConfigDescriptor + valuation.Store.UpdateByKey，见 ADR-0008）。
+// （CoefficientConfigDescriptor + DictStore.UpdateByKey，见 ADR-0008）。
 
 // AlgorithmParameters 算法参数聚合结果（管理员后台「算法参数」tab 一次加载）
 type AlgorithmParameters struct {

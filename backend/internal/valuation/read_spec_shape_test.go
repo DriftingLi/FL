@@ -2,7 +2,7 @@
 // 锁定每个简单单表读由 ReadSpec 生成的 SELECT SQL 与深化前手写 SQL 字节级一致。
 // SQL 的列顺序/列名/WHERE/ORDER BY 一旦漂移，JSON 响应 shape（key 集合、字段顺序、
 // 筛选/排序语义）即漂移——本测试把这些锁成常量，深化后不可复现漂移。
-package repository
+package valuation
 
 import (
 	"encoding/json"

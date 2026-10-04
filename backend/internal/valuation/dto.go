@@ -175,9 +175,9 @@ type EvaluationDetail struct {
 	ConfidenceLow   float64          `json:"confidence_low"`
 	ConfidenceHigh  float64          `json:"confidence_high"`
 	ReportPdfPath   string           `json:"report_pdf_path,omitempty" extensions:"x-optional"` // omitempty：键可能整个不存在
-	DimensionScores []DimensionScore `json:"dimension_scores"`
+	DimensionScores []DimensionScore `json:"dimension_scores" nullability:"nonnil"`
 	// 评估时点锁定的建议与 λ 值（ADR-0004 评估事实性）
-	Suggestions      []string `json:"suggestions"`
+	Suggestions      []string `json:"suggestions" nullability:"nonnil"`
 	LambdaElectric   float64  `json:"lambda_electric"`
 	LambdaCombustion float64  `json:"lambda_combustion"`
 	// 未来价值曲线锚点（ADR-0012 §8，评估时点锁定）
@@ -219,8 +219,8 @@ type EvaluationResponse struct {
 	EstimatedValue  float64          `json:"estimated_value"`
 	ConfidenceLow   float64          `json:"confidence_low"`
 	ConfidenceHigh  float64          `json:"confidence_high"`
-	DimensionScores []DimensionScore `json:"dimension_scores"`
-	Suggestions     []string         `json:"suggestions"`
+	DimensionScores []DimensionScore `json:"dimension_scores" nullability:"nonnil"`
+	Suggestions     []string         `json:"suggestions" nullability:"nonnil"`
 	// 本次评估使用的 λ 值（评估时点锁定，供前端走势图数据驱动）
 	LambdaElectric   float64 `json:"lambda_electric"`
 	LambdaCombustion float64 `json:"lambda_combustion"`

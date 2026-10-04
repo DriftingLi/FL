@@ -19,7 +19,7 @@ package service
 import (
 	"context"
 
-	"forklift-training/internal/valuation/repository"
+	"forklift-training/internal/valuation"
 )
 
 // KcResult 车况系数计算结果
@@ -71,7 +71,7 @@ func CalcKCondition(
 	//    字典表未命中时用 1.0 兜底（中性车况，不阻断评估流程）
 	cr, err := dictRepo.GetConditionRating(ctx, rating)
 	if err != nil {
-		cr = repository.ConditionRating{
+		cr = valuation.ConditionRating{
 			Rating:          rating,
 			Label:           rating,
 			BaseCoefficient: 1.0,

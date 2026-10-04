@@ -1,41 +1,11 @@
 // 评估事实性集成测试：真实 Postgres 下新列 SQL 与字段映射。
 // CI 提供 postgres:15 服务（DATABASE_URL），本地未配置时跳过。
-package repository
+package valuation
 
 import (
 	"context"
-	"os"
 	"testing"
-
-	"time"
-
-	"go.uber.org/zap"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"forklift-training/internal/valuation"
-
-	migratedb "forklift-training/internal/migrate"
 )
-
-func integrationPool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL 未配置，跳过集成测试")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if err := migratedb.RunMigrations(dsn, "up", zap.NewNop()); err != nil {
-		t.Fatalf("迁移失败: %v", err)
-	}
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("连接失败: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
 
 // TestEvaluationsRepository_LockedSuggestionsMapping 持久化 → 读取往返：
 // suggestions/λ 列写入并原样读回（字段映射正确性）。
@@ -212,7 +182,7 @@ func TestEvaluationsRepository_BackfillIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("二次列出失败: %v", err)
 	}
-	byID := map[int64]valuation.EvaluationDetail{}
+	byID := map[int64]EvaluationDetail{}
 	for _, r := range rows2 {
 		byID[r.ID] = r
 	}

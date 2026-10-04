@@ -155,16 +155,16 @@ type ScanDir struct {
 
 // responseStaticPackages 是「响应面」里**不由域声明表派生**的那一半（模块根相对）。
 //
-// 三类：装配根与共享层（internal/api、internal/core、internal/model、pkg/response）、残值模块
-// 按技术分层**尚未**收口的那一个包（valuation/repository —— 它的定义键前缀是 `repository.`，
-// 不叫 `valuation.`；同批的 valuation/model 已在 issue #1514 波 1 并回域包，valuation 域因此
-// 从这一份转到派生面），以及 audit —— 它虽已出包（P2 波 4f），却**不在域声明表**里（审计面
-// 没有 Web 消费方、不进 codegen），派生器看不到它，只能在这里登记。
+// 两类：装配根与共享层（internal/api、internal/core、internal/model、pkg/response），以及 audit
+// —— 它虽已出包（P2 波 4f），却**不在域声明表**里（审计面没有 Web 消费方、不进 codegen），派生器
+// 看不到它，只能在这里登记。
+//
+// #1514 的估值域扁平化把最后两枚「残值模块按技术分层」的登记收掉了：valuation/model 在波 1、
+// valuation/repository 在波 7 并回 internal/valuation ⇒ 估值域整域转由派生面收。
 var responseStaticPackages = []ScanDir{
 	{"internal/api", "api"},
 	{"internal/core", "core"},
 	{"internal/model", "model"},
-	{"internal/valuation/repository", "repository"},
 	{"internal/audit", "audit"},
 	{"pkg/response", "response"},
 }

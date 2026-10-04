@@ -1,5 +1,5 @@
 // series 系列 与 series_config_options 维度映射：只读方法（写面已迁至 dictcrud，见 ADR-0008）。
-package repository
+package valuation
 
 import (
 	"context"

@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/repository"
 )
 
 // countingDict 包装 DictionaryReader，统计系数读取调用次数（断言快照单次读取）。
@@ -21,12 +20,12 @@ type countingDict struct {
 	getCalls  int
 }
 
-func (c *countingDict) ListCoefficientConfigs(ctx context.Context) ([]repository.CoefficientConfig, error) {
+func (c *countingDict) ListCoefficientConfigs(ctx context.Context) ([]valuation.CoefficientConfig, error) {
 	c.listCalls++
 	return c.DictionaryReader.ListCoefficientConfigs(ctx)
 }
 
-func (c *countingDict) GetCoefficientByKey(ctx context.Context, key string) (repository.CoefficientConfig, error) {
+func (c *countingDict) GetCoefficientByKey(ctx context.Context, key string) (valuation.CoefficientConfig, error) {
 	c.getCalls++
 	return c.DictionaryReader.GetCoefficientByKey(ctx, key)
 }
@@ -36,26 +35,26 @@ type failSnapshotDict struct {
 	DictionaryReader
 }
 
-func (f *failSnapshotDict) ListCoefficientConfigs(context.Context) ([]repository.CoefficientConfig, error) {
+func (f *failSnapshotDict) ListCoefficientConfigs(context.Context) ([]valuation.CoefficientConfig, error) {
 	return nil, errors.New("模拟全表查询故障")
 }
 
 // newFullMemDictReader 带车型/原价/系数的完整版。
 type fullMemDict struct {
 	memDictReader
-	vehicleTypes   map[string]repository.VehicleType
-	originalPrices []repository.OriginalPrice
+	vehicleTypes   map[string]valuation.VehicleType
+	originalPrices []valuation.OriginalPrice
 	coefficients   map[string]float64
 }
 
 func newFullMemDictReader() *fullMemDict {
 	return &fullMemDict{
 		memDictReader: *newDefaultMemDict(),
-		vehicleTypes: map[string]repository.VehicleType{
+		vehicleTypes: map[string]valuation.VehicleType{
 			"电动叉车": {ID: 1, Name: "电动叉车", PowerType: "electric", EarliestFactoryYear: 2000},
 			"内燃叉车": {ID: 2, Name: "内燃叉车", PowerType: "combustion", EarliestFactoryYear: 2000},
 		},
-		originalPrices: []repository.OriginalPrice{{
+		originalPrices: []valuation.OriginalPrice{{
 			ID: 1, Brand: "林德", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
 			ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, OriginalPrice: 100000,
 		}},
@@ -63,14 +62,14 @@ func newFullMemDictReader() *fullMemDict {
 	}
 }
 
-func (f *fullMemDict) GetVehicleTypeByName(_ context.Context, name string) (repository.VehicleType, error) {
+func (f *fullMemDict) GetVehicleTypeByName(_ context.Context, name string) (valuation.VehicleType, error) {
 	if vt, ok := f.vehicleTypes[name]; ok {
 		return vt, nil
 	}
-	return repository.VehicleType{}, pgx.ErrNoRows
+	return valuation.VehicleType{}, pgx.ErrNoRows
 }
 
-func (f *fullMemDict) FindOriginalPriceMatch(_ context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (repository.OriginalPrice, error) {
+func (f *fullMemDict) FindOriginalPriceMatch(_ context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (valuation.OriginalPrice, error) {
 	for _, op := range f.originalPrices {
 		if op.Brand == brand && op.VehicleType == vehicleType && op.Series == series &&
 			op.Tonnage == tonnage && op.ConfigType == configType && op.MastType == mastType &&
@@ -78,30 +77,30 @@ func (f *fullMemDict) FindOriginalPriceMatch(_ context.Context, brand, vehicleTy
 			return op, nil
 		}
 	}
-	return repository.OriginalPrice{}, pgx.ErrNoRows
+	return valuation.OriginalPrice{}, pgx.ErrNoRows
 }
 
 // FindOriginalPriceFuzzy 按 brand + vehicle_type + tonnage 匹配（series="其它" 时降级路径）。
-func (f *fullMemDict) FindOriginalPriceFuzzy(_ context.Context, brand, vehicleType, _ string, tonnage float64) (repository.OriginalPrice, error) {
+func (f *fullMemDict) FindOriginalPriceFuzzy(_ context.Context, brand, vehicleType, _ string, tonnage float64) (valuation.OriginalPrice, error) {
 	for _, op := range f.originalPrices {
 		if op.Brand == brand && op.VehicleType == vehicleType && op.Tonnage == tonnage {
 			return op, nil
 		}
 	}
-	return repository.OriginalPrice{}, pgx.ErrNoRows
+	return valuation.OriginalPrice{}, pgx.ErrNoRows
 }
 
-func (f *fullMemDict) GetCoefficientByKey(_ context.Context, key string) (repository.CoefficientConfig, error) {
+func (f *fullMemDict) GetCoefficientByKey(_ context.Context, key string) (valuation.CoefficientConfig, error) {
 	if v, ok := f.coefficients[key]; ok {
-		return repository.CoefficientConfig{Key: key, Value: v}, nil
+		return valuation.CoefficientConfig{Key: key, Value: v}, nil
 	}
-	return repository.CoefficientConfig{}, pgx.ErrNoRows
+	return valuation.CoefficientConfig{}, pgx.ErrNoRows
 }
 
-func (f *fullMemDict) ListCoefficientConfigs(_ context.Context) ([]repository.CoefficientConfig, error) {
-	out := make([]repository.CoefficientConfig, 0, len(f.coefficients))
+func (f *fullMemDict) ListCoefficientConfigs(_ context.Context) ([]valuation.CoefficientConfig, error) {
+	out := make([]valuation.CoefficientConfig, 0, len(f.coefficients))
 	for k, v := range f.coefficients {
-		out = append(out, repository.CoefficientConfig{Key: k, Value: v})
+		out = append(out, valuation.CoefficientConfig{Key: k, Value: v})
 	}
 	return out, nil
 }
@@ -111,7 +110,7 @@ type memEvalStore struct {
 	nextID int64
 }
 
-func (m *memEvalStore) CreateEvaluation(context.Context, *repository.CreateEvaluationParams) (int64, error) {
+func (m *memEvalStore) CreateEvaluation(context.Context, *valuation.CreateEvaluationParams) (int64, error) {
 	m.nextID++
 	return m.nextID, nil
 }

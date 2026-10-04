@@ -15,7 +15,6 @@ import (
 
 	applogger "forklift-training/internal/logger"
 	"forklift-training/internal/valuation"
-	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 )
 
@@ -43,8 +42,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	dictRepo := vrepo.NewDictionaryRepository(pool)
-	evalRepo := vrepo.NewEvaluationRepository(pool)
+	dictRepo := valuation.NewDictionaryRepository(pool)
+	evalRepo := valuation.NewEvaluationRepository(pool)
 
 	updated, err := vservice.BackfillEvaluationSuggestions(ctx, dictRepo, evalRepo)
 	if err != nil {

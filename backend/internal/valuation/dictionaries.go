@@ -1,10 +1,9 @@
-// Package repository - 字典表与 original_prices 数据访问
+// 字典表与 original_prices 数据访问（原 internal/valuation/repository，#1514 波 7 并回域包）。
 // 手写 pgx 仓储，覆盖学生端只读与管理员 CRUD 接口
 // 设计参考 battery.go，统一使用 *pgxpool.Pool 直接操作
-package repository
+package valuation
 
 import (
-	"forklift-training/internal/valuation"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -128,13 +127,13 @@ type CoefficientConfig struct {
 
 // DictionaryRepository 字典与原价仓储
 // 持有 *pgxpool.Pool，所有方法均为线程安全（pgx 连接池内置并发控制）。
-// 嵌入 *valuation.DictStore：描述符驱动的机械写面（ADR-0008），读面保持逐实体 typed 方法。
+// 嵌入 *DictStore：描述符驱动的机械写面（ADR-0008），读面保持逐实体 typed 方法。
 type DictionaryRepository struct {
 	pool *pgxpool.Pool
-	*valuation.DictStore
+	*DictStore
 }
 
 // NewDictionaryRepository 构造字典仓储
 func NewDictionaryRepository(pool *pgxpool.Pool) *DictionaryRepository {
-	return &DictionaryRepository{pool: pool, DictStore: valuation.NewDictStore(pool)}
+	return &DictionaryRepository{pool: pool, DictStore: NewDictStore(pool)}
 }

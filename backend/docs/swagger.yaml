@@ -2791,182 +2791,6 @@ definitions:
       user_id:
         type: integer
     type: object
-  repository.AlgorithmParameters:
-    properties:
-      brands:
-        items:
-          $ref: '#/definitions/repository.Brand'
-        type: array
-      coefficients:
-        items:
-          $ref: '#/definitions/repository.CoefficientConfig'
-        type: array
-      condition_ratings:
-        items:
-          $ref: '#/definitions/repository.ConditionRating'
-        type: array
-      region_coefficients:
-        items:
-          $ref: '#/definitions/repository.RegionCoefficient'
-        type: array
-    type: object
-  repository.BatteryTypeDict:
-    properties:
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  repository.Brand:
-    properties:
-      id:
-        type: integer
-      is_active:
-        type: boolean
-      k_brand:
-        type: number
-      name:
-        type: string
-    type: object
-  repository.CoefficientConfig:
-    properties:
-      description:
-        type: string
-      id:
-        type: integer
-      key:
-        type: string
-      updated_at:
-        type: string
-      value:
-        type: number
-    type: object
-  repository.ConditionRating:
-    properties:
-      base_coefficient:
-        type: number
-      id:
-        type: integer
-      label:
-        type: string
-      rating:
-        type: string
-    type: object
-  repository.ConfigOption:
-    properties:
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  repository.EngineType:
-    properties:
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  repository.MastHeight:
-    properties:
-      id:
-        type: integer
-      value_mm:
-        type: integer
-    type: object
-  repository.MastType:
-    properties:
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  repository.OriginalPrice:
-    properties:
-      brand:
-        type: string
-      config_type:
-        type: string
-      earliest_factory_year:
-        type: integer
-      id:
-        type: integer
-      mast_height_mm:
-        type: integer
-      mast_type:
-        type: string
-      original_price:
-        type: number
-      series:
-        type: string
-      tonnage:
-        type: number
-      updated_at:
-        type: string
-      vehicle_type:
-        type: string
-    type: object
-  repository.RegionCoefficient:
-    properties:
-      city:
-        type: string
-      coefficient:
-        type: number
-      id:
-        type: integer
-      province:
-        type: string
-    type: object
-  repository.Series:
-    properties:
-      brand:
-        type: string
-      earliest_factory_year:
-        type: integer
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  repository.SeriesConfigOptions:
-    properties:
-      battery:
-        items:
-          type: string
-        type: array
-      engine:
-        items:
-          type: string
-        type: array
-      transmission:
-        items:
-          type: string
-        type: array
-    type: object
-  repository.Tonnage:
-    properties:
-      id:
-        type: integer
-      value:
-        type: number
-    type: object
-  repository.TransmissionType:
-    properties:
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  repository.VehicleType:
-    properties:
-      earliest_factory_year:
-        type: integer
-      id:
-        type: integer
-      name:
-        type: string
-      power_type:
-        type: string
-    type: object
   response.R:
     properties:
       code:
@@ -3719,6 +3543,25 @@ definitions:
       file_id:
         type: integer
     type: object
+  valuation.AlgorithmParameters:
+    properties:
+      brands:
+        items:
+          $ref: '#/definitions/valuation.Brand'
+        type: array
+      coefficients:
+        items:
+          $ref: '#/definitions/valuation.CoefficientConfig'
+        type: array
+      condition_ratings:
+        items:
+          $ref: '#/definitions/valuation.ConditionRating'
+        type: array
+      region_coefficients:
+        items:
+          $ref: '#/definitions/valuation.RegionCoefficient'
+        type: array
+    type: object
   valuation.BatteryEvaluation:
     properties:
       battery_model:
@@ -3793,6 +3636,55 @@ definitions:
     - BatteryTypeLFP
     - BatteryTypeNCM
     - BatteryTypeOther
+  valuation.BatteryTypeDict:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  valuation.Brand:
+    properties:
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      k_brand:
+        type: number
+      name:
+        type: string
+    type: object
+  valuation.CoefficientConfig:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      key:
+        type: string
+      updated_at:
+        type: string
+      value:
+        type: number
+    type: object
+  valuation.ConditionRating:
+    properties:
+      base_coefficient:
+        type: number
+      id:
+        type: integer
+      label:
+        type: string
+      rating:
+        type: string
+    type: object
+  valuation.ConfigOption:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
   valuation.CreateBatteryRequest:
     properties:
       battery_model:
@@ -3885,6 +3777,13 @@ definitions:
         type: string
       value:
         type: number
+    type: object
+  valuation.EngineType:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
     type: object
   valuation.EvaluationDetail:
     properties:
@@ -4138,6 +4037,45 @@ definitions:
       total:
         type: integer
     type: object
+  valuation.MastHeight:
+    properties:
+      id:
+        type: integer
+      value_mm:
+        type: integer
+    type: object
+  valuation.MastType:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  valuation.OriginalPrice:
+    properties:
+      brand:
+        type: string
+      config_type:
+        type: string
+      earliest_factory_year:
+        type: integer
+      id:
+        type: integer
+      mast_height_mm:
+        type: integer
+      mast_type:
+        type: string
+      original_price:
+        type: number
+      series:
+        type: string
+      tonnage:
+        type: number
+      updated_at:
+        type: string
+      vehicle_type:
+        type: string
+    type: object
   valuation.RawStats:
     properties:
       capacity:
@@ -4162,6 +4100,68 @@ definitions:
         type: number
       voltage_std:
         type: number
+    type: object
+  valuation.RegionCoefficient:
+    properties:
+      city:
+        type: string
+      coefficient:
+        type: number
+      id:
+        type: integer
+      province:
+        type: string
+    type: object
+  valuation.Series:
+    properties:
+      brand:
+        type: string
+      earliest_factory_year:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  valuation.SeriesConfigOptions:
+    properties:
+      battery:
+        items:
+          type: string
+        type: array
+      engine:
+        items:
+          type: string
+        type: array
+      transmission:
+        items:
+          type: string
+        type: array
+    type: object
+  valuation.Tonnage:
+    properties:
+      id:
+        type: integer
+      value:
+        type: number
+    type: object
+  valuation.TransmissionType:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  valuation.VehicleType:
+    properties:
+      earliest_factory_year:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      power_type:
+        type: string
     type: object
   wrongquestion.WrongQuestionBatchRemoveResultDTO:
     properties:
@@ -17256,7 +17256,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/repository.AlgorithmParameters'
+                  $ref: '#/definitions/valuation.AlgorithmParameters'
               type: object
         "500":
           description: 服务器内部错误
@@ -17298,7 +17298,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.BatteryTypeDict'
+                    $ref: '#/definitions/valuation.BatteryTypeDict'
                   type: array
               type: object
         "500":
@@ -17324,7 +17324,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.Brand'
+                    $ref: '#/definitions/valuation.Brand'
                   type: array
               type: object
         "500":
@@ -17386,7 +17386,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.CoefficientConfig'
+                    $ref: '#/definitions/valuation.CoefficientConfig'
                   type: array
               type: object
         "500":
@@ -17412,7 +17412,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.ConditionRating'
+                    $ref: '#/definitions/valuation.ConditionRating'
                   type: array
               type: object
         "500":
@@ -17455,7 +17455,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.ConfigOption'
+                    $ref: '#/definitions/valuation.ConfigOption'
                   type: array
               type: object
         "500":
@@ -17532,7 +17532,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.EngineType'
+                    $ref: '#/definitions/valuation.EngineType'
                   type: array
               type: object
         "500":
@@ -17583,7 +17583,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.MastHeight'
+                    $ref: '#/definitions/valuation.MastHeight'
                   type: array
               type: object
         "500":
@@ -17630,7 +17630,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.MastType'
+                    $ref: '#/definitions/valuation.MastType'
                   type: array
               type: object
         "500":
@@ -17667,7 +17667,7 @@ paths:
                   properties:
                     list:
                       items:
-                        $ref: '#/definitions/repository.OriginalPrice'
+                        $ref: '#/definitions/valuation.OriginalPrice'
                       type: array
                     page:
                       type: integer
@@ -17731,7 +17731,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.RegionCoefficient'
+                    $ref: '#/definitions/valuation.RegionCoefficient'
                   type: array
               type: object
         "500":
@@ -17766,7 +17766,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.Series'
+                    $ref: '#/definitions/valuation.Series'
                   type: array
               type: object
         "500":
@@ -17802,7 +17802,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/repository.SeriesConfigOptions'
+                  $ref: '#/definitions/valuation.SeriesConfigOptions'
               type: object
         "400":
           description: 参数错误
@@ -17844,7 +17844,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.Tonnage'
+                    $ref: '#/definitions/valuation.Tonnage'
                   type: array
               type: object
         "500":
@@ -17870,7 +17870,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.TransmissionType'
+                    $ref: '#/definitions/valuation.TransmissionType'
                   type: array
               type: object
         "500":
@@ -17901,7 +17901,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/repository.VehicleType'
+                    $ref: '#/definitions/valuation.VehicleType'
                   type: array
               type: object
         "500":

@@ -15,16 +15,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/valuation/repository"
 	"forklift-training/pkg/response"
 )
 
 // dictInvalidationPatterns 描述符实体的写后失效集：
-// 契约 pattern（repository.PatternsOf）+ （按描述符）评估结果缓存 pattern。
+// 契约 pattern（valuation.PatternsOf）+ （按描述符）评估结果缓存 pattern。
 func dictInvalidationPatterns(d valuation.DictDescriptor) []string {
-	patterns := repository.PatternsOf(d.Name)
+	patterns := valuation.PatternsOf(d.Name)
 	if d.InvalidateResult {
-		patterns = append(patterns, repository.ResultCachePattern)
+		patterns = append(patterns, valuation.ResultCachePattern)
 	}
 	return patterns
 }
