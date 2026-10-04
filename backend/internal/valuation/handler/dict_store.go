@@ -4,20 +4,20 @@ package handler
 
 import (
 	"context"
+	"forklift-training/internal/valuation"
 
-	"forklift-training/internal/valuation/dictcrud"
 	"forklift-training/internal/valuation/repository"
 	"forklift-training/internal/valuation/service"
 )
 
 // DictWriter 描述符驱动字典写面（ADR-0008）：机械 CRUD 塌缩后的窄面。
-// 生产为 dictcrud.Store（DictionaryRepository 嵌入），测试为内存替身。
+// 生产为 valuation.DictStore（DictionaryRepository 嵌入），测试为内存替身。
 // UpdateByKey 供按 key 更新的实体使用（coefficient_configs，PUT /:key，返回完整行）。
 type DictWriter interface {
-	Create(ctx context.Context, d dictcrud.Descriptor, fields map[string]any) (int64, error)
-	Update(ctx context.Context, d dictcrud.Descriptor, id int64, fields map[string]any) error
-	UpdateByKey(ctx context.Context, d dictcrud.Descriptor, key string, fields map[string]any) (map[string]any, error)
-	Delete(ctx context.Context, d dictcrud.Descriptor, id int64) error
+	Create(ctx context.Context, d valuation.DictDescriptor, fields map[string]any) (int64, error)
+	Update(ctx context.Context, d valuation.DictDescriptor, id int64, fields map[string]any) error
+	UpdateByKey(ctx context.Context, d valuation.DictDescriptor, key string, fields map[string]any) (map[string]any, error)
+	Delete(ctx context.Context, d valuation.DictDescriptor, id int64) error
 }
 
 // DictionaryConfigStore 字典配置存储接口（ConfigHandler 消费；生产为 pgx 仓储，测试为内存替身）。

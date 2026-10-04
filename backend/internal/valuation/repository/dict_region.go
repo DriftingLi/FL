@@ -27,7 +27,7 @@ func (r *DictionaryRepository) ListCities(ctx context.Context, province string) 
 }
 
 // 注：region_coefficients 的写操作（Create/Update/Delete）已迁至描述符驱动核心
-// （dictcrud.RegionCoefficientDescriptor + dictcrud.Store，见 ADR-0008）。
+// （valuation.RegionCoefficientDescriptor + valuation.Store，见 ADR-0008）。
 
 // GetRegionCoefficient 按 province + city 查询区域系数（供 service 计算 Km 使用）
 // 未命中时返回 pgx.ErrNoRows，由调用方决定是否使用默认值 1.0

@@ -2,14 +2,14 @@
 // 生成规则（测试逐字符锁定，见 builder_test.go）：
 //
 //	INSERT INTO <table> (cols...) VALUES ($1,...)
-//	  + ON CONFLICT (<unique>) DO NOTHING                       [UpsertDoNothing]
+//	  + ON CONFLICT (<unique>) DO NOTHING                       [DictUpsertDoNothing]
 //	  + ON CONFLICT (<unique>) DO UPDATE SET <非唯一 create 列> = EXCLUDED.<col>...
-//	    RETURNING id                                            [UpsertDoUpdate]
+//	    RETURNING id                                            [DictUpsertDoUpdate]
 //	UPDATE <table> SET <update 列> = $n... WHERE id = $1
 //	DELETE FROM <table> WHERE id = $1
 //
 // 响应：create → {"id"} + Create.Fields；update → {"id"} + Update.Fields；delete → {"id"}。
-package dictcrud
+package valuation
 
 import (
 	"strconv"
@@ -17,7 +17,7 @@ import (
 )
 
 // columnsOf 返回操作字段按声明顺序的 DB 列名。
-func columnsOf(d Descriptor, names []string) []string {
+func columnsOf(d DictDescriptor, names []string) []string {
 	cols := make([]string, 0, len(names))
 	for _, name := range names {
 		if f, ok := d.Field(name); ok {
@@ -29,7 +29,7 @@ func columnsOf(d Descriptor, names []string) []string {
 
 // BuildInsertSQL 由描述符生成 INSERT SQL（含可选 ON CONFLICT 子句 + RETURNING id）。
 // UpdateTimestamp 时 DO UPDATE SET 尾列追加 updated_at = NOW()。
-func BuildInsertSQL(d Descriptor) string {
+func BuildInsertSQL(d DictDescriptor) string {
 	cols := columnsOf(d, d.Create.Fields)
 	var b strings.Builder
 	b.WriteString("INSERT INTO " + d.Table + " (" + strings.Join(cols, ", ") + ") VALUES ($1")
@@ -38,9 +38,9 @@ func BuildInsertSQL(d Descriptor) string {
 	}
 	b.WriteString(")")
 	switch d.Upsert {
-	case UpsertDoNothing:
+	case DictUpsertDoNothing:
 		b.WriteString(" ON CONFLICT (" + strings.Join(d.UniqueColumns, ", ") + ") DO NOTHING")
-	case UpsertDoUpdate:
+	case DictUpsertDoUpdate:
 		b.WriteString(" ON CONFLICT (" + strings.Join(d.UniqueColumns, ", ") + ") DO UPDATE SET ")
 		updates := make([]string, 0, len(d.Create.Fields))
 		for _, name := range d.Create.Fields {
@@ -60,7 +60,7 @@ func BuildInsertSQL(d Descriptor) string {
 }
 
 // BuildInsertArgs 由描述符生成 INSERT 参数（create 字段顺序，按类型强转）。
-func BuildInsertArgs(d Descriptor, values map[string]any) []any {
+func BuildInsertArgs(d DictDescriptor, values map[string]any) []any {
 	args := make([]any, 0, len(d.Create.Fields))
 	for _, name := range d.Create.Fields {
 		f, _ := d.Field(name)
@@ -71,7 +71,7 @@ func BuildInsertArgs(d Descriptor, values map[string]any) []any {
 
 // BuildUpdateSQL 由描述符生成 UPDATE SQL（只更新 Update.Fields 列）。
 // UpdateTimestamp 时 SET 尾列追加 updated_at = NOW()。
-func BuildUpdateSQL(d Descriptor) string {
+func BuildUpdateSQL(d DictDescriptor) string {
 	cols := columnsOf(d, d.Update.Fields)
 	sets := make([]string, len(cols))
 	for i, c := range cols {
@@ -87,7 +87,7 @@ func BuildUpdateSQL(d Descriptor) string {
 // BuildUpdateKeySQL 按唯一 key 列更新（$1 = key 值；coefficient_configs）：
 // UPDATE <table> SET <update 列> = $n... [ , updated_at = NOW()] WHERE <key 列> = $1
 // [+ RETURNING id, <ResponseColumns>]。
-func BuildUpdateKeySQL(d Descriptor) string {
+func BuildUpdateKeySQL(d DictDescriptor) string {
 	cols := columnsOf(d, d.Update.Fields)
 	sets := make([]string, len(cols))
 	for i, c := range cols {
@@ -107,7 +107,7 @@ func BuildUpdateKeySQL(d Descriptor) string {
 }
 
 // BuildUpdateArgs 由描述符生成 UPDATE 参数（id + update 字段）。
-func BuildUpdateArgs(d Descriptor, id int64, values map[string]any) []any {
+func BuildUpdateArgs(d DictDescriptor, id int64, values map[string]any) []any {
 	args := make([]any, 0, len(d.Update.Fields)+1)
 	args = append(args, id)
 	for _, name := range d.Update.Fields {
@@ -118,7 +118,7 @@ func BuildUpdateArgs(d Descriptor, id int64, values map[string]any) []any {
 }
 
 // BuildUpdateKeyArgs 按 key 更新的参数（key 值 + update 字段）。
-func BuildUpdateKeyArgs(d Descriptor, key string, values map[string]any) []any {
+func BuildUpdateKeyArgs(d DictDescriptor, key string, values map[string]any) []any {
 	args := make([]any, 0, len(d.Update.Fields)+1)
 	args = append(args, key)
 	for _, name := range d.Update.Fields {
@@ -129,22 +129,22 @@ func BuildUpdateKeyArgs(d Descriptor, key string, values map[string]any) []any {
 }
 
 // BuildDeleteSQL 由描述符生成 DELETE SQL。
-func BuildDeleteSQL(d Descriptor) string {
+func BuildDeleteSQL(d DictDescriptor) string {
 	return "DELETE FROM " + d.Table + " WHERE id = $1"
 }
 
 // BuildCreateResult create 响应：{"id": id} + create 字段值（声明顺序）。
-func BuildCreateResult(d Descriptor, id int64, values map[string]any) map[string]any {
+func BuildCreateResult(d DictDescriptor, id int64, values map[string]any) map[string]any {
 	return buildResult(d, d.Create.Fields, id, values)
 }
 
 // BuildUpdateResult update 响应：{"id": id} + update 字段值（声明顺序）。
-func BuildUpdateResult(d Descriptor, id int64, values map[string]any) map[string]any {
+func BuildUpdateResult(d DictDescriptor, id int64, values map[string]any) map[string]any {
 	return buildResult(d, d.Update.Fields, id, values)
 }
 
 // buildResult 响应构造：{"id"} + 操作字段（声明顺序）+ ResponseExtra 零值字段。
-func buildResult(d Descriptor, names []string, id int64, values map[string]any) map[string]any {
+func buildResult(d DictDescriptor, names []string, id int64, values map[string]any) map[string]any {
 	out := make(map[string]any, len(names)+len(d.ResponseExtra)+1)
 	out["id"] = id
 	for _, name := range names {
@@ -162,7 +162,7 @@ func buildResult(d Descriptor, names []string, id int64, values map[string]any) 
 
 // ApplyDefaults 将 op 参与字段中的零值替换为描述符默认值（create/update 双侧，
 // 与迁移前 handler 的 "if x == 0 { x = default }" 行为一致）。
-func ApplyDefaults(d Descriptor, values map[string]any) {
+func ApplyDefaults(d DictDescriptor, values map[string]any) {
 	for _, name := range d.Create.Fields {
 		applyDefault(d, name, values)
 	}
@@ -171,7 +171,7 @@ func ApplyDefaults(d Descriptor, values map[string]any) {
 	}
 }
 
-func applyDefault(d Descriptor, name string, values map[string]any) {
+func applyDefault(d DictDescriptor, name string, values map[string]any) {
 	f, ok := d.Field(name)
 	if !ok || f.Default == nil {
 		return
@@ -182,15 +182,15 @@ func applyDefault(d Descriptor, name string, values map[string]any) {
 }
 
 // ZeroValue 返回字段类型的零值（body 缺失字段按 struct 零值语义绑定）。
-func ZeroValue(f Field) any {
+func ZeroValue(f DictField) any {
 	switch f.Type {
-	case FieldString:
+	case DictFieldString:
 		return ""
-	case FieldFloat:
+	case DictFieldFloat:
 		return 0.0
-	case FieldInt:
+	case DictFieldInt:
 		return 0
-	case FieldBool:
+	case DictFieldBool:
 		return false
 	}
 	return nil
@@ -210,15 +210,15 @@ func isZeroValue(v any) bool {
 	return v == nil
 }
 
-func coerce(t FieldType, v any) any {
+func coerce(t DictFieldType, v any) any {
 	switch t {
-	case FieldString:
+	case DictFieldString:
 		return v.(string)
-	case FieldFloat:
+	case DictFieldFloat:
 		return v.(float64)
-	case FieldInt:
+	case DictFieldInt:
 		return v.(int)
-	case FieldBool:
+	case DictFieldBool:
 		return v.(bool)
 	}
 	return v

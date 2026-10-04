@@ -1,7 +1,7 @@
 // 描述符驱动通用写存储：Create/Update/Delete 由描述符生成 SQL 直接执行。
 // 语义与迁移前 repository 骨架一致：insert RETURNING id；
 // update/delete RowsAffected==0 → pgx.ErrNoRows（handler 映射 404）。
-package dictcrud
+package valuation
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store 描述符驱动通用 CRUD 写存储（生产实现，handler 的 DictWriter seam 消费）。
-type Store struct {
+// DictStore 描述符驱动通用 CRUD 写存储（生产实现，handler 的 DictWriter seam 消费）。
+type DictStore struct {
 	pool *pgxpool.Pool
 }
 
-// NewStore 构造通用写存储。
-func NewStore(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool}
+// NewDictStore 构造通用写存储。
+func NewDictStore(pool *pgxpool.Pool) *DictStore {
+	return &DictStore{pool: pool}
 }
 
 // Create 执行描述符 INSERT 并返回新行 id。
-func (s *Store) Create(ctx context.Context, d Descriptor, values map[string]any) (int64, error) {
+func (s *DictStore) Create(ctx context.Context, d DictDescriptor, values map[string]any) (int64, error) {
 	var id int64
 	if err := s.pool.QueryRow(ctx, BuildInsertSQL(d), BuildInsertArgs(d, values)...).Scan(&id); err != nil {
 		return 0, fmt.Errorf("新增%s失败: %w", d.EntityLabel, err)
@@ -31,7 +31,7 @@ func (s *Store) Create(ctx context.Context, d Descriptor, values map[string]any)
 }
 
 // Update 执行描述符 UPDATE；未命中返回 pgx.ErrNoRows。
-func (s *Store) Update(ctx context.Context, d Descriptor, id int64, values map[string]any) error {
+func (s *DictStore) Update(ctx context.Context, d DictDescriptor, id int64, values map[string]any) error {
 	ct, err := s.pool.Exec(ctx, BuildUpdateSQL(d), BuildUpdateArgs(d, id, values)...)
 	if err != nil {
 		return fmt.Errorf("更新%s失败: %w", d.EntityLabel, err)
@@ -44,7 +44,7 @@ func (s *Store) Update(ctx context.Context, d Descriptor, id int64, values map[s
 
 // UpdateByKey 按唯一 key 列更新（coefficient_configs，PUT /:key）。
 // ResponseReturning 时 RETURNING 整行并经 ResponseScan 扫描为响应；未命中返回 pgx.ErrNoRows。
-func (s *Store) UpdateByKey(ctx context.Context, d Descriptor, key string, values map[string]any) (map[string]any, error) {
+func (s *DictStore) UpdateByKey(ctx context.Context, d DictDescriptor, key string, values map[string]any) (map[string]any, error) {
 	if !d.ResponseReturning {
 		ct, err := s.pool.Exec(ctx, BuildUpdateKeySQL(d), BuildUpdateKeyArgs(d, key, values)...)
 		if err != nil {
@@ -64,7 +64,7 @@ func (s *Store) UpdateByKey(ctx context.Context, d Descriptor, key string, value
 }
 
 // Delete 执行描述符 DELETE；未命中返回 pgx.ErrNoRows。
-func (s *Store) Delete(ctx context.Context, d Descriptor, id int64) error {
+func (s *DictStore) Delete(ctx context.Context, d DictDescriptor, id int64) error {
 	ct, err := s.pool.Exec(ctx, BuildDeleteSQL(d), id)
 	if err != nil {
 		return fmt.Errorf("删除%s失败: %w", d.EntityLabel, err)

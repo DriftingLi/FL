@@ -4,9 +4,8 @@
 package repository
 
 import (
+	"forklift-training/internal/valuation"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"forklift-training/internal/valuation/dictcrud"
 )
 
 // 字典 DTO 定义
@@ -129,13 +128,13 @@ type CoefficientConfig struct {
 
 // DictionaryRepository 字典与原价仓储
 // 持有 *pgxpool.Pool，所有方法均为线程安全（pgx 连接池内置并发控制）。
-// 嵌入 *dictcrud.Store：描述符驱动的机械写面（ADR-0008），读面保持逐实体 typed 方法。
+// 嵌入 *valuation.DictStore：描述符驱动的机械写面（ADR-0008），读面保持逐实体 typed 方法。
 type DictionaryRepository struct {
 	pool *pgxpool.Pool
-	*dictcrud.Store
+	*valuation.DictStore
 }
 
 // NewDictionaryRepository 构造字典仓储
 func NewDictionaryRepository(pool *pgxpool.Pool) *DictionaryRepository {
-	return &DictionaryRepository{pool: pool, Store: dictcrud.NewStore(pool)}
+	return &DictionaryRepository{pool: pool, DictStore: valuation.NewDictStore(pool)}
 }

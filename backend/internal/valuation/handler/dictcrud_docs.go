@@ -6,12 +6,12 @@
 //
 // 第十一波起这些方法不再只是注解壳：路由注册由具名分派表（dictcrud_dispatch.go）指向它们，
 // 注解宿主与执行体合成一份。判据仍是**只加注解、不改任何响应形状** —— 方法体恒为一行转发；
-// 每个实体的 create/update/delete 均由同一条骨架构造响应（dictcrud.BuildCreateResult /
+// 每个实体的 create/update/delete 均由同一条骨架构造响应（valuation.BuildCreateResult /
 // BuildUpdateResult / BuildUpdateKeySQL / gin.H{"id"}），故响应形状对全部实体同构：
 //
 //	{id} ∪ 该操作的声明字段。swag 的 object{} 是字段并集描述（实际字段随描述符变化）。
 //
-// 注解的 path/method/字段表由描述符派生（dictcrud.RoutePath / SwaggerPath / ResponseFields），
+// 注解的 path/method/字段表由描述符派生（valuation.DictRoutePath / SwaggerPath / ResponseFields），
 // 与分派表、AllDescriptors() 的全等锁在 dictcrud_docs_lock_test.go —— 改描述符不改注解即红。
 //
 // 第十一波（#1100）实测出 37 条注解里有 6 条**幻影 PUT**：规格族（tonnages / mast_types /
@@ -22,9 +22,8 @@
 package handler
 
 import (
+	"forklift-training/internal/valuation"
 	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/valuation/dictcrud"
 )
 
 // original-prices（原价记录）
@@ -545,8 +544,8 @@ func (h *ConfigHandler) AdminDeleteRegionCoefficient(c *gin.Context) {
 // 查不到即 panic（fail-closed）：名字打错或描述符被删时返回零值 Descriptor{} 会让
 // 「无字段、无路由」静默成立（注解照发、路由少注册），到运行期才以 404/空响应暴露。
 // 注册期纪律同 requireDictRoute（dictcrud_dispatch.go）——描述符缺失必须在启动前炸。
-func descriptorByName(name string) dictcrud.Descriptor {
-	for _, d := range dictcrud.AllDescriptors() {
+func descriptorByName(name string) valuation.DictDescriptor {
+	for _, d := range valuation.AllDictDescriptors() {
 		if d.Name == name {
 			return d
 		}
@@ -554,32 +553,36 @@ func descriptorByName(name string) dictcrud.Descriptor {
 	panic("字典描述符不存在: " + name + "（名字打错或描述符被删？）")
 }
 
-func originalPriceDescriptor() dictcrud.Descriptor { return descriptorByName("original_prices") }
+func originalPriceDescriptor() valuation.DictDescriptor { return descriptorByName("original_prices") }
 
-func regionCoefficientDescriptor() dictcrud.Descriptor {
+func regionCoefficientDescriptor() valuation.DictDescriptor {
 	return descriptorByName("region_coefficients")
 }
 
-func coefficientConfigDescriptor() dictcrud.Descriptor {
+func coefficientConfigDescriptor() valuation.DictDescriptor {
 	return descriptorByName("coefficient_configs")
 }
 
-func brandDescriptor() dictcrud.Descriptor { return descriptorByName("brands") }
+func brandDescriptor() valuation.DictDescriptor { return descriptorByName("brands") }
 
-func vehicleTypeDescriptor() dictcrud.Descriptor { return descriptorByName("vehicle_types") }
+func vehicleTypeDescriptor() valuation.DictDescriptor { return descriptorByName("vehicle_types") }
 
-func seriesDescriptor() dictcrud.Descriptor { return descriptorByName("series") }
+func seriesDescriptor() valuation.DictDescriptor { return descriptorByName("series") }
 
-func tonnageDescriptor() dictcrud.Descriptor { return descriptorByName("tonnages") }
+func tonnageDescriptor() valuation.DictDescriptor { return descriptorByName("tonnages") }
 
-func mastTypeDescriptor() dictcrud.Descriptor { return descriptorByName("mast_types") }
+func mastTypeDescriptor() valuation.DictDescriptor { return descriptorByName("mast_types") }
 
-func mastHeightDescriptor() dictcrud.Descriptor { return descriptorByName("mast_heights") }
+func mastHeightDescriptor() valuation.DictDescriptor { return descriptorByName("mast_heights") }
 
-func batteryTypeDescriptor() dictcrud.Descriptor { return descriptorByName("battery_types") }
+func batteryTypeDescriptor() valuation.DictDescriptor { return descriptorByName("battery_types") }
 
-func transmissionTypeDescriptor() dictcrud.Descriptor { return descriptorByName("transmission_types") }
+func transmissionTypeDescriptor() valuation.DictDescriptor {
+	return descriptorByName("transmission_types")
+}
 
-func engineTypeDescriptor() dictcrud.Descriptor { return descriptorByName("engine_types") }
+func engineTypeDescriptor() valuation.DictDescriptor { return descriptorByName("engine_types") }
 
-func conditionRatingDescriptor() dictcrud.Descriptor { return descriptorByName("condition_ratings") }
+func conditionRatingDescriptor() valuation.DictDescriptor {
+	return descriptorByName("condition_ratings")
+}

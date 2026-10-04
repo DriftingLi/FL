@@ -44,7 +44,7 @@ func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key stri
 }
 
 // 注：coefficient_configs 的写操作（按 key 更新）已迁至描述符驱动核心
-// （dictcrud.CoefficientConfigDescriptor + dictcrud.Store.UpdateByKey，见 ADR-0008）。
+// （valuation.CoefficientConfigDescriptor + valuation.Store.UpdateByKey，见 ADR-0008）。
 
 // AlgorithmParameters 算法参数聚合结果（管理员后台「算法参数」tab 一次加载）
 type AlgorithmParameters struct {

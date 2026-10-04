@@ -23,7 +23,6 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/dictcrud"
 	"forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 )
@@ -71,7 +70,7 @@ func rowsOf(m *memDictStore, name string) []memRow {
 }
 
 // memFieldNameByColumn 列名 → 字段 JSON 名（唯一列冲突匹配用）。
-func memFieldNameByColumn(d dictcrud.Descriptor, column string) string {
+func memFieldNameByColumn(d valuation.DictDescriptor, column string) string {
 	for _, f := range d.Fields {
 		if f.Column == column {
 			return f.Name
@@ -81,7 +80,7 @@ func memFieldNameByColumn(d dictcrud.Descriptor, column string) string {
 }
 
 // rowMatches 行值是否命中全部唯一列（upsert 冲突判定）。
-func rowMatches(d dictcrud.Descriptor, row, values map[string]any) bool {
+func rowMatches(d valuation.DictDescriptor, row, values map[string]any) bool {
 	for _, col := range d.UniqueColumns {
 		name := memFieldNameByColumn(d, col)
 		if row[name] != values[name] {
@@ -181,7 +180,7 @@ func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]repository.C
 // 描述符驱动写面内存替身（DictWriter；契约测试走此路径）
 // 区域系数保持 typed 存储（既有契约测试断言 dict.regions）；其余实体走通用内存表。
 
-func (m *memDictStore) Create(_ context.Context, d dictcrud.Descriptor, fields map[string]any) (int64, error) {
+func (m *memDictStore) Create(_ context.Context, d valuation.DictDescriptor, fields map[string]any) (int64, error) {
 	if d.Name == "region_coefficients" {
 		rc := repository.RegionCoefficient{
 			ID:          m.nextRegionID,
@@ -197,7 +196,7 @@ func (m *memDictStore) Create(_ context.Context, d dictcrud.Descriptor, fields m
 	for _, row := range t.rows {
 		if rowMatches(d, row.values, fields) {
 			switch d.Upsert {
-			case dictcrud.UpsertDoUpdate:
+			case valuation.DictUpsertDoUpdate:
 				for _, name := range d.Create.Fields {
 					row.values[name] = fields[name]
 				}
@@ -218,7 +217,7 @@ func (m *memDictStore) Create(_ context.Context, d dictcrud.Descriptor, fields m
 	return id, nil
 }
 
-func (m *memDictStore) Update(_ context.Context, d dictcrud.Descriptor, id int64, fields map[string]any) error {
+func (m *memDictStore) Update(_ context.Context, d valuation.DictDescriptor, id int64, fields map[string]any) error {
 	if d.Name == "region_coefficients" {
 		for i := range m.regions {
 			if m.regions[i].ID == int(id) {
@@ -241,7 +240,7 @@ func (m *memDictStore) Update(_ context.Context, d dictcrud.Descriptor, id int64
 }
 
 // UpdateByKey 按唯一 key 列更新（coefficient_configs）：写回系数表并返回完整行。
-func (m *memDictStore) UpdateByKey(_ context.Context, d dictcrud.Descriptor, key string, fields map[string]any) (map[string]any, error) {
+func (m *memDictStore) UpdateByKey(_ context.Context, d valuation.DictDescriptor, key string, fields map[string]any) (map[string]any, error) {
 	if d.Name != "coefficient_configs" {
 		return nil, errors.New("未实现的字典实体: " + d.Name)
 	}
@@ -258,7 +257,7 @@ func (m *memDictStore) UpdateByKey(_ context.Context, d dictcrud.Descriptor, key
 	}, nil
 }
 
-func (m *memDictStore) Delete(_ context.Context, d dictcrud.Descriptor, id int64) error {
+func (m *memDictStore) Delete(_ context.Context, d valuation.DictDescriptor, id int64) error {
 	if d.Name == "region_coefficients" {
 		for i, rc := range m.regions {
 			if rc.ID == int(id) {

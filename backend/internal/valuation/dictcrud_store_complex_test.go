@@ -2,7 +2,7 @@
 // original_prices（宽行 upsert/update + updated_at 尾列）与
 // coefficient_configs（按 key 更新 + RETURNING 整行）的往返正确性。
 // CI 提供 postgres:15 服务（DATABASE_URL），本地未配置时跳过。
-package dictcrud
+package valuation
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func TestStore_OriginalPriceRoundTrip(t *testing.T) {
 		t.Fatalf("清空表失败: %v", err)
 	}
 
-	s := NewStore(pool)
+	s := NewDictStore(pool)
 	d := OriginalPriceDescriptor
 
 	id, err := s.Create(ctx, d, opValues())
@@ -111,7 +111,7 @@ func TestStore_CoefficientByKeyRoundTrip(t *testing.T) {
 		t.Fatalf("重置失败: %v", err)
 	}
 
-	s := NewStore(pool)
+	s := NewDictStore(pool)
 	d := CoefficientConfigDescriptor
 
 	row, err := s.UpdateByKey(ctx, d, "lambda_electric", map[string]any{"value": 0.15})

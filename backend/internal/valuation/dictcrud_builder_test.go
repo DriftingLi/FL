@@ -1,6 +1,6 @@
 // 描述符核心纯逻辑测试：SQL 生成、参数构造、响应构造、描述符校验。
 // 锁定的 SQL 与 repository/dict_region.go 迁移前逐字符一致（HTTP/DB 契约不变）。
-package dictcrud
+package valuation
 
 import (
 	"strings"
@@ -18,22 +18,22 @@ func TestDescriptorValidate_Errors(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		mutate  func(d *Descriptor)
+		mutate  func(d *DictDescriptor)
 		wantSub string
 	}{
 		{
 			name:    "create 引用未声明字段",
-			mutate:  func(d *Descriptor) { d.Create.Fields = append(d.Create.Fields, "ghost") },
+			mutate:  func(d *DictDescriptor) { d.Create.Fields = append(d.Create.Fields, "ghost") },
 			wantSub: "ghost",
 		},
 		{
 			name:    "update 引用未声明字段",
-			mutate:  func(d *Descriptor) { d.Update.Fields = append(d.Update.Fields, "ghost") },
+			mutate:  func(d *DictDescriptor) { d.Update.Fields = append(d.Update.Fields, "ghost") },
 			wantSub: "ghost",
 		},
 		{
 			name: "create required 不在 create 字段集",
-			mutate: func(d *Descriptor) {
+			mutate: func(d *DictDescriptor) {
 				d.Create.Fields = []string{"province", "coefficient"}
 				d.Create.Required = []string{"city"}
 			},
@@ -41,22 +41,22 @@ func TestDescriptorValidate_Errors(t *testing.T) {
 		},
 		{
 			name:    "bind required 不在字段集",
-			mutate:  func(d *Descriptor) { d.Update.BindRequired = []string{"ghost"} },
+			mutate:  func(d *DictDescriptor) { d.Update.BindRequired = []string{"ghost"} },
 			wantSub: "ghost",
 		},
 		{
 			name:    "upsert 未声明唯一列",
-			mutate:  func(d *Descriptor) { d.UniqueColumns = nil },
+			mutate:  func(d *DictDescriptor) { d.UniqueColumns = nil },
 			wantSub: "UniqueColumns",
 		},
 		{
 			name:    "唯一列不是已声明列",
-			mutate:  func(d *Descriptor) { d.UniqueColumns = []string{"ghost"} },
+			mutate:  func(d *DictDescriptor) { d.UniqueColumns = []string{"ghost"} },
 			wantSub: "ghost",
 		},
 		{
 			name: "默认值类型与字段类型不符",
-			mutate: func(d *Descriptor) {
+			mutate: func(d *DictDescriptor) {
 				for i := range d.Fields {
 					if d.Fields[i].Name == "coefficient" {
 						d.Fields[i].Default = "1980"
@@ -69,7 +69,7 @@ func TestDescriptorValidate_Errors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := base
-			d.Fields = append([]Field(nil), base.Fields...)
+			d.Fields = append([]DictField(nil), base.Fields...)
 			tc.mutate(&d)
 			err := d.Validate()
 			if err == nil {
@@ -143,7 +143,7 @@ func TestBuildUpdateResult_Region(t *testing.T) {
 }
 
 func TestRegistry_Get(t *testing.T) {
-	rg := NewRegistry(
+	rg := NewDictRegistry(
 		BrandDescriptor, VehicleTypeDescriptor, SeriesDescriptor,
 		TonnageDescriptor, MastTypeDescriptor, MastHeightDescriptor,
 		BatteryTypeDescriptor, TransmissionTypeDescriptor, EngineTypeDescriptor,
@@ -167,7 +167,7 @@ func TestRegistry_Get(t *testing.T) {
 
 // TestAllDescriptors_Validate 全部描述符注册前校验通过（registry 构造即校验）。
 func TestAllDescriptors_Validate(t *testing.T) {
-	descriptors := []Descriptor{
+	descriptors := []DictDescriptor{
 		BrandDescriptor, VehicleTypeDescriptor, SeriesDescriptor,
 		TonnageDescriptor, MastTypeDescriptor, MastHeightDescriptor,
 		BatteryTypeDescriptor, TransmissionTypeDescriptor, EngineTypeDescriptor,
@@ -242,7 +242,7 @@ func TestBuildUpdateSQL_Simple(t *testing.T) {
 
 // TestBuildInsertSQL_DoNothing 规格实体形状：单唯一列 + DO NOTHING。
 func TestBuildInsertSQL_DoNothing(t *testing.T) {
-	for _, d := range []Descriptor{
+	for _, d := range []DictDescriptor{
 		TonnageDescriptor, MastTypeDescriptor, MastHeightDescriptor,
 		BatteryTypeDescriptor, TransmissionTypeDescriptor, EngineTypeDescriptor,
 	} {

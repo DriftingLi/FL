@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"forklift-training/internal/valuation"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -12,8 +13,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/valuation/dictcrud"
 )
 
 // 管理端 31 条 CRUD 注解的「路径 + 方法 + 响应字段集」== AllDescriptors() 的派生集合
@@ -27,7 +26,7 @@ import (
 //	   表里不得有孤儿；
 //	2. 注解集合 ↔ AllDescriptors() 派生集合：**直接全等**（多一条或漏一条都红，无豁免表）；
 //	3. 每条注解的 @Router 反解回 (描述符, 操作)：路径/参数名必须等于派生值，宿主 == 分派表执行体；
-//	4. @Success 的 object{} 字段表 ↔ dictcrud.ResponseFields：逐字段（名 + 类型）全等。
+//	4. @Success 的 object{} 字段表 ↔ valuation.DictResponseFields：逐字段（名 + 类型）全等。
 //
 // 判定面是**源码文本**（dictcrud_docs.go 的注释）—— swag 只认函数级注释，注解无法在运行期
 // 派生，故这里用「派生期望 + 全等断言」把「手抄」变成可执行判据。
@@ -43,34 +42,34 @@ func adminSwaggerPrefix() string {
 }
 
 // dictOpFunc 取一个描述符在某操作上的具名方法（nil = 未声明/未登记）。
-func dictOpFunc(routes dictRoute, op dictcrud.Op) gin.HandlerFunc {
+func dictOpFunc(routes dictRoute, op valuation.DictOp) gin.HandlerFunc {
 	switch op {
-	case dictcrud.OpCreate:
+	case valuation.DictOpCreate:
 		return routes.create
-	case dictcrud.OpUpdate:
+	case valuation.DictOpUpdate:
 		return routes.update
-	case dictcrud.OpDelete:
+	case valuation.DictOpDelete:
 		return routes.delete
 	}
 	return nil
 }
 
 // dictDeclaresOp 描述符是否声明该操作（= 路由注册条件，见 registerDictCRUDRoutes）。
-func dictDeclaresOp(d dictcrud.Descriptor, op dictcrud.Op) bool {
+func dictDeclaresOp(d valuation.DictDescriptor, op valuation.DictOp) bool {
 	switch op {
-	case dictcrud.OpCreate:
+	case valuation.DictOpCreate:
 		return len(d.Create.Fields) > 0
-	case dictcrud.OpUpdate:
+	case valuation.DictOpUpdate:
 		return len(d.Update.Fields) > 0
-	case dictcrud.OpDelete:
+	case valuation.DictOpDelete:
 		return d.Delete
 	}
 	return false
 }
 
 // dictOps 三个操作（遍历顺序固定）。
-func dictOps() []dictcrud.Op {
-	return []dictcrud.Op{dictcrud.OpCreate, dictcrud.OpUpdate, dictcrud.OpDelete}
+func dictOps() []valuation.DictOp {
+	return []valuation.DictOp{valuation.DictOpCreate, valuation.DictOpUpdate, valuation.DictOpDelete}
 }
 
 // funcName 取方法值的具名方法名（方法值是编译器生成的 -fm 包装，去掉后缀）。
@@ -96,7 +95,7 @@ type docAnnotation struct {
 	// router 规范形态："POST /valuation/admin/brands"。
 	router string
 	// success @Success 200 的 data=object{...} 字段表（声明序）。
-	success []dictcrud.ResponseField
+	success []valuation.DictResponseField
 }
 
 // loadDictDocAnnotations 解析 dictcrud_docs.go 的函数级注释（go test 的 CWD = 包目录）。
@@ -165,7 +164,7 @@ func parseDocAnnotation(text string) (docAnnotation, error) {
 }
 
 // parseSuccessFields 取 "@Success 200 {object} response.R{data=object{name=type,...}} ..." 的字段表。
-func parseSuccessFields(line string) ([]dictcrud.ResponseField, error) {
+func parseSuccessFields(line string) ([]valuation.DictResponseField, error) {
 	const marker = "data=object{"
 	i := strings.Index(line, marker)
 	if i < 0 {
@@ -193,39 +192,39 @@ func parseSuccessFields(line string) ([]dictcrud.ResponseField, error) {
 	}
 	body := rest[:end]
 	if strings.TrimSpace(body) == "" {
-		return []dictcrud.ResponseField{}, nil
+		return []valuation.DictResponseField{}, nil
 	}
 	parts := strings.Split(body, ",")
-	out := make([]dictcrud.ResponseField, 0, len(parts))
+	out := make([]valuation.DictResponseField, 0, len(parts))
 	for _, p := range parts {
 		kv := strings.SplitN(strings.TrimSpace(p), "=", 2)
 		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
 			return nil, fmt.Errorf("字段形态异常: %s", p)
 		}
-		out = append(out, dictcrud.ResponseField{Name: kv[0], Type: kv[1]})
+		out = append(out, valuation.DictResponseField{Name: kv[0], Type: kv[1]})
 	}
 	return out, nil
 }
 
 // resolveAnnotation 把注解的 "METHOD /valuation/admin/<path>" 反解回 (描述符, 操作)：
 // 必须逐字等于某个描述符某个操作的派生路径（含 :param / {param} 名）。
-func resolveAnnotation(descriptors []dictcrud.Descriptor, router string) (dictcrud.Descriptor, dictcrud.Op, bool) {
+func resolveAnnotation(descriptors []valuation.DictDescriptor, router string) (valuation.DictDescriptor, valuation.DictOp, bool) {
 	for _, d := range descriptors {
 		for _, op := range dictOps() {
-			want := op.Method() + " " + adminSwaggerPrefix() + "/" + dictcrud.SwaggerPath(d, op)
+			want := op.Method() + " " + adminSwaggerPrefix() + "/" + valuation.DictSwaggerPath(d, op)
 			if router == want {
 				return d, op, true
 			}
 		}
 	}
-	return dictcrud.Descriptor{}, 0, false
+	return valuation.DictDescriptor{}, 0, false
 }
 
 // TestDictDispatchMatchesDescriptors 分派表 ↔ AllDescriptors()：声明了操作就必须有具名方法
 // （注册期 panic 的同一判据），表里不得有孤儿。
 func TestDictDispatchMatchesDescriptors(t *testing.T) {
 	table := (&ConfigHandler{}).dictDispatch()
-	descriptors := dictcrud.AllDescriptors()
+	descriptors := valuation.AllDictDescriptors()
 	if len(table) != len(descriptors) {
 		t.Fatalf("分派表条目 %d 条，AllDescriptors() %d 条 —— 必须一一对应", len(table), len(descriptors))
 	}
@@ -266,7 +265,7 @@ func TestDictDispatchMatchesDescriptors(t *testing.T) {
 func TestDictAnnotationsMatchDescriptors(t *testing.T) {
 	docs := loadDictDocAnnotations(t)
 	table := (&ConfigHandler{}).dictDispatch()
-	descriptors := dictcrud.AllDescriptors()
+	descriptors := valuation.AllDictDescriptors()
 
 	// 1) 派生集合：描述符声明了操作 → 分派表的具名方法名（注解宿主 == 执行体）。
 	wantHosts := map[string]bool{}
@@ -314,7 +313,7 @@ func TestDictAnnotationsMatchDescriptors(t *testing.T) {
 			t.Fatalf("描述符 %q 的 %s：分派表执行体 = %s，注解宿主 = %s —— 必须同一个方法",
 				d.Name, op.Method(), host, ann.method)
 		}
-		wantFields := dictcrud.ResponseFields(d, op)
+		wantFields := valuation.DictResponseFields(d, op)
 		if !reflect.DeepEqual(ann.success, wantFields) {
 			t.Fatalf("%s：@Success 字段表与描述符派生不一致\n  注解   = %s\n  描述符 = %s",
 				ann.method, formatFields(ann.success), formatFields(wantFields))
@@ -352,10 +351,10 @@ func TestDictDispatchRegistrationFailClosed(t *testing.T) {
 			t.Fatal("描述符声明了 create 但分派表没有具名方法：期望 panic")
 		}
 	}()
-	requireDictRoute(dictcrud.BrandDescriptor, dictcrud.OpCreate, nil)
+	requireDictRoute(valuation.BrandDescriptor, valuation.DictOpCreate, nil)
 }
 
-func formatFields(fields []dictcrud.ResponseField) string {
+func formatFields(fields []valuation.DictResponseField) string {
 	parts := make([]string, 0, len(fields))
 	for _, f := range fields {
 		parts = append(parts, f.Name+"="+f.Type)

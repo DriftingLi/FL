@@ -124,7 +124,7 @@ func TestValuationEndpointTopLevelKeys(t *testing.T) {
 	})
 
 	// 管理端 region-coefficients：POST 创建 → PUT 更新（非统一信封登记：update/delete 走 gin.H，
-	// 但 create 走 dictcrud.BuildCreateResult，故此处断言 create 的 id ∪ 声明字段集）。
+	// 但 create 走 valuation.BuildCreateResult，故此处断言 create 的 id ∪ 声明字段集）。
 	t.Run("admin_region_coefficient_create_update", func(t *testing.T) {
 		r, _, _ := newTestValuationEngine(t)
 		w := performRequestWithAuth(r, http.MethodPost, "/api/valuation/admin/region-coefficients",

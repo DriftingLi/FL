@@ -1,6 +1,6 @@
-// Store 集成测试：真实 Postgres 下描述符生成 SQL 的往返正确性。
+// DictStore 集成测试：真实 Postgres 下描述符生成 SQL 的往返正确性。
 // CI 提供 postgres:15 服务（DATABASE_URL），本地未配置时跳过。
-package dictcrud
+package valuation
 
 import (
 	"context"
@@ -46,7 +46,7 @@ func TestStore_RegionCoefficientRoundTrip(t *testing.T) {
 		t.Fatalf("清空表失败: %v", err)
 	}
 
-	s := NewStore(pool)
+	s := NewDictStore(pool)
 	d := RegionCoefficientDescriptor
 
 	id, err := s.Create(ctx, d, map[string]any{"province": "江苏", "city": "苏州", "coefficient": 1.02})
