@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"forklift-training/internal/valuation/repository"
+	"forklift-training/internal/valuation"
 )
 
 // memConfigReader 内存版系数键读取。
@@ -46,63 +46,63 @@ func newDefaultConfigReader() *memConfigReader {
 
 // memDictReader 内存版系数表读取（condition_ratings / region / brand）。
 type memDictReader struct {
-	conditions map[string]repository.ConditionRating
-	regions    map[string]repository.RegionCoefficient
-	brands     map[string]repository.Brand
+	conditions map[string]valuation.ConditionRating
+	regions    map[string]valuation.RegionCoefficient
+	brands     map[string]valuation.Brand
 }
 
 // newDefaultMemDict 与迁移种子一致的默认系数表。
 func newDefaultMemDict() *memDictReader {
 	return &memDictReader{
-		conditions: map[string]repository.ConditionRating{
+		conditions: map[string]valuation.ConditionRating{
 			"A": {ID: 1, Rating: "A", Label: "优秀", BaseCoefficient: 1.00},
 			"B": {ID: 2, Rating: "B", Label: "良好", BaseCoefficient: 0.90},
 			"C": {ID: 3, Rating: "C", Label: "一般", BaseCoefficient: 0.78},
 			"D": {ID: 4, Rating: "D", Label: "较差", BaseCoefficient: 0.65},
 			"E": {ID: 5, Rating: "E", Label: "差", BaseCoefficient: 0.50},
 		},
-		regions: map[string]repository.RegionCoefficient{},
-		brands:  map[string]repository.Brand{},
+		regions: map[string]valuation.RegionCoefficient{},
+		brands:  map[string]valuation.Brand{},
 	}
 }
 
-func (m *memDictReader) GetConditionRating(_ context.Context, rating string) (repository.ConditionRating, error) {
+func (m *memDictReader) GetConditionRating(_ context.Context, rating string) (valuation.ConditionRating, error) {
 	if c, ok := m.conditions[rating]; ok {
 		return c, nil
 	}
-	return repository.ConditionRating{}, pgx.ErrNoRows
+	return valuation.ConditionRating{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) GetRegionCoefficient(_ context.Context, province, city string) (repository.RegionCoefficient, error) {
+func (m *memDictReader) GetRegionCoefficient(_ context.Context, province, city string) (valuation.RegionCoefficient, error) {
 	if r, ok := m.regions[province+"|"+city]; ok {
 		return r, nil
 	}
-	return repository.RegionCoefficient{}, pgx.ErrNoRows
+	return valuation.RegionCoefficient{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) GetBrandByName(_ context.Context, name string) (repository.Brand, error) {
+func (m *memDictReader) GetBrandByName(_ context.Context, name string) (valuation.Brand, error) {
 	if b, ok := m.brands[name]; ok {
 		return b, nil
 	}
-	return repository.Brand{}, pgx.ErrNoRows
+	return valuation.Brand{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) GetVehicleTypeByName(context.Context, string) (repository.VehicleType, error) {
-	return repository.VehicleType{}, pgx.ErrNoRows
+func (m *memDictReader) GetVehicleTypeByName(context.Context, string) (valuation.VehicleType, error) {
+	return valuation.VehicleType{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) FindOriginalPriceMatch(context.Context, string, string, string, float64, string, string, int) (repository.OriginalPrice, error) {
-	return repository.OriginalPrice{}, pgx.ErrNoRows
+func (m *memDictReader) FindOriginalPriceMatch(context.Context, string, string, string, float64, string, string, int) (valuation.OriginalPrice, error) {
+	return valuation.OriginalPrice{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) FindOriginalPriceFuzzy(context.Context, string, string, string, float64) (repository.OriginalPrice, error) {
-	return repository.OriginalPrice{}, pgx.ErrNoRows
+func (m *memDictReader) FindOriginalPriceFuzzy(context.Context, string, string, string, float64) (valuation.OriginalPrice, error) {
+	return valuation.OriginalPrice{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) GetCoefficientByKey(context.Context, string) (repository.CoefficientConfig, error) {
-	return repository.CoefficientConfig{}, pgx.ErrNoRows
+func (m *memDictReader) GetCoefficientByKey(context.Context, string) (valuation.CoefficientConfig, error) {
+	return valuation.CoefficientConfig{}, pgx.ErrNoRows
 }
 
-func (m *memDictReader) ListCoefficientConfigs(context.Context) ([]repository.CoefficientConfig, error) {
-	return []repository.CoefficientConfig{}, nil
+func (m *memDictReader) ListCoefficientConfigs(context.Context) ([]valuation.CoefficientConfig, error) {
+	return []valuation.CoefficientConfig{}, nil
 }

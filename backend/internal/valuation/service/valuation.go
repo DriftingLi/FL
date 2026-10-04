@@ -22,7 +22,6 @@ import (
 
 	"forklift-training/internal/cache"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/repository"
 )
 
 // ValuationService 评估服务
@@ -35,7 +34,7 @@ type ValuationService struct {
 
 // EvaluationStore 评估记录持久化接口（Persist 消费窄接口，生产为 pgx 仓储，测试为内存替身）。
 type EvaluationStore interface {
-	CreateEvaluation(ctx context.Context, p *repository.CreateEvaluationParams) (int64, error)
+	CreateEvaluation(ctx context.Context, p *valuation.CreateEvaluationParams) (int64, error)
 }
 
 // NewValuationService 构造评估服务
@@ -236,7 +235,7 @@ func (s *ValuationService) Persist(ctx context.Context, result *valuation.Evalua
 	if s.evalRepo == nil {
 		return 0, fmt.Errorf("evalRepo 未装配")
 	}
-	params := &repository.CreateEvaluationParams{
+	params := &valuation.CreateEvaluationParams{
 		Brand:                      result.Brand,
 		VehicleType:                result.VehicleType,
 		Series:                     result.Series,

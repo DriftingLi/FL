@@ -37,7 +37,6 @@ import (
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
 	vhandler "forklift-training/internal/valuation/handler"
-	vrepo "forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 
 	"github.com/gin-gonic/gin"
@@ -124,7 +123,7 @@ func main() {
 
 	// 5. 装配根：全部 service 在此构建一次（单一装配根，见 spec #75 D9）
 	// 导出数据访问经 ExportStore seam 注入估值模块 adapter（spec #75 D4）
-	deps := api.NewDeps(cfg, gormDB, st, logger, vrepo.NewExportStore(vpool))
+	deps := api.NewDeps(cfg, gormDB, st, logger, valuation.NewPgExportStore(vpool))
 
 	// 5.1 确保默认账号（密码由环境变量配置）
 	if err := deps.AuthSvc.EnsureDefaultUsers(); err != nil {
@@ -225,8 +224,8 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 //nolint:gocritic
 func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
-	dictRepo := vrepo.NewDictionaryRepository(pool)
-	evalRepo := vrepo.NewEvaluationRepository(pool)
+	dictRepo := valuation.NewDictionaryRepository(pool)
+	evalRepo := valuation.NewEvaluationRepository(pool)
 
 	// 2. 装配业务服务（系数从 DB 实时查询，不再使用内存加载器）
 	valuationSvc, err := vservice.NewValuationService(dictRepo, evalRepo)
@@ -235,7 +234,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 		os.Exit(1)
 	}
 	batterySvc := vservice.NewBatteryRULService()
-	batteryRepo := vrepo.NewBatteryRepository(pool)
+	batteryRepo := valuation.NewBatteryRepository(pool)
 
 	// 3. 装配 PDF 生成器（字节输出，不落盘；存储经 storage 抽象层）
 	pdfGen := valuation.NewPDFGenerator()

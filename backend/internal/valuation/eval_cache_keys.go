@@ -9,7 +9,7 @@
 // 读 key 前缀 ⊆ 失效 pattern 集（与 dict_cache_keys.go 同款不变式）；
 // per-user 详情前缀（eval:get:user）天然起于公开详情前缀（eval:get）之内，
 // 一种失效 pattern（eval:get:*）即覆盖两种详情形状。
-package repository
+package valuation
 
 import (
 	"context"

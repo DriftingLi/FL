@@ -1,5 +1,5 @@
 // 级联过滤方法：基于 original_prices 表查询有效组合（骨架走 dict_helpers 共享实现）
-package repository
+package valuation
 
 import (
 	"context"

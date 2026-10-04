@@ -5,35 +5,10 @@ package valuation
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
-
-	migratedb "forklift-training/internal/migrate"
 )
-
-func integrationPool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL 未配置，跳过集成测试")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if err := migratedb.RunMigrations(dsn, "up", zap.NewNop()); err != nil {
-		t.Fatalf("迁移失败: %v", err)
-	}
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("连接失败: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
 
 // TestStore_RegionCoefficientRoundTrip 区域系数走描述符核心的 DB 往返：
 // upsert 语义（同 (province, city) 冲突 → 更新 coefficient 不新增行）、

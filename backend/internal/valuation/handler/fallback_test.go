@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/repository"
 )
 
 // TestEvaluationDetailFillsEmptySuggestions 锁定 ADR-0012 §6：
@@ -73,7 +72,7 @@ func TestBatteryDetailFillsEmptySuggestions(t *testing.T) {
 // createEvalWithSuggestions 向 memEvalStore 写入一条建议可控的评估记录。
 func createEvalWithSuggestions(t *testing.T, store *memEvalStore, suggestions []string) {
 	t.Helper()
-	_, err := store.CreateEvaluation(context.TODO(), &repository.CreateEvaluationParams{
+	_, err := store.CreateEvaluation(context.TODO(), &valuation.CreateEvaluationParams{
 		Brand: "合力", VehicleType: "内燃叉车", FactoryYear: 2020, SaleYear: 2026,
 		OriginalPrice: 100000, EstimatedValue: 40000, Suggestions: suggestions,
 	})

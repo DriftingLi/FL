@@ -85,7 +85,7 @@ type CycleFeature struct {
 	ID            int64         `json:"id,omitempty" extensions:"x-optional"` // omitempty：键可能整个不存在
 	EvaluationID  int64         `json:"evaluation_id"`
 	CycleIndex    int           `json:"cycle_index"`
-	FeatureVector FeatureVector `json:"feature_vector"`
+	FeatureVector FeatureVector `json:"feature_vector" nullability:"nonnil"`
 	RawStats      RawStats      `json:"raw_stats"`
 	SohAtCycle    float64       `json:"soh_at_cycle"`
 }
@@ -114,14 +114,14 @@ type BatteryEvaluation struct {
 	Confidence        float64             `json:"confidence"`
 	ConfidenceLow     int                 `json:"confidence_low"`
 	ConfidenceHigh    int                 `json:"confidence_high"`
-	FeatureImportance []FeatureImportance `json:"feature_importance,omitempty" extensions:"x-optional"` // omitempty：键可能整个不存在
+	FeatureImportance []FeatureImportance `json:"feature_importance,omitempty" extensions:"x-optional" nullability:"nonnil"` // omitempty：键可能整个不存在
 	ReportPdfPath     string              `json:"report_pdf_path"`
 	CreatedAt         string              `json:"created_at"`
 	UpdatedAt         string              `json:"updated_at"`
 	// 详情时填充
-	CycleFeatures []CycleFeature `json:"cycle_features,omitempty" extensions:"x-optional"` // omitempty：列表接口不返回，详情接口才填
+	CycleFeatures []CycleFeature `json:"cycle_features,omitempty" extensions:"x-optional" nullability:"nonnil"` // omitempty：列表接口不返回，详情接口才填
 	// 评估建议（基于 SOH/RUL/电池类型生成）
-	Suggestions []string `json:"suggestions,omitempty" extensions:"x-optional"` // omitempty：旧记录可能没有建议
+	Suggestions []string `json:"suggestions,omitempty" extensions:"x-optional" nullability:"nonnil"` // omitempty：旧记录可能没有建议
 }
 
 // FeatureImportance 特征重要性条目
@@ -155,14 +155,14 @@ type CreateBatteryResponse struct {
 	Confidence     float64     `json:"confidence"`
 	ConfidenceLow  int         `json:"confidence_low"`
 	ConfidenceHigh int         `json:"confidence_high"`
-	Suggestions    []string    `json:"suggestions"`
+	Suggestions    []string    `json:"suggestions" nullability:"nonnil"`
 	CreatedAt      string      `json:"created_at"`
 }
 
 // ListBatteryResponse 列表查询响应
 type ListBatteryResponse struct {
 	Total int                        `json:"total"`
-	Items []BatteryEvaluationSummary `json:"items"`
+	Items []BatteryEvaluationSummary `json:"items" nullability:"nonnil"`
 }
 
 // BatteryReportResponse 报告生成响应

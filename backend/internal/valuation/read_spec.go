@@ -1,17 +1,16 @@
 // 字典读面描述符引擎（ADR-0013 候选 1）：简单单表读（List/Get）的 SQL + scan
 // 由 ReadSpec 声明、读面引擎生成，消除「SELECT 列顺序 + scan 列顺序」双处手工同步
-// 的漂移面。字段 Name/Column/Type 复用写面 valuation.DictField 为单点（+ 引擎自动补 id 列）。
+// 的漂移面。字段 Name/Column/Type 复用写面 DictField 为单点（+ 引擎自动补 id 列）。
 //
 // 读面独有的 SELECT 列顺序 / ORDER BY / WHERE 模板由 ReadSpec 声明；缓存 key 由
 // facade 按既有契约常量（dict_cache_keys.go）+ cacheKey 构造后传入引擎——线上 key 不变。
 // 特殊行解码（可空列 / 时间格式化，如 coefficient_configs）由 facade 继续传入既有
 // scan 闭包走 listCached/getCached，仅 SQL 从 ReadSpec.selectSQL() 生成，保持单点。
-package repository
+package valuation
 
 import (
 	"context"
 	"fmt"
-	"forklift-training/internal/valuation"
 	"reflect"
 	"strings"
 
@@ -24,7 +23,7 @@ type ReadSpec struct {
 	Table string
 	// Columns 有序的 SELECT 输出列（不含 id，引擎自动前置 id 列）。
 	// 字段 Name 必须与目标 DTO 的 json tag 一致（反射按 Name 定位结构体字段）。
-	Columns []valuation.DictField
+	Columns []DictField
 	// Where WHERE 模板（含 $n 占位符）；空字符串表示无过滤条件。
 	Where string
 	// OrderBy ORDER BY 子句（不含 "ORDER BY " 前缀）；空字符串表示无排序。
@@ -60,10 +59,10 @@ func (s ReadSpec) selectSQL() string {
 }
 
 // fullColumns 返回扫描目的列（id + Columns，NoID 时仅 Columns），供反射 scan 定位字段。
-func (s ReadSpec) fullColumns() []valuation.DictField {
-	cols := make([]valuation.DictField, 0, len(s.Columns)+1)
+func (s ReadSpec) fullColumns() []DictField {
+	cols := make([]DictField, 0, len(s.Columns)+1)
 	if !s.NoID {
-		cols = append(cols, valuation.DictField{Name: "id", Column: "id", Type: valuation.DictFieldInt})
+		cols = append(cols, DictField{Name: "id", Column: "id", Type: DictFieldInt})
 	}
 	cols = append(cols, s.Columns...)
 	return cols

@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"forklift-training/internal/valuation/repository"
+	"forklift-training/internal/valuation"
 )
 
 // regionRow 便捷断言：data 中按名取值。
@@ -103,7 +103,7 @@ func TestRegionCrud_Create_MalformedJSON(t *testing.T) {
 
 func TestRegionCrud_Update(t *testing.T) {
 	r, dict, _ := newTestValuationEngine(t)
-	dict.regions = []repository.RegionCoefficient{{ID: 1, Province: "江苏", City: "苏州", Coefficient: 1.02}}
+	dict.regions = []valuation.RegionCoefficient{{ID: 1, Province: "江苏", City: "苏州", Coefficient: 1.02}}
 
 	w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/region-coefficients/1",
 		map[string]interface{}{"coefficient": 1.05}, adminAuthHeader(t))
@@ -173,7 +173,7 @@ func TestRegionCrud_Update_BadID(t *testing.T) {
 
 func TestRegionCrud_Delete(t *testing.T) {
 	r, dict, _ := newTestValuationEngine(t)
-	dict.regions = []repository.RegionCoefficient{
+	dict.regions = []valuation.RegionCoefficient{
 		{ID: 1, Province: "江苏", City: "苏州", Coefficient: 1.02},
 		{ID: 2, Province: "安徽", City: "合肥", Coefficient: 1.00},
 	}

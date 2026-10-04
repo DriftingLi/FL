@@ -1,6 +1,6 @@
 // 评估缓存失效集成测试：报告/建议回写后 per-user 详情立即见新值（#399 stale 回归）。
 // 真实 Postgres + Redis 下运行（CI 服务容器提供），本地不可用时跳过。
-package repository
+package valuation
 
 import (
 	"context"

@@ -23,7 +23,6 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/repository"
 	vservice "forklift-training/internal/valuation/service"
 )
 
@@ -42,11 +41,11 @@ type memRow struct {
 
 type memDictStore struct {
 	DictionaryConfigStore // 嵌入 nil：未实现的读面调用即 panic（本 seam 覆盖范围内不调用）
-	vehicleTypes          map[string]repository.VehicleType
-	conditions            map[string]repository.ConditionRating
-	originalPrices        []repository.OriginalPrice
+	vehicleTypes          map[string]valuation.VehicleType
+	conditions            map[string]valuation.ConditionRating
+	originalPrices        []valuation.OriginalPrice
 	coefficients          map[string]float64
-	regions               []repository.RegionCoefficient
+	regions               []valuation.RegionCoefficient
 	nextRegionID          int
 	tables                map[string]*memTable
 }
@@ -94,17 +93,17 @@ func rowMatches(d valuation.DictDescriptor, row, values map[string]any) bool {
 func newSeedMemDict() *memDictStore {
 	return &memDictStore{
 		nextRegionID: 1,
-		vehicleTypes: map[string]repository.VehicleType{
+		vehicleTypes: map[string]valuation.VehicleType{
 			"电动叉车": {ID: 1, Name: "电动叉车", PowerType: "electric", EarliestFactoryYear: 2000},
 		},
-		conditions: map[string]repository.ConditionRating{
+		conditions: map[string]valuation.ConditionRating{
 			"A": {ID: 1, Rating: "A", Label: "优秀", BaseCoefficient: 1.00},
 			"B": {ID: 2, Rating: "B", Label: "良好", BaseCoefficient: 0.90},
 			"C": {ID: 3, Rating: "C", Label: "一般", BaseCoefficient: 0.78},
 			"D": {ID: 4, Rating: "D", Label: "较差", BaseCoefficient: 0.65},
 			"E": {ID: 5, Rating: "E", Label: "差", BaseCoefficient: 0.50},
 		},
-		originalPrices: []repository.OriginalPrice{{
+		originalPrices: []valuation.OriginalPrice{{
 			ID: 1, Brand: "合力", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
 			ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, OriginalPrice: 100000,
 		}},
@@ -125,29 +124,29 @@ func newSeedMemDict() *memDictStore {
 	}
 }
 
-func (m *memDictStore) GetVehicleTypeByName(_ context.Context, name string) (repository.VehicleType, error) {
+func (m *memDictStore) GetVehicleTypeByName(_ context.Context, name string) (valuation.VehicleType, error) {
 	if vt, ok := m.vehicleTypes[name]; ok {
 		return vt, nil
 	}
-	return repository.VehicleType{}, pgx.ErrNoRows
+	return valuation.VehicleType{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) GetConditionRating(_ context.Context, rating string) (repository.ConditionRating, error) {
+func (m *memDictStore) GetConditionRating(_ context.Context, rating string) (valuation.ConditionRating, error) {
 	if c, ok := m.conditions[rating]; ok {
 		return c, nil
 	}
-	return repository.ConditionRating{}, pgx.ErrNoRows
+	return valuation.ConditionRating{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) GetRegionCoefficient(context.Context, string, string) (repository.RegionCoefficient, error) {
-	return repository.RegionCoefficient{}, pgx.ErrNoRows
+func (m *memDictStore) GetRegionCoefficient(context.Context, string, string) (valuation.RegionCoefficient, error) {
+	return valuation.RegionCoefficient{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) GetBrandByName(context.Context, string) (repository.Brand, error) {
-	return repository.Brand{}, pgx.ErrNoRows
+func (m *memDictStore) GetBrandByName(context.Context, string) (valuation.Brand, error) {
+	return valuation.Brand{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) FindOriginalPriceMatch(_ context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (repository.OriginalPrice, error) {
+func (m *memDictStore) FindOriginalPriceMatch(_ context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (valuation.OriginalPrice, error) {
 	for _, op := range m.originalPrices {
 		if op.Brand == brand && op.VehicleType == vehicleType && op.Series == series &&
 			op.Tonnage == tonnage && op.ConfigType == configType && op.MastType == mastType &&
@@ -155,24 +154,24 @@ func (m *memDictStore) FindOriginalPriceMatch(_ context.Context, brand, vehicleT
 			return op, nil
 		}
 	}
-	return repository.OriginalPrice{}, pgx.ErrNoRows
+	return valuation.OriginalPrice{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) FindOriginalPriceFuzzy(context.Context, string, string, string, float64) (repository.OriginalPrice, error) {
-	return repository.OriginalPrice{}, pgx.ErrNoRows
+func (m *memDictStore) FindOriginalPriceFuzzy(context.Context, string, string, string, float64) (valuation.OriginalPrice, error) {
+	return valuation.OriginalPrice{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) GetCoefficientByKey(_ context.Context, key string) (repository.CoefficientConfig, error) {
+func (m *memDictStore) GetCoefficientByKey(_ context.Context, key string) (valuation.CoefficientConfig, error) {
 	if v, ok := m.coefficients[key]; ok {
-		return repository.CoefficientConfig{Key: key, Value: v}, nil
+		return valuation.CoefficientConfig{Key: key, Value: v}, nil
 	}
-	return repository.CoefficientConfig{}, pgx.ErrNoRows
+	return valuation.CoefficientConfig{}, pgx.ErrNoRows
 }
 
-func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]repository.CoefficientConfig, error) {
-	out := make([]repository.CoefficientConfig, 0, len(m.coefficients))
+func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]valuation.CoefficientConfig, error) {
+	out := make([]valuation.CoefficientConfig, 0, len(m.coefficients))
 	for k, v := range m.coefficients {
-		out = append(out, repository.CoefficientConfig{Key: k, Value: v})
+		out = append(out, valuation.CoefficientConfig{Key: k, Value: v})
 	}
 	return out, nil
 }
@@ -182,7 +181,7 @@ func (m *memDictStore) ListCoefficientConfigs(_ context.Context) ([]repository.C
 
 func (m *memDictStore) Create(_ context.Context, d valuation.DictDescriptor, fields map[string]any) (int64, error) {
 	if d.Name == "region_coefficients" {
-		rc := repository.RegionCoefficient{
+		rc := valuation.RegionCoefficient{
 			ID:          m.nextRegionID,
 			Province:    fields["province"].(string),
 			City:        fields["city"].(string),
@@ -298,7 +297,7 @@ func newMemEvalStore() *memEvalStore {
 	return &memEvalStore{nextID: 1, records: map[int64]valuation.EvaluationDetail{}}
 }
 
-func (m *memEvalStore) CreateEvaluation(_ context.Context, p *repository.CreateEvaluationParams) (int64, error) {
+func (m *memEvalStore) CreateEvaluation(_ context.Context, p *valuation.CreateEvaluationParams) (int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	id := m.nextID
@@ -375,13 +374,14 @@ func (m *memBatteryStore) init() {
 	}
 }
 
-func (m *memBatteryStore) CreateEvaluation(_ context.Context, eval *valuation.BatteryEvaluation, _ []valuation.CycleFeature, _ int) (*valuation.BatteryEvaluation, error) {
+func (m *memBatteryStore) CreateEvaluation(_ context.Context, eval *valuation.BatteryEvaluation, cf []valuation.CycleFeature, _ int) (*valuation.BatteryEvaluation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.init()
 	m.nextID++
 	cp := *eval
 	cp.ID = m.nextID
+	cp.CycleFeatures = cf // 生产侧 repository 也持久化周期特征（详情端点的 cycle_features 来源）
 	m.records[cp.ID] = &cp
 	return &cp, nil
 }

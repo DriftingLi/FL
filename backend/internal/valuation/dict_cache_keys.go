@@ -4,7 +4,7 @@
 // 每实体的读 key 前缀 ⊆ 该实体写操作的失效 pattern 集。
 // 历史上读 key（dict:*:cascade:*）与失效 pattern（dict:specs:*）两套命名互不包含，
 // 导致级联数据在 TTL 窗口内陈旧——本文件让契约只有一个来源。
-package repository
+package valuation
 
 import (
 	"forklift-training/internal/cache"

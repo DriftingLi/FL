@@ -53,9 +53,10 @@ func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 	// 数一遍目录：论域自检比的是**前缀**，同前缀的两枚之间它分不开（#1514 波 1 之前
 	// `../model` 与 `../valuation/model` 正是那一对），所以这里补一条「清单本身有几枚」的断言
 	// ——与批⑤ 那条「pathInt* 名字族必须恰好两枚」同形。加删一枚目录时这条会红，逼着回来一起
-	// 改数并想清楚理由（波 1 是「静态面少一枚、派生面多一枚」，总数不变）。
-	if n := len(dirs); n != 35 {
-		t.Fatalf("fact 射程应是 35 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的目录），"+
+	// 改数并想清楚理由（波 1 是「静态面少一枚、派生面多一枚」，总数不变；波 7 把 valuation/repository
+	// 并回域包 ⇒ 静态面再少一枚、派生面不变，总数 35→34，这里签字）。
+	if n := len(dirs); n != 34 {
+		t.Fatalf("fact 射程应是 34 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的目录），"+
 			"多了就回来把这条数和上面的注释一起改。", n, dirs)
 	}
 	closure := responseDefinitions(t)

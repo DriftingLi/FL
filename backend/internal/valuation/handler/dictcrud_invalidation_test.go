@@ -1,14 +1,12 @@
 // 缓存失效聚焦验证：迁移后区域系数写操作经描述符核心失效的 pattern 集
 // 必须与迁移前 RegionCoefficientInvalidationPatterns() + resultInvalidation 组合完全一致
-// （契约单点 repository.PatternsOf("region_coefficients") + ResultCachePattern）。
+// （契约单点 valuation.PatternsOf("region_coefficients") + ResultCachePattern）。
 package handler
 
 import (
 	"forklift-training/internal/valuation"
 	"strings"
 	"testing"
-
-	"forklift-training/internal/valuation/repository"
 )
 
 // keyMatches 读 key 前缀是否被失效 pattern 覆盖（与 repository 契约测试同语义）。
@@ -22,7 +20,7 @@ func keyMatches(key, pattern string) bool {
 
 func TestDictInvalidationPatterns_Region(t *testing.T) {
 	got := dictInvalidationPatterns(valuation.RegionCoefficientDescriptor)
-	want := []string{"dict:region:*", repository.ResultCachePattern}
+	want := []string{"dict:region:*", valuation.ResultCachePattern}
 
 	if len(got) != len(want) {
 		t.Fatalf("失效 pattern 集漂移: got %v, want %v", got, want)
@@ -40,7 +38,7 @@ func TestDictInvalidationPatterns_NonResult(t *testing.T) {
 	d := valuation.SeriesDescriptor
 	got := dictInvalidationPatterns(d)
 	for _, p := range got {
-		if p == repository.ResultCachePattern {
+		if p == valuation.ResultCachePattern {
 			t.Fatalf("非 result 实体不应追加评估结果 pattern: %v", got)
 		}
 	}
@@ -62,7 +60,7 @@ func TestDictInvalidationPatterns_AllDescriptors(t *testing.T) {
 	}
 	for _, d := range descriptors {
 		got := dictInvalidationPatterns(d)
-		contract := repository.PatternsOf(d.Name)
+		contract := valuation.PatternsOf(d.Name)
 		if len(contract) == 0 {
 			t.Fatalf("%s 无缓存契约", d.Name)
 		}
@@ -86,9 +84,9 @@ func TestDictInvalidationPatterns_AllDescriptors(t *testing.T) {
 func TestRegionDescriptor_ReadPrefixesCovered(t *testing.T) {
 	patterns := dictInvalidationPatterns(valuation.RegionCoefficientDescriptor)
 	readPrefixes := []string{
-		repository.CachePrefixRegionList,
-		repository.CachePrefixRegionCities,
-		repository.CachePrefixRegionGet,
+		valuation.CachePrefixRegionList,
+		valuation.CachePrefixRegionCities,
+		valuation.CachePrefixRegionGet,
 	}
 	for _, prefix := range readPrefixes {
 		covered := false

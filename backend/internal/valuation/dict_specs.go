@@ -1,6 +1,6 @@
 // specs 规格字典（吨位/门架类型/门架高度/电池类型/传动/发动机）：只读方法
 // （写面已迁至 dictcrud 描述符驱动，见 ADR-0008）。
-package repository
+package valuation
 
 import (
 	"context"

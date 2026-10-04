@@ -8,20 +8,19 @@ import (
 	"fmt"
 
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/repository"
 )
 
 // DictionaryReader 系数表读取接口（评估服务与 K 系数计算消费的窄 interface）。
 type DictionaryReader interface {
-	GetBrandByName(ctx context.Context, name string) (repository.Brand, error)
-	GetConditionRating(ctx context.Context, rating string) (repository.ConditionRating, error)
-	GetRegionCoefficient(ctx context.Context, province, city string) (repository.RegionCoefficient, error)
-	GetVehicleTypeByName(ctx context.Context, name string) (repository.VehicleType, error)
-	FindOriginalPriceMatch(ctx context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (repository.OriginalPrice, error)
-	FindOriginalPriceFuzzy(ctx context.Context, brand, vehicleType, series string, tonnage float64) (repository.OriginalPrice, error)
-	GetCoefficientByKey(ctx context.Context, key string) (repository.CoefficientConfig, error)
+	GetBrandByName(ctx context.Context, name string) (valuation.Brand, error)
+	GetConditionRating(ctx context.Context, rating string) (valuation.ConditionRating, error)
+	GetRegionCoefficient(ctx context.Context, province, city string) (valuation.RegionCoefficient, error)
+	GetVehicleTypeByName(ctx context.Context, name string) (valuation.VehicleType, error)
+	FindOriginalPriceMatch(ctx context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (valuation.OriginalPrice, error)
+	FindOriginalPriceFuzzy(ctx context.Context, brand, vehicleType, series string, tonnage float64) (valuation.OriginalPrice, error)
+	GetCoefficientByKey(ctx context.Context, key string) (valuation.CoefficientConfig, error)
 	// ListCoefficientConfigs 系数配置全表读取（快照加载用，一次缓存往返）。
-	ListCoefficientConfigs(ctx context.Context) ([]repository.CoefficientConfig, error)
+	ListCoefficientConfigs(ctx context.Context) ([]valuation.CoefficientConfig, error)
 }
 
 // λ 兜底默认值（与迁移种子一致；仅在系数配置缺失时用于评估结果锁定的 λ 字段）。
@@ -37,7 +36,7 @@ type CoefficientSnapshot struct {
 }
 
 // NewCoefficientSnapshot 由全表系数配置构造快照。
-func NewCoefficientSnapshot(configs []repository.CoefficientConfig) *CoefficientSnapshot {
+func NewCoefficientSnapshot(configs []valuation.CoefficientConfig) *CoefficientSnapshot {
 	m := make(map[string]float64, len(configs))
 	for _, c := range configs {
 		m[c.Key] = c.Value

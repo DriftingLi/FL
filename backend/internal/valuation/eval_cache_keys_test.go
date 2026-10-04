@@ -1,6 +1,6 @@
 // 评估缓存 key 契约 static 测试：读 key ⊆ 写路径失效 pattern 集（含 per-user 形状）。
 // prior art：dict_cache_keys_test.go（keyMatchesPattern 同包复用）。
-package repository
+package valuation
 
 import (
 	"os"
