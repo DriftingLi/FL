@@ -8,7 +8,7 @@
  *    业务失败（积分不足/已兑换/课程不存在）**原样 reject 后端文案** —— api 层不做字符串比对、
  *    不折成功、不静默（哨兵→状态码映射在服务端 `pointsErrStatus`，客户端只是搬运工）。
  * 2) 详情 mapper 逐字段迁出 `points_price` / `entitled`（「后端暂未返回」谎言注释的终结之地）：
- *    真 DTO 样本（形态抄 `backend/internal/service/course_service.go` CourseDTO 的线上投影）下，
+ *    真 DTO 样本（形态抄 `backend/internal/course/service.go` CourseDTO 的线上投影）下，
  *    两槽必须解出真值；缺省/免费/未登录三形态各走各的可空语义，不得压成同一个值。
  *
  * C 组注入变异 = 成对取证的另一半（docs/agents/guards.md 判据 ③）。
