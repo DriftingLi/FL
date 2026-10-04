@@ -103,19 +103,19 @@ func (f *fullMemDict) ListCoefficientConfigs(_ context.Context) ([]CoefficientCo
 	return out, nil
 }
 
-// memEvalStore 内存评估存储（Persist 消费面）。
-type memEvalStore struct {
+// e2eMemEvalStore 内存评估存储（Persist 消费面）。
+type e2eMemEvalStore struct {
 	nextID int64
 }
 
-func (m *memEvalStore) CreateEvaluation(context.Context, *CreateEvaluationParams) (int64, error) {
+func (m *e2eMemEvalStore) CreateEvaluation(context.Context, *CreateEvaluationParams) (int64, error) {
 	m.nextID++
 	return m.nextID, nil
 }
 
 func newTestValuationService(t *testing.T, dict DictionaryReader) *Service {
 	t.Helper()
-	svc, err := NewService(dict, &memEvalStore{})
+	svc, err := NewService(dict, &e2eMemEvalStore{})
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}

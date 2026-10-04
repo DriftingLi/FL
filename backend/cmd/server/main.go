@@ -36,7 +36,6 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	vhandler "forklift-training/internal/valuation/handler"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -221,7 +220,7 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 // 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := valuation.NewDictionaryRepository(pool)
 	evalRepo := valuation.NewEvaluationRepository(pool)
@@ -242,7 +241,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc vhandler.Valuatio
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
 	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
-	vhandler.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
+	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

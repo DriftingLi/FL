@@ -268,23 +268,20 @@ func countQueryHelpers(t *testing.T, dir string) (named, prefixed, files int) {
 	return named, prefixed, files
 }
 
-// valuationPathParseDebt 是**尚未**收进 helper 的跨包债务实测数（internal/valuation/handler，
-// 6 处 `strconv.ParseInt(c.Param("id"))`，同样只看 err ⇒ 0/负数继续往下走 repo）。
-// 共享出口（pkg/httpx 的 PathInt64）现在有了，但这 6 处**不能顺手改**：收进来会把它们的错误面
-// 从「0/负数继续进 repo」改成「400 + 本端点文案」，是 HTTP 面的行为变更，得单独一批带契约测试做。
-// ⇒ 仍记成只能减的债，登记在 ADR-0065 决策 1 末段。这个数字变大即红；变小说明有人先收了，
-// 请把本行与 ADR 一起改小。
-const valuationPathParseDebt = 6
-
+// #1514 波 9（估值域扁平化收尾）把 **ADR-0065 决策 1 末段登记的那笔跨包债务**收掉了：
+// internal/valuation/handler 的 6 处裸 `strconv.ParseInt(c.Param("id"), 10, 64)` 全部改走
+// `httpx.PathInt64(c, "id", "id 必须为整数")`。此前它们因「目录不在 ResponsePackages() 里」
+// 而只能单列一条只减不增的债务分支；并包后估值域的 handler*.go 落在 internal/valuation/
+// —— 本锁的扫描面本就有它（pathParseScopeDirs 按「含 handler*.go 的响应包目录」现算）⇒
+// 那笔债与主断言合流，债务常量与单独的分支一并不再需要。
 // pathParseScopeDirs 扫描面 = 本包 + 所有「含 handler*.go 的响应包目录」（域包 HTTP 出口跟着 handler 走）。
 //
 // 为什么不再只扫本包：ADR-0070 把 HTTP 出口逐域搬进 internal/<域> 之后，internal/api 的非测试
 // 源文件从 30 掉到 27 —— 只盯一个目录的话，域包 handler 里长出本地解析助手时这条锁**看不见**
 // （静默失配），与「目录即射程」正好相反。扫描面因此扩到「哪里还有 handler，哪里就在射程内」，
 // 热源只有一处：testutil.ResponsePackages()（与两把 fact 锁共用同一份目录宇宙）。
-// 注意 ../valuation/handler 不在 ResponsePackages() 里（估值域进的是 internal/valuation —— 其下
-// 还没有 handler*.go —— 与 internal/valuation/repository），故下面那条债务分支仍单独扫它、
-// 不会与这里重复计数。
+// 估值域那一路自 #1514 波 9 起也在射程内：并包后 handler*.go 就落在 internal/valuation/，
+// 于是「哪里还有 handler，哪里就在射程内」自然覆盖它，不再需要单列债务分支。
 func pathParseScopeDirs(t *testing.T) []string {
 	t.Helper()
 	dirs := []string{"."}
@@ -361,21 +358,8 @@ func TestPathIntHasASingleParsePoint(t *testing.T) {
 			pathParseHome, len(queryParseHelperNames), queryParseHelperNames, qNamed)
 	}
 
-	vSites, vFiles := scanDir(t, "../valuation/handler")
-	if vFiles == 0 {
-		t.Fatalf("valuation/handler 一个源文件都没扫到 ⇒ 跨包债务这条断言是空的")
-	}
-	if len(vSites) > valuationPathParseDebt {
-		t.Errorf("valuation/handler 的路径整数解析点从 %d 涨到 %d ⇒ 债务只能减。新增处请改走共享出口"+
-			"（httpx.PathInt64），而不是再加一份实现：\n  %s", valuationPathParseDebt, len(vSites), joinSites(vSites))
-	}
-	if len(vSites) < valuationPathParseDebt {
-		t.Errorf("valuation/handler 实测只剩 %d 处（登记常量是 %d）⇒ 有人先收了这批债，"+
-			"请同步把常量改小并在 ADR-0065 决策 1 末段记一笔", len(vSites), valuationPathParseDebt)
-	}
-	t.Logf("扫描面：%d 个目录 %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / 路径 helper %d 枚 / 查询出口 %d 枚；"+
-		"valuation/handler %d 个文件 / 债务 %d 处（登记 %d）",
-		len(dirs), totalFiles, len(sites), pathParseHome, homeFiles, named, qNamed, vFiles, len(vSites), valuationPathParseDebt)
+	t.Logf("扫描面：%d 个目录 %d 个文件 / 自定义解析点 %d 处；%s %d 个文件 / 路径 helper %d 枚 / 查询出口 %d 枚",
+		len(dirs), totalFiles, len(sites), pathParseHome, homeFiles, named, qNamed)
 }
 
 // TestPathParseDetectorFiresOnPlantedSources 自证扫描器不是空转：三种坏形状各被抓到、

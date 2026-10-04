@@ -118,7 +118,10 @@ func TestCacheContract_NoDictLiteralKeys(t *testing.T) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || name == "dict_cache_keys.go" || name == "dict_cache_keys_test.go" {
+		// #1514 波 9 并包后本目录同时住着 handler 侧的契约测试（它们合法地写出期望字面量，
+		// 如 dictcrud_invalidation_test.go 的 dict:region:*）—— 本判据的主体始终是**读方法**
+		// （生产代码），故把测试文件排除在扫描面外，判据本身不放宽。
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || name == "dict_cache_keys.go" {
 			continue
 		}
 		data, err := os.ReadFile(name)
