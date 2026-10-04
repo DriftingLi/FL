@@ -1,10 +1,10 @@
-// Package dictcrud 字典描述符驱动的机械写面核心（ADR-0008）。
+// 字典描述符驱动的机械写面核心（ADR-0008；原 internal/valuation/dictcrud，#1514 波 6 并回域包）。
 //
 // 每种字典用一个声明式描述符定义（字段、操作参与集、唯一约束、upsert 模式、
 // 默认值、校验、缓存失效标记），CRUD 写 SQL 与响应形状由描述符纯函数生成，
 // 异构处全部落在描述符声明里，核心代码无 if-branch 实体分支。
-// 只读侧保持每实体 typed 方法（repository/dict_*.go），不进入本包。
-package dictcrud
+// 只读侧保持每实体 typed 方法（repository/dict_*.go），不进入本文件族。
+package valuation
 
 import (
 	"errors"
@@ -13,28 +13,28 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// FieldType 描述符字段类型（body 解码与 SQL 参数类型）。
-type FieldType int
+// DictFieldType 描述符字段类型（body 解码与 SQL 参数类型）。
+type DictFieldType int
 
 const (
-	// FieldString 字符串字段。
-	FieldString FieldType = iota
-	// FieldFloat 浮点字段（DECIMAL 列）。
-	FieldFloat
-	// FieldInt 整数字段。
-	FieldInt
-	// FieldBool 布尔字段。
-	FieldBool
+	// DictFieldString 字符串字段。
+	DictFieldString DictFieldType = iota
+	// DictFieldFloat 浮点字段（DECIMAL 列）。
+	DictFieldFloat
+	// DictFieldInt 整数字段。
+	DictFieldInt
+	// DictFieldBool 布尔字段。
+	DictFieldBool
 )
 
-// Field 一个可写字段：JSON 名（body 与响应共用）→ DB 列映射 + 类型。
-type Field struct {
+// DictField 一个可写字段：JSON 名（body 与响应共用）→ DB 列映射 + 类型。
+type DictField struct {
 	// Name JSON 字段名（body 接受与响应输出共用）。
 	Name string
 	// Column DB 列名。
 	Column string
 	// Type 字段类型。
-	Type FieldType
+	Type DictFieldType
 	// BindName bind 必填错误消息里的 Go 字段名（复制 gin binding:"required"
 	// 的输出 "Key: 'body.<BindName>' required"，缺省取大写 Name）。
 	BindName string
@@ -42,8 +42,8 @@ type Field struct {
 	Default any
 }
 
-// OpSpec 一次写操作（create/update）的字段参与声明。
-type OpSpec struct {
+// DictOpSpec 一次写操作（create/update）的字段参与声明。
+type DictOpSpec struct {
 	// Fields 参与该操作的字段名（顺序 = body 接受顺序 = 响应字段顺序）。
 	Fields []string
 	// BindRequired bind 层必填字段：缺失 → 400 "请求体格式错误: ..."。
@@ -52,21 +52,21 @@ type OpSpec struct {
 	Required []string
 }
 
-// UpsertMode 唯一冲突处理模式。
-type UpsertMode int
+// DictUpsertMode 唯一冲突处理模式。
+type DictUpsertMode int
 
 const (
-	// UpsertNone 无 ON CONFLICT 子句。
-	UpsertNone UpsertMode = iota
-	// UpsertDoNothing 冲突时跳过（ON CONFLICT ... DO NOTHING）。
-	UpsertDoNothing
-	// UpsertDoUpdate 冲突时更新非唯一列（ON CONFLICT ... DO UPDATE SET col = EXCLUDED.col）。
-	UpsertDoUpdate
+	// DictUpsertNone 无 ON CONFLICT 子句。
+	DictUpsertNone DictUpsertMode = iota
+	// DictUpsertDoNothing 冲突时跳过（ON CONFLICT ... DO NOTHING）。
+	DictUpsertDoNothing
+	// DictUpsertDoUpdate 冲突时更新非唯一列（ON CONFLICT ... DO UPDATE SET col = EXCLUDED.col）。
+	DictUpsertDoUpdate
 )
 
-// Descriptor 一个字典实体的声明式描述符。
+// DictDescriptor 一个字典实体的声明式描述符。
 // Name 与缓存契约名一致（repository.PatternsOf 查找失效 pattern 的键）。
-type Descriptor struct {
+type DictDescriptor struct {
 	// Name 实体名（= 缓存契约名，registry key）。
 	Name string
 	// EntityLabel 中文实体名（日志与 500 消息："新增<label>失败"）。
@@ -81,17 +81,17 @@ type Descriptor struct {
 	// Path 管理端路由段（POST /admin/<path>；PUT/DELETE /admin/<path>/:id）。
 	Path string
 	// Fields 全部可写字段字典（Create/Update 按名引用；响应追加字段也在其中声明）。
-	Fields []Field
+	Fields []DictField
 	// Create 创建操作声明；Fields 为空表示该实体无 POST（不注册路由）。
-	Create OpSpec
+	Create DictOpSpec
 	// Update 更新操作声明；Fields 为空表示该实体无 PUT（不注册路由）。
-	Update OpSpec
+	Update DictOpSpec
 	// Delete 是否暴露 DELETE（false 不注册路由）。
 	Delete bool
 	// UniqueColumns ON CONFLICT 目标列（upsert 模式必需，且必须是已声明列）。
 	UniqueColumns []string
 	// Upsert 唯一冲突处理模式。
-	Upsert UpsertMode
+	Upsert DictUpsertMode
 	// InvalidateResult 写操作是否追加失效评估结果缓存（ResultCachePattern）。
 	// series 为 false（现状），其余实体为 true。
 	InvalidateResult bool
@@ -123,17 +123,17 @@ type Descriptor struct {
 }
 
 // Field 按 JSON 名返回字段声明。
-func (d Descriptor) Field(name string) (Field, bool) {
+func (d DictDescriptor) Field(name string) (DictField, bool) {
 	for _, f := range d.Fields {
 		if f.Name == name {
 			return f, true
 		}
 	}
-	return Field{}, false
+	return DictField{}, false
 }
 
 // BindName 返回字段的 bind 错误消息名（缺省大写 JSON 名）。
-func (f Field) BindNameOr() string {
+func (f DictField) BindNameOr() string {
 	if f.BindName != "" {
 		return f.BindName
 	}
@@ -147,7 +147,7 @@ func (f Field) BindNameOr() string {
 // 规则：Create/Update 至少一个非空；Create/Update/BindRequired/Required 引用的字段必须已声明；
 // upsert 模式必须声明唯一列且唯一列必须是已声明列；默认值类型与字段类型一致；
 // keyed 更新（UpdateKeyField）与全行响应（ResponseReturning）的声明一致。
-func (d Descriptor) Validate() error {
+func (d DictDescriptor) Validate() error {
 	if d.Name == "" || d.Table == "" || d.Path == "" {
 		return errors.New("Name/Table/Path 必填")
 	}
@@ -156,7 +156,7 @@ func (d Descriptor) Validate() error {
 	}
 	for _, spec := range []struct {
 		kind string
-		spec OpSpec
+		spec DictOpSpec
 	}{{"Create", d.Create}, {"Update", d.Update}} {
 		for _, name := range spec.spec.Fields {
 			if _, ok := d.Field(name); !ok {
@@ -178,7 +178,7 @@ func (d Descriptor) Validate() error {
 		}
 	}
 	switch d.Upsert {
-	case UpsertDoNothing, UpsertDoUpdate:
+	case DictUpsertDoNothing, DictUpsertDoUpdate:
 		if len(d.UniqueColumns) == 0 {
 			return errors.New("upsert 模式必须声明 UniqueColumns")
 		}
@@ -200,7 +200,7 @@ func (d Descriptor) Validate() error {
 		if !ok {
 			return fmt.Errorf("ValidatePositive 引用未声明字段 %q", name)
 		}
-		if f.Type != FieldFloat && f.Type != FieldInt {
+		if f.Type != DictFieldFloat && f.Type != DictFieldInt {
 			return fmt.Errorf("ValidatePositive 字段 %q 必须为数值类型", name)
 		}
 	}
@@ -232,20 +232,20 @@ func (d Descriptor) Validate() error {
 	}
 	for _, f := range d.Fields {
 		if f.Default != nil && !defaultMatchesType(f.Default, f.Type) {
-			return fmt.Errorf("字段 %q 的 Default 类型与 FieldType 不符", f.Name)
+			return fmt.Errorf("字段 %q 的 Default 类型与 DictFieldType 不符", f.Name)
 		}
 	}
 	return nil
 }
 
-// Registry 描述符注册表：实体名 → 描述符（防重名、注册即校验）。
-type Registry struct {
-	m map[string]Descriptor
+// DictRegistry 描述符注册表：实体名 → 描述符（防重名、注册即校验）。
+type DictRegistry struct {
+	m map[string]DictDescriptor
 }
 
-// NewRegistry 构造注册表；描述符非法或重名时 panic（注册期编程错误）。
-func NewRegistry(descriptors ...Descriptor) *Registry {
-	rg := &Registry{m: make(map[string]Descriptor, len(descriptors))}
+// NewDictRegistry 构造注册表；描述符非法或重名时 panic（注册期编程错误）。
+func NewDictRegistry(descriptors ...DictDescriptor) *DictRegistry {
+	rg := &DictRegistry{m: make(map[string]DictDescriptor, len(descriptors))}
 	for _, d := range descriptors {
 		if err := d.Validate(); err != nil {
 			panic("dictcrud: 描述符 " + d.Name + " 非法: " + err.Error())
@@ -259,14 +259,14 @@ func NewRegistry(descriptors ...Descriptor) *Registry {
 }
 
 // Get 按实体名取描述符。
-func (rg *Registry) Get(name string) (Descriptor, bool) {
+func (rg *DictRegistry) Get(name string) (DictDescriptor, bool) {
 	d, ok := rg.m[name]
 	return d, ok
 }
 
 // All 返回全部描述符（注册顺序）。
-func (rg *Registry) All() []Descriptor {
-	out := make([]Descriptor, 0, len(rg.m))
+func (rg *DictRegistry) All() []DictDescriptor {
+	out := make([]DictDescriptor, 0, len(rg.m))
 	for _, d := range rg.m {
 		out = append(out, d)
 	}
@@ -282,18 +282,18 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-func defaultMatchesType(v any, t FieldType) bool {
+func defaultMatchesType(v any, t DictFieldType) bool {
 	switch t {
-	case FieldString:
+	case DictFieldString:
 		_, ok := v.(string)
 		return ok
-	case FieldFloat:
+	case DictFieldFloat:
 		_, ok := v.(float64)
 		return ok
-	case FieldInt:
+	case DictFieldInt:
 		_, ok := v.(int)
 		return ok
-	case FieldBool:
+	case DictFieldBool:
 		_, ok := v.(bool)
 		return ok
 	}

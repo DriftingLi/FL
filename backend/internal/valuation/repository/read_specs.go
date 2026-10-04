@@ -2,16 +2,16 @@
 // 字段复用写面 dictcrud 的 Field（Name/Column/Type 单点）。
 package repository
 
-import "forklift-training/internal/valuation/dictcrud"
+import "forklift-training/internal/valuation"
 
 var (
 	// brands
 	readSpecBrandsList = ReadSpec{
 		Table: "brands",
-		Columns: []dictcrud.Field{
-			{Name: "name", Column: "name", Type: dictcrud.FieldString},
-			{Name: "k_brand", Column: "k_brand", Type: dictcrud.FieldFloat},
-			{Name: "is_active", Column: "is_active", Type: dictcrud.FieldBool},
+		Columns: []valuation.DictField{
+			{Name: "name", Column: "name", Type: valuation.DictFieldString},
+			{Name: "k_brand", Column: "k_brand", Type: valuation.DictFieldFloat},
+			{Name: "is_active", Column: "is_active", Type: valuation.DictFieldBool},
 		},
 		OrderBy: "k_brand DESC, name ASC",
 	}
@@ -24,10 +24,10 @@ var (
 	// condition_ratings
 	readSpecConditionList = ReadSpec{
 		Table: "condition_ratings",
-		Columns: []dictcrud.Field{
-			{Name: "rating", Column: "rating", Type: dictcrud.FieldString},
-			{Name: "label", Column: "label", Type: dictcrud.FieldString},
-			{Name: "base_coefficient", Column: "base_coefficient", Type: dictcrud.FieldFloat},
+		Columns: []valuation.DictField{
+			{Name: "rating", Column: "rating", Type: valuation.DictFieldString},
+			{Name: "label", Column: "label", Type: valuation.DictFieldString},
+			{Name: "base_coefficient", Column: "base_coefficient", Type: valuation.DictFieldFloat},
 		},
 		OrderBy: "base_coefficient DESC",
 	}
@@ -40,10 +40,10 @@ var (
 	// vehicle_types
 	readSpecVtList = ReadSpec{
 		Table: "vehicle_types",
-		Columns: []dictcrud.Field{
-			{Name: "name", Column: "name", Type: dictcrud.FieldString},
-			{Name: "power_type", Column: "power_type", Type: dictcrud.FieldString},
-			{Name: "earliest_factory_year", Column: "earliest_factory_year", Type: dictcrud.FieldInt},
+		Columns: []valuation.DictField{
+			{Name: "name", Column: "name", Type: valuation.DictFieldString},
+			{Name: "power_type", Column: "power_type", Type: valuation.DictFieldString},
+			{Name: "earliest_factory_year", Column: "earliest_factory_year", Type: valuation.DictFieldInt},
 		},
 		OrderBy: "id ASC",
 	}
@@ -56,10 +56,10 @@ var (
 	// series
 	readSpecSeriesList = ReadSpec{
 		Table: "series",
-		Columns: []dictcrud.Field{
-			{Name: "brand", Column: "brand", Type: dictcrud.FieldString},
-			{Name: "name", Column: "name", Type: dictcrud.FieldString},
-			{Name: "earliest_factory_year", Column: "earliest_factory_year", Type: dictcrud.FieldInt},
+		Columns: []valuation.DictField{
+			{Name: "brand", Column: "brand", Type: valuation.DictFieldString},
+			{Name: "name", Column: "name", Type: valuation.DictFieldString},
+			{Name: "earliest_factory_year", Column: "earliest_factory_year", Type: valuation.DictFieldInt},
 		},
 		OrderBy: "id ASC",
 	}
@@ -67,55 +67,55 @@ var (
 	// specs 家族
 	readSpecTonnagesList = ReadSpec{
 		Table:   "tonnages",
-		Columns: []dictcrud.Field{{Name: "value", Column: "value", Type: dictcrud.FieldFloat}},
+		Columns: []valuation.DictField{{Name: "value", Column: "value", Type: valuation.DictFieldFloat}},
 		OrderBy: "value ASC",
 	}
 	readSpecMastTypesList = ReadSpec{
 		Table:   "mast_types",
-		Columns: []dictcrud.Field{{Name: "name", Column: "name", Type: dictcrud.FieldString}},
+		Columns: []valuation.DictField{{Name: "name", Column: "name", Type: valuation.DictFieldString}},
 		OrderBy: "id ASC",
 	}
 	readSpecMastHeightsList = ReadSpec{
 		Table:   "mast_heights",
-		Columns: []dictcrud.Field{{Name: "value_mm", Column: "value_mm", Type: dictcrud.FieldInt}},
+		Columns: []valuation.DictField{{Name: "value_mm", Column: "value_mm", Type: valuation.DictFieldInt}},
 		OrderBy: "value_mm ASC",
 	}
 	readSpecBatteryTypesList = ReadSpec{
 		Table:   "battery_types",
-		Columns: []dictcrud.Field{{Name: "name", Column: "name", Type: dictcrud.FieldString}},
+		Columns: []valuation.DictField{{Name: "name", Column: "name", Type: valuation.DictFieldString}},
 		OrderBy: "id ASC",
 	}
 	readSpecTransmissionTypesList = ReadSpec{
 		Table:   "transmission_types",
-		Columns: []dictcrud.Field{{Name: "name", Column: "name", Type: dictcrud.FieldString}},
+		Columns: []valuation.DictField{{Name: "name", Column: "name", Type: valuation.DictFieldString}},
 		OrderBy: "id ASC",
 	}
 	readSpecEngineTypesList = ReadSpec{
 		Table:   "engine_types",
-		Columns: []dictcrud.Field{{Name: "name", Column: "name", Type: dictcrud.FieldString}},
+		Columns: []valuation.DictField{{Name: "name", Column: "name", Type: valuation.DictFieldString}},
 		OrderBy: "id ASC",
 	}
 
 	// region_coefficients
 	readSpecRegionList = ReadSpec{
 		Table: "region_coefficients",
-		Columns: []dictcrud.Field{
-			{Name: "province", Column: "province", Type: dictcrud.FieldString},
-			{Name: "city", Column: "city", Type: dictcrud.FieldString},
-			{Name: "coefficient", Column: "coefficient", Type: dictcrud.FieldFloat},
+		Columns: []valuation.DictField{
+			{Name: "province", Column: "province", Type: valuation.DictFieldString},
+			{Name: "city", Column: "city", Type: valuation.DictFieldString},
+			{Name: "coefficient", Column: "coefficient", Type: valuation.DictFieldFloat},
 		},
 		OrderBy: "id ASC",
 	}
 	readSpecRegionProvinces = ReadSpec{
 		Table:    "region_coefficients",
-		Columns:  []dictcrud.Field{{Name: "province", Column: "province", Type: dictcrud.FieldString}},
+		Columns:  []valuation.DictField{{Name: "province", Column: "province", Type: valuation.DictFieldString}},
 		Distinct: true,
 		OrderBy:  "province ASC",
 		NoID:     true,
 	}
 	readSpecRegionCities = ReadSpec{
 		Table:   "region_coefficients",
-		Columns: []dictcrud.Field{{Name: "city", Column: "city", Type: dictcrud.FieldString}},
+		Columns: []valuation.DictField{{Name: "city", Column: "city", Type: valuation.DictFieldString}},
 		Where:   "province = $1",
 		OrderBy: "city ASC",
 		NoID:    true,
@@ -129,11 +129,11 @@ var (
 	// coefficient_configs（特殊解码：description 可空 + updated_at 格式化；SQL 仍由 spec 单点生成）
 	readSpecCoefList = ReadSpec{
 		Table: "coefficient_configs",
-		Columns: []dictcrud.Field{
-			{Name: "key", Column: "key", Type: dictcrud.FieldString},
-			{Name: "value", Column: "value", Type: dictcrud.FieldFloat},
-			{Name: "description", Column: "description", Type: dictcrud.FieldString},
-			{Name: "updated_at", Column: "updated_at", Type: dictcrud.FieldString},
+		Columns: []valuation.DictField{
+			{Name: "key", Column: "key", Type: valuation.DictFieldString},
+			{Name: "value", Column: "value", Type: valuation.DictFieldFloat},
+			{Name: "description", Column: "description", Type: valuation.DictFieldString},
+			{Name: "updated_at", Column: "updated_at", Type: valuation.DictFieldString},
 		},
 		OrderBy: "key ASC",
 	}

@@ -4,10 +4,10 @@
 package handler
 
 import (
+	"forklift-training/internal/valuation"
 	"strings"
 	"testing"
 
-	"forklift-training/internal/valuation/dictcrud"
 	"forklift-training/internal/valuation/repository"
 )
 
@@ -21,7 +21,7 @@ func keyMatches(key, pattern string) bool {
 }
 
 func TestDictInvalidationPatterns_Region(t *testing.T) {
-	got := dictInvalidationPatterns(dictcrud.RegionCoefficientDescriptor)
+	got := dictInvalidationPatterns(valuation.RegionCoefficientDescriptor)
 	want := []string{"dict:region:*", repository.ResultCachePattern}
 
 	if len(got) != len(want) {
@@ -37,7 +37,7 @@ func TestDictInvalidationPatterns_Region(t *testing.T) {
 // TestDictInvalidationPatterns_NonResult 未标记 InvalidateResult 的实体
 // 不追加评估结果 pattern（series 现状；防描述符误开）。
 func TestDictInvalidationPatterns_NonResult(t *testing.T) {
-	d := dictcrud.SeriesDescriptor
+	d := valuation.SeriesDescriptor
 	got := dictInvalidationPatterns(d)
 	for _, p := range got {
 		if p == repository.ResultCachePattern {
@@ -53,12 +53,12 @@ func TestDictInvalidationPatterns_NonResult(t *testing.T) {
 // （除 series 外）ResultCachePattern；结果集内每个 pattern 必须覆盖该实体读前缀
 // （沿用 repository 契约 static 测试的不变式；此处在 handler 侧以描述符验证）。
 func TestDictInvalidationPatterns_AllDescriptors(t *testing.T) {
-	descriptors := []dictcrud.Descriptor{
-		dictcrud.BrandDescriptor, dictcrud.VehicleTypeDescriptor, dictcrud.SeriesDescriptor,
-		dictcrud.TonnageDescriptor, dictcrud.MastTypeDescriptor, dictcrud.MastHeightDescriptor,
-		dictcrud.BatteryTypeDescriptor, dictcrud.TransmissionTypeDescriptor, dictcrud.EngineTypeDescriptor,
-		dictcrud.ConditionRatingDescriptor, dictcrud.RegionCoefficientDescriptor,
-		dictcrud.CoefficientConfigDescriptor, dictcrud.OriginalPriceDescriptor,
+	descriptors := []valuation.DictDescriptor{
+		valuation.BrandDescriptor, valuation.VehicleTypeDescriptor, valuation.SeriesDescriptor,
+		valuation.TonnageDescriptor, valuation.MastTypeDescriptor, valuation.MastHeightDescriptor,
+		valuation.BatteryTypeDescriptor, valuation.TransmissionTypeDescriptor, valuation.EngineTypeDescriptor,
+		valuation.ConditionRatingDescriptor, valuation.RegionCoefficientDescriptor,
+		valuation.CoefficientConfigDescriptor, valuation.OriginalPriceDescriptor,
 	}
 	for _, d := range descriptors {
 		got := dictInvalidationPatterns(d)
@@ -84,7 +84,7 @@ func TestDictInvalidationPatterns_AllDescriptors(t *testing.T) {
 // TestRegionDescriptor_ReadPrefixesCovered 区域系数的读 key 前缀必须被描述符实体的
 // 失效集覆盖（沿用 repository 契约 static 测试的不变式；此处在 handler 侧以描述符验证）。
 func TestRegionDescriptor_ReadPrefixesCovered(t *testing.T) {
-	patterns := dictInvalidationPatterns(dictcrud.RegionCoefficientDescriptor)
+	patterns := dictInvalidationPatterns(valuation.RegionCoefficientDescriptor)
 	readPrefixes := []string{
 		repository.CachePrefixRegionList,
 		repository.CachePrefixRegionCities,

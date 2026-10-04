@@ -8,20 +8,20 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"forklift-training/internal/valuation"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/valuation/dictcrud"
 	"forklift-training/internal/valuation/repository"
 	"forklift-training/pkg/response"
 )
 
 // dictInvalidationPatterns 描述符实体的写后失效集：
 // 契约 pattern（repository.PatternsOf）+ （按描述符）评估结果缓存 pattern。
-func dictInvalidationPatterns(d dictcrud.Descriptor) []string {
+func dictInvalidationPatterns(d valuation.DictDescriptor) []string {
 	patterns := repository.PatternsOf(d.Name)
 	if d.InvalidateResult {
 		patterns = append(patterns, repository.ResultCachePattern)
@@ -31,7 +31,7 @@ func dictInvalidationPatterns(d dictcrud.Descriptor) []string {
 
 // createDict 描述符驱动创建骨架：
 // bind（JSON 语法/字段类型/bind 必填）→ 默认值 → 应用层必填 → 写库 → 缓存失效 → 返回整行。
-func (h *ConfigHandler) createDict(c *gin.Context, d dictcrud.Descriptor) {
+func (h *ConfigHandler) createDict(c *gin.Context, d valuation.DictDescriptor) {
 	values, ok := h.bindDictFields(c, d, d.Create)
 	if !ok {
 		return
@@ -43,12 +43,12 @@ func (h *ConfigHandler) createDict(c *gin.Context, d dictcrud.Descriptor) {
 		return
 	}
 	h.invalidateCache(c.Request.Context(), dictInvalidationPatterns(d)...)
-	response.Success(c, dictcrud.BuildCreateResult(d, id, values))
+	response.Success(c, valuation.BuildCreateResult(d, id, values))
 }
 
 // updateDict 描述符驱动更新骨架：id 解析 → bind → 写库（ErrNoRows→404）→ 失效 → 返回字段子集。
 // UpdateKeyField 非空时走按 key 更新（coefficient_configs，返回完整行）。
-func (h *ConfigHandler) updateDict(c *gin.Context, d dictcrud.Descriptor) {
+func (h *ConfigHandler) updateDict(c *gin.Context, d valuation.DictDescriptor) {
 	if d.UpdateKeyField != "" {
 		h.updateDictByKey(c, d)
 		return
@@ -72,12 +72,12 @@ func (h *ConfigHandler) updateDict(c *gin.Context, d dictcrud.Descriptor) {
 		return
 	}
 	h.invalidateCache(c.Request.Context(), dictInvalidationPatterns(d)...)
-	response.Success(c, dictcrud.BuildUpdateResult(d, id, values))
+	response.Success(c, valuation.BuildUpdateResult(d, id, values))
 }
 
 // updateDictByKey 按唯一 key 列更新骨架（coefficient_configs）：
 // key 参数 → bind → 写库（ErrNoRows→404，消息附 key）→ 失效 → 返回完整行。
-func (h *ConfigHandler) updateDictByKey(c *gin.Context, d dictcrud.Descriptor) {
+func (h *ConfigHandler) updateDictByKey(c *gin.Context, d valuation.DictDescriptor) {
 	key := c.Param(d.UpdateKeyField)
 	if key == "" {
 		response.BadRequest(c, d.UpdateKeyMessage)
@@ -106,7 +106,7 @@ func (h *ConfigHandler) updateDictByKey(c *gin.Context, d dictcrud.Descriptor) {
 }
 
 // deleteDict 描述符驱动删除骨架：id 解析 → 删除（ErrNoRows→404）→ 失效 → 返回 {id}。
-func (h *ConfigHandler) deleteDict(c *gin.Context, d dictcrud.Descriptor) {
+func (h *ConfigHandler) deleteDict(c *gin.Context, d valuation.DictDescriptor) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "id 必须为整数")
@@ -129,7 +129,7 @@ func (h *ConfigHandler) deleteDict(c *gin.Context, d dictcrud.Descriptor) {
 // 按 OpSpec.Fields 逐字段解码（JSON 语法错误 → 400 请求体格式错误）；
 // 缺失字段落类型零值（与 struct 零值绑定语义一致）；BindRequired 缺失 → 400（复制
 // gin validator 的 required 失败消息）；随后应用默认值与应用层必填校验。
-func (h *ConfigHandler) bindDictFields(c *gin.Context, d dictcrud.Descriptor, spec dictcrud.OpSpec) (map[string]any, bool) {
+func (h *ConfigHandler) bindDictFields(c *gin.Context, d valuation.DictDescriptor, spec valuation.DictOpSpec) (map[string]any, bool) {
 	var raw map[string]json.RawMessage
 	if err := c.ShouldBindJSON(&raw); err != nil {
 		response.BadRequest(c, "请求体格式错误: "+err.Error())
@@ -148,7 +148,7 @@ func (h *ConfigHandler) bindDictFields(c *gin.Context, d dictcrud.Descriptor, sp
 					"' Error:Field validation for '"+f.BindNameOr()+"' failed on the 'required' tag")
 				return nil, false
 			}
-			values[name] = dictcrud.ZeroValue(f)
+			values[name] = valuation.ZeroValue(f)
 			continue
 		}
 		v, err := decodeDictValue(rawVal, f.Type)
@@ -158,7 +158,7 @@ func (h *ConfigHandler) bindDictFields(c *gin.Context, d dictcrud.Descriptor, sp
 		}
 		values[name] = v
 	}
-	dictcrud.ApplyDefaults(d, values)
+	valuation.ApplyDefaults(d, values)
 	for _, name := range spec.Required {
 		if s, ok := values[name].(string); ok && s == "" {
 			response.BadRequest(c, d.RequiredMessage)
@@ -186,27 +186,27 @@ func positiveValue(v any) bool {
 }
 
 // decodeDictValue 按字段类型解码单字段 JSON 值。
-func decodeDictValue(raw json.RawMessage, t dictcrud.FieldType) (any, error) {
+func decodeDictValue(raw json.RawMessage, t valuation.DictFieldType) (any, error) {
 	switch t {
-	case dictcrud.FieldString:
+	case valuation.DictFieldString:
 		var s string
 		if err := json.Unmarshal(raw, &s); err != nil {
 			return nil, err
 		}
 		return s, nil
-	case dictcrud.FieldFloat:
+	case valuation.DictFieldFloat:
 		var f float64
 		if err := json.Unmarshal(raw, &f); err != nil {
 			return nil, err
 		}
 		return f, nil
-	case dictcrud.FieldInt:
+	case valuation.DictFieldInt:
 		var i int
 		if err := json.Unmarshal(raw, &i); err != nil {
 			return nil, err
 		}
 		return i, nil
-	case dictcrud.FieldBool:
+	case valuation.DictFieldBool:
 		var b bool
 		if err := json.Unmarshal(raw, &b); err != nil {
 			return nil, err

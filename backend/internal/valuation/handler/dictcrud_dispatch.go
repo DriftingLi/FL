@@ -13,9 +13,8 @@
 package handler
 
 import (
+	"forklift-training/internal/valuation"
 	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/valuation/dictcrud"
 )
 
 // dictRoute 一个描述符的三条写路由具名方法；nil = 描述符未声明该操作。
@@ -25,7 +24,7 @@ type dictRoute struct {
 	delete gin.HandlerFunc
 }
 
-// dictDispatch 具名分派表：描述符名（dictcrud.Descriptor.Name）→ 具名方法。
+// dictDispatch 具名分派表：描述符名（valuation.DictDescriptor.Name）→ 具名方法。
 // 键必须与描述符名逐字一致；漏登记或多登记都在注册期 panic（见 registerDictCRUDRoutes），
 // 锁测试再断一次「表 ↔ 描述符 ↔ 注解」三方一致。
 func (h *ConfigHandler) dictDispatch() map[string]dictRoute {
@@ -99,7 +98,7 @@ func (h *ConfigHandler) dictDispatch() map[string]dictRoute {
 //
 // 注册期 fail-closed：描述符声明了操作而表里没有具名方法 → panic（漏登记是编程错误，
 // 不能静默少注册一条路由）；表里登记了未声明的描述符 → panic。
-func (h *ConfigHandler) registerDictCRUDRoutes(group *gin.RouterGroup, reg *dictcrud.Registry) {
+func (h *ConfigHandler) registerDictCRUDRoutes(group *gin.RouterGroup, reg *valuation.DictRegistry) {
 	table := h.dictDispatch()
 	for _, d := range reg.All() {
 		routes, ok := table[d.Name]
@@ -107,24 +106,24 @@ func (h *ConfigHandler) registerDictCRUDRoutes(group *gin.RouterGroup, reg *dict
 			panic("dictcrud: 描述符 " + d.Name + " 未在具名分派表（dictcrud_dispatch.go）中登记")
 		}
 		if len(d.Create.Fields) > 0 {
-			group.POST("/"+dictcrud.RoutePath(d, dictcrud.OpCreate), requireDictRoute(d, dictcrud.OpCreate, routes.create))
+			group.POST("/"+valuation.DictRoutePath(d, valuation.DictOpCreate), requireDictRoute(d, valuation.DictOpCreate, routes.create))
 		}
 		if len(d.Update.Fields) > 0 {
-			group.PUT("/"+dictcrud.RoutePath(d, dictcrud.OpUpdate), requireDictRoute(d, dictcrud.OpUpdate, routes.update))
+			group.PUT("/"+valuation.DictRoutePath(d, valuation.DictOpUpdate), requireDictRoute(d, valuation.DictOpUpdate, routes.update))
 		}
 		if d.Delete {
-			group.DELETE("/"+dictcrud.RoutePath(d, dictcrud.OpDelete), requireDictRoute(d, dictcrud.OpDelete, routes.delete))
+			group.DELETE("/"+valuation.DictRoutePath(d, valuation.DictOpDelete), requireDictRoute(d, valuation.DictOpDelete, routes.delete))
 		}
 	}
 	for name := range table {
 		if _, ok := reg.Get(name); !ok {
-			panic("dictcrud: 具名分派表登记了未声明的描述符 " + name + "（dictcrud.AllDescriptors() 漏了它？）")
+			panic("dictcrud: 具名分派表登记了未声明的描述符 " + name + "（valuation.AllDictDescriptors() 漏了它？）")
 		}
 	}
 }
 
 // requireDictRoute 描述符声明了该操作就必须有具名方法（缺项 → panic，不静默少注册路由）。
-func requireDictRoute(d dictcrud.Descriptor, op dictcrud.Op, fn gin.HandlerFunc) gin.HandlerFunc {
+func requireDictRoute(d valuation.DictDescriptor, op valuation.DictOp, fn gin.HandlerFunc) gin.HandlerFunc {
 	if fn == nil {
 		panic("dictcrud: 描述符 " + d.Name + " 的 " + op.Method() + " 路由没有具名方法（dictcrud_dispatch.go 漏登记）")
 	}

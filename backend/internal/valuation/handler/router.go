@@ -30,6 +30,7 @@
 package handler
 
 import (
+	"forklift-training/internal/valuation"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
@@ -38,7 +39,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
-	"forklift-training/internal/valuation/dictcrud"
 	vservice "forklift-training/internal/valuation/service"
 )
 
@@ -155,6 +155,6 @@ func RegisterRoutes(
 		admin.Use(middleware.AuditLog(auditSvc, logger))
 	}
 	{
-		configHandler.registerDictCRUDRoutes(admin, dictcrud.NewRegistry(dictcrud.AllDescriptors()...))
+		configHandler.registerDictCRUDRoutes(admin, valuation.NewDictRegistry(valuation.AllDictDescriptors()...))
 	}
 }

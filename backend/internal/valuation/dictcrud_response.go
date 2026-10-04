@@ -8,118 +8,118 @@
 //
 // 注：响应体在运行期是 map[string]any（encoding/json 按字典序输出键），故这里的顺序只服务
 // 注解与生成物的可读性——它必须逐字等于既有注解顺序，改顺序就是改生成物 diff。
-package dictcrud
+package valuation
 
-// Op 描述符的一条写路由（注册条件见 handler 侧 registerDictCRUDRoutes）。
-type Op int
+// DictOp 描述符的一条写路由（注册条件见 handler 侧 registerDictCRUDRoutes）。
+type DictOp int
 
 const (
-	// OpCreate POST /<Path>（Create.Fields 非空时注册）。
-	OpCreate Op = iota
-	// OpUpdate PUT /<Path>/:<param>（Update.Fields 非空时注册；param = UpdateKeyField 或 id）。
-	OpUpdate
-	// OpDelete DELETE /<Path>/:id（Delete 为真时注册）。
-	OpDelete
+	// DictOpCreate POST /<Path>（Create.Fields 非空时注册）。
+	DictOpCreate DictOp = iota
+	// DictOpUpdate PUT /<Path>/:<param>（Update.Fields 非空时注册；param = UpdateKeyField 或 id）。
+	DictOpUpdate
+	// DictOpDelete DELETE /<Path>/:id（Delete 为真时注册）。
+	DictOpDelete
 )
 
 // Method 该操作注册的 HTTP 方法（= 注解 @Router 的动词）。
-func (o Op) Method() string {
+func (o DictOp) Method() string {
 	switch o {
-	case OpCreate:
+	case DictOpCreate:
 		return "POST"
-	case OpUpdate:
+	case DictOpUpdate:
 		return "PUT"
-	case OpDelete:
+	case DictOpDelete:
 		return "DELETE"
 	}
 	return ""
 }
 
-// RouteParam 该操作的路由参数名：create 无参数（返回空串）；
+// DictRouteParam 该操作的路由参数名：create 无参数（返回空串）；
 // update 取 UpdateKeyField（缺省 id）；delete 恒为 id。
-func RouteParam(d Descriptor, op Op) string {
+func DictRouteParam(d DictDescriptor, op DictOp) string {
 	switch op {
-	case OpUpdate:
+	case DictOpUpdate:
 		if d.UpdateKeyField != "" {
 			return d.UpdateKeyField
 		}
 		return "id"
-	case OpDelete:
+	case DictOpDelete:
 		return "id"
 	}
 	return ""
 }
 
-// RoutePath 该操作在管理端组内的路由段，gin 形态（:id / :key）：create → <Path>；update/delete → <Path>/:<param>。
-// 路由注册用这一份；注解形态见 SwaggerPath。
-func RoutePath(d Descriptor, op Op) string {
-	if p := RouteParam(d, op); p != "" {
+// DictRoutePath 该操作在管理端组内的路由段，gin 形态（:id / :key）：create → <Path>；update/delete → <Path>/:<param>。
+// 路由注册用这一份；注解形态见 DictSwaggerPath。
+func DictRoutePath(d DictDescriptor, op DictOp) string {
+	if p := DictRouteParam(d, op); p != "" {
 		return d.Path + "/:" + p
 	}
 	return d.Path
 }
 
-// SwaggerPath 同一路由的注解/生成物形态（{id} / {key}）：与 RoutePath 共用同一个参数名派生，
+// DictSwaggerPath 同一路由的注解/生成物形态（{id} / {key}）：与 DictRoutePath 共用同一个参数名派生，
 // 故「描述符 Path / UpdateKeyField 改了而注解没改」会被锁测试抓住。
-func SwaggerPath(d Descriptor, op Op) string {
-	if p := RouteParam(d, op); p != "" {
+func DictSwaggerPath(d DictDescriptor, op DictOp) string {
+	if p := DictRouteParam(d, op); p != "" {
 		return d.Path + "/{" + p + "}"
 	}
 	return d.Path
 }
 
-// ResponseField 响应里的一个字段：JSON 名 + swag 内联 object{} 的类型名。
-type ResponseField struct {
+// DictResponseField 响应里的一个字段：JSON 名 + swag 内联 object{} 的类型名。
+type DictResponseField struct {
 	// Name JSON 字段名（body 与响应共用）。
 	Name string
-	// Type swag 类型名（integer / number / string / boolean），由 FieldType 派生。
+	// Type swag 类型名（integer / number / string / boolean），由 DictFieldType 派生。
 	Type string
 }
 
-// ResponseFields 由描述符派生一次写操作的响应字段表（顺序 = 既有注解顺序）：
+// DictResponseFields 由描述符派生一次写操作的响应字段表（顺序 = 既有注解顺序）：
 //
 //	create → {id} ∪ Create.Fields ∪ ResponseExtra
 //	update → ResponseReturning 时 {id} ∪ ResponseColumns；否则 {id} ∪ Update.Fields ∪ ResponseExtra
 //	delete → {id}
 //
 // 与 builder.go 的响应构造一一对应（buildResult / ResponseScan 的 id 前置 + ResponseColumns）。
-func ResponseFields(d Descriptor, op Op) []ResponseField {
-	out := []ResponseField{{Name: "id", Type: swaggerTypeOf(FieldInt)}}
+func DictResponseFields(d DictDescriptor, op DictOp) []DictResponseField {
+	out := []DictResponseField{{Name: "id", Type: swaggerTypeOf(DictFieldInt)}}
 	switch op {
-	case OpCreate:
+	case DictOpCreate:
 		out = append(out, swaggerFields(d, d.Create.Fields)...)
-	case OpUpdate:
+	case DictOpUpdate:
 		if d.ResponseReturning {
 			return append(out, swaggerFields(d, d.ResponseColumns)...)
 		}
 		out = append(out, swaggerFields(d, d.Update.Fields)...)
-	case OpDelete:
+	case DictOpDelete:
 		return out
 	}
 	return append(out, swaggerFields(d, d.ResponseExtra)...)
 }
 
 // swaggerFields 按名取描述符字段并映射为注解字段（未声明的名字跳过，与响应构造的 if ok 一致）。
-func swaggerFields(d Descriptor, names []string) []ResponseField {
-	out := make([]ResponseField, 0, len(names))
+func swaggerFields(d DictDescriptor, names []string) []DictResponseField {
+	out := make([]DictResponseField, 0, len(names))
 	for _, name := range names {
 		if f, ok := d.Field(name); ok {
-			out = append(out, ResponseField{Name: f.Name, Type: swaggerTypeOf(f.Type)})
+			out = append(out, DictResponseField{Name: f.Name, Type: swaggerTypeOf(f.Type)})
 		}
 	}
 	return out
 }
 
-// swaggerTypeOf FieldType → swag 内联 object{} 的类型名。
-func swaggerTypeOf(t FieldType) string {
+// swaggerTypeOf DictFieldType → swag 内联 object{} 的类型名。
+func swaggerTypeOf(t DictFieldType) string {
 	switch t {
-	case FieldString:
+	case DictFieldString:
 		return "string"
-	case FieldFloat:
+	case DictFieldFloat:
 		return "number"
-	case FieldInt:
+	case DictFieldInt:
 		return "integer"
-	case FieldBool:
+	case DictFieldBool:
 		return "boolean"
 	}
 	return ""
