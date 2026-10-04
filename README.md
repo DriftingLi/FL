@@ -2,7 +2,7 @@
 
 面向叉车维修培训、学员就业对接与叉车残值评估的全栈系统。包含在线培训与考试练习、论坛问答、学员资料投稿、积分激励、AI 助手、企业招聘对接，以及叉车残值评估与电池剩余寿命（RUL）评估等模块。系统按角色划分工作区（学员 / 讲师 / 管理员 / 企业招聘者），前端以子域名承载独立工作区。
 
-领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（`ADR-0001` ~ `ADR-0061`，61 篇）。
+领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（`ADR-0001` ~ `ADR-0070`，71 篇）。
 
 ## 功能特性
 
@@ -52,7 +52,7 @@
 ### 移动端（学员 App + 招聘者端）
 
 - **uni-app x** 跨端应用（Android / iOS / H5 / 微信小程序）
-- `training-app/叉车维修培训学员端跨端应用/pages/` 下已有 21 个页面模块（含 `recruiter` 招聘者端）
+- `training-app/叉车维修培训学员端跨端应用/pages/` 下已有 23 个页面模块（含 `recruiter` 招聘者端）
 - **落地范围与验收门不在本仓评审面**：移动端由 @zhengcookie 负责，其功能清单以该目录的 `pages.json` 与**移动端自己的 ADR 体系**（`training-app/…/docs/adr/`，编号与根仓库无关）为准，本处不复述功能状态
 
 ## 系统架构
@@ -83,6 +83,17 @@
 - **验证码（ADR-0001）**：邮箱（SMTP）与短信（腾讯云 SMS）是同一状态机两侧的 adapter，六态用途，默认 5 分钟内有效、60 秒节流、错误上限 5 次
 
 统一响应结构：`{ "code": <HTTP状态码>, "message": "...", "data": ... }`（`code` 即 HTTP 状态码，`200` 表示成功，见 ADR-0005）。
+
+### 后端按功能域分包（ADR-0070）
+
+后端**不按技术分层切目录**，而是「一个功能域 = 一个包」：`backend/internal/<域>/`，共 30 个域；域名与路由前缀的唯一真源是 [`backend/internal/apitypes/domains.go`](./backend/internal/apitypes/domains.go) 的域声明表（它同时是 swagger definitions 前缀与前端生成契约的域边界）。
+
+- 包内按**文件名**分层：`handler*.go`（HTTP 出口与路由注册）/ `service.go` / `dto.go` / `errors.go`；测试与实现同目录同包。**不用子目录分层**——子目录 = 多包 = 导出面被迫扩大，且会让「目录即射程」的守卫失明。
+- 跨域共享件只有三个出口：注入参数 → 升级到 [`backend/pkg/httpx`](./backend/pkg/httpx)（HTTP 形状与请求解析）→ 共享助手层 [`backend/internal/core`](./backend/internal/core)（能进叶子包的一律进叶子包）。
+- 装配根是 [`backend/internal/api`](./backend/internal/api)：只剩 `NewDeps` + `providers_*.go` + 路由登记，没有业务实现；域包**不得反向依赖**它。
+- 三条分层规矩由 [`backend/internal/layers`](./backend/internal/layers/layer_guard.go) 可执行地守着（单向依赖 / 测试与实现同居 / gin 只出现在 HTTP 面与登记的基建里）；「哪些文件算 HTTP 面」的唯一出处是 `backend/internal/testutil/codescan.go`。
+
+逐波迁移账本（含共享件落点表与全部踩坑血账）见 [`docs/agents/domain-package-migration.md`](./docs/agents/domain-package-migration.md)；决策理由见 [`ADR-0070`](./docs/adr/ADR-0070-域包形态与目录即射程的收口.md)。
 
 ### 文件与对象存储
 
@@ -144,18 +155,21 @@
 │   │   ├── server/               # 服务入口（默认 :8080；启动即跑 migrate up + 建默认账号）
 │   │   ├── migrate/              # 数据库迁移 CLI（up | down | version | force | check-columns）
 │   │   ├── gen-apitypes/ gen-authz/ gen-credscope/ gen-aifeatures/ gen-deploy/
-│   │   │                         # 代码生成：Go 注解 → 前端契约类型 / 授权表 / 证件作用域表 等
-│   │   └── import-reference-content/ backfill-evaluation-suggestions/
+│   │   │                         # 代码生成：Go 声明表 → 前端契约类型 / 授权表 / 证件作用域表 / AI 功能表 / 部署默认值
+│   │   └── import-reference-content/ backfill-evaluation-suggestions/ backfill-mock-exam-scores/
 │   │                                 # 一次性数据导入与回填工具
 │   ├── internal/
-│   │   ├── api/                  # 各域 Gin 路由与 handler（端点骨架见 api/endpoint.go）
-│   │   ├── service/ model/ db/   # 业务层与实体——**没有 repository 层**，读写都在 service 里（勿再新增）
-│   │   ├── config/ logger/ middleware/ cache/ captcha/ clock/ security/ daemon/ storage/ pdfutil/ geolocation/
-│   │   ├── authz/ apitypes/ codegen/ credentialscope/ deploy/ migrate/ testutil/
-│   │   │                         # 授权矩阵 / 前端契约 codegen / 证件作用域覆盖锁 / 部署配置校验 / 迁移执行 / 测试基建
-│   │   └── valuation/            # 残值评估 + 电池 RUL 子模块（自带 handler/service/repository/config/model/pdf/report）
-│   ├── pkg/{paging,response}/    # 分页与统一响应
-│   ├── migrations/               # 迁移脚本（000001 ~ 000039，共 39 组，up/down 成对）
+│   │   ├── api/                  # 装配根：NewDeps + providers_*.go + 路由登记（无业务实现）
+│   │   ├── <域>/ × 30            # 30 个功能域包（域名见 apitypes/domains.go）：handler*.go / service.go / dto.go / errors.go
+│   │   ├── core/ model/ db/      # 共享助手层 / GORM 实体与跨域词汇 / GORM 初始化——**没有 repository 层**，读写都在各域里（勿再新增）
+│   │   ├── config/ logger/ middleware/ cache/ captcha/ clock/ security/ daemon/ storage/ geolocation/
+│   │   ├── authz/ apitypes/ codegen/ credentialscope/ deploy/ migrate/ layers/ testutil/
+│   │   │                         # 授权矩阵 / 前端契约 codegen / 证件作用域表 / 部署事实 / 迁移执行 / 分层守卫 / 测试基建
+│   │   ├── coerce/ timefmt/ textx/ slicesx/ sortorder/ questionpool/ region/ filestore/ entitlement/ scope/ dberr/ pdfutil/
+│   │   │                         # 叶子包：数值转换 / 时间格式化 / 文本 / 切片 / 排序位 / 题库 SQL 片段 / 地区 / 文件存取 / 权益 / 证件分区 / DB 错误 / PDF 字体与版式常量
+│   │   └── valuation/            # 残值评估域（扁平单包：109 个 .go、0 个子目录，含电池 RUL / 字典描述符 CRUD / PDF 报告）
+│   ├── pkg/{httpx,paging,response}/   # HTTP 解析出口与端点骨架 / 分页 / 统一响应
+│   ├── migrations/               # 迁移脚本（000001 ~ 000040，共 40 组，up/down 成对）
 │   ├── docs/                     # Swagger 生成产物（docs.go / swagger.json|yaml）
 │   ├── Dockerfile / Makefile
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice + backend
@@ -174,6 +188,7 @@
 │   └── .env.example
 ├── training-app/
 │   └── 叉车维修培训学员端跨端应用/  # uni-app x 学员端移动 App
+├── deploy/                       # 部署事实声明物（env.defaults 生成物）与 systemd 单元
 ├── libreoffice-sidecar/          # 文档转换服务镜像（PPT → WebP、简历 PDF）
 ├── viz/                          # 设计提案 / 设计系统静态原型（HTML，仅参考）
 ├── scripts/
@@ -181,18 +196,19 @@
 │   ├── setup-server.sh           # 服务器初始化（含 /etc/cron.d/forklift-maintenance）
 │   ├── lxc-install-docker.sh / lxc-setup-ssh.sh   # LXC 容器初始化
 │   ├── backup-daily.sh / rbd-snap-hourly.sh       # 定时备份与快照
-│   ├── check-*.mjs               # 七条静态守卫（api-seam / el-controls / async-section /
-│   │                             #   api-consumers / ai-assistant-send / render-error-face / catalog-sort）
-│   │                             #   每条配同名 .test.mjs 自检；runner 面在 lib/guard.mjs
+│   ├── check-*.mjs               # 八条静态守卫（api-seam / el-controls / async-section /
+│   │                             #   api-consumers / ai-assistant-send / render-error-face / catalog-sort /
+│   │                             #   comment-cleanliness）；每条配同名 .test.mjs 自检，runner 面在 lib/guard.mjs
 │   ├── guard.test.mjs / gate-predicates.test.mjs / deploy-migration-gate.test.mjs
 │   │                             # 守卫 runner、CD 门禁谓词、迁移门的可执行判据（CI 在跑）
 │   └── audit-api-annotations.mjs / ci-summary-status.sh   # 注解审计 / CI 汇总状态
-├── docs/                         # `.gitignore` 忽略 `docs/*`，四个例外入库：`adr/`、`agents/`、`README.md`、`verification/`
-│   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0061（入库，核心资产）
+├── docs/                         # `.gitignore` 忽略 `docs/*`，五个例外入库：`adr/`、`agents/`、`design/`、`README.md`、`verification/`
+│   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0070（71 篇，入库，核心资产）
 │   ├── agents/                   # AI/agent 工作约定（入库，由根 AGENTS.md 导航；权威检查流程在 checks.md）
+│   ├── design/                   # 调研与实测账本（入库，如 1445 契约测试审计）
 │   ├── verification/             # 验收产物（真机截图等）——`pr-evidence.yml` 认的可核验路径之一
-│   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库）
-├── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml）
+│   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库；代码百科 `reference/CODE_WIKI.md` 住这里）
+├── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml / pr-evidence.yml）
 ├── deploy.sh                     # 本地 / 手动一键部署
 └── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Nginx 前端）
 ```
@@ -384,7 +400,7 @@ npm test             # vitest 单元测试
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，`序号_名称.up.sql` / `.down.sql` 成对组织，当前 **39 组**（`000001` baseline ~ `000039` 联系方式交换的裁决窗口）。
+迁移脚本位于 `backend/migrations/`，`序号_名称.up.sql` / `.down.sql` 成对组织，当前 **40 组**（`000001` baseline ~ `000040` 练习进度与证件级联）。
 
 **这里不再逐项列表**——旧版列到 000020 后再没人更新，读它只会得到一个错误的现状。清单看目录本身，意图看每条迁移自己的头部注释（本仓惯例是每条都写明「为什么需要它、为什么是这个形状、回滚的有损性在哪」）：
 
@@ -398,7 +414,7 @@ ls backend/migrations/*.up.sql | sed 's#.*/##'
 
 ## 测试与检查
 
-> **权威版本在 [`docs/agents/checks.md`](docs/agents/checks.md)**（含七条静态守卫、swagger 与 codegen 的生成链顺序、PG 契约测试纪律、两条环境的已知例外）。本节只留入口，不复述细节——过去这里就是靠抄写漂移的。
+> **权威版本在 [`docs/agents/checks.md`](docs/agents/checks.md)**（含八条静态守卫、swagger 与 codegen 的生成链顺序、PG 契约测试纪律、两条环境的已知例外）。本节只留入口，不复述细节——过去这里就是靠抄写漂移的。
 
 - **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。
   ⚠️ 本机（Windows）**目前跑不了 `golangci-lint`**：v1.64.8 构建于 go 1.26.4，面对本机 go 1.27.1 直接失败 ⇒ 本地三条 + CI 的 `backend-lint` 兜底。WSL 环境下 Go 工具链在 `~/go/bin`。
@@ -476,9 +492,10 @@ grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
 | [`CONTEXT.md`](./CONTEXT.md) | 领域词汇表（canonical 术语与 Avoid 清单） |
 | [`API.md`](./API.md) | API 清单 |
 | [`AGENTS.md`](./AGENTS.md) | AI / agent 工作约定与发布流程 |
-| [`docs/adr/`](./docs/adr/) | 架构决策记录 `ADR-0001` ~ `ADR-0061`（61 篇，入库） |
+| [`docs/adr/`](./docs/adr/) | 架构决策记录 `ADR-0001` ~ `ADR-0070`（71 篇，入库） |
 | [`docs/agents/`](./docs/agents/) | AI/agent 工作约定（**入库**，由根 `AGENTS.md` 导航）：issue-tracker / triage-labels / domain / security-scan / **ui-conventions** / **checks（测试与检查的权威版本）** / **release** / **multi-agent-git** / handoff-验收门 |
 | [`docs/README.md`](./docs/README.md) | `docs/` 自身的索引与入库 / 本地分层规则 |
+| `docs/reference/CODE_WIKI.md` | 代码百科（**本地不入库**，故不设链接）：目录结构 / 域包职责 / 数据模型 / 算法 / 运行与部署方式 |
 | [`student-api-docs.md`](./student-api-docs.md) | 学员端接口说明 |
 | [`THIRD_PARTY.md`](./THIRD_PARTY.md) | 第三方组件与许可 |
 

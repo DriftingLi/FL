@@ -1,17 +1,18 @@
 # docs/ 目录索引与存储规范
 
 > 本目录混存「入库文档」与「本地协作文档」两类，按 `.gitignore` 的 `docs/*` 例外规则区分：
-> **入库** = `adr/`（架构决策记录，核心资产）、`agents/`（AI/agent 工作约定，随 AGENTS.md 导航拆分入库，2026-09-09 起）、本 README；
+> **入库** = `adr/`（架构决策记录，核心资产）、`agents/`（AI/agent 工作约定，随 AGENTS.md 导航拆分入库，2026-09-09 起）、`verification/`（验收产物，2026-09-21 起）、`design/`（调研与实测账本，2026-10-03 起）、本 README；
 > **本地不入库** = `plans/`、`reference/`、`archive/` 及其余未列外名的文件。
 
 ## 目录结构
 
 | 目录 | 入库 | 用途 |
 | --- | --- | --- |
-| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，61 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
+| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，71 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
 | `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git / handoff-验收门） |
 | `docs/README.md` | ✅ | 本索引 |
 | `docs/verification/` | ✅ | 验收产物（真机截图等），按 `<模块>/<PR号>/` 分目录存放——`pr-evidence.yml` 认的可核验产物路径之一，不按「方案文档」归档 |
+| `docs/design/` | ✅ | 调研与实测账本（如 `1445-api-contract-test-audit.md`、`1445-p4-comment-audit.md`）——**可被引用的判据来源**，不是草稿 |
 | `docs/plans/` | ❌ | 产品 / 技术方案、实施计划（当前为空；命名建议 `主题-方案.md`） |
 | `docs/reference/` | ❌ | 参考资料：业务数据表、评估填报界面、代码 Wiki 等 |
 | `docs/archive/` | ❌ | 已归档 / 被取代的方案（如 try-uniapp-mvp-isolated/） |
@@ -44,14 +45,14 @@
 
 ### docs/adr/（入库）
 
-61 篇，文件名一律 `ADR-NNNN-主题.md`（如 `ADR-0001-验证码通道适配器seam`、`ADR-0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
-<!-- 计数基线 2026-09-20（ADR-0061 入库后）；新增 ADR 时同步这里，或按 `ls docs/adr/ADR-*.md | wc -l` 重算。 -->
+71 篇，文件名一律 `ADR-NNNN-主题.md`（如 `ADR-0001-验证码通道适配器seam`、`ADR-0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
+<!-- 计数基线 2026-10-04（ADR-0070 入库后）；新增 ADR 时同步这里，或按 `ls docs/adr/ADR-*.md | wc -l` 重算。 -->
 
 ### docs/plans/（本地，当前为空）
 
 ### docs/reference/（本地）
 
-- CODE_WIKI.md（代码 Wiki）
+- CODE_WIKI.md（代码百科：架构 / 域包职责 / 数据模型 / 算法 / 运行与部署。**本地维护**，事实基线写在文件头，改代码时顺手同步）
 - 叉车残值评估填报.png
 - 叉车价格对照表.xlsx
 - 叉车配置大全.xlsx
