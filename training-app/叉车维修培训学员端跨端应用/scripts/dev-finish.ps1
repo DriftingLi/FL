@@ -70,6 +70,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 子进程输出解码用 UTF-8（本仓先例：frontier-run.ps1 / wt-bootstrap.ps1 / mp-weixin-check.ps1）。
+# 本机 `[Console]::OutputEncoding` 默认是 **gb2312** ⇒ `& npx jest` 的 stdout 在**进入内存那一刻**
+# 就被按 GBK 解码：中文用例名与 `●` 标记变成乱码（#1526 实测：同一行原始字节 E2 97 8F 被解成
+# 「鈻犫暈」形态）。若不在这里修，失败摘要会把「看不见红」换成「看得见但读不懂」——比不写更坏。
+# 非控制台环境（CI、被重定向）设置可能抛 ⇒ try/catch 吞掉，行为退回改前。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
 $ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $started = Get-Date
 
@@ -86,6 +93,235 @@ function Write-Result {
     param([bool]$Ok, [string]$Msg)
     if ($Ok) { Write-Host "  ✅ $Msg" -ForegroundColor Green }
     else { Write-Host "  ❌ $Msg" -ForegroundColor Red }
+}
+
+<#
+.SYNOPSIS
+    把已经跑完的 jest 失败输出裁剪成 ≤$MaxBytes 字节的**人读**摘要并落盘（#1526，2026-10-04）。
+
+.DESCRIPTION
+    存在理由：单元测试这一步失败时，脚本只打一行「单元测试失败（exit code 1）」就 `exit 1`，
+    而那一份完整输出**只活在内存里、随进程蒸发** ⇒ 想知道「哪一条红、为什么红」只能**重跑**
+    jest（#1472 先例：为看失败原因重跑六遍，合计 2,140.466 秒）。本函数把那一份已经拿到的输出
+    留下四件东西：**失败套件**、**失败用例名 + 其后的判据行**（为什么红）、**套件级说明**
+    （`● Console` 日志与 `● Test suite failed to run` —— 它们不是失败用例）、**`Tests:` / `Time:` 汇总行**。
+
+    四条硬口径：
+      · **绿跑不落盘** —— `$ExitCode -eq 0` 直接返回 `$null`，不碰文件系统。一份「看起来像证据」
+        的绿跑镜像文件正是本仓防的形态（永绿 / 假绿）。
+      · **人读出口，不作门禁输入** —— 调用方的判定仍然只看 exit code；本文件不进任何判红路径。
+      · **≤2KB 是承诺不是目标** —— 超预算就按「套件级说明 → 失败用例 → 失败套件」整条丢弃并
+        **明说各丢了几条**（汇总段不丢）；连表头都装不下时按字符整体硬裁剪。绝不静默截半条多字节序列。
+      · **对重复块幂等** —— 同一条 `FAIL` 行 / 同一个用例块在一次单元测试的输出里可能出现两遍
+        （本机实测：`.scratch/1526/full-raw.txt` 第 15 与 189 行是同一条 FAIL 行，`● ` 块各两次，
+        而 `Tests:` 只有一遍）。不去重就会写「共 2 个失败套件」，与同份输出里的 `Tests: 2 failed`
+        自相矛盾 —— 摘要自己打自己脸，比不落盘更坏。
+
+    纯函数边界：唯一副作用是写 `$Path` 那一个文件（父目录按需创建）；不读仓内源码、不取锁、不碰设备
+    ⇒ 可被 `utils/devFinishContract.test.js` 用 AST 抽函数定义后**真执行**断言产物（先例
+    `scripts/lib/process-capture.ps1` + `utils/hxLaunchDetachBehavior.test.js`）。
+#>
+function New-TestFailureSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][AllowNull()][AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [int]$ExitCode = 1,
+        [int]$MaxBytes = 2048,
+        [int]$MaxEntries = 30,
+        [int]$DetailLines = 2
+    )
+    if ($ExitCode -eq 0) { return $null }
+
+    $utf8 = [System.Text.Encoding]::UTF8
+    $lines = @($Output -split "\r?\n")
+
+    # jest 的四行汇总（`Test Suites:` / `Tests:` / `Snapshots:` / `Time:`）—— 总量面
+    $summary = @($lines | Where-Object { $_ -match '^\s*(?:Test Suites?|Tests|Snapshots|Time):\s' })
+
+    # 失败套件行：`FAIL utils/x.test.js (7.421 s)`。**必须整行去重** ——
+    # 本机实测（`.scratch/1526/full-raw.txt`，sha256=825BFA0A…4940，244 行；该探针产物不入仓，
+    # 全文随 PR #1526 附上）：多套件的一次「单元测试」里，
+    # 同一个失败套件的**整块详情出现两遍**（同一条 `FAIL` 行在第 15 行和第 189 行，`● ` 用例块各两次），
+    # 而 `Tests:` 汇总行只有一遍 ⇒ 不去重就会写「共 2 个失败套件 / 5 条失败用例」，与同份输出里的
+    # `Tests: 2 failed` 自相矛盾 —— 本票要消灭的是「失败原因不可得」，不是把它换成「读得出但读错」。
+    # 计数一律给**去重后**的唯一数（`suiteCount`），被并掉的行数另报（`dupSuites`），不静默吞掉。
+    # ⚠️ 本函数的注释里**别写**「Step + 步骤号」那种字面量（要指代就写步骤名「单元测试」）：
+    #    守护 F2 判的是「本文件里每个步骤串的首次出现位置单调递增」，函数文档里多写一次步骤三
+    #    就会让 F2 报红（2026-10-04 实测踩过），而那红报的是「步骤顺序错了」——一个根本没发生的改动。
+    $seenSuite = [System.Collections.Generic.HashSet[string]]::new()
+    $suites = [System.Collections.Generic.List[string]]::new()
+    $dupSuites = 0
+    foreach ($l in @($lines | Where-Object { $_ -match '(?:^|\s)FAIL\s+\S+\.test\.' })) {
+        $k = "$($l)".Trim()
+        if ($seenSuite.Add($k)) { $null = $suites.Add($k) } else { $dupSuites++ }
+    }
+
+    # 失败用例条目：`● 套件 › 用例名`（默认 reporter）/ `✕ 用例名`（verbose）+ 其后判据行。
+    # ⚠️ 字形一律用 \uXXXX 转义写：源码里放裸字形会被编辑工具/编码链吃掉（本仓实测踩过）。
+    # ⚠️ `● Console` 与 `● Test suite failed to run` **不是失败用例**：前者是套件打印的日志
+    #    （实测那份输出里它挂在 `PASS utils/concurrent401RefreshBehavior.test.js` 之后 —— 通过的套件也会有），
+    #    后者是整个套件没跑起来。把它们计入「失败用例 N 条」就与 `Tests:` 行对不上 ⇒ 单列一段。
+    $caseRe = '^\s*[\u25CF\u2715\u2716\u2717\u2718]\s*(\S.*)$'
+    $cases = [System.Collections.Generic.List[object]]::new()
+    $notes = [System.Collections.Generic.List[object]]::new()
+    $seenEntry = [System.Collections.Generic.HashSet[string]]::new()
+    $dupEntries = 0
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -notmatch $caseRe) { continue }
+        $name = "$($matches[1])".Trim()
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
+        $isNote = ($name -eq 'Console') -or ($name -match '^Test suite failed to run')
+        $entry = [System.Collections.Generic.List[string]]::new()
+        $entry.Add("  - $name")
+        # 判据行：紧随其后的非空行（`Expected` / `Received` / 断言消息 / `at … .test.js:行:列` 栈在这层）。
+        # ⚠️ **空行要跳过而不是中止**：jest 的失败块内部就有空行分隔（`● 用例名` / 空行 / `Expected: 31`），
+        #    拿空行当终止符会让每条只剩用例名 ⇒「为什么红」整层丢失（本机实测踩过这一形）。
+        #    中止条件只有三个：下一条用例名、套件行（FAIL/PASS）、jest 汇总行 —— 后者是**最后一坨**，
+        #    不吃掉它才会既进「汇总」段、又被末条用例当判据重复一遍。
+        $taken = 0
+        for ($j = $i + 1; $j -lt $lines.Count -and $taken -lt $DetailLines; $j++) {
+            if ($lines[$j] -match $caseRe) { break }
+            if ($lines[$j] -match '^\s*(?:Test Suites?|Tests|Snapshots|Time):\s') { break }
+            if ($lines[$j] -match '(?:^|\s)(?:FAIL|PASS)\s+\S+\.test\.') { break }
+            $d = "$($lines[$j])".Trim()
+            if ($d.Length -eq 0) { continue }
+            if ($d.Length -gt 180) { $d = $d.Substring(0, 180) + '...' }
+            $entry.Add("      $d")
+            $taken++
+        }
+        $rendered = ($entry -join "`r`n")
+        # 去重键带上「是不是套件级」⇒ 同名条目不会互相顶掉
+        if (-not $seenEntry.Add($(if ($isNote) { "n|$rendered" } else { "c|$rendered" }))) { $dupEntries++; continue }
+        if ($isNote) { $null = $notes.Add($rendered) } else { $null = $cases.Add($rendered) }
+    }
+
+    # 缺字段要**说出来**，而且要**写进文件**：调用点的 `Write-Host` 一闪而过，而这份摘要正是给
+    # 「事后打开看」用的 —— 只在返回对象里带 Missing、文件却是一份干净的表头，就是本票要消灭的
+    # 「看不见红」换了个位置（输出形态一变、摘要静默变空 = 新的假绿出口）。
+    $missing = [System.Collections.Generic.List[string]]::new()
+    if (@($summary | Where-Object { $_ -match '^\s*Tests:' }).Count -eq 0) { $missing.Add('Tests 汇总行') }
+    if (@($summary | Where-Object { $_ -match '^\s*Time:' }).Count -eq 0) { $missing.Add('Time 汇总行') }
+    # 「抓到东西」包含**套件级说明**：实测有 `● Test suite failed to run`（整个套件没跑起来）这种
+    # 只有说明、没有用例条目的形态 —— 那时原因拿到了，不该报「什么都没抓到」。
+    if ($suites.Count -eq 0 -and $cases.Count -eq 0 -and $notes.Count -eq 0) { $missing.Add('失败套件 / 失败用例名') }
+
+    $head = @(
+        "dev-finish 单元测试失败摘要（jest exit=$ExitCode，生成于 $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))）"
+        '本文件是人读出口，不作门禁输入：判定仍以单元测试的 exit code 为准。'
+        ''
+    )
+    if ($missing.Count -gt 0) {
+        $head += "警告：本次输出里没抓到 $($missing -join '、') ⇒ jest 的输出形态可能变了，请看终端里的完整输出。"
+        $head += ''
+    }
+
+    # 组装 = 表头 + 汇总行 + 失败套件 + 失败用例 + 套件级说明 (+ 丢弃说明)。
+    # 顺序有两条后果，分开说，别混成一条：
+    #   · **整条丢弃只丢「说明 → 用例 → 套件」** —— 汇总段不在可丢集合里，所以 97 个套件一起红
+    #     （FAIL 行就 ≈4 KB）时 `Tests:` / `Time:` 仍然在文件里（守护 S6）。
+    #   · **硬裁剪保头不保尾** —— 预算小到连表头都装不下时按字符砍尾部，排在前面的先保住，
+    #     所以「这份摘要在说什么 + 没抓到什么」的表头与警告排在最前（守护 S5）。
+    # 用**局部脚本块**而不是 `function script:` —— 后者会在脚本作用域留下第二个真源名字，
+    # 且 AST 抽函数定义时不会被抽到。
+    # ⚠️ 参数名不能叫 `$Note`：PowerShell **变量名大小写不敏感**，`$Note` 与闭包里的 `$notes`
+    #    （套件级说明列表）是同一个名字 —— 写下去就是「表头段被丢弃说明覆盖」这种查半天的坑。
+    $assemble = {
+        param($SuiteList, $CaseList, $NoteList, $DropNote)
+        $keptSuites = @($SuiteList)
+        $keptCases = @($CaseList)
+        $keptNotes = @($NoteList)
+        $parts = [System.Collections.Generic.List[string]]::new()
+        foreach ($h in $head) { $parts.Add($h) }
+        if ($summary.Count -gt 0) {
+            $parts.Add('汇总：')
+            foreach ($s in $summary) { $parts.Add("  $($s.Trim())") }
+            $parts.Add('')
+        }
+        if ($keptSuites.Count -gt 0) {
+            $parts.Add("失败套件（列出 $($keptSuites.Count) / 共 $($suites.Count) 个）：")
+            foreach ($s in $keptSuites) { $parts.Add("  $($s.Trim())") }
+            $parts.Add('')
+        }
+        if ($keptCases.Count -gt 0) {
+            $parts.Add("失败用例（列出 $($keptCases.Count) / 共 $($cases.Count) 条）：")
+            foreach ($c in $keptCases) { $parts.Add($c) }
+            $parts.Add('')
+        }
+        if ($keptNotes.Count -gt 0) {
+            $parts.Add("套件级说明（列出 $($keptNotes.Count) / 共 $($notes.Count) 条；Console 日志与「整个套件没跑起来」，不是失败用例）：")
+            foreach ($n in $keptNotes) { $parts.Add($n) }
+        }
+        if ($DropNote) { $parts.Add($DropNote) }
+        return (($parts -join "`r`n") + "`r`n")
+    }
+
+    # 先按条数封顶（返回对象里的计数仍是**去重后的总数**，不被上限骗过），再按字节裁剪
+    $keepSuites = @($suites | Select-Object -First $MaxEntries)
+    $keepCases = @($cases | Select-Object -First $MaxEntries)
+    $keepNotes = @($notes | Select-Object -First $MaxEntries)
+    # 丢最后一条（丢到空就停在这一段），三段共用一个收缩器，别再抄三份
+    $shrink = { param($arr) @(if (@($arr).Count -le 1) { @() } else { $arr[0..(@($arr).Count - 2)] }) }
+    $text = & $assemble $keepSuites $keepCases $keepNotes $null
+    # 超预算 ⇒ 按 **套件级说明 → 失败用例 → 失败套件** 的顺序整条丢（汇总段永远不丢：它给出
+    # 「总共红了几条」这一层，丢了就只剩一份看不出规模的清单），每一步都**明说**各丢了几条 ——
+    # 静默截断等于换一种「看不见」。三段都丢光仍超（表头 + 汇总本身太大）⇒ 交给下面的硬裁剪。
+    while ($utf8.GetByteCount($text) -gt $MaxBytes) {
+        if (@($keepNotes).Count -gt 0) { $keepNotes = & $shrink $keepNotes }
+        elseif (@($keepCases).Count -gt 0) { $keepCases = & $shrink $keepCases }
+        elseif (@($keepSuites).Count -gt 0) { $keepSuites = & $shrink $keepSuites }
+        else { break }
+        $hidden = @()
+        if ($notes.Count - @($keepNotes).Count -gt 0) { $hidden += "$($notes.Count - @($keepNotes).Count) 条套件级说明" }
+        if ($cases.Count - @($keepCases).Count -gt 0) { $hidden += "$($cases.Count - @($keepCases).Count) 条失败用例" }
+        if ($suites.Count - @($keepSuites).Count -gt 0) { $hidden += "$($suites.Count - @($keepSuites).Count) 个失败套件" }
+        $dropText = $null
+        if (@($hidden).Count -gt 0) { $dropText = "...另有 $($hidden -join '、')未列出（完整输出见本次运行的终端）。" }
+        $text = & $assemble $keepSuites $keepCases $keepNotes $dropText
+    }
+    $droppedCases = $cases.Count - @($keepCases).Count
+    $droppedSuites = $suites.Count - @($keepSuites).Count
+    $droppedNotes = $notes.Count - @($keepNotes).Count
+
+    # 兜底：连表头 + 汇总都装不下（极端：套件没跑成、堆栈巨长）⇒ 按**字符**整体裁剪，保证承诺成立。
+    $truncated = $false
+    if ($utf8.GetByteCount($text) -gt $MaxBytes) {
+        $truncated = $true
+        $note = "...（超出 $MaxBytes 字节预算，已按字节裁剪）`r`n"
+        $budget = $MaxBytes - $utf8.GetByteCount($note)
+        if ($budget -lt 0) { $budget = 0 }
+        $chars = $text.ToCharArray()
+        for ($n = $chars.Length; $n -gt 0; $n--) {
+            $cand = -join $chars[0..($n - 1)]
+            if ($utf8.GetByteCount($cand) -le $budget) { $text = $cand + $note; break }
+        }
+    }
+
+    $dir = Split-Path -Parent $Path
+    if ($dir) { $null = New-Item -ItemType Directory -Force -Path $dir }
+    [System.IO.File]::WriteAllText($Path, $text, [System.Text.UTF8Encoding]::new($false))
+
+    # 计数面全部是**去重后**的唯一数；被并掉的重复行/块另报（`DupSuites` / `DupEntries`），
+    # 让「输出里同一条出现两遍」这件事在返回对象里看得见，而不是悄悄被去重吞掉。
+    return [pscustomobject]@{
+        Path          = $Path
+        Bytes         = $utf8.GetByteCount($text)
+        FileBytes     = ([System.IO.File]::ReadAllBytes($Path)).Length
+        Lines         = @($text -split "\r?\n").Count
+        Truncated     = $truncated
+        SuiteCount    = $suites.Count
+        CaseCount     = $cases.Count
+        NoteCount     = $notes.Count
+        KeptSuites    = @($keepSuites).Count
+        KeptCases     = @($keepCases).Count
+        KeptNotes     = @($keepNotes).Count
+        DroppedSuites = $droppedSuites
+        DroppedCases  = $droppedCases
+        DroppedNotes  = $droppedNotes
+        DupSuites     = $dupSuites
+        DupEntries    = $dupEntries
+        Missing       = @($missing)
+    }
 }
 
 # ============================================================
@@ -193,8 +429,33 @@ try {
 catch {
     $testOutput = "$($_.Exception.Message)"
 }
-if ($LASTEXITCODE -ne 0) {
-    Write-Result $false "单元测试失败（exit code $LASTEXITCODE）"
+# 先固化成变量：下面要**调一个函数**（内部有 New-Item / [IO.File] 等托管调用），而 `$LASTEXITCODE`
+# 只由原生命令更新 —— 现在没事，但「判据依赖一个可能被后续代码改写的自动变量」正是本仓防的形态。
+$testExitCode = $LASTEXITCODE
+# ---- 失败摘要落盘（#1526）----
+# 为什么放在这里：本次 jest 的完整输出**只活在内存里**，`exit 1` 一执行就随进程蒸发 ⇒ 想知道
+# 「哪一条红、为什么红」只能重跑（#1472 先例：六遍合计 2,140.466 秒）。
+# **绿跑不落**由 `New-TestFailureSummary` 自身保证（`ExitCode=0` ⇒ 直接返回、不碰文件系统）——
+# 把这条口径放进被守护执行的单元里，而不是只靠调用点「恰好写在 if 里」。
+# 摘要是**人读出口，不作门禁输入**：下面判定仍然只看 `$testExitCode`。
+$failSummaryPath = Join-Path $ProjectDir '.ci-verify\dev-finish-test-failure.txt'
+$failSummary = $null
+try {
+    $failSummary = New-TestFailureSummary -Output $testOutput -Path $failSummaryPath -ExitCode $testExitCode
+}
+catch {
+    # 摘要落盘失败**不能**改变门的结果：判据仍是单元测试的退出码（fail-closed 的方向是「照旧判红」）
+    Write-Host "  ⚠️ 失败摘要未落盘：$($_.Exception.Message)" -ForegroundColor DarkYellow
+}
+if ($testExitCode -ne 0) {
+    Write-Result $false "单元测试失败（exit code $testExitCode）"
+    if ($failSummary) {
+        Write-Host "  失败摘要（$($failSummary.Bytes) 字节，人读，不作门禁输入）：$($failSummary.Path)" -ForegroundColor Yellow
+        if (@($failSummary.Missing).Count -gt 0) {
+            # 没抓到东西就明说没抓到 —— 不许产出一份「看着像摘要、其实空的」文件还不吭声
+            Write-Host "  ⚠️ 摘要缺字段：$(@($failSummary.Missing) -join '、')（输出形态可能变了，需人工看完整输出）" -ForegroundColor DarkYellow
+        }
+    }
     exit 1
 }
 Write-Result $true '单元测试通过'
