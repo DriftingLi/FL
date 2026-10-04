@@ -1,13 +1,11 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：系数配置实时查询
 // 重构后不再使用内存加载器，所有系数从 coefficient_configs 实时查询
-package service
+package valuation
 
 import (
 	"context"
 	"fmt"
-
-	"forklift-training/internal/valuation"
 )
 
 // CoefficientProvider 系数配置提供者（实时查 DB）
@@ -22,11 +20,11 @@ func NewCoefficientProvider(dictRepo DictionaryReader) *CoefficientProvider {
 }
 
 // Get 按 key 读取系数
-// 未找到时返回 valuation.ErrCoefficientNotFound
+// 未找到时返回 ErrCoefficientNotFound
 func (p *CoefficientProvider) Get(ctx context.Context, key string) (float64, error) {
 	c, err := p.dictRepo.GetCoefficientByKey(ctx, key)
 	if err != nil {
-		return 0, fmt.Errorf("%w: %s", valuation.ErrCoefficientNotFound, key)
+		return 0, fmt.Errorf("%w: %s", ErrCoefficientNotFound, key)
 	}
 	return c.Value, nil
 }

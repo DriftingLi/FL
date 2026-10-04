@@ -1,12 +1,10 @@
-package service
+package valuation
 
 import (
 	"context"
 	"errors"
 	"strings"
 	"testing"
-
-	"forklift-training/internal/valuation"
 )
 
 // memResolver 内存版系数配置读取（测试用）。
@@ -131,15 +129,15 @@ func TestSuggestions_ResultAndDetail_Consistent(t *testing.T) {
 	resolver := newDefaultResolver()
 	ctx := context.Background()
 
-	r := &valuation.EvaluationResult{
-		EvaluationRequest: valuation.EvaluationRequest{
+	r := &EvaluationResult{
+		EvaluationRequest: EvaluationRequest{
 			OriginalPaint: true, HasMaintenanceRecords: true,
 			HasLicensePlate: false, HasRegistrationCertificate: true,
 		},
 		KCondition: 0.8, KHours: 1.1, KBrand: 1.0, KTime: 0.7, KMarket: 1.01,
 		OriginalPrice: 100000, EstimatedValue: 70000,
 	}
-	d := &valuation.EvaluationDetail{
+	d := &EvaluationDetail{
 		OriginalPaint: true, HasMaintenanceRecords: true,
 		HasLicensePlate: false, HasRegistrationCertificate: true,
 		KCondition: 0.8, KHours: 1.1, KBrand: 1.0, KTime: 0.7, KMarket: 1.01,
@@ -160,7 +158,7 @@ func TestSuggestions_ResultAndDetail_Consistent(t *testing.T) {
 }
 
 func TestBuildBatterySuggestions(t *testing.T) {
-	out := BuildBatterySuggestions(valuation.BatteryTypeLFP, 90, 500, 450, 550, 1.0)
+	out := BuildBatterySuggestions(BatteryTypeLFP, 90, 500, 450, 550, 1.0)
 	joined := strings.Join(out, "|")
 	if !strings.Contains(joined, "SOH≥95") && !strings.Contains(joined, "80%≤SOH<95%") {
 		t.Errorf("健康度文案缺失: %v", out)
@@ -175,7 +173,7 @@ func TestBuildBatterySuggestions(t *testing.T) {
 	if strings.Contains(joined, "特征波动较大") {
 		t.Errorf("health=1.0 不应出现稳定性提示: %v", out)
 	}
-	unstable := BuildBatterySuggestions(valuation.BatteryTypeNCM, 50, 100, 80, 120, 0.3)
+	unstable := BuildBatterySuggestions(BatteryTypeNCM, 50, 100, 80, 120, 0.3)
 	if !strings.Contains(strings.Join(unstable, "|"), "特征波动较大") {
 		t.Errorf("health<0.5 应提示稳定性: %v", unstable)
 	}

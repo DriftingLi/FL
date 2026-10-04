@@ -1,6 +1,6 @@
 // 评估全流程端到端测试：内存替身下 evaluateInternal 的组合行为
 // （五维公式组合、残值≤原价钳制、置信区间、原价精确→模糊降级、系数快照单次读取）。
-package service
+package valuation
 
 import (
 	"context"
@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/valuation"
 )
 
 // countingDict 包装 DictionaryReader，统计系数读取调用次数（断言快照单次读取）。
@@ -20,12 +18,12 @@ type countingDict struct {
 	getCalls  int
 }
 
-func (c *countingDict) ListCoefficientConfigs(ctx context.Context) ([]valuation.CoefficientConfig, error) {
+func (c *countingDict) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
 	c.listCalls++
 	return c.DictionaryReader.ListCoefficientConfigs(ctx)
 }
 
-func (c *countingDict) GetCoefficientByKey(ctx context.Context, key string) (valuation.CoefficientConfig, error) {
+func (c *countingDict) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
 	c.getCalls++
 	return c.DictionaryReader.GetCoefficientByKey(ctx, key)
 }
@@ -35,26 +33,26 @@ type failSnapshotDict struct {
 	DictionaryReader
 }
 
-func (f *failSnapshotDict) ListCoefficientConfigs(context.Context) ([]valuation.CoefficientConfig, error) {
+func (f *failSnapshotDict) ListCoefficientConfigs(context.Context) ([]CoefficientConfig, error) {
 	return nil, errors.New("模拟全表查询故障")
 }
 
 // newFullMemDictReader 带车型/原价/系数的完整版。
 type fullMemDict struct {
 	memDictReader
-	vehicleTypes   map[string]valuation.VehicleType
-	originalPrices []valuation.OriginalPrice
+	vehicleTypes   map[string]VehicleType
+	originalPrices []OriginalPrice
 	coefficients   map[string]float64
 }
 
 func newFullMemDictReader() *fullMemDict {
 	return &fullMemDict{
 		memDictReader: *newDefaultMemDict(),
-		vehicleTypes: map[string]valuation.VehicleType{
+		vehicleTypes: map[string]VehicleType{
 			"电动叉车": {ID: 1, Name: "电动叉车", PowerType: "electric", EarliestFactoryYear: 2000},
 			"内燃叉车": {ID: 2, Name: "内燃叉车", PowerType: "combustion", EarliestFactoryYear: 2000},
 		},
-		originalPrices: []valuation.OriginalPrice{{
+		originalPrices: []OriginalPrice{{
 			ID: 1, Brand: "林德", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
 			ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, OriginalPrice: 100000,
 		}},
@@ -62,14 +60,14 @@ func newFullMemDictReader() *fullMemDict {
 	}
 }
 
-func (f *fullMemDict) GetVehicleTypeByName(_ context.Context, name string) (valuation.VehicleType, error) {
+func (f *fullMemDict) GetVehicleTypeByName(_ context.Context, name string) (VehicleType, error) {
 	if vt, ok := f.vehicleTypes[name]; ok {
 		return vt, nil
 	}
-	return valuation.VehicleType{}, pgx.ErrNoRows
+	return VehicleType{}, pgx.ErrNoRows
 }
 
-func (f *fullMemDict) FindOriginalPriceMatch(_ context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (valuation.OriginalPrice, error) {
+func (f *fullMemDict) FindOriginalPriceMatch(_ context.Context, brand, vehicleType, series string, tonnage float64, configType, mastType string, mastHeightMM int) (OriginalPrice, error) {
 	for _, op := range f.originalPrices {
 		if op.Brand == brand && op.VehicleType == vehicleType && op.Series == series &&
 			op.Tonnage == tonnage && op.ConfigType == configType && op.MastType == mastType &&
@@ -77,30 +75,30 @@ func (f *fullMemDict) FindOriginalPriceMatch(_ context.Context, brand, vehicleTy
 			return op, nil
 		}
 	}
-	return valuation.OriginalPrice{}, pgx.ErrNoRows
+	return OriginalPrice{}, pgx.ErrNoRows
 }
 
 // FindOriginalPriceFuzzy 按 brand + vehicle_type + tonnage 匹配（series="其它" 时降级路径）。
-func (f *fullMemDict) FindOriginalPriceFuzzy(_ context.Context, brand, vehicleType, _ string, tonnage float64) (valuation.OriginalPrice, error) {
+func (f *fullMemDict) FindOriginalPriceFuzzy(_ context.Context, brand, vehicleType, _ string, tonnage float64) (OriginalPrice, error) {
 	for _, op := range f.originalPrices {
 		if op.Brand == brand && op.VehicleType == vehicleType && op.Tonnage == tonnage {
 			return op, nil
 		}
 	}
-	return valuation.OriginalPrice{}, pgx.ErrNoRows
+	return OriginalPrice{}, pgx.ErrNoRows
 }
 
-func (f *fullMemDict) GetCoefficientByKey(_ context.Context, key string) (valuation.CoefficientConfig, error) {
+func (f *fullMemDict) GetCoefficientByKey(_ context.Context, key string) (CoefficientConfig, error) {
 	if v, ok := f.coefficients[key]; ok {
-		return valuation.CoefficientConfig{Key: key, Value: v}, nil
+		return CoefficientConfig{Key: key, Value: v}, nil
 	}
-	return valuation.CoefficientConfig{}, pgx.ErrNoRows
+	return CoefficientConfig{}, pgx.ErrNoRows
 }
 
-func (f *fullMemDict) ListCoefficientConfigs(_ context.Context) ([]valuation.CoefficientConfig, error) {
-	out := make([]valuation.CoefficientConfig, 0, len(f.coefficients))
+func (f *fullMemDict) ListCoefficientConfigs(_ context.Context) ([]CoefficientConfig, error) {
+	out := make([]CoefficientConfig, 0, len(f.coefficients))
 	for k, v := range f.coefficients {
-		out = append(out, valuation.CoefficientConfig{Key: k, Value: v})
+		out = append(out, CoefficientConfig{Key: k, Value: v})
 	}
 	return out, nil
 }
@@ -110,22 +108,22 @@ type memEvalStore struct {
 	nextID int64
 }
 
-func (m *memEvalStore) CreateEvaluation(context.Context, *valuation.CreateEvaluationParams) (int64, error) {
+func (m *memEvalStore) CreateEvaluation(context.Context, *CreateEvaluationParams) (int64, error) {
 	m.nextID++
 	return m.nextID, nil
 }
 
-func newTestValuationService(t *testing.T, dict DictionaryReader) *ValuationService {
+func newTestValuationService(t *testing.T, dict DictionaryReader) *Service {
 	t.Helper()
-	svc, err := NewValuationService(dict, &memEvalStore{})
+	svc, err := NewService(dict, &memEvalStore{})
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}
 	return svc
 }
 
-func baseRequest() *valuation.EvaluationRequest {
-	return &valuation.EvaluationRequest{
+func baseRequest() *EvaluationRequest {
+	return &EvaluationRequest{
 		Brand: "林德", VehicleType: "电动叉车", Series: "K系列",
 		Tonnage: 3, ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000,
 		FactoryYear: 2019, SaleYear: 2024, UsageHours: 1000,
@@ -265,12 +263,12 @@ func TestEvaluateSnapshotFailureFallback(t *testing.T) {
 
 // memBackfillStore 内存回填存储（与生产仓储同形：返回完整评估详情）。
 type memBackfillStore struct {
-	rows    []valuation.EvaluationDetail
+	rows    []EvaluationDetail
 	updates map[int64][]string
 }
 
-func (m *memBackfillStore) ListEvaluationsForBackfill(context.Context) ([]valuation.EvaluationDetail, error) {
-	out := make([]valuation.EvaluationDetail, len(m.rows))
+func (m *memBackfillStore) ListEvaluationsForBackfill(context.Context) ([]EvaluationDetail, error) {
+	out := make([]EvaluationDetail, len(m.rows))
 	copy(out, m.rows)
 	for i := range out {
 		if s, ok := m.updates[out[i].ID]; ok {
@@ -290,7 +288,7 @@ func (m *memBackfillStore) UpdateEvaluationSuggestions(_ context.Context, id int
 func TestBackfillEvaluationSuggestions_Idempotent(t *testing.T) {
 	dict := newFullMemDictReader()
 	store := &memBackfillStore{
-		rows: []valuation.EvaluationDetail{
+		rows: []EvaluationDetail{
 			{ID: 1, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
 			{ID: 2, KCondition: 0.9, KHours: 1.1, KBrand: 1.0, KTime: 0.7, KMarket: 1.0, OriginalPrice: 80000, EstimatedValue: 40000, Suggestions: []string{"已锁定"}},
 			{ID: 3, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
@@ -327,7 +325,7 @@ func TestBackfillEvaluationSuggestions_Idempotent(t *testing.T) {
 // 回填是离线运维命令，宁可失败暴露问题也不静默跳过）。
 func TestBackfillEvaluationSuggestions_SnapshotFailure(t *testing.T) {
 	dict := &failSnapshotDict{DictionaryReader: newFullMemDictReader()}
-	store := &memBackfillStore{rows: []valuation.EvaluationDetail{
+	store := &memBackfillStore{rows: []EvaluationDetail{
 		{ID: 1, KCondition: 1.0, KHours: 1.0, KBrand: 1.0, KTime: 0.8, KMarket: 1.0, OriginalPrice: 100000, EstimatedValue: 60000},
 	}, updates: map[int64][]string{}}
 

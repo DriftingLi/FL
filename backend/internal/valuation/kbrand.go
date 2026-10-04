@@ -1,8 +1,8 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：品牌系数 Kb
 // 公式：Kb = brands.k_brand（直接使用品牌系数，不再乘以品牌类型系数）
 // 重构说明：删除 brand_types 表后，Kb 由 brands.k_brand 独立承载
-package service
+package valuation
 
 import (
 	"context"

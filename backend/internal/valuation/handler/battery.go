@@ -15,7 +15,6 @@ import (
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -23,7 +22,7 @@ import (
 // BatteryHandler 电池 RUL 评估 HTTP 处理器
 type BatteryHandler struct {
 	repo    BatteryStore
-	service *service.BatteryRULService
+	service *valuation.BatteryRULService
 	logger  *zap.Logger
 	storage storage.Storage
 	// coord 电池报告流程协调器（生成/下载/再生成单点实现，gin-free）
@@ -33,10 +32,10 @@ type BatteryHandler struct {
 }
 
 // NewBatteryHandler 构造电池处理器
-func NewBatteryHandler(repo BatteryStore, svc *service.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
+func NewBatteryHandler(repo BatteryStore, svc *valuation.BatteryRULService, l *zap.Logger, st storage.Storage) *BatteryHandler {
 	prepareSuggestions := func(_ context.Context, e *valuation.BatteryEvaluation) {
 		// 旧记录建议 fallback 单入口：health 由记录置信度反推（缺失默认 1.0）
-		service.EnsureBatterySuggestions(e)
+		valuation.EnsureBatterySuggestions(e)
 	}
 	return &BatteryHandler{
 		repo:               repo,

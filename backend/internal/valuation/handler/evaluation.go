@@ -1,6 +1,6 @@
 // Package handler 实现 HTTP 处理器
 // 本文件：评估相关接口（提交计算、查询详情、列表）
-// 重构后采用手写 pgx 仓储，service.Persist 持久化评估结果
+// 重构后采用手写 pgx 仓储，valuation.Persist 持久化评估结果
 package handler
 
 import (
@@ -13,7 +13,6 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/valuation"
-	"forklift-training/internal/valuation/service"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -21,18 +20,18 @@ import (
 // EvaluationHandler 评估 HTTP 处理器
 // 持有 valuation service（执行残值计算 + 持久化）与 evalRepo（查询详情 / 列表）
 type EvaluationHandler struct {
-	valuation *service.ValuationService
+	valuation *valuation.Service
 	evalRepo  EvaluationStore
 	logger    *zap.Logger
 }
 
 // NewEvaluationHandler 构造评估处理器
-func NewEvaluationHandler(v *service.ValuationService, evalRepo EvaluationStore, l *zap.Logger) *EvaluationHandler {
+func NewEvaluationHandler(v *valuation.Service, evalRepo EvaluationStore, l *zap.Logger) *EvaluationHandler {
 	return &EvaluationHandler{valuation: v, evalRepo: evalRepo, logger: l}
 }
 
 // Create 处理 POST /api/valuation/evaluations
-// 提交评估请求：调用 service.Evaluate → service.Persist 持久化 → 返回计算结果
+// 提交评估请求：调用 valuation.Evaluate → valuation.Persist 持久化 → 返回计算结果
 // 走可选认证：登录用户提交时记录 user_id，匿名提交 user_id 为 NULL
 // @Summary 提交评估
 // @Description 残值计算 + 持久化，返回 ID + 输入参数 + 全部 K 系数 + 残值 + 置信区间 + 维度评分 + 建议。**可选认证**：匿名可提交（user_id 落 NULL），带 Bearer 则归属当前用户。
@@ -110,9 +109,9 @@ func (h *EvaluationHandler) Get(c *gin.Context) {
 	}
 
 	// 重建派生字段（单一装配点：KTimeAdjusted + 维度分；建议为评估时点锁定值，ADR-0004）
-	service.RebuildDerivedFromDetail(detail)
+	valuation.RebuildDerivedFromDetail(detail)
 	// 旧记录建议 fallback（与报告 Prepare 同源单入口，ADR-0012 §6）
-	service.EnsureSuggestions(c.Request.Context(), detail, h.valuation.Resolver())
+	valuation.EnsureSuggestions(c.Request.Context(), detail, h.valuation.Resolver())
 
 	// 详情接口直接返回持久化记录（已含全部输入字段 + 计算结果 + 报告路径）
 	response.Success(c, detail)
@@ -164,7 +163,7 @@ func (h *EvaluationHandler) List(c *gin.Context) {
 
 	// 2.1 重建派生字段（KTimeAdjusted 不入库字段，单一装配点）
 	for i := range list {
-		service.RebuildDerivedFromDetail(&list[i])
+		valuation.RebuildDerivedFromDetail(&list[i])
 	}
 
 	// 3. 返回分页响应
@@ -197,7 +196,7 @@ func (h *EvaluationHandler) Stats(c *gin.Context) {
 }
 
 // buildEvaluationResponse 把 EvaluationRequest + EvaluationResult + 持久化 ID 转换为响应 DTO
-// 维度评分顺序与雷达图保持一致（由 service.BuildDimensionScores 单一装配，此处不再排序）
+// 维度评分顺序与雷达图保持一致（由 valuation.BuildDimensionScores 单一装配，此处不再排序）
 func buildEvaluationResponse(id int64, r *valuation.EvaluationResult, req *valuation.EvaluationRequest) valuation.EvaluationResponse {
 	// 兜底：若维度评分缺失，返回空切片（避免 JSON null）
 	dimScores := r.DimensionScores

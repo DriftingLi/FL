@@ -12,7 +12,7 @@ import (
 	"forklift-training/internal/auth"
 	mainmodel "forklift-training/internal/model"
 	"forklift-training/internal/security"
-	vservice "forklift-training/internal/valuation/service"
+	"forklift-training/internal/valuation"
 )
 
 // fakeValuationAuth 实现 ValuationAuth 窄接口（/auth/me 测试用）。
@@ -49,13 +49,13 @@ func TestValuationAuthMe_MasksEmailPlaceholderPhone(t *testing.T) {
 	dict := newSeedMemDict()
 	evalStore := newMemEvalStore()
 	batteryStore := &memBatteryStore{}
-	valuationSvc, err := vservice.NewValuationService(dict, evalStore)
+	valuationSvc, err := valuation.NewService(dict, evalStore)
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}
 	RegisterRoutes(r, sess, zap.NewNop(), nil,
 		dict, evalStore, batteryStore,
-		valuationSvc, vservice.NewBatteryRULService(),
+		valuationSvc, valuation.NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},
 		authSvc)
 

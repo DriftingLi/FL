@@ -14,7 +14,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
-	vservice "forklift-training/internal/valuation/service"
+	"forklift-training/internal/valuation"
 )
 
 // TestValuationAdminWriteAudited 锁定 ADR-0012 §7：
@@ -30,13 +30,13 @@ func TestValuationAdminWriteAudited(t *testing.T) {
 	dict := newSeedMemDict()
 	evalStore := newMemEvalStore()
 	batteryStore := &memBatteryStore{}
-	valuationSvc, err := vservice.NewValuationService(dict, evalStore)
+	valuationSvc, err := valuation.NewService(dict, evalStore)
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}
 	RegisterRoutes(r, sess, zap.NewNop(), audit.NewService(auditDB),
 		dict, evalStore, batteryStore,
-		valuationSvc, vservice.NewBatteryRULService(),
+		valuationSvc, valuation.NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},
 		nil)
 

@@ -5,8 +5,6 @@ package handler
 import (
 	"context"
 	"forklift-training/internal/valuation"
-
-	"forklift-training/internal/valuation/service"
 )
 
 // DictWriter 描述符驱动字典写面（ADR-0008）：机械 CRUD 塌缩后的窄面。
@@ -20,10 +18,10 @@ type DictWriter interface {
 }
 
 // DictionaryConfigStore 字典配置存储接口（ConfigHandler 消费；生产为 pgx 仓储，测试为内存替身）。
-// 读面 = service.DictionaryReader + 学生端字典查询 typed 方法（30+，形状异构不强求通用化）；
+// 读面 = valuation.DictionaryReader + 学生端字典查询 typed 方法（30+，形状异构不强求通用化）；
 // 写面 = DictWriter（描述符驱动，全部实体的 CRUD 写操作塌缩到 4 个方法）。
 type DictionaryConfigStore interface {
-	service.DictionaryReader
+	valuation.DictionaryReader
 	DictWriter
 
 	ListBrands(ctx context.Context) ([]valuation.Brand, error)

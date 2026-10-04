@@ -1,4 +1,4 @@
-// Package service 实现核心业务逻辑
+// 估值域实现（原 internal/valuation/service 子包，#1514 波 8 并回域包）。
 // 本文件：车况系数 Kc（基于车况评级 + 证件/维保/原漆修正）
 //
 // 公式（000015 重构后，加性 + 乘性混合）：
@@ -14,12 +14,10 @@
 //   - 证件改为乘性扣减（影响大，缺双证时复合放大，匹配"无法正常出售"业务直觉）
 //   - 4 个修正值均从 coefficient_configs 实时读取，管理员可在后台调整
 //   - 查询失败时回退到旧硬编码默认值（0.03/0.03/0.05/0.05），保证 DB 异常时算法不崩
-package service
+package valuation
 
 import (
 	"context"
-
-	"forklift-training/internal/valuation"
 )
 
 // KcResult 车况系数计算结果
@@ -71,7 +69,7 @@ func CalcKCondition(
 	//    字典表未命中时用 1.0 兜底（中性车况，不阻断评估流程）
 	cr, err := dictRepo.GetConditionRating(ctx, rating)
 	if err != nil {
-		cr = valuation.ConditionRating{
+		cr = ConditionRating{
 			Rating:          rating,
 			Label:           rating,
 			BaseCoefficient: 1.0,

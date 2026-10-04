@@ -23,7 +23,6 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/valuation"
-	vservice "forklift-training/internal/valuation/service"
 )
 
 // 内存 adapter：字典（评估路径读方法显式实现，其余读面未实现——调用即 panic）
@@ -108,18 +107,18 @@ func newSeedMemDict() *memDictStore {
 			ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, OriginalPrice: 100000,
 		}},
 		coefficients: map[string]float64{
-			vservice.KeyLambdaElectric:             0.12,
-			vservice.KeyLambdaCombustion:           0.10,
-			vservice.KeyAnnualUsageHours:           1750,
-			vservice.KeyConfidenceRange:            0.10,
-			vservice.KeyKHoursRatioLow:             0.7,
-			vservice.KeyKHoursRatioMid:             1.0,
-			vservice.KeyKHoursRatioHigh:            1.3,
-			vservice.KeyKHoursRatioMax:             1.6,
-			vservice.KeyKcPaintBonus:               0.02,
-			vservice.KeyKcMaintenanceBonus:         0.02,
-			vservice.KeyKcNoLicensePenaltyPct:      0.10,
-			vservice.KeyKcNoRegistrationPenaltyPct: 0.10,
+			valuation.KeyLambdaElectric:             0.12,
+			valuation.KeyLambdaCombustion:           0.10,
+			valuation.KeyAnnualUsageHours:           1750,
+			valuation.KeyConfidenceRange:            0.10,
+			valuation.KeyKHoursRatioLow:             0.7,
+			valuation.KeyKHoursRatioMid:             1.0,
+			valuation.KeyKHoursRatioHigh:            1.3,
+			valuation.KeyKHoursRatioMax:             1.6,
+			valuation.KeyKcPaintBonus:               0.02,
+			valuation.KeyKcMaintenanceBonus:         0.02,
+			valuation.KeyKcNoLicensePenaltyPct:      0.10,
+			valuation.KeyKcNoRegistrationPenaltyPct: 0.10,
 		},
 	}
 }
@@ -451,7 +450,7 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 	evalStore := newMemEvalStore()
 	batteryStore := &memBatteryStore{}
 
-	valuationSvc, err := vservice.NewValuationService(dict, evalStore)
+	valuationSvc, err := valuation.NewService(dict, evalStore)
 	if err != nil {
 		t.Fatalf("构造估值服务失败: %v", err)
 	}
@@ -466,7 +465,7 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 
 	RegisterRoutes(r, sess, zap.NewNop(), nil,
 		dict, evalStore, batteryStore,
-		valuationSvc, vservice.NewBatteryRULService(),
+		valuationSvc, valuation.NewBatteryRULService(),
 		&memReportGenerator{}, st,
 		nil, // ValuationAuthService 未装配：本 seam 覆盖的公开评估路径不触达 /auth/*
 	)
@@ -663,7 +662,7 @@ func TestEvaluationFactuality_LockedSuggestionsAndLambda(t *testing.T) {
 	}
 
 	// 修改系数配置（影响建议文案的 Kc 修正项）
-	dict.coefficients[vservice.KeyKcPaintBonus] = 0.05
+	dict.coefficients[valuation.KeyKcPaintBonus] = 0.05
 
 	// 登录用户读取详情：建议与 λ 必须是评估时点锁定值（不被新配置改写）
 	w = performRequestWithAuth(r, http.MethodGet, "/api/valuation/evaluations/1", nil, authHeader(t, 1))
