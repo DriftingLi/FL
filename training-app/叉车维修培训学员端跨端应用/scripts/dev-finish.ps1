@@ -622,7 +622,11 @@ if ($UnitGate) {
         Write-Host "  ⚠️ 机检行缺字段：$(@($art.Missing) -join '、')（jest 的输出形态可能变了，请看日志原文）" -ForegroundColor DarkYellow
     }
     if ($art.ExitCode -eq 0) { Write-Result $true '全量单测门通过（结论由退出码给出，摘要只在红跑产出）' }
-    else { Write-Result $false "全量单测门未过（exit $art.ExitCode）" }
+    # ⚠️ 属性引用必须走 `$($art.ExitCode)` 子表达式：双引号里的 `$art.ExitCode` **不展开属性** ——
+    #    PowerShell 把 `$art` 整个 ToString 再接一串字面量 `.ExitCode`（2026-10-05 真链路实测：终端打出
+    #    `exit @{ResultLine=…; ExitCode=1; …}.ExitCode`）。同文件的其它行本来就是子表达式形态，
+    #    只有这一行漏了 —— 而守护钉的是 `exit $art.ExitCode` 那条**语句**，钉不到这句文案。
+    else { Write-Result $false "全量单测门未过（exit $($art.ExitCode)）" }
 
     if ($PostToPr -gt 0) {
         # Get-HeadSha 取共享库那份（`lib/gate-common.ps1` 里唯一合格的成员）；本脚本不自定义。
