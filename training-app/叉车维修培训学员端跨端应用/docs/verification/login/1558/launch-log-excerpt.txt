@@ -1,0 +1,32 @@
+# ①a 真机 launch 日志摘录（#1484 / PR #1558）
+# 树：D:\FL\wt-1484\training-app\叉车维修培训学员端跨端应用 @ 53c0393d
+# 设备：b32d8398（Xiaomi 23049RAD8C / 1080x2400）
+
+## 轮次 A：本树首次被真正编译并部署（.ci-verify/launch-nav-c07a901852f34967ae7cd005f8f55067.out）
+23:41:05.826 项目 叉车维修培训学员端跨端应用 开始编译
+23:43:28.392 检测到编译缓存部分失效，开始差量编译。详见：https://uniapp.dcloud.net.cn/uni-app-x/compiler/#cache
+23:48:26.099 项目 叉车维修培训学员端跨端应用 编译成功。
+23:48:30.027 注：当前使用的 ADB 非 HBuilderX 内置或自定义版本：
+23:48:30.087 可能存在 ADB 冲突，导致真机运行不刷新或无法重启。运行正常可忽略，如遇异常请前往 运行配置 中设置 ADB 路径
+23:48:31.068 手机端uni-app x调试基座已是最新版本，跳过更新
+23:48:39.770 正在同步手机端程序文件...
+23:48:40.707 同步手机端程序文件成功
+23:48:42.225 [login-providers] DIAG platform= app available= [boolean] true ready= [boolean] false isApp= [boolean] true at composables/useLoginProviders.uts:121
+23:48:42.557 进入页面:​pages/login/login​ 。[{"创建dom元素个数":"42个","耗时":"45ms"},{"排版":"1次","耗时":"73ms"},{"渲染":"2次","耗时":"151ms"},{"跳转页面到onReady总耗时":"412ms"}]
+23:48:42.835 应用【叉车维修培训学员端跨端应用】已启动
+23:53:21.504 已停止运行...
+
+## 轮次 B：正式 ①a 取证那一次（.ci-verify/launch-nav-581c981a62a84361bdb33cbbf723d185.out）
+00:07:31.741 项目 叉车维修培训学员端跨端应用 开始编译
+00:08:24.318 检测到编译缓存有效，跳过编译。详见：https://uniapp.dcloud.net.cn/uni-app-x/compiler/#cache
+00:08:24.371 项目 叉车维修培训学员端跨端应用 编译成功。
+00:08:35.798 正在同步手机端程序文件...
+00:08:36.688 同步手机端程序文件成功
+00:08:38.345 [login-providers] DIAG platform= app available= [boolean] true ready= [boolean] false isApp= [boolean] true at composables/useLoginProviders.uts:121
+00:08:38.674 进入页面:​pages/login/login​ 。[{"创建dom元素个数":"42个","耗时":"46ms"},{"排版":"1次","耗时":"104ms"},{"渲染":"1次","耗时":"121ms"},{"跳转页面到onReady总耗时":"457ms"}]
+00:08:38.830 应用【叉车维修培训学员端跨端应用】已启动
+
+## 轮次 A/B 之前的反例（同名项目被误解析，编译落在主树）
+# .ci-verify/launch-nav-6ee211fde0264115affa4e0082079485.out：22:35:43 开始编译 → 22:39:27 编译成功，
+#   但 22:30-22:45 本树 unpackage/ 零写入、主树 unpackage/ 全量重写；
+#   设备侧 www/pages/login/login/classes.dex 停在 46,888 B / 14:39（= 主树同名文件尺寸），本树为 47,608 B / 18:09。
