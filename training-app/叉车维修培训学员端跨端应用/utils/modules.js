@@ -85,7 +85,7 @@ const INFRA = {
     // `provider` prop 复用同一件）。同 login-agreement 的口径落跨切面基础设施而非某模块私有：
     // 它是**入口的展示形态**而非登录页的表单态，着陆页 `pages/index` 将来接同一形态时不应触发
     // 跨模块私有件消费锁（`MODULES.login.crossModuleConsumers` 现为 []，执法点
-    // landingLoginContract.test.js:786）。不登记则 `modulesDeclarationContract` E2「零隐形文件」判红
+    // landingLoginContract.test.js 的 crossModuleConsumers 断言）。不登记则 `modulesDeclarationContract` E2「零隐形文件」判红
     // （判据本体 contractHarness.js:354）。
     'components/login-provider-entry',
     'config',
