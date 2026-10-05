@@ -1,0 +1,103 @@
+<template>
+    <!-- #1484：登录提供方入口件（App 端常驻的「样式位」）。
+         职责边界刻意为窄：**只渲染、不判请求**。票面最重那条判据「禁用态下点击 ⇒ 请求层被调次数 = 0」
+         的门禁住在 pages/login/composables/useLoginForm.uts 的 `onProviderPick` —— `.uvue` 在 node 里
+         跑不了，门禁写在组件里就没人能把它真跑（utils/loginProviderEntry.test.js 的 A 组数的是请求层
+         次数，不是源码字面量）。本件只做一件事：把点到的 provider 交出去。
+         禁用态由 `ready`（探测件的接通面）驱动，**不是写死的常量** ⇒ #1482 把微信 SDK 配好、接通面
+         转真之后，本件零改动自动变可点。 -->
+    <view class="lpe-row" v-if="showEntry">
+        <text class="lpe-entry" :class="{ 'lpe-entry-off': !ready }" @click="onTap">{{ entryLabel }}</text>
+        <text class="lpe-notice" v-if="showNotice">{{ noticeText }}</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 面很小且刻意不扩：只吃「哪个 provider + 接通了没有」两个原始值，只吐一个 `pick` 事件
+     * （形态同先例 components/login-agreement：数组 defineEmits + payload 直传，不用 v-model，
+     *  后者仓内无先例、App 端 Kotlin 编译门未验过）。
+     *
+     * 参数化落在 props 上，不落在校验上 —— `provider` 决定展示名，决定不了能不能点
+     * （能不能点归 `ready`，怎么拦归 composable）。加 Apple 入口 = 页面多挂一行
+     * `:provider="'apple'"`，**不需要复制第二份组件**（票面 AC「探测与入口按 provider 参数化」的落点）。
+     */
+    import { computed } from 'vue'
+    import { WECHAT_NOT_WIRED_NOTICE } from '../../composables/useLoginProviders'
+
+    const props = withDefaults(defineProps<{
+        provider? : string
+        ready? : boolean
+    }>(), {
+        provider: 'wechat',
+        ready: false,
+    })
+
+    const emit = defineEmits(['pick'])
+
+    /**
+     * 展示名按 provider 取。未列出的 provider ⇒ 空串 ⇒ 本件不渲染（`showEntry`）：
+     * 宁可什么都不出，也不给一个「谁都不认的按钮」——那正是本票要防的「看得见但不兑现」的另一种形态。
+     *
+     * ⚠️ `'微信登录'` 这个词与小程序端那条文字链（`pages/login/login.uvue` 的 `.mode-link`）是
+     * **两份字面副本**，这是有意的例外还是第二真源，由 `utils/loginProviderEntry.test.js` B9 钉住
+     * 「两处必须同词」——漂移会变红，所以它不会悄悄漂。
+     */
+    const entryLabel = computed<string>(() : string => {
+        if (props.provider == 'wechat') return '微信登录'
+        if (props.provider == 'apple') return 'Apple 登录'
+        return ''
+    })
+
+    /**
+     * 明示文案取**单点真源**（探测件的 `WECHAT_NOT_WIRED_NOTICE`），这里不内联副本 ——
+     * 抄一份就是第三真源（同 `utils/agreementNotice.uts` 被评审要求收成单点的理由）。
+     * 非微信 provider 目前给不出「暂未开通」这句话（那句文案的主语是微信）⇒ 返回空串、不渲染。
+     */
+    const noticeText = computed<string>(() : string => {
+        if (props.provider == 'wechat') return WECHAT_NOT_WIRED_NOTICE
+        return ''
+    })
+
+    const showEntry = computed<boolean>(() : boolean => {
+        return entryLabel.value.length > 0
+    })
+
+    /** 禁用态才需要把「没开通」写在脸面上；接通了这行就该消失 */
+    const showNotice = computed<boolean>(() : boolean => {
+        return props.ready == false && noticeText.value.length > 0
+    })
+
+    function onTap() : void {
+        emit('pick', props.provider)
+    }
+</script>
+
+<style lang="scss">
+    /* 前缀 lpe- = login-provider-entry，自带命名空间避免与宿主页 class 相撞（同 la- 口径）。
+       .lpe-entry 的字号 / 色值 / 内边距逐字取自登录页 `.mode-link`（login.uvue:532-536）：
+       票面要的是「样式位」，App 端入口应与小程序端那条文字链同形，而不是新增一种视觉。
+       文字类属性只落 <text>（AGENTS.md「文字类样式只能落在文字类元素上」+ 机检
+       utils/uvueFontCarrierContract.test.js，其 DEFERRED 现为空 ⇒ 新写错就红）。 */
+    .lpe-row {
+        flex-direction: column;
+        align-items: center;
+        padding-top: 8rpx;
+    }
+
+    .lpe-entry {
+        font-size: 28rpx;
+        color: #666666;
+        padding: 12rpx 20rpx;
+    }
+
+    .lpe-entry-off {
+        color: #C8CDD8;
+    }
+
+    .lpe-notice {
+        font-size: 24rpx;
+        color: #999999;
+        margin-top: 4rpx;
+    }
+</style>

@@ -81,6 +81,13 @@ const INFRA = {
     // 口径落跨切面基础设施（同款先例：`components/app-*` 整族）。登记为 INFRA 而非某模块私有，
     // 是为了让另一页 import 它时**不构成跨模块私有件消费**（那会触发连锁消费者锁）。
     'components/login-agreement',
+    // 'components/login-provider-entry' —— #1484：登录提供方入口件（微信档现已挂载，Apple 槽位靠
+    // `provider` prop 复用同一件）。同 login-agreement 的口径落跨切面基础设施而非某模块私有：
+    // 它是**入口的展示形态**而非登录页的表单态，着陆页 `pages/index` 将来接同一形态时不应触发
+    // 跨模块私有件消费锁（`MODULES.login.crossModuleConsumers` 现为 []，执法点
+    // landingLoginContract.test.js 的 crossModuleConsumers 断言）。不登记则 `modulesDeclarationContract` E2「零隐形文件」判红
+    // （判据本体 contractHarness.js:354）。
+    'components/login-provider-entry',
     'config',
     'constants',
     'stores',
