@@ -344,11 +344,14 @@ function New-TestFailureSummary {
     **至今没有落盘脚本** —— 终端滚过去就没了，调用方拿到的只有 exit code。于是「刚才哪个红了」只能
     **再跑几分钟**（票 #1546 打的正是 #1545 读数里的 C1 那一档：为重看失败原因而重跑）。
 
-    四条硬口径，逐条都是可断言的：
+    五条硬口径，逐条都是可断言的：
       · **日志恒定落盘，且落的是原文** —— 绿跑也要有日志：它是「这道门真的跑过、结论确实是 0」的唯一物证
         （④ 的两条门脚本同形：先写 `.ci-verify/kotlin-all.log`，再打结论行）。
       · **摘要只随红跑产生** —— 复用 `New-TestFailureSummary`，它自己保证 `ExitCode=0` 直接返回、不碰文件系统。
         一份「长得像证据」的绿跑镜像文件正是本仓防的形态。
+      · **陈旧摘要要指名** —— 摘要路径是固定的，所以**下一次绿跑不会覆盖上一跑留下的那份红摘要**；而本票回答的
+        是「**刚才**哪个红了」，「刚才」完全可能是这一次绿跑（什么都没红）。既不删（`.ci-verify/` 里的东西在本仓
+        是判据输入，删了不可复算）也不装看不见 ⇒ 绿跑遇到磁盘上还有摘要时，机检行写 `staleSummary=<那份的 mtime>`。
       · **日志本体不被按内容 hash 折叠** —— 机检行引用的是**路径**，不是内容的摘要值：结论行可以被 sha 绑定，
         但事后复核靠的是日志文件本体（#1522 那条「同 sha 只留一份日志」的候选已撤销并在册）。
       · **不判成败、不新增第二个绿面** —— 本函数把传入的 `$ExitCode` **原样**写进机检行，不产出任何
@@ -358,7 +361,8 @@ function New-TestFailureSummary {
     就能重算出同一串 —— 这是票面「机检行可复算」的落点。抓不到的字段**点名**写进 `missing=`，
     不静默补 0（补 0 是把「读不出」伪装成「没红」）。
 
-    纯函数边界：唯一副作用是写 `$LogPath` 与（仅红跑）`$SummaryPath` 两个文件；不跑 jest、不读工作树、
+    纯函数边界：唯一**写**副作用是写 `$LogPath` 与（仅红跑）`$SummaryPath` 两个文件；除此之外只读
+    `$SummaryPath` 自己的 mtime（只为指名陈旧摘要，不删不改）；不跑 jest、不读工作树源码、
     不取锁、不碰设备 ⇒ 可被 `utils/devFinishContract.test.js` 用 AST 抽函数定义后**真执行**并断言产物。
 #>
 function Write-UnitGateArtifacts {
@@ -404,7 +408,13 @@ function Write-UnitGateArtifacts {
     $testsTotal = & $grab $testLine 'total'
     $timeText = ''
     if (@($timeLine).Count -gt 0 -and -not [string]::IsNullOrWhiteSpace("$timeLine")) {
-        $timeText = ("$timeLine" -replace '^\s*Time:\s*', '').Trim() -replace '\s+', ''
+        $timeRaw = ("$timeLine" -replace '^\s*Time:\s*', '').Trim()
+        # `Time:` 行的本体是「本次测量值」；jest 会在它后面挂一条 `, estimated 814 s` —— 那是**对下一跑的预估**
+        # （2026-10-05 实测：一次 287.673 s 的绿跑挂着 `estimated 814 s`，因为上一跑真的跑了 813.602 s）。
+        # 预估不是本次耗时，也不该混进一个 `key=value` 的机检 token 里 ⇒ 只取 `数 + s`，且它仍是日志里那一行的**前缀**
+        # ⇒ 「拿日志复算」这条不因为归一而失效。整行读不出来时退回原文（去掉空白），不静默丢弃。
+        $tm = [regex]::Match($timeRaw, '^([\d.]+\s*s)')
+        $timeText = $(if ($tm.Success) { $tm.Groups[1].Value -replace '\s+', '' } else { $timeRaw -replace '\s+', '' })
     }
 
     $missing = [System.Collections.Generic.List[string]]::new()
@@ -424,6 +434,17 @@ function Write-UnitGateArtifacts {
         $summaryError = "$($_.Exception.Message)" -replace '\s+', ' '
         if ($summaryError.Length -gt 120) { $summaryError = $summaryError.Substring(0, 120) }
     }
+    # **陈旧摘要要指名**：摘要是「那一次红跑」的产物，路径固定 ⇒ 下一次绿跑不会覆盖它，它会留在原处。
+    # 本票要回答的是「**刚才**哪个红了」，而「刚才」可能是这一次绿跑（什么都没红）—— 拿上一跑的摘要回答
+    # 这一跑，比不落盘更坏。所以绿跑遇到磁盘上还留着摘要时：**不删**（`.ci-verify/` 里的东西在本仓是判据输入，
+    # 删了不可复算），而是在机检行里把它的时间戳点出来，让读的人知道那不是本次的产物。
+    $staleSummary = ''
+    if ($null -eq $summary -and -not $summaryError -and (Test-Path -LiteralPath $SummaryPath -PathType Leaf)) {
+        # 只认**文件**：写失败时那一条路径可能是别的形态（守护 U6 就故意把它种成一个目录），
+        # 报「陈旧摘要」会把「写不进去」说成「上次红过」—— 两件事必须分开有名。
+        # 时间戳取**无空格**形态：机检行是 `key=value` 空格分隔的一行，值里不能夹空格
+        $staleSummary = ([System.IO.File]::GetLastWriteTime($SummaryPath)).ToString('yyyyMMdd-HHmmss')
+    }
 
     $logRef = $(if ($LogRef) { $LogRef } else { $LogPath })
     $summaryRef = $(if ($null -eq $summary) { 'none' } elseif ($SummaryRef) { $SummaryRef } else { $SummaryPath })
@@ -442,6 +463,7 @@ function Write-UnitGateArtifacts {
         "log=$logRef"
         "summary=$summaryRef"
     )
+    if ($staleSummary) { $parts += "staleSummary=$staleSummary" }
     if ($missing.Count -gt 0) { $parts += "missing=$(@($missing) -join '|')" }
     if ($summaryError) { $parts += "summaryError=$summaryError" }
     $resultLine = $parts -join ' '
@@ -467,6 +489,7 @@ function Write-UnitGateArtifacts {
         SummaryPath  = $(if ($null -ne $summary) { $summary.Path } else { '' })
         SummaryBytes = $(if ($null -ne $summary) { $summary.Bytes } else { 0 })
         SummaryError = $summaryError
+        StaleSummary = $staleSummary
     }
 }
 
@@ -613,6 +636,11 @@ if ($UnitGate) {
     if ($art.SummaryPath) {
         # 只报路径与体量，正文留在文件里 —— 终端这一行是给「之后要不要重跑」做决定的，不是给人读详情用的
         Write-Host "  失败摘要（$($art.SummaryBytes) 字节，人读，不作门禁输入）：$($art.SummaryPath)" -ForegroundColor Yellow
+    }
+    elseif ($art.StaleSummary) {
+        # 磁盘上那份是**上一跑**的红摘要（绿跑不覆盖它）。不指出来，就会有人拿它回答「刚才哪个红了」，
+        # 而刚才这一次什么都没红 —— 那是把「看不见」换成「看得见但看错」。不删：`.ci-verify/` 在本仓是判据输入。
+        Write-Host "  ⚠️ 本次是绿跑，但 $unitSummaryPath 还留着 $($art.StaleSummary) 那一次红跑的摘要 ⇒ 它不是本次结论" -ForegroundColor DarkYellow
     }
     if ($art.SummaryError) {
         Write-Host "  ⚠️ 摘要未落盘：$($art.SummaryError)（判定不受影响，照旧只看退出码）" -ForegroundColor DarkYellow

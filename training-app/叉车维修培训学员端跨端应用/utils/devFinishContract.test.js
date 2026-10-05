@@ -625,7 +625,23 @@ const GATE_NOISE_OUTPUT = [
   'npm ERR! command failed',
 ].join('\r\n');
 
-/** 六个场景。形状取自真跑一次 `npm run test:unit` 的输出（`.ci-verify/test-unit.log`），
+// jest 的 `Time:` 行**带预估尾巴**的那一形（2026-10-05 真链路抓到：一次 287.673 s 的绿跑挂着
+// `estimated 814 s`，因为上一跑真的跑了 813.602 s）。预估不是本次耗时，也不该挤进一个 `key=value`
+// 的机检 token —— U10 判的就是「只取测量值本体，且取出来的仍是日志那一行的前缀」。
+const GATE_ESTIMATED_TIME_OUTPUT = [
+  '> forklift-training-app@1.0.0 test:unit',
+  '> jest --config jest.config.unit.js -i',
+  '',
+  'PASS utils/format.test.js',
+  '',
+  'Test Suites: 158 passed, 158 total',
+  'Tests:       3017 passed, 3017 total',
+  'Snapshots:   0 total',
+  'Time:        287.673 s, estimated 814 s',
+  'Ran all test suites.',
+].join('\r\n');
+
+/** 八个场景。形状取自真跑一次 `npm run test:unit` 的输出（`.ci-verify/test-unit.log`），
  *  但**全部喂合成输出**（ADR-0019 §⑤：判据不读工作树真源）。 */
 function gateScenarios(dir) {
   const refLog = '.ci-verify/test-unit.log';
@@ -638,6 +654,9 @@ function gateScenarios(dir) {
     noise: { output: GATE_NOISE_OUTPUT, exitCode: 1, logRef: refLog, summaryRef: refSummary, durationSeconds: 3 },
     quotedSummary: { output: GATE_QUOTED_SUMMARY_OUTPUT, exitCode: 1, logRef: refLog, summaryRef: refSummary, durationSeconds: 4 },
     blockedSummary: { output: GATE_RED_OUTPUT, exitCode: 1, logRef: refLog, summaryRef: refSummary, durationSeconds: 5 },
+    estimatedTime: { output: GATE_ESTIMATED_TIME_OUTPUT, exitCode: 0, logRef: refLog, summaryRef: refSummary, durationSeconds: 291 },
+    // 绿跑，但磁盘上还留着**上一跑**的红摘要（路径固定 ⇒ 绿跑不会覆盖它）。U9 判「指名而不装看不见」。
+    greenWithStaleSummary: { output: GATE_GREEN_OUTPUT, exitCode: 0, logRef: refLog, summaryRef: refSummary, durationSeconds: 6 },
   };
   for (const [name, sc] of Object.entries(spec)) {
     sc.logPath = path.join(dir, `${name}-test-unit.log`); // eslint-disable-line no-param-reassign
@@ -662,9 +681,12 @@ function runUnitGateScenarios() {
   const inputPath = path.join(dir, 'input.json');
   const resultPath = path.join(dir, 'result.json');
   const harness = path.join(dir, 'harness.ps1');
+  const cases = gateScenarios(dir);
+  // 给 U9 种一份**上一跑**的红摘要（内容刻意与本次无关）：绿跑既不该覆盖它、也不该装作没看见它
+  fs.writeFileSync(cases.greenWithStaleSummary.summaryPath, '上一次红跑的摘要正文，本次是绿跑 ⇒ 不是本次结论\r\n', 'utf8');
   fs.writeFileSync(inputPath, JSON.stringify({
     script: path.join(ROOT, SCRIPT_REL),
-    cases: gateScenarios(dir),
+    cases,
   }), 'utf8');
 
   const body = [
@@ -706,6 +728,7 @@ function runUnitGateScenarios() {
     '    summaryPathEcho = $(if ($null -ne $r) { $r.SummaryPath } else { \'nosuch\' })',
     '    summaryBytes = $(if ($null -ne $r) { $r.SummaryBytes } else { -1 })',
     '    summaryError = $(if ($null -ne $r) { $r.SummaryError } else { \'nosuch\' })',
+    '    staleSummary = $(if ($null -ne $r) { $r.StaleSummary } else { \'nosuch\' })',
     '    suitesTotal = $(if ($null -ne $r) { $r.SuitesTotal } else { \'nosuch\' })',
     '    suitesFailed = $(if ($null -ne $r) { $r.SuitesFailed } else { \'nosuch\' })',
     '    testsTotal = $(if ($null -ne $r) { $r.TestsTotal } else { \'nosuch\' })',
@@ -787,6 +810,7 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     expect(g.thrown).toBe(null);
     expect(g.logExists).toBe(true);
     expect(g.summaryExists).toBe(false);
+    expect(g.staleSummary).toBe(''); // 干净环境里的绿跑：无摘要、也无陈旧摘要可指名
     expect(fs.existsSync(path.join(ctx.dir, 'green-gate-dir-should-not-exist'))).toBe(false);
     // 绿跑的日志是「这道门真的跑过、结论确实是 0」的唯一物证 ⇒ 必须在，且是原文
     expect(g.logContent.startsWith(GATE_GREEN_OUTPUT)).toBe(true);
@@ -889,6 +913,9 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     expect(b.resultLine).toContain('summary=none');
     expect(b.resultLine).toContain('summaryError=');
     expect(b.summaryError).not.toBe('');
+    // 「写不进去」与「上一次红过」是两件事：这里不许顺带报出 staleSummary（那条路径刻意种成**目录**）
+    expect(b.resultLine).not.toContain('staleSummary=');
+    expect(b.staleSummary).toBe('');
   });
 
   test('U7: 输出里引用过一份汇总行 ⇒ 取 reporter 收尾那一份（最后一条），不读成噪声', () => {
@@ -901,6 +928,37 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     expect(q.resultLine).toContain('suites=158');
     expect(q.resultLine).not.toContain('suites=3');
     expect(q.resultLine).not.toContain('time=9.000s');
+  });
+
+  test('U9: 绿跑时磁盘上还留着上一跑的红摘要 ⇒ 机检行指名 staleSummary，且不删不改那份产物', () => {
+    const s = ctx.parsed.greenWithStaleSummary;
+    expect(s.thrown).toBe(null);
+    expect(s.logExists).toBe(true);
+    // 本次确实没产摘要（绿跑）—— 与「文件不存在」区分开：文件在，但它不是本次的
+    expect(s.summaryPathEcho).toBe('');
+    expect(s.resultLine).toContain('summary=none');
+    expect(s.resultLine).toMatch(/\bstaleSummary=\d{8}-\d{6}\b/);
+    expect(s.staleSummary).toMatch(/^\d{8}-\d{6}$/);
+    // **不删**：`.ci-verify/` 里的东西在本仓是判据输入（删了不可复算），指名而不是销毁
+    const kept = fs.readFileSync(path.join(ctx.dir, 'greenWithStaleSummary-test-unit-failure.txt'), 'utf8');
+    expect(kept).toContain('上一次红跑的摘要正文');
+    // 绿跑也不许覆盖它 —— 内容与种下去时逐字相同
+    expect(kept.trim()).toBe('上一次红跑的摘要正文，本次是绿跑 ⇒ 不是本次结论');
+  });
+
+  test('U10: `Time:` 行挂着 jest 的预估尾巴 ⇒ time= 只取测量值本体，且它仍是日志那一行的前缀（可复算）', () => {
+    const e = ctx.parsed.estimatedTime;
+    expect(e.thrown).toBe(null);
+    expect(e.time).toBe('287.673s');
+    expect(e.resultLine).toContain('time=287.673s');
+    // 预估是给下一跑看的，不是本次耗时 ⇒ 不许挤进 key=value 的机检 token
+    expect(e.resultLine).not.toContain('estimated');
+    // 复算口径仍然成立：机检行那串是日志里 `Time:` 行去掉标签后的**前缀**
+    const back = recomputeFromLog(e.logContent);
+    expect(back.time.startsWith(e.time)).toBe(true);
+    expect(e.suitesTotal).toBe(158);
+    expect(e.testsTotal).toBe(3017);
+    expect(e.resultLine).toMatch(/\bexit=0\b/);
   });
 
   test('U8: 调用点是接线正确的 —— 跑的就是 `npm run test:unit` 那一条、判定只看退出码、贴评论在 exit 之前', () => {
