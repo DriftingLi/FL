@@ -344,7 +344,7 @@ function New-TestFailureSummary {
     **至今没有落盘脚本** —— 终端滚过去就没了，调用方拿到的只有 exit code。于是「刚才哪个红了」只能
     **再跑几分钟**（票 #1546 打的正是 #1545 读数里的 C1 那一档：为重看失败原因而重跑）。
 
-    五条硬口径，逐条都是可断言的：
+    六条硬口径，逐条都是可断言的：
       · **日志恒定落盘，且落的是原文** —— 绿跑也要有日志：它是「这道门真的跑过、结论确实是 0」的唯一物证
         （④ 的两条门脚本同形：先写 `.ci-verify/kotlin-all.log`，再打结论行）。
       · **摘要只随红跑产生** —— 复用 `New-TestFailureSummary`，它自己保证 `ExitCode=0` 直接返回、不碰文件系统。
@@ -356,6 +356,11 @@ function New-TestFailureSummary {
         但事后复核靠的是日志文件本体（#1522 那条「同 sha 只留一份日志」的候选已撤销并在册）。
       · **不判成败、不新增第二个绿面** —— 本函数把传入的 `$ExitCode` **原样**写进机检行，不产出任何
         「绿/红」的新结论；调用方的判定仍然是且只是那一个退出码。
+      · **机检行要能指着「哪一棵树的哪一个状态」跑出来的**（#1556）—— 尾部两枚 `head=<sha>` / `dirty=clean|dirty`。
+        没有它们，「引用上一次落盘的机检行」就退化成「引用一段会话记忆」：#1545 §8.3 的 C2 四档判据要靠这一行
+        回答「上一次那行结论覆盖的是不是当前这份内容」，而当时那一行既不记 sha 也不记工作树脏净
+        （sha 只出现在 `-PostToPr` 那条评论正文的 `- commit:` 行里）。两枚**只是可见性**：取不到写 `?`，
+        既不省略字段也不补空串（与 `missing=` 同口径），也不参与任何判红路径。
 
     机检行的数字全部取自本次输出**自己的**汇总行（`Test Suites:` / `Tests:` / `Time:`），所以拿着日志
     就能重算出同一串 —— 这是票面「机检行可复算」的落点。抓不到的字段**点名**写进 `missing=`，
@@ -377,7 +382,14 @@ function Write-UnitGateArtifacts {
         # 机检行里显示的引用（默认用绝对路径）。调用点传仓内相对形（`.ci-verify/test-unit.log`），
         # 于是**终端打的那一行**与**贴进 PR 评论的那一行**逐字相同 —— 评论里的绝对本地路径没有读者能打开。
         [string]$LogRef = '',
-        [string]$SummaryRef = ''
+        [string]$SummaryRef = '',
+        # 引用性两枚（#1556）：由**调用点**喂进来 —— 函数本体不去跑 git，那是上面「纯函数边界」那条承诺，
+        # 也是这套守护能把值种成任意固定串再断言产物的前提（`utils/devFinishContract.test.js` U11–U14）。
+        # sha 的取法只有一份：调用方用 `lib/gate-common.ps1` 的 `Get-HeadSha`，本文件不自定义。
+        # 取不到就传空串 ⇒ 机检行写 `head=?` / `dirty=?`；`$WorktreeState` 只认 `clean` / `dirty` 两个字面值，
+        # 其余（含带空格的串）一律归一为 `?` —— 机检行是一行 `key=value`，不能被输入撑成两行。
+        [string]$HeadSha = '',
+        [string]$WorktreeState = ''
     )
     $utf8 = [System.Text.Encoding]::UTF8
     $lines = @($Output -split "\r?\n")
@@ -451,6 +463,12 @@ function Write-UnitGateArtifacts {
 
     # ---- 3) 机检行 ----
     $show = { param($v) $(if ($null -eq $v) { '?' } else { "$v" }) }
+    # 引用性两枚的归一（#1556）：`head=` 只收「非空且不含空白」的串，`dirty=` 只收 `clean` / `dirty` 两个字面值，
+    # 其余一律 `?`。取不到时**保留字段**写 `?` —— 省略字段或补空串都会让「上一次那行」变得不可比，
+    # 那正是本件要消灭的形态（取舍与 `missing=` 同一条）。两枚都不参与任何判红路径。
+    $headText = $(if ($HeadSha) { "$HeadSha".Trim() } else { '' })
+    if (-not $headText -or $headText -match '\s') { $headText = '?' }
+    $dirtyText = $(if (@('clean', 'dirty') -contains $WorktreeState) { $WorktreeState } else { '?' })
     $parts = @(
         'TEST_UNIT_RESULT'
         "exit=$ExitCode"
@@ -462,6 +480,8 @@ function Write-UnitGateArtifacts {
         "wall=${DurationSeconds}s"
         "log=$logRef"
         "summary=$summaryRef"
+        "head=$headText"
+        "dirty=$dirtyText"
     )
     if ($staleSummary) { $parts += "staleSummary=$staleSummary" }
     if ($missing.Count -gt 0) { $parts += "missing=$(@($missing) -join '|')" }
@@ -486,6 +506,8 @@ function Write-UnitGateArtifacts {
         TestsFailed  = $testsFailed
         Time         = $timeText
         Missing      = @($missing)
+        HeadSha      = $headText
+        WorktreeState = $dirtyText
         SummaryPath  = $(if ($null -ne $summary) { $summary.Path } else { '' })
         SummaryBytes = $(if ($null -ne $summary) { $summary.Bytes } else { 0 })
         SummaryError = $summaryError
@@ -615,6 +637,21 @@ if ($UnitGate) {
     Write-Host '=== 全量单测门：日志 +（仅红跑）失败摘要 + 机检行 ===' -ForegroundColor Cyan
     Write-Host "  日志（绿跑也落，落原文）：$unitLogPath"
     Write-Host "  摘要（只有红跑才落）：$unitSummaryPath"
+    # ---- 引用性两枚的取数（#1556）：机检行要能回答「这一行覆盖的是哪一棵树的哪个状态」。
+    # Get-HeadSha 用共享库那份（`lib/gate-common.ps1` 里唯一合格的成员），本脚本不自定义；
+    # dot-source 提到分支开头，于是机检行与下面 `-PostToPr` 那条评论**共用同一份取法**（先前它只在评论分支里）。
+    . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+    $headSha = Get-HeadSha -ProjectDir $ProjectDir
+    # 工作树脏净 = `git status --porcelain` 非空即 dirty（**含未跟踪**：没 `git add` 的新文件正是
+    # 「head 没动而内容已经不是那份」的形态，只比 sha 会把它读成 clean）。取不到留空串 ⇒ 机检行写 `dirty=?`，
+    # 不猜、也不参与任何判红路径 —— 判据仍只有 jest 那一个退出码。
+    $worktreeState = ''
+    try {
+        $porcelain = @(& git -C $ProjectDir status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
+        if ($LASTEXITCODE -eq 0) { $worktreeState = $(if ($porcelain.Count -gt 0) { 'dirty' } else { 'clean' }) }
+    } catch {
+        $worktreeState = ''
+    }
     # 跑的是 package.json 里**那一条门命令本身**：本脚本不再抄一份 jest 参数 —— 参数一旦在这里再抄一份，
     # 「门」与「被落盘的那一次」就是两个东西了（与 #974 的 pattern 双份漂移同形）。
     try {
@@ -628,7 +665,8 @@ if ($UnitGate) {
     $unitExitCode = $LASTEXITCODE
     $art = Write-UnitGateArtifacts -Output $unitOutput -LogPath $unitLogPath -SummaryPath $unitSummaryPath `
         -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $gateStarted).TotalSeconds) `
-        -LogRef '.ci-verify/test-unit.log' -SummaryRef '.ci-verify/test-unit-failure.txt'
+        -LogRef '.ci-verify/test-unit.log' -SummaryRef '.ci-verify/test-unit-failure.txt' `
+        -HeadSha $headSha -WorktreeState $worktreeState
 
     Write-Host ''
     Write-Host $art.ResultLine -ForegroundColor $(if ($art.ExitCode -eq 0) { 'Green' } else { 'Red' })
@@ -657,8 +695,9 @@ if ($UnitGate) {
     else { Write-Result $false "全量单测门未过（exit $($art.ExitCode)）" }
 
     if ($PostToPr -gt 0) {
-        # Get-HeadSha 取共享库那份（`lib/gate-common.ps1` 里唯一合格的成员）；本脚本不自定义。
-        . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+        # sha 的取法只有一份：分支开头 dot-source 共享库并取 `$headSha`（#1556 之前这里才 dot-source，
+        # 于是机检行根本没有 sha，只有评论正文那行 `- commit:` 有）。评论侧仍走
+        # `Publish-UnitGateComment` 内部同一条 `Get-HeadSha` —— 同一个函数、同一个仓库，不是第二份取法。
         $summaryText = ''
         if ($art.SummaryPath -and (Test-Path -LiteralPath $art.SummaryPath)) {
             $summaryText = [System.IO.File]::ReadAllText($art.SummaryPath, [System.Text.Encoding]::UTF8)
