@@ -13,8 +13,8 @@
  *
  * ## 本文件没有耗时阈值（#1549，2026-10-05）
  *
- * 旧版有四条 `expect(Number(elapsed)).toBe*Than(...)`（原 `:194` / `:206` / `:220` / `:246`），押的是
- * **本机 CPU 供给**而不是被测行为：#1547 执行期实测**空闲单跑也红**（`3 failed / 4 passed`，`Time 237 s`），
+ * 改前（origin/master `36e0d5ff`）有四条 `expect(Number(elapsed)).toBe*Than(...)`，押的是**本机 CPU
+ * 供给**而不是被测行为：#1547 执行期实测**空闲单跑也红**（`3 failed / 4 passed`，`Time 237 s`），
  * 同一 head 的 CI `mobile-test` 全绿 ⇒ 红的是墙钟不是逻辑，而族一那条「重跑即绿」的退路对本族**不成立**。
  * 现判据只有两类观测量：
  *   - **定性值**：`TimedOut`、输出是否 `[timeout]` 开头、退出码、行数与两处标记行；
@@ -25,14 +25,21 @@
  * 于是「无界」在因果上**只能**表现为「返回时对方已经松手」—— 不需要比较耗时就能把旧实现判红。
  *
  * ⚠️ 撤掉阈值不等于自动免疫负载：**预算自己也会变成判据**。本轮 A/B 同窗实测把这条抓出来了 ——
- * 旧版在 36-worker 饱和下红的那两条，红的都不是耗时阈值而是旁边的**定性**断言
- * （`BEFORE1549:189` 的 `timedOut` 读到 True：10 s 预算被子进程冷启吃光；`BEFORE1549:245` 同理，4 s 预算）。
- * 本机现测子脚本冷启：空载 **0.88–0.92 s**，饱和 **14.3–17.6 s**（`.scratch/childstart.txt`）。
- * 所以 CAP 预算取 60 s、HOLD 预算取 30 s、后代自放余量取 90 s / 15 s —— 这些数字全部只兜「挂死」与
- * 「挤不挤得进那条要验的分支」、都不参与断言。同一条纪律在 #1544 里记作「等待预算 ≠ 断言」。
- * 形态同源：#1544 的 D1（存活探针）+ D5（探针自检），与本仓正面先例 `utils/hxTimingBehavior.test.js`
- * 的 `Simulate-DeployTicks`（把秒数换成注入的假采样 ⇒ 断言落点是结论字符串与采样序号）。
- * **放宽阈值不是修法**（只是把假红推迟），#1544 的裁定在本族同理。
+ * 改前那版在 36-worker 饱和下红的两条，红的都不是耗时阈值而是旁边的**定性**断言：改前 `:189` 的
+ * `timedOut` 读到 True（10 s 预算被子进程冷启吃光）、改前 `:245` 同理（4 s 预算）。本机 12 核现测
+ * （2026-10-05，原始日志随 PR 正文附出）：子脚本「一次 pwsh 冷启 + 起后代 + 退出」空载 **0.88–0.92 s**、
+ * 36-worker 饱和下 **14.3–17.6 s**；300 行合成流那条腿饱和下整腿 **30.3 / 42.8 s**。
+ *
+ * 预算因此分两类给（这条区分是本文件最容易读错的地方）：
+ *   - **给宽不花钱的**（返回由被测物驱动，不由预算驱动）：CAP 的 120 s、④-4 变异腿的 90 s —— 前者一有
+ *     EOF 就返回（空闲实测 ~1.9 s），后者的返回由**后代松手**驱动。这类数字只兜挂死。
+ *   - **给宽要花钱的**：③ 的 30 s —— 这一腿的耗时**就是**它要验的那个「到点收手」，抬到 120 s 就给每次
+ *     门跑多塞 90 s。取 30 s = 饱和最慢冷启 17.6 s 的 1.7 倍；代价与残留风险登记在「已知边界」。
+ * 纪律同源：#1544 的 D2 注释（「它不是断言…命中即提前退出 ⇒ 给宽不花钱」）与其 `jest.setTimeout` 那条
+ * （「默认 5 s 预算本身就是一条墙钟判据」）。形态同源：#1544 的 D1（存活探针）+ D5（探针自检），与本仓
+ * 正面先例 `utils/hxTimingBehavior.test.js` 的 `Simulate-DeployTicks`（秒数换成注入的假采样 ⇒ 断言落点
+ * 是结论字符串与采样序号）。**放宽阈值不是修法**（只是把假红推迟），#1544 的裁定在本族同理 ——
+ * 本文件换的是**观测量**，不是数字。
  *
  * ## 怎么真执行
  *
@@ -42,10 +49,11 @@
  *
  * ## 判据（③ 门三问）
  *
- * - **判别力（①「我故意弄坏被测物，它会不会红？」）**：③ 组 HOLD 在旧实现（无界 `.Result`）上**实测判红**，
- *   判据是顺序而非耗时；④ 组五条变异腿逐条弄坏「收全 / 恒不排空 / 退出段有界 / 有界排空 / 超时标志」，
- *   并断言观测量**真的翻转** ⇒ ①②③ 三组的断言都有牙。其中「恒不排空」与「退出段无界」两条是本轮新加的：
- *   被撤掉的那两条耗时断言原本名义上承担的事，现在改由定性值/顺序值承担，并且被量过了。
+ * - **判别力（①「我故意弄坏被测物，它会不会红？」）**：③ 组 HOLD 在被弄坏的真件上**实测判红**（本轮两种
+ *   载体变异各跑一遍，判红落点与读数随 PR 正文附出），判据是顺序而非耗时；④ 组五条变异腿逐条弄坏
+ *   「收全 / 恒不排空 / 退出段有界 / 有界排空 / 超时标志」并断言观测量**真的翻转** ⇒ ①②③ 三组的断言都
+ *   有牙。其中「恒不排空」与「退出段无界」两条是本轮新加的：被撤掉的那两条耗时断言原本名义上承担的事，
+ *   现在改由定性值/顺序值承担，并且被量过了。
  * - **测的是该测的那一支（②）**：驱的是真实子进程与真实管道（不是 mock 字符串），退出码 / 超时标志 /
  *   逐行输出 / 释放顺序全部从真执行里取。
  * - **成对取证（③「只跑通过的那一次不算验收」）**：收全 + 超时语义保持 + 读段有界三条必不红，
@@ -59,11 +67,15 @@
  *   的本地 IPC，受限会话跑不了（与 #1272 守护记的边界同类）⇒ 字段那次丢行的机制由票面字节级记录承担；
  *   本守护锁的是**采集契约**：读段必须有界（排不完 ⇒ TimedOut ⇒ 门 reason=timeout，fail-closed）、
  *   多行必须收全、超时必须保持。
- * - **比现测更饿的机器上，③ 会退到「退出段超时」那一支**：③ 的读段预算 30 s 是按本机饱和最慢读数
- *   17.6 s 的 1.7 倍定的。若某台机器上子脚本冷启久过 30 s，③ 仍判绿（两个出口的 fail-closed 语义相同、
- *   断言也同为 True），但它那一轮验的是退出段而不是读段 —— **这是本文件目前唯一已知的 vacuous 形态**，
- *   登记在此而不是当它不存在。反向的危险（变异腿假红）已由 `MUT` 腿的预算同一口径消掉：本轮 A/B 里
- *   旧版 `:245` 那条假红就是这个形态的实证。
+ * - **③ 有一条已知的 vacuous 支，本轮把它做成可见而不是藏起来**：若某台机器上子脚本冷启久过 30 s，
+ *   ③ 会走「退出段超时」而不是「读段超时」—— 三个断言字段照样全 True（两个出口的 fail-closed 语义相同），
+ *   但那一轮没验到读段。机检行因此多带一个 `readBranch` 字段（`[timeout]` 后面是不是「未在预算内排空」），
+ *   它**不进断言**（进断言就等于把「机器够快」重新写成判据，本票要消灭的正是这个），但失败时
+ *   `objectContaining` 会把整行 received 打出来 ⇒ 「这一轮验的是哪一段」看得见。
+ * - ④-4「有界排空」变异腿**不能**沿用 ③ 的 30 s：它断的是变异体 `timedOut=False`，而变异体要先等到子脚本
+ *   退出才走得到读段 —— 30 s 在饱和下会被两层冷启（子脚本 + 后代）吃穿，那条腿就会**假红**（改前 `:245`
+ *   正是这个形态的实证）。给它 90 s 不花钱：变异体的返回由后代松手（`HOLDER_MARGIN_S.unbounded`）驱动。
+ *   ⇒ ③ 与 ④-4 的预算**故意不同**，理由是「谁驱动返回」不同，不是漂移。
  * - 变异腿里 `WaitForExit` 的替代写法有个坑：只把 `$exited = $p.WaitForExit($ms)` 换成
  *   `$p.WaitForExit()` 注入的**不是**「无界等待」—— 该重载返回 void ⇒ PowerShell 赋成 `$null` ⇒
  *   下一句 `if (-not $exited)` 恒真 ⇒ 实际注入的是「恒判超时」，与要仿的缺陷反向（2026-10-05 实测踩过）。
@@ -85,38 +97,33 @@ const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'process-capture.ps1');
 const GATE_REL = 'scripts/kotlin-all-check.ps1';
 
-/** HOLD 腿传给被测物的读段预算（秒）。它是**预算**不是断言 —— 判据看超时标志与释放顺序。
- *  取值判据（2026-10-05 本机现测，`.scratch/childstart.txt`）：子脚本「一次 pwsh 冷启 + 起后代 + 退出」
- *  空载 **0.88–0.92 s**，36-worker 饱和（CPU 100%）下 **14.3–17.6 s**。预算必须**大于**子脚本冷启，
- *  否则饥饿会把这一腿挤到「退出段超时」那条支上 —— 空载时 4 s 够用，饱和时就成了 #1544 里
- *  「默认 5 s 预算本身就是一条墙钟判据」的同一个坑（本轮 A/B 实测：旧版 `:245` 腿正是这样假红的，
- *  `timedOut` 在变异体上读到了 True）。取 **30 s** = 饱和最慢读数 17.6 s 的 1.7 倍。
- *  这一腿的耗时 ≈ 预算本身（被测物就是要在预算处收手），所以这是**用行为换覆盖**、不是给判据松绑。 */
+/** ③ 读段腿的预算（秒）。它是**预算**不是断言 —— 判据看超时标志与释放顺序。取值判据与「给宽要花钱」
+ *  的取舍见文件头；30 s = 饱和最慢子脚本冷启 17.6 s 的 1.7 倍（本机 12 核 2026-10-05 现测）。 */
 const HOLD_BUDGET_S = 30;
-/** CAP 腿的预算（秒）。旧值 10 贴着空闲耗时给，于是预算自己成了一条墙钟判据：本轮 A/B 实测饱和下
- *  300 行合成流跑不完 10 s ⇒ `timedOut` 读到 True ⇒ **定性断言**被机器负载判红（`BEFORE1549:189`）。
- *  抬到 60 = 饱和下子脚本冷启 17.6 s 的 3.4 倍，且不花空闲路径的钱（何时返回取决于子进程排空完成，
- *  不取决于预算），只兜挂死。 */
-const CAP_BUDGET_S = 60;
+/** ④-4（有界排空变异）腿的预算（秒）：比 ③ 宽，因为变异体的返回由后代松手驱动、不由预算驱动 ⇒ 给宽
+ *  不花钱，而给窄会让这条**成对取证的牙**在饱和下假红（机制见文件头「已知边界」第 3 条）。 */
+const MUT_HOLD_BUDGET_S = 90;
+/** CAP 腿的预算（秒）。改前的 10 s 贴着空闲耗时给 ⇒ 预算自己成了墙钟判据（饱和下 `timedOut` 读到 True）。
+ *  给到 120 不花空闲路径的钱（排空一完成就返回，实测 ~1.9 s），只兜挂死。 */
+const CAP_BUDGET_S = 120;
 /** 超时腿：子进程睡眠与预算（秒）。两者关系是**因果**的 —— 睡满才落 mark，而预算短到必然先收手，
  *  所以「返回时 mark 在不在」就是「退出段有没有预算」的顺序读数（真件 Kill 掉睡过预算的子进程 ⇒
  *  mark 恒不在；饥饿只会让睡眠更长、不会更短 ⇒ 这一维随负载单调安全）。 */
 const TMO_BUDGET_S = 3;
 const TMO_SLEEP_S = 12;
 /** 后代的**自放余量**（秒）：见不到释放信号时的兜底，防夹具挂死。
- *  HOLD 组（真件）取 90 —— 必须长过 `HOLD_BUDGET_S`，否则真件会在预算耗尽前先等到松手、把「排不完」
- *  读成「排完了」；90 = 30 的 3 倍，且真件在 ~30 s 就返回，命中这一支需要再饿 60 s。
+ *  真件腿取 90 —— 必须长过 `HOLD_BUDGET_S`，否则「排不完」会被读成「排完了」；90 = 30 的 3 倍。
  *  变异「无界排空」腿取 15 —— 该腿断的是「返回时后代已松手」，无界实现在因果上**只能**在松手后返回，
  *  所以这里的余量不参与判据，只决定那条路多慢。同形先例见 #1544：子进程寿命当余量、不当阈值。 */
 const HOLDER_MARGIN_S = { real: 90, unbounded: 15 };
-/** `drive` 的 execFileSync 上限（毫秒）。必须长于上面几个上限之和，否则「驱动自己超时」会顶替
- *  「断言判红」，把失败原因吞掉（#1544 的同一条坑）。 */
-const DRIVE_TIMEOUT_MS = 180000;
+/** `drive` 的 execFileSync 上限（毫秒）。必须长于上面几个上限之和（最坏 = CAP 120 s + 驱动层冷启），
+ *  否则「驱动自己超时」会顶替「断言判红」，把失败原因吞掉（#1544 的同一条坑）。 */
+const DRIVE_TIMEOUT_MS = 240000;
 
-/** jest.setTimeout 是**每条用例**的预算，只兜「挂死」，本文件不拿它比快慢。取本文件最坏那条的内部
- *  硬上限（CAP 预算 60 s / HOLD 预算 30 s / 无界变异阻塞 15 s / 超时腿子进程 12 s，各再加驱动层 pwsh
- *  冷启）与 `DRIVE_TIMEOUT_MS` 之上留余量 ⇒ 300 s。⚠️ 默认 5 s 本身就是一条墙钟判据（同 #1544），必须显式抬高。 */
-jest.setTimeout(300000);
+/** jest.setTimeout 是**每条用例**的预算，只兜「挂死」，本文件不拿它比快慢。取值 = 单条腿最坏的内部硬
+ *  上限之和（CAP 预算 120 s + 变异腿无界阻塞 15 s + 驱动层 pwsh 冷启 ~18 s ⇒ ~153 s，按声明上限**推算**）
+ *  之上再留 2 倍余量 ⇒ 600 s（同 #1544 的取值法）。⚠️ 默认 5 s 本身就是一条墙钟判据，必须显式抬高。 */
+jest.setTimeout(600000);
 
 function psArgs(extra) {
   const args = ['-NoProfile', '-NonInteractive'];
@@ -129,11 +136,16 @@ function q(s) {
   return `'${String(s).replace(/'/g, "''")}'`;
 }
 
+/** 三条驱动脚本共用的两行：取宿主 pwsh 路径、把「输出是不是 `[timeout]` 开头」取成具名布尔。
+ *  共用是为了**不让三条腿各自漂** —— 超时标志的读法必须与超时语义那条腿一字不差。 */
+const PS_SELF = '$pwsh = (Get-Process -Id $PID).Path';
+const PS_IS_TIMEOUT = "$tmo = $r.Output.StartsWith('[timeout]')";
+
 /**
  * dot-source 指定副本的采集层并执行语句，回读 stdout。
  * @param {string} libAbs 要 dot-source 的库路径（真实库或**变异副本**）
  */
-function drive(libAbs, statements, timeout = DRIVE_TIMEOUT_MS) {
+function drive(libAbs, statements) {
   const prelude = [
     '$ErrorActionPreference = "Stop"',
     // 必须先把编码钉成 UTF-8：脚本与断言里都有中文，被管道捕获时可能落成 OEM 代码页 ⇒ 恒假
@@ -147,7 +159,7 @@ function drive(libAbs, statements, timeout = DRIVE_TIMEOUT_MS) {
   try {
     const stdout = execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8',
-      timeout,
+      timeout: DRIVE_TIMEOUT_MS,
       windowsHide: true,
       maxBuffer: 8 * 1024 * 1024,
     });
@@ -187,14 +199,14 @@ function writeScript(file, body) {
   return file;
 }
 
-/** 新建一个临时目录并交出其中的文件路径（信号文件与脚本同目录：一次夹具一眼看全，不必跨目录对号） */
-function tmpIn(name) {
+/** 新建一个临时目录、交出其中的文件路径（信号文件与脚本同目录：一次夹具一眼看全，不必跨目录对号） */
+function newTmpFile(name) {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-cap-')), name);
 }
 
 /** 子脚本写到独立临时目录 */
 function writeChild(name, body) {
-  return writeScript(tmpIn(name), body);
+  return writeScript(newTmpFile(name), body);
 }
 
 /** 「多行 + 末行后立刻退出」的合成流：300 行，第 150 行是中间标记行，末行也是标记行（票面期望 c） */
@@ -208,12 +220,12 @@ const LINES_BODY = [
 
 function capStatements(child, key) {
   return [
-    '$pwsh = (Get-Process -Id $PID).Path',
+    PS_SELF,
     `$r = Invoke-Process -FilePath $pwsh -Arguments @('-NoProfile','-File',${q(child)}) -TimeoutSeconds ${CAP_BUDGET_S} -Tag 'CAP'`,
     "$ln = ([regex]::Matches($r.Output, '(?m)^LINE-\\d+\\r?$')).Count",
     "$mid = $r.Output -match 'MIDDLE-MARKER.*导出 android 成功'",
     "$last = $r.Output -match 'LAST-MARKER.*导出 android 成功'",
-    "$tmo = $r.Output.StartsWith('[timeout]')",
+    PS_IS_TIMEOUT,
     `Write-Output ("${key}=" + $r.TimedOut + "|" + $tmo + "|" + $r.ExitCode + "|" + $ln + "|" + $mid + "|" + $last)`,
   ];
 }
@@ -222,22 +234,20 @@ function capStatements(child, key) {
  * 超时腿：子进程睡过预算，**睡满后先落 mark 再退出** ⇒ mark 存在 ⇔ 子进程已走到退出那一步
  * （被 `Kill` 掉的那一支走不到 `Set-Content`）。这就是退出段的顺序判据。
  */
-function tmoStatements(key, markPath, opts = {}) {
-  const sleepS = opts.sleepS === undefined ? TMO_SLEEP_S : opts.sleepS;
-  const budgetS = opts.budgetS === undefined ? TMO_BUDGET_S : opts.budgetS;
-  const childCmd = `Start-Sleep ${sleepS}; Set-Content -LiteralPath ${q(markPath)} -Value exited`;
+function tmoStatements(key, markPath) {
+  const childCmd = `Start-Sleep ${TMO_SLEEP_S}; Set-Content -LiteralPath ${q(markPath)} -Value exited`;
   return [
-    '$pwsh = (Get-Process -Id $PID).Path',
+    PS_SELF,
     `if (Test-Path -LiteralPath ${q(markPath)}) { Remove-Item -LiteralPath ${q(markPath)} -Force }`,
-    `$r = Invoke-Process -FilePath $pwsh -Arguments @('-NoProfile','-Command',${q(childCmd)}) -TimeoutSeconds ${budgetS} -Tag 'TMO'`,
-    '$exitedAlready = Test-Path -LiteralPath ' + q(markPath),
-    "$tmo = $r.Output.StartsWith('[timeout]')",
-    `Write-Output ("${key}=" + $r.TimedOut + "|" + $tmo + "|" + $r.ExitCode + "|" + $exitedAlready)`,
+    `$r = Invoke-Process -FilePath $pwsh -Arguments @('-NoProfile','-Command',${q(childCmd)}) -TimeoutSeconds ${TMO_BUDGET_S} -Tag 'TMO'`,
+    '$childExited = Test-Path -LiteralPath ' + q(markPath),
+    PS_IS_TIMEOUT,
+    `Write-Output ("${key}=" + $r.TimedOut + "|" + $tmo + "|" + $r.ExitCode + "|" + $childExited)`,
   ];
 }
 
 /**
- * 后代的**确定性释放协议**（代替旧版的 `Start-Sleep 12`）：握着继承来的 stdout 管道，直到看见 flag
+ * 后代的**确定性释放协议**（代替改前的 `Start-Sleep 12`）：握着继承来的 stdout 管道，直到看见 flag
  * （由驱动脚本在 `Invoke-Process` **返回之后**才创建）才松手；松手前先落 mark。
  * 于是「驱动侧看到 mark」⇔「管道在返回前已经松开」—— 这是一个**顺序**观测量，与耗时无关。
  * `marginS` 只在「见不到 flag」那条兜底支上生效（防夹具挂死），正常路径用不到它。
@@ -280,31 +290,36 @@ function holdHarness(marginS) {
   return { child, flag, mark };
 }
 
-function holdStatements(h, key) {
+function holdStatements(h, key, budgetS) {
   return [
-    '$pwsh = (Get-Process -Id $PID).Path',
+    PS_SELF,
     `foreach ($f in @(${q(h.flag)}, ${q(h.mark)})) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }`,
-    `$r = Invoke-Process -FilePath $pwsh -Arguments @('-NoProfile','-File',${q(h.child)}) -TimeoutSeconds ${HOLD_BUDGET_S} -Tag 'HOLD'`,
+    `$r = Invoke-Process -FilePath $pwsh -Arguments @('-NoProfile','-File',${q(h.child)}) -TimeoutSeconds ${budgetS} -Tag 'HOLD'`,
     // 顺序判据（本组的核心）：返回**那一刻** mark 还不存在 ⇒ 后代仍握着管道 ⇒ 读段确实没等排空。
     `$held = -not (Test-Path -LiteralPath ${q(h.mark)})`,
-    // 释放信号留在最后发，两个理由：它是顺序判据的另一半（发早了后代就没得握），且旧写法那 12 s
-    // 固定睡眠同时被 execFileSync 的 stdout 继承链拖住 —— 2026-10-05 实测那两条腿各 13.9 / 14.0 s，
-    // 换成信号后真件这条降到 ~5 s。
+    // 分支可见性（**不进断言**，理由见文件头「已知边界」第 2 条）：两个超时出口的文案不同 ——
+    // 「未在预算内排空」= 读段超时（要验的那一支），「未返回，已终止」= 退出段超时。
+    `$readBranch = $r.Output -match ${q('未在预算内排空')}`,
+    // 释放信号留在最后发：它是顺序判据的另一半（发早了后代就没得握）；同时它取代了改前那 12 s
+    // 固定睡眠 —— 旧睡眠还被 execFileSync 的 stdout 继承链拖住，改前两条 HOLD 腿实测各 13.9 / 14.0 s。
     `Set-Content -LiteralPath ${q(h.flag)} -Value release`,
-    "$tmo = $r.Output.StartsWith('[timeout]')",
-    `Write-Output ("${key}=" + $r.TimedOut + "|" + $tmo + "|" + $held)`,
+    PS_IS_TIMEOUT,
+    `Write-Output ("${key}=" + $r.TimedOut + "|" + $tmo + "|" + $held + "|" + $readBranch)`,
   ];
 }
 
-/** 机检行 ⇒ 具名字段对象：断言写成字段，失败时读得出是哪一维翻车 */
+/** 机检行 ⇒ 具名字段对象：断言写成字段，失败时读得出是哪一维翻车。
+ *  ⚠️ 段数与字段名数必须相等 —— 不等就当场红，否则缺的那一维会变成 `undefined`，
+ *  在 `toEqual` 里读起来像「值不对」而不是「行被截了」。 */
 function fields(line, names) {
   const values = line.split('|');
+  expect({ segments: values.length, names: names.length }).toEqual({ segments: names.length, names: names.length });
   return names.reduce((acc, n, i) => ({ ...acc, [n]: values[i] }), {});
 }
 
 const CAP_FIELDS = ['timedOut', 'timeoutHead', 'exitCode', 'lines', 'mid', 'last'];
 const TMO_FIELDS = ['timedOut', 'timeoutHead', 'exitCode', 'childExitedAtReturn'];
-const HOLD_FIELDS = ['timedOut', 'timeoutHead', 'heldAtReturn'];
+const HOLD_FIELDS = ['timedOut', 'timeoutHead', 'heldAtReturn', 'readBranch'];
 
 // ===== ① 多行 + 末行后立刻退出 ⇒ 收全（票面期望 c 的字面要求）=====
 
@@ -312,8 +327,8 @@ describe('采集契约：多行 + 末行后立刻退出 ⇒ 收全（期望 c �
   it('必不红半：300 行（中间含标记行、末行也是标记行）全部收齐，退出码 0、不超时', () => {
     const child = writeChild('child-lines.ps1', LINES_BODY);
     const out = drive(REAL_LIB, capStatements(child, 'CAP'));
-    // 「在预算内排完」由 {timedOut, timeoutHead} 承担。旧版在这里还叠了一条耗时阈值，而 ④ 的
-    // 「读段恒不排空」腿实测它**在同一个缺陷上照样绿**（1552 ms，远在该阈值内）⇒ 撤掉不丢语义。
+    // 「在预算内排完」由 {timedOut, timeoutHead} 承担。改前这里还叠了一条耗时阈值，而 ④-2
+    // 「读段恒不排空」腿实测它**在同一个缺陷上照样绿** ⇒ 撤掉不丢语义（读数随 PR 正文附出）。
     expect(fields(pick(out, 'CAP'), CAP_FIELDS)).toEqual({
       timedOut: 'False', timeoutHead: 'False', exitCode: '0', lines: '300', mid: 'True', last: 'True',
     });
@@ -324,11 +339,11 @@ describe('采集契约：多行 + 末行后立刻退出 ⇒ 收全（期望 c �
 
 describe('采集契约：超时语义保持（期望 a：超时仍 TimedOut=true ⇒ 门 reason=timeout）', () => {
   it('必不红半：子进程睡过预算 ⇒ TimedOut=True、输出以 [timeout] 开头、退出码 -1、且**子进程还没走到退出**', () => {
-    const mark = tmpIn('tmo-exit.mark');
+    const mark = newTmpFile('tmo-exit.mark');
     const out = drive(REAL_LIB, tmoStatements('TMO', mark));
-    // childExitedAtReturn=True 就是「退出段没预算」的形态（等到进程真退出再判定）。旧版那条耗时阈值
+    // childExitedAtReturn=True 就是「退出段没预算」的形态（等到进程真退出再判定）。改前那条耗时阈值
     // 在这里独家承担的只有「返回得快」= 性能；「退出段有界」改由这一维 + timedOut 承担，
-    // 且 ④ 的「退出段无界」腿量过它真的会翻。
+    // 且 ④-3「退出段无界」腿量过它真的会翻。
     expect(fields(pick(out, 'TMO'), TMO_FIELDS)).toEqual({
       timedOut: 'True', timeoutHead: 'True', exitCode: '-1', childExitedAtReturn: 'False',
     });
@@ -340,12 +355,16 @@ describe('采集契约：超时语义保持（期望 a：超时仍 TimedOut=true
 describe('采集契约：读段有界（期望 a：排不空 ⇒ TimedOut，且返回时后代仍握着管道）', () => {
   it('必不红半：子脚本秒退、后代握 stdout ⇒ TimedOut=True 且 **返回那一刻管道还没松开**（旧实现做不到）', () => {
     const h = holdHarness(HOLDER_MARGIN_S.real);
-    const out = drive(REAL_LIB, holdStatements(h, 'HOLD'));
+    const out = drive(REAL_LIB, holdStatements(h, 'HOLD', HOLD_BUDGET_S));
     const f = fields(pick(out, 'HOLD'), HOLD_FIELDS);
     // heldAtReturn=True ⇔ Invoke-Process 没等管道排空就返回了。旧实现（无界 `.Result`）在因果上
     // 只能拿到 False（它必然在后代松手之后才返回）⇒ 这一维就是「有界」的非计时表达。
-    // ④ 的「无界排空」腿读的是同一维的相反值 ⇒ 顺带给探针自己做了正控（防它退化成恒 True）。
-    expect(f).toEqual({ timedOut: 'True', timeoutHead: 'True', heldAtReturn: 'True' });
+    // ④-4 读的是同一维的相反值 ⇒ 顺带给探针自己做了正控（防它退化成恒 True）。
+    // 用 objectContaining 而不是 toEqual：`readBranch` 不参与判定（理由见文件头「已知边界」第 2 条），
+    // 但失败时 jest 会把整行 received 打出来 ⇒ 「这一轮走的是读段还是退出段」看得见。
+    expect(f).toEqual(expect.objectContaining({
+      timedOut: 'True', timeoutHead: 'True', heldAtReturn: 'True',
+    }));
   });
 });
 
@@ -367,7 +386,7 @@ describe('成对取证（变异后观测量必须翻转）：把采集层注入�
     const child = writeChild('child-lines.ps1', LINES_BODY);
     const out = drive(broken, capStatements(child, 'MUT'));
     const f = fields(pick(out, 'MUT'), CAP_FIELDS);
-    // 这一腿同时是「耗时阈值没有独家语义」的证据：缺陷形态是「没排空」，而耗时照样很小 ——
+    // 这一腿同时是「耗时阈值没有独家语义」的证据：缺陷形态是「没排空」，而耗时照样落在阈值内 ——
     // 判红的是定性值，不是墙钟。
     expect({ timedOut: f.timedOut, timeoutHead: f.timeoutHead })
       .toEqual({ timedOut: 'True', timeoutHead: 'True' });
@@ -380,7 +399,7 @@ describe('成对取证（变异后观测量必须翻转）：把采集层注入�
     const broken = mutatedLib([
       ['$exited = $p.WaitForExit($TimeoutSeconds * 1000)', '$p.WaitForExit(); $exited = $true'],
     ]);
-    const mark = tmpIn('tmo-exit.mark');
+    const mark = newTmpFile('tmo-exit.mark');
     const out = drive(broken, tmoStatements('MUT', mark));
     const f = fields(pick(out, 'MUT'), TMO_FIELDS);
     // **只断顺序维**：变异体走到读段时 `remainingMs` 必然已是负数 ⇒ 落到 1 s 下限，而那一秒在饱和机器上
@@ -392,10 +411,11 @@ describe('成对取证（变异后观测量必须翻转）：把采集层注入�
   it('变异「有界排空」（WaitAll 恒真 ⇒ 退回无界 .Result）⇒ 返回时后代已松手（③ 的顺序判据随之判红）', () => {
     const broken = mutatedLib([[WAIT_ALL, '$drained = $true']]);
     const h = holdHarness(HOLDER_MARGIN_S.unbounded);
-    const out = drive(broken, holdStatements(h, 'MUT'));
+    const out = drive(broken, holdStatements(h, 'MUT', MUT_HOLD_BUDGET_S));
     const f = fields(pick(out, 'MUT'), HOLD_FIELDS);
-    // 与 ③ 那组**逐字段相反**：这就是「③ 有牙」的镜像证据，且两维都不涉及耗时。
-    expect(f).toEqual({ timedOut: 'False', timeoutHead: 'False', heldAtReturn: 'False' });
+    // 与 ③ 那组**逐字段相反**（`readBranch` 也相反：变异体拿到的是子脚本的真实输出，不是排空超时文案）。
+    // 这就是「③ 有牙」的镜像证据，且四维都不涉及耗时。预算与 ③ 故意不同，理由见文件头「已知边界」第 3 条。
+    expect(f).toEqual({ timedOut: 'False', timeoutHead: 'False', heldAtReturn: 'False', readBranch: 'False' });
   });
 
   it('变异「超时标志」⇒ 超时场景 TimedOut=False（② 的 timedOut 随之判红）', () => {
@@ -403,7 +423,7 @@ describe('成对取证（变异后观测量必须翻转）：把采集层注入�
       '"[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $true',
       '"[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $false',
     ]]);
-    const mark = tmpIn('tmo-exit.mark');
+    const mark = newTmpFile('tmo-exit.mark');
     const out = drive(broken, tmoStatements('MUT', mark));
     const f = fields(pick(out, 'MUT'), TMO_FIELDS);
     expect({ timedOut: f.timedOut, timeoutHead: f.timeoutHead, exitCode: f.exitCode })
