@@ -1,4 +1,4 @@
-# 截图 diff 真链路成对取证（#1542）
+# 截图 diff 真链路成对取证（#1542 / PR #1552）
 
 被测对象：`scripts/dev-finish.ps1` **步骤 7「截图对比」** 的像素判据
 （`scripts/lib/png-diff.mjs` → `Compare-ScreenshotBaseline` → `Get-PngDiffVerdict`）。
