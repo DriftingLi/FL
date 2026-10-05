@@ -11,7 +11,7 @@
  *   第一条判据「我故意弄坏被测物，它会不会红」，更证明不了「请求没发出去」。⇒ 用
  *   `utils/utsHarness.js` 起**真的** `useLoginForm`，经返回面 `onProviderPick` 驱动，数请求层次数。
  *
- * 成对取证（AGENTS.md「③ 门三条判据」之第 ③ 条：只跑通过的那一次不算验收）：
+ * 成对取证（判据原文见 docs/agents/guards.md 与本线 AGENTS.md 的验收门段：只跑通过的那一次不算验收）：
  *   · 必不红 = A1/A2/A3（真源：未接通零请求、接通才切模式、未知 provider 什么都不做）
  *   · 必红   = A4（把门禁判据反写 ⇒ 同一条点击就把请求打到 `loginByWechat`，证明 A1 不是恒真）
  *
