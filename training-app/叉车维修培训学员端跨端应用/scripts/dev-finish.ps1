@@ -38,6 +38,8 @@
     npm run dev:finish
     npm run dev:finish -- -Level standard -Device 192.168.10.51:39181
     npm run dev:finish -- -DryRun
+    npm run test:unit:gate                 # 只跑全量单测门：日志 + （红跑）摘要 + 机检行
+    pwsh scripts/dev-finish.ps1 -UnitGate -PostToPr 1546   # 同上，并把结果贴成 sha 绑定评论
 #>
 [CmdletBinding()]
 param(
@@ -45,6 +47,14 @@ param(
     [ValidateSet('quick', 'standard', 'full', '')]
     [string]$Level = '',
     [switch]$DryRun,
+    # ---- 全量单测门落盘模式（#1546，2026-10-05）----
+    # 只跑「全量单测门」这一件事：完整输出恒定落盘、红跑另产一份 ≤2KB 人读摘要、打一行机检行，
+    # 然后**按 jest 的退出码原样退出**。不进下面的九步管线、不取 HBuilderX 锁、不碰设备。
+    # 存在的理由：#1526 只把「单元测试（契约子集）」那一步的失败详情留住了；全量那一条至今没有落盘
+    # 脚本，跑完只剩 exit code ⇒ 「刚才哪个红了」只能重跑几分钟（票 #1546 打的就是 C1 那一档）。
+    [switch]$UnitGate,
+    # 与 ②④ 两条门脚本同名同义：把本次结果贴成 sha 绑定的 PR 评论（0 = 不贴）。
+    [int]$PostToPr = 0,
     [switch]$Distribute,
     [switch]$UpdateBaseline,
     # ---- Q17（2026-09-18，#1139）：步骤 7 的像素判据参数 ----
@@ -324,6 +334,204 @@ function New-TestFailureSummary {
     }
 }
 
+<#
+.SYNOPSIS
+    把一次**全量单测门**的运行落盘成两件产物（完整日志 + 红跑的人读摘要），并组出一行可复算的机检行
+    （#1546，2026-10-05）。
+
+.DESCRIPTION
+    存在理由：#1526 只把「单元测试（契约子集）」那一步的失败详情留住了；全量那一条（`npm run test:unit`）
+    **至今没有落盘脚本** —— 终端滚过去就没了，调用方拿到的只有 exit code。于是「刚才哪个红了」只能
+    **再跑几分钟**（票 #1546 打的正是 #1545 读数里的 C1 那一档：为重看失败原因而重跑）。
+
+    四条硬口径，逐条都是可断言的：
+      · **日志恒定落盘，且落的是原文** —— 绿跑也要有日志：它是「这道门真的跑过、结论确实是 0」的唯一物证
+        （④ 的两条门脚本同形：先写 `.ci-verify/kotlin-all.log`，再打结论行）。
+      · **摘要只随红跑产生** —— 复用 `New-TestFailureSummary`，它自己保证 `ExitCode=0` 直接返回、不碰文件系统。
+        一份「长得像证据」的绿跑镜像文件正是本仓防的形态。
+      · **日志本体不被按内容 hash 折叠** —— 机检行引用的是**路径**，不是内容的摘要值：结论行可以被 sha 绑定，
+        但事后复核靠的是日志文件本体（#1522 那条「同 sha 只留一份日志」的候选已撤销并在册）。
+      · **不判成败、不新增第二个绿面** —— 本函数把传入的 `$ExitCode` **原样**写进机检行，不产出任何
+        「绿/红」的新结论；调用方的判定仍然是且只是那一个退出码。
+
+    机检行的数字全部取自本次输出**自己的**汇总行（`Test Suites:` / `Tests:` / `Time:`），所以拿着日志
+    就能重算出同一串 —— 这是票面「机检行可复算」的落点。抓不到的字段**点名**写进 `missing=`，
+    不静默补 0（补 0 是把「读不出」伪装成「没红」）。
+
+    纯函数边界：唯一副作用是写 `$LogPath` 与（仅红跑）`$SummaryPath` 两个文件；不跑 jest、不读工作树、
+    不取锁、不碰设备 ⇒ 可被 `utils/devFinishContract.test.js` 用 AST 抽函数定义后**真执行**并断言产物。
+#>
+function Write-UnitGateArtifacts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][AllowNull()][AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory = $true)][string]$LogPath,
+        [Parameter(Mandatory = $true)][string]$SummaryPath,
+        [int]$ExitCode = 0,
+        [int]$MaxBytes = 2048,
+        [int]$DurationSeconds = 0,
+        # 机检行里显示的引用（默认用绝对路径）。调用点传仓内相对形（`.ci-verify/test-unit.log`），
+        # 于是**终端打的那一行**与**贴进 PR 评论的那一行**逐字相同 —— 评论里的绝对本地路径没有读者能打开。
+        [string]$LogRef = '',
+        [string]$SummaryRef = ''
+    )
+    $utf8 = [System.Text.Encoding]::UTF8
+    $lines = @($Output -split "\r?\n")
+
+    # ---- 1) 汇总行取数：取**最后**一条 ----
+    # jest 的失败详情里可能把同名的行再引一遍（#1526 实测过「同一个套件的整块详情出现两遍」），
+    # reporter 收尾打的那一份在最后 ⇒ 取最后一条才不会把「详情里的引用」当成总量。
+    $lastMatch = {
+        param([string]$Pattern)
+        @($lines | Where-Object { $_ -match $Pattern } | Select-Object -Last 1)
+    }
+    $suiteLine = & $lastMatch '^\s*Test Suites?:\s'
+    $testLine = & $lastMatch '^\s*Tests:\s'
+    $timeLine = & $lastMatch '^\s*Time:\s'
+
+    # 「有这一行但没有 `N failed`」= jest **省略了零值类别**（绿跑只打 `3000 passed, 3000 total`），
+    # 读成 0；「整行都没有」才是输出形态变了 ⇒ 交给你看的那份日志，不许在这里替它编一个数。
+    $grab = {
+        param([string]$Line, [string]$Label)
+        if (@($Line).Count -eq 0 -or [string]::IsNullOrWhiteSpace("$Line")) { return $null }
+        $m = [regex]::Match("$Line", "(\d+)\s+$Label")
+        if ($m.Success) { return [int]$m.Groups[1].Value }
+        return 0
+    }
+    $suitesFailed = & $grab $suiteLine 'failed'
+    $suitesTotal = & $grab $suiteLine 'total'
+    $testsFailed = & $grab $testLine 'failed'
+    $testsTotal = & $grab $testLine 'total'
+    $timeText = ''
+    if (@($timeLine).Count -gt 0 -and -not [string]::IsNullOrWhiteSpace("$timeLine")) {
+        $timeText = ("$timeLine" -replace '^\s*Time:\s*', '').Trim() -replace '\s+', ''
+    }
+
+    $missing = [System.Collections.Generic.List[string]]::new()
+    if ($null -eq $suitesTotal) { $missing.Add('suites') }
+    if ($null -eq $testsTotal) { $missing.Add('tests') }
+    if ([string]::IsNullOrWhiteSpace($timeText)) { $missing.Add('time') }
+
+    # ---- 2) 摘要：绿跑不落（由 `New-TestFailureSummary` 自身保证），红跑落 ----
+    # 摘要落盘**失败不能改变门的结果**：判据仍是调用方手里的那个退出码，所以这里 catch 而不是让它外抛；
+    # 但也不能静默 —— 外抛或 catch 都要在机检行里留名（`summaryError=`）。
+    $summary = $null
+    $summaryError = ''
+    try {
+        $summary = New-TestFailureSummary -Output $Output -Path $SummaryPath -ExitCode $ExitCode -MaxBytes $MaxBytes
+    }
+    catch {
+        $summaryError = "$($_.Exception.Message)" -replace '\s+', ' '
+        if ($summaryError.Length -gt 120) { $summaryError = $summaryError.Substring(0, 120) }
+    }
+
+    $logRef = $(if ($LogRef) { $LogRef } else { $LogPath })
+    $summaryRef = $(if ($null -eq $summary) { 'none' } elseif ($SummaryRef) { $SummaryRef } else { $SummaryPath })
+
+    # ---- 3) 机检行 ----
+    $show = { param($v) $(if ($null -eq $v) { '?' } else { "$v" }) }
+    $parts = @(
+        'TEST_UNIT_RESULT'
+        "exit=$ExitCode"
+        "suites=$(& $show $suitesTotal)"
+        "suitesFailed=$(& $show $suitesFailed)"
+        "tests=$(& $show $testsTotal)"
+        "testsFailed=$(& $show $testsFailed)"
+        "time=$(if ($timeText) { $timeText } else { '?' })"
+        "wall=${DurationSeconds}s"
+        "log=$logRef"
+        "summary=$summaryRef"
+    )
+    if ($missing.Count -gt 0) { $parts += "missing=$(@($missing) -join '|')" }
+    if ($summaryError) { $parts += "summaryError=$summaryError" }
+    $resultLine = $parts -join ' '
+
+    # ---- 4) 日志：原文 + 机检行 ----
+    # 机检行**追加在日志尾部**（④c 同形：`Write-Log "\n$summary"`）⇒ 只拿这一份文件就能既读到
+    # 完整输出、又读到结论行，复算不需要第三个东西。
+    $dir = Split-Path -Parent $LogPath
+    if ($dir) { $null = New-Item -ItemType Directory -Force -Path $dir }
+    [System.IO.File]::WriteAllText($LogPath, ($Output + "`r`n" + $resultLine + "`r`n"), [System.Text.UTF8Encoding]::new($false))
+
+    return [pscustomobject]@{
+        ResultLine   = $resultLine
+        LogPath      = $LogPath
+        LogBytes     = ([System.IO.File]::ReadAllBytes($LogPath)).Length
+        ExitCode     = $ExitCode
+        SuitesTotal  = $suitesTotal
+        SuitesFailed = $suitesFailed
+        TestsTotal   = $testsTotal
+        TestsFailed  = $testsFailed
+        Time         = $timeText
+        Missing      = @($missing)
+        SummaryPath  = $(if ($null -ne $summary) { $summary.Path } else { '' })
+        SummaryBytes = $(if ($null -ne $summary) { $summary.Bytes } else { 0 })
+        SummaryError = $summaryError
+    }
+}
+
+<#
+.SYNOPSIS
+    把一次全量单测门的结果贴成 **sha 绑定**的 PR 评论（#1546 的「纳入 sha 绑定评论」出口）。
+
+.DESCRIPTION
+    与 ②④ 两条门脚本的 `Publish-GateComment` 同一格式（标记 + `commit: <sha>` + 结论行含产物 + 复现），
+    所以 `pr-evidence.yml` 的祖先/等值绑定口径将来若要接住 ③，不需要改评论形状。
+    **本函数不是判据**：贴得过与贴不过都不改门的结果，两条路径都 `Write-Host` 警告后返回。
+    贴评论**只在红跑时附摘要正文** —— `.ci-verify/` 是 gitignored、且随工作树回收一起消失，
+    而「刚才哪个红了」要能在树没了之后仍然读得到；评论是它唯一的持久出口。绿跑不附正文，
+    否则每次收口都往 PR 上贴一份「长得像证据」的绿跑镜像。
+#>
+function Publish-UnitGateComment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][int]$PrNumber,
+        [Parameter(Mandatory = $true)][string]$ResultLine,
+        [Parameter(Mandatory = $true)][string]$LogRelative,
+        [string]$SummaryText = '',
+        [string]$ProjectDir = '',
+        [string]$ReproCommand = 'npm run test:unit:gate'
+    )
+    $sha = Get-HeadSha -ProjectDir $ProjectDir
+    if (-not $sha) {
+        Write-Host '[warn] 取不到 HEAD sha（git 不可用或不在仓库里）：跳过贴 PR 评论，门结论不受影响。' -ForegroundColor Yellow
+        return
+    }
+    $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
+    # 门号字形用 [char] 拼，不放裸字形进源码（本文件 `New-TestFailureSummary` 里的同一条纪律）。
+    $marker = '<!-- gate-evidence:{0} -->' -f [char]0x2462
+    $body = [System.Collections.Generic.List[string]]::new()
+    $body.Add($marker)
+    $body.Add('**全量单测门（`npm run test:unit`，agent 执行）**')
+    $body.Add("- commit: $sha")
+    $body.Add("- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``")
+    $body.Add("- 复现：``$ReproCommand``")
+    if ($SummaryText) {
+        $body.Add('')
+        $body.Add('失败摘要正文（人读出口，不作门禁输入）：')
+        $body.Add('```')
+        $body.Add("$SummaryText".TrimEnd())
+        $body.Add('```')
+    }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
+        return
+    }
+    try {
+        $out = (& gh pr comment $PrNumber --body ($body -join "`n") 2>&1 | Out-String)
+        if ($out -match 'github\.com/') {
+            Write-Host "✅ 已贴 PR #$PrNumber 的全量单测门评论（sha 绑定 $short）。" -ForegroundColor Green
+        }
+        else {
+            Write-Host "[warn] 贴 PR #$PrNumber 评论疑似失败（门结论不受影响）：$($out.Trim())" -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "[warn] 贴 PR 评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
+    }
+}
+
+
 # ============================================================
 # DryRun：只打印计划
 # ============================================================
@@ -369,6 +577,64 @@ if ($DryRun) {
         Write-Host $line
     }
     exit 0
+}
+
+# ============================================================
+# 全量单测门落盘模式（#1546）：只跑这一件事，跑完按 jest 的退出码退出
+#   位置在 -DryRun 之后 —— `-DryRun -UnitGate` 同时给时，「不执行任何操作」那条承诺优先。
+#   不进九步管线、不取 HBuilderX 锁、不碰设备 ⇒ 别的会话持锁时它照样能跑（③ 本来就不占主程序）。
+# ============================================================
+if ($UnitGate) {
+    $gateStarted = Get-Date
+    $ciDir = Join-Path $ProjectDir '.ci-verify'
+    $unitLogPath = Join-Path $ciDir 'test-unit.log'
+    $unitSummaryPath = Join-Path $ciDir 'test-unit-failure.txt'
+    Write-Host '=== 全量单测门：日志 +（仅红跑）失败摘要 + 机检行 ===' -ForegroundColor Cyan
+    Write-Host "  日志（绿跑也落，落原文）：$unitLogPath"
+    Write-Host "  摘要（只有红跑才落）：$unitSummaryPath"
+    # 跑的是 package.json 里**那一条门命令本身**：本脚本不再抄一份 jest 参数 —— 参数一旦在这里再抄一份，
+    # 「门」与「被落盘的那一次」就是两个东西了（与 #974 的 pattern 双份漂移同形）。
+    try {
+        $unitOutput = & npm run test:unit 2>&1 | Out-String
+    }
+    catch {
+        # 与「单元测试」那一步同形：`$ErrorActionPreference='Stop'` 下原生命令写 stderr 可能抛 ⇒ 把异常
+        # 文本当成输出继续走，判定仍取退出码（这里拿不到退出码时脚本会在 strict mode 下炸 = fail-closed）。
+        $unitOutput = "$($_.Exception.Message)"
+    }
+    $unitExitCode = $LASTEXITCODE
+    $art = Write-UnitGateArtifacts -Output $unitOutput -LogPath $unitLogPath -SummaryPath $unitSummaryPath `
+        -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $gateStarted).TotalSeconds) `
+        -LogRef '.ci-verify/test-unit.log' -SummaryRef '.ci-verify/test-unit-failure.txt'
+
+    Write-Host ''
+    Write-Host $art.ResultLine -ForegroundColor $(if ($art.ExitCode -eq 0) { 'Green' } else { 'Red' })
+    Write-Host "  日志：$unitLogPath（$($art.LogBytes) 字节）" -ForegroundColor Yellow
+    if ($art.SummaryPath) {
+        # 只报路径与体量，正文留在文件里 —— 终端这一行是给「之后要不要重跑」做决定的，不是给人读详情用的
+        Write-Host "  失败摘要（$($art.SummaryBytes) 字节，人读，不作门禁输入）：$($art.SummaryPath)" -ForegroundColor Yellow
+    }
+    if ($art.SummaryError) {
+        Write-Host "  ⚠️ 摘要未落盘：$($art.SummaryError)（判定不受影响，照旧只看退出码）" -ForegroundColor DarkYellow
+    }
+    if (@($art.Missing).Count -gt 0) {
+        # 汇总行读不出来 ⇒ 明说读不出来。「缺字段」补 0 就是把「读不出」伪装成「没红」
+        Write-Host "  ⚠️ 机检行缺字段：$(@($art.Missing) -join '、')（jest 的输出形态可能变了，请看日志原文）" -ForegroundColor DarkYellow
+    }
+    if ($art.ExitCode -eq 0) { Write-Result $true '全量单测门通过（结论由退出码给出，摘要只在红跑产出）' }
+    else { Write-Result $false "全量单测门未过（exit $art.ExitCode）" }
+
+    if ($PostToPr -gt 0) {
+        # Get-HeadSha 取共享库那份（`lib/gate-common.ps1` 里唯一合格的成员）；本脚本不自定义。
+        . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+        $summaryText = ''
+        if ($art.SummaryPath -and (Test-Path -LiteralPath $art.SummaryPath)) {
+            $summaryText = [System.IO.File]::ReadAllText($art.SummaryPath, [System.Text.Encoding]::UTF8)
+        }
+        Publish-UnitGateComment -PrNumber $PostToPr -ResultLine $art.ResultLine `
+            -LogRelative '.ci-verify/test-unit.log' -SummaryText $summaryText -ProjectDir $ProjectDir
+    }
+    exit $art.ExitCode
 }
 
 # ============================================================
