@@ -46,8 +46,16 @@ function Get-StyleLoopWorkState {
         （白跑一轮是成本，被一句 `no-work` 劝退是损失）。真出现「这里有数、那边推不出页」时，
         入口会走到截图那一步、由 auto-screenshot 明报「无改动页面」⇒ 结论仍然红，只是多付一次启动。
 
-        git 失败（不在仓库里 / git 不可用）⇒ **fail-open**（HasWork=$true）：预检没有判红权，
-        判红权在 auto-screenshot 的推导与像素层。
+        **读不到 git ⇒ fail-open（HasWork=$true）**，且这里必须写清「读不到」怎么判定（2026-10-05 自查修正）：
+        `$ErrorActionPreference='Stop'` **不会**让原生命令的非零退出抛异常（本机实测 pwsh 7.6.6、
+        `$PSNativeCommandUseErrorActionPreference=False`：`git -C <非仓库>` 返回空串 + `$LASTEXITCODE=128`，
+        `catch` 根本不触发）。所以「不在仓库 / git 不可用 / dubious ownership」只能**显式认退出码** ——
+        早先这里只写了 `catch`，于是注释承诺 fail-open、代码走的是 `files=@()` 那条 **fail-closed**，
+        把预检变成了它最不该变成的东西：**谎称没活**。
+        两条 git 调用**分级**处理：`diff HEAD`（工作树 vs HEAD）是**主判据**，它失败就是读不到 ⇒ fail-open；
+        `diff origin/master...HEAD`（已提交未推送的那半）是**补充**，`origin/master` 不存在是**常态**
+        （干净临时仓库、浅克隆都这样），它的失败不许把一轮干净树也拖成 fail-open ⇒ 只当没这一路。
+        git 二进制缺失那一形仍由 `catch` 兜住（那时才真抛）。
 
     .PARAMETER ChangedFiles
         测试缝：直接给「项目根相对」的改动文件清单时**不碰 git**（守护靠它成对喂数）。
@@ -81,20 +89,30 @@ function Get-StyleLoopWorkState {
         if (-not (Get-Command ConvertFrom-GitQuotedPath -ErrorAction SilentlyContinue)) {
             . (Join-Path $PSScriptRoot 'level-detect.ps1')
         }
-        foreach ($gitArgs in @(
-                @('diff', '--name-only', '--relative', 'HEAD'),
-                @('diff', '--name-only', '--relative', 'origin/master...HEAD'))) {
-            try {
-                $raw = & git -C $ProjectDir @gitArgs 2>$null
-                if ($raw) {
-                    $files += @($raw | Where-Object { $_ -and "$_".Trim() } |
-                        ForEach-Object { ConvertFrom-GitQuotedPath "$_".Trim() })
-                }
-            }
-            catch {
-                return [pscustomobject]@{ HasWork = $true; PageFileCount = -1; Source = 'git-failed' }
+        # 主判据：工作树 vs HEAD。这一步失败 = **读不到 git** ⇒ fail-open（判红权不在预检）。
+        try {
+            $rawPrimary = & git -C $ProjectDir diff --name-only --relative HEAD 2>$null
+            $primaryExit = $LASTEXITCODE
+        }
+        catch {
+            return [pscustomobject]@{ HasWork = $true; PageFileCount = -1; Source = 'git-failed' }
+        }
+        if ($primaryExit -ne 0) {
+            return [pscustomobject]@{ HasWork = $true; PageFileCount = -1; Source = 'git-failed' }
+        }
+        $files = @($rawPrimary | Where-Object { $_ -and "$_".Trim() } |
+            ForEach-Object { ConvertFrom-GitQuotedPath "$_".Trim() })
+
+        # 补充：已提交未推送的那一半。`origin/master` 不存在是常态 ⇒ **它的失败不改变方向**，
+        # 只按「这一路没有数」处理（否则任何干净临时树都会被拖进 fail-open）。
+        try {
+            $rawExtra = & git -C $ProjectDir diff --name-only --relative 'origin/master...HEAD' 2>$null
+            if ($LASTEXITCODE -eq 0 -and $rawExtra) {
+                $files += @($rawExtra | Where-Object { $_ -and "$_".Trim() } |
+                    ForEach-Object { ConvertFrom-GitQuotedPath "$_".Trim() })
             }
         }
+        catch { }
         $files = @($files | Select-Object -Unique)
     }
 
@@ -131,8 +149,11 @@ function Get-StyleLoopVerdict {
         # 0 干净 / 1 有诊断行 / 2 环境不可用（取自 lib/test-compile.ps1 新增的 ExitCode 字段）
         [Nullable[bool]]$CompileOk = $null,
         [Nullable[int]]$CompileExit = $null,
+        # 部署阶段的结论：**只认设备侧事实是否前进**（`lib/build-deploy.ps1` 返回对象的 `Deployed` 字段）。
+        # 不要拿它的 `Ok` 顶位：`Ok` 是「调用成立」，quick 档那一支明写 `Ok=$true / Deployed=$false`
+        # （:67 附近）——拿 `Ok` 当「到了设备」就是把「没部署」读成「部署了」。
+        # 未部署归 env(2) 而非红(1)：它的出路是「换环境/看设备」，不是「回去改代码」。
         [bool]$Deployed = $false,
-        [string]$DeployError = '',
         [string]$ShotError = '',
         [int]$PageCount = 0,
         [int]$ShotCount = 0,
@@ -215,8 +236,12 @@ function Format-StyleLoopLine {
              页名本身截断（≥8 字符）→ 整行硬裁剪` 的阶梯，每步重新量字节。
           ② **恒为单行 ASCII**：非 ASCII 与非可打印字符替换成 `?`。理由见 #1542 缺陷 5 ——
              中文行在包装链上会按 GBK 解释成 mojibake；机检判据必须能在任何码页下原样 grep 到。
-          ③ **判红时至少点一页**：`shot=` 至少含一个页面名（必要时截断它，也不换成 `-`）——
-             票面第 2 条要的就是「机检行指出是哪一页变的」。绿色或未走到像素层时 `shot=-`。
+          ③ **判红时点名页面，直到预算真的装不下为止**：`shot=` 至少含一个页面名（必要时截断它，
+             也不换成 `-`）——票面第 2 条要的就是「机检行指出是哪一页变的」。绿色或未走到像素层
+             时 `shot=-`。**唯一的例外是最后一档 `hard-trim`**：预算被压到连「结论 + 一行裁剪」都
+             装不下时（守护用 40 字节验这一档），整行按字节裁掉、以 `~` 明示不完整，此时 `ShotNames`
+             为空。这一档**只在预算被人为调小时可达**——入口把 `-MaxLineBytes` 限死在 40..200，
+             票面那条 ≤200 B 的承诺因此由参数本身兜住，而不是只写在注释里。
     #>
     [CmdletBinding()]
     param(
@@ -284,7 +309,7 @@ function Format-StyleLoopLine {
         $cand = & $render $v $Seconds (& $shotValue $shown $hidden) $log
         if ($utf8.GetByteCount($cand) -le $MaxBytes) {
             $chosen = [pscustomobject]@{
-                Line = $cand; Shown = $shown; Hidden = $hidden; Log = $log; Ladder = $rung.Tag
+                Line = $cand; Shown = $shown; Hidden = $hidden; Ladder = $rung.Tag
             }
             break
         }
@@ -300,7 +325,7 @@ function Format-StyleLoopLine {
             if ($utf8.GetByteCount($cand) -le $MaxBytes) {
                 $chosen = [pscustomobject]@{
                     Line = $cand; Shown = @($name0.Substring(0, $len)); Hidden = $hidden
-                    Log = $leafLog; Ladder = 'clipped-name'
+                    Ladder = 'clipped-name'
                 }
                 break
             }
@@ -319,7 +344,7 @@ function Format-StyleLoopLine {
         }
         $chosen = [pscustomobject]@{
             Line = $cut; Shown = @(); Hidden = @($names).Count
-            Log = $leafLog; Ladder = 'hard-trim'
+            Ladder = 'hard-trim'
         }
     }
 
@@ -328,7 +353,6 @@ function Format-StyleLoopLine {
         Bytes      = $utf8.GetByteCount($chosen.Line)
         ShotNames  = @($chosen.Shown)
         ShotHidden = [int]$chosen.Hidden
-        LogField   = $chosen.Log
         Ladder     = [string]$chosen.Ladder
     }
 }
@@ -406,10 +430,13 @@ function Copy-StyleLoopBaselineShot {
         不执行动作，第一轮的绿就是空的 —— 基线目录永远没有图，下一轮还是「首次运行」，判据永远不咬
         （ADR-0008:419 记的那个死循环）。所以这一步不是便利，是那条死循环的封口。
 
-        与 `dev-finish` 那一份拷贝的一处**刻意**差别：这里按 `RunStartedAt` 过滤，只拷本轮截图。
-        `.ci-verify/screenshots/` 从不清理 ⇒ 上一轮失败运行残留的同名图被拷进基线，就是把坏画面钉成参考图
-        （#1158 记的那半岛，判据与 `Select-ThisRunShots` 同源，不另写一份时间戳规则）。
-        不传 `RunStartedAt` ⇒ 全拷（向后兼容旧形态）。
+        与 `dev-finish` 那一份拷贝的一处**刻意**差别：这里只拷「本轮产物」。
+        `.ci-verify/screenshots/` 从不清理 ⇒ 上一轮失败运行残留的同名图被拷进基线，就是把坏画面钉成参考图。
+        「什么算本轮」**不在这里重写** —— 直接调 `lib/screenshot-gate.ps1` 的 `Select-ThisRunShots`
+        （#1158 的那条时间戳判据的**唯一真源**，`screenshot-diff.ps1` 用的也是它）：早先这里自己写了
+        一份 `$f.LastWriteTime -lt $RunStartedAt`，注释却声称「与 Select-ThisRunShots 同源」——那是**第二真源
+        配一句不实注释**，正是本仓防的形态。现在两处（比对的当前侧、建基线的拷贝面）判的是同一个集合。
+        不传 `RunStartedAt` ⇒ 全拷（向后兼容旧形态，且给守护留一条「过滤真的在起作用」的对照）。
     #>
     [CmdletBinding()]
     param(
@@ -430,9 +457,22 @@ function Copy-StyleLoopBaselineShot {
     }
 
     $null = New-Item -ItemType Directory -Force -Path $BaselineDir
+
+    # 「本轮产物」的集合**不自己判**：交给唯一真源 Select-ThisRunShots（纯函数、不取锁、只读时间戳）
+    $inScope = $null
+    if ($null -ne $RunStartedAt) {
+        if (-not (Get-Command Select-ThisRunShots -ErrorAction SilentlyContinue)) {
+            . (Join-Path $PSScriptRoot 'screenshot-gate.ps1')
+        }
+        $scope = Select-ThisRunShots -RunStartedAt ([datetime]$RunStartedAt) `
+            -CurrentDir $SourceDir -BaselineDir $BaselineDir
+        $inScope = @($scope.InScope)
+        $skipped = @($scope.Skipped | ForEach-Object { $_.Name })
+    }
+
     foreach ($f in @(Get-ChildItem -Path $SourceDir -Filter '*.png' -File)) {
-        if ($null -ne $RunStartedAt -and $f.LastWriteTime -lt [datetime]$RunStartedAt) {
-            $skipped += $f.Name
+        if ($null -ne $inScope -and $inScope -notcontains $f.Name) {
+            # 不在本轮集合里 ⇒ 已经计进 Skipped（陈旧残留），这里不重复报
             continue
         }
         Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $BaselineDir $f.Name) -Force

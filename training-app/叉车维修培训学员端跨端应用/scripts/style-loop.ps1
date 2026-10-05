@@ -84,8 +84,10 @@ param(
     [switch]$UpdateBaseline,
     [int]$HxWaitSeconds = 1800,
     [int]$HxRunTimeoutSeconds = 1800,
-    # 机检行字节预算（票面第 3 条：≤200 B）。守护会把它压到 40 来验「装不下时先砍哪一半」。
-    [ValidateRange(40, 4096)]
+    # 机检行字节预算（票面第 3 条：≤200 B）。**上限就是那条承诺本身** ⇒ 用参数范围锁死，
+    # 而不是只写在注释里等人遵守（评审自查 2026-10-05：原 `ValidateRange(40, 4096)` 让调用方
+    # 一句 `-MaxLineBytes 4096` 就把 ≤200 B 的承诺放宽成 2 KB）。下限 40 留给守护验收缩阶梯。
+    [ValidateRange(40, 200)]
     [int]$MaxLineBytes = 200,
     [switch]$DryRun,
     # 内部形态：本脚本被自己以子进程方式拉起时走链体分支（见上方 .NOTES）。不是给人用的开关。
@@ -98,16 +100,42 @@ $ErrorActionPreference = 'Stop'
 # 子进程输出解码用 UTF-8（本仓先例：dev-finish.ps1 / frontier-run.ps1 / mp-weixin-check.ps1）。
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-if (-not $ProjectDir) {
-    $ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-}
-$ProjectDir = (Resolve-Path -LiteralPath $ProjectDir).Path
 $started = Get-Date
 $logRel = '.ci-verify/style-loop.log'
-$logPath = Join-Path $ProjectDir $logRel
-$null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath)
 
 . (Join-Path $PSScriptRoot 'lib\style-loop.ps1')
+
+# ============================================================
+# 父进程侧的收口：**任何**在链体之前/之外失败的形态，也必须是「恰好一行 + 非零退出」。
+#   自查轮（2026-10-05 code review）实测两种形态：`-ProjectDir` 指错目录、`.ci-verify` 被占成文件
+#   ⇒ `Resolve-Path` / `Add-Content` 直接抛，终端上出来的是一坨 PowerShell 错误栈、
+#   **一行判据都没有** —— 正是本入口要消灭的那个形态。`log=unwritten` 是诚实的：
+#   落不了盘就不许在行里声称产物存在。
+# ============================================================
+function Complete-StyleLoopAbort {
+    param([string]$Phase, [string]$Reason, [int]$Exit, [int]$BudgetBytes)
+    $v = [pscustomobject]@{
+        Verdict = 'env'; Phase = $Phase; Changed = 0; Pages = 0; Shots = 0
+        Reason  = $Reason; ChangedPages = @()
+    }
+    $fmt = Format-StyleLoopLine -Verdict $v -LogPath 'unwritten' -Seconds 0 -MaxBytes $BudgetBytes
+    Write-Host $fmt.Line
+    exit $Exit
+}
+
+if (-not $ProjectDir) { $ProjectDir = (Join-Path $PSScriptRoot '..') }
+if (-not (Test-Path -LiteralPath $ProjectDir -PathType Container)) {
+    Complete-StyleLoopAbort -Phase 'usage' -Reason 'bad-project-dir' -Exit 2 -BudgetBytes $MaxLineBytes
+}
+$ProjectDir = (Resolve-Path -LiteralPath $ProjectDir).Path
+$logPath = Join-Path $ProjectDir $logRel
+$logWritable = $true
+try {
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath)
+}
+catch {
+    $logWritable = $false
+}
 
 # ============================================================
 # 链体的唯一出口：算结论 ⇒ 打那一行 ⇒ 把退出码交回调用方。
@@ -157,7 +185,7 @@ function Invoke-StyleLoopChain {
     # 而不是留一个空字段让渲染层去猜。
     $inputs = @{
         HasWork      = $true; EnvError = ''; CompileOk = $null; CompileExit = $null
-        Deployed     = $false; DeployError = ''; ShotError = ''
+        Deployed     = $false; ShotError = ''
         PageCount    = 0; ShotCount = 0; ChangedCount = 0; ChangedPages = @()
         DiffVerdict  = $null
     }
@@ -213,9 +241,11 @@ function Invoke-StyleLoopChain {
             Write-Host '[5/7] 真运行到设备'
             $deploy = Invoke-BuildAndDeploy -CliPath $envResult.CliPath -Device $Device -ProjectDir $ProjectDir `
                 -Level 'standard' -RunTimeoutSeconds $HxRunTimeoutSeconds
-            $inputs.Deployed = [bool]$deploy.Ok
-            $inputs.DeployError = [string]$deploy.Reason
-            Write-Host "      deployed=$($deploy.Ok) $($deploy.RunLine) reason=$($deploy.Reason)"
+            # 判「到了设备」只认 `Deployed`（设备侧事实相对基线前进），**不认 `Ok`**：
+            # `Ok` 是「调用成立」，`lib/build-deploy.ps1` 的 quick 那一支明写 `Ok=$true / Deployed=$false`，
+            # 拿 `Ok` 顶位就是把「没部署」读成「部署了」（自查轮 2026-10-05 抓到的一处方向性错误）。
+            $inputs.Deployed = [bool]$deploy.Deployed
+            Write-Host "      ok=$($deploy.Ok) deployed=$($deploy.Deployed) $($deploy.RunLine) reason=$($deploy.Reason)"
             if (-not $deploy.Ok) {
                 return (Complete-StyleLoopRun -Inputs $inputs -Started $started -MaxLineBytes $MaxLineBytes -LogRelativePath $LogRelativePath)
             }
@@ -275,6 +305,34 @@ function Invoke-StyleLoopChain {
 }
 
 # ============================================================
+# 转发实参只有**一张表**：链体的入参与子进程的命令行都从它派生（一份实参、两处消费）。
+#   为什么值得改这一刀：这里原本把同一串参数抄了**三遍**（入口 param 块 / 链体 param 块 /
+#   `$childArgs` 手工清单），而手工清单**漏抄一个不会报错** —— 子进程安静地用默认值跑，
+#   于是人传的 `-IgnoreTopRows 80` 到了链体变成 0，判据就不再是人以为的那个判据。
+#   Duplicated Code 里最贵的那一类：漏抄即静默改语义。
+#   再加一道形状自检：表里的键必须是链体参数名，打错键名当场出一行结论，而不是静默走默认值。
+# ============================================================
+$loopOpts = @{
+    Device              = $Device
+    CliPath             = $CliPath
+    ProjectDir          = $ProjectDir
+    Pages               = $Pages
+    MaxScreenshotPages  = $MaxScreenshotPages
+    PixelThreshold      = $PixelThreshold
+    IgnoreTopRows       = $IgnoreTopRows
+    IgnoreBottomRows    = $IgnoreBottomRows
+    UpdateBaseline      = [bool]$UpdateBaseline
+    HxWaitSeconds       = $HxWaitSeconds
+    HxRunTimeoutSeconds = $HxRunTimeoutSeconds
+    MaxLineBytes        = $MaxLineBytes
+}
+$chainParamNames = @((Get-Command Invoke-StyleLoopChain).Parameters.Keys)
+$unknownOpts = @($loopOpts.Keys | Where-Object { $chainParamNames -notcontains $_ })
+if ($unknownOpts.Count -gt 0) {
+    Complete-StyleLoopAbort -Phase 'usage' -Reason "unknown-opt-$($unknownOpts -join ',')" -Exit 2 -BudgetBytes $MaxLineBytes
+}
+
+# ============================================================
 # -DryRun：只打计划（**不是判据**，故 verdict=plan；不建子进程、不取锁、不碰设备）
 # ============================================================
 if ($DryRun) {
@@ -306,11 +364,7 @@ if ($DryRun) {
 # 链体形态（子进程）
 # ============================================================
 if ($Inner) {
-    $code = Invoke-StyleLoopChain -Device $Device -CliPath $CliPath -ProjectDir $ProjectDir -Pages $Pages `
-        -MaxScreenshotPages $MaxScreenshotPages -PixelThreshold $PixelThreshold `
-        -IgnoreTopRows $IgnoreTopRows -IgnoreBottomRows $IgnoreBottomRows `
-        -UpdateBaseline ([bool]$UpdateBaseline) -HxWaitSeconds $HxWaitSeconds `
-        -HxRunTimeoutSeconds $HxRunTimeoutSeconds -MaxLineBytes $MaxLineBytes -LogRelativePath $logRel
+    $code = Invoke-StyleLoopChain @loopOpts -LogRelativePath $logRel
     exit $code
 }
 
@@ -318,18 +372,22 @@ if ($Inner) {
 # 包装层（父进程）：拉起子进程 ⇒ 子进程全部输出进日志 ⇒ 终端只 relay 那一行
 # ============================================================
 $childArgs = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Inner')
-if ($Device) { $childArgs += @('-Device', $Device) }
-if ($CliPath) { $childArgs += @('-CliPath', $CliPath) }
-if ($Pages) { $childArgs += @('-Pages', $Pages) }
-$childArgs += @('-ProjectDir', $ProjectDir)
-$childArgs += @('-MaxScreenshotPages', "$MaxScreenshotPages")
-# 阈值用 InvariantCulture 写：中文/德语区域设置下 `"$PixelThreshold"` 会变成 `0,005`，
-# 传出去就是把默认阈值静默改成别的数（同 lib/screenshot-diff.ps1 传 CLI 参数时的那条理由）。
-$childArgs += @('-PixelThreshold', $PixelThreshold.ToString('0.######', [System.Globalization.CultureInfo]::InvariantCulture))
-$childArgs += @('-IgnoreTopRows', "$IgnoreTopRows", '-IgnoreBottomRows', "$IgnoreBottomRows")
-$childArgs += @('-HxWaitSeconds', "$HxWaitSeconds", '-HxRunTimeoutSeconds', "$HxRunTimeoutSeconds")
-$childArgs += @('-MaxLineBytes', "$MaxLineBytes")
-if ($UpdateBaseline) { $childArgs += @('-UpdateBaseline') }
+foreach ($key in @($loopOpts.Keys | Sort-Object)) {
+    $val = $loopOpts[$key]
+    if ($val -is [bool]) {
+        # switch 参数只在真值时传（传 `-Foo:$false` 也行，但清单里出现的就是「真做了的事」）
+        if ($val) { $childArgs += "-$key" }
+        continue
+    }
+    $text = "$val"
+    if (-not $text) { continue }   # 空串 = 没给 ⇒ 让子进程用自己的默认值
+    if ($val -is [double]) {
+        # 阈值用 InvariantCulture 写：中文/德语区域设置下 `"$PixelThreshold"` 会变成 `0,005`，
+        # 传出去就是把默认阈值静默改成别的数（同 lib/screenshot-diff.ps1 传 CLI 参数时的那条理由）。
+        $text = $val.ToString('0.######', [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+    $childArgs += @("-$key", $text)
+}
 
 $childExit = 0
 $spawnFailed = $false
@@ -361,7 +419,23 @@ $logBlock = @(
     "$($resolved.Body)".TrimEnd()
     $resolved.Line
 )
-Add-Content -LiteralPath $logPath -Value $logBlock -Encoding utf8
+$logOk = $logWritable
+if ($logOk) {
+    try {
+        Add-Content -LiteralPath $logPath -Value $logBlock -Encoding utf8
+    }
+    catch {
+        $logOk = $false
+    }
+}
+$finalLine = [string]$resolved.Line
+if (-not $logOk) {
+    # 落不了盘 ⇒ 那一行里的 `log=` 必须跟着改口：行不能指着一个不存在的产物当证据。
+    # 细节走 **stderr**（终端 stdout 仍恰好一行 —— 会话侧读的就是那一行，这里不新增噪音），
+    # 静默丢弃才是本仓反复防的形态。
+    try { [Console]::Error.WriteLine("style:loop 日志未落盘：$logPath") } catch { }
+    $finalLine = ($finalLine -replace 'log=\S+', 'log=unwritten')
+}
 
-Write-Host $resolved.Line
+Write-Host $finalLine
 exit $resolved.ExitCode

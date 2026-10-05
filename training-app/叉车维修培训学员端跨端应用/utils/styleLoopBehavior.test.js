@@ -15,12 +15,18 @@
  *   C  配置字节还原：改脏⇒还原、BOM/行尾漂移⇒也还原、幂等、只报不删
  *   D  基线落盘：首次运行**真的**写基线（否则绿是空的）、非本轮残留不得进参考图
  *   R  包装层：子进程有行⇒原样 relay、无行⇒合成并按红（含「码 0 却没行」那一形）
- *   E  入口真跑：-DryRun / 预检红 / 环境红 三条路径的退出码与「终端恰好一行」
+ *   E  入口真跑：-DryRun / 预检红 / 环境红 / 预检读不到 git⇒fail-open /
+ *      父进程侧的「恰好一行」承诺（目录不存在、日志落不了盘）
+ *   P  生产者侧：`lib/test-compile.ps1` 的 `ExitCode` 字段（0=没判定 / 2=环境），
+ *      用产物锁住 —— 既有的 testCompileContract 是接线守护，它的字段清单不含新字段
  *
  * 成对断言在哪（guards.md 末节第 2 问）：
- *   · 必不红 —— L1（绿⇒exit 0）、V4（Ok=false 但码 0 ⇒ 仍判红，反向配对见 V3）、C1（未改动⇒Unchanged）
+ *   · 必不红 —— L1（绿⇒exit 0）、V4（Ok=false 但码 0 ⇒ 仍判红，反向配对见 V3）、C1（未改动⇒Unchanged）、
+ *              P1（Q-A 未做诊断⇒ExitCode=0）
  *   · 必红   —— L2（像素变化⇒exit 1 且点名 settings.png）、V1/V6/V7（判不了⇒红）、
- *              R3（子进程静默却报 0 ⇒ 改判 1）、C3（原本没有的文件出现 ⇒ 只报不删，不静默）
+ *              R3（子进程静默却报 0 ⇒ 改判 1）、C3（原本没有的文件出现 ⇒ 只报不删，不静默）、
+ *              E2（干净仓库⇒no-work 且**不取锁**）、E7（读不到 git⇒**不许**谎称没活）、
+ *              E5/E6（父进程侧失败仍恰好一行）、P2（载体缺失⇒2 而不是 1）
  *
  * 安全性（为什么这些用例可以在任何机器上跑、也不会抢 HBuilderX）：
  *   E 组只走两条**不碰主程序**的路径 —— `-DryRun`（不建子进程）与「预检/环境就收口」。
@@ -524,9 +530,14 @@ describe('样式内循环入口：配置字节还原与基线落盘（真文件�
 describe('样式内循环入口：真跑三条不碰 HBuilderX 的路径（E 组）', () => {
   let tmpClean;
   let tmpDirty;
+  let tmpNoRepo;
 
   beforeAll(() => {
+    // tmpClean：**是一个 git 仓库但工作树干净** —— E2 要测的是「改动集里没有 pages/」，
+    // 不是「git 读不到」。把目录建成非仓库会让预检走 fail-open 那一支（E7），
+    // 于是「reason=no-work」这句话测的其实是另一件事（自查轮 2026-10-05 抓到）。
     tmpClean = fs.mkdtempSync(path.join(os.tmpdir(), 'styleloop-clean-'));
+    gitInit(tmpClean);
     tmpDirty = fs.mkdtempSync(path.join(os.tmpdir(), 'styleloop-dirty-'));
     const runDirty = gitInit(tmpDirty);
     // 预检与 auto-screenshot 的推导一样**只看 git diff**（未跟踪的新页不在集合里 —— 那是
@@ -537,10 +548,12 @@ describe('样式内循环入口：真跑三条不碰 HBuilderX 的路径（E 组
     runDirty(['add', 'pages/profile/settings.uvue']);
     runDirty(['commit', '-q', '-m', 'page']);
     fs.writeFileSync(path.join(tmpDirty, 'pages', 'profile', 'settings.uvue'), '<template><view class="b"/></template>\n');
+    // tmpNoRepo：**根本不是 git 仓库** —— 喂 E7 的 fail-open 方向
+    tmpNoRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'styleloop-norepo-'));
   });
 
   afterAll(() => {
-    [tmpClean, tmpDirty].forEach((d) => {
+    [tmpClean, tmpDirty, tmpNoRepo].forEach((d) => {
       if (d) {
         try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* 清理失败不判红 */ }
       }
@@ -591,5 +604,124 @@ describe('样式内循环入口：真跑三条不碰 HBuilderX 的路径（E 组
     expect(r.status).toBe(2);
     expect(ms.length).toBe(1);
     expect(fieldOf(ms[0], 'phase')).toBe('env');
+  });
+
+  // ---------- 下面三条是 2026-10-05 code review 自查补的：父进程侧的「一行承诺」----------
+
+  // E5：目录都不存在 ⇒ 以前是 `Resolve-Path` 抛一坨 PowerShell 错误栈、**一行判据都没有**
+  //     （正是本入口要消灭的形态）。现在必须恰好一行、且归 env(2)。
+  test('E5: -ProjectDir 指向不存在的目录 ⇒ 仍然恰好一行（不是错误栈）、phase=usage、退出码 2', () => {
+    const r = runEntry(['-ProjectDir', path.join(tmpClean, 'no-such-subdir')]);
+    const ms = machineLines(r.stdout);
+    expect(ms.length).toBe(1);
+    expect(r.status).toBe(2);
+    expect(fieldOf(ms[0], 'phase')).toBe('usage');
+    expect(fieldOf(ms[0], 'reason')).toBe('bad-project-dir');
+    expect(fieldOf(ms[0], 'log')).toBe('unwritten');
+    // 那一行以外不许有 PowerShell 噪音混进 stdout
+    expect(r.stdout).not.toMatch(/Resolve-Path|CategoryInfo/);
+  });
+
+  // E6：日志落不了盘（`.ci-verify` 被占成文件）⇒ 行仍然要出来，且 `log=` 字段**改口**，
+  //     不许指着一个没写成的产物当证据。细节走 stderr ⇒ stdout 仍恰好一行。
+  test('E6: 日志无法落盘 ⇒ 恰好一行 + 非零 + log= 字段改口 unwritten', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'styleloop-nolog-'));
+    try {
+      fs.writeFileSync(path.join(tmp, '.ci-verify'), '占位：这不是目录\n');
+      const r = runEntry(['-ProjectDir', tmp, '-Pages', 'pages/profile/settings', '-Device', 'no-such-device-xyz']);
+      const ms = machineLines(r.stdout);
+      expect(ms.length).toBe(1);
+      expect(r.status).not.toBe(0);
+      expect(fieldOf(ms[0], 'log')).toBe('unwritten');
+      expect(Buffer.byteLength(ms[0], 'utf8')).toBeLessThanOrEqual(LINE_BUDGET);
+    } finally {
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* 清理失败不判红 */ }
+    }
+  });
+
+  // E8/E9：票面第 3 条那句「≤200 B」现在由**参数范围**兜住，不再只是注释。
+  //   成对：E9 给 200（边界内）⇒ 照常出一行；E8 给 201 ⇒ 当场拒收、什么都不跑。
+  //   （原实现的 `ValidateRange(40, 4096)` 让调用方一句 `-MaxLineBytes 4096` 就把承诺放宽成 2 KB ——
+  //   code review 2026-10-05 抓到；这两条用例就是那条承诺的牙。）
+  test('E9: -MaxLineBytes 200（边界内）⇒ 正常收口，行仍 ≤200 B', () => {
+    const r = runEntry(['-ProjectDir', tmpClean, '-DryRun', '-MaxLineBytes', '200']);
+    const ms = machineLines(r.stdout);
+    expect(r.status).toBe(0);
+    expect(ms.length).toBe(1);
+    expect(Buffer.byteLength(ms[0], 'utf8')).toBeLessThanOrEqual(LINE_BUDGET);
+  });
+
+  test('E8: -MaxLineBytes 201 ⇒ 参数级拒收（非零、且不产出任何判据行）', () => {
+    const r = runEntry(['-ProjectDir', tmpClean, '-DryRun', '-MaxLineBytes', '201']);
+    expect(r.status).not.toBe(0);
+    expect(machineLines(r.stdout).length).toBe(0);
+  });
+
+  // E7：预检的**方向性**成对（与 E2 成对）—— git 读不到（根本不是仓库）时**不许**谎称没活：
+  //     必须 fail-open 放行到下一阶段，由环境/推导去判。判红权不在预检。
+  //     （这一条同时锁住一处真实缺陷：`$ErrorActionPreference='Stop'` **不会**让原生命令非零退出抛异常，
+  //     本机实测 `git -C <非仓库>` 返回空串 + `$LASTEXITCODE=128` ⇒ 只写 `catch` 等于没写。）
+  test('E7: 目录不是 git 仓库（预检读不到）⇒ fail-open 放行到环境阶段，不是 no-work', () => {
+    const r = runEntry(['-ProjectDir', tmpNoRepo, '-Device', 'no-such-device-xyz']);
+    const ms = machineLines(r.stdout);
+    expect(ms.length).toBe(1);
+    expect(fieldOf(ms[0], 'reason')).not.toBe('no-work');
+    expect(fieldOf(ms[0], 'phase')).toBe('env');
+    expect(r.status).toBe(2);
+  });
+});
+
+/**
+ * P 组：`lib/test-compile.ps1` 的 `ExitCode` 字段（#1543 为分方向而加）——**用产物验生产者**。
+ * 既有的 `utils/testCompileContract.test.js` 是接线守护（`expect(src).toContain(...)`，
+ * 真源 `node scripts/classify-guards.mjs` 判它 `[接线]`），它的 T2 字段清单里没有 `ExitCode`
+ * ⇒ 这个新字段一旦被人改回「只靠陈旧 $LASTEXITCODE」，没有任何**产物**会红。这里补上。
+ * 两条都不碰 HBuilderX：P1 走 Q-A（明写「未做编译诊断」），P2 走「hx-run.ps1 不存在」那条。
+ */
+function probeCompileExit() {
+  const lines = [
+    '$ErrorActionPreference = "Stop"',
+    'Set-StrictMode -Version Latest',
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    `. '${psQuote(path.join(ROOT, 'scripts', 'lib', 'test-compile.ps1'))}'`,
+    '$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("styleloop-tc-" + [guid]::NewGuid().ToString("N").Substring(0, 8))',
+    '$null = New-Item -ItemType Directory -Force -Path $tmp',
+    'try {',
+    // P1 Q-A：没做编译诊断 ⇒ 不该有诊断可判 ⇒ ExitCode=0，且 Ok=true
+    '$a = Invoke-TestAndCompile -Level quick -ProjectDir $tmp -SkipTests',
+    'Write-Output ("P1_OK=" + $a.Ok + "|" + $a.ExitCode + "|" + ($a.CompileResult -match "quick_static_only"))',
+    // P2 载体不在：-QuickCompile 但临时目录里没有 scripts/hx-run.ps1 ⇒ 这是**环境**问题（2），不是「编译有诊断」（1）
+    '$b = Invoke-TestAndCompile -Level quick -ProjectDir $tmp -CliPath (Join-Path $tmp "no-such-cli.exe") -SkipTests -QuickCompile',
+    'Write-Output ("P2_OK=" + (-not $b.Ok) + "|" + $b.ExitCode + "|" + ($b.Error -match "hx-run"))',
+    '} finally {',
+    '  Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue',
+    '}',
+    'Write-Output "PROBE_DONE=1"',
+  ];
+  return runPwshCommand(lines.join('\n'));
+}
+
+describe('test-compile 的 ExitCode 字段：用产物验生产者（P 组）', () => {
+  let out;
+
+  beforeAll(() => {
+    const r = probeCompileExit();
+    if (!r.ok) {
+      throw new Error('test-compile 探针失败（fail-closed，不跳过）：\n' + `exit=${r.status}\nstdout=${r.stdout}\nstderr=${r.stderr}`);
+    }
+    out = r.stdout;
+    if (field(out, 'PROBE_DONE') !== '1') {
+      throw new Error('test-compile 探针没跑完（中途抛错）：\n' + out + '\n' + r.stderr);
+    }
+  });
+
+  // 成对：P1 是「本阶段没判定 ⇒ 0」，P2 是「环境不可用 ⇒ 2」。
+  // 入口的 V4 用例（Ok=false 而码是陈旧的 0 ⇒ 仍判红）依赖这里锁住的字段真的存在且语义正确。
+  test('P1: Q-A 未做编译诊断 ⇒ Ok=true 且 ExitCode=0（不是把「没判」当成「判过」）', () => {
+    expect(field(out, 'P1_OK')).toBe('True|0|True');
+  });
+
+  test('P2: 载体（hx-run.ps1）不存在 ⇒ Ok=false 且 ExitCode=2（环境，不是红：出路不同）', () => {
+    expect(field(out, 'P2_OK')).toBe('True|2|True');
   });
 });
