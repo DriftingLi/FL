@@ -18,7 +18,8 @@
     "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1",
     "dev:finish": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1",
     "dev:finish:dry": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -DryRun",
-    "dev:finish:distribute": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -Distribute"
+    "dev:finish:distribute": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -Distribute",
+    "style:loop": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/style-loop.ps1"
   },
   "devDependencies": {
     "jest": "^27.0.4",
