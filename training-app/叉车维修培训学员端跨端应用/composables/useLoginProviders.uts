@@ -110,10 +110,15 @@ export function useLoginProviders() : UseLoginProvidersResult {
         if (wechatAvailable.value) return ''
         return REASON_UNAVAILABLE
     })
+    // #1484 票面 AC「日志能看到探测结论」：三个面的结论一次性打出来。
+    // 它同时是 ①a 的归因工具——真机上「入口该在却不在」时，这一行能立刻分清是**端别取数**不对，
+    // 还是**部署的树**不对（这行压根不出现 = 设备上跑的不是含本件的那棵树）。
+    // ⚠️ 位置有约束：必须在 `isAppPlatform` 声明**之后**（UTS 的先声明后用，同本仓「函数定义顺序」坑位）。
     // 端别面（#1484）：提供方入口件的**挂载**条件 —— 只看是不是 App 端，不看链路通没通
     const isAppPlatform = computed<boolean>(() : boolean => {
         return onApp
     })
+    console.log('[login-providers] DIAG platform=', platform, 'available=', wechatAvailable.value, 'ready=', wechatLoginReady.value, 'isApp=', isAppPlatform.value)
     return {
         wechatAvailable: wechatAvailable,
         wechatUnavailableReason: wechatUnavailableReason,
