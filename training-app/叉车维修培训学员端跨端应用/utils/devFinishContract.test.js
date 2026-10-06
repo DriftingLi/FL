@@ -587,6 +587,16 @@ describe('New-TestFailureSummary 失败摘要（#1526，行为级：真执行被
 //   —— 对照两条 #1546 旧变异，证明加字段没把旧牙磨钝 ——
 //   取第一条汇总而不是最后一条             ⇒ U7 红
 //   绿跑不指名陈旧摘要                     ⇒ U9 红
+//
+// 判别力（#1556 **合并后复核批**，2026-10-06，同一手法再取一轮；基线 sha256(dev-finish.ps1) = `3e4fffb3…f0e9`，
+// 脚本与读数在本票工作树 `.scratch/1556b/mutation.js` / `mutation.out`，归档副本在
+// `D:\FL\.scratch\archived\issue-1556\scratch-1556b\` —— ⚠️ #1556 那批的 `.scratch/1556/` 随工作树回收已不在
+// 仓根，上两条旧引用的存活副本都在 `archived/` 下，别按仓根路径去找）：
+//   dirty 枚举比较退回不区分大小写的 -contains ⇒ U13 红（`dirty=CLEAN` 原样进行 —— 这一条**同时是 TDD 的
+//                                        红跑那一次**：先写断言、见到它红，才改的 `-ccontains`）
+//   工作树态写死成常量（不再读 status --porcelain）⇒ U8 红（接线：字段不再反映工作树；复核前这种坏实现**全绿**）
+//   返回对象把原始入参当结论（与机检行分家）    ⇒ U12 + U13 红（`HeadSha` / `WorktreeState` 先前返了没读者）
+//   对照：机检行不写 head（#1556 旧变异 N1 重跑）⇒ U11 + U12 + U13 + U14 红（加断言没把旧牙磨钝）
 // ============================================================
 
 const GATE_GREEN_OUTPUT = [
@@ -670,10 +680,10 @@ const GATE_ESTIMATED_TIME_OUTPUT = [
 const HEAD_SHA_FULL = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const HEAD_SHA_SHORT = 'a1b2c3d';
 
-/** 十二个场景。形状取自真跑一次 `npm run test:unit` 的输出（`.ci-verify/test-unit.log`），
+/** 十三个场景。形状取自真跑一次 `npm run test:unit` 的输出（`.ci-verify/test-unit.log`），
  *  但**全部喂合成输出**（ADR-0019 §⑤：判据不读工作树真源）。
- *  后四个（headFull / headUnknown / dirtyJunk / headUnknownRed）是 #1556 加的两字段腿，
- *  前八个各自带 `headSha` / `worktreeState` —— 这两个键**必须**在每一个场景里都存在：
+ *  后五个（headFull / headUnknown / dirtyJunk / headUnknownRed / dirtyUpper）是 #1556 与其合并后复核批
+ *  加的两字段腿，前八个各自带 `headSha` / `worktreeState` —— 这两个键**必须**在每一个场景里都存在：
  *  驱动脚本跑在 `Set-StrictMode -Version Latest` 下，缺属性是直接抛而不是传空。 */
 function gateScenarios(dir) {
   const refLog = '.ci-verify/test-unit.log';
@@ -698,6 +708,11 @@ function gateScenarios(dir) {
     dirtyJunk: { output: GATE_GREEN_OUTPUT, exitCode: 0, logRef: refLog, summaryRef: refSummary, durationSeconds: 9, headSha: 'NOT A SHA', worktreeState: 'NOT A STATE' },
     // 「取不到 sha」那一腿**同时是红跑** ⇒ 判据仍只有退出码，两字段不得把它洗成绿
     headUnknownRed: { output: GATE_RED_OUTPUT, exitCode: 1, logRef: refLog, summaryRef: refSummary, durationSeconds: 10, headSha: '', worktreeState: '' },
+    // 大小写变体：`dirty=` 是**枚举**不是自由文本 ⇒ 只认 `clean` / `dirty` 两个**逐字节**字面值。
+    // （复核 #1556 立：`-contains` 不区分大小写，`'CLEAN'` 会被原样放进行 —— 机检行的读者按 `clean`
+    //   正则收窄时会漏读这一腿，等于同一枚字段有两种写法。真源 `dev-finish.ps1` 恒发小写，
+    //   所以这一腿钉的是「调用方以外的入口也不许把大小写变体当成合法值」。）
+    dirtyUpper: { output: GATE_GREEN_OUTPUT, exitCode: 0, logRef: refLog, summaryRef: refSummary, durationSeconds: 11, headSha: HEAD_SHA_SHORT, worktreeState: 'CLEAN' },
   };
   for (const [name, sc] of Object.entries(spec)) {
     sc.logPath = path.join(dir, `${name}-test-unit.log`); // eslint-disable-line no-param-reassign
@@ -713,7 +728,7 @@ function gateScenarios(dir) {
 }
 
 /**
- * 一次性真跑六个场景：AST 抽函数定义 ⇒ 调 `Write-UnitGateArtifacts` ⇒ 把返回对象**与两个产物的内容**
+ * 一次性真跑十三个场景：AST 抽函数定义 ⇒ 调 `Write-UnitGateArtifacts` ⇒ 把返回对象**与两个产物的内容**
  * 写成 JSON 交给 node 断言。形态与 `runSummaryScenarios` 一致（一趟跑完共享同一份 AST 抽取）。
  */
 function runUnitGateScenarios() {
@@ -775,6 +790,10 @@ function runUnitGateScenarios() {
     '    testsTotal = $(if ($null -ne $r) { $r.TestsTotal } else { \'nosuch\' })',
     '    testsFailed = $(if ($null -ne $r) { $r.TestsFailed } else { \'nosuch\' })',
     '    time = $(if ($null -ne $r) { $r.Time } else { \'nosuch\' })',
+    // #1556 复核补：返回对象里那两枚**也得有读者**。先前只有机检行文本被断言 ⇒ `HeadSha` / `WorktreeState`
+    // 是装饰（改了不影响任何用例）。现在钉「返回的枚 == 行里那一串」，两者分家就红。
+    '    headShaEcho = $(if ($null -ne $r) { $r.HeadSha } else { \'nosuch\' })',
+    '    worktreeStateEcho = $(if ($null -ne $r) { $r.WorktreeState } else { \'nosuch\' })',
     // Missing 走 `|` 连接的字符串而不是 JSON 数组：同 S 系列记过的坑（空数组会被序列化成 null，
     // 于是断言对着 `null` 红，红的是序列化形状不是被测函数）。
     '    missing = $(if ($null -ne $r) { (@($r.Missing) -join \'|\') } else { \'nosuch\' })',
@@ -1021,6 +1040,10 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     // 引用靠的是**落盘的那一份**：机检行追加在日志尾部 ⇒ 拿日志就能读到 sha，不需要第三个东西
     expect(h.logContent).toContain(`head=${HEAD_SHA_FULL}`);
     expect(h.logContent).toContain('dirty=clean');
+    // 返回对象那两枚**也得与行里同串**（#1556 复核：先前 `$art.HeadSha` / `$art.WorktreeState` 返了没读者，
+    // 于是「返回枚与结论行分家」这种坏实现全绿。判据取自行本身，不是把夹具值再抄一遍。）
+    expect(h.headShaEcho).toBe(h.resultLine.match(/\bhead=(\S+)/)[1]);
+    expect(h.worktreeStateEcho).toBe(h.resultLine.match(/\bdirty=(\S+)/)[1]);
     // 加了两个字段之后，「拿日志复算机检行」这条判据必须照样成立（票面 AC 倒数第五条）
     const back = recomputeFromLog(h.logContent);
     expect(h.resultLine).toContain(`suites=${back.suitesTotal}`);
@@ -1043,6 +1066,9 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     // 取不到不是「读不出汇总行」那一族 ⇒ 不进 missing=（那里点名的是 jest 的输出形态）
     expect(u.missing).toBe('');
     expect(u.resultLine).not.toContain('missing=');
+    // 同一件事对返回对象也成立：`?` 是「没读到」，那两枚就得真的是 `?`，不许内部还留着空串或原值
+    expect(u.headShaEcho).toBe('?');
+    expect(u.worktreeStateEcho).toBe('?');
   });
 
   test('U13: dirty= 只认 clean / dirty 两个字面值，head= 不接受带空格的值 —— 非法输入归一为 ? 而不原样进 token', () => {
@@ -1055,8 +1081,14 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     expect(j.resultLine).toMatch(/\bhead=\?/);
     expect(j.resultLine).not.toContain('NOT');
     expect(j.resultLine).not.toContain('A STATE');
+    // 大小写变体也不算合法值 ⇒ 归一为 `?`，不许以 `dirty=CLEAN` 这种第二写法进结论行
+    const up = ctx.parsed.dirtyUpper;
+    expect(up.thrown).toBe(null);
+    expect(up.resultLine).toMatch(/\bdirty=\?/);
+    expect(up.resultLine).not.toMatch(/dirty=CLEAN/i);
+    expect(up.worktreeStateEcho).toBe('?');
     // 机检行是**一行** `key=value`：任何一腿都不许被输入撑成两行或多出空格
-    for (const key of ['headFull', 'red', 'dirtyJunk', 'headUnknown']) {
+    for (const key of ['headFull', 'red', 'dirtyJunk', 'headUnknown', 'dirtyUpper']) {
       const line = ctx.parsed[key].resultLine;
       expect(line).toMatch(/\bdirty=(clean|dirty|\?)/);
       expect(line).toMatch(/\bhead=[^\s]/);
@@ -1129,6 +1161,14 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     const callText = branch.slice(artifactsCall, branch.indexOf('\n\n', artifactsCall));
     expect(callText).toContain('-HeadSha $headSha');
     expect(callText).toContain('-WorktreeState $worktreeState');
+    // ---- 取数那一腿也得在分支里（#1556 复核补）----
+    //   先前只钉「参数接线」：把 `$worktreeState` 在分支里写死成 `'clean'`、参数不动 ⇒ **全绿**，
+    //   字段还在但不再反映工作树 —— 而那枚字段存在的唯一理由就是「head 相同不等于内容相同」。
+    //   这三条仍是**接线**（读源码文本），不构成 ③ 的行为证据；行为面由 U11–U14 真执行 +
+    //   本票真链路成对取证兜（`dirty=dirty` 与 `dirty=clean` 各一腿）。
+    expect(branch).toMatch(/git -C \$ProjectDir status --porcelain/);
+    expect(branch).toMatch(/\$porcelain\.Count -gt 0/);
+    expect(branch).not.toMatch(/\$worktreeState\s*=\s*'[A-Za-z]'/);
     // dot-source 共享库必须**早于**取 sha：顺序反了不会报错，只会让机检行恒为 `head=?`
     // （静默降级成「字段在但没有值」，正是 #1546 立「不许静默省略」要防的那一形态）
     const dotAt = branch.indexOf('lib\\gate-common.ps1');
