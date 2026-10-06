@@ -57,6 +57,7 @@ export type UseLoginFormResult = {
     refreshCaptcha : () => void
     clearCountdownTimer : () => void
     switchMode : (m : string) => void
+    onProviderPick : (provider : string) => void
     toggleAgree : () => void
     togglePasswordVisible : () => void
     showAgreement : (name : string) => void
@@ -154,6 +155,36 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
         countdown.value = 0
         wrongAttempts.value = 0
         loadCaptcha()
+    }
+
+    /**
+     * #1484：登录提供方入口件的点击门禁（App 端微信入口 → 这里）。
+     *
+     * 为什么住在 composable 而不是入口件里：`.uvue` 在 node 里跑不了 ⇒ 票面最重那条判据「**禁用态下
+     * 点击 ⇒ 请求层被调次数 = 0**」只有落在这里才能被 jest 真跑（`utils/loginProviderEntry.test.js`
+     * A 组数的是请求层次数，不是源码字面量）。入口件只负责渲染与把点到的 provider 交出来。
+     *
+     * 顺序就是判据：未接通 ⇒ 提示并返回，**在 `switchMode` 之前**。切模式不是无害动作 —— 它会经
+     * `loadCaptcha()` 打一次图形验证码接口，那已经是请求 ⇒ 「先切后拦」等于把票面那条写反。
+     * 同一条「拦在任何请求之前」的顺序口径，与着陆页 `useLandingLogin.onWechatLogin` 和协议勾选
+     * 拦截（`onSubmit` 的第一道）保持一致。
+     *
+     * 未列出的 provider（例如将来的 `apple`）⇒ 什么都不做：入口件按 provider 参数化，但**本票只
+     * 接通微信一条**，放行未知值等于给一个不兑现的入口。
+     *
+     * TODO(#1482)：App 端接通后**不得**复用本文件既有的 `mode == 'wechat'` 提交链 —— 那条走
+     * `auth.loginByWechat()` → `/auth/wx-login`（小程序 `jscode2session`）。拿 App 端的 code 去换
+     * 是必然失败的接法（移动应用走 `/sns/oauth2/access_token`，两套凭证两个端点；见 #1482 与
+     * `docs/design/1482-app-wechat-login.md` §3.3）。端别分流由 #1482 落，本票只保证
+     * 「未接通时点不动，且不骗人」。
+     */
+    function onProviderPick(provider : string) : void {
+        if (provider != 'wechat') return
+        if (wechatLoginReady == false) {
+            uni.showToast({ title: WECHAT_NOT_WIRED_NOTICE, icon: 'none' })
+            return
+        }
+        switchMode(provider)
     }
 
     function toggleAgree() : void {
@@ -423,6 +454,7 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
         refreshCaptcha: () => refreshCaptcha(),
         clearCountdownTimer: () => clearCountdownTimer(),
         switchMode: (m : string) => switchMode(m),
+        onProviderPick: (provider : string) => onProviderPick(provider),
         toggleAgree: () => toggleAgree(),
         togglePasswordVisible: () => togglePasswordVisible(),
         showAgreement: (name : string) => showAgreement(name),

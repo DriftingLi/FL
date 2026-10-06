@@ -574,11 +574,15 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
 describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两份实现即红）', () => {
   const sources = allSources();
 
-  it('两页都 import 根 composables/useLoginProviders 并解构**两个面**（展示面 + 接通面）', () => {
+  it('两页都 import 根 composables/useLoginProviders 并解构**两个能力面**（展示面 + 接通面）', () => {
     for (const rel of [PAGE, LOGIN_PAGE]) {
       expect(read(rel)).toContain("import { useLoginProviders } from '../../composables/useLoginProviders'");
-      expect(read(rel)).toContain('const { wechatAvailable, wechatLoginReady } = useLoginProviders()');
     }
+    // #1484 显式变更（不是绕过）：登录页多解构一个**端别面** `isAppPlatform` 作入口件的挂载条件。
+    // 判据仍是**逐字**的、且按页各自写死 —— 两页各一条，谁改名谁红；摘掉「只解构两个面」这条
+    // 统一断言的代价由下方「探测件返回面」那条 it 的字段逐一钉死接住（探测件多一个字段没有，页面少解构一个名字，两处都红）。
+    expect(read(PAGE)).toContain('const { wechatAvailable, wechatLoginReady } = useLoginProviders()');
+    expect(read(LOGIN_PAGE)).toContain('const { wechatAvailable, wechatLoginReady, isAppPlatform } = useLoginProviders()');
   });
 
   it('两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）只出现在探测件里 —— 多一个文件即「两份实现」', () => {
@@ -609,12 +613,15 @@ describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两�
     expect(code).toMatch(/try \{[\s\S]*?\} catch \(e\) \{\s*return false\s*\}/);
   });
 
-  it('探测件返回面是**两个能力判断**（展示面 / 接通面，供 #1484 决定 disabled），不是「要不要渲染」的布尔', () => {
+  it('探测件返回面是**两个能力判断 + 一个端别面**（供 #1484 决定 disabled 与挂载），不是「要不要渲染」的布尔', () => {
     const src = read(PROBE);
     const declared = [...src.matchAll(/^\s{4}([A-Za-z_$][\w$]*)\s*:/gm)].map((m) => m[1]).sort();
-    expect(declared).toEqual(['wechatAvailable', 'wechatLoginReady', 'wechatUnavailableReason']);
+    expect(declared).toEqual(['isAppPlatform', 'wechatAvailable', 'wechatLoginReady', 'wechatUnavailableReason']);
     expect(src).toContain('wechatAvailable : ComputedRef<boolean>');
     expect(src).toContain('wechatLoginReady : ComputedRef<boolean>');
+    // 端别面（#1484）：挂载条件的真源。它与接通面**必须是两个字段** ——
+    // 合成一个就退回「#1482 接通那天 App 入口自己消失」那个 future bug（见探测件头 ③ 段）。
+    expect(src).toContain('isAppPlatform : ComputedRef<boolean>');
     expect(src).not.toMatch(/shouldRender|showWechat|visible\b/);
   });
 
@@ -719,8 +726,10 @@ describe('#1478 新增件的 computed 回调形态（utsHarness 可解析 + ④ 
   });
 
   it('本票新增件确有 computed 站点（防止上面那条退化成空集恒真）', () => {
-    // 探测件三处：展示面 / 接通面（#1487 ①a 真机口径新增）/ 不可用原因
-    expect(computedSites(read(PROBE))).toHaveLength(3);
+    // 探测件四处：展示面 / 接通面（#1487 ①a 真机口径新增）/ 不可用原因 / **端别面**（#1484 新增，
+    // 入口件的挂载条件）。站点数从 3 进到 4 是**加了一个面**，不是把某个面拆成两份 ——
+    // 面的对账由上面「探测件返回面」那条 it（四个字段名逐一钉死）守，本条只守「非空集」这半边。
+    expect(computedSites(read(PROBE))).toHaveLength(4);
     // F4 返工后协议件只剩一处 computed（按通道的引导**文案**）：原先那处「按通道收掉入口」
     // 的 showRegisterLink 已删除 —— 站点数从 2 掉到 1 正是那次越界被收回的证据。
     expect(computedSites(read(AGREEMENT))).toHaveLength(1);

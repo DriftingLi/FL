@@ -152,6 +152,15 @@
             <text class="mode-link" :class="{ 'mode-link-active': mode == 'email' }" @click="switchMode('email')">邮箱验证码</text>
         </view>
 
+        <!-- #1484：App 端微信登录入口（常驻样式位 + 禁用态 + 明示文案）。
+             为什么小程序端不挂这里：小程序端的入口就是上面那条 `.mode-link`，它住在
+             `#ifdef MP-WEIXIN` 块内（#1478 裁定 2 要求该块两条指令行一字不动）⇒ 两端各有一条入口，
+             不出现「同一个微信入口在小程序端渲染两次」。
+             门禁不在模板里：`@pick` 交出去之后由 useLoginForm.onProviderPick 决定拦还是放行
+             （未接通 ⇒ 只给提示、零请求；判据可被 jest 真跑，见 utils/loginProviderEntry.test.js A 组）。
+             挂载条件 `isAppPlatform` 是端别，不是接通态 ⇒ #1482 配好微信 SDK 后本行零改动，入口自己转可用。 -->
+        <LoginProviderEntry v-if="isAppPlatform" :provider="'wechat'" :ready="wechatLoginReady" @pick="onProviderPick" />
+
         <!-- 切回账号密码登录的小入口：仅在非密码模式下显示 -->
         <view class="back-password" v-if="mode != 'password'" @click="switchMode('password')">
             <text class="back-password-link">账号密码登录</text>
@@ -172,11 +181,16 @@
     import { useLoginForm } from './composables/useLoginForm'
     import { useBiometricGate } from './composables/useBiometricGate'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
+    // #1484：登录提供方入口件（App 端常驻样式位 + 禁用态 + 明示文案）。落点选登录页而非着陆页：
+    // 着陆页那侧 #1478/#1487 已有主 CTA，本票只补登录页这条次级链，两个战场不重叠。
+    import LoginProviderEntry from '../../components/login-provider-entry/login-provider-entry.uvue'
 
     const auth = useAuthStore()
     // 微信登录入口的显隐由**运行期能力探测**决定（#1478 裁定 2：条件编译指令行增删数为 0）；
-    // 着陆页 `pages/index/index.uvue` 引用的是同一个符号，两页不各写一份探测逻辑
-    const { wechatAvailable, wechatLoginReady } = useLoginProviders()
+    // 着陆页 `pages/index/index.uvue` 引用的是同一个符号，两页不各写一份探测逻辑。
+    // 第三个面 `isAppPlatform` 是**挂载条件**（#1484）：入口件挂不挂 = 端别；按钮禁不禁 = 接通面。
+    // 两者必须分开——用「展示面 && 未接通」当挂载条件，#1482 接通那天 App 入口会自己消失。
+    const { wechatAvailable, wechatLoginReady, isAppPlatform } = useLoginProviders()
     // 生物识别实例只有一个：门控 checkSupport 写入的 isSupported 与模板读取的必须是同一份
     const biometric = useBiometric()
 
@@ -205,6 +219,7 @@
         loadCaptcha,
         clearCountdownTimer,
         switchMode,
+        onProviderPick,
         toggleAgree,
         togglePasswordVisible,
         showAgreement,

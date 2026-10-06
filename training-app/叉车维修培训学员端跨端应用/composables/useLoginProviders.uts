@@ -12,6 +12,10 @@
  *   ② 接通面 `wechatLoginReady`：真实微信登录链路是否已接通。当前**只有小程序端为真**
  *      （App 端 `manifest.json` 未配微信 SDK，见 #1482）。App 端消费方（着陆页 / 登录页）据此把
  *      点击改成友好提示、**不发任何请求** —— 即「有个样式即可」与「不可给了点不动」两条口径的交点。
+ *   ③ 端别面 `isAppPlatform`（#1484 新增）：**挂载条件**，与「可用 / 禁用」无关。单独立一个面是为了
+ *      防一个具体的 future bug —— 接通面翻真（#1482 配好 SDK）那天，「展示面 && !接通面」就**不再
+ *      等价于**「App 端」，拿它当挂载条件会让 App 入口在链路接通那一刻自己消失，恰与票面判据
+ *      「#1482 落地后入口自动转可用、本票组件零改动」相反。挂载看端别，可用看接通，不共用一个布尔。
  *
  *   历史（#1487 ①a 真机判红）：原复合判据 `onMpWeixin || providerFound` 里的 provider 那半，在
  *      未配微信 SDK 的 Android 上仍返回真 ⇒ App 端被误判「可用」、点击即失败。能力半**已停用**
@@ -42,6 +46,7 @@ export type UseLoginProvidersResult = {
     wechatAvailable : ComputedRef<boolean>
     wechatUnavailableReason : ComputedRef<string>
     wechatLoginReady : ComputedRef<boolean>
+    isAppPlatform : ComputedRef<boolean>
 }
 
 /** 端别判据的合法值（uni.getSystemInfoSync().uniPlatform：仅小程序微信端写作 'mp-weixin'） */
@@ -105,9 +110,19 @@ export function useLoginProviders() : UseLoginProvidersResult {
         if (wechatAvailable.value) return ''
         return REASON_UNAVAILABLE
     })
+    // #1484 票面 AC「日志能看到探测结论」：三个面的结论一次性打出来。
+    // 它同时是 ①a 的归因工具——真机上「入口该在却不在」时，这一行能立刻分清是**端别取数**不对，
+    // 还是**部署的树**不对（这行压根不出现 = 设备上跑的不是含本件的那棵树）。
+    // ⚠️ 位置有约束：必须在 `isAppPlatform` 声明**之后**（UTS 的先声明后用，同本仓「函数定义顺序」坑位）。
+    // 端别面（#1484）：提供方入口件的**挂载**条件 —— 只看是不是 App 端，不看链路通没通
+    const isAppPlatform = computed<boolean>(() : boolean => {
+        return onApp
+    })
+    console.log('[login-providers] DIAG platform=', platform, 'available=', wechatAvailable.value, 'ready=', wechatLoginReady.value, 'isApp=', isAppPlatform.value)
     return {
         wechatAvailable: wechatAvailable,
         wechatUnavailableReason: wechatUnavailableReason,
-        wechatLoginReady: wechatLoginReady
+        wechatLoginReady: wechatLoginReady,
+        isAppPlatform: isAppPlatform
     } as UseLoginProvidersResult
 }

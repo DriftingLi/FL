@@ -59,8 +59,16 @@ const LINE_BUDGET = 600;
  * 模板必然少那 11 行、样式必然少三条 `.agree-*` 规则 ⇒ 两把 sha 同步更新。
  * 下面两个值是 #1478 之后的逐字节 sha；判别力自检（原样重算必等、改一字符必换值）照旧。
  * 变更理由与「为什么不把协议行复制两份避开这把锁」见 `docs` 侧 issue #1478 与本仓 commit message。
+ *
+ * ⚠️ **#1484 第二次显式变更（同样不是绕过）**：模板块内新增一行入口件挂载
+ * `<LoginProviderEntry v-if="isAppPlatform" … />`（票面 AC：App 端入口常驻 + 禁用态 + 明示文案，
+ * 且组件**必须被页面显式 import 且模板挂载**——只建不挂在本仓是红的，零孤儿锁见本文件「拆出物零孤儿 / 零死引用」那条 it）。
+ * ⇒ 只有 TEMPLATE_SHA256 前进；**STYLE_SHA256 逐字节不变**（新件的样式全在组件自己的 `<style>` 里，
+ * 登录页样式一条都没动 —— 这正是「UI 像素级不变」那条原判据在小程序端继续成立的结构证据：
+ * 小程序端模板上那三块 `#ifdef` 内容与样式均未改，改的是 App 端才渲染的一行）。
+ * 现测：新模板 sha 由 `block(read(PAGE),'template')` 重算，样式 sha 与 #1478 后同值。
  */
-const TEMPLATE_SHA256 = 'c30ef3895db558fe3b7934be6821c9334c393dd3d601936939b248d2969d4871';
+const TEMPLATE_SHA256 = '1598c42ac82452cccd9583582129695fe73a0a8a5c06275502d6d20cf4d66335';
 const STYLE_SHA256 = '214949d8a2798b7e582068a121cb6ed9e582bbc6902bfb33fd03e78e8eb0c581';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
@@ -147,7 +155,7 @@ describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必�
     }
   });
 
-  it('模板块与 <style> 块**逐字节**未变（票面 ②「UI 像素级不变」的 sha 锁）', () => {
+  it('样式块**逐字节**未变；模板块停在 #1484 的新基线上（两把 sha 锁，改一字符即红）', () => {
     const tpl = pageTemplate();
     const style = block(read(PAGE), 'style');
     expect(tpl.length).toBeGreaterThan(8000);
