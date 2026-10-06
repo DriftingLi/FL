@@ -466,9 +466,12 @@ function Write-UnitGateArtifacts {
     # 引用性两枚的归一（#1556）：`head=` 只收「非空且不含空白」的串，`dirty=` 只收 `clean` / `dirty` 两个字面值，
     # 其余一律 `?`。取不到时**保留字段**写 `?` —— 省略字段或补空串都会让「上一次那行」变得不可比，
     # 那正是本件要消灭的形态（取舍与 `missing=` 同一条）。两枚都不参与任何判红路径。
+    # ⚠️ 枚举比较用 `-ccontains`（**区分大小写**）：PowerShell 的 `-contains` 对 `'CLEAN'` 也返回真，
+    #    于是同一枚字段可能出现两种写法 —— 而按 `dirty=clean` 收窄读的人（脚本、grep、下一个会话）
+    #    会把它当成「没有这一腿」。枚举的含义就是**只有这一种写法**。
     $headText = $(if ($HeadSha) { "$HeadSha".Trim() } else { '' })
     if (-not $headText -or $headText -match '\s') { $headText = '?' }
-    $dirtyText = $(if (@('clean', 'dirty') -contains $WorktreeState) { $WorktreeState } else { '?' })
+    $dirtyText = $(if (@('clean', 'dirty') -ccontains $WorktreeState) { $WorktreeState } else { '?' })
     $parts = @(
         'TEST_UNIT_RESULT'
         "exit=$ExitCode"
