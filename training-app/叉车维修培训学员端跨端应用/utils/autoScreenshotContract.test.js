@@ -43,6 +43,14 @@
  *       （MIUI 实时网速）会让整帧 hash 恒不同 ⇒ 判据永远不可能满足、步骤 7–9 永远跑不到；
  *       必须走 `Compare-ScreenFrames` 的宽容比较（差异像素占比 ≤ `-StableMaxDiffPercent`，默认 0.5%）。
  *       宽容比较本身的语义由 `autoScreenshotStabilityBehavior.test.js`（B1–B4）在运行期另钉。
+ *   S23 【2026-10-06，#1560 票面现测】**每次 adb 调用必须有单次超时**：S16 那条 420 秒上限原先**不可达** ——
+ *       每轮的 `& cmd.exe /c "adb … > probe.png"` 没有单次超时，一次不返回就永远回不到 `$elapsed -ge $TimeoutSeconds`
+ *       （现测：32 分钟 `.ci-verify` 零写入，而同时刻手工 `screencap` 4.8 秒返回 ⇒ 卡点不是 adb 坏，是调用没被约束）。
+ *       必须走 `Invoke-BoundedAdbShot`（文件重定向 + `WaitForExit(ms)` + `Kill($true)`），且**两个调用点都覆盖**
+ *       （导航采样 + 页面截图；只修前者等于把挂死从「等落定」挪到「等截图」）。
+ *       配套三条不变式：超时轮**不计入采样**（半张 PNG 会伪装成「两帧一致」⇒ 谎报落定）、
+ *       **残帧当场删除**、`Settled` 两个出口都带 `CallTimeouts` 计数。
+ *       行为面（真挂死桩 / 影子夹具 / 预算内收口）由 `autoScreenshotStabilityBehavior.test.js`（B6–B8）另钉。
  */
 const path = require('path');
 
@@ -323,5 +331,57 @@ describe('auto-screenshot.ps1 contract', () => {
     // 「连续两次采样一致」的语义没变（仍是 stable ≥ 1），fail-closed 出口照旧
     expect(src).toMatch(/\$stable\s*-ge\s*1/);
     expect(src).toMatch(/Settled\s*=\s*\$false/);
+  });
+
+  // S23（2026-10-06，#1560 **票面现测**）：每次 adb 调用必须有**单次超时**，且**两个调用点**都要覆盖。
+  //   症状：S16 那条 420 秒上限**不可达** —— `$elapsed -ge $TimeoutSeconds` 只在两轮之间检查一次，
+  //   而真正可能不返回的是那一轮的 `& cmd.exe /c "adb … > probe.png"`（无单次超时）⇒ 一次挂住就永远
+  //   回不到上限：既不落定、也不按设计记 Skipped，整条链就地停住（现测 32 分钟 `.ci-verify` 零写入，
+  //   而**同一时刻**手工 `adb exec-out screencap` 4.8 秒返回 ⇒ 设备与 adb 都健康，缺的是「约束」）。
+  //   判据：走 `Invoke-BoundedAdbShot`（OS 直接把 stdout 写进文件 + `WaitForExit(ms)` + `Kill($true)`）；
+  //   不复用 `process-capture.ps1` 的 `Invoke-Process` —— 它把 stdout 按 UTF-8 **读成字符串**会改坏 PNG 字节，
+  //   而它「等异步读段排空」那段（#1285）在 adb **常驻 server** 下会造出第二个无界等待点。
+  //   行为面（真挂死桩在预算内返回并杀树 / 残帧不在盘上 / 影子夹具驱动循环到点 Skipped）由
+  //   `autoScreenshotStabilityBehavior.test.js`（B6–B8）在运行期另钉 —— 这里只钉形状与「不得回写成无界」。
+  test('S23: 【2026-10-06，#1560】every adb shot call goes through a bounded single-call executor', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+
+    // ① 有界执行器存在，且两个调用点都走它（定义 1 处 + 调用 ≥2 处）
+    expect(code).toContain('function Invoke-BoundedAdbShot');
+    expect((code.match(/Invoke-BoundedAdbShot/g) || []).length).toBeGreaterThanOrEqual(3);
+
+    // ② 旧的无界形状**不得**回写：`cmd.exe /c` 直调、以及 cmd 的内层 `>` 重定向（现由 -RedirectStandardOutput 落盘）
+    expect(code).not.toMatch(/cmd\.exe\s+\/c/);
+    expect(code).not.toMatch(/exec-out screencap -p\s*>/);
+    expect(code).toMatch(/-RedirectStandardOutput\s+\$OutFile/);
+
+    // ③ 单次上限必须是**可调参数 + 有默认值**，并从外层透传到两个调用点（不许写死在函数体里）
+    expect(code).toMatch(/\[int\]\$CallTimeoutSeconds\s*=\s*15/);
+    expect(code).toMatch(/\[int\]\$AdbCallTimeoutSeconds\s*=\s*15/);
+    expect(code).toMatch(/-CallTimeoutSeconds\s+\$AdbCallTimeoutSeconds/);
+    expect(code).toMatch(/-OutFile\s+\$ProbeFile\s+-TimeoutSeconds\s+\$CallTimeoutSeconds/);
+    expect(code).toMatch(/-OutFile\s+\$outputFile\s+-TimeoutSeconds\s+\$AdbCallTimeoutSeconds/);
+
+    // ④ 超时轮的三条不变式：计数、**不计入采样**、**残帧当场删**
+    //    （半张 PNG 留在盘上会伪装成一次成功采样 ⇒ 比挂死更坏，它谎报落定）
+    expect(code).toMatch(/\$callTimeouts\+\+/);
+    expect(code).toMatch(/if\s*\(\$shot\.TimedOut\)\s*\{[\s\S]{0,200}?\$callTimeouts\+\+/);
+    expect(code).toMatch(/Remove-Item\s+-LiteralPath\s+\$OutFile/);
+    expect(code).toMatch(/Samples\s*=\s*\$sampled;\s*CallTimeouts\s*=\s*\$callTimeouts/);
+
+    // ⑤ 用时必须在**调用之后**才算，否则「到上限 N 秒」那句文案撒谎（`Seconds` 少算整次调用耗时）
+    const shotAt = code.indexOf('Invoke-BoundedAdbShot -AdbExe $AdbExe -Serial $Serial -OutFile $ProbeFile');
+    const elapsedAt = code.indexOf('$elapsed = [int]((Get-Date) - $start).TotalSeconds', shotAt);
+    expect(shotAt).toBeGreaterThan(-1);
+    expect(elapsedAt).toBeGreaterThan(shotAt);
+
+    // ⑥ 页面截图那个调用点的 fail-closed 出口：超时 ⇒ 记 Skipped（调用方语义不变，只多点名）
+    expect(code).toMatch(/SHOT_CALL_TIMEOUT/);
+    expect(code).toMatch(/if\s*\(\$shot\.TimedOut\)\s*\{[\s\S]{0,300}?\$skipped\s*\+=\s*\$pageName/);
+
+    // ⑦ 机检行：单点格式串 + 两个出口都打；它自我声明为**读数不是判据**（先例 capability-surface.ps1）
+    expect(code).toMatch(/\$navLineFmt\s*=\s*'NAV_SAMPLE settled=/);
+    expect((code.match(/Write-Host \(\$navLineFmt/g) || []).length).toBe(2);
+    expect(src).toMatch(/它\*\*不是判据\*\*/);
   });
 });

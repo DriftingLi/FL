@@ -24,6 +24,23 @@
  *
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip**（仓库先例：
  *   `hxLaunchDetachBehavior.test.js` / `contractTestPatternBehavior.test.js`）。
+ *
+ * ── 本文件第二组（B6–B8，2026-10-06，#1560）：adb 单次调用的**有界性**
+ *   为什么放这里而不是新开套件（票面 AC5 的措辞按「不新增 token」解释）：
+ *     · `contract-tests.ps1:62` 的 `autoScreenshot` token 是**子串**匹配，本文件已在册 ⇒ 零注册改动，
+ *       不新开第二真源；
+ *     · 本文件的夹具现成——已 dot-source `auto-screenshot.ps1`（函数级直调，不碰 HBuilderX），
+ *       已在 `mkdtemp` 里合成 PNG，判据 token 全 ASCII。
+ *   三层各锁一件事（**PNG 字节完整性不放进 ③ 门**——cmd 往 stdout 吐二进制不可靠，那一条由 #1560
+ *   的**真链路腿**承载：真机 screencap 走同一形状，断言 PNG 头与可解码，读数在 PR 正文）：
+ *     B6 有界执行器本身：真启动器 + 「写半帧就永不返回」的 `.cmd` 桩 ⇒ 预算内返回 / 杀到孙进程 /
+ *        **残帧当场删**（并先证明「被杀的调用确实会在盘上留下非空残帧」，否则删除断言是空转）；
+ *     B7 采样循环：把有界执行器**影子替换**成「永不返回」（PowerShell 函数名在调用时解析 ⇒ 无需改产品代码）
+ *        ⇒ 到点 `Settled=False`、`Samples=0`（超时轮不计入采样）、`CallTimeouts>0`、Reason 点名是调用超时；
+ *        Windows 那支另跑一遍**真桩**版本（不靠影子），证整条链在真启动器下同样收口；
+ *     B8 对照腿：影子执行器正常写帧 + 日志给页身份行 ⇒ `Settled=True`（三条同时满足那一条真走到）。
+ *   ⚠️ 平台边界同 B1–B5：取色不可用时「落定」在结构上不可能（`Compare-ScreenFrames` fail-closed 判不一致）
+ *     ⇒ Linux 那支断言的是「**仍然有界**」而不是「能落定」，两支都断言、无静默跳过。
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -131,6 +148,142 @@ function field(stdout, key) {
   return m ? m[1].trim() : null;
 }
 
+/**
+ * B6–B8 的探针（#1560）：adb 单次调用的**有界性**，一次 pwsh 会话里跑完三层。
+ * 判据 token 全 ASCII（True/False/数字）——JS 侧不匹配中文（本仓血账：OEM 码页会把中文变乱码）；
+ * 需要判中文的地方（Reason 文案）在 **PS 侧**判完再回带布尔，跨语言只传 ASCII。
+ */
+function probeBounded(ctx) {
+  const script = `
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+. "${AUTO_SHOT}"
+$dir = '${ctx.tmp}'
+Write-Output ("IS_WINDOWS=" + [bool]$IsWindows)
+try {
+  Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+  $pb = New-Object System.Drawing.Bitmap 2, 2
+  $pb.Dispose()
+  $drawing = $true
+} catch { $drawing = $false }
+Write-Output ("DRAWING_AVAILABLE=" + [bool]$drawing)
+
+# 假 adb 桩：先把 14 字节写到 stdout（=「被杀的调用会留下非空残帧」的前提），再挂 120 秒不返回
+$hang = Join-Path $dir 'hang.cmd'
+Set-Content -LiteralPath $hang -Encoding ascii -Value @('@echo off', 'echo PARTIAL-FRAME', 'ping -n 120 127.0.0.1 > nul')
+$quick = Join-Path $dir 'quick.cmd'
+Set-Content -LiteralPath $quick -Encoding ascii -Value @('@echo off', 'echo OK')
+$navLog = Join-Path $dir 'nav.log'
+Set-Content -LiteralPath $navLog -Encoding utf8 -Value 'probe log without page line'
+
+if ($IsWindows) {
+  # ── B6：真启动器 + 挂死桩 ⇒ 预算内返回 + 杀到孙进程 + 残帧不在盘上
+  $p6 = Join-Path $dir 'b6.png'
+  $sw6 = [System.Diagnostics.Stopwatch]::StartNew()
+  $r6 = Invoke-BoundedAdbShot -AdbExe $hang -Serial 'FAKE-SERIAL' -OutFile $p6 -TimeoutSeconds 2
+  $sw6.Stop()
+  Write-Output ("B6_TIMEDOUT=" + [bool]$r6.TimedOut)
+  Write-Output ("B6_MS=" + $sw6.ElapsedMilliseconds)
+  Write-Output ("B6_FILE_GONE=" + [bool](-not (Test-Path -LiteralPath $p6)))
+  Start-Sleep -Milliseconds 300
+  Write-Output ("B6_PING_LEFT=" + @(Get-Process -Name 'ping' -ErrorAction SilentlyContinue).Count)
+  # 空转证明：不走本函数、同样 Kill 一次挂死调用 ⇒ 盘上**确实**留着非空残帧 ⇒ 上面那条删除不是空转
+  $raw = Join-Path $dir 'b6raw.png'
+  $rp = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', ('"{0}" -s X exec-out screencap -p' -f $hang)) -RedirectStandardOutput $raw -NoNewWindow -PassThru
+  $null = $rp.WaitForExit(1000)
+  if (-not $rp.HasExited) { try { $rp.Kill($true) } catch { } }
+  Write-Output ("B6C_RAW_BYTES=" + $(if (Test-Path -LiteralPath $raw) { (Get-Item -LiteralPath $raw).Length } else { 0 }))
+  $r6b = Invoke-BoundedAdbShot -AdbExe $quick -Serial 'FAKE-SERIAL' -OutFile (Join-Path $dir 'b6ok.png') -TimeoutSeconds 10
+  Write-Output ("B6B_TIMEDOUT=" + [bool]$r6b.TimedOut)
+  Write-Output ("B6B_EXIT=" + $r6b.ExitCode)
+
+  # ── B7R：整条采样循环 + **真桩**（不经影子）⇒ 到点未落定、一次采样都没拿到、盘上无残帧
+  $swR = [System.Diagnostics.Stopwatch]::StartNew()
+  $rR = Wait-NavSettled -AdbExe $hang -Serial 'FAKE-SERIAL' -ProbeFile (Join-Path $dir 'p7r.png') -NavOutFile $navLog -ExpectedPage 'pages/probe/page' -MinSeconds 1 -TimeoutSeconds 6 -PollSeconds 1 -CallTimeoutSeconds 2
+  $swR.Stop()
+  Write-Output ("B7R_SETTLED=" + [bool]$rR.Settled)
+  Write-Output ("B7R_SAMPLES=" + $rR.Samples)
+  Write-Output ("B7R_CALLTIMEOUTS=" + $rR.CallTimeouts)
+  Write-Output ("B7R_MS=" + $swR.ElapsedMilliseconds)
+  Write-Output ("B7R_PROBE_GONE=" + [bool](-not (Test-Path -LiteralPath (Join-Path $dir 'p7r.png'))))
+  Write-Output ("B7R_REASON_NAMES_CALL_TIMEOUT=" + [bool]($rR.Reason -match '未在 2 秒内返回'))
+} else {
+  # Linux（本仓 CI runner）：没有 cmd.exe ⇒ 本函数**也不能挂住**——有界性是「拿不到帧时的唯一出路」
+  $sw6 = [System.Diagnostics.Stopwatch]::StartNew()
+  $r6 = Invoke-BoundedAdbShot -AdbExe '/bin/echo' -Serial 'FAKE-SERIAL' -OutFile (Join-Path $dir 'b6.png') -TimeoutSeconds 2
+  $sw6.Stop()
+  Write-Output ("B6_BOUNDED=" + [bool]($sw6.ElapsedMilliseconds -lt 10000))
+  Write-Output ("B6_HAS_ERROR=" + [bool]($r6.Error -ne ''))
+  Write-Output ("B6_TIMEDOUT=" + [bool]$r6.TimedOut)
+}
+
+# ── 影子替换有界执行器（PowerShell 函数名**在调用时解析** ⇒ 无需改产品代码就有接缝）
+$script:shadowMode = 'timeout'
+$script:shadowCalls = 0
+$basePng = Join-Path $dir 'base.png'
+function Invoke-BoundedAdbShot {
+  param([string]$AdbExe, [string]$Serial, [string]$OutFile, [int]$TimeoutSeconds = 15)
+  $script:shadowCalls = $script:shadowCalls + 1
+  if ($script:shadowMode -eq 'ok') {
+    if (Test-Path -LiteralPath $basePng) { Copy-Item -LiteralPath $basePng -Destination $OutFile -Force }
+    if ($script:shadowCalls -eq 1) { Add-Content -LiteralPath $navLog -Value '进入页面:"pages/probe/page"' -Encoding utf8 }
+    return [pscustomobject]@{ TimedOut = $false; Exited = $true; ExitCode = 0; Seconds = 0.1; OutFile = $OutFile; ErrFile = ''; ErrTail = ''; Error = '' }
+  }
+  return [pscustomobject]@{ TimedOut = $true; Exited = $false; ExitCode = -1; Seconds = $TimeoutSeconds; OutFile = $OutFile; ErrFile = ''; ErrTail = ''; Error = '探针桩：未在 ' + $TimeoutSeconds + ' 秒内返回' }
+}
+
+# ── B7：每次调用都永不返回 ⇒ 循环必须**到点**收口（420 秒那条上限在此真的可达）
+$sw7 = [System.Diagnostics.Stopwatch]::StartNew()
+$r7 = Wait-NavSettled -AdbExe 'stub' -Serial 'FAKE-SERIAL' -ProbeFile (Join-Path $dir 'p7.png') -NavOutFile $navLog -ExpectedPage 'pages/probe/page' -MinSeconds 1 -TimeoutSeconds 6 -PollSeconds 1 -CallTimeoutSeconds 2
+$sw7.Stop()
+Write-Output ("B7_SETTLED=" + [bool]$r7.Settled)
+Write-Output ("B7_SAMPLES=" + $r7.Samples)
+Write-Output ("B7_CALLTIMEOUTS=" + $r7.CallTimeouts)
+Write-Output ("B7_MS=" + $sw7.ElapsedMilliseconds)
+Write-Output ("B7_REASON_NAMES_CALL_TIMEOUT=" + [bool]($r7.Reason -match '未在 2 秒内返回'))
+
+# ── B8 对照腿：控制腿必须真走到「三条同时满足」那一条（Windows 才有 PNG 可写）
+if ($drawing) {
+  $bmp = New-Object System.Drawing.Bitmap 600, 800
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.Clear([System.Drawing.Color]::FromArgb(255, 210, 226, 245))
+  $g.FillRectangle([System.Drawing.Brushes]::White, 20, 300, 560, 200)
+  $g.Dispose()
+  $bmp.Save($basePng, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bmp.Dispose()
+}
+$script:shadowCalls = 0
+$script:shadowMode = 'ok'
+$sw8 = [System.Diagnostics.Stopwatch]::StartNew()
+$r8 = Wait-NavSettled -AdbExe 'stub' -Serial 'FAKE-SERIAL' -ProbeFile (Join-Path $dir 'p8.png') -NavOutFile $navLog -ExpectedPage 'pages/probe/page' -MinSeconds 1 -TimeoutSeconds 8 -PollSeconds 1 -CallTimeoutSeconds 2
+$sw8.Stop()
+Write-Output ("B8_SETTLED=" + [bool]$r8.Settled)
+Write-Output ("B8_SAMPLES=" + $r8.Samples)
+Write-Output ("B8_CALLTIMEOUTS=" + $r8.CallTimeouts)
+Write-Output ("B8_MS=" + $sw8.ElapsedMilliseconds)
+Write-Output ("BOUNDED_DONE=" + $script:shadowCalls)
+`.trim();
+
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  try {
+    const stdout = execFileSync(powershellExe(), psArgs(['-EncodedCommand', encoded]), {
+      encoding: 'utf8',
+      timeout: 180000,
+      windowsHide: true,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    return { ok: true, stdout: String(stdout), stderr: '' };
+  } catch (e) {
+    return {
+      ok: false,
+      status: e.status,
+      stdout: String(e.stdout || ''),
+      stderr: String(e.stderr || e.message || ''),
+    };
+  }
+}
+
 describe('Compare-ScreenFrames 宽容比较语义（运行期，#1027 收尾）', () => {
   let ctx;
   let probe;
@@ -224,5 +377,106 @@ describe('Compare-ScreenFrames 宽容比较语义（运行期，#1027 收尾）'
   test('B5: 缺上一帧 ⇒ 判不一致并回带原因（fail-closed）', () => {
     expect(v.MISSING.same).toBe('False');
     expect(v.MISSING.hasError).toBe('True');
+  });
+});
+
+describe('adb 单次调用的有界性（运行期，#1560）', () => {
+  let ctx2;
+  let probe;
+  const v = {};
+
+  beforeAll(() => {
+    ctx2 = { tmp: fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-')) };
+    probe = probeBounded(ctx2);
+    if (probe.ok) {
+      [
+        'IS_WINDOWS', 'DRAWING_AVAILABLE',
+        'B6_TIMEDOUT', 'B6_MS', 'B6_FILE_GONE', 'B6_PING_LEFT', 'B6C_RAW_BYTES', 'B6B_TIMEDOUT', 'B6B_EXIT',
+        'B6_BOUNDED', 'B6_HAS_ERROR',
+        'B7R_SETTLED', 'B7R_SAMPLES', 'B7R_CALLTIMEOUTS', 'B7R_MS', 'B7R_PROBE_GONE', 'B7R_REASON_NAMES_CALL_TIMEOUT',
+        'B7_SETTLED', 'B7_SAMPLES', 'B7_CALLTIMEOUTS', 'B7_MS', 'B7_REASON_NAMES_CALL_TIMEOUT',
+        'B8_SETTLED', 'B8_SAMPLES', 'B8_CALLTIMEOUTS', 'B8_MS', 'BOUNDED_DONE',
+      ].forEach((key) => { v[key] = field(probe.stdout, key); });
+      v.navLines = String(probe.stdout).split('\n').filter((l) => l.indexOf('NAV_SAMPLE') >= 0);
+    }
+  });
+
+  afterAll(() => {
+    if (ctx2) {
+      try {
+        fs.rmSync(ctx2.tmp, { recursive: true, force: true });
+      } catch {
+        // 临时目录清理失败不该把用例判红
+      }
+    }
+  });
+
+  function requireProbe() {
+    if (probe && probe.ok) return;
+    throw new Error(
+      '有界性探针失败（pwsh 不可用或脚本抛错，fail-closed 不跳过）：\n'
+        + `exit=${probe ? probe.status : 'n/a'}\nstdout=${probe ? probe.stdout : ''}\nstderr=${probe ? probe.stderr : ''}`
+    );
+  }
+
+  // B6：**有界执行器本身**（真 cmd 启动器 + 真「写半帧就永不返回」的桩）
+  test('B6: 挂死的单次调用必须在预算内被终止 —— 杀到孙进程、残帧不留在盘上', () => {
+    requireProbe();
+    if (v.IS_WINDOWS !== 'True') {
+      // Linux（本仓 CI runner）：没有 cmd.exe ⇒ 能断言的是「启动器缺失同样不许挂住」——
+      // 有界性这条性质不该依赖「能不能起进程」。
+      expect(v.B6_BOUNDED).toBe('True');
+      expect(v.B6_HAS_ERROR).toBe('True');
+      return;
+    }
+    expect(v.B6_TIMEDOUT).toBe('True');
+    expect(Number(v.B6_MS)).toBeLessThanOrEqual(6000); // 预算 2 秒 + 派发开销
+    expect(v.B6_FILE_GONE).toBe('True'); // 残帧当场删
+    expect(v.B6_PING_LEFT).toBe('0'); // Kill 杀到 cmd 的孙进程
+    // 上面那条删除**不是空转**：不走本函数、同样杀一次挂死调用 ⇒ 盘上确实留着非空残帧
+    expect(Number(v.B6C_RAW_BYTES)).toBeGreaterThan(0);
+    // 成对的对照腿：正常返回的调用不得被误判成超时（否则「有界」退化成「把所有调用都杀掉」）
+    expect(v.B6B_TIMEDOUT).toBe('False');
+    expect(Number(v.B6B_EXIT)).toBe(0);
+  });
+
+  // B7：**采样循环**——每次调用都不返回 ⇒ 那条 TimeoutSeconds 上限必须真的可达（票面的靶心）
+  test('B7: 调用永不返回时循环到点判未落定，超时轮不计入采样，Reason 点名是调用超时', () => {
+    requireProbe();
+    expect(v.B7_SETTLED).toBe('False');
+    // 超时轮**不计入采样**：半张 PNG 若进了 Compare-ScreenFrames 会伪装成「两帧一致」⇒ 谎报落定
+    expect(v.B7_SAMPLES).toBe('0');
+    expect(Number(v.B7_CALLTIMEOUTS)).toBeGreaterThanOrEqual(2);
+    expect(v.B7_REASON_NAMES_CALL_TIMEOUT).toBe('True');
+    // 用时上界 = TimeoutSeconds 6 + PollSeconds 1 + CallTimeoutSeconds 2 + 3 秒松弛（**不是判据**，只证没挂住）
+    expect(Number(v.B7_MS)).toBeLessThanOrEqual(12000);
+    expect(v.navLines.some((l) => l.indexOf('NAV_SAMPLE settled=False') >= 0)).toBe(true);
+
+    if (v.IS_WINDOWS === 'True') {
+      // 同一条循环再用**真桩**（不经影子）跑一遍 ⇒ 「有界」不是夹具造出来的性质
+      expect(v.B7R_SETTLED).toBe('False');
+      expect(v.B7R_SAMPLES).toBe('0');
+      expect(Number(v.B7R_CALLTIMEOUTS)).toBeGreaterThanOrEqual(1);
+      expect(v.B7R_PROBE_GONE).toBe('True');
+      expect(v.B7R_REASON_NAMES_CALL_TIMEOUT).toBe('True');
+      expect(Number(v.B7R_MS)).toBeLessThanOrEqual(12000);
+    }
+  });
+
+  // B8：**对照腿**——调用正常返回 + 页身份行 + 画面稳定 ⇒ 判落定（证明 B7 不是「夹具坏了才红」）
+  test('B8: 对照腿正常返回时仍按原判据落定（页身份 + 非全黑 + 相邻帧一致）', () => {
+    requireProbe();
+    expect(v.B8_CALLTIMEOUTS).toBe('0');
+    expect(v.BOUNDED_DONE).not.toBeNull(); // 探针跑到最后一行
+    if (v.IS_WINDOWS === 'True' && v.DRAWING_AVAILABLE === 'True') {
+      expect(v.B8_SETTLED).toBe('True');
+      expect(Number(v.B8_SAMPLES)).toBeGreaterThanOrEqual(2);
+      expect(v.navLines.some((l) => l.indexOf('NAV_SAMPLE settled=True') >= 0)).toBe(true);
+    } else {
+      // Linux：取色不可用 ⇒ Compare-ScreenFrames fail-closed 判「不一致」，「落定」在结构上不可能；
+      // 这一支验的是「即使如此，循环照旧在预算内收口、且一次调用超时都没有」
+      expect(v.B8_SETTLED).toBe('False');
+      expect(Number(v.B8_MS)).toBeLessThanOrEqual(14000); // TimeoutSeconds 8 + Poll 1 + Call 2 + 3
+    }
   });
 });
