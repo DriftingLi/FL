@@ -217,7 +217,7 @@ npm run style:loop -- -Device <serial> -UpdateBaseline                  # 人看
 npm run style:loop -- -DryRun                                           # 只看计划与参数，不执行（verdict=plan，不是判据）
 ```
 
-**时间账（2026-10-07 实测，设备 `23049RAD8C` / 1080×2400，1 页 `settings`，head `bee02190`）**：顺利一轮 = 链自报 **235 秒**（驱动侧墙钟 237.8 秒），构成分段：编译期诊断 `HX_RUN mode=compile-only total=66` ⇒ 装机 `mode=incremental total=78 deployed=True` ⇒ 导航 `NAV_SAMPLE settled=True seconds=83 samples=13 callTimeouts=0` ⇒ 截图 + 像素比。对照件：同设备同页的现读全链路 `dev:finish -Level standard` 实测 **1007 秒**（其间含 151 秒排队等另一会话的锁；它自报的「17 分 46 秒」分钟数由 `[int](总秒/60)` 四舍五入、与秒位不自洽，记账取外层时间戳差）。差的 772 秒来自**不做** ④c 整模块编译门、契约测试与证据生成——那三件是中循环与收口门的活。**串行资源一个没多**：全程只取一把 `Wait-HxFree`（ADR-0011 的 A-3，覆盖「仅编译 → 真运行 → 逐页截图」）。
+**时间账（2026-10-07 实测，设备 `23049RAD8C` / 1080×2400，1 页 `settings`，head `bee02190`）**：顺利一轮 = 链自报 **235 秒**（驱动侧墙钟 237.8 秒），构成分段：编译期诊断 `HX_RUN mode=compile-only total=66` ⇒ 装机 `mode=incremental total=78 deployed=True` ⇒ 导航 `NAV_SAMPLE settled=True seconds=83 samples=13 callTimeouts=0` ⇒ 截图 + 像素比。对照件：同设备同页的现读全链路 `dev:finish -Level standard` 实测 **1007 秒**（**10-05 记**，其间含 151 秒排队等另一会话的锁；它自报的「17 分 46 秒」分钟数由 `[int](总秒/60)` 四舍五入、与秒位不自洽，记账取外层时间戳差）。差的 772 秒来自**不做** ④c 整模块编译门、契约测试与证据生成——那三件是中循环与收口门的活。**串行资源一个没多**：全程只取一把 `Wait-HxFree`（ADR-0011 的 A-3，覆盖「仅编译 → 真运行 → 逐页截图」）。
 
 **判据没有第二真源**：编译诊断 = `hx-run -CompileOnly`；部署判定 = `HX_RUN_DEPLOY deployed=`（设备侧事实相对基线前进，取 `Deployed` **不取 `Ok`**）；「这一轮截哪些页」的唯一真源仍是 `lib/auto-screenshot.ps1`（从 git diff 推导并按 `pages.json` 校验）；像素判据 = `lib/screenshot-gate.ps1` 的 `Get-PngDiffVerdict`（阈值 0.005，与 `dev:finish` 步骤 7 同一个函数、同一个「本轮产物」起点，`Select-ThisRunShots` 不重写）。入口自带的预检只看「`pages/` 下有没有改动」，**故意取成推导集合的超集**且**没有判红权**：读不到 git 一律放行，由后面的推导去判。
 
