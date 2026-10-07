@@ -1,0 +1,296 @@
+# ---- style:loop 2026-10-05 16:52:51 用时 726s head=36e0d5ff dirty_files=7 from_child=True exit=0 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=-1 source=explicit-pages
+[2/7] 环境检测
+HX_BUSY wait=1 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=293 deploy=0 total=294 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      deployed=True HX_RUN mode=incremental compile=160 deploy=0 total=191 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=160 deploy=0 total=191 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  · 导航已落定（222s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=263E0361F51E5B20…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] 基线目录不存在，已创建: D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用\.ci-verify\baseline
+[screenshot-diff] 🆕 settings.png — 新增
+      基线已建立：settings.png（跳过非本轮 0 张）
+      changed=1 mode=md5 ok=True action=write-baseline msg=首次运行：基线为空 ⇒ 已自动以本轮截图建立基线（1 页）；此后每轮都会真比
+      结论字节数=162 收缩档=full 点名=settings.png
+STYLE_LOOP gate=none verdict=green phase=baseline-written changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=first-baseline secs=724
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=green phase=baseline-written changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=first-baseline secs=724
+# ---- style:loop 2026-10-05 17:12:12 用时 794s head=36e0d5ff dirty_files=8 from_child=True exit=0 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=1 source=git-diff
+[2/7] 环境检测
+>>> [hx-busy] 主程序暂不可响应，10 秒后重试（已等 8 秒，上限 120 秒）
+>>> [hx-busy] 主程序暂不可响应，10 秒后重试（已等 24 秒，上限 120 秒）
+>>> [hx-busy] 主程序暂不可响应，10 秒后重试（已等 42 秒，上限 120 秒）
+HX_BUSY wait=52 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=239 deploy=0 total=240 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      deployed=True HX_RUN mode=incremental compile=170 deploy=0 total=207 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=170 deploy=0 total=207 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  · 导航已落定（226s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=B215E2F4529A1D96…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] 📄 settings.png — 无变化（像素差 0.266% / 阈值 0.5%）
+      changed=0 mode=pixel ok=True action=none msg=所有页面无变化
+      结论字节数=130 收缩档=full 点名=
+STYLE_LOOP gate=none verdict=green phase=done changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=1 reason=clean secs=782
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=green phase=done changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=1 reason=clean secs=782
+# ---- style:loop 2026-10-05 17:30:28 用时 610s head=36e0d5ff dirty_files=8 from_child=True exit=1 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=1 source=git-diff
+[2/7] 环境检测
+HX_BUSY wait=0 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=228 deploy=0 total=229 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      deployed=True HX_RUN mode=incremental compile=150 deploy=0 total=182 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=150 deploy=0 total=182 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  · 导航已落定（186s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=F09C05E285DD5C1D…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] ⚠️ settings.png — 有变化（像素差 5.774% / 阈值 0.5%）
+      changed=1 mode=pixel ok=False action=request-decision msg=1 页有变化且未确认：确认是有意改动 ⇒ 重跑并加 -UpdateBaseline；否则修回
+      结论字节数=148 收缩档=full 点名=settings.png
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=609
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=609
+# ---- style:loop 2026-10-05 21:35:57 用时 537s head=f4772e95 dirty_files=2 from_child=True exit=1 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=1 source=git-diff
+[2/7] 环境检测
+HX_BUSY wait=0 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=159 deploy=0 total=160 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=150 deploy=0 total=184 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=150 deploy=0 total=184 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  · 导航已落定（184s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=BD17F315B419D718…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] ⚠️ settings.png — 有变化（像素差 0.947% / 阈值 0.5%）
+      changed=1 mode=pixel ok=False action=request-decision msg=1 页有变化且未确认：确认是有意改动 ⇒ 重跑并加 -UpdateBaseline；否则修回
+      结论字节数=148 收缩档=full 点名=settings.png
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=537
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=537
+# ---- style:loop 2026-10-05 21:48:30 用时 534s head=f4772e95 dirty_files=2 from_child=True exit=1 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=1 source=git-diff
+[2/7] 环境检测
+HX_BUSY wait=0 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=152 deploy=0 total=153 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=140 deploy=0 total=168 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=140 deploy=0 total=168 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  · 导航已落定（204s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=8342CDB760732156…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] ⚠️ settings.png — 有变化（像素差 0.877% / 阈值 0.5%）
+      changed=1 mode=pixel ok=False action=request-decision msg=1 页有变化且未确认：确认是有意改动 ⇒ 重跑并加 -UpdateBaseline；否则修回
+      结论字节数=148 收缩档=full 点名=settings.png
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=533
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=533
+# ---- style:loop 2026-10-06 19:07:03 用时 852s head=92d33301 dirty_files=0 from_child=True exit=1 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=-1 source=explicit-pages
+[2/7] 环境检测
+HX_BUSY wait=1 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=221 deploy=0 total=224 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=110 deploy=0 total=186 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=110 deploy=0 total=186 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  ❌ settings 导航未在 420 秒内落定（到上限 420 秒日志里始终没有页面进入行（launch 未真正跑起来）；launch 日志：D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-7458aeda10bf4243a83bbd1e101ba91f.out）——不截这张图
+      target=1 shots=0 skipped=1 error=没有任何页面截图成功
+[3/7] 已退出锁临界区
+      结论字节数=140 收缩档=full 点名=
+STYLE_LOOP gate=none verdict=red phase=shot changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=0 reason=screenshot-failed secs=851
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=red phase=shot changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=0 reason=screenshot-failed secs=851
+# ---- style:loop 2026-10-06 19:43:18 用时 540s head=92d33301 dirty_files=0 from_child=True exit=1 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=-1 source=explicit-pages
+[2/7] 环境检测
+>>> [hx-busy] 抢占陈旧锁（pid=1608，起始 2026-10-06 19:21:19：持有进程 pid=1608 已不存在（#974：不必再等满 30 分钟））
+HX_BUSY wait=1 result=free
+      设备 b32d8398 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=0 deploy=0 total=4 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=230 deploy=0 total=284 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=230 deploy=0 total=284 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+  · 导航已落定（228s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=664D5A3D53308F41…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] ⚠️ settings.png — 有变化（像素差 0.919% / 阈值 0.5%）
+      changed=1 mode=pixel ok=False action=request-decision msg=1 页有变化且未确认：确认是有意改动 ⇒ 重跑并加 -UpdateBaseline；否则修回
+      结论字节数=148 收缩档=full 点名=settings.png
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=539
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=539
+# ---- style:loop 2026-10-07 14:02:39 用时 270s head=bee02190 dirty_files=1 from_child=True exit=1 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=-1 source=explicit-pages
+[2/7] 环境检测
+HX_BUSY wait=0 result=free
+      设备 192.168.10.51:39527 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=71 deploy=0 total=79 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=80 deploy=0 total=92 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=80 deploy=0 total=92 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.10.51:39527
+NAV_SAMPLE settled=True seconds=90 samples=13 callTimeouts=0 callBudgetSeconds=15 budgetSeconds=420
+  · 导航已落定（90s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=1CF829565F41DC1D…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] ⚠️ settings.png — 有变化（像素差 27.122% / 阈值 0.5%）
+      changed=1 mode=pixel ok=False action=request-decision msg=1 页有变化且未确认：确认是有意改动 ⇒ 重跑并加 -UpdateBaseline；否则修回
+      结论字节数=148 收缩档=full 点名=settings.png
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=269
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=269
+# ---- style:loop 2026-10-07 14:08:53 用时 262s head=bee02190 dirty_files=0 from_child=True exit=0 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=-1 source=explicit-pages
+[2/7] 环境检测
+HX_BUSY wait=0 result=free
+      设备 192.168.10.51:39527 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=73 deploy=0 total=74 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=80 deploy=0 total=91 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=80 deploy=0 total=91 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.10.51:39527
+NAV_SAMPLE settled=True seconds=88 samples=13 callTimeouts=0 callBudgetSeconds=15 budgetSeconds=420
+  · 导航已落定（88s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=41CBC4462AD7F068…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] 📄 settings.png — 无变化（像素差 0.362% / 阈值 0.5%）
+[screenshot-diff] ✅ 基线已更新
+      changed=0 mode=pixel ok=True action=none msg=所有页面无变化
+      结论字节数=130 收缩档=full 点名=
+STYLE_LOOP gate=none verdict=green phase=done changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=1 reason=clean secs=261
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=green phase=done changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=1 reason=clean secs=261
+# ---- style:loop 2026-10-07 14:15:18 用时 236s head=bee02190 dirty_files=0 from_child=True exit=0 ----
+[1/7] 预检改动集
+      haswork=True pages-under-diff=-1 source=explicit-pages
+[2/7] 环境检测
+HX_BUSY wait=0 result=free
+      设备 192.168.10.51:39527 在线，HBuilderX cli 可用（D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe）
+[3/7] 进入 HBuilderX 锁临界区
+HX_BUSY wait=0 result=free
+[4/7] 编译期诊断（hx-run -CompileOnly）
+[test-compile] 执行编译期诊断（hx-run -CompileOnly）...
+[test-compile] 编译期诊断为空（无 error）
+      exit=0 ok=True line=HX_RUN mode=compile-only compile=65 deploy=0 total=66 exit=ok err=
+[5/7] 真运行到设备
+[build-deploy] 调 hx-run.ps1 真运行（standard 模式）...
+      ok=True deployed=True HX_RUN mode=incremental compile=70 deploy=0 total=78 exit=ok reason=hx-run 报 deployed=true（HX_RUN mode=incremental compile=70 deploy=0 total=78 exit=ok）
+[6/7] 逐页截图
+[auto-screenshot] (1/1) 导航: pages/profile/settings
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/profile/settings --project D:\FL\wt-1543\training-app\叉车维修培训学员端跨端应用 --deviceId 192.168.10.51:39527
+NAV_SAMPLE settled=True seconds=83 samples=13 callTimeouts=0 callBudgetSeconds=15 budgetSeconds=420
+  · 导航已落定（83s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ settings.png (sha256=8F4EF9E490E45585…)
+      target=1 shots=1 skipped=0 error=
+[3/7] 已退出锁临界区
+[7/7] 与基线做像素比
+[screenshot-diff] 📄 settings.png — 无变化（像素差 0.324% / 阈值 0.5%）
+      changed=0 mode=pixel ok=True action=none msg=所有页面无变化
+      结论字节数=130 收缩档=full 点名=
+STYLE_LOOP gate=none verdict=green phase=done changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=1 reason=clean secs=235
+      配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json
+STYLE_LOOP gate=none verdict=green phase=done changed=0 shot=- log=.ci-verify/style-loop.log pages=1 shots=1 reason=clean secs=235

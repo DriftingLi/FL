@@ -1,0 +1,20 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm.
+npm warn Unknown user config "disturl". This will stop working in the next major version of npm.
+npm warn Unknown user config "electron-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "chromedriver-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "phantomjs-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "puppeteer-download-host". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass_binary_site". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "node-sqlite3-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "sqlite3-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "grpc-node-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-hyper-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "utf-8-validate-binary-host-mirror". This will stop working in the next major version of npm.
+
+> forklift-training-app@1.0.0 style:loop
+> pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/style-loop.ps1 -Device 192.168.10.51:39527 -Pages pages/profile/settings
+
+STYLE_LOOP gate=none verdict=red phase=pixel changed=1 shot=settings.png log=.ci-verify/style-loop.log pages=1 shots=1 reason=pixel-changed secs=269
+

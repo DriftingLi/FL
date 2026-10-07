@@ -59,5 +59,7 @@ function Get-ContractTestPattern {
     #                    档位/展开前置被改坏必须红；与 markdownContract 的登记用例互为接线/行为两层）
     # frontierRun      → frontierRunPlan（#1435 ④2-3：轮转计划的**归属与顺序**——
     #                    「门不交给 agent」「建树 cwd 在主树」「StopOn=2 即整轮停」）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun'
+    # styleLoop        → styleLoopBehavior（#1543：样式内循环入口的**产物形状**——
+    #                    那一行的字节预算/点名/退出码，与包装层「子进程静默就判红」那条 fail-closed）
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop'
 }
