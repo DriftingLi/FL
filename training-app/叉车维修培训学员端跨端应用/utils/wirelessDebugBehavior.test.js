@@ -4,7 +4,7 @@
  * 为什么不能只有静态契约（utils/wirelessDebugContract.test.js）：源码文本断言在
  * 「算法被改坏但字面量还在」时**不会红**——本仓已经实测过「全绿可以恒真」这件事。
  * 本文件真起 pwsh、真跑脚本，把 adb 换成一份**可编程的假载体**（node + .bat，
- * 形态沿用 utils/mpWeixinGateHarness.js 的 makeFakeDevTools），钉五条只有跑起来才看得见的行为：
+ * 形态沿用 utils/mpWeixinGateHarness.js 的 makeFakeDevTools），钉六条只有跑起来才看得见的行为：
  *
  *   B1 候选表里**死记录排在前面** ⇒ 结论必须是那个活端口。
  *      防的是「信第一条 mDNS 记录」。现测（2026-10-07）：这台机器的表里活端口与一个恒 10061 的旧端口并列。
@@ -18,9 +18,15 @@
  *      stop 恒报 not_running，而 keep 进程还在后台跑（留孤儿）。这条就是那起事故的回归钉。
  *      同一条腿还顺带钉住「-AdbExe 必须传给子进程」：漏传时子进程根本不碰指定载体，calls.log 会是空的。
  *
- *   B6 平台边界：非 Windows 不得报成功（fail-closed 真断言，不是静默跳过）。
- *      ⚠️ 读数口径：Windows 上这五条才是**行为证据**；CI 的 ubuntu 只证明「非 Windows 不冒充通过」。
- *      真机上的 Windows 实链读数（受控断链 2 秒自愈那一段）记在 #1564 的 PR 正文。
+ *   B6 一条候选都试不活 ⇒ ensure 判 unconnected、退出码非 0、对设备零写入（fail-closed 真断言）。
+ *      防的是「连不上却报 connected」——门照着那个假 serial 去跑就是白跑一轮真机。
+ *
+ * 平台口径（2026-10-07 修订，**六条在 Windows 与 CI 的 ubuntu 上都真跑**）：假载体按平台落成
+ * `.bat` / `sh` 两种壳，pwsh 两侧都在。上一版把 B1–B5 写成「非 Windows 直接 return」⇒ CI 里那五条是
+ * **永不执行的空体**（正是 `docs/agents/guards.md` #1156 要防的「全绿可以恒真」），而当时补的那条
+ * 「非 Windows 不得报成功」断的是**代码里并不存在的平台禁令**：CI 现测 ubuntu 上脚本照跑、照报
+ * `result=connected` ⇒ 该断言判红（run 37595419950，`Tests: 1 failed, 3073 passed, 3074 total`）。
+ * 真机上的 Windows 实链读数（受控断链 2 秒自愈那一段）记在 #1564 的 PR 正文。
  */
 const fs = require('fs');
 const os = require('os');
@@ -158,16 +164,20 @@ const verdict = (out, action) => {
 };
 
 describe('wireless-debug.ps1 行为守护（#1564）', () => {
-  it('B6 平台边界：非 Windows 不得报成功（行为证据在 Windows 那几条腿里）', () => {
-    if (IS_WIN) return; // Windows 上由下面真跑，本条只钉另一支
-    const fx = makeFixture();
-    const r = runTool(fx, ['-Action', 'ensure'], 30000);
-    expect(r.stdout).not.toMatch(/action=ensure result=connected/);
-    expect(r.stdout).not.toMatch(/result=paired_connected/);
-  });
+  it('B6 无候选可试 ⇒ ensure 判 unconnected、退出码非 0、对设备零写入（fail-closed，两侧平台都跑）', () => {
+    const fx = makeFixture({ records: [], connected: [] }); // mDNS 空表 + 没有已知端口
+    const r = runTool(fx, ['-Action', 'ensure'], 60000);
+    expect(r.status).not.toBe(0); // 现测（2026-10-07 Windows）exit=3
+    expect(r.stdout).toMatch('result=unconnected');
+    expect(r.stdout).not.toMatch(/result=connected|result=paired_connected/);
+    const seq = callsParsed(fx);
+    expect(seq.some((c) => c.startsWith('connect '))).toBe(false); // 没候选就不许盲试端口
+    expect(seq.join('|')).not.toMatch('kill-server');
+    expect(adbState(fx).toggleWrites || []).toEqual([]); // 失败路径一个字节都不写设备
+    expect(toolState(fx).serial).toBeNull(); // 不把失败当成功落盘
+  }, 60000);
 
   it('B1 候选表死记录在前 ⇒ 结论必须是活端口（不得信第一条 mDNS 记录）', () => {
-    if (!IS_WIN) return;
     const fx = makeFixture({ records: [{ ep: DEAD, alive: false }, { ep: LIVE, alive: true }] });
     const r = runTool(fx, ['-Action', 'ensure']);
     const v = verdict(r.stdout, 'ensure').find((x) => x.result === 'connected');
@@ -179,10 +189,9 @@ describe('wireless-debug.ps1 行为守护（#1564）', () => {
     expect(connects[0]).toContain(DEAD); // 先试了排在前面那条
     expect(connects.some((c) => c.includes(LIVE))).toBe(true);
     expect(seq.join('|')).not.toMatch('kill-server');
-  });
+  }, 60000);
 
   it('B2 -Serial 与 state.json 都是死端口 ⇒ 必须回落到 mDNS 的活端口', () => {
-    if (!IS_WIN) return;
     const fx = makeFixture({ records: [{ ep: LIVE, alive: true }] });
     seedToolState(fx, GONE); // 上次成功、如今已死的端口
     const r = runTool(fx, ['-Action', 'ensure', '-Serial', DEAD]);
@@ -191,10 +200,9 @@ describe('wireless-debug.ps1 行为守护（#1564）', () => {
     expect(v.serial).toBe(LIVE);
     expect(r.stdout).not.toContain('result=connected serial=' + DEAD); // 死端口不得当结论
     expect(toolState(fx).serial).toBe(LIVE); // 回落结果要落盘，下次冷启动别再试死端口
-  });
+  }, 60000);
 
   it('B3 设备从表里消失 ⇒ keep 经 mDNS 自己接回（LOST→SAMEPORT/NEWPORT→RECOVERED），全程不 kill-server', () => {
-    if (!IS_WIN) return;
     const fx = makeFixture({ emptyDevicesFirst: 3 }); // 前 3 次 devices 报空 = 链路掉了
     seedToolState(fx, LIVE);
     const child = spawn('pwsh', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT_ABS,
@@ -221,7 +229,6 @@ describe('wireless-debug.ps1 行为守护（#1564）', () => {
   }, 90000);
 
   it('B4 开关读到 0 ⇒ on 写回 1；关掉写入 ⇒ 设备一个字节都不改', () => {
-    if (!IS_WIN) return;
     // 前提：`on` 只在**已有 adb 通道**时才谈得上写开关——没有通道时它必须判 no_channel（那是产品的边界，
     // 不是缺陷：无通道意味着手机侧重置过，任何脚本都开不了那个开关）。所以这里先接上一条 live transport。
     const a = makeFixture({ toggle: '0', connected: [LIVE] });
@@ -238,10 +245,9 @@ describe('wireless-debug.ps1 行为守护（#1564）', () => {
     const r2 = runTool(b, ['-Action', 'on', '-ReassertToggle:$false']);
     expect(verdict(r2.stdout, 'on').map((x) => x.result)).toContain('readonly');
     expect(adbState(b).toggleWrites || []).toEqual([]);
-  });
+  }, 60000);
 
   it('B5 watch 起的 keep ⇒ stop 按同一 pid 收掉、进程真没了（且子进程用的是指定 adb）', () => {
-    if (!IS_WIN) return;
     const fx = makeFixture();
     const w = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1', '-SlowBeatEvery', '2', '-MaxHours', '1']);
     const m = /watcher_pid=(\d+)/.exec(w.stdout);
