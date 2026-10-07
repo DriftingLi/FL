@@ -25,9 +25,11 @@
  *
  * 运行前提：需要 `pwsh`。不可用时 **fail-closed 抛错，不 skip**。
  *
- * 在册性（票面 AC5 现测后的裁定）：`scripts/lib/contract-tests.ps1` 现测**没有** `emulatorSmoke`
- *   token ⇒ 本套件**只由全量 ③ 门兜**，不在 token 收窄的门里跑；刻意不补 token 是因为该文件正被
- *   open PR #1561（#1543）改着，别并行动同一文件。裁定写进 PR 正文。
+ * 在册性（票面 AC5 现测后的裁定）：`scripts/lib/contract-tests.ps1` 原先**没有** `emulatorSmoke` token
+ *   （现测 grep 0 命中），本票**补上了**。判据不是偏好而是该文件头部写明的那条：「新增运行期守护时
+ *   必须把 token 加进本函数，否则该守护**永不执行**」—— 本套件属行为守护（门 3 承重那一类，
+ *   见 `docs/agents/guards.md`），只在「全量」那一档跑而 token 收窄的门静默跳过，正是要防的假绿形态。
+ *   时序：该文件此前正被 open PR #1561（#1543）改着 ⇒ 等它合入 master（`65d25f4f`）后才动它。
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');

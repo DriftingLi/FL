@@ -61,5 +61,10 @@ function Get-ContractTestPattern {
     #                    「门不交给 agent」「建树 cwd 在主树」「StopOn=2 即整轮停」）
     # styleLoop        → styleLoopBehavior（#1543：样式内循环入口的**产物形状**——
     #                    那一行的字节预算/点名/退出码，与包装层「子进程静默就判红」那条 fail-closed）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop'
+    # deviceCapture    → deviceCaptureContract（接线层：D12 单次超时与「残帧不进证据名」）
+    #                  + deviceCaptureBoundedShotBehavior（行为层：#1562 真挂死桩 + 影子夹具。
+    #                    承重证据在行为层 —— 不注册就只在全量那一档跑，token 收窄的门会静默跳过真执行腿）
+    # emulatorSmoke    → emulatorSmokeContract（接线层：C9 同族判据）
+    #                  + emulatorSmokeBoundedShotBehavior（行为层：#1562 仿真机冒烟那处调用，判据同上）
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop|deviceCapture|emulatorSmoke'
 }

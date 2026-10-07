@@ -30,10 +30,14 @@
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip**
  *   （仓库先例：本目录 `autoScreenshotStabilityBehavior.test.js` / `hxLaunchDetachBehavior.test.js`）。
  *
- * 在册性（票面 AC5 现测后的裁定，写进 PR 正文）：本套件文件名匹配不到
- *   `scripts/lib/contract-tests.ps1` 的任何 token（那里现测**没有** `deviceCapture`），
- *   所以它**只由全量 ③ 门（`npm run test:unit`）兜**，不在 token 收窄的门里跑。
- *   刻意不补 token：`contract-tests.ps1` 正被 open PR #1561（#1543）改着，别并行动同一文件。
+ * 在册性（票面 AC5 现测后的裁定）：`scripts/lib/contract-tests.ps1` 原先**没有** `deviceCapture` token
+ *   （现测 grep 0 命中），本票**补上了**。判据不是偏好而是该文件头部写明的那条：「新增运行期守护时
+ *   必须把 token 加进本函数，否则该守护**永不执行**」—— 本套件属**行为**守护（③ 门承重那一类，
+ *   见 `docs/agents/guards.md`），让它只在「全量」那一档跑、token 收窄的门静默跳过，正是要防的假绿形态。
+ *   #1560 当年不注册，是因为它的腿**追加进了已在册的** `autoScreenshotStabilityBehavior.test.js`
+ *   （`autoScreenshot` 子串顺带命中）；本票是新文件，情形不同，故注册。
+ *   时序：该文件此前正被 open PR #1561（#1543）改着 ⇒ 本票等它合入 master（`65d25f4f`）之后才动它，
+ *   不并行改同一文件。
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');
