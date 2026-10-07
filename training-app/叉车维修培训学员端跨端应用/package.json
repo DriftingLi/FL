@@ -16,6 +16,7 @@
     "probe:mp-weixin-element": "node scripts/mp-weixin-element-probe.mjs",
     "smoke:emulator": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/emulator-smoke.ps1",
     "capture:device": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/device-capture.ps1",
+    "connect:device": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/wireless-debug.ps1",
     "setup:android-sdk": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/android-sdk-setup.ps1",
     "dev:finish": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1",
     "dev:finish:dry": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -DryRun",
