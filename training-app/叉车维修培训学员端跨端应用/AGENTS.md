@@ -113,6 +113,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 **时间账、机检行与「真运行会话常驻但会被下一次 launch 顶掉」的实测原文**，在按需层
 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「时间账与三样慢」「真运行会话常驻与收口」。
+改完样式要一行结论 ⇒ `npm run style:loop`（实测原文在同文件「样式内循环：一条命令、一行结论」）。
 结论与对策：**慢的从来不是编译，而是返工 / 排队 / 卡死** —— 返工用 `hx:compile-only` 拦在本地、
 排队的取锁上限默认 120 秒、卡死靠部署停滞 300 秒提前判环境不可用（`-DeployStallSeconds`）。
 
@@ -218,5 +219,5 @@ HBuilderX 的检查（`npm run test:unit` / `npm run build:kotlin-all`），**�
 ## 相关文档
 
 - **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界。其余按目录逐个标题查。
-- **按需层（常驻层指向它们，不反向抄）**：`docs/agents/guards.md`（守护分类与新增守护三问）、`docs/agents/issue-dispatch.md`（派活一行）、`docs/agents/uvue-css.md`（uvue 样式与 UTS 编译约束全表）、`docs/agents/concurrency.md`（并发纪律与时间预算）、`docs/agents/dev-loop.md`（内循环时间账与坑位原文）、`docs/agents/skills.md`（技能供给与管线归属）。
+- **按需层（常驻层指向它们，不反向抄）**：`docs/agents/guards.md`（守护分类与新增守护三问）、`docs/agents/issue-dispatch.md`（派活一行）、`docs/agents/uvue-css.md`（uvue 样式与 UTS 编译约束全表）、`docs/agents/concurrency.md`（并发纪律与时间预算）、`docs/agents/dev-loop.md`（内循环时间账与坑位原文、样式内循环一行结论）、`docs/agents/skills.md`（技能供给与管线归属）。
 - **其余**：`docs/GIT_WORKFLOW.md`、`docs/GIT_CHEATSHEET.md`、`docs/ui-spec.md`、`docs/product-design.md`、`docs/refactor-decisions.md`、`docs/spec-永绿整改.md`。

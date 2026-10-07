@@ -191,3 +191,50 @@ U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `
 「编译成功 → 已停止运行...」被误读成「运行失败」并追了整整一票。**反过来说，「仅编译」正是拿编译期诊断的捷径**。
 **判据必须带基线**：判「有没有到设备」要运行前后各取一次设备侧事实相对比（如资源目录 mtime 前进）；
 拿「当前前台是不是基座」当判据，在**重复运行到同一台机器**时恒为真 ⇒ 假绿。
+
+## 样式内循环：一条命令、一行结论
+
+（2026-10-05 立，#1543；同帧三条腿读数 2026-10-07。载体 = `npm run style:loop`，仓内入口 `scripts/style-loop.ps1`。）
+
+`npm run style:loop`（= `scripts/style-loop.ps1`）把「拿编译期诊断 → 真运行到设备 → 逐页截图 → 与基线做像素比」
+收成**一个进程、一行机检结论**：
+
+```
+STYLE_LOOP gate=none verdict=… phase=… changed=… shot=… log=… pages=… shots=… reason=… secs=…
+```
+
+* 红 ⇒ 非零退出，且 `shot=` **行内点名是哪一页变的**；绿 ⇒ 退出码 0。退出码三分：`0` 绿 / `1` 判据判出的红（回去改代码）/ `2` 环境不可用（换环境再看）。
+* 一行以外的东西**全量落** `.ci-verify/style-loop.log`（表头绑 head 与 `dirty_files=`）——「会话只读一行」不等于少留证据。
+* **它不是门**：行内恒带 `gate=none`，不进 CI、不改四门的触发面与归属。**内循环的绿不等于门过了。**
+
+常用形态：
+
+```
+npm run style:loop -- -Device <serial>                                  # 改动集里已有 pages/ 改动
+npm run style:loop -- -Device <serial> -Pages 'pages/profile/settings'  # 首轮建基线（改动集里还没有 .uvue 时）
+npm run style:loop -- -Device <serial> -IgnoreTopRows 120               # 收掉状态栏噪声（真机建议）
+npm run style:loop -- -Device <serial> -UpdateBaseline                  # 人看过 diff、确认是有意改动之后刷基线
+npm run style:loop -- -DryRun                                           # 只看计划与参数，不执行（verdict=plan，不是判据）
+```
+
+**时间账（2026-10-07 实测，设备 `23049RAD8C` / 1080×2400，1 页 `settings`，head `bee02190`）**：顺利一轮 = 链自报 **235 秒**（驱动侧墙钟 237.8 秒），构成分段：编译期诊断 `HX_RUN mode=compile-only total=66` ⇒ 装机 `mode=incremental total=78 deployed=True` ⇒ 导航 `NAV_SAMPLE settled=True seconds=83 samples=13 callTimeouts=0` ⇒ 截图 + 像素比。对照件：同设备同页的现读全链路 `dev:finish -Level standard` 实测 **1007 秒**（**10-05 记**，其间含 151 秒排队等另一会话的锁；它自报的「17 分 46 秒」分钟数由 `[int](总秒/60)` 四舍五入、与秒位不自洽，记账取外层时间戳差）。差的 772 秒来自**不做** ④c 整模块编译门、契约测试与证据生成——那三件是中循环与收口门的活。**串行资源一个没多**：全程只取一把 `Wait-HxFree`（ADR-0011 的 A-3，覆盖「仅编译 → 真运行 → 逐页截图」）。
+
+**判据没有第二真源**：编译诊断 = `hx-run -CompileOnly`；部署判定 = `HX_RUN_DEPLOY deployed=`（设备侧事实相对基线前进，取 `Deployed` **不取 `Ok`**）；「这一轮截哪些页」的唯一真源仍是 `lib/auto-screenshot.ps1`（从 git diff 推导并按 `pages.json` 校验）；像素判据 = `lib/screenshot-gate.ps1` 的 `Get-PngDiffVerdict`（阈值 0.005，与 `dev:finish` 步骤 7 同一个函数、同一个「本轮产物」起点，`Select-ThisRunShots` 不重写）。入口自带的预检只看「`pages/` 下有没有改动」，**故意取成推导集合的超集**且**没有判红权**：读不到 git 一律放行，由后面的推导去判。
+
+**基线卫生：同帧三条腿**（2026-10-07 立，取代「隔天复跑」）。跨天基线会让「改坏」与「没改」**分不开**：同一棵零改动的树，昨天绿腿读到 0.266%、今天读到 0.919%，而阈值是 0.5%。协议因此固定为：**红腿**（真改一处色值 ⇒ 必 `exit 1` 且点名）→ **刷基线腿**（`-UpdateBaseline`，把同帧画面钉成参考图）→ **绿腿**（同帧复跑 ⇒ 必 `exit 0`）。现读：红腿像素差 **27.122%**、绿腿 **0.324%**，阈值 0.5% 正好落在两者之间。⚠️ 别用 `-UpdateBaseline` 把噪声压进基线——它只在「人看过 diff、确认是有意改动」之后才允许用。三条腿**别写同一个输出目录**（`.ci-verify/screenshots/` 会被后一条腿覆盖，先例：#1560 的 LEG_C 覆盖了 LEG_A 的 png）。
+
+**残留噪声的定位**（本地复算，不占设备）：拿同帧两枚图跑 `node scripts/lib/png-diff.mjs --a … --b … --ignore-top-rows N` —— `N=0` ⇒ `different=8387 / ratio=0.003236`；`N=120/300/600/1200` ⇒ **`different=0`** ⇒ 那 0.324% **全部落在顶部 120 行以内**（状态栏一带：时钟、网速读数），第 120 行以下逐像素相同。处置口径：**要收噪声动的是 `-IgnoreTopRows`（取状态栏高度），不是把 `PixelThreshold` 抬高**——抬阈值会把红腿的判据一起钝掉；阈值本身不在该入口射程（默认 0.005 与 `dev:finish` 同源，不 fork）。
+
+**工作树纪律**：进临界区前给 `manifest.json` / `pages.json` / `platformConfig.json` 拍**字节**快照，退出时（含异常与 `exit` 路径）按字节写回。`lib/build-deploy.ps1` 那层还原比的是**文本**、用 `Set-Content` 写回 ⇒ BOM / 行尾变了它看不出来而 git 看得出来；这一层是兜底，不是重复。三条腿各自跑完 `git status --porcelain` 行数 = 0，链尾 `配置字节还原 restored= appeared= unchanged=manifest.json,pages.json,platformConfig.json`。
+
+**坑位（自查轮实测，不是推测）**：
+
+* `$ErrorActionPreference='Stop'` **不会**让原生命令非零退出抛异常（本机 pwsh 7.6.6、`$PSNativeCommandUseErrorActionPreference=False`：`git -C <非仓库>` 返回**空串** + `$LASTEXITCODE=128`，`catch` 根本不触发）⇒ 想按「读不到 git」做 fail-open 必须**显式认退出码**；只写 `catch` 就是注释承诺 fail-open、代码走 fail-closed。
+* 包装层（父）与链体（子 `-Inner`）必须分段：`Wait-HxFree` 超时是自己 `exit 2` 的，链体内联在父进程里会被**就地截断**——那一轮既没有结论行也没有日志。
+* 转发实参只许一份（一张表派生链体入参与子进程命令行）：手抄清单**漏抄一个不报错**，子进程静默用默认值 ⇒ 判据就不再是人以为的那个。
+* 日志落不了盘时那一行必须**改口**（`log=unwritten`）而不是继续声称产物存在；细节走 stderr，stdout 仍恰好一行。
+* 首次运行的基线落盘**动作归入口执行**（判定表 `write-baseline` 那一支只给结论）；只转述不执行 ⇒ 基线永远为空、每轮都「首次运行」、判据永不咬（同一死循环由 `0008` 的「2026-09-18 修订（`dev:finish` 步骤 7 从空转修成真的）」第 3 条掐掉）。
+
+**守护**：`utils/styleLoopBehavior.test.js`（真源 `node scripts/classify-guards.mjs` 判 `[行为]`，33 用例，八组 L/V/W/R/C/D/E/P）。断言的是**产物形状**——那一行的字节数与字段、退出码、还原后的文件 sha256、真跑入口的终端行数——不是脚本源码原文；成对断言（必不红 / 必红）逐组配齐。E 组一律带 `-Device <不存在序列号>` + `-ProjectDir <临时目录>` ⇒ 在任何机器上跑都不会抢 HBuilderX。
+
+**决策与失败语义全文**见 `docs/adr/0034-样式内循环的一行结论与包装层失败语义.md`（移动端编号体系，须写全路径）；锁纪律与并发语义仍归 `docs/adr/0011-一键完成的并发与失败语义.md`。
