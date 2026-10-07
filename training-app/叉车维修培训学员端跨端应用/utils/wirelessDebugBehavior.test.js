@@ -32,6 +32,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawn } = require('child_process');
+// 读文件一律经共享读者（ADR-0019 的读取层归一真源）：CI 的 `check-contract-read.mjs` 规则二
+// 判的是「读者助手体内裸读 fs.readFileSync」，**不问读的是不是仓内文件**（本夹具在 os.tmpdir() 里，
+// 一样要归一）。2026-10-07 现测：run 37598814948 的 mobile-test 就红在这四条助手上（3074 条用例全绿，
+// 挂的是那一步独立检查）。顺带这也是真需求——Windows 上 keep.log 由 Add-Content 写成 CRLF。
+const { readText } = require('./utsHarness');
 
 const IS_WIN = process.platform === 'win32';
 const ROOT = path.join(__dirname, '..');
@@ -118,19 +123,19 @@ function makeFixture(over) {
   return { dir, stateDir, bat };
 }
 
-const adbState = (fx) => JSON.parse(fs.readFileSync(path.join(fx.dir, 'adb-state.json'), 'utf8'));
+const adbState = (fx) => JSON.parse(readText(path.join(fx.dir, 'adb-state.json')));
 const callsParsed = (fx) => {
   const p = path.join(fx.dir, 'calls.log');
   if (!fs.existsSync(p)) return [];
-  return fs.readFileSync(p, 'utf8').split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l).join(' '));
+  return readText(p).split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l).join(' '));
 };
 const toolState = (fx) => {
   const p = path.join(fx.stateDir, 'state.json');
-  return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+  return fs.existsSync(p) ? JSON.parse(readText(p)) : null;
 };
 const keepLog = (fx) => {
   const p = path.join(fx.stateDir, 'keep.log');
-  return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+  return fs.existsSync(p) ? readText(p) : '';
 };
 const seedToolState = (fx, serial) => fs.writeFileSync(
   path.join(fx.stateDir, 'state.json'),
