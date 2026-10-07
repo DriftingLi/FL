@@ -444,6 +444,22 @@ describe('auto-screenshot.ps1 contract', () => {
     // 取文本也**先落盘再读回**：读段那条挂死路径（#1285）不能因为「这次是文本」就换回 `| Out-String`
     expect(code).toMatch(/function Invoke-BoundedAdbText[\s\S]*?Get-Content -LiteralPath \$outFile/);
 
+    // ②b 读回判据 = `Exited`（进程真的退出），**不是**「没被判超时」（#1562 自审时补的窄缝）：
+    //    stdout 按 PID 命名，而 `-RedirectStandardOutput` 只在这次调用起得来时才截断文件 ⇒
+    //    起不来那一格（执行核 catch：TimedOut=false + Exited=false）若只判 TimedOut，就会把**上一次调用**
+    //    留在同一个路径上的文本读成本次结论。两层各自独立钉住，缺一层就红（行为腿见 B12 / 变异 M6）。
+    const textAt2 = code.indexOf('function Invoke-BoundedAdbText');
+    expect(textAt2).toBeGreaterThan(-1);
+    const textBody = code.slice(textAt2, code.indexOf('function Wait-NavSettled', textAt2));
+    expect(textBody).toMatch(/if\s*\(\$call\.Exited\s*-\s*and\s*\(Test-Path -LiteralPath \$outFile\)\)\s*\{/);
+    expect(textBody).not.toMatch(/if\s*\(\s*-not\s+\$call\.TimedOut\s+-and\s+\(Test-Path -LiteralPath \$outFile\)\)/);
+    // 起调用之前先尽力清旧档（卫生；判据仍是上面那条 Exited —— 顺序钉住，防「清档写在起调用之后」这种空转写法）
+    const preDelete = textBody.indexOf('Remove-Item -LiteralPath $outFile');
+    const coreCall = textBody.indexOf('Invoke-BoundedAdbCall -AdbExe');
+    expect(preDelete).toBeGreaterThan(-1);
+    expect(coreCall).toBeGreaterThan(-1);
+    expect(preDelete).toBeLessThan(coreCall);
+
     // ③ 机检行：三条出口（判亮 / 判灭 / 拿不到）都点名单次预算，且自我声明为**读数不是判据**
     expect((code.match(/AWAKE_PROBE ok=/g) || []).length).toBe(3);
     expect(code).toMatch(/callBudgetSeconds=/);

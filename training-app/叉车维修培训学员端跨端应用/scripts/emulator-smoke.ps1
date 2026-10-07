@@ -36,10 +36,13 @@
     **默认无窗口（headless）**：模拟器跑在 `-no-window -no-audio -no-boot-anim` 下，不弹 GUI 窗口、不抢焦点
     （这台是维护者在用的工作机，冒烟不得打断人）。仅当显式给 `-ShowWindow` 才开窗。
     截图不受影响：仍走 `adb exec-out screencap -p`（headless 下可用，已实测出图）。
-    ⚠️ **每次 adb 调用都有单次超时**（#1562，2026-10-07）：截图复用 `lib/auto-screenshot.ps1` 的有界执行器
+    ⚠️ **每张截图调用都有单次超时**（#1562，2026-10-07）：截图复用 `lib/auto-screenshot.ps1` 的有界执行器
     （`-AdbCallTimeoutSeconds`，默认 15 秒）。到点不返回 ⇒ 终止整棵进程树、该页记 FAIL 并**继续**跑后面的页，
     日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」；截图先落 `.part`、「调用返回 + 帧非空」才改名归位
     —— 被杀调用的残帧可能删不掉（#1560 真链路现测），而本链按「存在且非空」判出图 ⇒ 归位靠命名，不靠删除成功。
+    ⚠️ **这句话的射程就到截图为止**：本脚本另有 13 处文本/管理类 adb 调用（`Get-AdbOutput` 那一个点就是它们的
+    收口处，外加 `adb version` / `wait-for-device` / `install` / `push` / `dumpsys window` / `logcat` / `emu kill` 等直调）
+    仍是无界等待，**#1562 没做**（票面点名的只有三处 `screencap` 同形落点）⇒ 剩余面登记在 #1568。
 
 .PARAMETER BaseApk
     基座 APK。默认走 HBuilderX 自带那份（含 x86/x86_64，故 x86 模拟器装得上）。
@@ -77,9 +80,11 @@ param(
     [int]$PostToPr = 0,
     [int]$BootTimeoutSeconds = 300,
     [int]$PageSettleSeconds = 8,
-    # **一次** adb 调用的上限（#1562）。默认 15 秒的理由与 `device-capture.ps1` 同名参数一致：
-    # 同形状调用现测是亚秒级（#1560 收口会话 `bounded_screencap ms=964`；本会话现测执行核 514 ms 返回），
-    # 15 秒给了 15 倍以上余量，而它把「一次不返回就整条冒烟就地停住」钉死成**最多 15 秒**。
+    # **一次截图调用**的上限（#1562）。默认值理由与 `device-capture.ps1` 同名参数一致：同一条有界调用在
+    # #1560 的真链路产物里返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
+    # 15 秒给了最慢那次的十倍余量，而它把「一次不返回就整条冒烟就地停住」钉死成**最多 15 秒**。
+    # ⚠️ 限定词是实的：本脚本另有 13 处文本/管理类 adb 调用仍走无界等待（现测 14 处 `& $AdbExe`，其中
+    #   `Get-AdbOutput` 一个点就是那 13 处的收口处）⇒ 不在 #1562 票面射程，剩余面登记在 **#1568**。
     [int]$AdbCallTimeoutSeconds = 15,
     [int]$Port = 5554
 )

@@ -15,9 +15,9 @@ AVD `Pixel_4a_API_30`（x86 / API 30 / 1080×2340）。**基座 APK 装不上这
 | 腿 | 命令要点 | 机检行原文（逐字摘自同目录日志） | 结论 |
 | --- | --- | --- | --- |
 | L1 冒烟对照腿 | 默认预算 15、两页 | `SHOT_CALL_BUDGET calls=2 timeouts=0 callBudgetSeconds=15 timedOutPages=none` | 两张图都出，无一次超时 |
-| L2 冒烟强制腿 | `-AdbCallTimeoutSeconds 0`（每次调用必挂） | `SHOT_CALL_BUDGET calls=2 timeouts=2 callBudgetSeconds=0 timedOutPages=pages/index/index,pages/login/login`；`SHOT_CALL_TIMEOUT page=emulator-pages-index-index.png callBudgetSeconds=0 partBytes=0 finalWritten=False` | 到点给结论、**第二页照旧跑**、整腿 85 秒自然收口（旧写法在这里会一直等） |
+| L2 冒烟强制腿 | `-AdbCallTimeoutSeconds 0`（每次调用必挂） | `SHOT_CALL_BUDGET calls=2 timeouts=2 callBudgetSeconds=0 timedOutPages=pages/index/index,pages/login/login`；`SHOT_CALL_TIMEOUT page=emulator-pages-index-index.png callBudgetSeconds=0 partBytes=0 finalWritten=False` | 到点给结论、**第二页照旧跑**、整腿 85 秒自然收口 ⚠️ 这一轮**只证明**「到点给结论 + 循环继续 + 该页记失败」。「旧写法在这里会一直等」是**没测的反事实**，别读成实测（预算 0 连健康调用都判超时，旧写法这一轮约一秒就返回）——那一半边由 M1 变异与 #1560 的现测承担，见下方「谁照了哪一半」 |
 | L3 ①a 对照腿 | `-Device emulator-5556`，默认预算 15 | `SHOT_CALL_BUDGET calls=1 timeouts=0 callBudgetSeconds=15 timedOutPages=none`；`DEVICE_CAPTURE_RESULT=PASS` | 真图 574.3 KB / `sha256=65E158FE6488…` |
-| L4 ①a 强制腿 | `-AdbCallTimeoutSeconds 0` | `SHOT_CALL_BUDGET calls=1 timeouts=1 callBudgetSeconds=0 timedOutPages=pages-login-login-current.png`；`断言失败：截图调用未在 0 秒内返回（pages-login-login-current.png）—— 是 adb 通道不返回，不是设备没亮屏`；`DEVICE_CAPTURE_RESULT=FAIL` | 该页记 FAIL、3 秒收口；证据名上**没有**文件（`截图：pages-login-login-current.png=0B/n/a`） |
+| L4 ①a 强制腿 | `-AdbCallTimeoutSeconds 0` | `SHOT_CALL_BUDGET calls=1 timeouts=1 callBudgetSeconds=0 timedOutPages=pages-login-login-current.png`；`断言失败：截图调用未在 0 秒内返回（pages-login-login-current.png）—— 是 adb 通道不返回，不是设备没亮屏`；`DEVICE_CAPTURE_RESULT=FAIL` | 该页记 FAIL、3 秒收口；证据名上**没有**文件（`截图：pages-login-login-current.png=0B/n/a`）。⚠️ ①a 只读模式一次跑一页 ⇒ `calls=1`，票面 AC6 里「**继续**跑后面的页」这一半在本链**没有**读数，由 L2 那条两页腿（同一判据形状、`timeouts=2` 而第二页照跑）证明 |
 | R1 冒烟对照腿（重跑留图） | 同 L1，跑在强制腿之后 | `SHOT_CALL_BUDGET calls=2 timeouts=0`；`shotTimedOut=False` ×2 | `emulator-pages-index-index.png` 22,064 B / `magic=89504E47` / **可解码 1080×2340** / `sha256=1FD08757D3400292…` |
 | R2 ①a 对照腿（重跑留图） | 同 L3，`-Device emulator-5558` | `SHOT_CALL_BUDGET calls=1 timeouts=0`；`DEVICE_CAPTURE_RESULT=PASS` | `pages-login-login-current.png` 588,756 B / `magic=89504E47` / **可解码 1080×2340** / `sha256=EC8BF3E15A7BA233…` |
 
@@ -28,10 +28,20 @@ L1 与 R1 用同一组参数却给出 `PASS` / `FAIL` 两种 `RESULT`，差别�
 **不在截图调用那一条**（两条腿的 `timeouts` 都是 0、两张图都出了）。
 ⇒ 本表只对「一次 adb 调用有没有界、残帧进不进证据名、超时之后循环继续不继续」这三件事负责。
 
-⚠️ **强制腿在真链路上残帧恰好是 `partBytes=0`（删掉了）** —— 所以「不进证据名」这件事**不能**靠这一轮证明：
+⚠️ **强制腿在真链路上残帧恰好是 `partBytes=0`（删掉了）** —— 所以「残帧不进证据名」这件事**不能**靠这一轮证明：
 #1560 已实测 `Kill` 之后删除与子进程句柄有竞争、可能删不掉。那条防线由夹具与变异证明（见下表 M4/M5：
 把逻辑闸门拆掉，同一形状当场被数成证据目录里的 `*.png`）。真链路这一轮只证明「到点给结论 + 循环继续 + 
 `finalWritten=False`」。
+
+### 谁照了哪一半（别把某一轮的读数读成它撑不住的结论）
+
+| 这件事 | 是谁照的 | 在哪 |
+| --- | --- | --- |
+| 「一次调用不返回 ⇒ 到点给结论、该页记失败、后面的页照跑」 | 本目录 L2（两页腿，`timeouts=2` 而第二页仍跑）+ BSD1 / ESD1（挂死桩腿） | 本 README 上表 + 两个新套件 |
+| 「正常返回不被误判成超时」 | L1 / L3 / R1 / R2 四条对照腿 + BSD3 / ESD3 + B9 | 本 README 上表 + 套件对照腿 |
+| 「被杀的调用**确实可能**留下非空残帧」（物理前提） | #1560 落在 ③ 门里的 **B6C** 腿：不走有界执行核、真起 `cmd.exe -RedirectStandardOutput` + `Kill`，现数文件字节并断言 `B6C_RAW_BYTES > 0` | `utils/autoScreenshotStabilityBehavior.test.js:202` 与 `:464`（每次全量 ③ 门都跑；两条新链共用**同一件执行核与同一载体** ⇒ 本票不重做这一半） |
+| 「本票新加的那道闸门有牙」（拆掉就把半帧当证据） | 本票 **M4 / M5** 变异：`STRAY_PNG=2`（两枚半帧被 `Move-Item` 归位成 `*.png` 进证据目录），同时对照腿 BSD3 / ESD3 仍绿 | 本 README 下表 |
+| 「旧写法（无界）会一直等、整条链就地停住」 | **不是本目录任何一轮照的**。是 ① M1 变异：把 `Test-ScreenAwake` 退回无界形状后，该套件墙钟从常态顶到 **149 秒**（多出来的就是那次调用自己挂满 120 秒）；② #1560 票面记的真链路「32 分钟 `.ci-verify` 零写入」（原文抄在 `lib/auto-screenshot.ps1` 的 `Wait-NavSettled` 注释里） | 本 README 下表 M1 + `docs/verification/tooling/1560/` |
 
 ## 判别力实测（逐条弄坏被测物，每次 `git checkout --` 还原并复验 `git status` 为空）
 

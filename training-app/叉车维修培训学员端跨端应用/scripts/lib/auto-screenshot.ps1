@@ -140,7 +140,7 @@ function Test-ScreenAwake {
         [string]$AdbExe,
         [string]$Serial,
         [string]$WorkDir = '',
-        # 单次 `dumpsys power` 的上限；默认值理由见 `Invoke-BoundedAdbText`（现测 237 ms ⇒ 15 秒是 60 倍余量）。
+        # 单次 `dumpsys power` 的上限；默认值理由见 `Invoke-BoundedAdbText` 的参数注释（读数指得到入库产物）。
         [int]$TimeoutSeconds = 15
     )
     $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $Serial -AdbArguments @('shell', 'dumpsys', 'power') `
@@ -422,18 +422,31 @@ function Invoke-BoundedAdbText {
         # 落盘目录：调用方不给就用系统临时目录。默认值刻意**不**落在 `.ci-verify` ——
         # 那是证据目录，步骤 7 按 `-Filter '*.png'` + 本轮时间戳扫它，中间产物不该进射程。
         [string]$WorkDir = '',
-        # 单次调用上限。现测同机 `adb shell dumpsys power` **237 ms** 返回（#1560 收口会话读数，
-        # 记在 `docs/verification/tooling/1560/`），默认 15 秒 = 60 倍余量；它与截屏共用同一个默认值
-        # 是为了让「一次 adb 调用」在本仓只有一个预算口径，而不是每个子命令各定一个。
+        # 单次调用上限。默认值理由只引用**指得到入库产物**的读数：#1560 收口会话真链路里同一条有界调用
+        # 返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
+        # 而那出的是一张 ~730 KB 的 PNG ⇒ 本封装要取的一页 `dumpsys power` 文本只会更快，15 秒只会更宽。
+        # ⚠️ 本会话另有两次 `dumpsys power` 的 ms 读数**没有落进任何产物** ⇒ 不抄在这里（同一份 ADR 那条
+        #   「不抄数字，抄过来就是第二真源」的纪律；注释里的数字必须能被读者复算）。
+        # 与截屏共用同一个默认值是为了让「一次**有界** adb 调用」在本仓只有一个预算口径，而不是每个子命令各定一个。
+        # ⚠️ 「有界」这个限定是实的：`scripts/device-capture.ps1` / `scripts/emulator-smoke.ps1` 里仍有
+        #   现测 6 / 14 处文本与管理类 `& $AdbExe … | Out-String` 走无界等待 ⇒ 剩余面登记在 #1568，别把本句读成「全仓每次 adb 调用都有界」。
         [int]$TimeoutSeconds = 15
     )
     $dir = if ($WorkDir) { $WorkDir } else { [System.IO.Path]::GetTempPath() }
     # 文件名带 PID：同机并发会话（多 worktree / 多个取证链同时跑）不互相覆盖同一份 stdout。
     $outFile = Join-Path $dir ('adb-call-stdout-{0}.txt' -f $PID)
+    # ⚠️ 起调用**前先清旧档**（#1562 自审发现的窄缝，2026-10-07）：上一轮被 `Kill` 的调用可能因句柄竞争而删不掉，
+    #   旧文本就留在同一个 PID 路径上；而 `-RedirectStandardOutput` 只在**这次调用起得来**时才截断文件
+    #   （文件被别的句柄握着 ⇒ `Start-Process` 直接抛 ⇒ 执行核走 catch：`TimedOut=$false` + `Exited=$false`）。
+    #   ⇒ 只判 `TimedOut` 就会把**上一次调用的文本**读成本次结论。删除在这里仍然只是卫生
+    #   （#1560 的不变式：删除不能当判据），真正的闸门在下面那条 `Exited`。
+    Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
     $call = Invoke-BoundedAdbCall -AdbExe $AdbExe -Serial $Serial -AdbSubCommand ($AdbArguments -join ' ') `
         -OutFile $outFile -StderrName ('adb-call-stderr-{0}.txt' -f $PID) -TimeoutSeconds $TimeoutSeconds
     $text = ''
-    if (-not $call.TimedOut -and (Test-Path -LiteralPath $outFile)) {
+    # 读回判据 = `Exited`（进程**真的退出了**）而不是「没被判超时」：`Exited=$false` 同时覆盖两种
+    # 「盘上那份不是本次调用的字节」——被判超时、以及 `Start-Process` 起不来（catch 那条）。
+    if ($call.Exited -and (Test-Path -LiteralPath $outFile)) {
         $text = (Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue)
         if ($null -eq $text) { $text = '' }
     }

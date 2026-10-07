@@ -38,10 +38,13 @@
     只用只读命令：adb devices、adb -s <dev> exec-out screencap -p、adb -s <dev> shell dumpsys …、
     adb -s <dev> shell logcat -d（-d = dump 后立即退出，**不清**缓冲）。
 
-    ⚠️ **每次 adb 调用都有单次超时**（#1562，2026-10-07）：截图走 `lib/auto-screenshot.ps1` 的有界执行器
+    ⚠️ **每张截图调用都有单次超时**（#1562，2026-10-07）：截图走 `lib/auto-screenshot.ps1` 的有界执行器
     （`-AdbCallTimeoutSeconds`，默认 15 秒），到点不返回 ⇒ 终止整棵进程树、该页记失败并**继续**跑后面的页，
     日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」。这不改变只读性 —— 发的还是同一条
     `exec-out screencap -p`，只是不再无限等它（旧写法挂在一次调用上时，整条取证链就地停住、既不产帧也不报错）。
+    ⚠️ **这句话的射程就到截图为止**：本脚本另有 6 处文本/管理类 adb 调用（`Get-DeviceList`、每页都跑的
+    `Get-ForegroundInfo`、`Get-LogcatBaseline`、`Get-LogcatWindow`、`Resolve-LauncherComponent`、`Start-AppPage`）
+    仍是无界的 `& $AdbExe … | Out-String`，**#1562 没做**（票面点名的只有三处 `screencap` 同形落点）⇒ 剩余面登记在 #1568。
     ⚠️ **残帧不进证据**：截图先落 `.part`，「调用返回 + 帧非空」才改名归位。被杀调用的残帧**可能删不掉**
     （#1560 真链路现测：`Kill` 之后句柄未放，删除与它竞争），而本链的出图判据是「文件存在且非空」
     ⇒ 归位靠命名兑现，不靠删除成功。
@@ -176,11 +179,14 @@ param(
     [string]$Package = '',
     [int]$LogcatSeconds = 0,
     [int]$PageSettleSeconds = 3,
-    # **一次** adb 调用的上限（#1562）。默认 15 秒的理由：同一形状在真机现测是亚秒级
-    # （#1560 收口会话同机读数 `raw_dumpsys_power ms=237` / `bounded_screencap ms=964`，
-    # 本会话 2026-10-07 又现测到 `Test-ScreenAwake` 走同一执行核 514 ms 返回），15 秒给了 15 倍以上余量，
-    # 同时把「一次不返回就整条链就地停住」钉死成**最多 15 秒** —— 预算给宽不改变结论，只改变多久出结论。
-    # 与 `lib/auto-screenshot.ps1` 的 `-AdbCallTimeoutSeconds` 取同一个默认值：本仓「一次 adb 调用」只有一个口径。
+    # **一次截图调用**的上限（#1562）。默认 15 秒的理由只引用指得到入库产物的读数：#1560 收口会话里同一条
+    # 有界调用返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
+    # 15 秒给了最慢那次的十倍余量，同时把「一次不返回就整条链就地停住」钉死成**最多 15 秒** ——
+    # 预算给宽不改变结论，只改变多久出结论。
+    # 与 `lib/auto-screenshot.ps1` 的 `-AdbCallTimeoutSeconds` 取同一个默认值：本仓「一次**有界** adb 调用」只有一个口径。
+    # ⚠️ 限定词是实的：本脚本另有 6 处文本/管理类 `& $AdbExe … | Out-String` 仍走无界等待（`Get-DeviceList` /
+    #   `Get-ForegroundInfo`（每页都跑）/ `Get-LogcatBaseline` / `Get-LogcatWindow` / `Resolve-LauncherComponent` /
+    #   `Start-AppPage`）⇒ 不在 #1562 票面射程，剩余面登记在 **#1568**，别把这段读成「本脚本每次 adb 调用都有界」。
     [int]$AdbCallTimeoutSeconds = 15,
     [string]$Module = 'device',
     [string]$ArchiveModule = '',
