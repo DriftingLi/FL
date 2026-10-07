@@ -1,0 +1,40 @@
+**********************
+PowerShell 记录开始
+开始时间: 20261007131127
+用户名: DESKTOP-PMQDEEQ\ZHENG
+RunAs 用户: DESKTOP-PMQDEEQ\ZHENG
+配置名称: 
+计算机: DESKTOP-PMQDEEQ (Microsoft Windows NT 10.0.26200.0)
+主机应用程序: C:\Program Files\PowerShell\7\pwsh.dll -NoProfile -ExecutionPolicy Bypass -File .scratch/1560/real-chain2.ps1
+进程 ID: 32092
+PSVersion: 7.6.6
+PSEdition: Core
+GitCommitId: 7.6.6
+OS: Microsoft Windows 10.0.26200
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+RC2 | DEVICE=b32d8398 ADB=D:\android-sdk\platform-tools\adb.exe WAKE=Awake
+RC2 | D1_budget0 wall_ms=181 TimedOut=True Exit=-1 Seconds=0 file_exists_after=False err=单次 adb 调用未在 0 秒内返回（已终止整棵进程树；残帧已作废）
+RC2 | D2_budget1 wall_ms=646 TimedOut=False Exit=0 Seconds=0.6 bytes=729987
+RC2 | D3_budget15 wall_ms=719 TimedOut=False Exit=0 bytes=729987 magic=89504E47 blank=False sha256=0E8B749F3999FDEF7B860220A915C6F87578C39D23BFE340B1DD5226521C9366
+HX_BUSY wait=0 result=free
+RC2 | LOCK_HELD cli=D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+[auto-screenshot] (1/2) 导航: pages/dashboard/dashboard
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/dashboard/dashboard --project D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+NAV_SAMPLE settled=False seconds=31 samples=0 callTimeouts=6 callBudgetSeconds=0 budgetSeconds=30
+  ❌ dashboard 导航未在 30 秒内落定（到上限 30 秒，6 次 adb 采样调用**全部未在 0 秒内返回**（残帧已当场作废，一次采样都没拿到）——设备侧通道疑似不可用，末次：单次 adb 调用未在 0 秒内返回（已终止整棵进程树；残帧已作废）；launch 日志：D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-7344c7b54e5c472598238b69133bc9bf.out）——不截这张图
+[auto-screenshot] (2/2) 导航: pages/index/index
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/index/index --project D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+NAV_SAMPLE settled=False seconds=31 samples=0 callTimeouts=6 callBudgetSeconds=0 budgetSeconds=30
+  ❌ index 导航未在 30 秒内落定（到上限 30 秒，6 次 adb 采样调用**全部未在 0 秒内返回**（残帧已当场作废，一次采样都没拿到）——设备侧通道疑似不可用，末次：单次 adb 调用未在 0 秒内返回（已终止整棵进程树；残帧已作废）；launch 日志：D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-628d03547e684fbf83f5e1873a2b32ef.out）——不截这张图
+RC2 | B2 ok=False shots= skipped=dashboard|index wall_seconds=62 nav_probe_left=False
+RC2 | REALCHAIN2_DONE=1
+RC2 | HX_LOCK_RELEASED
+**********************
+PowerShell 记录结束
+结束时间: 20261007131232
+**********************

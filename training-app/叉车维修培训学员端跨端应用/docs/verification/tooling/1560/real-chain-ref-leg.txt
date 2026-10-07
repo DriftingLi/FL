@@ -1,0 +1,49 @@
+**********************
+PowerShell 记录开始
+开始时间: 20261007130310
+用户名: DESKTOP-PMQDEEQ\ZHENG
+RunAs 用户: DESKTOP-PMQDEEQ\ZHENG
+配置名称: 
+计算机: DESKTOP-PMQDEEQ (Microsoft Windows NT 10.0.26200.0)
+主机应用程序: C:\Program Files\PowerShell\7\pwsh.dll -NoProfile -ExecutionPolicy Bypass -File .scratch/1560/real-chain.ps1
+进程 ID: 31760
+PSVersion: 7.6.6
+PSEdition: Core
+GitCommitId: 7.6.6
+OS: Microsoft Windows 10.0.26200
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+RC | ADB path=D:\android-sdk\platform-tools\adb.exe
+RC | DEVICE=b32d8398
+RC | WAKE state=Awake
+RC | HXB_NOT_RUNNING starting exe=D:\软件\HBuilderX.5.23.2026080626\HBuilderX\HBuilderX.exe
+RC | HXB_WAIT try=1 proc=1 responsive=True 1 - 鍙夎溅缁翠慨鍩硅瀛﹀憳绔法绔簲鐢?UniApp_VUE)
+0:project list:OK
+HX_BUSY wait=0 result=free
+RC | LOCK_HELD cli=D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+RC | PAGES p1=pages/dashboard/dashboard (不自跳转) p2=pages/index/index (ADR-0008:370 记的自跳转页)
+[auto-screenshot] (1/1) 导航: pages/dashboard/dashboard
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/dashboard/dashboard --project D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+NAV_SAMPLE settled=True seconds=87 samples=15 callTimeouts=0 callBudgetSeconds=15 budgetSeconds=900
+  · 导航已落定（87s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ dashboard.png (sha256=838BD7FEED9656CF…)
+RC | LEG_A ok=True shots=dashboard skipped= wall_seconds=92
+RC | LEG_A PNG bytes=731099 magic=89504E47 blank=False min=8 max=255 mean=219 sha256=838BD7FEED9656CFA196B3E691A4009D6351969323458CA4ED4184DBDFFF2677
+RC | WAKE state=Awake
+[auto-screenshot] (1/1) 导航: pages/dashboard/dashboard
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/dashboard/dashboard --project D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+NAV_SAMPLE settled=False seconds=11 samples=2 callTimeouts=0 callBudgetSeconds=1 budgetSeconds=8
+  ❌ dashboard 导航未在 8 秒内落定（到上限 8 秒日志里始终没有页面进入行（launch 未真正跑起来）；launch 日志：D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\.ci-verify\launch-nav-c20b9ee7ffb94515932f49bbcbd0c028.out）——不截这张图
+RC | LEG_B ok=False shots= skipped=dashboard wall_seconds=12 (期望：到点 Skipped 且链继续收口，不是挂住)
+RC | WAKE state=Awake
+[auto-screenshot] (1/2) 导航: pages/dashboard/dashboard
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/dashboard/dashboard --project D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
+NAV_SAMPLE settled=True seconds=46 samples=8 callTimeouts=0 callBudgetSeconds=1 budgetSeconds=600
+  · 导航已落定（46s，已进入目标页且画面稳定（相邻两次采样差异 0% ≤ 0.5%））
+  ✅ dashboard.png (sha256=B9132CFC09C2A980…)
+[auto-screenshot] (2/2) 导航: pages/index/index
+>>> D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe launch app-android --pagePath pages/index/index --project D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用 --deviceId b32d8398
