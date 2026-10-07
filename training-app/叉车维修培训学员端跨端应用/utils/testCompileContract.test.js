@@ -38,8 +38,8 @@ describe('test-compile.ps1 contract', () => {
     expect(src).toContain('function Invoke-TestAndCompile');
   });
 
-  test('T2: returns Ok/Step/Error/TestOutput/CompileResult/Duration', () => {
-    ['Ok', 'Step', 'Error', 'TestOutput', 'CompileResult', 'Duration'].forEach((f) => {
+  test('T2: returns Ok/Step/Error/TestOutput/CompileResult/ExitCode/Duration', () => {
+    ['Ok', 'Step', 'Error', 'TestOutput', 'CompileResult', 'ExitCode', 'Duration'].forEach((f) => {
       expect(src).toContain(f);
     });
   });

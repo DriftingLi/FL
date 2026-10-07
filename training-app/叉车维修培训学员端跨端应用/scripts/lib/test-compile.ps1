@@ -56,6 +56,9 @@ function Invoke-TestAndCompile {
     $error = ''
     $testOutput = ''
     $compileResult = ''
+    # 阶段退出码（#1543 加）：调用方要区分「判据判出的红（1）」与「环境不可用（2）」。
+    # 默认 0 只用于「本阶段没做任何判定」的路径（Q-A 静态守护）；走到编译分支后被显式覆盖。
+    $stageExit = 0
 
     # ================= Step 1: 单元测试（默认只跑本工具链的契约测试） =================
     if (-not $SkipTests) {
@@ -84,6 +87,9 @@ function Invoke-TestAndCompile {
                 Error         = "单元测试失败（exit code $LASTEXITCODE）"
                 TestOutput    = $testOutput
                 CompileResult = ''
+                # 阶段退出码（#1543 加）：调用方要区分「判据判出的红（1）」与「环境不可用（2）」，
+                # 而 Ok/Error 那两层把两者压成了一句「失败」。语义与本仓门脚本一致：0/1/2。
+                ExitCode      = [int]$LASTEXITCODE
                 Duration      = [int]((Get-Date) - $started).TotalSeconds
             }
         }
@@ -101,6 +107,8 @@ function Invoke-TestAndCompile {
             Error         = ''
             TestOutput    = $testOutput
             CompileResult = 'STATIC_ONLY skipped=true quick_static_only（未做编译诊断）'
+            # 未做编译诊断 ⇒ 没有诊断可判，按「本阶段没红」交 0（调用方据 CompileResult 知道它没做）
+            ExitCode      = 0
             Duration      = [int]((Get-Date) - $started).TotalSeconds
         }
     }
@@ -116,6 +124,8 @@ function Invoke-TestAndCompile {
                 Error         = "找不到 hx-run.ps1：$hxRun"
                 TestOutput    = $testOutput
                 CompileResult = ''
+                # 载体都不在 ⇒ 环境不可用（2），与「编译有诊断」（1）分开：出路不同
+                ExitCode      = 2
                 Duration      = [int]((Get-Date) - $started).TotalSeconds
             }
         }
@@ -125,11 +135,16 @@ function Invoke-TestAndCompile {
         if ($CliPath) { $extra += @('-Cli', $CliPath) }
         try {
             $compileOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $hxRun @extra 2>&1 | Out-String
+            $compileExit = $LASTEXITCODE
         }
         catch {
             $compileOutput = "$($_.Exception.Message)"
+            # 连子进程都没拉起来 ⇒ 这是**环境**不可用（2），不是「编译有诊断」（1）。
+            # 不显式写就会拿上一条原生命令留下的**陈旧 $LASTEXITCODE** 当判据 —— #1543 的入口要用这个码
+            # 分「回去改代码」与「换环境再看」，拿错码就是拿错方向。
+            $compileExit = 2
         }
-        $compileExit = $LASTEXITCODE
+        $stageExit = [int]$compileExit
 
         # 解析 hx-run 机检行
         foreach ($line in ($compileOutput -split "`r?`n")) {
@@ -166,6 +181,7 @@ function Invoke-TestAndCompile {
                 Error         = "找不到 kotlin-all-check.ps1：$kotlinScript"
                 TestOutput    = $testOutput
                 CompileResult = ''
+                ExitCode      = 2
                 Duration      = [int]((Get-Date) - $started).TotalSeconds
             }
         }
@@ -175,11 +191,14 @@ function Invoke-TestAndCompile {
         if ($CliPath) { $extra += @('-Cli', $CliPath) }
         try {
             $compileOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $kotlinScript @extra 2>&1 | Out-String
+            $compileExit = $LASTEXITCODE
         }
         catch {
             $compileOutput = "$($_.Exception.Message)"
+            # 同 -CompileOnly 那支：拉不起子进程就是环境不可用，不许拿陈旧的 $LASTEXITCODE 顶
+            $compileExit = 2
         }
-        $compileExit = $LASTEXITCODE
+        $stageExit = [int]$compileExit
 
         foreach ($line in ($compileOutput -split "`r?`n")) {
             if ($line -match 'COMPILE_RESULT') { $compileResult = $line.Trim(); break }
@@ -206,6 +225,8 @@ function Invoke-TestAndCompile {
         Error         = $error
         TestOutput    = $testOutput
         CompileResult = $compileResult
+        # 0 = 过了 / 1 = 判据判出的红（诊断非空、门未过）/ 2 = 环境不可用（拉不起来、超时、载体缺失）
+        ExitCode      = [int]$stageExit
         Duration      = [int]((Get-Date) - $started).TotalSeconds
     }
 }
