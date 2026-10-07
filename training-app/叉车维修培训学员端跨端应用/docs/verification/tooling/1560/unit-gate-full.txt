@@ -1,0 +1,660 @@
+npm warn Unknown env config "chromedriver-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown env config "disturl". This will stop working in the next major version of npm.
+npm warn Unknown env config "electron-mirror". This will stop working in the next major version of npm.
+npm warn Unknown env config "grpc-node-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown env config "leveldown-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown env config "leveldown-hyper-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown env config "node-sqlite3-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown env config "phantomjs-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown env config "puppeteer-download-host". This will stop working in the next major version of npm.
+npm warn Unknown env config "python". This will stop working in the next major version of npm.
+npm warn Unknown env config "sass-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown env config "sqlite3-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown env config "utf-8-validate-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "python". This will stop working in the next major version of npm.
+npm warn Unknown user config "disturl". This will stop working in the next major version of npm.
+npm warn Unknown user config "electron-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "chromedriver-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "phantomjs-cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "puppeteer-download-host". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass_binary_site". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "node-sqlite3-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "sqlite3-binary-site". This will stop working in the next major version of npm.
+npm warn Unknown user config "grpc-node-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "leveldown-hyper-binary-host-mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "utf-8-validate-binary-host-mirror". This will stop working in the next major version of npm.
+
+> forklift-training-app@1.0.0 test:unit
+> jest --config jest.config.unit.js -i
+
+PASS utils/mpWeixinGateContract.test.js (7.194 s)
+PASS utils/concurrent401RefreshBehavior.test.js
+  ● Console
+
+    console.warn
+      [refreshGate] refresh runner failed: Error: boom
+          at gateRefresh (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:233:45)
+          at runGuarded (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:38:18)
+          at Object.gateRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:61:19)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:233:12)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at runGuarded (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:40:13)
+
+    console.warn
+      [auth] tryRefreshToken failed: Error: refresh token 已失效
+          at success (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:136:45)
+          at tryRefreshToken (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:394:26)
+          at eval (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:449:14)
+          at runGuarded (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:38:18)
+          at gateRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:61:19)
+          at tryAutoRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:222:10)
+          at Object.success (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:479:7)
+          at forEach (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:176:9)
+          at Array.forEach (<anonymous>)
+          at respondWhere (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:171:9)
+          at Object.stormAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:191:21)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:358:9)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at tryRefreshToken (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:403:13)
+      at runGuarded (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:38:12)
+
+    console.warn
+      [auth] tryRefreshToken failed: Error: refresh token 已失效
+          at success (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:136:45)
+          at tryRefreshToken (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:394:26)
+          at eval (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:449:14)
+          at runGuarded (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:38:18)
+          at gateRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:61:19)
+          at tryAutoRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:222:10)
+          at Object.success (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:479:7)
+          at forEach (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:176:9)
+          at Array.forEach (<anonymous>)
+          at respondWhere (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:171:9)
+          at Object.stormAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:191:21)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\concurrent401RefreshBehavior.test.js:444:9)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at tryRefreshToken (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:403:13)
+      at runGuarded (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:38:12)
+
+PASS utils/aiDiagnosisSourcesContract.test.js
+PASS utils/aiSourcesDisplay.test.js
+PASS utils/authPreRequestValidationBehavior.test.js
+PASS utils/authLoginOutletsContract.test.js
+PASS utils/aiFeatureEntryWiringContract.test.js
+PASS utils/apiBatchAContract.test.js
+PASS utils/chapterNotFoundBehavior.test.js
+  ● Console
+
+    console.error
+      [request] <<< FAIL errMsg= request:fail timeout
+
+      at Object.fail (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:488:15)
+      at forEach (utils/chapterNotFoundBehavior.test.js:175:25)
+          at Array.forEach (<anonymous>)
+      at Object.respondAll (utils/chapterNotFoundBehavior.test.js:174:13)
+      at Object.<anonymous> (utils/chapterNotFoundBehavior.test.js:232:9)
+
+PASS utils/agentsLayeringContract.test.js
+PASS utils/chapterFavoriteContract.test.js
+PASS utils/capabilitySurfaceBehavior.test.js (11.37 s)
+PASS utils/contributionStatusContract.test.js
+PASS utils/concurrent401RefreshContract.test.js
+PASS utils/aiFeatureRegistryParityContract.test.js
+PASS utils/aiFeatureDiagnosisFilterContract.test.js
+PASS utils/aiCapabilityGateContract.test.js
+PASS utils/apiBatchAOutletBehavior.test.js
+PASS utils/apiBatchBContract.test.js
+PASS utils/aiFunctionEntryContract.test.js
+PASS utils/contractTestPatternBehavior.test.js
+PASS utils/aiProGateContract.test.js
+PASS utils/chapterCompleteContract.test.js
+PASS utils/checkinCalendar.test.js
+PASS utils/aiAnswerBodyBehavior.test.js
+PASS utils/aiEmptyStateActionableContract.test.js
+PASS utils/checkinWiringContract.test.js
+PASS utils/aiChatDrawerContract.test.js
+PASS utils/buildDeployContract.test.js
+PASS utils/contractReaderEolContract.test.js
+PASS utils/aiAssistantScrollContract.test.js
+PASS utils/contributionErrorVisibilityContract.test.js
+PASS utils/aiChatModesContract.test.js
+PASS utils/courseDetailRefreshContract.test.js
+PASS utils/aiChatTrimContract.test.js
+PASS utils/aiChatImageContract.test.js
+PASS utils/aiChatTitleContract.test.js
+PASS utils/aiChatRenameContract.test.js
+PASS utils/autoScreenshotStabilityBehavior.test.js (26.805 s)
+PASS utils/autoScreenshotAdbAgreementBehavior.test.js
+PASS utils/autoScreenshotContract.test.js
+PASS utils/devFinishContract.test.js
+PASS utils/utsAndroidCompile.test.js
+PASS utils/recruitWorkspaceContract.test.js
+PASS utils/landingLoginContract.test.js
+PASS utils/coursesContract.test.js
+PASS utils/forumContract.test.js
+PASS utils/recruiterResumeContract.test.js
+PASS utils/hxRunContract.test.js
+PASS utils/uvueFontCarrierContract.test.js
+PASS utils/kotlinAllStaleExportBehavior.test.js (28.54 s)
+PASS utils/landingLoginBehavior.test.js
+  ● Console
+
+    console.log
+      [login-providers] DIAG platform= mp-weixin available= true ready= true isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= web available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= mp-toutiao available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= MP-WEIXIN available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform=  available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= null available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= undefined available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= mp-weixin available= true ready= true isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= mp-weixin available= true ready= true isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= mp-weixin available= true ready= true isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= mp-weixin available= true ready= true isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= mp-weixin available= false ready= false isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= web available= true ready= true isApp= false
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= true isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= true ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+    console.log
+      [login-providers] DIAG platform= app available= false ready= false isApp= true
+
+      at Object.useLoginProviders (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:117:11)
+
+PASS utils/resumeContract.test.js
+PASS utils/loginContract.test.js
+PASS utils/markdownContract.test.js
+PASS utils/forgotPasswordContract.test.js
+PASS utils/kotlinAllProcessCaptureBehavior.test.js (75.62 s)
+PASS utils/registerContract.test.js
+PASS utils/dashboardContract.test.js
+PASS utils/modulesDeclarationContract.test.js (6.61 s)
+PASS utils/deviceCaptureContract.test.js
+PASS utils/uvueWhiteSpaceContract.test.js
+PASS utils/recruiterResumeBehavior.test.js
+PASS utils/markdownToolbarBehavior.test.js
+PASS utils/forumBodyBehavior.test.js
+PASS utils/screenshotDiffBehavior.test.js
+PASS utils/credentialGroupedBehavior.test.js
+  ● Console
+
+    console.warn
+      [getCurrentCredentialApi] failed: Error: network down
+          at getMapped (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:129:63)
+          at getCurrentCredentialApi (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:59:59)
+          at Object.getCurrentCredentialApi (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:137:10)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:130:22)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:149:13)
+      at Object.<anonymous> (utils/credentialGroupedBehavior.test.js:130:5)
+
+    console.warn
+      [dashboard] load credential list failed: Error: list 500
+          at getAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:196:36)
+          at loadCredentials (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:62:28)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:198:5)
+
+      at loadCredentials (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:66:15)
+      at Object.<anonymous> (utils/credentialGroupedBehavior.test.js:198:5)
+
+    console.warn
+      [dashboard] load credential list failed: Error: list A
+          at getAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:232:36)
+          at loadCredentials (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:62:28)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:234:5)
+
+      at loadCredentials (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:66:15)
+      at Object.<anonymous> (utils/credentialGroupedBehavior.test.js:234:5)
+
+    console.warn
+      [dashboard] load credential list failed: Error: list A
+          at getAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:232:36)
+          at loadCredentials (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:62:28)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:235:5)
+
+      at loadCredentials (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:66:15)
+      at Object.<anonymous> (utils/credentialGroupedBehavior.test.js:235:5)
+
+    console.warn
+      [dashboard] load credential list failed: Error: list B
+          at getAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:232:36)
+          at loadCredentials (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:62:28)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\credentialGroupedBehavior.test.js:238:5)
+
+      at loadCredentials (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:66:15)
+      at Object.<anonymous> (utils/credentialGroupedBehavior.test.js:238:5)
+
+PASS utils/resourcesContract.test.js
+PASS utils/iconGlyphContract.test.js
+PASS utils/navQueryKeyContract.test.js
+PASS utils/examContract.test.js
+PASS utils/notebookPageContract.test.js
+Exception: D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\scripts\lib\frontier.ps1:212
+Line |
+ 212 |          throw "Get-FrontierRunPlan: AgentExe='$AgentExe' 时 -Disciplin …
+     |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Get-FrontierRunPlan: AgentExe='pi' 时 -DisciplineFile 必填。没有纪律的计划=一个无约束的无人值守 agent，宁可组不出计划。
+PASS utils/frontierRunPlan.test.js (5.378 s)
+PASS utils/helpCenterContract.test.js
+PASS utils/resumeNotFoundBehavior.test.js
+  ● Console
+
+    console.error
+      [request] <<< FAIL errMsg= request:fail timeout
+
+      at Object.fail (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:488:15)
+      at forEach (utils/resumeNotFoundBehavior.test.js:138:25)
+          at Array.forEach (<anonymous>)
+      at Object.respondAll (utils/resumeNotFoundBehavior.test.js:137:13)
+      at Object.<anonymous> (utils/resumeNotFoundBehavior.test.js:258:9)
+
+PASS utils/personalActivityContract.test.js
+PASS utils/favoritesLandingContract.test.js
+PASS utils/wtBootstrapBehavior.test.js (6.807 s)
+PASS utils/pointsRealApiContract.test.js
+PASS utils/mpWeixinElementProbeContract.test.js
+PASS utils/hxLaunchDetachBehavior.test.js
+PASS utils/searchContract.test.js
+PASS utils/loginProviderEntry.test.js
+PASS utils/hxBusyGateContract.test.js
+PASS utils/markdownSubsetBehavior.test.js
+PASS utils/pointsDisplay.test.js
+PASS utils/wrongQuestionsContract.test.js
+PASS utils/forumContentFormatBehavior.test.js
+PASS utils/forumMarkdownInputContract.test.js
+PASS utils/profilePage.test.js
+PASS utils/unauthorized401CertCleanupBehavior.test.js
+  ● Console
+
+    console.warn
+      [auth] tryRefreshToken failed: Error: refresh token 已失效
+          at success (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:151:29)
+          at tryRefreshToken (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:394:26)
+          at eval (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:449:14)
+          at runGuarded (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:38:18)
+          at gateRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:61:19)
+          at tryAutoRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:222:10)
+          at Object.success (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:479:7)
+          at forEach (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:193:9)
+          at Array.forEach (<anonymous>)
+          at Object.stormAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:188:13)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:214:16)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at tryRefreshToken (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:403:13)
+      at runGuarded (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:38:12)
+
+    console.warn
+      [auth] tryRefreshToken failed: Error: refresh token 已失效
+          at success (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:151:29)
+          at tryRefreshToken (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:394:26)
+          at eval (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:449:14)
+          at runGuarded (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:38:18)
+          at gateRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:61:19)
+          at tryAutoRefresh (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:222:10)
+          at Object.success (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:479:7)
+          at forEach (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:193:9)
+          at Array.forEach (<anonymous>)
+          at Object.stormAll (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:188:13)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\unauthorized401CertCleanupBehavior.test.js:235:16)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at tryRefreshToken (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:403:13)
+      at runGuarded (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:38:12)
+
+PASS utils/recruitDisplayBehavior.test.js
+PASS utils/credentialScopeContract.test.js
+PASS utils/searchDisplay.test.js
+PASS utils/faqDisplay.test.js
+warning: in the working copy of 'a.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'a.uvue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'run.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'pages/home/home.uvue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'utils/a.ts', LF will be replaced by CRLF the next time Git touches it
+PASS utils/levelDetectBehavior.test.js (13.874 s)
+PASS utils/uvueEntityLiteralContract.test.js
+PASS utils/pagedListBehavior.test.js
+PASS utils/forumImagePickerBehavior.test.js
+  ● Console
+
+    console.error
+      [forum-image] upload failed: Error: boom
+          at uploadFn (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\forumImagePickerBehavior.test.js:135:54)
+          at uploadForumImageApi (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\forumImagePickerBehavior.test.js:64:62)
+          at uploadPicked (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:41:27)
+
+      at uploadPicked (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:44:17)
+
+PASS utils/emulatorSmokeContract.test.js
+PASS utils/markdownInlineBehavior.test.js
+PASS utils/gradientSyntaxContract.test.js
+PASS utils/frontierBehavior.test.js (12.564 s)
+PASS utils/uploadPathContract.test.js
+PASS utils/coursePointsRedeemBehavior.test.js
+  ● Console
+
+    console.log
+      [getCourseDetailApi] raw data: {"course_info":{"course_id":7,"name":"叉车液压系统检修","description":"d","cover_image":"","duration":96,"specialty_id":2,"level_id":3,"theory_hours":4,"practice_hours":8,"points_price":300,"entitled":false},"chapters":[],"progress":0,"is_enrolled":false,"completed_chapters":0}
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:401:13)
+
+    console.log
+      [getCourseDetailApi] raw data: {"course_info":{"course_id":7,"name":"叉车液压系统检修","description":"d","cover_image":"","duration":96,"specialty_id":2,"level_id":3,"theory_hours":4,"practice_hours":8,"points_price":300,"entitled":true},"chapters":[],"progress":0,"is_enrolled":false,"completed_chapters":0}
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:401:13)
+
+    console.log
+      [getCourseDetailApi] raw data: {"course_info":{"course_id":7,"name":"叉车液压系统检修","description":"d","cover_image":"","duration":96,"specialty_id":2,"level_id":3,"theory_hours":4,"practice_hours":8},"chapters":[],"progress":0,"is_enrolled":false,"completed_chapters":0}
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:401:13)
+
+    console.log
+      [getCourseListApi] raw data: {"courses":[{"course_id":1,"name":"A","points_price":300},{"course_id":2,"name":"B"}],"total":2,"page":1,"pages":1}
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:328:13)
+
+    console.log
+      [getCourseDetailApi] raw data: {"course_info":{"course_id":7,"name":"叉车液压系统检修","description":"d","cover_image":"","duration":96,"specialty_id":2,"level_id":3,"theory_hours":4,"practice_hours":8,"points_price":300,"entitled":false},"chapters":[],"progress":0,"is_enrolled":false,"completed_chapters":0}
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:400:13)
+
+    console.log
+      [getCourseDetailApi] raw data: {"course_info":{"course_id":7,"name":"叉车液压系统检修","description":"d","cover_image":"","duration":96,"specialty_id":2,"level_id":3,"theory_hours":4,"practice_hours":8,"points_price":300},"chapters":[],"progress":0,"is_enrolled":false,"completed_chapters":0}
+
+      at eval (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:399:13)
+
+PASS utils/dashboardPage.test.js
+PASS utils/profileContract.test.js
+PASS utils/hxTimingBehavior.test.js
+PASS utils/kotlinAllGateContract.test.js
+PASS utils/loginGating.test.js
+PASS utils/recruiterLoginContract.test.js
+PASS utils/uvuePageScrollContract.test.js
+PASS utils/logoutRevokeBehavior.test.js
+  ● Console
+
+    console.warn
+      [auth] logout backend failed (ignored): Error: logout backend unavailable
+          at logout (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\logoutRevokeBehavior.test.js:105:41)
+          at logout (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:325:13)
+          at Object.logout (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:480:19)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\logoutRevokeBehavior.test.js:184:17)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at logout (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:327:15)
+      at Object.<anonymous> (utils/logoutRevokeBehavior.test.js:184:5)
+
+PASS utils/pngDiffBehavior.test.js
+PASS utils/forumFormatPreferenceBehavior.test.js
+PASS utils/evidenceGenContract.test.js
+PASS utils/screenshotDiffSingleFileBehavior.test.js
+PASS utils/notebookDisplay.test.js
+PASS utils/hxErrorLinesBehavior.test.js (5.053 s)
+PASS utils/coursePointsCtaBehavior.test.js
+PASS utils/personalInfoContract.test.js
+PASS utils/screenshotDiffContract.test.js
+PASS utils/practiceContract.test.js
+PASS utils/jobApplyStateContract.test.js
+PASS utils/examDomainRetirementContract.test.js
+PASS utils/guardClassification.test.js
+PASS utils/forumAcceptButtonContract.test.js
+PASS utils/secureStorage.test.js
+PASS utils/testCompileContract.test.js
+PASS utils/gateCommonLibContract.test.js
+PASS utils/useBiometric.test.js
+PASS utils/pagedListAdoptionContract.test.js
+PASS utils/materialsPageContract.test.js
+PASS utils/forumEditContract.test.js
+PASS utils/quickLoginBehavior.test.js
+  ● Console
+
+    console.warn
+      [auth] quickLogin failed: Error: 账号或密码错误
+          at quickLogin (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\quickLoginBehavior.test.js:85:55)
+          at quickLogin (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:431:26)
+          at Object.quickLogin (eval at loadUts (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\utsHarness.js:140:10), <anonymous>:466:41)
+          at Object.<anonymous> (D:\FL\wt-1560\training-app\叉车维修培训学员端跨端应用\utils\quickLoginBehavior.test.js:86:28)
+          at Promise.then.completed (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\FL\training-app\叉车维修培训学员端跨端应用\node_modules\jest-runner\build\runTest.js:475:34)
+
+      at quickLogin (eval at loadUts (utils/utsHarness.js:140:10), <anonymous>:439:13)
+      at Object.<anonymous> (utils/quickLoginBehavior.test.js:86:16)
+
+PASS utils/levelDetectQuotepathBehavior.test.js
+PASS utils/resumeAttachmentContract.test.js
+PASS utils/mpWeixinGateRetryBehavior.test.js (15.37 s)
+PASS utils/courseFavoriteAffordanceContract.test.js
+PASS utils/mpWeixinGatePortFallbackBehavior.test.js (12.723 s)
+PASS utils/jobsMineEntryContract.test.js
+PASS utils/levelDetectContract.test.js
+PASS utils/quickLoginContract.test.js
+PASS utils/profileMetrics.test.js
+PASS utils/requestLogSanitizeBehavior.test.js
+PASS utils/recruiterResumesRefreshContract.test.js
+PASS utils/format.test.js
+PASS utils/mpWeixinArchiveSumBehavior.test.js
+PASS utils/displayDedupContract.test.js
+PASS utils/mallPilotContract.test.js
+PASS utils/replyPanelLayoutBehavior.test.js
+PASS utils/envCheckContract.test.js
+PASS utils/utsHarnessDedupContract.test.js
+PASS utils/pointsBalance.test.js
+PASS utils/requestOutletContract.test.js
+PASS utils/credentialSwitchBehavior.test.js
+PASS utils/secureStorageDegrade.test.js
+PASS utils/requestLogSanitizeContract.test.js
+PASS utils/credentialApi.test.js
+
+Test Suites: 159 passed, 159 total
+Tests:       3044 passed, 3044 total
+Snapshots:   0 total
+Time:        290.597 s
+Ran all test suites.
+
+TEST_UNIT_RESULT exit=0 suites=159 suitesFailed=0 tests=3044 testsFailed=0 time=290.597s wall=294s log=.ci-verify/test-unit.log summary=none head=a455cc9827e7c84a09ff47056389be6346e0c7f0 dirty=clean
