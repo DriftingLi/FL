@@ -723,16 +723,25 @@ describe('灭屏前置那次 adb 调用的有界性（运行期，#1562）', () 
     }
   });
 
-  // B12：起不来那一格不许把**上一次调用**的旧档读成本次结论（Windows / Linux 两支都跑——
-  //   判据是 `Exited`，与 cmd.exe 在不在无关；CI runner 上这一条同样有牙，见 M6 变异读数）
+  // B12：起不来那一格不许把**上一次调用**的旧档读成本次结论。
+  //   ⚠️ 判别力分平台（CI 首跑现测照出来的，别当成「平台差异可以容忍」）：那一格靠的是 NT 文件共享语义
+  //   （句柄以 Write 握着 ⇒ 写者开不进来、读者照样开得上）。**Linux 的 unlink 允许删正被打开的文件**
+  //   ⇒ 起调用前那句清档在 CI 上会成功、旧档留不下，「写者进不来」这一格在 ubuntu 上物理造不出来
+  //   （CI 首跑读数：`B12_STALE_STILL_THERE=False`，而本机等价读数 `True`）。所以两支各断言自己撑得住的：
+  //     · Windows（本机）：完整那一格——旧档还在、且没被读回来；M6 / M6′ 的牙在这里。
+  //     · Linux（CI）：**不是静默跳过**，仍断言「起不来 ⇒ 不崩、不判超时、`Exited=False`、带回错误、
+  //       不回读、fail-closed 给 unknown」这五条（五条在两个平台上都成立，差别只在旧档留不留得下）。
   test('B12: Start-Process 起不来时不回读旧 stdout，仍 fail-closed 给 unknown（不把上一次的 Awake 当本次的）', () => {
     requireProbe();
-    // 现场必须是「没被判超时、但也没真的退出」——旧代码正是在这一格读回旧档
+    // 现场必须是「没被判超时、但也没真的退出」——旧代码正是在这一格读回旧档（两平台都成立）
     expect(v.B12_TIMEDOUT).toBe('False');
     expect(v.B12_EXITED).toBe('False');
     expect(v.B12_HAS_ERROR).toBe('True');
-    // 空转防线：现场必须真是「旧档还在、且读者开得上」——这一条不成立时下面那条 False 就毫无意义
-    expect(v.B12_STALE_STILL_THERE).toBe('True');
+    // 空转防线（只在 Windows 成立，理由见上面那段）：现场必须真是「旧档还在、且读者开得上」，
+    //   否则「没把旧档读回来」那条 False 就毫无意义——那条断言的是**旧档在场却没被用**。
+    if (v.IS_WINDOWS === 'True') {
+      expect(v.B12_STALE_STILL_THERE).toBe('True');
+    }
     // 产物判据：文本里没有旧那份 `STALE mWakefulness=Awake`（有 ⇒ 等于没调用却报告「屏幕亮着」）
     expect(v.B12_TEXT_HAS_STALE).toBe('False');
     expect(v.B12_AWAKE_OK).toBe('False');
