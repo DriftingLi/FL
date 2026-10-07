@@ -251,6 +251,9 @@ describe('wireless-debug.ps1 行为守护（#1564）', () => {
     const fx = makeFixture();
     const w = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1', '-SlowBeatEvery', '2', '-MaxHours', '1']);
     const m = /watcher_pid=(\d+)/.exec(w.stdout);
+    // 红的时候必须把工具的真回话带出来：CI 在 ubuntu 上判红过（run 37597381121），而 expect(m).toBeTruthy()
+    // 只印得出 `Received: null`，看不出是 spawn_unconfirmed 还是子进程当场炸了。
+    if (!m) throw new Error('watch 没回 watcher_pid ⇒ exit=' + w.status + ' out=' + JSON.stringify(w.stdout.slice(-600)));
     expect(m).toBeTruthy(); // 归属判据写死旧名时这里恒报 spawn_unconfirmed
     const pid = Number(m[1]);
     const w2 = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1']);

@@ -244,6 +244,23 @@ function Write-State {
     ($obj | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $StatePath -Encoding utf8
 }
 
+function Get-ProcessCommandLine { param([int]$Id)
+    # 归属判据要读「这个 pid 的命令行里有没有本脚本」，而读法两边平台不一样：
+    # Windows 走 CIM；Linux **根本没有 CIM cmdlet**——现测（2026-10-07 CI run 37597381121，ubuntu-24.04）
+    # 在 Linux 上调它会 CommandNotFound ⇒ 整条 watch 当场炸掉，连「读不到」都算不上。
+    # 所以这里按平台分支：Linux 读 /proc/<pid>/cmdline（NUL 分隔），读不到就返回 $null，
+    # 让上层走「不认这个 pid」那一支——宁可报 spawn_unconfirmed，也不猜某个进程是自家 keep。
+    if ($IsWindows) {
+        return (Get-CimInstance Win32_Process -Filter "ProcessId=$Id" -ErrorAction SilentlyContinue).CommandLine
+    }
+    $procFile = "/proc/$Id/cmdline"
+    if (Test-Path -LiteralPath $procFile) {
+        $bytes = [System.IO.File]::ReadAllBytes($procFile)
+        return (([System.Text.Encoding]::UTF8.GetString($bytes)) -replace "`0", ' ')
+    }
+    return $null
+}
+
 function Get-WatcherPid {
     if (-not (Test-Path -LiteralPath $PidPath)) { return $null }
     # 自测踩到的坑：Start-Process -PassThru 在这台机器上回过空对象 ⇒ pid 文件写成空，
@@ -255,7 +272,7 @@ function Get-WatcherPid {
     if ($p -match '^\d+$') {
         $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
         if ($proc) {
-            $cl = (Get-CimInstance Win32_Process -Filter "ProcessId=$p" -ErrorAction SilentlyContinue).CommandLine
+            $cl = Get-ProcessCommandLine -Id ([int]$p)
             # 归属判据取当前脚本自己的文件名（Get-WatcherPid 调用前已由 $script:ScriptFile 备好），不得写死字面量：
             # 入仓改名成 wireless-debug.ps1 后那个旧名再也不命中 —— 实测后果是 watch 永远报
             # spawn_unconfirmed、stop 永远报 not_running，而 keep 进程还在后台跑（留孤儿）。
@@ -567,22 +584,30 @@ function Do-Watch {
             -Detail "已在跑一个 keep 循环（pid=$alive）⇒ 不叠第二个；要停就 -Action stop"
         exit 0
     }
-    $hostExe = (Get-Process -Id $PID).Path
-    $argLine = @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script:ScriptFile`"",
+    # 重新起一个 pwsh 当后台心跳。两条跨平台约束（2026-10-07 CI 在 ubuntu 上现测踩到的）：
+    # ① 可执行文件用 $PSHome 拼，别拿 (Get-Process -Id $PID).Path——那条在 Unix 上不保证有值；
+    #    且 FilePath 一律传**不带引号**的原值（Windows 会剥引号，Unix 不会 ⇒ 带引号＝文件不存在）。
+    # ② ArgumentList 传**数组**让 PowerShell 自己按平台加引号，别预先 join 成一个字符串再塞引号。
+    $pwshName = if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' }
+    $hostExe = Join-Path $PSHome $pwshName
+    if (-not (Test-Path -LiteralPath $hostExe)) { $hostExe = 'pwsh' }
+    $childArgs = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:ScriptFile,
         '-Action', 'keep',
         '-IntervalSeconds', $IntervalSeconds,
         '-SlowBeatEvery', $SlowBeatEvery,
         '-ProbeSeconds', $ProbeSeconds,
         '-WaitMinutes', $WaitMinutes,
         '-MaxHours', $MaxHours,
-        '-StateDir', "`"$StateDir`"",
+        '-StateDir', $StateDir,
         # -AdbExe 必须一起传下去：漏了它，后台 keep 会用默认 adb 路径而不是调用方指定的那份
         # （2026-10-07 写行为守护时现测：非默认 adb 下 watch 起的子进程碰不到被指定的设备）
-        '-AdbExe', "`"$AdbExe`""
-    ) -join ' '
-    if (-not $ReassertToggle) { $argLine += ' -ReassertToggle:$false' }
-    $null = Start-Process -FilePath "`"$hostExe`"" -ArgumentList $argLine -WindowStyle Hidden
+        '-AdbExe', $AdbExe
+    )
+    if (-not $ReassertToggle) { $childArgs += '-ReassertToggle:$false' }
+    $spawn = @{ FilePath = $hostExe; ArgumentList = $childArgs }
+    if ($IsWindows) { $spawn['WindowStyle'] = 'Hidden' } # -WindowStyle 只在 Windows 上有意义
+    $null = Start-Process @spawn
 
     # pid 由 keep 子进程自己落盘，这里等它写出来再回报（-PassThru 的返回值不可信，见 Get-WatcherPid 注释）
     $wp = $null
