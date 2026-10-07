@@ -48,8 +48,9 @@
  *       （现测：32 分钟 `.ci-verify` 零写入，而同时刻手工 `screencap` 4.8 秒返回 ⇒ 卡点不是 adb 坏，是调用没被约束）。
  *       必须走 `Invoke-BoundedAdbShot`（文件重定向 + `WaitForExit(ms)` + `Kill($true)`），且**两个调用点都覆盖**
  *       （导航采样 + 页面截图；只修前者等于把挂死从「等落定」挪到「等截图」）。
- *       配套三条不变式：超时轮**不计入采样**（半张 PNG 会伪装成「两帧一致」⇒ 谎报落定）、
- *       **残帧当场删除**、`Settled` 两个出口都带 `CallTimeouts` 计数。
+ *       配套三条不变式：超时轮**逻辑上不计入采样**（`-not $shot.TimedOut` 先看轮次再看文件——真链路现测证明
+ *       残帧**可能删不掉**，删除只是卫生、不能当判据）、页面截图先落 `.part` 成功才归位（半张图不得进步骤 7
+ *       按 `*.png` 扫的证据目录）、`Settled` 两个出口都带 `CallTimeouts` 计数。
  *       行为面（真挂死桩 / 影子夹具 / 预算内收口）由 `autoScreenshotStabilityBehavior.test.js`（B6–B8）另钉。
  */
 const path = require('path');
@@ -360,14 +361,20 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(code).toMatch(/\[int\]\$AdbCallTimeoutSeconds\s*=\s*15/);
     expect(code).toMatch(/-CallTimeoutSeconds\s+\$AdbCallTimeoutSeconds/);
     expect(code).toMatch(/-OutFile\s+\$ProbeFile\s+-TimeoutSeconds\s+\$CallTimeoutSeconds/);
-    expect(code).toMatch(/-OutFile\s+\$outputFile\s+-TimeoutSeconds\s+\$AdbCallTimeoutSeconds/);
+    expect(code).toMatch(/-OutFile\s+\$partFile\s+-TimeoutSeconds\s+\$AdbCallTimeoutSeconds/);
 
-    // ④ 超时轮的三条不变式：计数、**不计入采样**、**残帧当场删**
-    //    （半张 PNG 留在盘上会伪装成一次成功采样 ⇒ 比挂死更坏，它谎报落定）
+    // ④ 超时轮的不变式：计数、**逻辑上不计入采样**、残帧尽力删（但删除**不是判据**，见下面的 `.part`）
     expect(code).toMatch(/\$callTimeouts\+\+/);
     expect(code).toMatch(/if\s*\(\$shot\.TimedOut\)\s*\{[\s\S]{0,200}?\$callTimeouts\+\+/);
+    // 采样判据必须先看「这一轮是不是超时轮」，再看文件在不在 —— 顺序反了就把被杀的半帧当采样
+    expect(code).toMatch(/-not\s+\$shot\.TimedOut\s+-and\s+\(Test-Path\s+-LiteralPath\s+\$ProbeFile\)/);
     expect(code).toMatch(/Remove-Item\s+-LiteralPath\s+\$OutFile/);
     expect(code).toMatch(/Samples\s*=\s*\$sampled;\s*CallTimeouts\s*=\s*\$callTimeouts/);
+
+    // ④b 证据目录里半张图不许出现（真链路现测：Kill 之后删除与子进程句柄有竞争，删不掉是真发生过的）
+    //     ⇒ 页面截图先落 `.part`，只有「调用返回 + 帧非空」才改名归位
+    expect(code).toMatch(/\$partFile\s*=\s*"\$outputFile\.part"/);
+    expect(code).toMatch(/Move-Item\s+-LiteralPath\s+\$partFile\s+-Destination\s+\$outputFile\s+-Force/);
 
     // ⑤ 用时必须在**调用之后**才算，否则「到上限 N 秒」那句文案撒谎（`Seconds` 少算整次调用耗时）
     const shotAt = code.indexOf('Invoke-BoundedAdbShot -AdbExe $AdbExe -Serial $Serial -OutFile $ProbeFile');

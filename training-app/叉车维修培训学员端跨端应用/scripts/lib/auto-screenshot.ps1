@@ -30,10 +30,13 @@
         每轮的 `& cmd.exe /c "adb … > probe.png"` 没有单次超时，一次不返回就永远回不到上限判据
         （票面现测：32 分钟 `.ci-verify` 零写入，而同时刻手工 `screencap` 4.8 秒返回 ⇒ 卡点不是 adb 坏，
         是**那次调用在链里没被约束**）。现在两处 adb 调用（导航采样 + 页面截图）都走 `Invoke-BoundedAdbShot`
-        （`-AdbCallTimeoutSeconds`，默认 15s）：超时 ⇒ 终止整棵进程树、**残帧当场作废**、该轮**不计入采样**
+        （`-AdbCallTimeoutSeconds`，默认 15s）：超时 ⇒ 终止整棵进程树 + 该轮**不计入采样** + 残帧尽力删
         ⇒ 「不返回」从「整条链挂死」变成「到点 `Settled=false` ⇒ 该页 `Skipped`」，也就是把本文件一直承诺、
-        但代码没做到的那条 fail-closed 补实。残帧必须删：「存在且非空」正是采样与截图的判据，
-        半张 PNG 会伪装成一次成功采样，比挂死更坏 —— 它**谎报落定**。
+        但代码没做到的那条 fail-closed 补实。
+        ⚠️ **删除不能当判据**：半张 PNG 若进了「画面稳定」的比较就伪装成一次成功采样（比挂死更坏 —— 谎报落定），
+        而真链路现测（2026-10-07）证明 `Kill` 之后删除与子进程句柄有竞争、**可能删不掉** ⇒ 防线是两条逻辑闸门：
+        采样轮用 `-not $shot.TimedOut` 不计数；页面截图先落 `.part`、成功才改名成 `*.png`
+        （步骤 7 按 `*.png` + 本轮时间戳扫目录，半张图绝不能进证据目录）。
       · 每页截图算 **SHA256**；与上一页**相同 ⇒ 判切页未生效**（记入 `HashConflicts`，令 `Ok=$false`）
       · **截图文件的时间戳必须晚于本次运行起点**：`$OutputDir` 不清理、文件名按页名固定，
         故 adb 静默失败时**上一次运行的同名残留 PNG** 会让「存在且非空」照样通过 ——
@@ -263,9 +266,13 @@ function Invoke-BoundedAdbShot {
       重定向文件**启动即截断**（跑完不写 = 0 字节）/ Kill 之后文件**立刻可删** / 中文目录（`.ci-verify` 在
       `叉车维修…` 下）可用 / 真机 `b32d8398` screencap **1217 ms** 返回 103,678 字节且 PNG 头 `89504E47` 完好。
 
-      **残帧规则（本函数的产物契约，被下面两处调用点依赖）**：被终止的调用**不在盘上留帧**。
-      `Kill` 时文件可能已写了一半，而「存在且非空」正是采样循环（`:278`）与页面截图（`:523`）的判据
-      ⇒ 半张 PNG 会伪装成一次成功采样，甚至比原来的挂死更坏：它会**谎报落定**。
+      **残帧规则（本函数的产物契约，被下面两处调用点依赖）**：被终止的调用**不得被当成一次采样**。
+      本函数会尽力删掉残帧（先 `WaitForExit(1500)` 收尸、`Dispose()` 放句柄，再删，删不动重试一次），
+      但**删除只是卫生，不是判据** —— 真链路现测（2026-10-07，强制挂死腿预算 0）里 `Kill` 之后子进程仍握着
+      重定向句柄，`Remove-Item` 当场失败、文件留在盘上。所以防线在调用方两处：
+      `Wait-NavSettled` 用 `-not $shot.TimedOut` 让超时轮**逻辑上**不计数；页面截图那侧先落 `.part`
+      再在成功时改名归位（步骤 7 按 `-Filter '*.png'` + 本轮时间戳扫目录，半张图绝不能进证据目录）。
+      为什么危险：半张 PNG 拿去 `Compare-ScreenFrames` 极可能判「两帧一致」⇒ **谎报落定**，比原来的挂死更坏。
     #>
     param(
         [string]$AdbExe,
@@ -299,8 +306,21 @@ function Invoke-BoundedAdbShot {
     if (-not $exited) {
         try { $p.Kill($true) } catch { }
         $sw.Stop()
+        # ⚠️ `Kill` 只是**请求**终止：子进程握着的重定向文件句柄未必已释放 ⇒ 删除与它存在竞争。
+        #    真链路现测（2026-10-07，强制挂死腿预算 0）：`Remove-Item` 当场失败，报「残帧未删净」，
+        #    且导航采样循环里 `nav-probe.png` 也留在盘上 ⇒ **删除不能当判据用**，它只是卫生。
+        #    真正的防线在调用方：超时轮一律按「没有采样」处理（见 `Wait-NavSettled` 里 `-not $shot.TimedOut`）。
+        #    这里的收尸等待**仍然有界**（1.5 秒）—— 不得为删干净而无限等，那正是本函数要消灭的形状。
+        $null = $p.WaitForExit(1500)
+        try { $p.Dispose() } catch { }
         Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
-        $left = if (Test-Path -LiteralPath $OutFile) { '残帧未删净' } else { '残帧已作废' }
+        if (Test-Path -LiteralPath $OutFile) {
+            Start-Sleep -Milliseconds 200
+            Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+        }
+        $left = if (Test-Path -LiteralPath $OutFile) {
+            '残帧未删净（句柄竞争；调用方按「没有采样」处理，不依赖本次删除成功）'
+        } else { '残帧已作废' }
         return [pscustomobject]@{
             TimedOut = $true; Exited = $false; ExitCode = -1
             Seconds  = [Math]::Round($sw.ElapsedMilliseconds / 1000.0, 1)
@@ -336,7 +356,7 @@ function Wait-NavSettled {
       **2026-10-06 修订三（#1560，票面现测：32 分钟 `.ci-verify` 零写入）**：上面那条「到 -TimeoutSeconds 仍未满足
       ⇒ Settled=$false」**原先不可达** —— 每轮那次 adb 调用没有单次超时，一次不返回就永远回不到上限判据
       （票面同时刻手工 `screencap` 4.8 秒返回 ⇒ 卡点不是 adb 坏，是**那次调用在链里没被约束**）。
-      现在单次调用由 `Invoke-BoundedAdbShot` 兜住：超时的轮**不计入采样**、残帧当场作废，并以 `CallTimeouts` 计数回报；
+      现在单次调用由 `Invoke-BoundedAdbShot` 兜住：超时的轮**逻辑上不计入采样**（不靠残帧删得掉），并以 `CallTimeouts` 计数回报；
       四条不满足原因之外多一条**最优先**的「通道无返回」（`Samples=0` 且 `CallTimeouts>0`）——
       「adb 通道不返回」与「画面没稳定」的处置人完全不同，混进通用文案会把前者读成后者。
     #>
@@ -380,12 +400,15 @@ function Wait-NavSettled {
         $blankNow = $false
         $sameNow = $false
         if ($shot.TimedOut) {
-            # 超时的轮**不计入采样**：不 ++、不比较、不写 prev —— 残帧已由 `Invoke-BoundedAdbShot` 当场删除，
-            # 而半张 PNG 拿去 `Compare-ScreenFrames` 极可能判「两帧一致」⇒ 未落定的页会被谎报成落定。
+            # 超时的轮**不计入采样**：不 ++、不比较、不写 prev。
+            # 半张 PNG 拿去 `Compare-ScreenFrames` 极可能判「两帧一致」⇒ 未落定的页会被谎报成落定。
             $callTimeouts++
             $lastShotError = $shot.Error
         }
-        if ((Test-Path -LiteralPath $ProbeFile) -and (Get-Item -LiteralPath $ProbeFile).Length -gt 0) {
+        # ⚠️ `-not $shot.TimedOut` 是**逻辑闸门**，不是对「删除已成功」的重复检查：`Invoke-BoundedAdbShot`
+        #    会尽力删残帧，但真链路现测（2026-10-07，强制挂死腿预算 0）证明 `Kill` 之后句柄未放、删除当场失败
+        #    ⇒ 计数若只看「文件存在且非空」，就会把被杀的那半帧当成一次成功采样。
+        if (-not $shot.TimedOut -and (Test-Path -LiteralPath $ProbeFile) -and (Get-Item -LiteralPath $ProbeFile).Length -gt 0) {
             $sampled++
             $blankNow = (Test-ScreenBlank -Path $ProbeFile).Blank
             if ($blankNow) { $blankSeen++ }
@@ -638,21 +661,29 @@ function Invoke-AutoScreenshot {
             # 截图（exec-out 保 PNG 字节流；**单次调用有界**，#1560）。
             # 旧写法是 `& cmd.exe /c "… > file" 2>&1 | Out-Null`：没有单次超时 ⇒ 挂住时既不产帧也不报错，
             # 而票面点名「只修采样循环等于把挂死从『等落定』挪到『等截图』」——这个调用点就是那第二个形状。
-            $shot = Invoke-BoundedAdbShot -AdbExe $adbExe -Serial $Device -OutFile $outputFile -TimeoutSeconds $AdbCallTimeoutSeconds
+            # ⚠️ 先落**暂存名** `.part`（不是 `.png`），成功才改名归位。真链路现测（2026-10-07，强制挂死腿）证明
+            #    被杀调用的残帧**可能删不掉**（子进程还握着句柄，删除与终止有竞争），而步骤 7 是按
+            #    `-Filter '*.png'` + 本轮时间戳扫目录的（`screenshot-diff.ps1:235`）⇒ 半张图若直接落在证据目录，
+            #    会被下一步当成本轮截图去比基线。票面那句「到点 ⇒ 该页 Skipped、**不产截图**」要靠命名兑现，
+            #    不能靠删除成功。
+            $partFile = "$outputFile.part"
+            $shot = Invoke-BoundedAdbShot -AdbExe $adbExe -Serial $Device -OutFile $partFile -TimeoutSeconds $AdbCallTimeoutSeconds
             if ($shot.TimedOut) {
-                # 残帧已由 `Invoke-BoundedAdbShot` 当场删除；这里走既有的「该页不计入证据」出口（调用方语义不变，只多点名）。
+                # 走既有的「该页不计入证据」出口（调用方语义不变，只多点名）；`.part` 不进 `*.png` 射程。
                 $skipped += $pageName
                 Write-Host "  ❌ $pageName 的截图调用未在 $AdbCallTimeoutSeconds 秒内返回（$($shot.Error)）⇒ 不计入证据" -ForegroundColor Red
                 Write-Host ("SHOT_CALL_TIMEOUT page={0} callBudgetSeconds={1}" -f $pageName, $AdbCallTimeoutSeconds) -ForegroundColor DarkGray
                 continue
             }
 
-            if (-not (Test-Path -LiteralPath $outputFile) -or (Get-Item -LiteralPath $outputFile).Length -eq 0) {
+            if (-not (Test-Path -LiteralPath $partFile) -or (Get-Item -LiteralPath $partFile).Length -eq 0) {
                 $skipped += $pageName
                 $shotWhy = if ($shot.ErrTail) { "（adb stderr: $($shot.ErrTail)）" } else { '' }
                 Write-Host "  ⚠️ $pageName 截图失败$shotWhy" -ForegroundColor Yellow
                 continue
             }
+            # 归位：只有「调用返回了」且「拿到非空帧」的图才进证据目录
+            Move-Item -LiteralPath $partFile -Destination $outputFile -Force
 
             # 反假绿：整帧**全黑 / 无内容** ⇒ 不是证据（灭屏、白屏、切页过渡帧都会这样）。
             # 2026-09-15 实测：17208 字节的全黑 PNG 一路通过「存在且非空 + 时间戳新 + hash 不变」三条判据。

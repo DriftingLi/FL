@@ -34,10 +34,16 @@
  *   三层各锁一件事（**PNG 字节完整性不放进 ③ 门**——cmd 往 stdout 吐二进制不可靠，那一条由 #1560
  *   的**真链路腿**承载：真机 screencap 走同一形状，断言 PNG 头与可解码，读数在 PR 正文）：
  *     B6 有界执行器本身：真启动器 + 「写半帧就永不返回」的 `.cmd` 桩 ⇒ 预算内返回 / 杀到孙进程 /
- *        **残帧当场删**（并先证明「被杀的调用确实会在盘上留下非空残帧」，否则删除断言是空转）；
+ *        残帧尽力删（并先证明「被杀的调用确实会在盘上留下非空残帧」，否则删除断言是空转）；
  *     B7 采样循环：把有界执行器**影子替换**成「永不返回」（PowerShell 函数名在调用时解析 ⇒ 无需改产品代码）
  *        ⇒ 到点 `Settled=False`、`Samples=0`（超时轮不计入采样）、`CallTimeouts>0`、Reason 点名是调用超时；
  *        Windows 那支另跑一遍**真桩**版本（不靠影子），证整条链在真启动器下同样收口；
+ *     B7W 「**残帧留在盘上**还不算采样」——真链路现测（2026-10-07，强制挂死腿预算 0）照出 `Kill` 之后
+ *        删除与子进程句柄有竞争、**可能删不掉**（日志原文「残帧未删净」/ `nav_probe_left=True`）⇒
+ *        「不计入采样」必须是 `-not $shot.TimedOut` 这条**逻辑闸门**，不能是删除的成功率。
+ *        这一支断言夹具里文件确实在盘上且非空（`B7W_FILE_BYTES > 0`）而 `Samples=0`，并验半帧没被写进
+ *        「上一帧」（`B7W_PREV_ABSENT`）—— 否则下一轮拿半帧一比就判「稳定」。
+ *        同源的第二处防线（页面截图先落 `.part` 成功才归位）由 S23 的 ④b 在结构面钉住。
  *     B8 对照腿：影子执行器正常写帧 + 日志给页身份行 ⇒ `Settled=True`（三条同时满足那一条真走到）。
  *   ⚠️ 平台边界同 B1–B5：取色不可用时「落定」在结构上不可能（`Compare-ScreenFrames` fail-closed 判不一致）
  *     ⇒ Linux 那支断言的是「**仍然有界**」而不是「能落定」，两支都断言、无静默跳过。
@@ -230,6 +236,11 @@ function Invoke-BoundedAdbShot {
     if ($script:shadowCalls -eq 1) { Add-Content -LiteralPath $navLog -Value '进入页面:"pages/probe/page"' -Encoding utf8 }
     return [pscustomobject]@{ TimedOut = $false; Exited = $true; ExitCode = 0; Seconds = 0.1; OutFile = $OutFile; ErrFile = ''; ErrTail = ''; Error = '' }
   }
+  if ($script:shadowMode -eq 'timeout_write') {
+    # 真链路现测的形状：调用被判超时，而**残帧确实留在盘上**（Kill 与句柄释放有竞争，删除可能失败）
+    Set-Content -LiteralPath $OutFile -Encoding ascii -Value 'PARTIAL-FRAME-BYTES'
+    return [pscustomobject]@{ TimedOut = $true; Exited = $false; ExitCode = -1; Seconds = $TimeoutSeconds; OutFile = $OutFile; ErrFile = ''; ErrTail = ''; Error = '探针桩：留残帧并判超时' }
+  }
   return [pscustomobject]@{ TimedOut = $true; Exited = $false; ExitCode = -1; Seconds = $TimeoutSeconds; OutFile = $OutFile; ErrFile = ''; ErrTail = ''; Error = '探针桩：未在 ' + $TimeoutSeconds + ' 秒内返回' }
 }
 
@@ -242,6 +253,21 @@ Write-Output ("B7_SAMPLES=" + $r7.Samples)
 Write-Output ("B7_CALLTIMEOUTS=" + $r7.CallTimeouts)
 Write-Output ("B7_MS=" + $sw7.ElapsedMilliseconds)
 Write-Output ("B7_REASON_NAMES_CALL_TIMEOUT=" + [bool]($r7.Reason -match '未在 2 秒内返回'))
+
+# ── B7W：超时**且残帧留在盘上**（真链路现测到的形状）⇒ 依然不得计入采样。
+#    这一支防的是「把删除当判据」：文件确实在盘上、且非空，靠的是「-not $shot.TimedOut」这条逻辑闸门。
+$p7w = Join-Path $dir 'p7w.png'
+$script:shadowMode = 'timeout_write'
+$swW = [System.Diagnostics.Stopwatch]::StartNew()
+$rW = Wait-NavSettled -AdbExe 'stub' -Serial 'FAKE-SERIAL' -ProbeFile $p7w -NavOutFile $navLog -ExpectedPage 'pages/probe/page' -MinSeconds 1 -TimeoutSeconds 6 -PollSeconds 1 -CallTimeoutSeconds 2
+$swW.Stop()
+Write-Output ("B7W_SETTLED=" + [bool]$rW.Settled)
+Write-Output ("B7W_SAMPLES=" + $rW.Samples)
+Write-Output ("B7W_CALLTIMEOUTS=" + $rW.CallTimeouts)
+Write-Output ("B7W_MS=" + $swW.ElapsedMilliseconds)
+Write-Output ("B7W_FILE_ON_DISK=" + [bool](Test-Path -LiteralPath $p7w))
+Write-Output ("B7W_FILE_BYTES=" + $(if (Test-Path -LiteralPath $p7w) { (Get-Item -LiteralPath $p7w).Length } else { 0 }))
+Write-Output ("B7W_PREV_ABSENT=" + [bool](-not (Test-Path -LiteralPath (Join-Path $dir 'nav-probe-prev.png'))))
 
 # ── B8 对照腿：控制腿必须真走到「三条同时满足」那一条（Windows 才有 PNG 可写）
 if ($drawing) {
@@ -395,6 +421,7 @@ describe('adb 单次调用的有界性（运行期，#1560）', () => {
         'B6_BOUNDED', 'B6_HAS_ERROR',
         'B7R_SETTLED', 'B7R_SAMPLES', 'B7R_CALLTIMEOUTS', 'B7R_MS', 'B7R_PROBE_GONE', 'B7R_REASON_NAMES_CALL_TIMEOUT',
         'B7_SETTLED', 'B7_SAMPLES', 'B7_CALLTIMEOUTS', 'B7_MS', 'B7_REASON_NAMES_CALL_TIMEOUT',
+        'B7W_SETTLED', 'B7W_SAMPLES', 'B7W_CALLTIMEOUTS', 'B7W_MS', 'B7W_FILE_ON_DISK', 'B7W_FILE_BYTES', 'B7W_PREV_ABSENT',
         'B8_SETTLED', 'B8_SAMPLES', 'B8_CALLTIMEOUTS', 'B8_MS', 'BOUNDED_DONE',
       ].forEach((key) => { v[key] = field(probe.stdout, key); });
       v.navLines = String(probe.stdout).split('\n').filter((l) => l.indexOf('NAV_SAMPLE') >= 0);
@@ -451,6 +478,15 @@ describe('adb 单次调用的有界性（运行期，#1560）', () => {
     // 用时上界 = TimeoutSeconds 6 + PollSeconds 1 + CallTimeoutSeconds 2 + 3 秒松弛（**不是判据**，只证没挂住）
     expect(Number(v.B7_MS)).toBeLessThanOrEqual(12000);
     expect(v.navLines.some((l) => l.indexOf('NAV_SAMPLE settled=False') >= 0)).toBe(true);
+
+    // B7W：**残帧确实留在盘上**（真链路现测到的竞争形状）⇒ 「不计入采样」必须是**逻辑闸门**而不是删除的成功率
+    expect(v.B7W_FILE_ON_DISK).toBe('True');
+    expect(Number(v.B7W_FILE_BYTES)).toBeGreaterThan(0);
+    expect(v.B7W_SETTLED).toBe('False');
+    expect(v.B7W_SAMPLES).toBe('0');
+    expect(Number(v.B7W_CALLTIMEOUTS)).toBeGreaterThanOrEqual(2);
+    expect(v.B7W_PREV_ABSENT).toBe('True'); // 超时轮也不得把半帧写进「上一帧」，否则下一轮拿它比出「稳定」
+    expect(Number(v.B7W_MS)).toBeLessThanOrEqual(12000);
 
     if (v.IS_WINDOWS === 'True') {
       // 同一条循环再用**真桩**（不经影子）跑一遍 ⇒ 「有界」不是夹具造出来的性质
