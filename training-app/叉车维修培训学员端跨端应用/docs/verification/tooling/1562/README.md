@@ -52,6 +52,26 @@ L1 与 R1 用同一组参数却给出 `PASS` / `FAIL` 两种 `RESULT`，差别�
 | M3 | `emulator-smoke` 同上 | `C9` 三条违规；ESD 系红（合计 6 红 / 5 绿） | 契约「自检：注入违规必须被检出」绿 |
 | M4 | **拆掉 `device-capture` 的 `TimedOut` 逻辑闸门**（让「文件在不在」独判） | `D12`「超时判据缺失或顺序错」；`BSD1/BSD2/BSD4/BSD5` 红；`BSD5` 读数 **`STRAY_PNG=2`** —— 两枚半帧被 `Move-Item` 归位成 `*.png` 进了证据目录 | **`BSD3`（对照腿）仍绿** |
 | M5 | 同 M4，落在 `emulator-smoke` | `C9`「超时判据缺失或顺序错」；`ESD1/ESD2/ESD4/ESD5` 红；`ESD5` 读数 **`STRAY_PNG=2`** | **`ESD3`（对照腿）仍绿**，契约其余用例绿（合计 5 红 / 6 绿） |
+| M6 | `Invoke-BoundedAdbText` 的读回判据退回「没被判超时」+ 去掉起调用前的清旧档（两层一起拆） | `S24` 红；**`B12` 红**（`B12_TEXT_HAS_STALE=True` / `B12_AWAKE_OK=True state=Awake`） | `B1–B11` 全绿（合计 2 红 / 34 绿）——两轴自审后才补的这一格 |
+| M6′ | **只**退回读回判据（`Exited` → `-not TimedOut`），**保留**起调用前的清旧档 | `S24` 红；`B12` 红 | `B1–B11` 全绿（2 红 / 34 绿）⇒ 判据确实由 `Exited` 承担：那一格清档删不掉（旧档被写着它的句柄握着），单靠删除挡不住 |
+
+### M6 这一格为什么值得单独记（第一版 `B12` 是空转断言，被它自己的变异检查照出来的）
+
+写完 `B12` 跑 M6，**B12 照样绿、只有 S24 红** ⇒ 那条腿对它要防的那一格毫无判别力。现测定位到握法：
+第一版锁的是 stderr，而 .NET 打开重定向文件的顺序是**先 stdout（`FileMode.Create` 直接截断）再 stderr** ⇒
+旧档在抛错之前就被清空，旧代码同样读不到东西；「锁 stdout 但不给 Read 共享」也一样空转（`Get-Content` 跟着失败）。
+成立的第三法是 **`FileAccess.Write` + `FileShare.Read`**：写者（重定向）开不进来 ⇒ 本次 `Start-Process` 抛、
+执行核走 catch（`TimedOut=False` + `Exited=False`），读者（`Get-Content`）照旧开得上 ⇒ 盘上仍是**上一次调用**那份
+`STALE mWakefulness=Awake`。直调真执行核的两组对照读数（`lock-probe3` 形状，探针留在 `.scratch`，产物是这 7 个 token）：
+
+| | 旧判据 | 发货件 |
+| --- | --- | --- |
+| `P_TEXT_HAS_STALE` | **True** | False |
+| `AWAKE_PROBE` | **ok=True state=Awake** | ok=False state=unknown |
+| `P_EXITED` / `P_TIMEDOUT` / `P_HAS_ERROR` | False / False / True | False / False / True |
+
+⇒ 旧判据那一格真的把「上一次调用的 Awake」读成了本次结论 —— 等于一次 adb 都没发却报告屏幕亮着、照样截图。
+`B12` 另加一条空转防线：`B12_STALE_STILL_THERE=True`（旧档必须还在且读者还开得上，否则那条 False 毫无意义）。
 
 ⇒ M4/M5 就是票面 AC3 要的「残帧规则有牙」：不删/不看 `TimedOut` 时**实测**留下非空残帧并被当成本次证据
 （`STRAY_PNG=2`），删了/闸门在位时空转断言不成立。
@@ -73,7 +93,7 @@ L1 与 R1 用同一组参数却给出 `PASS` / `FAIL` 两种 `RESULT`，差别�
 | `1562-cap-ref2.txt` | 2706 | `f43ddc8634feefef8aa6` | `8ad79182648f1ff0f8b9` | R2 重跑（留图那一轮） |
 | `emulator-pages-index-index.png` | 22064 | `1fd08757d3400292d873` | `1fd08757d3400292d873`（同） | 真链路出图（有界执行器产物，`magic=89504E47`，可解码 1080×2340） |
 | `pages-login-login-current.png` | 588756 | `ec8bf3e15a7ba2336c3d` | `ec8bf3e15a7ba2336c3d`（同） | ①a 链真图（只读模式当前前台，同样可解码） |
-| `real-chain-driver.ps1` | 4435 | `78ace4758c40cf12459e` | `78ace4758c40cf12459e`（同） | L1–L4 四腿取证驱动（绝对路径写死在本机 worktree，复现用） |
+| `real-chain-driver.ps1` | 4516 | `7f7c9c3af95f387e1ca0` | `7f7c9c3af95f387e1ca0`（同） | L1–L4 四腿取证驱动（绝对路径写死在本机 worktree，复现用；`5e552830` 之后因修头部那行「不入库」自相矛盾而重算过一次） |
 | `real-chain-ref-driver.ps1` | 3781 | `ad0180e83b6388edf506` | `ad0180e83b6388edf506`（同） | R1/R2 两腿驱动（跑在强制腿之后，把图留在盘上并当场验 magic/解码） |
 
 两列怎么自己复现（本机现测命令，逐字）：
@@ -96,3 +116,6 @@ git cat-file blob HEAD:training-app/叉车维修培训学员端跨端应用/docs
   ⇒ 本产物证明的是**真实 adb 往返 + 真实 screencap 字节**，不声称替代 ① 真机门。
 - 强制腿只用了**预算 0** 这一档：1 秒预算在本机不保证每次必挂（#1560 已把这条写进 ADR）。
 - 未跑 ④（编译门）：改动集不含运行时面（`.ps1` / `.test.js` / `.md`），不参与应用编译产物。
+- **本票只收口「截屏」那一条通道**：剥注释后现测 `device-capture.ps1` 仍有 6 处、`emulator-smoke.ps1` 仍有 14 处
+  文本/管理类 `& $AdbExe … | Out-String` 走无界等待（后者 13 个调用方共用 `Get-AdbOutput` 一个收口点）；
+  票面点名的只有三处 `screencap` 同形落点 ⇒ 剩余面已另立 **#1568** 登记，两处脚本头部注释也各自写明射程边界。
