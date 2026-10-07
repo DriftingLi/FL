@@ -516,3 +516,237 @@ describe('adb 单次调用的有界性（运行期，#1560）', () => {
     }
   });
 });
+
+/**
+ * B9–B12 的探针（#1562）：**灭屏前置**那一次 adb 调用的有界性。
+ *
+ * 为什么必须有这一组（票面现测，同族缺陷的第三个落点）：`Test-ScreenAwake` 原先是
+ * `& $AdbExe -s $Serial shell dumpsys power | Out-String` —— 前台同步等待、**没有单次超时**，
+ * 而它在**每一页之前**跑 ⇒ 挂住的时机比 #1560 修掉的采样循环**更早**，卡的是「能不能开始截屏」。
+ * 它取的还是**文本**（不是 PNG），所以复用不了 `Invoke-BoundedAdbShot` 的调用形态，
+ * 但「等待 / 杀树 / 结果作废」那三段必须只有**一份**实现 —— 本探针验的就是这一件新封装
+ * （`Invoke-BoundedAdbText`）真的接在执行核上，而不是又抄了一份。
+ *
+ * 判据口径（沿 #1549 的教训）：**只取定性值与顺序值**。墙钟上界只用来证明「没挂住」，
+ * 给的是预算的 10 倍以上余量；结论对不对一律看 `TimedOut` / `Ok` / `State` 这三个定性读数。
+ */
+function probeAwake(ctx) {
+  const script = `
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+. "${AUTO_SHOT}"
+$dir = '${ctx.tmp}'
+Write-Output ("IS_WINDOWS=" + [bool]$IsWindows)
+
+# 三种桩：亮屏 / 灭屏 / 永不返回（先吐半行再挂 120 秒）
+$awakeCmd = Join-Path $dir 'awake.cmd'
+Set-Content -LiteralPath $awakeCmd -Encoding ascii -Value @('@echo off', 'echo   mWakefulness=Awake')
+$asleepCmd = Join-Path $dir 'asleep.cmd'
+Set-Content -LiteralPath $asleepCmd -Encoding ascii -Value @('@echo off', 'echo   mWakefulness=Asleep')
+$hangCmd = Join-Path $dir 'hang-awake.cmd'
+Set-Content -LiteralPath $hangCmd -Encoding ascii -Value @('@echo off', 'echo PARTIAL', 'ping -n 120 127.0.0.1 > nul')
+
+if ($IsWindows) {
+  # ── B9 对照腿：正常返回的 dumpsys **不得**被误判成超时（否则「有界」退化成「把所有调用都杀掉」）
+  $a1 = Test-ScreenAwake -AdbExe $awakeCmd -Serial 'FAKE-SERIAL' -WorkDir $dir -TimeoutSeconds 20
+  Write-Output ("B9_OK=" + [bool]$a1.Ok)
+  Write-Output ("B9_STATE=" + $a1.State)
+  Write-Output ("B9_TIMEDOUT=" + [bool]$a1.TimedOut)
+  $a2 = Test-ScreenAwake -AdbExe $asleepCmd -Serial 'FAKE-SERIAL' -WorkDir $dir -TimeoutSeconds 20
+  Write-Output ("B9B_OK=" + [bool]$a2.Ok)
+  Write-Output ("B9B_STATE=" + $a2.State)
+  Write-Output ("B9B_TIMEDOUT=" + [bool]$a2.TimedOut)
+
+  # ── B10 挂死腿：预算 2 秒 ⇒ 必须**到点给结论**，且给的是「拿不到唤醒状态」而不是「判成没亮屏之外的第三种后果」
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  $a3 = Test-ScreenAwake -AdbExe $hangCmd -Serial 'FAKE-SERIAL' -WorkDir $dir -TimeoutSeconds 2
+  $sw.Stop()
+  Write-Output ("B10_OK=" + [bool]$a3.Ok)
+  Write-Output ("B10_STATE=" + $a3.State)
+  Write-Output ("B10_TIMEDOUT=" + [bool]$a3.TimedOut)
+  Write-Output ("B10_HAS_ERROR=" + [bool]($a3.Error -ne ''))
+  Write-Output ("B10_MS=" + $sw.ElapsedMilliseconds)
+  # 残帧（这里是半份 stdout 文本）不许留在盘上：WorkDir 就是本探针目录，数一下就知道
+  Write-Output ("B10_LEFT_TEXT=" + @(Get-ChildItem -LiteralPath $dir -Filter 'adb-call-stdout-*.txt').Count)
+  Write-Output ("B10_LEFT_PNG=" + @(Get-ChildItem -LiteralPath $dir -Filter '*.png').Count)
+} else {
+  # Linux（本仓 CI runner）：没有 cmd.exe ⇒ 断言的是「启动器缺失同样不许挂住」+ 仍走 fail-closed
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  $a3 = Test-ScreenAwake -AdbExe '/bin/echo' -Serial 'FAKE-SERIAL' -WorkDir $dir -TimeoutSeconds 2
+  $sw.Stop()
+  Write-Output ("B10_OK=" + [bool]$a3.Ok)
+  Write-Output ("B10_STATE=" + $a3.State)
+  Write-Output ("B10_TIMEDOUT=" + [bool]$a3.TimedOut)
+  Write-Output ("B10_BOUNDED=" + [bool]($sw.ElapsedMilliseconds -lt 60000))
+  Write-Output ("B10_MS=" + $sw.ElapsedMilliseconds)
+}
+# ── B12 旧档读回腿（#1562 自审时补的窄缝；两条平台都跑，判据不依赖 cmd.exe 在不在）
+#   stdout 落档按 PID 命名、-RedirectStandardOutput 只在**这次调用起得来**时才截断它。
+#   这里用「Write 权限 + FileShare.Read」握着那份旧 stdout：写者（重定向）开不进来 ⇒ 本次 Start-Process 抛
+#   ⇒ 执行核走 catch 回 TimedOut=False + Exited=False；读者（Get-Content）照旧开得上 ⇒ 盘上仍是
+#   **上一次调用**的那份 dumpsys 文本。
+#   ⇒ 读回判据必须是 Exited：拿不到就回空文本 ⇒ Test-ScreenAwake 走既有 fail-closed 给 unknown，
+#     而不是把上一次的「Awake」当成本次的结论（那等于一次 adb 都没发却报告屏幕亮着、照样截图）。
+#   ⚠️ 这个握法是现测挑出来的（另两种都不成立、会造出空转断言）：锁 stderr ⇒ .NET 先按 FileMode.Create
+#     截断了 stdout，旧代码也读不到旧文本；锁 stdout 不给 Read 共享 ⇒ 旧代码的 Get-Content 一起失败，同样读不到。
+#   ⚠️ 本块注释里不得出现反引号——它在 JS 模板字符串内，反引号会终止模板（本仓先例：B11 那一版就是这么炸的）。
+$staleOut = Join-Path $dir ('adb-call-stdout-{0}.txt' -f $PID)
+Set-Content -LiteralPath $staleOut -Encoding ascii -Value 'STALE mWakefulness=Awake'
+$b12Lock = [System.IO.File]::Open($staleOut, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+try {
+  $r12 = Invoke-BoundedAdbText -AdbExe 'cmd.exe' -Serial 'FAKE-SERIAL' -AdbArguments @('shell', 'dumpsys', 'power') -WorkDir $dir -TimeoutSeconds 5
+  Write-Output ("B12_EXITED=" + [bool]$r12.Exited)
+  Write-Output ("B12_TIMEDOUT=" + [bool]$r12.TimedOut)
+  Write-Output ("B12_HAS_ERROR=" + [bool]($r12.Error -ne ''))
+  Write-Output ("B12_TEXT_HAS_STALE=" + [bool]($r12.Text -match 'STALE'))
+  Write-Output ("B12_STALE_STILL_THERE=" + [bool](Test-Path -LiteralPath $staleOut))
+  $a12 = Test-ScreenAwake -AdbExe 'cmd.exe' -Serial 'FAKE-SERIAL' -WorkDir $dir -TimeoutSeconds 5
+  Write-Output ("B12_AWAKE_OK=" + [bool]$a12.Ok)
+  Write-Output ("B12_AWAKE_STATE=" + $a12.State)
+  Write-Output ("B12_AWAKE_TIMEDOUT=" + [bool]$a12.TimedOut)
+} finally {
+  $b12Lock.Dispose()
+}
+Write-Output "AWAKE_SENTINEL_DONE=1"
+`.trim();
+
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  try {
+    const stdout = execFileSync(powershellExe(), psArgs(['-EncodedCommand', encoded]), {
+      encoding: 'utf8',
+      timeout: 180000,
+      windowsHide: true,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    return { ok: true, stdout: String(stdout), stderr: '' };
+  } catch (e) {
+    return {
+      ok: false,
+      status: e.status,
+      stdout: String(e.stdout || ''),
+      stderr: String(e.stderr || e.message || ''),
+    };
+  }
+}
+
+describe('灭屏前置那次 adb 调用的有界性（运行期，#1562）', () => {
+  let ctx3;
+  let probe;
+  const v = {};
+
+  beforeAll(() => {
+    ctx3 = { tmp: fs.mkdtempSync(path.join(os.tmpdir(), 'awake-')) };
+    probe = probeAwake(ctx3);
+    if (probe.ok) {
+      [
+        'IS_WINDOWS', 'B9_OK', 'B9_STATE', 'B9_TIMEDOUT', 'B9B_OK', 'B9B_STATE', 'B9B_TIMEDOUT',
+        'B10_OK', 'B10_STATE', 'B10_TIMEDOUT', 'B10_HAS_ERROR', 'B10_BOUNDED', 'B10_MS',
+        'B10_LEFT_TEXT', 'B10_LEFT_PNG',
+        'B12_EXITED', 'B12_TIMEDOUT', 'B12_HAS_ERROR', 'B12_TEXT_HAS_STALE', 'B12_STALE_STILL_THERE',
+        'B12_AWAKE_OK', 'B12_AWAKE_STATE', 'B12_AWAKE_TIMEDOUT',
+      ].forEach((key) => { v[key] = field(probe.stdout, key); });
+      v.awakeLines = String(probe.stdout).split('\n').filter((l) => l.indexOf('AWAKE_PROBE ok=') >= 0);
+      v.sentinel = field(probe.stdout, 'AWAKE_SENTINEL_DONE');
+    }
+  });
+
+  afterAll(() => {
+    if (ctx3) {
+      try {
+        fs.rmSync(ctx3.tmp, { recursive: true, force: true });
+      } catch {
+        // 临时目录清理失败不该把用例判红
+      }
+    }
+  });
+
+  function requireProbe() {
+    if (probe && probe.ok) return;
+    throw new Error(
+      '灭屏前置有界性探针失败（pwsh 不可用或脚本抛错，fail-closed 不跳过）：\n'
+        + `exit=${probe ? probe.status : 'n/a'}\nstdout=${probe ? probe.stdout : ''}\nstderr=${probe ? probe.stderr : ''}`
+    );
+  }
+
+  // B9：对照腿 —— 真给了 mWakefulness 的两次调用都必须**按原判据**给结论，且都不被当成超时
+  test('B9: 正常返回的 dumpsys 不被误判为超时（亮屏判亮、灭屏判灭，两条都真走到）', () => {
+    requireProbe();
+    if (v.IS_WINDOWS !== 'True') return; // Linux 那支由 B10 断言（没有 cmd.exe 就没有文本可读）
+    expect(v.B9_OK).toBe('True');
+    expect(v.B9_STATE).toBe('Awake');
+    expect(v.B9_TIMEDOUT).toBe('False');
+    // 成对的「必不红」面：灭屏必须仍判 Ok=False，且**不是**因为超时（那是另一条出口）
+    expect(v.B9B_OK).toBe('False');
+    expect(v.B9B_STATE).toBe('Asleep');
+    expect(v.B9B_TIMEDOUT).toBe('False');
+  });
+
+  // B10：挂死腿 —— 到点必须给结论，且结论是「拿不到唤醒状态」（Ok=False / State=unknown）
+  test('B10: 调用永不返回时到点给结论并 fail-closed，残帧（半份文本）不留盘', () => {
+    requireProbe();
+    expect(v.B10_OK).toBe('False'); // 判定只有「截 / 不截」两档：超时归到不截，不开第三种后果
+    expect(v.B10_STATE).toBe('unknown');
+    if (v.IS_WINDOWS === 'True') {
+      expect(v.B10_TIMEDOUT).toBe('True');
+      expect(v.B10_HAS_ERROR).toBe('True');
+      // 上界只用来证明「没挂住」，不是判据（预算 2 秒 + 派发开销，这里给 60 秒 = 30 倍余量）
+      expect(Number(v.B10_MS)).toBeLessThanOrEqual(60000);
+      expect(v.B10_LEFT_TEXT).toBe('0');
+      expect(v.B10_LEFT_PNG).toBe('0');
+    } else {
+      expect(v.B10_BOUNDED).toBe('True');
+    }
+  });
+
+  // B11：机检行 —— 「通道不返回」与「设备没亮」在日志里必须分得开（是读数、不是判据）
+  test('B11: AWAKE_PROBE 机检行按出口打得出，且点名单次预算', () => {
+    requireProbe();
+    expect(v.sentinel).toBe('1'); // 探针跑到最后一行（否则下面的「按出口」断言可能只是没跑到）
+    const lines = v.awakeLines;
+    // 每条都必须**整行符合**这个格式（ASCII token：跨语言只传 ASCII，本仓血账是 OEM 码页会把中文变乱码）
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    lines.forEach((l) => {
+      expect(l.trim()).toMatch(
+        /^AWAKE_PROBE ok=(True|False) state=\w+ timedOut=(True|False) callBudgetSeconds=\d+$/,
+      );
+    });
+    if (v.IS_WINDOWS === 'True') {
+      // 三条出口各一行：判亮 / 判灭 / 拿不到（超时）
+      expect(lines.length).toBeGreaterThanOrEqual(3);
+      expect(lines.some((l) => l.indexOf('ok=True state=Awake timedOut=False') >= 0)).toBe(true);
+      expect(lines.some((l) => l.indexOf('ok=False state=Asleep timedOut=False') >= 0)).toBe(true);
+      expect(lines.some((l) => l.indexOf('ok=False state=unknown timedOut=True') >= 0)).toBe(true);
+    } else {
+      // Linux：起不了 cmd.exe ⇒ 只有「拿不到唤醒状态」这一条出口可达，且它必须**不是**超时出口
+      expect(lines.some((l) => l.indexOf('ok=False state=unknown timedOut=False') >= 0)).toBe(true);
+    }
+  });
+
+  // B12：起不来那一格不许把**上一次调用**的旧档读成本次结论。
+  //   ⚠️ 判别力分平台（CI 首跑现测照出来的，别当成「平台差异可以容忍」）：那一格靠的是 NT 文件共享语义
+  //   （句柄以 Write 握着 ⇒ 写者开不进来、读者照样开得上）。**Linux 的 unlink 允许删正被打开的文件**
+  //   ⇒ 起调用前那句清档在 CI 上会成功、旧档留不下，「写者进不来」这一格在 ubuntu 上物理造不出来
+  //   （CI 首跑读数：`B12_STALE_STILL_THERE=False`，而本机等价读数 `True`）。所以两支各断言自己撑得住的：
+  //     · Windows（本机）：完整那一格——旧档还在、且没被读回来；M6 / M6′ 的牙在这里。
+  //     · Linux（CI）：**不是静默跳过**，仍断言「起不来 ⇒ 不崩、不判超时、`Exited=False`、带回错误、
+  //       不回读、fail-closed 给 unknown」这五条（五条在两个平台上都成立，差别只在旧档留不留得下）。
+  test('B12: Start-Process 起不来时不回读旧 stdout，仍 fail-closed 给 unknown（不把上一次的 Awake 当本次的）', () => {
+    requireProbe();
+    // 现场必须是「没被判超时、但也没真的退出」——旧代码正是在这一格读回旧档（两平台都成立）
+    expect(v.B12_TIMEDOUT).toBe('False');
+    expect(v.B12_EXITED).toBe('False');
+    expect(v.B12_HAS_ERROR).toBe('True');
+    // 空转防线（只在 Windows 成立，理由见上面那段）：现场必须真是「旧档还在、且读者开得上」，
+    //   否则「没把旧档读回来」那条 False 就毫无意义——那条断言的是**旧档在场却没被用**。
+    if (v.IS_WINDOWS === 'True') {
+      expect(v.B12_STALE_STILL_THERE).toBe('True');
+    }
+    // 产物判据：文本里没有旧那份 `STALE mWakefulness=Awake`（有 ⇒ 等于没调用却报告「屏幕亮着」）
+    expect(v.B12_TEXT_HAS_STALE).toBe('False');
+    expect(v.B12_AWAKE_OK).toBe('False');
+    expect(v.B12_AWAKE_STATE).toBe('unknown');
+    // 且这仍不是超时出口（三种后果各归各位：判定只有截/不截，TimedOut 只进读数）
+    expect(v.B12_AWAKE_TIMEDOUT).toBe('False');
+  });
+});

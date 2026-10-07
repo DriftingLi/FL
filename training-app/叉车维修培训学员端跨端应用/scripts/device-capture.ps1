@@ -38,6 +38,17 @@
     只用只读命令：adb devices、adb -s <dev> exec-out screencap -p、adb -s <dev> shell dumpsys …、
     adb -s <dev> shell logcat -d（-d = dump 后立即退出，**不清**缓冲）。
 
+    ⚠️ **每张截图调用都有单次超时**（#1562，2026-10-07）：截图走 `lib/auto-screenshot.ps1` 的有界执行器
+    （`-AdbCallTimeoutSeconds`，默认 15 秒），到点不返回 ⇒ 终止整棵进程树、该页记失败并**继续**跑后面的页，
+    日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」。这不改变只读性 —— 发的还是同一条
+    `exec-out screencap -p`，只是不再无限等它（旧写法挂在一次调用上时，整条取证链就地停住、既不产帧也不报错）。
+    ⚠️ **这句话的射程就到截图为止**：本脚本另有 6 处文本/管理类 adb 调用（`Get-DeviceList`、每页都跑的
+    `Get-ForegroundInfo`、`Get-LogcatBaseline`、`Get-LogcatWindow`、`Resolve-LauncherComponent`、`Start-AppPage`）
+    仍是无界的 `& $AdbExe … | Out-String`，**#1562 没做**（票面点名的只有三处 `screencap` 同形落点）⇒ 剩余面登记在 #1568。
+    ⚠️ **残帧不进证据**：截图先落 `.part`，「调用返回 + 帧非空」才改名归位。被杀调用的残帧**可能删不掉**
+    （#1560 真链路现测：`Kill` 之后句柄未放，删除与它竞争），而本链的出图判据是「文件存在且非空」
+    ⇒ 归位靠命名兑现，不靠删除成功。
+
     ### 只读带来的连带结论：无法清 logcat 缓冲 ⇒ 不能「清缓冲后再统计」
     处置（**不假装能清**）：脚本启动时先取**设备自己**最新日志行的 epoch 时间戳作窗口起点
     （logcat -d -v epoch -t 1），结束时只统计大于等于起点的行；-LogcatSeconds > 0 时再取
@@ -168,6 +179,15 @@ param(
     [string]$Package = '',
     [int]$LogcatSeconds = 0,
     [int]$PageSettleSeconds = 3,
+    # **一次截图调用**的上限（#1562）。默认 15 秒的理由只引用指得到入库产物的读数：#1560 收口会话里同一条
+    # 有界调用返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
+    # 15 秒给了最慢那次的十倍余量，同时把「一次不返回就整条链就地停住」钉死成**最多 15 秒** ——
+    # 预算给宽不改变结论，只改变多久出结论。
+    # 与 `lib/auto-screenshot.ps1` 的 `-AdbCallTimeoutSeconds` 取同一个默认值：本仓「一次**有界** adb 调用」只有一个口径。
+    # ⚠️ 限定词是实的：本脚本另有 6 处文本/管理类 `& $AdbExe … | Out-String` 仍走无界等待（`Get-DeviceList` /
+    #   `Get-ForegroundInfo`（每页都跑）/ `Get-LogcatBaseline` / `Get-LogcatWindow` / `Resolve-LauncherComponent` /
+    #   `Start-AppPage`）⇒ 不在 #1562 票面射程，剩余面登记在 **#1568**，别把这段读成「本脚本每次 adb 调用都有界」。
+    [int]$AdbCallTimeoutSeconds = 15,
     [string]$Module = 'device',
     [string]$ArchiveModule = '',
     [switch]$NoArchive,
@@ -185,6 +205,12 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $VerifyRoot = if ([System.IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $ProjectRoot $OutDir }
 $LogPath = Join-Path $VerifyRoot 'device-capture.log'
 $AdbExe = $AdbPath
+# 「一次 adb 调用怎么才有界」的**唯一真源**在 `scripts/lib/auto-screenshot.ps1`（#1560 落地的有界执行器）。
+# 本脚本 dot-source 它并复用，**不**在这里再写一份「Start-Process + WaitForExit(ms) + Kill + 残帧作废」——
+# 复制而不是复用正是 ADR-0008「adb 解析的唯一真源」记的那类分叉（两份悄悄漂移，坏的那份在真机上才露出来）。
+# 该 lib 只有函数定义、dot-source 无副作用，且与本脚本无同名函数（`lib/auto-screenshot.ps1` 现定义 10 个，
+# 逐条对照过；新增同名函数时以本文件的定义为准 —— 后加载者胜）。
+. (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
 $ArchiveModuleName = if ($ArchiveModule) { $ArchiveModule } else { $Module }
 
 # 切页闸门：默认关闭；-NoStartApp / -SkipAppStart 等价且优先级更高（fail-safe）
@@ -206,6 +232,8 @@ $script:FinalStatus = ''
 $script:Foreground = [pscustomobject]@{ Component = ''; Raw = ''; Source = '' }
 $script:TargetPackage = ''
 $script:ShotRecords = @()
+# 超时过的截图调用点名清单（#1562）：汇总与机检行用它，「哪一次调用、多大预算、有没有留下残帧」才看得见
+$script:ShotTimeouts = @()
 $script:SkippedPages = @()
 $script:WindowStart = 0.0
 $script:WindowKnown = $false
@@ -376,9 +404,42 @@ function Export-Screenshot {
     param([string]$Name)
     $path = Join-Path $VerifyRoot $Name
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
-    # PNG 是二进制：必须走 cmd 重定向，PowerShell 的 > 会破坏字节流
-    $cmd = '"{0}" -s {1} exec-out screencap -p > "{2}"' -f $AdbExe, $script:Serial, $path
-    & cmd.exe /c $cmd 2>&1 | Out-Null
+    # ⚠️ 单次 adb 调用**有界**（#1562；同族缺陷的第三个落点，前两个由 #1560 收口）。
+    #    旧写法是 `& cmd.exe /c "… exec-out screencap -p > file" 2>&1 | Out-Null`：前台同步等待、**没有单次超时**
+    #    ⇒ 一次调用不返回就既不产帧也不报错，整条取证链就地停住、后面的页也跑不到（#1560 现测：32 分钟零写入，
+    #    而同一时刻手工 `screencap` 4.8 秒返回 ⇒ 卡点不是 adb 坏，是那次调用在链里没被约束）。
+    #    现复用 `lib/auto-screenshot.ps1` 那份有界执行核：PNG 是二进制，仍由 OS 把 stdout **直接写进文件**
+    #    （父进程一个字节都不读 —— PowerShell 的 `>` 会破坏字节流，这条既有约束由执行核保住）。
+    #    ⚠️ 先落 `.part`、成功才归位：被杀调用的残帧**可能删不掉**（#1560 真链路现测：`Kill` 之后子进程仍握着
+    #    重定向句柄，删除与它竞争），而本链的出图判据正是「文件存在且非空」⇒ 半张图绝不能落在最终名上
+    #    被当成本次证据。**归位靠命名，不靠删除成功**。
+    $partPath = "$path.part"
+    if (Test-Path -LiteralPath $partPath) { Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue }
+    $shot = Invoke-BoundedAdbShot -AdbExe $AdbExe -Serial $script:Serial -OutFile $partPath -TimeoutSeconds $AdbCallTimeoutSeconds
+    if ($shot.TimedOut) {
+        # 到点给结论并**继续**跑后面的页：该次调用记为「没有帧」，最终名上不写文件。
+        # 残帧尽力删（卫生），但判据是这条 `TimedOut` 逻辑闸门 —— 删除成不成功都不改变结论。
+        $partLeft = if (Test-Path -LiteralPath $partPath) { (Get-Item -LiteralPath $partPath).Length } else { 0 }
+        Write-Log ("截图调用未返回：$Name —— 单次 exec-out screencap 未在 $AdbCallTimeoutSeconds 秒内返回（$($shot.Error)）")
+        Write-Log ("SHOT_CALL_TIMEOUT page=$Name callBudgetSeconds=$AdbCallTimeoutSeconds partBytes=$partLeft finalWritten=False")
+        $script:ShotTimeouts = @($script:ShotTimeouts) + @($Name)
+        Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0; Hash = ''; TimedOut = $true; CallBudgetSeconds = $AdbCallTimeoutSeconds }
+    }
+    if (-not (Test-Path -LiteralPath $partPath) -or (Get-Item -LiteralPath $partPath).Length -eq 0) {
+        $shotWhy = if ($shot.ErrTail) { "（adb stderr: $($shot.ErrTail)）" } else { '' }
+        Write-Log "截图失败：$Name（文件未生成）$shotWhy"
+        Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0; Hash = ''; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
+    }
+    # 归位：只有「调用返回了」且「拿到非空帧」的图才进证据目录。失败只判这一张，不许掀翻整条链。
+    try {
+        Move-Item -LiteralPath $partPath -Destination $path -Force
+    } catch {
+        Write-Log "截图归位失败：$Name（$($_.Exception.Message)）"
+        Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0; Hash = ''; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
+    }
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $size = (Get-Item -LiteralPath $path).Length
         # sha256 供「页身份 fail-closed」用：切页失效时多页会拍到同一屏（2026-09-12 实测，见 PR #898）
@@ -386,10 +447,10 @@ function Export-Screenshot {
         if ($size -gt 0) { $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
         $short = if ($hash.Length -ge 16) { $hash.Substring(0, 16) } else { $hash }
         Write-Log "截图：$Name（$([math]::Round($size / 1KB, 1)) KB，sha256=$short…）"
-        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = $size; Hash = $hash }
+        return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = $size; Hash = $hash; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
     }
     Write-Log "截图失败：$Name（文件未生成）"
-    return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0; Hash = '' }
+    return [pscustomobject]@{ Page = $Name; Path = $path; Name = $Name; Bytes = 0; Hash = ''; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
 }
 
 # ================= 切页（写操作：**仅** -AllowAppStart 显式开启时可达） =================
@@ -692,7 +753,8 @@ try {
             Write-Log "  SKIP：$page —— 未切页：切页默认关闭"
             $pageResults += [pscustomobject]@{ Page = $page; Status = 'SKIP'; Detail = '未切页：切页默认关闭'; Shot = $shot.Name }
         }
-        if ($shot.Bytes -le 0) { $failures += "截图未落盘或为 0 字节（$shotName）" }
+        if ($shot.TimedOut) { $failures += "截图调用未在 $AdbCallTimeoutSeconds 秒内返回（$shotName）—— 是 adb 通道不返回，不是设备没亮屏" }
+        elseif ($shot.Bytes -le 0) { $failures += "截图未落盘或为 0 字节（$shotName）" }
     } else {
         # ---------------- 显式切页模式（只有 -AllowAppStart 才可达） ----------------
         if (-not $script:TargetPackage) {
@@ -709,7 +771,8 @@ try {
             $pageFail = @()
             if (-not $fg.Component) { $pageFail += '取不到前台 Activity' }
             elseif ($fg.Component -notmatch [regex]::Escape($script:TargetPackage)) { $pageFail += "前台不是目标包（$($fg.Component)）" }
-            if ($shot.Bytes -le 0) { $pageFail += '截图未落盘或为 0 字节' }
+            if ($shot.TimedOut) { $pageFail += "截图调用未在 $AdbCallTimeoutSeconds 秒内返回（adb 通道问题）" }
+            elseif ($shot.Bytes -le 0) { $pageFail += '截图未落盘或为 0 字节' }
             $status = 'PASS'
             if (@($pageFail).Count -gt 0) {
                 $status = 'FAIL'
@@ -781,6 +844,9 @@ try {
         "logcat：窗口起点=$($final.WindowStart) 窗口行数=$($final.WindowLines)  FATAL EXCEPTION=$($final.FatalCount)  ANR in 包=$($final.AnrPkgCount)  ANR 合计=$($final.AnrAllCount)  E AndroidRuntime=$($final.RuntimeCrashes)  进程死亡=$($final.ProcessDeaths)",
         "页面判定：PASS=$(@($pageResults | Where-Object { $_.Status -eq 'PASS' }).Count)  FAIL=$(@($pageResults | Where-Object { $_.Status -eq 'FAIL' }).Count)  SKIP=$(@($pageResults | Where-Object { $_.Status -eq 'SKIP' }).Count)",
         "截图：$(($script:ShotRecords | ForEach-Object { $h = if ($_.Hash -and $_.Hash.Length -ge 12) { $_.Hash.Substring(0, 12) } else { 'n/a' }; "$($_.Name)=$($_.Bytes)B/$h" }) -join ', ')",
+        # 「不返回」必须是一种**可见的结论**（#1562）：哪一次调用、多大预算、有没有留下残帧都点名，
+        # 否则读日志的人只能看到「少了一张图」，分不清通道问题与设备问题。
+        "SHOT_CALL_BUDGET calls=$(@($script:ShotRecords).Count) timeouts=$(@($script:ShotTimeouts).Count) callBudgetSeconds=$AdbCallTimeoutSeconds timedOutPages=$(if (@($script:ShotTimeouts).Count -gt 0) { $script:ShotTimeouts -join ',' } else { 'none' })",
         "页身份断言：$(if ($CanStart) { '已启用 —— 多页截图哈希相同即判 FAIL（防切页静默失效）' } else { '不适用（未切页）' })",
         "目录=$VerifyRoot  日志=$LogPath"
     )

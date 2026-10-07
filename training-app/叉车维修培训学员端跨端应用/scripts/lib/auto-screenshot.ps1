@@ -33,6 +33,12 @@
         （`-AdbCallTimeoutSeconds`，默认 15s）：超时 ⇒ 终止整棵进程树 + 该轮**不计入采样** + 残帧尽力删
         ⇒ 「不返回」从「整条链挂死」变成「到点 `Settled=false` ⇒ 该页 `Skipped`」，也就是把本文件一直承诺、
         但代码没做到的那条 fail-closed 补实。
+        ⚠️ **同一件「有界单次调用」在本仓只有一个实现**（#1562，2026-10-07）：等待/杀树/残帧作废三段
+        收成执行核 `Invoke-BoundedAdbCall`，`Invoke-BoundedAdbShot`（截屏，二进制）与
+        `Invoke-BoundedAdbText`（取文本，如 `dumpsys power`）是它的两个薄封装 —— 三个消费点
+        （本文件的采样与页面截图、本文件的灭屏前置 `Test-ScreenAwake`、①a 取证与仿真机冒烟的那两张图）
+        各抄一份正是 ADR-0008「adb 解析的唯一真源」记的那类分叉。后两个消费点在 `device-capture.ps1` /
+        `emulator-smoke.ps1`，它们 **dot-source 本文件复用**、不自定义第二份。
         ⚠️ **删除不能当判据**：半张 PNG 若进了「画面稳定」的比较就伪装成一次成功采样（比挂死更坏 —— 谎报落定），
         而真链路现测（2026-10-07）证明 `Kill` 之后删除与子进程句柄有竞争、**可能删不掉** ⇒ 防线是两条逻辑闸门：
         采样轮用 `-not $shot.TimedOut` 不计数；页面截图先落 `.part`、成功才改名成 `*.png`
@@ -121,12 +127,38 @@ function Test-ScreenAwake {
       **天然满足「画面稳定」** ⇒ 会让「导航已落定」判据瞬间通过、把黑图当成本次证据
       （2026-09-15 实测：两次采样 16 秒即「落定」，两张 PNG 字节完全相同、内容全黑）。
       fail-closed：不亮屏就**不截图**。唤醒设备是**人**的动作，本脚本不注入 input。
+
+      ⚠️ **这次调用同样必须有单次超时**（#1562，2026-10-07；#1560 收口时现测出的第三处无界 adb 调用）：
+      旧写法 `& $AdbExe -s $Serial shell dumpsys power | Out-String` 是**前台同步等待、无上限**，
+      而它跑在**每页之前** ⇒ 挂住的时机比 #1560 修掉的采样循环**更早**，卡的是「能不能开始截屏」这一步。
+      超时后的结论只有一个：**拿不到唤醒状态**（`Ok=$false` + `State='unknown'`），走既有的 fail-closed
+      出口拒绝截图 —— **不得**新增第三种状态把「没亮屏」与「不知道亮没亮」变成两条不同后果，
+      那会让调用方的判断从「截不截」漂成「截，因为看起来没亮」。
+      `TimedOut` 只是**读数**（写进机检行，让人一眼分清「通道不返回」与「设备真没亮」），不改判定。
     #>
-    param([string]$AdbExe, [string]$Serial)
-    $out = ''
-    try { $out = (& $AdbExe -s $Serial shell dumpsys power 2>$null | Out-String) } catch { }
-    if ($out -notmatch 'mWakefulness=(\w+)') { return [pscustomobject]@{ Ok = $false; State = 'unknown' } }
-    return [pscustomobject]@{ Ok = ($Matches[1] -eq 'Awake'); State = $Matches[1] }
+    param(
+        [string]$AdbExe,
+        [string]$Serial,
+        [string]$WorkDir = '',
+        # 单次 `dumpsys power` 的上限；默认值理由见 `Invoke-BoundedAdbText` 的参数注释（读数指得到入库产物）。
+        [int]$TimeoutSeconds = 15
+    )
+    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $Serial -AdbArguments @('shell', 'dumpsys', 'power') `
+        -WorkDir $WorkDir -TimeoutSeconds $TimeoutSeconds
+    if ($r.TimedOut) {
+        # 机检行（ASCII token，供守护与取证 grep）：**是读数不是判据** —— 判定仍是下面那句 `Ok=$false`。
+        # 先例 `lib/capability-surface.ps1`「最后一行是机检行……它不是判据」与 `NAV_SAMPLE`。
+        Write-Host ('AWAKE_PROBE ok=False state=unknown timedOut=True callBudgetSeconds={0}' -f $TimeoutSeconds) -ForegroundColor DarkGray
+        return [pscustomobject]@{ Ok = $false; State = 'unknown'; TimedOut = $true; Seconds = $r.Seconds; Error = $r.Error }
+    }
+    $out = $r.Text
+    if ($out -notmatch 'mWakefulness=(\w+)') {
+        Write-Host ('AWAKE_PROBE ok=False state=unknown timedOut=False callBudgetSeconds={0}' -f $TimeoutSeconds) -ForegroundColor DarkGray
+        return [pscustomobject]@{ Ok = $false; State = 'unknown'; TimedOut = $false; Seconds = $r.Seconds; Error = $r.Error }
+    }
+    $awakeNow = [bool]($Matches[1] -eq 'Awake')
+    Write-Host ('AWAKE_PROBE ok={0} state={1} timedOut=False callBudgetSeconds={2}' -f $awakeNow, $Matches[1], $TimeoutSeconds) -ForegroundColor DarkGray
+    return [pscustomobject]@{ Ok = $awakeNow; State = $Matches[1]; TimedOut = $false; Seconds = $r.Seconds; Error = '' }
 }
 
 function Get-NavEnteredPage {
@@ -243,9 +275,18 @@ function Compare-ScreenFrames {
     }
 }
 
-function Invoke-BoundedAdbShot {
+function Invoke-BoundedAdbCall {
     <#
-      单次 adb 截屏调用的**有界**执行器（#1560，2026-10-06）：一次调用不返回 ⇒ 到点终止整棵进程树并回报 `TimedOut`。
+      单次 adb 调用的**有界执行核**（#1560，2026-10-06；#1562 收成一件、供三个消费点共用）：
+      一次调用不返回 ⇒ 到点终止整棵进程树并回报 `TimedOut`。
+
+      为什么把「一次调用」收成一件（#1562）：同一个「前台同步等一次 adb、没有单次超时」的形状在本仓有
+      **三个**落点（导航采样、页面截图 = #1560 已修；`Test-ScreenAwake` 的 `dumpsys power` = 本票；
+      ①a 取证与仿真机冒烟各自的那张 `screencap` = 本票）。等待/杀树/残帧这三段逻辑若各抄一份，
+      漂移就是早晚的事 —— ADR-0008「adb 解析的唯一真源」记的血账正是「复制而不是复用」。
+      故本核只处理「起一个进程、有界地等它、不放就杀树、产物按 `TimedOut` 作废」，
+      具体是哪条 adb 子命令由 `$AdbSubCommand` 传入；两个调用形态各有一个**薄封装**
+      （`Invoke-BoundedAdbShot` 截屏、`Invoke-BoundedAdbText` 取文本），封装里没有第二次等待逻辑。
 
       为什么单独成一个函数：`Wait-NavSettled` 那条 420 秒上限**只在两轮之间**检查一次，而真正可能不返回的是
       那一轮的 adb 调用本身 ⇒ 调用挂住就永远回不到判据（票面现测：32 分钟 `.ci-verify` 零写入，既不落定也不报超时）。
@@ -277,7 +318,12 @@ function Invoke-BoundedAdbShot {
     param(
         [string]$AdbExe,
         [string]$Serial,
+        # 交给 adb 的子命令原文（不含 `-s <serial>`，那部分由本核拼）。截屏封装传 `exec-out screencap -p`。
+        [string]$AdbSubCommand,
         [string]$OutFile,
+        # stdout 的落点名可以换，但**不能**与 stdout 同文件（`Start-Process` 直接拒绝）。
+        # 默认名沿用 #1560 的两个避讳：不叫 `*.png`、不叫 `*.log`（见下方注释）。
+        [string]$StderrName = 'adb-screencap-stderr.txt',
         # 单次调用的上限。现测健康返回 **1217 ms**（2026-10-06 真机 b32d8398；票面记的是 4.8 s ⇒ 两个数都留档，
         # 别只引用对默认值有利的那一个）。默认 15 秒 = 现测的 12 倍余量、票面数的 3 倍；一轮最坏耗时
         # （`PollSeconds` 5 + 本值 15）相对 420 秒上限可忽略，而它把「32 分钟零写入」钉死成**最多 15 秒**。
@@ -291,8 +337,8 @@ function Invoke-BoundedAdbShot {
     # stderr 单独一份，且**不能与 stdout 同文件**（`Start-Process` 直接拒绝）。
     # 命名刻意避开两个判据来源：不叫 `*.png`（步骤 7 按 `-Filter '*.png'` 扫目录，`screenshot-diff.ps1:235`）、
     # 不叫 `*.log`（避免被别处的日志扫描捡走当成判据输入）。
-    $errFile = Join-Path (Split-Path -Parent $OutFile) 'adb-screencap-stderr.txt'
-    $cmd = '"{0}" -s {1} exec-out screencap -p' -f $AdbExe, $Serial
+    $errFile = Join-Path (Split-Path -Parent $OutFile) $StderrName
+    $cmd = '"{0}" -s {1} {2}' -f $AdbExe, $Serial, $AdbSubCommand
     try {
         $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $cmd) `
             -RedirectStandardOutput $OutFile -RedirectStandardError $errFile -NoNewWindow -PassThru
@@ -336,6 +382,80 @@ function Invoke-BoundedAdbShot {
         Seconds  = [Math]::Round($sw.ElapsedMilliseconds / 1000.0, 1)
         OutFile  = $OutFile; ErrFile = $errFile; ErrTail = (Get-Content -LiteralPath $errFile -TotalCount 1 -ErrorAction SilentlyContinue)
         Error    = ''
+    }
+}
+
+function Invoke-BoundedAdbShot {
+    <#
+      一次**截屏**调用的有界封装（#1560 发货件，签名与返回形状一字未动）：
+      实现已收成 `Invoke-BoundedAdbCall` 那份有界执行核，本函数只钉「哪条子命令」。
+      为什么保留这个名字而不让调用方直调执行核：`exec-out screencap -p` 是**二进制**通道，
+      「PNG 必须走 OS 重定向、父进程一个字节都不读」这条约束是它专属的坑位（#1285 / `process-capture.ps1`
+      按 UTF-8 读 stdout 会改坏字节），封装在就把坑位绑在调用形态上，而不是散在三个调用点里各记一遍。
+    #>
+    param(
+        [string]$AdbExe,
+        [string]$Serial,
+        [string]$OutFile,
+        [int]$TimeoutSeconds = 15
+    )
+    return Invoke-BoundedAdbCall -AdbExe $AdbExe -Serial $Serial -AdbSubCommand 'exec-out screencap -p' `
+        -OutFile $OutFile -StderrName 'adb-screencap-stderr.txt' -TimeoutSeconds $TimeoutSeconds
+}
+
+function Invoke-BoundedAdbText {
+    <#
+      一次**取文本**调用的有界封装（#1562，2026-10-07）。为什么不能直接套用截屏封装：它写死了
+      `exec-out screencap -p`，而 `Test-ScreenAwake` 要的是 `shell dumpsys power` 的**文本**输出。
+      为什么仍走同一个执行核（而不是新写一份「有界等待 + 杀树」）：那三段逻辑抄第二份就是分叉
+      —— ADR-0008「adb 解析的唯一真源」的血账正是「复制而不是复用」。
+      ⚠️ 取文本也**先落盘再读回**，不在父进程读 stdout：读段那条挂死路径（`#1285`：adb 有常驻
+      server，客户端退了句柄未必放）在两个形态里是同一条，不能因为「这次是文本」就换回
+      `… | Out-String` —— 那正是本票要消灭的形状。
+      返回：`TimedOut / Exited / ExitCode / Seconds / Text / Error / OutFile`。
+    #>
+    param(
+        [string]$AdbExe,
+        [string]$Serial,
+        # adb 子命令的**各段**（例：@('shell','dumpsys','power')），由本函数拼成一条子命令。
+        [string[]]$AdbArguments,
+        # 落盘目录：调用方不给就用系统临时目录。默认值刻意**不**落在 `.ci-verify` ——
+        # 那是证据目录，步骤 7 按 `-Filter '*.png'` + 本轮时间戳扫它，中间产物不该进射程。
+        [string]$WorkDir = '',
+        # 单次调用上限。默认值理由只引用**指得到入库产物**的读数：#1560 收口会话真链路里同一条有界调用
+        # 返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
+        # 而那出的是一张 ~730 KB 的 PNG ⇒ 本封装要取的一页 `dumpsys power` 文本只会更快，15 秒只会更宽。
+        # ⚠️ 本会话另有两次 `dumpsys power` 的 ms 读数**没有落进任何产物** ⇒ 不抄在这里（同一份 ADR 那条
+        #   「不抄数字，抄过来就是第二真源」的纪律；注释里的数字必须能被读者复算）。
+        # 与截屏共用同一个默认值是为了让「一次**有界** adb 调用」在本仓只有一个预算口径，而不是每个子命令各定一个。
+        # ⚠️ 「有界」这个限定是实的：`scripts/device-capture.ps1` / `scripts/emulator-smoke.ps1` 里仍有
+        #   现测 6 / 14 处文本与管理类 `& $AdbExe … | Out-String` 走无界等待 ⇒ 剩余面登记在 #1568，别把本句读成「全仓每次 adb 调用都有界」。
+        [int]$TimeoutSeconds = 15
+    )
+    $dir = if ($WorkDir) { $WorkDir } else { [System.IO.Path]::GetTempPath() }
+    # 文件名带 PID：同机并发会话（多 worktree / 多个取证链同时跑）不互相覆盖同一份 stdout。
+    $outFile = Join-Path $dir ('adb-call-stdout-{0}.txt' -f $PID)
+    # ⚠️ 起调用**前先清旧档**（#1562 自审发现的窄缝，2026-10-07）：上一轮被 `Kill` 的调用可能因句柄竞争而删不掉，
+    #   旧文本就留在同一个 PID 路径上；而 `-RedirectStandardOutput` 只在**这次调用起得来**时才截断文件
+    #   （文件被别的句柄握着 ⇒ `Start-Process` 直接抛 ⇒ 执行核走 catch：`TimedOut=$false` + `Exited=$false`）。
+    #   ⇒ 只判 `TimedOut` 就会把**上一次调用的文本**读成本次结论。删除在这里仍然只是卫生
+    #   （#1560 的不变式：删除不能当判据），真正的闸门在下面那条 `Exited`。
+    Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
+    $call = Invoke-BoundedAdbCall -AdbExe $AdbExe -Serial $Serial -AdbSubCommand ($AdbArguments -join ' ') `
+        -OutFile $outFile -StderrName ('adb-call-stderr-{0}.txt' -f $PID) -TimeoutSeconds $TimeoutSeconds
+    $text = ''
+    # 读回判据 = `Exited`（进程**真的退出了**）而不是「没被判超时」：`Exited=$false` 同时覆盖两种
+    # 「盘上那份不是本次调用的字节」——被判超时、以及 `Start-Process` 起不来（catch 那条）。
+    if ($call.Exited -and (Test-Path -LiteralPath $outFile)) {
+        $text = (Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue)
+        if ($null -eq $text) { $text = '' }
+    }
+    # 超时 ⇒ 残帧（这里是半份文本）同样作废：`Text` 留空，由调用方按「没拿到」处理。
+    Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
+    [pscustomobject]@{
+        TimedOut = $call.TimedOut; Exited = $call.Exited; ExitCode = $call.ExitCode
+        Seconds  = $call.Seconds; Text = $text; OutFile = $outFile
+        ErrFile = $call.ErrFile; ErrTail = $call.ErrTail; Error = $call.Error
     }
 }
 
@@ -606,9 +726,15 @@ function Invoke-AutoScreenshot {
 
     # 前置（fail-closed）：设备必须**亮屏**才能截图 —— 灭屏时 screencap 只会给全黑帧，
     # 而全黑帧天然「稳定」⇒ 会被当成本次证据（2026-09-15 实测踩到）。唤醒设备是**人**的动作，脚本不注入 input。
-    $awake = Test-ScreenAwake -AdbExe $adbExe -Serial $Device
+    # 单次调用有界（#1562）：这一处原先是**无上限**的同步等待，而它在每页之前跑 ⇒ 挂住时连「开始截屏」都到不了。
+    # 「拿不到唤醒状态」有两种，判定相同（都不截）但**文案必须分开**——处置人不同：
+    # 前者查 adb 通道（设备可能好着），后者是**人**去亮屏。混成一句会把通道问题读成没亮屏。
+    $awake = Test-ScreenAwake -AdbExe $adbExe -Serial $Device -TimeoutSeconds $AdbCallTimeoutSeconds
     if (-not $awake.Ok) {
         foreach ($p in $targetPages) { $skipped += ($p -split '/')[-1] }
+        $awakeWhy = if ($awake.TimedOut) {
+            "单次 adb 调用未在 $AdbCallTimeoutSeconds 秒内返回（adb 通道问题，不是没亮屏）"
+        } else { "mWakefulness=$($awake.State)" }
         return [pscustomobject]@{
             Ok            = $false
             Screenshots   = @()
@@ -616,7 +742,7 @@ function Invoke-AutoScreenshot {
             HashConflicts = @()
             StaleShots    = @()
             TargetPages   = $targetPages
-            Error         = "设备屏幕未唤醒（mWakefulness=$($awake.State)）：灭屏时 screencap 只会得到全黑帧 ⇒ 拒绝截图（fail-closed）。请先唤醒设备（或打开「充电时保持唤醒」）再跑。"
+            Error         = "设备屏幕未唤醒（$awakeWhy）：灭屏时 screencap 只会得到全黑帧 ⇒ 拒绝截图（fail-closed）。请先唤醒设备（或打开「充电时保持唤醒」）再跑。"
         }
     }
 

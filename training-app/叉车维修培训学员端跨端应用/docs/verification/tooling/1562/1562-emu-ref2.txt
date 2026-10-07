@@ -1,0 +1,42 @@
+[emulator-smoke] 运行时间：2026-10-07 19:26:43
+[emulator-smoke] AVD=Pixel_4a_API_30 SDK=D:\android-sdk 页数=2
+[emulator-smoke] adb      : Android Debug Bridge version 1.0.41
+[emulator-smoke] emulator : Android emulator version 37.1.11.0 (build_id 15917651) (CL:N/A)
+[emulator-smoke] 基座 APK 来源：D:\软件\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk
+[emulator-smoke] 启动模拟器：D:\android-sdk\emulator\emulator.exe -avd Pixel_4a_API_30 -no-snapshot -no-boot-anim -no-audio -port 5554 -gpu swiftshader_indirect -no-window
+[emulator-smoke] adb wait-for-device …
+[emulator-smoke] 等待 sys.boot_completed=1（上限 300 秒）…
+[emulator-smoke] 冷启动完成，耗时 12.8 秒
+[emulator-smoke] 设备：model=sdk_gphone_x86 api=30 abi=x86 serial=emulator-5554
+[emulator-smoke] logcat 已清空（崩溃计数只统计本次冒烟期间）
+[emulator-smoke] 跳过装基座（-SkipInstallBaseApk）
+[emulator-smoke] 设备上基座包名=io.dcloud.simple（与回落常量 io.dcloud.HBuilder 不同，以设备为准）
+[emulator-smoke] 基座 package=io.dcloud.simple launcher=io.dcloud.simple/io.dcloud.PandoraEntry
+[emulator-smoke] 基座冷启后进程存活=True
+[emulator-smoke] 未给 -ResourcesDir：跳过资源 push，逐页打开将标记 SKIP（不假装跑过）
+[emulator-smoke] ── 打开页面：pages/index/index
+[emulator-smoke] am start：Starting: Intent { act=android.intent.action.VIEW dat=uniapp://pages/index/index cmp=io.dcloud.simple/io.dcloud.PandoraEntry (has extras) }
+[emulator-smoke] 截图：emulator-pages-index-index.png (21.5 KB)
+[emulator-smoke]   ⚠ SKIP：未提供 -ResourcesDir，本次只验证到「基座能起、无崩溃」
+[emulator-smoke]   进程存活=True 前台=io.dcloud.simple/io.dcloud.PandoraEntryActivity FATAL=0 ANR=0 截图=emulator-pages-index-index.png shotTimedOut=False 判定=SKIP
+[emulator-smoke] ── 打开页面：pages/login/login
+[emulator-smoke] am start：Starting: Intent { act=android.intent.action.VIEW dat=uniapp://pages/login/login cmp=io.dcloud.simple/io.dcloud.PandoraEntry (has extras) }
+[emulator-smoke] 截图：emulator-pages-login-login.png (23.3 KB)
+[emulator-smoke]   ✗ 前台 Activity 不是基座（com.google.android.apps.nexuslauncher/com.android.launcher3.secondarydisplay.SecondaryDisplayLauncher）
+[emulator-smoke]   ⚠ SKIP：未提供 -ResourcesDir，本次只验证到「基座能起、无崩溃」
+[emulator-smoke]   进程存活=True 前台=com.google.android.apps.nexuslauncher/com.android.launcher3.secondarydisplay.SecondaryDisplayLauncher FATAL=0 ANR=0 截图=emulator-pages-login-login.png shotTimedOut=False 判定=SKIP
+[emulator-smoke] 
+[emulator-smoke] ── 冒烟汇总（非门，不替代 ① 真机门）──
+[emulator-smoke] AVD=Pixel_4a_API_30  model=sdk_gphone_x86  api=30  abi=x86
+[emulator-smoke] 硬件加速：OK（WHPX(10.0.26200) is installed and usable.）
+[emulator-smoke] 冷启动耗时=12.8 秒（headless=True）
+[emulator-smoke] SHOT_CALL_BUDGET calls=2 timeouts=0 callBudgetSeconds=15 timedOutPages=none
+[emulator-smoke] 基座 APK=io.dcloud.simple  安装=已跳过
+[emulator-smoke] 本次 logcat 总行数=5755  FATAL EXCEPTION=0  ANR=0  AndroidRuntime=0  进程死亡=0
+[emulator-smoke] 页面判定：PASS=0  FAIL=0  SKIP=2
+[emulator-smoke] 截图目录=D:\FL\wt-1562\training-app\叉车维修培训学员端跨端应用\.ci-verify
+[emulator-smoke] 日志=D:\FL\wt-1562\training-app\叉车维修培训学员端跨端应用\.ci-verify\emulator-smoke.log
+[emulator-smoke] EMULATOR_SMOKE_RESULT=FAIL
+[emulator-smoke]   页面 pages/index/index=SKIP, pages/login/login=SKIP
+[emulator-smoke] 收尾：adb emu kill
+[emulator-smoke] 收尾完成

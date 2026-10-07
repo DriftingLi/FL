@@ -36,6 +36,13 @@
     **默认无窗口（headless）**：模拟器跑在 `-no-window -no-audio -no-boot-anim` 下，不弹 GUI 窗口、不抢焦点
     （这台是维护者在用的工作机，冒烟不得打断人）。仅当显式给 `-ShowWindow` 才开窗。
     截图不受影响：仍走 `adb exec-out screencap -p`（headless 下可用，已实测出图）。
+    ⚠️ **每张截图调用都有单次超时**（#1562，2026-10-07）：截图复用 `lib/auto-screenshot.ps1` 的有界执行器
+    （`-AdbCallTimeoutSeconds`，默认 15 秒）。到点不返回 ⇒ 终止整棵进程树、该页记 FAIL 并**继续**跑后面的页，
+    日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」；截图先落 `.part`、「调用返回 + 帧非空」才改名归位
+    —— 被杀调用的残帧可能删不掉（#1560 真链路现测），而本链按「存在且非空」判出图 ⇒ 归位靠命名，不靠删除成功。
+    ⚠️ **这句话的射程就到截图为止**：本脚本另有 13 处文本/管理类 adb 调用（`Get-AdbOutput` 那一个点就是它们的
+    收口处，外加 `adb version` / `wait-for-device` / `install` / `push` / `dumpsys window` / `logcat` / `emu kill` 等直调）
+    仍是无界等待，**#1562 没做**（票面点名的只有三处 `screencap` 同形落点）⇒ 剩余面登记在 #1568。
 
 .PARAMETER BaseApk
     基座 APK。默认走 HBuilderX 自带那份（含 x86/x86_64，故 x86 模拟器装得上）。
@@ -73,6 +80,12 @@ param(
     [int]$PostToPr = 0,
     [int]$BootTimeoutSeconds = 300,
     [int]$PageSettleSeconds = 8,
+    # **一次截图调用**的上限（#1562）。默认值理由与 `device-capture.ps1` 同名参数一致：同一条有界调用在
+    # #1560 的真链路产物里返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
+    # 15 秒给了最慢那次的十倍余量，而它把「一次不返回就整条冒烟就地停住」钉死成**最多 15 秒**。
+    # ⚠️ 限定词是实的：本脚本另有 13 处文本/管理类 adb 调用仍走无界等待（现测 14 处 `& $AdbExe`，其中
+    #   `Get-AdbOutput` 一个点就是那 13 处的收口处）⇒ 不在 #1562 票面射程，剩余面登记在 **#1568**。
+    [int]$AdbCallTimeoutSeconds = 15,
     [int]$Port = 5554
 )
 
@@ -90,6 +103,11 @@ $PlatformTools = Join-Path $SdkRoot 'platform-tools'
 $EmulatorExe = Join-Path $SdkRoot 'emulator\emulator.exe'
 $AdbExe = Join-Path $PlatformTools 'adb.exe'
 $Serial = "emulator-$Port"
+# 「一次 adb 调用怎么才有界」的**唯一真源**在 `scripts/lib/auto-screenshot.ps1`（#1560 落地的有界执行器，
+# #1562 把本脚本这张图也接到它上面）。dot-source 复用、**不**在此再写一份「等待 + 杀树 + 残帧作废」：
+# 复制而不是复用是 ADR-0008「adb 解析的唯一真源」记的那类分叉。该 lib 只有函数定义、加载无副作用，
+# 且与本脚本无同名函数（若将来出现同名，后加载者胜 —— 本文件的定义在 dot-source 之后，以本文件为准）。
+. (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
 
 # script 作用域状态：Set-StrictMode 下必须先声明再赋值，否则读未赋值变量会抛错
 $script:BootedEmulator = $false
@@ -108,6 +126,8 @@ $script:Accel = [pscustomobject]@{ Verdict = 'UNKNOWN'; Raw = ''; Brief = '' }
 $script:DrawingReady = $false
 $script:SkippedPages = @()
 $script:ShotRecords = @()
+# 超时过的截图调用点名清单（#1562）：汇总与机检行用它
+$script:ShotTimeouts = @()
 $script:FinalTotals = [pscustomobject]@{ Lines = 0; FatalCount = 0; AnrCount = 0; RuntimeCrashes = 0; ProcessDeaths = 0 }
 $script:PageResultsAll = @()
 
@@ -349,16 +369,46 @@ function Export-Screenshot {
     $name = Convert-PageToFileName -Page $Page
     $path = Join-Path $VerifyDir $name
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
-    # PNG 是二进制：必须走 cmd 重定向，PowerShell 的 > 会破坏字节流
-    $cmd = '"{0}" -s {1} exec-out screencap -p > "{2}"' -f $AdbExe, $Serial, $path
-    & cmd.exe /c $cmd 2>&1 | Out-Null
+    # ⚠️ 单次 adb 调用**有界**（#1562；同族缺陷的第三个落点，前两个由 #1560 收口）。
+    #    旧写法 `& cmd.exe /c "… exec-out screencap -p > file" 2>&1 | Out-Null` 没有单次超时 ⇒ 一次不返回
+    #    就既不产帧也不报错，整条冒烟就地停住（后面的页也跑不到）。现复用 `lib/auto-screenshot.ps1`
+    #    那份有界执行核：PNG 是二进制，仍由 OS 把 stdout 直接写进文件、父进程一个字节都不读
+    #    （PowerShell 的 `>` 会破坏字节流 —— 这条既有约束由执行核保住，headless 出图判据不变）。
+    #    ⚠️ 先落 `.part`、成功才归位：被杀调用的残帧**可能删不掉**（#1560 真链路现测：`Kill` 之后句柄未放、
+    #    删除与它竞争），而本链的判据是「文件存在且非空」⇒ 半张图绝不能落在最终名上被当成本次出图。
+    $partPath = "$path.part"
+    if (Test-Path -LiteralPath $partPath) { Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue }
+    $shot = Invoke-BoundedAdbShot -AdbExe $AdbExe -Serial $Serial -OutFile $partPath -TimeoutSeconds $AdbCallTimeoutSeconds
+    if ($shot.TimedOut) {
+        # 到点给结论并**继续**跑后面的页：该页记失败（见主循环），最终名上不写文件。
+        $partLeft = if (Test-Path -LiteralPath $partPath) { (Get-Item -LiteralPath $partPath).Length } else { 0 }
+        Write-Log "截图调用未返回：$name —— 单次 exec-out screencap 未在 $AdbCallTimeoutSeconds 秒内返回（$($shot.Error)）"
+        Write-Log ("SHOT_CALL_TIMEOUT page=$name callBudgetSeconds=$AdbCallTimeoutSeconds partBytes=$partLeft finalWritten=False")
+        $script:ShotTimeouts = @($script:ShotTimeouts) + @($Page)
+        Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = 0; TimedOut = $true; CallBudgetSeconds = $AdbCallTimeoutSeconds }
+    }
+    if (-not (Test-Path -LiteralPath $partPath) -or (Get-Item -LiteralPath $partPath).Length -eq 0) {
+        $shotWhy = if ($shot.ErrTail) { "（adb stderr: $($shot.ErrTail)）" } else { '' }
+        Write-Log "截图失败：$name（文件未生成）$shotWhy"
+        Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = 0; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
+    }
+    # 归位：只有「调用返回了」且「拿到非空帧」的图才算出图。失败只判这一页，不许掀翻整条冒烟。
+    try {
+        Move-Item -LiteralPath $partPath -Destination $path -Force
+    } catch {
+        Write-Log "截图归位失败：$name（$($_.Exception.Message)）"
+        Remove-Item -LiteralPath $partPath -Force -ErrorAction SilentlyContinue
+        return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = 0; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
+    }
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $size = (Get-Item -LiteralPath $path).Length
         Write-Log "截图：$name ($([math]::Round($size / 1KB, 1)) KB)"
-        return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = $size }
+        return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = $size; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
     }
     Write-Log "截图失败：$name（文件未生成）"
-    return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = 0 }
+    return [pscustomobject]@{ Page = $Page; Path = $path; Name = $name; Bytes = 0; TimedOut = $false; CallBudgetSeconds = $AdbCallTimeoutSeconds }
 }
 
 
@@ -657,6 +707,9 @@ try {
         if ($foreground -and $foreground -notmatch [regex]::Escape($script:BaseApkPackage)) {
             $pageFail += "前台 Activity 不是基座（$foreground）"
         }
+        # 截图调用超时 ⇒ **该页记失败、循环继续**（#1562）。只加这一条判据：0 字节出图的老行为不动
+        # （票面「不动判据本身」；本链原先并不按截图字节数判页，改成按它判会越界）。
+        if ($shot.TimedOut) { $pageFail += "截图调用未在 $AdbCallTimeoutSeconds 秒内返回（adb 通道问题，非渲染问题）" }
 
         $status = 'PASS'
         if (@($pageFail).Count -gt 0) {
@@ -669,7 +722,7 @@ try {
             $skips += "$page（未提供 -ResourcesDir，未验证页面打开）"
             Write-Log '  ⚠ SKIP：未提供 -ResourcesDir，本次只验证到「基座能起、无崩溃」'
         }
-        Write-Log "  进程存活=$alive 前台=$foreground FATAL=$($logcat.FatalCount) ANR=$($logcat.AnrCount) 截图=$($shot.Name) 判定=$status"
+        Write-Log "  进程存活=$alive 前台=$foreground FATAL=$($logcat.FatalCount) ANR=$($logcat.AnrCount) 截图=$($shot.Name) shotTimedOut=$($shot.TimedOut) 判定=$status"
 
         $pageResults += [pscustomobject]@{ Page = $page; Status = $status; Bytes = $shot.Bytes; Fatal = $logcat.FatalCount; Anr = $logcat.AnrCount; Alive = $alive }
     }
@@ -681,6 +734,9 @@ try {
         "AVD=$AvdName  model=$($script:DeviceModel)  api=$($script:DeviceSdk)  abi=$($script:DeviceAbi)",
         "硬件加速：$($script:Accel.Verdict)（$($script:Accel.Brief)）",
         "冷启动耗时=$($script:ColdBootSeconds) 秒（headless=$(-not $ShowWindow)）",
+        # 「不返回」必须是一种**可见的结论**（#1562）：次数 / 预算 / 哪几页都点名，
+        # 否则读日志的人只看到「少了一张图」，分不清 adb 通道问题与渲染问题。是读数、不是判据。
+        "SHOT_CALL_BUDGET calls=$(@($shotRecords).Count) timeouts=$(@($script:ShotTimeouts).Count) callBudgetSeconds=$AdbCallTimeoutSeconds timedOutPages=$(if (@($script:ShotTimeouts).Count -gt 0) { $script:ShotTimeouts -join ',' } else { 'none' })",
         "基座 APK=$($script:BaseApkPackage)  安装=$(if ($SkipInstallBaseApk) { '已跳过' } else { "已安装 ($($script:BaseApkSizeMb) MB)" })",
         "本次 logcat 总行数=$($final.Lines)  FATAL EXCEPTION=$($final.FatalCount)  ANR=$($final.AnrCount)  AndroidRuntime=$($final.RuntimeCrashes)  进程死亡=$($final.ProcessDeaths)",
         "页面判定：PASS=$(@($pageResults | Where-Object { $_.Status -eq 'PASS' }).Count)  FAIL=$(@($pageResults | Where-Object { $_.Status -eq 'FAIL' }).Count)  SKIP=$(@($pageResults | Where-Object { $_.Status -eq 'SKIP' }).Count)",
