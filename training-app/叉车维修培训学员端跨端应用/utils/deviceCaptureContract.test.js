@@ -25,6 +25,12 @@
  *      pages.json 首项 + 人点一次运行），且不得把已按实测订正的旧说法写回
  *      —— 2026-09-13 真机实测（#937 取证会话）。只记「不生效」不记「为什么」，后续会话会把它读成
  *      「写法不对、换个 intent 就好」，反复重试一条**机械上不可能**的路（#970）
+ *   D12 【#1562，2026-10-07 票面现测】每次 adb 调用都必须有**单次超时**，且残帧不进证据名：
+ *      截图复用 `lib/auto-screenshot.ps1` 的有界执行核（唯一真源，不复制第二份）、预算来自 `param()`、
+ *      先判 `$shot.TimedOut` 再看帧在不在、`.part` 成功才归位、超时机检行点名「哪一次/多大预算/有无残帧」
+ *      —— 旧写法 `& cmd.exe /c "… > file"` 无单次超时，一次不返回就**既不产帧也不报错**，后面的页也跑不到
+ *      （同族现测见 #1560：32 分钟零写入，而同时刻手工 `screencap` 4.8 秒返回）。
+ *      行为面由 `deviceCaptureBoundedShotBehavior.test.js`（BSD1–BSD5）另钉 —— 这里只钉形状与「不得回写成无界」。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/emulatorSmokeContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -296,6 +302,54 @@ function scanContract(sources) {
     violations.push('D11 已按实测订正的旧说法被写回：' + ADB_LAUNCH_STALE_CLAIM + '（该路径需先建 CLI 通道，非随手可用）');
   }
 
+  // D12 单次 adb 调用必须有超时，且残帧不进证据名（#1562，2026-10-07 票面现测）。
+  //   症状：`Export-Screenshot` 原先是 `& cmd.exe /c "adb … exec-out screencap -p > file" 2>&1 | Out-Null`
+  //   —— 前台同步等待、**没有单次超时**。#1560 已证明这形状偶发但真实（同机同时刻手工 `screencap`
+  //   4.8 秒返回，而链里那一次 32 分钟没回来）⇒ 一次不返回就既不产帧也不报错，**后面的页也跑不到**，
+  //   而 ①a 的全部产物就是「逐页的图 + 一行机检结论」。
+  //   判据落点：复用 `lib/auto-screenshot.ps1` 那份有界执行核（唯一真源，**不**在此复制第二份），
+  //   预算是 `param()` 里的参数，超时先判、再看文件在不在（删除不是判据 —— #1560 真链路现测证明
+  //   被杀调用的残帧**可能删不掉**，而本链的出图判据正是「存在且非空」⇒ 半张图会伪装成本次证据）。
+  //   行为面（真挂死桩 / 残帧留盘仍不进证据名 / 超时后下一页照旧跑）由
+  //   `deviceCaptureBoundedShotBehavior.test.js`（BSD1–BSD5）在运行期另钉。
+  if (!/\. \(Join-Path \$PSScriptRoot 'lib\\auto-screenshot\.ps1'\)/.test(code)) {
+    violations.push('D12 未 dot-source 有界执行器唯一真源（lib/auto-screenshot.ps1）—— 截图调用又变成无界等待');
+  }
+  if (!/Invoke-BoundedAdbShot -AdbExe \$AdbExe -Serial \$script:Serial -OutFile \$partPath -TimeoutSeconds \$AdbCallTimeoutSeconds/.test(code)) {
+    violations.push('D12 截图未走有界执行器，或单次预算没从参数透传');
+  }
+  if (!/\[int\]\$AdbCallTimeoutSeconds\s*=\s*15/.test(code)) {
+    violations.push('D12 缺 -AdbCallTimeoutSeconds 单次预算参数（默认 15 秒；理由写在 param 注释里）');
+  }
+  if (/cmd\.exe\s+\/c/.test(code)) {
+    violations.push('D12 正文回写 cmd.exe /c 直调截图（无单次超时 ⇒ 一次不返回整条取证链就地停住）');
+  }
+  if (/exec-out screencap -p\s*>/.test(code)) {
+    violations.push('D12 截图重定向回到 cmd 的内层 `>`（现由执行器 -RedirectStandardOutput 落盘）');
+  }
+  if (!/\$partPath = "\$path\.part"/.test(code)) {
+    violations.push('D12 缺 `.part` 暂存名 —— 被杀调用的半张图会直接落在证据名上');
+  }
+  if (!/Move-Item -LiteralPath \$partPath -Destination \$path -Force/.test(code)) {
+    violations.push('D12 缺「调用返回 + 帧非空才归位」那一步（归位靠命名，不靠删除成功）');
+  }
+  const tmoIdx = code.indexOf('if ($shot.TimedOut) {');
+  const partExistsIdx = code.indexOf('if (-not (Test-Path -LiteralPath $partPath)', tmoIdx < 0 ? 0 : tmoIdx);
+  if (tmoIdx < 0 || partExistsIdx < 0) {
+    violations.push('D12 超时判据缺失或顺序错：必须先判 `$shot.TimedOut`，再看帧文件在不在');
+  } else if (code.indexOf('if (-not (Test-Path -LiteralPath $partPath)') < tmoIdx) {
+    violations.push('D12 出图判据排在超时之前（会把被杀的半帧当成一次成功截图）');
+  }
+  if (!/SHOT_CALL_TIMEOUT/.test(code)) {
+    violations.push('D12 缺 SHOT_CALL_TIMEOUT 机检行（哪一次调用、多大预算、有没有留残帧必须点名）');
+  }
+  if (!/\$script:ShotTimeouts/.test(code)) {
+    violations.push('D12 缺超时调用清单（汇总里点不出「本次挂过几次」）');
+  }
+  if (!/截图调用未在 \$AdbCallTimeoutSeconds 秒内返回/.test(code)) {
+    violations.push('D12 缺「截图调用未在 N 秒内返回」的失败文案（通道问题不得被读成设备没亮屏）');
+  }
+
   return violations;
 }
 
@@ -332,7 +386,15 @@ describe('真机只读取证契约（①a 预置 · 非门 · 不替代 ①b）'
       ['D11', 'scheme 未注册判据被删', (s) => ({ ...s, script: s.script.replace(/未注册/g, '不可达') })],
       ['D11', '可靠替代（pages.json 首项）被删', (s) => ({ ...s, script: s.script.replace(/pages\.json/g, '页面配置') })],
       ['D11', 'cli 通道前提被删', (s) => ({ ...s, script: s.script.replace(/cli open/g, 'cli 已连通') })],
-      ['D11', '已订正的旧说法被写回', (s) => ({ ...s, script: s.script + '\n<#\n已知可用的替代切页机制是 HBuilderX 的 cli launch app-android --pagePath。\n#>\n' })]
+      ['D11', '已订正的旧说法被写回', (s) => ({ ...s, script: s.script + '\n<#\n已知可用的替代切页机制是 HBuilderX 的 cli launch app-android --pagePath。\n#>\n' })],
+      // D12（#1562）：每条都对应一种「把单次超时又拆掉」的真实改法
+      ['D12', '有界执行器的 dot-source 被删（回到本地无界调用）', (s) => ({ ...s, script: s.script.replace(/.*lib\\auto-screenshot\.ps1'\).*/m, '# x') })],
+      ['D12', '单次预算参数失去默认值', (s) => ({ ...s, script: s.script.replace('[int]$AdbCallTimeoutSeconds = 15', '[int]$AdbCallTimeoutSeconds') })],
+      ['D12', '旧无界形状被回写（cmd.exe /c + 内层 >）', (s) => ({ ...s, script: s.script + '\n$cmd = \'"{}" -s {} exec-out screencap -p > "{}"\'; & cmd.exe /c $cmd 2>&1 | Out-Null\n' })],
+      ['D12', '「成功才归位」被删（半张图直接落在证据名上）', (s) => ({ ...s, script: s.script.replace('Move-Item -LiteralPath $partPath -Destination $path -Force', '# 归位被删') })],
+      ['D12', '超时判据被降级成「看文件在不在」', (s) => ({ ...s, script: s.script.replace('if ($shot.TimedOut) {', 'if ($false) {') })],
+      ['D12', 'SHOT_CALL_TIMEOUT 机检行被删', (s) => ({ ...s, script: s.script.replace(/SHOT_CALL_TIMEOUT/g, 'SHOT_TIMEOUT') })],
+      ['D12', '「未在 N 秒内返回」文案被改成通用失败', (s) => ({ ...s, script: s.script.replace(/截图调用未在 \$AdbCallTimeoutSeconds 秒内返回/g, '截图失败') })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));

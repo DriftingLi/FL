@@ -52,6 +52,16 @@
  *       残帧**可能删不掉**，删除只是卫生、不能当判据）、页面截图先落 `.part` 成功才归位（半张图不得进步骤 7
  *       按 `*.png` 扫的证据目录）、`Settled` 两个出口都带 `CallTimeouts` 计数。
  *       行为面（真挂死桩 / 影子夹具 / 预算内收口）由 `autoScreenshotStabilityBehavior.test.js`（B6–B8）另钉。
+ *   S24 【2026-10-07，#1562 票面现测】**第三处无界 adb 调用（灭屏前置）也已收口，且「一次调用」只有一份实现**：
+ *       `Test-ScreenAwake` 原先是 `& $AdbExe -s $Serial shell dumpsys power | Out-String` —— 前台同步等待、
+ *       没有单次超时，而它在**每页之前**跑 ⇒ 挂住的时机比 S23 那两处**更早**，卡的是「能不能开始截屏」。
+ *       现在它走 `Invoke-BoundedAdbText`（预算从 `-AdbCallTimeoutSeconds` 透传），超时给的是**既有的那条
+ *       fail-closed 出口**（`Ok=false` + `state=unknown`：拿不到唤醒状态 ⇒ 不截），不开第三种后果。
+ *       另钉两件事：① 等待+杀树+残帧作废**只许一份**（`Invoke-BoundedAdbCall` 一个实现核，Shot/Text 两个
+ *       薄封装都委托它）—— 复制而不是复用正是 ADR-0008「adb 解析的唯一真源」记的那类分叉；
+ *       ② `AWAKE_PROBE` 机检行三条出口都点名单次预算。
+ *       行为面（真桩在预算内给结论 / 正常返回不被误判 / 半份 stdout 不留盘）由
+ *       `autoScreenshotStabilityBehavior.test.js`（B9–B11）在运行期另钉。
  */
 const path = require('path');
 
@@ -390,5 +400,53 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(code).toMatch(/\$navLineFmt\s*=\s*'NAV_SAMPLE settled=/);
     expect((code.match(/Write-Host \(\$navLineFmt/g) || []).length).toBe(2);
     expect(src).toMatch(/它\*\*不是判据\*\*/);
+  });
+
+  // S24（2026-10-07，#1562 **票面现测**）：第三处无界 adb 调用（灭屏前置）已收口，且「一次调用」只有一份实现。
+  //   症状：`Test-ScreenAwake` 是 `& $AdbExe -s $Serial shell dumpsys power | Out-String` —— 前台同步等待、
+  //   **没有单次超时**，而它在**每页之前**跑（S19 那条灭屏 fail-closed）⇒ 挂住的时机比 S23 修掉的两处**更早**，
+  //   卡的还是「能不能开始截屏」。#1560 收口时现测出这一处，票面刻意没顺手修（扩面会让「只修一处等于把挂死
+  //   挪个位置」那条论证失去对照物），另立 #1562。
+  //   另钉一件事：等待/杀树/残帧作废**只许一份**（`Invoke-BoundedAdbCall`）—— 三个消费点各抄一份正是
+  //   ADR-0008「adb 解析的唯一真源」记的那类「复制而不是复用 ⇒ 两份悄悄漂移」。
+  //   行为面由 `autoScreenshotStabilityBehavior.test.js`（B9–B11）另钉 —— 这里只钉形状与「不得回写成无界」。
+  test('S24: 【2026-10-07，#1562】the awake pre-check is bounded too, and one bounded-call implementation only', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+
+    // ① 灭屏前置走有界取文本封装，预算是**参数**而不是写死在函数体里
+    const awakeAt = code.indexOf('function Test-ScreenAwake');
+    expect(awakeAt).toBeGreaterThan(-1);
+    const awakeBody = code.slice(awakeAt, code.indexOf('function Get-NavEnteredPage'));
+    expect(awakeBody).toMatch(/Invoke-BoundedAdbText/);
+    expect(awakeBody).toMatch(/\[int\]\$TimeoutSeconds\s*=\s*15/);
+    expect(awakeBody).toMatch(/-TimeoutSeconds\s+\$TimeoutSeconds/);
+    // 超时是一种**结论**（不是 catch 掉就当没发生）
+    expect(awakeBody).toMatch(/if\s*\(\$r\.TimedOut\)\s*\{/);
+    // 旧形状不得回写：整条 dumpsys 前台同步等待（票面点名的第三处无界调用）
+    expect(awakeBody).not.toMatch(/&\s*\$AdbExe\s+-s\s+\$Serial\s+shell\s+dumpsys/);
+    expect(awakeBody).not.toMatch(/Out-String/);
+    // 超时出口仍是 S19 那条 fail-closed：Ok=false + state=unknown —— 不开「第三种后果」，判定仍只有截/不截
+    expect(awakeBody).toMatch(/Ok\s*=\s*\$false;\s*State\s*=\s*'unknown';\s*TimedOut\s*=\s*\$true/);
+    // 调用方把单次预算透传给前置检查（缺了它，`-AdbCallTimeoutSeconds` 对这一处不起作用）
+    expect(code).toMatch(/\$awake = Test-ScreenAwake[^\n]*-TimeoutSeconds\s+\$AdbCallTimeoutSeconds/);
+    // 「通道不返回」与「设备没亮屏」的文案得分开（处置人不同：前者查 adb，后者是人去亮屏）
+    expect(code).toMatch(/adb 通道问题，不是没亮屏/);
+
+    // ② 一次 adb 调用只有一份「有界」实现：三段各出现一次，两个封装都委托执行核
+    expect((code.match(/WaitForExit\(\$TimeoutSeconds \* 1000\)/g) || []).length).toBe(1);
+    expect((code.match(/\.Kill\(\$true\)/g) || []).length).toBe(1);
+    expect((code.match(/Start-Process -FilePath 'cmd\.exe'/g) || []).length).toBe(1);
+    expect((code.match(/Invoke-BoundedAdbCall -AdbExe/g) || []).length).toBe(2);
+    expect(code).toMatch(/function Invoke-BoundedAdbShot[\s\S]{0,600}?Invoke-BoundedAdbCall -AdbExe/);
+    expect(code).toMatch(/function Invoke-BoundedAdbText[\s\S]{0,900}?Invoke-BoundedAdbCall -AdbExe/);
+    // 二进制通道那条子命令绑在截屏封装上（不靠每个调用方各自记住 PNG 不能经 PowerShell 的 `>`）
+    expect(code).toMatch(/-AdbSubCommand 'exec-out screencap -p'/);
+    // 取文本也**先落盘再读回**：读段那条挂死路径（#1285）不能因为「这次是文本」就换回 `| Out-String`
+    expect(code).toMatch(/function Invoke-BoundedAdbText[\s\S]*?Get-Content -LiteralPath \$outFile/);
+
+    // ③ 机检行：三条出口（判亮 / 判灭 / 拿不到）都点名单次预算，且自我声明为**读数不是判据**
+    expect((code.match(/AWAKE_PROBE ok=/g) || []).length).toBe(3);
+    expect(code).toMatch(/callBudgetSeconds=/);
+    expect(src).toMatch(/是读数不是判据/);
   });
 });

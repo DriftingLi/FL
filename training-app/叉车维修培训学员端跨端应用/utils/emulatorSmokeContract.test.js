@@ -12,6 +12,12 @@
  *   C5 页面清单参数与截图落在 .ci-verify/
  *   C6 ADR-0008 已记录「非门辅助：仿真机前置冒烟」，且不得写成「已通过」/代填执行人
  *   C7 装机脚本存在、SDK 路径默认在 D 盘（非系统盘、不含空格）且可配置
+ *   C8 截图入库纪律（非门证据）：路径 / 上限 / 编码器探测 / 逃生开关 / 提交前提
+ *   C9 【#1562，2026-10-07 票面现测】每次 adb 调用都必须有**单次超时**，且残帧不进证据名：
+ *      截图复用 `lib/auto-screenshot.ps1` 的有界执行核、预算来自 `param()`、先判 TimedOut 再看帧在不在、
+ *      `.part` 成功才归位、超时**计入该页判定**（否则挂死被读成「跑过了」）、机检行点名哪一次调用。
+ *      与 `device-capture.ps1` 逐字同形的那一处由 D12 钉（同一族，两个消费点各钉各的调用点）。
+ *      行为面由 `emulatorSmokeBoundedShotBehavior.test.js`（ESD1–ESD5）另钉。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -175,6 +181,49 @@ function scanContract(sources) {
     violations.push('C8 减图后必须在评论/日志写明省了哪几页');
   }
 
+  // C9 单次 adb 调用必须有超时，且残帧不进证据名（#1562，2026-10-07 票面现测）。
+  //   症状：`Export-Screenshot` 与 `device-capture.ps1` **逐字同形** —— `& cmd.exe /c "… exec-out screencap -p > file"`，
+  //   前台同步等待、没有单次超时 ⇒ 一次不返回就既不产帧也不报错、后面的页也跑不到（同族现测见 #1560）。
+  //   ⚠️ 判据必须落在**剥掉整行注释**的正文上：本文件为 C9 写下的坑位说明本身就以 `#` 注释形态出现，
+  //   直接拿 smokeCode 判「不得出现 cmd.exe /c」会在真文件上误报（本仓血账：注释会命中断言）。
+  //   行为面（真挂死桩 / 残帧留盘仍不进证据名 / 超时后下一页照旧跑）由
+  //   `emulatorSmokeBoundedShotBehavior.test.js`（ESD1–ESD5）另钉。
+  const smokeBare = smokeCode.replace(/^[ \t]*#[^\n]*$/gm, '');
+  if (!/\. \(Join-Path \$PSScriptRoot 'lib\\auto-screenshot\.ps1'\)/.test(smokeBare)) {
+    violations.push('C9 未 dot-source 有界执行器唯一真源（lib/auto-screenshot.ps1）—— 截图调用又变成无界等待');
+  }
+  if (!/Invoke-BoundedAdbShot -AdbExe \$AdbExe -Serial \$Serial -OutFile \$partPath -TimeoutSeconds \$AdbCallTimeoutSeconds/.test(smokeBare)) {
+    violations.push('C9 截图未走有界执行器，或单次预算没从参数透传');
+  }
+  if (!/\[int\]\$AdbCallTimeoutSeconds\s*=\s*15/.test(smokeBare)) {
+    violations.push('C9 缺 -AdbCallTimeoutSeconds 单次预算参数（默认 15 秒；理由写在 param 注释里）');
+  }
+  if (/cmd\.exe\s+\/c/.test(smokeBare)) {
+    violations.push('C9 正文回写 cmd.exe /c 直调截图（无单次超时 ⇒ 一次不返回整条冒烟就地停住）');
+  }
+  if (/exec-out screencap -p\s*>/.test(smokeBare)) {
+    violations.push('C9 截图重定向回到 cmd 的内层 `>`（现由执行器 -RedirectStandardOutput 落盘）');
+  }
+  if (!/\$partPath = "\$path\.part"/.test(smokeBare)) {
+    violations.push('C9 缺 `.part` 暂存名 —— 被杀调用的半张图会直接落在出图判据看的那个名字上');
+  }
+  if (!/Move-Item -LiteralPath \$partPath -Destination \$path -Force/.test(smokeBare)) {
+    violations.push('C9 缺「调用返回 + 帧非空才归位」那一步（归位靠命名，不靠删除成功）');
+  }
+  const emuTmoIdx = smokeBare.indexOf('if ($shot.TimedOut) {');
+  if (emuTmoIdx < 0 || smokeBare.indexOf('if (-not (Test-Path -LiteralPath $partPath)', emuTmoIdx) < 0) {
+    violations.push('C9 超时判据缺失或顺序错：必须先判 `$shot.TimedOut`，再看帧文件在不在');
+  }
+  if (!/SHOT_CALL_TIMEOUT/.test(smokeBare)) {
+    violations.push('C9 缺 SHOT_CALL_TIMEOUT 机检行（哪一次调用、多大预算、有没有留残帧必须点名）');
+  }
+  // 超时必须**落到该页的判定**上（票面：该页记失败并继续跑后面的页），否则「不返回」是一种静默结局
+  if (!/if \(\$shot\.TimedOut\) \{\s*\$pageFail \+=/.test(smokeBare)) {
+    violations.push('C9 截图超时未计入该页失败（该页仍会被判 PASS ⇒ 挂死被读成「跑过了」）');
+  }
+  if (!/\$script:ShotTimeouts/.test(smokeBare)) {
+    violations.push('C9 缺超时调用清单（汇总里点不出「本次挂过几次」）');
+  }
 
   return violations;
 }
@@ -202,7 +251,15 @@ describe('仿真机前置冒烟契约（#883 / O2，非门辅助）', () => {
       ['C5', '截图目录被改走', (s) => ({ ...s, smoke: s.smoke.replace(/\.ci-verify/g, '.tmp') })],
       ['C6', 'ADR 未记录非门辅助', (s) => ({ ...s, adr: s.adr.replace(/非门辅助：仿真机前置冒烟/g, '仿真机说明') })],
       ['C6', 'ADR 代填执行人', (s) => ({ ...s, adr: s.adr + '\n执行人：alice\n' })],
-      ['C7', 'SDK 路径挪回带空格的系统盘', (s) => ({ ...s, setup: s.setup.replace(/D:\\android-sdk/g, 'C:\\android sdk') })]
+      ['C7', 'SDK 路径挪回带空格的系统盘', (s) => ({ ...s, setup: s.setup.replace(/D:\\android-sdk/g, 'C:\\android sdk') })],
+      // C9（#1562）：每条都对应一种「把单次超时又拆掉」的真实改法
+      ['C9', '有界执行器的 dot-source 被删（回到本地无界调用）', (s) => ({ ...s, smoke: s.smoke.replace(/.*lib\\auto-screenshot\.ps1'\).*/m, '# x') })],
+      ['C9', '单次预算参数失去默认值', (s) => ({ ...s, smoke: s.smoke.replace('[int]$AdbCallTimeoutSeconds = 15', '[int]$AdbCallTimeoutSeconds') })],
+      ['C9', '旧无界形状被回写（cmd.exe /c + 内层 >）', (s) => ({ ...s, smoke: s.smoke + '\n$cmd = \'x exec-out screencap -p > y\'; & cmd.exe /c $cmd 2>&1 | Out-Null\n' })],
+      ['C9', '「成功才归位」被删（半张图直接落在出图判据看的名字上）', (s) => ({ ...s, smoke: s.smoke.replace('Move-Item -LiteralPath $partPath -Destination $path -Force', '# 归位被删') })],
+      ['C9', '超时判据被降级成「看文件在不在」', (s) => ({ ...s, smoke: s.smoke.replace('if ($shot.TimedOut) {', 'if ($false) {') })],
+      ['C9', '超时不再计入该页失败（挂死被读成「跑过了」）', (s) => ({ ...s, smoke: s.smoke.replace('if ($shot.TimedOut) { $pageFail +=', 'if ($shot.TimedOut) { $skips +=') })],
+      ['C9', 'SHOT_CALL_TIMEOUT 机检行被删', (s) => ({ ...s, smoke: s.smoke.replace(/SHOT_CALL_TIMEOUT/g, 'SHOT_TIMEOUT') })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
