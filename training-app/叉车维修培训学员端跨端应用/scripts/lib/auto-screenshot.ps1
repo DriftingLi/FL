@@ -428,8 +428,11 @@ function Invoke-BoundedAdbText {
         # ⚠️ 本会话另有两次 `dumpsys power` 的 ms 读数**没有落进任何产物** ⇒ 不抄在这里（同一份 ADR 那条
         #   「不抄数字，抄过来就是第二真源」的纪律；注释里的数字必须能被读者复算）。
         # 与截屏共用同一个默认值是为了让「一次**有界** adb 调用」在本仓只有一个预算口径，而不是每个子命令各定一个。
-        # ⚠️ 「有界」这个限定是实的：`scripts/device-capture.ps1` / `scripts/emulator-smoke.ps1` 里仍有
-        #   现测 6 / 14 处文本与管理类 `& $AdbExe … | Out-String` 走无界等待 ⇒ 剩余面登记在 #1568，别把本句读成「全仓每次 adb 调用都有界」。
+        # ⚠️ 「有界」这个限定是实的：本文件之外仍有文本与管理类 `& $AdbExe … | Out-String` 走无界等待，
+        #   现测（剥注释 + 按所在函数归属）全 `scripts/` 共 **26 处 / 5 个文件**：`device-capture.ps1` 6、
+        #   `emulator-smoke.ps1` 14（含 `Get-AdbOutput` 本体 1 行，那个点另有 12 个调用方）、`hx-run.ps1` 4、
+        #   `wireless-debug.ps1` 1（`Invoke-Adb`，另有 16 个调用方）、`lib/env-check.ps1` 1 ⇒ 剩余面登记在 #1568。
+        #   别把本句读成「全仓每次 adb 调用都有界」，也别只盯那两条取证脚本 —— 数法与逐函数分布在那张票里。
         [int]$TimeoutSeconds = 15
     )
     $dir = if ($WorkDir) { $WorkDir } else { [System.IO.Path]::GetTempPath() }

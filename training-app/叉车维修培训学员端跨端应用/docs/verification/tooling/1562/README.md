@@ -62,13 +62,21 @@ L1 与 R1 用同一组参数却给出 `PASS` / `FAIL` 两种 `RESULT`，差别�
 旧档在抛错之前就被清空，旧代码同样读不到东西；「锁 stdout 但不给 Read 共享」也一样空转（`Get-Content` 跟着失败）。
 成立的第三法是 **`FileAccess.Write` + `FileShare.Read`**：写者（重定向）开不进来 ⇒ 本次 `Start-Process` 抛、
 执行核走 catch（`TimedOut=False` + `Exited=False`），读者（`Get-Content`）照旧开得上 ⇒ 盘上仍是**上一次调用**那份
-`STALE mWakefulness=Awake`。直调真执行核的两组对照读数（`lock-probe3` 形状，探针留在 `.scratch`，产物是这 7 个 token）：
+`STALE mWakefulness=Awake`。直调真执行核的对照读数由仓内探针产出 —— **`stale-read-probe.ps1`**（就在本目录，随仓解析
+`scripts/lib/auto-screenshot.ps1`，跑法：在移动项目目录下 `pwsh docs/verification/tooling/1562/stale-read-probe.ps1`）：
 
-| | 旧判据 | 发货件 |
+| | 旧判据（临时把 `Exited` 退回 `-not TimedOut` 并去掉清档）| 发货件 |
 | --- | --- | --- |
 | `P_TEXT_HAS_STALE` | **True** | False |
 | `AWAKE_PROBE` | **ok=True state=Awake** | ok=False state=unknown |
 | `P_EXITED` / `P_TIMEDOUT` / `P_HAS_ERROR` | False / False / True | False / False / True |
+| `P_STALE_STILL_THERE` | True | True（旧档在场，但没被读回）|
+
+⚠️ **左列不是探针自己跑出来的**：探针打的是当前发货代码，右列是它 2026-10-07 在 `wt-1568` 里的实跑读数
+（`PROBE_LIB=…`、`P_EXITED=False`、`P_TIMEDOUT=False`、`P_HAS_ERROR=True`、`P_TEXT_HAS_STALE=False`、
+`AWAKE_PROBE ok=False state=unknown timedOut=False callBudgetSeconds=5`、`P_STALE_STILL_THERE=True`）。
+左列要复现必须**先提交、再临时把判据退回旧形状**跑一次、然后 `git checkout --` 还原（本仓纪律：变异取证前先提交，
+否则还原会连带吞掉修复）—— 本目录上面的 M6 / M6′ 两行就是那一次临时退回的读数。
 
 ⇒ 旧判据那一格真的把「上一次调用的 Awake」读成了本次结论 —— 等于一次 adb 都没发却报告屏幕亮着、照样截图。
 `B12` 另加一条空转防线：`B12_STALE_STILL_THERE=True`（旧档必须还在且读者还开得上，否则那条 False 毫无意义）。
@@ -101,6 +109,7 @@ ubuntu runner 上起调用前那句清档会成功、旧档留不下（CI 读数
 | `pages-login-login-current.png` | 588756 | `ec8bf3e15a7ba2336c3d` | `ec8bf3e15a7ba2336c3d`（同） | ①a 链真图（只读模式当前前台，同样可解码） |
 | `real-chain-driver.ps1` | 4516 | `7f7c9c3af95f387e1ca0` | `7f7c9c3af95f387e1ca0`（同） | L1–L4 四腿取证驱动（绝对路径写死在本机 worktree，复现用；`5e552830` 之后因修头部那行「不入库」自相矛盾而重算过一次） |
 | `real-chain-ref-driver.ps1` | 3781 | `ad0180e83b6388edf506` | `ad0180e83b6388edf506`（同） | R1/R2 两腿驱动（跑在强制腿之后，把图留在盘上并当场验 magic/解码） |
+| `stale-read-probe.ps1` | 3425 | `7a84f5bc8d92df39a702` | `7a84f5bc8d92df39a702`（同：`*.ps1` 被 `.gitattributes` 钉 `text eol=lf`，写入即 LF ⇒ 无归一空间）| M6 / M6′ 那一格的探针：直调真执行核，用 `Write + FileShare.Read` 握着旧 stdout，打 `P_*` 七个 token |
 
 两列怎么自己复现（本机现测命令，逐字）：
 
