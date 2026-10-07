@@ -156,6 +156,27 @@ U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `
 不在射程内——口径承接 #1546：机检行把传入的退出码**原样**写出来，不产出任何绿/红的新结论；该跑的那一档跑完，
 判据仍然只是那一个 `exit=`。
 
+
+## 真机无线调试入口（#1564，2026-10-07 落地）
+
+一句话：**每次真机前先跑 `npm run connect:device`**，它接上设备并把「门该用哪个 `-Device`」打在结论行里；
+之后开一个 `npm run connect:device -- -Action watch` 当后台保活，收工 `-Action stop`。
+
+四条不看代码就会踩的判据：
+
+1. **mDNS 候选必须逐个现测**。`adb mdns services` 的表里会**同时挂着已经 10061 的旧端口**
+   （2026-10-07 现测：活端口 39527 与死端口 37611 并列）⇒ 「记录里有」不等于「能用」；
+   `already connected` 与 `state=device` 都不算数，判据是连上之后 `shell echo ok` 真有回话。
+2. **防不住手机侧重置**。重启 / 撤销授权 / 人手动关掉开关之后一个 adb 通道都没有，
+   任何脚本都开不了那个开关——那一刻仍要人在手机上点一次；脚本保证的是**点完这一次不用再读屏**。
+3. **绝不 `adb kill-server`**（server 与 HBuilderX 共享）。这一条与 `docs/adr/0025-论坛正文格式与输入区形态.md`
+   「mDNS 变空就 kill-server 重来」的旧处置**相互冲突**，本工具按 `scripts/device-capture.ps1` 的只读禁令取「不 kill」，
+   把「整表变空」判为需人介入的态。冲突的裁决与代价记在 #1564。
+4. **它是载体不是门**：结论行叫 `WIRELESS_DEBUG`，**不进** `## 验收证据`；机读只用 ASCII 行，
+   中文全文在 `%LOCALAPPDATA%\adb-wireless\last-run.txt`（本仓实测：pwsh 子进程 stdout 被上层按 GBK 解码必乱码）。
+
+---
+
 ## 工作树与会话坑位原文
 
 **HBuilderX 回写坑位同样适用**：跑完任何 HBuilderX 步骤（含 `hx-run.ps1`）先 `git status` 看 `manifest.json` **与 `pages.json`** 是否被改脏，脏了就还原再继续 —— 后者会被写入一段 `condition`（GUI 选的启动页，注释自述「仅开发期间生效」），**属本地开发配置、禁止提交**；而 `pages.json` 同时是「运行时面 / 打包面」判据来源，误提交会让 PR 凭空命中 ④b 云打包门（详见 `docs/adr/0008-移动端验收门与证据.md`）。
