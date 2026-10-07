@@ -583,23 +583,24 @@ if ($IsWindows) {
 }
 # ── B12 旧档读回腿（#1562 自审时补的窄缝；两条平台都跑，判据不依赖 cmd.exe 在不在）
 #   stdout 落档按 PID 命名、-RedirectStandardOutput 只在**这次调用起得来**时才截断它。
-#   这里把 stderr 用独占句柄握着 ⇒ 本次 Start-Process 抛 ⇒ 执行核走 catch 回 TimedOut=False + Exited=False，
-#   而盘上留着的仍是**上一次调用**的那份 dumpsys 文本。
+#   这里用「Write 权限 + FileShare.Read」握着那份旧 stdout：写者（重定向）开不进来 ⇒ 本次 Start-Process 抛
+#   ⇒ 执行核走 catch 回 TimedOut=False + Exited=False；读者（Get-Content）照旧开得上 ⇒ 盘上仍是
+#   **上一次调用**的那份 dumpsys 文本。
 #   ⇒ 读回判据必须是 Exited：拿不到就回空文本 ⇒ Test-ScreenAwake 走既有 fail-closed 给 unknown，
-#     而不是把上一次的「Awake」当成本次的结论（那等于一次调用都没发却说屏幕亮着、照样截图）。
-#   为什么不用「锁住 stdout 本身」复现：那样 Get-Content 也一起失败，旧代码同样读不到 ⇒ 断言空转。
+#     而不是把上一次的「Awake」当成本次的结论（那等于一次 adb 都没发却报告屏幕亮着、照样截图）。
+#   ⚠️ 这个握法是现测挑出来的（另两种都不成立、会造出空转断言）：锁 stderr ⇒ .NET 先按 FileMode.Create
+#     截断了 stdout，旧代码也读不到旧文本；锁 stdout 不给 Read 共享 ⇒ 旧代码的 Get-Content 一起失败，同样读不到。
 #   ⚠️ 本块注释里不得出现反引号——它在 JS 模板字符串内，反引号会终止模板（本仓先例：B11 那一版就是这么炸的）。
 $staleOut = Join-Path $dir ('adb-call-stdout-{0}.txt' -f $PID)
-$staleErr = Join-Path $dir ('adb-call-stderr-{0}.txt' -f $PID)
 Set-Content -LiteralPath $staleOut -Encoding ascii -Value 'STALE mWakefulness=Awake'
-Set-Content -LiteralPath $staleErr -Encoding ascii -Value 'placeholder'
-$b12Lock = [System.IO.File]::Open($staleErr, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+$b12Lock = [System.IO.File]::Open($staleOut, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
 try {
   $r12 = Invoke-BoundedAdbText -AdbExe 'cmd.exe' -Serial 'FAKE-SERIAL' -AdbArguments @('shell', 'dumpsys', 'power') -WorkDir $dir -TimeoutSeconds 5
   Write-Output ("B12_EXITED=" + [bool]$r12.Exited)
   Write-Output ("B12_TIMEDOUT=" + [bool]$r12.TimedOut)
   Write-Output ("B12_HAS_ERROR=" + [bool]($r12.Error -ne ''))
   Write-Output ("B12_TEXT_HAS_STALE=" + [bool]($r12.Text -match 'STALE'))
+  Write-Output ("B12_STALE_STILL_THERE=" + [bool](Test-Path -LiteralPath $staleOut))
   $a12 = Test-ScreenAwake -AdbExe 'cmd.exe' -Serial 'FAKE-SERIAL' -WorkDir $dir -TimeoutSeconds 5
   Write-Output ("B12_AWAKE_OK=" + [bool]$a12.Ok)
   Write-Output ("B12_AWAKE_STATE=" + $a12.State)
@@ -642,7 +643,7 @@ describe('灭屏前置那次 adb 调用的有界性（运行期，#1562）', () 
         'IS_WINDOWS', 'B9_OK', 'B9_STATE', 'B9_TIMEDOUT', 'B9B_OK', 'B9B_STATE', 'B9B_TIMEDOUT',
         'B10_OK', 'B10_STATE', 'B10_TIMEDOUT', 'B10_HAS_ERROR', 'B10_BOUNDED', 'B10_MS',
         'B10_LEFT_TEXT', 'B10_LEFT_PNG',
-        'B12_EXITED', 'B12_TIMEDOUT', 'B12_HAS_ERROR', 'B12_TEXT_HAS_STALE',
+        'B12_EXITED', 'B12_TIMEDOUT', 'B12_HAS_ERROR', 'B12_TEXT_HAS_STALE', 'B12_STALE_STILL_THERE',
         'B12_AWAKE_OK', 'B12_AWAKE_STATE', 'B12_AWAKE_TIMEDOUT',
       ].forEach((key) => { v[key] = field(probe.stdout, key); });
       v.awakeLines = String(probe.stdout).split('\n').filter((l) => l.indexOf('AWAKE_PROBE ok=') >= 0);
@@ -730,6 +731,8 @@ describe('灭屏前置那次 adb 调用的有界性（运行期，#1562）', () 
     expect(v.B12_TIMEDOUT).toBe('False');
     expect(v.B12_EXITED).toBe('False');
     expect(v.B12_HAS_ERROR).toBe('True');
+    // 空转防线：现场必须真是「旧档还在、且读者开得上」——这一条不成立时下面那条 False 就毫无意义
+    expect(v.B12_STALE_STILL_THERE).toBe('True');
     // 产物判据：文本里没有旧那份 `STALE mWakefulness=Awake`（有 ⇒ 等于没调用却报告「屏幕亮着」）
     expect(v.B12_TEXT_HAS_STALE).toBe('False');
     expect(v.B12_AWAKE_OK).toBe('False');
