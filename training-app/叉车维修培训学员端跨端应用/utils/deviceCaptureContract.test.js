@@ -31,6 +31,14 @@
  *      —— 旧写法 `& cmd.exe /c "… > file"` 无单次超时，一次不返回就**既不产帧也不报错**，后面的页也跑不到
  *      （同族现测见 #1560：32 分钟零写入，而同时刻手工 `screencap` 4.8 秒返回）。
  *      行为面由 `deviceCaptureBoundedShotBehavior.test.js`（BSD1–BSD5）另钉 —— 这里只钉形状与「不得回写成无界」。
+ *   D13 【#1568 AC 第 2 条，2026-10-08 票面现测】本文件另外 6 处**文本 / 管理类**直调（`Get-DeviceList` /
+ *      每页都跑的 `Get-ForegroundInfo` / `Get-LogcatBaseline` / `Get-LogcatWindow` / `Resolve-LauncherComponent` /
+ *      `Start-AppPage`）也全部接上同一件唯一执行核，并**按调用形态分档**（单行读 15 秒、全量 logcat 60 秒）。
+ *      判据四格：委托层是档位与点名的唯一落点、`& $AdbExe` 在本文件**归零**（棘轮，只减不增）、
+ *      logcat 挂死的 `TimedOut` 必须落到主失败清单（空日志会被读成「无崩溃」）、文档块那句「射程就到截图为止」
+ *      已过期且**不许**被写成全仓声明（剩余面只许指向复算尺 `docs/verification/tooling/1568/adb-bounded-count.mjs`）。
+ *      行为面（真挂死桩 / 对照腿不误判 / server 级不带 -s / 预算是参数 / 挂死后流程继续）由
+ *      `deviceCaptureTierBehavior.test.js`（DCT1–DCT12）另钉。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/emulatorSmokeContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -350,6 +358,123 @@ function scanContract(sources) {
     violations.push('D12 缺「截图调用未在 N 秒内返回」的失败文案（通道问题不得被读成设备没亮屏）');
   }
 
+  // D13（#1568 AC 第 2 条，2026-10-08）：本文件 **6 处文本/管理类直调清零** + 按调用形态分档。
+  //   症状：这 6 处原先都是 `& $AdbExe … 2>&1 | Out-String` —— 前台同步等一次 adb、**没有单次超时**。
+  //   最险的一格是 `Get-LogcatWindow`：挂死的下场是**空日志**⇒ 崩溃计数读成 0 = 把挂死读成「无崩溃」，
+  //   比原来的就地停住更坏；所以 `TimedOut` 必须一路带到主判据，而不是只留在日志里。
+  //   这一格是 emulatorSmoke 的 C10「只判函数体」的反面 —— **文件做完了，整文件禁令才撑得住**（棘轮只减不增）。
+  //   档位默认值只引用指得到库内产物的现测（`docs/verification/tooling/1568/`）：
+  //     devices 106 ms / version 178 ms（latency-readings.txt）；
+  //     dumpsys activity activities 1,168 / 1,662 ms、resolve-activity 457 / 336 ms、logcat -d 5,896 / 6,186 ms
+  //     （emulator-tier-readings.txt 与 -run2.txt）⇒ 单行读走文本档 15 秒，全量 dump 走 logcat 档 60 秒。
+  const tierStart = code.indexOf('function Invoke-AdbTierCall');
+  const tierEnd = code.indexOf('function Get-DeviceList');
+  const tierBody = tierStart < 0 ? '' : code.slice(tierStart, tierEnd > tierStart ? tierEnd : code.length);
+  if (tierStart < 0) {
+    violations.push('D13 找不到 Invoke-AdbTierCall（档位 / 点名 / serial 取舍的唯一落点；判据取不到即红，不在空集合上判绿）');
+  } else {
+    if (!/Invoke-BoundedAdbText -AdbExe \$AdbExe -Serial \$adbSerial/.test(tierBody)) {
+      violations.push('D13 委托层没接到唯一执行核（调用点又回到无界等待）');
+    }
+    if (!/\$adbSerial = \$\(if \(\$NoSerial\) \{ '' \} else \{ \$script:Serial \}\)/.test(tierBody)) {
+      violations.push('D13 serial 不是按 -NoSerial 现算的（server 级命令恒拼 -s = 换判据）');
+    }
+    if (!/\[int\]\$BudgetSeconds\s*=\s*\$AdbTextCallTimeoutSeconds/.test(tierBody)) {
+      violations.push('D13 单次预算没从 param() 的档位取默认值（写死在函数体里就等于没有档）');
+    }
+    if (!/-TimeoutSeconds \$BudgetSeconds/.test(tierBody)) violations.push('D13 预算没透传给执行核');
+    if (!/-MergeStdErr/.test(tierBody)) {
+      violations.push('D13 没合并 stderr ⇒ adb 的失败原文进不了调用方（老形状是 2>&1，不合并就是静默换判据）');
+    }
+    if (!/-DirectExec:\(-not \$IsWindows\)/.test(tierBody)) {
+      violations.push('D13 直启没按平台判（恒经 cmd ⇒ 本族的运行期腿在 CI 的 ubuntu 上造不出来，只能静默假绿）');
+    }
+    if (/Out-String/.test(tierBody)) {
+      violations.push('D13 委托层里回写了 Out-String 取文本（父进程读子进程输出段 = #1285 那条挂死路径）');
+    }
+    if (!/ADB_TEXT_TIMEOUT call=adb /.test(tierBody)) violations.push('D13 缺超时点名行（哪一次调用、多大预算必须写出来）');
+    if (!/tier=\$Tier/.test(tierBody)) violations.push('D13 点名行没写 tier=（分不清挂的是哪一档、该找谁改预算）');
+    if (!/\$script:AdbTextTimeouts = @\(\$script:AdbTextTimeouts\)/.test(tierBody)) {
+      violations.push('D13 缺超时清单累计（汇总点不出「本次挂过几次」）');
+    }
+    if (!/\$script:AdbTextCalls = \$script:AdbTextCalls \+ 1/.test(tierBody)) {
+      violations.push('D13 缺调用计数（汇总 calls= 的分母；没有分母就读不出 timeouts= 那一格）');
+    }
+  }
+  // ② 整文件棘轮：本文件 6 处已全部收口 ⇒ 直调禁令撑得住全文（与 emulator-smoke 的 C11 同律）
+  const adbDirect = (code.match(/&\s*\$AdbExe/g) || []).length;
+  if (adbDirect !== 0) {
+    violations.push('D13 代码面还剩 ' + adbDirect + ' 处 `& $AdbExe` 直调（无单次超时 ⇒ 一次不返回整条取证链就地停住）');
+  }
+  // ③ 档位参数与默认值（默认值被删 = 调用方拿到 0 秒档；长等档被塞进文本档 = 把正常当挂死）
+  if (!/\[int\]\$AdbTextCallTimeoutSeconds\s*=\s*15/.test(code)) {
+    violations.push('D13 缺 -AdbTextCallTimeoutSeconds 默认 15 秒（单行读与 server 级同档）');
+  }
+  if (!/\[int\]\$AdbLogcatTimeoutSeconds\s*=\s*60/.test(code)) {
+    violations.push('D13 缺 -AdbLogcatTimeoutSeconds 默认 60 秒（全量 logcat -d 现测 5.9 / 6.2 秒，与文本档不同形）');
+  }
+  // ④ 点位 ↔ 档位 接线（同一行；档写了却没接上 = 那处仍是无界）
+  const SITE_WIRING = [
+    ['adb devices -l（server 级）', /@\('devices', '-l'\)[^\n]*-BudgetSeconds \$AdbTextCallTimeoutSeconds[^\n]*-Tier 'server'[^\n]*-NoSerial/],
+    ['dumpsys activity activities', /@\('shell', 'dumpsys', 'activity', 'activities'\)[^\n]*-BudgetSeconds \$AdbTextCallTimeoutSeconds[^\n]*-Tier 'read'/],
+    ['logcat 基线 -t 1', /@\('shell', 'logcat', '-d', '-v', 'epoch', '-t', '1'\)[^\n]*-BudgetSeconds \$AdbLogcatTimeoutSeconds/],
+    ['logcat 全量窗口', /@\('shell', 'logcat', '-d', '-v', 'epoch'\)[^\n]*-BudgetSeconds \$AdbLogcatTimeoutSeconds/],
+    ['resolve-activity', /'resolve-activity'[^\n]*-BudgetSeconds \$AdbTextCallTimeoutSeconds[^\n]*-Tier 'resolve'/],
+    ['am start', /-AdbArgs \$intentArgs[^\n]*-BudgetSeconds \$AdbTextCallTimeoutSeconds[^\n]*-Tier 'am-start'/]
+  ];
+  SITE_WIRING.forEach(([label, re]) => {
+    if (!re.test(code)) violations.push('D13 点位「' + label + '」没在自己的那一档上（或 -NoSerial 丢了）');
+  });
+  // ④b 设备探测的两个出口必须分开且**挂死排在前**：一次不返回的 `adb devices` 也给出空列表，
+  //     顺序反了就把「通道故障」写成「请先恢复无线连接」（同一个 exit 2，两种成因，读者查的地方不同）
+  const devHangIdx = code.indexOf('if ($found.TimedOut) {');
+  const devEmptyIdx = code.indexOf("if ($devices.Count -eq 0) {");
+  if (devHangIdx < 0) {
+    violations.push('D13 设备探测没有自己的挂死出口（不返回会被读成「没有设备」）');
+  } else if (devEmptyIdx >= 0 && devEmptyIdx < devHangIdx) {
+    violations.push('D13 「没有设备」判定排在挂死之前（通道故障被写成用户该去重连无线）');
+  }
+  // ⑤ logcat 窗口挂死 ⇒ 落失败 + 汇总不可判（空日志被读成「无崩溃」是本票最险的一格）
+  if (!/if \(\$final\.TimedOut\) \{\s*\$failures \+=/.test(code)) {
+    violations.push('D13 logcat 窗口读取超时未计入失败（本次仍会被判 PASS ⇒ 挂死被读成「无崩溃」）');
+  }
+  if (!/TimedOut\s*=\s*\[bool\]\$r\.TimedOut/.test(code)) {
+    violations.push('D13 没把执行核的 TimedOut 带进返回值（调用方无从区分「日志干净」与「日志没读到」）');
+  }
+  if (!/LOGCAT_INCONCLUSIVE=/.test(code)) {
+    violations.push('D13 汇总缺 LOGCAT_INCONCLUSIVE（崩溃计数不可判必须在结论里点名）');
+  }
+  // ⑥ StrictMode 初值：读未声明属性会抛 ⇒ 接线自己把脚本跑炸（本文件 Set-StrictMode -Version Latest）
+  if (!/\$script:Foreground = \[pscustomobject\]@\{ Component = ''; Raw = ''; Source = ''; TimedOut = \$false \}/.test(code)) {
+    violations.push('D13 $script:Foreground 初值缺 TimedOut（StrictMode 下读未声明属性会抛）');
+  }
+  if (!/\$script:FinalTotals = \[pscustomobject\]@\{[\s\S]{0,400}?AnrSamples = @\(\); TimedOut = \$false/.test(code)) {
+    violations.push('D13 $script:FinalTotals 初值缺 TimedOut（PR 评论段在 try 之外读它 ⇒ 异常路径上会撞 StrictMode）');
+  }
+  if (!/Lines = 0; Total = 0; WindowLines = 0; WindowStart = 0\.0; WindowKnown = \$false/.test(code)) {
+    violations.push('D13 $script:FinalTotals 初值段被改（后续读 .FatalCount 会撞 StrictMode）');
+  }
+  // ⑦ 汇总读数行：事后能从日志核对「当时生效的是哪一档、挂了几次」
+  if (!/ADB_TEXT_CALL_BUDGET calls=/.test(code)) {
+    violations.push('D13 缺取文本那档的汇总读数行（分不清 adb 通道挂了与设备答了个空）');
+  }
+  if (!/ADB_TIER_BUDGET[^\n]*logcat=\$AdbLogcatTimeoutSeconds/.test(code)) {
+    violations.push('D13 汇总缺 ADB_TIER_BUDGET 档位读数（分不清「预算给小了」与「设备真挂了」）');
+  }
+  // ⑧ 文档块口径：既不许留在过期声明里，也不许把本文件的收口写成全仓的收口
+  if (doc.includes('射程就到截图为止')) {
+    violations.push('D13 文档块仍写「射程就到截图为止」——本文件 6 处直调已收口，该句过期（会让下一会话误判射程）');
+  }
+  if (!doc.includes('本文件的每次 adb 调用都有单次超时')) {
+    violations.push('D13 文档块缺现行口径「本文件的每次 adb 调用都有单次超时」');
+  }
+  if (doc.includes('全仓每次 adb 调用都有单次超时')) {
+    violations.push('D13 把本文件的收口写成了整个仓的收口（声明比代码宽；剩余面只许指向复算尺）');
+  }
+  if (!doc.includes('adb-bounded-count.mjs')) {
+    violations.push('D13 文档块没指复算尺 —— 剩余读数必须可复算，抄数字就是第二真源');
+  }
+
   return violations;
 }
 
@@ -394,7 +519,30 @@ describe('真机只读取证契约（①a 预置 · 非门 · 不替代 ①b）'
       ['D12', '「成功才归位」被删（半张图直接落在证据名上）', (s) => ({ ...s, script: s.script.replace('Move-Item -LiteralPath $partPath -Destination $path -Force', '# 归位被删') })],
       ['D12', '超时判据被降级成「看文件在不在」', (s) => ({ ...s, script: s.script.replace('if ($shot.TimedOut) {', 'if ($false) {') })],
       ['D12', 'SHOT_CALL_TIMEOUT 机检行被删', (s) => ({ ...s, script: s.script.replace(/SHOT_CALL_TIMEOUT/g, 'SHOT_TIMEOUT') })],
-      ['D12', '「未在 N 秒内返回」文案被改成通用失败', (s) => ({ ...s, script: s.script.replace(/截图调用未在 \$AdbCallTimeoutSeconds 秒内返回/g, '截图失败') })]
+      ['D12', '「未在 N 秒内返回」文案被改成通用失败', (s) => ({ ...s, script: s.script.replace(/截图调用未在 \$AdbCallTimeoutSeconds 秒内返回/g, '截图失败') })],
+      // D13（#1568 AC 第 2 条）：每条都对应一种「把这 6 处又放回无界 / 把声明写歪」的真实改法
+      ['D13', '正文回写 & $AdbExe 直调（本文件的棘轮是整文件级）', (s) => ({ ...s, script: s.script + '\n$raw = (& $AdbExe devices -l 2>&1 | Out-String)\n' })],
+      ['D13', '委托层被拆掉（档位与点名各点位抄一份）', (s) => ({ ...s, script: s.script.replace('function Invoke-AdbTierCall', 'function Invoke-TierXyz') })],
+      ['D13', '委托层没接到唯一执行核', (s) => ({ ...s, script: s.script.replace('Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $adbSerial', 'Invoke-BoundedAdbTextX -AdbExe $AdbExe -Serial $adbSerial') })],
+      ['D13', 'serial 改成恒拼（server 级命令换了判据）', (s) => ({ ...s, script: s.script.replace("$adbSerial = $(if ($NoSerial) { '' } else { $script:Serial })", "$adbSerial = $script:Serial") })],
+      ['D13', 'stderr 不再合并（adb 失败原文进不了调用方）', (s) => ({ ...s, script: s.script.replace(' -MergeStdErr', '') })],
+      ['D13', '直启不按平台判（恒经 cmd）', (s) => ({ ...s, script: s.script.replace('-DirectExec:(-not $IsWindows)', '# 直启被摘') })],
+      ['D13', '预算写死在函数体里（param() 的档不再被引用）', (s) => ({ ...s, script: s.script.replace('[int]$BudgetSeconds = $AdbTextCallTimeoutSeconds', '[int]$BudgetSeconds = 15') })],
+      ['D13', 'logcat 档被塞进文本档（把现测 6.2 秒的正常当挂死）', (s) => ({ ...s, script: s.script.replace('[int]$AdbLogcatTimeoutSeconds = 60', '[int]$AdbLogcatTimeoutSeconds = 15') })],
+      ['D13', '文本档默认值被删（调用方拿到 0 秒档）', (s) => ({ ...s, script: s.script.replace('[int]$AdbTextCallTimeoutSeconds = 15', '[int]$AdbTextCallTimeoutSeconds') })],
+      ['D13', 'server 点位丢了 -NoSerial', (s) => ({ ...s, script: s.script.replace("-Tier 'server' -NoSerial", "-Tier 'server'") })],
+      ['D13', 'logcat 点位没接自己的档（写成文本档）', (s) => ({ ...s, script: s.script.replace("-BudgetSeconds $AdbLogcatTimeoutSeconds", '-BudgetSeconds $AdbTextCallTimeoutSeconds') })],
+      ['D13', 'logcat 窗口挂死不再落失败（挂死读成「无崩溃」）', (s) => ({ ...s, script: s.script.replace('if ($final.TimedOut) {', 'if ($false) {') })],
+      ['D13', '设备探测的挂死出口被并进了「没有设备」', (s) => ({ ...s, script: s.script.replace('if ($found.TimedOut) {', 'if ($false) {') })],
+      ['D13', 'FinalTotals 初值缺 TimedOut（异常路径上 PR 评论段会抛）', (s) => ({ ...s, script: s.script.replace('AnrSamples = @(); TimedOut = $false', 'AnrSamples = @()') })],
+      ['D13', 'TimedOut 没带进返回值', (s) => ({ ...s, script: s.script.replace(/= \[bool\]\$r\.TimedOut/g, '= $false') })],
+      ['D13', 'LOGCAT_INCONCLUSIVE 机检行被删', (s) => ({ ...s, script: s.script.replace(/LOGCAT_INCONCLUSIVE/g, 'LOGCAT_X') })],
+      ['D13', 'Foreground 初值缺 TimedOut（StrictMode 下接线自己把脚本跑炸）', (s) => ({ ...s, script: s.script.replace("$script:Foreground = [pscustomobject]@{ Component = ''; Raw = ''; Source = ''; TimedOut = $false }", "$script:Foreground = [pscustomobject]@{ Component = ''; Raw = ''; Source = '' }") })],
+      ['D13', '超时点名行被删（读日志的人分不清通道挂了与答了个空）', (s) => ({ ...s, script: s.script.replace('ADB_TEXT_TIMEOUT call=adb ', 'X call=adb ') })],
+      ['D13', '汇总缺档位读数行', (s) => ({ ...s, script: s.script.replace('ADB_TIER_BUDGET shot=', 'X_TIER shot=') })],
+      ['D13', '过期的「射程就到截图为止」被写回文档块', (s) => ({ ...s, script: s.script + '\n<#\n⚠️ 这句话的射程就到截图为止。\n#>\n' })],
+      ['D13', '把本文件的收口写成整个仓的收口（声明比代码宽）', (s) => ({ ...s, script: s.script + '\n<#\n本仓结论：全仓每次 adb 调用都有单次超时。\n#>\n' })],
+      ['D13', '复算尺的指向被删（剩余读数不可复算）', (s) => ({ ...s, script: s.script.replace(/adb-bounded-count\.mjs/g, '那把尺') })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));
