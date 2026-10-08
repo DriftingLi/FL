@@ -65,7 +65,7 @@ function Get-ContractTestPattern {
     #                  + D13 本文件 6 处文本/管理类直调分档收口，#1568 AC 第 2 条）
     #                  + deviceCaptureBoundedShotBehavior（行为层：#1562 真挂死桩 + 影子夹具。
     #                    承重证据在行为层 —— 不注册就只在全量那一档跑，token 收窄的门会静默跳过真执行腿）
-    #                  + deviceCaptureTierBehavior（行为层：#1568 那 6 处的分档，DCT1–DCT12）
+    #                  + deviceCaptureTierBehavior（行为层：#1568 那 6 处的分档，DCT1–DCT13）
     #                    ⚠️ **不需要新格子**：现测 `npx jest --listTests` 里子串 `deviceCapture` 已同时列出
     #                    上面三个套件（2026-10-08 实测 `--listTests | grep -c deviceCapture` = 3），
     #                    再加一格就是第二真源（AC 第 6 条要求先现测再决定，这条就是那次现测的落点）。

@@ -38,7 +38,7 @@
  *      logcat 挂死的 `TimedOut` 必须落到主失败清单（空日志会被读成「无崩溃」）、文档块那句「射程就到截图为止」
  *      已过期且**不许**被写成全仓声明（剩余面只许指向复算尺 `docs/verification/tooling/1568/adb-bounded-count.mjs`）。
  *      行为面（真挂死桩 / 对照腿不误判 / server 级不带 -s / 预算是参数 / 挂死后流程继续）由
- *      `deviceCaptureTierBehavior.test.js`（DCT1–DCT12）另钉。
+ *      `deviceCaptureTierBehavior.test.js`（DCT1–DCT13）另钉。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/emulatorSmokeContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。

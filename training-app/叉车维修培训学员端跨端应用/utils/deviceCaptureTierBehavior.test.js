@@ -32,6 +32,13 @@
  *   DCT10 预算是**参数**：文本档从 2 换到 5 ⇒ 日志里的 `callBudgetSeconds` 跟着变（写死在函数体里这条打不中）
  *   DCT11 挂死不得成为链路终点：基线挂一次 ⇒ 随后那次全量 dump 照样拿得到
  *   DCT12 多设备守卫没被接线换掉 ⇒ 两条 online 且未给 -Device 仍 exit 2，且把两条候选都点出来
+ *   DCT13 adb 只写 **stderr** 的答复仍是判据原料 ⇒ `Start-AppPage` 落盘那行带得到原文（`-MergeStdErr` 被摘就丢）
+ *
+ * ⚠️ 三格「档位接错 / 出口并错」是**行为腿**打的，不是只有契约打（现测各跑过一次才敢这么写）：
+ *   · 点位接错档（logcat 点位塞进文本档）—— DCT5 / DCT6 各判一次 `callBudgetSeconds`，
+ *     因为这两条腿的实参刻意给成 text=3 / logcat=2，读到 2 才证明接的是 logcat 那一格；
+ *   · 挂死被并成「没有设备」—— DCT1 判 UNUSABLE 的**原因行**自己带 `tier=server`，摘掉那个出口就红；
+ *   · server 点位丢 `-NoSerial` —— DCT2 判假 adb 记到的 argv 里没有 `-s`。
  *
  * ⚠️ 手法沿用本仓先例：AST 抽出脚本里的函数定义后**直调**，不执行整篇门脚本（整篇跑会去连真机）；
  *   执行核用**真的那一份**（dot-source `lib/auto-screenshot.ps1`）⇒「有界」不是影子造出来的。
@@ -84,7 +91,11 @@ const FAKE_ADB_JS = [
   "if (joined.includes('logcat -d -v epoch -t 1')) { (st.baselineLines || ['  1759000000.100  100  200 I Tag: seed']).forEach(say); return; }",
   "if (joined.includes('logcat -d -v epoch')) { (st.windowLines || ['--------- beginning of main']).forEach(say); return; }",
   "if (joined.includes('resolve-activity')) { say(st.resolveLine || 'io.dcloud.uniappx/io.dcloud.uniappx.PandoraEntry'); return; }",
-  "if (joined.includes('am start')) { (st.amStartLines || ['Starting: Intent { act=android.intent.action.VIEW dat=uniapp://pages/login/login }']).forEach(say); return; }",
+  "if (joined.includes('am start')) {",
+  "  (st.amStartLines || ['Starting: Intent { act=android.intent.action.VIEW dat=uniapp://pages/login/login }']).forEach(say);",
+  "  if (st.amStartErr) process.stderr.write(String(st.amStartErr) + '\\n');",
+  "  return;",
+  "}",
   "say('STUB-OUT');",
   '',
 ].join('\n');
@@ -224,6 +235,9 @@ describe('device-capture 的 6 处直调按形态分档有界（运行期，#156
     expect(logField(r.fx, /DEVICE_CAPTURE_RESULT=(\w+)/)).toBe('UNUSABLE');
     expect(logField(r.fx, /ADB_TEXT_TIMEOUT.*tier=(\S+)/)).toBe('server');
     expect(logField(r.fx, /callBudgetSeconds=(\d+)/)).toBe('2');
+    // UNUSABLE 的**原因行**必须自己点名 tier=server：挂死与「真没设备」都是 exit 2，
+    // 但读者据此决定去查 adb 通道还是去重连无线 —— 把两条并成一个原因，就是这条腿存在的理由（M8 打这一格）。
+    expect(logField(r.fx, /DEVICE_CAPTURE_RESULT=UNUSABLE[^\n]*\n[^\n]*tier=([a-z-]+)/)).toBe('server');
     // server 级命令不得被拼上 -s：那已经不是同一条调用了（AC 第 4 条）
     const hung = logField(r.fx, /ADB_TEXT_TIMEOUT call=([^\n]*)/);
     expect(hung).not.toBe('none');
@@ -297,6 +311,8 @@ describe('device-capture 的 6 处直调按形态分档有界（运行期，#156
     expect(field(r.stdout, 'BL_EPOCH')).toBe('0');
     expect(field(r.stdout, 'BL_TIMEDOUT')).toBe('True');
     expect(field(r.stdout, 'TIER_LOGCAT')).toBe('True');
+    // 这一腿的档位实参是 text=3 / logcat=2 —— 读到 2 才算基线**真接在 logcat 档上**（M2 打这一格）
+    expect(logField(r.fx, /callBudgetSeconds=(\d+)/)).toBe('2');
   }, 130000);
 
   it('DCT6 logcat 全量挂死 ⇒ TimedOut=True 且同一读数里 FatalCount=0（险处：空日志会被读成「无崩溃」）', () => {
@@ -314,6 +330,22 @@ describe('device-capture 的 6 处直调按形态分档有界（运行期，#156
     expect(field(r.stdout, 'W_TIMEDOUT')).toBe('True');
     expect(field(r.stdout, 'W_FATAL')).toBe('0');
     expect(field(r.stdout, 'TIER_LOGCAT')).toBe('True');
+    expect(logField(r.fx, /callBudgetSeconds=(\d+)/)).toBe('2');
+  }, 130000);
+
+  it('DCT13 stderr 的失败原文仍是判据原料：am start 只写 stderr 的答复，落盘那行必须带得到（摘掉 -MergeStdErr 就是静默换判据）', () => {
+    const r = leg(
+      [
+        "Start-AppPage -Page 'pages/login/login'",
+        "Write-Output (\"AM_LINE_HAS_STDERR_MARK=\" + $(LogHas 'am start：.*STDERR-MARK'))",
+        "Write-Output (\"AM_LINE_HAS_STDOUT_MARK=\" + $(LogHas 'am start：.*Starting: Intent'))",
+      ].join('\n'),
+      { state: { amStartErr: 'Error type 3 STDERR-MARK' }, timeoutMs: 45000 },
+    );
+    expect(r.ok).toBe(true);
+    expect(field(r.stdout, 'AM_LINE_HAS_STDERR_MARK')).toBe('True');
+    // 合并顺序 = 先 stdout 再 stderr（既有 `2>&1` 拿到的**内容**等价；行序不判，理由写在执行核注释里）
+    expect(field(r.stdout, 'AM_LINE_HAS_STDOUT_MARK')).toBe('True');
   }, 130000);
 
   it('DCT7 对照腿：全量正常返回含 FATAL 与本包 ANR ⇒ TimedOut=False 且两个计数照旧', () => {
