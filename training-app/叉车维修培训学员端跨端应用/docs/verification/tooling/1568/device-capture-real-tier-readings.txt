@@ -1,0 +1,16 @@
+REAL_TIER serial=192.168.0.212:38255 model=23049RAD8C android=15 adb=Android Debug Bridge version 1.0.41 now=2026-10-08T17:37:01 rounds=2 形态=与 scripts/device-capture.ps1 的六个点位同形
+ROUND 1
+CALL devices_l_no_serial tier=server rc=0 ms=443 chars=121 argv_n=2
+CALL shell_dumpsys_activity tier=read rc=0 ms=322 chars=88397 argv_n=6
+CALL shell_resolve_activity tier=resolve rc=0 ms=317 chars=128 argv_n=12
+CALL shell_pidof tier=read rc=0 ms=196 chars=7 argv_n=5
+CALL logcat_t1_epoch tier=logcat rc=0 ms=601 chars=119 argv_n=9
+CALL logcat_dump_epoch tier=logcat rc=0 ms=21189 chars=47368474 argv_n=7
+ROUND 2
+CALL devices_l_no_serial tier=server rc=0 ms=196 chars=121 argv_n=2
+CALL shell_dumpsys_activity tier=read rc=0 ms=402 chars=88399 argv_n=6
+CALL shell_resolve_activity tier=resolve rc=0 ms=317 chars=128 argv_n=12
+CALL shell_pidof tier=read rc=0 ms=342 chars=7 argv_n=5
+CALL logcat_t1_epoch tier=logcat rc=0 ms=612 chars=119 argv_n=9
+CALL logcat_dump_epoch tier=logcat rc=0 ms=21301 chars=47269175 argv_n=7
+CALL shot_execout tier=shot rc=0 ms=1648 bytes=167592
