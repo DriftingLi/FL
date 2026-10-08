@@ -70,8 +70,12 @@ function Resolve-CliPathLocal {
 }
 
 function Get-OnlineDevices {
-    param([string]$AdbExe)
-    $out = (& $AdbExe devices 2>&1 | Out-String)
+    param([string]$AdbExe, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds)
+    # **接线层内联**（一次取文本 / 管理类的 adb 调用）。形态与 hx-run.ps1 / device-capture.ps1 / emulator-smoke.ps1 一致：
+    # 不写等待逻辑，直接 delegate 到唯一执行核并补三件事：档位、超时点名、serial 的取舍（devices 是 server 级⇒ -NoSerial）
+    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial '' -AdbArguments @('devices') `
+        -AdbArgv @('devices') -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    $out = if ($r) { $r.Text } else { '' }
     $list = @()
     foreach ($line in ($out -split "`r?`n")) {
         if ($line -match '^\s*(\S+)\s+(device|offline|unauthorized)\s*$') {
@@ -87,7 +91,12 @@ function Test-BuildEnv {
         [string]$ProjectDir,
         [string]$CliPath,
         [string]$Device,
-        [int]$HxWaitSeconds = 600
+        [int]$HxWaitSeconds = 600,
+        # **一次取文本 / 管理类的 adb 调用**的上限（#1568 AC 第 2 + 3 条）。修的是本文件里那 1 处
+        # `& $AdbExe devices`（Get-OnlineDevices）。形态与 hx-run.ps1 的同形：等的是文本答复。
+        # 默认值引用指得到入库产物的现测：同机 `adb devices` 155 ms ⇒ ≈10 倍余量。
+        # 与 emulator-smoke / device-capture / hx-run.ps1 同名参数同值同因。
+        [int]$AdbTextCallTimeoutSeconds = 15
     )
 
     # 1. 检测 adb
