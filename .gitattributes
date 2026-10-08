@@ -27,6 +27,12 @@ deploy/env.defaults text eol=lf
 # （实测先例：emulatorSmokeContract 的「C3 注入点已失效」用例）。故 *.ps1 也钉 LF。
 *.ps1 text eol=lf
 
+# 台账/对照物 TSV 钉 LF：`docs/verification/tooling/1570/1545-s1-enriched.tsv` 是**机器对照物**——
+# 复算腿拿它与重跑产物逐行比、README 里登了它的 md5 与字节数（13,319 B）。autocrlf=true 检出成 CRLF
+# 会让枚数与字节都变（+111 B），「逐行相同」的判据当场失真。同 .ps1 那一族的成因，只是这次飘的是数据件。
+# 现测本仓此前无其它 tracked .tsv（`git ls-files '*.tsv'` 只命中这一枚），故规则按扩展名写，不锁路径。
+*.tsv text eol=lf
+
 # uni-app-x 源码钉 LF：这是**纵深防御的第二层**，不再是主防线。主防线已改为**读取层无条件归一**
 # （ADR-0019 ②：共享读者 utils/utsHarness.js 的 normalizeEol / readText；由 scripts/check-contract-read.mjs
 # 增量门守护）—— 归一后「扩展名钉没钉」已不重要，本钉只是多兜一层。
