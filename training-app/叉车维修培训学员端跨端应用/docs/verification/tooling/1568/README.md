@@ -256,10 +256,21 @@ pass2 重跑 M7–M9；pass3 是 M3 在契约锚改成**函数体 scoped** 之�
 
 - 在册性现测：`npx jest --config jest.config.unit.js --listTests` 里子串 `deviceCapture` 已列出
   **三个**套件（`Contract` / `BoundedShotBehavior` / `TierBehavior`）⇒ **不新增格子**；M9 是这条裁定的反面见证。
-- 真链路腿：`device-capture-emulator-legs.ps1`（真 adb + 真仿真机，三条腿：L1 默认预算对照 /
-  L2 只把 logcat 档给 0 / L3 只把文本档给 0），读数在 `device-capture-emulator-readings.txt`。
-  ⚠️ **①a 的真机取证本轮未跑**：无线调试离线、重开要人在手机上操作 ⇒ 本片的判据不依赖它，
-  也不把它写成「已验」。仿真机替代的是「真 adb 的答复仍被原有解析器读懂 + 到点给可见结论」这两格。
+- 真链路腿（真 adb + 真仿真机，`device-capture-emulator-legs.ps1`，读数件 `device-capture-emulator-readings.txt`）：
+
+| 腿 | 现测 | 读到什么 |
+| --- | --- | --- |
+| L1 `ref`（默认预算） | `exit=0` / 33.5 s | `ADB_TEXT_CALL_BUDGET calls=4 timeouts=0` + `ADB_TIER_BUDGET shot=15 text=15 logcat=60` + `LOGCAT_INCONCLUSIVE=0` + `DEVICE_CAPTURE_RESULT=PASS`，截图非零 ⇒ **真 adb 的答复仍被原有解析器读懂**（devices 状态列 / dumpsys 前台行 / logcat epoch 行三处都是），分档没把正常等误判成挂死 |
+| L2 `-AdbLogcatTimeoutSeconds 0` | `exit=1` / 5.8 s | 两条 `ADB_TEXT_TIMEOUT … tier=logcat` 逐字是 `shell logcat -d -v epoch -t 1` 与 `shell logcat -d -v epoch`（`callBudgetSeconds=0 seconds=0.2 / 0`）+ `LOGCAT_INCONCLUSIVE=1` + 整趟 **FAIL**（不是「无崩溃」的 PASS）；`hungCalls=` 把两条点名；截图仍出图（`shot_bytes_nonzero=True`）⇒ 假绿路径在真链路上被堵住且**链没停住** |
+| L3 `-AdbTextCallTimeoutSeconds 0` | `exit=2` / 1.5 s | `ADB_TEXT_TIMEOUT call=adb devices -l callBudgetSeconds=0 seconds=0.1 tier=server` —— **argv 里没有 `-s`**（server 级形态在真 adb 上成立），整条链在 1.5 秒给出 UNUSABLE；旧写法这一格是**永不返回**，没有对照可给 |
+
+  收尾行 `LEGS_DONE=3/3 legs_ran=3`，AVD 冷起 `boot_ms=66774`。RAW 行的中文尾巴按驱动既有纪律被 scrub 成 `?`
+  （读数件只留 ASCII token，中文原文在 `.ci-verify/device-capture.log` —— 与 §3c 那套血账同律）。
+  ⚠️ **①a 的真机取证本轮未跑**：手机侧无线调试离线（`adb devices` 现测只有 `10.255.255.1:5555 offline`
+  那条探针残留、`adb mdns services` 空），重开要人在手机上操作。本片的判据不依赖它，也不把它写成「已验」——
+  仿真机替代的是「真 adb 的答复仍被解析」与「到点给可见结论」这两格，**替代不了**厂商 ROM 的 dumpsys 字段差异
+  （本机小米实测定档：Android 14+ 只报 `topResumedActivity`，`mResumedActivity` 那一格是空 —— 判据写在
+  `scripts/device-capture.ps1` 的 `Get-ForegroundInfo` 上方注释里，AVD 上量不到这一支）。
 - 驱动自己的四条纪律（四级根路径 + `Test-Path` 先 throw、每腿 `WaitForExit(ms)` 硬上界、子进程 stdout 按
   `$RunStamp` 分名、RAW 整行与开跑前逐条编译自检）都是从上面 §3c 那三处洞抄过来的 —— 见其 SYNOPSIS 末段。
 
