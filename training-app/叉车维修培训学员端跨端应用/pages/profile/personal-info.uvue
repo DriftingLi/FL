@@ -73,13 +73,6 @@
           </view>
         </view>
       </view>
-
-      <!-- 退出当前账号 -->
-      <view class="logout-wrap">
-        <view class="logout-btn" @click="onLogout">
-          <text class="logout-text">退出当前账号</text>
-        </view>
-      </view>
     </scroll-view>
 
     <!-- 修改昵称弹窗 -->
@@ -371,25 +364,12 @@
     }
   }
 
-  // ===== 注销与退出 =====
+  // ===== 注销 =====
   function onDeleteAccount() : void {
     confirmDeleteAccountFlow(() : void => {
       deleteAccountFlow(() : void => {
         authStore.clearAuthData()
       })
-    })
-  }
-
-  function onLogout() : void {
-    uni.showModal({
-      title: '提示',
-      content: '确认退出当前账号？',
-      success: (res) => {
-        if (res.confirm) {
-          // authStore.logout() 内部已包含 logoutApi 调用，无需重复调用
-          authStore.logout()
-        }
-      }
     })
   }
 
@@ -529,22 +509,6 @@
 
   .cell-avatar-icon {
     font-size: 44rpx;
-  }
-
-  .logout-wrap {
-    padding: 48rpx 32rpx;
-  }
-
-  .logout-btn {
-    background-color: #ffffff;
-    border-radius: 48rpx;
-    padding: 24rpx 0;
-    align-items: center;
-  }
-
-  .logout-text {
-    font-size: 32rpx;
-    color: #ff5252;
   }
 
   /* 弹窗输入样式（slot 内容归本页作用域；壳样式在 InfoDialog） */
