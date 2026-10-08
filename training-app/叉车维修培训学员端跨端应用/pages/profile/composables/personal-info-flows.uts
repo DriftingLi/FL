@@ -329,7 +329,7 @@ export async function submitCompanyFlow(companyRaw : string) : Promise<boolean> 
 export function confirmDeleteAccountFlow(onConfirmed : () => void) : void {
 	uni.showModal({
 		title: '确认注销账号？',
-		content: '注销为不可恢复操作：账号、学习记录、积分、论坛帖子与回复将全部删除。如仅是切换账号，请选择"退出当前账号"。',
+		content: '注销为不可恢复操作：账号、学习记录、积分、论坛帖子与回复将全部删除。如仅是退出登录，请到「我的 → 设置」页底部选择「退出登录」。',
 		confirmText: '继续注销',
 		confirmColor: '#ff5252',
 		success: (res) => {

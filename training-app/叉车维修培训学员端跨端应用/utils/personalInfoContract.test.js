@@ -123,12 +123,14 @@ describe('flows 纯函数契约（状态所有权留在页面）', () => {
 describe('UI 像素结构锁定（重构不动 UI：cells 与弹窗内控件逐数核对）', () => {
   const p = read(PAGE);
 
-  it('七个设置 cell + 注销 cell + 退出按钮的标签与回调名不变', () => {
+  // #1554 的显式决定：原第 131 行的字面锁 `logout-text">退出当前账号<` 按终态**反向改写**
+  // （保留 settings 那处、撤本页那处）。判据与可否决项见 issue #1554「保留哪一处」。
+  it('七个设置 cell + 注销 cell 的标签不变；退出按钮已撤（#1554 收敛到 settings）', () => {
     for (const t of ['修改头像', '昵称', '登录账号', '手机号', '邮箱', '单位']) {
       expect(p).toContain(`>${t}<`);
     }
     expect(p).toContain('cell-label-danger">注销账号<');
-    expect(p).toContain('logout-text">退出当前账号<');
+    expect(p).not.toContain('logout-text');
     expect(p).toContain('<text v-if="hasPending" class="cell-badge">审核中</text>');
   });
 
@@ -151,6 +153,33 @@ describe('UI 像素结构锁定（重构不动 UI：cells 与弹窗内控件逐�
       expect(read(SHELL)).toContain(cls);
       expect(p).not.toContain(cls);
     }
+  });
+});
+
+describe('退出入口撤净与注销引导语指称（#1554）', () => {
+  it('整块撤净：模板 / 处理函数 / 确认框文案 / 样式类四处零残留（不留死样式）', () => {
+    const src = read(PAGE);
+    for (const dead of ['logout-wrap', 'logout-btn', 'logout-text', 'onLogout', '退出当前账号', '确认退出当前账号？']) {
+      expect(src).not.toContain(dead);
+    }
+  });
+
+  it('引导语不再引用已撤的按钮文案，改指实际落点', () => {
+    const f = read(FLOWS);
+    expect(f).not.toContain('退出当前账号');
+    // 写「我的 → 设置」这个**位置**而不是「返回设置页」：本页另有两处不经设置页的入口
+    // （`pages/notifications/notifications.uvue` 与 `pages/points/task-center.uvue` 都直挂
+    // `/pages/profile/personal-info`），从那些入口进来「返回」并不落在设置页上，而位置名对任何入口都成立。
+    expect(f).toContain('如仅是退出登录，请到「我的 → 设置」页底部选择「退出登录」');
+  });
+
+  it('判据有判别力（把旧文案写回引导语，正向锁与反向锁各红一次）', () => {
+    const f = read(FLOWS);
+    const regressed = f.replace('如仅是退出登录，请到「我的 → 设置」页底部选择「退出登录」',
+      '如仅是切换账号，请选择"退出当前账号"。');
+    expect(regressed).not.toBe(f);
+    expect(regressed).toContain('退出当前账号');
+    expect(regressed).not.toContain('如仅是退出登录');
   });
 });
 
