@@ -112,7 +112,22 @@ npx jest --config jest.config.unit.js utils/emulatorSmokeBoundedTextBehavior.tes
 git cat-file blob <head-sha>:./docs/verification/tooling/1568/adb-bounded-count.mjs | sha256sum
 ```
 
-⚠️ 口径提醒（本族记过的坑）：复算 blob 用 `git cat-file blob HEAD:./<路径>`，**不是** `git hash-object`
-（后者给 SHA-1，与这里的 sha256 对不上）；`*.ps1` 被根 `.gitattributes:28` 钉 `text eol=lf` ⇒ 副本 sha 与
-blob sha 同值，`.mjs` / `.txt` 没有那条规则 ⇒ 两列可能不同。
+⚠️ 口径提醒（本族记过的坑）：复算 blob 用 `git cat-file blob <sha>:./<路径>`，**不是** `git hash-object`
+（后者给 SHA-1，与这里的 SHA-256 对不上）。两列是否相同取决于 `.gitattributes`：`*.ps1`（根 `.gitattributes:28`）
+与 `*.mjs`（`:23`）**都钉了 `text eol=lf`** ⇒ 副本与 blob 逐字节相同、两列同值；
+`.txt` **没有**该规则 ⇒ 在 `core.autocrlf=true` 的机器上检出成 CRLF ⇒ blob 是 LF、副本是 CRLF，两列必不同。
+本机 2026-10-08 实测（blob 侧的 ref = `9be9a16e`，sha256 前 20 位）：
+
+| 文件 | 副本 | blob | 判定 |
+| --- | --- | --- | --- |
+| `adb-bounded-count.mjs` | `86dbbbfd8e916e901f10` | `86dbbbfd8e916e901f10` | 同值（`.mjs` 被 `:23` 钉 LF） |
+| `latency-readings.txt` | `9c5871e6b0953b2784c5` | `83b69095dc2203884b4e` | **不同**（`.txt` 未钉 ⇒ 副本 CRLF、blob LF） |
+
+复算命令：
+
+```
+sha256sum docs/verification/tooling/1568/adb-bounded-count.mjs
+git cat-file blob 9be9a16e:./docs/verification/tooling/1568/adb-bounded-count.mjs | sha256sum
+```
+
 
