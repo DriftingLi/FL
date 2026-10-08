@@ -247,7 +247,7 @@ x 版来源：上表第 1.2 节列出的三页
 
 | 本文建议 | 落地取值 | 为什么不一样 |
 |---|---|---|
-| §5 第 4 条键名建议 `WECHAT_APP_ID/SECRET`（或 `OPEN_PLATFORM_MOBILE_*`） | `WECHAT_MOBILE_APP_ID` / `WECHAT_MOBILE_APP_SECRET`，且加载处**不向旧名回退** | `WECHAT_APP_ID/SECRET` 这一对在仓内**已被占用**（原注释把它标为「扫码登录（网站应用）占位」），再拿来喂移动应用链路等于制造第二个真源。不回退这条由 `backend/internal/config/wechat_keys_test.go` 锁住 |
+| §5 第 4 条键名建议 `WECHAT_APP_ID/SECRET`（或 `OPEN_PLATFORM_MOBILE_*`） | `WECHAT_MOBILE_APP_ID` / `WECHAT_MOBILE_APP_SECRET`，且加载处**不向旧名回退** | `WECHAT_APP_ID/SECRET` 这一对在仓内**已被占用**——它是小程序的 legacy 回退键（见 `config.go` 里 `wechatAppConfig("wechat_mini_program_app_id", …, "wechat_app_id", "wechat_app_secret")` 的调用处），而调研时 `backend/.env.example` 给这一对配的注释是「微信开放平台（扫码登录，授权信息待接入…）」，那个归属与代码不符、本次一并改掉。按本文建议复用它喂移动应用，等于给同一对键名造第三个真源。不回退这条由 `backend/internal/config/wechat_keys_test.go` 锁住 |
 | §4.2 与 §5 第 4 条「unionid 唯一索引预留」 | 只建**普通偏索引**（`WHERE wechat_unionid <> ''`），不上唯一约束 | 存量库里同一 unionid 出现两行是可能的（历史上按其他方式建过号又绑了 unionid），唯一约束会让迁移在生产库上直接失败，而这条风险**在仓内不可复算**。冲突时的行为改由「认 id 最小者」定序，口径确定、不随查询次序漂；判据全文在 `backend/migrations/000041_wechat_unionid_lookup.up.sql` 文件头 |
 | §5 第 4 条换取层「先落空实现 / 返回明确 NotImplemented」 | 直接实装 `https://api.weixin.qq.com/sns/oauth2/access_token` | 端点形状已由官方文档钉死（本文 §3.1），空实现只是把**可测的那部分**推后。无 AppID 也能测：换取层基址是注入字段，单测用 `httptest` 假端点覆盖全部错误码分支；凭证缺失时走「未配置」分支，不会误打真端点 |
 | §5 第 4 条新建 `user_auth` 类表 + `platform` 枚举（照 uni-id 形状） | 复用 `hrwai_users` 现有 `wechat_openid` / `wechat_unionid` 两列 | 本仓现状就是一行一账号、openid 列已存在。另建一张表会把「同人」拆成两处真源；而「一行同时存两端 openid」的需求当前不成立——App 命中 unionid 时复用整行且**不覆盖**库里已有的 openid |
