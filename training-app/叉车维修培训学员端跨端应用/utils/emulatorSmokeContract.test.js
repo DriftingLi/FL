@@ -18,6 +18,13 @@
  *      `.part` 成功才归位、超时**计入该页判定**（否则挂死被读成「跑过了」）、机检行点名哪一次调用。
  *      与 `device-capture.ps1` 逐字同形的那一处由 D12 钉（同一族，两个消费点各钉各的调用点）。
  *      行为面由 `emulatorSmokeBoundedShotBehavior.test.js`（ESD1–ESD5）另钉。
+ *   C10 【#1568，2026-10-08 票面 AC 第 1 条】**文本**收口点 `Get-AdbOutput` 同样接上那件唯一执行核：
+ *      它自己只有 1 行调用、却压着 **12 个调用方**（`sys.boot_completed` 轮询在最前面），判据五组——
+ *      委托在位、预算是带默认值的**参数**且透传、stderr 合并（老形状是 `2>&1`，不合并就是静默换判据）、
+ *      直启按平台判（恒经 cmd ⇒ CI 的 ubuntu 上那一格造不出来）、超时回空串且点名。
+ *      ⚠️ 只判**函数体**：本脚本另有 13 处直调仍无界（同票 AC 第 2 条的后续 PR），
+ *      在这里下全局禁令会把「还没做完」读成「做错了」——那正是 #1568 开票时要防的那类漂移。
+ *      行为面由 `emulatorSmokeBoundedTextBehavior.test.js`（ETD1–ETD5）另钉。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -225,6 +232,42 @@ function scanContract(sources) {
     violations.push('C9 缺超时调用清单（汇总里点不出「本次挂过几次」）');
   }
 
+  // C10（#1568，2026-10-08 票面 AC 第 1 条）：**文本**收口点 `Get-AdbOutput` 也接上了同一件唯一执行核。
+  //   症状：它是 `& $AdbExe -s $Serial @AdbArgs 2>&1` + `Out-String` —— 前台同步等一次 adb、没有单次超时，
+  //   自己只有 1 行调用却压着 **12 个调用方**（`sys.boot_completed` 轮询排在最前面，挂在那里连「起没起机」
+  //   都判不出来）。等待/杀树在本仓只许有一份（移动端 ADR-0008「有界单次调用的三个消费点」）。
+  //   ⚠️ 与 C9 同一套剥注释判据（文档块 + 整行注释都掩掉），且**只判函数体** —— 本脚本另有 13 处直调
+  //   仍无界（#1568 AC 第 2 条的后续 PR），在这里判全局 `Out-String` 禁令会把「还没做完」误判成「做错了」。
+  //   行为面（真挂死桩到点 / 对照腿不误判 / stderr 原料不丢 / 预算是参数）由
+  //   `emulatorSmokeBoundedTextBehavior.test.js`（ETD1–ETD5）另钉。
+  const gaStart = smokeBare.indexOf('function Get-AdbOutput');
+  const gaEnd = smokeBare.indexOf('function Assert-Environment');
+  const gaBody = gaStart < 0 ? '' : smokeBare.slice(gaStart, gaEnd > gaStart ? gaEnd : smokeBare.length);
+  if (gaStart < 0) {
+    violations.push('C10 找不到 Get-AdbOutput 函数体（判据取不到即红，不在空集合上判绿）');
+  } else {
+    if (!/Invoke-BoundedAdbText -AdbExe \$AdbExe -Serial \$Serial/.test(gaBody)) {
+      violations.push('C10 取文本没委托到唯一执行核（12 个调用方又回到无界等待）');
+    }
+    if (!/\[int\]\$BudgetSeconds\s*=\s*\$AdbTextCallTimeoutSeconds/.test(gaBody)) {
+      violations.push('C10 单次预算没从 param() 的档位取默认值（写死在函数体里就等于没有档）');
+    }
+    if (!/-TimeoutSeconds\s+\$BudgetSeconds/.test(gaBody)) violations.push('C10 预算没透传给执行核');
+    if (!/-MergeStdErr/.test(gaBody)) {
+      violations.push('C10 没合并 stderr ⇒ adb 的失败原文进不了调用方（老形状是 2>&1，不合并就是静默换判据）');
+    }
+    if (!/-DirectExec:\(-not \$IsWindows\)/.test(gaBody)) {
+      violations.push('C10 直启没按平台判（恒经 cmd ⇒ 本族的运行期腿在 CI 的 ubuntu 上造不出来，只能静默假绿）');
+    }
+    if (/&\s*\$AdbExe/.test(gaBody)) violations.push('C10 函数体回写了 `& $AdbExe` 直调（无单次超时）');
+    if (/Out-String/.test(gaBody)) violations.push('C10 函数体回写了 Out-String 取文本（父进程读子进程输出段 = #1285 那条挂死路径）');
+    if (!/return\s*''/.test(gaBody)) violations.push('C10 超时没回空串（既有语义「失败一律返回空串」不许改，调用方各按自己的分支判）');
+    if (!/ADB_TEXT_TIMEOUT call=/.test(smokeBare)) violations.push('C10 缺超时点名行（哪一次调用、多大预算必须写出来）');
+    if (!/\[int\]\$AdbTextCallTimeoutSeconds\s*=\s*15/.test(smokeBare)) violations.push('C10 缺 -AdbTextCallTimeoutSeconds 默认 15 秒的档位参数');
+    if (!/\$script:AdbTextTimeouts\s*=\s*@\(\$script:AdbTextTimeouts\)/.test(smokeBare)) violations.push('C10 缺超时清单累计（汇总点不出「本次挂过几次」）');
+    if (!/ADB_TEXT_CALL_BUDGET calls=/.test(smokeBare)) violations.push('C10 缺取文本那档的汇总读数行（分不清 adb 通道挂了与设备答了个空）');
+  }
+
   return violations;
 }
 
@@ -259,7 +302,18 @@ describe('仿真机前置冒烟契约（#883 / O2，非门辅助）', () => {
       ['C9', '「成功才归位」被删（半张图直接落在出图判据看的名字上）', (s) => ({ ...s, smoke: s.smoke.replace('Move-Item -LiteralPath $partPath -Destination $path -Force', '# 归位被删') })],
       ['C9', '超时判据被降级成「看文件在不在」', (s) => ({ ...s, smoke: s.smoke.replace('if ($shot.TimedOut) {', 'if ($false) {') })],
       ['C9', '超时不再计入该页失败（挂死被读成「跑过了」）', (s) => ({ ...s, smoke: s.smoke.replace('if ($shot.TimedOut) { $pageFail +=', 'if ($shot.TimedOut) { $skips +=') })],
-      ['C9', 'SHOT_CALL_TIMEOUT 机检行被删', (s) => ({ ...s, smoke: s.smoke.replace(/SHOT_CALL_TIMEOUT/g, 'SHOT_TIMEOUT') })]
+      ['C9', 'SHOT_CALL_TIMEOUT 机检行被删', (s) => ({ ...s, smoke: s.smoke.replace(/SHOT_CALL_TIMEOUT/g, 'SHOT_TIMEOUT') })],
+      // C10（#1568）：每条都对应一种「把文本收口点的单次超时又拆掉」的真实改法
+      ['C10', '委托被删、回写成 `& $AdbExe … | Out-String`', (s) => ({ ...s, smoke: s.smoke.replace('Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $Serial -AdbArguments $AdbArgs -AdbArgv $AdbArgs', '& $AdbExe -s $Serial @AdbArgs | Out-String') })],
+      ['C10', '档位默认值丢失（预算不再是参数）', (s) => ({ ...s, smoke: s.smoke.replace('[int]$BudgetSeconds = $AdbTextCallTimeoutSeconds', '[int]$BudgetSeconds') })],
+      ['C10', '预算写死在执行处（透传断了）', (s) => ({ ...s, smoke: s.smoke.replace('-TimeoutSeconds $BudgetSeconds', '-TimeoutSeconds 15') })],
+      ['C10', 'stderr 合并被摘掉（判据原料静默换掉）', (s) => ({ ...s, smoke: s.smoke.replace(' -MergeStdErr ', ' ') })],
+      ['C10', '直启恒开（Windows 那条已验证载体被换掉）', (s) => ({ ...s, smoke: s.smoke.replace('-DirectExec:(-not $IsWindows)', '-DirectExec:$true') })],
+      ['C10', '超时点名行被改名', (s) => ({ ...s, smoke: s.smoke.replace(/ADB_TEXT_TIMEOUT/g, 'ADB_TEXT_TMO') })],
+      ['C10', '取文本档失去默认值', (s) => ({ ...s, smoke: s.smoke.replace('[int]$AdbTextCallTimeoutSeconds = 15', '[int]$AdbTextCallTimeoutSeconds') })],
+      ['C10', '超时不再回空串（改成回一句假数据）', (s) => ({ ...s, smoke: s.smoke.replace(/return ''(\r?\n    \}\r?\n    return \(\[string\]\$r\.Text\))/, "return 'unknown'$1") })],
+      ['C10', '超时清单不再累计', (s) => ({ ...s, smoke: s.smoke.replace('$script:AdbTextTimeouts = @($script:AdbTextTimeouts)', '$script:AdbTextTimeouts = @()') })],
+      ['C10', '汇总读数行被删', (s) => ({ ...s, smoke: s.smoke.replace(/ADB_TEXT_CALL_BUDGET/g, 'ADB_TEXT_BUDGET_X') })]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));

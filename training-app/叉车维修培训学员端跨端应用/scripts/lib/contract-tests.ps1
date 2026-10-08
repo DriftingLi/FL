@@ -64,7 +64,13 @@ function Get-ContractTestPattern {
     # deviceCapture    → deviceCaptureContract（接线层：D12 单次超时与「残帧不进证据名」）
     #                  + deviceCaptureBoundedShotBehavior（行为层：#1562 真挂死桩 + 影子夹具。
     #                    承重证据在行为层 —— 不注册就只在全量那一档跑，token 收窄的门会静默跳过真执行腿）
-    # emulatorSmoke    → emulatorSmokeContract（接线层：C9 同族判据）
+    # emulatorSmoke    → emulatorSmokeContract（接线层：C9 同族判据 + C10 文本收口点，#1568）
     #                  + emulatorSmokeBoundedShotBehavior（行为层：#1562 仿真机冒烟那处调用，判据同上）
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop|deviceCapture|emulatorSmoke'
+    #                  + emulatorSmokeBoundedTextBehavior（行为层：#1568 的 Get-AdbOutput 收口点，12 个调用方；
+    #                    **同一 token 顺带命中**，不新增格子 —— 先例 #1560 把腿追加进已在册套件）
+    # wirelessDebugBoundedText → 行为层：#1568 的 Invoke-Adb 收口点（16 个调用方，且它是设备掉线时的自愈工具）。
+    #                  ⚠️ 刻意取**窄 token**：`wirelessDebug` 会顺带命中 #1564 的
+    #                  wirelessDebugBehavior（B1–B6 现测 81.2 s，含真起后台 keep 与心跳循环），
+    #                  而收窄门里要的是这一族真执行腿（现测 25.1 s）。#1564 那两条维持不注册（其裁定在 #1564 的 PR）。
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop|deviceCapture|emulatorSmoke|wirelessDebugBoundedText'
 }

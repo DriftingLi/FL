@@ -1,0 +1,9 @@
+PROBE adb_exe_exists=True at=2026-10-08T09:08:57
+OS=Microsoft Windows NT 10.0.26200.0 ps=7.6.6
+READ_version ms=178 rc=0 out=Android Debug Bridge version 1.0.41
+READ_devices ms=106 rc=0 out=List of devices attached
+READ_mdns_services ms=103 rc=0 out=List of discovered mdns services
+MGMT_connect_refused ms=2160 rc=0 out=cannot connect to 127.0.0.1:9: ??????????????????????????(10061)
+MGMT_connect_blackhole ms=10152 rc=0 out=failed to connect to 10.255.255.1:5555
+DEV_* no_device ?? ?????? state=device ? transport??????????????? #1560 ???
+

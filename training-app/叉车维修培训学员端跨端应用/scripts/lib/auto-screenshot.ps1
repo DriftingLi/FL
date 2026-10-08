@@ -324,6 +324,14 @@ function Invoke-BoundedAdbCall {
         # stdout 的落点名可以换，但**不能**与 stdout 同文件（`Start-Process` 直接拒绝）。
         # 默认名沿用 #1560 的两个避讳：不叫 `*.png`、不叫 `*.log`（见下方注释）。
         [string]$StderrName = 'adb-screencap-stderr.txt',
+        # argv 各段：**直启分支**（`-DirectExec`）用的那份，与 `$AdbSubCommand` 同义、只是不拼成一条 cmd 串。
+        # 为什么要有直启分支：cmd 那一层在 **Linux / macOS 上根本不存在** ⇒ 非 Windows 的调用方（#1568 的
+        # `wireless-debug.ps1`：它是机器级工具，行为守护在 CI 的 ubuntu 上真跑）经它就只剩「起不来」一条出口，
+        # 看似的「有界」其实是「永远拿不到结果」。等待与杀树仍然只有下面那一份 —— 两条分支共用同一个收口。
+        [string[]]$AdbArgv = @(),
+        # 直启开关：调用方明确「这一条不必经 cmd.exe」。默认**关** —— 截屏那条 PNG 通道走的仍是
+        # #1560 / #1562 已在真机验过的 cmd 重定向载体，本票不把那条已验证的链路换掉。
+        [switch]$DirectExec,
         # 单次调用的上限。现测健康返回 **1217 ms**（2026-10-06 真机 b32d8398；票面记的是 4.8 s ⇒ 两个数都留档，
         # 别只引用对默认值有利的那一个）。默认 15 秒 = 现测的 12 倍余量、票面数的 3 倍；一轮最坏耗时
         # （`PollSeconds` 5 + 本值 15）相对 420 秒上限可忽略，而它把「32 分钟零写入」钉死成**最多 15 秒**。
@@ -338,10 +346,23 @@ function Invoke-BoundedAdbCall {
     # 命名刻意避开两个判据来源：不叫 `*.png`（步骤 7 按 `-Filter '*.png'` 扫目录，`screenshot-diff.ps1:235`）、
     # 不叫 `*.log`（避免被别处的日志扫描捡走当成判据输入）。
     $errFile = Join-Path (Split-Path -Parent $OutFile) $StderrName
-    $cmd = '"{0}" -s {1} {2}' -f $AdbExe, $Serial, $AdbSubCommand
+    # `-s <serial>` 只在**给了 serial** 时才拼：`adb devices` / `mdns services` / `connect` 这一类是
+    # server 级命令，带 `-s` 会被 adb 当参数吃掉（#1568 的 `wireless-debug.ps1` 全走这一类，serial 由
+    # 调用方在自己的 argv 里带）。截屏与 `Test-ScreenAwake` 恒有 serial ⇒ 拼出来的串与之前逐字相同。
+    $cmd = if ($Serial) { '"{0}" -s {1} {2}' -f $AdbExe, $Serial, $AdbSubCommand }
+    else { '"{0}" {1}' -f $AdbExe, $AdbSubCommand }
     try {
-        $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $cmd) `
-            -RedirectStandardOutput $OutFile -RedirectStandardError $errFile -NoNewWindow -PassThru
+        if ($DirectExec) {
+            $argList = @()
+            if ($Serial) { $argList += @('-s', $Serial) }
+            $argList += @($AdbArgv)
+            $p = Start-Process -FilePath $AdbExe -ArgumentList $argList `
+                -RedirectStandardOutput $OutFile -RedirectStandardError $errFile -NoNewWindow -PassThru
+        }
+        else {
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $cmd) `
+                -RedirectStandardOutput $OutFile -RedirectStandardError $errFile -NoNewWindow -PassThru
+        }
     }
     catch {
         # 起不来（路径/权限）≠ 超时：`TimedOut=$false` + `Error` 点名，调用方按「没有采样」处理。
@@ -429,23 +450,42 @@ function Invoke-BoundedAdbText {
         #   「不抄数字，抄过来就是第二真源」的纪律；注释里的数字必须能被读者复算）。
         # 与截屏共用同一个默认值是为了让「一次**有界** adb 调用」在本仓只有一个预算口径，而不是每个子命令各定一个。
         # ⚠️ 「有界」这个限定是实的：本文件之外仍有文本与管理类 `& $AdbExe … | Out-String` 走无界等待，
-        #   现测（剥注释 + 按所在函数归属）全 `scripts/` 共 **26 处 / 5 个文件**：`device-capture.ps1` 6、
-        #   `emulator-smoke.ps1` 14（含 `Get-AdbOutput` 本体 1 行，那个点另有 12 个调用方）、`hx-run.ps1` 4、
-        #   `wireless-debug.ps1` 1（`Invoke-Adb`，另有 16 个调用方）、`lib/env-check.ps1` 1 ⇒ 剩余面登记在 #1568。
-        #   别把本句读成「全仓每次 adb 调用都有界」，也别只盯那两条取证脚本 —— 数法与逐函数分布在那张票里。
-        [int]$TimeoutSeconds = 15
+        #   数法 = 剥注释 + 按所在函数归属（尺入仓在 `docs/verification/tooling/1568/adb-bounded-count.mjs`，
+        #   「26 → 剩余 N」的每一格都在那张票的 PR 证据里用同一把尺复算）。
+        #   别把本句读成「全仓每次 adb 调用都有界」，剩余面登记在 #1568。
+        [int]$TimeoutSeconds = 15,
+        # argv 各段 + 直启开关：透传给执行核的**同一份**等待逻辑（见 `Invoke-BoundedAdbCall` 那两条注释）。
+        # 为什么由调用方而不是本封装判平台：判「这台机器有没有 cmd 那一层」是调用方的既有语境
+        # （`wireless-debug.ps1` 在非 Windows 上要真跑），而 `Test-ScreenAwake` 那条已验证的形状不该被动到。
+        [string[]]$AdbArgv = @(),
+        [switch]$DirectExec,
+        # stderr 合并：`2>&1` 那一格的等价物。为什么必须留在封装这一侧、且必须显式给：
+        # 执行核把 stdout / stderr 落成**两个**文件（`Start-Process` 不允许同文件），而本仓有两条判据
+        # 的原料本来就在 stderr 上（`wireless-debug.ps1` 的 pair 失败分类 `protocol fault`、
+        # `emulator-smoke.ps1` 的 `Get-AdbOutput` 12 个调用方都吃过 adb 的 stderr 原文）——
+        # 默认不合并是为了保住 #1562 已发货的 `Test-ScreenAwake`（它只看 stdout 里的 `mWakefulness=`）。
+        [switch]$MergeStdErr
     )
     $dir = if ($WorkDir) { $WorkDir } else { [System.IO.Path]::GetTempPath() }
     # 文件名带 PID：同机并发会话（多 worktree / 多个取证链同时跑）不互相覆盖同一份 stdout。
     $outFile = Join-Path $dir ('adb-call-stdout-{0}.txt' -f $PID)
+    $errName = ('adb-call-stderr-{0}.txt' -f $PID)
+    # 含空格的段（`-d "uniapp://…"`、带空格的路径）必须逐段加引号，否则经 cmd 那一层会被拆成两个 argv——
+    # 旧的 `& $AdbExe @args` 形态由 PowerShell 传参、不存在这一格，收口时不补就等于把坑位换了个位置。
+    $joined = ($AdbArguments | ForEach-Object {
+        if ($_ -match '\s') { '"{0}"' -f $_ } else { [string]$_ }
+    }) -join ' '
     # ⚠️ 起调用**前先清旧档**（#1562 自审发现的窄缝，2026-10-07）：上一轮被 `Kill` 的调用可能因句柄竞争而删不掉，
     #   旧文本就留在同一个 PID 路径上；而 `-RedirectStandardOutput` 只在**这次调用起得来**时才截断文件
     #   （文件被别的句柄握着 ⇒ `Start-Process` 直接抛 ⇒ 执行核走 catch：`TimedOut=$false` + `Exited=$false`）。
     #   ⇒ 只判 `TimedOut` 就会把**上一次调用的文本**读成本次结论。删除在这里仍然只是卫生
     #   （#1560 的不变式：删除不能当判据），真正的闸门在下面那条 `Exited`。
     Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
-    $call = Invoke-BoundedAdbCall -AdbExe $AdbExe -Serial $Serial -AdbSubCommand ($AdbArguments -join ' ') `
-        -OutFile $outFile -StderrName ('adb-call-stderr-{0}.txt' -f $PID) -TimeoutSeconds $TimeoutSeconds
+    # stderr 走同一条纪律：同一个 PID 路径 ⇒ 起调用前清档 + 只在 `Exited` 时读回（#1568 合并那一格的新入口）
+    Remove-Item -LiteralPath (Join-Path $dir $errName) -Force -ErrorAction SilentlyContinue
+    $call = Invoke-BoundedAdbCall -AdbExe $AdbExe -Serial $Serial -AdbSubCommand $joined `
+        -AdbArgv $AdbArgv -DirectExec:$DirectExec `
+        -OutFile $outFile -StderrName $errName -TimeoutSeconds $TimeoutSeconds
     $text = ''
     # 读回判据 = `Exited`（进程**真的退出了**）而不是「没被判超时」：`Exited=$false` 同时覆盖两种
     # 「盘上那份不是本次调用的字节」——被判超时、以及 `Start-Process` 起不来（catch 那条）。
@@ -453,8 +493,19 @@ function Invoke-BoundedAdbText {
         $text = (Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue)
         if ($null -eq $text) { $text = '' }
     }
+    if ($MergeStdErr -and $call.Exited) {
+        # 合并顺序 = 先 stdout 再 stderr，与调用方原先 `2>&1` 拿到的**内容**等价（行序可能不同：
+        # 两条判据都按 `-match` 取原料，不按行序，实测见 #1568 的 WBD3 腿）。
+        $errText = ''
+        if (Test-Path -LiteralPath $call.ErrFile) {
+            $errText = (Get-Content -LiteralPath $call.ErrFile -Raw -ErrorAction SilentlyContinue)
+            if ($null -eq $errText) { $errText = '' }
+        }
+        if ($errText.Trim()) { $text = if ($text.Trim()) { ($text.Trim() + "`n" + $errText.Trim()) } else { $errText } }
+    }
     # 超时 ⇒ 残帧（这里是半份文本）同样作废：`Text` 留空，由调用方按「没拿到」处理。
     Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $call.ErrFile -Force -ErrorAction SilentlyContinue
     [pscustomobject]@{
         TimedOut = $call.TimedOut; Exited = $call.Exited; ExitCode = $call.ExitCode
         Seconds  = $call.Seconds; Text = $text; OutFile = $outFile

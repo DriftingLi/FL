@@ -1,0 +1,20 @@
+M1 scripts/wireless-debug.ps1 → utils/wirelessDebugContract.test.js exit=1 total=36 failed=2
+    RED: wireless-debug.ps1 契约守护（#1564） › W9（#1568）：W9 被拿掉或换形 ⇒ 必须判红
+    RED: wireless-debug.ps1 契约守护（#1564） › 真文件零违规（九条判据同时成立）
+    restored_clean=true
+M2 scripts/wireless-debug.ps1 → utils/wirelessDebugBoundedTextBehavior.test.js -t WBD3 exit=1 total=5 failed=1
+    RED: wireless-debug.ps1 的 Invoke-Adb 收口点有界性（运行期，#1568） › WBD3 pair 失败分支：adb 把 protocol fault 打在 stderr ⇒ 分类判据照样拿到它（2>&1 语义没丢）
+    restored_clean=true
+M3 scripts/wireless-debug.ps1 → utils/wirelessDebugBoundedTextBehavior.test.js -t WBD1 exit=1 total=5 failed=1
+    RED: wireless-debug.ps1 的 Invoke-Adb 收口点有界性（运行期，#1568） › WBD1 挂死腿：mDNS 发现不返回 ⇒ 到预算给结论（ensure 照旧 unconnected、非 0 退出），日志点名哪一次调用与哪一档预算
+    restored_clean=true
+M6 scripts/wireless-debug.ps1 → utils/wirelessDebugBoundedTextBehavior.test.js -t WBD2 exit=1 total=5 failed=1
+    RED: wireless-debug.ps1 的 Invoke-Adb 收口点有界性（运行期，#1568） › WBD2 对照腿：正常载体 ⇒ ensure 判 connected 且日志里没有一条超时（正常返回不得被误判）
+    restored_clean=true
+M4 scripts/emulator-smoke.ps1 → utils/emulatorSmokeContract.test.js exit=1 total=6 failed=1
+    RED: 仿真机前置冒烟契约（#883 / O2，非门辅助） › 真实文件：零违规
+    restored_clean=true
+M5 scripts/emulator-smoke.ps1 → utils/emulatorSmokeBoundedTextBehavior.test.js -t ETD2 exit=1 total=5 failed=1
+    RED: emulator-smoke 文本收口点 Get-AdbOutput 的有界性（运行期，#1568） › ETD2: 对照腿正常返回时文本照旧回给调用方，stdout 与 stderr 都在（2>&1 语义不许在收口时丢掉）
+    restored_clean=true
+OTHER_DIRTY_AFTER_ALL=0 (只允许本会话有意改的 ADR 与 README)
