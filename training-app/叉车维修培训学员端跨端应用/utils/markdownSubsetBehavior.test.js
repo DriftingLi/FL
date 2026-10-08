@@ -179,7 +179,7 @@ describe('行为对账 · 反向：未声明的成员不得出块，且内容退
     expect(types(blocks)).not.toContain('image');          // 仍不产 image 块（图文分离不变）
     expect(blocks[0].text).toBe(SRC);                       // 块内存源串（分叉成立）
     expect(k.inlineRunsPlainText(k.splitInlineRuns(blocks[0].text))).toBe('见 故障图 这张');
-    // 未声明 inline 的档：仍在解析器里剥成 alt（逐字不变，⑩-6）
+    // 未声明 inline 的档：仍在解析器里剥成 alt（块数组逐字不变 = ⑩-6 拆分后那条硬 AC，#1499）
     expect(m.parseMarkdown(SRC, m.SUBSET_CHAPTER)[0].text).toBe('见 故障图 这张');
   });
 });
