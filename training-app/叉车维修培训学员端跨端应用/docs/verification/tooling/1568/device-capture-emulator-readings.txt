@@ -1,0 +1,20 @@
+# device-capture 分档收口的仿真机腿读数（每行一条 LEG 记录，RAW 是整行）
+DRIVER avd=Pixel_4a_API_30 port=5554 capture=D:\FL\wt-1568b\training-app\叉车维修培训学员端跨端应用\scripts\device-capture.ps1 leg_cap_seconds=300 at=2026-10-08T15:08:51
+DRIVER booted=True boot_ms=66774 devices_line=emulator-5554?device
+LEG L1_ref exit=0 wall_seconds=33.5 log_present=True result=PASS inconclusive=0 text_calls=4 text_timeouts=0 hang_server=False hang_logcat=False hang_read=False shot_bytes_nonzero=True timeout_count=0 child_err_tail=""
+  RAW L1_ref: [device-capture] ADB_TEXT_CALL_BUDGET calls=4 timeouts=0 defaultBudgetSeconds=15 hungCalls=none?
+  RAW L1_ref: [device-capture] ADB_TIER_BUDGET shot=15 text=15 logcat=60?
+  RAW L1_ref: [device-capture] LOGCAT_INCONCLUSIVE=0?
+  RAW L1_ref: [device-capture] DEVICE_CAPTURE_RESULT=PASS?
+LEG L2_logcat0 exit=1 wall_seconds=5.8 log_present=True result=FAIL inconclusive=1 text_calls=4 text_timeouts=2 hang_server=False hang_logcat=True hang_read=False shot_bytes_nonzero=True timeout_count=2 child_err_tail=""
+  RAW L2_logcat0: [device-capture] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 shell logcat -d -v epoch -t 1 callBudgetSeconds=0 seconds=0.2 tier=logcat ?? ???????????????????????????????
+  RAW L2_logcat0: [device-capture] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 shell logcat -d -v epoch callBudgetSeconds=0 seconds=0 tier=logcat ?? ???????????????????????????????
+  RAW L2_logcat0: [device-capture] ADB_TEXT_CALL_BUDGET calls=4 timeouts=2 defaultBudgetSeconds=15 hungCalls=shell logcat -d -v epoch -t 1;shell logcat -d -v epoch?
+  RAW L2_logcat0: [device-capture] ADB_TIER_BUDGET shot=15 text=15 logcat=0?
+  RAW L2_logcat0: [device-capture] LOGCAT_INCONCLUSIVE=1?
+  RAW L2_logcat0: [device-capture] DEVICE_CAPTURE_RESULT=FAIL?
+LEG L3_text0 exit=2 wall_seconds=1.5 log_present=True result=UNUSABLE inconclusive=none text_calls=none text_timeouts=none hang_server=True hang_logcat=False hang_read=False shot_bytes_nonzero=False timeout_count=1 child_err_tail=""
+  RAW L3_text0: [device-capture] ADB_TEXT_TIMEOUT call=adb devices -l callBudgetSeconds=0 seconds=0.1 tier=server ?? ???????????????????????????????
+  RAW L3_text0: [device-capture] DEVICE_CAPTURE_RESULT=UNUSABLE?
+TEARDOWN emulator_stopped=True
+LEGS_DONE=3/3 legs_ran=3 labels=L1_ref(exit=0),L2_logcat0(exit=1),L3_text0(exit=2)

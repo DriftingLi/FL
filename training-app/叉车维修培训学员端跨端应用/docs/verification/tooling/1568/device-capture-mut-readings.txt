@@ -1,0 +1,81 @@
+# 变异电池原始读数（#1568 AC2 第二片 device-capture，2026-10-08，三趟合并）
+# 工具：.ci-verify/battery*.js（一次性，不入库；口径三条：注入落地断言 / jest 自己的判定行 / git checkout 还原断言）
+# pass1 = M1..M6 完成；M7 在该趟的 jest 执行中被本会话一条 git checkout 打断 ⇒ 该条作废（见文末重跑）
+# pass2 = M7..M9 重跑；pass3 = M3 在契约锚改成 Get-LogcatWindow 函数体 scoped 之后重跑
+# REVERT 行的 new_left 只在 to 不是 from 的子串时才有意义（M1/M9 的 CHECK 是这个读数口径的问题，old_back>0 才是还原判据）
+
+# 变异电池读数（#1568 AC2 第二片 device-capture，2026-10-08）
+# 每条三断言：落地（new_count>0）/ 守护判红（jest 自己的 Tests: 行与 × 行）/ 还原（旧值回来了且新值不在）
+MUT M1 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: server 级命令被拼上 -s = 换判据（AC 第 4 条）
+  JEST M1 Tests:       3 failed, 27 passed, 30 total | 期望打红：D13 点位接线 + DCT2（devices 的 argv 里出现 -s）
+    RED M1 × 真实文件：零违规 (6 ms)
+    RED M1 × DCT1 server 级挂死 ⇒ 结论落盘（tier=server + 该次预算），Resolve-DeviceSerial 照旧判 UNUSABLE 并 exit 2 (3
+    RED M1 × DCT2 对照腿：devices 正常返回一台 ⇒ serial 与 model 照旧解析，日志里零超时 (1700 ms)
+  REVERT M1 old_back=1 new_left=1 CHECK
+MUT M2 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: 点位接错档：档写了却没接上
+  JEST M2 Tests:       2 failed, 28 passed, 30 total | 期望打红：D13 点位接线 + DCT5（腿给的是 text=3 / logcat=2，读到 3 即红）
+    RED M2 × 真实文件：零违规 (6 ms)
+    RED M2 × DCT5 logcat 基线挂死 ⇒ 窗口起点仍是 0（既有 logcat=SKIP 出口不变）但能点名「通道不返回」与「缓冲为空」是两件事 (4392 ms)
+  REVERT M2 old_back=1 new_left=0 OK
+MUT M3 file=scripts/device-capture.ps1 landed=hits=1 new_count=0 :: 全量 logcat 不带出 TimedOut ⇒ 空日志 = 「无崩溃」
+  JEST M3 Tests:       3 failed, 27 passed, 30 total | 期望打红：D13 的 TimedOut 带出锚 + DCT6（挂死被读成无崩溃那一格）
+    RED M3 × DCT6 logcat 全量挂死 ⇒ TimedOut=True 且同一读数里 FatalCount=0（险处：空日志会被读成「无崩溃」） (3638 ms)
+    RED M3 × DCT7 对照腿：全量正常返回含 FATAL 与本包 ANR ⇒ TimedOut=False 且两个计数照旧 (1627 ms)
+    RED M3 × DCT11 挂死不得成为链路终点：基线挂一次 ⇒ 随后那次全量 dump 照样拿得到 (3768 ms)
+  REVERT M3 old_back=1 new_left=0 OK
+MUT M4 file=scripts/device-capture.ps1 landed=hits=2 new_count=2 :: 窗口挂死不再落失败
+  JEST M4 Tests:       1 failed, 29 passed, 30 total | 期望打红：D13 的主判据锚（行为腿射程到函数为止，main 不在腿内 —— 这一格如实记「契约独家」）
+    RED M4 × 真实文件：零违规 (6 ms)
+  REVERT M4 old_back=2 new_left=0 OK
+MUT M5 file=scripts/device-capture.ps1 landed=hits=1 new_count=0 :: 静默换判据原料
+  JEST M5 Tests:       2 failed, 28 passed, 30 total | 期望打红：D13 的 -MergeStdErr 锚 + DCT13（stderr 原文进不了调用方）
+    RED M5 × 真实文件：零违规 (5 ms)
+    RED M5 × DCT13 stderr 的失败原文仍是判据原料：am start 只写 stderr 的答复，落盘那行必须带得到（摘掉 -MergeStdErr 就是静默换判据） (1680
+  REVERT M5 old_back=1 new_left=0 OK
+MUT M6 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: 点不出「挂的是哪一档」
+  JEST M6 Tests:       7 failed, 23 passed, 30 total | 期望打红：D13 点名行锚 + 每一条挂死腿（DCT1/3/5/6/8/9/11）
+    RED M6 × 真实文件：零违规 (5 ms)
+    RED M6 × DCT1 server 级挂死 ⇒ 结论落盘（tier=server + 该次预算），Resolve-DeviceSerial 照旧判 UNUSABLE 并 exit 2 (3
+    RED M6 × DCT3 dumpsys 挂死 ⇒ Get-ForegroundInfo 带出 TimedOut=True（同一格 Component 确实是空 —— 不带出就是把挂死读成「没
+    RED M6 × DCT5 logcat 基线挂死 ⇒ 窗口起点仍是 0（既有 logcat=SKIP 出口不变）但能点名「通道不返回」与「缓冲为空」是两件事 (3289 ms)
+    RED M6 × DCT6 logcat 全量挂死 ⇒ TimedOut=True 且同一读数里 FatalCount=0（险处：空日志会被读成「无崩溃」） (3568 ms)
+    RED M6 × DCT8 resolve-activity 挂死 ⇒ 仍回退到当前前台组件（AC 第 7 条：既有回退分支不变），结论点名 tier=resolve (3374 ms)
+    RED M6 × DCT9 am start 挂死 ⇒ Start-AppPage 不抛不吞、流程继续（既有路径只加预算），结论点名 tier=am-start (3758 ms)
+  REVERT M6 old_back=1 new_left=0 OK
+MUT M7 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: 通道故障被写成「没有设备」
+  JEST M7 Tests:       2 failed, 28 passed, 30 total | 期望打红：D13 的设备探测出口锚 + DCT1（原因行不再带 tier=server）
+    RED M7 × 真实文件：零违规 (4 ms)
+    RED M7 × DCT1 server 级挂死 ⇒ 结论落盘（tier=server + 该次预算），Resolve-DeviceSerial 照旧判 UNUSABLE 并 exit 2 (3
+  REVERT M7 old_back=1 new_left=0 OK
+MUT M8 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: 把一处改回无界直调 —— 本文件做完了，棘轮才撑得住整文件（与 emulator-smoke 的 C11 同律）
+
+## —— pass2（M7..M9 重跑）——
+# 变异电池读数（#1568 AC2 第二片 device-capture，2026-10-08）
+# 每条三断言：落地（new_count>0）/ 守护判红（jest 自己的 Tests: 行与 × 行）/ 还原（旧值回来了且新值不在）
+MUT M7 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: 通道故障被写成「没有设备」
+  JEST M7 Tests:       2 failed, 28 passed, 30 total | 期望打红：D13 的设备探测出口锚 + DCT1（原因行不再带 tier=server）
+    RED M7 × 真实文件：零违规 (6 ms)
+    RED M7 × DCT1 server 级挂死 ⇒ 结论落盘（tier=server + 该次预算），Resolve-DeviceSerial 照旧判 UNUSABLE 并 exit 2 (3
+  REVERT M7 old_back=1 new_left=0 OK
+MUT M8 file=scripts/device-capture.ps1 landed=hits=1 new_count=1 :: 把一处改回无界直调 —— 本文件做完了，棘轮才撑得住整文件（与 emulator-smoke 的 C11 同律）
+  JEST M8 Tests:       2 failed, 28 passed, 30 total | 期望打红：D13 的整文件 & $AdbExe 归零棘轮 + DCT8（点位绕开委托层 ⇒ 点名行不再出现）
+    RED M8 × 真实文件：零违规 (6 ms)
+    RED M8 × DCT8 resolve-activity 挂死 ⇒ 仍回退到当前前台组件（AC 第 7 条：既有回退分支不变），结论点名 tier=resolve (31152 ms)
+  REVERT M8 old_back=1 new_left=0 OK
+MUT M9 file=scripts/lib/contract-tests.ps1 landed=hits=1 new_count=7 :: 在册性锚：证明「子串顺带命中」这件事本身有守护
+  JEST M9 Tests:       2 failed, 3 passed, 5 total | 期望打红：contractTestPattern 套件（在册性：摘掉 token ⇒ 收口门里静默不跑这一族）
+    RED M9 × P1: 真源可 dot-source，且返回的 pattern 与权威内容逐字一致 (822 ms)
+    RED M9 × P2: pattern 无空格、无重复 token（jest 参数与可读性） (630 ms)
+  REVERT M9 old_back=1 new_left=7 CHECK
+BATTERY_DONE=3
+
+## —— pass3（M3 重跑，scoped 锚）——
+# M3 单条重跑（第一趟 M3 时契约锚是全文级，被另三处同形文字满足 ⇒ 契约不打红；本轮改成函数体 scoped 后重跑）
+MUT M3 landed=hits=1 :: 全量 logcat 不带出 TimedOut ⇒ 空日志 = 「无崩溃」
+  JEST M3 Tests:       4 failed, 26 passed, 30 total | 期望打红：D13 的 Get-LogcatWindow 函数体锚（scoped 版）+ DCT6 / DCT7 / DCT11
+    RED M3 × 真实文件：零违规 (6 ms)
+    RED M3 × DCT6 logcat 全量挂死 ⇒ TimedOut=True 且同一读数里 FatalCount=0（险处：空日志会被读成「无崩溃」） (4308 ms)
+    RED M3 × DCT7 对照腿：全量正常返回含 FATAL 与本包 ANR ⇒ TimedOut=False 且两个计数照旧 (2475 ms)
+    RED M3 × DCT11 挂死不得成为链路终点：基线挂一次 ⇒ 随后那次全量 dump 照样拿得到 (4625 ms)
+  REVERT M3 old_back=1 OK
+BATTERY3_DONE=1

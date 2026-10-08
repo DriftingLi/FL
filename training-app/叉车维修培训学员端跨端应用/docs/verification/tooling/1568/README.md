@@ -179,6 +179,101 @@ N8 第一版指到 `-t EMT8`，现测 **`exit=0 failed=0`** —— 函数**定�
 （12:22 那轮的三条原文就是这么没的）⇒ 现在按 `$RunStamp` 分组；变异驱动 `git checkout --` 还原
 被测物，所以**跑变异前必须先提交**（本轮 `BASE_HEAD=d5694bfd`、`PRE_PRODUCT_DIRTY=0`）。
 
+## 3d. AC2 第二片：`device-capture.ps1` 的 6 处（2026-10-08）
+
+同一把尺，改前改后各跑一次（`node docs/verification/tooling/1568/adb-bounded-count.mjs`）：
+
+| 读数 | 命令输出（合计行） | 逐文件 |
+| --- | --- | --- |
+| 改前（master `704fd336`） | `ADB_UNBOUNDED_TOTAL calls=11 files=3` | device-capture **6** / hx-run 4 / env-check 1 |
+| 改后（本 PR，改后 head 见下面「复现」段的现测命令） | `ADB_UNBOUNDED_TOTAL calls=5 files=2` | hx-run 4 / env-check 1（**device-capture 归零**） |
+
+`device-capture.ps1` 那 6 处改前逐函数各 1 行（`Get-DeviceList` `:270` / `Get-ForegroundInfo` `:323` /
+`Get-LogcatBaseline` `:343` / `Get-LogcatWindow` `:351` / `Resolve-LauncherComponent` `:459` /
+`Start-AppPage` `:471`），归零后本文件不再出现在尺的输出里 ⇒ 「11 → 5」与「24 → 11」是同一把尺的两个读数，
+不是换了数法。
+
+### 六处的形态与「空」该给哪种结论
+
+| 点位 | 命令 | 档（默认值） | 挂死时拿到的「空」 | 结论落点 | 只读性 |
+| --- | --- | --- | --- | --- | --- |
+| `Get-DeviceList` | `devices -l`（**server 级**，不带 `-s`） | text 15 s | 空列表 | **自己的 exit 2 出口**，排在「没有设备」之前 | 只读 |
+| `Get-ForegroundInfo` | `shell dumpsys activity activities`（**每页都跑**） | text 15 s | Component 空 | 既有失败条目不动 + 补一条点名 `tier=read` | 只读 |
+| `Get-LogcatBaseline` | `shell logcat -d -v epoch -t 1` | logcat 60 s | Epoch = 0 | 既有 `logcat=SKIP` **不升级**，只在提示里点名成因 | 只读 |
+| `Get-LogcatWindow` | `shell logcat -d -v epoch`（全量） | logcat 60 s | 两个计数 0 | **必须落进 `$failures`** + `LOGCAT_INCONCLUSIVE=1` | 只读 |
+| `Resolve-LauncherComponent` | `shell cmd package resolve-activity …` | text 15 s | 无匹配 | 走既有第二层回退（当前前台），点名行分开两种「没匹配」 | 仅 -AllowAppStart 可达 |
+| `Start-AppPage` | `shell am start …` | text 15 s | 空原文 | 不抛不吞、原文行照打、流程继续 | 既有写路径，只加预算 |
+
+档位默认值的现测出处（逐字指得到本目录的入库件，不抄进代码注释之外的地方）：
+
+| 形态 | 现测 | 出处 |
+| --- | --- | --- |
+| `adb devices` | 106 ms | `latency-readings.txt` |
+| `adb version` | 178 ms | `latency-readings.txt` |
+| `shell dumpsys activity activities` | 1,168 / 1,662 ms | `emulator-tier-readings.txt` / `-run2.txt` |
+| `shell cmd package resolve-activity` | 457 / 336 ms | 同上 |
+| `logcat -d`（全量） | 5,896 / 6,186 ms | 同上 ⇒ 15 秒只剩 ≈2.4 倍 ⇒ 单列 60 秒档 |
+| `logcat -d -v epoch -t 1` | **没有独立现测** | 与全量同档（同形态里更小的那一个）—— 这条是记账，不是量过 |
+| `am start` | **没有独立现测** | 同族 AM 往返（resolve 两列）+ emulator-smoke 里同形态走文本档的先例 |
+
+⚠️ 仿真机与真机不同机：上表除前两行外都来自 AVD `Pixel_4a_API_30` ⇒ **真机的 dumpsys / logcat 余量没量过**。
+本片按仿真机现测给档（15 秒 ≈ 最慢现测的 9 倍、60 秒 ≈ 10 倍）；若真机现测更慢，**改档必须带新读数**。
+
+### 成对取证（红相 / 绿相各一趟，同一套腿）
+
+| 相 | 命令 | jest 自己的判定行 | 墙钟 |
+| --- | --- | --- | --- |
+| 红（接线前） | `npx jest --config jest.config.unit.js utils/deviceCaptureTierBehavior.test.js` | `Tests: 10 failed, 3 passed, 13 total` | **263.771 s** |
+| 绿（接线后） | `npx jest --config jest.config.unit.js utils/deviceCapture`（三套件：Contract + BoundedShot + Tier） | `Tests: 30 passed, 30 total` / `Test Suites: 3 passed, 3 total` | **50.702 s** |
+
+红相那 10 条**全部是断言「超时结论存在」的腿**（DCT1、DCT3–DCT11），过的 3 条是不依赖该结论的
+DCT0（pwsh 可用见证）、DCT2（正常返回对照腿）、DCT12（多设备守卫 —— 改动前后都 exit 2）
+⇒ 红不是因为腿写坏，是因为当时**真的没有单次超时**：那几条腿各等满假 adb 桩的 30 秒寿命
+（`hangFor` 命中 ⇒ `setTimeout(…30000)`），再被 `execFileSync` 的上界收掉。
+**同一族腿的墙钟从 263.8 秒降到 50.7 秒**（且后者多跑了两套守护）—— 这个下降本身就是「有界生效」的读数；
+中间那一趟 `45.217 s`（1 failed / 29 passed）是 DCT1 的原因行正则写宽了（`(\S+)` 连 `）⇒` 一起吃掉），
+与产品无关，改正后才是上面那行 30/30。
+
+### 判别力：变异电池（逐条弄坏被测物，M1–M9，三趟）
+
+原始读数件：`device-capture-mut-readings.txt`（工具输出原样拷贝，每条含 `landed=` / `JEST` / `RED` / `REVERT`）。
+三趟的来历要写清：**pass1 跑完 M1–M6，M7 那条在它的 jest 执行中被本会话的一次 `git checkout` 打断 ⇒ 读数作废**；
+pass2 重跑 M7–M9；pass3 是 M3 在契约锚改成**函数体 scoped** 之后的重跑（第一趟 M3 只有行为腿打红，理由见下表）。
+
+| 变异 | 弄坏的那格 | 打红的守护（jest 自己的判定行数） | 读数 |
+| --- | --- | --- | --- |
+| M1 | server 点位丢 `-NoSerial` | 契约「真实文件：零违规」+ DCT1 + DCT2（3 failed / 30） | argv 判据真管用 |
+| M2 | logcat 点位接成文本档 | 契约 + DCT5（2 failed） | 腿实参给 `text=3 / logcat=2` ⇒ 读到 3 即红 |
+| M3 | 全量 logcat 不带出 `TimedOut` | pass1：只有 DCT6 + DCT7 + DCT11（3 failed，**契约不打红**）<br>pass3（锚 scoped 后）：契约 + 同三条（4 failed） | 全文级锚被另三处同形文字满足 ⇒ 当场改成 `Get-LogcatWindow` 函数体锚；险处不许只靠一层 |
+| M4 | 窗口挂死不再落 `$failures` | **仅**契约（1 failed） | 如实记：行为腿用 AST 抽函数，main 不在射程 ⇒ 这一格契约独家 |
+| M5 | 摘 `-MergeStdErr` | 契约 + DCT13（2 failed） | stderr 原文是判据原料 |
+| M6 | 点名行 `tier=$Tier` 改成常量 | 契约 + DCT1/3/5/6/8/9（7 failed） | 每条挂死腿都依赖它 |
+| M7 | devices 的挂死出口并进「没有设备」 | 契约 + DCT1（2 failed，pass2 重跑） | 原因行不再带 `tier=server` |
+| M8 | 一处改回 `& $AdbExe … \| Out-String` | 契约的**整文件归零棘轮** + DCT8（2 failed） | DCT8 那一腿墙钟从 3.4 秒变 **31.2 秒** —— 无界形状的直接读数 |
+| M9 | 从 pattern 里摘掉 `deviceCapture` token | `contractTestPatternBehavior` P1 + P2（2 failed / 5） | 「子串顺带命中」这件事本身有守护 |
+
+### 在册性与真链路腿的边界
+
+- 在册性现测：`npx jest --config jest.config.unit.js --listTests` 里子串 `deviceCapture` 已列出
+  **三个**套件（`Contract` / `BoundedShotBehavior` / `TierBehavior`）⇒ **不新增格子**；M9 是这条裁定的反面见证。
+- 真链路腿（真 adb + 真仿真机，`device-capture-emulator-legs.ps1`，读数件 `device-capture-emulator-readings.txt`）：
+
+| 腿 | 现测 | 读到什么 |
+| --- | --- | --- |
+| L1 `ref`（默认预算） | `exit=0` / 33.5 s | `ADB_TEXT_CALL_BUDGET calls=4 timeouts=0` + `ADB_TIER_BUDGET shot=15 text=15 logcat=60` + `LOGCAT_INCONCLUSIVE=0` + `DEVICE_CAPTURE_RESULT=PASS`，截图非零 ⇒ **真 adb 的答复仍被原有解析器读懂**（devices 状态列 / dumpsys 前台行 / logcat epoch 行三处都是），分档没把正常等误判成挂死 |
+| L2 `-AdbLogcatTimeoutSeconds 0` | `exit=1` / 5.8 s | 两条 `ADB_TEXT_TIMEOUT … tier=logcat` 逐字是 `shell logcat -d -v epoch -t 1` 与 `shell logcat -d -v epoch`（`callBudgetSeconds=0 seconds=0.2 / 0`）+ `LOGCAT_INCONCLUSIVE=1` + 整趟 **FAIL**（不是「无崩溃」的 PASS）；`hungCalls=` 把两条点名；截图仍出图（`shot_bytes_nonzero=True`）⇒ 假绿路径在真链路上被堵住且**链没停住** |
+| L3 `-AdbTextCallTimeoutSeconds 0` | `exit=2` / 1.5 s | `ADB_TEXT_TIMEOUT call=adb devices -l callBudgetSeconds=0 seconds=0.1 tier=server` —— **argv 里没有 `-s`**（server 级形态在真 adb 上成立），整条链在 1.5 秒给出 UNUSABLE；旧写法这一格是**永不返回**，没有对照可给 |
+
+  收尾行 `LEGS_DONE=3/3 legs_ran=3`，AVD 冷起 `boot_ms=66774`。RAW 行的中文尾巴按驱动既有纪律被 scrub 成 `?`
+  （读数件只留 ASCII token，中文原文在 `.ci-verify/device-capture.log` —— 与 §3c 那套血账同律）。
+  ⚠️ **①a 的真机取证本轮未跑**：手机侧无线调试离线（`adb devices` 现测只有 `10.255.255.1:5555 offline`
+  那条探针残留、`adb mdns services` 空），重开要人在手机上操作。本片的判据不依赖它，也不把它写成「已验」——
+  仿真机替代的是「真 adb 的答复仍被解析」与「到点给可见结论」这两格，**替代不了**厂商 ROM 的 dumpsys 字段差异
+  （本机小米实测定档：Android 14+ 只报 `topResumedActivity`，`mResumedActivity` 那一格是空 —— 判据写在
+  `scripts/device-capture.ps1` 的 `Get-ForegroundInfo` 上方注释里，AVD 上量不到这一支）。
+- 驱动自己的四条纪律（四级根路径 + `Test-Path` 先 throw、每腿 `WaitForExit(ms)` 硬上界、子进程 stdout 按
+  `$RunStamp` 分名、RAW 整行与开跑前逐条编译自检）都是从上面 §3c 那三处洞抄过来的 —— 见其 SYNOPSIS 末段。
+
 ## 4. 在册性（AC 第 5 条：先现测 `scripts/lib/contract-tests.ps1` 再决定）
 
 - AC 第 2 条新增的行为套件 `emulatorSmokeTierBehavior` 同样落在子串 `emulatorSmoke` 的射程内

@@ -61,9 +61,14 @@ function Get-ContractTestPattern {
     #                    「门不交给 agent」「建树 cwd 在主树」「StopOn=2 即整轮停」）
     # styleLoop        → styleLoopBehavior（#1543：样式内循环入口的**产物形状**——
     #                    那一行的字节预算/点名/退出码，与包装层「子进程静默就判红」那条 fail-closed）
-    # deviceCapture    → deviceCaptureContract（接线层：D12 单次超时与「残帧不进证据名」）
+    # deviceCapture    → deviceCaptureContract（接线层：D12 截图单次超时与「残帧不进证据名」
+    #                  + D13 本文件 6 处文本/管理类直调分档收口，#1568 AC 第 2 条）
     #                  + deviceCaptureBoundedShotBehavior（行为层：#1562 真挂死桩 + 影子夹具。
     #                    承重证据在行为层 —— 不注册就只在全量那一档跑，token 收窄的门会静默跳过真执行腿）
+    #                  + deviceCaptureTierBehavior（行为层：#1568 那 6 处的分档，DCT1–DCT13）
+    #                    ⚠️ **不需要新格子**：现测 `npx jest --listTests` 里子串 `deviceCapture` 已同时列出
+    #                    上面三个套件（2026-10-08 实测 `--listTests | grep -c deviceCapture` = 3），
+    #                    再加一格就是第二真源（AC 第 6 条要求先现测再决定，这条就是那次现测的落点）。
     # emulatorSmoke    → emulatorSmokeContract（接线层：C9 同族判据 + C10 文本收口点 + C11 十三处直调分档，#1568）
     #                  + emulatorSmokeBoundedShotBehavior（行为层：#1562 仿真机冒烟那处调用，判据同上）
     #                  + emulatorSmokeBoundedTextBehavior（行为层：#1568 的 Get-AdbOutput 收口点，12 个调用方；

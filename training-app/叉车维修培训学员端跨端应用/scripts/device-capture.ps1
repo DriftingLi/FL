@@ -42,9 +42,16 @@
     （`-AdbCallTimeoutSeconds`，默认 15 秒），到点不返回 ⇒ 终止整棵进程树、该页记失败并**继续**跑后面的页，
     日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」。这不改变只读性 —— 发的还是同一条
     `exec-out screencap -p`，只是不再无限等它（旧写法挂在一次调用上时，整条取证链就地停住、既不产帧也不报错）。
-    ⚠️ **这句话的射程就到截图为止**：本脚本另有 6 处文本/管理类 adb 调用（`Get-DeviceList`、每页都跑的
-    `Get-ForegroundInfo`、`Get-LogcatBaseline`、`Get-LogcatWindow`、`Resolve-LauncherComponent`、`Start-AppPage`）
-    仍是无界的 `& $AdbExe … | Out-String`，**#1562 没做**（票面点名的只有三处 `screencap` 同形落点）⇒ 剩余面登记在 #1568。
+    ⚠️ **本文件的每次 adb 调用都有单次超时**（#1568 AC 第 2 条，2026-10-08 收口；截图那一格由 #1562 先落）：
+    除 `exec-out screencap -p` 之外那 6 处文本/管理类调用（`Get-DeviceList`、每页都跑的 `Get-ForegroundInfo`、
+    `Get-LogcatBaseline`、`Get-LogcatWindow`、`Resolve-LauncherComponent`、`Start-AppPage`）现也走同一件有界执行核
+    （`lib/auto-screenshot.ps1`，本文件 dot-source 复用），并**按调用形态分两档**：单行读与 server 级 15 秒、
+    全量 `logcat -d` 60 秒 —— 默认值与其现测出处写在 `param()` 上，别在这里抄数字。
+    ⚠️ **这句话的射程就到「本文件」**：别把它读成整个仓的每次 adb 调用都有界。剩余面以现测为准 ——
+    `node docs/verification/tooling/1568/adb-bounded-count.mjs`（尺、逐文件读数与剥注释法在同目录 README.md），
+    未收口面登记在 #1568。**为什么反复强调射程**：本段旧版的声明只覆盖截图那一格，收口后就成了过期话，
+    而反过来把它写成「整个仓都做完了」比过期更坏 —— 下一会话照它判断射程就会误估工作量
+    （#1568 的登记票自己同样飘过两次，见该票「现测」段与守护 D13 的注入用例）。
     ⚠️ **残帧不进证据**：截图先落 `.part`，「调用返回 + 帧非空」才改名归位。被杀调用的残帧**可能删不掉**
     （#1560 真链路现测：`Kill` 之后句柄未放，删除与它竞争），而本链的出图判据是「文件存在且非空」
     ⇒ 归位靠命名兑现，不靠删除成功。
@@ -184,10 +191,25 @@ param(
     # 15 秒给了最慢那次的十倍余量，同时把「一次不返回就整条链就地停住」钉死成**最多 15 秒** ——
     # 预算给宽不改变结论，只改变多久出结论。
     # 与 `lib/auto-screenshot.ps1` 的 `-AdbCallTimeoutSeconds` 取同一个默认值：本仓「一次**有界** adb 调用」只有一个口径。
-    # ⚠️ 限定词是实的：本脚本另有 6 处文本/管理类 `& $AdbExe … | Out-String` 仍走无界等待（`Get-DeviceList` /
-    #   `Get-ForegroundInfo`（每页都跑）/ `Get-LogcatBaseline` / `Get-LogcatWindow` / `Resolve-LauncherComponent` /
-    #   `Start-AppPage`）⇒ 不在 #1562 票面射程，剩余面登记在 **#1568**，别把这段读成「本脚本每次 adb 调用都有界」。
     [int]$AdbCallTimeoutSeconds = 15,
+    # **一次取文本 / 管理类的 adb 调用**的上限（#1568 AC 第 2 + 3 条，2026-10-08）。收的是本文件那 6 处
+    # `& $AdbExe … 2>&1 | Out-String`（`Get-DeviceList` / 每页都跑的 `Get-ForegroundInfo` / `Get-LogcatBaseline` /
+    # `Get-LogcatWindow` / `Resolve-LauncherComponent` / `Start-AppPage`）。形态与截图不同：等的是**文本**，
+    # 而 `Get-ForegroundInfo` **每页都跑** ⇒ 一次不返回就顶掉整次取证，且 `Get-LogcatWindow` 挂死的下场是
+    # **空日志**——崩溃计数读成 0 会被写成「无崩溃」（比就地停住更坏，故下面把 TimedOut 一路带到主判据）。
+    # 默认值只引用指得到库内产物的现测：同机 `adb devices` **106 ms**、`adb version` **178 ms**
+    # （`docs/verification/tooling/1568/latency-readings.txt`）；仿真机同形态 `shell dumpsys activity activities`
+    # **1,168 / 1,662 ms**、`resolve-activity` **457 / 336 ms**（同目录 `emulator-tier-readings.txt` 与 `-run2.txt`）
+    # ⇒ 15 秒给了最慢那次的 ≈9 倍余量。与 `emulator-smoke.ps1` 的同名参数同值，是为了让「一次有界 adb
+    # 文本调用」在本仓只有一个口径，而不是每个脚本各定一个数。
+    [int]$AdbTextCallTimeoutSeconds = 15,
+    # **全量 logcat dump 单独上一档**（#1568 AC 第 3 条：按调用形态分档，长等不许塞进文本档）。
+    # 现测 `logcat -d` **5,896 / 6,186 ms**（上面那两份入库读数）⇒ 套 15 秒只剩 ≈2.4 倍余量，而真会话的
+    # 缓冲区比刚起机的仿真机更满：这一格贴读数定档就是**把正常当挂死**。取 60 秒（≈10 倍），
+    # 与 `emulator-smoke.ps1` 的 `-AdbLogcatTimeoutSeconds` 同值同因。
+    # ⚠️ `Get-LogcatBaseline`（`logcat -d -v epoch -t 1`）是同形态里**更小**的一次，本仓**没有它的独立现测**
+    #   ⇒ 与全量同档（这一句是「没量过」的记账，不是「量过且等于 60 秒」的声明）。
+    [int]$AdbLogcatTimeoutSeconds = 60,
     [string]$Module = 'device',
     [string]$ArchiveModule = '',
     [switch]$NoArchive,
@@ -229,18 +251,21 @@ $script:DeviceModel = ''
 $script:ChildProcesses = @()
 $script:DrawingReady = $false
 $script:FinalStatus = ''
-$script:Foreground = [pscustomobject]@{ Component = ''; Raw = ''; Source = '' }
+$script:Foreground = [pscustomobject]@{ Component = ''; Raw = ''; Source = ''; TimedOut = $false }
 $script:TargetPackage = ''
 $script:ShotRecords = @()
 # 超时过的截图调用点名清单（#1562）：汇总与机检行用它，「哪一次调用、多大预算、有没有留下残帧」才看得见
 $script:ShotTimeouts = @()
+# 文本/管理类调用的计数与超时清单（#1568 AC 第 4 条）：`calls=` 是分母，没有分母就读不出 `timeouts=`
+$script:AdbTextCalls = 0
+$script:AdbTextTimeouts = @()
 $script:SkippedPages = @()
 $script:WindowStart = 0.0
 $script:WindowKnown = $false
 $script:FinalTotals = [pscustomobject]@{
     Lines = 0; Total = 0; WindowLines = 0; WindowStart = 0.0; WindowKnown = $false
     FatalCount = 0; AnrAllCount = 0; AnrPkgCount = 0
-    RuntimeCrashes = 0; ProcessDeaths = 0; FatalSamples = @(); AnrSamples = @()
+    RuntimeCrashes = 0; ProcessDeaths = 0; FatalSamples = @(); AnrSamples = @(); TimedOut = $false
 }
 $script:PageResultsAll = @()
 
@@ -265,9 +290,46 @@ function Fail-Environment {
     exit 2
 }
 
+# ── 有界 adb 调用的**唯一**委托层（#1568 AC 第 2 条，2026-10-08）─────────────────────────────
+# 「一次 adb 调用怎么才有界」（有界等待、到点杀整棵进程树、产物按 `TimedOut` 作废）不在本脚本重写 ——
+# 那一份只在 `lib/auto-screenshot.ps1` 存在（`Export-Screenshot` 从 #1562 起就在用它）。本层只补三件
+# 这一族需要、而执行核不该管的事：
+#   ① 档位：`-BudgetSeconds` 从 `param()` 的两个档取，**调用形态决定档**（AC 第 3 条）——
+#      单行读与 server 级走文本档，全量 `logcat -d` 走 logcat 档；
+#   ② 点名：挂死必须落一行超时结论（哪一次调用、多大预算、实际等了多久、属于哪一档）。
+#      **为什么只点名不够**：本族里 `Get-LogcatWindow` 的超时会被下游读成「窗口里零条崩溃」，
+#      所以它的 `TimedOut` 必须一路带到主判据（AC 第 4 条要的「可见结论」在这一格就是判定本身）；
+#   ③ serial 的取舍：`adb devices` 是 **server 级**命令，恒拼 `-s <serial>` 就不是同一条调用
+#      （AC 第 4 条「不改既有判据语义」在这一格最险 —— DCT2 与 DCT1 分别钉「不带 -s」的两条出口）。
+function Invoke-AdbTierCall {
+    param(
+        [string[]]$AdbArgs,
+        [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds,
+        [string]$Tier = 'read',
+        [switch]$NoSerial
+    )
+    $script:AdbTextCalls = $script:AdbTextCalls + 1
+    $adbSerial = $(if ($NoSerial) { '' } else { $script:Serial })
+    # `-MergeStdErr` 是给「调用方按原文判」兜底的：本族 6 处的原始形状都是 `2>&1`，而 adb 的**失败原文全在
+    # stderr**（`am start` 的 `Error: …`、`resolve-activity` 的 `adb.exe: device … not found`、`devices` 的
+    # server 启动告警）——不合并就等于悄悄把判据原料换了（#1568 合并 AC1 那一格学到的同一课）。
+    # 非 Windows 走直启分支：本脚本实践中只在 Windows 跑（真机 + 无线调试），但它的行为守护在 CI 的
+    # ubuntu 上真跑（AC 第 5 条明令禁止「非 Windows 静默跳过」——静默跳过就是造不出这一格）。
+    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $adbSerial -AdbArguments $AdbArgs -AdbArgv $AdbArgs `
+        -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    if ($r.TimedOut) {
+        $script:AdbTextTimeouts = @($script:AdbTextTimeouts) + @(($AdbArgs -join ' '))
+        Write-Log ('ADB_TEXT_TIMEOUT call=adb ' + $(if ($NoSerial) { '' } else { "-s $script:Serial " }) + ($AdbArgs -join ' ') +
+            " callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) tier=$Tier —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判")
+    }
+    return $r
+}
+
 # ================= 设备探测（只读：adb devices） =================
 function Get-DeviceList {
-    $raw = (& $AdbExe devices -l 2>&1 | Out-String)
+    # server 级命令：`-NoSerial` 是**判据的一部分**，不是风格（带上 -s 就不是同一条调用了）
+    $r = Invoke-AdbTierCall -AdbArgs @('devices', '-l') -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'server' -NoSerial
+    $raw = [string]$r.Text
     $list = @()
     $known = @('device', 'offline', 'unauthorized', 'bootloader', 'recovery', 'sideload')
     foreach ($line in ($raw -split "`r?`n")) {
@@ -284,13 +346,22 @@ function Get-DeviceList {
         if ($m.Success) { $mdl = $m.Groups[1].Value }
         $list += [pscustomobject]@{ Serial = $parts[0]; State = $state; Model = $mdl; Raw = $t }
     }
-    return $list
+    # ⚠️ 返回形状由「数组」改成 `@{ Devices; TimedOut }`：调用方必须能区分「列表为空」与「这次没答上」，
+    #   否则一次挂死会被报成「没有设备」——那是把通道故障写成用户操作失误。既有判据（exit 2 / 多设备守卫）
+    #   一条都没改，只是多了一个自己的出口（AC 第 4 条）。
+    return [pscustomobject]@{ Devices = $list; TimedOut = [bool]$r.TimedOut }
 }
 
 # 多设备 ⇒ 必须显式 -Device，否则 exit 2（绝不自动猜：猜错会去取证别人的设备/会话）
 function Resolve-DeviceSerial {
     param([string]$Requested)
-    $devices = @(Get-DeviceList)
+    $found = Get-DeviceList
+    # 挂死出口排在「没有设备」之前（#1568 AC 第 4 条）：一次不返回的 `adb devices` 也会给出**空列表**，
+    # 走下面那条分支就把它写成了「请先恢复无线连接」——同一个 exit 2，两种成因，读日志的人据此决定去查哪一边。
+    if ($found.TimedOut) {
+        Fail-Environment "adb devices 未在 $AdbTextCallTimeoutSeconds 秒内返回（tier=server）⇒ 是 adb 通道不返回，不是没有设备（已终止整棵进程树；本链不重启 adb server，故不动维护者的会话）"
+    }
+    $devices = @($found.Devices)
     if ($devices.Count -eq 0) {
         Fail-Environment 'adb devices 未列出任何设备（不重启 adb server，故不做任何自动重连；请先恢复无线连接）'
     }
@@ -320,16 +391,20 @@ function Resolve-DeviceSerial {
 # 口径要求记录 mResumedActivity；实测 Android 14+ 的 ROM 只报 topResumedActivity（本机 = annibale / 2510DRK44C），
 # 故两者都认、优先 mResumedActivity。同时把命中的**原始行**整行留证（等于 dumpsys 管道 grep mResumedActivity 的记录）。
 function Get-ForegroundInfo {
-    $out = (& $AdbExe -s $script:Serial shell dumpsys activity activities 2>&1 | Out-String)
+    # 每页都跑 ⇒ 这一格挂住顶掉的是整次取证；文本档（现测同形态 1,168 / 1,662 ms，见 param 注释）。
+    # `TimedOut` 必须带出来：调用方原来只能看到「Component 为空」，而那既可能是「前台真没 Activity」
+    # 也可能是「这次没答上」——两者在 AC 第 4 条里是两种结论，不许混成一条失败文案。
+    $r = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'activity', 'activities') -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'read'
+    $out = [string]$r.Text
     foreach ($key in @('mResumedActivity', 'topResumedActivity')) {
         $rx = $key + '[^\n]*?([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)'
         $m = [regex]::Match($out, $rx)
         if ($m.Success) {
             $rawLine = (($out -split "`r?`n") | Where-Object { $_ -match $key } | Select-Object -First 1)
-            return [pscustomobject]@{ Component = $m.Groups[1].Value; Raw = ([string]$rawLine).Trim(); Source = $key }
+            return [pscustomobject]@{ Component = $m.Groups[1].Value; Raw = ([string]$rawLine).Trim(); Source = $key; TimedOut = [bool]$r.TimedOut }
         }
     }
-    return [pscustomobject]@{ Component = ''; Raw = ''; Source = '' }
+    return [pscustomobject]@{ Component = ''; Raw = ''; Source = ''; TimedOut = [bool]$r.TimedOut }
 }
 
 function Get-PackageFromComponent {
@@ -340,15 +415,23 @@ function Get-PackageFromComponent {
 }# ================= logcat 时间窗（只读：logcat -d；不清缓冲） =================
 function Get-LogcatBaseline {
     # 窗口起点 = 设备自己最新日志行的 epoch 时间戳（不依赖宿主时钟）
-    $out = (& $AdbExe -s $script:Serial shell logcat -d -v epoch -t 1 2>&1 | Out-String)
+    # ⚠️ 返回形状由 `double` 改成 `@{ Epoch; TimedOut }`：旧写法下「一次不返回」与「缓冲为空」都回 0.0，
+    #   而下游把它写成同一句话（`logcat=SKIP`）。既有出口**不变**（仍 SKIP、仍不做崩溃判据），
+    #   只是让调用方能明报「SKIP 的原因是通道不返回」——这条区别决定读者去查手机还是查日志缓冲。
+    $r = Invoke-AdbTierCall -AdbArgs @('shell', 'logcat', '-d', '-v', 'epoch', '-t', '1') -BudgetSeconds $AdbLogcatTimeoutSeconds -Tier 'logcat'
+    $out = [string]$r.Text
     $ms = [regex]::Matches($out, '(?m)^\s*(\d{9,}\.\d+)\s')
-    if ($ms.Count -eq 0) { return 0.0 }
-    return [double]$ms[$ms.Count - 1].Groups[1].Value
+    if ($ms.Count -eq 0) { return [pscustomobject]@{ Epoch = 0.0; TimedOut = [bool]$r.TimedOut } }
+    return [pscustomobject]@{ Epoch = [double]$ms[$ms.Count - 1].Groups[1].Value; TimedOut = [bool]$r.TimedOut }
 }
 
 function Get-LogcatWindow {
     param([double]$SinceEpoch, [int]$MaxSeconds, [string]$Pkg)
-    $dump = (& $AdbExe -s $script:Serial shell logcat -d -v epoch 2>&1 | Out-String)
+    # 本族最险的一格：这一条挂死的下场是**空文本**，而下游的崩溃判据是「窗口里没有 FATAL/ANR」
+    # ⇒ 不带出 `TimedOut` 就等于把「没读到日志」写成「无崩溃」。文本档也不够（现测 5.9 / 6.2 秒），
+    #   故走 logcat 档；判据本身一个字没动（AC 第 4 条），只是多带一个读数。
+    $r = Invoke-AdbTierCall -AdbArgs @('shell', 'logcat', '-d', '-v', 'epoch') -BudgetSeconds $AdbLogcatTimeoutSeconds -Tier 'logcat'
+    $dump = [string]$r.Text
     $lines = @($dump -split "`r?`n")
     $stamped = @()
     $latest = 0.0
@@ -391,6 +474,7 @@ function Get-LogcatWindow {
         ProcessDeaths  = $died.Count
         FatalSamples   = @($fatal | Select-Object -First 5)
         AnrSamples     = @($anrPkg | Select-Object -First 5)
+        TimedOut       = [bool]$r.TimedOut
     }
 }
 
@@ -456,7 +540,13 @@ function Export-Screenshot {
 # ================= 切页（写操作：**仅** -AllowAppStart 显式开启时可达） =================
 function Resolve-LauncherComponent {
     $pkg = $script:TargetPackage
-    $out = (& $AdbExe -s $script:Serial shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER $pkg 2>&1 | Out-String)
+    # 票面 AC 第 7 条：这是**既有路径**，只加预算 —— 三层回退（resolve → 当前前台 → `<pkg>/<pkg>.PandoraEntry`）
+    # 一条都不动。挂死时 `$out` 为空 ⇒ 自然走既有的第二层，行为与「adb 答了个解析不出来」同形，
+    # 而 `ADB_TEXT_TIMEOUT` 那行已经把两者分开（tier=resolve，读日志的人知道这一格没拿到原文）。
+    # ⚠️ 一处已知且不可达的形态差异：`$pkg` 为空时旧形会传一个**空参数**、新形不传。唯一调用点在切页分支，
+    #   而该分支进循环前就有 `if (-not $script:TargetPackage) { Fail-Environment … }` ⇒ 该差异取不到。
+    $r = Invoke-AdbTierCall -AdbArgs @('shell', 'cmd', 'package', 'resolve-activity', '--brief', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.LAUNCHER', $pkg) -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'resolve'
+    $out = [string]$r.Text
     $m = [regex]::Match($out, '([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)')
     if ($m.Success) { return $m.Groups[1].Value }
     if ($script:Foreground.Component) { return $script:Foreground.Component }
@@ -468,7 +558,10 @@ function Start-AppPage {
     $launcher = Resolve-LauncherComponent
     $intentArgs = @('shell', 'am', 'start', '-n', $launcher, '-a', 'android.intent.action.VIEW',
         '-d', "uniapp://$Page", '--ez', 'dcloud_open_url', 'true', '--es', 'dcloud_page', $Page)
-    $out = (& $AdbExe -s $script:Serial @intentArgs 2>&1 | Out-String)
+    # 同上：只加预算。挂死不抛、不吞日志原文（`-MergeStdErr` 把 `Error: …` 带回来），下面的原文行照打。
+    # 这一格切页机制本身**已定性为机械上不可用**（见文档块三条根因），故本票更不许动它的语义。
+    $r = Invoke-AdbTierCall -AdbArgs $intentArgs -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'am-start'
+    $out = [string]$r.Text
     Write-Log "am start：$((($out -split "`r?`n") | Select-Object -First 2) -join ' / ')"
 }
 
@@ -724,12 +817,18 @@ try {
     Write-Log "设备：serial=$($script:Serial) model=$($script:DeviceModel)"
 
     # 窗口起点必须先于一切取证动作取（否则本次动作产生的日志会落在窗口外）
-    $script:WindowStart = Get-LogcatBaseline
+    $baseline = Get-LogcatBaseline
+    $script:WindowStart = $baseline.Epoch
     $script:WindowKnown = ($script:WindowStart -gt 0)
     if ($script:WindowKnown) {
         Write-Log "logcat 窗口起点（设备时钟）= $($script:WindowStart)（-LogcatSeconds=$LogcatSeconds）"
     } else {
         Write-Log 'logcat 窗口起点取不到（缓冲为空？）⇒ 本次不做崩溃判据（logcat=SKIP），不拿历史日志冒充本次'
+        # SKIP 有两种成因、同一个出口（都不做崩溃判据），但**该查的地方不同** ⇒ 点名。
+        # 这里刻意**不**把 SKIP 升级成失败：缓冲为空本来就不该判红，升级就是把既有判据改掉了（AC 第 4 条）。
+        if ($baseline.TimedOut) {
+            $notes += "logcat=SKIP 的成因是**通道不返回**（基线调用未在 $AdbLogcatTimeoutSeconds 秒内返回，tier=logcat），不是设备日志缓冲为空"
+        }
     }
 
     $script:Foreground = Get-ForegroundInfo
@@ -771,6 +870,9 @@ try {
             $pageFail = @()
             if (-not $fg.Component) { $pageFail += '取不到前台 Activity' }
             elseif ($fg.Component -notmatch [regex]::Escape($script:TargetPackage)) { $pageFail += "前台不是目标包（$($fg.Component)）" }
+            # 同一条页判据里再点一次名：上面那格在挂死时也会成立（Component 回空），但它把成因写成「没前台」，
+            # 而读者需要知道那是通道没答 —— 既有两条一个字没动（AC 第 4 条），只加这一条更具体的。
+            if ($fg.TimedOut) { $pageFail += "前台 Activity 调用未在 $AdbTextCallTimeoutSeconds 秒内返回（tier=read，adb 通道问题，不是设备没在前台）" }
             if ($shot.TimedOut) { $pageFail += "截图调用未在 $AdbCallTimeoutSeconds 秒内返回（adb 通道问题）" }
             elseif ($shot.Bytes -le 0) { $pageFail += '截图未落盘或为 0 字节' }
             $status = 'PASS'
@@ -817,6 +919,12 @@ try {
     # ---------------- logcat 窗口断言 ----------------
     $final = Get-LogcatWindow -SinceEpoch $script:WindowStart -MaxSeconds $LogcatSeconds -Pkg $script:TargetPackage
     $script:FinalTotals = $final
+    # ⚠️ 挂死必须落进 `$failures`（本族最险的一格）：下面那条分支只看 `FatalCount` / `AnrPkgCount`，
+    #    而一次不返回的 dump 恰好给出**两个 0** ⇒ 不点这一格，「没读到日志」就会被写成「窗口内无崩溃」，
+    #    比原来的就地停住更坏（停住至少不会被读成 PASS）。既有两条分支的语义一个字没动（AC 第 4 条）。
+    if ($final.TimedOut) {
+        $failures += "logcat 窗口调用未在 $AdbLogcatTimeoutSeconds 秒内返回（tier=logcat）⇒ 本次崩溃判据不成立：窗口里的 0 条 FATAL / ANR 是「没读到」，不是「没有」"
+    }
     if (-not $final.WindowKnown) {
         $notes += 'logcat=SKIP（窗口起点未知，未做崩溃判据）'
     } else {
@@ -833,6 +941,9 @@ try {
 
     # 前台 Activity 可取得（只读模式下的核心断言）
     if (-not $script:Foreground.Component) { $failures += '取不到前台 Activity（dumpsys 无 mResumedActivity/topResumedActivity）' }
+    # 只读模式跑的就是这一条：挂死时上面那格也会亮，但文案是「无 mResumedActivity」——那是把通道故障
+    # 写成了设备状态。既有那条不许改（它是 #624 备料时的判据），只补这一条点名的。
+    if ($script:Foreground.TimedOut) { $failures += "前台 Activity 调用未在 $AdbTextCallTimeoutSeconds 秒内返回（tier=read）—— 是 adb 通道不返回，不是设备没有前台 Activity" }
 
     $summary = @(
         '',
@@ -847,6 +958,13 @@ try {
         # 「不返回」必须是一种**可见的结论**（#1562）：哪一次调用、多大预算、有没有留下残帧都点名，
         # 否则读日志的人只能看到「少了一张图」，分不清通道问题与设备问题。
         "SHOT_CALL_BUDGET calls=$(@($script:ShotRecords).Count) timeouts=$(@($script:ShotTimeouts).Count) callBudgetSeconds=$AdbCallTimeoutSeconds timedOutPages=$(if (@($script:ShotTimeouts).Count -gt 0) { $script:ShotTimeouts -join ',' } else { 'none' })",
+        # 文本 / 管理类那一族的同款结论行（#1568 AC 第 4 条）：`calls=` 是分母，没有分母就读不出 `timeouts=`；
+        # 三档现值打进汇总，事后能从日志核对「当时生效的是哪一档」（分不清「预算给小了」与「设备真挂了」）。
+        "ADB_TEXT_CALL_BUDGET calls=$($script:AdbTextCalls) timeouts=$(@($script:AdbTextTimeouts).Count) defaultBudgetSeconds=$AdbTextCallTimeoutSeconds hungCalls=$(if (@($script:AdbTextTimeouts).Count -gt 0) { $script:AdbTextTimeouts -join ';' } else { 'none' })",
+        "ADB_TIER_BUDGET shot=$AdbCallTimeoutSeconds text=$AdbTextCallTimeoutSeconds logcat=$AdbLogcatTimeoutSeconds",
+        # 崩溃判据**可不可判**：上面那行的 `FATAL EXCEPTION=0` 有两种成因（真没有 / 没读到），这一格把它们分开
+        #（token 与 emulator-smoke 的 C11 同名，读日志的人不必记两套名字）
+        "LOGCAT_INCONCLUSIVE=$(if ($final.TimedOut) { 1 } else { 0 })",
         "页身份断言：$(if ($CanStart) { '已启用 —— 多页截图哈希相同即判 FAIL（防切页静默失效）' } else { '不适用（未切页）' })",
         "目录=$VerifyRoot  日志=$LogPath"
     )
@@ -899,7 +1017,8 @@ if ($PostToPr -gt 0) {
         "- 设备：serial=$($script:Serial) model=$($script:DeviceModel)",
         "- 前台 Activity：$($script:Foreground.Component)（来源 $($script:Foreground.Source)）",
         "- 切页：$(if ($CanStart) { '已显式开启（-AllowAppStart）' } else { '关闭（只读；未切页，-Pages 各项记 SKIP）' })",
-        "- logcat：窗口行数=$($totals.WindowLines) / FATAL EXCEPTION=$($totals.FatalCount) / ANR in 包=$($totals.AnrPkgCount)（详见 $LogPath）",
+        "- logcat：窗口行数=$($totals.WindowLines) / FATAL EXCEPTION=$($totals.FatalCount) / ANR in 包=$($totals.AnrPkgCount) / 崩溃判据可判=$(if ($totals.TimedOut) { '否——窗口调用未在 $AdbLogcatTimeoutSeconds 秒内返回，零计数是「没读到」不是「没有」' } else { '是' })（详见 $LogPath）",
+        "- adb 调用预算（单次上限，#1568）：shot=$AdbCallTimeoutSeconds s / text=$AdbTextCallTimeoutSeconds s / logcat=$AdbLogcatTimeoutSeconds s；文本族挂死 $(@($script:AdbTextTimeouts).Count) 次 / 截图族挂死 $(@($script:ShotTimeouts).Count) 次",
         "- 页面判定：$(($script:PageResultsAll | ForEach-Object { "$($_.Page)=$($_.Status)" }) -join '，')",
         "- 只读保证：全程只用 adb devices / exec-out screencap / shell dumpsys / shell logcat -d，未做任何写操作、未清 logcat、未重启 adb server",
         "- 复现：pwsh -NoProfile -File scripts/device-capture.ps1 -Device $($script:Serial) -Pages `"$Pages`""
