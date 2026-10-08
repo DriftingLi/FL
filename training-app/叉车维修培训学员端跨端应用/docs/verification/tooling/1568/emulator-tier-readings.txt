@@ -1,0 +1,39 @@
+# emulator-tier-probe 读数（每行一条 TIME 记录）
+PROBE avd=Pixel_4a_API_30 port=5554 base_apk_bytes=46770568 push_proxy_mb=48 emulator=
+TIME tier=read call=adb_version_no_serial ms=200 rc=0 first="Android Debug Bridge version 1.0.41"
+TIME tier=boot-wait call=wait_for_device_cold ms=29160 rc=0 first=""
+COLD wait_for_device_ms=29160
+TIME tier=read call=getprop_sys_boot_completed ms=188 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=178 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=143 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=149 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=164 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=181 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=177 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=278 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=251 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=343 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=411 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=1793 rc=0 first="1"
+BOOT booted=True boot_completed_poll_ms=26490
+TIME tier=read call=shell_pm_list_packages ms=420 rc=0 first="package:com.google.android.networkstack.tethering"
+TIME tier=read call=shell_cmd_package_resolve_activity ms=457 rc=0 first="No activity found"
+TIME tier=read call=shell_dumpsys_activity_activities ms=1168 rc=0 first="ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)"
+TIME tier=read call=shell_dumpsys_window ms=642 rc=0 first="WINDOW MANAGER LAST ANR (dumpsys window lastanr)"
+TIME tier=read call=logcat_dump ms=5896 rc=0 first="--------- beginning of kernel"
+TIME tier=read call=logcat_clear ms=776 rc=0 first=""
+TIME tier=read call=shell_mkdir_p ms=281 rc=0 first=""
+TIME tier=install call=install_r_t_base_apk ms=8528 rc=1 apk_mb=44.6 first="Performing Streamed Install"
+INSTALL first_ms=8528
+TIME tier=install call=install_r_t_repeat ms=6538 rc=1 apk_mb=44.6 first="Performing Streamed Install"
+INSTALL repeat_ms=6538
+TIME tier=push call=push_dir_proxy ms=3346 rc=0 proxy_mb=48 first="C:\Users\ZHENG\AppData\Local\Temp\emu-tier-af7ffd7e\pushsrc/.\: 1 file"
+PUSH proxy note=unpackage_resources_absent 见 PROBE 行；ms_per_mb=69.7
+TIME tier=read call=shell_rm_rf_probe_dir ms=802 rc=0 first=""
+NOTE base_apk_left_installed pm_list_has_dcloud=True
+TIME tier=teardown call=adb_emu_kill ms=357 rc=0 first="OK: killing emulator, bye bye"
+TEARDOWN emu_kill_ms=357
+TIME tier=teardown call=adb_wait_for_disconnect ms=2289 rc=0 first=""
+TEARDOWN wait_for_disconnect_ms=2289
+DEVICES_AFTER=List of devices attached | 10.255.255.1:5555	offline | 
+PROBE_DONE=1
