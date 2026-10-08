@@ -57,7 +57,8 @@ pwsh -NoProfile -File docs/verification/tooling/1568/adb-latency-probe.ps1 -OutF
 | `utils/emulatorSmokeContract.test.js`（+C10） / `utils/wirelessDebugContract.test.js`（+W9） | 全绿 | 6.02 s / 5.338 s |
 | 同族既有套件（`autoScreenshot*` / `deviceCapture*` / `wirelessDebugBehavior` B1–B6 / `contractTestPattern`） | 118 passed（11 套件一批跑）+ 5 passed | `wirelessDebugBehavior` 81.214 s |
 
-**必红那一半**（逐条把被测物弄坏，driver = `.ci-verify/mut-driver.mjs`，全文在 `.ci-verify/mut-readings.txt`；
+**必红那一半**（逐条把被测物弄坏，driver = `.ci-verify/mut-driver.mjs`（一次性跑批工具，不入库）；
+读数全文已入库为本目录 `mut-readings.txt`——`.ci-verify/` 随工作树一起消失，故证据落在这里；
 每条随后 `git checkout --` 还原并复验 `restored_clean=true`，末行 `OTHER_DIRTY_AFTER_ALL=0`）：
 
 | 变异 | 弄坏的东西 | 跑的那条守护 | 红的用例（jest `--json` 读出的标题，非「随便一条红」） |
