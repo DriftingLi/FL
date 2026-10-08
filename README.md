@@ -338,6 +338,7 @@ npm run dev                   # 默认 :5173
 | `TENCENT_SMS_SECRET_ID` / `TENCENT_SMS_SECRET_KEY` / `TENCENT_SMS_SDK_APP_ID` / `TENCENT_SMS_SIGN_NAME` / `TENCENT_SMS_REGION` | 短信验证码通道 | ap-guangzhou |
 | `TENCENT_SMS_TEMPLATE_REGISTER` / `_LOGIN` / `_PASSWORD` / `_BIND_PHONE` | 短信模板 ID | 空 |
 | `WECHAT_MINI_PROGRAM_APP_ID` / `_SECRET` | 微信小程序登录 | 空 |
+| `WECHAT_MOBILE_APP_ID` / `_SECRET` | App 端微信登录（开放平台「移动应用」，与小程序/网页扫码凭证不可混用） | 空 |
 | `WECHAT_OPEN_PLATFORM_APP_ID` / `_SECRET` | 网页端微信扫码登录（与小程序凭证不可混用） | 空 |
 
 ### AI、限流、日志与文档

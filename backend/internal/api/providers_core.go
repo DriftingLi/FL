@@ -40,6 +40,7 @@ type coreSingletons struct {
 	phoneCh       auth.CodeChannel
 	mailSender    core.MailSender
 	wechatAuthSvc *auth.WechatService
+	wechatAppSvc  *auth.WechatAppService
 	fileSvc       *filestore.FileStore
 	slideRenderer *course.SlideRenderer
 	notifSvc      *notification.Service
@@ -71,6 +72,8 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	c.mailSender = core.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)
 	c.phoneCh = auth.NewSmsChannel(cfg.SMS, cfg.IsProd(), logger)
 	c.wechatAuthSvc = auth.NewWechatService(cfg.Wechat.MiniProgram, db, c.authSvc, logger)
+	// App 端微信登录（#1482）：移动应用那对凭证，独立实例、独立端点，不与小程序凭证共用配置。
+	c.wechatAppSvc = auth.NewWechatAppService(cfg.Wechat.Mobile, db, c.authSvc, logger)
 	c.fileSvc = filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
 	c.slideRenderer = course.NewSlideRenderer(cfg.LibreOfficeSidecarURL, st, logger)
 	c.notifSvc = notification.NewService(db, logger)

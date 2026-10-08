@@ -26,6 +26,7 @@
 //   GET  /captcha
 //   POST /auth/wechat/qrcode
 //   POST /auth/wx-login
+//   POST /auth/app-wx-login
 //   POST /auth/wechat/login
 //   POST /auth/profile/send-code
 //   POST /auth/profile/email

@@ -153,11 +153,14 @@ func (c WechatAppConfig) Configured() bool {
 	return c.AppID != "" && c.AppSecret != ""
 }
 
-// WechatConfig 微信登录凭证——小程序与开放平台网页应用两套独立凭证，
-// 不可混用：code2session 只认小程序凭证，扫码登录只认开放平台网页应用凭证。
+// WechatConfig 微信登录凭证——三套应用凭证按「应用类型」划分，不可互相顶替：
+// code2session 只认小程序凭证，扫码登录只认开放平台网页应用凭证，App 端登录只认开放平台移动应用凭证。
+// Mobile 与 OpenPlatform 虽同属开放平台，但是两种应用类型、两对凭证（移动应用走
+// /sns/oauth2/access_token，网页应用走带 redirect_uri 的同族端点），复用同一对会串味。
 type WechatConfig struct {
 	MiniProgram  WechatAppConfig // WECHAT_MINI_PROGRAM_APP_ID / WECHAT_MINI_PROGRAM_APP_SECRET
 	OpenPlatform WechatAppConfig // WECHAT_OPEN_PLATFORM_APP_ID / WECHAT_OPEN_PLATFORM_APP_SECRET（扫码登录占位）
+	Mobile       WechatAppConfig // WECHAT_MOBILE_APP_ID / WECHAT_MOBILE_APP_SECRET（App 端微信登录，#1482）
 }
 
 // AuthCookieConfig 登录态 Cookie 配置。
@@ -322,6 +325,8 @@ func setDefaults() {
 	viper.SetDefault("wechat_mini_program_app_secret", "")
 	viper.SetDefault("wechat_open_platform_app_id", "")
 	viper.SetDefault("wechat_open_platform_app_secret", "")
+	viper.SetDefault("wechat_mobile_app_id", "")
+	viper.SetDefault("wechat_mobile_app_secret", "")
 	viper.SetDefault("auth_cookie_name", "hrwai_token")
 	viper.SetDefault("auth_cookie_domain", "localhost")
 	viper.SetDefault("recruiter_cookie_name", "recruiter_token")
@@ -443,6 +448,9 @@ func Load() (*Config, error) {
 		Wechat: WechatConfig{
 			MiniProgram:  wechatAppConfig("wechat_mini_program_app_id", "wechat_mini_program_app_secret", "wechat_app_id", "wechat_app_secret"),
 			OpenPlatform: wechatAppConfig("wechat_open_platform_app_id", "wechat_open_platform_app_secret"),
+			// 移动应用凭证不接 legacy 键：WECHAT_APP_ID/SECRET 的历史语义是小程序凭证，
+			// 接进来会让「App 端登录用的是哪一对」重新变成读代码猜不出来的事。
+			Mobile: wechatAppConfig("wechat_mobile_app_id", "wechat_mobile_app_secret"),
 		},
 		AuthCookie: AuthCookieConfig{
 			Name:   viper.GetString("auth_cookie_name"),

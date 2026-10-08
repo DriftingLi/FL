@@ -8941,6 +8941,38 @@ paths:
       summary: 管理员登录
       tags:
       - 管理端-认证
+  /auth/app-wx-login:
+    post:
+      consumes:
+      - application/json
+      description: 移动应用 code → /sns/oauth2/access_token 换 openid(+unionid) → 定位或建号
+        → 签发双令牌；返回体与 /auth/wx-login 同构
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.WxLoginResult'
+              type: object
+        "400":
+          description: 参数错误 / 未配置 / code 失效
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: App 端微信登录（开放平台移动应用）
+      tags:
+      - 学员端-认证
   /auth/avatar:
     post:
       consumes:

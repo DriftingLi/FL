@@ -172,11 +172,12 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 请求体：`{ "phone": "13800000001", "code": "123456", "password": "NewPass123" }`。响应 200：`{ "code": 200, "message": "密码重置成功", "data": null }`
 
-### 2.5 微信小程序登录 `/api/auth/wx-login`
+### 2.5 微信登录（小程序 `/api/auth/wx-login` 与 App `/api/auth/app-wx-login`）
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | POST | `/api/auth/wx-login` | 无 | 微信小程序一键登录（code 换 openid，未注册自动建号） |
+| POST | `/api/auth/app-wx-login` | 无 | App 端微信登录（开放平台移动应用 code 换 openid/+unionid，#1482） |
 
 **POST /api/auth/wx-login**
 
@@ -187,6 +188,18 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 ```
 
 `isNew` 仅新用户为 true（前端据此提示已自动注册）。错误分支均 400：缺 code、未配置 AppID/Secret、code 失效（40029）、频率限制（45011）、高风险拦截（40226）。小程序凭证经环境变量 `WECHAT_MINI_PROGRAM_APP_ID` / `WECHAT_MINI_PROGRAM_APP_SECRET` 配置。
+
+**POST /api/auth/app-wx-login**
+
+请求体：`{ "code": "App 端 uni.login({provider:'weixin'}) 拿到的 code" }`。后端用**开放平台「移动应用」**那对凭证调 `/sns/oauth2/access_token` 换 openid（获得 userinfo 授权时同时带回 unionid），再按下面顺序定位账号：
+
+1. unionid 非空且库里已有同 unionid 的账号 → 复用该账号（同一自然人在小程序与 App 落同一个账号，`isNew=false`）；
+2. 否则按 App openid 定位（unionid 拿不到的场合——移动应用与小程序不在同一开放平台账号下、或用户未授权 userinfo——自动退化为两端各自独立账号）；
+3. 都没有 → 自动建号，account/昵称派生规则与 `/auth/wx-login` 同源。
+
+响应 200，data 与 `/auth/wx-login` 同构（平铺 `token`/`refresh_token`/`user_id`/`account`/`username`/`name`/`role`/`avatar`/`isNew`）。凭证经 `WECHAT_MOBILE_APP_ID` / `WECHAT_MOBILE_APP_SECRET` 配置（GitHub Secrets 同名），AppSecret 只存服务端、绝不下发客户端。错误分支均 400：缺 code、未配置（「微信登录未配置」）、code 失效（40029）、未上架应用次数上限（10060）；其余错误码透传码值、不套既有人工文案。
+
+⚠️ 两个端点**不可互换**：`/auth/wx-login` 只认小程序的 `js_code` 与小程序凭证，把 App 的 code 送过去是必然失败的接法（两套应用类型的凭证与端点严格区分，见根 `CONTEXT.md`「微信一键登录」）。本端点不调 `/sns/userinfo`：昵称与头像是用户可控字符串，直接写进 `username`/`avatar` 会绕过资料审核面，要引入得先决定它落在哪条审核链路上。
 
 ### 2.6 微信扫码登录 `/api/auth/wechat`（框架占位）
 

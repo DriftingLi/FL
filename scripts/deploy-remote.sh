@@ -263,11 +263,15 @@ write_env_file() {
         echo "TENCENT_SMS_TEMPLATE_PASSWORD=${TENCENT_SMS_TEMPLATE_PASSWORD:-}"
         echo "TENCENT_SMS_TEMPLATE_BIND_PHONE=${TENCENT_SMS_TEMPLATE_BIND_PHONE:-}"
         echo "TENCENT_SMS_REGION=${TENCENT_SMS_REGION:-ap-guangzhou}"
-        # 微信登录凭证（小程序 / 开放平台严格区分）
+        # 微信登录凭证（小程序 / 开放平台移动应用 / 网页扫码三组严格区分）
         printf 'WECHAT_MINI_PROGRAM_APP_ID='
         env_val "${WECHAT_MINI_PROGRAM_APP_ID:-}"; echo
         printf 'WECHAT_MINI_PROGRAM_APP_SECRET='
         env_val "${WECHAT_MINI_PROGRAM_APP_SECRET:-}"; echo
+        printf 'WECHAT_MOBILE_APP_ID='
+        env_val "${WECHAT_MOBILE_APP_ID:-}"; echo
+        printf 'WECHAT_MOBILE_APP_SECRET='
+        env_val "${WECHAT_MOBILE_APP_SECRET:-}"; echo
         printf 'WECHAT_OPEN_PLATFORM_APP_ID='
         env_val "${WECHAT_OPEN_PLATFORM_APP_ID:-}"; echo
         printf 'WECHAT_OPEN_PLATFORM_APP_SECRET='

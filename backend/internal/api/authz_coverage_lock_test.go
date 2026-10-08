@@ -27,6 +27,7 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 		"auth.RegisterEmailAuthRoutes":       "认证入口：此刻尚无角色，能力守卫无从判定",
 		"auth.RegisterPhoneAuthRoutes":       "认证入口：同上",
 		"auth.RegisterWechatAuthRoutes":      "认证入口：同上",
+		"auth.RegisterWechatAppAuthRoutes":   "认证入口：同上（App 端微信登录，此刻尚无角色，能力守卫无从判定）",
 		"auth.RegisterProfileBindRoutes":     "认证入口：手机号/邮箱绑定，属账号自身而非资源域",
 		"auth.RegisterRoutes":                "公开登录/刷新/登出面 + 本人资料与注销（任何已登录角色都是自己的资料），无资源域能力位",
 		"course.RegisterRoutes":              "课程读面横跨学员/讲师/管理端（讲师与管理员读同一份章节详情），挂学员能力会误伤；能力位细化留待后续",

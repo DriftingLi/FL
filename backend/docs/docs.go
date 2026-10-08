@@ -7814,6 +7814,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/app-wx-login": {
+            "post": {
+                "description": "移动应用 code → /sns/oauth2/access_token 换 openid(+unionid) → 定位或建号 → 签发双令牌；返回体与 /auth/wx-login 同构",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-认证"
+                ],
+                "summary": "App 端微信登录（开放平台移动应用）",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/auth.WxLoginResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误 / 未配置 / code 失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/avatar": {
             "post": {
                 "security": [

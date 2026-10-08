@@ -165,19 +165,46 @@ func (s *WechatService) code2Session(ctx context.Context, code string) (*wxSessi
 }
 
 // findOrCreateByOpenID 按 openid 查用户；未注册则自动建账号并绑定。
-// account/username 由 openid 派生；account 前缀冲突时追加 openid 后段或序号重试（spec #279），
-// 数据库唯一约束冲突与其他错误分类处理：冲突走回查/重试，其他错误透传可观测原因。
-// 并发首登竞争由 wechat_openid 唯一索引兜底：撞唯一约束时按已存在用户处理。
+// 建号派生与并发兜底都在 wechatAccountStore 里（小程序与 App 两条链路共用同一份真源）。
 func (s *WechatService) findOrCreateByOpenID(openID, unionID string) (*model.HrwaiUser, bool, error) {
+	st := wechatAccountStore{db: s.db, logger: s.logger}
+	user, found, err := st.lookupByOpenID(openID)
+	if err != nil {
+		return nil, false, err
+	}
+	if found {
+		return user, false, nil
+	}
+	return st.create(openID, unionID)
+}
+
+// wechatAccountStore 微信登录的账号落库面：按标识定位用户 + 自动建号。
+// 拆出来是因为 App 端链路（#1482）只改「先按什么认人」——openid 之外还要先试 unionid——
+// 而建号派生规则（截段、冲突重试、并发回查）必须仍只有一处真源，两条链路各抄一份就会漂。
+type wechatAccountStore struct {
+	db     *gorm.DB
+	logger *zap.Logger
+}
+
+// lookupByOpenID 按 wechat_openid 定位用户。三种返回各自独立可辨：
+// 命中 → (user, true, nil)；未命中 → (nil, false, nil)；查询故障 → (nil, false, err)。
+func (st wechatAccountStore) lookupByOpenID(openID string) (*model.HrwaiUser, bool, error) {
 	var user model.HrwaiUser
-	err := s.db.Where("wechat_openid = ?", openID).First(&user).Error
+	err := st.db.Where("wechat_openid = ?", openID).First(&user).Error
 	if err == nil {
-		return &user, false, nil
+		return &user, true, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, errors.New("登录失败，请稍后再试")
 	}
+	return nil, false, nil
+}
 
+// create 自动建号并绑定 openid/unionid。
+// account/username 由 openid 派生；account 前缀冲突时追加 openid 后段或序号重试（spec #279），
+// 数据库唯一约束冲突与其他错误分类处理：冲突走回查/重试，其他错误透传可观测原因。
+// 并发首登竞争由 wechat_openid 唯一索引兜底：撞唯一约束时按已存在用户处理。
+func (st wechatAccountStore) create(openID, unionID string) (*model.HrwaiUser, bool, error) {
 	// openid 截段：account 取前 12 位、昵称取后 6 位（同源不同段，避免与账号撞名）。
 	baseSuffix := openID
 	if len(baseSuffix) > 12 {
@@ -218,32 +245,32 @@ func (s *WechatService) findOrCreateByOpenID(openID, unionID string) (*model.Hrw
 			Status:        1,
 			CreatedAt:     clock.Now(),
 		}
-		if err := s.db.Create(&newUser).Error; err == nil {
+		if err := st.db.Create(&newUser).Error; err == nil {
 			return &newUser, true, nil
 		} else {
 			lastErr = err
 			if dberr.IsDuplicateError(err) {
 				// 并发首登：wechat_openid 已被其他请求抢先插入
 				var again model.HrwaiUser
-				if qErr := s.db.Where("wechat_openid = ?", openID).First(&again).Error; qErr == nil {
+				if qErr := st.db.Where("wechat_openid = ?", openID).First(&again).Error; qErr == nil {
 					return &again, false, nil
 				}
 				// 非 wechat_openid 的唯一冲突（大概率 account/username 前缀碰撞）则尝试下一候选
 				// 若已是最后候选，继续循环会透传错误
 				if idx < len(candidates)-1 {
-					s.logger.Warn("微信自动建号账号冲突重试", zap.String("candidate", cand.account), zap.Error(err))
+					st.logger.Warn("微信自动建号账号冲突重试", zap.String("candidate", cand.account), zap.Error(err))
 					continue
 				}
 			}
 			// 非唯一冲突或候选耗尽：透传真实原因，便于可观测与区分「系统繁忙」与「注册失败」
-			s.logger.Warn("微信自动注册失败", zap.String("candidate", cand.account), zap.Error(err))
+			st.logger.Warn("微信自动注册失败", zap.String("candidate", cand.account), zap.Error(err))
 			if dberr.IsDuplicateError(err) {
 				return nil, false, errors.New("微信登录注册失败，请稍后再试")
 			}
 			return nil, false, fmt.Errorf("微信登录注册失败: %w", err)
 		}
 	}
-	s.logger.Warn("微信自动建号候选耗尽", zap.Error(lastErr))
+	st.logger.Warn("微信自动建号候选耗尽", zap.Error(lastErr))
 	return nil, false, errors.New("微信登录注册失败，请稍后再试")
 }
 

@@ -75,6 +75,7 @@ type Deps struct {
 	PhoneCh         auth.CodeChannel
 	CaptchaSvc      *captcha.Service
 	WechatAuthSvc   *auth.WechatService
+	WechatAppSvc    *auth.WechatAppService
 	FileSvc         *filestore.FileStore
 	SlideRenderer   *course.SlideRenderer
 	NotificationSvc *notification.Service

@@ -38,8 +38,9 @@ func TestRouteRegistryCoverage(t *testing.T) {
 	}
 }
 
-// expectedRouteCount 域注册表构出的路由总数基线（2026-09-19，第十二波票 6 新增
-// POST /api/question-bank/questions/{id}/submit → 329）。
-// 历史：2026-09-14 全局搜索升级 #982 新增 GET /api/admin/search-facts/zero-results → 315；
+// expectedRouteCount 域注册表构出的路由总数基线（2026-10-08，#1482 新增
+// POST /api/auth/app-wx-login（App 端微信登录）→ 330）。
+// 历史：2026-09-19 第十二波票 6 新增 POST /api/question-bank/questions/{id}/submit → 329；
+// 2026-09-14 全局搜索升级 #982 新增 GET /api/admin/search-facts/zero-results → 315；
 // 2026-09-17 学员笔记域 #1078 新增 4 条 → 319。
-const expectedRouteCount = 329
+const expectedRouteCount = 330

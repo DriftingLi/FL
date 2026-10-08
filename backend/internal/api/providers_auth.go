@@ -8,5 +8,6 @@ func provideAuth(c *coreSingletons, d *Deps) {
 	d.EmailCh = c.emailCh
 	d.PhoneCh = c.phoneCh
 	d.WechatAuthSvc = c.wechatAuthSvc
+	d.WechatAppSvc = c.wechatAppSvc
 	d.ReviewSvc = c.reviewSvc
 }

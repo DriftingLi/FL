@@ -59,6 +59,8 @@ var routeRegistrars = []routeRegistrar{
 			auth.RegisterPhoneAuthRoutes(api, rd.Session, deps.CodeSvc, deps.PhoneCh, deps.CaptchaSvc, deps.Cfg.CaptchaEnabled)
 			// 微信扫码登录（框架占位）
 			auth.RegisterWechatAuthRoutes(api, deps.WechatAuthSvc)
+			// App 端微信登录（开放平台移动应用 code 换取，#1482）
+			auth.RegisterWechatAppAuthRoutes(api, deps.WechatAppSvc)
 			// 个人信息页：手机号/邮箱绑定修改
 			auth.RegisterProfileBindRoutes(api, rd.Session, deps.CodeSvc, deps.EmailCh, deps.PhoneCh)
 		},

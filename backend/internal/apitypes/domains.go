@@ -174,6 +174,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/captcha"},
 			{Method: "POST", Path: "/auth/wechat/qrcode"},
 			{Method: "POST", Path: "/auth/wx-login"},
+			{Method: "POST", Path: "/auth/app-wx-login"},
 			{Method: "POST", Path: "/auth/wechat/login"},
 			{Method: "POST", Path: "/auth/profile/send-code", NoData: true},
 			{Method: "POST", Path: "/auth/profile/email", NoData: true},
