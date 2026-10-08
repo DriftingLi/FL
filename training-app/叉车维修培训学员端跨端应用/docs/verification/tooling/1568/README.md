@@ -1,7 +1,9 @@
-# #1568 收口点取证：`Invoke-Adb`（16 个调用方）与 `Get-AdbOutput`（12 个调用点）接上唯一执行核
+# #1568 无界 adb 调用收口取证：AC 第 1 条两个单点（16 + 12 个调用方）+ AC 第 2 条 emulator-smoke 的 13 处分档
 
 本目录是 PR 的**可复算产物**目录（本仓纪律：预算数与「还剩几处」都必须指得到入库件，不能只写在注释里）。
-射程 = 票面 AC 第 1 条的两个单点；AC 第 2 条那 24 处直调不在本 PR。
+§1–§4 的 3b 是 AC 第 1 条（两个收口点，`wireless-debug.ps1` 归零）；§3c 是 AC 第 2 条的第一片
+（`emulator-smoke.ps1` 那 13 处按形态分档）。AC 第 2 条**还剩 11 处**：`device-capture.ps1` 6、
+`hx-run.ps1` 4、`lib/env-check.ps1` 1 —— 按票面「建议切分」各自成 PR，不混进这两个 PR。
 
 ## 1. 复算尺（AC 最后那条防漂移条款的兑现件）
 
@@ -20,10 +22,15 @@ node docs/verification/tooling/1568/adb-bounded-count.mjs
 | 读数 | 命令输出（合计行） | 逐文件 |
 | --- | --- | --- |
 | 改前（master `0a8023e5`，与票面 26 处逐格一致） | `ADB_UNBOUNDED_TOTAL calls=26 files=5` | device-capture 6 / emulator-smoke 14 / hx-run 4 / wireless-debug 1 / env-check 1 |
-| 改后（本 PR） | `ADB_UNBOUNDED_TOTAL calls=24 files=4` | device-capture 6 / emulator-smoke 13 / hx-run 4 / env-check 1（**wireless-debug 归零**） |
+| 改后（AC 第 1 条那个 PR） | `ADB_UNBOUNDED_TOTAL calls=24 files=4` | device-capture 6 / emulator-smoke 13 / hx-run 4 / env-check 1（**wireless-debug 归零**） |
+| AC 第 2 条本片改后（本 PR） | `ADB_UNBOUNDED_TOTAL calls=11 files=3` | device-capture 6 / hx-run 4 / env-check 1（**emulator-smoke 归零**：13 → 0） |
 
 改前那份逐函数分布与票面表**逐格相同**（含 `emulator-smoke.ps1` 的顶层脚本段 3 行 = `:665` / `:765` / `:766`），
 所以「26 → 24」不是换一个数法得到的：两个收口点各是所在文件的那 1 行「本体」，收掉就各减 1。
+「24 → 11」这一跳的**基线是复量过的**：把 `9931a223` 版 `emulator-smoke.ps1`（48,315 字节）临时放回原位
+量一把（得 `calls=24 files=4`，emulator-smoke 那行 `calls=13 funcs=8`），再 `git checkout --` 还原，
+副本与 `HEAD` blob 逐字节相同（`sha256` 前 16 位同为 `85b2b87bb0bc40de`）⇒ 量的确实是同一把尺、同一份被测物，
+不是「改完之后再回头说改前是 24」。
 
 ## 2. 预算默认值的现测出处（`adb-latency-probe.ps1`）
 
@@ -87,8 +94,96 @@ pwsh -NoProfile -File docs/verification/tooling/1568/real-adb-legs.ps1 -OutFile 
 | R3 stderr 合并在真载体上 | `RL3_nonempty=True`、`RL3_HAS_NOT_FOUND=True`、原文 `adb.exe: device 'emulator-5556' not found` | 真 adb 把这句话打在 **stderr** 上；`Get-AdbOutput` 把它原样回给调用方 ⇒ 收口没有换掉调用方拿到的东西 |
 
 
+## 3c. 仿真机分档真链路腿（AC 第 2 条：`emulator-real-legs.ps1`，读数在 `emulator-real-legs-readings.txt`）
+
+EMT 那九条用的是可编程假 adb（要的是「真挂死」这一格 —— 真 adb 不可按需要挂死）。这一份补载体那一头：
+真 `adb.exe` + 真 AVD `Pixel_4a_API_30`，四遍各换一个形态（2026-10-08 本机，`-Pages pages/index/index`
+单页、`-NoArchive`，读数全程只取 ASCII token）：
+
+```
+pwsh -NoProfile -File docs/verification/tooling/1568/emulator-real-legs.ps1
+```
+
+| 腿 | 现测 | 读到什么 |
+| --- | --- | --- |
+| L1 正常冒烟（`-SkipInstallBaseApk`） | `exit=0`、wall 121 s、`ADB_TIER_BUDGET text=15 logcat=60 boot_wait=120 install=180 push=120 teardown=60 shot=15`、`ADB_TEXT_CALL_BUDGET calls=30 timeouts=0`、`LOGCAT_INCONCLUSIVE=0` | 六档现值打进汇总；整趟 30 次文本调用**一条超时都没记** ⇒ 分档没有把正常等误判成挂死（「长等不得套 15 秒」那格的反面证据） |
+| L2 `-AdbLogcatTimeoutSeconds 0` | `exit=1`、wall 129.1 s、`ADB_TEXT_TIMEOUT call=adb -s emulator-5554 logcat -d -v brief callBudgetSeconds=0 seconds=0.1 tier=logcat`（两条）、`LOGCAT_INCONCLUSIVE=1`、`hungCalls=logcat -d -v brief;logcat -d -v brief` | 档是**参数**（0 秒真的生效到点）；挂死/到点没有被子sequent 的计数读成「FATAL=0 ⇒ 无崩溃」，而是落 `INCONCLUSIVE=1` 且整趟判 FAIL |
+| L3 `-AdbInstallTimeoutSeconds 0` | `exit=2`、wall 131.9 s、`install_tier=True`（点名 `call=adb -s … install -r -t <基座路径>`、`callBudgetSeconds=0`） | install 到点后整条链以 UNUSABLE 收口，**不永挂**（收尾那两格照旧跑到底） |
+| L4 中文路径 APK 走新链路 | `exit=2`、wall 112.6 s、失败原文回到调用方。件里逐字（驱动把非 ASCII 脱敏成 `?`，真实路径是 `D:\软件\…`）：`adb.exe: failed to install D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract n…` |
+| 收尾标记 | `LEGS_DONE=4/4 legs_produced_log=4` | 带分母（见下面第二条洞） |
+
+⚠️ **一次真实撞上的 adb 通道不应答**（同日 12:22 那一轮，同一份代码、同一套参数）：L1 得
+`exit=1`、wall 199.5 s、`timeout_count=3`、该页 `SKIP`、`EMULATOR_SMOKE_RESULT=FAIL`，三条到点的调用逐字是
+`shell dumpsys activity activities` / `shell dumpsys window` / `shell pidof io.dcloud.simple`，
+各 **15.2 / 15.3 / 15.2 秒**打在 15 秒文本档上；12:29 重跑同一腿 `exit=0`、30 次调用零超时。
+两趟合起来才是这一格的全貌：**通道挂住是这台机器上会真实发生的事**，而有界化把它的下场从「整趟不返回」
+换成「点名哪一次调用、多大预算、哪一档 + 该页记不入结论」——这正是 AC 第 4 条要的形状。
+文本档 15 秒的定档依据（稳态空载仿真机 dumpsys 1.17 / 1.66 秒）没有因此改动：**没有证据说它常态不够**，
+只有证据说它偶尔会到点，而到点这条路已经被上面这两趟各自覆盖。
+⚠️ 两趟的**可复算程度不一样**，别写成一样。12:29 那轮整件入库；12:22 那轮当时**没入库**（驱动跑完 L1
+就死在下面第 3 条洞的非法正则上），本轮把它唯一留下的汇总行以 `APPENDIX_prior_round` 附录并进同一件
+（`exit=1 wall_seconds=199.5 timeout_count=3 result=FAIL inconclusive=0`）⇒ 这几格现在可复算；而**三条超时的
+名字**（`dumpsys activity activities` / `dumpsys window` / `pidof`）当时只存在于子进程 stdout，且那一轮的
+RAW 抓行有下面第 2 条「只抓到 token 为止」的缺陷、子日志随后被下一轮固定名覆盖 ⇒ **名字这一层是会话内
+观测，仓内不可复算**。把这条说白，是为了不让下一个人拿这三个名字当判据去改文本档。
+
+**判别力实测（N 系列，逐条弄坏被测物本体 `scripts/emulator-smoke.ps1`，还原后逐字节比对）**：
+`PRE_PRODUCT_DIRTY=0`，九条全部 `exit=1` 且 `restored_clean=true bytes_match_commit=true`（驱动
+`.ci-verify/mut-driver-1568b.mjs`，jest `--json` 取红腿名，绕开 pwsh 中文经码页变乱码那条血账）。
+
+| 变异 | 弄坏什么 | 红在哪 |
+| --- | --- | --- |
+| N1 | install 点位摘掉自己的 `-BudgetSeconds`（档写了却没接 = 那处仍无界） | 契约 C11 两格 |
+| N2 | install 档被塞成 15 秒（长等当挂死） | 契约 C11 两格 |
+| N3 | `Get-LogcatSummary` 不带出 `TimedOut` | 行为 EMT5 |
+| N4 | logcat 超时不再计入该页失败（改记 skip） | 契约 C11 两格 |
+| N5 | version 的 `-NoSerial` 丢了（server 级命令被拼 `-s`） | 行为 EMT8 |
+| N6 | 收尾 `wait-for-disconnect` 被摘出主 `finally` | 契约 C11 两格 |
+| N7 | boot-wait 换成文本档 | 行为 EMT7 |
+| N8 | version 点位绕开 `Get-AdbVersionBrief` 自己抄一遍 | 契约 C11 两格 |
+| N9 | 把一处文本调用改回 `& $AdbExe … \| Out-String` | 契约 C11 清零锁 |
+
+N8 第一版指到 `-t EMT8`，现测 **`exit=0 failed=0`** —— 函数**定义**还在，行为腿用 AST 抽定义直调，抽得到就照样绿。
+⇒ 「点位与函数脱钩」这一格的判据只能在**接线层**（`SITE_THROUGH_FN`：名字出现次数 + 点位正则），
+改指契约套件后才红。这条与本票 N5 的教训是同一件事的两面：行为腿证「函数对不对」，接线层证「点位走没走它」。
+
+两条口径跟着这张表一起说清：
+
+- ⚠️ **teardown 档没有挂死腿**（EMT1–EMT9 里没有一条真把 `emu kill` 挂住）：那两格在主 `finally` 段里，
+  本族 AST 抽函数的手法打不到（要打得先把收尾抽成函数）⇒ 现由 C11③/⑤ + 变异 **N6** 在**接线层**锁。
+  这是缺口，不是「已覆盖」，写在表旁边免得被读成成对九条各档都有。
+- 定档现测里 push 那两个数（69.7 / 111.1 ms 每 MB）量的是**合成 blob**：探针 `emulator-tier-probe.ps1:148`
+  用 `[System.IO.File]::Create` 造 48 MB 的 `blob.bin` 推到 `/data/local/tmp/tierprobe`，读数件自注
+  `note=unpackage_resources_absent`、实测 `push_dir_proxy ms=3346` ⇒ 它量的是 **adb 流式传输的速率**，
+  不是「真 www 资源目录」那一趟的耗时（120 秒这一档是按该速率外推的上界）。引用时别说成量过真资源。
+
+### 取证驱动自己那三处洞（照实在这里记，别再有人信 `LEGS_DONE`）
+
+1. `$Root` 上溯写成**三级**（`docs/verification/tooling/1568` 到工程根实为四级）⇒ `$Smoke` 指向
+   `docs\scripts\emulator-smoke.ps1` 这个不存在的路径 ⇒ 四条腿全部 `exit=90 wall_seconds=0`、日志零行，
+   而读数件照样打满四行并以 `LEGS_DONE=1` 收尾。**差一点就被当成本票的真链路证据引用**。
+   现在：四级 + `Test-Path $Smoke` 先 throw + 末行带分母（`LEGS_DONE=4/4 legs_produced_log=4`）。
+2. RAW 抓行正则写成 `(?m)^.*TOKEN` ⇒ 只抓到 token 为止，`ADB_TEXT_TIMEOUT` 行里的
+   `call=` / `callBudgetSeconds=` / `tier=` 全丢 ⇒ 读数只剩 `timeout_count=3` 这一个数，答不出是哪三条。
+   现在抓整行（`^.*TOKEN.*$`）。
+3. `pats` 里 `'Failure ['` 是**非法正则**（Unterminated [] set）⇒ L1 跑完后进 RAW 循环当场炸掉，
+   L2–L4 从未执行。现在转义成 `Failure \[`，并把六条 pattern 提到脚本级**开跑前逐条真编译**
+   （非法就 `BAD_RAW_PATTERN` 当场 throw，打印 `RAW_PATTERNS_COMPILED=6`）—— 驱动自己的错要在浪费一轮
+   仿真机之前就红，不能等产物。
+
+读数件 `emulator-real-legs-readings.txt` = 本轮 12:29–12:33 那一趟（四腿 + 分母行俱全）。驱动此后又加了
+两处（腿 stdout 按 `$RunStamp` 分组、RAW 开跑前自检），**不改变读数件的字段与数值**；重跑会得到同名 token、
+不同分组文件名。
+
+另有两处是本轮重跑时撞上的证据销毁：腿的 stdout 用固定名，下一轮同标签直接覆盖上一轮
+（12:22 那轮的三条原文就是这么没的）⇒ 现在按 `$RunStamp` 分组；变异驱动 `git checkout --` 还原
+被测物，所以**跑变异前必须先提交**（本轮 `BASE_HEAD=d5694bfd`、`PRE_PRODUCT_DIRTY=0`）。
+
 ## 4. 在册性（AC 第 5 条：先现测 `scripts/lib/contract-tests.ps1` 再决定）
 
+- AC 第 2 条新增的行为套件 `emulatorSmokeTierBehavior` 同样落在子串 `emulatorSmoke` 的射程内
+  （现测 `npx jest --config jest.config.unit.js --listTests` 该子串列出四个套件：`Contract` /
+  `BoundedShot` / `BoundedText` / `TierBehavior`）⇒ **不新增格子**。
 - `emulatorSmoke` token 是**子串**匹配 ⇒ 顺带命中新增的 `emulatorSmokeBoundedTextBehavior`，**不新增格子**
   （先例 #1560「追加进已在册的套件」）。
 - `wirelessDebug*` 原本**两个都不在册** ⇒ 本票**补一个窄 token** `wirelessDebugBoundedText`。
@@ -104,7 +199,10 @@ cd training-app/叉车维修培训学员端跨端应用
 node docs/verification/tooling/1568/adb-bounded-count.mjs
 pwsh -NoProfile -File docs/verification/tooling/1568/adb-latency-probe.ps1
 pwsh -NoProfile -File docs/verification/tooling/1568/real-adb-legs.ps1
+pwsh -NoProfile -File docs/verification/tooling/1568/emulator-tier-probe.ps1   # 定档现测（要真 AVD）
+pwsh -NoProfile -File docs/verification/tooling/1568/emulator-real-legs.ps1    # AC 第 2 条四腿（要真 AVD，约 8 分钟）
 npx jest --config jest.config.unit.js utils/emulatorSmokeBoundedTextBehavior.test.js utils/wirelessDebugBoundedTextBehavior.test.js
+npx jest --config jest.config.unit.js utils/emulatorSmokeTierBehavior.test.js utils/emulatorSmokeContract.test.js
 ```
 
 本目录不钉自己的 sha（文件不可能含自身 blob 值）；要核对读者拿到的是哪一份，按 PR 的 head sha 复算：
