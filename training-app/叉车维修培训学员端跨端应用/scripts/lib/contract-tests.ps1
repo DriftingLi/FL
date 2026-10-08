@@ -64,9 +64,12 @@ function Get-ContractTestPattern {
     # deviceCapture    → deviceCaptureContract（接线层：D12 单次超时与「残帧不进证据名」）
     #                  + deviceCaptureBoundedShotBehavior（行为层：#1562 真挂死桩 + 影子夹具。
     #                    承重证据在行为层 —— 不注册就只在全量那一档跑，token 收窄的门会静默跳过真执行腿）
-    # emulatorSmoke    → emulatorSmokeContract（接线层：C9 同族判据 + C10 文本收口点，#1568）
+    # emulatorSmoke    → emulatorSmokeContract（接线层：C9 同族判据 + C10 文本收口点 + C11 十三处直调分档，#1568）
     #                  + emulatorSmokeBoundedShotBehavior（行为层：#1562 仿真机冒烟那处调用，判据同上）
     #                  + emulatorSmokeBoundedTextBehavior（行为层：#1568 的 Get-AdbOutput 收口点，12 个调用方；
+    #                  + emulatorSmokeTierBehavior（行为层：#1568 AC 第 2 条，13 处直调按形态分档，EMT1–EMT9）
+    #                    ⚠️ 这两条都**不需要新格子**：子串 `emulatorSmoke` 现测同时列出四个套件
+    #                    （`npx jest --listTests` 过滤实测见 1568 README），再加一格就是第二真源。
     #                    **同一 token 顺带命中**，不新增格子 —— 先例 #1560 把腿追加进已在册套件）
     # wirelessDebugBoundedText → 行为层：#1568 的 Invoke-Adb 收口点（16 个调用方，且它是设备掉线时的自愈工具）。
     #                  ⚠️ 刻意取**窄 token**：`wirelessDebug` 会顺带命中 #1564 的

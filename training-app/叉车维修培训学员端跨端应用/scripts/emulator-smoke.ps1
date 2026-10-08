@@ -40,15 +40,22 @@
     （`-AdbCallTimeoutSeconds`，默认 15 秒）。到点不返回 ⇒ 终止整棵进程树、该页记 FAIL 并**继续**跑后面的页，
     日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」；截图先落 `.part`、「调用返回 + 帧非空」才改名归位
     —— 被杀调用的残帧可能删不掉（#1560 真链路现测），而本链按「存在且非空」判出图 ⇒ 归位靠命名，不靠删除成功。
-    ⚠️ **有界覆盖到哪一行（2026-10-08，#1568）**：截图那条走执行核（#1562）；`Get-AdbOutput` 这一个点**也**接上了
-    同一件唯一执行核（#1568 AC 第 1 条，预算参数 `-AdbTextCallTimeoutSeconds`，默认 15 秒）——它自己只有 1 行调用，
-    却压着 **12 个调用方**（`sys.boot_completed` 轮询在最前面，挂在那里连「起没起机」都判不出来），改一处一并有界。
-    仍然没界的只剩 **13 处没走收口点的直调**（`adb version` / `wait-for-device` / `install` / `push` /
-    `dumpsys activity` / `dumpsys window` / `logcat` / `emu kill` 那一类）⇒ 归 #1568 AC 第 2 条的后续 PR，
-    且**不得**套 15 秒那一档：install / push / 等待开机是有意的长等，那张票要收的是「没有上限的等」，不是「等得久」。
-    数法要说清，否则两个量会被读成一个：尺 = 剥注释（块注释与整行 `#` 注释）后按**所在函数**归属数 `& $AdbExe`，
-    入仓件 `docs/verification/tooling/1568/adb-bounded-count.mjs`；本脚本从 #1562 后的 14 行降到 **13 行**
-    （#1562 时那句「另有 13 处直调 + 收口点本体 1 行」里的「本体那 1 行」正是这次收掉的那一行）。
+    ⚠️ **有界覆盖到哪一行（2026-10-08，#1568 AC 第 1 + 2 条）**：截图那条走执行核（#1562）；`Get-AdbOutput`
+    这一个点接上同一件唯一执行核（AC 第 1 条，它自己只有 1 行调用、却压着 **12 个调用方**）；AC 第 2 条把
+    原先**没走收口点的 13 处直调**也逐个接上同一件执行核，并按调用形态分档 —— 文本档 `-AdbTextCallTimeoutSeconds`
+    （默认 15 秒：`adb version` / `pm list packages` / `resolve-activity` / 两条 `dumpsys` / `mkdir` / `logcat -c`，
+    现测最大 2.5 秒）、logcat 档 60 秒（现测 5.9 / 6.2 秒）、开机等待档 120 秒（现测 `wait-for-device` 29.2 / 32.0 秒）、
+    install 档 180 秒（现测 44.6 MB 基座 8.5 / 12.3 秒）、push 档 120 秒（现测 69.7 / 111.1 ms 每 MB）、
+    收尾档 60 秒（现测 `emu kill` 0.4 秒 / `wait-for-disconnect` 2.3 秒）。数与出处逐条见
+    `docs/verification/tooling/1568/emulator-tier-readings.txt` 与 `-run2.txt`，档位理由写在 `param()`。
+    ⇒ **本脚本代码面的 `& $AdbExe` 直调现为 0**（复算尺现测：本文件 13 → 0，全仓 24 → 11），
+    长等没有被塞进 15 秒：本票要收的是「没有上限的等」，不是「等得久」。
+    ⚠️ 一处既有的语义补齐：`logcat -d` 挂死时旧写法的下场是「空日志」，而空日志会被下面的计数读成
+    「FATAL=0 ⇒ 无崩溃」——那是把挂死包装成通过。现在 `Get-LogcatSummary` 带出 `TimedOut`，该页据此**记失败**，
+    汇总另落一行 `LOGCAT_INCONCLUSIVE`（形状与 #1562 给截图定的 `shotTimedOut ⇒ 该页 FAIL` 同律）。
+    数法要说清，否则两个量会被读成一个：尺 = 剥注释（块注释与整行 `#` 注释）后按**所在函数**归属数直调，
+    入仓件 `docs/verification/tooling/1568/adb-bounded-count.mjs`；本文件从 #1562 后的 14 行 → 13 行 → **0 行**
+    （中间那一格是 AC 第 1 条收掉的收口点本体）。
 
 .PARAMETER BaseApk
     基座 APK。默认走 HBuilderX 自带那份（含 x86/x86_64，故 x86 模拟器装得上）。
@@ -89,9 +96,9 @@ param(
     # **一次截图调用**的上限（#1562）。默认值理由与 `device-capture.ps1` 同名参数一致：同一条有界调用在
     # #1560 的真链路产物里返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
     # 15 秒给了最慢那次的十倍余量，而它把「一次不返回就整条冒烟就地停住」钉死成**最多 15 秒**。
-    # ⚠️ 限定词是实的：本脚本另有 **13 处没走收口点的直调**仍走无界等待（`adb version` / `install` / `push` /
-    #   `wait-for-device` / `logcat` 那一类，#1568 复算尺现测；那一张票 AC 第 2 条的后续 PR 收，且不得套 15 秒）
-    #   ⇒ `Get-AdbOutput` 那一个点（12 个调用方）已随 #1568 接到同一个执行核，就是下面那条预算参数管的部分。
+    # ⚠️ 限定词是实的：截图这一档只管 `Export-Screenshot` 那一条 `exec-out screencap`。本脚本其余 adb 调用
+    #   分属下面几档（#1568 AC 第 1 条收了 `Get-AdbOutput` 那一个点 = 12 个调用方；AC 第 2 条把原先 13 处
+    #   没走收口点的直调也接上同一件执行核，并按形态分档 —— 代码面现测 `& $AdbExe` 为 0）。
     [int]$AdbCallTimeoutSeconds = 15,
     # **一次取文本的 adb 调用**的上限（#1568，2026-10-08）：收的是 `Get-AdbOutput` 那一个点 —— 它自己只有
     # 1 行调用，却压着 **12 个调用方**（`sys.boot_completed` 轮询、三条 `settings put`、`input keyevent`、
@@ -100,9 +107,27 @@ param(
     # （`docs/verification/tooling/1560/README.md:25` 与 :48-49），而那还是一张约 730 KB 的 PNG；本档要取的是
     # `getprop` / `settings` / `am start` 这类小文本，同机现测 `adb version` 178 ms、`adb devices` 106 ms
     # （`docs/verification/tooling/1568/latency-readings.txt`）⇒ 15 秒给了三个数量级的余量。
-    # ⚠️ 这一档**只给读文本与小管理调用**：`install` / `push` / `wait-for-device` / boot 等待是有意的长等，
-    #   它们在本票 AC 第 2 条那批直调里（后续 PR），不得套这 15 秒 —— 本票要收的是「没有上限的等」，不是「等得久」。
+    # ⚠️ 这一档**只给读文本与小管理调用**：`install` / `push` / `wait-for-device` / `logcat -d` / 收尾是有意的长等，
+    #   各走下面那几档 —— 把它们塞进 15 秒就是**把正常当挂死**（现测：wait-for-device 29.2/32.0 秒、
+    #   install 8.5/12.3 秒、logcat -d 5.9/6.2 秒）；本票要收的是「没有上限的等」，不是「等得久」。
     [int]$AdbTextCallTimeoutSeconds = 15,
+    # ── 长等三档 + logcat 一档 + 收尾一档（#1568 AC 第 2 条，2026-10-08）──────────────────────────
+    # 每个默认值都指得到入库现测产物 `docs/verification/tooling/1568/emulator-tier-readings.txt`（两次冷起
+    # Pixel_4a_API_30 的真读数，另有 `-run2.txt` 复测）。**同一形状的两列都实测过**，取大值再给余量：
+    #   wait-for-device 29,160 / 32,049 ms ⇒ 120 秒（≈3.7 倍；且**必须小于** -BootTimeoutSeconds 300，
+    #     否则外层起机上限反而管不住它）；
+    #   install -r -t（44.6 MB 基座，流式安装）8,528 / 12,268 ms ⇒ 180 秒（≈15 倍；换更大 APK 也够）；
+    #   push 69.7 / 111.1 ms 每 MB ⇒ 120 秒（按 111 ms/MB 外推到 200 MB 是 22 秒，给 ≈5 倍）；
+    #   logcat -d 5,896 / 6,186 ms ⇒ 60 秒（≈10 倍；真会话的缓冲区比刚起机时更满，这一格不能贴读数定档）；
+    #   emu kill 357 / 413 ms + wait-for-disconnect 2,069 / 2,289 ms ⇒ 60 秒（≈26 倍；收尾一挂死，
+    #     下面的 Kill() 兜底就永远轮不到 ⇒ 这一档的意义是「让兜底可达」）。
+    # 现测同时照出：本机 `install` 一直是 `INSTALL_FAILED_NO_MATCHING_ABIS`（x86 AVD 装不上基座的原生库），
+    # 这解释了 #1562 三跑冒烟为何都带 -SkipInstallBaseApk；install 那一档量的仍是**真实流式传输**的耗时。
+    [int]$AdbInstallTimeoutSeconds = 180,
+    [int]$AdbPushTimeoutSeconds = 120,
+    [int]$AdbBootWaitTimeoutSeconds = 120,
+    [int]$AdbLogcatTimeoutSeconds = 60,
+    [int]$AdbTeardownTimeoutSeconds = 60,
     [int]$Port = 5554
 )
 
@@ -177,26 +202,54 @@ function Convert-PageToFileName {
     return 'emulator-' + ($Page -replace '[^A-Za-z0-9._-]', '-') + '.png'
 }
 
-function Get-AdbOutput {
-    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds)
-    # 统一走 adb -s <serial>；失败一律返回空串，让调用方自行判定
-    # 「一次 adb 调用怎么才有界」不在这里重写 —— 复用 `lib/auto-screenshot.ps1` 那件唯一执行核（#1568 AC1）。
-    # `-MergeStdErr` 是给上一条注释那句「失败一律返回空串」兜底的：本函数的老形状是 `2>&1`，
-    # adb 的**失败原文全在 stderr**（`am start` 的 Error type、`pidof` 的空答），不合并就等于把判据原料换了。
+# ── 有界 adb 调用的**唯一**委托层（#1568 AC 第 1 + 2 条，2026-10-08）──────────────────────────
+# 「一次 adb 调用怎么才有界」（等待、到点杀整棵进程树、残文件不回收）不在本脚本重写 —— 那份只在
+# `lib/auto-screenshot.ps1` 存在一件。本层只补三件这一族需要、而执行核不该管的事：
+#   ① 档位：`-BudgetSeconds` 从 `param()` 的六个档取，**调用形态决定档**（AC 第 3 条）；
+#   ② 点名：挂死必须落一行超时结论（哪一次调用、多大预算、实际等了多久、属于哪一档），
+#      否则读日志的人只看到「设备没答」，分不清 adb 通道挂了与答了个空。是读数、不是判据；
+#   ③ serial 的取舍：`version` 这类 **server 级**命令恒不带 `-s`（带了就换判据 —— AC 第 4 条），
+#      设备级调用照旧带。
+# 委托链两段：`Get-AdbOutput`（回文本，超时回空串 —— 既有语义）→ `Invoke-AdbTierCall`（回状态）。
+function Invoke-AdbTierCall {
+    param(
+        [string[]]$AdbArgs,
+        [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds,
+        [string]$Tier = 'text',
+        [switch]$NoSerial
+    )
+    $script:AdbTextCalls = $script:AdbTextCalls + 1
+    $adbSerial = $(if ($NoSerial) { '' } else { $Serial })
+    # `-MergeStdErr` 是给「失败一律回空串/回原文」兜底的：本族的原始形状是 `2>&1`，
+    # adb 的**失败原文全在 stderr**（`am start` 的 Error type、`pidof` 的空答、install 的 Failure 行），
+    # 不合并就等于悄悄把判据原料换了。
     # 非 Windows 走直启分支：本脚本实践中只在 Windows 跑（要 WHPX/HAXM 与 emulator.exe），但它的
     # 行为守护在 CI 的 ubuntu 上真跑（#1562 的 `B12` 教训：那一格造不出来就会静默假绿）。
-    $script:AdbTextCalls = $script:AdbTextCalls + 1
-    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $Serial -AdbArguments $AdbArgs -AdbArgv $AdbArgs `
+    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $adbSerial -AdbArguments $AdbArgs -AdbArgv $AdbArgs `
         -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
     if ($r.TimedOut) {
-        # 「不返回」必须是一种**可见的结论**（#1562 同一条纪律）：哪一次调用、多大预算、几点收的口都点名，
-        # 否则读日志的人只看到「设备没答」，分不清 adb 通道挂了与答了个空。是读数、不是判据。
         $script:AdbTextTimeouts = @($script:AdbTextTimeouts) + @(($AdbArgs -join ' '))
-        Write-Log ('ADB_TEXT_TIMEOUT call=adb -s ' + $Serial + ' ' + ($AdbArgs -join ' ') +
-            " callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) —— 已终止整棵进程树，本次按「没拿到」回空串")
-        return ''
+        Write-Log ('ADB_TEXT_TIMEOUT call=adb ' + $(if ($NoSerial) { '' } else { "-s $Serial " }) + ($AdbArgs -join ' ') +
+            " callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) tier=$Tier —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判")
     }
+    return $r
+}
+
+function Get-AdbOutput {
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds, [string]$Tier = 'text', [switch]$NoSerial)
+    # 既有语义不许改：失败（含挂死）一律返回空串，调用方各按自己的分支判「空」算不算失败
+    #（统一走 adb -s <serial>；要区分「答了空」与「没答上」的调用方直接读 Invoke-AdbTierCall 的 TimedOut ——
+    #  logcat 那一格就是这么做的，因为空日志会被读成「无崩溃」）。
+    $r = Invoke-AdbTierCall -AdbArgs $AdbArgs -BudgetSeconds $BudgetSeconds -Tier $Tier -NoSerial:$NoSerial
+    if ($r.TimedOut) { return '' }
     return ([string]$r.Text).Trim()
+}
+
+# wait-for-device 单独成函数（AC 第 2 条）：它是本族里最长的等（现测 29.2 / 32.0 秒），也是唯一
+# 「挂在那里连起没起机都判不出来」的一格 —— 收进可直调的函数，行为守护才真跑得到它（EMT7）。
+function Wait-ForDeviceBounded {
+    Write-Log 'adb wait-for-device …'
+    $null = Get-AdbOutput @('wait-for-device') -BudgetSeconds $AdbBootWaitTimeoutSeconds -Tier 'boot-wait'
 }
 
 # ================= 环境自检（缺 SDK/adb/AVD/APK ⇒ exit 2） =================
@@ -221,7 +274,9 @@ function Assert-Environment {
         }
         $script:BaseApkSizeMb = [math]::Round((Get-Item -LiteralPath $BaseApk).Length / 1MB, 1)
     }
-    $script:AdbVersion = ((& $AdbExe version 2>&1 | Out-String) -split "`n" | Select-Object -First 1).Trim()
+    # `adb version` 是 **server 级**命令：带 `-s <serial>` 就不是同一条调用了（#1568 AC 第 4 条「不改既有判据语义」
+    # 在这一格最实 —— 起了模拟器之后再问 version 会答出别的东西），所以走 -NoSerial；档位给文本档（现测 165–200 ms）。
+    $script:AdbVersion = ((Get-AdbOutput @('version') -NoSerial -Tier 'server') -split "`n" | Select-Object -First 1).Trim()
     $script:EmuVersion = ((& $EmulatorExe -version 2>&1 | Out-String) -split "`n" | Where-Object { $_ -match 'Emulator version|Android emulator' } | Select-Object -First 1).Trim()
     $script:Accel = Get-AccelerationStatus
 }
@@ -254,8 +309,7 @@ function Start-Emulator {
     $script:EmulatorProcess = $proc
     $script:BootedEmulator = $true
 
-    Write-Log 'adb wait-for-device …'
-    & $AdbExe -s $Serial wait-for-device 2>&1 | Out-Null
+    Wait-ForDeviceBounded
 
     Write-Log "等待 sys.boot_completed=1（上限 $BootTimeoutSeconds 秒）…"
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -295,7 +349,7 @@ function Start-Emulator {
 # 基座包名/入口一律**从设备上问**（adb），不依赖 aapt2/build-tools：
 # 少一份工具链依赖，也不用解析二进制 AndroidManifest。装不上才回落到已知常量。
 function Resolve-BaseApkOnDevice {
-    $pkgs = (& $AdbExe -s $Serial shell pm list packages 2>&1 | Out-String)
+    $pkgs = Get-AdbOutput @('shell', 'pm', 'list', 'packages')
     # 基座与「已装的本项目 5+ 应用」可能不同包名；优先带 dcloud/HBuilder 字样的，其次回落常量
     $candidates = @()
     foreach ($line in ($pkgs -split "`r?`n")) {
@@ -318,7 +372,7 @@ function Resolve-BaseApkOnDevice {
 function Resolve-LauncherComponent {
     param([string]$Package)
     # 先问系统的 resolved activity，拿不到再猜 PandoraEntry（DCloud 基座的入口类名）
-    $out = (& $AdbExe -s $Serial shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER $Package 2>&1 | Out-String)
+    $out = Get-AdbOutput @('shell', 'cmd', 'package', 'resolve-activity', '--brief', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.LAUNCHER', $Package)
     $m = [regex]::Match($out, '([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)')
     if ($m.Success) { return $m.Groups[1].Value }
     return "$Package/$Package.PandoraEntry"
@@ -328,7 +382,9 @@ function Resolve-LauncherComponent {
         return
     }
     Write-Log "安装基座 APK（$($script:BaseApkSizeMb) MB）：$BaseApk"
-    $out = (& $AdbExe -s $Serial install -r -t $BaseApk 2>&1 | Out-String)
+    # 流式安装是**有意的长等**（现测 44.6 MB 基座 8.5 / 12.3 秒，含失败那一次）⇒ 走 install 档，不套文本档。
+    # 判据不变：只看输出里有没有 `Success`（本仓口径：不拿退出码当判据，见契约 C2）。
+    $out = Get-AdbOutput @('install', '-r', '-t', $BaseApk) -BudgetSeconds $AdbInstallTimeoutSeconds -Tier 'install'
     if ($out -notmatch 'Success') {
         Fail-Environment "基座 APK 安装失败：$($out.Trim())"
     }
@@ -347,8 +403,9 @@ function Push-Resources {
     }
     $target = '/sdcard/Android/data/' + $script:BaseApkPackage + '/apps/__UNI__1C1D180/www'
     Write-Log "push 应用资源：$resolved → $target"
-    & $AdbExe -s $Serial shell mkdir -p $target 2>&1 | Out-Null
-    $out = (& $AdbExe -s $Serial push $resolved/. $target 2>&1 | Out-String)
+    $null = Get-AdbOutput @('shell', 'mkdir', '-p', $target)
+    # push 是有意的长等（现测 69.7 / 111.1 ms 每 MB）⇒ 走 push 档。目标串逐字保持 `目录/.`（adb 的「只传内容」写法）。
+    $out = Get-AdbOutput @('push', "$resolved/.", $target) -BudgetSeconds $AdbPushTimeoutSeconds -Tier 'push'
     if ($out -notmatch 'pushed|skipped') {
         Write-Log "资源 push 结果可疑：$($out.Trim())"
         return $false
@@ -359,10 +416,10 @@ function Push-Resources {
 
 # ================= 断言辅助 =================
 function Get-ForegroundActivity {
-    $out = (& $AdbExe -s $Serial shell dumpsys activity activities 2>&1 | Out-String)
+    $out = Get-AdbOutput @('shell', 'dumpsys', 'activity', 'activities')
     $m = [regex]::Match($out, 'topResumedActivity[^\n]*?([A-Za-z0-9_.]+/[A-Za-z0-9_.]+)')
     if ($m.Success) { return $m.Groups[1].Value }
-    $out2 = (& $AdbExe -s $Serial shell dumpsys window 2>&1 | Out-String)
+    $out2 = Get-AdbOutput @('shell', 'dumpsys', 'window')
     $m2 = [regex]::Match($out2, 'mCurrentFocus[^\n]*?([A-Za-z0-9_.]+/[A-Za-z0-9_.]+)')
     if ($m2.Success) { return $m2.Groups[1].Value }
     return ''
@@ -375,7 +432,12 @@ function Test-ProcessAlive {
 
 # logcat 摘要：只统计「本次冒烟期间」的崩溃/无响应证据（脚本开头已 logcat -c 清过）
 function Get-LogcatSummary {
-    $dump = (& $AdbExe -s $Serial logcat -d -v brief 2>&1 | Out-String)
+    # ⚠️ 这一格**不能**用「回空串」的 Get-AdbOutput：挂死时它回空文本，而下面的计数会把空文本读成
+    #   「FATAL=0 ⇒ 无崩溃」——那是把挂死包装成通过，比不收口更坏。所以这里直读状态位（#1568 AC 第 4 条：
+    #   「不返回」要成为可见结论，且不改既有判据语义 —— 计数照旧，只是多带一个 TimedOut 让调用方落该页失败）。
+    #   预算给 logcat 档（现测刚起机时 5.9 / 6.2 秒，真会话的缓冲区更满 ⇒ 60 秒，见 param() 的理由）。
+    $r = Invoke-AdbTierCall @('logcat', '-d', '-v', 'brief') -BudgetSeconds $AdbLogcatTimeoutSeconds -Tier 'logcat'
+    $dump = [string]$r.Text
     $lines = $dump -split "`r?`n"
     $fatal = @($lines | Where-Object { $_ -match 'FATAL EXCEPTION' })
     # ANR 只在**打给基座自己**时才算失败：`ANR in <pkg>` 里的 <pkg> 是卡住的进程。
@@ -386,6 +448,8 @@ function Get-LogcatSummary {
     $runtimeCrash = @($lines | Where-Object { $_ -match 'E AndroidRuntime' })
     $died = @($lines | Where-Object { $_ -match 'has died' })
     return [pscustomobject]@{
+        TimedOut        = [bool]$r.TimedOut
+        BudgetSeconds   = $AdbLogcatTimeoutSeconds
         Lines           = $lines.Count
         FatalCount      = $fatal.Count
         AnrCount        = $anr.Count
@@ -695,7 +759,7 @@ try {
     Write-Log "基座 APK 来源：$BaseApk"
 
     Start-Emulator
-    & $AdbExe -s $Serial logcat -c 2>&1 | Out-Null
+    $null = Get-AdbOutput @('logcat', '-c')
     Write-Log 'logcat 已清空（崩溃计数只统计本次冒烟期间）'
 
     Install-BaseApk
@@ -745,6 +809,9 @@ try {
         # 截图调用超时 ⇒ **该页记失败、循环继续**（#1562）。只加这一条判据：0 字节出图的老行为不动
         # （票面「不动判据本身」；本链原先并不按截图字节数判页，改成按它判会越界）。
         if ($shot.TimedOut) { $pageFail += "截图调用未在 $AdbCallTimeoutSeconds 秒内返回（adb 通道问题，非渲染问题）" }
+        # logcat 读不到 = 崩溃计数不可判 ⇒ **该页记失败**（形状与上面那条截图超时同律，#1568 AC 第 4 条）。
+        # 少了这一条，「adb 挂死 ⇒ 空日志 ⇒ FATAL=0」就会被读成「这页没崩」——那是本票最险的一格。
+        if ($logcat.TimedOut) { $pageFail += "logcat 未在 $AdbLogcatTimeoutSeconds 秒内返回 ⇒ 崩溃与 ANR 计数不可判，该页记失败" }
 
         $status = 'PASS'
         if (@($pageFail).Count -gt 0) {
@@ -757,7 +824,7 @@ try {
             $skips += "$page（未提供 -ResourcesDir，未验证页面打开）"
             Write-Log '  ⚠ SKIP：未提供 -ResourcesDir，本次只验证到「基座能起、无崩溃」'
         }
-        Write-Log "  进程存活=$alive 前台=$foreground FATAL=$($logcat.FatalCount) ANR=$($logcat.AnrCount) 截图=$($shot.Name) shotTimedOut=$($shot.TimedOut) 判定=$status"
+        Write-Log "  进程存活=$alive 前台=$foreground FATAL=$($logcat.FatalCount) ANR=$($logcat.AnrCount) 截图=$($shot.Name) shotTimedOut=$($shot.TimedOut) logcatTimedOut=$($logcat.TimedOut) 判定=$status"
 
         $pageResults += [pscustomobject]@{ Page = $page; Status = $status; Bytes = $shot.Bytes; Fatal = $logcat.FatalCount; Anr = $logcat.AnrCount; Alive = $alive }
     }
@@ -774,9 +841,13 @@ try {
         "SHOT_CALL_BUDGET calls=$(@($shotRecords).Count) timeouts=$(@($script:ShotTimeouts).Count) callBudgetSeconds=$AdbCallTimeoutSeconds timedOutPages=$(if (@($script:ShotTimeouts).Count -gt 0) { $script:ShotTimeouts -join ',' } else { 'none' })",
         # 取文本那一档同口径点名（#1568）：挂过哪几次、预算多大都得写出来，读日志的人才分得清
         # 「adb 通道不返回」与「设备答了个空」——前者查 adb、后者查设备，处置人完全不同。同样是读数、不是判据。
-        "ADB_TEXT_CALL_BUDGET calls=$($script:AdbTextCalls) timeouts=$(@($script:AdbTextTimeouts).Count) callBudgetSeconds=$AdbTextCallTimeoutSeconds hungCalls=$(if (@($script:AdbTextTimeouts).Count -gt 0) { $script:AdbTextTimeouts -join ';' } else { 'none' })",
+        "ADB_TEXT_CALL_BUDGET calls=$($script:AdbTextCalls) timeouts=$(@($script:AdbTextTimeouts).Count) defaultBudgetSeconds=$AdbTextCallTimeoutSeconds hungCalls=$(if (@($script:AdbTextTimeouts).Count -gt 0) { $script:AdbTextTimeouts -join ';' } else { 'none' })",
+        # 六档现值打进汇总（#1568 AC 第 3 条）：事后能从日志核对「当时生效的是哪一档」。
+        # 没有这一行，读到一条 `seconds=60` 的超时的人分不清是「预算给小了」还是「设备真挂了」。
+        "ADB_TIER_BUDGET text=$AdbTextCallTimeoutSeconds logcat=$AdbLogcatTimeoutSeconds boot_wait=$AdbBootWaitTimeoutSeconds install=$AdbInstallTimeoutSeconds push=$AdbPushTimeoutSeconds teardown=$AdbTeardownTimeoutSeconds shot=$AdbCallTimeoutSeconds",
         "基座 APK=$($script:BaseApkPackage)  安装=$(if ($SkipInstallBaseApk) { '已跳过' } else { "已安装 ($($script:BaseApkSizeMb) MB)" })",
         "本次 logcat 总行数=$($final.Lines)  FATAL EXCEPTION=$($final.FatalCount)  ANR=$($final.AnrCount)  AndroidRuntime=$($final.RuntimeCrashes)  进程死亡=$($final.ProcessDeaths)",
+        "LOGCAT_INCONCLUSIVE=$(if ($final.TimedOut) { 1 } else { 0 })",
         "页面判定：PASS=$(@($pageResults | Where-Object { $_.Status -eq 'PASS' }).Count)  FAIL=$(@($pageResults | Where-Object { $_.Status -eq 'FAIL' }).Count)  SKIP=$(@($pageResults | Where-Object { $_.Status -eq 'SKIP' }).Count)",
         "截图目录=$VerifyDir",
         "日志=$LogPath"
@@ -798,8 +869,11 @@ try {
     # 收尾**无条件**执行：断言失败、超时、异常都走这里，绝不留下跑着的模拟器
     if ($script:BootedEmulator) {
         Write-Log '收尾：adb emu kill'
-        try { & $AdbExe -s $Serial emu kill 2>&1 | Out-Null } catch { Write-Log "emu kill 失败：$($_.Exception.Message)" }
-        try { & $AdbExe -s $Serial wait-for-disconnect 2>&1 | Out-Null } catch { }
+        # 收尾两格也有单次预算（teardown 档；现测 emu kill 0.36/0.41 秒、wait-for-disconnect 2.1/2.3 秒）。
+        # 这一档的意义是**让下面的 Kill() 兜底可达**：旧写法一次不返回就永远轮不到兜底，
+        # 「绝不留下跑着的模拟器」这句承诺就地失效（#1568 AC 第 4 条：不返回要成为可见结论）。
+        try { $null = Get-AdbOutput @('emu', 'kill') -BudgetSeconds $AdbTeardownTimeoutSeconds -Tier 'teardown' } catch { Write-Log "emu kill 失败：$($_.Exception.Message)" }
+        try { $null = Get-AdbOutput @('wait-for-disconnect') -BudgetSeconds $AdbTeardownTimeoutSeconds -Tier 'teardown' } catch { }
     }
     if ($script:EmulatorProcess -and -not $script:EmulatorProcess.HasExited) {
         try { $script:EmulatorProcess.WaitForExit(30000) | Out-Null } catch { }
