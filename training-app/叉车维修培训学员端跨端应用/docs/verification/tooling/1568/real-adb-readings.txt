@@ -1,0 +1,13 @@
+RL1_concluded=True
+RL1_stdout_has_adb_version=True
+RL1_budget_line=2026-10-08 10:08:22 ADB_CALL_BUDGET calls=3 timeouts=0 readBudgetSeconds=15 endpointBudgetSeconds=30 hungArgs=none
+RL1_wall_ms=1743
+RL2_concluded=True
+RL2_timeouts=2
+RL2_first=2026-10-08 10:08:24 ADB_CALL_TIMEOUT args=version callBudgetSeconds=0 seconds=0.1 ?? ???????????????????????????? fail-closed ???
+RL2_wall_ms=1533
+RL3_nonempty=True
+RL3_HAS_NOT_FOUND=True
+RL3_raw=RL3_nonempty=True | RL3_HAS_NOT_FOUND=True | RL3_raw_text=adb.exe: device 'emulator-5556' not found
+RL3_carrier=real_adb stderr-only-answer serial=emulator-5556(no such transport)
+
