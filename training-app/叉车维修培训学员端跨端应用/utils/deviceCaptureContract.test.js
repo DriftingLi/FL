@@ -435,11 +435,19 @@ function scanContract(sources) {
     violations.push('D13 「没有设备」判定排在挂死之前（通道故障被写成用户该去重连无线）');
   }
   // ⑤ logcat 窗口挂死 ⇒ 落失败 + 汇总不可判（空日志被读成「无崩溃」是本票最险的一格）
+  //   ⚠️ 这一条**必须函数体 scoped**：现测教训（变异 M3 第一趟）—— 只删 `Get-LogcatWindow` 里那一格
+  //   `TimedOut = [bool]$r.TimedOut` 时，全文级锚被另外三处（devices / dumpsys / baseline）同形文字满足，
+  //   契约**不打红**（只有行为腿 DCT6/7/11 打红）。险处那一格不许只靠一层守着。
+  const winStart = code.indexOf('function Get-LogcatWindow');
+  const winEnd = code.indexOf('function Convert-PageToFileName');
+  const winBody = winStart < 0 ? '' : code.slice(winStart, winEnd > winStart ? winEnd : code.length);
+  if (winStart < 0) {
+    violations.push('D13 找不到 Get-LogcatWindow（判据取不到即红，不在空集合上判绿）');
+  } else if (!/TimedOut\s*=\s*\[bool\]\$r\.TimedOut/.test(winBody)) {
+    violations.push('D13 Get-LogcatWindow 没把 TimedOut 带进返回值（调用方无从区分「日志干净」与「日志没读到」）');
+  }
   if (!/if \(\$final\.TimedOut\) \{\s*\$failures \+=/.test(code)) {
     violations.push('D13 logcat 窗口读取超时未计入失败（本次仍会被判 PASS ⇒ 挂死被读成「无崩溃」）');
-  }
-  if (!/TimedOut\s*=\s*\[bool\]\$r\.TimedOut/.test(code)) {
-    violations.push('D13 没把执行核的 TimedOut 带进返回值（调用方无从区分「日志干净」与「日志没读到」）');
   }
   if (!/LOGCAT_INCONCLUSIVE=/.test(code)) {
     violations.push('D13 汇总缺 LOGCAT_INCONCLUSIVE（崩溃计数不可判必须在结论里点名）');
