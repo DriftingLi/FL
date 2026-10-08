@@ -85,7 +85,8 @@ export const SUBSET_MEMBERS_FEATURED : string[] = [
  *  与 Web 同口径**展开成 alt 文本**，图片走 `images` 数组），另**多一个 inline**（⑩-2：
  *  唯一声明行内格式的档 —— 粗体 / 斜体 / 行内代码 / 链接 / 删除线 / 有序编号在论坛渲染）。
  *  ⚠️ 后一条是 2026-10-02 对 ③ 第一条的重开：④ 当年「不给论坛改共享件」的理由仍成立，
- *  走的是**按成员开关**这条不摊风险的路 —— `chapter` / `featured` 不声明 ⇒ 逐字不变（⑩-6）。
+ *  走的是**按成员开关**这条不摊风险的路 —— `chapter` / `featured` 不声明 ⇒ **块数组**逐字不变（⑩-6 的硬 AC 面）。
+ *  ⚠️ 「逐字不变」的射程就是块数组：`stripInlinePlain` 是三档共用的剥离件，摘要面另走 ⑩-5 的修复集口径（#1499 按面拆分）。
  *  代价具名登记：同一个 app 里帖子有粗体、课程章节没有（一处新的跨面不一致）。 */
 export const SUBSET_MEMBERS_FORUM : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
@@ -291,9 +292,11 @@ export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTE
 	 * ⑩-2 的分叉闸门：本档声明 `inline` ⇒ 块内文本存**行内源串**（不抹平）。
 	 *
 	 * ⚠️ 它同时决定⑩-3 那条「有序落 `level` 槽」要不要生效：**两件事都只对本档声明走**，
-	 * 因为 ⑩-6 把「`chapter` / `featured` 逐字不变」定成了硬 AC —— 若把 `ol` 的 `level=1`
+	 * 因为 ⑩-6 把「`chapter` / `featured` 的**块数组**逐字不变」定成了硬 AC —— 若把 `ol` 的 `level=1`
 	 * 无条件写上，那两档的块数组也会变（`level` 是块的一部分），那就不是「按成员开关」而是
 	 * 「把论坛的新行为摊到已上线面」，正是 ④ 当年否决的那条路。
+	 * （#1499 把 ⑩-6 按面拆分：纯文本**摘要面**另走 ⑩-5 的修复集口径。那条拆分**不动这一面** ——
+	 *  拿「反正摘要可以变」来松绑本闸门，就是把论坛的新行为摊回已上线面。）
 	 */
 	const keepInline = hasMember(MEMBER_INLINE)
 	const lines = markdown.split('\n')

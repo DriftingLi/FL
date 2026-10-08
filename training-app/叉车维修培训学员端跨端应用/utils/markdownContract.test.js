@@ -500,7 +500,7 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
     expect(MD_SRC).not.toMatch(/keepInline\s*=\s*subset\s*==/);
     // 镜像侧必须同样从声明表取值（名字与 .uts 一致；两边名字不同就是分叉漂移的第一步）
     expect(parseMarkdown.toString()).toContain('hasMember(MEMBER_INLINE)');
-    // 有序编号落 level 槽只在**声明了 inline 的档**生效（⑩-6 的「两档逐字不变」由这条兜住）
+    // 有序编号落 level 槽只在**声明了 inline 的档**生效（⑩-6 拆分后的**块数组面**硬 AC 由这条兜住，#1499）
     expect(MD_CODE).toContain('LIST_LEVEL_OL');
     // list 块的文字在 `items` 里、`text` 恒空（形状从 #905 起如此），故这里断言 items 而非 text
     expect(parseMarkdown('3. 起步', SUBSET_CHAPTER)[0].items).toEqual(['起步']);
@@ -514,7 +514,8 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
   it('⑩-5 的 `~~` 剥离规则在 .uts 与镜像里同源（缺任何一处都是「摘要还漏删除线」）', () => {
     expect(MD_CODE).toContain('/~~([^~]+)~~/g');
     expect(stripInlinePlain('~~作废~~')).toBe('作废');
-    // 未声明 inline 的档也必须剥净（否则课程面继续漏 `~~`）
+    // 未声明 inline 的档也必须剥净（否则课程面继续漏 `~~`）—— ⑩-6 那句「逐字不变」的射程是**块数组面**，
+    // 不含这条三档共用的剥离件：#1499 裁定选项 1，`~~` 源串泄漏属修复集、不是回归
     expect(firstText('参 ~~作废~~ 数', SUBSET_CHAPTER)).toBe('参 作废 数');
   });
 
