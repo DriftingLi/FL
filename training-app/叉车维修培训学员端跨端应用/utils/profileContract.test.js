@@ -192,8 +192,9 @@ describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧
 
 describe('学员侧退出入口收敛（#1554：pages/profile 只剩一处 authStore.logout()）', () => {
   /**
-   * 只数**调用行**：#1554 现测两页各带一条「`// authStore.logout()` 内部已包含 logoutApi 调用」的
-   * 说明注释 ⇒ 拿整页字符串计数会把注释当成调用点（`git grep -c` 每页显 2 就是这个原因）。
+   * 只数**调用行**：settings 页那处调用点上方带着一条同文的说明注释
+   * （「`authStore.logout()` 内部已包含 logoutApi 调用」）⇒ 拿整页字符串计数会把注释也算成
+   * 调用点（`git grep -c` 每页显 2 就是这个原因），机检必须剥掉行首注释才成立。
    */
   function logoutCallLines(src) {
     return src.split('\n').filter((line) => {

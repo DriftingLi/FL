@@ -465,7 +465,10 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
       // 合法承载那一位也必须解析得到（登记表的 liveness 才有意义）
       const tpl = stripHtmlComments(templateOf(readSource('pages/profile/personal-info.uvue')));
       expect([...(classCarriers(tpl).get('code-btn-text') || [])]).toEqual(['text']);
-      expect(classCarriers(tpl).size).toBeGreaterThanOrEqual(30);
+      // 下界 30 → **27** 是一次显式决定（#1554）：本页退出入口整块撤净，
+      // `.logout-wrap` / `.logout-btn` / `.logout-text` 三个类随模板一起删除 ⇒ 映射条目 -3。
+      // 判据的角色没变（证明解析器在这一页真抓到了丰富映射、不是「零命中」假绿），只是**基数**跟着 UI 走。
+      expect(classCarriers(tpl).size).toBeGreaterThanOrEqual(27);
 
       // 全仓映射总量（class → 承载）—— 塌成 0 时第 3 条测试会「零命中」假绿
       const totalMapped = scanned.reduce((n, s) => n + s.carriers.size, 0);
