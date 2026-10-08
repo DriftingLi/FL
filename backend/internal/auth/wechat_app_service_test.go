@@ -6,6 +6,8 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	observer "go.uber.org/zap/zaptest/observer"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/config"
@@ -23,9 +26,11 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// newAppSvc 构建注入 mock 换取端点的 App 端微信登录服务。
-// resp 是端点返回的 JSON 字段集；lastQuery 记录最近一次请求参数，calls 记录外呼次数（可为 nil）。
-func newAppSvc(t *testing.T, cfg config.WechatAppConfig, resp map[string]any, lastQuery *url.Values, calls *int) (*WechatAppService, *gorm.DB) {
+// newAppSvcOnDB 在**既有库**上装一个 App 端微信登录服务，外呼打到 mock 换取端点。
+// 允许传库是为了跨服务用例（小程序登录回填 unionid ⇒ App 登录按 unionid 认出同一个账号）；
+// resp 是端点返回的 JSON 字段集，lastQuery 记录最近一次请求参数，calls 记录外呼次数（均可为 nil）。
+func newAppSvcOnDB(t *testing.T, db *gorm.DB, cfg config.WechatAppConfig, resp map[string]any,
+	lastQuery *url.Values, calls *int, logger *zap.Logger) *WechatAppService {
 	t.Helper()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls != nil {
@@ -40,12 +45,18 @@ func newAppSvc(t *testing.T, cfg config.WechatAppConfig, resp map[string]any, la
 	}))
 	t.Cleanup(ts.Close)
 
-	db := testutil.NewMemoryDB(t)
 	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), core.NewForumCounter(),
-		"admin123", "tutor123", "student123", zap.NewNop())
-	svc := NewWechatAppService(cfg, db, authSvc, zap.NewNop())
+		"admin123", "tutor123", "student123", logger)
+	svc := NewWechatAppService(cfg, db, authSvc, logger)
 	svc.accessTokenBase = ts.URL
-	return svc, db
+	return svc
+}
+
+// newAppSvc 自建内存库的常用形态（连带返回 db 供落库断言）。
+func newAppSvc(t *testing.T, cfg config.WechatAppConfig, resp map[string]any, lastQuery *url.Values, calls *int) (*WechatAppService, *gorm.DB) {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	return newAppSvcOnDB(t, db, cfg, resp, lastQuery, calls, zap.NewNop()), db
 }
 
 // configuredAppCfg 是「凭证已配好」的默认样本；不配置的用例显式传零值。
@@ -230,8 +241,11 @@ func TestWechatAppLogin_SameOpenIDIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestWechatAppLogin_DuplicateUnionIDPicksOldest 钉住重复 unionid 下的定序口径（id 最小者）。
-// 这也是 000041 迁移「为什么不上唯一约束」的行为前提：删掉 Order("id ASC") 这条就失去确定性。
+// TestWechatAppLogin_DuplicateUnionIDPicksOldest 钉住重复 unionid 下的定序口径（认最早那个账号），
+// 它是 000041「只建索引、不上唯一约束」这条决定的行为前提。
+// 诚实交代射程：`First` 本身就会按主键升序（GORM v1.25.12 finisher_api.go:119），所以**单删
+// 那句显式 Order 本用例不会红**——它防的是「换成 Find/limit 或改了选行规则」那类走偏，
+// 不是防那一行子句被删。代码里保留显式 Order 正是为了不把确定性寄存在库实现细节上。
 func TestWechatAppLogin_DuplicateUnionIDPicksOldest(t *testing.T) {
 	svc, db := newAppSvc(t, configuredAppCfg(), appOK("oAPP_dup", "uni-dup"), nil, nil)
 	old := model.HrwaiUser{UID: 7101, Account: "wx_dup_old", Username: "最早那个",
@@ -311,20 +325,129 @@ func TestWechatAppLogin_UnreachableEndpoint(t *testing.T) {
 	}
 }
 
-// --- 凭证面隔离：移动应用那对不被小程序链路复用 ---
+// --- 凭证面隔离那条判据已由 internal/config/wechat_keys_test.go 直接测键位映射，
+// 这里不再放一份「断言自己造的 struct 字面量」的同义反复用例。
 
-// TestWechatCredentialSetsAreDistinctFields 锁住「两套凭证各住各的字段」这条配置面判据：
-// 一旦有人把 Mobile 与 MiniProgram 指到同一对键，App 端就会拿小程序凭证去调移动应用端点，
-// 而那正是票面与 CONTEXT.md 判死的混用。
-func TestWechatCredentialSetsAreDistinctFields(t *testing.T) {
-	c := config.WechatConfig{
-		MiniProgram: config.WechatAppConfig{AppID: "mp-id", AppSecret: "mp-secret"},
-		Mobile:      config.WechatAppConfig{AppID: "mobile-id", AppSecret: "mobile-secret"},
+func TestWechatAppLogin_CodeAlreadyUsed(t *testing.T) {
+	svc, _ := newAppSvc(t, configuredAppCfg(), map[string]any{"errcode": 40163, "errmsg": "code已使用"}, nil, nil)
+	_, err := svc.AppLogin(context.Background(), "used-code")
+	if err == nil || !strings.Contains(err.Error(), "已被使用") {
+		t.Fatalf("40163（oauth_code已使用）应提示重新取码: got %v", err)
 	}
-	if c.MiniProgram.AppID == c.Mobile.AppID {
-		t.Fatal("小程序与移动应用凭证必须是两组独立配置")
+}
+
+// TestWechatAppLogin_BadCredentialCodes 40001（AppSecret 错）与 40013（appid 不合法）都是
+// 「重试永远不会好」的配置类失败，不该给用户一句「请稍后再试」。
+func TestWechatAppLogin_BadCredentialCodes(t *testing.T) {
+	for _, code := range []int{40001, 40013} {
+		svc, _ := newAppSvc(t, configuredAppCfg(), map[string]any{"errcode": code, "errmsg": "bad credential"}, nil, nil)
+		_, err := svc.AppLogin(context.Background(), "code")
+		if err == nil || !strings.Contains(err.Error(), "配置有误") {
+			t.Fatalf("%d 属配置类失败，应给「配置有误」而非稍后再试: got %v", code, err)
+		}
 	}
-	if (c.Mobile == config.WechatAppConfig{}) {
-		t.Fatal("WechatConfig 丢了 Mobile 字段：App 端换取链会拿零值凭证出门")
+}
+
+func TestWechatAppLogin_SystemBusy(t *testing.T) {
+	svc, _ := newAppSvc(t, configuredAppCfg(), map[string]any{"errcode": -1, "errmsg": "系统繁忙"}, nil, nil)
+	_, err := svc.AppLogin(context.Background(), "code")
+	if err == nil || !strings.Contains(err.Error(), "繁忙") {
+		t.Fatalf("-1（系统繁忙）应给繁忙文案: got %v", err)
+	}
+}
+
+// --- 凭据不落日志（#1482 评审发现的回归锁）---
+
+// TestOutboundCauseStripsRequestURL 先把前提钉住：Go 的 *url.Error 确实把完整 URL 拼进
+// Error()，而这两条链路的 URL 查询串里都有 AppSecret。前提不成立时本测试直接判红——
+// 否则「outboundCause 去掉了 URL」会变成一句永远测不到东西的空话。
+func TestOutboundCauseStripsRequestURL(t *testing.T) {
+	raw := &url.Error{
+		Op:  "Get",
+		URL: "https://api.weixin.qq.com/sns/oauth2/access_token?secret=LEAK-CHECK",
+		Err: errors.New("dial tcp: connection refused"),
+	}
+	if !strings.Contains(raw.Error(), "LEAK-CHECK") {
+		t.Fatal("前提失效：*url.Error 不含请求 URL，本用例失去判别力")
+	}
+	if got := outboundCause(raw).Error(); strings.Contains(got, "LEAK-CHECK") {
+		t.Fatalf("outboundCause 没去掉 URL: %s", got)
+	}
+	plain := errors.New("boom")
+	if outboundCause(plain) != plain {
+		t.Fatal("非 *url.Error 应原样返回，别把原因吞掉")
+	}
+}
+
+// TestWechatAppLogin_FailureLogCarriesNoSecret 外呼失败时日志里不得出现 AppSecret。
+// 把 wechat_app_service.go 的 zap.Error(outboundCause(err)) 改回 zap.Error(err) 即红。
+func TestWechatAppLogin_FailureLogCarriesNoSecret(t *testing.T) {
+	cfg := config.WechatAppConfig{AppID: "wx-mobile-appid", AppSecret: "MOBILE-SECRET-LEAK-CHECK"}
+	zapCore, logs := observer.New(zap.WarnLevel)
+	db := testutil.NewMemoryDB(t)
+	authSvc := NewService(db, security.NewSession(testJWTSecret, time.Hour, security.CookieConfig{}), core.NewForumCounter(),
+		"admin123", "tutor123", "student123", zap.NewNop())
+	svc := NewWechatAppService(cfg, db, authSvc, zap.New(zapCore))
+	svc.accessTokenBase = "http://127.0.0.1:1/unreachable"
+
+	if _, err := svc.AppLogin(context.Background(), "code"); err == nil {
+		t.Fatal("不可达端点应报错")
+	}
+	entries := logs.All()
+	if len(entries) == 0 {
+		t.Fatal("外呼失败一条日志都没写——本用例就成了空断言")
+	}
+	for _, e := range entries {
+		line := e.Message + fmt.Sprintf("%v", e.ContextMap())
+		if strings.Contains(line, "MOBILE-SECRET-LEAK-CHECK") {
+			t.Fatalf("日志泄漏移动应用 AppSecret: %s", line)
+		}
+	}
+}
+
+// --- 跨服务：小程序登录回填 unionid ⇒ App 端认出同一个账号 ---
+
+// TestWechatAppLogin_ReusesAccountBackfilledByMiniProgramLogin 是「同人」这一臂真正成立的判据。
+// 场景是存量用户：账号在开放平台绑定**之前**注册，那行 wechat_unionid 是空串。
+// 没有 backfillUnionID 这一步的话，App 端按 unionid 找不到他，会再建一个账号——
+// 于是「两端同一自然人两个账号」这个退化结果恰好落在最不该落在的人身上（已在小程序里买过课的人）。
+func TestWechatAppLogin_ReusesAccountBackfilledByMiniProgramLogin(t *testing.T) {
+	const mpOpenID = "oMINI_pre_existing"
+	const appOpenID = "oAPP_same_person"
+	const sharedUnion = "uni-shared-after-binding"
+
+	db := testutil.NewMemoryDB(t)
+	// 建号时没有 unionid（绑定之前的老数据形状）
+	if err := db.Create(&model.HrwaiUser{UID: 7301, Account: "wx_before_binding", Username: "绑定前注册",
+		WechatOpenID: mpOpenID, Status: 1, CreatedAt: time.Now()}).Error; err != nil {
+		t.Fatalf("预插老账号失败: %v", err)
+	}
+
+	// 第一步：小程序登录。此时 code2session 已能返回 unionid（绑定之后），应把它补回那行。
+	mpSvc := newWxSvcOnDB(t, db, mpOpenID, sharedUnion, 0, nil, zap.NewNop())
+	if _, err := mpSvc.MiniProgramLogin(context.Background(), "js-code"); err != nil {
+		t.Fatalf("小程序登录失败: %v", err)
+	}
+	var afterMp model.HrwaiUser
+	if err := db.Where("wechat_openid = ?", mpOpenID).First(&afterMp).Error; err != nil {
+		t.Fatalf("回查老账号失败: %v", err)
+	}
+	if afterMp.WechatUnionID != sharedUnion {
+		t.Fatalf("小程序登录应回填 unionid: got %q", afterMp.WechatUnionID)
+	}
+
+	// 第二步：同一个人从 App 端登录，拿到的 openid 不同、unionid 相同 ⇒ 必须落回同一个账号。
+	appSvc := newAppSvcOnDB(t, db, configuredAppCfg(), appOK(appOpenID, sharedUnion), nil, nil, zap.NewNop())
+	res, err := appSvc.AppLogin(context.Background(), "app-code")
+	if err != nil {
+		t.Fatalf("App 端登录失败: %v", err)
+	}
+	if res.UserID != afterMp.ID {
+		t.Fatalf("App 端应复用回填后的老账号: want %d got %d", afterMp.ID, res.UserID)
+	}
+	var count int64
+	db.Model(&model.HrwaiUser{}).Count(&count)
+	if count != 1 {
+		t.Fatalf("回填 + unionid 认人之后不该多出第二个账号: count=%d", count)
 	}
 }

@@ -197,7 +197,9 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 2. 否则按 App openid 定位（unionid 拿不到的场合——移动应用与小程序不在同一开放平台账号下、或用户未授权 userinfo——自动退化为两端各自独立账号）；
 3. 都没有 → 自动建号，account/昵称派生规则与 `/auth/wx-login` 同源。
 
-响应 200，data 与 `/auth/wx-login` 同构（平铺 `token`/`refresh_token`/`user_id`/`account`/`username`/`name`/`role`/`avatar`/`isNew`）。凭证经 `WECHAT_MOBILE_APP_ID` / `WECHAT_MOBILE_APP_SECRET` 配置（GitHub Secrets 同名），AppSecret 只存服务端、绝不下发客户端。错误分支均 400：缺 code、未配置（「微信登录未配置」）、code 失效（40029）、未上架应用次数上限（10060）；其余错误码透传码值、不套既有人工文案。
+响应 200，data 与 `/auth/wx-login` 同构（平铺 `token`/`refresh_token`/`user_id`/`account`/`username`/`name`/`role`/`avatar`/`isNew`）。凭证经 `WECHAT_MOBILE_APP_ID` / `WECHAT_MOBILE_APP_SECRET` 配置（GitHub Secrets 同名），AppSecret 只存服务端、绝不下发客户端。错误分支均 400：缺 code、未配置（「微信登录未配置，请联系管理员」）、code 失效（40029）、code 已被使用（40163）、服务繁忙（-1）、未上架应用次数上限（10060）、AppID/Secret 有误（40001/40013，「微信登录配置有误，请联系管理员」）；其余码值透传进文案（「微信登录失败（错误码 N）」），不套既有人工文案。
+
+⚠️ 该端点**已落地但通道尚未接通**（截至 2026-10）：缺开放平台「移动应用」的注册与凭证、缺 `manifest.json` 的 `uni-oauth` 配置，移动端也还没有把 App 的 code 送到这里的出口。「端点存在」不等于「用户能走通」，口径见根 `CONTEXT.md`「微信一键登录」的可达/可见之分与 `docs/design/1482-app-wechat-login.md`。
 
 ⚠️ 两个端点**不可互换**：`/auth/wx-login` 只认小程序的 `js_code` 与小程序凭证，把 App 的 code 送过去是必然失败的接法（两套应用类型的凭证与端点严格区分，见根 `CONTEXT.md`「微信一键登录」）。本端点不调 `/sns/userinfo`：昵称与头像是用户可控字符串，直接写进 `username`/`avatar` 会绕过资料审核面，要引入得先决定它落在哪条审核链路上。
 

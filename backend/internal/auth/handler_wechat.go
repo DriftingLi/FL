@@ -102,7 +102,7 @@ func (h *wechatHandler) LoginWithQRCode(c *gin.Context) {
 	}.Handle(c)
 }
 
-// wechatLoginReq 微信登录请求体（小程序与扫码登录共用 {code}）。
+// wechatLoginReq 微信登录请求体（小程序、扫码与 App 端 #1482 三条链路的入参都只有一个 code）。
 type wechatLoginReq struct {
 	Code string `json:"code"`
 }

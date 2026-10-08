@@ -17,6 +17,6 @@
 -- 为什么是偏索引（WHERE <> ''）：该列默认空串，且绝大多数账号根本没有微信身份；
 -- 全表索引等于把一堆空串条目塞进 B-tree，与本仓其余「空值不占唯一位」的偏索引同一口径。
 
-CREATE INDEX idx_hrwai_users_wechat_unionid
+CREATE INDEX IF NOT EXISTS idx_hrwai_users_wechat_unionid
     ON hrwai_users (wechat_unionid)
     WHERE wechat_unionid <> '';

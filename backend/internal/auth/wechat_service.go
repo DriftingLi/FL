@@ -134,7 +134,8 @@ func (s *WechatService) code2Session(ctx context.Context, code string) (*wxSessi
 	}
 	resp, err := s.httpCli.Do(req)
 	if err != nil {
-		s.logger.Warn("code2session 调用失败", zap.Error(err))
+		// 只记去掉 URL 的原因：*url.Error 的字符串含完整请求 URL，这条 URL 的查询串里带着 AppSecret。
+		s.logger.Warn("code2session 调用失败", zap.Error(outboundCause(err)))
 		return nil, errors.New("微信登录服务暂不可用，请稍后再试")
 	}
 	defer resp.Body.Close()
@@ -173,9 +174,41 @@ func (s *WechatService) findOrCreateByOpenID(openID, unionID string) (*model.Hrw
 		return nil, false, err
 	}
 	if found {
+		st.backfillUnionID(user, unionID)
 		return user, false, nil
 	}
 	return st.create(openID, unionID)
+}
+
+// backfillUnionID 把这次换取到的 unionid 补写进已有账号，只补空位、不覆盖已有值。
+//
+// 为什么必须在「按 openid 命中」这一支上做：unionid 是 App 端认人的第一优先键（#1482），
+// 而开放平台绑定**之前**建的那批行 `wechat_unionid` 恒为空串——那时 code2session 根本不返回它，
+// 建号写进去的就是空。不在老用户登录时补上，「同人」这一臂就只对绑定之后新注册的账号成立，
+// 恰好把最有价值的一批人（已经在小程序里买过课、学过进度的人）漏掉。
+//
+// 失败不阻断登录：补不上只是这次没认出同人，不该把一次已经成功的登录打回去（下次登录再补）。
+func (st wechatAccountStore) backfillUnionID(user *model.HrwaiUser, unionID string) {
+	if unionID == "" || user.WechatUnionID != "" {
+		return
+	}
+	if err := st.db.Model(user).Update("wechat_unionid", unionID).Error; err != nil {
+		st.logger.Warn("微信登录回填 unionid 失败", zap.Int("user_id", user.ID), zap.Error(err))
+		return
+	}
+	user.WechatUnionID = unionID
+}
+
+// outboundCause 取外呼错误里**不含请求 URL** 的那层原因。
+// Go 的 *url.Error 把完整 URL 拼进 Error()，而这两条微信链路（小程序 code2session、
+// 移动应用 oauth2/access_token）都把 AppSecret 放在查询串里 ⇒ 直接 zap.Error(err) 等于
+// 把服务端凭据写进日志文件。传输层失败的原因本身（DNS / 连接拒绝 / 超时）不含 URL，够定位了。
+func outboundCause(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) && ue.Err != nil {
+		return ue.Err
+	}
+	return err
 }
 
 // wechatAccountStore 微信登录的账号落库面：按标识定位用户 + 自动建号。

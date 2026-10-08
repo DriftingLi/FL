@@ -14,8 +14,8 @@ import (
 
 // RegisterWechatAppAuthRoutes 注册 App 端微信登录路由：
 // POST /api/auth/app-wx-login {code}——开放平台「移动应用」的 code 换取登录态。
-// 前端消费方是 api/auth.uts 的 appWechatLoginApi；App 端的 code 不得送进 /auth/wx-login
-// （那条只认小程序 js_code，凭证也是小程序那对）。
+// App 端的 code 不得送进 /auth/wx-login（那条只认小程序 js_code、凭证也是小程序那对）；
+// 移动端按端别分流那一半在 #1482 的后续 PR（改 api/auth.uts + stores/auth.uts），本仓尚未有该出口。
 func RegisterWechatAppAuthRoutes(rg *gin.RouterGroup, svc *WechatAppService) {
 	h := newWechatAppHandler(svc)
 	rg.POST("/auth/app-wx-login", h.AppLogin)

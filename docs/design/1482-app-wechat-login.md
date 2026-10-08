@@ -241,6 +241,23 @@ x 版来源：上表第 1.2 节列出的三页
 
 ---
 
+## 6. 落地实况与本文建议的偏离（2026-10-08，后端面 PR #1574）
+
+本节是**回写**，不是修订上文：上文是拿不到 AppID 时的判断，按 `docs/agents/comments.md` 第 4 节「历史面原样保留」处理，偏离逐条记在这里。判据的现行真源在代码与 `CONTEXT.md`，不在本节。「§5 第 N 条」指上文第 5 节那个有序清单。
+
+| 本文建议 | 落地取值 | 为什么不一样 |
+|---|---|---|
+| §5 第 4 条键名建议 `WECHAT_APP_ID/SECRET`（或 `OPEN_PLATFORM_MOBILE_*`） | `WECHAT_MOBILE_APP_ID` / `WECHAT_MOBILE_APP_SECRET`，且加载处**不向旧名回退** | `WECHAT_APP_ID/SECRET` 这一对在仓内**已被占用**（原注释把它标为「扫码登录（网站应用）占位」），再拿来喂移动应用链路等于制造第二个真源。不回退这条由 `backend/internal/config/wechat_keys_test.go` 锁住 |
+| §4.2 与 §5 第 4 条「unionid 唯一索引预留」 | 只建**普通偏索引**（`WHERE wechat_unionid <> ''`），不上唯一约束 | 存量库里同一 unionid 出现两行是可能的（历史上按其他方式建过号又绑了 unionid），唯一约束会让迁移在生产库上直接失败，而这条风险**在仓内不可复算**。冲突时的行为改由「认 id 最小者」定序，口径确定、不随查询次序漂；判据全文在 `backend/migrations/000041_wechat_unionid_lookup.up.sql` 文件头 |
+| §5 第 4 条换取层「先落空实现 / 返回明确 NotImplemented」 | 直接实装 `https://api.weixin.qq.com/sns/oauth2/access_token` | 端点形状已由官方文档钉死（本文 §3.1），空实现只是把**可测的那部分**推后。无 AppID 也能测：换取层基址是注入字段，单测用 `httptest` 假端点覆盖全部错误码分支；凭证缺失时走「未配置」分支，不会误打真端点 |
+| §5 第 4 条新建 `user_auth` 类表 + `platform` 枚举（照 uni-id 形状） | 复用 `hrwai_users` 现有 `wechat_openid` / `wechat_unionid` 两列 | 本仓现状就是一行一账号、openid 列已存在。另建一张表会把「同人」拆成两处真源；而「一行同时存两端 openid」的需求当前不成立——App 命中 unionid 时复用整行且**不覆盖**库里已有的 openid |
+| §5 第 3 条链路含 `/sns/userinfo` | **不调** `/sns/userinfo` | 昵称与头像是用户可控字符串，直写 `username`/`avatar` 会绕过资料审核面；要引入得先决定它落在哪条审核链路上，不搭本次的车 |
+| 登录时补 unionid（本文未提） | 两端登录都补：按 openid 命中已有账号时，把这次换取到的 unionid 写进**空位**（不覆盖已有值），失败只记日志、不打回已成功的登录 | 开放平台绑定之前建的那批行 `wechat_unionid` 恒为空串。不补，「同人」这一臂就只对绑定之后新注册的账号成立——恰好漏掉已在小程序买过课、学过进度的存量人。共用件是 `wechatAccountStore.backfillUnionID` |
+
+**未落地的部分**：§5 第 1–3 条的移动端接缝（运行期 gate 取代新增 `#ifdef`、`api/auth.uts` 的 `appWechatLoginApi`、`stores/auth.uts` 按端别分流、provider 值 `app-weixin`）与 §5 第 5 条的全部外部前置（开放平台注册与凭证、`manifest.json` 的 `uni-oauth`、包名与签名、真机人工签收门）。#1574 只含后端面，**「端点存在」不等于「通道可达」**，可达性口径见根 `CONTEXT.md`「微信一键登录」。
+
+---
+
 ## 附 A：一手来源清单
 
 DCloud（uni-app x）
