@@ -109,7 +109,7 @@ pwsh -NoProfile -File docs/verification/tooling/1568/emulator-real-legs.ps1
 | L1 正常冒烟（`-SkipInstallBaseApk`） | `exit=0`、wall 121 s、`ADB_TIER_BUDGET text=15 logcat=60 boot_wait=120 install=180 push=120 teardown=60 shot=15`、`ADB_TEXT_CALL_BUDGET calls=30 timeouts=0`、`LOGCAT_INCONCLUSIVE=0` | 六档现值打进汇总；整趟 30 次文本调用**一条超时都没记** ⇒ 分档没有把正常等误判成挂死（「长等不得套 15 秒」那格的反面证据） |
 | L2 `-AdbLogcatTimeoutSeconds 0` | `exit=1`、wall 129.1 s、`ADB_TEXT_TIMEOUT call=adb -s emulator-5554 logcat -d -v brief callBudgetSeconds=0 seconds=0.1 tier=logcat`（两条）、`LOGCAT_INCONCLUSIVE=1`、`hungCalls=logcat -d -v brief;logcat -d -v brief` | 档是**参数**（0 秒真的生效到点）；挂死/到点没有被子sequent 的计数读成「FATAL=0 ⇒ 无崩溃」，而是落 `INCONCLUSIVE=1` 且整趟判 FAIL |
 | L3 `-AdbInstallTimeoutSeconds 0` | `exit=2`、wall 131.9 s、`install_tier=True`（点名 `call=adb -s … install -r -t <基座路径>`、`callBudgetSeconds=0`） | install 到点后整条链以 UNUSABLE 收口，**不永挂**（收尾那两格照旧跑到底） |
-| L4 中文路径 APK 走新链路 | `exit=2`、wall 112.6 s、原文回到调用方：`adb.exe: failed to install D:\软件\…\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract n…` | 那句失败原文在 **stderr** 上 —— 中文路径 + cmd 包装 + `-MergeStdErr` 三者叠加仍拿到原料 ⇒ 收口没换掉调用方看到的东西 |
+| L4 中文路径 APK 走新链路 | `exit=2`、wall 112.6 s、失败原文回到调用方。件里逐字（驱动把非 ASCII 脱敏成 `?`，真实路径是 `D:\软件\…`）：`adb.exe: failed to install D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract n…` |
 | 收尾标记 | `LEGS_DONE=4/4 legs_produced_log=4` | 带分母（见下面第二条洞） |
 
 ⚠️ **一次真实撞上的 adb 通道不应答**（同日 12:22 那一轮，同一份代码、同一套参数）：L1 得
@@ -120,6 +120,12 @@ pwsh -NoProfile -File docs/verification/tooling/1568/emulator-real-legs.ps1
 换成「点名哪一次调用、多大预算、哪一档 + 该页记不入结论」——这正是 AC 第 4 条要的形状。
 文本档 15 秒的定档依据（稳态空载仿真机 dumpsys 1.17 / 1.66 秒）没有因此改动：**没有证据说它常态不够**，
 只有证据说它偶尔会到点，而到点这条路已经被上面这两趟各自覆盖。
+⚠️ 两趟的**可复算程度不一样**，别写成一样。12:29 那轮整件入库；12:22 那轮当时**没入库**（驱动跑完 L1
+就死在下面第 3 条洞的非法正则上），本轮把它唯一留下的汇总行以 `APPENDIX_prior_round` 附录并进同一件
+（`exit=1 wall_seconds=199.5 timeout_count=3 result=FAIL inconclusive=0`）⇒ 这几格现在可复算；而**三条超时的
+名字**（`dumpsys activity activities` / `dumpsys window` / `pidof`）当时只存在于子进程 stdout，且那一轮的
+RAW 抓行有下面第 2 条「只抓到 token 为止」的缺陷、子日志随后被下一轮固定名覆盖 ⇒ **名字这一层是会话内
+观测，仓内不可复算**。把这条说白，是为了不让下一个人拿这三个名字当判据去改文本档。
 
 **判别力实测（N 系列，逐条弄坏被测物本体 `scripts/emulator-smoke.ps1`，还原后逐字节比对）**：
 `PRE_PRODUCT_DIRTY=0`，九条全部 `exit=1` 且 `restored_clean=true bytes_match_commit=true`（驱动
@@ -140,6 +146,16 @@ pwsh -NoProfile -File docs/verification/tooling/1568/emulator-real-legs.ps1
 N8 第一版指到 `-t EMT8`，现测 **`exit=0 failed=0`** —— 函数**定义**还在，行为腿用 AST 抽定义直调，抽得到就照样绿。
 ⇒ 「点位与函数脱钩」这一格的判据只能在**接线层**（`SITE_THROUGH_FN`：名字出现次数 + 点位正则），
 改指契约套件后才红。这条与本票 N5 的教训是同一件事的两面：行为腿证「函数对不对」，接线层证「点位走没走它」。
+
+两条口径跟着这张表一起说清：
+
+- ⚠️ **teardown 档没有挂死腿**（EMT1–EMT9 里没有一条真把 `emu kill` 挂住）：那两格在主 `finally` 段里，
+  本族 AST 抽函数的手法打不到（要打得先把收尾抽成函数）⇒ 现由 C11③/⑤ + 变异 **N6** 在**接线层**锁。
+  这是缺口，不是「已覆盖」，写在表旁边免得被读成成对九条各档都有。
+- 定档现测里 push 那两个数（69.7 / 111.1 ms 每 MB）量的是**合成 blob**：探针 `emulator-tier-probe.ps1:148`
+  用 `[System.IO.File]::Create` 造 48 MB 的 `blob.bin` 推到 `/data/local/tmp/tierprobe`，读数件自注
+  `note=unpackage_resources_absent`、实测 `push_dir_proxy ms=3346` ⇒ 它量的是 **adb 流式传输的速率**，
+  不是「真 www 资源目录」那一趟的耗时（120 秒这一档是按该速率外推的上界）。引用时别说成量过真资源。
 
 ### 取证驱动自己那三处洞（照实在这里记，别再有人信 `LEGS_DONE`）
 

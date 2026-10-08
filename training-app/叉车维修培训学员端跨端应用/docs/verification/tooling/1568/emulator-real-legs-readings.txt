@@ -16,3 +16,15 @@ LEG L4_cjk_path_install exit=2 wall_seconds=112.6 log_present=True tier_budget_p
   RAW L4_cjk_path_install: adb.exe: failed to install D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]?
   RAW L4_cjk_path_install: adb.exe: failed to install D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]?
 LEGS_DONE=4/4 legs_produced_log=4
+
+# APPENDIX_prior_round（手工并入，出处写清楚）：12:22:49 那一轮，同一份被测物、同一套参数。
+# 那一轮的驱动跑完 L1 就死在非法正则（README §3c 三处洞的第 3 条），所以只有 L1 的行留下来；
+# 且当时 RAW 抓行只抓到 token 为止（第 2 条洞）⇒ 件里没有 call= / tier= 明细，超时的是哪三条在本件里不可复算。
+# 可复算的是这几格：整趟 FAIL、wall 199.5 秒、timeout_count=3、inconclusive=0。
+LEG L1_normal exit=1 wall_seconds=199.5 log_present=True tier_budget_present=True install_tier=False logcat_tier=False push_tier=False bootwait_tier=False teardown_tier=False inconclusive=0 result=FAIL timeout_count=3 budget_lines=2 child_err_tail=""
+  RAW L1_normal: [emulator-smoke] ADB_TIER_BUDGET
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_TIMEOUT
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_TIMEOUT
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_TIMEOUT
+  RAW L1_normal: [emulator-smoke] LOGCAT_INCONCLUSIVE
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_CALL_BUDGET
