@@ -1,0 +1,40 @@
+# emulator-tier-probe 读数（每行一条 TIME 记录）
+PROBE avd=Pixel_4a_API_30 port=5554 base_apk_bytes=46770568 push_proxy_mb=8 emulator=
+TIME tier=read call=adb_version_no_serial ms=165 rc=0 first="Android Debug Bridge version 1.0.41"
+TIME tier=boot-wait call=wait_for_device_cold ms=32049 rc=0 first=""
+COLD wait_for_device_ms=32049
+TIME tier=read call=getprop_sys_boot_completed ms=168 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=105 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=111 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=102 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=460 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=325 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=478 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=948 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=655 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=833 rc=0 first=""
+TIME tier=read call=getprop_sys_boot_completed ms=541 rc=0 first="1"
+BOOT booted=True boot_completed_poll_ms=24956
+TIME tier=read call=shell_pm_list_packages ms=756 rc=0 first="package:com.google.android.networkstack.tethering"
+TIME tier=read call=shell_cmd_package_resolve_activity ms=336 rc=0 first="No activity found"
+TIME tier=read call=shell_dumpsys_activity_activities ms=1662 rc=0 first="ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)"
+TIME tier=read call=shell_dumpsys_window ms=1493 rc=0 first="WINDOW MANAGER LAST ANR (dumpsys window lastanr)"
+TIME tier=read call=logcat_dump ms=6186 rc=0 first="--------- beginning of kernel"
+TIME tier=read call=logcat_clear ms=2499 rc=0 first=""
+TIME tier=read call=shell_mkdir_p ms=1719 rc=0 first=""
+TIME tier=install call=install_r_t_base_apk ms=12268 rc=1 apk_mb=44.6 first="Performing Streamed Install"
+INSTALL first_ms=12268
+INSTALL_TEXT_1=Performing Streamed Install
+INSTALL_TEXT_2=adb.exe: failed to install D:\杞欢\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]
+TIME tier=install call=install_r_t_repeat ms=9312 rc=1 apk_mb=44.6 first="Performing Streamed Install"
+INSTALL repeat_ms=9312
+TIME tier=push call=push_dir_proxy ms=889 rc=0 proxy_mb=8 first="C:\Users\ZHENG\AppData\Local\Temp\emu-tier-3898753f\pushsrc/.\: 1 file"
+PUSH proxy note=unpackage_resources_absent 见 PROBE 行；ms_per_mb=111.1
+TIME tier=read call=shell_rm_rf_probe_dir ms=472 rc=0 first=""
+NOTE base_apk_left_installed pm_list_has_dcloud=True
+TIME tier=teardown call=adb_emu_kill ms=413 rc=0 first="OK: killing emulator, bye bye"
+TEARDOWN emu_kill_ms=413
+TIME tier=teardown call=adb_wait_for_disconnect ms=2069 rc=0 first=""
+TEARDOWN wait_for_disconnect_ms=2069
+DEVICES_AFTER=List of devices attached | 10.255.255.1:5555	offline | 
+PROBE_DONE=1

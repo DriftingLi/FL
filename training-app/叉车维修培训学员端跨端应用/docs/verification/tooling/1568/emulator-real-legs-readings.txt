@@ -1,0 +1,30 @@
+# emulator-real-legs 读数（真 adb + 真仿真机 Pixel_4a_API_30，2026-10-08T12:29:26） smoke=D:\FL\wt-1568\training-app\叉车维修培训学员端跨端应用\scripts\emulator-smoke.ps1
+BASE base_apk_bytes=46770568 leg_timeout_seconds=420
+LEG L1_normal exit=0 wall_seconds=121 log_present=True tier_budget_present=True install_tier=False logcat_tier=False push_tier=False bootwait_tier=False teardown_tier=False inconclusive=0 result=PASS timeout_count=0 budget_lines=2 child_err_tail=""
+  RAW L1_normal: [emulator-smoke] ADB_TIER_BUDGET text=15 logcat=60 boot_wait=120 install=180 push=120 teardown=60 shot=15?
+  RAW L1_normal: [emulator-smoke] LOGCAT_INCONCLUSIVE=0?
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_CALL_BUDGET calls=30 timeouts=0 defaultBudgetSeconds=15 hungCalls=none?
+LEG L2_logcat_zero_budget exit=1 wall_seconds=129.1 log_present=True tier_budget_present=True install_tier=False logcat_tier=True push_tier=False bootwait_tier=False teardown_tier=False inconclusive=1 result=FAIL timeout_count=2 budget_lines=2 child_err_tail=""
+  RAW L2_logcat_zero_budget: [emulator-smoke] ADB_TIER_BUDGET text=15 logcat=0 boot_wait=120 install=180 push=120 teardown=60 shot=15?
+  RAW L2_logcat_zero_budget: [emulator-smoke] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 logcat -d -v brief callBudgetSeconds=0 seconds=0.1 tier=logcat ?? ???????????????????????????????
+  RAW L2_logcat_zero_budget: [emulator-smoke] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 logcat -d -v brief callBudgetSeconds=0 seconds=0.1 tier=logcat ?? ???????????????????????????????
+  RAW L2_logcat_zero_budget: [emulator-smoke] LOGCAT_INCONCLUSIVE=1?
+  RAW L2_logcat_zero_budget: [emulator-smoke] ADB_TEXT_CALL_BUDGET calls=30 timeouts=2 defaultBudgetSeconds=15 hungCalls=logcat -d -v brief;logcat -d -v brief?
+LEG L3_install_zero_budget exit=2 wall_seconds=131.9 log_present=True tier_budget_present=False install_tier=True logcat_tier=False push_tier=False bootwait_tier=False teardown_tier=False inconclusive=none result=UNUSABLE timeout_count=1 budget_lines=0 child_err_tail=""
+  RAW L3_install_zero_budget: [emulator-smoke] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 install -r -t D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk callBudgetSeconds=0 seconds=0.1 tier=install ?? ?????????
+LEG L4_cjk_path_install exit=2 wall_seconds=112.6 log_present=True tier_budget_present=False install_tier=False logcat_tier=False push_tier=False bootwait_tier=False teardown_tier=False inconclusive=none result=UNUSABLE timeout_count=0 budget_lines=0 child_err_tail=""
+  RAW L4_cjk_path_install: adb.exe: failed to install D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]?
+  RAW L4_cjk_path_install: adb.exe: failed to install D:\??\HBuilderX.5.23.2026080626\HBuilderX\plugins\uniappx-launcher\base\android_base.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]?
+LEGS_DONE=4/4 legs_produced_log=4
+
+# APPENDIX_prior_round（手工并入，出处写清楚）：12:22:49 那一轮，同一份被测物、同一套参数。
+# 那一轮的驱动跑完 L1 就死在非法正则（README §3c 三处洞的第 3 条），所以只有 L1 的行留下来；
+# 且当时 RAW 抓行只抓到 token 为止（第 2 条洞）⇒ 件里没有 call= / tier= 明细，超时的是哪三条在本件里不可复算。
+# 可复算的是这几格：整趟 FAIL、wall 199.5 秒、timeout_count=3、inconclusive=0。
+LEG L1_normal exit=1 wall_seconds=199.5 log_present=True tier_budget_present=True install_tier=False logcat_tier=False push_tier=False bootwait_tier=False teardown_tier=False inconclusive=0 result=FAIL timeout_count=3 budget_lines=2 child_err_tail=""
+  RAW L1_normal: [emulator-smoke] ADB_TIER_BUDGET
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_TIMEOUT
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_TIMEOUT
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_TIMEOUT
+  RAW L1_normal: [emulator-smoke] LOGCAT_INCONCLUSIVE
+  RAW L1_normal: [emulator-smoke] ADB_TEXT_CALL_BUDGET
