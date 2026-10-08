@@ -245,6 +245,16 @@ function Get-AdbOutput {
     return ([string]$r.Text).Trim()
 }
 
+# `adb version` 单独成函数（与 `Wait-ForDeviceBounded` 同一条理由）：它是 **server 级**命令，带 `-s <serial>`
+# 就不是同一条调用（#1568 AC 第 4 条「不改既有判据语义」在这一格最实 —— 起了模拟器之后再问 version 会答出
+# 别的东西）。判据是「这一格的 argv 里没有 -s」，而只有让运行期腿真走到**调用点本身**，摘掉 `-NoSerial`
+# 才会红 —— 现测教训（N5）：第一版把那行内联在 `Assert-Environment` 里，变异摘掉点位的 `-NoSerial` 时
+# 行为腿**不打红**，因为腿测的是 helper 能不能不带 -s，不是那个点位有没有用它。档位给文本档（现测 165–200 ms）。
+function Get-AdbVersionBrief {
+    $text = Get-AdbOutput @('version') -NoSerial -Tier 'server'
+    return (($text -split "`n" | Select-Object -First 1)).Trim()
+}
+
 # wait-for-device 单独成函数（AC 第 2 条）：它是本族里最长的等（现测 29.2 / 32.0 秒），也是唯一
 # 「挂在那里连起没起机都判不出来」的一格 —— 收进可直调的函数，行为守护才真跑得到它（EMT7）。
 function Wait-ForDeviceBounded {
@@ -276,7 +286,7 @@ function Assert-Environment {
     }
     # `adb version` 是 **server 级**命令：带 `-s <serial>` 就不是同一条调用了（#1568 AC 第 4 条「不改既有判据语义」
     # 在这一格最实 —— 起了模拟器之后再问 version 会答出别的东西），所以走 -NoSerial；档位给文本档（现测 165–200 ms）。
-    $script:AdbVersion = ((Get-AdbOutput @('version') -NoSerial -Tier 'server') -split "`n" | Select-Object -First 1).Trim()
+    $script:AdbVersion = Get-AdbVersionBrief
     $script:EmuVersion = ((& $EmulatorExe -version 2>&1 | Out-String) -split "`n" | Where-Object { $_ -match 'Emulator version|Android emulator' } | Select-Object -First 1).Trim()
     $script:Accel = Get-AccelerationStatus
 }

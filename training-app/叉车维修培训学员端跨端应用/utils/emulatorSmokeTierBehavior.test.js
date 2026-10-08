@@ -270,10 +270,13 @@ describe('emulator-smoke 的 13 处直调按形态分档有界（运行期，#15
     expect(field(r.stdout, 'AFTER_HANG')).toContain('STUB-OUT');
   }, 130000);
 
-  it('EMT8 server 级命令不带 serial：version 那条 argv 没有 -s，而 shell 那条有（恒拼 -s 就是换判据）', () => {
+  it('EMT8 server 级命令不带 serial：走的是**产品里那个调用点**，version 的 argv 没有 -s，而 shell 那条有', () => {
+    // ⚠️ 这一格调的是 `Get-AdbVersionBrief`（Assert-Environment 里那行的本体），不是在腿里自己
+    // `Get-AdbOutput @('version') -NoSerial`：现测教训 —— 第一版那样写，把点位上的 `-NoSerial` 摘掉（N5）
+    // 行为腿**不打红**，因为腿测的是 helper 能不能不带 -s，不是那个点位有没有用它。
     const r = leg(
       [
-        "Write-Output (\"VERSION_TEXT=\" + (Get-AdbOutput @('version') -NoSerial -Tier 'server'))",
+        'Get-AdbVersionBrief | Out-Null',
         "Write-Output (\"SHELL_TEXT=\" + (Get-AdbOutput @('shell', 'getprop', 'sys.boot_completed')))",
         "Write-Output (\"VERSION_HAS_S=\" + $(LastArgvLine 'version').Contains('-s'))",
         "Write-Output (\"SHELL_HAS_S=\" + $(LastArgvLine 'getprop').Contains('-s'))",
@@ -281,7 +284,6 @@ describe('emulator-smoke 的 13 处直调按形态分档有界（运行期，#15
       {},
     );
     expect(r.ok).toBe(true);
-    expect(field(r.stdout, 'VERSION_TEXT')).toContain('Android Debug Bridge version');
     expect(field(r.stdout, 'VERSION_HAS_S')).toBe('False');
     expect(field(r.stdout, 'SHELL_HAS_S')).toBe('True');
   }, 130000);

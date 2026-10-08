@@ -327,13 +327,18 @@ function scanContract(sources) {
   SITE_WIRING.forEach(([label, re]) => {
     if (!re.test(smokeBare)) violations.push('C11 点位「' + label + '」没在自己的那一档上（或 -NoSerial 丢了）');
   });
-  // wait-for-device 被抽成函数才谈得上「运行期腿真跑到它」；两处：定义 + Start-Emulator 里那一处调用
-  if (!/function Wait-ForDeviceBounded/.test(smokeBare)) {
-    violations.push('C11 wait-for-device 没收进可直调的函数（行为腿打不到它，那一格的有界就只剩注释）');
-  }
-  if ((smokeBare.match(/Wait-ForDeviceBounded/g) || []).length < 2) {
-    violations.push('C11 Wait-ForDeviceBounded 定义了却没被 Start-Emulator 调用');
-  }
+  // 点位必须**走那个函数**，而不是各自抄一遍调用：现测教训（N5）—— version 那行内联在
+  // `Assert-Environment` 里时，行为腿测的是 helper 能不能不带 -s，摘掉点位上的 -NoSerial 不打红。
+  const SITE_THROUGH_FN = [
+    ['Get-AdbVersionBrief', 'adb version', /\$script:AdbVersion = Get-AdbVersionBrief/],
+    ['Wait-ForDeviceBounded', 'wait-for-device', /^\s*Wait-ForDeviceBounded\s*$/m]
+  ];
+  SITE_THROUGH_FN.forEach(([fn, site, re]) => {
+    if ((smokeBare.match(new RegExp(fn, 'g')) || []).length < 2) {
+      violations.push('C11 ' + site + ' 那格只出现一次（定义或调用少了一边 ⇒ 点位没走函数）');
+    }
+    if (!re.test(smokeBare)) violations.push('C11 ' + site + ' 的点位没改成调用 ' + fn + '（行为腿打不到它）');
+  });
   // ④ logcat 挂死 ⇒ 该页失败 + 汇总不可判（空日志被读成「无崩溃」是本票最险的一格）
   if (!/if \(\$logcat\.TimedOut\) \{\s*\$pageFail \+=/.test(smokeBare)) {
     violations.push('C11 logcat 读取超时未计入该页失败（该页仍会被判 PASS ⇒ 挂死被读成「无崩溃」）');
@@ -430,6 +435,7 @@ describe('仿真机前置冒烟契约（#883 / O2，非门辅助）', () => {
       ['C11', 'push 档参数被改名', (s) => cut(s, '[int]$AdbPushTimeoutSeconds = 120,', '[int]$AdbPushBudgetX = 120,', 'C11')],
       ['C11', 'install 点位没接自己的档', (s) => cut(s, "@('install', '-r', '-t', $BaseApk) -BudgetSeconds $AdbInstallTimeoutSeconds -Tier 'install'", "@('install', '-r', '-t', $BaseApk) -Tier 'install'", 'C11')],
       ['C11', 'version 的 -NoSerial 丢了', (s) => cut(s, "@('version') -NoSerial -Tier 'server'", "@('version') -Tier 'server'", 'C11')],
+      ['C11', 'version 点位绕开函数自己抄一遍（行为腿就打不到它了）', (s) => cut(s, '$script:AdbVersion = Get-AdbVersionBrief', "$script:AdbVersion = (Get-AdbOutput @('version') -NoSerial -Tier 'server')", 'C11')],
       ['C11', 'Wait-ForDeviceBounded 的定义被拿掉', (s) => cut(s, 'function Wait-ForDeviceBounded {', '# function Wait-ForDeviceBounded {', 'C11')],
       ['C11', 'Wait-ForDeviceBounded 定义了却没被调', (s) => cut(s, '\n    Wait-ForDeviceBounded\n', '\n', 'C11')],
       ['C11', 'logcat 超时不再计入该页失败', (s) => cut(s, 'if ($logcat.TimedOut) { $pageFail +=', 'if ($logcat.TimedOut) { $skips +=', 'C11')],
