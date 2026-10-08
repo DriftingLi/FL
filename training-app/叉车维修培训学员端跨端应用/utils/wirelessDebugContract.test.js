@@ -25,11 +25,23 @@
  *      （文档块里那句「不得出现 gate-evidence:」是合法的禁令说明——判据只看代码面，
  *      口径同 utils/deviceCaptureContract.test.js 的 D3 与 utils/emulatorSmokeContract.test.js 的 C4）。
  *   W8 不叠第二个心跳循环：Do-Watch 与 Do-Keep 都必须先查 Get-WatcherPid 再动手。
+ *   W9 每一次 adb 调用都要有**单次超时**（#1568，2026-10-08）：`Invoke-Adb` 必须委托
+ *      `scripts/lib/auto-screenshot.ps1` 的那件唯一有界执行核（16 个调用方全压在这一个点上，而本工具是
+ *      **设备掉线时才用的自愈工具** —— 最容易撞上「adb 不返回」的那条路）。判据五组：① 真源 dot-source 在位，
+ *      且路径用「自身扩展名」构造（写死 `.ps1` 字面量会撞 W6，写反斜杠在 Linux 上解析不了）；
+ *      ② 两档预算都是带默认值的参数（读数 15 秒 / 端点 30 秒，票面 AC 第 3 条禁止把长等套进 15 秒）；
+ *      ③ 旧无界形状不得回写（代码面 `& $AdbExe` 与 `Out-String` 各零处）；
+ *      ④ 非 Windows 走直启（`-DirectExec:(-not $IsWindows)`：本工具的行为守护在 CI 的 ubuntu 上真跑，
+ *      恒经 cmd 那一层就只剩「起不来」一条出口，「有界」会退化成「永远拿不到结果」）；
+ *      ⑤ 「不返回」是可见结论（`ADB_CALL_TIMEOUT` 点名哪一次调用与多大预算 + `ADB_CALL_BUDGET` 读数行），
+ *      且点名件只进 UTF-8 日志、不写 stdout —— `-Quiet` 取 serial 那条路径的全部价值就是 stdout 只有 serial。
+ *      另钉 `-MergeStdErr`：本工具三条判据的原料在 stderr 上（pair 分类的 protocol fault、connect 的 10061）。
  *
  * 形态沿用本仓既有 .ps1 守护：**先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中**。
  * 变异分两类，用错方法就等于没注入：
  *   · **禁止型**（W1/W2/W4/W6/W7 的 gate-evidence）——出现即违规，用「整行追加」验，不依赖原文锚点；
- *   · **存在型**（W3 的两处 sleep 与时间窗、W5 的 ASCII 过滤、W6 的取名、W7 的非门声明、W8 的两处早退）
+ *   · **存在型**（W3 的两处 sleep 与时间窗、W5 的 ASCII 过滤、W6 的取名、W7 的非门声明、W8 的两处早退、
+ *     W9 的委托与两档预算与点名——#1568 一次十条）
  *     ——追加一行永远打不中，只能「把该在的拿掉」验；这类每条都先断言替换真的发生
  *     （`expect(m).not.toBe(real)`），因为替换锚点会随措辞漂移，锚点一漂用例就变成恒绿的空跑。
  */
@@ -142,6 +154,52 @@ function scanContract(src) {
     v.push('W8 Do-Keep 缺「已查到活循环 ⇒ REFUSE_STACK 早退」这一段（两条心跳对同一设备只会互抢）');
   }
 
+  // W9 每一次 adb 调用都必须**有单次超时**（#1568，2026-10-08 票面 AC 第 1 条点名本文件那个收口点）。
+  //   症状：`Invoke-Adb` 是 `& $AdbExe @AdbArgs 2>&1 | Out-String` —— 前台同步等一次 adb、没有单次超时，
+  //   而 **16 个调用方全压在这一个点上**，本工具又是**设备掉线时才用的自愈工具**（最容易撞上「adb 不返回」
+  //   的那条路）。一次不返回就既不产结论也不报错：keep 循环静默停住、`ensure` 永远不返回端口。
+  //   裁定：复用 `scripts/lib/` 那件**唯一**的有界执行核，不写第二份「等待 + 杀树」
+  //   （移动端 ADR-0008「有界单次调用的三个消费点，与「不上收」的载体裁定」）。
+  //   行为面（真挂死桩到点给结论 / 正常返回不误判 / stderr 判据原料不丢 / 两档预算各自点名）由
+  //   `utils/wirelessDebugBoundedTextBehavior.test.js`（WBD1–WBD5）在运行期另钉 —— 这里只钉形状与「不得回写成无界」。
+  const invokeAdb = functionBody(code, 'Invoke-Adb') || '';
+  if (!invokeAdb) v.push('W9 找不到 Invoke-Adb 函数体（判据取不到即红，不在空集合上判绿）');
+  if (!/function Note-AdbTimeout/.test(code)) v.push('W9 缺超时点名件（「不返回」必须是一种可见结论）');
+  if (!/Join-Path \(Join-Path \$PSScriptRoot 'lib'\)/.test(code) || !/auto-screenshot/.test(code)) {
+    v.push('W9 未 dot-source 有界执行器的唯一真源（lib/auto-screenshot.ps1）—— adb 调用又变成无界等待');
+  }
+  // 路径**不得**写成 `.ps1` 字面量（那会撞 W6），而扩展名从当前脚本自己取；顺带才是跨平台的
+  if (!/\(Get-Item -LiteralPath \$PSCommandPath\)\.Extension/.test(code)) {
+    v.push('W9 未用「自身扩展名」构造 lib 路径（写死 `.ps1` 字面量会撞 W6，写反斜杠在 Linux 上解析不了）');
+  }
+  if (invokeAdb && !/Invoke-BoundedAdbText -AdbExe \$AdbExe -Serial ''/.test(invokeAdb)) {
+    v.push('W9 Invoke-Adb 没委托到唯一执行核（本工具的候选阶段没有 serial，`-Serial \'\'` 是刻意的）');
+  }
+  // 两档预算都得是**带默认值的参数**（票面 AC 第 3 条：读数和端点不是一档，且默认值指得到入库产物）
+  if (!/\[int\]\$AdbCallTimeoutSeconds\s*=\s*15/.test(code)) v.push('W9 缺 -AdbCallTimeoutSeconds 默认 15 秒的读数档参数');
+  if (!/\[int\]\$AdbEndpointTimeoutSeconds\s*=\s*30/.test(code)) v.push('W9 缺 -AdbEndpointTimeoutSeconds 默认 30 秒的端点档参数');
+  if (!/-TimeoutSeconds\s+\$BudgetSeconds/.test(invokeAdb)) v.push('W9 单次预算没从参数透传给执行核');
+  const endpointWired = (code.match(/-BudgetSeconds\s+\$AdbEndpointTimeoutSeconds/g) || []).length;
+  if (endpointWired < 5) v.push(`W9 端点类调用只有 ${endpointWired} 处接上端点档（connect / disconnect×2 / pair / mdns×2 = 6 处，掉一处就静默回落读数档）`);
+  // 非 Windows 不许经 cmd 那一层（本工具的行为守护在 CI 的 ubuntu 上真跑，经 cmd 就只剩「起不来」一条出口）
+  if (!/-DirectExec:\(-not \$IsWindows\)/.test(invokeAdb)) {
+    v.push('W9 直启开关没按平台判（无条件直启会换掉 Windows 那条已验证载体；恒经 cmd 则 Linux 上永远拿不到文本）');
+  }
+  // stderr 是本工具三条判据的原料（pair 分类的 protocol fault、connect 失败的 10061 ⇒ 决定要不要 disconnect）
+  if (!/-MergeStdErr/.test(invokeAdb)) v.push('W9 没合并 stderr ⇒ adb 的失败原文进不了调用方的判据（静默换了判据）');
+  // 旧形状不得回写：前台同步等一次 adb
+  if (/&\s*\$AdbExe/.test(code)) v.push('W9 代码面回写了 `& $AdbExe` 直调（无单次超时 ⇒ 一次不返回整条自愈链就地停住）');
+  if (/Out-String/.test(code)) v.push('W9 代码面回写了 Out-String 取文本（父进程读子进程输出段 = #1285 那条挂死路径）');
+  // 「不返回」是可见结论：点名哪一次调用、多大预算，并有汇总读数
+  if (!/ADB_CALL_TIMEOUT args=/.test(code)) v.push('W9 缺 ADB_CALL_TIMEOUT 点名行（哪一次调用、多大预算必须写出来）');
+  if (!/callBudgetSeconds=/.test(code)) v.push('W9 超时结论没带预算大小');
+  if (!/ADB_CALL_BUDGET calls=/.test(code)) v.push('W9 缺每次结论的调用/超时读数行');
+  if (!/\$script:AdbTimeouts\s*=\s*@\(\$script:AdbTimeouts\)/.test(code)) v.push('W9 缺超时清单累计（汇总里点不出「本次挂过几次」）');
+  // 超时结论只进日志文件，不许污染 stdout：`-Quiet` 那条路径的全部价值就是 stdout 只有 serial
+  const noteBody = functionBody(code, 'Note-AdbTimeout') || '';
+  if (!noteBody) v.push('W9 找不到 Note-AdbTimeout 函数体（判据取不到即红）');
+  else if (/Write-Host|Say\s/.test(noteBody)) v.push('W9 超时点名件往 stdout 写了东西（`-Quiet` 取 serial 会被这一行污染）');
+
   return v;
 }
 
@@ -168,9 +226,31 @@ describe('wireless-debug.ps1 契约守护（#1564）', () => {
     ['W4', "$StateDir = 'D:\\FL\\.scratch\\adb-wireless'"],
     ['W6', "$mine = 'adb-wireless.ps1'"],
     ['W7', "Write-Host 'gate-evidence: 这条会被校验器当门证据'"],
+    // W9（#1568）：无界形状一回写就红 —— 这两条是「不得回写」型，追加一行即可命中
+    ['W9', "& $AdbExe -s $ep shell echo ok | Out-String"],
+    ['W9', "$hb = Invoke-Adb @('-s', $ep, 'shell', 'echo', 'hb') 2>&1 | Out-String"],
+  ];
+  const REMOVALS_EXTRA = [
+    ['W9', '委托唯一执行核', "Invoke-BoundedAdbText -AdbExe $AdbExe -Serial ''", "& $AdbExe @AdbArgs | Out-String"],
+    ['W9', '读数档默认值', '[int]$AdbCallTimeoutSeconds = 15', '[int]$AdbCallTimeoutSeconds'],
+    ['W9', '端点档默认值', '[int]$AdbEndpointTimeoutSeconds = 30', '[int]$AdbEndpointTimeoutSeconds'],
+    ['W9', '端点档接线', '-BudgetSeconds $AdbEndpointTimeoutSeconds', '-BudgetSeconds $AdbCallTimeoutSeconds'],
+    ['W9', 'stderr 合并（判据原料）', '-MergeStdErr', ''],
+    ['W9', '直启按平台判', '-DirectExec:(-not $IsWindows)', '-DirectExec:$true'],
+    ['W9', '超时点名行', 'ADB_CALL_TIMEOUT args=', 'TIMEOUT args='],
+    ['W9', '自身扩展名构造 lib 路径', '(Get-Item -LiteralPath $PSCommandPath).Extension', "'ps' + '1'"],
+    ['W9', 'dot-source 唯一真源', 'auto-screenshot', 'adb-local'],
+    ['W9', '点名件只进日志不进 stdout', "try { Add-Content -LiteralPath $ActLogPath -Value ('{0} {1}' -f $t, $Line) -Encoding utf8 } catch { }", 'Write-Host $Line'],
   ];
   test.each(INJECTIONS)('%s：注入违规必须被抓到', (tag, line) => {
     expect(hitsOf(injected(line), tag).length).toBeGreaterThan(0);
+  });
+
+  // W9 的十条都是**存在型**（该在的东西被拿掉/换形）——追加一行打不中它们，只能就地拆。
+  test.each(REMOVALS_EXTRA)('W9（#1568）：%s 被拿掉或换形 ⇒ 必须判红', (tag, label, from, to) => {
+    const m = real.split(from).join(to);
+    expect(m).not.toBe(real); // 锚点一漂就等于什么都没注入，用例就假绿
+    expect(hitsOf(scanContract(m), tag).length).toBeGreaterThan(0);
   });
 
   // ── ② **存在型**判据只能靠「把该在的东西拿掉」来验：追加一行永远打不中它们。
@@ -199,16 +279,19 @@ describe('wireless-debug.ps1 契约守护（#1564）', () => {
   });
 
   // ── ③ 真文件必须干净
-  test('真文件零违规（八条判据同时成立）', () => {
+  test('真文件零违规（九条判据同时成立）', () => {
     expect(scanContract(real)).toEqual([]);
   });
 
   // ── ④ 判据本身不能空转：两个面都取得到内容，函数体也取到
-  test('取样面非空：文档块、代码面、两个函数体都真取到了', () => {
+  test('取样面非空：文档块、代码面、四个函数体都真取到了', () => {
     expect(docBlock(real).length).toBeGreaterThan(800);
     expect(codeFace(real).length).toBeGreaterThan(4000);
     expect(functionBody(codeFace(real), 'Do-Keep')).not.toBeNull();
     expect(functionBody(codeFace(real), 'Do-Watch')).not.toBeNull();
+    // W9 的两件（#1568）：判据落在函数体上，函数体取不到就必须在 scanContract 里当场判红
+    expect(functionBody(codeFace(real), 'Invoke-Adb')).not.toBeNull();
+    expect(functionBody(codeFace(real), 'Note-AdbTimeout')).not.toBeNull();
   });
 
   test('W4 的正向读数：状态目录走机器级路径（不是宿主树）', () => {

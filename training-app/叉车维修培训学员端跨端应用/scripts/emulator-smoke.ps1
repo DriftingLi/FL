@@ -40,11 +40,15 @@
     （`-AdbCallTimeoutSeconds`，默认 15 秒）。到点不返回 ⇒ 终止整棵进程树、该页记 FAIL 并**继续**跑后面的页，
     日志点名「哪一次调用 / 多大预算 / 有没有留下残帧」；截图先落 `.part`、「调用返回 + 帧非空」才改名归位
     —— 被杀调用的残帧可能删不掉（#1560 真链路现测），而本链按「存在且非空」判出图 ⇒ 归位靠命名，不靠删除成功。
-    ⚠️ **这句话的射程就到截图为止**：本脚本另有 **13 处没走收口点的直调**仍是无界等待（`adb version` /
-    `wait-for-device` / `install` / `push` / `dumpsys activity` / `dumpsys window` / `logcat` / `emu kill` 那一类）。
-    数法要说清，否则两个量会被读成一个：剥注释后本脚本 `& $AdbExe` 共 **14 行** = 上面这 13 处直调 + `Get-AdbOutput`
-    本体那 1 行，而 `Get-AdbOutput` **另有 12 个调用方**（改那一个点就一并有界）。**#1562 没做**（票面点名的只有三处
-    `screencap` 同形落点）⇒ 剩余面登记在 #1568（全 `scripts/` 口径 **26 处**，逐文件与逐函数的数在那张票的「现测」段）。
+    ⚠️ **有界覆盖到哪一行（2026-10-08，#1568）**：截图那条走执行核（#1562）；`Get-AdbOutput` 这一个点**也**接上了
+    同一件唯一执行核（#1568 AC 第 1 条，预算参数 `-AdbTextCallTimeoutSeconds`，默认 15 秒）——它自己只有 1 行调用，
+    却压着 **12 个调用方**（`sys.boot_completed` 轮询在最前面，挂在那里连「起没起机」都判不出来），改一处一并有界。
+    仍然没界的只剩 **13 处没走收口点的直调**（`adb version` / `wait-for-device` / `install` / `push` /
+    `dumpsys activity` / `dumpsys window` / `logcat` / `emu kill` 那一类）⇒ 归 #1568 AC 第 2 条的后续 PR，
+    且**不得**套 15 秒那一档：install / push / 等待开机是有意的长等，那张票要收的是「没有上限的等」，不是「等得久」。
+    数法要说清，否则两个量会被读成一个：尺 = 剥注释（块注释与整行 `#` 注释）后按**所在函数**归属数 `& $AdbExe`，
+    入仓件 `docs/verification/tooling/1568/adb-bounded-count.mjs`；本脚本从 #1562 后的 14 行降到 **13 行**
+    （#1562 时那句「另有 13 处直调 + 收口点本体 1 行」里的「本体那 1 行」正是这次收掉的那一行）。
 
 .PARAMETER BaseApk
     基座 APK。默认走 HBuilderX 自带那份（含 x86/x86_64，故 x86 模拟器装得上）。
@@ -85,9 +89,20 @@ param(
     # **一次截图调用**的上限（#1562）。默认值理由与 `device-capture.ps1` 同名参数一致：同一条有界调用在
     # #1560 的真链路产物里返回 646 / 719 / 949 / 1217 ms（`docs/verification/tooling/1560/README.md:25` 与 :48-49），
     # 15 秒给了最慢那次的十倍余量，而它把「一次不返回就整条冒烟就地停住」钉死成**最多 15 秒**。
-    # ⚠️ 限定词是实的：本脚本另有 **13 处没走收口点的直调**仍走无界等待（现测 `& $AdbExe` 共 14 行 = 13 直调 +
-    #   `Get-AdbOutput` 本体 1 行；那个收口点另有 12 个调用方）⇒ 不在 #1562 票面射程，剩余面登记在 **#1568**。
+    # ⚠️ 限定词是实的：本脚本另有 **13 处没走收口点的直调**仍走无界等待（`adb version` / `install` / `push` /
+    #   `wait-for-device` / `logcat` 那一类，#1568 复算尺现测；那一张票 AC 第 2 条的后续 PR 收，且不得套 15 秒）
+    #   ⇒ `Get-AdbOutput` 那一个点（12 个调用方）已随 #1568 接到同一个执行核，就是下面那条预算参数管的部分。
     [int]$AdbCallTimeoutSeconds = 15,
+    # **一次取文本的 adb 调用**的上限（#1568，2026-10-08）：收的是 `Get-AdbOutput` 那一个点 —— 它自己只有
+    # 1 行调用，却压着 **12 个调用方**（`sys.boot_completed` 轮询、三条 `settings put`、`input keyevent`、
+    # 三条 `getprop`、`pidof`、`am start` / `am force-stop`），改一处就让它们一并有界。
+    # 默认值理由指得到入库产物：#1560 真链路里同一条有界调用返回 646 / 719 / 949 / 1217 ms
+    # （`docs/verification/tooling/1560/README.md:25` 与 :48-49），而那还是一张约 730 KB 的 PNG；本档要取的是
+    # `getprop` / `settings` / `am start` 这类小文本，同机现测 `adb version` 178 ms、`adb devices` 106 ms
+    # （`docs/verification/tooling/1568/latency-readings.txt`）⇒ 15 秒给了三个数量级的余量。
+    # ⚠️ 这一档**只给读文本与小管理调用**：`install` / `push` / `wait-for-device` / boot 等待是有意的长等，
+    #   它们在本票 AC 第 2 条那批直调里（后续 PR），不得套这 15 秒 —— 本票要收的是「没有上限的等」，不是「等得久」。
+    [int]$AdbTextCallTimeoutSeconds = 15,
     [int]$Port = 5554
 )
 
@@ -130,6 +145,9 @@ $script:SkippedPages = @()
 $script:ShotRecords = @()
 # 超时过的截图调用点名清单（#1562）：汇总与机检行用它
 $script:ShotTimeouts = @()
+# 超时过的**取文本**调用点名清单与调用计数（#1568）：同一件事的另一条通道，同一份机检行口径
+$script:AdbTextTimeouts = @()
+$script:AdbTextCalls = 0
 $script:FinalTotals = [pscustomobject]@{ Lines = 0; FatalCount = 0; AnrCount = 0; RuntimeCrashes = 0; ProcessDeaths = 0 }
 $script:PageResultsAll = @()
 
@@ -160,10 +178,25 @@ function Convert-PageToFileName {
 }
 
 function Get-AdbOutput {
-    param([string[]]$AdbArgs)
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds)
     # 统一走 adb -s <serial>；失败一律返回空串，让调用方自行判定
-    $out = & $AdbExe -s $Serial @AdbArgs 2>&1
-    return (($out | Out-String).Trim())
+    # 「一次 adb 调用怎么才有界」不在这里重写 —— 复用 `lib/auto-screenshot.ps1` 那件唯一执行核（#1568 AC1）。
+    # `-MergeStdErr` 是给上一条注释那句「失败一律返回空串」兜底的：本函数的老形状是 `2>&1`，
+    # adb 的**失败原文全在 stderr**（`am start` 的 Error type、`pidof` 的空答），不合并就等于把判据原料换了。
+    # 非 Windows 走直启分支：本脚本实践中只在 Windows 跑（要 WHPX/HAXM 与 emulator.exe），但它的
+    # 行为守护在 CI 的 ubuntu 上真跑（#1562 的 `B12` 教训：那一格造不出来就会静默假绿）。
+    $script:AdbTextCalls = $script:AdbTextCalls + 1
+    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial $Serial -AdbArguments $AdbArgs -AdbArgv $AdbArgs `
+        -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    if ($r.TimedOut) {
+        # 「不返回」必须是一种**可见的结论**（#1562 同一条纪律）：哪一次调用、多大预算、几点收的口都点名，
+        # 否则读日志的人只看到「设备没答」，分不清 adb 通道挂了与答了个空。是读数、不是判据。
+        $script:AdbTextTimeouts = @($script:AdbTextTimeouts) + @(($AdbArgs -join ' '))
+        Write-Log ('ADB_TEXT_TIMEOUT call=adb -s ' + $Serial + ' ' + ($AdbArgs -join ' ') +
+            " callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) —— 已终止整棵进程树，本次按「没拿到」回空串")
+        return ''
+    }
+    return ([string]$r.Text).Trim()
 }
 
 # ================= 环境自检（缺 SDK/adb/AVD/APK ⇒ exit 2） =================
@@ -739,6 +772,9 @@ try {
         # 「不返回」必须是一种**可见的结论**（#1562）：次数 / 预算 / 哪几页都点名，
         # 否则读日志的人只看到「少了一张图」，分不清 adb 通道问题与渲染问题。是读数、不是判据。
         "SHOT_CALL_BUDGET calls=$(@($shotRecords).Count) timeouts=$(@($script:ShotTimeouts).Count) callBudgetSeconds=$AdbCallTimeoutSeconds timedOutPages=$(if (@($script:ShotTimeouts).Count -gt 0) { $script:ShotTimeouts -join ',' } else { 'none' })",
+        # 取文本那一档同口径点名（#1568）：挂过哪几次、预算多大都得写出来，读日志的人才分得清
+        # 「adb 通道不返回」与「设备答了个空」——前者查 adb、后者查设备，处置人完全不同。同样是读数、不是判据。
+        "ADB_TEXT_CALL_BUDGET calls=$($script:AdbTextCalls) timeouts=$(@($script:AdbTextTimeouts).Count) callBudgetSeconds=$AdbTextCallTimeoutSeconds hungCalls=$(if (@($script:AdbTextTimeouts).Count -gt 0) { $script:AdbTextTimeouts -join ';' } else { 'none' })",
         "基座 APK=$($script:BaseApkPackage)  安装=$(if ($SkipInstallBaseApk) { '已跳过' } else { "已安装 ($($script:BaseApkSizeMb) MB)" })",
         "本次 logcat 总行数=$($final.Lines)  FATAL EXCEPTION=$($final.FatalCount)  ANR=$($final.AnrCount)  AndroidRuntime=$($final.RuntimeCrashes)  进程死亡=$($final.ProcessDeaths)",
         "页面判定：PASS=$(@($pageResults | Where-Object { $_.Status -eq 'PASS' }).Count)  FAIL=$(@($pageResults | Where-Object { $_.Status -eq 'FAIL' }).Count)  SKIP=$(@($pageResults | Where-Object { $_.Status -eq 'SKIP' }).Count)",

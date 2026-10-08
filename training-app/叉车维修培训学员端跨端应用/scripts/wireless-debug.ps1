@@ -30,6 +30,15 @@
     - `adb pair` 打到【连接端口】实测回 `protocol fault` —— pair 分支据此把失败分成三类回话，
       且失败的配对尝试实测**不影响已存在的会话**。
 
+    ### 有界性（#1568，2026-10-08）
+    16 个调用方全压在本文件的 `Invoke-Adb` 这一个点上，它接的是 `scripts/lib/` 那件**唯一**的有界执行核
+    （不在这里重写「等待 + 杀树」）。到点 ⇒ 终止整棵进程树、回空串，并把「哪一次调用 / 多大预算 / 几点收的口」
+    写进 `actions.log`（`ADB_CALL_TIMEOUT` + 每次结论旁的 `ADB_CALL_BUDGET` 读数行；**不进 stdout**，
+    `-Quiet` 那条取 serial 的路径 stdout 只能有 serial）。两档预算按调用形态分：
+    读数与 shell 15 秒（`-AdbCallTimeoutSeconds`）、端点类（connect / disconnect / pair / mDNS 发现）30 秒
+    （`-AdbEndpointTimeoutSeconds`）—— 后者是因为现测 `adb connect` 打一个不应答也不拒绝的地址要 **10,152 ms**
+    才回（那是端口换了但还连得上的慢，不是挂死），数与出处见 `docs/verification/tooling/1568/latency-readings.txt`。
+
     ### 红线（与 scripts/device-capture.ps1 同源）
     - **绝不 `adb kill-server`**：adb server 与 HBuilderX 共享，杀掉会连带打断门。
     - 心跳只发 `shell echo` / `shell settings get|put`；**不发 `input`**（抢取证脚本的焦点判据），
@@ -94,6 +103,18 @@ param(
     # keep/watch 的总存活时长（小时）。默认 8 —— 不留无限存活的后台心跳；跑一天自己收口
     [int]$MaxHours = 8,
 
+    # 一次 adb **读数 / shell** 调用的上限（#1568：`Invoke-Adb` 这一个点压着 16 个调用方）。
+    # 默认值理由指得到入库产物：同机现测 `adb version` 178 ms、`adb devices` 106 ms、
+    # `adb mdns services` 103 ms（`docs/verification/tooling/1568/latency-readings.txt`），
+    # 而 #1560 真链路里同一条有界调用（还是一张约 730 KB 的 PNG）返回 646 / 719 / 949 / 1217 ms
+    # （`docs/verification/tooling/1560/README.md:25` 与 :48-49）⇒ 15 秒对小文本是三个数量级的余量。
+    [int]$AdbCallTimeoutSeconds = 15,
+    # 一次**端点类** adb 调用（connect / disconnect / pair / mDNS 发现）的上限。为什么不与读数同档：
+    # 同一份现测里 `adb connect` 打到一个**既不应答也不拒绝**的地址实测 **10,152 ms** 才回（TCP SYN 重传跑完），
+    # 打到拒绝的端口 2,160 ms —— 那一档不是「不返回」，是端口换了但还连得上的慢。
+    # 票面 AC 第 3 条把这条边界写死了：要收的是「没有上限的等」，不是「等得久」⇒ 端点档给现测上界的 3 倍。
+    [int]$AdbEndpointTimeoutSeconds = 30,
+
     # 机器级落点：这工具要在任意 worktree / 任意检出里用，**不得**写死宿主树路径（契约 W6 锁这条）。
     # 优先级：-StateDir > $env:ADB_WIRELESS_STATE_DIR > $env:LOCALAPPDATA\adb-wireless > $env:TEMP\adb-wireless
     [string]$StateDir = $(if ($env:ADB_WIRELESS_STATE_DIR) { $env:ADB_WIRELESS_STATE_DIR }
@@ -115,6 +136,18 @@ $ActLogPath = Join-Path $StateDir 'actions.log'
 $TranscriptPath = Join-Path $StateDir 'last-run.txt'
 $script:TranscriptStarted = $false
 $script:ScriptFile = $PSCommandPath
+# 本脚本自己的 adb 调用账（#1568）：计数与超时清单，只进 actions.log 的读数行
+$script:AdbCalls = 0
+$script:AdbTimeouts = @()
+
+# 「一次 adb 调用怎么才有界」的**唯一真源**在 `scripts/lib/auto-screenshot.ps1`（#1560 落地的有界执行核，
+# #1562 收成一件供三个消费点共用）。本工具复用那一件、**不**在这里再写第二份「等待 + 杀树」——
+# 复制而不是复用正是移动端 ADR-0008「adb 解析的唯一真源」那节记的分叉形态（#1568 AC 第 1 条点名这一处）。
+# 路径刻意**不写成 `.ps1` 字面量**：契约 W6 禁代码面出现任何 `.ps1` 字面量（这条工具在代码面上本来
+# 不需要自己的文件名），扩展名从当前脚本自己取；顺带解决了跨平台 —— `Join-Path` 在 Linux 上不解析
+# 反斜杠，而 `wireless-debug.ps1` 是机器级工具、行为守护在 CI 的 ubuntu 上真跑。
+$adbLibPath = Join-Path (Join-Path $PSScriptRoot 'lib') ('auto-screenshot' + (Get-Item -LiteralPath $PSCommandPath).Extension)
+. $adbLibPath
 
 # 现测坑：pwsh 的控制台输出按这台机器的码页走，被上层（Bash / 别的 pwsh 驱动）按 GBK 解码时中文成乱码。
 # 对策三条：① 机读结论行只用 ASCII；② -Ascii 时把 stdout 里的非 ASCII 全部换成 ?；
@@ -131,10 +164,37 @@ if (-not (Test-Path -LiteralPath $StateDir)) {
 
 # ---------- 基础层 ----------
 
+function Note-AdbTimeout([string]$Line) {
+    # 「不返回」必须是一种**可见的结论**（#1562 同一条纪律，落到本工具这一档）：哪一次调用、多大预算都点名。
+    # ⚠️ 只进 UTF-8 日志文件、**不进 stdout**：`-Quiet` 那条路径的全部价值就是「stdout 只有 serial」
+    #    （门取 -Device 值靠命令替换 `$dev = pwsh -File ... -Action ensure -Quiet`，多一行就把它污染了）。
+    $t = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    try { Add-Content -LiteralPath $ActLogPath -Value ('{0} {1}' -f $t, $Line) -Encoding utf8 } catch { }
+    if ($Action -eq 'keep' -or $Action -eq 'watch') {
+        # 心跳循环里挂过一次 ⇒ keep.log 的时间线上必须看得见，否则读的人只看到「没有 LOST」
+        try { Add-Content -LiteralPath $LogPath -Value ('{0} {1}' -f $t, $Line) -Encoding utf8 } catch { }
+    }
+}
+
 function Invoke-Adb {
-    param([string[]]$AdbArgs)
-    $out = & $AdbExe @AdbArgs 2>&1 | Out-String
-    return $out.Trim()
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbCallTimeoutSeconds)
+    # 收口点（#1568 AC 第 1 条）：16 个调用方全压在这一行上，改一处就让它们一并有界。
+    # 为什么 `-Serial ''`：本工具的候选阶段就是「还没有 serial」——`devices` / `mdns services` / `connect`
+    # / `pair` 都是 server 级命令，带 `-s` 会被 adb 当参数吃掉；需要定向的调用方自己把 `-s <ep>` 写进 argv。
+    # 为什么 `-MergeStdErr`：老形状是 `2>&1`，而本工具三条判据的原料就在 stderr 上
+    # （pair 失败分类的 `protocol fault`、connect 失败的 `10061` ⇒ 它决定「要不要顺手 disconnect」）。
+    # 执行核把 stdout / stderr 落成两个文件，不合并就是静默换判据 —— 行为腿 WBD3 钉这一格。
+    $script:AdbCalls = $script:AdbCalls + 1
+    $r = Invoke-BoundedAdbText -AdbExe $AdbExe -Serial '' -AdbArguments $AdbArgs -AdbArgv $AdbArgs `
+        -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    if ($r.TimedOut) {
+        $script:AdbTimeouts = @($script:AdbTimeouts) + @(($AdbArgs -join ' '))
+        Note-AdbTimeout ('ADB_CALL_TIMEOUT args=' + ($AdbArgs -join ' ') +
+            ' callBudgetSeconds=' + $BudgetSeconds + ' seconds=' + $r.Seconds +
+            ' —— 已终止整棵进程树，本次按「拿不到」回空串（调用方各走既有 fail-closed 分支）')
+        return ''
+    }
+    return ([string]$r.Text).Trim()
 }
 
 function Get-DeviceList {
@@ -150,7 +210,7 @@ function Get-DeviceList {
 function Get-MdnsCandidate {
     # `adb mdns services` 行形如：name<TAB>_adb-tls-connect._tcp<TAB>192.168.10.51:39527
     $found = @()
-    foreach ($l in ((Invoke-Adb @('mdns', 'services')) -split "`r?`n")) {
+    foreach ($l in ((Invoke-Adb @('mdns', 'services') -BudgetSeconds $AdbEndpointTimeoutSeconds) -split "`r?`n")) {
         if ($l -match '_adb-tls-connect\._tcp\s+(\d{1,3}(?:\.\d{1,3}){3}:\d{2,5})\s*$') {
             $ep = $Matches[1]
             if (-not ($found.Serial -contains $ep)) {
@@ -165,7 +225,7 @@ function Test-LiveSerial {
     # connect 回 "already connected" 或 "connected to" 都不代表能用；
     # 唯一的真判据是这条 transport 在 adb devices 里 state=device 且 shell 有回话。
     param([string]$Ep)
-    $out = Invoke-Adb @('connect', $Ep)
+    $out = Invoke-Adb @('connect', $Ep) -BudgetSeconds $AdbEndpointTimeoutSeconds
     $state = $null
     foreach ($d in (Get-DeviceList)) { if ($d.Serial -eq $Ep) { $state = $d.State } }
     if ($state -ne 'device') {
@@ -216,7 +276,7 @@ function Find-WorkingEndpoint {
         Add-Content -LiteralPath $ActLogPath -Value ('{0} candidate_reject endpoint={1} reason={2}' -f `
                 $t, $ep, ($r.Detail -replace "`r?`n", ' ')) -Encoding utf8
         # 连上但 offline 的残条目会干扰后续判定，顺手摘掉（只动这一条，不 kill-server）
-        if ($r.Detail -notmatch '10061') { Invoke-Adb @('disconnect', $ep) | Out-Null }
+        if ($r.Detail -notmatch '10061') { Invoke-Adb @('disconnect', $ep) -BudgetSeconds $AdbEndpointTimeoutSeconds | Out-Null }
     }
     return [pscustomobject]@{ Ok = $false; Serial = $null; Tried = $ordered.Count }
 }
@@ -326,6 +386,13 @@ function Show-Verdict {
     $full = 'WIRELESS_DEBUG action={0} result={1} serial={2} toggle={3} extra={4} detail={5}' -f `
         $Action, $Result, $(if ($Ep) { $Ep } else { '-' }), $tg, $Extra, $Detail
     Add-Content -LiteralPath $ActLogPath -Value ('{0} {1}' -f $t, $full) -Encoding utf8
+    # 读数行、不是判据（先例 #1562 的 SHOT_CALL_BUDGET）：本趟一共发了几次 adb 调用、几次到点、
+    # 两档预算各是多少。写在 actions.log 而不是 stdout —— `-Quiet` 那条路径 stdout 只能有 serial。
+    try {
+        Add-Content -LiteralPath $ActLogPath -Value ('{0} ADB_CALL_BUDGET calls={1} timeouts={2} readBudgetSeconds={3} endpointBudgetSeconds={4} hungArgs={5}' -f `
+                $t, $script:AdbCalls, @($script:AdbTimeouts).Count, $AdbCallTimeoutSeconds, $AdbEndpointTimeoutSeconds, `
+                $(if (@($script:AdbTimeouts).Count -gt 0) { ($script:AdbTimeouts -join ';') } else { 'none' })) -Encoding utf8
+    } catch { }
 }
 
 # ---------- 动作层 ----------
@@ -340,7 +407,7 @@ function Do-Status {
     if ($devs.Count -eq 0) { Say '(空)' }
     foreach ($d in $devs) { Say ("  {0}  [{1}]" -f $d.Serial, $d.State) }
     Say '=== adb mdns services ==='
-    Say ((Invoke-Adb @('mdns', 'services')) -replace "`r", '')
+    Say ((Invoke-Adb @('mdns', 'services') -BudgetSeconds $AdbEndpointTimeoutSeconds) -replace "`r", '')
     Say '=== 设备侧真值（任取一条 device transport）==='
     $live = @($devs | Where-Object { $_.State -eq 'device' })
     if ($live.Count -ge 1) {
@@ -444,7 +511,7 @@ function Do-Pair {
             -Detail "配对码是 6 位数字，收到 '$PairCode'（端口与配对码来自不同屏，别混着抄）"
         exit 2
     }
-    $out = Invoke-Adb @('pair', $PairEndpoint, $PairCode)
+    $out = Invoke-Adb @('pair', $PairEndpoint, $PairCode) -BudgetSeconds $AdbEndpointTimeoutSeconds
     $raw = $out -replace "`r?`n", ' '
     if ($out -match 'Successfully paired') {
         $r = Find-WorkingEndpoint -Preferred $Serial
@@ -544,7 +611,7 @@ function Do-Keep {
             if (-not $absentSince) {
                 $absentSince = Get-Date
                 Write-Keep "LOST serial=$(if ($ep) { $ep } else { '-' }) state=$(if ($state) { $state } else { 'absent' }) -> 重发现（mDNS 候选 + 上次成功端口）"
-                if ($ep) { $null = Invoke-Adb @('disconnect', $ep) }
+                if ($ep) { $null = Invoke-Adb @('disconnect', $ep) -BudgetSeconds $AdbEndpointTimeoutSeconds }
             }
             if (((Get-Date) - $absentSince).TotalMinutes -ge $WaitMinutes) {
                 Write-Keep "GIVEUP: ${WaitMinutes} 分钟内没有可用端口 ⇒ 端口已轮换且 mDNS 无记录，只能人在手机上看一次新端口（旧端口 10061 永久失效）"
