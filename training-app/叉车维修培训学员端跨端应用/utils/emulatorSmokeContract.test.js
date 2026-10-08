@@ -440,10 +440,10 @@ describe('仿真机前置冒烟契约（#883 / O2，非门辅助）', () => {
       ['C11', 'Wait-ForDeviceBounded 定义了却没被调', (s) => cut(s, '\n    Wait-ForDeviceBounded\n', '\n', 'C11')],
       ['C11', 'logcat 超时不再计入该页失败', (s) => cut(s, 'if ($logcat.TimedOut) { $pageFail +=', 'if ($logcat.TimedOut) { $skips +=', 'C11')],
       ['C11', 'Get-LogcatSummary 不带出 TimedOut', (s) => cut(s, 'TimedOut        = [bool]$r.TimedOut', 'TimedOut        = $false', 'C11')],
-      ['C11', 'LOGCAT_INCONCLUSIVE 被删', (s) => ({ ...s, smoke: s.smoke.replace(/LOGCAT_INCONCLUSIVE/g, 'LOGCAT_X') })],
+      ['C11', 'LOGCAT_INCONCLUSIVE 被删', (s) => cutAll(s, 'LOGCAT_INCONCLUSIVE', 'LOGCAT_X', 2, 'C11')],
       ['C11', 'emu kill 没接 teardown 档', (s) => cut(s, "@('emu', 'kill') -BudgetSeconds $AdbTeardownTimeoutSeconds -Tier 'teardown'", "@('emu', 'kill') -Tier 'teardown'", 'C11')],
       ['C11', 'wait-for-disconnect 被挪出主 finally', (s) => cut(s, "try { $null = Get-AdbOutput @('wait-for-disconnect') -BudgetSeconds $AdbTeardownTimeoutSeconds -Tier 'teardown' } catch { }", 'try { } catch { }', 'C11')],
-      ['C11', 'ADB_TIER_BUDGET 汇总被删', (s) => ({ ...s, smoke: s.smoke.replace(/ADB_TIER_BUDGET/g, 'ADB_X_TIER') })]
+      ['C11', 'ADB_TIER_BUDGET 汇总被删', (s) => cutAll(s, 'ADB_TIER_BUDGET', 'ADB_X_TIER', 1, 'C11')]
     ];
     cases.forEach(([rule, label, mutate]) => {
       const found = scanContract(mutate(real));

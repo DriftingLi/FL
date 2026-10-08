@@ -8,6 +8,8 @@
     EMT 那九条用的是可编程假载体（要的是「真挂死」这一格 —— 真 adb 不能按需要挂死）。这一份补的是**载体那一头**：
       L1 正常冒烟（-SkipInstallBaseApk，与 #1562 的夹具同形）⇒ 六档现值打进汇总（ADB_TIER_BUDGET），
          且整趟**零** ADB_TEXT_TIMEOUT ⇒ 分档没把正常等误判成挂死（这是「不得套 15 秒」那格的反面证据）。
+         ⚠️ 这条是**判据**不是保证：同日两轮同码同参，一轮零超时、另一轮 3 条文本调用到点（通道真挂住过
+         一阵）⇒ 两轮对照与可复算边界记在 README §3c，别把「跑过一次零超时」读成「恒零超时」。
       L2 `-AdbLogcatTimeoutSeconds 0` ⇒ 真 logcat -d 到点：汇总必须落 LOGCAT_INCONCLUSIVE=1，
          而不是「FATAL=0 ⇒ 无崩溃」。
       L3 `-AdbInstallTimeoutSeconds 0` ⇒ 真 install 到点：结论必须点名 tier=install，且整条链以 UNUSABLE 收口
@@ -15,9 +17,13 @@
       L4 中文 APK 路径走新链路（cmd 包装 + stderr 合并）⇒ 必须仍拿到 adb 的失败原文
          （本机 AVD 装基座是 INSTALL_FAILED_NO_MATCHING_ABIS —— 那句原文在 stderr，正好当合并判据的原料）。
 
-    ⚠️ 已知取证缺口（写进 PR 正文，不藏）：逐页那条 `if ($logcat.TimedOut) { $pageFail += … }` 需要
-    `-ResourcesDir`（HBuilderX 编译产物 `unpackage/resources/app-android`），本机与宿主树都 ABSENT
-    ⇒ 该分支由契约锚点 C11④ + 行为腿 EMT5 锁，未在此处真跑。
+    ⚠️ 取证边界（写进 PR 正文，不藏，也别写成比代码宽）：逐页那条 `if ($logcat.TimedOut) { $pageFail += … }`
+    在 L2 上**确实执行了** —— 它经 `$failures`（`:869 $passed = ($failures.Count -eq 0)`）把整趟判成 FAIL，
+    也就是本腿 `exit=1` 的来源；逐页行带出 `logcatTimedOut=True`、汇总落 `LOGCAT_INCONCLUSIVE=1`。
+    **没证到的是页标签本身成为 FAIL**：紧随其后的 `if (-not $hasResources) { $status = 'SKIP' }`（#1562 既有
+    规则，票面 AC 第 4 条不许本票动它）把标签盖成 SKIP，而 `-ResourcesDir`（HBuilderX 产物
+    `unpackage/resources/app-android`）本机与宿主树现测都 ABSENT ⇒ 「该页记失败」这一**效果**只由
+    契约锚点 C11④ + 行为腿 EMT5 锁着；要真跑到它得先有一次 dev 编译产出资源目录。
 
 .PARAMETER OutFile
     读数落盘路径（相对调用时的当前目录）。
