@@ -172,7 +172,7 @@ describe('退出入口撤净与注销引导语指称（#1554）', () => {
   it('引导语改指实际落点，且不再引用已撤的按钮文案', () => {
     const f = read(FLOWS);
     // 写「我的 → 设置」这个**位置**而不是「返回设置页」：`pages/notifications/notifications.uvue`
-    // 与 `pages/points/task-center.uvue` 也直挂本页，从那两个入口「返回」并不落在设置页上，
+    // 和 `pages/profile/settings.uvue` 也都直挂本页；从那些入口进来「返回」并不落在设置页上，
     // 而位置名对任何入口都成立。
     expect(f).toContain(GUIDANCE);
     expect(f).not.toContain(STALE_REF);
