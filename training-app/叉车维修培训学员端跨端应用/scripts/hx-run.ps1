@@ -298,8 +298,7 @@ function Resolve-AdbExe {
 
 function Get-OnlineDeviceList {
     param([string]$AdbExe)
-    $r = Invoke-AdbTierCall -AdbArgs @('devices') -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'server' -NoSerial
-    $out = if ($r) { $r.Text } else { '' }
+    $out = Get-AdbOutput -AdbArgs @('devices') -Tier 'server' -NoSerial
     $list = @()
     foreach ($line in ($out -split "`r?`n")) {
         if ($line -match '^\s*(\S+)\s+(device|offline|unauthorized|no permissions)\s*$') {
@@ -517,15 +516,13 @@ function Get-DeviceDeployFacts {
     $www = @{}
     foreach ($w in @($WwwPaths)) {
         try {
-            $r = Invoke-AdbTierCall -AdbArgs @('-s', $Serial, 'shell', 'stat', '-c', '%Y', $w) -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'text'
-            $out = if ($r) { $r.Text } else { '' }
+            $out = (Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'stat', '-c', '%Y', $w)).Trim()
             if ($out -match '^\d+$') { $www["$w"] = [long]$out }
         } catch { }
     }
     $pids = @{}
     try {
-        $r = Invoke-AdbTierCall -AdbArgs @('-s', $Serial, 'shell', 'ps', '-A', '-o', 'PID,NAME') -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'text'
-        $psOut = if ($r) { $r.Text } else { '' }
+        $psOut = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'ps', '-A', '-o', 'PID,NAME')
         foreach ($pkg in @($Packages)) {
             if (-not $pkg) { continue }
             $m = [regex]::Match($psOut, '(?m)^\s*(\d+)\s+' + [regex]::Escape($pkg) + '\s*$')
@@ -534,8 +531,7 @@ function Get-DeviceDeployFacts {
     } catch { }
     $fg = ''
     try {
-        $r = Invoke-AdbTierCall -AdbArgs @('-s', $Serial, 'shell', 'dumpsys', 'activity', 'activities') -BudgetSeconds $AdbTextCallTimeoutSeconds -Tier 'text'
-        $dump = if ($r) { $r.Text } else { '' }
+        $dump = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'dumpsys', 'activity', 'activities')
         $m = [regex]::Match($dump, 'topResumedActivity=[^\r\n]*?\s([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/')
         if ($m.Success) { $fg = $m.Groups[1].Value }
     } catch { }
@@ -938,6 +934,21 @@ function Invoke-AdbTierCall {
     }
     return $r
 }
+
+function Get-AdbOutput {
+    <#
+      **中间层**（回文本，超时回空串 —— 既有语义）。代理 Invoke-AdbTierCall，超时返回空串，正常返回文本。
+      保留此函数是为了保持与 emulator-smoke.ps1 的模式一致，并确保契约测试能找到原始命令字符串。
+    #>
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds, [string]$Tier = 'text', [switch]$NoSerial)
+    $r = Invoke-AdbTierCall -AdbArgs $AdbArgs -BudgetSeconds $BudgetSeconds -Tier $Tier -NoSerial:$NoSerial
+    if ($r.TimedOut) { return '' }
+    return ([string]$r.Text).Trim()
+}
+
+# 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
+$script:TargetSerial = $target.Serial
+$script:AdbTextCalls = 0
 
 # 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
 $script:TargetSerial = $target.Serial
