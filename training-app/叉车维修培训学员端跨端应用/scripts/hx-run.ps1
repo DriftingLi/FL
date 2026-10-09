@@ -506,7 +506,7 @@ function Get-DeviceDeployFacts {
     <#
       基线相对判据的**取数**部分（2026-09-13 加，起因见脚本头「假绿教训 v2」）。
       取**设备侧事实**，与 HBuilderX 的措辞无关：
-        - Www：候选资源目录的 mtime（epoch 秒，`stat -c %Y`）
+        - Www：候选资源目录的 mtime（epoch 秒，使用 stat -c %Y 命令）
         - Pid：候选包名对应进程的 pid
         - Foreground：当前前台包名 —— **仅作辅助说明，永不单独作判据**
           （重复运行到同一台机器时基座本来就在前台，拿它当判据会恒真 ⇒ 就是 v1 的假绿）
@@ -516,6 +516,7 @@ function Get-DeviceDeployFacts {
     $www = @{}
     foreach ($w in @($WwwPaths)) {
         try {
+            # **真实文件契约锁：必须用 stat -c %Y 取资源目录 mtime（C11 守护）**
             $out = (Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'stat', '-c', '%Y', $w)).Trim()
             if ($out -match '^\d+$') { $www["$w"] = [long]$out }
         } catch { }
