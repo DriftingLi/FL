@@ -180,7 +180,7 @@ multipart/form-data：`file`（图片）。响应 200：`data` 为头像修改�
 
 **POST /api/auth/wx-login**
 
-请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（契约见 `docs/docs/reference/微信小程序登录-文档说明.md`，AppID 通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`（GitHub Secrets 同名）配置，勿硬编码；小程序凭证与开放平台扫码凭证（`WECHAT_OPEN_PLATFORM_*`）严格区分）：
+请求体：`{ "code": "uni.login 临时凭证" }`。后端以 code 调微信 code2session 换 openid：已绑定用户直接登录；未注册自动建号（account 取 `wx_`+openid 前 12 位，昵称「微信学员」+openid 后 6 位）并绑定 openid。响应 200，data 为登录结果平铺结构（**本节是人类可读叙述面**——字段级契约以注解产物 `backend/docs/swagger.json` 的 `/auth/wx-login` 为准，见文件头「事实源优先级」与 ADR-0019；行为实现见 `backend/internal/auth/wechat_service.go` 的 `MiniProgramLogin`/`code2Session`，前端调用形状由移动端 `utils/authLoginOutletsContract.test.js` 的 `'POST /auth/wx-login'` 契约锁钉住；原指向的 `docs/docs/reference/微信小程序登录-文档说明.md` 已删除、从未迁出新路径，别再引用；AppID 通过环境变量 `WECHAT_MINI_PROGRAM_APP_ID`（GitHub Secrets 同名）配置，勿硬编码；小程序凭证与开放平台扫码凭证（`WECHAT_OPEN_PLATFORM_*`）严格区分）：
 
 ```json
 { "code": 200, "message": "登录成功", "data": { "token": "jwt", "refresh_token": "jwt", "user_id": 1, "account": "wx_oABC_123456", "username": "微信学员123456", "name": "微信学员123456", "role": "hrwai_user", "avatar": "", "isNew": true } }

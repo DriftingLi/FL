@@ -3,7 +3,8 @@
  *
  * 沿用源码契约缝（.uvue 不可 jest import）。先例：wrongQuestionsContract、mallPilotContract。
  * 钉住：拆出物存在与接线、状态所有权（页面持 ref / flows 零可变状态）、
- * auth 触点回调注入、UI 像素结构、600 预算机检（机械坑位零命中由全工程守护执法，#654 起无豁免）。
+ * auth 触点回调注入、UI 像素结构、退出入口撤净与注销引导语指称（#1554）、
+ * 600 预算机检（机械坑位零命中由全工程守护执法，#654 起无豁免）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -123,12 +124,14 @@ describe('flows 纯函数契约（状态所有权留在页面）', () => {
 describe('UI 像素结构锁定（重构不动 UI：cells 与弹窗内控件逐数核对）', () => {
   const p = read(PAGE);
 
-  it('七个设置 cell + 注销 cell + 退出按钮的标签与回调名不变', () => {
+  // #1554 的显式决定：本用例原先**正向**钉着本页退出按钮的字面锁（`logout-text">退出当前账号<`），
+  // 按票面终态反向改写 —— 保留 settings 那处、撤本页那处，撤净的整块由下方「退出入口撤净」那条守。
+  // 「保留哪一处」的判据与可否决项写在 issue #1554 票面（不在这里复制，复制就是第二真源）。
+  it('设置 cell 与注销 cell 的标签不变；本页退出按钮已撤（#1554 收敛到 settings）', () => {
     for (const t of ['修改头像', '昵称', '登录账号', '手机号', '邮箱', '单位']) {
       expect(p).toContain(`>${t}<`);
     }
     expect(p).toContain('cell-label-danger">注销账号<');
-    expect(p).toContain('logout-text">退出当前账号<');
     expect(p).toContain('<text v-if="hasPending" class="cell-badge">审核中</text>');
   });
 
@@ -151,6 +154,40 @@ describe('UI 像素结构锁定（重构不动 UI：cells 与弹窗内控件逐�
       expect(read(SHELL)).toContain(cls);
       expect(p).not.toContain(cls);
     }
+  });
+});
+
+describe('退出入口撤净与注销引导语指称（#1554）', () => {
+  /** 判据本体（正向锁与注入自检共用同一条，先例 profileContract 的 `logoutCallLines`） */
+  const GUIDANCE = '如仅是退出登录，请到「我的 → 设置」页底部选择「退出登录」';
+  const STALE_REF = '退出当前账号';
+
+  it('整块撤净：模板 / 处理函数 / 入口文案 / 样式类四处零残留（不留死样式）', () => {
+    const src = read(PAGE);
+    for (const dead of ['logout-wrap', 'logout-btn', 'logout-text', 'onLogout', STALE_REF]) {
+      expect(src).not.toContain(dead);
+    }
+  });
+
+  it('引导语改指实际落点，且不再引用已撤的按钮文案', () => {
+    const f = read(FLOWS);
+    // 写「我的 → 设置」这个**位置**而不是「返回设置页」：`pages/notifications/notifications.uvue`
+    // 和 `pages/profile/settings.uvue` 也都直挂本页；从那些入口进来「返回」并不落在设置页上，
+    // 而位置名对任何入口都成立。
+    expect(f).toContain(GUIDANCE);
+    expect(f).not.toContain(STALE_REF);
+  });
+
+  it('判据有判别力（把票面那句旧引导语注回去，同一条判据两侧各翻一次）', () => {
+    const f = read(FLOWS);
+    const regressed = f.replace(GUIDANCE, '如仅是切换账号，请选择"退出当前账号"。');
+    // 变异必须真落地：零替换（CRLF / 字面漂了）会让「没弄坏」伪装成「测过了」
+    expect(regressed).not.toBe(f);
+    expect(regressed).not.toContain(GUIDANCE);
+    expect(regressed).toContain(STALE_REF);
+    // 对照组：真源在同一条判据上必须是另一侧
+    expect(f).toContain(GUIDANCE);
+    expect(f).not.toContain(STALE_REF);
   });
 });
 

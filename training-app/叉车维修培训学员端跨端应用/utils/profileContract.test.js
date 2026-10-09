@@ -189,3 +189,45 @@ describe('页面层零直发请求（网络一律经域 api 函数，#641 收紧
     expect(hits).toEqual([]);
   });
 });
+
+describe('学员侧退出入口收敛（#1554：pages/profile 只剩一处 authStore.logout()）', () => {
+  /**
+   * 只数**调用行**：settings 页那处调用点上方带着一条同文的说明注释
+   * （「`authStore.logout()` 内部已包含 logoutApi 调用」）⇒ 拿整页字符串计数会把注释也算成
+   * 调用点（`git grep -c` 每页显 2 就是这个原因），机检必须剥掉行首注释才成立。
+   */
+  function logoutCallLines(src) {
+    return src.split('\n').filter((line) => {
+      const t = line.trim();
+      if (!t.includes('authStore.logout()')) return false;
+      return !(t.startsWith('//') || t.startsWith('/*') || t.startsWith('*'));
+    }).length;
+  }
+
+  it('逐页普查：唯一调用点是 settings.uvue 的那一处', () => {
+    const hits = [];
+    for (const rel of h.sourceFilesIn('pages/profile')) {
+      const n = logoutCallLines(read(rel));
+      if (n > 0) hits.push(`${rel}=${n}`);
+    }
+    expect(hits).toEqual(['pages/profile/settings.uvue=1']);
+  });
+
+  it('保留那处整块在位（入口文案 + 确认框 + 调用），落地目标仍由 store 给出', () => {
+    const s = read('pages/profile/settings.uvue');
+    expect(s).toContain('logout-text">退出登录<');
+    expect(s).toContain("content: '确认退出登录？'");
+    expect(logoutCallLines(s)).toBe(1);
+  });
+
+  it('判据有判别力（调用行注回 personal-info ⇒ 普查立刻显出两处；注释伪装不算）', () => {
+    const src = read('pages/profile/personal-info.uvue');
+    expect(logoutCallLines(src)).toBe(0);
+    const regressed = src.replace('\n  onUnload(() => {',
+      '\n  function onLogout() : void {\n    authStore.logout()\n  }\n\n  onUnload(() => {');
+    expect(regressed).not.toBe(src);
+    expect(logoutCallLines(regressed)).toBe(1);
+    // 对照组：同一条判据遇到说明注释必须计 0（否则「2 变 1」的机检本身是假的）
+    expect(logoutCallLines('  // authStore.logout() 内部已包含 logoutApi 调用，无需重复调用')).toBe(0);
+  });
+});
