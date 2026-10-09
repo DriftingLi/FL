@@ -12,6 +12,10 @@
 > （真实名是 `$text-color-secondary` / `$text-color-placeholder` / `$text-color-inverse` / `$bg-color`）；
 > 照旧表写会**静默失效**（`<style>` 未声明 `lang="scss"` 时变量不预处理、声明被直接丢弃，页面无报错、只是颜色没生效）。
 > 机检：`utils/searchContract.test.js`「引用的 `$变量` 在 `uni.scss` 里都存在」。
+>
+> ⚠️ **但「变量已定义」不等于「页面能用」**：`.uvue` 的 `<style>` **不写 `lang="scss"` 时整段声明被丢弃**，
+> 此时连字面色值也不生效。2026-10-10 实测：60 个页面里**只有 13 个**声明了 `lang="scss"`，其余 47 页根本没资格用 token。
+> ⇒ **本规范的总开关是 ADR-0035 的 T2 票（补全 `lang="scss"` 声明），不补齐则后面所有 token 收敛都是空转。**
 
 ### 1.1 主色
 
@@ -58,7 +62,7 @@
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$card-bg` | `#ffffff` | 卡片背景 |
-| `$border-color` | `#f0f0f0` | 分隔线、卡片边框 |
+| `$border-color` | `#e5e5e5` | 分隔线、卡片边框 |
 | `$border-color-light` | `#f0f0f0` | 更浅的分隔线（列表行内分隔） |
 | `$input-border` | `#e5e5e5` | 输入框边框 |
 
@@ -82,7 +86,8 @@
 |---|---|---|
 | `$radius-sm` | `8rpx` | Tag 标签、小 badge |
 | `$radius-md` | `16rpx` | 卡片、图标容器 |
-| `$radius-lg` | `32rpx` | 次按钮描边、大卡片 |
+| `$radius-lg` | `24rpx` | 次按钮描边、大卡片 |
+| `$radius-xl` | `32rpx` | 大面板、对话框 |
 | `$radius-pill` | `999rpx` | 胶囊按钮（主按钮、筛选按钮） |
 
 ---
@@ -103,7 +108,13 @@
 
 ### 5.1 导航栏（appNavBar）
 
-- 高度：`88rpx`（不含状态栏）
+> **2026-10-10（ADR-0035）口径**：全仓**只有一份**页头件，**禁止 fork**；差异一律用 prop 表达。
+> 现状的 `components/ai-chat/ai-chat-nav.uvue` 与页面各自手写的 nav-bar 都要在 ADR-0035 的 T3/T4 收口到本件。
+> 本件负责**状态栏占位与胶囊让位**（`navigationStyle: "custom"` 下避让责任 100% 在项目代码，见 ADR-0035 现状锚点表）。
+
+- 高度：`88rpx`（**不含状态栏**）
+- 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
+- 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
 - 标题：居中，`$font-size-xl`（36rpx），font-weight bold
 - 左侧返回按钮：`‹` 字符，`44rpx`
 - 右侧图标：`44rpx`
@@ -182,7 +193,6 @@
 ```html
 <template>
   <view class="container" :style="{ height: windowHeight + 'px' }">
-    <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
     <appNavBar title="页面标题" />
     <scroll-view class="content-scroll" scroll-y>
       <!-- 内容 -->
@@ -190,7 +200,7 @@
   </view>
 </template>
 
-<style>
+<style lang="scss">
 .container {
   flex: 1;
   /* App 平台只支持 2 个颜色值、无百分比停靠（见 §1.2 注）；.uvue 不支持 CSS 变量，故写字面色值 */
@@ -198,17 +208,18 @@
   background-color: #D0EBFD;
   flex-direction: column;
 }
-.status-bar { background-color: transparent; }
 .content-scroll { flex: 1; }
 </style>
 ```
+
+> ⚠️ `<style>` **必须**写 `lang="scss"`：不写时变量不预处理、整段声明被直接丢弃且**无报错**（§1 顶部校正块）。
+> 状态栏占位已内化进 `appNavBar`（ADR-0035），**页面不再自带 `.status-bar`**。
 
 ### 6.2 普通页面（白色/灰色背景）
 
 ```html
 <template>
   <view class="container" :style="{ height: windowHeight + 'px' }">
-    <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
     <appNavBar title="页面标题" />
     <scroll-view class="content-scroll" scroll-y>
       <!-- 内容 -->
@@ -216,13 +227,12 @@
   </view>
 </template>
 
-<style>
+<style lang="scss">
 .container {
   flex: 1;
-  background-color: $bg-page;
+  background-color: $bg-color;
   flex-direction: column;
 }
-.status-bar { background-color: transparent; }
 .content-scroll { flex: 1; }
 </style>
 ```
@@ -236,6 +246,9 @@
 3. **禁止随意圆角**：圆角必须使用 `$radius-*` 系列变量
 4. **禁止重复实现**：导航栏、卡片、按钮等公共组件必须使用共享组件
 5. **禁止 px 单位**：除状态栏高度外，所有尺寸使用 rpx
+6. **禁止 fork 共享组件**（2026-10-10 ADR-0035）：页头差异用 prop 表达，**`fork` 出第二份页头件即违规**
+   （依据 ADR-0022:41「ADR-0009 的病根是『两份手画的栏』，不是『面多』」）
+7. **禁止页面自带状态栏占位**（ADR-0035）：`.status-bar` 只允许存在于页头件内部
 
 ---
 
@@ -246,3 +259,8 @@
 - 全局样式：`App.uvue` 中的 `<style>` 块
 - 共享组件：`components/app-*/` 目录
 - 实施计划：`docs/ui-spec-implementation-plan.md`
+- **当前兑现度（2026-10-10 实测）**：8 件 `app-*` 中 **6 件 0 引用**（`app-badge` / `app-button` / `app-card` / `app-tabs` / `app-nav-bar` / `app-list-item`），
+  活着的只有 `app-chip` 与 `app-empty-state`（引用均集中在 `pages/search/search.uvue`）。
+  本节不是现状清单而是**验收基线**——ADR-0035 的 T4/T5 就是把它推向兑现。
+  死件里 `app-button` / `app-badge` / `app-tabs` / `app-list-item` 还引用了 `uni.scss` 里**不存在**的
+  `$text-inverse` / `$text-secondary` / `$text-placeholder`，且**自身没声明 `lang="scss"`** ⇒ 直接引用只会静默失效。
