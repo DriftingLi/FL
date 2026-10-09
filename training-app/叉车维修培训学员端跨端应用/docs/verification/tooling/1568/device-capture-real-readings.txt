@@ -1,0 +1,23 @@
+CAPTURE blob=4f5bd3fde6bb902eea2c1ffaa8fd7aea3d2ce420 run_stamp=20261008-184711
+DEVICE 192.168.10.51:38819 model=23049RAD8C android=15
+ADB_SERVER_LEVEL_PROBE argv=devices -l（无 -s，驱动自身也不重启 server）
+RAW_PATTERNS_COMPILED=6
+LEG L1_ref exit=0 wall_seconds=141.6 log_present=True
+RAW_SOURCE L1_ref product_log(UTF-8) D:\FL\wt-1568c\training-app\叉车维修培训学员端跨端应用\.ci-verify-real-L1_ref\device-capture.log
+RAW L1_ref :: [device-capture] ADB_TEXT_CALL_BUDGET calls=4 timeouts=0 defaultBudgetSeconds=15 hungCalls=none
+RAW L1_ref :: [device-capture] ADB_TIER_BUDGET shot=15 text=15 logcat=60
+RAW L1_ref :: [device-capture] LOGCAT_INCONCLUSIVE=0
+RAW L1_ref :: [device-capture] DEVICE_CAPTURE_RESULT=PASS
+LEG L2_logcat0 exit=1 wall_seconds=2.7 log_present=True
+RAW_SOURCE L2_logcat0 product_log(UTF-8) D:\FL\wt-1568c\training-app\叉车维修培训学员端跨端应用\.ci-verify-real-L2_logcat0\device-capture.log
+RAW L2_logcat0 :: [device-capture] ADB_TEXT_TIMEOUT call=adb -s 192.168.10.51:38819 shell logcat -d -v epoch -t 1 callBudgetSeconds=0 seconds=0 tier=logcat —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判
+RAW L2_logcat0 :: [device-capture] ADB_TEXT_TIMEOUT call=adb -s 192.168.10.51:38819 shell logcat -d -v epoch callBudgetSeconds=0 seconds=0 tier=logcat —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判
+RAW L2_logcat0 :: [device-capture] ADB_TEXT_CALL_BUDGET calls=4 timeouts=2 defaultBudgetSeconds=15 hungCalls=shell logcat -d -v epoch -t 1;shell logcat -d -v epoch
+RAW L2_logcat0 :: [device-capture] ADB_TIER_BUDGET shot=15 text=15 logcat=0
+RAW L2_logcat0 :: [device-capture] LOGCAT_INCONCLUSIVE=1
+RAW L2_logcat0 :: [device-capture] DEVICE_CAPTURE_RESULT=FAIL
+LEG L3_text0 exit=2 wall_seconds=1 log_present=True
+RAW_SOURCE L3_text0 product_log(UTF-8) D:\FL\wt-1568c\training-app\叉车维修培训学员端跨端应用\.ci-verify-real-L3_text0\device-capture.log
+RAW L3_text0 :: [device-capture] ADB_TEXT_TIMEOUT call=adb devices -l callBudgetSeconds=0 seconds=0 tier=server —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判
+RAW L3_text0 :: [device-capture] DEVICE_CAPTURE_RESULT=UNUSABLE
+LEGS_DONE=3/3 legs_ran=3 legs_produced_log=3 readings=D:\FL\wt-1568c\training-app\叉车维修培训学员端跨端应用\docs\verification\tooling\1568\device-capture-real-readings.txt
