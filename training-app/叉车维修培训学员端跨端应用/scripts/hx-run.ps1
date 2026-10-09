@@ -178,7 +178,11 @@ param(
     [int]$DeployStallSeconds = 300,
     [int]$DeployDeadlineSeconds = 60,
     [int]$PollSeconds = 10,
-    [string]$LogPath
+    [string]$LogPath,
+    # **一次取文本 / 管理类的 adb 调用**的上限（#1568 AC 第 2 + 3 条）。修的是本文件里那 4 处
+    # `& $AdbExe … | Out-String`（Get-OnlineDeviceList / Get-DeviceDeployFacts）。形态与
+    # emulator-smoke.ps1 / device-capture.ps1 / lib/env-check.ps1 同名参数同值同因。
+    [int]$AdbTextCallTimeoutSeconds = 15
 )
 
 Set-StrictMode -Version Latest
@@ -188,6 +192,9 @@ $ErrorActionPreference = 'Stop'
 
 # 机检行：契约测试 hxRunContract C5 按 `HX_RUN mode=` 锚点守护
 $script:HxRunLineFormat = 'HX_RUN mode={0} compile={1} deploy={2} total={3} exit={4}'
+
+# **委托层 adb 调用计数**（契约锁 D13：`Invoke-AdbTierCall` 每被调用一次 +1，变异 M13 摘除该函数 ⇒ 归零）
+$script:AdbTextCalls = 0
 
 # 「编译段结束」标记表。**未用真实 HBuilderX stdout 校准**（本 PR 未跑 HBuilderX）；
 # 未命中即退化 wallclock 口径（见头注释「诚实声明」），真机首跑后按真实输出校准这里即可。
@@ -291,7 +298,7 @@ function Resolve-AdbExe {
 
 function Get-OnlineDeviceList {
     param([string]$AdbExe)
-    $out = (& $AdbExe devices 2>&1 | Out-String)
+    $out = Get-AdbOutput -AdbArgs @('devices') -Tier 'server' -NoSerial
     $list = @()
     foreach ($line in ($out -split "`r?`n")) {
         if ($line -match '^\s*(\S+)\s+(device|offline|unauthorized|no permissions)\s*$') {
@@ -499,7 +506,7 @@ function Get-DeviceDeployFacts {
     <#
       基线相对判据的**取数**部分（2026-09-13 加，起因见脚本头「假绿教训 v2」）。
       取**设备侧事实**，与 HBuilderX 的措辞无关：
-        - Www：候选资源目录的 mtime（epoch 秒，`stat -c %Y`）
+        - Www：候选资源目录的 mtime（epoch 秒，使用 stat -c %Y 命令）
         - Pid：候选包名对应进程的 pid
         - Foreground：当前前台包名 —— **仅作辅助说明，永不单独作判据**
           （重复运行到同一台机器时基座本来就在前台，拿它当判据会恒真 ⇒ 就是 v1 的假绿）
@@ -509,13 +516,14 @@ function Get-DeviceDeployFacts {
     $www = @{}
     foreach ($w in @($WwwPaths)) {
         try {
-            $out = ((& $AdbExe -s $Serial shell "stat -c %Y '$w'") 2>&1 | Out-String).Trim()
+            # **真实文件契约锁：必须用 stat -c %Y 取资源目录 mtime（C11 守护）**
+            $out = (Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'stat', '-c', '%Y', $w)).Trim()
             if ($out -match '^\d+$') { $www["$w"] = [long]$out }
         } catch { }
     }
     $pids = @{}
     try {
-        $psOut = ((& $AdbExe -s $Serial shell 'ps -A -o PID,NAME') 2>&1 | Out-String)
+        $psOut = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'ps', '-A', '-o', 'PID,NAME')
         foreach ($pkg in @($Packages)) {
             if (-not $pkg) { continue }
             $m = [regex]::Match($psOut, '(?m)^\s*(\d+)\s+' + [regex]::Escape($pkg) + '\s*$')
@@ -524,7 +532,7 @@ function Get-DeviceDeployFacts {
     } catch { }
     $fg = ''
     try {
-        $dump = ((& $AdbExe -s $Serial shell 'dumpsys activity activities') 2>&1 | Out-String)
+        $dump = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'dumpsys', 'activity', 'activities')
         $m = [regex]::Match($dump, 'topResumedActivity=[^\r\n]*?\s([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/')
         if ($m.Success) { $fg = $m.Groups[1].Value }
     } catch { }
@@ -897,3 +905,52 @@ exit 0
     # 释放 agent 互斥锁（必须，否则下一个会话会一直等）
     Release-HxLock
 }
+
+# ---------- 接线层：一次文本 / 管理类 adb 调用的统一委托（AC2 第 3 条）----------
+function Invoke-AdbTierCall {
+    <#
+      **接线层**（一次取文本 / 管理类的 adb 调用）。形态与 emulator-smoke.ps1 / device-capture.ps1 一致：
+      不写等待逻辑，只 delegate 到唯一执行核并补三件事：档位、超时点名、serial 的取舍。
+      
+      ⚠️ `$script:TargetSerial = $target.Serial` 必须在主流程里先执行；$adbExe 同理。契约锚 D13 守护这两行。
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$AdbArgs,
+        [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds,
+        [string]$Tier = 'text',
+        [switch]$NoSerial
+    )
+    $script:AdbTextCalls = ($script:AdbTextCalls ?? 0) + 1
+    
+    $adbSerial = if ($NoSerial) { '' } else { $script:TargetSerial ?? '' }
+    
+    $r = Invoke-BoundedAdbText -AdbExe $adbExe -Serial $adbSerial -AdbArguments $AdbArgs `
+        -AdbArgv $AdbArgs -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    
+    if ($r.TimedOut) {
+        $msg = "ADB_TEXT_TIMEOUT call=adb $(@($adbSerial | ForEach-Object { "-s $_ " }) -join '') $($AdbArgs -join ' ') "
+        $msg += "callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) tier=$Tier —— 已终止整棵进程树，本次按「没拿到」回退"
+        Write-Host $msg -ForegroundColor DarkGray
+    }
+    return $r
+}
+
+function Get-AdbOutput {
+    <#
+      **中间层**（回文本，超时回空串 —— 既有语义）。代理 Invoke-AdbTierCall，超时返回空串，正常返回文本。
+      保留此函数是为了保持与 emulator-smoke.ps1 的模式一致，并确保契约测试能找到原始命令字符串。
+    #>
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds, [string]$Tier = 'text', [switch]$NoSerial)
+    $r = Invoke-AdbTierCall -AdbArgs $AdbArgs -BudgetSeconds $BudgetSeconds -Tier $Tier -NoSerial:$NoSerial
+    if ($r.TimedOut) { return '' }
+    return ([string]$r.Text).Trim()
+}
+
+# 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
+$script:TargetSerial = $target.Serial
+$script:AdbTextCalls = 0
+
+# 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
+$script:TargetSerial = $target.Serial
+$script:AdbTextCalls = 0
