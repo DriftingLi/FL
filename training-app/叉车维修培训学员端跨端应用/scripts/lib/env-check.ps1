@@ -18,6 +18,21 @@
 #>
 
 # 复用 hx-run.ps1 的探测函数
+
+# **中间层**（回文本，超时回空串 —— 既有语义）。
+# ⚠️ #1584 的修复本应把这段放进本文件，但那个提交是**空提交**（树与父一致，函数从未入库）
+# ⇒ `Get-OnlineDevices` 引用了不存在的命令，style-loop 链体在环境阶段就炸（#1602 执行时实测：
+# `Test-BuildEnv: 术语 'Get-AdbOutput' 不会被识别…`，E3/E4/E7 全红）。按原意补上：
+# 代理 lib/auto-screenshot.ps1 的唯一执行核 Invoke-BoundedAdbText（本文件由链体 dot-source
+# 时该执行核已先行加载，见 scripts/style-loop.ps1 的 Invoke-StyleLoopChain）。
+function Get-AdbOutput {
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = 15, [switch]$NoSerial)
+    $adbExe = Resolve-AdbExeLocal
+    $r = Invoke-BoundedAdbText -AdbExe $adbExe -Serial '' -AdbArguments $AdbArgs `
+        -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    if ($r.TimedOut) { return '' }
+    return ([string]$r.Text).Trim()
+}
 function Resolve-AdbExeLocal {
     $cands = @()
     foreach ($root in @($env:ANDROID_SDK_ROOT, $env:ANDROID_HOME)) {
@@ -75,7 +90,6 @@ function Get-OnlineDevices {
     # 不写等待逻辑，直接 delegate 到唯一执行核并补三件事：档位、超时点名、serial 的取舍（devices 是 server 级⇒ -NoSerial）
     # 为保持与 emulator-smoke.ps1 的模式一致，也添加 Get-AdbOutput 中间层：
     $out = (Get-AdbOutput -AdbArgs @('devices')).Trim()
-    $list = @()
     foreach ($line in ($out -split "`r?`n")) {
         if ($line -match '^\s*(\S+)\s+(device|offline|unauthorized)\s*$') {
             $list += [pscustomobject]@{ Serial = $Matches[1]; State = $Matches[2] }

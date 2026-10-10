@@ -5,11 +5,29 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 
 /**
+ * 状态栏高度回退值 —— 全站唯一（#1602：消除 44/20 两派）。
+ * 所有「取不到真实状态栏高度」的回退一律引用本常量，别处不得再写字面量。
+ */
+export const DEFAULT_STATUS_BAR_HEIGHT = 44
+
+/** 安全区测量结果（#1592 页头共同格）：页头件唯一数据源。
+ *  用 type 而非 interface：UTS 里 interface 不能用对象字面量构造（#1602 ④c Kotlin 报错）。 */
+export type SafeAreaInfo = {
+	/** 状态栏高度（px）。H5 恒为 0。 */
+	statusBarHeight: number
+	/** 微信胶囊左边界（rpx）。非小程序端为 0（无胶囊、右槽不设让位约束）。 */
+	capsuleLeft: number
+	/** 页头右槽定宽（rpx）= 750 - capsuleLeft：右缘恰好落在胶囊左边线。
+	 *  放不下由页面把次要动作移出页头（不隐藏、不换行、不压缩、不写死魔数）。非小程序端为 0（不限宽）。 */
+	rightSlotWidth: number
+}
+
+/**
  * 创建状态栏高度响应式引用，自动获取并更新真实值。
  * 用于自定义导航栏顶部的 status-bar 占位。
- * @param defaultValue 获取失败时的回退高度，默认 44
+ * @param defaultValue 获取失败时的回退高度，默认 DEFAULT_STATUS_BAR_HEIGHT
  */
-export function useStatusBarHeight(defaultValue: number = 44): Ref<number> {
+export function useStatusBarHeight(defaultValue: number = DEFAULT_STATUS_BAR_HEIGHT): Ref<number> {
 	const height = ref<number>(defaultValue)
 	uni.getSystemInfo({
 		success: (res) => {
@@ -22,4 +40,57 @@ export function useStatusBarHeight(defaultValue: number = 44): Ref<number> {
 		}
 	})
 	return height
+}
+
+/**
+ * 顶部安全区单一真源（#1602 / #1592 页头共同格）：状态栏占位 + 胶囊让位一次测齐。
+ * - 小程序端：`uni.getMenuButtonBoundingClientRect()`，px→rpx = ×750/windowWidth；
+ * - App 端：只保状态栏占位（回退 DEFAULT_STATUS_BAR_HEIGHT），无胶囊 ⇒ 右槽不限宽；
+ * - H5：状态栏恒 0，右槽不限宽。
+ * 监听窗口尺寸变化自动重算（转屏 / 分屏）。
+ */
+export function useSafeArea(): Ref<SafeAreaInfo> {
+	const info = ref<SafeAreaInfo>({
+		statusBarHeight: DEFAULT_STATUS_BAR_HEIGHT,
+		capsuleLeft: 0,
+		rightSlotWidth: 0
+	})
+
+	const recalc = (): void => {
+		const win = uni.getSystemInfoSync()
+		let sbh = win.statusBarHeight
+		if (sbh == null || sbh <= 0) {
+			sbh = DEFAULT_STATUS_BAR_HEIGHT
+		}
+		let capsuleLeft = 0
+		let rightSlotWidth = 0
+		// #ifdef MP-WEIXIN
+		const rect = uni.getMenuButtonBoundingClientRect()
+		if (rect != null && win.windowWidth > 0) {
+			const pxToRpx = (v: number): number => {
+				return v * 750 / win.windowWidth
+			}
+			capsuleLeft = pxToRpx(rect.left)
+			// 右槽右缘 = 胶囊左边线：槽宽 = 750 - capsuleLeft（rpx）
+			rightSlotWidth = Math.max(0, 750 - capsuleLeft)
+		}
+		// #endif
+		// #ifdef H5
+		sbh = 0
+		// #endif
+		info.value = {
+			statusBarHeight: sbh,
+			capsuleLeft: capsuleLeft,
+			rightSlotWidth: rightSlotWidth
+		}
+	}
+
+	recalc()
+	// #ifndef APP-ANDROID
+	// App 端无 uni.onWindowResize（UTS/Kotlin unresolved，#1602 ④c）；转屏重算仅限非 App 端。
+	uni.onWindowResize((_res) => {
+		recalc()
+	})
+	// #endif
+	return info
 }

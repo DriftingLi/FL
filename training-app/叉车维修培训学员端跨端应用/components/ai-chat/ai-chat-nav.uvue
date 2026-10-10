@@ -1,40 +1,35 @@
 <template>
-	<view class="ai-chat-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
-		<view class="nav-content">
-			<!-- 左：会话抽屉 -->
-			<view class="nav-left" @click="onLeftClick">
-				<view class="panel-icon">
-					<view class="panel-icon-line"></view>
-				</view>
-			</view>
-
-			<!-- 中：标题 + 副标题 -->
-			<view class="nav-center">
-				<view class="nav-title-row">
-					<text class="nav-title">AI 助手</text>
-				</view>
-				<text class="nav-subtitle">维修助手</text>
-			</view>
-
-			<!-- 右：菜单入口（原型里的白胶囊是小程序端 chrome，App 端不画）。
-			     2026-09-13（issue #947）：真机反馈「点 ⋯ 无反应」，左侧同一套写法可用 ⇒ 右侧与左侧**对称化**：
-			     内层给一个**有显式尺寸的盒子**（左侧 `.panel-icon` 有显式尺寸）。与 `.drawer-right` 的
-			     `left` 锚定是同一批修复，二者中**承重者未定**（组合实测可用，见 PR #936）。 -->
-			<view class="nav-right" @click="onMenuClick">
-				<view class="nav-more-box">
-					<text class="nav-more">&#8943;</text>
-				</view>
-			</view>
-		</view>
+	<view>
+		<!-- #1602 归一：页头形态收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
+		     旧的独立形态消失；对页的 API（leftClick / menuClick）原样保留。 -->
+		<AppNavBar
+			title="AI 助手"
+			:subtitle="subtitle"
+			:transparent="transparent"
+			:left-icon="leftIcon"
+			:right-icon="rightIcon"
+			@left-click="onLeftClick"
+			@right-click="onMenuClick"
+		/>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import AppNavBar from '../app-nav-bar/app-nav-bar.uvue'
 
 	const props = withDefaults(defineProps<{
+		/** 兼容旧调用方的占位（ai-assistant 页仍传 status-bar-height 抽屉用）；页头自身经 useSafeArea 自测 */
 		statusBarHeight?: number
+		subtitle?: string
+		transparent?: boolean
+		leftIcon?: string
+		rightIcon?: string
 	}>(), {
-		statusBarHeight: 20
+		statusBarHeight: 0,
+		subtitle: '维修助手',
+		transparent: true,
+		leftIcon: '',
+		rightIcon: '⋯'
 	})
 
 	const emit = defineEmits(['leftClick', 'menuClick'])
@@ -47,87 +42,3 @@
 		emit('menuClick')
 	}
 </script>
-
-<style>
-	.ai-chat-nav {
-		background-color: transparent;
-	}
-
-	.nav-content {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 8rpx 24rpx 0 24rpx;
-	}
-
-	/* 左：面板图标 */
-	.nav-left {
-		width: 160rpx;
-		height: 96rpx;
-		align-items: flex-start;
-		justify-content: center;
-	}
-
-	.panel-icon {
-		width: 44rpx;
-		height: 36rpx;
-		border: 3rpx solid #6b6b6b;
-		border-radius: 8rpx;
-		flex-direction: row;
-		align-items: center;
-	}
-
-	.panel-icon-line {
-		width: 3rpx;
-		height: 24rpx;
-		background-color: #6b6b6b;
-		margin-left: 9rpx;
-	}
-
-	/* 中：标题 */
-	.nav-center {
-		flex: 1;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.nav-title-row {
-		flex-direction: row;
-		align-items: center;
-	}
-
-	.nav-title {
-		font-size: 34rpx;
-		color: #333333;
-		font-weight: bold;
-	}
-
-
-	.nav-subtitle {
-		font-size: 24rpx;
-		color: #65bbe9;
-		margin-top: 6rpx;
-	}
-
-	/* 右：菜单入口（宽度与左等宽，保证标题居中） */
-	.nav-right {
-		width: 160rpx;
-		height: 96rpx;
-		align-items: flex-end;
-		justify-content: center;
-	}
-
-	/* 与 .panel-icon 对称：内层给显式尺寸，保证存在命中区（#947） */
-	.nav-more-box {
-		width: 56rpx;
-		height: 56rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.nav-more {
-		font-size: 40rpx;
-		color: #333333;
-	}
-</style>
