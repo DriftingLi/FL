@@ -81,7 +81,12 @@
          端口不起、连 `SDKVersion` 都没有，而 `close` / `open` / `auto` **全部回显成功** —— 命令行侧完全看不出坏。
          换装 `2.02.2608070` 后，同一棵树 / 同一份产物 / 同一条命令 **② 一次通过**。
          ⇒ 判据：`auto` 之后端口不起**且** `Tool.getInfo` 无 `SDKVersion` 时，**先核对工具版本**，别在产物/代码上找。
-      c) 顺带修掉一处真缺陷：无截图（失败路径）时 `Publish-ScreenshotArchive` 在 StrictMode 下抛
+      c) **GPU 加速是 Tool 通道假死的真根因（2026-09-24 用户实测定位）**：现象与 a) 全同（端口 t=0 监听、
+          ws 接得上、`Tool.getInfo` 120s 全程无应答、`reason=sdk-version-missing`），杀净 IDE / 冷启动 /
+          手动 open→auto 均无效，且当时工具已是 `2.02`（b 的版本判据解释不了）。用户在开发者工具里
+          **关闭 GPU 加速**后通道即恢复。⇒ 判据修正：端口起而 Tool 通道假死时，**先关 GPU 加速**，
+          再核残留会话（a），最后才核对工具版本（b）。
+       d) 顺带修掉一处真缺陷：无截图（失败路径）时 `Publish-ScreenshotArchive` 在 StrictMode 下抛
          「在此对象上找不到属性"Sum"」（`Measure-Object` 对空管道不产出对象）⇒ 收成空安全的 `Get-MadeTotalBytes`；
          它只 warning、不影响门结论，但会把整段入库打成异常。
 
