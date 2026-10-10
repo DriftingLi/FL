@@ -3,7 +3,6 @@
        AdminLayout 不传这些 prop，走默认值（=改造前行为），管理端零 diff。 -->
   <SidebarLayout
     :menu-items="tutorNav"
-    sidebar-theme="dark"
     sidebar-density="compact"
     content-width="narrow"
   />

@@ -1,22 +1,26 @@
 <template>
-  <!-- 学员端：石墨青暗底侧栏 + 紧凑密度 + 内容限宽居中。
-       AdminLayout / TutorLayout 不传这些 prop，走默认值（=改造前行为），零 diff。 -->
+  <!-- 学员端：紧凑密度 + 内容限宽居中（#1619 起外壳由 SidebarLayout 统一提供顶栏，
+       侧栏不再是深色体系，「配色随侧栏 theme」的那套 prop 随之退役）。 -->
   <SidebarLayout
     :menu-items="currentMenuItems"
-    sidebar-theme="dark"
     sidebar-density="compact"
     content-width="narrow"
   >
+    <!-- 证件切换器（全局过滤器）：坐顶栏中区最左、与内容列对齐（ADR-0072）。
+         它是作用于内容区的上下文过滤器，故与它过滤的对象同一列；其余三端此段为空。 -->
+    <template #topbar>
+      <CredentialSwitcher v-if="!chapterCourseId" />
+    </template>
+
     <template #top="{ collapsed }">
       <div class="flex flex-col gap-2">
-        <CredentialSwitcher v-if="!chapterCourseId" :collapsed="collapsed" theme="dark" />
         <!-- 布局级搜索入口（#984）：侧栏顶部一处 + ⌘/Ctrl+K 全工作区可达。
-             暗底上必须**显式给底色**：本仓有意不引入 Tailwind preflight（见 tailwind.css 注释），
-             裸 <button> 会保留浏览器默认浅底，配浅色文字就成了亮色药丸。
-             配色照 CredentialSwitcher 的 dark 分支：白 8% 填充 + 12% 内描边 + 浅色文字。 -->
+             浅底上必须**显式给底色**：本仓有意不引入 Tailwind preflight（见 tailwind.css 注释），
+             裸 <button> 会保留浏览器默认样式。配色走语义色 token（bg-panel / border-line / text-ink-2），
+             不再硬写「暗底专用」的白 8% 与浅色文字（#1619 侧栏改浅底后那套配色失效）。 -->
         <button
           type="button"
-          class="flex items-center gap-2 rounded-md bg-white/[0.08] px-2.5 py-1.5 text-[13px] text-white/70 ring-1 ring-white/[0.12] ring-inset transition-colors hover:bg-white/[0.16] hover:text-white"
+          class="flex items-center gap-2 rounded-md border border-line bg-panel px-2.5 py-1.5 text-[13px] text-ink-2 transition-colors hover:text-ink"
           :class="collapsed ? 'justify-center' : ''"
           aria-label="全局搜索"
           @click="openSearch"
@@ -24,7 +28,7 @@
           <el-icon><Search /></el-icon>
           <template v-if="!collapsed">
             <span>搜索</span>
-            <span class="ml-auto rounded border border-white/20 px-1 text-[11px] text-white/60">⌘K</span>
+            <span class="ml-auto rounded border border-line px-1 text-[11px] text-ink-3">⌘K</span>
           </template>
         </button>
       </div>

@@ -1,10 +1,17 @@
 <template>
   <div class="sidebar-layout">
+    <!-- 顶栏（棋盘格第一行，ADR-0072）：左格与侧栏同宽并联动收缩；中区留给工作区控件。
+         汉堡在移动端接管唤出侧栏（原浮动按钮已退役）。 -->
+    <AppTopBar :collapsed="collapsed" @open-mobile="mobileOpen = !mobileOpen">
+      <template #center>
+        <slot name="topbar" :collapsed="collapsed" />
+      </template>
+    </AppTopBar>
+
     <AppSidebar
       :menu-items="menuItems"
       :collapsed="collapsed"
       :mobile-open="mobileOpen"
-      :theme="props.sidebarTheme"
       :density="props.sidebarDensity"
       :class="{ 'sidebar-mobile-open': mobileOpen }"
       @toggle-collapse="handleToggleCollapse"
@@ -17,19 +24,6 @@
     <transition name="fade">
       <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false"></div>
     </transition>
-
-    <!-- 明暗模式切换（三态下拉菜单）。全站（学员/导师/管理端）共用本布局，一处改动全局生效。 -->
-    <ThemeToggle fixed />
-
-    <!-- 移动端浮动菜单按钮（替代原顶栏的 mobile-toggle） -->
-    <button
-      v-if="!mobileOpen"
-      class="mobile-fab"
-      aria-label="打开菜单"
-      @click="mobileOpen = true"
-    >
-      <el-icon :size="20"><Operation /></el-icon>
-    </button>
 
     <div class="main-container" :class="{ 'main-collapsed': collapsed }">
       <main class="main-content" :class="{ 'content-narrow': props.contentWidth === 'narrow' }">
@@ -50,9 +44,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Operation } from '@element-plus/icons-vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
-import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import AppTopBar from '@/components/layout/AppTopBar.vue'
 import type { NavItem } from '@/config/navigation'
 
 const props = withDefaults(
@@ -65,12 +58,10 @@ const props = withDefaults(
      * - `narrow`：内容限宽 1280px 居中，宽屏下避免行过长
      */
     contentWidth?: 'full' | 'narrow'
-    /** 透传给 AppSidebar，不传则沿用其默认值 `dark`（2026-08-31 起统一三端恒深石墨青侧栏） */
-    sidebarTheme?: 'light' | 'dark'
     /** 透传给 AppSidebar，不传则沿用其默认值 `default` */
     sidebarDensity?: 'default' | 'compact'
   }>(),
-  { showFooter: false, contentWidth: 'full', sidebarTheme: 'dark' }
+  { showFooter: false, contentWidth: 'full' }
 )
 
 const route = useRoute()
@@ -107,6 +98,8 @@ watch(() => route.path, () => {
 
 .main-container {
   margin-left: var(--sidebar-width);
+  /* 顶栏恒在视口内（fixed）：内容区整体下移一个顶栏高度（#1619） */
+  padding-top: var(--topbar-height);
   transition: margin-left var(--duration-normal) var(--ease-default);
   min-height: 100vh;
   display: flex;
@@ -139,42 +132,14 @@ watch(() => route.path, () => {
 
 .sidebar-overlay {
   position: fixed;
-  top: 0;
+  /* 从顶栏下沿开始：抽屉打开时顶栏仍可点（汉堡即开关，再点一次收起） */
+  top: var(--topbar-height);
   left: 0;
   right: 0;
   bottom: 0;
   background: rgba(15, 23, 42, 0.5);
   z-index: calc(var(--z-fixed) - 1);
 }
-
-/* 移动端浮动菜单按钮 */
-.mobile-fab {
-  display: none;
-  position: fixed;
-  top: var(--space-4);
-  left: var(--space-4);
-  width: 44px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-md, 0 4px 12px rgba(15, 23, 42, 0.12));
-  cursor: pointer;
-  color: var(--color-text-primary);
-  z-index: var(--z-sticky);
-  transition: background var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
-}
-
-.mobile-fab:hover {
-  background: var(--color-bg-page);
-}
-
-.mobile-fab:active {
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16);
-}
-
 
 .fade-enter-active,
 .fade-leave-active {
@@ -222,15 +187,8 @@ watch(() => route.path, () => {
     transform: translateX(0) !important;
   }
 
-  .mobile-fab {
-    display: flex;
-  }
-
-
   .main-content {
     padding: var(--space-4);
-    /* 顶部留出浮动按钮的空间，避免内容被遮挡 */
-    padding-top: calc(var(--space-4) + 44px);
   }
 }
 </style>
