@@ -28,7 +28,9 @@
 //   PUT  /admin/roles/{role_id}
 //   DELETE /admin/roles/{role_id}
 //   GET  /admin/accounts
+//   POST /admin/accounts
 //   PUT  /admin/accounts/{admin_id}/role
+//   DELETE /admin/accounts/{admin_id}
 //   POST /admin/course/generate-content
 //   GET  /admin/course/generate-content/{task_id}
 //   GET  /admin/courses

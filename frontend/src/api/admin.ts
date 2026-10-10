@@ -220,6 +220,14 @@ export interface AdminRolePayload {
   capabilities: string[]
 }
 
+/** 管理员账号写面入参（#1632）：role_id 省略或 0 = 先建号、后挂角色（未授权即什么都看不到）。 */
+export interface AdminAccountPayload {
+  username: string
+  name: string
+  password: string
+  role_id?: number
+}
+
 export const adminApi = {
   /**
    * 当前管理员的**有效能力集**（#1618 段1）。
@@ -252,6 +260,21 @@ export const adminApi = {
 
   listAdminAccounts() {
     return unwrappedRequest.get<AdminAccountListDTO>('/admin/accounts')
+  },
+
+  /** 新建管理员（#1632）：口令由后端按 6-20 位规则校验后 bcrypt 落库。 */
+  createAdminAccount(data: AdminAccountPayload) {
+    return unwrappedRequest.post<AdminAccountDTO>('/admin/accounts', data)
+  },
+
+  /**
+   * 删除管理员（#1632）。
+   *
+   * 后端会拒三种：删自己、删最后一个超管（409），账号不存在（404）——**前端不预判**
+   * （预判要在前端重算一遍服务端不变式），由拦截器把后端文案 toast 给操作者。
+   */
+  deleteAdminAccount(adminId: number) {
+    return unwrappedRequest.delete<null>(`/admin/accounts/${adminId}`)
   },
 
   assignAdminRole(adminId: number, roleId: number) {

@@ -1,24 +1,35 @@
-// 授权两页的关键行为（#1621 段4 立页；#1630 补中文名）。
+// 授权两页的关键行为（#1621 段4 立页；#1630 补中文名与新建/删除）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 const h = vi.hoisted(() => ({
   listRoles: vi.fn(),
+  createRole: vi.fn(),
   updateRole: vi.fn(),
+  deleteRole: vi.fn(),
   listAccounts: vi.fn(),
-  assignRole: vi.fn()
+  assignRole: vi.fn(),
+  createAccount: vi.fn(),
+  deleteAccount: vi.fn(),
+  confirm: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminApi: {
     listAdminRoles: h.listRoles,
-    createAdminRole: vi.fn(),
+    createAdminRole: h.createRole,
     updateAdminRole: h.updateRole,
-    deleteAdminRole: vi.fn(),
+    deleteAdminRole: h.deleteRole,
     listAdminAccounts: h.listAccounts,
-    assignAdminRole: h.assignRole
+    assignAdminRole: h.assignRole,
+    createAdminAccount: h.createAccount,
+    deleteAdminAccount: h.deleteAccount
   }
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({ confirm: h.confirm, confirmDanger: h.confirm, prompt: vi.fn() })
 }))
 
 import { epLite } from '@/test/element-lite'
@@ -47,6 +58,11 @@ beforeEach(() => {
     ]
   })
   h.assignRole.mockResolvedValue({})
+  h.createRole.mockResolvedValue({})
+  h.deleteRole.mockResolvedValue(null)
+  h.createAccount.mockResolvedValue({})
+  h.deleteAccount.mockResolvedValue(null)
+  h.confirm.mockResolvedValue(true)
 })
 
 describe('角色权限页', () => {
@@ -82,5 +98,56 @@ describe('管理员管理页', () => {
     const w = mount(AccountManage, { global: { plugins: [epLite()] } })
     await flushPromises()
     expect(w.text()).toContain('未授权')
+  })
+
+  it('新建：填完表单提交 → 调 createAdminAccount（role_id 一并带上）', async () => {
+    const w = mount(AccountManage, { global: { plugins: [epLite()] } })
+    await flushPromises()
+    await w.find('.account-actions button').trigger('click')
+    await flushPromises()
+    const inputs = w.findAll('.account-form input')
+    expect(inputs.length).toBeGreaterThanOrEqual(3)
+    await inputs[0].setValue('newops')
+    await inputs[1].setValue('新运营')
+    await inputs[2].setValue('newpass123')
+    // 表单级校验通过后由对话框的「创建」按钮提交
+    const confirmBtn = w.findAll('button').find(b => b.text().includes('创建'))
+    expect(confirmBtn).toBeTruthy()
+    await confirmBtn!.trigger('click')
+    await flushPromises()
+    expect(h.createAccount).toHaveBeenCalledWith({
+      username: 'newops',
+      name: '新运营',
+      password: 'newpass123',
+      role_id: 0
+    })
+  })
+
+  it('新建：口令不合规在入口被拦下（不发请求）', async () => {
+    const w = mount(AccountManage, { global: { plugins: [epLite()] } })
+    await flushPromises()
+    await w.find('.account-actions button').trigger('click')
+    await flushPromises()
+    const inputs = w.findAll('.account-form input')
+    await inputs[0].setValue('newops')
+    await inputs[1].setValue('新运营')
+    await inputs[2].setValue('123')
+    const confirmBtn = w.findAll('button').find(b => b.text().includes('创建'))
+    await confirmBtn!.trigger('click')
+    await flushPromises()
+    expect(h.createAccount).not.toHaveBeenCalled()
+    expect(w.find('.account-form-error').text()).toContain('6-20')
+  })
+
+  it('删除：确认后调 deleteAdminAccount', async () => {
+    const w = mount(AccountManage, { global: { plugins: [epLite()] } })
+    await flushPromises()
+    // 每行一个删除按钮：取最后一行（运营甲，非受保护）——受保护账号由后端 409 拦，前端不预判
+    const delBtns = w.findAll('button').filter(b => b.text().includes('删除'))
+    expect(delBtns.length).toBe(2)
+    await delBtns[delBtns.length - 1].trigger('click')
+    await flushPromises()
+    expect(h.confirm).toHaveBeenCalled()
+    expect(h.deleteAccount).toHaveBeenCalledWith(2)
   })
 })
