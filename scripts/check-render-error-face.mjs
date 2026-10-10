@@ -69,11 +69,13 @@ export const SKELETON_FILE = 'backend/pkg/httpx/endpoint.go'
 export const SCAN_EXTENSIONS = ['.go']
 
 /**
- * `pkg/response` 的错误信封（写响应的六个错误出口）。
+ * `pkg/response` 的错误信封（写响应的七个错误出口）。
  * `ServerErrorCause`（ADR-0064 决策 9 执行面）是裸 handler 的 5xx 固定文案出口：
- * 它同样**不得**写进 Render 闭包（错误面归骨架），故与其余五个同列。
+ * 它同样**不得**写进 Render 闭包（错误面归骨架），故与其余六个同列。
+ * `Conflict`（409）是 #1621 段4 补进 `renderStatus` 的那一档（防自锁类拒绝用 409）——
+ * 名单与 `pkg/response` 导出函数的互等由本文件的自检钉住，新增出口必须同步登记。
  */
-export const ERROR_ENVELOPE_FNS = ['ServerError', 'ServerErrorCause', 'BadRequest', 'Unauthorized', 'Forbidden', 'NotFound']
+export const ERROR_ENVELOPE_FNS = ['ServerError', 'ServerErrorCause', 'BadRequest', 'Unauthorized', 'Forbidden', 'NotFound', 'Conflict']
 
 /** 成功面：不在禁列（Render 的唯一职责就是写成功面）。 */
 export const SUCCESS_ENVELOPE_FNS = ['Success', 'SuccessWithMsg', 'Created']
