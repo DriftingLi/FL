@@ -93,6 +93,10 @@
 </template>
 
 <script setup lang="ts">
+// keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
+// 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
+defineOptions({ name: 'AdminFeaturedContentList' })
+
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'

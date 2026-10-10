@@ -1,4 +1,8 @@
 <script setup lang="ts">
+// keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
+// 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
+defineOptions({ name: 'HrwaiUserManage' })
+
 // HRWAI 用户管理(管理员后台)
 // 对应后端 /api/admin/hrwai-users/*(统一管理 hrwai_users 表)
 // 合并原学员管理与评估用户管理,支持分页列表 + 关键词搜索 + 新增 + 编辑 + 重置密码 + 启用/禁用 + 删除

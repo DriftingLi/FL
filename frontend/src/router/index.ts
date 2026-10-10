@@ -39,6 +39,8 @@ function routeMeta(page: PageDescriptor): Record<string, unknown> {
   if (page.isValuationAuthPage) meta.isValuationAuthPage = true
   if (page.roles) meta.roles = page.roles
   if (page.capability) meta.capability = page.capability
+  // 缓存位（#1620）：SidebarLayout 读它决定该页是否进 keep-alive 的 include 名单
+  if (page.keepAlive) meta.keepAlive = true
   return meta
 }
 

@@ -5,6 +5,7 @@ import {
   navGroups,
   navPages,
   externalNavItems,
+  pages,
   type PageDescriptor,
   type Workspace
 } from './pages'
@@ -156,6 +157,41 @@ export const roleNavigation: Record<string, NavItem[]> = {
   admin: adminNav,
   tutor: tutorNav,
   recruiter: recruiterNav
+}
+
+/**
+ * 详情页 → 所属标签（列表页）的反查表（#1620）：由描述符的 `nav.activeRouteNames` 派生。
+ *
+ * 列表页已经声明了「哪些详情页属于我」（侧栏高亮用的同一份声明），标签归属直接复用，
+ * 不另写一张「详情页 → 列表页」的表 —— 那会是同一事实的第二份真源。
+ */
+const tabOwnerMap: Map<string, RouteName> = (() => {
+  const m = new Map<string, RouteName>()
+  for (const page of pages) {
+    for (const owned of page.nav?.activeRouteNames ?? []) m.set(owned, page.name)
+  }
+  return m
+})()
+
+/** 页面的导航标题（描述符的 `nav.label`）；无 nav 的页面回退路由名。 */
+export function pageTitleOf(name: RouteName): string {
+  const page = pages.find(p => p.name === name)
+  return page?.nav?.label ?? String(name)
+}
+
+/** 该路由的标签归属：详情页返回其列表页路由名，其余返回 null（= 自成标签）。 */
+export function tabOwnerOf(routeName: string): RouteName | null {
+  return tabOwnerMap.get(routeName) ?? null
+}
+
+/**
+ * 进 keep-alive 缓存的组件名清单（#1620）：= 该工作区描述符里 `keepAlive: true` 的页面路由名。
+ *
+ * 名字取自描述符的 `name`，而页面组件用 `defineOptions({ name })` 对齐同一个名字 ——
+ * 两侧对不上时该页不会被缓存（无声失效），故 `config/__tests__/pages.spec.ts` 有锁。
+ */
+export function keepAliveNames(workspace: Workspace): string[] {
+  return pages.filter(p => p.keepAlive && p.workspace === workspace).map(p => p.name)
 }
 
 /**

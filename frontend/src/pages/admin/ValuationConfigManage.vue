@@ -1,4 +1,8 @@
 <script setup lang="ts">
+// keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
+// 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
+defineOptions({ name: 'ValuationConfigManage' })
+
 // 残值评估配置管理（管理员）
 // 重构说明：从 15 tab 缩减为 2 tab
 //   Tab 1 原价表：CRUD original-prices（学生端表单依赖该表数据）
