@@ -48,7 +48,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.26.9" # 与 ci.yml 同源（#1623）：生产镜像用同一个补丁版
   NODE_VERSION: "22"
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend

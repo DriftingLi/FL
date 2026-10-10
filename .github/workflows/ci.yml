@@ -14,7 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26"
+  # 钉到含 2026-10 那批 net/http 公告修复的补丁版（#1623）：写成 "1.26" 时 setup-go 命中缓存里的
+  # 1.26.8，security-scan 的 govulncheck 稳定判红（全仓后端 PR 一起红，且与改动无关）。
+  GO_VERSION: "1.26.9"
   NODE_VERSION: "22"
 
 jobs:
