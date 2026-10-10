@@ -123,3 +123,52 @@ func TestAdminAccountCreateAndDelete(t *testing.T) {
 		t.Fatalf("有第二个超管时应可删, got %v", err)
 	}
 }
+
+func TestAdminResetPassword(t *testing.T) {
+	t.Parallel()
+	svc, sess, super, role := newAdminAccountFixture(t)
+	db := svc.db
+
+	created, err := svc.CreateAdminAccount("acct_pwd", "待重置", "oldpass123", role.RoleID)
+	if err != nil {
+		t.Fatalf("建号失败: %v", err)
+	}
+	_, refresh, err := sess.IssuePair(created.AdminID, "acct_pwd", core.AdminRole)
+	if err != nil {
+		t.Fatalf("签发管理员令牌对失败: %v", err)
+	}
+	if _, _, err := sess.RotateRefresh(context.Background(), refresh); err != nil {
+		t.Fatalf("前置：新签的 refresh 应该能轮换: %v", err)
+	}
+
+	// ① 代重置：新口令落库（bcrypt 可校验），旧 refresh 链当场失效
+	if err := svc.ResetAdminPassword(context.Background(), created.AdminID, "newpass456"); err != nil {
+		t.Fatalf("代重置口令失败: %v", err)
+	}
+	var stored model.Admin
+	if err := db.Where("admin_id = ?", created.AdminID).First(&stored).Error; err != nil {
+		t.Fatalf("取回管理员失败: %v", err)
+	}
+	if !core.VerifyPassword("newpass456", stored.Password) || core.VerifyPassword("oldpass123", stored.Password) {
+		t.Fatal("口令没有被换成新值（或旧值仍可校验）")
+	}
+	if _, _, err := sess.RotateRefresh(context.Background(), refresh); err == nil {
+		t.Fatal("代重置后旧 refresh 仍能轮换（吊销命名空间与 role claim 不同源？）")
+	}
+
+	// ② 三条拒绝：长度不合规（动作层兜底）/ 账号不存在 / id 非正数
+	if err := svc.ResetAdminPassword(context.Background(), created.AdminID, "123"); err == nil {
+		t.Fatal("口令过短应被动作层拒绝")
+	}
+	if err := svc.ResetAdminPassword(context.Background(), 999999, "newpass456"); !errors.Is(err, ErrAdminNotFound) {
+		t.Fatalf("账号不存在应 ErrAdminNotFound, got %v", err)
+	}
+	if err := svc.ResetAdminPassword(context.Background(), 0, "newpass456"); !errors.Is(err, ErrInvalidAdminID) {
+		t.Fatalf("id 非正数应 ErrInvalidAdminID, got %v", err)
+	}
+
+	// ③ 受保护角色的账号也可以重置口令（改口令不是降权，不触发防自锁第二层）
+	if err := svc.ResetAdminPassword(context.Background(), super.AdminID, "superpass789"); err != nil {
+		t.Fatalf("超管账号应可重置口令, got %v", err)
+	}
+}

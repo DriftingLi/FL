@@ -4404,6 +4404,41 @@ paths:
       summary: 删除管理员
       tags:
       - 管理端-权限
+  /admin/accounts/{admin_id}/password:
+    put:
+      consumes:
+      - application/json
+      description: 代重置某个管理员的口令：6-20 位规则 + bcrypt 落库 + 全会话吊销；响应不回显口令
+      parameters:
+      - description: 管理员 ID
+        in: path
+        name: admin_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已重置
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 管理员ID无效 / 口令不合规
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 管理员不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 重置管理员口令
+      tags:
+      - 管理端-权限
   /admin/accounts/{admin_id}/role:
     put:
       consumes:

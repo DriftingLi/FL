@@ -116,6 +116,43 @@ async function create(): Promise<void> {
   }
 }
 
+// ===== 代重置口令（#1640）=====
+
+const pwdVisible = ref(false)
+const pwdSaving = ref(false)
+const pwdTarget = ref<AdminAccountDTO | null>(null)
+const pwdValue = ref('')
+const pwdError = ref('')
+
+function openReset(account: AdminAccountDTO): void {
+  pwdTarget.value = account
+  pwdValue.value = ''
+  pwdError.value = ''
+  pwdVisible.value = true
+}
+
+/**
+ * 代重置口令。长度规则与新建同源（都是后端 core.ValidatePasswordLength 的入口前置），
+ * 真判据在后端动作里；重置成功后旧 refresh 链当场失效（后端做）。
+ */
+async function resetPassword(): Promise<void> {
+  const target = pwdTarget.value
+  if (!target) return
+  if (pwdValue.value.length < 6 || pwdValue.value.length > 20) {
+    pwdError.value = '口令长度需为 6-20 位'
+    return
+  }
+  pwdError.value = ''
+  pwdSaving.value = true
+  try {
+    await adminApi.resetAdminPassword(target.admin_id, pwdValue.value)
+    ElMessage.success('口令已重置')
+    pwdVisible.value = false
+  } finally {
+    pwdSaving.value = false
+  }
+}
+
 /** 删除管理员。确认框只问「删不删」，拦得住的是后端（409 文案由拦截器 toast）。 */
 async function remove(account: AdminAccountDTO): Promise<void> {
   try {
@@ -177,9 +214,12 @@ async function remove(account: AdminAccountDTO): Promise<void> {
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right" align="center">
+        <el-table-column label="操作" width="190" fixed="right" align="center">
           <template #default="{ row }">
-            <UiButton size="small" @click="remove(row)">删除</UiButton>
+            <span class="account-row-actions">
+              <UiButton size="small" @click="openReset(row)">重置口令</UiButton>
+              <UiButton size="small" @click="remove(row)">删除</UiButton>
+            </span>
           </template>
         </el-table-column>
       </el-table>
@@ -216,6 +256,29 @@ async function remove(account: AdminAccountDTO): Promise<void> {
         <p v-if="formError" class="account-form-error" role="alert">{{ formError }}</p>
       </div>
     </UiDialog>
+
+    <UiDialog
+      v-model="pwdVisible"
+      title="重置口令"
+      :subtitle="pwdTarget ? `给「${pwdTarget.name || pwdTarget.username}」设一个新口令；该账号的旧登录会话会立即失效` : ''"
+      width="420px"
+      :confirm-loading="pwdSaving"
+      confirm-text="重置"
+      @confirm="resetPassword"
+    >
+      <div class="account-form">
+        <UiFormField label="新口令" required for-id="admin-account-new-password">
+          <UiInput
+            id="admin-account-new-password"
+            v-model="pwdValue"
+            type="password"
+            placeholder="6-20 位"
+            :maxlength="20"
+          />
+        </UiFormField>
+        <p v-if="pwdError" class="account-form-error" role="alert">{{ pwdError }}</p>
+      </div>
+    </UiDialog>
   </div>
 </template>
 
@@ -234,6 +297,11 @@ async function remove(account: AdminAccountDTO): Promise<void> {
 .account-role-select {
   width: 100%;
   max-width: 200px;
+}
+
+.account-row-actions {
+  display: inline-flex;
+  gap: var(--space-2);
 }
 
 .account-form {

@@ -57,6 +57,12 @@ type adminIDParam struct {
 	AdminID int
 }
 
+// adminPasswordPayload 代重置口令的入参（路径参数 + 请求体在 Parse 期一次读全）。
+type adminPasswordPayload struct {
+	AdminID  int
+	Password string `json:"password"`
+}
+
 // @Summary 管理角色列表
 // @Description 列出全部管理角色及其能力键（受保护角色返回受保护能力全集）
 // @Tags 管理端-权限
@@ -271,6 +277,46 @@ func (h *adminHandler) DeleteAdminAccount(c *gin.Context) {
 		WithSentinel(ErrSelfDelete, http.StatusConflict).Handle(c)
 }
 
+// @Summary 重置管理员口令
+// @Description 代重置某个管理员的口令：6-20 位规则 + bcrypt 落库 + 全会话吊销；响应不回显口令
+// @Tags 管理端-权限
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param admin_id path int true "管理员 ID"
+// @Success 200 {object} response.R "已重置"
+// @Failure 400 {object} response.R "管理员ID无效 / 口令不合规"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "管理员不存在"
+// @Router /admin/accounts/{admin_id}/password [put]
+// ResetAdminPassword 代重置管理员口令 PUT /api/admin/accounts/:admin_id/password
+func (h *adminHandler) ResetAdminPassword(c *gin.Context) {
+	httpx.Endpoint[adminPasswordPayload, struct{}]{
+		Parse: func(c *gin.Context) (*adminPasswordPayload, error) {
+			id, err := httpx.PathInt(c, "admin_id", "管理员ID无效")
+			if err != nil {
+				return nil, err
+			}
+			body, err := httpx.BindJSON[struct {
+				Password string `json:"password"`
+			}](c)
+			if err != nil {
+				return nil, err
+			}
+			// 长度规则在动作里兜底（ADR-0064 决策 4），这里只是同一句文案的前置拦截
+			if err := core.ValidatePasswordLength(body.Password); err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
+			return &adminPasswordPayload{AdminID: id, Password: body.Password}, nil
+		},
+		Invoke: func(ctx context.Context, req *adminPasswordPayload) (*struct{}, error) {
+			return &struct{}{}, h.adminSvc.ResetAdminPassword(ctx, req.AdminID, req.Password)
+		},
+	}.WithSuccess(httpx.OkMsgNoData("已重置"), http.StatusBadRequest).
+		WithSentinel(ErrInvalidAdminID, http.StatusBadRequest).
+		WithSentinel(ErrAdminNotFound, http.StatusNotFound).Handle(c)
+}
+
 // @Summary 管理员改挂角色
 // @Description 给管理员改挂角色；**最后一个超管不可降级**（防自锁第二层）
 // @Tags 管理端-权限
@@ -326,5 +372,6 @@ func RegisterAdminAuthzRoutes(rg *gin.RouterGroup, session *security.Session, ad
 	accounts.GET("", h.ListAdminAccounts)
 	accounts.POST("", h.CreateAdminAccount)
 	accounts.PUT("/:admin_id/role", h.AssignAdminRole)
+	accounts.PUT("/:admin_id/password", h.ResetAdminPassword)
 	accounts.DELETE("/:admin_id", h.DeleteAdminAccount)
 }

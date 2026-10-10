@@ -260,6 +260,28 @@ func TestAdminAccountCrudContract(t *testing.T) {
 		t.Fatalf("删不存在的账号应 404, got %d %s", rec.Code, rec.Body.String())
 	}
 
+	// ⑤ 代重置口令（#1640）：200 → 新口令能登录、旧口令登不进；口令不合规 400；账号不存在 404
+	if rec := doWithToken(t, r, superTok, http.MethodPut, "/api/admin/accounts/"+strconv.Itoa(created.AdminID)+"/password",
+		map[string]any{"password": "resetpass456"}); rec.Code != http.StatusOK {
+		t.Fatalf("代重置口令应 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, r, http.MethodPost, "/api/auth/admin-login",
+		map[string]any{"username": "acct_new", "password": "resetpass456"}); rec.Code != http.StatusOK {
+		t.Fatalf("重置后应能用新口令登录, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, r, http.MethodPost, "/api/auth/admin-login",
+		map[string]any{"username": "acct_new", "password": "newpass123"}); rec.Code == http.StatusOK {
+		t.Fatalf("旧口令不应再能登录, got %d", rec.Code)
+	}
+	if rec := doWithToken(t, r, superTok, http.MethodPut, "/api/admin/accounts/"+strconv.Itoa(created.AdminID)+"/password",
+		map[string]any{"password": "123"}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("口令过短应 400, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doWithToken(t, r, superTok, http.MethodPut, "/api/admin/accounts/999999/password",
+		map[string]any{"password": "resetpass456"}); rec.Code != http.StatusNotFound {
+		t.Fatalf("账号不存在应 404, got %d %s", rec.Code, rec.Body.String())
+	}
+
 	// ④d 「删成功」那条（200 + 落库消失 + 旧 refresh 当场失效）打在 internal/admin 的服务面：
 	// 删除要先写吊销标记，而契约装配里**服务持有的会话是 Redis 版**（NewDeps 的 coreSingletons 用
 	// SessionFromConfig 建，helper 只换掉了 d.Session），这一层没有 Redis。同一 seam 的注释见

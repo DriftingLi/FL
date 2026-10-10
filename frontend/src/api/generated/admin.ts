@@ -30,6 +30,7 @@
 //   GET  /admin/accounts
 //   POST /admin/accounts
 //   PUT  /admin/accounts/{admin_id}/role
+//   PUT  /admin/accounts/{admin_id}/password
 //   DELETE /admin/accounts/{admin_id}
 //   POST /admin/course/generate-content
 //   GET  /admin/course/generate-content/{task_id}
