@@ -61,7 +61,7 @@
     // 图标落进胶囊矩形（实测 [532,726] vs 胶囊 [556,730]，违反验收「元素不落胶囊矩形」）。
     // 用 margin-right 把右缘钉回 capsuleLeft − CLEARANCE。非小程序端无胶囊 ⇒ 不设约束。
     const NAV_BODY_PADDING_X = 24 // 与 <style> 里 .nav-bar-body padding 的 $spacing-md 对齐
-    const RIGHT_SLOT_CLEARANCE = 16 // 右槽与胶囊的视觉间隙（rpx）
+    const RIGHT_SLOT_CLEARANCE = 24 // 右槽与胶囊的视觉间隙（rpx）；用户复验 16 太贴，加到 24
     const rightSlotStyle = computed((): string => {
         const capsuleLeft = safeArea.value.capsuleLeft
         const w = safeArea.value.rightSlotWidth
@@ -148,6 +148,8 @@
     .nav-bar-left {
         flex-direction: row;
         align-items: center;
+        /* 与右槽的最小间距：长标题经 ellipsis 收敛，不会顶到图标 */
+        margin-right: 24rpx;
     }
 
     .nav-bar-right {
@@ -157,7 +159,7 @@
     }
 
     .nav-bar-right-item {
-        padding: 0 8rpx;
+        padding: 0 12rpx;
     }
 
     .nav-bar-title {
@@ -165,6 +167,9 @@
         font-weight: bold;
         color: $text-color;
         margin-left: 16rpx;
+        /* 长证件名单行收敛（用户复验：标题与图标互相挤） */
+        lines: 1;
+        text-overflow: ellipsis;
     }
 
     .nav-bar-title-block {
