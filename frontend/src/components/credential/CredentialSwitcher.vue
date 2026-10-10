@@ -11,7 +11,7 @@
       </UiTooltip>
     </div>
     <div v-else class="expanded-view">
-      <div class="switcher-label">当前证件</div>
+      <div v-if="!props.compact" class="switcher-label">当前证件</div>
       <el-select
         v-model="selectedId"
         placeholder="请选择证件"
@@ -37,7 +37,7 @@
           />
         </el-option-group>
       </el-select>
-      <div v-if="current" class="current-meta">
+      <div v-if="current && !props.compact" class="current-meta">
         <span class="current-name">{{ current.name }}</span>
         <span class="current-badge" :class="current.category">{{ categoryLabel(current.category) }}</span>
       </div>
@@ -71,7 +71,7 @@ import { ElMessage } from 'element-plus'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /**
      * 折叠态（图标 + tooltip）。
@@ -81,8 +81,15 @@ withDefaults(
      * 外壳三块同底后不再存在「暗底侧栏」，留着就是无人走的配色分支。
      */
     collapsed?: boolean
+    /**
+     * 紧凑变体（缺省 false）：只渲染选择器，去掉「当前证件」标签与当前证件 meta 行。
+     *
+     * 为**顶栏中区**而设（#1619 外壳 / #1629 修）：顶栏恒高 56px，三行内容放不下会溢出到
+     * 内容区上方且没有底色 —— 表现为「透明的文字压在卡片上」。
+     */
+    compact?: boolean
   }>(),
-  { collapsed: false }
+  { collapsed: false, compact: false }
 )
 
 const credentialStore = useCredentialStore()

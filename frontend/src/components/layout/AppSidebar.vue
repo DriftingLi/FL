@@ -185,6 +185,8 @@ function isRouteActive(item: NavItem): boolean {
   /* 无缝外壳（#1619 / ADR-0072）：侧栏与顶栏、内容区同底，且**无右边框** ——
      接缝靠「同色」而非分隔线消失；层次由内容区里的卡片承担。 */
   background: var(--color-bg-page);
+  /* 十字细线的**竖线**（#1629，改判自 ADR-0072 的「无边框」）：与顶栏左格的右边线相接 */
+  border-right: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
   transition: width var(--duration-normal) var(--ease-default);
