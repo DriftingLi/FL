@@ -17,13 +17,9 @@ import (
 	"forklift-training/pkg/httpx"
 )
 
-// roleIDParam / adminIDParam 路径参数。
+// roleIDParam 路径参数（改挂角色那条把路径参数与请求体合成 accountRolePayload，故无独立类型）。
 type roleIDParam struct {
 	RoleID int
-}
-
-type adminIDParam struct {
-	AdminID int
 }
 
 // rolePayload 建角色 / 改角色的入参。
