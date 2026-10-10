@@ -159,6 +159,7 @@ func TestAuthzLock_RoleGuardRetired(t *testing.T) {
 		t.Fatalf("守卫必须统一为 CapabilityRequired，以下文件仍在用 RoleRequired: %v", offenders)
 	}
 }
+
 // isProtectedAdminCapability 该能力是否由受保护（超级管理员）角色持有 —— 即静态表对它没有回答
 // （#1618 段1 起管理端能力改为数据层回答）。判据来自 authz 自己的声明，不在这里另抄一份清单。
 func isProtectedAdminCapability(c authz.Capability) bool {

@@ -21,9 +21,9 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsAdmin = map[string]func(t *testing.T) any{
-	"admin.HrwaiUserPageResult.list":        outletHrwaiUserPageEmpty,
-	"admin.TutorListDTO.tutors":             outletTutorListEmpty,
-	"admin.AdminStatisticsDTO.course_stats": outletAdminStatisticsNoCourses,
+	"admin.HrwaiUserPageResult.list":          outletHrwaiUserPageEmpty,
+	"admin.TutorListDTO.tutors":               outletTutorListEmpty,
+	"admin.AdminStatisticsDTO.course_stats":   outletAdminStatisticsNoCourses,
 	"admin.AdminCapabilitiesDTO.capabilities": outletAdminCapabilitiesUnknownAdmin,
 }
 

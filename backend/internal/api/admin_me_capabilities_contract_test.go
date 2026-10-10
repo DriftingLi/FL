@@ -28,7 +28,7 @@ func TestAdminMeCapabilitiesContract(t *testing.T) {
 	r := NewRouter(newContractDeps(t, db, cfg))
 	sess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{})
 
-		// 1) 超管：受保护角色 → 能力全集
+	// 1) 超管：受保护角色 → 能力全集
 	super := testutil.SeedAdmin(t, db, "caps_super", "x")
 	superTok, err := sess.Issue(super.AdminID, super.Username, "admin")
 	if err != nil {
