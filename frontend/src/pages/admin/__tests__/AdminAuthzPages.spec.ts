@@ -1,4 +1,4 @@
-// 授权两页的关键行为（#1621 段4 立页；#1630 补中文名与新建/删除）。
+// 授权两页的关键行为（#1621 段4 立页；#1630 补中文名与新建/删除；#1640 补代重置口令）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   assignRole: vi.fn(),
   createAccount: vi.fn(),
   deleteAccount: vi.fn(),
+  resetPassword: vi.fn(),
   confirm: vi.fn()
 }))
 
@@ -24,7 +25,8 @@ vi.mock('@/api/admin', () => ({
     listAdminAccounts: h.listAccounts,
     assignAdminRole: h.assignRole,
     createAdminAccount: h.createAccount,
-    deleteAdminAccount: h.deleteAccount
+    deleteAdminAccount: h.deleteAccount,
+    resetAdminPassword: h.resetPassword
   }
 }))
 
@@ -62,6 +64,7 @@ beforeEach(() => {
   h.deleteRole.mockResolvedValue(null)
   h.createAccount.mockResolvedValue({})
   h.deleteAccount.mockResolvedValue(null)
+  h.resetPassword.mockResolvedValue(null)
   h.confirm.mockResolvedValue(true)
 })
 
@@ -137,6 +140,31 @@ describe('管理员管理页', () => {
     await flushPromises()
     expect(h.createAccount).not.toHaveBeenCalled()
     expect(w.find('.account-form-error').text()).toContain('6-20')
+  })
+
+  it('重置口令：填新口令提交 → 调 resetAdminPassword（口令不合规不发请求）', async () => {
+    const w = mount(AccountManage, { global: { plugins: [epLite()] } })
+    await flushPromises()
+    // 每行两个动作：先「重置口令」，后「删除」
+    const resetBtns = w.findAll('button').filter(b => b.text().includes('重置口令'))
+    expect(resetBtns.length).toBe(2)
+    await resetBtns[resetBtns.length - 1].trigger('click')
+    await flushPromises()
+    const input = w.find('#admin-account-new-password')
+    expect(input.exists()).toBe(true)
+    // 对话框页脚的「重置」按钮（行内那个是「重置口令」，两者文案不同，这里按页脚 + 精确文案取）
+    const confirmBtn = () => w.findAll('.el-dialog__footer button').find(b => b.text().trim() === '重置')
+    // 口令过短：入口拦下，不发请求
+    await input.setValue('123')
+    await confirmBtn()!.trigger('click')
+    await flushPromises()
+    expect(h.resetPassword).not.toHaveBeenCalled()
+    expect(w.find('.account-form-error').text()).toContain('6-20')
+    // 合规口令：按行上的账号 id 提交
+    await input.setValue('resetpass456')
+    await confirmBtn()!.trigger('click')
+    await flushPromises()
+    expect(h.resetPassword).toHaveBeenCalledWith(2, 'resetpass456')
   })
 
   it('删除：确认后调 deleteAdminAccount', async () => {

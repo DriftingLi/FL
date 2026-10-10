@@ -281,6 +281,16 @@ export const adminApi = {
     return unwrappedRequest.put<AdminAccountDTO>(`/admin/accounts/${adminId}/role`, { role_id: roleId })
   },
 
+  /**
+   * 代重置管理员口令（#1640）。
+   *
+   * 后端走与学员/讲师/招聘者**同一条**口令写面动作：6-20 位规则 → bcrypt 落库 → 全会话吊销
+   * （该账号旧 refresh 链当场失效）。响应不回显口令。
+   */
+  resetAdminPassword(adminId: number, password: string) {
+    return unwrappedRequest.put<null>(`/admin/accounts/${adminId}/password`, { password })
+  },
+
   // ===== HRWAI 用户管理(统一) =====
   /** 列表（后端行键 = `list`）。 */
   async getHrwaiUsers(params: AdminHrwaiUsersQuery): Promise<Page<HrwaiUserSummary>> {
