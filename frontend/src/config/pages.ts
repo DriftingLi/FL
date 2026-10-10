@@ -107,6 +107,15 @@ export interface PageDescriptor {
    * `config/__tests__/pages.spec.ts` 的锁测试拦住。
    */
   keepAlive?: boolean
+  /**
+   * **非导航页**的展示名（标签栏标题等）；导航页一律用 `nav.label`。
+   *
+   * 为什么需要它（#1638）：标签栏的固定页与标签标题取自 `pageTitleOf`，而它的回落链是
+   * `nav.label → title → 路由名`。像「无管理权限」页那样**刻意不进侧栏**（没有 nav）却又
+   * 会被当作标签渲染的页面，没有这一格就只能印英文路由名。
+   * 导航页不要用本字段写标题——那是同一事实的第二份来源。
+   */
+  title?: string
   /** 出现在侧栏时填写 */
   nav?: PageNav
 }
@@ -252,6 +261,9 @@ const pagesData = [
   // 编辑态页面按 ADR-0073 **不进 keep-alive**（避免把未保存的勾选缓存成"看起来已生效"）。
   { name: 'AdminRoleManage', path: '/admin/roles', component: () => import('@/pages/admin/RoleManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_role.manage', nav: { group: 'system', label: '角色权限', icon: Setting, order: 7 } },
   { name: 'AdminAccountManage', path: '/admin/accounts', component: () => import('@/pages/admin/AccountManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_account.manage', keepAlive: true, nav: { group: 'system', label: '管理员管理', icon: UserFilled, order: 6 } },
+  // 「无管理权限」页（#1638）：**刻意不声明 capability** —— 它是「一个能力位都没有」的落点
+  // （守卫 adminLandingPage 的兜底），再要求能力就是自锁；不进侧栏（无 nav），也不进 keep-alive。
+  { name: 'AdminNoAccess', path: '/admin/no-access', component: () => import('@/pages/admin/NoAccess.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, title: '无管理权限' },
 
   // ---------- 招聘端（RecruitLayout）----------
   { name: 'RecruitDashboard', path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: HomeFilled, exact: true, order: 1 } },

@@ -12,6 +12,8 @@ import {
   type GuardInput,
   type GuardState
 } from '../guard'
+import { pages } from '@/config/pages'
+import { adminLandingPage } from '@/config/navigation'
 
 // ===== 构造器 =====
 
@@ -353,10 +355,19 @@ describe('roleStep', () => {
     ).toEqual({ action: 'allow' })
   })
 
-  it('admin 闯学员区 → 回管理员工作台', () => {
+  it('admin 闯学员区 → 回**自己能看的**管理页；一个能力都没有 → 无管理权限页（#1638）', () => {
+    // 有仪表盘能力位：回仪表盘（与本改动前逐字一致）
+    expect(
+      resolveGuardDecision(input(), state({ role: 'admin', capabilities: ['admin.access'] }))
+    ).toEqual({ action: 'redirect', to: { name: 'AdminDashboard' } })
+    // 只有审计：回审计日志，而不是它所看不见的仪表盘
+    expect(
+      resolveGuardDecision(input(), state({ role: 'admin', capabilities: ['audit.read'] }))
+    ).toEqual({ action: 'redirect', to: { name: 'AuditLogs' } })
+    // 能力集为空（新建后没挂角色 / 角色一个能力都没勾）：落「无管理权限」页，而不是空转
     expect(
       resolveGuardDecision(input(), state({ role: 'admin' }))
-    ).toEqual({ action: 'redirect', to: '/admin/dashboard' })
+    ).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
   })
 
   it('tutor 闯学员区 → 回导师工作台', () => {
@@ -529,7 +540,7 @@ describe('capabilityStep（能力校验）', () => {
       matched: [{ requiresAuth: true, workspace: 'training', capability: 'course.learn' }]
     }
     const d = resolveGuardDecision(page, state({ role: 'admin', subdomain: 'training' }))
-    expect(d).toEqual({ action: 'redirect', to: '/admin/dashboard' })
+    expect(d).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
   })
 
   it('管理端能力来自运行时集合：命中 → 放行', () => {
@@ -541,9 +552,20 @@ describe('capabilityStep（能力校验）', () => {
   })
 
   it('管理端能力未命中（含「能力集还没加载」）→ 不放行（fail closed，不回落静态表）', () => {
+    // 落点按能力集算（#1638）：空集 → 无权限页；只有审计 → 审计日志。两者都不放行当前页。
+    const expected: Record<string, string> = { '': 'AdminNoAccess', 'audit.read': 'AuditLogs' }
     for (const capabilities of [[], ['audit.read']]) {
       const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin', capabilities }))
-      expect(d).toEqual({ action: 'redirect', to: '/admin/dashboard' })
+      expect(d).toEqual({ action: 'redirect', to: { name: expected[capabilities.join(',')] } })
+    }
+  })
+
+  it('落点自身必须可达：任何能力集下算出的落点，其能力位要么没有、要么在该集合里（#1638 的判据）', () => {
+    for (const capabilities of [[], ['audit.read'], ['admin.access'], ['forum.moderate'], ['admin_role.manage']]) {
+      const landing = adminLandingPage(cap => capabilities.includes(cap))
+      const page = pages.find(p => p.name === landing)
+      expect(page, landing).toBeTruthy()
+      if (page?.capability) expect(capabilities, landing).toContain(page.capability)
     }
   })
 

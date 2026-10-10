@@ -173,15 +173,69 @@ const tabOwnerMap: Map<string, RouteName> = (() => {
   return m
 })()
 
-/** 页面的导航标题（描述符的 `nav.label`）；无 nav 的页面回退路由名。 */
+/**
+ * 页面的展示名：描述符的 `nav.label` → 非导航页的 `title` → 路由名。
+ *
+ * 第二档（#1638）是给「刻意不进侧栏但会被当作标签渲染」的页面用的（如「无管理权限」页）——
+ * 没有它，那种页面在标签栏上只能印英文路由名。
+ */
 export function pageTitleOf(name: RouteName): string {
   const page = pages.find(p => p.name === name)
-  return page?.nav?.label ?? String(name)
+  return page?.nav?.label ?? page?.title ?? String(name)
 }
 
 /** 该路由的标签归属：详情页返回其列表页路由名，其余返回 null（= 自成标签）。 */
 export function tabOwnerOf(routeName: string): RouteName | null {
   return tabOwnerMap.get(routeName) ?? null
+}
+
+// ===== 管理端落点（#1638）=====
+//
+// 为什么需要它：能力不足时的回落曾经是写死的「回管理员工作台」= /admin/dashboard，
+// 而 dashboard 自己也要能力位 —— 一个没有该能力的账号就在 dashboard 上打转，
+// vue-router 判定无限重定向并中止导航（线上形态：整页空白，刷新依旧）。
+// 落点判据因此必须**读运行时能力集**：仪表盘可达就是它，否则按侧栏顺序取第一个可达页，
+// 再没有就落「无管理权限」页（那是一个真的会渲染的页面，不是空白）。
+
+/** 管理端首页（标签栏的固定页默认落点）。 */
+export const ADMIN_DASHBOARD: RouteName = 'AdminDashboard'
+/** 管理端「无管理权限」页（能力集为空的账号的落点）。 */
+export const ADMIN_NO_ACCESS: RouteName = 'AdminNoAccess'
+
+/**
+ * 按侧栏顺序取第一个**能力位满足**的叶子页（递归；外链项与纯分组标题跳过）。
+ *
+ * 判据与侧栏过滤同源（同一个 `holds` 谓词），因此「守卫把账号送到哪一页」与
+ * 「侧栏给这个账号显示什么」永远一致 —— 不会出现「落点是一页它看不见的页面」。
+ * 带 `routeParams` 的项跳过：那种页只靠路由名跳不过去。
+ */
+export function firstAccessiblePage(
+  items: NavItem[],
+  holds: (capability: AuthzCapability) => boolean
+): RouteName | null {
+  for (const item of items) {
+    if (item.capability && !holds(item.capability)) continue
+    if (item.children?.length) {
+      const found = firstAccessiblePage(item.children, holds)
+      if (found) return found
+      continue
+    }
+    if (item.routeName && !item.routeParams) return item.routeName
+  }
+  return null
+}
+
+/**
+ * 管理端落点：仪表盘的能力位（取自描述符，不在这里另写键）满足就是仪表盘；
+ * 否则侧栏顺序的第一个可达页；一个都没有 → 「无管理权限」页。
+ *
+ * 守卫（能力回落）与标签栏（固定页）共用本函数：两处落点必须同源，否则会出现
+ * 「固定页是账号看不见的页面」这类回弹。
+ */
+export function adminLandingPage(holds: (capability: AuthzCapability) => boolean): RouteName {
+  const dashboard = pages.find(p => p.name === ADMIN_DASHBOARD)
+  if (!dashboard?.capability || holds(dashboard.capability)) return ADMIN_DASHBOARD
+  return firstAccessiblePage(adminNav, holds) ?? ADMIN_NO_ACCESS
 }
 
 /**

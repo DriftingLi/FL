@@ -5,29 +5,46 @@
  * 位置：**内容列顶部、贴顶栏下沿**（SidebarLayout 的 #content-header 插槽），随顶栏一起固定 ——
  * 侧栏的竖向连续性不被打断，标签栏与它承载的页面同列。
  *
- * 行为：固定页（仪表盘）不可关；点击切签；右键出菜单（关闭当前/关闭其他/关闭全部）；
+ * 行为：固定页不可关；点击切签；右键出菜单（关闭当前/关闭其他/关闭全部）；
  * 详情页按描述符的归属并入其列表页标签，不重复开签。
+ *
+ * 固定页不是写死的仪表盘（#1638）：**按当前账号的能力集算**（`adminLandingPage`，
+ * 与守卫的能力回落同源）。一个能力位都没有的账号，固定页就是「无管理权限」页 ——
+ * 否则固定页会变成一页它看不见的页面，点一次被弹一次。
  */
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Close } from '@element-plus/icons-vue'
 
-import { tabOwnerOf, pageTitleOf } from '@/config/navigation'
-import { PINNED_ADMIN_TAB, useAdminTabsStore } from '@/stores/adminTabs'
+import { adminLandingPage, tabOwnerOf, pageTitleOf } from '@/config/navigation'
+import { holdsCapability } from '@/utils/authzRuntime'
+import { useAuthStore } from '@/stores/auth'
+import { useAdminTabsStore } from '@/stores/adminTabs'
 import type { AdminTab } from '@/stores/adminTabs'
+import type { AuthzCapability } from '@/config/authz'
 import type { RouteName } from '@/config/pages'
 
 const route = useRoute()
 const router = useRouter()
 const tabsStore = useAdminTabsStore()
+const authStore = useAuthStore()
+
+/** 本账号的固定页 = 它的落点（能力集变化会自动跟着变）。 */
+const pinnedName = computed<RouteName>(() =>
+  adminLandingPage((cap: AuthzCapability) =>
+    holdsCapability(authStore.userInfo?.role, authStore.capabilities, cap)
+  )
+)
 
 /**
- * 固定页恒在（不是"访问过仪表盘才有"）：首次直接落到别的管理页时，标签栏也必须有一个
+ * 固定页恒在（不是"访问过它才有"）：首次直接落到别的管理页时，标签栏也必须有一个
  * 保底返回点，否则「关闭全部」之后无处可去。标题取描述符的 nav.label（同一份真源）。
  */
 function ensurePinnedTab(): void {
-  if (tabsStore.tabs.some(t => t.pinned)) return
-  tabsStore.open({ name: PINNED_ADMIN_TAB, title: pageTitleOf(PINNED_ADMIN_TAB), pinned: true })
+  const existing = tabsStore.tabs.find(t => t.pinned)
+  // 能力集变化会让落点换页（超管新授权/收回权限）：把旧的固定页换成新的那一页
+  if (existing?.name === pinnedName.value) return
+  tabsStore.open({ name: pinnedName.value, title: pageTitleOf(pinnedName.value), pinned: true })
 }
 
 // 路由变化 → 开签/激活（含详情页并入所属标签）
@@ -35,11 +52,14 @@ watch(
   () => route.fullPath,
   () => {
     ensurePinnedTab()
-    const tab = tabsStore.resolveTab(route, tabOwnerOf, pageTitleOf)
+    const tab = tabsStore.resolveTab(route, tabOwnerOf, pageTitleOf, pinnedName.value)
     if (tab) tabsStore.open(tab)
   },
   { immediate: true }
 )
+
+// 落点变化（能力集刷新 / 换账号）→ 固定页随之替换
+watch(pinnedName, () => ensurePinnedTab())
 
 function activate(tab: AdminTab): void {
   if (route.name === tab.name) return

@@ -21,6 +21,7 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
+import { adminLandingPage } from '@/config/navigation'
 import type { AuthzCapability } from '@/config/authz'
 import { holdsCapability } from '@/utils/authzRuntime'
 import type { RouteName } from '@/config/pages'
@@ -193,10 +194,23 @@ export const roleStep: GuardStep = (input, state) => {
   return workspaceFallback(input, state)
 }
 
-/** 可见性不足时的统一回落：管理员/导师回各自工作台、估值受限页回估值首页、其余回学员工作区。 */
+/**
+ * 可见性不足时的统一回落：管理员回**自己看得见的**管理页、导师回导师工作台、
+ * 估值受限页回估值首页、其余回学员工作区。
+ *
+ * 管理员这一支不再是「回工作台」写死的那一条（#1638）：dashboard 自己也要能力位，
+ * 一个能力集为空的账号会在 dashboard 上无限重定向，vue-router 中止导航 ⇒ 整页空白。
+ * 落点改由 adminLandingPage 按**运行时能力集**算：仪表盘可达 → 仪表盘；
+ * 否则侧栏顺序的第一个可达页；一个都没有 → 「无管理权限」页（真的会渲染）。
+ */
 function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision {
-  // 管理员/导师回各自工作台（角色 → 默认工作区单点）
-  if (state.role === 'admin' || state.role === 'tutor') {
+  if (state.role === 'admin') {
+    const landing = adminLandingPage(capability =>
+      holdsCapability(state.role, state.capabilities, capability)
+    )
+    return { action: 'redirect', to: { name: landing } }
+  }
+  if (state.role === 'tutor') {
     return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
   }
   // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
