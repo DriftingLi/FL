@@ -170,6 +170,9 @@ async function onCommand(command: string) {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
   align-items: center;
   background: var(--color-bg-page);
+  /* 十字细线的**横线**（#1629）：顶栏下沿 1px 分界线；与侧栏右缘的竖线交叉成十字。
+     这是对 ADR-0072「完全无缝」的**改判**：同色保留，但边界用一条细线明示。 */
+  border-bottom: 1px solid var(--color-border-light);
   z-index: var(--z-fixed);
 }
 
@@ -184,6 +187,9 @@ async function onCommand(command: string) {
   gap: var(--space-3);
   padding: 0 var(--space-4);
   min-width: 0;
+  height: 100%;
+  /* 十字细线的**竖线**在顶栏内的那一段：与侧栏右边界连成一条 */
+  border-right: 1px solid var(--color-border-light);
 }
 
 .app-topbar.is-collapsed .topbar-left {
@@ -249,6 +255,8 @@ async function onCommand(command: string) {
   gap: var(--space-3);
   padding: 0 var(--space-6);
   min-width: 0;
+  /* 兜底：中区内容再高也不许溢出顶栏（溢出＝没有底色的文字压在内容上） */
+  overflow: hidden;
 }
 
 /* 右区 */

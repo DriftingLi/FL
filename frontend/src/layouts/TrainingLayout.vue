@@ -9,7 +9,7 @@
     <!-- 证件切换器（全局过滤器）：坐顶栏中区最左、与内容列对齐（ADR-0072）。
          它是作用于内容区的上下文过滤器，故与它过滤的对象同一列；其余三端此段为空。 -->
     <template #topbar>
-      <CredentialSwitcher v-if="!chapterCourseId" />
+      <CredentialSwitcher v-if="!chapterCourseId" compact />
     </template>
 
     <template #top="{ collapsed }">
