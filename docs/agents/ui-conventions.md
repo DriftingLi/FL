@@ -18,6 +18,8 @@
 | **溢出菜单** | `UiMoreMenu`，卡片/列表项右上角「⋯」触发的**治理动作收纳**（举报 / 删除等低频、破坏性、非互动类操作）。**互动动作不进菜单**——回复 / 点赞这类高频社交动作留在卡片底部主操作行，两者不可混放（ADR-0042 的回复区形态）。菜单项由调用方提供，**可见性判定也在调用方**（如自己的回复不出现「举报」）。 |
 | **管理端列表状态机** | admin **列表页**一律 `useAdminTable`（页面只声明 `fetch` adapter 与 `actions` adapter，内置三态 / 分页 / 搜索 / 行操作分发 / 删除确认；ADR-0015 + ADR-0039）。**`fetch` 的出口形状是 api 侧的 `Page<T>`（`api/page.ts`，ADR-0060 决策 6 / 票 6），页面不自搭分页容器**——见下「分页容器归 api 侧」。**非列表页不套**（详情/仪表盘/配置页用 `useAsyncPage` 的三态即可）。`useAsyncPage` 是服务全站 34 处的通用三态件，**不要为 admin 改它**。**同一页面里的第二档要写明归属**（第十一波）：分页列表 → `useAdminTable`；只读/计数 section（巡检计数、汇总卡）→ `useAsyncPage` + `UiAsyncSection`。两档都不得 `catch {}` 静默吞错，档位在文件顶部注释里登记——判定口径与登记格式见下「管理端列表两档归属」。 |
 | **状态词表** | 同一业务状态（联络授权 / 投递 / 题目状态…）的 **label 与 tone 各只有一个 descriptor**：输入 status，输出 `{ label, tone }`，列表、抽屉、角标、admin 留痕只消费它；status 收成 union（取值集合与后端常量表对齐），**模板里不得内联状态文案裸串**（第十一波）。已落地的两个域见下「状态词表（联络授权 / 投递）」——**状态词按「描述状态事实」取词**，同一个取值不得有两种文案。 |
+| **无缝外壳** | 顶栏 / 侧栏 / 内容区底**同用** `--color-bg-page`、侧栏**无右边框**的外壳形态（ADR-0072）：接缝靠「同色」消失，层次全部由内容区里的卡片承担。**不得**再用分隔线、阴影或第二档底色去表达「外壳内部」的边界；侧栏的「自带深色」体系（`sidebarTheme` / `.is-dark` / `--color-bg-sidebar` 三件套）已整体退役，不要再复活。 |
+| **顶栏** | `components/layout/AppTopBar.vue`，棋盘格第一行：**左格** = 身份（头像 + 昵称，纯展示，宽度与侧栏同源、随折叠联动）、**中区** = 工作区控件插槽（学员端放 `CredentialSwitcher`）、**右区** = 工具位（通知入口 + 单一用户菜单：外观三态 + 退出登录）。**主题入口与退出登录只此一处**（浮动主题按钮已退役）；角色徽标收在用户菜单顶部的只读行里。 |
 | **侧栏导航行** | 侧栏每一项由 `components/layout/AppSidebarItem.vue` **这一个**项级渲染 module 出行（行种类外链 `<a>` / `<router-link>` / 目标未就绪的不可点行，只在它的 `kind` 判据上分档），`AppSidebar.vue` 只管分组编排（分组标题、展开态、折叠态 tooltip）。**不得在任一层级里另抄一份 `<a>`/`<router-link>` markup**（第十三波 票9 前：三层嵌套各写两遍、共 9 份）。高亮与展开判定一律走 `config/navigation.ts` 的纯函数（`isNavRouteActive` / `isGroupExpanded` / `toggleGroupExpanded` / `flattenLeaves` / `isGroupActive`，测试面 `config/__tests__/navigation.spec.ts`），**组件里不自建匹配逻辑**。项级样式（`.nav-item` 一族）随组件下沉到 `AppSidebarItem.vue` 的 scoped 块——`scoped` 不穿子组件，祖先选择器（`.app-sidebar.collapsed|is-dark|is-compact`）仍照常命中。 |
 
 ### 状态词表（联络授权 / 投递）（第十一波 #1103 / ADR-0056 §8）
@@ -140,5 +142,5 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 - **新增样式禁止硬编码色值**：深色模式是靠翻 CSS 变量实现的，只对走 `var()` 的声明生效；裸 hex 不参与变量链，暗色下保持亮色 → 「暗底亮块」崩坏。一律用 `design-tokens.css` 的变量或 Tailwind 原子类。
   CI 会对 PR 的新增行做检查（`scripts/check-bare-hex.sh --diff`），豁免 `var(--token, #fallback)` 防御写法、`#fff`/`#000`、注释行与 `<script>` 块（canvas 色板属合理存在）。存量进度自查：`bash scripts/check-bare-hex.sh --all frontend/src`。
 
-- **主题切换按钮要覆盖所有布局**：现装在 `SidebarLayout`（学员/讲师/管理/招聘四端继承它）与 `ValuationLayout`。
+- **主题切换入口要覆盖所有布局**：#1619 起，四个走 `SidebarLayout` 的工作区（学员/讲师/管理/招聘）由**顶栏右区的用户菜单**承载（外观三态；原 `ThemeToggle fixed` 浮动按钮已退役）；`ValuationLayout`、`AuthPageShell`、`ChatPageShell` 各自保留自己的入口。
   认证布局 `AuthPageShell` 曾漏装，导致系统深色偏好的用户在登录页既看到崩坏画面、又无法切回浅色（#554）。**新增任何独立布局时，必须一并评估主题入口**——这条已踩两次（#432 补了 ValuationLayout，#554 补 AuthPageShell）。

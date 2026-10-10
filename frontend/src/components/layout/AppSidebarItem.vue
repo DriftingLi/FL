@@ -6,8 +6,9 @@
 
     样式：`scoped` 不穿子组件，所以 .nav-item / .nav-item-icon / .nav-item-label 一族规则
     随本组件下沉（与 NotificationPanel → NotificationPanelBody 同一手法）。
-    `.app-sidebar.collapsed|is-dark|is-compact` 是**祖先**选择器，作用域属性只加在最后一个复合选择器上
+    `.app-sidebar.collapsed|is-compact` 是**祖先**选择器，作用域属性只加在最后一个复合选择器上
     （即本组件根节点），因此这些变体照常命中，声明顺序与特异性与改造前逐字一致。
+    （原 `is-dark` 一档已随恒深侧栏退役，#1619 / ADR-0072。）
   -->
   <a
     v-if="kind === 'external'"
@@ -155,31 +156,8 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
   white-space: nowrap;
 }
 
-/* ---------------------------------------------------------------------------
- * 主题（theme）与密度（density）变体 —— 同 AppSidebar.vue 的约定：
- * 刻意「追加覆盖」而非改写上面的规则，因此 light + default 分支与改造前逐像素一致；
- * 变体选择器多两个类（.app-sidebar.is-*），特异性天然高于上面的单类规则，无需 !important。
- * ------------------------------------------------------------------------- */
-
-/* dark：石墨青暗底（走 --color-bg-sidebar token，深色模式下自动翻更深 #0B1120） */
-.app-sidebar.is-dark .nav-item {
-  color: rgba(241, 245, 249, 0.72);
-}
-
-.app-sidebar.is-dark .nav-item:hover {
-  color: var(--color-primary-300);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.app-sidebar.is-dark .nav-item.active {
-  color: var(--color-primary-300);
-  background: rgba(45, 212, 191, 0.14);
-}
-
-/* 激活指示条在暗底上要更亮才看得见 */
-.app-sidebar.is-dark .nav-item.active::before {
-  background: var(--color-primary-400);
-}
+/* 密度（density）变体：恒深侧栏的 is-dark 覆盖已整体退役（#1619 / ADR-0072），
+ * 导航行的配色现在只有一套（跟随主题 token）。 */
 
 /* compact：收紧纵向间距 */
 .app-sidebar.is-compact .nav-item {

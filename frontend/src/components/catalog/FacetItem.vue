@@ -43,7 +43,10 @@ defineEmits<{ select: [] }>()
 }
 
 .cc-nav-item:hover {
-  background: var(--color-bg-sidebar-hover);
+  /* #1619：原用 --color-bg-sidebar-hover（侧栏深色体系的 token）——它在本组件所在的**内容区
+     浅表面上**本就是错位配色（深底配深字），随恒深侧栏退役一并改判为「比所在表面深一档」。
+     bg-page 浅色下 #F8FAFC（卡片白之下一档）、深色下 #0F172A（卡片 #1E293B 之下一档）。 */
+  background: var(--color-bg-page);
 }
 
 .cc-nav-item.active {
