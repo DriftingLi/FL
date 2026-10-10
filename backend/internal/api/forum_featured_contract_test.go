@@ -25,6 +25,7 @@ import (
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/forum"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
@@ -59,6 +60,9 @@ func TestForumFeaturedContract(t *testing.T) {
 	r := gin.New()
 	apiGroup := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
+	// 管理端能力解析源（#1618 段1）：本用例自建路由（不经 NewRouter），必须与装配根同样注入，
+	// 否则管理端端点因「静态表不回答 admin」而一律 403。
+	apiGroup.Use(middleware.AdminCapabilityResolver(deps.AdminSvc))
 	forum.RegisterAdminRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc)
 	forum.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.ForumSvc, deps.ForumModSvc, deps.ForumImageSvc)
 	points.RegisterRoutes(apiGroup, deps.RouterDeps().Session, deps.PointsSvc)
@@ -68,11 +72,8 @@ func TestForumFeaturedContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发作者 token 失败: %v", err)
 	}
-	adminToken, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
-		Issue(1, "admin1", "admin")
-	if err != nil {
-		t.Fatalf("签发 admin token 失败: %v", err)
-	}
+	// 管理端能力由数据层回答（#1618 段1）：admin 令牌必须对应一个真实存在、且挂了角色的账号。
+	adminToken := adminTokenWithAccount(t, cfg, db, "admin1")
 
 	do := func(tok, method, path string, body any) *httptest.ResponseRecorder {
 		var req *http.Request

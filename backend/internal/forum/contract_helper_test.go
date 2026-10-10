@@ -7,8 +7,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admincap"
 	"forklift-training/internal/config"
 	"forklift-training/internal/filestore"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -35,6 +37,9 @@ func newForumContractEnv(t *testing.T) (*gorm.DB, *gin.Engine, *security.Session
 	imageSvc := NewImageService(env.db, filestore.NewFileStore("", env.st, zap.NewNop()), zap.NewNop())
 	r := gin.New()
 	grp := r.Group("/api")
+	// 管理端能力解析源（#1618 段1）：域包契约测试自建路由，与装配根 NewRouter 挂同一份实现。
+	// 缺了它管理端端点一律 403 —— admin 的能力已改由数据层回答，静态表不再回答它。
+	grp.Use(middleware.AdminCapabilityResolver(admincap.New(env.db, zap.NewNop())))
 	RegisterAdminRoutes(grp, sess, env.svc, env.mod)
 	RegisterRoutes(grp, sess, env.svc, env.mod, imageSvc)
 	return env.db, r, sess, cfg

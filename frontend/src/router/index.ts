@@ -39,6 +39,8 @@ function routeMeta(page: PageDescriptor): Record<string, unknown> {
   if (page.isValuationAuthPage) meta.isValuationAuthPage = true
   if (page.roles) meta.roles = page.roles
   if (page.capability) meta.capability = page.capability
+  // 缓存位（#1620）：SidebarLayout 读它决定该页是否进 keep-alive 的 include 名单
+  if (page.keepAlive) meta.keepAlive = true
   return meta
 }
 
@@ -81,10 +83,15 @@ const legacyRedirects: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: () => {
+      // 专属子域（mentor./manage.）根路径 → 本子域默认工作区（#1614：按公开路径处理，身份校验
+      // 交给守卫的 subdomainRoleStep——不符角色清登录态回本子域登录页，而非弹去 training 子域）
+      const sub = getSubdomain()
+      if (sub === 'tutor') return '/training/tutor'
+      if (sub === 'admin') return '/admin/dashboard'
       // valuation 子域根路径 → 估值首页（公开，无需登录）；
       // 原逻辑会跳 /login，守卫再把 valuation 子域的登录页转成 /valuation/login
-      if (getSubdomain() === 'valuation') return '/valuation'
-      if (getSubdomain() === 'recruit') return '/recruit'
+      if (sub === 'valuation') return '/valuation'
+      if (sub === 'recruit') return '/recruit'
       const authStore = useAuthStore()
       const workspace = resolveWorkspaceForRole(authStore.userInfo?.role)
       // 未知角色 resolveWorkspaceForRole 返回 '/'，根路径按原逻辑回登录页
@@ -171,7 +178,9 @@ router.beforeEach(async (to, _from, next) => {
     hasValidToken: !!(authStore.token && authStore.isLoggedIn && authStore.userInfo && authStore.userInfo.role),
     subdomain: getSubdomain(),
     ipDirect: isIpDirectMode(),
-    credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present'
+    credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present',
+    // 运行时能力集（#1618 段1）：管理端的能力由数据层回答，守卫据此判定页面可达性
+    capabilities: authStore.capabilities
   })
 
   for (;;) {

@@ -21,6 +21,15 @@ const RecruiterRole = "recruiter"
 // 注意与 authz.RoleTutor 不是一回事：那一层是能力角色名，这一层是凭证命名空间。
 const TutorRole = "tutor"
 
+// AdminRole 管理员角色名（#1640）。与另三个同住处、同口径：**这是凭证命名空间**，
+// 不是能力角色名（authz.RoleAdmin 那一层是能力角色）—— 两者取值相同是事实，但它们是两个概念，
+// 各自只有一个住处。管理员的 JWT 角色 claim 与全会话吊销的命名空间都用它。
+const AdminRole = "admin"
+
+// ErrAdminNotFound 「管理员账号不存在」这一事实的唯一载体（#1640，与 ErrRecruiterNotFound 同形）。
+// 口令写面（core.ApplyAdminPassword）拿它把「账号不存在」与「查不动」分档。
+var ErrAdminNotFound = errors.New("管理员不存在")
+
 // ErrRecruiterNotFound 「招聘者账号不存在」这一事实的唯一载体（ADR-0064 决策 1/2）。
 // 与吊销命名空间 RecruiterRole 同处一地，api 侧据此把它与「查不动」分档。
 var ErrRecruiterNotFound = errors.New("招聘者不存在")

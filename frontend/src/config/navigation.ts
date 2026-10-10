@@ -1,9 +1,11 @@
 import type { Component } from 'vue'
+import type { AuthzCapability } from './authz'
 import type { RouteName } from './pages'
 import {
   navGroups,
   navPages,
   externalNavItems,
+  pages,
   type PageDescriptor,
   type Workspace
 } from './pages'
@@ -33,6 +35,13 @@ export interface NavItem {
   // exact=true 时仅精确匹配 route.name 才高亮。
   // name 匹配天然精确，因此该标记保留以兼容既有语义，但不再参与前缀判断。
   exact?: boolean
+  /**
+   * 该项的可见性判据（来自页面描述符的 capability，ADR-0047 §2）。
+   *
+   * 消费面必须经 filterNavByCapability 过滤：直接渲染未过滤的导航会让「没有权限的菜单项」
+   * 留在侧栏里（点进去才 403）——管理端尤其明显，它的权限是超管按角色分配的（#1618 段1）。
+   */
+  capability?: AuthzCapability
 }
 
 type RouteParamsLike = Record<string, string | string[] | undefined>
@@ -82,7 +91,8 @@ function toNavItem(page: PageDescriptor): NavItem {
     activeRouteNames: nav.activeRouteNames,
     routeParams: nav.routeParams,
     icon: nav.icon,
-    exact: nav.exact
+    exact: nav.exact,
+    capability: page.capability
   }
 }
 
@@ -147,6 +157,120 @@ export const roleNavigation: Record<string, NavItem[]> = {
   admin: adminNav,
   tutor: tutorNav,
   recruiter: recruiterNav
+}
+
+/**
+ * 详情页 → 所属标签（列表页）的反查表（#1620）：由描述符的 `nav.activeRouteNames` 派生。
+ *
+ * 列表页已经声明了「哪些详情页属于我」（侧栏高亮用的同一份声明），标签归属直接复用，
+ * 不另写一张「详情页 → 列表页」的表 —— 那会是同一事实的第二份真源。
+ */
+const tabOwnerMap: Map<string, RouteName> = (() => {
+  const m = new Map<string, RouteName>()
+  for (const page of pages) {
+    for (const owned of page.nav?.activeRouteNames ?? []) m.set(owned, page.name)
+  }
+  return m
+})()
+
+/**
+ * 页面的展示名：描述符的 `nav.label` → 非导航页的 `title` → 路由名。
+ *
+ * 第二档（#1638）是给「刻意不进侧栏但会被当作标签渲染」的页面用的（如「无管理权限」页）——
+ * 没有它，那种页面在标签栏上只能印英文路由名。
+ */
+export function pageTitleOf(name: RouteName): string {
+  const page = pages.find(p => p.name === name)
+  return page?.nav?.label ?? page?.title ?? String(name)
+}
+
+/** 该路由的标签归属：详情页返回其列表页路由名，其余返回 null（= 自成标签）。 */
+export function tabOwnerOf(routeName: string): RouteName | null {
+  return tabOwnerMap.get(routeName) ?? null
+}
+
+// ===== 管理端落点（#1638）=====
+//
+// 为什么需要它：能力不足时的回落曾经是写死的「回管理员工作台」= /admin/dashboard，
+// 而 dashboard 自己也要能力位 —— 一个没有该能力的账号就在 dashboard 上打转，
+// vue-router 判定无限重定向并中止导航（线上形态：整页空白，刷新依旧）。
+// 落点判据因此必须**读运行时能力集**：仪表盘可达就是它，否则按侧栏顺序取第一个可达页，
+// 再没有就落「无管理权限」页（那是一个真的会渲染的页面，不是空白）。
+
+/** 管理端首页（标签栏的固定页默认落点）。 */
+export const ADMIN_DASHBOARD: RouteName = 'AdminDashboard'
+/** 管理端「无管理权限」页（能力集为空的账号的落点）。 */
+export const ADMIN_NO_ACCESS: RouteName = 'AdminNoAccess'
+
+/**
+ * 按侧栏顺序取第一个**能力位满足**的叶子页（递归；外链项与纯分组标题跳过）。
+ *
+ * 判据与侧栏过滤同源（同一个 `holds` 谓词），因此「守卫把账号送到哪一页」与
+ * 「侧栏给这个账号显示什么」永远一致 —— 不会出现「落点是一页它看不见的页面」。
+ * 带 `routeParams` 的项跳过：那种页只靠路由名跳不过去。
+ */
+export function firstAccessiblePage(
+  items: NavItem[],
+  holds: (capability: AuthzCapability) => boolean
+): RouteName | null {
+  for (const item of items) {
+    if (item.capability && !holds(item.capability)) continue
+    if (item.children?.length) {
+      const found = firstAccessiblePage(item.children, holds)
+      if (found) return found
+      continue
+    }
+    if (item.routeName && !item.routeParams) return item.routeName
+  }
+  return null
+}
+
+/**
+ * 管理端落点：仪表盘的能力位（取自描述符，不在这里另写键）满足就是仪表盘；
+ * 否则侧栏顺序的第一个可达页；一个都没有 → 「无管理权限」页。
+ *
+ * 守卫（能力回落）与标签栏（固定页）共用本函数：两处落点必须同源，否则会出现
+ * 「固定页是账号看不见的页面」这类回弹。
+ */
+export function adminLandingPage(holds: (capability: AuthzCapability) => boolean): RouteName {
+  const dashboard = pages.find(p => p.name === ADMIN_DASHBOARD)
+  if (!dashboard?.capability || holds(dashboard.capability)) return ADMIN_DASHBOARD
+  return firstAccessiblePage(adminNav, holds) ?? ADMIN_NO_ACCESS
+}
+
+/**
+ * 进 keep-alive 缓存的组件名清单（#1620）：= 该工作区描述符里 `keepAlive: true` 的页面路由名。
+ *
+ * 名字取自描述符的 `name`，而页面组件用 `defineOptions({ name })` 对齐同一个名字 ——
+ * 两侧对不上时该页不会被缓存（无声失效），故 `config/__tests__/pages.spec.ts` 有锁。
+ */
+export function keepAliveNames(workspace: Workspace): string[] {
+  return pages.filter(p => p.keepAlive && p.workspace === workspace).map(p => p.name)
+}
+
+/**
+ * 按能力过滤导航树（#1618 段1）：递归丢弃判据不满足的叶子，并丢弃因此变空的分组。
+ *
+ * 判据由调用方以 `holds` 注入，而不是在这里读 store：本模块在**装载期**派生导航树，
+ * 把能力集固化进模块状态会让「登录后拉到的能力集」永远晚一步；判据本身单点在
+ * `utils/authzRuntime.holdsCapability`（动态角色读运行时集合、静态角色读生成的能力表）。
+ */
+export function filterNavByCapability(
+  items: NavItem[],
+  holds: (capability: AuthzCapability) => boolean
+): NavItem[] {
+  const out: NavItem[] = []
+  for (const item of items) {
+    if (item.capability && !holds(item.capability)) continue
+    if (item.children?.length) {
+      const children = filterNavByCapability(item.children, holds)
+      if (children.length === 0) continue
+      out.push({ ...item, children })
+      continue
+    }
+    out.push(item)
+  }
+  return out
 }
 
 // ===== 侧栏分组判定（纯函数；ADR-0047 §2 / spec #930 决策 6）=====

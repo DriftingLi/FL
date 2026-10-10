@@ -38,11 +38,15 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapInspectionRead))
 	// 巡检计数：删除已解决帖计数
 	g.GET("/inspection/deleted-after-accepted", h.DeletedAfterAcceptedCount)
-	// 问答积分流水按原因筛选（admin 全量；查询归位 points.Service.GetLedger，#401）
-	g.GET("/points/ledger", h.PointsLedger)
 	// 招聘企业账号的查看与申请记录（滥用收口靠禁用位）
 	g.GET("/recruit/views", h.ListRecruitViews)
 	g.GET("/recruit/requests", h.ListRecruitRequests)
+
+	// 问答积分流水按原因筛选（admin 全量；查询归位 points.Service.GetLedger，#401）。
+	// 它同属积分管理（#1639）：只在巡检组里挂会把拿 points.admin 的人挡在自家流水之外。
+	ledger := rg.Group("/admin", middleware.JWTAuth(session),
+		middleware.CapabilityRequired(authz.CapInspectionRead, authz.CapPointsAdmin))
+	ledger.GET("/points/ledger", h.PointsLedger)
 }
 
 // @Summary 巡检计数：删除已解决帖

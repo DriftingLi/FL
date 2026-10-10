@@ -3,12 +3,16 @@
 // 工作区语义而非子域名字面——IP 直连部署形态下子域概念不存在）；守卫主路径读声明，
 // 子域前缀表（authRedirect.PATH_AUTH_ENTRIES）降级为未匹配路径（404）的兜底。
 //
-// 管线：(目标路由, 认证/环境状态) ⇒ 决策。五个决策步骤各管一件事，顺序即既有守卫的求值序：
+// 管线：(目标路由, 认证/环境状态) ⇒ 决策。六个决策步骤各管一件事，顺序即既有守卫的求值序：
 //   1. subdomainBoundaryStep —— 子域边界（IP 直连旁路：无 DNS 子域名环境整段跳过）
 //   2. authPageStep          —— 已登录访问认证页的回跳
 //   3. authRequiredStep      —— 需登录而未登录（决策附带清登录态标记）
-//   4. roleStep              —— 角色校验
-//   5. credentialStep        —— 无证件 onboarding 预筛（ADR-0020；前置 3 已放行需登录路由）
+//   4. subdomainRoleStep     —— 专属子域身份匹配（#1614）：已登录但角色与该子域缺席角色
+//                               不符 → 清登录态回本子域登录页。父域 Cookie 使学员登录态在
+//                               mentor./manage. 生效，须先判「不是本子域的人」，否则角色
+//                               回落会被子域边界整页弹去 training
+//   5. roleStep              —— 角色校验
+//   6. credentialStep        —— 无证件 onboarding 预筛（ADR-0020；前置 3 已放行需登录路由）
 // 纯函数约束：不触 window / store / router——环境事实（当前子域名、IP 直连、证件状态）由
 // orchestrator（router/index.ts beforeEach）注入；跨子域名整页跳转 URL 与「当前子域名默认
 // 工作区」由 orchestrator 构建/解析。证件数据未加载时经 load-credential 决策交还
@@ -17,7 +21,9 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
-import { hasCapability, type AuthzCapability, type AuthzRole } from '@/config/authz'
+import { adminLandingPage } from '@/config/navigation'
+import type { AuthzCapability } from '@/config/authz'
+import { holdsCapability } from '@/utils/authzRuntime'
 import type { RouteName } from '@/config/pages'
 
 /** onboarding 预筛的落点：由页面描述符表派生的 RouteName 收窄（名单已无第二处手工表，写错即编译报错）。 */
@@ -65,6 +71,11 @@ export interface GuardState {
   ipDirect: boolean
   /** 当前证件状态（credential store；'unloaded' = 未加载） */
   credential: 'unloaded' | 'none' | 'present'
+  /**
+   * 运行时能力集（#1618 段1）：动态角色（管理端）经 GET /admin/me/capabilities 下发，
+   * 静态角色恒为空数组（它们的可达面由生成的能力表回答）。判定见 utils/authzRuntime。
+   */
+  capabilities: readonly string[]
 }
 
 /** 守卫决策（orchestrator 执行） */
@@ -131,7 +142,7 @@ export const subdomainBoundaryStep: GuardStep = (input, state) => {
 export const authPageStep: GuardStep = (input, state) => {
   if (!state.isLoggedIn || !state.role) return null
   const ws = workspaceOf(input)
-  // 主体系认证页 → 按当前子域名回对应工作区
+  // 主体系认证页 → 按当前子域名回对应工作区（到不了的角色由下一步的子域身份匹配拦回登录页）
   if (ws === 'auth') return { action: 'workspace-home' }
   // 估值认证页 → 已登录学员回评估历史
   const isAuthPage = input.matched.some(record => record.authPage === true)
@@ -152,7 +163,27 @@ export const authRequiredStep: GuardStep = (input, state) => {
   return { action: 'redirect', to, clearAuth: true }
 }
 
-/** 步骤 4：角色校验（meta.role 单角色 / meta.roles 多角色，最终合并 meta 生效）。 */
+/**
+ * 步骤 4：专属子域身份匹配（#1614 / ADR-0071）——父域 Cookie（hrwai_token / refresh 同 Domain）
+ * 使登录态在所有子域生效，「已登录」不再等价「是本子域的人」。tutor/admin/recruit 三个专属
+ * 子域上，登录角色与缺席角色（getRoleForSubdomain 口径：tutor/admin/recruiter）不符时，
+ * 清登录态回**本子域**登录页并携带回跳。放在角色校验之前：否则学员会被 workspaceFallback
+ * 弹向 /training，再被子域边界整页跳去 training 子域（原缺陷路径），永远到不了本子域登录页。
+ * clearAuth 先清再重定向：管线重跑时未登录 → authRequiredStep 常规引导登录；登录页属 auth
+ * 工作区不再触发本步骤，无循环。IP 直连（无子域概念）与共号子域（training/valuation/main）
+ * 旁路，身份语义交给既有角色/能力校验。
+ */
+export const subdomainRoleStep: GuardStep = (input, state) => {
+  if (state.ipDirect) return null
+  const sub = state.subdomain
+  if (sub !== 'tutor' && sub !== 'admin' && sub !== 'recruit') return null
+  if (!state.isLoggedIn || !state.role) return null
+  const expectedRole = sub === 'tutor' ? 'tutor' : sub === 'admin' ? 'admin' : 'recruiter'
+  if (state.role === expectedRole) return null
+  return { action: 'redirect', to: { path: '/login', query: { redirect: input.fullPath } }, clearAuth: true }
+}
+
+/** 步骤 5：角色校验（meta.role 单角色 / meta.roles 多角色，最终合并 meta 生效）。 */
 export const roleStep: GuardStep = (input, state) => {
   const requiredRole = input.meta?.role as string | undefined
   const requiredRoles = input.meta?.roles as string[] | undefined
@@ -163,10 +194,23 @@ export const roleStep: GuardStep = (input, state) => {
   return workspaceFallback(input, state)
 }
 
-/** 可见性不足时的统一回落：管理员/导师回各自工作台、估值受限页回估值首页、其余回学员工作区。 */
+/**
+ * 可见性不足时的统一回落：管理员回**自己看得见的**管理页、导师回导师工作台、
+ * 估值受限页回估值首页、其余回学员工作区。
+ *
+ * 管理员这一支不再是「回工作台」写死的那一条（#1638）：dashboard 自己也要能力位，
+ * 一个能力集为空的账号会在 dashboard 上无限重定向，vue-router 中止导航 ⇒ 整页空白。
+ * 落点改由 adminLandingPage 按**运行时能力集**算：仪表盘可达 → 仪表盘；
+ * 否则侧栏顺序的第一个可达页；一个都没有 → 「无管理权限」页（真的会渲染）。
+ */
 function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision {
-  // 管理员/导师回各自工作台（角色 → 默认工作区单点）
-  if (state.role === 'admin' || state.role === 'tutor') {
+  if (state.role === 'admin') {
+    const landing = adminLandingPage(capability =>
+      holdsCapability(state.role, state.capabilities, capability)
+    )
+    return { action: 'redirect', to: { name: landing } }
+  }
+  if (state.role === 'tutor') {
     return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
   }
   // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
@@ -176,7 +220,7 @@ function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision 
 }
 
 /**
- * 步骤 4b：能力校验（ADR-0047 §1/§2；meta.capability 由页面描述符注入）。
+ * 步骤 5b：能力校验（ADR-0047 §1/§2；meta.capability 由页面描述符注入）。
  *
  * 语义边界：能力是**角色资格**，只对「需要登录」的页面生效——公开页（requiresAuth 全 false）
  * 今天对任意角色开放，加能力位不得把 /ai-assistant 这类页面锁死。判据来自后端能力表的
@@ -187,12 +231,13 @@ export const capabilityStep: GuardStep = (input, state) => {
   if (!required) return null
   const requiresAuth = input.matched.some(record => record.requiresAuth === true)
   if (!requiresAuth) return null
-  if (hasCapability(state.role as AuthzRole, required)) return null
+  // 两条路径收在 holdsCapability：动态角色（管理端）读运行时能力集，静态角色读生成的能力表。
+  if (holdsCapability(state.role, state.capabilities, required)) return null
   return workspaceFallback(input, state)
 }
 
 /**
- * 步骤 5：无证件 onboarding 预筛（ADR-0020）——hrwai_user 在 training 工作区且未选证件时
+ * 步骤 6：无证件 onboarding 预筛（ADR-0020）——hrwai_user 在 training 工作区且未选证件时
  * 强制进 onboarding；已选证件访问 onboarding → 回 /training。IP 直连旁路。
  * 求值序前置：authRequiredStep 已对无需登录路由放行（预筛不适用于公开页）。
  * 证件未加载 → load-credential 决策交还 orchestrator；加载失败同样落 'none'
@@ -214,10 +259,10 @@ export const credentialStep: GuardStep = (input, state) => {
 
 /**
  * 决策管线：按既有守卫求值序执行各步骤，首个产出决策的步骤生效；全步骤放行 = allow。
- * 步骤顺序 = 行为不变承诺的一部分，不可调整。
+ * 步骤顺序 = 行为承诺的一部分，不可随意调整（步骤 4 的插入决策见 ADR-0071）。
  */
 export function resolveGuardDecision(input: GuardInput, state: GuardState): GuardDecision {
-  const steps: GuardStep[] = [subdomainBoundaryStep, authPageStep, authRequiredStep, roleStep, capabilityStep, credentialStep]
+  const steps: GuardStep[] = [subdomainBoundaryStep, authPageStep, authRequiredStep, subdomainRoleStep, roleStep, capabilityStep, credentialStep]
   for (const step of steps) {
     const decision = step(input, state)
     if (decision) return decision

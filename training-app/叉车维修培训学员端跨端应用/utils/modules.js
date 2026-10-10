@@ -103,7 +103,7 @@ const INFRA = {
    * - `api/auth.uts` —— 鉴权域，5 个模块（forgot-password / login / profile / profile-setup / register）共用
    * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
-   * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**611 行，见 `oversized`**）
+   * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**711 行现测（#1598/#1603 订正，登记时 611），见 `oversized`**）
    * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），被 20+ 模块的列表页共用，
    *   无模块级消费者；与 `utils/**` 同属**跨切面基础设施**（登记不执法），预算面归它自己的票
    * - `composables/useLoginProviders.uts` —— #1478 的登录提供方能力探测件：返回「微信登录可用吗」这一

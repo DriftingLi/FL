@@ -31,7 +31,10 @@ var ModelBlocks = []ModelBlock{
 			&Notification{},
 			&AuditLog{},
 			&ProfileChangeRequest{},
+			&AdminRole{}, // 先建角色：admin.role_id 外键指向它（#1618 段1）
 			&Admin{},
+
+			&AdminRoleCapability{},
 			&Tutor{},
 		},
 	},

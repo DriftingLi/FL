@@ -6,6 +6,10 @@
 //
 // 用法：页面/路由声明「需要什么能力」（AuthzCapability），角色可达面由 ROLE_CAPABILITIES
 // 回答。**不要**在前端另抄一份角色清单——那是本文件要消灭的东西。
+//
+// 例外：'admin' 的能力**不来自本表**（#1618 段1）——管理端权限由超管按角色分配，运行时经
+// GET /admin/me/capabilities 下发。ROLE_CAPABILITIES.admin 因此**有意为空**，
+// hasCapability('admin', …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
 
 export type AuthzRole =
   | 'hrwai_user'
@@ -16,24 +20,30 @@ export type AuthzRole =
 
 export type AuthzCapability =
   | 'admin.access'
+  | 'admin_account.manage'
+  | 'admin_role.manage'
   | 'ai_assistant.use'
+  | 'ai_config.manage'
   | 'application.review'
   | 'audit.read'
   | 'catalog.author'
-  | 'catalog.manage'
   | 'check_in.use'
   | 'contact.request'
   | 'contact.respond'
-  | 'content.manage'
+  | 'content.generate'
   | 'contribution.review'
   | 'contribution.submit'
   | 'course.learn'
+  | 'course.manage'
+  | 'credential.manage'
   | 'export.run'
   | 'faq.manage'
   | 'faq.read'
   | 'favorite.manage'
+  | 'featured.manage'
   | 'forum.moderate'
   | 'forum.participate'
+  | 'hrwai_user.manage'
   | 'inspection.read'
   | 'job.apply'
   | 'job.manage'
@@ -44,6 +54,7 @@ export type AuthzCapability =
   | 'notification.use'
   | 'points.admin'
   | 'points.use'
+  | 'position.manage'
   | 'profile.review'
   | 'question.author'
   | 'question.practice'
@@ -55,17 +66,26 @@ export type AuthzCapability =
   | 'resume.manage'
   | 'resume.pdf'
   | 'search.use'
+  | 'statistics.read'
   | 'student.access'
   | 'tutor.access'
+  | 'tutor.manage'
   | 'valuation.config'
   | 'valuation.use'
 
+
+/**
+ * 能力由**数据层**回答的角色（#1618 段1）：它们的可达面必须读运行时能力集
+ * （GET /admin/me/capabilities），本表对它们 fail closed。
+ */
+export const DYNAMIC_ROLES: readonly AuthzRole[] = ['admin']
 
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
   hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'faq.read', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
   tutor: ['catalog.author', 'contribution.review', 'question.author', 'tutor.access'],
-  admin: ['admin.access', 'audit.read', 'catalog.author', 'catalog.manage', 'content.manage', 'contribution.review', 'export.run', 'faq.manage', 'forum.moderate', 'inspection.read', 'job_report.handle', 'points.admin', 'profile.review', 'question.author', 'question.review', 'recruiter.manage', 'valuation.config'],
+  // admin 有意为空：其能力由数据层回答（GET /admin/me/capabilities），本表对该角色 fail closed。
+  admin: [],
   recruiter: ['application.review', 'contact.request', 'job.manage', 'recruit.access', 'recruit.resume_pdf'],
 }
 

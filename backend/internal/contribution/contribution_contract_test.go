@@ -12,6 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"gorm.io/gorm"
+
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
@@ -124,7 +126,7 @@ func TestContributionAPIContract(t *testing.T) {
 	}
 
 	// 5. admin 通过
-	adminTok := issueContributionAdminToken(t, cfg)
+	adminTok := issueContributionAdminToken(t, cfg, deps.DB)
 	w = contributionDo(t, r, adminTok, "POST", fmt.Sprintf("/api/admin/contributions/%d/approve", cID), nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("approve 应 200, got %d body=%s", w.Code, w.Body.String())
@@ -200,10 +202,14 @@ func TestContributionAPIContract(t *testing.T) {
 }
 
 // issueContributionAdminToken 签发 admin token（契约测试）。
-func issueContributionAdminToken(t *testing.T, cfg *config.Config) string {
+//
+// #1618 段1：管理端能力由数据层回答，令牌必须对应**真实存在**且挂了角色的账号 ——
+// 此前这里借 id=1 直接签 admin 角色，在「role 即能力」的旧口径下成立，现在会 403。
+func issueContributionAdminToken(t *testing.T, cfg *config.Config, db *gorm.DB) string {
 	t.Helper()
+	admin := testutil.SeedAdmin(t, db, "admin1", "x")
 	tok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
-		Issue(1, "admin1", "admin")
+		Issue(admin.AdminID, admin.Username, "admin")
 	if err != nil {
 		t.Fatalf("签发 admin token 失败: %v", err)
 	}

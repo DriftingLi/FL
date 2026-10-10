@@ -3,42 +3,9 @@
     class="app-sidebar"
     :class="{
       collapsed: effectiveCollapsed,
-      'is-dark': props.theme === 'dark',
       'is-compact': props.density === 'compact'
     }"
   >
-    <!-- 用户信息区（含退出登录下拉菜单） -->
-    <el-dropdown
-      class="sidebar-user-dropdown"
-      trigger="click"
-      :placement="effectiveCollapsed ? 'right-start' : 'bottom-start'"
-      @command="handleUserCommand"
-    >
-      <div class="sidebar-user" :class="{ 'is-collapsed': effectiveCollapsed }">
-        <img
-          v-if="authStore.userInfo?.avatar_url"
-          :src="String(authStore.userInfo.avatar_url)"
-          class="user-avatar-circle user-avatar-img"
-          alt="头像"
-        />
-        <div v-else class="user-avatar-circle">
-          {{ (authStore.userInfo?.username || '?').charAt(0) }}
-        </div>
-        <div v-if="!effectiveCollapsed" class="user-info">
-          <span class="user-name">{{ authStore.userInfo?.username }}</span>
-          <span class="role-badge" :class="roleClass">{{ roleLabel }}</span>
-        </div>
-        <el-icon v-if="!effectiveCollapsed" class="user-dropdown-arrow"><ArrowDown /></el-icon>
-      </div>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item command="logout">
-            <el-icon><SwitchButton /></el-icon>退出登录
-          </el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
-
     <slot name="top" :collapsed="effectiveCollapsed" />
 
     <!-- 分隔线 -->
@@ -130,10 +97,6 @@
           <component :is="effectiveCollapsed ? Expand : Fold" class="collapse-icon" />
           <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
         </button>
-        <NotificationPanel
-          v-if="authStore.isLoggedIn && authStore.userInfo?.role === 'hrwai_user'"
-          class="sidebar-notification"
-        />
       </div>
     </div>
 
@@ -142,10 +105,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Expand, Fold, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
-import { href } from '@/config/pages'
-import { useAuthStore } from '@/stores/auth'
+import { useRoute } from 'vue-router'
+import { Expand, Fold, ArrowDown } from '@element-plus/icons-vue'
 import {
   isNavRouteActive,
   isGroupExpanded,
@@ -155,11 +116,8 @@ import {
   type NavItem
 } from '@/config/navigation'
 import { isNavItemRenderable } from '@/config/navigation'
-import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 import AppSidebarItem from '@/components/layout/AppSidebarItem.vue'
-import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
-import { describeRole } from '@/utils/roleWords'
 
 const props = withDefaults(
   defineProps<{
@@ -167,19 +125,13 @@ const props = withDefaults(
     collapsed: boolean
     mobileOpen?: boolean
     /**
-     * 侧栏配色。
-     * - `light`：浅底，**默认值 = 改造前行为**，tutor / admin 保持原样
-     * - `dark`：石墨青暗底（#0C1210），学员端传入
-     */
-    theme?: 'light' | 'dark'
-    /**
      * 纵向密度。
      * - `default`：**默认值 = 改造前行为**
      * - `compact`：收紧导航项与用户信息区的纵向间距
      */
     density?: 'default' | 'compact'
   }>(),
-  { theme: 'light', density: 'default' }
+  { density: 'default' }
 )
 
 defineEmits<{
@@ -190,8 +142,6 @@ defineEmits<{
 const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
 
 const route = useRoute()
-const router = useRouter()
-const authStore = useAuthStore()
 
 // 侧栏分组折叠：默认全部展开，点击分组标题即可折叠/展开（桌面与移动端一致）
 const expandedMap = reactive<Record<string, boolean>>({})
@@ -222,48 +172,28 @@ function isGroupActiveLocal(item: NavItem): boolean {
   return isGroupActive(item, route.name, route.params as Record<string, string | string[] | undefined>)
 }
 
-// 称谓来自角色词表单点（ADR-0060 票7）：canonical 为「讲师」，此处不再各写一份。
-const roleLabel = computed(() => describeRole(authStore.userInfo?.role))
-
-const roleClass = computed(() => {
-  const role = authStore.userInfo?.role
-  return role || 'hrwai_user'
-})
-
 /** 匹配逻辑抽到 config/navigation.ts 的 isNavRouteActive（纯函数，可单测）；跳转目标由 AppSidebarItem 现算 */
 function isRouteActive(item: NavItem): boolean {
   return isNavRouteActive(item, route.name, route.params as Record<string, string | string[] | undefined>)
 }
 
-async function handleUserCommand(command: string) {
-  if (command === 'logout') {
-    try {
-      await useConfirm().confirm('确定要退出登录吗？', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-      // 登出单点（票1）：revoke + 清本地都在 store.signOut 里，本页只管 confirm 与落点
-      await authStore.signOut()
-      router.push(href('Login'))
-    } catch (e) {
-      // 用户取消，不做任何操作
-    }
-  }
-}
 </script>
 
 <style scoped>
 .app-sidebar {
   width: var(--sidebar-width);
-  background: var(--color-bg-card);
+  /* 无缝外壳（#1619 / ADR-0072）：侧栏与顶栏、内容区同底，且**无右边框** ——
+     接缝靠「同色」而非分隔线消失；层次由内容区里的卡片承担。 */
+  background: var(--color-bg-page);
+  /* 十字细线的**竖线**（#1629，改判自 ADR-0072 的「无边框」）：与顶栏左格的右边线相接 */
   border-right: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
   transition: width var(--duration-normal) var(--ease-default);
   overflow: hidden;
   position: fixed;
-  top: 0;
+  /* 从顶栏下沿开始，保持竖向连续（顶栏是棋盘格第一行） */
+  top: var(--topbar-height);
   left: 0;
   bottom: 0;
   z-index: var(--z-fixed);
@@ -271,107 +201,6 @@ async function handleUserCommand(command: string) {
 
 .app-sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
-}
-
-/* 用户信息区 */
-.sidebar-user-dropdown {
-  display: block;
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.sidebar-user {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) var(--space-3);
-  cursor: pointer;
-  border-radius: 0;
-  outline: none;
-  transition: background var(--duration-fast) var(--ease-default);
-}
-
-.sidebar-user:hover,
-.sidebar-user:focus-visible {
-  background: var(--color-bg-page);
-}
-
-.app-sidebar.collapsed .sidebar-user {
-  justify-content: center;
-  padding: var(--space-4) var(--space-2);
-}
-
-.user-avatar-circle {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  background: var(--gradient-brand);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-base);
-  font-weight: var(--font-bold);
-  font-family: var(--font-display);
-  flex-shrink: 0;
-}
-
-.user-avatar-img {
-  object-fit: cover;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow: hidden;
-  flex: 1;
-  min-width: 0;
-}
-
-.user-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-dropdown-arrow {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.role-badge {
-  font-size: 11px;
-  font-weight: var(--font-medium);
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
-  width: fit-content;
-  white-space: nowrap;
-}
-
-.role-badge.student {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
-}
-
-.role-badge.recruiter {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
-}
-
-.role-badge.tutor {
-  background: var(--color-success-light);
-  color: var(--color-success-strong);
-}
-
-.role-badge.admin {
-  background: var(--color-violet-50);
-  color: var(--color-violet-500);
 }
 
 /* 分隔线 */
@@ -391,6 +220,20 @@ async function handleUserCommand(command: string) {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  /*
+   * 隐藏本列的滚动条（#1627，无缝外壳的补漏）：
+   * 导航列一溢出，原生滚动条（全局 6px、滑块 --color-border-dark）就**紧贴侧栏右缘** ——
+   * 而那条边缘正是外壳的接缝。实测（1920×1080 截图逐像素）它是一条 x=293..299、y=112..904、
+   * 色值 #CBD5E1 的竖线，成了整个界面上最显眼的分隔线，把「接缝靠同色消失」直接抹掉。
+   * 滚轮 / 触控板 / 键盘 / 拖拽滚动照常（只是不给滑块画出来）；本仓横向滚动条
+   * （MarkdownToolbar / UiSegmentTabs / AdminTabBar）已有同样先例。
+   */
+  scrollbar-width: none;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .nav-group-label {
@@ -524,10 +367,6 @@ async function handleUserCommand(command: string) {
   flex: 1;
 }
 
-.app-sidebar.collapsed .sidebar-notification {
-  display: none;
-}
-
 .footer-btn:hover {
   background: var(--color-bg-page);
   color: var(--color-text-secondary);
@@ -548,77 +387,13 @@ async function handleUserCommand(command: string) {
   font-size: var(--text-sm);
 }
 
-/* ---------------------------------------------------------------------------
- * 主题（theme）与密度（density）变体
+/* 密度（density）变体
  *
- * 刻意采用「追加覆盖」而非改写上面的规则：现有声明一行不动，
- * 因此 light + default 分支与改造前逐像素一致（tutor / admin 零 diff）。
- * 变体选择器多一个类，特异性天然高于上面的单类规则，无需 !important。
- * ------------------------------------------------------------------------- */
+ * 恒深侧栏体系（is-dark / sidebarTheme / --color-bg-sidebar 三件套）已整体退役（#1619 / ADR-0072）：
+ * 外壳三块同底后，「侧栏自带一套深色」不再有调用方，留着就是无人走的分支。
+ * 现存的变体只剩密度一档。 */
 
-/* dark：石墨青暗底（走 --color-bg-sidebar token，深色模式下自动翻更深 #0B1120） */
-.app-sidebar.is-dark {
-  background: var(--color-bg-sidebar);
-  border-right-color: rgba(255, 255, 255, 0.08);
-}
-
-.app-sidebar.is-dark .sidebar-user:hover,
-.app-sidebar.is-dark .sidebar-user:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.app-sidebar.is-dark .user-name {
-  color: var(--color-text-on-dark);
-}
-
-.app-sidebar.is-dark .user-dropdown-arrow {
-  color: rgba(241, 245, 249, 0.5);
-}
-
-/* 角色徽章：tutor / admin 的绿 / 紫在暗底上对比度仍够，只调学员/企业（品牌）色 */
-.app-sidebar.is-dark .role-badge.student,
-.app-sidebar.is-dark .role-badge.recruiter {
-  background: rgba(45, 212, 191, 0.16);
-  color: var(--color-primary-300);
-}
-
-.app-sidebar.is-dark .sidebar-divider {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.app-sidebar.is-dark .nav-group-label,
-.app-sidebar.is-dark .nav-group-icon,
-.app-sidebar.is-dark .nav-group-icon-only,
-.app-sidebar.is-dark .nav-sub-group-label {
-  color: rgba(148, 163, 184, 0.85);
-}
-
-.app-sidebar.is-dark .nav-group-label.is-active,
-.app-sidebar.is-dark .nav-group-label.is-active .nav-group-icon,
-.app-sidebar.is-dark .nav-group-label.is-accordion:hover,
-.app-sidebar.is-dark .nav-sub-group-label.is-active {
-  color: var(--color-primary-300);
-}
-
-.app-sidebar.is-dark .nav-group-icon-only.is-active {
-  color: var(--color-primary-300);
-  background: rgba(45, 212, 191, 0.14);
-}
-
-.app-sidebar.is-dark .footer-btn {
-  color: rgba(148, 163, 184, 0.85);
-}
-
-.app-sidebar.is-dark .footer-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text-on-dark);
-}
-
-/* compact：收紧纵向间距 */
-.app-sidebar.is-compact .sidebar-user {
-  padding: var(--space-3) var(--space-4) var(--space-2);
-}
-
+/* compact：收紧纵向间距（原身份区那一档随身份区迁往顶栏而去掉） */
 .app-sidebar.is-compact .nav-group-label {
   padding: var(--space-2) var(--space-3) var(--space-1);
 }

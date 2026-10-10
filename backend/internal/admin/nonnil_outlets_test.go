@@ -21,9 +21,14 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsAdmin = map[string]func(t *testing.T) any{
-	"admin.HrwaiUserPageResult.list":        outletHrwaiUserPageEmpty,
-	"admin.TutorListDTO.tutors":             outletTutorListEmpty,
-	"admin.AdminStatisticsDTO.course_stats": outletAdminStatisticsNoCourses,
+	"admin.HrwaiUserPageResult.list":          outletHrwaiUserPageEmpty,
+	"admin.TutorListDTO.tutors":               outletTutorListEmpty,
+	"admin.AdminStatisticsDTO.course_stats":   outletAdminStatisticsNoCourses,
+	"admin.AdminCapabilitiesDTO.capabilities": outletAdminCapabilitiesUnknownAdmin,
+	// #1621 段4 授权管理三格
+	"admin.AdminRoleDTO.capabilities":    outletAdminRoleCapabilitiesNonNil,
+	"admin.AdminRoleListDTO.roles":       outletAdminRoleListEmpty,
+	"admin.AdminAccountListDTO.accounts": outletAdminAccountListEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -57,4 +62,50 @@ func outletTutorListEmpty(t *testing.T) any {
 func outletAdminStatisticsNoCourses(t *testing.T) any {
 	t.Helper()
 	return NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStatistics()
+}
+
+// outletAdminRoleCapabilitiesNonNil 角色出口：能力集为空时 capabilities 是**空数组**
+// （CreateAdminRole 对 nil 入参归一成 make([]string, 0, 0)）——这是最容易发出 null 的那一格。
+func outletAdminRoleCapabilitiesNonNil(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	dto, err := svc.CreateAdminRole("运营", "", nil)
+	if err != nil {
+		t.Fatalf("建角色失败: %v", err)
+	}
+	return dto
+}
+
+// outletAdminRoleListEmpty 角色列表：空库（测试夹具不 seed 受保护角色）时 roles 是空集。
+func outletAdminRoleListEmpty(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	res, err := svc.ListAdminRoles()
+	if err != nil {
+		t.Fatalf("角色列表失败: %v", err)
+	}
+	return res
+}
+
+// outletAdminAccountListEmpty 管理员列表：空库时 accounts 是空集。
+func outletAdminAccountListEmpty(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	res, err := svc.ListAdminAccounts()
+	if err != nil {
+		t.Fatalf("管理员列表失败: %v", err)
+	}
+	return res
+}
+
+// outletAdminCapabilitiesUnknownAdmin 能力集出口：账号不存在（未授权）时 capabilities 是**空数组**。
+// 这是最容易发出 null 的那条分支（空集），也正是要举证的那一格。
+func outletAdminCapabilitiesUnknownAdmin(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	res, err := svc.AdminCapabilitySet(999999)
+	if err != nil {
+		t.Fatalf("能力集出口失败: %v", err)
+	}
+	return res
 }

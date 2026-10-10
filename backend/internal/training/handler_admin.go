@@ -18,43 +18,48 @@ import (
 )
 
 // RegisterAdminRoutes 注册培训域管理端路由：
-//   - /api/admin/{specialty,level,certificate-template,position}*：目录 CRUD 与排序（CapCatalogManage）
+//   - /api/admin/catalog/tree：目录树（课程/岗位/证件三片叶子共用）
+//   - /api/admin/{specialty,level,certificate-template}*：目录 CRUD 与排序（CapCourseManage）
+//   - /api/admin/position*：岗位字典（CapPositionManage）
 //   - /api/admin/question-tag*、/api/admin/question/:question_id/tags：题库标签与打标（CapCatalogAuthor，#问题2 导师端需要）
 //
 // 证件的五条管理端路由随证件面走，见 RegisterCredentialRoutes。
 func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
 	h := newHandler(svc)
 
-	// ===== 管理端 CRUD =====
-	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapCatalogManage))
-	g.GET("/catalog/tree", h.GetAdminCatalogTree)
+	// ===== 管理端 CRUD（#1639 起逐片挂键：课程/岗位/证件是三个侧栏叶子）=====
+	g := rg.Group("/admin", middleware.JWTAuth(session))
+
+	// 目录树三片叶子都要读（挂课程、挑岗位、选证件），任一命中即可。
+	tree := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage, authz.CapPositionManage, authz.CapCredentialManage))
+	tree.GET("/catalog/tree", h.GetAdminCatalogTree)
 
 	// ---- 岗位字典（问题4：与专业方向解绑） ----
-	g.GET("/positions", h.ListPositions)
-	g.POST("/position", h.CreatePosition)
-	g.PUT("/position/:position_id", h.UpdatePosition)
-	g.PUT("/position/:position_id/sort", h.SwapPositionSort)
-	g.DELETE("/position/:position_id", h.DeletePosition)
+	positions := g.Group("", middleware.CapabilityRequired(authz.CapPositionManage))
+	positions.GET("/positions", h.ListPositions)
+	positions.POST("/position", h.CreatePosition)
+	positions.PUT("/position/:position_id", h.UpdatePosition)
+	positions.PUT("/position/:position_id/sort", h.SwapPositionSort)
+	positions.DELETE("/position/:position_id", h.DeletePosition)
 
-	// ---- 专业方向 ----
-	g.GET("/specialties", h.ListSpecialties)
-	g.POST("/specialty", h.CreateSpecialty)
-	g.PUT("/specialty/:specialty_id", h.UpdateSpecialty)
-	g.PUT("/specialty/:specialty_id/sort", h.SwapSpecialtySort)
-	g.DELETE("/specialty/:specialty_id", h.DeleteSpecialty)
+	// ---- 专业方向 / 课程等级 / 证书模板：都是课程管理的挂载字典 ----
+	catalog := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage))
+	catalog.GET("/specialties", h.ListSpecialties)
+	catalog.POST("/specialty", h.CreateSpecialty)
+	catalog.PUT("/specialty/:specialty_id", h.UpdateSpecialty)
+	catalog.PUT("/specialty/:specialty_id/sort", h.SwapSpecialtySort)
+	catalog.DELETE("/specialty/:specialty_id", h.DeleteSpecialty)
 
-	// ---- 课程等级 ----
-	g.GET("/levels", h.ListLevels)
-	g.POST("/level", h.CreateLevel)
-	g.PUT("/level/:level_id", h.UpdateLevel)
-	g.PUT("/level/:level_id/sort", h.SwapLevelSort)
-	g.DELETE("/level/:level_id", h.DeleteLevel)
+	catalog.GET("/levels", h.ListLevels)
+	catalog.POST("/level", h.CreateLevel)
+	catalog.PUT("/level/:level_id", h.UpdateLevel)
+	catalog.PUT("/level/:level_id/sort", h.SwapLevelSort)
+	catalog.DELETE("/level/:level_id", h.DeleteLevel)
 
-	// ---- 证书模板 ----
-	g.GET("/certificate-templates", h.ListCertificateTemplates)
-	g.POST("/certificate-template", h.CreateCertificateTemplate)
-	g.PUT("/certificate-template/:id", h.UpdateCertificateTemplate)
-	g.DELETE("/certificate-template/:id", h.DeleteCertificateTemplate)
+	catalog.GET("/certificate-templates", h.ListCertificateTemplates)
+	catalog.POST("/certificate-template", h.CreateCertificateTemplate)
+	catalog.PUT("/certificate-template/:id", h.UpdateCertificateTemplate)
+	catalog.DELETE("/certificate-template/:id", h.DeleteCertificateTemplate)
 
 	// ===== 题库标签与题目打标（admin + tutor，#问题2：导师端题库管理需要） =====
 	tagG := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapCatalogAuthor))

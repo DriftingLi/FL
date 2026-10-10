@@ -23,12 +23,22 @@ const authzTSTemplate = `// 生成文件，勿手改（ADR-0047 §1 授权能力
 //
 // 用法：页面/路由声明「需要什么能力」（AuthzCapability），角色可达面由 ROLE_CAPABILITIES
 // 回答。**不要**在前端另抄一份角色清单——那是本文件要消灭的东西。
+//
+// 例外：'admin' 的能力**不来自本表**（#1618 段1）——管理端权限由超管按角色分配，运行时经
+// GET /admin/me/capabilities 下发。ROLE_CAPABILITIES.admin 因此**有意为空**，
+// hasCapability('admin', …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
 
 export type AuthzRole =
 %s
 
 export type AuthzCapability =
 %s
+
+/**
+ * 能力由**数据层**回答的角色（#1618 段1）：它们的可达面必须读运行时能力集
+ * （GET /admin/me/capabilities），本表对它们 fail closed。
+ */
+export const DYNAMIC_ROLES: readonly AuthzRole[] = [%s]
 
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
@@ -51,10 +61,16 @@ func RenderFrontendAuthzTS() (string, error) {
 	if len(roleCapabilities) == 0 {
 		return "", errors.New("能力表为空，拒绝生成前端授权配置")
 	}
-	var roles, caps, table strings.Builder
+	var roles, caps, table, dynamic strings.Builder
 	for _, r := range orderedRoles {
 		fmt.Fprintf(&roles, "  | '%s'\n", r)
 	}
+	dyn := DynamicRoles()
+	dynParts := make([]string, 0, len(dyn))
+	for _, r := range dyn {
+		dynParts = append(dynParts, "'"+string(r)+"'")
+	}
+	dynamic.WriteString(strings.Join(dynParts, ", "))
 	for _, c := range AllCapabilities() {
 		fmt.Fprintf(&caps, "  | '%s'\n", c)
 	}
@@ -63,8 +79,12 @@ func RenderFrontendAuthzTS() (string, error) {
 	}
 	for _, r := range orderedRoles {
 		list := Capabilities(r)
-		if len(list) == 0 {
+		// 动态角色的空集是**声明**（能力由数据层回答），不是能力表事故 —— 只有非动态角色为空才拒绝生成。
+		if len(list) == 0 && !IsDynamicRole(r) {
 			return "", fmt.Errorf("角色 %q 没有任何能力，拒绝生成（能力表不完整）", r)
+		}
+		if IsDynamicRole(r) {
+			fmt.Fprintf(&table, "  // %s 有意为空：其能力由数据层回答（GET /admin/me/capabilities），本表对该角色 fail closed。\n", r)
 		}
 		parts := make([]string, 0, len(list))
 		for _, c := range list {
@@ -72,5 +92,5 @@ func RenderFrontendAuthzTS() (string, error) {
 		}
 		fmt.Fprintf(&table, "  %s: [%s],\n", r, strings.Join(parts, ", "))
 	}
-	return fmt.Sprintf(authzTSTemplate, roles.String(), caps.String(), table.String()), nil
+	return fmt.Sprintf(authzTSTemplate, roles.String(), caps.String(), dynamic.String(), table.String()), nil
 }

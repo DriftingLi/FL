@@ -26,6 +26,8 @@ func TestValuationAdminWriteAudited(t *testing.T) {
 	sess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: "hrwai_token"})
 
 	r := gin.New()
+	// 管理端能力解析源（#1618 段1）：本域测试用内存 adapter 装配，故用替身。
+	attachAdminCapabilities(r)
 	dict := newSeedMemDict()
 	evalStore := newMemEvalStore()
 	batteryStore := &memBatteryStore{}

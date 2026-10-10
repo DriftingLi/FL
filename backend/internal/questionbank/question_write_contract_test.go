@@ -30,10 +30,21 @@ func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	return r, cfg, db
 }
 
-// qwriteIssue 按角色签发 token（tutor 走 CapQuestionAuthor，admin 走讲师+审核能力）。
-func qwriteIssue(t *testing.T, cfg *config.Config, role string) string {
+// qwriteIssue 按角色签发 token（tutor 走 CapQuestionAuthor，admin 走数据层回答的管理能力）。
+//
+// #1618 段1：admin 的能力不再由静态表回答，令牌必须对应**真实存在**且挂了角色的账号 ——
+// 此前借 id=1001 直接签 admin 角色，现在会 403。tutor 侧不受影响（仍走静态表）。
+func qwriteIssue(t *testing.T, cfg *config.Config, db *gorm.DB, role string) string {
 	t.Helper()
 	sess := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{Name: cfg.AuthCookie.Name})
+	if role == "admin" {
+		admin := testutil.SeedAdmin(t, db, "qwrite_admin", "x")
+		tok, err := sess.Issue(admin.AdminID, admin.Username, role)
+		if err != nil {
+			t.Fatalf("签发 %s token 失败: %v", role, err)
+		}
+		return tok
+	}
 	tok, err := sess.Issue(1001, "qwrite_"+role, role)
 	if err != nil {
 		t.Fatalf("签发 %s token 失败: %v", role, err)
@@ -43,8 +54,8 @@ func qwriteIssue(t *testing.T, cfg *config.Config, role string) string {
 
 func TestQuestionWriteSurfaceRejectsStatus(t *testing.T) {
 	t.Parallel()
-	r, cfg, _ := newQuestionWriteEnv(t)
-	tutor := qwriteIssue(t, cfg, "tutor")
+	r, cfg, db := newQuestionWriteEnv(t)
+	tutor := qwriteIssue(t, cfg, db, "tutor")
 
 	body := map[string]any{"type": "single_choice", "content": "带 status 的创建", "options": map[string]string{"A": "甲", "B": "乙"}, "answer": "A", "status": "published"}
 	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions", body)
@@ -81,8 +92,8 @@ func TestQuestionWriteSurfaceRejectsStatus(t *testing.T) {
 
 func TestQuestionWriteTypedFieldMismatchFails(t *testing.T) {
 	t.Parallel()
-	r, cfg, _ := newQuestionWriteEnv(t)
-	tutor := qwriteIssue(t, cfg, "tutor")
+	r, cfg, db := newQuestionWriteEnv(t)
+	tutor := qwriteIssue(t, cfg, db, "tutor")
 	// score 传字符串：typed 绑定必须拒绝（旧 map 面会静默落零值）
 	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions",
 		map[string]any{"type": "single_choice", "content": "分值类型不符", "options": map[string]string{"A": "甲"}, "answer": "A", "score": "abc"})
@@ -105,8 +116,8 @@ func TestQuestionWriteTypedFieldMismatchFails(t *testing.T) {
 
 func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
 	t.Parallel()
-	r, cfg, _ := newQuestionWriteEnv(t)
-	tutor := qwriteIssue(t, cfg, "tutor")
+	r, cfg, db := newQuestionWriteEnv(t)
+	tutor := qwriteIssue(t, cfg, db, "tutor")
 	rec := testutil.DoWithToken(t, r, tutor, http.MethodPost, "/api/question-bank/questions/batch-import",
 		map[string]any{"questions": []any{
 			map[string]any{"type": "true_false", "content": "条目级 status 旁路探针", "answer": "true", "status": "published"},
@@ -127,7 +138,7 @@ func TestQuestionBatchImportRejectsItemStatus(t *testing.T) {
 func TestQuestionSubmitAction(t *testing.T) {
 	t.Parallel()
 	r, cfg, db := newQuestionWriteEnv(t)
-	tutor := qwriteIssue(t, cfg, "tutor")
+	tutor := qwriteIssue(t, cfg, db, "tutor")
 	q := model.Question{Type: "single_choice", Content: "待提交题", Answer: "A", Status: "draft", CreatedByType: "tutor", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
 	if err := db.Create(&q).Error; err != nil {
 		t.Fatal(err)
@@ -150,8 +161,8 @@ func TestQuestionSubmitAction(t *testing.T) {
 func TestQuestionReviewInvariantOverHTTP(t *testing.T) {
 	t.Parallel()
 	r, cfg, db := newQuestionWriteEnv(t)
-	tutor := qwriteIssue(t, cfg, "tutor")
-	admin := qwriteIssue(t, cfg, "admin")
+	tutor := qwriteIssue(t, cfg, db, "tutor")
+	admin := qwriteIssue(t, cfg, db, "admin")
 
 	statusOf := func(id int) string {
 		var row model.Question

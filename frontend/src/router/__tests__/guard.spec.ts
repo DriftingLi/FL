@@ -12,6 +12,8 @@ import {
   type GuardInput,
   type GuardState
 } from '../guard'
+import { pages } from '@/config/pages'
+import { adminLandingPage } from '@/config/navigation'
 
 // ===== 构造器 =====
 
@@ -34,6 +36,8 @@ function state(overrides: Partial<GuardState> = {}): GuardState {
     subdomain: 'training',
     ipDirect: false,
     credential: 'present',
+    // 运行时能力集（#1618 段1）：静态角色的用例留空 —— 它们的可达面由生成的能力表回答
+    capabilities: [],
     ...overrides
   }
 }
@@ -259,7 +263,80 @@ describe('authRequiredStep', () => {
   })
 })
 
-// ===== 步骤 4：角色校验（工作区 × 角色） =====
+// ===== 步骤 4：专属子域身份匹配（#1614 / ADR-0071）=====
+
+describe('subdomainRoleStep', () => {
+  // 登录页 fixture：清理后管线重跑的着陆点（auth 工作区不再触发本步骤，无循环）
+  const loginPage = {
+    path: '/login',
+    fullPath: '/login',
+    name: 'Login',
+    meta: { workspace: 'auth', requiresAuth: false, authPage: true },
+    matched: [{ workspace: 'auth', requiresAuth: false, authPage: true }]
+  }
+
+  it('学员登录态访问 mentor. 受限页 → 清登录态回 /login 并携带回跳（而非角色回落弹去 training 子域）', () => {
+    const d = resolveGuardDecision(
+      input({ meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' }, path: '/training/tutor', fullPath: '/training/tutor' }),
+      state({ subdomain: 'tutor', role: 'hrwai_user' })
+    )
+    expect(d).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/training/tutor' } }, clearAuth: true })
+  })
+
+  it.each([
+    ['tutor', 'tutor', 'tutor', '/training/tutor'],
+    ['admin', 'admin', 'manage', '/admin/dashboard'],
+    ['recruit', 'recruiter', 'recruit', '/recruit']
+  ] as const)('%s 子域：学员闯本子域受限页 → 清登录态回登录页', (sub, role, ws, home) => {
+    const d = resolveGuardDecision(
+      input({ meta: { requiresAuth: true, role, workspace: ws }, path: home, fullPath: home }),
+      state({ subdomain: sub, role: 'hrwai_user' })
+    )
+    expect(d).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: home } }, clearAuth: true })
+  })
+
+  it.each([
+    ['tutor', 'tutor', 'tutor', '/training/tutor'],
+    ['admin', 'admin', 'manage', '/admin/dashboard'],
+    ['recruit', 'recruiter', 'recruit', '/recruit']
+  ] as const)('%s 子域：缺席角色本人访问 → 放行', (sub, role, ws, home) => {
+    expect(
+      resolveGuardDecision(
+        input({ meta: { requiresAuth: true, role, workspace: ws }, path: home, fullPath: home }),
+        state({ subdomain: sub, role })
+      )
+    ).toEqual({ action: 'allow' })
+  })
+
+  it('共号子域（training）不拦；IP 直连旁路（无子域概念，学员闯 tutor 工作区交由角色校验回落学员区）', () => {
+    expect(resolveGuardDecision(input(), state({ subdomain: 'training', role: 'hrwai_user' }))).toEqual({ action: 'allow' })
+    expect(
+      resolveGuardDecision(
+        input({ meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' } }),
+        state({ subdomain: 'tutor', role: 'hrwai_user', ipDirect: true })
+      )
+    ).toEqual({ action: 'redirect', to: '/training' })
+  })
+
+  it('未登录不拦：交给 authRequiredStep 的登录引导（同向回 /login，且此前已清登录态）', () => {
+    const d = resolveGuardDecision(
+      input({ meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' } }),
+      state({ subdomain: 'tutor', isLoggedIn: false, hasValidToken: false, role: '' })
+    )
+    expect(d).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/training' } }, clearAuth: true })
+  })
+
+  it('登录页不触发本步骤：已登录学员在 mentor. 打开 /login 仍按 authPageStep 回本子域工作区；清理后重跑（未登录）放行登录页', () => {
+    expect(
+      resolveGuardDecision(loginPage, state({ subdomain: 'tutor', role: 'hrwai_user' }))
+    ).toEqual({ action: 'workspace-home' })
+    expect(
+      resolveGuardDecision(loginPage, state({ subdomain: 'tutor', isLoggedIn: false, hasValidToken: false, role: '' }))
+    ).toEqual({ action: 'allow' })
+  })
+})
+
+// ===== 步骤 5：角色校验（工作区 × 角色） =====
 
 describe('roleStep', () => {
   it('meta.role 单角色匹配 / meta.roles 多角色匹配 / 无角色声明 → 放行', () => {
@@ -278,10 +355,19 @@ describe('roleStep', () => {
     ).toEqual({ action: 'allow' })
   })
 
-  it('admin 闯学员区 → 回管理员工作台', () => {
+  it('admin 闯学员区 → 回**自己能看的**管理页；一个能力都没有 → 无管理权限页（#1638）', () => {
+    // 有仪表盘能力位：回仪表盘（与本改动前逐字一致）
+    expect(
+      resolveGuardDecision(input(), state({ role: 'admin', capabilities: ['admin.access'] }))
+    ).toEqual({ action: 'redirect', to: { name: 'AdminDashboard' } })
+    // 只有审计：回审计日志，而不是它所看不见的仪表盘
+    expect(
+      resolveGuardDecision(input(), state({ role: 'admin', capabilities: ['audit.read'] }))
+    ).toEqual({ action: 'redirect', to: { name: 'AuditLogs' } })
+    // 能力集为空（新建后没挂角色 / 角色一个能力都没勾）：落「无管理权限」页，而不是空转
     expect(
       resolveGuardDecision(input(), state({ role: 'admin' }))
-    ).toEqual({ action: 'redirect', to: '/admin/dashboard' })
+    ).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
   })
 
   it('tutor 闯学员区 → 回导师工作台', () => {
@@ -299,13 +385,24 @@ describe('roleStep', () => {
     ).toEqual({ action: 'redirect', to: '/valuation' })
   })
 
-  it('学员闯招聘工作区 → 回学员工作区', () => {
+  it('学员闯招聘工作区（ recruit 子域）→ 招聘子域身份匹配先行：清登录态回登录页（#1614，原为弹回 /training）', () => {
     expect(
       resolveGuardDecision(
-        input({ meta: { requiresAuth: true, role: 'recruiter', workspace: 'recruit' }, path: '/recruit' }),
+        input({ meta: { requiresAuth: true, role: 'recruiter', workspace: 'recruit' }, path: '/recruit', fullPath: '/recruit' }),
         state({ subdomain: 'recruit', role: 'hrwai_user' })
       )
-    ).toEqual({ action: 'redirect', to: '/training' })
+    ).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/recruit' } }, clearAuth: true })
+    // 跨子域访问 recruit 路径（training 子域）会先被子域边界整页跳转；共号子域上的
+    // 角色回落由上方估值用例与 IP 直连用例覆盖（guard 管线的求值序所致）
+  })
+
+  it('学员闯估值受限页（共号子域）→ 角色回落回学员工作区（共号子域无身份匹配，行为不变）', () => {
+    expect(
+      resolveGuardDecision(
+        input({ meta: { requiresAuth: true, roles: ['hrwai_user'], workspace: 'valuation' }, path: '/valuation/history' }),
+        state({ subdomain: 'valuation', role: 'recruiter' })
+      )
+    ).toEqual({ action: 'redirect', to: '/valuation' })
   })
 
   it('未知角色闯受限页 → 回学员工作区', () => {
@@ -315,7 +412,7 @@ describe('roleStep', () => {
   })
 })
 
-// ===== 步骤 5：无证件 onboarding 预筛 =====
+// ===== 步骤 6：无证件 onboarding 预筛 =====
 
 describe('credentialStep', () => {
   it('非 hrwai_user / IP 直连 / 非 training 工作区 → 不预筛', () => {
@@ -396,10 +493,18 @@ describe('resolveGuardDecision（顺序与优先级）', () => {
     })
   })
 
-  it('角色校验先于预筛：无证件学员闯招聘区 → 先按角色回学员工作区', () => {
+  it('子域身份匹配先于角色校验：学员闯 tutor 工作区（mentor. 子域）→ 清登录态回登录页，而非角色回落弹 /training', () => {
     const d = resolveGuardDecision(
-      input({ meta: { requiresAuth: true, role: 'recruiter', workspace: 'recruit' }, path: '/recruit' }),
-      state({ subdomain: 'recruit', credential: 'none' })
+      input({ meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' } }),
+      state({ subdomain: 'tutor', role: 'hrwai_user' })
+    )
+    expect(d).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/training' } }, clearAuth: true })
+  })
+
+  it('角色校验先于预筛：无证件学员闯 tutor 工作区（IP 直连，无子域身份匹配）→ 先按角色回落', () => {
+    const d = resolveGuardDecision(
+      input({ meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' } }),
+      state({ credential: 'none', ipDirect: true })
     )
     expect(d).toEqual({ action: 'redirect', to: '/training' })
   })
@@ -410,8 +515,13 @@ describe('resolveGuardDecision（顺序与优先级）', () => {
 })
 // ===== 步骤 4b：能力校验（ADR-0047 §1/§2 / spec #930）=====
 //
-// 判据不再是页面自己抄的角色清单，而是「页面声明需要什么能力 + 生成的角色→能力表」。
+// 判据不再是页面自己抄的角色清单，而是「页面声明需要什么能力 + 该角色的可达面」。
 // 三条语义边界在这里钉死：需要登录的页面才判能力、公开页不因能力位被锁死、无能力声明则不判。
+//
+// #1618 段1 起可达面有**两条路径**（判定收在 utils/authzRuntime.holdsCapability）：
+//   - 静态角色（学员/讲师/招聘者）→ 生成的能力表；
+//   - 动态角色（管理端）→ **运行时能力集**（登录后由 GET /admin/me/capabilities 下发）。
+// 后者未加载时一律不放行（fail closed）：静态表对 admin 有意为空，回落等于放行。
 describe('capabilityStep（能力校验）', () => {
   const adminPage = (capability: string) => ({
     path: '/admin/forum-manage',
@@ -421,14 +531,42 @@ describe('capabilityStep（能力校验）', () => {
     matched: [{ requiresAuth: true, workspace: 'manage', capability }]
   })
 
-  it('能力不匹配 → 回落到该角色的工作区（管理员回管理端）', () => {
-    const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'tutor', subdomain: 'admin' }))
-    expect(d).toEqual({ action: 'redirect', to: expect.any(String) })
+  it('能力不匹配 → 回落到该角色的工作区（admin 闯学员页：缺 course.learn，共号子域同域角色回落）', () => {
+    const page = {
+      path: '/training',
+      fullPath: '/training',
+      name: 'StudentDashboard',
+      meta: { requiresAuth: true, workspace: 'training', capability: 'course.learn' },
+      matched: [{ requiresAuth: true, workspace: 'training', capability: 'course.learn' }]
+    }
+    const d = resolveGuardDecision(page, state({ role: 'admin', subdomain: 'training' }))
+    expect(d).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
   })
 
-  it('能力匹配 → 放行', () => {
-    const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin' }))
+  it('管理端能力来自运行时集合：命中 → 放行', () => {
+    const d = resolveGuardDecision(
+      adminPage('forum.moderate'),
+      state({ role: 'admin', subdomain: 'admin', capabilities: ['forum.moderate'] })
+    )
     expect(d.action).toBe('allow')
+  })
+
+  it('管理端能力未命中（含「能力集还没加载」）→ 不放行（fail closed，不回落静态表）', () => {
+    // 落点按能力集算（#1638）：空集 → 无权限页；只有审计 → 审计日志。两者都不放行当前页。
+    const expected: Record<string, string> = { '': 'AdminNoAccess', 'audit.read': 'AuditLogs' }
+    for (const capabilities of [[], ['audit.read']]) {
+      const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin', capabilities }))
+      expect(d).toEqual({ action: 'redirect', to: { name: expected[capabilities.join(',')] } })
+    }
+  })
+
+  it('落点自身必须可达：任何能力集下算出的落点，其能力位要么没有、要么在该集合里（#1638 的判据）', () => {
+    for (const capabilities of [[], ['audit.read'], ['admin.access'], ['forum.moderate'], ['admin_role.manage']]) {
+      const landing = adminLandingPage(cap => capabilities.includes(cap))
+      const page = pages.find(p => p.name === landing)
+      expect(page, landing).toBeTruthy()
+      if (page?.capability) expect(capabilities, landing).toContain(page.capability)
+    }
   })
 
   it('公开页声明了能力也不判：requiresAuth 全 false 时任意角色（含未登录）可访问', () => {

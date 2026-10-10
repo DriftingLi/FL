@@ -17,6 +17,11 @@ import { unwrappedRequest } from './request'
 import { toPage, type Page } from './page'
 import type {
   AIConfigDTO,
+  AdminAccountDTO,
+  AdminAccountListDTO,
+  AdminCapabilitiesDTO,
+  AdminRoleDTO,
+  AdminRoleListDTO,
   AdminCourseDetailDTO,
   AdminOverviewDTO,
   AdminStatisticsDTO,
@@ -208,7 +213,84 @@ export interface AddRecruiterPayload {
   wechat?: string
 }
 
+/** 角色写面入参（#1621）：能力键由页面按资源域勾选后原样提交，后端按 authz 能力表收口。 */
+export interface AdminRolePayload {
+  name: string
+  remark?: string
+  capabilities: string[]
+}
+
+/** 管理员账号写面入参（#1632）：role_id 省略或 0 = 先建号、后挂角色（未授权即什么都看不到）。 */
+export interface AdminAccountPayload {
+  username: string
+  name: string
+  password: string
+  role_id?: number
+}
+
 export const adminApi = {
+  /**
+   * 当前管理员的**有效能力集**（#1618 段1）。
+   *
+   * 管理端权限由超管按角色分配，静态能力表对 admin 有意为空 —— 守卫与侧栏的运行时判据取自这里。
+   * 只要求「是管理员」即可读（不要求 admin.access）：前端要靠它才能判断自己能不能进管理端。
+   */
+  fetchMyCapabilities() {
+    return unwrappedRequest.get<AdminCapabilitiesDTO>('/admin/me/capabilities')
+  },
+
+  // ===== 授权管理（#1621 段4）：角色 CRUD + 管理员挂角色 =====
+  // 后端把「受保护角色不可改不可删」「最后一个超管不可降级」做成 409；本层不吞错，
+  // 由 client 拦截器统一 toast 出后端文案，页面因此只需处理成功路径。
+  listAdminRoles() {
+    return unwrappedRequest.get<AdminRoleListDTO>('/admin/roles')
+  },
+
+  createAdminRole(data: AdminRolePayload) {
+    return unwrappedRequest.post<AdminRoleDTO>('/admin/roles', data)
+  },
+
+  updateAdminRole(roleId: number, data: AdminRolePayload) {
+    return unwrappedRequest.put<AdminRoleDTO>(`/admin/roles/${roleId}`, data)
+  },
+
+  deleteAdminRole(roleId: number) {
+    return unwrappedRequest.delete<null>(`/admin/roles/${roleId}`)
+  },
+
+  listAdminAccounts() {
+    return unwrappedRequest.get<AdminAccountListDTO>('/admin/accounts')
+  },
+
+  /** 新建管理员（#1632）：口令由后端按 6-20 位规则校验后 bcrypt 落库。 */
+  createAdminAccount(data: AdminAccountPayload) {
+    return unwrappedRequest.post<AdminAccountDTO>('/admin/accounts', data)
+  },
+
+  /**
+   * 删除管理员（#1632）。
+   *
+   * 后端会拒三种：删自己、删最后一个超管（409），账号不存在（404）——**前端不预判**
+   * （预判要在前端重算一遍服务端不变式），由拦截器把后端文案 toast 给操作者。
+   */
+  deleteAdminAccount(adminId: number) {
+    return unwrappedRequest.delete<null>(`/admin/accounts/${adminId}`)
+  },
+
+  assignAdminRole(adminId: number, roleId: number) {
+    return unwrappedRequest.put<AdminAccountDTO>(`/admin/accounts/${adminId}/role`, { role_id: roleId })
+  },
+
+  /**
+   * 代重置管理员口令（#1640）。
+   *
+   * 后端走与学员/讲师/招聘者**同一条**口令写面动作：6-20 位规则 → bcrypt 落库 → 全会话吊销
+   * （该账号旧 refresh 链当场失效）。响应不回显口令。
+   */
+  resetAdminPassword(adminId: number, password: string) {
+    return unwrappedRequest.put<null>(`/admin/accounts/${adminId}/password`, { password })
+  },
+
   // ===== HRWAI 用户管理(统一) =====
   /** 列表（后端行键 = `list`）。 */
   async getHrwaiUsers(params: AdminHrwaiUsersQuery): Promise<Page<HrwaiUserSummary>> {

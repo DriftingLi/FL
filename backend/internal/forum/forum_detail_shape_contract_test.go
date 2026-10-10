@@ -87,7 +87,10 @@ func TestForumTopicDetailShapeContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发学员 token 失败: %v", err)
 	}
-	adminTok, err := sess.Issue(int(author.ID), author.Account, "admin")
+	// 管理端令牌必须对应**真实存在**且挂了角色的管理员账号（#1618 段1：admin 的能力由数据层回答）。
+	// 此前这里借楼主的 id 签 admin 角色令牌 —— 那在「role 即能力」的旧口径下成立，现在不成立。
+	adminAccount := testutil.SeedAdmin(t, db, "detail_shape_admin", "x")
+	adminTok, err := sess.Issue(adminAccount.AdminID, adminAccount.Username, "admin")
 	if err != nil {
 		t.Fatalf("签发管理端 token 失败: %v", err)
 	}

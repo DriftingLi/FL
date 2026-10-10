@@ -113,8 +113,11 @@ func TestAuthzLock_CapabilityNaming(t *testing.T) {
 		if strings.HasPrefix(key, ".") || strings.HasSuffix(key, ".") {
 			t.Errorf("能力键 %q 的资源域或动作不得为空", key)
 		}
-		if len(authz.RolesFor(c)) == 0 {
-			t.Errorf("能力 %q 没有任何角色", key)
+		// 空行 = 该能力的可达面由数据层回答（受保护管理角色持有，#1618 段1）。
+		// 「空行 ⇔ 在受保护清单里」由 internal/authz 的 dynamic_admin_test.go 双向锁定，
+		// 这里只确认它不是没人认领的孤儿键。
+		if len(authz.RolesFor(c)) == 0 && !isProtectedAdminCapability(c) {
+			t.Errorf("能力 %q 没有任何角色，也不在受保护管理角色能力全集里（孤儿键）", key)
 		}
 	}
 }
@@ -155,4 +158,15 @@ func TestAuthzLock_RoleGuardRetired(t *testing.T) {
 	if len(offenders) > 0 {
 		t.Fatalf("守卫必须统一为 CapabilityRequired，以下文件仍在用 RoleRequired: %v", offenders)
 	}
+}
+
+// isProtectedAdminCapability 该能力是否由受保护（超级管理员）角色持有 —— 即静态表对它没有回答
+// （#1618 段1 起管理端能力改为数据层回答）。判据来自 authz 自己的声明，不在这里另抄一份清单。
+func isProtectedAdminCapability(c authz.Capability) bool {
+	for _, p := range authz.ProtectedAdminCapabilities() {
+		if p == c {
+			return true
+		}
+	}
+	return false
 }
