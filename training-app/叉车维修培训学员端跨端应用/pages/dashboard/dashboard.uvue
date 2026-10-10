@@ -1,28 +1,9 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部导航栏 -->
-        <view class="nav-bar">
-            <view class="nav-left" @click="onCertTap">
-                <text class="nav-title">{{ currentCert }}</text>
-                <text class="nav-arrow">▾</text>
-            </view>
-            <view class="nav-right">
-                <view class="nav-icon-btn" @click="onSearchClick">
-                    <text class="nav-icon-text">🔍</text>
-                </view>
-                <view class="nav-icon-btn" @click="onNotificationClick">
-                    <text class="nav-icon-text">🔔</text>
-                    <view v-if="unreadCount > 0" class="unread-badge">
-                        <text class="unread-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
-                    </view>
-                </view>
-                <view class="nav-icon-btn" @click="onCartClick">
-                    <text class="nav-icon-text">🛒</text>
-                </view>
-            </view>
-        </view>
+        <!-- #1602 迁移：页头收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
+             状态栏占位由页头件内化；右槽多图标按胶囊左边线让位（透明变体，N05 页面自垫底色）。 -->
+        <AppNavBar variant="plain" transparent :left-icon="''" :title="navTitle" :right-icons="navRightIcons"
+            @left-click="onCertTap" @right-click="onNavRightClick" />
 
         <!-- 公告栏 -->
         <view class="notice-bar" @click="onNoticeClick">
@@ -109,10 +90,10 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onShow, onHide } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import type { FeaturedContentItem, CourseItem } from '../../types/index'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import CertSelector from '../../components/cert-selector/cert-selector.uvue'
     import DashboardMenuGrid from './components/dashboard-menu-grid.uvue'
     import DashboardContinueCard from './components/dashboard-continue-card.uvue'
@@ -121,14 +102,19 @@
     import { useDashboardCredential } from './composables/use-dashboard-credential.uts'
     import { useDashboardFeeds } from './composables/use-dashboard-feeds.uts'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // #1602 迁移：页头右槽三图标（🔍🔔🛒），经 AppNavBar 的胶囊让位右槽排布
+    const navRightIcons : string[] = ['🔍', '🔔', '🛒']
 
     // ---- 证件切换流（composable 持有） ----
     const {
         currentCert, showCertDropdown, credentialGroups, currentCredentialId,
         loadCredentials, onCertTap, onSelectCredential, onCloseCertDropdown,
     } = useDashboardCredential()
+
+    // #1602 修复：旧页头「证件名 ▾」入口迁入 AppNavBar 左槽标题（点击 emit leftClick → onCertTap）。
+    const navTitle = computed((): string => currentCert.value + ' ▾')
 
     // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯 / 首页课程区（composable 持有） ----
     const {
@@ -203,6 +189,17 @@
         uni.showToast({ title: '购物车功能开发中', icon: 'none' })
     }
 
+    /** #1602 迁移：AppNavBar 多图标右槽分发（索引序同 navRightIcons）。须声明在被引用函数之后（UTS codegen 顺序敏感）。 */
+    function onNavRightClick(idx : number) : void {
+        if (idx == 0) {
+            onSearchClick()
+        } else if (idx == 1) {
+            onNotificationClick()
+        } else {
+            onCartClick()
+        }
+    }
+
     // ---- Banner 点击 ----
     function onBannerClick() : void {
         uni.showToast({ title: '报名功能开发中', icon: 'none' })
@@ -233,57 +230,12 @@
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: transparent;
-    }
-
     .content-scroll {
         flex: 1;
     }
 
-    /* 顶部导航栏 */
-    .nav-bar {
-        background-color: transparent;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        padding: 20rpx 32rpx;
-    }
-
-    .nav-left {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .nav-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .nav-arrow {
-        font-size: 24rpx;
-        color: #999999;
-        margin-left: 8rpx;
-    }
-
-    .nav-right {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .nav-icon-btn {
-        position: relative;
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-        margin-left: 48rpx;
-    }
-
-    .nav-icon-text {
-        font-size: 40rpx;
-    }
+    /* #1602 迁移：状态栏占位与页头骨架（旧页头那组样式）已整体收口进 app-nav-bar，
+       页内不再自持页头形态与角标样式。 */
 
     /* 公告栏 */
     .notice-bar {
@@ -310,25 +262,6 @@
         font-size: 30rpx;
         color: #333333;
         margin-left: 12rpx;
-    }
-
-    .unread-badge {
-        position: absolute;
-        top: -4rpx;
-        right: -4rpx;
-        background-color: #ff3b30;
-        border-radius: 20rpx;
-        min-width: 32rpx;
-        height: 32rpx;
-        padding: 0 8rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .unread-badge-text {
-        font-size: 20rpx;
-        color: #ffffff;
-        font-weight: 600;
     }
 
     /* Banner 海报 */

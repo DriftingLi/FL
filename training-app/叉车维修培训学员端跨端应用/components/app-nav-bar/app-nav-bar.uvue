@@ -4,13 +4,21 @@
         <view class="nav-bar-body">
             <view class="nav-bar-left" @click="onLeftClick">
                 <text v-if="leftIcon.length > 0" class="nav-bar-icon" :class="titleColorClass">{{ leftIcon }}</text>
-                <view v-if="title.length > 0 && !transparent" class="nav-bar-title-block">
+                <view v-if="title.length > 0" class="nav-bar-title-block">
                     <text class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
                     <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
                 </view>
             </view>
             <view v-if="rightIcon.length > 0" class="nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
                 <text class="nav-bar-icon" :class="titleColorClass">{{ rightIcon }}</text>
+            </view>
+            <!-- 多图标右槽（#1602 追加）：dashboard 等页的 🔍🔔🛒 一排；宽度同样按胶囊让位。
+                 每个图标独立可点，rightClick 携带索引（-1 = 单图标形态，兼容旧消费方）。 -->
+            <view v-else-if="rightIcons.length > 0" class="nav-bar-right" :style="rightSlotStyle">
+                <view v-for="(icon, idx) in rightIcons" :key="idx" class="nav-bar-right-item"
+                    @click="onRightItemClick(idx)">
+                    <text class="nav-bar-icon" :class="titleColorClass">{{ icon }}</text>
+                </view>
             </view>
         </view>
     </view>
@@ -24,6 +32,8 @@
         title ?: string
         leftIcon ?: string
         rightIcon ?: string
+        /** 多图标右槽（#1602 追加）：与 rightIcon 互斥，rightIcons 优先。 */
+        rightIcons ?: string[]
         transparent ?: boolean
         /** 页头套（#1592 双层套的页头层）：'inverse'（N01 蓝底，标题/图标反色）| 'plain'（N02/N03 白底） */
         variant ?: string
@@ -33,6 +43,7 @@
         title: '',
         leftIcon: '‹',
         rightIcon: '',
+        rightIcons: (): string[] => [],
         transparent: false,
         variant: 'plain',
         subtitle: ''
@@ -85,7 +96,11 @@
     }
 
     function onRightClick() : void {
-        emit('rightClick')
+        emit('rightClick', -1)
+    }
+
+    function onRightItemClick(idx : number) : void {
+        emit('rightClick', idx)
     }
 </script>
 
@@ -132,6 +147,10 @@
         flex-direction: row;
         align-items: center;
         justify-content: flex-end;
+    }
+
+    .nav-bar-right-item {
+        padding: 0 8rpx;
     }
 
     .nav-bar-title {
