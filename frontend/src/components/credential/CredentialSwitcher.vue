@@ -1,7 +1,7 @@
 <template>
   <div
     class="credential-switcher"
-    :class="{ collapsed: collapsed, 'is-dark': props.theme === 'dark' }"
+    :class="{ collapsed: collapsed }"
   >
     <div v-if="collapsed" class="collapsed-view">
       <UiTooltip :content="current?.name || '选择证件'" placement="right" :show-after="300">
@@ -71,17 +71,18 @@ import { ElMessage } from 'element-plus'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    collapsed: boolean
     /**
-     * 配色，需与所在侧栏的 theme 保持一致。
-     * - `light`：**默认值 = 改造前行为**
-     * - `dark`：适配石墨青暗底侧栏
+     * 折叠态（图标 + tooltip）。
+     *
+     * #1619 起本组件挂在**顶栏中区**（恒展开），故缺省 false；参数保留给未来的窄容器调用方。
+     * 原 `theme` prop 与配套的 is-dark 分支已随恒深侧栏退役一并删除（ADR-0072）：
+     * 外壳三块同底后不再存在「暗底侧栏」，留着就是无人走的配色分支。
      */
-    theme?: 'light' | 'dark'
+    collapsed?: boolean
   }>(),
-  { theme: 'light' }
+  { collapsed: false }
 )
 
 const credentialStore = useCredentialStore()
@@ -207,39 +208,4 @@ onMounted(async () => {
   color: var(--color-primary-600);
 }
 
-/* dark：适配石墨青暗底侧栏（Theme 由外层 TrainingLayout 与 AppSidebar 同步传入）。
-   追加覆盖，light 分支零改动。
-   下拉面板（el-select-dropdown）被 teleport 到 body，不在此适配 —— 保持浅色浮层。 */
-.credential-switcher.is-dark .switcher-label {
-  color: rgba(148, 163, 184, 0.85);
-}
-
-.credential-switcher.is-dark .current-name {
-  color: var(--color-text-on-dark, #f1f5f9);
-}
-
-.credential-switcher.is-dark .current-badge.special_operation {
-  background: rgba(45, 212, 191, 0.16);
-  color: var(--color-primary-300);
-}
-
-.credential-switcher.is-dark .collapsed-icon {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(241, 245, 249, 0.8);
-}
-
-.credential-switcher.is-dark .collapsed-icon:hover {
-  background: rgba(45, 212, 191, 0.18);
-  color: var(--color-primary-300);
-}
-
-.credential-switcher.is-dark :deep(.el-select__wrapper) {
-  background-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
-  color: rgba(241, 245, 249, 0.9);
-}
-
-.credential-switcher.is-dark :deep(.el-select__placeholder) {
-  color: rgba(148, 163, 184, 0.7);
-}
 </style>

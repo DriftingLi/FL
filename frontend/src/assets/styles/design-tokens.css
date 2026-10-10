@@ -80,9 +80,11 @@
 
   --color-bg-page: #F8FAFC;
   --color-bg-card: #FFFFFF;
-  --color-bg-sidebar: #0F172A;
-  --color-bg-sidebar-hover: #1E293B;
-  --color-bg-sidebar-active: rgba(13, 148, 136, 0.15);
+  /*
+   * 侧栏底色三件套（--color-bg-sidebar / -hover / -active）已随「恒深侧栏退役」删除
+   * （#1619 无缝外壳）：外壳三块（顶栏 / 侧栏 / 内容区底）统一用 --color-bg-page，
+   * 层次由卡片承担。判定与理由见 docs/adr/ADR-0072。
+   */
 
   /*
    * 沉浸式查看器（图片 / PPT / 视频 / 文档）的深色铬件。
@@ -172,6 +174,8 @@
 
   --sidebar-width: 240px;
   --sidebar-collapsed-width: 64px;
+  /* 顶栏高度（#1619 无缝外壳）：顶栏左格与侧栏同宽，故两者共用 --sidebar-* 两个宽度变量 */
+  --topbar-height: 56px;
 }
 
 /*
@@ -184,15 +188,13 @@
  * - 表面下沉一级：bg-page #F8FAFC → #0F172A，bg-card #FFFFFF → #1E293B
  * - 文字翻转：深字变浅字（沿用 slate 同阶反向），浅底上的 -strong 深字不变
  * - 语义 -light 浅底 → 深底，配对 -strong 深字 → 浅字（对比度翻转）
- * - 侧栏本身就是深色，dark 下再压暗一档拉开层次
+ * - 侧栏不再自带深色（#1619 无缝外壳：外壳与页面同底），层次一律由卡片承担
  */
 [data-theme="dark"] {
   /* ===== 表面 ===== */
   --color-bg-page: #0F172A;
   --color-bg-card: #1E293B;
-  --color-bg-sidebar: #0B1120;
-  --color-bg-sidebar-hover: #1E293B;
-  --color-bg-sidebar-active: rgba(45, 212, 191, 0.18);
+  /* 侧栏底色三件套见浅色块注释（#1619：外壳统一 --color-bg-page） */
 
   /* ===== 文字（翻转）===== */
   --color-text-primary: #F1F5F9;
