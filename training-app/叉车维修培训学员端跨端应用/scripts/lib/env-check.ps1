@@ -90,6 +90,7 @@ function Get-OnlineDevices {
     # 不写等待逻辑，直接 delegate 到唯一执行核并补三件事：档位、超时点名、serial 的取舍（devices 是 server 级⇒ -NoSerial）
     # 为保持与 emulator-smoke.ps1 的模式一致，也添加 Get-AdbOutput 中间层：
     $out = (Get-AdbOutput -AdbArgs @('devices')).Trim()
+    $list = @()
     foreach ($line in ($out -split "`r?`n")) {
         if ($line -match '^\s*(\S+)\s+(device|offline|unauthorized)\s*$') {
             $list += [pscustomobject]@{ Serial = $Matches[1]; State = $Matches[2] }
