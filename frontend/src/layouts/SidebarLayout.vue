@@ -27,13 +27,23 @@
 
     <div class="main-container" :class="{ 'main-collapsed': collapsed }">
       <main class="main-content" :class="{ 'content-narrow': props.contentWidth === 'narrow' }">
+        <!-- 内容列顶部插槽（#1620）：管理端在此挂标签栏，其余三端不传即不渲染 -->
+        <slot name="content-header" />
+
         <!-- 内层 router-view + transition：
              App.vue 已用 matched[0]?.path 做 key 锁住外层布局不重挂，
              这里用 fullPath 做 key 让同布局下的子页面也能走 180ms 淡入淡出。
-             不用 keep-alive，避免课程章节页/考试页等带副作用的状态被缓存。 -->
+
+             keep-alive（#1620）：**只缓存 include 名单里的组件**（名单来自描述符的
+             keepAlive: true，当前只有管理端）。名单为空时 keep-alive 等价于直通 ——
+             学员/讲师/招聘三端因此保持「一切换即销毁」的既有语义（考试页那类带副作用的状态
+             不会被缓存）。缓存页的 key 取**路由名**而不是 fullPath：同一页的不同查询参数
+             （翻页、筛选）不该各缓存一份实例。 -->
         <router-view v-slot="{ Component: Inner, route: r }">
           <transition name="inner-fade" mode="out-in">
-            <component :is="Inner" :key="r.fullPath" />
+            <keep-alive :include="props.keepAliveNames">
+              <component :is="Inner" :key="routeKey(r)" />
+            </keep-alive>
           </transition>
         </router-view>
       </main>
@@ -60,11 +70,25 @@ const props = withDefaults(
     contentWidth?: 'full' | 'narrow'
     /** 透传给 AppSidebar，不传则沿用其默认值 `default` */
     sidebarDensity?: 'default' | 'compact'
+    /**
+     * 进 keep-alive 缓存的组件名（#1620）。缺省空数组 = 不缓存任何页面（= 改造前行为），
+     * 由管理端布局传入（名单由页面描述符派生，见 config/navigation.ts 的 keepAliveNames）。
+     */
+    keepAliveNames?: string[]
   }>(),
-  { showFooter: false, contentWidth: 'full' }
+  { showFooter: false, contentWidth: 'full', keepAliveNames: () => [] }
 )
 
 const route = useRoute()
+
+/**
+ * 缓存页的 key 取路由名（同名页共用一份缓存实例），未缓存页仍用 fullPath
+ * （保持 180ms 淡入淡出对同页不同参数的既有行为）。
+ */
+function routeKey(r: { name?: unknown; fullPath: string }): string {
+  const name = typeof r.name === 'string' ? r.name : ''
+  return name && props.keepAliveNames.includes(name) ? name : r.fullPath
+}
 
 // 折叠状态持久化：同步读取初始值，避免组件重新挂载时 false→true 跳变引发拉伸动画
 const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
