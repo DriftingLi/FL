@@ -1,5 +1,27 @@
 basePath: /api
 definitions:
+  admin.AdminAccountDTO:
+    properties:
+      admin_id:
+        type: integer
+      name:
+        type: string
+      protected:
+        type: boolean
+      role_id:
+        type: integer
+      role_name:
+        type: string
+      username:
+        type: string
+    type: object
+  admin.AdminAccountListDTO:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/admin.AdminAccountDTO'
+        type: array
+    type: object
   admin.AdminCapabilitiesDTO:
     properties:
       capabilities:
@@ -25,6 +47,28 @@ definitions:
         type: integer
       total_study_duration:
         type: integer
+    type: object
+  admin.AdminRoleDTO:
+    properties:
+      capabilities:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      protected:
+        type: boolean
+      remark:
+        type: string
+      role_id:
+        type: integer
+    type: object
+  admin.AdminRoleListDTO:
+    properties:
+      roles:
+        items:
+          $ref: '#/definitions/admin.AdminRoleDTO'
+        type: array
     type: object
   admin.AdminStatisticsDTO:
     properties:
@@ -4262,6 +4306,78 @@ paths:
       summary: 服务信息（根路由）
       tags:
       - 系统
+  /admin/accounts:
+    get:
+      description: 列出全部管理员及其所挂角色（role_id 为 0 表示尚未挂角色）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminAccountListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理员账号列表
+      tags:
+      - 管理端-权限
+  /admin/accounts/{admin_id}/role:
+    put:
+      consumes:
+      - application/json
+      description: 给管理员改挂角色；**最后一个超管不可降级**（防自锁第二层）
+      parameters:
+      - description: 管理员 ID
+        in: path
+        name: admin_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已保存
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminAccountDTO'
+              type: object
+        "400":
+          description: 管理员ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 管理员或角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 必须保留至少一个超级管理员
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理员改挂角色
+      tags:
+      - 管理端-权限
   /admin/ai-configs:
     get:
       description: 管理员查看全部多 AI 配置（api_key 已脱敏）
@@ -7979,6 +8095,147 @@ paths:
       summary: 切换招聘者启用/禁用状态
       tags:
       - 管理端-招聘者
+  /admin/roles:
+    get:
+      description: 列出全部管理角色及其能力键（受保护角色返回受保护能力全集）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminRoleListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理角色列表
+      tags:
+      - 管理端-权限
+    post:
+      consumes:
+      - application/json
+      description: 新建角色并落能力键（能力键必须是 authz 能力表里的键）
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 角色已创建
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminRoleDTO'
+              type: object
+        "400":
+          description: 参数错误 / 未知能力键
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 角色名已存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 新建管理角色
+      tags:
+      - 管理端-权限
+  /admin/roles/{role_id}:
+    delete:
+      description: 删除角色；受保护角色或被管理员挂着的角色一律拒绝
+      parameters:
+      - description: 角色 ID
+        in: path
+        name: role_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 角色ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 受保护角色不可删除 / 角色仍被使用
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除管理角色
+      tags:
+      - 管理端-权限
+    put:
+      consumes:
+      - application/json
+      description: 改角色名 / 备注 / 能力集；受保护角色（超级管理员）一律拒绝
+      parameters:
+      - description: 角色 ID
+        in: path
+        name: role_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已保存
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminRoleDTO'
+              type: object
+        "400":
+          description: 参数错误 / 未知能力键
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 受保护角色不可修改 / 角色名已存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 修改管理角色
+      tags:
+      - 管理端-权限
   /admin/search-facts/zero-results:
     get:
       consumes:
