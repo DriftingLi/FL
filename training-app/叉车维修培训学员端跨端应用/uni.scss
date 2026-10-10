@@ -15,7 +15,7 @@
 /* 颜色变量 */
 
 /* 行为相关颜色 */
-$uni-color-primary: #2979ff;
+$uni-color-primary: #239EDD; // #1597 裁定 #2979ff → #239EDD（#1603 落地）
 $uni-color-success: #4cd964;
 $uni-color-warning: #ff9900;
 $uni-color-error: #dd524d;
@@ -78,12 +78,12 @@ $uni-font-size-paragraph:15px;
 /* ==================== 业务主题变量（叉车维修培训学员端） ==================== */
 
 /* 主题色 */
-$primary-color: #2979ff;
+$primary-color: #239EDD; // #1597 裁定 #2979ff → #239EDD（#1603 落地）
 $primary-color-light: #5b9aff;
 $primary-color-dark: #1c9eff;
 $success-color: #4cd964;
 $warning-color: #ff9900;
-$error-color: #dd524d;
+/* $error-color（原 #dd524d）已删：与 $danger-color（:137 一带）同语义位，#1597 Z12 裁定删定义留占位（#1603） */
 
 /* 文字色 */
 $text-color: #333333;
@@ -100,6 +100,12 @@ $card-bg: #ffffff;
 $bg-tint: #f1f6ff;
 /* 主色浅底（分区标题带、选中标签、历史 chip 底；收敛此前散落的 #EBF5FF 字面值） */
 $primary-tint: #ebf5ff;
+/* 白底页头套底色（N02/N03 套，#1592/#1603 新增，ui-spec §1.2 登记） */
+$bg-header: #ffffff;
+/* 状态浅底三 tint（#1597/#1603 新增，ui-spec §1.3 登记；收敛页面散落的同义字面值） */
+$success-tint: #e8f5e9;
+$warning-tint: #fff3e0;
+$danger-tint: #ffebee;
 
 /* 边框色 */
 $border-color: #e5e5e5;
@@ -125,7 +131,7 @@ $font-size-sm: 24rpx;
 $font-size-md: 28rpx;
 $font-size-lg: 32rpx;
 $font-size-xl: 36rpx;
-$font-size-xxl: 44rpx;
+/* $font-size-xxl（原 44rpx）已删：全站零消费 + 两份文档均写明「统一为 5 级」，#1597 Z7/C4 裁定删定义留占位（#1603） */
 
 /* ==================== 扩展 Token（UI 规范新增） ==================== */
 
