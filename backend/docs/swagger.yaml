@@ -4334,6 +4334,76 @@ paths:
       summary: 管理员账号列表
       tags:
       - 管理端-权限
+    post:
+      consumes:
+      - application/json
+      description: 新建管理员账号并（可选）挂角色；口令走 6-20 位规则、bcrypt 落库，账号名唯一
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 管理员已创建
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminAccountDTO'
+              type: object
+        "400":
+          description: 参数错误 / 口令不合规 / 角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 账号名已存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 新建管理员
+      tags:
+      - 管理端-权限
+  /admin/accounts/{admin_id}:
+    delete:
+      description: 删除管理员账号；**最后一个超管**与自己都不可删（防自锁第二层），先吊销其会话再落库删除
+      parameters:
+      - description: 管理员 ID
+        in: path
+        name: admin_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 管理员ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 管理员不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 必须保留至少一个超级管理员 / 不能删除自己的账号
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除管理员
+      tags:
+      - 管理端-权限
   /admin/accounts/{admin_id}/role:
     put:
       consumes:

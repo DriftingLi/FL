@@ -8,10 +8,12 @@ package admin
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/core"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
@@ -40,6 +42,19 @@ type roleUpdateParam struct {
 type accountRolePayload struct {
 	AdminID int `json:"admin_id"`
 	RoleID  int `json:"role_id"`
+}
+
+// adminCreatePayload 新建管理员账号的入参（#1632）。role_id 缺省 0 = 先建号、后挂角色。
+type adminCreatePayload struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+	RoleID   int    `json:"role_id"`
+}
+
+// adminIDParam 路径参数（删除账号；改挂角色那条把路径参数与请求体合成 accountRolePayload）。
+type adminIDParam struct {
+	AdminID int
 }
 
 // @Summary 管理角色列表
@@ -183,6 +198,79 @@ func (h *adminHandler) ListAdminAccounts(c *gin.Context) {
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
 
+// @Summary 新建管理员
+// @Description 新建管理员账号并（可选）挂角色；口令走 6-20 位规则、bcrypt 落库，账号名唯一
+// @Tags 管理端-权限
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 201 {object} response.R{data=admin.AdminAccountDTO} "管理员已创建"
+// @Failure 400 {object} response.R "参数错误 / 口令不合规 / 角色不存在"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 409 {object} response.R "账号名已存在"
+// @Router /admin/accounts [post]
+// CreateAdminAccount 新建管理员 POST /api/admin/accounts
+func (h *adminHandler) CreateAdminAccount(c *gin.Context) {
+	httpx.Endpoint[adminCreatePayload, AdminAccountDTO]{
+		Parse: func(c *gin.Context) (*adminCreatePayload, error) {
+			req, err := httpx.BindJSON[adminCreatePayload](c)
+			if err != nil {
+				return nil, err
+			}
+			if strings.TrimSpace(req.Username) == "" {
+				return nil, httpx.BadRequest("账号不能为空")
+			}
+			if strings.TrimSpace(req.Name) == "" {
+				return nil, httpx.BadRequest("姓名不能为空")
+			}
+			// 长度规则在动作里兜底（ADR-0064 决策 4），这里只是**在落到服务端之前**给出同一句文案
+			if err := core.ValidatePasswordLength(req.Password); err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
+			return req, nil
+		},
+		Invoke: func(ctx context.Context, req *adminCreatePayload) (*AdminAccountDTO, error) {
+			return h.adminSvc.CreateAdminAccount(req.Username, req.Name, req.Password, req.RoleID)
+		},
+	}.WithSuccess(httpx.Created("管理员已创建"), http.StatusBadRequest).
+		WithSentinel(ErrAdminUsernameTaken, http.StatusConflict).
+		WithSentinel(ErrRoleNotFound, http.StatusBadRequest).Handle(c)
+}
+
+// @Summary 删除管理员
+// @Description 删除管理员账号；**最后一个超管**与自己都不可删（防自锁第二层），先吊销其会话再落库删除
+// @Tags 管理端-权限
+// @Produce json
+// @Security BearerAuth
+// @Param admin_id path int true "管理员 ID"
+// @Success 200 {object} response.R "已删除"
+// @Failure 400 {object} response.R "管理员ID无效"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "管理员不存在"
+// @Failure 409 {object} response.R "必须保留至少一个超级管理员 / 不能删除自己的账号"
+// @Router /admin/accounts/{admin_id} [delete]
+// DeleteAdminAccount 删除管理员 DELETE /api/admin/accounts/:admin_id
+func (h *adminHandler) DeleteAdminAccount(c *gin.Context) {
+	httpx.Endpoint[adminIDParam, struct{}]{
+		Parse: func(c *gin.Context) (*adminIDParam, error) {
+			id, err := httpx.PathInt(c, "admin_id", "管理员ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &adminIDParam{AdminID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *adminIDParam) (*struct{}, error) {
+			// 操作者身份取自令牌（自删判据要它），不从请求体收 —— 那会变成可伪造的入参
+			actorID := middleware.CurrentUserID(c)
+			return &struct{}{}, h.adminSvc.DeleteAdminAccount(ctx, actorID, req.AdminID)
+		},
+	}.WithSuccess(httpx.OkMsgNoData("已删除"), http.StatusBadRequest).
+		WithSentinel(ErrInvalidAdminID, http.StatusBadRequest).
+		WithSentinel(ErrAdminNotFound, http.StatusNotFound).
+		WithSentinel(ErrLastSuperAdmin, http.StatusConflict).
+		WithSentinel(ErrSelfDelete, http.StatusConflict).Handle(c)
+}
+
 // @Summary 管理员改挂角色
 // @Description 给管理员改挂角色；**最后一个超管不可降级**（防自锁第二层）
 // @Tags 管理端-权限
@@ -236,5 +324,7 @@ func RegisterAdminAuthzRoutes(rg *gin.RouterGroup, session *security.Session, ad
 
 	accounts := rg.Group("/admin/accounts", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapAdminAccountManage))
 	accounts.GET("", h.ListAdminAccounts)
+	accounts.POST("", h.CreateAdminAccount)
 	accounts.PUT("/:admin_id/role", h.AssignAdminRole)
+	accounts.DELETE("/:admin_id", h.DeleteAdminAccount)
 }
