@@ -1,8 +1,7 @@
 // 本文件：管理角色与管理员账号的服务面（#1621 段4）。
 //
-// 边界（本批落地的一半）：**角色 CRUD + 能力配置 + 管理员改挂角色**；
-// 管理员口令重置与账号停用不在本批（前者要接 core 的口令写面与全会话吊销、后者要给 admin 表加
-// status 列并让登录与能力解析都尊重它 —— 都是独立的一小片，另开票）。
+// 落地面：**角色 CRUD + 能力配置 + 管理员改挂角色 + 新建/删除账号（#1632）+ 代重置口令（#1640）**。
+// 仍不在本批：账号**停用**（要给 admin 表加 status 列并让登录与能力解析都尊重它，另开票）。
 //
 // 三层防自锁（#1618 段1 的决策，本文件是它的执行点）：
 //  1. 受保护角色（protected）不可改能力、不可删；
@@ -16,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/authz"
@@ -407,10 +407,33 @@ func (s *Service) DeleteAdminAccount(ctx context.Context, actorID, adminID int) 
 			}
 		}
 	}
-	if err := s.session.RevokeIdentity(ctx, string(authz.RoleAdmin), adminID); err != nil {
+	if err := s.session.RevokeIdentity(ctx, core.AdminRole, adminID); err != nil {
 		return err
 	}
 	return s.db.Where("admin_id = ?", adminID).Delete(&model.Admin{}).Error
+}
+
+// ResetAdminPassword 代重置管理员口令（#1640）。
+//
+// 与另三个主体的代重置同判（ADR-0064 决策 4）：走**同一条口令写面动作**（core.ApplyAdminPassword），
+// 因此同时拿到 6-20 位长度兜底与全会话吊销 —— 不在这里另抄一份哈希或长度规则。
+// 失败策略沿口令族：口令一落库即不可回退，吊销标记写失败只记日志、不阻断。
+// 受保护角色的账号**可以**重置口令：改口令是换凭证，不是降权，不触发防自锁第二层。
+func (s *Service) ResetAdminPassword(ctx context.Context, adminID int, password string) error {
+	if adminID <= 0 {
+		return ErrInvalidAdminID
+	}
+	res := core.ApplyAdminPassword(ctx, s.db, s.session, adminID, password)
+	if !res.Applied() {
+		if errors.Is(res.Err, core.ErrAdminNotFound) {
+			return ErrAdminNotFound
+		}
+		return res.Err
+	}
+	if res.RevokeErr != nil {
+		s.logger.Warn("管理员口令重置后 refresh 吊销标记写入失败", zap.Int("admin_id", adminID), zap.Error(res.RevokeErr))
+	}
+	return nil
 }
 
 // replaceRoleCapabilities 以「先删后插」替换角色的能力行（同事务内，避免中间态）。

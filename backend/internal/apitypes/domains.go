@@ -657,6 +657,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/admin/accounts"},
 			{Method: "POST", Path: "/admin/accounts"},
 			{Method: "PUT", Path: "/admin/accounts/{admin_id}/role"},
+			{Method: "PUT", Path: "/admin/accounts/{admin_id}/password", NoData: true},
 			{Method: "DELETE", Path: "/admin/accounts/{admin_id}", NoData: true},
 			{Method: "POST", Path: "/admin/course/generate-content"},
 			{Method: "GET", Path: "/admin/course/generate-content/{task_id}"},

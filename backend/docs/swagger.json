@@ -192,6 +192,61 @@
                 }
             }
         },
+        "/admin/accounts/{admin_id}/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "代重置某个管理员的口令：6-20 位规则 + bcrypt 落库 + 全会话吊销；响应不回显口令",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-权限"
+                ],
+                "summary": "重置管理员口令",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "管理员 ID",
+                        "name": "admin_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已重置",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "管理员ID无效 / 口令不合规",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "管理员不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/accounts/{admin_id}/role": {
             "put": {
                 "security": [

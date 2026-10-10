@@ -54,6 +54,9 @@ type passwordSubject struct {
 var (
 	hrwaiPasswordSubject = passwordSubject{dest: &model.HrwaiUser{}, key: "id", role: HrwaiRole, notFound: model.ErrHrwaiUserNotFound}
 	tutorPasswordSubject = passwordSubject{dest: &model.Tutor{}, key: "tutor_id", role: TutorRole, notFound: model.ErrTutorNotFound}
+	// 管理员口令写面（#1640）：主体是 admin 表，吊销命名空间 = AdminRole（凭证命名空间单点，
+	// 与管理员 JWT 的角色 claim 同源 —— 两处一旦不同源，标记就「写得进、读不出」）。
+	adminPasswordSubject = passwordSubject{dest: &model.Admin{}, key: "admin_id", role: AdminRole, notFound: ErrAdminNotFound}
 	// 招聘者写面此前是本动作之外的第三份哈希副本（自建 Count + 哈希 + 落库 + 吊销），
 	// 且那句 Count 的 error 没查 ⇒ 查不动会被读成「招聘者不存在」（ADR-0062 票6 的同形）。
 	recruiterPasswordSubject = passwordSubject{dest: &model.RecruiterUser{}, key: "id", role: RecruiterRole, notFound: ErrRecruiterNotFound}
@@ -99,6 +102,13 @@ func ApplyTutorPassword(ctx context.Context, db *gorm.DB, session *security.Sess
 // ApplyRecruiterPassword 招聘者口令写面的唯一动作（同一条动作、主体换成 recruiter_users）。
 func ApplyRecruiterPassword(ctx context.Context, db *gorm.DB, session *security.Session, id int, password string) PasswordWriteResult {
 	return applyNewPassword(ctx, db, session, recruiterPasswordSubject, id, password)
+}
+
+// ApplyAdminPassword 管理员口令代重置（#1640，管理端第五个入口）：与另三个包装同形 ——
+// 动作留本包、声明权归调用方（admin.Service.ResetAdminPassword），吊销成败如实返回。
+// 主体是 admin 表，命名空间 admin（与管理员 JWT 的 role claim 同源）。
+func ApplyAdminPassword(ctx context.Context, db *gorm.DB, session *security.Session, adminID int, password string) PasswordWriteResult {
+	return applyNewPassword(ctx, db, session, adminPasswordSubject, adminID, password)
 }
 
 // applyNewPassword 是「落新口令」这一动作的实现体。五个入口共用（ADR-0064 决策 4 把它从
