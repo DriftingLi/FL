@@ -71,6 +71,13 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Se
 
 	// ===== 统计看板 =====
 	g.GET("/statistics", h.GetStatistics)
+
+	// ===== 当前管理员的能力集（#1618 段1）=====
+	// 只要求「是管理员」（JWTAuth + handler 内角色判定），**不**挂 CapAdminAccess：
+	// 前端要靠这份能力集才能判断自己能不能进管理端；若挂了该能力，「没有 admin.access 的管理员」
+	// 连自己的权限集都读不到，界面无从解释 403（只会看到一个沉默的空白页）。
+	me := rg.Group("/admin/me", middleware.JWTAuth(session))
+	me.GET("/capabilities", h.MyCapabilities)
 }
 
 // @Summary 启动课程内容异步生成

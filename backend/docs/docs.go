@@ -4768,6 +4768,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/me/capabilities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "登录后前端拉取「我的管理端能力」，用于路由守卫与侧栏过滤（#1618 段1）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-账号"
+                ],
+                "summary": "当前管理员的有效能力集",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/admin.AdminCapabilitiesDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非管理员身份",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/points/ledger": {
             "get": {
                 "security": [
@@ -23437,6 +23486,22 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "admin.AdminCapabilitiesDTO": {
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "description": "Capabilities 有效能力键；未挂角色时为空数组（**不是 null** —— 契约由\napitypes 的可空性锁按 nullability 声明核对）。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "granted": {
+                    "description": "Granted 是否已挂角色。false = 未授权（role_id 为 NULL）或账号不存在。\n前端据此区分「还没分配角色」与「角色里什么都没勾」：两者都是空集，但话术不同。",
+                    "type": "boolean"
+                }
+            }
+        },
         "admin.AdminOverviewDTO": {
             "type": "object",
             "properties": {

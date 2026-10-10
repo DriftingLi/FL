@@ -94,6 +94,9 @@ const (
 
 // roleCapabilities 能力表（唯一事实源）。**以现状为准**：本表由当前各蓝图注册的
 // RoleRequired 角色集合翻译而来，第一期不扩张也不收缩任何角色的可达面。
+//
+// #1618 段1 起，**管理端角色（admin）的能力不在此表回答**：它由数据层回答（管理员所挂的
+// admin_role → 能力集；protected 角色取本表全量）。本表对 admin 一律 fail closed。
 var roleCapabilities = map[Capability][]Role{
 	CapStudentAccess:      {RoleStudent},
 	CapCourseLearn:        {RoleStudent},
@@ -120,31 +123,99 @@ var roleCapabilities = map[Capability][]Role{
 	CapResumePDFView:      {RoleRecruiter},
 
 	CapTutorAccess:    {RoleTutor},
-	CapQuestionAuthor: {RoleTutor, RoleAdmin},
+	CapQuestionAuthor: {RoleTutor},
 
-	CapAdminAccess:        {RoleAdmin},
-	CapQuestionReview:     {RoleAdmin},
-	CapContributionReview: {RoleTutor, RoleAdmin},
-	CapCatalogManage:      {RoleAdmin},
-	CapCatalogAuthor:      {RoleTutor, RoleAdmin},
-	CapContentManage:      {RoleAdmin},
-	CapProfileReview:      {RoleAdmin},
-	CapPointsAdmin:        {RoleAdmin},
-	CapAuditRead:          {RoleAdmin},
-	CapForumModerate:      {RoleAdmin},
-	CapValuationConfig:    {RoleAdmin},
-	CapInspectionRead:     {RoleAdmin},
-	CapExportRun:          {RoleAdmin},
-	CapRecruiterManage:    {RoleAdmin},
-	CapJobReportHandle:    {RoleAdmin},
-	CapFaqManage:          {RoleAdmin},
+	// ===== 管理端：静态表**不回答** admin 的能力（#1618 段1）=====
+	// 空集 =「这个能力键存在，但它的角色可达面由数据层回答」（受保护角色持有，见
+	// protectedAdminCapabilities）。写空而不是删行，是因为
+	// AllCapabilities() 同时是前端 AuthzCapability 联合类型的来源 —— 删行会让键从前端类型里
+	// 消失，页面描述符的 capability 声明随之编译报错。
+	// 判据的单一来源是下面的 dynamicRoles；Has(RoleAdmin, …) 对动态角色一律 false（fail closed），
+	// 动态路径在 middleware 的能力守卫里（见 middleware.HasCapability）。
+	CapAdminAccess:        {},
+	CapQuestionReview:     {},
+	CapContributionReview: {RoleTutor},
+	CapCatalogManage:      {},
+	CapCatalogAuthor:      {RoleTutor},
+	CapContentManage:      {},
+	CapProfileReview:      {},
+	CapPointsAdmin:        {},
+	CapAuditRead:          {},
+	CapForumModerate:      {},
+	CapValuationConfig:    {},
+	CapInspectionRead:     {},
+	CapExportRun:          {},
+	CapRecruiterManage:    {},
+	CapJobReportHandle:    {},
+	CapFaqManage:          {},
 
 	CapRecruitAccess:     {RoleRecruiter},
 	CapJobManage:         {RoleRecruiter},
 	CapApplicationReview: {RoleRecruiter},
 }
 
-// Has 判定角色是否拥有能力。未知角色或未登记能力一律 false（fail closed）。
+// protectedAdminCapabilities 受保护（超级管理员）角色的能力全集（#1618 段1）。
+//
+// 它是「管理端能力面」这一件事的载体：静态表里管理端那些**空行**（不支持任何静态角色）正是它的
+// 补集，由 authz_test 双向锁定 —— 空行 ⇔ 在本清单里，且静态行 ∪ 本清单 == AllCapabilities()。
+// 因此本清单不是静态表的第二份抄写，而是被删掉的那半边的**替代声明**。
+//
+// 为什么不是「全部能力」：能力是「角色对某资源域的资格」。把 job.apply / course.learn 这类
+// 学员与招聘方能力一并授给超管，会让超管以一个不属于它的身份出现在那些域里 —— 语义漂移，
+// 且此后每新增一个学员能力都会自动扩权。管理端能力面显式列举才是准确的。
+var protectedAdminCapabilities = []Capability{
+	CapAdminAccess,        // 管理端入口与用户/招聘者管理
+	CapQuestionAuthor,     // 题库作者（与讲师共有）
+	CapQuestionReview,     // 题库审核
+	CapContributionReview, // 投稿审核（与讲师共有）
+	CapCatalogManage,      // 培训目录管理
+	CapCatalogAuthor,      // 目录作者面（与讲师共有）
+	CapContentManage,      // 内容精选与内容生成
+	CapProfileReview,      // 资料审核
+	CapPointsAdmin,        // 积分管理与扣罚
+	CapAuditRead,          // 审计日志
+	CapForumModerate,      // 论坛治理
+	CapValuationConfig,    // 残值系数配置
+	CapInspectionRead,     // 只读巡检
+	CapExportRun,          // 数据导出
+	CapRecruiterManage,    // 招聘者账号管理
+	CapJobReportHandle,    // 职位举报处置
+	CapFaqManage,          // 帮助中心内容维护
+}
+
+// ProtectedAdminCapabilities 返回受保护（超级管理员）角色的能力全集（按声明序）。
+func ProtectedAdminCapabilities() []Capability {
+	out := make([]Capability, len(protectedAdminCapabilities))
+	copy(out, protectedAdminCapabilities)
+	return out
+}
+
+// dynamicRoles 能力**不由静态表回答**的角色（#1618 段1）：它们的可达面来自数据层
+// （管理员所挂角色），静态表对这些角色一律 fail closed。
+//
+// 声明在此（而不是散在 Has / Capabilities / codegen 各写一遍），是为了让「谁是动态角色」只有
+// 一个来源：codegen 依此跳过它们的 ROLE_CAPABILITIES 行，锁测试依此确认没有第二个动态角色。
+var dynamicRoles = []Role{RoleAdmin}
+
+// DynamicRoles 返回能力动态化的角色（按声明序）。
+func DynamicRoles() []Role {
+	out := make([]Role, len(dynamicRoles))
+	copy(out, dynamicRoles)
+	return out
+}
+
+// IsDynamicRole 报告该角色的能力是否由数据层回答（静态表不回答它）。
+func IsDynamicRole(role Role) bool {
+	for _, r := range dynamicRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+// Has 判定角色是否拥有能力。未知角色、未登记能力、以及**动态角色**一律 false（fail closed）。
+// 动态角色（admin）的实际可达面由 middleware 的能力守卫经数据层回答，不走本函数。
 func Has(role Role, capability Capability) bool {
 	if !role.Valid() {
 		return false

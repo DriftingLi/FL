@@ -26,7 +26,46 @@ const (
 	CtxUserRole ContextKey = "role"
 	// CtxRequestID 请求ID
 	CtxRequestID ContextKey = "request_id"
+	// CtxCapabilityResolver 动态角色能力解析源（#1618 段1）
+	CtxCapabilityResolver ContextKey = "capability_resolver"
 )
+
+// CapabilityResolver 动态角色（admin）有效能力集的解析源（#1618 段1）。
+//
+// 为什么是接口而不是直接调用：middleware 是底层包 —— 域包（internal/admin）反过来 import 它，
+// 故这里只能声明接口，实现由装配根注入（admin.Service 结构化满足它）。
+type CapabilityResolver interface {
+	// AdminCapabilities 返回该管理员的有效能力集。
+	//
+	// 第二个返回值 = 是否已挂角色：false 表示未授权或账号不存在（**这是判定结果**，不是故障）。
+	// 第三个返回值 = 查询故障：非 nil 时守卫按 **500** 处理 —— 把「库挂了」渲染成
+	// 403「权限不足」会把故障伪装成权限问题（判据见 contract 测试
+	// TestListEndpointDBFailureRenders500Envelope：DB 故障必须 500）。
+	AdminCapabilities(adminID int) (map[authz.Capability]struct{}, bool, error)
+}
+
+// AdminCapabilityResolver 把解析源注入 context（装配根挂在 /api 组上）。
+//
+// 它**不读 claims**，因此与各域组内 JWTAuth 的先后无关：根组的中间件必然先跑。
+// r 为 nil 时不注入 —— 动态角色的能力守卫随之 fail closed（宁可 403，不可放行）。
+func AdminCapabilityResolver(r CapabilityResolver) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if r != nil {
+			c.Set(string(CtxCapabilityResolver), r)
+		}
+		c.Next()
+	}
+}
+
+// capabilityResolverFrom 读出请求上下文里的解析源。
+func capabilityResolverFrom(c *gin.Context) (CapabilityResolver, bool) {
+	v, ok := c.Get(string(CtxCapabilityResolver))
+	if !ok {
+		return nil, false
+	}
+	r, ok := v.(CapabilityResolver)
+	return r, ok
+}
 
 // Claims JWT 声明（统一由 security 会话模块持有）。
 type Claims = security.Claims
@@ -136,14 +175,19 @@ func authCookieValue(c *gin.Context, sess *security.Session) string {
 // 必须在 JWTAuth 之后使用。
 func CapabilityRequired(capability authz.Capability) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, exists := c.Get(string(CtxUserRole))
-		if !exists {
+		if _, exists := c.Get(string(CtxUserRole)); !exists {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
 			return
 		}
-		roleStr, _ := role.(string)
-		if !authz.Has(authz.Role(roleStr), capability) {
+		ok, err := requireCapability(c, capability)
+		if err != nil {
+			// 判定所需的查询失败：渲染 500 而非 403 —— 故障不得伪装成权限问题。
+			response.ServerError(c, "服务器内部错误")
+			c.Abort()
+			return
+		}
+		if !ok {
 			response.Forbidden(c, "权限不足")
 			c.Abort()
 			return
@@ -152,11 +196,42 @@ func CapabilityRequired(capability authz.Capability) gin.HandlerFunc {
 	}
 }
 
-// HasCapability 读当前请求角色的能力判定（JWTAuth 未应用或未登录时一律 false）。
-// 与 CapabilityRequired 同源（都走 authz 能力表），供 handler 在**同一端点内分流**读路径
-// 时使用（如题目 by-id：作者/审核者走编辑面，学员走题库池口径）。
+// HasCapability 读当前请求的能力判定（JWTAuth 未应用或未登录时一律 false）。
+// 与 CapabilityRequired 同源，供 handler 在**同一端点内分流**读路径时使用
+// （如题目 by-id：作者/审核者走编辑面，学员走题库池口径）。
+//
+// 两条路径（#1618 段1）：
+//   - 静态角色 → authz 能力表；
+//   - **动态角色（admin）** → 装配根注入的解析源（admin.Service.AdminCapabilities）：
+//     每请求查库 + 短缓存，故超管的授权变更最多延迟一个 TTL 生效。
+//
+// 解析源未装配或管理员未挂角色时一律 false —— 能力守卫宁可 403，不可放行。
 func HasCapability(c *gin.Context, capability authz.Capability) bool {
-	return authz.Has(authz.Role(CurrentRole(c)), capability)
+	ok, err := requireCapability(c, capability)
+	// handler 的分流判定没有「故障」这一档：查询失败按无能力处理（fail closed，退到保守分支）。
+	return err == nil && ok
+}
+
+// requireCapability 与 HasCapability 同源，但把**查询故障**与**判定结果**分开带出：
+// 守卫（CapabilityRequired）据此把故障渲染成 500，而把「无能力」渲染成 403。
+func requireCapability(c *gin.Context, capability authz.Capability) (bool, error) {
+	role := authz.Role(CurrentRole(c))
+	if !authz.IsDynamicRole(role) {
+		return authz.Has(role, capability), nil
+	}
+	resolver, ok := capabilityResolverFrom(c)
+	if !ok {
+		return false, nil
+	}
+	caps, granted, err := resolver.AdminCapabilities(CurrentUserID(c))
+	if err != nil {
+		return false, err
+	}
+	if !granted {
+		return false, nil
+	}
+	_, has := caps[capability]
+	return has, nil
 }
 
 // CurrentUserID 从 gin.Context 读取当前登录用户 ID(未登录返回 0)。

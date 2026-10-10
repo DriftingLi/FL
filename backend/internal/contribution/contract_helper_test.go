@@ -7,9 +7,11 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admincap"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/filestore"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
@@ -56,6 +58,8 @@ func newContributionRouter(t *testing.T) (*gin.Engine, *contributionContractDeps
 
 	r := gin.New()
 	api := r.Group("/api")
+	// 管理端能力解析源（#1618 段1）：自建路由与装配根 NewRouter 挂同一份实现，缺了它管理端端点一律 403。
+	api.Use(middleware.AdminCapabilityResolver(admincap.New(db, zap.NewNop())))
 	RegisterRoutes(api, sess, credRes, svc)
 	RegisterAdminRoutes(api, sess, svc)
 

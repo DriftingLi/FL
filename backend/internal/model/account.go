@@ -43,14 +43,44 @@ func (HrwaiUser) TableName() string { return "hrwai_users" }
 // ===== 2. 管理员 =====
 
 type Admin struct {
-	AdminID   int       `gorm:"column:admin_id;primaryKey" json:"admin_id"`
-	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password  string    `gorm:"column:password" json:"-"`
-	Name      string    `gorm:"column:name" json:"name"`
+	AdminID  int    `gorm:"column:admin_id;primaryKey" json:"admin_id"`
+	Username string `gorm:"column:username;uniqueIndex" json:"username"`
+	Password string `gorm:"column:password" json:"-"`
+	Name     string `gorm:"column:name" json:"name"`
+	// RoleID 所挂管理角色（#1618 段1）。NULL = **未授权**（fail closed）：新建管理员在挂上角色
+	// 之前不拿到任何能力，故这里是可空指针而不是零值兜底。
+	RoleID    *int      `gorm:"column:role_id" json:"role_id,omitempty"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Admin) TableName() string { return "admin" }
+
+// ProtectedAdminRoleName 受保护（超级管理员）角色名 —— **迁移 000041 的 seed 用同一字面量**，
+// 两侧由 internal/model 的锁测试逐字对账（TestProtectedAdminRoleSeedMatchesModel）。
+const ProtectedAdminRoleName = "超级管理员"
+
+// AdminRole 管理角色（#1618 段1）：超管给其它管理员分配权限的载体。
+//
+// protected 角色（超级管理员）**不由本表回答能力**：它的能力恒为 authz 能力表全量 —— 能力词表的
+// 唯一事实源仍是 internal/authz，故 protected 角色在 admin_role_capability 里没有行。
+type AdminRole struct {
+	RoleID    int       `gorm:"column:role_id;primaryKey" json:"role_id"`
+	Name      string    `gorm:"column:name;uniqueIndex" json:"name"`
+	Protected bool      `gorm:"column:protected" json:"protected"`
+	Remark    string    `gorm:"column:remark" json:"remark"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (AdminRole) TableName() string { return "admin_role" }
+
+// AdminRoleCapability 管理角色的能力行（能力键取值域 = authz 能力表的键）。
+type AdminRoleCapability struct {
+	RoleID     int    `gorm:"column:role_id;primaryKey" json:"role_id"`
+	Capability string `gorm:"column:capability;primaryKey" json:"capability"`
+}
+
+func (AdminRoleCapability) TableName() string { return "admin_role_capability" }
 
 // ===== 3. 导师 =====
 

@@ -1,5 +1,20 @@
 basePath: /api
 definitions:
+  admin.AdminCapabilitiesDTO:
+    properties:
+      capabilities:
+        description: |-
+          Capabilities 有效能力键；未挂角色时为空数组（**不是 null** —— 契约由
+          apitypes 的可空性锁按 nullability 声明核对）。
+        items:
+          type: string
+        type: array
+      granted:
+        description: |-
+          Granted 是否已挂角色。false = 未授权（role_id 为 NULL）或账号不存在。
+          前端据此区分「还没分配角色」与「角色里什么都没勾」：两者都是空集，但话术不同。
+        type: boolean
+    type: object
   admin.AdminOverviewDTO:
     properties:
       active_today:
@@ -7107,6 +7122,34 @@ paths:
       summary: 课程等级列表
       tags:
       - 管理端-培训目录
+  /admin/me/capabilities:
+    get:
+      description: 登录后前端拉取「我的管理端能力」，用于路由守卫与侧栏过滤（#1618 段1）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.AdminCapabilitiesDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非管理员身份
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 当前管理员的有效能力集
+      tags:
+      - 管理端-账号
   /admin/points/ledger:
     get:
       description: 管理员按原因 / 业务域 / 用户筛选积分流水（不传 ref_type = 跨域全量；页大小上限 100）

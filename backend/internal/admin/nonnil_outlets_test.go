@@ -24,6 +24,7 @@ var nonnilOutletsAdmin = map[string]func(t *testing.T) any{
 	"admin.HrwaiUserPageResult.list":        outletHrwaiUserPageEmpty,
 	"admin.TutorListDTO.tutors":             outletTutorListEmpty,
 	"admin.AdminStatisticsDTO.course_stats": outletAdminStatisticsNoCourses,
+	"admin.AdminCapabilitiesDTO.capabilities": outletAdminCapabilitiesUnknownAdmin,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -57,4 +58,16 @@ func outletTutorListEmpty(t *testing.T) any {
 func outletAdminStatisticsNoCourses(t *testing.T) any {
 	t.Helper()
 	return NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetStatistics()
+}
+
+// outletAdminCapabilitiesUnknownAdmin 能力集出口：账号不存在（未授权）时 capabilities 是**空数组**。
+// 这是最容易发出 null 的那条分支（空集），也正是要举证的那一格。
+func outletAdminCapabilitiesUnknownAdmin(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	res, err := svc.AdminCapabilitySet(999999)
+	if err != nil {
+		t.Fatalf("能力集出口失败: %v", err)
+	}
+	return res
 }

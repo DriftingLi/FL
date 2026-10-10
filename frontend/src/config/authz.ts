@@ -6,6 +6,10 @@
 //
 // 用法：页面/路由声明「需要什么能力」（AuthzCapability），角色可达面由 ROLE_CAPABILITIES
 // 回答。**不要**在前端另抄一份角色清单——那是本文件要消灭的东西。
+//
+// 例外：'admin' 的能力**不来自本表**（#1618 段1）——管理端权限由超管按角色分配，运行时经
+// GET /admin/me/capabilities 下发。ROLE_CAPABILITIES.admin 因此**有意为空**，
+// hasCapability('admin', …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
 
 export type AuthzRole =
   | 'hrwai_user'
@@ -65,7 +69,8 @@ export type AuthzCapability =
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
   hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'faq.read', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
   tutor: ['catalog.author', 'contribution.review', 'question.author', 'tutor.access'],
-  admin: ['admin.access', 'audit.read', 'catalog.author', 'catalog.manage', 'content.manage', 'contribution.review', 'export.run', 'faq.manage', 'forum.moderate', 'inspection.read', 'job_report.handle', 'points.admin', 'profile.review', 'question.author', 'question.review', 'recruiter.manage', 'valuation.config'],
+  // admin 有意为空：其能力由数据层回答（GET /admin/me/capabilities），本表对该角色 fail closed。
+  admin: [],
   recruiter: ['application.review', 'contact.request', 'job.manage', 'recruit.access', 'recruit.resume_pdf'],
 }
 

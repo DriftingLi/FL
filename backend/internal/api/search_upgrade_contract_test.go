@@ -47,7 +47,7 @@ func TestSearchUpgradeContract(t *testing.T) {
 	slice6AssertKeys(t, rec, 200, "items", "keyword", "page", "pages", "total", "type")
 
 	// 零结果词运营面：管理员可读、学员 403
-	adminToken := slice6Token(t, cfg, 1, "contract_admin", "admin")
+	adminToken := adminTokenWithAccount(t, cfg, db, "contract_admin")
 	rec = catalogRequest(t, r, adminToken, http.MethodGet, "/api/admin/search-facts/zero-results", "")
 	unpackData(t, rec, 200) // data 是**数组**（零结果词列表），不是对象
 	stuToken := slice6Token(t, cfg, student.ID, student.Account, "hrwai_user")
