@@ -218,6 +218,20 @@ function isRouteActive(item: NavItem): boolean {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  /*
+   * 隐藏本列的滚动条（#1627，无缝外壳的补漏）：
+   * 导航列一溢出，原生滚动条（全局 6px、滑块 --color-border-dark）就**紧贴侧栏右缘** ——
+   * 而那条边缘正是外壳的接缝。实测（1920×1080 截图逐像素）它是一条 x=293..299、y=112..904、
+   * 色值 #CBD5E1 的竖线，成了整个界面上最显眼的分隔线，把「接缝靠同色消失」直接抹掉。
+   * 滚轮 / 触控板 / 键盘 / 拖拽滚动照常（只是不给滑块画出来）；本仓横向滚动条
+   * （MarkdownToolbar / UiSegmentTabs / AdminTabBar）已有同样先例。
+   */
+  scrollbar-width: none;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .nav-group-label {
