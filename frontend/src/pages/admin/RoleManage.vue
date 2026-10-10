@@ -20,6 +20,7 @@ import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import { describeCapability, describeCapabilityDomain } from '@/utils/capabilityWords'
 
 const roles = ref<AdminRoleDTO[]>([])
 /** 每张卡的能力勾选草稿：role_id → 已勾选能力键（保存前的本地态）。 */
@@ -49,7 +50,13 @@ async function load(): Promise<void> {
 
 onMounted(load)
 
-/** 可授权集合 = 所有角色能力的并集（含受保护角色的受保护全集），按资源域分组。 */
+/**
+ * 可授权集合 = 所有角色能力的并集（含受保护角色的受保护全集），按资源域分组。
+ *
+ * 展示名走 utils/capabilityWords（#1630）：收敛前这里把能力键与资源域**原样**印给超管看
+ * （一屏英文）。分组标题与勾选框文案都取中文词表，**排序也按中文名**（域与键两级的稳定序），
+ * 原始键留在 title 上以便对照后端日志。
+ */
 const capabilityGroups = computed(() => {
   const byDomain = new Map<string, string[]>()
   const seen = new Set<string>()
@@ -62,8 +69,14 @@ const capabilityGroups = computed(() => {
     }
   }
   return [...byDomain.entries()]
-    .map(([domain, keys]) => ({ domain, keys: keys.sort() }))
-    .sort((a, b) => a.domain.localeCompare(b.domain))
+    .map(([domain, keys]) => ({
+      domain,
+      label: describeCapabilityDomain(domain),
+      keys: keys
+        .slice()
+        .sort((a, b) => describeCapability(a).localeCompare(describeCapability(b), 'zh-Hans-CN'))
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'))
 })
 
 function isDirty(role: AdminRoleDTO): boolean {
@@ -153,9 +166,11 @@ async function remove(role: AdminRoleDTO): Promise<void> {
 
         <!-- 受保护角色的能力恒为全集：勾选框只读，避免「勾了却没保存」的错觉 -->
         <div v-for="group in capabilityGroups" :key="group.domain" class="cap-group">
-          <div class="cap-group-title">{{ group.domain }}</div>
+          <div class="cap-group-title">{{ group.label }}</div>
           <UiCheckboxGroup v-model="draft[role.role_id]" :disabled="role.protected">
-            <UiCheckbox v-for="key in group.keys" :key="key" :value="key" :label="key">{{ key }}</UiCheckbox>
+            <UiCheckbox v-for="key in group.keys" :key="key" :value="key" :label="describeCapability(key)">
+              <span :title="key">{{ describeCapability(key) }}</span>
+            </UiCheckbox>
           </UiCheckboxGroup>
         </div>
       </section>

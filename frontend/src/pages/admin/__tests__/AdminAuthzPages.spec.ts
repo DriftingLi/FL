@@ -1,4 +1,4 @@
-// 授权两页的关键行为（#1621 段4）：受保护角色只读、保存/改挂打到正确的 API。
+// 授权两页的关键行为（#1621 段4 立页；#1630 补中文名）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -25,12 +25,13 @@ import { epLite } from '@/test/element-lite'
 import RoleManage from '../RoleManage.vue'
 import AccountManage from '../AccountManage.vue'
 
+// 能力键取自真实能力表（#1630 起页面把它们翻成中文，域分组标题同样走中文词表）
 const protectedRole = {
   role_id: 1,
   name: '超级管理员',
   protected: true,
   remark: '',
-  capabilities: ['admin_access.manage', 'admin_role.manage']
+  capabilities: ['admin.access', 'admin_role.manage', 'audit.read']
 }
 const opsRole = { role_id: 2, name: '运营', protected: false, remark: '', capabilities: ['audit.read'] }
 
@@ -59,12 +60,17 @@ describe('角色权限页', () => {
     expect(cards[1].findAll('button').length).toBeGreaterThan(0)
   })
 
-  it('能力按资源域分组渲染', async () => {
+  it('能力按资源域分组，标题与勾选框都是中文（不印能力键）', async () => {
     const w = mount(RoleManage, { global: { plugins: [epLite()] } })
     await flushPromises()
     const groups = w.findAll('.cap-group-title').map(g => g.text())
-    expect(groups).toContain('admin_access')
-    expect(groups).toContain('audit')
+    expect(groups).toContain('管理端')
+    expect(groups).toContain('管理角色')
+    expect(groups).toContain('审计')
+    expect(groups.join(' ')).not.toContain('admin.access')
+    expect(w.text()).toContain('管理端入口与用户管理')
+    expect(w.text()).toContain('审计日志')
+    expect(w.text()).not.toContain('admin_role.manage')
   })
 })
 

@@ -35,7 +35,7 @@ watch(
   () => route.fullPath,
   () => {
     ensurePinnedTab()
-    const tab = tabsStore.resolveTab(route, tabOwnerOf)
+    const tab = tabsStore.resolveTab(route, tabOwnerOf, pageTitleOf)
     if (tab) tabsStore.open(tab)
   },
   { immediate: true }

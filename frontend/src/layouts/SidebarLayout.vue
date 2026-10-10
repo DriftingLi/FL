@@ -26,10 +26,14 @@
     </transition>
 
     <div class="main-container" :class="{ 'main-collapsed': collapsed }">
-      <main class="main-content" :class="{ 'content-narrow': props.contentWidth === 'narrow' }">
-        <!-- 内容列顶部插槽（#1620）：管理端在此挂标签栏，其余三端不传即不渲染 -->
+      <!-- 内容列顶部插槽（#1620）：管理端在此挂标签栏，其余三端不传即不渲染。
+           它必须在 .main-content **之外**（#1633）：内容区有 --space-6 的内边距，插槽留在里面
+           就会离顶栏下沿差 24px（线上形态：标签栏浮在内容中间，不像顶栏的第二行）。 -->
+      <div v-if="$slots['content-header']" class="content-header">
         <slot name="content-header" />
+      </div>
 
+      <main class="main-content" :class="{ 'content-narrow': props.contentWidth === 'narrow' }">
         <!-- 内层 router-view + transition：
              App.vue 已用 matched[0]?.path 做 key 锁住外层布局不重挂，
              这里用 fullPath 做 key 让同布局下的子页面也能走 180ms 淡入淡出。
@@ -38,9 +42,19 @@
              keepAlive: true，当前只有管理端）。名单为空时 keep-alive 等价于直通 ——
              学员/讲师/招聘三端因此保持「一切换即销毁」的既有语义（考试页那类带副作用的状态
              不会被缓存）。缓存页的 key 取**路由名**而不是 fullPath：同一页的不同查询参数
-             （翻页、筛选）不该各缓存一份实例。 -->
+             （翻页、筛选）不该各缓存一份实例。
+
+             **刻意不用 mode="out-in"（#1631）**：out-in 的放行条件是「离场动画完成」的回调
+             （BaseTransition 的 leavingHooks.afterLeave），而**根节点不是单个元素**的页面 ——
+             管理端「管理员管理」的根是多分支组件 UiAsyncSection（Fragment 根，Vue 会警告
+             "renders non-element root node that cannot be animated"）—— 在渲染器里走 Fragment
+             分支：deactivate 走的是 move(..., LEAVE)，Fragment 那一支只搬 DOM、不碰过渡钩子，
+             回调永不触发 ⇒ state.isLeaving 永久为真、内容列只剩空占位符。
+             线上形态：从该页切走那一刻起内容区永久空白（标签栏与侧栏都在），刷新才恢复。
+             正确性不该依赖「页面模板恰好单根」这条约定，故改成默认模式 + 只保留进入动画
+             （离场即时隐藏，见样式；缓存页的离场本来也没有可播的动画）。 -->
         <router-view v-slot="{ Component: Inner, route: r }">
-          <transition name="inner-fade" mode="out-in">
+          <transition name="inner-fade">
             <keep-alive :include="props.keepAliveNames">
               <component :is="Inner" :key="routeKey(r)" />
             </keep-alive>
@@ -134,6 +148,17 @@ watch(() => route.path, () => {
   margin-left: var(--sidebar-collapsed-width);
 }
 
+/* 内容列顶部（当前只有管理端的标签栏）：贴顶栏下沿 + 随页面滚动固定在顶栏之下。
+   sticky 而不是 fixed：占位仍在文档流里（内容不会被压在标签栏下面），
+   而它的容器 .main-container 没有 overflow，sticky 生效。
+   底色与内容区同底，分隔线仍只有顶栏下沿那一条（十字细线），这里不再加第二条。 */
+.content-header {
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: var(--z-sticky);
+  background: var(--color-bg-page);
+}
+
 .main-content {
   background: var(--color-bg-page);
   padding: var(--space-6);
@@ -175,10 +200,11 @@ watch(() => route.path, () => {
   opacity: 0;
 }
 
-/* 内层子页面过渡：同布局内切换路由时给中间区域一个 180ms 淡入淡出 + 6px 上移。
-   比纯 opacity 多一点方向感，进出方向一致（都是向上）所以 out-in 模式下不会打架。 */
-.inner-fade-enter-active,
-.inner-fade-leave-active {
+/* 内层子页面过渡：同布局内切换路由时给中间区域一个 180ms 淡入 + 6px 上移（方向感）。
+   离场只做即时隐藏，不播动画（#1631）：缓存页的离场是 KeepAlive 把 DOM 搬进隐藏容器，
+   没有可播的动画；留一条 180ms 的 leave 规则反而会让旧页面与新页面在文档流里并存若干帧
+   （内容列高度抖一下）。display:none 让旧页立刻让位，新页的淡入照旧。 */
+.inner-fade-enter-active {
   transition:
     opacity 180ms var(--ease-default),
     transform 180ms var(--ease-default);
@@ -189,9 +215,8 @@ watch(() => route.path, () => {
   transform: translateY(6px);
 }
 
-.inner-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
+.inner-fade-leave-active {
+  display: none;
 }
 
 @media screen and (max-width: 768px) {

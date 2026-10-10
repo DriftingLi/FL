@@ -85,16 +85,21 @@ export const useAdminTabsStore = defineStore('adminTabs', () => {
    *
    * 归属判据取描述符的 `nav.activeRouteNames`（列表页自己声明哪些详情页属于它），
    * 不在这里另写一张「详情页 → 列表页」的表 —— 那是第二份真源。
+   *
+   * 标题也**不读 `route.meta.title`**（#1630）：路由记录从来没注入过 meta.title
+   * （看 router/index.ts 的 routeMeta），于是标签上印的是英文路由名 —— 线上形态是
+   * 「仪表盘 | AuditLogs | AdminAccountManage」。标题的唯一来源改为注入的 `titleOf`
+   * （= config/navigation 的 pageTitleOf → 描述符的 nav.label），与固定页同源。
    */
   function resolveTab(
     route: RouteLocationNormalizedLoaded,
-    ownerOf: (name: string) => RouteName | null
+    ownerOf: (name: string) => RouteName | null,
+    titleOf: (name: RouteName) => string
   ): AdminTab | null {
     if (route.meta?.workspace !== 'manage' || typeof route.name !== 'string') return null
     const owner = ownerOf(route.name)
     const name = (owner ?? route.name) as RouteName
-    const title = typeof route.meta?.title === 'string' ? (route.meta.title as string) : name
-    return { name, title, pinned: name === PINNED_ADMIN_TAB }
+    return { name, title: titleOf(name), pinned: name === PINNED_ADMIN_TAB }
   }
 
   return {
