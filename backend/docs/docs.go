@@ -83,6 +83,120 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "新建管理员账号并（可选）挂角色；口令走 6-20 位规则、bcrypt 落库，账号名唯一",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-权限"
+                ],
+                "summary": "新建管理员",
+                "responses": {
+                    "201": {
+                        "description": "管理员已创建",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/admin.AdminAccountDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误 / 口令不合规 / 角色不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "账号名已存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/accounts/{admin_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除管理员账号；**最后一个超管**与自己都不可删（防自锁第二层），先吊销其会话再落库删除",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-权限"
+                ],
+                "summary": "删除管理员",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "管理员 ID",
+                        "name": "admin_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "管理员ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "管理员不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "必须保留至少一个超级管理员 / 不能删除自己的账号",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
             }
         },
         "/admin/accounts/{admin_id}/role": {

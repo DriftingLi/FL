@@ -11,6 +11,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 )
 
@@ -38,6 +40,10 @@ var (
 	ErrUnknownCapability = errors.New("存在未知的能力键")
 	// ErrRoleNameTaken 角色名重复。
 	ErrRoleNameTaken = errors.New("角色名已存在")
+	// ErrAdminUsernameTaken 管理员账号名重复（admin.username 有唯一索引）。
+	ErrAdminUsernameTaken = errors.New("该账号名已存在")
+	// ErrSelfDelete 不能删除自己的账号（删掉自己即当场失去管理端入口，且没有任何补救面）。
+	ErrSelfDelete = errors.New("不能删除自己的账号")
 )
 
 // AdminRoleDTO 管理角色（含能力键，按字典序稳定输出）。
@@ -304,6 +310,107 @@ func (s *Service) AssignAdminRole(adminID, roleID int) (*AdminAccountDTO, error)
 		AdminID: admin.AdminID, Username: admin.Username, Name: admin.Name,
 		RoleID: target.RoleID, RoleName: target.Name, Protected: target.Protected,
 	}, nil
+}
+
+// CreateAdminAccount 新建管理员账号（#1632）。
+//
+// 口令走 core 的长度规则（6-20 位，与学员/讲师/招聘者**同一处声明**）后 bcrypt 落库 ——
+// 新建账号是口令写面的一种，不在这里另立一套长度规则，也不在这里发会话（新账号自己登）。
+// 姓名留空时回落为账号名（展示用，不是判据）。
+//
+// role_id 缺省 0 = **未授权**：账号建出来但什么都看不到（能力解析对 NULL role_id fail closed），
+// 由超管随后在管理员管理页给它挂角色 —— 与「新建角色默认无能力」同一姿势。
+func (s *Service) CreateAdminAccount(username, name, password string, roleID int) (*AdminAccountDTO, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, errors.New("账号不能为空")
+	}
+	if err := core.ValidatePasswordLength(password); err != nil {
+		return nil, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = username
+	}
+	var dup int64
+	if err := s.db.Model(&model.Admin{}).Where("username = ?", username).Count(&dup).Error; err != nil {
+		return nil, err
+	}
+	if dup > 0 {
+		return nil, ErrAdminUsernameTaken
+	}
+	var role *model.AdminRole
+	if roleID > 0 {
+		var target model.AdminRole
+		if err := s.db.Where("role_id = ?", roleID).First(&target).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrRoleNotFound
+			}
+			return nil, err
+		}
+		role = &target
+	}
+	hashed, err := core.HashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	admin := model.Admin{Username: username, Name: name, Password: hashed}
+	if role != nil {
+		admin.RoleID = &role.RoleID
+	}
+	if err := s.db.Create(&admin).Error; err != nil {
+		return nil, err
+	}
+	dto := &AdminAccountDTO{AdminID: admin.AdminID, Username: admin.Username, Name: admin.Name}
+	if role != nil {
+		dto.RoleID, dto.RoleName, dto.Protected = role.RoleID, role.Name, role.Protected
+	}
+	return dto, nil
+}
+
+// DeleteAdminAccount 删除管理员账号（#1632）。
+//
+// 三层拒绝（与改挂角色共用同一批不变式）：
+//  1. 受保护角色的**最后一个**账号不可删（防自锁第二层在删除动作上的同一判据）；
+//  2. 不能删自己（删完当场失去入口，且这条路径连「谁删的」都无从追问）；
+//  3. 账号不存在 → 404 哨兵（不是静默成功）。
+//
+// 会话吊销**先于**落库删除（注销族语义，ADR-0064 决策 4）：删除是不可回退的动作，而令牌在过期前
+// 仍然有效 —— 标记写失败就整体不生效（账号还在，人还能重新登录），而不是留下一个「人已删、
+// 凭证还活着」的中间态。吊销成功后旧 refresh 链失效；被删账号的 access token 即便在手，
+// 能力解析也会因账号不存在而 fail closed（admincap 的 not-found 分支）。
+func (s *Service) DeleteAdminAccount(ctx context.Context, actorID, adminID int) error {
+	if adminID <= 0 {
+		return ErrInvalidAdminID
+	}
+	var admin model.Admin
+	if err := s.db.Where("admin_id = ?", adminID).First(&admin).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrAdminNotFound
+		}
+		return err
+	}
+	if actorID == adminID {
+		return ErrSelfDelete
+	}
+	if admin.RoleID != nil {
+		var role model.AdminRole
+		if err := s.db.Where("role_id = ?", *admin.RoleID).First(&role).Error; err == nil && role.Protected {
+			var others int64
+			if err := s.db.Model(&model.Admin{}).
+				Where("admin_id <> ? AND role_id IN (SELECT role_id FROM admin_role WHERE protected = ?)", adminID, true).
+				Count(&others).Error; err != nil {
+				return err
+			}
+			if others == 0 {
+				return ErrLastSuperAdmin
+			}
+		}
+	}
+	if err := s.session.RevokeIdentity(ctx, string(authz.RoleAdmin), adminID); err != nil {
+		return err
+	}
+	return s.db.Where("admin_id = ?", adminID).Delete(&model.Admin{}).Error
 }
 
 // replaceRoleCapabilities 以「先删后插」替换角色的能力行（同事务内，避免中间态）。
