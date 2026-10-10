@@ -34,6 +34,12 @@ export type AuthzRole =
 export type AuthzCapability =
 %s
 
+/**
+ * 能力由**数据层**回答的角色（#1618 段1）：它们的可达面必须读运行时能力集
+ * （GET /admin/me/capabilities），本表对它们 fail closed。
+ */
+export const DYNAMIC_ROLES: readonly AuthzRole[] = [%s]
+
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
 %s}
@@ -55,10 +61,16 @@ func RenderFrontendAuthzTS() (string, error) {
 	if len(roleCapabilities) == 0 {
 		return "", errors.New("能力表为空，拒绝生成前端授权配置")
 	}
-	var roles, caps, table strings.Builder
+	var roles, caps, table, dynamic strings.Builder
 	for _, r := range orderedRoles {
 		fmt.Fprintf(&roles, "  | '%s'\n", r)
 	}
+	dyn := DynamicRoles()
+	dynParts := make([]string, 0, len(dyn))
+	for _, r := range dyn {
+		dynParts = append(dynParts, "'"+string(r)+"'")
+	}
+	dynamic.WriteString(strings.Join(dynParts, ", "))
 	for _, c := range AllCapabilities() {
 		fmt.Fprintf(&caps, "  | '%s'\n", c)
 	}
@@ -80,5 +92,5 @@ func RenderFrontendAuthzTS() (string, error) {
 		}
 		fmt.Fprintf(&table, "  %s: [%s],\n", r, strings.Join(parts, ", "))
 	}
-	return fmt.Sprintf(authzTSTemplate, roles.String(), caps.String(), table.String()), nil
+	return fmt.Sprintf(authzTSTemplate, roles.String(), caps.String(), dynamic.String(), table.String()), nil
 }

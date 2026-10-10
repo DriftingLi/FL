@@ -65,6 +65,12 @@ export type AuthzCapability =
   | 'valuation.use'
 
 
+/**
+ * 能力由**数据层**回答的角色（#1618 段1）：它们的可达面必须读运行时能力集
+ * （GET /admin/me/capabilities），本表对它们 fail closed。
+ */
+export const DYNAMIC_ROLES: readonly AuthzRole[] = ['admin']
+
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
   hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'faq.read', 'favorite.manage', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],

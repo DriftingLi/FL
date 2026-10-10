@@ -2,7 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, customRef } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
+import { adminApi } from '@/api/admin'
 import { getValidAccessToken } from '@/api/client'
+import { isDynamicRole } from '@/utils/authzRuntime'
 import type { UserProfile } from '@/types/user'
 import { getToken, getUserInfo, setToken, removeToken, removeRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
 import { consumeAuthTokenFromUrl } from '@/utils/authToken'
@@ -34,6 +36,13 @@ export const useAuthStore = defineStore('auth', () => {
   }))
   const userInfo: Ref<UserProfile> = ref({})
   const isLoggedIn: Ref<boolean> = ref(false)
+  /**
+   * 运行时能力集（#1618 段1）：**只有动态角色（管理端）有内容** —— 登录/恢复登录后经
+   * GET /admin/me/capabilities 拉取；静态角色（学员/讲师/招聘者）恒为空数组，它们的可达面
+   * 仍由生成的能力表回答。两条件并存是刻意的，「谁能做什么」的判定入口只有
+   * `utils/authzRuntime.ts` 的 holdsCapability（守卫与侧栏都走它，不各写一遍）。
+   */
+  const capabilities: Ref<string[]> = ref([])
 
   // 初始化 Promise 缓存：main.ts 显式启动一次，路由守卫 await 同一 Promise 等待完成
   let readyPromise: Promise<void> | null = null
@@ -84,6 +93,8 @@ export const useAuthStore = defineStore('auth', () => {
         }
         isLoggedIn.value = true
         setUserInfo(userInfo.value)
+        // 恢复登录同样要拉能力集：强刷后守卫与侧栏都靠它（否则管理端首屏会被判无权限）
+        await loadCapabilities()
       } else {
         clearAuthData()
       }
@@ -121,6 +132,29 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 登录响应只含基础字段（无昵称/头像等），异步拉取 /auth/me 补齐完整资料
     refreshUserInfo()
+    // 管理端能力集随登录态刷新（非管理角色会直接清空，不发请求）
+    void loadCapabilities()
+  }
+
+  /**
+   * 拉取当前管理员的运行时能力集（#1618 段1）。
+   *
+   * fail closed：拉取失败一律落空集，**不保留上一份** —— 上一份可能已被超管改小，
+   * 留着它等于让「刚被收回权限的人」继续看到菜单（点进去才 403）。
+   * 非动态角色不发请求（学员/讲师/招聘者的可达面由静态表回答）。
+   */
+  async function loadCapabilities(): Promise<void> {
+    if (!isDynamicRole(userInfo.value?.role)) {
+      capabilities.value = []
+      return
+    }
+    try {
+      const res = await adminApi.fetchMyCapabilities()
+      capabilities.value = res?.capabilities ?? []
+    } catch (e) {
+      capabilities.value = []
+      console.warn('[Auth] loadCapabilities failed:', e)
+    }
   }
 
   function clearAuthData() {
@@ -129,6 +163,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = ''
     userInfo.value = {}
     isLoggedIn.value = false
+    capabilities.value = []
 
     clearLocalAuth()
   }
@@ -180,6 +215,8 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     userInfo,
     isLoggedIn,
+    capabilities,
+    loadCapabilities,
     initialize,
     setAuthData,
     clearAuthData,

@@ -21,7 +21,8 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
 import { resolveWorkspaceForRole } from '@/utils/authRedirect'
-import { hasCapability, type AuthzCapability, type AuthzRole } from '@/config/authz'
+import type { AuthzCapability } from '@/config/authz'
+import { holdsCapability } from '@/utils/authzRuntime'
 import type { RouteName } from '@/config/pages'
 
 /** onboarding 预筛的落点：由页面描述符表派生的 RouteName 收窄（名单已无第二处手工表，写错即编译报错）。 */
@@ -69,6 +70,11 @@ export interface GuardState {
   ipDirect: boolean
   /** 当前证件状态（credential store；'unloaded' = 未加载） */
   credential: 'unloaded' | 'none' | 'present'
+  /**
+   * 运行时能力集（#1618 段1）：动态角色（管理端）经 GET /admin/me/capabilities 下发，
+   * 静态角色恒为空数组（它们的可达面由生成的能力表回答）。判定见 utils/authzRuntime。
+   */
+  capabilities: readonly string[]
 }
 
 /** 守卫决策（orchestrator 执行） */
@@ -211,7 +217,8 @@ export const capabilityStep: GuardStep = (input, state) => {
   if (!required) return null
   const requiresAuth = input.matched.some(record => record.requiresAuth === true)
   if (!requiresAuth) return null
-  if (hasCapability(state.role as AuthzRole, required)) return null
+  // 两条路径收在 holdsCapability：动态角色（管理端）读运行时能力集，静态角色读生成的能力表。
+  if (holdsCapability(state.role, state.capabilities, required)) return null
   return workspaceFallback(input, state)
 }
 

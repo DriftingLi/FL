@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import type { AuthzCapability } from './authz'
 import type { RouteName } from './pages'
 import {
   navGroups,
@@ -33,6 +34,13 @@ export interface NavItem {
   // exact=true 时仅精确匹配 route.name 才高亮。
   // name 匹配天然精确，因此该标记保留以兼容既有语义，但不再参与前缀判断。
   exact?: boolean
+  /**
+   * 该项的可见性判据（来自页面描述符的 capability，ADR-0047 §2）。
+   *
+   * 消费面必须经 filterNavByCapability 过滤：直接渲染未过滤的导航会让「没有权限的菜单项」
+   * 留在侧栏里（点进去才 403）——管理端尤其明显，它的权限是超管按角色分配的（#1618 段1）。
+   */
+  capability?: AuthzCapability
 }
 
 type RouteParamsLike = Record<string, string | string[] | undefined>
@@ -82,7 +90,8 @@ function toNavItem(page: PageDescriptor): NavItem {
     activeRouteNames: nav.activeRouteNames,
     routeParams: nav.routeParams,
     icon: nav.icon,
-    exact: nav.exact
+    exact: nav.exact,
+    capability: page.capability
   }
 }
 
@@ -147,6 +156,31 @@ export const roleNavigation: Record<string, NavItem[]> = {
   admin: adminNav,
   tutor: tutorNav,
   recruiter: recruiterNav
+}
+
+/**
+ * 按能力过滤导航树（#1618 段1）：递归丢弃判据不满足的叶子，并丢弃因此变空的分组。
+ *
+ * 判据由调用方以 `holds` 注入，而不是在这里读 store：本模块在**装载期**派生导航树，
+ * 把能力集固化进模块状态会让「登录后拉到的能力集」永远晚一步；判据本身单点在
+ * `utils/authzRuntime.holdsCapability`（动态角色读运行时集合、静态角色读生成的能力表）。
+ */
+export function filterNavByCapability(
+  items: NavItem[],
+  holds: (capability: AuthzCapability) => boolean
+): NavItem[] {
+  const out: NavItem[] = []
+  for (const item of items) {
+    if (item.capability && !holds(item.capability)) continue
+    if (item.children?.length) {
+      const children = filterNavByCapability(item.children, holds)
+      if (children.length === 0) continue
+      out.push({ ...item, children })
+      continue
+    }
+    out.push(item)
+  }
+  return out
 }
 
 // ===== 侧栏分组判定（纯函数；ADR-0047 §2 / spec #930 决策 6）=====

@@ -17,6 +17,7 @@ import { unwrappedRequest } from './request'
 import { toPage, type Page } from './page'
 import type {
   AIConfigDTO,
+  AdminCapabilitiesDTO,
   AdminCourseDetailDTO,
   AdminOverviewDTO,
   AdminStatisticsDTO,
@@ -209,6 +210,16 @@ export interface AddRecruiterPayload {
 }
 
 export const adminApi = {
+  /**
+   * 当前管理员的**有效能力集**（#1618 段1）。
+   *
+   * 管理端权限由超管按角色分配，静态能力表对 admin 有意为空 —— 守卫与侧栏的运行时判据取自这里。
+   * 只要求「是管理员」即可读（不要求 admin.access）：前端要靠它才能判断自己能不能进管理端。
+   */
+  fetchMyCapabilities() {
+    return unwrappedRequest.get<AdminCapabilitiesDTO>('/admin/me/capabilities')
+  },
+
   // ===== HRWAI 用户管理(统一) =====
   /** 列表（后端行键 = `list`）。 */
   async getHrwaiUsers(params: AdminHrwaiUsersQuery): Promise<Page<HrwaiUserSummary>> {
