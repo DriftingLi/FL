@@ -20,6 +20,8 @@ export type AuthzRole =
 
 export type AuthzCapability =
   | 'admin.access'
+  | 'admin_account.manage'
+  | 'admin_role.manage'
   | 'ai_assistant.use'
   | 'application.review'
   | 'audit.read'

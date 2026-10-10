@@ -38,9 +38,11 @@ func TestRouteRegistryCoverage(t *testing.T) {
 	}
 }
 
-// expectedRouteCount 域注册表构出的路由总数基线（2026-10-10，#1618 段1 新增
-// GET /api/admin/me/capabilities → 330）。
-// 历史：2026-09-19 第十二波票 6 新增 POST /api/question-bank/questions/{id}/submit → 329；
+// expectedRouteCount 域注册表构出的路由总数基线（2026-10-10，#1621 段4 新增 6 条授权管理端点
+// → 336：GET/POST /api/admin/roles、PUT/DELETE /api/admin/roles/{role_id}、
+// GET /api/admin/accounts、PUT /api/admin/accounts/{admin_id}/role）。
+// 历史：2026-10-10 #1618 段1 新增 GET /api/admin/me/capabilities → 330；
+// 2026-09-19 第十二波票 6 新增 POST /api/question-bank/questions/{id}/submit → 329；
 // 2026-09-14 全局搜索升级 #982 新增 GET /api/admin/search-facts/zero-results → 315；
 // 2026-09-17 学员笔记域 #1078 新增 4 条 → 319。
-const expectedRouteCount = 330
+const expectedRouteCount = 336
