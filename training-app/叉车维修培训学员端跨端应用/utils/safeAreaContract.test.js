@@ -61,6 +61,22 @@ describe('#1602 骨架层基建契约', () => {
         expect(nav).not.toContain('80rpx');
     });
 
+    it('D++: 胶囊让位含内容盒偏移补偿（右缘 ≤ 胶囊左边线−间隙，不落胶囊矩形）', () => {
+        // 假绿教训（#1602 真链路复验）：只设 width 时右槽在 padding 后的内容盒里右移 24rpx，
+        // 图标落进胶囊矩形。几何口径：margin-right = (750 − paddingX) − (capsuleLeft − clearance)，
+        // 且 paddingX 必须与 scss .nav-bar-body 的实际 padding 一致。
+        const nav = readText(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'));
+        expect(nav).toContain('margin-right');
+        expect(nav).toMatch(/capsuleLeft\s*-\s*RIGHT_SLOT_CLEARANCE|RIGHT_SLOT_CLEARANCE/);
+        // padding 常量与样式串用（$spacing-md = 24rpx，见 uni.scss）
+        const scss = readText(join(ROOT, 'uni.scss'));
+        const m = scss.match(/\$spacing-md:\s*(\d+)rpx/);
+        expect(m).not.toBeNull();
+        expect(Number(m[1])).toBe(24);
+        expect(nav).toMatch(/NAV_BODY_PADDING_X\s*=\s*24/);
+        expect(nav).toMatch(/padding:\s*0\s+\$spacing-md/);
+    });
+
     it('D+: ai-chat-nav 不再是独立页头形态（归一为 AppNavBar 包装）', () => {
         const src = readText(join(ROOT, 'components', 'ai-chat', 'ai-chat-nav.uvue'));
         expect(src).toContain('app-nav-bar');

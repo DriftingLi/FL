@@ -55,14 +55,21 @@
 
     const isInverse = computed((): boolean => props.variant == 'inverse')
 
-    // 胶囊让位（#1592）：右槽单行定宽，右缘 = 胶囊左边线；放不下由页面移出次要动作。
-    // 非小程序端 rightSlotWidth = 0 ⇒ 不设 width 约束。
+    // 胶囊让位（#1592）：右槽单行定宽，右缘 ≤ 胶囊左边线 − 视觉间隙；放不下由页面移出次要动作。
+    // 坐标系修正（#1602 真链路复验发现）：槽在 .nav-bar-body 的内容盒里，内容盒右缘 =
+    // 750 − 右padding（与 scss $spacing-md 一致）而非 750 ⇒ 只设 width 会把整槽右推 24rpx，
+    // 图标落进胶囊矩形（实测 [532,726] vs 胶囊 [556,730]，违反验收「元素不落胶囊矩形」）。
+    // 用 margin-right 把右缘钉回 capsuleLeft − CLEARANCE。非小程序端无胶囊 ⇒ 不设约束。
+    const NAV_BODY_PADDING_X = 24 // 与 <style> 里 .nav-bar-body padding 的 $spacing-md 对齐
+    const RIGHT_SLOT_CLEARANCE = 16 // 右槽与胶囊的视觉间隙（rpx）
     const rightSlotStyle = computed((): string => {
+        const capsuleLeft = safeArea.value.capsuleLeft
         const w = safeArea.value.rightSlotWidth
-        if (w <= 0) {
+        if (w <= 0 || capsuleLeft <= 0) {
             return ''
         }
-        return 'width: ' + w + 'rpx;'
+        const marginRight = Math.max(0, (750 - NAV_BODY_PADDING_X) - (capsuleLeft - RIGHT_SLOT_CLEARANCE))
+        return 'width: ' + w + 'rpx; margin-right: ' + marginRight + 'rpx;'
     })
 
     // 页头套底色（#1592）：N01 $primary-color / N02–N03 $bg-header / N05 transparent（页面自垫）
