@@ -1,18 +1,13 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <view class="nav-bar">
-            <view class="nav-side"></view>
-            <text class="nav-title">职位</text>
-            <view class="nav-side nav-side-right" @click="onPublish">
-                <text class="nav-action">发布</text>
-            </view>
-        </view>
+        <app-nav-bar title="职位" :left-icon="''" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view v-if="!loading && jobs.length == 0" class="empty-tip">
-                <text class="empty-text">暂无职位，点击右上角「发布」开始招聘</text>
+                <text class="empty-text">暂无职位</text>
+                <view class="empty-publish-btn" @click="onPublish">
+                    <text class="empty-publish-text">发布第一个职位</text>
+                </view>
             </view>
 
             <view v-for="job in jobs" :key="job.id" class="job-card">
@@ -54,14 +49,13 @@
      */
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { getRecruitJobsApi, toggleRecruitJobStatusApi } from '../../api/recruit'
     import { describeRecruitJobStatus } from '../../utils/recruitDisplay'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
     import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import type { RecruitJob } from '../../api/recruit'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const activeKey : string = 'jobs'
@@ -142,43 +136,7 @@
 
 <style lang="scss">
     .page {
-        background-color: #F5F6FA;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .nav-bar {
-        flex-direction: row;
-        align-items: center;
-        height: 88rpx;
-        padding: 0 24rpx;
-        background-color: #ffffff;
-    }
-
-    .nav-side {
-        width: 120rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .nav-side-right {
-        justify-content: flex-end;
-    }
-
-    .nav-title {
-        flex: 1;
-        font-size: 34rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
-    }
-
-    .nav-action {
-        font-size: 30rpx;
-        color: #239EDD;
-        padding: 16rpx 0;
+        background-color: $bg-color;
     }
 
     .content-scroll {
@@ -188,7 +146,7 @@
     .job-card {
         margin: 16rpx 24rpx 0 24rpx;
         padding: 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 12rpx;
     }
 
@@ -204,26 +162,26 @@
     .row-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .row-meta {
         margin-top: 8rpx;
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .card-actions {
         flex-direction: row;
         justify-content: flex-end;
         margin-top: 16rpx;
-        border-top: 1rpx solid #F0F0F0;
+        border-top: 1rpx solid $border-color-light;
         padding-top: 16rpx;
     }
 
     .action-text {
         font-size: 26rpx;
-        color: #239EDD;
+        color: $primary-color;
         margin-left: 32rpx;
     }
 
@@ -235,8 +193,8 @@
     }
 
     .tag-forced {
-        color: #E5484D;
-        background-color: #FFF0F0;
+        color: $danger-color;
+        background-color: $danger-tint;
     }
 
     .tag-open {
@@ -245,12 +203,12 @@
     }
 
     .tag-closed {
-        color: #999999;
+        color: $text-color-placeholder;
         background-color: #F5F5F5;
     }
 
     .tag-unknown {
-        color: #999999;
+        color: $text-color-placeholder;
         background-color: #F5F5F5;
     }
 
@@ -261,7 +219,21 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
+    }
+
+    .empty-publish-btn {
+        margin-top: 32rpx;
+        padding: 20rpx 48rpx;
+        align-items: center;
+        justify-content: center;
+        background-color: $primary-color;
+        border-radius: 44rpx;
+    }
+
+    .empty-publish-text {
+        font-size: 28rpx;
+        color: $text-color-inverse;
     }
 
     .loading-tip {
@@ -271,6 +243,6 @@
 
     .loading-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

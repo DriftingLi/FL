@@ -1,16 +1,16 @@
 <template>
-    <view class="nav-bar" :class="[navBgClass, { 'nav-bar--transparent': transparent }]">
+    <view class="nav-bar" :class="[navBgClass, { 'nav-bar--transparent': transparent, 'nav-bar--divider': divider }]">
         <view class="status-bar" :class="statusBarBgClass" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
         <view class="nav-bar-body">
-            <view class="nav-bar-left" @click="onLeftClick">
+            <view class="nav-bar-side nav-bar-left" @click="onLeftClick">
                 <text v-if="leftIcon.length > 0" class="nav-bar-icon" :class="titleColorClass">{{ leftIcon }}</text>
-                <view v-if="title.length > 0" class="nav-bar-title-block">
-                    <text class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
-                    <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
-                </view>
             </view>
-            <view v-if="rightIcon.length > 0" class="nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
-                <text class="nav-bar-icon" :class="titleColorClass">{{ rightIcon }}</text>
+            <view class="nav-bar-title-block" :class="{ 'nav-bar-title-block--center': !leftOverlap }">
+                <text v-if="title.length > 0" class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
+                <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
+            </view>
+            <view class="nav-bar-side nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
+                <slot name="right"></slot>
             </view>
             <!-- 多图标右槽（#1602 追加）：dashboard 等页的 🔍🔔🛒 一排；宽度同样按胶囊让位。
                  每个图标独立可点，rightClick 携带索引（-1 = 单图标形态，兼容旧消费方）。 -->
@@ -39,6 +39,8 @@
         variant ?: string
         /** 可选副标题（#1602：原 ai-chat-nav 独立形态的唯一差异，归一后以 prop 表达，不 fork） */
         subtitle ?: string
+        /** N03 分隔线：border-bottom 1rpx $border-color-light（#1592 白底带分隔线套） */
+        divider ?: boolean
     }>(), {
         title: '',
         leftIcon: '‹',
@@ -46,7 +48,8 @@
         rightIcons: (): string[] => [],
         transparent: false,
         variant: 'plain',
-        subtitle: ''
+        subtitle: '',
+        divider: false
     })
 
     const emit = defineEmits(['leftClick', 'rightClick'])
@@ -54,6 +57,9 @@
     const safeArea = useSafeArea()
 
     const isInverse = computed((): boolean => props.variant == 'inverse')
+
+    // 标题是否被左槽内容顶开（左槽有 icon 且有标题时走左对齐形态；否则居中，§5.1）
+    const leftOverlap = computed((): boolean => props.leftIcon.length > 0 && props.title.length > 0)
 
     // 胶囊让位（#1592）：右槽单行定宽，右缘 ≤ 胶囊左边线 − 视觉间隙；放不下由页面移出次要动作。
     // 坐标系修正（#1602 真链路复验发现）：槽在 .nav-bar-body 的内容盒里，内容盒右缘 =
@@ -129,6 +135,10 @@
         background-color: transparent;
     }
 
+    .nav-bar--divider {
+        border-bottom: 1rpx solid $border-color-light;
+    }
+
     .status-bar--primary {
         background-color: $primary-color;
     }
@@ -145,16 +155,18 @@
         padding: 0 $spacing-md;
     }
 
-    .nav-bar-left {
+    .nav-bar-side {
         flex-direction: row;
         align-items: center;
         /* 与右槽的最小间距：长标题经 ellipsis 收敛，不会顶到图标 */
         margin-right: 24rpx;
     }
 
+    .nav-bar-left {
+        justify-content: flex-start;
+    }
+
     .nav-bar-right {
-        flex-direction: row;
-        align-items: center;
         justify-content: flex-end;
     }
 
@@ -175,12 +187,17 @@
     .nav-bar-title-block {
         flex-direction: column;
         align-items: flex-start;
+        margin-left: 16rpx;
+    }
+
+    .nav-bar-title-block--center {
+        align-items: center;
+        margin-left: 0;
     }
 
     .nav-bar-subtitle {
         font-size: 24rpx;
         color: $text-color-secondary;
-        margin-left: 16rpx;
         margin-top: 4rpx;
     }
 

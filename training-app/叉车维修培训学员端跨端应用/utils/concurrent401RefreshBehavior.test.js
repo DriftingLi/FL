@@ -513,8 +513,9 @@ describe('#1194 收口：招聘者登录页的离开路径', () => {
     expect(src).toContain(`@click="${EXIT_FN}"`);
 
     // 复用既有 link 外观（与 `pages/login/login.uvue` 的 `.back-password-link` 逐属性同形）
+    // #1603：主色统一 #2979ff→$primary-color（uni.scss 登记为 #239EDD），页面不再写裸 hex 字面值
     expect(src).toContain('border-bottom-width: 1rpx;');
-    expect(src).toContain('border-bottom-color: #2979ff;');
+    expect(src).toContain('border-bottom-color: $primary-color;');
 
     // 无说明性 hint：出口块里只有那一行文字（多一段说明文案 = 违反「无说明性文案」）
     const block = src.match(/<view class="student-exit"[\s\S]*?<\/view>/);

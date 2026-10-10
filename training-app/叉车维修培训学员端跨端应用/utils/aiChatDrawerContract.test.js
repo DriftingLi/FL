@@ -70,9 +70,11 @@ describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样�
     // #1602：AiChatNav 独立形态消失，页头右槽归 app-nav-bar；此处守两件事：
     // a) nav 包装件仍发出 menuClick（页面 API 不变）
     expect(nav).toMatch(/onMenuClick/);
-    // b) 页头件右槽是显式可点元素（右槽宽度由 useSafeArea().rightSlotWidth 驱动，胶囊让位）
+    // b) 页头件右槽是显式可点元素（右槽宽度由 useSafeArea().rightSlotWidth 驱动，胶囊让位）。
+    //    #1604：右槽 class 归一为 nav-bar-side nav-bar-right（左右槽共用 .nav-bar-side 基类），
+    //    并开放 <slot name="right">（批1 页面右槽内容经 slot 注入）——可点性与宽度约束不变。
     const navBar = read(NAVBAR);
-    expect(navBar).toMatch(/class="nav-bar-right"[\s\S]*?@click="onRightClick"/);
+    expect(navBar).toMatch(/class="nav-bar-side nav-bar-right"[\s\S]*?@click="onRightClick"/);
     expect(navBar).toMatch(/rightSlotWidth/);
     // 右抽屉 left 锚定继续保留（#947 实测组合）
     expect(right).toMatch(/\.drawer-right\s*\{[^}]*left:\s*30%/);
