@@ -50,6 +50,13 @@ func NotFound(c *gin.Context, msg string) {
 	c.JSON(404, R{Code: 404, Message: msg, Data: nil})
 }
 
+// Conflict 输出 409 状态冲突响应（#1621 段4 引入：防自锁类拒绝 ——
+// 「受保护角色不可改」「最后一个超管不可降级」「角色仍被使用」都是**前置条件不满足**，
+// 不是参数错误也不是无权限，故用 409 而不是 400/403）。
+func Conflict(c *gin.Context, msg string) {
+	c.JSON(409, R{Code: 409, Message: msg, Data: nil})
+}
+
 // ServerError 输出 500 服务器错误响应。
 // ⚠️ msg 必须是**固定文案**：5xx 不得外发驱动/ORM 原文（见 ClientErrorText 与 ServerErrorCause）。
 func ServerError(c *gin.Context, msg string) {
