@@ -2,11 +2,15 @@
 /**
  * 角色权限配置（#1621 段4）。
  *
- * 形态：一页列出全部管理角色，每个角色按**资源域**分组勾选能力键；受保护角色（超级管理员）
+ * 形态：一页列出全部管理角色，每个角色按**侧栏分组**勾选能力键；受保护角色（超级管理员）
  * 整卡只读（能力恒为受保护全集，不可改不可删）——防自锁第一层的界面侧。
  *
  * 可授权集合取自**接口返回的并集**（受保护角色贡献受保护全集，其余角色贡献各自已授权），
  * 不在此另抄一份能力清单：清单的事实源是后端 authz 能力表 → codegen → 运行时下发。
+ *
+ * 分组标题不按资源域（#1639）：能力键已与侧栏叶子一一对应，按域分组会让「课程管理」与
+ * 「岗位管理」（同属 catalog 域）挤在一个标题下，超管看到的仍是一团。分组因此从
+ * config/pages.ts 派生——组的顺序与标题都取侧栏那一份声明，这里不另抄。
  */
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -20,7 +24,30 @@ import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
-import { describeCapability, describeCapabilityDomain } from '@/utils/capabilityWords'
+import { describeCapability } from '@/utils/capabilityWords'
+import { navGroups, pages } from '@/config/pages'
+
+/** 管理端侧栏分组：顺序与标题都以 config/pages.ts 的声明为准。 */
+const MANAGE_NAV_GROUPS = navGroups.manage ?? []
+
+/** 挂不到任何管理页上的能力键（数据导出/积分扣罚/举报处置/目录作者…）的落点。 */
+const ACTION_GROUP = { key: '__action__', label: '动作能力（不占侧栏页面）' }
+
+/**
+ * 能力键 → 它所属管理页的侧栏分组 key。
+ *
+ * 由页面描述符派生而不是手写对照表：一页一键（#1639）之后这层映射就是侧栏本身，
+ * 手写一份就会在下次改侧栏时静默漂移。只有带 nav 的页面参与——详情页（如内容精选编辑）
+ * 与列表页共享同一个能力键，谁声明了 nav 谁就代表这个键在侧栏里的位置。
+ */
+const capabilityGroupKey: ReadonlyMap<string, string> = (() => {
+  const map = new Map<string, string>()
+  for (const page of pages) {
+    if (page.workspace !== 'manage' || !page.nav || !page.capability) continue
+    if (!map.has(page.capability)) map.set(page.capability, page.nav.group)
+  }
+  return map
+})()
 
 const roles = ref<AdminRoleDTO[]>([])
 /** 每张卡的能力勾选草稿：role_id → 已勾选能力键（保存前的本地态）。 */
@@ -51,32 +78,34 @@ async function load(): Promise<void> {
 onMounted(load)
 
 /**
- * 可授权集合 = 所有角色能力的并集（含受保护角色的受保护全集），按资源域分组。
+ * 可授权集合 = 所有角色能力的并集（含受保护角色的受保护全集），按侧栏分组呈现。
  *
  * 展示名走 utils/capabilityWords（#1630）：收敛前这里把能力键与资源域**原样**印给超管看
- * （一屏英文）。分组标题与勾选框文案都取中文词表，**排序也按中文名**（域与键两级的稳定序），
- * 原始键留在 title 上以便对照后端日志。
+ * （一屏英文）。组标题取侧栏分组的 label，勾选框取能力键的中文名，**组内排序也按中文名**，
+ * 原始键留在 title 上以便对照后端日志。空组不渲染——没有任何角色持有该组能力时，
+ * 一个只有标题的分组只会让界面变长。
  */
 const capabilityGroups = computed(() => {
-  const byDomain = new Map<string, string[]>()
   const seen = new Set<string>()
+  const keys: string[] = []
   for (const role of roles.value) {
     for (const key of role.capabilities) {
       if (seen.has(key)) continue
       seen.add(key)
-      const domain = key.split('.')[0] ?? key
-      byDomain.set(domain, [...(byDomain.get(domain) ?? []), key])
+      keys.push(key)
     }
   }
-  return [...byDomain.entries()]
-    .map(([domain, keys]) => ({
-      domain,
-      label: describeCapabilityDomain(domain),
-      keys: keys
-        .slice()
-        .sort((a, b) => describeCapability(a).localeCompare(describeCapability(b), 'zh-Hans-CN'))
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'))
+  const byLabel = (list: string[]): string[] =>
+    list.slice().sort((a, b) => describeCapability(a).localeCompare(describeCapability(b), 'zh-Hans-CN'))
+  const buckets = [
+    ...MANAGE_NAV_GROUPS.map(g => ({
+      key: g.key,
+      label: g.label,
+      keys: byLabel(keys.filter(k => capabilityGroupKey.get(k) === g.key))
+    })),
+    { ...ACTION_GROUP, keys: byLabel(keys.filter(k => !capabilityGroupKey.has(k))) }
+  ]
+  return buckets.filter(b => b.keys.length > 0)
 })
 
 function isDirty(role: AdminRoleDTO): boolean {
@@ -142,7 +171,7 @@ async function remove(role: AdminRoleDTO): Promise<void> {
       :empty="isEmpty"
       :skeleton="false"
       empty-title="还没有角色"
-      empty-description="新建角色后按资源域勾选它能做的事"
+      empty-description="新建角色后按侧栏分组勾选它能做的事"
       error-title="角色列表加载失败"
       error-description="网络或服务端异常，可重试"
       @retry="retry"
@@ -165,7 +194,7 @@ async function remove(role: AdminRoleDTO): Promise<void> {
         </header>
 
         <!-- 受保护角色的能力恒为全集：勾选框只读，避免「勾了却没保存」的错觉 -->
-        <div v-for="group in capabilityGroups" :key="group.domain" class="cap-group">
+        <div v-for="group in capabilityGroups" :key="group.key" class="cap-group">
           <div class="cap-group-title">{{ group.label }}</div>
           <UiCheckboxGroup v-model="draft[role.role_id]" :disabled="role.protected">
             <UiCheckbox v-for="key in group.keys" :key="key" :value="key" :label="describeCapability(key)">

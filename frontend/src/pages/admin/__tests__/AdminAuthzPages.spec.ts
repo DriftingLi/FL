@@ -76,13 +76,13 @@ describe('角色权限页', () => {
     expect(cards[1].findAll('button').length).toBeGreaterThan(0)
   })
 
-  it('能力按资源域分组，标题与勾选框都是中文（不印能力键）', async () => {
+  it('能力按侧栏分组呈现，标题与勾选框都是中文（不印能力键）', async () => {
     const w = mount(RoleManage, { global: { plugins: [epLite()] } })
     await flushPromises()
-    const groups = w.findAll('.cap-group-title').map(g => g.text())
-    expect(groups).toContain('管理端')
-    expect(groups).toContain('管理角色')
-    expect(groups).toContain('审计')
+    // 分组标题 = 侧栏分组标签（#1639；本 fixture 的两个键分落总览与系统两组）。
+    // 分组渲染在每张角色卡里，故取第一张卡的标题序列。
+    const groups = w.findAll('.role-card')[0].findAll('.cap-group-title').map(g => g.text())
+    expect(groups).toEqual(['总览', '系统'])
     expect(groups.join(' ')).not.toContain('admin.access')
     expect(w.text()).toContain('管理端入口与用户管理')
     expect(w.text()).toContain('审计日志')

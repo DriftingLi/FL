@@ -31,7 +31,7 @@ var configUpdateErrStatus = &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntr
 }}
 
 // RegisterAdminRoutes 注册 /admin/ai-configs/* 与 /admin/ai-feature-bindings/* 子路由组。
-// 必须挂在 admin 路由组下（已应用 JWTAuth + CapabilityRequired(authz.CapAdminAccess)）。
+// 必须挂在 admin 路由组下（已应用 JWTAuth + CapabilityRequired(authz.CapAIConfigManage)，#1639）。
 func RegisterAdminRoutes(g *gin.RouterGroup, svc *ConfigService) {
 	h := newConfigHandler(svc)
 

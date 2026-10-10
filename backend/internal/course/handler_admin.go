@@ -29,22 +29,26 @@ func newAdminHandler(courseSvc *AdminService) *adminHandler {
 	return &adminHandler{courseSvc: courseSvc}
 }
 
-// RegisterAdminRoutes 注册 /api/admin 下的课程与章节管理端点（组级 JWTAuth + CapabilityRequired(CapAdminAccess)）。
+// RegisterAdminRoutes 注册 /api/admin 下的课程与章节管理端点（组级 JWTAuth + 逐片能力守卫，#1639）。
 func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *AdminService) {
 	h := newAdminHandler(svc)
 
-	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapAdminAccess))
+	g := rg.Group("/admin", middleware.JWTAuth(session))
 
-	// ===== 课程管理 =====
-	g.GET("/courses", h.ListCourses)
-	g.POST("/course", h.CreateCourse)
-	g.GET("/course/:course_id", h.GetCourseDetail)
-	g.PUT("/course/:course_id", h.UpdateCourse)
-	g.PUT("/course/:course_id/sort", h.SwapCourseSort)
-	g.DELETE("/course/:course_id", h.DeleteCourse)
-	g.POST("/course/:course_id/chapter", h.CreateChapter)
-	g.PUT("/chapter/:chapter_id", h.UpdateChapter)
-	g.DELETE("/chapter/:chapter_id", h.DeleteChapter)
+	// 课程读面被内容生成页共用（生成前要选课程与章节），故 content.generate 一并作为候选（#1639）。
+	read := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage, authz.CapContentGenerate))
+	read.GET("/courses", h.ListCourses)
+	read.GET("/course/:course_id", h.GetCourseDetail)
+
+	// ===== 课程与章节写面 =====
+	write := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage))
+	write.POST("/course", h.CreateCourse)
+	write.PUT("/course/:course_id", h.UpdateCourse)
+	write.PUT("/course/:course_id/sort", h.SwapCourseSort)
+	write.DELETE("/course/:course_id", h.DeleteCourse)
+	write.POST("/course/:course_id/chapter", h.CreateChapter)
+	write.PUT("/chapter/:chapter_id", h.UpdateChapter)
+	write.DELETE("/chapter/:chapter_id", h.DeleteChapter)
 }
 
 // @Summary 管理端课程列表
