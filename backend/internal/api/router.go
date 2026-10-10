@@ -74,6 +74,13 @@ func NewRouter(deps *Deps) *gin.Engine {
 		api.Use(middleware.AuditLog(deps.AuditSvc, deps.Logger))
 	}
 
+	// 管理端能力解析源（#1618 段1）：动态角色（admin）的有效能力由数据层回答（每请求查库 + 短缓存）。
+	// 挂在根组、且本身不读 claims ⇒ 与各域组内 JWTAuth 的先后无关（根组必然先跑）。
+	// 未注入时动态角色一律 fail closed（403），不会静默放行。
+	if deps.AdminSvc != nil {
+		api.Use(middleware.AdminCapabilityResolver(deps.AdminSvc))
+	}
+
 	// 邮箱验证码注册/登录（发码需过图形验证码）
 	// 手机号验证码注册/登录（发码需过图形验证码）
 	// 微信扫码登录（框架占位）

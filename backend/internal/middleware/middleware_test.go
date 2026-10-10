@@ -44,11 +44,17 @@ func generateToken(t *testing.T, userID int, username, role string) string {
 	return s
 }
 
-// newTestRouter 创建带 JWTAuth + CapabilityRequired 的测试路由器。
+// newTestRouter 创建带 JWTAuth + CapabilityRequired 的测试路由器（不含能力解析源）。
 func newTestRouter(cfg *config.Config, capabilities ...authz.Capability) *gin.Engine {
+	return newTestRouterWithResolver(cfg, nil, capabilities...)
+}
+
+// newTestRouterWithResolver 与 newTestRouter 同形，额外注入管理端能力解析源（#1618 段1）。
+// 解析源挂在组首：它不读 claims，与 JWTAuth 的先后无关（与装配根的挂法一致）。
+func newTestRouterWithResolver(cfg *config.Config, resolver CapabilityResolver, capabilities ...authz.Capability) *gin.Engine {
 	r := gin.New()
 	sess := security.SessionFromConfig(cfg)
-	protected := r.Group("/protected", JWTAuth(sess))
+	protected := r.Group("/protected", AdminCapabilityResolver(resolver), JWTAuth(sess))
 	if len(capabilities) > 0 {
 		protected.Use(CapabilityRequired(capabilities[0]))
 	}
@@ -57,6 +63,26 @@ func newTestRouter(cfg *config.Config, capabilities ...authz.Capability) *gin.En
 		c.JSON(200, gin.H{"user_id": uid})
 	})
 	return r
+}
+
+// stubCapabilityResolver 动态角色能力解析源的测试替身。
+type stubCapabilityResolver struct {
+	caps    map[authz.Capability]struct{}
+	granted bool
+	err     error
+}
+
+func (s stubCapabilityResolver) AdminCapabilities(int) (map[authz.Capability]struct{}, bool, error) {
+	return s.caps, s.granted, s.err
+}
+
+// capSet 构造能力集合。
+func capSet(caps ...authz.Capability) map[authz.Capability]struct{} {
+	out := make(map[authz.Capability]struct{}, len(caps))
+	for _, c := range caps {
+		out[c] = struct{}{}
+	}
+	return out
 }
 
 func TestJWTAuth_ValidToken(t *testing.T) {
@@ -277,9 +303,28 @@ func TestOptionalAuth_LogoutRevokesRefreshOnly(t *testing.T) {
 	}
 }
 
-func TestCapabilityRequired_Allowed(t *testing.T) {
+// 静态角色（讲师）的能力仍由 authz 能力表回答。
+func TestCapabilityRequired_Allowed_StaticRole(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg, authz.CapQuestionAuthor) // [tutor, admin]
+	r := newTestRouter(cfg, authz.CapQuestionAuthor) // [tutor]
+
+	token := generateToken(t, 1, "tutor01", "tutor")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("讲师拥有 question.author，应被允许，得到 %d", w.Code)
+	}
+}
+
+// 动态角色（admin）的能力由数据层回答：解析源命中即允许（#1618 段1）。
+func TestCapabilityRequired_Allowed_DynamicRoleWithResolver(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouterWithResolver(cfg, stubCapabilityResolver{
+		caps: capSet(authz.CapQuestionAuthor), granted: true,
+	}, authz.CapQuestionAuthor)
 
 	token := generateToken(t, 1, "admin01", "admin")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
@@ -288,7 +333,57 @@ func TestCapabilityRequired_Allowed(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	if w.Code != 200 {
-		t.Fatalf("admin 拥有 question.author，应被允许，得到 %d", w.Code)
+		t.Fatalf("解析源给出 question.author，admin 应被允许，得到 %d", w.Code)
+	}
+}
+
+// 动态角色**没有解析源**时必须 fail closed —— 静态表不再回答 admin 的能力，
+// 「没有解析源」不等于「默认放行」（#1618 段1）。
+func TestCapabilityRequired_DynamicRoleWithoutResolverFailsClosed(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouter(cfg, authz.CapAdminAccess)
+
+	token := generateToken(t, 1, "admin01", "admin")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 403 {
+		t.Fatalf("未注入解析源时 admin 应被拒绝 (403)，得到 %d", w.Code)
+	}
+}
+
+// 解析源查询故障 → 500：故障不得伪装成 403「权限不足」（判据同
+// api 包的 TestListEndpointDBFailureRenders500Envelope：DB 故障必须 500）。
+func TestCapabilityRequired_DynamicRoleResolverErrorRenders500(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouterWithResolver(cfg, stubCapabilityResolver{err: errors.New("db is closed")}, authz.CapAdminAccess)
+
+	token := generateToken(t, 1, "admin01", "admin")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 500 {
+		t.Fatalf("解析源故障应渲染 500，得到 %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// 解析源说「未挂角色」→ 403：空集与未授权都拿不到能力（#1618 段1）。
+func TestCapabilityRequired_DynamicRoleNotGranted(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouterWithResolver(cfg, stubCapabilityResolver{granted: false}, authz.CapAdminAccess)
+
+	token := generateToken(t, 1, "admin01", "admin")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 403 {
+		t.Fatalf("未挂角色的 admin 应被拒绝 (403)，得到 %d", w.Code)
 	}
 }
 

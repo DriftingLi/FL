@@ -34,6 +34,8 @@ function state(overrides: Partial<GuardState> = {}): GuardState {
     subdomain: 'training',
     ipDirect: false,
     credential: 'present',
+    // 运行时能力集（#1618 段1）：静态角色的用例留空 —— 它们的可达面由生成的能力表回答
+    capabilities: [],
     ...overrides
   }
 }
@@ -502,8 +504,13 @@ describe('resolveGuardDecision（顺序与优先级）', () => {
 })
 // ===== 步骤 4b：能力校验（ADR-0047 §1/§2 / spec #930）=====
 //
-// 判据不再是页面自己抄的角色清单，而是「页面声明需要什么能力 + 生成的角色→能力表」。
+// 判据不再是页面自己抄的角色清单，而是「页面声明需要什么能力 + 该角色的可达面」。
 // 三条语义边界在这里钉死：需要登录的页面才判能力、公开页不因能力位被锁死、无能力声明则不判。
+//
+// #1618 段1 起可达面有**两条路径**（判定收在 utils/authzRuntime.holdsCapability）：
+//   - 静态角色（学员/讲师/招聘者）→ 生成的能力表；
+//   - 动态角色（管理端）→ **运行时能力集**（登录后由 GET /admin/me/capabilities 下发）。
+// 后者未加载时一律不放行（fail closed）：静态表对 admin 有意为空，回落等于放行。
 describe('capabilityStep（能力校验）', () => {
   const adminPage = (capability: string) => ({
     path: '/admin/forum-manage',
@@ -525,9 +532,19 @@ describe('capabilityStep（能力校验）', () => {
     expect(d).toEqual({ action: 'redirect', to: '/admin/dashboard' })
   })
 
-  it('能力匹配 → 放行', () => {
-    const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin' }))
+  it('管理端能力来自运行时集合：命中 → 放行', () => {
+    const d = resolveGuardDecision(
+      adminPage('forum.moderate'),
+      state({ role: 'admin', subdomain: 'admin', capabilities: ['forum.moderate'] })
+    )
     expect(d.action).toBe('allow')
+  })
+
+  it('管理端能力未命中（含「能力集还没加载」）→ 不放行（fail closed，不回落静态表）', () => {
+    for (const capabilities of [[], ['audit.read']]) {
+      const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin', capabilities }))
+      expect(d).toEqual({ action: 'redirect', to: '/admin/dashboard' })
+    }
   })
 
   it('公开页声明了能力也不判：requiresAuth 全 false 时任意角色（含未登录）可访问', () => {

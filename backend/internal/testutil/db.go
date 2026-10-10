@@ -101,12 +101,21 @@ func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *mo
 }
 
 // SeedAdmin 插入一个测试管理员，返回其 ID。
+//
+// 自 #1618 段1 起，管理员的能力由「所挂角色」回答（静态表不再回答 admin），故这里必须同时建出
+// 受保护（超级管理员）角色并挂上 —— 否则每个管理端契约测试都会因能力为空而 403。
+// 生产侧同一件事由迁移 000041 的 seed 完成（测试面走 SQLite AutoMigrate，不跑迁移）。
 func SeedAdmin(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Admin {
 	t.Helper()
+	roleID, err := migrate.EnsureProtectedAdminRole(db)
+	if err != nil {
+		t.Fatalf("确保受保护管理角色失败: %v", err)
+	}
 	a := &model.Admin{
 		Username:  username,
 		Password:  hashedPassword,
 		Name:      username,
+		RoleID:    &roleID,
 		CreatedAt: Now(),
 	}
 	if err := db.Create(a).Error; err != nil {

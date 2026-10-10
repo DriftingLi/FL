@@ -176,7 +176,9 @@ router.beforeEach(async (to, _from, next) => {
     hasValidToken: !!(authStore.token && authStore.isLoggedIn && authStore.userInfo && authStore.userInfo.role),
     subdomain: getSubdomain(),
     ipDirect: isIpDirectMode(),
-    credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present'
+    credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present',
+    // 运行时能力集（#1618 段1）：管理端的能力由数据层回答，守卫据此判定页面可达性
+    capabilities: authStore.capabilities
   })
 
   for (;;) {

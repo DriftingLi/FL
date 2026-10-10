@@ -10,6 +10,7 @@ import (
 	"forklift-training/internal/auth"
 	"forklift-training/internal/config"
 	"forklift-training/internal/core"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -28,6 +29,10 @@ func newAdminRecruiterContractEnv(t *testing.T, db *gorm.DB, cfg *config.Config)
 	authSvc := auth.NewService(db, sess, core.NewForumCounter(),
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, zap.NewNop())
 	r := gin.New()
-	RegisterAdminRecruiterRoutes(r.Group("/api"), sess, authSvc)
+	apiGroup := r.Group("/api")
+	// 管理端能力解析源（#1618 段1）：与生产装配根 NewRouter 同一条挂法。自建路由的测试也必须注入 ——
+	// 管理端能力改为数据层回答后，缺了它管理端端点一律 403（静态表不再回答 admin）。
+	apiGroup.Use(middleware.AdminCapabilityResolver(NewService(db, sess, zap.NewNop())))
+	RegisterAdminRecruiterRoutes(apiGroup, sess, authSvc)
 	return r
 }

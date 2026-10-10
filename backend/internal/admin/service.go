@@ -4,11 +4,14 @@ package admin
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admincap"
+	"forklift-training/internal/authz"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/core"
@@ -39,11 +42,39 @@ type Service struct {
 	session *security.Session
 
 	logger *zap.Logger
+
+	// caps 管理端有效能力集解析器（#1618 段1）：能力解析是授权关注点，实现落在
+	// internal/admincap（域包测试要复用它，放在这里会让 domain → admin 成环）。
+	caps *admincap.Resolver
 }
 
 // NewService 创建管理员服务实例。
 func NewService(db *gorm.DB, session *security.Session, logger *zap.Logger) *Service {
-	return &Service{db: db, session: session, logger: logger}
+	return &Service{db: db, session: session, logger: logger, caps: admincap.New(db, logger)}
+}
+
+// AdminCapabilities 返回该管理员的有效能力集（#1618 段1）：转调 admincap 解析器，
+// 语义（缓存 TTL、未授权与故障的分档）见该包注释。
+func (s *Service) AdminCapabilities(adminID int) (map[authz.Capability]struct{}, bool, error) {
+	return s.caps.AdminCapabilities(adminID)
+}
+
+// AdminCapabilitySet 出口生产者：把有效能力集渲染成 DTO（能力键按字典序稳定输出，
+// 未挂角色时 capabilities 为**空数组**而非 null —— 契约由 apitypes 的可空性锁按 outlet 举证）。
+//
+// 放在 service 而不是 handler：本域既有惯例是「service 产 DTO、handler 只做 IO」
+// （ListHrwaiUsers / GetTutors / GetStatistics 同形），且 nonnil 出口举证要能直接调它。
+func (s *Service) AdminCapabilitySet(adminID int) (*AdminCapabilitiesDTO, error) {
+	caps, granted, err := s.AdminCapabilities(adminID)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]string, 0, len(caps))
+	for c := range caps {
+		list = append(list, string(c))
+	}
+	sort.Strings(list)
+	return &AdminCapabilitiesDTO{Capabilities: list, Granted: granted}, nil
 }
 
 // ===== HRWAI 用户管理(统一) =====

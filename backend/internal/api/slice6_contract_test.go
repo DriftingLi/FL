@@ -79,7 +79,7 @@ func slice6AssertNullData(t *testing.T, rec *httptest.ResponseRecorder) {
 func TestSlice6CatalogEnvelopeKeys(t *testing.T) {
 	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
-	admin := slice6Token(t, cfg, 1, "admin1", "admin")
+	admin := adminTokenWithAccount(t, cfg, db, "admin1")
 
 	publicCases := []struct {
 		name string
@@ -186,7 +186,7 @@ func TestSlice6CatalogEnvelopeKeys(t *testing.T) {
 func TestSlice6CredentialAndStudentEnvelopeKeys(t *testing.T) {
 	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
-	admin := slice6Token(t, cfg, 1, "admin1", "admin")
+	admin := adminTokenWithAccount(t, cfg, db, "admin1")
 	student := seedStudent(t, db, "stu1", "hash")
 	stuToken := slice6Token(t, cfg, student.ID, student.Account, "hrwai_user")
 
@@ -251,7 +251,7 @@ func TestSlice6CredentialAndStudentEnvelopeKeys(t *testing.T) {
 func TestSlice6QuestionBankEnvelopeKeys(t *testing.T) {
 	t.Parallel()
 	r, cfg, db := newSlice6Env(t)
-	admin := slice6Token(t, cfg, 1, "admin1", "admin")
+	admin := adminTokenWithAccount(t, cfg, db, "admin1")
 	tutor := testutil.SeedTutor(t, db, "tutor1", "hash")
 	tutorToken := slice6Token(t, cfg, tutor.TutorID, tutor.Username, "tutor")
 

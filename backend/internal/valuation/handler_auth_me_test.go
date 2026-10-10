@@ -45,6 +45,8 @@ func TestValuationAuthMe_MasksEmailPlaceholderPhone(t *testing.T) {
 	}
 
 	r := gin.New()
+	// 管理端能力解析源（#1618 段1）：本域测试用内存 adapter 装配，故用替身。
+	attachAdminCapabilities(r)
 	dict := newSeedMemDict()
 	evalStore := newMemEvalStore()
 	batteryStore := &memBatteryStore{}

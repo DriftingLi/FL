@@ -80,8 +80,10 @@ func TestForumCategorySplitContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)
 	}
+	// 管理端能力由数据层回答（#1618 段1）：令牌必须对应**真实存在**且挂了角色的账号。
+	adminAccount := testutil.SeedAdmin(t, db, "admin1", "x")
 	adminToken, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
-		Issue(1, "admin1", "admin")
+		Issue(adminAccount.AdminID, adminAccount.Username, "admin")
 	if err != nil {
 		t.Fatalf("签发 admin token 失败: %v", err)
 	}
