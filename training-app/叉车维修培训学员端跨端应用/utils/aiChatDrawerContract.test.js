@@ -35,6 +35,7 @@ const { readText } = require('./utsHarness');
 const RIGHT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawer-right.uvue');
 const LEFT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawer-left.uvue');
 const NAV = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-nav.uvue');
+const NAVBAR = path.join(__dirname, '..', 'components', 'app-nav-bar', 'app-nav-bar.uvue');
 const read = (p) => readText(p);
 
 describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样式）', () => {
@@ -65,12 +66,15 @@ describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样�
     expect(left).toMatch(/\.empty-text\s*\{[^}]*font-size/);
   });
 
-  it('④ 右侧入口可点：内层有显式尺寸的命中盒 + 右抽屉用 left 锚定（#947 实测可用的组合）', () => {
-    expect(nav).toMatch(/class="nav-right" @click="onMenuClick"/);
-    expect(nav).toMatch(/class="nav-more-box"/);
-    expect(nav).toMatch(/\.nav-more-box\s*\{[^}]*width:\s*\d+rpx/);
-    expect(nav).toMatch(/\.nav-more-box\s*\{[^}]*height:\s*\d+rpx/);
-    // 只给 right 时真机不弹；补 left 后实测可用 ⇒ 必须保留 left 锚定
+  it('④ 右侧入口可点：命中区由页头件右槽承载（#1602 归一：AiChatNav→AppNavBar，#947 经验收编进 app-nav-bar 右槽）', () => {
+    // #1602：AiChatNav 独立形态消失，页头右槽归 app-nav-bar；此处守两件事：
+    // a) nav 包装件仍发出 menuClick（页面 API 不变）
+    expect(nav).toMatch(/onMenuClick/);
+    // b) 页头件右槽是显式可点元素（右槽宽度由 useSafeArea().rightSlotWidth 驱动，胶囊让位）
+    const navBar = read(NAVBAR);
+    expect(navBar).toMatch(/class="nav-bar-right"[\s\S]*?@click="onRightClick"/);
+    expect(navBar).toMatch(/rightSlotWidth/);
+    // 右抽屉 left 锚定继续保留（#947 实测组合）
     expect(right).toMatch(/\.drawer-right\s*\{[^}]*left:\s*30%/);
   });
 });

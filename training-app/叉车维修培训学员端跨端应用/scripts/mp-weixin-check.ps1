@@ -81,7 +81,12 @@
          端口不起、连 `SDKVersion` 都没有，而 `close` / `open` / `auto` **全部回显成功** —— 命令行侧完全看不出坏。
          换装 `2.02.2608070` 后，同一棵树 / 同一份产物 / 同一条命令 **② 一次通过**。
          ⇒ 判据：`auto` 之后端口不起**且** `Tool.getInfo` 无 `SDKVersion` 时，**先核对工具版本**，别在产物/代码上找。
-      c) 顺带修掉一处真缺陷：无截图（失败路径）时 `Publish-ScreenshotArchive` 在 StrictMode 下抛
+      c) **GPU 加速是 Tool 通道假死的真根因（2026-09-24 用户实测定位）**：现象与 a) 全同（端口 t=0 监听、
+          ws 接得上、`Tool.getInfo` 120s 全程无应答、`reason=sdk-version-missing`），杀净 IDE / 冷启动 /
+          手动 open→auto 均无效，且当时工具已是 `2.02`（b 的版本判据解释不了）。用户在开发者工具里
+          **关闭 GPU 加速**后通道即恢复。⇒ 判据修正：端口起而 Tool 通道假死时，**先关 GPU 加速**，
+          再核残留会话（a），最后才核对工具版本（b）。
+       d) 顺带修掉一处真缺陷：无截图（失败路径）时 `Publish-ScreenshotArchive` 在 StrictMode 下抛
          「在此对象上找不到属性"Sum"」（`Measure-Object` 对空管道不产出对象）⇒ 收成空安全的 `Get-MadeTotalBytes`；
          它只 warning、不影响门结论，但会把整段入库打成异常。
 
@@ -98,6 +103,12 @@
     结果行的 `navigation=` 取值域：`ok`（逐页导航可用）/ `skip(unsupported)`（降级）/ `n/a`（环境早退，没走到导航）。
     **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，**留给后续排查**，
     不得据此宣称「已定位根因」；**首跑校准**要求人工核对结果行的 `navigation=` 字段（ADR-0008 ② 段）。
+
+    **Pre-flight quit 清场（#1634）**：用脚本启动（IPC 链）时，残留/堆叠的 IDE 实例会让 `open` 把项目窗口
+    叠进一个未初始化的实例 ⇒ 项目窗口白屏（连菜单/Console 都没有；直接双击 exe 启动不复现）。故跑门前先
+    `cli.bat quit` 退出整个 IDE 并轮询 wechatdevtools 进程归零（60s 超时只 [warn]），再走 close → open → auto。
+    quit/轮询失败不判 exit 2；**红线：不得用 Stop-Process 替代 quit**（运行中 kill IDE 是 ADR-0008 红线）。
+    步骤与预算声明在门计划的 `devtools-quit` 步（唯一真源）；-Doctor 跳过（体检不操控 IDE）。
 
     **判成败一律解析输出，绝不看退出码**：HBuilderX CLI 失败时退出码恒为 0（如实测「项目不存在，请先导入」仍返回 0），
     开发者工具 `cli.bat` 与探针的退出码同样不作为门结论。
@@ -231,6 +242,9 @@ $WxDevToolsPatterns = @(
     "$env:LOCALAPPDATA\微信web开发者工具\cli.bat"
 )
 $script:closed = $false
+# pre-flight quit 的幂等哨兵（#1634）：与 $script:closed 同款，必须先初始化 —— 严格模式下
+# 未设置的 $script:quitDone 会在 if 判定时抛「无法检索变量」（m00099 夹具实测：整段重试一次都没跑就 exit 2）
+$script:quitDone = $false
 # -PortWaitSeconds 由 90 抬到 180（2026-09-13）：-Doctor 首跑实测到一次「cli.bat auto 回显 √ auto、
 # 端口 90s 内始终没监听」，紧接着同一命令 8s 内就起来了 ⇒ **这一条只抬预算，不是修复**：病根未定位，
 # 已如实记进 ADR-0008 ② 段的待排查项；遇到它时结果行是 reason=port-not-listening，-Doctor 的 L6 会标 FAIL。
@@ -367,6 +381,30 @@ function New-GatePlan {
     $ws = "ws://127.0.0.1:$Port"
     $entryUrl = if (@($RouteList).Count -gt 0) { $RouteList[0] } else { '' }
     $steps = @()
+
+    # 0) quit：跑门前**清场** —— 退出整个开发者工具 IDE（#1634）。病根：用脚本（IPC 链）启动时，残留/堆叠的
+    #    未初始化 IDE 实例会让后面的 open 把项目窗口叠进白屏（连菜单/Console 都没有；双击 exe 启动不复现）。
+    #    close 只关项目窗口、对未初始化实例无能为力 ⇒ 必须 quit（等价于 ADR-0008 的 pre-flight 处置：
+    #    跑前先 `cli.bat quit` 清场，实测有效）。门本就独占 IDE，quit 关整个工具没有额外代价。
+    #    ⚠️ 红线（ADR-0008）：运行中**不许 kill IDE** —— 收拾残留只能走 quit，不得用 Stop-Process 替代。
+    #    进程归零的轮询预算（waitSeconds）与本步超时同源，都写死在这里（计划是预算的唯一真源）。
+    $steps += [ordered]@{
+        id = 'devtools-quit'
+        tag = 'devtools-quit'
+        exec = 'devToolsCli'
+        argv = @('quit')
+        timeoutSeconds = 60
+        waitSeconds = 60
+        awaitCompletion = $true
+        logged = $true
+        criteria = @(
+            '跑门前先 cli.bat quit 退出整个 IDE：脚本启动（IPC 链）下残留/堆叠的未初始化实例会让 open 把项目窗口叠进白屏（#1634）',
+            'quit 之后轮询 wechatdevtools 进程归零（最多 60 秒）；归零不了只 [warn] 继续 —— IDE 收不掉时 quit 重试无益，白屏风险记日志、由后续 open/auto/就绪闸门的判据兜',
+            '本步失败只警告，不判 exit 2（不得用 Stop-Process 替代 quit：运行中 kill IDE 是 ADR-0008 红线）',
+            '-Doctor 跳过本步（体检不操控 IDE）'
+        )
+        exit2 = @()
+    }
 
     # 1) close：清残留自动化会话（不 close 会撞 pageStack 空，坑位 1）。失败只警告，不判 exit 2。
     $steps += [ordered]@{
@@ -769,6 +807,40 @@ function Invoke-DevToolsClose {
     }
 }
 
+# ---------- Pre-flight：cli.bat quit 清场（#1634）----------
+# 病根（#1634）：用脚本启动（close → open → auto 的 IPC 链）时，残留/堆叠的 IDE 实例会让 open 把项目窗口
+# 叠进一个未初始化的实例 ⇒ 项目窗口白屏（连菜单/Console 都没有）。直接双击 exe 启动不复现 —— 所以这是
+# 「跑门前」的清场问题，不是工具自身的缺陷。quit 退出**整个** IDE（close 只关项目窗口，对未初始化实例
+# 无能为力），之后再 open 就是干净起点。等价于 ADR-0008 已记录的处置：跑前先 quit 清场，实测有效。
+# ⚠️ 两条红线：① 不得用 Stop-Process 替代 quit（运行中 kill IDE 是 ADR-0008 红线）；② quit/轮询失败只
+# [warn] 继续，不判 exit 2 —— 留下的白屏风险由 open/auto/就绪闸门的协议级判据兜（那里判得出真形态）。
+function Invoke-DevToolsPreflightQuit {
+    if ($script:quitDone) { return }
+    $script:quitDone = $true
+    if (-not $devTools) { return }
+    $quitStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-quit'
+    try {
+        $r = Invoke-Process -FilePath $devTools -Arguments $quitStep.argv -TimeoutSeconds $quitStep.timeoutSeconds -Tag $quitStep.tag
+        Write-Log "`n>>> $($quitStep.tag)（跑门前清场：退出整个 IDE，防残留实例把项目窗口叠成白屏）`n$($r.Output)"
+        Write-Host $r.Output
+    } catch {
+        Write-Host "[warn] cli.bat quit 失败（继续，不影响门结论）：$_" -ForegroundColor Yellow
+    }
+    # 轮询 wechatdevtools 进程归零：quit 是异步的，端口/会话收干净要等。超时只 [warn]，绝不 kill。
+    $waited = 0
+    while ($waited -lt [int]$quitStep.waitSeconds) {
+        if (@(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count -eq 0) {
+            Write-Log "pre-flight：wechatdevtools 进程已归零（等了 ${waited}s）"
+            return
+        }
+        Start-Sleep -Seconds 1
+        $waited++
+    }
+    $still = @(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count
+    Write-Host "[warn] pre-flight：quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
+    Write-Log "pre-flight：quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出（只警告，不 kill）"
+}
+
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
 # Get-HeadSha 已上移到 scripts/lib/gate-common.ps1（三份**逐字节相同**、且无任何守护 pin ⇒ 唯一合格的零风险
 # 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
@@ -1157,6 +1229,10 @@ try {
     #    ⚠️ **不得只重试 auto**：实测只重跑 auto 会绑到一个**没加载项目的新 IDE 实例**上 —— 端口通了但
     #    `Tool.getInfo` 缺 SDKVersion、`App.getPageStack` 永不应答（门会以为会话就绪而实际什么都没有）。
     #    判据始终是协议级（SDKVersion + pageStack，见就绪闸门），不是「端口出现在 Get-NetTCPConnection 里」。
+    # 0) Pre-flight（#1634，重试单元**之前**跑一次，幂等）：quit 清掉残留/堆叠的 IDE 实例 —— 脚本启动（IPC 链）
+    #    下残留实例会让 open 把项目窗口叠成白屏（连菜单/Console 都没有；#1634 票面形态）。-Doctor 不跑
+    #    （体检不操控 IDE）；quit/轮询失败只 [warn]，不判 exit 2，红线是不得用 Stop-Process 替代 quit。
+    if (-not $Doctor) { Invoke-DevToolsPreflightQuit }
     $attempts = [Math]::Max(1, [int]$script:GatePlan['timeouts']['autoAttempts'])
     $retryDelaySeconds = [Math]::Max(0, [int]$script:GatePlan['timeouts']['autoRetryDelay'])
     $listening = $false

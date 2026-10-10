@@ -58,8 +58,9 @@ describe('M1 落点：每条结果都能打开（ADR-0049 决策 2）', () => {
 });
 
 describe('M2 入口：dashboard 顶部栏有搜索', () => {
-  it('dashboard 有搜索按钮且指向搜索页', () => {
-    expect(DASHBOARD).toContain('@click="onSearchClick"');
+  it('dashboard 有搜索按钮且指向搜索页（#1602 迁移：入口经 AppNavBar 多图标右槽分发到 onSearchClick）', () => {
+    expect(DASHBOARD).toContain('@right-click="onNavRightClick"');
+    expect(DASHBOARD).toContain('onSearchClick()');
     expect(DASHBOARD).toContain("uni.navigateTo({ url: '/pages/search/search' })");
   });
 

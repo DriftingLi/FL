@@ -1,41 +1,143 @@
 <template>
-    <view class="nav-bar" :class="{ 'nav-bar--transparent': transparent }">
-        <view class="nav-bar-left" @click="onLeftClick">
-            <text v-if="leftIcon.length > 0" class="nav-bar-icon">{{ leftIcon }}</text>
-            <text v-if="title.length > 0 && !transparent" class="nav-bar-title">{{ title }}</text>
-        </view>
-        <view v-if="rightIcon.length > 0" class="nav-bar-right" @click="onRightClick">
-            <text class="nav-bar-icon">{{ rightIcon }}</text>
+    <view class="nav-bar" :class="[navBgClass, { 'nav-bar--transparent': transparent }]">
+        <view class="status-bar" :class="statusBarBgClass" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
+        <view class="nav-bar-body">
+            <view class="nav-bar-left" @click="onLeftClick">
+                <text v-if="leftIcon.length > 0" class="nav-bar-icon" :class="titleColorClass">{{ leftIcon }}</text>
+                <view v-if="title.length > 0" class="nav-bar-title-block">
+                    <text class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
+                    <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
+                </view>
+            </view>
+            <view v-if="rightIcon.length > 0" class="nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
+                <text class="nav-bar-icon" :class="titleColorClass">{{ rightIcon }}</text>
+            </view>
+            <!-- 多图标右槽（#1602 追加）：dashboard 等页的 🔍🔔🛒 一排；宽度同样按胶囊让位。
+                 每个图标独立可点，rightClick 携带索引（-1 = 单图标形态，兼容旧消费方）。 -->
+            <view v-else-if="rightIcons.length > 0" class="nav-bar-right" :style="rightSlotStyle">
+                <view v-for="(icon, idx) in rightIcons" :key="idx" class="nav-bar-right-item"
+                    @click="onRightItemClick(idx)">
+                    <text class="nav-bar-icon" :class="titleColorClass">{{ icon }}</text>
+                </view>
+            </view>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
+    import { computed } from 'vue'
+    import { useSafeArea } from '../../utils/system.uts'
+
     const props = withDefaults(defineProps<{
         title ?: string
         leftIcon ?: string
         rightIcon ?: string
+        /** 多图标右槽（#1602 追加）：与 rightIcon 互斥，rightIcons 优先。 */
+        rightIcons ?: string[]
         transparent ?: boolean
+        /** 页头套（#1592 双层套的页头层）：'inverse'（N01 蓝底，标题/图标反色）| 'plain'（N02/N03 白底） */
+        variant ?: string
+        /** 可选副标题（#1602：原 ai-chat-nav 独立形态的唯一差异，归一后以 prop 表达，不 fork） */
+        subtitle ?: string
     }>(), {
         title: '',
         leftIcon: '‹',
         rightIcon: '',
-        transparent: false
+        rightIcons: (): string[] => [],
+        transparent: false,
+        variant: 'plain',
+        subtitle: ''
     })
 
     const emit = defineEmits(['leftClick', 'rightClick'])
+
+    const safeArea = useSafeArea()
+
+    const isInverse = computed((): boolean => props.variant == 'inverse')
+
+    // 胶囊让位（#1592）：右槽单行定宽，右缘 ≤ 胶囊左边线 − 视觉间隙；放不下由页面移出次要动作。
+    // 坐标系修正（#1602 真链路复验发现）：槽在 .nav-bar-body 的内容盒里，内容盒右缘 =
+    // 750 − 右padding（与 scss $spacing-md 一致）而非 750 ⇒ 只设 width 会把整槽右推 24rpx，
+    // 图标落进胶囊矩形（实测 [532,726] vs 胶囊 [556,730]，违反验收「元素不落胶囊矩形」）。
+    // 用 margin-right 把右缘钉回 capsuleLeft − CLEARANCE。非小程序端无胶囊 ⇒ 不设约束。
+    const NAV_BODY_PADDING_X = 24 // 与 <style> 里 .nav-bar-body padding 的 $spacing-md 对齐
+    const RIGHT_SLOT_CLEARANCE = 24 // 右槽与胶囊的视觉间隙（rpx）；用户复验 16 太贴，加到 24
+    const rightSlotStyle = computed((): string => {
+        const capsuleLeft = safeArea.value.capsuleLeft
+        const w = safeArea.value.rightSlotWidth
+        if (w <= 0 || capsuleLeft <= 0) {
+            return ''
+        }
+        const marginRight = Math.max(0, (750 - NAV_BODY_PADDING_X) - (capsuleLeft - RIGHT_SLOT_CLEARANCE))
+        return 'width: ' + w + 'rpx; margin-right: ' + marginRight + 'rpx;'
+    })
+
+    // 页头套底色（#1592）：N01 $primary-color / N02–N03 $bg-header / N05 transparent（页面自垫）
+    const navBgClass = computed((): string => {
+        if (props.transparent) {
+            return 'nav-bar--bg-transparent'
+        }
+        if (isInverse.value) {
+            return 'nav-bar--bg-primary'
+        }
+        return 'nav-bar--bg-header'
+    })
+
+    // 状态栏占位底色随套走（#1592）
+    const statusBarBgClass = computed((): string => {
+        if (props.transparent) {
+            return 'status-bar--transparent'
+        }
+        if (isInverse.value) {
+            return 'status-bar--primary'
+        }
+        return 'status-bar--header'
+    })
+
+    const titleColorClass = computed((): string => {
+        return isInverse.value ? 'nav-bar-inverse-text' : ''
+    })
 
     function onLeftClick() : void {
         emit('leftClick')
     }
 
     function onRightClick() : void {
-        emit('rightClick')
+        emit('rightClick', -1)
+    }
+
+    function onRightItemClick(idx : number) : void {
+        emit('rightClick', idx)
     }
 </script>
 
-<style>
+<style lang="scss">
     .nav-bar {
+        flex-direction: column;
+    }
+
+    .nav-bar--bg-primary {
+        background-color: $primary-color;
+    }
+
+    .nav-bar--bg-header {
+        background-color: $bg-header;
+    }
+
+    .nav-bar--bg-transparent,
+    .status-bar--transparent {
+        background-color: transparent;
+    }
+
+    .status-bar--primary {
+        background-color: $primary-color;
+    }
+
+    .status-bar--header {
+        background-color: $bg-header;
+    }
+
+    .nav-bar-body {
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
@@ -43,18 +145,21 @@
         padding: 0 $spacing-md;
     }
 
-    .nav-bar--transparent {
-        background-color: transparent;
-    }
-
     .nav-bar-left {
         flex-direction: row;
         align-items: center;
+        /* 与右槽的最小间距：长标题经 ellipsis 收敛，不会顶到图标 */
+        margin-right: 24rpx;
     }
 
     .nav-bar-right {
         flex-direction: row;
         align-items: center;
+        justify-content: flex-end;
+    }
+
+    .nav-bar-right-item {
+        padding: 0 12rpx;
     }
 
     .nav-bar-title {
@@ -62,10 +167,29 @@
         font-weight: bold;
         color: $text-color;
         margin-left: 16rpx;
+        /* 长证件名单行收敛（用户复验：标题与图标互相挤） */
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .nav-bar-title-block {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .nav-bar-subtitle {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+        margin-left: 16rpx;
+        margin-top: 4rpx;
     }
 
     .nav-bar-icon {
         font-size: 44rpx;
         color: $text-color;
+    }
+
+    .nav-bar-inverse-text {
+        color: $text-color-inverse;
     }
 </style>
