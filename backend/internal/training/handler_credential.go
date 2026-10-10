@@ -18,7 +18,7 @@ import (
 // RegisterCredentialRoutes 注册培训域证件路由：
 //   - /api/credentials、/api/credentials/grouped：学员端公开查询
 //   - /api/me/credential：当前证件读写（需登录；hrwai_user / admin / tutor 均可查询，切换仅 hrwai_user）
-//   - /api/admin/credential*：管理端 CRUD 与排序（CapCatalogManage）
+//   - /api/admin/credential*：管理端 CRUD 与排序（CapCredentialManage 写面；读面另有 course.manage 候选）
 func RegisterCredentialRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
 	h := newHandler(svc)
 
@@ -29,13 +29,18 @@ func RegisterCredentialRoutes(rg *gin.RouterGroup, session *security.Session, sv
 	rg.GET("/me/credential", middleware.JWTAuth(session), h.GetCurrentCredential)
 	rg.PATCH("/me/credential", middleware.JWTAuth(session), h.SetCurrentCredential)
 
-	// ===== 管理端 CRUD =====
-	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapCatalogManage))
-	g.GET("/credentials", h.ListCredentials)
-	g.POST("/credential", h.CreateCredential)
-	g.PUT("/credential/:id", h.UpdateCredential)
-	g.PUT("/credential/:id/sort", h.SwapCredentialSort)
-	g.DELETE("/credential/:id", h.DeleteCredential)
+	// ===== 管理端 CRUD（#1639：证件管理自成一片叶子）=====
+	g := rg.Group("/admin", middleware.JWTAuth(session))
+
+	// 证件列表是只读字典：课程管理要按证件筛课程，故 course.manage 一并作为候选。
+	read := g.Group("", middleware.CapabilityRequired(authz.CapCredentialManage, authz.CapCourseManage))
+	read.GET("/credentials", h.ListCredentials)
+
+	write := g.Group("", middleware.CapabilityRequired(authz.CapCredentialManage))
+	write.POST("/credential", h.CreateCredential)
+	write.PUT("/credential/:id", h.UpdateCredential)
+	write.PUT("/credential/:id/sort", h.SwapCredentialSort)
+	write.DELETE("/credential/:id", h.DeleteCredential)
 }
 
 // ===== 目标证件 =====

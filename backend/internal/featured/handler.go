@@ -39,8 +39,8 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	rg.GET("/featured-content/:id", h.GetPublicDetail)
 	rg.POST("/featured-content/:id/view", h.IncrementViewCount)
 
-	// ===== 管理端接口（需 admin 角色）=====
-	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapContentManage))
+	// ===== 管理端接口（#1639：内容精选自成一片侧栏叶子）=====
+	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapFeaturedManage))
 	g.GET("/featured-contents", h.AdminList)
 	g.GET("/featured-content/:id", h.AdminDetail)
 	g.POST("/featured-content", h.Create)

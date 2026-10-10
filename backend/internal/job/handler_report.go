@@ -34,12 +34,13 @@ func RegisterReportRoutes(rg *gin.RouterGroup, session *security.Session, svc *R
 	// 学员侧举报
 	studentG := rg.Group("/jobs", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapJobReport))
 	studentG.POST("/:id/report", h.Report)
-	// 管理端只读巡检 + 处置
-	adminG := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapJobReportHandle))
-	adminG.GET("/jobs", h.ListAll)
-	adminG.GET("/job-reports", h.ListReports)
-	adminG.POST("/job-reports/:id/handle", h.MarkHandled)
-	adminG.POST("/jobs/:id/force-offline", h.ForceOffline)
+	// 管理端只读巡检 + 处置（#1639：组级不再挂单一能力，两条读面各挂各的候选）
+	adminG := rg.Group("/admin", middleware.JWTAuth(session))
+	adminG.GET("/jobs", middleware.CapabilityRequired(authz.CapJobReportHandle), h.ListAll)
+	adminG.POST("/jobs/:id/force-offline", middleware.CapabilityRequired(authz.CapJobReportHandle), h.ForceOffline)
+	adminG.POST("/job-reports/:id/handle", middleware.CapabilityRequired(authz.CapJobReportHandle), h.MarkHandled)
+	// 举报队列是巡检视图的一格：只挂 job_report.handle 会把只读巡检的人挡在这条读面之外。
+	adminG.GET("/job-reports", middleware.CapabilityRequired(authz.CapJobReportHandle, authz.CapInspectionRead), h.ListReports)
 }
 
 // JobReportHandler 举报治理 handler。

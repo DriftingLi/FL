@@ -37,40 +37,49 @@ func newHandler(adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassista
 }
 
 // RegisterRoutes 注册 /api/admin 蓝图（管理员后台：hrwai 用户、讲师、统计、内容生成）。
+//
+// 组级只留 JWTAuth（#1639）：本蓝图横跨五片侧栏叶子，各片自带细键守卫。组级若再挂一个粗键，
+// 细键会被并回同一个门——「只给用户管理、不给讲师管理」又变得做不到。
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Service, authSvc *auth.Service, aiConfigSvc *aiassistant.ConfigService, contentGenSvc *core.ContentGenerateService) {
 	h := newHandler(adminSvc, authSvc, aiConfigSvc, contentGenSvc)
 
-	g := rg.Group("/admin", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapAdminAccess))
+	g := rg.Group("/admin", middleware.JWTAuth(session))
 
 	// ===== AI 配置（多配置管理 + 功能绑定）=====
-	aiassistant.RegisterAdminRoutes(g, aiConfigSvc)
+	ai := g.Group("", middleware.CapabilityRequired(authz.CapAIConfigManage))
+	aiassistant.RegisterAdminRoutes(ai, aiConfigSvc)
 
 	// ===== 课程内容生成（留驻：实现仍在 internal/core，未随课程域搬包）=====
 	// 原 :48-59 的九条课程 / 章节管理端点已搬进 internal/course/handler_admin.go（波 4d 裁决 D1）；
 	// 这两条生成面（含 core.ContentGenerateService）属管理域射程，路由留在本蓝图，
 	// 与课程域那份注册按完整路径并存（gin 只按完整路径匹配，两组同名 /admin 不冲突）。
-	g.POST("/course/generate-content", h.GenerateContent)
-	g.GET("/course/generate-content/:task_id", h.GetGenerationTask)
+	gen := g.Group("", middleware.CapabilityRequired(authz.CapContentGenerate))
+	gen.POST("/course/generate-content", h.GenerateContent)
+	gen.GET("/course/generate-content/:task_id", h.GetGenerationTask)
 
 	// ===== HRWAI 用户管理(统一) =====
 	// 合并原学员管理与评估用户管理两套接口,操作 hrwai_users 表。
 	// 旧路由 /admin/students、/admin/student/* 保留为兼容别名,前端已切到 /admin/hrwai-users/*。
-	g.GET("/hrwai-users", h.ListHrwaiUsers)
-	g.POST("/hrwai-users", h.CreateHrwaiUser)
-	g.PUT("/hrwai-users/:id", h.UpdateHrwaiUser)
-	g.PUT("/hrwai-users/:id/password", h.ResetHrwaiUserPassword)
-	g.PUT("/hrwai-users/:id/status", h.ToggleHrwaiUserStatus)
-	g.DELETE("/hrwai-users/:id", h.DeleteHrwaiUser)
+	users := g.Group("", middleware.CapabilityRequired(authz.CapHrwaiUserManage))
+	users.GET("/hrwai-users", h.ListHrwaiUsers)
+	users.POST("/hrwai-users", h.CreateHrwaiUser)
+	users.PUT("/hrwai-users/:id", h.UpdateHrwaiUser)
+	users.PUT("/hrwai-users/:id/password", h.ResetHrwaiUserPassword)
+	users.PUT("/hrwai-users/:id/status", h.ToggleHrwaiUserStatus)
+	users.DELETE("/hrwai-users/:id", h.DeleteHrwaiUser)
 
 	// ===== 导师管理 =====
-	g.GET("/tutors", h.ListTutors)
-	g.POST("/tutor", h.CreateTutor)
-	g.DELETE("/tutor/:tutor_id", h.DeleteTutor)
-	g.PUT("/tutor/:tutor_id/password", h.ResetTutorPassword)
-	g.PUT("/tutor/:tutor_id/status", h.ToggleTutorStatus)
+	tutors := g.Group("", middleware.CapabilityRequired(authz.CapTutorManage))
+	tutors.GET("/tutors", h.ListTutors)
+	tutors.POST("/tutor", h.CreateTutor)
+	tutors.DELETE("/tutor/:tutor_id", h.DeleteTutor)
+	tutors.PUT("/tutor/:tutor_id/password", h.ResetTutorPassword)
+	tutors.PUT("/tutor/:tutor_id/status", h.ToggleTutorStatus)
 
 	// ===== 统计看板 =====
-	g.GET("/statistics", h.GetStatistics)
+	// 仪表盘也读这个端点（同一份概览），故 admin.access 一并作为候选（#1639）。
+	stats := g.Group("", middleware.CapabilityRequired(authz.CapStatisticsRead, authz.CapAdminAccess))
+	stats.GET("/statistics", h.GetStatistics)
 
 	// ===== 当前管理员的能力集（#1618 段1）=====
 	// 只要求「是管理员」（JWTAuth + handler 内角色判定），**不**挂 CapAdminAccess：

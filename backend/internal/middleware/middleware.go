@@ -173,14 +173,18 @@ func authCookieValue(c *gin.Context, sess *security.Session) string {
 // CapabilityRequired 能力守卫（ADR-0047 §1）：判据是 authz 能力，不是角色字面量。
 // 这是逐域迁移的目标形态——端点声明「需要什么能力」，角色可达面由 authz 能力表回答。
 // 必须在 JWTAuth 之后使用。
-func CapabilityRequired(capability authz.Capability) gin.HandlerFunc {
+//
+// **多参 = 任一命中即放行**（#1639）：一片只读面若被两个侧栏叶子共用（生成页要选课程、
+// 巡检视图要读积分流水与举报队列），端点无法只声明其中一个——声明成一个就等于给另一个
+// 叶子的持有者关上门。单参调用的语义与收敛前逐字一致。
+func CapabilityRequired(caps ...authz.Capability) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, exists := c.Get(string(CtxUserRole)); !exists {
 			response.Unauthorized(c, "Token无效或已过期，请重新登录")
 			c.Abort()
 			return
 		}
-		ok, err := requireCapability(c, capability)
+		ok, err := requireCapability(c, caps...)
 		if err != nil {
 			// 判定所需的查询失败：渲染 500 而非 403 —— 故障不得伪装成权限问题。
 			response.ServerError(c, "服务器内部错误")
@@ -214,10 +218,18 @@ func HasCapability(c *gin.Context, capability authz.Capability) bool {
 
 // requireCapability 与 HasCapability 同源，但把**查询故障**与**判定结果**分开带出：
 // 守卫（CapabilityRequired）据此把故障渲染成 500，而把「无能力」渲染成 403。
-func requireCapability(c *gin.Context, capability authz.Capability) (bool, error) {
+//
+// 多参即**任一命中**（#1639）；动态角色无论几个候选只解析一次能力集 —— 逐个候选各查一次库
+// 会把「一次判定」变成 N 次查询，而候选越多只会发生在共享只读面上。
+func requireCapability(c *gin.Context, candidates ...authz.Capability) (bool, error) {
 	role := authz.Role(CurrentRole(c))
 	if !authz.IsDynamicRole(role) {
-		return authz.Has(role, capability), nil
+		for _, capability := range candidates {
+			if authz.Has(role, capability) {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
 	resolver, ok := capabilityResolverFrom(c)
 	if !ok {
@@ -230,8 +242,12 @@ func requireCapability(c *gin.Context, capability authz.Capability) (bool, error
 	if !granted {
 		return false, nil
 	}
-	_, has := caps[capability]
-	return has, nil
+	for _, capability := range candidates {
+		if _, has := caps[capability]; has {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // CurrentUserID 从 gin.Context 读取当前登录用户 ID(未登录返回 0)。

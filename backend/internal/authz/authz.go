@@ -69,12 +69,23 @@ const (
 	CapQuestionAuthor Capability = "question.author" // 题库作者（建题/改题/批量导入/上传图片）
 
 	// ===== 管理端 =====
-	CapAdminAccess        Capability = "admin.access"        // 管理端入口与用户/招聘者管理
+	// #1639：管理端能力键**按侧栏叶子切分**（一页一键）。收敛前 admin.access 一个键盖住仪表盘/
+	// 统计分析/用户管理/讲师管理/AI 配置五页，catalog.manage 盖住课程/岗位/证件三页，
+	// content.manage 盖住内容生成/内容精选两页——超管做不到「只给用户管理、不给讲师管理」。
+	// 旧粗键由迁移 000042 展开成细键后删除（不缩权：持有粗键的角色拿到的是同一片可达面）。
+	CapAdminAccess        Capability = "admin.access"        // 管理端入口与仪表盘
+	CapStatisticsRead     Capability = "statistics.read"     // 统计看板
+	CapHrwaiUserManage    Capability = "hrwai_user.manage"   // HRWAI 用户管理
+	CapTutorManage        Capability = "tutor.manage"        // 讲师账号管理
+	CapAIConfigManage     Capability = "ai_config.manage"    // AI 配置与功能绑定
+	CapCourseManage       Capability = "course.manage"       // 课程与章节管理
+	CapPositionManage     Capability = "position.manage"     // 岗位字典管理
+	CapCredentialManage   Capability = "credential.manage"   // 目标证件管理
+	CapContentGenerate    Capability = "content.generate"    // 课程内容 AI 生成
+	CapFeaturedManage     Capability = "featured.manage"     // 内容精选管理
 	CapQuestionReview     Capability = "question.review"     // 题库审核（发布/驳回）
 	CapContributionReview Capability = "contribution.review" // 投稿审核（讲师与管理员同为审核者）
-	CapCatalogManage      Capability = "catalog.manage"      // 培训目录管理（证件/方向/等级/证书模板）
 	CapCatalogAuthor      Capability = "catalog.author"      // 目录作者面（题库标签等讲师可维护项）
-	CapContentManage      Capability = "content.manage"      // 内容精选与内容生成
 	CapProfileReview      Capability = "profile.review"      // 资料审核
 	CapPointsAdmin        Capability = "points.admin"        // 积分管理与扣罚
 	CapAuditRead          Capability = "audit.read"          // 审计日志
@@ -137,11 +148,18 @@ var roleCapabilities = map[Capability][]Role{
 	// 判据的单一来源是下面的 dynamicRoles；Has(RoleAdmin, …) 对动态角色一律 false（fail closed），
 	// 动态路径在 middleware 的能力守卫里（见 middleware.HasCapability）。
 	CapAdminAccess:        {},
+	CapStatisticsRead:     {},
+	CapHrwaiUserManage:    {},
+	CapTutorManage:        {},
+	CapAIConfigManage:     {},
+	CapCourseManage:       {},
+	CapPositionManage:     {},
+	CapCredentialManage:   {},
+	CapContentGenerate:    {},
+	CapFeaturedManage:     {},
 	CapQuestionReview:     {},
 	CapContributionReview: {RoleTutor},
-	CapCatalogManage:      {},
 	CapCatalogAuthor:      {RoleTutor},
-	CapContentManage:      {},
 	CapProfileReview:      {},
 	CapPointsAdmin:        {},
 	CapAuditRead:          {},
@@ -170,13 +188,20 @@ var roleCapabilities = map[Capability][]Role{
 // 学员与招聘方能力一并授给超管，会让超管以一个不属于它的身份出现在那些域里 —— 语义漂移，
 // 且此后每新增一个学员能力都会自动扩权。管理端能力面显式列举才是准确的。
 var protectedAdminCapabilities = []Capability{
-	CapAdminAccess,        // 管理端入口与用户/招聘者管理
+	CapAdminAccess,        // 管理端入口与仪表盘
+	CapStatisticsRead,     // 统计看板
+	CapHrwaiUserManage,    // HRWAI 用户管理
+	CapTutorManage,        // 讲师账号管理
+	CapAIConfigManage,     // AI 配置与功能绑定
+	CapCourseManage,       // 课程与章节管理
+	CapPositionManage,     // 岗位字典管理
+	CapCredentialManage,   // 目标证件管理
+	CapContentGenerate,    // 课程内容 AI 生成
+	CapFeaturedManage,     // 内容精选管理
 	CapQuestionAuthor,     // 题库作者（与讲师共有）
 	CapQuestionReview,     // 题库审核
 	CapContributionReview, // 投稿审核（与讲师共有）
-	CapCatalogManage,      // 培训目录管理
 	CapCatalogAuthor,      // 目录作者面（与讲师共有）
-	CapContentManage,      // 内容精选与内容生成
 	CapProfileReview,      // 资料审核
 	CapPointsAdmin,        // 积分管理与扣罚
 	CapAuditRead,          // 审计日志
