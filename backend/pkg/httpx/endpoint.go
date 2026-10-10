@@ -130,6 +130,8 @@ func renderStatus(c *gin.Context, status int, msg string) {
 		response.Forbidden(c, msg)
 	case http.StatusNotFound:
 		response.NotFound(c, msg)
+	case http.StatusConflict:
+		response.Conflict(c, msg)
 	case http.StatusCreated:
 		response.Created(c, msg, nil)
 	default:

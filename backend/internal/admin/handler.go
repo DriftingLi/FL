@@ -78,6 +78,9 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Se
 	// 连自己的权限集都读不到，界面无从解释 403（只会看到一个沉默的空白页）。
 	me := rg.Group("/admin/me", middleware.JWTAuth(session))
 	me.GET("/capabilities", h.MyCapabilities)
+
+	// ===== 授权管理（角色 CRUD + 管理员挂角色，#1621 段4）=====
+	RegisterAdminAuthzRoutes(rg, session, adminSvc)
 }
 
 // @Summary 启动课程内容异步生成

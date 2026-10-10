@@ -17,7 +17,11 @@ import { unwrappedRequest } from './request'
 import { toPage, type Page } from './page'
 import type {
   AIConfigDTO,
+  AdminAccountDTO,
+  AdminAccountListDTO,
   AdminCapabilitiesDTO,
+  AdminRoleDTO,
+  AdminRoleListDTO,
   AdminCourseDetailDTO,
   AdminOverviewDTO,
   AdminStatisticsDTO,
@@ -209,6 +213,13 @@ export interface AddRecruiterPayload {
   wechat?: string
 }
 
+/** 角色写面入参（#1621）：能力键由页面按资源域勾选后原样提交，后端按 authz 能力表收口。 */
+export interface AdminRolePayload {
+  name: string
+  remark?: string
+  capabilities: string[]
+}
+
 export const adminApi = {
   /**
    * 当前管理员的**有效能力集**（#1618 段1）。
@@ -218,6 +229,33 @@ export const adminApi = {
    */
   fetchMyCapabilities() {
     return unwrappedRequest.get<AdminCapabilitiesDTO>('/admin/me/capabilities')
+  },
+
+  // ===== 授权管理（#1621 段4）：角色 CRUD + 管理员挂角色 =====
+  // 后端把「受保护角色不可改不可删」「最后一个超管不可降级」做成 409；本层不吞错，
+  // 由 client 拦截器统一 toast 出后端文案，页面因此只需处理成功路径。
+  listAdminRoles() {
+    return unwrappedRequest.get<AdminRoleListDTO>('/admin/roles')
+  },
+
+  createAdminRole(data: AdminRolePayload) {
+    return unwrappedRequest.post<AdminRoleDTO>('/admin/roles', data)
+  },
+
+  updateAdminRole(roleId: number, data: AdminRolePayload) {
+    return unwrappedRequest.put<AdminRoleDTO>(`/admin/roles/${roleId}`, data)
+  },
+
+  deleteAdminRole(roleId: number) {
+    return unwrappedRequest.delete<null>(`/admin/roles/${roleId}`)
+  },
+
+  listAdminAccounts() {
+    return unwrappedRequest.get<AdminAccountListDTO>('/admin/accounts')
+  },
+
+  assignAdminRole(adminId: number, roleId: number) {
+    return unwrappedRequest.put<AdminAccountDTO>(`/admin/accounts/${adminId}/role`, { role_id: roleId })
   },
 
   // ===== HRWAI 用户管理(统一) =====

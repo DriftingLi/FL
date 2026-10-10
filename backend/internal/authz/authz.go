@@ -85,6 +85,10 @@ const (
 	CapRecruiterManage    Capability = "recruiter.manage"    // 招聘者账号管理
 	CapJobReportHandle    Capability = "job_report.handle"   // 职位举报处置
 	CapFaqManage          Capability = "faq.manage"          // 帮助中心内容维护（分类与条目 CRUD）
+	// 能力键 =「资源域.动作」，**恰一个点**（api 包的命名锁会拦下多点写法）——
+	// 故资源域写成 admin_account / admin_role（与既有 job_report.handle 同形）。
+	CapAdminAccountManage Capability = "admin_account.manage" // 管理员账号管理（改挂角色等）（#1621）
+	CapAdminRoleManage    Capability = "admin_role.manage"    // 管理角色与能力配置（超管专属）（#1621）
 
 	// ===== 招聘方 =====
 	CapRecruitAccess     Capability = "recruit.access"     // 招聘工作区入口
@@ -148,6 +152,8 @@ var roleCapabilities = map[Capability][]Role{
 	CapRecruiterManage:    {},
 	CapJobReportHandle:    {},
 	CapFaqManage:          {},
+	CapAdminAccountManage: {},
+	CapAdminRoleManage:    {},
 
 	CapRecruitAccess:     {RoleRecruiter},
 	CapJobManage:         {RoleRecruiter},
@@ -181,6 +187,8 @@ var protectedAdminCapabilities = []Capability{
 	CapRecruiterManage,    // 招聘者账号管理
 	CapJobReportHandle,    // 职位举报处置
 	CapFaqManage,          // 帮助中心内容维护
+	CapAdminAccountManage, // 管理员账号管理（#1621）
+	CapAdminRoleManage,    // 管理角色与能力配置（#1621）
 }
 
 // ProtectedAdminCapabilities 返回受保护（超级管理员）角色的能力全集（按声明序）。
