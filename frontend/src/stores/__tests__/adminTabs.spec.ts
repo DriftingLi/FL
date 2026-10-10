@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAdminTabsStore, PINNED_ADMIN_TAB } from '@/stores/adminTabs'
-import { tabOwnerOf } from '@/config/navigation'
+import { pageTitleOf, tabOwnerOf } from '@/config/navigation'
+import { pages } from '@/config/pages'
 
 function tab(name: string, title = name, pinned = false) {
   return { name: name as never, title, pinned }
@@ -80,12 +81,15 @@ describe('关闭与落点', () => {
 })
 
 describe('路由 → 标签（详情页并入所属标签）', () => {
-  const routeOf = (name: string, workspace = 'manage', title?: string) =>
-    ({ name, fullPath: '/x', meta: { workspace, ...(title ? { title } : {}) } }) as never
+  // fixture 与生产同形：router/index.ts 的 routeMeta **不注入 title**。
+  // （此前 fixture 自己塞了 meta.title，于是「标签印英文路由名」这条线上缺陷在测试里看不见 ——
+  //   #1630 的根因之一就是用例替生产补了一个生产不存在的输入。）
+  const routeOf = (name: string, workspace = 'manage') =>
+    ({ name, fullPath: '/x', meta: { workspace } }) as never
 
-  it('普通管理页自成标签，标题取 meta.title', () => {
+  it('普通管理页自成标签，标题取描述符的中文名', () => {
     const s = useAdminTabsStore()
-    const t = s.resolveTab(routeOf('AuditLogs', 'manage', '审计日志'), tabOwnerOf)
+    const t = s.resolveTab(routeOf('AuditLogs'), tabOwnerOf, pageTitleOf)
     expect(t).toMatchObject({ name: 'AuditLogs', title: '审计日志', pinned: false })
   })
 
@@ -93,14 +97,28 @@ describe('路由 → 标签（详情页并入所属标签）', () => {
     const owner = tabOwnerOf('AdminFeaturedContentEdit')
     expect(owner).toBe('AdminFeaturedContentList')
     const s = useAdminTabsStore()
-    expect(s.resolveTab(routeOf('AdminFeaturedContentEdit'), tabOwnerOf)?.name).toBe(
+    expect(s.resolveTab(routeOf('AdminFeaturedContentEdit'), tabOwnerOf, pageTitleOf)?.name).toBe(
       'AdminFeaturedContentList'
     )
   })
 
   it('仪表盘解析为固定页；非管理端工作区不产生标签', () => {
     const s = useAdminTabsStore()
-    expect(s.resolveTab(routeOf(PINNED_ADMIN_TAB), tabOwnerOf)?.pinned).toBe(true)
-    expect(s.resolveTab(routeOf('CourseList', 'training'), tabOwnerOf)).toBeNull()
+    expect(s.resolveTab(routeOf(PINNED_ADMIN_TAB), tabOwnerOf, pageTitleOf)?.pinned).toBe(true)
+    expect(s.resolveTab(routeOf('CourseList', 'training'), tabOwnerOf, pageTitleOf)).toBeNull()
+  })
+})
+
+describe('标签标题一律中文（#1630）', () => {
+  const CJK = /[\u4e00-\u9fa5]/
+
+  it('管理端每个「自成标签」的页面都有中文标题，且不是英文路由名', () => {
+    const standalone = pages.filter(p => p.workspace === 'manage' && !tabOwnerOf(p.name))
+    expect(standalone.length).toBeGreaterThan(10)
+    for (const page of standalone) {
+      const title = pageTitleOf(page.name)
+      expect(title, `${page.name} 的标签标题`).toMatch(CJK)
+      expect(title, `${page.name} 的标签标题`).not.toBe(page.name)
+    }
   })
 })
