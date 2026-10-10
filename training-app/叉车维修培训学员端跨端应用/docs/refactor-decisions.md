@@ -25,8 +25,8 @@ PR-0(#639)✅ → mall(#640)✅ → profile(#641)✅ → forum(T04，600 预算�
 > ② **600 软预算的最终判定**（`node -e` 走 `utils/contractHarness.js` 现测，非回忆）：声明面 23 个模块里
 > **19 个已翻成执法**（`budgetViolations()` 返回空），**4 个仍 `budget: 'pending'`** =
 > `ai-assistant` / `points` / `recruiter` / `search`；全仓 231 份 `.uts` + `.uvue` 现测 **9 份 >600**
-> （839 / 727 / 702 / 700 / 667 / 643 / 629 / 621 / 617），其中 8 份落在那 4 个 pending 模块内、
-> 1 份是登记在基础设施面的共享件 `api/request.uts`（643，`INFRA.oversized` 且 drift 为空）；
+> （839 / 778 / 702 / 700 / 667 / 711 / 629 / 621 / 617，其中 recruit.uts 727→778、request.uts 643→711 两处按 #1598/#1603 现测订正）、其中 8 份落在那 4 个 pending 模块内、
+> 1 份是登记在基础设施面的共享件 `api/request.uts`（登记时 643，**2026-10-10 现测 711**（#1598/#1603 订正），`INFRA.oversized` 且 drift 为空）；
 > 本文件「目标与范围」记的开工基线是 **20 份 >600** ⇒ 收口到 9 份。
 > ③ **pending 分两类，别混成一句「都达标了」**：`points` / `recruiter` / `search` 不在这串手术步骤里
 > （本文「明确不做」= 不动非手术模块的页面结构），其 pending 属**设计内**；而 `ai-assistant` 是 T10（#648）
