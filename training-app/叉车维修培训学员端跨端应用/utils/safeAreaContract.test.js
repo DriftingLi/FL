@@ -1,5 +1,7 @@
-const { readFileSync, readdirSync, statSync } = require('fs');
+const { readdirSync, statSync } = require('fs');
 const { join } = require('path');
+// 读取层归一（#1177 / ADR-0019 票 B）：仓内源码一律经 utsHarness.readText（唯一真源 normalizeEol）
+const { readText } = require('./utsHarness');
 
 // #1602 骨架层基建机检（契约 B/C/D + 渐进）：
 // B. getMenuButtonBoundingClientRect 唯一真源 = utils/system.uts
@@ -27,47 +29,47 @@ function walk(dir, ext, out) {
 describe('#1602 骨架层基建契约', () => {
     it('B: getMenuButtonBoundingClientRect 只在 utils/system.uts 出现（唯一真源）', () => {
         const utsFiles = walk(ROOT, '.uts');
-        const hits = utsFiles.filter((f) => readFileSync(f, 'utf-8').includes('getMenuButtonBoundingClientRect'));
+        const hits = utsFiles.filter((f) => readText(f).includes('getMenuButtonBoundingClientRect'));
         expect(hits.length).toBe(1);
         expect(hits[0].replace(/\\/g, '/')).toContain('utils/system.uts');
     });
 
     it('B+: useSafeArea 从 system.uts 导出且被页头件消费', () => {
-        const sys = readFileSync(join(ROOT, 'utils', 'system.uts'), 'utf-8');
+        const sys = readText(join(ROOT, 'utils', 'system.uts'));
         expect(sys).toContain('export function useSafeArea');
-        const nav = readFileSync(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'), 'utf-8');
+        const nav = readText(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'));
         expect(nav).toContain("from '../../utils/system.uts'");
     });
 
     it('C: 状态栏回退值 44 全仓唯一（页内不得出现别的数字字面量回退）', () => {
-        const sys = readFileSync(join(ROOT, 'utils', 'system.uts'), 'utf-8');
+        const sys = readText(join(ROOT, 'utils', 'system.uts'));
         expect(sys).toContain('export const DEFAULT_STATUS_BAR_HEIGHT = 44');
         // 页头件 / ai-chat-nav 不允许自带回退数字（44/20 两派收敛到 system.uts）
         for (const f of [
             join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'),
             join(ROOT, 'components', 'ai-chat', 'ai-chat-nav.uvue'),
         ]) {
-            const src = readFileSync(f, 'utf-8');
+            const src = readText(f);
             expect(src).not.toMatch(/statusBarHeight[^;\n]*\b(20|44)\b/);
         }
     });
 
     it('D: 页头件右槽按胶囊让位（rightSlotWidth 驱动）且 <style lang="scss">', () => {
-        const nav = readFileSync(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'), 'utf-8');
+        const nav = readText(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'));
         expect(nav).toContain('rightSlotWidth');
         expect(nav).toContain('<style lang="scss">');
         expect(nav).not.toContain('80rpx');
     });
 
     it('D+: ai-chat-nav 不再是独立页头形态（归一为 AppNavBar 包装）', () => {
-        const src = readFileSync(join(ROOT, 'components', 'ai-chat', 'ai-chat-nav.uvue'), 'utf-8');
+        const src = readText(join(ROOT, 'components', 'ai-chat', 'ai-chat-nav.uvue'));
         expect(src).toContain('app-nav-bar');
         expect(src).not.toContain('<style>');
         expect(src).not.toContain('panel-icon');
     });
 
     it('渐进: manifest.json 有 app-plus 段（statusbar/safearea）且 appid 未动', () => {
-        const raw = readFileSync(join(ROOT, 'manifest.json'), 'utf-8');
+        const raw = readText(join(ROOT, 'manifest.json'));
         const clean = raw.replace(/\/\*[\s\S]*?\*\//g, '');
         const m = JSON.parse(clean);
         expect(m.appid).toBe('__UNI__1C1D180');
