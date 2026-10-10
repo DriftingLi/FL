@@ -28,11 +28,15 @@ const savingId = ref<number | null>(null)
 const newRoleName = ref('')
 
 const { loading, loadError, retrying, isEmpty, run, retry } = useAsyncPage(
-  async () => {
-    const res = await adminApi.listAdminRoles()
-    return res?.roles ?? []
-  },
-  { itemsRef: roles }
+  // loader **只取数**（ADR-0069 决策 1 的锁：loader 内不得写页面 ref）
+  () => adminApi.listAdminRoles(),
+  {
+    itemsRef: roles,
+    // 写回走 apply 槽：它在代数校验之后执行，旧轮结果连 ref 都不碰
+    apply: res => {
+      roles.value = res?.roles ?? []
+    }
+  }
 )
 
 // 装载后把能力集灌进草稿（数组拷贝，避免直接改接口返回的对象）

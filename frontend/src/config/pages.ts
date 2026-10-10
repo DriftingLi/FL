@@ -251,6 +251,7 @@ const pagesData = [
   // 授权管理两页（#1621 段4）：能力键只挂受保护角色 ⇒ 只有超管看得见这两项（侧栏与守卫同源）。
   // 编辑态页面按 ADR-0073 **不进 keep-alive**（避免把未保存的勾选缓存成"看起来已生效"）。
   { name: 'AdminRoleManage', path: '/admin/roles', component: () => import('@/pages/admin/RoleManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_role.manage', nav: { group: 'system', label: '角色权限', icon: Setting, order: 7 } },
+  { name: 'AdminAccountManage', path: '/admin/accounts', component: () => import('@/pages/admin/AccountManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_account.manage', keepAlive: true, nav: { group: 'system', label: '管理员管理', icon: UserFilled, order: 6 } },
 
   // ---------- 招聘端（RecruitLayout）----------
   { name: 'RecruitDashboard', path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: HomeFilled, exact: true, order: 1 } },
