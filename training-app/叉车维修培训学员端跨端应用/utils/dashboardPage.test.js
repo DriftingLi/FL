@@ -84,11 +84,15 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('顶部导航三个图标（搜索 / 通知 / 购物车）必须可见（历史 bug：icon 文本为空导致图标消失）', () => {
-    const icons = [...template.matchAll(/class="nav-icon-text">([^<]*)</g)].map((m) => m[1]);
+  it('顶部导航三个图标（搜索 / 通知 / 购物车）必须可见（历史 bug：icon 文本为空导致图标消失；#1602 迁移后经 AppNavBar right-icons 数组流入）', () => {
+    // 旧形态：页内三枚 class="nav-icon-text"；迁移后：模板绑定 :right-icons + 脚本数组真源。
+    expect(template).toContain(':right-icons="navRightIcons"');
+    const arr = src.match(/navRightIcons\s*:\s*string\[\]\s*=\s*\[([^\]]*)\]/);
+    expect(arr).not.toBeNull();
+    const icons = [...arr[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
     // #979 M2：dashboard 补全局搜索入口，故由 2 变 3
     expect(icons.length).toBe(3);
-    expect(icons.map((i) => i.trim())).toEqual(['🔍', '🔔', '🛒']);
+    expect(icons).toEqual(['🔍', '🔔', '🛒']);
     for (const icon of icons) {
       expect(icon.trim().length).toBeGreaterThan(0);
     }

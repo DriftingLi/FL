@@ -39,7 +39,7 @@ PR-0(#639)✅ → mall(#640)✅ → profile(#641)✅ → forum(T04，600 预算�
 > 残表（`api/auth.uts` 登录族八条出口）由 **#1324 / T21** 承接。
 
 ## 约束
-- 冻结：uni-secure-storage、main.uts、App.uvue、manifest.json、config/、残值域 valuation 模块。
+- 冻结：uni-secure-storage、main.uts、App.uvue、manifest.json（**唯一例外：`app-plus` 段——#1602 骨架层基建解冻，仅限 statusbar/safearea，appid 不得动**）、config/、残值域 valuation 模块。
 - API 兼容：请求形态不得变（GET 走手动 query 序列化）；既有 request/get/post 原样保留（expand–contract）。
 - uni-app-x：文件 ≤600 行、目录 ≤2 层；数据所有权单一（谁消费谁持有、扁平下发，禁 `ref<any>`/`defineExpose` 反向桥接）；守护 M–S 禁：裸 builder 引用、`as unknown as`、模板裸插值/直调 import 函数、`ref<any`、`async : void`、可选对象 prop 成员直读。
 

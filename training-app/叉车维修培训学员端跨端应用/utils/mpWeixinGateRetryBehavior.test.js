@@ -9,8 +9,8 @@
  * 为什么守护要**真跑门**而不是断言源码文本：文本断言在「循环被摘掉、只留一句字面量」时照样绿。
  * 这里用共享夹具的**假开发者工具**（只记账 + 回显，**永不**监听端口 = 冷起点第一枪的形态）把门真跑一遍，
  * 判据是**调用序列**与**结果行**：
- *   - 必不红（attempts=2）：`close → open → auto` 必须**整段**出现两遍（不是只重试 auto），
- *     且两次都用尽才 `exit 2` / `reason=port-not-listening`；
+ *   - 必不红（attempts=2）：pre-flight `quit` 清场一次（#1634），随后 `close → open → auto` **整段**出现
+ *     两遍（不是只重试 auto），且两次都用尽才 `exit 2` / `reason=port-not-listening`；
  *   - 必红（attempts=1）：只允许出现一遍 —— 这条同时证明「次数真的来自 `-AutoAttempts`」，
  *     而不是写死的两遍（否则本条会红）。
  *
@@ -61,12 +61,13 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT errors=0/);
   });
 
-  it('必不红：attempts=2 ⇒ close → open → auto 整段出现两遍，用尽才 exit 2', () => {
+  it('必不红：attempts=2 ⇒ quit 清场一次 + close → open → auto 整段出现两遍，用尽才 exit 2', () => {
     if (!IS_WIN) return; // 平台边界由上一条真断言
     H.resetCalls(fakeCli);
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '2']);
-    // **整段**：不是 close/open/auto 各来两次的任意组合，而是两遍完整的 close → open → auto
-    expect(H.verbsOf(fakeCli)).toEqual(['close', 'open', 'auto', 'close', 'open', 'auto']);
+    // pre-flight quit 先清场一次（#1634，幂等、只在重试单元之前），然后是**两遍完整**的 close → open → auto
+    // （不是 close/open/auto 各来两次的任意组合）
+    expect(H.verbsOf(fakeCli)).toEqual(['quit', 'close', 'open', 'auto', 'close', 'open', 'auto']);
     // 全部用尽才判环境不可用（不是第一枪就红）
     expect(r.status).toBe(2);
     const log = H.gateLog(fixture);
@@ -78,10 +79,23 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     if (!IS_WIN) return;
     H.resetCalls(fakeCli);
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '1']);
-    expect(H.verbsOf(fakeCli)).toEqual(['close', 'open', 'auto']);
+    expect(H.verbsOf(fakeCli)).toEqual(['quit', 'close', 'open', 'auto']);
     expect(r.status).toBe(2);
     const log = H.gateLog(fixture);
     expect(log).not.toMatch(/整段重试/);
     expect(log).toMatch(/MP_WEIXIN_RESULT errors=env reason=port-not-listening/);
+  }, 300000);
+
+  it('pre-flight：quit 先于 close → open → auto，且进程归零轮询写进日志（#1634）', () => {
+    if (!IS_WIN) return;
+    H.resetCalls(fakeCli);
+    const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '1']);
+    const verbs = H.verbsOf(fakeCli);
+    expect(verbs[0]).toBe('quit');
+    expect(verbs.slice(1)).toEqual(['close', 'open', 'auto']);
+    // 轮询结果（归零或超时警告）必须留痕：本夹具机器上 fake cli 不派生真 IDE ⇒ 应记「归零」
+    const log = H.gateLog(fixture);
+    expect(log).toMatch(/pre-flight：wechatdevtools 进程已归零/);
+    expect(r.status).toBe(2); // 端口仍不起（夹具形态），门照常在端口面判环境不可用
   }, 300000);
 });
