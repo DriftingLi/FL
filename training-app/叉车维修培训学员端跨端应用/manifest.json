@@ -65,5 +65,16 @@
             "icons" : {},
             "splashScreens" : {}
         }
+    },
+    "app-plus" : {
+        "statusbar" : {
+            "immersive" : false
+        },
+        "safearea" : {
+            "background" : "#ffffff",
+            "bottom" : {
+                "offset" : "auto"
+            }
+        }
     }
 }

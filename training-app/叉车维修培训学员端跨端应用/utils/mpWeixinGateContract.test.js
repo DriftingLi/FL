@@ -66,6 +66,7 @@ const PR_TEMPLATE_REL = path.join('..', '..', '.github', 'PULL_REQUEST_TEMPLATE.
 
 // 门计划的步骤序列（② 的全部外部动作，按执行顺序；-DryRun 输出的 steps[].id 必须逐字等于它）
 const PLAN_SEQUENCE = [
+  'devtools-quit',
   'devtools-close',
   'devtools-open',
   'devtools-auto',
@@ -216,6 +217,9 @@ function scanPlan(plan) {
   // close 是「失败只警告」的步骤：它声明 exit 2 就意味着门的退出语义被改宽了
   const closeStep = step('devtools-close');
   must(Boolean(closeStep) && (closeStep.exit2 || []).length === 0, 'C18', 'close 是「失败只警告」的步骤，不该声明 exit 2');
+  // quit 同样是「失败只警告」的步骤（pre-flight 清场不判环境不可用）
+  const quitStep = step('devtools-quit');
+  must(Boolean(quitStep) && (quitStep.exit2 || []).length === 0, 'C18', 'quit 是「失败只警告」的 pre-flight 步骤，不该声明 exit 2');
   // 预算与步骤不能分叉：步骤上的超时值必须逐项等于预算里的对应项
   [['devtools-open', 'open', 'timeoutSeconds'],
     ['devtools-auto', 'auto', 'timeoutSeconds'],
@@ -285,6 +289,26 @@ function scanPlan(plan) {
   if (portStep) {
     must(portStep.attempts === T.autoAttempts, 'C21',
       `port-listening 的 attempts（${portStep.attempts}）与预算 timeouts.autoAttempts（${T.autoAttempts}）不一致 —— 端口预算必须与整段尝试同源`);
+  }
+
+  // ---- C22：pre-flight quit 清场（#1634）—— quit 必须是第一步，且在 close 之前 ----
+  // 病根：脚本启动（IPC 链）下，残留/堆叠的未初始化 IDE 实例会让 open 把项目窗口叠成白屏（连菜单/Console
+  // 都没有）。close 只关项目窗口、对未初始化实例无能为力 ⇒ 必须先 quit 退出整个 IDE。判据（唯一真源仍是
+  // 计划）：quit 是第一步、argv 写死 `quit`、声明进程归零轮询（waitSeconds）与失败只警告的语义、不判 exit 2。
+  must(Boolean(quitStep), 'C22', '计划里没有 pre-flight `cli.bat quit` 步（残留 IDE 实例会把项目窗口叠成白屏，#1634）');
+  if (quitStep) {
+    must(ids.indexOf('devtools-quit') === 0, 'C22', 'quit 不是第一步（清场必须发生在 close/open/auto 之前）');
+    must(argvOf(quitStep)[0] === 'quit', 'C22', 'quit 的 argv 不是 `quit`（清场要退出整个 IDE，不是 close 项目窗口）');
+    must(Number.isFinite(quitStep.waitSeconds) && quitStep.waitSeconds > 0, 'C22', 'quit 缺进程归零轮询预算（waitSeconds）');
+    must(Number.isFinite(quitStep.timeoutSeconds) && quitStep.timeoutSeconds > 0, 'C22', 'quit 缺超时兜底');
+    must(quitStep.awaitCompletion === true, 'C22', 'quit 未声明「等它跑完」（与 close/open 同款可追溯口径）');
+    must(quitStep.logged === true, 'C22', 'quit 未声明「写进日志」（清场结果必须可追溯）');
+    const qc = (quitStep.criteria || []).join(' ');
+    must(qc.includes('白屏'), 'C22', 'quit 的判据未写明白屏病根（#1634）');
+    must(qc.includes('归零'), 'C22', 'quit 的判据未写明「轮询 wechatdevtools 进程归零」');
+    must(qc.includes('只警告') || qc.includes('[warn]'), 'C22', 'quit 的判据未写明「失败只警告，不判 exit 2」');
+    must(!qc.includes('Stop-Process') || qc.includes('不得用 Stop-Process'), 'C22', 'quit 的判据须写明「不得用 Stop-Process 替代 quit」（kill IDE 是 ADR-0008 红线）');
+    must((quitStep.exit2 || []).length === 0, 'C22', 'quit 是「失败只警告」的 pre-flight 步骤，不该声明 exit 2');
   }
 
   // ---- C15：auto 之后、探针之前跑就绪闸门；判据与预算写在计划里 ----
@@ -558,6 +582,16 @@ function scanContract(sources) {
     must(/catch\s*\{/.test(code.slice(commentCallIdx, commentCallIdx + 1200)), 'C19', '贴评论调用缺 catch（崩了必须警告 + 记日志，不得静默）');
   }
 
+  // C22 pre-flight quit 清场的执行侧接线（#1634；计划面判据在 scanPlan）
+  //   · 有按 id 取用 quit 步的执行点（计划与执行不脱节）；
+  //   · 进程归零轮询用 Get-Process -Name wechatdevtools（只观测，绝不 kill —— Stop-Process 是 ADR-0008 红线）；
+  //   · 主流程（重试单元之前）真的调用了 pre-flight，且 -Doctor 跳过。
+  must(s.includes("-Id 'devtools-quit'"), 'C22', '执行路径里没有按 id 取用 quit 步骤（计划与执行脱节）');
+  must(/Get-Process -Name wechatdevtools/.test(s), 'C22', '执行侧没有 wechatdevtools 进程归零轮询（quit 是异步的，不轮询等于没等清场）');
+  must(!/Stop-Process\s+-/.test(stripCommentLines(s).join('\n')), 'C22', '执行侧出现 Stop-Process 调用（运行中 kill IDE 是 ADR-0008 红线，只能 quit；判据文本里「不得用 Stop-Process」的引用不算）');
+  must(/if \(-not \$Doctor\) \{ Invoke-DevToolsPreflightQuit \}/.test(s), 'C22', '主流程没有在重试单元之前调用 pre-flight（或未做 -Doctor 跳过）');
+  must(s.includes('function Invoke-DevToolsPreflightQuit'), 'C22', '缺 pre-flight quit 的执行函数');
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -723,7 +757,16 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C18', (p) => { const log = p.resultLine.fields.find((f) => f.name === 'log'); p.resultLine.fields = [log].concat(p.resultLine.fields.filter((f) => f.name !== 'log')); return p; }],
       ['C18', (p) => { p.schema = 'gate-plan/2'; return p; }],
       ['C18', (p) => { p.endpoint.ws = 'ws://127.0.0.1:1'; return p; }],
-      ['C18', (p) => { p.paths.probeRelative = 'scripts/other.mjs'; return p; }]
+      ['C18', (p) => { p.paths.probeRelative = 'scripts/other.mjs'; return p; }],
+      // C22：拆掉 pre-flight quit / 挪到 close 之后 / 把它改成 close 的别名 / 摘掉红线与「只警告」判据
+      ['C22', (p) => { p.steps = p.steps.filter((s) => s.id !== 'devtools-quit'); return p; }],
+      ['C22', (p) => swap(p, 'devtools-quit', 'devtools-close')],
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.argv = ['close', '--project', 'x']; })],
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.waitSeconds = 0; })],
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.criteria = ['清场']; })],
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.exit2 = [{ on: 'timeout', reason: 'quit-timeout' }]; })],
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.awaitCompletion = false; })],
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.logged = false; })]
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -814,7 +857,13 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C19', { ...real, script: real.script + "\n$relProbe = $archive.Rel\n" }],
       ['C19', { ...real, script: real.script.replace("-ArchivedRel @(Get-Prop $archive 'Rel')", "-ArchivedRel @($archive.Rel)") }],
       ['C19', { ...real, script: real.script.replace("try {\n        Publish-GateComment -PrNumber $PostToPr", "Publish-GateComment -PrNumber $PostToPr") }],
-      ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }]
+      ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }],
+      // C22：执行侧拆掉 pre-flight（不再按 id 取用 quit / 轮询改 kill —— kill 是 ADR-0008 红线）
+      ['C22', { ...real, script: real.script.replace("-Id 'devtools-quit'", "-Id 'devtools-quitX'") }],
+      ['C22', { ...real, script: real.script.replace(/Get-Process -Name wechatdevtools/g, 'Get-ProcessX -Name wechatdevtools') }],
+      ['C22', { ...real, script: real.script.replace('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }', 'if ($false) { }') }],
+      // 红线面：真的往代码里塞 Stop-Process 调用必须被抓（判据文本里的「不得用 Stop-Process」引用不算命中）
+      ['C22', { ...real, script: real.script.replace('        $waited++', '        Stop-Process -Name wechatdevtools -Force\n        $waited++') }]
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
@@ -846,6 +895,35 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     const returns = body.match(/return @\{[^}]*\}/g) || [];
     expect(returns.length).toBeGreaterThanOrEqual(2);
     returns.forEach((r) => expect(r).toMatch(/Rel\s*=/));
+  });
+
+  it('C22：pre-flight quit 清场在计划里是第一步（#1634 白屏病根）', () => {
+    const quit = realPlan.steps.find((s) => s.id === 'devtools-quit');
+    expect(realPlan.steps[0].id).toBe('devtools-quit');
+    expect(quit.argv).toEqual(['quit']);
+    expect(quit.exit2).toEqual([]); // 失败只警告，不判 exit 2
+    expect(quit.criteria.join(' ')).toContain('白屏');
+    // quit 在 close 之前：close 只关项目窗口，清残留 IDE 实例必须先 quit
+    expect(realPlan.steps.map((s) => s.id).indexOf('devtools-quit'))
+      .toBeLessThan(realPlan.steps.map((s) => s.id).indexOf('devtools-close'));
+  });
+
+  it('C22：执行侧真的跑 pre-flight（取计划步骤 + 进程归零轮询 + -Doctor 跳过 + 绝不 kill）', () => {
+    const s = real.script;
+    expect(s).toContain('function Invoke-DevToolsPreflightQuit');
+    expect(s).toContain("-Id 'devtools-quit'");
+    expect(s).toContain('Get-Process -Name wechatdevtools');
+    expect(s).toContain('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }');
+    expect(stripCommentLines(s).join('\n')).not.toMatch(/Stop-Process\s+-/);
+  });
+
+  it('C10：注册与文档面（package.json / ADR-0008 / PR 模板 / 移动端 AGENTS.md）', () => {
+    expect(real.pkg).toMatch(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/);
+    expect(real.adr).toContain('半自动');
+    expect(real.adr).toContain('#883');
+    expect(real.adr).toContain('mp-weixin-check.ps1');
+    expect(real.template).toContain('gate-evidence:②');
+    expect(real.agents).toContain('② 微信开发者工具门 = 半自动门');
   });
 
   it('C6：仅门通过（exit 0）分支贴 sha 绑定评论', () => {

@@ -215,6 +215,51 @@ function Test-HxCompileFinished {
 # Get-HxErrorLines 已上移到 scripts/lib/hx-errors.ps1（ADR-0012）：纯判定抽成 lib 才能做运行期断言。
 # 本文件在下方统一 dot-source 它 —— 调用点仍是两处（仅编译 / 真运行），且都必须包 @()（契约 C13）。
 
+# Invoke-BoundedAdbText 执行核：Get-AdbOutput / Invoke-AdbTierCall 的底层。#1584 空提交漏了
+# dot-source 这条链，首步 Get-OnlineDeviceList 直接「术语 'Get-AdbOutput' 不会被识别」（#1602 补上）。
+. (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
+
+function Invoke-AdbTierCall {
+    <#
+      **接线层**（一次取文本 / 管理类的 adb 调用）。形态与 emulator-smoke.ps1 / device-capture.ps1 一致：
+      不写等待逻辑，只 delegate 到唯一执行核并补三件事：档位、超时点名、serial 的取舍。
+      
+      ⚠️ `$script:TargetSerial = $target.Serial` 必须在主流程里先执行；$adbExe 同理。契约锚 D13 守护这两行。
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$AdbArgs,
+        [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds,
+        [string]$Tier = 'text',
+        [switch]$NoSerial
+    )
+    $script:AdbTextCalls = ($script:AdbTextCalls ?? 0) + 1
+    
+    $adbSerial = if ($NoSerial) { '' } else { $script:TargetSerial ?? '' }
+    
+    $r = Invoke-BoundedAdbText -AdbExe $adbExe -Serial $adbSerial -AdbArguments $AdbArgs `
+        -AdbArgv $AdbArgs -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
+    
+    if ($r.TimedOut) {
+        $msg = "ADB_TEXT_TIMEOUT call=adb $(@($adbSerial | ForEach-Object { "-s $_ " }) -join '') $($AdbArgs -join ' ') "
+        $msg += "callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) tier=$Tier —— 已终止整棵进程树，本次按「没拿到」回退"
+        Write-Host $msg -ForegroundColor DarkGray
+    }
+    return $r
+}
+
+function Get-AdbOutput {
+    <#
+      **中间层**（回文本，超时回空串 —— 既有语义）。代理 Invoke-AdbTierCall，超时返回空串，正常返回文本。
+      保留此函数是为了保持与 emulator-smoke.ps1 的模式一致，并确保契约测试能找到原始命令字符串。
+    #>
+    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds, [string]$Tier = 'text', [switch]$NoSerial)
+    $r = Invoke-AdbTierCall -AdbArgs $AdbArgs -BudgetSeconds $BudgetSeconds -Tier $Tier -NoSerial:$NoSerial
+    if ($r.TimedOut) { return '' }
+    return ([string]$r.Text).Trim()
+}
+
+
 # ---------- 通用函数 ----------
 
 function Test-PeHeader {
@@ -907,46 +952,9 @@ exit 0
 }
 
 # ---------- 接线层：一次文本 / 管理类 adb 调用的统一委托（AC2 第 3 条）----------
-function Invoke-AdbTierCall {
-    <#
-      **接线层**（一次取文本 / 管理类的 adb 调用）。形态与 emulator-smoke.ps1 / device-capture.ps1 一致：
-      不写等待逻辑，只 delegate 到唯一执行核并补三件事：档位、超时点名、serial 的取舍。
-      
-      ⚠️ `$script:TargetSerial = $target.Serial` 必须在主流程里先执行；$adbExe 同理。契约锚 D13 守护这两行。
-    #>
-    [CmdletBinding()]
-    param(
-        [string[]]$AdbArgs,
-        [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds,
-        [string]$Tier = 'text',
-        [switch]$NoSerial
-    )
-    $script:AdbTextCalls = ($script:AdbTextCalls ?? 0) + 1
-    
-    $adbSerial = if ($NoSerial) { '' } else { $script:TargetSerial ?? '' }
-    
-    $r = Invoke-BoundedAdbText -AdbExe $adbExe -Serial $adbSerial -AdbArguments $AdbArgs `
-        -AdbArgv $AdbArgs -DirectExec:(-not $IsWindows) -MergeStdErr -TimeoutSeconds $BudgetSeconds
-    
-    if ($r.TimedOut) {
-        $msg = "ADB_TEXT_TIMEOUT call=adb $(@($adbSerial | ForEach-Object { "-s $_ " }) -join '') $($AdbArgs -join ' ') "
-        $msg += "callBudgetSeconds=$BudgetSeconds seconds=$($r.Seconds) tier=$Tier —— 已终止整棵进程树，本次按「没拿到」回退"
-        Write-Host $msg -ForegroundColor DarkGray
-    }
-    return $r
-}
-
-function Get-AdbOutput {
-    <#
-      **中间层**（回文本，超时回空串 —— 既有语义）。代理 Invoke-AdbTierCall，超时返回空串，正常返回文本。
-      保留此函数是为了保持与 emulator-smoke.ps1 的模式一致，并确保契约测试能找到原始命令字符串。
-    #>
-    param([string[]]$AdbArgs, [int]$BudgetSeconds = $AdbTextCallTimeoutSeconds, [string]$Tier = 'text', [switch]$NoSerial)
-    $r = Invoke-AdbTierCall -AdbArgs $AdbArgs -BudgetSeconds $BudgetSeconds -Tier $Tier -NoSerial:$NoSerial
-    if ($r.TimedOut) { return '' }
-    return ([string]$r.Text).Trim()
-}
-
+# ⚠️ 定义必须在首次调用（Get-OnlineDeviceList → Get-AdbOutput，:696 设备解析）之前：
+#    PowerShell 函数要「执行到定义行」才生效，#1584 把这两块挪到文件尾 ⇒ 首步直接
+#    「术语 'Get-AdbOutput' 不会被识别」（#1602 补上，#1584 空提交 b5de6022 的同族错位）。
 # 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
 $script:TargetSerial = $target.Serial
 $script:AdbTextCalls = 0
