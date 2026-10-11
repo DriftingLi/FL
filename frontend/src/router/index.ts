@@ -179,8 +179,10 @@ router.beforeEach(async (to, _from, next) => {
     subdomain: getSubdomain(),
     ipDirect: isIpDirectMode(),
     credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present',
-    // 运行时能力集（#1618 段1）：管理端的能力由数据层回答，守卫据此判定页面可达性
-    capabilities: authStore.capabilities
+    // 运行时能力集（#1618 段1）：管理端的能力由数据层回答，守卫据此判定页面可达性。
+    // 落定标志与集合**同时**注入（#1645）：集合为空可能只是「还没拉到」，那种情况下不许判可见性
+    capabilities: authStore.capabilities,
+    capabilitiesSettled: authStore.capabilitiesSettled
   })
 
   for (;;) {
@@ -202,6 +204,12 @@ router.beforeEach(async (to, _from, next) => {
         // 留在当前子域名的默认工作区（valuation/recruit 子域名有独立入口）
         next(getDefaultWorkspaceBySubdomain())
         return
+      case 'load-capabilities':
+        // 动态角色的能力集还没落定：补拉一次后重跑管线（#1645）。装载**必然落定**
+        // （成功 → ready、失败 → failed，见 stores/auth.loadCapabilities），
+        // 故重跑时本步不再触发，不会自我循环；失败仍按空集走 fail closed。
+        await authStore.loadCapabilities()
+        break
       case 'load-credential':
         // 证件数据未加载：补拉一次后重跑管线；credentialLoadAttempted 防御性兜底死循环
         if (credentialLoadAttempted) {
