@@ -132,13 +132,18 @@ describe('§1.6 白名单文件自检', () => {
     }
   });
 
-  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2，白名单是全仓册不是批内册）', () => {
-    // 批2 页清单与 utils/batch2UiContract.test.js 的 PAGES 保持一致（不 require 测试模块，防 describe 嵌套）
+  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2（#1605 四页 + #1606 十四页），白名单是全仓册不是批内册）', () => {
+    // 批2 页清单与 utils/batch2UiContract.test.js 的 PAGES 保持一致（不 require 测试模块，防 describe 嵌套）；#1606 十四页与 batch2UiContract 十四页同册
     const BATCH2_PAGES = [
       'pages/exam-info/exam-info.uvue',
       'pages/guide/choose-cert.uvue',
       'pages/jobs/job-list.uvue',
       'pages/profile/personal-activity.uvue',
+      'pages/profile/settings.uvue', 'pages/profile/personal-info.uvue', 'pages/profile/wrong-questions.uvue',
+      'pages/points/points-detail.uvue', 'pages/points/task-center.uvue', 'pages/ai-assistant/ai-feature.uvue',
+      'pages/ai-assistant/ai-settings.uvue', 'pages/ai-assistant/custom-models.uvue', 'pages/practice/practice.uvue',
+      'pages/practice/practice-report.uvue', 'pages/jobs/job-detail.uvue', 'pages/resume/resume-edit.uvue',
+      'pages/resume/resume-attach.uvue', 'pages/practice/practice-do.uvue',
     ];
     const all = PAGES.concat(BATCH2_PAGES)
       .map((p) => styleBlock(read(p)).toUpperCase())

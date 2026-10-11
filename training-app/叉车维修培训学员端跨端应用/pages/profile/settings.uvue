@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">设置</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="设置" @left-click="onBack" divider />
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- 账号与安全 -->
             <view class="section">
@@ -40,8 +33,7 @@
                         <text class="cell-label">通知设置</text>
                         <text class="cell-arrow">›</text>
                     </view>
-                    <!-- <view class="cell" @click="onClearCache"> -->
-                    <view class="cell">
+                    <view class="cell" @click="onClearCache">
                         <text class="cell-label">清理缓存</text>
                         <text class="cell-value">{{ cacheSize }}</text>
                     </view>
@@ -95,14 +87,16 @@
 </template>
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, onMounted } from 'vue'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { useAuthStore } from '../../stores/auth'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../../constants/app'
 
     const authStore = useAuthStore()
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // 关怀模式（本地存储）
@@ -221,44 +215,11 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .header {
-        background-color: #ffffff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .header-left {
-        width: 60rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .header-right {
-        width: 60rpx;
     }
 
     .content-scroll {
@@ -272,7 +233,7 @@
     }
 
     .card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         flex-direction: column;
     }
@@ -281,7 +242,7 @@
         flex-direction: row;
         align-items: center;
         padding: 28rpx 24rpx;
-        border-bottom: 1rpx solid #f5f5f5;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .cell-border-none {
@@ -291,18 +252,18 @@
     .cell-label {
         flex: 1;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .cell-value {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-right: 8rpx;
     }
 
     .cell-arrow {
         font-size: 40rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     .logout-wrap {
@@ -310,7 +271,7 @@
     }
 
     .logout-btn {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 48rpx;
         padding: 24rpx 0;
         align-items: center;
@@ -318,6 +279,6 @@
 
     .logout-text {
         font-size: 32rpx;
-        color: #ff5252;
+        color: $uni-color-error;
     }
 </style>

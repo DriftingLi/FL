@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">错题本</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="错题本" @left-click="onBack" divider />
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <WrongStatsCard :stats-total="stats.total" :today-count="todayCount" />
 
@@ -66,10 +59,13 @@
 </template>
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import {
         getWrongQuestionsApi,
         getWrongQuestionStatsApi,
@@ -77,6 +73,7 @@
         removeWrongQuestionApi,
     } from '../../api/wrongQuestion'
     import type { WrongQuestionQuery } from '../../api/wrongQuestion'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'
     import type { WrongQuestionItem, WrongQuestionStats, WrongQuestionListResult } from '../../types/index'
     import WrongStatsCard from './components/wrong-stats-card.uvue'
@@ -96,8 +93,6 @@
         correct_answer : string
         explanation : string
     }
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ===== 视图状态：分组视图 ⇄ 组内列表视图 =====
@@ -148,7 +143,7 @@
         for (const k in byType) {
             const v = byType[k]
             if (v == null) continue
-            const n = parseFloat(`${v}`)
+            const n = parseFloat(${v}$)
             if (isNaN(n) || n <= 0) continue
             rows.push({ label: getTypeName(k), typeKey: k, count: n } as GroupRow)
         }
@@ -195,7 +190,6 @@
             todayCount.value = n
         }).catch(() => {})
     }
-
 
     async function loadRecords(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -330,9 +324,9 @@
         try {
             const data = await redoWrongQuestionApi(item.question_id, userAnswer)
             // 后端返回 { is_correct, correct_answer, explanation }
-            const isCorrect = `${data['is_correct']}` == 'true' || `${data['is_correct']}` == '1'
-            const correctAnswer = data['correct_answer'] != null ? `${data['correct_answer']}` : item.correct_answer
-            const explanation = data['explanation'] != null ? `${data['explanation']}` : ''
+            const isCorrect = ${data['is_correct']}$ == 'true' || ${data['is_correct']}$ == '1'
+            const correctAnswer = data['correct_answer'] != null ? ${data['correct_answer']}$ : item.correct_answer
+            const explanation = data['explanation'] != null ? ${data['explanation']}$ : ''
 
             if (isCorrect) {
                 // 重做正确：自动移出错题本，不保留该数据
@@ -409,53 +403,17 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .header {
-        background-color: #ffffff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 80rpx;
     }
 
     .content-scroll {
         flex: 1;
         height: 0;
     }
-
 
     /* 分组卡片 */
     .group-list {
@@ -464,20 +422,20 @@
     }
 
     .group-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 32rpx 24rpx;
         margin-bottom: 20rpx;
         flex-direction: row;
         align-items: center;
-        border: 1rpx solid #f0f0f0;
+        border: 1rpx solid Ff0f0f0;
     }
 
     .group-icon {
         width: 48rpx;
         height: 48rpx;
         border-radius: 24rpx;
-        border: 3rpx solid #2979ff;
+        border: 3rpx solid F2979ff;
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
@@ -486,25 +444,25 @@
 
     .group-icon-text {
         font-size: 30rpx;
-        color: #2979ff;
+        color: F2979ff;
         font-weight: bold;
     }
 
     .group-name {
         flex: 1;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .group-count {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-right: 12rpx;
     }
 
     .group-chevron {
         font-size: 32rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     /* 组内返回条 */
@@ -513,26 +471,26 @@
         align-items: center;
         margin: 24rpx 24rpx 0;
         padding: 16rpx 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 12rpx;
-        border: 1rpx solid #eeeeee;
+        border: 1rpx solid Feeeeee;
     }
 
     .group-back-icon {
         font-size: 32rpx;
-        color: #2979ff;
+        color: F2979ff;
         margin-right: 8rpx;
     }
 
     .group-back-text {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         flex: 1;
     }
 
     .group-back-hint {
         font-size: 24rpx;
-        color: #2979ff;
+        color: F2979ff;
     }
 
     /* 错题列表 */
@@ -541,7 +499,6 @@
         padding: 16rpx 24rpx 0;
     }
 
-
     .empty-tip {
         align-items: center;
         padding: 120rpx 0;
@@ -549,7 +506,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .loading-more {
@@ -559,6 +516,6 @@
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

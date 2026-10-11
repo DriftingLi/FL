@@ -1,13 +1,6 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="nav-bar">
-            <view class="nav-left" @click="onBack">
-                <text class="nav-icon">‹</text>
-            </view>
-            <text class="nav-title">数据报告</text>
-            <view class="nav-right"></view>
-        </view>
+        <app-nav-bar title="数据报告" @left-click="onBack" divider />
         <scroll-view class="body" scroll-y="true">
             <!-- 概览卡 -->
             <view class="overview-card">
@@ -72,11 +65,15 @@
 </template>
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getPracticeOverviewApi, getPracticeReportApi } from '../../api/practice'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { toNumber, toStr } from '../../api/helpers'
     import type { PracticeOverview } from '../../types/index'
 
@@ -87,8 +84,6 @@
         correct : number
         accuracyText : string
     }
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const overview = ref<PracticeOverview>({
@@ -173,44 +168,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .page {
         flex: 1;
         background-color: #f5f6fa;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .nav-bar {
-        background-color: #ffffff;
-        padding: 16rpx 24rpx;
-        height: 88rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .nav-left,
-    .nav-right {
-        width: 72rpx;
-        height: 72rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .nav-icon {
-        font-size: 44rpx;
-        color: #333333;
-    }
-
-    .nav-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
     }
 
     .body {
@@ -222,8 +184,8 @@
     /* 概览卡 */
     .overview-card {
         margin-top: 24rpx;
-        background: linear-gradient(to bottom right, #4facfe, #239edd);
-        background-color: #239edd;
+        background: linear-gradient(to bottom right, #4facfe, $primary-color);
+        background-color: $primary-color;
         border-radius: 20rpx;
         padding: 32rpx 0;
         flex-direction: row;
@@ -240,7 +202,7 @@
     .overview-num {
         font-size: 40rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .overview-label {
@@ -258,7 +220,7 @@
     /* 通用卡片 */
     .card {
         margin-top: 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 20rpx;
         padding: 28rpx;
     }
@@ -266,7 +228,7 @@
     .card-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 20rpx;
     }
 
@@ -279,12 +241,12 @@
     .acc-num {
         font-size: 56rpx;
         font-weight: bold;
-        color: #239edd;
+        color: $primary-color;
     }
 
     .acc-label {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-left: 12rpx;
     }
 
@@ -298,7 +260,7 @@
     .acc-fill {
         height: 14rpx;
         border-radius: 7rpx;
-        background-color: #239edd;
+        background-color: $primary-color;
     }
 
     .acc-stats-row {
@@ -329,12 +291,12 @@
 
     .type-name {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .type-count {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .type-track {
@@ -347,13 +309,13 @@
     .type-fill {
         height: 10rpx;
         border-radius: 5rpx;
-        background-color: #239edd;
+        background-color: $primary-color;
     }
 
     .type-acc {
         margin-top: 8rpx;
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .type-empty {
@@ -363,7 +325,7 @@
 
     .type-empty-text {
         font-size: 26rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     /* mock 提示 */

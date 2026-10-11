@@ -1,13 +1,6 @@
 <template>
 	<view class="container" :style="{ height: windowHeight + 'px' }">
-		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-		<view class="header">
-			<view class="header-left" @click="onBack">
-				<text class="back-icon">‹</text>
-			</view>
-			<text class="header-title">对话设置</text>
-			<view class="header-right"></view>
-		</view>
+		<app-nav-bar title="对话设置" @left-click="onBack" divider />
 
 		<scroll-view class="content-scroll" scroll-y="true">
 			<!-- 模型来源 -->
@@ -138,10 +131,13 @@
 </template>
 
 <script setup lang="uts">
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { ref } from 'vue'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onShow } from '@dcloudio/uni-app'
-	import { useStatusBarHeight } from '../../utils/system'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { goBack } from '../../utils/navigation'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import {
 		getAiModelsApi,
 		getAiUserModelsApi,
@@ -152,9 +148,8 @@
 		defaultAiChatSettings,
 	} from '../../api/aiAssistant'
 	import type { AiModel, AiUserModel, AiChatSettings } from '../../types/index'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { useAiPro } from '../../composables/useAiPro'
-
-	const statusBarHeight = useStatusBarHeight()
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 
 	const settings = ref<AiChatSettings>(defaultAiChatSettings())
@@ -404,44 +399,11 @@
 	})
 </script>
 
-<style>
+<style lang="scss">
 	.container {
 		display: flex;
 		flex-direction: column;
 		background-color: #f5f6f8;
-	}
-
-	.status-bar {
-		background-color: #ffffff;
-	}
-
-	.header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 16rpx 24rpx;
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.header-left,
-	.header-right {
-		width: 72rpx;
-		height: 72rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.back-icon {
-		font-size: 48rpx;
-		color: #333333;
-		font-weight: bold;
-	}
-
-	.header-title {
-		font-size: 34rpx;
-		font-weight: bold;
-		color: #222222;
 	}
 
 	.content-scroll {
@@ -456,7 +418,7 @@
 
 	.section-title {
 		font-size: 26rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 		margin-bottom: 16rpx;
 		margin-left: 8rpx;
 	}
@@ -493,7 +455,7 @@
 	}
 
 	.card {
-		background-color: #ffffff;
+		background-color: $card-bg;
 		border-radius: 16rpx;
 		overflow: hidden;
 	}
@@ -514,7 +476,7 @@
 	.source-name,
 	.model-name {
 		font-size: 30rpx;
-		color: #222222;
+		color: $text-color;
 		font-weight: bold;
 		margin-bottom: 6rpx;
 	}
@@ -522,12 +484,12 @@
 	.source-desc,
 	.model-sub {
 		font-size: 24rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 	}
 
 	.divider {
 		height: 1rpx;
-		background-color: #f0f0f0;
+		background-color: $border-color-light;
 		margin-left: 28rpx;
 	}
 
@@ -535,7 +497,7 @@
 		width: 40rpx;
 		height: 40rpx;
 		border-radius: 20rpx;
-		border: 2rpx solid #cccccc;
+		border: 2rpx solid $text-disabled;
 		align-items: center;
 		justify-content: center;
 	}
@@ -561,7 +523,7 @@
 
 	.form-label {
 		font-size: 26rpx;
-		color: #666666;
+		color: $text-color-secondary;
 		margin-bottom: 12rpx;
 	}
 
@@ -571,7 +533,7 @@
 		border-radius: 12rpx;
 		padding: 0 24rpx;
 		font-size: 28rpx;
-		color: #333333;
+		color: $text-color;
 	}
 
 	.saved-block {
@@ -585,7 +547,7 @@
 
 	.del-text {
 		font-size: 24rpx;
-		color: #dd524d;
+		color: $uni-color-error;
 		margin-left: 20rpx;
 		padding: 8rpx;
 	}
@@ -597,7 +559,7 @@
 
 	.empty-text {
 		font-size: 26rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 	}
 
 	.btn-wrap {
@@ -614,7 +576,7 @@
 
 	.save-btn-text {
 		font-size: 32rpx;
-		color: #ffffff;
+		color: $text-color-inverse;
 		font-weight: bold;
 	}
 </style>

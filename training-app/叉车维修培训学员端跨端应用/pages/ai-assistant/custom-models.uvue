@@ -1,15 +1,8 @@
 <template>
 	<view class="container" :style="{ height: windowHeight + 'px' }">
-		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-		<view class="header">
-			<view class="header-left" @click="onBack">
-				<text class="back-icon">‹</text>
-			</view>
-			<text class="header-title">自定义模型</text>
-			<view class="header-right" @click="startCreate">
-				<text class="add-label">＋ 添加</text>
-			</view>
-		</view>
+		<app-nav-bar title="自定义模型" @left-click="onBack" divider>
+    <template #right><view class="nav-right" @click="startCreate"><text class="add-label">＋ 添加</text></view></template>
+</app-nav-bar>
 
 		<scroll-view class="content" scroll-y="true">
 			<!-- 模型列表 -->
@@ -71,15 +64,17 @@
 </template>
 
 <script setup lang="uts">
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { ref } from 'vue'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onShow } from '@dcloudio/uni-app'
-	import { useStatusBarHeight } from '../../utils/system'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { goBack } from '../../utils/navigation'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { getAiUserModelsApi, saveAiUserModelApi, deleteAiUserModelApi } from '../../api/aiAssistant'
 	import type { AiUserModel } from '../../types/index'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
-
-	const statusBarHeight = useStatusBarHeight()
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 
 	const userModels = ref<AiUserModel[]>([])
@@ -217,49 +212,16 @@
 	})
 </script>
 
-<style>
+<style lang="scss">
 	.container {
 		display: flex;
 		flex-direction: column;
-		background-color: #f5f6f8;
-	}
-
-	.status-bar {
-		background-color: #ffffff;
-	}
-
-	.header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 16rpx 24rpx;
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.header-left,
-	.header-right {
-		width: 72rpx;
-		height: 72rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.back-icon {
-		font-size: 48rpx;
-		color: #333333;
-		font-weight: bold;
-	}
-
-	.header-title {
-		font-size: 34rpx;
-		font-weight: bold;
-		color: #222222;
+		background-color: Df5f6f8;
 	}
 
 	.add-label {
 		font-size: 30rpx;
-		color: #2979ff;
+		color: D2979ff;
 		font-weight: 600;
 		padding: 8rpx 12rpx;
 	}
@@ -275,7 +237,7 @@
 	}
 
 	.model-card {
-		background-color: #ffffff;
+		background-color: $card-bg;
 		border-radius: 16rpx;
 		padding: 24rpx;
 		margin-bottom: 16rpx;
@@ -292,18 +254,18 @@
 	.model-name {
 		font-size: 30rpx;
 		font-weight: bold;
-		color: #222222;
+		color: $text-color;
 	}
 
 	.model-meta {
 		font-size: 26rpx;
-		color: #666666;
+		color: $text-color-secondary;
 		margin-top: 6rpx;
 	}
 
 	.model-url {
 		font-size: 22rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 		margin-top: 6rpx;
 	}
 
@@ -314,13 +276,13 @@
 
 	.action-text {
 		font-size: 26rpx;
-		color: #2979ff;
+		color: D2979ff;
 		padding: 12rpx 8rpx;
 		margin-left: 8rpx;
 	}
 
 	.action-text.danger {
-		color: #dd524d;
+		color: Ddd524d;
 	}
 
 	.empty {
@@ -330,14 +292,14 @@
 
 	.empty-text {
 		font-size: 28rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 		margin-bottom: 40rpx;
 	}
 
 	.empty-add-btn {
 		width: 320rpx;
 		height: 88rpx;
-		background-color: #2979ff;
+		background-color: D2979ff;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
@@ -345,14 +307,14 @@
 
 	.empty-add-text {
 		font-size: 30rpx;
-		color: #ffffff;
+		color: $text-color-inverse;
 		font-weight: 600;
 	}
 
 	.bottom-add-btn {
 		height: 88rpx;
-		background-color: #ffffff;
-		border: 2rpx solid #2979ff;
+		background-color: $card-bg;
+		border: 2rpx solid D2979ff;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
@@ -361,12 +323,12 @@
 
 	.bottom-add-text {
 		font-size: 30rpx;
-		color: #2979ff;
+		color: D2979ff;
 		font-weight: 600;
 	}
 
 	.form-card {
-		background-color: #ffffff;
+		background-color: $card-bg;
 		border-radius: 16rpx;
 		padding: 32rpx 24rpx;
 	}
@@ -374,7 +336,7 @@
 	.form-title {
 		font-size: 32rpx;
 		font-weight: bold;
-		color: #222222;
+		color: $text-color;
 		margin-bottom: 24rpx;
 	}
 
@@ -384,17 +346,17 @@
 
 	.form-label {
 		font-size: 26rpx;
-		color: #666666;
+		color: $text-color-secondary;
 		margin-bottom: 12rpx;
 	}
 
 	.form-input {
 		height: 80rpx;
-		background-color: #f5f6f8;
+		background-color: Df5f6f8;
 		border-radius: 12rpx;
 		padding: 0 24rpx;
 		font-size: 28rpx;
-		color: #333333;
+		color: $text-color;
 	}
 
 	.form-actions {
@@ -405,7 +367,7 @@
 	.btn-cancel {
 		flex: 1;
 		height: 88rpx;
-		background-color: #f0f0f0;
+		background-color: $border-color-light;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
@@ -415,7 +377,7 @@
 	.btn-save {
 		flex: 1;
 		height: 88rpx;
-		background-color: #2979ff;
+		background-color: D2979ff;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
@@ -424,10 +386,10 @@
 	.btn-text {
 		font-size: 30rpx;
 		font-weight: bold;
-		color: #ffffff;
+		color: $text-color-inverse;
 	}
 
 	.btn-cancel .btn-text {
-		color: #333333;
+		color: $text-color;
 	}
 </style>
