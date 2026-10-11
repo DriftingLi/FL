@@ -36,10 +36,18 @@ function state(overrides: Partial<GuardState> = {}): GuardState {
     subdomain: 'training',
     ipDirect: false,
     credential: 'present',
-    // 运行时能力集（#1618 段1）：静态角色的用例留空 —— 它们的可达面由生成的能力表回答
+    // 运行时能力集（#1618 段1）：静态角色的用例留空 —— 它们的可达面由生成的能力表回答。
+    // 落定标志的缺省是**生产形状**（#1645）：动态角色的第一次导航时它还是 false，
+    // 要判「装载后能看到什么」的用例显式用 settled(...) 声明这一点。
     capabilities: [],
+    capabilitiesSettled: false,
     ...overrides
   }
+}
+
+/** 已装载的能力集：管理端能力判定的用例都发生在装载**落定之后**（#1645）。 */
+function settled(capabilities: string[]): Pick<GuardState, 'capabilities' | 'capabilitiesSettled'> {
+  return { capabilities, capabilitiesSettled: true }
 }
 
 // ===== workspace 声明 → 子域名派生 =====
@@ -303,7 +311,8 @@ describe('subdomainRoleStep', () => {
     expect(
       resolveGuardDecision(
         input({ meta: { requiresAuth: true, role, workspace: ws }, path: home, fullPath: home }),
-        state({ subdomain: sub, role })
+        // admin 是动态角色：能力集「已落定」是后续步骤的前置（#1645），本用例只看第 4 步的结论
+        state({ subdomain: sub, role, capabilitiesSettled: true })
       )
     ).toEqual({ action: 'allow' })
   })
@@ -358,15 +367,15 @@ describe('roleStep', () => {
   it('admin 闯学员区 → 回**自己能看的**管理页；一个能力都没有 → 无管理权限页（#1638）', () => {
     // 有仪表盘能力位：回仪表盘（与本改动前逐字一致）
     expect(
-      resolveGuardDecision(input(), state({ role: 'admin', capabilities: ['admin.access'] }))
+      resolveGuardDecision(input(), state({ role: 'admin', ...settled(['admin.access']) }))
     ).toEqual({ action: 'redirect', to: { name: 'AdminDashboard' } })
     // 只有审计：回审计日志，而不是它所看不见的仪表盘
     expect(
-      resolveGuardDecision(input(), state({ role: 'admin', capabilities: ['audit.read'] }))
+      resolveGuardDecision(input(), state({ role: 'admin', ...settled(['audit.read']) }))
     ).toEqual({ action: 'redirect', to: { name: 'AuditLogs' } })
     // 能力集为空（新建后没挂角色 / 角色一个能力都没勾）：落「无管理权限」页，而不是空转
     expect(
-      resolveGuardDecision(input(), state({ role: 'admin' }))
+      resolveGuardDecision(input(), state({ role: 'admin', ...settled([]) }))
     ).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
   })
 
@@ -522,6 +531,9 @@ describe('resolveGuardDecision（顺序与优先级）', () => {
 //   - 静态角色（学员/讲师/招聘者）→ 生成的能力表；
 //   - 动态角色（管理端）→ **运行时能力集**（登录后由 GET /admin/me/capabilities 下发）。
 // 后者未加载时一律不放行（fail closed）：静态表对 admin 有意为空，回落等于放行。
+//
+// #1645 起「未加载」不再直接进本步：4b 的 capabilityLoadStep 先把「装载中」与「装载落定」
+// 分开（前者补拉、后者才判），本节的用例因此都显式声明集合**已落定**（settled(...)）。
 describe('capabilityStep（能力校验）', () => {
   const adminPage = (capability: string) => ({
     path: '/admin/forum-manage',
@@ -539,25 +551,65 @@ describe('capabilityStep（能力校验）', () => {
       meta: { requiresAuth: true, workspace: 'training', capability: 'course.learn' },
       matched: [{ requiresAuth: true, workspace: 'training', capability: 'course.learn' }]
     }
-    const d = resolveGuardDecision(page, state({ role: 'admin', subdomain: 'training' }))
+    const d = resolveGuardDecision(page, state({ role: 'admin', subdomain: 'training', ...settled([]) }))
     expect(d).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
   })
 
   it('管理端能力来自运行时集合：命中 → 放行', () => {
     const d = resolveGuardDecision(
       adminPage('forum.moderate'),
-      state({ role: 'admin', subdomain: 'admin', capabilities: ['forum.moderate'] })
+      state({ role: 'admin', subdomain: 'admin', ...settled(['forum.moderate']) })
     )
     expect(d.action).toBe('allow')
   })
 
-  it('管理端能力未命中（含「能力集还没加载」）→ 不放行（fail closed，不回落静态表）', () => {
+  it('管理端能力未命中（装载已落定）→ 不放行当前页，也不回落静态表（fail closed）', () => {
     // 落点按能力集算（#1638）：空集 → 无权限页；只有审计 → 审计日志。两者都不放行当前页。
+    // 注意「装载中」不走这条路：它由 4b 的 load-capabilities 先行拦下（#1645），
+    // 否则一次网络慢就被读成「没有能力」。
     const expected: Record<string, string> = { '': 'AdminNoAccess', 'audit.read': 'AuditLogs' }
     for (const capabilities of [[], ['audit.read']]) {
-      const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin', capabilities }))
+      const d = resolveGuardDecision(adminPage('forum.moderate'), state({ role: 'admin', subdomain: 'admin', ...settled(capabilities) }))
       expect(d).toEqual({ action: 'redirect', to: { name: expected[capabilities.join(',')] } })
     }
+  })
+
+  it('能力集还没落定 → 先补拉（load-capabilities），而不是判「没有能力」（#1645）', () => {
+    // 线上形态：登录后第一次导航就落在 dashboard 上，而能力集要等一次网络往返。
+    const dashboard = {
+      path: '/admin/dashboard',
+      fullPath: '/admin/dashboard',
+      name: 'AdminDashboard',
+      meta: { requiresAuth: true, workspace: 'manage', role: 'admin', capability: 'admin.access' },
+      matched: [{ requiresAuth: true, workspace: 'manage', role: 'admin', capability: 'admin.access' }]
+    }
+    expect(resolveGuardDecision(dashboard, state({ role: 'admin', subdomain: 'admin' }))).toEqual({
+      action: 'load-capabilities'
+    })
+    // 补拉完（ready 或 failed 都算落定）→ 回到常规判定：failed 时集合为空，按空集算落点
+    expect(
+      resolveGuardDecision(dashboard, state({ role: 'admin', subdomain: 'admin', ...settled([]) }))
+    ).toEqual({ action: 'redirect', to: { name: 'AdminNoAccess' } })
+  })
+
+  it('装载前置排在角色回落之前：admin 闯学员区且能力集未落定 → 先补拉，不先按空集回落', () => {
+    const d = resolveGuardDecision(input(), state({ role: 'admin', subdomain: 'training' }))
+    expect(d).toEqual({ action: 'load-capabilities' })
+  })
+
+  it('公开页不等能力集：管理员开 /ai-assistant 时未落定也照常放行', () => {
+    const aiPage = {
+      path: '/ai-assistant',
+      fullPath: '/ai-assistant',
+      name: 'AIAssistant',
+      meta: { requiresAuth: false, workspace: 'training', capability: 'ai_assistant.use' },
+      matched: [{ requiresAuth: false, workspace: 'training', capability: 'ai_assistant.use' }]
+    }
+    expect(resolveGuardDecision(aiPage, state({ role: 'admin' }))).toEqual({ action: 'allow' })
+  })
+
+  it('静态角色不受装载前置影响：未落定也照常判定（可达面来自生成的能力表）', () => {
+    expect(resolveGuardDecision(input(), state({ role: 'hrwai_user' }))).toEqual({ action: 'allow' })
   })
 
   it('落点自身必须可达：任何能力集下算出的落点，其能力位要么没有、要么在该集合里（#1638 的判据）', () => {

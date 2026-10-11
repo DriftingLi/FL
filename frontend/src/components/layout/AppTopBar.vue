@@ -171,8 +171,9 @@ async function onCommand(command: string) {
   align-items: center;
   background: var(--color-bg-page);
   /* 十字细线的**横线**（#1629）：顶栏下沿 1px 分界线；与侧栏右缘的竖线交叉成十字。
-     这是对 ADR-0072「完全无缝」的**改判**：同色保留，但边界用一条细线明示。 */
-  border-bottom: 1px solid var(--color-border-light);
+     这是对 ADR-0072「完全无缝」的**改判**：同色保留，但边界用一条细线明示。
+     线色走 --color-border-seam（#1646）：接缝比通用分隔线清晰一档 */
+  border-bottom: 1px solid var(--color-border-seam);
   z-index: var(--z-fixed);
 }
 
@@ -188,8 +189,8 @@ async function onCommand(command: string) {
   padding: 0 var(--space-4);
   min-width: 0;
   height: 100%;
-  /* 十字细线的**竖线**在顶栏内的那一段：与侧栏右边界连成一条 */
-  border-right: 1px solid var(--color-border-light);
+  /* 十字细线的**竖线**在顶栏内的那一段：与侧栏右边界连成一条（同一条缝、同一个线色） */
+  border-right: 1px solid var(--color-border-seam);
 }
 
 .app-topbar.is-collapsed .topbar-left {
