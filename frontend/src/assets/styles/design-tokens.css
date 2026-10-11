@@ -105,6 +105,17 @@
   --color-border-light: #F1F5F9;
   --color-border-dark: #CBD5E1;
   --color-border-darker: #334155;
+  /*
+   * 外壳接缝（十字细线：顶栏下沿横线 + 侧栏右缘竖线，#1629 / #1646）。
+   *
+   * 单列一档的理由：那条线是**外壳边界**的唯一表达，需要比「卡片内部分隔线」清晰一档；
+   * 复用 --color-border-light（#F1F5F9）时它与 #F8FAFC 的底色几乎同值，线上看上去像没画。
+   * 只动这条缝，不动通用边框族 —— 后者是几十处卡片/表格/EP 填充的公共值。
+   *
+   * 取值按三档候选实测后定（#1646，见 docs/verification/admin-shell/1646/）：
+   * #F1F5F9（改前）不可辨、#E2E8F0 仍偏虚、#CBD5E1 才读得出「十字细线」本身。
+   */
+  --color-border-seam: #CBD5E1;
 
   /* ===== 渐变 ===== */
   --gradient-brand: linear-gradient(135deg, #0D9488 0%, #0EA5E9 100%);
@@ -210,6 +221,8 @@
   --color-border-light: #273449;
   --color-border-dark: #475569;
   --color-border-darker: #64748B;
+  /* 外壳接缝（#1646）：深色下保持 #1629 起的现状值 —— 本票只改浅色那档 */
+  --color-border-seam: #273449;
 
   /* ===== 语义色 -light 浅底 → 深底（-strong 深字同步翻浅）===== */
   --color-success-light: #06382C;
