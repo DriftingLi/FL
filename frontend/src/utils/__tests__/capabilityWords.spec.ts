@@ -44,6 +44,12 @@ describe('能力中文词表', () => {
     }
   })
 
+  it('admin.access 的措辞 = 拆分后的口径（入口与仪表盘，不再含用户管理）', () => {
+    // 锁的是 #1645 订正的那处漂移：#1639 之后用户管理已是独立的 hrwai_user.manage，
+    // 这句再写「用户管理」就会骗超管 —— 他以为勾了入口键就等于给了用户管理。
+    expect(describeCapability('admin.access')).toBe('管理端入口与仪表盘')
+  })
+
   it('未登记的键/域回落为原值（后端加了能力而前端产物未再生成时降级可见，不静默留空）', () => {
     expect(describeCapability('future.thing')).toBe('future.thing')
     expect(describeCapabilityDomain('future')).toBe('future')
