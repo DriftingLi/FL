@@ -143,7 +143,7 @@
         for (const k in byType) {
             const v = byType[k]
             if (v == null) continue
-            const n = parseFloat(${v}$)
+            const n = parseFloat(`${v}`)
             if (isNaN(n) || n <= 0) continue
             rows.push({ label: getTypeName(k), typeKey: k, count: n } as GroupRow)
         }
@@ -324,9 +324,9 @@
         try {
             const data = await redoWrongQuestionApi(item.question_id, userAnswer)
             // 后端返回 { is_correct, correct_answer, explanation }
-            const isCorrect = ${data['is_correct']}$ == 'true' || ${data['is_correct']}$ == '1'
-            const correctAnswer = data['correct_answer'] != null ? ${data['correct_answer']}$ : item.correct_answer
-            const explanation = data['explanation'] != null ? ${data['explanation']}$ : ''
+            const isCorrect = `${data['is_correct']}` == 'true' || `${data['is_correct']}` == '1'
+            const correctAnswer = data['correct_answer'] != null ? `${data['correct_answer']}` : item.correct_answer
+            const explanation = data['explanation'] != null ? `${data['explanation']}` : ''
 
             if (isCorrect) {
                 // 重做正确：自动移出错题本，不保留该数据
