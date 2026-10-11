@@ -48,7 +48,6 @@
 <script setup lang="uts">
     import { onLoad } from '@dcloudio/uni-app'
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
     import { useAuthStore } from '../../stores/auth'
     import { getActiveRole, isRecruiterActive } from '../../utils/authRole'
     import { ACTIVE_ROLE_STUDENT } from '../../constants/app'
