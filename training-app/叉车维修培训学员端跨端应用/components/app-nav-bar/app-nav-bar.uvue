@@ -9,16 +9,14 @@
                 <text v-if="title.length > 0" class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
                 <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
             </view>
-            <view class="nav-bar-side nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
-                <slot name="right"></slot>
-            </view>
-            <!-- 多图标右槽（#1602 追加）：dashboard 等页的 🔍🔔🛒 一排；宽度同样按胶囊让位。
-                 每个图标独立可点，rightClick 携带索引（-1 = 单图标形态，兼容旧消费方）。 -->
-            <view v-else-if="rightIcons.length > 0" class="nav-bar-right" :style="rightSlotStyle">
+            <view v-if="rightIcons.length > 0" class="nav-bar-right" :style="rightSlotStyle">
                 <view v-for="(icon, idx) in rightIcons" :key="idx" class="nav-bar-right-item"
                     @click="onRightItemClick(idx)">
                     <text class="nav-bar-icon" :class="titleColorClass">{{ icon }}</text>
                 </view>
+            </view>
+            <view v-else class="nav-bar-side nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
+                <slot name="right"></slot>
             </view>
         </view>
     </view>
