@@ -1,14 +1,6 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <view class="nav-bar">
-            <view class="nav-side" @click="onBack">
-                <text class="nav-back">‹</text>
-            </view>
-            <text class="nav-title">{{ navTitle }}</text>
-            <view class="nav-side"></view>
-        </view>
+        <app-nav-bar :title="navTitle" @left-click="onBack" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view v-if="unreadCount > 0" class="unread-banner">
@@ -59,14 +51,13 @@
      */
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { getRecruitJobApplicationsApi, rejectRecruitApplicationApi } from '../../api/recruit'
     import { formatDateStr } from '../../utils/format'
     import { describeRecruitApplicationStatus } from '../../utils/recruitDisplay'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import type { RecruitApplication } from '../../api/recruit'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const jobId = ref<number>(0)
@@ -169,39 +160,7 @@
 
 <style lang="scss">
     .page {
-        background-color: #F5F6FA;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .nav-bar {
-        flex-direction: row;
-        align-items: center;
-        height: 88rpx;
-        padding: 0 24rpx;
-        background-color: #ffffff;
-    }
-
-    .nav-side {
-        width: 120rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .nav-back {
-        font-size: 44rpx;
-        color: #333333;
-        padding: 8rpx 16rpx 8rpx 0;
-    }
-
-    .nav-title {
-        flex: 1;
-        font-size: 34rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
+        background-color: $bg-color;
     }
 
     .content-scroll {
@@ -211,13 +170,13 @@
     .unread-banner {
         margin: 16rpx 24rpx 0 24rpx;
         padding: 16rpx 24rpx;
-        background-color: #FFF7E6;
+        background-color: $warning-tint;
         border-radius: 12rpx;
     }
 
     .unread-text {
         font-size: 26rpx;
-        color: #FF9800;
+        color: $warning-color;
     }
 
     .application-row {
@@ -225,7 +184,7 @@
         align-items: center;
         margin: 16rpx 24rpx 0 24rpx;
         padding: 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 12rpx;
     }
 
@@ -241,13 +200,13 @@
     .row-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .row-meta {
         margin-top: 8rpx;
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .tag {
@@ -258,34 +217,34 @@
     }
 
     .tag-applied {
-        color: #239EDD;
+        color: $primary-color;
         background-color: #EEF3FD;
     }
 
     .tag-rejected {
-        color: #E5484D;
-        background-color: #FFF0F0;
+        color: $danger-color;
+        background-color: $danger-tint;
     }
 
     .tag-withdrawn {
-        color: #999999;
+        color: $text-color-placeholder;
         background-color: #F5F5F5;
     }
 
     .tag-unknown {
-        color: #999999;
+        color: $text-color-placeholder;
         background-color: #F5F5F5;
     }
 
     .reject-btn {
         padding: 16rpx 24rpx;
         border-radius: 32rpx;
-        background-color: #FFF0F0;
+        background-color: $danger-tint;
     }
 
     .reject-btn-text {
         font-size: 26rpx;
-        color: #E5484D;
+        color: $danger-color;
     }
 
     .empty-tip {
@@ -295,7 +254,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .loading-tip {
@@ -305,6 +264,6 @@
 
     .loading-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

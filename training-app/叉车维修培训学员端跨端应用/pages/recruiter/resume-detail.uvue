@@ -1,14 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">简历详情</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="简历详情" @left-click="onBack" divider />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view v-if="loading" class="loading-block">
@@ -147,7 +139,6 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import {
         getRecruitResumeDetailApi,
         getRecruitResumeContactApi,
@@ -160,10 +151,10 @@
     import { isRecruiterActive } from '../../utils/authRole'
     import { companyDisabledNotice } from '../../utils/recruitDisplay'
     import { errMsg, toStr } from '../../api/helpers'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import type { RecruitResumeCard, RecruitCertification, RecruitContactPlain } from '../../api/recruit'
     import type { ResumeExperience } from '../../types/index'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const userId = ref<number>(0)
@@ -482,44 +473,8 @@
 <style lang="scss">
     .container {
         flex: 1;
-        background-color: #f8f8f8;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        height: 88rpx;
-        padding: 0 24rpx;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .header-left {
-        width: 96rpx;
-        height: 64rpx;
-        align-items: flex-start;
-        justify-content: center;
-    }
-
-    .back-icon {
-        font-size: 44rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        font-size: 34rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .header-right {
-        width: 96rpx;
     }
 
     .content-scroll {
@@ -532,30 +487,30 @@
     }
 
     .card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
-        border: 1rpx solid #eeeeee;
+        border: 1rpx solid $border-color-light;
         flex-direction: column;
     }
 
     .name {
         font-size: 40rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .position {
         font-size: 28rpx;
-        color: #239EDD;
+        color: $primary-color;
         margin-top: 8rpx;
     }
 
     .section-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 16rpx;
     }
 
@@ -577,24 +532,24 @@
 
     .meta-item {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .updated-text {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .paragraph {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 1.6;
     }
 
     /* 可用性那一格：与 `contacts.uvue` 的 `.row-notice`、`resumes.uvue` 的 `.company-notice` 同色 */
     .contact-notice {
         font-size: 26rpx;
-        color: #E5484D;
+        color: $danger-color;
         line-height: 1.6;
     }
 
@@ -605,17 +560,17 @@
     .exp-company {
         font-size: 28rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .exp-period {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .exp-position {
         font-size: 26rpx;
-        color: #239EDD;
+        color: $primary-color;
     }
 
     .cert-item {
@@ -629,19 +584,19 @@
     .cert-title {
         font-size: 28rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .cert-line {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .cert-image {
         width: 320rpx;
         height: 220rpx;
         border-radius: 8rpx;
-        background-color: #f5f5f5;
+        background-color: $border-color-light;
     }
 
     .contact-row {
@@ -651,13 +606,13 @@
 
     .contact-label {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         width: 140rpx;
     }
 
     .contact-value {
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
     }
 
@@ -669,13 +624,13 @@
         width: 160rpx;
         height: 160rpx;
         border-radius: 8rpx;
-        background-color: #f5f5f5;
+        background-color: $border-color-light;
     }
 
     .btn-primary {
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #239EDD;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
     }
@@ -683,7 +638,7 @@
     .btn-primary-text {
         font-size: 30rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .btn-secondary {
@@ -697,7 +652,7 @@
 
     .btn-secondary-text {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .loading-block {
@@ -707,7 +662,7 @@
 
     .loading-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .empty-tip {
@@ -723,7 +678,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .ml-16 { margin-left: 16rpx; }

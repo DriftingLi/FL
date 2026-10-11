@@ -51,6 +51,7 @@
     import { useAuthStore } from '../../stores/auth'
     import { getActiveRole, isRecruiterActive } from '../../utils/authRole'
     import { ACTIVE_ROLE_STUDENT } from '../../constants/app'
+    import { useSafeArea } from '../../utils/system.uts'
 
     const auth = useAuthStore()
 
@@ -59,7 +60,9 @@
     const passwordVisible = ref<boolean>(false)
     const loading = ref<boolean>(false)
 
-    const statusBarHeight = ref<number>(20)
+    // N05 页面自垫：状态栏占位由 useSafeArea() 供数（#1602 扶正后的唯一真源），页面自己画头。
+    const safeArea = useSafeArea()
+    const statusBarHeight = computed(() : number => safeArea.value.statusBarHeight)
 
     /**
      * 离开招聘者登录页 —— **按「页面栈里有没有上一页」分流**，而不是所有出口都清槽。
@@ -100,8 +103,6 @@
     }
 
     onLoad((options : OnLoadOptions) => {
-        const sysInfo = uni.getSystemInfoSync()
-        statusBarHeight.value = sysInfo.statusBarHeight
         // 身份互斥（ADR-0021 ②）：不允许「已登录学员」与招聘者并存于同一认证槽。
         // 已持学员会话时**先问人**再清槽 —— 清槽是破坏性动作，不能由一次误点触发。
         auth.restoreFromStorage()
@@ -197,11 +198,11 @@
 <style lang="scss">
     .recruiter-login-page {
         flex: 1;
-        background-color: #ffffff;
+        background-color: $bg-header;
     }
 
     .status-bar {
-        background-color: #ffffff;
+        background-color: $bg-header;
     }
 
     .nav-bar {
@@ -217,7 +218,7 @@
 
     .nav-back-text {
         font-size: 30rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .body {
@@ -232,7 +233,7 @@
     .page-title {
         font-size: 44rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         text-align: center;
     }
 
@@ -247,7 +248,7 @@
     .input-wrap {
         flex-direction: row;
         align-items: center;
-        background-color: #F5F6FA;
+        background-color: $bg-color;
         border-radius: 16rpx;
         height: 96rpx;
         padding: 0 28rpx;
@@ -260,12 +261,12 @@
         background-color: transparent;
         padding: 0;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .pwd-toggle {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         padding-left: 16rpx;
     }
 
@@ -275,8 +276,8 @@
         height: 96rpx;
         line-height: 96rpx;
         border-radius: 48rpx;
-        background-color: #2979ff;
-        color: #ffffff;
+        background-color: $primary-color;
+        color: $text-color-inverse;
         font-size: 34rpx;
         font-weight: bold;
         text-align: center;
@@ -295,10 +296,10 @@
 
     .student-exit-link {
         font-size: 26rpx;
-        color: #2979ff;
+        color: $primary-color;
         border-bottom-width: 1rpx;
         border-bottom-style: solid;
-        border-bottom-color: #2979ff;
+        border-bottom-color: $primary-color;
         padding-bottom: 2rpx;
     }
 </style>
