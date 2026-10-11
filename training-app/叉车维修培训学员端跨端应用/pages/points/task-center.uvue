@@ -447,15 +447,15 @@
     }
 
     .icon-daily {
-        background-color: `$warning-tint;
+        background-color: $warning-tint;
     }
 
     .icon-newbie {
-        background-color: `$success-tint;
+        background-color: $success-tint;
     }
 
     .icon-other {
-        background-color: `$border-color-light;
+        background-color: $border-color-light;
     }
 
     .task-icon {

@@ -216,12 +216,12 @@
 	.container {
 		display: flex;
 		flex-direction: column;
-		background-color: Df5f6f8;
+		background-color: #F5F6F8;
 	}
 
 	.add-label {
 		font-size: 30rpx;
-		color: D2979ff;
+		color: $primary-color;
 		font-weight: 600;
 		padding: 8rpx 12rpx;
 	}
@@ -276,13 +276,13 @@
 
 	.action-text {
 		font-size: 26rpx;
-		color: D2979ff;
+		color: $primary-color;
 		padding: 12rpx 8rpx;
 		margin-left: 8rpx;
 	}
 
 	.action-text.danger {
-		color: Ddd524d;
+		color: $uni-color-error;
 	}
 
 	.empty {
@@ -299,7 +299,7 @@
 	.empty-add-btn {
 		width: 320rpx;
 		height: 88rpx;
-		background-color: D2979ff;
+		background-color: $primary-color;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
@@ -314,7 +314,7 @@
 	.bottom-add-btn {
 		height: 88rpx;
 		background-color: $card-bg;
-		border: 2rpx solid D2979ff;
+		border: 2rpx solid $primary-color;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
@@ -323,7 +323,7 @@
 
 	.bottom-add-text {
 		font-size: 30rpx;
-		color: D2979ff;
+		color: $primary-color;
 		font-weight: 600;
 	}
 
@@ -352,7 +352,7 @@
 
 	.form-input {
 		height: 80rpx;
-		background-color: Df5f6f8;
+		background-color: #F5F6F8;
 		border-radius: 12rpx;
 		padding: 0 24rpx;
 		font-size: 28rpx;
@@ -377,7 +377,7 @@
 	.btn-save {
 		flex: 1;
 		height: 88rpx;
-		background-color: D2979ff;
+		background-color: $primary-color;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;
