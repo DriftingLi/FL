@@ -87,7 +87,8 @@ describe('角色权限页', () => {
     const groups = w.findAll('.role-card')[0].findAll('.cap-group-title').map(g => g.text())
     expect(groups).toEqual(['总览', '系统'])
     expect(groups.join(' ')).not.toContain('admin.access')
-    expect(w.text()).toContain('管理端入口与用户管理')
+    // #1645 订正：#1639 之后用户管理已独立成 hrwai_user.manage，本键只剩入口与仪表盘
+    expect(w.text()).toContain('管理端入口与仪表盘')
     expect(w.text()).toContain('审计日志')
     expect(w.text()).not.toContain('admin_role.manage')
   })
