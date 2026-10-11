@@ -428,14 +428,14 @@
         margin-bottom: 20rpx;
         flex-direction: row;
         align-items: center;
-        border: 1rpx solid Ff0f0f0;
+        border: 1rpx solid $border-color-light;
     }
 
     .group-icon {
         width: 48rpx;
         height: 48rpx;
         border-radius: 24rpx;
-        border: 3rpx solid F2979ff;
+        border: 3rpx solid $primary-color;
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
@@ -444,7 +444,7 @@
 
     .group-icon-text {
         font-size: 30rpx;
-        color: F2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -473,12 +473,12 @@
         padding: 16rpx 24rpx;
         background-color: $card-bg;
         border-radius: 12rpx;
-        border: 1rpx solid Feeeeee;
+        border: 1rpx solid #EEEEEE;
     }
 
     .group-back-icon {
         font-size: 32rpx;
-        color: F2979ff;
+        color: $primary-color;
         margin-right: 8rpx;
     }
 
@@ -490,7 +490,7 @@
 
     .group-back-hint {
         font-size: 24rpx;
-        color: F2979ff;
+        color: $primary-color;
     }
 
     /* 错题列表 */
