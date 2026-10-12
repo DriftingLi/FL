@@ -10,11 +10,14 @@
 
 **适用面（为什么它落在移动端层）**：本文件服务**移动端（uni-app-x 学员端）那条线**的派活与执行。「阶段闸门 / 进度契约 / 收尾口径」是**这条线的工作方式**，**不是全仓约定** —— 实测全仓带 `## 进度：N%` 的票绝大多数是移动端票。故它随移动端 `AGENTS.md` 导航；**前后端会话不读它、也不受它约束**。（根层 `docs/agents/` 只放跨栈的 tracker / 文档纪律。）
 
-本文件是那份长清单的**唯一事实源** —— 派活不再手写检查表。手写会漂移：模板曾长期以 `/wayfinder` 开头，而本仓**没有 map**，于是每个新会话都要重新发现一次「这里没有 map」（上一份 handoff 不得不专门写一条「**不要去找 map**」来兜，这就是那笔税）。
+本文件是那份长清单的**唯一事实源** —— 派活不再手写检查表。手写会漂移：模板曾长期以 `/wayfinder` 开头。
+
+> **2026-10-10 更新（当天两次）**：上一句的下半段（「而本仓**没有 map**，于是每个新会话都要重新发现一次」）**作废** —— 它是自我实现的判据（同文末）。同日按维护者裁定试建了首张 map `#1585`，**当天又关闭**（流程选错：能一手握住的任务不该建 map，且让 map 承载执行会让它的 `Destination` 自指下游产物）。`wayfinder:*` 五个 label 仍在，sub-issues 与原生 `blocked_by` 边均实测可用，但**本仓实际票不挂它们**。**§0 首条与文末节同步改写。**
 
 ## 0. 形态判定（先做，30 秒）
 
-- 本票是 **issue**，不是 wayfinder 的 map/ticket。**本仓不用 wayfinder —— 这是「准入条件未命中」的判断，不是一条禁令**（三条准入门槛见文末）⇒ **不要去找 map、不要建 map、不要建 ticket 形态的东西**。
+- 本票是 **issue**。它**不带** `wayfinder:*` label，本仓的票一律是 **`/to-tickets` 的执行切片**，按本文件走。
+- **若票顶出现 `Part of #<map>` 或 `wayfinder:*` label**：那是**外来形状**，不是本仓的规范形态 —— 按文末节「什么时候用 wayfinder」判断它是误用还是真遇迷雾；`wayfinder:grilling` / `wayfinder:prototype` 是**对话票**，须与提出它的人一起解，agent 不代答他那一侧。
 - 票面若带 `needs-triage`：那是**前置步骤**，先诊断（见 §3），不许跳过直接实施。
 - **波级 issue（无票号的 `refactor epic:`）有两种形态，别按感觉挑**（2026-09-21 立，先例：`#1201` 第十三波 = spec 形；`#1221` 模块声明与契约 harness = 索引形）：
   - **spec 形** —— 波级 issue **自己就是 spec**：`Problem Statement` / `Solution` / `User Stories` / `Implementation Decisions` / `Testing Decisions` / `Out of Scope`；落地后**不再维护**，学到的东西回写在 ADR 的「实施回记」段。
@@ -53,7 +56,7 @@
 - [ ] 验收通过 ⇒ `## 进度：100%` + **close**。
 - [ ] 未完成 ⇒ 按进度契约**如实**更新（含下一步）。**95% 必须写明待确认什么；未确认不得 close。**
 - [ ] 若本票被判定**重复** ⇒ 按 `docs/agents/triage-labels.md` 的「重复票的处置」（`close --reason "not planned"` + 一条指向原票的评论）。
-- [ ] **不要**再去找「所属 map 的 Decisions so far 追加一行」—— 本仓没有 map（§0）。
+- [ ] 若本票带 `Part of #<map>` ⇒ 收尾时**向 map 的 `## Decisions so far` 追加一行**（标题带链接 + 一句 gist），再 close。**别在 map 正文里复述细节** —— 细节住它的票或 ADR。**没带 `Part of` ⇒ 不必找 map。**
 
 ## 5. 正文格式（写 / 改票面时必须遵守）
 
@@ -67,12 +70,36 @@
 
 约定 / 决策进 `docs/adr/`、`docs/agents/`（**入库、只增不删**，过时用「取代」表达）；临时产物（handoff、探针、PR 正文草稿）进 `.scratch/`（不入库）。详见 `docs/agents/domain.md`。
 
-## 为什么不用 wayfinder：准入条件未命中（判据，防 reflex 回归）
+## 什么时候用 wayfinder：判据是「能不能一手握住」，不是「任务大不大」（2026-10-10 两次改写）
 
-三条**同时**成立才值得启用：
+**第一次改写**：本节原为「为什么不用 wayfinder：准入条件未命中」，据维护者裁定启用 wayfinder 而改写。**第二次改写**：当天的实践证伪了那次改写里的一处关键论断，见下。
 
-1. 要动的是**全新的域**，且连「第一个该决定什么」都说不清；
-2. 你发现**连续几个 session 都在重新定义目的地**，而不是在推进它；
-3. 目的地的形状决定了后面十几张票的**顺序**，而这个顺序现在只能靠试。
+### 准入判据
 
-本仓的实际形态是**决策先于工作**：`grill-with-docs` → **ADR**（编号、可引用、用「取代」表达演化）→ 切票（带原生 blocking 边）。**ADR 就是本仓的 map**；再开一层 map 是重复的第三份事实源，而它的产物「决策票 DAG」还会**加重**票量膨胀（本仓重复票的成因是「决定里不做的那半被即时开成票」+「没查承载面」，两者都不是"缺一张地图"）。
+`/wayfinder` 在 `/ask-matt` 的路由表里是 **on-ramp**，不在 main flow 上：
+
+> Where **`/grill-with-docs`** sharpens an idea you can hold in one session, wayfinder is for the idea you can't.
+
+**真正的判据是「能不能一手握住」—— 连第一个该决定什么都说不出，才需要 map。** 任务大本身不构成理由：60 页 UI 改造照样能一手握住（先 grep 出 58 页 `navigationStyle: custom`、57 处 `.status-bar`、`getMenuButtonBoundingClientRect` 全仓零命中这些**事实**，再 grill 十八问，一个会话收敛）。判据一旦退化成规模感，map 就变成「任务大所以要」的仪式。
+
+### 本仓为什么用不上 map（map 与 ADR 是分工，分工线在这里）
+
+| | wayfinder map | ADR | 本仓实况 |
+|---|---|---|---|
+| 装什么 | **索引 + 迷雾 + 范围边界**：Destination / Notes / Decisions so far（每条一行 gist + 链接）/ Not yet specified / Out of scope | **决策的完整论证与约束**：六段结构、证据、验收判据 | **ADR 已覆盖迷雾**——「③ 明确不做的事」就是本仓版本的 Out of scope，「② 十八问」覆盖 Decisions so far |
+| 谁读 | 每会话开场一次（低分辨率） | 冷启动会话**必读** | 冷启动读「票 + 对应 ADR + `refactor-decisions.md`」，已够 |
+| 在哪 | GitHub（label `wayfinder:map`） | 仓内 `docs/adr/` | 仓内那份是冷启动必读面，GitHub 那份是第二份低分辨率视图 |
+
+**「ADR 就是本仓的 map」那句是准确的** —— 本仓的迷雾不长在票上，长在 ADR 的 ③ 里。**再开一层 map 是第三份事实源。**
+
+### 反面实证（#1585，2026-10-10，已关闭）
+
+当天的实践给了一次反面证据，值一条：
+
+**把「承载执行」覆盖进 map，会让地图的 Destination 自指下游产物。** 当时的覆盖条款让子票标 `wayfinder:task`、交付物即收口物；但 wayfinder 的地图是**决策地图**，`ask-matt:46` 明写它「hands off, it doesn't build」——清完雾要 merge 到 `/to-spec` 收拢成计划。**一旦让票自己去交付，地图就失去了它的下游出口**：`Not yet specified` 里那三片迷雾还没等 `/to-spec` 收拢就消失了，`Destination` 只好写「一份能交接的 spec」——**那是 `/to-spec` 的产物，是地图自己下游的东西**。一张终点指向自己下游的地图没有可走之路。
+
+**所以那处覆盖是错的。** 结论三条：
+
+1. **本仓的票属 main flow 的 `/to-tickets`，不属 wayfinder。** 主流程是 `grill-with-docs` → ADR → `/to-spec` → `/to-tickets` → `/implement`；ADR-0035 之后**本该有一步 `/to-spec`**，这一步不能省（ADR 说「怎么做对」，spec 说「做成什么样」，五张票全是前者）。
+2. **票据纪律不因建图而放宽**：原生 `blocked_by` 边是依赖的唯一表达，不靠正文里的「Blocked by」行；`/to-tickets:67` 的「Do NOT close or modify any parent issue」对 map 同样适用。
+3. **五个 `wayfinder:*` label 已建**（第一次改写时创建），但**本仓的实际票不挂它们**；若将来真出现「连第一个决定是什么都说不清」的情况，用法照 `/wayfinder` SKILL.md 原样，**不要带本节的那处覆盖**。

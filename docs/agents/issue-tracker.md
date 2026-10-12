@@ -38,9 +38,9 @@ GitHub 在 issues 和 PRs 之间共享一个 number space，因此裸 `#42` 可�
 
 ## Wayfinding operations
 
-> ⚠️ **本仓不用 wayfinder —— 这是「准入条件未命中」的判断，不是一条禁令**：三条准入门槛**同时**成立才值得启用，判据的**唯一事实源**是 `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md` §0 与文末（本仓三条都不成立；本块不复述判据，避免第二份事实源）。配套事实：`wayfinder:map` label **不存在**、map 数为 **0**（2026-09-16 实测）。
-> 本节**只是 tracker 能力说明**，不是待办 —— 接到 `/wayfinder` 式的票据指令时，**不要据此去找 map、不要建 map**
-> （`/wayfinder` skill 会把你引到本节，这就是那个空转的来源）。形态判定与判据（含「什么时候才真的需要 wayfinder」三条）见 `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md` §0 与文末 —— **该文件属移动端层**，做其它栈的会话只需记住本块的一句：**本仓没有 map，不要去找**。
+> ⛔ **本仓的 map 实验已于 2026-10-10 短暂收口后重新启用**：五个 `wayfinder:*` label 保留可用，sub-issues 与原生 `blocked_by` 边均实测可用；首张 map = #1585 当天开、当天关（not planned），五张执行票 #1586-#1590 改为直接挂 ADR-0035；但**第二张 map = #1591 已开且在用**（小程序 60 页 UI 改造，3 张 grilling + 4 张 research 子票），「唯一一张 map」的说法作废。
+> **为什么关**：① 原判断「本仓不用 wayfinder」的依据「准入三判据未命中」是**自我实现的**（最硬那条是「label 不存在、map 数为 0」，没有 map 就永远判不通过）——这部分旧判断确实作废；② 但当天实践**证伪了反向的过度启用**：60 页 UI 改造能一手握住（先 grep 出事实再 grill，十八问一个会话收敛），这正是 `/grill-with-docs` 的形状，而 `/wayfinder` 的准入判据是「**能不能一手握住**」，不是「任务大不大」；③ 更关键的是**「承载执行」这处覆盖是错的**：它让地图的 `Destination` 自指 `/to-spec` 的产物（spec 是地图自己下游的东西），地图因此失去下游出口——详见 #1585 的关闭评论。
+> **准入判据的唯一事实源**是 `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md` 文末节「什么时候用 wayfinder」（**该文件属移动端层**）。本仓的执行票属 main flow 的 `/to-tickets`（`grill-with-docs` → ADR → `/to-spec` → `/to-tickets` → `/implement`），**不挂 `wayfinder:*` label**；若将来真出现「连第一个决定是什么都说不清」的情况，照 `/wayfinder` SKILL.md 原样用，**不要带本仓那处覆盖**。
 
 供 `/wayfinder` 使用。**map** 是单个 issue，以 **child** issues 作为 tickets。
 
