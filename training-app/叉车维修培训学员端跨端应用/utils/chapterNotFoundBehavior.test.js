@@ -29,6 +29,11 @@ const os = require('os');
 const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
 
+// 套件级超时预算（#1654 暴露）：本套件每次 buildApp 都真实装配 6 个 .uts 模块，
+// 串行门（-i）无争抢时单测 <5s 侥幸过 jest 默认值；并行 worker 争抢下 A1 超 5s 判死。
+// 预算先例：utils/evidenceGenContract.test.js 等 9 个套件同款 jest.setTimeout(120000+)。
+jest.setTimeout(120000);
+
 const ROOT = path.join(__dirname, '..');
 const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
 const COURSE_UTS = path.join(ROOT, 'api', 'course.uts');

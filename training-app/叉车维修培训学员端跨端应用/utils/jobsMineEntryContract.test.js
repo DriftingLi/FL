@@ -12,6 +12,9 @@
  * 「去填写简历」引导卡升级为完善度卡——由现有 ResumeData 八项字段计算（GET /resume
  * 零后端改动）；人口学 9 项不做（后端无字段）。Lv（学习时长推导）与收藏统计（已接
  * 真实 API、target_type 就绪前恒 0）是 resume 页既有功能，保留。
+ *
+ * #1605 批2：job-list 手写页头换成 app-nav-bar 页头件（N02 白底套），
+ * 原 header-title / header-right 三件随之删除；本契约同步改断言件引用形态。
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read） */
 const h = require('./contractHarness');
@@ -23,13 +26,15 @@ describe('就业在线导航链契约（#705 招聘→我的，单页合并版�
   const mine = read('pages/resume/resume.uvue');
 
   it('job-list：公告/职位双 tab；头像在 tab 行最右端直跳 resume（单页）；导航栏右侧留给胶囊', () => {
-    expect(list).toContain('<text class="header-title">招聘</text>');
+    // #1605 批2：手写页头（header-title 三件）换成 app-nav-bar 页头件，标题由 title prop 承载
+    expect(list).toContain('<app-nav-bar title="招聘"');
     expect(list).toMatch(/@click="onTabChange\('notice'\)"/);
     expect(list).toMatch(/@click="onTabChange\('job'\)"/);
     expect(list).toMatch(/class="tab-avatar-btn" @click="onMine"/);
     expect(list).toContain("uni.navigateTo({ url: '/pages/resume/resume' })");
     // 导航栏右侧不得挂可点元素（小程序胶囊遮挡区）
-    expect(list).not.toMatch(/class="header-right"[^>]*@click/);
+    // #1605 批2：手写 header-right 已随页头件收编，右槽归 app-nav-bar 的 <slot name="right">（空则不渲染）
+    expect(list).not.toMatch(/class="header-right"/);
     // 公告 tab 空态占位，不放假数据
     expect(list).toContain('暂无公告');
     expect(list).not.toContain('mockJobs');

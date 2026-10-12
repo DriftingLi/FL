@@ -1,16 +1,7 @@
 <template>
     <view class="page">
-        <!-- 状态栏占位 -->
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部导航栏 -->
-        <view class="nav-bar">
-            <view class="nav-back" @click="toback">
-                <text class="nav-back-icon">‹</text>
-            </view>
-            <text class="nav-title">选择学习阶段</text>
-            <view class="nav-placeholder"></view>
-        </view>
+        <!-- 页头（N02 白底套，#1605 批2）：唯一页头件 app-nav-bar -->
+        <app-nav-bar title="选择学习阶段" @left-click="toback" />
 
         <!-- 省份选择 -->
         <view class="province-bar" @click="onProvinceTap">
@@ -47,14 +38,12 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { useAuthStore } from '../../stores/auth'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getAllCredentialsApi, switchCredentialApi, writeCurrentCredentialCache } from '../../api/credential'
     import type { CredentialGroup, CredentialItem } from '../../types/index'
     import CertSelector from '../../components/cert-selector/cert-selector.uvue'
-
-    const statusBarHeight = useStatusBarHeight()
 
     // 未登录防护
     const auth = useAuthStore()
@@ -137,48 +126,11 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .page {
         flex: 1;
         flex-direction: column;
         background-color: #F5F7FA;
-    }
-
-    .status-bar {
-        background-color: #FFFFFF;
-    }
-
-    /* ---- 顶部导航 ---- */
-    .nav-bar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        height: 88rpx;
-        padding: 0 24rpx;
-        background-color: #FFFFFF;
-    }
-
-    .nav-back {
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .nav-back-icon {
-        font-size: 52rpx;
-        color: #333333;
-    }
-
-    .nav-title {
-        font-size: 34rpx;
-        font-weight: 600;
-        color: #222222;
-    }
-
-    .nav-placeholder {
-        width: 64rpx;
-        height: 64rpx;
     }
 
     /* ---- 省份选择 ---- */
@@ -193,8 +145,8 @@
     }
 
     .province-pin {
-        font-size: 28rpx;
-        margin-right: 8rpx;
+        font-size: $font-size-md;
+        margin-right: $spacing-xs;
     }
 
     .province-label {
@@ -204,7 +156,7 @@
 
     .province-value {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: 500;
     }
 
@@ -215,29 +167,29 @@
 
     /* ---- 列表失败空态 ---- */
     .error-section {
-        margin: 16rpx 32rpx 0;
-        padding: 48rpx 28rpx;
-        background-color: #FFFFFF;
+        margin: $spacing-sm 32rpx 0;
+        padding: $spacing-lg 28rpx;
+        background-color: $bg-header;
         border-radius: 20rpx;
         align-items: center;
     }
 
     .error-text {
-        font-size: 28rpx;
+        font-size: $font-size-md;
         color: #888888;
-        margin-bottom: 24rpx;
+        margin-bottom: $spacing-md;
     }
 
     .btn-retry {
-        padding: 14rpx 48rpx;
+        padding: 14rpx $spacing-lg;
         border-radius: 40rpx;
         border-width: 2rpx;
-        border-color: #2979FF;
+        border-color: $primary-color;
     }
 
     .btn-retry-text {
-        font-size: 28rpx;
-        color: #2979FF;
+        font-size: $font-size-md;
+        color: $primary-color;
         font-weight: 600;
     }
 
@@ -245,12 +197,12 @@
     .bottom-bar {
         padding: 20rpx 32rpx;
         padding-bottom: 20rpx;
-        background-color: #FFFFFF;
+        background-color: $bg-header;
     }
 
     .btn-confirm {
         height: 96rpx;
-        background: linear-gradient(to bottom right, #2979FF, #1565C0);
+        background: linear-gradient(to bottom right, $primary-color, #1565C0);
         background-color: #1565C0;
         border-radius: 48rpx;
         align-items: center;
@@ -262,8 +214,8 @@
     }
 
     .btn-confirm-text {
-        font-size: 32rpx;
+        font-size: $font-size-lg;
         font-weight: 600;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 </style>
