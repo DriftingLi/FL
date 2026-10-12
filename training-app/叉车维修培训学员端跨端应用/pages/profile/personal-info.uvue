@@ -1,13 +1,6 @@
 <template>
   <view class="container" :style="{ height: windowHeight + 'px' }">
-    <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-    <view class="header">
-      <view class="header-left" @click="onBack">
-        <text class="back-icon">‹</text>
-      </view>
-      <text class="header-title">个人信息</text>
-      <view class="header-right"></view>
-    </view>
+    <app-nav-bar title="个人信息" @left-click="onBack" divider />
     <scroll-view class="content-scroll" scroll-y="true">
       <!-- 账号信息 -->
       <view class="section">
@@ -136,13 +129,17 @@
 </template>
 
 <script setup lang="uts">
+  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { ref, computed } from 'vue'
+  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { onShow, onUnload } from '@dcloudio/uni-app'
-  import { useStatusBarHeight } from '../../utils/system'
+  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { goBack } from '../../utils/navigation'
+  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { useAuthStore } from '../../stores/auth'
   import type { LoginResult } from '../../types/index'
   import InfoDialog from './components/info-dialog.uvue'
+  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import {
     displayNameOf, avatarUrlOf, hasPendingOf, accountTextOf, phoneTextOf,
     emailTextOf, companyTextOf, passwordTitleOf, passwordHintOf, Countdown,
@@ -153,7 +150,6 @@
   } from './composables/personal-info-flows.uts'
 
   const authStore = useAuthStore()
-  const statusBarHeight = useStatusBarHeight()
   const windowHeight = uni.getSystemInfoSync().windowHeight
   const uploadingAvatar = ref<boolean>(false)
 
@@ -381,44 +377,11 @@
   })
 </script>
 
-<style>
+<style lang="scss">
   .container {
     display: flex;
-    background-color: #f5f5f5;
+    background-color: $bg-color;
     flex-direction: column;
-  }
-
-  .status-bar {
-    background-color: #ffffff;
-  }
-
-  .header {
-    background-color: #ffffff;
-    padding: 16rpx 32rpx;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1rpx solid #f0f0f0;
-  }
-
-  .header-left {
-    width: 60rpx;
-    align-items: center;
-  }
-
-  .back-icon {
-    font-size: 48rpx;
-    color: #333333;
-  }
-
-  .header-title {
-    font-size: 36rpx;
-    font-weight: bold;
-    color: #333333;
-  }
-
-  .header-right {
-    width: 60rpx;
   }
 
   .content-scroll {
@@ -432,7 +395,7 @@
   }
 
   .card {
-    background-color: #ffffff;
+    background-color: $card-bg;
     border-radius: 16rpx;
     flex-direction: column;
   }
@@ -441,7 +404,7 @@
     flex-direction: row;
     align-items: center;
     padding: 28rpx 24rpx;
-    border-bottom: 1rpx solid #f5f5f5;
+    border-bottom: 1rpx solid $border-color-light;
   }
 
   .cell-border-none {
@@ -451,17 +414,17 @@
   .cell-label {
     width: 190rpx;
     font-size: 30rpx;
-    color: #333333;
+    color: $text-color;
     flex-shrink: 0;
   }
 
   .cell-label-danger {
-    color: #ff5252;
+    color: $uni-color-error;
   }
 
   .cell-badge {
     font-size: 20rpx;
-    color: #ff9900;
+    color: $warning-color;
     background-color: #FFF6E5;
     border-radius: 8rpx;
     padding: 2rpx 10rpx;
@@ -471,7 +434,7 @@
   .cell-value {
     flex: 1;
     font-size: 28rpx;
-    color: #999999;
+    color: $text-color-placeholder;
     text-align: right;
     margin-right: 8rpx;
     lines: 1;
@@ -480,7 +443,7 @@
 
   .cell-arrow {
     font-size: 40rpx;
-    color: #cccccc;
+    color: $text-disabled;
   }
 
   .cell-avatar-wrap {
@@ -514,7 +477,7 @@
   /* 弹窗输入样式（slot 内容归本页作用域；壳样式在 InfoDialog） */
   .dialog-tip {
     font-size: 22rpx;
-    color: #999999;
+    color: $text-color-placeholder;
   }
 
   .input {
@@ -545,12 +508,12 @@
   }
 
   .code-btn-disabled {
-    background-color: #cccccc;
+    background-color: $text-disabled;
   }
 
   .code-btn-text {
     font-size: 24rpx;
-    color: #ffffff;
+    color: $text-color-inverse;
     white-space: nowrap;
   }
 </style>

@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">积分明细</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="积分明细" @left-click="onBack" divider />
 
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 积分余额卡片 -->
@@ -89,16 +82,19 @@
 </template>
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getPointsBalanceApi, getPointsLedgerApi } from '../../api/points'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, ledgerIconGlyph, deltaText, deltaKind, expiringWithinDays, todayDateStr } from '../../utils/pointsDisplay'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { formatDateTimeStr } from '../../utils/format'
     import type { PointsBalance, PointsLedgerItem, PointsLedgerResult } from '../../types/index'
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     /** 「即将过期」窗口天数（与积分规则文案「到期前 30 天提醒」同口径） */
@@ -267,44 +263,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .header {
-        background-color: #ffffff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .header-left {
-        width: 60rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .header-right {
-        width: 60rpx;
     }
 
     .content-scroll {
@@ -330,7 +293,7 @@
     .balance-value {
         font-size: 56rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
         margin-bottom: 16rpx;
     }
 
@@ -344,13 +307,13 @@
 
     .balance-label {
         font-size: 24rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .tab-bar {
-        background-color: #ffffff;
+        background-color: $card-bg;
         flex-direction: row;
-        border-bottom: 1rpx solid #f0f0f0;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .tab-item {
@@ -367,7 +330,7 @@
 
     .tab-text {
         font-size: 30rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .tab-item.active .tab-text {
@@ -377,8 +340,8 @@
     }
 
     .filter-bar {
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
+        background-color: $card-bg;
+        border-bottom: 1rpx solid $border-color-light;
         flex-direction: row;
         align-items: center;
         padding: 20rpx 24rpx;
@@ -387,7 +350,7 @@
     .filter-chip {
         padding: 12rpx 28rpx;
         border-radius: 32rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-shrink: 0;
     }
 
@@ -397,11 +360,11 @@
 
     .filter-chip-text {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .filter-chip.active .filter-chip-text {
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: 500;
     }
 
@@ -414,7 +377,7 @@
     }
 
     .detail-item {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 32rpx;
         margin-bottom: 16rpx;
@@ -433,15 +396,15 @@
     }
 
     .icon-task {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .icon-checkin {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .icon-redeem {
-        background-color: #fff3e0;
+        background-color: $warning-tint;
     }
 
     .icon-community {
@@ -453,12 +416,12 @@
     }
 
     .icon-default {
-        background-color: #f5f5f5;
+        background-color: $bg-color;
     }
 
     .detail-icon {
         font-size: 32rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .detail-content {
@@ -476,7 +439,7 @@
     .detail-action {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .detail-points {
@@ -494,15 +457,15 @@
 
     .detail-source {
         font-size: 22rpx;
-        color: #999999;
-        background-color: #f5f5f5;
+        color: $text-color-placeholder;
+        background-color: $bg-color;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;
     }
 
     .detail-date {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .empty-tip {
@@ -512,7 +475,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .error-tip {
@@ -523,7 +486,7 @@
 
     .error-text {
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
         margin-bottom: 20rpx;
     }
 
@@ -535,7 +498,7 @@
 
     .retry-text {
         font-size: 26rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .loading-more {
@@ -545,13 +508,13 @@
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .bottom-button {
         padding: 24rpx 32rpx;
-        background-color: #ffffff;
-        border-top: 1rpx solid #f0f0f0;
+        background-color: $card-bg;
+        border-top: 1rpx solid $border-color-light;
     }
 
     .earn-button {
@@ -560,7 +523,7 @@
         border-radius: 48rpx;
         background: linear-gradient(to bottom right, #2979ff, #1565c0);
         background-color: #1565c0;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-size: 34rpx;
         font-weight: bold;
         align-items: center;

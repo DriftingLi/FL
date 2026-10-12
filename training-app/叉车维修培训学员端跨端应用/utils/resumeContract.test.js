@@ -492,8 +492,9 @@ describe('删除禁区「resume 不用删」：行为保持点逐项仍在', () 
   });
 
   it('保存入口双份与顶栏形态保持：顶栏「保存」+ 底部「保存简历」，标题「在线简历」', () => {
-    expect(page).toContain('<text class="nav-save">保存</text>');
-    expect(page).toContain('<text class="nav-title">在线简历</text>');
+    // #1606 批2：顶栏「保存」移入 app-nav-bar 右槽（形态保持点不变，位置随页头件化内移）
+    expect(page).toContain('<text class="nav-save" @click="onSave">保存</text>');
+    expect(page).toContain('<app-nav-bar title="在线简历"');
     expect(page).toContain('<text class="save-btn-text">保存简历</text>');
     expect(page).toContain('@click="onSave"');
   });
