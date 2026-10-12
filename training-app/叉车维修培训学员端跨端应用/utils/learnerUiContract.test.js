@@ -159,7 +159,12 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
       'pages/recruiter/contacts.uvue', 'pages/recruiter/applications.uvue', 'pages/recruiter/me.uvue',
       'pages/recruiter/job-edit.uvue', 'pages/recruiter/resume-detail.uvue', 'pages/recruiter/login.uvue',
     ];
-    const all = PAGES.concat(batch1).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    // 白名单是全仓册：#1605 批2（choose-cert/job-list 等）的条目落在 #1605 页面，纳入并集扫描面
+    const batch1605 = [
+      'pages/exam-info/exam-info.uvue', 'pages/guide/choose-cert.uvue',
+      'pages/jobs/job-list.uvue', 'pages/profile/personal-activity.uvue',
+    ];
+    const all = PAGES.concat(batch1, batch1605).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }
