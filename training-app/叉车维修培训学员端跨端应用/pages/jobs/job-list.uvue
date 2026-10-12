@@ -1,15 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部导航栏（右侧留给小程序胶囊按钮，不放可点元素） -->
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">招聘</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="招聘" @left-click="onBack" />
 
         <!-- 公告/职位双 tab；头像放 tab 行最右端（避开胶囊遮挡区），点入「我的」 -->
         <view class="tab-row">
@@ -86,13 +77,12 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getJobListApi } from '../../api/job'
     import { getCatalogTreeSpecialties } from '../../api/course'
     import { useAuthStore } from '../../stores/auth'
     import type { JobPosting } from '../../types/index'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- 顶栏头像（真实登录态，点入「我的」；不引假数据）----
@@ -239,60 +229,24 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
-        background-color: #f8f8f8;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: transparent;
     }
 
     .content-scroll {
         flex: 1;
     }
 
-    /* 顶部导航栏 */
-    .header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        height: 88rpx;
-        padding: 0 24rpx;
-        background-color: #ffffff;
-    }
-
-    .header-left {
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .back-icon {
-        font-size: 44rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .header-right {
-        width: 64rpx;
-    }
-
     /* 公告/职位双 tab；头像在行最右端（避开小程序胶囊遮挡区） */
     .tab-row {
         flex-direction: row;
         align-items: center;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
-        padding: 0 24rpx;
+        background-color: $bg-header;
+        border-bottom: 1rpx solid $border-color-light;
+        padding: 0 $spacing-md;
     }
 
     .tab-item {
@@ -304,12 +258,12 @@
     }
 
     .tab-item.active {
-        border-bottom-color: #2979ff;
+        border-bottom-color: $primary-color;
     }
 
     .tab-text {
         font-size: 30rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .tab-text.active {
@@ -347,43 +301,43 @@
     /* 筛选标签 */
     .filter-row {
         flex-direction: row;
-        padding: 16rpx 24rpx;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
+        padding: $spacing-sm $spacing-md;
+        background-color: $bg-header;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .filter-tag {
-        padding: 8rpx 24rpx;
-        border-radius: 8rpx;
+        padding: $spacing-xs $spacing-md;
+        border-radius: $radius-sm;
         background-color: #f5f5f5;
         border: 1rpx solid #e0e0e0;
     }
 
     .filter-tag-active {
         background-color: #e8f0fe;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .filter-tag-text {
-        font-size: 24rpx;
-        color: #666666;
+        font-size: $font-size-xs;
+        color: $text-color-secondary;
     }
 
     .filter-tag-text-active {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     /* 职位列表 */
     .job-list {
         flex-direction: column;
-        padding: 16rpx 24rpx;
+        padding: $spacing-sm $spacing-md;
     }
 
     .job-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx;
-        margin-bottom: 16rpx;
+        background-color: $bg-header;
+        border-radius: $radius-md;
+        padding: $spacing-md;
+        margin-bottom: $spacing-sm;
         border: 1rpx solid #eeeeee;
         flex-direction: column;
     }
@@ -396,15 +350,15 @@
     }
 
     .job-company {
-        font-size: 24rpx;
-        color: #666666;
+        font-size: $font-size-xs;
+        color: $text-color-secondary;
         flex: 1;
     }
 
     .job-title {
-        font-size: 32rpx;
+        font-size: $font-size-lg;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 12rpx;
     }
 
@@ -422,21 +376,21 @@
     }
 
     .job-location {
-        font-size: 24rpx;
-        color: #999999;
+        font-size: $font-size-xs;
+        color: $text-color-placeholder;
     }
 
     .job-desc {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 1.5;
-        margin-bottom: 16rpx;
+        margin-bottom: $spacing-sm;
     }
 
     .job-divider {
         height: 1rpx;
-        background-color: #f0f0f0;
-        margin-bottom: 16rpx;
+        background-color: $border-color-light;
+        margin-bottom: $spacing-sm;
     }
 
     .job-actions {
@@ -447,8 +401,8 @@
 
     .job-action-btn {
         padding: 12rpx 32rpx;
-        border-radius: 24rpx;
-        margin-left: 16rpx;
+        border-radius: $radius-md;
+        margin-left: $spacing-sm;
     }
 
     .job-action-detail {
@@ -456,16 +410,16 @@
     }
 
     .job-action-apply {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
-    /* #1199：不可投时的状态标签（不是按钮，无点击） */
+    /* 不可投递时的状态标签（不是按钮，无点击；状态由 dispatch-control 票管） */
     .job-action-disabled {
-        background-color: #f0f0f0;
+        background-color: $border-color-light;
     }
 
     .job-action-disabled-text {
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .job-action-text {
@@ -474,11 +428,11 @@
     }
 
     .job-action-detail-text {
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .job-action-apply-text {
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* 空状态 */
@@ -490,24 +444,24 @@
 
     .empty-icon {
         font-size: 80rpx;
-        margin-bottom: 24rpx;
+        margin-bottom: $spacing-md;
     }
 
     .empty-text {
-        font-size: 28rpx;
-        color: #999999;
+        font-size: $font-size-md;
+        color: $text-color-placeholder;
     }
 
     /* 加载更多 */
     .loading-more {
         align-items: center;
-        padding: 24rpx 0;
+        padding: $spacing-md 0;
     }
 
     .loading-text {
-        font-size: 24rpx;
-        color: #999999;
+        font-size: $font-size-xs;
+        color: $text-color-placeholder;
     }
 
-    .ml-16 { margin-left: 16rpx; }
+    .ml-16 { margin-left: $spacing-sm; }
 </style>

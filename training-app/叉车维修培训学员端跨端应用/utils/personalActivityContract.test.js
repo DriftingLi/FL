@@ -35,9 +35,11 @@ const USER = 'pages/profile/components/activity-user-card.uvue';
 const CARD = 'pages/profile/components/activity-topic-card.uvue';
 
 /** 取模板段并剥掉 HTML 注释：注释里解释「为什么没有收藏」不算入口，真入口才算 */
+// #1605 批2：页头件化后模板里有内层 <template #right>（app-nav-bar 右槽），
+// indexOf('</template>') 只截到内层闭合（303 字符）⇒ 改用 lastIndexOf 截到页面模板真正闭合处。
 function templateOf(src) {
   const start = src.indexOf('<template>');
-  const end = src.indexOf('</template>');
+  const end = src.lastIndexOf('</template>');
   if (start === -1 || end === -1) return '';
   return src.slice(start, end).replace(/<!--[\s\S]*?-->/g, ' ');
 }
@@ -217,9 +219,13 @@ describe('UI 像素结构锁定（样式归属互斥，无双写）', () => {
   const page = read(PAGE);
 
   it('页面保留骨架/空态/列表容器样式；tab、user-card、topic-card 块已迁出且页面无残留', () => {
-    for (const cls of ['.container', '.page-header', '.content-scroll', '.empty-state', '.publish-btn', '.list-section', '.loading-more']) {
+    // #1605 批2：手写页头（.page-header）换成 app-nav-bar 页头件，标题由 title prop 承载。
+    // 原 .page-header 样式类已随件迁出——此处断言件引用 + 骨架类保留，钉住「样式归属互斥」不松动。
+    for (const cls of ['.container', '.content-scroll', '.empty-state', '.publish-btn', '.list-section', '.loading-more']) {
       expect(page).toContain(cls);
     }
+    expect(page).not.toContain('.page-header');
+    expect(page).toContain('<app-nav-bar title="个人动态">');
     for (const [moved, target] of [
       ['.tab-item.active', TABS], ['.sub-tab-text.active', TABS],
       ['.user-avatar-placeholder', USER], ['.level-badge', USER],

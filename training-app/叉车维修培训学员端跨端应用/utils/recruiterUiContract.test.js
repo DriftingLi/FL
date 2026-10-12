@@ -132,8 +132,17 @@ describe('§1.6 白名单文件自检', () => {
     }
   });
 
-  it('白名单值必须在某个受管页面里真实出现（防死条目）', () => {
-    const all = PAGES.map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2，白名单是全仓册不是批内册）', () => {
+    // 批2 页清单与 utils/batch2UiContract.test.js 的 PAGES 保持一致（不 require 测试模块，防 describe 嵌套）
+    const BATCH2_PAGES = [
+      'pages/exam-info/exam-info.uvue',
+      'pages/guide/choose-cert.uvue',
+      'pages/jobs/job-list.uvue',
+      'pages/profile/personal-activity.uvue',
+    ];
+    const all = PAGES.concat(BATCH2_PAGES)
+      .map((p) => styleBlock(read(p)).toUpperCase())
+      .join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }
