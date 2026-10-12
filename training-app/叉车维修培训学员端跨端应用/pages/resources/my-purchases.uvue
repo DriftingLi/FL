@@ -31,7 +31,8 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getStudentCoursesApi } from '../../api/student'
     import type { StudentCourse } from '../../types/index'
 

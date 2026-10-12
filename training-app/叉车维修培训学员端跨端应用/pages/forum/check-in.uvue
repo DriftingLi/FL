@@ -78,7 +78,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { checkInApi, getCheckInCalendarApi } from '../../api/checkin'
     import type { CheckInCalendarDay } from '../../types/index'
 
@@ -305,7 +306,7 @@
         }
         loadCalendar().then(() => {
             // 进入页面自动代打卡一次：仅日历加载成功（非失败态）、今日未打卡时触发
-            // #1607 §8③：usingMock 洞已堵——失败态下绝不自动打卡，避免把假成功写进用户数据
+            // #1607 §8③：mock 态洞已堵——失败态下绝不自动打卡，避免把假成功写进用户数据
             if (!loadError.value && !todayChecked.value && !autoCheckInTried.value) {
                 autoCheckInTried.value = true
                 doCheckIn(true)

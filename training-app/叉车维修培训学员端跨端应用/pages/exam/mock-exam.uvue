@@ -70,7 +70,8 @@
 
 <script setup lang="uts">
     import { onLoad, onUnload } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { useMockExamSession } from './composables/useMockExamSession'
     import ExamQuestionCard from './components/exam-question-card.uvue'
     import ExamActionBar from './components/exam-action-bar.uvue'

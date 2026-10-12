@@ -57,7 +57,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { FORMAT_TEXT } from '../../utils/forumBody'
     import { normalizeAuthorFormat, readAuthorFormat, writeAuthorFormat } from '../../utils/forumFormatPreference'
     import { useForumImagePicker } from '../../composables/useForumImagePicker'

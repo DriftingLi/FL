@@ -62,7 +62,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getFeaturedContentDetailApi, viewFeaturedContentApi } from '../../api/featured'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'

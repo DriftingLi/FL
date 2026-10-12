@@ -77,7 +77,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getMockExamHistoryApi } from '../../api/mockExam'
     import type { MockExamHistoryItem } from '../../types/index'
     import { formatDateTimeStr } from '../../utils/format'

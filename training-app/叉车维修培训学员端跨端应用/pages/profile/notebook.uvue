@@ -85,7 +85,8 @@
 <script setup lang="uts">
     import { computed, ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_SCOPE_QUESTION, NOTE_SCOPE_STANDALONE } from '../../api/note'
     import type { NoteItem } from '../../types/index'
     import { noteTitle, noteExcerpt, noteBadgeText, isStandaloneNote, noteEmptyText } from '../../utils/notebookDisplay'

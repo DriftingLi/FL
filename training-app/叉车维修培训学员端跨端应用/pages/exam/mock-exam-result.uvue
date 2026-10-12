@@ -47,7 +47,8 @@
 
 <script setup lang="uts">
     import { onLoad } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { useMockExamResult } from './composables/useMockExamResult'
     import ExamResultSummary from './components/exam-result-summary.uvue'
     import ExamResultDetailList from './components/exam-result-detail-list.uvue'

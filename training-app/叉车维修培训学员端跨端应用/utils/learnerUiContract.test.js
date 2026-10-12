@@ -153,7 +153,7 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
     }
   });
 
-  it('批1+批2 受管页面并集内每个白名单值真实出现（防死条目）', () => {
+  it('批1+批2+批4 受管页面并集内每个白名单值真实出现（防死条目）', () => {
     const batch1 = [
       'pages/recruiter/home.uvue', 'pages/recruiter/jobs.uvue', 'pages/recruiter/resumes.uvue',
       'pages/recruiter/contacts.uvue', 'pages/recruiter/applications.uvue', 'pages/recruiter/me.uvue',
@@ -164,7 +164,17 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
       'pages/exam-info/exam-info.uvue', 'pages/guide/choose-cert.uvue',
       'pages/jobs/job-list.uvue', 'pages/profile/personal-activity.uvue',
     ];
-    const all = PAGES.concat(batch1, batch1605).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    // #1607 批4（N01 蓝底套 19 页）条目落在批4页面，纳入并集扫描面
+    const batch4 = [
+      'pages/courses/course-detail.uvue', 'pages/courses/chapter-view.uvue',
+      'pages/resources/materials.uvue', 'pages/exam/mock-exam.uvue', 'pages/exam/mock-exam-result.uvue',
+      'pages/profile/records.uvue', 'pages/profile/practice-records.uvue', 'pages/profile/mock-exam-records.uvue',
+      'pages/profile/favorites.uvue', 'pages/profile/notebook.uvue', 'pages/profile/help-center.uvue',
+      'pages/forum/forum-detail.uvue', 'pages/forum/forum-create.uvue', 'pages/forum/check-in.uvue',
+      'pages/notifications/notifications.uvue', 'pages/resources/my-purchases.uvue', 'pages/resources/my-uploads.uvue',
+      'pages/featured/featured-list.uvue', 'pages/featured/featured-detail.uvue',
+    ];
+    const all = PAGES.concat(batch1, batch1605, batch4).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }

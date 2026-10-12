@@ -47,7 +47,8 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getMyContributionsApi } from '../../api/contribution'
     import type { ContributionItem } from '../../api/contribution'
     import { describeContributionStatus } from '../../utils/contributionStatus'

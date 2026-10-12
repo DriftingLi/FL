@@ -58,7 +58,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
     import { getStudentCourseDetailApi } from '../../api/student'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'

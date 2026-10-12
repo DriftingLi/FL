@@ -48,7 +48,8 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getNotificationsApi, markAllReadApi, markNotificationReadApi } from '../../api/notification'
     import type { NotificationItem } from '../../types/index'
 

@@ -63,7 +63,8 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getFaqApi } from '../../api/faq'
     import { buildFaqNav, buildFaqGroups, faqEmptyText, faqEmptyIcon } from '../../utils/faqDisplay'
     import type { FaqCategory, FaqGroup, FaqNavItem } from '../../types/index'

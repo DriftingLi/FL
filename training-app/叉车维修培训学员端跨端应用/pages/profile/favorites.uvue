@@ -52,7 +52,8 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { getFavoritesApi, removeFavoriteApi } from '../../api/favorite'
     import type { FavoriteItem } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
