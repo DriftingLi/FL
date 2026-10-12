@@ -1,18 +1,15 @@
 <template>
 	<view class="page" :style="{ height: pageHeight + 'px' }">
-		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-		<view class="header">
-			<view class="header-left" @click="onBack">
-				<text class="back-icon">&#8249;</text>
-			</view>
-			<text class="header-title">{{ featureTitle }}</text>
+		<app-nav-bar :title="featureTitle" @left-click="onBack" divider>
 			<!-- 右：会话抽屉入口（「列该区」的界面，ADR-0013）。内层给**显式尺寸**的盒子 ⇒ 有命中区（#947 血账） -->
-			<view class="header-right" @click="toggleSidebarLeft">
-				<view class="panel-icon">
-					<view class="panel-icon-line"></view>
+			<template #right>
+				<view @click="toggleSidebarLeft">
+					<view class="panel-icon">
+						<view class="panel-icon-line"></view>
+					</view>
 				</view>
-			</view>
-		</view>
+			</template>
+		</app-nav-bar>
 
 		<!-- 会话区：本页**没有**宫格、没有档位横幅、没有模型选择器 —— 专项通道由管理端单绑定
 		     解析模型（见 buildBody 注释），用户在这一页没有可自选的东西。 -->
@@ -79,14 +76,20 @@
 </template>
 
 <script setup lang="uts">
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onLoad } from '@dcloudio/uni-app'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { ref, computed } from 'vue'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { useAuthStore } from '../../stores/auth'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
 	import type { AiChatMessage, AIFunctionItem, AiSession, AiDiagnosisBrandOption, AiDiagnosisFaultCodeItem } from '../../types/index'
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { getDiagnosisBrandsApi, getDiagnosisModelsApi, getDiagnosisFaultCodesApi } from '../../api/aiAssistant'
 
+	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { FUNCTION_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
@@ -401,33 +404,13 @@
 	})
 </script>
 
-<style>
+<style lang="scss">
 	.page {
 		display: flex;
 		flex-direction: column;
 		background-color: #dfeffb;
 	}
 
-	.status-bar {
-		background-color: #ffffff;
-	}
-
-	.header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-		padding: 16rpx 24rpx;
-		background-color: #ffffff;
-		border-bottom: 1rpx solid #f0f0f0;
-	}
-
-	.header-left,
-	.header-right {
-		width: 72rpx;
-		height: 72rpx;
-		align-items: center;
-		justify-content: center;
-	}
 
 	/* 会话抽屉入口：与通用页导航左侧同一套「面板」视觉；内层给**显式尺寸** ⇒ 有命中区（#947 血账） */
 	.panel-icon {
@@ -448,7 +431,7 @@
 
 	.back-icon {
 		font-size: 48rpx;
-		color: #333333;
+		color: $text-color;
 		font-weight: bold;
 	}
 
@@ -484,16 +467,16 @@
 		max-width: 600rpx;
 		padding: 20rpx 24rpx;
 		border-radius: 16rpx;
-		background-color: #ffffff;
+		background-color: $card-bg;
 	}
 
 	.message-bubble.thinking {
-		background-color: #f0f0f0;
+		background-color: $border-color-light;
 	}
 
 	.message-text {
 		font-size: 28rpx;
-		color: #333333;
+		color: $text-color;
 		line-height: 1.6;
 	}
 
@@ -502,8 +485,8 @@
 	   `.filter-chip` / `.filter-chip-text` 的 active 双类；active 类直接落在 text 上，
 	   不用 `.a .b` 后代选择器（uvue 支持但有运行时损耗，见 mobile AGENTS.md）。 */
 	.diag-bar {
-		background-color: #ffffff;
-		border-top: 1rpx solid #f0f0f0;
+		background-color: $card-bg;
+		border-top: 1rpx solid $border-color-light;
 		padding: 12rpx 24rpx;
 	}
 
@@ -514,7 +497,7 @@
 
 	.diag-head-title {
 		font-size: 26rpx;
-		color: #333333;
+		color: $text-color;
 		font-weight: bold;
 		margin-right: 16rpx;
 	}
@@ -527,7 +510,7 @@
 
 	.diag-head-toggle {
 		font-size: 24rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 		padding-left: 16rpx;
 	}
 
@@ -545,7 +528,7 @@
 	.filter-chip {
 		padding: 10rpx 24rpx;
 		border-radius: 32rpx;
-		background-color: #f5f5f5;
+		background-color: $bg-color;
 		margin-right: 12rpx;
 		flex-shrink: 0;
 	}
@@ -556,17 +539,17 @@
 
 	.filter-chip-text {
 		font-size: 24rpx;
-		color: #666666;
+		color: $text-color-secondary;
 	}
 
 	.filter-chip-text.active {
-		color: #ffffff;
+		color: $card-bg;
 	}
 
 	.diag-search {
 		flex-direction: row;
 		align-items: center;
-		background-color: #f5f5f5;
+		background-color: $bg-color;
 		border-radius: 32rpx;
 		padding: 4rpx 20rpx;
 		margin-bottom: 12rpx;
@@ -576,7 +559,7 @@
 		flex: 1;
 		height: 64rpx;
 		font-size: 26rpx;
-		color: #333333;
+		color: $text-color;
 	}
 
 	.diag-search-btn {
@@ -594,7 +577,7 @@
 		flex-direction: row;
 		align-items: center;
 		padding: 16rpx 0;
-		border-bottom: 1rpx solid #f0f0f0;
+		border-bottom: 1rpx solid $border-color-light;
 	}
 
 	.diag-fault-code {
@@ -607,7 +590,7 @@
 	.diag-fault-name {
 		flex: 1;
 		font-size: 24rpx;
-		color: #666666;
+		color: $text-color-secondary;
 	}
 
 	.diag-fault-more {
@@ -622,7 +605,7 @@
 
 	.diag-fault-empty {
 		font-size: 24rpx;
-		color: #999999;
+		color: $text-color-placeholder;
 		padding: 12rpx 0;
 	}
 </style>

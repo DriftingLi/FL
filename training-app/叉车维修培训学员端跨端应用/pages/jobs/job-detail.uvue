@@ -1,18 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部导航栏 -->
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">职位详情</text>
-            <view class="header-right">
-                <text v-if="!hasReported" class="report-btn" @click="onOpenReport">举报</text>
-                <text v-else class="report-btn-disabled">已举报</text>
-            </view>
-        </view>
+        <app-nav-bar title="职位详情" @left-click="onBack" divider>
+            <template #right><text v-if="!hasReported" class="report-btn" @click="onOpenReport">举报</text></template>
+        </app-nav-bar>
 
         <!-- 加载中 -->
         <view v-if="loading" class="loading-wrap">
@@ -108,11 +98,9 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getJobDetailApi, reportJobApi, applyJobApi, REPORT_REASONS } from '../../api/job'
     import type { JobPosting, ReportReason } from '../../types/index'
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- 职位数据 ----
@@ -267,15 +255,11 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
-        background-color: #f8f8f8;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: transparent;
     }
 
     .content-scroll {
@@ -283,47 +267,14 @@
     }
 
     /* 顶部导航栏 */
-    .header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        height: 88rpx;
-        padding: 0 24rpx;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .header-left {
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .back-icon {
-        font-size: 44rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .header-right {
-        flex-direction: row;
-        align-items: center;
-    }
-
     .report-btn {
         font-size: 28rpx;
-        color: #ff3b30;
+        color: $danger-color;
     }
 
     .report-btn-disabled {
         font-size: 28rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     /* 加载中 */
@@ -335,12 +286,12 @@
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 职位基本信息 */
     .job-section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 32rpx 24rpx;
         margin-bottom: 16rpx;
     }
@@ -348,18 +299,18 @@
     .job-title {
         font-size: 40rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 12rpx;
     }
 
     .job-company {
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 信息行 */
     .info-section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 24rpx;
         margin-bottom: 16rpx;
     }
@@ -378,7 +329,7 @@
 
     .info-value {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         flex: 1;
     }
 
@@ -390,20 +341,20 @@
 
     /* 职位描述 */
     .desc-section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 24rpx;
     }
 
     .desc-title {
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 16rpx;
     }
 
     .desc-content {
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 1.6;
     }
 
@@ -411,8 +362,8 @@
     .bottom-bar {
         padding: 16rpx 24rpx;
         padding-bottom: 16rpx;
-        background-color: #ffffff;
-        border-top: 1rpx solid #f0f0f0;
+        background-color: $card-bg;
+        border-top: 1rpx solid $border-color-light;
     }
 
     .apply-btn {
@@ -426,12 +377,12 @@
     .apply-btn-text {
         font-size: 32rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .apply-btn-disabled {
         height: 88rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         border-radius: 44rpx;
         align-items: center;
         justify-content: center;
@@ -439,7 +390,7 @@
 
     .apply-btn-text-disabled {
         font-size: 32rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 举报弹窗 */
@@ -457,7 +408,7 @@
 
     .report-modal {
         width: 600rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 24rpx;
         padding: 40rpx;
         flex-direction: column;
@@ -466,7 +417,7 @@
     .report-modal-title {
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         text-align: center;
         margin-bottom: 32rpx;
     }
@@ -487,7 +438,7 @@
         width: 40rpx;
         height: 40rpx;
         border-radius: 20rpx;
-        border: 2rpx solid #cccccc;
+        border: 2rpx solid $text-disabled;
         align-items: center;
         justify-content: center;
         margin-right: 16rpx;
@@ -506,7 +457,7 @@
 
     .report-option-text {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     /* 自定义原因 */
@@ -517,17 +468,17 @@
     .report-textarea {
         width: 100%;
         height: 200rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         border-radius: 12rpx;
         padding: 20rpx;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 8rpx;
     }
 
     .report-counter {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: right;
     }
 
@@ -541,7 +492,7 @@
         flex: 1;
         height: 80rpx;
         border-radius: 40rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         align-items: center;
         justify-content: center;
         margin-right: 16rpx;
@@ -549,7 +500,7 @@
 
     .report-cancel-text {
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .report-confirm {
@@ -562,12 +513,12 @@
     }
 
     .report-confirm.disabled {
-        background-color: #cccccc;
+        background-color: $text-disabled;
     }
 
     .report-confirm-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: 500;
     }
 </style>

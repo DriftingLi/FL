@@ -1,11 +1,8 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="nav-bar">
-            <view class="nav-left" @click="onBack"><text class="nav-icon">‹</text></view>
-            <text class="nav-title">题库练习</text>
-            <view class="nav-right" @click="onSearch"><text class="nav-icon">🔍</text></view>
-        </view>
+        <app-nav-bar title="题库练习" @left-click="onBack" divider>
+    <template #right><text class="nav-icon" @click="onSearch">🔍</text></template>
+</app-nav-bar>
         <view class="region-bar">
             <view class="region-left" @click="onRegionTap">
                 <text class="region-text">{{ region }}</text>
@@ -23,17 +20,18 @@
 </template>
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref } from 'vue'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { usePracticeOverview, type ModuleRow } from './composables/usePracticeOverview'
     import PracticeBannerCard from './components/practice-banner-card.uvue'
     import PracticeStatsBar from './components/practice-stats-bar.uvue'
     import PracticeFeatureGrid from './components/practice-feature-grid.uvue'
     import PracticeModuleList from './components/practice-module-list.uvue'
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const { overview, modules, listLoading, listError, loadOverview, loadModules } = usePracticeOverview()
     const region = ref<string>('全国')
@@ -56,17 +54,12 @@
     onShow(() => { loadOverview(); if (modules.value.length == 0) { loadModules() } })
 </script>
 
-<style>
-    .page { display: flex; flex-direction: column; background-color: #f5f5f5; }
-    .status-bar { background-color: #ffffff; }
-    .nav-bar { background-color: #ffffff; padding: 16rpx 24rpx; height: 88rpx; flex-direction: row; align-items: center; justify-content: space-between; border-bottom: 1rpx solid #f0f0f0; }
-    .nav-left, .nav-right { width: 72rpx; height: 72rpx; align-items: center; justify-content: center; }
-    .nav-icon { font-size: 40rpx; color: #333333; }
-    .nav-title { font-size: 36rpx; font-weight: bold; color: #333333; }
+<style lang="scss">
+    .page { display: flex; flex-direction: column; background-color: $bg-color; }
     .scroll-content { flex: 1; height: 0; }
-    .region-bar { background-color: #ffffff; padding: 8rpx 24rpx 20rpx; flex-direction: row; align-items: center; }
+    .region-bar { background-color: $card-bg; padding: 8rpx 24rpx 20rpx; flex-direction: row; align-items: center; }
     .region-left { flex-direction: row; align-items: center; background-color: #f5f6fa; border-radius: 24rpx; padding: 8rpx 20rpx; }
-    .region-text { font-size: 26rpx; color: #333333; }
-    .region-arrow { font-size: 20rpx; color: #999999; margin-left: 8rpx; }
+    .region-text { font-size: 26rpx; color: $text-color; }
+    .region-arrow { font-size: 20rpx; color: $text-color-placeholder; margin-left: 8rpx; }
     .safe-bottom { height: 34rpx; }
 </style>

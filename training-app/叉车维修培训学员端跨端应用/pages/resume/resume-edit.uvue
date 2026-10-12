@@ -1,16 +1,8 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <!-- 顶栏：返回 / 标题 / 保存 -->
-        <view class="nav-bar">
-            <view class="nav-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="nav-title">在线简历</text>
-            <view class="nav-right" @click="onSave">
-                <text class="nav-save">保存</text>
-            </view>
-        </view>
+        <app-nav-bar title="在线简历" @left-click="onBack" divider>
+            <template #right><text class="nav-save" @click="onSave">保存</text></template>
+        </app-nav-bar>
 
         <scroll-view class="body" scroll-y="true">
             <!-- 完善度 -->
@@ -210,13 +202,11 @@
 -->
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { useResumeEdit } from './composables/useResumeEdit'
     import ResumeProgressCard from './components/resume-progress-card.uvue'
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // 编辑态与保存流程全部下沉 composable，页面只保留模板与薄包装 handler
@@ -231,53 +221,14 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .page {
         flex: 1;
         background-color: #f5f6fa;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: #ffffff;
-    }
-
     /* ===== 顶栏 ===== */
-    .nav-bar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12rpx 32rpx;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .nav-left {
-        width: 100rpx;
-    }
-
-    .back-icon {
-        font-size: 52rpx;
-        color: #333333;
-    }
-
-    .nav-title {
-        font-size: 34rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .nav-right {
-        width: 100rpx;
-        align-items: flex-end;
-    }
-
-    .nav-save {
-        font-size: 30rpx;
-        color: #2979ff;
-        font-weight: bold;
-    }
-
     .body {
         flex: 1;
         height: 0;
@@ -286,7 +237,7 @@
 
     /* ===== 卡片与字段 ===== */
     .card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 20rpx;
         padding: 28rpx;
         margin-top: 24rpx;
@@ -295,7 +246,7 @@
     .card-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 8rpx;
     }
 
@@ -308,7 +259,7 @@
     .field-label {
         width: 170rpx;
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
         flex-shrink: 0;
     }
 
@@ -320,7 +271,7 @@
     .field-input {
         flex: 1;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         background-color: transparent;
         border: none;
         padding: 0;
@@ -336,7 +287,7 @@
 
     .field-value {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .field-ph {
@@ -346,7 +297,7 @@
 
     .field-arrow {
         font-size: 32rpx;
-        color: #cccccc;
+        color: $text-disabled;
         margin-left: 8rpx;
     }
 
@@ -360,7 +311,7 @@
         width: 150rpx;
         height: 80rpx;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         background-color: #f7f8fa;
         border-radius: 8rpx;
         padding: 0 16rpx;
@@ -368,7 +319,7 @@
 
     .field-range-sep {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin: 0 16rpx;
     }
 
@@ -383,7 +334,7 @@
         margin-top: 16rpx;
         padding: 20rpx;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         background-color: #f7f8fa;
         border-radius: 12rpx;
     }
@@ -391,7 +342,7 @@
     .area-counter {
         margin-top: 8rpx;
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: right;
     }
 
@@ -413,7 +364,7 @@
 
     .sub-title {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .sub-del {
@@ -454,7 +405,7 @@
 
     .save-btn-text {
         font-size: 32rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 </style>

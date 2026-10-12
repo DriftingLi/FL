@@ -1,13 +1,6 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="nav-bar">
-            <view class="nav-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="nav-title">附件简历</text>
-            <view class="nav-right"></view>
-        </view>
+        <app-nav-bar title="附件简历" @left-click="onBack" divider />
 
         <scroll-view class="body" scroll-y="true">
             <!-- 已上传：文件卡片 -->
@@ -58,16 +51,20 @@
 </template>
 
 <script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { setStorageJSON, getStorageJSON, removeStorage } from '../../utils/storage'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { STORAGE_KEY_RESUME_ATTACH } from '../../constants/app'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { toStr, toNumber, errMsg } from '../../api/helpers'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { uploadResumePdfApi, deleteAttachmentApi } from '../../api/resume'
-
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const attachName = ref<string>('')
@@ -188,43 +185,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .page {
         flex: 1;
         background-color: #f5f6fa;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .nav-bar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12rpx 32rpx;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .nav-left {
-        width: 100rpx;
-    }
-
-    .back-icon {
-        font-size: 52rpx;
-        color: #333333;
-    }
-
-    .nav-title {
-        font-size: 34rpx;
-        font-weight: bold;
-        color: #333333;
-    }
-
-    .nav-right {
-        width: 100rpx;
     }
 
     .body {
@@ -235,7 +200,7 @@
 
     /* ===== 文件卡片 ===== */
     .card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 20rpx;
         padding: 28rpx;
         margin-top: 24rpx;
@@ -268,7 +233,7 @@
 
     .file-name {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
         text-overflow: ellipsis;
     }
@@ -276,7 +241,7 @@
     .file-desc {
         margin-top: 8rpx;
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .file-status {
@@ -306,12 +271,12 @@
 
     .action-btn-text-ghost {
         font-size: 30rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
     .action-btn-danger {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border: 2rpx solid #fadcd9;
     }
 
@@ -323,7 +288,7 @@
     /* ===== 上传区 ===== */
     .upload-area {
         margin-top: 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border: 2rpx dashed #c8cdd8;
         border-radius: 20rpx;
         padding: 72rpx 32rpx;
@@ -339,21 +304,21 @@
     .upload-main-text {
         margin-top: 16rpx;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
     }
 
     .upload-sub-text {
         margin-top: 12rpx;
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* ===== 建议卡 ===== */
     .card-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 16rpx;
     }
 
@@ -372,7 +337,7 @@
     .tip-text {
         flex: 1;
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 40rpx;
     }
 </style>
