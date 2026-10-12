@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">考试成绩</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="考试成绩" variant="inverse" @left-click="onBack" />
 
         <!-- 加载中 -->
         <view v-if="result.loading.value" class="loading-wrap">
@@ -54,13 +47,11 @@
 
 <script setup lang="uts">
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { useMockExamResult } from './composables/useMockExamResult'
     import ExamResultSummary from './components/exam-result-summary.uvue'
     import ExamResultDetailList from './components/exam-result-detail-list.uvue'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // 成绩拉取与展示派生（汇总/逐题行）下沉 composable，页面只保留模板与薄包装
@@ -82,45 +73,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 80rpx;
     }
 
     .content-scroll {

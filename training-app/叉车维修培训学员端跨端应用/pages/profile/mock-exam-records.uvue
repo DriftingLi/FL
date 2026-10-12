@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">模考历史</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="模考历史" variant="inverse" @left-click="onBack" />
 
         <!-- 统计卡片 -->
         <view class="stats-card">
@@ -84,7 +77,6 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getMockExamHistoryApi } from '../../api/mockExam'
     import type { MockExamHistoryItem } from '../../types/index'
@@ -96,7 +88,6 @@
         return formatDateTimeStr(dateStr)
     }
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const records = ref<MockExamHistoryItem[]>([])
@@ -239,45 +230,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 80rpx;
     }
 
     /* 汇总 */

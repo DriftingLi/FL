@@ -1,17 +1,12 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">文章详情</text>
-            <view class="header-right">
+        <app-nav-bar title="文章详情" variant="inverse" @left-click="onBack">
+            <template #right>
                 <view class="fav-btn" @click="onToggleFavorite">
                     <text class="fav-icon">{{ isFavorited ? '⭐' : '☆' }}</text>
                 </view>
-            </view>
-        </view>
+            </template>
+        </app-nav-bar>
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view v-if="loading" class="loading-wrap">
@@ -67,7 +62,6 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getFeaturedContentDetailApi, viewFeaturedContentApi } from '../../api/featured'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
@@ -81,7 +75,6 @@
         return formatDateStr(dateStr)
     }
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const contentId = ref<number>(0)
@@ -170,47 +163,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
         background-color: #f5f5f5;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 80rpx;
-        align-items: flex-end;
-        justify-content: center;
     }
 
     .fav-btn {

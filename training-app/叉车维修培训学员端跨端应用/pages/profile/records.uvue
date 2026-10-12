@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">学习记录</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="学习记录" variant="inverse" @left-click="onBack" />
 
         <!-- 统计卡片 -->
         <view class="stats-card">
@@ -74,7 +67,6 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getRecordsApi } from '../../api/student'
     import type { StudyRecord } from '../../types/index'
@@ -84,7 +76,6 @@
         value : string
     }
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const rangeOptions : RangeOption[] = [
@@ -238,43 +229,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 60rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-    }
-
-    .header-right {
-        width: 60rpx;
     }
 
     .filter-bar {

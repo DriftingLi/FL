@@ -1,16 +1,13 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">{{ detail != null ? detail!.title : '章节学习' }}</text>
-            <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能） -->
-            <view class="header-right" @click="toggleFavorite">
-                <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
-            </view>
-        </view>
+        <app-nav-bar :title="detail != null ? detail!.title : '章节学习'" variant="inverse" @left-click="onBack">
+            <template #right>
+                <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能） -->
+                <view class="nav-action" @click="toggleFavorite">
+                    <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
+                </view>
+            </template>
+        </app-nav-bar>
 
         <!-- 加载中 -->
         <view v-if="loading" class="loading-wrap">
@@ -78,7 +75,6 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { parseMarkdown } from '../../utils/markdown'
     import { getCourseDetailApi, getChapterDetailApi, isChapterNotFound } from '../../api/course'
@@ -89,7 +85,6 @@
     import { useChapterStudy } from './composables/useChapterStudy'
     import type { ChapterDetail, ChapterFile, CourseDetail, MarkdownBlock } from '../../types/index'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const courseId = ref<number>(0)
@@ -371,48 +366,18 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
+    .nav-action {
+        width: 64rpx;
+        height: 64rpx;
         align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 60rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #ffffff;
-        flex: 1;
-        text-align: center;
-        lines: 1;
-        text-overflow: ellipsis;
-    }
-
-    .header-right {
-        width: 60rpx;
-        align-items: flex-end;
+        justify-content: center;
     }
 
     /* 收藏位字形（#1140）：与 course-detail.uvue 的 .favorite-icon 同值（40rpx / 白），

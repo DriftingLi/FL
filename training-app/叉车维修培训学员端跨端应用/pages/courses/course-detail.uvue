@@ -1,15 +1,12 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">课程详情</text>
-            <view class="header-right" @click="toggleFavorite">
-                <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
-            </view>
-        </view>
+        <app-nav-bar title="课程详情" variant="inverse" @left-click="onBack">
+            <template #right>
+                <view class="nav-action" @click="toggleFavorite">
+                    <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
+                </view>
+            </template>
+        </app-nav-bar>
 
         <!-- 加载中 -->
         <view v-if="loading" class="loading-wrap">
@@ -61,7 +58,6 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseDetailApi } from '../../api/course'
     import { getStudentCourseDetailApi } from '../../api/student'
@@ -76,7 +72,6 @@
     import CourseChapterList from './components/course-chapter-list.uvue'
     import type { CourseDetail, ChapterItem, StudentCourseChapterProgress } from '../../types/index'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const courseId = ref<number>(0)
@@ -408,44 +403,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 60rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-    }
-
-    .header-right {
-        width: 60rpx;
-        align-items: flex-end;
     }
 
     .content-scroll {
@@ -528,6 +490,13 @@
     /* 两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠**实心与空心**区分选中态 ——
        与论坛 stat-like-icon（♥/♡ 同色）同一套先例。此前未收藏态渲染空串，
        点击区虽在、却没有任何可点的视觉提示，观感等同「没有收藏功能」。 */
+    .nav-action {
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
     .favorite-icon {
         font-size: 40rpx;
         color: #ffffff;
