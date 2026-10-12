@@ -259,6 +259,13 @@ const flow = useAuthFlow<LoginMode>({
   },
   afterSuccess: async (_m, userInfo) => {
     authStore.setAuthData(userInfo as UserProfile)
+    // #1651 / ADR-0075：登录身份与子域缺席角色不符 → 不落地、就地清态提示换号。
+    // 不挡这一拍的话，随后的 router.push 会被守卫的回落不变式清态打回本页，形成登录循环。
+    if (getSubdomain() !== 'main' && authStore.userInfo?.role !== getRoleForSubdomain()) {
+      authStore.clearAuthData()
+      ElMessage.error('该账号不属于此端，请使用对应身份的账号登录')
+      return
+    }
     ElMessage.success('登录成功')
 
     // redirect 回跳：复用 authRedirect.isSafeRedirect 单点白名单（仅同身份工作台内放行）

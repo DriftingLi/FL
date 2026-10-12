@@ -83,15 +83,12 @@ const legacyRedirects: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: () => {
-      // 专属子域（mentor./manage.）根路径 → 本子域默认工作区（#1614：按公开路径处理，身份校验
-      // 交给守卫的 subdomainRoleStep——不符角色清登录态回本子域登录页，而非弹去 training 子域）
+      // 子域名已知（非 main / 非 IP 直连）→ 一律按**子域假想角色**落点（#1651 / ADR-0075）：
+      // 不再按实际登录角色选工作区——那是 #1651 的根因（tutor/admin 的父域 Cookie 开
+      // training./recruit. 时被弹去 mentor./manage.）。身份校验交给守卫：不符角色由回落出口
+      // 的身份不变式清登录态回本子域登录页。IP 直连（getSubdomain 归 main）走原角色分支。
       const sub = getSubdomain()
-      if (sub === 'tutor') return '/training/tutor'
-      if (sub === 'admin') return '/admin/dashboard'
-      // valuation 子域根路径 → 估值首页（公开，无需登录）；
-      // 原逻辑会跳 /login，守卫再把 valuation 子域的登录页转成 /valuation/login
-      if (sub === 'valuation') return '/valuation'
-      if (sub === 'recruit') return '/recruit'
+      if (sub !== 'main') return getDefaultWorkspaceBySubdomain()
       const authStore = useAuthStore()
       const workspace = resolveWorkspaceForRole(authStore.userInfo?.role)
       // 未知角色 resolveWorkspaceForRole 返回 '/'，根路径按原逻辑回登录页

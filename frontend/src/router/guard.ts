@@ -11,6 +11,7 @@
 //                               不符 → 清登录态回本子域登录页。父域 Cookie 使学员登录态在
 //                               mentor./manage. 生效，须先判「不是本子域的人」，否则角色
 //                               回落会被子域边界整页弹去 training
+//                               （#1651 补全：共号子域上的同一不变式落在回落出口，见 ADR-0075）
 //   5. roleStep              —— 角色校验
 //   6. credentialStep        —— 无证件 onboarding 预筛（ADR-0020；前置 3 已放行需登录路由）
 // 另有一条**状态就绪**步骤：4b capabilityLoadStep —— 动态角色（管理端）的能力集尚未装载时，
@@ -239,19 +240,41 @@ export const roleStep: GuardStep = (input, state) => {
  * 否则侧栏顺序的第一个可达页；一个都没有 → 「无管理权限」页（真的会渲染）。
  */
 function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision {
-  if (state.role === 'admin') {
-    const landing = adminLandingPage(capability =>
-      holdsCapability(state.role, state.capabilities, capability)
-    )
-    return { action: 'redirect', to: { name: landing } }
+  // #1651 / ADR-0075 —— 回落出口的子域身份不变式：父域 Cookie 让任何登录态在所有子域生效，
+  // 回落决策若把用户送向「当前子域之外的工作区」，会被 subdomainBoundaryStep 升级成整页跳转
+  // （tutor/admin 的 Cookie 开 training./recruit. 被弹去 mentor./manage.，即 #1614 的镜像）。
+  // 出口①（身份落点异域）：目标落点子域 ≠ 当前子域，或 admin/tutor 的静态落点子域 ≠ 当前
+  // 子域（他们在共号子域上本就是「别人」，落点再同域也是替别人选的路）→ 清登录态回本子域
+  // 登录页并携带回跳，让用户就地换身份。
+  if (!state.ipDirect && state.subdomain !== 'main') {
+    const ws = workspaceOf(input)
+    const landing = ws && ws !== 'auth' ? WORKSPACE_SUBDOMAIN[ws] : resolveTargetSubdomain(input)
+    const homeSub = state.role === 'admin' ? 'admin' : state.role === 'tutor' ? 'tutor' : null
+    if (landing !== state.subdomain || (homeSub && homeSub !== state.subdomain)) {
+      return { action: 'redirect', to: { path: '/login', query: { redirect: input.fullPath } }, clearAuth: true }
+    }
   }
-  if (state.role === 'tutor') {
-    return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
+  const decision: GuardDecision = (() => {
+    if (state.role === 'admin') {
+      const landing = adminLandingPage(capability =>
+        holdsCapability(state.role, state.capabilities, capability)
+      )
+      return { action: 'redirect', to: { name: landing } }
+    }
+    if (state.role === 'tutor') {
+      return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
+    }
+    // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
+    if (workspaceOf(input) === 'valuation') return { action: 'redirect', to: '/valuation' }
+    // 其余 → 学员工作区
+    return { action: 'redirect', to: '/training' }
+  })()
+  // 出口②（共号子域自绕）：recruiter/未知角色的回落落点就是 /training——若当前路径也是它，
+  // 重跑守卫会再次进入本函数得到同一决策，vue-router 掐导航成空白页 → 同样清态回登录页。
+  if (!state.ipDirect && state.subdomain !== 'main' && decision.to === input.path) {
+    return { action: 'redirect', to: { path: '/login', query: { redirect: input.fullPath } }, clearAuth: true }
   }
-  // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
-  if (workspaceOf(input) === 'valuation') return { action: 'redirect', to: '/valuation' }
-  // 其余 → 学员工作区
-  return { action: 'redirect', to: '/training' }
+  return decision
 }
 
 /**
