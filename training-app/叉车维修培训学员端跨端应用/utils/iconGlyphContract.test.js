@@ -324,7 +324,6 @@ describe('图标字形契约（#1071：全仓零空槽 + 零孤立 U+FE0F）', (
         'pages/courses/course-detail.uvue',
         'pages/notifications/notifications.uvue',
         'pages/forum/forum.uvue',
-        'pages/forum/my-forum.uvue',
         'pages/forum/components/forum-topic-card.uvue',
         'pages/forum/components/forum-resource-panel.uvue',
       ]) {

@@ -313,7 +313,6 @@ const MODULES = {
       'pages/forum/forum-create.uvue',
       'pages/forum/forum-detail.uvue',
       'pages/forum/forum.uvue',
-      'pages/forum/my-forum.uvue',
     ],
     extractDirs: ['pages/forum/components'],
     crossModuleConsumers: ['profile'],

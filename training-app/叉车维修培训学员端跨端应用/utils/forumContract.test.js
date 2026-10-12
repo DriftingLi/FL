@@ -170,7 +170,6 @@ describe('composable 下沉契约（列表两域 + 详情三域状态离开壳�
 describe('列表摘要接格式轴（#1273：预览与正文同源，摘要不留第二实现）', () => {
   const card = read('pages/forum/components/forum-topic-card.uvue');
   const plaza = read('pages/forum/forum.uvue');
-  const mine = read('pages/forum/my-forum.uvue');
   const display = read('utils/forumDisplay.uts');
 
   it('卡片走扁平 `contentFormat` prop 转发到唯一实现，不自持截断（#687：可选对象 prop 成员直读 = error18）', () => {
@@ -184,13 +183,9 @@ describe('列表摘要接格式轴（#1273：预览与正文同源，摘要不�
     expect(plaza).toContain(':content-format="item.content_format"');
   });
 
-  it('「我的帖子」的第二实现已删：只剩薄包装 + 唯一实现 import（副本一回来，格式轴就补不到它）', () => {
-    expect(mine).toContain("import { getContentPreview } from '../../utils/forumDisplay'");
-    expect(mine).toContain('return getContentPreview(item.content, item.content_format)');
-    expect(mine).toContain('{{ topicPreview(item) }}'); // 模板不直调 import 函数（#677 编译门）
-    expect(mine).not.toContain('function getContentPreview(');
-    expect(mine).not.toContain('substring(0, 80)');
-  });
+  // 「我的帖子」（pages/forum/my-forum.uvue）的薄包装断言已随 #1610 删页摘除：
+  // 该页是孤儿页（被 personal-activity 四主 tab 覆盖），其编辑入口随页迁入
+  // personal-activity 帖子 tab（activity-topic-card editable/edit）。
 
   it('摘要层不自己解析、不自己判档 —— 只经 `utils/forumBody` 那一条格式轴口（投影与渲染同源）', () => {
     expect(display).toContain("import { forumContentPlainText, FORMAT_TEXT } from './forumBody'");

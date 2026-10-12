@@ -272,13 +272,6 @@
             }
         },
         {
-            "path": "pages/forum/my-forum",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "我的论坛"
-            }
-        },
-        {
             "path": "pages/forum/check-in",
             "style": {
                 "navigationStyle": "custom",

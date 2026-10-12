@@ -28,7 +28,7 @@
                 </view>
                 <view class="list-section">
                     <ActivityTopicCard v-for="(item, idx) in topics" :key="idx" :title="item.title" :content="item.content" :content-format="item.content_format" :has-content="true"
-                        :likes-count="item.likes_count" :replies-count="item.replies_count" :created-date="item.created_at" :show-stats="true" @tap="onTopicClick(item.id)" />
+                        :likes-count="item.likes_count" :replies-count="item.replies_count" :created-date="item.created_at" :show-stats="true" :editable="true" @tap="onTopicClick(item.id)" @edit="onEditTopic(item.id)" />
                 </view>
             </view>
 
@@ -300,6 +300,11 @@
 
     function onTopicClick(topicId : number) : void {
         uni.navigateTo({ url: '/pages/forum/forum-detail?id=' + topicId })
+    }
+
+    /** 编辑我的帖子（#1610：my-forum 删页后「编辑」唯一可达入口，落在本页帖子 tab） */
+    function onEditTopic(topicId : number) : void {
+        uni.navigateTo({ url: '/pages/forum/forum-create?id=' + topicId })
     }
 
     onShow(() => {

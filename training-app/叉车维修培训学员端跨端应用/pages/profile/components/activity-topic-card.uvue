@@ -8,7 +8,12 @@
         <text class="stat-text">{{ likesCount }} 赞</text>
         <text class="stat-text">{{ repliesCount }} 评论</text>
       </view>
-      <text class="topic-time">{{ displayTime(createdDate) }}</text>
+      <view class="topic-footer-right">
+        <view v-if="editable" class="topic-edit-btn" @click.stop="onEditTap">
+          <text class="topic-edit-text">编辑</text>
+        </view>
+        <text class="topic-time">{{ displayTime(createdDate) }}</text>
+      </view>
     </view>
   </view>
 </template>
@@ -35,6 +40,7 @@
     refHeader?: boolean
     hasContent?: boolean
     contentFormat?: string // 正文格式轴（#1273；空串与非 markdown 都按纯文本投影）
+    editable?: boolean // 「编辑」入口（#1610：my-forum 删页后唯一可达入口，随页迁入帖子 tab）
   }>(), {
     title: '',
     content: '',
@@ -44,10 +50,11 @@
     showStats: false,
     refHeader: false,
     hasContent: false,
-    contentFormat: ''
+    contentFormat: '',
+    editable: false
   })
 
-  const emit = defineEmits(['tap'])
+  const emit = defineEmits(['tap', 'edit'])
 
   /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，
    *  #677 编译门实测）；本地薄包装后消费 utils/format 唯一实现 */
@@ -66,6 +73,11 @@
 
   function onCardTap() : void {
     emit('tap')
+  }
+
+  /** 编辑按钮（#1610）：.stop 防止触发卡片的 onCardTap（与 my-forum 原实现同口径） */
+  function onEditTap() : void {
+    emit('edit')
   }
 </script>
 
@@ -105,6 +117,25 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .topic-footer-right {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* 「编辑」按钮样式自已删除的「我的论坛」页原样移植（#1610：样式随唯一消费方迁移） */
+  .topic-edit-btn {
+    padding: 6rpx 20rpx;
+    border-radius: 24rpx;
+    background-color: #f0f5ff;
+    border: 1rpx solid #d0e0ff;
+    margin-right: 16rpx;
+  }
+
+  .topic-edit-text {
+    font-size: 22rpx;
+    color: #2979ff;
   }
 
   .topic-stats {

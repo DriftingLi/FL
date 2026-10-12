@@ -124,14 +124,15 @@ describe('卡片组件契约（纯展示 + 扁平 props，#687 教训）', () =>
       expect(src).not.toMatch(/uni\.(navigateTo|showToast|request)/);
       expect(src).not.toMatch(/setInterval|ref</);
     }
-    expect(card).toContain("defineEmits(['tap'])");
+    expect(card).toContain("defineEmits(['tap', 'edit'])");
     expect(tabs).toContain("defineEmits(['switch'])");
     expect(user).not.toMatch(/defineEmits/);
   });
 
   it('卡片 props 全扁平原始值（无对象 prop、无 as unknown as、无 ref<any>）', () => {
     for (const p of ['title?: string', 'content?: string', 'createdDate?: string', 'likesCount?: number',
-      'repliesCount?: number', 'showStats?: boolean', 'refHeader?: boolean', 'hasContent?: boolean']) {
+      'repliesCount?: number', 'showStats?: boolean', 'refHeader?: boolean', 'hasContent?: boolean',
+      'editable?: boolean']) {
       expect(card).toContain(p);
     }
     expect(card).not.toMatch(/item\??:|Topic\??:|Reply\??:/);
