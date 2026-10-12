@@ -131,15 +131,11 @@
 <script setup lang="uts">
   import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { ref, computed } from 'vue'
-  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { onShow, onUnload } from '@dcloudio/uni-app'
-  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { goBack } from '../../utils/navigation'
-  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import { useAuthStore } from '../../stores/auth'
   import type { LoginResult } from '../../types/index'
   import InfoDialog from './components/info-dialog.uvue'
-  import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
   import {
     displayNameOf, avatarUrlOf, hasPendingOf, accountTextOf, phoneTextOf,
     emailTextOf, companyTextOf, passwordTitleOf, passwordHintOf, Countdown,
