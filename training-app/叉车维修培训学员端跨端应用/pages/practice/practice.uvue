@@ -22,11 +22,8 @@
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref } from 'vue'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onShow } from '@dcloudio/uni-app'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { usePracticeOverview, type ModuleRow } from './composables/usePracticeOverview'
     import PracticeBannerCard from './components/practice-banner-card.uvue'
     import PracticeStatsBar from './components/practice-stats-bar.uvue'
