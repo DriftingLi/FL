@@ -79,7 +79,10 @@ function runInModule(statements) {
   try {
     const stdout = execFileSync(exe, args, {
       encoding: 'utf8',
-      timeout: 60000,
+      // 预算 180s（#1654 全量门串行实测暴露）：门跑到本套件时机器负载累积，pwsh 冷启动
+      // + git 链路在 60s 预算下被杀（e.status=null ⇒ fail-closed 抛错，G1b 红一例）；
+      // 单跑低负载 2-3s 过。只放宽杀线，不改任何判定语义。
+      timeout: 180000,
       windowsHide: true,
       maxBuffer: 8 * 1024 * 1024,
     });
@@ -88,6 +91,9 @@ function runInModule(statements) {
     return {
       ok: false,
       status: e.status,
+      // 被超时杀掉时 status=null（无头案）：把 signal 与原始 message 带回给断言方，
+      // fail-closed 的报错才指得出「为什么没拿到退出码」。
+      signal: e.signal || null,
       stdout: String(e.stdout || ''),
       stderr: String(e.stderr || e.message || ''),
     };
