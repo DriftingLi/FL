@@ -479,9 +479,12 @@ describe('api 收紧契约（forum 域经 mapper-callback 出口家族，refs #6
     expect(src).not.toMatch(/\.catch\(\(e : any/);
   });
 
-  it('降级/报错语义保留：my-* 三接口 catch 空列表降级，topics/detail 失败仍抛错', () => {
-    const degrades = (src.match(/后端未实现时降级为空列表/g) || []).length;
-    expect(degrades).toBe(3);
+  it('my-* 三接口经信封 getPaged 且不再吞错（ADR-0037 PR-A 首刀：#701 后「降级为空列表」纯遗留已删，reject 交页面既有 catch→toast）', () => {
+    expect((src.match(/后端未实现时降级为空列表/g) || []).length).toBe(0);
+    expect(src).toContain("getPaged<ForumReply>('/forum/my-replies'");
+    expect(src).toContain("getPaged<ForumTopic>('/forum/my-liked-topics'");
+    expect(src).toContain("getPaged<ForumTopic>('/forum/my-observed'");
+    expect(src).toContain("getPaged<ForumTopic>('/forum/my-view-history'");
     expect(src).toContain("errMsg(e, '获取帖子列表失败')");
     expect(src).toContain("errMsg(e, '获取帖子详情失败')");
   });

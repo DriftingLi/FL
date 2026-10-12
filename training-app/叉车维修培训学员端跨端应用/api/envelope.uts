@@ -1,0 +1,127 @@
+/**
+ * 分页信封归一：api 层响应解码的**单一出口**（移动端 ADR-0037）。
+ *
+ * 81 处各写一遍的「拆信封拿数组 + 定分页终止」收编为三个出口（A3：键名知识留在各域文件）：
+ *   - `getPaged<T>`   GET 分页站点的整条装载（拼 query → getMapped → decodePage）
+ *   - `decodePage<T>` 已在手的 UTSJSONObject → Page<T>（POST 站点配 `postMapped` + 它）
+ *   - `decodeList<T>` 纯数组信封 → T[]（`['items','list']`）
+ *
+ * 分页字段**只认 `total`**，`pages` / `page_size` 结构上不可表达 —— `pages→page_size` 误读家族
+ * （getMyRepliesApi 原内联 mapper 的误读站点，本票首刀消亡）因此消亡而不是逐处修。`total` 缺失 ⇒ 回落 `items.length`
+ * （先例 api/note.uts:37）并打 `[envelope] no-total <url>`；keys 全落空 ⇒ `[envelope] no-hit <url>`
+ * （**console.warn 不 reject**，理由见 ADR-0037 ③：现网吞错面会让 fail-loud 静默化）。
+ *
+ * 形态约束（utsAndroidCompile 规则表 + utsHarness fail-closed）：
+ *   - import 全花括号（utsHarness 只认 `import {…}` / `import type {…}`）
+ *   - 显式类型声明 + `as` 收口（Kotlin 泛型推断兜底，先例 usePagedList.uts:132 `as UsePagedListResult<T>`）
+ *   - 函数成员箭头包裹（规则 M/T：具名 fn 引用不作高阶实参；本文件 mapper 透传，形参直达）
+ *   - 无 try/catch、无 catch((e : any))（规则 H）、解码器 rethrow 原样上抛
+ *   - query 合并用 for...in（Android 端不支持 Object.keys，api/request.uts:432 先例）
+ */
+import { getMapped } from './request'
+import { toNumber } from './helpers'
+
+/** 归一化的一页：items + total + hasMore（ADR-0037 ①）。6 个页面要 total，不与 PagedBatch 合并。 */
+export type Page<T> = {
+    items : T[]
+    total : number
+    hasMore : boolean
+}
+
+/** 数组键名候选（ADR-0037 ①：键名知识留在各域文件，默认 `['items','list']`） */
+export const DEFAULT_KEYS : string[] = ['items', 'list']
+
+/** 归一化的 query 形态：调用方给键值对，getPaged 负责拼到 URL 上 */
+export type PageQuery = UTSJSONObject
+
+/**
+ * 从 UTSJSONObject 里取第一个命中键的数组信封。全落空 ⇒ null（调用方打 no-hit warn）。
+ * `Array<UTSJSONObject>` cast 是仓内先例形态（api/note.uts:39、api/student.uts:101）。
+ */
+function extractArray(obj : UTSJSONObject, keys : string[]) : Array<UTSJSONObject> | null {
+    for (let i = 0; i < keys.length; i++) {
+        const raw = obj[keys[i]]
+        if (raw != null) {
+            const arr = raw as Array<UTSJSONObject>
+            return arr
+        }
+    }
+    return null
+}
+
+/**
+ * 分页信封解码（归一出口之一）。
+ * 三级 hasMore：`total` 在 ⇒ `page*pageSize < total`；`total` 缺 ⇒ `items.length == pageSize`；
+ * 空批次恒假。`total` 缺失时打 `[envelope] no-total <url>`（回落 `items.length`，先例 api/note.uts:37）。
+ * keys 全落空 ⇒ 打 `[envelope] no-hit <url>` 并返回空页（不 reject，ADR-0037 ③）。
+ * 注意：信封在但**数组键落空**与「数组键在但为空数组」是两回事——前者打 no-hit，后者不打。
+ */
+export function decodePage<T>(data : UTSJSONObject, url : string, page : number, pageSize : number, toItem : (obj : UTSJSONObject) => T, keys : string[] = DEFAULT_KEYS) : Page<T> {
+    const arr = extractArray(data, keys)
+    if (arr == null) {
+        console.warn('[envelope] no-hit ' + url)
+        return {
+            items: [] as T[],
+            total: 0,
+            hasMore: false,
+        } as Page<T>
+    }
+    const items : T[] = []
+    for (let i = 0; i < arr.length; i++) {
+        items.push(toItem(arr[i]))
+    }
+    const totalRaw = data['total']
+    const total = totalRaw != null ? toNumber(totalRaw, items.length) : items.length
+    let hasMore : boolean
+    if (totalRaw != null) {
+        hasMore = page * pageSize < total
+    } else {
+        console.warn('[envelope] no-total ' + url)
+        hasMore = items.length == pageSize
+    }
+    return {
+        items: items,
+        total: total,
+        hasMore: hasMore,
+    } as Page<T>
+}
+
+/**
+ * 纯数组信封解码（归一出口之二）：裸数组或 `{list:[...]}` 包装（api/request.uts 对裸数组的既有包装）。
+ * `raw as Array<UTSJSONObject>` 之外若出现非对象元素（裸标量数组站点），PR-B 迁移时以现测为准。
+ */
+export function decodeList<T>(data : UTSJSONObject, url : string, toItem : (obj : UTSJSONObject) => T, keys : string[] = DEFAULT_KEYS) : T[] {
+    const arr = extractArray(data, keys)
+    if (arr == null) {
+        console.warn('[envelope] no-hit ' + url)
+        return [] as T[]
+    }
+    const items : T[] = []
+    for (let i = 0; i < arr.length; i++) {
+        items.push(toItem(arr[i]))
+    }
+    return items
+}
+
+/**
+ * GET 分页站点的整条装载（归一出口之三）：拼 query → `getMapped` → `decodePage`。
+ * 只收编 GET（ADR-0037 ⑤：POST 分页现网 0 站点，出现时走 `postMapped` + `decodePage`，不加 postPaged）。
+ * `query` 的值经 `toString()` 进 query 串（数字等标量调用方直传）；
+ * 手动序列化沿用 `api/request.uts:432` 的 for...in + encodeURIComponent（防跨端漂移，不交平台自动序列化）。
+ */
+export function getPaged<T>(url : string, page : number, pageSize : number, toItem : (obj : UTSJSONObject) => T, query : PageQuery | null = null, keys : string[] = DEFAULT_KEYS) : Promise<Page<T>> {
+    const params : UTSJSONObject = {} as UTSJSONObject
+    params['page'] = page.toString()
+    params['page_size'] = pageSize.toString()
+    if (query != null) {
+        for (const k in query) {
+            const v = query[k]
+            if (v != null) {
+                params[k] = `${v}`
+            }
+        }
+    }
+    return getMapped<Page<T>>(url, params, (data : UTSJSONObject) : Page<T> => {
+        return decodePage<T>(data, url, page, pageSize, toItem, keys)
+    })
+}

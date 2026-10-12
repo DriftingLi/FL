@@ -8,10 +8,12 @@
  *       构造在 `api/forumDto.uts`（那边头部写明了后端响应形态）。
  *       拆的理由是 600 行软预算（拆前 654 行）；执法面见 `utils/modules.js` 的 forum 条目。
  */
+import { getPaged } from './envelope'
+import type { Page } from './envelope'
 import { post, del, uploadFile, getMapped, postMapped, requestMapped } from './request'
 import type { RequestOptions } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
-import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, LikeTopicResult, MyRepliesResult } from '../types/index'
+import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, LikeTopicResult } from '../types/index'
 import { buildReply, buildTopic, buildTopicListResult, buildTopicDetail, buildLikeResult } from './forumDto'
 import { FORMAT_TEXT } from '../utils/forumBody'
 
@@ -321,28 +323,13 @@ export function getMyTopicsApi(page : number = 1, pageSize : number = 10) : Prom
  * 获取我的回复列表（含主题标题回填）
  * @param page 页码
  * @param pageSize 每页条数
+ * 装载走信封归一出口 `getPaged`（ADR-0037 PR-A 首刀）：数组键 `replies`，
+ * `pages→page_size` 误读站点（原 :343）在此消亡——decodePage 只认 total。
  */
-export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Promise<MyRepliesResult> {
-    const params : UTSJSONObject = {
-        page: page.toString(),
-        page_size: pageSize.toString(),
-    } as UTSJSONObject
-    return getMapped<MyRepliesResult>('/forum/my-replies', params, (data : UTSJSONObject) : MyRepliesResult => {
-        const items : ForumReply[] = []
-        const repliesRaw = data['replies']
-        if (repliesRaw != null) {
-            const repliesArray = repliesRaw as Array<UTSJSONObject>
-            for (let i = 0; i < repliesArray.length; i++) {
-                items.push(buildReply(repliesArray[i]))
-            }
-        }
-        return {
-            items: items,
-            total: toNumber(data['total']),
-            page: toNumber(data['page']),
-            page_size: toNumber(data['pages']),
-        } as MyRepliesResult
-    })
+export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Promise<Page<ForumReply>> {
+    return getPaged<ForumReply>('/forum/my-replies', page, pageSize, (obj : UTSJSONObject) : ForumReply => {
+        return buildReply(obj)
+    }, null, ['replies'])
 }
 
 // ===== 个人动态模块 API =====
@@ -353,15 +340,13 @@ export function getMyRepliesApi(page : number = 1, pageSize : number = 10) : Pro
  * @param pageSize 每页条数
  * @note 后端 GET /forum/my-liked-topics（#701，响应沿用 my-topics 形态，按点赞时间倒序）
  */
-export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
-    const params : UTSJSONObject = {
-        page: page.toString(),
-        page_size: pageSize.toString(),
-    } as UTSJSONObject
-    return getMapped<ForumTopicListResult>('/forum/my-liked-topics', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data)).catch((e) : ForumTopicListResult => {
-        // 后端未实现时降级为空列表
-        return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
-    })
+export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<Page<ForumTopic>> {
+    // 迁 getPaged（ADR-0037 PR-A 首刀）：keys ['topics']（buildTopicListResult 的既有键）；
+    // 原上滑 .catch→空页吞错点（注释「后端未实现时降级」，#701 后端已实现，纯遗留）同批删除——
+    // 吞错点会静默吞掉信封 warn 通道（ADR-0037 ③）；reject 交由页面既有 catch→toast 承接。
+    return getPaged<ForumTopic>('/forum/my-liked-topics', page, pageSize, (obj : UTSJSONObject) : ForumTopic => {
+        return buildTopic(obj)
+    }, null, ['topics'])
 }
 
 /**
@@ -370,15 +355,11 @@ export function getMyLikedTopicsApi(page : number = 1, pageSize : number = 10) :
  * @param pageSize 每页条数
  * @note 后端 GET /forum/my-observed（#701，浏览减去发帖/回复/主题点赞/主题收藏四项，按最近浏览倒序）
  */
-export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
-    const params : UTSJSONObject = {
-        page: page.toString(),
-        page_size: pageSize.toString(),
-    } as UTSJSONObject
-    return getMapped<ForumTopicListResult>('/forum/my-observed', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data)).catch((e) : ForumTopicListResult => {
-        // 后端未实现时降级为空列表
-        return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
-    })
+export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10) : Promise<Page<ForumTopic>> {
+    // 迁 getPaged（ADR-0037 PR-A 首刀）：keys ['topics']；原 .catch→空页吞错点同批删（#701 后纯遗留）。
+    return getPaged<ForumTopic>('/forum/my-observed', page, pageSize, (obj : UTSJSONObject) : ForumTopic => {
+        return buildTopic(obj)
+    }, null, ['topics'])
 }
 
 /**
@@ -387,15 +368,11 @@ export function getMyObservedTopicsApi(page : number = 1, pageSize : number = 10
  * @param pageSize 每页条数
  * @note 后端 GET /forum/my-view-history（#701，按主题去重取最近一次浏览倒序）
  */
-export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) : Promise<ForumTopicListResult> {
-    const params : UTSJSONObject = {
-        page: page.toString(),
-        page_size: pageSize.toString(),
-    } as UTSJSONObject
-    return getMapped<ForumTopicListResult>('/forum/my-view-history', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data)).catch((e) : ForumTopicListResult => {
-        // 后端未实现时降级为空列表
-        return { items: [], total: 0, page: page, page_size: pageSize } as ForumTopicListResult
-    })
+export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) : Promise<Page<ForumTopic>> {
+    // 迁 getPaged（ADR-0037 PR-A 首刀）：keys ['topics']；原 .catch→空页吞错点同批删（#701 后纯遗留）。
+    return getPaged<ForumTopic>('/forum/my-view-history', page, pageSize, (obj : UTSJSONObject) : ForumTopic => {
+        return buildTopic(obj)
+    }, null, ['topics'])
 }
 
 // ===== 采纳（#366）=====

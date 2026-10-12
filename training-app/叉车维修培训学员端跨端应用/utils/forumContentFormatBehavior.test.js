@@ -33,6 +33,7 @@ const API_DIR = path.join(__dirname, '..', 'api');
 const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
 const DTO_UTS = path.join(API_DIR, 'forumDto.uts');
 const FORUM_UTS = path.join(API_DIR, 'forum.uts');
+const ENVELOPE_UTS = path.join(API_DIR, 'envelope.uts');
 const TYPES_FORUM = path.join(__dirname, '..', 'types', 'forum.uts');
 
 /** 真件：helpers（零 import，空绑定即可）与 DTO 构造层（依赖 helpers，注入真件） */
@@ -72,7 +73,10 @@ function makeRequestMocks() {
 /** 载入真件 `api/forum.uts`（或变异副本），回读「载荷构造」这一层 */
 function loadForumApi(file = FORUM_UTS) {
   const mocks = makeRequestMocks();
-  const api = loadUts(file, { ...mocks, ...helpers(), ...dto(), ...formatBindings() });
+  // forum.uts import 面 2026-10 起含 `./envelope`（#1661 PR-A）⇒ 注入真件 envelope（建在同一套
+  // getMapped mock 之上，不手抄接口镜像——#1273：镜像抄写会静默漂移；envelope 内部只走 getMapped）。
+  const envelope = loadUts(ENVELOPE_UTS, { getMapped: mocks.getMapped, toNumber: helpers().toNumber });
+  const api = loadUts(file, { ...mocks, ...envelope, ...helpers(), ...dto(), ...formatBindings() });
   return { api, captured: mocks.captured };
 }
 
