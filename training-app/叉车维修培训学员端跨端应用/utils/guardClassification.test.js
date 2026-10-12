@@ -51,6 +51,10 @@ const ZERO_REF_WIRING_ALLOWED = [
   // 故 refs 天然为空；判据喂**合成** CRLF 文本（ADR-0019 §⑤ 的硬约束：不得读工作树真源）。
   // 判别力已实测：拆掉归一 ⇒ 该文件两条「必红」面转红（#1176）。
   'contractReaderEolContract.test.js',
+  // #1611：文档↔值面一致性接线守护（读 docs/ui-spec.md 与 uni.scss 文本做双向断言）。
+  // 被测物是文档与 SCSS 真源（.md / .scss 都不在载体扩展名集内）⇒ refs 天然为空；
+  // 判别力已实测：uni.scss:81 主色值改坏 ⇒ 5 用例真红（套件另带注入必红 8 it 自检）。
+  'uiDocDocMapContract.test.js',
 ];
 
 /**
