@@ -1,0 +1,10 @@
+# 统一作者身份 —— 规范身份：DriftingLi <2945123383@qq.com>
+#
+# 1) 早期 GitHub noreply 身份并入规范邮箱
+#    FL: 27 个提交（2026-07-03 ~ 2026-08-09）；portal: 6 个提交（2026-08-09）
+DriftingLi <2945123383@qq.com> <135530638+DriftingLi@users.noreply.github.com>
+#
+# 2) 同一邮箱下的多个名字（罗浩 / luohao / DriftingLi）统一为 DriftingLi
+DriftingLi <2945123383@qq.com> <2945123383@qq.com>
+#
+# 其他协作者（zheng / zhengcookie）与 agent（lh6-agent）的身份不在此文件射程内
