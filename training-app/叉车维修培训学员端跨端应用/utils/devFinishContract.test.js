@@ -1185,3 +1185,250 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
   });
 });
 
+// ============================================================
+// L 系列（#1654，2026-10-12）：③ 门本地快路径
+//
+// 票面验收①：快路径入口存在、结果行与全量门**机检可判读地区分**；
+// 票面验收②：汇总行判读要在「错误流灌满、人类视线被淹没」的输出形态下仍命中；
+// 票面验收③：CI 与 ③ 门全量的 `-i` 串行语义一字不动（#1410）。
+//
+// 判别力取证（变异实测，改坏 ⇒ 哪条红）：
+//   Write-UnitGateArtifacts 不认 -Mode（回退一律 gate 形）     ⇒ L1b 红（local 腿收不到独立 token 与 mode=local）
+//   local 机检行沿用 TEST_UNIT_RESULT（不区分）                ⇒ L1b 红（行首 token 断言 + L1a 的 gate 形对照腿）
+//   mode=local 字段被省略                                      ⇒ L1b 红（行逐字节相等断言）
+//   gate 形机检行被顺手改形状（新开关磨到默认路径）            ⇒ L1a 红（默认腿行逐字节钉住）
+//   红跑摘要不落 / exit 不透传                                 ⇒ L1c 红（红腿 summaryExists 与行内 exit=1）
+//   CLIXML 刷屏 + 重复汇总行 + 假机检 token ⇒ 判读漂走         ⇒ L2 红（计数取最后一条、time 剥预估尾巴、真 token 在日志末行）
+//   UnitLocal 分支跑 test:unit / 抄第二份 jest 参数 / 不透传 exit ⇒ L3 红（命令单一形状 + 无参数抄写 + exit 语句）
+//   UnitLocal 分支被搬到 UnitGate 之后                          ⇒ L3 红（位置断言：U8 的 branch 切片会把它吞进全量门）
+//   package.json 四入口任一漂移（-i 进快路径 / 全量丢 -i）      ⇒ L3 红（四条入口逐字面量）
+// ============================================================
+
+/** L 系列一次性 AST 抽函数真执行（先例：runUnitGateScenarios；独立驱动，不混用 U 系列的场景夹具）。 */
+function runLocalModeScenarios() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'devfinish-1654-'));
+  const inputPath = path.join(dir, 'input.json');
+  const resultPath = path.join(dir, 'result.json');
+  const harness = path.join(dir, 'harness.ps1');
+  // 输出夹具用**真实 jest 形状**（Test Suites:/Tests:/Time: 三条汇总行带前导空白），与门真跑时
+  // `& npm run ... | Out-String` 吐出来的形态一致。同一份输出喂 gate / local 两腿 ⇒ 分行只来自 -Mode。
+  const greenLocalOutput = [
+    '> forklift-training-app@1.0.0 test:unit:local',
+    '> jest --config jest.config.unit.js',
+    '',
+    'PASS utils/format.test.js',
+    'PASS utils/checkinCalendar.test.js',
+    '',
+    'Test Suites: 158 passed, 158 total',
+    'Tests:       3000 passed, 3000 total',
+    'Snapshots:   0 total',
+    'Time:        87.412 s',
+    'Ran all test suites.',
+  ].join('\r\n');
+  const redLocalOutput = greenLocalOutput
+    .replace('Test Suites: 158 passed, 158 total', 'Test Suites: 157 passed, 1 failed, 158 total')
+    .replace('Tests:       3000 passed, 3000 total', 'Tests:       2999 passed, 1 failed, 3000 total');
+  // CLIXML 对抗夹具（票面验收②）：模拟 pwsh 把子进程 stderr 序列化成 `#< CLIXML` / NativeCommandError
+  // 记录的刷屏形态（ADR-0036 的根因），再叠两层真实世界见过的问题：汇总行在详情里被引用过一遍
+  //（应取最后一条）、`Time:` 挂 jest 的预估尾巴（time= 只取测量值）、以及一条**旧形状**的假机检 token
+  //（真 token 是现生成的、追加在日志尾部 ⇒ 假 token 不得成为日志的最后一行）。
+  const clixmlNoise = [];
+  for (let i = 0; i < 200; i++) {
+    clixmlNoise.push(`#< CLIXML <Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="E" RefId="${i}"><S N="E">NativeCommandError noise line #${i}</S></Obj></Objs>`);
+  }
+  const clixmlGreenLocalOutput = [
+    '> forklift-training-app@1.0.0 test:unit:local',
+    '> jest --config jest.config.unit.js',
+    '',
+    ...clixmlNoise,
+    'TEST_UNIT_RESULT exit=99 suites=0 suitesFailed=99 tests=0 testsFailed=99 time=9s',
+    '',
+    'PASS utils/format.test.js',
+    'Test Suites: 158 passed, 158 total',
+    'Tests:       3000 passed, 3000 total',
+    'Test Suites: 158 passed, 158 total',
+    'Time:        87.412 s, estimated 814 s',
+    'Ran all test suites.',
+    '', '',
+  ].join('\r\n');
+  fs.writeFileSync(inputPath, JSON.stringify({
+    script: path.join(ROOT, SCRIPT_REL),
+    cases: {
+      gateDefault: { mode: 'gate', output: greenLocalOutput, exitCode: 0, logPath: path.join(dir, 'gate-test-unit.log'), summaryPath: path.join(dir, 'gate-test-unit-failure.txt') },
+      localGreen: { mode: 'local', output: greenLocalOutput, exitCode: 0, logPath: path.join(dir, 'local-test-unit.log'), summaryPath: path.join(dir, 'local-test-unit-failure.txt') },
+      localRed: { mode: 'local', output: redLocalOutput, exitCode: 1, logPath: path.join(dir, 'local-red-test-unit.log'), summaryPath: path.join(dir, 'local-red-test-unit-failure.txt') },
+      clixmlFlood: { mode: 'local', output: clixmlGreenLocalOutput, exitCode: 0, logPath: path.join(dir, 'flood-test-unit.log'), summaryPath: path.join(dir, 'flood-test-unit-failure.txt') },
+    },
+  }), 'utf8');
+  const body = [
+    '$ErrorActionPreference = \'Stop\'',
+    'Set-StrictMode -Version Latest',
+    `$spec = [System.IO.File]::ReadAllText('${inputPath}', [System.Text.Encoding]::UTF8) | ConvertFrom-Json`,
+    '$src = [System.IO.File]::ReadAllText($spec.script, [System.Text.Encoding]::UTF8)',
+    '$tokens = $null',
+    '$errors = $null',
+    '$ast = [System.Management.Automation.Language.Parser]::ParseInput($src, [ref]$tokens, [ref]$errors)',
+    'if (@($errors).Count -gt 0) { throw (\'dev-finish.ps1 解析失败（行号）：\' + ((@($errors) | ForEach-Object { $_.Extent.StartLineNumber }) -join \',\')) }',
+    '$fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)',
+    'if (@($fns | Where-Object { $_.Name -eq \'Write-UnitGateArtifacts\' }).Count -ne 1) { throw \'Write-UnitGateArtifacts 没有被抽到（被改名 / 被拆进别的文件 / 定义形态变了）\' }',
+    'if (@($fns | Where-Object { $_.Name -eq \'New-TestFailureSummary\' }).Count -ne 1) { throw \'New-TestFailureSummary 没有被一起抽到：摘要复用件与落盘件分家了\' }',
+    'foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }',
+    '$out = [ordered]@{}',
+    'foreach ($p in $spec.cases.PSObject.Properties) {',
+    '  $sc = $p.Value',
+    '  $r = $null',
+    '  $thrown = $null',
+    '  try {',
+    // gateDefault 腿**不传** -Mode ⇒ 走参数默认值（「默认路径逐字节不变」钉的就是它）；local 腿显式传。
+    '    $modeToken = $(if ($sc.mode -eq \'local\') { \'-Mode local\' } else { \'\' })',
+    '    $r = Invoke-Expression ("Write-UnitGateArtifacts -Output `$sc.output -LogPath `$sc.logPath -SummaryPath `$sc.summaryPath -ExitCode ([int]`$sc.exitCode) $modeToken")',
+    '  } catch {',
+    '    $thrown = $_.Exception.Message',
+    '  }',
+    '  $logExists = Test-Path -LiteralPath $sc.logPath',
+    '  $logContent = \'\'',
+    '  if ($logExists) { $logContent = [System.IO.File]::ReadAllText($sc.logPath, [System.Text.Encoding]::UTF8) }',
+    '  $summaryExists = Test-Path -LiteralPath $sc.summaryPath',
+    '  $out[$p.Name] = @{',
+    '    thrown = $thrown',
+    '    resultLine = $(if ($null -ne $r) { $r.ResultLine } else { \'nosuch\' })',
+    '    exitCodeEcho = $(if ($null -ne $r) { $r.ExitCode } else { -1 })',
+    '    logContent = $logContent',
+    '    summaryExists = $summaryExists',
+    '    modeEcho = $(if ($null -ne $r) { $r.Mode } else { \'nosuch\' })',
+    '  }',
+    '}',
+    '$json = ConvertTo-Json -InputObject $out -Depth 6 -Compress',
+    `[System.IO.File]::WriteAllText('${resultPath}', $json, [System.Text.UTF8Encoding]::new($false))`,
+  ].join('\n');
+  fs.writeFileSync(harness, body, 'utf8');
+  try {
+    execFileSync(powershellExe(), psArgs(['-File', harness]), {
+      cwd: ROOT,
+      timeout: 180000,
+      windowsHide: true,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (e) {
+    throw new Error(
+      'L 系列驱动脚本跑不起来（pwsh 不可用或脚本抛错，fail-closed 不跳过）：\n'
+      + `status=${e.status === undefined ? 'n/a' : e.status}\n`
+      + `stdout=${String(e.stdout || '')}\nstderr=${String(e.stderr || e.message || '')}`
+    );
+  }
+  if (!fs.existsSync(resultPath)) {
+    throw new Error(`L 系列驱动脚本跑完了但没有产出 ${resultPath}（fail-closed：判据面不存在就等于没判）`);
+  }
+  return { parsed: JSON.parse(readText(resultPath)), dir };
+}
+
+describe('③ 门本地快路径（#1654）', () => {
+  let localCtx;
+  beforeAll(() => {
+    localCtx = runLocalModeScenarios();
+  });
+
+  test('L1a: 默认调用（不传 -Mode）保持 gate 形逐字节不变 —— 成对腿：既有读者不被新开关磨到', () => {
+    const g = localCtx.parsed.gateDefault;
+    expect(g.thrown).toBeNull();
+    expect(g.modeEcho).toBe('gate');
+    // 行**逐字节**钉住（含 log= 指回绝对路径的默认行为）：默认路径不许因新开关改变任何一段
+    expect(g.resultLine).toBe('TEST_UNIT_RESULT exit=0 suites=158 suitesFailed=0 tests=3000 testsFailed=0 time=87.412s wall=0s log=' + path.join(localCtx.dir, 'gate-test-unit.log') + ' summary=none head=? dirty=?');
+  });
+
+  test('L1b: -Mode local 发独立首 token + mode=local，同一输入下与 gate 形机检可判读地区分（票面验收①）', () => {
+    const g = localCtx.parsed.gateDefault;
+    const l = localCtx.parsed.localGreen;
+    expect(l.thrown).toBeNull();
+    expect(l.modeEcho).toBe('local');
+    expect(l.exitCodeEcho).toBe(0);
+    // 行逐字节钉住：独立 token、同计数、`mode=local` 收尾 —— 字段顺序也在这里（机检行是稳定的形状）
+    expect(l.resultLine).toBe('TEST_UNIT_LOCAL_RESULT exit=0 suites=158 suitesFailed=0 tests=3000 testsFailed=0 time=87.412s wall=0s log=' + path.join(localCtx.dir, 'local-test-unit.log') + ' summary=none head=? dirty=? mode=local');
+    // 「机检可判读地区分」的实际读法 = Select-String 锚定行首的正则：local 行**只**命中 LOCAL token，
+    // 全量门的行首锚定**不得**命中 local 行（快路径的绿不许被算到 ③ 门全量头上，反之亦然）
+    expect(l.resultLine).toMatch(/^TEST_UNIT_LOCAL_RESULT /);
+    expect(l.resultLine).not.toMatch(/^TEST_UNIT_RESULT /);
+    expect(g.resultLine).toMatch(/^TEST_UNIT_RESULT /);
+    expect(g.resultLine).not.toMatch(/^TEST_UNIT_LOCAL_RESULT /);
+  });
+
+  test('L1c: 红腿成对 —— local 红跑 exit=1、计数带 failed、摘要真落盘（绿红两腿共用同一判据面）', () => {
+    const r = localCtx.parsed.localRed;
+    expect(r.thrown).toBeNull();
+    expect(r.exitCodeEcho).toBe(1);
+    expect(r.resultLine).toBe('TEST_UNIT_LOCAL_RESULT exit=1 suites=158 suitesFailed=1 tests=3000 testsFailed=1 time=87.412s wall=0s log=' + path.join(localCtx.dir, 'local-red-test-unit.log') + ' summary=' + path.join(localCtx.dir, 'local-red-test-unit-failure.txt') + ' head=? dirty=? mode=local');
+    expect(r.summaryExists).toBe(true);
+  });
+
+  test('L2: CLIXML 刷屏 + 重复汇总行 + 假机检 token 的输出形态下，判读仍命中真计数与退出码（票面验收②）', () => {
+    const f = localCtx.parsed.clixmlFlood;
+    expect(f.thrown).toBeNull();
+    // 行逐字节钉住 ⇒ 计数取**最后一条**汇总行（不是详情里引用的那份）、time= 剥掉预估尾巴、
+    // 夹具里那条假 token（exit=99）没有污染任何字段 —— 四件事全在一条断言里
+    expect(f.resultLine).toBe('TEST_UNIT_LOCAL_RESULT exit=0 suites=158 suitesFailed=0 tests=3000 testsFailed=0 time=87.412s wall=0s log=' + path.join(localCtx.dir, 'flood-test-unit.log') + ' summary=none head=? dirty=? mode=local');
+    // 票面验收②的落点：真机检行**追加在日志尾部** ⇒ 人类视线被 200 行 CLIXML 淹没后，
+    // 机检读者（Select-String | Select-Object -Last 1）从日志末行仍取到真 token
+    const lines = f.logContent.split(/\r?\n/).filter((s) => s.trim().length > 0);
+    expect(lines[lines.length - 1]).toBe(f.resultLine);
+    // 假 token 还在日志中间（它不被删——日志落原文），但机检读者（按首 token 过滤取**最后一条**）
+    // 读到的是真 token —— 假 token 淹没在中间，不再被读到，这正是不把它当结论的机制
+    expect(f.logContent).toContain('TEST_UNIT_RESULT exit=99');
+    const machineLines = lines.filter((s) => s.startsWith('TEST_UNIT'));
+    expect(machineLines).toHaveLength(2); // 夹具种入的假 token + 落盘追加的真 token
+    expect(machineLines[machineLines.length - 1]).toBe(f.resultLine);
+    expect(machineLines[0]).toContain('exit=99');
+  });
+
+  test('L3: 接线 —— 分支形态、命令单一形状、退出码透传、四条 npm 入口逐字面量（票面验收③）', () => {
+    const scriptSrc = readSource();
+    // 参数在（缺失则 StrictMode 下 `if ($UnitLocal)` 直接炸）
+    expect(scriptSrc).toMatch(/\[switch\]\$UnitLocal/);
+    // 位置：-UnitLocal 分支在 -UnitGate **之前**（U8 的 branch 切片从 `if ($UnitGate)` 起 ⇒ 后置会被
+    // 吞进全量门切片，把 U8 的「Get-HeadSha 恰 1 次」磨红）；且仍在 -DryRun 之后（不执行的承诺优先）
+    const localStart = scriptSrc.indexOf('if ($UnitLocal)');
+    const gateStart = scriptSrc.indexOf('if ($UnitGate)');
+    const dryRunAt = scriptSrc.indexOf('if ($DryRun)');
+    expect(localStart).toBeGreaterThan(-1);
+    expect(gateStart).toBeGreaterThan(localStart);
+    expect(localStart).toBeGreaterThan(dryRunAt);
+    const branch = scriptSrc.slice(localStart, gateStart);
+    // 跑的是 package.json 那条快路径命令本身，且**调用形态**只此一份（#974 双份漂移同形）。
+    // 只数 `& npm run` 的执行形态：分支里给人看的回显文案（「命令：npm run …」）不算第二份调用。
+    expect((branch.match(/& npm run test:\S+/g) || [])).toEqual(['& npm run test:unit:local']);
+    expect(branch).not.toContain('npx jest');
+    expect(branch).not.toContain('jest.config.unit.js'); // 不抄第二份 jest 参数
+    // 产物与判定：Write-UnitGateArtifacts 复用件 + -Mode local + exit 透传（判定只看退出码）
+    const artifactsCall = branch.indexOf('Write-UnitGateArtifacts -Output');
+    expect(artifactsCall).toBeGreaterThan(-1);
+    const callText = branch.slice(artifactsCall, branch.indexOf('\n\n', artifactsCall));
+    expect(callText).toContain('-Mode local');
+    expect(callText).toContain('-HeadSha $headSha');
+    expect(callText).toContain('-WorktreeState $worktreeState');
+    expect(branch).toMatch(/^ {4}exit \$art\.ExitCode$/m);
+    // 引用性两枚与全量门同一条纪律（#1556）：共享库取 sha、porcelain 判脏净，本分支不自定义取法
+    expect((branch.match(/Get-HeadSha -ProjectDir/g) || []).length).toBe(1);
+    expect(branch).toContain('lib\\gate-common.ps1');
+    expect(branch.indexOf('lib\\gate-common.ps1')).toBeLessThan(branch.indexOf('Get-HeadSha -ProjectDir'));
+    expect(branch).toMatch(/git -C \$ProjectDir status --porcelain/);
+    expect(branch).not.toMatch(/function Get-HeadSha/);
+    // -PostToPr 在快路径分支只警告不贴评论（sha 绑定评论是全量门的证据通道）
+    expect(branch).toContain('$PostToPr -gt 0');
+    expect(branch).not.toContain('Publish-UnitGateComment');
+    // ---- package.json 四入口逐字面量（票面验收③：CI 与 ③ 门全量的 -i 串行语义一字不动，#1410）----
+    const pkg = JSON.parse(readText(path.join(ROOT, 'package.json')));
+    expect(pkg.scripts['test:unit']).toBe('jest --config jest.config.unit.js -i');
+    expect(pkg.scripts['test:unit:gate']).toBe('pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -UnitGate');
+    // 快路径两入口都不带 -i（并行语义），全量门两入口都带（串行语义）—— 彼此互不污染
+    expect(pkg.scripts['test:unit:local']).toBe('jest --config jest.config.unit.js');
+    expect(pkg.scripts['test:unit:local']).not.toMatch(/\s-i\b/);
+    expect(pkg.scripts['test:unit:gate:local']).toBe('pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -UnitLocal');
+    // ---- 票面验收③的反向腿：全量门分支跑的命令必须是**串行那条** ----
+    // U8 钉的是 `toContain('npm run test:unit')` —— substring 形，`test:unit:local` 同样命中 ⇒
+    // 「全量门悄悄漂成并行」它挡不住（变异 M4 实测 U8 仍绿）。这里用 (?!:) 负向断言钉死：
+    // `& npm run test:unit` 的执行形态在 UnitGate 分支里恰好一次、且分支里不出现 `test:unit:local`。
+    const gateBranch = scriptSrc.slice(gateStart, scriptSrc.indexOf('# Step 1: 级别判定'));
+    expect((gateBranch.match(/& npm run test:unit(?!:)/g) || [])).toEqual(['& npm run test:unit']);
+    expect(gateBranch).not.toContain('test:unit:local');
+  });
+});
+
