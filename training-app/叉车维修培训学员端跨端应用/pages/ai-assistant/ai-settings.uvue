@@ -133,11 +133,8 @@
 <script setup lang="uts">
 	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { ref } from 'vue'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onShow } from '@dcloudio/uni-app'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { goBack } from '../../utils/navigation'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import {
 		getAiModelsApi,
 		getAiUserModelsApi,
@@ -148,7 +145,6 @@
 		defaultAiChatSettings,
 	} from '../../api/aiAssistant'
 	import type { AiModel, AiUserModel, AiChatSettings } from '../../types/index'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { useAiPro } from '../../composables/useAiPro'
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 

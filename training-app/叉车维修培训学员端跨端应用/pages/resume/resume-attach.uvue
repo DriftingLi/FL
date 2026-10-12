@@ -53,17 +53,11 @@
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onLoad } from '@dcloudio/uni-app'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { setStorageJSON, getStorageJSON, removeStorage } from '../../utils/storage'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { STORAGE_KEY_RESUME_ATTACH } from '../../constants/app'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { toStr, toNumber, errMsg } from '../../api/helpers'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { uploadResumePdfApi, deleteAttachmentApi } from '../../api/resume'
     const windowHeight = uni.getSystemInfoSync().windowHeight
 

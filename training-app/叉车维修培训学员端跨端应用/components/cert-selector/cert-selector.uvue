@@ -175,7 +175,9 @@
     }
 
     .cert-dropdown-mask {
-        position: fixed;
+        /* mp-weixin 组件内 position:fixed 全屏遮罩不绘制（#1671，#1650 取证）：改 absolute
+           锚定宿主 .container（页面级 .filter-mask 同构先例）；铺满+遮罩+点击关闭语义不变 */
+        position: absolute;
         left: 0;
         right: 0;
         top: 0;

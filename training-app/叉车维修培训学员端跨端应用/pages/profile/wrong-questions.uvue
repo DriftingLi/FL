@@ -61,11 +61,8 @@
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onShow } from '@dcloudio/uni-app'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import {
         getWrongQuestionsApi,
         getWrongQuestionStatsApi,
@@ -73,7 +70,6 @@
         removeWrongQuestionApi,
     } from '../../api/wrongQuestion'
     import type { WrongQuestionQuery } from '../../api/wrongQuestion'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'
     import type { WrongQuestionItem, WrongQuestionStats, WrongQuestionListResult } from '../../types/index'
     import WrongStatsCard from './components/wrong-stats-card.uvue'

@@ -66,14 +66,10 @@
 <script setup lang="uts">
 	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { ref } from 'vue'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onShow } from '@dcloudio/uni-app'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { goBack } from '../../utils/navigation'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { getAiUserModelsApi, saveAiUserModelApi, deleteAiUserModelApi } from '../../api/aiAssistant'
 	import type { AiUserModel } from '../../types/index'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 

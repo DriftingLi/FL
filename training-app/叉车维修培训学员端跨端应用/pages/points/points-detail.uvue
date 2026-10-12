@@ -84,15 +84,10 @@
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, computed } from 'vue'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { onShow } from '@dcloudio/uni-app'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getPointsBalanceApi, getPointsLedgerApi } from '../../api/points'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, ledgerIconGlyph, deltaText, deltaKind, expiringWithinDays, todayDateStr } from '../../utils/pointsDisplay'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { formatDateTimeStr } from '../../utils/format'
     import type { PointsBalance, PointsLedgerItem, PointsLedgerResult } from '../../types/index'
     const windowHeight = uni.getSystemInfoSync().windowHeight

@@ -89,11 +89,8 @@
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref, onMounted } from 'vue'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { useAuthStore } from '../../stores/auth'
-    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { STORAGE_KEY_TOKEN, STORAGE_KEY_REFRESH_TOKEN, STORAGE_KEY_USER, STORAGE_KEY_LOGIN_PROVIDER } from '../../constants/app'
 
     const authStore = useAuthStore()

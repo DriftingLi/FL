@@ -78,18 +78,13 @@
 <script setup lang="uts">
 	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onLoad } from '@dcloudio/uni-app'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { ref, computed } from 'vue'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { useAuthStore } from '../../stores/auth'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
 	import type { AiChatMessage, AIFunctionItem, AiSession, AiDiagnosisBrandOption, AiDiagnosisFaultCodeItem } from '../../types/index'
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { getDiagnosisBrandsApi, getDiagnosisModelsApi, getDiagnosisFaultCodesApi } from '../../api/aiAssistant'
 
-	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { FUNCTION_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
