@@ -69,7 +69,7 @@ describe('② 残留自动化会话 ⇒ 换端口（auto 会静默复用死会�
     expect(log).toMatch(/PORT_SWITCH/);
     // 换端口不是「门通过」的理由：假开发者工具永不开端口 ⇒ 仍判环境不可用
     expect(r.status).toBe(2);
-    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env reason=port-not-listening/);
+    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env-blocked reason=port-not-listening/);
   }, 300000);
 
   it('必红：请求端口空闲 ⇒ 必须沿用请求端口（不得无条件换）', async () => {

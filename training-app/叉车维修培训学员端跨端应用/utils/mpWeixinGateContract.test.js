@@ -437,7 +437,7 @@ function scanContract(sources) {
   // 锚点取**整条字面量**（不是裸 `no-dist`）：裸子串会被 `no-dist-X` 这类改名蒙过去（子串遮蔽，见 C17 的同类教训）。
   const openUseAt = s.indexOf("-Id 'devtools-open'");
   must(openUseAt !== -1, 'C12', '执行路径里没有按 id 取用 open 步骤（计划与执行脱节）');
-  const lastDistGuard = s.indexOf("'MP_WEIXIN_RESULT errors=env reason=no-dist'");
+  const lastDistGuard = s.indexOf("'MP_WEIXIN_RESULT errors=env-blocked reason=no-dist'");
   must(lastDistGuard !== -1, 'C12', '找不到 -SkipBuild 分支的 no-dist 兜底（open 的执行点晚于哪个锚点就判不出来了）');
   if (openUseAt !== -1 && lastDistGuard !== -1) {
     must(openUseAt > lastDistGuard, 'C12', 'open 的执行点落在构建分支条件内（-SkipBuild 路径到不了它）');
@@ -818,7 +818,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C11', { ...real, script: real.script.replace('Release-HxLock', 'Stop-Process -Name HBuilderX -Force') }],
       ['C12', { ...real, script: real.script.replace("-Id 'devtools-open'", "-Id 'devtools-openX'") }],
       ['C12', { ...real, script: real.script.replace(/\$open\.TimedOut/g, '$openX.TimedOut') }],
-      ['C12', { ...real, script: real.script.replace("errors=env reason=no-dist", "errors=env reason=nodist") }],
+      ['C12', { ...real, script: real.script.replace("errors=env-blocked reason=no-dist", "errors=env-blocked reason=nodist") }],
       // C13：把降级写成 PASS / 让 SKIP 静默变成通过 / 把结果行的 navigation 绑错
       ['C13', { ...real, script: real.script.replace('navigation=SKIP reason=', 'navigation=PASS reason=') }],
       ['C13', { ...real, script: real.script.replace('navigation = "$navField"', 'navigation = "ok"') }],
