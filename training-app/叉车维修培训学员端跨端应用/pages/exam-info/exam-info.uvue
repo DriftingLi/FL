@@ -1,13 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">考情资讯</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="考情资讯" @left-click="onBack" />
         <scroll-view class="tab-bar" direction="horizontal" :show-scrollbar="false">
             <view v-for="(tab, idx) in mainTabs" :key="idx" class="tab-item" @click="onMainTabChange(idx)">
                 <text class="tab-text" :class="{ 'tab-text-active': activeMainTab === idx }" lines="1">{{ tab }}</text>
@@ -44,12 +37,11 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
     function onBack() : void {
         goBack()
     }
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const mainTabs : string[] = ['招聘信息', '新闻资讯', '考试动态', '相关问题', '报名入口', '成绩查询', '岗位表']
@@ -122,52 +114,18 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    .header {
-        background-color: #ffffff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 80rpx;
     }
 
     .tab-bar {
         height: 80rpx;
         flex-direction: row;
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
+        background-color: $bg-header;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .tab-item {
@@ -178,12 +136,12 @@
     }
 
     .tab-text {
-        font-size: 28rpx;
-        color: #666666;
+        font-size: $font-size-md;
+        color: $text-color-secondary;
     }
 
     .tab-text-active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -191,13 +149,13 @@
         width: 40rpx;
         height: 6rpx;
         border-radius: 3rpx;
-        background-color: #2979ff;
-        margin-top: 8rpx;
+        background-color: $primary-color;
+        margin-top: $spacing-xs;
     }
 
     .filter-bar {
         flex-direction: row;
-        background-color: #ffffff;
+        background-color: $bg-header;
         padding: 16rpx 24rpx 20rpx;
         flex-wrap: wrap;
     }
@@ -205,56 +163,56 @@
     .filter-tag {
         padding: 10rpx 28rpx;
         border-radius: 28rpx;
-        background-color: #f5f5f5;
-        margin-right: 16rpx;
-        margin-bottom: 8rpx;
+        background-color: $bg-color;
+        margin-right: $spacing-sm;
+        margin-bottom: $spacing-xs;
     }
 
     .filter-tag-active {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .filter-tag-text {
-        font-size: 24rpx;
-        color: #666666;
+        font-size: $font-size-sm;
+        color: $text-color-secondary;
     }
 
     .filter-tag-text-active {
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: 500;
     }
 
     .content-scroll {
         flex: 1;
         height: 0;
-        background-color: #ffffff;
+        background-color: $bg-header;
     }
 
     .news-list {
         flex-direction: column;
-        padding: 8rpx 0;
+        padding: $spacing-xs 0;
     }
 
     .news-item {
         flex-direction: row;
         align-items: center;
         padding: 28rpx 32rpx;
-        border-bottom: 1rpx solid #f5f5f5;
+        border-bottom: 1rpx solid $bg-color;
     }
 
     .news-dot {
         width: 12rpx;
         height: 12rpx;
         border-radius: 6rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         margin-right: 20rpx;
         flex-shrink: 0;
     }
 
     .news-title {
         flex: 1;
-        font-size: 28rpx;
-        color: #333333;
+        font-size: $font-size-md;
+        color: $text-color;
         lines: 2;
         text-overflow: ellipsis;
     }
@@ -265,8 +223,8 @@
     }
 
     .empty-text {
-        font-size: 28rpx;
-        color: #999999;
+        font-size: $font-size-md;
+        color: $text-color-placeholder;
     }
 
     .loading-more {
@@ -275,7 +233,7 @@
     }
 
     .loading-text {
-        font-size: 24rpx;
-        color: #999999;
+        font-size: $font-size-sm;
+        color: $text-color-placeholder;
     }
 </style>
