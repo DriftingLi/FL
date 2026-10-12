@@ -1,14 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">签到</text>
-            <view class="header-right"></view>
-        </view>
+        <app-nav-bar title="签到" variant="inverse" @left-click="onBack" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <view class="reminder-row">
@@ -21,7 +13,15 @@
                 </view>
             </view>
 
-            <view class="checkin-banner">
+            <!-- #1607 §8③：加载失败显式化——失败态隐藏数据区与打卡入口，展示错误与重试 -->
+            <view v-if="loadError" class="error-state">
+                <text class="error-state-text">签到数据加载失败，请检查网络后重试</text>
+                <view class="error-retry-btn" @click="onRetryLoad">
+                    <text class="error-retry-text">重试</text>
+                </view>
+            </view>
+
+            <view v-if="!loadError" class="checkin-banner">
                 <view class="banner-left">
                     <text class="banner-title">{{ displayMonth }}月学习打卡</text>
                     <view class="banner-desc-row">
@@ -37,7 +37,7 @@
                 </view>
             </view>
 
-            <view class="month-bar">
+            <view v-if="!loadError" class="month-bar">
                 <view class="month-arrow" @click="onPrevMonth">
                     <text class="arrow-text">‹</text>
                 </view>
@@ -47,11 +47,11 @@
                 </view>
             </view>
 
-            <view class="week-header">
+            <view v-if="!loadError" class="week-header">
                 <text v-for="(day, idx) in weekDays" :key="idx" class="week-item">{{ day }}</text>
             </view>
 
-            <view class="calendar-grid">
+            <view v-if="!loadError" class="calendar-grid">
                 <view v-for="(cell, idx) in calendarCells" :key="idx" class="calendar-cell">
                     <view class="cell-day" :class="getCellClass(cell)">
                         <text class="cell-num" :class="getCellNumClass(cell)">{{ cell.day }}</text>
@@ -78,12 +78,10 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { checkInApi, getCheckInCalendarApi } from '../../api/checkin'
     import type { CheckInCalendarDay } from '../../types/index'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const weekDays : string[] = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -98,8 +96,9 @@
     const REMINDER_KEY = 'checkin-reminder-on'
     const reminderOn = ref<boolean>(false)
     // 自动打卡：进入页面即代打卡一次（仅真实数据下触发，每次访问尝试一次）
-    const usingMock = ref<boolean>(false)
     const autoCheckInTried = ref<boolean>(false)
+    // 加载失败显式化（#1607 §8③）：mock 降级链已清除——失败必须可见、可重试，不回退假数据
+    const loadError = ref<boolean>(false)
 
     type CalendarCell = {
         day : number
@@ -209,41 +208,11 @@
         uni.showToast({ title: reminderOn.value ? '已开启签到提醒' : '已关闭签到提醒', icon: 'none' })
     }
 
-    /** mock 日历数据（后端接口未就绪时回退；mock 态不触发自动打卡） */
-    function loadMockCalendar() : void {
-        usingMock.value = true
-        const year = displayYear.value
-        const month = displayMonth.value
-        const daysInMonth = new Date(year, month, 0).getDate()
-        const today = new Date()
-        const todayDate = today.getDate()
-        const mockDays : CheckInCalendarDay[] = []
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = year + '-' + padZero(month) + '-' + padZero(d)
-            // 过去日期随机标记部分已签到，今天及未来未签到
-            const isPast = d < todayDate
-            const checked = isPast && (d % 3 == 0 || d == 13 || d == 21)
-            mockDays.push({ date: dateStr, checked: checked, points: checked ? 7 : 0 } as CheckInCalendarDay)
-        }
-        calendarDays.value = mockDays
-        consecutiveDays.value = 2
-        totalDays.value = 49
-        // 检查今日
-        const todayStr = today.getFullYear() + '-' + padZero(today.getMonth() + 1) + '-' + padZero(today.getDate())
-        todayChecked.value = false
-        for (let i = 0; i < mockDays.length; i++) {
-            if (mockDays[i].date == todayStr && mockDays[i].checked) {
-                todayChecked.value = true
-                break
-            }
-        }
-    }
-
     async function loadCalendar() : Promise<void> {
         try {
             const result = await getCheckInCalendarApi(displayYear.value, displayMonth.value)
             console.log('[check-in] API result:', JSON.stringify(result))
-            usingMock.value = false
+            loadError.value = false
             consecutiveDays.value = result.streak
             totalDays.value = result.total
             calendarDays.value = result.days
@@ -259,8 +228,9 @@
                 }
             }
         } catch (e) {
-            console.error('[check-in] loadCalendar failed, using mock:', e)
-            loadMockCalendar()
+            // #1607 §8③：失败显式化——不再静默回退 mock，置失败态让用户看到并手动重试
+            console.error('[check-in] loadCalendar failed:', e)
+            loadError.value = true
         }
     }
 
@@ -283,7 +253,9 @@
             }
             loadCalendar()
         } catch (e) {
+            // #1607 §8③：打卡失败不再静默——toast 显式报错，用户可再点重试
             console.error('[check-in] checkIn failed:', e)
+            uni.showToast({ title: '打卡失败，请稍后重试', icon: 'none' })
         }
     }
 
@@ -320,6 +292,11 @@
         goBack()
     }
 
+    /** #1607 §8③：失败态手动重试入口 */
+    function onRetryLoad() : void {
+        loadCalendar()
+    }
+
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
     onLoad((options : OnLoadOptions) => {
         const stored = uni.getStorageSync(REMINDER_KEY)
@@ -327,8 +304,9 @@
             reminderOn.value = true
         }
         loadCalendar().then(() => {
-            // 进入页面自动代打卡一次：仅真实日历加载成功、今日未打卡时触发
-            if (!usingMock.value && !todayChecked.value && !autoCheckInTried.value) {
+            // 进入页面自动代打卡一次：仅日历加载成功（非失败态）、今日未打卡时触发
+            // #1607 §8③：usingMock 洞已堵——失败态下绝不自动打卡，避免把假成功写进用户数据
+            if (!loadError.value && !todayChecked.value && !autoCheckInTried.value) {
                 autoCheckInTried.value = true
                 doCheckIn(true)
             }
@@ -336,14 +314,8 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container { display: flex; background-color: #f5f5f5; flex-direction: column; }
-    .status-bar { background-color: #2979ff; }
-    .header { background-color: #2979ff; padding: 16rpx 32rpx; flex-direction: row; align-items: center; justify-content: space-between; }
-    .header-left { width: 80rpx; align-items: center; }
-    .back-icon { font-size: 48rpx; color: #ffffff; }
-    .header-title { flex: 1; font-size: 36rpx; font-weight: bold; color: #ffffff; text-align: center; }
-    .header-right { width: 80rpx; }
     .content-scroll { flex: 1; height: 0; }
     .checkin-banner { margin: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: #2979ff; flex-direction: row; align-items: center; justify-content: space-between; }
     .banner-left { flex: 1; flex-direction: column; margin-right: 24rpx; }
@@ -396,4 +368,9 @@
     /* 过去未打卡：灰色金币 */
     .badge-coin-missed { background-color: #c9c9c9; }
     .badge-coin-missed-text { font-size: 20rpx; color: #ffffff; font-weight: bold; line-height: 22rpx; }
+    /* #1607 §8③ 失败态：错误提示 + 重试钮（色值走既有告警语义白瓦片族，不引新 token） */
+    .error-state { align-items: center; padding: 80rpx 24rpx; }
+    .error-state-text { font-size: 26rpx; color: #999999; margin-bottom: 24rpx; }
+    .error-retry-btn { background-color: #2979ff; padding: 16rpx 48rpx; border-radius: 32rpx; }
+    .error-retry-text { font-size: 28rpx; color: #ffffff; font-weight: bold; }
 </style>
