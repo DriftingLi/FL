@@ -53,6 +53,14 @@ param(
     # 存在的理由：#1526 只把「单元测试（契约子集）」那一步的失败详情留住了；全量那一条至今没有落盘
     # 脚本，跑完只剩 exit code ⇒ 「刚才哪个红了」只能重跑几分钟（票 #1546 打的就是 C1 那一档）。
     [switch]$UnitGate,
+    # ---- ③ 门本地快路径（#1654，2026-10-12）----
+    # 与 -UnitGate 同构的落盘模式，但跑的是 `test:unit:local`（**并行**语义，jest.config.unit.js
+    # 不带 `-i`）：本机多核上的日常反馈环，结果行用独立 token `TEST_UNIT_LOCAL_RESULT` 打头，
+    # 与全量门的 `TEST_UNIT_RESULT` 机检可判读地区分。CI 与 ③ 门全量的 `-i` 串行语义一字不动（#1410
+    # 裁定：`-i` 挡的是并行下 loadUts 同步转译的 5s 默认超时抖动，本开关不动它、也不新增红面）。
+    # 不进九步管线、不取 HBuilderX 锁、不碰设备；位置在 -UnitGate **之前** ⇒
+    # `-UnitGate -UnitLocal` 同时给时本地快路径优先（它本来就是给「不想等全量」的时刻用的）。
+    [switch]$UnitLocal,
     # 与 ②④ 两条门脚本同名同义：把本次结果贴成 sha 绑定的 PR 评论（0 = 不贴）。
     [int]$PostToPr = 0,
     [switch]$Distribute,
@@ -389,7 +397,13 @@ function Write-UnitGateArtifacts {
         # 取不到就传空串 ⇒ 机检行写 `head=?` / `dirty=?`；`$WorktreeState` 只认 `clean` / `dirty` 两个字面值，
         # 其余（含带空格的串）一律归一为 `?` —— 机检行是一行 `key=value`，不能被输入撑成两行。
         [string]$HeadSha = '',
-        [string]$WorktreeState = ''
+        [string]$WorktreeState = '',
+        # 机检行身份（#1654）：'gate' = 全量门（`npm run test:unit`，-i 串行）发 `TEST_UNIT_RESULT`；
+        # 'local' = 本地快路径（`npm run test:unit:local`，并行）发 `TEST_UNIT_LOCAL_RESULT` 且多带
+        # 一枚 `mode=local`。两行**必须可判读地区分**（票面验收①）：Select-String 按首 token 就能分流，
+        # 不会把快路径的绿算到全量门头上。默认 'gate' ⇒ 既有调用点（-UnitGate 分支）逐字节不变。
+        [ValidateSet('gate', 'local')]
+        [string]$Mode = 'gate'
     )
     $utf8 = [System.Text.Encoding]::UTF8
     $lines = @($Output -split "\r?\n")
@@ -462,6 +476,10 @@ function Write-UnitGateArtifacts {
     $summaryRef = $(if ($null -eq $summary) { 'none' } elseif ($SummaryRef) { $SummaryRef } else { $SummaryPath })
 
     # ---- 3) 机检行 ----
+    # 身份首 token（#1654）：'local' 发独立 token `TEST_UNIT_LOCAL_RESULT` 并多带一枚 `mode=local`；
+    # 'gate' 维持 `TEST_UNIT_RESULT` 原样（既有读者 / 守护按旧形态读到的行逐字节不变）。
+    $isLocal = ($Mode -eq 'local')
+    $headToken = $(if ($isLocal) { 'TEST_UNIT_LOCAL_RESULT' } else { 'TEST_UNIT_RESULT' })
     $show = { param($v) $(if ($null -eq $v) { '?' } else { "$v" }) }
     # 引用性两枚的归一（#1556）：`head=` 只收「非空且不含空白」的串，`dirty=` 只收 `clean` / `dirty` 两个字面值，
     # 其余一律 `?`。取不到时**保留字段**写 `?` —— 省略字段或补空串都会让「上一次那行」变得不可比，
@@ -473,7 +491,7 @@ function Write-UnitGateArtifacts {
     if (-not $headText -or $headText -match '\s') { $headText = '?' }
     $dirtyText = $(if (@('clean', 'dirty') -ccontains $WorktreeState) { $WorktreeState } else { '?' })
     $parts = @(
-        'TEST_UNIT_RESULT'
+        $headToken
         "exit=$ExitCode"
         "suites=$(& $show $suitesTotal)"
         "suitesFailed=$(& $show $suitesFailed)"
@@ -486,6 +504,7 @@ function Write-UnitGateArtifacts {
         "head=$headText"
         "dirty=$dirtyText"
     )
+    if ($isLocal) { $parts += 'mode=local' }
     if ($staleSummary) { $parts += "staleSummary=$staleSummary" }
     if ($missing.Count -gt 0) { $parts += "missing=$(@($missing) -join '|')" }
     if ($summaryError) { $parts += "summaryError=$summaryError" }
@@ -515,6 +534,7 @@ function Write-UnitGateArtifacts {
         SummaryBytes = $(if ($null -ne $summary) { $summary.Bytes } else { 0 })
         SummaryError = $summaryError
         StaleSummary = $staleSummary
+        Mode         = $Mode
     }
 }
 
@@ -625,6 +645,75 @@ if ($DryRun) {
         Write-Host $line
     }
     exit 0
+}
+
+# ============================================================
+# ③ 门本地快路径落盘模式（#1654）：与 -UnitGate 同构，但跑**并行**语义的 `test:unit:local`
+#   与全量门的两处差别：① jest 不带 `-i` ⇒ 本机多核并行（CI 与 ③ 门全量的 `-i` 串行语义不动，
+#   #1410 裁定）；② 机检行用独立首 token `TEST_UNIT_LOCAL_RESULT`（+ `mode=local`），
+#   与全量门的 `TEST_UNIT_RESULT` 机检可判读地区分 —— 快路径的结论不会被算到全量门头上。
+#   位置在 -UnitGate **之前** ⇒ 两个开关同时给时快路径优先（它本来就是给「不想等全量」的时刻用的）。
+#   不进九步管线、不取 HBuilderX 锁、不碰设备；-DryRun 的「不执行任何操作」承诺同样优先于本分支。
+# ============================================================
+if ($UnitLocal) {
+    if ($PostToPr -gt 0) {
+        Write-Host '  ⚠️ -PostToPr 只在 -UnitGate（全量门）生效；本地快路径不贴 PR 评论' -ForegroundColor DarkYellow
+    }
+    $localStarted = Get-Date
+    $ciDir = Join-Path $ProjectDir '.ci-verify'
+    $localLogPath = Join-Path $ciDir 'test-unit-local.log'
+    $localSummaryPath = Join-Path $ciDir 'test-unit-local-failure.txt'
+    Write-Host '=== ③ 门本地快路径：并行单测 + 日志 +（仅红跑）失败摘要 + 机检行 ===' -ForegroundColor Cyan
+    Write-Host '  命令：npm run test:unit:local（并行，不带 -i；全量门维持 -i 串行不动，#1410）'
+    Write-Host "  日志（绿跑也落，落原文）：$localLogPath"
+    Write-Host "  摘要（只有红跑才落）：$localSummaryPath"
+    # 引用性两枚的取数与全量门同一条纪律（#1556）：Get-HeadSha 用共享库那份，本分支不自定义。
+    . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+    $headSha = Get-HeadSha -ProjectDir $ProjectDir
+    # 工作树脏净 = `git status --porcelain` 非空即 dirty（含未跟踪），与 -UnitGate 分支同形；
+    # 取不到留空串 ⇒ 机检行写 `dirty=?`，不猜、也不参与任何判红路径 —— 判据仍只有 jest 那一个退出码。
+    $worktreeState = ''
+    try {
+        $porcelain = @(& git -C $ProjectDir status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
+        if ($LASTEXITCODE -eq 0) { $worktreeState = $(if ($porcelain.Count -gt 0) { 'dirty' } else { 'clean' }) }
+    } catch {
+        $worktreeState = ''
+    }
+    # 跑的是 package.json 里**那条快路径命令本身**：不在这里抄第二份 jest 参数（与 -UnitGate 同一条
+    # 纪律，#974 的 pattern 双份漂移同形）—— 门与「被落盘的那一次」必须是同一个东西。
+    try {
+        $localOutput = & npm run test:unit:local 2>&1 | Out-String
+    }
+    catch {
+        # 与 -UnitGate 同形：EAP=Stop 下原生命令写 stderr 可能抛 ⇒ 异常文本当输出继续，判定仍取退出码。
+        $localOutput = "$($_.Exception.Message)"
+    }
+    $localExitCode = $LASTEXITCODE
+    $art = Write-UnitGateArtifacts -Output $localOutput -LogPath $localLogPath -SummaryPath $localSummaryPath `
+        -ExitCode $localExitCode -DurationSeconds ([int]((Get-Date) - $localStarted).TotalSeconds) `
+        -LogRef '.ci-verify/test-unit-local.log' -SummaryRef '.ci-verify/test-unit-local-failure.txt' `
+        -HeadSha $headSha -WorktreeState $worktreeState -Mode local
+
+    Write-Host ''
+    Write-Host $art.ResultLine -ForegroundColor $(if ($art.ExitCode -eq 0) { 'Green' } else { 'Red' })
+    Write-Host "  日志：$localLogPath（$($art.LogBytes) 字节）" -ForegroundColor Yellow
+    if ($art.SummaryPath) {
+        # 只报路径与体量，正文留在文件里 —— 与 -UnitGate 同一口径
+        Write-Host "  失败摘要（$($art.SummaryBytes) 字节，人读，不作门禁输入）：$($art.SummaryPath)" -ForegroundColor Yellow
+    }
+    elseif ($art.StaleSummary) {
+        Write-Host "  ⚠️ 本次是绿跑，但 $localSummaryPath 还留着 $($art.StaleSummary) 那一次红跑的摘要 ⇒ 它不是本次结论" -ForegroundColor DarkYellow
+    }
+    if ($art.SummaryError) {
+        Write-Host "  ⚠️ 摘要未落盘：$($art.SummaryError)（判定不受影响，照旧只看退出码）" -ForegroundColor DarkYellow
+    }
+    if (@($art.Missing).Count -gt 0) {
+        Write-Host "  ⚠️ 机检行缺字段：$(@($art.Missing) -join '、')（jest 的输出形态可能变了，请看日志原文）" -ForegroundColor DarkYellow
+    }
+    if ($art.ExitCode -eq 0) { Write-Result $true '本地快路径通过（并行语义的日常环，不是 ③ 门全量；结论由退出码给出）' }
+    # ⚠️ 属性引用必须走 `$($art.ExitCode)` 子表达式（同 -UnitGate 分支那行注释记过的坑）。
+    else { Write-Result $false "本地快路径未过（exit $($art.ExitCode)）；③ 门全量（-UnitGate，-i 串行）另行判定" }
+    exit $art.ExitCode
 }
 
 # ============================================================
