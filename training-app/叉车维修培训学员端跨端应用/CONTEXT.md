@@ -115,6 +115,19 @@ _Avoid_：测试工具（会把「模块边界的唯一事实源」降格为实�
 _Avoid_：异步列表（Web 侧 `useAsyncPage` 的语感，那边的信封形状与这边不同）；分页组件（它不是视图组件，
 空态/失败态的渲染仍归页面）；无限滚动（那是触发方式，不是这个概念）
 
+**信封归一（envelope normalization）**：
+`api` 层响应解码的**单一出口**（`api/envelope.uts`，移动端 ADR-0037）。它收编「拆信封拿数组、定分页终止」这两件
+各域各写一遍的事：调用方逐域**声明键名**（默认 `['items','list']`），模块只认 `total` 一个分页字段，并给出**单一
+`hasMore` 算法**（`page*pageSize < total`；无 `total` 回落 `items.length == pageSize`）。键名知识留在各域文件——
+模块收编算法、不持中央表。
+
+边界：只收编 GET 分页与纯数组解码（POST 站点走 `postMapped` + `decodePage`）；信封裁定（`{code,message,data}`
+双校验、`403:`/`404:` 前缀协议）仍归 `api/request.uts`；迁移期现存的 `.catch → 空页` 吞错点是它的反面教材，
+随迁移同批删除。
+
+_Avoid_：信封解码（手解 `['items']`、读 `pages`/`page_size` 正是它要消灭的形态）；中央键名表（键名差异留在领域文件，
+不在模块里集中登记——那是多会话并发改同一文件的冲突面）；拿它当错误处理层（信封形状不符只 warn 不 reject，错误通道不动）
+
 **手写载体（hand-rolled carrier）**：
 仍在自己实现分页装载协议的页面或 composable 文件——判据是「页码游标 `…page = ref` **且** 取数函数
 `function load|fetch|reloadXxx`」，与协议的具体形态无关。它是**棘轮**的计量单位
