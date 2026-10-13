@@ -35,6 +35,10 @@
  *       （#914 收束）：这四类不变量集中在脚本的 `New-GatePlan` 一处声明，执行路径按 id 取用
  *       （`Get-GateStep`），`-DryRun` 把同一份数据打成单行 `GATE_PLAN {json}`。守护**跑 `-DryRun` 并断言
  *       这份 JSON**（不再是调用点源码文本）⇒ 把调用点原文抽进共享库时守护不会失配。
+ *   C24 **任意页直达探针**（#1682 · ADR-0039 拆分步骤 2）：门计划必须声明 directPages 节（机制 =
+ *       cold-start-direct，构建产物 app.json 首项临时换页 + plain 冷启动、finally 还原、SKIP reason 值域、
+ *       探针 argv 模板）；执行路径必须消费 `<page>` 占位与 auto 页清单判据，且任何代码行不得回写源头
+ *       pages.json（运行时面判据来源，ADR-0038 决策 2 红线）。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -371,6 +375,38 @@ function scanPlan(plan) {
     must(catalog.includes(e.reason), 'C23', `exit2 的 reason ${e.reason}（${e.step}/${e.on}）不在 envReasons 枚举里 —— 直接 emit 的环境性失败必须能被枚举覆盖`);
   });
 
+  // ---- C24（#1682 · ADR-0039 拆分步骤 2）：任意页直达探针（cold-start-direct）的计划面声明 ----
+  //   机制由 ADR-0038 决策 1 裁定为唯一可靠：构建产物 app.json 首项临时换页 + plain 冷启动；
+  //   源头 pages.json 是运行时面判据来源，绝不许动（决策 2 红线）。缺这节 ⇒ 执行路径退化成硬编码参数。
+  const dp = plan && plan.directPages;
+  must(Boolean(dp), 'C24', '门计划缺 directPages 节（#1682 直达探针没有唯一真源）');
+  if (dp) {
+    must(dp.mechanism === 'cold-start-direct', 'C24', 'directPages.mechanism 不是 cold-start-direct（ADR-0038 决策 1 的机制是唯一一个，勿另选）');
+    must(dp.swapTarget === 'app.json', 'C24', 'directPages.swapTarget 不是 app.json（换页对象=构建产物 app.json 的 pages 首项）');
+    must(String(dp.swapNote || '').includes('不动源头 pages.json'), 'C24', 'directPages.swapNote 未声明「不动源头 pages.json」（ADR-0038 决策 2 红线）');
+    must(dp.restore === 'finally', 'C24', 'directPages.restore 不是 finally（换页必须在异常路径也还原）');
+    const dpArgv = Array.isArray(dp.probeArgv) ? dp.probeArgv.map(String) : [];
+    must(dpArgv.includes('--expect-page'), 'C24', '直达探针 argv 模板缺 --expect-page（页身份判据=落地的 pageStack[0] 等于目标路由）');
+    must(dpArgv.includes('<page>'), 'C24', '直达探针 argv 模板缺 <page> 占位（页清单由执行路径传入，计划不写死页）');
+    const wsAt = dpArgv.indexOf('--ws');
+    must(wsAt >= 0 && dpArgv[wsAt + 1] === plan.endpoint.ws, 'C24', 'directPages.probeArgv 的 --ws 值与 endpoint.ws 不一致');
+    const shotAt = dpArgv.indexOf('--shot-dir');
+    must(shotAt >= 0 && dpArgv[shotAt + 1] === plan.paths.logDir, 'C24', 'directPages.probeArgv 的 --shot-dir 值与 paths.logDir 不一致');
+    const rootAt = dpArgv.indexOf('--require-root');
+    must(rootAt >= 0 && dpArgv[rootAt + 1] === plan.paths.automatorRoot, 'C24', 'directPages.probeArgv 的 --require-root 值与 paths.automatorRoot 不一致');
+    const msAt = dpArgv.indexOf('--timeout-ms');
+    must(msAt >= 0 && String(dpArgv[msAt + 1]) === String(plan.timeouts.probeTimeoutMs), 'C24', 'directPages.probeArgv 的 --timeout-ms 值与预算 probeTimeoutMs 不一致');
+    must(Number.isFinite(dp.attempts) && dp.attempts >= 1, 'C24', 'directPages.attempts 缺失或 < 1（直达探针仍需重试预算，只针对会话级短暂失败）');
+    const sr = Array.isArray(dp.skipReasons) ? dp.skipReasons.map(String) : [];
+    must(sr.length > 0, 'C24', 'directPages.skipReasons 为空（SKIP reason 值域必须可枚举——诚实降级的前提）');
+    sr.forEach((r) => must(/^[a-z0-9-]+$/.test(r), 'C24', `skipReasons 值 ${r} 不是 kebab-case slug`));
+    must(sr.includes('direct-page-unsupported'), 'C24', 'skipReasons 缺 direct-page-unsupported（落地页≠目标路由必须记 SKIP）');
+    const dc = (dp.criteria || []).join('\n');
+    must(dc.includes('冷启动'), 'C24', 'directPages.criteria 未写冷启动直达机制');
+    must(dc.includes('还原'), 'C24', 'directPages.criteria 未写还原纪律');
+    must(dc.includes('skip'), 'C24', 'directPages.criteria 未写 SKIP 诚实降级');
+  }
+
   return violations;
 }
 
@@ -618,6 +654,24 @@ function scanContract(sources) {
   must(/if \(-not \$Doctor\) \{ Invoke-DevToolsPreflightQuit \}/.test(s), 'C22', '主流程没有在重试单元之前调用 pre-flight（或未做 -Doctor 跳过）');
   must(s.includes('function Invoke-DevToolsPreflightQuit'), 'C22', '缺 pre-flight quit 的执行函数');
 
+  // ---- C24（#1682）执行侧：直达分支必须真实接线 ----
+  must(s.includes("[string]$Pages = 'auto'"), 'C24', '门脚本缺 -Pages 参数声明（#1682 交付物载体；判到默认值 auto，防 $PagesMode 前缀掩盖缺席）');
+  must(s.includes("'<page>'"), 'C24', '执行路径未消费 <page> 占位（直达 argv 未从 directPages.probeArgv 模板化）');
+  must(s.includes('origin/master...HEAD'), 'C24', '-Pages auto 模式缺「本 PR 改动页」判据（git diff origin/master...HEAD）');
+  must(s.includes('function Switch-DistAppJsonFirstPage'), 'C24', '缺构建产物 app.json 首项换页函数');
+  must(s.includes('function Restore-DistAppJson'), 'C24', '缺 app.json 还原函数');
+  const c24FinallyAt = s.lastIndexOf('} finally {');
+  must(c24FinallyAt !== -1 && s.slice(c24FinallyAt).includes('Restore-DistAppJson'), 'C24', 'Restore-DistAppJson 不在 finally 路径（异常路径换页会留脏产物）');
+  must(s.includes('page-not-in-build'), 'C24', '执行路径未记 page-not-in-build 的 SKIP');
+  must(s.includes('direct-page-unsupported'), 'C24', '执行路径未记 direct-page-unsupported 的 SKIP');
+  must(s.includes('cold-start-direct'), 'C24', '执行路径未携带机制标识 cold-start-direct');
+  stripCommentLines(s).filter((l) => /Set-Content|Out-File/.test(l)).forEach((l) => {
+    must(!l.includes('pages.json'), 'C24', `代码行回写源头 pages.json（ADR-0038 决策 2 红线）：${l.trim()}`);
+  });
+  must(probe.includes("'--expect-page'"), 'C24', '探针未解析 --expect-page 参数');
+  must(probe.includes('cold-start-direct'), 'C24', '探针未记录直达达成的机制标识');
+  must(probe.includes('direct-page-unsupported'), 'C24', '探针未记录直达未达成的 SKIP reason');
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -806,7 +860,21 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C23', (p) => { p.branches.envBlocked.envReasons = []; return p; }],
       ['C23', (p) => { const c = p.branches.envBlocked.envReasons.slice(); c.push(c[0]); p.branches.envBlocked.envReasons = c; return p; }],
       ['C23', (p) => { const c = p.branches.envBlocked.envReasons.slice(); c[0] = 'Port_Not_Listening'; p.branches.envBlocked.envReasons = c; return p; }],
-      ['C23', (p) => { p.exit2 = p.exit2.concat([{ step: 'x', on: 'y', reason: 'brand-new-env-reason' }]); return p; }]
+      ['C23', (p) => { p.exit2 = p.exit2.concat([{ step: 'x', on: 'y', reason: 'brand-new-env-reason' }]); return p; }],
+      // C24：直达声明被改坏（机制/换页对象/源头红线/还原/argv 模板/预算/SKIP 值域/判据）
+      ['C24', (p) => { delete p.directPages; return p; }],
+      ['C24', (p) => { p.directPages.mechanism = 'navigate-to'; return p; }],
+      ['C24', (p) => { p.directPages.swapTarget = 'app.js'; return p; }],
+      ['C24', (p) => { p.directPages.swapNote = '换页'; return p; }],
+      ['C24', (p) => { p.directPages.restore = 'main'; return p; }],
+      ['C24', (p) => { p.directPages.probeArgv = p.directPages.probeArgv.filter((a) => a !== '--expect-page'); return p; }],
+      ['C24', (p) => { p.directPages.probeArgv = p.directPages.probeArgv.filter((a) => a !== '<page>'); return p; }],
+      ['C24', (p) => { p.directPages.probeArgv[p.directPages.probeArgv.indexOf('--ws') + 1] = 'ws://127.0.0.1:1'; return p; }],
+      ['C24', (p) => { p.directPages.probeArgv[p.directPages.probeArgv.indexOf('--timeout-ms') + 1] = '1'; return p; }],
+      ['C24', (p) => { p.directPages.attempts = 0; return p; }],
+      ['C24', (p) => { p.directPages.skipReasons = []; return p; }],
+      ['C24', (p) => { p.directPages.skipReasons = ['DirectPageUnsupported']; return p; }],
+      ['C24', (p) => { p.directPages.criteria = ['换页']; return p; }],
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -862,7 +930,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       // C13：把降级写成 PASS / 让 SKIP 静默变成通过 / 把结果行的 navigation 绑错
       ['C13', { ...real, script: real.script.replace('navigation=SKIP reason=', 'navigation=PASS reason=') }],
       ['C13', { ...real, script: real.script.replace('navigation = "$navField"', 'navigation = "ok"') }],
-      ['C13', { ...real, script: real.script.replace('降级（SKIP，非 PASS）', '结果说明') }],
+      ['C13', { ...real, script: real.script.replace(/降级（SKIP，非 PASS）/g, '结果说明') }],
       ['C13', { ...real, probe: real.probe.replace(/navigation-api-unsupported/g, 'x') }],
       ['C13', { ...real, probe: real.probe.replace(/'skip'/g, 'true') }],
       ['C13', { ...real, probe: real.probe.replace('if (v === false)', 'if (v === true)') }],
@@ -903,7 +971,17 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C22', { ...real, script: real.script.replace(/Get-Process -Name wechatdevtools/g, 'Get-ProcessX -Name wechatdevtools') }],
       ['C22', { ...real, script: real.script.replace('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }', 'if ($false) { }') }],
       // 红线面：真的往代码里塞 Stop-Process 调用必须被抓（判据文本里的「不得用 Stop-Process」引用不算命中）
-      ['C22', { ...real, script: real.script.replace('        $waited++', '        Stop-Process -Name wechatdevtools -Force\n        $waited++') }]
+      ['C22', { ...real, script: real.script.replace('        $waited++', '        Stop-Process -Name wechatdevtools -Force\n        $waited++') }],
+      // C24：拆掉直达接线（参数/占位/判据/还原 finally/源头红线/探针直达模式）
+      ['C24', { ...real, script: real.script.replace("[string]$Pages = 'auto'", "[string]$PagesX = 'auto'") }],
+      ['C24', { ...real, script: real.script.replace(/'<page>'/g, 'null') }],
+      ['C24', { ...real, script: real.script.replace(/origin\/master\.\.\.HEAD/g, 'HEAD') }],
+      ['C24', { ...real, script: real.script.replace('function Restore-DistAppJson {', 'function RestoreX {') }],
+      ['C24', { ...real, script: real.script.replace('\n    Restore-DistAppJson', '') }],
+      ['C24', { ...real, script: real.script.replace('Set-Content -LiteralPath $Path -Value ($j | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM -NoNewline', "Set-Content -LiteralPath 'pages.json' -Value 1") }],
+      ['C24', { ...real, probe: real.probe.replace("'--expect-page'", "'--other-page'") }],
+      ['C24', { ...real, probe: real.probe.replace(/cold-start-direct/g, 'x') }],
+      ['C24', { ...real, probe: real.probe.replace(/direct-page-unsupported/g, 'x') }],
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);

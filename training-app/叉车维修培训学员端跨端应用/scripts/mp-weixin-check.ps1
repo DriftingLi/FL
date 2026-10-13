@@ -100,9 +100,19 @@
     （`allRoutesVisited` / `screenshotsProduced` 在降级时值为字符串 `skip`，**不得**写成 `true`，见守护测试 C13；
     导航在可用机器上时这两条按「每步导航后当前页 == 目标页」判，**不拿导航前读到的 pageStack 去比所有路由**——
     那样恒假、会让健康机器上的门永远过不去）。
-    结果行的 `navigation=` 取值域：`ok`（逐页导航可用）/ `skip(unsupported)`（降级）/ `n/a`（环境早退，没走到导航）。
+    结果行的 `navigation=` 取值域：`ok`（逐页导航可用，或直达探针全部达成）/ `skip(reason)`（降级）/ `n/a`（环境早退，没走到导航）。
     **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，**留给后续排查**，
     不得据此宣称「已定位根因」；**首跑校准**要求人工核对结果行的 `navigation=` 字段（ADR-0008 ② 段）。
+
+    **任意页直达探针（#1682 · ADR-0039 拆分步骤 2）**：上面的 SKIP 只证明入口页 ⇒ 取证面用 `-Pages` 扩到被改页。
+    机制（已裁定，勿另选）= ADR-0038 决策 1 的「构建产物 `app.json` 首项临时换页 + plain 冷启动」——**不调用任何
+    导航 API**，页身份判据 = 冷启动落地页 `pageStack[0]` 等于目标路由（真机侧同手法先例 #1678）。`-Pages auto`（缺省）
+    = 入口页 + 本 PR 改动页（git diff 命中 `pages/**/*.uvue`）；`-Pages none` 关闭直达走旧导航组；`-Pages <csv>` 指定清单。
+    每页取证 = 截图（按现行入仓判据落 `docs/verification/<模块>/<PR号>/<页名>.png`）+ 该页 console error/exception
+    读数（`errorsTotal` 语义不变：逐页累加，重试不重复计数）。有页未达成 ⇒ `navigation=skip(reason=…)` 显式记录
+    （reason ∈ direct-page-unsupported / page-not-in-build / app-json-invalid），**既不当通过也不当失败**；
+    直达冷启动/会话失败 ⇒ env-blocked（exit 2）。逐页读数行（`direct-page …` / `direct-total …`）进日志与
+    sha 绑定评论，供 0039 窗口主门取证成本校准。换页只动 dist 构建产物，**源头 `pages.json` 一个字不改**（ADR-0038 决策 2）。
 
     **Pre-flight quit 清场（#1634）**：用脚本启动（IPC 链）时，残留/堆叠的 IDE 实例会让 `open` 把项目窗口
     叠进一个未初始化的实例 ⇒ 项目窗口白屏（连菜单/Console 都没有；直接双击 exe 启动不复现）。故跑门前先
@@ -214,6 +224,7 @@ param(
     [string]$AppId = 'wx38c3e31b16a7ced0',
     [int]$Port = 9420,
     [string]$Routes = 'pages/index/index,pages/login/login',
+    [string]$Pages = 'auto',
     [switch]$SkipBuild,
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
@@ -252,6 +263,9 @@ $script:closed = $false
 # pre-flight quit 的幂等哨兵（#1634）：与 $script:closed 同款，必须先初始化 —— 严格模式下
 # 未设置的 $script:quitDone 会在 if 判定时抛「无法检索变量」（m00099 夹具实测：整段重试一次都没跑就 exit 2）
 $script:quitDone = $false
+# 任意页直达探针（#1682）的 app.json 备份哨兵：与 $script:closed 同款先初始化（严格模式下
+# 未设置会在 finally 判定抛「无法检索变量」）；Restore-DistAppJson 以「备份为 null」当幂等哨兵。
+$script:AppJsonBackup = $null
 # -PortWaitSeconds 由 90 抬到 180（2026-09-13）：-Doctor 首跑实测到一次「cli.bat auto 回显 √ auto、
 # 端口 90s 内始终没监听」，紧接着同一命令 8s 内就起来了 ⇒ **这一条只抬预算，不是修复**：病根未定位，
 # 已如实记进 ADR-0008 ② 段的待排查项；遇到它时结果行是 reason=port-not-listening，-Doctor 的 L6 会标 FAIL。
@@ -383,7 +397,8 @@ function New-GatePlan {
         [int]$PublishTimeoutSeconds,
         [bool]$SkipBuild,
         [bool]$Doctor,
-        [int]$PostToPr
+        [int]$PostToPr,
+        [string]$PagesMode
     )
     $ws = "ws://127.0.0.1:$Port"
     $entryUrl = if (@($RouteList).Count -gt 0) { $RouteList[0] } else { '' }
@@ -529,6 +544,33 @@ function New-GatePlan {
         }
         endpoint = [ordered]@{ port = $Port; ws = $ws }
         routes = @($RouteList)
+        # 任意页直达探针（#1682 · ADR-0039 拆分步骤 2 · ADR-0038 决策 1）：取证面从入口页扩到被改页逐页。
+        # 机制唯一：把**构建产物** app.json 的 pages 首项临时换成目标页，plain 冷启动 ⇒ 落地页=目标页，
+        # 探针以 --expect-page 模式**不调用任何导航 API**（reLaunch/navigateTo 在本机恒报 Uncaught [object Object]，
+        # 那是「导航组」的老结论，不随本机制改变）。机制不成立 ⇒ 显式记 SKIP（诚实降级，不破坏门、不假绿）；
+        # 每直达一页的 console error/exception 断言照旧生效（errorsTotal 语义不变）。
+        directPages = [ordered]@{
+            param = 'Pages'
+            modes = @('auto', 'none', '<csv>')
+            mode = $PagesMode
+            autoSource = 'git diff --name-only origin/master...HEAD 命中 pages/**/*.uvue（本 PR 改动页）'
+            mechanism = 'cold-start-direct'
+            swapTarget = 'app.json'
+            swapNote = '只换构建产物 app.json 的 pages 首项；不动源头 pages.json（运行时面判据来源，ADR-0038 决策 2）'
+            restore = 'finally'
+            exec = 'node'
+            probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
+            attempts = 2
+            retryDelaySeconds = $ProbeRetryDelaySeconds
+            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid')
+            criteria = @(
+                '直达 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针不得调用 reLaunch/navigateTo',
+                '页身份判据 = 冷启动落地页 pageStack[0] 等于目标路由（与 #1678 真机侧「以进入页面日志为准」同源）',
+                '换前 ConvertFrom-Json 校验、换后读回复验首项；用毕从备份还原 app.json 并复验（finally 路径）',
+                '机制不成立 ⇒ navigation=skip(reason=…) 显式记录：不冒充门失败、不冒充取证成立；console error 照常进 failures',
+                '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准'
+            )
+        }
         steps = $steps
         timeouts = [ordered]@{
             publish = $PublishTimeoutSeconds
@@ -636,7 +678,8 @@ function New-ThisGatePlan {
         -PortWaitSeconds $PortWaitSeconds -ReadyWaitSeconds $ReadyWaitSeconds -ProbeTimeoutMs $ProbeTimeoutMs `
         -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
         -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
-        -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -PostToPr $PostToPr
+        -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -PostToPr $PostToPr `
+        -PagesMode $Pages
 }
 $script:GatePlan = New-ThisGatePlan -UsePort $Port
 
@@ -684,7 +727,7 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
     "# mp-weixin-check (②) 开始 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
     "# project = $Project",
-    "# 期望 appid = $AppId ; 自动化端口 = $Port ; 路由 = $Routes ; SkipBuild = $([bool]$SkipBuild)",
+    "# 期望 appid = $AppId ; 自动化端口 = $Port ; 路由 = $Routes ; Pages = $Pages ; SkipBuild = $([bool]$SkipBuild)",
     "# 判成败只看输出：HBuilderX CLI / cli.bat / 探针的退出码一律不作门结论",
     "# 门计划（GATE_PLAN）是步骤/参数/预算/结果行字段的唯一真源；见 New-GatePlan 与 -DryRun"
 )
@@ -873,6 +916,131 @@ function Invoke-DevToolsPreflightQuit {
     Write-Log "pre-flight：quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出（只警告，不 kill）"
 }
 
+# ---------- 任意页直达探针（#1682 · ADR-0038 决策 1/2 · ADR-0039 拆分步骤 2）----------
+# 机制（已裁定，勿另选）：把**构建产物** app.json 的 pages 首项临时换成目标页，再走一遍
+# close → open → auto → 端口 → 就绪闸门 的 plain 冷启动 ⇒ 小程序落地页就是目标页，全程**不调用任何
+# 导航 API**（本机 automator 0.12.1 的 reLaunch/navigateTo 恒报 Uncaught [object Object]，#1674 先例）。
+# 换页三纪律（ADR-0038 决策 2）：换前 ConvertFrom-Json 校验；换后读回复验首项；用毕从备份还原并复验。
+# ⚠️ 只动 $dist 下的构建产物（gitignored），**源头 pages.json 一个字都不改** —— 它是运行时面判据来源。
+function Switch-DistAppJsonFirstPage {
+    param([string]$Path, [string]$TargetRoute)
+    # 返回 $null = 已换好；否则返回 SKIP 原因（page-not-in-build / app-json-invalid）
+    $target = ($TargetRoute -replace '^/', '')
+    $j = $null
+    try { $j = (Get-Content -LiteralPath $Path -Raw) | ConvertFrom-Json } catch { return 'app-json-invalid' }
+    if ($null -eq $j -or -not $j.pages -or @($j.pages).Count -eq 0) { return 'app-json-invalid' }
+    $pages = @($j.pages)
+    $idx = -1
+    for ($i = 0; $i -lt $pages.Count; $i++) { if ("$($pages[$i])" -eq $target) { $idx = $i; break } }
+    if ($idx -lt 0) { return 'page-not-in-build' }
+    if ($idx -ne 0) {
+        $tmp = $pages[0]; $pages[0] = $pages[$idx]; $pages[$idx] = $tmp
+        $j.pages = $pages
+    }
+    Set-Content -LiteralPath $Path -Value ($j | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM -NoNewline
+    # 换后复验（判据 = 读回，不是「写了就当成对了」）：首项必须是目标页
+    $re = $null
+    try { $re = (Get-Content -LiteralPath $Path -Raw) | ConvertFrom-Json } catch { return 'app-json-invalid' }
+    if ($null -eq $re -or -not $re.pages -or "$(@($re.pages)[0])" -ne $target) { return 'app-json-invalid' }
+    return $null
+}
+
+function Restore-DistAppJson {
+    # 幂等：先清哨兵再写回（finally 与主路径可能各命中一次）；还原失败只 [warn] 不改变门结论
+    if (-not $script:AppJsonBackup) { return }
+    $bk = $script:AppJsonBackup
+    $script:AppJsonBackup = $null
+    try {
+        Set-Content -LiteralPath $bk.Path -Value $bk.Text -Encoding utf8NoBOM -NoNewline
+        $firstOrig = ''
+        try { $firstOrig = "$(@(((Get-Content -LiteralPath $bk.Path -Raw) | ConvertFrom-Json).pages)[0])" } catch { $firstOrig = '(复验失败)' }
+        $wantFirst = ''
+        try { $wantFirst = "$(@(($bk.Text | ConvertFrom-Json).pages)[0])" } catch { $wantFirst = '' }
+        if ($wantFirst -and $firstOrig -ne $wantFirst) {
+            Write-Host "[warn] app.json 已写回但首项与备份不一致（人工复核 $($bk.Path)）" -ForegroundColor Yellow
+            Write-Log "direct-pages: app.json 还原复验不一致 path=$($bk.Path)"
+        } else {
+            Write-Log "direct-pages: dist app.json 已从备份还原并复验（首项=$firstOrig）"
+        }
+    } catch {
+        Write-Host "[warn] app.json 还原失败（人工复核：$($bk.Path)）：$_" -ForegroundColor Yellow
+    }
+}
+
+function Invoke-DirectColdStart {
+    param($Steps, [string]$PageTag)
+    # 逐页换页后的重冷启动单元：close → open → auto → 端口轮询 → 就绪闸门（与首轮整段重试同构，
+    # 参数一律取自传入的计划步骤——守护 C18 的「调用点原文至多一次」不允许这里重复写死 argv）。
+    $attempts = [Math]::Max(1, [int]$script:GatePlan['timeouts']['autoAttempts'])
+    $delay = [Math]::Max(0, [int]$script:GatePlan['timeouts']['autoRetryDelay'])
+    $out = @{ ok = $false; reason = 'port-not-listening'; readySeconds = 0; sdk = ''; ide = '' }
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        if ($attempt -gt 1) {
+            Write-Log "`n>>> direct-coldstart($PageTag)：整段重试第 $attempt/$attempts 次（等 ${delay}s；上一轮 reason=$($out.reason)）"
+            Start-Sleep -Seconds $delay
+        }
+        $script:closed = $false
+        Invoke-DevToolsClose
+        $open = Invoke-Process -FilePath $devTools -Arguments $Steps.open.argv -TimeoutSeconds $Steps.open.timeoutSeconds -Tag "$($Steps.open.tag)(direct:$PageTag)"
+        Write-Log "`n>>> direct-coldstart open($PageTag)`n$($open.Output)"
+        if ($open.TimedOut) { $out.reason = 'devtools-open-timeout'; continue }
+        $auto = Invoke-Process -FilePath $devTools -Arguments $Steps.auto.argv -TimeoutSeconds $Steps.auto.timeoutSeconds -Tag "$($Steps.auto.tag)(direct:$PageTag)"
+        Write-Log "`n>>> direct-coldstart auto($PageTag)`n$($auto.Output)"
+        if ($auto.TimedOut) { $out.reason = 'auto-timeout'; continue }
+        $ma = [regex]::Match($auto.Output, 'Using AppID:\s*(\S+)')
+        if ($AppId -and $ma.Success -and $ma.Groups[1].Value -ne $AppId) {
+            Write-Log "direct-coldstart($PageTag)：auto 回显 AppID=$($ma.Groups[1].Value) 与期望不一致（首轮产物断言已把关，这里只记录）"
+        }
+        $listening = $false
+        for ($i = 0; $i -lt $Steps.port.waitSeconds; $i++) {
+            if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -gt 0) { $listening = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $listening) { $out.reason = 'port-not-listening'; continue }
+        $ready = Invoke-Process -FilePath $nodeExe -Arguments $Steps.ready.argv -TimeoutSeconds $Steps.ready.timeoutSeconds -Tag "$($Steps.ready.tag)(direct:$PageTag)"
+        Write-Log "`n>>> direct-coldstart ready($PageTag)`n$($ready.Output)"
+        $rj = $null
+        foreach ($line in ($ready.Output -split "`r?`n")) {
+            if ($line -match '^\s*MP_WEIXIN_READY\s+(\{.*\})\s*$') { try { $rj = ($Matches[1] | ConvertFrom-Json) } catch { $rj = $null } }
+        }
+        if (-not $rj) { $out.reason = 'no-ready-result'; continue }
+        if (((Get-Prop $rj 'ok') -ne $true)) { $out.reason = 'automation-not-ready'; continue }
+        $re = Get-Prop $rj 'elapsedMs'
+        if ($null -eq $re) { $re = 0 }
+        $out.readySeconds = [int]([double]$re / 1000)
+        $out.sdk = "$(Get-Prop $rj 'sdkVersion')"
+        $out.ide = "$(Get-Prop $rj 'ideVersion')"
+        $out.ok = $true
+        $out.reason = ''
+        return $out
+    }
+    return $out
+}
+
+function Invoke-DirectProbe {
+    param($ProbeStep, $DirectPages, [string]$Page)
+    # argv 模板取自门计划 directPages.probeArgv（唯一真源），<page> 占位在这里才落成具体路由。
+    # 重试判据与旧逐页导航不同：**只在会话级短暂失败上重试**（没拿到结果行 / 没连上）；
+    # 一旦连上，页报错/直达未达成都是**真实读数**，重试会把 errorsTotal 重复计数 ⇒ 不重试。
+    $argv = @($DirectPages.probeArgv | ForEach-Object { if ("$_" -eq '<page>') { $Page } else { $_ } })
+    $json = $null
+    $timedOut = $false
+    $attempts = [Math]::Max(1, [int]$DirectPages.attempts)
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        Write-Log "`n>>> direct-probe($Page) 第 $attempt/$attempts 次"
+        $r = Invoke-Process -FilePath $nodeExe -Arguments $argv -TimeoutSeconds $ProbeStep.timeoutSeconds -Tag "automator-probe(direct:$Page)#$attempt"
+        Write-Log $r.Output
+        $timedOut = [bool]$r.TimedOut
+        if ($timedOut) { $json = $null }
+        foreach ($line in ($r.Output -split "`r?`n")) {
+            if ($line -match '^\s*MP_WEIXIN_PROBE\s+(\{.*\})\s*$') { try { $json = ($Matches[1] | ConvertFrom-Json) } catch { $json = $null } }
+        }
+        if ($json -and $json.connected) { break }
+        if ($attempt -lt $attempts) { Start-Sleep -Seconds ([int]$DirectPages.retryDelaySeconds) }
+    }
+    return @{ json = $json; timedOut = $timedOut }
+}
+
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
 # Get-HeadSha 已上移到 scripts/lib/gate-common.ps1（三份**逐字节相同**、且无任何守护 pin ⇒ 唯一合格的零风险
 # 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
@@ -897,7 +1065,8 @@ function Publish-GateComment {
         [string[]]$ArchivedRel = @(),
         [string[]]$ArchiveNotes = @(),
         [bool]$NavSkipped = $false,
-        [string]$NavReason = ''
+        [string]$NavReason = '',
+        [string[]]$DirectPageLines = @()
     )
     $sha = Get-HeadSha -ProjectDir $Project
     if (-not $sha) {
@@ -915,11 +1084,24 @@ function Publish-GateComment {
     }
     if (@($ArchiveNotes).Count -gt 0) { $archLines += ('- 入库说明：' + (@($ArchiveNotes) -join '；')) }
     # 降级必须**显式写明**（不许假绿）：评论里不写清楚，读评论的人会把「可验证子集通过」当成「逐页都过了」。
+    # #1682：直达探针（cold-start-direct）的 SKIP 与旧导航组的 SKIP 是**两种成因**，措辞分开——
+    # 前者是「某页冷启动后落地页 ≠ 目标路由」，后者才是「导航 API 本机恒不可用」。
     $navLines = @()
     if ($NavSkipped) {
-        $navLines += "- ⚠️ 降级（SKIP，非 PASS）：逐页导航 + 每页截图 = SKIP（reason=$($NavReason)）——本机 ``miniprogram-automator@0.12.1`` 的 ``mp.reLaunch`` / ``mp.navigateTo`` 恒报 ``Uncaught [object Object]``，该组断言在此环境不成立。"
-        $navLines += '- 门只对**可验证子集**作结论：`connected=true` + `pageStack` 非空 + 入口页在栈内 + `errorsTotal==0 && exceptionsTotal==0` + 至少 1 张当前页截图；**未取证的页**见上面的 `navigation=` 字段与日志 ``' + $LogRelative + '``。'
-        $navLines += '- **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，留给后续排查；本条不宣称已定位根因，**首跑须人工核对 `navigation=` 字段**。'
+        if ($NavReason -like 'direct-*' -or $NavReason -eq 'page-not-in-build' -or $NavReason -eq 'app-json-invalid') {
+            $navLines += "- ⚠️ 降级（SKIP，非 PASS）：任意页直达探针（#1682）有页未达成 = SKIP（reason=$($NavReason)）——机制是「构建产物 app.json 首项临时换页 + plain 冷启动」，未达成的页**不得**当成已取证。"
+            $navLines += '- 门只对**可验证子集**作结论：已达成页逐页 console/exception 读数 + 入口页 `pageStack` 落地判据；**未取证的页**见下面的逐页读数与日志 ``' + $LogRelative + '``。'
+        } else {
+            $navLines += "- ⚠️ 降级（SKIP，非 PASS）：逐页导航 + 每页截图 = SKIP（reason=$($NavReason)）——本机 ``miniprogram-automator@0.12.1`` 的 ``mp.reLaunch`` / ``mp.navigateTo`` 恒报 ``Uncaught [object Object]``，该组断言在此环境不成立。"
+            $navLines += '- 门只对**可验证子集**作结论：`connected=true` + `pageStack` 非空 + 入口页在栈内 + `errorsTotal==0 && exceptionsTotal==0` + 至少 1 张当前页截图；**未取证的页**见上面的 `navigation=` 字段与日志 ``' + $LogRelative + '``。'
+            $navLines += '- **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，留给后续排查；本条不宣称已定位根因，**首跑须人工核对 `navigation=` 字段**。'
+        }
+    }
+    # 逐页直达读数（#1682 验收 4：实测时长/逐页读数进 sha 绑定评论，供 0039 窗口主门成本校准）
+    $directOut = @()
+    if (@($DirectPageLines).Count -gt 0) {
+        $directOut += '- 逐页直达读数（#1682，机制=cold-start-direct）：'
+        foreach ($l in @($DirectPageLines)) { $directOut += ('  - ``' + $l + '``') }
     }
     $body = @(
         '<!-- gate-evidence:② -->',
@@ -927,7 +1109,7 @@ function Publish-GateComment {
         "- commit: $sha",
         "- 结论（含产物）：``$ResultLine``；本地截图 ``$ShotRelative``；日志 ``$LogRelative``",
         '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门（content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住）。'
-    ) + $navLines + $archLines + @(
+    ) + $navLines + $directOut + $archLines + @(
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
@@ -1440,13 +1622,148 @@ try {
 
     $probeStep = Get-GateStep -Plan $script:GatePlan -Id 'automator-probe'
     $probeArgs = $probeStep.argv
+    $probeTimeoutSec = $probeStep.timeoutSeconds
+    # ---------- 任意页直达探针（#1682 · ADR-0039 拆分步骤 2）：取证面从入口页扩到被改页逐页 ----------
+    # -Pages 三态：'auto'（缺省）= 入口页 + 本 PR 改动页（git diff 命中 pages/**/*.uvue）；
+    # 'none' = 关闭直达、走旧逐页导航组（保留原 SKIP 面）；其余 = 逗号分隔页清单。
+    # 直达机制 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针 --expect-page
+    # 模式**不调用任何导航 API**，页身份判据 = 落地页 pageStack[0] 等于目标路由。
+    $directLines = @()
+    $directList = @()
+    $distAppJson = Join-Path $Dist 'app.json'
+    $entryRoute = ''
+    if ($Pages -ne 'none' -and (Test-Path -LiteralPath $distAppJson)) {
+        try { $entryRoute = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])" } catch { $entryRoute = '' }
+        $want = @()
+        if ($Pages -eq 'auto') {
+            # auto 判据 = 本 PR 改动页；git 不可用 / 无 origin/master 参照（如 detached 树）⇒ 空清单，
+            # 直达只剩入口页一张（等价旧取证面，不冒充「改动页已核」）。
+            $gd = @(& git -C $Project diff --name-only 'origin/master...HEAD' 2>$null | ForEach-Object { "$_" })
+            $want = @($gd | Where-Object { $_ -match '(^|/)pages/.+\.uvue$' } | ForEach-Object { ($_ -replace '^.*?/pages/', 'pages/') -replace '\.uvue$', '' } | Select-Object -Unique)
+        } else {
+            $want = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        }
+        $directList = @(@($entryRoute) + $want | Where-Object { $_ } | Select-Object -Unique)
+    }
+    if ($directList.Count -gt 0) {
+        Write-Host ">>> 直达探针（#1682，机制=cold-start-direct）：页清单 = $($directList -join ',')"
+        Write-Log "`n>>> direct-pages-loop: list=$($directList -join ',')"
+        $script:AppJsonBackup = @{ Path = $distAppJson; Text = (Get-Content -LiteralPath $distAppJson -Raw) }
+        # 复用首轮整段重试与就绪闸门已按 id 取过的步骤对象（同一计划、同一参数真源；
+        # 不再写第二处 -Id 字面量——守护 C12/C18 的注入判据按「首个取用点」定位，重复取用会让注入失配）
+        $coldSteps = [ordered]@{ open = $openStep; auto = $autoStep; port = $portStep; ready = $readyStep }
+        $directStart = Get-Date
+        $agg = @{ errors = 0; exceptions = 0; logs = 0; shots = @(); steps = @(); failures = @() }
+        $firstJson = $null
+        $missReason = ''
+        $missPages = @()
+        $directEnv = $false
+        $probeJson = $null
+        foreach ($pg in $directList) {
+            $leaf = ($pg -split '/')[-1]
+            if ($pg -ne $entryRoute) {
+                $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
+                if ($sw) {
+                    # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
+                    Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
+                    $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
+                    if (-not $missReason) { $missReason = $sw }
+                    $missPages += $pg
+                    continue
+                }
+                $cs = Invoke-DirectColdStart -Steps $coldSteps -PageTag $leaf
+                if (-not $cs.ok) {
+                    $agg.failures += "环境不可用：直达冷启动未成（page=$pg reason=$($cs.reason)）"
+                    $directEnv = $true
+                    break
+                }
+                $readySeconds = $cs.readySeconds
+                $sdkVersion = $cs.sdk
+                $ideVersion = $cs.ide
+            }
+            $pr = Invoke-DirectProbe -ProbeStep $probeStep -DirectPages $script:GatePlan['directPages'] -Page $pg
+            $pj = $pr.json
+            if (-not $pj) {
+                $agg.failures += "环境不可用：直达探针无结果行（page=$pg timedOut=$([bool]$pr.timedOut)）"
+                $directEnv = $true
+                break
+            }
+            if (@($pj.failures | Where-Object { $_ -match '^环境不可用：' }).Count -gt 0) {
+                # 会话级环境失败（连不上 / 空栈 / 缺模块）：探针已判 exit 2 语义 ⇒ 整门 env-blocked。
+                # **原条目**入 failures、不包写：尾部分类器按「环境不可用：」前缀锚派生具体 slug（#1655 单点真源），
+                # 包一层会让 detail 失配、全部落进 probe-env 兜底。
+                $agg.failures += @($pj.failures)
+                $directEnv = $true
+                break
+            }
+            if (-not $firstJson) { $firstJson = $pj }
+            $agg.errors += [int]$pj.errorsTotal
+            $agg.exceptions += [int]$pj.exceptionsTotal
+            $agg.logs += [int]$pj.logsTotal
+            $agg.shots += @($pj.shots)
+            $agg.steps += @($pj.steps)
+            $agg.failures += @($pj.failures)
+            $navOne = Get-Prop $pj 'navigation'
+            $reached = ("$(Get-Prop $navOne 'status')" -eq 'ok')
+            $pngOne = @($pj.shots | Where-Object { Get-Prop $_ 'isPng' })
+            $shotLeaf = $(if ($pngOne.Count -gt 0) { Split-Path (@($pngOne)[-1]).path -Leaf } else { '' })
+            $emOne = Get-Prop $pj 'elapsedMs'
+            if ($null -eq $emOne) { $emOne = 0 }
+            $line = "direct-page $pg reached=$([bool]$reached) errors=$($pj.errorsTotal) exceptions=$($pj.exceptionsTotal) logs=$($pj.logsTotal) shot=$shotLeaf elapsed=$([int]([double]$emOne / 1000))s"
+            Write-Log $line
+            $directLines += $line
+            if (-not $reached) {
+                $nr = "$(Get-Prop $navOne 'reason')"
+                if (-not $missReason) { $missReason = $(if ($nr) { $nr } else { 'direct-page-unsupported' }) }
+                $missPages += $pg
+            }
+        }
+        # 用毕还原（ADR-0038 决策 2）：env 早退路径也走这里；finally 里的 Restore-DistAppJson 靠哨兵幂等不再重复
+        Restore-DistAppJson
+        $directElapsed = [int]((Get-Date) - $directStart).TotalSeconds
+        $totalLine = "direct-total pages=$($directList.Count) accepted=$(@($directLines).Count) elapsed=${directElapsed}s"
+        Write-Log $totalLine
+        $directLines += $totalLine
+        if ($directEnv) {
+            # env 情形**不再裸行早退**（#1682 初版写死 `reason=probe-env` 的简化行，违 #1655 三分线形状——
+            # 无 failures= 原文、无 appid= metric 行）：失败条目已在 $agg.failures，随下面的聚合与
+            # 通用装配段的分类器走完整 env 行（exit 2）。
+            Write-Host "[error] 直达探针环境受阻（页：$($directList -join ',')）：$($agg.failures -join ' / ')" -ForegroundColor Red
+        }
+        if (-not $firstJson -and -not $directEnv) {
+            # 列出的页全部不在构建产物 ⇒ 零取证：**不得**当通过（failures ⇒ exit 1 门未过）
+            $agg.failures += '断言未过：直达探针没有任何被接受的运行（列出的页都不在构建产物中）'
+        }
+        if ($directEnv) {
+            $navAgg = [pscustomobject]@{ status = 'n/a'; reason = 'env-early-exit'; detail = 'env-early-exit'; at = 'direct-loop'; skippedAssertions = @(); skippedSteps = @() }
+        } elseif ($missPages.Count -eq 0 -and $firstJson) {
+            $navAgg = [pscustomobject]@{ status = 'ok'; reason = ''; detail = 'cold-start-direct'; at = "direct-loop($($directList.Count)页)"; skippedAssertions = @(); skippedSteps = @() }
+        } else {
+            $navAgg = [pscustomobject]@{ status = 'skip'; reason = $missReason; detail = $missReason; at = 'direct-loop'; skippedAssertions = @('allRoutesVisited', 'screenshotsProduced'); skippedSteps = @($missPages) }
+        }
+        $probeJson = [pscustomobject]@{
+            connected = (-not $directEnv)
+            probeOk = ($agg.failures.Count -eq 0)
+            pageStack = @($(if ($firstJson) { $firstJson.pageStack } else { @() }))
+            entryPage = $(if ($firstJson) { $firstJson.entryPage } else { '' })
+            errorsTotal = $agg.errors
+            exceptionsTotal = $agg.exceptions
+            logsTotal = $agg.logs
+            shots = @($agg.shots)
+            steps = @($agg.steps)
+            failures = @($agg.failures)
+            navigation = $navAgg
+            consoleTail = @()
+            elapsedMs = ($directElapsed * 1000)
+        }
+    } else {
     # 探针重试：开发者工具把项目/小程序拉起来是**异步**的（实测连接与 pageStack 常在第 2–3 次才就绪，
     # 首次报 "check if target project window is opened with automation enabled"）⇒ 必须重试而不是一次定生死。
     $probe = $null
     $probeJson = $null
     for ($attempt = 1; $attempt -le $probeStep.attempts; $attempt++) {
         Write-Log "`n>>> $($probeStep.tag)（第 $attempt/$($probeStep.attempts) 次）"
-        $probe = Invoke-Process -FilePath $nodeExe -Arguments $probeArgs -TimeoutSeconds $probeStep.timeoutSeconds -Tag "$($probeStep.tag)#$attempt"
+        $probe = Invoke-Process -FilePath $nodeExe -Arguments $probeArgs -TimeoutSeconds $probeTimeoutSec -Tag "$($probeStep.tag)#$attempt"
         Write-Log $probe.Output
         Write-Host $probe.Output
         if ($probe.TimedOut) {
@@ -1471,6 +1788,7 @@ try {
             Write-Host ">>> 探针未就绪（第 $attempt 次），$($probeStep.retryDelaySeconds) 秒后重试 —— 开发者工具拉起项目是异步的" -ForegroundColor Yellow
             Start-Sleep -Seconds $probeStep.retryDelaySeconds
         }
+    }
     }
 
     if (-not $probeJson) {
@@ -1518,10 +1836,17 @@ try {
             "skippedSteps=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedSteps') -join ','))"
         Write-Log $skipLine
         Write-Host ''
-        Write-Host "⚠️  降级：逐页导航 + 每页截图 = SKIP（reason=$navReason）" -ForegroundColor Yellow
-        Write-Host '    本机 miniprogram-automator@0.12.1 的 mp.reLaunch / mp.navigateTo 恒报 `Uncaught [object Object]`；' -ForegroundColor Yellow
-        Write-Host '    门只对可验证子集（连通 + pageStack 非空 + 入口页在栈内 + 无 error/exception + ≥1 张当前页截图）作结论。' -ForegroundColor Yellow
-        Write-Host '    未证实是否为版本组合问题（留给后续排查）；首跑请人工核对结果行的 navigation= 字段。' -ForegroundColor Yellow
+        if ($navReason -eq 'navigation-api-unsupported') {
+            Write-Host "⚠️  降级：逐页导航 + 每页截图 = SKIP（reason=$navReason）" -ForegroundColor Yellow
+            Write-Host '    本机 miniprogram-automator@0.12.1 的 mp.reLaunch / mp.navigateTo 恒报 `Uncaught [object Object]`；' -ForegroundColor Yellow
+            Write-Host '    门只对可验证子集（连通 + pageStack 非空 + 入口页在栈内 + 无 error/exception + ≥1 张当前页截图）作结论。' -ForegroundColor Yellow
+            Write-Host '    未证实是否为版本组合问题（留给后续排查）；首跑请人工核对结果行的 navigation= 字段。' -ForegroundColor Yellow
+        } else {
+            Write-Host "⚠️  降级：任意页直达探针（#1682）有页未达成 = SKIP（reason=$navReason）" -ForegroundColor Yellow
+            Write-Host '    机制 = 「构建产物 app.json 首项临时换页 + plain 冷启动」（ADR-0038 决策 1）；未达成的页**不得**当成已取证。' -ForegroundColor Yellow
+            Write-Host '    门只对可验证子集（已达成页逐页 console/exception 读数 + 落地页判据）作结论；未取证页见日志的 direct-page 读数行。' -ForegroundColor Yellow
+            Write-Host '    首跑请人工核对结果行的 navigation= 字段与 direct-total 时长行（0039 窗口主门成本校准）。' -ForegroundColor Yellow
+        }
         Write-Host "    $skipLine" -ForegroundColor Yellow
     }
 
@@ -1548,8 +1873,9 @@ try {
     if ($probeJson.probeOk -and $failed.Count -eq 0) {
         Write-Host ''
         if ($navSkip) {
-            Write-Host "✅ ② 通过（可验证子集；逐页导航组 = SKIP）：$resultLine" -ForegroundColor Green
-            Write-Host "   ⚠️ 未取证的部分：逐页导航 + 每页截图 = SKIP（reason=$navReason）—— 见上面的降级说明与 ADR-0008 ② 段。" -ForegroundColor Yellow
+            $navGroupCn = $(if ($navReason -eq 'navigation-api-unsupported') { '逐页导航组' } else { '直达组（#1682）' })
+            Write-Host "✅ ② 通过（可验证子集；$navGroupCn = SKIP）：$resultLine" -ForegroundColor Green
+            Write-Host "   ⚠️ 未取证的部分：$navGroupCn = SKIP（reason=$navReason）—— 见上面的降级说明与 ADR-0008 ② 段。" -ForegroundColor Yellow
         } else {
             Write-Host "✅ ② 通过：$resultLine" -ForegroundColor Green
         }
@@ -1584,6 +1910,9 @@ try {
     Write-Log (New-MpWeixinEnvResultLine -Prefix 'MP_WEIXIN_RESULT' -Reason 'exception' -Failures @("环境不可用：脚本异常（$_）"))
     $exitCode = 2
 } finally {
+    # 任意页直达探针（#1682）：异常/早退路径也必须还原 dist app.json（幂等，主路径已还原则是空操作；
+    # ADR-0038 决策 2「用毕从备份还原并复验」的 finally 兜底）
+    Restore-DistAppJson
     # 必须在 finally 路径里关：否则自动化会话与端口会残留（下次 pageStack 空 ⇒ 误导弹错）
     Invoke-DevToolsClose
     # 释放 agent 互斥锁（-SkipBuild 下未取锁，Release-HxLock 是安全的空操作）
@@ -1609,7 +1938,8 @@ if ($exitCode -eq 0 -and $PostToPr -gt 0) {
             -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
             -ArchivedRel @(Get-Prop $archive 'Rel') `
             -ArchiveNotes @(Get-Prop $archive 'Notes') `
-            -NavSkipped ([bool]$navSkip) -NavReason $navReason
+            -NavSkipped ([bool]$navSkip) -NavReason $navReason `
+            -DirectPageLines @($directLines)
     } catch {
         Write-Host "[warn] 贴 ② 门评论失败（门结论不受影响，退出码仍为 $exitCode）：$_" -ForegroundColor Yellow
         Write-Log "MP_WEIXIN_RESULT comment=FAILED exit=$exitCode detail=$_"

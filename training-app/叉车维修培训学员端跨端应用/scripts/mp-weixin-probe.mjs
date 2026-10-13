@@ -32,6 +32,11 @@
 // 用法：
 //   node mp-weixin-probe.mjs --ws ws://127.0.0.1:9420 --routes pages/index/index,pages/login/login \
 //        --entry-url pages/index/index --shot-dir <dir> [--timeout-ms 30000] [--page-timeout-ms 10000]
+//   任意页直达（#1682 · ADR-0038 决策1）：node mp-weixin-probe.mjs --ws <端点> --expect-page <路由> \
+//        --shot-dir <dir> —— 调用方已把构建产物 app.json 首项临时换成目标页并冷启动；本模式**不调用任何
+//        导航 API**，只断言「冷启动落地的当前页 == 目标页」+ 截图 + console/exception 读数。
+//   达成 ⇒ navigation=ok(detail=cold-start-direct)；未达成 ⇒ navigation=skip(reason=direct-page-unsupported)
+//   —— 诚实降级：SKIP 既不冒充门失败，也不冒充逐页取证成立。
 // 输出：最后一行固定为 JSON（前缀 `MP_WEIXIN_PROBE `），由调用方解析 —— **只看输出，不看退出码**。
 // 退出码：0 = 断言全过；1 = 有断言未过（真报错）；2 = 环境不可用（连不上 / 缺 automator / pageStack 空）。
 // 说明：断言结果同时写进 JSON 的 assertions/failures/probeOk，调用方以 JSON 为准。
@@ -43,7 +48,7 @@ import { createRequire } from 'node:module';
 function parseArgs(argv) {
   const out = {
     ws: 'ws://127.0.0.1:9420', routes: [], shotDir: '', entryUrl: '', requireRoot: '',
-    timeoutMs: 30000, pageTimeoutMs: 10000, settleMs: 2000, tailMax: 40,
+    timeoutMs: 30000, pageTimeoutMs: 10000, settleMs: 2000, tailMax: 40, expectPage: '',
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -55,6 +60,7 @@ function parseArgs(argv) {
     else if (a === '--require-root') out.requireRoot = val();
     else if (a === '--timeout-ms') out.timeoutMs = Number(val());
     else if (a === '--page-timeout-ms') out.pageTimeoutMs = Number(val());
+    else if (a === '--expect-page') out.expectPage = String(val() || '').trim();
   }
   return out;
 }
@@ -174,11 +180,15 @@ function finish(envUnavailable) {
   // 判据取**导航本身的结果**（每一步的 ok = 导航后当前页 == 目标页），不拿「导航前读到的 pageStack」
   // 去比所有路由——后者恒假（pageStack 在导航前只读一次），会让健康机器上的门永远过不去。
   const navSteps = result.steps.filter((s) => s.navigate !== 'none');
+  // 直达模式（#1682）：routes 为空、navigate 全 'none' ⇒ 逐页组判据换成「直达达成 + 至少 1 张页截图」
+  const directMode = Boolean(args.expectPage);
   assertions.allRoutesVisited = navSupported
-    ? (args.routes.length > 0 && navSteps.length === args.routes.length && navSteps.every((s) => s.ok === true))
+    ? (directMode
+      ? result.steps.some((s) => s.direct === true && s.ok === true)
+      : (args.routes.length > 0 && navSteps.length === args.routes.length && navSteps.every((s) => s.ok === true)))
     : 'skip';
   assertions.screenshotsProduced = navSupported
-    ? (args.routes.length > 0 && pngShots >= args.routes.length)
+    ? (directMode ? pngShots >= 1 : (args.routes.length > 0 && pngShots >= args.routes.length))
     : 'skip';
   result.assertions = assertions;
   // 只有**明确 false**（可验证子集不过，或导航可用时逐页组不过）才算失败；'skip' 不算
@@ -269,6 +279,48 @@ if (result.pageStack.length === 0) {
   finish(true);
 }
 result.entryPage = result.pageStack[0];
+
+// 任意页直达模式（#1682 · ADR-0038 决策1）：调用方已把构建产物 app.json 首项临时换成目标页并冷启动，
+// 会话落地页就应是目标页 ⇒ **不调用任何导航 API**（reLaunch/navigateTo 在本机 automator 0.12.1 恒报
+// `Uncaught [object Object]`，见文件头 2026-09-12 复测段），只判「落地页 == 目标页」+ 截图 + 读数。
+// 达成 ⇒ navigation=ok(detail=cold-start-direct)；未达成 ⇒ SKIP(reason=direct-page-unsupported)：
+// 机制不成立**不冒充门失败**（failures 不产生），也**不冒充逐页取证成立**（不写 true）。
+if (args.expectPage) {
+  const target = rel(args.expectPage);
+  const leaf = target.split('/').pop() || 'direct';
+  const reached = rel(result.pageStack[0]) === target;
+  const step = { label: 'direct-' + leaf, route: target, navigate: 'none', direct: true, ok: reached, currentPage: rel(result.pageStack[0]) };
+  if (!reached) {
+    step.error = '冷启动落地的当前页不是目标页（直达未达成）';
+    step.skipped = true;
+    step.skipReason = 'direct-page-unsupported';
+  }
+  if (args.shotDir) {
+    // 达成截目标页（文件名=页名）；未达成也截——但命名 miss- 前缀，**不冒充被改页证据**
+    const shotName = reached ? leaf : 'miss-' + leaf;
+    const shotFile = path.join(args.shotDir, shotName + '.png');
+    try {
+      await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
+      if (fs.existsSync(shotFile)) {
+        const info = pngInfo(shotFile);
+        result.shots.push({ name: shotName, route: step.currentPage, ...info });
+        step.shot = shotFile;
+      } else {
+        step.shotError = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+      }
+    } catch (e) {
+      step.error = String((e && e.message) || e);
+    }
+  }
+  result.steps.push(step);
+  result.navigation = reached
+    ? { status: 'ok', reason: '', detail: 'cold-start-direct', at: 'direct:' + target, skippedAssertions: [], skippedSteps: [] }
+    : { status: 'skip', reason: 'direct-page-unsupported', detail: 'direct-page-unsupported', at: 'direct:' + target, skippedAssertions: [], skippedSteps: [] };
+  console.log('[direct] ' + (reached ? 'ok' : 'skip') + ' page=' + target + ' current=' + step.currentPage
+    + ' errors=' + result.errorsTotal + ' exceptions=' + result.exceptionsTotal + ' shot=' + (step.shot || '-'));
+  await new Promise((r) => setTimeout(r, args.settleMs));
+  finish(false);
+}
 
 // 逐页：第一个用 reLaunch（当入口页），其余用 navigateTo（当被改页）
 let navSkipped = false;
