@@ -1,7 +1,7 @@
 /**
  * ② 门「环境性失败三分」行为守护（#1655 / ADR-0036 处置二）。
  *
- * 三分：通过（errors=0 的 metric 行，exit 0）/ 门未过（errors=<N> failures=…，exit 1）/
+ * 三分：通过（metric 行本身——无 errors= token，errorsTotal=0 承载通过语义，exit 0）/ 门未过（errors=<N> failures=…，exit 1）/
  * 环境受阻（errors=env-blocked reason=<slug>，exit 2）。分类判据真源 =
  * `scripts/lib/mp-weixin-env.ps1`（门脚本 dot-source 同一份，:1535 一带的分类下沉到它）。
  *

@@ -59,6 +59,8 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '1']);
     expect(r.status).not.toBe(0);
     expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT errors=0/);
+    // #1655 三分现测：通过产物 = metric 行（**无** errors= token），errors=0 锚对它是死的——「不产出绿」必须同时钉 metric 行的缺席
+    expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT appid=/);
   });
 
   it('必不红：attempts=2 ⇒ quit 清场一次 + close → open → auto 整段出现两遍，用尽才 exit 2', () => {

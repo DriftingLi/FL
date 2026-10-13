@@ -137,7 +137,7 @@
     登录态过期时需人补扫一次码。
 
     结果行三分（#1655 / ADR-0036 处置二；同一前缀 MP_WEIXIN_RESULT 下三选一，互斥）：
-       通过       `errors=0 …`（metric 行）—— exit 0；
+       通过       metric 行本身（**无** errors= token；`errorsTotal=0` 承载通过语义）—— exit 0；
        门未过     `errors=<N> failures=…`（可验证子集不过，N≥1）—— exit 1；
        环境受阻   `errors=env-blocked reason=<slug> [failures=…][ <metric>]` —— exit 2。
        env-blocked ≠ 门未过：环境性失败是一等结果行（分类判据 = scripts/lib/mp-weixin-env.ps1），
@@ -547,10 +547,12 @@ function New-GatePlan {
         exit2 = $exit2Summary
         resultLine = [ordered]@{ prefix = 'MP_WEIXIN_RESULT'; fields = $resultFields }
         # 结果行三分声明（#1655 / ADR-0036 处置二）：本计划的三种结果行形状与各自出口码。
+        # 通过分支的判别 = errors= token 的**缺席**：'<none>' 是占位声明，产物不写这个 token，
+        # 「errors=0」语义由 metric 行的 errorsTotal=0 承载（既有产物形状，零回归）。
         # classifier = 分类器真源（scripts/lib/mp-weixin-env.ps1 的函数名，守护对它做形状校验）；
         # envReasons 只能引用 exit2 已声明的 reason + 分类器派生的探针侧枚举（#1655 实测清单）。
         branches = [ordered]@{
-            pass = [ordered]@{ errors = '0'; exitCode = 0 }
+            pass = [ordered]@{ errors = '<none>'; errorsTotal = '0'; exitCode = 0 }
             gateFailed = [ordered]@{ errors = '<N>'; failures = $true; exitCode = 1 }
             envBlocked = [ordered]@{
                 errors = 'env-blocked'
