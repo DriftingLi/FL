@@ -132,7 +132,7 @@ describe('§1.6 白名单文件自检', () => {
     }
   });
 
-  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2（#1605 四页 + #1606 十四页），白名单是全仓册不是批内册）', () => {
+  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2（#1605 四页 + #1606 十四页）∪ 批4（#1607 十九页），白名单是全仓册不是批内册）', () => {
     // 批2 页清单与 utils/batch2UiContract.test.js 的 PAGES 保持一致（不 require 测试模块，防 describe 嵌套）；#1606 十四页与 batch2UiContract 十四页同册
     const BATCH2_PAGES = [
       'pages/exam-info/exam-info.uvue',
@@ -145,7 +145,17 @@ describe('§1.6 白名单文件自检', () => {
       'pages/practice/practice-report.uvue', 'pages/jobs/job-detail.uvue', 'pages/resume/resume-edit.uvue',
       'pages/resume/resume-attach.uvue', 'pages/practice/practice-do.uvue',
     ];
-    const all = PAGES.concat(BATCH2_PAGES)
+    // #1607 批4（N01 蓝底套 19 页）条目落在批4页面，纳入并集扫描面；清单与 learnerUiContract.test.js 的 batch4 保持一致
+    const BATCH4_PAGES = [
+      'pages/courses/course-detail.uvue', 'pages/courses/chapter-view.uvue',
+      'pages/resources/materials.uvue', 'pages/exam/mock-exam.uvue', 'pages/exam/mock-exam-result.uvue',
+      'pages/profile/records.uvue', 'pages/profile/practice-records.uvue', 'pages/profile/mock-exam-records.uvue',
+      'pages/profile/favorites.uvue', 'pages/profile/notebook.uvue', 'pages/profile/help-center.uvue',
+      'pages/forum/forum-detail.uvue', 'pages/forum/forum-create.uvue', 'pages/forum/check-in.uvue',
+      'pages/notifications/notifications.uvue', 'pages/resources/my-purchases.uvue', 'pages/resources/my-uploads.uvue',
+      'pages/featured/featured-list.uvue', 'pages/featured/featured-detail.uvue',
+    ];
+    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES)
       .map((p) => styleBlock(read(p)).toUpperCase())
       .join('\n');
     for (const value of Object.keys(WHITELIST)) {

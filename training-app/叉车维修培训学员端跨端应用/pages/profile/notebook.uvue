@@ -1,15 +1,12 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">我的笔记</text>
-            <view class="header-right" @click="onCreate">
-                <text class="header-action">新建</text>
-            </view>
-        </view>
+        <app-nav-bar title="我的笔记" variant="inverse" @left-click="onBack">
+            <template #right>
+                <view class="nav-action" @click="onCreate">
+                    <text class="header-action">新建</text>
+                </view>
+            </template>
+        </app-nav-bar>
 
         <!-- 分段控件：三态取值与后端 scope 参数同名（ADR-0055），不另造端上词表 -->
         <view class="segment-bar">
@@ -88,8 +85,8 @@
 <script setup lang="uts">
     import { computed, ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_SCOPE_QUESTION, NOTE_SCOPE_STANDALONE } from '../../api/note'
     import type { NoteItem } from '../../types/index'
     import { noteTitle, noteExcerpt, noteBadgeText, isStandaloneNote, noteEmptyText } from '../../utils/notebookDisplay'
@@ -125,7 +122,6 @@
         value : string
     }
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const scopeOptions : ScopeOption[] = [
@@ -320,39 +316,11 @@
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
+    .nav-action {
+        width: 64rpx;
+        height: 64rpx;
         align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 120rpx;
-        align-items: flex-start;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 120rpx;
-        align-items: flex-end;
+        justify-content: center;
     }
 
     .header-action {

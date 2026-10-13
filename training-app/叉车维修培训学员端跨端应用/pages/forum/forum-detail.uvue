@@ -1,22 +1,18 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">帖子详情</text>
-            <view class="header-right" v-if="canDelete" @click="onDelete">
-                <!-- <view class="header-right" v-if="canDelete" @click="onDelete"> -->
-                <text class="header-action-danger">删除</text>
-            </view>
-            <view class="header-right" v-if="canEdit && !canDelete" @click="onEditTopic">
-                <text class="header-action">编辑</text>
-            </view>
-            <view class="header-right" v-if="!canDelete && !canEdit" @click="onReportTopicClick">
-                <text class="header-action">举报</text>
-            </view>
-        </view>
+        <app-nav-bar title="帖子详情" variant="inverse" @left-click="onBack">
+            <template #right>
+                <view class="nav-action" v-if="canDelete" @click="onDelete">
+                    <text class="header-action-danger">删除</text>
+                </view>
+                <view class="nav-action" v-if="canEdit && !canDelete" @click="onEditTopic">
+                    <text class="header-action">编辑</text>
+                </view>
+                <view class="nav-action" v-if="!canDelete && !canEdit" @click="onReportTopicClick">
+                    <text class="header-action">举报</text>
+                </view>
+            </template>
+        </app-nav-bar>
 
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- 加载中 -->
@@ -103,8 +99,8 @@
     import { useTopicDetail } from '../../composables/useTopicDetail'
     import { useReplyComposer } from '../../composables/useReplyComposer'
     import { useReport } from '../../composables/useReport'
-    import { useStatusBarHeight } from '../../utils/system'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { formatDateTimeStr } from '../../utils/format'
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
     import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
@@ -115,7 +111,6 @@
     /** 回复面的图片限额（`constants/app` 单点；组件不持缺省值，本页只报自己那一档） */
     const replyImageLimit : number = FORUM_MAX_REPLY_IMAGES
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ===== 三域 composable 接线：详情核心 / 回复输入 / 举报 =====
@@ -390,7 +385,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background: linear-gradient(to bottom, #CFE9FB, #D0EBFD);
@@ -398,39 +393,11 @@
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
+    .nav-action {
+        width: 64rpx;
+        height: 64rpx;
         align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 80rpx;
-        align-items: center;
+        justify-content: center;
     }
 
     .header-action-danger {

@@ -1,15 +1,10 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">模拟考试</text>
-            <view class="header-right">
+        <app-nav-bar title="模拟考试" variant="inverse" @left-click="onBack">
+            <template #right>
                 <text class="timer-text" :class="{ warning: session.isTimeWarning.value, danger: session.isTimeDanger.value }">{{ session.timerDisplay.value }}</text>
-            </view>
-        </view>
+            </template>
+        </app-nav-bar>
 
         <!-- 加载中 -->
         <view v-if="session.loading.value && session.questions.value.length == 0" class="loading-wrap">
@@ -75,13 +70,12 @@
 
 <script setup lang="uts">
     import { onLoad, onUnload } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
-    import { goBack } from '../../utils/navigation'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+import { goBack } from '../../utils/navigation'
     import { useMockExamSession } from './composables/useMockExamSession'
     import ExamQuestionCard from './components/exam-question-card.uvue'
     import ExamActionBar from './components/exam-action-bar.uvue'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // 会话状态机（组卷/计时/答题态/存进度/交卷）全部下沉 composable，页面只保留模板与薄包装
@@ -120,46 +114,11 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
         background-color: #f5f5f5;
         flex-direction: column;
-    }
-
-    .status-bar {
-        background-color: #2979ff;
-    }
-
-    .header {
-        background-color: #2979ff;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 80rpx;
-        align-items: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #ffffff;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #ffffff;
-        text-align: center;
-    }
-
-    .header-right {
-        width: 120rpx;
-        align-items: flex-end;
     }
 
     .timer-text {
