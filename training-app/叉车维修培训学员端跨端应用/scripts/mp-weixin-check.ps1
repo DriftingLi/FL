@@ -907,6 +907,9 @@ function Invoke-DevToolsQuitAndPoll {
     while ($waited -lt [int]$quitStep.waitSeconds) {
         if (@(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count -eq 0) {
             Write-Log "quit：wechatdevtools 进程已归零（等了 ${waited}s）"
+            # #1682 第四轮实测：进程归零 ≠ IDE server（43005）状态收干净——quit 后立刻 open，
+            # auto 会挂满 180s 超时；手动实验 quit 后静置 8s 再 open→auto→ready 12s 成 ⇒ 固定静置。
+            Start-Sleep -Seconds 10
             return
         }
         Start-Sleep -Seconds 1
@@ -976,11 +979,11 @@ function Restore-DistAppJson {
 
 function Invoke-DirectColdStart {
     param($Steps, [string]$PageTag)
-    # 逐页换页后的重冷启动单元：close → open → auto → 端口轮询 → 就绪闸门（参数一律取自传入的计划
+    # 逐页换页后的重冷启动单元：open → auto → 端口轮询 → 就绪闸门（参数一律取自传入的计划
     # 步骤——守护 C18 的「调用点原文至多一次」不允许这里重复写死 argv）。
-    # ⚠️ 重试轮不是同段重放：#1682 冒烟实测同一 IDE 进程内**第二次 close→open→auto 循环**稳定复现
-    # #1634 白屏形态（getInfo 全程 no-reply 到超时），close 修不好、quit 重启即恢复（实测 12s 就绪）
-    # ⇒ 首轮 close 换窗，第 2 轮起升级为整 IDE 重启（quit → open）。
+    # ⚠️ 每一轮都整 IDE 重启（quit→open），不走 close→open 的第二窗口循环：#1682 冒烟四轮实测
+    # 同一 IDE 进程内第二次 close→open→auto 循环大概率复现 #1634 白屏（getInfo 全程 no-reply 烧满
+    # 120s 超时），而 quit 重启路径（含归零后静置）三轮全成 ⇒ 直达页首轮即 quit 重启，省掉白屏赌局。
     $attempts = [Math]::Max(1, [int]$script:GatePlan['timeouts']['autoAttempts'])
     $delay = [Math]::Max(0, [int]$script:GatePlan['timeouts']['autoRetryDelay'])
     $out = @{ ok = $false; reason = 'port-not-listening'; readySeconds = 0; sdk = ''; ide = '' }
@@ -989,14 +992,9 @@ function Invoke-DirectColdStart {
             Write-Log "`n>>> direct-coldstart($PageTag)：整段重试第 $attempt/$attempts 次（等 ${delay}s；上一轮 reason=$($out.reason)）"
             Start-Sleep -Seconds $delay
         }
-        if ($attempt -eq 1) {
-            $script:closed = $false
-            Invoke-DevToolsClose
-        } else {
-            # quit 后旧窗口随进程消失；重启出的新窗口仍需 finally 的 close 收掉 ⇒ 复位哨兵。
-            Invoke-DevToolsQuitAndPoll
-            $script:closed = $false
-        }
+        # quit 后旧窗口随进程消失；重启出的新窗口仍需 finally 的 close 收掉 ⇒ 复位哨兵。
+        Invoke-DevToolsQuitAndPoll
+        $script:closed = $false
         $open = Invoke-Process -FilePath $devTools -Arguments $Steps.open.argv -TimeoutSeconds $Steps.open.timeoutSeconds -Tag "$($Steps.open.tag)(direct:$PageTag)"
         Write-Log "`n>>> direct-coldstart open($PageTag)`n$($open.Output)"
         if ($open.TimedOut) { $out.reason = 'devtools-open-timeout'; continue }
