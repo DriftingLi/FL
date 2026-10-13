@@ -59,6 +59,8 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '1']);
     expect(r.status).not.toBe(0);
     expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT errors=0/);
+    // #1655 三分现测：通过产物 = metric 行（**无** errors= token），errors=0 锚对它是死的——「不产出绿」必须同时钉 metric 行的缺席
+    expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT appid=/);
   });
 
   it('必不红：attempts=2 ⇒ quit 清场一次 + close → open → auto 整段出现两遍，用尽才 exit 2', () => {
@@ -72,7 +74,7 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     expect(r.status).toBe(2);
     const log = H.gateLog(fixture);
     expect(log).toMatch(/整段重试第 2\/2 次/);
-    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env reason=port-not-listening/);
+    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env-blocked reason=port-not-listening/);
   }, 300000);
 
   it('必红：attempts=1 ⇒ 只跑一遍（证明次数真的来自 -AutoAttempts，不是写死的）', () => {
@@ -83,7 +85,7 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     expect(r.status).toBe(2);
     const log = H.gateLog(fixture);
     expect(log).not.toMatch(/整段重试/);
-    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env reason=port-not-listening/);
+    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env-blocked reason=port-not-listening/);
   }, 300000);
 
   it('pre-flight：quit 先于 close → open → auto，且进程归零轮询写进日志（#1634）', () => {

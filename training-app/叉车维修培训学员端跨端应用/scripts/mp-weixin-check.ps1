@@ -136,8 +136,15 @@
     须以全访问权限执行（同 ④a）。开发者工具需已登录（`cli.bat islogin` → `{"login":true}`），
     登录态过期时需人补扫一次码。
 
+    结果行三分（#1655 / ADR-0036 处置二；同一前缀 MP_WEIXIN_RESULT 下三选一，互斥）：
+       通过       metric 行本身（**无** errors= token；`errorsTotal=0` 承载通过语义）—— exit 0；
+       门未过     `errors=<N> failures=…`（可验证子集不过，N≥1）—— exit 1；
+       环境受阻   `errors=env-blocked reason=<slug> [failures=…][ <metric>]` —— exit 2。
+       env-blocked ≠ 门未过：环境性失败是一等结果行（分类判据 = scripts/lib/mp-weixin-env.ps1），
+       处置 = 转人工 / 改跑**不需要 DevTools** 的检查，绝不 kill 主程序。
+
     退出码：0 = ② 通过；1 = 门未过（**产物不合法**（#1210）/ console error / exception / 页面未打开 / 截图缺失）；
-    2 = 环境不可用（缺 CLI / 连不上 / 超时）。**产物坏了判 1、不判 2** —— 判 2 等于告诉调用方「重跑即可」，
+    2 = 环境受阻（env-blocked：缺 CLI / 连不上 / 超时，reason= 指明是哪一类）。**产物坏了判 1、不判 2** —— 判 2 等于告诉调用方「重跑即可」，
     而重跑会得到同一份坏产物（判据见 `scripts/lib/mp-weixin-product.ps1` 与 ADR-0008 的「② 产物合法性判据」段）。
 
 .PARAMETER Project
@@ -539,6 +546,31 @@ function New-GatePlan {
         }
         exit2 = $exit2Summary
         resultLine = [ordered]@{ prefix = 'MP_WEIXIN_RESULT'; fields = $resultFields }
+        # 结果行三分声明（#1655 / ADR-0036 处置二）：本计划的三种结果行形状与各自出口码。
+        # 通过分支的判别 = errors= token 的**缺席**：'<none>' 是占位声明，产物不写这个 token，
+        # 「errors=0」语义由 metric 行的 errorsTotal=0 承载（既有产物形状，零回归）。
+        # classifier = 分类器真源（scripts/lib/mp-weixin-env.ps1 的函数名，守护对它做形状校验）；
+        # envReasons 只能引用 exit2 已声明的 reason + 分类器派生的探针侧枚举（#1655 实测清单）。
+        branches = [ordered]@{
+            pass = [ordered]@{ errors = '<none>'; errorsTotal = '0'; exitCode = 0 }
+            gateFailed = [ordered]@{ errors = '<N>'; failures = $true; exitCode = 1 }
+            envBlocked = [ordered]@{
+                errors = 'env-blocked'
+                reason = $true
+                failures = $true
+                exitCode = 2
+                classifier = 'Get-MpWeixinEnvClassification'
+                envReasons = @(
+                    'port-not-listening', 'hbuilderx-not-found', 'cli-unusable', 'devtools-not-found',
+                    'node-not-found', 'cli-ipc-blocked', 'timeout', 'devtools-open-timeout', 'auto-timeout',
+                    'no-dist', 'npm-not-found', 'automator-install-failed', 'no-ready-gate',
+                    'no-ready-result', 'automation-not-ready', 'probe-timeout', 'no-probe-result',
+                    'no-probe', 'no-routes',
+                    'automation-unreachable', 'automation-timeout', 'automation-unknown',
+                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception'
+                )
+            }
+        }
     }
 }
 
@@ -707,12 +739,12 @@ function Get-DoctorExitCode {
 
 if (-not (Test-Path -LiteralPath $probePath)) {
     Write-Host "[error] 缺探针脚本：$probePath" -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-probe'
+    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-probe'
     exit 2
 }
 if ($routeList.Count -eq 0) {
     Write-Host '[error] -Routes 为空：至少给一个入口页路由' -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-routes'
+    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-routes'
     exit 2
 }
 
@@ -723,23 +755,23 @@ $devTools = Resolve-DevToolsCli -Explicit $DevToolsCli
 if (-not $SkipBuild) {
     if (-not $hbxRoot) {
         Write-Host '[error] 找不到可用的 HBuilderX（需含 cli.exe 与 plugins/）。用 -HBuilderX <安装根> 或 -Cli <cli.exe> 指定。' -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=hbuilderx-not-found'
+        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=hbuilderx-not-found'
         exit 2
     }
 } elseif ($Cli -and -not $hbxRoot) {
     Write-Host "[error] 指定的 cli.exe 不可用（不存在或 PE 头损坏）：$Cli" -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env reason=cli-unusable'
+    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=cli-unusable'
     exit 2
 }
 if (-not $devTools) {
     Write-Host '[error] 找不到微信开发者工具 cli.bat。用 -DevToolsCli <路径> 指定。' -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env reason=devtools-not-found'
+    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=devtools-not-found'
     exit 2
 }
 $nodeExe = (Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1).Source
 if (-not $nodeExe) {
     Write-Host '[error] 找不到 node（跑探针需要 Node.js + miniprogram-automator）。' -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env reason=node-not-found'
+    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=node-not-found'
     exit 2
 }
 
@@ -849,6 +881,11 @@ function Invoke-DevToolsPreflightQuit {
 # 截图入库的判据面（`Get-MadeTotalBytes` 的空安全）：**必须 dot-source 才可用**，
 # 而 `Publish-ScreenshotArchive` 在 main 流程里才被调用 ⇒ 这里（main 之前）是它唯一可靠的落点。
 . (Join-Path $PSScriptRoot 'lib\mp-weixin-archive.ps1')
+# 环境性失败三分的分类与结果行构造（#1655 / ADR-0036 处置二）：判据面单点真源 ——
+# :1535 一带的分类、env-blocked/门未过两种结果行的形状都出自它，
+# 守护用夹具**真执行**这些函数（utils/mpWeixinGateEnvBehavior.test.js / mpWeixinGateResultLineBehavior.test.js），
+# 不对源码文本断言（C20 先例）。分支声明形状见 GATE_PLAN 的 branches 键。
+. (Join-Path $PSScriptRoot 'lib\mp-weixin-env.ps1')
 
 function Publish-GateComment {
     param(
@@ -1141,12 +1178,12 @@ try {
             Write-Host $r.Output
             if ($r.Output -match '与主程序的连接已中断|启动超时') {
                 Write-Host '[error] HBuilderX CLI 连不上主程序：受限/沙箱会话会阻断 CLI↔主程序的本地 IPC。' -ForegroundColor Red
-                Write-Log 'MP_WEIXIN_RESULT errors=env reason=cli-ipc-blocked'
+                Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=cli-ipc-blocked'
                 exit 2
             }
             if ($r.TimedOut) {
                 Write-Host "[error] $($step.Tag) 超时（$PublishTimeoutSeconds 秒）" -ForegroundColor Red
-                Write-Log 'MP_WEIXIN_RESULT errors=env reason=timeout'
+                Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=timeout'
                 exit 2
             }
         }
@@ -1159,12 +1196,12 @@ try {
         Write-Host $pub.Output
         if ($pub.Output -match '与主程序的连接已中断') {
             Write-Host '[error] HBuilderX CLI 连不上主程序（见日志）。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=cli-ipc-blocked'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=cli-ipc-blocked'
             exit 2
         }
         if ($pub.TimedOut) {
             Write-Host "[error] publish 超时（$PublishTimeoutSeconds 秒）" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=timeout'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=timeout'
             exit 2
         }
         # 成败一律解析输出（CLI 退出码不可用）
@@ -1184,7 +1221,7 @@ try {
         Write-Host ">>> -SkipBuild：跳过 publish（用现有产物；门结论只对这份产物成立）" -ForegroundColor Yellow
         if (-not (Test-Path -LiteralPath (Join-Path $dist 'app.json'))) {
             Write-Host "[error] 没有可用产物（缺 $dist\app.json）：去掉 -SkipBuild 或先跑一次构建。" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-dist'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-dist'
             exit 2
         }
     }
@@ -1271,7 +1308,7 @@ try {
             $lastReason = 'devtools-open-timeout'
             if ($attempt -lt $attempts) { continue }
             Write-Host "[error] cli.bat open 超时（$OpenTimeoutSeconds 秒）：项目窗口未重开 ⇒ auto 不会替你重开 ⇒ pageStack 必为空格。" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=devtools-open-timeout'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=devtools-open-timeout'
             exit 2
         }
 
@@ -1288,7 +1325,7 @@ try {
             if ($Doctor) { Add-DoctorRow -Layer 'L6 自动化端口' -Verdict 'FAIL' -Detail "第 $attempt/$attempts 次尝试：cli.bat auto 超时（$AutoTimeoutSeconds 秒）：自动化端口没开起来（残留会话多时见过此形态）" }
             if ($attempt -lt $attempts) { continue }
             Write-Host "[error] cli.bat auto 超时（$AutoTimeoutSeconds 秒，整段重试 $attempts 次用尽）" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=auto-timeout'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=auto-timeout'
             exit 2
         }
         $usingAppId = ''
@@ -1324,7 +1361,7 @@ try {
     }
     if (-not $listening) {
         Write-Host "[error] 自动化端口 $Port 未监听：cli.bat auto 未真正生效（整段 close → open → auto 重试 $attempts 次用尽）。" -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=port-not-listening'
+        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=port-not-listening'
         exit 2
     }
 
@@ -1338,7 +1375,7 @@ try {
         if (-not $npmCmd) { $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
         if (-not $npmCmd) {
             Write-Host '[error] 找不到 npm：无法准备 miniprogram-automator。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=npm-not-found'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=npm-not-found'
             exit 2
         }
         New-Item -ItemType Directory -Force -Path $autoRoot | Out-Null
@@ -1349,7 +1386,7 @@ try {
         Write-Host $npmStep.Output
         if (-not (Test-Path -LiteralPath $autoModule)) {
             Write-Host '[error] miniprogram-automator 装不上（见日志）：探针无法连自动化端口。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=automator-install-failed'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=automator-install-failed'
             exit 2
         }
     }
@@ -1364,7 +1401,7 @@ try {
     #      哪个里程碑 —— 不再笼统说成「端口连不上」。
     if (-not (Test-Path -LiteralPath $readyPath)) {
         Write-Host "[error] 缺就绪闸门脚本：$readyPath" -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-ready-gate'
+        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-ready-gate'
         exit 2
     }
     # 命令、超时、wait 预算一律取自门计划（计划里写明判据：SDKVersion + App.getPageStack）
@@ -1380,7 +1417,7 @@ try {
     }
     if (-not $readyJson) {
         Write-Host '[error] 就绪闸门未输出可解析的 MP_WEIXIN_READY 结果行（见日志）。' -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-ready-result'
+        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-ready-result'
         exit 2
     }
     $readyElapsed = Get-Prop $readyJson 'elapsedMs'
@@ -1397,7 +1434,7 @@ try {
     if (-not $readyOk) {
         Write-Host "[error] 自动化会话未就绪（reason=$(Get-Prop $readyJson 'reason')）：$(Get-Prop $readyJson 'detail')" -ForegroundColor Red
         Write-Host '        注意：端口是通的 —— 这不是「端口连不上」，是会话还没到可用状态（坑位 5）。' -ForegroundColor Red
-        Write-Log "MP_WEIXIN_RESULT errors=env reason=automation-not-ready detail=$(Get-Prop $readyJson 'detail')"
+        Write-Log "MP_WEIXIN_RESULT errors=env-blocked reason=automation-not-ready detail=$(Get-Prop $readyJson 'detail')"
         exit 2
     }
 
@@ -1414,7 +1451,7 @@ try {
         Write-Host $probe.Output
         if ($probe.TimedOut) {
             Write-Host "[error] 探针超时（$($probeStep.timeoutSeconds) 秒）：元素级 API 会静默挂起，本门不得引入它们（#883 坑位 3）。" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env reason=probe-timeout'
+            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=probe-timeout'
             exit 2
         }
         # **只看输出**：解析探针的 MP_WEIXIN_PROBE JSON（退出码不作判据）
@@ -1438,7 +1475,7 @@ try {
 
     if (-not $probeJson) {
         Write-Host '[error] 探针未输出可解析的 MP_WEIXIN_PROBE 结果行（见日志）。' -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env reason=no-probe-result'
+        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-probe-result'
         exit 2
     }
 
@@ -1526,17 +1563,25 @@ try {
         $failed | Select-Object -First 20 | ForEach-Object { Write-Host "   $_" -ForegroundColor Red }
         # 用 Get-Prop 而不是 `$_.error`：Set-StrictMode 下访问**不存在的属性**会抛异常，
         # 而探针的 step 只在真出错时才带 error 字段 ⇒ 旧写法会把「❌ 门未过」的失败路径炸成
-        # `errors=env reason=exception`（本机 2026-09-12 复测实测到：失败详情被异常顶掉）。
+        # `errors=env-blocked reason=exception`（本机 2026-09-12 复测实测到：失败详情被异常顶掉）。
         @($probeJson.steps | Where-Object { Get-Prop $_ 'error' }) | Select-Object -First 10 |
             ForEach-Object { Write-Host "   [step] $($_.label) $($_.route)：$(Get-Prop $_ 'error')" -ForegroundColor Red }
         Write-Host "完整日志：$logPath" -ForegroundColor Yellow
-        # failures= 只在**可验证子集**不过时非空（导航降级不产生 failures，只记 SKIP）
-        Write-Log ("$($script:GatePlan.resultLine.prefix) errors=$($failed.Count) failures=" + ($failed -join ' / ') + " $metricLine")
-        $exitCode = if (@($failed | Where-Object { $_ -match '环境不可用' }).Count -gt 0) { 2 } else { 1 }
+        # 三分分类（#1655 / ADR-0036 处置二）：判据锚 = 探针失败条目前缀「环境不可用：」（StartsWith，
+        # 不是裸 Contains —— 引用这句话的普通断言失败不得误判成环境受阻）；reason 派生也出自同一真源。
+        # 行构造器保证两种结果行形状互斥：门未过行永不写 env-blocked，env 行 reason= 只允许小写连字符 slug。
+        $envClass = Get-MpWeixinEnvClassification -Failures $failed
+        if ($envClass.isEnv) {
+            Write-Log (New-MpWeixinEnvResultLine -Prefix $($script:GatePlan.resultLine.prefix) -Reason $envClass.envReasons[0] -Failures $failed -MetricLine $metricLine)
+        } else {
+            # failures= 只在**可验证子集**不过时非空（导航降级不产生 failures，只记 SKIP）
+            Write-Log (New-MpWeixinGateResultLine -Prefix $($script:GatePlan.resultLine.prefix) -Count $failed.Count -FailuresJoined ($failed -join ' / ') -MetricLine $metricLine)
+        }
+        $exitCode = if ($envClass.isEnv) { 2 } else { 1 }
     }
 } catch {
     Write-Host "[error] ② 脚本异常：$_" -ForegroundColor Red
-    Write-Log "MP_WEIXIN_RESULT errors=env reason=exception detail=$_"
+    Write-Log (New-MpWeixinEnvResultLine -Prefix 'MP_WEIXIN_RESULT' -Reason 'exception' -Failures @("环境不可用：脚本异常（$_）"))
     $exitCode = 2
 } finally {
     # 必须在 finally 路径里关：否则自动化会话与端口会残留（下次 pageStack 空 ⇒ 误导弹错）

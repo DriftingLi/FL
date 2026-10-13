@@ -345,6 +345,32 @@ function scanPlan(plan) {
   must(fields.length > 0 && fields[fields.length - 1].name === 'log' && !fields[fields.length - 1].optional,
     'C18', 'log 应是结果行最后一个字段（与既有日志格式一致）');
 
+  // ---- C23（#1655 / ADR-0036 处置二）：三分结果行形状写进计划（branches 键） ----
+  // 三分 = 通过 metric 行（无 errors= token，errorsTotal=0 承载通过语义）/ 门未过 errors=<N> failures=…
+  // / 环境受阻 errors=env-blocked reason=<slug>。
+  // 分支声明是**产物契约**：机检方（dev-loop、agent）从计划就知道「环境性失败长什么样、
+  // 处置是什么」——不用再从 publish 文案猜。改 token/分支形状必须同步这里（改了要同步）。
+  const B = (plan && plan.branches) || {};
+  must(B.pass && B.pass.errors === '<none>', 'C23', 'branches.pass.errors 不是字面量 \'<none>\'（通过行**没有** errors= token——判别写在缺席上，别把它改成值）');
+  must(B.pass && B.pass.errorsTotal === '0', 'C23', 'branches.pass.errorsTotal 不是 \'0\'（通过语义由 metric 行的 errorsTotal=0 承载）');
+  must(B.pass && B.pass.exitCode === 0, 'C23', 'branches.pass.exitCode 不是 0（通过 = exit 0）');
+  must(B.gateFailed && B.gateFailed.errors === '<N>', 'C23', 'branches.gateFailed.errors 不是 \'<N>\'（门未过行的 errors= 值是失败计数）');
+  must(B.gateFailed && B.gateFailed.failures === true, 'C23', 'branches.gateFailed 未声明 failures= 字段（门未过行必须带 failures=）');
+  must(B.gateFailed && B.gateFailed.exitCode === 1, 'C23', 'branches.gateFailed.exitCode 不是 1（门未过 = exit 1）');
+  must(B.envBlocked && B.envBlocked.errors === 'env-blocked', 'C23', 'branches.envBlocked.errors 不是 \'env-blocked\'（环境受阻的一等 token，ADR-0036 处置二）');
+  must(B.envBlocked && B.envBlocked.reason === true, 'C23', 'branches.envBlocked 未声明 reason= 字段（env 行必须带 reason=<slug>）');
+  must(B.envBlocked && B.envBlocked.exitCode === 2, 'C23', 'branches.envBlocked.exitCode 不是 2（环境受阻 = exit 2）');
+  must(B.envBlocked && B.envBlocked.classifier === 'Get-MpWeixinEnvClassification', 'C23',
+    'branches.envBlocked.classifier 不是 Get-MpWeixinEnvClassification（分类判据的唯一真源在 scripts/lib/mp-weixin-env.ps1）');
+  const catalog = (B.envBlocked && Array.isArray(B.envBlocked.envReasons)) ? B.envBlocked.envReasons : [];
+  must(catalog.length > 0, 'C23', 'branches.envBlocked.envReasons 缺失（环境受阻的 reason 枚举必须写进计划，机检方按它判断处置）');
+  must(new Set(catalog).size === catalog.length, 'C23', 'branches.envBlocked.envReasons 有重复项（枚举必须唯一）');
+  catalog.forEach((r) => must(/^[a-z0-9-]+$/.test(r), 'C23', `envReasons 枚举值 ${r} 不是 kebab-case slug（reason= 值域纪律）`));
+  // 计划 exit2 声明的 reason（脚本侧直接 emit 的环境性失败）必须全部落在 envReasons 枚举里
+  (Array.isArray(plan && plan.exit2) ? plan.exit2 : []).forEach((e) => {
+    must(catalog.includes(e.reason), 'C23', `exit2 的 reason ${e.reason}（${e.step}/${e.on}）不在 envReasons 枚举里 —— 直接 emit 的环境性失败必须能被枚举覆盖`);
+  });
+
   return violations;
 }
 
@@ -437,7 +463,7 @@ function scanContract(sources) {
   // 锚点取**整条字面量**（不是裸 `no-dist`）：裸子串会被 `no-dist-X` 这类改名蒙过去（子串遮蔽，见 C17 的同类教训）。
   const openUseAt = s.indexOf("-Id 'devtools-open'");
   must(openUseAt !== -1, 'C12', '执行路径里没有按 id 取用 open 步骤（计划与执行脱节）');
-  const lastDistGuard = s.indexOf("'MP_WEIXIN_RESULT errors=env reason=no-dist'");
+  const lastDistGuard = s.indexOf("'MP_WEIXIN_RESULT errors=env-blocked reason=no-dist'");
   must(lastDistGuard !== -1, 'C12', '找不到 -SkipBuild 分支的 no-dist 兜底（open 的执行点晚于哪个锚点就判不出来了）');
   if (openUseAt !== -1 && lastDistGuard !== -1) {
     must(openUseAt > lastDistGuard, 'C12', 'open 的执行点落在构建分支条件内（-SkipBuild 路径到不了它）');
@@ -766,7 +792,21 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.criteria = ['清场']; })],
       ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.exit2 = [{ on: 'timeout', reason: 'quit-timeout' }]; })],
       ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.awaitCompletion = false; })],
-      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.logged = false; })]
+      ['C22', (p) => editStep(p, 'devtools-quit', (s) => { s.logged = false; })],
+      // C23：三分声明被改坏（通过行的 token 缺席声明、env token、分类器真源、枚举纪律、exit2 覆盖）
+      ['C23', (p) => { delete p.branches; return p; }],
+      ['C23', (p) => { p.branches.pass.errors = '0'; return p; }],
+      ['C23', (p) => { p.branches.pass.errorsTotal = '1'; return p; }],
+      ['C23', (p) => { p.branches.gateFailed.errors = '0'; return p; }],
+      ['C23', (p) => { p.branches.gateFailed.failures = false; return p; }],
+      ['C23', (p) => { p.branches.gateFailed.exitCode = 2; return p; }],
+      ['C23', (p) => { p.branches.envBlocked.errors = 'env'; return p; }],
+      ['C23', (p) => { p.branches.envBlocked.reason = false; return p; }],
+      ['C23', (p) => { p.branches.envBlocked.classifier = 'AnythingElse'; return p; }],
+      ['C23', (p) => { p.branches.envBlocked.envReasons = []; return p; }],
+      ['C23', (p) => { const c = p.branches.envBlocked.envReasons.slice(); c.push(c[0]); p.branches.envBlocked.envReasons = c; return p; }],
+      ['C23', (p) => { const c = p.branches.envBlocked.envReasons.slice(); c[0] = 'Port_Not_Listening'; p.branches.envBlocked.envReasons = c; return p; }],
+      ['C23', (p) => { p.exit2 = p.exit2.concat([{ step: 'x', on: 'y', reason: 'brand-new-env-reason' }]); return p; }]
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -818,7 +858,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C11', { ...real, script: real.script.replace('Release-HxLock', 'Stop-Process -Name HBuilderX -Force') }],
       ['C12', { ...real, script: real.script.replace("-Id 'devtools-open'", "-Id 'devtools-openX'") }],
       ['C12', { ...real, script: real.script.replace(/\$open\.TimedOut/g, '$openX.TimedOut') }],
-      ['C12', { ...real, script: real.script.replace("errors=env reason=no-dist", "errors=env reason=nodist") }],
+      ['C12', { ...real, script: real.script.replace("errors=env-blocked reason=no-dist", "errors=env-blocked reason=nodist") }],
       // C13：把降级写成 PASS / 让 SKIP 静默变成通过 / 把结果行的 navigation 绑错
       ['C13', { ...real, script: real.script.replace('navigation=SKIP reason=', 'navigation=PASS reason=') }],
       ['C13', { ...real, script: real.script.replace('navigation = "$navField"', 'navigation = "ok"') }],

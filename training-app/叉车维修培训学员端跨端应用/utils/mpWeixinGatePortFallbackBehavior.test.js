@@ -55,6 +55,8 @@ describe('② 残留自动化会话 ⇒ 换端口（auto 会静默复用死会�
     const r = runGate(fixture, fakeCli, occupied.port, ['-AutoAttempts', '1']);
     expect(r.status).not.toBe(0);
     expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT errors=0/);
+    // #1655 三分现测：通过产物 = metric 行（**无** errors= token），errors=0 锚对它是死的——「不产出绿」必须同时钉 metric 行的缺席
+    expect(r.stdout).not.toMatch(/MP_WEIXIN_RESULT appid=/);
   });
 
   it('必不红：请求端口被占 ⇒ auto 换到别的端口，且日志记下 PORT_SWITCH', () => {
@@ -69,7 +71,7 @@ describe('② 残留自动化会话 ⇒ 换端口（auto 会静默复用死会�
     expect(log).toMatch(/PORT_SWITCH/);
     // 换端口不是「门通过」的理由：假开发者工具永不开端口 ⇒ 仍判环境不可用
     expect(r.status).toBe(2);
-    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env reason=port-not-listening/);
+    expect(log).toMatch(/MP_WEIXIN_RESULT errors=env-blocked reason=port-not-listening/);
   }, 300000);
 
   it('必红：请求端口空闲 ⇒ 必须沿用请求端口（不得无条件换）', async () => {
