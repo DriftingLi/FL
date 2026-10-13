@@ -889,14 +889,15 @@ function Invoke-DevToolsClose {
 # 无能为力），之后再 open 就是干净起点。等价于 ADR-0008 已记录的处置：跑前先 quit 清场，实测有效。
 # ⚠️ 两条红线：① 不得用 Stop-Process 替代 quit（运行中 kill IDE 是 ADR-0008 红线）；② quit/轮询失败只
 # [warn] 继续，不判 exit 2 —— 留下的白屏风险由 open/auto/就绪闸门的协议级判据兜（那里判得出真形态）。
-function Invoke-DevToolsPreflightQuit {
-    if ($script:quitDone) { return }
-    $script:quitDone = $true
+# #1682 冒烟实测：直达分支的**第二次 close→open→auto 循环**（同一 IDE 进程内）会稳定复现此白屏形态
+# （getInfo 全程 no-reply 直到 120s 超时），close 修不好、quit 重启即恢复（实测 12s 就绪）
+# ⇒ 本函数体抽成 Invoke-DevToolsQuitAndPoll 供直达冷启动的重试轮升级调用（哨兵语义只留 pre-flight）。
+function Invoke-DevToolsQuitAndPoll {
     if (-not $devTools) { return }
     $quitStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-quit'
     try {
         $r = Invoke-Process -FilePath $devTools -Arguments $quitStep.argv -TimeoutSeconds $quitStep.timeoutSeconds -Tag $quitStep.tag
-        Write-Log "`n>>> $($quitStep.tag)（跑门前清场：退出整个 IDE，防残留实例把项目窗口叠成白屏）`n$($r.Output)"
+        Write-Log "`n>>> $($quitStep.tag)（清场：退出整个 IDE，防残留实例把项目窗口叠成白屏）`n$($r.Output)"
         Write-Host $r.Output
     } catch {
         Write-Host "[warn] cli.bat quit 失败（继续，不影响门结论）：$_" -ForegroundColor Yellow
@@ -905,15 +906,21 @@ function Invoke-DevToolsPreflightQuit {
     $waited = 0
     while ($waited -lt [int]$quitStep.waitSeconds) {
         if (@(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count -eq 0) {
-            Write-Log "pre-flight：wechatdevtools 进程已归零（等了 ${waited}s）"
+            Write-Log "quit：wechatdevtools 进程已归零（等了 ${waited}s）"
             return
         }
         Start-Sleep -Seconds 1
         $waited++
     }
     $still = @(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count
-    Write-Host "[warn] pre-flight：quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
-    Write-Log "pre-flight：quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出（只警告，不 kill）"
+    Write-Host "[warn] quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
+    Write-Log "quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出（只警告，不 kill）"
+}
+
+function Invoke-DevToolsPreflightQuit {
+    if ($script:quitDone) { return }
+    $script:quitDone = $true
+    Invoke-DevToolsQuitAndPoll
 }
 
 # ---------- 任意页直达探针（#1682 · ADR-0038 决策 1/2 · ADR-0039 拆分步骤 2）----------
@@ -969,8 +976,11 @@ function Restore-DistAppJson {
 
 function Invoke-DirectColdStart {
     param($Steps, [string]$PageTag)
-    # 逐页换页后的重冷启动单元：close → open → auto → 端口轮询 → 就绪闸门（与首轮整段重试同构，
-    # 参数一律取自传入的计划步骤——守护 C18 的「调用点原文至多一次」不允许这里重复写死 argv）。
+    # 逐页换页后的重冷启动单元：close → open → auto → 端口轮询 → 就绪闸门（参数一律取自传入的计划
+    # 步骤——守护 C18 的「调用点原文至多一次」不允许这里重复写死 argv）。
+    # ⚠️ 重试轮不是同段重放：#1682 冒烟实测同一 IDE 进程内**第二次 close→open→auto 循环**稳定复现
+    # #1634 白屏形态（getInfo 全程 no-reply 到超时），close 修不好、quit 重启即恢复（实测 12s 就绪）
+    # ⇒ 首轮 close 换窗，第 2 轮起升级为整 IDE 重启（quit → open）。
     $attempts = [Math]::Max(1, [int]$script:GatePlan['timeouts']['autoAttempts'])
     $delay = [Math]::Max(0, [int]$script:GatePlan['timeouts']['autoRetryDelay'])
     $out = @{ ok = $false; reason = 'port-not-listening'; readySeconds = 0; sdk = ''; ide = '' }
@@ -979,8 +989,14 @@ function Invoke-DirectColdStart {
             Write-Log "`n>>> direct-coldstart($PageTag)：整段重试第 $attempt/$attempts 次（等 ${delay}s；上一轮 reason=$($out.reason)）"
             Start-Sleep -Seconds $delay
         }
-        $script:closed = $false
-        Invoke-DevToolsClose
+        if ($attempt -eq 1) {
+            $script:closed = $false
+            Invoke-DevToolsClose
+        } else {
+            # quit 后旧窗口随进程消失；重启出的新窗口仍需 finally 的 close 收掉 ⇒ 复位哨兵。
+            Invoke-DevToolsQuitAndPoll
+            $script:closed = $false
+        }
         $open = Invoke-Process -FilePath $devTools -Arguments $Steps.open.argv -TimeoutSeconds $Steps.open.timeoutSeconds -Tag "$($Steps.open.tag)(direct:$PageTag)"
         Write-Log "`n>>> direct-coldstart open($PageTag)`n$($open.Output)"
         if ($open.TimedOut) { $out.reason = 'devtools-open-timeout'; continue }

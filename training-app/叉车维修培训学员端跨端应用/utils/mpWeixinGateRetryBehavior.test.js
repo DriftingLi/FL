@@ -97,7 +97,7 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     expect(verbs.slice(1)).toEqual(['close', 'open', 'auto']);
     // 轮询结果（归零或超时警告）必须留痕：本夹具机器上 fake cli 不派生真 IDE ⇒ 应记「归零」
     const log = H.gateLog(fixture);
-    expect(log).toMatch(/pre-flight：wechatdevtools 进程已归零/);
+    expect(log).toMatch(/quit：wechatdevtools 进程已归零/); // #1682：函数体抽成 Invoke-DevToolsQuitAndPoll 后措辞去 pre-flight 前缀
     expect(r.status).toBe(2); // 端口仍不起（夹具形态），门照常在端口面判环境不可用
   }, 300000);
 });
