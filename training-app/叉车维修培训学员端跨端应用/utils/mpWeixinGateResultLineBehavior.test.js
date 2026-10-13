@@ -103,17 +103,22 @@ function writeReadyStub(dir, readyJson) {
   );
 }
 
-/** 三分共用的探针 JSON 骨架（failures 空 ⇒ 通过；纯断言失败 ⇒ 门未过；带前缀 ⇒ 环境受阻）。 */
+/** 三分共用的探针 JSON 骨架（failures 空 ⇒ 通过；纯断言失败 ⇒ 门未过；带前缀 ⇒ 环境受阻）。
+ *  connected 必给：真探针顶层 result 恒有该字段（scripts/mp-weixin-probe.mjs 的初始化），
+ *  直达分支的重试判据读它（mp-weixin-check.ps1 的 Invoke-DirectProbe）——桩缺字段 ⇒ StrictMode 抛。
+ *  navigation 取直达形状（status ok/cold-start-direct）：Pages=auto 默认走直达分支，
+ *  真探针在直达 argv 下只会写 ok 或 skip(direct-page-unsupported)（probe.mjs 的 direct 段），不再 n/a。 */
 function probeFixture(failures) {
   return {
     probeOk: failures.length === 0,
+    connected: true,
     entryPage: 'pages/index/index',
     pageStack: ['pages/index/index'],
     errorsTotal: 0,
     exceptionsTotal: 0,
     logsTotal: 0,
     shots: [{ path: 'x.png', isPng: true, width: 10, height: 10, bytes: 99 }],
-    navigation: { status: 'n/a', reason: 'not-run' },
+    navigation: { status: 'ok', reason: '', detail: 'cold-start-direct', at: 'direct:pages/index/index', skippedAssertions: [], skippedSteps: [] },
     failures,
     steps: []
   };
@@ -183,9 +188,12 @@ describe('② 结果行三分端到端（真跑门脚本 + 桩探针/桩就绪�
       // v4 口径：不预持端口（预检会换端口绕开）——auto 派生的分离监听器让轮询通过。
       const r = runGate(fixture.dir, fakeCli, port, ['-ProbeAttempts', '1']);
       const log = H.gateLog({ dir: fixture.dir });
-      expect(log).toMatch(/MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages\/index\/index errorsTotal=0 exceptionsTotal=0 logsTotal=0 shots=1 navigation=n\/a ready=\d+s sdk=3\.8\.10 ide=1\.06\.2412050 log=\.ci-verify\/mp-weixin\.log/);
-      expect(log).not.toMatch(/errors=/);
-      expect(log).not.toMatch(/env-blocked/);
+      // 断言收窄到结果行：直达分支的逐页读数行（direct-page … errors=0 …）是 #1682 的新日志面，
+      // 全 log 的 not.toMatch(/errors=/) 会被它顶穿——三分互斥只对结果行成立。
+      const resultLine = (log.match(/MP_WEIXIN_RESULT [^\r\n]*/) || [''])[0];
+      expect(resultLine).toMatch(/appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages\/index\/index errorsTotal=0 exceptionsTotal=0 logsTotal=0 shots=1 navigation=ok ready=\d+s sdk=3\.8\.10 ide=1\.06\.2412050 log=\.ci-verify\/mp-weixin\.log/);
+      expect(resultLine).not.toMatch(/errors=/);
+      expect(resultLine).not.toMatch(/env-blocked/);
       expect(r.status).toBe(0);
     } finally { rmFixture(fixture.dir); }
   });
