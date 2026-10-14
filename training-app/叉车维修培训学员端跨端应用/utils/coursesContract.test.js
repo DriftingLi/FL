@@ -795,10 +795,11 @@ describe('#1422 首页课程区接真实数据：is_hot 迁出 · filter=hot 口
     expect(body).toContain("if (filter.length > 0)");
   });
 
-  it('dashboard 课程区经 useDashboardFeeds 消费 filter=hot 热门口径 + 当前证件显式下发', () => {
+  it('dashboard 课程区经 useDashboardFeeds 消费 filter 口径（#1608 §8⑤ 单轴透传）+ 当前证件显式下发', () => {
     const feeds = stripAll(read(FEEDS));
     expect(feeds).toContain("import { getCourseListApi } from '../../../api/course'");
-    expect(feeds).toMatch(/async function loadHotCourses[\s\S]*?getCourseListApi\(1, 4, 0, 0, credentialId, 'hot'\)/);
+    // filter 由页面单轴「全部/热门/精品」传入（''|'hot'|'featured'），不再写死 'hot'
+    expect(feeds).toMatch(/async function loadHotCourses[\s\S]*?getCourseListApi\(1, 4, 0, 0, credentialId, filter\)/);
     // 结果面接线：hotCourses 与 loadHotCourses 都进返回值（页面消费的前提）
     expect(feeds).toMatch(/hotCourses\s*:\s*hotCourses/);
     expect(feeds).toMatch(/loadHotCourses\s*:\s*\(/);

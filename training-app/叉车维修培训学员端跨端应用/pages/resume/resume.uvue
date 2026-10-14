@@ -1,14 +1,7 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left" @click="onBack">
-                <text class="back-icon">‹</text>
-            </view>
-            <view class="header-right">
-                <text class="bell-icon" @click="onNotifications">🔔</text>
-            </view>
-        </view>
+        <!-- #1608 批5 N05：手写 .status-bar + .header（‹ 返回 + 🔔）收口进 app-nav-bar（transparent，页面自垫 #F5F6FA 灰底） -->
+        <app-nav-bar transparent @left-click="onBack" :right-icons="['🔔']" @right-click="onNotifications" />
         <scroll-view class="content" scroll-y="true">
             <!-- 用户信息卡 -->
             <view class="user-card">
@@ -77,13 +70,12 @@
     import { useAuthStore } from '../../stores/auth'
     import { getProfileApi } from '../../api/student'
     import { getFavoritesApi } from '../../api/favorite'
-    import { useStatusBarHeight } from '../../utils/system'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
     import { getResumeApi, isResumeNotFound } from '../../api/resume'
     import type { StudentProfile, FavoriteListResult, ResumeData } from '../../types/index'
 
     const auth = useAuthStore()
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const profile = ref<StudentProfile | null>(null)
@@ -202,37 +194,15 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
+        /* 批5 N05（票1608）：灰底自垫 F5F6FA 走 uiHexWhitelist 留痕——G7 入口宫格非渐变页，映射值待 token 票统一收编 */
         background-color: #f5f6fa;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: #f5f6fa;
-    }
-
-    .header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12rpx 32rpx;
-        background-color: #f5f6fa;
-    }
-
-    .header-left {
-        width: 80rpx;
-    }
-
-    .back-icon {
-        font-size: 52rpx;
-        color: #333333;
-    }
-
-    .bell-icon {
-        font-size: 40rpx;
-    }
+    /* 批5 N05（票1608）：原页头五件套样式随页头件收口删除 */
 
     .content {
         flex: 1;

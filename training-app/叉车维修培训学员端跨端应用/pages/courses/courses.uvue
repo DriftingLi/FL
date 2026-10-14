@@ -1,11 +1,7 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部标题 -->
-        <view class="header">
-            <text class="header-title">课程</text>
-        </view>
+        <!-- #1608 批5 N05：手写 .status-bar + .header 收口进 app-nav-bar（transparent，页面自垫渐变底） -->
+        <app-nav-bar transparent :left-icon="''" title="课程" />
 
         <!-- 顶部分类大按钮：资料课 / 课程 -->
         <view class="category-row">
@@ -100,12 +96,11 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getCourseListApi, getCatalogTreeSpecialties, getLevelsApi } from '../../api/course'
     import { getCurrentCredentialApi } from '../../api/credential'
     import type { CourseItem, SpecialtyItem, LevelItem } from '../../types/index'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- 当前证件（名称 + 分区参数）----
@@ -278,29 +273,16 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
-        background: linear-gradient(to bottom, #CFE9FB, #D0EBFD);
-        background-color: #D0EBFD;
+        /* 批5 N05（票1608）：tabBar 渐变页模板（ui-spec §6.1），色值走 token（§1.2） */
+        background: linear-gradient(to bottom, $gradient-start, $gradient-end);
+        background-color: $gradient-end;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: transparent;
-    }
-
-    /* ---- 顶部标题 ---- */
-    .header {
-        padding: 20rpx 0 12rpx;
-        align-items: center;
-    }
-
-    .header-title {
-        font-size: 38rpx;
-        font-weight: 700;
-        color: #1a1a1a;
-    }
+    /* 批5 N05（票1608）：原页头三件套样式随页头件收口删除 */
 
     /* ---- 顶部分类大按钮 ---- */
     .category-row {

@@ -22,7 +22,7 @@ export type UseDashboardFeedsResult = {
     hotCourses : Ref<CourseItem[]>
     loadMyCourses : () => Promise<void>
     loadFeaturedContents : () => Promise<void>
-    loadHotCourses : (credentialId : number) => Promise<void>
+    loadHotCourses : (credentialId : number, filter : string) => Promise<void>
     startUnreadPolling : () => void
     stopUnreadPolling : () => void
 }
@@ -86,11 +86,12 @@ export function useDashboardFeeds() : UseDashboardFeedsResult {
     // ---- 首页课程区（#1422：真实课程 + 热门口径，替代写死的 mock 数组） ----
     // `/courses` 是公开路由，服务端 CredentialScoped 兜底永不生效（见 api/course.uts 文件头）
     // ⇒ credentialId 必须由页面显式传入（证件解析完成后），否则热门口径会跨证件。取前 4 门（页面卡片位）。
+    // #1608 §8⑤：口径不再写死 'hot'——filter 由页面筛选抽屉传入（'' | 'hot' | 'featured'，映射后端既有维度）。
     const hotCourses = ref<CourseItem[]>([])
 
-    async function loadHotCourses(credentialId : number) : Promise<void> {
+    async function loadHotCourses(credentialId : number, filter : string) : Promise<void> {
         try {
-            const result = await getCourseListApi(1, 4, 0, 0, credentialId, 'hot')
+            const result = await getCourseListApi(1, 4, 0, 0, credentialId, filter)
             hotCourses.value = result.items
         } catch (e) {
             console.warn('[dashboard] loadHotCourses failed:', e)
@@ -105,7 +106,7 @@ export function useDashboardFeeds() : UseDashboardFeedsResult {
         hotCourses: hotCourses,
         loadMyCourses: () => loadMyCourses(),
         loadFeaturedContents: () => loadFeaturedContents(),
-        loadHotCourses: (credentialId : number) => loadHotCourses(credentialId),
+        loadHotCourses: (credentialId : number, filter : string) => loadHotCourses(credentialId, filter),
         startUnreadPolling: () => startUnreadPolling(),
         stopUnreadPolling: () => stopUnreadPolling()
     } as UseDashboardFeedsResult

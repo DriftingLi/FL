@@ -1,12 +1,8 @@
 <template>
     <view class="recruiter-login-page">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <view class="nav-bar">
-            <view class="nav-back" @click="leaveRecruiterLogin">
-                <text class="nav-back-text">返回</text>
-            </view>
-        </view>
+        <!-- #1608 批5 N05：自绘 .status-bar + 文字「返回」收口进 app-nav-bar（默认 ‹ 图标，透明页头、页面自垫 $bg-header 白底）。
+             #1604 豁免理由「页头件无文字槽」已由 #1602 归一消解：返回语义由 leftClick 事件承载，图标形态全站统一。 -->
+        <app-nav-bar transparent @left-click="leaveRecruiterLogin" />
 
         <scroll-view scroll-y class="body">
             <view class="header">
@@ -51,7 +47,7 @@
     import { useAuthStore } from '../../stores/auth'
     import { getActiveRole, isRecruiterActive } from '../../utils/authRole'
     import { ACTIVE_ROLE_STUDENT } from '../../constants/app'
-    import { useSafeArea } from '../../utils/system.uts'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 
     const auth = useAuthStore()
 
@@ -59,10 +55,6 @@
     const password = ref<string>('')
     const passwordVisible = ref<boolean>(false)
     const loading = ref<boolean>(false)
-
-    // N05 页面自垫：状态栏占位由 useSafeArea() 供数（#1602 扶正后的唯一真源），页面自己画头。
-    const safeArea = useSafeArea()
-    const statusBarHeight = computed(() : number => safeArea.value.statusBarHeight)
 
     /**
      * 离开招聘者登录页 —— **按「页面栈里有没有上一页」分流**，而不是所有出口都清槽。
@@ -201,25 +193,7 @@
         background-color: $bg-header;
     }
 
-    .status-bar {
-        background-color: $bg-header;
-    }
-
-    .nav-bar {
-        flex-direction: row;
-        align-items: center;
-        padding: 0 24rpx;
-        height: 88rpx;
-    }
-
-    .nav-back {
-        padding: 20rpx 16rpx;
-    }
-
-    .nav-back-text {
-        font-size: 30rpx;
-        color: $primary-color;
-    }
+    /* 批5 N05（票1608）：原页头四件套样式随页头件收口删除 */
 
     .body {
         flex: 1;

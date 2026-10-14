@@ -1,21 +1,21 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-        <view class="header">
-            <view class="header-left">
+        <!-- #1608 批5 N05：手写 .status-bar + .header 收口进 app-nav-bar（transparent，页面自垫渐变底）；
+             原左槽 ✉️ 与右槽「发帖」合并进页头件 #right 槽（胶囊让位由组件右槽样式承担，功能不减）。 -->
+        <app-nav-bar transparent :left-icon="''" title="学员论坛">
+            <template #right>
                 <view class="msg-icon-wrap" @click="onMsgClick">
                     <text class="msg-icon">✉️</text>
                     <view v-if="unreadCount > 0" class="msg-badge">
                         <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
-            </view>
-            <text class="header-title">学员论坛</text>
-            <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口 -->
-            <view v-if="currentTab !== 'experience'" class="header-right" @click="onCreate">
-                <text class="header-action" @click="onCreate">发帖</text>
-            </view>
-        </view>
+                <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口 -->
+                <view v-if="currentTab !== 'experience'" class="header-right" @click="onCreate">
+                    <text class="header-action" @click="onCreate">发帖</text>
+                </view>
+            </template>
+        </app-nav-bar>
         <ForumTabBar :current-tab="currentTab" :avatar-url="avatarUrl" @switch-tab="onSwitchTab" @personal-activity="onPersonalActivity" />
         <!-- 搜索栏（点击即进发布，故与 header 同口径：经验 Tab 不显示） -->
         <view v-if="currentTab !== 'experience'" class="res-search-bar" @click="onCreate">
@@ -85,12 +85,11 @@
     import ForumResourcePanel from './components/forum-resource-panel.uvue'
     import { useTopicFeed } from '../../composables/useTopicFeed'
     import { useAuthStore } from '../../stores/auth'
-    import { useStatusBarHeight } from '../../utils/system'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getCheckInCalendarApi } from '../../api/checkin'
     import { getUnreadCountApi } from '../../api/notification'
 
     const authStore = useAuthStore()
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- tab 态（壳层唯一持有的视图状态）----
@@ -200,31 +199,17 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         display: flex;
-        background: linear-gradient(to bottom, #CFE9FB, #D0EBFD);
-        background-color: #D0EBFD;
+        /* 批5 N05（票1608）：tabBar 渐变页模板（ui-spec §6.1），色值走 token（§1.2） */
+        background: linear-gradient(to bottom, $gradient-start, $gradient-end);
+        background-color: $gradient-end;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: transparent;
-    }
-
-    .header {
-        background-color: transparent;
-        padding: 16rpx 32rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .header-left {
-        width: 100rpx;
-        align-items: center;
-        justify-content: center;
-    }
+    /* #1608 批5 N05：.status-bar/.header/.header-left/.header-title 随页头件收口删除；
+       以下保留的是 #right 槽内容（✉️ 徽标 + 发帖 pill）的自有样式。 */
 
     /* 消息图标 */
     .msg-icon-wrap {
@@ -257,19 +242,6 @@
         font-size: 20rpx;
         color: #ffffff;
         font-weight: bold;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
     }
 
     .header-right {

@@ -527,8 +527,10 @@ describe('#1194 收口：招聘者登录页的离开路径', () => {
   test('R6b: 三个出口（左上「返回」/ 模态「取消」/ 底部文字）收敛到同一条分流', () => {
     const src = readText(RECRUITER_LOGIN_UVUE);
 
-    // 模板两处 @click：左上「返回」与底部出口
-    expect((src.match(new RegExp(`@click="${EXIT_FN}"`, 'g')) || []).length).toBe(2);
+    // 模板两处出口绑定：底部文字 link 走 @click；左上「返回」=#1608 批5 N05 迁移后由
+    // app-nav-bar 的 @left-click 承载——绑定目标不变，三出口收敛语义不变。
+    expect((src.match(new RegExp(`@click="${EXIT_FN}"`, 'g')) || []).length).toBe(1);
+    expect(src).toContain(`@left-click="${EXIT_FN}"`);
     // 模态「取消」分支也走同一条路；「确定」分支（退出当前账号）语义未动
     const modal = src.match(/uni\.showModal\(\{[\s\S]*?\n {12}\}\)/);
     expect(modal).not.toBeNull();

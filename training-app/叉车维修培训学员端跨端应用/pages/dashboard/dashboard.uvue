@@ -51,26 +51,14 @@
                     </view>
                 </view>
 
-                <!-- 价格 -->
+                <!-- 口径（#1608 §8⑤ 裁定：双轴改单轴，值域映射后端既有 filter；直播/录播、免费/付费两轴删除） -->
                 <view class="filter-section">
-                    <text class="filter-label">价格</text>
+                    <text class="filter-label">口径</text>
                     <view class="filter-options">
-                        <view v-for="(opt, idx) in priceOptions" :key="idx" class="filter-chip mr-20 mb-20"
-                            :class="{ 'filter-chip--active': selectedPrice === idx }" @click="selectedPrice = idx">
+                        <view v-for="(opt, idx) in filterOptions" :key="idx" class="filter-chip mr-20 mb-20"
+                            :class="{ 'filter-chip--active': selectedFilter === idx }" @click="selectedFilter = idx">
                             <text class="filter-chip-text"
-                                :class="{ 'filter-chip-text--active': selectedPrice === idx }">{{ opt }}</text>
-                        </view>
-                    </view>
-                </view>
-
-                <!-- 类型 -->
-                <view class="filter-section">
-                    <text class="filter-label">类型</text>
-                    <view class="filter-options">
-                        <view v-for="(opt, idx) in typeOptions" :key="idx" class="filter-chip mr-20 mb-20"
-                            :class="{ 'filter-chip--active': selectedType === idx }" @click="selectedType = idx">
-                            <text class="filter-chip-text"
-                                :class="{ 'filter-chip-text--active': selectedType === idx }">{{ opt }}</text>
+                                :class="{ 'filter-chip-text--active': selectedFilter === idx }">{{ opt }}</text>
                         </view>
                     </view>
                 </view>
@@ -122,28 +110,27 @@
         loadMyCourses, loadFeaturedContents, loadHotCourses, startUnreadPolling, stopUnreadPolling,
     } = useDashboardFeeds()
 
-    // ---- 筛选弹窗（页面持有选中态） ----
+    // ---- 筛选弹窗（页面持有选中态）----
+    // #1608 §8⑤ 裁定：「价格（直播/录播）」「类型（免费/付费）」双轴后端无此维度，删；
+    // 改单轴「口径」，值域直接映射 getCourseListApi 既有 filter: '' | 'hot' | 'featured'（api/course.uts）。
+    // 初值=热门（idx 1）：保持 #1422 起课程区默认热门口径的既有行为；「重置」=清空为全部。
     const showFilter = ref(false)
-    const priceOptions : string[] = ['全部', '直播', '录播']
-    const typeOptions : string[] = ['全部', '免费', '付费']
-    const selectedPrice = ref(0)
-    const selectedType = ref(0)
+    const filterOptions : string[] = ['全部', '热门', '精品']
+    const filterValues : string[] = ['', 'hot', 'featured']
+    const selectedFilter = ref(1)
 
     function onFilterBtnClick() : void {
         showFilter.value = true
     }
 
     function onFilterReset() : void {
-        selectedPrice.value = 0
-        selectedType.value = 0
+        selectedFilter.value = 0
     }
 
     function onFilterConfirm() : void {
         showFilter.value = false
-        // TODO: 根据筛选条件刷新课程列表
-        const price = priceOptions[selectedPrice.value]
-        const type = typeOptions[selectedType.value]
-        console.log('[dashboard] filter applied:', price, type)
+        // #1608 §8⑤：确认即按所选口径重拉课程区（此前只 console.log 空转不落数据）
+        loadHotCourses(currentCredentialId.value, filterValues[selectedFilter.value])
     }
 
     function onNotificationClick() : void {
@@ -161,7 +148,7 @@
         // `.then` 回调必须显式 `: void` 块体吞掉 Promise —— 箭头直返 loadHotCourses(...) 会被 Kotlin
         // 判成「return type mismatch: expected Unit, actual UTSPromise<Unit>」（同 mall onLoad 先例）。
         loadCredentials().then(() : void => {
-            loadHotCourses(currentCredentialId.value)
+            loadHotCourses(currentCredentialId.value, filterValues[selectedFilter.value])
         })
         loadMyCourses()
         loadFeaturedContents()
@@ -222,11 +209,12 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
-        background: linear-gradient(to bottom, #CFE9FB, #D0EBFD);
-        background-color: #D0EBFD;
+        /* 批5 N05（票1608）：tabBar 渐变页模板（ui-spec §6.1），色值走 token（§1.2，禁 deg 与裸 hex） */
+        background: linear-gradient(to bottom, $gradient-start, $gradient-end);
+        background-color: $gradient-end;
         flex-direction: column;
     }
 

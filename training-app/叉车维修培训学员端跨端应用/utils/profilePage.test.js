@@ -92,7 +92,8 @@ const allEntries = toolItems.concat(serviceItems);
 describe('「我的」页面原型图契约', () => {
   it('自上而下包含原型要求的全部区块', () => {
     const markers = [
-      'class="nav-title">我的<',
+      // #1608 批5：页头迁 app-nav-bar（N05 transparent），自绘 .nav-title 消失——顺序锚改为页头件标签
+      '<app-nav-bar transparent :left-icon="\'\'" title="我的" />',
       'class="checkin-pill"',
       '学习时长',
       '坚持天数',

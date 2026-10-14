@@ -1,7 +1,7 @@
 <template>
 	<view class="ai-page" :style="{ height: pageHeight + 'px' }">
 		<!-- 自定义导航栏 -->
-		<AiChatNav :status-bar-height="statusBarHeight" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
+		<AiChatNav @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
 		<!-- 功能入口头部（#998）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
 		     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
@@ -651,7 +651,7 @@
 	})
 </script>
 
-<style>
+<style lang="scss">
 	.ai-page {
 		flex: 1;
 		display: flex;
