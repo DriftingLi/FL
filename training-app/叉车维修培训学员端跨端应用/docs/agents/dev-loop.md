@@ -1,7 +1,8 @@
 > 本文件是移动端 `AGENTS.md`「开发内循环（移动端 UI 迭代）」与「Qoder 托管 worktree 的使用边界（2026-09-28 立）」两节的**按需层全文**（#1509 根线式分层）。
 > 常驻层只留判据与对策，**实测数字、时间账与坑位叙述在这里**。
-> 另含两节常驻层没有全文的家：**「全量 ③ 门落盘与入口」**（`npm run test:unit:gate` 那条命令的入口指针，#1546 落地、#1556 登记）
-> 与 **「全量 ③ 门该不该跑」**（常驻层「成本账反模式」那句指针所指的判据全集，#1556 立）。
+> 另含三节常驻层没有全文的家：**「全量 ③ 门落盘与入口」**（`npm run test:unit:gate` 那条命令的入口指针，#1546 落地、#1556 登记）、
+> **「全量 ③ 门该不该跑」**（常驻层「成本账反模式」那句指针所指的判据全集，#1556 立）
+> 与 **「agent 判读纪律（慢≠卡死 / 机检行 / 重跑半径）」**（一条命令在跑 / 跑完 / 跑红之后的读数判据，#1656 立；**不复述门脚本细节**）。
 > **引用本文件时引小节名，不引行号。**内容从常驻层逐字搬入，口径未变。
 
 # 开发内循环与工作树边界（按需层）
@@ -156,6 +157,93 @@ U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `
 不在射程内——口径承接 #1546：机检行把传入的退出码**原样**写出来，不产出任何绿/红的新结论；该跑的那一档跑完，
 判据仍然只是那一个 `exit=`。
 
+
+## agent 判读纪律（慢≠卡死 / 机检行 / 重跑半径）（#1656，2026-10-14 立）
+
+**这一节只管一件事**：一条命令在跑、跑完、或跑红之后**怎么读**。判据**不住在这里**——住在脚本与
+`docs/adr/0036-工具链交付慢与怪错的三条处置.md`（移动端编号体系，须写全路径），本节只给冷启动读数：
+三类误判各一条判据、③ 门的两条出口、② 门的三分语义。**不复述门脚本细节**（写了必漂，ADR-0036 ③ 明令），
+上面「时间账与三样慢」「全量 ③ 门落盘与入口」「全量 ③ 门该不该跑」已有的读数，这里只引小节名、不抄回来。
+⚠️ 本节所有数字都是 **2026-10-14 现测**（head `4d4f22ed`，178 套件，本机 12 核）——**别拿 #1410 当年的账当现测**。
+
+### 三类误判，各一条判据
+
+1. **慢 ≠ 卡死**。判据 = **看结论行在不在，不看输出有没有在动**。
+   全量 ③ 门串行一跑现测 **wall=880 秒**（`TEST_UNIT_RESULT exit=0`，绿），而它**中途没有进度输出**：
+   `jest.setTimeout` 在 `utils/*.test.js` 里有 9 处取值 **120–600 秒**（120000×2 / 180000×2 / 240000×2 / 600000×3），
+   行为套件单套串行就吃 **29–265 秒**（现测 `styleLoopBehavior` 29.4 s、`deviceCaptureTierBehavior` 46.3 s、
+   `wirelessDebugBehavior` 46.6 s、`mpWeixinGateResultLineBehavior` 265.2 s）⇒ **长时间无输出是设计内**。
+   真源：`docs/adr/0036-…` 处置一——那一跑被读成「卡死」，实为 `exit 0`（83 PASS / 0 FAIL）。
+2. **刷屏 ≠ 失败**。判据 = **只认结论行的 `exit=`，噪音不参与判红**。
+   现测噪音量级：快路径入口那一跑，落盘日志 858 行里 **828 行是 pwsh 自己的**
+   `node.exe: 无法处理来自 "Error" 的 … 流中的 XML: Data at the root level is invalid.` 解码噪音
+   （**不是被测物写的**），一条 `PASS` 都没抓到 ⇒ 结论行老实写 `missing=suites|tests|time`，
+   失败摘要件自己也写着「本次输出里没抓到 Tests 汇总行」。
+   ⚠️ **这不是「换个捕获方式」能治的**：同一条命令绕开入口直跑 `npm run test:unit:local` 并 `cmd /c "… > 文件 2>&1"`，
+   日志 839 行、汇总行完整（`Test Suites: 3 failed, 175 passed, 178 total`）——但**走门入口时它自己就要过一层 pwsh 捕获**，
+   所以**门的落盘件按门读、别拿它当 jest 原始输出读**。
+   ⇒ 先问「结论行在不在」，别问「输出好不好看」；**要读汇总就绕开门入口直跑 `npm run test:unit:local` 并重定向到文件**。
+   ⚠️ **缺字段 ≠ 跑失败**：上面那跑串行门 `exit=0` 也照样 `missing=suites|tests|time`——落盘件按汇总行取数，
+   取不到就写 `?`（口径见「全量 ③ 门落盘与入口」里 `?` 那条：`?` 是「没读到」，不是「没有」）。
+   ⇒ 看 `exit=` 判成败；`missing=` 只说明**读不到汇总**，不改变成败。
+3. **红 ≠ 重跑整道门**。判据 = **先分「墙钟红」与「逻辑红」，重跑半径是单套件**。
+   现测一组同树同 head 的对照：并行快路径 `exit=1`，3 套红（`deviceCaptureTierBehavior` DCT11 期望 `False` 得 `True`、
+   `wirelessDebugBehavior` B2/B3、`styleLoopBehavior` E3 期望 `2` 得 `-1`）；**这 3 套单独并行重跑 66 秒全绿**
+   （`Test Suites: 3 passed, 3 total` / `Tests: 53 passed, 53 total`），**在串行 `-i` 全量门里也全绿**（`exit=0`）
+   ⇒ 那一跑的红是**争抢下的计时读数**，不是逻辑变了。先例 #1410（`utils/chapterNotFoundBehavior.test.js` A4
+   `Exceeded timeout of 5000 ms`，单套件重跑 13/13 绿；2026-10-14 复现一次同样绿）。
+   ⇒ 处置顺序：**单套件重跑 → 绿 ⇒ 原样记红、不扩大重跑**；**仍红 ⇒ 才去查环境**（这三套都碰 adb / 设备 / 入口进程，
+   本机无设备时读数本就不稳）。整道门重跑的成本账归上面「成本账反模式（2026-10-03 立）」，「我觉得没改」不算判据。
+
+### ③ 门的两条出口：入口与结果行
+
+两条出口的**结果行首 token 不同 ⇒ 机检可区分**（这是 ADR-0036 ③ 定的：门是全量的、快路径是本地日常，不许混读）：
+
+- **全量门** `npm run test:unit:gate`（= `scripts/dev-finish.ps1 -UnitGate`，**串行 `-i`**）⇒ 首 token
+  `TEST_UNIT_RESULT`，产物 `.ci-verify/test-unit.log`；现测 **wall=880 秒 / exit=0**。
+- **本地快路径** `npm run test:unit:gate:local`（= `-UnitLocal`，**并行、不带 `-i`**）⇒ 首 token
+  `TEST_UNIT_LOCAL_RESULT` 且行尾多一枚 **`mode=local`**，产物 `.ci-verify/test-unit-local.log` 与
+  `.ci-verify/test-unit-local-failure.txt`；现测 **入口自报 `wall=300s`**（同树绕开入口直跑 `npm run test:unit:local` 是 325 秒、jest 自报 `Time: 320.282 s`——差的那一截是入口自己那层捕获，不是被测面变慢）。
+  它**不进九步管线、不取 HBuilderX 锁、不碰设备**。
+- ⚠️ **两枚同给时快路径赢**（`-UnitLocal` 分支排在 `-UnitGate` 之前）⇒ 别指望「顺手带上 `-UnitGate` 就能贴 PR」。
+- ⚠️ **`-PostToPr` 只在 `-UnitGate` 生效**：快路径带它会打印「`-PostToPr` 只在 -UnitGate（全量门）生效；
+  本地快路径不贴 PR 评论」然后照常跑完 ⇒ **要出 PR 证据就切全量门那条**，快路径的结论进不了 `## 验收证据`。
+- **快路径的红不等于门的红**：`-i` 的取舍与真因写在 `jest.config.unit.js` 文件头（12 核实测 5 次并行出现 1 次墙钟红），
+  本节不复述。日常内循环走快路径，收口与 PR 证据走全量门。
+- **时间账只认这一跑**：现测 快路径入口 300 s / 串行全量门 880 s，比 #1410 记的「并行 60–90 s / 串行 236 s」大一截——
+  套件数从 146 涨到 178、行为套件变多是主因 ⇒ **旧账不能当现测引**，引之前先现跑一次。
+
+### ② 门的 env-blocked：三分语义与处置
+
+判据源 = `scripts/lib/mp-weixin-env.ps1`（结论行由它的两个构造器产出，**互斥由构造器保证，不靠调用方自觉**）。
+本节只给读法：
+
+- **通过** = metric 行里**没有** `errors=` 这枚 token（判别靠**缺席**），exit 0。
+  现例（#1655 收口记录）：`MP_WEIXIN_RESULT appid=… pageStack=1 entry=pages/index/index errorsTotal=0 …`
+  ——里面有 `errorsTotal=0`，**但没有 `errors=`**，这两件事就是「通过」的长相。
+- **门未过** = `errors=<N> failures=…`（N 是数字），**exit 1** ⇒ 回去改产物。
+- **环境受阻** = `errors=env-blocked reason=<slug>[ failures=…][ <metricLine>]`，**exit 2** ⇒ 换环境，别改代码。
+  现测构造行：`MP_WEIXIN_RESULT errors=env-blocked reason=devtools-open-timeout failures=环境不可用：… appid=… pageStack=1`。
+- ⚠️ **产物坏了判 1、不判 2**：判据锚是失败条目的**固定前缀「环境不可用：」**（取 `StartsWith`，不是 `Contains`）。
+  现测分类：`环境不可用：端口未监听` ⇒ `kind=env-blocked`；`pageStack 读取失败：空`（不带那个前缀）⇒ `kind=gate-failed`
+  ⇒ 把 1 读成 2，就是拿「环境问题」洗掉一个真红。
+- `reason=` 的值域是**闭集**：构造器只收 `^[a-z0-9-]+$`，非法值当场抛（现测 `bad reason` ⇒
+  `env reason 只允许小写连字符 slug`）⇒ 看到没见过的 slug 是**脚本坏了**，不是新类别。
+  全集 26 项落在 `scripts/mp-weixin-check.ps1` 的 `GATE_PLAN.branches`，**本节不抄**（抄了就是第二真源）。
+- **处置 = 转人工，或改跑不需要 HBuilderX / DevTools 的检查**——这一列**不是本节新造的**，
+  `scripts/hx-run.ps1` 的环境不可用分支与 `scripts/lib/hx-busy.ps1` 的 `Write-HxBusyHint` 已经在打印它：
+  `npm run test:unit` / `npm run build:kotlin-all -SkipPublish` / `npm run smoke:emulator`。
+  ⚠️ `-SkipPublish` 只跑 kotlinc 段（不依赖主程序），**publish 那一步仍需 HBuilderX 主程序可达**
+  （判据源 `scripts/kotlin-all-check.ps1` 头部；它还不适用新鲜度判据，结果行会显式记）。
+- ⚠️ **绝不 kill 主程序**：`hx-run.ps1` 与 `hx-busy.ps1` 自述「本脚本**绝不 kill** HBuilderX / cli / 主程序
+  （忙就等，超时就退出）」——HBuilderX 是**单实例串行资源、GUI 优先**（见移动端 `AGENTS.md`「并发会话纪律（多会话并行时必读）」）。
+  env-blocked 是**一等出口，不是 bug**（ADR-0036 ③）⇒ 别把它当失败去重跑整道门，也别去抢那把锁。
+
+### 这一节不装什么
+
+门脚本的细节（字段怎么拼、重试几轮、锁怎么排队、退出码怎么透传）**不住这里**：判据住脚本与 ADR-0036，
+本节只负责「冷启动时读得懂现场」。上面每一条都点名了它的真源文件——**改判据请改脚本，别在本节加叙述**。
+分层口径见移动端 `AGENTS.md`「三层节奏」与本文件头部那句「引用本文件时引小节名，不引行号」。
 
 ## 真机无线调试入口（#1564，2026-10-07 落地）
 
