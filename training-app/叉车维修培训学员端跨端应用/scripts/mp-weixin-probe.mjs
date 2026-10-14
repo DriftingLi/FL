@@ -299,17 +299,29 @@ if (args.expectPage) {
     // 达成截目标页（文件名=页名）；未达成也截——但命名 miss- 前缀，**不冒充被改页证据**
     const shotName = reached ? leaf : 'miss-' + leaf;
     const shotFile = path.join(args.shotDir, shotName + '.png');
-    try {
-      await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
-      if (fs.existsSync(shotFile)) {
-        const info = pngInfo(shotFile);
-        result.shots.push({ name: shotName, route: step.currentPage, ...info });
-        step.shot = shotFile;
-      } else {
-        step.shotError = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+    // #1690 run5 实测：冷启动后 app 侧渲染服务未热 ⇒ mp.screenshot 会撞 automator 内部
+    // 15s 应答超时（dashboard 直达 reached=True 却截不到图判红）。重试一次（隔 3s 让服务
+    // 热起来），两次都失败才记错——不把「试过一次」冒充成「截到了」。
+    let shotErr = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      shotErr = null;
+      try {
+        await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
+        if (fs.existsSync(shotFile)) {
+          const info = pngInfo(shotFile);
+          result.shots.push({ name: shotName, route: step.currentPage, ...info });
+          step.shot = shotFile;
+          break;
+        }
+        shotErr = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+      } catch (e) {
+        shotErr = String((e && e.message) || e);
       }
-    } catch (e) {
-      step.error = String((e && e.message) || e);
+      if (attempt < 2) await new Promise((r2) => setTimeout(r2, 3000));
+    }
+    if (shotErr) {
+      if (shotErr.includes('未落盘')) step.shotError = shotErr;
+      else step.error = shotErr;
     }
   }
   result.steps.push(step);

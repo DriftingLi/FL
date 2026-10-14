@@ -700,6 +700,8 @@ function scanContract(sources) {
   must(s.includes('cold-start-direct'), 'C24', '执行路径未携带机制标识 cold-start-direct');
   // #1690 run4 实测：DevTools open 会还原上次会话的页面栈 ⇒ 入口页也必须一律换页→冷启动（吃主会话不可靠）
   must(!s.includes('if ($pg -ne $entryRoute)'), 'C24', '直达循环回退成「入口页跳过换页吃主会话」旧口径（#1690：会话还原使入口页探针拿到旧栈判 miss）');
+  must(s.includes('port-held-after-quit'), 'C24', '直达冷启动缺「端口被垂死实例占住」判据（#1690 run5：open 骑旧会话 ⇒ 假 miss；归零后必须等端口收摊）');
+  must(probe.includes('shotErr'), 'C24', '直达截图缺重试壳（#1690 run5：冷启动后渲染服务未热，mp.screenshot 撞 automator 15s 应答超时 ⇒ 重试一次再记错）');
   // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
   // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
   // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
@@ -1056,6 +1058,8 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, probe: real.probe.replace(/cold-start-direct/g, 'x') }],
       ['C24', { ...real, probe: real.probe.replace(/direct-page-unsupported/g, 'x') }],
       ['C24', { ...real, script: real.script.replace('foreach ($pg in $directList) {', 'foreach ($pg in $directList) { if ($pg -ne $entryRoute) {') }],
+      ['C24', { ...real, script: real.script.replace(/port-held-after-quit/g, 'x') }],
+      ['C24', { ...real, probe: real.probe.replace(/shotErr/g, 'x') }],
       // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓
       ['C24', { ...real, script: real.script.replace('$agg.shots += @($pj.shots)', '') }],
       ['C24', { ...real, script: real.script.replace('shots = @($agg.shots)', 'shots = @()') }],

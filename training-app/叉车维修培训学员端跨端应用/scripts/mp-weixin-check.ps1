@@ -633,7 +633,7 @@ function New-GatePlan {
                     'no-ready-result', 'automation-not-ready', 'probe-timeout', 'no-probe-result',
                     'no-probe', 'no-routes',
                     'automation-unreachable', 'automation-timeout', 'automation-unknown',
-                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception'
+                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception', 'port-held-after-quit'
                 )
             }
         }
@@ -931,27 +931,52 @@ function Invoke-DevToolsQuitAndPoll {
     # #1690 实测修正：本机 IDE 的进程名是中文「微信开发者工具」（exe 随安装包语言），只数
     # -Name wechatdevtools 在这台机器恒 0 ⇒ 归零轮询形同虚设，quit 还没真收摊就 open，
     # 冷启动叠在垂死实例上 ⇒ storage 落盘不完整、直达页会话丢失。按 ProcessName 双名匹配。
-    $waited = 0
-    while ($waited -lt [int]$quitStep.waitSeconds) {
-        if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count -eq 0) {
-            Write-Log "quit：IDE 进程已归零（wechatdevtools/微信开发者工具 双名匹配，等了 ${waited}s）"
-            # #1682 第四轮实测：进程归零 ≠ IDE server（43005）状态收干净——quit 后立刻 open，
-            # auto 会挂满 180s 超时；手动实验 quit 后静置 8s 再 open→auto→ready 12s 成 ⇒ 固定静置。
-            Start-Sleep -Seconds 10
-            return
+    # #1690 run5 实测：首轮 quit 后 60s 仍有 4 个进程未退 ⇒ open 连上垂死实例、冷启动骑旧会话
+    # （入口页探针拿到旧栈判 miss）。补第二轮 quit 再轮询；**只观测不 kill**（ADR-0008 红线不变）。
+    $clean = $false
+    for ($round = 1; $round -le 2; $round++) {
+        if ($round -gt 1) {
+            Write-Host "[warn] 首轮 quit 后进程未归零，补发第二次 quit 再轮询" -ForegroundColor Yellow
+            Write-Log 'quit 第 2 轮：补发 cli quit 再归零轮询'
+            try { [void](Invoke-Process -FilePath $devTools -Arguments $quitStep.argv -TimeoutSeconds $quitStep.timeoutSeconds -Tag "$($quitStep.tag)(retry)") } catch { Write-Host "[warn] 第二次 quit 失败（继续轮询）：$_" -ForegroundColor Yellow }
         }
-        Start-Sleep -Seconds 1
-        $waited++
+        $waited = 0
+        while ($waited -lt [int]$quitStep.waitSeconds) {
+            if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count -eq 0) {
+                Write-Log "quit：IDE 进程已归零（wechatdevtools/微信开发者工具 双名匹配，等了 ${waited}s）"
+                $clean = $true
+                break
+            }
+            Start-Sleep -Seconds 1
+            $waited++
+        }
+        if ($clean) { break }
     }
-    $still = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count
-    Write-Host "[warn] quit 后 ${waited}s 仍有 $still 个 IDE 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
-    Write-Log "quit 后 ${waited}s 仍有 $still 个 IDE 进程未退出（只警告，不 kill）"
+    if (-not $clean) {
+        $still = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count
+        Write-Host "[warn] 两轮 quit（各 $([int]$quitStep.waitSeconds)s）后仍有 $still 个 IDE 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
+        Write-Log "两轮 quit 后仍有 $still 个 IDE 进程未退出（只警告，不 kill）"
+    }
+    # #1682 第四轮实测：进程归零 ≠ IDE server（43005）状态收干净——quit 后立刻 open，
+    # auto 会挂满 180s 超时；手动实验 quit 后静置 8s 再 open→auto→ready 12s 成 ⇒ 固定静置。
+    Start-Sleep -Seconds 10
+    # 端口收摊判据（#1690 run5）：垂死实例会**占住自动化端口**，open/auto 接上去骑旧会话。
+    # 等端口随进程关净；预算内关不掉 ⇒ 返回 $false，直达冷启动据此记 port-held-after-quit（环境性，诚实）。
+    $held = 0
+    while ($held -lt 60) {
+        if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -eq 0) { return $true }
+        Start-Sleep -Seconds 1
+        $held++
+    }
+    Write-Log "quit：自动化端口 $Port 60s 后仍在 listening（垂死实例占会话）⇒ 直达冷启动判 port-held-after-quit"
+    return $false
 }
 
 function Invoke-DevToolsPreflightQuit {
     if ($script:quitDone) { return }
     $script:quitDone = $true
-    Invoke-DevToolsQuitAndPoll
+    # #1690：函数现在返回「端口是否收干净」；主链 pre-flight 只清场不改判 ⇒ 显式弃值（直达冷启动才消费）。
+    $null = Invoke-DevToolsQuitAndPoll
 }
 
 # ---------- 任意页直达探针（#1682 · ADR-0038 决策 1/2 · ADR-0039 拆分步骤 2）----------
@@ -1021,7 +1046,9 @@ function Invoke-DirectColdStart {
             Start-Sleep -Seconds $delay
         }
         # quit 后旧窗口随进程消失；重启出的新窗口仍需 finally 的 close 收掉 ⇒ 复位哨兵。
-        Invoke-DevToolsQuitAndPoll
+        # 归零 + 端口收摊都过关才继续（#1690 run5：垂死实例占端口 ⇒ open 骑旧会话 ⇒ 假 miss）。
+        $quitClean = Invoke-DevToolsQuitAndPoll
+        if (-not $quitClean) { $out.reason = 'port-held-after-quit'; continue }
         $script:closed = $false
         $open = Invoke-Process -FilePath $devTools -Arguments $Steps.open.argv -TimeoutSeconds $Steps.open.timeoutSeconds -Tag "$($Steps.open.tag)(direct:$PageTag)"
         Write-Log "`n>>> direct-coldstart open($PageTag)`n$($open.Output)"
