@@ -38,7 +38,9 @@
  *   C24 **任意页直达探针**（#1682 · ADR-0039 拆分步骤 2）：门计划必须声明 directPages 节（机制 =
  *       cold-start-direct，构建产物 app.json 首项临时换页 + plain 冷启动、finally 还原、SKIP reason 值域、
  *       探针 argv 模板）；执行路径必须消费 `<page>` 占位与 auto 页清单判据，且任何代码行不得回写源头
- *       pages.json（运行时面判据来源，ADR-0038 决策 2 红线）。
+ *       pages.json（运行时面判据来源，ADR-0038 决策 2 红线）。核验补记（2026-10-13）后另钉两件事：
+ *       **入库数据流**（直达截图 → 聚合 shots → probeJson.shots → 归档，AC1 的链条，拆了门照样绿）与
+ *       **评论渲染的 null 过滤**（-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -665,6 +667,16 @@ function scanContract(sources) {
   must(s.includes('page-not-in-build'), 'C24', '执行路径未记 page-not-in-build 的 SKIP');
   must(s.includes('direct-page-unsupported'), 'C24', '执行路径未记 direct-page-unsupported 的 SKIP');
   must(s.includes('cold-start-direct'), 'C24', '执行路径未携带机制标识 cold-start-direct');
+  // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
+  // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
+  // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
+  must(s.includes('$agg.shots += @($pj.shots)'), 'C24', '直达组截图未并入聚合 shots ⇒ AC1 入库链断（Publish-ScreenshotArchive 只遍历 probeJson.shots）');
+  must(s.includes('shots = @($agg.shots)'), 'C24', '聚合 shots 未写回 probeJson ⇒ 入库与结果行不再共用同一清单');
+  // #1682 核验补记①：评论渲染必须过滤 null 条目——@(Get-Prop $null 'Rel') = @($null)（单元素= null），
+  // 不过滤会把 -NoArchive / 未入库渲染成一条空反引号条目，兜底文案永不出现。
+  const gateCommentBody = psFunctionBody(code, 'function Publish-GateComment');
+  must(gateCommentBody.length > 0, 'C24', '定位不到 Publish-GateComment 函数体（无法核对入库清单渲染的 null 过滤）');
+  must(gateCommentBody.includes('@(@($ArchivedRel) | Where-Object { $_ })'), 'C24', 'Publish-GateComment 未过滤 null 入库条目 ⇒ -NoArchive 渲染成空条目假清单（#1682 核验补记①回归）');
   stripCommentLines(s).filter((l) => /Set-Content|Out-File/.test(l)).forEach((l) => {
     must(!l.includes('pages.json'), 'C24', `代码行回写源头 pages.json（ADR-0038 决策 2 红线）：${l.trim()}`);
   });
@@ -982,6 +994,10 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, probe: real.probe.replace("'--expect-page'", "'--other-page'") }],
       ['C24', { ...real, probe: real.probe.replace(/cold-start-direct/g, 'x') }],
       ['C24', { ...real, probe: real.probe.replace(/direct-page-unsupported/g, 'x') }],
+      // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓
+      ['C24', { ...real, script: real.script.replace('$agg.shots += @($pj.shots)', '') }],
+      ['C24', { ...real, script: real.script.replace('shots = @($agg.shots)', 'shots = @()') }],
+      ['C24', { ...real, script: real.script.replace('@(@($ArchivedRel) | Where-Object { $_ })', '@($ArchivedRel)') }],
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
