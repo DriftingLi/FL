@@ -1089,14 +1089,19 @@ function Publish-GateComment {
     }
     $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
     # 正文格式被 .github/workflows/pr-evidence.yml 认（标记 ② + commit sha），改动前先看那边的注释
+    # #1682 核验补记①：-NoArchive / 未入库时调用点传 @(Get-Prop $null 'Rel') = @($null)——
+    # 单元素数组（元素是 null）Count=1，不过滤会渲染成「一条空反引号条目」的假入库清单，
+    # 设计好的兜底文案反而永不出现。先滤掉 null/空再决定走清单还是兜底。
+    $archRels = @(@($ArchivedRel) | Where-Object { $_ })
+    $archNotes = @(@($ArchiveNotes) | Where-Object { $_ })
     $archLines = @()
-    if (@($ArchivedRel).Count -gt 0) {
+    if ($archRels.Count -gt 0) {
         $archLines += '- 入库截图（仓库内相对路径，GitHub 可点开预览）：'
-        foreach ($r in @($ArchivedRel)) { $archLines += ('  - ``' + $r + '``') }
+        foreach ($r in $archRels) { $archLines += ('  - ``' + $r + '``') }
     } else {
         $archLines += '- 入库截图：（无 —— 见脚本输出的 [archive] 说明，未入库不影响门结论）'
     }
-    if (@($ArchiveNotes).Count -gt 0) { $archLines += ('- 入库说明：' + (@($ArchiveNotes) -join '；')) }
+    if ($archNotes.Count -gt 0) { $archLines += ('- 入库说明：' + ($archNotes -join '；')) }
     # 降级必须**显式写明**（不许假绿）：评论里不写清楚，读评论的人会把「可验证子集通过」当成「逐页都过了」。
     # #1682：直达探针（cold-start-direct）的 SKIP 与旧导航组的 SKIP 是**两种成因**，措辞分开——
     # 前者是「某页冷启动后落地页 ≠ 目标路由」，后者才是「导航 API 本机恒不可用」。
