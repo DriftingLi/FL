@@ -1734,32 +1734,34 @@ try {
         }
         foreach ($pg in $directList) {
             $leaf = ($pg -split '/')[-1]
-            if ($pg -ne $entryRoute) {
-                $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
-                if ($sw) {
-                    # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
-                    Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
-                    $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
-                    if (-not $missReason) { $missReason = $sw }
-                    $missPages += $pg
-                    continue
-                }
-                $cs = Invoke-DirectColdStart -Steps $coldSteps -PageTag $leaf
-                if (-not $cs.ok) {
-                    $agg.failures += "环境不可用：直达冷启动未成（page=$pg reason=$($cs.reason)）"
-                    $directEnv = $true
-                    break
-                }
-                $readySeconds = $cs.readySeconds
-                $sdkVersion = $cs.sdk
-                $ideVersion = $cs.ide
-                # 冷启动后 app 侧未热 ⇒ 注入脚本自带重试；幂等（storage 持久 ⇒ existing 秒返）。
-                # 本页注入失败 ⇒ 该页 miss 如实记 auth-session-unavailable，不中断其余页（#1690）。
-                if ($Auth -ne 'off') {
-                    $ai = Invoke-AuthInject -AuthStep $authStep -PageTag $leaf
-                    $authOk = [bool]$ai.ok
-                    if ($ai.ok) { $authField = $ai.status }
-                }
+            # 每页（含入口页）一律 换页→冷启动→注入→探针（#1690 实测修正）。
+            # 旧口径「入口页不换页、直接吃主会话」不可靠：DevTools open 会**还原上次会话的页面栈**
+            # （run4 主会话落在 dashboard，入口页探针拿到旧栈判 miss），只有换页写盘（Switch 恒
+            # Set-Content ⇒ mtime 变 ⇒ 强制重编译）才保证落点页 == 目标页。
+            $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
+            if ($sw) {
+                # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
+                Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
+                $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
+                if (-not $missReason) { $missReason = $sw }
+                $missPages += $pg
+                continue
+            }
+            $cs = Invoke-DirectColdStart -Steps $coldSteps -PageTag $leaf
+            if (-not $cs.ok) {
+                $agg.failures += "环境不可用：直达冷启动未成（page=$pg reason=$($cs.reason)）"
+                $directEnv = $true
+                break
+            }
+            $readySeconds = $cs.readySeconds
+            $sdkVersion = $cs.sdk
+            $ideVersion = $cs.ide
+            # 冷启动后 app 侧未热 ⇒ 注入脚本自带重试；幂等（storage 持久 ⇒ existing 秒返）。
+            # 本页注入失败 ⇒ 该页 miss 如实记 auth-session-unavailable，不中断其余页（#1690）。
+            if ($Auth -ne 'off') {
+                $ai = Invoke-AuthInject -AuthStep $authStep -PageTag $leaf
+                $authOk = [bool]$ai.ok
+                if ($ai.ok) { $authField = $ai.status }
             }
             $pr = Invoke-DirectProbe -ProbeStep $probeStep -DirectPages $script:GatePlan['directPages'] -Page $pg
             $pj = $pr.json
