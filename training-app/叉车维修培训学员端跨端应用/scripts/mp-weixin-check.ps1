@@ -1000,7 +1000,20 @@ function Switch-DistAppJsonFirstPage {
         $tmp = $pages[0]; $pages[0] = $pages[$idx]; $pages[$idx] = $tmp
         $j.pages = $pages
     }
-    Set-Content -LiteralPath $Path -Value ($j | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM -NoNewline
+    # 键序轮转（#1690 run6 实测口径）：IDE 编译缓存按 app.json **字节**认新——pages[0] 已是目标页时
+    # 重序列化字节不变 ⇒ IDE 不重编译、窗口还原上一会话页栈 ⇒ 入口页直达拿旧栈假 miss（run6 实测
+    # [dashboard] 顶掉 [index]）。顶层键序轮一位保证字节必变（语义不变）⇒ 强制 fresh 编译从 pages[0] 起。
+    $keys = @($j.PSObject.Properties.Name)
+    $out = $null
+    if ($keys.Count -ge 2) {
+        $rot = @($keys[1..($keys.Count - 1)]) + @($keys[0])
+        $od = [ordered]@{}
+        foreach ($k in $rot) { $od[$k] = $j.$k }
+        $out = ($od | ConvertTo-Json -Depth 30)
+    } else {
+        $out = ($j | ConvertTo-Json -Depth 30) + ' '
+    }
+    Set-Content -LiteralPath $Path -Value $out -Encoding utf8NoBOM -NoNewline
     # 换后复验（判据 = 读回，不是「写了就当成对了」）：首项必须是目标页
     $re = $null
     try { $re = (Get-Content -LiteralPath $Path -Raw) | ConvertFrom-Json } catch { return 'app-json-invalid' }
