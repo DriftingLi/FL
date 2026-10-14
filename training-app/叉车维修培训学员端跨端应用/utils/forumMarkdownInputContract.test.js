@@ -34,7 +34,6 @@ const CREATE_REL = 'pages/forum/forum-create.uvue';
 const DETAIL_REL = 'pages/forum/forum-detail.uvue';
 const COMPOSER_REL = 'composables/useReplyComposer.uts';
 const PICKER_REL = 'composables/useForumImagePicker.uts';
-const MY_FORUM_REL = 'pages/forum/my-forum.uvue';
 
 const input = read(INPUT_REL);
 const createPage = read(CREATE_REL);
@@ -211,20 +210,9 @@ describe('界面层只经格式轴：不直引档位常量、不直连解析器'
   });
 });
 
-// ===== ⑦ P2 遗留的真实缺口收口：「我的动态」的回复原文 =====
-
-describe('「我的动态」的回复原文接上格式轴（P2 复核回写修正①的真实缺口，本批收口）', () => {
-  const myForum = read(MY_FORUM_REL);
-
-  it('完整 `content` 的承载点不再无条件直出源串', () => {
-    expect(myForum).toContain('function isMarkdownReply(item : ForumReply) : boolean');
-    expect(myForum).toContain('function replyBlocks(item : ForumReply) : MarkdownBlock[]');
-    expect(myForum).toContain('v-if="!isMarkdownReply(item)" class="reply-content"');
-    expect(myForum).toContain('<ForumMarkdownBlocks :blocks="replyBlocks(item)" />');
-  });
-
-  it('它消费的是 DTO 上已有的 `content_format`（P1 的 `buildReply` 已带上，本批不动 DTO）', () => {
-    expect(myForum).toContain('isMarkdownFormat(item.content_format)');
-    expect(myForum).toContain('forumContentBlocks(item.content, item.content_format)');
-  });
-});
+// ===== ⑦ 「我的动态」的回复原文 =====
+//
+// P2 遗留缺口的收口断言（my-forum 的 .reply-content 接格式轴）已随 #1610 删页整块摘除：
+// 承载页 pages/forum/my-forum.uvue 是孤儿页（被 personal-activity 四主 tab 覆盖），
+// 「我的回复」tab 经 ActivityTopicCard 的 content-format prop 走同一条格式轴
+// （activity-topic-card → getContentPreview，#1273）。

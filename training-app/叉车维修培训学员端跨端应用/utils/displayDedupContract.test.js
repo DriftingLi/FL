@@ -44,7 +44,6 @@ describe('展示层泛型格式化：唯一实现点 utils/format，零第二实
       'pages/profile/components/wrong-question-card.uvue',
       'pages/featured/featured-list.uvue',
       'pages/featured/featured-detail.uvue',
-      'pages/forum/my-forum.uvue',
     ];
     for (const rel of consumers) {
       const src = read(rel);
@@ -62,7 +61,6 @@ describe('展示层泛型格式化：唯一实现点 utils/format，零第二实
       'pages/profile/components/wrong-question-card.uvue',
       'pages/featured/featured-list.uvue',
       'pages/featured/featured-detail.uvue',
-      'pages/forum/my-forum.uvue',
       'pages/forum/components/forum-topic-card.uvue',
       'pages/forum/components/forum-checkin-card.uvue',
       'pages/forum/components/forum-resource-panel.uvue',
@@ -81,7 +79,6 @@ describe('展示层泛型格式化：唯一实现点 utils/format，零第二实
       'pages/profile/mock-exam-records.uvue',
       'pages/featured/featured-list.uvue',
       'pages/featured/featured-detail.uvue',
-      'pages/forum/my-forum.uvue',
     ]) {
       const src = read(rel);
       const tpl = src.slice(src.indexOf('<template>'), src.lastIndexOf('</template>'));
