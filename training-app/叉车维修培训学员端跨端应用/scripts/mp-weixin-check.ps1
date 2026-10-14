@@ -927,11 +927,14 @@ function Invoke-DevToolsQuitAndPoll {
     } catch {
         Write-Host "[warn] cli.bat quit 失败（继续，不影响门结论）：$_" -ForegroundColor Yellow
     }
-    # 轮询 wechatdevtools 进程归零：quit 是异步的，端口/会话收干净要等。超时只 [warn]，绝不 kill。
+    # 轮询 IDE 进程归零：quit 是异步的，端口/会话收干净要等。超时只 [warn]，绝不 kill。
+    # #1690 实测修正：本机 IDE 的进程名是中文「微信开发者工具」（exe 随安装包语言），只数
+    # -Name wechatdevtools 在这台机器恒 0 ⇒ 归零轮询形同虚设，quit 还没真收摊就 open，
+    # 冷启动叠在垂死实例上 ⇒ storage 落盘不完整、直达页会话丢失。按 ProcessName 双名匹配。
     $waited = 0
     while ($waited -lt [int]$quitStep.waitSeconds) {
-        if (@(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count -eq 0) {
-            Write-Log "quit：wechatdevtools 进程已归零（等了 ${waited}s）"
+        if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count -eq 0) {
+            Write-Log "quit：IDE 进程已归零（wechatdevtools/微信开发者工具 双名匹配，等了 ${waited}s）"
             # #1682 第四轮实测：进程归零 ≠ IDE server（43005）状态收干净——quit 后立刻 open，
             # auto 会挂满 180s 超时；手动实验 quit 后静置 8s 再 open→auto→ready 12s 成 ⇒ 固定静置。
             Start-Sleep -Seconds 10
@@ -940,9 +943,9 @@ function Invoke-DevToolsQuitAndPoll {
         Start-Sleep -Seconds 1
         $waited++
     }
-    $still = @(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count
-    Write-Host "[warn] quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
-    Write-Log "quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出（只警告，不 kill）"
+    $still = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count
+    Write-Host "[warn] quit 后 ${waited}s 仍有 $still 个 IDE 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
+    Write-Log "quit 后 ${waited}s 仍有 $still 个 IDE 进程未退出（只警告，不 kill）"
 }
 
 function Invoke-DevToolsPreflightQuit {

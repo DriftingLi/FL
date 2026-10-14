@@ -678,10 +678,11 @@ function scanContract(sources) {
 
   // C22 pre-flight quit 清场的执行侧接线（#1634；计划面判据在 scanPlan）
   //   · 有按 id 取用 quit 步的执行点（计划与执行不脱节）；
-  //   · 进程归零轮询用 Get-Process -Name wechatdevtools（只观测，绝不 kill —— Stop-Process 是 ADR-0008 红线）；
+  //   · 进程归零轮询按 ProcessName 双名匹配 wechatdevtools|微信开发者工具（#1690：本机 IDE 进程名是中文，
+  //     只数英文名恒 0 ⇒ 归零轮询形同虚设、冷启动叠在垂死实例上；只观测，绝不 kill —— Stop-Process 是 ADR-0008 红线）；
   //   · 主流程（重试单元之前）真的调用了 pre-flight，且 -Doctor 跳过。
   must(s.includes("-Id 'devtools-quit'"), 'C22', '执行路径里没有按 id 取用 quit 步骤（计划与执行脱节）');
-  must(/Get-Process -Name wechatdevtools/.test(s), 'C22', '执行侧没有 wechatdevtools 进程归零轮询（quit 是异步的，不轮询等于没等清场）');
+  must(/ProcessName -match 'wechatdevtools\|微信开发者工具'/.test(s), 'C22', '执行侧没有 IDE 进程归零双名轮询（wechatdevtools/微信开发者工具；quit 是异步的，不轮询等于没等清场，只数英文名在本机恒 0 —— #1690 实测）');
   must(!/Stop-Process\s+-/.test(stripCommentLines(s).join('\n')), 'C22', '执行侧出现 Stop-Process 调用（运行中 kill IDE 是 ADR-0008 红线，只能 quit；判据文本里「不得用 Stop-Process」的引用不算）');
   must(/if \(-not \$Doctor\) \{ Invoke-DevToolsPreflightQuit \}/.test(s), 'C22', '主流程没有在重试单元之前调用 pre-flight（或未做 -Doctor 跳过）');
   must(s.includes('function Invoke-DevToolsPreflightQuit'), 'C22', '缺 pre-flight quit 的执行函数');
@@ -1038,7 +1039,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }],
       // C22：执行侧拆掉 pre-flight（不再按 id 取用 quit / 轮询改 kill —— kill 是 ADR-0008 红线）
       ['C22', { ...real, script: real.script.replace("-Id 'devtools-quit'", "-Id 'devtools-quitX'") }],
-      ['C22', { ...real, script: real.script.replace(/Get-Process -Name wechatdevtools/g, 'Get-ProcessX -Name wechatdevtools') }],
+      ['C22', { ...real, script: real.script.replace(/ProcessName -match 'wechatdevtools\|微信开发者工具'/g, "ProcessName -match 'wechatdevtools'") }],
       ['C22', { ...real, script: real.script.replace('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }', 'if ($false) { }') }],
       // 红线面：真的往代码里塞 Stop-Process 调用必须被抓（判据文本里的「不得用 Stop-Process」引用不算命中）
       ['C22', { ...real, script: real.script.replace('        $waited++', '        Stop-Process -Name wechatdevtools -Force\n        $waited++') }],
@@ -1104,7 +1105,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     const s = real.script;
     expect(s).toContain('function Invoke-DevToolsPreflightQuit');
     expect(s).toContain("-Id 'devtools-quit'");
-    expect(s).toContain('Get-Process -Name wechatdevtools');
+    expect(s).toContain("ProcessName -match 'wechatdevtools|微信开发者工具'");
     expect(s).toContain('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }');
     expect(stripCommentLines(s).join('\n')).not.toMatch(/Stop-Process\s+-/);
   });
