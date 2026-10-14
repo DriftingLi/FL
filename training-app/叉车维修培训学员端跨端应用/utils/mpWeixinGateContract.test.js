@@ -41,6 +41,11 @@
  *       pages.json（运行时面判据来源，ADR-0038 决策 2 红线）。核验补记（2026-10-13）后另钉两件事：
  *       **入库数据流**（直达截图 → 聚合 shots → probeJson.shots → 归档，AC1 的链条，拆了门照样绿）与
  *       **评论渲染的 null 过滤**（-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）。
+ *   C25 **登录态会话注入**（#1690）：门计划必须有 auth-inject 步（ready-gate 之后、探针之前，exec=node，
+ *       exit 2 恒空——注入失败是诚实 SKIP（auth-session-unavailable），不是环境 blocked）；执行路径唯一
+ *       取用点 `Get-GateStep -Id 'auth-inject'` + `Invoke-AuthInject` 解析 `MP_WEIXIN_AUTH` 结果行；
+ *       注入脚本 scripts/mp-weixin-auth.mjs 走 callWxMethod('login') → POST /auth/wx-login →
+ *       setStorageSync 四键（与 setAuthData 对齐），令牌绝不入结果行、脚本不得 mp.close（会话留给探针）。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -65,6 +70,7 @@ const SCRIPT_REL = 'scripts/mp-weixin-check.ps1';
 const DEVICE_CAPTURE_REL = 'scripts/device-capture.ps1';
 const PROBE_REL = 'scripts/mp-weixin-probe.mjs';
 const READY_REL = 'scripts/mp-weixin-ready.mjs';
+const AUTH_REL = 'scripts/mp-weixin-auth.mjs';
 const PKG_REL = 'package.json';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 const AGENTS_REL = 'AGENTS.md';
@@ -78,6 +84,7 @@ const PLAN_SEQUENCE = [
   'devtools-auto',
   'port-listening',
   'ready-gate',
+  'auth-inject',
   'automator-probe'
 ];
 // 结果行必填字段（顺序即输出顺序；可选字段单列，见 C13）
@@ -85,7 +92,7 @@ const RESULT_MANDATORY = [
   'appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal',
   'shots', 'navigation', 'ready', 'sdk', 'ide', 'log'
 ];
-const RESULT_OPTIONAL = ['navigationSkipReason'];
+const RESULT_OPTIONAL = ['navigationSkipReason', 'auth'];
 
 /**
  * 取一个 PowerShell 函数的函数体（花括号配对）。
@@ -407,7 +414,30 @@ function scanPlan(plan) {
     must(dc.includes('冷启动'), 'C24', 'directPages.criteria 未写冷启动直达机制');
     must(dc.includes('还原'), 'C24', 'directPages.criteria 未写还原纪律');
     must(dc.includes('skip'), 'C24', 'directPages.criteria 未写 SKIP 诚实降级');
+    const sr24 = Array.isArray(dp.skipReasons) ? dp.skipReasons.map(String) : [];
+    must(sr24.includes('auth-session-unavailable'), 'C25', 'directPages.skipReasons 缺 auth-session-unavailable（#1690 会话注入失败的回退 reason，值域要可枚举）');
   }
+
+  // ---- C25（#1690）：登录态会话注入步的计划面声明 ----
+  //   登录态页直达冷启动无会话 ⇒ 401 被弹回登录页（#1610 缺口）。注入只发生在门运行环境
+  //   （automator callWxMethod），不改业务代码；失败是诚实 SKIP，不是环境 blocked。
+  const authStep = step('auth-inject');
+  must(Boolean(authStep), 'C25', '门计划缺 auth-inject 步（#1690 会话注入没有唯一真源）');
+  if (authStep) {
+    must(authStep.exec === 'node', 'C25', 'auth-inject 不是 node 脚本步骤');
+    const aArgv = argvOf(authStep).map(String);
+    must(aArgv[0] === String(P.auth), 'C25', 'auth-inject 的 argv[0] 与 paths.auth 不一致（脚本路径要由计划派生）');
+    const aWs = aArgv.indexOf('--ws');
+    must(aWs >= 0 && aArgv[aWs + 1] === E.ws, 'C25', 'auth-inject 的 --ws 与 endpoint.ws 不一致');
+    const aRoot = aArgv.indexOf('--require-root');
+    must(aRoot >= 0 && aArgv[aRoot + 1] === P.automatorRoot, 'C25', 'auth-inject 的 --require-root 与 paths.automatorRoot 不一致');
+    must(Array.isArray(authStep.exit2) && authStep.exit2.length === 0, 'C25', 'auth-inject 不该声明 exit 2（注入失败⇒诚实 SKIP，不得升级成环境 blocked）');
+    const ac = (authStep.criteria || []).join('\n');
+    must(ac.includes('MP_WEIXIN_AUTH'), 'C25', 'auth-inject 判据未写 MP_WEIXIN_AUTH 结果行');
+    must(ac.includes('existing') && ac.includes('injected') && ac.includes('none'), 'C25', 'auth-inject 判据未枚举 status 值域（existing/injected/none）');
+    must(ac.includes('令牌'), 'C25', 'auth-inject 判据未声明令牌不入结果行（凭据不得进日志/评论）');
+  }
+  must(P.authRelative === 'scripts\\mp-weixin-auth.mjs', 'C25', '注入脚本相对路径不是 scripts\\mp-weixin-auth.mjs');
 
   return violations;
 }
@@ -684,6 +714,24 @@ function scanContract(sources) {
   must(probe.includes('cold-start-direct'), 'C24', '探针未记录直达达成的机制标识');
   must(probe.includes('direct-page-unsupported'), 'C24', '探针未记录直达未达成的 SKIP reason');
 
+  // ---- C25（#1690）执行侧：会话注入必须真实接线 ----
+  must(s.includes("[string]$Auth = 'auto'"), 'C25', '门脚本缺 -Auth 参数声明（#1690 交付物载体；判到默认值 auto，防前缀掩盖缺席）');
+  must(s.includes("Get-GateStep -Plan $script:GatePlan -Id 'auth-inject'"), 'C25', '执行路径未消费 auth-inject 步（缺唯一 Get-GateStep 取用点）');
+  must(s.includes('function Invoke-AuthInject'), 'C25', '缺会话注入的执行函数 Invoke-AuthInject');
+  must(s.includes('MP_WEIXIN_AUTH'), 'C25', '执行路径未解析 MP_WEIXIN_AUTH 结果行');
+  must(s.includes('auth-session-unavailable'), 'C25', '执行路径未记 auth-session-unavailable 回退');
+  const authSrc = sources.auth || '';
+  must(authSrc.includes('MP_WEIXIN_AUTH'), 'C25', '注入脚本不输出 MP_WEIXIN_AUTH 结果行');
+  must(authSrc.includes('/auth/wx-login'), 'C25', '注入脚本未走真实 /auth/wx-login 通道');
+  ['auth_token', 'auth_user', 'auth_refresh_token', 'auth_login_provider'].forEach((k) => {
+    must(authSrc.includes("'" + k + "'"), 'C25', `注入脚本 storage 键缺 ${k}（须与 setAuthData 四键对齐）`);
+  });
+  must(authSrc.includes('callWxMethod'), 'C25', '注入脚本未用 callWxMethod（注入只发生在门运行环境）');
+  // 只判代码行：注释里「不调 mp.close()」的纪律声明不算违规（剥 // 行注释后查真调用）
+  const authCode = authSrc.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
+  must(!authCode.includes('mp.close'), 'C25', '注入脚本关闭了会话（须留给后续探针，与 mp-weixin-probe.mjs 同纪律）');
+  must(authSrc.includes('MP_WEIXIN_AUTH'), 'C25', '注入脚本注释未声明 MP_WEIXIN_AUTH 纪律（防后人加 close 断会话）');
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -700,6 +748,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     script: readSource(SCRIPT_REL),
     probe: readSource(PROBE_REL),
     ready: readSource(READY_REL),
+    auth: readSource(AUTH_REL),
     pkg: readSource(PKG_REL),
     adr: readSource(ADR_REL),
     agents: readSource(AGENTS_REL),
@@ -887,6 +936,15 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', (p) => { p.directPages.skipReasons = []; return p; }],
       ['C24', (p) => { p.directPages.skipReasons = ['DirectPageUnsupported']; return p; }],
       ['C24', (p) => { p.directPages.criteria = ['换页']; return p; }],
+      // C25：会话注入被改坏（缺步/exit2 加宽/端点漂移/脚本路径漂移/SKIP 值域缺失）
+      ['C25', (p) => { p.steps = p.steps.filter((x) => x.id !== 'auth-inject'); return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.exec = 'pwsh'; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.exit2 = [{ on: 'fail', reason: 'auth-failed' }]; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.argv[x.argv.indexOf('--ws') + 1] = 'ws://127.0.0.1:1'; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.argv[0] = 'scripts/nope.mjs'; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.criteria = ['跑注入']; return p; }],
+      ['C25', (p) => { p.paths.authRelative = 'scripts\\nope.mjs'; return p; }],
+      ['C25', (p) => { p.directPages.skipReasons = p.directPages.skipReasons.filter((r) => r !== 'auth-session-unavailable'); return p; }],
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));

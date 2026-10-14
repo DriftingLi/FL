@@ -225,6 +225,8 @@ param(
     [int]$Port = 9420,
     [string]$Routes = 'pages/index/index,pages/login/login',
     [string]$Pages = 'auto',
+    # 会话注入（#1690）：auto = 直达循环前与每页冷启动后注入登录态（幂等，已登录即 existing）；off = 不注入。
+    [string]$Auth = 'auto',
     [switch]$SkipBuild,
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
@@ -252,6 +254,7 @@ $ErrorActionPreference = 'Stop'
 $DistRelative = 'unpackage\dist\build\mp-weixin'
 $ProbeRelative = 'scripts\mp-weixin-probe.mjs'
 $ReadyRelative = 'scripts\mp-weixin-ready.mjs'
+$AuthRelative = 'scripts\mp-weixin-auth.mjs'
 $WxDevToolsPatterns = @(
     'D:\微信web开发者工具\cli.bat',
     'D:\软件\微信web开发者工具\cli.bat',
@@ -379,6 +382,7 @@ function New-GatePlan {
         [string]$Dist,
         [string]$ProbePath,
         [string]$ReadyPath,
+        [string]$AuthPath,
         [string]$AutoRoot,
         [string]$LogDir,
         [string]$LogRelative,
@@ -496,6 +500,22 @@ function New-GatePlan {
         )
     }
 
+    # 5.5) 会话注入（#1690）：直达探针冷启动**登录态页**时 DevTools 里没有会话 ⇒ 首屏 401 ⇒
+    #      handleUnauthorized reLaunch 到登录页 ⇒ reached=False。本步在门运行环境里走真实登录链路
+    #      （wx.login → POST /auth/wx-login → setStorageSync 四键），**不改业务代码**。
+    #      失败**不判环境受阻**：status=none(reason) 记录后照跑直达循环，登录态页如实 miss ——
+    #      「注入不可用」不得升级成「环境坏了」，也不得冒充取证成立。
+    $steps += [ordered]@{
+        id = 'auth-inject'
+        tag = 'auth-inject'
+        exec = 'node'
+        argv = @($AuthPath, '--ws', $ws, '--require-root', $AutoRoot, '--timeout-ms', '90000')
+        timeoutSeconds = 150
+        awaitCompletion = $true
+        criteria = @('判成败只看输出 MP_WEIXIN_AUTH 结果行（退出码不作判据）', 'status ∈ existing|injected|none：none ⇒ 后续登录态页如实记 miss(reason=auth-session-unavailable)，不判 exit 2', '结果行不得含令牌：只带 user 标识与耗时', '幂等：已有会话 ⇒ existing 即返回（每页冷启动后都会调用）')
+        exit2 = @()
+    }
+
     # 6) 探针：判成败只看输出 MP_WEIXIN_PROBE（cli / 探针退出码一律不作判据）。
     $steps += [ordered]@{
         id = 'automator-probe'
@@ -524,6 +544,8 @@ function New-GatePlan {
         $resultFields += [ordered]@{ name = $n }
     }
     $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
+    # 会话注入（#1690）读数：auth=existing|injected|none:<reason>；只在直达循环启用时出现（可选字段）
+    $resultFields += [ordered]@{ name = 'auth'; optional = $true }
     $resultFields += [ordered]@{ name = 'log' }
 
     return [ordered]@{
@@ -538,6 +560,8 @@ function New-GatePlan {
             probeRelative = $ProbeRelative
             ready = $ReadyPath
             readyRelative = $ReadyRelative
+            auth = $AuthPath
+            authRelative = $AuthRelative
             automatorRoot = $AutoRoot
             logDir = $LogDir
             logRelative = $LogRelative
@@ -562,7 +586,7 @@ function New-GatePlan {
             probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
             attempts = 2
             retryDelaySeconds = $ProbeRetryDelaySeconds
-            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid')
+            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable')
             criteria = @(
                 '直达 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针不得调用 reLaunch/navigateTo',
                 '页身份判据 = 冷启动落地页 pageStack[0] 等于目标路由（与 #1678 真机侧「以进入页面日志为准」同源）',
@@ -662,6 +686,7 @@ $logPath = Join-Path $logDir 'mp-weixin.log'
 $logRelative = '.ci-verify/mp-weixin.log'
 $probePath = Join-Path $Project $ProbeRelative
 $readyPath = Join-Path $Project $ReadyRelative
+$authPath = Join-Path $Project $AuthRelative
 $autoRoot = Join-Path $tempRoot 'mp-weixin-automator'
 $routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 # 入口页 = 第一个路由；它进了门计划（探针的 --entry-url），这里不再另存一份，免得两处取值分叉
@@ -671,7 +696,7 @@ $routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object 
 # 探针端点与真实端口分叉。收成函数是为了让 `New-GatePlan` 只有一个调用点（计划与执行不分叉）。
 function New-ThisGatePlan {
     param([int]$UsePort)
-    return New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath `
+    return New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath -AuthPath $authPath `
         -AutoRoot $autoRoot -LogDir $logDir -LogRelative $logRelative -RouteList $routeList -Port $UsePort `
         -OpenTimeoutSeconds $OpenTimeoutSeconds -AutoTimeoutSeconds $AutoTimeoutSeconds `
         -AutoAttempts $AutoAttempts -AutoRetryDelaySeconds $AutoRetryDelaySeconds `
@@ -1053,6 +1078,21 @@ function Invoke-DirectProbe {
         if ($attempt -lt $attempts) { Start-Sleep -Seconds ([int]$DirectPages.retryDelaySeconds) }
     }
     return @{ json = $json; timedOut = $timedOut }
+}
+
+function Invoke-AuthInject {
+    param($AuthStep, [string]$PageTag)
+    # 会话注入（#1690）：argv 取自门计划（唯一真源）；判成败只看 MP_WEIXIN_AUTH 结果行（退出码不作判据）。
+    # 失败**不判环境受阻**：返回 ok=false + kebab reason，由调用方把该页如实记 miss —— 注入不可用
+    # 既不得升级成 exit 2，也不得冒充取证成立。脚本自身幂等（已有会话 ⇒ existing 即返）。
+    $r = Invoke-Process -FilePath $nodeExe -Arguments $AuthStep.argv -TimeoutSeconds $AuthStep.timeoutSeconds -Tag "auth-inject($PageTag)"
+    Write-Log "`n>>> auth-inject($PageTag)`n$($r.Output)"
+    $json = $null
+    foreach ($line in ($r.Output -split "`r?`n")) {
+        if ($line -match '^\s*MP_WEIXIN_AUTH\s+(\{.*\})\s*$') { try { $json = ($Matches[1] | ConvertFrom-Json) } catch { $json = $null } }
+    }
+    if (-not $json) { return @{ ok = $false; status = 'none'; reason = 'no-auth-result' } }
+    return @{ ok = ((Get-Prop $json 'ok') -eq $true); status = "$(Get-Prop $json 'status')"; reason = "$(Get-Prop $json 'reason')" }
 }
 
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
@@ -1678,6 +1718,17 @@ try {
         $missPages = @()
         $directEnv = $false
         $probeJson = $null
+        # 会话注入（#1690）：直达循环前注入一次（实测 storage 跨 IDE quit→reopen 持久）；入口页是游客页，
+        # 先注入也无妨（幂等 existing 即返）。取用点唯一 —— 守护 C12/C18 按「首个 -Id 字面量取用点」定位。
+        $authStep = Get-GateStep -Plan $script:GatePlan -Id 'auth-inject'
+        $authOk = $true
+        $authField = 'off'
+        if ($Auth -ne 'off') {
+            $ai = Invoke-AuthInject -AuthStep $authStep -PageTag 'pre-loop'
+            $authOk = [bool]$ai.ok
+            $authField = $(if ($ai.ok) { $ai.status } else { "none($($ai.reason))" })
+            Write-Host ">>> 会话注入（#1690）pre-loop：ok=$([bool]$ai.ok) status=$authField" -ForegroundColor $(if ($ai.ok) { 'Green' } else { 'Yellow' })
+        }
         foreach ($pg in $directList) {
             $leaf = ($pg -split '/')[-1]
             if ($pg -ne $entryRoute) {
@@ -1699,6 +1750,13 @@ try {
                 $readySeconds = $cs.readySeconds
                 $sdkVersion = $cs.sdk
                 $ideVersion = $cs.ide
+                # 冷启动后 app 侧未热 ⇒ 注入脚本自带重试；幂等（storage 持久 ⇒ existing 秒返）。
+                # 本页注入失败 ⇒ 该页 miss 如实记 auth-session-unavailable，不中断其余页（#1690）。
+                if ($Auth -ne 'off') {
+                    $ai = Invoke-AuthInject -AuthStep $authStep -PageTag $leaf
+                    $authOk = [bool]$ai.ok
+                    if ($ai.ok) { $authField = $ai.status }
+                }
             }
             $pr = Invoke-DirectProbe -ProbeStep $probeStep -DirectPages $script:GatePlan['directPages'] -Page $pg
             $pj = $pr.json
@@ -1733,7 +1791,9 @@ try {
             $directLines += $line
             if (-not $reached) {
                 $nr = "$(Get-Prop $navOne 'reason')"
-                if (-not $missReason) { $missReason = $(if ($nr) { $nr } else { 'direct-page-unsupported' }) }
+                # 会话注入不可用时，miss 的真实原因是缺会话，不得冒充「直达机制不支持」（#1690）
+                $mrAuth = ($Auth -ne 'off' -and -not $authOk)
+                if (-not $missReason) { $missReason = $(if ($mrAuth) { 'auth-session-unavailable' } elseif ($nr) { $nr } else { 'direct-page-unsupported' }) }
                 $missPages += $pg
             }
         }
@@ -1846,6 +1906,8 @@ try {
     }
     # 降级字段是**可选**的：计划里标了 optional，只在真的降级时出现（不降级就不写这个字段）
     if ($navSkip) { $metricValues['navigationSkipReason'] = "$navReason" }
+    # 会话注入读数（#1690）：只在直达循环启用且未关闭注入时出现（计划里 optional）
+    if ($directList.Count -gt 0 -and $Auth -ne 'off') { $metricValues['auth'] = "$authField" }
     $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"
