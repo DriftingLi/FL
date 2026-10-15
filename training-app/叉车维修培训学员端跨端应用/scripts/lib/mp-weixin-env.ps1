@@ -22,6 +22,7 @@
    口径 connectError.kind=unknown     → automation-unknown
    找不到 miniprogram-automator       → automator-missing
    pageStack 为空                     → page-stack-empty
+   直达冷启动未成（reason=X）          → X 原样派生（#1690 run5：port-held-after-quit 等，不落 probe-env 兜底）
    其余带前缀但识别不出               → probe-env（兜底，让新增环境性失败不至于裸奔）
 
  为什么单独成库而不是写成门脚本里的内联块：判据必须能被**真执行** —— 守护
@@ -62,6 +63,10 @@ function Get-MpWeixinEnvClassification {
             $slug = 'automator-missing'
         } elseif ($detail.StartsWith('pageStack 为空')) {
             $slug = 'page-stack-empty'
+        } elseif ($detail -match '直达冷启动未成（page=[^）]*reason=([a-z0-9-]+)）') {
+            # #1690 run5：直达冷启动的环境性失败自带具体 reason（port-held-after-quit / devtools-open-timeout /
+            # auto-timeout / no-ready-result / automation-not-ready / port-not-listening）⇒ 原样派生，不落 probe-env 兜底。
+            $slug = $Matches[1]
         } else {
             $slug = 'probe-env'
         }
@@ -89,6 +94,7 @@ function Get-MpWeixinEnvReasonCatalogue {
         'automation-unknown',
         'automator-missing',
         'page-stack-empty',
+        'port-held-after-quit',
         'probe-env'
     )
 }

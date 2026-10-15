@@ -46,6 +46,8 @@ function probeLib() {
     "  autoUnknown = (Get-MpWeixinEnvClassification -Failures @('环境不可用：x（口径 connectError.kind=weird；原始：raw）'))",
     "  autoMissing = (Get-MpWeixinEnvClassification -Failures @('环境不可用：找不到 miniprogram-automator（npm install 失败）'))",
     "  stackEmpty = (Get-MpWeixinEnvClassification -Failures @('环境不可用：pageStack 为空（自动化会话没有打开页面）。处置 = 先 `cli.bat close` 再 `cli.bat auto`（#883 坑位 1）。'))",
+    // #1690 run5：直达冷启动的环境性失败（port-held-after-quit 等）原样派生 slug，不落 probe-env 兜底
+    "  coldStart = (Get-MpWeixinEnvClassification -Failures @('环境不可用：直达冷启动未成（page=pages/x reason=port-held-after-quit）'))",
     "  probeEnv = (Get-MpWeixinEnvClassification -Failures @('环境不可用：别的环境故障'))",
     "  mixed = (Get-MpWeixinEnvClassification -Failures @('断言未过：entry', '环境不可用：pageStack 为空（自动化会话没有打开页面）。'))",
     '}',
@@ -96,6 +98,8 @@ describe('② 环境性失败三分（分类真执行 + 前缀锚成对取证）
     expect(r.class.autoUnknown.envReasons).toEqual(['automation-unknown']);
     expect(r.class.autoMissing.envReasons).toEqual(['automator-missing']);
     expect(r.class.stackEmpty.envReasons).toEqual(['page-stack-empty']);
+    expect(r.class.coldStart.kind).toBe('env-blocked');
+    expect(r.class.coldStart.envReasons).toEqual(['port-held-after-quit']);
     expect(r.class.probeEnv.envReasons).toEqual(['probe-env']);
   });
 
@@ -123,10 +127,10 @@ describe('② 环境性失败三分（分类真执行 + 前缀锚成对取证）
     expect(r.reasonThrow).toBe('throw');
   });
 
-  it('reason 目录 = 探针派生 7 枚举（唯一真源）', () => {
+  it('reason 目录 = 探针派生 8 枚举（唯一真源）', () => {
     expect(r.catalogue.split(',')).toEqual([
       'automation-not-ready', 'automation-unreachable', 'automation-timeout', 'automation-unknown',
-      'automator-missing', 'page-stack-empty', 'probe-env'
+      'automator-missing', 'page-stack-empty', 'port-held-after-quit', 'probe-env'
     ]);
   });
 });

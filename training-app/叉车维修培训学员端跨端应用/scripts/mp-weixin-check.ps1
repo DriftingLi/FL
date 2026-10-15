@@ -225,6 +225,8 @@ param(
     [int]$Port = 9420,
     [string]$Routes = 'pages/index/index,pages/login/login',
     [string]$Pages = 'auto',
+    # 会话注入（#1690）：auto = 直达循环前与每页冷启动后注入登录态（幂等，已登录即 existing）；off = 不注入。
+    [string]$Auth = 'auto',
     [switch]$SkipBuild,
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
@@ -252,6 +254,7 @@ $ErrorActionPreference = 'Stop'
 $DistRelative = 'unpackage\dist\build\mp-weixin'
 $ProbeRelative = 'scripts\mp-weixin-probe.mjs'
 $ReadyRelative = 'scripts\mp-weixin-ready.mjs'
+$AuthRelative = 'scripts\mp-weixin-auth.mjs'
 $WxDevToolsPatterns = @(
     'D:\微信web开发者工具\cli.bat',
     'D:\软件\微信web开发者工具\cli.bat',
@@ -379,6 +382,7 @@ function New-GatePlan {
         [string]$Dist,
         [string]$ProbePath,
         [string]$ReadyPath,
+        [string]$AuthPath,
         [string]$AutoRoot,
         [string]$LogDir,
         [string]$LogRelative,
@@ -496,6 +500,22 @@ function New-GatePlan {
         )
     }
 
+    # 5.5) 会话注入（#1690）：直达探针冷启动**登录态页**时 DevTools 里没有会话 ⇒ 首屏 401 ⇒
+    #      handleUnauthorized reLaunch 到登录页 ⇒ reached=False。本步在门运行环境里走真实登录链路
+    #      （wx.login → POST /auth/wx-login → setStorageSync 四键），**不改业务代码**。
+    #      失败**不判环境受阻**：status=none(reason) 记录后照跑直达循环，登录态页如实 miss ——
+    #      「注入不可用」不得升级成「环境坏了」，也不得冒充取证成立。
+    $steps += [ordered]@{
+        id = 'auth-inject'
+        tag = 'auth-inject'
+        exec = 'node'
+        argv = @($AuthPath, '--ws', $ws, '--require-root', $AutoRoot, '--timeout-ms', '150000')
+        timeoutSeconds = 300
+        awaitCompletion = $true
+        criteria = @('判成败只看输出 MP_WEIXIN_AUTH 结果行（退出码不作判据）', 'status ∈ existing|injected|cleared|none：none ⇒ 后续页如实记 miss(reason=auth-session-unavailable)，不判 exit 2', '结果行不得含令牌：只带 user 标识与耗时', '幂等：已有会话 ⇒ existing 即返回；guest 相写盖帽 ⇒ cleared', '落盘确认（#1690 run13）：写/盖帽后必须等标记出现在 WeappStorage 盘上才放行冷启动——IDE 异步刷盘且 quit 不冲刷')
+        exit2 = @()
+    }
+
     # 6) 探针：判成败只看输出 MP_WEIXIN_PROBE（cli / 探针退出码一律不作判据）。
     $steps += [ordered]@{
         id = 'automator-probe'
@@ -524,6 +544,8 @@ function New-GatePlan {
         $resultFields += [ordered]@{ name = $n }
     }
     $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
+    # 会话注入（#1690）读数：auth=existing|injected|none:<reason>；只在直达循环启用时出现（可选字段）
+    $resultFields += [ordered]@{ name = 'auth'; optional = $true }
     $resultFields += [ordered]@{ name = 'log' }
 
     return [ordered]@{
@@ -538,6 +560,8 @@ function New-GatePlan {
             probeRelative = $ProbeRelative
             ready = $ReadyPath
             readyRelative = $ReadyRelative
+            auth = $AuthPath
+            authRelative = $AuthRelative
             automatorRoot = $AutoRoot
             logDir = $LogDir
             logRelative = $LogRelative
@@ -562,7 +586,7 @@ function New-GatePlan {
             probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
             attempts = 2
             retryDelaySeconds = $ProbeRetryDelaySeconds
-            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid')
+            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable')
             criteria = @(
                 '直达 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针不得调用 reLaunch/navigateTo',
                 '页身份判据 = 冷启动落地页 pageStack[0] 等于目标路由（与 #1678 真机侧「以进入页面日志为准」同源）',
@@ -609,7 +633,7 @@ function New-GatePlan {
                     'no-ready-result', 'automation-not-ready', 'probe-timeout', 'no-probe-result',
                     'no-probe', 'no-routes',
                     'automation-unreachable', 'automation-timeout', 'automation-unknown',
-                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception'
+                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception', 'port-held-after-quit'
                 )
             }
         }
@@ -662,6 +686,7 @@ $logPath = Join-Path $logDir 'mp-weixin.log'
 $logRelative = '.ci-verify/mp-weixin.log'
 $probePath = Join-Path $Project $ProbeRelative
 $readyPath = Join-Path $Project $ReadyRelative
+$authPath = Join-Path $Project $AuthRelative
 $autoRoot = Join-Path $tempRoot 'mp-weixin-automator'
 $routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 # 入口页 = 第一个路由；它进了门计划（探针的 --entry-url），这里不再另存一份，免得两处取值分叉
@@ -671,7 +696,7 @@ $routeList = @($Routes -split ',' | ForEach-Object { $_.Trim() } | Where-Object 
 # 探针端点与真实端口分叉。收成函数是为了让 `New-GatePlan` 只有一个调用点（计划与执行不分叉）。
 function New-ThisGatePlan {
     param([int]$UsePort)
-    return New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath `
+    return New-GatePlan -Project $Project -Dist $dist -ProbePath $probePath -ReadyPath $readyPath -AuthPath $authPath `
         -AutoRoot $autoRoot -LogDir $logDir -LogRelative $logRelative -RouteList $routeList -Port $UsePort `
         -OpenTimeoutSeconds $OpenTimeoutSeconds -AutoTimeoutSeconds $AutoTimeoutSeconds `
         -AutoAttempts $AutoAttempts -AutoRetryDelaySeconds $AutoRetryDelaySeconds `
@@ -902,28 +927,56 @@ function Invoke-DevToolsQuitAndPoll {
     } catch {
         Write-Host "[warn] cli.bat quit 失败（继续，不影响门结论）：$_" -ForegroundColor Yellow
     }
-    # 轮询 wechatdevtools 进程归零：quit 是异步的，端口/会话收干净要等。超时只 [warn]，绝不 kill。
-    $waited = 0
-    while ($waited -lt [int]$quitStep.waitSeconds) {
-        if (@(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count -eq 0) {
-            Write-Log "quit：wechatdevtools 进程已归零（等了 ${waited}s）"
-            # #1682 第四轮实测：进程归零 ≠ IDE server（43005）状态收干净——quit 后立刻 open，
-            # auto 会挂满 180s 超时；手动实验 quit 后静置 8s 再 open→auto→ready 12s 成 ⇒ 固定静置。
-            Start-Sleep -Seconds 10
-            return
+    # 轮询 IDE 进程归零：quit 是异步的，端口/会话收干净要等。超时只 [warn]，绝不 kill。
+    # #1690 实测修正：本机 IDE 的进程名是中文「微信开发者工具」（exe 随安装包语言），只数
+    # -Name wechatdevtools 在这台机器恒 0 ⇒ 归零轮询形同虚设，quit 还没真收摊就 open，
+    # 冷启动叠在垂死实例上 ⇒ storage 落盘不完整、直达页会话丢失。按 ProcessName 双名匹配。
+    # #1690 run5 实测：首轮 quit 后 60s 仍有 4 个进程未退 ⇒ open 连上垂死实例、冷启动骑旧会话
+    # （入口页探针拿到旧栈判 miss）。补第二轮 quit 再轮询；**只观测不 kill**（ADR-0008 红线不变）。
+    $clean = $false
+    for ($round = 1; $round -le 2; $round++) {
+        if ($round -gt 1) {
+            Write-Host "[warn] 首轮 quit 后进程未归零，补发第二次 quit 再轮询" -ForegroundColor Yellow
+            Write-Log 'quit 第 2 轮：补发 cli quit 再归零轮询'
+            try { [void](Invoke-Process -FilePath $devTools -Arguments $quitStep.argv -TimeoutSeconds $quitStep.timeoutSeconds -Tag "$($quitStep.tag)(retry)") } catch { Write-Host "[warn] 第二次 quit 失败（继续轮询）：$_" -ForegroundColor Yellow }
         }
-        Start-Sleep -Seconds 1
-        $waited++
+        $waited = 0
+        while ($waited -lt [int]$quitStep.waitSeconds) {
+            if (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count -eq 0) {
+                Write-Log "quit：IDE 进程已归零（wechatdevtools/微信开发者工具 双名匹配，等了 ${waited}s）"
+                $clean = $true
+                break
+            }
+            Start-Sleep -Seconds 1
+            $waited++
+        }
+        if ($clean) { break }
     }
-    $still = @(Get-Process -Name wechatdevtools -ErrorAction SilentlyContinue).Count
-    Write-Host "[warn] quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
-    Write-Log "quit 后 ${waited}s 仍有 $still 个 wechatdevtools 进程未退出（只警告，不 kill）"
+    if (-not $clean) {
+        $still = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' }).Count
+        Write-Host "[warn] 两轮 quit（各 $([int]$quitStep.waitSeconds)s）后仍有 $still 个 IDE 进程未退出 —— 不 kill（ADR-0008 红线），继续跑门；若白屏复现优先怀疑残留实例。" -ForegroundColor Yellow
+        Write-Log "两轮 quit 后仍有 $still 个 IDE 进程未退出（只警告，不 kill）"
+    }
+    # #1682 第四轮实测：进程归零 ≠ IDE server（43005）状态收干净——quit 后立刻 open，
+    # auto 会挂满 180s 超时；手动实验 quit 后静置 8s 再 open→auto→ready 12s 成 ⇒ 固定静置。
+    Start-Sleep -Seconds 10
+    # 端口收摊判据（#1690 run5）：垂死实例会**占住自动化端口**，open/auto 接上去骑旧会话。
+    # 等端口随进程关净；预算内关不掉 ⇒ 返回 $false，直达冷启动据此记 port-held-after-quit（环境性，诚实）。
+    $held = 0
+    while ($held -lt 60) {
+        if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -eq 0) { return $true }
+        Start-Sleep -Seconds 1
+        $held++
+    }
+    Write-Log "quit：自动化端口 $Port 60s 后仍在 listening（垂死实例占会话）⇒ 直达冷启动判 port-held-after-quit"
+    return $false
 }
 
 function Invoke-DevToolsPreflightQuit {
     if ($script:quitDone) { return }
     $script:quitDone = $true
-    Invoke-DevToolsQuitAndPoll
+    # #1690：函数现在返回「端口是否收干净」；主链 pre-flight 只清场不改判 ⇒ 显式弃值（直达冷启动才消费）。
+    $null = Invoke-DevToolsQuitAndPoll
 }
 
 # ---------- 任意页直达探针（#1682 · ADR-0038 决策 1/2 · ADR-0039 拆分步骤 2）----------
@@ -947,11 +1000,27 @@ function Switch-DistAppJsonFirstPage {
         $tmp = $pages[0]; $pages[0] = $pages[$idx]; $pages[$idx] = $tmp
         $j.pages = $pages
     }
-    Set-Content -LiteralPath $Path -Value ($j | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM -NoNewline
+    # 键序轮转（#1690 run6 实测口径）：IDE 编译缓存按 app.json **字节**认新——pages[0] 已是目标页时
+    # 重序列化字节不变 ⇒ IDE 不重编译、窗口还原上一会话页栈 ⇒ 入口页直达拿旧栈假 miss（run6 实测
+    # [dashboard] 顶掉 [index]）。顶层键序轮一位保证字节必变（语义不变）⇒ 强制 fresh 编译从 pages[0] 起。
+    $keys = @($j.PSObject.Properties.Name)
+    $out = $null
+    if ($keys.Count -ge 2) {
+        $rot = @($keys[1..($keys.Count - 1)]) + @($keys[0])
+        $od = [ordered]@{}
+        foreach ($k in $rot) { $od[$k] = $j.$k }
+        $out = ($od | ConvertTo-Json -Depth 30)
+    } else {
+        $out = ($j | ConvertTo-Json -Depth 30) + ' '
+    }
+    Set-Content -LiteralPath $Path -Value $out -Encoding utf8NoBOM -NoNewline
     # 换后复验（判据 = 读回，不是「写了就当成对了」）：首项必须是目标页
     $re = $null
     try { $re = (Get-Content -LiteralPath $Path -Raw) | ConvertFrom-Json } catch { return 'app-json-invalid' }
     if ($null -eq $re -or -not $re.pages -or "$(@($re.pages)[0])" -ne $target) { return 'app-json-invalid' }
+    # 唯一性复验（#1690 run7-10 实测教训）：重复路由 ⇒ 构建器拒启模拟器（症状 page-stack-not-answering），
+    # 换页前文件已被外部污染时这里拦住，不让它烧进 120s 僵尸等待
+    if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }
     return $null
 }
 
@@ -993,7 +1062,9 @@ function Invoke-DirectColdStart {
             Start-Sleep -Seconds $delay
         }
         # quit 后旧窗口随进程消失；重启出的新窗口仍需 finally 的 close 收掉 ⇒ 复位哨兵。
-        Invoke-DevToolsQuitAndPoll
+        # 归零 + 端口收摊都过关才继续（#1690 run5：垂死实例占端口 ⇒ open 骑旧会话 ⇒ 假 miss）。
+        $quitClean = Invoke-DevToolsQuitAndPoll
+        if (-not $quitClean) { $out.reason = 'port-held-after-quit'; continue }
         $script:closed = $false
         $open = Invoke-Process -FilePath $devTools -Arguments $Steps.open.argv -TimeoutSeconds $Steps.open.timeoutSeconds -Tag "$($Steps.open.tag)(direct:$PageTag)"
         Write-Log "`n>>> direct-coldstart open($PageTag)`n$($open.Output)"
@@ -1053,6 +1124,22 @@ function Invoke-DirectProbe {
         if ($attempt -lt $attempts) { Start-Sleep -Seconds ([int]$DirectPages.retryDelaySeconds) }
     }
     return @{ json = $json; timedOut = $timedOut }
+}
+
+function Invoke-AuthInject {
+    param($AuthStep, [string]$PageTag, [string]$Mode = 'auth')
+    # 会话注入（#1690）：argv 取自门计划（唯一真源）；判成败只看 MP_WEIXIN_AUTH 结果行（退出码不作判据）。
+    # 失败**不判环境受阻**：返回 ok=false + kebab reason，由调用方把该页如实记 miss —— 注入不可用
+    # 既不得升级成 exit 2，也不得冒充取证成立。脚本自身幂等（已有会话 ⇒ existing 即返）。
+    $argv = @($AuthStep.argv) + @('--mode', $Mode)
+    $r = Invoke-Process -FilePath $nodeExe -Arguments $argv -TimeoutSeconds $AuthStep.timeoutSeconds -Tag "auth-inject($PageTag)"
+    Write-Log "`n>>> auth-inject($PageTag)`n$($r.Output)"
+    $json = $null
+    foreach ($line in ($r.Output -split "`r?`n")) {
+        if ($line -match '^\s*MP_WEIXIN_AUTH\s+(\{.*\})\s*$') { try { $json = ($Matches[1] | ConvertFrom-Json) } catch { $json = $null } }
+    }
+    if (-not $json) { return @{ ok = $false; status = 'none'; reason = 'no-auth-result' } }
+    return @{ ok = ((Get-Prop $json 'ok') -eq $true); status = "$(Get-Prop $json 'status')"; reason = "$(Get-Prop $json 'reason')" }
 }
 
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
@@ -1650,6 +1737,29 @@ try {
     $directLines = @()
     $directList = @()
     $distAppJson = Join-Path $Dist 'app.json'
+    # 入口漂移自愈（#1690 run14 实测教训）：上一次直达循环被强杀 ⇒ finally 未跑 ⇒ 产物 app.json 首项
+    # 停在上次换的页；本次会把孤儿页当入口静默取证（index 漏测还判 ✅）。以源 pages.json 首项为真源，
+    # 漂移且该页在产物里 ⇒ 换回（复用 Switch 的键序轮转 + 读回/唯一性复验纪律）；源首项不在产物
+    # （产物过期）⇒ 不动，门结论按实际入口如实记录。
+    if ((Test-Path -LiteralPath $distAppJson) -and ($Pages -ne 'none')) {
+        $srcPagesJson = Join-Path $Project 'pages.json'
+        if (Test-Path -LiteralPath $srcPagesJson) {
+            try {
+                $srcFirst = "$(@(((Get-Content -LiteralPath $srcPagesJson -Raw) | ConvertFrom-Json).pages)[0].path)"
+                $curFirst = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])"
+                if ($srcFirst -and $curFirst -and ($curFirst -ne $srcFirst)) {
+                    $heal = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $srcFirst
+                    if ($null -eq $heal) {
+                        Write-Host ">>> 入口漂移自愈（#1690）：产物 app.json 首项 $curFirst ⇒ $srcFirst（上次强杀遗留换页）" -ForegroundColor Yellow
+                        Write-Log "入口漂移自愈：$curFirst ⇒ $srcFirst"
+                    } else {
+                        Write-Host "[warn] 入口漂移自愈未成（$heal）：产物入口仍为 $curFirst，门按实际入口记录" -ForegroundColor Yellow
+                        Write-Log "入口漂移自愈未成：$heal（入口保持 $curFirst）"
+                    }
+                }
+            } catch { Write-Host "[warn] 入口漂移检测读页清单失败（跳过自愈）：$_" -ForegroundColor Yellow }
+        }
+    }
     $entryRoute = ''
     if ($Pages -ne 'none' -and (Test-Path -LiteralPath $distAppJson)) {
         try { $entryRoute = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])" } catch { $entryRoute = '' }
@@ -1662,6 +1772,10 @@ try {
         } else {
             $want = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         }
+        # 入口页打头 = 两相序的唯一真源（#1690 run12 终版）：入口页是 welcome 着陆页（index.uvue
+        # #1478「已登录仍无条件 reLaunch dashboard」业务不变量）⇒ 必须先在**无会话**下取证（guest 相），
+        # 再注入会话跑其余登录态页（auth 相）。run4/6/11 的入口页 miss 曾误诊为「IDE 会话还原」，
+        # run12 证实真凶就是这条业务路由——殿后/键序轮转都救不了有会话的 index 冷启动。
         $directList = @(@($entryRoute) + $want | Where-Object { $_ } | Select-Object -Unique)
     }
     if ($directList.Count -gt 0) {
@@ -1678,28 +1792,52 @@ try {
         $missPages = @()
         $directEnv = $false
         $probeJson = $null
+        # 会话两相（#1690 run12）：auth-inject 步取用点唯一 —— 守护 C12/C18 按「首个 -Id 字面量取用点」定位。
+        # guest 相（入口页，清会话）/ auth 相（其余页，探针前注入）都在**当页冷启动之前**执行——
+        # storage 跨 IDE 重启持久（实测），冷启动后 app 直接消费；冷启动后再注入救不回当页落地。
+        $authStep = Get-GateStep -Plan $script:GatePlan -Id 'auth-inject'
+        $authOk = $true
+        $authField = 'off'
+        if ($Auth -ne 'off') { $authField = 'none(no-auth-pages)' }
         foreach ($pg in $directList) {
             $leaf = ($pg -split '/')[-1]
-            if ($pg -ne $entryRoute) {
-                $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
-                if ($sw) {
-                    # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
-                    Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
-                    $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
-                    if (-not $missReason) { $missReason = $sw }
-                    $missPages += $pg
-                    continue
+            $isEntry = ($pg -eq $entryRoute)
+            # 每页（含入口页）一律 会话相→换页→冷启动→探针（#1690 实测修正）。
+            # 入口页不换页不可靠：上一相窗口落在别的页 ⇒ 靠换页写盘（Switch 恒 Set-Content +
+            # 键序轮转 ⇒ 字节必变 ⇒ 强制重编译）保证冷启动从目标页起。
+            # 会话相（#1690 run12/run13 两相）：入口页 = guest（游客盖帽——welcome 页有会话必弹 dashboard；
+            #   remove 不跨重启落盘、set 落盘 ⇒ 盖帽用 setStorageSync 写坏值）；
+            # 其余页 = auth（探针前注入，幂等 existing 秒返；上一相注入失败/被 app 401 清掉 ⇒ 本页自愈重注）。
+            if ($Auth -ne 'off') {
+                if ($isEntry) {
+                    $ag = Invoke-AuthInject -AuthStep $authStep -PageTag "guest($leaf)" -Mode 'guest'
+                    $authOk = [bool]$ag.ok
+                    if (-not $ag.ok) { Write-Host ">>> guest 相游客盖帽未成（$($ag.reason)）：入口页若被弹走如实记 miss，不假绿" -ForegroundColor Yellow }
+                } else {
+                    $ai = Invoke-AuthInject -AuthStep $authStep -PageTag "auth($leaf)" -Mode 'auth'
+                    $authOk = [bool]$ai.ok
+                    $authField = $(if ($ai.ok) { $ai.status } else { "none($($ai.reason))" })
+                    Write-Host ">>> auth 相会话注入（#1690）$leaf：ok=$([bool]$ai.ok) status=$authField" -ForegroundColor $(if ($ai.ok) { 'Green' } else { 'Yellow' })
                 }
-                $cs = Invoke-DirectColdStart -Steps $coldSteps -PageTag $leaf
-                if (-not $cs.ok) {
-                    $agg.failures += "环境不可用：直达冷启动未成（page=$pg reason=$($cs.reason)）"
-                    $directEnv = $true
-                    break
-                }
-                $readySeconds = $cs.readySeconds
-                $sdkVersion = $cs.sdk
-                $ideVersion = $cs.ide
             }
+            $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
+            if ($sw) {
+                # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
+                Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
+                $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
+                if (-not $missReason) { $missReason = $sw }
+                $missPages += $pg
+                continue
+            }
+            $cs = Invoke-DirectColdStart -Steps $coldSteps -PageTag $leaf
+            if (-not $cs.ok) {
+                $agg.failures += "环境不可用：直达冷启动未成（page=$pg reason=$($cs.reason)）"
+                $directEnv = $true
+                break
+            }
+            $readySeconds = $cs.readySeconds
+            $sdkVersion = $cs.sdk
+            $ideVersion = $cs.ide
             $pr = Invoke-DirectProbe -ProbeStep $probeStep -DirectPages $script:GatePlan['directPages'] -Page $pg
             $pj = $pr.json
             if (-not $pj) {
@@ -1733,7 +1871,9 @@ try {
             $directLines += $line
             if (-not $reached) {
                 $nr = "$(Get-Prop $navOne 'reason')"
-                if (-not $missReason) { $missReason = $(if ($nr) { $nr } else { 'direct-page-unsupported' }) }
+                # 会话注入不可用时，miss 的真实原因是缺会话，不得冒充「直达机制不支持」（#1690）
+                $mrAuth = ($Auth -ne 'off' -and -not $authOk)
+                if (-not $missReason) { $missReason = $(if ($mrAuth) { 'auth-session-unavailable' } elseif ($nr) { $nr } else { 'direct-page-unsupported' }) }
                 $missPages += $pg
             }
         }
@@ -1846,6 +1986,8 @@ try {
     }
     # 降级字段是**可选**的：计划里标了 optional，只在真的降级时出现（不降级就不写这个字段）
     if ($navSkip) { $metricValues['navigationSkipReason'] = "$navReason" }
+    # 会话注入读数（#1690）：只在直达循环启用且未关闭注入时出现（计划里 optional）
+    if ($directList.Count -gt 0 -and $Auth -ne 'off') { $metricValues['auth'] = "$authField" }
     $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"

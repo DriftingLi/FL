@@ -41,6 +41,14 @@
  *       pages.json（运行时面判据来源，ADR-0038 决策 2 红线）。核验补记（2026-10-13）后另钉两件事：
  *       **入库数据流**（直达截图 → 聚合 shots → probeJson.shots → 归档，AC1 的链条，拆了门照样绿）与
  *       **评论渲染的 null 过滤**（-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）。
+ *   C25 **登录态会话注入**（#1690）：门计划必须有 auth-inject 步（ready-gate 之后、探针之前，exec=node，
+ *   直达循环两相（run12/run13）：入口页 = guest 相（--mode guest 游客盖帽——auth_user 写非 JSON + token 清空，
+ *       removeStorageSync 实测不跨重启落盘、setStorageSync 落盘，run13 实证不对称；#1478 welcome 有会话必弹 dashboard）、
+ *   其余页 = auth 相（--mode auth 注入，当页冷启动**之前**执行）；
+ *       exit 2 恒空——注入失败是诚实 SKIP（auth-session-unavailable），不是环境 blocked）；执行路径唯一
+ *       取用点 `Get-GateStep -Id 'auth-inject'` + `Invoke-AuthInject` 解析 `MP_WEIXIN_AUTH` 结果行；
+ *       注入脚本 scripts/mp-weixin-auth.mjs 走 callWxMethod('login') → POST /auth/wx-login →
+ *       setStorageSync 四键（与 setAuthData 对齐），令牌绝不入结果行、脚本不得 mp.close（会话留给探针）。
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -65,6 +73,7 @@ const SCRIPT_REL = 'scripts/mp-weixin-check.ps1';
 const DEVICE_CAPTURE_REL = 'scripts/device-capture.ps1';
 const PROBE_REL = 'scripts/mp-weixin-probe.mjs';
 const READY_REL = 'scripts/mp-weixin-ready.mjs';
+const AUTH_REL = 'scripts/mp-weixin-auth.mjs';
 const PKG_REL = 'package.json';
 const ADR_REL = 'docs/adr/0008-移动端验收门与证据.md';
 const AGENTS_REL = 'AGENTS.md';
@@ -78,6 +87,7 @@ const PLAN_SEQUENCE = [
   'devtools-auto',
   'port-listening',
   'ready-gate',
+  'auth-inject',
   'automator-probe'
 ];
 // 结果行必填字段（顺序即输出顺序；可选字段单列，见 C13）
@@ -85,7 +95,7 @@ const RESULT_MANDATORY = [
   'appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal',
   'shots', 'navigation', 'ready', 'sdk', 'ide', 'log'
 ];
-const RESULT_OPTIONAL = ['navigationSkipReason'];
+const RESULT_OPTIONAL = ['navigationSkipReason', 'auth'];
 
 /**
  * 取一个 PowerShell 函数的函数体（花括号配对）。
@@ -407,7 +417,30 @@ function scanPlan(plan) {
     must(dc.includes('冷启动'), 'C24', 'directPages.criteria 未写冷启动直达机制');
     must(dc.includes('还原'), 'C24', 'directPages.criteria 未写还原纪律');
     must(dc.includes('skip'), 'C24', 'directPages.criteria 未写 SKIP 诚实降级');
+    const sr24 = Array.isArray(dp.skipReasons) ? dp.skipReasons.map(String) : [];
+    must(sr24.includes('auth-session-unavailable'), 'C25', 'directPages.skipReasons 缺 auth-session-unavailable（#1690 会话注入失败的回退 reason，值域要可枚举）');
   }
+
+  // ---- C25（#1690）：登录态会话注入步的计划面声明 ----
+  //   登录态页直达冷启动无会话 ⇒ 401 被弹回登录页（#1610 缺口）。注入只发生在门运行环境
+  //   （automator callWxMethod），不改业务代码；失败是诚实 SKIP，不是环境 blocked。
+  const authStep = step('auth-inject');
+  must(Boolean(authStep), 'C25', '门计划缺 auth-inject 步（#1690 会话注入没有唯一真源）');
+  if (authStep) {
+    must(authStep.exec === 'node', 'C25', 'auth-inject 不是 node 脚本步骤');
+    const aArgv = argvOf(authStep).map(String);
+    must(aArgv[0] === String(P.auth), 'C25', 'auth-inject 的 argv[0] 与 paths.auth 不一致（脚本路径要由计划派生）');
+    const aWs = aArgv.indexOf('--ws');
+    must(aWs >= 0 && aArgv[aWs + 1] === E.ws, 'C25', 'auth-inject 的 --ws 与 endpoint.ws 不一致');
+    const aRoot = aArgv.indexOf('--require-root');
+    must(aRoot >= 0 && aArgv[aRoot + 1] === P.automatorRoot, 'C25', 'auth-inject 的 --require-root 与 paths.automatorRoot 不一致');
+    must(Array.isArray(authStep.exit2) && authStep.exit2.length === 0, 'C25', 'auth-inject 不该声明 exit 2（注入失败⇒诚实 SKIP，不得升级成环境 blocked）');
+    const ac = (authStep.criteria || []).join('\n');
+    must(ac.includes('MP_WEIXIN_AUTH'), 'C25', 'auth-inject 判据未写 MP_WEIXIN_AUTH 结果行');
+    must(ac.includes('existing') && ac.includes('injected') && ac.includes('none'), 'C25', 'auth-inject 判据未枚举 status 值域（existing/injected/none）');
+    must(ac.includes('令牌'), 'C25', 'auth-inject 判据未声明令牌不入结果行（凭据不得进日志/评论）');
+  }
+  must(P.authRelative === 'scripts\\mp-weixin-auth.mjs', 'C25', '注入脚本相对路径不是 scripts\\mp-weixin-auth.mjs');
 
   return violations;
 }
@@ -648,10 +681,11 @@ function scanContract(sources) {
 
   // C22 pre-flight quit 清场的执行侧接线（#1634；计划面判据在 scanPlan）
   //   · 有按 id 取用 quit 步的执行点（计划与执行不脱节）；
-  //   · 进程归零轮询用 Get-Process -Name wechatdevtools（只观测，绝不 kill —— Stop-Process 是 ADR-0008 红线）；
+  //   · 进程归零轮询按 ProcessName 双名匹配 wechatdevtools|微信开发者工具（#1690：本机 IDE 进程名是中文，
+  //     只数英文名恒 0 ⇒ 归零轮询形同虚设、冷启动叠在垂死实例上；只观测，绝不 kill —— Stop-Process 是 ADR-0008 红线）；
   //   · 主流程（重试单元之前）真的调用了 pre-flight，且 -Doctor 跳过。
   must(s.includes("-Id 'devtools-quit'"), 'C22', '执行路径里没有按 id 取用 quit 步骤（计划与执行脱节）');
-  must(/Get-Process -Name wechatdevtools/.test(s), 'C22', '执行侧没有 wechatdevtools 进程归零轮询（quit 是异步的，不轮询等于没等清场）');
+  must(/ProcessName -match 'wechatdevtools\|微信开发者工具'/.test(s), 'C22', '执行侧没有 IDE 进程归零双名轮询（wechatdevtools/微信开发者工具；quit 是异步的，不轮询等于没等清场，只数英文名在本机恒 0 —— #1690 实测）');
   must(!/Stop-Process\s+-/.test(stripCommentLines(s).join('\n')), 'C22', '执行侧出现 Stop-Process 调用（运行中 kill IDE 是 ADR-0008 红线，只能 quit；判据文本里「不得用 Stop-Process」的引用不算）');
   must(/if \(-not \$Doctor\) \{ Invoke-DevToolsPreflightQuit \}/.test(s), 'C22', '主流程没有在重试单元之前调用 pre-flight（或未做 -Doctor 跳过）');
   must(s.includes('function Invoke-DevToolsPreflightQuit'), 'C22', '缺 pre-flight quit 的执行函数');
@@ -667,6 +701,16 @@ function scanContract(sources) {
   must(s.includes('page-not-in-build'), 'C24', '执行路径未记 page-not-in-build 的 SKIP');
   must(s.includes('direct-page-unsupported'), 'C24', '执行路径未记 direct-page-unsupported 的 SKIP');
   must(s.includes('cold-start-direct'), 'C24', '执行路径未携带机制标识 cold-start-direct');
+  // #1690 终版归因：入口页 = welcome 着陆页（#1478 有会话必弹 dashboard）⇒ 入口页必须独立换页→冷启动，
+  // 且冷启动前处于 guest 相（无会话）；「吃主会话」旧口径把主会话落地页冒充入口页取证。
+  must(!s.includes('if ($pg -ne $entryRoute)'), 'C24', '直达循环回退成「入口页跳过换页吃主会话」旧口径（#1690：主会话落地页 ≠ 入口页取证）');
+  must(s.includes('port-held-after-quit'), 'C24', '直达冷启动缺「端口被垂死实例占住」判据（#1690 run5：open 骑旧会话 ⇒ 假 miss；归零后必须等端口收摊）');
+  must(probe.includes('shotErr'), 'C24', '直达截图缺重试壳（#1690 run5：冷启动后渲染服务未热，mp.screenshot 撞 automator 15s 应答超时 ⇒ 重试一次再记错）');
+  must(s.includes('键序轮转'), 'C24', '换页写入缺「键序轮转」保证（#1690 run6：pages[0] 未变时字节不变 ⇒ IDE 不重编译、窗口停在上一页 ⇒ 入口页假 miss）');
+  must(s.includes('-ne @($re.pages).Count'), 'C24', '换页读回复验缺「路由唯一性」判据（#1690 run7-10：重复路由让构建器拒启模拟器，症状伪装成 page-stack-not-answering）');
+  must(s.includes("-Mode 'guest'"), 'C24', '直达循环缺 guest 相（入口页冷启动前必须清会话——#1478 welcome 页「已登录无条件落 dashboard」业务不变量，有会话的 index 冷启动必 miss，run4/6/11/12 实证）');
+  must(s.includes('$isEntry = ($pg -eq $entryRoute)'), 'C24', '直达循环缺「入口页 == guest 相」分相判据（两相序真源，#1690 run12）');
+  must(s.includes('入口漂移自愈'), 'C24', '缺「入口漂移自愈」判据（#1690 run14：上次强杀遗留换页 ⇒ 孤儿页被当入口静默取证，index 漏测还判 ✅）');
   // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
   // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
   // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
@@ -684,6 +728,32 @@ function scanContract(sources) {
   must(probe.includes('cold-start-direct'), 'C24', '探针未记录直达达成的机制标识');
   must(probe.includes('direct-page-unsupported'), 'C24', '探针未记录直达未达成的 SKIP reason');
 
+  // ---- C25（#1690）执行侧：会话注入必须真实接线 ----
+  must(s.includes("[string]$Auth = 'auto'"), 'C25', '门脚本缺 -Auth 参数声明（#1690 交付物载体；判到默认值 auto，防前缀掩盖缺席）');
+  must(s.includes("Get-GateStep -Plan $script:GatePlan -Id 'auth-inject'"), 'C25', '执行路径未消费 auth-inject 步（缺唯一 Get-GateStep 取用点）');
+  must(s.includes('function Invoke-AuthInject'), 'C25', '缺会话注入的执行函数 Invoke-AuthInject');
+  must(s.includes('MP_WEIXIN_AUTH'), 'C25', '执行路径未解析 MP_WEIXIN_AUTH 结果行');
+  must(s.includes('auth-session-unavailable'), 'C25', '执行路径未记 auth-session-unavailable 回退');
+  must(s.includes("-Mode 'guest'") && s.includes("-Mode 'auth'"), 'C25', '门脚本缺两相会话调用（guest 相清入口页会话 / auth 相注入登录态页——#1690 run12 两相，#1478 welcome 不变量）');
+  const authSrc = sources.auth || '';
+  must(authSrc.includes('MP_WEIXIN_AUTH'), 'C25', '注入脚本不输出 MP_WEIXIN_AUTH 结果行');
+  must(authSrc.includes('/auth/wx-login'), 'C25', '注入脚本未走真实 /auth/wx-login 通道');
+  ['auth_token', 'auth_user', 'auth_refresh_token', 'auth_login_provider'].forEach((k) => {
+    must(authSrc.includes("'" + k + "'"), 'C25', `注入脚本 storage 键缺 ${k}（须与 setAuthData 四键对齐）`);
+  });
+  must(authSrc.includes('callWxMethod'), 'C25', '注入脚本未用 callWxMethod（注入只发生在门运行环境）');
+  must(authSrc.includes("a === '--mode'"), 'C25', '注入脚本缺 --mode 解析（guest/auth 两相的唯一开关）');
+  must(authSrc.includes('gate-guest-invalid-json'), 'C25', '注入脚本 guest 相缺游客盖帽（auth_user 写非 JSON 让 restoreFromStorage 判游客——remove 不跨重启落盘，run13 实证；不盖帽 ⇒ 入口页被 #1478 弹 dashboard）');
+  must(authSrc.includes('flushSettleMs'), 'C25', '注入脚本缺落盘兜底窗口 flushSettleMs（非默认安装面的盲等路径，须存在且带 settled-blind 上报）');
+  must(authSrc.includes('flushConfirm') && authSrc.includes('WeappSimulator'), 'C25', '注入脚本缺落盘确认（#1690 run13 实证：storage 写只活 app 内存、quit 不冲刷 ⇒ 盖帽/注入必须轮询 WeappStorage 盘上出现唯一标记后才放行冷启动，否则白写）');
+  must(authSrc.includes('storage-flush-timeout'), 'C25', '注入脚本缺 flush 超时诚实失败（落盘确认超时 ⇒ ok=false reason=storage-flush-timeout，不得假放行）');
+  must(authSrc.includes('gate_flush_stamp'), 'C25', 'auth 相缺落盘 stamp（注入写回后以唯一 stamp 键确认刷盘——门自有键，应用不消费）');
+  must(authSrc.includes("'cleared'"), 'C25', '注入脚本 guest 相缺 status=cleared 上报');
+  // 只判代码行：注释里「不调 mp.close()」的纪律声明不算违规（剥 // 行注释后查真调用）
+  const authCode = authSrc.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
+  must(!authCode.includes('mp.close'), 'C25', '注入脚本关闭了会话（须留给后续探针，与 mp-weixin-probe.mjs 同纪律）');
+  must(authSrc.includes('MP_WEIXIN_AUTH'), 'C25', '注入脚本注释未声明 MP_WEIXIN_AUTH 纪律（防后人加 close 断会话）');
+
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
@@ -700,6 +770,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     script: readSource(SCRIPT_REL),
     probe: readSource(PROBE_REL),
     ready: readSource(READY_REL),
+    auth: readSource(AUTH_REL),
     pkg: readSource(PKG_REL),
     adr: readSource(ADR_REL),
     agents: readSource(AGENTS_REL),
@@ -887,6 +958,15 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', (p) => { p.directPages.skipReasons = []; return p; }],
       ['C24', (p) => { p.directPages.skipReasons = ['DirectPageUnsupported']; return p; }],
       ['C24', (p) => { p.directPages.criteria = ['换页']; return p; }],
+      // C25：会话注入被改坏（缺步/exit2 加宽/端点漂移/脚本路径漂移/SKIP 值域缺失）
+      ['C25', (p) => { p.steps = p.steps.filter((x) => x.id !== 'auth-inject'); return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.exec = 'pwsh'; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.exit2 = [{ on: 'fail', reason: 'auth-failed' }]; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.argv[x.argv.indexOf('--ws') + 1] = 'ws://127.0.0.1:1'; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.argv[0] = 'scripts/nope.mjs'; return p; }],
+      ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.criteria = ['跑注入']; return p; }],
+      ['C25', (p) => { p.paths.authRelative = 'scripts\\nope.mjs'; return p; }],
+      ['C25', (p) => { p.directPages.skipReasons = p.directPages.skipReasons.filter((r) => r !== 'auth-session-unavailable'); return p; }],
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -980,7 +1060,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }],
       // C22：执行侧拆掉 pre-flight（不再按 id 取用 quit / 轮询改 kill —— kill 是 ADR-0008 红线）
       ['C22', { ...real, script: real.script.replace("-Id 'devtools-quit'", "-Id 'devtools-quitX'") }],
-      ['C22', { ...real, script: real.script.replace(/Get-Process -Name wechatdevtools/g, 'Get-ProcessX -Name wechatdevtools') }],
+      ['C22', { ...real, script: real.script.replace(/ProcessName -match 'wechatdevtools\|微信开发者工具'/g, "ProcessName -match 'wechatdevtools'") }],
       ['C22', { ...real, script: real.script.replace('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }', 'if ($false) { }') }],
       // 红线面：真的往代码里塞 Stop-Process 调用必须被抓（判据文本里的「不得用 Stop-Process」引用不算命中）
       ['C22', { ...real, script: real.script.replace('        $waited++', '        Stop-Process -Name wechatdevtools -Force\n        $waited++') }],
@@ -990,10 +1070,25 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, script: real.script.replace(/origin\/master\.\.\.HEAD/g, 'HEAD') }],
       ['C24', { ...real, script: real.script.replace('function Restore-DistAppJson {', 'function RestoreX {') }],
       ['C24', { ...real, script: real.script.replace('\n    Restore-DistAppJson', '') }],
-      ['C24', { ...real, script: real.script.replace('Set-Content -LiteralPath $Path -Value ($j | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM -NoNewline', "Set-Content -LiteralPath 'pages.json' -Value 1") }],
+      ['C24', { ...real, script: real.script.replace('Set-Content -LiteralPath $Path -Value $out -Encoding utf8NoBOM -NoNewline', "Set-Content -LiteralPath 'pages.json' -Value 1") }],
       ['C24', { ...real, probe: real.probe.replace("'--expect-page'", "'--other-page'") }],
       ['C24', { ...real, probe: real.probe.replace(/cold-start-direct/g, 'x') }],
       ['C24', { ...real, probe: real.probe.replace(/direct-page-unsupported/g, 'x') }],
+      ['C24', { ...real, script: real.script.replace('foreach ($pg in $directList) {', 'foreach ($pg in $directList) { if ($pg -ne $entryRoute) {') }],
+      ['C25', { ...real, auth: real.auth.replace(/gate-guest-invalid-json/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/flushSettleMs/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/flushConfirm/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/storage-flush-timeout/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/gate_flush_stamp/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace("a === '--mode'", 'false') }],
+      ['C25', { ...real, script: real.script.replace(/-Mode 'auth'/g, "-Mode 'x'") }],
+      ['C24', { ...real, script: real.script.replace(/port-held-after-quit/g, 'x') }],
+      ['C24', { ...real, script: real.script.replace(/键序轮转/g, 'x').replace(/\$rot = @\(\$keys\[1\.\.\(\$keys\.Count - 1\)\]\) \+ @\(\$keys\[0\]\)/, '$rot = $keys') }],
+      ['C24', { ...real, script: real.script.replace(/-Mode 'guest'/g, "-Mode 'auth'") }],
+      ['C24', { ...real, script: real.script.replace('$isEntry = ($pg -eq $entryRoute)', '$isEntry = $false') }],
+    ['C24', { ...real, script: real.script.replace(/入口漂移自愈/g, 'x') }],
+      ['C24', { ...real, probe: real.probe.replace(/shotErr/g, 'x') }],
+      ['C24', { ...real, script: real.script.replace("if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }").replace(/\n *# 唯一性复验[^\n]*/g, '') }],
       // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓
       ['C24', { ...real, script: real.script.replace('$agg.shots += @($pj.shots)', '') }],
       ['C24', { ...real, script: real.script.replace('shots = @($agg.shots)', 'shots = @()') }],
@@ -1046,7 +1141,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     const s = real.script;
     expect(s).toContain('function Invoke-DevToolsPreflightQuit');
     expect(s).toContain("-Id 'devtools-quit'");
-    expect(s).toContain('Get-Process -Name wechatdevtools');
+    expect(s).toContain("ProcessName -match 'wechatdevtools|微信开发者工具'");
     expect(s).toContain('if (-not $Doctor) { Invoke-DevToolsPreflightQuit }');
     expect(stripCommentLines(s).join('\n')).not.toMatch(/Stop-Process\s+-/);
   });
@@ -1266,6 +1361,21 @@ describe('C20：产物合法性判据（#1210）', () => {
     expect(r.ok).toBe(false);
     expect(r.stage).toBe('product-pages');
     expect(r.detail).toContain('pages/login/login.js');
+  });
+
+  it('C20e（必红④）：app.json.pages 路由重复 ⇒ 点名重复项（#1690 run7-10：重复页让构建器拒启模拟器，症状伪装成 page-stack-not-answering）', () => {
+    // 夹具把每个声明页的 .js 都补齐 ⇒ 判据面唯一可能的失败分支就是「重复」。
+    // （中文 detail 经子进程 stdout 会被 OEM 码页打成乱码，负向断言不牢靠 —— 结构上排除歧义，断言只用 ASCII）
+    const dir = product((d) => {
+      fs.writeFileSync(path.join(d, 'app.json'), JSON.stringify({ pages: ['pages/index/index', 'pages/login/login', 'pages/index/index'] }));
+      fs.mkdirSync(path.join(d, 'pages', 'login'), { recursive: true });
+      fs.writeFileSync(path.join(d, 'pages', 'login', 'login.js'), 'Page({})');
+    });
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-pages');
+    expect(r.detail).toContain('pages/index/index');
+    expect(r.pages).toBe(3);
   });
 
   it('C20-wiring①：门脚本真的调判据库（dot-source + 调用），且旧正则抠 appid 已删', () => {
