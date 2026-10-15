@@ -104,6 +104,7 @@ const INFRA = {
    * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
    * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**711 行现测（#1598/#1603 订正，登记时 611），见 `oversized`**）
+   * - `api/envelope.uts` —— 分页信封归一的**单一出口**（移动端 ADR-0037：getPaged/decodePage/decodeList），被全仓 api 层的分页站点消费，无模块级消费者；与 request 同属跨切面基础设施
    * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），被 20+ 模块的列表页共用，
    *   无模块级消费者；与 `utils/**` 同属**跨切面基础设施**（登记不执法），预算面归它自己的票
    * - `composables/useLoginProviders.uts` —— #1478 的登录提供方能力探测件：返回「微信登录可用吗」这一
@@ -117,6 +118,7 @@ const INFRA = {
     'api/helpers.uts',
     'api/refreshGate.uts',
     'api/request.uts',
+    'api/envelope.uts',
     'composables/useLoginProviders.uts',
     'composables/usePagedList.uts',
     // 'utils/coursePointsCta.uts' —— #1421（移动端 ADR-0031 决策 7）：课程价格/兑换 CTA 的
