@@ -102,7 +102,9 @@ describe('域 api 收紧（T06 / ADR-0007）：DTO 函数经 mapper-callback 出
     expect(start).toBeGreaterThan(-1);
     const body = api.slice(start, api.indexOf('\n}', start));
     // URL 允许「字面量」与「字面量 + id 变量拼接」两种形态（by-id 端点后者才有意义，先例 examContract）
-    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\('[^']+'(?:\s*\+\s*[^,]+)?, [^,]+, \(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data\)\)/);
+    // 形态一：整体箭头包裹 build*(data)（原状）
+    // 形态二（ADR-0037 PR-B）：装载改走信封归一出口 decodeList/decodePage，仍由箭头包裹的 build*(obj) 逐项映射
+    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:<[A-Za-z_$][\w$]*>)?(?:\[\])?>\('[^']+'(?:\s*\+\s*[^,]+)?, [^,]+, \(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data\)\)|(get|post)Mapped<[A-Za-z_$][\w$]*(?:<[A-Za-z_$][\w$]*>)?(?:\[\])?>\('[^']+'(?:\s*\+\s*[^,]+)?, [^,]+, \(data : UTSJSONObject\) : [^=]+=> decode(?:List|Page)<[A-Za-z_$][\w$]*>\(data, '[^']+', [^;]*build[A-Za-z_$][\w$]*\(obj\)/);
   });
 
   // raw 透传白名单：刻意保留裸 get/post（不硬套 identity map，T03/T05 口径）
