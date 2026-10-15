@@ -67,9 +67,17 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     if (!IS_WIN) return; // 平台边界由上一条真断言
     H.resetCalls(fakeCli);
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '2']);
-    // pre-flight quit 先清场一次（#1634，幂等、只在重试单元之前），然后是**两遍完整**的 close → open → auto
-    // （不是 close/open/auto 各来两次的任意组合）
-    expect(H.verbsOf(fakeCli)).toEqual(['quit', 'close', 'open', 'auto', 'close', 'open', 'auto']);
+    // pre-flight quit 先清场（#1634，幂等、只在重试单元之前），然后是**两遍完整**的 close → open → auto
+    // （不是 close/open/auto 各来两次的任意组合）。
+    // ⚠️ quit 的**次数**不做断言：quit 归零轮询在「本机真开着 IDE」时会补发第二轮 quit
+    // （scripts/mp-weixin-check.ps1 的两轮清场，只为把残留实例等干净，语义仍是「重试单元之前清场」）。
+    // 实测：开发机上开着微信开发者工具时 `quit` 出现两次 ⇒ 钉死长度会让本条**随环境变红**（#1695 实测）。
+    // 因此断言「quit 全在重试单元之前」+「重试单元恰好两遍」这两个不变式，不钉 quit 的条数。
+    const verbs = H.verbsOf(fakeCli);
+    const firstUnit = verbs.indexOf('close');
+    expect(firstUnit).toBeGreaterThan(0); // 清场在重试单元之前（至少一次）
+    expect(verbs.slice(0, firstUnit).every((v) => v === 'quit')).toBe(true); // 单元之前只允许 quit
+    expect(verbs.slice(firstUnit)).toEqual(['close', 'open', 'auto', 'close', 'open', 'auto']);
     // 全部用尽才判环境不可用（不是第一枪就红）
     expect(r.status).toBe(2);
     const log = H.gateLog(fixture);
@@ -81,7 +89,12 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     if (!IS_WIN) return;
     H.resetCalls(fakeCli);
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '1']);
-    expect(H.verbsOf(fakeCli)).toEqual(['quit', 'close', 'open', 'auto']);
+    const verbs = H.verbsOf(fakeCli);
+    // 同上：quit 次数随环境（本机是否开着 IDE）而变，只钉「清场在单元之前 + 单元恰好一遍」
+    const firstUnit = verbs.indexOf('close');
+    expect(firstUnit).toBeGreaterThan(0);
+    expect(verbs.slice(0, firstUnit).every((v) => v === 'quit')).toBe(true);
+    expect(verbs.slice(firstUnit)).toEqual(['close', 'open', 'auto']);
     expect(r.status).toBe(2);
     const log = H.gateLog(fixture);
     expect(log).not.toMatch(/整段重试/);
@@ -93,16 +106,19 @@ describe('② 整段重试行为（坑位 6：auto 回显 √ 但端口不起 �
     H.resetCalls(fakeCli);
     const r = runGate(fixture, fakeCli, port, ['-AutoAttempts', '1']);
     const verbs = H.verbsOf(fakeCli);
-    expect(verbs[0]).toBe('quit');
-    expect(verbs.slice(1)).toEqual(['close', 'open', 'auto']);
-    // 轮询结果（归零或超时警告）必须留痕：本夹具机器上 fake cli 不派生真 IDE ⇒ 应记「归零」
+    // 本条的判据是**顺序**（quit 在 close/open/auto 之前），不是 quit 的条数 —— 见「必不红」那条的说明
+    const firstUnit = verbs.indexOf('close');
+    expect(firstUnit).toBeGreaterThan(0);
+    expect(verbs.slice(0, firstUnit).every((v) => v === 'quit')).toBe(true);
+    expect(verbs.slice(firstUnit)).toEqual(['close', 'open', 'auto']);
+    // 轮询结果（归零**或**两轮后仍有残留的警告）必须留痕。
+    // ⚠️ 不能只锚「归零」：那条分支要求本机一个 微信开发者工具 进程都没有 —— 开发机上开着 IDE 时
+    // 门会走「两轮 quit 后仍有 N 个未退出（只警告，不 kill）」那一支（ADR-0008 只观测不 kill 的红线），
+    // 于是这条**随环境变红**（#1695 实测）。判据是「轮询确实留痕且如实」，两支都算过。
     const log = H.gateLog(fixture);
-    // 锚只取措辞里**不易变的那截**（`quit：` + `进程已归零`）：#1682 抽函数时去掉了 `pre-flight` 前缀、
-    // #1691 把进程名判据改成双名匹配（`wechatdevtools` → `IDE`）——两次都撞在这条锚上。进程编号/进程名口径
-    // 由 `utils/mpWeixinGateContract.test.js` 的契约钉，本条只判「归零轮询确实留痕」。
-    expect(log).toMatch(/quit：.*进程已归零/);
-    // 双名匹配本身单独钉：英文名在本机恒 0（中文 exe），只数它会让清场形同虚设（#1690 实测）
-    expect(log).toMatch(/wechatdevtools\/微信开发者工具/);
+    expect(log).toMatch(/quit：.*进程已归零|两轮 quit 后仍有 \d+ 个 IDE 进程未退出/);
+    // 双名匹配（wechatdevtools/微信开发者工具）由 utils/mpWeixinGateContract.test.js 的契约钉，
+    // 本行为守护不重复锚：那句只在「归零」分支才出现，锚它会与环境耦合（#1695 实测）。
     expect(r.status).toBe(2); // 端口仍不起（夹具形态），门照常在端口面判环境不可用
   }, 300000);
 });
