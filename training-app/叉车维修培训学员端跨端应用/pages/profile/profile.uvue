@@ -1,11 +1,7 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部标题（原型：居中「我的」） -->
-        <view class="nav-bar">
-            <text class="nav-title">我的</text>
-        </view>
+        <!-- #1608 批5 N05：手写 .status-bar + .nav-bar 收口进 app-nav-bar（transparent，页面自垫蓝渐变底） -->
+        <app-nav-bar transparent :left-icon="''" title="我的" />
 
         <scroll-view class="content-scroll" scroll-y>
             <ProfileUserRow :study-minutes="studyMinutes" :completed-courses="completedCourses" :today-checked="todayChecked" @avatar-tap="onChangeAvatar" @edit-nickname="onEditNickname" @checkin-tap="onGoCheckIn" />
@@ -72,7 +68,7 @@
     import { updateProfileApi, uploadAvatarApi } from '../../api/auth'
     import { getCheckInCalendarApi } from '../../api/checkin'
     import { getPointsBalanceApi } from '../../api/points'
-    import { useStatusBarHeight } from '../../utils/system'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { UNAVAILABLE_TOAST } from '../../constants/app'
     import type { StudentProfile, UpdateProfileParams, StudyStats, PointsBalance, CheckInCalendarResult } from '../../types/index'
     import ProfileUserRow from './components/profile-user-row.uvue'
@@ -87,7 +83,6 @@
     }
 
     const authStore = useAuthStore()
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const profile = ref<StudentProfile | null>(null)
     const uploadingAvatar = ref<boolean>(false)
@@ -342,29 +337,16 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
+        /* 批5 N05（票1608）：本页保留原型蓝渐变（非 §6.1 通用渐变对，色值入 uiHexWhitelist 留痕） */
         background: linear-gradient(to bottom, #6ECCFD, #0CA2EF);
         background-color: #0CA2EF;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: transparent;
-    }
-
-    .nav-bar {
-        height: 88rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .nav-title {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #333333;
-    }
+    /* 批5 N05（票1608）：原页头三件套样式随页头件收口删除 */
 
     .content-scroll {
         flex: 1;
@@ -408,12 +390,12 @@
     }
 
     .stats-num-blue {
-        color: #239EDD;
+        color: $primary-color;
     }
 
     .stats-arrow {
         font-size: 32rpx;
-        color: #239EDD;
+        color: $primary-color;
         margin-left: 4rpx;
     }
 

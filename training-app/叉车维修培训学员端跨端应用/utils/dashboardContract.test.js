@@ -323,11 +323,14 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(cred).toContain('writeCurrentCredentialCache(null)');
   });
 
-  it('筛选抽屉留页面（选中态重开保持）；组件不引入跨层 v-model（ADR-0007 T04 教训）', () => {
+  it('筛选抽屉留页面（选中态重开保持）；#1608 §8⑤ 单轴「口径」映射后端 filter；组件不引入跨层 v-model（ADR-0007 T04 教训）', () => {
     expect(page).toContain('class="filter-mask"');
-    expect(page).toContain('const selectedPrice = ref(0)');
-    expect(page).toContain('const selectedType = ref(0)');
-    expect(page).toContain('filter applied');
+    // #1608 §8⑤：双轴（直播/录播、免费/付费）→ 单轴「全部/热门/精品」，值域 ''|'hot'|'featured'
+    expect(page).toContain("const filterOptions : string[] = ['全部', '热门', '精品']");
+    expect(page).toContain("const filterValues : string[] = ['', 'hot', 'featured']");
+    expect(page).toContain('const selectedFilter = ref(1)');
+    // 确认即重拉课程区（不再是 console.log 空转）；初值热门=1 保持 #1422 默认口径
+    expect(page).toMatch(/function onFilterConfirm[\s\S]*?loadHotCourses\(currentCredentialId\.value, filterValues\[selectedFilter\.value\]\)/);
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
     // #1422：emit 清单由 ['openFilter'] 扩为 ['openFilter', 'courseOpen']（点击回抛归页面）
     expect(course).toContain("defineEmits(['openFilter', 'courseOpen'])");
@@ -439,7 +442,8 @@ describe('#1422 课程区接线：DashboardCourseSection 页面↔组件双向�
     // 锁形态而非字面量：`.then` 回调须显式 `: void` 吞 Promise（否则 Kotlin 判 UTSPromise<Unit>），
     // 故这里断言「链式 + 传当前证件」两点，不钉死会返 Promise 的箭头一行式
     expect(show).toContain('loadCredentials().then(');
-    expect(show).toContain('loadHotCourses(currentCredentialId.value)');
+    // #1608 §8⑤：onShow 拉取带当前筛选口径（初值热门），filter 显式透传
+    expect(show).toContain('loadHotCourses(currentCredentialId.value, filterValues[selectedFilter.value])');
   });
 
   /** feeds 源现读（不进文件顶层：顶层读法会被后续新增文件的 EOL 归一问题牵连，同本文件既有 describe 口径） */
