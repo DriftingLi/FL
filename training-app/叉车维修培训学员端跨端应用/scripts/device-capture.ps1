@@ -233,6 +233,8 @@ $AdbExe = $AdbPath
 # 该 lib 只有函数定义、dot-source 无副作用，且与本脚本无同名函数（`lib/auto-screenshot.ps1` 现定义 10 个，
 # 逐条对照过；新增同名函数时以本文件的定义为准 —— 后加载者胜）。
 . (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
+# sha 绑定口径（#1695）：评论里的 `- commit:` 只绑 GitHub 点得开的提交（判定见 lib/gate-commit.ps1 头注释）。
+. (Join-Path $PSScriptRoot 'lib\gate-commit.ps1')
 $ArchiveModuleName = if ($ArchiveModule) { $ArchiveModule } else { $Module }
 
 # 切页闸门：默认关闭；-NoStartApp / -SkipAppStart 等价且优先级更高（fail-safe）
@@ -754,8 +756,15 @@ function Archive-Screenshots {
         Invoke-Git (@('add') + $rel) | Out-Null
         $msg = "chore(verify): 归档真机只读取证截图（非门，不替代 ①b 人工关键交互）PR #$PrNumber"
         Invoke-Git (@('commit', '-m', $msg)) | Out-Null
-        Invoke-Git @('push', 'origin', $branch) | Out-Null
-        Write-Log "入库：已提交并推送 $(@($rel).Count) 张到 $branch"
+        # #1695：归档提交要真推上去，评论里 `- commit:` 的 sha 才在 GitHub 上点得开；
+        # 推不动（分支保护/权限/离线）时**不假装成功**，如实记日志（评论侧同样会如实标注）。
+        $push = Push-ArchiveCommit -ProjectDir $ProjectRoot -Branch $branch
+        if ($push.Pushed) {
+            Write-Log "入库：已提交并推送 $(@($rel).Count) 张到 $branch"
+        }
+        else {
+            Write-Log "入库：已提交但**未推送**（$($push.Reason)）—— 本次是本地归档 sha（未推送），评论会如实标注"
+        }
     } catch {
         Write-Log "入库提交/推送失败（不影响结论）：$($_.Exception.Message)"
     }
@@ -770,7 +779,12 @@ function Publish-PrefilterComment {
     param([int]$PrNumber, [string]$Body)
     try {
         $sha = (git -C $ProjectRoot rev-parse HEAD 2>&1 | Out-String).Trim()
+        # #1695：只绑 GitHub 点得开的 sha —— HEAD 尚未推送时绑远端分支 tip，并把「本地归档 sha（未推送）」
+        # 如实写进评论（口径见 lib/gate-commit.ps1 头注释）。
+        $binding = Resolve-CommitBinding -ProjectDir $ProjectRoot -HeadSha $sha
+        $sha = $binding.Sha
         $body = $Body + "`n`n- commit: $sha"
+        foreach ($noteLine in @($binding.NoteLines)) { $body = $body + "`n" + $noteLine }
         # 刻意用 prefilter: 前缀，而不是验收门证据那套标记，避免被校验器当成门证据
         $body = "<!-- prefilter:device-capture -->`n" + $body
         $tmp = Join-Path $env:TEMP ('device-capture-comment-' + [guid]::NewGuid().ToString('N') + '.md')
