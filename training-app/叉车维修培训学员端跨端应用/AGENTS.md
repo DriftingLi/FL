@@ -45,10 +45,10 @@ Single-context：root `CONTEXT.md` + `docs/adr/`。See `docs/agents/domain.md`.
 
 ### 会话切分约定（所有技能会话遵守）
 
-- **一条思考链一个会话**：grilling → to-spec → to-tickets 在同一会话内连续完成，中途不 clear/compact——spec 与票不只依赖结论，还依赖被否决的分支和否决理由。
-- **一件票一个会话**：implement/execute-task 每票冷启动新会话，只读票 + 对应 ADR + `docs/refactor-decisions.md`；票间 `/clear`，上一票的讨论残留不进下一票。
-- **换气只在阶段边界**：接近 smart zone（约 150k）用 `/compact`；跨目录、跨工具或会话中途分叉才用 `/handoff`。
-- **收束与执行分座，重构与 UI 分时**：回填结论/补复盘另开短会话，不占手术会话；UI 原型对齐走独立 grilling 链，且同一模块内 UI 对齐 PR 一律排在该模块手术合并之后。
+- **一条思考链一个会话**：grilling → to-spec → to-tickets 连续完成，中途不 clear/compact——被否决的分支与否决理由也是 spec 的依据。
+- **一件票一个会话**：每票冷启动，只读票 + 对应 ADR + `docs/refactor-decisions.md`；票间 `/clear`。
+- **换气只在阶段边界**：接近 smart zone（约 150k）用 `/compact`；跨目录 / 跨工具 / 会话中途分叉才用 `/handoff`。
+- **收束与执行分座、重构与 UI 分时**：回填结论/补复盘另开短会话；同一模块内 UI 对齐 PR 排在手术合并之后。
 
 ### Security scan
 
@@ -83,7 +83,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 ## 测试与检查流程
 
-- **本线唯一在跑的验证层 = `npm run test:unit`（它就是 ③ 门）**：`jest.config.unit.js`，`testEnvironment: node`，只扫 `utils/**/*.test.[jt]s?(x)`；`npm test` 是等价别名。只跑一个测试：`npx jest --config jest.config.unit.js <相对路径>`，按名加 `-t "片段"`。判据三条与守护分类（**接线守护不构成 ③ 证据**）见下节 ③ 条与 [`docs/agents/guards.md`](docs/agents/guards.md)。
+- **本线唯一在跑的验证层 = `npm run test:unit`（它就是 ③ 门）**：`jest.config.unit.js`，`testEnvironment: node`，只扫 `utils/**/*.test.[jt]s?(x)`；`npm test` 是等价别名。只跑一个测试：`npx jest --config jest.config.unit.js <相对路径>`，按名加 `-t "片段"`。判据三条与守护分类（**接线守护不构成 ③ 证据**）见下节 ③ 条与 [`docs/agents/guards.md`](docs/agents/guards.md)。**跑完只把结果行带进上下文**（完整日志留 `.ci-verify/*.log`，要细节按小节名回 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「agent 判读纪律」读，别贴日志原文）。
 - ⚠️ **本仓没有 `type-check` 脚本** —— 那是 Web 前端栈的入口，别照搬。后端四件套（含 Windows 本机 golangci-lint 由 CI 兜底、WSL 例外）、生成链顺序（swagger → gen-apitypes → 再跑测试）、PG 契约测试纪律、部署配置校验、DeepSec 扫描的**权威版本在根** [`docs/agents/checks.md`](../../docs/agents/checks.md)，本处不抄。
 - **端到端（E2E）自动化本仓不做，别再按 uni-app 项目模板去接**：微信小程序通道只能做 page 级断言、做不了「点击 → 跳转 → 断言」的流程验证（PR #1136 裁决），H5 通道在 `require` 阶段即炸 ⇒ 本仓**没有** E2E 入口与装配。裁决、实测与**将来重启的配方**见 `docs/adr/0020-端到端测试通道裁决落锁与装配清退.md`；补强验证层的正确方向是**把镜像实现迁到 `utils/utsHarness.js` 真执行**（`docs/spec-永绿整改.md` §④ S3 / S6a–S6c），不是引入 E2E。
 
@@ -111,57 +111,31 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 **提交粒度**：**一个视觉主题一个 commit**。色值微调与结构删除**不要混在一个提交里**——反例 `56d0fe3`（本地分支 `feat/ai-basic-ui-prototype`，+21 / −71）：「背景实色兜底」与「去掉小程序 chrome 胶囊」压在一起，回滚无从下手。
 
-**时间账、机检行与「真运行会话常驻但会被下一次 launch 顶掉」的实测原文**，在按需层
-[`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「时间账与三样慢」「真运行会话常驻与收口」。
-改完样式要一行结论 ⇒ `npm run style:loop`（实测原文在同文件「样式内循环：一条命令、一行结论」）。
-结论与对策：**慢的从来不是编译，而是返工 / 排队 / 卡死** —— 返工用 `hx:compile-only` 拦在本地、
-排队的取锁上限默认 120 秒、卡死靠部署停滞 300 秒提前判环境不可用（`-DeployStallSeconds`）。
+**时间账、机检行、样式一行结论与对策**（慢的是**返工 / 排队 / 卡死**，不是编译：返工用 `hx:compile-only` 拦在本地、排队取锁上限默认 120 秒、卡死靠部署停滞 300 秒判环境不可用）全在按需层 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「时间账与三样慢」「真运行会话常驻与收口」「样式内循环」——改完样式要一行结论：`npm run style:loop`。
 
 ### 并发会话纪律（多会话并行时必读）
 
-**HBuilderX 是单实例串行资源** ⇒ 「真机自动化」被钉成**不可并发**：多个会话同时跑 `hx-run` / 编译门 /
-截图只会**排队**（`scripts/lib/hx-busy.ps1` 的锁 + 忙探测，日志打 `HX_BUSY wait=<秒> result=free|timeout`），
-到等待上限即 `exit 2` 判**环境不可用** —— 这是**架构约束，不是可以调优的缺陷**；忙就改跑不需要
-HBuilderX 的检查（`npm run test:unit` / `npm run build:kotlin-all`），**绝不 kill 主程序、绝不抢占**。
-
-**职责边界**：真机步骤（`dev:finish` 的 4–6）**集中到一个会话**；其余会话只做到编译门为止（🟢 Q-A 默认路径：契约测试 + 静态守护，秒级、不取锁、不占设备）。
-
-分步的取锁上限（`hx-run` 120 秒 / `dev:finish` 1800 秒 / `build:*` 600 秒）、锁的交接机制（`$env:HX_LOCK_OWNER`）、「**先写代码、后集中上机**」的攒批口径与四条时间预算，全在按需层 [`docs/agents/concurrency.md`](docs/agents/concurrency.md)。
-判据与守护：`docs/adr/0011-一键完成的并发与失败语义.md`、`utils/hxBusyGateContract.test.js` H1–H11、
-`utils/devFinishContract.test.js` F6–F10。
+**HBuilderX 是单实例串行资源** ⇒ 真机自动化**不可并发**：多会话同时跑 `hx-run` / 编译门 / 截图只会**排队**（`scripts/lib/hx-busy.ps1` 的锁与忙探测，日志 `HX_BUSY wait=<秒>`），到取锁上限即 `exit 2` 判**环境不可用**——**这是架构约束，不是可调优的缺陷**；忙就改跑不需要 HBuilderX 的检查（`npm run test:unit` / `npm run build:kotlin-all`），**绝不 kill 主程序、绝不抢占**。**职责边界**：真机步骤（`dev:finish` 的 4–6）**集中到一个会话**，其余会话只做到编译门为止。取锁上限（120/1800/600 秒）、锁交接（`$env:HX_LOCK_OWNER`）、「先写代码、后集中上机」攒批口径与时间预算在按需层 [`docs/agents/concurrency.md`](docs/agents/concurrency.md)；判据与守护见 `docs/adr/0011-一键完成的并发与失败语义.md`、`utils/hxBusyGateContract.test.js` H1–H11、`utils/devFinishContract.test.js` F6–F10。
 
 ### Qoder 托管 worktree 的使用边界（2026-09-28 立）
 
 **一句话**：**改动落在 `training-app/**` 下的活，一律不在宿主树里做**（哪怕只改一个 `.md`）——走
-`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`。本段只声明移动端与小程序的禁令；
-宿主树适合干什么由 Web / 后端的负责人定，本段不表态。
+`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`。看的是**这轮打算动哪些路径的意图**
+（含还没 `git add` 的新文件），不是 `git diff` 现在显不显示；事后回检：`git status --porcelain | Select-String 'training-app/'`。
 
-判据不是「命中运行时面」，而是「**③ 要不要在这棵树里跑**」：CI 的 `changes.mobile` 过滤器是 `'training-app/**'`
-（`ci.yml` 的 `changes` job）⇒ 该路径下**任何**改动都把 ③ 变成必过门。**看的是「你这轮打算动哪些路径」的意图，
-不是「`git diff` 现在显不显示东西」**：计划新建 / 修改的任一路径落在 `training-app/**`（**含还没 `git add` 的新文件**）就命中。
-
-⚠️ **别拿开工前的一句 `git diff` 当许可** —— 它在最该报警的时刻恰好返回空：开工前什么都没改、`git diff` 不含未跟踪新文件、`origin/master` 可能陈旧。要机检就连未跟踪一起看，且当作**事后回检**（确认没漏，不是开工前的通行证）：`git status --porcelain | Select-String 'training-app/'` —— 任一行路径以 `training-app/` 开头 ⇒ 本不该在这棵宿主树里做。
-
-三条原因（各一句，实测原文在 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「三条原因的实测原文」）：
-
-1. **③ 门在宿主树里静默假绿，且这是永久属性**：宿主落点父段带点 ⇒ jest 的 glob 匹配 0 套件、还 `exit 0` 不报错（#1144），
-   而**该落点不可配置**。CI 侧不受此坑 ⇒ 最后一道防线还在，但**本地反馈环失效**。
-2. **HBuilderX 项目名冲突不是理由**（2026-09-28 更正）：改成唯一名是所有 worktree 的共同代价，闸门树同样要付。
-3. **树会被自动回收**：`worktreeMaxCount` 超限即删最旧（**包括别的编辑器正开着的那一棵**），且 `git worktree remove`
-   连带删掉 gitignored 的 `.ci-verify/`（原始判据输入，删了不可复算）。
-
-**回退与复用**：宿主树是普通 git worktree ⇒ 提交并推了分支就能回退；反过来**没提交的改动与 gitignored 证据，树没了就没了** ⇒ 进树第一件事建分支、尽早推 origin，判据输入当场拷到树外或直接入 `docs/verification/<模块>/<PR号>/`。
-**初始化单一真源** = `pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`；宿主「本地任务的 Worktree 配置」框
-**只填这一行调用**（填逻辑＝开第二真源），现值怎么核对见根 `AGENTS.md` 的命令速查块。
-决策论证全文见 `docs/adr/0029-移动端不用宿主托管worktree.md`（**移动端编号体系，须写全路径**；根仓库另有同名的 `ADR-0029`）。
+三条原因（③ 门在宿主树静默假绿 #1144 / 项目名冲突不是理由 / 树被自动回收连删 `.ci-verify/`）实测原文在
+[`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「三条原因的实测原文」。**回退与复用**：进树第一件事建分支、
+尽早推 origin；没提交的改动与 gitignored 证据树没了就没了，判据输入当场拷到树外或入 `docs/verification/<模块>/<PR号>/`。
+**初始化单一真源** = `pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`；宿主「本地任务的
+Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源），现值核对：读回 `%APPDATA%\Qoder\logs\<run>\questWindow\renderer.log`
+里 `worktreeSetup` 键的值与之比对（**别拿「应该已填」当作已填**）。决策论证全文见
+`docs/adr/0029-移动端不用宿主托管worktree.md`（**移动端编号体系，须写全路径**；根仓库另有同名 `ADR-0029`）。
 
 ### 反模式（逐条禁）
 
 - **在真机上验「本该编译期就红」的东西**——类型名义不一致（`ClassCastException`）、uvue 样式规则违反、模板编译错误
   **都是编译期诊断**：先 `npm run hx:compile-only`（**不碰设备**），别让它变成一次 5 分钟的真机返工。
-- 每次微调都**全量重编译**——全量是门的活（`compile-check.ps1`），日常走 `hx-run.ps1`。
-- 每次微调都**重装基座**——**基座只装一次**；`hx-run.ps1` 里没有任何 `adb install`，装机由 HBuilderX 自己处理。
-- 每次微调都**跑全量门 + 提交**——门按中循环跑（每个视觉满意点一次），提交按「**一个视觉主题一个 commit**」。
+- 每次微调都**全量重编译 / 重装基座 / 跑全量门 + 提交**——全量是门的活（`compile-check.ps1`），**基座只装一次**（`hx-run.ps1` 无 `adb install`），门按中循环跑（每个视觉满意点一次），提交按「一个视觉主题一个 commit」。
 - **kill `cli` 或 HBuilderX 主程序**——违反「HBuilderX 是单实例串行资源」：**忙就等**
   （`scripts/lib/hx-busy.ps1` 的锁 + 忙探测 + 等待上限），超时 `exit 2` 并改跑不需要 HBuilderX 的检查
   （`npm run test:unit` / `build:kotlin-all -SkipPublish` / `smoke:emulator`）。
@@ -178,21 +152,17 @@ HBuilderX 的检查（`npm run test:unit` / `npm run build:kotlin-all`），**�
 
 ## 验收门与合并纪律（ADR-0008）
 
-改动触及运行时面（改动集含 `*.uvue` / `*.uts`，或 training-app 下的 `manifest.json` / `pages.json` / `platformConfig.json`）时，适用 `docs/adr/0008-移动端验收门与证据.md` 的四门与证据要求。
+改动触及运行时面（改动集含 `*.uvue` / `*.uts`，或 training-app 下的 `manifest.json` / `pages.json` / `platformConfig.json`）时，适用下列五道门——**判据与原因全文在** `docs/adr/0008-移动端验收门与证据.md`（**须写全路径**，根仓库另有同名 `ADR-0008`），本节只留执行要点。
 
-- **签收在人、合并不限人**：把 PR 正文的 `## 验收证据` 段填齐（每门四字段 + 产物），人工门（**①b**）的「执行人」栏由**人**给出原文（agent 可代录、不得自拟）；填齐后 **agent 可直接合并**，不必停在「待人工签收」。**「不必停在」不等于「还要问」**——这一条是**授权**：证据齐且不走例外通道时，「是否合并」不构成需要维护者拍板的问题（授权全文与合并前一行披露 production 部署的口径见根 `docs/agents/release.md`:16）。
-- **合并后的收尾是默认动作，不是问题**：「是否清理工作树」不问。顺序是**先 `git worktree remove` → 再 `git branch -D` → 最后删远端**（`release.md`:13 —— 反序会让 `--delete-branch` 静默不删）；摘 `node_modules` junction **必须早于**删目录，且 `git worktree remove` 后要用 `Test-Path` 复验目录真消失（判据与不可逆血账见根 `docs/agents/multi-agent-git.md`）。
-- 非运行时面的 PR（纯文档 / 测试 / CI 配置）不受此限，agent 可自行合并。
-- **人工门只剩 ①b Android 真机「能力面」冒烟**（2026-09-12 修订：② 已移出人工门清单，见下条；**2026-09-16 修订**：① 拆成 ①a／①b，只有 ①b 由人签）；①b 的「执行人」栏由**人**给出原文（agent 代录，不得自拟、不得写「已通过」）。
-- **① 的触发面与取证节奏（2026-09-16 修订）**：**①a**（agent 出证：逐页截图 + logcat + 机检行 + 入仓截图）**按「一次分支收口」跑一次**，不在 PR 内每次微调、**不跨 PR 共用**。**①b**（人签）**只在命中「能力面」时必过**：指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互 —— **不是**「任何运行时面」。① 行的「执行人」栏在该行只覆盖 ①a 时允许写「agent 执行」。能力面可机检口径 = **路径白名单 + PR 模板自报勾选**（自报是声明、不是判据，漏报靠 ①a 的 logcat 与评审兜）。**明确不做**：基于 diff 文本 / API 字符串的触发判据、跨 PR 共用真机、「冷态降级 ④」。逐条理由见 `docs/adr/0016-真机门的人工性收缩与按批取证.md`。「小程序优先窗口」（人裁定开关/退出）内 ①a 降档为按批收口，细则见 `0039`；能力面四类触发与 ①b 人签不随窗口延后。
-- **①a 真机取证的具体手法**见 `docs/adr/0008-移动端验收门与证据.md` 的「①a 取证手法补遗（2026-09-15 实测）」（因 L1 预算于 #1679 搬走）。**多会话并发时如何不动别人的工作树就提交 / 同步 master** 见 `docs/agents/multi-agent-git.md` 的「游离提交：完整配方」。
-- **② 微信开发者工具门 = 半自动门（2026-09-12，#883 收口）**：agent 可执行 `npm run build:mp-weixin-check`（= `scripts/mp-weixin-check.ps1`）产出 `MP_WEIXIN_RESULT` + `.ci-verify/mp-weixin.log` + `.ci-verify/*.png`，**结果可由脚本 `-PostToPr <PR号>` 贴成 sha 绑定的 PR 评论承载**（正文该行写「见评论 <链接>」即可）。**「执行人」栏窗口外由人给出原文**（agent 代录，不得自拟）；0039 窗口内 ② = 每 PR 主验收门、允许「agent 执行」（先例 #1674）。三条硬前提：**全访问权限执行**（与 HBuilderX 的本地 IPC）、开发者工具**已登录**、项目目录**唯一名**；其余（`hx-busy.ps1` 的锁与忙探测、HBuilderX 回写 `manifest.json` 置空 appid、端口绑 `::` 的暴露面、② ≠ ① ≠ ④b 的证据边界）**原文在** `docs/adr/0008-移动端验收门与证据.md` 的「小程序门（第②门）」「② 门三条硬前提与证据边界」「HBuilderX 是单实例串行资源」三节。**跑完任何 HBuilderX 门先 `git status` 查 `manifest.json` 有没有被改脏**，脏了就 `git checkout -- manifest.json` 再继续。
-- **低风险运行时面（仅 `.uts` 逻辑改动，无 `.uvue` / 三份 json / `uni_modules`）免 ① ②**：正文里这两行可以整行不写（写「免（低风险运行时面：仅 .uts 逻辑改动）」也行）；代价是真机 / 渲染类问题推迟到发版前的 ① 全量冒烟兜底。③ 与 ④ 仍必过。
-- **③ `npm run test:unit` 门 = 有判据的门（2026-09-18 立，#1156）**：判据三条 —— **①「我故意弄坏被测物，它会不会红？」**（判别力）**②「它测的是该测的那一支吗？」**（条件编译 / 镜像 / 分支选错 ⇒ 测的是另一支）**③「只跑通过的那一次，不算验收」**（成对取证：必不红 / 必红各一条）。「全绿」可恒真的逐条实测证伪、以及「行为守护承重 / 接线守护不构成 ③ 证据」的分类见 [`docs/agents/guards.md`](docs/agents/guards.md)；分类真源 `node scripts/classify-guards.mjs`（机检形状由 `utils/guardClassification.test.js` H1–H5 钉住）。**新增守护**在 PR 正文回答 `guards.md` 末节三问。本条只加判据，**不加人工门、不改 ①②④ 的触发面**。
-- **④ 本地编译门（2026-09-11 修订：④a 与 ④c 合并，裁定见 #870 / #859）**：默认载体是 **④c 整模块编译**（`npm run build:kotlin-all` → `.ci-verify/kotlin-all.log`）；**dev 专属面追加 ④a**（`npm run build:compile` → `.ci-verify/build.log`）——命中 `pages.json` / `manifest.json` / `platformConfig.json` 改动、新增页面、模块手术收口 PR 时。「执行人」栏填执行会话所用账号并注明「agent 执行」；结果同样可由 `-PostToPr` 贴成 sha 绑定评论。**两条门脚本都须以全访问权限执行**（受限沙箱下与 HBuilderX 的本地 IPC 报「与主程序的连接已中断」）。
-- **④b release 云打包按「打包面」触发（2026-09-11 修订）**：改动 `manifest.json` / `pages.json` / `platformConfig.json`、`uni_modules/**/utssdk/app-android/**`、新增 `*.aar` / `libs/*.jar` 时必填；**正式发版前必须跑一次云打包并装机自测**（发布前置条款）。旧口径「新增 async / 新增 composable 即触发」已废止。
-- 例外通道：正文写明「已接受未验证风险 + 理由 + 事后验证计划」，检查会打警告放行，但**仍必须由人执行合并**。禁止静默例外。
-- `pr-evidence` 检查只校证据结构、不校真伪；它是**可见检查**而非 ruleset 必检——本仓**有可用的 admin 通道**（维护者持有仓库所有者账号），但**裁定不装**（逐 PR 审批成本高于约束收益，见 ADR-0008「为何不装『必检 + approve』」）。
+- **真机逐页取证**（agent 出证：逐页截图 + logcat + 机检行 + 入仓截图）：按**一次分支收口**跑一次、**不跨 PR 共用**，手法见 ADR-0008「取证手法补遗」；**窗口内不跑**，真机行如实写 `SKIP·待批收口`。
+- **真机人工签收**：**只在命中「能力面」时必过**——指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互，**不是**「任何运行时面」；「执行人」栏由**人**给出原文（agent 代录、不得自拟、不得写「已通过」）。触发口径与**明确不做**清单（diff 文本触发、跨 PR 共用真机等）见 `docs/adr/0016-真机门的人工性收缩与按批取证.md`。
+- **小程序门（② 微信开发者工具门 = 半自动门，#883 收口）**：`npm run build:mp-weixin-check` → `MP_WEIXIN_RESULT` + `.ci-verify/*.png`，结果可 `-PostToPr <PR号>` 贴 sha 绑定评论（正文该行写「见评论 <链接>」）。**窗口内 = 每个运行时面 PR 的主门、执行人允许「agent 执行」**（先例 #1674）；窗口外执行人由人给出原文。三条硬前提与证据边界原文在 ADR-0008「小程序门」「三条硬前提与证据边界」两节。**跑完任何 HBuilderX 门先 `git status` 查 `manifest.json`**，脏了 `git checkout -- manifest.json` 再继续。
+- **单元测试门**（`npm run test:unit`）：判据三条（**只跑通过的那一次不算验收**，成对取证）与守护分类（**行为守护承重、接线守护不构成证据**）见 [`docs/agents/guards.md`](docs/agents/guards.md)；分类真源 `node scripts/classify-guards.mjs`（`utils/guardClassification.test.js` H1–H5 钉形）。**新增守护**在 PR 正文答 `guards.md` 末节三问；本条只加判据，**不加人工门、不改其他门触发面**。
+- **编译门**：默认 `npm run build:kotlin-all` → `.ci-verify/kotlin-all.log`（执行人注明「agent 执行」、可 `-PostToPr`）；命中三份 json 改动、新增页面、模块手术收口 PR 时追加 `npm run build:compile`。**云打包按「打包面」触发**（三份 json / `uni_modules` app-android / 新增 aar·jar），**正式发版前必跑云打包并装机自测**。两条门脚本**须以全访问权限执行**。
+- **低风险运行时面**（仅 `.uts` 逻辑改动，无 `.uvue` / 三份 json / `uni_modules`）免真机两道（正文那两行可整行不写），代价是真机 / 渲染问题推迟到发版前全量冒烟兜底——**单元测试门与编译门仍必过**。
+- **窗口口径（ADR-0039 + 2026-10-15 收紧，见 `0040`）**：窗口内真机逐页取证**不跑**、小程序门每个运行时面 PR 必跑、视觉回归如实记「无人验」；**触及能力面的 PR 窗口内不合并、排队到退出后**（与 0039 决策 4 冲突处以 0040 为准）；能力面触发与人工签收**不随窗口延后**。
+- **签齐即合并**：证据填齐后 **agent 直接合并**，不必停在「待人工签收」——**「不必停在」不等于「还要问」**：证据齐且不走例外通道时，「是否合并 / 是否清理工作树」**不是问题**，直接执行（授权全文与合并前一行披露 production 部署口径见根 `docs/agents/release.md`:16）。合并后收尾顺序（先 `git worktree remove` → 再 `git branch -D` → 最后删远端，摘 `node_modules` junction 早于删目录）见 `release.md`:13。非运行时面的 PR（纯文档 / 测试 / CI 配置）agent 可自行合并。**例外通道**（「已接受未验证风险 + 理由 + 事后验证计划」）**仍必须由人执行合并**，禁止静默例外。
+- 多会话并发下不动别人工作树就提交 / 同步 master 的配方见 `docs/agents/multi-agent-git.md`「游离提交：完整配方」。`pr-evidence` 检查**只校结构、不校真伪**，是可见检查而非 ruleset 必检（admin 通道**裁定不装**，见 ADR-0008）。
 
 ## 发布流程（push / PR / merge）
 
@@ -218,6 +188,6 @@ HBuilderX 的检查（`npm run test:unit` / `npm run build:kotlin-all`），**�
 
 ## 相关文档
 
-- **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界、`0039` 小程序优先窗口。其余按目录逐个标题查。
+- **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界、`0039` 小程序优先窗口、`0040` 10-15 收紧裁定（真机零跑 / 能力面 PR 排队到退出后）。其余按目录逐个标题查。
 - **按需层（常驻层指向它们，不反向抄）**：`docs/agents/guards.md`（守护分类与新增守护三问）、`docs/agents/issue-dispatch.md`（派活一行）、`docs/agents/uvue-css.md`（uvue 样式与 UTS 编译约束全表）、`docs/agents/concurrency.md`（并发纪律与时间预算）、`docs/agents/dev-loop.md`（内循环时间账与坑位原文、样式内循环一行结论）、`docs/agents/skills.md`（技能供给与管线归属）。
 - **其余**：`docs/GIT_WORKFLOW.md`、`docs/GIT_CHEATSHEET.md`、`docs/ui-spec.md`、`docs/product-design.md`、`docs/refactor-decisions.md`、`docs/spec-永绿整改.md`。
