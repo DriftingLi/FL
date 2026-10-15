@@ -13,7 +13,7 @@
  * 守护：
  *   C1 职位 DTO 与映射：apply_state / cooldown_days 都要有（ADR-0003）。
  *      #652 T14 收紧后：DTO 从 `api/job.uts` 迁入 `types/job.uts`，两处同形内联映射去重为
- *      单一 `buildJobPosting`（详情直连、列表经 `buildJobListResult` 复用）⇒ 两字段仍被映射，
+ *      单一 `buildJobPosting`（详情直连、列表经 `decodePage` + 同一 `buildJobPosting` 逐项映射）⇒ 两字段仍被映射，
  *      且两端点共用一处映射更强（不会再出现只补详情漏列表）。
  *   C2 `job-detail.uvue`：三态由 `applyState()` 驱动；本地 `hasApplied` 不得回归；
  *      `onApply` 先判态再发请求
@@ -73,9 +73,11 @@ describe('C1 职位 DTO 与映射都要补两字段（ADR-0003；#652 后类型�
     const detailFn = between(jobSrc, 'export function getJobDetailApi', '\n}');
     expect(detailFn).toMatch(/getMapped<JobPosting>/);
     expect(detailFn).toMatch(/buildJobPosting\(data\)/);
-    // 列表：buildJobListResult 复用 buildJobPosting（去重后单一映射覆盖两端，防「补详情漏列表」）
-    const listBuilder = between(jobSrc, 'function buildJobListResult', '\n}');
-    expect(listBuilder).toMatch(/buildJobPosting\(obj\)/);
+    // 列表：仍复用同一 buildJobPosting 逐项映射（去重后单一映射覆盖两端，防「补详情漏列表」）；
+    // 分页信封解码交 decodePage（ADR-0037 PR-B），这里只钉「列表也经 buildJobPosting」。
+    const listFn = between(jobSrc, 'export function getJobListApi', '\n}');
+    expect(listFn).toMatch(/decodePage<JobPosting>\(data/);
+    expect(listFn).toMatch(/buildJobPosting\(obj\)/);
   });
 });
 

@@ -127,6 +127,11 @@ function buildApp(opts = {}) {
   const uni = makeUni();
   const pages = [{ route: 'pages/courses/chapter-view' }];
   const helpers = loadUts(HELPERS_UTS, {});
+  // 信封归一模块真实现（ADR-0037 PR-B）：course 的列表/数组出口现在走 decodePage/decodeList。
+  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+    getMapped: () => Promise.resolve({}),
+    toNumber: helpers.toNumber,
+  });
   const storage = loadUts(STORAGE_UTS, { uni });
   const gate = loadUts(GATE_UTS, {});
   const authRole = loadUts(AUTH_ROLE_UTS, {
@@ -161,6 +166,8 @@ function buildApp(opts = {}) {
   const courseBindings = {
     getMapped: request.getMapped,
     post: request.post,
+    decodePage: envelope.decodePage,
+    decodeList: envelope.decodeList,
     toNumber: helpers.toNumber,
     toNumberOrNull: helpers.toNumberOrNull,
     toBool: helpers.toBool,

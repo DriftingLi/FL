@@ -27,6 +27,12 @@ const COURSE_UTS = path.join(ROOT, 'api', 'course.uts');
 const helpers = loadUts(path.join(ROOT, 'api', 'helpers.uts'), {});
 const { toNumber, toNumberOrNull, toBool, toStr } = helpers;
 
+/** 信封归一模块真实现（ADR-0037 PR-B）：course 的列表/数组出口现在走 decodePage/decodeList。 */
+const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+  getMapped: () => Promise.resolve({}),
+  toNumber,
+});
+
 /** 捕获 postMapped/getMapped 调用的最小桩：返回值由用例给（reject 用 err 槽） */
 function makeRequestStub(reply) {
   const calls = [];
@@ -57,6 +63,8 @@ function loadCourse(reply, source) {
   })();
   const mod = loadUts(file, {
     getMapped: stub.getMapped,
+    decodePage: envelope.decodePage,
+    decodeList: envelope.decodeList,
     post: stub.postMapped,
     NOT_FOUND_MESSAGE_PREFIX: '404:',
     toNumber,

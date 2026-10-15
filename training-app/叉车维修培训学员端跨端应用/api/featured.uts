@@ -7,8 +7,10 @@
  *   POST /api/featured-content/:id/view        浏览计数 +1
  */
 import { getMapped, post } from './request'
+import { decodePage } from './envelope'
+import type { Page } from './envelope'
 import { toNumber, toStr } from './helpers'
-import type { FeaturedContentItem, FeaturedContentListResult, FeaturedContentDetail } from '../types/index'
+import type { FeaturedContentItem, FeaturedContentDetail } from '../types/index'
 
 
 
@@ -27,24 +29,6 @@ function buildFeaturedItem(obj : UTSJSONObject) : FeaturedContentItem {
 		published_at: toStr(obj['published_at']),
 		created_at: toStr(obj['created_at']),
 	} as FeaturedContentItem
-}
-
-/** 精选列表映射（T05 手术 #643：收紧至 getMapped 出口，响应字段读取逐行不变） */
-function buildFeaturedListResult(data : UTSJSONObject) : FeaturedContentListResult {
-	const items : FeaturedContentItem[] = []
-	const itemsRaw = data['items']
-	if (itemsRaw != null) {
-		const arr = itemsRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildFeaturedItem(arr[i]))
-		}
-	}
-	return {
-		items: items,
-		total: toNumber(data['total']),
-		page: toNumber(data['page'], 1),
-		pages: toNumber(data['pages']),
-	} as FeaturedContentListResult
 }
 
 /** 精选详情映射（T05 手术 #643：收紧至 getMapped 出口，响应字段读取逐行不变） */
@@ -94,7 +78,7 @@ function buildFeaturedDetailResult(data : UTSJSONObject) : FeaturedContentDetail
  * @param pageSize 每页条数
  * @param category 分类过滤（可选）
  */
-export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10, category : string = '') : Promise<FeaturedContentListResult> {
+export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10, category : string = '') : Promise<Page<FeaturedContentItem>> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -102,9 +86,9 @@ export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10
 	if (category.length > 0) {
 		params['category'] = category
 	}
-	return getMapped<FeaturedContentListResult>('/featured-contents', params, (data : UTSJSONObject) : FeaturedContentListResult => buildFeaturedListResult(data))
+	// 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`，分页字段只认 total
+	return getMapped<Page<FeaturedContentItem>>('/featured-contents', params, (data : UTSJSONObject) : Page<FeaturedContentItem> => decodePage<FeaturedContentItem>(data, '/featured-contents', page, pageSize, (obj : UTSJSONObject) : FeaturedContentItem => buildFeaturedItem(obj), ['items']))
 }
-
 /**
  * 精选详情
  * @param contentId 内容 ID

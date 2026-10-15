@@ -6,6 +6,7 @@
  */
 import { get, post, put, del } from './request'
 import { toNumber, toStr, toBool } from './helpers'
+import { decodeList } from './envelope'
 import type { QuestionComment, CommentListResult, QuestionNote, KnowledgeTag } from '../types/index'
 
 
@@ -87,19 +88,11 @@ export function deleteCommentApi(commentId : number) : Promise<UTSJSONObject> {
 
 /** 获取题目考点标签列表 */
 export function getKnowledgeApi(questionId : number) : Promise<KnowledgeTag[]> {
-	return get(`/questions/${questionId}/knowledge`).then((data : UTSJSONObject) : KnowledgeTag[] => {
-		const tags : KnowledgeTag[] = []
-		const listRaw = data['list'] ?? data['items']
-		if (listRaw != null) {
-			const arr = listRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				tags.push(buildKnowledgeTag(arr[i]))
-			}
-		}
-		return tags
-	})
+	const url = '/questions/' + questionId + '/knowledge'
+	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：原 `data['list'] ?? data['items']` 的回退链
+	// 收敛为模块默认键序 `['items','list']`
+	return get(url).then((data : UTSJSONObject) : KnowledgeTag[] => decodeList<KnowledgeTag>(data, url, (obj : UTSJSONObject) : KnowledgeTag => buildKnowledgeTag(obj)))
 }
-
 // ========== 笔记 ==========
 
 /** 获取个人笔记（无笔记时返回空内容） */

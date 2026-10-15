@@ -117,7 +117,8 @@ describe('数据源：消费 GET /api/faq（一次取回，无分页无搜索接
     for (const field of ['id', 'question', 'answer', 'sort_order']) {
       expect(api).toContain(`obj['${field}']`);
     }
-    expect(api).toContain("data['categories']");
+    // ADR-0037 PR-B：数组键 categories 的读取收进信封归一出口（键名仍在调用点声明）
+    expect(api).toContain("decodeList<FaqCategory>(data, '/faq', (obj : UTSJSONObject) : FaqCategory => buildFaqCategory(obj), ['categories'])");
   });
 
   it('空分类 entries 缺失 / null 都兜底成空数组（后端返回 []，但不假设只有一种形态）', () => {

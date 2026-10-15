@@ -31,12 +31,13 @@ describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）'
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
 
-  it('getCourseListApi 函数体经 getMapped 且映射函数为 buildCourseListResult', () => {
+  it('getCourseListApi 函数体经 getMapped，映射走信封归一出口 decodePage（ADR-0037 PR-B）', () => {
     const start = src.indexOf('export function getCourseListApi');
     expect(start).toBeGreaterThan(-1);
     const body = src.slice(start, src.indexOf('\n}', start));
-    expect(body).toContain('getMapped<CourseListResult>');
-    expect(body).toContain('buildCourseListResult');
+    expect(body).toContain('getMapped<Page<CourseItem>>');
+    expect(body).toMatch(/decodePage<CourseItem>\(data/);
+    expect(body).toContain('COURSE_LIST_KEYS');
     // #1331：mock 降级按 ADR-0007「掩盖面」判据整体退役 —— 原「UI 冻结：无网络时仍出 mock 数据」反转：
     // 失败一律上抛，由页面呈现可见错误态 + 重试（courses / mall 的 loadError 三态）。锁随之反转为「不得复活」。
     expect(body).not.toContain('getMockCourseList()');

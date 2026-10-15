@@ -54,18 +54,3 @@ export function errMsg(e : any | null, fallback : string) : string {
     }
     return fallback
 }
-
-/**
- * 从 data 中取出列表数组（后端信封 data 为裸数组时由 request 层包装为 { list: [...] }）
- */
-export function toList(data : UTSJSONObject) : Array<UTSJSONObject> {
-    const items : Array<UTSJSONObject> = []
-    const raw = data['list']
-    if (raw != null) {
-        const arr = raw as Array<UTSJSONObject>
-        for (let i = 0; i < arr.length; i++) {
-            items.push(arr[i])
-        }
-    }
-    return items
-}

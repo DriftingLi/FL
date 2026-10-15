@@ -13,6 +13,8 @@
  *   同文件另两条有载荷出口（`createContributionApi` / `getMyContributionsApi`）已在 postMapped / getMapped 上。
  */
 import { uploadFile, getMapped, postMapped } from './request'
+import { decodePage } from './envelope'
+import type { Page } from './envelope'
 import type { RequestOptions } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
 
@@ -90,24 +92,6 @@ function buildContributionItem(obj : UTSJSONObject) : ContributionItem {
     } as ContributionItem
 }
 
-/** 构造投稿分页（从 UTSJSONObject） */
-function buildContributionPage(data : UTSJSONObject) : ContributionPageResult {
-    const items : ContributionItem[] = []
-    const itemsRaw = data['items']
-    if (itemsRaw != null) {
-        const arr = itemsRaw as Array<UTSJSONObject>
-        for (let i = 0; i < arr.length; i++) {
-            items.push(buildContributionItem(arr[i]))
-        }
-    }
-    return {
-        items: items,
-        total: toNumber(data['total']),
-        page: toNumber(data['page'], 1),
-        page_size: toNumber(data['page_size'], 20),
-    } as ContributionPageResult
-}
-
 /**
  * 上传投稿暂存文件（先传后交）
  * POST /contributions/upload-file（multipart 字段 file）
@@ -163,14 +147,15 @@ export function createContributionApi(credentialId : number, title : string, int
  * @param page 页码（默认 1）
  * @param pageSize 每页数量（默认 20，后端上限 50）
  */
-export function getMyContributionsApi(page : number = 1, pageSize : number = 20) : Promise<ContributionPageResult> {
+export function getMyContributionsApi(page : number = 1, pageSize : number = 20) : Promise<Page<ContributionItem>> {
     const params : UTSJSONObject = {
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return getMapped<ContributionPageResult>('/contributions/mine', params, (data : UTSJSONObject) : ContributionPageResult => {
-        return buildContributionPage(data)
-    }).catch((e) : ContributionPageResult => {
+    // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`，分页字段只认 total
+    return getMapped<Page<ContributionItem>>('/contributions/mine', params, (data : UTSJSONObject) : Page<ContributionItem> => {
+        return decodePage<ContributionItem>(data, '/contributions/mine', page, pageSize, (obj : UTSJSONObject) : ContributionItem => buildContributionItem(obj), ['items'])
+    }).catch((e) : Page<ContributionItem> => {
         console.error('[getMyContributionsApi] failed:', e)
         throw new Error(errMsg(e, '获取我的投稿失败'))
     })

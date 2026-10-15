@@ -11,6 +11,7 @@
  */
 import { getMapped } from './request'
 import { toNumber, toStr } from './helpers'
+import { decodeList } from './envelope'
 import type { FaqCategory, FaqEntry } from '../types/index'
 
 /** 构造 FaqEntry（ADR-0003 手动 JSON 映射：Android 端不能 as 强转 Kotlin data class） */
@@ -47,15 +48,6 @@ function buildFaqCategory(obj : UTSJSONObject) : FaqCategory {
  * @returns 分类数组；后端无任何内容时返回空数组（页面据此走空态，不区分「无分类」与「全空」）
  */
 export function getFaqApi() : Promise<FaqCategory[]> {
-    return getMapped<FaqCategory[]>('/faq', null, (data : UTSJSONObject) : FaqCategory[] => {
-        const categories : FaqCategory[] = []
-        const raw = data['categories']
-        if (raw != null) {
-            const arr = raw as Array<UTSJSONObject>
-            for (let i = 0; i < arr.length; i++) {
-                categories.push(buildFaqCategory(arr[i]))
-            }
-        }
-        return categories
-    })
+    // 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `categories`
+    return getMapped<FaqCategory[]>('/faq', null, (data : UTSJSONObject) : FaqCategory[] => decodeList<FaqCategory>(data, '/faq', (obj : UTSJSONObject) : FaqCategory => buildFaqCategory(obj), ['categories']))
 }

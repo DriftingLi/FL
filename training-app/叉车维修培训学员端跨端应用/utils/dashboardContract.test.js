@@ -45,14 +45,14 @@ describe('featured 域收紧（dashboard 新闻资讯数据源）', () => {
   it('引入 getMapped', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it('getFeaturedContentsApi / getFeaturedContentDetailApi 经 getMapped + build* 提取（箭头包裹，error17 先例）', () => {
+  it('getFeaturedContentsApi / getFeaturedContentDetailApi 经 getMapped + mapper-callback（列表走信封归一出口 decodePage，ADR-0037 PR-B）', () => {
     const list = fnBodyOf(src, 'getFeaturedContentsApi');
-    expect(list).toContain('getMapped<FeaturedContentListResult>');
-    expect(list).toMatch(/\(data : UTSJSONObject\) : FeaturedContentListResult => buildFeaturedListResult\(data\)/);
+    expect(list).toContain('getMapped<Page<FeaturedContentItem>>');
+    expect(list).toMatch(/decodePage<FeaturedContentItem>\(data/);
     const detail = fnBodyOf(src, 'getFeaturedContentDetailApi');
     expect(detail).toContain('getMapped<FeaturedContentDetail>');
     expect(detail).toMatch(/\(data : UTSJSONObject\) : FeaturedContentDetail => buildFeaturedDetailResult\(data\)/);
-    expect(src).toMatch(/function buildFeaturedListResult/);
+    expect(src).not.toMatch(/function buildFeaturedListResult/);
     expect(src).toMatch(/function buildFeaturedDetailResult/);
   });
   it('viewFeaturedContentApi（void 透传）保持原 post() 通路不硬套 mapper', () => {

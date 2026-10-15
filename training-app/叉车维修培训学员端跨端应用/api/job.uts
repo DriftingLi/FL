@@ -12,7 +12,9 @@
  * 后端无 data 载荷、调用方只 await 成败，硬套 identity map 属过度设计 ⇒ 保持原 `post` 通路。
  */
 import { getMapped, post } from './request'
-import type { JobPosting, JobListParams, JobListResult, ReportReason } from '../types/index'
+import { decodePage } from './envelope'
+import type { Page } from './envelope'
+import type { JobPosting, JobListParams, ReportReason } from '../types/index'
 
 /** 预设举报原因列表 */
 export const REPORT_REASONS : ReportReason[] = [
@@ -41,16 +43,6 @@ function buildJobPosting(obj : UTSJSONObject) : JobPosting {
         apply_state: (obj['apply_state'] as string) ?? '',
         cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
     } as JobPosting
-}
-
-/** 从 UTSJSONObject 构造 JobListResult（items 逐条走 buildJobPosting，total 直读） */
-function buildJobListResult(data : UTSJSONObject) : JobListResult {
-    const itemsRaw = (data['items'] as UTSJSONObject[]) ?? []
-    const items : JobPosting[] = itemsRaw.map((obj : UTSJSONObject) : JobPosting => buildJobPosting(obj))
-    return {
-        items: items,
-        total: data['total'] as number,
-    } as JobListResult
 }
 
 /**
@@ -89,7 +81,7 @@ export function applyJobApi(jobId : number) : Promise<void> {
  * 职位广场列表（学员侧，仅 open 且未强制下架）
  * @param params 查询参数（可选）
  */
-export function getJobListApi(params : JobListParams = {}) : Promise<JobListResult> {
+export function getJobListApi(params : JobListParams = {}) : Promise<Page<JobPosting>> {
     const query : UTSJSONObject = {} as UTSJSONObject
     if (params.page != null && params.page! > 0) query['page'] = params.page!.toString()
     if (params.page_size != null && params.page_size! > 0) query['page_size'] = params.page_size!.toString()
@@ -106,5 +98,6 @@ export function getJobListApi(params : JobListParams = {}) : Promise<JobListResu
     const qs = qsParts.join('&')
     const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
 
-    return getMapped<JobListResult>(url, null, (data : UTSJSONObject) : JobListResult => buildJobListResult(data))
+    // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`，分页字段只认 total
+    return getMapped<Page<JobPosting>>(url, null, (data : UTSJSONObject) : Page<JobPosting> => decodePage<JobPosting>(data, url, params.page != null ? params.page! : 1, params.page_size != null ? params.page_size! : 20, (obj : UTSJSONObject) : JobPosting => buildJobPosting(obj), ['items']))
 }

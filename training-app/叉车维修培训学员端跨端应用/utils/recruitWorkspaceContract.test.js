@@ -903,7 +903,9 @@ describe('H2. uvue / UTS 硬约束（本票新增文件）', () => {
   it('api 层数组一律先落 UTSJSONObject[] 再逐项取字段（ADR-0015 实体解码边界）', () => {
     const api = read(API_RECRUIT);
     expect(api).not.toMatch(/as\s+Recruit\w+\[\]/);
-    expect((api.match(/as UTSJSONObject\[\]/g) || []).length).toBe(3);
+    // 原三处列表站点（jobs / contact-requests / applications）已改走 decodePage（ADR-0037 PR-B）：
+    // `as UTSJSONObject[]` 的落点随解码收敛进 api/envelope.uts，本文件只剩简历库那一条（PR-D 射程）。
+    expect((api.match(/as UTSJSONObject\[\]/g) || []).length).toBe(1);
   });
 });
 

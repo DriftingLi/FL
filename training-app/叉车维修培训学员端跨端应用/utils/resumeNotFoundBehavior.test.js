@@ -84,6 +84,11 @@ function buildApp(opts = {}) {
   const uni = makeUni();
   const pages = [{ route: 'pages/resume/resume-edit' }];
   const helpers = loadUts(HELPERS_UTS, {});
+  // 信封归一模块真实现（ADR-0037 PR-B）：resume 的数组出口现在走 decodeList。
+  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+    getMapped: () => Promise.resolve({}),
+    toNumber: helpers.toNumber,
+  });
   const storage = loadUts(STORAGE_UTS, { uni });
   const gate = loadUts(GATE_UTS, {});
   const authRole = loadUts(AUTH_ROLE_UTS, {
@@ -118,6 +123,7 @@ function buildApp(opts = {}) {
   const resumeBindings = {
     getMapped: request.getMapped,
     requestMapped: request.requestMapped,
+    decodeList: envelope.decodeList,
     del: request.del,
     uploadFile: request.uploadFile,
     toStr: helpers.toStr,
