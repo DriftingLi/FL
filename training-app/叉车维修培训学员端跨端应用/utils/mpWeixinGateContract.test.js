@@ -42,7 +42,8 @@
  *       **入库数据流**（直达截图 → 聚合 shots → probeJson.shots → 归档，AC1 的链条，拆了门照样绿）与
  *       **评论渲染的 null 过滤**（-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）。
  *   C25 **登录态会话注入**（#1690）：门计划必须有 auth-inject 步（ready-gate 之后、探针之前，exec=node，
- *   直达循环两相（run12）：入口页 = guest 相（--mode guest 清会话，#1478 welcome 页有会话必弹 dashboard）、
+ *   直达循环两相（run12/run13）：入口页 = guest 相（--mode guest 游客盖帽——auth_user 写非 JSON + token 清空，
+ *       removeStorageSync 实测不跨重启落盘、setStorageSync 落盘，run13 实证不对称；#1478 welcome 有会话必弹 dashboard）、
  *   其余页 = auth 相（--mode auth 注入，当页冷启动**之前**执行）；
  *       exit 2 恒空——注入失败是诚实 SKIP（auth-session-unavailable），不是环境 blocked）；执行路径唯一
  *       取用点 `Get-GateStep -Id 'auth-inject'` + `Invoke-AuthInject` 解析 `MP_WEIXIN_AUTH` 结果行；
@@ -741,7 +742,11 @@ function scanContract(sources) {
   });
   must(authSrc.includes('callWxMethod'), 'C25', '注入脚本未用 callWxMethod（注入只发生在门运行环境）');
   must(authSrc.includes("a === '--mode'"), 'C25', '注入脚本缺 --mode 解析（guest/auth 两相的唯一开关）');
-  must(authSrc.includes('removeStorageSync'), 'C25', '注入脚本 guest 相缺 removeStorageSync（不清会话 ⇒ 入口页被 #1478 弹 dashboard）');
+  must(authSrc.includes('gate-guest-invalid-json'), 'C25', '注入脚本 guest 相缺游客盖帽（auth_user 写非 JSON 让 restoreFromStorage 判游客——remove 不跨重启落盘，run13 实证；不盖帽 ⇒ 入口页被 #1478 弹 dashboard）');
+  must(authSrc.includes('flushSettleMs'), 'C25', '注入脚本缺落盘兜底窗口 flushSettleMs（非默认安装面的盲等路径，须存在且带 settled-blind 上报）');
+  must(authSrc.includes('flushConfirm') && authSrc.includes('WeappSimulator'), 'C25', '注入脚本缺落盘确认（#1690 run13 实证：storage 写只活 app 内存、quit 不冲刷 ⇒ 盖帽/注入必须轮询 WeappStorage 盘上出现唯一标记后才放行冷启动，否则白写）');
+  must(authSrc.includes('storage-flush-timeout'), 'C25', '注入脚本缺 flush 超时诚实失败（落盘确认超时 ⇒ ok=false reason=storage-flush-timeout，不得假放行）');
+  must(authSrc.includes('gate_flush_stamp'), 'C25', 'auth 相缺落盘 stamp（注入写回后以唯一 stamp 键确认刷盘——门自有键，应用不消费）');
   must(authSrc.includes("'cleared'"), 'C25', '注入脚本 guest 相缺 status=cleared 上报');
   // 只判代码行：注释里「不调 mp.close()」的纪律声明不算违规（剥 // 行注释后查真调用）
   const authCode = authSrc.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
@@ -1069,7 +1074,11 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, probe: real.probe.replace(/cold-start-direct/g, 'x') }],
       ['C24', { ...real, probe: real.probe.replace(/direct-page-unsupported/g, 'x') }],
       ['C24', { ...real, script: real.script.replace('foreach ($pg in $directList) {', 'foreach ($pg in $directList) { if ($pg -ne $entryRoute) {') }],
-      ['C25', { ...real, auth: real.auth.replace(/removeStorageSync/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/gate-guest-invalid-json/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/flushSettleMs/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/flushConfirm/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/storage-flush-timeout/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace(/gate_flush_stamp/g, 'x') }],
       ['C25', { ...real, auth: real.auth.replace("a === '--mode'", 'false') }],
       ['C25', { ...real, script: real.script.replace(/-Mode 'auth'/g, "-Mode 'x'") }],
       ['C24', { ...real, script: real.script.replace(/port-held-after-quit/g, 'x') }],

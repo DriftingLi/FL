@@ -8,10 +8,12 @@
 //       的 storage 里，app 冷启动后 restoreFromStorage 照常消费（access 过期还有 refresh_token 续期兜底）。
 // 幂等：先读现状 —— token 与 user 都在 ⇒ status=existing 直接返回（每页冷启动前都会调本脚本，
 //       重复调用必须便宜）。实测 storage 跨 IDE quit→reopen 持久（#1690 前置实验）。
-// 两相（#1690 run12）：--mode auth（缺省）= 注入会话给登录态页；--mode guest = **清会话**给入口页。
+// 两相（#1690 run12/run13）：--mode auth（缺省）= 注入会话给登录态页；--mode guest = **游客盖帽**给入口页。
 //       入口页是 welcome 着陆页（index.uvue #1478：「已登录仍无条件 reLaunch dashboard」，业务不变量、
-//       不得条件化）⇒ 有会话时其冷启动必落 dashboard 判 miss。guest 相 removeStorageSync 四键 + 读回
-//       确认 ⇒ status=cleared。清/注入都须发生在当页冷启动**之前**（冷启动后 app 已按旧 storage 落地）。
+//       不得条件化）⇒ 有会话时其冷启动必落 dashboard 判 miss。guest 相用 setStorageSync 把 auth_user
+//       写成非 JSON 盖帽（removeStorageSync 实测不跨 IDE 重启落盘、set 落盘——run13 实证不对称）：
+//       应用启动 restoreFromStorage 走 uObj==null 分支 resetAuthState（stores/auth.uts:194，只动内存
+//       不动 storage）⇒ welcome 页以游客态留在入口页。盖帽/注入都须发生在当页冷启动**之前**。
 // 诚实降级：任何一步失败 ⇒ ok=false + kebab reason，由调用方记 SKIP（auth-session-unavailable），
 //       绝不冒充取证成立。
 // 输出：单行 `MP_WEIXIN_AUTH {json}`（调用方只看这行，不看退出码）。
@@ -20,6 +22,7 @@
 //       （冷启动后 app 侧未热时 callWxMethod 会「timeout waiting for automator response」，重试而不是挂死）。
 
 import path from 'node:path';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 function parseArgs(argv) {
@@ -31,6 +34,9 @@ function parseArgs(argv) {
     stepTimeoutMs: 15000,
     attempts: 3,
     retryDelayMs: 4000,
+    flushSettleMs: 45000, // 无 WeappStorage 目录时的盲等兜底
+    flushTimeoutMs: 90000, // 落盘确认轮询上限（#1690 run13：写不确认就 quit ⇒ 重启后原样复活）
+    flushIntervalMs: 2000,
     mode: 'auth',
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -117,25 +123,60 @@ async function main() {
   const USER_KEY = 'auth_user';
   const REFRESH_KEY = 'auth_refresh_token';
   const PROVIDER_KEY = 'auth_login_provider';
+  const GUEST_CAP = 'gate-guest-invalid-json'; // 非 JSON ⇒ getStorageJSON 走 catch 返 null（utils/storage.uts:44）
 
-  // 0) guest 相（#1690 run12）：清会话给入口页（welcome 页有会话必弹 dashboard，见文件头）。
-  //    remove 不存在的键可能报错 ⇒ 逐键吞错，以读回为准判「已清」。
+  // 0) guest 相（#1690 run13 终版）：游客盖帽给入口页。
+  //    实证口径（cap-probe 实验）：callWxMethod 的 storage 写（含 REMOVE）只活 app 内存，IDE 异步刷盘、
+  //    quit 不冲刷 ⇒ 删除会「复活」，写盖帽也必须**落盘确认**后才准进入冷启动。盖帽值含唯一时间戳，
+  //    盘上出现该值 = 本轮写入已刷盘。auth_user 非 JSON ⇒ 应用启动 restoreFromStorage 判无用户 ⇒
+  //    resetAuthState（#1124 纪律：只动内存不动 storage）⇒ 入口 welcome 页停游客态（#1478 不变量）。
   if (args.mode === 'guest') {
-    for (const k of [TOKEN_KEY, REFRESH_KEY, USER_KEY, PROVIDER_KEY]) {
-      try { await wxRetry(mp, 'removeStorageSync', k); } catch { /* 键本就不存在 ⇒ 缺席即游客态 */ }
-    }
-    let tGone = '';
-    let uGone = '';
     try {
-      tGone = String((await wxRetry(mp, 'getStorageSync', TOKEN_KEY)) ?? '');
-      uGone = String((await wxRetry(mp, 'getStorageSync', USER_KEY)) ?? '');
+      const capVal = GUEST_CAP + '-' + Date.now(); // 唯一值：落盘轮询不被上一轮旧盖帽假确认
+      await wxRetry(mp, 'setStorageSync', USER_KEY, capVal);
+      await wxRetry(mp, 'setStorageSync', TOKEN_KEY, '');
+      const uCap = String((await wxRetry(mp, 'getStorageSync', USER_KEY)) ?? '');
+      if (uCap !== capVal) {
+        finish({ ok: false, status: 'none', reason: 'storage-clear-failed', detail: 'guest cap not in place: readback=' + uCap.slice(0, 40) });
+      }
+      const fc = await flushConfirm(capVal); // 盖帽必须活过紧随其后的 quit ⇒ 落盘确认后才放行
+      if (fc === 'timeout') {
+        finish({ ok: false, status: 'none', reason: 'storage-flush-timeout', detail: 'guest cap not flushed to disk in ' + args.flushTimeoutMs + 'ms' });
+      }
+      finish({ ok: true, status: 'cleared', user: '', reason: '', detail: 'guest phase: auth_user capped, token emptied, flush=' + fc });
     } catch (e) {
       finish({ ok: false, status: 'none', reason: 'storage-clear-failed', detail: String((e && e.message) || e).slice(0, 200) });
     }
-    if (tGone.length > 20 || uGone.length > 2) {
-      finish({ ok: false, status: 'none', reason: 'storage-clear-failed', detail: 'token/user still present after removeStorageSync' });
+  }
+
+  // 落盘确认（#1690 run13 实证）：storage 写只活 app 内存，IDE 以未公开节律异步刷盘、quit 不冲刷。
+  // 判据：写含唯一时间戳的标记值，轮询 DevTools User Data/*/WeappSimulator/WeappStorage/storage_*.json
+  // 直到标记出现在盘上（只读观测，不写 IDE 内部文件）。超时 ⇒ 诚实报 storage-flush-timeout。
+  async function flushConfirm(marker) {
+    const base = process.env.LOCALAPPDATA || '';
+    const ud = base ? path.join(base, '微信开发者工具', 'User Data') : '';
+    if (!ud || !existsSync(ud)) {
+      await sleep(args.flushSettleMs); // 非默认安装面：盲等兜底（detail 记 settled-blind，不瞒）
+      return 'settled-blind';
     }
-    finish({ ok: true, status: 'cleared', user: '', reason: '', detail: 'guest phase: session keys removed' });
+    const deadline = Date.now() + args.flushTimeoutMs;
+    for (;;) {
+      try {
+        for (const hash of readdirSync(ud)) {
+          const dir = path.join(ud, hash, 'WeappSimulator', 'WeappStorage');
+          let fl = [];
+          try { fl = readdirSync(dir); } catch { continue; }
+          for (const f of fl) {
+            if (!f.startsWith('storage_') || !f.endsWith('.json')) continue;
+            try {
+              if (readFileSync(path.join(dir, f), 'utf8').includes(marker)) return 'flushed';
+            } catch { /* 正被 IDE 重写 ⇒ 下一轮 */ }
+          }
+        }
+      } catch { /* 目录竞态 ⇒ 下一轮 */ }
+      if (Date.now() > deadline) return 'timeout';
+      await sleep(args.flushIntervalMs);
+    }
   }
 
   // 1) 现状检查（幂等便宜路径）
@@ -221,7 +262,17 @@ async function main() {
   if (rt !== String(data.token) || !uidOk) {
     finish({ ok: false, status: 'none', reason: 'readback-mismatch', detail: apiDetail });
   }
-  finish({ ok: true, status: 'injected', user: String(user.user_id), reason: '', detail: 'wx-login+storage ok ' + apiDetail });
+  // 6) 落盘确认（#1690 run13）：注入若没刷盘，冷启动重启后令牌丢失 ⇒ 本页白跑。
+  //    stamp 键 = 门自有、应用不消费；值含唯一时间戳，盘上出现即证明本轮写入已随之落盘。
+  const stamp = 'fs-' + Date.now();
+  try {
+    await wxRetry(mp, 'setStorageSync', 'gate_flush_stamp', stamp);
+  } catch { /* stamp 写失败 ⇒ 走 flush timeout 路径，不另立错误 */ }
+  const fc = await flushConfirm(stamp);
+  if (fc === 'timeout') {
+    finish({ ok: false, status: 'none', reason: 'storage-flush-timeout', detail: 'injection not flushed to disk in ' + args.flushTimeoutMs + 'ms; ' + apiDetail });
+  }
+  finish({ ok: true, status: 'injected', user: String(user.user_id), reason: '', detail: 'wx-login+storage ok, flush=' + fc + ' ' + apiDetail });
 }
 
 main().catch((e) => finish({ ok: false, status: 'none', reason: 'exception', detail: String((e && e.stack) || e).slice(0, 300) }));

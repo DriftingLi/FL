@@ -509,10 +509,10 @@ function New-GatePlan {
         id = 'auth-inject'
         tag = 'auth-inject'
         exec = 'node'
-        argv = @($AuthPath, '--ws', $ws, '--require-root', $AutoRoot, '--timeout-ms', '90000')
-        timeoutSeconds = 150
+        argv = @($AuthPath, '--ws', $ws, '--require-root', $AutoRoot, '--timeout-ms', '150000')
+        timeoutSeconds = 300
         awaitCompletion = $true
-        criteria = @('判成败只看输出 MP_WEIXIN_AUTH 结果行（退出码不作判据）', 'status ∈ existing|injected|none：none ⇒ 后续登录态页如实记 miss(reason=auth-session-unavailable)，不判 exit 2', '结果行不得含令牌：只带 user 标识与耗时', '幂等：已有会话 ⇒ existing 即返回（每页冷启动后都会调用）')
+        criteria = @('判成败只看输出 MP_WEIXIN_AUTH 结果行（退出码不作判据）', 'status ∈ existing|injected|cleared|none：none ⇒ 后续页如实记 miss(reason=auth-session-unavailable)，不判 exit 2', '结果行不得含令牌：只带 user 标识与耗时', '幂等：已有会话 ⇒ existing 即返回；guest 相写盖帽 ⇒ cleared', '落盘确认（#1690 run13）：写/盖帽后必须等标记出现在 WeappStorage 盘上才放行冷启动——IDE 异步刷盘且 quit 不冲刷')
         exit2 = @()
     }
 
@@ -1782,13 +1782,14 @@ try {
             # 每页（含入口页）一律 会话相→换页→冷启动→探针（#1690 实测修正）。
             # 入口页不换页不可靠：上一相窗口落在别的页 ⇒ 靠换页写盘（Switch 恒 Set-Content +
             # 键序轮转 ⇒ 字节必变 ⇒ 强制重编译）保证冷启动从目标页起。
-            # 会话相（#1690 run12 两相）：入口页 = guest（清会话——welcome 页有会话必弹 dashboard）；
+            # 会话相（#1690 run12/run13 两相）：入口页 = guest（游客盖帽——welcome 页有会话必弹 dashboard；
+            #   remove 不跨重启落盘、set 落盘 ⇒ 盖帽用 setStorageSync 写坏值）；
             # 其余页 = auth（探针前注入，幂等 existing 秒返；上一相注入失败/被 app 401 清掉 ⇒ 本页自愈重注）。
             if ($Auth -ne 'off') {
                 if ($isEntry) {
                     $ag = Invoke-AuthInject -AuthStep $authStep -PageTag "guest($leaf)" -Mode 'guest'
                     $authOk = [bool]$ag.ok
-                    if (-not $ag.ok) { Write-Host ">>> guest 相清会话未成（$($ag.reason)）：入口页若被弹走如实记 miss，不假绿" -ForegroundColor Yellow }
+                    if (-not $ag.ok) { Write-Host ">>> guest 相游客盖帽未成（$($ag.reason)）：入口页若被弹走如实记 miss，不假绿" -ForegroundColor Yellow }
                 } else {
                     $ai = Invoke-AuthInject -AuthStep $authStep -PageTag "auth($leaf)" -Mode 'auth'
                     $authOk = [bool]$ai.ok
