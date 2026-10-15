@@ -5,7 +5,8 @@
             <view class="nav-bar-side nav-bar-left" @click="onLeftClick">
                 <text v-if="leftIcon.length > 0" class="nav-bar-icon" :class="titleColorClass">{{ leftIcon }}</text>
             </view>
-            <view class="nav-bar-title-block" :class="{ 'nav-bar-title-block--center': !leftOverlap }">
+            <view class="nav-bar-title-block" :class="{ 'nav-bar-title-block--center': !leftOverlap }"
+                @click="onTitleBlockClick">
                 <text v-if="title.length > 0" class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
                 <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
             </view>
@@ -106,6 +107,19 @@
         emit('leftClick')
     }
 
+    /**
+     * 标题块点击（#1677）：**仅左槽空置（leftIcon=''）时**上移到同一条 leftClick 链。
+     * 左槽空置时其内 text 无渲染 ⇒ 左槽 view 零宽零高、onLeftClick 命中区不存在，
+     * 页面把左入口动作（dashboard 证件切换）挂在 leftClick 上就永远点不动；
+     * 标题此时是该入口唯一可见的可点面，故由它代发。左槽有 icon（返回箭头）时
+     * 标题是纯展示文字，点击不得触发左动作 —— 否则全仓子页点标题即误返回。
+     */
+    function onTitleBlockClick() : void {
+        if (props.leftIcon.length == 0) {
+            emit('leftClick')
+        }
+    }
+
     function onRightClick() : void {
         emit('rightClick', -1)
     }
@@ -186,6 +200,11 @@
         flex-direction: column;
         align-items: flex-start;
         margin-left: 16rpx;
+        /* #1677：占满 88rpx bar 高（与 .nav-bar-body 同高）+ 内容垂直居中 ——
+           视觉与原内容高块居中时逐像素一致，但把左入口标题的命中区从「文字高」
+           抬到整条 bar 高（触摸目标 44×44）。左槽空置时标题代发 leftClick（见 onTitleBlockClick）。 */
+        height: 88rpx;
+        justify-content: center;
     }
 
     .nav-bar-title-block--center {
