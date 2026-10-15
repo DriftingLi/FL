@@ -1748,7 +1748,11 @@ try {
         } else {
             $want = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         }
-        $directList = @(@($entryRoute) + $want | Where-Object { $_ } | Select-Object -Unique)
+        # 入口页殿后（#1690 run11 实测口径）：IDE 会话还原按「上次编译的 pages[0] 未变」触发——
+        # 入口页打头时它的冷启动与主链同 head ⇒ 还原旧栈假 miss（run11 复现：主链 index 后直达 index
+        # 拿到 [dashboard]）。改殿后 ⇒ 入口页启动必跟随另一页的 fresh 编译（head 必变 ⇒ 必 fresh）。
+        # 已知极限：清单只剩入口页（$want 空）时同 head 还原仍可能发生 ⇒ 诚实 SKIP，不假绿。
+        $directList = @(@($want | Where-Object { $_ -ne $entryRoute }) + @($entryRoute) | Where-Object { $_ } | Select-Object -Unique)
     }
     if ($directList.Count -gt 0) {
         Write-Host ">>> 直达探针（#1682，机制=cold-start-direct）：页清单 = $($directList -join ',')"
