@@ -10,6 +10,9 @@
       这正是票面「打印非法位置，让人一眼看到病根」那条。
    3) **appid 由解析后取值**：不再用正则从（可能非法的）文件里抠一个 appid 假装通过。
    4) **`app.json.pages` 每页必须有对应 `<page>.js`**。
+ 5) **`app.json.pages` 路由必须唯一**（#1690 run7-10 实测教训）：重复路由下微信构建器 `checkMainPkgPages`
+    拒启模拟器 —— 症状是 `Tool.getInfo` 应答而 `App.getPageStack` 永不应答（`page-stack-not-answering`），
+    病根藏在产物文件里，不查这份判据就找不到。合法产物由构建器保证唯一；重复 ⇒ 产物被外部改写/污染。
 
  退出码语义（与门脚本一致）：本判据失败 = **产物坏了 ⇒ 门未过（exit 1）**，不是「环境不可用（exit 2）」。
  两者混在一起正是票面的病根：坏产物会以「看起来像环境问题」的形态（白屏 / `pageStack` 永不应答 /
@@ -88,6 +91,23 @@ function Get-MpWeixinProductReport {
         return [ordered]@{
             ok = $false; stage = 'product-pages'; appid = $appid; pages = 0
             detail = 'app.json 的 pages 为空或缺失（没有页面可验 ⇒ 产物不可信）'
+        }
+    }
+
+    # 路由唯一性（#1690 run7-10 实测教训）：重复路由 ⇒ 微信构建器 checkMainPkgPages 拒启模拟器，
+    # 症状是 Tool.getInfo 应答而 App.getPageStack 永不应答（page-stack-not-answering）——病根在产物里。
+    # 判序放在缺 .js 检查之前：坏夹具里重复项常同时缺配套文件，先报「重复」才指向真病根。
+    $seen = @{}
+    $dups = @()
+    foreach ($p in $pages) {
+        $rel0 = ([string]$p).TrimStart('/')
+        if ($rel0.Length -eq 0) { continue }
+        if ($seen.ContainsKey($rel0)) { if (-not ($dups -contains $rel0)) { $dups += $rel0 } } else { $seen[$rel0] = $true }
+    }
+    if ($dups.Count -gt 0) {
+        return [ordered]@{
+            ok = $false; stage = 'product-pages'; appid = $appid; pages = $pages.Count
+            detail = ('app.json.pages 路由重复（' + (($dups | Select-Object -First 5) -join ' / ') + '）—— 微信构建器会拒启模拟器（症状：pageStack 永不应答），产物已被外部改写或污染，须重新 publish')
         }
     }
 

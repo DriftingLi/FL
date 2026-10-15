@@ -703,6 +703,7 @@ function scanContract(sources) {
   must(s.includes('port-held-after-quit'), 'C24', '直达冷启动缺「端口被垂死实例占住」判据（#1690 run5：open 骑旧会话 ⇒ 假 miss；归零后必须等端口收摊）');
   must(probe.includes('shotErr'), 'C24', '直达截图缺重试壳（#1690 run5：冷启动后渲染服务未热，mp.screenshot 撞 automator 15s 应答超时 ⇒ 重试一次再记错）');
   must(s.includes('键序轮转'), 'C24', '换页写入缺「键序轮转」保证（#1690 run6：pages[0] 未变时字节不变 ⇒ IDE 不重编译、还原旧会话页栈 ⇒ 入口页假 miss）');
+  must(s.includes('-ne @($re.pages).Count'), 'C24', '换页读回复验缺「路由唯一性」判据（#1690 run7-10：重复路由让构建器拒启模拟器，症状伪装成 page-stack-not-answering）');
   // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
   // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
   // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
@@ -1062,6 +1063,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, script: real.script.replace(/port-held-after-quit/g, 'x') }],
       ['C24', { ...real, script: real.script.replace(/键序轮转/g, 'x').replace(/\$rot = @\(\$keys\[1\.\.\(\$keys\.Count - 1\)\]\) \+ @\(\$keys\[0\]\)/, '$rot = $keys') }],
       ['C24', { ...real, probe: real.probe.replace(/shotErr/g, 'x') }],
+      ['C24', { ...real, script: real.script.replace("if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }").replace(/\n *# 唯一性复验[^\n]*/g, '') }],
       // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓
       ['C24', { ...real, script: real.script.replace('$agg.shots += @($pj.shots)', '') }],
       ['C24', { ...real, script: real.script.replace('shots = @($agg.shots)', 'shots = @()') }],
@@ -1334,6 +1336,21 @@ describe('C20：产物合法性判据（#1210）', () => {
     expect(r.ok).toBe(false);
     expect(r.stage).toBe('product-pages');
     expect(r.detail).toContain('pages/login/login.js');
+  });
+
+  it('C20e（必红④）：app.json.pages 路由重复 ⇒ 点名重复项（#1690 run7-10：重复页让构建器拒启模拟器，症状伪装成 page-stack-not-answering）', () => {
+    // 夹具把每个声明页的 .js 都补齐 ⇒ 判据面唯一可能的失败分支就是「重复」。
+    // （中文 detail 经子进程 stdout 会被 OEM 码页打成乱码，负向断言不牢靠 —— 结构上排除歧义，断言只用 ASCII）
+    const dir = product((d) => {
+      fs.writeFileSync(path.join(d, 'app.json'), JSON.stringify({ pages: ['pages/index/index', 'pages/login/login', 'pages/index/index'] }));
+      fs.mkdirSync(path.join(d, 'pages', 'login'), { recursive: true });
+      fs.writeFileSync(path.join(d, 'pages', 'login', 'login.js'), 'Page({})');
+    });
+    const r = runProductReport(dir);
+    expect(r.ok).toBe(false);
+    expect(r.stage).toBe('product-pages');
+    expect(r.detail).toContain('pages/index/index');
+    expect(r.pages).toBe(3);
   });
 
   it('C20-wiring①：门脚本真的调判据库（dot-source + 调用），且旧正则抠 appid 已删', () => {

@@ -1018,6 +1018,9 @@ function Switch-DistAppJsonFirstPage {
     $re = $null
     try { $re = (Get-Content -LiteralPath $Path -Raw) | ConvertFrom-Json } catch { return 'app-json-invalid' }
     if ($null -eq $re -or -not $re.pages -or "$(@($re.pages)[0])" -ne $target) { return 'app-json-invalid' }
+    # 唯一性复验（#1690 run7-10 实测教训）：重复路由 ⇒ 构建器拒启模拟器（症状 page-stack-not-answering），
+    # 换页前文件已被外部污染时这里拦住，不让它烧进 120s 僵尸等待
+    if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }
     return $null
 }
 
