@@ -710,6 +710,7 @@ function scanContract(sources) {
   must(s.includes('-ne @($re.pages).Count'), 'C24', '换页读回复验缺「路由唯一性」判据（#1690 run7-10：重复路由让构建器拒启模拟器，症状伪装成 page-stack-not-answering）');
   must(s.includes("-Mode 'guest'"), 'C24', '直达循环缺 guest 相（入口页冷启动前必须清会话——#1478 welcome 页「已登录无条件落 dashboard」业务不变量，有会话的 index 冷启动必 miss，run4/6/11/12 实证）');
   must(s.includes('$isEntry = ($pg -eq $entryRoute)'), 'C24', '直达循环缺「入口页 == guest 相」分相判据（两相序真源，#1690 run12）');
+  must(s.includes('入口漂移自愈'), 'C24', '缺「入口漂移自愈」判据（#1690 run14：上次强杀遗留换页 ⇒ 孤儿页被当入口静默取证，index 漏测还判 ✅）');
   // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
   // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
   // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
@@ -1085,6 +1086,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, script: real.script.replace(/键序轮转/g, 'x').replace(/\$rot = @\(\$keys\[1\.\.\(\$keys\.Count - 1\)\]\) \+ @\(\$keys\[0\]\)/, '$rot = $keys') }],
       ['C24', { ...real, script: real.script.replace(/-Mode 'guest'/g, "-Mode 'auth'") }],
       ['C24', { ...real, script: real.script.replace('$isEntry = ($pg -eq $entryRoute)', '$isEntry = $false') }],
+    ['C24', { ...real, script: real.script.replace(/入口漂移自愈/g, 'x') }],
       ['C24', { ...real, probe: real.probe.replace(/shotErr/g, 'x') }],
       ['C24', { ...real, script: real.script.replace("if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }").replace(/\n *# 唯一性复验[^\n]*/g, '') }],
       // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓

@@ -1737,6 +1737,29 @@ try {
     $directLines = @()
     $directList = @()
     $distAppJson = Join-Path $Dist 'app.json'
+    # 入口漂移自愈（#1690 run14 实测教训）：上一次直达循环被强杀 ⇒ finally 未跑 ⇒ 产物 app.json 首项
+    # 停在上次换的页；本次会把孤儿页当入口静默取证（index 漏测还判 ✅）。以源 pages.json 首项为真源，
+    # 漂移且该页在产物里 ⇒ 换回（复用 Switch 的键序轮转 + 读回/唯一性复验纪律）；源首项不在产物
+    # （产物过期）⇒ 不动，门结论按实际入口如实记录。
+    if ((Test-Path -LiteralPath $distAppJson) -and ($Pages -ne 'none')) {
+        $srcPagesJson = Join-Path $Project 'pages.json'
+        if (Test-Path -LiteralPath $srcPagesJson) {
+            try {
+                $srcFirst = "$(@(((Get-Content -LiteralPath $srcPagesJson -Raw) | ConvertFrom-Json).pages)[0].path)"
+                $curFirst = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])"
+                if ($srcFirst -and $curFirst -and ($curFirst -ne $srcFirst)) {
+                    $heal = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $srcFirst
+                    if ($null -eq $heal) {
+                        Write-Host ">>> 入口漂移自愈（#1690）：产物 app.json 首项 $curFirst ⇒ $srcFirst（上次强杀遗留换页）" -ForegroundColor Yellow
+                        Write-Log "入口漂移自愈：$curFirst ⇒ $srcFirst"
+                    } else {
+                        Write-Host "[warn] 入口漂移自愈未成（$heal）：产物入口仍为 $curFirst，门按实际入口记录" -ForegroundColor Yellow
+                        Write-Log "入口漂移自愈未成：$heal（入口保持 $curFirst）"
+                    }
+                }
+            } catch { Write-Host "[warn] 入口漂移检测读页清单失败（跳过自愈）：$_" -ForegroundColor Yellow }
+        }
+    }
     $entryRoute = ''
     if ($Pages -ne 'none' -and (Test-Path -LiteralPath $distAppJson)) {
         try { $entryRoute = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])" } catch { $entryRoute = '' }
