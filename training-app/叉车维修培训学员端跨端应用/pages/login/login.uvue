@@ -1,6 +1,6 @@
 <template>
     <scroll-view scroll-y class="login-page">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 
         <!-- 顶部品牌区 -->
         <view class="header">
@@ -180,12 +180,15 @@
     import { useLoginProviders } from '../../composables/useLoginProviders'
     import { useLoginForm } from './composables/useLoginForm'
     import { useBiometricGate } from './composables/useBiometricGate'
+    import { useSafeArea } from '../../utils/system'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
     // #1484：登录提供方入口件（App 端常驻样式位 + 禁用态 + 明示文案）。落点选登录页而非着陆页：
     // 着陆页那侧 #1478/#1487 已有主 CTA，本票只补登录页这条次级链，两个战场不重叠。
     import LoginProviderEntry from '../../components/login-provider-entry/login-provider-entry.uvue'
 
     const auth = useAuthStore()
+    // N06 自垫状态栏：高度取自 utils/system.uts 唯一真源（#1602/#1609），页面不再自行探测
+    const safeArea = useSafeArea()
     // 微信登录入口的显隐由**运行期能力探测**决定（#1478 裁定 2：条件编译指令行增删数为 0）；
     // 着陆页 `pages/index/index.uvue` 引用的是同一个符号，两页不各写一份探测逻辑。
     // 第三个面 `isAppPlatform` 是**挂载条件**（#1484）：入口件挂不挂 = 端别；按钮禁不禁 = 接通面。
@@ -197,7 +200,6 @@
     // 表单态（登录方式 / 验证码 / 提交），模板绑定的符号一律解构成本地绑定 ——
     // 模板因此可以**逐字节不变**（UI 像素级冻结的最强证据面），无需 reg.xxx.value 改写
     const {
-        statusBarHeight,
         mode,
         phone,
         phoneCode,
@@ -236,9 +238,6 @@
     const { showedStored, quickLoginLabel, initBiometricGate, onQuickLogin, toggleRemember } = useBiometricGate(biometric, username, password, rememberMe)
 
     onLoad((options : OnLoadOptions) => {
-        const sysInfo = uni.getSystemInfoSync()
-        statusBarHeight.value = sysInfo.statusBarHeight
-
         auth.restoreFromStorage()
         if (auth.isLoggedIn.value) {
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
@@ -293,7 +292,7 @@
     }
 
     .status-bar {
-        background-color: #ffffff;
+        background-color: $bg-header;
     }
 
     /* ===== 顶部品牌区 ===== */

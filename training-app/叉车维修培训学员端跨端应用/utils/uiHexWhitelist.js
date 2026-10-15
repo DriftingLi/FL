@@ -108,4 +108,20 @@ module.exports = {
     '#4A8F68': 'pages/ai-assistant/ai-assistant.uvue pro-banner-desc 已解锁字色——中绿文字（#920 设计），token 表无对应',
     '#2E9E5B': 'pages/ai-assistant/ai-assistant.uvue pro-banner-btn 已解锁按钮底——绿系按钮实底（#920 设计），$success-color 偏荧光语义不符',
     '#8AA9C0': 'pages/ai-assistant/ai-assistant.uvue func-head-arrow 收起箭头灰蓝——功能入口头部装饰灰，token 表无对应，待灰阶 token 票裁',
+
+    // ── 批6（#1609 N06 无页头白名单 6 页 + mall N03 补漏）新增 ──
+    '#0066FF': 'pages/index/index.uvue landing-page 渐变首色——着陆品牌渐变对（蓝→绿），非主色 #239EDD 族，token 表无对应，待品牌渐变票裁',
+    '#00CC99': 'pages/index/index.uvue landing-page 渐变尾色/实底兜底——与 #0066FF 成对，同上',
+    '#FFF1F0': 'pages/index/index.uvue error-box 底——错误提示浅红底，$danger-tint(#ffebee) 近似但值不等，待真机裁',
+    '#D93025': 'pages/index/index.uvue error-text 字色——错误红，$danger-color(#ff3b30) 值不等（同批2 #F44336 判例），待红系 token 票裁',
+    '#22C55E': 'pages/index/index.uvue cta-wechat 主按钮底 / pages/forgot-password/forgot-password.uvue 成功按钮底——微信绿按钮，$success-color(#4cd964) 偏荧光语义不符（同批2 #4CAF50、批5 #14AE50 判例），待成功系 token 票裁',
+    '#F2F4F7': 'pages/index/index.uvue cta-secondary 底——次级按钮中性浅灰，$bg-color(#f8f8f8) 近似但值不等，待真机裁',
+    '#1E9FFF': 'pages/index/index.uvue cta-secondary-text 字色——uView 系蓝文字，token 表无对应，待蓝系 token 票裁',
+    '#E0E2EA': 'pages/login/login.uvue、pages/register/register.uvue、pages/forgot-password/forgot-password.uvue 区号与输入分隔竖线——中性灰蓝分隔，$border-color(#e5e5e5) 近似但值不等，待灰阶 token 票裁',
+    '#07C160': 'pages/login/login.uvue 微信登录按钮底 / pages/profile-setup/profile-setup.uvue 头像虚线框——微信品牌绿属外部品牌标识色，改走 token 即失真，不入 token 体系',
+    '#15803D': 'pages/forgot-password/forgot-password.uvue 成功态按钮按下底——#22C55E 的深一档配对（green-700），同上待成功系 token 票裁',
+    '#14532D': 'pages/forgot-password/forgot-password.uvue 成功态深绿字——green-900，token 表无对应',
+    '#86EFAC': 'pages/forgot-password/forgot-password.uvue 成功态浅绿字——green-300，token 表无对应',
+    '#F0F1F5': 'pages/register/register.uvue、pages/forgot-password/forgot-password.uvue mode-tab 未选中底——分段控件中性浅灰，$bg-color 近似但值不等（与批5 #EEF1F5 轨道灰用途不同，各守各点不并条）',
+    '#FF4D4F': 'pages/mall/mall.uvue product-price 价格红——与页面私有子组件 mall-category-sidebar 同值，本批只收页头不扩面改色；$danger-color(#ff3b30) 值不等（同批2 #F44336 判例），待红系 token 票裁',
 }

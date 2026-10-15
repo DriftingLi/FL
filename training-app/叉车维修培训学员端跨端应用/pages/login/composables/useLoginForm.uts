@@ -34,7 +34,6 @@ import type { UseBiometricResult } from '../../../composables/useBiometric'
  * 不再是本文件的内部函数 —— 两页都从那里取，全仓不存在第二套登录成功跳转。）
  */
 export type UseLoginFormResult = {
-    statusBarHeight : Ref<number>
     mode : Ref<string>
     phone : Ref<string>
     phoneCode : Ref<string>
@@ -138,12 +137,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
             countdownTimer = null
         }
     }
-
-    /**
-     * 状态栏高度（先例 useAiChat：ref 由 composable 持有、页面 onLoad 写入）
-     * 生命周期不在 composable 注册（T06/T07/T08 口径），故取值动作留在壳层，逐字保持原样。
-     */
-    const statusBarHeight = ref<number>(20)
 
     // 连续输错次数（对齐后端：错误上限 5 次，发新码时清零）
     const wrongAttempts = ref<number>(0)
@@ -431,7 +424,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
     }
 
     return {
-        statusBarHeight,
         mode,
         phone,
         phoneCode,

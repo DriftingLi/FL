@@ -1,6 +1,6 @@
 <template>
     <scroll-view scroll-y class="setup-page">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
         <view class="header">
             <text class="title">完善个人资料</text>
             <text class="subtitle">选择头像和昵称，让同学们认识你</text>
@@ -42,12 +42,12 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { useStatusBarHeight } from '../../utils/system'
+    import { useSafeArea } from '../../utils/system'
     import { useAuthStore } from '../../stores/auth'
     import { uploadAvatarApi, updateProfileApi } from '../../api/auth'
 
     const auth = useAuthStore()
-    const statusBarHeight = useStatusBarHeight()
+    const safeArea = useSafeArea()
     const avatarUrl = ref<string>('')
     const avatarFilePath = ref<string>('')
     const nickName = ref<string>('')
@@ -168,9 +168,9 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .setup-page { flex: 1; background-color: #ffffff; }
-    .status-bar { background-color: #ffffff; }
+    .status-bar { background-color: $bg-header; }
     .header { align-items: center; padding: 80rpx 0 60rpx 0; }
     .title { font-size: 44rpx; font-weight: bold; color: #333333; }
     .subtitle { font-size: 28rpx; color: #999999; margin-top: 16rpx; }

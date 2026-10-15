@@ -53,8 +53,12 @@ const LINE_BUDGET = 600;
  * —— 原生渲染层只把文字类样式认给文字类元素，落在 `<view>` 上会被**静默忽略**（真机日志逐字点名）。
  * 块内规则数 43 → 45（两条新规则）+ 一行解释性 CSS 注释（该注释在 `<style>` 内 ⇒ 已含在下面这个 sha256 里），
  * 除此之外未动；这一页自术后的像素面变化只有「标签字号/颜色真的生效了」这一项。
+ *
+ * ⚠️ **#1609 第二次显式变更（批6 N06 收口）**：同 register —— 本批只把开标签 `<style>` 补成
+ * `<style lang="scss">`（ui-spec §9 指标2「lang="scss" 100%、无豁免」；§7.1 裁定本页维持系统导航、不动作，
+ * 故不加页头件也不自垫状态栏）。**块内 45 条规则一字未动** ⇒ 像素面零变化，sha 只因标签属性前进。
  */
-const STYLE_SHA256 = 'a5fbd0f8d4fa26fe7170ee4dd16cb81a145bac0b75fc5c0dc240966f9922525d';
+const STYLE_SHA256 = '7d5efd51118864739510077f9a4d91dbeb609ae827ab71aec30b1637faae2e5d';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {

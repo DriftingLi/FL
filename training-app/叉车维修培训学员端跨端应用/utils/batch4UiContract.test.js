@@ -181,7 +181,7 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     }
   });
 
-  it('批1+批1605+批3+批4+批5 受管页面并集内每个白名单值真实出现（防死条目）', () => {
+  it('批1+批1605+批3+批4+批5+批6 受管页面并集内每个白名单值真实出现（防死条目）', () => {
     const batch1 = [
       'pages/recruiter/home.uvue', 'pages/recruiter/jobs.uvue', 'pages/recruiter/resumes.uvue',
       'pages/recruiter/contacts.uvue', 'pages/recruiter/applications.uvue', 'pages/recruiter/me.uvue',
@@ -204,7 +204,13 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
       'pages/courses/courses.uvue', 'pages/profile/profile.uvue', 'pages/recruiter/login.uvue',
       'pages/resume/resume.uvue',
     ];
-    const all = PAGES.concat(batch1, batch1605, batch3, batch5).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    // #1609 批6（N06 无页头白名单 6 页 + mall N03 补漏）白名单条目落在批6页面，纳入并集扫描面；清单与 learnerUiContract/recruiterUiContract 保持一致
+    const batch6 = [
+      'pages/index/index.uvue', 'pages/login/login.uvue', 'pages/register/register.uvue',
+      'pages/forgot-password/forgot-password.uvue', 'pages/profile-setup/profile-setup.uvue',
+      'pages/search/search.uvue', 'pages/mall/mall.uvue',
+    ];
+    const all = PAGES.concat(batch1, batch1605, batch3, batch5, batch6).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }

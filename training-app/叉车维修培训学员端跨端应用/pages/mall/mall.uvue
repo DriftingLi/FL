@@ -1,19 +1,14 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
-
-        <!-- 顶部导航栏 -->
-        <view class="header">
-            <view class="header-left" @click="toback()">
-                <text class="back-icon">‹</text>
-            </view>
-            <text class="header-title">商城</text>
-            <view class="header-right">
+        <!-- 页头归位 N03（#1609 补漏：#1595 台账行 25 判 N03 白底带分隔线，批3 清单未含 mall）：
+             左返回走页头件 leftClick，右槽承载跨小程序 navigator（胶囊让位由页头件负责，#1602） -->
+        <AppNavBar title="商城" :divider="true" @left-click="toback">
+            <template #right>
                 <navigator class="header-avatar" target="miniProgram" app-id="wx56ce2775c2b3aea8" version="release">
                     <image class="avatar-icon" src="/static/icons/易拉宝-006 1-1.png"></image>
                 </navigator>
-            </view>
-        </view>
+            </template>
+        </AppNavBar>
 
         <!-- 排序栏 -->
         <MallSortBar :active-sort="activeSort" @sort-change="onSortChange" @search="onSearch" />
@@ -85,7 +80,6 @@
 <script setup lang="uts">
     import { ref } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
-    import { useStatusBarHeight } from '../../utils/system'
     import { goBack } from '../../utils/navigation'
     import { getCourseListApi } from '../../api/course'
     import { getCurrentCredentialApi } from '../../api/credential'
@@ -94,8 +88,8 @@
     import MallSortBar from './components/mall-sort-bar.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
     import MallFloatActions from './components/mall-float-actions.uvue'
+    import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 
-    const statusBarHeight = useStatusBarHeight()
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // ---- 排序 ----
@@ -207,54 +201,14 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .container {
         flex: 1;
         background-color: #f5f5f5;
         flex-direction: column;
     }
 
-    .status-bar {
-        background-color: #ffffff;
-    }
-
-    /* ===== 顶部导航栏 ===== */
-    .header {
-        background-color: #ffffff;
-        padding: 16rpx 24rpx;
-        height: 88rpx;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1rpx solid #f0f0f0;
-        overflow: visible;
-    }
-
-    .header-left {
-        width: 72rpx;
-        height: 72rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .back-icon {
-        font-size: 48rpx;
-        color: #333333;
-    }
-
-    .header-title {
-        flex: 1;
-        font-size: 36rpx;
-        font-weight: bold;
-        color: #333333;
-        text-align: center;
-    }
-
-    .header-right {
-        flex-direction: row;
-        align-items: center;
-    }
-
+    /* 页头（状态栏占位 / 88rpx 头体 / 分隔线）已由 AppNavBar 承担，此处只留右槽素材尺寸 */
     .header-avatar {
         width: 64rpx;
         height: 64rpx;
