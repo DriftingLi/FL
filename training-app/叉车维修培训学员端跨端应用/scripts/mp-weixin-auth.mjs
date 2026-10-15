@@ -6,12 +6,16 @@
 //       stores/auth.uts setAuthData 完全同键同形的 4 个凭据（auth_token / auth_refresh_token /
 //       auth_user(JSON) / auth_login_provider）。**不改任何业务代码**：注入只发生在开发者工具
 //       的 storage 里，app 冷启动后 restoreFromStorage 照常消费（access 过期还有 refresh_token 续期兜底）。
-// 幂等：先读现状 —— token 与 user 都在 ⇒ status=existing 直接返回（每页冷启动后都会调本脚本，
+// 幂等：先读现状 —— token 与 user 都在 ⇒ status=existing 直接返回（每页冷启动前都会调本脚本，
 //       重复调用必须便宜）。实测 storage 跨 IDE quit→reopen 持久（#1690 前置实验）。
+// 两相（#1690 run12）：--mode auth（缺省）= 注入会话给登录态页；--mode guest = **清会话**给入口页。
+//       入口页是 welcome 着陆页（index.uvue #1478：「已登录仍无条件 reLaunch dashboard」，业务不变量、
+//       不得条件化）⇒ 有会话时其冷启动必落 dashboard 判 miss。guest 相 removeStorageSync 四键 + 读回
+//       确认 ⇒ status=cleared。清/注入都须发生在当页冷启动**之前**（冷启动后 app 已按旧 storage 落地）。
 // 诚实降级：任何一步失败 ⇒ ok=false + kebab reason，由调用方记 SKIP（auth-session-unavailable），
 //       绝不冒充取证成立。
 // 输出：单行 `MP_WEIXIN_AUTH {json}`（调用方只看这行，不看退出码）。
-//       json = {ok, status: existing|injected|none, user, reason, detail, elapsedMs} —— 不含令牌。
+//       json = {ok, status: existing|injected|cleared|none, user, reason, detail, elapsedMs} —— 不含令牌。
 // 红线：不调 mp.close()（会话留给后续探针，同 mp-weixin-probe.mjs 纪律）；单步全部带超时
 //       （冷启动后 app 侧未热时 callWxMethod 会「timeout waiting for automator response」，重试而不是挂死）。
 
@@ -27,6 +31,7 @@ function parseArgs(argv) {
     stepTimeoutMs: 15000,
     attempts: 3,
     retryDelayMs: 4000,
+    mode: 'auth',
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -37,6 +42,7 @@ function parseArgs(argv) {
     else if (a === '--api') out.api = String(val() || '').replace(/\/+$/, '');
     else if (a === '--step-timeout-ms') out.stepTimeoutMs = Number(val());
     else if (a === '--attempts') out.attempts = Number(val());
+    else if (a === '--mode') out.mode = String(val()) === 'guest' ? 'guest' : 'auth';
   }
   return out;
 }
@@ -111,6 +117,26 @@ async function main() {
   const USER_KEY = 'auth_user';
   const REFRESH_KEY = 'auth_refresh_token';
   const PROVIDER_KEY = 'auth_login_provider';
+
+  // 0) guest 相（#1690 run12）：清会话给入口页（welcome 页有会话必弹 dashboard，见文件头）。
+  //    remove 不存在的键可能报错 ⇒ 逐键吞错，以读回为准判「已清」。
+  if (args.mode === 'guest') {
+    for (const k of [TOKEN_KEY, REFRESH_KEY, USER_KEY, PROVIDER_KEY]) {
+      try { await wxRetry(mp, 'removeStorageSync', k); } catch { /* 键本就不存在 ⇒ 缺席即游客态 */ }
+    }
+    let tGone = '';
+    let uGone = '';
+    try {
+      tGone = String((await wxRetry(mp, 'getStorageSync', TOKEN_KEY)) ?? '');
+      uGone = String((await wxRetry(mp, 'getStorageSync', USER_KEY)) ?? '');
+    } catch (e) {
+      finish({ ok: false, status: 'none', reason: 'storage-clear-failed', detail: String((e && e.message) || e).slice(0, 200) });
+    }
+    if (tGone.length > 20 || uGone.length > 2) {
+      finish({ ok: false, status: 'none', reason: 'storage-clear-failed', detail: 'token/user still present after removeStorageSync' });
+    }
+    finish({ ok: true, status: 'cleared', user: '', reason: '', detail: 'guest phase: session keys removed' });
+  }
 
   // 1) 现状检查（幂等便宜路径）
   let token = '';

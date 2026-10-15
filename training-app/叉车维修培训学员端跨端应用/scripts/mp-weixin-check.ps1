@@ -1127,11 +1127,12 @@ function Invoke-DirectProbe {
 }
 
 function Invoke-AuthInject {
-    param($AuthStep, [string]$PageTag)
+    param($AuthStep, [string]$PageTag, [string]$Mode = 'auth')
     # 会话注入（#1690）：argv 取自门计划（唯一真源）；判成败只看 MP_WEIXIN_AUTH 结果行（退出码不作判据）。
     # 失败**不判环境受阻**：返回 ok=false + kebab reason，由调用方把该页如实记 miss —— 注入不可用
     # 既不得升级成 exit 2，也不得冒充取证成立。脚本自身幂等（已有会话 ⇒ existing 即返）。
-    $r = Invoke-Process -FilePath $nodeExe -Arguments $AuthStep.argv -TimeoutSeconds $AuthStep.timeoutSeconds -Tag "auth-inject($PageTag)"
+    $argv = @($AuthStep.argv) + @('--mode', $Mode)
+    $r = Invoke-Process -FilePath $nodeExe -Arguments $argv -TimeoutSeconds $AuthStep.timeoutSeconds -Tag "auth-inject($PageTag)"
     Write-Log "`n>>> auth-inject($PageTag)`n$($r.Output)"
     $json = $null
     foreach ($line in ($r.Output -split "`r?`n")) {
@@ -1748,11 +1749,11 @@ try {
         } else {
             $want = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         }
-        # 入口页殿后（#1690 run11 实测口径）：IDE 会话还原按「上次编译的 pages[0] 未变」触发——
-        # 入口页打头时它的冷启动与主链同 head ⇒ 还原旧栈假 miss（run11 复现：主链 index 后直达 index
-        # 拿到 [dashboard]）。改殿后 ⇒ 入口页启动必跟随另一页的 fresh 编译（head 必变 ⇒ 必 fresh）。
-        # 已知极限：清单只剩入口页（$want 空）时同 head 还原仍可能发生 ⇒ 诚实 SKIP，不假绿。
-        $directList = @(@($want | Where-Object { $_ -ne $entryRoute }) + @($entryRoute) | Where-Object { $_ } | Select-Object -Unique)
+        # 入口页打头 = 两相序的唯一真源（#1690 run12 终版）：入口页是 welcome 着陆页（index.uvue
+        # #1478「已登录仍无条件 reLaunch dashboard」业务不变量）⇒ 必须先在**无会话**下取证（guest 相），
+        # 再注入会话跑其余登录态页（auth 相）。run4/6/11 的入口页 miss 曾误诊为「IDE 会话还原」，
+        # run12 证实真凶就是这条业务路由——殿后/键序轮转都救不了有会话的 index 冷启动。
+        $directList = @(@($entryRoute) + $want | Where-Object { $_ } | Select-Object -Unique)
     }
     if ($directList.Count -gt 0) {
         Write-Host ">>> 直达探针（#1682，机制=cold-start-direct）：页清单 = $($directList -join ',')"
@@ -1768,23 +1769,33 @@ try {
         $missPages = @()
         $directEnv = $false
         $probeJson = $null
-        # 会话注入（#1690）：直达循环前注入一次（实测 storage 跨 IDE quit→reopen 持久）；入口页是游客页，
-        # 先注入也无妨（幂等 existing 即返）。取用点唯一 —— 守护 C12/C18 按「首个 -Id 字面量取用点」定位。
+        # 会话两相（#1690 run12）：auth-inject 步取用点唯一 —— 守护 C12/C18 按「首个 -Id 字面量取用点」定位。
+        # guest 相（入口页，清会话）/ auth 相（其余页，探针前注入）都在**当页冷启动之前**执行——
+        # storage 跨 IDE 重启持久（实测），冷启动后 app 直接消费；冷启动后再注入救不回当页落地。
         $authStep = Get-GateStep -Plan $script:GatePlan -Id 'auth-inject'
         $authOk = $true
         $authField = 'off'
-        if ($Auth -ne 'off') {
-            $ai = Invoke-AuthInject -AuthStep $authStep -PageTag 'pre-loop'
-            $authOk = [bool]$ai.ok
-            $authField = $(if ($ai.ok) { $ai.status } else { "none($($ai.reason))" })
-            Write-Host ">>> 会话注入（#1690）pre-loop：ok=$([bool]$ai.ok) status=$authField" -ForegroundColor $(if ($ai.ok) { 'Green' } else { 'Yellow' })
-        }
+        if ($Auth -ne 'off') { $authField = 'none(no-auth-pages)' }
         foreach ($pg in $directList) {
             $leaf = ($pg -split '/')[-1]
-            # 每页（含入口页）一律 换页→冷启动→注入→探针（#1690 实测修正）。
-            # 旧口径「入口页不换页、直接吃主会话」不可靠：DevTools open 会**还原上次会话的页面栈**
-            # （run4 主会话落在 dashboard，入口页探针拿到旧栈判 miss），只有换页写盘（Switch 恒
-            # Set-Content ⇒ mtime 变 ⇒ 强制重编译）才保证落点页 == 目标页。
+            $isEntry = ($pg -eq $entryRoute)
+            # 每页（含入口页）一律 会话相→换页→冷启动→探针（#1690 实测修正）。
+            # 入口页不换页不可靠：上一相窗口落在别的页 ⇒ 靠换页写盘（Switch 恒 Set-Content +
+            # 键序轮转 ⇒ 字节必变 ⇒ 强制重编译）保证冷启动从目标页起。
+            # 会话相（#1690 run12 两相）：入口页 = guest（清会话——welcome 页有会话必弹 dashboard）；
+            # 其余页 = auth（探针前注入，幂等 existing 秒返；上一相注入失败/被 app 401 清掉 ⇒ 本页自愈重注）。
+            if ($Auth -ne 'off') {
+                if ($isEntry) {
+                    $ag = Invoke-AuthInject -AuthStep $authStep -PageTag "guest($leaf)" -Mode 'guest'
+                    $authOk = [bool]$ag.ok
+                    if (-not $ag.ok) { Write-Host ">>> guest 相清会话未成（$($ag.reason)）：入口页若被弹走如实记 miss，不假绿" -ForegroundColor Yellow }
+                } else {
+                    $ai = Invoke-AuthInject -AuthStep $authStep -PageTag "auth($leaf)" -Mode 'auth'
+                    $authOk = [bool]$ai.ok
+                    $authField = $(if ($ai.ok) { $ai.status } else { "none($($ai.reason))" })
+                    Write-Host ">>> auth 相会话注入（#1690）$leaf：ok=$([bool]$ai.ok) status=$authField" -ForegroundColor $(if ($ai.ok) { 'Green' } else { 'Yellow' })
+                }
+            }
             $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
             if ($sw) {
                 # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
@@ -1803,13 +1814,6 @@ try {
             $readySeconds = $cs.readySeconds
             $sdkVersion = $cs.sdk
             $ideVersion = $cs.ide
-            # 冷启动后 app 侧未热 ⇒ 注入脚本自带重试；幂等（storage 持久 ⇒ existing 秒返）。
-            # 本页注入失败 ⇒ 该页 miss 如实记 auth-session-unavailable，不中断其余页（#1690）。
-            if ($Auth -ne 'off') {
-                $ai = Invoke-AuthInject -AuthStep $authStep -PageTag $leaf
-                $authOk = [bool]$ai.ok
-                if ($ai.ok) { $authField = $ai.status }
-            }
             $pr = Invoke-DirectProbe -ProbeStep $probeStep -DirectPages $script:GatePlan['directPages'] -Page $pg
             $pj = $pr.json
             if (-not $pj) {

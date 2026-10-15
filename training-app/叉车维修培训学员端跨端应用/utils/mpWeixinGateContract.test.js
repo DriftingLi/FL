@@ -42,6 +42,8 @@
  *       **入库数据流**（直达截图 → 聚合 shots → probeJson.shots → 归档，AC1 的链条，拆了门照样绿）与
  *       **评论渲染的 null 过滤**（-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）。
  *   C25 **登录态会话注入**（#1690）：门计划必须有 auth-inject 步（ready-gate 之后、探针之前，exec=node，
+ *   直达循环两相（run12）：入口页 = guest 相（--mode guest 清会话，#1478 welcome 页有会话必弹 dashboard）、
+ *   其余页 = auth 相（--mode auth 注入，当页冷启动**之前**执行）；
  *       exit 2 恒空——注入失败是诚实 SKIP（auth-session-unavailable），不是环境 blocked）；执行路径唯一
  *       取用点 `Get-GateStep -Id 'auth-inject'` + `Invoke-AuthInject` 解析 `MP_WEIXIN_AUTH` 结果行；
  *       注入脚本 scripts/mp-weixin-auth.mjs 走 callWxMethod('login') → POST /auth/wx-login →
@@ -698,13 +700,15 @@ function scanContract(sources) {
   must(s.includes('page-not-in-build'), 'C24', '执行路径未记 page-not-in-build 的 SKIP');
   must(s.includes('direct-page-unsupported'), 'C24', '执行路径未记 direct-page-unsupported 的 SKIP');
   must(s.includes('cold-start-direct'), 'C24', '执行路径未携带机制标识 cold-start-direct');
-  // #1690 run4 实测：DevTools open 会还原上次会话的页面栈 ⇒ 入口页也必须一律换页→冷启动（吃主会话不可靠）
-  must(!s.includes('if ($pg -ne $entryRoute)'), 'C24', '直达循环回退成「入口页跳过换页吃主会话」旧口径（#1690：会话还原使入口页探针拿到旧栈判 miss）');
+  // #1690 终版归因：入口页 = welcome 着陆页（#1478 有会话必弹 dashboard）⇒ 入口页必须独立换页→冷启动，
+  // 且冷启动前处于 guest 相（无会话）；「吃主会话」旧口径把主会话落地页冒充入口页取证。
+  must(!s.includes('if ($pg -ne $entryRoute)'), 'C24', '直达循环回退成「入口页跳过换页吃主会话」旧口径（#1690：主会话落地页 ≠ 入口页取证）');
   must(s.includes('port-held-after-quit'), 'C24', '直达冷启动缺「端口被垂死实例占住」判据（#1690 run5：open 骑旧会话 ⇒ 假 miss；归零后必须等端口收摊）');
   must(probe.includes('shotErr'), 'C24', '直达截图缺重试壳（#1690 run5：冷启动后渲染服务未热，mp.screenshot 撞 automator 15s 应答超时 ⇒ 重试一次再记错）');
-  must(s.includes('键序轮转'), 'C24', '换页写入缺「键序轮转」保证（#1690 run6：pages[0] 未变时字节不变 ⇒ IDE 不重编译、还原旧会话页栈 ⇒ 入口页假 miss）');
+  must(s.includes('键序轮转'), 'C24', '换页写入缺「键序轮转」保证（#1690 run6：pages[0] 未变时字节不变 ⇒ IDE 不重编译、窗口停在上一页 ⇒ 入口页假 miss）');
   must(s.includes('-ne @($re.pages).Count'), 'C24', '换页读回复验缺「路由唯一性」判据（#1690 run7-10：重复路由让构建器拒启模拟器，症状伪装成 page-stack-not-answering）');
-  must(s.includes('$_ -ne $entryRoute'), 'C24', '直达清单缺「入口页殿后」排序（#1690 run11：入口页打头时其冷启动与主链同 head ⇒ 会话还原假 miss）');
+  must(s.includes("-Mode 'guest'"), 'C24', '直达循环缺 guest 相（入口页冷启动前必须清会话——#1478 welcome 页「已登录无条件落 dashboard」业务不变量，有会话的 index 冷启动必 miss，run4/6/11/12 实证）');
+  must(s.includes('$isEntry = ($pg -eq $entryRoute)'), 'C24', '直达循环缺「入口页 == guest 相」分相判据（两相序真源，#1690 run12）');
   // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
   // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
   // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
@@ -728,6 +732,7 @@ function scanContract(sources) {
   must(s.includes('function Invoke-AuthInject'), 'C25', '缺会话注入的执行函数 Invoke-AuthInject');
   must(s.includes('MP_WEIXIN_AUTH'), 'C25', '执行路径未解析 MP_WEIXIN_AUTH 结果行');
   must(s.includes('auth-session-unavailable'), 'C25', '执行路径未记 auth-session-unavailable 回退');
+  must(s.includes("-Mode 'guest'") && s.includes("-Mode 'auth'"), 'C25', '门脚本缺两相会话调用（guest 相清入口页会话 / auth 相注入登录态页——#1690 run12 两相，#1478 welcome 不变量）');
   const authSrc = sources.auth || '';
   must(authSrc.includes('MP_WEIXIN_AUTH'), 'C25', '注入脚本不输出 MP_WEIXIN_AUTH 结果行');
   must(authSrc.includes('/auth/wx-login'), 'C25', '注入脚本未走真实 /auth/wx-login 通道');
@@ -735,6 +740,9 @@ function scanContract(sources) {
     must(authSrc.includes("'" + k + "'"), 'C25', `注入脚本 storage 键缺 ${k}（须与 setAuthData 四键对齐）`);
   });
   must(authSrc.includes('callWxMethod'), 'C25', '注入脚本未用 callWxMethod（注入只发生在门运行环境）');
+  must(authSrc.includes("a === '--mode'"), 'C25', '注入脚本缺 --mode 解析（guest/auth 两相的唯一开关）');
+  must(authSrc.includes('removeStorageSync'), 'C25', '注入脚本 guest 相缺 removeStorageSync（不清会话 ⇒ 入口页被 #1478 弹 dashboard）');
+  must(authSrc.includes("'cleared'"), 'C25', '注入脚本 guest 相缺 status=cleared 上报');
   // 只判代码行：注释里「不调 mp.close()」的纪律声明不算违规（剥 // 行注释后查真调用）
   const authCode = authSrc.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
   must(!authCode.includes('mp.close'), 'C25', '注入脚本关闭了会话（须留给后续探针，与 mp-weixin-probe.mjs 同纪律）');
@@ -1061,9 +1069,13 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, probe: real.probe.replace(/cold-start-direct/g, 'x') }],
       ['C24', { ...real, probe: real.probe.replace(/direct-page-unsupported/g, 'x') }],
       ['C24', { ...real, script: real.script.replace('foreach ($pg in $directList) {', 'foreach ($pg in $directList) { if ($pg -ne $entryRoute) {') }],
+      ['C25', { ...real, auth: real.auth.replace(/removeStorageSync/g, 'x') }],
+      ['C25', { ...real, auth: real.auth.replace("a === '--mode'", 'false') }],
+      ['C25', { ...real, script: real.script.replace(/-Mode 'auth'/g, "-Mode 'x'") }],
       ['C24', { ...real, script: real.script.replace(/port-held-after-quit/g, 'x') }],
       ['C24', { ...real, script: real.script.replace(/键序轮转/g, 'x').replace(/\$rot = @\(\$keys\[1\.\.\(\$keys\.Count - 1\)\]\) \+ @\(\$keys\[0\]\)/, '$rot = $keys') }],
-      ['C24', { ...real, script: real.script.replace('@($want | Where-Object { $_ -ne $entryRoute }) + @($entryRoute)', '@($entryRoute) + $want') }],
+      ['C24', { ...real, script: real.script.replace(/-Mode 'guest'/g, "-Mode 'auth'") }],
+      ['C24', { ...real, script: real.script.replace('$isEntry = ($pg -eq $entryRoute)', '$isEntry = $false') }],
       ['C24', { ...real, probe: real.probe.replace(/shotErr/g, 'x') }],
       ['C24', { ...real, script: real.script.replace("if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }").replace(/\n *# 唯一性复验[^\n]*/g, '') }],
       // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓
