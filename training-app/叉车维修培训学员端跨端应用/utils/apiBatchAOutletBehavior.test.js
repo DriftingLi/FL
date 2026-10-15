@@ -39,6 +39,12 @@ const SEARCH_UTS = path.join(API_DIR, 'search.uts');
 /** 真源：helpers 是零依赖纯函数，直接跑真实现 */
 const helpers = () => loadUts(HELPERS_UTS, {});
 
+/** 信封归一模块真实现（ADR-0037 PR-B）：job 列表入口现在走 decodePage，按依赖从真源注入。 */
+const envelope = () => loadUts(path.join(API_DIR, 'envelope.uts'), {
+  getMapped: () => Promise.resolve({}),
+  toNumber: helpers().toNumber,
+});
+
 /**
  * `getMapped` 替身 —— **真的调用出口传进来的 mapper**。
  * 这是「行为」与「源码文本」的分界：若被测方退化成不传 mapper（或塞个恒等函数），
@@ -60,6 +66,7 @@ function loadJobApi(raw) {
   const postCalls = [];
   const mod = loadUts(JOB_UTS, {
     getMapped: makeGetMapped(raw, getCalls),
+    decodePage: envelope().decodePage,
     post: (url, payload) => {
       postCalls.push({ url, payload });
       return Promise.resolve(undefined);

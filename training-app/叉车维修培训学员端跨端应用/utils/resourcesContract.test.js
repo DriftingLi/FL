@@ -337,7 +337,7 @@ describe('api/contribution.uts 裸出口白名单（#653：multipart 无 mapped 
 
   it('有载荷的两条仍走 mapped 出口（白名单没有顺手扩大到整文件）', () => {
     expect(code).toContain('postMapped<');
-    expect(code).toContain('getMapped<ContributionPageResult>');
+    expect(code).toContain('getMapped<Page<ContributionItem>>');
   });
 });
 

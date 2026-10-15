@@ -75,7 +75,8 @@ describe('#1082 数据面：走 api/note，符号必须真的被导出', () => {
   });
 
   it('四个端点与 scope 三态都在 api 层成文（页面不自己拼 URL）', () => {
-    expect(api).toContain("getMapped<NoteListResult>('/notes'");
+    // ADR-0037 PR-B：列表出口收敛到信封归一的 getPaged（page/page_size + scope 走 query）
+    expect(api).toContain("getPaged<NoteItem>('/notes'");
     expect(api).toContain("postMapped<NoteItem>('/notes'");
     expect(api).toContain("put('/notes/' + id.toString()");
     expect(api).toContain("del('/notes/' + id.toString()");

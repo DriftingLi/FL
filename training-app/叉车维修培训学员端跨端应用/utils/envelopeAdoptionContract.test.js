@@ -34,11 +34,11 @@ const ROOT = path.join(__dirname, '..');
 const MODULE_FILE = 'api/envelope.uts';
 
 /**
- * 载体的实测基线（PR-A #1661 迁移后现测）：迁移前 raw 50 处（forum.uts 占 2，含 :343 误读站点）；
- * forum 首刀清零后 raw 50，其中定义文件 envelope.uts 自身 2 处经排除不计 ⇒ **48**。
+ * 载体的实测基线（PR-B #1662 迁移后现测）：PR-A 后 48（raw 50，其中定义文件 envelope.uts
+ * 自身 2 处经排除不计）；PR-B 机械迁移 11 个文件的标准域站点后消 15 ⇒ **33**。
  * 迁移一处 ⇒ **同一 PR 下调本数**；新增一处 ⇒ 判红。终态 = 0（ADR-0037 ⑥）。
  */
-const ENVELOPE_BASELINE = 48;
+const ENVELOPE_BASELINE = 33;
 
 /** 载体判据：三键合并、不分彼此（`page_size` 与 `pages` 换着写拿不到后门） */
 const CARRIER_RE = /\['(total|page_size|pages)'\]/g;

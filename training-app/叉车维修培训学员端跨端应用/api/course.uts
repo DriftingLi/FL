@@ -26,8 +26,16 @@
  *   筛选条（specialties / levels）失败保持静默降级（job-list 同款先例；判据见 ADR-0007 实施回记）。
  */
 import { getMapped, post, NOT_FOUND_MESSAGE_PREFIX } from './request'
+import { decodeList, decodePage } from './envelope'
+import type { Page } from './envelope'
 import { toNumber, toNumberOrNull, toBool, toStr, errMsg } from './helpers'
-import type { CourseListResult, CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, TagItem, CoursePrereq } from '../types/index'
+import type { CourseDetail, CourseItem, ChapterItem, ChapterDetail, ChapterFile, SpecialtyItem, LevelItem, TagItem, CoursePrereq } from '../types/index'
+
+/** `/courses` 分页信封的数组键序（后端 `courses`，历史兼容 `items`；ADR-0037 ② 键序即回退序） */
+const COURSE_LIST_KEYS : string[] = ['courses', 'items']
+
+/** `/tags` 数组信封的键序（后端 `tags`，`{list:[…]}` 为 request 层对裸数组的包装形态） */
+const TAG_LIST_KEYS : string[] = ['tags', 'list']
 
 
 
@@ -240,35 +248,6 @@ function buildCourseDetail(obj : UTSJSONObject) : CourseDetail {
 	return detail
 }
 
-/**
- * 从 UTSJSONObject 构造 CourseListResult
- * @note 后端返回 { courses: [...], total, page, pages }
- *       前端类型用 { items: [...], total, page, page_size }
- */
-function buildCourseListResult(obj : UTSJSONObject) : CourseListResult {
-	const items : CourseItem[] = []
-	// 后端用 "courses" 字段，兼容 "items" 字段
-	let listRaw = obj['courses']
-	if (listRaw == null) {
-		listRaw = obj['items']
-	}
-	if (listRaw != null) {
-		const itemsArray = listRaw as Array<UTSJSONObject>
-		for (let i = 0; i < itemsArray.length; i++) {
-			items.push(buildCourseItem(itemsArray[i]))
-		}
-	}
-	const result : CourseListResult = {
-		items: items,
-		total: toNumber(obj['total']),
-		page: toNumber(obj['page']),
-		// 后端返回 "pages"（总页数），前端用 "page_size"（每页条数）
-		// 后端不返回 page_size，用 items 长度推算
-		page_size: toNumber(obj['page_size'], items.length > 0 ? items.length : 12),
-	} as CourseListResult
-	return result
-}
-
 /** 从 UTSJSONObject 构造 SpecialtyItem */
 function buildSpecialtyItem(obj : UTSJSONObject) : SpecialtyItem {
 	const item : SpecialtyItem = {
@@ -307,7 +286,7 @@ function buildLevelItem(obj : UTSJSONObject) : LevelItem {
  * @param credentialId 当前证件 ID（>0 才下发；0 = 未声明，与服务端 nil 语义一致）
  * @param filter 热门/精品口径（'' = 全部，不下发；'hot' | 'featured' —— #1422 dashboard 课程区取热门）
  */
-export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0, filter : string = '') : Promise<CourseListResult> {
+export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0, filter : string = '') : Promise<Page<CourseItem>> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -325,9 +304,9 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 	if (filter.length > 0) {
 		params['filter'] = filter
 	}
-	return getMapped<CourseListResult>('/courses', params, (data : UTSJSONObject) : CourseListResult => {
+	return getMapped<Page<CourseItem>>('/courses', params, (data : UTSJSONObject) : Page<CourseItem> => {
 		console.log('[getCourseListApi] raw data:', JSON.stringify(data))
-		return buildCourseListResult(data)
+		return decodePage<CourseItem>(data, '/courses', page, pageSize, (obj : UTSJSONObject) : CourseItem => buildCourseItem(obj), COURSE_LIST_KEYS)
 	})
 }
 
@@ -367,29 +346,16 @@ export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
 	})
 }
 
-/** 从 /levels 响应中提取课程等级列表 */
-function buildLevelList(obj : UTSJSONObject) : LevelItem[] {
-	const items : LevelItem[] = []
-	const raw = obj['levels']
-	if (raw != null) {
-		const arr = raw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildLevelItem(arr[i]))
-		}
-	}
-	return items
-}
-
 /**
  * 课程等级列表（公开，仅启用项）
  */
 export function getLevelsApi() : Promise<LevelItem[]> {
 	return getMapped<LevelItem[]>('/levels', null, (data : UTSJSONObject) : LevelItem[] => {
 		console.log('[getLevelsApi] raw data:', JSON.stringify(data))
-		return buildLevelList(data)
+		// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `levels`
+		return decodeList<LevelItem>(data, '/levels', (obj : UTSJSONObject) : LevelItem => buildLevelItem(obj), ['levels'])
 	})
 }
-
 /**
  * 课程详情（含章节列表 + 学习进度）
  * @param courseId 课程 ID
@@ -472,28 +438,6 @@ function buildTagItem(obj : UTSJSONObject) : TagItem {
 	} as TagItem
 }
 
-/** 从 UTSJSONObject 构造题库标签列表（兼容 { tags } / { list } / 直接数组三种形态） */
-function buildTagList(obj : UTSJSONObject) : TagItem[] {
-	const items : TagItem[] = []
-	let listRaw = obj['tags']
-	if (listRaw == null) {
-		listRaw = obj['list']
-	}
-	if (listRaw != null) {
-		const arr = listRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildTagItem(arr[i]))
-		}
-	} else {
-		// 可能直接是数组
-		const arr = obj as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildTagItem(arr[i]))
-		}
-	}
-	return items
-}
-
 /**
  * 题库标签列表（仅启用项，含已发布题目数）
  *
@@ -511,7 +455,7 @@ export function getTagsApi(credentialId : number = 0) : Promise<TagItem[]> {
 		params = { credential_id: credentialId.toString() } as UTSJSONObject
 	}
 	return getMapped<TagItem[]>('/tags', params, (data : UTSJSONObject) : TagItem[] => {
-		return buildTagList(data)
+		return decodeList<TagItem>(data, '/tags', (obj : UTSJSONObject) : TagItem => buildTagItem(obj), TAG_LIST_KEYS)
 	})
 }
 

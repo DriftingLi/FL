@@ -313,7 +313,8 @@ describe('域 api 收紧（T09 / ADR-0007）：DTO 出口走 mapper-callback 家
     expect(start).toBeGreaterThan(-1);
     const body = api.slice(start, api.indexOf('\n}', start));
     expect(body).toMatch(/(get|request)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\(/);
-    expect(body).toMatch(/\(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => (build[A-Za-z_$][\w$]*|to[A-Za-z_$][\w$]*)\(data/);
+    // ADR-0037 PR-B：getPositionsApi 的数组出口改走信封归一 decodeList，其余仍是 build*/to* 形态
+    expect(body).toMatch(/\(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => (build[A-Za-z_$][\w$]*|to[A-Za-z_$][\w$]*|decode(?:List|Page)<[A-Za-z_$][\w$]*>)\(data/);
   });
 
   it('PUT 面走 requestMapped + opts.method 赋值（与既有 put() 逐字同通路，T05 先例）', () => {

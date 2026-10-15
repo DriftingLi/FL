@@ -10,6 +10,7 @@
 import { getMapped, requestMapped, del, uploadFile, NOT_FOUND_MESSAGE_PREFIX } from './request'
 import type { RequestOptions } from './request'
 import { toStr, toNumber, toBool, errMsg } from './helpers'
+import { decodeList } from './envelope'
 import type { ResumeData, SaveResumeParams, ResumeExperience, ResumeCertification, PositionItem } from '../types/index'
 
 // ========== 内部构建函数 ==========
@@ -181,25 +182,14 @@ function buildSavePayload(p : SaveResumeParams) : UTSJSONObject {
 	return body
 }
 
-/** 岗位字典映射（GET /positions 的 data.positions） */
-function buildPositionList(data : UTSJSONObject) : PositionItem[] {
-	const list : PositionItem[] = []
-	const raw = data['positions']
-	if (raw != null) {
-		try {
-			const arr = raw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				list.push({
-					position_id: toNumber(arr[i]['position_id']),
-					code: toStr(arr[i]['code']),
-					name: toStr(arr[i]['name']),
-				})
-			}
-		} catch (_e) {}
-	}
-	return list
+/** 岗位字典单项映射（GET /positions 的 data.positions；信封归一出口 `decodeList`） */
+function buildPositionItem(obj : UTSJSONObject) : PositionItem {
+	return {
+		position_id: toNumber(obj['position_id']),
+		code: toStr(obj['code']),
+		name: toStr(obj['name']),
+	} as PositionItem
 }
-
 // ========== 对外 API 函数 ==========
 
 /**
@@ -271,9 +261,9 @@ export function getViewStatsApi() : Promise<number> {
  */
 export function getPositionsApi() : Promise<PositionItem[]> {
 	const opts : RequestOptions = { url: '/positions', silent: true } as RequestOptions
-	return getMapped<PositionItem[]>('/positions', null, (data : UTSJSONObject) : PositionItem[] => buildPositionList(data), opts)
+	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `positions`
+	return getMapped<PositionItem[]>('/positions', null, (data : UTSJSONObject) : PositionItem[] => decodeList<PositionItem>(data, '/positions', (obj : UTSJSONObject) : PositionItem => buildPositionItem(obj), ['positions']), opts)
 }
-
 /**
  * 上传工作照
  * POST /resume/image (multipart/form-data)

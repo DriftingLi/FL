@@ -140,13 +140,12 @@ describe('job 域收紧：有载荷 GET 经 getMapped<T> + build* 去重', () =>
     expect(jobApi).toMatch(/import\s*\{[^}]*\bgetMapped\b[^}]*\bpost\b[^}]*\}\s*from\s*'\.\/request'/);
   });
 
-  it('详情 / 列表收敛到 buildJobPosting（此前两处同形映射去重），列表经 buildJobListResult', () => {
+  it('详情 / 列表收敛到 buildJobPosting（此前两处同形映射去重），列表经信封归一出口 decodePage', () => {
     expect(jobApi).toMatch(/function buildJobPosting\(/);
-    expect(jobApi).toMatch(/function buildJobListResult\(/);
     expect(topFn(jobApi, 'export function getJobDetailApi')).toContain('getMapped<JobPosting>');
     expect(topFn(jobApi, 'export function getJobDetailApi')).toMatch(/\(data : UTSJSONObject\) : JobPosting => buildJobPosting\(data\)/);
-    expect(topFn(jobApi, 'export function getJobListApi')).toContain('getMapped<JobListResult>');
-    expect(topFn(jobApi, 'export function getJobListApi')).toMatch(/\(data : UTSJSONObject\) : JobListResult => buildJobListResult\(data\)/);
+    expect(topFn(jobApi, 'export function getJobListApi')).toContain('getMapped<Page<JobPosting>>');
+    expect(topFn(jobApi, 'export function getJobListApi')).toMatch(/decodePage<JobPosting>\(data/);
     // 同 search 口径：去重后映射只有一份，出口不得再自己读字段
     for (const marker of ['export function getJobDetailApi', 'export function getJobListApi']) {
       expect(topFn(jobApi, marker)).not.toMatch(FIELD_READ);
@@ -171,7 +170,7 @@ describe('job 域收紧：有载荷 GET 经 getMapped<T> + build* 去重', () =>
     const body = topFn(jobApi, 'export function getJobListApi');
     expect(body).toContain("const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')");
     expect(body).toContain("encodeURIComponent(k) + '=' + encodeURIComponent(query[k] as string)");
-    expect(body).toContain('getMapped<JobListResult>(url, null,');
+    expect(body).toContain('getMapped<Page<JobPosting>>(url, null,');
   });
 
   it('reportJobApi / applyJobApi（void 透传）保持裸 post，不硬套 mapper', () => {

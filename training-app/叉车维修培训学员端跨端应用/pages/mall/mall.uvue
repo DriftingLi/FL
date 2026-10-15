@@ -84,7 +84,8 @@
     import { getCourseListApi } from '../../api/course'
     import { getCurrentCredentialApi } from '../../api/credential'
     import { renderCoursePrice } from '../../utils/coursePointsCta'
-    import type { CourseItem, CourseListResult } from '../../types/index'
+    import type { CourseItem } from '../../types/index'
+    import type { Page } from '../../api/envelope'
     import MallSortBar from './components/mall-sort-bar.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
     import MallFloatActions from './components/mall-float-actions.uvue'
@@ -134,7 +135,9 @@
 
         loading.value = true
         try {
-            const result : CourseListResult = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
+            // ADR-0037 信封归一（PR-B）：`getCourseListApi` 返回 `Page<CourseItem>`（items/total/hasMore），
+            // 本页只消费 items/total，装载行为不变；旧 DTO 名 `CourseListResult` 由 PR-F 清尾删除。
+            const result : Page<CourseItem> = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
             loadError.value = false
             if (reset) {
                 products.value = result.items

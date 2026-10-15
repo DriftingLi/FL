@@ -21,8 +21,10 @@
  *   - getPracticeReportApi：报告页需后端原始结构（含 by_type 明细）自由渲染
  */
 import { get, getMapped, post, postMapped } from './request'
+import { decodeList, decodePage } from './envelope'
+import type { Page } from './envelope'
 import { toNumber, toStr, toBool } from './helpers'
-import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeOverview, PracticeHistoryItem, PracticeHistoryResult, PracticeProgress } from '../types/index'
+import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeOverview, PracticeHistoryItem, PracticeProgress } from '../types/index'
 
 
 
@@ -61,21 +63,6 @@ function buildQuestion(obj : UTSJSONObject) : Question {
 	return q
 }
 
-/**
- * 从 UTSJSONObject 构造 Question 数组
- */
-function buildQuestions(data : UTSJSONObject) : Question[] {
-	const questions : Question[] = []
-	const questionsRaw = data['questions']
-	if (questionsRaw != null) {
-		const arr = questionsRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			questions.push(buildQuestion(arr[i]))
-		}
-	}
-	return questions
-}
-
 /** 从 UTSJSONObject 构造 PracticeStats */
 function buildPracticeStats(obj : UTSJSONObject) : PracticeStats {
 	const stats : PracticeStats = {
@@ -102,33 +89,6 @@ function buildHistoryItem(obj : UTSJSONObject) : PracticeHistoryItem {
 		created_at: toStr(obj['created_at'], toStr(obj['practice_date'], toStr(obj['created_time']))),
 	} as PracticeHistoryItem
 	return item
-}
-
-/** 从 UTSJSONObject 构造 PracticeHistoryResult */
-function buildHistoryResult(data : UTSJSONObject) : PracticeHistoryResult {
-	const items : PracticeHistoryItem[] = []
-	const listRaw = data['records']
-	if (listRaw != null) {
-		const arr = listRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildHistoryItem(arr[i]))
-		}
-	} else {
-		const alt = data['items']
-		if (alt != null) {
-			const arr = alt as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildHistoryItem(arr[i]))
-			}
-		}
-	}
-	const result : PracticeHistoryResult = {
-		items: items,
-		total: toNumber(data['total']),
-		page: toNumber(data['page'], 1),
-		page_size: toNumber(data['page_size'], 20),
-	} as PracticeHistoryResult
-	return result
 }
 
 /** 从 UTSJSONObject 构造 PracticeProgress */
@@ -211,11 +171,6 @@ export function getQuestionByIdApi(questionId : number) : Promise<Question> {
  * @param count 抽题数量，默认 20
  * @param type 题型过滤（可选）
  */
-/**
- * 随机练习抽题
- * @param count 抽题数量，默认 20
- * @param type 题型过滤（可选）
- */
 export function getFreePracticeApi(count : number = 20, type : string = '') : Promise<Question[]> {
 	const params : UTSJSONObject = {
 		count: count.toString(),
@@ -223,20 +178,14 @@ export function getFreePracticeApi(count : number = 20, type : string = '') : Pr
 	if (type.length > 0) {
 		params['type'] = type
 	}
-	return getMapped<Question[]>('/practice-mode/free', params, (data : UTSJSONObject) : Question[] => buildQuestions(data))
+	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `questions`
+	return getMapped<Question[]>('/practice-mode/free', params, (data : UTSJSONObject) : Question[] => decodeList<Question>(data, '/practice-mode/free', (obj : UTSJSONObject) : Question => buildQuestion(obj), ['questions']))
 }
-
-/** 顺序练习（开始/续练） */
 /** 顺序练习（开始/续练） */
 export function getSequentialPracticeApi() : Promise<Question[]> {
-	return getMapped<Question[]>('/practice-mode/sequential', null, (data : UTSJSONObject) : Question[] => buildQuestions(data))
+	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `questions`
+	return getMapped<Question[]>('/practice-mode/sequential', null, (data : UTSJSONObject) : Question[] => decodeList<Question>(data, '/practice-mode/sequential', (obj : UTSJSONObject) : Question => buildQuestion(obj), ['questions']))
 }
-
-/**
- * 标签练习抽题
- * @param tagId 标签 ID（必填）
- * @param count 题量，0=全部
- */
 /**
  * 标签练习抽题
  * @param tagId 标签 ID（必填）
@@ -247,9 +196,9 @@ export function getTagPracticeApi(tagId : number, count : number = 0) : Promise<
 		tag_id: tagId.toString(),
 		count: count.toString(),
 	}
-	return getMapped<Question[]>('/practice-mode/tag', params, (data : UTSJSONObject) : Question[] => buildQuestions(data))
+	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `questions`
+	return getMapped<Question[]>('/practice-mode/tag', params, (data : UTSJSONObject) : Question[] => decodeList<Question>(data, '/practice-mode/tag', (obj : UTSJSONObject) : Question => buildQuestion(obj), ['questions']))
 }
-
 // ========== 答题与进度 ==========
 
 /**
@@ -339,10 +288,7 @@ export function getPracticeStatsApi() : Promise<PracticeStats> {
 /**
  * 练习历史
  */
-/**
- * 练习历史
- */
-export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20, type : string = '', startDate : string = '', endDate : string = '') : Promise<PracticeHistoryResult> {
+export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20, type : string = '', startDate : string = '', endDate : string = '') : Promise<Page<PracticeHistoryItem>> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -356,5 +302,6 @@ export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20,
 	if (endDate.length > 0) {
 		params['end_date'] = endDate
 	}
-	return getMapped<PracticeHistoryResult>('/practice-mode/history', params, (data : UTSJSONObject) : PracticeHistoryResult => buildHistoryResult(data))
+	// 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `records` / `items`
+	return getMapped<Page<PracticeHistoryItem>>('/practice-mode/history', params, (data : UTSJSONObject) : Page<PracticeHistoryItem> => decodePage<PracticeHistoryItem>(data, '/practice-mode/history', page, pageSize, (obj : UTSJSONObject) : PracticeHistoryItem => buildHistoryItem(obj), ['records', 'items']))
 }

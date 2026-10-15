@@ -70,7 +70,14 @@ function loadRecruit(reply = {}) {
     return Promise.resolve(reply.data || {});
   };
 
+  // 信封归一模块真实现（ADR-0037 PR-B）：recruit 列表入口现在走 decodePage。
+  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+    getMapped: () => Promise.resolve({}),
+    toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(String(v))) ? d : parseFloat(String(v)))),
+  });
+
   const bindings = {
+    decodePage: envelope.decodePage,
     get: (url, params) => respond(url, params),
     post: (url, data) => respond(url, data),
     put: (url, data) => respond(url, data),
@@ -362,7 +369,7 @@ describe('D. 发起交换与我的交换申请', () => {
     expect(dto.id).toBe(11);
   });
 
-  test('D2：我的交换申请列表带 page/page_size=20，并**读回显**（与简历库相反的那套行为）', async () => {
+  test('D2：我的交换申请列表带 page/page_size=20；响应回显字段不再读取，续读由 total 推 hasMore', async () => {
     const { mod, calls } = loadRecruit({
       data: { items: [], page: 2, page_size: 20, total: 30 },
     });
@@ -370,8 +377,14 @@ describe('D. 发起交换与我的交换申请', () => {
     expect(calls[0].url).toBe('/recruit/contact-requests');
     expect(calls[0].params.page).toBe('2');
     expect(calls[0].params.page_size).toBe('20');
-    expect(r.page).toBe(2);
-    expect(r.page_size).toBe(20);
+    // ADR-0037：page / page_size 是旧「读回显」形态（③ 明确不读）；2*20=40 不 < 30 ⇒ 到底
+    expect(r.total).toBe(30);
+    expect(r.hasMore).toBe(false);
+    expect(r.page).toBeUndefined();
+    expect(r.page_size).toBeUndefined();
+    // 反向：total 41 ⇒ 2*20=40 < 41 ⇒ 还有下一页（推导链真的被走通）
+    const more = await loadRecruit({ data: { items: [], total: 41 } }).mod.getRecruitContactRequestsApi(2, 20);
+    expect(more.hasMore).toBe(true);
   });
 
   // D3 / D4：`company_disabled` 是**缺席式**可选键（后端 `contact_service.go:80` 的
