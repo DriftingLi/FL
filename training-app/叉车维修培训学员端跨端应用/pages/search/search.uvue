@@ -1,6 +1,6 @@
 <template>
 	<view class="search-page">
-		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+		<view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 
 		<!-- 搜索栏：主色区 + 白色胶囊输入（对齐 course-detail / featured-list 等非 tabBar 页的既有写法） -->
 		<view class="search-header">
@@ -118,7 +118,7 @@
 <script setup lang="uts">
 	import { ref, computed } from 'vue'
 	import { onShow } from '@dcloudio/uni-app'
-	import { useStatusBarHeight } from '../../utils/system'
+	import { useSafeArea } from '../../utils/system'
 	import { getCurrentCredentialApi } from '../../api/credential'
 	import { searchAllApi, searchByTypeApi } from '../../api/search'
 	import { splitHighlight, searchItemPath, hitLabel, displaySnippet, sectionLabel, itemPrimaryText, shouldShowSnippet } from '../../utils/searchDisplay'
@@ -126,7 +126,7 @@
 	import AppEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
 	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult, HighlightSegment } from '../../types/index'
 
-	const statusBarHeight = useStatusBarHeight()
+	const safeArea = useSafeArea()
 
 	type TypeTab = { label: string; value: string }
 	const typeTabs: TypeTab[] = [

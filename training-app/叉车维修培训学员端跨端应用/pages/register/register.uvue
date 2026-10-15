@@ -178,7 +178,7 @@
 	})
 </script>
 
-<style>
+<style lang="scss">
 	.register-page {
 		flex: 1;
 		background-color: #ffffff;

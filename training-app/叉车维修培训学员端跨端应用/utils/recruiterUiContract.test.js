@@ -140,7 +140,7 @@ describe('§1.6 白名单文件自检', () => {
     }
   });
 
-  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2（#1605 四页 + #1606 十四页）∪ 批4（#1607 十九页）∪ 批5（#1608 七页），白名单是全仓册不是批内册）', () => {
+  it('白名单值必须在某个受管页面里真实出现（防死条目；受管页 = 批1 ∪ 批2（#1605 四页 + #1606 十四页）∪ 批4（#1607 十九页）∪ 批5（#1608 七页）∪ 批6（#1609 七页），白名单是全仓册不是批内册）', () => {
     // 批2 页清单与 utils/batch2UiContract.test.js 的 PAGES 保持一致（不 require 测试模块，防 describe 嵌套）；#1606 十四页与 batch2UiContract 十四页同册
     const BATCH2_PAGES = [
       'pages/exam-info/exam-info.uvue',
@@ -169,7 +169,13 @@ describe('§1.6 白名单文件自检', () => {
       'pages/courses/courses.uvue', 'pages/profile/profile.uvue', 'pages/recruiter/login.uvue',
       'pages/resume/resume.uvue',
     ];
-    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES)
+    // #1609 批6（N06 无页头白名单 6 页 + mall N03 补漏）白名单条目落在批6页面，纳入并集扫描面；清单与 learnerUiContract/batch4UiContract 保持一致
+    const BATCH6_PAGES = [
+      'pages/index/index.uvue', 'pages/login/login.uvue', 'pages/register/register.uvue',
+      'pages/forgot-password/forgot-password.uvue', 'pages/profile-setup/profile-setup.uvue',
+      'pages/search/search.uvue', 'pages/mall/mall.uvue',
+    ];
+    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES)
       .map((p) => styleBlock(read(p)).toUpperCase())
       .join('\n');
     for (const value of Object.keys(WHITELIST)) {

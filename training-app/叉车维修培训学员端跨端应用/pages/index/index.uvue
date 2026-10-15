@@ -8,8 +8,8 @@
         <view class="glow glow-top"></view>
         <view class="glow glow-bottom"></view>
 
-        <!-- 状态栏占位 -->
-        <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+        <!-- 状态栏占位（N06 自垫：高度取自 utils/system.uts 唯一真源，#1602/#1609） -->
+        <view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 
         <!-- 顶部标签 -->
         <view class="page-tag">
@@ -53,9 +53,11 @@
     import { useAuthStore } from '../../stores/auth'
     import { useLoginProviders } from '../../composables/useLoginProviders'
     import { useLandingLogin } from './composables/useLandingLogin'
+    import { useSafeArea } from '../../utils/system'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
 
     const auth = useAuthStore()
+    const safeArea = useSafeArea()
 
     // 探测件与登录页引用**同一符号**（判据：两页共享，不是两份实现）
     // 两个面：#1487 ①a 真机口径（2026-10-03）—— 移动端**也展示**该入口（`wechatAvailable`），
@@ -63,7 +65,6 @@
     const { wechatAvailable, wechatLoginReady } = useLoginProviders()
 
     const {
-        statusBarHeight,
         agreed,
         loading,
         errorHint,
@@ -75,9 +76,6 @@
     } = useLandingLogin(wechatLoginReady.value)
 
     onLoad((_options : OnLoadOptions) => {
-        const sysInfo = uni.getSystemInfoSync()
-        statusBarHeight.value = sysInfo.statusBarHeight
-
         const restored = auth.restoreFromStorage()
         console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
         if (auth.isLoggedIn.value) {
@@ -94,7 +92,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .landing-page {
         flex: 1;
         flex-direction: column;

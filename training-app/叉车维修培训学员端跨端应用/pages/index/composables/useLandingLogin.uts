@@ -26,7 +26,6 @@ import { showAgreementNotice } from '../../../utils/agreementNotice'
 import { WECHAT_NOT_WIRED_NOTICE } from '../../../composables/useLoginProviders'
 
 export type UseLandingLoginResult = {
-    statusBarHeight : Ref<number>
     agreed : Ref<boolean>
     loading : Ref<boolean>
     errorHint : Ref<string>
@@ -45,7 +44,6 @@ export type UseLandingLoginResult = {
  */
 export function useLandingLogin(wechatLoginReady : boolean) : UseLandingLoginResult {
     const auth = useAuthStore()
-    const statusBarHeight = ref<number>(20)
     const agreed = ref<boolean>(false)
     const loading = ref<boolean>(false)
     const errorHint = ref<string>('')
@@ -119,7 +117,6 @@ export function useLandingLogin(wechatLoginReady : boolean) : UseLandingLoginRes
     }
 
     return {
-        statusBarHeight: statusBarHeight,
         agreed: agreed,
         loading: loading,
         errorHint: errorHint,

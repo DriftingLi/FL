@@ -67,9 +67,18 @@ const LINE_BUDGET = 600;
  * 登录页样式一条都没动 —— 这正是「UI 像素级不变」那条原判据在小程序端继续成立的结构证据：
  * 小程序端模板上那三块 `#ifdef` 内容与样式均未改，改的是 App 端才渲染的一行）。
  * 现测：新模板 sha 由 `block(read(PAGE),'template')` 重算，样式 sha 与 #1478 后同值。
+ *
+ * ⚠️ **#1609 第三次显式变更（批6 N06 收口，同样不是绕过）**：
+ * ① 模板块：状态栏占位的高度来源换轨 —— `height: statusBarHeight + 'px'` → `height: safeArea.statusBarHeight + 'px'`，
+ *    并新增 `import { useSafeArea } from '../../utils/system'`、删掉解构里的 `statusBarHeight` 与 onLoad 里的
+ *    `uni.getSystemInfoSync()` 自算（#1602 把状态栏高度收成 `utils/system.uts` 唯一真源；页面不再自探测）。
+ *    ⇒ 这是「高度从哪来」的接线变更，不是像素变更：真机上占位高度取的是同一个系统值。
+ * ② 样式块：`.status-bar` 底色 `#ffffff` → `$bg-header`（`uni.scss` 里 `$bg-header: #ffffff`，**同值字面替换，零像素变化**）
+ *    —— 判据源 ui-spec §7.1「N06 页面自垫状态栏走 token」+ §9 指标1（声明位 hex 必须 ∈ token 值集合 ∪ §1.6 白名单）。
+ * ⇒ 两把 sha 同步前进；块内规则数、其余每一条声明逐字节不变。
  */
-const TEMPLATE_SHA256 = '1598c42ac82452cccd9583582129695fe73a0a8a5c06275502d6d20cf4d66335';
-const STYLE_SHA256 = '214949d8a2798b7e582068a121cb6ed9e582bbc6902bfb33fd03e78e8eb0c581';
+const TEMPLATE_SHA256 = '4b8eb5e3b0ddd9524e8e7839aade8c1efd902e2320903c8f9dffd43e109a36de';
+const STYLE_SHA256 = '411eea573f1b25a12c97c76546af164ba71a6fec0174c1ec3274886165bea9f4';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -524,7 +533,8 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(script).toContain('auth.restoreFromStorage()');
     expect(script).toContain('if (auth.isLoggedIn.value)');
     expect(script).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
-    expect(script).toContain('statusBarHeight.value = sysInfo.statusBarHeight');
+    expect(script).toContain('const safeArea = useSafeArea()');
+    expect(script).not.toContain('getSystemInfoSync');
     expect(script).toMatch(/loadCaptcha\(\)\s*\n\s*initBiometricGate\(\)/);
     expect(script).toMatch(/onUnload\(\(\) => \{\s*clearCountdownTimer\(\)/);
   });

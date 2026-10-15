@@ -43,8 +43,13 @@ const LINE_BUDGET = 600;
  * `<style>` 块的 sha256 = **UI 冻结的证据锁**（改一字符即红）：改它 = 改了这页的像素面，
  * 必须是一次显式决定，并在 PR 里给出 ①a 前后对比。基线取 #1269 术后的那棵树（块内 39 条规则）。
  * 值经 `h.read` → `readText` 归一 CRLF（ADR-0019），故检出端行尾不影响本值。
+ *
+ * ⚠️ **#1609 第二次显式变更（批6 N06 收口）**：本批只把开标签 `<style>` 补成 `<style lang="scss">`
+ * （判据源 ui-spec §9 指标2「lang="scss" 100%、无豁免」；本票 §7.1 同时裁定 register **维持系统导航、不动作**，
+ * 故页面既不加页头件也不自垫状态栏）。**块内 39 条规则一字未动** ⇒ 像素面零变化，sha 只因标签属性前进。
+ * 用例名照 #1313 的先例不改（红控制凭据按前缀比对），变更史记在本注释里。
  */
-const STYLE_SHA256 = '82b7e2250bfa7970f371ab4a4f963dfd96f12b11e12df9251d8ec64aa3cac41a';
+const STYLE_SHA256 = '75d8fe1f8172ace6f8482981f0e6d1c01b8f629cee85c8daef5620566bc71d22';
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 /** 块内 class 规则数 —— 与 sha256 互为冗余判据：数规则的锁漏属性值改动，sha 锁不漏 */
 const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
