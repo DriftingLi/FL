@@ -150,6 +150,8 @@ $Serial = "emulator-$Port"
 # 复制而不是复用是 ADR-0008「adb 解析的唯一真源」记的那类分叉。该 lib 只有函数定义、加载无副作用，
 # 且与本脚本无同名函数（若将来出现同名，后加载者胜 —— 本文件的定义在 dot-source 之后，以本文件为准）。
 . (Join-Path $PSScriptRoot 'lib\auto-screenshot.ps1')
+# sha 绑定口径（#1695）：评论里的 `- commit:` 只绑 GitHub 点得开的提交（判定见 lib/gate-commit.ps1 头注释）。
+. (Join-Path $PSScriptRoot 'lib\gate-commit.ps1')
 
 # script 作用域状态：Set-StrictMode 下必须先声明再赋值，否则读未赋值变量会抛错
 $script:BootedEmulator = $false
@@ -719,8 +721,15 @@ function Archive-Screenshots {
         Invoke-Git (@('add') + $rel) | Out-Null
         $msg = "chore(verify): 归档仿真机冒烟截图（非门，不替代 ① 真机门）PR #$PrNumber"
         Invoke-Git (@('commit', '-m', $msg)) | Out-Null
-        $push = Invoke-Git @('push', 'origin', $branch)
-        Write-Log "入库：已提交并推送 $(@($rel).Count) 张到 $branch"
+        # #1695：归档提交要真推上去，评论里 `- commit:` 的 sha 才在 GitHub 上点得开；
+        # 推不动（分支保护/权限/离线）时**不假装成功**，如实记日志（评论侧同样会如实标注）。
+        $push = Push-ArchiveCommit -ProjectDir $ProjectRoot -Branch $branch
+        if ($push.Pushed) {
+            Write-Log "入库：已提交并推送 $(@($rel).Count) 张到 $branch"
+        }
+        else {
+            Write-Log "入库：已提交但**未推送**（$($push.Reason)）—— 本次是本地归档 sha（未推送），评论会如实标注"
+        }
     } catch {
         Write-Log "入库提交/推送失败（不影响结论）：$($_.Exception.Message)"
     }
@@ -736,7 +745,12 @@ function Publish-PrefilterComment {
     param([int]$PrNumber, [string]$Body)
     try {
         $sha = (git -C $ProjectRoot rev-parse HEAD 2>&1 | Out-String).Trim()
+        # #1695：只绑 GitHub 点得开的 sha —— HEAD 尚未推送时绑远端分支 tip，并把「本地归档 sha（未推送）」
+        # 如实写进评论（口径见 lib/gate-commit.ps1 头注释）。
+        $binding = Resolve-CommitBinding -ProjectDir $ProjectRoot -HeadSha $sha
+        $sha = $binding.Sha
         $body = $Body + "`n`n- commit: $sha"
+        foreach ($noteLine in @($binding.NoteLines)) { $body = $body + "`n" + $noteLine }
         # 刻意用 prefilter: 前缀，而不是验收门证据那套标记，避免被校验器当成门证据
         $body = "<!-- prefilter:emulator-smoke -->`n" + $body
         $tmp = Join-Path $env:TEMP ('emulator-smoke-comment-' + [guid]::NewGuid().ToString('N') + '.md')

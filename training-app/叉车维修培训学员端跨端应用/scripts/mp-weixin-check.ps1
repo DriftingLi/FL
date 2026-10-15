@@ -1155,6 +1155,9 @@ function Invoke-AuthInject {
 # 守护用夹具**真执行**这些函数（utils/mpWeixinGateEnvBehavior.test.js / mpWeixinGateResultLineBehavior.test.js），
 # 不对源码文本断言（C20 先例）。分支声明形状见 GATE_PLAN 的 branches 键。
 . (Join-Path $PSScriptRoot 'lib\mp-weixin-env.ps1')
+# sha 绑定口径（#1695）：评论里的 `- commit:` 只绑「GitHub 点得开」的提交 ——
+# 判定与 push 收在 lib/gate-commit.ps1（头注释写明 A/B/C 三级口径）。
+. (Join-Path $PSScriptRoot 'lib\gate-commit.ps1')
 
 function Publish-GateComment {
     param(
@@ -1174,6 +1177,10 @@ function Publish-GateComment {
         Write-Host '[warn] 取不到 HEAD sha（git 不可用或不在仓库里）：跳过贴 PR 评论，门结论不受影响。' -ForegroundColor Yellow
         return
     }
+    # #1695：只绑「GitHub 点得开」的 sha —— HEAD 还没推上去（rebase 后 / 归档提交仅本地）时绑远端
+    # 分支 tip，并把「本地归档 sha（未推送）」如实写进正文（三级口径见 lib/gate-commit.ps1 头注释）。
+    $binding = Resolve-CommitBinding -ProjectDir $Project -HeadSha $sha
+    $sha = $binding.Sha
     $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
     # 正文格式被 .github/workflows/pr-evidence.yml 认（标记 ② + commit sha），改动前先看那边的注释
     # #1682 核验补记①：-NoArchive / 未入库时调用点传 @(Get-Prop $null 'Rel') = @($null)——
@@ -1215,7 +1222,7 @@ function Publish-GateComment {
         "- commit: $sha",
         "- 结论（含产物）：``$ResultLine``；本地截图 ``$ShotRelative``；日志 ``$LogRelative``",
         '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门（content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住）。'
-    ) + $navLines + $directOut + $archLines + @(
+    ) + @($binding.NoteLines) + $navLines + $directOut + $archLines + @(
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
@@ -1415,6 +1422,19 @@ function Publish-ScreenshotArchive {
         $notes.Add("入库提交失败：$_")
         $cmdLines.Add("git add docs/verification/$module/$PrNumber")
         $cmdLines.Add("git commit -m `"docs(verification): ② 门截图（PR #$PrNumber）`"")
+    }
+
+    # #1695：归档提交必须**先推上去**，评论里 `- commit:` 的 sha 才在 GitHub 上点得开（验收①）。
+    # 推不动（分支保护 / 权限 / 离线）时**不假装成功**：如实记进入库说明 + 复现命令，
+    # 由 Publish-GateComment 的绑定口径把评论降级成「绑远端 tip」或「如实标注未推送」（验收②）。
+    $archBranch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1)
+    $push = Push-ArchiveCommit -ProjectDir $root -Branch $archBranch
+    if ($push.Pushed) {
+        $notes.Add("已推送 $archBranch（#1695：sha 绑定评论只引远端可达的提交）")
+    }
+    else {
+        $notes.Add("未推送 $archBranch：$($push.Reason) —— 本次归档 sha 仅本地（#1695）")
+        $cmdLines.Add("git push origin HEAD:refs/heads/$archBranch")
     }
     return @{ Notes = $notes; Commands = $cmdLines; Rel = $rel }
 }

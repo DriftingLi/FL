@@ -378,6 +378,8 @@ Write-Host '   注意：④c ≠ compileReleaseKotlin（工具链不同），只
 # 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
 # pin 住」的代码才允许搬进去 —— 本仓守护断言的是**源码文本**，搬走被 pin 的代码等于逼着后续放宽守护。
 . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+# sha 绑定口径（#1695）：评论里的 `- commit:` 只绑 GitHub 点得开的提交 —— 判定收在 lib/gate-commit.ps1。
+. (Join-Path $PSScriptRoot 'lib\gate-commit.ps1')
 
 function Publish-GateComment {
     param(
@@ -392,15 +394,21 @@ function Publish-GateComment {
         Write-Host '[warn] 取不到 HEAD sha（git 不可用或不在仓库里）：跳过贴 PR 评论，门结论不受影响。' -ForegroundColor Yellow
         return
     }
+    # #1695：只绑「GitHub 点得开」的 sha（口径见 lib/gate-commit.ps1 头注释）—— 编译门没有归档提交，
+    # 但 rebase 后 HEAD 未推送时同样会贴出点不开的 sha，这一支与 ②/③ 走同一条绑定口径。
+    $binding = Resolve-CommitBinding -ProjectDir $Project -HeadSha $sha
+    $sha = $binding.Sha
     $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
     # 正文格式被 .github/workflows/pr-evidence.yml 认（标记 + commit sha），改动前先看那边的注释
     $body = @(
         '<!-- gate-evidence:④ -->',
         "**④ 本地编译门（$GateLabel，agent 执行）**",
-        "- commit: $sha",
+        "- commit: $sha"
+    ) + @($binding.NoteLines) + @(
         "- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``",
         "- 复现：``$ReproCommand``"
-    ) -join "`n"
+    )
+    $body = $body -join "`n"
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
         return

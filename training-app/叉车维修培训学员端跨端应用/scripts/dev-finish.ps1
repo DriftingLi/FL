@@ -565,6 +565,10 @@ function Publish-UnitGateComment {
         Write-Host '[warn] 取不到 HEAD sha（git 不可用或不在仓库里）：跳过贴 PR 评论，门结论不受影响。' -ForegroundColor Yellow
         return
     }
+    # #1695：只绑「GitHub 点得开」的 sha（口径见 lib/gate-commit.ps1 头注释）—— ③ 门自己没有归档
+    # 提交，但 rebase 之后 HEAD 尚未推送时同样会贴出点不开的 sha，这一支与 ②/④ 走同一条绑定口径。
+    $binding = Resolve-CommitBinding -ProjectDir $ProjectDir -HeadSha $sha
+    $sha = $binding.Sha
     $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
     # 门号字形用 [char] 拼，不放裸字形进源码（本文件 `New-TestFailureSummary` 里的同一条纪律）。
     $marker = '<!-- gate-evidence:{0} -->' -f [char]0x2462
@@ -572,6 +576,7 @@ function Publish-UnitGateComment {
     $body.Add($marker)
     $body.Add('**全量单测门（`npm run test:unit`，agent 执行）**')
     $body.Add("- commit: $sha")
+    foreach ($noteLine in @($binding.NoteLines)) { $body.Add($noteLine) }
     $body.Add("- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``")
     $body.Add("- 复现：``$ReproCommand``")
     if ($SummaryText) {
@@ -733,6 +738,8 @@ if ($UnitGate) {
     # Get-HeadSha 用共享库那份（`lib/gate-common.ps1` 里唯一合格的成员），本脚本不自定义；
     # dot-source 提到分支开头，于是机检行与下面 `-PostToPr` 那条评论**共用同一份取法**（先前它只在评论分支里）。
     . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+    # #1695：评论的 sha 绑定口径（lib/gate-commit.ps1）与上面同一处就位 —— 调用点不再各自算一遍。
+    . (Join-Path $PSScriptRoot 'lib\gate-commit.ps1')
     $headSha = Get-HeadSha -ProjectDir $ProjectDir
     # 工作树脏净 = `git status --porcelain` 非空即 dirty（**含未跟踪**：没 `git add` 的新文件正是
     # 「head 没动而内容已经不是那份」的形态，只比 sha 会把它读成 clean）。取不到留空串 ⇒ 机检行写 `dirty=?`，

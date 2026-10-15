@@ -80,5 +80,11 @@ function Get-ContractTestPattern {
     #                  ⚠️ 刻意取**窄 token**：`wirelessDebug` 会顺带命中 #1564 的
     #                  wirelessDebugBehavior（B1–B6 现测 81.2 s，含真起后台 keep 与心跳循环），
     #                  而收窄门里要的是这一族真执行腿（现测 25.1 s）。#1564 那两条维持不注册（其裁定在 #1564 的 PR）。
-    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop|deviceCapture|emulatorSmoke|wirelessDebugBoundedText'
+    # gateCommit       → gateCommitBindingBehavior（行为层：#1695 门评论 sha 绑定口径 ——
+    #                    真建 bare 远端 + monorepo 形状工作树（ProjectDir 是仓库子目录，`--relative` 那条腿才有
+    #                    判别力），真跑 git 判「远端可达 / 仅本地归档提交 / 混着非归档改动 / 推不动」四种形态。
+    #                    承重证据在行为层 —— 不注册就只在全量那一档跑，token 收窄的门会静默跳过真执行腿）。
+    #                    ⚠️ 刻意取**窄 token**：`gateCommit` 不命中接线层 gateCommonLibContract（那一份在
+    #                    `gateCommon` 名下），也不会顺带命中别的套件（2026-10-16 `npx jest --listTests` 实测）。
+    return 'levelDetect|envCheck|testCompile|buildDeploy|autoScreenshot|screenshotDiff|evidenceGen|devFinish|hxBusyGate|hxRun|hxTimingBehavior|hxError|hxLaunchDetach|capabilitySurface|concurrent401Refresh|contractTestPattern|contractReaderEol|resumeAttachment|jobApplyState|recruiterResume|wtBootstrap|frontier|aiAnswerBody|frontierRun|styleLoop|deviceCapture|emulatorSmoke|wirelessDebugBoundedText|gateCommit'
 }
