@@ -273,8 +273,8 @@ describe('B. mockExam 历史：三级 if-else 收敛为一次 keys 声明，吞�
 
   it('M3 必红：把吞错 .catch 加回来 → 失败不再上抛', async () => {
     const file = mutateUts(MOCK_EXAM_UTS, [[
-      'buildMockExamHistoryResult(data, url, page, pageSize))',
-      "buildMockExamHistoryResult(data, url, page, pageSize)).catch(() => Promise.resolve({ items: [], total: 0, page: page, page_size: pageSize }))",
+      "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize))",
+      "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize)).catch(() => Promise.resolve({ items: [], total: 0, page: page, page_size: pageSize }))",
     ]], 'mockExam.uts');
     const { mod } = loadMockExam({}, [], file, { reject: true });
     await expect(mod.getMockExamHistoryApi(1, 10)).resolves.toEqual({ items: [], total: 0, page: 1, page_size: 10 });

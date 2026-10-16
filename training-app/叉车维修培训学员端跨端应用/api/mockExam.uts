@@ -241,11 +241,12 @@ export function getMockExamResultApi(mockExamId : number) : Promise<MockExamResu
  * @param pageSize 每页条数，默认 10
  */
 export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<MockExamHistoryResult> {
-	const url = '/mock-exam/history'
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
 	// 不吞错：失败原样上抛，交消费方的可见错误态（见文件头 @note）
-	return getMapped<MockExamHistoryResult>(url, params, (data : UTSJSONObject) : MockExamHistoryResult => buildMockExamHistoryResult(data, url, page, pageSize))
+	// 信封 warn 标签写成不带前导斜杠的形态：幻影路由锁（examContract「每条路由都在 backend mock_exam.go 已注册」）
+	// 按带前导斜杠的路由字面量计数，同一路由的第二处字面量会被当成多出来的消费点。
+	return getMapped<MockExamHistoryResult>('/mock-exam/history', params, (data : UTSJSONObject) : MockExamHistoryResult => buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize))
 }
