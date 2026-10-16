@@ -206,8 +206,16 @@ export function buildTopicListResult(obj : UTSJSONObject, url : string, page : n
  *    author: {...}, can_delete, accepted_reply_id }, replies: [{ id, content, created_at, parent_name, parent_avatar_url, author: {...} }] }
  *  注意：帖子信息在 topic 子对象里，replies 与分页三元组在顶层；replies 是**当前页**而非全量
  *  status 从 accepted_reply_id 派生（#707 裁定：采纳判定，非后端 status 字段）
+ *  @note PR-D #1664：回复列表与 total 走信封归一出口 decodePage（数组键 `replies` 显式声明，
+ *       嵌套父列表形态，ADR-0037 ④.4）；`pages` **不索引读后端回显**，按 total / 请求 pageSize 折算
+ *       （折算式用 floor：UTS 侧只保证 Math.floor，先例 api/material.uts:57）。
+ *       `page` 是回显键（非棘轮载体），保持原样。
+ *       采纳 / 取消采纳两个出口复用本 builder，其响应是变更后的帖子 DTO、**没有 replies 数组**
+ *       ⇒ 走 decodePage 的 no-hit 通道（一条 console.warn + 空页），三元组落成「空 / 0 条 / 0 页」；
+ *       消费方 composables/useTopicDetail.uts:217-219 把 0 页归一成 1，`hasMoreReplies` 仍为假，
+ *       与旧的「1 页 / 1 页 / 0 条」手垫逐值同解。
  */
-export function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
+export function buildTopicDetail(obj : UTSJSONObject, url : string, page : number, pageSize : number) : ForumTopicDetail {
     // 帖子主体在 topic 子对象里
     const topicRaw = obj['topic']
     let topicObj : UTSJSONObject = obj
@@ -216,15 +224,9 @@ export function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
     }
     const topicId = toNumber(topicObj['id'])
 
-    // 回复列表在顶层 replies
-    const replies : ForumReply[] = []
-    const repliesRaw = obj['replies']
-    if (repliesRaw != null) {
-        const repliesArray = repliesRaw as Array<UTSJSONObject>
-        for (let i = 0; i < repliesArray.length; i++) {
-            replies.push(buildReply(repliesArray[i], topicId))
-        }
-    }
+    // 回复列表在顶层 replies（当前页）
+    const paged : Page<ForumReply> = decodePage<ForumReply>(obj, url, page, pageSize, (reply : UTSJSONObject) : ForumReply => buildReply(reply, topicId), ['replies'])
+    const replies = paged.items
 
     let likedVal = toBool(topicObj['liked'])
     if (!likedVal) likedVal = toBool(topicObj['liked_by_me'])
@@ -251,10 +253,10 @@ export function buildTopicDetail(obj : UTSJSONObject) : ForumTopicDetail {
         can_delete: toBool(topicObj['can_delete']),
         replies: replies,
         // 分页三元组（ADR-0042）：详情接口下发；采纳/取消采纳返回的 topic DTO 没有它，
-        // 垫成「1 页 / 1 页 / 0 条」——语义正确（没有下一页），不会退化成「还有更多」
+        // 由 decodePage 的空页通道垫成「0 条 / 0 页」——语义正确（没有下一页），不会退化成「还有更多」
         page: toNumber(obj['page'], 1),
-        pages: toNumber(obj['pages'], 1),
-        total: toNumber(obj['total'], replies.length),
+        pages: Math.floor((paged.total + pageSize - 1) / pageSize),
+        total: paged.total,
         scope: toStr(topicObj['scope'], 'general'),
         category: toStr(topicObj['category'], 'discussion'),
         is_experience: toBool(topicObj['is_experience']),

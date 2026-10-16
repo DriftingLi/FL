@@ -23,9 +23,15 @@
  * 请求形态逐字不变（getMapped 的 query 序列化与 get 同通路），响应字段读取也逐行不变——
  * 变的只是出口签名带 DTO 类型、内联映射收敛为 `buildSearchResult` / `buildSearchPagedResult`
  * 具名函数（与 #643 T05 已收紧域同构：出口一行委托，映射只有一份实现）。
+ *
+ * ## 信封归一（ADR-0037 PR-D #1664）
+ *
+ * 五分区与分页站点的手拆信封改为 `decodePage`（数组键显式声明 `['items']`）；`pages` 不再索引读后端
+ * 回显，按 `total` / 请求 `pageSize` 折算。`keyword` / `type` / `page` 是回显键（非棘轮载体），保持原样。
  */
 import { getMapped } from './request'
 import { toNumber, toStr } from './helpers'
+import { decodePage } from './envelope'
 import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult } from '../types/index'
 
 
@@ -43,25 +49,26 @@ function buildSearchItem(obj : UTSJSONObject) : SearchItem {
 	} as SearchItem
 }
 
-function buildSearchCategoryResult(obj : UTSJSONObject | null) : SearchCategoryResult {
+/**
+ * 单个分区的映射（五分区共用）。
+ * @note 装载走信封归一出口 `decodePage`（ADR-0037 PR-D）：数组键显式声明 `['items']`
+ *       （不给 'list' 兜底 —— 后端分区形态只有 items，多给一个键等于凭空扩面）。
+ *       分区本身不分页，`page` / `pageSize` 传占位 1 / 0，只借它的「数组键 + total」解码面，
+ *       返回的 hasMore 不消费。`total` 缺失时旧读法给 0、信封回落 items.length ——
+ *       后端契约每个分区恒发 total（缺省各分区 top 5 + 总数），该分支只在假想载荷上不同解。
+ */
+function buildSearchCategoryResult(obj : UTSJSONObject | null, url : string) : SearchCategoryResult {
 	if (obj == null) {
 		return { items: [] as SearchItem[], total: 0 } as SearchCategoryResult
 	}
-	const items : SearchItem[] = []
-	const itemsRaw = obj['items']
-	if (itemsRaw != null) {
-		const arr = itemsRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildSearchItem(arr[i]))
-		}
-	}
+	const paged = decodePage<SearchItem>(obj, url, 1, 0, (o : UTSJSONObject) : SearchItem => buildSearchItem(o), ['items'])
 	return {
-		items: items,
-		total: toNumber(obj['total']),
+		items: paged.items,
+		total: paged.total,
 	} as SearchCategoryResult
 }
 
-/** 全局搜索结果映射（#652 T14：收紧至 getMapped 出口，响应字段读取逐行不变） */
+/** 全局搜索结果映射（#652 T14：收紧至 getMapped 出口；PR-D：五分区装载收敛为信封出口） */
 function buildSearchResult(data : UTSJSONObject, keyword : string) : SearchResult {
 	const coursesRaw = data['courses']
 	const chaptersRaw = data['chapters']
@@ -70,31 +77,30 @@ function buildSearchResult(data : UTSJSONObject, keyword : string) : SearchResul
 	const topicsRaw = data['topics']
 	return {
 		keyword: toStr(data['keyword'], keyword),
-		courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null),
-		chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null),
-		questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null),
-		contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null),
-		topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null),
+		courses: buildSearchCategoryResult(coursesRaw != null ? coursesRaw as UTSJSONObject : null, '/search'),
+		chapters: buildSearchCategoryResult(chaptersRaw != null ? chaptersRaw as UTSJSONObject : null, '/search'),
+		questions: buildSearchCategoryResult(questionsRaw != null ? questionsRaw as UTSJSONObject : null, '/search'),
+		contents: buildSearchCategoryResult(contentsRaw != null ? contentsRaw as UTSJSONObject : null, '/search'),
+		topics: buildSearchCategoryResult(topicsRaw != null ? topicsRaw as UTSJSONObject : null, '/search'),
 	} as SearchResult
 }
 
-/** 指定类型分页结果映射（同口径；keyword/type 是回退缺省值，须由出口传入） */
-function buildSearchPagedResult(data : UTSJSONObject, keyword : string, type : string) : SearchPagedResult {
-	const items : SearchItem[] = []
-	const itemsRaw = data['items']
-	if (itemsRaw != null) {
-		const arr = itemsRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildSearchItem(arr[i]))
-		}
-	}
+/**
+ * 指定类型分页结果映射（同口径；keyword/type 是回退缺省值，须由出口传入）。
+ * @note `pages` **不读后端回显**，按 total / 请求 pageSize 折算（ADR-0037 ②：`pages` 属棘轮载体，
+ *       且「回显总页数」与「total 推导」在现网同解，推导式让 `pages→page_size` 误读家族结构上消亡）。
+ *       折算式用 floor（UTS 侧只保证 Math.floor，先例 utils/recruitDisplay.uts:164、api/material.uts:57）。
+ *       消费方 pages/search/search.uvue:201 的 `page < pages` 由此等价于 `page*pageSize < total`。
+ */
+function buildSearchPagedResult(data : UTSJSONObject, keyword : string, type : string, page : number, pageSize : number) : SearchPagedResult {
+	const paged = decodePage<SearchItem>(data, '/search', page, pageSize, (obj : UTSJSONObject) : SearchItem => buildSearchItem(obj), ['items'])
 	return {
 		keyword: toStr(data['keyword'], keyword),
 		type: toStr(data['type'], type),
-		total: toNumber(data['total']),
+		total: paged.total,
 		page: toNumber(data['page'], 1),
-		pages: toNumber(data['pages']),
-		items: items,
+		pages: Math.floor((paged.total + pageSize - 1) / pageSize),
+		items: paged.items,
 	} as SearchPagedResult
 }
 
@@ -131,5 +137,5 @@ export function searchByTypeApi(keyword : string, type : string, page : number =
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject, credentialId)
-	return getMapped<SearchPagedResult>('/search', params, (data : UTSJSONObject) : SearchPagedResult => buildSearchPagedResult(data, keyword, type))
+	return getMapped<SearchPagedResult>('/search', params, (data : UTSJSONObject) : SearchPagedResult => buildSearchPagedResult(data, keyword, type, page, pageSize))
 }

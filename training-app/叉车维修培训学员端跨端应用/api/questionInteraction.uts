@@ -6,7 +6,7 @@
  */
 import { get, post, put, del } from './request'
 import { toNumber, toStr, toBool } from './helpers'
-import { decodeList } from './envelope'
+import { decodeList, decodePage } from './envelope'
 import type { QuestionComment, CommentListResult, QuestionNote, KnowledgeTag } from '../types/index'
 
 
@@ -48,21 +48,20 @@ function buildKnowledgeTag(obj : UTSJSONObject) : KnowledgeTag {
 
 // ========== 评论 ==========
 
-/** 获取题目评论列表 */
+/**
+ * 获取题目评论列表
+ * @note 端点本身不分页（后端一次性返回全部评论），故 `decodePage` 的 `page` / `pageSize`
+ *       传占位值 1 / 0，只借它的「数组键 + total」解码面；`hasMore` 不消费。
+ */
 export function getCommentsApi(questionId : number) : Promise<CommentListResult> {
-	return get(`/questions/${questionId}/comments`).then((data : UTSJSONObject) : CommentListResult => {
-		const items : QuestionComment[] = []
-		// 兼容后端返回 { list: [...] } 或 { items: [...] } 两种形态
-		const listRaw = data['list'] ?? data['items']
-		if (listRaw != null) {
-			const arr = listRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildComment(arr[i]))
-			}
-		}
+	const url = `/questions/${questionId}/comments`
+	// 装载走信封归一出口 `decodePage`（ADR-0037 PR-D）：原 `data['list'] ?? data['items']` 的手写回退链
+	// 收敛为模块默认键序 `['items','list']`（与同文件 getKnowledgeApi 的 PR-B 口径一致）
+	return get(url).then((data : UTSJSONObject) : CommentListResult => {
+		const paged = decodePage<QuestionComment>(data, url, 1, 0, (obj : UTSJSONObject) : QuestionComment => buildComment(obj))
 		return {
-			items: items,
-			total: toNumber(data['total'], items.length),
+			items: paged.items,
+			total: paged.total,
 		} as CommentListResult
 	})
 }

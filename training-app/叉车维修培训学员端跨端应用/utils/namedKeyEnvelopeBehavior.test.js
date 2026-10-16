@@ -593,8 +593,8 @@ describe('forum：topics 具名键站点 + pages→page_size 误写消亡（PR-C
 
 // ===== 票面验收：forum 回复列表装载行为不变（两条装载路径逐字段不变） =====
 
-describe('forum 回复列表装载行为不变（票面验收，PR-C #1663）', () => {
-  it('详情回复：topic 子对象 + 顶层 replies + 分页三元组逐字段不变（PR-D 域，本票不动）', async () => {
+describe('forum 回复列表装载行为不变（票面验收，列表 PR-C #1663 / 详情回复 PR-D #1664）', () => {
+  it('详情回复：topic 子对象 + 顶层 replies + 分页三元组逐字段不变（PR-D 迁 decodePage 后同解）', async () => {
     const { mod, calls } = loadForum(DETAIL_RAW);
     const got = await mod.getForumTopicDetailApi(7, 'latest', 'asc', 1, 20);
 

@@ -65,11 +65,14 @@ describe('notification 域收紧（dashboard 未读轮询数据源）', () => {
   it('引入 getMapped', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it('getNotificationsApi / getUnreadCountApi 经 getMapped，字段读取保持（items/total/page/page_size/unread_count/count）', () => {
+  it('getNotificationsApi / getUnreadCountApi 经 getMapped，列表装载走信封出口（PR-D #1664），侧计数器 unread_count 与 count 保持手读', () => {
     const list = fnBodyOf(src, 'getNotificationsApi');
     expect(list).toContain('getMapped<NotificationListResult>');
-    expect(list).toMatch(/\(data : UTSJSONObject\) : NotificationListResult => buildNotificationListResult\(data\)/);
+    // `data` 之后跟信封归一的附加实参（url / page / pageSize，ADR-0037 PR-D）
+    expect(list).toMatch(/\(data : UTSJSONObject\) : NotificationListResult => buildNotificationListResult\(data[^)]*\)/);
     expect(src).toMatch(/function buildNotificationListResult/);
+    expect(src).toMatch(/decodePage<NotificationItem>/);
+    expect(src).toContain("toNumber(data['unread_count'])");
     const unread = fnBodyOf(src, 'getUnreadCountApi');
     expect(unread).toContain("getMapped<number>('/notifications/unread-count'");
     expect(unread).toContain("toNumber(data['count'])");
