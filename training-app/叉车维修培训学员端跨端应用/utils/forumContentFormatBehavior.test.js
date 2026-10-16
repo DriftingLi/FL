@@ -36,9 +36,14 @@ const FORUM_UTS = path.join(API_DIR, 'forum.uts');
 const ENVELOPE_UTS = path.join(API_DIR, 'envelope.uts');
 const TYPES_FORUM = path.join(__dirname, '..', 'types', 'forum.uts');
 
-/** 真件：helpers（零 import，空绑定即可）与 DTO 构造层（依赖 helpers，注入真件） */
+/** 真件：helpers（零 import，空绑定即可）与 DTO 构造层（依赖 helpers；PR-C #1663 起列表 builder
+ *  还 import ./envelope 的 decodePage ⇒ 同注入真件 envelope——它内部只走 getMapped，
+ *  而 DTO 构造层零请求出口（forumContract 拆分锁执法），这里给个占位替身即可） */
 const helpers = () => loadUts(HELPERS_UTS, {});
-const dto = () => loadUts(DTO_UTS, { ...helpers() });
+const dto = () => {
+  const envelope = loadUts(ENVELOPE_UTS, { getMapped: () => Promise.resolve({}), toNumber: helpers().toNumber });
+  return loadUts(DTO_UTS, { ...helpers(), ...envelope });
+};
 
 /**
  * `api/forum.uts` 的格式缺省取自 `utils/forumBody`（不写裸字面量 `'text'`）⇒ 注入**真执行**的常量。

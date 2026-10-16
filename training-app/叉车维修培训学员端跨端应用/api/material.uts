@@ -24,6 +24,8 @@
  */
 import { getMapped } from './request'
 import { toNumber, toStr } from './helpers'
+import { decodePage } from './envelope'
+import type { Page } from './envelope'
 import type { MaterialItem, MaterialListResult, MaterialDownloadInfo } from '../types/index'
 
 function buildMaterialItem(obj : UTSJSONObject) : MaterialItem {
@@ -41,21 +43,18 @@ function buildMaterialItem(obj : UTSJSONObject) : MaterialItem {
 	} as MaterialItem
 }
 
-/** 列表信封 → MaterialListResult（`/materials` 与 `/student/materials` 共用同一后端 DTO） */
-function buildMaterialListResult(data : UTSJSONObject) : MaterialListResult {
-	const materials : MaterialItem[] = []
-	const listRaw = data['materials']
-	if (listRaw != null) {
-		const arr = listRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			materials.push(buildMaterialItem(arr[i]))
-		}
-	}
+/**
+ * 列表信封 → MaterialListResult（`/materials` 与 `/student/materials` 共用同一后端 DTO）
+ * 数组与 total 走信封归一出口 decodePage（ADR-0037 PR-C），数组键 materials 显式声明；
+ * pages 不再读后端回显，按 total / pageSize 向上取整（Math.floor 手写，UTS 侧只保证 floor）
+ */
+function buildMaterialListResult(data : UTSJSONObject, url : string, page : number, pageSize : number) : MaterialListResult {
+	const paged : Page<MaterialItem> = decodePage<MaterialItem>(data, url, page, pageSize, (obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj), ['materials'])
 	return {
-		materials: materials,
-		total: toNumber(data['total']),
+		materials: paged.items,
+		total: paged.total,
 		page: toNumber(data['page'], 1),
-		pages: toNumber(data['pages']),
+		pages: Math.floor((paged.total + pageSize - 1) / pageSize),
 	} as MaterialListResult
 }
 
@@ -81,7 +80,7 @@ export function getMaterialsApi(courseId : number = 0, page : number = 1, pageSi
 	if (courseId > 0) {
 		params['course_id'] = courseId.toString()
 	}
-	return getMapped<MaterialListResult>('/materials', params, (data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data))
+	return getMapped<MaterialListResult>('/materials', params, (data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/materials', page, pageSize))
 }
 
 /**
@@ -153,5 +152,5 @@ export function getStudentMaterialsApi(page : number = 1, pageSize : number = 20
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
-	return getMapped<MaterialListResult>('/student/materials', params, (data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data))
+	return getMapped<MaterialListResult>('/student/materials', params, (data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/student/materials', page, pageSize))
 }
