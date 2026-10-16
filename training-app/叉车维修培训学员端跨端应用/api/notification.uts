@@ -10,6 +10,7 @@
  */
 import { getMapped, post } from './request'
 import { toNumber, toStr, toBool } from './helpers'
+import { decodePage } from './envelope'
 import type { NotificationItem, NotificationListResult } from '../types/index'
 
 
@@ -30,21 +31,18 @@ function buildNotificationItem(obj : UTSJSONObject) : NotificationItem {
     } as NotificationItem
 }
 
-/** 通知列表映射（T05 手术 #643：收紧至 getMapped 出口，响应字段读取逐行不变） */
-function buildNotificationListResult(data : UTSJSONObject) : NotificationListResult {
-    const items : NotificationItem[] = []
-    const rawItems = data['items']
-    if (rawItems != null) {
-        const arr = rawItems as Array<UTSJSONObject>
-        for (let i = 0; i < arr.length; i++) {
-            items.push(buildNotificationItem(arr[i]))
-        }
-    }
+/**
+ * 通知列表映射（T05 手术 #643：收紧至 getMapped 出口；PR-D #1664：装载收敛为信封出口）
+ * @note `unread_count` 是**侧计数器**，不属于信封三字段，保留手读（ADR-0037 ④.4）。
+ *       `page_size` 改填**请求** pageSize（旧读法拿响应回显的每页大小，属棘轮载体）。
+ */
+function buildNotificationListResult(data : UTSJSONObject, url : string, page : number, pageSize : number) : NotificationListResult {
+    const paged = decodePage<NotificationItem>(data, url, page, pageSize, (obj : UTSJSONObject) : NotificationItem => buildNotificationItem(obj))
     return {
-        items: items,
-        total: toNumber(data['total']),
+        items: paged.items,
+        total: paged.total,
         page: toNumber(data['page']),
-        page_size: toNumber(data['page_size']),
+        page_size: pageSize,
         unread_count: toNumber(data['unread_count']),
     } as NotificationListResult
 }
@@ -59,7 +57,7 @@ export function getNotificationsApi(page : number = 1, pageSize : number = 10) :
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return getMapped<NotificationListResult>('/notifications', params, (data : UTSJSONObject) : NotificationListResult => buildNotificationListResult(data))
+    return getMapped<NotificationListResult>('/notifications', params, (data : UTSJSONObject) : NotificationListResult => buildNotificationListResult(data, '/notifications', page, pageSize))
 }
 
 /**

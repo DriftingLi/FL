@@ -36,10 +36,13 @@ const MODULE_FILE = 'api/envelope.uts';
 /**
  * 载体的实测基线（PR-B #1662 迁移后现测）：PR-A 后 48（raw 50，其中定义文件 envelope.uts
  * 自身 2 处经排除不计）；PR-B 机械迁移 11 个文件的标准域站点后消 15 ⇒ 33；
- * PR-C #1663 具名键站点迁移（material/student 两列表 builder + forumDto topics builder）再消 6 ⇒ 27。
+ * PR-C #1663 具名键站点迁移（material/student 两列表 builder + forumDto topics builder）再消 6 ⇒ 27；
+ * PR-D #1664 兜底链收敛 + 四类异形处置（questionInteraction/mockExam/favorite/notification/
+ * search/forumDto/recruit 七文件共 15 处，含 mockExam 的 exams→items→records 三级回退与
+ * search 的 pages 回显读）再消 15 ⇒ 12。
  * 迁移一处 ⇒ **同一 PR 下调本数**；新增一处 ⇒ 判红。终态 = 0（ADR-0037 ⑥）。
  */
-const ENVELOPE_BASELINE = 27;
+const ENVELOPE_BASELINE = 12;
 
 /** 载体判据：三键合并、不分彼此（`page_size` 与 `pages` 换着写拿不到后门） */
 const CARRIER_RE = /\['(total|page_size|pages)'\]/g;

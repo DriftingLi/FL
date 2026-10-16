@@ -75,12 +75,13 @@ function loadJobApi(raw) {
   return { mod, getCalls, postCalls };
 }
 
-/** 按出口装载 search.uts（helpers 是真源，不注入假的） */
+/** 按出口装载 search.uts（helpers 是真源，不注入假的；PR-D #1664 起 search.uts 走信封出口，注入真 envelope 实现） */
 function loadSearchApi(raw) {
   const getCalls = [];
   const h = helpers();
   const mod = loadUts(SEARCH_UTS, {
     getMapped: makeGetMapped(raw, getCalls),
+    decodePage: envelope().decodePage,
     toNumber: h.toNumber,
     toStr: h.toStr,
   });

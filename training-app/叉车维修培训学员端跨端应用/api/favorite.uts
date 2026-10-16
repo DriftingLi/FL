@@ -11,6 +11,7 @@
  */
 import { get, getMapped, post, postMapped, del } from './request'
 import { toNumber, toStr } from './helpers'
+import { decodePage } from './envelope'
 import type { FavoriteItem, FavoriteListResult, FavoriteCheckResult } from '../types/index'
 
 
@@ -31,22 +32,20 @@ function buildFavoriteItem(obj : UTSJSONObject) : FavoriteItem {
 	} as FavoriteItem
 }
 
-/** 从 UTSJSONObject 构造 FavoriteListResult（后端列表字段为 favorites，非 items） */
-function buildFavoriteListResult(data : UTSJSONObject) : FavoriteListResult {
-		const items : FavoriteItem[] = []
-		const listRaw = data['favorites']
-		if (listRaw != null) {
-			const arr = listRaw as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildFavoriteItem(arr[i]))
-			}
-		}
-		return {
-			items: items,
-			total: toNumber(data['total']),
-			page: toNumber(data['page'], 1),
-			page_size: toNumber(data['page_size'], 20),
-		} as FavoriteListResult
+/**
+ * 从 UTSJSONObject 构造 FavoriteListResult
+ * @note 具名键站点（后端列表字段为 `favorites`，非 `items`）：数组键显式声明为 keys 一位，
+ *       不靠模块默认键序兜底（ADR-0037 PR-D）。`page_size` 改填**请求** pageSize
+ *       （旧读法拿响应回显的每页大小，属棘轮载体）。
+ */
+function buildFavoriteListResult(data : UTSJSONObject, url : string, page : number, pageSize : number) : FavoriteListResult {
+	const paged = decodePage<FavoriteItem>(data, url, page, pageSize, (obj : UTSJSONObject) : FavoriteItem => buildFavoriteItem(obj), ['favorites'])
+	return {
+		items: paged.items,
+		total: paged.total,
+		page: toNumber(data['page'], 1),
+		page_size: pageSize,
+	} as FavoriteListResult
 }
 
 /** 从 UTSJSONObject 构造 FavoriteCheckResult */
@@ -68,7 +67,7 @@ export function getFavoritesApi(targetType : string = '', page : number = 1, pag
 	if (targetType.length > 0) {
 		params['target_type'] = targetType
 	}
-	return getMapped<FavoriteListResult>('/favorites', params, (data : UTSJSONObject) : FavoriteListResult => buildFavoriteListResult(data))
+	return getMapped<FavoriteListResult>('/favorites', params, (data : UTSJSONObject) : FavoriteListResult => buildFavoriteListResult(data, '/favorites', page, pageSize))
 }
 
 /**

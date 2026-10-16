@@ -94,7 +94,7 @@ const jobListPage = read('pages/jobs/job-list.uvue');
 const jobDetailPage = read('pages/jobs/job-detail.uvue');
 
 /* ══ ①-a search 域出口收紧（#652 T14） ══ */
-describe('search 域收紧：两出口经 getMapped<T>，请求形态与字段读取不变', () => {
+describe('search 域收紧：两出口经 getMapped<T>，请求形态不变（装载自 PR-D #1664 起走信封出口 decodePage）', () => {
   it('import 只引入 getMapped（不再引入裸 get）', () => {
     expect(searchApi).toMatch(/import\s*\{\s*getMapped\s*\}\s*from\s*'\.\/request'/);
   });
@@ -112,7 +112,7 @@ describe('search 域收紧：两出口经 getMapped<T>，请求形态与字段�
   it('两出口一行委托具名映射，出口体内零字段读取（映射单一实现，与 T05 同构）', () => {
     for (const [marker, delegation] of [
       ['export function searchAllApi', '=> buildSearchResult(data, keyword)'],
-      ['export function searchByTypeApi', '=> buildSearchPagedResult(data, keyword, type)'],
+      ['export function searchByTypeApi', '=> buildSearchPagedResult(data, keyword, type, page, pageSize)'],
     ]) {
       const body = topFn(searchApi, marker);
       expect(body).toContain(delegation);

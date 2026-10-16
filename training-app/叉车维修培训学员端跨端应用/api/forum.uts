@@ -84,7 +84,7 @@ export function getForumTopicDetailApi(topicId : number, sort : string = 'latest
     } as UTSJSONObject
     return getMapped<ForumTopicDetail>(url, params, (data : UTSJSONObject) : ForumTopicDetail => {
         console.log('[getForumTopicDetailApi] raw data:', JSON.stringify(data))
-        return buildTopicDetail(data)
+        return buildTopicDetail(data, url, page, pageSize)
     }).catch((e) : ForumTopicDetail => {
         console.error('[getForumTopicDetailApi] failed:', e)
         const msg = errMsg(e, '获取帖子详情失败')
@@ -382,13 +382,16 @@ export function getMyViewHistoryApi(page : number = 1, pageSize : number = 10) :
  * @param topicId 主题 ID
  * @param replyId 要采纳的回复 ID
  * @note POST /forum/topics/{id}/accept，后端返回更新后的 topic DTO
+ * @note 该响应**不带回复分页**（ADR-0042），故按 getForumTopicDetailApi 的同款缺省 (1, 20) 交给
+ *       buildTopicDetail：走 decodePage 的空页通道，三元组落成「空 / 0 / 0」，
+ *       与 PR-D 之前的手垫「1 / 1 / 0」在消费方（composables/useTopicDetail.uts:217-219 归一）逐值同解。
  */
 export function acceptReplyApi(topicId : number, replyId : number) : Promise<ForumTopicDetail> {
     const body : UTSJSONObject = {
         reply_id: replyId,
     } as UTSJSONObject
     return postMapped<ForumTopicDetail>('/forum/topics/' + topicId.toString() + '/accept', body, (data : UTSJSONObject) : ForumTopicDetail => {
-        return buildTopicDetail(data)
+        return buildTopicDetail(data, '/forum/topics/' + topicId.toString() + '/accept', 1, 20)
     })
 }
 
@@ -398,8 +401,9 @@ export function acceptReplyApi(topicId : number, replyId : number) : Promise<For
  * @note DELETE /forum/topics/{id}/accept，后端返回更新后的 topic DTO
  */
 export function cancelAcceptApi(topicId : number) : Promise<ForumTopicDetail> {
+    const url = '/forum/topics/' + topicId.toString() + '/accept'
     return requestMapped<ForumTopicDetail>(
-        { url: '/forum/topics/' + topicId.toString() + '/accept', method: 'DELETE' } as RequestOptions,
-        (data : UTSJSONObject) : ForumTopicDetail => buildTopicDetail(data),
+        { url: url, method: 'DELETE' } as RequestOptions,
+        (data : UTSJSONObject) : ForumTopicDetail => buildTopicDetail(data, url, 1, 20),
     )
 }

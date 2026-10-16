@@ -74,10 +74,12 @@ describe('favorite 域收紧（收藏段）', () => {
     const body = fnBodyOf(src, 'getFavoritesApi');
     expect(body).toContain('getMapped<');
     // mapper 必须箭头包裹：UTS→Kotlin 不支持具名顶层函数直传高阶参数（error17）
-    expect(body).toMatch(/getMapped<FavoriteListResult>\([^)]*\(data : UTSJSONObject\) : FavoriteListResult => buildFavoriteListResult\(data\)/);
+    // `data` 之后可跟信封归一的附加实参（url / page / pageSize，ADR-0037 PR-D #1664）
+    expect(body).toMatch(/getMapped<FavoriteListResult>\([^)]*\(data : UTSJSONObject\) : FavoriteListResult => buildFavoriteListResult\(data[^)]*\)/);
     const b = read('api/favorite.uts');
     expect(b).toMatch(/function buildFavoriteListResult/);
-    expect(b).toContain("data['favorites']");
+    // 具名键 favorites 改由信封出口的 keys 声明承载（PR-D），不再是手写索引读
+    expect(b).toContain("['favorites']");
   });
   it('addFavoriteApi 经 postMapped 映射 FavoriteItem', () => {
     expect(fnBodyOf(src, 'addFavoriteApi')).toContain('postMapped<FavoriteItem>');

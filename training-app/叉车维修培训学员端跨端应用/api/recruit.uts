@@ -511,36 +511,42 @@ export function getRecruitContactRequestsApi(page : number = 1, pageSize : numbe
     })
 }
 /**
+ * 投递条目映射（PR-D #1664：从 getRecruitJobApplicationsApi 的内联循环提出，供 decodePage 箭头包裹）
+ * @note 字段读取逐行不变（仍是 cast + ?? 风格，与本域既有写法一致）
+ */
+function buildRecruitApplication(obj : UTSJSONObject) : RecruitApplication {
+    return {
+        id: obj['id'] as number,
+        job_posting_id: (obj['job_posting_id'] as number) ?? 0,
+        job_title: (obj['job_title'] as string) ?? '',
+        student_user_id: (obj['student_user_id'] as number) ?? 0,
+        student_real_name_masked: (obj['student_real_name_masked'] as string) ?? '',
+        status: (obj['status'] as string) ?? '',
+        employer_viewed_at: (obj['employer_viewed_at'] as string) ?? '',
+        created_at: (obj['created_at'] as string) ?? '',
+        updated_at: (obj['updated_at'] as string) ?? '',
+        resume_updated_at_snapshot: (obj['resume_updated_at_snapshot'] as string) ?? '',
+    } as RecruitApplication
+}
+
+/**
  * 按职位查看投递（含 `unread_count`）
  *
  * ⚠️ **绝不可**在职位列表里逐职位调用它来凑未读数 —— 那是 N+1（ADR-0021 ②）。
  * 本函数只允许被「进入某个职位之后的投递列表页」调用一次。
+ * @note PR-D #1664：数组与 total 走信封归一出口 decodePage（ADR-0037 ④.4），`page_size` 改填请求值；
+ *       `unread_count` / `job_title` 是侧计数器与冗余标题，保留手读。
+ *       出口仍是裸 `get`（本域裸出口的收口属 PR-E #1665）。
  */
 export function getRecruitJobApplicationsApi(jobId : number, page : number = 1, pageSize : number = 20) : Promise<RecruitApplicationListResult> {
     const url = '/recruit/jobs/' + jobId.toString() + '/applications?page=' + page.toString() + '&page_size=' + pageSize.toString()
     return get(url).then((data : UTSJSONObject) : RecruitApplicationListResult => {
-        const raw = (data['items'] as UTSJSONObject[]) ?? []
-        const items : RecruitApplication[] = []
-        for (let i = 0; i < raw.length; i++) {
-            const obj = raw[i]
-            items.push({
-                id: obj['id'] as number,
-                job_posting_id: (obj['job_posting_id'] as number) ?? 0,
-                job_title: (obj['job_title'] as string) ?? '',
-                student_user_id: (obj['student_user_id'] as number) ?? 0,
-                student_real_name_masked: (obj['student_real_name_masked'] as string) ?? '',
-                status: (obj['status'] as string) ?? '',
-                employer_viewed_at: (obj['employer_viewed_at'] as string) ?? '',
-                created_at: (obj['created_at'] as string) ?? '',
-                updated_at: (obj['updated_at'] as string) ?? '',
-                resume_updated_at_snapshot: (obj['resume_updated_at_snapshot'] as string) ?? '',
-            } as RecruitApplication)
-        }
+        const paged = decodePage<RecruitApplication>(data, url, page, pageSize, (obj : UTSJSONObject) : RecruitApplication => buildRecruitApplication(obj))
         return {
-            items: items,
-            total: (data['total'] as number) ?? 0,
+            items: paged.items,
+            total: paged.total,
             page: (data['page'] as number) ?? 1,
-            page_size: (data['page_size'] as number) ?? pageSize,
+            page_size: pageSize,
             unread_count: (data['unread_count'] as number) ?? 0,
             job_title: (data['job_title'] as string) ?? '',
         } as RecruitApplicationListResult
@@ -625,21 +631,17 @@ export function getRecruitJobDetailApi(id : number) : Promise<RecruitJobInput> {
  * @param filters 8 维筛选（空值不发键）
  * @param page 页码，从 1 起（**响应不回显 page**，由调用方自记）
  * @note 每页固定 `page_size=20`；后端超 50 截断为 50 且不回显 —— 我们不会用到那个区间。
+ * @note PR-D #1664：「不回显分页字段的端点」样本（ADR-0037 ④.4）—— items / total 走 decodePage，
+ *       pageSize 传本域常量 `RECRUIT_PAGE_SIZE`（与 buildFilterParams 下发的 `page_size` 同源，
+ *       不是新造的数）。出口仍是裸 `get`（收口属 PR-E #1665）。
  */
 export function getRecruitResumesApi(filters : RecruitResumeFilters, page : number = 1) : Promise<RecruitResumeListResult> {
     const params = buildFilterParams(filters, page)
     return get('/recruit/resumes', params).then((data : UTSJSONObject) : RecruitResumeListResult => {
-        const items : RecruitResumeCard[] = []
-        const raw = data['items']
-        if (raw != null) {
-            const arr = raw as Array<UTSJSONObject>
-            for (let i = 0; i < arr.length; i++) {
-                items.push(buildRecruitResumeCard(arr[i]))
-            }
-        }
+        const paged = decodePage<RecruitResumeCard>(data, '/recruit/resumes', page, RECRUIT_PAGE_SIZE, (obj : UTSJSONObject) : RecruitResumeCard => buildRecruitResumeCard(obj))
         return {
-            items: items,
-            total: toNumber(data['total']),
+            items: paged.items,
+            total: paged.total,
         } as RecruitResumeListResult
     })
 }

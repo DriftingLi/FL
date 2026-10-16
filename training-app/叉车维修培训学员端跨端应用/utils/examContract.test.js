@@ -173,7 +173,8 @@ describe('域 api 收紧（T07 / ADR-0007）：DTO 函数经 mapper-callback 出
     const start = api.indexOf('export function ' + name);
     expect(start).toBeGreaterThan(-1);
     const body = api.slice(start, api.indexOf('\n}', start));
-    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\([^,]+,\s*[^,]+,\s*\(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data\)\)/);
+    // `data` 之后可跟信封归一的附加实参（url / page / pageSize，ADR-0037 PR-D #1664），形态仍是箭头包裹具名 build*
+    expect(body).toMatch(/(get|post)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\([^,]+,\s*[^,]+,\s*\(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => build[A-Za-z_$][\w$]*\(data[^)]*\)\)/);
   });
 
   // raw 透传白名单：刻意保留裸 post（返回体被调用方忽略，void 语义，T03/T05 口径）
@@ -187,10 +188,10 @@ describe('域 api 收紧（T07 / ADR-0007）：DTO 函数经 mapper-callback 出
     expect(body).not.toMatch(/Mapped</);
   });
 
-  it('api 层唯一一处静默回退是 history 探活的既有空表回退（本票按删除禁区原样保留）', () => {
-    expect([...api.matchAll(/\.catch\(/g)].length).toBe(1);
+  it('api 层零静默回退：history 探活的吞错空页已随 PR-D #1664 删除（ADR-0037 ④.4「吞错点同批删」）', () => {
+    expect([...api.matchAll(/\.catch\(/g)].length).toBe(0);
     const start = api.indexOf('export function getMockExamHistoryApi');
-    expect(api.slice(start, api.indexOf('\n}', start))).toContain('.catch(');
+    expect(api.slice(start, api.indexOf('\n}', start))).not.toContain('.catch(');
   });
 });
 

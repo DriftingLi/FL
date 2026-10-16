@@ -124,8 +124,9 @@ describe('DTO 归一：只有显式 markdown 是 markdown，其余一律 text（
     expect(d.buildTopic({ id: 1, title: 'T', content: 'C' }).content_format).toBe('text');
     expect(d.buildReply({ id: 2, content: 'C', content_format: 'markdown' }).content_format).toBe('markdown');
     expect(d.buildReply({ id: 2, content: 'C' }).content_format).toBe('text');
-    expect(d.buildTopicDetail({ topic: { id: 3, title: 'T', content: 'C', content_format: 'markdown' }, replies: [] }).content_format).toBe('markdown');
-    expect(d.buildTopicDetail({ topic: { id: 3, title: 'T', content: 'C' }, replies: [] }).content_format).toBe('text');
+    // PR-D（#1664）：buildTopicDetail 的回复分页走信封出口，页参由调用方传（此处只验 content_format 归一）
+    expect(d.buildTopicDetail({ topic: { id: 3, title: 'T', content: 'C', content_format: 'markdown' }, replies: [] }, '/forum/topics/3', 1, 20).content_format).toBe('markdown');
+    expect(d.buildTopicDetail({ topic: { id: 3, title: 'T', content: 'C' }, replies: [] }, '/forum/topics/3', 1, 20).content_format).toBe('text');
   });
 });
 

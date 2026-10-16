@@ -467,7 +467,11 @@ describe('api 收紧契约（forum 域经 mapper-callback 出口家族，refs #6
     expect(src).toContain('buildTopicListResult(data, \'/forum/topics\', page, pageSize)');
     expect(src).toContain('buildTopicListResult(data, \'/forum/my-topics\', page, pageSize)');
     expect(src).toContain('getMapped<ForumTopicDetail>(url');
-    expect(src).toContain('buildTopicDetail(data)');
+    // PR-D（#1664）：详情的回复分页也走信封出口，url / 页参由出口闭包传入；
+    // 采纳两站点（POST/DELETE）复用同一 builder，按详情接口的同款缺省 (1, 20) 传占位页参
+    expect(src).toContain('buildTopicDetail(data, url, page, pageSize)');
+    expect(src).toContain("buildTopicDetail(data, '/forum/topics/' + topicId.toString() + '/accept', 1, 20)");
+    expect(src).toContain('buildTopicDetail(data, url, 1, 20)');
   });
 
   it('POST 面经 postMapped；PUT/DELETE 经 requestMapped 显式 method（保请求形态不变）', () => {
@@ -595,11 +599,17 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     expect(src).toContain('page_size: pageSize.toString(),');
   });
 
-  it('api：buildTopicDetail 回显分页三元组（采纳接口无三元组时垫成「只有一页」，不退化成「还有更多」）', () => {
+  it('api：buildTopicDetail 的回复分页走信封出口，pages 由 total 折算（采纳接口无三元组时落空页，不退化成「还有更多」）', () => {
     const dto = readForumDto();
+    // 嵌套父列表形态（ADR-0037 ④.4 / PR-D #1664）：replies 与 total 交给 decodePage，数组键显式声明
+    expect(dto).toContain('decodePage<ForumReply>(obj, url, page, pageSize,');
+    expect(dto).toContain(", ['replies'])");
     expect(dto).toContain("page: toNumber(obj['page'], 1),");
-    expect(dto).toContain("pages: toNumber(obj['pages'], 1),");
-    expect(dto).toContain("total: toNumber(obj['total'], replies.length),");
+    expect(dto).toContain('pages: Math.floor((paged.total + pageSize - 1) / pageSize),');
+    expect(dto).toContain('total: paged.total,');
+    // 反向锁：不再索引读后端回显的 pages / total（两者都是棘轮载体）
+    expect(dto).not.toMatch(/obj\['pages'\]/);
+    expect(dto).not.toMatch(/obj\['total'\]/);
   });
 
   it('api：buildReply 映射被回复人 parent_name / parent_avatar_url（ADR-0042 一并新增，勿丢）', () => {

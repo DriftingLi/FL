@@ -8,12 +8,14 @@
  *   payload 仍走同一 opts.data 通路，请求形态逐字不变。**raw 透传的 2 个函数刻意保留裸 post**
  *   （不硬套 identity map —— 返回体被调用方忽略，void 语义，T03/T05 口径）：
  *   - saveMockExamApi / submitMockExamApi
- * @note getMockExamHistoryApi 保留既有 `.catch` 空表回退（原样搬运，非本票新增）：
- *   消费方 pages/exam（未完成考试探活）与 pages/profile/mock-exam-records 各自另有 try/catch
- *   与可见错误态，回退不构成 #662 式幻影路由掩盖。是否随域收尾退役留给 api 批量收尾票（#652/#653）。
+ * @note getMockExamHistoryApi 的 `.catch` 空表回退已随 ADR-0037 PR-D 删除（原为 #652/#653 挂账的
+ *   吞错点）：网络失败不再伪装成「没有历史记录」。唯一消费方 pages/profile/mock-exam-records 的
+ *   loadRecords 本就有 try/catch → 可见 toast（「加载模考历史失败」），删回退不新增未捕获面，
+ *   只把「静默空态」换成「可见失败」。
  */
 import { getMapped, post, postMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
+import { decodePage } from './envelope'
 import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, MockExamResult, MockExamResultDetail, MockExamHistoryItem, MockExamHistoryResult, ExamQuestion, QuestionOption } from '../types/index'
 
 
@@ -157,38 +159,20 @@ function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
 	return item
 }
 
-/** 从 UTSJSONObject 构造 MockExamHistoryResult */
-function buildMockExamHistoryResult(data : UTSJSONObject) : MockExamHistoryResult {
-	const items : MockExamHistoryItem[] = []
-	const listRaw = data['exams']
-	if (listRaw != null) {
-		const arr = listRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildMockExamHistoryItem(arr[i]))
-		}
-	} else {
-		// 兼容旧字段 items / records
-		const alt = data['items']
-		if (alt != null) {
-			const arr = alt as Array<UTSJSONObject>
-			for (let i = 0; i < arr.length; i++) {
-				items.push(buildMockExamHistoryItem(arr[i]))
-			}
-		} else {
-			const fallback = data['records']
-			if (fallback != null) {
-				const arr = fallback as Array<UTSJSONObject>
-				for (let i = 0; i < arr.length; i++) {
-					items.push(buildMockExamHistoryItem(arr[i]))
-				}
-			}
-		}
-	}
+/**
+ * 从 UTSJSONObject 构造 MockExamHistoryResult
+ * @note 数组键的三级回退（原 exams → items → records 的嵌套 if-else）收敛为**一次** keys 声明
+ *       （ADR-0037 PR-D：键序即回退序）。`total` 走信封（缺 ⇒ 回落 items.length，旧读法缺省 0 ——
+ *       两个值在唯一消费方 pages/profile/mock-exam-records 的判底式 `records.length >= total` 下
+ *       同解）；`page_size` 改填**请求** pageSize（旧读法拿响应回显的每页大小，属载体）。
+ */
+function buildMockExamHistoryResult(data : UTSJSONObject, url : string, page : number, pageSize : number) : MockExamHistoryResult {
+	const paged = decodePage<MockExamHistoryItem>(data, url, page, pageSize, (obj : UTSJSONObject) : MockExamHistoryItem => buildMockExamHistoryItem(obj), ['exams', 'items', 'records'])
 	const result : MockExamHistoryResult = {
-		items: items,
-		total: toNumber(data['total']),
+		items: paged.items,
+		total: paged.total,
 		page: toNumber(data['page'], 1),
-		page_size: toNumber(data['page_size'], 10),
+		page_size: pageSize,
 	} as MockExamHistoryResult
 	return result
 }
@@ -257,12 +241,11 @@ export function getMockExamResultApi(mockExamId : number) : Promise<MockExamResu
  * @param pageSize 每页条数，默认 10
  */
 export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<MockExamHistoryResult> {
+	const url = '/mock-exam/history'
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
-	return getMapped<MockExamHistoryResult>('/mock-exam/history', params, (data : UTSJSONObject) : MockExamHistoryResult => buildMockExamHistoryResult(data)).catch((e) : MockExamHistoryResult => {
-		console.warn('[getMockExamHistoryApi] network failed:', e)
-		return { items: [] as MockExamHistoryItem[], total: 0, page: page, page_size: pageSize } as MockExamHistoryResult
-	})
+	// 不吞错：失败原样上抛，交消费方的可见错误态（见文件头 @note）
+	return getMapped<MockExamHistoryResult>(url, params, (data : UTSJSONObject) : MockExamHistoryResult => buildMockExamHistoryResult(data, url, page, pageSize))
 }
