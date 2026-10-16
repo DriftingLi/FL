@@ -29,6 +29,8 @@
  * `utils/forumContentFormatBehavior.test.js`。
  */
 import { toNumber, toStr, toBool } from './helpers'
+import { decodePage } from './envelope'
+import type { Page } from './envelope'
 import type { ForumTopic, ForumTopicListResult, ForumTopicDetail, ForumReply, LikeTopicResult } from '../types/index'
 
 /**
@@ -183,23 +185,17 @@ export function buildTopic(obj : UTSJSONObject) : ForumTopic {
 }
 
 /** 构造 ForumTopicListResult
- *  后端字段：topics（非 items）、pages（非 page_size）、page、total
+ *  后端数组字段是 topics（非 items）——数组与 total 走信封归一出口 decodePage（ADR-0037 PR-C），
+ *  数组键 topics 显式声明；page_size 填请求 pageSize：原写法把后端回显的总页数塞进 page_size
+ *  （pages→page_size 误写），decodePage 只认 total 后该误写在结构上不可再表达
  */
-export function buildTopicListResult(obj : UTSJSONObject) : ForumTopicListResult {
-    const items : ForumTopic[] = []
-    // 后端用 topics 字段返回帖子数组
-    const topicsRaw = obj['topics']
-    if (topicsRaw != null) {
-        const topicsArray = topicsRaw as Array<UTSJSONObject>
-        for (let i = 0; i < topicsArray.length; i++) {
-            items.push(buildTopic(topicsArray[i]))
-        }
-    }
+export function buildTopicListResult(obj : UTSJSONObject, url : string, page : number, pageSize : number) : ForumTopicListResult {
+    const paged : Page<ForumTopic> = decodePage<ForumTopic>(obj, url, page, pageSize, (topic : UTSJSONObject) : ForumTopic => buildTopic(topic), ['topics'])
     const result : ForumTopicListResult = {
-        items: items,
-        total: toNumber(obj['total']),
+        items: paged.items,
+        total: paged.total,
         page: toNumber(obj['page']),
-        page_size: toNumber(obj['pages']),
+        page_size: pageSize,
     } as ForumTopicListResult
     return result
 }

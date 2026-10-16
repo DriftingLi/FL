@@ -56,7 +56,7 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     }
     return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
         console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
-        return buildTopicListResult(data)
+        return buildTopicListResult(data, '/forum/topics', page, pageSize)
     }).catch((e) : ForumTopicListResult => {
         console.error('[getForumTopicsApi] failed:', e)
         const msg = errMsg(e, '获取帖子列表失败')
@@ -316,7 +316,7 @@ export function getMyTopicsApi(page : number = 1, pageSize : number = 10) : Prom
         page: page.toString(),
         page_size: pageSize.toString(),
     } as UTSJSONObject
-    return getMapped<ForumTopicListResult>('/forum/my-topics', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data))
+    return getMapped<ForumTopicListResult>('/forum/my-topics', params, (data : UTSJSONObject) : ForumTopicListResult => buildTopicListResult(data, '/forum/my-topics', page, pageSize))
 }
 
 /**

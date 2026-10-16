@@ -7,6 +7,8 @@
  */
 import { get, getMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
+import { decodePage, decodeList } from './envelope'
+import type { Page } from './envelope'
 import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem, StudyRecord, StudentCourse, StudentCourseListResult, StudentCourseDetail, StudentCourseChapterProgress } from '../types/index'
 
 /**
@@ -140,23 +142,16 @@ function buildStudyRecord(obj : UTSJSONObject) : StudyRecord {
 
 /**
  * 从 UTSJSONObject 构造 StudyRecordsResult
- * @note 后端返回字段是 pages（总页数），不是 page_size（每页条数），
- *       前端类型 StudyRecordsResult 中 page_size 是必填，后端没返回该字段时默认 0
+ * 数组与 total 走信封归一出口 decodePage（ADR-0037 PR-C），数组键 records 显式声明；
+ * page_size 填请求 pageSize——后端原本就不回每页条数（旧读法恒 0，且无任何读者）
  */
-function buildStudyRecordsResult(obj : UTSJSONObject) : StudyRecordsResult {
-	const records : StudyRecord[] = []
-	const recordsRaw = obj['records']
-	if (recordsRaw != null) {
-		const recordsArray = recordsRaw as Array<UTSJSONObject>
-		for (let i = 0; i < recordsArray.length; i++) {
-			records.push(buildStudyRecord(recordsArray[i]))
-		}
-	}
+function buildStudyRecordsResult(obj : UTSJSONObject, url : string, page : number, pageSize : number) : StudyRecordsResult {
+	const paged : Page<StudyRecord> = decodePage<StudyRecord>(obj, url, page, pageSize, (rec : UTSJSONObject) : StudyRecord => buildStudyRecord(rec), ['records'])
 	const result : StudyRecordsResult = {
-		records: records,
-		total: toNumber(obj['total']),
+		records: paged.items,
+		total: paged.total,
 		page: toNumber(obj['page']),
-		page_size: toNumber(obj['page_size']),
+		page_size: pageSize,
 	}
 	return result
 }
@@ -245,7 +240,7 @@ export function getRecordsApi(page : number, pageSize : number, startDate : stri
 		params['end_date'] = endDate
 	}
 	return getMapped<StudyRecordsResult>('/student/records', params, (data : UTSJSONObject) : StudyRecordsResult => {
-		return buildStudyRecordsResult(data)
+		return buildStudyRecordsResult(data, '/student/records', page, pageSize)
 	}).catch((e) : StudyRecordsResult => {
 		console.warn('[getRecordsApi] network failed, using mock data:', e)
 		return getMockRecords()
@@ -285,16 +280,13 @@ function buildChapterProgress(obj : UTSJSONObject) : StudentCourseChapterProgres
 	} as StudentCourseChapterProgress
 }
 
-/** 从 UTSJSONObject 构造 StudentCourseListResult */
-function buildStudentCourseListResult(data : UTSJSONObject) : StudentCourseListResult {
-	const courses : StudentCourse[] = []
-	const coursesRaw = data['courses']
-	if (coursesRaw != null) {
-		const arr = coursesRaw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			courses.push(buildStudentCourse(arr[i]))
-		}
-	}
+/**
+ * 从 UTSJSONObject 构造 StudentCourseListResult
+ * 数组走信封归一出口 decodeList（ADR-0037 PR-C），数组键 courses 显式声明；
+ * 本端点响应无 total（后端只回 courses 与 continue_learning 兄弟键），decodePage 会恒打 no-total 警，故走 decodeList
+ */
+function buildStudentCourseListResult(data : UTSJSONObject, url : string) : StudentCourseListResult {
+	const courses : StudentCourse[] = decodeList<StudentCourse>(data, url, (obj : UTSJSONObject) : StudentCourse => buildStudentCourse(obj), ['courses'])
 	let continueLearning : StudentCourse | null = null
 	const clRaw = data['continue_learning']
 	if (clRaw != null) {
@@ -341,7 +333,7 @@ function buildStudentCourseDetailResult(data : UTSJSONObject) : StudentCourseDet
  * GET /api/student/courses
  */
 export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
-	return getMapped<StudentCourseListResult>('/student/courses', null, (data : UTSJSONObject) : StudentCourseListResult => buildStudentCourseListResult(data))
+	return getMapped<StudentCourseListResult>('/student/courses', null, (data : UTSJSONObject) : StudentCourseListResult => buildStudentCourseListResult(data, '/student/courses'))
 }
 
 /**

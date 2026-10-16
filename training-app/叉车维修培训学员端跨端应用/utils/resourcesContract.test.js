@@ -232,7 +232,10 @@ describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部
   });
 
   it('mapper 一律箭头包裹 build*（守护规则 M 的形态面；M 本身由 utsAndroidCompile 全工程执法，此处不复述判据）', () => {
-    expect(code).toContain('(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data)');
+    // PR-C（#1663）：列表 builder 签名扩为 (data, url, page, pageSize)，信封 url 与页参由出口闭包传入，
+    // 两个站点各传自己的路径字面量；detail/download 两出口仍是单参形态
+    expect(code).toContain("(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/materials', page, pageSize)");
+    expect(code).toContain("(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/student/materials', page, pageSize)");
     expect(code).toContain('(data : UTSJSONObject) : MaterialItem => buildMaterialItem(data)');
     expect(code).toContain('(data : UTSJSONObject) : MaterialDownloadInfo => buildMaterialDownloadInfo(data)');
   });
@@ -243,20 +246,26 @@ describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部
       ['buildMaterialListResult', 'MaterialListResult'],
       ['buildMaterialDownloadInfo', 'MaterialDownloadInfo'],
     ]) {
-      expect(code).toMatch(new RegExp(`function\\s+${name}\\s*\\(\\s*\\w+\\s*:\\s*UTSJSONObject\\s*\\)\\s*:\\s*${dto}\\b`));
+      // PR-C（#1663）起列表 builder 可带 url/page/pageSize 尾参（信封与页参由出口传入），首参与返回形不变
+      expect(code).toMatch(new RegExp(`function\\s+${name}\\s*\\(\\s*\\w+\\s*:\\s*UTSJSONObject\\s*(?:,[^)]*)?\\)\\s*:\\s*${dto}\\b`));
       expect(code).not.toMatch(new RegExp(`export\\s+function\\s+${name}\\b`));
     }
   });
 
-  it('列表信封四个键只在 buildMaterialListResult 一处拆（两支列表出口共用同一真相）', () => {
+  it('列表信封拆包只在 buildMaterialListResult 一处、且全部经 decodePage（PR-C #1663 具名键站点迁移）', () => {
     const body = fnBodyOf(code, 'buildMaterialListResult');
     expect(body).not.toBe('');
-    for (const k of ['materials', 'total', 'page', 'pages']) {
-      expect(body).toContain(`data['${k}']`);
+    // 数组与 total 走信封出口、数组键具名显式声明；旧手写索引读法一处不剩（total/页数类索引读
+    // 由 envelopeAdoption 棘轮按文件计数兜底，此处锁本 builder 不回潮）
+    expect(body).toContain('decodePage<MaterialItem>(data, url, page, pageSize');
+    expect(body).toContain("['materials']");
+    for (const k of ['materials', 'total', 'pages']) {
+      expect(body).not.toContain(`data['${k}']`);
     }
     // page 缺省 1 是行为保持点：转换前写在 getMaterialsApi 的 then 里，现在只能平移、不能改值
     expect(body).toMatch(/toNumber\(data\['page'\],\s*1\)/);
-    expect(body).toContain('buildMaterialItem(arr[i])');
+    // items 逐条仍经同一份 buildMaterialItem（工厂箭头包裹）
+    expect(body).toContain('(obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj)');
   });
 
   it('数值/字符串强转不再本地复制（api/helpers.uts 是唯一实现）', () => {
@@ -349,12 +358,15 @@ describe('幻影路由锁（#662 口径）：material 域路由必须落在后�
     return [...go.matchAll(/\bg\.(?:GET|POST|PUT|DELETE|PATCH)\("([^"]+)"[^)]*\)/g)].map((m) => m[1]);
   }
 
-  /** 前端路由：拼段的 `'/x/' + materialId.toString() + '/y'` 先归一成 `/x/:id/y`，再抽全部字面量 */
+  /** 前端路由：拼段的 `'/x/' + materialId.toString() + '/y'` 先归一成 `/x/:id/y`，再抽全部字面量。
+   *  PR-C（#1663）起同一路径字面量会在出口与解码器参数中各出现一次 ⇒ 抽完去重；
+   *  去重只折叠相同字符串，路由集合的双向对账（集合恰等四条、全部命中注册面）不受影响 */
   function apiRoutes() {
     const normalized = stripComments(read('api/material.uts'))
       .replace(/'((?:\/materials|\/student\/materials)\/[^']*)'\s*\+\s*materialId\.toString\(\)\s*\+\s*'([^']*)'/g, "'$1:id$2'")
       .replace(/'((?:\/materials|\/student\/materials)\/[^']*)'\s*\+\s*materialId\.toString\(\)/g, "'$1:id'");
-    return [...normalized.matchAll(/'((?:\/materials|\/student\/materials)[^']*)'/g)].map((m) => m[1]);
+    const hits = [...normalized.matchAll(/'((?:\/materials|\/student\/materials)[^']*)'/g)].map((m) => m[1]);
+    return [...new Set(hits)];
   }
 
   it('四条路由全部命中 handler.go 注册面（收紧只换出口、不改请求形态）', () => {

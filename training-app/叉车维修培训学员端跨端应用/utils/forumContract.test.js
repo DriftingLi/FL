@@ -463,7 +463,9 @@ describe('api 收紧契约（forum 域经 mapper-callback 出口家族，refs #6
 
   it('GET 面经 getMapped 且映射函数为既有 builder（buildTopicListResult/buildTopicDetail）', () => {
     expect(src).toContain('getMapped<ForumTopicListResult>(\'/forum/topics\'');
-    expect(src).toContain('buildTopicListResult(data)');
+    // PR-C（#1663）：builder 签名扩为 (obj, url, page, pageSize)——信封 url 与页参由出口闭包传入，两个站点各钉各的
+    expect(src).toContain('buildTopicListResult(data, \'/forum/topics\', page, pageSize)');
+    expect(src).toContain('buildTopicListResult(data, \'/forum/my-topics\', page, pageSize)');
     expect(src).toContain('getMapped<ForumTopicDetail>(url');
     expect(src).toContain('buildTopicDetail(data)');
   });
