@@ -75,7 +75,7 @@ export function useTopicDetail() : UseTopicDetailResult {
     // 保证占首页第一条，本层不做任何置顶派生——分页后前端只拿得到一页，派生必然失效。
     const REPLY_PAGE_SIZE = 20
     const replyPage = ref<number>(1)
-    const replyPages = ref<number>(1)
+    const replyHasMore = ref<boolean>(false)
     const replyTotal = ref<number>(0)
     const loadingMore = ref<boolean>(false)
     const topicFavoriteId = ref<number>(0)
@@ -128,7 +128,7 @@ export function useTopicDetail() : UseTopicDetailResult {
 
     /** 是否还有未加载的回复页：以响应 pages 为唯一判据（不读 topic.replies_count，
      *  那是列表页消费的反范式列，两者漂移会让「剩余 N 条」与翻页行为自相矛盾） */
-    const hasMoreReplies = computed<boolean>(() : boolean => replyPage.value < replyPages.value)
+    const hasMoreReplies = computed<boolean>(() : boolean => replyHasMore.value)
 
     /** 尚未加载的回复条数（加载更多入口上的剩余量），与 total 同源 */
     const remainingReplies = computed<number>(() : number => {
@@ -214,8 +214,8 @@ export function useTopicDetail() : UseTopicDetailResult {
             const data = await getForumTopicDetailApi(topicId.value, replySortField.value, replySortOrder.value, 1, REPLY_PAGE_SIZE)
             topic.value = data
             replies.value = data.replies
-            replyPage.value = data.page > 0 ? data.page : 1
-            replyPages.value = data.pages > 0 ? data.pages : 1
+            replyPage.value = 1
+            replyHasMore.value = data.hasMore
             replyTotal.value = data.total
             console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
             // 回填回复点赞态（后端暂未下发时靠本地存储恢复，避免刷新后数据/样式丢失）
@@ -231,7 +231,7 @@ export function useTopicDetail() : UseTopicDetailResult {
     }
 
     /**
-     * 加载更多回复（ADR-0042）：**追加**下一页，不替换已渲染内容；到底后由 pages 判定入口消失。
+     * 加载更多回复（ADR-0042）：**追加**下一页，不替换已渲染内容；到底后由 hasMore 判定入口消失。
      * 追加前按 id 去重——删回复 / 本地新回复会让本地窗口相对服务端页码漂移（第 N 页不再逐条对齐），
      * 不去重就会在页码边界渲染出重复行。
      */
@@ -258,8 +258,8 @@ export function useTopicDetail() : UseTopicDetailResult {
                 if (!seen) merged.push(incoming)
             }
             replies.value = merged
-            replyPage.value = data.page > 0 ? data.page : next
-            replyPages.value = data.pages > 0 ? data.pages : replyPages.value
+            replyPage.value = next
+            replyHasMore.value = data.hasMore
             if (data.total > 0) replyTotal.value = data.total
             // 回填新加载页的点赞态（后端未下发时靠本地存储恢复）
             hydrateReplyLikesFromReplies()

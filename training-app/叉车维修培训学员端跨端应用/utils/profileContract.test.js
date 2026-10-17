@@ -37,18 +37,28 @@ describe('student 域收紧（profile 主页面数据源）', () => {
   it('引入 getMapped', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it.each(['getProfileApi', 'getStudyStatsApi', 'getRecordsApi', 'getStudentCoursesApi', 'getStudentCourseDetailApi'])(
+  it.each(['getProfileApi', 'getStudyStatsApi', 'getStudentCoursesApi', 'getStudentCourseDetailApi'])(
     '%s 经 getMapped 且保留原 catch/mock 降级结构', (fn) => {
       const body = fnBodyOf(src, fn);
       expect(body).toContain('getMapped<');
       // 收紧不得改变错误行为：原函数有 .catch 的必须保留
     });
+  it('getRecordsApi 改走信封出口 getPaged（PR-F #1666 页面侧重命名：出口统一 Page<StudyRecord>）', () => {
+    const body = fnBodyOf(src, 'getRecordsApi');
+    expect(body).toContain('getPaged<StudyRecord>');
+    expect(body).toContain("['records']");
+    expect(body).not.toContain('getMapped<');
+    expect(src).not.toMatch(/function\s+buildStudyRecordsResult/);
+  });
   it('getProfileApi 的 mock 降级保持', () => {
     expect(fnBodyOf(src, 'getProfileApi')).toContain('getMockProfile()');
   });
-  it('getStudyStatsApi / getRecordsApi 的 mock 降级保持', () => {
+  it('getStudyStatsApi 的 mock 降级保持；getRecordsApi 的 mock 回填已退役（票面：吞错点清零）', () => {
     expect(fnBodyOf(src, 'getStudyStatsApi')).toContain('getMockStudyStats()');
-    expect(fnBodyOf(src, 'getRecordsApi')).toContain('getMockRecords()');
+    // PR-F #1666：分页站点回填 mock 会让页面把示例数据当真记录渲染，改为向上抛由页面提示
+    expect(fnBodyOf(src, 'getRecordsApi')).not.toContain('getMockRecords()');
+    expect(fnBodyOf(src, 'getRecordsApi')).toContain('throw new Error');
+    expect(src).not.toMatch(/function\s+getMockRecords/);
   });
 });
 
@@ -57,10 +67,17 @@ describe('wrongQuestion 域收紧（错题本）', () => {
   it('引入 getMapped', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it.each(['getWrongQuestionsApi', 'getWrongQuestionStatsApi'])('%s 经 getMapped + build* 映射', (fn) => {
-    const body = fnBodyOf(src, fn);
+  it('getWrongQuestionStatsApi 经 getMapped + build* 映射', () => {
+    const body = fnBodyOf(src, 'getWrongQuestionStatsApi');
     expect(body).toContain('getMapped<');
-    expect(body).toMatch(/build(WrongQuestionListResult|WrongQuestionStats)\(/);
+    expect(body).toMatch(/buildWrongQuestionStats\(/);
+  });
+  it('getWrongQuestionsApi 改走信封出口 getPaged（PR-F #1666 页面侧重命名：出口统一 Page<WrongQuestionItem>）', () => {
+    const body = fnBodyOf(src, 'getWrongQuestionsApi');
+    expect(body).toContain('getPaged<WrongQuestionItem>');
+    expect(body).toContain("['items']");
+    expect(body).not.toContain('getMapped<');
+    expect(src).not.toMatch(/function\s+buildWrongQuestionListResult/);
   });
 });
 
@@ -95,8 +112,15 @@ describe('points 域收紧（积分余额/流水/任务，#709 改口径）', ()
   it('引入 getMapped / postMapped', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it.each(['getPointsBalanceApi', 'getPointsLedgerApi', 'getPointsTasksApi', 'claimPointsTaskApi'])('%s 经 mapper-callback 出口', (fn) => {
+  it.each(['getPointsBalanceApi', 'getPointsTasksApi', 'claimPointsTaskApi'])('%s 经 mapper-callback 出口', (fn) => {
     expect(fnBodyOf(src, fn)).toMatch(/(get|post)Mapped</);
+  });
+  it('getPointsLedgerApi 改走信封出口 getPaged（PR-F #1666 页面侧重命名：出口统一 Page<PointsLedgerItem>）', () => {
+    const body = fnBodyOf(src, 'getPointsLedgerApi');
+    expect(body).toContain('getPaged<PointsLedgerItem>');
+    expect(body).toContain("['items']");
+    expect(body).not.toContain('getMapped<');
+    expect(src).not.toMatch(/function\s+buildPointsLedgerResult/);
   });
   // #709 前的锁是「mock 降级保持」（profile 首屏零网络依赖）；幻影 404 被它盖了三个月，
   // 口径反转为「失败要可见」：points 域一律不得再出现占位回退（见 pointsRealApiContract）。

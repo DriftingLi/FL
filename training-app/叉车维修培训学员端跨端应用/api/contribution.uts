@@ -48,12 +48,10 @@ export type ContributionItem = {
     created_at : string
 }
 
-/** 投稿分页（对齐后端 ContributionPageResult） */
+/** 投稿分页（对齐后端 ContributionPageResult；PR-F #1666 起 page/page_size 两字段删除，只认 total） */
 export type ContributionPageResult = {
     items : ContributionItem[]
     total : number
-    page : number
-    page_size : number
 }
 
 /** 构造投稿文件对象（从 UTSJSONObject；content_type 缺失兜底 octet-stream） */

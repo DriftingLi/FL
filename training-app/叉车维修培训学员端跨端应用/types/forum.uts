@@ -47,8 +47,8 @@ export type ForumTopic = {
 export type ForumTopicListResult = {
     items : ForumTopic[]
     total : number
-    page : number
-    page_size : number
+    /** PR-F #1666：翻页终止判据（= page*pageSize < total，由 decodePage 推导）；取代已删的 page / pages 回显 */
+    hasMore : boolean
 }
 
 /** 帖子回复 */
@@ -107,12 +107,11 @@ export type ForumTopicDetail = {
      * 首页第一条恒为被采纳回复（若该帖有采纳），后端置顶并已从排序结果中剔除。
      */
     replies : ForumReply[]
-    /** 回复分页元信息（ADR-0042）：当前页码 */
-    page : number
-    /** 回复分页元信息（ADR-0042）：总页数；page < pages 即还有下一页 */
-    pages : number
     /** 回复分页元信息（ADR-0042）：总条数（含置顶条，与 replies_count 同源） */
     total : number
+    /** 回复分页元信息（ADR-0037 ⑥）：是否还有下一页；由信封出口 `decodePage` 依 total×pageSize 推导，
+     *  取代旧的 page/pages 双字段——消费方只判 this（composables/useTopicDetail 的 hasMoreReplies） */
+    hasMore : boolean
     /** 帖子分类：general / resource / video / exam */
     scope : string
     /** 帖子类别：discussion / question / experience（#727） */
@@ -141,6 +140,4 @@ export type LikeTopicResult = {
 export type MyRepliesResult = {
     items : ForumReply[]
     total : number
-    page : number
-    page_size : number
 }

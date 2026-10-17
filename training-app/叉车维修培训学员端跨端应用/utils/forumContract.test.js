@@ -599,13 +599,13 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     expect(src).toContain('page_size: pageSize.toString(),');
   });
 
-  it('api：buildTopicDetail 的回复分页走信封出口，pages 由 total 折算（采纳接口无三元组时落空页，不退化成「还有更多」）', () => {
+  it('api：buildTopicDetail 的回复分页走信封出口，hasMore 由 total 折算（采纳接口无三元组时落空页，不退化成「还有更多」）', () => {
     const dto = readForumDto();
     // 嵌套父列表形态（ADR-0037 ④.4 / PR-D #1664）：replies 与 total 交给 decodePage，数组键显式声明
     expect(dto).toContain('decodePage<ForumReply>(obj, url, page, pageSize,');
     expect(dto).toContain(", ['replies'])");
-    expect(dto).toContain("page: toNumber(obj['page'], 1),");
-    expect(dto).toContain('pages: Math.floor((paged.total + pageSize - 1) / pageSize),');
+    // PR-F #1666：page / pages 两个回显字段删除，翻页判据改读信封推导的 hasMore
+    expect(dto).toContain('hasMore: paged.hasMore,');
     expect(dto).toContain('total: paged.total,');
     // 反向锁：不再索引读后端回显的 pages / total（两者都是棘轮载体）
     expect(dto).not.toMatch(/obj\['pages'\]/);
@@ -618,40 +618,42 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     expect(dto).toContain("parent_avatar_url: toStr(obj['parent_avatar_url']),");
   });
 
-  it('types：ForumTopicDetail 携带分页三元组；ForumReply 携带被回复人两字段', () => {
+  it('types：ForumTopicDetail 携带 total / hasMore 分页元信息（page、pages 已删）；ForumReply 携带被回复人两字段', () => {
     const detailType = types.slice(types.indexOf('export type ForumTopicDetail'), types.indexOf('export type LikeTopicResult'));
-    expect(detailType).toMatch(/page : number/);
-    expect(detailType).toMatch(/pages : number/);
     expect(detailType).toMatch(/total : number/);
+    expect(detailType).toMatch(/hasMore : boolean/);
+    expect(detailType).not.toMatch(/page : number/);
+    expect(detailType).not.toMatch(/pages : number/);
     const replyType = types.slice(types.indexOf('export type ForumReply'), types.indexOf('export type ForumTopicDetail'));
     expect(replyType).toMatch(/parent_name : string/);
     expect(replyType).toMatch(/parent_avatar_url : string/);
   });
 
-  it('detail：分页态沉在 useTopicDetail（page/pages/total + hasMore/loadingMore/remaining），判据是 pages 不是 reply_count', () => {
+  it('detail：分页态沉在 useTopicDetail（page/total/hasMore + loadingMore/remaining），判据是 hasMore 不是 reply_count', () => {
     expect(detail).toContain('const replyPage = ref<number>(1)');
-    expect(detail).toContain('const replyPages = ref<number>(1)');
+    expect(detail).toContain('const replyHasMore = ref<boolean>(false)');
     expect(detail).toContain('const replyTotal = ref<number>(0)');
     expect(detail).toContain('const loadingMore = ref<boolean>(false)');
-    expect(detail).toContain('const hasMoreReplies = computed<boolean>(() : boolean => replyPage.value < replyPages.value)');
+    expect(detail).toContain('const hasMoreReplies = computed<boolean>(() : boolean => replyHasMore.value)');
     expect(detail).toContain('const remainingReplies = computed<number>');
   });
 
   it('detail：首屏 / 切排序 / 重试都回第 1 页并**替换**列表（分页语义，不是追加）', () => {
     expect(detail).toMatch(/getForumTopicDetailApi\(topicId\.value, replySortField\.value, replySortOrder\.value, 1, REPLY_PAGE_SIZE\)/);
     expect(detail).toContain('replies.value = data.replies');
-    expect(detail).toContain('replyPage.value = data.page > 0 ? data.page : 1');
-    expect(detail).toContain('replyPages.value = data.pages > 0 ? data.pages : 1');
+    expect(detail).toContain('replyPage.value = 1');
+    expect(detail).toContain('replyHasMore.value = data.hasMore');
     // 切排序维度经 loadDetail 重置页码（沿用列表页既有惯例）
     expect(detail).toMatch(/function onReplySortFieldChange[\s\S]{0,200}?loadDetail\(\)/);
   });
 
-  it('detail：loadMoreReplies **追加**下一页（不替换已渲染内容）、按 id 去重、以 pages 判定到底', () => {
+  it('detail：loadMoreReplies **追加**下一页（不替换已渲染内容）、按 id 去重、以 hasMore 判定到底', () => {
     expect(detail).toContain('async function loadMoreReplies() : Promise<void>');
     expect(detail).toContain('if (loadingMore.value || !hasMoreReplies.value) return');
     expect(detail).toContain('const next = replyPage.value + 1');
     expect(detail).toContain('if (!seen) merged.push(incoming)');
-    expect(detail).toContain('replyPage.value = data.page > 0 ? data.page : next');
+    expect(detail).toContain('replyPage.value = next');
+    expect(detail).toContain('replyHasMore.value = data.hasMore');
     // 反范式锁：加载更多不得整体替换列表
     expect(detail).not.toMatch(/async function loadMoreReplies[\s\S]{0,800}?replies\.value = data\.replies/);
   });

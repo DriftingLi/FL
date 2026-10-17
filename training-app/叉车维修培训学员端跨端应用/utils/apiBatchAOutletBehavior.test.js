@@ -60,13 +60,19 @@ function makeGetMapped(raw, recorder) {
   };
 }
 
-/** 按出口装载 job.uts：同时录下 getMapped / post 两条通路的调用形态 */
+/** 按出口装载 job.uts：同时录下 getMapped / post 两条通路的调用形态
+ *  PR-F #1666 起列表走 `getPaged`，故注入信封真实现（getPaged 内部再走本文件的 getMapped 替身）。 */
 function loadJobApi(raw) {
   const getCalls = [];
   const postCalls = [];
+  const env = loadUts(path.join(API_DIR, 'envelope.uts'), {
+    getMapped: makeGetMapped(raw, getCalls),
+    toNumber: helpers().toNumber,
+  });
   const mod = loadUts(JOB_UTS, {
     getMapped: makeGetMapped(raw, getCalls),
-    decodePage: envelope().decodePage,
+    getPaged: env.getPaged,
+    decodePage: env.decodePage,
     post: (url, payload) => {
       postCalls.push({ url, payload });
       return Promise.resolve(undefined);
@@ -142,12 +148,13 @@ describe('job.uts：有载荷的 GET 出口经 getMapped，映射行为逐字段
     });
   });
 
-  it('列表：手工 query 串逐字保留，items 逐条经同一份 buildJobPosting', async () => {
+  it('列表：筛选键走 params 对象、page/page_size 由信封出口统一拼，items 逐条经同一份 buildJobPosting', async () => {
     const { mod, getCalls } = loadJobApi(JOB_LIST_RAW);
     const got = await mod.getJobListApi({ page: 2, page_size: 10, region: '广州' });
 
-    expect(getCalls).toEqual([{ url: '/jobs?page=2&page_size=10&region=%E5%B9%BF%E5%B7%9E', params: null }]);
+    expect(getCalls).toEqual([{ url: '/jobs', params: { region: '广州', page: '2', page_size: '10' } }]);
     expect(got.total).toBe(7);
+    expect(got.hasMore).toBe(false); // 2*10 = 20 ≥ 7
     expect(got.items).toHaveLength(2);
     expect(got.items[0].title).toBe('专业叉车维修员');
     // 第二条缺字段 ⇒ 走默认值那一支，证明列表与详情共用同一份映射
@@ -170,16 +177,18 @@ describe('job.uts：有载荷的 GET 出口经 getMapped，映射行为逐字段
     });
   });
 
-  it('列表默认参数 → 裸 /jobs（不带 ?，与收紧前的拼串分支一致）', async () => {
+  it('列表默认参数 → 裸 /jobs + page/page_size 缺省 1/20', async () => {
     const { mod, getCalls } = loadJobApi(JOB_LIST_RAW);
     await mod.getJobListApi();
     expect(getCalls[0].url).toBe('/jobs');
+    expect(getCalls[0].params).toEqual({ page: '1', page_size: '20' });
   });
 
   it('列表过滤值为 0 / 空串时不下发（与服务端 nil 语义一致）', async () => {
     const { mod, getCalls } = loadJobApi(JOB_LIST_RAW);
     await mod.getJobListApi({ page: 0, page_size: 0, specialty_id: 0, region: '', experience: '' });
     expect(getCalls[0].url).toBe('/jobs');
+    expect(getCalls[0].params).toEqual({ page: '1', page_size: '20' }); // 0 也归一成默认页码/条数
   });
 
   it('举报 / 投递仍走裸 post（void 透传），不经 getMapped', async () => {
@@ -232,7 +241,7 @@ describe('search.uts：出口注入的回退缺省值真的落进 DTO', () => {
     expect(got.keyword).toBe('服务端回显');
   });
 
-  it('分页搜索：type/page 回退 + 分页字段与 items 逐条映射', async () => {
+  it('分页搜索：type 回退 + hasMore 由 total 推导、items 逐条映射', async () => {
     const { mod, getCalls } = loadSearchApi({
       // 故意不带 type / page，用出口注入的回退值
       total: '12',
@@ -250,9 +259,10 @@ describe('search.uts：出口注入的回退缺省值真的落进 DTO', () => {
       credential_id: '7',
     });
     expect(got.type).toBe('chapter'); // ← 同样是出口注入的回退值
-    expect(got.page).toBe(1); // 响应缺 page → 出口给的缺省 1，不是 0
     expect(got.total).toBe(12); // 数字字段按 toNumber 归一（字符串 "12" 也能读）
-    expect(got.pages).toBe(3);
+    expect(got.hasMore).toBe(false); // 3*5 = 15 ≥ 12
+    expect(got.page).toBeUndefined(); // PR-F #1666：回显页码字段已删
+    expect(got.pages).toBeUndefined();
     expect(got.items).toHaveLength(1);
     expect(got.items[0]).toEqual({
       type: 'chapter',

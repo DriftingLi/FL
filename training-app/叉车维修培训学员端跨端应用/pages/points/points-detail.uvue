@@ -89,7 +89,8 @@
     import { getPointsBalanceApi, getPointsLedgerApi } from '../../api/points'
     import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, ledgerIconGlyph, deltaText, deltaKind, expiringWithinDays, todayDateStr } from '../../utils/pointsDisplay'
     import { formatDateTimeStr } from '../../utils/format'
-    import type { PointsBalance, PointsLedgerItem, PointsLedgerResult } from '../../types/index'
+    import type { PointsBalance, PointsLedgerItem } from '../../types/index'
+    import type { Page } from '../../api/envelope'
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     /** 「即将过期」窗口天数（与积分规则文案「到期前 30 天提醒」同口径） */
@@ -198,7 +199,7 @@
         }
 
         loading.value = true
-        getPointsLedgerApi(startPage, pageSize, directionOf(currentTab.value)).then((data : PointsLedgerResult) => {
+        getPointsLedgerApi(startPage, pageSize, directionOf(currentTab.value)).then((data : Page<PointsLedgerItem>) => {
             if (seq != reqSeq) return // 已被更新的请求取代，回包作废（防串数据）
             loadFailed.value = false
             if (isRefresh) {
@@ -206,7 +207,7 @@
             } else {
                 items.value = items.value.concat(data.items)
             }
-            if (items.value.length >= data.total || data.items.length < pageSize) {
+            if (!data.hasMore) {
                 noMore.value = true
             }
             page.value = startPage + 1

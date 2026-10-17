@@ -140,12 +140,12 @@ describe('job 域收紧：有载荷 GET 经 getMapped<T> + build* 去重', () =>
     expect(jobApi).toMatch(/import\s*\{[^}]*\bgetMapped\b[^}]*\bpost\b[^}]*\}\s*from\s*'\.\/request'/);
   });
 
-  it('详情 / 列表收敛到 buildJobPosting（此前两处同形映射去重），列表经信封归一出口 decodePage', () => {
+  it('详情 / 列表收敛到 buildJobPosting（此前两处同形映射去重），列表经信封归一出口 getPaged', () => {
     expect(jobApi).toMatch(/function buildJobPosting\(/);
     expect(topFn(jobApi, 'export function getJobDetailApi')).toContain('getMapped<JobPosting>');
     expect(topFn(jobApi, 'export function getJobDetailApi')).toMatch(/\(data : UTSJSONObject\) : JobPosting => buildJobPosting\(data\)/);
-    expect(topFn(jobApi, 'export function getJobListApi')).toContain('getMapped<Page<JobPosting>>');
-    expect(topFn(jobApi, 'export function getJobListApi')).toMatch(/decodePage<JobPosting>\(data/);
+    expect(topFn(jobApi, 'export function getJobListApi')).toContain('getPaged<JobPosting>(');
+    expect(topFn(jobApi, 'export function getJobListApi')).toContain('buildJobPosting(obj)');
     // 同 search 口径：去重后映射只有一份，出口不得再自己读字段
     for (const marker of ['export function getJobDetailApi', 'export function getJobListApi']) {
       expect(topFn(jobApi, marker)).not.toMatch(FIELD_READ);
@@ -161,16 +161,17 @@ describe('job 域收紧：有载荷 GET 经 getMapped<T> + build* 去重', () =>
 
   /**
    * 请求形态锁（ADR-0007「params 沿用手动 query 序列化…收紧不得改变请求形态」）。
-   * 列表把查询串自己拼进 url、params 传 null —— 这是收紧**前后同一形态**，不是新写法：
-   * getMapped 内部正是 `url + (url.includes('?') ? '&' : '?') + pairs.join('&')`，
-   * 与旧的 `'/jobs' + (qs.length > 0 ? '?' + qs : '')` 逐字节同解。本条钉住它不被
-   * 「顺手改成 params 传对象」（那会改序列化通路，属本票范围外的另一件事）。
+   * PR-F #1666 起列表不再手拼 query 串：筛选键进 `query` 对象交给信封出口 `getPaged`，
+   * page / page_size 也由 `getPaged` 统一拼（请求侧写位从此只有一处）。
    */
-  it('列表请求形态不变：手动 query 串进 url、params 传 null', () => {
+  it('列表请求形态：筛选键进 query 对象、page/page_size 由信封出口统一拼', () => {
     const body = topFn(jobApi, 'export function getJobListApi');
-    expect(body).toContain("const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')");
-    expect(body).toContain("encodeURIComponent(k) + '=' + encodeURIComponent(query[k] as string)");
-    expect(body).toContain('getMapped<Page<JobPosting>>(url, null,');
+    expect(body).toContain("query['specialty_id'] = params.specialty_id!.toString()");
+    expect(body).toContain("query['region'] = params.region!");
+    expect(body).toContain("getPaged<JobPosting>('/jobs', page, pageSize,");
+    // 反范式锁：不得再手拼 query 串，也不得自己写 page / page_size（写位归信封出口一处）
+    expect(body).not.toContain('encodeURIComponent');
+    expect(body).not.toMatch(/query\['page(_size)?'\]/);
   });
 
   it('reportJobApi / applyJobApi（void 透传）保持裸 post，不硬套 mapper', () => {

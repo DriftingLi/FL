@@ -7,9 +7,9 @@
  */
 import { get, getMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
-import { decodePage, decodeList } from './envelope'
+import { decodeList, getPaged } from './envelope'
 import type { Page } from './envelope'
-import type { StudentProfile, StudyRecordsResult, StudyStats, CourseProgressItem, StudyRecord, StudentCourse, StudentCourseListResult, StudentCourseDetail, StudentCourseChapterProgress } from '../types/index'
+import type { StudentProfile, StudyStats, CourseProgressItem, StudyRecord, StudentCourse, StudentCourseListResult, StudentCourseDetail, StudentCourseChapterProgress } from '../types/index'
 
 /**
  * 安全转换为 number
@@ -140,22 +140,6 @@ function buildStudyRecord(obj : UTSJSONObject) : StudyRecord {
 	return record
 }
 
-/**
- * 从 UTSJSONObject 构造 StudyRecordsResult
- * 数组与 total 走信封归一出口 decodePage（ADR-0037 PR-C），数组键 records 显式声明；
- * page_size 填请求 pageSize——后端原本就不回每页条数（旧读法恒 0，且无任何读者）
- */
-function buildStudyRecordsResult(obj : UTSJSONObject, url : string, page : number, pageSize : number) : StudyRecordsResult {
-	const paged : Page<StudyRecord> = decodePage<StudyRecord>(obj, url, page, pageSize, (rec : UTSJSONObject) : StudyRecord => buildStudyRecord(rec), ['records'])
-	const result : StudyRecordsResult = {
-		records: paged.items,
-		total: paged.total,
-		page: toNumber(obj['page']),
-		page_size: pageSize,
-	}
-	return result
-}
-
 /** mock 学员档案（网络不可用时回退） */
 function getMockProfile() : StudentProfile {
 	const profile : StudentProfile = {
@@ -183,19 +167,6 @@ function getMockStudyStats() : StudyStats {
 		data: [45, 60, 30, 90, 50, 120, 80],
 		total_minutes: 475,
 		active_days: 7,
-	}
-}
-
-/** mock 学习记录（网络不可用时回退） */
-function getMockRecords() : StudyRecordsResult {
-	return {
-		records: [
-			{ record_id: 1, course_id: 1, course_name: '叉车基础操作', chapter_id: 1, chapter_title: '叉车概述', study_duration: 45, study_date: '2026-07-23' } as StudyRecord,
-			{ record_id: 2, course_id: 2, course_name: '日常维护保养', chapter_id: 1, chapter_title: '保养基础', study_duration: 60, study_date: '2026-07-22' } as StudyRecord,
-		],
-		total: 2,
-		page: 1,
-		page_size: 20,
 	}
 }
 
@@ -227,23 +198,30 @@ export function getStudyStatsApi(days : number) : Promise<StudyStats> {
  * @param pageSize 每页条数
  * @param startDate 起始日期 YYYY-MM-DD（可选）
  * @param endDate 结束日期 YYYY-MM-DD（可选）
+ * @note PR-F #1666：出口改 `getPaged`（ADR-0037 ④-6「页面侧重命名」）——后端数组键 `records`
+ *       由 keys 声明承载，返回统一 `Page<StudyRecord>`，页面只认 `items / total / hasMore`
  */
-export function getRecordsApi(page : number, pageSize : number, startDate : string = '', endDate : string = '') : Promise<StudyRecordsResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	}
+export function getRecordsApi(page : number, pageSize : number, startDate : string = '', endDate : string = '') : Promise<Page<StudyRecord>> {
+	const params : UTSJSONObject = {} as UTSJSONObject
 	if (startDate.length > 0) {
 		params['start_date'] = startDate
 	}
 	if (endDate.length > 0) {
 		params['end_date'] = endDate
 	}
-	return getMapped<StudyRecordsResult>('/student/records', params, (data : UTSJSONObject) : StudyRecordsResult => {
-		return buildStudyRecordsResult(data, '/student/records', page, pageSize)
-	}).catch((e) : StudyRecordsResult => {
-		console.warn('[getRecordsApi] network failed, using mock data:', e)
-		return getMockRecords()
+	return getPaged<StudyRecord>('/student/records', page, pageSize, (rec : UTSJSONObject) : StudyRecord => buildStudyRecord(rec), params, ['records']).catch((e) : Page<StudyRecord> => {
+		// PR-F #1666：删掉「回退 mock 学习记录」的吞错分支——分页站点吞错会让页面把示例数据
+		// 当成真实记录渲染（ADR-0037 ③ 不做 fail-loud，但也不许伪数据），改为向上抛由页面提示
+		console.error('[getRecordsApi] failed:', e)
+		let msg = '获取学习记录失败'
+		if (e instanceof Error) {
+			const errObj = e as Error
+			const m = errObj.message
+			if (m != null && m.length > 0) {
+				msg = msg + ': ' + m
+			}
+		}
+		throw new Error(msg)
 	})
 }
 
