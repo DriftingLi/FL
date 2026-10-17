@@ -58,6 +58,18 @@ export const FORBIDDEN_MESSAGE_PREFIX = '403:'
  */
 export const NOT_FOUND_MESSAGE_PREFIX = '404:'
 
+/**
+ * **401 终态文案** —— 单点真源，不许在别处另写字面量。
+ *
+ * 三条 401 出口（普通请求 / `uploadFile` / SSE 流）最终都落到 `expireSession()`，提示与
+ * reject 的错误消息都由这一个常量给出。分头写字的后果不是「有三句同义话」这么轻：跳转是一致的、
+ * 用户看到的句子却不同（#1704 收口前 `streamChatApi` 自带一份，且它既不跳转也不刷新）。
+ *
+ * 消费方：本文件的 `expireSession()`，以及 `api/aiAssistant.uts` 的 `sendStream()`
+ * （SSE 侧把同一句话经 `onError` 交回对话流）。
+ */
+export const AUTH_EXPIRED_MESSAGE = '登录已过期，请重新登录'
+
 
 /** 请求配置 */
 export type RequestOptions = {
@@ -197,11 +209,22 @@ function handleUnauthorized() {
     }, 2000)
 }
 
+/**
+ * 401 终态单点：清登录态 → 跳登录页 → 提示，并返回可 reject 的错误对象
+ *
+ * ⚠️ 本函数是全仓唯一调用 `handleUnauthorized` 的地方（`utils/concurrent401RefreshContract.test.js` C2），
+ * 因此也是全仓唯一「登出 + 跳转」的语义点。三条 401 出口（普通请求 / `uploadFile` / SSE 流）
+ * 都经由它，不许别处另写一份 `removeStorage` + `reLaunch`（#1704）。
+ */
+function expireSession(silent : boolean) : Error {
+    handleUnauthorized()
+    showError(AUTH_EXPIRED_MESSAGE, silent)
+    return new Error(AUTH_EXPIRED_MESSAGE)
+}
+
 /** 401 终态：清空登录态并 reject（无法恢复或重试仍 401 时走这里） */
 function logoutAndReject(silent : boolean, reject : (e : Error) => void) {
-    handleUnauthorized()
-    showError('登录已过期，请重新登录', silent)
-    reject(new Error('登录已过期，请重新登录'))
+    reject(expireSession(silent))
 }
 
 /** 全局 token 刷新回调（由 auth store 注册，避免循环依赖） */
@@ -237,6 +260,32 @@ export function registerUnauthorizedCredentialCleanup(handler : () => void) : vo
 function tryAutoRefresh(forToken : string) : Promise<boolean> {
     if (_refreshTokenHandler == null) return Promise.resolve(false)
     return gateRefresh(_refreshTokenHandler!, forToken)
+}
+
+/**
+ * 401 续期决策 —— 三条 401 出口（普通请求 / `uploadFile` / SSE 流）共用**同一份**规则
+ *
+ * 规则只有两种合法终态（ADR-0017）：刷新成功 ⇒ 带新 token **重发一次**；刷新**真的**失败 ⇒ 登出。
+ * 把这条规则写三遍就是三处漂移面：#1124 只修了普通请求，#1704 收口前上传与 SSE 各留了一份
+ * 「看见 401 就登出」——于是「access 过期但 refresh_token 仍有效」在上传/对话上仍是误判登出。
+ *
+ * @param forToken 触发这次 401 的请求**实际发出时**带的 access token（并发去重键，见 `api/refreshGate.uts`）
+ * @param allowRetry false = 已经重发过 / 刷新接口自身 401 / 无刷新回调 ⇒ 不再尝试，直接终态
+ * @param silent 是否静默（不弹 toast；SSE 侧自己把文案交回对话流，避免重复提示）
+ * @returns true = 已续期，调用方带新 token 重发一次；false = 已进终态（清态 + 跳登录页 + 提示）
+ */
+export function renewOrExpire(forToken : string, allowRetry : boolean, silent : boolean) : Promise<boolean> {
+    if (!allowRetry) {
+        expireSession(silent)
+        return Promise.resolve(false)
+    }
+    // 注意：`false` 只代表刷新**真的**失败（并发者共享同一次在飞刷新，见 tryAutoRefresh）
+    return tryAutoRefresh(forToken).then((refreshed : boolean) : boolean => {
+        // 刷新成功了但 token 槽是空的 ⇒ 视为失败（曾出现「刷成功却没人把 token 写回去」）
+        if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) return true
+        expireSession(silent)
+        return false
+    })
 }
 
 /**
@@ -492,18 +541,17 @@ function doSingleRequest(
 
             if (handleStatus(statusCode, body, silent, '请求失败', resolve, reject)) return
 
-            // HTTP 401：刷新接口自身 401、重试后仍 401、或无刷新回调 → 直接登出
+            // HTTP 401：刷新接口自身 401、重试后仍 401、或无刷新回调 → 直接登出（不再尝试续期）
             if (isRetry || options.url.includes('/auth/refresh') || _refreshTokenHandler == null) {
                 logoutAndReject(silent, reject)
                 return
             }
-            // 401 自动刷新：刷新成功后带新 token 重试一次
-            // 注意：`false` 现在**只**代表刷新真的失败（并发者共享同一次刷新，不再是「别人在刷」）
-            tryAutoRefresh(sentTokenOf(reqHeader)).then((refreshed : boolean) => {
-                if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) {
+            // 401 自动刷新：刷新成功后带新 token 重试一次（规则单点在 renewOrExpire）
+            renewOrExpire(sentTokenOf(reqHeader), true, silent).then((retried : boolean) => {
+                if (retried) {
                     doSingleRequest(url, method, data, buildHeader(options.header, silent), timeout, options, true, resolve, reject)
                 } else {
-                    logoutAndReject(silent, reject)
+                    reject(new Error(AUTH_EXPIRED_MESSAGE))
                 }
             })
         },
@@ -642,9 +690,89 @@ function removeTempFile(path : string) : void {
 }
 
 /**
+ * 上传一次（401 时先续期、成功则重发**一次**，与 `doSingleRequest` 同一规则）
+ *
+ * 为什么独立成模块级函数而不是闭包：续期后要**递归**重发，UTS→Kotlin 对「自引用的局部 lambda」
+ * 支持不可靠（`doSingleRequest` 同样是模块级递归）。
+ *
+ * @param isRetry 是否已是续期后的重发（true ⇒ 再 401 就是真失效，直接终态）
+ * @param done 收尾回调（删中转文件）——**只在终态调用**：续期重发期间文件必须还在
+ */
+function doUpload(
+    fullURL : string,
+    realPath : string,
+    name : string,
+    safeFormData : UTSJSONObject,
+    silent : boolean,
+    timeout : number,
+    isRetry : boolean,
+    done : () => void,
+    resolve : (value : UTSJSONObject) => void,
+    reject : (reason : any) => void
+) : void {
+    // 每次发出都重新取 header：续期重发必须带**新** token（首包 401 之后 token 才会被替换）
+    const header = buildUploadHeader(silent)
+    if (ENABLE_DEBUG_LOG) {
+        console.log('[uploadFile] >>> POST', fullURL, 'filePath=', realPath, 'retry=', isRetry)
+    }
+    uni.uploadFile({
+        url: fullURL,
+        filePath: realPath,
+        name: name,
+        header: header,
+        formData: safeFormData,
+        timeout: timeout,
+        success: (res) => {
+            const statusCode = res.statusCode
+            // res.data 是字符串，需要 JSON.parse
+            let body : UTSJSONObject
+            try {
+                const parsed = JSON.parse(res.data)
+                if (parsed == null) {
+                    throw new Error('empty body')
+                }
+                body = parsed as UTSJSONObject
+            } catch (e) {
+                const msg = `上传失败 (${statusCode})`
+                showError(msg, silent)
+                done()
+                reject(new Error(msg))
+                return
+            }
+
+            if (statusCode == 401) {
+                // 401 不「见就登出」：先续期，成功则带新 token 重发一次（#1704，规则单点在 renewOrExpire）
+                if (isRetry) {
+                    done()
+                    logoutAndReject(silent, reject)
+                    return
+                }
+                renewOrExpire(sentTokenOf(header), true, silent).then((retried : boolean) => {
+                    if (retried) {
+                        doUpload(fullURL, realPath, name, safeFormData, silent, timeout, true, done, resolve, reject)
+                    } else {
+                        done()
+                        reject(new Error(AUTH_EXPIRED_MESSAGE))
+                    }
+                })
+                return
+            }
+            done()
+            handleStatus(statusCode, body, silent, '上传失败', resolve, reject)
+        },
+        fail: (err) => {
+            console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
+            done()
+            networkError(err.errMsg, '上传失败，请检查网络后重试', '上传超时，请稍后重试', silent, reject)
+        }
+    })
+}
+
+/**
  * 上传文件（multipart/form-data）
  * @note uni.uploadFile 不走统一 request 封装，需手动注入 Authorization 与解包 ApiResponse
  * @note 入参若为 content:// URI，会先拷成真实文件再传（#816 根因修复）
+ * @note 401 与普通请求同规则（ADR-0017 / #1704）：先续期、成功则带新 token 重发一次，真失败才登出
  * @returns 解包后的 data 字段（UTSJSONObject）
  */
 export function uploadFile(url : string, filePath : string, name : string = 'file', formData : UTSJSONObject | null = null, options : RequestOptions | null = null) : Promise<UTSJSONObject> {
@@ -653,59 +781,16 @@ export function uploadFile(url : string, filePath : string, name : string = 'fil
             const silent = options?.silent ?? false
             const timeout = options?.timeout ?? REQUEST_TIMEOUT
             const fullURL = resolveURL(url)
-            const header = buildUploadHeader(silent)
-
-            if (ENABLE_DEBUG_LOG) {
-                console.log('[uploadFile] >>> POST', fullURL, 'filePath=', realPath)
-            }
 
             // formData 必须是 UTSJSONObject，null 时传空对象（uni.uploadFile 不接受 undefined）
             const safeFormData : UTSJSONObject = formData != null ? formData! : ({} as UTSJSONObject)
 
-            /** 收尾：中转文件用完即删（无论成功/失败/401） */
+            /** 收尾：中转文件用完即删（无论成功/失败/401；续期重发期间**不删**） */
             const done = () : void => {
                 removeTempFile(realPath)
             }
 
-            uni.uploadFile({
-                url: fullURL,
-                filePath: realPath,
-                name: name,
-                header: header,
-                formData: safeFormData,
-                timeout: timeout,
-                success: (res) => {
-                    const statusCode = res.statusCode
-                    // res.data 是字符串，需要 JSON.parse
-                    let body : UTSJSONObject
-                    try {
-                        const parsed = JSON.parse(res.data)
-                        if (parsed == null) {
-                            throw new Error('empty body')
-                        }
-                        body = parsed as UTSJSONObject
-                    } catch (e) {
-                        const msg = `上传失败 (${statusCode})`
-                        showError(msg, silent)
-                        done()
-                        reject(new Error(msg))
-                        return
-                    }
-
-                    if (statusCode == 401) {
-                        done()
-                        logoutAndReject(silent, reject)
-                        return
-                    }
-                    done()
-                    handleStatus(statusCode, body, silent, '上传失败', resolve, reject)
-                },
-                fail: (err) => {
-                    console.error('[uploadFile] <<< FAIL errMsg=', err.errMsg)
-                    done()
-                    networkError(err.errMsg, '上传失败，请检查网络后重试', '上传超时，请稍后重试', silent, reject)
-                }
-            })
+            doUpload(fullURL, realPath, name, safeFormData, silent, timeout, false, done, resolve, reject)
         })
     })
 }
