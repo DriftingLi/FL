@@ -11,7 +11,8 @@
  * `/api/questions/:id/note` 逐字不变，practice-do 在消费）；本文件只服务「我的笔记」列表页。
  * 两条路径是同一资源的两副面孔，不互相改写。
  */
-import { postMapped, put, del } from './request'
+import { postMapped, requestMapped, del } from './request'
+import type { RequestOptions } from './request'
 import { getPaged } from './envelope'
 import { toNumber, toNumberOrNull, toStr } from './helpers'
 import type { Page } from './envelope'
@@ -54,7 +55,12 @@ export function createNoteApi(content : string) : Promise<NoteItem> {
 /** 改笔记正文（只认本人；他人笔记后端按「不存在」404，不泄漏存在性） */
 export function updateNoteApi(id : number, content : string) : Promise<NoteItem> {
 	const payload : UTSJSONObject = { content: content } as UTSJSONObject
-	return put('/notes/' + id.toString(), payload).then((data : UTSJSONObject) : NoteItem => buildNoteItem(data))
+	// 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 putMapped 便捷面，PUT 经 opts 同通路，
+	// 请求形态（url / method / data）与历史 put() 逐字一致
+	const opts : RequestOptions = { url: '/notes/' + id.toString() } as RequestOptions
+	opts.method = 'PUT'
+	opts.data = payload
+	return requestMapped<NoteItem>(opts, (data : UTSJSONObject) : NoteItem => buildNoteItem(data))
 }
 
 /** 删笔记（只认本人） */

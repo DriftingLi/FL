@@ -9,7 +9,7 @@
  * 日历响应：{ days: [{ date, checked, points }], streak, total, today_checked }
  *   points 为该日实发积分（历史无流水的旧打卡为 0）。
  */
-import { get, post } from './request'
+import { getMapped, postMapped } from './request'
 import { toNumber, toStr, toBool, errMsg } from './helpers'
 import type { CheckInResult, CheckInCalendarResult, CheckInCalendarDay } from '../types/index'
 
@@ -70,9 +70,7 @@ function buildCheckInCalendarResult(obj : UTSJSONObject) : CheckInCalendarResult
  * @returns 打卡结果（连续/累计天数、当日实发积分）
  */
 export function checkInApi() : Promise<CheckInResult> {
-    return post('/check-in').then((data : UTSJSONObject) : CheckInResult => {
-        return buildCheckInResult(data)
-    }).catch((e : any | null) : CheckInResult => {
+    return postMapped<CheckInResult>('/check-in', null, (data : UTSJSONObject) : CheckInResult => buildCheckInResult(data)).catch((e : any | null) : CheckInResult => {
         console.error('[checkInApi] failed:', e)
         const msg = errMsg(e, '打卡失败')
         throw new Error(msg)
@@ -93,9 +91,7 @@ export function getCheckInCalendarApi(year : number = 0, month : number = 0) : P
     if (month > 0) {
         params['month'] = month.toString()
     }
-    return get('/check-in/calendar', params).then((data : UTSJSONObject) : CheckInCalendarResult => {
-        return buildCheckInCalendarResult(data)
-    }).catch((e : any | null) : CheckInCalendarResult => {
+    return getMapped<CheckInCalendarResult>('/check-in/calendar', params, (data : UTSJSONObject) : CheckInCalendarResult => buildCheckInCalendarResult(data)).catch((e : any | null) : CheckInCalendarResult => {
         console.error('[getCheckInCalendarApi] failed:', e)
         const msg = errMsg(e, '获取打卡日历失败')
         throw new Error(msg)

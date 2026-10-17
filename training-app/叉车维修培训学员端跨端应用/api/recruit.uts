@@ -36,7 +36,7 @@
  * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
  * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
  */
-import { get, post, put, FORBIDDEN_MESSAGE_PREFIX } from './request'
+import { post, getMapped, postMapped, requestMapped, FORBIDDEN_MESSAGE_PREFIX } from './request'
 import { decodePage } from './envelope'
 import type { Page } from './envelope'
 // ⚠️ `API_BASE_URL` 来自 `config/env`，**不是** `./request`（`request.uts` 并不 export 它）。
@@ -484,7 +484,7 @@ export function emptyRecruitFilters() : RecruitResumeFilters {
  */
 export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : Promise<Page<RecruitJob>> {
     const url = '/recruit/jobs?page=' + page.toString() + '&page_size=' + pageSize.toString()
-    return get(url).then((data : UTSJSONObject) : Page<RecruitJob> => {
+    return getMapped<Page<RecruitJob>>(url, null, (data : UTSJSONObject) : Page<RecruitJob> => {
         // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组一律先落 UTSJSONObject[] 再逐项取字段，
         // Android 端把 JSON 元素直接 `as` 成 Kotlin data class 会抛 ClassCastException（ADR-0015 / 先例 api/job.uts:124）
         return decodePage<RecruitJob>(data, url, page, pageSize, (obj : UTSJSONObject) : RecruitJob => buildRecruitJob(obj), ['items'])
@@ -506,7 +506,7 @@ export function getRecruitContactRequestsApi(page : number = 1, pageSize : numbe
     } as UTSJSONObject
     // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`；后端回显的 page / page_size
     // 结构上不可表达（ADR-0037 ②），消费方只读 items / total
-    return get('/recruit/contact-requests', params).then((data : UTSJSONObject) : Page<RecruitContactRequest> => {
+    return getMapped<Page<RecruitContactRequest>>('/recruit/contact-requests', params, (data : UTSJSONObject) : Page<RecruitContactRequest> => {
         return decodePage<RecruitContactRequest>(data, '/recruit/contact-requests', page, pageSize, (obj : UTSJSONObject) : RecruitContactRequest => buildRecruitContactRequest(obj), ['items'])
     })
 }
@@ -536,11 +536,11 @@ function buildRecruitApplication(obj : UTSJSONObject) : RecruitApplication {
  * 本函数只允许被「进入某个职位之后的投递列表页」调用一次。
  * @note PR-D #1664：数组与 total 走信封归一出口 decodePage（ADR-0037 ④.4），`page_size` 改填请求值；
  *       `unread_count` / `job_title` 是侧计数器与冗余标题，保留手读。
- *       出口仍是裸 `get`（本域裸出口的收口属 PR-E #1665）。
+ *       出口走 getMapped（PR-E #1665）。
  */
 export function getRecruitJobApplicationsApi(jobId : number, page : number = 1, pageSize : number = 20) : Promise<RecruitApplicationListResult> {
     const url = '/recruit/jobs/' + jobId.toString() + '/applications?page=' + page.toString() + '&page_size=' + pageSize.toString()
-    return get(url).then((data : UTSJSONObject) : RecruitApplicationListResult => {
+    return getMapped<RecruitApplicationListResult>(url, null, (data : UTSJSONObject) : RecruitApplicationListResult => {
         const paged = decodePage<RecruitApplication>(data, url, page, pageSize, (obj : UTSJSONObject) : RecruitApplication => buildRecruitApplication(obj))
         return {
             items: paged.items,
@@ -571,7 +571,7 @@ export function rejectRecruitApplicationApi(applicationId : number) : Promise<vo
 
 /** 招聘者自助信息（账号 / 角色；「我的」推入页用来显示身份事实） */
 export function getRecruitMeApi() : Promise<RecruitMe> {
-    return get('/recruit/me').then((data : UTSJSONObject) : RecruitMe => {
+    return getMapped<RecruitMe>('/recruit/me', null, (data : UTSJSONObject) : RecruitMe => {
         return {
             user_id: (data['user_id'] as number) ?? 0,
             account: (data['account'] as string) ?? '',
@@ -586,23 +586,22 @@ export function getRecruitMeApi() : Promise<RecruitMe> {
 
 /** 发布职位 `POST /recruit/jobs`（返回带 id/status 的新职位） */
 export function createRecruitJobApi(input : RecruitJobInput) : Promise<RecruitJob> {
-    return post('/recruit/jobs', buildJobInputPayload(input)).then((data : UTSJSONObject) : RecruitJob => {
-        return buildRecruitJob(data)
-    })
+    return postMapped<RecruitJob>('/recruit/jobs', buildJobInputPayload(input), (data : UTSJSONObject) : RecruitJob => buildRecruitJob(data))
 }
 
 /** 编辑职位 `PUT /recruit/jobs/{id}` */
 export function updateRecruitJobApi(id : number, input : RecruitJobInput) : Promise<RecruitJob> {
-    return put('/recruit/jobs/' + id.toString(), buildJobInputPayload(input)).then((data : UTSJSONObject) : RecruitJob => {
-        return buildRecruitJob(data)
-    })
+    // 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 putMapped 便捷面，PUT 经 opts 同通路，
+    // 请求形态（url / method / data）与历史 put() 逐字一致
+    const opts : RequestOptions = { url: '/recruit/jobs/' + id.toString() } as RequestOptions
+    opts.method = 'PUT'
+    opts.data = buildJobInputPayload(input)
+    return requestMapped<RecruitJob>(opts, (data : UTSJSONObject) : RecruitJob => buildRecruitJob(data))
 }
 
 /** 上架 / 下架切换 `POST /recruit/jobs/{id}/toggle-status`（返回带新 status 的职位）。forced_offline 的职位由页面隐去本入口 */
 export function toggleRecruitJobStatusApi(id : number) : Promise<RecruitJob> {
-    return post('/recruit/jobs/' + id.toString() + '/toggle-status').then((data : UTSJSONObject) : RecruitJob => {
-        return buildRecruitJob(data)
-    })
+    return postMapped<RecruitJob>('/recruit/jobs/' + id.toString() + '/toggle-status', null, (data : UTSJSONObject) : RecruitJob => buildRecruitJob(data))
 }
 
 /**
@@ -610,7 +609,7 @@ export function toggleRecruitJobStatusApi(id : number) : Promise<RecruitJob> {
  * 列表 DTO 不含 description / position_id / 薪资区间，故编辑前单独取一次详情。
  */
 export function getRecruitJobDetailApi(id : number) : Promise<RecruitJobInput> {
-    return get('/recruit/jobs/' + id.toString()).then((data : UTSJSONObject) : RecruitJobInput => {
+    return getMapped<RecruitJobInput>('/recruit/jobs/' + id.toString(), null, (data : UTSJSONObject) : RecruitJobInput => {
         return {
             title: toStr(data['title']),
             position_id: toNumberOrNull(data['position_id']),
@@ -633,12 +632,13 @@ export function getRecruitJobDetailApi(id : number) : Promise<RecruitJobInput> {
  * @note 每页固定 `page_size=20`；后端超 50 截断为 50 且不回显 —— 我们不会用到那个区间。
  * @note PR-D #1664：「不回显分页字段的端点」样本（ADR-0037 ④.4）—— items / total 走 decodePage，
  *       pageSize 传本域常量 `RECRUIT_PAGE_SIZE`（与 buildFilterParams 下发的 `page_size` 同源，
- *       不是新造的数）。出口仍是裸 `get`（收口属 PR-E #1665）。
+ *       不是新造的数）。出口走 getMapped（PR-E #1665）。
  */
 export function getRecruitResumesApi(filters : RecruitResumeFilters, page : number = 1) : Promise<RecruitResumeListResult> {
     const params = buildFilterParams(filters, page)
-    return get('/recruit/resumes', params).then((data : UTSJSONObject) : RecruitResumeListResult => {
-        const paged = decodePage<RecruitResumeCard>(data, '/recruit/resumes', page, RECRUIT_PAGE_SIZE, (obj : UTSJSONObject) : RecruitResumeCard => buildRecruitResumeCard(obj))
+    const url = '/recruit/resumes'
+    return getMapped<RecruitResumeListResult>(url, params, (data : UTSJSONObject) : RecruitResumeListResult => {
+        const paged = decodePage<RecruitResumeCard>(data, url, page, RECRUIT_PAGE_SIZE, (obj : UTSJSONObject) : RecruitResumeCard => buildRecruitResumeCard(obj))
         return {
             items: paged.items,
             total: paged.total,
@@ -650,9 +650,7 @@ export function getRecruitResumesApi(filters : RecruitResumeFilters, page : numb
  * 简历详情 `GET /recruit/resumes/{id}`（与列表同一脱敏实现；非 open 或不存在 404）
  */
 export function getRecruitResumeDetailApi(userId : number) : Promise<RecruitResumeCard> {
-    return get('/recruit/resumes/' + userId.toString()).then((data : UTSJSONObject) : RecruitResumeCard => {
-        return buildRecruitResumeCard(data)
-    })
+    return getMapped<RecruitResumeCard>('/recruit/resumes/' + userId.toString(), null, (data : UTSJSONObject) : RecruitResumeCard => buildRecruitResumeCard(data))
 }
 
 /**
@@ -665,9 +663,7 @@ export function createRecruitContactRequestApi(studentUserId : number, message :
         student_user_id: studentUserId,
         message: message,
     } as UTSJSONObject
-    return post('/recruit/contact-requests', payload).then((data : UTSJSONObject) : RecruitContactRequest => {
-        return buildRecruitContactRequest(data)
-    })
+    return postMapped<RecruitContactRequest>('/recruit/contact-requests', payload, (data : UTSJSONObject) : RecruitContactRequest => buildRecruitContactRequest(data))
 }
 
 /**
@@ -679,7 +675,7 @@ export function createRecruitContactRequestApi(studentUserId : number, message :
  */
 export function getRecruitResumeContactApi(userId : number) : Promise<RecruitContactPlain> {
     const opts : RequestOptions = { url: '/recruit/resumes/' + userId.toString() + '/contact', silent: true } as RequestOptions
-    return get(opts.url, null, opts).then((data : UTSJSONObject) : RecruitContactPlain => {
+    return getMapped<RecruitContactPlain>(opts.url, null, (data : UTSJSONObject) : RecruitContactPlain => {
         const photos : string[] = []
         const photosRaw = data['photos']
         if (photosRaw != null) {

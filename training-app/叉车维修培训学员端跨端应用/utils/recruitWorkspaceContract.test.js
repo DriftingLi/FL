@@ -541,12 +541,13 @@ describe('D. 标记不合适：二次确认（不可逆 + 30 天冷却），全�
   it('api 层写操作 = 4 个具名 POST（reject + 发起交换 + 发布职位 + 上下架），无回退端点', () => {
     // T3（ADR-0028 ④）推翻 0021 ③后，写端点由 2 个变 4 个：新增发布 + 上下架（两个职位写 POST）。
     // 强制的部分一条未减：没有回退端点；reject / contact 两条路径仍逐字钉死。
+    // PR-E #1665：写出口收紧至 postMapped（reject 仍裸 post 透传 void）——计数按 mapped 家族一起数。
     const api = stripComments(read(API_RECRUIT));
-    const posts = api.match(/\bpost\s*\(/g) || [];
+    const posts = api.match(/\b(?:postMapped|post)(?:<[^>]*>)?\s*\(/g) || [];
     expect(posts.length).toBe(4);
     expect(api).toContain("'/recruit/applications/' + applicationId.toString() + '/reject'");
-    expect(api).toContain("post('/recruit/contact-requests', payload)");
-    expect(api).toContain("post('/recruit/jobs', buildJobInputPayload(input))");
+    expect(api).toContain("postMapped<RecruitContactRequest>('/recruit/contact-requests', payload,");
+    expect(api).toContain("postMapped<RecruitJob>('/recruit/jobs', buildJobInputPayload(input),");
   });
 
   it('标记不合适的前置是 status == applied（后端只允许 applied 被拒）', () => {
@@ -570,11 +571,13 @@ describe('E. 职位管理面存在且与 web 同源；仍零「功能开发中�
   it('职位管理面与 web 同源：发布/编辑/上下架入口齐 + 三方法端点路径逐字钉（ADR-0028 ④ T3，推翻 0021 ③）', () => {
     const api = stripComments(read(API_RECRUIT));
     // 三写端点与 web jobApi.{createJob,updateJob,toggleJobStatus} 逐字同源
-    expect(api).toContain("post('/recruit/jobs', buildJobInputPayload(input))");
-    expect(api).toContain("put('/recruit/jobs/' + id.toString(), buildJobInputPayload(input))");
+    // （PR-E #1665：post/put 载荷出口收紧至Mapped 家族——端点 / 方法 / 载荷经同通路逐字钉住）
+    expect(api).toContain("postMapped<RecruitJob>('/recruit/jobs', buildJobInputPayload(input),");
+    expect(api).toContain("url: '/recruit/jobs/' + id.toString()");
+    expect(api).toContain("opts.method = 'PUT'");
+    expect(api).toContain("opts.data = buildJobInputPayload(input)");
     expect(api).toContain("'/recruit/jobs/' + id.toString() + '/toggle-status'");
-    // 编辑走 PUT（现在必须在）；DELETE / PATCH web 未用，仍禁止
-    expect(api).toMatch(/\bput\s*\(/);
+    // 编辑仍走 PUT（经 requestMapped 的 opts.method 同通路——出口家族无 putMapped 便捷面）；DELETE / PATCH web 未用，仍禁止
     expect(api).not.toMatch(/\bdel\s*\(/);
     expect(api).not.toMatch(/\bpatch\s*\(/);
     // 面内确有发布 / 编辑 / 上下架动作入口（jobs 卡 + job-edit 页），且 forced_offline 抑制上架

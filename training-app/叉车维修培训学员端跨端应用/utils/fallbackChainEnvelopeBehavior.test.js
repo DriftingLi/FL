@@ -70,16 +70,16 @@ function makeRejecting(recorder) {
 /** 信封模块：与被测域共用同一份真实现（缺绑定 = fail-closed） */
 const envelopeFor = (h, gm) => loadUts(ENVELOPE_UTS, { getMapped: gm, toNumber: h.toNumber });
 
-/** 装载 questionInteraction.uts（imports：get/post/put/del + toNumber/toStr/toBool + decodeList/decodePage） */
+/** 装载 questionInteraction.uts（imports：getMapped/postMapped/requestMapped/del + toNumber/toStr/toBool + decodeList/decodePage；PR-E #1665 出口已收口至 mapper 家族） */
 function loadQuestionInteraction(raw, calls = [], file = QUESTION_INTERACTION_UTS, opt = {}) {
   const h = helpers();
-  const get = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'bare');
+  const respond = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'mapped');
   const env = envelopeFor(h, makeResponder({}, calls, 'mapped'));
   const mod = loadUts(file, {
-    get,
-    post: get,
-    put: get,
-    del: get,
+    getMapped: respond,
+    postMapped: respond,
+    requestMapped: (opts, mapper) => respond(opts.url, null, mapper),
+    del: makeResponder(raw, calls, 'bare'),
     toNumber: h.toNumber,
     toStr: h.toStr,
     toBool: h.toBool,
@@ -161,15 +161,16 @@ function loadForumDto(file = FORUM_DTO_UTS) {
   return loadUts(file, { ...h, decodePage: env.decodePage });
 }
 
-/** 装载 recruit.uts（绑定表与 recruiterResumeBehavior 同源：本域 imports 一项不缺） */
+/** 装载 recruit.uts（绑定表与 recruiterResumeBehavior 同源：本域 imports 一项不缺；PR-E #1665 后 getMapped/postMapped/requestMapped 走 mapped 替身、post 留裸供 void 透传） */
 function loadRecruit(raw, calls = [], file = RECRUIT_UTS, opt = {}) {
   const h = helpers();
-  const respond = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'bare');
+  const respond = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'mapped');
   const env = envelopeFor(h, makeResponder({}, calls, 'mapped'));
   const mod = loadUts(file, {
-    get: respond,
-    post: respond,
-    put: respond,
+    getMapped: respond,
+    postMapped: respond,
+    requestMapped: (opts, mapper) => respond(opts.url, null, mapper),
+    post: makeResponder(raw, calls, 'bare'),
     decodePage: env.decodePage,
     API_BASE_URL: 'https://example.test/api',
     FORBIDDEN_MESSAGE_PREFIX: '没有权限：',

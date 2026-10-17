@@ -70,7 +70,9 @@ function loadRecruit(reply = {}) {
     return Promise.resolve(reply.data || {});
   };
 
-  // 信封归一模块真实现（ADR-0037 PR-B）：recruit 列表入口现在走 decodePage。
+  // PR-E #1665：recruit 出口已收口至 mapper 家族（getMapped/postMapped/requestMapped）——
+  // 替身**真的回调 mapper**，映射行为由域模块自身完成；`post` 保留裸（rejectRecruitApplicationApi
+  // 的 void 透传按 ADR-0007 两问判据合法留裸）。信封归一模块真实现（ADR-0037 PR-B）。
   const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
     getMapped: () => Promise.resolve({}),
     toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(String(v))) ? d : parseFloat(String(v)))),
@@ -78,9 +80,10 @@ function loadRecruit(reply = {}) {
 
   const bindings = {
     decodePage: envelope.decodePage,
-    get: (url, params) => respond(url, params),
+    getMapped: (url, params, map) => respond(url, params).then(map),
+    postMapped: (url, data, map) => respond(url, data).then(map),
+    requestMapped: (opts, map) => respond(opts.url, opts.data).then(map),
     post: (url, data) => respond(url, data),
-    put: (url, data) => respond(url, data),
     API_BASE_URL: 'https://example.test/api',
     // 403 的可识别前缀（真源 = `api/request.uts` 的 FORBIDDEN_MESSAGE_PREFIX）：
     // 这里按 **相同字面量** 注入，与 request 出口对齐（契约测试 E3 同时钉住两端的单点真源）。

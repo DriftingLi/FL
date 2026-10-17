@@ -78,7 +78,11 @@ describe('#1082 数据面：走 api/note，符号必须真的被导出', () => {
     // ADR-0037 PR-B：列表出口收敛到信封归一的 getPaged（page/page_size + scope 走 query）
     expect(api).toContain("getPaged<NoteItem>('/notes'");
     expect(api).toContain("postMapped<NoteItem>('/notes'");
-    expect(api).toContain("put('/notes/' + id.toString()");
+    // PR-E #1665：改笔记 PUT 收紧至 requestMapped（出口家族无 putMapped 便捷面），
+    // 端点 / 方法 / 载荷经同通路 opts 逐字钉住
+    expect(api).toContain("url: '/notes/' + id.toString()");
+    expect(api).toContain("opts.method = 'PUT'");
+    expect(api).toContain("opts.data = payload");
     expect(api).toContain("del('/notes/' + id.toString()");
     expect(api).toContain("export const NOTE_SCOPE_ALL = 'all'");
     expect(api).toContain("export const NOTE_SCOPE_QUESTION = 'question'");
@@ -249,10 +253,13 @@ describe('#1082 编辑：新建独立笔记 + 编辑同构 practice-do（纯文�
 });
 
 describe('#1082 老路径不受影响：/api/questions/:id/note 与 practice-do 笔记写入', () => {
-  it('题目维度三个端点逐字仍在 api/questionInteraction.uts', () => {
+  it('题目维度三个端点逐字仍在 api/questionInteraction.uts（出口家族已收口至 mapper，端点字面量不变）', () => {
     const qi = read('api/questionInteraction.uts');
-    expect(qi).toContain('get(`/questions/${questionId}/note`)');
-    expect(qi).toContain('put(`/questions/${questionId}/note`');
+    // PR-E #1665 的出口收紧只换「谁发这个请求」（get/put → getMapped/requestMapped），
+    // 端点路径三处逐字原样 —— 老契约（path + method）没动。
+    expect(qi).toContain('getMapped<QuestionNote>(`/questions/${questionId}/note`, null,');
+    expect(qi).toContain('url: `/questions/${questionId}/note`');
+    expect(qi).toContain("opts.method = 'PUT'");
     expect(qi).toContain('del(`/questions/${questionId}/note`)');
   });
 
