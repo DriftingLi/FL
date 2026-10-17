@@ -64,8 +64,8 @@ function loadRecruit(reply = {}) {
     },
   };
 
-  const respond = (url, params) => {
-    calls.push({ url, params });
+  const respond = (url, params, options = null) => {
+    calls.push({ url, params, options });
     if (reply.reject) return Promise.reject(reply.reject);
     return Promise.resolve(reply.data || {});
   };
@@ -80,7 +80,7 @@ function loadRecruit(reply = {}) {
 
   const bindings = {
     decodePage: envelope.decodePage,
-    getMapped: (url, params, map) => respond(url, params).then(map),
+    getMapped: (url, params, map, options) => respond(url, params, options).then(map),
     postMapped: (url, data, map) => respond(url, data).then(map),
     requestMapped: (opts, map) => respond(opts.url, opts.data).then(map),
     post: (url, data) => respond(url, data),
@@ -266,13 +266,17 @@ describe('B. 明文联系方式：恰好 6 键 + 403 分流', () => {
     expect(dto.resume_certifications.length).toBe(1);
   });
 
-  test('B2：明文请求带 silent（403 是预期分支，不该弹错误 toast）', () => {
+  test('B2：明文请求带 silent（403 是预期分支，不该弹错误 toast）', async () => {
     const { mod, calls } = loadRecruit({ data: {} });
-    mod.getRecruitResumeContactApi(7);
-    // get(url, null, opts) 的单向断言：调用点必须把 silent 交给 request 层
+    await mod.getRecruitResumeContactApi(7);
+    // 行为断言（PR-E #1665 加固）：silent 必须**真的到达** request 层——收口至 getMapped 后
+    // opts 是经第 4 参透传的，只钉 const opts 声明行是接线盲位（首轮迁移漏传 4 参仍绿的教训）。
+    expect(calls.length).toBe(1);
+    expect(calls[0].options?.silent).toBe(true);
+    // 接线面同步钉住调用形态：opts 声明与调用点一体
     const src = readText(RECRUIT);
     expect(src).toMatch(/const opts : RequestOptions = \{ url: '\/recruit\/resumes\/' \+ userId\.toString\(\) \+ '\/contact', silent: true \}/);
-    expect(calls.length).toBe(1);
+    expect(src).toMatch(/getMapped<RecruitContactPlain>\(opts\.url, null, [\s\S]*?\}, opts\)/);
   });
 
   test('B3：403 被识别为「无有效授权」而不是普通失败', () => {

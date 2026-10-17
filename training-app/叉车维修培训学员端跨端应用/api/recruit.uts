@@ -506,8 +506,10 @@ export function getRecruitContactRequestsApi(page : number = 1, pageSize : numbe
     } as UTSJSONObject
     // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`；后端回显的 page / page_size
     // 结构上不可表达（ADR-0037 ②），消费方只读 items / total
-    return getMapped<Page<RecruitContactRequest>>('/recruit/contact-requests', params, (data : UTSJSONObject) : Page<RecruitContactRequest> => {
-        return decodePage<RecruitContactRequest>(data, '/recruit/contact-requests', page, pageSize, (obj : UTSJSONObject) : RecruitContactRequest => buildRecruitContactRequest(obj), ['items'])
+    // url 提常量复用（ADR-0037 ④.4 教训：出口闭包给 decodePage 传 url 时勿重写同字面量）
+    const url = '/recruit/contact-requests'
+    return getMapped<Page<RecruitContactRequest>>(url, params, (data : UTSJSONObject) : Page<RecruitContactRequest> => {
+        return decodePage<RecruitContactRequest>(data, url, page, pageSize, (obj : UTSJSONObject) : RecruitContactRequest => buildRecruitContactRequest(obj), ['items'])
     })
 }
 /**
@@ -675,6 +677,8 @@ export function createRecruitContactRequestApi(studentUserId : number, message :
  */
 export function getRecruitResumeContactApi(userId : number) : Promise<RecruitContactPlain> {
     const opts : RequestOptions = { url: '/recruit/resumes/' + userId.toString() + '/contact', silent: true } as RequestOptions
+    // 收口至 getMapped 时 opts 必须经第 4 参原样透传（silent 是 403 预期分支不弹 toast 的唯一载体；
+    // PR-E 首轮迁移曾漏传，被 B2 行为断言钉回——见 utils/recruiterResumeBehavior.test.js）
     return getMapped<RecruitContactPlain>(opts.url, null, (data : UTSJSONObject) : RecruitContactPlain => {
         const photos : string[] = []
         const photosRaw = data['photos']
@@ -701,7 +705,7 @@ export function getRecruitResumeContactApi(userId : number) : Promise<RecruitCon
             photos: photos,
             resume_certifications: certs,
         } as RecruitContactPlain
-    })
+    }, opts)
 }
 
 // ── 下载后交系统打开（打码 PDF 与上传 PDF 共用的**唯一**出路）──────────────
