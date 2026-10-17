@@ -26,8 +26,6 @@ export type FavoriteItem = {
 export type FavoriteListResult = {
     items : FavoriteItem[]
     total : number
-    page : number
-    page_size : number
 }
 
 /** 收藏检查结果 */

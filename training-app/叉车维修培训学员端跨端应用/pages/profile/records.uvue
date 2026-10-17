@@ -178,12 +178,12 @@ import { goBack } from '../../utils/navigation'
         try {
             const result = await getRecordsApi(page.value, pageSize, range[0], range[1])
             if (reset) {
-                records.value = result.records
+                records.value = result.items
             } else {
-                records.value = records.value.concat(result.records)
+                records.value = records.value.concat(result.items)
             }
             total.value = result.total
-            if (records.value.length >= result.total || result.records.length == 0) {
+            if (!result.hasMore || result.items.length == 0) {
                 noMore.value = true
             } else {
                 page.value = page.value + 1

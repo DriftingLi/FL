@@ -159,8 +159,7 @@
 			keyword: '',
 			type: '',
 			total: 0,
-			page: 1,
-			pages: 0,
+			hasMore: false,
 			items: [] as SearchItem[],
 		} as SearchPagedResult
 	}
@@ -198,7 +197,7 @@
 	})
 
 	const hasMore = computed<boolean>(() : boolean => {
-		return page.value < typedResult.value.pages
+		return typedResult.value.hasMore
 	})
 
 	// ===== 展示包装（uvue 模板不能直调 import 的函数，先例 featured-detail 的 displayTime） =====
@@ -307,8 +306,7 @@
 						keyword: result.keyword,
 						type: result.type,
 						total: result.total,
-						page: result.page,
-						pages: result.pages,
+						hasMore: result.hasMore,
 						items: prev.items.concat(result.items),
 					} as SearchPagedResult
 					typedResult.value = merged

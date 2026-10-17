@@ -46,8 +46,6 @@ export type LevelItem = {
 export type CourseListResult = {
     items : CourseItem[]
     total : number
-    page : number
-    page_size : number
 }
 
 /** 章节项 */
@@ -142,14 +140,6 @@ export type MaterialItem = {
     content_type : string
     file_size : number
     created_at : string
-}
-
-/** 学习资料列表结果 */
-export type MaterialListResult = {
-    materials : MaterialItem[]
-    total : number
-    page : number
-    pages : number
 }
 
 /** 学习资料下载信息 */

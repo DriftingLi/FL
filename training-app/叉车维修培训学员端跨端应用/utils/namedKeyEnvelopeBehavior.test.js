@@ -66,7 +66,7 @@ function makeRejectingGetMapped(err, recorder) {
 /** 信封模块：与出口共用同一个 getMapped 替身（`getPaged` 内部走它，真回调 mapper） */
 const envelopeFor = (h, gm) => loadUts(ENVELOPE_UTS, { getMapped: gm, toNumber: h.toNumber });
 
-/** 按出口装载 material.uts（imports：getMapped / toNumber,toStr / decodePage） */
+/** 按出口装载 material.uts（imports：getMapped / toNumber,toStr / getPaged —— PR-F #1666 起走信封出口） */
 function loadMaterial(raw, calls = [], file = MATERIAL_UTS, opt = {}) {
   const h = helpers();
   const gm = opt.reject ? makeRejectingGetMapped(opt.reject, calls) : makeGetMapped(raw, calls);
@@ -75,12 +75,12 @@ function loadMaterial(raw, calls = [], file = MATERIAL_UTS, opt = {}) {
     getMapped: gm,
     toNumber: h.toNumber,
     toStr: h.toStr,
-    decodePage: env.decodePage,
+    getPaged: env.getPaged,
   });
   return { mod, calls };
 }
 
-/** 按出口装载 student.uts（imports 另有 `get` 与 decodeList —— 缺一个 loadUts 就 fail-closed 抛缺绑定） */
+/** 按出口装载 student.uts（imports 另有 `get`、decodeList 与 getPaged —— 缺一个 loadUts 就 fail-closed 抛缺绑定） */
 function loadStudent(raw, calls = [], file = STUDENT_UTS, opt = {}) {
   const h = helpers();
   const gm = opt.reject ? makeRejectingGetMapped(opt.reject, calls) : makeGetMapped(raw, calls);
@@ -93,6 +93,7 @@ function loadStudent(raw, calls = [], file = STUDENT_UTS, opt = {}) {
     toBool: h.toBool,
     decodePage: env.decodePage,
     decodeList: env.decodeList,
+    getPaged: env.getPaged,
   });
   return { mod, calls };
 }
@@ -165,8 +166,7 @@ const MATERIAL_TWO_EXPECTED = {
   created_at: '',
 };
 
-/** total 45 / pageSize 10 ⇒ 折算 pages 5；回显 pages 故意给 99（锁「不读后端回显」） */
-const MATERIAL_RAW = {
+/** total 45 / pageSize 10 ⇒ 折算 pages 5；回显 pages 故意给 99（锁「不读后端回显」） */const MATERIAL_RAW = {
   materials: [MATERIAL_ONE, { id: 7, file_name: '电池保养.docx' }],
   total: 45,
   page: 2,
@@ -395,18 +395,23 @@ const MY_REPLIES_RAW = {
 
 // ===== 站点 1：material（materials 具名键，两出口共用 builder） =====
 
-describe('material.uts：materials 具名键站点（PR-C #1663，真执行）', () => {
-  it('列表：数组键命中、total 走信封、pages 按折算不读回显、请求形态不变', async () => {
+describe('material.uts：materials 具名键站点（PR-C #1663 → PR-F #1666 改 getPaged，真执行）', () => {
+  it('列表：数组键命中、total 走信封、hasMore 由 total 折算、请求形态不变', async () => {
     const { mod, calls } = loadMaterial(MATERIAL_RAW);
     const got = await mod.getMaterialsApi(0, 2, 10);
 
     expect(calls).toEqual([{ url: '/materials', params: { page: '2', page_size: '10' } }]);
     expect(got).toEqual({
-      materials: [MATERIAL_ONE_EXPECTED, MATERIAL_TWO_EXPECTED],
+      items: [MATERIAL_ONE_EXPECTED, MATERIAL_TWO_EXPECTED],
       total: 45,
-      page: 2,
-      pages: 5, // floor((45 + 10 - 1) / 10)；回显 pages=99 被忽略
+      hasMore: true, // 2*10 < 45
     });
+  });
+
+  it('列表：末页 hasMore=false（5*10 ≥ 45）—— 到底判据由 total 折算，不读回显 pages=99', async () => {
+    const { mod } = loadMaterial(MATERIAL_RAW);
+    const got = await mod.getMaterialsApi(0, 5, 10);
+    expect(got.hasMore).toBe(false);
   });
 
   it('列表：courseId>0 才下发 course_id（请求形态逐字不变）', async () => {
@@ -415,54 +420,43 @@ describe('material.uts：materials 具名键站点（PR-C #1663，真执行）',
     expect(calls[0].params).toEqual({ page: '1', page_size: '20', course_id: '3' });
   });
 
-  it('列表：响应缺 page 字段 → 缺省 1（行为保持点，不能变 0）', async () => {
-    const { mod } = loadMaterial({ materials: [{ id: 1, file_name: 'a.pdf' }], total: 1 });
+  it('列表：响应缺 total → total 回落条数、hasMore 按条数兜底', async () => {
+    const { mod } = loadMaterial({ materials: [{ id: 1, file_name: 'a.pdf' }] });
     const got = await mod.getMaterialsApi(0, 1, 10);
-    expect(got.page).toBe(1);
     expect(got.total).toBe(1);
-    expect(got.materials[0].file_id).toBe(1); // id 回退
+    expect(got.hasMore).toBe(false); // 1 != pageSize 10
+    expect(got.items[0].file_id).toBe(1); // id 回退
   });
 
-  it('学员资料别名出口：同一 builder、同一具名键，URL 与 params 不变', async () => {
+  it('学员资料别名出口：同一具名键，URL 与 params 不变', async () => {
     const { mod, calls } = loadMaterial(MATERIAL_RAW);
     const got = await mod.getStudentMaterialsApi(3, 10);
     expect(calls).toEqual([{ url: '/student/materials', params: { page: '3', page_size: '10' } }]);
     expect(got.total).toBe(45);
-    expect(got.materials).toHaveLength(2);
+    expect(got.items).toHaveLength(2);
   });
 
-  it('必红 M1：数组键改坏（materials→items）⇒ 空列表 —— 具名键断言承重', async () => {
+  it('必红 M1：数组键改坏（materials→items）⇒ 空列表 + total 归零 —— 具名键断言承重', async () => {
     const file = mutateUts(MATERIAL_UTS, [["['materials']", "['items']"]], 'material.uts');
     const { mod } = loadMaterial(MATERIAL_RAW, [], file);
     const got = await mod.getMaterialsApi(0, 2, 10);
-    expect(got.materials).toEqual([]); // 绿用例的逐字段 toEqual 在此必红
-  });
-
-  it('必红 M2：pages 改回读后端回显 ⇒ 99 —— 「不读回显」断言承重', async () => {
-    const file = mutateUts(
-      MATERIAL_UTS,
-      [['pages: Math.floor((paged.total + pageSize - 1) / pageSize),', 'pages: toNumber(data[\'pages\']),']],
-      'material.uts'
-    );
-    const { mod } = loadMaterial(MATERIAL_RAW, [], file);
-    const got = await mod.getMaterialsApi(0, 2, 10);
-    expect(got.pages).toBe(99); // 绿用例断言的是 5
+    expect(got.items).toEqual([]); // 绿用例的逐字段 toEqual 在此必红
+    expect(got.total).toBe(0);
   });
 });
 
 // ===== 站点 2/3：student（records / courses 具名键） =====
 
 describe('student.uts：records / courses 具名键站点（PR-C #1663，真执行）', () => {
-  it('学习记录：records 键命中、total 走信封、page_size=请求值（旧读法恒 0）', async () => {
+  it('学习记录：records 键命中、total 走信封、返回 Page<StudyRecord>（PR-F #1666 页面侧重命名）', async () => {
     const { mod, calls } = loadStudent(RECORDS_RAW);
     const got = await mod.getRecordsApi(2, 15);
 
     expect(calls).toEqual([{ url: '/student/records', params: { page: '2', page_size: '15' } }]);
     expect(got).toEqual({
-      records: [RECORD_FULL, RECORD_BARE_EXPECTED],
+      items: [RECORD_FULL, RECORD_BARE_EXPECTED],
       total: 7,
-      page: 1,
-      page_size: 15, // 请求 pageSize，不是响应里的任何东西、更不是 0
+      hasMore: false, // 2*15 = 30 ≥ 7
     });
   });
 
@@ -479,18 +473,9 @@ describe('student.uts：records / courses 具名键站点（PR-C #1663，真执�
     });
   });
 
-  it('学习记录：请求拒绝 → getMockRecords 兜底（2 条、page_size 20）', async () => {
+  it('学习记录：请求拒绝 → 向上抛（PR-F #1666 删掉 mock 回填，吞错点清零）', async () => {
     const { mod } = loadStudent(null, [], STUDENT_UTS, { reject: new Error('网络断了') });
-    const got = await mod.getRecordsApi(1, 20);
-    expect(got).toEqual({
-      records: [
-        { record_id: 1, course_id: 1, course_name: '叉车基础操作', chapter_id: 1, chapter_title: '叉车概述', study_duration: 45, study_date: '2026-07-23' },
-        { record_id: 2, course_id: 2, course_name: '日常维护保养', chapter_id: 1, chapter_title: '保养基础', study_duration: 60, study_date: '2026-07-22' },
-      ],
-      total: 2,
-      page: 1,
-      page_size: 20,
-    });
+    await expect(mod.getRecordsApi(1, 20)).rejects.toThrow('获取学习记录失败');
   });
 
   it('我的课程：courses 键命中（decodeList，本端点无 total）、continue_learning 兄弟键手读保留', async () => {
@@ -509,18 +494,12 @@ describe('student.uts：records / courses 具名键站点（PR-C #1663，真执�
     expect(got.continue_learning).toBeNull();
   });
 
-  it('必红 M3：records 键改坏 ⇒ 空列表', async () => {
+  it('必红 M3：records 键改坏 ⇒ 空页', async () => {
     const file = mutateUts(STUDENT_UTS, [["['records']", "['items']"]], 'student.uts');
     const { mod } = loadStudent(RECORDS_RAW, [], file);
     const got = await mod.getRecordsApi(2, 15);
-    expect(got.records).toEqual([]);
-  });
-
-  it('必红 M4：page_size 改回 0（旧读法恒 0 的那个值）⇒ 与请求值断言相斥', async () => {
-    const file = mutateUts(STUDENT_UTS, [['page_size: pageSize,', 'page_size: 0,']], 'student.uts');
-    const { mod } = loadStudent(RECORDS_RAW, [], file);
-    const got = await mod.getRecordsApi(2, 15);
-    expect(got.page_size).toBe(0); // 绿用例断言的是 15
+    expect(got.items).toEqual([]);
+    expect(got.total).toBe(0);
   });
 
   it('必红 M5：courses 键改坏 ⇒ 空列表', async () => {
@@ -530,17 +509,22 @@ describe('student.uts：records / courses 具名键站点（PR-C #1663，真执�
     expect(got.courses).toEqual([]);
   });
 
-  it('必红 M6：拆掉 mock 兜底 catch ⇒ 拒绝穿透（绿用例断言的是兜底成功）', async () => {
-    const file = mutateUts(STUDENT_UTS, [['return getMockRecords()', 'throw e']], 'student.uts');
+  it('必红 M6：把 rethrow 改回返回空页 ⇒ 拒绝被吞（绿用例断言的是向上抛）', async () => {
+    const file = mutateUts(
+      STUDENT_UTS,
+      [['throw new Error(msg)', "return { items: [] as StudyRecord[], total: 0, hasMore: false } as Page<StudyRecord>"]],
+      'student.uts'
+    );
     const { mod } = loadStudent(null, [], file, { reject: new Error('网络断了') });
-    await expect(mod.getRecordsApi(1, 20)).rejects.toThrow();
+    const got = await mod.getRecordsApi(1, 20);
+    expect(got).toEqual({ items: [], total: 0, hasMore: false });
   });
 });
 
 // ===== 站点 4：forumDto topics（票面②：pages→page_size 误写随迁移消亡） =====
 
-describe('forum：topics 具名键站点 + pages→page_size 误写消亡（PR-C #1663，真执行）', () => {
-  it('帖子列表：topics 键命中、page_size=请求值（回显总页数 4 塞不进来）', async () => {
+describe('forum：topics 具名键站点 + 回显页数不参与判据（PR-C #1663 / PR-F #1666，真执行）', () => {
+  it('帖子列表：topics 键命中、hasMore 由 total 折算（回显 pages=4 塞不进来）', async () => {
     const { mod, calls } = loadForum(TOPICS_RAW);
     const got = await mod.getForumTopicsApi(2, 5, 'general', 'latest', 'desc', 'question', 'resolved', '', '');
 
@@ -553,17 +537,16 @@ describe('forum：topics 具名键站点 + pages→page_size 误写消亡（PR-C
     expect(got).toEqual({
       items: [TOPIC_FULL_EXPECTED, TOPIC_BARE_EXPECTED],
       total: 30,
-      page: 3,
-      page_size: 5, // 请求 pageSize —— 旧误写这里是 toNumber(obj['pages']) = 4
+      hasMore: true, // 2*5 < 30
     });
   });
 
-  it('我的帖子：同一 builder、params 仅 page/page_size', async () => {
+  it('我的帖子：同一 builder、params 仅 page/page_size、末页 hasMore=false', async () => {
     const { mod, calls } = loadForum(TOPICS_RAW);
     const got = await mod.getMyTopicsApi(3, 10);
     expect(calls).toEqual([{ url: '/forum/my-topics', params: { page: '3', page_size: '10' } }]);
     expect(got.total).toBe(30);
-    expect(got.page_size).toBe(10);
+    expect(got.hasMore).toBe(false); // 3*10 ≥ 30；回显 pages=4 若被读会误判「还有更多」
     expect(got.items).toHaveLength(2);
   });
 
@@ -579,15 +562,15 @@ describe('forum：topics 具名键站点 + pages→page_size 误写消亡（PR-C
     expect(got.items).toEqual([]);
   });
 
-  it('必红 M8：page_size 改回读总页数（旧误写原文回潮）⇒ 4 ≠ 请求值 5', async () => {
+  it('必红 M8：hasMore 改回读后端回显页数 ⇒ 末页误判「还有更多」', async () => {
     const dtoFile = mutateUts(
       FORUM_DTO_UTS,
-      [['page_size: pageSize,', "page_size: toNumber(obj['pages']),"]],
+      [['hasMore: paged.hasMore,', "hasMore: toNumber(obj['pages'], 0) > page,"]],
       'forumDto.uts'
     );
     const { mod } = loadForum(TOPICS_RAW, [], { dto: dtoFile });
-    const got = await mod.getMyTopicsApi(3, 5);
-    expect(got.page_size).toBe(4); // 绿用例断言的是请求 pageSize=5
+    const got = await mod.getMyTopicsApi(3, 10);
+    expect(got.hasMore).toBe(true); // 回显 pages=4 > 3；绿用例断言的是 false
   });
 });
 
@@ -617,8 +600,7 @@ describe('forum 回复列表装载行为不变（票面验收，列表 PR-C #166
       created_at: '2026-10-01',
       can_delete: false,
       replies: [DETAIL_REPLY_EXPECTED],
-      page: 1,
-      pages: 1,
+      hasMore: false, // 1*20 ≥ total 2；PR-F #1666 起 page/pages 换成 hasMore
       total: 2,
       scope: 'general',
       category: 'discussion',

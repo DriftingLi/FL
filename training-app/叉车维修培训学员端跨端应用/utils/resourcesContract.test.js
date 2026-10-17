@@ -220,10 +220,8 @@ describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部
   });
 
   it.each([
-    ['getMaterialsApi', 'MaterialListResult', "'/materials', params"],
     ['getMaterialDetailApi', 'MaterialItem', "'/materials/' + materialId.toString(), null"],
     ['getMaterialDownloadApi', 'MaterialDownloadInfo', "'/materials/' + materialId.toString() + '/download', null"],
-    ['getStudentMaterialsApi', 'MaterialListResult', "'/student/materials', params"],
   ])('%s 经 getMapped<%s> 且旧 get().then() 形态不回潮', (name, dto, callShape) => {
     const body = fnBodyOf(code, name);
     expect(body).not.toBe('');
@@ -231,41 +229,50 @@ describe('material 域 api 出口收紧（#653 T15 批 B：有载荷出口全部
     expect(outletViolations(body, dto)).toEqual([]);
   });
 
+  it.each([
+    ['getMaterialsApi', "'/materials'"],
+    ['getStudentMaterialsApi', "'/student/materials'"],
+  ])('%s 经 getPaged<MaterialItem>（PR-F #1666 页面侧重命名：列表出口统一 Page<T>）', (name, path) => {
+    const body = fnBodyOf(code, name);
+    expect(body).not.toBe('');
+    // 列表两站点直接吃信封归一出口：数组键 materials 由 keys 声明承载，页参由出口拼
+    expect(body).toContain(`getPaged<MaterialItem>(${path}, page, pageSize, (obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj)`);
+    expect(body).toContain("['materials']");
+    expect(body).not.toMatch(/getMapped</);
+    // 请求参数不再手拼（page/page_size 由 getPaged 统一注入，写位不许回潮）
+    expect(body).not.toContain("params['page_size']");
+    expect(body).not.toContain('buildMaterialListResult');
+  });
+
   it('mapper 一律箭头包裹 build*（守护规则 M 的形态面；M 本身由 utsAndroidCompile 全工程执法，此处不复述判据）', () => {
-    // PR-C（#1663）：列表 builder 签名扩为 (data, url, page, pageSize)，信封 url 与页参由出口闭包传入，
-    // 两个站点各传自己的路径字面量；detail/download 两出口仍是单参形态
-    expect(code).toContain("(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/materials', page, pageSize)");
-    expect(code).toContain("(data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/student/materials', page, pageSize)");
+    // PR-C（#1663）：列表 builder 签名扩为 (data, url, page, pageSize)，信封 url 与页参由出口闭包传入；
+    // PR-F（#1666）：列表两站点改 getPaged，builder 退化为单元素映射（buildMaterialItem），
+    // detail/download 两出口仍是单参形态
+    expect(code).toContain('(obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj)');
     expect(code).toContain('(data : UTSJSONObject) : MaterialItem => buildMaterialItem(data)');
     expect(code).toContain('(data : UTSJSONObject) : MaterialDownloadInfo => buildMaterialDownloadInfo(data)');
   });
 
-  it('映射真相收在三个私有 builder（不对外暴露，页面只消费 DTO）', () => {
+  it('映射真相收在两个私有 builder（不对外暴露，页面只消费 DTO）', () => {
     for (const [name, dto] of [
       ['buildMaterialItem', 'MaterialItem'],
-      ['buildMaterialListResult', 'MaterialListResult'],
       ['buildMaterialDownloadInfo', 'MaterialDownloadInfo'],
     ]) {
-      // PR-C（#1663）起列表 builder 可带 url/page/pageSize 尾参（信封与页参由出口传入），首参与返回形不变
       expect(code).toMatch(new RegExp(`function\\s+${name}\\s*\\(\\s*\\w+\\s*:\\s*UTSJSONObject\\s*(?:,[^)]*)?\\)\\s*:\\s*${dto}\\b`));
       expect(code).not.toMatch(new RegExp(`export\\s+function\\s+${name}\\b`));
     }
   });
 
-  it('列表信封拆包只在 buildMaterialListResult 一处、且全部经 decodePage（PR-C #1663 具名键站点迁移）', () => {
-    const body = fnBodyOf(code, 'buildMaterialListResult');
-    expect(body).not.toBe('');
-    // 数组与 total 走信封出口、数组键具名显式声明；旧手写索引读法一处不剩（total/页数类索引读
-    // 由 envelopeAdoption 棘轮按文件计数兜底，此处锁本 builder 不回潮）
-    expect(body).toContain('decodePage<MaterialItem>(data, url, page, pageSize');
-    expect(body).toContain("['materials']");
-    for (const k of ['materials', 'total', 'pages']) {
-      expect(body).not.toContain(`data['${k}']`);
+  it('列表信封拆包只在信封出口、数组键具名显式声明（PR-F #1666：手写 builder 退役）', () => {
+    // PR-C 时这里锁的是 buildMaterialListResult 本体；PR-F 把列表出口整段交给 getPaged，
+    // 该 builder 已删 ⇒ 判据改为「文件里不存在手写列表拆包」，且 keys 声明仍在（真执行侧由
+    // namedKeyEnvelopeBehavior 的 material 站点逐字段验，此处只锁接线形态）
+    expect(code).not.toContain('buildMaterialListResult');
+    expect(code).not.toMatch(/decodePage<MaterialItem>/);
+    expect(code).toContain("['materials']");
+    for (const k of ['materials', 'total', 'pages', 'page']) {
+      expect(code).not.toContain(`data['${k}']`);
     }
-    // page 缺省 1 是行为保持点：转换前写在 getMaterialsApi 的 then 里，现在只能平移、不能改值
-    expect(body).toMatch(/toNumber\(data\['page'\],\s*1\)/);
-    // items 逐条仍经同一份 buildMaterialItem（工厂箭头包裹）
-    expect(body).toContain('(obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj)');
   });
 
   it('数值/字符串强转不再本地复制（api/helpers.uts 是唯一实现）', () => {

@@ -9,8 +9,10 @@
  *   不支持 knowledge_point 维度（分组只按题型）
  */
 import { get, getMapped, post } from './request'
+import { getPaged } from './envelope'
+import type { Page } from './envelope'
 import { toNumber, toStr, toBool } from './helpers'
-import type { WrongQuestionItem, WrongQuestionListResult, WrongQuestionStats, QuestionOption } from '../types/index'
+import type { WrongQuestionItem, WrongQuestionStats, QuestionOption } from '../types/index'
 
 /** 列表查询条件（对应后端 query 参数，空值不发送） */
 export type WrongQuestionQuery = {
@@ -84,25 +86,6 @@ function buildWrongQuestionItem(obj : UTSJSONObject) : WrongQuestionItem {
 	return item
 }
 
-/** 从 UTSJSONObject 构造 WrongQuestionListResult */
-function buildWrongQuestionListResult(obj : UTSJSONObject) : WrongQuestionListResult {
-	const items : WrongQuestionItem[] = []
-	const itemsRaw = obj['items']
-	if (itemsRaw != null) {
-		const itemsArray = itemsRaw as Array<UTSJSONObject>
-		for (let i = 0; i < itemsArray.length; i++) {
-			items.push(buildWrongQuestionItem(itemsArray[i]))
-		}
-	}
-	const result : WrongQuestionListResult = {
-		items: items,
-		total: toNumber(obj['total']),
-		page: toNumber(obj['page']),
-		page_size: toNumber(obj['page_size']),
-	} as WrongQuestionListResult
-	return result
-}
-
 /** 从 UTSJSONObject 构造 WrongQuestionStats */
 function buildWrongQuestionStats(obj : UTSJSONObject) : WrongQuestionStats {
 	const byTypeRaw = obj['by_type']
@@ -120,12 +103,12 @@ function buildWrongQuestionStats(obj : UTSJSONObject) : WrongQuestionStats {
 
 /**
  * 获取错题列表（page/pageSize + 可组合筛选条件）
+ *
+ * PR-F #1666：装载走信封归一出口 `getPaged`（ADR-0037）——数组键 `items`，分页字段只认 total；
+ * 旧 DTO 的 page / page_size 两字段随之消亡（消费方按 hasMore 判终止）。
  */
-export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, query : WrongQuestionQuery | null = null) : Promise<WrongQuestionListResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	} as UTSJSONObject
+export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, query : WrongQuestionQuery | null = null) : Promise<Page<WrongQuestionItem>> {
+	const params : UTSJSONObject = {} as UTSJSONObject
 	if (query != null) {
 		const q = query as WrongQuestionQuery
 		if (q.type.length > 0) {
@@ -141,9 +124,7 @@ export function getWrongQuestionsApi(page : number = 1, pageSize : number = 20, 
 			params['min_wrong_count'] = q.minWrongCount.toString()
 		}
 	}
-	return getMapped<WrongQuestionListResult>('/wrong-questions', params, (data : UTSJSONObject) : WrongQuestionListResult => {
-		return buildWrongQuestionListResult(data)
-	}).catch((e) : WrongQuestionListResult => {
+	return getPaged<WrongQuestionItem>('/wrong-questions', page, pageSize, (obj : UTSJSONObject) : WrongQuestionItem => buildWrongQuestionItem(obj), params, ['items']).catch((e) : Page<WrongQuestionItem> => {
 		console.error('[getWrongQuestionsApi] failed:', e)
 		let msg = '获取错题列表失败'
 		if (e instanceof Error) {

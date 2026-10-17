@@ -22,8 +22,6 @@ export type FeaturedContentItem = {
 export type FeaturedContentListResult = {
     items : FeaturedContentItem[]
     total : number
-    page : number
-    pages : number
 }
 
 /** 精选内容详情 */

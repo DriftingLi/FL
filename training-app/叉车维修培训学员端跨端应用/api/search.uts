@@ -87,10 +87,8 @@ function buildSearchResult(data : UTSJSONObject, keyword : string) : SearchResul
 
 /**
  * 指定类型分页结果映射（同口径；keyword/type 是回退缺省值，须由出口传入）。
- * @note `pages` **不读后端回显**，按 total / 请求 pageSize 折算（ADR-0037 ②：`pages` 属棘轮载体，
- *       且「回显总页数」与「total 推导」在现网同解，推导式让 `pages→page_size` 误读家族结构上消亡）。
- *       折算式用 floor（UTS 侧只保证 Math.floor，先例 utils/recruitDisplay.uts:164、api/material.uts:57）。
- *       消费方 pages/search/search.uvue:201 的 `page < pages` 由此等价于 `page*pageSize < total`。
+ * @note PR-F #1666：`page` / `pages` 两字段删除，翻页判据改为 `hasMore`——由 decodePage 依
+ *       total / 请求 pageSize 推导（消费方 pages/search/search.uvue 直接读该字段，不再自算 page<pages）。
  */
 function buildSearchPagedResult(data : UTSJSONObject, keyword : string, type : string, page : number, pageSize : number) : SearchPagedResult {
 	const paged = decodePage<SearchItem>(data, '/search', page, pageSize, (obj : UTSJSONObject) : SearchItem => buildSearchItem(obj), ['items'])
@@ -98,8 +96,7 @@ function buildSearchPagedResult(data : UTSJSONObject, keyword : string, type : s
 		keyword: toStr(data['keyword'], keyword),
 		type: toStr(data['type'], type),
 		total: paged.total,
-		page: toNumber(data['page'], 1),
-		pages: Math.floor((paged.total + pageSize - 1) / pageSize),
+		hasMore: paged.hasMore,
 		items: paged.items,
 	} as SearchPagedResult
 }

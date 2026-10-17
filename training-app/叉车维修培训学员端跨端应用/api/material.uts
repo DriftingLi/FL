@@ -24,9 +24,9 @@
  */
 import { getMapped } from './request'
 import { toNumber, toStr } from './helpers'
-import { decodePage } from './envelope'
+import { getPaged } from './envelope'
 import type { Page } from './envelope'
-import type { MaterialItem, MaterialListResult, MaterialDownloadInfo } from '../types/index'
+import type { MaterialItem, MaterialDownloadInfo } from '../types/index'
 
 function buildMaterialItem(obj : UTSJSONObject) : MaterialItem {
 	return {
@@ -43,21 +43,6 @@ function buildMaterialItem(obj : UTSJSONObject) : MaterialItem {
 	} as MaterialItem
 }
 
-/**
- * 列表信封 → MaterialListResult（`/materials` 与 `/student/materials` 共用同一后端 DTO）
- * 数组与 total 走信封归一出口 decodePage（ADR-0037 PR-C），数组键 materials 显式声明；
- * pages 不再读后端回显，按 total / pageSize 向上取整（Math.floor 手写，UTS 侧只保证 floor）
- */
-function buildMaterialListResult(data : UTSJSONObject, url : string, page : number, pageSize : number) : MaterialListResult {
-	const paged : Page<MaterialItem> = decodePage<MaterialItem>(data, url, page, pageSize, (obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj), ['materials'])
-	return {
-		materials: paged.items,
-		total: paged.total,
-		page: toNumber(data['page'], 1),
-		pages: Math.floor((paged.total + pageSize - 1) / pageSize),
-	} as MaterialListResult
-}
-
 /** 下载地址信封 → MaterialDownloadInfo */
 function buildMaterialDownloadInfo(data : UTSJSONObject) : MaterialDownloadInfo {
 	return {
@@ -71,16 +56,15 @@ function buildMaterialDownloadInfo(data : UTSJSONObject) : MaterialDownloadInfo 
  * @param courseId 可选，按课程过滤
  * @param page 页码
  * @param pageSize 每页条数
+ * @note PR-F #1666：出口改 `getPaged`（ADR-0037 ④-6「页面侧重命名」）——后端数组键 `materials`
+ *       由 keys 声明承载，返回统一 `Page<MaterialItem>`，页面只认 `items / total / hasMore`
  */
-export function getMaterialsApi(courseId : number = 0, page : number = 1, pageSize : number = 20) : Promise<MaterialListResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	} as UTSJSONObject
+export function getMaterialsApi(courseId : number = 0, page : number = 1, pageSize : number = 20) : Promise<Page<MaterialItem>> {
+	const params : UTSJSONObject = {} as UTSJSONObject
 	if (courseId > 0) {
 		params['course_id'] = courseId.toString()
 	}
-	return getMapped<MaterialListResult>('/materials', params, (data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/materials', page, pageSize))
+	return getPaged<MaterialItem>('/materials', page, pageSize, (obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj), params, ['materials'])
 }
 
 /**
@@ -147,10 +131,6 @@ export function downloadAndOpenMaterialApi(materialId : number) : Promise<string
 /**
  * 学员可访问资料（同列表，别名端点）
  */
-export function getStudentMaterialsApi(page : number = 1, pageSize : number = 20) : Promise<MaterialListResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	} as UTSJSONObject
-	return getMapped<MaterialListResult>('/student/materials', params, (data : UTSJSONObject) : MaterialListResult => buildMaterialListResult(data, '/student/materials', page, pageSize))
+export function getStudentMaterialsApi(page : number = 1, pageSize : number = 20) : Promise<Page<MaterialItem>> {
+	return getPaged<MaterialItem>('/student/materials', page, pageSize, (obj : UTSJSONObject) : MaterialItem => buildMaterialItem(obj), null, ['materials'])
 }
