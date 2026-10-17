@@ -50,6 +50,10 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 
 > **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**——闸门在创建处校验参数并实测 `jest --listTests` 必须列出套件，目录名不合规会让 ③ 门**静默匹配 0 个套件**，血账 #1144）。**移动端交付不用 Qoder 托管树**；宿主「本地任务的 Worktree 配置」框只填 `wt-bootstrap.ps1` 一行调用——血账、框现值核对方法与移动端边界，见移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」。
 
+## 会话纪律（降本四条，#1705）
+
+成本按**实付 token**（`Σ(input − cached)`）/请求量，基线 8,773（#1694），复算口径与前后 run 对比见 [`docs/agents/checks.md`](docs/agents/checks.md)「成本量尺」。四条：**① 一模型一上游**——一个 run 内不换模型、不换上游，要换就结束本 run、另开新 run 并在台账注明换模型（混跑会让「模型档位」这个基线失去意义）；**② 优先续跑**——上下文还在就继续同一 run，别为「干净」重启（首帧重建是纯成本，实测 #1694 首帧 116,519）；**③ 长日志不整读**——只带结果行 + 按需索引（`acp_status` / `search_context`），别把日志与整文件读进上下文；**④ 折叠要赚钱**——`compress` 只为换回**足够体积**的旧内容才做，不为「看着干净」而折叠（实测同系列 run 折叠 460 → 129，成本反降一个量级）。
+
 ## 命令速查（只补 README / checks.md 没写的「跑单个测试」）
 
 构建 / lint / 全量测试 / 生成链 / 迁移 / 部署的**权威命令**在 [`README.md`](README.md)（常用命令、快速开始）与 [`docs/agents/checks.md`](docs/agents/checks.md)（提交前四件套与守卫）。本处**不重复那些表**——它们靠指路而非抄写，抄过来正是历史上漂移的来源。这里只补一件两表都没写、又几乎每次会话都要用的：**如何只跑一个测试**。
