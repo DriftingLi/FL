@@ -56,10 +56,13 @@ function literalRequestSites() {
     for (let i = 0; i < bounds.length; i++) bounds[i].end = i + 1 < bounds.length ? bounds[i + 1].start : src.length;
     // #1662 / ADR-0037：归一出口的泛型可能是嵌套的（getMapped<Page<T>>），单层 [^>]* 会看不见
   // 这类站点 ⇒ 改成「非尖括号，或一层完整尖括号」的重复；冻结表（25 处）不变。
-  const reqRe = /(?:^|[^\w.])(get|post|put|del|patch)(?:Mapped\s*<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*'([^']+)'/g;
+  // PR-F #1666：列表出口收编到信封出口 `getPaged<…>('…')`（请求侧 page/page_size 也归它），
+  // 它的第一个参数同样是**字面量请求点** ⇒ 一并纳入扫描，否则 scoped 消费面会凭空少一处。
+  const reqRe = /(?:^|[^\w.])(get|post|put|del|patch|getPaged)(?:Mapped\s*<(?:[^<>]|<[^<>]*>)*>)?(?:\s*<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*'([^']+)'/g;
     while ((m = reqRe.exec(src)) !== null) {
       const fn = bounds.filter((b) => b.start <= m.index && m.index < b.end).pop();
-      out.push({ file: rel, method: m[1].toUpperCase(), path: m[2], fn: fn ? fn.name : '(top-level)' });
+      // 信封出口 getPaged 语义是 GET（ADR-0037 ①：只服务分页 GET 出口）
+      out.push({ file: rel, method: m[1] === 'getPaged' ? 'GET' : m[1].toUpperCase(), path: m[2], fn: fn ? fn.name : '(top-level)' });
     }
   }
   return out;
