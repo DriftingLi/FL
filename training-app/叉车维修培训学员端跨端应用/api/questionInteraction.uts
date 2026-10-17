@@ -4,7 +4,8 @@
  * - 考点标签
  * - 个人笔记 CRUD
  */
-import { get, post, put, del } from './request'
+import { del, getMapped, postMapped, requestMapped } from './request'
+import type { RequestOptions } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import { decodeList, decodePage } from './envelope'
 import type { QuestionComment, CommentListResult, QuestionNote, KnowledgeTag } from '../types/index'
@@ -57,7 +58,7 @@ export function getCommentsApi(questionId : number) : Promise<CommentListResult>
 	const url = `/questions/${questionId}/comments`
 	// 装载走信封归一出口 `decodePage`（ADR-0037 PR-D）：原 `data['list'] ?? data['items']` 的手写回退链
 	// 收敛为模块默认键序 `['items','list']`（与同文件 getKnowledgeApi 的 PR-B 口径一致）
-	return get(url).then((data : UTSJSONObject) : CommentListResult => {
+	return getMapped<CommentListResult>(url, null, (data : UTSJSONObject) : CommentListResult => {
 		const paged = decodePage<QuestionComment>(data, url, 1, 0, (obj : UTSJSONObject) : QuestionComment => buildComment(obj))
 		return {
 			items: paged.items,
@@ -69,9 +70,7 @@ export function getCommentsApi(questionId : number) : Promise<CommentListResult>
 /** 发表评论 */
 export function createCommentApi(questionId : number, content : string) : Promise<QuestionComment> {
 	const payload : UTSJSONObject = { content: content } as UTSJSONObject
-	return post(`/questions/${questionId}/comments`, payload).then((data : UTSJSONObject) : QuestionComment => {
-		return buildComment(data)
-	})
+	return postMapped<QuestionComment>(`/questions/${questionId}/comments`, payload, (data : UTSJSONObject) : QuestionComment => buildComment(data))
 }
 
 /**
@@ -90,23 +89,24 @@ export function getKnowledgeApi(questionId : number) : Promise<KnowledgeTag[]> {
 	const url = '/questions/' + questionId + '/knowledge'
 	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：原 `data['list'] ?? data['items']` 的回退链
 	// 收敛为模块默认键序 `['items','list']`
-	return get(url).then((data : UTSJSONObject) : KnowledgeTag[] => decodeList<KnowledgeTag>(data, url, (obj : UTSJSONObject) : KnowledgeTag => buildKnowledgeTag(obj)))
+	return getMapped<KnowledgeTag[]>(url, null, (data : UTSJSONObject) : KnowledgeTag[] => decodeList<KnowledgeTag>(data, url, (obj : UTSJSONObject) : KnowledgeTag => buildKnowledgeTag(obj)))
 }
 // ========== 笔记 ==========
 
 /** 获取个人笔记（无笔记时返回空内容） */
 export function getNoteApi(questionId : number) : Promise<QuestionNote> {
-	return get(`/questions/${questionId}/note`).then((data : UTSJSONObject) : QuestionNote => {
-		return buildNote(data)
-	})
+	return getMapped<QuestionNote>(`/questions/${questionId}/note`, null, (data : UTSJSONObject) : QuestionNote => buildNote(data))
 }
 
 /** 保存笔记（upsert：首次创建，之后更新） */
 export function saveNoteApi(questionId : number, content : string) : Promise<QuestionNote> {
 	const payload : UTSJSONObject = { content: content } as UTSJSONObject
-	return put(`/questions/${questionId}/note`, payload).then((data : UTSJSONObject) : QuestionNote => {
-		return buildNote(data)
-	})
+	// 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 putMapped 便捷面，PUT 经 opts 同通路，
+	// 请求形态（url / method / data）与历史 put() 逐字一致
+	const opts : RequestOptions = { url: `/questions/${questionId}/note` } as RequestOptions
+	opts.method = 'PUT'
+	opts.data = payload
+	return requestMapped<QuestionNote>(opts, (data : UTSJSONObject) : QuestionNote => buildNote(data))
 }
 
 /** 删除笔记 */

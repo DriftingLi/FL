@@ -64,13 +64,15 @@ function loadRecruit(reply = {}) {
     },
   };
 
-  const respond = (url, params) => {
-    calls.push({ url, params });
+  const respond = (url, params, options = null) => {
+    calls.push({ url, params, options });
     if (reply.reject) return Promise.reject(reply.reject);
     return Promise.resolve(reply.data || {});
   };
 
-  // 信封归一模块真实现（ADR-0037 PR-B）：recruit 列表入口现在走 decodePage。
+  // PR-E #1665：recruit 出口已收口至 mapper 家族（getMapped/postMapped/requestMapped）——
+  // 替身**真的回调 mapper**，映射行为由域模块自身完成；`post` 保留裸（rejectRecruitApplicationApi
+  // 的 void 透传按 ADR-0007 两问判据合法留裸）。信封归一模块真实现（ADR-0037 PR-B）。
   const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
     getMapped: () => Promise.resolve({}),
     toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(String(v))) ? d : parseFloat(String(v)))),
@@ -78,9 +80,10 @@ function loadRecruit(reply = {}) {
 
   const bindings = {
     decodePage: envelope.decodePage,
-    get: (url, params) => respond(url, params),
+    getMapped: (url, params, map, options) => respond(url, params, options).then(map),
+    postMapped: (url, data, map) => respond(url, data).then(map),
+    requestMapped: (opts, map) => respond(opts.url, opts.data).then(map),
     post: (url, data) => respond(url, data),
-    put: (url, data) => respond(url, data),
     API_BASE_URL: 'https://example.test/api',
     // 403 的可识别前缀（真源 = `api/request.uts` 的 FORBIDDEN_MESSAGE_PREFIX）：
     // 这里按 **相同字面量** 注入，与 request 出口对齐（契约测试 E3 同时钉住两端的单点真源）。
@@ -263,13 +266,17 @@ describe('B. 明文联系方式：恰好 6 键 + 403 分流', () => {
     expect(dto.resume_certifications.length).toBe(1);
   });
 
-  test('B2：明文请求带 silent（403 是预期分支，不该弹错误 toast）', () => {
+  test('B2：明文请求带 silent（403 是预期分支，不该弹错误 toast）', async () => {
     const { mod, calls } = loadRecruit({ data: {} });
-    mod.getRecruitResumeContactApi(7);
-    // get(url, null, opts) 的单向断言：调用点必须把 silent 交给 request 层
+    await mod.getRecruitResumeContactApi(7);
+    // 行为断言（PR-E #1665 加固）：silent 必须**真的到达** request 层——收口至 getMapped 后
+    // opts 是经第 4 参透传的，只钉 const opts 声明行是接线盲位（首轮迁移漏传 4 参仍绿的教训）。
+    expect(calls.length).toBe(1);
+    expect(calls[0].options?.silent).toBe(true);
+    // 接线面同步钉住调用形态：opts 声明与调用点一体
     const src = readText(RECRUIT);
     expect(src).toMatch(/const opts : RequestOptions = \{ url: '\/recruit\/resumes\/' \+ userId\.toString\(\) \+ '\/contact', silent: true \}/);
-    expect(calls.length).toBe(1);
+    expect(src).toMatch(/getMapped<RecruitContactPlain>\(opts\.url, null, [\s\S]*?\}, opts\)/);
   });
 
   test('B3：403 被识别为「无有效授权」而不是普通失败', () => {

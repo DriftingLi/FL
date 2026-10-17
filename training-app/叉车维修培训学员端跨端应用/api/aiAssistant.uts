@@ -8,7 +8,8 @@
  * @note chat 为 SSE 流：event: delta/done/error + data: {...}
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
-import { get, getMapped, post, del, patch, uploadFile } from './request'
+import { del, getMapped, postMapped, requestMapped, uploadFile } from './request'
+import type { RequestOptions } from './request'
 import { decodeList, decodePage } from './envelope'
 import type { Page } from './envelope'
 import { toNumber, toStr } from './helpers'
@@ -154,21 +155,22 @@ function extractArray(data : UTSJSONObject, key : string) : Array<UTSJSONObject>
 
 /** 可用模型列表（公开） */
 export function getAiModelsApi() : Promise<AiModel[]> {
-	return get('/ai-assistant/models', null).then((data : UTSJSONObject) : AiModel[] => {
+	return getMapped<AiModel[]>('/ai-assistant/models', null, (data : UTSJSONObject) : AiModel[] => {
 		const arr = extractArray(data, 'models')
 		const out : AiModel[] = []
 		for (let i = 0; i < arr.length; i++) {
 			out.push(buildAiModel(arr[i]))
 		}
 		return out
-	}).catch((_e) : AiModel[] => {
-		return [] as AiModel[]
 	})
+	// 原 `.catch(() => [])` 吞错兜底已删（ADR-0037 ③）：返回空列表会把 outlet 失败
+	// （网络 / 401 刷新终态）静默折成「没有可用模型」，维护者排障看不到任何信号。
+	// 失败原样上抛，交调用方（ai-assistant / ai-settings 页的 try/catch 已在）呈现。
 }
 
 /** 用户自定义模型列表 */
 export function getAiUserModelsApi() : Promise<AiUserModel[]> {
-	return get('/ai-assistant/user-models').then((data : UTSJSONObject) : AiUserModel[] => {
+	return getMapped<AiUserModel[]>('/ai-assistant/user-models', null, (data : UTSJSONObject) : AiUserModel[] => {
 		const arr = extractArray(data, 'models')
 		// 兼容 user_models / items
 		let list = arr
@@ -186,7 +188,7 @@ export function getAiUserModelsApi() : Promise<AiUserModel[]> {
 
 /** 保存自定义模型（新建或更新：有 id 时后端若支持则带上） */
 export function saveAiUserModelApi(payload : UTSJSONObject) : Promise<AiUserModel> {
-	return post('/ai-assistant/user-models', payload).then((data : UTSJSONObject) : AiUserModel => {
+	return postMapped<AiUserModel>('/ai-assistant/user-models', payload, (data : UTSJSONObject) : AiUserModel => {
 		// 后端可能直接返回模型对象，或包在 model 字段
 		const m = data['model']
 		if (m != null) {
@@ -218,7 +220,7 @@ export function uploadAiImageApi(filePath : string) : Promise<string> {
  * @returns { normal?: AiModel|null, expert?: AiModel|null }
  */
 export function getAiModesApi() : Promise<UTSJSONObject> {
-	return get('/ai-assistant/modes', null).then((data : UTSJSONObject) : UTSJSONObject => {
+	return getMapped<UTSJSONObject>('/ai-assistant/modes', null, (data : UTSJSONObject) : UTSJSONObject => {
 		const out : UTSJSONObject = {}
 		const normal = data['normal']
 		if (normal != null) {
@@ -249,7 +251,7 @@ export function getAiSessionsApi(featureKey : string) : Promise<AiSession[]> {
 	if (featureKey.length > 0) {
 		params['feature_key'] = featureKey
 	}
-	return get('/ai-assistant/sessions', params).then((data : UTSJSONObject) : AiSession[] => {
+	return getMapped<AiSession[]>('/ai-assistant/sessions', params, (data : UTSJSONObject) : AiSession[] => {
 		const arr = extractArray(data, 'sessions')
 		const out : AiSession[] = []
 		for (let i = 0; i < arr.length; i++) {
@@ -273,7 +275,7 @@ export function createAiSessionApi(title : string, modelName : string, featureKe
 	if (featureKey.length > 0) {
 		payload['feature_key'] = featureKey
 	}
-	return post('/ai-assistant/sessions', payload).then((data : UTSJSONObject) : AiSession => {
+	return postMapped<AiSession>('/ai-assistant/sessions', payload, (data : UTSJSONObject) : AiSession => {
 		const s = data['session']
 		if (s != null) return buildSession(s as UTSJSONObject)
 		return buildSession(data)
@@ -283,7 +285,12 @@ export function createAiSessionApi(title : string, modelName : string, featureKe
 /** 重命名会话 */
 export function renameAiSessionApi(id : number, title : string) : Promise<AiSession> {
 	const payload : UTSJSONObject = { title: title }
-	return patch('/ai-assistant/sessions/' + id + '/title', payload).then((data : UTSJSONObject) : AiSession => {
+	// 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 patchMapped 便捷面，PATCH 经 opts 同通路，
+	// 请求形态（url / method / data）与历史 patch() 逐字一致（先例 credential.uts switchCredentialApi）
+	const opts : RequestOptions = { url: '/ai-assistant/sessions/' + id + '/title' } as RequestOptions
+	opts.method = 'PATCH'
+	opts.data = payload
+	return requestMapped<AiSession>(opts, (data : UTSJSONObject) : AiSession => {
 		const s = data['session']
 		if (s != null) return buildSession(s as UTSJSONObject)
 		return buildSession(data)
@@ -297,7 +304,7 @@ export function deleteAiSessionApi(id : number) : Promise<void> {
 
 /** 会话消息 */
 export function getAiSessionMessagesApi(id : number) : Promise<AiSessionMessage[]> {
-	return get('/ai-assistant/sessions/' + id + '/messages').then((data : UTSJSONObject) : AiSessionMessage[] => {
+	return getMapped<AiSessionMessage[]>('/ai-assistant/sessions/' + id + '/messages', null, (data : UTSJSONObject) : AiSessionMessage[] => {
 		const arr = extractArray(data, 'messages')
 		const out : AiSessionMessage[] = []
 		for (let i = 0; i < arr.length; i++) {
