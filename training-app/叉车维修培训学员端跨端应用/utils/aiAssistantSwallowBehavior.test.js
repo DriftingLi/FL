@@ -40,7 +40,8 @@ function envelopeFor(h) {
 
 /**
  * 装载 aiAssistant.uts（imports：getMapped/postMapped/requestMapped/del/uploadFile +
- * decodeList/decodePage + toNumber/toStr + env/storage 三常量；出口退回裸 get ⇒ 缺绑定当场红）
+ * renewOrExpire/AUTH_EXPIRED_MESSAGE + decodeList/decodePage + toNumber/toStr + env/storage 三常量；
+ * 出口退回裸 get ⇒ 缺绑定当场红）
  * @param {object} raw 下一次 outlet 的应答载荷（经 mapper 之后再返回）
  * @param {{ reject?: Error, file?: string }} opt reject = 注入出口失败；file = 变异后的临时文件
  */
@@ -57,6 +58,9 @@ function loadAi(raw, opt = {}) {
     requestMapped: (o, mapper) => respond(o.url, null, mapper),
     del: () => (opt.reject ? Promise.reject(opt.reject) : Promise.resolve({})),
     uploadFile: () => Promise.resolve({}),
+    // SSE 401 的单点决策（#1704）：本套件不测它们，但缺绑定 = fail-closed
+    renewOrExpire: () => Promise.resolve(false),
+    AUTH_EXPIRED_MESSAGE: '登录已过期，请重新登录',
     decodeList: env.decodeList,
     decodePage: env.decodePage,
     toNumber: h.toNumber,

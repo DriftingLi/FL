@@ -8,7 +8,7 @@
  * @note chat 为 SSE 流：event: delta/done/error + data: {...}
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
-import { del, getMapped, postMapped, requestMapped, uploadFile } from './request'
+import { del, getMapped, postMapped, requestMapped, uploadFile, renewOrExpire, AUTH_EXPIRED_MESSAGE } from './request'
 import type { RequestOptions } from './request'
 import { decodeList, decodePage } from './envelope'
 import type { Page } from './envelope'
@@ -539,8 +539,25 @@ function handleStreamSSEEvent(event : string, data : string, callbacks : StreamC
  * 流式对话（SSE，回调式）
  * @param params 请求体（UTSJSONObject）
  * @returns 请求对象（支持 abort 时返回之，否则返回 null）
+ * @note 401 与普通请求同规则（ADR-0017 / #1704）：先续期、成功则带新 token 重发一次，真失败才走统一登出出口
  */
 export function streamChatApi(params : UTSJSONObject, callbacks : StreamChatCallbacks) : any | null {
+	return sendStream(params, callbacks, false)
+}
+
+/**
+ * 发出一次流式请求（401 续期成功后递归重发**一次**）
+ *
+ * 本模块**不复制** 401 规则：续期与终态全在 `api/request.uts` 的 `renewOrExpire()`
+ * （三条 401 出口的单点）。为什么必须走它 —— #1704 收口前这里是「看见 401 就 onError」，
+ * 既不刷新也不跳登录页：access 恰好过期时对话报「登录已过期」而页面还停在原地，
+ * 与其它接口的登出行为不一致（同一秒内两个接口一个跳走、一个弹错）。
+ *
+ * @param isRetry 是否已是续期后的重发（true ⇒ 再 401 就是真失效）
+ * @note 只有**首次**尝试的 task 会返回给调用方；重发的 task 不返回（本仓无人 abort，
+ *       日后若要支持 abort，需把它交回一个可更新的持有者）
+ */
+function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isRetry : boolean) : any | null {
 	const token = getStorage(STORAGE_KEY_TOKEN)
 	const url = API_BASE_URL + '/ai-assistant/chat'
 
@@ -561,7 +578,14 @@ export function streamChatApi(params : UTSJSONObject, callbacks : StreamChatCall
 		success: (res) => {
 			const statusCode = res.statusCode
 			if (statusCode == 401) {
-				emitStreamError(callbacks, '登录已过期，请重新登录')
+				// silent=true：文案由 onError 交回对话流，不再叠一层 toast（真失效时页面随即被 reLaunch）
+				renewOrExpire(token, !isRetry, true).then((retried : boolean) => {
+					if (retried) {
+						sendStream(params, callbacks, true)
+					} else {
+						emitStreamError(callbacks, AUTH_EXPIRED_MESSAGE)
+					}
+				})
 				return
 			}
 			if (statusCode < 200 || statusCode >= 300) {

@@ -14,6 +14,7 @@
  *   C4「清理缓存」不丢 `auth_refresh_token` / `auth_login_provider`
  *   C5 已登出时不得用遗留的 refresh_token 悄悄复活会话
  *   C6 证件域三键由单点清理，登出与身份切换都经它（#1380）
+ *   C7 三条 401 出口（普通请求 / 上传 / SSE 流）共用同一份续期决策与同一处终态（#1704）
  */
 const path = require('path');
 
@@ -23,9 +24,11 @@ const ROOT = path.join(__dirname, '..');
 const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
 const GATE_UTS = path.join(ROOT, 'api', 'refreshGate.uts');
 const AUTH_UTS = path.join(ROOT, 'stores', 'auth.uts');
+const AI_UTS = path.join(ROOT, 'api', 'aiAssistant.uts');
 const SETTINGS_UVUE = path.join(ROOT, 'pages', 'profile', 'settings.uvue');
 
 const requestSrc = readText(REQUEST_UTS);
+const aiSrc = readText(AI_UTS);
 const gateSrc = readText(GATE_UTS);
 const authSrc = readText(AUTH_UTS);
 const settingsSrc = readText(SETTINGS_UVUE);
@@ -71,7 +74,9 @@ describe('C1 并发刷新去重：共享 in-flight，而不是布尔量', () => 
     expect(requestSrc).toContain("import { gateRefresh } from './refreshGate'");
     const body = fnBody(requestSrc, 'tryAutoRefresh');
     expect(body).toContain('gateRefresh(_refreshTokenHandler!, forToken)');
-    expect(fnBody(requestSrc, 'doSingleRequest')).toContain('tryAutoRefresh(sentTokenOf(reqHeader))');
+    // 规则单点（#1704）：token 经 renewOrExpire 透传到 tryAutoRefresh，不许在出口里另拼一份
+    expect(fnBody(requestSrc, 'doSingleRequest')).toContain('renewOrExpire(sentTokenOf(reqHeader)');
+    expect(fnBody(requestSrc, 'renewOrExpire')).toContain('tryAutoRefresh(forToken)');
     // sentTokenOf 必须从请求头取本次真正发出的 token（storage 里的可能已被刷新换掉）
     const picker = fnBody(requestSrc, 'sentTokenOf');
     expect(picker).toContain('reqHeader[HEADER_AUTHORIZATION]');
@@ -94,14 +99,15 @@ describe('C1 并发刷新去重：共享 in-flight，而不是布尔量', () => 
 });
 
 describe('C2 登出只由真实失败触发', () => {
-  test('401 分支：只有 `refreshed` 为真才重试，否则登出', () => {
+  test('401 分支：续期成功才重发，失败即终态（规则单点在 renewOrExpire）', () => {
     const body = fnBody(requestSrc, 'doSingleRequest');
-    expect(body).toContain('if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0)');
-    const retryIdx = body.indexOf('doSingleRequest(url, method, data, buildHeader(options.header, silent), timeout, options, true, resolve, reject)');
-    // 取**最后**一处登出：doSingleRequest 内的 else 分支（缩进不参与匹配，避免被 12/16 空格绊倒）
-    const logoutIdx = body.lastIndexOf('logoutAndReject(silent, reject)');
-    expect(retryIdx).toBeGreaterThan(-1);
-    expect(logoutIdx).toBeGreaterThan(retryIdx);
+    expect(body).toContain('renewOrExpire(sentTokenOf(reqHeader), true, silent).then((retried : boolean) => {');
+    expect(body).toContain('if (retried) {');
+    expect(body).toContain('doSingleRequest(url, method, data, buildHeader(options.header, silent), timeout, options, true, resolve, reject)');
+    // 终态错误文案来自单点常量（不许再各写一份字面量）
+    expect(body).toContain('reject(new Error(AUTH_EXPIRED_MESSAGE))');
+    // 规则只许出现在 renewOrExpire 里：出口复写一次 `tryAutoRefresh` = 又长出第二份判据
+    expect(body).not.toContain('tryAutoRefresh(');
   });
 
   test('终态判定不变：重试仍 401 / 刷新接口自身 401 / 无刷新回调 ⇒ 直接登出', () => {
@@ -109,11 +115,52 @@ describe('C2 登出只由真实失败触发', () => {
     expect(body).toContain("if (isRetry || options.url.includes('/auth/refresh') || _refreshTokenHandler == null)");
   });
 
-  test('跳转只有一个出口：handleUnauthorized 只被 logoutAndReject 调用', () => {
+  test('跳转只有一个出口：handleUnauthorized 只被 expireSession 调用', () => {
     const callers = (requestSrc.match(/handleUnauthorized\(\)/g) || []).length;
-    // 1 次定义在 logoutAndReject 里调用 + 0 次定义声明本身（声明是 `function handleUnauthorized()`）
-    expect(callers).toBe(2); // `function handleUnauthorized()` 声明 + logoutAndReject 里的调用
-    expect(fnBody(requestSrc, 'logoutAndReject')).toContain('handleUnauthorized()');
+    // 1 次定义（`function handleUnauthorized()` 也匹配到这里）+ 1 次 expireSession 里的调用
+    expect(callers).toBe(2);
+    expect(fnBody(requestSrc, 'expireSession')).toContain('handleUnauthorized()');
+    // 三条出口的终态都汇到 expireSession：logoutAndReject 只是「终态 + reject」的薄壳
+    expect(fnBody(requestSrc, 'logoutAndReject')).toContain('expireSession(silent)');
+    // 全文件只许有一次 reLaunch（跳转出口的机械判据，避免「语义上算同一处」的口头约定）
+    expect((requestSrc.match(/uni\.reLaunch\(/g) || []).length).toBe(1);
+  });
+});
+
+describe('C7 三条 401 出口共用同一份续期决策（#1704）', () => {
+  test('renewOrExpire 是唯一决策点：allowRetry=false 直接终态，成功判据只有一条', () => {
+    const body = fnBody(requestSrc, 'renewOrExpire');
+    expect(body).toContain('if (!allowRetry) {');
+    expect(body).toContain('expireSession(silent)');
+    expect(body).toContain('if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) return true');
+    // 对外可复用（SSE 侧也在用），因此必须是 export
+    expect(requestSrc).toMatch(/export\s+function\s+renewOrExpire\s*\(/);
+  });
+
+  test('上传出口不再「见 401 就登出」：先续期，成功带新 token 重发一次', () => {
+    const body = fnBody(requestSrc, 'doUpload');
+    expect(body).toContain('renewOrExpire(sentTokenOf(header)');
+    // 重发才能拿到新 token：header 必须在**每次**发出前重建
+    expect(body).toContain('const header = buildUploadHeader(silent)');
+    // 只有「重发后仍 401」才登出
+    expect(body).toContain('if (isRetry) {');
+    // 递归重发一次（isRetry=true），不许无限重试
+    expect(body).toContain('doUpload(fullURL, realPath, name, safeFormData, silent, timeout, true, done, resolve, reject)');
+    // 中转文件只在终态删：提前 done() 会让重发读到已删路径（终态 reject 与 done 必须同支）
+    expect(body).toContain('reject(new Error(AUTH_EXPIRED_MESSAGE))');
+    expect(body).toContain('done()\n                        reject(new Error(AUTH_EXPIRED_MESSAGE))');
+  });
+
+  test('SSE 出口不再「见 401 就 onError」：经同一决策点续期/终态', () => {
+    expect(aiSrc).toContain('renewOrExpire');
+    const body = fnBody(aiSrc, 'sendStream');
+    expect(body).toContain('renewOrExpire(token, !isRetry, true)');
+    expect(body).toContain('sendStream(params, callbacks, true)');
+    // 终态文案来自单点常量，不许再自写字面量
+    expect(body).toContain('emitStreamError(callbacks, AUTH_EXPIRED_MESSAGE)');
+    expect(aiSrc).not.toContain("'登录已过期，请重新登录'");
+    // 对外入口只是「首次尝试」的薄壳
+    expect(fnBody(aiSrc, 'streamChatApi')).toContain('sendStream(params, callbacks, false)');
   });
 });
 
