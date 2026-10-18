@@ -4,7 +4,7 @@
  */
 import { resolveFileUrl } from './forumDisplay'
 
-/** 回复卡展示模型（壳层由 ForumReply + 点赞本地态 + 权限位映射而来） */
+/** 回复卡展示模型（壳层由 ForumReply + 后端权威点赞态 + 权限位映射而来） */
 export type ForumReplyDisplay = {
     id : number
     authorId : number

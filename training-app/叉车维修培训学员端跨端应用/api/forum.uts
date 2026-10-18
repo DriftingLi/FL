@@ -254,7 +254,7 @@ export function unlikeTopicApi(topicId : number) : Promise<LikeTopicResult> {
 /**
  * 点赞回复
  * @param replyId 回复 ID
- * 对应 POST /forum/replies/{id}/like（若后端暂未实现，调用将 404，前端已做受控提示）
+ * 对应 POST /forum/replies/{id}/like（后端已实现；返回 liked/likes_count，调用方用它覆盖乐观值）
  */
 export function likeReplyApi(replyId : number) : Promise<LikeTopicResult> {
     const url = '/forum/replies/' + replyId + '/like'

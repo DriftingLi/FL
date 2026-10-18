@@ -68,9 +68,9 @@ export type ForumReply = {
     can_delete : boolean
     likes_count : number
     liked : boolean
-    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    /** 后端 GetTopic 的权威字段名（api/forumDto.uts 已映射进 liked；保留可选以兼容其它下发形态） */
     liked_by_me ?: boolean
-    /** 后端未来可能直接返回：兼容读取时判空使用（forum-detail 本地态回退） */
+    /** 点赞数别名（若后端以 like_count 下发，getReplyLikesCount 用它兜底） */
     like_count ?: number
     /** 是否被楼主采纳（后端 is_accepted 字段，仅问答帖有效） */
     is_accepted : boolean

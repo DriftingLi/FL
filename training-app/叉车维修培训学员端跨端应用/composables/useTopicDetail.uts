@@ -1,6 +1,6 @@
 /**
  * forum 详情核心态（T04 手术：forum-detail.uvue script 详情域下沉）
- * 持有 topic/replies 与其全部交叉变更（点赞/收藏/删除/回复点赞本地态）——数据所有权单一。
+ * 持有 topic/replies 与其全部交叉变更（点赞/收藏/删除/回复点赞）——数据所有权单一。
  * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
  */
 import { ref, computed } from 'vue'
@@ -19,7 +19,6 @@ import {
     cancelAcceptApi,
 } from '../api/forum'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../api/favorite'
-import { getStorageJSON, setStorageJSON } from '../utils/storage'
 import type { ForumTopicDetail, ForumReply } from '../types/index'
 
 export type UseTopicDetailResult = {
@@ -79,52 +78,6 @@ export function useTopicDetail() : UseTopicDetailResult {
     const replyTotal = ref<number>(0)
     const loadingMore = ref<boolean>(false)
     const topicFavoriteId = ref<number>(0)
-    // 回复点赞本地态：key 为 reply.id 字符串，value 为 { liked: boolean, likes_count: number }，持久化到本地存储防止刷新丢失（后端暂未在 GetTopic 下发 replies[].liked/likes_count）
-    const replyLikeState = ref<UTSJSONObject>({} as UTSJSONObject)
-
-    function replyLikeStorageKey() : string {
-        return 'forum_reply_like_' + topicId.value.toString()
-    }
-
-    function persistReplyLikeState() : void {
-        try {
-            if (topicId.value > 0) setStorageJSON(replyLikeStorageKey(), replyLikeState.value as object)
-        } catch (e) { console.warn('[forum-detail] persistReplyLikeState failed:', e) }
-    }
-
-    function restoreReplyLikeState() : void {
-        if (topicId.value <= 0) return
-        try {
-            const saved = getStorageJSON(replyLikeStorageKey())
-            if (saved != null) {
-                // 合并到当前态（保留内存中更新的优先）
-                const merged : UTSJSONObject = {} as UTSJSONObject
-                for (const k in saved) merged[k] = saved[k]
-                for (const k in replyLikeState.value) merged[k] = replyLikeState.value[k]
-                replyLikeState.value = merged
-            }
-        } catch (e) { console.warn('[forum-detail] restoreReplyLikeState failed:', e) }
-    }
-
-    function hydrateReplyLikesFromReplies() : void {
-        restoreReplyLikeState()
-        // 若后端已下发 liked/likes_count（未来实现），以后端为权威回填到本地态，避免刷新后样式因后端 0 被覆盖则仅在本地无记录时写入
-        for (let i = 0; i < replies.value.length; i++) {
-            const r = replies.value[i]
-            const hasBackend = (r.liked == true) || (r.likes_count > 0)
-            if (!hasBackend) continue
-            const key = r.id.toString()
-            const existing = replyLikeState.value[key] as UTSJSONObject | null
-            if (existing == null) {
-                const next : UTSJSONObject = {} as UTSJSONObject
-                for (const k in replyLikeState.value) next[k] = replyLikeState.value[k]
-                next[key] = { liked: r.liked, likes_count: r.likes_count } as UTSJSONObject
-                replyLikeState.value = next
-            }
-        }
-        // 首次回填后即持久化，保证刷新后数据不丢
-        persistReplyLikeState()
-    }
 
     /** 是否还有未加载的回复页：以响应 pages 为唯一判据（不读 topic.replies_count，
      *  那是列表页消费的反范式列，两者漂移会让「剩余 N 条」与翻页行为自相矛盾） */
@@ -218,8 +171,6 @@ export function useTopicDetail() : UseTopicDetailResult {
             replyHasMore.value = data.hasMore
             replyTotal.value = data.total
             console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
-            // 回填回复点赞态（后端暂未下发时靠本地存储恢复，避免刷新后数据/样式丢失）
-            hydrateReplyLikesFromReplies()
             // 刷新收藏状态（获取 favorite_id 供取消收藏使用）
             loadTopicFavorite()
         } catch (e) {
@@ -261,8 +212,6 @@ export function useTopicDetail() : UseTopicDetailResult {
             replyPage.value = next
             replyHasMore.value = data.hasMore
             if (data.total > 0) replyTotal.value = data.total
-            // 回填新加载页的点赞态（后端未下发时靠本地存储恢复）
-            hydrateReplyLikesFromReplies()
         } catch (e) {
             console.error('[forum-detail] load more replies failed:', e)
             uni.showToast({ title: '加载更多失败', icon: 'none' })
@@ -343,71 +292,46 @@ export function useTopicDetail() : UseTopicDetailResult {
         })
     }
 
-    // ===== 回复点赞本地态 helpers（后端 GET /forum/topics/{id} 暂未返回 replies[].liked/likes_count，靠本地态 + POST/DELETE /forum/replies/{id}/like 同步） =====
-    function getReplyLikeRecord(replyId : number) : UTSJSONObject | null {
-        const key = replyId.toString()
-        const v = replyLikeState.value[key]
-        if (v == null) return null
-        return v as UTSJSONObject
-    }
-
+    // ===== 回复点赞 helpers（后端 GET /forum/topics/{id} 已下发 replies[].liked_by_me，api/forumDto.uts 已映射
+    //      成 reply.liked / reply.likes_count ⇒ 直接读字段；本地态已删，不再有「本地优先于服务端」的口径） =====
     function isReplyLiked(reply : ForumReply) : boolean {
-        const rec = getReplyLikeRecord(reply.id)
-        if (rec != null) return rec['liked'] == true
-        // 兼容后端未来在 reply 上直接返回 liked / liked_by_me（字段在类型上为可选，直接读，无需 cast）
         if (reply.liked == true) return true
         if (reply.liked_by_me == true) return true
         return false
     }
 
     function getReplyLikesCount(reply : ForumReply) : number {
-        const rec = getReplyLikeRecord(reply.id)
-        if (rec != null) {
-            const n = rec['likes_count'] as number
-            if (n != null) return n as number
-        }
-        if (reply.likes_count >= 0) return reply.likes_count
+        if (reply.likes_count > 0) return reply.likes_count
         const lc = reply.like_count
-        if (lc != null && (lc as number) >= 0) return lc as number
-        return 0
-    }
-
-    function setReplyLikeState(replyId : number, liked : boolean, likesCount : number) : void {
-        const key = replyId.toString()
-        const next : UTSJSONObject = {} as UTSJSONObject
-        for (const k in replyLikeState.value) {
-            next[k] = replyLikeState.value[k]
-        }
-        next[key] = { liked: liked, likes_count: likesCount } as UTSJSONObject
-        replyLikeState.value = next
-        persistReplyLikeState()
+        if (lc != null && (lc as number) > 0) return lc as number
+        return reply.likes_count
     }
 
     async function onToggleReplyLike(reply : ForumReply) : Promise<void> {
         const wasLiked = isReplyLiked(reply)
         const oldCount = getReplyLikesCount(reply)
         const nextLiked = !wasLiked
-        const nextCount = wasLiked ? Math.max(0, oldCount - 1) : oldCount + 1
-        setReplyLikeState(reply.id, nextLiked, nextCount)
+        // 乐观更新：直接改 reply 字段（页面 computed 读的就是这两个字段），失败回滚、成功用接口返回值覆盖
+        reply.liked = nextLiked
+        reply.likes_count = wasLiked ? Math.max(0, oldCount - 1) : oldCount + 1
         try {
             if (wasLiked) {
                 const result = await unlikeReplyApi(reply.id)
-                setReplyLikeState(reply.id, result.liked, result.likes_count)
+                reply.liked = result.liked
+                reply.likes_count = result.likes_count
             } else {
                 const result = await likeReplyApi(reply.id)
-                setReplyLikeState(reply.id, result.liked, result.likes_count)
+                reply.liked = result.liked
+                reply.likes_count = result.likes_count
             }
         } catch (e) {
-            setReplyLikeState(reply.id, wasLiked, oldCount)
+            reply.liked = wasLiked
+            reply.likes_count = oldCount
             console.error('[forum-detail] toggle reply like failed:', e)
             let msg = '操作失败'
             if (e instanceof Error) {
                 const m = (e as Error).message
                 if (m != null && m.length > 0) msg = m
-            }
-            // 后端若尚未实现该接口会 404，提示更友好
-            if (msg.indexOf('404') >= 0 || msg.indexOf('不存在') >= 0) {
-                msg = '点赞回复功能后端暂未实现'
             }
             uni.showToast({ title: msg, icon: 'none' })
         }
