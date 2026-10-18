@@ -452,6 +452,17 @@ jobs:
     needs: changes
     if: needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
+    # 4 片并行（2026-10-16 立，ADR-0041「三层门分离与云上证据管家」决策 2）：
+    # 全量 189 套件 / 3579 用例 / 实测 423.5 s（run 39090642299），最慢单套件
+    # utils/wirelessDebugBehavior.test.js 独占 108.6 s ⇒ 单进程串行是墙钟主因。
+    # **分片 = 分机器**，不是把 -i 改成并行：每片内部仍 `-i` 串行，于是
+    # jest.config.unit.js 文件头记的「#1410 怕的是同机 CPU 争抢下的 5s 超时抖动」
+    # 一点没引入（该文件头同时记了「套件无跨套件共享面」= 分机器切分安全的依据）。
+    # fail-fast: false —— 四片都要出结论，别让首片红把后三片的判读信息掐掉。
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: training-app/叉车维修培训学员端跨端应用
@@ -466,19 +477,50 @@ jobs:
       # 曾经的两行 PUPPETEER_SKIP_* env 随 ADR-0020 一并移除（puppeteer 已不在 devDependencies）。
       - name: 安装依赖
         run: npm ci
-      - name: 单元测试（守护规则 + 各模块契约）
-        run: npm run test:unit
+      # 分片必须**自己算文件清单**：本仓 jest 是 27.5.1，`--shard=k/4` 是 jest 28 才有的选项，
+      # 27 会把它当未知参数**静默忽略** ⇒ 每片照跑全量 189 套件（2026-10-16 实测：四片同时拉到
+      # 6 分钟以上、等于成本 ×4 且一点没提速）。改成先 `--listTests` 取全量清单、再按 `NR%4`
+      # 轮转切出本片、用 `--runTestsByPath` 精确执行——判据仍是 jest 自己的 testMatch，不另造清单。
+      - name: 单元测试（守护规则 + 各模块契约，第 ${{ matrix.shard }}/4 片）
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: '4'
+        run: |
+          set -euo pipefail
+          files=$(node node_modules/jest/bin/jest.js --config jest.config.unit.js --listTests)
+          total=$(printf '%s\n' "$files" | grep -c . || true)
+          if [ "$total" -eq 0 ]; then
+            echo "错误: --listTests 取到 0 个套件（判据失效，不许当绿）"
+            exit 1
+          fi
+          mine=$(printf '%s\n' "$files" | awk -v k="$SHARD" -v n="$SHARDS" 'NR % n == (k - 1)')
+          count=$(printf '%s\n' "$mine" | grep -c . || true)
+          echo "本片套件数: $count / 全量 $total"
+          # 轮转切分下每片都非空；若真为空说明切分口径坏了，宁可红也别静默跑 0 个套件（血账 #1144）。
+          if [ "$count" -eq 0 ]; then
+            echo "错误: 第 $SHARD 片切到 0 个套件"
+            exit 1
+          fi
+          printf '%s\n' "$mine" > /tmp/shard-files.txt
+          set +e
+          node node_modules/jest/bin/jest.js --config jest.config.unit.js -i --runTestsByPath $(cat /tmp/shard-files.txt)
+          code=$?
+          set -e
+          exit $code
       # 契约测试「读取层归一」守卫（移动端 ADR-0019 票 B / #1177）：只判相对默认分支的**新增行**。
       # 必须**显式写目标 ref**：checkout 是单分支浅克隆时，裸 `git fetch origin <branch>`
       # 只写 FETCH_HEAD、不建 `origin/<branch>`，守卫会因 base 不可得而 fail-closed 判红
       # （该坑位与 frontend-check 的「守卫增量门」同源，那段注释里有实测）。
+      # 只在第 1 片跑：它是**全仓静态扫描**、与分片无关，跑四遍既不增信息也不减风险（ADR-0041 决策 2）。
       - name: 契约测试读取层归一守卫（仅新增行）
+        if: matrix.shard == 1
         run: |
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
           git fetch --no-tags --depth=1 origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           node scripts/check-contract-read.mjs --diff "origin/$DEFAULT_BRANCH"
-      # 守卫自身的可执行单测（判据形状 + fail-closed；与前端 scripts/*.test.mjs 同款）
+      # 守卫自身的可执行单测（判据形状 + fail-closed；与前端 scripts/*.test.mjs 同款）。同上，只在第 1 片跑。
       - name: 读取层归一守卫自测
+        if: matrix.shard == 1
         run: node scripts/check-contract-read.test.mjs
 
 
