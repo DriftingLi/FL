@@ -126,3 +126,6 @@ export function useLoginProviders() : UseLoginProvidersResult {
         isAppPlatform: isAppPlatform
     } as UseLoginProvidersResult
 }
+
+// 冒烟标记（临时）：验证移动端证据门 / 4 片分片 / 证据管家结构是否真生效。
+// 该 PR 只用于观察门链路，跑完即关闭，不合并。
