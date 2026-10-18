@@ -119,12 +119,15 @@ describe('composable 下沉契约（列表两域 + 详情三域状态离开壳�
     expect(report).toContain('} as UseReportResult');
   });
 
-  it('详情页壳层接线三 composable；回复点赞本地态与存储持久化沉入 useTopicDetail', () => {
+  it('详情页壳层接线三 composable；回复点赞直读后端权威字段（本地态已删，不再本地优先）', () => {
     expect(detailPage).toContain("import { useTopicDetail } from '../../composables/useTopicDetail'");
     expect(detailPage).toContain("import { useReplyComposer } from '../../composables/useReplyComposer'");
     expect(detailPage).toContain("import { useReport } from '../../composables/useReport'");
-    expect(detail).toContain("'forum_reply_like_'");
-    expect(detail).toContain('setStorageJSON');
+    // 后端 GET /forum/topics/{id} 已下发 replies[].liked_by_me（api/forumDto.uts:153 映射进 liked）
+    expect(detail).toContain('if (reply.liked == true) return true');
+    expect(detail).toContain('if (reply.likes_count > 0) return reply.likes_count');
+    expect(detail).not.toContain("'forum_reply_like_'");
+    expect(detail).not.toContain('setStorageJSON');
     expect(detailPage).not.toContain('replyLikeState');
   });
 
@@ -419,7 +422,9 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(detail).toContain('// 乐观更新');
     expect(detail).toContain('t.favorited = wasFavorited');
     expect(detail).toContain('t.liked = wasLiked');
-    expect(detail).toContain('setReplyLikeState(reply.id, wasLiked, oldCount)');
+    // 回复点赞改为就地乐观改 reply 字段，回滚同样就地（无本地态）
+    expect(detail).toContain('reply.liked = wasLiked');
+    expect(detail).toContain('reply.likes_count = oldCount');
     expect(composer).toContain('if (replyContent.value.trim().length == 0)');
     // 图片限额的文案与闸门都在共享 picker 里（限额本身单点在 constants/app）
     expect(picker).toContain("'最多上传 ' + maxImages + ' 张图片'");
