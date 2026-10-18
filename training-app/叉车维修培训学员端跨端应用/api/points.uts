@@ -15,8 +15,10 @@
  */
 import { getMapped, postMapped } from './request'
 import type { RequestOptions } from './request'
+import { getPaged } from './envelope'
+import type { Page } from './envelope'
 import { toNumber, toStr } from './helpers'
-import type { PointsBalance, PointsLedgerItem, PointsLedgerResult, PointsTaskItem, PointsTasksResult, PointsClaimResult, PointsRedeemResult } from '../types/index'
+import type { PointsBalance, PointsLedgerItem, PointsTaskItem, PointsTasksResult, PointsClaimResult, PointsRedeemResult } from '../types/index'
 
 /** 从 UTSJSONObject 构造 PointsBalance（后端三字段直读，无历史别名回退） */
 function buildPointsBalance(obj : UTSJSONObject) : PointsBalance {
@@ -39,24 +41,6 @@ function buildPointsLedgerItem(obj : UTSJSONObject) : PointsLedgerItem {
 		created_at: toStr(obj['created_at']),
 		expires_at: expiresRaw != null ? toStr(expiresRaw) : null,
 	} as PointsLedgerItem
-}
-
-/** 从 UTSJSONObject 构造 PointsLedgerResult（后端列表字段是 items，不是 records） */
-function buildPointsLedgerResult(obj : UTSJSONObject) : PointsLedgerResult {
-	const items : PointsLedgerItem[] = []
-	const raw = obj['items']
-	if (raw != null) {
-		const arr = raw as Array<UTSJSONObject>
-		for (let i = 0; i < arr.length; i++) {
-			items.push(buildPointsLedgerItem(arr[i]))
-		}
-	}
-	return {
-		items: items,
-		total: toNumber(obj['total']),
-		page: toNumber(obj['page']),
-		pages: toNumber(obj['pages']),
-	} as PointsLedgerResult
 }
 
 /** 从 UTSJSONObject 构造 PointsTaskItem */
@@ -123,16 +107,16 @@ export function getPointsBalanceApi(silent : boolean = false) : Promise<PointsBa
  * @param pageSize 每页条数
  * @param direction 收支方向：'' 全部 / 'in' 收入 / 'out' 支出（#512）
  *        后端无「来源」维度筛选，故本参数不接受 source_type 之类幻影条件（#709 待后端清单）
+ *
+ * PR-F #1666：装载走信封归一出口 `getPaged`（ADR-0037）——数组键 `items`（后端字段名，非 records），
+ * 分页字段只认 total；旧 DTO 的 page / pages 两字段随之消亡（消费方按 hasMore 判终止）。
  */
-export function getPointsLedgerApi(page : number, pageSize : number, direction : string) : Promise<PointsLedgerResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	}
+export function getPointsLedgerApi(page : number, pageSize : number, direction : string) : Promise<Page<PointsLedgerItem>> {
+	const query : UTSJSONObject = {} as UTSJSONObject
 	if (direction != '') {
-		params['direction'] = direction
+		query['direction'] = direction
 	}
-	return getMapped<PointsLedgerResult>('/points/ledger', params, (data : UTSJSONObject) : PointsLedgerResult => buildPointsLedgerResult(data))
+	return getPaged<PointsLedgerItem>('/points/ledger', page, pageSize, (obj : UTSJSONObject) : PointsLedgerItem => buildPointsLedgerItem(obj), query, ['items'])
 }
 
 /**

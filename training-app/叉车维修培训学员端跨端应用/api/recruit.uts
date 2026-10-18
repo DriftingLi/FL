@@ -100,12 +100,10 @@ export type RecruitApplication = {
     resume_updated_at_snapshot : string
 }
 
-/** 按职位查看投递的结果（后端 `RecruiterApplicationListResult`，**unread_count 在这里**) */
+/** 按职位查看投递的结果（后端 `RecruiterApplicationListResult`，**unread_count 在这里**） */
 export type RecruitApplicationListResult = {
     items : RecruitApplication[]
     total : number
-    page : number
-    page_size : number
     unread_count : number
     job_title : string
 }
@@ -235,14 +233,6 @@ export type RecruitContactRequest = {
     expires_at : string
     source : string
     company_disabled : boolean
-}
-
-/** 交换申请列表结果（后端 `ContactRequestListResult`，**回显 page / page_size**） */
-export type RecruitContactRequestListResult = {
-    items : RecruitContactRequest[]
-    page : number
-    page_size : number
-    total : number
 }
 
 /** 用工性质取值（后端注释 fulltime / parttime / contract，`recruit_service.go` applyFilters）。 */
@@ -547,8 +537,6 @@ export function getRecruitJobApplicationsApi(jobId : number, page : number = 1, 
         return {
             items: paged.items,
             total: paged.total,
-            page: (data['page'] as number) ?? 1,
-            page_size: pageSize,
             unread_count: (data['unread_count'] as number) ?? 0,
             job_title: (data['job_title'] as string) ?? '',
         } as RecruitApplicationListResult

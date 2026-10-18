@@ -74,9 +74,9 @@ describe('C1 职位 DTO 与映射都要补两字段（ADR-0003；#652 后类型�
     expect(detailFn).toMatch(/getMapped<JobPosting>/);
     expect(detailFn).toMatch(/buildJobPosting\(data\)/);
     // 列表：仍复用同一 buildJobPosting 逐项映射（去重后单一映射覆盖两端，防「补详情漏列表」）；
-    // 分页信封解码交 decodePage（ADR-0037 PR-B），这里只钉「列表也经 buildJobPosting」。
+    // PR-F #1666 起分页装载改走信封归一出口 getPaged（page/page_size 由它统一拼）。
     const listFn = between(jobSrc, 'export function getJobListApi', '\n}');
-    expect(listFn).toMatch(/decodePage<JobPosting>\(data/);
+    expect(listFn).toMatch(/getPaged<JobPosting>\('\/jobs'/);
     expect(listFn).toMatch(/buildJobPosting\(obj\)/);
   });
 });

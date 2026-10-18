@@ -84,13 +84,13 @@ import { goBack } from '../../utils/navigation'
         try {
             const data = await getMaterialsApi(0, page.value, pageSize)
             if (page.value <= 1) {
-                materials.value = data.materials
+                materials.value = data.items
             } else {
-                for (let i = 0; i < data.materials.length; i++) {
-                    materials.value.push(data.materials[i])
+                for (let i = 0; i < data.items.length; i++) {
+                    materials.value.push(data.items[i])
                 }
             }
-            noMore.value = materials.value.length >= data.total || data.materials.length == 0
+            noMore.value = !data.hasMore || data.items.length == 0
             failed.value = false
         } catch (e) {
             console.error('[materials] load failed:', e)

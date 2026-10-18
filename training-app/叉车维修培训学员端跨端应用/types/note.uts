@@ -25,6 +25,4 @@ export type NoteItem = {
 export type NoteListResult = {
 	items : NoteItem[]
 	total : number
-	page : number
-	page_size : number
 }

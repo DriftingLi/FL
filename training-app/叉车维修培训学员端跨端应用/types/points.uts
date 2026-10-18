@@ -22,14 +22,6 @@ export type PointsLedgerItem = {
     expires_at : string | null // 过期时间设计位（#509：首版恒 null，永久有效）
 }
 
-/** 积分流水分页结果 */
-export type PointsLedgerResult = {
-    items : PointsLedgerItem[] // 条目列表（后端字段名 items，非 records）
-    total : number             // 总条数
-    page : number              // 当前页码
-    pages : number             // 总页数
-}
-
 /** 积分任务项 GET /points/tasks */
 export type PointsTaskItem = {
     code : string           // 任务编码（POST /points/tasks/{code}/claim 用）

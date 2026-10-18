@@ -19,7 +19,5 @@ export type NotificationItem = {
 export type NotificationListResult = {
     items : NotificationItem[]
     total : number
-    page : number
-    page_size : number
     unread_count : number
 }

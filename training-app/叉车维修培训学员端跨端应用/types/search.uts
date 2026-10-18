@@ -45,7 +45,7 @@ export type SearchPagedResult = {
     keyword : string
     type : string
     total : number
-    page : number
-    pages : number
+    /** 是否还有下一页（ADR-0037 ⑥ / PR-F #1666：取代旧 page/pages 双字段，由信封出口推导） */
+    hasMore : boolean
     items : SearchItem[]
 }

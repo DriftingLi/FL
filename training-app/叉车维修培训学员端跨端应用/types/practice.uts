@@ -60,8 +60,6 @@ export type PracticeHistoryItem = {
 export type PracticeHistoryResult = {
     items : PracticeHistoryItem[]
     total : number
-    page : number
-    page_size : number
 }
 
 /** 练习进度 */

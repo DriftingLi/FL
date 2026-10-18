@@ -242,13 +242,12 @@ describe('A. getCommentsApi：手写回退链收敛为模块默认键序（PR-B 
 // ===== B. 三级回退链 + 吞错删除：mockExam =====
 
 describe('B. mockExam 历史：三级 if-else 收敛为一次 keys 声明，吞错分支已删', () => {
-  it('exams 优先于 records（键序即回退序）；page_size 恒等于请求值', async () => {
+  it('exams 优先于 records（键序即回退序）；结果只留 items / total（PR-F #1666 删 page/page_size）', async () => {
     const { mod, calls } = loadMockExam({ exams: [EXAM_ROW], records: [EXAM_ROW, EXAM_ROW], total: 7 });
     const got = await mod.getMockExamHistoryApi(2, 5);
     expect(got.items.length).toBe(1);
     expect(got.total).toBe(7);
-    expect(got.page).toBe(1); // 载荷无回显页码 → 缺省 1（行为保持点）
-    expect(got.page_size).toBe(5); // 请求值，不是响应回显
+    expect(Object.keys(got).sort()).toEqual(['items', 'total']); // 结构性：分页回显字段已不可表达
     expect(calls[0].url).toBe('/mock-exam/history');
     expect(calls[0].params).toEqual({ page: '2', page_size: '5' });
   });
@@ -275,23 +274,23 @@ describe('B. mockExam 历史：三级 if-else 收敛为一次 keys 声明，吞�
   it('M3 必红：把吞错 .catch 加回来 → 失败不再上抛', async () => {
     const file = mutateUts(MOCK_EXAM_UTS, [[
       "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize))",
-      "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize)).catch(() => Promise.resolve({ items: [], total: 0, page: page, page_size: pageSize }))",
+      "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize)).catch(() => Promise.resolve({ items: [], total: 0 }))",
     ]], 'mockExam.uts');
     const { mod } = loadMockExam({}, [], file, { reject: true });
-    await expect(mod.getMockExamHistoryApi(1, 10)).resolves.toEqual({ items: [], total: 0, page: 1, page_size: 10 });
+    await expect(mod.getMockExamHistoryApi(1, 10)).resolves.toEqual({ items: [], total: 0 });
   });
 });
 
 // ===== C. 具名键站点：favorite =====
 
 describe('C. favorite：具名键 favorites 显式声明，不因默认键序而放宽', () => {
-  it('favorites 命中；page_size 取请求值、page 取回显值', async () => {
+  it('favorites 命中；total 走信封、分页回显字段已删（page 回显值 4 无处落）', async () => {
     const { mod } = loadFavorite({ favorites: [FAV_ROW], total: 31, page: 4 });
     const got = await mod.getFavoritesApi('course', 4, 7);
     expect(got.items.length).toBe(1);
     expect(got.total).toBe(31);
-    expect(got.page).toBe(4);
-    expect(got.page_size).toBe(7);
+    expect(got.page).toBeUndefined();
+    expect(got.page_size).toBeUndefined();
   });
 
   it('载荷用 items 键 → 解不出（具名键站点不借默认兜底扩面）', async () => {
@@ -312,13 +311,13 @@ describe('C. favorite：具名键 favorites 显式声明，不因默认键序而
 // ===== D. 侧计数器：notification =====
 
 describe('D. notification：信封三字段之外，unread_count 保留手读', () => {
-  it('items/total 走信封，page_size 取请求值，unread_count 逐值不变', async () => {
+  it('items/total 走信封，unread_count 逐值不变（page/page_size 已随 PR-F #1666 删除）', async () => {
     const { mod } = loadNotification({ items: [NOTE_ROW], total: 12, page: 2, unread_count: 3 });
     const got = await mod.getNotificationsApi(2, 6);
     expect(got.items.length).toBe(1);
     expect(got.total).toBe(12);
-    expect(got.page).toBe(2);
-    expect(got.page_size).toBe(6);
+    expect(got.page).toBeUndefined();
+    expect(got.page_size).toBeUndefined();
     expect(got.unread_count).toBe(3);
   });
 
@@ -335,12 +334,8 @@ describe('D. notification：信封三字段之外，unread_count 保留手读', 
     const got = await mod.getNotificationsApi();
     expect(got.unread_count).toBe(0);
   });
-  it('M6 必红：page_size 改读响应回显 → 请求值不再恒等（票面②「结构上不可再表达」的反证）', async () => {
-    const file = mutateUts(NOTIFICATION_UTS, [['page_size: pageSize,', "page_size: toNumber(data['page']),"]], 'notification.uts');
-    const { mod } = loadNotification({ items: [NOTE_ROW], total: 12, page: 2, page_size: 99 }, [], file);
-    const got = await mod.getNotificationsApi(2, 6);
-    expect(got.page_size).toBe(2);
-  });
+  // M6（page_size 改读回显）随 PR-F #1666 删除：DTO 已无该字段，「把请求值写成响应回显」在类型上不可表达；
+  // 取代它的结构性守护是 utils/envelopeAdoptionContract.test.js 的载体双计数器（api/ 内 page_size/pages 索引读 = 0）。
 });
 
 // ===== E. 四类异形之一：search 五分区 + 分页 pages =====
@@ -361,20 +356,27 @@ describe('E. search：五分区各自解码，pages 由 total 折算不读回显
     expect(got.keyword).toBe('叉车'); // 载荷无回显 → 出口注入的关键词落进 DTO
   });
 
-  it('分页搜索：pages = ceil(total / 请求 pageSize)，后端回显更大的数也不作数', async () => {
+  it('分页搜索：hasMore = page*pageSize < total，后端回显 pages/page 不作数', async () => {
     const { mod } = loadSearch({ items: [SEARCH_ROW], total: 12, pages: 99, page: 2 });
     const got = await mod.searchByTypeApi('叉车', 'chapter', 2, 5);
     expect(got.total).toBe(12);
-    expect(got.pages).toBe(3); // floor((12+5-1)/5)，不是回显的 99
-    expect(got.page).toBe(2);
+    expect(got.hasMore).toBe(true); // 2*5 = 10 < 12
+    expect(got.pages).toBeUndefined();
+    expect(got.page).toBeUndefined();
     expect(got.type).toBe('chapter');
   });
 
-  it('M7 必红：pages 改回索引读后端回显 → 现网回显值直接进 DTO', async () => {
-    const file = mutateUts(SEARCH_UTS, [["pages: Math.floor((paged.total + pageSize - 1) / pageSize),", "pages: toNumber(data['pages'], 1),"]], 'search.uts');
-    const { mod } = loadSearch({ items: [SEARCH_ROW], total: 12, pages: 99, page: 2 }, [], file);
+  it('分页搜索：末页 hasMore=false（3*5 ≥ 12）', async () => {
+    const { mod } = loadSearch({ items: [SEARCH_ROW], total: 12, pages: 99, page: 3 });
+    const got = await mod.searchByTypeApi('叉车', 'chapter', 3, 5);
+    expect(got.hasMore).toBe(false);
+  });
+
+  it('M7 必红：hasMore 改回读后端回显页数 → 回显值直接进 DTO', async () => {
+    const file = mutateUts(SEARCH_UTS, [['hasMore: paged.hasMore,', "hasMore: toNumber(data['pages'], 0) > page,"]], 'search.uts');
+    const { mod } = loadSearch({ items: [SEARCH_ROW], total: 12, pages: 1, page: 2 }, [], file);
     const got = await mod.searchByTypeApi('叉车', 'chapter', 2, 5);
-    expect(got.pages).toBe(99);
+    expect(got.hasMore).toBe(false); // 回显 pages=1 > page=2 不成立；绿用例断言的是 true
   });
 });
 
@@ -383,22 +385,22 @@ describe('E. search：五分区各自解码，pages 由 total 折算不读回显
 describe('F. buildTopicDetail：replies 与三元组走信封，pages 折算', () => {
   const TOPIC = { id: 7, title: '泵异响', content: '哒哒响', reply_count: 45, view_count: 10 };
 
-  it('详情载荷：replies 命中、total 取后端值、pages 由 total/pageSize 折算', () => {
+  it('详情载荷：replies 命中、total 取后端值、hasMore 由 total/pageSize 推导', () => {
     const d = loadForumDto();
     const got = d.buildTopicDetail({ topic: TOPIC, replies: [{ id: 31, content: '换密封圈' }], page: 2, pages: 9, total: 45 }, '/forum/topics/7', 2, 20);
     expect(got.replies.length).toBe(1);
     expect(got.total).toBe(45);
-    expect(got.pages).toBe(3); // floor((45+19)/20)，不是回显的 9
-    expect(got.page).toBe(2);
+    expect(got.hasMore).toBe(true); // 2*20 = 40 < 45，不是回显的 pages=9
+    expect(got.page).toBeUndefined();
+    expect(got.pages).toBeUndefined();
   });
 
-  it('采纳形态（无 replies / 无三元组）→ 空页 + 0 条 0 页，不退化成「还有更多」', () => {
+  it('采纳形态（无 replies / 无三元组）→ 空页 + 0 条 + hasMore=false，不退化成「还有更多」', () => {
     const d = loadForumDto();
     const got = d.buildTopicDetail({ topic: TOPIC }, '/forum/topics/7/accept', 1, 20);
     expect(got.replies).toEqual([]);
     expect(got.total).toBe(0);
-    expect(got.pages).toBe(0);
-    expect(got.page).toBe(1);
+    expect(got.hasMore).toBe(false);
   });
 
   it('M8 必红：数组键写成 items → 详情的 replies 解不出', () => {
@@ -412,13 +414,13 @@ describe('F. buildTopicDetail：replies 与三元组走信封，pages 折算', (
 // ===== G. 四类异形之三/四：recruit 侧计数器 + 不回显端点 =====
 
 describe('G. recruit：投递列表保留 unread_count/job_title，简历库不回显 total 时回落', () => {
-  it('投递列表：total 走信封、page_size 取请求值、侧计数器逐值不变', async () => {
+  it('投递列表：total 走信封、侧计数器逐值不变，分页回显字段已删', async () => {
     const { mod } = loadRecruit({ items: [{ id: 1, job_title: '叉车维修员' }], total: 8, page: 2, unread_count: 3, job_title: '液压专班' });
     const got = await mod.getRecruitJobApplicationsApi(9, 2, 7);
     expect(got.items.length).toBe(1);
     expect(got.total).toBe(8);
-    expect(got.page).toBe(2);
-    expect(got.page_size).toBe(7);
+    expect(got.page).toBeUndefined();
+    expect(got.page_size).toBeUndefined();
     expect(got.unread_count).toBe(3);
     expect(got.job_title).toBe('液压专班');
   });

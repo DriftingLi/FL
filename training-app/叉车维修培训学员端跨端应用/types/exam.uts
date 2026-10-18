@@ -75,8 +75,6 @@ export type MockExamHistoryItem = {
 export type MockExamHistoryResult = {
     items : MockExamHistoryItem[]
     total : number
-    page : number
-    page_size : number
 }
 
 /** 错题项 */
@@ -98,14 +96,6 @@ export type WrongQuestionItem = {
     /** 最近错误时间（后端 WrongQuestionDTO.last_wrong_at，列表排序依据） */
     last_wrong_at : string
     favorited : boolean      // 是否已收藏（后端 JOIN favorite 回填）
-}
-
-/** 错题列表结果 */
-export type WrongQuestionListResult = {
-    items : WrongQuestionItem[]
-    total : number
-    page : number
-    page_size : number
 }
 
 /** 错题统计 */

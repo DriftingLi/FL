@@ -171,8 +171,6 @@ function buildMockExamHistoryResult(data : UTSJSONObject, url : string, page : n
 	const result : MockExamHistoryResult = {
 		items: paged.items,
 		total: paged.total,
-		page: toNumber(data['page'], 1),
-		page_size: pageSize,
 	} as MockExamHistoryResult
 	return result
 }

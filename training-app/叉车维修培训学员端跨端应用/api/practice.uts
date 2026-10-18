@@ -63,10 +63,15 @@ function buildQuestion(obj : UTSJSONObject) : Question {
 	return q
 }
 
-/** 从 UTSJSONObject 构造 PracticeStats */
+/** 从 UTSJSONObject 构造 PracticeStats
+ *  @note PR-F #1666：`total_practiced` 是幻影键（后端 `PracticeStatsDTO` 只有 `total`，
+ *        grep 全后端 0 命中），回退链原为「幻影 total_practiced → 真实 total → 幻影 total_count」，
+ *        第三层 `total_count` 属另一个端点（/practice-mode/practice-stats）的键，本响应里不存在。
+ *        ⇒ 收敛为只读 `total`（端点 /practice-mode/stats 的真键，ADR-0037 ⑥ 逐处登记的域统计读）
+ */
 function buildPracticeStats(obj : UTSJSONObject) : PracticeStats {
 	const stats : PracticeStats = {
-		total_practiced: toNumber(obj['total_practiced'], toNumber(obj['total'], toNumber(obj['total_count']))),
+		total_practiced: toNumber(obj['total']),
 		correct_count: toNumber(obj['correct_count'], toNumber(obj['correct'])),
 		accuracy: toNumber(obj['accuracy'], toNumber(obj['correct_rate'], toNumber(obj['accuracy_rate']))),
 		today_count: toNumber(obj['today_count'], toNumber(obj['today'])),
@@ -91,14 +96,18 @@ function buildHistoryItem(obj : UTSJSONObject) : PracticeHistoryItem {
 	return item
 }
 
-/** 从 UTSJSONObject 构造 PracticeProgress */
+/** 从 UTSJSONObject 构造 PracticeProgress
+ *  @note PR-F #1666（口径变更，维护者裁定）：`total` 改读 `pool_total`——后者是实时题库池总数
+ *        （后端 `PracticeProgressDTO.PoolTotal`，#413 当前证件分区口径），与开始练习返回的题数一致；
+ *        旧 `total` 的语义已退回「上次会话数组长度」，仅供断点续练游标使用，当模块题量用是错的。
+ */
 function buildPracticeProgress(data : UTSJSONObject) : PracticeProgress {
 	const answersState = data['answers_state']
 	const progress : PracticeProgress = {
 		index: toNumber(data['current_index'], toNumber(data['index'])),
 		completed: toNumber(data['completed']),
 		practice_mode: toStr(data['practice_mode'], toStr(data['mode'], 'sequential')),
-		total: toNumber(data['total']),
+		total: toNumber(data['pool_total']),
 		answers_state: answersState != null ? (answersState as UTSJSONObject) : {} as UTSJSONObject,
 	} as PracticeProgress
 	return progress

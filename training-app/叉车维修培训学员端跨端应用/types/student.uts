@@ -45,14 +45,6 @@ export type StudyRecord = {
     study_date : string
 }
 
-/** 学习记录分页响应 */
-export type StudyRecordsResult = {
-    records : StudyRecord[]
-    total : number
-    page : number
-    page_size : number
-}
-
 // ========== 学员课程（GET /student/courses） ==========
 /** 学员课程条目 */
 export type StudentCourse = {

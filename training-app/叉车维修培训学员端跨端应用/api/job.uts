@@ -12,7 +12,7 @@
  * 后端无 data 载荷、调用方只 await 成败，硬套 identity map 属过度设计 ⇒ 保持原 `post` 通路。
  */
 import { getMapped, post } from './request'
-import { decodePage } from './envelope'
+import { getPaged } from './envelope'
 import type { Page } from './envelope'
 import type { JobPosting, JobListParams, ReportReason } from '../types/index'
 
@@ -79,25 +79,19 @@ export function applyJobApi(jobId : number) : Promise<void> {
 
 /**
  * 职位广场列表（学员侧，仅 open 且未强制下架）
- * @param params 查询参数（可选）
+ * @param params 查询参数（可选；page/page_size 由信封出口 `getPaged` 统一拼）
  */
 export function getJobListApi(params : JobListParams = {}) : Promise<Page<JobPosting>> {
     const query : UTSJSONObject = {} as UTSJSONObject
-    if (params.page != null && params.page! > 0) query['page'] = params.page!.toString()
-    if (params.page_size != null && params.page_size! > 0) query['page_size'] = params.page_size!.toString()
     if (params.specialty_id != null && params.specialty_id! > 0) query['specialty_id'] = params.specialty_id!.toString()
     if (params.region != null && params.region!.length > 0) query['region'] = params.region!
     if (params.salary_min != null) query['salary_min'] = params.salary_min!.toString()
     if (params.salary_max != null) query['salary_max'] = params.salary_max!.toString()
     if (params.experience != null && params.experience!.length > 0) query['experience'] = params.experience!
 
-    const qsParts : string[] = []
-    for (const k in query) {
-        qsParts.push(encodeURIComponent(k) + '=' + encodeURIComponent(query[k] as string))
-    }
-    const qs = qsParts.join('&')
-    const url = '/jobs' + (qs.length > 0 ? '?' + qs : '')
-
-    // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`，分页字段只认 total
-    return getMapped<Page<JobPosting>>(url, null, (data : UTSJSONObject) : Page<JobPosting> => decodePage<JobPosting>(data, url, params.page != null ? params.page! : 1, params.page_size != null ? params.page_size! : 20, (obj : UTSJSONObject) : JobPosting => buildJobPosting(obj), ['items']))
+    const page = params.page != null && params.page! > 0 ? params.page! : 1
+    const pageSize = params.page_size != null && params.page_size! > 0 ? params.page_size! : 20
+    // 装载走信封归一出口 `getPaged`（ADR-0037 PR-B；PR-F #1666 把请求侧 page/page_size 写位一并收编）：
+    // 数组键 `items`，分页字段只认 total
+    return getPaged<JobPosting>('/jobs', page, pageSize, (obj : UTSJSONObject) : JobPosting => buildJobPosting(obj), query, ['items'])
 }

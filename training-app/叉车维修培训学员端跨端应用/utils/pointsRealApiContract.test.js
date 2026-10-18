@@ -111,24 +111,28 @@ describe('catch-mock 静默回退退役（失败要可见）', () => {
   it('出口全部经 mapper-callback 家族（#639 出口，与 #652 T14 同文件收口）', () => {
     expect(apiSrc).toMatch(/import\s*\{[^}]*getMapped[^}]*postMapped[^}]*\}\s*from\s*'\.\/request'/);
     expect(apiSrc).toContain("getMapped<PointsBalance>('/points/balance'");
-    expect(apiSrc).toContain('getMapped<PointsLedgerResult>(');
+    // PR-F #1666：流水列表改走信封归一出口 getPaged（统一 Page<PointsLedgerItem>）
+    expect(apiSrc).toContain("getPaged<PointsLedgerItem>('/points/ledger', page, pageSize");
     expect(apiSrc).toContain('getMapped<PointsTasksResult>(');
     expect(apiSrc).toContain('postMapped<PointsClaimResult>(');
   });
 });
 
 describe('流水接口对齐后端 /points/ledger 契约（#512 direction）', () => {
-  it('解析 items 而非 records，页码参数为 page / page_size', () => {
+  it('解析 items 而非 records，页参由信封出口注入', () => {
     const body = fnBody(apiSrc, 'export function getPointsLedgerApi');
     expect(body).toContain("'/points/ledger'");
-    expect(body).toContain('page_size');
+    // 页参（page / page_size）不再手拼，由 getPaged 统一注入；数组键 items 由 keys 声明承载
+    expect(body).toContain('getPaged<PointsLedgerItem>');
+    expect(body).toContain("['items']");
+    expect(body).not.toContain("params['page_size']");
     const itemBuilder = fnBody(apiSrc, 'function buildPointsLedgerItem');
     expect(itemBuilder).toContain("obj['delta']");
     expect(itemBuilder).toContain("obj['reason']");
     expect(itemBuilder).toContain("obj['expires_at']");
-    const resultBuilder = fnBody(apiSrc, 'function buildPointsLedgerResult');
-    expect(resultBuilder).toContain("obj['items']");
-    expect(resultBuilder).not.toContain("obj['records']");
+    // 旧「构造 PointsLedgerResult 再拆包」的中间层已删（PR-F #1666）
+    expect(apiSrc).not.toMatch(/function\s+buildPointsLedgerResult/);
+    expect(apiSrc).not.toContain('PointsLedgerResult');
   });
 
   it('direction 仅在收入/支出时透传（全部不传；后端无 source_type 维度，幻影筛选退役）', () => {
@@ -156,7 +160,7 @@ describe('任务中心接口：GET /points/tasks + POST /points/tasks/{code}/cla
   });
 
   it('types 层按后端 DTO 定义积分类型，幻影 records 类型退役', () => {
-    for (const t of ['PointsLedgerItem', 'PointsLedgerResult', 'PointsTaskItem', 'PointsTasksResult', 'PointsClaimResult']) {
+    for (const t of ['PointsLedgerItem', 'PointsTaskItem', 'PointsTasksResult', 'PointsClaimResult']) {
       expect(typesSrc).toContain(`export type ${t} = {`);
     }
     expect(typesSrc).not.toContain('PointsRecordListResult');
