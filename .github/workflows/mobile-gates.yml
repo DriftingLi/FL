@@ -1,0 +1,265 @@
+# mobile-gates —— 移动端「门证据管家」
+#
+# 决策与实测依据：training-app/叉车维修培训学员端跨端应用/docs/adr/0041-三层门分离与云上证据管家.md
+# （移动端 ADR 独立编号体系；根仓库 docs/adr/ 另有同名编号，引用须写全路径）
+#
+# 它做什么：把「这个 PR 的门证据是不是对**当前 head** 有效」渲染成 PR 上的一条常驻评论。
+# 它不做什么（都是刻意的）：
+#   · **不执行任何真门**——② 微信开发者工具门要 GUI 登录态、④ 编译门要 HBuilderX 主程序，
+#     2026-10-16 两轮托管 runner 实验已证伪无头化（HBuilderX `publish app-android` 直接回
+#     `Please Login in!`；微信开发者工具 `cli.bat islogin` 因 UserData 未初始化报 ENOENT），
+#     见 ADR-0041 决策 1 与 ADR-0008「为何不把 HBuilderX 搬进 CI」段。真门继续在本机/真机跑。
+#   · **不判红、不阻断合并**：本仓的门是人工/agent 执行、agent 签齐即合并（ADR-0008），
+#     多一个会变红的机器人检查只会逼人绕过它。所以整个 job 走 `continue-on-error`。
+#   · **不另写一套判据**：从 PR head 取 `.github/workflows/pr-evidence.yml`，把其中的校验器
+#     （PR-EVIDENCE-VALIDATOR 标记块）原样抽出来跑——判据永远同源，不会出现「管家说绿、
+#     pr-evidence 说红」。该块有 .github/scripts/pr-evidence-check.test.mjs 的抽取式单测在守。
+#
+# 三入口（ADR-0041 决策 3）：
+#   · pull_request [opened, synchronize, reopened]：开 PR / 推新提交时重算
+#   · issue_comment [created]：`-PostToPr` 贴上门证据评论的那一刻重算（这是最关键的一条：
+#     贴评论的人不会再去点一次重跑）
+#   · workflow_dispatch：手工补算（`-f pr=<PR号>`）
+name: mobile-gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: '要核对的 PR 号（手动触发时必填）'
+        required: false
+        type: string
+
+# 同一 PR 串行化并丢弃旧的一轮：贴证据 + 推提交常常并发到达，旧一轮的输出会被新一轮覆盖，
+# 保留旧轮只会让评论先显示「缺」再显示「已绑」，白闪一次。
+concurrency:
+  group: mobile-gates-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr }}
+  cancel-in-progress: true
+
+# 只需要读代码 / 读 PR 与评论 + 写**一条**评论：门评论由本仓 agent（人的账号）自己贴，
+# 本 workflow 不代贴、不改别人的评论（pr-evidence.yml 那种 read-only 的口径不适用这里）。
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  steward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        # 管家自身出错（取 diff 失败 / 判据块读不到）时：不改评论、只在跑摘要留痕，绝不判红
+        continue-on-error: true
+        env:
+          # 手动触发的 PR 号走 env，避免把表达式拼进脚本字面量
+          INPUT_PR: ${{ github.event.inputs.pr }}
+        with:
+          script: |
+            const MARKER = '<!-- mobile-gate-steward -->';
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            // ===== 1. 认 PR =====
+            const ev = context.eventName;
+            let prNumber = 0;
+            if (ev === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+            } else if (ev === 'issue_comment') {
+              // 全仓任何 issue/PR 的评论都会触发本 workflow，先做三重早退（否则等于给全仓装了个吵嘴机器人）
+              if (!context.payload.issue.pull_request) {
+                core.info('issue_comment 来自普通 issue（非 PR），跳过。');
+                return;
+              }
+              const c = context.payload.comment || {};
+              const body = String(c.body || '');
+              // 早退 1：管家自己发的评论 —— 否则每次更新评论都自我唤醒一次（自锁循环）
+              if (body.includes(MARKER)) {
+                core.info('是本管家自己的评论（含 MARKER），跳过以防自锁。');
+                return;
+              }
+              // 早退 2：任何机器人评论（Dependabot / 其他 workflow 的 GITHUB_TOKEN 评论等）
+              if (c.user && (c.user.type === 'Bot' || /\[bot\]$/.test(String(c.user.login || '')))) {
+                core.info(`机器人评论（${c.user.login}），跳过。`);
+                return;
+              }
+              prNumber = context.payload.issue.number;
+            } else {
+              prNumber = Number(process.env.INPUT_PR || 0);
+            }
+            if (!prNumber) {
+              core.info('没拿到 PR 号（缺 workflow_dispatch 的 pr 输入？），跳过。');
+              return;
+            }
+            core.info(`开始核对 PR #${prNumber}（事件：${ev}）`);
+
+            try {
+              // ===== 2. 取 PR 事实 =====
+              const prRes = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+              const pr = prRes.data;
+              const headSha = String(pr.head.sha || '').toLowerCase();
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: prNumber, per_page: 100,
+              });
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: prNumber, per_page: 100,
+              });
+              const gateComments = comments.map((c) => c.body || '');
+
+              // ===== 3. 判据同源：从 head 取 pr-evidence.yml，抽出校验器原样跑 =====
+              // 取 head 而不是默认分支：pull_request 事件下 GitHub 本来就按 PR 的版本跑 workflow，
+              // 这里只是让「判据版本」和「真要判的那个 PR」对齐（同一个 PR 改判据时不会两套口径）。
+              const extractor = (src) => {
+                const m = String(src).match(
+                  /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
+                );
+                if (!m) throw new Error('pr-evidence.yml 里找不到 PR-EVIDENCE-VALIDATOR 标记块（判据同源中断）');
+                return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
+              };
+              const readWorkflow = async (ref) => {
+                const res = await github.rest.repos.getContent({
+                  owner, repo, path: '.github/workflows/pr-evidence.yml', ref,
+                });
+                return Buffer.from(res.data.content || '', 'base64').toString('utf8');
+              };
+              let validate;
+              try {
+                validate = extractor(await readWorkflow(headSha));
+              } catch (e) {
+                core.warning(`从 head 取判据失败（${e.message}），退回默认分支版本。`);
+                validate = extractor(await readWorkflow(pr.base.ref));
+              }
+
+              // compare 回调：与 pr-evidence.yml 里那份逐字同义（祖先判定 + 运行时面比对 + 截断即 fail-closed）
+              const COMPARE_FILES_CAP = 300;
+              const fetchCompare = async ({ base, head }) => {
+                try {
+                  const res = await github.rest.repos.compareCommits({ owner, repo, base, head });
+                  const d = res.data || {};
+                  return {
+                    status: d.status,
+                    mergeBaseSha: (d.merge_base_commit && d.merge_base_commit.sha) || '',
+                    files: (d.files || []).map((f) => f.filename),
+                    filesTruncated: (d.files || []).length >= COMPARE_FILES_CAP,
+                  };
+                } catch (e) {
+                  core.warning(`compare(${base}…${head}) 失败：${e.message} ⇒ 按 fail-closed 判「没绑上」。`);
+                  return null;
+                }
+              };
+
+              const result = await validate({
+                files,
+                body: pr.body || '',
+                author: (pr.user && pr.user.login) || '',
+                gateComments,
+                headSha,
+                fetchCompare,
+              });
+
+              // ===== 4. 找有没有我们自己发过的那条常驻评论（有则原地更新，永不刷屏） =====
+              const mine = comments.find((c) => String(c.body || '').includes(MARKER));
+              // 写入口只有一个：有就原地改、没有就新建；内容逐字相同则不写（免得每次重跑都制造一个 edited 事件）
+              const upsert = async (body) => {
+                if (mine && (mine.body || '') === body) {
+                  core.info('评论内容未变，跳过写入。');
+                  return;
+                }
+                if (mine) {
+                  await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+                  core.info(`已原地更新评论 #${mine.id}。`);
+                  return;
+                }
+                await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
+                core.info('已新建常驻评论。');
+              };
+
+              // ===== 5a. 非运行时面 PR：不打扰。但若之前发过，就把那条改写成「已无需门证据」 =====
+              if (!result.runtime || result.runtime.length === 0) {
+                if (!mine) {
+                  core.info('未命中运行时面且此前没发过评论 ⇒ 什么都不发。');
+                  return;
+                }
+                await upsert([
+                  MARKER,
+                  '### 移动端门证据 · 已无需',
+                  '',
+                  `当前改动（\`${headSha.slice(0, 7)}\`，共 ${files.length} 个文件）不含运行时面`
+                    + '（`*.uvue` / `*.uts` / training-app 下的 `manifest.json`·`pages.json`·`platformConfig.json`）'
+                    + ' ⇒ 按 ADR-0008 免门，本检查无内容可核对。',
+                  '',
+                  `<sub>由 \`mobile-gates.yml\` 自动维护 · <a href="${runUrl}">本次运行</a></sub>`,
+                ].join('\n'));
+                return;
+              }
+
+              // ===== 5b. 运行时面 PR：渲染核对结论 =====
+              const head7 = headSha.slice(0, 7);
+              const g2 = result.gates['②'];
+              const g4 = result.gates['④'];
+              const cell = (g) => (g.bound
+                ? (g.commit === head7 ? `✅ 已绑 \`${g.commit}\`` : `✅ 已绑 \`${g.commit}\`（祖先口径，head 为 \`${head7}\`）`)
+                : '❌ 还没有');
+              const whys = [];
+              if (!g2.bound && g2.reason) whys.push(`- ② 门评论未绑上的原因：${g2.reason}`);
+              if (!g4.bound && g4.reason) whys.push(`- ④ 门评论未绑上的原因：${g4.reason}`);
+              const why2 = g2.required
+                ? `命中 MP-WEIXIN 面：${(g2.why || []).join('、') || '（见改动集）'}`
+                : '未命中 MP-WEIXIN 面 ⇒ 按 ADR-0008 免';
+              const structLine = result.ok
+                ? '正文结构：✅ 完整（pr-evidence 只校结构，不校真伪）'
+                : `正文结构：❌ ${result.errors.length} 条待补 —— ${result.errors.slice(0, 3).join('；')}`;
+              const lines = [
+                MARKER,
+                '### 移动端门证据 · 自动核对',
+                '',
+                `head \`${head7}\` · 判据同源：\`.github/workflows/pr-evidence.yml\` 的校验器（本评论只渲染结论，不另算口径）`,
+                '',
+                '| 门 | 是否需要 | 证据 | 说明 |',
+                '| --- | --- | --- | --- |',
+                `| ② 微信开发者工具（半自动） | ${g2.required ? '需要' : '免'} | ${cell(g2)} | ${why2} |`,
+                `| ④ 本地编译门 | ${g4.required ? '需要' : '免'} | ${cell(g4)} | ${g4.required ? `运行时面 ${(g4.why || []).join('、') || ''}` : '未命中运行时面'} |`,
+              ];
+              if (result.needs4b) {
+                lines.push('| ④b release 云打包 | 需要（命中打包面） | 见正文 | 三份 json / `uni_modules` app-android / 新增 aar·jar |');
+              }
+              if (result.lowRiskRuntime) {
+                lines.push('', '低风险运行时面（仅 `.uts`）⇒ ① 真机两道按 ADR-0008 减免，③④ 仍必过。');
+              }
+              lines.push('', structLine);
+              if (whys.length) lines.push(...whys);
+              lines.push(
+                '',
+                '<details><summary>怎么补（点开）</summary>',
+                '',
+                `- ② 门：\`npm run build:mp-weixin-check\`，或全量 \`pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -Pages auto -PostToPr ${prNumber}\``
+                  + '（**第一次就带 `-PostToPr`**，否则等于白跑一轮）。',
+                `- ④ 门：\`pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -PostToPr ${prNumber}\`。`,
+                '- 两个脚本都会贴出带 `<!-- gate-evidence:<门号> -->` 与 `commit: <sha>` 的评论；贴完本评论会自动刷新（`issue_comment` 事件）。',
+                '- 证据是**旧提交**但期间只动了文档/测试/脚本 ⇒ 仍算绑上（祖先口径，ADR-0008）；期间动过运行时面就必须重跑重贴。',
+                '- ① 真机取证与 ④b 云打包**不在这张表里**：前者在正文逐页截图、后者按打包面触发，都由人/agent 走正文证据。',
+                '</details>',
+                '',
+                `---`,
+                `<sub>本检查**不阻断合并、不判红**——门本身仍是人工/agent 执行、签齐即合并（ADR-0008）；这条评论只回答「证据对不对得上当前 head」。`
+                  + `由 \`mobile-gates.yml\` 自动维护，勿手改 · <a href="${runUrl}">本次运行 #${context.runId}</a></sub>`,
+              );
+
+              await upsert(lines.join('\n'));
+              await core.summary.addHeading('mobile-gates 结论').addCodeBlock(JSON.stringify({
+                pr: prNumber, head: head7, gates: result.gates, ok: result.ok,
+              }, null, 2)).write();
+
+
+            } catch (e) {
+              // 管家自身故障：不改评论（避免把「没算出来」渲染成「没有证据」），只留痕
+              core.warning(`管家本轮未完成核对：${e.message}`);
+              await core.summary
+                .addHeading('mobile-gates 未完成')
+                .addRaw(`PR #${prNumber}：${e.message}`)
+                .write();
+            }

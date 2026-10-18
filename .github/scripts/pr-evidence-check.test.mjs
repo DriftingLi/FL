@@ -874,3 +874,59 @@ test('模板门行形状锁：PR 模板「## 验收证据」的 5 行门必须�
     '删掉模板 ③ 行竟没报「缺该行」⇒ 锁恒绿、抓不住门行丢失',
   );
 });
+
+// ============================================================
+// gates 结构化字段（2026-10-16 新增，移动端 ADR-0041 决策 3）
+//   `.github/workflows/mobile-gates.yml` 的门证据管家从 head 取 pr-evidence.yml、抽出本校验器
+//   原样跑一遍，再把 `gates` 渲染成 PR 上的一条常驻评论。**判据同源**靠的就是这几条断言：
+//   - required 由**触发面**决定（② 看 MP-WEIXIN 面，④ 看有无运行时面），
+//   - bound   由**门评论绑定**决定（等价于 upper 里 gateComment() 的 hit），
+//   两者互不冒充：没有触发面时 required=false（免门不应渲染成「缺证据」），
+//   有触发面但无评论时 bound=false 且 commit 为空（不得把 head 兜底成「已绑」）。
+//   成对取证（spec §⑥ 判据③）：下面既有「该 true」也有「该 false」的对照，缺一半即恒绿。
+// ============================================================
+test('gates：非运行时面 PR ⇒ ②④ 都不 required（免门不冒充缺证据）', async () => {
+  const r = await run({ files: [docs], body: '# 改了什么\n\n只改文档。\n' });
+  assert.equal(r.gates['②'].required, false);
+  assert.equal(r.gates['④'].required, false);
+  assert.equal(r.gates['④'].bound, false);
+});
+
+test('gates：纯 .uvue 改动无门评论 ⇒ ④ required 但未绑（commit 不得兜底成 head）', async () => {
+  const r = await run({ files: [uvue()], body: FULL_EVIDENCE, headSha: SHA });
+  assert.equal(r.gates['④'].required, true);
+  assert.equal(r.gates['④'].bound, false);
+  assert.equal(r.gates['④'].commit, '');
+});
+
+test('gates：④ 门评论绑当前 head ⇒ bound 且回填实际 commit 前 7 位', async () => {
+  const r = await run({
+    files: [uvue()],
+    body: bodyWith4FromComment(),
+    headSha: SHA,
+    gateComments: [gate4Comment(SHA)],
+  });
+  assert.equal(r.gates['④'].bound, true);
+  assert.equal(r.gates['④'].commit, SHA.slice(0, 7));
+  assert.equal(r.gates['④'].reason, '');
+});
+
+test('gates：② required 由 MP-WEIXIN 面点亮（低风险 .uts 面则免），绑定同理', async () => {
+  const hit = await run({
+    files: mpWeixinFiles(),
+    body: FULL_EVIDENCE,
+    headSha: SHA,
+    gateComments: [gate2Comment(SHA)],
+  });
+  assert.equal(hit.gates['②'].required, true);
+  assert.equal(hit.gates['②'].bound, true);
+  assert.equal(hit.gates['②'].commit, SHA.slice(0, 7));
+
+  const lowRisk = await run({
+    files: [{ filename: 'training-app/叉车维修培训学员端跨端应用/utils/exam-session.uts', status: 'modified', patch: '' }],
+    body: '',
+    headSha: SHA,
+  });
+  assert.equal(lowRisk.gates['②'].required, false, '低风险运行时面（仅 .uts）应免 ②（ADR-0008）');
+  assert.equal(lowRisk.gates['④'].required, true, '低风险面 ④ 仍必过（ADR-0008）');
+});

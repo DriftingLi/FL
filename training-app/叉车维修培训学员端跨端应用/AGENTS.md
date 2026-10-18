@@ -160,6 +160,8 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 - **单元测试门**（`npm run test:unit`）：判据三条（**只跑通过的那一次不算验收**，成对取证）与守护分类（**行为守护承重、接线守护不构成证据**）见 [`docs/agents/guards.md`](docs/agents/guards.md)；分类真源 `node scripts/classify-guards.mjs`（`utils/guardClassification.test.js` H1–H5 钉形）。**新增守护**在 PR 正文答 `guards.md` 末节三问；本条只加判据，**不加人工门、不改其他门触发面**。
 - **编译门**：默认 `npm run build:kotlin-all` → `.ci-verify/kotlin-all.log`（执行人注明「agent 执行」、可 `-PostToPr`）；命中三份 json 改动、新增页面、模块手术收口 PR 时追加 `npm run build:compile`。**云打包按「打包面」触发**（三份 json / `uni_modules` app-android / 新增 aar·jar），**正式发版前必跑云打包并装机自测**。两条门脚本**须以全访问权限执行**。
 - **低风险运行时面**（仅 `.uts` 逻辑改动，无 `.uvue` / 三份 json / `uni_modules`）免真机两道（正文那两行可整行不写），代价是真机 / 渲染问题推迟到发版前全量冒烟兜底——**单元测试门与编译门仍必过**。
+- **门证据管家**（`.github/workflows/mobile-gates.yml`，2026-10-16 立）：PR 上**一条常驻评论**自动回答「②④ 的证据是不是绑当前 head」，判据与 `pr-evidence` **同源**（从 head 抽同一个校验器跑，不另算口径）；**不判红、不进 ruleset、不代贴证据**。真门仍在**本机 / 真机**执行——托管 runner 上两道门卡在账号登录态（DCloud `Please Login in!` / 微信 `islogin` ENOENT），已实测证伪，见 `docs/adr/0041-三层门分离与云上证据管家.md` 决策 1。`-PostToPr` 贴完证据评论管家会自动刷新，**不必再手动触发**；分层口径（云上纯逻辑 / 本机运行时门 / 真机取证，**勿与 ② 门 `-Doctor` 的 L1–L7 混淆**）见 `0041` 决策 4。
+- **③ 门在 CI 是 4 片并行**（`npm run test:unit -- --shard=k/4`，`0041` 决策 2）：分的是**机器**、每片内部仍 `-i` 串行（`jest.config.unit.js` 文件头的 #1410 结论不变）；本地内循环仍按 `0036` 处置一走 `test:unit:local`，CI 快慢不改变本地判读纪律。
 - **窗口口径（ADR-0039 + 2026-10-15 收紧，见 `0040`）**：窗口内真机逐页取证**不跑**、小程序门每个运行时面 PR 必跑、视觉回归如实记「无人验」；**触及能力面的 PR 窗口内不合并、排队到退出后**（与 0039 决策 4 冲突处以 0040 为准）；能力面触发与人工签收**不随窗口延后**。
 - **签齐即合并**：证据填齐后 **agent 直接合并**，不必停在「待人工签收」——**「不必停在」不等于「还要问」**：证据齐且不走例外通道时，「是否合并 / 是否清理工作树」**不是问题**，直接执行（授权全文与合并前一行披露 production 部署口径见根 `docs/agents/release.md`:16）。合并后收尾顺序（先 `git worktree remove` → 再 `git branch -D` → 最后删远端，摘 `node_modules` junction 早于删目录）见 `release.md`:13。非运行时面的 PR（纯文档 / 测试 / CI 配置）agent 可自行合并。**例外通道**（「已接受未验证风险 + 理由 + 事后验证计划」）**仍必须由人执行合并**，禁止静默例外。
 - 多会话并发下不动别人工作树就提交 / 同步 master 的配方见 `docs/agents/multi-agent-git.md`「游离提交：完整配方」。`pr-evidence` 检查**只校结构、不校真伪**，是可见检查而非 ruleset 必检（admin 通道**裁定不装**，见 ADR-0008）。
@@ -188,6 +190,6 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 
 ## 相关文档
 
-- **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界、`0039` 小程序优先窗口、`0040` 10-15 收紧裁定（真机零跑 / 能力面 PR 排队到退出后）。其余按目录逐个标题查。
+- **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界、`0036` 工具链交付慢的三条处置、`0039` 小程序优先窗口、`0040` 10-15 收紧裁定（真机零跑 / 能力面 PR 排队到退出后）、`0041` 三层门分离与云上证据管家。其余按目录逐个标题查。
 - **按需层（常驻层指向它们，不反向抄）**：`docs/agents/guards.md`（守护分类与新增守护三问）、`docs/agents/issue-dispatch.md`（派活一行）、`docs/agents/uvue-css.md`（uvue 样式与 UTS 编译约束全表）、`docs/agents/concurrency.md`（并发纪律与时间预算）、`docs/agents/dev-loop.md`（内循环时间账与坑位原文、样式内循环一行结论）、`docs/agents/skills.md`（技能供给与管线归属）。
 - **其余**：`docs/GIT_WORKFLOW.md`、`docs/GIT_CHEATSHEET.md`、`docs/ui-spec.md`、`docs/product-design.md`、`docs/refactor-decisions.md`、`docs/spec-永绿整改.md`。

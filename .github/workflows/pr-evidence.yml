@@ -246,9 +246,32 @@ jobs:
                 '②': gate2Comment ? '' : g2.reason,
               };
 
+              // 2026-10-16 新增（移动端 ADR-0041 决策 3）：把**每道门的判定结果**作为结构化字段返回。
+              // 用途：`.github/workflows/mobile-gates.yml` 的「门证据管家」从 head 取本文件、抽出
+              // 本函数原样跑一遍，把结论渲染成 PR 上的一条常驻评论 —— **判据永远同源**，管家不另写一套。
+              // 纯增量：不改任何 ok / errors / notes 的既有语义与文案（抽取式单测另有断言）。
+              const collectGate = (verdict) => ({
+                bound: Boolean(verdict.hit),
+                commit: verdict.hit ? (gateCommitIn(verdict.hit) || '').slice(0, 7) : '',
+                reason: verdict.hit ? '' : String(verdict.reason || ''),
+              });
+              const gates = {
+                '②': {
+                  ...collectGate(g2),
+                  // 与上面 GATES 循环同一判据（requires: 'mpweixin' + 低风险面减免），别在这里另算
+                  required: Boolean(needs2) && !lowRiskRuntime,
+                  why: Boolean(needs2) && !lowRiskRuntime ? needs2Why.slice(0, 5) : [],
+                },
+                '④': {
+                  ...collectGate(g4),
+                  required: runtime.length > 0,
+                  why: runtime.slice(0, 5),
+                },
+              };
+
               if (runtime.length === 0) {
                 notes.push(`未命中运行时面（改动 ${files.length} 个文件），按 ADR-0008 免人工门与 ④ 编译门。`);
-                return { ok: true, errors, notes, runtime, needs4b, lowRiskRuntime };
+                return { ok: true, errors, notes, runtime, needs4b, lowRiskRuntime, gates };
               }
 
               if (lowRiskRuntime) {
@@ -260,7 +283,7 @@ jobs:
               const head = clean.match(/^##\s*验收证据\s*$/m);
               if (!head) {
                 errors.push('缺 `## 验收证据` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。');
-                return { ok: false, errors, notes, runtime, needs4b, lowRiskRuntime };
+                return { ok: false, errors, notes, runtime, needs4b, lowRiskRuntime, gates };
               }
               const rest = clean.slice(head.index + head[0].length);
               const next = rest.search(/^##\s/m);
@@ -392,6 +415,7 @@ jobs:
                   runtime,
                   needs4b,
                   lowRiskRuntime,
+                  gates,
                 };
               }
               // ② 的**触发理由**要写在摘要里（#1030 的另一半诉求）：门被点亮时让人一眼看见是**哪个文件**
@@ -418,7 +442,7 @@ jobs:
               for (const [k, why] of Object.entries(gateReason)) {
                 if (why && !errors.some((e) => e.includes(why))) notes.push(`${k} 门证据未绑上：${why}`);
               }
-              return { ok: errors.length === 0, errors, notes, runtime, needs4b, lowRiskRuntime };
+              return { ok: errors.length === 0, errors, notes, runtime, needs4b, lowRiskRuntime, gates };
             }
             // ==== PR-EVIDENCE-VALIDATOR-END ====
 
