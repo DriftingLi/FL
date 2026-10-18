@@ -713,6 +713,11 @@ function gateScenarios(dir) {
     //   正则收窄时会漏读这一腿，等于同一枚字段有两种写法。真源 `dev-finish.ps1` 恒发小写，
     //   所以这一腿钉的是「调用方以外的入口也不许把大小写变体当成合法值」。）
     dirtyUpper: { output: GATE_GREEN_OUTPUT, exitCode: 0, logRef: refLog, summaryRef: refSummary, durationSeconds: 11, headSha: HEAD_SHA_SHORT, worktreeState: 'CLEAN' },
+    // ---- #1702 的拆腿：腿必须进**首 token**（机检读者一眼就要分清这是哪一腿在说话）----
+    // 行为腿：ref 也换成本腿的落点（真实调用点就是这么喂的），首 token 变 TEST_BEHAVIOR_RESULT。
+    behaviorLeg: { output: GATE_GREEN_OUTPUT, exitCode: 0, logRef: '.ci-verify/test-behavior.log', summaryRef: '.ci-verify/test-behavior-failure.txt', durationSeconds: 700, headSha: HEAD_SHA_SHORT, worktreeState: 'clean', leg: 'behavior' },
+    // 两维叠加：行为 + local ⇒ TEST_BEHAVIOR_LOCAL_RESULT（四种组合各自可判读，不是互相覆盖）
+    behaviorLocal: { output: GATE_GREEN_OUTPUT, exitCode: 0, logRef: '.ci-verify/test-behavior.log', summaryRef: '.ci-verify/test-behavior-failure.txt', durationSeconds: 701, headSha: HEAD_SHA_SHORT, worktreeState: 'clean', leg: 'behavior', mode: 'local' },
   };
   for (const [name, sc] of Object.entries(spec)) {
     sc.logPath = path.join(dir, `${name}-test-unit.log`); // eslint-disable-line no-param-reassign
@@ -764,7 +769,11 @@ function runUnitGateScenarios() {
     '  $r = $null',
     '  $thrown = $null',
     '  try {',
-    '    $r = Write-UnitGateArtifacts -Output $sc.output -LogPath $sc.logPath -SummaryPath $sc.summaryPath -ExitCode ([int]$sc.exitCode) -DurationSeconds ([int]$sc.durationSeconds) -LogRef $sc.logRef -SummaryRef $sc.summaryRef -HeadSha $sc.headSha -WorktreeState $sc.worktreeState',
+    // #1702：-Leg / -Mode 只在该场景点名时才传 —— 不传就是**默认路径**，U15 用它当「新开关没磨到默认腿」的对照
+    '    $optArgs = @{}',
+    '    if ($sc.PSObject.Properties[\'leg\'] -and $sc.leg) { $optArgs[\'Leg\'] = [string]$sc.leg }',
+    '    if ($sc.PSObject.Properties[\'mode\'] -and $sc.mode) { $optArgs[\'Mode\'] = [string]$sc.mode }',
+    '    $r = Write-UnitGateArtifacts -Output $sc.output -LogPath $sc.logPath -SummaryPath $sc.summaryPath -ExitCode ([int]$sc.exitCode) -DurationSeconds ([int]$sc.durationSeconds) -LogRef $sc.logRef -SummaryRef $sc.summaryRef -HeadSha $sc.headSha -WorktreeState $sc.worktreeState @optArgs',
     '  } catch {',
     '    $thrown = $_.Exception.Message',
     '  }',
@@ -1124,11 +1133,36 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     }
   });
 
-  test('U8: 调用点是接线正确的 —— 跑的就是 `npm run test:unit` 那一条、判定只看退出码、贴评论在 exit 之前', () => {
-    // 本条是**接线**断言（读源码文本），它守的三条不变式各由谁兜行为：
-    //   · 「跑的是 package.json 那一条门命令、不抄第二份 jest 参数」⇒ 行为面由本票真链路取证兜
-    //     （真跑一次 `-UnitGate`，日志里必须是全量 158 套件那一跑，不是契约子集那一跑）；
-    //   · 「产物由 `Write-UnitGateArtifacts` 产出、退出码透传」⇒ U1–U7 真执行；
+  test('U15: 腿进首 token（#1702）—— 行为腿发 TEST_BEHAVIOR_RESULT，默认腿逐字节仍是 TEST_UNIT_RESULT，两维叠加成 TEST_BEHAVIOR_LOCAL_RESULT', () => {
+    // 票据验收①：两腿的机检行必须**机检可判读地区分**。只把腿写进正文（或只换日志文件名）不够 ——
+    // 「agent 判读纪律」里进上下文的只有**结果行**（dev-loop.md），腿不在首 token 就等于拿不到。
+    const g = ctx.parsed.green;
+    const b = ctx.parsed.behaviorLeg;
+    const bl = ctx.parsed.behaviorLocal;
+    expect(b.thrown).toBe(null);
+    expect(b.resultLine.startsWith('TEST_BEHAVIOR_RESULT ')).toBe(true);
+    // gate 形本来就不带 `mode=`（L1a 逐字节钉住的那一形）：行为腿只该换首 token，不该顺手多一枚字段
+    expect(b.resultLine).not.toContain('mode=');
+    expect(b.resultLine).not.toContain('TEST_UNIT_RESULT'); // 首 token 之外的每一处也不许留着旧 token
+    // 默认腿（不传 -Leg）不许被新开关磨到：L1a 钉的是 local 那一维，这里钉 default 这一维
+    expect(g.resultLine.startsWith('TEST_UNIT_RESULT ')).toBe(true);
+    expect(b.resultLine.split(' ')[0]).not.toBe(g.resultLine.split(' ')[0]);
+    // 两维叠加：行为 + local ⇒ TEST_BEHAVIOR_LOCAL_RESULT + mode=local（不回落成 unit，也不回落成 gate）
+    expect(bl.thrown).toBe(null);
+    expect(bl.resultLine.startsWith('TEST_BEHAVIOR_LOCAL_RESULT ')).toBe(true);
+    expect(bl.resultLine).toContain('mode=local');
+    // 腿只是首 token 与落点变了，判据面（退出码 / 产物）与调用方喂的一致 —— 不是行首贴个前缀了事
+    expect(b.exitCodeEcho).toBe(0);
+    expect(b.logExists).toBe(true);
+    expect(b.summaryExists).toBe(false);
+    expect(b.resultLine).toContain('TEST_BEHAVIOR_RESULT');
+    expect(b.resultLine).toMatch(/\blog=\.ci-verify\/test-behavior\.log\b/);
+  });
+  test('U8: 调用点是接线正确的 —— 两腿跑的都是 package.json 那两条、判定只看退出码、贴评论在 exit 之前', () => {
+    // 本条是**接线**断言（读源码文本），它守的几条不变式各由谁兜行为：
+    //   · 「两腿跑的是 package.json 那两条门命令、不抄第二份 jest 参数」⇒ 行为面由本票真链路取证兜
+    //     （真跑一次 `-UnitGate`，两份日志的汇总行必须是两腿**各自**的全量数，不是契约子集那一跑）；
+    //   · 「产物由 `Write-UnitGateArtifacts` 产出、退出码透传」⇒ U1–U7、U15 真执行；
     //   · 「贴评论只在 -PostToPr 且发生在 exit 之前」⇒ 真链路取证（贴出的评论带 sha 绑定且门仍按码退出）。
     const scriptSrc = readSource();
     const branchStart = scriptSrc.indexOf('if ($UnitGate)');
@@ -1136,15 +1170,55 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     expect(branchStart).toBeGreaterThan(-1);
     expect(step1At).toBeGreaterThan(branchStart);
     const branch = scriptSrc.slice(branchStart, step1At);
-    expect(branch).toContain('npm run test:unit');
-    // 第二份门参数 = 门与「被落盘的那一次」分家（#974 的 pattern 漂移同形）
+    // ---- #1702：两腿各跑 package.json 里的那一条，形如 `& npm run <script>`（不抄 jest 参数）----
+    //   8 空格 = 在各自 `try { }` 里（原生命令写 stderr 在 EAP=Stop 下会抛，两腿同形兜法）；
+    //   判据是「调用形态逐字就是这一条」，不是「缩进几格」—— 缩进只用来确认它真在分支体内。
+    // #1702 验收②：取输出必须**边跑边吐** —— 走 `Invoke-GateLegCommand`（内里 Tee-Object + Out-Host）。
+    //   回写成 `| Out-String` 会让 70 个行为套件的心跳行攒到命令结束才出现（2026-10-18 探针：
+    //   8 行 × 0.8s，4s 时 Tee 版控制台已有 3 行、Out-String 版还是空的）—— 那样「日志里有进度行」
+    //   成立、「跑的人看得见进度」不成立，正是本票要修的那件事。两件事分开钉：调用点形状 + 兜法本体。
+    expect(branch).toMatch(/^ {8}\$unitOutput = Invoke-GateLegCommand \{ & npm run test:unit \}$/m);
+    expect(branch).toMatch(/^ {8}\$behaviorOutput = Invoke-GateLegCommand \{ & npm run test:behavior \}$/m);
+    expect(branch).not.toMatch(/npm run test:(unit|behavior)[^\r\n]*\|\s*Out-String/);
+    const helperStart = scriptSrc.indexOf('function Invoke-GateLegCommand {');
+    expect(helperStart).toBeGreaterThan(-1);
+    const helperBody = scriptSrc.slice(helperStart, helperStart + 700);
+    expect(helperBody).toContain('Tee-Object -Variable legLines');
+    expect(helperBody).toContain('| Out-Host');
+    // 第二份门参数 = 门与「被落盘的那一次」分家（#974 的 pattern 漂移同形）。两腿都不许抄 config 名。
     expect(branch).not.toContain('--testPathPattern');
     expect(branch).not.toContain('jest.config.unit.js');
-    // 判定只看退出码：分支的**最后一条语句**就是那一个 exit，后面不再有别的评价逻辑。
-    // ⚠️ 不能用 `indexOf('exit $art.ExitCode')` —— 那串字面量也出现在给人看的那行
-    //    「全量单测门未过（exit $art.ExitCode）」里，取到的第一处不是语句而是文案。
-    const exitMatch = branch.match(/^ {4}exit \$art\.ExitCode$/m);
+    expect(branch).not.toContain('jest.config.behavior.js');
+    // ---- 行为腿**不是**「第一腿绿了才跑」----
+    //   写成 `if ($art.ExitCode -eq 0) { … npm run test:behavior … }` 时第一腿红 ⇒ 第二腿「没跑」，
+    //   而「没跑」在评论里看起来和「这一半没问题」一模一样（本票要防的正是这一形态）。
+    //   钉法：行为腿的起点在**分支顶格**（4 空格缩进）；进了 if 块就会是 8 空格。
+    expect(branch).toMatch(/^ {4}\$behaviorStarted = Get-Date$/m);
+    // ---- #1702 验收③：预期时长是**入口第一行**（读者在开始等之前就该知道「多久算正常」）----
+    //   钉「第一枚 Write-Host 就是那一行」，不是「文件里出现过这句话」—— 放在两腿跑完之后打印时，
+    //   读者该等的十几分钟已经过去了，本票要防的误判一点没少。
+    const firstHost = branch.match(/^ {4}Write-Host [^\n]*$/m);
+    expect(firstHost).not.toBeNull();
+    expect(firstHost[0]).toContain('本次预期');
+    expect(firstHost[0]).toContain('不是卡死');
+    expect(branch.indexOf('本次预期')).toBeLessThan(branch.indexOf('=== ③ 门（两腿'));
+    // 产物由复用件产两次（每腿一次），且只有行为腿带 `-Leg behavior`（默认腿保持逐字节不变）
+    expect((branch.match(/Write-UnitGateArtifacts -Output/g) || []).length).toBe(2);
+    const unitCallAt = branch.indexOf('$art = Write-UnitGateArtifacts -Output');
+    const behaviorCallAt = branch.indexOf('$artBehavior = Write-UnitGateArtifacts -Output');
+    expect(unitCallAt).toBeGreaterThan(-1);
+    expect(behaviorCallAt).toBeGreaterThan(unitCallAt);
+    expect(branch.slice(unitCallAt, unitCallAt + 900)).not.toContain('-Leg');
+    expect(branch.slice(behaviorCallAt, behaviorCallAt + 900)).toContain('-Leg behavior');
+    // ---- 判定只看退出码：合成退出码是分支最后一件事（其后不再有别的评价逻辑）----
+    // ⚠️ 不能用 `indexOf('exit $gateExit')` —— 那串字面量也出现在给人看的那行
+    //    「③ 门未过（exit $gateExit：…）」里，取到的第一处不是语句而是文案。
+    const exitMatch = branch.match(/^ {4}exit \$gateExit$/m);
     expect(exitMatch).not.toBeNull();
+    // 合成口径：先红者胜 —— 任一腿红都算红，后一腿的绿不得盖掉前一腿的红。
+    expect(branch).toMatch(/^ {4}\$gateExit = 0$/m);
+    expect(branch).toMatch(/^ {4}if \(\$art\.ExitCode -ne 0\) \{ \$gateExit = \$art\.ExitCode \}$/m);
+    expect(branch).toMatch(/^ {4}if \(\$artBehavior\.ExitCode -ne 0 -and \$gateExit -eq 0\) \{ \$gateExit = \$artBehavior\.ExitCode \}$/m);
     const callAt = branch.indexOf('Publish-UnitGateComment -PrNumber $PostToPr');
     const exitAt = branch.indexOf(exitMatch[0]);
     expect(callAt).toBeGreaterThan(-1);
@@ -1394,17 +1468,35 @@ describe('③ 门本地快路径（#1654）', () => {
     const branch = scriptSrc.slice(localStart, gateStart);
     // 跑的是 package.json 那条快路径命令本身，且**调用形态**只此一份（#974 双份漂移同形）。
     // 只数 `& npm run` 的执行形态：分支里给人看的回显文案（「命令：npm run …」）不算第二份调用。
-    expect((branch.match(/& npm run test:\S+/g) || [])).toEqual(['& npm run test:unit:local']);
+    // #1702 起快路径也**两腿**（日常环若只跑接线腿，行为腿的回归要等到全量门才暴露）：
+    // 两条执行形态都在、顺序固定（接线腿先、行为腿后），且都不带 -i（并行语义）。
+    expect((branch.match(/& npm run test:\S+/g) || [])).toEqual([
+      '& npm run test:unit:local',
+      '& npm run test:behavior:local',
+    ]);
     expect(branch).not.toContain('npx jest');
     expect(branch).not.toContain('jest.config.unit.js'); // 不抄第二份 jest 参数
+    expect(branch).not.toContain('jest.config.behavior.js');
     // 产物与判定：Write-UnitGateArtifacts 复用件 + -Mode local + exit 透传（判定只看退出码）
-    const artifactsCall = branch.indexOf('Write-UnitGateArtifacts -Output');
-    expect(artifactsCall).toBeGreaterThan(-1);
-    const callText = branch.slice(artifactsCall, branch.indexOf('\n\n', artifactsCall));
+    const artifactsCalls = [...branch.matchAll(/Write-UnitGateArtifacts -Output/g)];
+    expect(artifactsCalls).toHaveLength(2); // 每腿一枚：少了哪枚，那腿就没有机检行
+    const callText = branch.slice(artifactsCalls[0].index, branch.indexOf('\n\n', artifactsCalls[0].index));
     expect(callText).toContain('-Mode local');
     expect(callText).toContain('-HeadSha $headSha');
     expect(callText).toContain('-WorktreeState $worktreeState');
-    expect(branch).toMatch(/^ {4}exit \$art\.ExitCode$/m);
+    expect(callText).not.toContain('-Leg behavior'); // 接线腿 = 默认腿，不显式写
+    const behaviorCallText = branch.slice(artifactsCalls[1].index, branch.indexOf('\n\n', artifactsCalls[1].index));
+    expect(behaviorCallText).toContain('-Mode local');
+    expect(behaviorCallText).toContain('-Leg behavior'); // 行为腿靠这个换 token
+    expect(behaviorCallText).toContain('-HeadSha $headSha');
+    expect(behaviorCallText).toContain('-WorktreeState $worktreeState');
+    expect(behaviorCallText).toContain(".ci-verify/test-behavior-local.log");
+    expect(behaviorCallText).toContain(".ci-verify/test-behavior-local-failure.txt");
+    // 合成退出码：先红者胜（不能只透传第一腿 —— 那会让行为腿红了也绿）
+    expect(branch).toContain('$localGateExit = 0');
+    expect(branch).toContain('if ($art.ExitCode -ne 0) { $localGateExit = $art.ExitCode }');
+    expect(branch).toMatch(/if \(\$artBehaviorLocal\.ExitCode -ne 0 -and \$localGateExit -eq 0\)/);
+    expect(branch).toMatch(/^ {4}exit \$localGateExit$/m);
     // 引用性两枚与全量门同一条纪律（#1556）：共享库取 sha、porcelain 判脏净，本分支不自定义取法
     expect((branch.match(/Get-HeadSha -ProjectDir/g) || []).length).toBe(1);
     expect(branch).toContain('lib\\gate-common.ps1');
@@ -1429,6 +1521,15 @@ describe('③ 门本地快路径（#1654）', () => {
     const gateBranch = scriptSrc.slice(gateStart, scriptSrc.indexOf('# Step 1: 级别判定'));
     expect((gateBranch.match(/& npm run test:unit(?!:)/g) || [])).toEqual(['& npm run test:unit']);
     expect(gateBranch).not.toContain('test:unit:local');
+    // ---- #1702 拆腿：第二腿同一条纪律（同一个 package.json 真源、串行那条、不许漂成 :local）----
+    //   与上面 unit 腿逐条镜像：入口逐字面量 + 全量门分支里只许出现串行那一条。
+    expect(pkg.scripts['test:behavior']).toBe('jest --config jest.config.behavior.js -i');
+    expect(pkg.scripts['test:behavior:local']).toBe('jest --config jest.config.behavior.js');
+    expect(pkg.scripts['test:behavior:local']).not.toMatch(/\s-i\b/);
+    expect((gateBranch.match(/& npm run test:behavior(?!:)/g) || [])).toEqual(['& npm run test:behavior']);
+    expect(gateBranch).not.toContain('test:behavior:local');
+    // `npm test` 是两腿的串行合成（不是只跑接线那一半）：一键全量不该悄悄少跑行为面。
+    expect(pkg.scripts.test).toBe('npm run test:unit && npm run test:behavior');
   });
 });
 

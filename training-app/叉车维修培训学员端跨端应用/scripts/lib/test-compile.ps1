@@ -71,10 +71,12 @@ function Invoke-TestAndCompile {
         #    步骤 3 曾各抄一份**并漂移**（步骤 3 那份少 3 个 token，而它先跑且失败即 exit 1
         #    ⇒ 实际门禁是更窄的那份）。本文件**不得**再抄自己的 pattern 字面量。
         #    守护：utils/contractTestPatternBehavior.test.js（运行期）。
+        # ⚠️ config 用 `jest.config.all.js`（#1702 拆腿）：pattern 命中的套件横跨接线 / 行为两腿，
+        #    单腿 config 会把另一腿的套件当成不存在（0 套件 ⇒ 静默空跑）。
         . (Join-Path $PSScriptRoot 'contract-tests.ps1')
         $testPattern = Get-ContractTestPattern
         try {
-            $testOutput = & npx jest --config jest.config.unit.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
+            $testOutput = & npx jest --config jest.config.all.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
         }
         catch {
             $testOutput = "$($_.Exception.Message)"

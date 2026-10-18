@@ -38,7 +38,7 @@
     npm run dev:finish
     npm run dev:finish -- -Level standard -Device 192.168.10.51:39181
     npm run dev:finish -- -DryRun
-    npm run test:unit:gate                 # 只跑全量单测门：日志 + （红跑）摘要 + 机检行
+    npm run test:unit:gate                 # ③ 门两腿（test:unit + test:behavior）：每腿 日志 + （红跑）摘要 + 机检行
     pwsh scripts/dev-finish.ps1 -UnitGate -PostToPr 1546   # 同上，并把结果贴成 sha 绑定评论
 #>
 [CmdletBinding()]
@@ -47,9 +47,12 @@ param(
     [ValidateSet('quick', 'standard', 'full', '')]
     [string]$Level = '',
     [switch]$DryRun,
-    # ---- 全量单测门落盘模式（#1546，2026-10-05）----
-    # 只跑「全量单测门」这一件事：完整输出恒定落盘、红跑另产一份 ≤2KB 人读摘要、打一行机检行，
-    # 然后**按 jest 的退出码原样退出**。不进下面的九步管线、不取 HBuilderX 锁、不碰设备。
+    # ---- 全量单测门落盘模式（#1546，2026-10-05；#1702 拆腿）----
+    # 只跑「全量单测门」这一件事：**两腿先后各跑一次**（接线腿 `test:unit` → 行为腿 `test:behavior`），
+    # 每腿完整输出恒定落盘、红跑各产一份 ≤2KB 人读摘要、各打一行机检行（`TEST_UNIT_RESULT` /
+    # `TEST_BEHAVIOR_RESULT`），最后**先红者胜**合成一个退出码退出。行为腿无论第一腿红绿都要跑
+    # （停在第一腿会把「没跑」读成「这一半没问题」）。
+    # 不进下面的九步管线、不取 HBuilderX 锁、不碰设备。
     # 存在的理由：#1526 只把「单元测试（契约子集）」那一步的失败详情留住了；全量那一条至今没有落盘
     # 脚本，跑完只剩 exit code ⇒ 「刚才哪个红了」只能重跑几分钟（票 #1546 打的就是 C1 那一档）。
     [switch]$UnitGate,
@@ -370,6 +373,11 @@ function New-TestFailureSummary {
         （sha 只出现在 `-PostToPr` 那条评论正文的 `- commit:` 行里）。两枚**只是可见性**：取不到写 `?`，
         既不省略字段也不补空串（与 `missing=` 同口径），也不参与任何判红路径。
 
+      · **腿要写进首 token**（#1702）—— ③ 门拆成两跑：接线腿（`npm run test:unit`，纯逻辑 / 接线守护）与
+        行为腿（`npm run test:behavior`，现场执行被测面的行为守护）。两腿的结论行必须能按首 token 分流
+        （`TEST_UNIT_*` / `TEST_BEHAVIOR_*`），否则「哪一腿绿了」只能靠日志顺序猜；它与 `mode=` 正交，
+        四个组合各有其名，同一个 token 不答两个问题。
+
     机检行的数字全部取自本次输出**自己的**汇总行（`Test Suites:` / `Tests:` / `Time:`），所以拿着日志
     就能重算出同一串 —— 这是票面「机检行可复算」的落点。抓不到的字段**点名**写进 `missing=`，
     不静默补 0（补 0 是把「读不出」伪装成「没红」）。
@@ -403,7 +411,11 @@ function Write-UnitGateArtifacts {
         # 一枚 `mode=local`。两行**必须可判读地区分**（票面验收①）：Select-String 按首 token 就能分流，
         # 不会把快路径的绿算到全量门头上。默认 'gate' ⇒ 既有调用点（-UnitGate 分支）逐字节不变。
         [ValidateSet('gate', 'local')]
-        [string]$Mode = 'gate'
+        [string]$Mode = 'gate',
+        # 腿（#1702，2026-10-18）：'unit' = 接线腿（`npm run test:unit`）；'behavior' = 行为腿
+        # （`npm run test:behavior`）。首 token 由「腿 × 模式」共同决定，默认 'unit' ⇒ 既有调用点逐字节不变。
+        [ValidateSet('unit', 'behavior')]
+        [string]$Leg = 'unit'
     )
     $utf8 = [System.Text.Encoding]::UTF8
     $lines = @($Output -split "\r?\n")
@@ -478,8 +490,11 @@ function Write-UnitGateArtifacts {
     # ---- 3) 机检行 ----
     # 身份首 token（#1654）：'local' 发独立 token `TEST_UNIT_LOCAL_RESULT` 并多带一枚 `mode=local`；
     # 'gate' 维持 `TEST_UNIT_RESULT` 原样（既有读者 / 守护按旧形态读到的行逐字节不变）。
+    # 首 token = 腿 × 模式（#1702）：接线腿逐字节沿用 `TEST_UNIT_*`（既有读者 / 守护按旧形态读到的行不变），
+    # 行为腿换成 `TEST_BEHAVIOR_*` —— 「哪一腿」与「门还是本地」是两问，一个 token 只答一问。
     $isLocal = ($Mode -eq 'local')
-    $headToken = $(if ($isLocal) { 'TEST_UNIT_LOCAL_RESULT' } else { 'TEST_UNIT_RESULT' })
+    $legToken = $(if ($Leg -eq 'behavior') { 'BEHAVIOR' } else { 'UNIT' })
+    $headToken = "TEST_${legToken}_" + $(if ($isLocal) { 'LOCAL_RESULT' } else { 'RESULT' })
     $show = { param($v) $(if ($null -eq $v) { '?' } else { "$v" }) }
     # 引用性两枚的归一（#1556）：`head=` 只收「非空且不含空白」的串，`dirty=` 只收 `clean` / `dirty` 两个字面值，
     # 其余一律 `?`。取不到时**保留字段**写 `?` —— 省略字段或补空串都会让「上一次那行」变得不可比，
@@ -540,6 +555,64 @@ function Write-UnitGateArtifacts {
 
 <#
 .SYNOPSIS
+    把一次落盘结果**打印**成人读块（#1702）：两腿共用，同一段报告不用在分支里抄两遍。
+
+.DESCRIPTION
+    只做显示：不写文件、不改判据、不碰退出码、不读工作树。判据仍是调用方手里那个
+    `Write-UnitGateArtifacts` 回来的 `.ExitCode`（能出错的地方只有「打错字没显示出来」）。
+#>
+function Write-UnitGateArtifactReport {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]$Art,
+        [Parameter(Mandatory = $true)][string]$LogPath,
+        [Parameter(Mandatory = $true)][string]$SummaryPath
+    )
+    Write-Host ''
+    Write-Host $Art.ResultLine -ForegroundColor $(if ($Art.ExitCode -eq 0) { 'Green' } else { 'Red' })
+    Write-Host "  日志：$LogPath（$($Art.LogBytes) 字节）" -ForegroundColor Yellow
+    if ($Art.SummaryPath) {
+        # 只报路径与体量，正文留在文件里 —— 终端这一行是给「之后要不要重跑」做决定的，不是给人读详情用的
+        Write-Host "  失败摘要（$($Art.SummaryBytes) 字节，人读，不作门禁输入）：$($Art.SummaryPath)" -ForegroundColor Yellow
+    }
+    elseif ($Art.StaleSummary) {
+        # 磁盘上那份是**上一跑**的红摘要（绿跑不覆盖它）。不指出来，就会有人拿它回答「刚才哪个红了」，
+        # 而刚才这一次什么都没红 —— 那是把「看不见」换成「看得见但看错」。不删：`.ci-verify/` 在本仓是判据输入。
+        Write-Host "  ⚠️ 本次是绿跑，但 $SummaryPath 还留着 $($Art.StaleSummary) 那一次红跑的摘要 ⇒ 它不是本次结论" -ForegroundColor DarkYellow
+    }
+    if ($Art.SummaryError) {
+        Write-Host "  ⚠️ 摘要未落盘：$($Art.SummaryError)（判定不受影响，照旧只看退出码）" -ForegroundColor DarkYellow
+    }
+    if (@($Art.Missing).Count -gt 0) {
+        # 汇总行读不出来 ⇒ 明说读不出来。「缺字段」补 0 就是把「读不出」伪装成「没红」
+        Write-Host "  ⚠️ 机检行缺字段：$(@($Art.Missing) -join '、')（jest 的输出形态可能变了，请看日志原文）" -ForegroundColor DarkYellow
+    }
+}
+
+<#
+.SYNOPSIS
+    跑一腿测试命令：**当场**把输出打到控制台，同时把同一份对象流攒成日志原文返回（#1702 验收②）。
+
+.DESCRIPTION
+    不能写成 `& npm run X 2>&1 | Out-String`：`Out-String` 会把整段输出**缓冲到命令结束**才吐一次，
+    于是 70 个行为套件的逐套件心跳行在跑的过程中一行也看不见 —— 这正是本票要修的「880 秒零输出」。
+    `Tee-Object -Variable` 边收边存、`Out-Host` 边收边写：同一份对象流既进日志文件也进人的眼睛
+    （2026-10-18 实测探针：8 行 × 0.8s，4s 时 Tee 版控制台已有 3 行，Out-String 版 4s 时还是空的）。
+    命令字面量仍只在调用方出现一次（`{ & npm run test:behavior }`），不在这里抄第二份 jest 参数（#974）。
+#>
+function Invoke-GateLegCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Command
+    )
+    $legLines = @()
+    & $Command 2>&1 | Tee-Object -Variable legLines | Out-Host
+    # 渲染收在收集之后：日志落盘要的是与旧路径同形的整段文本（Out-String 干的就是这件事）。
+    return ($legLines | Out-String)
+}
+
+<#
+.SYNOPSIS
     把一次全量单测门的结果贴成 **sha 绑定**的 PR 评论（#1546 的「纳入 sha 绑定评论」出口）。
 
 .DESCRIPTION
@@ -557,6 +630,11 @@ function Publish-UnitGateComment {
         [Parameter(Mandatory = $true)][string]$ResultLine,
         [Parameter(Mandatory = $true)][string]$LogRelative,
         [string]$SummaryText = '',
+        # 行为腿（#1702）：三个都可选。给了就多贴一行同形的结论（+ 可选的摘要正文）；不给则评论形状
+        # 与拆分前逐字相同 ⇒ 单腿的既有读者 / 工具不受影响。
+        [string]$BehaviorResultLine = '',
+        [string]$BehaviorLogRelative = '',
+        [string]$BehaviorSummaryText = '',
         [string]$ProjectDir = '',
         [string]$ReproCommand = 'npm run test:unit:gate'
     )
@@ -574,16 +652,32 @@ function Publish-UnitGateComment {
     $marker = '<!-- gate-evidence:{0} -->' -f [char]0x2462
     $body = [System.Collections.Generic.List[string]]::new()
     $body.Add($marker)
-    $body.Add('**全量单测门（`npm run test:unit`，agent 执行）**')
+    # 标题按「本次实际跑了几腿」生成（#1702）：拆分后 ③ 门是两腿，标题只写 test:unit 就是错的。
+    if ($BehaviorResultLine) {
+        $body.Add('**全量单测门（`npm run test:unit` 接线腿 + `npm run test:behavior` 行为腿，agent 执行）**')
+    }
+    else {
+        $body.Add('**全量单测门（`npm run test:unit`，agent 执行）**')
+    }
     $body.Add("- commit: $sha")
     foreach ($noteLine in @($binding.NoteLines)) { $body.Add($noteLine) }
     $body.Add("- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``")
+    if ($BehaviorResultLine) {
+        $body.Add("- 结论（行为腿）：``$BehaviorResultLine``；日志 ``$BehaviorLogRelative``")
+    }
     $body.Add("- 复现：``$ReproCommand``")
     if ($SummaryText) {
         $body.Add('')
         $body.Add('失败摘要正文（人读出口，不作门禁输入）：')
         $body.Add('```')
         $body.Add("$SummaryText".TrimEnd())
+        $body.Add('```')
+    }
+    if ($BehaviorSummaryText) {
+        $body.Add('')
+        $body.Add('失败摘要正文（行为腿，人读出口，不作门禁输入）：')
+        $body.Add('```')
+        $body.Add("$BehaviorSummaryText".TrimEnd())
         $body.Add('```')
     }
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -668,10 +762,12 @@ if ($UnitLocal) {
     $ciDir = Join-Path $ProjectDir '.ci-verify'
     $localLogPath = Join-Path $ciDir 'test-unit-local.log'
     $localSummaryPath = Join-Path $ciDir 'test-unit-local-failure.txt'
-    Write-Host '=== ③ 门本地快路径：并行单测 + 日志 +（仅红跑）失败摘要 + 机检行 ===' -ForegroundColor Cyan
-    Write-Host '  命令：npm run test:unit:local（并行，不带 -i；全量门维持 -i 串行不动，#1410）'
-    Write-Host "  日志（绿跑也落，落原文）：$localLogPath"
-    Write-Host "  摘要（只有红跑才落）：$localSummaryPath"
+    $behaviorLocalLogPath = Join-Path $ciDir 'test-behavior-local.log'
+    $behaviorLocalSummaryPath = Join-Path $ciDir 'test-behavior-local-failure.txt'
+    Write-Host '=== ③ 门本地快路径（两腿）：并行单测 + 日志 +（仅红跑）失败摘要 + 机检行 ===' -ForegroundColor Cyan
+    Write-Host '  命令：npm run test:unit:local + npm run test:behavior:local（两条都并行、不带 -i；全量门维持 -i 串行不动，#1410）'
+    Write-Host "  日志（绿跑也落，落原文）：$localLogPath / $behaviorLocalLogPath"
+    Write-Host "  摘要（只有红跑才落）：$localSummaryPath / $behaviorLocalSummaryPath"
     # 引用性两枚的取数与全量门同一条纪律（#1556）：Get-HeadSha 用共享库那份，本分支不自定义。
     . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
     $headSha = Get-HeadSha -ProjectDir $ProjectDir
@@ -684,10 +780,12 @@ if ($UnitLocal) {
     } catch {
         $worktreeState = ''
     }
-    # 跑的是 package.json 里**那条快路径命令本身**：不在这里抄第二份 jest 参数（与 -UnitGate 同一条
+    # 跑的是 package.json 里**那两条快路径命令本身**：不在这里抄第二份 jest 参数（与 -UnitGate 同一条
     # 纪律，#974 的 pattern 双份漂移同形）—— 门与「被落盘的那一次」必须是同一个东西。
+    # ---- 接线腿 ----
+    $unitLocalStarted = Get-Date
     try {
-        $localOutput = & npm run test:unit:local 2>&1 | Out-String
+        $localOutput = Invoke-GateLegCommand { & npm run test:unit:local }
     }
     catch {
         # 与 -UnitGate 同形：EAP=Stop 下原生命令写 stderr 可能抛 ⇒ 异常文本当输出继续，判定仍取退出码。
@@ -695,35 +793,44 @@ if ($UnitLocal) {
     }
     $localExitCode = $LASTEXITCODE
     $art = Write-UnitGateArtifacts -Output $localOutput -LogPath $localLogPath -SummaryPath $localSummaryPath `
-        -ExitCode $localExitCode -DurationSeconds ([int]((Get-Date) - $localStarted).TotalSeconds) `
+        -ExitCode $localExitCode -DurationSeconds ([int]((Get-Date) - $unitLocalStarted).TotalSeconds) `
         -LogRef '.ci-verify/test-unit-local.log' -SummaryRef '.ci-verify/test-unit-local-failure.txt' `
         -HeadSha $headSha -WorktreeState $worktreeState -Mode local
 
+    # 报告块与全量门两腿共用同一个纯展示函数（#1702）：同样的 8 行只写一份。
+    Write-UnitGateArtifactReport -Art $art -LogPath $localLogPath -SummaryPath $localSummaryPath
+
+    # ---- 行为腿（#1702；红不掐掉另一腿的判读信息，与全量门同取舍）----
+    $behaviorLocalStarted = Get-Date
+    try {
+        $behaviorLocalOutput = Invoke-GateLegCommand { & npm run test:behavior:local }
+    }
+    catch {
+        $behaviorLocalOutput = "$($_.Exception.Message)"
+    }
+    $behaviorLocalExitCode = $LASTEXITCODE
+    $artBehaviorLocal = Write-UnitGateArtifacts -Output $behaviorLocalOutput -LogPath $behaviorLocalLogPath -SummaryPath $behaviorLocalSummaryPath `
+        -ExitCode $behaviorLocalExitCode -DurationSeconds ([int]((Get-Date) - $behaviorLocalStarted).TotalSeconds) `
+        -LogRef '.ci-verify/test-behavior-local.log' -SummaryRef '.ci-verify/test-behavior-local-failure.txt' `
+        -HeadSha $headSha -WorktreeState $worktreeState -Mode local -Leg behavior
+
+    Write-UnitGateArtifactReport -Art $artBehaviorLocal -LogPath $behaviorLocalLogPath -SummaryPath $behaviorLocalSummaryPath
+
     Write-Host ''
-    Write-Host $art.ResultLine -ForegroundColor $(if ($art.ExitCode -eq 0) { 'Green' } else { 'Red' })
-    Write-Host "  日志：$localLogPath（$($art.LogBytes) 字节）" -ForegroundColor Yellow
-    if ($art.SummaryPath) {
-        # 只报路径与体量，正文留在文件里 —— 与 -UnitGate 同一口径
-        Write-Host "  失败摘要（$($art.SummaryBytes) 字节，人读，不作门禁输入）：$($art.SummaryPath)" -ForegroundColor Yellow
-    }
-    elseif ($art.StaleSummary) {
-        Write-Host "  ⚠️ 本次是绿跑，但 $localSummaryPath 还留着 $($art.StaleSummary) 那一次红跑的摘要 ⇒ 它不是本次结论" -ForegroundColor DarkYellow
-    }
-    if ($art.SummaryError) {
-        Write-Host "  ⚠️ 摘要未落盘：$($art.SummaryError)（判定不受影响，照旧只看退出码）" -ForegroundColor DarkYellow
-    }
-    if (@($art.Missing).Count -gt 0) {
-        Write-Host "  ⚠️ 机检行缺字段：$(@($art.Missing) -join '、')（jest 的输出形态可能变了，请看日志原文）" -ForegroundColor DarkYellow
-    }
-    if ($art.ExitCode -eq 0) { Write-Result $true '本地快路径通过（并行语义的日常环，不是 ③ 门全量；结论由退出码给出）' }
-    # ⚠️ 属性引用必须走 `$($art.ExitCode)` 子表达式（同 -UnitGate 分支那行注释记过的坑）。
-    else { Write-Result $false "本地快路径未过（exit $($art.ExitCode)）；③ 门全量（-UnitGate，-i 串行）另行判定" }
-    exit $art.ExitCode
+    Write-Host "  两腿合计 wall=$([int]((Get-Date) - $localStarted).TotalSeconds)s（每腿自己的 wall= 在各自机检行里）"
+    $localGateExit = 0
+    if ($art.ExitCode -ne 0) { $localGateExit = $art.ExitCode }
+    if ($artBehaviorLocal.ExitCode -ne 0 -and $localGateExit -eq 0) { $localGateExit = $artBehaviorLocal.ExitCode }
+    if ($localGateExit -eq 0) { Write-Result $true '本地快路径两腿通过（并行语义的日常环，不是 ③ 门全量；结论由退出码给出）' }
+    # ⚠️ 属性引用必须走 `$($localGateExit)` 子表达式（同 -UnitGate 分支那行注释记过的坑）。
+    else { Write-Result $false "本地快路径未过（先红者 exit $($localGateExit)）；③ 门全量（-UnitGate，-i 串行）另行判定" }
+    exit $localGateExit
 }
 
 # ============================================================
-# 全量单测门落盘模式（#1546）：只跑这一件事，跑完按 jest 的退出码退出
+# 全量单测门落盘模式（#1546；#1702 拆两腿）：只跑这一件事，两腿都跑完再按合成退出码退出
 #   位置在 -DryRun 之后 —— `-DryRun -UnitGate` 同时给时，「不执行任何操作」那条承诺优先。
+#   入口**第一行**打预期时长（#1702 验收③）：慢 ≠ 卡死，读者一开始就该知道多久算正常。
 #   不进九步管线、不取 HBuilderX 锁、不碰设备 ⇒ 别的会话持锁时它照样能跑（③ 本来就不占主程序）。
 # ============================================================
 if ($UnitGate) {
@@ -731,9 +838,15 @@ if ($UnitGate) {
     $ciDir = Join-Path $ProjectDir '.ci-verify'
     $unitLogPath = Join-Path $ciDir 'test-unit.log'
     $unitSummaryPath = Join-Path $ciDir 'test-unit-failure.txt'
-    Write-Host '=== 全量单测门：日志 +（仅红跑）失败摘要 + 机检行 ===' -ForegroundColor Cyan
-    Write-Host "  日志（绿跑也落，落原文）：$unitLogPath"
-    Write-Host "  摘要（只有红跑才落）：$unitSummaryPath"
+    $behaviorLogPath = Join-Path $ciDir 'test-behavior.log'
+    $behaviorSummaryPath = Join-Path $ciDir 'test-behavior-failure.txt'
+    # ⚠️ 预期时长行必须是**入口第一行**（#1702 验收③）：读者在开始等之前就该知道「多久算正常」，
+    #    而不是等十几分钟之后才怀疑卡死（#1656 的判读纪律：慢 ≠ 卡死）。数字取自 `docs/adr/0042` 的实跑记录，
+    #    只在两腿都被重跑并实测时更新 —— 别拿估算改它。
+    Write-Host '本次预期 ≈ 20 分钟（2026-10-18 两腿实测合计 1172 s）：先接线腿（test:unit，120 个纯逻辑 / 接线套件，≈ 1 分钟），再行为腿（test:behavior，70 个直接执行被测面的行为套件，≈ 19 分钟 —— 光 utils/mpWeixinGateResultLineBehavior.test.js 一套就约 8 分钟）；逐套件心跳行 JEST_SUITE i=… 会不断出现，但单个超长套件内静默数分钟属设计内（-i 串行，#1410），不是卡死' -ForegroundColor Cyan
+    Write-Host '=== ③ 门（两腿：test:unit 接线 + test:behavior 行为）：每腿 日志 +（仅红跑）失败摘要 + 一条机检行 ===' -ForegroundColor Cyan
+    Write-Host "  日志（绿跑也落，落原文）：$unitLogPath / $behaviorLogPath"
+    Write-Host "  摘要（只有红跑才落）：$unitSummaryPath / $behaviorSummaryPath"
     # ---- 引用性两枚的取数（#1556）：机检行要能回答「这一行覆盖的是哪一棵树的哪个状态」。
     # Get-HeadSha 用共享库那份（`lib/gate-common.ps1` 里唯一合格的成员），本脚本不自定义；
     # dot-source 提到分支开头，于是机检行与下面 `-PostToPr` 那条评论**共用同一份取法**（先前它只在评论分支里）。
@@ -753,8 +866,9 @@ if ($UnitGate) {
     }
     # 跑的是 package.json 里**那一条门命令本身**：本脚本不再抄一份 jest 参数 —— 参数一旦在这里再抄一份，
     # 「门」与「被落盘的那一次」就是两个东西了（与 #974 的 pattern 双份漂移同形）。
+    $unitStarted = Get-Date
     try {
-        $unitOutput = & npm run test:unit 2>&1 | Out-String
+        $unitOutput = Invoke-GateLegCommand { & npm run test:unit }
     }
     catch {
         # 与「单元测试」那一步同形：`$ErrorActionPreference='Stop'` 下原生命令写 stderr 可能抛 ⇒ 把异常
@@ -763,35 +877,42 @@ if ($UnitGate) {
     }
     $unitExitCode = $LASTEXITCODE
     $art = Write-UnitGateArtifacts -Output $unitOutput -LogPath $unitLogPath -SummaryPath $unitSummaryPath `
-        -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $gateStarted).TotalSeconds) `
+        -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $unitStarted).TotalSeconds) `
         -LogRef '.ci-verify/test-unit.log' -SummaryRef '.ci-verify/test-unit-failure.txt' `
         -HeadSha $headSha -WorktreeState $worktreeState
 
+    Write-UnitGateArtifactReport -Art $art -LogPath $unitLogPath -SummaryPath $unitSummaryPath
+
+    # ---- 第二腿：行为（test:behavior）----
+    # **无论第一腿红绿都要跑**：③ 门是「两腿都绿」，不是「第一腿红就停」—— 停在第一腿会把「没跑」
+    # 读成「这一半没问题」，正是本票要防的形态。行为腿的每行 `JEST_SUITE i=…/N` 就是串行下的进度心跳
+    # （`-i` 不动，#1410 裁定不变；单个套件内部仍可能长静默，故入口第一行要写预期时长）。
+    $behaviorStarted = Get-Date
+    try {
+        $behaviorOutput = Invoke-GateLegCommand { & npm run test:behavior }
+    }
+    catch {
+        # 与第一腿同形：EAP=Stop 下原生命令写 stderr 可能抛 ⇒ 异常文本当输出继续，判定仍取退出码。
+        $behaviorOutput = "$($_.Exception.Message)"
+    }
+    $behaviorExitCode = $LASTEXITCODE
+    $artBehavior = Write-UnitGateArtifacts -Output $behaviorOutput -LogPath $behaviorLogPath -SummaryPath $behaviorSummaryPath `
+        -ExitCode $behaviorExitCode -DurationSeconds ([int]((Get-Date) - $behaviorStarted).TotalSeconds) `
+        -LogRef '.ci-verify/test-behavior.log' -SummaryRef '.ci-verify/test-behavior-failure.txt' `
+        -HeadSha $headSha -WorktreeState $worktreeState -Leg behavior
+    Write-UnitGateArtifactReport -Art $artBehavior -LogPath $behaviorLogPath -SummaryPath $behaviorSummaryPath
+
     Write-Host ''
-    Write-Host $art.ResultLine -ForegroundColor $(if ($art.ExitCode -eq 0) { 'Green' } else { 'Red' })
-    Write-Host "  日志：$unitLogPath（$($art.LogBytes) 字节）" -ForegroundColor Yellow
-    if ($art.SummaryPath) {
-        # 只报路径与体量，正文留在文件里 —— 终端这一行是给「之后要不要重跑」做决定的，不是给人读详情用的
-        Write-Host "  失败摘要（$($art.SummaryBytes) 字节，人读，不作门禁输入）：$($art.SummaryPath)" -ForegroundColor Yellow
-    }
-    elseif ($art.StaleSummary) {
-        # 磁盘上那份是**上一跑**的红摘要（绿跑不覆盖它）。不指出来，就会有人拿它回答「刚才哪个红了」，
-        # 而刚才这一次什么都没红 —— 那是把「看不见」换成「看得见但看错」。不删：`.ci-verify/` 在本仓是判据输入。
-        Write-Host "  ⚠️ 本次是绿跑，但 $unitSummaryPath 还留着 $($art.StaleSummary) 那一次红跑的摘要 ⇒ 它不是本次结论" -ForegroundColor DarkYellow
-    }
-    if ($art.SummaryError) {
-        Write-Host "  ⚠️ 摘要未落盘：$($art.SummaryError)（判定不受影响，照旧只看退出码）" -ForegroundColor DarkYellow
-    }
-    if (@($art.Missing).Count -gt 0) {
-        # 汇总行读不出来 ⇒ 明说读不出来。「缺字段」补 0 就是把「读不出」伪装成「没红」
-        Write-Host "  ⚠️ 机检行缺字段：$(@($art.Missing) -join '、')（jest 的输出形态可能变了，请看日志原文）" -ForegroundColor DarkYellow
-    }
-    if ($art.ExitCode -eq 0) { Write-Result $true '全量单测门通过（结论由退出码给出，摘要只在红跑产出）' }
+    Write-Host "  两腿合计 wall=$([int]((Get-Date) - $gateStarted).TotalSeconds)s（每腿自己的 wall= 在各自机检行里）" -ForegroundColor Yellow
+    # 合成退出码：**先红者胜** —— 哪一腿红都算红（不让后一腿的绿盖掉前一腿的红），两腿都绿才是 0。
+    $gateExit = 0
+    if ($art.ExitCode -ne 0) { $gateExit = $art.ExitCode }
+    if ($artBehavior.ExitCode -ne 0 -and $gateExit -eq 0) { $gateExit = $artBehavior.ExitCode }
+    if ($gateExit -eq 0) { Write-Result $true '③ 门两腿都过（接线 test:unit + 行为 test:behavior；结论由两条机检行的 exit= 给出，摘要只在红跑产出）' }
     # ⚠️ 属性引用必须走 `$($art.ExitCode)` 子表达式：双引号里的 `$art.ExitCode` **不展开属性** ——
     #    PowerShell 把 `$art` 整个 ToString 再接一串字面量 `.ExitCode`（2026-10-05 真链路实测：终端打出
-    #    `exit @{ResultLine=…; ExitCode=1; …}.ExitCode`）。同文件的其它行本来就是子表达式形态，
-    #    只有这一行漏了 —— 而守护钉的是 `exit $art.ExitCode` 那条**语句**，钉不到这句文案。
-    else { Write-Result $false "全量单测门未过（exit $($art.ExitCode)）" }
+    #    `exit @{ResultLine=…; ExitCode=1; …}.ExitCode`）。这里同样用子表达式报两腿各自的退出码。
+    else { Write-Result $false "③ 门未过（exit $gateExit：接线腿 exit=$($art.ExitCode) / 行为腿 exit=$($artBehavior.ExitCode)）" }
 
     if ($PostToPr -gt 0) {
         # sha 的取法只有一份：分支开头 dot-source 共享库并取 `$headSha`（#1556 之前这里才 dot-source，
@@ -801,10 +922,17 @@ if ($UnitGate) {
         if ($art.SummaryPath -and (Test-Path -LiteralPath $art.SummaryPath)) {
             $summaryText = [System.IO.File]::ReadAllText($art.SummaryPath, [System.Text.Encoding]::UTF8)
         }
+        # 两腿各自的红摘要都贴：评论是 `.ci-verify/` 消失之后唯一还读得到「刚才哪个红了」的出口。
+        $behaviorSummaryText = ''
+        if ($artBehavior.SummaryPath -and (Test-Path -LiteralPath $artBehavior.SummaryPath)) {
+            $behaviorSummaryText = [System.IO.File]::ReadAllText($artBehavior.SummaryPath, [System.Text.Encoding]::UTF8)
+        }
         Publish-UnitGateComment -PrNumber $PostToPr -ResultLine $art.ResultLine `
-            -LogRelative '.ci-verify/test-unit.log' -SummaryText $summaryText -ProjectDir $ProjectDir
+            -LogRelative '.ci-verify/test-unit.log' -BehaviorResultLine $artBehavior.ResultLine `
+            -BehaviorLogRelative '.ci-verify/test-behavior.log' -SummaryText $summaryText `
+            -BehaviorSummaryText $behaviorSummaryText -ProjectDir $ProjectDir
     }
-    exit $art.ExitCode
+    exit $gateExit
 }
 
 # ============================================================
@@ -857,10 +985,13 @@ Write-Step 3 9 '单元测试'
 # ⚠️ pattern 取自**唯一真源** `lib\contract-tests.ps1`，本文件**不得**再抄一份自己的字面量
 #    （曾有第二份、且与 test-compile 的那份漂移：少了 hxRun/hxTimingBehavior/hxError，
 #     而步骤 3 先跑且失败即 exit 1 ⇒ 实际门禁是**更窄的那份**）。守护：contractTestPatternBehavior.test.js
+# ⚠️ config 用 `jest.config.all.js`（#1702 拆腿）：pattern 命中的套件横跨接线 / 行为两腿，
+#    而单腿 config 只认自己那一半 —— 拿 unit 腿的 config 跑行为套件，jest 会当它**不存在**
+#    （0 套件，看着像「这个 token 没守护」，正是本文件最恨的静默漂移形态）。
 . (Join-Path $PSScriptRoot 'lib\contract-tests.ps1')
 $testPattern = Get-ContractTestPattern
 try {
-    $testOutput = & npx jest --config jest.config.unit.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
+    $testOutput = & npx jest --config jest.config.all.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
 }
 catch {
     $testOutput = "$($_.Exception.Message)"

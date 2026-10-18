@@ -60,7 +60,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 
 - ① Android 真机逐页截图对比（**①a**：agent 出证、按一次分支收口跑；**①b**：命中「能力面」时由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
 - ② 微信开发者工具无报错（半自动：可跑 `scripts/mp-weixin-check.ps1` 产出证据，执行人栏仍由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `MP_WEIXIN_RESULT` + 截图 `.ci-verify/*.png`；也可写「见评论 <链接>」）：
-- ③ `npm run test:unit` 全绿 — 结论（含产物，贴 CI run 链接）：
+- ③ `npm run test:unit`（接线腿）+ `npm run test:behavior`（行为腿）两腿全绿 — 结论（含产物，贴 CI run 链接；本地落盘入口 `npm run test:unit:gate` 会给两条 `TEST_*_RESULT` 机检行）：
 - ④ 本地编译门（默认 ④c `npm run build:kotlin-all`；dev 面追加 ④a `npm run build:compile`） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `.ci-verify/kotlin-all.log` 或 `.ci-verify/build.log`；也可写「见评论 <链接>」）：
 - ④b release 云打包（触及打包面时必填；正式发版前必跑） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
 

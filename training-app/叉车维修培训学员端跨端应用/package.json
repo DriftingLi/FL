@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "jest --config jest.config.unit.js -i",
+    "test": "npm run test:unit && npm run test:behavior",
     "test:unit": "jest --config jest.config.unit.js -i",
+    "test:behavior": "jest --config jest.config.behavior.js -i",
     "test:unit:local": "jest --config jest.config.unit.js",
+    "test:behavior:local": "jest --config jest.config.behavior.js",
     "test:unit:gate": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -UnitGate",
     "test:unit:gate:local": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -UnitLocal",
     "hx:run": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/hx-run.ps1",

@@ -83,7 +83,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 ## 测试与检查流程
 
-- **本线唯一在跑的验证层 = `npm run test:unit`（它就是 ③ 门）**：`jest.config.unit.js`，`testEnvironment: node`，只扫 `utils/**/*.test.[jt]s?(x)`；`npm test` 是等价别名。只跑一个测试：`npx jest --config jest.config.unit.js <相对路径>`，按名加 `-t "片段"`。判据三条与守护分类（**接线守护不构成 ③ 证据**）见下节 ③ 条与 [`docs/agents/guards.md`](docs/agents/guards.md)。**跑完只把结果行带进上下文**（完整日志留 `.ci-verify/*.log`，要细节按小节名回 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「agent 判读纪律」读，别贴日志原文）。
+- **本线唯一在跑的验证层 = ③ 门两腿**（#1702 拆分，来路见 [`docs/adr/0042-测试门拆腿与逐套件心跳.md`](docs/adr/0042-测试门拆腿与逐套件心跳.md)）：`npm run test:unit`（**接线腿**，`jest.config.unit.js`）+ `npm run test:behavior`（**行为腿**，`jest.config.behavior.js`），两腿都是 `testEnvironment: node`，各扫自己那一半 `utils/**/*.test.[jt]s?(x)`；`npm test` = 两腿顺序跑（**不是只跑一半**）。只跑一个测试：`npx jest --config <该套件所在腿的 config> <相对路径>`，按名加 `-t "片段"`——**选错腿的 config 会让 jest 当那个套件不存在（0 套件，长得像绿）**，套件归哪一腿问 `node scripts/classify-guards.mjs`。判据三条与守护分类（**接线守护不构成 ③ 证据**）见下节 ③ 条与 [`docs/agents/guards.md`](docs/agents/guards.md)。**跑完只把结果行带进上下文**（两腿各一条 `TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT`；完整日志留 `.ci-verify/*.log`，要细节按小节名回 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「agent 判读纪律」读，别贴日志原文）。
 - ⚠️ **本仓没有 `type-check` 脚本** —— 那是 Web 前端栈的入口，别照搬。后端四件套（含 Windows 本机 golangci-lint 由 CI 兜底、WSL 例外）、生成链顺序（swagger → gen-apitypes → 再跑测试）、PG 契约测试纪律、部署配置校验、DeepSec 扫描的**权威版本在根** [`docs/agents/checks.md`](../../docs/agents/checks.md)，本处不抄。
 - **端到端（E2E）自动化本仓不做，别再按 uni-app 项目模板去接**：微信小程序通道只能做 page 级断言、做不了「点击 → 跳转 → 断言」的流程验证（PR #1136 裁决），H5 通道在 `require` 阶段即炸 ⇒ 本仓**没有** E2E 入口与装配。裁决、实测与**将来重启的配方**见 `docs/adr/0020-端到端测试通道裁决落锁与装配清退.md`；补强验证层的正确方向是**把镜像实现迁到 `utils/utsHarness.js` 真执行**（`docs/spec-永绿整改.md` §④ S3 / S6a–S6c），不是引入 E2E。
 
@@ -106,7 +106,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 | **内循环（只编译拿诊断）** | 改完 `.uvue` / `.uts`，**先确认没有编译期诊断** | `npm run hx:compile-only`（= `hx-run.ps1 -CompileOnly`：官方语义的「仅编译」，**不推送 / 不启动 / 不轮询 / 不需要设备**，机检行 `mode=compile-only`） | **热缓存 257 秒**（2026-09-14 实测，落在旧口径 205–261 秒内 ✅）；**冷 / 上次被打断后 826–901+ 秒**（同日两次实测）—— **勿再引用「约 3–4 分钟」当常态** |
 | **内循环（热刷新）** | 只改模板 / 样式，想看真机效果 | HBuilderX「运行到手机」+ 热刷新；**不勾干净缓存重建、不重装基座** | 秒级～1 分钟 |
 | **内循环（真运行到真机）** | 要在真机上看行为 / 收口取证前的部署 | `npm run hx:run`（**真运行**：无干净缓存重建、不重装基座、不做 `adb install`；判定靠**设备侧事实相对基线前进**） | 约 4–5 分钟（实测编译 205–261 秒 + 推送 15–21 秒） |
-| **中循环** | **每个「视觉满意点」一次**（不是每次微调） | `npm run test:unit` + ④ 本地编译门（`npm run build:kotlin-all` 够用；必要时 `npm run build:compile` 全量）→ **一次提交** | 分钟级 |
+| **中循环** | **每个「视觉满意点」一次**（不是每次微调） | `npm run test:unit && npm run test:behavior`（两腿）+ ④ 本地编译门（`npm run build:kotlin-all` 够用；必要时 `npm run build:compile` 全量）→ **一次提交** | 分钟级 |
 | **外循环** | **主题收口一次** | ①a 真机自动取证（`adb` 只读逐页截图 + logcat，**不抢焦点**）→ 开 PR；证据 sha 对齐 | 一次 |
 
 **提交粒度**：**一个视觉主题一个 commit**。色值微调与结构删除**不要混在一个提交里**——反例 `56d0fe3`（本地分支 `feat/ai-basic-ui-prototype`，+21 / −71）：「背景实色兜底」与「去掉小程序 chrome 胶囊」压在一起，回滚无从下手。
@@ -115,7 +115,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 ### 并发会话纪律（多会话并行时必读）
 
-**HBuilderX 是单实例串行资源** ⇒ 真机自动化**不可并发**：多会话同时跑 `hx-run` / 编译门 / 截图只会**排队**（`scripts/lib/hx-busy.ps1` 的锁与忙探测，日志 `HX_BUSY wait=<秒>`），到取锁上限即 `exit 2` 判**环境不可用**——**这是架构约束，不是可调优的缺陷**；忙就改跑不需要 HBuilderX 的检查（`npm run test:unit` / `npm run build:kotlin-all`），**绝不 kill 主程序、绝不抢占**。**职责边界**：真机步骤（`dev:finish` 的 4–6）**集中到一个会话**，其余会话只做到编译门为止。取锁上限（120/1800/600 秒）、锁交接（`$env:HX_LOCK_OWNER`）、「先写代码、后集中上机」攒批口径与时间预算在按需层 [`docs/agents/concurrency.md`](docs/agents/concurrency.md)；判据与守护见 `docs/adr/0011-一键完成的并发与失败语义.md`、`utils/hxBusyGateContract.test.js` H1–H11、`utils/devFinishContract.test.js` F6–F10。
+**HBuilderX 是单实例串行资源** ⇒ 真机自动化**不可并发**：多会话同时跑 `hx-run` / 编译门 / 截图只会**排队**（`scripts/lib/hx-busy.ps1` 的锁与忙探测，日志 `HX_BUSY wait=<秒>`），到取锁上限即 `exit 2` 判**环境不可用**——**这是架构约束，不是可调优的缺陷**；忙就改跑不需要 HBuilderX 的检查（③ 门两腿 `npm run test:unit` / `test:behavior`、`npm run build:kotlin-all`），**绝不 kill 主程序、绝不抢占**。**职责边界**：真机步骤（`dev:finish` 的 4–6）**集中到一个会话**，其余会话只做到编译门为止。取锁上限（120/1800/600 秒）、锁交接（`$env:HX_LOCK_OWNER`）、「先写代码、后集中上机」攒批口径与时间预算在按需层 [`docs/agents/concurrency.md`](docs/agents/concurrency.md)；判据与守护见 `docs/adr/0011-一键完成的并发与失败语义.md`、`utils/hxBusyGateContract.test.js` H1–H11、`utils/devFinishContract.test.js` F6–F10。
 
 ### Qoder 托管 worktree 的使用边界（2026-09-28 立）
 
@@ -138,7 +138,7 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 - 每次微调都**全量重编译 / 重装基座 / 跑全量门 + 提交**——全量是门的活（`compile-check.ps1`），**基座只装一次**（`hx-run.ps1` 无 `adb install`），门按中循环跑（每个视觉满意点一次），提交按「一个视觉主题一个 commit」。
 - **kill `cli` 或 HBuilderX 主程序**——违反「HBuilderX 是单实例串行资源」：**忙就等**
   （`scripts/lib/hx-busy.ps1` 的锁 + 忙探测 + 等待上限），超时 `exit 2` 并改跑不需要 HBuilderX 的检查
-  （`npm run test:unit` / `build:kotlin-all -SkipPublish` / `smoke:emulator`）。
+  （③ 门两腿 `npm run test:unit` / `test:behavior` / `build:kotlin-all -SkipPublish` / `smoke:emulator`）。
 - 拿**仿真机当热刷新用**——仿真机是**前置冒烟**（`npm run smoke:emulator`，非门、不替代 ①），
   装一次 SDK 3–4 GB / 20–40 分钟，不适合秒级迭代。
 - **成本账反模式两条**（sha 无害前进就重跑整道门 / ② 失败后不带 `-SkipBuild` 重试）：**判据与实测数字在**
@@ -157,11 +157,11 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 - **真机逐页取证**（agent 出证：逐页截图 + logcat + 机检行 + 入仓截图）：按**一次分支收口**跑一次、**不跨 PR 共用**，手法见 ADR-0008「取证手法补遗」；**窗口内不跑**，真机行如实写 `SKIP·待批收口`。
 - **真机人工签收**：**只在命中「能力面」时必过**——指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互，**不是**「任何运行时面」；「执行人」栏由**人**给出原文（agent 代录、不得自拟、不得写「已通过」）。触发口径与**明确不做**清单（diff 文本触发、跨 PR 共用真机等）见 `docs/adr/0016-真机门的人工性收缩与按批取证.md`。
 - **小程序门（② 微信开发者工具门 = 半自动门，#883 收口）**：`npm run build:mp-weixin-check` → `MP_WEIXIN_RESULT` + `.ci-verify/*.png`，结果可 `-PostToPr <PR号>` 贴 sha 绑定评论（正文该行写「见评论 <链接>」）。**窗口内 = 每个运行时面 PR 的主门、执行人允许「agent 执行」**（先例 #1674）；窗口外执行人由人给出原文。三条硬前提与证据边界原文在 ADR-0008「小程序门」「三条硬前提与证据边界」两节。**跑完任何 HBuilderX 门先 `git status` 查 `manifest.json`**，脏了 `git checkout -- manifest.json` 再继续。
-- **单元测试门**（`npm run test:unit`）：判据三条（**只跑通过的那一次不算验收**，成对取证）与守护分类（**行为守护承重、接线守护不构成证据**）见 [`docs/agents/guards.md`](docs/agents/guards.md)；分类真源 `node scripts/classify-guards.mjs`（`utils/guardClassification.test.js` H1–H5 钉形）。**新增守护**在 PR 正文答 `guards.md` 末节三问；本条只加判据，**不加人工门、不改其他门触发面**。
+- **单元测试门**（#1702 起**两腿**：`npm run test:unit` 接线 + `npm run test:behavior` 行为；拆分轴就是守护分类本身——behavior ⇒ 行为腿、wiring ⇒ 接线腿，两腿 `testMatch` 由 `scripts/lib/guard-split.js` 从同一份分类算出，**不是第二份手写清单**；两腿并集才是全量，`utils/jestSplitContract.test.js` P1–P6 钉这个形态）：判据三条（**只跑通过的那一次不算验收**，成对取证）与守护分类（**行为守护承重、接线守护不构成证据**）见 [`docs/agents/guards.md`](docs/agents/guards.md)；分类真源 `node scripts/classify-guards.mjs`（`utils/guardClassification.test.js` H1–H5 钉形）。**新增守护**在 PR 正文答 `guards.md` 末节三问；本条只加判据，**不加人工门、不改其他门触发面**。
 - **编译门**：默认 `npm run build:kotlin-all` → `.ci-verify/kotlin-all.log`（执行人注明「agent 执行」、可 `-PostToPr`）；命中三份 json 改动、新增页面、模块手术收口 PR 时追加 `npm run build:compile`。**云打包按「打包面」触发**（三份 json / `uni_modules` app-android / 新增 aar·jar），**正式发版前必跑云打包并装机自测**。两条门脚本**须以全访问权限执行**。
 - **低风险运行时面**（仅 `.uts` 逻辑改动，无 `.uvue` / 三份 json / `uni_modules`）免真机两道（正文那两行可整行不写），代价是真机 / 渲染问题推迟到发版前全量冒烟兜底——**单元测试门与编译门仍必过**。
 - **门证据管家**（`.github/workflows/mobile-gates.yml`，2026-10-16 立）：PR 上**一条常驻评论**自动回答「②④ 的证据是不是绑当前 head」，判据与 `pr-evidence` **同源**（从 head 抽同一个校验器跑，不另算口径）；**不判红、不进 ruleset、不代贴证据**。真门仍在**本机 / 真机**执行——托管 runner 上两道门卡在账号登录态（DCloud `Please Login in!` / 微信 `islogin` ENOENT），已实测证伪，见 `docs/adr/0041-三层门分离与云上证据管家.md` 决策 1。`-PostToPr` 贴完证据评论管家会自动刷新，**不必再手动触发**；分层口径（云上纯逻辑 / 本机运行时门 / 真机取证，**勿与 ② 门 `-Doctor` 的 L1–L7 混淆**）见 `0041` 决策 4。
-- **③ 门在 CI 是 4 片并行**（`0041` 决策 2）：分的是**机器**、每片内部仍 `-i` 串行（`jest.config.unit.js` 文件头的 #1410 结论不变）；本地内循环仍按 `0036` 处置一走 `test:unit:local`，CI 快慢不改变本地判读纪律。**CI 里别写 `--shard=k/4`**：jest **27.5.1 没有这个选项**，未知参数被**静默忽略** ⇒ 每片照跑全量（2026-10-16 实测成本 ×4、零提速）；正确做法是 `--listTests` 取清单 + `NR%4` 轮转 + `--runTestsByPath`，切到 0 个套件即红。
+- **③ 门在 CI 是 4 片 × 两腿 = 8 个子 job**（`0041` 决策 2 的分片 + `#1702` 的拆腿；矩阵腿→config 的映射只在 `ci.yml` 的 `include:` 里一处）：分的是**机器**、每个子 job 内部仍 `-i` 串行（`jest.config.unit.js` 文件头的 #1410 结论不变）；本地内循环仍按 `0036` 处置一走 `test:unit:local`，CI 快慢不改变本地判读纪律。**CI 里别写 `--shard=k/4`**：jest **27.5.1 没有这个选项**，未知参数被**静默忽略** ⇒ 每片照跑全量（2026-10-16 实测成本 ×4、零提速）；正确做法是 `--listTests` 取清单 + `NR%4` 轮转 + `--runTestsByPath`，切到 0 个套件即红。
 - **窗口口径（ADR-0039 + 2026-10-15 收紧，见 `0040`）**：窗口内真机逐页取证**不跑**、小程序门每个运行时面 PR 必跑、视觉回归如实记「无人验」；**触及能力面的 PR 窗口内不合并、排队到退出后**（与 0039 决策 4 冲突处以 0040 为准）；能力面触发与人工签收**不随窗口延后**。
 - **签齐即合并**：证据填齐后 **agent 直接合并**，不必停在「待人工签收」——**「不必停在」不等于「还要问」**：证据齐且不走例外通道时，「是否合并 / 是否清理工作树」**不是问题**，直接执行（授权全文与合并前一行披露 production 部署口径见根 `docs/agents/release.md`:16）。合并后收尾顺序（先 `git worktree remove` → 再 `git branch -D` → 最后删远端，摘 `node_modules` junction 早于删目录）见 `release.md`:13。非运行时面的 PR（纯文档 / 测试 / CI 配置）agent 可自行合并。**例外通道**（「已接受未验证风险 + 理由 + 事后验证计划」）**仍必须由人执行合并**，禁止静默例外。
 - 多会话并发下不动别人工作树就提交 / 同步 master 的配方见 `docs/agents/multi-agent-git.md`「游离提交：完整配方」。`pr-evidence` 检查**只校结构、不校真伪**，是可见检查而非 ruleset 必检（admin 通道**裁定不装**，见 ADR-0008）。
@@ -190,6 +190,6 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 
 ## 相关文档
 
-- **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界、`0036` 工具链交付慢的三条处置、`0039` 小程序优先窗口、`0040` 10-15 收紧裁定（真机零跑 / 能力面 PR 排队到退出后）、`0041` 三层门分离与云上证据管家。其余按目录逐个标题查。
+- **移动端 ADR（独立编号体系，与根仓库 `docs/adr/` 的 `ADR-0001+` 互不相关，引用须写全路径）**：目录 `docs/adr/`。本文件直接依赖的几条：`0008` 四门判据与取证补遗、`0011` 并发与失败语义、`0016` 真机门收缩与按批取证、`0020` E2E 通道裁决、`0024` 技能供给与管线归属、`0029` 不用宿主托管 worktree、`0033` 常驻与按需分界、`0036` 工具链交付慢的三条处置、`0039` 小程序优先窗口、`0040` 10-15 收紧裁定（真机零跑 / 能力面 PR 排队到退出后）、`0041` 三层门分离与云上证据管家、`0042` 测试门拆腿与逐套件心跳。其余按目录逐个标题查。
 - **按需层（常驻层指向它们，不反向抄）**：`docs/agents/guards.md`（守护分类与新增守护三问）、`docs/agents/issue-dispatch.md`（派活一行）、`docs/agents/uvue-css.md`（uvue 样式与 UTS 编译约束全表）、`docs/agents/concurrency.md`（并发纪律与时间预算）、`docs/agents/dev-loop.md`（内循环时间账与坑位原文、样式内循环一行结论）、`docs/agents/skills.md`（技能供给与管线归属）。
 - **其余**：`docs/GIT_WORKFLOW.md`、`docs/GIT_CHEATSHEET.md`、`docs/ui-spec.md`、`docs/product-design.md`、`docs/refactor-decisions.md`、`docs/spec-永绿整改.md`。

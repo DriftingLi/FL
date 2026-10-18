@@ -123,10 +123,13 @@ function readPatternFromLib() {
 //    （它只在 PowerShell 的 PATH 解析里存在）。直连 node + jest 入口是唯一稳的形态。
 const JEST_ENTRY = require.resolve('jest/bin/jest');
 
+// ⚠️ config 用 `jest.config.all.js`（#1702 拆腿）：pattern 命中的套件横跨接线 / 行为两腿，
+//   单腿 config 会把另一腿的套件当成不存在 ⇒ 下面「每个 token 必须真的选中套件」会误判成缺守护
+//   （那条断言正是本文件的判别力来源，喂给它一份半截清单就等于把判别力关掉）。
 function listAllTestSuites() {
   const out = execFileSync(
     process.execPath,
-    [JEST_ENTRY, '--config', 'jest.config.unit.js', '--listTests'],
+    [JEST_ENTRY, '--config', 'jest.config.all.js', '--listTests'],
     { cwd: ROOT, encoding: 'utf8', timeout: 180000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }
   );
   return String(out)

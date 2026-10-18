@@ -191,8 +191,11 @@ describe('worktree 初始化真源（运行期）', () => {
   test('W7: 自指 —— wtBootstrap token 真的能选中本文件（否则它是永不执行的守护）', () => {
     // ⚠️ 本条只证明 --listTests 能选中本文件；token 三处连锁（contract-tests.ps1 字面量 /
     //    EXPECTED_PATTERN / TOKENS_REQUIRED_TO_SELECT）的真正闭合在 contractTestPatternBehavior 的 P1/P2/P3。
+    // ⚠️ config 用 jest.config.all.js（#1702 拆腿）：本文件是**行为**套件 ⇒ 只列接线腿的
+    //    jest.config.unit.js 会把本文件当「不存在」（0 命中，本条当场变红，2026-10-18 实测）。
+    //    换成 all 才是「token 真的能选中本文件」这句自指要证的形状。
     const out = execFileSync(process.execPath,
-      [JEST_ENTRY, '--config', 'jest.config.unit.js', '--listTests', '--testPathPattern', 'wtBootstrap'],
+      [JEST_ENTRY, '--config', 'jest.config.all.js', '--listTests', '--testPathPattern', 'wtBootstrap'],
       { cwd: ROOT, encoding: 'utf8', timeout: 180000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
     const suites = String(out).split(/\r?\n/).map((l) => l.trim()).filter((l) => l.endsWith('.test.js'));
     expect(suites.some((l) => norm(l).endsWith('utils/wtBootstrapBehavior.test.js'))).toBe(true);

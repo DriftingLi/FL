@@ -38,9 +38,17 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const CLI = path.join(ROOT, 'scripts', 'classify-guards.mjs');
 
-/** 本机实测下界（2026-09-27，ADR-0027 PR 内按新进程读数上调）：不允许下降 */
-const BEHAVIOR_MIN = 35;
-const TOTAL_MIN = 138;
+/**
+ * 本机实测下界（2026-10-18，按新进程读数上调）：不允许下降
+ *
+ * 2026-10-18 上调到 70 / 190（#1702 拆腿时按新进程重新取数：`node scripts/classify-guards.mjs --json`
+ * ⇒ total 190 / behavior 70 / wiring 120，含本票新增的 `utils/jestSplitContract.test.js`）。
+ * 旧下界 35 / 138 在拆腿后留了 35 个行为守护的松弛 —— 而 #1702 之后的 `test:unit` 只认 120 个
+ * 接线套件、`test:behavior` 只认 70 个行为套件，那 70 就是**行为腿的准入面**：下界停在 35
+ * 会让「行为套件被悄悄挪进接线」照样绿。
+ */
+const BEHAVIOR_MIN = 70;
+const TOTAL_MIN = 190;
 
 /** H4：允许「既不执行、也不引用仓内载体」的接线守护 —— 必须显式登记，新增即红 */
 const ZERO_REF_WIRING_ALLOWED = [
