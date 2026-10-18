@@ -40,7 +40,12 @@ const toPosix = (p) => p.replace(/\\/g, '/')
 export function relKeyOf(file, root) {
   const f = toPosix(resolve(file))
   const r = toPosix(resolve(root)).replace(/\/$/, '')
-  if (f.startsWith(r + '/')) return f.slice(r.length + 1)
+  if (f.startsWith(r + '/')) {
+    const rest = f.slice(r.length + 1)
+    // 反斜杠形态在 POSIX 上会被 path.resolve 当成一个普通相对段拼到 cwd 后面 ⇒ 前缀是
+    // 「cwd + '/' + '\home\…'」，剥掉前缀后仍以 '/' 开头。这种痕迹不算已折键，落兜底。
+    if (rest && !rest.startsWith('/')) return rest
+  }
   // 兜底：取「utils/xxx.test.js」这样的尾段（--listTests 在个别 jest 版本会打印相对路径）
   const m = f.match(/(?:^|\/)((?:pages|utils|api|components|composables|scripts)\/.*)$/)
   return m ? m[1] : f
