@@ -45,7 +45,9 @@
       不截图、不 install / force-stop / logcat -c / push / reboot。
     - `status` 比心跳多读几样诊断（`dumpsys battery` / `dumpsys power` 全量取回后本地过滤、
       `ip -4 addr show`、`settings get`）——都只读，但**别在取证跑到一半**用它抢设备回话。
-    - `stop` 只杀本脚本自己起的 keep 进程（校验命令行含本文件名），不碰 adb / HBuilderX / cli。
+    - `stop` 收掉本脚本自己起的 keep **及其整棵子树**（先校验命令行含本文件名；子树里只有 keep 派生的
+      adb 客户端，不碰 adb server / HBuilderX / cli）。只杀 keep 的 pid 会漏下正在跑的那次 adb 调用，
+      而它握着 keep 从调用方继承的 stdout 管道 ⇒ 调用方永远等不到 EOF（#1718：jest 就挂在这里）。
     - 同一时刻只允许一个 keep：已在跑就拒绝叠加（两条心跳对同一设备只会互抢）。
 
     ### 副作用边界
@@ -346,6 +348,46 @@ function Get-WatcherPid {
 function Set-WatcherPid { param([int]$Id) Set-Content -LiteralPath $PidPath -Value $Id -Encoding ascii }
 
 function Clear-WatcherPid { Remove-Item -LiteralPath $PidPath -Force -ErrorAction SilentlyContinue }
+
+# keep 的**整棵子树**（#1718）：keep 每拍都起一次 adb 调用（Windows 上还多一层 cmd.exe），
+# 只杀 keep 的 pid 时，正在跑的那次调用会活下来，并且握着 keep 从调用方继承来的 stdout 管道
+# ⇒ 调用方永远等不到 EOF。实测（2026-10-18，真机夹具）：jest 打完 JEST_SUITE_DONE 后挂 20+ 分钟，
+# 手动杀掉 cmd.exe 孤儿才退；同一形状的 `child.kill()` 也会留同样的孤儿。
+function Get-ChildProcessIds {
+    param([int]$ParentId)
+    if ($IsWindows) {
+        $kids = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue
+        if ($kids) { return @($kids | ForEach-Object { [int]$_.ProcessId }) }
+        return @()
+    }
+    # 非 Windows 没有 CIM：ppid 只能从 ps 读（本工具的行为守护在 CI 的 ubuntu 上真跑）
+    $rows = & ps -eo pid=,ppid= 2>$null
+    return @($rows | ForEach-Object {
+        $f = -split $_.Trim()
+        if ($f.Count -ge 2 -and $f[1] -match '^\d+$' -and [int]$f[1] -eq $ParentId) { [int]$f[0] }
+    })
+}
+
+function Stop-ProcessTree {
+    param([int]$RootPid)
+    # 顺序是「先杀根、再按记录逐层收子树」：根一死就不再派生新子进程，枚举窗口归零；
+    # 父进程已死的记录仍保留原 ParentProcessId（#1718 现场实测：孤儿的 ppid 指向已退出的父），
+    # 所以子进程按 ppid 仍然找得到 —— 不需要先枚举再杀那种仍留窗口的写法。
+    $seen = @{}
+    $seen[$RootPid] = $true
+    Stop-Process -Id $RootPid -Force -ErrorAction SilentlyContinue
+    $queue = [System.Collections.Generic.Queue[int]]::new()
+    $queue.Enqueue($RootPid)
+    while ($queue.Count -gt 0) {
+        $cur = $queue.Dequeue()
+        foreach ($kid in (Get-ChildProcessIds -ParentId $cur)) {
+            if ($seen.ContainsKey($kid)) { continue }
+            $seen[$kid] = $true
+            Stop-Process -Id $kid -Force -ErrorAction SilentlyContinue
+            $queue.Enqueue($kid)
+        }
+    }
+}
 
 function Say([object]$Msg) {
     if ($Quiet) { return }
@@ -701,10 +743,10 @@ function Do-Stop {
             -Detail '没有本脚本起的 keep 进程（adb server 与 HBuilderX 都没被碰）'
         exit 0
     }
-    Stop-Process -Id $alive -Force
+    Stop-ProcessTree -RootPid $alive
     Clear-WatcherPid
     Show-Verdict -Result 'stopped' -Ep $null -Extra "killed_pid=$alive" `
-        -Detail "只结束了本脚本自己的 keep 进程 pid=$alive；设备侧开关与 adb 连接都没动，需要连接就再跑 ensure"
+        -Detail "结束本脚本自己的 keep 进程 pid=$alive 及其整棵子树（#1718：只杀 keep 会漏下正在跑的 adb 调用，它握着调用方的管道）；设备侧开关与 adb 连接都没动，需要连接就再跑 ensure"
     exit 0
 }
 

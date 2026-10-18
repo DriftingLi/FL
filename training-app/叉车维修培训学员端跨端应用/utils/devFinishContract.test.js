@@ -1170,21 +1170,26 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     expect(branchStart).toBeGreaterThan(-1);
     expect(step1At).toBeGreaterThan(branchStart);
     const branch = scriptSrc.slice(branchStart, step1At);
-    // ---- #1702：两腿各跑 package.json 里的那一条，形如 `& npm run <script>`（不抄 jest 参数）----
+    // ---- #1702：两腿各跑 package.json 里的那一条，形如 `Invoke-GateLegCommand 'npm run <script>'`（不抄 jest 参数）----
     //   8 空格 = 在各自 `try { }` 里（原生命令写 stderr 在 EAP=Stop 下会抛，两腿同形兜法）；
     //   判据是「调用形态逐字就是这一条」，不是「缩进几格」—— 缩进只用来确认它真在分支体内。
     // #1702 验收②：取输出必须**边跑边吐** —— 走 `Invoke-GateLegCommand`（内里 Tee-Object + Out-Host）。
     //   回写成 `| Out-String` 会让 70 个行为套件的心跳行攒到命令结束才出现（2026-10-18 探针：
     //   8 行 × 0.8s，4s 时 Tee 版控制台已有 3 行、Out-String 版还是空的）—— 那样「日志里有进度行」
     //   成立、「跑的人看得见进度」不成立，正是本票要修的那件事。两件事分开钉：调用点形状 + 兜法本体。
-    expect(branch).toMatch(/^ {8}\$unitOutput = Invoke-GateLegCommand \{ & npm run test:unit \}$/m);
-    expect(branch).toMatch(/^ {8}\$behaviorOutput = Invoke-GateLegCommand \{ & npm run test:behavior \}$/m);
+    expect(branch).toMatch(/^ {8}\$unitOutput = Invoke-GateLegCommand 'npm run test:unit'$/m);
+    expect(branch).toMatch(/^ {8}\$behaviorOutput = Invoke-GateLegCommand 'npm run test:behavior'$/m);
     expect(branch).not.toMatch(/npm run test:(unit|behavior)[^\r\n]*\|\s*Out-String/);
     const helperStart = scriptSrc.indexOf('function Invoke-GateLegCommand {');
     expect(helperStart).toBeGreaterThan(-1);
-    const helperBody = scriptSrc.slice(helperStart, helperStart + 700);
+    const helperBody = scriptSrc.slice(helperStart, helperStart + 1200);
     expect(helperBody).toContain('Tee-Object -Variable legLines');
     expect(helperBody).toContain('| Out-Host');
+    // #1718：Windows 上必须先由 shell 合并 2>&1 —— PowerShell 读原生命令的 stderr 时，遇到 `#< CLIXML`
+    //   头会按 CLIXML 猜测式反序列化，失败就整块丢弃（实测正好吞掉 jest 的 Test Suites:/Tests:/Time: 三行，
+    //   门于是误报 missing=suites|tests|time）。改成 cmd 先合并后 PowerShell 只看到普通文本；POSIX 用 sh。
+    expect(helperBody).toContain('cmd.exe /d /s /c');
+    expect(helperBody).toContain('sh -c');
     // 第二份门参数 = 门与「被落盘的那一次」分家（#974 的 pattern 漂移同形）。两腿都不许抄 config 名。
     expect(branch).not.toContain('--testPathPattern');
     expect(branch).not.toContain('jest.config.unit.js');
@@ -1467,13 +1472,15 @@ describe('③ 门本地快路径（#1654）', () => {
     expect(localStart).toBeGreaterThan(dryRunAt);
     const branch = scriptSrc.slice(localStart, gateStart);
     // 跑的是 package.json 那条快路径命令本身，且**调用形态**只此一份（#974 双份漂移同形）。
-    // 只数 `& npm run` 的执行形态：分支里给人看的回显文案（「命令：npm run …」）不算第二份调用。
+    // 只数 `Invoke-GateLegCommand '<命令>'` 的执行形态：分支里给人看的回显文案（「命令：npm run …」）不算第二份调用。
+    // #1718：命令改为字符串传给 helper（helper 内里要在 shell 层合并 2>&1），不再用 `{ & … }` scriptblock。
     // #1702 起快路径也**两腿**（日常环若只跑接线腿，行为腿的回归要等到全量门才暴露）：
     // 两条执行形态都在、顺序固定（接线腿先、行为腿后），且都不带 -i（并行语义）。
-    expect((branch.match(/& npm run test:\S+/g) || [])).toEqual([
-      '& npm run test:unit:local',
-      '& npm run test:behavior:local',
+    expect((branch.match(/Invoke-GateLegCommand '[^']+'/g) || [])).toEqual([
+      "Invoke-GateLegCommand 'npm run test:unit:local'",
+      "Invoke-GateLegCommand 'npm run test:behavior:local'",
     ]);
+    expect(branch).not.toMatch(/& npm run/); // 直跑形态不许回写（会绕过 2>&1 的 shell 合并）
     expect(branch).not.toContain('npx jest');
     expect(branch).not.toContain('jest.config.unit.js'); // 不抄第二份 jest 参数
     expect(branch).not.toContain('jest.config.behavior.js');
@@ -1518,15 +1525,22 @@ describe('③ 门本地快路径（#1654）', () => {
     // U8 钉的是 `toContain('npm run test:unit')` —— substring 形，`test:unit:local` 同样命中 ⇒
     // 「全量门悄悄漂成并行」它挡不住（变异 M4 实测 U8 仍绿）。这里用 (?!:) 负向断言钉死：
     // `& npm run test:unit` 的执行形态在 UnitGate 分支里恰好一次、且分支里不出现 `test:unit:local`。
+    // `Invoke-GateLegCommand 'npm run test:unit'` 的执行形态在 UnitGate 分支里恰好一次、且分支里不出现 `test:unit:local`。
+    // （#1718 起命令以字符串传入 helper，不再是 `{ & … }`；判据同时挡回写成直跑形态。）
     const gateBranch = scriptSrc.slice(gateStart, scriptSrc.indexOf('# Step 1: 级别判定'));
-    expect((gateBranch.match(/& npm run test:unit(?!:)/g) || [])).toEqual(['& npm run test:unit']);
+    expect((gateBranch.match(/Invoke-GateLegCommand 'npm run test:unit(?!:)'/g) || [])).toEqual([
+      "Invoke-GateLegCommand 'npm run test:unit'",
+    ]);
+    expect(gateBranch).not.toMatch(/& npm run/);
     expect(gateBranch).not.toContain('test:unit:local');
     // ---- #1702 拆腿：第二腿同一条纪律（同一个 package.json 真源、串行那条、不许漂成 :local）----
     //   与上面 unit 腿逐条镜像：入口逐字面量 + 全量门分支里只许出现串行那一条。
     expect(pkg.scripts['test:behavior']).toBe('jest --config jest.config.behavior.js -i');
     expect(pkg.scripts['test:behavior:local']).toBe('jest --config jest.config.behavior.js');
     expect(pkg.scripts['test:behavior:local']).not.toMatch(/\s-i\b/);
-    expect((gateBranch.match(/& npm run test:behavior(?!:)/g) || [])).toEqual(['& npm run test:behavior']);
+    expect((gateBranch.match(/Invoke-GateLegCommand 'npm run test:behavior(?!:)'/g) || [])).toEqual([
+      "Invoke-GateLegCommand 'npm run test:behavior'",
+    ]);
     expect(gateBranch).not.toContain('test:behavior:local');
     // `npm test` 是两腿的串行合成（不是只跑接线那一半）：一键全量不该悄悄少跑行为面。
     expect(pkg.scripts.test).toBe('npm run test:unit && npm run test:behavior');

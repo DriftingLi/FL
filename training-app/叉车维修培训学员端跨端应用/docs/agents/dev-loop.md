@@ -211,15 +211,14 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
    `node.exe: 无法处理来自 "Error" 的 … 流中的 XML: Data at the root level is invalid.` 解码噪音
    （**不是被测物写的**），一条 `PASS` 都没抓到 ⇒ 结论行老实写 `missing=suites|tests|time`，
    失败摘要件自己也写着「本次输出里没抓到 Tests 汇总行」。
-   ⚠️ **捕获层已是流式，但落盘件仍不全等于 jest 原始输出**（2026-10-18 修订）：入口现在边跑边吐
-   （`Invoke-GateLegCommand`：`Tee-Object -Variable … | Out-Host`，`Out-String` 会把整段攒到最后，实测见 ADR-0042 决策 4），
-   可**汇总行仍可能被 CLIXML 噪音挤掉**——同日两腿那一跑，行为腿机检行老实写 `missing=suites|tests|time`
-   （心跳行 `JEST_SUITE_DONE total=70 passed=67 failed=3` 反而是那跑唯一完整的计数来源）。
-   ⇒ 先问「结论行在不在」，别问「输出好不好看」；**要读 jest 汇总就绕开门入口直跑那一腿的 `npm run test:*:local` 并重定向到文件**。
+   ⚠️ **落盘件与 jest 原始输出的差异已收口**（2026-10-18 修订，`#1718`）：入口边跑边吐
+   （`Invoke-GateLegCommand`：`Tee-Object -Variable … | Out-Host`，`Out-String` 会把整段攒到最后，实测见 ADR-0042 决策 4）；
+   并且 `2>&1` 改由 shell 先合并（Windows `cmd.exe /d /s /c`、POSIX `sh -c`）——此前 PowerShell 读原生命令的 stderr 时，
+   遇到 `#< CLIXML` 头解析失败会**整块丢弃**，正好吞掉 jest 的 `Test Suites:`/`Tests:`/`Time:` 三行。
+   现在这三行是落盘件里的常态读数；CLIXML 原文仍会出现在日志里（噪音，不参与判红）。
    ⚠️ 这条**曾经**被写成「换个捕获方式治不了」——那个结论只对「攒到最后再吐」成立；**判读的可见性**靠流式，
-   **落盘件的完整性**靠绕开入口读，两件事分开记。
-   ⚠️ **缺字段 ≠ 跑失败**：上面那跑串行门 `exit=0` 也照样 `missing=suites|tests|time`——落盘件按汇总行取数，
-   取不到就写 `?`（口径见「全量 ③ 门落盘与入口」里 `?` 那条：`?` 是「没读到」，不是「没有」）。
+   **落盘件的完整性**靠 `2>&1` 在 shell 层合并，两件事分开记。
+   ⚠️ **缺字段 ≠ 跑失败**：落盘件按汇总行取数，取不到就写 `?`（口径见「全量 ③ 门落盘与入口」里 `?` 那条：`?` 是「没读到」，不是「没有」）。
    ⇒ 看 `exit=` 判成败；`missing=` 只说明**读不到汇总**，不改变成败。
 3. **红 ≠ 重跑整道门**。判据 = **先分「墙钟红」与「逻辑红」，重跑半径是单套件**。
    现测一组同树同 head 的对照：并行快路径 `exit=1`，3 套红（`deviceCaptureTierBehavior` DCT11 期望 `False` 得 `True`、

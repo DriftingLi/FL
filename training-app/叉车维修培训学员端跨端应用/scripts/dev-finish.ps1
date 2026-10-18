@@ -598,15 +598,27 @@ function Write-UnitGateArtifactReport {
     于是 70 个行为套件的逐套件心跳行在跑的过程中一行也看不见 —— 这正是本票要修的「880 秒零输出」。
     `Tee-Object -Variable` 边收边存、`Out-Host` 边收边写：同一份对象流既进日志文件也进人的眼睛
     （2026-10-18 实测探针：8 行 × 0.8s，4s 时 Tee 版控制台已有 3 行，Out-String 版 4s 时还是空的）。
-    命令字面量仍只在调用方出现一次（`{ & npm run test:behavior }`），不在这里抄第二份 jest 参数（#974）。
+    命令字面量仍只在调用方出现一次（`Invoke-GateLegCommand 'npm run test:behavior'`），不在这里抄第二份 jest 参数（#974）。
+
+    **#1718**：Windows 上不能直接 `& <命令> 2>&1` —— PowerShell 读原生命令的 stderr 时，只要流里出现
+    `#< CLIXML` 头（无线调试/模拟器桩用 `Write-Host`/Information 写的记录会被序列化成 CLIXML），
+    解析失败就把这一段**整块丢掉**，连块后面接的普通文本一起吞；实测正好吞掉 jest 的
+    `Test Suites:`/`Tests:`/`Time:` 三行，门于是误报 `missing=suites|tests|time`。
+    改由 shell 先做 `2>&1` 合并（Windows 用 `cmd.exe /d /s /c`，其余用 `sh -c`）：PowerShell 只看到普通
+    文本行，不再走 CLIXML 猜测；逐行 `Out-Host` 的「边跑边吐」不变。
 #>
 function Invoke-GateLegCommand {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)][scriptblock]$Command
+        [Parameter(Mandatory = $true)][string]$Command
     )
     $legLines = @()
-    & $Command 2>&1 | Tee-Object -Variable legLines | Out-Host
+    if ($IsWindows) {
+        & cmd.exe /d /s /c "$Command 2>&1" | Tee-Object -Variable legLines | Out-Host
+    }
+    else {
+        & sh -c "$Command 2>&1" | Tee-Object -Variable legLines | Out-Host
+    }
     # 渲染收在收集之后：日志落盘要的是与旧路径同形的整段文本（Out-String 干的就是这件事）。
     return ($legLines | Out-String)
 }
@@ -785,7 +797,7 @@ if ($UnitLocal) {
     # ---- 接线腿 ----
     $unitLocalStarted = Get-Date
     try {
-        $localOutput = Invoke-GateLegCommand { & npm run test:unit:local }
+        $localOutput = Invoke-GateLegCommand 'npm run test:unit:local'
     }
     catch {
         # 与 -UnitGate 同形：EAP=Stop 下原生命令写 stderr 可能抛 ⇒ 异常文本当输出继续，判定仍取退出码。
@@ -803,7 +815,7 @@ if ($UnitLocal) {
     # ---- 行为腿（#1702；红不掐掉另一腿的判读信息，与全量门同取舍）----
     $behaviorLocalStarted = Get-Date
     try {
-        $behaviorLocalOutput = Invoke-GateLegCommand { & npm run test:behavior:local }
+        $behaviorLocalOutput = Invoke-GateLegCommand 'npm run test:behavior:local'
     }
     catch {
         $behaviorLocalOutput = "$($_.Exception.Message)"
@@ -868,7 +880,7 @@ if ($UnitGate) {
     # 「门」与「被落盘的那一次」就是两个东西了（与 #974 的 pattern 双份漂移同形）。
     $unitStarted = Get-Date
     try {
-        $unitOutput = Invoke-GateLegCommand { & npm run test:unit }
+        $unitOutput = Invoke-GateLegCommand 'npm run test:unit'
     }
     catch {
         # 与「单元测试」那一步同形：`$ErrorActionPreference='Stop'` 下原生命令写 stderr 可能抛 ⇒ 把异常
@@ -889,7 +901,7 @@ if ($UnitGate) {
     # （`-i` 不动，#1410 裁定不变；单个套件内部仍可能长静默，故入口第一行要写预期时长）。
     $behaviorStarted = Get-Date
     try {
-        $behaviorOutput = Invoke-GateLegCommand { & npm run test:behavior }
+        $behaviorOutput = Invoke-GateLegCommand 'npm run test:behavior'
     }
     catch {
         # 与第一腿同形：EAP=Stop 下原生命令写 stderr 可能抛 ⇒ 异常文本当输出继续，判定仍取退出码。
