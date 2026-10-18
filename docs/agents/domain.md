@@ -38,6 +38,14 @@ Multi-context repo（根目录存在 `CONTEXT-MAP.md`）：
         └── docs/adr/
 ```
 
+## 布局口径：两支词表 + 单一根级 ADR 体系（2026-10-14 确认；2026-10-18 按 #1498 校正措辞）
+
+本 repo **不设** `CONTEXT-MAP.md`，也不是「每个 context 各带一份 `CONTEXT.md` + 各自 `docs/adr/`」的 multi-context 形态：
+
+- **词表**：根 `CONTEXT.md`（全站 / Web / 后端 / 跨端契约）与移动端自己的 `CONTEXT.md`（`training-app/叉车维修培训学员端跨端应用/CONTEXT.md`，uni-app x 侧）**各辖一侧**，按改动所属侧取用；两份之间**未声明仲裁规则**。权威陈述以根 `AGENTS.md`「领域文件」段为准 —— 这里曾写成「只有一份 `CONTEXT.md`」，已由 #1498 校正。
+- **决策**：根仓库 `docs/adr/`（`ADR-0001-…`）；移动端另有一套独立编号的 ADR（`0001-…` 起），两套编号互不相关，引用时注明「根仓库 / 移动端」。
+- **本次不建**：不创建 `CONTEXT-MAP.md`，也不给子项目补建 `CONTEXT.md` —— 留到第一次真正写下词条时由 `/domain-modeling` 懒创建。
+
 ## 文档分层：持久 vs 临时（**不要删 ADR / CONTEXT.md**）
 
 这个 repo 的文档分两层，**换任务时只清临时层**：
