@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "note": "③ 门分片配平用的逐套件耗时（秒）。采集环境：GitHub Actions ubuntu-latest，ci.yml run 39117749573 的 mobile-test 四片日志（jest 只打印 ≥5s 的套件耗时 ⇒ 本表只列慢套件，其余按 defaultSeconds 计权）。改这里请同时改 scripts/jest-fanout.mjs 的注释与 utils/jestFanout 自测的用例。",
+  "defaultSeconds": 1,
+  "suites": {
+    "utils/wirelessDebugBehavior.test.js": 108.38,
+    "utils/kotlinAllProcessCaptureBehavior.test.js": 74.08,
+    "utils/deviceCaptureTierBehavior.test.js": 41.012,
+    "utils/emulatorSmokeTierBehavior.test.js": 29.098,
+    "utils/styleLoopBehavior.test.js": 26.532,
+    "utils/autoScreenshotStabilityBehavior.test.js": 23.485,
+    "utils/wirelessDebugBoundedTextBehavior.test.js": 18.625,
+    "utils/frontierBehavior.test.js": 14.749,
+    "utils/emulatorSmokeBoundedTextBehavior.test.js": 9.298,
+    "utils/mpWeixinGateContract.test.js": 8.899,
+    "utils/kotlinAllStaleExportBehavior.test.js": 7.763,
+    "utils/wtBootstrapBehavior.test.js": 6.581,
+    "utils/capabilitySurfaceBehavior.test.js": 6.438,
+    "utils/levelDetectBehavior.test.js": 6.102,
+    "utils/devFinishContract.test.js": 5.789
+  }
+}
