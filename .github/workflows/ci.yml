@@ -490,9 +490,15 @@ jobs:
         run: npm ci
       # 分片必须**自己算文件清单**：本仓 jest 是 27.5.1，`--shard=k/4` 是 jest 28 才有的选项，
       # 27 会把它当未知参数**静默忽略** ⇒ 每片照跑该腿全量套件（2026-10-16 实测：四片同时拉到
-      # 6 分钟以上、等于成本 ×4 且一点没提速）。改成先 `--listTests` 取**本腿**清单、再按 `NR%4`
-      # 轮转切出本片、用 `--runTestsByPath` 精确执行——判据仍是 jest 自己的 testMatch，不另造清单。
-      # 清单与执行**都用 matrix.config**（同一个文件）：腿内切片不会串腿，也不需要在这里认领。
+      # 6 分钟以上、等于成本 ×4 且一点没提速）。改成先 `--listTests` 取**本腿**清单、再用
+      # `scripts/jest-fanout.mjs` 切出本片、用 `--runTestsByPath` 精确执行——判据仍是 jest
+      # 自己的 testMatch，不另造清单。清单与执行**都用 matrix.config**（同一个文件）：腿内切片
+      # 不会串腿，也不需要在这里认领。
+      # 切分口径 = **LPT 按耗时装箱**（#1715）：`NR%4` 轮转不看单套件耗时，慢套件落哪片哪片就得等
+      # 它（实测 run 39113010218：1:29 / 1:15 / 2:36 / 3:39，而 108.4s 的
+      # utils/wirelessDebugBehavior.test.js 独占一片的长尾）。装箱在**本腿内**进行：每片目标 =
+      # max(本腿总耗时/4, 本腿最慢套件)，权重表 utils/jestSuiteTimings.json 两腿共用同一份键。
+      # 表里没有的套件按 defaultSeconds 计权 ⇒ 新增套件不用回来改表，也不会让门红。
       - name: 单测（${{ matrix.leg }} 腿，第 ${{ matrix.shard }}/4 片）
         env:
           SHARD: ${{ matrix.shard }}
@@ -500,21 +506,22 @@ jobs:
           LEG_CONFIG: ${{ matrix.config }}
         run: |
           set -euo pipefail
-          files=$(node node_modules/jest/bin/jest.js --config "$LEG_CONFIG" --listTests)
-          total=$(printf '%s\n' "$files" | grep -c . || true)
+          node node_modules/jest/bin/jest.js --config "$LEG_CONFIG" --listTests > /tmp/all-files.txt
+          total=$(grep -c . /tmp/all-files.txt || true)
           if [ "$total" -eq 0 ]; then
             echo "错误: --listTests 取到 0 个套件（判据失效，不许当绿）"
             exit 1
           fi
-          mine=$(printf '%s\n' "$files" | awk -v k="$SHARD" -v n="$SHARDS" 'NR % n == (k - 1)')
-          count=$(printf '%s\n' "$mine" | grep -c . || true)
+          # LPT 装箱（#1715）：先按耗时降序，再依次放进当前负载最小的片。切片器自己会在
+          # 本片为空时 exit 3（fail-closed），下面的显式守卫保留作第二道。
+          node scripts/jest-fanout.mjs --shard "$SHARD" --shards "$SHARDS" --list /tmp/all-files.txt > /tmp/shard-files.txt
+          count=$(grep -c . /tmp/shard-files.txt || true)
           echo "本片套件数: $count / 全量 $total"
-          # 轮转切分下每片都非空；若真为空说明切分口径坏了，宁可红也别静默跑 0 个套件（血账 #1144）。
+          # 装箱下每片都非空；若真为空说明切分口径坏了，宁可红也别静默跑 0 个套件（血账 #1144）。
           if [ "$count" -eq 0 ]; then
             echo "错误: 第 $SHARD 片切到 0 个套件"
             exit 1
           fi
-          printf '%s\n' "$mine" > /tmp/shard-files.txt
           set +e
           node node_modules/jest/bin/jest.js --config "$LEG_CONFIG" -i --runTestsByPath $(cat /tmp/shard-files.txt)
           code=$?
@@ -536,6 +543,11 @@ jobs:
       - name: 读取层归一守卫自测
         if: matrix.shard == 1 && matrix.leg == 'unit'
         run: node scripts/check-contract-read.test.mjs
+      # 分片器自测（#1715）：漏套件 / 重复套件 / 切到 0 个 / 退化成轮转 —— 四种坏法都要红。
+      # 同样只在 unit 腿第 1 片跑（与分片无关的判据，跑八遍不增信息）。
+      - name: 分片器自测（LPT 装箱判据）
+        if: matrix.shard == 1 && matrix.leg == 'unit'
+        run: node scripts/jest-fanout.test.mjs
 
 
   # ============================================================
