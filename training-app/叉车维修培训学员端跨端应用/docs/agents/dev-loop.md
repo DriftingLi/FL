@@ -1,6 +1,6 @@
 > 本文件是移动端 `AGENTS.md`「开发内循环（移动端 UI 迭代）」与「Qoder 托管 worktree 的使用边界（2026-09-28 立）」两节的**按需层全文**（#1509 根线式分层）。
 > 常驻层只留判据与对策，**实测数字、时间账与坑位叙述在这里**。
-> 另含三节常驻层没有全文的家：**「全量 ③ 门落盘与入口」**（`npm run test:unit:gate` 那条命令的入口指针，#1546 落地、#1556 登记）、
+> 另含三节常驻层没有全文的家：**「全量 ③ 门落盘与入口」**（`npm run test:unit:gate` 那条命令的入口指针，#1546 落地、#1556 登记；#1702 起该入口跑**两腿** —— `test:unit` 接线 + `test:behavior` 行为）、
 > **「全量 ③ 门该不该跑」**（常驻层「成本账反模式」那句指针所指的判据全集，#1556 立）
 > 与 **「agent 判读纪律（慢≠卡死 / 机检行 / 重跑半径）」**（一条命令在跑 / 跑完 / 跑红之后的读数判据，#1656 立；**不复述门脚本细节**）。
 > **引用本文件时引小节名，不引行号。**内容从常驻层逐字搬入，口径未变。
@@ -61,22 +61,29 @@
 ## 全量 ③ 门落盘与入口（#1546 落地 · #1556 登记指针）
 
 **入口 = `npm run test:unit:gate`**（= `pwsh scripts/dev-finish.ps1 -UnitGate [-PostToPr <PR号>]`；命令注册在
-`package.json`，本体是 `scripts/dev-finish.ps1` 的 `-UnitGate` 分支）。它跑的就是 `npm run test:unit`
-那一条门命令本身（分支里不抄第二份 jest 参数），**只多干一件事：把那一次跑的痕迹留在盘上，让人能引用它。**
+`package.json`，本体是 `scripts/dev-finish.ps1` 的 `-UnitGate` 分支）。#1702 之后它跑的是**两腿门命令本身**
+——`npm run test:unit`（接线腿）与 `npm run test:behavior`（行为腿），分支里不抄第二份 jest 参数，
+**只多干一件事：把那一次跑的痕迹留在盘上，让人能引用它。** 两腿都跑完才退出，退出码取**先红者**
+（一条腿红不掐掉另一条腿的判读信息 —— 与 CI 的 `fail-fast: false` 同一取舍）。
+**入口的第一行就是预期时长**（#1702 验收 ③）：慢 ≠ 卡死，读者一开始就该知道多久算正常。
 
 **为什么入口要写进文档**：#1546 把落盘件合进 master 之后，`test:unit:gate` 这个串在 tracked 文件里只有三处命中
 （`package.json` 的 scripts、`dev-finish.ps1` 头部的 `.EXAMPLE`、贴评论时的复现行），两份 `AGENTS.md` 与
 全部 `docs/**` **零命中**（2026-10-05 现测）⇒ 门有出口但没人指路，下一个会话照旧选「再跑一遍」。本节就是那个家。
 
-**产物（跑完就在，绿跑也在）**：
+**产物（跑完就在，绿跑也在）** —— 两腿各一份，路径里带腿名：
 
-- `.ci-verify/test-unit.log` —— 完整输出**原文**，机检行追加在尾部 ⇒ 一份文件同时是物证与结论
-- `.ci-verify/test-unit-failure.txt` —— **只随红跑**产出的人读摘要（≤2 KB，不作门禁输入）；绿跑不产，
-  而磁盘上若还留着上一跑的红摘要，机检行以 `staleSummary=<mtime>` 指名「那不是本次结论」
-- 出 PR 的出口：`-PostToPr <PR号>` 按 ②④ 的同格式贴 **sha 绑定**评论（红跑才附摘要正文）
+- `.ci-verify/test-unit.log` / `.ci-verify/test-behavior.log` —— 完整输出**原文**，机检行追加在尾部
+  ⇒ 一份文件同时是物证与结论。行为腿那份**自带逐套件心跳行**（`JEST_SUITE i=k/N status=… secs=…`）
+- `.ci-verify/test-unit-failure.txt` / `.ci-verify/test-behavior-failure.txt` —— **只随红跑**产出的人读摘要
+  （≤2 KB，不作门禁输入）；绿跑不产，而磁盘上若还留着上一跑的红摘要，
+  机检行以 `staleSummary=<mtime>` 指名「那不是本次结论」
+- 出 PR 的出口：`-PostToPr <PR号>` 按 ②④ 的同格式贴 **sha 绑定**评论（红跑才附摘要正文；两腿的机检行与
+  摘要正文都进同一条评论，标题写「两腿」）
 
-**机检行的读法**（`key=value` 一行，字段名固定）：
+**机检行的读法**（`key=value` 一行，字段名固定；**两腿各一行，首 token 不同 ⇒ 机检可区分**）：
 `TEST_UNIT_RESULT exit=… suites=… suitesFailed=… tests=… testsFailed=… time=… wall=…s log=… summary=… head=<sha> dirty=clean|dirty`
+`TEST_BEHAVIOR_RESULT exit=… suites=… …log=.ci-verify/test-behavior.log …`（行为腿同款字段）
 
 - `exit=` 是**唯一判据**（jest 的退出码原样透传；摘要、机检行与下面两枚都不参与任何判红路径）
 - `head=` ＝ 那一次跑所在的 HEAD sha；`dirty=` ＝ 当时**整棵工作树**（含未跟踪文件）有没有未提交改动
@@ -96,9 +103,14 @@
 
 守护：`utils/devFinishContract.test.js` 的 U 系列 —— U1–U10 钉 #1546 那件产物的形状与可复算性，
 U11–U14 钉 `head=` / `dirty=` 的行为（种进去的值要出现、取不到要写 `?`、非法值与大小写变体归一、
-两枚不产出绿/红结论、返回的那两枚必须与结论行同串），
-U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `git status --porcelain` 实读而不是常量 ——
-这一条是**接线**，不构成 ③ 的行为证据，行为面看 U11–U14 与真链路那两腿）。
+两枚不产出绿/红结论、返回的那两枚必须与结论行同串），U15 钉 #1702 的腿进首 token
+（默认腿逐字节仍是 `TEST_UNIT_RESULT`，`-Leg behavior` 发 `TEST_BEHAVIOR_RESULT`，与 `-Mode local` 叠加成
+`TEST_BEHAVIOR_LOCAL_RESULT`）。
+U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `git status --porcelain` 实读而不是常量；
+两腿跑的都是 `package.json` 那两条字面命令、**且必须边跑边吐** —— 见下「判读纪律」里 `Out-String` 那条 ——
+这一条是**接线**，不构成 ③ 的行为证据，行为面看 U11–U15 与真链路那两腿）。
+L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿、L2 脏输出判读、L3 快路径两腿接线与合成退出码）。
+
 
 ## 全量 ③ 门该不该跑（C2 四档判据，2026-10-05 立 · #1556）
 
@@ -176,31 +188,36 @@ U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `
 
 ## agent 判读纪律（慢≠卡死 / 机检行 / 重跑半径）（#1656，2026-10-14 立）
 
-**上下文只带结果行（2026-10-15 立）**：跑完门，进上下文的只有结果行（`TEST_UNIT_RESULT` / `MP_WEIXIN_RESULT` / `KOTLIN_ALL_RESULT`）；完整日志留在 `.ci-verify/*.log`，要细节按小节名回本文件读，**不把日志原文贴进对话**。
+**上下文只带结果行（2026-10-15 立，2026-10-18 补两腿）**：跑完门，进上下文的只有结果行（`TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT` / `MP_WEIXIN_RESULT` / `KOTLIN_ALL_RESULT`）；完整日志留在 `.ci-verify/*.log`，要细节按小节名回本文件读，**不把日志原文贴进对话**。
 
 **这一节只管一件事**：一条命令在跑、跑完、或跑红之后**怎么读**。判据**不住在这里**——住在脚本与
 `docs/adr/0036-工具链交付慢与怪错的三条处置.md`（移动端编号体系，须写全路径），本节只给冷启动读数：
 三类误判各一条判据、③ 门的两条出口、② 门的三分语义。**不复述门脚本细节**（写了必漂，ADR-0036 ③ 明令），
 上面「时间账与三样慢」「全量 ③ 门落盘与入口」「全量 ③ 门该不该跑」已有的读数，这里只引小节名、不抄回来。
-⚠️ 本节所有数字都是 **2026-10-14 现测**（head `4d4f22ed`，178 套件，本机 12 核）——**别拿 #1410 当年的账当现测**。
+⚠️ 本节数字分两批：**2026-10-14 现测**（head `4d4f22ed`，178 套件单腿）与 **2026-10-18 两腿实测**（head `632a30e0` 工作树，190 套件，本机 12 核，见 `docs/adr/0042-测试门拆腿与逐套件心跳.md`）——**别拿 #1410 当年的账当现测**。
 
 ### 三类误判，各一条判据
 
-1. **慢 ≠ 卡死**。判据 = **看结论行在不在，不看输出有没有在动**。
-   全量 ③ 门串行一跑现测 **wall=880 秒**（`TEST_UNIT_RESULT exit=0`，绿），而它**中途没有进度输出**：
-   `jest.setTimeout` 在 `utils/*.test.js` 里有 9 处取值 **120–600 秒**（120000×2 / 180000×2 / 240000×2 / 600000×3），
-   行为套件单套串行就吃 **29–265 秒**（现测 `styleLoopBehavior` 29.4 s、`deviceCaptureTierBehavior` 46.3 s、
-   `wirelessDebugBehavior` 46.6 s、`mpWeixinGateResultLineBehavior` 265.2 s）⇒ **长时间无输出是设计内**。
-   真源：`docs/adr/0036-…` 处置一——那一跑被读成「卡死」，实为 `exit 0`（83 PASS / 0 FAIL）。
+1. **慢 ≠ 卡死**。判据 = **看心跳行进到第几套、看入口第一行给的预期时长**，不看「输出有没有在动」（#1702 起两者一致了）。
+   ③ 门现在是两腿：入口**第一行**先给预期时长，随后逐套件心跳 `JEST_SUITE i=k/N status=… secs=… elapsed=…` 连续出现，
+   一条腿收尾落一行结果行，两腿都跑完才按先红者退出。**2026-10-18 实测**：接线腿 **42 s / 120 套件**、
+   行为腿 **1129 s / 70 套件**（两腿合计 1172 s）；最慢单套 `utils/mpWeixinGateResultLineBehavior.test.js` **496 s**，
+   其后 `kotlinAllProcessCaptureBehavior` 76 s、`mpWeixinGateRetryBehavior` 73.5 s；`jest.setTimeout` 在 `utils/*.test.js`
+   里仍有 9 处取 **120–600 秒** ⇒ **单个超长套件内静默数分钟仍是设计内**（`-i` 串行，#1410），
+   但「整跑零输出」那种形态已经不存在了。
+   真源：`docs/adr/0036-…` 处置一（那一跑被读成「卡死」，实为 `exit 0`）与 `docs/adr/0042-测试门拆腿与逐套件心跳.md`（拆法与基线）。
 2. **刷屏 ≠ 失败**。判据 = **只认结论行的 `exit=`，噪音不参与判红**。
    现测噪音量级：快路径入口那一跑，落盘日志 858 行里 **828 行是 pwsh 自己的**
    `node.exe: 无法处理来自 "Error" 的 … 流中的 XML: Data at the root level is invalid.` 解码噪音
    （**不是被测物写的**），一条 `PASS` 都没抓到 ⇒ 结论行老实写 `missing=suites|tests|time`，
    失败摘要件自己也写着「本次输出里没抓到 Tests 汇总行」。
-   ⚠️ **这不是「换个捕获方式」能治的**：同一条命令绕开入口直跑 `npm run test:unit:local` 并 `cmd /c "… > 文件 2>&1"`，
-   日志 839 行、汇总行完整（`Test Suites: 3 failed, 175 passed, 178 total`）——但**走门入口时它自己就要过一层 pwsh 捕获**，
-   所以**门的落盘件按门读、别拿它当 jest 原始输出读**。
-   ⇒ 先问「结论行在不在」，别问「输出好不好看」；**要读汇总就绕开门入口直跑 `npm run test:unit:local` 并重定向到文件**。
+   ⚠️ **捕获层已是流式，但落盘件仍不全等于 jest 原始输出**（2026-10-18 修订）：入口现在边跑边吐
+   （`Invoke-GateLegCommand`：`Tee-Object -Variable … | Out-Host`，`Out-String` 会把整段攒到最后，实测见 ADR-0042 决策 4），
+   可**汇总行仍可能被 CLIXML 噪音挤掉**——同日两腿那一跑，行为腿机检行老实写 `missing=suites|tests|time`
+   （心跳行 `JEST_SUITE_DONE total=70 passed=67 failed=3` 反而是那跑唯一完整的计数来源）。
+   ⇒ 先问「结论行在不在」，别问「输出好不好看」；**要读 jest 汇总就绕开门入口直跑那一腿的 `npm run test:*:local` 并重定向到文件**。
+   ⚠️ 这条**曾经**被写成「换个捕获方式治不了」——那个结论只对「攒到最后再吐」成立；**判读的可见性**靠流式，
+   **落盘件的完整性**靠绕开入口读，两件事分开记。
    ⚠️ **缺字段 ≠ 跑失败**：上面那跑串行门 `exit=0` 也照样 `missing=suites|tests|time`——落盘件按汇总行取数，
    取不到就写 `?`（口径见「全量 ③ 门落盘与入口」里 `?` 那条：`?` 是「没读到」，不是「没有」）。
    ⇒ 看 `exit=` 判成败；`missing=` 只说明**读不到汇总**，不改变成败。
@@ -213,23 +230,28 @@ U8 钉调用点接线（取法只有共享库那一份；`dirty=` 的值取自 `
    ⇒ 处置顺序：**单套件重跑 → 绿 ⇒ 原样记红、不扩大重跑**；**仍红 ⇒ 才去查环境**（这三套都碰 adb / 设备 / 入口进程，
    本机无设备时读数本就不稳）。整道门重跑的成本账归上面「成本账反模式（2026-10-03 立）」，「我觉得没改」不算判据。
 
-### ③ 门的两条出口：入口与结果行
+### ③ 门的四条出口：两腿 × 入口与结果行
 
-两条出口的**结果行首 token 不同 ⇒ 机检可区分**（这是 ADR-0036 ③ 定的：门是全量的、快路径是本地日常，不许混读）：
+出口从两条变**四条**（#1702 拆腿 × ADR-0036 ③ 的门/快路径）：首 token = `TEST_<LEG>_…`，`LEG ∈ {UNIT, BEHAVIOR}`，
+快路径行尾多一枚 `mode=local` ⇒ **四者机检可区分，不许混读**（门是全量的、快路径是本地日常）：
 
-- **全量门** `npm run test:unit:gate`（= `scripts/dev-finish.ps1 -UnitGate`，**串行 `-i`**）⇒ 首 token
-  `TEST_UNIT_RESULT`，产物 `.ci-verify/test-unit.log`；现测 **wall=880 秒 / exit=0**。
-- **本地快路径** `npm run test:unit:gate:local`（= `-UnitLocal`，**并行、不带 `-i`**）⇒ 首 token
-  `TEST_UNIT_LOCAL_RESULT` 且行尾多一枚 **`mode=local`**，产物 `.ci-verify/test-unit-local.log` 与
-  `.ci-verify/test-unit-local-failure.txt`；现测 **入口自报 `wall=300s`**（同树绕开入口直跑 `npm run test:unit:local` 是 325 秒、jest 自报 `Time: 320.282 s`——差的那一截是入口自己那层捕获，不是被测面变慢）。
+- **全量门** `npm run test:unit:gate`（= `scripts/dev-finish.ps1 -UnitGate`，**两腿都跑、串行 `-i`**）⇒ 两行：
+  `TEST_UNIT_RESULT`（接线腿，`.ci-verify/test-unit.log`）与 `TEST_BEHAVIOR_RESULT`（行为腿，`.ci-verify/test-behavior.log`）；
+  2026-10-18 实测 **42 s + 1129 s = 1172 s / exit=0**（拆腿前单腿 880 s / 178 套件）。
+- **本地快路径** `npm run test:unit:gate:local`（= `-UnitLocal`，**并行、不带 `-i`**，同为两腿）⇒ `TEST_UNIT_LOCAL_RESULT` /
+  `TEST_BEHAVIOR_LOCAL_RESULT` 各带 `mode=local`，产物 `test-{unit,behavior}-local.log` 与对应的 `-failure.txt`；
+  单腿现测 **`wall=300s`**（同树绕开入口直跑 `npm run test:unit:local` 是 325 秒、jest 自报 `Time: 320.282 s`——
+  差的那一截是入口自己那层捕获，不是被测面变慢）。
   它**不进九步管线、不取 HBuilderX 锁、不碰设备**。
 - ⚠️ **两枚同给时快路径赢**（`-UnitLocal` 分支排在 `-UnitGate` 之前）⇒ 别指望「顺手带上 `-UnitGate` 就能贴 PR」。
 - ⚠️ **`-PostToPr` 只在 `-UnitGate` 生效**：快路径带它会打印「`-PostToPr` 只在 -UnitGate（全量门）生效；
   本地快路径不贴 PR 评论」然后照常跑完 ⇒ **要出 PR 证据就切全量门那条**，快路径的结论进不了 `## 验收证据`。
 - **快路径的红不等于门的红**：`-i` 的取舍与真因写在 `jest.config.unit.js` 文件头（12 核实测 5 次并行出现 1 次墙钟红），
   本节不复述。日常内循环走快路径，收口与 PR 证据走全量门。
-- **时间账只认这一跑**：现测 快路径入口 300 s / 串行全量门 880 s，比 #1410 记的「并行 60–90 s / 串行 236 s」大一截——
-  套件数从 146 涨到 178、行为套件变多是主因 ⇒ **旧账不能当现测引**，引之前先现跑一次。
+- **时间账只认这一跑**：2026-10-18 两腿实测 = 接线腿 42 s + 行为腿 1129 s（全量门 1172 s）；快路径单腿 300 s。
+  比 #1410 记的「并行 60–90 s / 串行 236 s」与 2026-10-14 的「178 套件 880 s」又大了一截——
+  套件从 146 → 178 → 190，**行为套件变重**（`mpWeixinGateResultLineBehavior` 从 265 s 涨到 496 s）是主因
+  ⇒ **旧账不能当现测引**，引之前先现跑一次，并把新数写回 `docs/adr/0042`。
 
 ### ② 门的 env-blocked：三分语义与处置
 

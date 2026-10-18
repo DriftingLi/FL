@@ -1,6 +1,7 @@
 # 守护的两类：行为守护 vs 接线守护
 
-> 移动端 ③ 门（`npm run test:unit` 全绿）的判据说明。真源是**分类器**，不是本文件里的清单：
+> 移动端 ③ 门（**两腿**：`npm run test:unit` 接线腿 + `npm run test:behavior` 行为腿；落盘入口
+> `npm run test:unit:gate`）的判据说明。真源是**分类器**，不是本文件里的清单：
 > `node scripts/classify-guards.mjs`（人读）/ `--json`（机读 / 供 `utils/guardClassification.test.js` 断言）。
 > 立此文的起因：issue **#1156**（验证层「永远绿」三层整改，规格 `docs/spec-永绿整改.md` 随 PR #1154 落地）。
 
@@ -26,10 +27,14 @@
 
 ## 两类守护
 
+两条判据**同时是 ③ 门拆腿的切分轴**（#1702）：同一份分类结果既回答「它承不承重」，也决定这个套件落在哪一腿 ——
+`behavior` ⇒ `test:behavior`（`jest.config.behavior.js`），`wiring` ⇒ `test:unit`（`jest.config.unit.js`）。
+两腿的 `testMatch` 都由 `scripts/lib/guard-split.js` 现算，**没有第二份手写清单**（血账 #974 的形态）。
+
 | 类 | 判据（代码级事实） | 对 ③ 门 |
 |---|---|---|
-| **行为守护 behavior** | 文件里**有代码级的执行调用**（`child_process` / `execFileSync` / `spawnSync` / `utsHarness` / 动态 `import()`），**且**引用了至少一个仓内载体（`.uts` / `.uvue` / `.ps1` / `.mjs` / `.json`） | **承重**：只有它回答得了判据 ① |
-| **接线守护 wiring** | 读源码文本断言调用点、常量、命名、顺序 | **不构成 ③ 门证据**：算法被改坏而字面量还在时**不会红** |
+| **行为守护 behavior** | 文件里**有代码级的执行调用**（`child_process` / `execFileSync` / `spawnSync` / `utsHarness` / 动态 `import()`），**且**引用了至少一个仓内载体（`.uts` / `.uvue` / `.ps1` / `.mjs` / `.json`） | **承重**：只有它回答得了判据 ①；落在 `test:behavior` 腿（带逐套件心跳行） |
+| **接线守护 wiring** | 读源码文本断言调用点、常量、命名、顺序 | **不构成 ③ 门证据**：算法被改坏而字面量还在时**不会红**；落在 `test:unit` 腿 |
 
 判据是**代码事实**，不是文件名约定、不是注释里提到过什么、也不是作者自报：
 文件名叫 `*Behavior.test.js` 而实际只 `expect(src).toContain(...)` 的，照样归接线守护。
@@ -38,11 +43,12 @@
 > `hxRunContract` / `envCheckContract` / `testCompileContract` / `uvuePageScrollContract` 等 **9 个**
 > 文件被误判成行为守护（20/78）⇒ 修正后 **13 行为 / 86 接线**。**判据必须落在代码级调用上。**
 
-## 现状（快照 2026-09-19；**真源永远是分类器**，不要照抄本节数字）
+## 现状（快照 2026-10-18；**真源永远是分类器**，不要照抄本节数字）
 
-- **实测：行为守护 15 · 接线守护 88 · 合计 103**（`node scripts/classify-guards.mjs`，origin/master `f0faff82`）。
-- **`utils/guardClassification.test.js` 的 H2 钉的是「下界」，不是「现值」**：`BEHAVIOR_MIN = 13` / `TOTAL_MIN = 99`
-  （2026-09-18 在 `bee21af4` + 本守护自身上的读数）。迁移镜像会让 behavior **上升**（**允许**），下降才红
+- **实测：行为守护 70 · 接线守护 120 · 合计 190**（`node scripts/classify-guards.mjs`，`feat/1702-split-unit-behavior`，
+  拆腿 PR 内按新进程取数；含该 PR 新增的 `utils/jestSplitContract.test.js`）。拆腿后这两腿就是 ③ 门的两个入口面。
+- **`utils/guardClassification.test.js` 的 H2 钉的是「下界」，不是「现值」**：`BEHAVIOR_MIN = 70` / `TOTAL_MIN = 190`
+  （2026-10-18 按新进程读数上调；此前 35 / 138）。迁移镜像会让 behavior **上升**（**允许**），下降才红
   ⇒ 本节的数字**本来就会随 master 前进而过期**（#1160 合并后即如此：master 又多了 4 个套件）。
   **要现行值请跑分类器，别读这里。**
 - **点名：目前只是接线守护的 7 个手抄镜像模块**（迁移对象，spec §④ 的 S6 系列）：

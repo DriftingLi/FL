@@ -298,7 +298,8 @@ jobs:
               const GATES = [
                 { key: '①', label: 'Android 真机逐页截图对比', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
                 { key: '②', label: '微信开发者工具无报错（半自动：agent 可执行 scripts/mp-weixin-check.ps1）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot', requires: 'mpweixin' },
-                { key: '③', label: 'npm run test:unit 全绿', fields: ['结论'], artifact: 'ci-run' },
+                // 标签文案是给人读的（#1702 两腿）；判据只认行首 key（matchesGate），改文案不动校验语义。
+                { key: '③', label: 'npm run test:unit / test:behavior 两腿全绿', fields: ['结论'], artifact: 'ci-run' },
                 { key: '④', label: '本地编译门（默认 ④c 整模块；dev 面追加 ④a）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'compile-log' },
                 { key: '④b', label: 'release 云打包（触及打包面时）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', requires: '4b' },
               ];

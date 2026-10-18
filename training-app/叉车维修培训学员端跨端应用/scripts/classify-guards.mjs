@@ -34,33 +34,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * ① 执行判据：文件里有没有**代码级**的「跑起来」调用。
- * 只认代码行，不认注释（先用 stripComments 去注释再匹配）。
- * `[^)]*` 而不是 `['"]child_process['"]`：本仓两种引号都在用。
- */
-const EXECUTION_MARKERS = [
-  { re: /require\(\s*['"]child_process['"]\s*\)/, why: 'require(child_process)：起子进程真跑载体' },
-  { re: /\bfrom\s+['"]node:child_process['"]/, why: 'import node:child_process' },
-  { re: /\bexecFileSync\s*\(/, why: 'execFileSync：同步起子进程' },
-  { re: /\bspawnSync\s*\(/, why: 'spawnSync：同步起子进程' },
-  { re: /\bexecSync\s*\(/, why: 'execSync：同步起子进程' },
-  // ⚠️ `utsHarness` 这条必须锚在**执行调用**上，不能只认模块名（#1178 实测踩过）：
-  // 读取层归一（ADR-0019）落地后，一批**接线守护**也 `require('./utsHarness')` 取共享读者 `readText` ——
-  // 但它们**并不执行** `.uts`，只是用它读文本。只认模块名会把 6 个接线守护误升成行为守护
-  // （H5「点名的手抄镜像仍是接线守护」当场转红，而它们的断言一行没改）。
-  // 故只认真正的执行出口：`loadUts(`（把 .uts 当 JS 跑）。
-  { re: /\bloadUts\s*\(/, why: 'utsHarness.loadUts：把 .uts 当 JS 真执行' },
-  { re: /import\(\s*/, why: '动态 import()：真加载被执行物' },
-];
+// 执行判据（什么算「现场跑了被测面」）与去注释**只有一份**，住在 `scripts/lib/guard-split.js`：
+// ③ 门拆腿（`jest.config.unit.js` / `jest.config.behavior.js`）用的是同一份判据，
+// 两份各写一套会让「分类表」与「两腿的 testMatch」静默漂移（#1702；血账 #974 的形态）。
+// 本文件仍负责**分类结果**（refs / rows / 人读表 / 退出码），判据本身不在这里。
+import guardSplit from './lib/guard-split.js';
+
+const { stripComments, matchExecutionMarkers } = guardSplit;
 
 /** 被执行的载体：说明这个「跑起来」跑的是**仓内的东西**，不是自说自话 */
 const SUBJECT_RE = /\.(?:uts|uvue|ps1|mjs|json)\b/;
-
-/** 去注释：块注释 + 行注释（`//` 起）。字符串里的 `//` 极少见，本仓的断言文本里没有 http:// 之类 */
-function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-}
 
 /** 读取的文件（真实存在于同一模块目录里的 `.uts`）——两类守护都该做的事 */
 function readsRealFiles(srcDir, src) {
@@ -83,7 +66,7 @@ export function classify(utilsDir) {
     .map((name) => {
       const src = fs.readFileSync(path.join(utilsDir, name), 'utf8');
       const code = stripComments(src);
-      const exec = EXECUTION_MARKERS.filter((m) => m.re.test(code)).map((m) => m.why);
+      const exec = matchExecutionMarkers(code);
       // 分类只看**一件事**：有没有代码级的执行调用。
       //   ⚠️ 不要把「有没有被执行的载体」并进分类条件（2026-09-18 血账）：那样一个**真执行**的文件
       //   一旦失去载体引用，就会**掉进 wiring** 而不是被报成「行为但无载体」—— 于是
