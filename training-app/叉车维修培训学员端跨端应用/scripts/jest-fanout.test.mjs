@@ -106,10 +106,15 @@ test('配平判据：最慢片 <= max(总/4, 最慢套件) 的 1.15 倍', () => 
   )
 })
 
-test('relKeyOf：绝对路径 / 相对路径都能折成表里的键', () => {
+test('relKeyOf：绝对路径 / 相对路径 / 反斜杠 / 别的根，都能折成表里的键', () => {
   assert.equal(relKeyOf(join(APP_ROOT, 'utils', 'x.test.js'), APP_ROOT), 'utils/x.test.js')
   assert.equal(relKeyOf('utils/x.test.js', APP_ROOT), 'utils/x.test.js')
-  assert.equal(relKeyOf('D:\\FL\\wt-1\\training-app\\app\\utils\\x.test.js', APP_ROOT), 'utils/x.test.js')
+  // 反斜杠形态要由本机真实绝对路径派生 —— 写死 'D:\FL\wt-1\...' 只在 Windows 成立，
+  // 上 CI（/home/runner/work/...）会红（#1717 首跑实测）。
+  const winStyle = join(APP_ROOT, 'utils', 'x.test.js').replace(/\//g, '\\')
+  assert.equal(relKeyOf(winStyle, APP_ROOT), 'utils/x.test.js')
+  // 尾段兜底：不在本根下面的绝对路径（别的机器 / 别的 clone 根）也按 utils/... 折键。
+  assert.equal(relKeyOf(join(APP_ROOT, '..', 'another-root', 'utils', 'x.test.js'), APP_ROOT), 'utils/x.test.js')
 })
 
 test('parseTimings fail-closed：defaultSeconds 缺失 / 非数 / suites 非对象 ⇒ throw', () => {
