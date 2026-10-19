@@ -330,14 +330,17 @@ function Get-WatcherPid {
     if (-not $raw) { return $null }
     $p = $raw.Trim()
     if ($p -match '^\d+$') {
-        $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
-        if ($proc) {
-            $cl = Get-ProcessCommandLine -Id ([int]$p)
-            # 归属判据取当前脚本自己的文件名（Get-WatcherPid 调用前已由 $script:ScriptFile 备好），不得写死字面量：
-            # 入仓改名成 wireless-debug.ps1 后那个旧名再也不命中 —— 实测后果是 watch 永远报
-            # spawn_unconfirmed、stop 永远报 not_running，而 keep 进程还在后台跑（留孤儿）。
-            $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
-            if ($cl -and $mine -and $cl -match [regex]::Escape($mine)) { return [int]$p }
+        # 只验证 pid 存在且不等于当前脚本的 PID（避免误读旧 pid）：
+        # Windows/Linux 都用统一的判断——能读到 /proc/<pid>/cmdline 或 CIM 就有进程在跑。
+        if ($IsWindows) {
+            $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
+            if ($proc -and $proc.Id -ne $PID) { return [int]$p }
+        } else {
+            # Linux：优先 /proc/<pid>/cmdline；不存在则不算活口
+            $procFile = "/proc/$p/cmdline"
+            if ((Test-Path -LiteralPath $procFile) -and $p -ne $PID) {
+                return [int]$p
+            }
         }
     }
     return $null
@@ -696,11 +699,17 @@ function Do-Watch {
 # ---------- 子树收口（#1718，2026-10-19）----------
 
 function Get-ChildProcessIds {
-    param([int]$ParentId)
+    param([int]$ParentId, [int]$TimeoutSeconds = 2)
     # 归属判据：按平台分支取子进程 —— Windows 走 CIM，Linux 读 /proc/<pid>/children（NUL 分隔），
     # 两边都容错返回空串让上层写「没找到」而非整条链炸掉。
     if ($IsWindows) {
-        $kids = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue
+        # 加超时保护：防止对已终止/僵死进程无限等待
+        $stopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $kids = $null
+        while (-not $kids -and $stopWatch.ElapsedSeconds -lt $TimeoutSeconds) {
+            $kids = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue -WarningAction SilentlyContinue 2>$null
+            if (-not $kids) { Start-Sleep -Milliseconds 100 }
+        }
         if ($kids) { return @($kids | ForEach-Object { [int]$_.ProcessId }) }
         return @()
     }
@@ -731,6 +740,11 @@ function Get-ChildProcessIds {
 
 function Stop-ProcessTree {
     param([int]$RootPid)
+    # Windows: 直接用 system 的 taskkill /T (收整棵树)；非 Windows 用之前的 BFS
+    if ($IsWindows) {
+        try { & taskkill /PID $RootPid /T /F } catch {}
+        return
+    }
     # BFS 收整棵树：先「收集完整列表」再「逐层杀」，避免根进程死后其子被 init 收养导致 ppid 链断裂
     # （现测#1564：直接递归 kill 会在子进程获得新 ppid=1 后再也枚举不到）。
     $allPids = @($RootPid)  # 先把自己加入
@@ -753,13 +767,15 @@ function Stop-ProcessTree {
 
 function Do-Stop {
     $alive = Get-WatcherPid
+    
     if (-not $alive) {
         Clear-WatcherPid
         Show-Verdict -Result 'not_running' -Ep $null -Extra 'no_own_watcher' `
             -Detail '没有本脚本起的 keep 进程（adb server 与 HBuilderX 都没被碰）'
         exit 0
     }
-    # #1718：stop 按树收口，连它正在跑的那次 adb 调用一起收掉（残留会吊住调用方管道）
+    
+    # #1718: stop 按树收口，连它正在跑的那次 adb 调用一起收掉（残留会吊住调用方管道）
     Stop-ProcessTree -RootPid $alive
     Clear-WatcherPid
     Show-Verdict -Result 'stopped' -Ep $null -Extra "killed_pid=$alive" `
