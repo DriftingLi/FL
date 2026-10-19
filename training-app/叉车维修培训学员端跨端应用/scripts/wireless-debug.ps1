@@ -377,19 +377,18 @@ function Stop-ProcessTree {
     param([int]$RootPid)
     # BFS 收整棵树：先「收集完整列表」再「逐层杀」，避免根进程死后其子被 init 收养导致 ppid 链断裂
     # 同时加一层「命令行含脚本文件名」作为补充判据，确保我们只收自己的 keep 派生出的进程
-    $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
     
     # 第一阶段：收集所有子孙（不管它们的 ppid 是否已被收养）
     $allChildren = @()
-    function Collect-AllChildren([int]$pid) {
-        $kids = Get-ChildProcessIds -ParentId $pid
+    function Collect-AllChildren([int]$ChildPid) {
+        $kids = Get-ChildProcessIds -ParentId $ChildPid
         foreach ($kid in $kids) {
             if ($allChildren -contains $kid) { continue }
             $allChildren += $kid
-            Collect-AllChildren -Id $kid
+            Collect-AllChildren -ChildPid $kid
         }
     }
-    Collect-AllChildren -Id $RootPid
+    Collect-AllChildren -ChildPid $RootPid
     
     # 第二阶段：按从底到顶的顺序杀（先杀叶子再杀根）
     # 这样即使某个节点在被杀时 ppid 变了，它的子已经被安全收了
