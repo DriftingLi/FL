@@ -377,29 +377,18 @@ function Stop-ProcessTree {
     param([int]$RootPid)
     # BFS 收整棵树：先「收集完整列表」再「逐层杀」，避免根进程死后其子被 init 收养导致 ppid 链断裂
     
-    # 使用队列做 BFS（非递归方式，更可靠）
-    $queue = [System.Collections.Generic.Queue[int]]::new()
-    $visited = [System.Collections.Generic.HashSet[int]]::new()
-    
-    $queue.Enqueue($RootPid) | Out-Null
-    $null = $visited.Add($RootPid)
-    
-    $allPids = @()
-    
-    while ($queue.Count -gt 0) {
-        $current = $queue.Dequeue()
-        $allPids += $current
-        
-        # 找所有子孙
-        $kids = Get-ChildProcessIds -ParentId $current
-        foreach ($kid in $kids) {
-            if ($visited.Contains($kid)) { continue }
-            $null = $visited.Add($kid)
-            $queue.Enqueue($kid) | Out-Null
+    # 第一遍：收集整棵树所有 PID（不管它们现在的 ppid 指向哪里）
+    $allPids = @($RootPid)  # 先把自己加入
+    function CollectChildren([int]$parentPid) {
+        foreach ($kid in (Get-ChildProcessIds -ParentId $parentPid)) {
+            if ($allPids -contains $kid) { continue }
+            $allPids += $kid
+            CollectChildren -ChildPid $kid
         }
     }
+    CollectChildren -ChildPid $RootPid
     
-    # 从底到顶杀（数组天然就是从叶子到根的顺序）
+    # 第二遍：从底向上杀（数组天然顺序就是从叶子到根）
     foreach ($p in $allPids) {
         Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
     }
