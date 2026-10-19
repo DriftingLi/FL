@@ -361,11 +361,16 @@ function Get-ChildProcessIds {
         return @()
     }
     # 非 Windows 没有 CIM：ppid 只能从 ps 读（本工具的行为守护在 CI 的 ubuntu 上真跑）
-    $rows = & ps -eo pid=,ppid= 2>$null
-    return @($rows | ForEach-Object {
-        $f = -split $_.Trim()
-        if ($f.Count -ge 2 -and $f[1] -match '^\d+$' -and [int]$f[1] -eq $ParentId) { [int]$f[0] }
-    })
+    $output = & ps -eo pid=,ppid= --no-headers 2>$null
+    $children = @()
+    foreach ($line in $output) {
+        # ps -eo pid=,ppid= 输出格式如：1234 5678 （用空格分隔，可能有多余空白）
+        $parts = $line -split '\s+'
+        if ($parts.Count -ge 2 -and $parts[1] -match '^\d+$' -and [int]$parts[1] -eq $ParentId) {
+            $children += [int]$parts[0]
+        }
+    }
+    return $children
 }
 
 function Stop-ProcessTree {
