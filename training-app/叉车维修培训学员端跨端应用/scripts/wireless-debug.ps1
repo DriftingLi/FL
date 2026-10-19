@@ -693,6 +693,64 @@ function Do-Watch {
     exit 0
 }
 
+# ---------- 子树收口（#1718，2026-10-19）----------
+
+function Get-ChildProcessIds {
+    param([int]$ParentId)
+    # 归属判据：按平台分支取子进程 —— Windows 走 CIM，Linux 读 /proc/<pid>/children（NUL 分隔），
+    # 两边都容错返回空串让上层写「没找到」而非整条链炸掉。
+    if ($IsWindows) {
+        $kids = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue
+        if ($kids) { return @($kids | ForEach-Object { [int]$_.ProcessId }) }
+        return @()
+    }
+    # 非 Windows：优先尝试 /proc/<pid>/children（现代 Linux 发行版）；不存在再 fallback 到 ps
+    $childFile = "/proc/$ParentId/children"
+    if (Test-Path -LiteralPath $childFile) {
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($childFile)
+            $text = [System.Text.Encoding]::UTF8.GetString($bytes) -replace "`0", ' '
+            return @($text -split '\s+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+        } catch { return @() }
+    }
+    # fallback：从 ps -eo pid ppid 里反向查（注意参数不带等号）
+    # ⚠️ 单次 adb 调用也必须有单次超时（#1562，2026-10-07）：这条边界同样重要——get-childprocessids 不能无界等待
+    try {
+        $output = & { timeout 2s ps -eo pid ppid --no-headers 2>$null } 2>$null
+    } catch { $output = $null }
+    $children = @()
+    foreach ($line in ($output -split "`r?`n" | Where-Object { $_ -notmatch '^\s*$' })) {
+        # ps 输出格式：PID PPID（空格分隔）
+        $parts = $line -split '\s+'
+        if ($parts.Count -ge 2 -and $parts[1] -match '^\d+$' -and [int]$parts[1] -eq $ParentId) {
+            $children += [int]$parts[0]
+        }
+    }
+    return $children
+}
+
+function Stop-ProcessTree {
+    param([int]$RootPid)
+    # BFS 收整棵树：先「收集完整列表」再「逐层杀」，避免根进程死后其子被 init 收养导致 ppid 链断裂
+    # （现测#1564：直接递归 kill 会在子进程获得新 ppid=1 后再也枚举不到）。
+    $allPids = @($RootPid)  # 先把自己加入
+    $queue = @($RootPid)     # 队列初始只有根
+    while ($queue.Length -gt 0) {
+        $current = $queue[0]
+        $queue = $queue[1..($queue.Length-1)]   # dequeue
+        foreach ($kid in (Get-ChildProcessIds -ParentId $current)) {
+            if ($allPids -notcontains $kid) {
+                $allPids += $kid
+                $queue += $kid
+            }
+        }
+    }
+    # 第二遍：从底向上杀（数组天然顺序就是从叶子到根）
+    foreach ($p in $allPids) {
+        try { Stop-Process -Id $p -Force -ErrorAction Stop } catch {}
+    }
+}
+
 function Do-Stop {
     $alive = Get-WatcherPid
     if (-not $alive) {
@@ -701,10 +759,11 @@ function Do-Stop {
             -Detail '没有本脚本起的 keep 进程（adb server 与 HBuilderX 都没被碰）'
         exit 0
     }
-    Stop-Process -Id $alive -Force
+    # #1718：stop 按树收口，连它正在跑的那次 adb 调用一起收掉（残留会吊住调用方管道）
+    Stop-ProcessTree -RootPid $alive
     Clear-WatcherPid
     Show-Verdict -Result 'stopped' -Ep $null -Extra "killed_pid=$alive" `
-        -Detail "只结束了本脚本自己的 keep 进程 pid=$alive；设备侧开关与 adb 连接都没动，需要连接就再跑 ensure"
+        -Detail "结束本脚本自己的 keep 进程及其整棵子树 pid=$alive；设备侧开关与 adb 连接都没动，需要连接就再跑 ensure"
     exit 0
 }
 
