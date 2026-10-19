@@ -41,9 +41,10 @@
  * 变异分两类，用错方法就等于没注入：
  *   · **禁止型**（W1/W2/W4/W6/W7 的 gate-evidence）——出现即违规，用「整行追加」验，不依赖原文锚点；
  *   · **存在型**（W3 的两处 sleep 与时间窗、W5 的 ASCII 过滤、W6 的取名、W7 的非门声明、W8 的两处早退、
- *     W9 的委托与两档预算与点名——#1568 一次十条）
+ *     W9 的委托与两档预算与点名——#1568 一次十条；W10 的按树收口三件——#1718）
  *     ——追加一行永远打不中，只能「把该在的拿掉」验；这类每条都先断言替换真的发生
  *     （`expect(m).not.toBe(real)`），因为替换锚点会随措辞漂移，锚点一漂用例就变成恒绿的空跑。
+ *     W10 的变量名锚用宽容正则（`$(cur|current|parentPid)`），枚举变量改名不改判据。
  */
 const path = require('path');
 const { readText } = require('./utsHarness');
@@ -200,6 +201,25 @@ function scanContract(src) {
   if (!noteBody) v.push('W9 找不到 Note-AdbTimeout 函数体（判据取不到即红）');
   else if (/Write-Host|Say\s/.test(noteBody)) v.push('W9 超时点名件往 stdout 写了东西（`-Quiet` 取 serial 会被这一行污染）');
 
+  // W10 stop 收 keep 的整棵子树（#1718）：只杀 keep 的 pid 会漏下正在跑的 adb 子进程
+  const stop = functionBody(code, 'Do-Stop') || '';
+  if (!stop) v.push('W10 找不到 Do-Stop 函数体（判据取不到即红，不在空集合上判绿）');
+  if (stop && !/Stop-ProcessTree -RootPid \$alive/.test(stop)) {
+    v.push('W10 stop 没按整棵子树收口（keep 正在跑的 adb 子进程会活下来，握着调用方管道 ⇒ 调用方等不到 EOF）');
+  }
+  if (stop && /Stop-Process -Id \$alive/.test(stop)) {
+    v.push('W10 stop 回写成只杀 keep 的 pid（#1718 的孤儿就是这一行留的）');
+  }
+  const tree = functionBody(code, 'Stop-ProcessTree') || '';
+  if (!tree) v.push('W10 缺 Stop-ProcessTree 助手（收树逻辑不得内联在 stop 里）');
+  else if (!/Get-ChildProcessIds -ParentId \$(cur|current|parentPid)/.test(tree)) v.push('W10 Stop-ProcessTree 没枚举子树（只杀根仍然会留孤儿）');
+  const child = functionBody(code, 'Get-ChildProcessIds') || '';
+  if (!child) v.push('W10 缺 Get-ChildProcessIds 助手（按平台取子进程的那件）');
+  else {
+    if (!/\$IsWindows/.test(child)) v.push('W10 子树枚举没分平台（CI 的 ubuntu 上没有 Get-CimInstance）');
+    if (!/ps -eo pid=,ppid=/.test(child)) v.push('W10 非 Windows 分支没从 ps 读 ppid（子树枚举在那侧会静默取空）');
+  }
+
   return v;
 }
 
@@ -263,6 +283,10 @@ describe('wireless-debug.ps1 契约守护（#1564）', () => {
     ['W7', '非门声明', '非门（不替代 ① 验收门', '门（已替代 ① 验收门'],
     ['W8', 'Do-Keep 的叠循环早退', /if \(\$alive -and \$alive -ne \$PID\) \{[\s\S]*?\r?\n {4}\}/, '$null = $null'],
     ['W8', 'Do-Watch 的叠循环早退', 'already_running', 'already_gone'],
+    // W10（#1718）：stop 的收口范围与收树助手的形状（变量名锚宽容化，锚点一漂工况见 #1718 修的双 PR 现场）
+    ['W10', 'stop 按树收口', 'Stop-ProcessTree -RootPid $alive', 'Stop-Process -Id $alive -Force'],
+    ['W10', '子树枚举', /foreach \(\$kid in \(Get-ChildProcessIds -ParentId \$(?:cur|current|parentPid)\)\)/, 'foreach ($kid in @())'],
+    ['W10', '非 Windows 的 ppid 读法', 'ps -eo pid=,ppid=', 'ps -eo pid='],
   ];
   test.each(REMOVALS)('%s：%s 被拿掉 ⇒ 必须判红', (tag, label, from, to) => {
     const m = typeof from === 'string' ? real.split(from).join(to) : real.replace(from, to);
@@ -279,12 +303,12 @@ describe('wireless-debug.ps1 契约守护（#1564）', () => {
   });
 
   // ── ③ 真文件必须干净
-  test('真文件零违规（九条判据同时成立）', () => {
+  test('真文件零违规（十条判据同时成立）', () => {
     expect(scanContract(real)).toEqual([]);
   });
 
   // ── ④ 判据本身不能空转：两个面都取得到内容，函数体也取到
-  test('取样面非空：文档块、代码面、四个函数体都真取到了', () => {
+  test('取样面非空：文档块、代码面、六个函数体都真取到了', () => {
     expect(docBlock(real).length).toBeGreaterThan(800);
     expect(codeFace(real).length).toBeGreaterThan(4000);
     expect(functionBody(codeFace(real), 'Do-Keep')).not.toBeNull();
@@ -292,6 +316,10 @@ describe('wireless-debug.ps1 契约守护（#1564）', () => {
     // W9 的两件（#1568）：判据落在函数体上，函数体取不到就必须在 scanContract 里当场判红
     expect(functionBody(codeFace(real), 'Invoke-Adb')).not.toBeNull();
     expect(functionBody(codeFace(real), 'Note-AdbTimeout')).not.toBeNull();
+    // W10 的两件（#1718）：同上，收树判据都落在函数体上
+    expect(functionBody(codeFace(real), 'Do-Stop')).not.toBeNull();
+    expect(functionBody(codeFace(real), 'Stop-ProcessTree')).not.toBeNull();
+    expect(functionBody(codeFace(real), 'Get-ChildProcessIds')).not.toBeNull();
   });
 
   test('W4 的正向读数：状态目录走机器级路径（不是宿主树）', () => {

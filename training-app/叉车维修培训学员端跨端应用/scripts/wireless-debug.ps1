@@ -330,16 +330,24 @@ function Get-WatcherPid {
     if (-not $raw) { return $null }
     $p = $raw.Trim()
     if ($p -match '^\d+$') {
-        # 只验证 pid 存在且不等于当前脚本的 PID（避免误读旧 pid）：
-        # Windows/Linux 都用统一的判断——能读到 /proc/<pid>/cmdline 或 CIM 就有进程在跑。
+        # 64bb0e87 曾把这里简化成「只验 pid 存在」⇒ 契约 W6 判红（归属判据 = 命令行里认得出的本脚本名，
+        # 丢了这个判据任何同名 pid 都会被当成自家 keep，stop 会误杀别人家的进程）。恢复归属判据：
+        # 取当前脚本自己的文件名（Get-WatcherPid 调用前已由 $script:ScriptFile 备好），不得写死字面量
+        # ——入仓改名成 wireless-debug.ps1 后旧名再也不命中，watch 恒 spawn_unconfirmed、stop 恒 not_running。
         if ($IsWindows) {
             $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
-            if ($proc -and $proc.Id -ne $PID) { return [int]$p }
+            if ($proc -and $proc.Id -ne $PID) {
+                $cl = Get-ProcessCommandLine -Id ([int]$p)
+                $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
+                if ($cl -and $mine -and $cl -match [regex]::Escape($mine)) { return [int]$p }
+            }
         } else {
             # Linux：优先 /proc/<pid>/cmdline；不存在则不算活口
             $procFile = "/proc/$p/cmdline"
             if ((Test-Path -LiteralPath $procFile) -and $p -ne $PID) {
-                return [int]$p
+                $cl = Get-ProcessCommandLine -Id ([int]$p)
+                $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
+                if ($cl -and $mine -and $cl -match [regex]::Escape($mine)) { return [int]$p }
             }
         }
     }
@@ -722,15 +730,15 @@ function Get-ChildProcessIds {
             return @($text -split '\s+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
         } catch { return @() }
     }
-    # fallback：从 ps -eo pid ppid 里反向查（注意参数不带等号）
-    # ⚠️ 单次 adb 调用也必须有单次超时（#1562，2026-10-07）：这条边界同样重要——get-childprocessids 不能无界等待
+    # fallback：从 ps -eo pid=,ppid= 反向查（等号形式去表头，免得在无 --no-headers 的发行版上把表头行当数据）
+    # ⚠️ 单次 ps 调用也带超时（#1562，2026-10-07）：get-childprocessids 不能无界等待
     try {
-        $output = & { timeout 2s ps -eo pid ppid --no-headers 2>$null } 2>$null
+        $output = & { timeout 2s ps -eo pid=,ppid= 2>$null } 2>$null
     } catch { $output = $null }
     $children = @()
     foreach ($line in ($output -split "`r?`n" | Where-Object { $_ -notmatch '^\s*$' })) {
-        # ps 输出格式：PID PPID（空格分隔）
-        $parts = $line -split '\s+'
+        # ps -eo pid=,ppid= 输出格式：PID PPID（右对齐两列，空格分隔；等号只是去表头的写法）
+        $parts = ($line -replace 'pid=', '' -replace 'ppid=', '') -split '\s+' | Where-Object { $_ -ne '' }
         if ($parts.Count -ge 2 -and $parts[1] -match '^\d+$' -and [int]$parts[1] -eq $ParentId) {
             $children += [int]$parts[0]
         }
@@ -751,7 +759,7 @@ function Stop-ProcessTree {
     $queue = @($RootPid)     # 队列初始只有根
     while ($queue.Length -gt 0) {
         $current = $queue[0]
-        $queue = $queue[1..($queue.Length-1)]   # dequeue
+        $queue = @($queue | Select-Object -Skip 1)   # dequeue（区间写 $queue[1..($queue.Length-1)] 在只剩 1 个元素时回 [1..0]=自+null，队列永不减 ⇒ 死循环 #1718 实测）
         foreach ($kid in (Get-ChildProcessIds -ParentId $current)) {
             if ($allPids -notcontains $kid) {
                 $allPids += $kid
