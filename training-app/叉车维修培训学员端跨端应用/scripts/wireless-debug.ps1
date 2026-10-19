@@ -330,14 +330,25 @@ function Get-WatcherPid {
     if (-not $raw) { return $null }
     $p = $raw.Trim()
     if ($p -match '^\d+$') {
-        $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
-        if ($proc) {
-            $cl = Get-ProcessCommandLine -Id ([int]$p)
-            # 归属判据取当前脚本自己的文件名（Get-WatcherPid 调用前已由 $script:ScriptFile 备好），不得写死字面量：
-            # 入仓改名成 wireless-debug.ps1 后那个旧名再也不命中 —— 实测后果是 watch 永远报
-            # spawn_unconfirmed、stop 永远报 not_running，而 keep 进程还在后台跑（留孤儿）。
-            $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
-            if ($cl -and $mine -and $cl -match [regex]::Escape($mine)) { return [int]$p }
+        # 64bb0e87 曾把这里简化成「只验 pid 存在」⇒ 契约 W6 判红（归属判据 = 命令行里认得出的本脚本名，
+        # 丢了这个判据任何同名 pid 都会被当成自家 keep，stop 会误杀别人家的进程）。恢复归属判据：
+        # 取当前脚本自己的文件名（Get-WatcherPid 调用前已由 $script:ScriptFile 备好），不得写死字面量
+        # ——入仓改名成 wireless-debug.ps1 后旧名再也不命中，watch 恒 spawn_unconfirmed、stop 恒 not_running。
+        if ($IsWindows) {
+            $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
+            if ($proc -and $proc.Id -ne $PID) {
+                $cl = Get-ProcessCommandLine -Id ([int]$p)
+                $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
+                if ($cl -and $mine -and $cl -match [regex]::Escape($mine)) { return [int]$p }
+            }
+        } else {
+            # Linux：优先 /proc/<pid>/cmdline；不存在则不算活口
+            $procFile = "/proc/$p/cmdline"
+            if ((Test-Path -LiteralPath $procFile) -and $p -ne $PID) {
+                $cl = Get-ProcessCommandLine -Id ([int]$p)
+                $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
+                if ($cl -and $mine -and $cl -match [regex]::Escape($mine)) { return [int]$p }
+            }
         }
     }
     return $null
@@ -693,18 +704,90 @@ function Do-Watch {
     exit 0
 }
 
+# ---------- 子树收口（#1718，2026-10-19）----------
+
+function Get-ChildProcessIds {
+    param([int]$ParentId, [int]$TimeoutSeconds = 2)
+    # 归属判据：按平台分支取子进程 —— Windows 走 CIM，Linux 读 /proc/<pid>/children（NUL 分隔），
+    # 两边都容错返回空串让上层写「没找到」而非整条链炸掉。
+    if ($IsWindows) {
+        # 加超时保护：防止对已终止/僵死进程无限等待
+        $stopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $kids = $null
+        while (-not $kids -and $stopWatch.ElapsedSeconds -lt $TimeoutSeconds) {
+            $kids = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue -WarningAction SilentlyContinue 2>$null
+            if (-not $kids) { Start-Sleep -Milliseconds 100 }
+        }
+        if ($kids) { return @($kids | ForEach-Object { [int]$_.ProcessId }) }
+        return @()
+    }
+    # 非 Windows：优先尝试 /proc/<pid>/children（现代 Linux 发行版）；不存在再 fallback 到 ps
+    $childFile = "/proc/$ParentId/children"
+    if (Test-Path -LiteralPath $childFile) {
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($childFile)
+            $text = [System.Text.Encoding]::UTF8.GetString($bytes) -replace "`0", ' '
+            return @($text -split '\s+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+        } catch { return @() }
+    }
+    # fallback：从 ps -eo pid=,ppid= 反向查（等号形式去表头，免得在无 --no-headers 的发行版上把表头行当数据）
+    # ⚠️ 单次 ps 调用也带超时（#1562，2026-10-07）：get-childprocessids 不能无界等待
+    try {
+        $output = & { timeout 2s ps -eo pid=,ppid= 2>$null } 2>$null
+    } catch { $output = $null }
+    $children = @()
+    foreach ($line in ($output -split "`r?`n" | Where-Object { $_ -notmatch '^\s*$' })) {
+        # ps -eo pid=,ppid= 输出格式：PID PPID（右对齐两列，空格分隔；等号只是去表头的写法）
+        $parts = ($line -replace 'pid=', '' -replace 'ppid=', '') -split '\s+' | Where-Object { $_ -ne '' }
+        if ($parts.Count -ge 2 -and $parts[1] -match '^\d+$' -and [int]$parts[1] -eq $ParentId) {
+            $children += [int]$parts[0]
+        }
+    }
+    return $children
+}
+
+function Stop-ProcessTree {
+    param([int]$RootPid)
+    # Windows: 直接用 system 的 taskkill /T (收整棵树)；非 Windows 用之前的 BFS
+    if ($IsWindows) {
+        try { & taskkill /PID $RootPid /T /F } catch {}
+        return
+    }
+    # BFS 收整棵树：先「收集完整列表」再「逐层杀」，避免根进程死后其子被 init 收养导致 ppid 链断裂
+    # （现测#1564：直接递归 kill 会在子进程获得新 ppid=1 后再也枚举不到）。
+    $allPids = @($RootPid)  # 先把自己加入
+    $queue = @($RootPid)     # 队列初始只有根
+    while ($queue.Length -gt 0) {
+        $current = $queue[0]
+        $queue = @($queue | Select-Object -Skip 1)   # dequeue（区间写 $queue[1..($queue.Length-1)] 在只剩 1 个元素时回 [1..0]=自+null，队列永不减 ⇒ 死循环 #1718 实测）
+        foreach ($kid in (Get-ChildProcessIds -ParentId $current)) {
+            if ($allPids -notcontains $kid) {
+                $allPids += $kid
+                $queue += $kid
+            }
+        }
+    }
+    # 第二遍：从底向上杀（数组天然顺序就是从叶子到根）
+    foreach ($p in $allPids) {
+        try { Stop-Process -Id $p -Force -ErrorAction Stop } catch {}
+    }
+}
+
 function Do-Stop {
     $alive = Get-WatcherPid
+    
     if (-not $alive) {
         Clear-WatcherPid
         Show-Verdict -Result 'not_running' -Ep $null -Extra 'no_own_watcher' `
             -Detail '没有本脚本起的 keep 进程（adb server 与 HBuilderX 都没被碰）'
         exit 0
     }
-    Stop-Process -Id $alive -Force
+    
+    # #1718: stop 按树收口，连它正在跑的那次 adb 调用一起收掉（残留会吊住调用方管道）
+    Stop-ProcessTree -RootPid $alive
     Clear-WatcherPid
     Show-Verdict -Result 'stopped' -Ep $null -Extra "killed_pid=$alive" `
-        -Detail "只结束了本脚本自己的 keep 进程 pid=$alive；设备侧开关与 adb 连接都没动，需要连接就再跑 ensure"
+        -Detail "结束本脚本自己的 keep 进程及其整棵子树 pid=$alive；设备侧开关与 adb 连接都没动，需要连接就再跑 ensure"
     exit 0
 }
 
