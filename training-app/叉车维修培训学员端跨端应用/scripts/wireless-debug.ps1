@@ -375,22 +375,27 @@ function Get-ChildProcessIds {
 
 function Stop-ProcessTree {
     param([int]$RootPid)
-    # 顺序是「先杀根、再按记录逐层收子树」：根一死就不再派生新子进程，枚举窗口归零；
-    # 父进程已死的记录仍保留原 ParentProcessId（#1718 现场实测：孤儿的 ppid 指向已退出的父），
-    # 所以子进程按 ppid 仍然找得到 —— 不需要先枚举再杀那种仍留窗口的写法。
-    $seen = @{}
-    $seen[$RootPid] = $true
-    Stop-Process -Id $RootPid -Force -ErrorAction SilentlyContinue
-    $queue = [System.Collections.Generic.Queue[int]]::new()
-    $queue.Enqueue($RootPid)
-    while ($queue.Count -gt 0) {
-        $cur = $queue.Dequeue()
-        foreach ($kid in (Get-ChildProcessIds -ParentId $cur)) {
-            if ($seen.ContainsKey($kid)) { continue }
-            $seen[$kid] = $true
-            Stop-Process -Id $kid -Force -ErrorAction SilentlyContinue
-            $queue.Enqueue($kid)
+    # BFS 收整棵树：先「收集完整列表」再「逐层杀」，避免根进程死后其子被 init 收养导致 ppid 链断裂
+    # 同时加一层「命令行含脚本文件名」作为补充判据，确保我们只收自己的 keep 派生出的进程
+    $mine = [System.IO.Path]::GetFileName($script:ScriptFile)
+    
+    # 第一阶段：收集所有子孙（不管它们的 ppid 是否已被收养）
+    $allChildren = @()
+    function Collect-AllChildren([int]$pid) {
+        $kids = Get-ChildProcessIds -ParentId $pid
+        foreach ($kid in $kids) {
+            if ($allChildren -contains $kid) { continue }
+            $allChildren += $kid
+            Collect-AllChildren -Id $kid
         }
+    }
+    Collect-AllChildren -Id $RootPid
+    
+    # 第二阶段：按从底到顶的顺序杀（先杀叶子再杀根）
+    # 这样即使某个节点在被杀时 ppid 变了，它的子已经被安全收了
+    $toKill = @($allChildren) + $RootPid
+    foreach ($p in $toKill) {
+        Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
     }
 }
 
