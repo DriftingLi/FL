@@ -244,12 +244,6 @@ export const AVAILABLE_IN_OPTIONS : string[] = ['随时到岗', '一周内', '�
 /** 列表每页条数：一律 20（ADR-0022 ②「加载更多 page_size=20」） */
 export const RECRUIT_PAGE_SIZE : number = 20
 
-/**
- * 未授权访问明文联系方式时后端返回 403（**不是 404**）。
- * 挂在 Error 上供页面分流：403 ⇒ 提示「尚未授权」并给「发起交换」入口，而不是当请求失败。
- */
-export const RECRUIT_STATUS_FORBIDDEN : number = 403
-
 /** 用工性质展示名（筛选抽屉的 chip 文案） */
 export function jobNatureLabel(v : string) : string {
     if (v == 'fulltime') return '全职'
@@ -258,7 +252,10 @@ export function jobNatureLabel(v : string) : string {
     return v
 }
 
-/** 判断错误是否为「无有效授权」（后端明文端点 403） */
+/**
+ * 判断错误是否为「无有效授权」。
+ * 未授权访问明文联系方式时后端返回 403（**不是 404**）：403 ⇒ 提示「尚未授权」并给「发起交换」入口，而不是当请求失败。
+ */
 export function isContactForbidden(e : any | null) : boolean {
     if (e == null) return false
     if (!(e instanceof Error)) return false
