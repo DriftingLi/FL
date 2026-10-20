@@ -41,18 +41,20 @@
 | # | 简名 | 现象 → 成因 → 后果 | 状态 | 证据指向 | 原文出处 |
 |---|------|-------------------|------|----------|----------|
 | 22 | 已关票分支未回收 | #1718 已关、master 已由 #1722 收编，但 `fix/1718-stub-orphans`（6 提交 229 行差异）+ 同族 4 条本地/远端分支仍挂 → 血账 #15 的成因在 2026-10-20 第四次复发 → 票关闭 ≠ 分支回收，缺「关票即清分支」机检 | fixed（本地） | 2026-10-20 复盘当日删净（tag `fix/1718-stub-orphans-archived` 归档 c02c279f；本地 2 条 + 远端 4 条删净，`fetch --prune` 后 `branch -a` 无 1718 残留）；机检闭环 `check-branch-residue.ps1` 自动触发点仍未接（调查 §5 候选） | 本簿首录 |
-| 23 | 孤儿目录壳取证失联 | 5 个无 `.git` 的孤儿目录壳（wt-1484/1542/1554/1607/1713-verify）混在主树 untracked 清单里，无人认领；`wt-1713-verify` 装着 #1713 真机取证 25 文件（rl-1~rl-9 截图 + logcat + desktop，6,575,224 字节），而该票正文只以行内附件引用证据、未仓库化 → 判据输入濒临永久丢失（#14 同族）；`cleanup-orphan-worktrees.ps1` 目标列表（1514/1543/1570/1602/1603/1604）与磁盘现状脱节，脚本自身过期 | fixed（本地） | 2026-10-20 复盘当日抢救入库 `docs/verification/forum/1713/`（25 文件 + README，src=dst=25 验证）后删净 5 壳；脚本 targets 表待更新或废弃 | 本簿首录 |
+| 23 | 孤儿目录壳取证失联 | 5 个无 `.git` 的孤儿目录壳（wt-1484/1542/1554/1607/1713-verify）混在主树 untracked 清单里，无人认领；`wt-1713-verify` 装着 #1713 真机取证 25 文件（rl-1~rl-9 截图 + logcat + desktop，6,575,224 字节），而该票正文只以行内附件引用证据、未仓库化 → 判据输入濒临永久丢失（#14 同族）；`cleanup-orphan-worktrees.ps1` 目标列表（1514/1543/1570/1602/1603/1604）与磁盘现状脱节，脚本自身过期 | fixed（本地） | 2026-10-20 复盘当日抢救入库 `docs/verification/forum/1713/`（25 文件 + README，src=dst=25 验证）后删净 5 壳；脚本已加 STALE-GUARD（#1724 合并 c0153bda），targets 表重写待办在 #1723 | 本簿首录 |
+| 24 | CD gate 把主题尾缀 (#N) 一律当 PR 号 | squash 主题合法地引用 issue 号（`(#1723)` 是 issue，PR 是 #1724）时，push 触发的 cd.yml gate `grep -oE '\(#[0-9]+\)$'` 解析出 1723 后直接 `gh pr view 1723` → GraphQL `Could not resolve to a PullRequest` exit 1 → 合并后生产部署 gate 失败、全链 skipped。#16 血账只要求「后缀必须存在」，没管「尾缀必须是 PR 而非 issue」——GitHub issue/PR 共享编号空间，先占号者赢 | open | 实测 2026-10-20 c0153bda，run 39426628397（`GraphQL: Could not resolve to a PullRequest with the number of 1723`）；应急通道 dispatch production run 39426988432 success 放行；修复候选 = gate 查询失败回退 `gh issue view` 判类型，或约定合并主题尾缀一律指 PR | 本簿首录 |
 
 ---
 
 ## 附：状态统计与待办
 
-- **open**：#1 #2 #3 #4 #5 #6 #8 #10 #11 #13 #14 #18 #19 #20 #21（15 条，其中 #19 是「设计裁定记档防误修」，不算待修）
+- **open**：#1 #2 #3 #4 #5 #6 #8 #10 #11 #13 #14 #18 #19 #20 #21 #24（16 条，其中 #19 是「设计裁定记档防误修」，不算待修）
 - **fixed**：#7 #16 #17 + #22/#23（2026-10-20 当日收口两条）
 - **superseded**：#12（被 #1156 修正 + #1702 拆腿取代）
 - **待办（按 §5 候选与复盘发现）**：
   - `check-branch-residue.ps1` 接合并后自动触发点（防 #15/#22 复发——#1718 族已四犯，这是簿上最高优先复）→ **#1723 立票跟进**
   - ② 门产物未变默认 `-SkipBuild`（压 #11 的失败轮成本）
   - 每页成本预估器（#1/#2/§5 第一条）
-  - `cleanup-orphan-worktrees.ps1` 的 targets 表按现状重写或废弃（#23 遗留物）→ **已加 STALE-GUARD 拦停（#1723），重写待办仍在**
+  - `cleanup-orphan-worktrees.ps1` 的 targets 表按现状重写或废弃（#23 遗留物）→ **已加 STALE-GUARD 拦停（#1724 合并），重写待办在 #1723**
   - `Invoke-Process` 两份现存写法逐份核超时语义（#6 收敛后未复核）
+  - cd.yml gate 主题尾缀 (#N) 的 PR/issue 判型回退（#24，2026-10-20 首犯）
