@@ -130,7 +130,7 @@
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
     import { goBack } from '../../utils/navigation'
     import { useAuthStore } from '../../stores/auth'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
@@ -191,6 +191,15 @@
             if (!isNaN(parsed) && parsed > 0) { questionId.value = parsed; mode.value = 'single' }
         }
         session.loadQuestions(mode.value, practiceCount.value, tagId.value, questionId.value); loadKnowledge()
+    })
+
+    // 系统返回键/手势返回不走 onExit（#1727）：页面隐藏/销毁时必须停表，避免计时随页面引用在后台继续递增。
+    onHide(() : void => {
+        session.stopTimer()
+    })
+
+    onUnload(() : void => {
+        session.stopTimer()
     })
 </script>
 
