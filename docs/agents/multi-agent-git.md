@@ -94,6 +94,8 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
   **退路**：真的必须在同一会话里继续交付时，不要与锁硬碰 —— 证据文件仍可正常**读/复制**（只有改名与删除被拒），可用本文件下面「游离提交：完整配方」把产物按**正确入库路径**提交，交付不受影响；
   被卡住的 worktree 待旧会话退出后再 `改名 → git worktree remove` 收尾。
 
+  **收尾入口（2026-10-20 补）**：移动端用 `pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -Task <n>` 做预检（注册 / junction / 持有者），确认后加 `-Execute`：它按「优雅收口 → 拆 junction → `git worktree remove` → 目录兜底 → 校验」执行，仍被锁就报持有者并非零退出，**不 kill 任何进程**。脚本不替代上面的判断，只把「删之前该做什么」收成可重复的顺序。
+
   **2026-09-21 追加实测（#1240 P2 会话；两个新事实，本条只增不删）**：
   ① **持锁者不止 `cli.exe`** —— 本会话跑完 ④c 与 ①a 真运行后，先 `cli.exe project close --path <项目>`
   （回「项目关闭完成」，`cli project list` 随即不再列该项目），再 `cli.bat quit`（微信开发者工具进程归 0），

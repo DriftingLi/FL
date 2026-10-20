@@ -82,7 +82,9 @@ if (Test-Path $dest) { Fail "目标已存在：$dest" 2 }
 
 # ── 建
 & git -C $RepoRoot fetch origin --prune 2>&1 | Out-Null
-$gitArgs = @('-C', $RepoRoot, 'worktree', 'add')
+# -q：worktree add 会把 3000 行 "Updating files: N%" 打进调用方输出（实测约 1K token）；
+# 成功路径只留下面两行摘要。失败信息仍由 git 的 stderr 给出。
+$gitArgs = @('-C', $RepoRoot, 'worktree', 'add', '-q')
 if ($NoBranch) {
     $gitArgs += @($dest, $Base)
 } else {

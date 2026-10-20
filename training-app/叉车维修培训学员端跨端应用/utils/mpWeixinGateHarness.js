@@ -103,7 +103,7 @@ function occupyPort() {
  */
 function gateArgs(scriptPath, fixture, fakeCli, port, extraArgs) {
   return [
-    '-NoProfile', '-NonInteractive', '-File', scriptPath,
+    '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-File', scriptPath,
     '-Project', fixture.dir, '-SkipBuild', '-DevToolsCli', fakeCli,
     '-Port', String(port), '-PortWaitSeconds', '1', '-OpenTimeoutSeconds', '20',
     '-AutoTimeoutSeconds', '20', '-AutoRetryDelaySeconds', '0', '-HxNoWait'
