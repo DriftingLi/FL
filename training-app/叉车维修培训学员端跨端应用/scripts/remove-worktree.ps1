@@ -116,6 +116,12 @@ if (Test-Path -LiteralPath $nodeModules) {
     $isJunction = [bool]($item -and (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0))
 }
 
+# 未提交改动默认拒绝（-Force 才删）：worktree remove --force 会连同它们一起丢。
+$dirty = $false
+if ($exists -and (Test-Path -LiteralPath (Join-Path $dest '.git'))) {
+    $dirty = @(& git -C $dest status --porcelain 2>$null).Count -gt 0
+}
+
 # 持有者：HBuilderX / 微信开发者工具只要在跑就列为「可能持有」——它们的语言服务 / 文件监视
 # 子进程命令行里往往不带项目路径，靠命令行匹配会漏报。node / pwsh 只在命令行提到本目录时才算。
 $holders = New-Object System.Collections.Generic.List[object]
@@ -149,6 +155,12 @@ $branchExists = @(& git -C $RepoRoot branch --list $Branch 2>$null).Count -gt 0
 $branchMerged = $false
 if ($branchExists) {
     $branchMerged = @(& git -C $RepoRoot branch --merged origin/master --list $Branch 2>$null).Count -gt 0
+    if (-not $branchMerged) {
+        # squash 合并后分支与 master 不再有祖先关系；单提交分支用 patch-id（git cherry）兜底：
+        # 输出里没有 `+` 行 ⇒ 每个提交都在 upstream 有等价补丁。
+        $cherry = @(& git -C $RepoRoot cherry origin/master $Branch 2>$null)
+        $branchMerged = ($cherry.Count -gt 0) -and (@($cherry | Where-Object { -not $_.StartsWith('-') }).Count -eq 0)
+    }
 }
 
 $status = if (-not $exists -and -not $registered) { 'not-found' }
@@ -174,6 +186,7 @@ $plan = [ordered]@{
     nodeModulesLink = $isJunction
     branchExists    = $branchExists
     branchMerged    = $branchMerged
+    dirty           = $dirty
     # 直接放 List：ConvertTo-Json 会序列化成数组；@($list) 在 [ordered] 字面量里会抛
     # "Argument types do not match"（PowerShell 7 实测），故不套数组子表达式。
     holders         = $holders
@@ -191,6 +204,9 @@ if ($status -eq 'not-found') {
     Write-Host '[remove-worktree] 目录与注册都不存在，无需清理。' -ForegroundColor Green
     exit 0
 }
+
+# worktree remove --force 会连未提交改动一起丢；清理入口不替人做这个决定。
+if ($dirty) { Fail "worktree 有未提交改动（$dest）：先提交或 stash 再来，脚本不替你丢改动" 4 }
 
 # ── 1. 优雅收口（只在工具确实在跑时；不做 Stop-Process）
 if ($hxCliPath -and (Test-Path -LiteralPath $hxCliPath) -and (Test-Path -LiteralPath $mobileDir)) {
