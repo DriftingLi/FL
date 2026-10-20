@@ -42,3 +42,9 @@
   （`npm run test:unit` / `build:kotlin-all -SkipPublish`），**绝不 kill 主程序、绝不抢占**。
 - **不要拿「另一个会话空着」当假设**：判据现测，不看记忆 ——
   `Get-Process HBuilderX,cli`、`$env:TEMP\hx-agent.lock`、以及 `.ci-verify\` 里是否有文件**正在被写**。
+
+## ③ 行为腿与 ②/④ 门串行（2026-10-20 补）
+
+**跑 ② 微信开发者工具门或 ④ 编译门时，不要同时跑 ③ 行为腿。** 2026-10-20 实测：② 门 + HBuilderX + 微信开发者工具同机运行时，`npm run test:behavior` 69/70，唯一红是 `utils/styleLoopBehavior.test.js` 的 `request:fail timeout`（202.9 秒）；同一套件隔离重跑 33/33 全绿。行为腿里有套件会起本地服务 / 子进程，与门的 IDE 会话争 CPU 和端口，红得没有信息量。
+
+顺序：先跑门（或先跑行为腿），一条跑完再起另一条。②/④ 之间已被 `hx-busy` 串行；这条补的是**行为腿不取那把锁**的空档。
