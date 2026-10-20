@@ -1,0 +1,33 @@
+name: Branch residue scan
+
+# 血账 #15 的兜底机检（票 #1723）：仓库已开 delete_branch_on_merge，
+# 但 gh 2.97.0 删远端分支有两条静默失败路径（见
+# training-app/叉车维修培训学员端跨端应用/scripts/check-branch-residue.ps1 头注），
+# 且上游设置只覆盖「merge 即删」，覆盖不了历史残留与关闭即删的分支。
+# 本 workflow 每天跑一次 check-branch-residue.ps1（默认 dry-run）：
+# 检出 MERGED 残留 ⇒ exit 1 ⇒ 本 job 红灯。只报警、不删分支（不带 -Execute）——
+# 删除动作永远走人工或主会话确认后的收口顺序（worktree → 本地 → 远端）。
+
+on:
+  schedule:
+    - cron: '17 2 * * *'   # 每天 02:17 UTC（避开整点高峰，时间随意但须不与整点重合）
+  workflow_dispatch: {}      # 手动补跑入口
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-residue
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Branch residue scan（dry-run，MERGED 残留即红）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pwsh training-app/叉车维修培训学员端跨端应用/scripts/check-branch-residue.ps1
