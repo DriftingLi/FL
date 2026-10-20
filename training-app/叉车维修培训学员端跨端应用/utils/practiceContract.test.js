@@ -40,6 +40,28 @@ describe('composable 接线契约（T06 拆分：显式 import composable）', (
   });
 });
 
+describe('离开页面停表（#1727：系统返回/手势返回不走 onExit）', () => {
+  const doPage = read('pages/practice/practice-do.uvue');
+
+  function hookBody(name) {
+    const re = new RegExp(name + '\\s*\\(\\s*\\(\\s*\\)\\s*:\\s*void\\s*=>\\s*\\{([\\s\\S]*?)\\n\\s*\\}\\s*\\)');
+    const m = doPage.match(re);
+    return m ? m[1] : '';
+  }
+
+  it('导入 onHide / onUnload 生命周期钩子', () => {
+    expect(doPage).toMatch(/import\s*\{[^}]*\bonHide\b[^}]*\bonUnload\b[^}]*\}\s*from\s*'@dcloudio\/uni-app'/);
+  });
+
+  it('onHide 停表（页面隐藏/进后台）', () => {
+    expect(hookBody('onHide')).toContain('session.stopTimer()');
+  });
+
+  it('onUnload 停表（页面销毁兜底）', () => {
+    expect(hookBody('onUnload')).toContain('session.stopTimer()');
+  });
+});
+
 describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须存在）', () => {
   it('页面 import 的每个模块私有组件文件都真实存在', () => {
     const missing = [];
