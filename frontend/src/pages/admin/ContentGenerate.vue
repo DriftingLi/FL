@@ -298,7 +298,8 @@ loadCourses()
 
 /* .progress-card 容器（底色/圆角/内距/投影）已由 UiCard 承担，从共用规则中拆出 */
 .generate-card {
-  background: var(--color-text-inverse);
+  /* 同 FeaturedContentEdit：卡片底色用「表面」token，--color-text-inverse 深色下仍是白 */
+  background: var(--color-bg-card);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);

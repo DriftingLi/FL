@@ -11,6 +11,8 @@ import UiUnderlineTabs from '@/components/ui/UiUnderlineTabs.vue'
 vi.mock('vditor/dist/index.css', () => ({}))
 vi.mock('vditor/dist/js/i18n/zh_CN.js', () => ({}))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ token: 'test-token' }) }))
+// 编辑器按主题选代码块高亮样式（github / github-dark）：store 的 resolved 就够了
+vi.mock('@/stores/theme', () => ({ useThemeStore: () => ({ resolved: 'light' }) }))
 
 const vditorCtor = vi.hoisted(() => vi.fn())
 vi.mock('vditor', () => ({ default: vditorCtor }))

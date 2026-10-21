@@ -1,0 +1,87 @@
+/*
+ * Vditor 深色适配（#1748 后续 UI 优化）。
+ *
+ * 为什么需要这一层：Vditor 的配色自己带一套 CSS 变量，全部按浅色写死（编辑区 #fff、
+ * 工具条 #f6f8fa、SV 文本区 #fafbfc），而它只会读 `--panel-background-color` 等变量、
+ * 不认本仓的 `--color-*` token ⇒ 深色页面上编辑器是整块白，刺眼且与卡片边界打架。
+ *
+ * 口径：**只换变量与少数写死背景的落点**，不改 Vditor 的排版/交互类规则；
+ * 变量值一律引用 design-tokens 的 token（深色下由 [data-theme="dark"] 块翻转）。
+ * 代码块的高亮配色不在这里（hljs 主题是另一套样式表），由组件按当前主题选
+ * `github` / `github-dark` —— 见 MarkdownEditor.vue 的 hljs.style。
+ */
+
+[data-theme="dark"] .vditor {
+  --border-color: var(--color-border);
+  --second-color: rgba(148, 163, 184, 0.36);
+  --panel-background-color: var(--color-bg-card);
+  --toolbar-background-color: var(--color-bg-page);
+  --toolbar-icon-color: var(--color-text-tertiary);
+  --toolbar-icon-hover-color: var(--color-primary-400);
+  --textarea-background-color: var(--color-bg-card);
+  --textarea-text-color: var(--color-text-primary);
+  --count-background-color: rgba(148, 163, 184, 0.14);
+  --heading-border-color: var(--color-border-light);
+  --blockquote-color: var(--color-text-tertiary);
+  /* 源码模式（SV）里的标记色：浅色下是高饱和深色，深底上要提亮才读得出 */
+  --ir-heading-color: #c084fc;
+  --ir-title-color: var(--color-text-muted);
+  --ir-bi-color: #93c5fd;
+  --ir-link-color: #6ee7b7;
+  --ir-bracket-color: #fbbf24;
+  --ir-paren-color: #86efac;
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .vditor-reset {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .vditor-reset a {
+  color: var(--color-primary-400);
+}
+
+[data-theme="dark"] .vditor-reset hr {
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .vditor-reset table td,
+[data-theme="dark"] .vditor-reset table th {
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .vditor-reset blockquote {
+  border-left-color: var(--color-border-dark);
+  color: var(--color-text-secondary);
+}
+
+/* 行内代码与代码块：底色改深底面板色，文字交给 hljs 深色主题 */
+[data-theme="dark"] .vditor-reset code:not(.hljs) {
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .vditor-reset pre,
+[data-theme="dark"] .vditor-wysiwyg pre.vditor-reset,
+[data-theme="dark"] .vditor-ir pre.vditor-reset {
+  background-color: var(--color-bg-page);
+}
+
+/* 工具条图标悬停 / 提示面板（emoji、插入面板）也走深色 */
+[data-theme="dark"] .vditor-toolbar__item:hover svg,
+[data-theme="dark"] .vditor-toolbar__item--current svg {
+  fill: var(--color-primary-400);
+}
+
+[data-theme="dark"] .vditor-panel,
+[data-theme="dark"] .vditor-tip,
+[data-theme="dark"] .vditor-hint {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .vditor-counter {
+  color: var(--color-text-muted);
+  background-color: var(--count-background-color);
+}

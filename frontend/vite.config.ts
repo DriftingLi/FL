@@ -15,7 +15,7 @@ import fs from 'node:fs'
  *
  * 只复制 WHITELIST 里的路径（全量复制约 23MB，白名单后约 6MB）：
  * - 必选：index.css（预览 iframe 样式）、method.min.js（预览渲染模块）、js/lute（Markdown 解析内核）、js/i18n（语言包）
- * - 默认开启：js/katex（preview.math 默认 KaTeX）、js/highlight.js 的 highlight.min.js + third-languages.js + github 样式（preview.hljs）、js/icons/ant.js（默认 icon: 'ant'）
+ * - 默认开启：js/katex（preview.math 默认 KaTeX）、js/highlight.js 的 highlight.min.js + third-languages.js + github / github-dark 两套样式（preview.hljs：浅色主题用 github、深色主题用 github-dark）、js/icons/ant.js（默认 icon: 'ant'）
  * - 未启用则不复制：emoji、content-theme、以及按内容懒加载的可选渲染引擎
  *   （mermaid / mathjax / echarts / graphviz / markmap / abcjs / flowchart.js / plantuml / smiles-drawer）。
  *   若未来内容需要这些引擎，往 WHITELIST 加对应目录即可。
@@ -33,6 +33,8 @@ function vditorStaticPlugin(): Plugin {
     'js/highlight.js/highlight.min.js',
     'js/highlight.js/third-languages.js',
     'js/highlight.js/styles/github.min.css',
+    // 深色主题的代码块高亮（MarkdownEditor 按 data-theme 选这份）；漏了它深色下代码块会掉样式
+    'js/highlight.js/styles/github-dark.min.css',
     'images/logo.png'
   ]
   const copy = () => {
