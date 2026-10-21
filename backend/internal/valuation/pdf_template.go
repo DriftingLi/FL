@@ -38,7 +38,7 @@ const (
 
 // 报告主体信息
 const (
-	orgName       = "和润天下人工智能科技有限公司"
+	orgName       = "和润天下（广州）人工智能科技有限公司"
 	orgNameEN     = "HERUN TIANXIA AI TECHNOLOGY CO., LTD."
 	reportTitleEN = "Forklift Residual Value Evaluation Report"
 )

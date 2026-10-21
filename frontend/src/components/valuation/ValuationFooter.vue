@@ -10,7 +10,7 @@
             <span class="brand-name">和润天下 · 残值评估</span>
           </div>
           <p class="brand-desc">
-            和润天下人工智能科技有限公司旗下叉车残值评估与电池健康度检测平台，
+            和润天下（广州）人工智能科技有限公司旗下叉车残值评估与电池健康度检测平台，
             用AI让每一台叉车的价值透明可见。
           </p>
           <div class="brand-meta">
@@ -76,7 +76,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ year }} 和润天下人工智能科技有限公司 版权所有 | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">粤ICP备2026005936号-1</a></p>
+        <p>© {{ year }} 和润天下（广州）人工智能科技有限公司 版权所有 | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">粤ICP备2026005936号-1</a></p>
       </div>
     </div>
   </footer>
