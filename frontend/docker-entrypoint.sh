@@ -3,7 +3,6 @@
 # 启动前用 envsubst 替换占位符：
 #   - ${DOMAIN}            server_name 域名
 #   - ${BACKEND_HOST_PORT}  backend 宿主机映射端口（默认 8080，测试环境用 18080 避冲突）
-#   - ${PORTAL_HOST_PORT}   官网门户（hrwai-portal）宿主机监听端口（默认 3000）
 # 仅替换以上变量，避免影响 nginx 原生变量（如 $host、$remote_addr）
 
 set -e
@@ -21,13 +20,11 @@ fi
 export BACKEND_HOST_PORT="${BACKEND_HOST_PORT:=8080}"
 echo "[nginx-entrypoint] backend 代理端口: ${BACKEND_HOST_PORT}"
 
-# portal 端口默认 3000（未设置 PORTAL_HOST_PORT 时）
-export PORTAL_HOST_PORT="${PORTAL_HOST_PORT:=3000}"
-echo "[nginx-entrypoint] portal 代理端口: ${PORTAL_HOST_PORT}"
-
-# 仅替换 DOMAIN / BACKEND_HOST_PORT / PORTAL_HOST_PORT 变量（envsubst_defined_vars 模式）
-# 这样 $host、$remote_addr 等 nginx 变量不会被替换
-envsubst '${DOMAIN} ${BACKEND_HOST_PORT} ${PORTAL_HOST_PORT}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
+# 仅替换 DOMAIN / BACKEND_HOST_PORT 变量（envsubst_defined_vars 模式）
+# 这样 $host、$remote_addr 等 nginx 变量不会被替换。
+# 模板里出现的 ${…} 集合必须与本行清单严格相等（票 #1742 的结构锁）：
+# 少列一个 = 模板里留下字面量、nginx -t 直接失败；多列只是噪音，同样判红。
+envsubst '${DOMAIN} ${BACKEND_HOST_PORT}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 
 # 验证 nginx 配置语法
 nginx -t

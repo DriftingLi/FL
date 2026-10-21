@@ -1,6 +1,8 @@
 // 子域名解析工具：通过 window.location.hostname 判断当前访问的子域名类型。
 // 六类子域名约定：
-//   - 主域名（www.example.com / localhost）：官网门户（独立 Nuxt 仓库承载，见 CONTEXT.md「门户与内容」）
+//   - 主域名（www.example.com / localhost）：旧官网门户址。门户已迁 EdgeOne（主域 www.hrwai.cn，
+//     票 #1742），本仓在 www 上只保留「页面 301 + API」，SPA 不再跑在该子域；
+//     这里的 `main` 仍按「本站主域名」参与 URL 推导（跨子域跳转 / 外链判定）
 //   - training.主域名：学员培训 + AI 助手 + 学员登录
 //   - valuation.主域名：残值评估（含历史）+ HRWAI 账号登录
 //   - mentor.主域名：导师登录与工作区
@@ -8,7 +10,8 @@
 //   - recruit.主域名：企业招聘者登录与工作区
 //
 // 注意：不使用根域名（example.com），主站统一走 www 子域名。
-// 根域名的请求由 nginx 301 重定向到 www.根域名。
+// 根域名的请求由 nginx 一跳 301 到新站主域（门户迁 EdgeOne 后是 https://www.hrwai.cn，
+// 票 #1742）——不再经 www.根域名 二次跳；www 只留「页面 301 + API」。
 //
 // 跨子域名视为不同站点，localStorage 中存储的 token 不共享，
 // 用户在不同子域名间切换时需要重新登录。

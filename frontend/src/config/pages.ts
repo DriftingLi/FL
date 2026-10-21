@@ -349,6 +349,7 @@ export interface ExternalNavItem {
 
 export const externalNavItems: Record<string, ExternalNavItem[]> = {
   training: [
-    { key: 'featured', label: '内容精选', group: 'interactive', icon: Document, externalUrl: 'https://www.gccsmile.com/news' }
+    // 门户已迁 EdgeOne（票 #1742）：主域 www.hrwai.cn；旧域只留「301 + API」。
+    { key: 'featured', label: '内容精选', group: 'interactive', icon: Document, externalUrl: 'https://www.hrwai.cn/news' }
   ]
 }

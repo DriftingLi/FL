@@ -137,6 +137,14 @@ describe('导航树 ↔ 路由表', () => {
       }
     }
   })
+
+  // 门户迁 EdgeOne 后（票 #1742）主域是 www.hrwai.cn：外链必须直达新站，
+  // 而不是先落到旧域再吃一跳 301。
+  it('内容精选外链指向新站主域', () => {
+    const featured = externalNavItems.training.find((i) => i.key === 'featured')
+    expect(featured, '内容精选外链项缺失').toBeDefined()
+    expect(featured!.externalUrl).toBe('https://www.hrwai.cn/news')
+  })
 })
 
 // 公开页面清单锁（ADR-0060 票8a）。requiresAuth 改为必填后，「哪些页面匿名可达」第一次
