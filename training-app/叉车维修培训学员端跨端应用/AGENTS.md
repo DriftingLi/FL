@@ -182,6 +182,7 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 - 命名：文件 kebab-case、组件名 PascalCase；导入顺序 `@vue/*` → uni-app API → 第三方库 → 本地模块。
 - 列表渲染：`v-for` 必须带 `key`，**避免用 `index` 当 key**（旧「常见问题·性能优化」段唯一被外部引用的承重条，`docs/adr/0025` 引它）。
 - props / emit 优先，跨层才用 provide/inject 或 Pinia；平台差异走条件编译 `#ifdef` / `#ifndef`，样式用 rpx、触摸目标不小于 44×44。
+- **api 层禁裸打印整段 response/`data` 的调试 `console.log`**（#1730 立；先例来源票 #1730）：调试输出一律走 `api/request.uts` 的 `sanitizeForLog` 管道（或专门 debug flag 分支），不得绕过脱敏。
 
 ## 注意事项
 
