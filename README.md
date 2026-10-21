@@ -466,6 +466,13 @@ docker compose -f docker-compose.prod.yml up -d
 
 **EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到本机；回源 Host 用旧域还是新站主域都落进同一个 server 块（两个 `server_name` 都收），因此不必在控制台钉死 Host 改写。
 
+**回填旧 URL**（一次性，票 #1742）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
+docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
+```
+
 **已知降级：客户端 IP 按边缘节点聚合**（票 #1742 记录，未修）。经 EdgeOne 回源时 nginx 的 `$remote_addr` 是**边缘节点地址**，而后端 `TRUSTED_PROXIES` 里没有 EdgeOne 段 ⇒ 限流键与访问日志里的 `ip` 都是边缘 IP（同一节点的用户共享一个桶）。
 
 - 修法（未落地）：先实测 EdgeOne 实际传哪个头，再在 www 块启用 `real_ip`（`set_real_ip_from <回源段>` + `real_ip_header` + `real_ip_recursive on`）；改完后端 `TRUSTED_PROXIES` 不需要动（追加语义仍然成立）。
