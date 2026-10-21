@@ -1502,6 +1502,9 @@ definitions:
       published_at:
         type: string
         x-nullable: true
+      scheduled_at:
+        type: string
+        x-nullable: true
       sort_order:
         type: integer
       source:
@@ -1515,6 +1518,52 @@ definitions:
       updated_at:
         type: string
       view_count:
+        type: integer
+    type: object
+  featured.FeaturedContentAdminListDTO:
+    properties:
+      category:
+        type: string
+      category_label:
+        type: string
+      content_id:
+        type: integer
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      published_at:
+        type: string
+        x-nullable: true
+      scheduled_at:
+        type: string
+        x-nullable: true
+      sort_order:
+        type: integer
+      source:
+        type: string
+      status:
+        type: integer
+      summary:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      view_count:
+        type: integer
+    type: object
+  featured.FeaturedContentAdminPageResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/featured.FeaturedContentAdminListDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
         type: integer
     type: object
   featured.FeaturedContentDTO:
@@ -6101,7 +6150,7 @@ paths:
       - application/json
       description: 管理员创建内容（status 缺省为草稿）
       parameters:
-      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order}
+      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}
         in: body
         name: body
         schema:
@@ -6119,7 +6168,7 @@ paths:
                   $ref: '#/definitions/featured.FeaturedContentAdminDetailDTO'
               type: object
         "400":
-          description: 请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效
+          description: 请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6212,7 +6261,7 @@ paths:
         name: id
         required: true
         type: integer
-      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order}
+      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}
         in: body
         name: body
         schema:
@@ -6230,7 +6279,7 @@ paths:
                   $ref: '#/definitions/featured.FeaturedContentAdminDetailDTO'
               type: object
         "400":
-          description: 请求数据无效 / 分类无效 / 图片地址无效
+          description: 请求数据无效 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6252,13 +6301,20 @@ paths:
       - 管理端-精选内容
   /admin/featured-content/{id}/publish:
     post:
-      description: 草稿 → 已发布，返回发布后的内容
+      consumes:
+      - application/json
+      description: 发布内容：无 body = 立即发布；带 {published_at} 时按发布时间落定（未来时间 = 转为定时中）
       parameters:
       - description: 内容 ID
         in: path
         name: id
         required: true
         type: integer
+      - description: 可选 {published_at}
+        in: body
+        name: body
+        schema:
+          type: object
       produces:
       - application/json
       responses:
@@ -6271,6 +6327,10 @@ paths:
                 data:
                   $ref: '#/definitions/featured.FeaturedContentAdminDetailDTO'
               type: object
+        "400":
+          description: 请求数据无效 / 发布时间无效
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
@@ -6315,7 +6375,7 @@ paths:
       - 管理端-精选内容
   /admin/featured-contents:
     get:
-      description: 管理端列表（含草稿），支持分类与状态过滤
+      description: 管理端列表（含草稿与定时中），支持分类与状态过滤（state = draft/scheduled/published）
       parameters:
       - default: 1
         description: 页码
@@ -6331,9 +6391,9 @@ paths:
         in: query
         name: category
         type: string
-      - description: 状态
+      - description: 状态：draft 草稿 / scheduled 定时中 / published 已发布（空 = 全部）
         in: query
-        name: status
+        name: state
         type: string
       produces:
       - application/json
@@ -6345,8 +6405,12 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/featured.FeaturedContentPageResult'
+                  $ref: '#/definitions/featured.FeaturedContentAdminPageResult'
               type: object
+        "400":
+          description: 状态过滤无效
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
@@ -11054,7 +11118,12 @@ paths:
         "200":
           description: success
           schema:
-            $ref: '#/definitions/response.R'
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/featured.FeaturedContentPageResult'
+              type: object
       summary: 精选内容列表（公开）
       tags:
       - 学员端-精选内容

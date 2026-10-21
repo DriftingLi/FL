@@ -15,8 +15,9 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsFeatured = map[string]func(t *testing.T) any{
-	"featured.FeaturedContentPageResult.items":  outletFeaturedPageEmpty,
-	"featured.FeaturedContentDetailDTO.related": outletFeaturedDetailNoRelated,
+	"featured.FeaturedContentPageResult.items":      outletFeaturedPageEmpty,
+	"featured.FeaturedContentDetailDTO.related":     outletFeaturedDetailNoRelated,
+	"featured.FeaturedContentAdminPageResult.items": outletFeaturedAdminPageEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -30,6 +31,18 @@ func outletFeaturedPageEmpty(t *testing.T) any {
 	res, err := svc.GetPublicList(1, 20, "")
 	if err != nil {
 		t.Fatalf("精选公开列表失败: %v", err)
+	}
+	return res
+}
+
+// outletFeaturedAdminPageEmpty 管理端列表空页（#1748）：行切片同样是 make(0,len) 出来的，
+// 空页发 [] 而不是 null —— 管理端表格的 v-for 与分页都按非 null 用。
+func outletFeaturedAdminPageEmpty(t *testing.T) any {
+	t.Helper()
+	svc, _ := newFeaturedTestSvc(t)
+	res, err := svc.AdminList(1, 20, "", "")
+	if err != nil {
+		t.Fatalf("精选管理端列表失败: %v", err)
 	}
 	return res
 }

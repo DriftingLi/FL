@@ -144,25 +144,35 @@ func (s *Service) GetPublicDetail(id int, countView bool) (*FeaturedContentDetai
 	return &detail, nil
 }
 
-// AdminList 管理端列表（含草稿）。
-func (s *Service) AdminList(page, pageSize int, category, status string) (FeaturedContentPageResult, error) {
+// AdminList 管理端列表（含草稿与定时中）。
+// state 过滤（#1748）：空 = 全部 / draft 草稿 / scheduled 定时中 / published 已发布。
+// 「定时中」不是一个 status 取值，而是「status = 0 且 scheduled_at 非空」的组合，故按组合筛。
+func (s *Service) AdminList(page, pageSize int, category, state string) (FeaturedContentAdminPageResult, error) {
+	if err := validateFeaturedState(state); err != nil {
+		return FeaturedContentAdminPageResult{}, err
+	}
 	items, total, page, pageSize, err := paging.Query[model.FeaturedContent](s.db, page, pageSize, 10, "created_at DESC, content_id DESC", func(q *gorm.DB) *gorm.DB {
 		if category != "" {
 			q = q.Where("category = ?", category)
 		}
-		if status != "" {
-			q = q.Where("status = ?", status)
+		switch state {
+		case featuredStateDraft:
+			q = q.Where("status = ? AND scheduled_at IS NULL", 0)
+		case featuredStateScheduled:
+			q = q.Where("status = ? AND scheduled_at IS NOT NULL", 0)
+		case featuredStatePublished:
+			q = q.Where("status = ?", 1)
 		}
 		return q
 	})
 	if err != nil {
-		return FeaturedContentPageResult{}, err
+		return FeaturedContentAdminPageResult{}, err
 	}
-	list := make([]FeaturedContentDTO, 0, len(items))
+	list := make([]FeaturedContentAdminListDTO, 0, len(items))
 	for i := range items {
-		list = append(list, featuredContentDTO(&items[i]))
+		list = append(list, featuredContentAdminListDTO(&items[i]))
 	}
-	return FeaturedContentPageResult{
+	return FeaturedContentAdminPageResult{
 		Items: list,
 		Page:  page,
 		Pages: response.PageCount(total, pageSize),
@@ -183,7 +193,8 @@ func (s *Service) AdminDetail(id int) (*FeaturedContentAdminDetailDTO, error) {
 	return &dto, nil
 }
 
-// Create 创建内容精选（默认草稿；status=1 时写入 published_at）。
+// Create 创建内容精选（默认草稿）。
+// status=1 时按「发布时间」落定：未携带 = 立即发布；≤ now = 补录；> now = 定时中（#1748）。
 func (s *Service) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDTO, error) {
 	if in.Title == "" {
 		return nil, ErrFeaturedTitleRequired
@@ -206,20 +217,31 @@ func (s *Service) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDT
 		sortOrder = *in.SortOrder
 	}
 	now := clock.Now()
-	item := model.FeaturedContent{
-		Title:      in.Title,
-		Summary:    in.Summary,
-		CoverImage: in.CoverImage,
-		Content:    in.Content,
-		Category:   in.Category,
-		Source:     in.Source,
-		Status:     status,
-		SortOrder:  sortOrder,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+	// 发布时间入参决定最终三字段（ADR-0076 语义矩阵）；未携带时保持 #1748 前的行为：
+	// 发布补当前时间、草稿不带时间。
+	plan := featuredPublishPlan{Status: status}
+	if in.PublishedAt != nil {
+		applied, err := applyFeaturedPublishTime(status, *in.PublishedAt, now)
+		if err != nil {
+			return nil, err
+		}
+		plan = applied
+	} else if status == 1 {
+		plan.PublishedAt = &now
 	}
-	if status == 1 {
-		item.PublishedAt = &now
+	item := model.FeaturedContent{
+		Title:       in.Title,
+		Summary:     in.Summary,
+		CoverImage:  in.CoverImage,
+		Content:     in.Content,
+		Category:    in.Category,
+		Source:      in.Source,
+		Status:      plan.Status,
+		SortOrder:   sortOrder,
+		PublishedAt: plan.PublishedAt,
+		ScheduledAt: plan.ScheduledAt,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	if err := s.db.Create(&item).Error; err != nil {
 		return nil, err
@@ -229,7 +251,9 @@ func (s *Service) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDT
 }
 
 // Update 更新内容精选。
-// 若从草稿改为已发布，则补写当前时间；已发布 → 草稿保留 published_at。
+// 携带 published_at 时按语义矩阵落定（≤ now 补录 / > now 转为定时中）。
+// 未携带时分两格：**只改内容**（连 status 也没带）⇒ 排期原样保留；**点名了状态** ⇒ 状态落定
+// （草稿 → 已发布补当前时间、已发布 → 草稿保留 published_at），排期一律清空（= 取消定时）。
 func (s *Service) Update(id int, in FeaturedContentUpdateInput) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
@@ -276,21 +300,42 @@ func (s *Service) Update(id int, in FeaturedContentUpdateInput) (*FeaturedConten
 		item.SortOrder = *in.SortOrder
 	}
 
-	// 状态变更处理
+	// 状态与时间一起落定（ADR-0076 语义矩阵）：目标状态先定下来，再由「发布时间入参」决定
+	// 是补录、立即发布还是转为定时中 —— 三者是同一次赋值，不能分两处各写一半。
 	oldStatus := item.Status
-	newStatus := oldStatus
+	targetStatus := oldStatus
 	if in.Status != nil {
-		newStatus = *in.Status
-		if newStatus != 0 && newStatus != 1 {
-			newStatus = oldStatus
+		if next := *in.Status; next == 0 || next == 1 {
+			targetStatus = next
 		}
 	}
-	if oldStatus == 0 && newStatus == 1 {
-		now := clock.Now()
-		item.PublishedAt = &now
+	now := clock.Now()
+	var plan featuredPublishPlan
+	if in.PublishedAt != nil {
+		applied, err := applyFeaturedPublishTime(targetStatus, *in.PublishedAt, now)
+		if err != nil {
+			return nil, err
+		}
+		plan = applied
+	} else {
+		// 未携带发布时间：排期是否保留取决于「有没有点名状态」。
+		//   * 只改标题/正文（status 也没带）⇒ 排期原样保留（#1748 用户故事 6：临上线前的小修不必重排）；
+		//   * 点名了状态 ⇒ 这是一次状态落定，排期一律清空（草稿 = 取消定时、发布 = 提前上线）。
+		plan = featuredPublishPlan{Status: targetStatus, PublishedAt: item.PublishedAt, ScheduledAt: item.ScheduledAt}
+		if in.Status != nil {
+			plan.ScheduledAt = nil
+			if targetStatus == 1 && oldStatus == 0 {
+				plan.PublishedAt = &now
+			}
+		}
 	}
-	item.Status = newStatus
-	item.UpdatedAt = clock.Now()
+	if plan.Status == 1 && plan.PublishedAt == nil {
+		plan.PublishedAt = &now // 不变量 1 的写侧半边：已发布必须有时间
+	}
+	item.Status = plan.Status
+	item.PublishedAt = plan.PublishedAt
+	item.ScheduledAt = plan.ScheduledAt
+	item.UpdatedAt = now
 
 	if err := s.db.Save(&item).Error; err != nil {
 		return nil, err
@@ -335,8 +380,9 @@ func (s *Service) deleteFeaturedImages(cover, content string) {
 	s.fileSvc.DeleteFiles(urls)
 }
 
-// Publish 发布内容精选（草稿 → 已发布）。
-func (s *Service) Publish(id int) (*FeaturedContentAdminDetailDTO, error) {
+// Publish 发布内容精选：无 body = 立即发布；带 body 时按语义矩阵落定（#1748）。
+// 已发布且未指定时间时保持幂等（不改 published_at）—— 与 #1748 前的行为逐字一致。
+func (s *Service) Publish(id int, publishedAt *string) (*FeaturedContentAdminDetailDTO, error) {
 	var item model.FeaturedContent
 	if err := s.db.First(&item, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -344,20 +390,29 @@ func (s *Service) Publish(id int) (*FeaturedContentAdminDetailDTO, error) {
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
-	if item.Status == 1 {
+	now := clock.Now()
+	plan := featuredPublishPlan{Status: 1, PublishedAt: &now}
+	if publishedAt != nil {
+		applied, err := applyFeaturedPublishTime(1, *publishedAt, now)
+		if err != nil {
+			return nil, err
+		}
+		plan = applied
+	} else if item.Status == 1 {
 		dto := featuredContentAdminDetailDTO(&item)
 		return &dto, nil
 	}
-	now := clock.Now()
 	if err := s.db.Model(&item).Updates(map[string]any{
-		"status":       int16(1),
-		"published_at": now,
+		"status":       plan.Status,
+		"published_at": plan.PublishedAt,
+		"scheduled_at": plan.ScheduledAt,
 		"updated_at":   now,
 	}).Error; err != nil {
 		return nil, err
 	}
-	item.Status = 1
-	item.PublishedAt = &now
+	item.Status = plan.Status
+	item.PublishedAt = plan.PublishedAt
+	item.ScheduledAt = plan.ScheduledAt
 	item.UpdatedAt = now
 	dto := featuredContentAdminDetailDTO(&item)
 	return &dto, nil

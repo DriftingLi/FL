@@ -3,6 +3,8 @@ package featured
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -60,7 +62,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 // @Param page_size query int false "每页条数" default(10)
 // @Param category query string false "分类"
 // @Param sort query string false "排序 latest|hot" default(latest)
-// @Success 200 {object} response.R "success"
+// @Success 200 {object} response.R{data=featured.FeaturedContentPageResult} "success"
 // @Router /featured-contents [get]
 func (h *handler) GetPublicList(c *gin.Context) {
 	httpx.Endpoint[featuredListReq, FeaturedContentPageResult]{
@@ -146,36 +148,38 @@ func (h *handler) IncrementViewCount(c *gin.Context) {
 }
 
 // @Summary 精选内容列表（管理端）
-// @Description 管理端列表（含草稿），支持分类与状态过滤
+// @Description 管理端列表（含草稿与定时中），支持分类与状态过滤（state = draft/scheduled/published）
 // @Tags 管理端-精选内容
 // @Produce json
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Param category query string false "分类"
-// @Param status query string false "状态"
-// @Success 200 {object} response.R{data=featured.FeaturedContentPageResult} "success"
+// @Param state query string false "状态：draft 草稿 / scheduled 定时中 / published 已发布（空 = 全部）"
+// @Success 200 {object} response.R{data=featured.FeaturedContentAdminPageResult} "success"
+// @Failure 400 {object} response.R "状态过滤无效"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/featured-contents [get]
-// AdminList 管理端列表（含草稿）GET /api/admin/featured-contents
+// AdminList 管理端列表（含草稿与定时中）GET /api/admin/featured-contents
 func (h *handler) AdminList(c *gin.Context) {
-	httpx.Endpoint[adminFeaturedListReq, FeaturedContentPageResult]{
+	httpx.Endpoint[adminFeaturedListReq, FeaturedContentAdminPageResult]{
 		Parse: func(c *gin.Context) (*adminFeaturedListReq, error) {
 			return &adminFeaturedListReq{
 				Page:     httpx.QueryIntDefault(c, "page", 1),
 				PageSize: httpx.QueryIntDefault(c, "page_size", 10),
 				Category: c.Query("category"),
-				Status:   c.Query("status"),
+				State:    c.Query("state"),
 			}, nil
 		},
-		Invoke: func(ctx context.Context, req *adminFeaturedListReq) (*FeaturedContentPageResult, error) {
-			result, err := h.svc.AdminList(req.Page, req.PageSize, req.Category, req.Status)
+		Invoke: func(ctx context.Context, req *adminFeaturedListReq) (*FeaturedContentAdminPageResult, error) {
+			result, err := h.svc.AdminList(req.Page, req.PageSize, req.Category, req.State)
 			if err != nil {
 				return nil, err
 			}
 			return &result, nil
 		},
-	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(ErrFeaturedStateInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 精选内容详情（管理端）
@@ -205,9 +209,9 @@ func (h *handler) AdminDetail(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}"
+// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}"
 // @Success 201 {object} response.R{data=featured.FeaturedContentAdminDetailDTO} "内容创建成功"
-// @Failure 400 {object} response.R "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效"
+// @Failure 400 {object} response.R "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务器内部错误（写库失败等真故障，不再冒充参数错误）"
 // @Router /admin/featured-content [post]
@@ -225,7 +229,9 @@ func (h *handler) Create(c *gin.Context) {
 	}.WithSuccess(httpx.Created("内容创建成功"), http.StatusInternalServerError).
 		WithSentinel(ErrFeaturedTitleRequired, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedCategoryInvalid, http.StatusBadRequest).
-		WithSentinel(ErrFeaturedImageInvalid, http.StatusBadRequest).Handle(c)
+		WithSentinel(ErrFeaturedImageInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedPublishTimeInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedDraftWithPublishTime, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 更新精选内容
@@ -235,9 +241,9 @@ func (h *handler) Create(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "内容 ID"
-// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}"
+// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}"
 // @Success 200 {object} response.R{data=featured.FeaturedContentAdminDetailDTO} "内容更新成功"
-// @Failure 400 {object} response.R "请求数据无效 / 分类无效 / 图片地址无效"
+// @Failure 400 {object} response.R "请求数据无效 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "内容不存在"
 // @Failure 500 {object} response.R "服务器内部错误"
@@ -253,7 +259,9 @@ func (h *handler) Update(c *gin.Context) {
 	}.WithSuccess(httpx.OkMsg("内容更新成功"), http.StatusInternalServerError).
 		WithSentinel(ErrFeaturedContentNotFound, http.StatusNotFound).
 		WithSentinel(ErrFeaturedCategoryInvalid, http.StatusBadRequest).
-		WithSentinel(ErrFeaturedImageInvalid, http.StatusBadRequest).Handle(c)
+		WithSentinel(ErrFeaturedImageInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedPublishTimeInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedDraftWithPublishTime, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 删除精选内容
@@ -278,24 +286,28 @@ func (h *handler) Delete(c *gin.Context) {
 }
 
 // @Summary 发布精选内容
-// @Description 草稿 → 已发布，返回发布后的内容
+// @Description 发布内容：无 body = 立即发布；带 {published_at} 时按发布时间落定（未来时间 = 转为定时中）
 // @Tags 管理端-精选内容
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "内容 ID"
+// @Param body body object false "可选 {published_at}"
 // @Success 200 {object} response.R{data=featured.FeaturedContentAdminDetailDTO} "内容发布成功"
+// @Failure 400 {object} response.R "请求数据无效 / 发布时间无效"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "内容不存在"
 // @Router /admin/featured-content/{id}/publish [post]
 // Publish 发布内容精选 POST /api/admin/featured-content/:id/publish
 func (h *handler) Publish(c *gin.Context) {
-	httpx.Endpoint[featuredIDReq, FeaturedContentAdminDetailDTO]{
-		Parse: parseFeaturedID,
-		Invoke: func(ctx context.Context, req *featuredIDReq) (*FeaturedContentAdminDetailDTO, error) {
-			return h.svc.Publish(req.ID)
+	httpx.Endpoint[featuredPublishReq, FeaturedContentAdminDetailDTO]{
+		Parse: parseFeaturedPublish,
+		Invoke: func(ctx context.Context, req *featuredPublishReq) (*FeaturedContentAdminDetailDTO, error) {
+			return h.svc.Publish(req.ID, req.PublishedAt)
 		},
 	}.WithSuccess(httpx.OkMsg("内容发布成功"), http.StatusInternalServerError).
-		WithSentinel(ErrFeaturedContentNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(ErrFeaturedContentNotFound, http.StatusNotFound).
+		WithSentinel(ErrFeaturedPublishTimeInvalid, http.StatusBadRequest).Handle(c)
 }
 
 // @Summary 上传精选内容图片
@@ -328,7 +340,7 @@ type adminFeaturedListReq struct {
 	Page     int
 	PageSize int
 	Category string
-	Status   string
+	State    string
 }
 
 // featuredDetailReq 内容详情请求（id + countView）。
@@ -340,6 +352,12 @@ type featuredDetailReq struct {
 // featuredIDReq 仅 ID 的请求（详情/删除/发布/计数）。
 type featuredIDReq struct {
 	ID int
+}
+
+// featuredPublishReq 发布请求（id + 可选发布时间；无 body = 立即发布）。
+type featuredPublishReq struct {
+	ID          int
+	PublishedAt *string
 }
 
 // featuredUpdateReq 更新请求（id + typed input）。
@@ -360,6 +378,27 @@ func parseFeaturedID(c *gin.Context) (*featuredIDReq, error) {
 		return nil, err
 	}
 	return &featuredIDReq{ID: id}, nil
+}
+
+// parseFeaturedPublish 发布请求的解析面：**body 可省略**（无 body = 立即发布）。
+//
+// 不用 BindJSONMsg 的理由：它把空 body 当解析失败回 400，而现有客户端发的正是无 body 的
+// POST。只有「带了 body 且解析不出来」才判 400；chunked 的空 body（ContentLength = -1）
+// 读成 EOF 同样放行。
+func parseFeaturedPublish(c *gin.Context) (*featuredPublishReq, error) {
+	id, err := httpx.PathInt(c, "id", "内容ID无效")
+	if err != nil {
+		return nil, err
+	}
+	var body struct {
+		PublishedAt *string `json:"published_at"`
+	}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&body); err != nil && !errors.Is(err, io.EOF) {
+			return nil, httpx.BadRequest("请求数据无效")
+		}
+	}
+	return &featuredPublishReq{ID: id, PublishedAt: body.PublishedAt}, nil
 }
 
 func parseFeaturedUpdate(c *gin.Context) (*featuredUpdateReq, error) {

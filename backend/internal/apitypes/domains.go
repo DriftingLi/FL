@@ -716,11 +716,13 @@ var Domains = []Domain{
 		// 消费者：训练域 Web 的「内容精选详情页」（搜索结果落点），故详情类型与端点在此登记。
 		Roots: []string{
 			"featured.FeaturedContentPageResult",
+			"featured.FeaturedContentAdminPageResult", // 管理端列表（#1748 起带 scheduled_at，与公开那份分开）
 			"featured.FeaturedContentAdminDetailDTO",
 			"featured.FeaturedContentDetailDTO",
 			"featured.FeaturedDeleteResult",
 		},
 		Endpoints: []Endpoint{
+			{Method: "GET", Path: "/featured-contents"},
 			{Method: "GET", Path: "/featured-content/{id}"},
 			{Method: "GET", Path: "/admin/featured-contents"},
 			{Method: "GET", Path: "/admin/featured-content/{id}"},

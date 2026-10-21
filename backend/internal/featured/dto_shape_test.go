@@ -66,14 +66,27 @@ func TestFeaturedDTOShapes(t *testing.T) {
 
 	adminWant := []string{
 		"category", "category_label", "content", "content_id", "cover_image", "created_at",
-		"published_at", "sort_order", "source", "status", "summary", "title", "updated_at", "view_count",
+		"published_at", "scheduled_at", "sort_order", "source", "status", "summary", "title",
+		"updated_at", "view_count",
 	}
 	assertKeys(t, jsonTopLevelKeys(t, FeaturedContentAdminDetailDTO{
 		Category: "news", CategoryLabel: "资讯", Content: "content", ContentID: 1,
-		CoverImage: "cover.png", CreatedAt: pub, PublishedAt: &pub,
+		CoverImage: "cover.png", CreatedAt: pub, PublishedAt: &pub, ScheduledAt: &pub,
 		SortOrder: 1, Source: "src", Status: 1, Summary: "summary", Title: "title",
 		UpdatedAt: pub, ViewCount: 2,
 	}), adminWant)
+
+	// 管理端列表项（#1748 新增）：公开列表项 + scheduled_at —— 公开那份不加（公开接口零变更）。
+	adminListWant := []string{
+		"category", "category_label", "content_id", "cover_image", "created_at",
+		"published_at", "scheduled_at", "sort_order", "source", "status", "summary", "title",
+		"updated_at", "view_count",
+	}
+	assertKeys(t, jsonTopLevelKeys(t, FeaturedContentAdminListDTO{
+		Category: "news", CategoryLabel: "资讯", ContentID: 1, CoverImage: "cover.png",
+		CreatedAt: pub, PublishedAt: &pub, ScheduledAt: &pub, SortOrder: 1, Source: "src",
+		Status: 1, Summary: "summary", Title: "title", UpdatedAt: pub, ViewCount: 2,
+	}), adminListWant)
 
 	navWant := []string{"category", "category_label", "content_id", "published_at", "title"}
 	assertKeys(t, jsonTopLevelKeys(t, FeaturedNavDTO{

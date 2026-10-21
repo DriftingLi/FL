@@ -23,6 +23,7 @@ import (
 var expectedDaemonNames = []string{
 	"contact-request-expire",
 	"contribution-file-cleanup",
+	"featured-scheduled-publish",
 	"forum-image-cleanup",
 }
 
@@ -43,6 +44,10 @@ func TestDaemonRegistryLock(t *testing.T) {
 			t.Fatalf("%s 登记了名字却没有动作", task.Name)
 		}
 		names = append(names, task.Name)
+		// 周期本身也是判据：定时发布的口径是「分钟级」，改成别的值必须留下痕迹。
+		if task.Name == "featured-scheduled-publish" && task.Interval != time.Minute {
+			t.Fatalf("%s 的周期 = %s，期望 1 分钟（#1748 已与产品确认的精度）", task.Name, task.Interval)
+		}
 	}
 
 	sort.Strings(names)

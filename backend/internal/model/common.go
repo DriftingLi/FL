@@ -84,6 +84,8 @@ type FeaturedContent struct {
 	ViewCount   int        `gorm:"column:view_count;default:0" json:"view_count"`
 	SortOrder   int        `gorm:"column:sort_order;default:0" json:"sort_order"`
 	PublishedAt *time.Time `gorm:"column:published_at" json:"published_at,omitempty"`
+	// ScheduledAt 定时发布时间（#1748）：仅草稿态（status=0）有效，到点由守护落成已发布并清空。
+	ScheduledAt *time.Time `gorm:"column:scheduled_at" json:"scheduled_at,omitempty"`
 	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
 }

@@ -24,15 +24,15 @@
           :value="opt.value"
         />
       </el-select>
+      <!-- 三态过滤（#1748）：「定时」不是一个 status 取值，故参数由 status(0/1) 改为 state -->
       <el-select
-        v-model="filterStatus"
+        v-model="filterState"
         placeholder="全部状态"
         clearable
         style="width: 140px"
         @change="handleFilterChange"
       >
-        <el-option label="草稿" :value="0" />
-        <el-option label="已发布" :value="1" />
+        <el-option v-for="opt in stateOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
       </el-select>
       <UiButton variant="primary" @click="handleFilterChange">查询</UiButton>
       <UiButton @click="resetFilter">重置</UiButton>
@@ -48,14 +48,15 @@
       </el-table-column>
       <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
-          <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">
-            {{ row.status === 1 ? '已发布' : '草稿' }}
-          </UiTag>
+          <UiTag :tone="rowMeta(row).tone" size="small">{{ rowMeta(row).label }}</UiTag>
         </template>
       </el-table-column>
       <el-table-column label="发布时间" width="180" align="center">
         <template #default="{ row }">
-          <span v-if="row.published_at">{{ formatDateTime(row.published_at) }}</span>
+          <span v-if="rowTime(row)">
+            <span v-if="rowState(row) === 'scheduled'" class="scheduled-hint">定时 </span>
+            {{ formatDateTime(rowTime(row)) }}
+          </span>
           <span v-else class="empty-text">—</span>
         </template>
       </el-table-column>
@@ -70,7 +71,10 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                <el-dropdown-item v-if="row.status === 0" command="publish">发布</el-dropdown-item>
+                <!-- 立即发布：草稿与定时中都能用（定时项提前上线，不必改时间；#1748 用户故事 17） -->
+                <el-dropdown-item v-if="rowState(row) !== 'published'" command="publish">立即发布</el-dropdown-item>
+                <!-- 转为草稿：只对定时行出现 —— 它是「取消排期」这类内容的唯一出口 -->
+                <el-dropdown-item v-if="rowState(row) === 'scheduled'" command="cancelSchedule">转为草稿</el-dropdown-item>
                 <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -101,7 +105,10 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContentDTO } from '@/api/featured'
+import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContentAdminListDTO } from '@/api/featured'
+import { useConfirm } from '@/composables/useConfirm'
+// #1748：三态徽标与时间列的判据是纯函数（单测见 __tests__/FeaturedSchedule.spec.ts）
+import { FEATURED_STATE_META, featuredRowState, featuredRowTime } from './featuredSchedule'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -112,41 +119,47 @@ import UiTag from '@/components/ui/UiTag.vue'
 const router = useRouter()
 
 const filterCategory = ref('')
-const filterStatus = ref<number | undefined>(undefined)
+const filterState = ref<string>('')
+
+// 模板里直接用纯函数（三态徽标 / 时间列）——判据只有一份，页面不重写规则
+const rowState = featuredRowState
+const rowTime = featuredRowTime
+const rowMeta = (row: { status: number; scheduled_at?: string | null }) => FEATURED_STATE_META[featuredRowState(row)]
+// 筛选选项也由 descriptor 派生：状态文案在全站只此一份（ui-conventions「状态词表」）
+const stateOptions = Object.entries(FEATURED_STATE_META).map(([value, meta]) => ({ value, label: meta.label }))
 
 // admin 列表状态机：本页只声明 fetch 与行操作 adapter
-const table = useAdminTable<FeaturedContentDTO>({
+const table = useAdminTable<FeaturedContentAdminListDTO>({
   fetch: (paging, filters) => {
-    const params: { page?: number; page_size?: number; category?: string; status?: string } = {
+    const params: { page?: number; page_size?: number; category?: string; state?: string } = {
       page: paging.page,
       page_size: paging.pageSize
     }
     if (filters.category) params.category = String(filters.category)
-    if (filters.status !== undefined && filters.status !== null && filters.status !== '') {
-      params.status = String(filters.status)
-    }
+    if (filters.state) params.state = String(filters.state)
     return adminFeaturedApi.getList(params)
   },
   actions: {
-    edit: (row: FeaturedContentDTO) => goEdit(row.content_id),
-    publish: (row: FeaturedContentDTO) => handlePublish(row.content_id),
+    edit: (row: FeaturedContentAdminListDTO) => goEdit(row.content_id),
+    publish: (row: FeaturedContentAdminListDTO) => handlePublish(row.content_id),
+    cancelSchedule: (row: FeaturedContentAdminListDTO) => cancelSchedule(row.content_id),
     delete: deleteRow
   }
 })
 const { loading, list, total, currentPage, pageSize, load, handleAction } = table
 
-function deleteRow(row: FeaturedContentDTO): Promise<void> {
+function deleteRow(row: FeaturedContentAdminListDTO): Promise<void> {
   return table.confirmDelete(row, r => handleDelete(r.content_id), '确定删除该内容？删除后不可恢复')
 }
 
 function handleFilterChange() {
-  table.applyFilters({ category: filterCategory.value, status: filterStatus.value ?? '' })
+  table.applyFilters({ category: filterCategory.value, state: filterState.value })
 }
 
 function resetFilter() {
   filterCategory.value = ''
-  filterStatus.value = undefined
-  table.applyFilters({ category: '', status: '' })
+  filterState.value = ''
+  table.applyFilters({ category: '', state: '' })
 }
 
 function goCreate() {
@@ -159,8 +172,27 @@ function goEdit(id: number) {
 
 async function handlePublish(id: number) {
   try {
+    // 不带 body = 立即发布（定时项也可提前上线，不必先改时间）
     await adminFeaturedApi.publish(id)
-    ElMessage.success('发布成功')
+    ElMessage.success('已发布')
+    load()
+  } catch (e: any) {
+    // 错误已由全局拦截器提示
+  }
+}
+
+/** 转为草稿 = 取消排期（不带时间，后端语义就是「清空 scheduled_at」） */
+async function cancelSchedule(id: number) {
+  try {
+    await useConfirm().confirmDanger('取消这条定时？内容会退回草稿，不再自动发布。', '取消定时', {
+      confirmButtonText: '转为草稿'
+    })
+  } catch {
+    return
+  }
+  try {
+    await adminFeaturedApi.update(id, { status: 0 })
+    ElMessage.success('已转为草稿')
     load()
   } catch (e: any) {
     // 错误已由全局拦截器提示
@@ -205,6 +237,10 @@ onMounted(() => {
 
 .empty-text {
   color: var(--color-text-disabled);
+}
+
+.scheduled-hint {
+  color: var(--el-color-warning, var(--color-text-muted));
 }
 
 :deep(.el-table) {
