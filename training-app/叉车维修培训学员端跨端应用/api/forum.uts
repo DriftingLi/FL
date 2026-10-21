@@ -55,7 +55,6 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
         params['is_experience'] = isExperience
     }
     return getMapped<ForumTopicListResult>('/forum/topics', params, (data : UTSJSONObject) : ForumTopicListResult => {
-        console.log('[getForumTopicsApi] raw data:', JSON.stringify(data))
         return buildTopicListResult(data, '/forum/topics', page, pageSize)
     }).catch((e) : ForumTopicListResult => {
         console.error('[getForumTopicsApi] failed:', e)
@@ -83,7 +82,6 @@ export function getForumTopicDetailApi(topicId : number, sort : string = 'latest
         page_size: pageSize.toString(),
     } as UTSJSONObject
     return getMapped<ForumTopicDetail>(url, params, (data : UTSJSONObject) : ForumTopicDetail => {
-        console.log('[getForumTopicDetailApi] raw data:', JSON.stringify(data))
         return buildTopicDetail(data, url, page, pageSize)
     }).catch((e) : ForumTopicDetail => {
         console.error('[getForumTopicDetailApi] failed:', e)
@@ -135,7 +133,6 @@ export function createForumTopicApi(title : string, content : string, images : s
         content_format: format,
     } as UTSJSONObject
     return postMapped<ForumTopic>('/forum/topics', payload, (data : UTSJSONObject) : ForumTopic => {
-        console.log('[createForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
     }).catch((e) : ForumTopic => {
         console.error('[createForumTopicApi] failed:', e)
@@ -174,7 +171,6 @@ export function updateForumTopicApi(topicId : number, title : string, content : 
         data: payload,
     }
     return requestMapped<ForumTopic>(options, (data : UTSJSONObject) : ForumTopic => {
-        console.log('[updateForumTopicApi] raw data:', JSON.stringify(data))
         return buildTopic(data)
     }).catch((e) : ForumTopic => {
         console.error('[updateForumTopicApi] failed:', e)
@@ -200,7 +196,6 @@ export function replyForumTopicApi(topicId : number, content : string, images : 
         content_format: format,
     } as UTSJSONObject
     return postMapped<ForumReply>(url, payload, (data : UTSJSONObject) : ForumReply => {
-        console.log('[replyForumTopicApi] raw data:', JSON.stringify(data))
         return buildReply(data, topicId)
     }).catch((e) : ForumReply => {
         console.error('[replyForumTopicApi] failed:', e)
