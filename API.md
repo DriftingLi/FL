@@ -972,7 +972,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 { "code": 200, "message": "success", "data": { "items": [ { "id": 1, "credential_id": 1, "title": "叉车液压故障排查手册", "intro": "...", "status": "approved", "is_anonymous": false, "downloads_count": 12, "files": [ { "file_id": 1, "file_name": "a.pdf", "file_url": "/static/uploads/contributions/a.pdf", "file_size": 10240, "content_type": "document" } ], "author": { "user_id": 7, "username": "小明", "anonymous": false }, "created_at": "2026-09-01 10:00:00" } ], "total": 1, "page": 1, "page_size": 20 } }
 ```
 
-> 上传/文件访问注意：R2 模式下 `file_url` 为 `https://www.gccsmile.com/contributions/...` 公开直链，需 nginx 对象存储反代登记 `contributions`（与 `resumes`）顶层前缀（见 PR #530）；未登记会落进门户兜底被 Nuxt 报 404。
+> 上传/文件访问注意：R2 模式下 `file_url` 是对象存储的公开直链，host 由部署变量 `R2_PUBLIC_DOMAIN` 决定（自票 #1742 起是资源域 `cdn.<domain>`；更早的历史数据仍是 `www.<domain>`，旧域对这些前缀只做 301 到资源域）。nginx 侧必须登记该前缀（`contributions` 与 `resumes` 等，见 PR #530）；**未登记的前缀会落进资源域的 404 兜底**，不再是「门户兜底页」。
 
 ---
 

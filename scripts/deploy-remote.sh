@@ -1227,8 +1227,8 @@ prune_old_images() {
     fi
     log_info ">>> 清理旧版本镜像 (每个仓库保留最近 ${KEEP_IMAGES} 个)..."
 
-    # 附加清理仓库：国内镜像源前缀（回退拉取遗留的镜像源 tag）与门户镜像
-    # （hrwai-portal 独立流水线部署，不在 IMAGE_* 清单内，不清理会无限堆积）。
+    # 附加清理仓库：国内镜像源前缀（回退拉取遗留的镜像源 tag）。
+    # 门户镜像（hrwai-portal）已随官网迁 EdgeOne 撤出本机（票 #1742），不再在此清理。
     local mirror_repos=()
     if [ -n "${REGISTRY_MIRROR:-}" ]; then
         local orig
@@ -1239,12 +1239,10 @@ prune_old_images() {
             esac
         done
     fi
-    local portal_repo="${PRUNE_PORTAL_REPO:-127.0.0.1:5000/driftingli/hrwai-portal}"
-
     local repo
     for repo in "${IMAGE_BACKEND}" "${IMAGE_FRONTEND}" "${IMAGE_LIBREOFFICE}" \
                 "${IMAGE_BACKEND_ORIG:-}" "${IMAGE_FRONTEND_ORIG:-}" "${IMAGE_LIBREOFFICE_ORIG:-}" \
-                "${mirror_repos[@]:-}" "${portal_repo:-}"; do
+                "${mirror_repos[@]:-}"; do
         [ -z "$repo" ] && continue
         # 按创建时间倒序列出该仓库的镜像，保留前 KEEP_IMAGES 个，其余删除
         local kept=0

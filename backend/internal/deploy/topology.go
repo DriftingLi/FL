@@ -52,7 +52,6 @@ var EnvVars = []EnvVar{
 	{Name: "LOG_MAX_BACKUPS", Default: "7", Desc: "日志备份份数"},
 	{Name: "LOG_MAX_SIZE_MB", Default: "100", Desc: "单日志文件上限（MB）"},
 	{Name: "PG_VOLUME", Default: "pgdata-prod", Desc: "Postgres 数据卷"},
-	{Name: "PORTAL_HOST_PORT", Default: "3000", Desc: "门户对外发布端口"},
 	{Name: "REDIS_DB", Default: "0", Desc: "Redis 逻辑库"},
 	{Name: "REDIS_KEY_PREFIX", Default: "fl:", Desc: "Redis 键前缀"},
 	{Name: "REDIS_POOL_SIZE", Default: "20", Desc: "Redis 连接池大小"},

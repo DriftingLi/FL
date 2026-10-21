@@ -65,7 +65,7 @@
 
 | 子域名 | 工作区 | 角色 | 主要内容 |
 | --- | --- | --- | --- |
-| `www` | 官网门户 | 访客 | 由**独立 Nuxt 仓库**承载（本仓库不再含门户页面） |
+| `www` | 官网门户 | 访客 | 由**独立 Nuxt 仓库**承载、部署在腾讯云 EdgeOne（主域 `www.hrwai.cn`）；旧域 `www.gccsmile.com` 只留「页面 301 + API」，资源在 `cdn` 子域 |
 | `training.` | 培训学习 | 学员 `hrwai_user` | 课程、练习、模考、真题、论坛、投稿、积分、AI 助手、简历、职位广场 |
 | `mentor.` | 讲师工作区 | 讲师 `tutor` | 章节、题库、标签、投稿审核 |
 | `manage.` | 管理后台 | 管理员 `admin` | 全站管理与配置 |
@@ -97,7 +97,7 @@
 
 ### 文件与对象存储
 
-`storage_driver` 可切换 `local` / `r2`（S3 兼容）。生产环境经 Nginx 把 `featured/ avatars/ contributions/ resumes/ images/ chapters/ slides/ uploads/ reports/` 等前缀反代到 S3 兼容对象存储网关，避免直链落到门户兜底路由导致 404。
+`storage_driver` 可切换 `local` / `r2`（S3 兼容）。生产环境在**资源域 `cdn.<domain>`**（公开 URL 基址 `R2_PUBLIC_DOMAIN`，只允许 GET/HEAD）把 `featured/ avatars/ contributions/ resumes/ images/ chapters/ slides/ uploads/ reports/` 等前缀反代到 S3 兼容对象存储网关；旧域的同名路径只做 301 到资源域，不再直出（票 #1742）。
 
 ## 技术栈
 
@@ -181,7 +181,7 @@
 │   │                             #   assets / icons）
 │   ├── scripts/                  # 前端侧守卫与扫描器（scan-el-components.mjs 等）
 │   ├── Dockerfile
-│   ├── nginx-host.conf           # 生产 host 网络模式 Nginx（SSL + 反代 + 对象存储分流）
+│   ├── nginx-host.conf           # 生产 host 网络模式 Nginx（SSL；www=301+API、cdn=对象存储、其余子域=SPA）
 │   ├── nginx.default.conf        # 镜像内置 Nginx 配置（template，envsubst 渲染）
 │   ├── docker-entrypoint.sh
 │   ├── wrangler.jsonc            # Cloudflare Pages 备选部署
@@ -453,6 +453,24 @@ docker compose -f docker-compose.prod.yml up -d
 ### 远程部署（自托管服务器）
 
 `scripts/deploy-remote.sh` 通过公网 SSH 将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback` 回滚到上一个版本；备份默认落在 `/opt/forklift-backups`。配套脚本：`setup-server.sh`（初始化）、`lxc-install-docker.sh` / `lxc-setup-ssh.sh`（LXC 容器初始化）、`backup-daily.sh` / `rbd-snap-hourly.sh`（定时备份与快照）。
+
+### 域名与资源域（官网迁 EdgeOne 后，票 #1742）
+
+官网门户已从本机房迁到腾讯云 EdgeOne，本仓 nginx 收成三个职责面：
+
+| host | 职责 | 注意 |
+| --- | --- | --- |
+| `www.<domain>` | 页面路径 301 到 `https://www.hrwai.cn`；`/api/`、`/swagger`、`/health`、`/ai-assistant` 照旧 | 301 必须写在 `location` 里（提到 server 级会短路 API 与资源出口，issue #496）；同一块也收 `www.hrwai.cn` 作为回源 Host，对它的页面路径直接 404（防止 301 到自己成环） |
+| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，其余 404 | 投递分档头随路径走（ADR-0066）；旧域同名路径 301 到这里，老外链不碎 |
+| 裸域 | 一跳 301 到新站 | 不再经 www 二次跳 |
+
+**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到本机；回源 Host 用旧域还是新站主域都落进同一个 server 块（两个 `server_name` 都收），因此不必在控制台钉死 Host 改写。
+
+**已知降级：客户端 IP 按边缘节点聚合**（票 #1742 记录，未修）。经 EdgeOne 回源时 nginx 的 `$remote_addr` 是**边缘节点地址**，而后端 `TRUSTED_PROXIES` 里没有 EdgeOne 段 ⇒ 限流键与访问日志里的 `ip` 都是边缘 IP（同一节点的用户共享一个桶）。
+
+- 修法（未落地）：先实测 EdgeOne 实际传哪个头，再在 www 块启用 `real_ip`（`set_real_ip_from <回源段>` + `real_ip_header` + `real_ip_recursive on`）；改完后端 `TRUSTED_PROXIES` 不需要动（追加语义仍然成立）。
+- **明确不采用**「把 EdgeOne 公共段塞进 `TRUSTED_PROXIES`」：公共段进白名单等于让任何直连者伪造来源。
+- 排查含混时别把日志里的 `ip` 当用户 IP（见下一节）。
 
 ### 生产诊断：某个端点到底有没有真实流量
 
