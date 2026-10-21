@@ -473,10 +473,12 @@ docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-ass
 docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
 ```
 
-**已知降级：客户端 IP 按边缘节点聚合**（票 #1742 记录，未修）。经 EdgeOne 回源时 nginx 的 `$remote_addr` 是**边缘节点地址**，而后端 `TRUSTED_PROXIES` 里没有 EdgeOne 段 ⇒ 限流键与访问日志里的 `ip` 都是边缘 IP（同一节点的用户共享一个桶）。
+**客户端 IP：EdgeOne 回源鉴权（票 #1746）**。经 EdgeOne 回源时 nginx 的 `$remote_addr` 是边缘节点，但 EdgeOne 会带 `EO-Connecting-IP`（实测为真实客户端；同一次请求里的 `X-Forwarded-For` / `X-Real-IP` 都只是边缘链路）。门户（EdgeOne Pages）的 `/api` 代理回源时带 `X-Origin-Token`，nginx **只有 token 命中才采信** `EO-Connecting-IP`（`frontend/nginx-host.conf` 开头的三个 map），否则沿用「追加对端」的语义 —— 直连源站伪造该头无效。
 
-- 修法（未落地）：先实测 EdgeOne 实际传哪个头，再在 www 块启用 `real_ip`（`set_real_ip_from <回源段>` + `real_ip_header` + `real_ip_recursive on`）；改完后端 `TRUSTED_PROXIES` 不需要动（追加语义仍然成立）。
-- **明确不采用**「把 EdgeOne 公共段塞进 `TRUSTED_PROXIES`」：公共段进白名单等于让任何直连者伪造来源。
+- **两处同值**：本仓部署 secret `EDGE_ORIGIN_TOKEN`（production / testing 两个 environment 都要）+ 门户 Pages 环境变量 `NUXT_API_ORIGIN_TOKEN`。
+- **fail closed**：模板启用鉴权而 token 为空时，前端容器入口直接拒绝启动 —— 空键会匹配空头，等于信任所有人的 `EO-Connecting-IP`。
+- **轮换**：两处同时改，重新部署前后端即可，不需要改代码。
+- **不采用**「把 EdgeOne 公共段塞进 `TRUSTED_PROXIES`」：公共段进白名单等于让任何直连者伪造来源。
 - 排查含混时别把日志里的 `ip` 当用户 IP（见下一节）。
 
 ### 生产诊断：某个端点到底有没有真实流量

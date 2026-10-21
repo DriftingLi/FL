@@ -484,6 +484,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
+      # EdgeOne 回源鉴权 token（#1746）：与门户侧 NUXT_API_ORIGIN_TOKEN 同值；缺省时前端容器拒绝启动
+      EDGE_ORIGIN_TOKEN: ${{ secrets.EDGE_ORIGIN_TOKEN }}
       # Swagger 文档（C 方案：旗标 + BasicAuth；prod 默认 false，线上临时开启需同时注入 USER/PASS）
       SWAGGER_ENABLED: ${{ secrets.SWAGGER_ENABLED || vars.SWAGGER_ENABLED || 'false' }}
       SWAGGER_USER: ${{ secrets.SWAGGER_USER }}
@@ -687,6 +689,7 @@ jobs:
             printf 'export R2_SECRET_ACCESS_KEY=%q\n' "${R2_SECRET_ACCESS_KEY:-}"
             printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
             printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
+            printf 'export EDGE_ORIGIN_TOKEN=%q\n' "${EDGE_ORIGIN_TOKEN:-}"
             printf 'export SWAGGER_USER=%q\n' "${SWAGGER_USER:-}"
             printf 'export SWAGGER_PASS=%q\n' "${SWAGGER_PASS:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
