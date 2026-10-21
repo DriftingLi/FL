@@ -16,7 +16,8 @@ concurrency:
 env:
   # 钉到含 2026-10 那批 net/http 公告修复的补丁版（#1623）：写成 "1.26" 时 setup-go 命中缓存里的
   # 1.26.8，security-scan 的 govulncheck 稳定判红（全仓后端 PR 一起红，且与改动无关）。
-  GO_VERSION: "1.26.9"
+  # 1.26.10 修 GO-2026-6809（crypto/x509 中间证书信任）；1.26.9 在 2026-10-21 被 govulncheck 判红（#1744）。
+  GO_VERSION: "1.26.10"
   NODE_VERSION: "22"
 
 jobs:
