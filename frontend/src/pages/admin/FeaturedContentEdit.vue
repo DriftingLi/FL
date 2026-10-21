@@ -85,10 +85,9 @@
               v-model="form.content"
               :height="560"
               :upload-url="uploadUrl"
-              placeholder="请输入正文内容（支持 Markdown 语法，可粘贴或上传图片）..."
+              placeholder="请输入正文内容（支持 Markdown 语法，可直接粘贴图片）..."
             />
-            <div class="mt-2 flex items-center justify-between gap-3">
-              <span class="text-xs text-ink-3">正文子集（三端一致）：{{ FEATURED_SUBSET_SYNTAX }}</span>
+            <div class="mt-2 flex justify-end">
               <UiButton size="small" @click="openPreview">发布端预览</UiButton>
             </div>
           </div>
@@ -111,17 +110,20 @@
           不在模板里再写一遍规则（否则文案与提交逻辑会各漂一半）。
         -->
         <el-form-item v-if="form.status === 1" label="发布时间">
-          <div class="publish-time">
-            <el-date-picker
-              v-model="form.published_at"
-              type="datetime"
-              placeholder="留空 = 保存后立即发布"
-              format="YYYY-MM-DD HH:mm"
-              clearable
-            />
-            <UiButton size="small" @click="useNow">现在</UiButton>
+          <!-- el-form-item__content 是 flex 横排：要让提示落在框下方，必须自己起一列 -->
+          <div class="publish-time-group">
+            <div class="publish-time">
+              <el-date-picker
+                v-model="form.published_at"
+                type="datetime"
+                placeholder="留空 = 保存后立即发布"
+                format="YYYY-MM-DD HH:mm"
+                clearable
+              />
+              <UiButton size="small" @click="useNow">现在</UiButton>
+            </div>
+            <div class="publish-hint">{{ publishHint }}</div>
           </div>
-          <div class="publish-hint">{{ publishHint }}</div>
         </el-form-item>
 
         <el-form-item>
@@ -138,7 +140,7 @@
       v-model="previewVisible"
       subset="featured"
       :content="previewContent"
-      subtitle="门户访客与移动端学员看到的样子（三端交集子集）。"
+      subtitle="门户访客与移动端学员看到的样子。"
     />
   </div>
 </template>
@@ -152,7 +154,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
 import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
-import { detectOutsideSubset, FEATURED_SUBSET_SYNTAX, outsideSubsetNotice } from '@/utils/publishMarkdown'
+import { detectOutsideSubset, outsideSubsetNotice } from '@/utils/publishMarkdown'
 import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
 // #1748：发布时间的三条规则（行 → 状态、表单 → 请求体、提示文案）都是纯函数，单测在 __tests__/FeaturedSchedule.spec.ts
 import { buildFeaturedPayload, describePublishTime, editorStatusOf } from './featuredSchedule'
@@ -363,7 +365,8 @@ onMounted(() => {
 }
 
 .edit-card {
-  background: var(--color-text-inverse);
+  /* 卡片底色用「表面」token：--color-text-inverse 在深色下仍是白，等于把整张卡刷成白板 */
+  background: var(--color-bg-card);
   border-radius: 12px;
   padding: 32px 40px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -412,6 +415,14 @@ onMounted(() => {
   margin-top: 8px;
 }
 
+.publish-time-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
 .publish-time {
   display: flex;
   align-items: center;
@@ -419,7 +430,6 @@ onMounted(() => {
 }
 
 .publish-hint {
-  margin-top: 4px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--color-text-muted);

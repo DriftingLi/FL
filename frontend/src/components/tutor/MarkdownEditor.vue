@@ -22,11 +22,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import UiUnderlineTabs from '@/components/ui/UiUnderlineTabs.vue'
+import { useThemeStore } from '@/stores/theme'
 // vditor 是浏览器 DOM 库，动态导入避免 SSR/构建期问题
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
+// 深色适配：Vditor 自带一套浅色写死的配色（编辑区纯白），这里按 [data-theme] 换成 token
+import '@/assets/styles/vditor-dark.css'
 // 预加载中文语言包，挂载到 window.VditorI18n，避免 Vditor 运行时从 CDN (unpkg.com) 请求 i18n 文件导致 404
 import 'vditor/dist/js/i18n/zh_CN.js'
 import { useAuthStore } from '@/stores/auth'
@@ -47,6 +50,11 @@ const emit = defineEmits(['update:modelValue'])
 
 const vditorRef = ref<HTMLElement | null>(null)
 const mode = ref<'ir' | 'sv'>('ir')
+
+// 代码块高亮主题是 Vditor 自己按名字去拉样式表（github / github-dark），不跟着 CSS 变量走，
+// 故这里按当前主题选一份；主题切换时重建实例（见文件尾的 watch）。
+const themeStore = useThemeStore()
+const isDark = computed(() => themeStore.resolved === 'dark')
 
 /** Tab 选项（值与 Vditor 的 mode 同名：ir=即时渲染 / sv=源码） */
 const MODE_OPTIONS = [
@@ -142,7 +150,7 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
     preview: {
       hljs: {
         lineNumber: false,
-        style: 'github'
+        style: isDark.value ? 'github-dark' : 'github'
       }
     },
     input: (value: string) => {
@@ -211,6 +219,20 @@ watch(() => props.modelValue, (newVal) => {
 // 高度变化时更新容器
 watch(() => props.height, (h) => {
   bodyHeight.value = `${h}px`
+})
+
+// 主题切换：Vditor 的高亮主题在初始化时就定死了，重建一次让它换成 github-dark / github。
+// 内容从当前实例读出来再恢复（与模式切换同一手法），不改表单值、不触发 input 回环。
+watch(isDark, () => {
+  if (!vditor || !isReady.value) return
+  let current = props.modelValue
+  try {
+    current = vditor.getValue() || props.modelValue
+  } catch {
+    // 读不出来就退回表单值：主题切换不值得为它中断编辑
+  }
+  internalUpdate = true
+  createVditor(mode.value, current)
 })
 
 onBeforeUnmount(() => {

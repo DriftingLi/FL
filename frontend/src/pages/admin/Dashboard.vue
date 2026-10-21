@@ -281,10 +281,12 @@ onUnmounted(() => {
   gap: var(--space-6);
 }
 
-/* Welcome Banner */
+/* Welcome Banner
+   底色由「表面 token + 品牌色浅混」现算：浅色下≈原来的淡紫，深色下是带紫调的深卡，
+   不会因为品牌 -50 色阶不随主题翻转而变成一块白板（深色下刺眼的根因）。 */
 .welcome-banner {
-  background: var(--color-violet-50);
-  border: 1px solid var(--color-violet-200);
+  background: color-mix(in srgb, var(--color-violet-500) 8%, var(--color-bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-violet-500) 18%, var(--color-border));
   border-radius: var(--radius-xl);
   padding: var(--space-6) var(--space-8);
   color: var(--color-text-primary);
