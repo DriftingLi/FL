@@ -38,10 +38,13 @@ describe('student 域收紧（profile 主页面数据源）', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
   it.each(['getProfileApi', 'getStudyStatsApi', 'getStudentCoursesApi', 'getStudentCourseDetailApi'])(
-    '%s 经 getMapped 且保留原 catch/mock 降级结构', (fn) => {
+    '%s 经 getMapped 且出口零 catch/mock 回退（#1731 后失败一律上抛）', (fn) => {
       const body = fnBodyOf(src, fn);
       expect(body).toContain('getMapped<');
-      // 收紧不得改变错误行为：原函数有 .catch 的必须保留
+      // #1731：口子反转 —— 原先锁「保留 .catch」，现在锁「零 .catch / 零 getMock*」，
+      // 吞错回退会让页面把示例学员当真数据渲染（ADR-0037 ③ 不做 fail-loud，但也不许伪数据）
+      expect(body).not.toContain('.catch(');
+      expect(body).not.toContain('getMock');
     });
   it('getRecordsApi 改走信封出口 getPaged（PR-F #1666 页面侧重命名：出口统一 Page<StudyRecord>）', () => {
     const body = fnBodyOf(src, 'getRecordsApi');
@@ -50,11 +53,28 @@ describe('student 域收紧（profile 主页面数据源）', () => {
     expect(body).not.toContain('getMapped<');
     expect(src).not.toMatch(/function\s+buildStudyRecordsResult/);
   });
-  it('getProfileApi 的 mock 降级保持', () => {
-    expect(fnBodyOf(src, 'getProfileApi')).toContain('getMockProfile()');
+  // #1731：档案 / 统计两个站点的 mock 回退一并退役，口径与 points 域 #709「失败要可见」、
+  // getRecordsApi PR-F #1666「不许伪数据」同源：api 层不再造占位学员，错误交页面可见地呈现。
+  it('student 域 mock 降级已退役（#1731）：源码零 getMock*，档案/统计出口零 .catch(', () => {
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(code).not.toMatch(/getMock/);
+    expect(fnBodyOf(code, 'getProfileApi')).not.toContain('.catch(');
+    expect(fnBodyOf(code, 'getStudyStatsApi')).not.toContain('.catch(');
+    // 三个消费点（profile.uvue:174/184、resume.uvue:174、useResourcePoints.uts:26）各自已在
+    // then/catch 或 try/catch 里，上抛不会变成未捕获 rejection —— 页面侧无需再改。
+    expect(src).not.toMatch(/function\s+getMockProfile/);
+    expect(src).not.toMatch(/function\s+getMockStudyStats/);
   });
-  it('getStudyStatsApi 的 mock 降级保持；getRecordsApi 的 mock 回填已退役（票面：吞错点清零）', () => {
-    expect(fnBodyOf(src, 'getStudyStatsApi')).toContain('getMockStudyStats()');
+  it('判据有判别力（#1731）：把 mock 回退注回 getProfileApi 会同时踩中两条锁', () => {
+    const regressed = src.replace(
+      '\t})\n}\n\n/** 学习统计',
+      '\t}).catch((e) : StudentProfile => getMockProfile())\n}\n\n/** 学习统计');
+    expect(regressed).not.toBe(src);
+    const code = regressed.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(code).toMatch(/getMock/);
+    expect(fnBodyOf(code, 'getProfileApi')).toContain('.catch(');
+  });
+  it('getRecordsApi 的 mock 回填已退役（PR-F #1666：吞错点清零）', () => {
     // PR-F #1666：分页站点回填 mock 会让页面把示例数据当真记录渲染，改为向上抛由页面提示
     expect(fnBodyOf(src, 'getRecordsApi')).not.toContain('getMockRecords()');
     expect(fnBodyOf(src, 'getRecordsApi')).toContain('throw new Error');

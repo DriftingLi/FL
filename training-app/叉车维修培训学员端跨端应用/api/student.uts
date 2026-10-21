@@ -5,7 +5,7 @@
  * @note 后端 /student/profile 返回嵌套结构：
  *       { student_info: {...}, study_stats: {...}, course_progress: [...] }
  */
-import { get, getMapped } from './request'
+import { getMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import { decodeList, getPaged } from './envelope'
 import type { Page } from './envelope'
@@ -140,56 +140,24 @@ function buildStudyRecord(obj : UTSJSONObject) : StudyRecord {
 	return record
 }
 
-/** mock 学员档案（网络不可用时回退） */
-function getMockProfile() : StudentProfile {
-	const profile : StudentProfile = {
-		student_id: 1,
-		username: 'student',
-		name: '学员同学',
-		phone: '',
-		total_study_duration: 1680,
-		total_courses: 6,
-		completed_courses: 3,
-		course_progress: [
-			{ course_id: 1, course_name: '叉车基础操作', progress: 60 } as CourseProgressItem,
-			{ course_id: 2, course_name: '日常维护保养', progress: 30 } as CourseProgressItem,
-			{ course_id: 3, course_name: '安全操作规程', progress: 100 } as CourseProgressItem,
-		],
-	} as StudentProfile
-	return profile
-}
-
-/** mock 学习统计（网络不可用时回退） */
-function getMockStudyStats() : StudyStats {
-	return {
-		days: 7,
-		labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
-		data: [45, 60, 30, 90, 50, 120, 80],
-		total_minutes: 475,
-		active_days: 7,
-	}
-}
-
-/** 学员档案（信息 + 学习统计 + 各课程进度） */
+/** 学员档案（信息 + 学习统计 + 各课程进度）
+ * @note #1731：删掉「网络失败回退 mock 档案」的吞错分支——档案站点吞错会让页面把示例数据
+ *       当成真实学员渲染（ADR-0037 ③ 不做 fail-loud，但也不许伪数据），失败上抛由页面提示
+ */
 export function getProfileApi() : Promise<StudentProfile> {
 	return getMapped<StudentProfile>('/student/profile', null, (data : UTSJSONObject) : StudentProfile => {
 		return buildStudentProfile(data)
-	}).catch((e) : StudentProfile => {
-		console.warn('[getProfileApi] network failed, using mock data:', e)
-		return getMockProfile()
 	})
 }
 
 /** 学习统计（按天分组）
  * @param days 7 或 30
+ * @note #1731：同 getProfileApi，删掉「网络失败回退 mock 统计」的吞错分支，失败上抛由页面提示
  */
 export function getStudyStatsApi(days : number) : Promise<StudyStats> {
 	const params : UTSJSONObject = { days: days.toString() }
 	return getMapped<StudyStats>('/student/study-stats', params, (data : UTSJSONObject) : StudyStats => {
 		return buildStudyStats(data)
-	}).catch((e) : StudyStats => {
-		console.warn('[getStudyStatsApi] network failed, using mock data:', e)
-		return getMockStudyStats()
 	})
 }
 
