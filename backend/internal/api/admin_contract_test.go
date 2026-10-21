@@ -31,6 +31,7 @@ import (
 	"forklift-training/internal/valuation"
 
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/core"
 	"forklift-training/internal/model"
@@ -465,16 +466,16 @@ func TestFeaturedContract_AdminEndpoints(t *testing.T) {
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/admin/featured-content",
 		map[string]any{"title": "精选一", "category": "industry", "summary": "摘要", "content": "正文"})
 	created := adminObject(t, rec, http.StatusCreated)
-	// FeaturedContentAdminDetailDTO 全字段必填（published_at 可空但键在）
+	// FeaturedContentAdminDetailDTO 全字段必填（published_at / scheduled_at 可空但键在）
 	assertKeysExact(t, created, "category", "category_label", "content", "content_id", "cover_image",
-		"created_at", "published_at", "sort_order", "source", "status", "summary", "title",
-		"updated_at", "view_count")
+		"created_at", "published_at", "scheduled_at", "sort_order", "source", "status", "summary",
+		"title", "updated_at", "view_count")
 	contentID := jsonInt(t, created["content_id"])
 
 	rec = doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/featured-content/%d", contentID), nil)
 	assertKeysExact(t, adminObject(t, rec, http.StatusOK), "category", "category_label", "content",
-		"content_id", "cover_image", "created_at", "published_at", "sort_order", "source",
-		"status", "summary", "title", "updated_at", "view_count")
+		"content_id", "cover_image", "created_at", "published_at", "scheduled_at", "sort_order",
+		"source", "status", "summary", "title", "updated_at", "view_count")
 
 	rec = doWithToken(t, r, token, http.MethodPut, fmt.Sprintf("/api/admin/featured-content/%d", contentID),
 		map[string]any{"title": "精选一改"})
@@ -489,6 +490,144 @@ func TestFeaturedContract_AdminEndpoints(t *testing.T) {
 
 	rec = doWithToken(t, r, token, http.MethodDelete, fmt.Sprintf("/api/admin/featured-content/%d", contentID), nil)
 	assertKeysExact(t, adminObject(t, rec, http.StatusOK), "content_id")
+}
+
+// TestFeaturedContract_ScheduledPublish 内容精选「指定发布时间 / 定时发布」的 HTTP 契约（#1748）。
+//
+// 与 internal/featured 的语义矩阵测试分工：那边锁「一次写请求之后库里是什么状态」，
+// 这里锁**HTTP 面**——具名 400 的落点、`state` 查询参数的接线、以及定时内容在真实路由下
+// 对公开读路径确实不可见（用户故事 8/13：这条只有跑真实路由才算验过）。
+func TestFeaturedContract_ScheduledPublish(t *testing.T) {
+	t.Parallel()
+	r, _, token := newAdminContractEnv(t)
+
+	now := time.Now()
+	past := now.Add(-26 * time.Hour).In(clock.Location()).Format(time.RFC3339)
+	future := now.Add(2 * time.Hour).In(clock.Location()).Format(time.RFC3339)
+
+	// 补录：发布时间在 26 小时前 ⇒ 建完即已发布，published_at 就是入参那个时刻
+	rec := doWithToken(t, r, token, http.MethodPost, "/api/admin/featured-content",
+		map[string]any{"title": "补录", "category": "industry", "status": 1, "published_at": past})
+	backfilled := adminObject(t, rec, http.StatusCreated)
+	if got := jsonInt(t, backfilled["status"]); got != 1 {
+		t.Fatalf("补录后 status = %d，期望 1", got)
+	}
+	if got := adminTime(t, backfilled["published_at"]); !got.Equal(mustRFC3339(t, past)) {
+		t.Fatalf("补录后 published_at = %s，期望 %s", got, past)
+	}
+	backfillID := jsonInt(t, backfilled["content_id"])
+
+	// 定时：发布时间在 2 小时后 ⇒ 存成草稿 + scheduled_at，published_at 为空
+	rec = doWithToken(t, r, token, http.MethodPost, "/api/admin/featured-content",
+		map[string]any{"title": "定时", "category": "industry", "status": 1, "published_at": future})
+	scheduled := adminObject(t, rec, http.StatusCreated)
+	if got := jsonInt(t, scheduled["status"]); got != 0 {
+		t.Fatalf("定时内容 status = %d，期望 0（靠保持草稿态实现不可见）", got)
+	}
+	if got := adminTime(t, scheduled["scheduled_at"]); !got.Equal(mustRFC3339(t, future)) {
+		t.Fatalf("scheduled_at = %s，期望 %s", got, future)
+	}
+	if null := strings.TrimSpace(string(scheduled["published_at"])); null != "null" {
+		t.Fatalf("定时内容的 published_at 应为 null，got %s", null)
+	}
+	scheduledID := jsonInt(t, scheduled["content_id"])
+
+	// 公开面：定时内容不可见（列表只统计补录那一篇；详情与阅读量端点 404）
+	pubList := adminObject(t, doWithToken(t, r, token, http.MethodGet, "/api/featured-contents", nil), http.StatusOK)
+	if got := jsonInt(t, pubList["total"]); got != 1 {
+		t.Fatalf("公开列表 total = %d，期望 1（定时内容不可见）", got)
+	}
+	if rec := testutil.PerformRequest(r, "GET", fmt.Sprintf("/api/featured-content/%d", scheduledID)); rec.Code != http.StatusNotFound {
+		t.Fatalf("定时内容公开详情 = %d，期望 404", rec.Code)
+	}
+	if rec := testutil.PerformRequest(r, "POST", fmt.Sprintf("/api/featured-content/%d/view", scheduledID)); rec.Code != http.StatusNotFound {
+		t.Fatalf("定时内容阅读量端点 = %d，期望 404", rec.Code)
+	}
+
+	// 管理端三态过滤：scheduled 只命中定时那一篇，draft 为 0，published 命中补录那一篇
+	for _, c := range []struct {
+		state string
+		want  int
+	}{{"scheduled", 1}, {"draft", 0}, {"published", 1}} {
+		rec := doWithToken(t, r, token, http.MethodGet, "/api/admin/featured-contents?state="+c.state, nil)
+		page := adminObject(t, rec, http.StatusOK)
+		if got := jsonInt(t, page["total"]); got != c.want {
+			t.Fatalf("state=%s 命中 %d 行，期望 %d", c.state, got, c.want)
+		}
+	}
+
+	// 立即发布：无 body 的 POST 仍是「立刻上线」（旧客户端行为不变，用户故事 22）
+	rec = doWithToken(t, r, token, http.MethodPost, fmt.Sprintf("/api/admin/featured-content/%d/publish", scheduledID), nil)
+	published := adminObject(t, rec, http.StatusOK)
+	if got := jsonInt(t, published["status"]); got != 1 {
+		t.Fatalf("立即发布后 status = %d，期望 1", got)
+	}
+	if got := adminTime(t, published["scheduled_at"]); !got.IsZero() {
+		t.Fatalf("立即发布后 scheduled_at 应清空，got %s", got)
+	}
+	pubList = adminObject(t, doWithToken(t, r, token, http.MethodGet, "/api/featured-contents", nil), http.StatusOK)
+	if got := jsonInt(t, pubList["total"]); got != 2 {
+		t.Fatalf("发布后公开列表 total = %d，期望 2", got)
+	}
+
+	// 400 三态：非法时间 / 草稿带时间 / state 非法（都是「该改请求」，不是「服务坏了」）
+	badTime := doWithToken(t, r, token, http.MethodPost, "/api/admin/featured-content",
+		map[string]any{"title": "坏时间", "category": "industry", "status": 1, "published_at": "2026-13-32T09:00:00+08:00"})
+	if badTime.Code != http.StatusBadRequest {
+		t.Fatalf("非法时间 = %d，期望 400（body=%s）", badTime.Code, badTime.Body.String())
+	}
+	// 越界（1999 / 11 年后）与格式错误同属「输入不合法」⇒ 400
+	for _, outOfRange := range []string{
+		"1999-12-31T23:59:59+08:00",
+		now.AddDate(11, 0, 0).In(clock.Location()).Format(time.RFC3339),
+	} {
+		rec := doWithToken(t, r, token, http.MethodPost, "/api/admin/featured-content",
+			map[string]any{"title": "越界时间", "category": "industry", "status": 1, "published_at": outOfRange})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("越界时间 %s = %d，期望 400（body=%s）", outOfRange, rec.Code, rec.Body.String())
+		}
+	}
+	draftWithTime := doWithToken(t, r, token, http.MethodPost, "/api/admin/featured-content",
+		map[string]any{"title": "草稿带时间", "category": "industry", "status": 0, "published_at": past})
+	if draftWithTime.Code != http.StatusBadRequest {
+		t.Fatalf("草稿带时间 = %d，期望 400（body=%s）", draftWithTime.Code, draftWithTime.Body.String())
+	}
+	badState := doWithToken(t, r, token, http.MethodGet, "/api/admin/featured-contents?state=bogus", nil)
+	if badState.Code != http.StatusBadRequest {
+		t.Fatalf("非法 state = %d，期望 400", badState.Code)
+	}
+
+	// 清理：两条都要删掉（同一用例里后续断言只依赖本用例的数据，删不删都不影响，但留着更脏）
+	for _, id := range []int{backfillID, scheduledID} {
+		doWithToken(t, r, token, http.MethodDelete, fmt.Sprintf("/api/admin/featured-content/%d", id), nil)
+	}
+}
+
+// adminTime 解出 DTO 里的时间串（ISO，+08:00）；null 与缺键都返回零值。
+func adminTime(t *testing.T, raw json.RawMessage) time.Time {
+	t.Helper()
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return time.Time{}
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatalf("期望时间字符串, got %s", string(raw))
+	}
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("时间串不是 RFC3339: %s", s)
+	}
+	return parsed
+}
+
+// mustRFC3339 解析测试自造的 RFC3339 串（写错即用例自身的问题，直接 Fatal）。
+func mustRFC3339(t *testing.T, s string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("用例自造的 RFC3339 串不合法: %s (%v)", s, err)
+	}
+	return parsed
 }
 
 // TestAdminContract_ExportRoutes 导出路由（非统一信封的 CSV 附件）：

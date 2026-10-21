@@ -1157,21 +1157,37 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/admin/featured-contents` | 管理端列表（含草稿；分页+分类+状态过滤） |
+| GET | `/api/admin/featured-contents` | 管理端列表（含草稿与定时中；分页 + 分类 + `state` 过滤） |
 | POST | `/api/admin/featured-content` | 新增 |
 | GET | `/api/admin/featured-content/:id` | 管理端详情 |
 | PUT | `/api/admin/featured-content/:id` | 更新 |
 | DELETE | `/api/admin/featured-content/:id` | 删除 |
-| POST | `/api/admin/featured-content/:id/publish` | 发布/下线 |
+| POST | `/api/admin/featured-content/:id/publish` | 发布（可选发布时间；无 body = 立即发布） |
 | POST | `/api/admin/featured-content/upload-image` | 上传封面图 |
+
+**时间与状态（#1748 / ADR-0076）**
+
+管理端**列表项与详情**都多一列 `scheduled_at`（排期时间，仅定时中非空；编辑器回填靠它区分「定时」与「草稿」）；`state` 取值 `draft`（草稿）/ `scheduled`（定时中）/ `published`（已发布），空 = 全部，非法取值 400。**公开接口不变**：公开列表与详情只返回已发布内容。
 
 **POST /api/admin/featured-content**
 
-请求体：`{ "title": "标题", "category": "news", "summary": "摘要", "cover_image": "/static/uploads/...", "content": "正文 Markdown", "source": "官网", "status": "draft", "sort_order": 1 }`
+请求体：`{ "title": "标题", "category": "news", "summary": "摘要", "cover_image": "/static/uploads/...", "content": "正文 Markdown", "source": "官网", "status": 1, "sort_order": 1, "published_at": "2026-10-20T09:00:00+08:00" }`
+
+`published_at`（可选，严格 RFC3339，范围 2000-01-01 ～ 现在 + 10 年）决定这次保存落在哪种状态：
+
+| `published_at` | `status` | 结果 |
+|---|---|---|
+| 缺省 | 1 | 立即发布（`published_at` = 现在） |
+| 缺省 | 0 | 草稿（同时取消已有排期） |
+| 过去/当前时刻或空串 `""` | 1 | 补录：按该时刻发布（空串 = 用现在） |
+| 未来时刻 | 1 | 定时：`status` 存 0、`scheduled_at` = 该时刻，到点由守护自动上线 |
+| 任意时刻 | 0 | 400（草稿不排期） |
+
+时间格式不合法或越界 → 400；创建 / 更新都适用同一张表。**空串也算「指定了时间」**——它只在 `status = 1` 下等同于「用现在」，`status = 0` 时与具体时刻同样判 400（草稿不排期）。更新时缺省 `published_at` 且**没有点名 `status`** = 只改内容、排期原样保留；点了 `status` 而没带时间 = 状态落定（转草稿即取消定时）。
 
 `content`（正文）：**Markdown，落在三端交集子集内**——标题 / 列表 / 引用 / 代码块 / 图片 / 链接；**不含表格与公式**（门户与移动端不渲染，ADR-0046）。管理端编辑器在越界时给出可见提示，服务端不校验、不阻断。
 
-**POST /api/admin/featured-content/:id/publish**：请求体 `{}`，发布/下线切换。
+**POST /api/admin/featured-content/:id/publish**：请求体可选 `{ "published_at": "2026-10-20T09:00:00+08:00" }`。无 body = 立即发布（草稿与定时中都适用，定时项可提前上线）；带未来时刻 = 转为定时中；已发布且无 body 时幂等（不改发布时间）。
 
 ### 16.7 数据导出
 

@@ -3022,7 +3022,7 @@ const docTemplate = `{
                 "summary": "创建精选内容",
                 "parameters": [
                     {
-                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}",
+                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -3050,7 +3050,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效",
+                        "description": "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3197,7 +3197,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order}",
+                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -3225,7 +3225,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求数据无效 / 分类无效 / 图片地址无效",
+                        "description": "请求数据无效 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3314,7 +3314,10 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "草稿 → 已发布，返回发布后的内容",
+                "description": "发布内容：无 body = 立即发布；带 {published_at} 时按发布时间落定（未来时间 = 转为定时中）",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3329,6 +3332,14 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "可选 {published_at}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
                     }
                 ],
                 "responses": {
@@ -3348,6 +3359,12 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求数据无效 / 发布时间无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
@@ -3372,7 +3389,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理端列表（含草稿），支持分类与状态过滤",
+                "description": "管理端列表（含草稿与定时中），支持分类与状态过滤（state = draft/scheduled/published）",
                 "produces": [
                     "application/json"
                 ],
@@ -3403,8 +3420,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "状态",
-                        "name": "status",
+                        "description": "状态：draft 草稿 / scheduled 定时中 / published 已发布（空 = 全部）",
+                        "name": "state",
                         "in": "query"
                     }
                 ],
@@ -3420,11 +3437,17 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/featured.FeaturedContentPageResult"
+                                            "$ref": "#/definitions/featured.FeaturedContentAdminPageResult"
                                         }
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "状态过滤无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
@@ -11203,7 +11226,19 @@ const docTemplate = `{
                     "200": {
                         "description": "success",
                         "schema": {
-                            "$ref": "#/definitions/response.R"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/featured.FeaturedContentPageResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -26243,6 +26278,10 @@ const docTemplate = `{
                     "type": "string",
                     "x-nullable": true
                 },
+                "scheduled_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
                 "sort_order": {
                     "type": "integer"
                 },
@@ -26262,6 +26301,75 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentAdminListDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "category_label": {
+                    "type": "string"
+                },
+                "content_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "scheduled_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedContentAdminPageResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/featured.FeaturedContentAdminListDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
                     "type": "integer"
                 }
             }

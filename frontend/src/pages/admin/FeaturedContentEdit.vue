@@ -101,13 +101,32 @@
         <el-form-item label="状态">
           <UiRadioGroup v-model="form.status">
             <el-radio :value="0">保存草稿</el-radio>
-            <el-radio :value="1">立即发布</el-radio>
+            <el-radio :value="1">发布</el-radio>
           </UiRadioGroup>
+        </el-form-item>
+
+        <!--
+          发布时间（#1748）：只在「发布」下出现。三种填法就是三种行为 ——
+          留空 = 立即发布、过去 = 补录、未来 = 定时；提示文案由 describePublishTime 单点提供，
+          不在模板里再写一遍规则（否则文案与提交逻辑会各漂一半）。
+        -->
+        <el-form-item v-if="form.status === 1" label="发布时间">
+          <div class="publish-time">
+            <el-date-picker
+              v-model="form.published_at"
+              type="datetime"
+              placeholder="留空 = 保存后立即发布"
+              format="YYYY-MM-DD HH:mm"
+              clearable
+            />
+            <UiButton size="small" @click="useNow">现在</UiButton>
+          </div>
+          <div class="publish-hint">{{ publishHint }}</div>
         </el-form-item>
 
         <el-form-item>
           <UiButton variant="primary" :loading="saving" @click="handleSave">
-            {{ form.status === 1 ? '保存并发布' : '保存草稿' }}
+            {{ saveLabel }}
           </UiButton>
           <UiButton @click="goBack">取消</UiButton>
         </el-form-item>
@@ -135,6 +154,8 @@ import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
 import { detectOutsideSubset, FEATURED_SUBSET_SYNTAX, outsideSubsetNotice } from '@/utils/publishMarkdown'
 import { adminFeaturedApi, featuredCategoryOptions } from '@/api/featured'
+// #1748：发布时间的三条规则（行 → 状态、表单 → 请求体、提示文案）都是纯函数，单测在 __tests__/FeaturedSchedule.spec.ts
+import { buildFeaturedPayload, describePublishTime, editorStatusOf } from './featuredSchedule'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -171,7 +192,11 @@ const { loading, run: loadDetail } = useAsyncPage(
       form.cover_image = d.cover_image || ''
       form.content = d.content || ''
       form.sort_order = d.sort_order || 0
-      form.status = d.status ?? 0
+      // 定时项在库里是草稿（靠保持草稿态实现不可见），故必须按 scheduled_at 回填成
+      // 「发布 + 该时间」；照抄 status 会让编辑器在保存时把定时取消（#1748 的关键规则）。
+      const editorState = editorStatusOf(d)
+      form.status = editorState.status
+      form.published_at = editorState.publishedAt
     }
   }
 )
@@ -190,8 +215,24 @@ const form = reactive({
   cover_image: '',
   content: '',
   sort_order: 0,
-  status: 0 as number
+  status: 0 as number,
+  // null = 留空 = 保存后立即发布（#1748）；空串是提交面的事，表单里只用 null 表达「没填」
+  published_at: null as Date | null
 })
+
+/** 提示文案（规则单点在 describePublishTime，与提交面的语义矩阵同源） */
+const publishHint = computed(() => describePublishTime(form.published_at))
+
+/** 主按钮文案跟着时间走：定时 / 补录 / 立即 三种说法，避免「点了才发现不是现在发」 */
+const saveLabel = computed(() => {
+  if (form.status !== 1) return '保存草稿'
+  if (!form.published_at) return '保存并发布'
+  return form.published_at.getTime() > Date.now() ? '保存并定时' : '保存并发布'
+})
+
+function useNow() {
+  form.published_at = new Date()
+}
 
 // 子集越界提示（#902）：判据与渲染同源（见 publishMarkdown.detectOutsideSubset）
 const outsideSubsetLabels = computed(() => detectOutsideSubset(form.content))
@@ -250,35 +291,31 @@ async function handleSave() {
   }
 
   // 主动从 MarkdownEditor 获取最新正文（避免 v-model 在 ir 模式下偶发未同步）
+  let latestContent = form.content
   if (markdownEditorRef.value) {
     const latest = markdownEditorRef.value.getValue()
-    if (latest) form.content = latest
+    if (latest) {
+      form.content = latest
+      latestContent = latest
+    }
   }
 
-  if (!form.content.trim()) {
+  if (!latestContent.trim()) {
     ElMessage.warning('正文内容不能为空')
     return
   }
 
   saving.value = true
-  const payload = {
-    title: form.title.trim(),
-    category: form.category,
-    source: form.source,
-    summary: form.summary,
-    cover_image: form.cover_image,
-    content: form.content,
-    sort_order: form.sort_order,
-    status: form.status
-  }
+  // 提交规则单点在 buildFeaturedPayload：草稿不带时间、发布带时间（空串 = 用现在）
+  const payload = buildFeaturedPayload(form, { content: latestContent })
   try {
     if (isEdit.value) {
       await adminFeaturedApi.update(editId.value, payload)
-      ElMessage.success(form.status === 1 ? '已保存并发布' : '草稿已保存')
+      ElMessage.success(savedMessage('已保存'))
       router.push({ name: 'AdminFeaturedContentList' })
     } else {
       await adminFeaturedApi.create(payload)
-      ElMessage.success(form.status === 1 ? '已创建并发布' : '草稿已创建')
+      ElMessage.success(savedMessage('已创建'))
       router.push({ name: 'AdminFeaturedContentList' })
     }
   } catch (e: any) {
@@ -286,6 +323,13 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+/** 保存成功的说法：定时与补录都不是「已发布」，别让提示替用户判断结果 */
+function savedMessage(prefix: string): string {
+  if (form.status !== 1) return `${prefix}草稿`
+  if (form.published_at && form.published_at.getTime() > Date.now()) return `${prefix}，已排期定时发布`
+  return `${prefix}并发布`
 }
 
 function goBack() {
@@ -366,6 +410,19 @@ onMounted(() => {
 
 .cover-actions {
   margin-top: 8px;
+}
+
+.publish-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.publish-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {

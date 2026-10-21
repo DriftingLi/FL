@@ -106,9 +106,14 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "favorite.FavoritePageResult", Endpoints: []string{"GET /favorites"},
 		Keys: []string{"page", "pages", "total", "favorites"}, Dialect: paging.DialectPages,
 		Sample: favorite.FavoritePageResult{}},
-	{Result: "featured.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents", "GET /admin/featured-contents"},
+	{Result: "featured.FeaturedContentPageResult", Endpoints: []string{"GET /featured-contents"},
 		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: featured.FeaturedContentPageResult{}},
+	// 管理端列表自 #1748 起另有类型（多一列 scheduled_at）：公开接口零变更的那条承诺，
+	// 靠这两个容器分家来守——信封键一致，行形状不同。
+	{Result: "featured.FeaturedContentAdminPageResult", Endpoints: []string{"GET /admin/featured-contents"},
+		Keys: []string{"items", "page", "pages", "total"}, Dialect: paging.DialectPages,
+		Sample: featured.FeaturedContentAdminPageResult{}},
 	{Result: "forum.ForumReportPageResult", Endpoints: []string{"GET /admin/forum/reports"},
 		Keys: []string{"page", "pages", "total", "reports"}, Dialect: paging.DialectPages,
 		Sample: forum.ForumReportPageResult{}},

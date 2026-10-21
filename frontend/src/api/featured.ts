@@ -5,6 +5,8 @@ import { getValidAccessToken } from './client'
 import { toPage, type Page } from './page'
 import type {
   FeaturedContentAdminDetailDTO,
+  FeaturedContentAdminListDTO,
+  FeaturedContentAdminPageResult,
   FeaturedContentDetailDTO,
   FeaturedContentDTO,
   FeaturedContentPageResult,
@@ -18,7 +20,8 @@ import type {
 // 差异处置（详见片七字段级差异清单）：旧的 `FeaturedContent` 是**列表项与详情混用**的一份
 // 全可选 interface（凭空多出 content 字段、可选性全面放宽），与注解产物不一一对应，
 // 归类②「手写类型过时」→ 删旧名，列表用 FeaturedContentDTO、详情用 FeaturedContentAdminDetailDTO。
-export type { FeaturedContentDTO, FeaturedContentAdminDetailDTO, FeaturedContentPageResult, FeaturedDeleteResult }
+// #1748 起管理端列表单独一份行类型（多一列 scheduled_at）：公开 DTO 一行未动。
+export type { FeaturedContentDTO, FeaturedContentAdminListDTO, FeaturedContentAdminDetailDTO, FeaturedContentAdminPageResult, FeaturedContentPageResult, FeaturedDeleteResult }
 
 /** 内容精选分类标签映射 */
 export const featuredCategoryLabels: Record<string, string> = {
@@ -54,9 +57,13 @@ export const featuredApi = {
 
 /** 管理端接口 */
 export const adminFeaturedApi = {
-  /** 管理端列表（含草稿；后端行键 = `items`）。 */
-  async getList(params: { page?: number; page_size?: number; category?: string; status?: string } = {}): Promise<Page<FeaturedContentDTO>> {
-    const res = await unwrappedRequest.get<FeaturedContentPageResult>('/admin/featured-contents', { params })
+  /**
+   * 管理端列表（含草稿与定时中；后端行键 = `items`）。
+   * `state`（#1748）：draft 草稿 / scheduled 定时中 / published 已发布；空 = 全部。
+   * 旧的 `status`（0/1）已由后端移除 —— 它表达不了「定时中」，而三态是这次要看清的东西。
+   */
+  async getList(params: { page?: number; page_size?: number; category?: string; state?: string } = {}): Promise<Page<FeaturedContentAdminListDTO>> {
+    const res = await unwrappedRequest.get<FeaturedContentAdminPageResult>('/admin/featured-contents', { params })
     return toPage(res?.items, res?.total)
   },
 
@@ -65,7 +72,7 @@ export const adminFeaturedApi = {
     return unwrappedRequest.get<FeaturedContentAdminDetailDTO>(`/admin/featured-content/${id}`)
   },
 
-  /** 创建内容精选 */
+  /** 创建内容精选（published_at：#1748 可选发布时间，RFC3339；缺省 = 立即发布，空串 = 用现在） */
   create(data: {
     title: string
     category: string
@@ -75,11 +82,12 @@ export const adminFeaturedApi = {
     source?: string
     status?: number
     sort_order?: number
+    published_at?: string
   }) {
     return unwrappedRequest.post<FeaturedContentAdminDetailDTO>('/admin/featured-content', data)
   },
 
-  /** 更新内容精选 */
+  /** 更新内容精选（published_at 同上；未携带 = 不指定，排期会被清空） */
   update(id: number, data: {
     title?: string
     category?: string
@@ -89,6 +97,7 @@ export const adminFeaturedApi = {
     source?: string
     status?: number
     sort_order?: number
+    published_at?: string
   }) {
     return unwrappedRequest.put<FeaturedContentAdminDetailDTO>(`/admin/featured-content/${id}`, data)
   },
@@ -98,9 +107,12 @@ export const adminFeaturedApi = {
     return unwrappedRequest.delete<FeaturedDeleteResult>(`/admin/featured-content/${id}`)
   },
 
-  /** 发布内容精选（草稿 → 已发布） */
-  publish(id: number) {
-    return unwrappedRequest.post<FeaturedContentAdminDetailDTO>(`/admin/featured-content/${id}/publish`)
+  /**
+   * 发布内容精选（#1748）：无 body = 立即发布；带 published_at 时按该时间落定
+   * （未来时间 = 转为定时中）。
+   */
+  publish(id: number, data?: { published_at?: string }) {
+    return unwrappedRequest.post<FeaturedContentAdminDetailDTO>(`/admin/featured-content/${id}/publish`, data)
   },
 
   /** 上传图片（Markdown 编辑器内嵌 + 封面）

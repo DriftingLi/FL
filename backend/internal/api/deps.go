@@ -180,6 +180,19 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 				logger.Warn("contact expire 失败", zap.Error(err))
 			}
 		}},
+		// 内容精选的定时发布（#1748）：每分钟把已到点的排期落成已发布。精度就是 1 分钟 ——
+		// 「分钟级」是已与产品确认的口径（门户侧另有缓存，不承诺秒级）。守护停摆不丢排期：
+		// 下一轮按 scheduled_at <= now 全量补发，重复执行 / 多实例由 status = 0 的条件兜住。
+		{Name: "featured-scheduled-publish", Interval: time.Minute, Run: func(ctx context.Context) {
+			published, err := d.FeaturedSvc.PublishDueScheduled(ctx, clock.Now())
+			if err != nil {
+				logger.Warn("内容精选定时发布失败", zap.Error(err))
+				return
+			}
+			if published > 0 { // 0 条不写日志，避免每分钟一条噪音
+				logger.Info("内容精选定时发布完成", zap.Int64("published", published))
+			}
+		}},
 	}
 
 	// 投递通知与联系方式交换共用邮件单点（spec #449 决定 15）
