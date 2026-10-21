@@ -303,6 +303,9 @@ services:
       DOMAIN: ${DOMAIN:-localhost}
       # backend 宿主机映射端口（默认 8080；testing 环境固定 18080）
       BACKEND_HOST_PORT: ${BACKEND_HOST_PORT:-8080}
+      # EdgeOne 回源鉴权 token（票 #1746）：与门户 NUXT_API_ORIGIN_TOKEN 同值。
+      # 为空且模板启用了鉴权时，容器入口会拒绝启动（fail closed，见 docker-entrypoint.sh）。
+      EDGE_ORIGIN_TOKEN: ${EDGE_ORIGIN_TOKEN:-}
     volumes:
       # host 模式专用 nginx 配置（listen 80/443 + proxy_pass 127.0.0.1:8080）
       - ./frontend/nginx-host.conf:/etc/nginx/conf.d/default.conf.template:ro
