@@ -36,19 +36,21 @@ docker compose -f docker-compose.prod.yml run --rm backend \
 
 ⚠️ 若第 4 步仍有命中，**停下**：说明中间被打断或有写回，先查清再切。
 
-## 2. 切 secrets（只改 4 个、删 2 个）
+## 2. 切 secrets（**作用域坑已实测，照这张表改**）
 
-production 与 testing 两个 environment 都要：
+2026-10-22 实测的 secret 分布（`gh secret list`）：
 
-| secret | 动作 | 值 |
-| --- | --- | --- |
-| `DOMAIN` | 改 | `gdyidao.cn` |
-| `AUTH_COOKIE_DOMAIN` | 改 | `gdyidao.cn`（**不带前导点**，与既有口径一致） |
-| `CORS_ORIGINS` | 改 | 六个 `https://*.gdyidao.cn` 源 |
-| `R2_PUBLIC_DOMAIN` | 改 | `https://cdn.gdyidao.cn` |
-| `SSL_FULLCHAIN` / `SSL_PRIVKEY` | **删** | 已无引用（Caddy 自签/自续） |
+| secret | 作用域 | 动作 | 值 |
+| --- | --- | --- | --- |
+| `DOMAIN` | **repo** | 改 | `gdyidao.cn` |
+| `AUTH_COOKIE_DOMAIN` | **repo** | 改 | `gdyidao.cn`（不带前导点，与既有口径一致） |
+| `CORS_ORIGINS` | **repo** | 改 | 六个 `https://*.gdyidao.cn` 源 |
+| `SSL_FULLCHAIN` / `SSL_PRIVKEY` | **repo** | **删** | 已无引用（Caddy 自签/自续） |
+| `R2_PUBLIC_DOMAIN` | **repo + production + testing 三处都有** | **三处都要改** | `https://cdn.gdyidao.cn` |
 
-另：仓库 Variables 里的 `API_URL` / `FRONTEND_URL` 同步改（只用于部署报告展示）。
+⚠️ **`R2_PUBLIC_DOMAIN` 是这张表里唯一会咬人的一行**：它同时存在于仓库级与两个 environment 级，而 GitHub **environment 级优先**。只改仓库级等于没改——部署仍会用 environment 里的旧域，表现为「图片 URL 还是旧域」，且当时看不出报错。
+
+另：仓库 Variables 里的 `API_URL` / `FRONTEND_URL` 若存在则同步改（只用于部署报告展示）。
 
 ## 3. 合并 PR #1757 → CD 自动上生产
 
