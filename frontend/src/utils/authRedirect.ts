@@ -22,7 +22,6 @@ export interface PathAuthEntry {
 export const PATH_AUTH_ENTRIES: PathAuthEntry[] = [
   { prefix: '/training/tutor', role: 'tutor', subdomain: 'tutor' },
   { prefix: '/ai-assistant', role: 'hrwai_user', subdomain: 'training' },
-  { prefix: '/valuation', role: 'hrwai_user', subdomain: 'valuation' },
   { prefix: '/training', role: 'hrwai_user', subdomain: 'training' },
   { prefix: '/recruit', role: 'recruiter', subdomain: 'recruit' },
   { prefix: '/admin', role: 'admin', subdomain: 'admin' }
@@ -35,7 +34,7 @@ export function findPathEntry(path: string): PathAuthEntry | undefined {
 }
 
 // 同身份工作台内回跳白名单：仅当目标路径落在当前角色允许的前缀之内才放行，防止越权/钓鱼回跳。
-// hrwai_user 允许 /training | /valuation | /ai-assistant 前缀；admin 仅 /admin；tutor 仅 /training/tutor。
+// hrwai_user 允许 /training | /ai-assistant 前缀；admin 仅 /admin；tutor 仅 /training/tutor。
 export function isSafeRedirect(role: string | undefined, target: string): boolean {
   if (!role || typeof target !== 'string') return false
   return PATH_AUTH_ENTRIES.some(entry => entry.role === role && target.startsWith(entry.prefix))

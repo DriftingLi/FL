@@ -43,10 +43,6 @@ describe('getDefaultWorkspaceBySubdomain', () => {
     mockHostname('recruit.example.com')
     expect(getDefaultWorkspaceBySubdomain()).toBe('/recruit')
   })
-  it('valuation 子域默认工作区为 /valuation', () => {
-    mockHostname('valuation.example.com')
-    expect(getDefaultWorkspaceBySubdomain()).toBe('/valuation')
-  })
 })
 
 describe('buildSubdomainUrl', () => {

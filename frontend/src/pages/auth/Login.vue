@@ -302,13 +302,12 @@ const { sending: codeSending, remaining: countdown, send: sendCode } = useSendCo
 // 当前子域名决定角色（不再支持手动切换）
 const subdomain: SubdomainType = getSubdomain()
 const currentRole = getRoleForSubdomain()
-// 学员登录入口：training 和 valuation 子域名都显示注册链接
-const isStudentSubdomain = subdomain === 'training' || subdomain === 'valuation'
+// 学员登录入口：training 子域名显示注册链接
+const isStudentSubdomain = subdomain === 'training'
 
 const subtitleMap: Record<SubdomainType, string> = {
   main: '登录您的HRWAI账户',
   training: '登录您的HRWAI账户',
-  valuation: '登录您的HRWAI账户',
   tutor: '登录讲师工作台',
   admin: '登录管理后台',
   recruit: '登录企业招聘端'

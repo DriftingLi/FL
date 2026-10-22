@@ -46,7 +46,7 @@
  * 主题切换按钮（全站统一）：三态下拉菜单（浅色/深色/跟随系统，当前项打勾），
  * 替代旧的 cycle() 循环按钮（交互对齐 DeepSeek）。
  *
- * - variant="card"（默认）：白底描边阴影圆按钮 —— SidebarLayout / ValuationLayout / AuthPageShell 原外观
+ * - variant="card"（默认）：白底描边阴影圆按钮 —— SidebarLayout / AuthPageShell 原外观
  * - variant="ghost"：透明无边框、hover 反色 —— ChatPageShell 悬浮胶囊与侧栏 header 内嵌用
  * - fixed：附加右上角固定定位（SidebarLayout / AuthPageShell 需悬浮于内容区；移动端加大触控目标）
  */

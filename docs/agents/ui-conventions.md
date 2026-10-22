@@ -135,9 +135,9 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 
 ## 不得触碰的边界
 
-- `--color-brand-*` 属**残值域**专用（`assets/styles/valuation-tokens.css` 在 `.valuation-root` 内定义），**禁止提升为全局变量** —— 会击穿 `layouts/ValuationLayout.vue` 与 `pages/ai-assistant/*` 两处依赖「变量未定义 → 走 fallback」的写法。培训域品牌色用 `--color-primary-*`。
+- `--color-brand-*` 属**残值域**专用（`assets/styles/valuation-tokens.css` 在 `.valuation-root` 内定义），**禁止提升为全局变量** —— 会击穿 `pages/admin/ValuationConfigManage.vue` 与 `pages/ai-assistant/*` 两处依赖「变量未定义 → 走 fallback」的写法。培训域品牌色用 `--color-primary-*`。
 
-- 残值模块（`pages/student/valuation/**`、`components/valuation/**`）本轮冻结，批量替换色值等机械操作时记得排除。
+- 残值模块本轮冻结，批量替换色值等机械操作时记得排除。（2026-10 起公开界面已北迁门户仓，本仓只剩 `pages/admin/ValuationConfigManage.vue` 与 `components/valuation/PageHeader.vue`。）
   **2026-09-04 解除冻结**（见 #554）：为清理深色模式下不跟随主题的硬编码色值，残值域与 `components/catalog/**` 已解冻。解冻后两条约束不变：
   ① `--color-brand-*` 依然禁止提升为全局（见上一条）；
   ② `components/catalog/**`（FacetCard/FacetItem/CourseCard）师生管三端共用，只换色值、不新增 prop。
@@ -145,5 +145,5 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 - **新增样式禁止硬编码色值**：深色模式是靠翻 CSS 变量实现的，只对走 `var()` 的声明生效；裸 hex 不参与变量链，暗色下保持亮色 → 「暗底亮块」崩坏。一律用 `design-tokens.css` 的变量或 Tailwind 原子类。
   CI 会对 PR 的新增行做检查（`scripts/check-bare-hex.sh --diff`），豁免 `var(--token, #fallback)` 防御写法、`#fff`/`#000`、注释行与 `<script>` 块（canvas 色板属合理存在）。存量进度自查：`bash scripts/check-bare-hex.sh --all frontend/src`。
 
-- **主题切换入口要覆盖所有布局**：#1619 起，四个走 `SidebarLayout` 的工作区（学员/讲师/管理/招聘）由**顶栏右区的用户菜单**承载（外观三态；原 `ThemeToggle fixed` 浮动按钮已退役）；`ValuationLayout`、`AuthPageShell`、`ChatPageShell` 各自保留自己的入口。
-  认证布局 `AuthPageShell` 曾漏装，导致系统深色偏好的用户在登录页既看到崩坏画面、又无法切回浅色（#554）。**新增任何独立布局时，必须一并评估主题入口**——这条已踩两次（#432 补了 ValuationLayout，#554 补 AuthPageShell）。
+- **主题切换入口要覆盖所有布局**：#1619 起，四个走 `SidebarLayout` 的工作区（学员/讲师/管理/招聘）由**顶栏右区的用户菜单**承载（外观三态；原 `ThemeToggle fixed` 浮动按钮已退役）；`AuthPageShell`、`ChatPageShell` 各自保留自己的入口。
+  认证布局 `AuthPageShell` 曾漏装，导致系统深色偏好的用户在登录页既看到崩坏画面、又无法切回浅色（#554）。**新增任何独立布局时，必须一并评估主题入口**——这条已踩两次（#432 补的是残值布局，该布局已随北迁删除；#554 补 AuthPageShell）。

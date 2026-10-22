@@ -30,7 +30,10 @@
 - **简历库与交换**：企业检索简历、发起联系请求，双向交换联系方式
 - **招聘者管理**：授信码开通、资料编辑、微信绑定、查看统计
 
-### 残值评估（学员 `hrwai_user` · `valuation.`）
+### 残值评估（学员 `hrwai_user` · 界面在门户 `valuation.hrwai.cn`）
+
+> **2026-10 北迁完成**：公开界面（填报 / 历史 / 报告）整体搬到门户仓的 Nuxt 应用（`valuation.hrwai.cn/valuation`），
+> 本仓保留**后端与数据**，以及管理端的「残值配置」。旧子域 `valuation.gdyidao.cn` 现在只是一条 301。
 
 - **整机残值评估**：输入品牌、车型、系列、吨位、配置、出厂年份、工时、车况、区域等参数，输出残值估算、置信区间与多维系数雷达图
 - **评估公式**：`残值 = 原价 × Kt_adj × Kc × Km`，其中 `Kt_adj = Kt^(Kh/Kb)`
@@ -463,7 +466,7 @@ docker compose -f docker-compose.prod.yml up -d
 | `training` / `mentor` / `manage` / `recruit`.`<domain>` | 四个工作区 SPA（同源 `/api` 反代） |
 | `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，未知前缀 404（不吐 SPA） |
 | `dify.<domain>` | 内网 Dify 与知识库图片反代（SSE 不缓冲） |
-| `valuation.<domain>` | **过渡期**仍由本仓 SPA 服务；北迁完成后改为 301 到 `valuation.hrwai.cn` |
+| `valuation.<domain>` | 一跳 301 到 `https://valuation.hrwai.cn/valuation`（北迁已完成，本仓不再有该工作区的 SPA） |
 | 裸域 / `www.<domain>` | 一跳 301 到培训入口 |
 
 **EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到 `https://api.<domain>`。回源鉴权见下节（`X-Origin-Token`）。
@@ -525,7 +528,6 @@ grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
 | [`docs/agents/`](./docs/agents/) | AI/agent 工作约定（**入库**，由根 `AGENTS.md` 导航）：issue-tracker / triage-labels / domain / security-scan / **ui-conventions** / **checks（测试与检查的权威版本）** / **release** / **multi-agent-git** / handoff-验收门 |
 | [`docs/README.md`](./docs/README.md) | `docs/` 自身的索引与入库 / 本地分层规则 |
 | `docs/reference/CODE_WIKI.md` | 代码百科（**本地不入库**，故不设链接）：目录结构 / 域包职责 / 数据模型 / 算法 / 运行与部署方式 |
-| [`student-api-docs.md`](./student-api-docs.md) | 学员端接口说明 |
 | [`THIRD_PARTY.md`](./THIRD_PARTY.md) | 第三方组件与许可 |
 
 ## 许可证
