@@ -3,8 +3,10 @@
 #
 # 证书：生产由 Caddy 自己向 ACME 申请与续期（443 的 TLS-ALPN 为主、80 的 HTTP-01 兜底），
 #      运维不再需要把证书塞进 GitHub Secrets。
-#      非生产（测试环境冒烟）由 entrypoint 注入 auto_https off + tls internal（自签），
-#      **不申请公共证书**——冒烟不占证书配额，也不要求公网解析指向测试机。
+#      非生产（测试环境冒烟）由 entrypoint 只注入 `tls internal`（自签），**不申请公共证书**——
+#      冒烟不占证书配额，也不要求公网解析指向测试机。
+#      ⚠️ 不要再叠 `auto_https off`：它的语义是「不要 HTTPS」，叠加后会在 :443 上明文服务，
+#      TLS 握手直接失败（2026-10-22 冒烟实测，健康检查永远拿不到 200）。
 # 占位符：一律用 Caddy 原生的 {$VAR} 语法（由 Caddyfile 解析器直接展开），**不做 envsubst**——
 #      多一层文本替换就多一条「模板里的占位符与替换清单不一致」的部署面。
 #      本文件允许出现的环境变量只有六个：DOMAIN / BACKEND_HOST_PORT / EDGE_ORIGIN_TOKEN /

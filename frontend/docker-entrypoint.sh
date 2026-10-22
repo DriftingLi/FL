@@ -52,7 +52,11 @@ if [ "${TLS_MODE:-auto}" = "auto" ]; then
     echo "[caddy-entrypoint] 证书: 自动 HTTPS（ACME）"
 else
     CADDY_TLS="tls internal"
-    CADDY_GLOBAL="auto_https off"
+    # ⚠️ 这里**不能**再用 `auto_https off`：那条指令的语义是「不要 HTTPS」而不是
+    # 「不要申请证书」。实测（2026-10-22 第三次冒烟）：两者叠加后 Caddy 在 :443 上
+    # **以明文服务**，TLS 握手直接 internal error，健康检查永远拿不到 200。
+    # 只留 `tls internal` 就够了 —— 站点一挂内部 CA，Caddy 就不会去碰 ACME。
+    CADDY_GLOBAL=""
     echo "[caddy-entrypoint] 证书: 内部自签（TLS_MODE=${TLS_MODE}，不申请公共证书）"
 fi
 export CADDY_TLS CADDY_GLOBAL
