@@ -273,7 +273,7 @@ services:
         max-file: "5"
 
   # ==========================================
-  # Nginx 前端服务（SSL 终止 + API 反代 + 静态文件托管）
+  # Caddy 前端服务（证书自动申请/续期 + API 反代 + 静态文件托管）
   # ==========================================
   frontend:
     image: ${FRONTEND_IMAGE:-forklift-frontend:latest}
@@ -306,12 +306,16 @@ services:
       # EdgeOne 回源鉴权 token（票 #1746）：与门户 NUXT_API_ORIGIN_TOKEN 同值。
       # 为空且模板启用了鉴权时，容器入口会拒绝启动（fail closed，见 docker-entrypoint.sh）。
       EDGE_ORIGIN_TOKEN: ${EDGE_ORIGIN_TOKEN:-}
+      # 证书策略（`auto` = ACME 自动签发；其余 = 内部自签）。判据与 APP_ENV 分开：
+      # 两套环境后端都是 APP_ENV=production，但冒烟环境不该去申请生产域名的证书。
+      TLS_MODE: ${TLS_MODE:-auto}
+      # ACME 账户邮箱（证书到期提醒与 Let's Encrypt 的联络信箱）
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
     volumes:
-      # host 模式专用 nginx 配置（listen 80/443 + proxy_pass 127.0.0.1:8080）
-      - ./frontend/nginx-host.conf:/etc/nginx/conf.d/default.conf.template:ro
-      # SSL 证书：CD 流水线（write_ssl_certs）写入 ${DEPLOY_PATH}/nginx/ssl，
-      # 挂载到容器 /etc/nginx/ssl（nginx-host.conf 引用固定路径）
-      - ${SSL_CERT_DIR:-./nginx/ssl}:/etc/nginx/ssl:ro
+      # 反代配置（Caddy 原生 {$VAR} 占位符，不做 envsubst）
+      - ./frontend/Caddyfile:/etc/caddy/Caddyfile:ro
+      # 证书与 OCSP 缓存：Caddy 自己申请、自己续期，落在命名卷里跨重启保留
+      - caddy-data:/data
     deploy:
       resources:
         limits:
@@ -340,4 +344,8 @@ volumes:
   reports-data:
     driver: local
   logs-data:
+    driver: local
+  # Caddy 的证书与 OCSP 缓存（/data）。放命名卷而不是绑定挂载：
+  # 证书由容器自己写，宿主机路径不需要人管，也不会被部署脚本的清理步骤误删。
+  caddy-data:
     driver: local

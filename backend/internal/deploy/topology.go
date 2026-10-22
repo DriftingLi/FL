@@ -59,7 +59,6 @@ var EnvVars = []EnvVar{
 	{Name: "REPORTS_VOLUME", Default: "reports-data", Desc: "报告卷"},
 	{Name: "SMTP_FROM_NAME", Default: "和润天下", Desc: "发件人显示名"},
 	{Name: "SMTP_PORT", Default: "465", Desc: "SMTP 端口"},
-	{Name: "SSL_CERT_DIR", Default: "./nginx/ssl", Desc: "证书目录"},
 	{Name: "STORAGE_DRIVER", Default: "local", Desc: "存储驱动（local | r2）"},
 	{Name: "SWAGGER_ENABLED", Default: "false", Desc: "是否开启 Swagger"},
 	{Name: "TENCENT_SMS_REGION", Default: "ap-guangzhou", Desc: "腾讯云短信区域"},

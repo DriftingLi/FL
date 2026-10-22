@@ -12,15 +12,72 @@ import (
 	"forklift-training/pkg/response"
 )
 
+// ValuationLoginResult 登录成功后的最小结果面：只含 BFF 需要的字段，
+// 不把主体系 LoginResult 的形状抄进来（域包之间只递数据，不递对方的类型）。
+type ValuationLoginResult struct {
+	Token        string
+	RefreshToken string
+	UserID       int
+	Account      string
+	Username     string
+	Role         string
+}
+
+// ValuationLoginFunc 按令牌族验密并签发的窄接口 —— 由主体系 auth.Service.HrwaiLoginFor 适配。
+// 之所以是函数而不是接口：估值域只需要「一个能力」，多一个接口就多一层要维护的实现面。
+type ValuationLoginFunc func(family security.Family, account, password string) (ValuationLoginResult, error)
+
 // ValuationAuthHandler 估值模块认证处理器（消费 ValuationAuth 窄接口，主体系 AuthService 直接满足）。
 type ValuationAuthHandler struct {
 	authSvc ValuationAuth
 	sess    *security.Session
+	// login 为 nil 时 /auth/login 返回 503：装配根没接这条线时**不静默降级**成 401，
+	// 否则「端点没接」会被误读成「凭证不对」。
+	login ValuationLoginFunc
 }
 
 // NewValuationAuthHandler 构造估值认证处理器。sess 为装配根注入的唯一会话实例。
 func NewValuationAuthHandler(authSvc ValuationAuth, sess *security.Session) *ValuationAuthHandler {
 	return &ValuationAuthHandler{authSvc: authSvc, sess: sess}
+}
+
+// NewValuationAuthHandlerWithLogin 带上按族登录能力的构造函数（#1756 第二批）。
+func NewValuationAuthHandlerWithLogin(authSvc ValuationAuth, sess *security.Session, login ValuationLoginFunc) *ValuationAuthHandler {
+	return &ValuationAuthHandler{authSvc: authSvc, sess: sess, login: login}
+}
+
+// Login 处理 POST /api/valuation/auth/login：签发**估值族**双令牌。
+//
+// 与主站 /api/auth/login 的差别只有两处，都重要：
+//  1. 令牌带 aud=valuation —— 主站入口不认它（会话隔离的落点）；
+//  2. **不下发 Cookie**：令牌由调用方（Nuxt BFF）持有，浏览器侧不出现跨站 Cookie。
+func (h *ValuationAuthHandler) Login(c *gin.Context) {
+	if h.login == nil {
+		response.ServerError(c, "估值登录通道未装配")
+		return
+	}
+	var req struct {
+		Account  string `json:"account" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "账号与密码不能为空")
+		return
+	}
+	res, err := h.login(security.FamilyValuation, req.Account, req.Password)
+	if err != nil {
+		// 与主站同口径：验密失败一律「账号或密码错误」，不区分账号是否存在（防枚举）。
+		response.Unauthorized(c, err.Error())
+		return
+	}
+	response.Success(c, map[string]interface{}{
+		"token":         res.Token,
+		"refresh_token": res.RefreshToken,
+		"user_id":       res.UserID,
+		"account":       res.Account,
+		"username":      res.Username,
+		"role":          res.Role,
+	})
 }
 
 // Me 处理 GET /api/valuation/auth/me（需 middleware.JWTAuth）
