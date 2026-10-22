@@ -105,8 +105,11 @@ const INFRA = {
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
    * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**711 行现测（#1598/#1603 订正，登记时 611），见 `oversized`**）
    * - `api/envelope.uts` —— 分页信封归一的**单一出口**（移动端 ADR-0037：getPaged/decodePage/decodeList），被全仓 api 层的分页站点消费，无模块级消费者；与 request 同属跨切面基础设施
-   * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），被 20+ 模块的列表页共用，
-   *   无模块级消费者；与 `utils/**` 同属**跨切面基础设施**（登记不执法），预算面归它自己的票
+   * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），跨切面基础设施，
+   *   无模块级消费者，预算面归它自己的票。**消费面按现状写，不按愿景写**（#1733 订正：原注释称
+   *   「被 20+ 模块的列表页共用」，而彼时 `pages/` 下 grep `usePagedList` 命中 0 —— 20+ 是**待迁移**的
+   *   手写载体数（见 `utils/pagedListAdoptionContract.test.js` 的 `HAND_ROLLED_BASELINE`），不是消费方；
+   *   现消费方是 `composables/useTopicFeed.uts` 一处，其余列表页仍手写装载协议，逐票迁）
    * - `composables/useLoginProviders.uts` —— #1478 的登录提供方能力探测件：返回「微信登录可用吗」这一
    *   **能力判断**，被 index（着陆页主 CTA 分叉）与 login（微信登录入口显隐，后续 #1484 的 disabled）
    *   共同消费 ⇒ 落根 `composables/` 中立位置，两页 import **同一符号**（票面判据「不是两份实现」）。
@@ -154,6 +157,7 @@ const MODULES = {
       'components/ai-chat/ai-chat-pro-sheet.uvue',
       'components/ai-chat/ai-chat-sources.uvue',
       'composables/useAiChat.uts',
+      'composables/useAiModelSelection.uts',
       'composables/useAiPro.uts',
       'pages/ai-assistant/ai-assistant-constants.uts',
       'pages/ai-assistant/ai-assistant.uvue',
@@ -170,7 +174,7 @@ const MODULES = {
      * （不拿一条假声明去保真）。
      */
     crossModuleConsumers: [],
-    /** 超预算：ai-assistant.uvue 839 / ai-feature 629 / ai-settings 621 / api/aiAssistant.uts 667 */
+    /** 超预算：ai-assistant.uvue 822 / ai-feature 606 / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化） */
     budget: 'pending',
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

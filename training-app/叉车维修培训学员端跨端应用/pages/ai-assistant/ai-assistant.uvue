@@ -82,10 +82,14 @@
 	import {
 		getAiModelsApi,
 		getAiUserModelsApi,
-		loadAiChatSettings,
-		saveAiChatSettings,
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
+	import {
+		loadAiChatSettings,
+		saveAiChatSettings,
+		normalizeAiChatSettings,
+		emptyAiCustomModelInput,
+	} from '../../composables/useAiModelSelection'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
 	import { useAiPro } from '../../composables/useAiPro'
 	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
@@ -379,41 +383,21 @@
 		uni.navigateTo({ url: '/pages/ai-assistant/ai-feature?featureKey=' + item.featureKey })
 	}
 
-	// 持久化设置
+	// 持久化设置：三 source 归一化规则单源在 composables/useAiModelSelection.uts（#1732）
 	function persistSettings() : void {
-		const s = loadAiChatSettings()
-		s.model_source = currentModelSource.value
-		s.model_id = currentModelId.value
-		if (currentModelSource.value == 'custom') {
-			s.model_name = customModel.value.length > 0 ? customModel.value : s.model_name
-			s.model = customModel.value
-			s.base_url = customBaseUrl.value
-			s.api_key = customApiKey.value
-			s.model_id = 0
-		} else if (currentModelSource.value == 'user') {
-			for (let i = 0; i < userModels.value.length; i++) {
-				const um = userModels.value[i]
-				if (um.id == currentModelId.value) {
-					s.model_name = um.name
-					s.model = um.model
-					s.base_url = um.base_url
-					s.api_key = ''
-					break
-				}
-			}
-		} else {
-			for (let i = 0; i < models.value.length; i++) {
-				const pm = models.value[i]
-				if (pm.id == currentModelId.value) {
-					s.model_name = pm.name
-					s.model = pm.model
-					break
-				}
-			}
-			s.base_url = ''
-			s.api_key = ''
-		}
-		saveAiChatSettings(s)
+		const custom = emptyAiCustomModelInput()
+		custom.name = customModel.value
+		custom.model = customModel.value
+		custom.base_url = customBaseUrl.value
+		custom.api_key = customApiKey.value
+		saveAiChatSettings(normalizeAiChatSettings(
+			currentModelSource.value,
+			currentModelId.value,
+			models.value,
+			userModels.value,
+			custom,
+			loadAiChatSettings(),
+		))
 	}
 
 	// 模型选择

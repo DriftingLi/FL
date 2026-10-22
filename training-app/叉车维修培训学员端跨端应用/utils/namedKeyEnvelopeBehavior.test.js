@@ -14,7 +14,8 @@
  *      `pages` 不读后端回显、按 total/pageSize 折算（M2）；`page` 缺省 1 行为保持点；
  *   3. 票面验收「forum 回复列表装载行为不变」—— 详情 replies（`buildTopicDetail`，
  *      PR-D 不动）与「我的回复」（`getMyRepliesApi`，PR-A 已迁）两条装载路径逐字段不变；
- *   4. 兜底语义 —— `getRecordsApi` 拒绝 → `getMockRecords()`（M6 锁 catch 不被拆），
+ *   4. 失败语义 —— `getRecordsApi` / `getStudentCoursesApi` 拒绝 → 向上抛（不吞错；
+ *      student 侧 mock 回退已在 PR-F #1666 / #1731 全数退役，本文件不再有 mock 兜底可锁），
  *      `getForumTopicsApi` 拒绝 → errMsg rethrow（不吞错）。
  *
  * 与接线锁的分工：`resourcesContract` / `forumContract` 守源码形状、

@@ -305,7 +305,6 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 		params['filter'] = filter
 	}
 	return getMapped<Page<CourseItem>>('/courses', params, (data : UTSJSONObject) : Page<CourseItem> => {
-		console.log('[getCourseListApi] raw data:', JSON.stringify(data))
 		return decodePage<CourseItem>(data, '/courses', page, pageSize, (obj : UTSJSONObject) : CourseItem => buildCourseItem(obj), COURSE_LIST_KEYS)
 	})
 }
@@ -341,7 +340,6 @@ function buildSpecialtyListFromCatalog(obj : UTSJSONObject) : SpecialtyItem[] {
  */
 export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
 	return getMapped<SpecialtyItem[]>('/catalog/tree', null, (data : UTSJSONObject) : SpecialtyItem[] => {
-		console.log('[getCatalogTreeSpecialties] raw data:', JSON.stringify(data))
 		return buildSpecialtyListFromCatalog(data)
 	})
 }
@@ -351,7 +349,6 @@ export function getCatalogTreeSpecialties() : Promise<SpecialtyItem[]> {
  */
 export function getLevelsApi() : Promise<LevelItem[]> {
 	return getMapped<LevelItem[]>('/levels', null, (data : UTSJSONObject) : LevelItem[] => {
-		console.log('[getLevelsApi] raw data:', JSON.stringify(data))
 		// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `levels`
 		return decodeList<LevelItem>(data, '/levels', (obj : UTSJSONObject) : LevelItem => buildLevelItem(obj), ['levels'])
 	})
@@ -362,7 +359,6 @@ export function getLevelsApi() : Promise<LevelItem[]> {
  */
 export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
 	return getMapped<CourseDetail>('/course/' + courseId, null, (data : UTSJSONObject) : CourseDetail => {
-		console.log('[getCourseDetailApi] raw data:', JSON.stringify(data))
 		return buildCourseDetail(data)
 	})
 }
