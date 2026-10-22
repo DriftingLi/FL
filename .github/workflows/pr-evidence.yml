@@ -250,12 +250,17 @@ jobs:
               // 用途：`.github/workflows/mobile-gates.yml` 的「门证据管家」从 head 取本文件、抽出
               // 本函数原样跑一遍，把结论渲染成 PR 上的一条常驻评论 —— **判据永远同源**，管家不另写一套。
               // 纯增量：不改任何 ok / errors / notes 的既有语义与文案（抽取式单测另有断言）。
+              // 2026-10-22 追加 ① 的 { required, bound, skipped }：只为让「窗口口径跳过」在评论里可见、且
+              // 与「已取证 / 还缺」区分开（#1766）；不改 ②④ 的字段语义。
               const collectGate = (verdict) => ({
                 bound: Boolean(verdict.hit),
                 commit: verdict.hit ? (gateCommitIn(verdict.hit) || '').slice(0, 7) : '',
                 reason: verdict.hit ? '' : String(verdict.reason || ''),
               });
               const gates = {
+                // ① 门没有「sha 绑定评论」承载路径，结构化字段只服务 mobile-gates 的渲染：
+                // 「窗口口径跳过」必须与「已取证 / 还缺」区分开 —— 跳过要可见，不能长得像已取证（#1766）。
+                '①': { required: runtime.length > 0 && !lowRiskRuntime, bound: false, skipped: false },
                 '②': {
                   ...collectGate(g2),
                   // 与上面 GATES 循环同一判据（requires: 'mpweixin' + 低风险面减免），别在这里另算
@@ -382,10 +387,21 @@ jobs:
                   const end = i + 1 < marks.length ? marks[i + 1].index : line.length;
                   values[m[1]] = line.slice(start, end).replace(/[·|]\s*$/, '').trim();
                 });
+                // ① 门的窗口期口径（#1766，2026-10-22；移动端 ADR-0039 / 0040 决策 1）：
+                // 小程序优先窗口期内真机逐页取证**不跑**，① 门「结论」如实写 `SKIP·待批收口`。
+                // 判据只认**带「待批收口」字样**的标记（裸 `SKIP` / 「跳过」语义不明，仍走截图判据判红）；
+                // 跳过的是「取证」不是「签收」：执行人须非占位、日期须为 YYYY-MM-DD（下面两条校验**不**绕过）；
+                // 窗口期无实机可测 ⇒ 仅「复测对象」在跳过时允许写「无」（占位判定对这一个字段豁免）。
+                // ②③④④b 一律不受此分支影响（窗口口径只属于 ① 门）。
+                const windowSkip = gate.key === '①' && /待批收口/.test(String(values['结论'] || ''));
                 for (const field of gate.fields) {
                   const v = values[field];
-                  if (v === undefined) errors.push(`${where}：缺字段「${field}」。`);
-                  else if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
+                  if (v === undefined) {
+                    errors.push(`${where}：缺字段「${field}」。`);
+                    continue;
+                  }
+                  if (windowSkip && field === '复测对象') continue;
+                  if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
                 }
                 if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
                   errors.push(`${where}：「日期」须为 YYYY-MM-DD。`);
@@ -393,6 +409,12 @@ jobs:
                 // 单账号仓库无法机械区分「人」与「agent」：只提示、不拦（约束落在 AGENTS.md 上）
                 if (gate.fields.includes('执行人') && values['执行人'] === `@${author}`) {
                   notes.push(`${where}：执行人与 PR 作者是同一账号（${author}）——本仓单账号，机械上分不出人与 agent；agent 不得代填该字段。`);
+                }
+                // 窗口口径跳过：不走截图判据，但**留下可见的 notes**（跳过 ≠ 免签收，也不许静默）。
+                if (windowSkip) {
+                  gates['①'].skipped = true;
+                  notes.push(`${where}：跳过（窗口口径）——「结论」写的是「${values['结论']}」；按移动端 ADR-0039 / 0040 窗口期不跑真机逐页取证，待批收口后再补证。`);
+                  continue;
                 }
                 if (values['结论'] && !artifactOk(gate.artifact, values['结论'])) {
                   const hint = {
@@ -402,6 +424,9 @@ jobs:
                     any: '须引用产物',
                   }[gate.artifact];
                   errors.push(`${where}：「结论」${hint}。`);
+                } else if (gate.key === '①' && values['结论']) {
+                  // ① 行填了可核验截图 ⇒ 结构化字段记为「已取证」（窗口口径跳过时上面已 continue）
+                  gates['①'].bound = true;
                 }
               }
 

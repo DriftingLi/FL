@@ -199,11 +199,23 @@ jobs:
 
               // ===== 5b. 运行时面 PR：渲染核对结论 =====
               const head7 = headSha.slice(0, 7);
+              // ① 门（#1766）：窗口期口径下正文写 `SKIP·待批收口` ⇒ 渲染成「跳过（窗口口径）」，
+              // 与「✅ 已取证 / ❌ 还没有」区分开 —— 跳过必须可见，不能长得像已取证。
+              const g1 = result.gates['①'] || { required: false, bound: false, skipped: false };
               const g2 = result.gates['②'];
               const g4 = result.gates['④'];
               const cell = (g) => (g.bound
                 ? (g.commit === head7 ? `✅ 已绑 \`${g.commit}\`` : `✅ 已绑 \`${g.commit}\`（祖先口径，head 为 \`${head7}\`）`)
                 : '❌ 还没有');
+              const cell1 = g1.skipped
+                ? '⏭ 跳过（窗口口径）'
+                : (g1.bound ? '✅ 已取证' : (g1.required ? '❌ 还没有' : '— 免'));
+              const need1 = g1.skipped ? '需要（窗口期跳过）' : (g1.required ? '需要' : '免');
+              const why1 = g1.skipped
+                ? '移动端 ADR-0039 / 0040 窗口口径：真机逐页取证不跑，正文写 `SKIP·待批收口`，退出窗口后补证'
+                : (g1.required
+                  ? '正文逐页截图：GitHub 附件 / `docs/verification/<模块>/<PR号>/<页名>.<ext>` / 门评论链接'
+                  : '低风险运行时面（仅 `.uts`）⇒ 按 ADR-0008 免');
               const whys = [];
               if (!g2.bound && g2.reason) whys.push(`- ② 门评论未绑上的原因：${g2.reason}`);
               if (!g4.bound && g4.reason) whys.push(`- ④ 门评论未绑上的原因：${g4.reason}`);
@@ -221,6 +233,7 @@ jobs:
                 '',
                 '| 门 | 是否需要 | 证据 | 说明 |',
                 '| --- | --- | --- | --- |',
+                `| ① Android 真机逐页截图 | ${need1} | ${cell1} | ${why1} |`,
                 `| ② 微信开发者工具（半自动） | ${g2.required ? '需要' : '免'} | ${cell(g2)} | ${why2} |`,
                 `| ④ 本地编译门 | ${g4.required ? '需要' : '免'} | ${cell(g4)} | ${g4.required ? `运行时面 ${(g4.why || []).join('、') || ''}` : '未命中运行时面'} |`,
               ];

@@ -930,3 +930,112 @@ test('gates：② required 由 MP-WEIXIN 面点亮（低风险 .uts 面则免）
   assert.equal(lowRisk.gates['②'].required, false, '低风险运行时面（仅 .uts）应免 ②（ADR-0008）');
   assert.equal(lowRisk.gates['④'].required, true, '低风险面 ④ 仍必过（ADR-0008）');
 });
+
+// ============================================================
+// ① 门窗口期口径（#1766，2026-10-22）
+//   移动端 ADR-0039 / 0040 决策 1：小程序优先窗口期内真机逐页取证**不跑**，① 门「结论」如实写
+//   `SKIP·待批收口`。票里判据（grill Q12 = I）：
+//   - 只认**带「待批收口」字样**的结论标记；裸 `SKIP` / 其他跳过措辞一律仍走截图判据（判红）；
+//   - 跳过的是「取证」不是「签收」：执行人须非占位、日期须为 YYYY-MM-DD；窗口期无实机可测，
+//     故「复测对象：无」在跳过时不算占位；
+//   - ②③④④b 判据一字不动（窗口口径不是万能免死金牌）；
+//   - 结构化 gates['①'] 必须让「跳过（窗口口径）」与「已取证 / 还缺」可区分（跳过必须可见）。
+// ============================================================
+const WINDOW_LINE = (fields = {}) => {
+  const f = {
+    执行人: '@DriftingLi',
+    日期: '2026-10-22',
+    复测对象: '无',
+    结论: 'SKIP·待批收口（ADR-0039 窗口口径）',
+    ...fields,
+  };
+  return `- ① Android 真机逐页截图对比 — 执行人：${f.执行人} · 日期：${f.日期} · 复测对象：${f.复测对象} · 结论（含产物）：${f.结论}`;
+};
+/** 把 ① 行换成给定行，其余四门证据保持完整 */
+const bodyWith1 = (line) => {
+  const old = FULL_EVIDENCE.split('\n').find((l) => l.startsWith('- ① '));
+  return FULL_EVIDENCE.replace(old, line);
+};
+
+test('① 窗口期：结论写 SKIP·待批收口（复测对象：无）⇒ 绿，且 notes 明示「跳过（窗口口径）」', async () => {
+  const r = await run({ body: bodyWith1(WINDOW_LINE()) });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /跳过（窗口口径）/);
+
+  // 成对对照：「复测对象：无」的豁免只属于窗口口径 —— 同样写「无」但结论换成真截图 ⇒ 仍按占位判红。
+  const red = await run({
+    body: bodyWith1(WINDOW_LINE({ 结论: '逐页截图 docs/verification/exam/624/exam-home-after.jpg' })),
+  });
+  assert.equal(red.ok, false, '非窗口口径的「复测对象：无」必须仍按占位判红（豁免不许外溢）');
+  assert.match(red.errors.join(), /复测对象/);
+});
+
+test('① 窗口期：只认带「待批收口」的标记 —— 裸 SKIP / 跳过 / 待批 ⇒ 仍红', async () => {
+  for (const conclusion of ['SKIP', '跳过（窗口期）', '待批', 'SKIP·待确认', '待人工']) {
+    const r = await run({ body: bodyWith1(WINDOW_LINE({ 结论: conclusion })) });
+    assert.equal(r.ok, false, `「${conclusion}」不该被认作窗口口径标记`);
+    assert.match(r.errors.join(), /截图/, `「${conclusion}」应仍按截图判据报错`);
+  }
+});
+
+test('① 窗口期：跳过不等于免签收 —— 执行人 / 日期仍是硬判据', async () => {
+  const exec = await run({ body: bodyWith1(WINDOW_LINE({ 执行人: '待人工' })) });
+  assert.equal(exec.ok, false);
+  assert.match(exec.errors.join(), /执行人/);
+
+  const date = await run({ body: bodyWith1(WINDOW_LINE({ 日期: '窗口期退出后' })) });
+  assert.equal(date.ok, false);
+  assert.match(date.errors.join(), /日期/);
+});
+
+test('① 窗口期：标记只对 ① 生效 —— ② 结论写同样的字句仍按截图判据判红', async () => {
+  const r = await run({
+    files: mpWeixinFiles(),
+    body: FULL_EVIDENCE.replace(/结论（含产物）：入口页无报错 [^\n]*/, '结论（含产物）：SKIP·待批收口'),
+  });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+  assert.match(r.errors.join(), /截图/);
+});
+
+test('① 窗口期：也不能替别的门兜底 —— ③ 行缺失时照样红', async () => {
+  const r = await run({ body: bodyWith1(WINDOW_LINE()).replace(/^- ③ .*\n/m, '') });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /③/);
+  assert.doesNotMatch(r.errors.join(), /①/);
+});
+
+test('gates：① 区分「窗口口径跳过」/「已取证」/「还缺」三种状态（跳过必须可见）', async () => {
+  const skipped = await run({ body: bodyWith1(WINDOW_LINE()) });
+  assert.equal(skipped.gates['①'].required, true);
+  assert.equal(skipped.gates['①'].skipped, true);
+  assert.equal(skipped.gates['①'].bound, false, '跳过不是取证 ⇒ bound 必须为 false');
+
+  const evidence = await run({ body: FULL_EVIDENCE });
+  assert.equal(evidence.gates['①'].skipped, false);
+  assert.equal(evidence.gates['①'].bound, true);
+
+  const missing = await run({ body: dropLines(['- ① ']) });
+  assert.equal(missing.gates['①'].required, true);
+  assert.equal(missing.gates['①'].bound, false);
+  assert.equal(missing.gates['①'].skipped, false);
+  assert.equal(missing.ok, false);
+});
+
+test('gates：低风险 .uts 面 ① 免 ⇒ required=false，且不是「跳过」', async () => {
+  const r = await run({
+    files: [{ filename: 'training-app/叉车维修培训学员端跨端应用/utils/exam-session.uts', status: 'modified', patch: '' }],
+    body: '',
+  });
+  assert.equal(r.gates['①'].required, false);
+  assert.equal(r.gates['①'].skipped, false);
+});
+
+test('静态自检：管家渲染 ① 行时必须区分「跳过（窗口口径）」与 ✅/❌（跳过不许长得像已取证）', () => {
+  const gatesPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'workflows', 'mobile-gates.yml');
+  const src = readFileSync(gatesPath, 'utf8');
+  assert.match(src, /result\.gates\['①'\]/, '管家没读 gates[①] ⇒ ① 行的跳过状态无从渲染');
+  assert.match(src, /g1\.skipped\s*\?/, '管家没按 skipped 分支渲染 ⇒ 跳过会与「已取证」混为一谈');
+  assert.match(src, /跳过（窗口口径）/, '管家渲染文案里缺少「跳过（窗口口径）」标记');
+  assert.match(src, /① Android 真机逐页截图/, '管家表格里没有 ① 行 ⇒ 窗口口径跳过在 PR 上不可见');
+});
