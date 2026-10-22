@@ -58,7 +58,7 @@ func TestValuationAuthMe_MasksEmailPlaceholderPhone(t *testing.T) {
 		dict, evalStore, batteryStore,
 		valuationSvc, NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},
-		authSvc)
+		authSvc, nil)
 
 	token, err := sess.Issue(1, "acct_alice", "hrwai_user")
 	if err != nil {

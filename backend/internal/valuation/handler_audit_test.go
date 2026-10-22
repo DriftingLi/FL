@@ -39,7 +39,7 @@ func TestValuationAdminWriteAudited(t *testing.T) {
 		dict, evalStore, batteryStore,
 		valuationSvc, NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},
-		nil)
+		nil, nil)
 
 	token, err := sess.Issue(1, "admin1", "admin")
 	if err != nil {
