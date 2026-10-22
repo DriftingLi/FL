@@ -1,0 +1,107 @@
+# GitHub Dependabot：依赖侧的安全告警与升级 PR
+#
+# 分成两层，缺一不可：
+#   1. **版本更新**（本文件）——按周/月把依赖升到新版，PR 走既有 ruleset 与 CI；
+#   2. **安全更新**（仓库设置里的 Dependabot alerts + security updates）——
+#      只针对有 CVE 的版本，触发不受本文件控制，已在 2026-10-22 通过 API 打开。
+#
+# 刻意不覆盖的两个位置：
+# - `training-app/叉车维修培训学员端跨端应用`：移动端由 @zhengcookie 负责，其 PR 要过
+#   真机验收门（四门 + 证据），机器开的依赖 PR 到不了那道门，只会变成红单；
+# - `unpackage/**`：构建产物（未入库），不是依赖清单。
+version: 2
+
+updates:
+  # ===== Go 后端 =====
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+    groups:
+      go-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+
+  # ===== Web 前端 =====
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+    groups:
+      npm-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+
+  # ===== GitHub Actions =====
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - ci
+
+  # ===== 容器基础镜像 =====
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /libreoffice-sidecar
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - docker

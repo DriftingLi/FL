@@ -46,3 +46,43 @@ python -m deepsec shield scan <path> [--layer all|l1|l2] [--format text|json|sar
 ## 报告与清理
 
 - `--format json|markdown --output <path>` 写报告；扫完删除产物，勿留在 repo 根污染 git。
+
+## 依赖侧（Dependabot + Go 安全版本）
+
+Shield 扫的是**我们自己写的代码**，看不到「依赖里的已知漏洞」和「工具链本身的漏洞」这两层。补法：
+
+### 1. Dependabot
+
+- **告警与安全更新**：仓库设置里开启（`Dependabot alerts` + `Dependabot security updates`，2026-10-22 用 API 打开）。
+  这层由 GitHub 按 CVE 触发，不受配置文件控制；有漏洞的依赖会自动开 PR（不需要等周更）。
+- **版本更新**：`.github/dependabot.yml` 覆盖 `gomod:/backend`、`npm:/frontend`、`github-actions:/`、
+  `docker:/{backend,frontend,libreoffice-sidecar}`，每周一 09:00（Asia/Shanghai）跑一次，minor+patch 合成一个 PR。
+- **刻意不覆盖移动端**（`training-app/叉车维修培训学员端跨端应用`）：那一侧由 @zhengcookie 负责，
+  PR 要过真机验收门（四门 + 证据），机器开的依赖单到不了那道门，只会变成红单。
+
+### 2. Go 标准库漏洞看的是**构建工具链**，不是 `go.mod`
+
+`backend/go.mod` 的 `go 1.26.0` 只是**语言版本下限**，真正决定二进制里那份标准库的是构建它的 Go：
+
+- 生产镜像：`backend/Dockerfile` 的 `FROM golang:<版本>-alpine`；
+- CI：`.github/workflows/ci.yml` / `cd.yml` 的 `GO_VERSION`（两者必须同源）；
+- 本机 `go version` 只影响本地开发，不影响线上。
+
+所以「某个标准库漏洞有没有修」的判据是：**这四处里产生产物用的那个版本是否 ≥ 公告的修复版本**。
+例：`GO-2026-6809`（CVE-2026-111943，`crypto/x509` 错误信任已撤销的中间证书）修在 `1.26.10` / `1.27.3`；
+本仓镜像与 CI 都在 `1.26.10`（不受影响），而本机 `1.27.1` 低于 `1.27.3`（本地构建属受影响区间）。
+
+### 3. 想知道「哪些依赖漏洞真的能被走到」
+
+OSV / Dependabot 给的是「版本命中」，不是「可达」。要判可达性用 `govulncheck`：
+
+```bash
+cd backend && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+```
+
+本仓实测（2026-10-22）：用**生产同款** `go1.26.10` 跑 → `0 vulnerabilities`（标准库 0 条可达）；
+用当时的本机 `go1.27.1` 跑 → `13 vulnerabilities from the Go standard library` 全部可达。
+同一份代码、同一天，差别只在工具链 —— 所以「本机扫出来一片红」先别慌，先看用的是哪个 Go。
+
+它按调用图报告「这些漏洞有代码路径能到达」，是排优先级的第一手依据；只按版本清单排，会把
+大量根本没被调到的传递依赖排到前面。
