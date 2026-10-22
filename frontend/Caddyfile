@@ -5,26 +5,45 @@
 #      运维不再需要把证书塞进 GitHub Secrets。
 #      非生产（测试环境冒烟）由 entrypoint 注入 auto_https off + tls internal（自签），
 #      **不申请公共证书**——冒烟不占证书配额，也不要求公网解析指向测试机。
-# 挂载：本文件渲染成 /etc/caddy/Caddyfile；模板占位符只允许 ${DOMAIN}、${BACKEND_HOST_PORT}、
-#      ${EDGE_ORIGIN_TOKEN}、${CADDY_GLOBAL}、${CADDY_TLS} 五个（entrypoint 的 envsubst 清单必须与之一致）。
+# 占位符：一律用 Caddy 原生的 {$VAR} 语法（由 Caddyfile 解析器直接展开），**不做 envsubst**——
+#      多一层文本替换就多一条「模板里的占位符与替换清单不一致」的部署面。
+#      本文件允许出现的环境变量只有五个：DOMAIN / BACKEND_HOST_PORT / EDGE_ORIGIN_TOKEN /
+#      CADDY_GLOBAL / CADDY_TLS（结构锁见 backend/internal/deploy/caddy_topology_test.go）。
 # 生成区：投递分档匹配器由 backend/cmd/gen-deploy 覆写，勿手改。
 
 {
-	${CADDY_GLOBAL}
+	{$CADDY_GLOBAL}
 	email {$CADDY_ACME_EMAIL}
+}
+
+# ===== 片段：回源到后端的 API 出口 =====
+# 命中回源鉴权 token 的请求（EdgeOne 回源）与其余直连请求分两条路走。
+# EdgeOne 的 X-Forwarded-For 语义（票 #1746）：token 命中才采信 EO-Connecting-IP，
+# 且**只给这一个值**（不追加对端）——Caddy 默认会把对端追加到 XFF 末尾，
+# 那会让后端把边缘节点当成客户端 IP（限流键聚合、访问日志失真）。
+(backend_api) {
+	@from_edge header X-Origin-Token {$EDGE_ORIGIN_TOKEN}
+	handle @from_edge {
+		reverse_proxy 127.0.0.1:{$BACKEND_HOST_PORT} {
+			header_up X-Forwarded-For {http.request.header.EO-Connecting-IP}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:{$BACKEND_HOST_PORT}
+	}
 }
 
 # ===== 片段：SPA 工作区 =====
 # 每个工作区同源提供页面与 /api（前端 baseURL 是 /api，跨子域只发生在页面跳转时）。
 (spa_workspace) {
-	${CADDY_TLS}
+	{$CADDY_TLS}
 	encode zstd gzip
 
 	@health path /health
 	respond @health "ok" 200
 
 	handle /api/* {
-		reverse_proxy 127.0.0.1:${BACKEND_HOST_PORT}
+		import backend_api
 	}
 
 	handle {
@@ -52,18 +71,18 @@
 # ===== api：唯一后端入口 =====
 # 移动端、门户（EdgeOne）回源、残值 BFF 都打这里；页面域名与它解耦，
 # 下次换页面域名时这三条链路一行都不用动。
-api.${DOMAIN} {
-	${CADDY_TLS}
+api.{$DOMAIN} {
+	{$CADDY_TLS}
 	encode zstd gzip
 
 	@health path /health
 	respond @health "ok" 200
 
 	handle /swagger* {
-		reverse_proxy 127.0.0.1:${BACKEND_HOST_PORT}
+		import backend_api
 	}
 	handle /api/* {
-		reverse_proxy 127.0.0.1:${BACKEND_HOST_PORT}
+		import backend_api
 	}
 	handle {
 		respond "Not Found" 404
@@ -71,33 +90,33 @@ api.${DOMAIN} {
 }
 
 # ===== 四个工作区 =====
-training.${DOMAIN} {
+training.{$DOMAIN} {
 	import spa_workspace
 }
 
-mentor.${DOMAIN} {
+mentor.{$DOMAIN} {
 	import spa_workspace
 }
 
-manage.${DOMAIN} {
+manage.{$DOMAIN} {
 	import spa_workspace
 }
 
-recruit.${DOMAIN} {
+recruit.{$DOMAIN} {
 	import spa_workspace
 }
 
 # ===== 残值评估（过渡期：仍由本仓 SPA 服务）=====
 # 第二批（前端迁到和润门户、改写 Nuxt）完成后，本块改为 301 到 https://valuation.hrwai.cn。
-valuation.${DOMAIN} {
+valuation.{$DOMAIN} {
 	import spa_workspace
 }
 
 # ===== cdn：对象存储直出（资源域，仅 GET/HEAD）=====
 # 本块只有两类直出（对象存储前缀与 /reports/），其余一律 404 —— 不吐 SPA、不反代后端：
 # 漏配的前缀立刻暴露，而不是伪装成 200。
-cdn.${DOMAIN} {
-	${CADDY_TLS}
+cdn.{$DOMAIN} {
+	{$CADDY_TLS}
 
 	# >>> gen-deploy:caddy-delivery 生成区起（以下到止标记由 backend/cmd/gen-deploy 覆写，勿手改）
 # ===== 对象存储直出的投递分档（ADR-0066 决策 2 / 票 #1364）=====
@@ -144,8 +163,8 @@ cdn.${DOMAIN} {
 
 # ===== dify：内网 Dify + 知识库图片反代 =====
 # Dify 大量使用 SSE，需关闭缓冲（Caddy 的 flush_interval -1 等价于 nginx 的 proxy_buffering off）。
-dify.${DOMAIN} {
-	${CADDY_TLS}
+dify.{$DOMAIN} {
+	{$CADDY_TLS}
 
 	handle /kbimg/* {
 		@kbimg_write not method GET HEAD
@@ -164,6 +183,6 @@ dify.${DOMAIN} {
 
 # ===== 根域与 www：一跳 301 到培训入口 =====
 gdyidao.cn, www.gdyidao.cn {
-	${CADDY_TLS}
-	redir https://training.${DOMAIN}{http.request.uri} permanent
+	{$CADDY_TLS}
+	redir https://training.{$DOMAIN}{http.request.uri} permanent
 }

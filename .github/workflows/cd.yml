@@ -418,10 +418,11 @@ jobs:
       REGISTRY_PROXY_BIND: ${{ vars.REGISTRY_PROXY_BIND || '127.0.0.1' }}
       # 旧版本镜像保留数量（部署后清理更早版本；可在仓库级 Variables 中覆盖）
       KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
-      # SSL 证书内容（从 GitHub Secrets 注入，部署时写入服务器固定路径）
-      SSL_FULLCHAIN: ${{ secrets.SSL_FULLCHAIN }}
-      SSL_PRIVKEY: ${{ secrets.SSL_PRIVKEY }}
-      # 域名（启动时 envsubst 替换 nginx 配置中的 ${DOMAIN}）
+      # 证书策略：production = Caddy 自动签发（ACME）；testing = 内部自签（不占公共证书配额）
+      TLS_MODE: ${{ needs.gate.outputs.environment == 'production' && 'auto' || 'internal' }}
+      # ACME 账户邮箱（证书到期提醒；留空时 Caddy 用默认的匿名账户，仍可签发）
+      CADDY_ACME_EMAIL: ${{ secrets.CADDY_ACME_EMAIL }}
+      # 域名（Caddyfile 用原生的 {$DOMAIN} 占位符展开，不做 envsubst）
       DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # 数据库
@@ -588,12 +589,12 @@ jobs:
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          # 打包：deploy-remote.sh / compose / nginx-host.conf
+          # 打包：deploy-remote.sh / compose / Caddyfile
           tar czf /tmp/deploy-files.tar.gz \
             scripts/deploy-remote.sh \
             docker-compose.prod.yml \
             deploy/env.defaults \
-            frontend/nginx-host.conf
+            frontend/Caddyfile
 
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             /tmp/deploy-files.tar.gz \
@@ -646,8 +647,6 @@ jobs:
             printf 'export IMAGE_BACKEND=%q\n' "${IMAGE_BACKEND:-}"
             printf 'export IMAGE_FRONTEND=%q\n' "${IMAGE_FRONTEND:-}"
             printf 'export IMAGE_LIBREOFFICE=%q\n' "${IMAGE_LIBREOFFICE:-}"
-            printf 'export SSL_FULLCHAIN=%q\n' "${SSL_FULLCHAIN:-}"
-            printf 'export SSL_PRIVKEY=%q\n' "${SSL_PRIVKEY:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
             printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
             printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
