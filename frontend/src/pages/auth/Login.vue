@@ -2,8 +2,6 @@
   <AuthPageShell
     title="欢迎回来"
     :subtitle="subtitleByRole"
-    :badge-text="roleLabel"
-    :badge-tone="badgeTone"
     :alt-modes="altModes"
     :active-alt="activeAlt"
     @select-alt="onSelectAlt"
@@ -263,7 +261,7 @@ const flow = useAuthFlow<LoginMode>({
     // 不挡这一拍的话，随后的 router.push 会被守卫的回落不变式清态打回本页，形成登录循环。
     if (getSubdomain() !== 'main' && authStore.userInfo?.role !== getRoleForSubdomain()) {
       authStore.clearAuthData()
-      ElMessage.error('该账号不属于此端，请使用对应身份的账号登录')
+      ElMessage.error('该账号与本工作区身份不符，请使用对应身份的账号登录')
       return
     }
     ElMessage.success('登录成功')
@@ -316,14 +314,6 @@ const subtitleMap: Record<SubdomainType, string> = {
   recruit: '登录企业招聘端'
 }
 const subtitleByRole = computed(() => subtitleMap[subdomain])
-
-// badge 角色色：学员=蓝/讲师=青/管理=紫/企业=蓝（复用学员色，避免新增视觉分支）
-const badgeTone = computed<'student' | 'tutor' | 'admin'>(
-  () => (currentRole === 'tutor' ? 'tutor' : currentRole === 'admin' ? 'admin' : 'student')
-)
-const roleLabel = computed(() =>
-  currentRole === 'tutor' ? '讲师端' : currentRole === 'admin' ? '管理端' : currentRole === 'recruiter' ? '企业端' : '学员端'
-)
 
 const usernamePlaceholder = computed(() =>
   currentRole === 'tutor' || currentRole === 'admin' || currentRole === 'recruiter' ? '账号' : '账号或手机号'
