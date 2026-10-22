@@ -1,38 +1,28 @@
-// pr-evidence 校验逻辑的抽取式单测。
+// pr-evidence 校验逻辑的单测（#1770 起不再「抽取」，直接 import 判据模块）。
 //
-// 校验器内联在 .github/workflows/pr-evidence.yml 里（不 checkout 任何代码即可运行），
-// 本测试把它从 workflow 中抽出来跑表驱动用例 —— 保证「守护的守护」不会静默失效。
-// 运行：node --test .github/scripts/pr-evidence-check.test.mjs
-// 已被 ci.yml 的 pr-evidence-selftest job 调用。
+// 校验器是 .github/scripts/lib/gate-validator.mjs —— 判据的**单一来源**：
+//   · pr-evidence.yml / mobile-gates.yml 都不 checkout，改用 repos.getContent 取该文件文本 → new Function 求值；
+//   · 本测试直接 import（同一个函数，不是抄一份）。
+// 运行：node --test .github/scripts/pr-evidence-check.test.mjs（已由 ci.yml 的 pr-evidence-selftest job 调用）。
 //
 // 2026-09-12 修订（本文件与校验器同步改）：门证据的绑定判据从「sha 必须等于 head」放宽为
 // 「**祖先 + 运行时面未变**」（动机：#624 反复被 master 前进作废）。判定要看 compare 结果，
 // 故校验器改为 async 且把「取 compare 结果」抽成**注入回调 fetchCompare** ——
-// 本文件里一律注桩（`cmp()` / `compareStub()`），**不发任何真实网络请求**。
+// 本文件里一律注桩（cmp() / compareStub()），**不发任何真实网络请求**。
+//
+// 2026-10-22（#1770）：证据主键改为 commit sha——新增 commitComments 入参的单测（commit 评论能承载门证据，
+// 又没有绕过 marker/sha 绑定判据）；票（issue）评论仍不进判据。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { validatePrEvidence as validate } from './lib/gate-validator.mjs';
 
-const workflowPath = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'workflows',
-  'pr-evidence.yml',
-);
-
-function loadValidator() {
-  const src = readFileSync(workflowPath, 'utf8');
-  const m = src.match(
-    /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
-  );
-  assert.ok(m, '在 pr-evidence.yml 里找不到 PR-EVIDENCE-VALIDATOR 标记块');
-  return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
-}
-
-const validate = loadValidator();
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const workflowPath = path.resolve(SCRIPT_DIR, '..', 'workflows', 'pr-evidence.yml');
+const validatorPath = path.resolve(SCRIPT_DIR, 'lib', 'gate-validator.mjs');
 const AUTHOR = 'zhengcookie'; // 本仓库 agent 账号；PR 作者即它
 
 const uvue = (name = 'pages/exam/exam.uvue', extra = {}) => ({
@@ -799,7 +789,7 @@ test('#1030：② 未被点亮时不写「触发面命中」，点亮时摘要�
 });
 
 test('#1030 静态自检：判据不得退回「扫改动文本里的字面量」（文本判据与语义脱节的复发防线）', () => {
-  const src = readFileSync(workflowPath, 'utf8');
+  const src = readFileSync(validatorPath, 'utf8');
   // 只对**代码行**判：修订说明里刻意引用了旧判据原文（`.includes('MP-WEIXIN')`）作对照，
   // 拿全文判会误报帮助文本（ADR-0008 记的 C14 就是这一坑位）。
   const codeLines = src
@@ -877,8 +867,9 @@ test('模板门行形状锁：PR 模板「## 验收证据」的 5 行门必须�
 
 // ============================================================
 // gates 结构化字段（2026-10-16 新增，移动端 ADR-0041 决策 3）
-//   `.github/workflows/mobile-gates.yml` 的门证据管家从 head 取 pr-evidence.yml、抽出本校验器
-//   原样跑一遍，再把 `gates` 渲染成 PR 上的一条常驻评论。**判据同源**靠的就是这几条断言：
+//   `.github/workflows/mobile-gates.yml` 的门证据管家从 head 取 `.github/scripts/lib/gate-validator.mjs`
+//   （#1770 起；取不到才退回抽 pr-evidence.yml 的标注块）原样跑一遍，再把 `gates` 渲染成 PR 上的一条常驻评论。
+//   **判据同源**靠的就是这几条断言：
 //   - required 由**触发面**决定（② 看 MP-WEIXIN 面，④ 看有无运行时面），
 //   - bound   由**门评论绑定**决定（等价于 upper 里 gateComment() 的 hit），
 //   两者互不冒充：没有触发面时 required=false（免门不应渲染成「缺证据」），
@@ -1075,4 +1066,42 @@ test('静态自检：管家渲染 ① 行时必须区分「跳过（窗口口径
   // 兜底不许把「算不出来」写成「免」：head 校验器读不到时会退回 base 旧版（不产 gates[①]），
   // 此时 required 必须由 runtime / lowRiskRuntime 现算，否则 .uvue PR 会被渲染成「免门」。
   assert.match(src, /required:\s*\(result\.runtime/, '管家兜底把 ① 默认成免门 ⇒ 旧校验器下 .uvue PR 会被错误显示为免');
+});
+
+// ============================================================
+// #1770 S2：证据主键改为 commit sha —— commit 评论与 PR 评论**合并**成同一候选集
+// ============================================================
+
+test('#1770 S2 证据只贴在 commit 评论上（还没开 PR / 开 PR 后没再贴）⇒ ④ 照常绑上并判绿', async () => {
+  const body = dropLines(['- ④ ']);
+  const r = await run({ body, commitComments: [gate4Comment(SHA)], headSha: SHA });
+  assert.equal(r.ok, true, r.errors.join('；'));
+});
+
+test('#1770 S2 commit 评论与 PR 评论合并判定：坏的那条不拖红绑得上的那条', async () => {
+  const body = dropLines(['- ④ ']);
+  const good = await run({ body, commitComments: [gate4Comment(SHA)], gateComments: [gate4Comment('deadbee')], headSha: SHA });
+  assert.equal(good.ok, true, good.errors.join('；'));
+  const bad = await run({ body, commitComments: [gate4Comment('deadbee')], gateComments: [gate4Comment('deadbee')], headSha: SHA });
+  assert.equal(bad.ok, false);
+  assert.match(bad.errors.join(), /④ 本地编译门/);
+});
+
+test('#1770 S2 commit 评论不绕过 marker / sha 绑定：缺 gate-evidence 标记或 commit 行一律不认', async () => {
+  const body = dropLines(['- ④ ']);
+  const noMarker = ['- commit: ' + SHA, '- 结论（含产物）：KOTLIN_ALL_RESULT errors=0', ''].join('\n');
+  const r1 = await run({ body, commitComments: [noMarker], headSha: SHA });
+  assert.equal(r1.ok, false, '没有 gate-evidence 标记的 commit 评论被当成了证据');
+  const noSha = ['<!-- gate-evidence:④ -->', '- 结论（含产物）：KOTLIN_ALL_RESULT errors=0', ''].join('\n');
+  const r2 = await run({ body, commitComments: [noSha], headSha: SHA });
+  assert.equal(r2.ok, false, '没有 commit 行的 commit 评论被当成了证据');
+});
+
+test('#1770 S2 判据面只认 PR 评论 + commit 评论：票（issue）评论不进判据（签名里没有第三来源）', () => {
+  const src = readFileSync(validatorPath, 'utf8');
+  const start = src.indexOf('export async function validatePrEvidence(');
+  assert.ok(start >= 0, '判据模块里找不到导出的校验器');
+  const sig = src.slice(start, src.indexOf(') {', start));
+  assert.match(sig, /commitComments/);
+  assert.doesNotMatch(sig, /issueComments|ticketComments/);
 });

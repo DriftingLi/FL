@@ -69,11 +69,18 @@ param(
     [switch]$HxNoWait,
     [int]$PublishTimeoutSeconds = 900,
     [int]$KotlincTimeoutSeconds = 900,
+    # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
+    # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
+    [int]$PostToIssue = 0,
     [int]$PostToPr = 0
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# #1770：验收证据主键从 PR 号改成 commit sha。`-PostToIssue` 是正式名（票号），`-PostToPr` 是**别名**
+# （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
+if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
 
 # 出错行判据：kotlinc 的「路径:行:列: error:」与 `e: ` 前缀两种形态
 $ErrorLinePattern = '(?m)(^\s*e: )|(:\d+:\d+: *error:)'
@@ -409,19 +416,21 @@ function Publish-GateComment {
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
-        return
-    }
+    # #1770：判据评论贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+    # 这里不再假设 PR 存在（新流程：证据齐了再开 PR）；号码只是「归档目录键 / 展示副本落点 / 批次标识」。
     try {
-        $out = (& gh pr comment $PrNumber --body $body 2>&1 | Out-String)
-        if ($out -match 'github\.com/') {
-            Write-Host "✅ 已贴 PR #$PrNumber 的 ④ 门评论（sha 绑定 $short）。" -ForegroundColor Green
+        $sent = Send-GateComment -ProjectDir $Project -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
+        if ($sent.CommitOk) {
+            Write-Host "✅ 已贴 commit $short 的 ④ 门评论：$($sent.CommitUrl)" -ForegroundColor Green
         } else {
-            Write-Host "[warn] 贴 PR #$PrNumber 评论疑似失败（门结论不受影响）：$($out.Trim())" -ForegroundColor Yellow
+            Write-Host "[warn] 贴 commit $short 的 ④ 门评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
+        }
+        if ($PrNumber -gt 0) {
+            if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
+            else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
         }
     } catch {
-        Write-Host "[warn] 贴 PR 评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
+        Write-Host "[warn] 贴 ④ 门评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
     }
 }
 

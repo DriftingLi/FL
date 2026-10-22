@@ -196,12 +196,16 @@
 .PARAMETER AutoRetryDelaySeconds
     两次整段尝试之间的等待秒数（默认 20）：让开发者工具把上一次的 IDE 实例/端口收干净再重来。
 
-.PARAMETER PostToPr
-    > 0 时，**仅在门通过（exit 0）分支**把结果贴成 PR 评论（② 门结果免手抄，与 ④ 门同款）。
+.PARAMETER PostToIssue
+    > 0 时，**仅在门通过（exit 0）分支**把结果贴成评论（② 门结果免手抄，与 ④ 门同款）。
+    #1770 起**判据评论贴到 commit**（证据主键），同一份正文的展示副本贴该票号/PR 号。
     评论正文严格形如 `<!-- gate-evidence:② -->` + 「② 微信开发者工具无报错（半自动，agent 执行）」
     + `commit: <HEAD sha>` + 结论（含 MP_WEIXIN_RESULT）与产物路径 + 复现命令；
-    `.github/workflows/pr-evidence.yml` 只认「带该标记且 sha 与 PR head 相等」的评论，不校真伪。
+    `.github/workflows/pr-evidence.yml` 只认「带该标记且贴在 sha 上」的评论，不校真伪。
     gh 不可用/取不到 sha 时只打印警告，**不影响门的结论**。
+
+.PARAMETER PostToPr
+    `-PostToIssue` 的**别名**（同值，一个版本后退役）。
 
 .PARAMETER DryRun
     只打印门计划（单行 `GATE_PLAN {json}`）后 exit 0：**不执行任何外部命令、不写工作树、不接 HBuilderX**。
@@ -244,12 +248,19 @@ param(
     [int]$ProbeTimeoutMs = 60000,
     [int]$ReadyWaitSeconds = 120,
     [switch]$Doctor,
+    # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
+    # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
+    [int]$PostToIssue = 0,
     [int]$PostToPr = 0,
     [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# #1770：验收证据主键从 PR 号改成 commit sha。`-PostToIssue` 是正式名（票号），`-PostToPr` 是**别名**
+# （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
+if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
 
 $DistRelative = 'unpackage\dist\build\mp-weixin'
 $ProbeRelative = 'scripts\mp-weixin-probe.mjs'
@@ -1226,19 +1237,21 @@ function Publish-GateComment {
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
-        return
-    }
+    # #1770：判据评论贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+    # 这里不再假设 PR 存在（新流程：证据齐了再开 PR），号码只是「归档目录键 / 展示副本落点 / 批次标识」。
     try {
-        $out = (& gh pr comment $PrNumber --body $body 2>&1 | Out-String)
-        if ($out -match 'github\.com/') {
-            Write-Host "✅ 已贴 PR #$PrNumber 的 ② 门评论（sha 绑定 $short）。" -ForegroundColor Green
+        $sent = Send-GateComment -ProjectDir $Project -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
+        if ($sent.CommitOk) {
+            Write-Host "✅ 已贴 commit $short 的 ② 门评论：$($sent.CommitUrl)" -ForegroundColor Green
         } else {
-            Write-Host "[warn] 贴 PR #$PrNumber 评论疑似失败（门结论不受影响）：$($out.Trim())" -ForegroundColor Yellow
+            Write-Host "[warn] 贴 commit $short 的 ② 门评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
+        }
+        if ($PrNumber -gt 0) {
+            if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
+            else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
         }
     } catch {
-        Write-Host "[warn] 贴 PR 评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
+        Write-Host "[warn] 门评论投递异常（门结论不受影响）：$_" -ForegroundColor Yellow
     }
 }
 # ---------- 截图入库（P2：② 的截图自动压缩提交到 PR 分支）----------
@@ -1331,8 +1344,8 @@ function Export-ArchiveImage {
 
 function Publish-ScreenshotArchive {
     param([int]$PrNumber, [string]$Module, [string]$ShotDir, $ProbeJson, [string]$RepoRoot)
-    # 目标：docs/verification/<模块>/<PR号>/<页名>-after.<ext>；仅当「当前分支 = 该 PR 的 head」
-    # 且「工作树除本次改动外无其他改动」时才提交；其余情况只警告 + 给命令。
+    # 目标：docs/verification/<模块>/<号码>/<页名>-after.<ext>（#1770 起号码 = 票号，旧 PR 号目录同段仍被接受）；
+    # 仅当「HEAD 在远端可达」且「工作树除本次改动外无其他改动」时才提交；其余情况只警告 + 给命令。
     #
     # ⚠️ **每个 return 必须是同一形状**（本函数所有分支都要带 `Rel`，取值用 @() 兜底）——
     #    #1209 血账：此前只有成功路径带 `Rel`，而调用点在 Set-StrictMode 下读 `$archive.Rel`，
@@ -1344,17 +1357,18 @@ function Publish-ScreenshotArchive {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 git'); Commands = @(); Rel = @() } }
 
     $root = $RepoRoot
-    $branch = ''
-    try { $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1) } catch { }
     $dirty = @()
     try { $dirty = @(& git -C $root status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() }) } catch { }
 
-    $prJson = $null
-    try { $prJson = (& gh pr view $PrNumber --json headRefName,state 2>$null | Out-String | ConvertFrom-Json) } catch { }
-    if (-not $prJson) { return @{ Notes = @("未入库：取不到 PR #$PrNumber 的信息（gh 不可用/无权限）"); Commands = @(); Rel = @() } }
-    if ($prJson.state -ne 'OPEN') { return @{ Notes = @("未入库：PR #$PrNumber 状态为 $($prJson.state)（非 OPEN）"); Commands = @(); Rel = @() } }
-    if ($branch -ne $prJson.headRefName) {
-        return @{ Notes = @("未入库：当前分支 '$branch' ≠ PR #$PrNumber 的 head 分支 '$($prJson.headRefName)'（避免把截图提到错的分支）"); Commands = @(); Rel = @() }
+    # #1770：归档不再依赖 PR —— 「这是不是 PR 的 head 分支 / PR 是否仍 OPEN」已无从问起（新流程是**证据齐了
+    # 再开 PR**，跑门时 PR 往往还不存在）。改为问一句离线可答的：HEAD 在远端可达吗？归档提交要能推上去、
+    # 评论里的 `- commit:` 才在 GitHub 上点得开（#1695）；不可达就跳过入库、只写说明 —— 门结论不变。
+    $headSha = ''
+    try { $headSha = (& git -C $root rev-parse HEAD 2>$null | Select-Object -First 1) } catch { }
+    $headSha = ("$headSha").Trim()
+    if (-not $headSha) { return @{ Notes = @('未入库：取不到 HEAD sha'); Commands = @(); Rel = @() } }
+    if (-not (Test-ShaReachable -ProjectDir $root -Sha $headSha)) {
+        return @{ Notes = @("未入库：HEAD $($headSha.Substring(0, 7)) 不在远端可达（还没推上去？）"); Commands = @(); Rel = @() }
     }
     $allowed = @("docs/verification/$Module/$PrNumber/")
     $blocking = @($dirty | Where-Object { $p = ($_ -replace '^..\s+', '').Trim('"'); -not ($allowed | Where-Object { $p.StartsWith($_) }) })

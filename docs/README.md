@@ -11,7 +11,7 @@
 | `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，71 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
 | `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git / handoff-验收门） |
 | `docs/README.md` | ✅ | 本索引 |
-| `docs/verification/` | ✅ | 验收产物（真机截图等），按 `<模块>/<PR号>/` 分目录存放——`pr-evidence.yml` 认的可核验产物路径之一，不按「方案文档」归档 |
+| `docs/verification/` | ✅ | 验收产物（真机截图等），按 `<模块>/<票号>/` 分目录存放（#1770 起目录键 = 票号；旧 PR 号目录同为数字段、仍被接受）——`pr-evidence` 认的可核验产物路径之一，不按「方案文档」归档 |
 | `docs/design/` | ✅ | 调研与实测账本（如 `1445-api-contract-test-audit.md`、`1445-p4-comment-audit.md`）——**可被引用的判据来源**，不是草稿 |
 | `docs/plans/` | ❌ | 产品 / 技术方案、实施计划（当前为空；命名建议 `主题-方案.md`） |
 | `docs/reference/` | ❌ | 参考资料：业务数据表、评估填报界面、代码 Wiki 等 |

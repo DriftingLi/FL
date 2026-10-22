@@ -83,7 +83,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 ## 测试与检查流程
 
-- **本线唯一在跑的验证层 = ③ 门两腿**（#1702 拆分，来路见 [`docs/adr/0042-测试门拆腿与逐套件心跳.md`](docs/adr/0042-测试门拆腿与逐套件心跳.md)）：`npm run test:unit`（**接线腿**，`jest.config.unit.js`）+ `npm run test:behavior`（**行为腿**，`jest.config.behavior.js`），两腿都是 `testEnvironment: node`，各扫自己那一半 `utils/**/*.test.[jt]s?(x)`；`npm test` = 两腿顺序跑（**不是只跑一半**）。只跑一个测试：`npx jest --config <该套件所在腿的 config> <相对路径>`，按名加 `-t "片段"`——**选错腿的 config 会让 jest 当那个套件不存在（0 套件，长得像绿）**，套件归哪一腿问 `node scripts/classify-guards.mjs`。判据三条与守护分类（**接线守护不构成 ③ 证据**）见下节 ③ 条与 [`docs/agents/guards.md`](docs/agents/guards.md)。**跑完只把结果行带进上下文**（两腿各一条 `TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT`；完整日志留 `.ci-verify/*.log`，要细节按小节名回 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「agent 判读纪律」读，别贴日志原文）。
+- **本线唯一在跑的验证层 = ③ 门两腿**（#1702 拆分，来路见 [`docs/adr/0042-测试门拆腿与逐套件心跳.md`](docs/adr/0042-测试门拆腿与逐套件心跳.md)）：`npm run test:unit`（**接线腿**，`jest.config.unit.js`）+ `npm run test:behavior`（**行为腿**，`jest.config.behavior.js`），各扫一半 `utils/**/*.test.[jt]s?(x)`，`npm test` 两腿顺序跑。只跑一个：`npx jest --config <该套件所在腿的 config> <相对路径>`（`-t "片段"` 按名）——**选错腿的 config 会让 jest 当那个套件不存在（0 套件，长得像绿）**，归腿问 `node scripts/classify-guards.mjs`。判据与守护分类见 ③ 条；**跑完只带结果行进上下文**（`TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT`，整日志留 `.ci-verify/*.log`，读法见 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「agent 判读纪律」）。
 - ⚠️ **本仓没有 `type-check` 脚本** —— 那是 Web 前端栈的入口，别照搬。后端四件套（含 Windows 本机 golangci-lint 由 CI 兜底、WSL 例外）、生成链顺序（swagger → gen-apitypes → 再跑测试）、PG 契约测试纪律、部署配置校验、DeepSec 扫描的**权威版本在根** [`docs/agents/checks.md`](../../docs/agents/checks.md)，本处不抄。
 - **端到端（E2E）自动化本仓不做，别再按 uni-app 项目模板去接**：微信小程序通道只能做 page 级断言、做不了「点击 → 跳转 → 断言」的流程验证（PR #1136 裁决），H5 通道在 `require` 阶段即炸 ⇒ 本仓**没有** E2E 入口与装配。裁决、实测与**将来重启的配方**见 `docs/adr/0020-端到端测试通道裁决落锁与装配清退.md`；补强验证层的正确方向是**把镜像实现迁到 `utils/utsHarness.js` 真执行**（`docs/spec-永绿整改.md` §④ S3 / S6a–S6c），不是引入 E2E。
 
@@ -125,7 +125,7 @@ UTS 类型限制与 Kotlin 编译期错误对照）在按需层** [`docs/agents/
 
 三条原因（③ 门在宿主树静默假绿 #1144 / 项目名冲突不是理由 / 树被自动回收连删 `.ci-verify/`）实测原文在
 [`docs/agents/dev-loop.md`](docs/agents/dev-loop.md)「三条原因的实测原文」。**回退与复用**：进树第一件事建分支、
-尽早推 origin；没提交的改动与 gitignored 证据树没了就没了，判据输入当场拷到树外或入 `docs/verification/<模块>/<PR号>/`。
+尽早推 origin；没提交的改动与 gitignored 证据树没了就没了，判据输入当场拷到树外或入 `docs/verification/<模块>/<票号>/`（#1770 起归档目录键 = 票号；旧 PR 号目录仍被接受）。
 **初始化单一真源** = `pwsh training-app/叉车维修培训学员端跨端应用/scripts/wt-bootstrap.ps1`；宿主「本地任务的
 Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源），现值核对：读回 `%APPDATA%\Qoder\logs\<run>\questWindow\renderer.log`
 里 `worktreeSetup` 键的值与之比对（**别拿「应该已填」当作已填**）。决策论证全文见
@@ -156,15 +156,15 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 
 - **真机逐页取证**（agent 出证：逐页截图 + logcat + 机检行 + 入仓截图）：按**一次分支收口**跑一次、**不跨 PR 共用**，手法见 ADR-0008「取证手法补遗」；**窗口内不跑**，真机行如实写 `SKIP·待批收口`。
 - **真机人工签收**：**只在命中「能力面」时必过**——指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互，**不是**「任何运行时面」；「执行人」栏由**人**给出原文（agent 代录、不得自拟、不得写「已通过」）。触发口径与**明确不做**清单（diff 文本触发、跨 PR 共用真机等）见 `docs/adr/0016-真机门的人工性收缩与按批取证.md`。
-- **小程序门（② 微信开发者工具门 = 半自动门，#883 收口）**：`npm run build:mp-weixin-check` → `MP_WEIXIN_RESULT` + `.ci-verify/*.png`，结果可 `-PostToPr <PR号>` 贴 sha 绑定评论（正文该行写「见评论 <链接>」）。**窗口内 = 每个运行时面 PR 的主门、执行人允许「agent 执行」**（先例 #1674）；窗口外执行人由人给出原文。三条硬前提与证据边界原文在 ADR-0008「小程序门」「三条硬前提与证据边界」两节。**跑完任何 HBuilderX 门先 `git status` 查 `manifest.json`**，脏了 `git checkout -- manifest.json` 再继续。
+- **小程序门（② 微信开发者工具门 = 半自动门，#883 收口）**：`npm run build:mp-weixin-check` → `MP_WEIXIN_RESULT` + `.ci-verify/*.png`，结果以 `-PostToIssue <票号>` 贴 sha 绑定评论（**判据评论贴 commit、展示副本贴票/PR**；正文该行写「见评论 <链接>」）。**窗口内 = 每个运行时面 PR 的主门、执行人允许「agent 执行」**（先例 #1674）；窗口外执行人由人给出原文。三条硬前提与证据边界原文在 ADR-0008「小程序门」「三条硬前提与证据边界」两节。**跑完任何 HBuilderX 门先 `git status` 查 `manifest.json`**，脏了 `git checkout -- manifest.json` 再继续。
 - **单元测试门**（#1702 起**两腿**：`npm run test:unit` 接线 + `npm run test:behavior` 行为；拆分轴就是守护分类本身——behavior ⇒ 行为腿、wiring ⇒ 接线腿，两腿 `testMatch` 由 `scripts/lib/guard-split.js` 从同一份分类算出，**不是第二份手写清单**；两腿并集才是全量，`utils/jestSplitContract.test.js` P1–P6 钉这个形态）：判据三条（**只跑通过的那一次不算验收**，成对取证）与守护分类（**行为守护承重、接线守护不构成证据**）见 [`docs/agents/guards.md`](docs/agents/guards.md)；分类真源 `node scripts/classify-guards.mjs`（`utils/guardClassification.test.js` H1–H5 钉形）。**新增守护**在 PR 正文答 `guards.md` 末节三问；本条只加判据，**不加人工门、不改其他门触发面**。
-- **编译门**：默认 `npm run build:kotlin-all` → `.ci-verify/kotlin-all.log`（执行人注明「agent 执行」、可 `-PostToPr`）；命中三份 json 改动、新增页面、模块手术收口 PR 时追加 `npm run build:compile`。**云打包按「打包面」触发**（三份 json / `uni_modules` app-android / 新增 aar·jar），**正式发版前必跑云打包并装机自测**。两条门脚本**须以全访问权限执行**。
+- **编译门**：默认 `npm run build:kotlin-all` → `.ci-verify/kotlin-all.log`（执行人注明「agent 执行」、可 `-PostToIssue <票号>` 贴 commit 判据评论）；命中三份 json 改动、新增页面、模块手术收口 PR 时追加 `npm run build:compile`。**云打包按「打包面」触发**（三份 json / `uni_modules` app-android / 新增 aar·jar），**正式发版前必跑云打包并装机自测**。两条门脚本**须以全访问权限执行**。
 - **低风险运行时面**（仅 `.uts` 逻辑改动，无 `.uvue` / 三份 json / `uni_modules`）免真机两道（正文那两行可整行不写），代价是真机 / 渲染问题推迟到发版前全量冒烟兜底——**单元测试门与编译门仍必过**。
-- **门证据管家**（`.github/workflows/mobile-gates.yml`，2026-10-16 立）：PR 上**一条常驻评论**自动回答「②④ 的证据是不是绑当前 head」，判据与 `pr-evidence` **同源**（从 head 抽同一个校验器跑，不另算口径）；**不判红、不进 ruleset、不代贴证据**。真门仍在**本机 / 真机**执行——托管 runner 上两道门卡在账号登录态（DCloud `Please Login in!` / 微信 `islogin` ENOENT），已实测证伪，见 `docs/adr/0041-三层门分离与云上证据管家.md` 决策 1。`-PostToPr` 贴完证据评论管家会自动刷新，**不必再手动触发**；分层口径（云上纯逻辑 / 本机运行时门 / 真机取证，**勿与 ② 门 `-Doctor` 的 L1–L7 混淆**）见 `0041` 决策 4。
+- **门证据管家**（`.github/workflows/mobile-gates.yml`，2026-10-16 立）：PR 上**一条常驻评论**自动回答「②④ 的证据是不是绑当前 head」，判据与 `pr-evidence` **同源**（同一份 `.github/scripts/lib/gate-validator.mjs`：两个工作流都不 checkout，用 `repos.getContent` 取模块文本执行，不另算口径）；**不判红、不进 ruleset、不代贴证据**。真门仍在**本机 / 真机**执行——托管 runner 上两道门卡在账号登录态（DCloud `Please Login in!` / 微信 `islogin` ENOENT），已实测证伪，见 `docs/adr/0041-三层门分离与云上证据管家.md` 决策 1。`-PostToIssue` 贴完证据评论管家会自动刷新，**不必再手动触发**；分层口径（云上纯逻辑 / 本机运行时门 / 真机取证，**勿与 ② 门 `-Doctor` 的 L1–L7 混淆**）见 `0041` 决策 4。
 - **③ 门在 CI 是 4 片 × 两腿 = 8 个子 job**（`0041` 决策 2 的分片 + `#1702` 的拆腿；矩阵腿→config 的映射只在 `ci.yml` 的 `include:` 里一处）：分的是**机器**、每个子 job 内部仍 `-i` 串行（`jest.config.unit.js` 文件头的 #1410 结论不变）；本地内循环仍按 `0036` 处置一走 `test:unit:local`，CI 快慢不改变本地判读纪律。**CI 里别写 `--shard=k/4`**：jest **27.5.1 没有这个选项**，未知参数被**静默忽略** ⇒ 每片照跑本腿全量（2026-10-16 实测成本 ×4、零提速）；正确做法是 `--listTests` 取**本腿**清单 + `scripts/jest-fanout.mjs` 按耗时 LPT 装箱（权重表 `utils/jestSuiteTimings.json`，重采脚本 `scripts/gen-jest-timings.mjs`，两腿共用同一份键）+ `--runTestsByPath`，切到 0 个套件即红（**#1715 起不再按 `NR%4` 轮转**：轮转不看单套件耗时，108.4 s 的那条会把所属片拖到 3:36）。
 - **窗口口径（ADR-0039 + 2026-10-15 收紧，见 `0040`）**：窗口内真机逐页取证**不跑**、小程序门每个运行时面 PR 必跑、视觉回归如实记「无人验」；**触及能力面的 PR 窗口内不合并、排队到退出后**（与 0039 决策 4 冲突处以 0040 为准）；能力面触发与人工签收**不随窗口延后**。
-- **签齐即合并**：证据填齐后 **agent 直接合并**，不必停在「待人工签收」——**「不必停在」不等于「还要问」**：证据齐且不走例外通道时，「是否合并 / 是否清理工作树」**不是问题**，直接执行（授权全文与合并前一行披露 production 部署口径见根 `docs/agents/release.md`:16）。合并后收尾顺序（先 `git worktree remove` → 再 `git branch -D` → 最后删远端，摘 `node_modules` junction 早于删目录）见 `release.md`:13。非运行时面的 PR（纯文档 / 测试 / CI 配置）agent 可自行合并。**例外通道**（「已接受未验证风险 + 理由 + 事后验证计划」）**仍必须由人执行合并**，禁止静默例外。
-- **批收口先答「减法仪式」再合**（#1729 立）：每一批 UI 收口（`docs/ui-spec.md` §11 的批 1–6 及其后续批）的收口 PR，正文必须回答一句「**本批有无该消的值？**」——逐条点名该消的 `utils/uiHexWhitelist.js` 条目并说明为何可消，或明确写「无」。**答了才许合（答「无」也是答）**。判据是棘轮只锁增长不锁消退：批 1→批 6 六个收口全是净增、无一净减提交，没有这条自问，垃圾条目只会随批数累积；「何时算死」的判据见 ADR-0038 决策 3（白名单值在受管页并集里再也 grep 不到即为死条目）。
+- **签齐即合并**：**证据主键是 commit 评论（#1770）**（判据贴 commit、展示副本贴票/PR）；证据填齐后 **agent 直接合并**，不必停在「待人工签收」——**「不必停在」不等于「还要问」**：证据齐且不走例外通道时，「是否合并 / 是否清理工作树」**不是问题**，直接执行（授权全文与合并前一行披露 production 部署口径见根 `docs/agents/release.md`:16）。合并后收尾顺序（先 `git worktree remove` → 再 `git branch -D` → 最后删远端，摘 `node_modules` junction 早于删目录）见 `release.md`:13。非运行时面的 PR（纯文档 / 测试 / CI 配置）agent 可自行合并。**例外通道**（「已接受未验证风险 + 理由 + 事后验证计划」）**仍必须由人执行合并**，禁止静默例外。
+- **批收口先答「减法仪式」再合**（#1729 立）：每批 UI 收口 PR（`docs/ui-spec.md` §11）正文必须回答「**本批有无该消的值？**」——逐条点名该消的 `utils/uiHexWhitelist.js` 条目并说明为何可消，或写「无」（答了才许合，答「无」也是答）；棘轮只锁增长不锁消退，批 1→6 六批全净增、无一净减；「何时算死」见 ADR-0038 决策 3（白名单值在受管页并集里 grep 不到即为死条目）。
 - 多会话并发下不动别人工作树就提交 / 同步 master 的配方见 `docs/agents/multi-agent-git.md`「游离提交：完整配方」。`pr-evidence` 检查**只校结构、不校真伪**，是可见检查而非 ruleset 必检（admin 通道**裁定不装**，见 ADR-0008）。
 
 ## 发布流程（push / PR / merge）
@@ -173,7 +173,7 @@ Worktree 配置」框**只填这一行调用**（填逻辑＝开第二真源）�
 
 移动端只补两条：
 
-- PR 正文的 `## 验收证据` 段结构见上节；四门的证据绑定与「签齐即 agent 直接合并」见 `docs/adr/0008-移动端验收门与证据.md`。
+- PR 正文的 `## 验收证据` 段结构见上节；四门的证据绑定与「签齐即 agent 直接合并」见 `docs/adr/0008-移动端验收门与证据.md`。门脚本 `-PostToIssue <票号>` 贴 **commit 判据评论** + 票/PR 展示副本（归档 `docs/verification/<模块>/<票号>/`）；**建 PR 前先跑预检绿、再由 `submit-pr.ps1` 建**（首次推送即判绿，见根 `docs/agents/release.md` 第 4 步）。
 
 - ⚠️ git/gh 的写操作一律**后台跑并等它自然结束**，用 `timeout` 包它们会把操作**截在执行到一半**（比失败更糟，事故全文见根 `docs/agents/release.md`）。
 
