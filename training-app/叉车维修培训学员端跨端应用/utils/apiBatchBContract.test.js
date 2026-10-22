@@ -42,8 +42,10 @@ function fnBodyOf(src, name) {
 describe('api/auth.uts 资料出口收紧（#653 兑现文件头遗留的 `updateProfileApi`）', () => {
   const code = stripComments(read(AUTH_API));
 
-  it('requestMapped 进出口家族 import（PUT 无便捷面，只能走通路本体）', () => {
-    expect(code).toMatch(/import\s*\{[^}]*\brequestMapped\b[^}]*\}\s*from\s*'\.\/request'/);
+  it('putMapped 进出口家族 import（#1734 起 PUT 有便捷面，不再手作 opts 长径）', () => {
+    expect(code).toMatch(/import\s*\{[^}]*\bputMapped\b[^}]*\}\s*from\s*'\.\/request'/);
+    // 反向：短径落地后，通路本体不该再出现在 auth.uts 的 import 面上
+    expect(code).not.toMatch(/import\s*\{[^}]*\brequestMapped\b[^}]*\}\s*from\s*'\.\/request'/);
   });
 
   /**
@@ -52,16 +54,19 @@ describe('api/auth.uts 资料出口收紧（#653 兑现文件头遗留的 `updat
    */
   function outletViolations(body) {
     const v = [];
-    if (!body.includes('return requestMapped<ProfileChangeRequest>(opts,')) v.push('未走 requestMapped 出口');
+    if (!body.includes("return putMapped<ProfileChangeRequest>('/auth/profile', payload,")) {
+      v.push('未走 putMapped 出口');
+    }
     if (/(?:^|[^A-Za-z0-9_$])put\(/.test(body)) v.push('仍有裸 put( 调用');
     if (body.includes('.then(')) v.push('仍有 .then() 拆包');
-    for (const shape of ["opts.method = 'PUT'", 'opts.data = payload', "url: '/auth/profile'"]) {
-      if (!body.includes(shape)) v.push('请求形态偏离 put()，缺 ' + shape);
+    // 反向：#1734 后不许再退回「手作 opts 三步」的长径（方法/路径/载荷都该由出口参数承载）
+    for (const legacy of ["opts.method = 'PUT'", 'opts.data = payload', "url: '/auth/profile'"]) {
+      if (body.includes(legacy)) v.push('退回 opts 长径，仍手写 ' + legacy);
     }
     return v;
   }
 
-  it('updateProfileApi 经 requestMapped 出口，请求形态与 put() 逐字一致', () => {
+  it('updateProfileApi 经 putMapped 出口（#1734 短径），方法/路径/载荷在调用点一次写清', () => {
     const body = fnBodyOf(code, 'updateProfileApi');
     expect(body).not.toBe('');
     expect(outletViolations(body)).toEqual([]);
@@ -87,27 +92,28 @@ describe('api/auth.uts 资料出口收紧（#653 兑现文件头遗留的 `updat
   it('文件头「资料类出口本轮不动」的旧口径已推翻并与实现同批更新', () => {
     const src = read(AUTH_API);
     expect(src).not.toContain('其余登录 / 资料类出口本轮不动');
-    expect(src).toContain('updateProfileApi` 走 `requestMapped');
+    // #1734 把文件头同步改到 putMapped 口径：头与实现必须同批更新，别让注释退化成旧指针
+    expect(src).toContain('updateProfileApi` 走 **`putMapped`**');
     // 划清边界：profile 模块独有的账号面不属本票，免得被读成「整个 auth 资料面收完了」
     expect(src).toContain('updateAccountApi');
   });
 
-  it('出口判据具备判别力（写回 put().then() 必须被同一条判据逐项抓到）', () => {
+  it('出口判据具备判别力（退回 put().then() 长径必须被同一条判据逐项抓到）', () => {
     const body = fnBodyOf(code, 'updateProfileApi');
     const regressed = body
-      .replace("return requestMapped<ProfileChangeRequest>(opts,",
-        "return put('/auth/profile', payload).then((data : UTSJSONObject) : ProfileChangeRequest => {")
-      .replace("opts.method = 'PUT'\n", '')
-      .replace('opts.data = payload\n', '')
-      .replace("const opts : RequestOptions = { url: '/auth/profile' } as RequestOptions\n", '');
+      .replace("return putMapped<ProfileChangeRequest>('/auth/profile', payload,",
+        "const opts : RequestOptions = { url: '/auth/profile' } as RequestOptions\n" +
+        "\topts.method = 'PUT'\n" +
+        "\topts.data = payload\n" +
+        "\treturn put('/auth/profile', payload).then((data : UTSJSONObject) : ProfileChangeRequest => {");
     expect(regressed).not.toBe(body);
     expect(outletViolations(regressed)).toEqual([
-      '未走 requestMapped 出口',
+      '未走 putMapped 出口',
       '仍有裸 put( 调用',
       '仍有 .then() 拆包',
-      "请求形态偏离 put()，缺 opts.method = 'PUT'",
-      '请求形态偏离 put()，缺 opts.data = payload',
-      "请求形态偏离 put()，缺 url: '/auth/profile'",
+      '退回 opts 长径，仍手写 opts.method = \'PUT\'',
+      '退回 opts 长径，仍手写 opts.data = payload',
+      '退回 opts 长径，仍手写 url: \'/auth/profile\'',
     ]);
     // 对照组：真源跑同一条判据必须零违例（防判据退化成「逢调用必报」）
     expect(outletViolations(body)).toEqual([]);

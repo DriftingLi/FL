@@ -4,8 +4,7 @@
  * - 考点标签
  * - 个人笔记 CRUD
  */
-import { del, getMapped, postMapped, requestMapped } from './request'
-import type { RequestOptions } from './request'
+import { del, getMapped, postMapped, putMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
 import { decodeList, decodePage } from './envelope'
 import type { QuestionComment, CommentListResult, QuestionNote, KnowledgeTag } from '../types/index'
@@ -101,12 +100,7 @@ export function getNoteApi(questionId : number) : Promise<QuestionNote> {
 /** 保存笔记（upsert：首次创建，之后更新） */
 export function saveNoteApi(questionId : number, content : string) : Promise<QuestionNote> {
 	const payload : UTSJSONObject = { content: content } as UTSJSONObject
-	// 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 putMapped 便捷面，PUT 经 opts 同通路，
-	// 请求形态（url / method / data）与历史 put() 逐字一致
-	const opts : RequestOptions = { url: `/questions/${questionId}/note` } as RequestOptions
-	opts.method = 'PUT'
-	opts.data = payload
-	return requestMapped<QuestionNote>(opts, (data : UTSJSONObject) : QuestionNote => buildNote(data))
+	return putMapped<QuestionNote>(`/questions/${questionId}/note`, payload, (data : UTSJSONObject) : QuestionNote => buildNote(data))
 }
 
 /** 删除笔记 */

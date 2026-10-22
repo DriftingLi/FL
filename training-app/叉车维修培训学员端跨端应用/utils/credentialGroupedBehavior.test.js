@@ -50,19 +50,19 @@ const toNumber = (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(`${v}`)
 const toNumberOrNull = (v) => (v == null ? null : (Number.isNaN(parseFloat(`${v}`)) ? null : parseFloat(`${v}`)));
 const toStr = (v, d = '') => (v == null ? d : `${v}`);
 
-/** 起真实的 api/credential.uts：getMapped / requestMapped 由用例注入 */
-function loadApi({ storage = {}, getMapped, requestMapped } = {}) {
+/** 起真实的 api/credential.uts：getMapped / patchMapped 由用例注入（#1734 问题 2：PATCH 走短径出口） */
+function loadApi({ storage = {}, getMapped, patchMapped } = {}) {
   const u = makeUni(storage);
   const calls = [];
   const gM = (url, params, map) => {
     calls.push({ method: 'GET', url });
     return getMapped == null ? Promise.resolve(map({})) : getMapped(url, params, map);
   };
-  const rM = (opts, map) => {
-    calls.push({ method: opts.method, url: opts.url, data: opts.data });
-    return requestMapped == null ? Promise.resolve(map({})) : requestMapped(opts, map);
+  const pM = (url, data, map) => {
+    calls.push({ method: 'PATCH', url, data });
+    return patchMapped == null ? Promise.resolve(map({})) : patchMapped(url, data, map);
   };
-  const mod = loadUts(CRED, { getMapped: gM, requestMapped: rM, toNumber, toNumberOrNull, toStr, uni: u.uni });
+  const mod = loadUts(CRED, { getMapped: gM, patchMapped: pM, toNumber, toNumberOrNull, toStr, uni: u.uni });
   return { mod, calls, store: u.store, toasts: u.toasts };
 }
 
@@ -318,7 +318,7 @@ function loadAuthFace(init = {}) {
   bindings.STORAGE_KEY_CREDENTIALS = KEY.credentials;
   bindings.ACTIVE_ROLE_RECRUITER = 'recruiter';
   bindings.uni = u.uni;
-  const cred = loadUts(CRED, { getMapped: () => Promise.resolve({}), requestMapped: () => Promise.resolve({}), toNumber, toNumberOrNull, toStr, uni: u.uni });
+  const cred = loadUts(CRED, { getMapped: () => Promise.resolve({}), patchMapped: () => Promise.resolve({}), toNumber, toNumberOrNull, toStr, uni: u.uni });
   return { store: loadUts(AUTH_STORE, bindings).useAuthStore(), kv: u.store, uni: u, readCache: () => cred.readCurrentCredentialCache() };
 }
 

@@ -16,9 +16,11 @@
  *   - 显式类型声明 + `as` 收口（Kotlin 泛型推断兜底，先例 usePagedList.uts:132 `as UsePagedListResult<T>`）
  *   - 函数成员箭头包裹（规则 M/T：具名 fn 引用不作高阶实参；本文件 mapper 透传，形参直达）
  *   - 无 try/catch、无 catch((e : any))（规则 H）、解码器 rethrow 原样上抛
- *   - query 合并用 for...in（Android 端不支持 Object.keys，api/request.uts:432 先例）
+ *   - query 合并走 `api/transport.uts` 的 `mergeQueryParams`（#1734 问题 3：此处曾是第三份
+ *     逐字同构的 for...in；Android 端不支持 Object.keys，合并语义统一收在传输层一处）
  */
 import { getMapped } from './request'
+import { mergeQueryParams } from './transport'
 import { toNumber } from './helpers'
 
 /** 归一化的一页：items + total + hasMore（ADR-0037 ①）。6 个页面要 total，不与 PagedBatch 合并。 */
@@ -106,21 +108,14 @@ export function decodeList<T>(data : UTSJSONObject, url : string, toItem : (obj 
 /**
  * GET 分页站点的整条装载（归一出口之三）：拼 query → `getMapped` → `decodePage`。
  * 只收编 GET（ADR-0037 ⑤：POST 分页现网 0 站点，出现时走 `postMapped` + `decodePage`，不加 postPaged）。
- * `query` 的值经 `toString()` 进 query 串（数字等标量调用方直传）；
- * 手动序列化沿用 `api/request.uts:432` 的 for...in + encodeURIComponent（防跨端漂移，不交平台自动序列化）。
+ * `query` 的值经模板字符串强促进 query 串（数字等标量调用方直传）；
+ * 合并与序列化都收在 `api/transport.uts`（`mergeQueryParams` / `buildQuery`，防跨端漂移，不交平台自动序列化）。
  */
 export function getPaged<T>(url : string, page : number, pageSize : number, toItem : (obj : UTSJSONObject) => T, query : PageQuery | null = null, keys : string[] = DEFAULT_KEYS) : Promise<Page<T>> {
     const params : UTSJSONObject = {} as UTSJSONObject
     params['page'] = page.toString()
     params['page_size'] = pageSize.toString()
-    if (query != null) {
-        for (const k in query) {
-            const v = query[k]
-            if (v != null) {
-                params[k] = `${v}`
-            }
-        }
-    }
+    mergeQueryParams(params, query)
     return getMapped<Page<T>>(url, params, (data : UTSJSONObject) : Page<T> => {
         return decodePage<T>(data, url, page, pageSize, toItem, keys)
     })

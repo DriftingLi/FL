@@ -18,6 +18,8 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { loadUts, readText } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
+
 
 const ROOT = path.join(__dirname, '..');
 const POINTS_UTS = path.join(ROOT, 'api', 'points.uts');
@@ -28,10 +30,10 @@ const helpers = loadUts(path.join(ROOT, 'api', 'helpers.uts'), {});
 const { toNumber, toNumberOrNull, toBool, toStr } = helpers;
 
 /** 信封归一模块真实现（ADR-0037 PR-B）：course 的列表/数组出口现在走 decodePage/decodeList。 */
-const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), envelopeBindings({
   getMapped: () => Promise.resolve({}),
   toNumber,
-});
+}));
 
 /** 捕获 postMapped/getMapped 调用的最小桩：返回值由用例给（reject 用 err 槽） */
 function makeRequestStub(reply) {

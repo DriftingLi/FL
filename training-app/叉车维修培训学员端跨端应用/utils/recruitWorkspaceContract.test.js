@@ -573,11 +573,13 @@ describe('E. 职位管理面存在且与 web 同源；仍零「功能开发中�
     // 三写端点与 web jobApi.{createJob,updateJob,toggleJobStatus} 逐字同源
     // （PR-E #1665：post/put 载荷出口收紧至Mapped 家族——端点 / 方法 / 载荷经同通路逐字钉住）
     expect(api).toContain("postMapped<RecruitJob>('/recruit/jobs', buildJobInputPayload(input),");
-    expect(api).toContain("url: '/recruit/jobs/' + id.toString()");
-    expect(api).toContain("opts.method = 'PUT'");
-    expect(api).toContain("opts.data = buildJobInputPayload(input)");
+    // #1734 起编辑走 putMapped 短径：端点 / 方法 / 载荷三段由出口参数承载，逐字钉住
+    expect(api).toContain("putMapped<RecruitJob>('/recruit/jobs/' + id.toString(), buildJobInputPayload(input),");
+    // 反向：不许退回手作 opts 长径（那是本票收掉的两轴混杂）
+    expect(api).not.toContain("opts.method = 'PUT'");
+    expect(api).not.toContain('opts.data = buildJobInputPayload(input)');
     expect(api).toContain("'/recruit/jobs/' + id.toString() + '/toggle-status'");
-    // 编辑仍走 PUT（经 requestMapped 的 opts.method 同通路——出口家族无 putMapped 便捷面）；DELETE / PATCH web 未用，仍禁止
+    // 编辑仍走 PUT（#1734 起经 putMapped 出口）；DELETE / PATCH web 未用，仍禁止
     expect(api).not.toMatch(/\bdel\s*\(/);
     expect(api).not.toMatch(/\bpatch\s*\(/);
     // 面内确有发布 / 编辑 / 上下架动作入口（jobs 卡 + job-edit 页），且 forced_offline 抑制上架

@@ -103,7 +103,10 @@ const INFRA = {
    * - `api/auth.uts` —— 鉴权域，5 个模块（forgot-password / login / profile / profile-setup / register）共用
    * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
-   * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（**711 行现测（#1598/#1603 订正，登记时 611），见 `oversized`**）
+   * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（#1734 两轴拆分后 583 行，已在 `BUDGET` 内 ⇒ 不再进 `oversized`）
+ * - `api/transport.uts` —— #1734 从 request.uts 沉下来的**纯传输层**（请求头构造 / URL 解析 / query 序列化
+ *   `buildQuery`·`withQuery`·`mergeQueryParams` / 统一信封解析 `handleStatus` / 日志脱敏 / 网络层报错）。
+ *   依赖方向单向（request.uts → transport.uts）；被 api 层间接消费，无模块级消费者 ⇒ 跨切面基础设施
    * - `api/envelope.uts` —— 分页信封归一的**单一出口**（移动端 ADR-0037：getPaged/decodePage/decodeList），被全仓 api 层的分页站点消费，无模块级消费者；与 request 同属跨切面基础设施
    * - `composables/usePagedList.uts` —— 分页列表协议本体（移动端 ADR-0027），跨切面基础设施，
    *   无模块级消费者，预算面归它自己的票。**消费面按现状写，不按愿景写**（#1733 订正：原注释称
@@ -121,6 +124,7 @@ const INFRA = {
     'api/helpers.uts',
     'api/refreshGate.uts',
     'api/request.uts',
+    'api/transport.uts',
     'api/envelope.uts',
     'composables/useLoginProviders.uts',
     'composables/usePagedList.uts',
@@ -133,8 +137,12 @@ const INFRA = {
    * 基础设施里**已超 600 行、本票不拆**的文件（登记不执法；拆它需要独立票）。
    * 双向对账：① 每个超预算的 infra 文件都必须在这里；② 这里的每一条都必须**真的**超预算 ——
    * 于是它既不是藏身处，也不会留下过期的行（同 `pending` 的口径）。
+   *
+   * 现测**为空**：#1734 把 `api/request.uts` 从 796 行拆到 583 行（两轴：续期/重试编排留原地，
+   * 纯传输沉 `api/transport.uts`），最后一条超预算的跨界文件随之出表。空表不是「判据退役」——
+   * 双向对账的判别力由 `modulesDeclarationContract.test.js` E4 的合成探针 + E8/E9 注入取证。
    */
-  oversized: ['api/request.uts'],
+  oversized: [],
 };
 
 /**

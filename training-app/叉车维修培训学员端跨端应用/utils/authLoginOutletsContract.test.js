@@ -48,10 +48,10 @@ const OUTLETS = [
   { fn: 'mpWechatLoginApi', label: 'postMapped', required: "return postMapped<WechatLoginResult>('/auth/wx-login', payload,", shapes: ['isNewRaw'] },
   {
     fn: 'updateAccountApi',
-    label: 'requestMapped',
-    required: 'return requestMapped<LoginResult>(opts,',
-    // PUT 无便捷面 ⇒ 与 put() 逐字同通路的三件套（#653 updateProfileApi 先例）
-    shapes: ["opts.method = 'PUT'", 'opts.data = payload', "url: '/auth/account'", '=> buildLoginResult(data)'],
+    label: 'putMapped',
+    // #1734 问题 2：出口家族补齐 putMapped，方法/路径/载荷在调用点一次写清（原 opts 三件套长径退役）
+    required: "return putMapped<LoginResult>('/auth/account', payload,",
+    shapes: ['=> buildLoginResult(data)'],
   },
 ];
 
@@ -75,11 +75,13 @@ describe('锁 1：八条出口判据（#1324 验收 ①：全部走 mapper-callb
     const m = /^import \{([^}]+)\} from '\.\/request'$/m.exec(code);
     expect(m).not.toBeNull();
     const names = m[1].split(',').map((s) => s.trim());
-    for (const need of ['post', 'getMapped', 'postMapped', 'requestMapped', 'del', 'uploadFile']) {
+    for (const need of ['post', 'getMapped', 'postMapped', 'putMapped', 'del', 'uploadFile']) {
       expect(names).toContain(need);
     }
     expect(names).not.toContain('get');
     expect(names).not.toContain('put');
+    // #1734 起 updateAccountApi 走 putMapped 短径 ⇒ 通路本体退出 import 面（孤儿现状，跟着锁住）
+    expect(names).not.toContain('requestMapped');
   });
 
   it.each(OUTLETS)('$fn 走 $label 出口且形态字段在位', (spec) => {
@@ -312,7 +314,9 @@ describe('锁 3：幻影路由锁（#662 口径）：登录族八条路由必须
       const body = fnBodyOf(code, spec.fn);
       const path = /'((?:\/auth)\/[^']*)'/.exec(body);
       expect({ fn: spec.fn, found: Boolean(path) }).toEqual({ fn: spec.fn, found: true });
+      // #1734 后 PUT 那支的 method 由出口名承载（不再是 opts.method 赋值），两支都认
       const method = body.includes('getMapped<') ? 'GET'
+        : body.includes('putMapped<') ? 'PUT'
         : body.includes("opts.method = 'PUT'") ? 'PUT' : 'POST';
       out.push(`${method} ${path[1]}`);
     }

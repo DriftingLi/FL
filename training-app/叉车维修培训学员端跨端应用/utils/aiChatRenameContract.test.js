@@ -29,11 +29,11 @@ function fnBody(name) {
 describe('会话重命名 API 契约（renameAiSessionApi）', () => {
   const body = fnBody('renameAiSessionApi');
 
-  it('走 PATCH .../sessions/:id/title 的路径（opts.url + PATCH 方法），请求体带 title', () => {
-    // PR-E #1665：出口收口至 requestMapped（出口家族无 patchMapped 便捷面），
-    // 方法 + 路径经 opts 同通路，与历史 patch() 逐字一致
-    expect(body).toContain("url: '/ai-assistant/sessions/' + id + '/title'");
-    expect(body).toContain("opts.method = 'PATCH'");
+  it('走 PATCH .../sessions/:id/title 的路径（patchMapped 短径），请求体带 title', () => {
+    // #1734 问题 2：出口家族补齐 patchMapped，本处从「opts 三步长径」换为短径，
+    // 方法（PATCH）由出口名承载，路径与请求体仍是逐字判据 —— 少的是样板，不是约束。
+    expect(body).toContain('patchMapped<AiSession>(');
+    expect(body).toContain("'/ai-assistant/sessions/' + id + '/title'");
     expect(body).toContain('{ title: title }');
   });
 

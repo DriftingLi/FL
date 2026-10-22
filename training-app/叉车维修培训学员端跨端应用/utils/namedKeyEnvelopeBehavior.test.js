@@ -28,6 +28,8 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, readText } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
+
 const { forumBodyModule } = require('./forumChainHarness');
 
 const API_DIR = path.join(__dirname, '..', 'api');
@@ -65,7 +67,7 @@ function makeRejectingGetMapped(err, recorder) {
 }
 
 /** 信封模块：与出口共用同一个 getMapped 替身（`getPaged` 内部走它，真回调 mapper） */
-const envelopeFor = (h, gm) => loadUts(ENVELOPE_UTS, { getMapped: gm, toNumber: h.toNumber });
+const envelopeFor = (h, gm) => loadUts(ENVELOPE_UTS, envelopeBindings({ getMapped: gm, toNumber: h.toNumber }));
 
 /** 按出口装载 material.uts（imports：getMapped / toNumber,toStr / getPaged —— PR-F #1666 起走信封出口） */
 function loadMaterial(raw, calls = [], file = MATERIAL_UTS, opt = {}) {
