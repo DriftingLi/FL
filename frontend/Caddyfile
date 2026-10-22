@@ -143,8 +143,12 @@ cdn.{$DOMAIN} {
 @delivery_unsafe path_regexp (?i)\.(cjs|htm|html|js|mjs|svg|svgz|xhtml|xml)$
 # <<< gen-deploy:caddy-delivery 生成区止
 
+	# 写方法拦截同样必须进 handle 链：链外的 `respond @write_methods` 会被下面的
+	# handle 互斥路由吞掉（线上实测 POST 返回 404 而非 403，见 #1759）。
 	@write_methods method POST PUT PATCH DELETE
-	respond @write_methods "Forbidden" 403
+	handle @write_methods {
+		respond "Forbidden" 403
+	}
 
 	handle /reports/* {
 		rewrite * /forklift-files{http.request.uri}
@@ -155,16 +159,21 @@ cdn.{$DOMAIN} {
 		reverse_proxy 172.17.1.42:8088
 	}
 
-	handle {
-		@not_object_store not path /featured/* /avatars/* /contributions/* /resumes/* /images/forum/* /images/questions/* /images/chapters/* /images/ai-assistant/* /chapters/* /slides/* /uploads/*
-		respond @not_object_store "Not Found" 404
-
+	# ⚠️ 这里必须用「正向匹配 + 独立兜底」，**不要**写 `not path ...`：
+	# 2026-10-22 线上实测，那条 `@not_object_store` 对所有路径都成立 ⇒ 全部请求被本站
+	# `respond 404` 拦掉（正文是 9 字节的 "Not Found"，不是 RGW 的 NoSuchKey），
+	# 表现为「RGW 里明明有对象、cdn 却 404」（学员头像就是这样废掉的）。
+	@object_store path /featured/* /avatars/* /contributions/* /resumes/* /images/forum/* /images/questions/* /images/chapters/* /images/ai-assistant/* /chapters/* /slides/* /uploads/*
+	handle @object_store {
 		rewrite * /forklift-files{http.request.uri}
 		header Content-Disposition "attachment"
 		header @delivery_inline Content-Disposition "inline"
 		header X-Content-Type-Options "nosniff"
 		header Cache-Control "public, max-age=86400"
 		reverse_proxy 172.17.1.42:8088
+	}
+	handle {
+		respond "Not Found" 404
 	}
 }
 

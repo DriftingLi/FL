@@ -192,6 +192,19 @@ func TestCaddyCDNScopeLock(t *testing.T) {
 	if !strings.Contains(cdn, "404") || !strings.Contains(cdn, "respond") {
 		t.Error("cdn 块缺少未知路径的 404 兜底")
 	}
+	// 2026-10-22 线上事故：`not path ...` 形式的反向匹配对所有路径都成立，
+	// 结果所有请求被本站 404 拦掉，而 RGW 里对象其实存在（学员头像全废）。
+	// 判据锁「正向匹配 @object_store + 独立兜底」这个形状本身。
+	if !strings.Contains(cdn, "@object_store path") {
+		t.Error("cdn 块必须用正向匹配 @object_store，而不是反向 not path（后者实测会把一切拦成 404）")
+	}
+	if strings.Contains(cdn, "not path") {
+		t.Error("cdn 块里出现了 not path：反向匹配在本项目踩过线上事故，改用正向匹配 + 独立兜底")
+	}
+	// 写方法拦截必须落在 handle 内（链外会被互斥路由吞掉，#1759）。
+	if !strings.Contains(cdn, "handle @write_methods {") {
+		t.Error("写方法拦截必须在 handle 内：链外的 respond 会被后续 handle 吞掉，POST 会返回 404 而非 403")
+	}
 	if !strings.Contains(cdn, "@write_methods method POST PUT PATCH DELETE") {
 		t.Error("cdn 块没有挡住写方法（资源域只允许 GET/HEAD）")
 	}
