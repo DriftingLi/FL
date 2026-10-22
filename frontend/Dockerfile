@@ -3,7 +3,7 @@
 # Stage 2: Caddy 托管静态资源 + 反代（证书自动申请与续期）
 
 # ----- Builder 阶段 -----
-FROM node:22-alpine AS builder
+FROM node:25-alpine AS builder
 
 WORKDIR /app
 
