@@ -127,8 +127,11 @@ func RegisterRoutes(
 	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
 	// 评估历史/详情 + 电池 RUL CRUD + /auth/me
 	// 已统一到主体系 JWT,与培训学员端共用同一 token
+	// 过渡期同时收 web 与 valuation 两族：老 SPA（本仓）持 web 族令牌，Nuxt BFF 持 valuation 族。
+	// 北迁完成后收窄成只认 security.FamilyValuation（判据与理由见 middleware.JWTAuthAllowFamilies）。
 	valAuth := r.Group("/api/valuation")
-	valAuth.Use(middleware.JWTAuth(sess), middleware.CapabilityRequired(authz.CapValuationUse))
+	valAuth.Use(middleware.JWTAuthAllowFamilies(sess, security.FamilyWeb, security.FamilyValuation),
+		middleware.CapabilityRequired(authz.CapValuationUse))
 	{
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)

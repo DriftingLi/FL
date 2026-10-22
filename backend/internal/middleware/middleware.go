@@ -136,6 +136,43 @@ func JWTAuth(sess *security.Session) gin.HandlerFunc {
 	}
 }
 
+// JWTAuthAllowFamilies 强制 JWT 认证，且只接受点名的令牌族（#1756 第二批）。
+//
+// 为什么会有「允许两族」这种形态：残值前端北迁是第二批，**过渡期** valuation.gdyidao.cn
+// 仍由本仓 SPA 服务，它持有的是 web 族令牌；等 Nuxt + BFF 上线后必须收窄成
+// `JWTAuthAllowFamilies(sess, security.FamilyValuation)`。
+// ⚠️ 收窄之前，「允许两族」是过渡态而不是设计意图 —— 谁把这条注释连同北迁一起删，才是对了。
+func JWTAuthAllowFamilies(sess *security.Session, families ...security.Family) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !resolveClaimsAllowed(c, sess, families) {
+			response.Unauthorized(c, "Token无效或已过期，请重新登录")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// resolveClaimsAllowed resolveClaims 的按族版本：任一允许的族接受即通过。
+// 族判定与校验的实现在 security.Session.VerifyAccessFor（对外行为的唯一判据）。
+func resolveClaimsAllowed(c *gin.Context, sess *security.Session, families []security.Family) bool {
+	tokenStr := sess.ExtractToken(c.GetHeader("Authorization"), authCookieValue(c, sess))
+	if tokenStr == "" {
+		return false
+	}
+	for _, family := range families {
+		claims, err := sess.VerifyAccessFor(family, tokenStr)
+		if err != nil {
+			continue
+		}
+		c.Set(string(CtxUserID), claims.UserID)
+		c.Set(string(CtxAccount), claims.Account)
+		c.Set(string(CtxUserRole), claims.Role)
+		return true
+	}
+	return false
+}
+
 // OptionalAuth 可选 JWT 认证：有 token 则解析填充，无则放行。
 func OptionalAuth(sess *security.Session) gin.HandlerFunc {
 	return func(c *gin.Context) {
