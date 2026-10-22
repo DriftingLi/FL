@@ -113,10 +113,12 @@ recruit.{$DOMAIN} {
 	import spa_workspace
 }
 
-# ===== 残值评估（过渡期：仍由本仓 SPA 服务）=====
-# 第二批（前端迁到和润门户、改写 Nuxt）完成后，本块改为 301 到 https://valuation.hrwai.cn。
+# ===== 残值评估：已迁走，本块只做 301 =====
+# 前端已迁到和润门户（Nuxt，路径 /valuation），本仓只保留后端与数据。
+# 老书签 / 已发出的链接在这里 301 过去；本仓不再有估值 SPA。
 valuation.{$DOMAIN} {
-	import spa_workspace
+	{$CADDY_TLS}
+	redir https://valuation.hrwai.cn/valuation{http.request.uri} permanent
 }
 
 # ===== cdn：对象存储直出（资源域，仅 GET/HEAD）=====

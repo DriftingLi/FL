@@ -91,6 +91,15 @@ func TestCaddyfileHostMatrixLock(t *testing.T) {
 			t.Errorf("Caddyfile 缺少站点块：%s", addr)
 		}
 	}
+	// 残值评估已迁到和润门户（Nuxt）：本仓只剩 301，不得再挂 SPA 面。
+	val := blockAt(src, "valuation.{$DOMAIN}")
+	if !strings.Contains(val, "redir https://valuation.hrwai.cn/valuation") {
+		t.Error("valuation 站点必须 301 到 https://valuation.hrwai.cn/valuation（前端已迁走，本仓只剩后端）")
+	}
+	if strings.Contains(val, "spa_workspace") || strings.Contains(val, "file_server") {
+		t.Error("valuation 站点不得再挂 SPA：本仓估值前端已迁到门户仓")
+	}
+
 	// 根域与 www 用逗号合并写法，单独断言。
 	if !strings.Contains(src, "gdyidao.cn, www.gdyidao.cn {") {
 		t.Error("Caddyfile 缺少「根域 + www」的合并站点块")
@@ -100,9 +109,13 @@ func TestCaddyfileHostMatrixLock(t *testing.T) {
 	// 2026-10-22 收尾：切换日曾留过一个 api-only 的 `www.gccsmile.com` 过渡块给门户回源。
 	// 现已确认 EdgeOne 回源切到 `api.<domain>`（旧域 DNS 已 NXDOMAIN、门户 /api 仍 200），
 	// 过渡块删除，本条锁恢复严格 —— 谁再把它加回来，这里就红。
+	// 例外：残值评估的 301 目标本身就在和润域（`https://valuation.hrwai.cn/valuation`）——
+	// 那是「指向门户」，不是「本机又去承载和润域」。把该字面量摘掉后再扫。
+	const valuationTarget = "https://valuation.hrwai.cn/valuation"
+	rest := strings.ReplaceAll(src, valuationTarget, "")
 	for _, retired := range []string{"gccsmile", "hrwai.cn"} {
-		if strings.Contains(src, retired) {
-			t.Errorf("Caddyfile 里还有已退役域名 %q 的引用（hrwai.cn 已由 EdgeOne 承载，与本机无关）", retired)
+		if strings.Contains(rest, retired) {
+			t.Errorf("Caddyfile 里还有已退役域名 %q 的引用（hrwai.cn 只允许作为残值 301 的目标出现）", retired)
 		}
 	}
 	if strings.Contains(src, "legacy_api") {
