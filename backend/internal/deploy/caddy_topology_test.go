@@ -105,8 +105,8 @@ func TestCaddyfileHostMatrixLock(t *testing.T) {
 				t.Errorf("门户回源兼容块里出现了 %s：它只该服务 /api、/swagger、/health", forbidden)
 			}
 		}
-		if !strings.Contains(legacy, "@legacy_api path /api/* /swagger* /health") {
-			t.Error("门户回源兼容块的放行集合被改过：必须恰好是 /api/* /swagger* /health")
+		if !strings.Contains(legacy, "@legacy_api path /api/* /swagger*") {
+			t.Error("门户回源兼容块的放行集合被改过：必须恰好是 /api/* 与 /swagger*（/health 由独立 handle 返回 ok）")
 		}
 	}
 	// 除过渡块外，旧域与和润域都不得出现（R2 硬切：切完即删）。

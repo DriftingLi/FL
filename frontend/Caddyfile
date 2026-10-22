@@ -44,9 +44,11 @@
 	{$CADDY_TLS}
 	encode zstd gzip
 
-	@health path /health
-	respond @health "ok" 200
-
+	# health 必须是 handle 链的第一环：Caddy 的 handle 互斥，
+	# 放在链外的 `respond @health` 会被下面那条兜底 handle 抢先吞掉（实测 404）。
+	handle /health {
+		respond "ok" 200
+	}
 	handle /api/* {
 		import backend_api
 	}
@@ -80,9 +82,9 @@ api.{$DOMAIN} {
 	{$CADDY_TLS}
 	encode zstd gzip
 
-	@health path /health
-	respond @health "ok" 200
-
+	handle /health {
+		respond "ok" 200
+	}
 	handle /swagger* {
 		import backend_api
 	}
@@ -196,7 +198,10 @@ dify.{$DOMAIN} {
 # 它只接受旧 Host、只放行 /api、/swagger、/health，其余一律 404 —— 不吐 SPA、不做 301。
 www.gccsmile.com {
 	{$CADDY_TLS}
-	@legacy_api path /api/* /swagger* /health
+	handle /health {
+		respond "ok" 200
+	}
+	@legacy_api path /api/* /swagger*
 	handle @legacy_api {
 		import backend_api
 	}
