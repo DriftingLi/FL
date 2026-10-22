@@ -431,10 +431,18 @@ describe('E. 全表对账：每个源文件都有归属（模块 或 基础设�
 
   it('E4: 超预算的跨界文件双向对账（登记不执法，但不许隐形、也不许留过期登记）', () => {
     expect(REAL.infraOversizedDrift).toEqual([]);
-    // 事实可见：现在确实有一条（`api/request.uts`）—— 这条断言防「oversized 恒空 ⇒ 判据空跑」
-    const facts = h.infraFacts();
-    expect(facts.oversized.length).toBeGreaterThan(0);
-    expect(facts.oversized.every((f) => h.fileLines(f) > h.BUDGET)).toBe(true);
+    // 真源此刻**为空**：#1734 把最后一条越线的 `api/request.uts` 从 796 行拆到 583 行，
+    // 于是「真源必须非空」这条自证式断言永久失效（它只会逼人留一条假的超预算登记）。
+    // 改为收紧预算的**合成探针**：让真实的 infra 文件越过线，同一段对账逻辑照样被驱动。
+    expect(h.INFRA.oversized).toEqual([]);
+    const PROBE_BUDGET = 100;
+    const probe = h.infraFacts(h.MODULES, h.INFRA, PROBE_BUDGET);
+    expect(probe.oversized.length).toBeGreaterThan(0); // 判据非空跑：探针预算下确有真实越线文件
+    expect(probe.oversized.every((f) => h.fileLines(f) > PROBE_BUDGET)).toBe(true);
+    // 越线却没登记 ⇒ 漂移的「漏登记」侧在探针下照样会亮（必红一侧由 E8 逐条取证）
+    expect(probe.oversizedDrift.length).toBeGreaterThan(0);
+    // 「过期登记」侧：登记表里每一条都必须是真超 `BUDGET` 的文件（必红一侧由 E9 取证）
+    expect(h.INFRA.oversized.every((f) => h.fileLines(f) > h.BUDGET)).toBe(true);
   });
 
   const INFRA_INJECTIONS = [
@@ -460,6 +468,9 @@ describe('E. 全表对账：每个源文件都有归属（模块 或 基础设�
       id: 'E8',
       name: '超预算跨界文件漏登记（清空 oversized）',
       key: 'infraOversizedDrift',
+      // 真源预算下现已无越线文件（清空 oversized 不产生漂移）⇒ 用探针预算让真实文件越线，
+      // 「漏登记必红」这一侧才继续有判别力；真源在默认预算下走同一段代码（budget 参数默认 `BUDGET`）。
+      budget: 100,
       apply: (infra) => { infra.oversized = []; },
     },
     {
@@ -476,11 +487,12 @@ describe('E. 全表对账：每个源文件都有归属（模块 或 基础设�
     },
   ];
 
-  it.each(INFRA_INJECTIONS)('$id: $name ⇒ $key 判红（真实声明必不红）', ({ key, apply }) => {
+  it.each(INFRA_INJECTIONS)('$id: $name ⇒ $key 判红（真实声明必不红）', ({ key, apply, budget }) => {
     expect(REAL[key]).toEqual([]); // 必不红一侧
     const brokenInfra = JSON.parse(JSON.stringify(h.INFRA));
     apply(brokenInfra);
-    expect(h.reconcile(h.MODULES, brokenInfra)[key].length).toBeGreaterThan(0); // 必红一侧
+    const lineBudget = typeof budget === 'number' ? budget : h.BUDGET;
+    expect(h.reconcile(h.MODULES, brokenInfra, lineBudget)[key].length).toBeGreaterThan(0); // 必红一侧
   });
 
   it('E11: 漏登记的信息能直接指出是哪个文件（可照抄进声明）', () => {

@@ -18,6 +18,7 @@
  */
 const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
+const { requestBindings } = require('./requestUtsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const GATE_UTS = path.join(ROOT, 'api', 'refreshGate.uts');
@@ -92,7 +93,11 @@ function buildApp(opts) {
     ACTIVE_ROLE_STUDENT: ROLE_STUDENT,
     ACTIVE_ROLE_RECRUITER: ROLE_RECRUITER,
   });
+  // #1734：纯传输层已沉成 api/transport.uts，request.uts 从它 import 一组符号 ⇒ 装载时按真源注入。
+  // ⚠️ 传输层的 getStorage/API_BASE_URL 必须与下面 request 侧**同一个真源**：buildHeader 搬到传输层后，
+  //    token 是从传输层自己的 getStorage 取的，给它桩值 = Authorization 静默缺失（并发 401 重试发不出去）。
   const request = loadUts(REQUEST_UTS, {
+    ...requestBindings({ uni, getStorage: storage.getStorage, API_BASE_URL: 'http://127.0.0.1:8080', STORAGE_KEY_TOKEN: KEY_TOKEN }),
     gateRefresh: gate.gateRefresh,
     API_BASE_URL: 'http://127.0.0.1:8080',
     REQUEST_TIMEOUT: 15000,

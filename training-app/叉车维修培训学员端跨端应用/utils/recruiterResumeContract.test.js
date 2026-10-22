@@ -46,6 +46,12 @@ const PROJECTION_GO = path.join(REPO_ROOT, 'backend', 'internal', 'resume', 'pro
 
 const recruitSrc = readText(RECRUIT_UTS);
 const requestSrc = readText(REQUEST_UTS);
+/**
+ * #1734 两轴拆分后，403/404 的**写端真源**（状态码前缀常量 + handleStatus 分支）沉在
+ * `api/transport.uts`，`api/request.uts` 只留一条转发 —— 本节「写端」判据因此读传输层。
+ */
+const TRANSPORT_UTS = path.join(ROOT, 'api', 'transport.uts');
+const transportSrc = readText(TRANSPORT_UTS);
 const librarySrc = readText(LIBRARY_UVUE);
 const detailSrc = readText(DETAIL_UVUE);
 const drawerSrc = readText(DRAWER_UVUE);
@@ -339,16 +345,22 @@ describe('D. 筛选抽屉 = 后端 8 维（不多不少）+ 列表加载更多 p
 });
 
 describe('E. 403 分支在 request 出口里与 401 分开（不清态、不跳转）', () => {
-  test('E1：handleStatus 有独立 403 分支，且不碰登录态与导航', () => {
-    const start = requestSrc.indexOf('if (statusCode == 403) {');
+  test('E1：handleStatus 有独立 403 分支（transport.uts），且不碰登录态与导航', () => {
+    const start = transportSrc.indexOf('if (statusCode == 403) {');
     expect(start).toBeGreaterThan(-1);
-    const body = requestSrc.slice(start, requestSrc.indexOf('\n    }', start));
-    expect(body).toContain('statusCode = 403');
+    const body = transportSrc.slice(start, transportSrc.indexOf('\n    }', start));
+    // 分支本体：读消息 → 提示 → 以消息前缀承载状态码 → 上抛 → 吃下这一支
+    expect(body).toContain('showError(forbiddenMsg, silent)');
+    expect(body).toContain('new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)');
+    expect(body).toContain('reject(forbiddenErr)');
+    expect(body).toContain('return true');
     expect(body).not.toContain('handleUnauthorized');
     expect(body).not.toContain('removeStorage');
     expect(body).not.toContain('reLaunch');
-    // 401 仍是「返回 false 交给刷新/登出链」的那条
-    expect(requestSrc).toContain('if (statusCode == 401) {\n        return false\n    }');
+    // 401 仍是「返回 false 交给刷新/登出链」的那条（同函数，分支顺序在前）
+    expect(transportSrc).toContain('if (statusCode == 401) {\n        return false\n    }');
+    // 反向：request.uts 里不许留第二份解析真源（两轴拆分后 handleStatus 只有一处）
+    expect(requestSrc).not.toContain('if (statusCode == 403) {');
   });
 
   test('E2：403 状态码**不得**再靠「给 any 动态加属性」承载（④a 编译门抓获的编不过写法）', () => {
@@ -356,15 +368,18 @@ describe('E. 403 分支在 request 出口里与 401 分开（不清态、不跳�
     // 在 UTS→Kotlin 下报 error18「找不到名称 statusCode」，编译直接失败。
     // 注意：注释里可以出现这句话（作为血账记录），所以先把注释剥掉再判。
     const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
-    const code = stripComments(requestSrc) + '\n' + stripComments(recruitSrc);
+    const code = stripComments(requestSrc) + '\n' + stripComments(transportSrc) + '\n' + stripComments(recruitSrc);
     expect(code).not.toMatch(/\.statusCode\s*=\s*\d/);
     expect(code).not.toMatch(/as any\)\.statusCode/);
   });
 
   test('E3：403 用**消息前缀**承载，读写两端共用同一常量（单点真源）', () => {
-    // 写端：request.uts 定义常量并在 403 分支前置到消息
-    expect(requestSrc).toContain("export const FORBIDDEN_MESSAGE_PREFIX = '403:'");
-    expect(requestSrc).toContain('new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)');
+    // 写端：transport.uts 定义常量并在 403 分支前置到消息（#1734 后的写端真源）
+    expect(transportSrc).toContain("export const FORBIDDEN_MESSAGE_PREFIX = '403:'");
+    expect(transportSrc).toContain('new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)');
+    // request.uts 只留转发：出口名不变（消费方仍从 './request' 取），字面量不再二次出现
+    expect(requestSrc).toContain('export const FORBIDDEN_MESSAGE_PREFIX = TRANSPORT_FORBIDDEN_PREFIX');
+    expect(requestSrc).not.toContain("export const FORBIDDEN_MESSAGE_PREFIX = '403:'");
     // 读端：recruit.uts 从 request import 同一常量并 startsWith 判定（不得自写字面量）
     expect(recruitSrc).toContain('FORBIDDEN_MESSAGE_PREFIX');
     expect(recruitSrc).toContain('msg.startsWith(FORBIDDEN_MESSAGE_PREFIX)');
@@ -382,7 +397,7 @@ describe('E. 403 分支在 request 出口里与 401 分开（不清态、不跳�
 
   test('E5：`uni.openDocument` 调用面不得出现 `showMenu`（该参数在本仓基座下不存在）', () => {
     const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
-    for (const src of [recruitSrc, requestSrc]) {
+    for (const src of [recruitSrc, requestSrc, transportSrc]) {
       const code = stripComments(src);
       // 只覆盖「openDocument 的参数对象紧跟着 showMenu」这一种形态；注释血账不算
       expect(code).not.toMatch(/openDocument\(\{[\s\S]{0,200}?showMenu\s*:/);

@@ -87,9 +87,12 @@ describe('credential 域收紧（dashboard 证件切换数据源）', () => {
   const src = read('api/credential.uts');
   // 注释里的 getMock* 是**解释性文字**（说明为什么删），不是回退 —— 判据一律先抹注释
   const code = stripComments(src);
-  it('引入 getMapped 与 requestMapped（PATCH 无便捷面，走 opts 同通路）', () => {
+  it('引入 getMapped 与 patchMapped（#1734 起 PATCH 有便捷面，不再手作 opts 长径）', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
-    expect(src).toMatch(/import\s*\{[^}]*requestMapped[^}]*\}\s*from\s*'\.\/request'/);
+    expect(src).toMatch(/import\s*\{[^}]*patchMapped[^}]*\}\s*from\s*'\.\/request'/);
+    // 反向：短径落地后，通路本体与 RequestOptions 都不该再出现在 credential.uts
+    expect(src).not.toMatch(/import\s*\{[^}]*requestMapped[^}]*\}\s*from\s*'\.\/request'/);
+    expect(src).not.toMatch(/import type \{ RequestOptions \}/);
   });
   it('getCurrentCredentialApi 经 getMapped 且保留 catch（GET 面「读不到」不当业务失败），但不再查硬编码字典（#1349）', () => {
     const body = fnBodyOf(src, 'getCurrentCredentialApi');
@@ -131,11 +134,13 @@ describe('credential 域收紧（dashboard 证件切换数据源）', () => {
     expect(src).not.toMatch(/obj\['level'\]\s*as\s+number/);
     expect(src).toMatch(/import\s*\{[^}]*toNumberOrNull[^}]*\}\s*from\s*'\.\/helpers'/);
   });
-  it('switchCredentialApi 经 requestMapped，PATCH 经 opts.method 赋值；失败上抛、不再 mock 假成功（#1346 反转 #643 的「后端未实现」兜底）', () => {
+  it('switchCredentialApi 经 patchMapped 短径（#1734）；失败上抛、不再 mock 假成功（#1346 反转 #643 的「后端未实现」兜底）', () => {
     const body = fnBodyOf(src, 'switchCredentialApi');
-    expect(body).toContain('requestMapped<CredentialSwitchResult>');
-    expect(body).toContain("opts.method = 'PATCH'");
-    expect(body).toContain('opts.data = body');
+    expect(body).toContain('patchMapped<CredentialSwitchResult>');
+    expect(body).toContain("TRAINING_API_BASE + '/me/credential', body,");
+    // 反向：不许退回手作 opts 三步（方法/路径/载荷都由出口参数承载）
+    expect(body).not.toContain("opts.method = 'PATCH'");
+    expect(body).not.toContain('opts.data = body');
     // 后端 PATCH /me/credential 已实现 ⇒ 失败必须上抛，不得用 .catch + mock 兜成 success:true
     expect(body).not.toContain('.catch(');
     expect(body).not.toContain('getMockCredentialList');
@@ -158,9 +163,14 @@ describe('幻影路由锁（#662）：credential 域路由必须落在后端已�
     for (const m of code.matchAll(/getMapped<[^(]*\(\s*TRAINING_API_BASE \+ '([^']+)'/g)) {
       out.push(`GET ${m[1]}`);
     }
-    const opts = /opts\.method = '([A-Z]+)'/.exec(code);
-    const patchPath = /opts : RequestOptions = \{ url: TRAINING_API_BASE \+ '([^']+)' \}/.exec(code);
-    if (opts != null && patchPath != null) out.push(`${opts[1]} ${patchPath[1]}`);
+    // #1734 后 PATCH 那支由 patchMapped 出口名承载 method（不再有 opts.method 赋值），路径取自第一个实参
+    for (const m of code.matchAll(/patchMapped<[^(]*\(\s*TRAINING_API_BASE \+ '([^']+)'/g)) {
+      out.push(`PATCH ${m[1]}`);
+    }
+    // 兜底形态：若哪天又写回 opts 长径，这里仍要能抽到（否则该站点会从路由锁里静默消失）
+    const optsMethod = /opts\.method = '([A-Z]+)'/.exec(code);
+    const optsPath = /opts : RequestOptions = \{ url: TRAINING_API_BASE \+ '([^']+)' \}/.exec(code);
+    if (optsMethod != null && optsPath != null) out.push(`${optsMethod[1]} ${optsPath[1]}`);
     return out;
   }
 

@@ -21,6 +21,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const uts = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENV_UTS = path.join(ROOT, 'api', 'envelope.uts');
@@ -29,7 +30,8 @@ const HELPERS_UTS = path.join(ROOT, 'api', 'helpers.uts');
 const SHELL_SRC = uts.readText(ENV_UTS);
 
 // 导入面自检：与文件头 import 逐一对齐——错位即夹具坏（bindings 掏空会静默假绿，先 fail 在这里）
-expect(uts.importedNames(SHELL_SRC).slice().sort()).toEqual(['getMapped', 'toNumber']);
+// #1734 问题 3：query 合并收一为 api/transport.uts 的 mergeQueryParams ⇒ 导入面多这一条
+expect(uts.importedNames(SHELL_SRC).slice().sort()).toEqual(['getMapped', 'mergeQueryParams', 'toNumber']);
 // 导出面自检：三个函数出口 + DEFAULT_KEYS（export type 被 utsHarness 有意忽略，形态由 ④ 门证）
 expect(uts.exportedNames(SHELL_SRC).slice().sort()).toEqual(['DEFAULT_KEYS', 'decodeList', 'decodePage', 'getPaged']);
 
@@ -43,7 +45,8 @@ const stubGetMapped = (url, params, map) => {
     return Promise.resolve(map(FIXTURE[url] != null ? FIXTURE[url] : {}));
 };
 
-const BINDINGS = { getMapped: stubGetMapped, toNumber: toNumber };
+// mergeQueryParams 用传输层**真件**（不是手抄镜像）：getPaged 的 query 合并语义由真源保证
+const BINDINGS = envelopeBindings({ getMapped: stubGetMapped, toNumber: toNumber });
 const mod = uts.loadUts(ENV_UTS, BINDINGS);
 
 const toItem = (obj) => ({ id: obj['id'] });

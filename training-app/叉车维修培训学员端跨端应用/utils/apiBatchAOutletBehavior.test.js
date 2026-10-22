@@ -30,6 +30,7 @@
 const path = require('path');
 
 const { loadUts } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
 
 const API_DIR = path.join(__dirname, '..', 'api');
 const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
@@ -40,10 +41,10 @@ const SEARCH_UTS = path.join(API_DIR, 'search.uts');
 const helpers = () => loadUts(HELPERS_UTS, {});
 
 /** 信封归一模块真实现（ADR-0037 PR-B）：job 列表入口现在走 decodePage，按依赖从真源注入。 */
-const envelope = () => loadUts(path.join(API_DIR, 'envelope.uts'), {
+const envelope = () => loadUts(path.join(API_DIR, 'envelope.uts'), envelopeBindings({
   getMapped: () => Promise.resolve({}),
   toNumber: helpers().toNumber,
-});
+}));
 
 /**
  * `getMapped` 替身 —— **真的调用出口传进来的 mapper**。
@@ -65,10 +66,10 @@ function makeGetMapped(raw, recorder) {
 function loadJobApi(raw) {
   const getCalls = [];
   const postCalls = [];
-  const env = loadUts(path.join(API_DIR, 'envelope.uts'), {
+  const env = loadUts(path.join(API_DIR, 'envelope.uts'), envelopeBindings({
     getMapped: makeGetMapped(raw, getCalls),
     toNumber: helpers().toNumber,
-  });
+  }));
   const mod = loadUts(JOB_UTS, {
     getMapped: makeGetMapped(raw, getCalls),
     getPaged: env.getPaged,

@@ -294,8 +294,9 @@ describe('零直发请求（页面层不直接 uni.request）', () => {
 describe('域 api 收紧（T09 / ADR-0007）：DTO 出口走 mapper-callback 家族', () => {
   const api = read('api/resume.uts');
 
-  it('引入 getMapped / requestMapped 出口家族，且不再 import 裸 get/put', () => {
-    expect(api).toMatch(/import\s*\{[^}]*getMapped[^}]*requestMapped[^}]*\}\s*from\s*'\.\/request'/);
+  it('引入 getMapped / putMapped 出口家族（#1734：PUT 有了便捷面，不再借 requestMapped 手作长径），且不再 import 裸 get/put', () => {
+    expect(api).toMatch(/import\s*\{[^}]*getMapped[^}]*putMapped[^}]*\}\s*from\s*'\.\/request'/);
+    expect(api).not.toMatch(/import\s*\{[^}]*requestMapped[^}]*\}\s*from\s*'\.\/request'/);
     expect(api).not.toMatch(/import\s*\{[^}]*\bget\b[^}]*\}\s*from\s*'\.\/request'/);
     expect(api).not.toMatch(/import\s*\{[^}]*\bput\b[^}]*\}\s*from\s*'\.\/request'/);
   });
@@ -308,21 +309,23 @@ describe('域 api 收紧（T09 / ADR-0007）：DTO 出口走 mapper-callback 家
     'getPositionsApi',
   ];
 
-  it.each(MAPPED_FNS)('%s 经 mapper 出口（getMapped/requestMapped + 箭头包裹 build*）', (name) => {
+  it.each(MAPPED_FNS)('%s 经 mapper 出口（getMapped/putMapped + 箭头包裹 build*）', (name) => {
     const start = api.indexOf('export function ' + name);
     expect(start).toBeGreaterThan(-1);
     const body = api.slice(start, api.indexOf('\n}', start));
-    expect(body).toMatch(/(get|request)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\(/);
+    expect(body).toMatch(/(get|put|request)Mapped<[A-Za-z_$][\w$]*(?:\[\])?>\(/);
     // ADR-0037 PR-B：getPositionsApi 的数组出口改走信封归一 decodeList，其余仍是 build*/to* 形态
     expect(body).toMatch(/\(data : UTSJSONObject\) : [A-Za-z_$][\w$]*(?:\[\])? => (build[A-Za-z_$][\w$]*|to[A-Za-z_$][\w$]*|decode(?:List|Page)<[A-Za-z_$][\w$]*>)\(data/);
   });
 
-  it('PUT 面走 requestMapped + opts.method 赋值（与既有 put() 逐字同通路，T05 先例）', () => {
+  it('PUT 面走 putMapped 短径（#1734 收掉 opts 三步长径；方法/路径/载荷由出口参数承载）', () => {
     for (const name of ['saveResumeApi', 'setVisibilityApi']) {
       const start = api.indexOf('export function ' + name);
       const body = api.slice(start, api.indexOf('\n}', start));
-      expect(body).toContain("opts.method = 'PUT'");
-      expect(body).toContain('requestMapped<');
+      expect(body).toMatch(/putMapped<[A-Za-z_$][\w$]*>\(/);
+      // 反向：不许退回手作长径（方法/路径/载荷三段手写，正是本票要收掉的两轴混杂）
+      expect(body).not.toContain("opts.method = 'PUT'");
+      expect(body).not.toContain('requestMapped<');
     }
   });
 
@@ -568,16 +571,22 @@ describe('拆分判据锁（T09 新增）：壳层不自持编辑态，「卡宽
  * 两节分工：行为测试会自己搭依赖（接线断了它照样绿），本节负责「接线没断」。
  */
 describe('#1204 notfound 单一出口（写端前缀 → 判定出口 → 两个消费方）', () => {
+  // #1734 两轴拆分后，404 前缀与分支的**写端真源**沉在 api/transport.uts；
+  // api/request.uts 只留一条转发（消费方仍从 './request' 取常量，出口面零变化）
   const req = read('api/request.uts');
+  const transport = read('api/transport.uts');
   const api = read('api/resume.uts');
   const overview = read('pages/resume/resume.uvue');
   const composable = read('pages/resume/composables/useResumeEdit.uts');
 
-  it('写端：request.uts 有 404 分支，状态码经**消息前缀**承载（与 403 同构，不给 any 动态加属性）', () => {
-    expect(req).toContain("export const NOT_FOUND_MESSAGE_PREFIX = '404:'");
-    const start = req.indexOf('if (statusCode == 404) {');
+  it('写端：transport.uts 有 404 分支，状态码经**消息前缀**承载（与 403 同构，不给 any 动态加属性）', () => {
+    expect(transport).toContain("export const NOT_FOUND_MESSAGE_PREFIX = '404:'");
+    // 字面量单点在传输层；request.uts 保留一条转发，出口名与消费方视角不变
+    expect(req).toContain('export const NOT_FOUND_MESSAGE_PREFIX = TRANSPORT_NOT_FOUND_PREFIX');
+    expect(req).toMatch(/NOT_FOUND_MESSAGE_PREFIX as TRANSPORT_NOT_FOUND_PREFIX/);
+    const start = transport.indexOf('if (statusCode == 404) {');
     expect(start).toBeGreaterThan(-1);
-    const body = req.slice(start, req.indexOf('\n    }', start));
+    const body = transport.slice(start, transport.indexOf('\n    }', start));
     expect(body).toContain('NOT_FOUND_MESSAGE_PREFIX + notFoundMsg');
     // 404 是**预期分支**：与 401 分开（不清登录态、不跳登录页）
     const code = stripComments(body);

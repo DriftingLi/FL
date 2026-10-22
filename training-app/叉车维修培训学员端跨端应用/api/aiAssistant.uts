@@ -8,8 +8,7 @@
  * @note chat 为 SSE 流：event: delta/done/error + data: {...}
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
-import { del, getMapped, postMapped, requestMapped, uploadFile, renewOrExpire, AUTH_EXPIRED_MESSAGE } from './request'
-import type { RequestOptions } from './request'
+import { del, getMapped, postMapped, patchMapped, uploadFile, renewOrExpire, AUTH_EXPIRED_MESSAGE } from './request'
 import { decodeList, decodePage } from './envelope'
 import type { Page } from './envelope'
 import { toNumber, toStr } from './helpers'
@@ -284,12 +283,7 @@ export function createAiSessionApi(title : string, modelName : string, featureKe
 /** 重命名会话 */
 export function renameAiSessionApi(id : number, title : string) : Promise<AiSession> {
 	const payload : UTSJSONObject = { title: title }
-	// 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 patchMapped 便捷面，PATCH 经 opts 同通路，
-	// 请求形态（url / method / data）与历史 patch() 逐字一致（先例 credential.uts switchCredentialApi）
-	const opts : RequestOptions = { url: '/ai-assistant/sessions/' + id + '/title' } as RequestOptions
-	opts.method = 'PATCH'
-	opts.data = payload
-	return requestMapped<AiSession>(opts, (data : UTSJSONObject) : AiSession => {
+	return patchMapped<AiSession>('/ai-assistant/sessions/' + id + '/title', payload, (data : UTSJSONObject) : AiSession => {
 		const s = data['session']
 		if (s != null) return buildSession(s as UTSJSONObject)
 		return buildSession(data)

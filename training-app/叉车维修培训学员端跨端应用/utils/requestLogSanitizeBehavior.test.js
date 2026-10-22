@@ -13,33 +13,30 @@
  *   ClassCastException 走 catch 分支。故本缝只覆盖**对象**与 **null** 两支 —— 标量 / 数组请求体
  *   本仓不存在（auth 请求体都是扁平 UTSJSONObject），不在射程内。
  */
+/** 把传输层真件当 JS 跑起来，取它导出的 sanitizeForLog */
 const path = require('path');
-
-/** 把 request.uts 当 JS 跑起来，取它导出的 sanitizeForLog */
 const { loadUts } = require('./utsHarness');
-const REQUEST_UTS = path.join(__dirname, '..', 'api', 'request.uts');
+
+const TRANSPORT_UTS = path.join(__dirname, '..', 'api', 'transport.uts');
 
 /**
- * request.uts 的 import 依赖（loadUts 按 import 清单 fail-closed 校验齐全）。
+ * #1734 两轴拆分后，脱敏实现随「纯传输」沉到 `api/transport.uts` ⇒ 这里装载的是**传输层真件**，
+ * 仍然真执行（不是手抄镜像）。`request.uts` 侧只剩「打印点接线」，由对应的 contract 文件守。
+ *
+ * 传输层的 import 依赖（loadUts 按 import 清单 fail-closed 校验齐全）：
  * sanitizeForLog 只用模块内量（SENSITIVE_LOG_KEYS / LOG_SECRET_MASK / isSensitiveLogKey），
  * 其余给占位即可 —— 我们不调 request()，那些依赖不会被触发。
  */
 function loadSanitizer() {
-  const mod = loadUts(REQUEST_UTS, {
-    gateRefresh: () => Promise.resolve(true),
+  // ⚠️ 这里必须**直接**调 loadUts，不能转手给 utils/requestUtsHarness.js：
+  //    scripts/classify-guards.mjs 的「行为守护」判据认的是本文件里的 `loadUts(` 调用与 `.uts` 载体
+  //    （#1156）。转手会让本守护被降级成接线守护 ⇒ H4「零载体引用名单」平白多一项、③ 门少一条真执行腿。
+  return loadUts(TRANSPORT_UTS, {
     API_BASE_URL: 'http://127.0.0.1:8080',
-    REQUEST_TIMEOUT: 15000,
-    ENABLE_DEBUG_LOG: false,
     STORAGE_KEY_TOKEN: 'auth_token',
-    STORAGE_KEY_USER: 'auth_user',
     getStorage: () => '',
-    removeStorage: () => {},
-    isContentUri: () => false,
-    buildTempFilePath: () => '',
-    UPLOAD_TMP_DIR: 'upload-tmp',
-    isRecruiterActive: () => false,
-  });
-  return mod.sanitizeForLog;
+    uni: { showToast: () => {} },
+  }).sanitizeForLog;
 }
 
 describe('sanitizeForLog 行为（#1398：敏感值不进 logcat 由代码保证）', () => {

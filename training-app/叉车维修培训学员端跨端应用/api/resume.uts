@@ -7,7 +7,7 @@
  * 刻意保留裸透传的三类（白名单，理由在各自函数上）：multipart 上传（无 mapped 便捷面）、
  * void 语义删除（#1198 端点已定，行为与错误传播逐字不变）。
  */
-import { getMapped, requestMapped, del, uploadFile, NOT_FOUND_MESSAGE_PREFIX } from './request'
+import { getMapped, putMapped, del, uploadFile, NOT_FOUND_MESSAGE_PREFIX } from './request'
 import type { RequestOptions } from './request'
 import { toStr, toNumber, toBool, errMsg } from './helpers'
 import { decodeList } from './envelope'
@@ -223,14 +223,11 @@ export function isResumeNotFound(e : any | null) : boolean {
 /**
  * 保存简历（PUT /resume 整页 upsert）
  * @returns 服务端返回的最新简历数据
- * @note 走 `requestMapped` + `opts.method` 赋值：与既有 `put()` 逐字同通路（同一 opts.data / method 形态）
+ * @note 走 `putMapped` 短径（#1734 问题 2）：PUT 的 url / 载荷 / 映射三段与 `postMapped` 同形
  */
 export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
 	// silent: 由调用方统一提示保存结果，避免 request 层与页面双重 toast
-	const opts : RequestOptions = { url: '/resume', silent: true } as RequestOptions
-	opts.method = 'PUT'
-	opts.data = buildSavePayload(params)
-	return requestMapped<ResumeData>(opts, (data : UTSJSONObject) : ResumeData => buildResumeData(data))
+	return putMapped<ResumeData>('/resume', buildSavePayload(params), (data : UTSJSONObject) : ResumeData => buildResumeData(data), { url: '/resume', silent: true } as RequestOptions)
 }
 
 /**
@@ -239,10 +236,7 @@ export function saveResumeApi(params : SaveResumeParams) : Promise<ResumeData> {
  * @param visibility - "open" 公开 / "hidden" 隐藏
  */
 export function setVisibilityApi(visibility : string) : Promise<string> {
-	const opts : RequestOptions = { url: '/resume/visibility', silent: true } as RequestOptions
-	opts.method = 'PUT'
-	opts.data = { visibility: visibility } as UTSJSONObject
-	return requestMapped<string>(opts, (data : UTSJSONObject) : string => toStr(data['visibility']))
+	return putMapped<string>('/resume/visibility', { visibility: visibility } as UTSJSONObject, (data : UTSJSONObject) : string => toStr(data['visibility']), { url: '/resume/visibility', silent: true } as RequestOptions)
 }
 
 /**
