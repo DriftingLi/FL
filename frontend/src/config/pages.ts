@@ -89,8 +89,6 @@ export interface PageDescriptor {
   requiresAuth: boolean
   /** 认证页标记（认证页外壳用） */
   authPage?: boolean
-  /** 估值模块独立认证页标记 */
-  isValuationAuthPage?: boolean
   /** 兼容存量 meta.roles（估值历史页） */
   roles?: readonly string[]
   /** 可见性判据：角色需要拥有的能力 */
@@ -137,7 +135,6 @@ export const layouts: LayoutDef[] = [
   { key: 'tutor', basePath: '/training/tutor', component: () => import('@/layouts/TutorLayout.vue'), workspace: 'tutor', requiresAuth: true, role: 'tutor' },
   { key: 'manage', basePath: '/admin', component: () => import('@/layouts/AdminLayout.vue'), workspace: 'manage', requiresAuth: true, role: 'admin' },
   { key: 'recruit', basePath: '/recruit', component: () => import('@/layouts/RecruitLayout.vue'), workspace: 'recruit', requiresAuth: true, role: 'recruiter' },
-  { key: 'valuation', basePath: '/valuation', component: () => import('@/layouts/ValuationLayout.vue'), workspace: 'valuation', requiresAuth: false },
 ]
 
 /** 侧栏分组（按工作区分表；顺序即渲染顺序）。 */
@@ -219,16 +216,8 @@ const pagesData = [
   { name: 'TutorQuestionCreate', path: '/training/tutor/question-create', component: () => import('@/pages/tutor/QuestionCreate.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author' },
   { name: 'TutorQuestionTags', path: '/training/tutor/question-tags', component: () => import('@/pages/tutor/QuestionTags.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '标签管理', icon: CollectionTag, order: 4 } },
 
-  // ---------- 残值评估（ValuationLayout + 独立认证页）----------
-  { name: 'ValuationHome', path: '/valuation', component: () => import('@/pages/student/valuation/ValuationHome.vue'), layout: 'valuation', workspace: 'valuation', requiresAuth: false },
-  { name: 'ValuationResult', path: '/valuation/result', component: () => import('@/pages/student/valuation/ValuationResultView.vue'), layout: 'valuation', workspace: 'valuation', requiresAuth: false },
-  { name: 'ValuationReport', path: '/valuation/report/:id', component: () => import('@/pages/student/valuation/ValuationReportView.vue'), layout: 'valuation', workspace: 'valuation', requiresAuth: false },
-  { name: 'ValuationBatteryInput', path: '/valuation/battery', component: () => import('@/pages/student/valuation/BatteryInputView.vue'), layout: 'valuation', workspace: 'valuation', requiresAuth: false },
-  { name: 'ValuationBatteryResult', path: '/valuation/battery/result', component: () => import('@/pages/student/valuation/BatteryResultView.vue'), layout: 'valuation', workspace: 'valuation', requiresAuth: false },
-  { name: 'ValuationHistory', path: '/valuation/history', component: () => import('@/pages/student/valuation/ValuationHistoryView.vue'), layout: 'valuation', workspace: 'valuation', requiresAuth: true, roles: ['hrwai_user'], capability: 'valuation.use' },
-  { name: 'ValuationLogin', path: '/valuation/login', component: () => import('@/pages/auth/Login.vue'), workspace: 'valuation', requiresAuth: false, authPage: true, isValuationAuthPage: true },
-  { name: 'ValuationRegister', path: '/valuation/register', component: () => import('@/pages/auth/Register.vue'), workspace: 'valuation', requiresAuth: false, authPage: true, isValuationAuthPage: true },
-  { name: 'ValuationForgotPassword', path: '/valuation/forgot-password', component: () => import('@/pages/auth/ForgotPassword.vue'), workspace: 'valuation', requiresAuth: false, authPage: true, isValuationAuthPage: true },
+  // 残值评估的公开界面已迁门户仓（valuation.hrwai.cn/valuation，2026-10）；
+  // 本仓只保留管理端的「残值配置」（ValuationConfigManage），它挂在 manage 工作区下。
 
   // ---------- AI 助手（顶层，可选登录；归属 training 工作区）----------
   { name: 'AIAssistant', path: '/ai-assistant', component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use', nav: { group: 'interactive', label: 'AI助手', icon: MagicStick, activeRouteNames: ['AIAssistantFeature'], order: 2 } },

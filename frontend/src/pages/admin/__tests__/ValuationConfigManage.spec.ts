@@ -11,7 +11,7 @@
  * ③ 旧一轮的失败后到时，既不打错误态也不清草稿 —— 那正是 `onError` 必须排在代数校验之后的原因。
  *
  * 判定面走 ElTable 的 `data` prop（jsdom 下 `el-table-column` 的 scoped slot 拿不到 row，
- * 口径同 `student/valuation/__tests__/ValuationHistoryView.spec.ts`）。
+ * 口径同 `pages/admin/__tests__/CourseCatalog.spec.ts` 等既有列表页测试）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'

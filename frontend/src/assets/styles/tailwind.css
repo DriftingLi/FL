@@ -50,7 +50,6 @@
 @import "./design-tokens.css" layer(base);
 @import "./element-overrides.css" layer(base);
 @import "./valuation-tokens.css" layer(base);
-@import "./valuation-view-sections.css" layer(base);
 
 /* 原子类扫描范围：frontend/src（相对于本文件 ../../ ） */
 @source "../../";
@@ -72,9 +71,9 @@
  *    命名空间，所以这里一律用**语义别名**绕开（--radius-card / --shadow-card /
  *    --font-sans 等），绝不写 --radius-lg: var(--radius-lg)。
  * 2. 品牌色必须用 ui-* 命名空间，不能叫 brand-*。
- *    --color-brand-* 已被 valuation-tokens.css 在 .valuation-root 内用作残值域品牌色，
- *    且 ValuationLayout 有 var(--color-brand-500, #0EA5E9) 的兜底写法；
- *    在 :root 上定义 --color-brand-* 会击穿它，导致残值页头变青、主体仍蓝。
+ *    --color-brand-* 已被 valuation-tokens.css 在 .valuation-root 内用作残值域品牌色
+ *    （该作用域现在只剩管理端的「残值配置」页在用）；
+ *    在 :root 上定义 --color-brand-* 会击穿它，导致那一页的页头变青、主体仍蓝。
  *    同理不能用 teal-*（valuation-tokens 也定义了 --color-teal-*）。
  * 3. 原子类引用链是 .bg-ui-500 → var(--color-ui-500) → var(--color-primary-500)，
  *    因此残值域内若遮蔽了 --color-primary-*，原子类会自动跟随，无需额外处理。

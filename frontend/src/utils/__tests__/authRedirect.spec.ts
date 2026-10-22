@@ -11,11 +11,10 @@ describe('PATH_AUTH_ENTRIES 单点表（路径前缀 → 允许身份）', () =>
     expect(prefixes).toEqual(expectedDesc)
   })
 
-  it('内含全部六条路径前缀规约', () => {
+  it('内含全部五条路径前缀规约', () => {
     expect(PATH_AUTH_ENTRIES.map(e => e.prefix)).toEqual([
       '/training/tutor',
       '/ai-assistant',
-      '/valuation',
       '/training',
       '/recruit',
       '/admin'
@@ -29,7 +28,6 @@ describe('PATH_AUTH_ENTRIES 单点表（路径前缀 → 允许身份）', () =>
       '/training/tutor': 'tutor',
       '/admin': 'admin',
       '/training': 'hrwai_user',
-      '/valuation': 'hrwai_user',
       '/ai-assistant': 'hrwai_user'
     })
   })
@@ -67,13 +65,10 @@ describe('isSafeRedirect（同身份工作台内回跳白名单）', () => {
     ['tutor', '/training/tutor/courses', true],
     ['tutor', '/training', false],
     ['tutor', '/admin/dashboard', false],
-    ['tutor', '/valuation', false],
     ['tutor', '/ai-assistant', false],
-    // ===== hrwai_user：允许 /training / valuation / ai-assistant 前缀 =====
+    // ===== hrwai_user：允许 /training / ai-assistant 前缀 =====
     ['hrwai_user', '/training', true],
     ['hrwai_user', '/training/courses', true],
-    ['hrwai_user', '/valuation', true],
-    ['hrwai_user', '/valuation/history', true],
     ['hrwai_user', '/ai-assistant', true],
     ['hrwai_user', '/ai-assistant/chat', true],
     ['hrwai_user', '/admin/dashboard', false],
@@ -84,7 +79,6 @@ describe('isSafeRedirect（同身份工作台内回跳白名单）', () => {
     ['recruiter', '/recruit/resumes', true],
     ['recruiter', '/training', false],
     ['recruiter', '/admin', false],
-    ['recruiter', '/valuation', false],
     // ===== 未知/空角色：一律不放行 =====
     ['manager', '/admin/dashboard', false],
     ['manager', '/training/courses', false],
@@ -132,9 +126,6 @@ describe('getTargetSubdomainForPath（子域名归属，与旧行为一致）', 
     // 管理员后台
     ['/admin', 'admin'],
     ['/admin/dashboard', 'admin'],
-    // 残值评估（含历史/报告/电池）
-    ['/valuation', 'valuation'],
-    ['/valuation/history', 'valuation'],
     // 企业招聘
     ['/recruit', 'recruit'],
     ['/recruit/resumes', 'recruit'],

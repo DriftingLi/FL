@@ -4,7 +4,6 @@
 //     票 #1742），本仓在 www 上只保留「页面 301 + API」，SPA 不再跑在该子域；
 //     这里的 `main` 仍按「本站主域名」参与 URL 推导（跨子域跳转 / 外链判定）
 //   - training.主域名：学员培训 + AI 助手 + 学员登录
-//   - valuation.主域名：残值评估（含历史）+ HRWAI 账号登录
 //   - mentor.主域名：导师登录与工作区
 //   - manage.主域名：管理员登录与后台（hostname 前缀为 manage，内部类型仍为 admin）
 //   - recruit.主域名：企业招聘者登录与工作区
@@ -19,12 +18,13 @@
 import { getToken } from '@/utils/storage'
 import { findPathEntry, resolveWorkspaceForRole } from './authRedirect'
 
-export type SubdomainType = 'main' | 'training' | 'valuation' | 'tutor' | 'admin' | 'recruit'
+// 残值评估（valuation.）2026-10 起整站迁门户仓（valuation.hrwai.cn），Caddy 上直接 301，
+// 本仓不再认识这个子域：万一有请求落到这里，按 main 处理（根路径兜底会把它送去学员工作区）。
+export type SubdomainType = 'main' | 'training' | 'tutor' | 'admin' | 'recruit'
 
 // 子域名前缀到类型的映射（用于构建跨子域名 URL）
 const SUBDOMAIN_PREFIX_MAP: Record<Exclude<SubdomainType, 'main'>, string> = {
   training: 'training',
-  valuation: 'valuation',
   tutor: 'mentor', // 导师子域名前缀为 mentor
   admin: 'manage', // 管理员子域名前缀为 manage（内部类型 admin 保持不变）
   recruit: 'recruit'
@@ -38,7 +38,6 @@ export function getSubdomain(): SubdomainType {
   if (host.startsWith('manage.')) return 'admin'
   if (host.startsWith('recruit.')) return 'recruit'
   if (host.startsWith('training.')) return 'training'
-  if (host.startsWith('valuation.')) return 'valuation'
   return 'main'
 }
 
@@ -169,22 +168,20 @@ export function buildCrossDomainAuthUrl(target: SubdomainType, path: string): st
 
 // 获取当前子域名对应的默认工作区路径（同子域名内的相对路径）。
 // 「角色 → 默认工作区」单点：tutor/admin/hrwai_user 统一交由 authRedirect.resolveWorkspaceForRole 派生，
-// 消除两处「角色→工作区」重复映射；valuation 子域名与 training 同为 hrwai_user（resolve 归一为 /training），
-// 但其残值评估入口独立，此处保留既有行为。
+// 消除两处「角色→工作区」重复映射。
 export function getDefaultWorkspaceBySubdomain(): string {
   const sub = getSubdomain()
-  if (sub === 'valuation') return '/valuation'
   if (sub === 'recruit') return '/recruit'
   return resolveWorkspaceForRole(getRoleForSubdomain())
 }
 
 // 获取当前子域名对应的登录角色
-// training 和 valuation 子域名统一走 HRWAI 账号登录体系
+// training 子域名走 HRWAI 账号登录体系
 export function getRoleForSubdomain(): 'hrwai_user' | 'tutor' | 'admin' | 'recruiter' {
   const sub = getSubdomain()
   if (sub === 'tutor') return 'tutor'
   if (sub === 'admin') return 'admin'
   if (sub === 'recruit') return 'recruiter'
-  // training / valuation / 其他 → 统一 hrwai_user
+  // training / 其他 → 统一 hrwai_user
   return 'hrwai_user'
 }

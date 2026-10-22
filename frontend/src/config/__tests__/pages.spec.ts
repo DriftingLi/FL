@@ -155,15 +155,7 @@ const PUBLIC_PAGES = [
   'AIAssistantFeature',
   'ForgotPassword',
   'Login',
-  'Register',
-  'ValuationBatteryInput',
-  'ValuationBatteryResult',
-  'ValuationForgotPassword',
-  'ValuationHome',
-  'ValuationLogin',
-  'ValuationRegister',
-  'ValuationReport',
-  'ValuationResult'
+  'Register'
 ]
 
 describe('公开页面清单与 requiresAuth 必填', () => {
@@ -182,9 +174,9 @@ describe('公开页面清单与 requiresAuth 必填', () => {
     }
   })
 
-  it('挂在公开布局下却要求登录的页面，只有显式写出来的那一条', () => {
+  it('公开布局下没有需要登录的页面（残值评估迁走后已无此形态）', () => {
     const publicLayouts = new Set(layouts.filter(l => !l.requiresAuth).map(l => l.key))
     const protectedUnderPublic = pages.filter(p => p.layout && publicLayouts.has(p.layout) && p.requiresAuth)
-    expect(protectedUnderPublic.map(p => String(p.name))).toEqual(['ValuationHistory'])
+    expect(protectedUnderPublic.map(p => String(p.name))).toEqual([])
   })
 })

@@ -65,7 +65,6 @@ describe('workspaceOf / resolveTargetSubdomain（声明读法与派生）', () =
   it.each([
     ['training', 'training'],
     ['tutor', 'tutor'],
-    ['valuation', 'valuation'],
     ['recruit', 'recruit'],
     ['manage', 'admin'] // 管理后台子域名前缀 manage，内部类型 admin
   ] as const)('WORKSPACE_SUBDOMAIN[%s] === %s', (ws, sub) => {
@@ -98,7 +97,7 @@ describe('workspaceOf / resolveTargetSubdomain（声明读法与派生）', () =
 describe('subdomainBoundaryStep', () => {
   it('IP 直连旁路：整段跳过（跨工作区目标也不跳）', () => {
     expect(
-      resolveGuardDecision(input({ meta: { workspace: 'valuation' }, path: '/valuation' }), state({ ipDirect: true, subdomain: 'training' }))
+      resolveGuardDecision(input({ meta: { workspace: 'recruit' }, path: '/recruit' }), state({ ipDirect: true, subdomain: 'training' }))
     ).toEqual({ action: 'allow' })
   })
 
@@ -108,19 +107,6 @@ describe('subdomainBoundaryStep', () => {
       state({ subdomain: 'main', isLoggedIn: false, hasValidToken: false, role: '' })
     )
     expect(d).toEqual({ action: 'external', target: 'training', path: '/login?x=1' })
-  })
-
-  it('主体系认证页在 valuation 子域名 → 内部重定向到估值认证页（三页各归各位）', () => {
-    const st = state({ subdomain: 'valuation', isLoggedIn: false, hasValidToken: false, role: '' })
-    expect(
-      resolveGuardDecision(input({ meta: { workspace: 'auth' }, path: '/login' }), st)
-    ).toEqual({ action: 'redirect', to: '/valuation/login' })
-    expect(
-      resolveGuardDecision(input({ meta: { workspace: 'auth' }, path: '/register' }), st)
-    ).toEqual({ action: 'redirect', to: '/valuation/register' })
-    expect(
-      resolveGuardDecision(input({ meta: { workspace: 'auth' }, path: '/forgot-password' }), st)
-    ).toEqual({ action: 'redirect', to: '/valuation/forgot-password' })
   })
 
   it('主体系认证页在功能子域名（training/tutor/admin/recruit）自留 → 放行', () => {
@@ -157,7 +143,7 @@ describe('subdomainBoundaryStep', () => {
   it('未声明路径（404）兜底：非 main 子域名访问未知前缀 → 留在当前子域名默认工作区', () => {
     const d = resolveGuardDecision(
       input({ meta: {}, matched: [], path: '/foo', name: undefined }),
-      state({ subdomain: 'valuation' })
+      state({ subdomain: 'training' })
     )
     expect(d).toEqual({ action: 'workspace-home' })
   })
@@ -174,7 +160,7 @@ describe('subdomainBoundaryStep', () => {
   it('未声明但前缀表命中（404 挂在工作区前缀下）→ 按前缀子域名整页跳转', () => {
     const d = resolveGuardDecision(
       input({ meta: {}, matched: [], path: '/training/unknown', fullPath: '/training/unknown', name: undefined }),
-      state({ subdomain: 'valuation' })
+      state({ subdomain: 'recruit' })
     )
     expect(d).toEqual({ action: 'external', target: 'training', path: '/training/unknown' })
   })
@@ -198,31 +184,6 @@ describe('authPageStep', () => {
       state({ subdomain: 'training', role: 'admin' })
     )
     expect(d).toEqual({ action: 'workspace-home' })
-  })
-
-  it('已登录学员访问估值认证页 → 回评估历史', () => {
-    const d = resolveGuardDecision(
-      input({
-        meta: { workspace: 'valuation', authPage: true },
-        path: '/valuation/login',
-        matched: [{ authPage: true, workspace: 'valuation' }]
-      }),
-      state({ subdomain: 'valuation', role: 'hrwai_user' })
-    )
-    expect(d).toEqual({ action: 'redirect', to: '/valuation/history' })
-  })
-
-  it('已登录非学员角色访问估值认证页 → 不按学员回跳', () => {
-    expect(
-      resolveGuardDecision(
-        input({
-          meta: { workspace: 'valuation', authPage: true },
-          path: '/valuation/login',
-          matched: [{ authPage: true, workspace: 'valuation' }]
-        }),
-        state({ subdomain: 'valuation', role: 'tutor' })
-      )
-    ).toEqual({ action: 'allow' })
   })
 
   it('已登录访问业务页（非认证页）→ 不干预', () => {
@@ -258,17 +219,6 @@ describe('authRequiredStep', () => {
     })
   })
 
-  it('需登录而 token 缺失（估值工作区）→ 清登录态回估值登录页', () => {
-    const d = resolveGuardDecision(
-      input({ meta: { requiresAuth: true, roles: ['hrwai_user'], workspace: 'valuation' }, path: '/valuation/history', fullPath: '/valuation/history' }),
-      state({ subdomain: 'valuation', isLoggedIn: false, hasValidToken: false, role: '' })
-    )
-    expect(d).toEqual({
-      action: 'redirect',
-      to: { path: '/valuation/login', query: { redirect: '/valuation/history' } },
-      clearAuth: true
-    })
-  })
 })
 
 // ===== 步骤 4：专属子域身份匹配（#1614 / ADR-0071）=====
@@ -456,15 +406,6 @@ describe('roleStep', () => {
     ).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/training' } }, clearAuth: true })
   })
 
-  it('recruiter 闯估值受限页 → 回估值首页（公开）', () => {
-    expect(
-      resolveGuardDecision(
-        input({ meta: { requiresAuth: true, roles: ['hrwai_user'], workspace: 'valuation' }, path: '/valuation/history' }),
-        state({ subdomain: 'valuation', role: 'recruiter' })
-      )
-    ).toEqual({ action: 'redirect', to: '/valuation' })
-  })
-
   it('学员闯招聘工作区（ recruit 子域）→ 招聘子域身份匹配先行：清登录态回登录页（#1614，原为弹回 /training）', () => {
     expect(
       resolveGuardDecision(
@@ -473,16 +414,7 @@ describe('roleStep', () => {
       )
     ).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/recruit' } }, clearAuth: true })
     // 跨子域访问 recruit 路径（training 子域）会先被子域边界整页跳转；共号子域上的
-    // 角色回落由上方估值用例与 IP 直连用例覆盖（guard 管线的求值序所致）
-  })
-
-  it('学员闯估值受限页（共号子域）→ 角色回落回估值首页（同子域落点，行为不变）', () => {
-    expect(
-      resolveGuardDecision(
-        input({ meta: { requiresAuth: true, roles: ['hrwai_user'], workspace: 'valuation' }, path: '/valuation/history' }),
-        state({ subdomain: 'valuation', role: 'recruiter' })
-      )
-    ).toEqual({ action: 'redirect', to: '/valuation' })
+    // 角色回落由 IP 直连用例覆盖（guard 管线的求值序所致）
   })
 
   it('未知角色闯受限页 → 回学员工作区（IP 直连）；training. 子域上 → 清态回登录页（#1651）', () => {
@@ -509,8 +441,8 @@ describe('credentialStep', () => {
     expect(resolveGuardDecision(input(), state({ ipDirect: true, credential: 'none' }))).toEqual({ action: 'allow' })
     expect(
       resolveGuardDecision(
-        input({ meta: { requiresAuth: true, roles: ['hrwai_user'], workspace: 'valuation' }, path: '/valuation/history' }),
-        state({ subdomain: 'valuation', credential: 'none' })
+        input({ meta: { requiresAuth: true, workspace: 'recruit' }, path: '/recruit' }),
+        state({ credential: 'none', ipDirect: true })
       )
     ).toEqual({ action: 'allow' })
   })
