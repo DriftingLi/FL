@@ -19,7 +19,7 @@
 #   WATCH_TO_EMAIL   收件人，逗号分隔可多个
 #   SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD/SMTP_FROM  与部署 .env 同一套凭据的副本
 #   可选覆盖：WATCH_FAIL_THRESHOLD(3) WATCH_COOLDOWN_MIN(60) WATCH_DISK_CRIT_PCT(85)
-#             WATCH_ASSISTANT_URL WATCH_PUBLIC_BRANDS_URL WATCH_REMOTE_HOST WATCH_REMOTE_LXC
+#             WATCH_ASSISTANT_URL WATCH_PUBLIC_BRANDS_URL WATCH_FE_HOST WATCH_REMOTE_HOST WATCH_REMOTE_LXC
 # 发信失败 = 本单元失败（timer 的 OnFailure= 会再走一封），绝不静默跳过。
 # 已知边界：env 文件本身缺失/缺必需键时，兜底投递器用的是同一个文件 ⇒ 也发不出，只剩 journald。
 set -euo pipefail
@@ -48,7 +48,10 @@ FAIL_THRESHOLD=${WATCH_FAIL_THRESHOLD:-3}
 COOLDOWN_S=$(( ${WATCH_COOLDOWN_MIN:-60} * 60 ))
 DISK_CRIT_PCT=${WATCH_DISK_CRIT_PCT:-85}
 ASSISTANT_URL=${WATCH_ASSISTANT_URL:-http://172.17.1.23:8000/assistant/api/health}
-BRANDS_URL=${WATCH_PUBLIC_BRANDS_URL:-https://www.gccsmile.com/api/ai-assistant/diagnosis/brands}
+BRANDS_URL=${WATCH_PUBLIC_BRANDS_URL:-https://api.gdyidao.cn/api/ai-assistant/diagnosis/brands}
+# 反代探活的目标主机（#1760）：必须是**站群里的真实 Host**，不再是 localhost。
+# 留 WATCH_FE_HOST 覆盖口，是为了能在不打生产的前提下演练「探针失败必须变红」。
+FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
 REMOTE_HOST=${WATCH_REMOTE_HOST:-172.17.1.41}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-101}
 EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-redis-prod forklift-libreoffice-prod)
@@ -128,16 +131,17 @@ probe_public_brands() {
 
 # 前端「在跑」≠「在服务」：frontend 是 network_mode: host，compose 里 healthcheck 被显式
 # disable（#496 血账：host 网络下容器内 wget 跟随 301 → 证书不匹配 → 误报 unhealthy）。
-# 判据沿用 deploy-remote.sh 的宿主侧探活（#483）：首选 https 443 /health，只认 200；
-# 兜底 http 80 /health 同样只认 200 —— 80 端口的 server 级 return 301 抢在 location 前，
-# 301 一律视为不通（2026-09-02 曾因此误杀一次 testing 冒烟）。
+# 判据与 deploy-remote.sh 的宿主侧探活同口径（#483）：打 **api.<domain> 的 /health，只认 200**。
+#
+# 为什么不再打 https://localhost（#1760，2026-10-22 切换日实测）：
+# 那是 nginx 时代的事实 —— 443 上有 default_server 兜任何 Host。反代换成 Caddy 后没有
+# localhost 站点 ⇒ SNI 无证书 ⇒ 握手失败 ⇒ 恒 000 ⇒ **每轮巡检必报假警**，把真告警盖住。
+# --resolve 钉回环：不依赖 DNS（测试机/换域时域名不一定指回本机）；-k 保留：内部自签模式也要过。
 probe_frontend_health() {
   local code
-  code=$(curl -sk -o /dev/null -w '%{http_code}' -m 8 "https://localhost:${WATCH_NGINX_HTTPS_PORT:-443}/health" 2>/dev/null || echo 000)
-  if [ "$code" != "200" ]; then
-    code=$(curl -s -o /dev/null -w '%{http_code}' -m 8 "http://localhost:${WATCH_NGINX_HTTP_PORT:-80}/health" 2>/dev/null || echo 000)
-    [ "$code" = "200" ] || { REASON="前端 nginx 未在服务：https 与 http(301 不算) 的 /health 均非 200（本机回环，-k 跳证书）"; return 1; }
-  fi
+  code=$(curl -sk -o /dev/null -w '%{http_code}' -m 8 \
+    --resolve "${FE_HOST}:443:127.0.0.1" "https://${FE_HOST}/health" 2>/dev/null || echo 000)
+  [ "$code" = "200" ] || { REASON="前端反代未在服务：https://${FE_HOST}/health 非 200（本机回环 --resolve，-k 跳证书）"; return 1; }
 }
 
 disk_pct_of() { # disk_pct_of <usage%> -> echoes int
@@ -215,7 +219,7 @@ run_check() {
 判据来源：/usr/local/bin/forklift-watchdog.sh --dry-run
 状态文件：$STATE_FILE
 journald：journalctl -u forklift-watchdog.service --since '-30 min'
-探测面：助手内网 health / pve-02 生产容器 / 公网诊断端点 / 前端 nginx /health / 本机与 LXC$REMOTE_LXC 磁盘水位"
+探测面：助手内网 health / pve-02 生产容器 / 公网诊断端点 / 前端反代 $FE_HOST/health / 本机与 LXC$REMOTE_LXC 磁盘水位"
           then
             log "已告警：$name"
             state_set "$name" "$fails" 1 "$now"
