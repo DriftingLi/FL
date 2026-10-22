@@ -73,10 +73,13 @@ curl -sI https://api.gdyidao.cn/api/health      # 200
 for h in training mentor manage recruit; do curl -sI https://$h.gdyidao.cn/ | head -1; done
 curl -s https://training.gdyidao.cn/ | grep -o '粤ICP备2026005936号-3'
 
-# 资源域：只 GET/HEAD、未知前缀 404、投递分档头仍在
-curl -sI https://cdn.gdyidao.cn/avatars/x.webp | grep -i 'content-disposition\|x-content-type'
-curl -s -o /dev/null -w '%{http_code}\n' https://cdn.gdyidao.cn/not-a-prefix   # 404
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://cdn.gdyidao.cn/avatars/x.webp  # 403
+# 资源域：**三条必须成对验**（2026-10-22 事故的教训）
+# 只验「不存在的对象 404」= 只验了兜底，路由整段坏掉也能绿。
+N=avatars/<库里真实存在的一条 key>
+curl -s  -o /dev/null -w '%{http_code}\n' "https://cdn.gdyidao.cn/$N"                    # ① 200（存在必须取得到）
+curl -sI "https://cdn.gdyidao.cn/$N" | grep -i 'content-disposition\|x-content-type'      # ② 投递分档头 + nosniff
+curl -s  -o /dev/null -w '%{http_code}\n' https://cdn.gdyidao.cn/not-a-prefix/x.png       # ③ 404，且正文是本站 "Not Found"（不是 RGW 的 NoSuchKey）
+curl -s  -o /dev/null -w '%{http_code}\n' -X POST https://cdn.gdyidao.cn/avatars/x.webp   # ④ 403（写方法拦截）
 
 # 浏览器侧：登录一次，确认 Cookie 域是 gdyidao.cn、且跨子域跳转不掉登录
 ```
@@ -86,6 +89,10 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://cdn.gdyidao.cn/avatars/
 ## 5. 门户回源切到新入口
 
 EdgeOne 控制台：门户项目的 API 回源地址 `https://www.gccsmile.com` → `https://api.gdyidao.cn`；`NUXT_API_ORIGIN_TOKEN` 与后端 `EDGE_ORIGIN_TOKEN` 同值。切完验：门户内容精选页能拉到数据、图片走 `cdn.gdyidao.cn`。
+
+**怎么判定「回源真的切过去了」**（2026-10-22 实测口径）：旧域 DNS 删除后，若门户 `/api` 仍返回 200，则回源必然已是新入口 —— 这是不依赖控制台的一条判据。切换瞬间可能看到 1～2 次 502（EdgeOne 回源重试），重试后恢复属正常。
+
+⚠️ 切换日曾为「门户还打旧 Host」留过一个 **api-only 过渡块**（`www.gccsmile.com`）。回源确认切走后**必须删掉它**（`TestCaddyfileHostMatrixLock` 会挡住残留）。
 
 ## 6. 旧域退役
 
