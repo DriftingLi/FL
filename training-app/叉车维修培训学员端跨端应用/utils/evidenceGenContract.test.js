@@ -7,7 +7,7 @@
  * 于是「dev:finish 步骤 8 产物一开 PR 即红」这个真缺陷一路漏到运行时才被发现。
  *
  * 新版按 spec §⑥「判别力」口径做**成对断言**：dot-source 真模块 → 真跑 `New-Evidence` 出文本 →
- * 从 `pr-evidence.yml` 抽出真校验器 `validatePrEvidence` → 把产物喂进去。
+ * 取真校验器 `validatePrEvidence`（#1770 起的单一来源 `.github/scripts/lib/gate-validator.mjs`）→ 把产物喂进去。
  *   ① 必不红对照组：补全真产物（CI run 链接 / 仓库内截图 / 编译日志）⇒ 校验器判绿。
  *   ② 必红·结构漂移：退回旧「多行块」⇒ 校验器判「缺该行」（证明这锁抓得住形状漂移）。
  *   ③ 必红·等证据：开 PR 前的默认产物（①③④ 结论留「待补」）⇒ 判红，但**只因缺产物、不再「缺该行」**
@@ -27,15 +27,25 @@ jest.setTimeout(120000);
 
 const ROOT = path.join(__dirname, '..');
 const GEN_REL = 'scripts/lib/evidence-gen.ps1';
+// #1770 起校验器是单一来源模块；两个工作流都用 repos.getContent 取它执行。
+const VALIDATOR = path.resolve(ROOT, '..', '..', '.github', 'scripts', 'lib', 'gate-validator.mjs');
 const WORKFLOW = path.resolve(ROOT, '..', '..', '.github', 'workflows', 'pr-evidence.yml');
 
-/** 从 workflow 抽出内联校验器（与 .github/scripts/pr-evidence-check.test.mjs 同一抽取式）。 */
+/**
+ * 取真校验器（判据同源）。本文件是 CJS、模块是 ESM，故读源码剥 `export ` 后 new Function ——
+ * 与工作流里的 evalValidator 同一手法（不用抽块副本，避免第二份判据）。取不到模块才退回
+ * 抽 workflow 的标注块，兜底迁移期（模块是 #1770 新加的，老分支的 base 上没有）。
+ */
 function loadValidator() {
+  if (fs.existsSync(VALIDATOR)) {
+    const src = fs.readFileSync(VALIDATOR, 'utf8');
+    return new Function(`${src.replace(/^export /gm, '')}\nreturn validatePrEvidence;`)();
+  }
   const src = fs.readFileSync(WORKFLOW, 'utf8');
   const m = src.match(
     /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
   );
-  if (!m) throw new Error('在 pr-evidence.yml 里找不到 PR-EVIDENCE-VALIDATOR 标记块');
+  if (!m) throw new Error('取不到 .github/scripts/lib/gate-validator.mjs，pr-evidence.yml 里也没有标注块');
   return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
 }
 

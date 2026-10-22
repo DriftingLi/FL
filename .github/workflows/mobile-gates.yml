@@ -11,15 +11,15 @@
 #     见 ADR-0041 决策 1 与 ADR-0008「为何不把 HBuilderX 搬进 CI」段。真门继续在本机/真机跑。
 #   · **不判红、不阻断合并**：本仓的门是人工/agent 执行、agent 签齐即合并（ADR-0008），
 #     多一个会变红的机器人检查只会逼人绕过它。所以整个 job 走 `continue-on-error`。
-#   · **不另写一套判据**：从 PR head 取 `.github/workflows/pr-evidence.yml`，把其中的校验器
-#     （PR-EVIDENCE-VALIDATOR 标记块）原样抽出来跑——判据永远同源，不会出现「管家说绿、
-#     pr-evidence 说红」。该块有 .github/scripts/pr-evidence-check.test.mjs 的抽取式单测在守。
+#   · **不另写一套判据**：读 `.github/scripts/lib/gate-validator.mjs`（#1770 起判据的单一来源；取不到时才退回
+#     从 `pr-evidence.yml` 抽 PR-EVIDENCE-VALIDATOR 标记块的旧读法）——判据永远同源，不会出现「管家说绿、
+#     pr-evidence 说红」。该模块有 .github/scripts/pr-evidence-check.test.mjs 的单测在守。
 #
 # 三入口（ADR-0041 决策 3）：
 #   · pull_request [opened, synchronize, reopened]：开 PR / 推新提交时重算
-#   · issue_comment [created]：`-PostToPr` 贴上门证据评论的那一刻重算（这是最关键的一条：
-#     贴评论的人不会再去点一次重跑）
-#   · workflow_dispatch：手工补算（`-f pr=<PR号>`）
+#   · issue_comment [created]：门脚本贴出**展示副本**（票/PR 评论）的那一刻重算（这是最关键的一条：
+#     贴评论的人不会再去点一次重跑）。判据评论贴在 commit 上、不产生 issue_comment 事件，
+#     但每个门脚本都会同时贴一份展示副本到票/PR，所以这里总能被点亮。
 name: mobile-gates
 
 on:
@@ -110,28 +110,34 @@ jobs:
               });
               const gateComments = comments.map((c) => c.body || '');
 
-              // ===== 3. 判据同源：从 head 取 pr-evidence.yml，抽出校验器原样跑 =====
+              // ===== 3. 判据同源：读 .github/scripts/lib/gate-validator.mjs（#1770 起的单一来源） =====
               // 取 head 而不是默认分支：pull_request 事件下 GitHub 本来就按 PR 的版本跑 workflow，
               // 这里只是让「判据版本」和「真要判的那个 PR」对齐（同一个 PR 改判据时不会两套口径）。
-              const extractor = (src) => {
-                const m = String(src).match(
-                  /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
-                );
-                if (!m) throw new Error('pr-evidence.yml 里找不到 PR-EVIDENCE-VALIDATOR 标记块（判据同源中断）');
-                return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
+              // 迁移期兜底：那个 ref 上还没有模块时，退回旧的「从 pr-evidence.yml 抽标记块」读法。
+              const readRepoFile = async (path, ref) => {
+                const res = await github.rest.repos.getContent({ owner, repo, path, ref });
+                const data = res.data || {};
+                return Buffer.from(data.content || '', data.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8');
               };
-              const readWorkflow = async (ref) => {
-                const res = await github.rest.repos.getContent({
-                  owner, repo, path: '.github/workflows/pr-evidence.yml', ref,
-                });
-                return Buffer.from(res.data.content || '', 'base64').toString('utf8');
+              const evalValidator = (src) => new Function(`${String(src).replace(/^export /gm, '')}\nreturn validatePrEvidence;`)();
+              const loadValidator = async (ref) => {
+                try {
+                  return evalValidator(await readRepoFile('.github/scripts/lib/gate-validator.mjs', ref));
+                } catch (e) {
+                  const wf = await readRepoFile('.github/workflows/pr-evidence.yml', ref);
+                  const m = String(wf).match(
+                    /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
+                  );
+                  if (!m) throw new Error('判据同源中断：既没有 gate-validator.mjs，也没有内联标记块');
+                  return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
+                }
               };
               let validate;
               try {
-                validate = extractor(await readWorkflow(headSha));
+                validate = await loadValidator(headSha);
               } catch (e) {
                 core.warning(`从 head 取判据失败（${e.message}），退回默认分支版本。`);
-                validate = extractor(await readWorkflow(pr.base.ref));
+                validate = await loadValidator(pr.base.ref);
               }
 
               // compare 回调：与 pr-evidence.yml 里那份逐字同义（祖先判定 + 运行时面比对 + 截断即 fail-closed）
@@ -152,11 +158,26 @@ jobs:
                 }
               };
 
+              // 证据候选同样读 commit 评论（#1770：与 pr-evidence.yml 同一来源）。
+              // 少读这一类，管家就会比真门少认证据，出现「管家说没绑、pr-evidence 说绿」的假分歧。
+              const prCommits = await github.paginate(github.rest.pulls.listCommits, {
+                owner, repo, pull_number: prNumber, per_page: 100,
+              });
+              const commitShas = [...new Set([...prCommits.map((c) => c.sha), headSha])].slice(-30);
+              const commitComments = [];
+              for (const sha of commitShas) {
+                const cs = await github.paginate(github.rest.repos.listCommitComments, {
+                  owner, repo, commit_sha: sha, per_page: 100,
+                });
+                for (const c of cs) commitComments.push(c.body || '');
+              }
+
               const result = await validate({
                 files,
                 body: pr.body || '',
                 author: (pr.user && pr.user.login) || '',
                 gateComments,
+                commitComments,
                 headSha,
                 fetchCompare,
               });

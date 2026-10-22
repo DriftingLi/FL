@@ -4,7 +4,8 @@
 
 .DESCRIPTION
     输出**逐门单行**、字段以 ` · ` 分隔、结论行内带产物 —— 严格对齐
-    `.github/workflows/pr-evidence.yml` 校验器（`validatePrEvidence`）的解析语法：
+    校验器（`validatePrEvidence`，单一来源 `.github/scripts/lib/gate-validator.mjs`；
+    `pr-evidence.yml` 用 `repos.getContent` 取它执行，不再内联）的解析语法：
     它按「以门号开头的那一行」取门（`matchesGate`），再在**同一行**里正则抠
     `执行人 / 日期 / 复测对象 / 结论`。多行块（门号单独一行、字段拆成缩进 bullet）会被判
     「缺该行」—— 2026-09-29 实测（issue #1403 取证）旧版正是这个形状，故 PR 一开即红、
@@ -16,11 +17,13 @@
       - standard → ① + ③ + ④（④ 为默认载体 ④c）
       - full → ① + ③ + ④（同门集；② 由 sha 绑定评论承载、④b 按需追加，本模块不产）
 
-    ⚠️ 「生成即绿」对 ①③ **本质做不到**：dev:finish 跑在开 PR 之前，③ 的 CI run 链接、
-    ① 的仓库内截图路径此刻还不存在。故这两行的结论**默认留「待补：<占位说明>」**——它不是
-    校验器的占位词（`待人工/待补/…` 精确匹配才算占位），而是会**如实判红**直到人贴上真产物，
-    符合「证据未到位即红」的门设计。本模块的职责是**给对形状**，让收口的人只填值、不重排。
-    若这些产物已知（例如 standalone 调用、或 PR 后重跑），用 `-CiRunUrl / -ScreenshotRelPath`
+    ⚠️ 产物何时可得（#1770 起口径变了，别再照旧假设「开 PR 之前拿不到」）：
+    证据在 **push 后、开 PR 前**就该齐 —— ① 的截图目录键是**票号**（不等 PR 号，push 后即可取证），
+    ③ 的 `ci-summary` run 在 push 后即产出（`submit-pr.ps1` 会从 check-runs 自动发现链接并补进 ③ 行）。
+    但 dev:finish 仍可能**赶在 push 之前**跑，那时这两项确实还不存在 ⇒ 结论行按「待补：<占位说明>」
+    输出；它**不在**校验器的占位词表里（`待人工/待补/…` 精确匹配才算占位），会**如实判红**直到人贴上
+    真产物 —— 符合「证据未到位即红」的门设计。本模块的职责是**给对形状**，让收口的人只填值、不重排。
+    若产物已知（standalone 调用、push 后重跑、或 submit-pr 预检回填），用 `-CiRunUrl / -ScreenshotRelPath`
     传入即得逐门真产物。
 
 .EXAMPLE
@@ -38,10 +41,10 @@ function New-Evidence {
         [int]$ScreenshotChangedCount = 0,
         [string]$OutputPath = '',
         [string]$ProjectDir,
-        # —— 开 PR 后才取得到的可核验产物；不传则该门结论落「待补：<说明>」（如实判红，非假绿）——
+        # —— 证据齐了再开 PR（#1770）：产物在 push 之后就能取到；不传则该门结论落「待补：<说明>」（如实判红，非假绿）——
         # CI run 链接（③）。形如 https://github.com/<owner>/<repo>/actions/runs/<id>
         [string]$CiRunUrl = '',
-        # 仓库内截图相对路径（①）。形如 docs/verification/<模块>/<PR号>/<页名>.jpg（PR 号须数字）
+        # 仓库内截图相对路径（①）。形如 docs/verification/<模块>/<票号>/<页名>.jpg（目录键须数字）
         [string]$ScreenshotRelPath = '',
         # ① 行执行人栏：①a 由 agent 出证（ADR-0016）默认「agent 执行」；命中能力面 ①b 时由人给原文后代录
         [string]$Executor = 'agent 执行'

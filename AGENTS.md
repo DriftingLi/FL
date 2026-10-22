@@ -44,7 +44,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | --- | --- | --- |
 | [`docs/agents/ui-conventions.md`](docs/agents/ui-conventions.md) | 前端 UI 约定：UI 词汇（封装层/分段控件/空态两级/筛选栏/表格/确认框）、Tailwind 共存四条边界规则（R1-R4）、不得触碰的边界（brand 色域/冻结区/裸 hex/主题入口） | 改前端模板或样式前 |
 | [`docs/agents/checks.md`](docs/agents/checks.md) | 测试与检查流程：后端四件套（**Windows 本机 golangci-lint 暂不可用，由 CI 兜底** / WSL 双环境）、生成链顺序（swagger → gen-apitypes → 再跑测试）、PG 契约测试纪律（随机 schema / 目录查询按 `current_schema()` 收窄）、前端 type-check + vitest、部署配置校验、DeepSec 安全检测 | 每次提交前 |
-| [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律；**合并后的分支与 worktree 收尾顺序**见其 :13 | push / PR / merge / 清理工作树前 |
+| [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律；**证据主键 = commit 评论、先预检绿再开 PR**（见其「证据主键」段）；**合并后的分支与 worktree 收尾顺序**见其 :13 | push / PR / merge / 清理工作树前 |
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
 | [`docs/agents/comments.md`](docs/agents/comments.md) | 注释标准：三类判据（保留 / 删除 / 不可动）、本仓先例、「只减不增」棘轮锁哪些类与为什么 | 增删改注释前（后端 `backend/**/*.go`；底数与逐包实测见 [`docs/design/1445-p4-comment-audit.md`](docs/design/1445-p4-comment-audit.md)） |
 
@@ -71,13 +71,13 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 
 ## 验收门（合并前置）
 
-**执行面与机器语义（仓库级）**：`.github/workflows/pr-evidence.yml` 每个 PR 都跑，**只对命中运行时面**（`*.uvue` / `*.uts` / training-app 下三份 json）的 PR 校验正文 `## 验收证据` 段——未命中早退放行（约定仍写 `免（未命中运行时面）`，先例 #908）、命中缺段判红；适用范围不限于移动端。逐行机制（早退用例、白名单行号）在 `docs/agents/checks.md`「运行时面判定与证据校验的机器语义」。
+**执行面与机器语义（仓库级）**：`.github/workflows/pr-evidence.yml` 每个 PR 都跑，**只对命中运行时面**（`*.uvue` / `*.uts` / training-app 下三份 json）的 PR 校验正文 `## 验收证据` 段——未命中早退放行（约定仍写 `免（未命中运行时面）`，先例 #908）、命中缺段判红；适用范围不限于移动端。证据来源不止 PR 正文与 PR 评论：**commit 评论（#1770 起的证据主键）也在候选集**，票（issue）评论不进判据。逐行机制（早退用例、白名单行号）在 `docs/agents/checks.md`「运行时面判定与证据校验的机器语义」。
 
-**开 PR 的时机（2026-09-15 裁定）**：一个 PR = **一件做完且已在目标环境验证过的事**——先做完、验完，**再**开 PR；不当进度容器，也不把「未命中 ⇒ 免四门」当「不需要验证」（工具链/脚本类改动的验收判据是「它要达成的那个行为在真实链路上成立」）。完成定义（DoD）、例外通道与反例见 `docs/agents/release.md`。
+**开 PR 的时机（2026-09-15 裁定）**：一个 PR = **一件做完且已在目标环境验证过的事**——先做完、验完，**再**开 PR；不当进度容器，也不把「未命中 ⇒ 免四门」当「不需要验证」（工具链/脚本类改动的验收判据是「它要达成的那个行为在真实链路上成立」）。完成定义（DoD）、例外通道与反例见 `docs/agents/release.md`。**#1770 起顺序固定**：证据先出在 **commit 上**（门脚本 `-PostToIssue <票号>` 贴 commit 判据评论、同一份正文的展示副本贴票/PR）→ `preflight-pr.ps1` 预检绿 → 最后由 `submit-pr.ps1` 建 PR（③ run 链接由它从 `ci-summary` check 自动发现），首次推送即判绿。
 
-**两条不看源码就读不出来的硬口径（2026-09-20 实测；判据源 `.github/workflows/pr-evidence.yml`）**：
+**两条不看源码就读不出来的硬口径（2026-09-20 实测；判据源 `.github/scripts/lib/gate-validator.mjs` —— `pr-evidence.yml` 与 `mobile-gates.yml` 都不 checkout，用 `repos.getContent` 取同一份模块）**：
 
 - **「低风险运行时面」豁免是逐文件白名单，且它与「①② 变必过」是两个不同源的过滤器**——**别写成一句因果**（工具改动拆独立 PR 仍是正解，代价只是多跑一次移动端测试门）。因果链、判据源行号与反例在 `docs/agents/checks.md`「运行时面判定与证据校验的机器语义」。
-- **「结论」栏引用的可核验产物必须写在该行的行内**：仓库内 `docs/verification/<模块>/<PR号>/<页名>.<ext>`（PR 号须为数字）、GitHub 附件/Markdown 图片、或 sha 绑定的门评论链接（`#issuecomment-<id>`）。把它写在**子条目**（`  - …`）里、或只写裸本地产物路径（`.ci-verify/*.png`）、或任意 http(s) 链接，校验器**一律不认**（判「未引用可核验截图」）。
+- **「结论」栏引用的可核验产物必须写在该行的行内**：仓库内 `docs/verification/<模块>/<数字>/<页名>.<ext>`（数字 = **票号**；旧 PR 号目录仍是同一数字段、照样被接受）、GitHub 附件/Markdown 图片、或 sha 绑定的门评论链接（`#issuecomment-<id>` —— **commit 评论**是判据评论、**票/PR 评论**是展示副本，两种 id 同源）。把它写在**子条目**（`  - …`）里、或只写裸本地产物路径（`.ci-verify/*.png`）、或任意 http(s) 链接，校验器**一律不认**（判「未引用可核验截图」）。
 
 移动端改动触及运行时面时，四门与证据要求的**规则全文**见 `training-app/叉车维修培训学员端跨端应用/AGENTS.md`「验收门与合并纪律」与 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**须写全路径**，它属移动端编号体系、根仓库另有同名 `ADR-0008`）。本处只留三句：**签收在人、合并不限人**——人工签收只有能力面真机签（「执行人」栏由人给出原文、agent 代录），其余门允许「agent 执行」，证据填齐后 **agent 直接合并**，不必停在「待人工签收」（证据齐且不走例外通道时，「是否合并 / 是否清理工作树」不是问题，直接执行；合并前一行披露 production 部署口径见 `docs/agents/release.md`:16）；**窗口口径 2026-10-15 收紧**（真机逐页取证窗口内不跑、触及能力面的 PR 窗口内**不合并**、排队到退出后）与冲突裁定，见移动端 `docs/adr/0040-小程序优先窗口的验收门槛口径（2026-10-15 裁定）.md`——① 门触发面 / 签收语义 / 取证节奏见同目录 `0016-真机门的人工性收缩与按批取证.md`，窗口细则见 `0039`；**例外通道**（「已接受未验证风险」）仍由人执行合并。合并流程里的位置见 `docs/agents/release.md`。

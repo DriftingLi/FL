@@ -554,8 +554,10 @@ jobs:
 
   # ============================================================
   # Stage 6.6: pr-evidence 校验逻辑的自检（守护的守护）
-  #   校验器内联在 .github/workflows/pr-evidence.yml 里（不 checkout 即可运行），
-  #   本 job 抽取该段跑表驱动单测：逻辑被改坏或 workflow 被删 → 这里红 → ci-summary 红 → 不能合并。
+  #   校验器在 .github/scripts/lib/gate-validator.mjs（#1770 起从 pr-evidence.yml 抽出的单一来源，
+  #   pr-evidence.yml / mobile-gates.yml 都用 repos.getContent 取它执行），本 job 直接 import 跑表驱动单测；
+  #   本地预检（.github/scripts/preflight-pr.mjs）也 import 同一份，故它的纯函数与「双跑一致」一并在这里钉：
+  #   逻辑被改坏或模块被删 → 这里红 → ci-summary 红 → 不能合并。
   # ============================================================
   pr-evidence-selftest:
     runs-on: ubuntu-latest
@@ -564,8 +566,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 抽取式单测（pr-evidence 校验逻辑）
-        run: node --test .github/scripts/pr-evidence-check.test.mjs
+      - name: 表驱动单测（pr-evidence 校验逻辑，import gate-validator.mjs）
+        run: |
+          node --test .github/scripts/pr-evidence-check.test.mjs
+          # #1770：本地预检 = 同一判据 + ③ run 链接自动发现（占位不补），双跑一致性钉在这里
+          node --test .github/scripts/preflight-pr.test.mjs
 
   # ============================================================
   # Stage 6.7: 已收敛控件守卫的自检（守护的守护）

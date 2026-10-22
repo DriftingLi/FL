@@ -8,12 +8,16 @@
     只核「sha 是不是 PR head 的祖先」，**核不出「远端可达」** —— 于是任何一次 rebase / force-push /
     分支删除都会让既往门评论里的 sha 在 GitHub 上 404，证据链悬空（run15 @32e0eed、run16 @d4fc737）。
 
-    本文件的三个成员把口径收成**一处**（各门脚本只调函数，不各写一份 git 逻辑）：
+    本文件的成员把口径收成**一处**（各门脚本只调函数，不各写一份 git 逻辑）：
 
-      已入库成员（调用方只准用这三枚）
+      已入库成员（调用方只准用这四枚）
       - `Test-ShaReachable`    ：某 sha 是否已落在远端分支上（`git branch -r --contains`，离线）
       - `Push-ArchiveCommit`   ：把当前 HEAD 推上 PR head 分支（推得动就推，推不动**如实回报**）
       - `Resolve-CommitBinding`：给出评论 `- commit:` 该绑哪个 sha，以及**必须如实附上的标注行**
+      - `Send-GateComment`     ：把**同一份**正文贴到 commit（判据面）+ 号码（展示副本）上（#1770）
+
+    #1770（证据主键从 PR 号改成 commit sha）：判据评论必须**贴在 commit 上**，校验器按 sha 找证据；
+    号码评论只是给人看的展示副本 —— 于是「贴评论」与「绑哪个 sha」是同一件事的两半，都收在本文件。
 
     绑定优先级（fail-closed：宁可标「不可点开」，绝不把点不开的 sha 伪装成证据锚点）：
 
@@ -24,8 +28,9 @@
       C) 其余             ⇒ 绑 HEAD 并标注「未推送/点不开」。此形态 pr-evidence 的祖先核对会**如实判红**，
                             不静默放过 —— 悬空证据宁可红，不可假绿。
 
-    准入门槛（与 `lib/gate-common.ps1` 同一条）：本文件只做**纯 git 查询 + 一次显式 push**，
-    不读设备、不碰 GitHub API、不解析评论正文。push 只推当前分支到同名远端分支
+    准入门槛（与 `lib/gate-common.ps1` 同一条）：本文件只做**纯 git 查询 + 一次显式 push + 评论投递**
+    （后者仅 `Send-GateComment` 两处 `gh api` POST：commit 评论 / 号码评论），不读设备、不解析评论正文、
+    不判断门结论。push 只推当前分支到同名远端分支
     （`git push <remote> HEAD:refs/heads/<branch>`）：**不带 force、不动 tag、不推其它 ref**。
 
     判据面守护：`utils/gateCommitBindingBehavior.test.js`（真执行本文件的函数，含「远端可达 / 仅本地」
@@ -154,5 +159,119 @@ function Resolve-CommitBinding {
         Reachable = $false
         Mode      = 'local-head'
         NoteLines = @("- ⚠️ ${unpushedLabel}：``$short`` —— GitHub 上点不开（#1695）；把它推上 ``$Remote`` 的同名分支后重跑本门，即可让评论绑到远端可达的 sha")
+    }
+}
+
+function Get-GateRepoSlug {
+    <#
+    .SYNOPSIS
+        取 GitHub REST 端点要的那一段 `owner/repo`；取不到就回空串（不抛异常）。
+    .NOTES
+        先解析 `origin` 的 URL（离线、确定），解析不出来才问 `gh repo view`（要 gh 已登录）。
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$ProjectDir)
+    $url = ''
+    try { $url = (& git -C $ProjectDir remote get-url origin 2>$null | Out-String).Trim() } catch { $url = '' }
+    if ($url) {
+        # https://github.com/OWNER/REPO(.git) / git@github.com:OWNER/REPO(.git) / ssh://git@github.com/OWNER/REPO(.git)
+        $m = [regex]::Match($url, 'github\.com[:/]+([^/\s]+)/([^/\s]+?)(?:\.git)?/?$')
+        if ($m.Success) { return ('{0}/{1}' -f $m.Groups[1].Value, $m.Groups[2].Value) }
+    }
+    try {
+        $nwo = (& gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>$null | Select-Object -First 1)
+        if ($nwo) { return ("$nwo").Trim() }
+    } catch { }
+    return ''
+}
+
+function Send-GateComment {
+    <#
+    .SYNOPSIS
+        把**同一份**评论正文贴到两个落点：commit（判据面）+ 号码（展示副本）。不抛异常，失败如实回报。
+    .DESCRIPTION
+        #1770：验收证据的主键从 PR 号改成 commit sha —— 校验器按 sha 找证据，所以**判据评论必须贴在
+        commit 上**（`POST /repos/{owner}/{repo}/commits/{sha}/comments`）；号码评论（`/issues/{N}/comments`，
+        PR 号在 REST 里就是 issue 号）只是给人看的副本，**不再假设 PR 存在**（新流程是证据齐了再开 PR）。
+
+        正文一律走**临时文件 + `--input`**：正文里有反引号 / 中文 / 多行，内联进命令行会被 PowerShell 的
+        引号规则改写。任何一步失败只回报（Errors），**绝不抛异常改门结论**（#1209 血账：报告层崩了不许把
+        「门通过」变成 exit 1）。
+    .OUTPUTS
+        [pscustomobject] @{ CommitOk = <bool>; CommitUrl = <string>; IssueOk = <bool>; IssueUrl = <string>; Errors = <string[]> }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ProjectDir,
+        [AllowEmptyString()][Parameter(Mandatory = $true)][string]$Sha,
+        # 绑定口径算出来的可达性：不可达（口径 C）时不贴判据评论 —— 贴上去就是悬空证据（#1695）
+        [bool]$Reachable = $true,
+        [int]$IssueNumber = 0,
+        [AllowEmptyString()][Parameter(Mandatory = $true)][string]$Body
+    )
+    $errors = New-Object System.Collections.Generic.List[string]
+    $commitOk = $false
+    $commitUrl = ''
+    $issueOk = $false
+    $issueUrl = ''
+    $tmp = ''
+    try {
+        if (-not $Body) {
+            $errors.Add('正文为空，跳过投递')
+        }
+        elseif (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            $errors.Add('找不到 gh CLI')
+        }
+        else {
+            $slug = Get-GateRepoSlug -ProjectDir $ProjectDir
+            if (-not $slug) {
+                $errors.Add('取不到 origin 的 owner/repo（gh api 端点无从拼起）')
+            }
+            else {
+                $tmp = Join-Path $env:TEMP ('gate-comment-' + [guid]::NewGuid().ToString('N') + '.json')
+                [System.IO.File]::WriteAllText($tmp, (@{ body = $Body } | ConvertTo-Json -Compress), [System.Text.UTF8Encoding]::new($false))
+                if (-not $Sha) {
+                    $errors.Add('没有可绑定的 sha：判据评论不贴')
+                }
+                elseif (-not $Reachable) {
+                    $errors.Add("sha $Sha 不在远端可达（GitHub 上点不开）：判据评论不贴，避免制造悬空证据（#1695 口径 C）")
+                }
+                else {
+                    $out1 = (& gh api --method POST "repos/$slug/commits/$Sha/comments" --input $tmp -q '.html_url' 2>&1 | Out-String)
+                    $url1 = $out1.Trim()
+                    if ($LASTEXITCODE -eq 0 -and $url1 -match '^https?://') {
+                        $commitOk = $true
+                        $commitUrl = $url1
+                    }
+                    else {
+                        $errors.Add("commit 评论失败：$url1")
+                    }
+                }
+                if ($IssueNumber -gt 0) {
+                    $out2 = (& gh api --method POST "repos/$slug/issues/$IssueNumber/comments" --input $tmp -q '.html_url' 2>&1 | Out-String)
+                    $url2 = $out2.Trim()
+                    if ($LASTEXITCODE -eq 0 -and $url2 -match '^https?://') {
+                        $issueOk = $true
+                        $issueUrl = $url2
+                    }
+                    else {
+                        $errors.Add("展示副本（#$IssueNumber）失败：$url2")
+                    }
+                }
+            }
+        }
+    }
+    catch {
+        $errors.Add("投递异常：$($_.Exception.Message)")
+    }
+    finally {
+        if ($tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+    return [pscustomobject]@{
+        CommitOk  = $commitOk
+        CommitUrl = $commitUrl
+        IssueOk   = $issueOk
+        IssueUrl  = $issueUrl
+        Errors    = @($errors)
     }
 }

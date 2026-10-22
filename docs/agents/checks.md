@@ -91,13 +91,13 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 
 改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
-## 运行时面判定与证据校验的机器语义（2026-10-15 从根 `AGENTS.md` 迁入，判据源 `.github/workflows/pr-evidence.yml`）
+## 运行时面判定与证据校验的机器语义（2026-10-15 从根 `AGENTS.md` 迁入，判据源 `.github/scripts/lib/gate-validator.mjs`）
 
 **执行面是仓库级**：`.github/workflows/pr-evidence.yml` 对**每一个 PR** 运行，但**只对命中运行时面**（`*.uvue` / `*.uts` / training-app 下的三份 json）**的 PR 校验正文的 `## 验收证据` 段** —— 未命中时校验器在校验段**之前**就放行（`runtime.length === 0` 早退，用例见 `.github/scripts/pr-evidence-check.test.mjs`「非运行时面 PR：即使正文为空也通过」），命中而缺段则直接判红；未命中运行时面时仍**约定**写 `免（未命中运行时面）`（先例 #908）。适用范围不限于移动端。
 
 **开 PR 的时机（2026-09-15 裁定）**：一个 PR = **一件做完且已在目标环境验证过的事** —— 先把事做完、验完，**再**开 PR；不得边做边开、不得把 PR 当进度容器，也不得把「未命中运行时面 ⇒ 免四门」当成「不需要验证」（工具链 / 脚本类改动的验收判据是「**它要达成的那个行为在真实链路上成立**」，例如改截图判据就得跑一次真机 🟡 并留下产物）。完成定义（DoD）、例外通道与反例见 `docs/agents/release.md`。
 
-**「低风险运行时面」的豁免是逐文件的**（`pr-evidence.yml:121-130`）：改动集里**每一个**文件都必须落在白名单内（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`）。顺手改一处 `training-app/**/scripts/*.ps1`（**哪怕只是给契约套件补一条 token 注册**）⇒ **拿不到这条逐文件豁免**（`.ps1` 不在白名单）。但**别把「拿不到豁免」与「①② 变必过」写成一句因果**——这是**两个不同源的过滤器**，各判各的：① `.ps1` **不命中运行时面判定**（`pr-evidence.yml:108-130` 只认 `*.uvue` / `*.uts` / training-app 下三份 json），所以一个**只含 `.ps1`** 的 PR 走「未命中运行时面 ⇒ `runtime.length === 0`、校验器在 `## 验收证据` 段**之前**早退放行」那条路径，**① 真机与 ② 微信并不会因此变必过**；② 真正会多跑的是 **CI 的 `mobile-test`（＝ ③）**，它的判据是另一个源——`ci.yml:45` 的 `changes.mobile = 'training-app/**'`，该目录下**任何**文件（含 `.ps1` / `.md`）都命中。⇒ 把工具改动**拆成独立 PR** 仍是正解（非运行时面 ⇒ 免证据段，可立即合并），但代价是「多跑一次 ③」，**不是**「①② 双双变必过」。
+**「低风险运行时面」的豁免是逐文件的**（`gate-validator.mjs:86-95`）：改动集里**每一个**文件都必须落在白名单内（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`）。顺手改一处 `training-app/**/scripts/*.ps1`（**哪怕只是给契约套件补一条 token 注册**）⇒ **拿不到这条逐文件豁免**（`.ps1` 不在白名单）。但**别把「拿不到豁免」与「①② 变必过」写成一句因果**——这是**两个不同源的过滤器**，各判各的：① `.ps1` **不命中运行时面判定**（`gate-validator.mjs:19`（`RUNTIME_JSON`）/ `:77`（`needs2`）/ `:80`（`runtime`）/ `:86-95`（低风险白名单）只认 `*.uvue` / `*.uts` / training-app 下三份 json），所以一个**只含 `.ps1`** 的 PR 走「未命中运行时面 ⇒ `runtime.length === 0`、校验器在 `## 验收证据` 段**之前**早退放行」那条路径，**① 真机与 ② 微信并不会因此变必过**；② 真正会多跑的是 **CI 的 `mobile-test`（＝ ③）**，它的判据是另一个源——`ci.yml:45` 的 `changes.mobile = 'training-app/**'`，该目录下**任何**文件（含 `.ps1` / `.md`）都命中。⇒ 把工具改动**拆成独立 PR** 仍是正解（非运行时面 ⇒ 免证据段，可立即合并），但代价是「多跑一次 ③」，**不是**「①② 双双变必过」。
 
 **② 的「机器必检面」与「窗口执行面」是两件事**（2026-10-20 补）：`pr-evidence` 的 `needs2` 只认 **MP-WEIXIN 面**（正文的 `平台：MP-WEIXIN` 指令行 / `manifest.json` / `platformConfig.json`）——纯 `.uvue` 改动在校验器里判 `②` **不必强制出现**；而窗口纪律（移动端 `docs/adr/0040`）要求**每个运行时面 PR 都执行 ②**，因为它是唯一能看见小程序渲染差异的门。两者各判各的：`needs2` 决定**证据段里 ② 行是否强制**，窗口纪律决定**要不要真跑**。⇒ 纯 `.uvue` 的 PR 仍要跑 ②（窗口内），只是正文可以按模板写 `免`；别把校验器的「免」当成不必执行。
 

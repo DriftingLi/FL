@@ -67,9 +67,12 @@
     已编译的 5+ 应用资源目录（HBuilderX「运行到手机或模拟器」产出的 app-android 资源），会 push 进设备让基座加载本项目。
     不给则只做「起机 + 装基座 + 起基座」级别的冒烟，逐页打开会被标记为 SKIP（不假装跑过）。
 
+.PARAMETER PostToIssue
+    > 0 时：#1770 起**判据评论贴到 commit**（证据主键），同一份正文的展示副本贴该票号/PR 号；正文带标记
+    `<!-- prefilter:emulator-smoke -->`（**刻意不用 gate-evidence: 前缀**，避免被验收门校验器误当作门证据）。
+
 .PARAMETER PostToPr
-    > 0 时把结果贴成 PR 评论，标记 `<!-- prefilter:emulator-smoke -->`（**刻意不用 gate-evidence: 前缀**，
-    避免被验收门校验器误当作门证据）。
+    `-PostToIssue` 的**别名**（同值，一个版本后退役）。
 
 .EXAMPLE
     pwsh -NoProfile -File scripts/emulator-smoke.ps1
@@ -90,6 +93,9 @@ param(
     [string]$ResourcesDir = '',
     [string]$Module = 'emulator',
     [switch]$NoArchive,
+    # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
+    # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
+    [int]$PostToIssue = 0,
     [int]$PostToPr = 0,
     [int]$BootTimeoutSeconds = 300,
     [int]$PageSettleSeconds = 8,
@@ -134,6 +140,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+
+# #1770：验收证据主键从 PR 号改成 commit sha。`-PostToIssue` 是正式名（票号），`-PostToPr` 是**别名**
+# （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
+if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
 
 # ⚠️ 非门标注（三处之一：脚本头部；另两处＝日志首行、可选 PR 评论）。改这行前先读 ADR-0008。
 $NonGateBanner = '非门（不替代 ① 真机门）——仅前置冒烟：仿真机截图与无异常证据，鉴权/生物识别/厂商 ROM/真机上传路径类问题仿真机抓不到'
@@ -656,7 +666,8 @@ function Archive-Screenshots {
     $usable = @($Shots | Where-Object { $_.Bytes -gt 0 })
     if (@($usable).Count -eq 0) { Write-Log '入库：截图均为 0 字节，跳过'; return @() }
 
-    # 硬前提：当前分支是该 PR 的 head 且工作树无其他改动；否则只警告，不提交
+    # 硬前提：当前分支就是归档提交要推上去的那条分支（`git push <remote> HEAD:refs/heads/<branch>` 的 target），
+    # 且工作树无其他改动；否则只警告，不提交
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Log '入库：无 git，跳过'; return @() }
     $status = Invoke-Git @('status', '--porcelain')
     if ($status) {
@@ -664,14 +675,12 @@ function Archive-Screenshots {
         return @()
     }
     $branch = Invoke-Git @('rev-parse', '--abbrev-ref', 'HEAD')
-    $prHead = ''
-    try { $prHead = ((& gh pr view $PrNumber --json headRefName -q .headRefName 2>&1 | Out-String).Trim()) } catch { }
-    if (-not $prHead) {
-        Write-Log "入库：取不到 PR #$PrNumber 的 head 分支，跳过"
-        return @()
-    }
-    if ($branch -ne $prHead) {
-        Write-Log "入库：当前分支 $branch ≠ PR head $prHead，跳过入库"
+    # #1770：归档不再依赖 PR —— 目录键改成号码（票号），「这是不是 PR 的 head 分支」已无从问起
+    # （新流程是**证据齐了再开 PR**）。改为问一句离线可答的：HEAD 在远端可达吗？归档提交要能推上去、
+    # 评论里的 `- commit:` 才点得开（#1695）；不可达就跳过归档、只警告，冒烟结论不变。
+    $headSha = Invoke-Git @('rev-parse', 'HEAD')
+    if (-not (Test-ShaReachable -ProjectDir $ProjectRoot -Sha $headSha)) {
+        Write-Log "入库：HEAD $($headSha.Substring(0, 7)) 不在远端可达（还没推上去？），跳过入库"
         return @()
     }
 
@@ -753,11 +762,15 @@ function Publish-PrefilterComment {
         foreach ($noteLine in @($binding.NoteLines)) { $body = $body + "`n" + $noteLine }
         # 刻意用 prefilter: 前缀，而不是验收门证据那套标记，避免被校验器当成门证据
         $body = "<!-- prefilter:emulator-smoke -->`n" + $body
-        $tmp = Join-Path $env:TEMP ('emulator-smoke-comment-' + [guid]::NewGuid().ToString('N') + '.md')
-        [System.IO.File]::WriteAllText($tmp, $body, [System.Text.UTF8Encoding]::new($false))
-        $out = (gh pr comment $PrNumber --body-file $tmp 2>&1 | Out-String)
-        Write-Log "PR 评论结果：$($out.Trim())"
-        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        # #1770：判据评论贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+        $sent = Send-GateComment -ProjectDir $ProjectRoot -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
+        if ($sent.CommitOk) { Write-Log "评论已贴到 commit $($sha)：$($sent.CommitUrl)" }
+        else { Write-Log '评论未贴到 commit（判据面缺证据，冒烟结论不受影响）' }
+        if ($PrNumber -gt 0) {
+            if ($sent.IssueOk) { Write-Log "展示副本已贴 #$PrNumber：$($sent.IssueUrl)" }
+            else { Write-Log "展示副本未贴 #$PrNumber（判据面不受影响）" }
+        }
+        foreach ($e in @($sent.Errors)) { Write-Log "  评论投递：$e" }
     } catch {
         Write-Log "贴 PR 评论失败（不影响结论）：$($_.Exception.Message)"
     }

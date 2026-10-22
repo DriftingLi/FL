@@ -39,7 +39,7 @@
     npm run dev:finish -- -Level standard -Device 192.168.10.51:39181
     npm run dev:finish -- -DryRun
     npm run test:unit:gate                 # ③ 门两腿（test:unit + test:behavior）：每腿 日志 + （红跑）摘要 + 机检行
-    pwsh scripts/dev-finish.ps1 -UnitGate -PostToPr 1546   # 同上，并把结果贴成 sha 绑定评论
+    pwsh scripts/dev-finish.ps1 -UnitGate -PostToIssue 1546   # 同上，并把结果贴成 sha 绑定评论（判据贴 commit + 展示副本贴号码）
 #>
 [CmdletBinding()]
 param(
@@ -64,7 +64,10 @@ param(
     # 不进九步管线、不取 HBuilderX 锁、不碰设备；位置在 -UnitGate **之前** ⇒
     # `-UnitGate -UnitLocal` 同时给时本地快路径优先（它本来就是给「不想等全量」的时刻用的）。
     [switch]$UnitLocal,
-    # 与 ②④ 两条门脚本同名同义：把本次结果贴成 sha 绑定的 PR 评论（0 = 不贴）。
+    # 与 ②④ 两条门脚本同名同义：把本次结果贴成 sha 绑定的评论（0 = 不贴）。
+    # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
+    # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
+    [int]$PostToIssue = 0,
     [int]$PostToPr = 0,
     [switch]$Distribute,
     [switch]$UpdateBaseline,
@@ -90,6 +93,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# #1770：验收证据主键从 PR 号改成 commit sha。`-PostToIssue` 是正式名（票号），`-PostToPr` 是**别名**
+# （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
+if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
 
 # 子进程输出解码用 UTF-8（本仓先例：frontier-run.ps1 / wt-bootstrap.ps1 / mp-weixin-check.ps1）。
 # 本机 `[Console]::OutputEncoding` 默认是 **gb2312** ⇒ `& npx jest` 的 stdout 在**进入内存那一刻**
@@ -680,21 +687,23 @@ function Publish-UnitGateComment {
         $body.Add("$BehaviorSummaryText".TrimEnd())
         $body.Add('```')
     }
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        Write-Host '[warn] 找不到 gh CLI：跳过贴 PR 评论，门结论不受影响（结果见上面日志）。' -ForegroundColor Yellow
-        return
-    }
+    # #1770：判据评论贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+    # 这里不再假设 PR 存在（新流程：证据齐了再开 PR）；号码只是「归档目录键 / 展示副本落点 / 批次标识」。
     try {
-        $out = (& gh pr comment $PrNumber --body ($body -join "`n") 2>&1 | Out-String)
-        if ($out -match 'github\.com/') {
-            Write-Host "✅ 已贴 PR #$PrNumber 的全量单测门评论（sha 绑定 $short）。" -ForegroundColor Green
+        $sent = Send-GateComment -ProjectDir $ProjectDir -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body ($body -join "`n")
+        if ($sent.CommitOk) {
+            Write-Host "✅ 已贴 commit $short 的全量单测门评论：$($sent.CommitUrl)" -ForegroundColor Green
         }
         else {
-            Write-Host "[warn] 贴 PR #$PrNumber 评论疑似失败（门结论不受影响）：$($out.Trim())" -ForegroundColor Yellow
+            Write-Host "[warn] 贴 commit $short 的评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
+        }
+        if ($PrNumber -gt 0) {
+            if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
+            else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
         }
     }
     catch {
-        Write-Host "[warn] 贴 PR 评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
+        Write-Host "[warn] 贴评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
     }
 }
 
