@@ -453,19 +453,22 @@ docker compose -f docker-compose.prod.yml up -d
 
 `scripts/deploy-remote.sh` 通过公网 SSH 将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback` 回滚到上一个版本；备份默认落在 `/opt/forklift-backups`。配套脚本：`setup-server.sh`（初始化）、`lxc-install-docker.sh` / `lxc-setup-ssh.sh`（LXC 容器初始化）、`backup-daily.sh` / `rbd-snap-hourly.sh`（定时备份与快照）。
 
-### 域名与资源域（官网迁 EdgeOne 后，票 #1742）
+### 域名与资源域（双域族，票 #1756 / ADR-0077）
 
-官网门户已从本机房迁到腾讯云 EdgeOne，本仓反代收成三个职责面：
+**和润**（门户 + 残值评估）在 `hrwai.cn`，**易道**（培训 / 讲师 / 管理 / 招聘）在 `gdyidao.cn`。本仓反代只服务后者；`hrwai.cn` 与本机没有直接关系（除 EdgeOne 回源到 `api.<domain>`）。旧域 `gccsmile.com` 按硬切口径整体退役，不留 301。
 
-| host | 职责 | 注意 |
-| --- | --- | --- |
-| `www.<domain>` | 页面路径 301 到 `https://www.hrwai.cn`；`/api/`、`/swagger`、`/health`、`/ai-assistant` 照旧 | 301 落在 `handle` 内侧（Caddy 的 `redir` 与 `handle` 顺序表达同一语义；旧 nginx 的「server 级 return 短路 location」坑位见 issue #496）；本站点也收 `www.hrwai.cn` 作为回源 Host，对它的页面路径直接 404（防止 301 到自己成环） |
-| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，其余 404 | 投递分档头随路径走（ADR-0066）；旧域同名路径 301 到这里，老外链不碎 |
-| 裸域 | 一跳 301 到新站 | 不再经 www 二次跳 |
+| host | 职责 |
+| --- | --- |
+| `api.<domain>` | **唯一 API 入口**：`/api`、`/swagger`、`/health`。移动端、门户回源、残值 BFF 都打这里 —— 页面域名与它解耦，下次换页面域名这三条链路不用动 |
+| `training` / `mentor` / `manage` / `recruit`.`<domain>` | 四个工作区 SPA（同源 `/api` 反代） |
+| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，未知前缀 404（不吐 SPA） |
+| `dify.<domain>` | 内网 Dify 与知识库图片反代（SSE 不缓冲） |
+| `valuation.<domain>` | **过渡期**仍由本仓 SPA 服务；北迁完成后改为 301 到 `valuation.hrwai.cn` |
+| 裸域 / `www.<domain>` | 一跳 301 到培训入口 |
 
-**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到本机；回源 Host 用旧域还是新站主域都落进同一个 server 块（两个 `server_name` 都收），因此不必在控制台钉死 Host 改写。
+**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到 `https://api.<domain>`。回源鉴权见下节（`X-Origin-Token`）。
 
-**回填旧 URL**（一次性，票 #1742）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。
+**回填旧 URL**（一次性，票 #1742；#1756 换域时按同一口径再跑一次，用 `-from`/`-to` 指新前缀）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。**切换日必须先 dry-run 记账、执行后第二次命中 0 行**，否则切完历史图片全碎。
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
