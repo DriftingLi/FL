@@ -178,14 +178,6 @@ func normExtKey(ext string) string {
 	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
 }
 
-// deliveryOf 分档 → 响应头的 Content-Disposition 取值（safe 内联，其余强制下载）。
-func deliveryOf(class filestore.FileTypeClass) string {
-	if class == filestore.FileTypeSafe {
-		return "inline"
-	}
-	return "attachment"
-}
-
 // fileTypeTableRows 取类型表的**全集**与分档：扩展名键从源码 AST 读，分档值以运行期
 // filestore.FileTypeClassOf 为准，并与 AST 字面量逐行对账。
 //
