@@ -197,28 +197,6 @@ dify.{$DOMAIN} {
 	}
 }
 
-# ===== 过渡期：门户回源兼容（票 #1756 切换日）=====
-# 和润门户（EdgeOne）的 /api 目前仍回源到本机的旧 Host。硬切会让门户内容页当场失联，
-# 而 EdgeOne 的回源地址只能在控制台改（不在本仓能力范围）。
-# 故保留一个**只服务 API** 的别名，直到控制台把回源改到 api.<domain>。
-#
-# 移除条件（做完即删本块）：EdgeOne 把 API 回源改成 https://api.<domain> 并验证门户
-# 内容精选页正常 ⇒ 删除本块、重跑 gen-deploy、跑 TestCaddyfile。
-# 它只接受旧 Host、只放行 /api、/swagger、/health，其余一律 404 —— 不吐 SPA、不做 301。
-www.gccsmile.com {
-	{$CADDY_TLS}
-	handle /health {
-		respond "ok" 200
-	}
-	@legacy_api path /api/* /swagger*
-	handle @legacy_api {
-		import backend_api
-	}
-	handle {
-		respond "Not Found" 404
-	}
-}
-
 # ===== 根域与 www：一跳 301 到培训入口 =====
 gdyidao.cn, www.gdyidao.cn {
 	{$CADDY_TLS}
