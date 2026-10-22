@@ -95,9 +95,24 @@ func TestCaddyfileHostMatrixLock(t *testing.T) {
 	if !strings.Contains(src, "gdyidao.cn, www.gdyidao.cn {") {
 		t.Error("Caddyfile 缺少「根域 + www」的合并站点块")
 	}
-	// 旧域的域名不得再出现在配置里（R2 硬切：切完即删）。
+	// 旧域只在**过渡块**（门户回源兼容）里允许出现，且该块必须只服务 API。
+	legacy := blockAt(src, "www.gccsmile.com")
+	if legacy == "" {
+		t.Log("未发现过渡期的门户回源兼容块（EdgeOne 已切走 ⇒ 正常）")
+	} else {
+		for _, forbidden := range []string{"file_server", "try_files", "redir"} {
+			if strings.Contains(legacy, forbidden) {
+				t.Errorf("门户回源兼容块里出现了 %s：它只该服务 /api、/swagger、/health", forbidden)
+			}
+		}
+		if !strings.Contains(legacy, "@legacy_api path /api/* /swagger* /health") {
+			t.Error("门户回源兼容块的放行集合被改过：必须恰好是 /api/* /swagger* /health")
+		}
+	}
+	// 除过渡块外，旧域与和润域都不得出现（R2 硬切：切完即删）。
+	rest := strings.Replace(src, legacy, "", 1)
 	for _, retired := range []string{"gccsmile", "hrwai.cn"} {
-		if strings.Contains(src, retired) {
+		if strings.Contains(rest, retired) {
 			t.Errorf("Caddyfile 里还有已退役域名 %q 的引用（hrwai.cn 已由 EdgeOne 承载，与本机无关）", retired)
 		}
 	}
