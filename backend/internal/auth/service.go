@@ -169,19 +169,31 @@ type loginCredentials struct {
 // verifyAndIssue 登录共享骨架：验密 → 禁用校验 → 签发 → 组结果。
 // plainPassword 为用户输入的明文，errMessage 为验密失败的统一文案（防账号枚举）。
 func (s *Service) verifyAndIssue(plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
+	return s.verifyAndIssueFor(security.FamilyWeb, plainPassword, c, role, errMessage)
+}
+
+// verifyAndIssueFor 同 verifyAndIssue，但按指定令牌族签发（#1756 第二批）。
+func (s *Service) verifyAndIssueFor(family security.Family, plainPassword string, c loginCredentials, role, errMessage string) (*LoginResult, error) {
 	if !core.VerifyPassword(plainPassword, c.password) {
 		return nil, errors.New(errMessage)
 	}
-	return s.issueLogin(c, role)
+	return s.issueLoginFor(family, c, role)
 }
 
 // issueLogin 登录骨架后半段：禁用校验 → 签发 → 组结果。
 // 密码三入口与验证码登录/注册共用（ADR-0011 向验证码路径的延伸，ADR-0012 §5）。
 func (s *Service) issueLogin(c loginCredentials, role string) (*LoginResult, error) {
+	return s.issueLoginFor(security.FamilyWeb, c, role)
+}
+
+// issueLoginFor 同 issueLogin，但按指定令牌族签发（#1756 第二批）。
+// 族决定这枚令牌在**哪个入口**被接受，与角色权限是两件事：估值 BFF 用 valuation 族，
+// 主站四端用 web 族。
+func (s *Service) issueLoginFor(family security.Family, c loginCredentials, role string) (*LoginResult, error) {
 	if c.status != nil && *c.status != 1 {
 		return nil, errors.New("账号已被禁用，请联系管理员")
 	}
-	access, refresh, err := s.session.IssuePair(c.id, c.account, role)
+	access, refresh, err := s.session.IssuePairFor(family, c.id, c.account, role)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +210,12 @@ func (s *Service) issueLogin(c loginCredentials, role string) (*LoginResult, err
 // HrwaiLogin 统一 HRWAI 账号登录,支持账号或手机号。
 // 三套前端(培训学员端 / 残值评估 / AI 助手)共用此登录方法。
 func (s *Service) HrwaiLogin(account, password string) (*LoginResult, error) {
+	return s.HrwaiLoginFor(security.FamilyWeb, account, password)
+}
+
+// HrwaiLoginFor 按令牌族登录（#1756 第二批）：估值 BFF 用它签发 valuation 族的双令牌，
+// 其余调用方一律走 HrwaiLogin（web 族）。两者共用同一套验密与禁用校验，只有族不同。
+func (s *Service) HrwaiLoginFor(family security.Family, account, password string) (*LoginResult, error) {
 	var user model.HrwaiUser
 	// 同一输入既可能是登录账号也可能是手机号，二者择一命中即可
 	if err := s.db.Where("account = ? OR phone = ?", account, account).First(&user).Error; err != nil {
@@ -207,7 +225,7 @@ func (s *Service) HrwaiLogin(account, password string) (*LoginResult, error) {
 		return nil, err
 	}
 	status := user.Status
-	return s.verifyAndIssue(password, loginCredentials{
+	return s.verifyAndIssueFor(family, password, loginCredentials{
 		id: user.ID, account: user.Account, username: user.Username,
 		password: user.Password, status: &status,
 	}, core.HrwaiRole, "账号或密码错误")
