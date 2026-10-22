@@ -25,7 +25,6 @@ import type {
 	AiDiagnosisBrandOption,
 	AiDiagnosisFaultCodeItem,
 	AiDiagnosisSource,
-	AiChatSettings,
 } from '../types/index'
 
 
@@ -631,50 +630,4 @@ function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isR
 		return task
 	}
 	return null
-}
-
-/** 默认对话设置 */
-export function defaultAiChatSettings() : AiChatSettings {
-	return {
-		model_source: 'admin',
-		model_id: 0,
-		model_name: '默认模型',
-		base_url: '',
-		model: '',
-		api_key: '',
-	} as AiChatSettings
-}
-
-const SETTINGS_KEY = 'ai_chat_settings'
-
-/** 读取本地对话设置 */
-export function loadAiChatSettings() : AiChatSettings {
-	const raw = getStorage(SETTINGS_KEY)
-	if (raw.length == 0) return defaultAiChatSettings()
-	try {
-		const obj = JSON.parse(raw) as UTSJSONObject
-		return {
-			model_source: toStr(obj['model_source'], 'admin'),
-			model_id: toNumber(obj['model_id']),
-			model_name: toStr(obj['model_name'], '默认模型'),
-			base_url: toStr(obj['base_url']),
-			model: toStr(obj['model']),
-			api_key: toStr(obj['api_key']),
-		} as AiChatSettings
-	} catch (_e) {
-		return defaultAiChatSettings()
-	}
-}
-
-/** 保存本地对话设置 */
-export function saveAiChatSettings(settings : AiChatSettings) : void {
-	const obj : UTSJSONObject = {
-		model_source: settings.model_source,
-		model_id: settings.model_id,
-		model_name: settings.model_name,
-		base_url: settings.base_url,
-		model: settings.model,
-		api_key: settings.api_key,
-	}
-	uni.setStorageSync(SETTINGS_KEY, JSON.stringify(obj))
 }

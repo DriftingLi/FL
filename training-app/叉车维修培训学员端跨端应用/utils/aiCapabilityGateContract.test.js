@@ -152,9 +152,10 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
     expect(apply).toMatch(/if\s*\(!proStateSettled\.value\) return/);
     expect(apply).toMatch(/removeStorageSync\(STORAGE_KEY_AI_SELECTED_USER_MODEL\)/);
     expect(apply).toMatch(/if\s*\(!proUnlocked\.value\) return/);
+    // 设置页只留「何时调」；「回收成什么形态」自 #1732 起单源在 useAiModelSelection
     const reclaim2 = settings.slice(settings.indexOf('function reclaimLockedModelSource'), settings.indexOf('async function loadData'));
     expect(reclaim2).toMatch(/if\s*\(proUnlocked\.value\) return/);
-    expect(reclaim2).toMatch(/settings\.value\.model_source = 'admin'/);
+    expect(reclaim2).toMatch(/settings\.value = reclaimLockedAiChatSettings\(platformModels\.value\)/);
     expect(reclaim2).toMatch(/saveAiChatSettings\(settings\.value\)/);
   });
 });

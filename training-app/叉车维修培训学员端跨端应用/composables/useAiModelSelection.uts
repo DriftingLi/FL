@@ -1,0 +1,190 @@
+/**
+ * AI 对话设置（本地键 `ai_chat_settings`）—— **持久面与归一化的唯一实现**（#1732）
+ *
+ * ## 为什么在这里
+ *
+ * 从前 `api/aiAssistant.uts` 里同时住着「HTTP 出口」与「本地存储读写」
+ * （`loadAiChatSettings` / `saveAiChatSettings` / `SETTINGS_KEY`）：api 层只该做
+ * 请求与 DTO 映射，存储 IO 混进去后，谁都能在 api 层顺手落盘、也能在别处重抄一份键名。
+ * 本票把两侧拆开（先例：`stores/auth.uts` 把 token/user/refresh 编排收在 store，api 层只留出口）：
+ *
+ *   - **持久面**（`defaultAiChatSettings` / `loadAiChatSettings` / `saveAiChatSettings`）——
+ *     键名 `SETTINGS_KEY` 是**模块私有**常量，不再从任何 api 出口暴露。
+ *   - **归一化面**（`normalizeAiChatSettings` / `reclaimLockedAiChatSettings`）——
+ *     三种来源（admin / user / custom）的排他规则、明文 key 的落盘边界、回收为平台模型的形态，
+ *     **全仓只有这一份**。从前两页各写一份（`ai-assistant.uvue` 的 `persistSettings` 与
+ *     `ai-settings.uvue` 的 `onSave` + `reclaimLockedModelSource`），失一处即不对称且无守护。
+ *
+ * ## 归一化契约（单源，别再在页面里分叉）
+ *
+ * | 来源 | model_id | model_name | model | base_url | api_key |
+ * | --- | --- | --- | --- | --- | --- |
+ * | admin | 原样 | 平台模型命中则回填，否则沿用 previous；空则 `默认模型` | 同上 | **清空** | **清空** |
+ * | user | 原样 | 已保存模型命中则回填，否则沿用 previous；空则 `默认模型` | 同上 | 同上 | **清空**（本地不落明文 key） |
+ * | custom | 原样（见下） | `name` → `model` → previous 依次兜底 | 表单值 | 表单值 | 表单值（明文 key 只属于本来源） |
+ *
+ * `model_id` **原样采用**而不是在 custom 分支强制置 0：两页对它的语义不同 ——
+ * `ai-assistant.uvue` 选 custom 时 id 本就是 0（选择器与 `buildBody` 都不看它），
+ * 而 `ai-settings.uvue` 用它记住「下次保存要更新哪条自定义模型」（`payload['id']`）。
+ * 在这里替它决定会造出「每保存一次新增一条」的重复数据。
+ *
+ * 未解锁专业版时的**存量回收**（#1024）也走本文件：`reclaimLockedAiChatSettings` 就是
+ * 「回收为平台模型」的那一条规则，两页各自只负责「什么时候调」。
+ */
+import type { AiChatSettings, AiModel, AiUserModel } from '../types/index'
+import { getStorage, setStorage } from '../utils/storage'
+import { toNumber, toStr } from '../api/helpers'
+
+/**
+ * 本地存储键 —— **模块私有**（不导出）。
+ * 持久面只经 `loadAiChatSettings` / `saveAiChatSettings` 开放：#1732 验收①
+ * 即「`api/aiAssistant.uts` 里 SETTINGS_KEY / ai_chat_settings 零命中」。
+ */
+const SETTINGS_KEY : string = 'ai_chat_settings'
+
+/** 默认对话设置（纯值，无存储副作用） */
+export function defaultAiChatSettings() : AiChatSettings {
+	return {
+		model_source: 'admin',
+		model_id: 0,
+		model_name: '默认模型',
+		base_url: '',
+		model: '',
+		api_key: '',
+	} as AiChatSettings
+}
+
+/**
+ * 读取本地对话设置：缺键 / 坏 JSON 一律回落默认值（**fail-closed 到可用默认**，
+ * 不把「读不到」当成「没有设置」之外的东西 —— 与本仓 #916 那条纪律同源）。
+ */
+export function loadAiChatSettings() : AiChatSettings {
+	const raw = getStorage(SETTINGS_KEY)
+	if (raw.length == 0) return defaultAiChatSettings()
+	try {
+		const obj = JSON.parse(raw) as UTSJSONObject
+		return {
+			model_source: toStr(obj['model_source'], 'admin'),
+			model_id: toNumber(obj['model_id']),
+			model_name: toStr(obj['model_name'], '默认模型'),
+			base_url: toStr(obj['base_url']),
+			model: toStr(obj['model']),
+			api_key: toStr(obj['api_key']),
+		} as AiChatSettings
+	} catch (_e) {
+		return defaultAiChatSettings()
+	}
+}
+
+/** 落盘对话设置（本文件是唯一写入口） */
+export function saveAiChatSettings(settings : AiChatSettings) : void {
+	const obj : UTSJSONObject = {
+		model_source: settings.model_source,
+		model_id: settings.model_id,
+		model_name: settings.model_name,
+		base_url: settings.base_url,
+		model: settings.model,
+		api_key: settings.api_key,
+	}
+	setStorage(SETTINGS_KEY, JSON.stringify(obj))
+}
+
+/** 「自定义 API Key」表单的四个字段（与 `AiChatSettings` 分开：前者是可编辑输入，后者是落盘结果） */
+export type AiCustomModelInput = {
+	name : string
+	model : string
+	base_url : string
+	api_key : string
+}
+
+/** 空的自定义输入（admin / user 来源用不到它，但归一化签名统一，避免两个入口） */
+export function emptyAiCustomModelInput() : AiCustomModelInput {
+	return { name: '', model: '', base_url: '', api_key: '' } as AiCustomModelInput
+}
+
+/**
+ * 把「当前选中项 + 列表上下文」折叠成要落盘的设置 —— **三 source 排他规则的唯一实现**。
+ *
+ * @param source 选中来源（admin / user / custom；其余值按 admin 处理，不新造第四种）
+ * @param modelId 选中的平台模型 id / 已保存模型 id / custom 时为要更新的那条 id（见文件头表）
+ * @param platformModels 平台模型列表（admin 命中时回填展示名与 model）
+ * @param userModels 已保存的自定义模型列表（user 命中时回填；api_key 恒清空）
+ * @param custom 自定义表单输入（仅 custom 来源读取）
+ * @param previous 上一次落盘的设置（字段缺失时的兜底来源，**不要传一份新建的空对象**）
+ */
+export function normalizeAiChatSettings(
+	source : string,
+	modelId : number,
+	platformModels : AiModel[],
+	userModels : AiUserModel[],
+	custom : AiCustomModelInput,
+	previous : AiChatSettings,
+) : AiChatSettings {
+	const s = defaultAiChatSettings()
+	s.model_source = (source == 'user' || source == 'custom') ? source : 'admin'
+	s.model_id = modelId
+	s.model_name = previous.model_name
+	s.model = previous.model
+	s.base_url = previous.base_url
+	s.api_key = previous.api_key
+
+	if (s.model_source == 'custom') {
+		// 展示名兜底顺序：表单名 → 表单 model → 原展示名（三处调用点语义一致）
+		if (custom.name.length > 0) {
+			s.model_name = custom.name
+		} else if (custom.model.length > 0) {
+			s.model_name = custom.model
+		}
+		s.model = custom.model
+		s.base_url = custom.base_url
+		s.api_key = custom.api_key
+		return s
+	}
+
+	if (s.model_source == 'user') {
+		for (let i = 0; i < userModels.length; i++) {
+			const um = userModels[i]
+			if (um.id == modelId) {
+				s.model_name = um.name
+				s.model = um.model
+				s.base_url = um.base_url
+				break
+			}
+		}
+		if (s.model_name.length == 0) {
+			s.model_name = '默认模型'
+		}
+		// 明文 key 只属于 custom 来源：user 走服务端 user_model_id 鉴权，本地不落 key
+		s.api_key = ''
+		return s
+	}
+
+	// admin：平台模型命中则回填；未命中沿用 previous（回收路径传默认值 ⇒ '默认模型' / 空 model）
+	for (let i = 0; i < platformModels.length; i++) {
+		const pm = platformModels[i]
+		if (pm.id == modelId) {
+			s.model_name = pm.name
+			s.model = pm.model
+			break
+		}
+	}
+	if (s.model_name.length == 0) {
+		s.model_name = '默认模型'
+	}
+	// 平台模型不带自带 key：两条并列清空的规则同样单源在这里
+	s.base_url = ''
+	s.api_key = ''
+	return s
+}
+
+/**
+ * 未解锁专业版时的**存量回收**（#1024）：自带 key 的来源（user / custom）是本地持久态，
+ * 只关入口不清存量 ⇒ 未解锁用户仍在按 `user_model_id` / 明文 `custom_api_key` 对话。
+ *
+ * 回收形态 = 「平台模型 + 第一个平台模型（有则选）」＋ 清掉 model / 两个自有地址与 key ——
+ * 由 `normalizeAiChatSettings` 生成，两页只决定**何时**调（门状态已读完、且未解锁）。
+ */
+export function reclaimLockedAiChatSettings(platformModels : AiModel[]) : AiChatSettings {
+	const firstId : number = platformModels.length > 0 ? platformModels[0].id : 0
+	return normalizeAiChatSettings('admin', firstId, platformModels, [] as AiUserModel[], emptyAiCustomModelInput(), defaultAiChatSettings())
+}

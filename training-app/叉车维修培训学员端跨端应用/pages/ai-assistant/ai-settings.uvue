@@ -140,12 +140,18 @@
 		getAiUserModelsApi,
 		saveAiUserModelApi,
 		deleteAiUserModelApi,
-		loadAiChatSettings,
-		saveAiChatSettings,
-		defaultAiChatSettings,
 	} from '../../api/aiAssistant'
 	import type { AiModel, AiUserModel, AiChatSettings } from '../../types/index'
 	import { useAiPro } from '../../composables/useAiPro'
+	import {
+		loadAiChatSettings,
+		saveAiChatSettings,
+		defaultAiChatSettings,
+		normalizeAiChatSettings,
+		reclaimLockedAiChatSettings,
+		emptyAiCustomModelInput,
+	} from '../../composables/useAiModelSelection'
+	import type { AiCustomModelInput } from '../../composables/useAiModelSelection'
 	const windowHeight = uni.getSystemInfoSync().windowHeight
 
 	const settings = ref<AiChatSettings>(defaultAiChatSettings())
@@ -196,13 +202,16 @@
 		formApiKey.value = e.detail.value
 	}
 
+	// 选中口径全部走单源归一化（#1732）：页面不再自己拼「哪个字段清空、哪个字段回填」
 	function onSelectPlatformModel(m : AiModel) : void {
-		settings.value.model_source = 'admin'
-		settings.value.model_id = m.id
-		settings.value.model_name = m.name
-		settings.value.model = m.model
-		settings.value.base_url = ''
-		settings.value.api_key = ''
+		settings.value = normalizeAiChatSettings(
+			'admin',
+			m.id,
+			platformModels.value,
+			userModels.value,
+			emptyAiCustomModelInput(),
+			settings.value,
+		)
 	}
 
 	function onSelectSource(source : string) : void {
@@ -218,13 +227,16 @@
 	}
 
 	function onSelectUserModel(m : AiUserModel) : void {
-		// 已保存模型即后端 user 模型：model_source='user'，按 user_model_id 对话
-		settings.value.model_source = 'user'
-		settings.value.model_id = m.id
-		settings.value.model_name = m.name
-		settings.value.model = m.model
-		settings.value.base_url = m.base_url
-		settings.value.api_key = '' // 本地不落明文 key，后端按 id 鉴权
+		// 已保存模型即后端 user 模型：model_source='user'，按 user_model_id 对话；
+		// 「本地不落明文 key」这条规则单源在 normalizeAiChatSettings（user 分支恒清 api_key）
+		settings.value = normalizeAiChatSettings(
+			'user',
+			m.id,
+			platformModels.value,
+			userModels.value,
+			emptyAiCustomModelInput(),
+			settings.value,
+		)
 		formName.value = m.name
 		formBaseUrl.value = m.base_url
 		formModel.value = m.model
@@ -242,12 +254,8 @@
 			}
 			userModels.value = next
 			if (settings.value.model_id == id) {
-				settings.value.model_id = 0
-				settings.value.model_source = 'admin'
-				settings.value.model_name = '默认模型'
-				settings.value.base_url = ''
-				settings.value.model = ''
-				settings.value.api_key = ''
+				// 删除后回到「未选中的默认形态」——与首屏初值同源，不再手抄一份字段清单（#1732）
+				settings.value = defaultAiChatSettings()
 			}
 			uni.showToast({ title: '已删除', icon: 'success' })
 		} catch (e) {
@@ -310,15 +318,18 @@
 					settings.value.api_key = apiKey
 				}
 			} else {
-				// admin / user：若未选中具体模型也允许保存（后端可能用默认绑定）
-				if (settings.value.model_name.length == 0) {
-					settings.value.model_name = '默认模型'
-				}
-				// user 来源始终不落明文 key
-				if (settings.value.model_source == 'user') {
-					settings.value.base_url = ''
-					settings.value.api_key = ''
-				}
+				// admin / user：若未选中具体模型也允许保存（后端可能用默认绑定）。
+				// 展示名兜底 / 「user 与 admin 都不留自带地址与明文 key」两条规则单源在
+				// normalizeAiChatSettings（#1732）——从前本页与助手页各写一份且互不相同。
+				const custom : AiCustomModelInput = emptyAiCustomModelInput()
+				settings.value = normalizeAiChatSettings(
+					settings.value.model_source,
+					settings.value.model_id,
+					platformModels.value,
+					userModels.value,
+					custom,
+					settings.value,
+				)
 			}
 
 			saveAiChatSettings(settings.value)
@@ -341,19 +352,13 @@
 		if (proUnlocked.value) return
 		const src = settings.value.model_source
 		if (src != 'user' && src != 'custom') return
-		settings.value.model_source = 'admin'
-		settings.value.model_id = 0
-		settings.value.model_name = '默认模型'
-		settings.value.model = ''
-		settings.value.base_url = ''
-		settings.value.api_key = ''
+		// 「回收成什么形态」单源在 composables/useAiModelSelection.uts（#1732）；
+		// 本页仍守自己那一半：门状态读完之后才调（见 refreshProStateAndReclaim）。
+		settings.value = reclaimLockedAiChatSettings(platformModels.value)
 		formName.value = ''
 		formBaseUrl.value = ''
 		formModel.value = ''
 		formApiKey.value = ''
-		if (platformModels.value.length > 0) {
-			onSelectPlatformModel(platformModels.value[0])
-		}
 		saveAiChatSettings(settings.value)
 	}
 

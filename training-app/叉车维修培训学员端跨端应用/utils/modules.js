@@ -154,6 +154,7 @@ const MODULES = {
       'components/ai-chat/ai-chat-pro-sheet.uvue',
       'components/ai-chat/ai-chat-sources.uvue',
       'composables/useAiChat.uts',
+      'composables/useAiModelSelection.uts',
       'composables/useAiPro.uts',
       'pages/ai-assistant/ai-assistant-constants.uts',
       'pages/ai-assistant/ai-assistant.uvue',
@@ -170,7 +171,7 @@ const MODULES = {
      * （不拿一条假声明去保真）。
      */
     crossModuleConsumers: [],
-    /** 超预算：ai-assistant.uvue 839 / ai-feature 629 / ai-settings 621 / api/aiAssistant.uts 667 */
+    /** 超预算：ai-assistant.uvue 822 / ai-feature 606 / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化） */
     budget: 'pending',
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
