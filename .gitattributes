@@ -9,6 +9,10 @@ Dockerfile text eol=lf
 # 既让锁在本机假红，也让每次再生成都留下幻影 diff（ADR-0053 §9）。
 deploy/env.defaults text eol=lf
 
+# 反代配置同属生成物：frontend/Caddyfile 由 gen-deploy 以 LF 写出并做字节级同步比对，
+# 检出成 CRLF 会让锁在本机假红（同一族问题见上一条）。
+frontend/Caddyfile text eol=lf
+
 # Go 源码统一 LF，保证 Windows 检出后 gofmt -l 依然干净
 *.go text eol=lf
 

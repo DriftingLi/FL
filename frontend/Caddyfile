@@ -1,0 +1,169 @@
+# ===== 前端反代（host 网络模式，Caddy）=====
+# 承载：四个工作区 SPA、唯一 API 入口 api.、对象存储直出 cdn.、内网 Dify 反代 dify.。
+#
+# 证书：生产由 Caddy 自己向 ACME 申请与续期（443 的 TLS-ALPN 为主、80 的 HTTP-01 兜底），
+#      运维不再需要把证书塞进 GitHub Secrets。
+#      非生产（测试环境冒烟）由 entrypoint 注入 auto_https off + tls internal（自签），
+#      **不申请公共证书**——冒烟不占证书配额，也不要求公网解析指向测试机。
+# 挂载：本文件渲染成 /etc/caddy/Caddyfile；模板占位符只允许 ${DOMAIN}、${BACKEND_HOST_PORT}、
+#      ${EDGE_ORIGIN_TOKEN}、${CADDY_GLOBAL}、${CADDY_TLS} 五个（entrypoint 的 envsubst 清单必须与之一致）。
+# 生成区：投递分档匹配器由 backend/cmd/gen-deploy 覆写，勿手改。
+
+{
+	${CADDY_GLOBAL}
+	email {$CADDY_ACME_EMAIL}
+}
+
+# ===== 片段：SPA 工作区 =====
+# 每个工作区同源提供页面与 /api（前端 baseURL 是 /api，跨子域只发生在页面跳转时）。
+(spa_workspace) {
+	${CADDY_TLS}
+	encode zstd gzip
+
+	@health path /health
+	respond @health "ok" 200
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:${BACKEND_HOST_PORT}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	# SPA 入口 HTML 禁止缓存：index.html 内容随发布变化，缓存旧 SPA 会让用户拿到旧应用。
+	# 子块静态资源（带内容哈希）走下面的长缓存覆盖。
+	header {
+		Cache-Control "no-cache, no-store, must-revalidate"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	@assets path /assets/*
+	header @assets Cache-Control "public, immutable"
+}
+
+# ===== api：唯一后端入口 =====
+# 移动端、门户（EdgeOne）回源、残值 BFF 都打这里；页面域名与它解耦，
+# 下次换页面域名时这三条链路一行都不用动。
+api.${DOMAIN} {
+	${CADDY_TLS}
+	encode zstd gzip
+
+	@health path /health
+	respond @health "ok" 200
+
+	handle /swagger* {
+		reverse_proxy 127.0.0.1:${BACKEND_HOST_PORT}
+	}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:${BACKEND_HOST_PORT}
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# ===== 四个工作区 =====
+training.${DOMAIN} {
+	import spa_workspace
+}
+
+mentor.${DOMAIN} {
+	import spa_workspace
+}
+
+manage.${DOMAIN} {
+	import spa_workspace
+}
+
+recruit.${DOMAIN} {
+	import spa_workspace
+}
+
+# ===== 残值评估（过渡期：仍由本仓 SPA 服务）=====
+# 第二批（前端迁到和润门户、改写 Nuxt）完成后，本块改为 301 到 https://valuation.hrwai.cn。
+valuation.${DOMAIN} {
+	import spa_workspace
+}
+
+# ===== cdn：对象存储直出（资源域，仅 GET/HEAD）=====
+# 本块只有两类直出（对象存储前缀与 /reports/），其余一律 404 —— 不吐 SPA、不反代后端：
+# 漏配的前缀立刻暴露，而不是伪装成 200。
+cdn.${DOMAIN} {
+	${CADDY_TLS}
+
+	# >>> gen-deploy:caddy-delivery 生成区起（以下到止标记由 backend/cmd/gen-deploy 覆写，勿手改）
+# ===== 对象存储直出的投递分档（ADR-0066 决策 2 / 票 #1364）=====
+# 唯一事实源：backend/internal/filestore/file_type_table.go 的 class 列；
+# 再生成：cd backend && go run ./cmd/gen-deploy；
+# 同步契约：backend/internal/deploy/caddy_delivery_gen_test.go（改表不改本段即红）。
+# 语义与后端 staticHandler 的 applyUploadDeliveryHeaders 对齐：safe 内联、
+# unsafe 与 unknown 强制下载。Content-Type 不在这里覆写（#1364 决策 3）——
+# attachment 已是下载语义，覆写收益为零且会把 RGW 回的正确 MIME 弄丢。
+# 匹配器一律 path_regexp + (?i)：nginx 原用 ~* 不区分大小写，Caddy 的 path 区分，
+# 这条 (?i) 就是「.JPG 与 .jpg 同档」的唯一保证。
+
+# safe 档：16 项 —— inline（内联预览：PDF 内联与图片/视频直出依赖它）
+@delivery_inline path_regexp (?i)\.(bmp|doc|docx|gif|jpeg|jpg|mp4|pdf|png|ppt|pptx|webm|webp|xls|xlsx|zip)$
+
+# unsafe 档：9 项 —— attachment（显式登记：行为同兜底，登记是为了让「想过它」留在生成物里）
+@delivery_unsafe path_regexp (?i)\.(cjs|htm|html|js|mjs|svg|svgz|xhtml|xml)$
+# <<< gen-deploy:caddy-delivery 生成区止
+
+	@write_methods method POST PUT PATCH DELETE
+	respond @write_methods "Forbidden" 403
+
+	handle /reports/* {
+		rewrite * /forklift-files{http.request.uri}
+		header Content-Disposition "attachment"
+		header @delivery_inline Content-Disposition "inline"
+		header X-Content-Type-Options "nosniff"
+		header Cache-Control "public, max-age=3600"
+		reverse_proxy 172.17.1.42:8088
+	}
+
+	handle {
+		@not_object_store not path /featured/* /avatars/* /contributions/* /resumes/* /images/forum/* /images/questions/* /images/chapters/* /images/ai-assistant/* /chapters/* /slides/* /uploads/*
+		respond @not_object_store "Not Found" 404
+
+		rewrite * /forklift-files{http.request.uri}
+		header Content-Disposition "attachment"
+		header @delivery_inline Content-Disposition "inline"
+		header X-Content-Type-Options "nosniff"
+		header Cache-Control "public, max-age=86400"
+		reverse_proxy 172.17.1.42:8088
+	}
+}
+
+# ===== dify：内网 Dify + 知识库图片反代 =====
+# Dify 大量使用 SSE，需关闭缓冲（Caddy 的 flush_interval -1 等价于 nginx 的 proxy_buffering off）。
+dify.${DOMAIN} {
+	${CADDY_TLS}
+
+	handle /kbimg/* {
+		@kbimg_write not method GET HEAD
+		respond @kbimg_write "Forbidden" 403
+		uri strip_prefix /kbimg
+		rewrite * /forklift-files{http.request.uri}
+		reverse_proxy 172.17.1.42:8088
+	}
+
+	handle {
+		reverse_proxy 172.17.1.46:80 {
+			flush_interval -1
+		}
+	}
+}
+
+# ===== 根域与 www：一跳 301 到培训入口 =====
+gdyidao.cn, www.gdyidao.cn {
+	${CADDY_TLS}
+	redir https://training.${DOMAIN}{http.request.uri} permanent
+}
