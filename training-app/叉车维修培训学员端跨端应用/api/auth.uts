@@ -14,24 +14,26 @@
  *   三者的返回值**没有任何消费方落地**（void 用法；`resetPasswordApi` 后端 apitypes 标 `NoData: true`）
  *   ⇒ 按 T03/T09 口径（void 透传不硬套 identity map）留裸，理由登记在各模块契约的白名单节。
  *   `sendPhoneCodeApi` 是 `sendCodeApi` 的 register 态薄包装。
- * - `updateProfileApi` 走 `requestMapped` 出口（T15 批 B #653）：出口家族里没有 `putMapped` 便捷面，
- *   故与 `put()` 逐字同通路（`opts.url` + `opts.method = 'PUT'` + `opts.data`），只把拆包后的
- *   `.then()` 换成 mapper。显式 DTO `ProfileChangeRequest` 与 `buildReviewRequest` 术前已在位，
+ * - `updateProfileApi` 走 **`putMapped`** 出口（T15 批 B #653 收紧；#1734 补上 `putMapped` 后换短径）：
+ *   原先是「出口家族没有 `putMapped` ⇒ 手写 `opts.url` + `opts.method = 'PUT'` + `opts.data` 三步」的
+ *   长径，#1734 让 `putMapped(url, data, map)` 承担同一通路，调用点只剩方法/路径/载荷/mapper。
+ *   显式 DTO `ProfileChangeRequest` 与 `buildReviewRequest` 术前已在位，
  *   本票只收紧管道、签名一字未动 ⇒ **七个调用点、三个文件**（`profile-setup.uvue:125/143`、
  *   `personal-info-flows.uts:92/141/316`、`profile.uvue:231/274`）全部 `await` 后丢弃返回值，零页面适配。
  * - **裸出口白名单（T15 批 B #653 登记）**：`uploadAvatarApi` 留裸 `uploadFile` —— multipart 上传在
- *   T01 #639 的出口家族里没有 mapped 便捷面（只有 requestMapped / getMapped / postMapped），硬套需在
+ *   T01 #639 的出口家族里没有 mapped 便捷面（mapped 家族只覆盖 JSON 体的
+ *   requestMapped / getMapped / postMapped / putMapped / patchMapped），硬套需在
  *   api 层自造拆包，反比裸通路多一份映射真相；其响应仍经 `buildReviewRequest` 组装，映射点只有一个。
  * - **本文件仍未收紧的面（写清楚，别让指针烂在这里）**：
  *   - 甲：`/auth/profile/*` 五条与 `/auth/account` 两条路由共**七个函数**，全部返回
  *     `Promise<UTSJSONObject>`、唯一消费方是 profile 模块的 `personal-info-flows.uts` ⇒ 按 T03/T09
  *     「void 透传不硬套 identity map」留裸（白名单理由登记在各模块契约）。原第八条
- *     `updateAccountApi`（有载荷 `LoginResult`）已由 #1324 收紧走 `requestMapped`，见下条。
+ *     `updateAccountApi`（有载荷 `LoginResult`）已由 #1324 收紧，见下条。
  * - **登录族八条有载荷出口：已由 #1324（T15 补票）收紧** ——
  *   `loginApi` / `recruiterLoginApi` / `phoneLoginApi` / `emailLoginApi` / `refreshTokenApi` /
  *   `getUserInfoApi` / `mpWechatLoginApi` / `updateAccountApi` 全部走 mapper-callback 家族
- *   （`postMapped` / `getMapped` / `requestMapped` + `opts.method = 'PUT'`，PUT 无便捷面沿
- *   `updateProfileApi` 先例）；签名与返回类型一字未动 ⇒ 十处调用点零适配。两处非机械决策：
+ *   （`postMapped` / `getMapped` / `putMapped`；#1734 前 PUT 两支是 `requestMapped` + `opts.method`
+ *   手作长径，现都由 `putMapped` 承担）；签名与返回类型一字未动 ⇒ 十处调用点零适配。两处非机械决策：
  *   ① `loginApi` 外层双层 `.catch`（request 层 `showError` 之外的第二处用户可见文案源）**保留是决策**
  *   —— 按 ADR-0007「静默回退去留按是否掩盖面 + 本票禁区双判」：最终仍 reject、非静默回退，且退役属
  *   文案变更须另立票 ⇒ 留，形态与文案模板锁在 `utils/authLoginOutletsContract.test.js`；
@@ -39,7 +41,7 @@
  *   `buildLoginResult`（逐字节保形先测后合；`loginApi`/`recruiterLoginApi` 的带文案 try-catch 与
  *   `mpWechatLoginApi` 的 `isNew` 透传各自保形不并入）。
  */
-import { post, getMapped, postMapped, requestMapped, del, uploadFile } from './request'
+import { post, getMapped, postMapped, putMapped, del, uploadFile } from './request'
 import { toStr } from './helpers'
 import type { RequestOptions } from './request'
 import type { LoginParams, LoginResult, RegisterParams, EmailRegisterParams, UserInfo, UpdateProfileParams, UploadAvatarResult, ProfileChangeRequest, WechatLoginResult, RefreshTokenResult } from '../types/index'
@@ -413,11 +415,7 @@ export function updateProfileApi(params : UpdateProfileParams) : Promise<Profile
 	if (company != null && company.length > 0) {
 		payload['company'] = company
 	}
-	// PUT 在出口家族里没有便捷面：走通路本体，请求形态与 put() 逐字一致（同 opts.url / method / data）
-	const opts : RequestOptions = { url: '/auth/profile' } as RequestOptions
-	opts.method = 'PUT'
-	opts.data = payload
-	return requestMapped<ProfileChangeRequest>(opts, (data : UTSJSONObject) : ProfileChangeRequest => buildReviewRequest(data))
+	return putMapped<ProfileChangeRequest>('/auth/profile', payload, (data : UTSJSONObject) : ProfileChangeRequest => buildReviewRequest(data))
 }
 
 /** 从 UTSJSONObject 构造 ProfileChangeRequest（后端审核请求 DTO） */
@@ -568,12 +566,7 @@ export function updateAccountApi(account : string, code : string) : Promise<Logi
 		account: account,
 		code: code
 	} as UTSJSONObject
-	// PUT 在出口家族里没有便捷面：走通路本体，请求形态与 put() 逐字一致（同 opts.url / method / data）
-	// —— 同 updateProfileApi 先例（#653），#1324 收紧
-	const opts : RequestOptions = { url: '/auth/account' } as RequestOptions
-	opts.method = 'PUT'
-	opts.data = payload
-	return requestMapped<LoginResult>(opts, (data : UTSJSONObject) : LoginResult => buildLoginResult(data))
+	return putMapped<LoginResult>('/auth/account', payload, (data : UTSJSONObject) : LoginResult => buildLoginResult(data))
 }
 
 /** 注销账号 DELETE /auth/account（硬删，不可恢复；成功后本地需 clearAuthData） */

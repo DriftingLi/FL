@@ -27,6 +27,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
+const {
+  transport,
+  transportAliases,
+  envelopeBindings,
+  TRANSPORT_UTS,
+} = require('./requestUtsHarness');
 
 const ROOT = path.join(__dirname, '..');
 const REQUEST_UTS = path.join(ROOT, 'api', 'request.uts');
@@ -77,18 +83,18 @@ function makeUni() {
 
 /**
  * 装配一棵**真实**的依赖树：`helpers.uts` / `refreshGate.uts` / `storage.uts` / `authRole.uts`
- * → `request.uts` → `resume.uts`（可选：用变异源码替换其中任一层的真源）。
- * @param {{ requestSource?: string, resumeSource?: string }} [opts]
+ * / `transport.uts` → `request.uts` → `resume.uts`（可选：用变异源码替换其中任一层的真源）。
+ * @param {{ requestSource?: string, resumeSource?: string, transportSource?: string }} [opts]
  */
 function buildApp(opts = {}) {
   const uni = makeUni();
   const pages = [{ route: 'pages/resume/resume-edit' }];
   const helpers = loadUts(HELPERS_UTS, {});
   // 信封归一模块真实现（ADR-0037 PR-B）：resume 的数组出口现在走 decodeList。
-  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), envelopeBindings({
     getMapped: () => Promise.resolve({}),
     toNumber: helpers.toNumber,
-  });
+  }));
   const storage = loadUts(STORAGE_UTS, { uni });
   const gate = loadUts(GATE_UTS, {});
   const authRole = loadUts(AUTH_ROLE_UTS, {
@@ -100,7 +106,18 @@ function buildApp(opts = {}) {
     ACTIVE_ROLE_RECRUITER: ROLE_RECRUITER,
   });
 
+  // #1734：纯传输层已沉成 api/transport.uts，request.uts 从它 import 一组符号 ⇒ 装载时按真源注入。
+  // 变异侧（C1）替换的是**传输层源码**：404 前缀分支已随纯传输沉下去，打在 request.uts 上会落空。
+  const transportMod = opts.transportSource == null
+    ? transport({ uni, getStorage: storage.getStorage, API_BASE_URL: 'https://example.test/api', STORAGE_KEY_TOKEN: KEY_TOKEN })
+    : loadUtsFromSource(opts.transportSource, 'transport.uts', {
+      API_BASE_URL: 'https://example.test/api',
+      STORAGE_KEY_TOKEN: KEY_TOKEN,
+      getStorage: storage.getStorage,
+      uni,
+    });
   const requestBindings = {
+    ...transportAliases(transportMod),
     gateRefresh: gate.gateRefresh,
     API_BASE_URL: 'https://example.test/api',
     REQUEST_TIMEOUT: 15000,
@@ -122,7 +139,8 @@ function buildApp(opts = {}) {
 
   const resumeBindings = {
     getMapped: request.getMapped,
-    requestMapped: request.requestMapped,
+    // #1734 问题 2：resume 的 PUT 站点改走 putMapped 短径（真出口，非桩）
+    putMapped: request.putMapped,
     decodeList: envelope.decodeList,
     del: request.del,
     uploadFile: request.uploadFile,
@@ -318,14 +336,14 @@ describe('B. 编辑页 composable：新用户（404）不弹「简历加载失�
 });
 
 describe('C. 判别力自检：变异真源必须让本文件变红（成对取证的另一半）', () => {
-  test('C1：摘掉 request.uts 404 出口的前缀（退回老形态）⇒ 404 不再被判成 notfound', async () => {
-    const realRequest = readText(REQUEST_UTS);
+  test('C1：摘掉 404 出口的前缀（退回老形态）⇒ 404 不再被判成 notfound', async () => {
+    // #1734 两轴拆分后 404 分支沉在 api/transport.uts ⇒ 变异打在传输层真源上（request.uts 仍用真源装载）
     const mutated = mutateOnce(
-      realRequest,
+      readText(TRANSPORT_UTS),
       'reject(new Error(NOT_FOUND_MESSAGE_PREFIX + notFoundMsg))',
       'reject(new Error(notFoundMsg))',
     );
-    const app = buildApp({ requestSource: mutated });
+    const app = buildApp({ transportSource: mutated });
     const pending = app.resume.getResumeApi();
     await tick();
     app.respondAll(NOT_FOUND_REPLY);

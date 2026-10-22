@@ -36,7 +36,7 @@
  * 手动 JSON 映射（ADR-0003）：`as UTSJSONObject` 不可跨端强转成 Kotlin data class，
  * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
  */
-import { post, getMapped, postMapped, requestMapped, FORBIDDEN_MESSAGE_PREFIX } from './request'
+import { post, getMapped, postMapped, putMapped, requestMapped, FORBIDDEN_MESSAGE_PREFIX } from './request'
 import { decodePage } from './envelope'
 import type { Page } from './envelope'
 // ⚠️ `API_BASE_URL` 来自 `config/env`，**不是** `./request`（`request.uts` 并不 export 它）。
@@ -470,8 +470,14 @@ export function emptyRecruitFilters() : RecruitResumeFilters {
  * 在模块内即按此形态取行，mapper 只做逐字段映射。
  */
 export function getRecruitJobsApi(page : number = 1, pageSize : number = 20) : Promise<Page<RecruitJob>> {
-    const url = '/recruit/jobs?page=' + page.toString() + '&page_size=' + pageSize.toString()
-    return getMapped<Page<RecruitJob>>(url, null, (data : UTSJSONObject) : Page<RecruitJob> => {
+    // query 走 params 对象（#1734 问题 3）：与同文件 getRecruitContactRequestsApi 同形，不在 URL 上手工拼串
+    // —— 手工拼串的转义风险与两套拼接法并存，正是这张票要收掉的东西
+    const url = '/recruit/jobs'
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return getMapped<Page<RecruitJob>>(url, params, (data : UTSJSONObject) : Page<RecruitJob> => {
         // 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组一律先落 UTSJSONObject[] 再逐项取字段，
         // Android 端把 JSON 元素直接 `as` 成 Kotlin data class 会抛 ClassCastException（ADR-0015 / 先例 api/job.uts:124）
         return decodePage<RecruitJob>(data, url, page, pageSize, (obj : UTSJSONObject) : RecruitJob => buildRecruitJob(obj), ['items'])
@@ -528,8 +534,13 @@ function buildRecruitApplication(obj : UTSJSONObject) : RecruitApplication {
  *       出口走 getMapped（PR-E #1665）。
  */
 export function getRecruitJobApplicationsApi(jobId : number, page : number = 1, pageSize : number = 20) : Promise<RecruitApplicationListResult> {
-    const url = '/recruit/jobs/' + jobId.toString() + '/applications?page=' + page.toString() + '&page_size=' + pageSize.toString()
-    return getMapped<RecruitApplicationListResult>(url, null, (data : UTSJSONObject) : RecruitApplicationListResult => {
+    // query 走 params 对象（#1734 问题 3）：手工拼 '?page=' 的写法在本文件内已全部消亡
+    const url = '/recruit/jobs/' + jobId.toString() + '/applications'
+    const params : UTSJSONObject = {
+        page: page.toString(),
+        page_size: pageSize.toString(),
+    } as UTSJSONObject
+    return getMapped<RecruitApplicationListResult>(url, params, (data : UTSJSONObject) : RecruitApplicationListResult => {
         const paged = decodePage<RecruitApplication>(data, url, page, pageSize, (obj : UTSJSONObject) : RecruitApplication => buildRecruitApplication(obj))
         return {
             items: paged.items,
@@ -578,12 +589,7 @@ export function createRecruitJobApi(input : RecruitJobInput) : Promise<RecruitJo
 
 /** 编辑职位 `PUT /recruit/jobs/{id}` */
 export function updateRecruitJobApi(id : number, input : RecruitJobInput) : Promise<RecruitJob> {
-    // 收紧至 requestMapped 出口（PR-E #1665）：出口家族无 putMapped 便捷面，PUT 经 opts 同通路，
-    // 请求形态（url / method / data）与历史 put() 逐字一致
-    const opts : RequestOptions = { url: '/recruit/jobs/' + id.toString() } as RequestOptions
-    opts.method = 'PUT'
-    opts.data = buildJobInputPayload(input)
-    return requestMapped<RecruitJob>(opts, (data : UTSJSONObject) : RecruitJob => buildRecruitJob(data))
+    return putMapped<RecruitJob>('/recruit/jobs/' + id.toString(), buildJobInputPayload(input), (data : UTSJSONObject) : RecruitJob => buildRecruitJob(data))
 }
 
 /** 上架 / 下架切换 `POST /recruit/jobs/{id}/toggle-status`（返回带新 status 的职位）。forced_offline 的职位由页面隐去本入口 */

@@ -333,17 +333,20 @@ function infraFiles(infra = INFRA) {
  * 全表对账里基础设施那一侧的事实（票 D #1220）。**只出事实**，判红在测试里。
  * @param {object} decls 模块声明集合
  * @param {object} infra 基础设施声明
+ * @param {number} [budget] 行数软预算口径（默认 `BUDGET`）。注入别的预算只供**判别力取证**：
+ *   #1734 拆完 `api/request.uts` 后真源 oversized 为空，若判据只能靠「现有一个真超预算文件」自证非空，
+ *   它就永久失去判别力；收紧预算让**真实的** infra 文件越过线，同一段判据照样被驱动。
  * @returns {{dirs:number,files:number,phantomDirs:string[],phantomFiles:string[],overlaps:string[],unregistered:string[],oversized:string[],oversizedDrift:string[]}}
  *   - `unregistered`：树上有、既没归模块也没登记为 infra 的源文件（**这就是「隐形文件」的位置**）
  *   - `overlaps`：既被模块声明、又登记为 infra（归属不唯一）
  *   - `oversized` / `oversizedDrift`：超预算的 infra 文件；以及 `oversized` 登记的**双向**漂移
  */
-function infraFacts(decls = MODULES, infra = INFRA) {
+function infraFacts(decls = MODULES, infra = INFRA, budget = BUDGET) {
   const owned = new Set(moduleKeys(decls).flatMap((k) => declaredFiles(k, decls)));
   const inf = infraFiles(infra);
   const infSet = new Set(inf);
   const onDisk = filesUnder('.', SOURCE_RE, true);
-  const oversized = inf.filter((f) => exists(f) && fileLines(f) > BUDGET);
+  const oversized = inf.filter((f) => exists(f) && fileLines(f) > budget);
   const declaredOversized = infra.oversized || [];
   return {
     dirs: (infra.dirs || []).length,
@@ -364,9 +367,10 @@ function infraFacts(decls = MODULES, infra = INFRA) {
  * 一次拿全：声明面自检的全部事实。
  * @param {object} decls 声明集合（默认真源 `MODULES`；注入自检传改坏过的副本）
  * @param {object} infra 基础设施声明（同上，默认真源 `INFRA`）
+ * @param {number} [lineBudget] 传给 `infraFacts` 的行数软预算口径（默认 `BUDGET`），只供判别力取证
  * @returns {object} 每一面一个违规清单 + `ok`（`pending` 是事实不是违规）
  */
-function reconcile(decls = MODULES, infra = INFRA) {
+function reconcile(decls = MODULES, infra = INFRA, lineBudget = BUDGET) {
   const keys = moduleKeys(decls);
   const missing = [];
   const missingDirs = [];
@@ -419,7 +423,7 @@ function reconcile(decls = MODULES, infra = INFRA) {
     .sort((a, b) => a.file.localeCompare(b.file));
 
   const consumers = consumerFacts(decls);
-  const infrastructure = infraFacts(decls, infra);
+  const infrastructure = infraFacts(decls, infra, lineBudget);
   const sortBy = (a, b) =>
     `${a.module}|${a.file || a.consumer || a.dir || ''}`.localeCompare(`${b.module}|${b.file || b.consumer || b.dir || ''}`);
 

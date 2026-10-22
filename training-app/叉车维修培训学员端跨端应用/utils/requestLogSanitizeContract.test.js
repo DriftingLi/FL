@@ -16,6 +16,12 @@ const path = require('path');
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
 const src = readText(path.join(__dirname, '..', 'api', 'request.uts'));
+/**
+ * #1734 两轴拆分后，脱敏实现随「纯传输」沉到 `api/transport.uts`，**打印点仍在 request.uts**。
+ * 判据因此分两侧读：打印接线读调用方（request.uts），清单/掩码读写端（transport.uts）——
+ * 只读一侧会让「实现搬走但打印点没接线」或「接线在但清单被改」两种断链各自逃逸。
+ */
+const transportSrc = readText(path.join(__dirname, '..', 'api', 'transport.uts'));
 
 describe('请求体打印接线（#1398）', () => {
   it('debug 行的 data: 槽包了 sanitizeForLog，敏感值不再原样进 logcat', () => {
@@ -33,10 +39,10 @@ describe('请求体打印接线（#1398）', () => {
   });
 
   it('敏感清单逐字在案：password / refresh_token / token / code / api_key / captcha_value', () => {
-    expect(src).toContain("['password', 'refresh_token', 'token', 'code', 'api_key', 'captcha_value']");
+    expect(transportSrc).toContain("['password', 'refresh_token', 'token', 'code', 'api_key', 'captcha_value']");
   });
 
   it('掩码替身存在（不是把键删掉，是把值替换 —— 结构仍可读）', () => {
-    expect(src).toContain("const LOG_SECRET_MASK = '***'");
+    expect(transportSrc).toContain("const LOG_SECRET_MASK = '***'");
   });
 });

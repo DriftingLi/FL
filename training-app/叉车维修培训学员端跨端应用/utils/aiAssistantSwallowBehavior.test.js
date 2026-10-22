@@ -24,6 +24,8 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
+
 
 const API_DIR = path.join(__dirname, '..', 'api');
 const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
@@ -35,11 +37,11 @@ const helpers = () => loadUts(HELPERS_UTS, {});
 
 /** 信封模块真实现：getAiUserModelsApi 的回退内仍可能走本域 decode 语义（缺绑定 = fail-closed） */
 function envelopeFor(h) {
-  return loadUts(ENVELOPE_UTS, { getMapped: () => Promise.resolve({}), toNumber: h.toNumber });
+  return loadUts(ENVELOPE_UTS, envelopeBindings({ getMapped: () => Promise.resolve({}), toNumber: h.toNumber }));
 }
 
 /**
- * 装载 aiAssistant.uts（imports：getMapped/postMapped/requestMapped/del/uploadFile +
+ * 装载 aiAssistant.uts（imports：getMapped/postMapped/patchMapped/del/uploadFile +（#1734 问题 2：PATCH 走短径）
  * renewOrExpire/AUTH_EXPIRED_MESSAGE + decodeList/decodePage + toNumber/toStr + env/storage 三常量；
  * 出口退回裸 get ⇒ 缺绑定当场红）
  * @param {object} raw 下一次 outlet 的应答载荷（经 mapper 之后再返回）
@@ -55,7 +57,7 @@ function loadAi(raw, opt = {}) {
   const mod = loadUts(opt.file || AI_UTS, {
     getMapped: respond,
     postMapped: respond,
-    requestMapped: (o, mapper) => respond(o.url, null, mapper),
+    patchMapped: (url, data, mapper) => respond(url, data, mapper),
     del: () => (opt.reject ? Promise.reject(opt.reject) : Promise.resolve({})),
     uploadFile: () => Promise.resolve({}),
     // SSE 401 的单点决策（#1704）：本套件不测它们，但缺绑定 = fail-closed

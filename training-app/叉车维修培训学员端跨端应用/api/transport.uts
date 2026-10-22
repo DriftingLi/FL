@@ -1,0 +1,300 @@
+/**
+ * HTTP 传输层（线路面）—— 只回答「怎么把这一次请求发对」，不回答「401 之后怎么办」
+ *
+ * `api/request.uts` **两轴拆分**（#1734）的下沉层：留在 request.uts 的是**续期/重试编排**
+ * （renewOrExpire / refreshGate 单飞 / 401 三出口 / 唯一 reLaunch 出口），沉到这里的是**纯传输**
+ * —— 请求头构造、URL 解析、query 序列化、统一信封解析（HTTP 状态码 + 业务 code 双重校验）、
+ * 请求体日志脱敏、网络层报错。
+ *
+ * 依赖方向**单向**（request.uts → transport.uts）：本文件不得 import request.uts，否则 401 编排成环
+ * （同 request.uts 文件头「不能 import auth store」的理由）。机械判据：本文件里没有
+ * gateRefresh / renewOrExpire / handleUnauthorized / uni.reLaunch 的任何一处。
+ */
+import { API_BASE_URL } from '../config/env'
+import { STORAGE_KEY_TOKEN } from '../constants/app'
+import { getStorage } from '../utils/storage'
+
+/** 鉴权头名与 scheme：buildHeader / buildUploadHeader / sentTokenOf 共用的唯一真源 */
+export const HEADER_AUTHORIZATION = 'Authorization'
+export const BEARER_PREFIX = 'Bearer '
+
+/**
+ * **403（已认证但无权限）错误的可识别前缀** —— 单点真源，不许在别处另写字面量。
+ *
+ * 为什么要这么绕（2026-09-20 ④a 编译门抓获的真缺陷）：原实现写
+ * `const forbiddenAny = forbiddenErr as any; forbiddenAny.statusCode = 403`
+ * —— UTS 编译到 Kotlin 时**不允许给 `any` 动态加属性**，报 `error18 找不到名称"statusCode"`，
+ * 编译直接失败（同理读取侧 `(err as any).statusCode` 也编不过）。
+ * 而本仓**没有** `extends Error` 的先例，UTS 的自定义类也没有构造器先例
+ * （唯一先例 `pages/profile/composables/personal-info-flows.uts:104` 的 `Countdown` 是字段初始化式、无构造器）
+ * ⇒ 不发明新语法：改用**消息前缀**承载状态码，读写两端都用这一个常量。
+ *
+ * 消费方：`api/recruit.uts` 的 `isContactForbidden()`（页面据此把 403 分流成「尚未授权」而非「请求失败」）。
+ * ⚠️ 边界（照实记）：这是**字符串协议**，弱于类型化错误对象；若日后 UTS 支持
+ * `extends Error` 且编译通过，应换成带 `statusCode` 字段的错误类并删除本常量。
+ */
+export const FORBIDDEN_MESSAGE_PREFIX = '403:'
+
+/**
+ * **404（资源不存在）错误的可识别前缀** —— 单点真源，不许在别处另写字面量。
+ *
+ * 与 `FORBIDDEN_MESSAGE_PREFIX` 同款理由（同一处坑位）：状态码只能走**消息前缀**承载，
+ * 因为 UTS→Kotlin 不允许给 `any` 动态加 `statusCode`（`error18`），而本仓没有 `extends Error` 的先例。
+ *
+ * 为什么 404 也要单独成一支（#1204）：**「未建」是预期分支，不是失败** ——
+ * 新用户的 `GET /resume` 就是 404，调用方要据此静默（不弹「加载失败」/展示完善度引导）。
+ * 旧实现没有这一支，调用方只能**按后端中文文案**（`不存在` / `404`）逐字匹配消息，
+ * 后端文案一改语义就静默改变，且两端各复制一份判据。
+ *
+ * 消费方：`api/resume.uts` 的 `isResumeNotFound()`（两个简历页面共用同一判定实现）。
+ * ⚠️ 边界（照实记，与 403 同）：这是**字符串协议**，弱于类型化错误对象
+ * （且前缀会出现在 `errMsg(e)` 的返回值里，直接展示该串的调用方会看到 `404:` 开头）。
+ */
+export const NOT_FOUND_MESSAGE_PREFIX = '404:'
+
+/** 默认请求头 */
+export function buildHeader(custom : UTSJSONObject | null, silent : boolean) : UTSJSONObject {
+    const header : UTSJSONObject = {}
+    header['Content-Type'] = 'application/json'
+
+    const token = getStorage(STORAGE_KEY_TOKEN)
+    if (token.length > 0) {
+        header[HEADER_AUTHORIZATION] = `${BEARER_PREFIX}${token}`
+    }
+
+    if (silent) {
+        header['X-Silent'] = '1'
+    }
+
+    if (custom != null) {
+        // 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+        for (const k in custom) {
+            header[k] = custom[k]
+        }
+    }
+
+    return header
+}
+
+/** 上传请求头（与 buildHeader 同逻辑但不设 Content-Type，multipart boundary 由端侧生成） */
+export function buildUploadHeader(silent : boolean) : UTSJSONObject {
+    const header : UTSJSONObject = {}
+    const token = getStorage(STORAGE_KEY_TOKEN)
+    if (token.length > 0) {
+        header[HEADER_AUTHORIZATION] = `${BEARER_PREFIX}${token}`
+    }
+    if (silent) {
+        header['X-Silent'] = '1'
+    }
+    return header
+}
+
+/** 拼接完整 URL（相对路径不拼接 baseURL） */
+export function resolveURL(url : string) : string {
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+        // H5 端使用相对路径 /api 走同源 + 后端 CORS
+        if (url.startsWith('/')) {
+            return API_BASE_URL + url
+        }
+        return url
+    }
+    return API_BASE_URL + '/' + url
+}
+
+/** 显示错误 toast（受 silent 控制） */
+export function showError(msg : string, silent : boolean) {
+    if (silent) return
+    uni.showToast({
+        title: msg.length > 20 ? msg.substring(0, 20) + '...' : msg,
+        icon: 'none',
+        duration: 2500,
+    })
+}
+
+/**
+ * query 序列化**唯一实现**（#1734 问题 3：此前 getMapped / get / api/envelope.uts 的 getPaged
+ * 各抄一份逐字同构的 for...in + encodeURIComponent）。
+ *
+ * 为什么不交平台自动序列化：四个端（App / H5 / 小程序）对对象编码的形态不一致，
+ * 手写一份让各端发出去的 URL 逐字相同（防跨端漂移）。
+ * @returns 不含前导 ? 的 `k=v&k=v` 串；null 或无参数返回 ''
+ */
+export function buildQuery(params : UTSJSONObject | null) : string {
+    if (params == null) return ''
+    const pairs : string[] = []
+    // 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+    for (const k in params) {
+        const v = params[k]
+        pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+    }
+    return pairs.join('&')
+}
+
+/** 把 query 串挂到 URL 上（URL 已含 ? 时改用 & 续接；无参数原样返回） */
+export function withQuery(url : string, params : UTSJSONObject | null) : string {
+    const qs = buildQuery(params)
+    if (qs.length == 0) return url
+    return url + (url.includes('?') ? '&' : '?') + qs
+}
+
+/**
+ * 把 extra 的键合并进 target —— 分页信封 getPaged 的 query 合并语义（ADR-0037）
+ *
+ * 与 buildQuery 的分工：**这里只合并、不编码**，编码仍只有 buildQuery 一处。
+ * 模板字符串强转是本合并语义特有的：分页 query 的值可能是数字/布尔，统一成字符串再交给序列化。
+ */
+export function mergeQueryParams(target : UTSJSONObject, extra : UTSJSONObject | null) : void {
+    if (extra == null) return
+    // 用 for...in 遍历 UTSJSONObject 的字段名（跨端通用，Android 端不支持 Object.keys）
+    for (const k in extra) {
+        const v = extra[k]
+        if (v != null) {
+            target[k] = `${v}`
+        }
+    }
+}
+
+/**
+ * 命中这些键的请求体值不得原样进 logcat（明文密码 / 长效令牌 / 短信验证码 / 第三方模型密钥 / 图形验证码）—— #1398。
+ * #1394 取证实证：快捷登录（凭据登录）把明文密码、`POST /auth/logout` 把 7 天有效期的
+ * refresh_token JWT 原样打进日志；此前靠「取证产物入库前人工打码」兜，人工漏一次即明文凭证入仓。
+ * 键面不止票面点名的四个：`api_key`（自定义 AI 模型密钥 `sk-…`，长期有效的外部凭证，
+ * 经 `POST /ai-assistant/user-models` 走同一打印口）与 `captcha_value`（图形验证码）同属该防。
+ */
+const SENSITIVE_LOG_KEYS : string[] = ['password', 'refresh_token', 'token', 'code', 'api_key', 'captcha_value']
+/** 敏感值在日志里的替身：不回显任何片段、不保留长度 */
+const LOG_SECRET_MASK = '***'
+
+/** 键名是否落进敏感清单（逐字匹配后端 snake_case 字段） */
+function isSensitiveLogKey(key : string) : boolean {
+    for (let i = 0; i < SENSITIVE_LOG_KEYS.length; i++) {
+        if (SENSITIVE_LOG_KEYS[i] == key) return true
+    }
+    return false
+}
+
+/**
+ * 生成**可安全写进日志**的请求体副本：命中敏感键的值替换为掩码，其余逐字保留。
+ *
+ * 为什么返回副本而非原地改写：入参 `options.data` 在 `request()` 里紧随其后要**原样发出去**
+ * （`doSingleRequest`），就地打码会连同真实请求体一起毁掉。
+ *
+ * 只处理**扁平对象**请求体：本仓敏感请求体（登录 / 登出 / 刷新 / 验证码）的敏感值都在顶层键；
+ * 非对象形态（null / 数组 / 标量）原样返回，不做递归（无需要脱敏的嵌套载荷，YAGNI）。
+ */
+export function sanitizeForLog(data : any | null) : any | null {
+    if (data == null) return null
+    let casted : UTSJSONObject | null = null
+    try {
+        casted = data as UTSJSONObject
+    } catch (e) {
+        // 非对象形态（数组 / 标量）：本仓无此类敏感请求体，原样返回
+        return data
+    }
+    if (casted == null) return data
+    const obj : UTSJSONObject = casted!
+    const out : UTSJSONObject = {}
+    for (const k in obj) {
+        if (isSensitiveLogKey(k)) {
+            out[k] = LOG_SECRET_MASK
+        } else {
+            out[k] = obj[k]
+        }
+    }
+    return out
+}
+
+/**
+ * 统一信封解析：HTTP 状态码 + 业务 code 双重校验，成功时解包 data 字段
+ * @returns true=已给出最终结果（resolve/reject）；false=HTTP 401，由调用方决定刷新/登出
+ * @note 后端各接口 data 有「对象」与「裸数组」两种形态。Android 端数组无法
+ *       as UTSJSONObject（会抛 ClassCastException），此处捕获后统一包装为
+ *       { list: [...] }，由各 API 层按 list 字段取值。
+ */
+export function handleStatus(statusCode : number, body : UTSJSONObject, silent : boolean, fallbackMsg : string, resolve : (v : UTSJSONObject) => void, reject : (e : Error) => void) : boolean {
+    if (statusCode == 401) {
+        return false
+    }
+
+    // 403：**已认证但无权限**（#1196）。与 401 的区别是「身份没问题、这一项不给」——
+    // 典型是招聘者读未授权学员的明文联系方式（后端 `GetContact` 返回 403，不是 404）。
+    // 它必须与 401 分开：**不清登录态、不跳登录页**（唯二的 reLaunch 出口是 handleUnauthorized，
+    // 见 `utils/concurrent401RefreshContract.test.js` 的 C2）。
+    // 错误对象挂 `statusCode`，让调用方能把「预期分支」（如详情页的未授权态）与真失败分开；
+    // 调用方不需要时它只是多了一个字段，行为与既有的「HTTP 错误」分支一致。
+    if (statusCode == 403) {
+        let forbiddenMsg = '无权限访问'
+        const forbiddenBodyMsg = body['message']
+        if (forbiddenBodyMsg != null) {
+            forbiddenMsg = forbiddenBodyMsg as string
+        }
+        showError(forbiddenMsg, silent)
+        // ⚠️ 状态码走**消息前缀**而不是动态属性：见 FORBIDDEN_MESSAGE_PREFIX 的注释
+        //    （`(err as any).statusCode = 403` 在 UTS→Kotlin 下编不过，error18）。
+        const forbiddenErr = new Error(FORBIDDEN_MESSAGE_PREFIX + forbiddenMsg)
+        reject(forbiddenErr)
+        return true
+    }
+
+    // 404：**资源不存在**（#1204）。与 403 同构：走**消息前缀**承载状态码，而不是动态属性。
+    // 「未建」在很多端点是**预期分支**（新用户没有简历就是 404）⇒ 调用方要能把它与真失败分开；
+    // 不给这一支时，调用方只能按后端中文文案匹配消息（文案一改，语义静默改变）。
+    // 与「HTTP 错误」分支的区别只有错误对象的可识别前缀：toast 文案、退出码语义均不变。
+    if (statusCode == 404) {
+        let notFoundMsg = '资源不存在'
+        const notFoundBodyMsg = body['message']
+        if (notFoundBodyMsg != null) {
+            notFoundMsg = notFoundBodyMsg as string
+        }
+        showError(notFoundMsg, silent)
+        reject(new Error(NOT_FOUND_MESSAGE_PREFIX + notFoundMsg))
+        return true
+    }
+
+    // HTTP 错误
+    if (statusCode < 200 || statusCode >= 300) {
+        let msg = `请求失败 (${statusCode})`
+        const bodyMsg = body['message']
+        if (bodyMsg != null) {
+            msg = bodyMsg as string
+        }
+        showError(msg, silent)
+        reject(new Error(msg))
+        return true
+    }
+
+    // 业务层错误：code 非 200/201
+    const code = body['code'] as number
+    const message = (body['message'] as string) ?? fallbackMsg
+    if (code != 200 && code != 201) {
+        showError(message, silent)
+        reject(new Error(message))
+        return true
+    }
+
+    // 成功：返回 data 字段
+    const data = body['data']
+    if (data == null) {
+        resolve({})
+        return true
+    }
+    let dataObj : UTSJSONObject
+    try {
+        dataObj = data as UTSJSONObject
+    } catch (e) {
+        // data 为数组：包装为 { list: [...] }
+        dataObj = { list: data } as UTSJSONObject
+    }
+    resolve(dataObj)
+    return true
+}
+
+/** 网络层失败（fail 回调）的统一报错 */
+export function networkError(errMsg : string | null, failMsg : string, timeoutMsg : string, silent : boolean, reject : (e : Error) => void) {
+    let msg = failMsg
+    if (errMsg != null && errMsg.indexOf('timeout') >= 0) {
+        msg = timeoutMsg
+    }
+    showError(msg, silent)
+    reject(new Error(errMsg != null && errMsg.length > 0 ? errMsg : msg))
+}

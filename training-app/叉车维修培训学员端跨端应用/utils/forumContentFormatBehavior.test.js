@@ -25,6 +25,8 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, readText } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
+
 // 格式轴的真执行（含它的两个上游）只从夹具取：#1472 起 forumBody 又多一个运行期依赖，
 // 各套件各自抄注入表 = 每次加依赖都要改 N 处（本文件与 forumFormatPreferenceBehavior 各中过一次）。
 const { forumBodyModule } = require('./forumChainHarness');
@@ -41,7 +43,7 @@ const TYPES_FORUM = path.join(__dirname, '..', 'types', 'forum.uts');
  *  而 DTO 构造层零请求出口（forumContract 拆分锁执法），这里给个占位替身即可） */
 const helpers = () => loadUts(HELPERS_UTS, {});
 const dto = () => {
-  const envelope = loadUts(ENVELOPE_UTS, { getMapped: () => Promise.resolve({}), toNumber: helpers().toNumber });
+  const envelope = loadUts(ENVELOPE_UTS, envelopeBindings({ getMapped: () => Promise.resolve({}), toNumber: helpers().toNumber }));
   return loadUts(DTO_UTS, { ...helpers(), ...envelope });
 };
 
@@ -80,7 +82,7 @@ function loadForumApi(file = FORUM_UTS) {
   const mocks = makeRequestMocks();
   // forum.uts import 面 2026-10 起含 `./envelope`（#1661 PR-A）⇒ 注入真件 envelope（建在同一套
   // getMapped mock 之上，不手抄接口镜像——#1273：镜像抄写会静默漂移；envelope 内部只走 getMapped）。
-  const envelope = loadUts(ENVELOPE_UTS, { getMapped: mocks.getMapped, toNumber: helpers().toNumber });
+  const envelope = loadUts(ENVELOPE_UTS, envelopeBindings({ getMapped: mocks.getMapped, toNumber: helpers().toNumber }));
   const api = loadUts(file, { ...mocks, ...envelope, ...helpers(), ...dto(), ...formatBindings() });
   return { api, captured: mocks.captured };
 }

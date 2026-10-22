@@ -29,6 +29,8 @@ const os = require('os');
 const path = require('path');
 
 const { loadUts, readText } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
+
 
 const API_DIR = path.join(__dirname, '..', 'api');
 const HELPERS_UTS = path.join(API_DIR, 'helpers.uts');
@@ -68,9 +70,9 @@ function makeRejecting(recorder) {
 }
 
 /** 信封模块：与被测域共用同一份真实现（缺绑定 = fail-closed） */
-const envelopeFor = (h, gm) => loadUts(ENVELOPE_UTS, { getMapped: gm, toNumber: h.toNumber });
+const envelopeFor = (h, gm) => loadUts(ENVELOPE_UTS, envelopeBindings({ getMapped: gm, toNumber: h.toNumber }));
 
-/** 装载 questionInteraction.uts（imports：getMapped/postMapped/requestMapped/del + toNumber/toStr/toBool + decodeList/decodePage；PR-E #1665 出口已收口至 mapper 家族） */
+/** 装载 questionInteraction.uts（imports：getMapped/postMapped/putMapped/del + toNumber/toStr/toBool + decodeList/decodePage；PR-E #1665 出口收口至 mapper 家族，#1734 问题 2 再收 PUT 短径） */
 function loadQuestionInteraction(raw, calls = [], file = QUESTION_INTERACTION_UTS, opt = {}) {
   const h = helpers();
   const respond = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'mapped');
@@ -78,7 +80,7 @@ function loadQuestionInteraction(raw, calls = [], file = QUESTION_INTERACTION_UT
   const mod = loadUts(file, {
     getMapped: respond,
     postMapped: respond,
-    requestMapped: (opts, mapper) => respond(opts.url, null, mapper),
+    putMapped: (url, data, mapper) => respond(url, data, mapper),
     del: makeResponder(raw, calls, 'bare'),
     toNumber: h.toNumber,
     toStr: h.toStr,
@@ -161,7 +163,7 @@ function loadForumDto(file = FORUM_DTO_UTS) {
   return loadUts(file, { ...h, decodePage: env.decodePage });
 }
 
-/** 装载 recruit.uts（绑定表与 recruiterResumeBehavior 同源：本域 imports 一项不缺；PR-E #1665 后 getMapped/postMapped/requestMapped 走 mapped 替身、post 留裸供 void 透传） */
+/** 装载 recruit.uts（绑定表与 recruiterResumeBehavior 同源：本域 imports 一项不缺；PR-E #1665 后 getMapped/postMapped/requestMapped 走 mapped 替身、post 留裸供 void 透传；#1734 问题 2 再补 putMapped 短径） */
 function loadRecruit(raw, calls = [], file = RECRUIT_UTS, opt = {}) {
   const h = helpers();
   const respond = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'mapped');
@@ -170,6 +172,7 @@ function loadRecruit(raw, calls = [], file = RECRUIT_UTS, opt = {}) {
     getMapped: respond,
     postMapped: respond,
     requestMapped: (opts, mapper) => respond(opts.url, null, mapper),
+    putMapped: (url, data, mapper) => respond(url, data, mapper),
     post: makeResponder(raw, calls, 'bare'),
     decodePage: env.decodePage,
     API_BASE_URL: 'https://example.test/api',

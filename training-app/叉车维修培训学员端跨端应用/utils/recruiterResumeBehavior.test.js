@@ -12,10 +12,13 @@
  */
 const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
+const { envelopeBindings } = require('./requestUtsHarness');
+
 
 const ROOT = path.join(__dirname, '..');
 const RECRUIT = path.join(ROOT, 'api', 'recruit.uts');
 const REQUEST = path.join(ROOT, 'api', 'request.uts');
+const TRANSPORT = path.join(ROOT, 'api', 'transport.uts');
 
 /**
  * 403 的**可识别消息前缀** —— 与 `api/request.uts` 的 `FORBIDDEN_MESSAGE_PREFIX` 同值。
@@ -73,16 +76,18 @@ function loadRecruit(reply = {}) {
   // PR-E #1665：recruit 出口已收口至 mapper 家族（getMapped/postMapped/requestMapped）——
   // 替身**真的回调 mapper**，映射行为由域模块自身完成；`post` 保留裸（rejectRecruitApplicationApi
   // 的 void 透传按 ADR-0007 两问判据合法留裸）。信封归一模块真实现（ADR-0037 PR-B）。
-  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), {
+  const envelope = loadUts(path.join(ROOT, 'api', 'envelope.uts'), envelopeBindings({
     getMapped: () => Promise.resolve({}),
     toNumber: (v, d = 0) => (v == null ? d : (Number.isNaN(parseFloat(String(v))) ? d : parseFloat(String(v)))),
-  });
+  }));
 
   const bindings = {
     decodePage: envelope.decodePage,
     getMapped: (url, params, map, options) => respond(url, params, options).then(map),
     postMapped: (url, data, map) => respond(url, data).then(map),
     requestMapped: (opts, map) => respond(opts.url, opts.data).then(map),
+    // #1734 问题 2：PUT 走短径出口（recruit 的 PUT 站点不再手作 opts.method）
+    putMapped: (url, data, map) => respond(url, data).then(map),
     post: (url, data) => respond(url, data),
     API_BASE_URL: 'https://example.test/api',
     // 403 的可识别前缀（真源 = `api/request.uts` 的 FORBIDDEN_MESSAGE_PREFIX）：
@@ -296,7 +301,8 @@ describe('B. 明文联系方式：恰好 6 键 + 403 分流', () => {
   });
 
   test('B4：403 不触发登出 / 不 reLaunch（唯一出口是 401 的 handleUnauthorized）', () => {
-    const src = readText(REQUEST);
+    // #1734 两轴拆分：状态码分诊（403/404/HTTP/业务码）属「纯传输」，已沉到 api/transport.uts
+    const src = readText(TRANSPORT);
     const start = src.indexOf("if (statusCode == 403) {");
     expect(start).toBeGreaterThan(-1);
     const body = src.slice(start, src.indexOf('\n    }', start));
@@ -310,6 +316,12 @@ describe('B. 明文联系方式：恰好 6 键 + 403 分流', () => {
     const code = body.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
     expect(code).not.toMatch(/\.statusCode\s*=\s*403/);
     expect(code).not.toMatch(/as any\)\.statusCode/);
+    // 两轴 seam（#1734 验收 ④）：登出/跳转是「续期编排」独占的出口，传输层整份源码都不该碰它们
+    const seam = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    expect(seam).not.toContain('handleUnauthorized');
+    expect(seam).not.toContain('reLaunch');
+    expect(seam).not.toContain('gateRefresh');
+    expect(seam).not.toContain('renewOrExpire');
   });
 });
 

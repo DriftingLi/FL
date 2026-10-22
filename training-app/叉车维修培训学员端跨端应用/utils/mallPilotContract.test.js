@@ -19,12 +19,21 @@ describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）'
   const src = read('api/course.uts');
   const req = read('api/request.uts');
 
-  it('request.uts 提供 GET 便捷面 getMapped：委派 requestMapped 且沿用 get() 的手动 query 序列化（不交平台自动序列化，防跨端漂移）', () => {
+  it('request.uts 提供 GET 便捷面 getMapped：委派 requestMapped，query 序列化收在传输层 buildQuery（不交平台自动序列化，防跨端漂移）', () => {
     const start = req.indexOf('export function getMapped');
     expect(start).toBeGreaterThan(-1);
     const body = req.slice(start, req.indexOf('\n}', start));
     expect(body).toContain('requestMapped<T>(');
-    expect(body).toContain('encodeURIComponent');
+    // #1734 问题 3：序列化本体下沉 api/transport.uts（buildQuery），getMapped 只经 withQuery 组 URL。
+    // 判据仍锁「不交平台自动序列化」这层意图：getMapped 必须在**自己**拼 query，
+    // 只是拼接的实现在传输层 —— 故一侧钉委派、另一侧钉 buildQuery 逐字含 encodeURIComponent。
+    expect(body).toContain('withQuery(');
+    const transport = read('api/transport.uts');
+    const bs = transport.indexOf('export function buildQuery');
+    expect(bs).toBeGreaterThan(-1);
+    const buildQueryBody = transport.slice(bs, transport.indexOf('\n}', bs));
+    expect(buildQueryBody).toContain('encodeURIComponent');
+    expect(buildQueryBody).toContain('pairs.join');
   });
 
   it('course.uts 引入 getMapped 出口', () => {
