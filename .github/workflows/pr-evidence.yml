@@ -393,14 +393,19 @@ jobs:
                 // 跳过的是「取证」不是「签收」：执行人须非占位、日期须为 YYYY-MM-DD（下面两条校验**不**绕过）；
                 // 窗口期无实机可测 ⇒ 仅「复测对象」在跳过时允许写「无」（占位判定对这一个字段豁免）。
                 // ②③④④b 一律不受此分支影响（窗口口径只属于 ① 门）。
-                const windowSkip = gate.key === '①' && /待批收口/.test(String(values['结论'] || ''));
+                // **必须**以 `SKIP` 开头：真正的截图结论里若顺手写了「待批收口后再补」，不能被误判成跳过
+                // （否则「已有证据」会被渲染成「跳过」）。判据：`^SKIP` 且含「待批收口」。
+                const conclusion1 = String(values['结论'] || '');
+                const windowSkip = gate.key === '①'
+                  && /^\s*SKIP\b/i.test(conclusion1) && /待批收口/.test(conclusion1);
+                const errorsBefore = errors.length;
                 for (const field of gate.fields) {
                   const v = values[field];
                   if (v === undefined) {
                     errors.push(`${where}：缺字段「${field}」。`);
                     continue;
                   }
-                  if (windowSkip && field === '复测对象') continue;
+                  if (windowSkip && field === '复测对象' && /^(无|暂无)$/.test(v)) continue;
                   if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
                 }
                 if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
@@ -411,11 +416,14 @@ jobs:
                   notes.push(`${where}：执行人与 PR 作者是同一账号（${author}）——本仓单账号，机械上分不出人与 agent；agent 不得代填该字段。`);
                 }
                 // 窗口口径跳过：不走截图判据，但**留下可见的 notes**（跳过 ≠ 免签收，也不许静默）。
-                if (windowSkip) {
+                // 只有该行自身没有报错才算跳过：执行人占位 / 日期不是 YYYY-MM-DD 时这行仍红，
+                // 且不得记成 skipped —— 否则管家会替一条不合格的行渲染「⏭ 跳过（窗口口径）」。
+                if (windowSkip && errors.length === errorsBefore) {
                   gates['①'].skipped = true;
                   notes.push(`${where}：跳过（窗口口径）——「结论」写的是「${values['结论']}」；按移动端 ADR-0039 / 0040 窗口期不跑真机逐页取证，待批收口后再补证。`);
                   continue;
                 }
+                if (windowSkip) continue; // 该行已红：不再叠加「须引用可核验截图」这条噪音，红因保持精确
                 if (values['结论'] && !artifactOk(gate.artifact, values['结论'])) {
                   const hint = {
                     screenshot: '须引用**可核验**的截图：GitHub 附件/Markdown 图片、仓库内 `docs/verification/<模块>/<PR号>/<页名>.<ext>`（PR 号须为数字），或 sha 绑定门评论链接（`#issuecomment-<id>`）；裸本地产物路径（`.ci-verify/*.png` 等）与任意 http(s) 链接不算证据',
@@ -424,7 +432,7 @@ jobs:
                     any: '须引用产物',
                   }[gate.artifact];
                   errors.push(`${where}：「结论」${hint}。`);
-                } else if (gate.key === '①' && values['结论']) {
+                } else if (gate.key === '①' && values['结论'] && errors.length === errorsBefore) {
                   // ① 行填了可核验截图 ⇒ 结构化字段记为「已取证」（窗口口径跳过时上面已 continue）
                   gates['①'].bound = true;
                 }

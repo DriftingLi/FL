@@ -201,7 +201,10 @@ jobs:
               const head7 = headSha.slice(0, 7);
               // ① 门（#1766）：窗口期口径下正文写 `SKIP·待批收口` ⇒ 渲染成「跳过（窗口口径）」，
               // 与「✅ 已取证 / ❌ 还没有」区分开 —— 跳过必须可见，不能长得像已取证。
-              const g1 = result.gates['①'] || { required: false, bound: false, skipped: false };
+              // 兜底（head 上的校验器读不到、退回 base 分支的旧版时没有 gates['①']）：required 必须按
+              // runtime / lowRiskRuntime 现算，**不能默认 false** —— 默认 false 会把 `.uvue` PR 渲染成「免」。
+              const g1 = result.gates['①']
+                || { required: (result.runtime || []).length > 0 && !result.lowRiskRuntime, bound: false, skipped: false };
               const g2 = result.gates['②'];
               const g4 = result.gates['④'];
               const cell = (g) => (g.bound
@@ -215,7 +218,9 @@ jobs:
                 ? '移动端 ADR-0039 / 0040 窗口口径：真机逐页取证不跑，正文写 `SKIP·待批收口`，退出窗口后补证'
                 : (g1.required
                   ? '正文逐页截图：GitHub 附件 / `docs/verification/<模块>/<PR号>/<页名>.<ext>` / 门评论链接'
-                  : '低风险运行时面（仅 `.uts`）⇒ 按 ADR-0008 免');
+                  : ((result.runtime || []).length
+                    ? '低风险运行时面（仅 `.uts`）⇒ 按 ADR-0008 免'
+                    : '非运行时面 ⇒ 不适用'));
               const whys = [];
               if (!g2.bound && g2.reason) whys.push(`- ② 门评论未绑上的原因：${g2.reason}`);
               if (!g4.bound && g4.reason) whys.push(`- ④ 门评论未绑上的原因：${g4.reason}`);
@@ -254,7 +259,7 @@ jobs:
                 `- ④ 门：\`pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -PostToPr ${prNumber}\`。`,
                 '- 两个脚本都会贴出带 `<!-- gate-evidence:<门号> -->` 与 `commit: <sha>` 的评论；贴完本评论会自动刷新（`issue_comment` 事件）。',
                 '- 证据是**旧提交**但期间只动了文档/测试/脚本 ⇒ 仍算绑上（祖先口径，ADR-0008）；期间动过运行时面就必须重跑重贴。',
-                '- ① 真机取证与 ④b 云打包**不在这张表里**：前者在正文逐页截图、后者按打包面触发，都由人/agent 走正文证据。',
+                '- ① 的证据就是正文那一行（逐页截图引用；窗口期写 `SKIP·待批收口`）；④b 云打包**不在这张表里**，按打包面触发、由人/agent 走正文证据。',
                 '</details>',
                 '',
                 `---`,

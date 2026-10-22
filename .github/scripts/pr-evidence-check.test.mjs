@@ -986,6 +986,40 @@ test('① 窗口期：跳过不等于免签收 —— 执行人 / 日期仍是�
   const date = await run({ body: bodyWith1(WINDOW_LINE({ 日期: '窗口期退出后' })) });
   assert.equal(date.ok, false);
   assert.match(date.errors.join(), /日期/);
+
+  // 反向断言（管家渲染诚实性）：这行不合格 ⇒ 不得记成「跳过」，否则管家会替一条不合格的行渲染
+  // 「⏭ 跳过（窗口口径）」，把「还没签收」显示成「按窗口口径免了」。
+  assert.equal(exec.gates['①'].skipped, false, '执行人占位时不许记成跳过');
+  assert.equal(date.gates['①'].skipped, false, '日期不合格时不许记成跳过');
+});
+
+test('① 窗口期：豁免只认「无 / 暂无」—— 复测对象写「待人工」仍按占位判红', async () => {
+  const r = await run({ body: bodyWith1(WINDOW_LINE({ 复测对象: '待人工' })) });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /复测对象/);
+  assert.equal(r.gates['①'].skipped, false);
+});
+
+test('① 窗口期：已有截图 + 文中提到「待批收口」不得被误判成跳过（标号必须打头）', async () => {
+  const r = await run({
+    body: bodyWith1(WINDOW_LINE({
+      复测对象: 'exam 入口页与交卷流程',
+      结论: '逐页截图 docs/verification/exam/624/exam-home-after.jpg（待批收口后再补交卷页）',
+    })),
+  });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.equal(r.gates['①'].skipped, false, '有真截图却被渲染成「跳过」= 往更不可信方向失真');
+  assert.equal(r.gates['①'].bound, true);
+  assert.doesNotMatch(r.notes.join(), /跳过（窗口口径）/);
+});
+
+test('gates：① 有可核验截图但本行另有错 ⇒ ok 为红时 bound 不得为 true（管家不许显示「已取证」）', async () => {
+  const r = await run({
+    body: bodyWith1(WINDOW_LINE({ 执行人: '待人工', 结论: '逐页截图 docs/verification/exam/624/exam-home-after.jpg' })),
+  });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /执行人/);
+  assert.equal(r.gates['①'].bound, false);
 });
 
 test('① 窗口期：标记只对 ① 生效 —— ② 结论写同样的字句仍按截图判据判红', async () => {
@@ -1038,4 +1072,7 @@ test('静态自检：管家渲染 ① 行时必须区分「跳过（窗口口径
   assert.match(src, /g1\.skipped\s*\?/, '管家没按 skipped 分支渲染 ⇒ 跳过会与「已取证」混为一谈');
   assert.match(src, /跳过（窗口口径）/, '管家渲染文案里缺少「跳过（窗口口径）」标记');
   assert.match(src, /① Android 真机逐页截图/, '管家表格里没有 ① 行 ⇒ 窗口口径跳过在 PR 上不可见');
+  // 兜底不许把「算不出来」写成「免」：head 校验器读不到时会退回 base 旧版（不产 gates[①]），
+  // 此时 required 必须由 runtime / lowRiskRuntime 现算，否则 .uvue PR 会被渲染成「免门」。
+  assert.match(src, /required:\s*\(result\.runtime/, '管家兜底把 ① 默认成免门 ⇒ 旧校验器下 .uvue PR 会被错误显示为免');
 });
