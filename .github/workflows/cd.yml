@@ -657,6 +657,10 @@ jobs:
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"
             printf 'export AUTH_COOKIE_DOMAIN=%q\n' "${AUTH_COOKIE_DOMAIN:-}"
+            # 证书策略与 ACME 邮箱：**必须在这里写出**，否则远端 .env 里没有它们，
+            # compose 回落到 auto，testing 会去申请公共证书（2026-10-22 两次冒烟实测）。
+            printf 'export TLS_MODE=%q\n' "${TLS_MODE:-auto}"
+            printf 'export CADDY_ACME_EMAIL=%q\n' "${CADDY_ACME_EMAIL:-}"
             printf 'export ADMIN_DEFAULT_PASSWORD=%q\n' "${ADMIN_DEFAULT_PASSWORD:-}"
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"

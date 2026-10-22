@@ -298,6 +298,12 @@ write_env_file() {
         echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
         echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG_LIBREOFFICE}"
         echo "DOMAIN=${DOMAIN:-localhost}"
+        # 证书策略：auto = Caddy 自动签发（ACME）；其余 = 内部自签（testing 冒烟）。
+        # 必须落进 .env —— compose 的 ${TLS_MODE:-auto} 只从这份文件/环境读。
+        # 漏这一行的后果是实测过的：testing 去申请生产域名的公共证书，ACME 校验必然失败，
+        # 前端容器起不来、健康检查红、回滚也救不回来（2026-10-22 两次冒烟）。
+        echo "TLS_MODE=${TLS_MODE:-auto}"
+        printf 'CADDY_ACME_EMAIL=%s\n' "${CADDY_ACME_EMAIL:-}"
 
                 echo "UPLOAD_FOLDER=/data/uploads"
         echo "VOLUME_MOUNT_PATH=/data"

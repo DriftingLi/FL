@@ -225,4 +225,15 @@ func TestDeployChainUsesCaddy(t *testing.T) {
 			t.Errorf("cd.yml 里还有 %s：证书已由 Caddy 自签，这个 secret 不该再注入", dead)
 		}
 	}
+	// TLS_MODE 必须同时出现在**两处写盘**里：cd.yml 生成 /tmp/deploy-env.sh，
+	// deploy-remote.sh 把它写进 $DEPLOY_PATH/.env（compose 只读后者）。
+	// 少一处的实测后果：testing 回落到 auto，去申请生产域名的公共证书 ⇒ 容器起不来、
+	// 健康检查红、回滚也救不回来（2026-10-22 两次冒烟）。
+	if !strings.Contains(cd, "TLS_MODE") {
+		t.Error("cd.yml 没有把 TLS_MODE 写进远端环境变量文件：compose 会回落到 auto")
+	}
+	remote := readRepoFile(t, "scripts/deploy-remote.sh")
+	if !strings.Contains(remote, "TLS_MODE=") {
+		t.Error("deploy-remote.sh 没有把 TLS_MODE 写进 .env：远程 compose 读不到它")
+	}
 }
