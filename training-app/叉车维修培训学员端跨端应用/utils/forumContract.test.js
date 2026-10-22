@@ -287,7 +287,9 @@ describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列
     expect(feed).toContain('function onFeaturedChange(val : string)');
     expect(feed).toContain('featuredFilter: featuredFilter,');
     expect(feed).toContain('onFeaturedChange: (val : string) => onFeaturedChange(val),');
-    expect(feed).toContain('getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)');
+    // #1733：装载协议改由 `usePagedList` 持页，页码经 `fetchPage(page)` 形参进来（不再是 `page.value`）；
+    // 九个实参的顺序即 api 契约，逐字锚住（featured 在第 8 位）
+    expect(feed).toContain('getForumTopicsApi(page, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)');
   });
 
   it('壳层接线：三 Tab 显示精选筛选条（资源 Tab 不显示）；切 Tab 精选筛选回全部帖（跨 Tab 不延续，对齐 Web）', () => {

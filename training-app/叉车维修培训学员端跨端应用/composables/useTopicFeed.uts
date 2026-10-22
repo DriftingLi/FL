@@ -2,23 +2,36 @@
  * forum 帖子流状态（T04 手术：forum.uvue script 列表域下沉）
  * 持有 topics 分页与排序态；currentTab 由壳层以 Ref 注入（tab 态属壳层，数据所有权单一）。
  * 函数字段箭头包裹返回（UTS error18 先例，同 useAiChat）。
+ *
+ * #1733（ADR-0027 ④ PR3 第一格）：装载协议不再手写 —— 页码游标、重入守卫、终止判定、失败标记与
+ * **代际守卫**全部交给 `composables/usePagedList.uts`；本模块只留 forum 自己的账：tab→query 映射、
+ * 排序/筛选态，以及失败时的那句 toast（模块本体不碰 `uni.*`，故 toast 责任留在这一层，
+ * 用户可见行为与迁移前一致）。
+ *
+ * 对外返回面不变（页面 diff 0），两处措辞已在类型上对齐事实：
+ *   - `loadTopics` 由 async 改同步 `void` —— 装载完成信号是 `loading` / `noMore` 两个状态，
+ *     壳层从未 await 过它；返回 Promise 会让「装载还没落地」被误读成已完成。
+ *   - `noMore` 是 `hasMore` 的派生取反（终止判据只剩模块一处），壳层按 `noMore && topics.length > 0`
+ *     读它，读法没变。
  */
-import { ref } from 'vue'
-import type { Ref } from 'vue'
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
 import { getForumTopicsApi } from '../api/forum'
+import { usePagedList } from './usePagedList'
+import type { PagedBatch } from './usePagedList'
 import type { ForumTopic } from '../types/index'
 
 export type UseTopicFeedResult = {
     topics : Ref<ForumTopic[]>
     loading : Ref<boolean>
-    noMore : Ref<boolean>
+    noMore : ComputedRef<boolean>
     sortField : Ref<string>
     sortOrder : Ref<string>
     qaSort : Ref<string>
     qaStatus : Ref<string>
     expSort : Ref<string>
     featuredFilter : Ref<string>
-    loadTopics : (reset : boolean) => Promise<void>
+    loadTopics : (reset : boolean) => void
     onLoadMore : () => void
     onSortFieldChange : (field : string) => void
     onSortOrderChange : (order : string) => void
@@ -29,12 +42,11 @@ export type UseTopicFeedResult = {
 }
 
 export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
-    const topics = ref<ForumTopic[]>([])
-    const page = ref<number>(1)
     const pageSize = 10
-    const total = ref<number>(0)
-    const loading = ref<boolean>(false)
-    const noMore = ref<boolean>(false)
+    // 失败提示只在「本代」发：协议的代际守卫住在 `usePagedList.uts` 的 `.catch` 里，而本模块的
+    // catch 在它**之前**执行（rethrow 才轮到它），所以换代作废的旧请求失败时那句 toast 会照样弹。
+    // 令牌与 `loadFirst` 同步推进：换代即作废旧令牌，旧代的失败只静默 rethrow（协议会丢弃它）。
+    let requestToken = 0
     const sortField = ref<string>('latest') // latest | hot
     const sortOrder = ref<string>('desc')   // desc | asc
     // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
@@ -46,60 +58,74 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
     // 精选筛选（#742 批次三，三 Tab 通用轴，对齐 Web）：''（全部帖）| 'true'（仅精选）；跨 Tab 不延续由壳层切 Tab 复位
     const featuredFilter = ref<string>('')
 
-    async function loadTopics(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
-        if (reset) {
-            page.value = 1
-            noMore.value = false
+    /**
+     * 取第 `page` 页（页码从 1 起，由 `usePagedList` 递进来；`pageSize` 留在本模块的闭包里 —— ADR-0027 ②）。
+     * 失败在这里 toast 后 rethrow：模块本体不碰 `uni.*`，`failed` 由 `usePagedList` 翻。
+     */
+    async function fetchPage(page : number) : Promise<PagedBatch<ForumTopic>> {
+        const mine = requestToken
+        // 后端 scope 白名单仅 all|general|chapter（tab 名不可直传，会被静默当 all），
+        // category 白名单只有学员自述的两值 discussion|question（ADR-0040 收窄；
+        // 'experience' 仅为旧客户端兼容保留、过滤不出任何行）
+        // 广场只出普通帖（discussion）；问答帖（question）走 category，经验帖走认定 is_experience
+        let scope = 'general'
+        let category = 'discussion'
+        let isExperience = ''
+        let sort = sortField.value
+        let order = sortOrder.value
+        if (currentTab.value === 'hot') {
+            // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
+            scope = 'all'
+            category = 'question'
+            order = 'desc'
+            sort = qaSort.value == 'latest' ? 'latest' : 'hot'
+        } else if (currentTab.value === 'experience') {
+            // 备考经验（#706 / ADR-0040）：经验的唯一判据是管理端认定 is_experience（不是 category）；
+            // scope=all —— 经验帖可挂章节也可不挂，看全量认定帖。
+            // 最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
+            scope = 'all'
+            category = ''
+            isExperience = 'true'
+            order = 'desc'
+            sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
         }
-        if (noMore.value && !reset) return
-
-        loading.value = true
+        const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
         try {
-            // 后端 scope 白名单仅 all|general|chapter（tab 名不可直传，会被静默当 all），
-            // category 白名单只有学员自述的两值 discussion|question（ADR-0040 收窄；
-            // 'experience' 仅为旧客户端兼容保留、过滤不出任何行）
-            // 广场只出普通帖（discussion）；问答帖（question）走 category，经验帖走认定 is_experience
-            let scope = 'general'
-            let category = 'discussion'
-            let isExperience = ''
-            let sort = sortField.value
-            let order = sortOrder.value
-            if (currentTab.value === 'hot') {
-                // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
-                scope = 'all'
-                category = 'question'
-                order = 'desc'
-                sort = qaSort.value == 'latest' ? 'latest' : 'hot'
-            } else if (currentTab.value === 'experience') {
-                // 备考经验（#706 / ADR-0040）：经验的唯一判据是管理端认定 is_experience（不是 category）；
-                // scope=all —— 经验帖可挂章节也可不挂，看全量认定帖。
-                // 最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
-                scope = 'all'
-                category = ''
-                isExperience = 'true'
-                order = 'desc'
-                sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
-            }
-            const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
-            const result = await getForumTopicsApi(page.value, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)
-            if (reset) {
-                topics.value = result.items
-            } else {
-                topics.value = topics.value.concat(result.items)
-            }
-            total.value = result.total
-            if (topics.value.length >= result.total || result.items.length == 0) {
-                noMore.value = true
-            } else {
-                page.value = page.value + 1
-            }
+            const result = await getForumTopicsApi(page, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)
+            // 终止判据由 api 层的信封归一给出（ADR-0037 ①：page*pageSize < total），本模块不再自己算
+            return {
+                items: result.items,
+                hasMore: result.hasMore,
+            } as PagedBatch<ForumTopic>
         } catch (e) {
             console.error('[forum] load failed:', e)
-            uni.showToast({ title: '加载帖子失败', icon: 'none' })
-        } finally {
-            loading.value = false
+            if (mine == requestToken) {
+                uni.showToast({ title: '加载帖子失败', icon: 'none' })
+            }
+            throw new Error('加载帖子失败')
         }
+    }
+
+    // 传箭头包一层而非裸具名引用：UTS 生成 Kotlin 时 `usePagedList(fetchPage)` 会被读成「调用 fetchPage」
+    // （编译门实测 error: function invocation 'fetchPage(...)' expected）—— 形参类型是函数类型，须给函数值。
+    const paged = usePagedList<ForumTopic>((page : number) : Promise<PagedBatch<ForumTopic>> => fetchPage(page))
+    const topics = paged.items
+    const loading = paged.loading
+    /** 终止判据的唯一来源是模块的 `hasMore`；本模块只取反（壳层按 `noMore` 读，读法不变） */
+    const noMore = computed<boolean>(() : boolean => !paged.hasMore.value)
+
+    /**
+     * 首屏 / 刷新 / 切筛选 / 切 Tab 走 `loadFirst`（**换代** ⇒ 在飞的旧 tab 响应整条作废）；
+     * 触底追加走 `onLoadMore`（在飞或已到底由模块短路）。
+     * 迁移前那版在这里先判 `loading` 再决定是否归 1 —— 那一判把「装载中切 tab」整个吞掉了。
+     */
+    function loadTopics(reset : boolean = false) : void {
+        if (reset) {
+            requestToken = requestToken + 1
+            paged.loadFirst()
+            return
+        }
+        paged.onLoadMore()
     }
 
     function onLoadMore() : void {
