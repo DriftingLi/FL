@@ -68,6 +68,34 @@ const (
 	roleRecruiter = "recruiter"
 )
 
+// Family 令牌族（#1756 第二批）：同一套签名密钥下的两类会话。
+//
+// 为什么需要它：残值评估迁到和润域名后由 BFF 持有会话，与易道站的登录态**不该互通**。
+// 密钥分离（两套 JWT secret）能换来的隔离增量，在「浏览器本来就不共享任何凭证」的 BFF
+// 形态下很小；族标记用最小的代价拿到同一件事：一个族签出的令牌，另一族的入口不认。
+//
+// 空族按 web 处理：切换前签发的存量 access 没有 aud，不能因为这次改动把所有人踢下线
+// （那次踢下线由域名切换本身造成，不该由代码再叠一次）。
+type Family string
+
+const (
+	// FamilyWeb 易道站（training / mentor / manage / recruit）。
+	FamilyWeb Family = "web"
+	// FamilyValuation 残值评估（和润域名，由 BFF 注入）。
+	FamilyValuation Family = "valuation"
+)
+
+// normalized 空族归一为 web（存量令牌兼容口径）。
+func (f Family) normalized() Family {
+	if f == "" {
+		return FamilyWeb
+	}
+	return f
+}
+
+// ErrWrongFamily 令牌族不匹配：该入口不认这一族的令牌。
+var ErrWrongFamily = errors.New("token family mismatch")
+
 // Claims JWT 声明。
 type Claims struct {
 	UserID    int    `json:"user_id"`
@@ -191,29 +219,43 @@ func SessionFromConfigWithBlacklist(cfg *config.Config, blacklist BlacklistStore
 // Issue 签发 access token（双令牌会话：短生命周期、只供鉴权中间件，ADR-0012）。
 // claims：user_id/account/role/token_type=access，过期时长由配置决定（默认 2h）。
 func (s *Session) Issue(userID int, account, role string) (string, error) {
-	return s.issue(userID, account, role, TokenTypeAccess, s.jwtExpiry)
+	return s.issue(userID, account, role, TokenTypeAccess, FamilyWeb, s.jwtExpiry)
 }
 
 // IssueRefresh 签发 refresh token（仅刷新端点专用，长周期、轮换吊销）。
 func (s *Session) IssueRefresh(userID int, account, role string) (string, error) {
-	return s.issue(userID, account, role, TokenTypeRefresh, s.refreshExpiry)
+	return s.issue(userID, account, role, TokenTypeRefresh, FamilyWeb, s.refreshExpiry)
 }
 
 // IssuePair 一次签发双令牌（登录/刷新共用），返回 (access, refresh, error)。
 func (s *Session) IssuePair(userID int, account, role string) (string, string, error) {
-	access, err := s.Issue(userID, account, role)
+	return s.IssuePairFor(FamilyWeb, userID, account, role)
+}
+
+// IssuePairFor 按指定族签发双令牌（#1756 第二批）：估值入口用它签发 valuation 族，
+// 其余入口一律走 IssuePair（web 族）。
+func (s *Session) IssuePairFor(family Family, userID int, account, role string) (string, string, error) {
+	access, err := s.issue(userID, account, role, TokenTypeAccess, family, s.jwtExpiry)
 	if err != nil {
 		return "", "", err
 	}
-	refresh, err := s.IssueRefresh(userID, account, role)
+	refresh, err := s.issue(userID, account, role, TokenTypeRefresh, family, s.refreshExpiry)
 	if err != nil {
 		return "", "", err
 	}
 	return access, refresh, nil
 }
 
+// Family 返回该令牌所属的族（无 aud 的存量令牌按 web 处理）。
+func (c *Claims) Family() Family {
+	if len(c.Audience) == 0 {
+		return FamilyWeb
+	}
+	return Family(c.Audience[0])
+}
+
 // issue 签发单个 JWT（按 token_type 设置 claims 与有效期）。
-func (s *Session) issue(userID int, account, role, tokenType string, expiry time.Duration) (string, error) {
+func (s *Session) issue(userID int, account, role, tokenType string, family Family, expiry time.Duration) (string, error) {
 	claims := &Claims{
 		UserID:    userID,
 		Account:   account,
@@ -224,6 +266,8 @@ func (s *Session) issue(userID int, account, role, tokenType string, expiry time
 			ID:        randomJWTID(), // 每次签发唯一，保证轮换后的新 token 与旧 token 一定不同
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			// aud 就是族标记本身：一个族签出的令牌，另一族的入口不认（见 VerifyAccessFor）。
+			Audience: jwt.ClaimStrings{string(family.normalized())},
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -239,6 +283,21 @@ func (s *Session) VerifyAccess(tokenStr string) (*Claims, error) {
 	}
 	if claims.TokenType != TokenTypeAccess {
 		return nil, errors.New("token type must be access")
+	}
+	return claims, nil
+}
+
+// VerifyAccessFor 校验 access 并要求**族匹配**（#1756 第二批）。
+//
+// 这是「会话隔离」唯一有效的落点：入口按族收令牌，估值族签出的 access 贴到主站配上
+// 会在这里被拒，反之亦然。无 aud 的存量令牌按 web 处理（切换前签发的那批）。
+func (s *Session) VerifyAccessFor(family Family, tokenStr string) (*Claims, error) {
+	claims, err := s.VerifyAccess(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Family() != family.normalized() {
+		return nil, ErrWrongFamily
 	}
 	return claims, nil
 }
@@ -321,7 +380,9 @@ func (s *Session) RotateRefresh(ctx context.Context, refreshToken string) (strin
 	if !won {
 		return "", "", fmt.Errorf("%w: already rotated or revoked", ErrInvalidRefresh)
 	}
-	return s.IssuePair(claims.UserID, claims.Account, claims.Role)
+	// 轮换必须保住原来的族（#1756 第二批）：估值的 refresh 续期后若变成 web 族令牌，
+	// 下一次请求就会被自己那一族的入口拒掉，表现为「用一会儿就掉登录」。
+	return s.IssuePairFor(claims.Family(), claims.UserID, claims.Account, claims.Role)
 }
 
 // RotateAndSetCookie 轮换并把新 refresh 回写成 httpOnly Cookie（ADR-0067 决策 1、2 的落点）。

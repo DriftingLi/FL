@@ -6,7 +6,8 @@
   样式：模板走原子类（R1），scoped 仅保留局部变量、badge 动态分类色、divider 伪元素。
 -->
 <template>
-  <div class="auth-page flex min-h-screen items-center justify-center bg-panel p-6 max-[480px]:p-4">
+  <div class="auth-page flex min-h-screen flex-col bg-panel">
+    <div class="flex flex-1 items-center justify-center p-6 max-[480px]:p-4">
     <div
       class="auth-card w-full max-w-[420px] rounded-card border border-line bg-panel px-10 pt-11 pb-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] max-[480px]:px-[22px] max-[480px]:pt-8 max-[480px]:pb-[22px]"
     >
@@ -15,10 +16,6 @@
       <ThemeToggle fixed />
 
       <header class="card-header mb-5 text-center">
-        <span
-          class="badge mb-3.5 inline-block rounded-pill px-3 py-1 text-xs font-semibold tracking-[0.02em]"
-          :class="`badge-${badgeTone}`"
-        >{{ badgeText }}</span>
         <h1 class="title m-0 mb-2 text-2xl font-bold tracking-[-0.02em] text-ink">{{ title }}</h1>
         <p class="subtitle m-0 text-sm leading-normal text-ink-3">{{ subtitle }}</p>
       </header>
@@ -70,12 +67,17 @@
         <slot name="footer" />
       </footer>
     </div>
+    </div>
+
+    <!-- 站点页脚（#1756 第一批）：认证页是最该看到运营主体的地方，不能只有卡片 -->
+    <SiteFooter />
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Component } from 'vue'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import SiteFooter from '@/components/layout/SiteFooter.vue'
 
 export type AltModeKey = 'email' | 'phone' | 'wechat'
 
@@ -89,8 +91,6 @@ const props = withDefaults(
   defineProps<{
     title: string
     subtitle: string
-    badgeText: string
-    badgeTone: 'student' | 'tutor' | 'admin'
     /** alt 方式图标按钮列表；空数组则不渲染分隔线与图标按钮区 */
     altModes?: AltMode[]
     /** 当前激活的 alt 方式；null = 主方式 */
@@ -129,22 +129,6 @@ function goMain() {
   /* 微信品牌绿：品牌恒定色，深浅底上都成立、不随主题翻转。
      用组件局部变量承载，供模板 bg-[var(--wechat-green)] 引用。 */
   --wechat-green: #07c160;
-}
-
-/* badge 分类色底：color-mix 透明叠底（写死 rgba 无法跟随深浅主题切换） */
-.badge-student {
-  background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
-  color: var(--color-accent-700);
-}
-
-.badge-tutor {
-  background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
-  color: var(--color-primary-700);
-}
-
-.badge-admin {
-  background: color-mix(in srgb, var(--color-violet-500) 10%, transparent);
-  color: var(--color-violet-500);
 }
 
 .divider::before,

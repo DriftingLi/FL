@@ -60,6 +60,10 @@
             </keep-alive>
           </transition>
         </router-view>
+
+        <!-- 站点页脚（#1756 第一批）：内容列末尾、随内容滚动。
+             四个工作区共用本外壳，因此一处插入即四端覆盖。 -->
+        <SiteFooter />
       </main>
     </div>
   </div>
@@ -70,6 +74,7 @@ import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppTopBar from '@/components/layout/AppTopBar.vue'
+import SiteFooter from '@/components/layout/SiteFooter.vue'
 import type { NavItem } from '@/config/navigation'
 
 const props = withDefaults(

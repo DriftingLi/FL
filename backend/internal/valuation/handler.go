@@ -65,13 +65,14 @@ func RegisterRoutes(
 	pdfGen ReportGenerator,
 	st storage.Storage,
 	valuationAuthSvc ValuationAuth,
+	login ValuationLoginFunc,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
 	reportHandler := NewReportHandler(evalRepo, pdfGen, logger, st, NewCoefficientProvider(dictRepo))
 	batteryHandler := NewBatteryHandler(batteryRepo, batterySvc, logger, st)
 	healthHandler := NewHealthHandler()
-	valuationAuthHandler := NewValuationAuthHandler(valuationAuthSvc, sess)
+	valuationAuthHandler := NewValuationAuthHandlerWithLogin(valuationAuthSvc, sess, login)
 
 	// === 公开组（无需登录）：字典查询 + 统计 + 健康检查 + 报告生成/下载 + 登录/注册 ===
 	// 评估提交（POST /evaluations）已移至"可选认证组"，登录用户提交时记录 user_id
@@ -112,6 +113,10 @@ func RegisterRoutes(
 
 		// 登出与主站 /auth/logout 同口径（ADR-0016）：以 refresh_token 自证身份吊销会话，
 		// 不依赖 JWTAuth（access 过期时也能登出）
+		// 估值族的登录入口（#1756 第二批）：签发 aud=valuation 的双令牌，不下发 Cookie。
+		// 主站 SPA 不走这里（它继续用 /api/auth/login 的 web 族），BFF 走这里。
+		public.POST("/auth/login", valuationAuthHandler.Login)
+
 		public.POST("/auth/logout", valuationAuthHandler.Logout)
 	}
 
@@ -127,8 +132,11 @@ func RegisterRoutes(
 	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===
 	// 评估历史/详情 + 电池 RUL CRUD + /auth/me
 	// 已统一到主体系 JWT,与培训学员端共用同一 token
+	// 过渡期同时收 web 与 valuation 两族：老 SPA（本仓）持 web 族令牌，Nuxt BFF 持 valuation 族。
+	// 北迁完成后收窄成只认 security.FamilyValuation（判据与理由见 middleware.JWTAuthAllowFamilies）。
 	valAuth := r.Group("/api/valuation")
-	valAuth.Use(middleware.JWTAuth(sess), middleware.CapabilityRequired(authz.CapValuationUse))
+	valAuth.Use(middleware.JWTAuthAllowFamilies(sess, security.FamilyWeb, security.FamilyValuation),
+		middleware.CapabilityRequired(authz.CapValuationUse))
 	{
 		valAuth.GET("/evaluations", evalHandler.List)
 		valAuth.GET("/evaluations/:id", evalHandler.Get)

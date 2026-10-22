@@ -165,7 +165,19 @@ func main() {
 	deps.StartDaemons(daemonCtx)
 
 	// 7.5 装配残值评估子模块（注册 /api/valuation/* 路由）
-	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc)
+	// 估值族登录：把主体系「按族登录」适配成估值域的窄函数（域包之间不互相 import）。
+	// 适配放在装配处而不是域包内，是因为 auth 与 valuation 都不该为了一个函数互相依赖。
+	valuationLogin := func(family security.Family, account, password string) (valuation.ValuationLoginResult, error) {
+		res, err := deps.AuthSvc.HrwaiLoginFor(family, account, password)
+		if err != nil {
+			return valuation.ValuationLoginResult{}, err
+		}
+		return valuation.ValuationLoginResult{
+			Token: res.Token, RefreshToken: res.RefreshToken, UserID: res.UserID,
+			Account: res.Account, Username: res.Username, Role: res.Role,
+		}, nil
+	}
+	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc, valuationLogin)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -220,7 +232,7 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 // 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service, login valuation.ValuationLoginFunc) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := valuation.NewDictionaryRepository(pool)
 	evalRepo := valuation.NewEvaluationRepository(pool)
@@ -241,7 +253,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.Valuati
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
 	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
-	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc)
+	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

@@ -3,7 +3,7 @@
 # deploy-remote.sh v3 — 远程服务器端全栈部署脚本
 # [env_val 版本] — 使用 env_val() 安全转义 .env 值
 # ======================================================================
-# 部署前端（Nginx）+ 后端（Go API）。
+# 部署前端（Caddy）+ 后端（Go API）。
 echo "[deploy-remote.sh] 版本: env_val v3 (全栈)"
 # 也可以手动执行：
 #   bash deploy-remote.sh            # 正常部署
@@ -116,9 +116,6 @@ fi
 
 # 后台备份 join 超时（秒）：迁移前等待备份完成的上限
 BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-120}"
-
-# SSL 证书目录（固定路径，由 write_ssl_certs() 写入，frontend 容器挂载）
-SSL_CERT_DIR="${DEPLOY_PATH}/nginx/ssl"
 
 # 迁移
 SKIP_MIGRATION="${SKIP_MIGRATION:-false}"
@@ -301,11 +298,14 @@ write_env_file() {
         echo "FRONTEND_IMAGE=${IMAGE_FRONTEND}:${IMAGE_TAG_FRONTEND}"
         echo "LIBREOFFICE_IMAGE=${IMAGE_LIBREOFFICE:-forklift-libreoffice}:${IMAGE_TAG_LIBREOFFICE}"
         echo "DOMAIN=${DOMAIN:-localhost}"
+        # 证书策略：auto = Caddy 自动签发（ACME）；其余 = 内部自签（testing 冒烟）。
+        # 必须落进 .env —— compose 的 ${TLS_MODE:-auto} 只从这份文件/环境读。
+        # 漏这一行的后果是实测过的：testing 去申请生产域名的公共证书，ACME 校验必然失败，
+        # 前端容器起不来、健康检查红、回滚也救不回来（2026-10-22 两次冒烟）。
+        echo "TLS_MODE=${TLS_MODE:-auto}"
+        printf 'CADDY_ACME_EMAIL=%s\n' "${CADDY_ACME_EMAIL:-}"
 
-        # SSL 证书目录（compose 挂载到 frontend 容器 /etc/nginx/ssl，nginx-host.conf 引用固定路径）
-        echo "SSL_CERT_DIR=${SSL_CERT_DIR:-${DEPLOY_PATH}/nginx/ssl}"
-
-        echo "UPLOAD_FOLDER=/data/uploads"
+                echo "UPLOAD_FOLDER=/data/uploads"
         echo "VOLUME_MOUNT_PATH=/data"
         echo "MAX_CONTENT_LENGTH_MB=250"
         echo "VALUATION_PDF_OUTPUT_DIR=/data/reports"
@@ -347,48 +347,10 @@ write_env_file() {
 }
 
 # ======================================================================
-# 写入 SSL 证书文件（从 GitHub Secrets 注入的内容）
+# SSL 证书：**已废弃**（Caddy 自己申请与续期，见 frontend/Caddyfile 与 entrypoint）
+# 保留这段注释是为了让「为什么这里不再有证书步骤」可查：证书曾经由 GitHub Secrets
+# （SSL_FULLCHAIN / SSL_PRIVKEY）注入到 $DEPLOY_PATH/nginx/ssl，换域名时必然失效。
 # ======================================================================
-write_ssl_certs() {
-    log_info ">>> 检查 SSL 证书..."
-
-    mkdir -p "$SSL_CERT_DIR"
-
-    # 检查证书内容是否已通过环境变量注入
-    if [ -z "${SSL_FULLCHAIN:-}" ] || [ -z "${SSL_PRIVKEY:-}" ]; then
-        log_warn "未通过环境变量提供 SSL 证书内容（SSL_FULLCHAIN/SSL_PRIVKEY）"
-        # 检查证书文件是否已存在（可能是手动上传的）
-        if [ -f "${SSL_CERT_DIR}/fullchain.pem" ] && [ -f "${SSL_CERT_DIR}/privkey.pem" ]; then
-            log_ok "检测到已有证书文件，将复用: $SSL_CERT_DIR"
-        else
-            log_error "SSL 证书文件不存在且未通过 Secrets 注入: $SSL_CERT_DIR"
-            log_info "请在 GitHub Secrets 中配置 SSL_FULLCHAIN 和 SSL_PRIVKEY，或手动上传证书文件"
-            exit 1
-        fi
-        return
-    fi
-
-    # 写入证书文件（环境变量中的换行符已通过 printf %q 还原）
-    printf '%s\n' "${SSL_FULLCHAIN}" > "${SSL_CERT_DIR}/fullchain.pem"
-    printf '%s\n' "${SSL_PRIVKEY}" > "${SSL_CERT_DIR}/privkey.pem"
-
-    # 设置权限：chown 到 nginx:alpine 固定 UID 101，保证 nginx 用户可读
-    # （master 以 root 运行绑 80/443，worker 降权为 nginx；证书文件可读，私钥仅 owner 可读）
-    chown 101:101 "${SSL_CERT_DIR}/fullchain.pem" "${SSL_CERT_DIR}/privkey.pem"
-    chmod 644 "${SSL_CERT_DIR}/fullchain.pem"
-    chmod 600 "${SSL_CERT_DIR}/privkey.pem"
-
-    # 验证证书内容有效
-    if ! openssl x509 -in "${SSL_CERT_DIR}/fullchain.pem" -noout 2>/dev/null; then
-        log_error "证书文件无效（非合法的 X.509 格式）: ${SSL_CERT_DIR}/fullchain.pem"
-        log_info "请检查 GitHub Secret SSL_FULLCHAIN 的内容是否完整（含 BEGIN/END CERTIFICATE 行）"
-        exit 1
-    fi
-
-    log_ok "SSL 证书已从 GitHub Secrets 写入: $SSL_CERT_DIR"
-    log_info "证书有效期至: $(openssl x509 -in "${SSL_CERT_DIR}/fullchain.pem" -noout -enddate 2>/dev/null | cut -d= -f2)"
-}
-
 # ======================================================================
 # 预部署检查
 # ======================================================================
@@ -1145,28 +1107,22 @@ health_check() {
         return 1
     fi
 
-    # ⚠️ 容器"在跑"不等于 nginx 在服务：frontend 用 network_mode: host，容器内没有自己的
-    #    网络命名空间，healthcheck 被显式禁用（原 healthcheck 在 host 网络下 wget 行为异常，
-    #    会误报 unhealthy，见 docker-compose.prod.yml 注释）。因此 `compose --wait` 恒对它
-    #    超时，`docker compose ps` 也永远只会显示 running——nginx 即使完全起不来，部署照样
-    #    报绿。必须像后端一样做真实 HTTP 探活。
+    # ⚠️ 容器"在跑"不等于反代在服务：frontend 用 network_mode: host，容器内没有自己的
+    #    网络命名空间，healthcheck 被显式禁用（见 docker-compose.prod.yml 注释）。因此
+    #    `compose --wait` 恒对它超时，`docker compose ps` 也永远只会显示 running——反代
+    #    即使完全起不来，部署照样报绿。必须像后端一样做真实 HTTP 探活。
     #
     # 探活走宿主机侧而非容器内（curl 是本脚本硬依赖，check_dependency curl）：
-    # - 首选 HTTPS 443：`location /health` 挂在 443 的 default_server（server_name _）上，
-    #   `return 200 "ok"`。用 -k 跳过证书校验——证书 CN 是公网域名，走 localhost 回环必然
-    #   不匹配。已在生产机实测：https://<ip>/health → 200。
-    # - 兜底 HTTP 80：⚠️ 仓库 nginx-host.conf 注释称 80 端口的 /health 豁免 301→HTTPS，
-    #   但生效配置实测并非如此（2026-09-02 生产与 testing 均返回 301，曾因此误杀一次
-    #   testing 冒烟）。所以 80 只作兜底且仅认 200，301 一律视为不通。
-    FRONTEND_HTTPS_PORT="${NGINX_HTTPS_PORT:-443}"
-    FRONTEND_HTTP_PORT="${NGINX_HTTP_PORT:-80}"
+    # 打的是 **api.${DOMAIN} 的 /health**，并用 --resolve 钉到回环——不依赖 DNS（测试环境
+    # 的域名不一定指到测试机），也不依赖证书链（-k：内部自签模式由 TLS_MODE 决定）。
+    # 旧实现打 https://localhost/health 依赖「443 上有 default_server」这一条 nginx 事实；
+    # Caddy 没有匹配的站点会直接 404，因此必须显式给 Host。
+    FE_HOST="api.${DOMAIN:-localhost}"
     FE_RETRY=0
     FE_HTTP_CODE="000"
     while [ $FE_RETRY -lt $HEALTH_CHECK_RETRIES ]; do
-        FE_HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "https://localhost:${FRONTEND_HTTPS_PORT}/health" 2>/dev/null || echo "000")
-        if [ "$FE_HTTP_CODE" != "200" ]; then
-            FE_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:${FRONTEND_HTTP_PORT}/health" 2>/dev/null || echo "000")
-        fi
+        FE_HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 \
+            --resolve "${FE_HOST}:443:127.0.0.1" "https://${FE_HOST}/health" 2>/dev/null || echo "000")
         if [ "$FE_HTTP_CODE" = "200" ]; then
             break
         fi
@@ -1400,9 +1356,7 @@ main() {
         deploy|*)
             pre_deploy_check
             write_env_file
-            # 写入 SSL 证书（host 网络模式 + nginx-host.conf 已在 80/443 提供 HTTPS，
-            # 证书内容来自 GitHub Secrets SSL_FULLCHAIN/SSL_PRIVKEY，写入 $SSL_CERT_DIR）
-            write_ssl_certs
+            # 证书不再由此脚本写入：Caddy 启动时按 TLS_MODE 自动签发/续期，落在 caddy-data 卷里。
             # 备份与后续无依赖步骤（登录/镜像拉取）并行执行，迁移前 join——
             # 隐藏备份耗时（pg_dump + 异地同步），同时保证备份先于任何 DB 写操作完成。
             # SKIP_BACKUP=true（testing 加速）：跳过备份，回滚保障由 RBD 快照+每日备份承担

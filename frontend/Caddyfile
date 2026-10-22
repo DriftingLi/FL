@@ -1,0 +1,206 @@
+# ===== 前端反代（host 网络模式，Caddy）=====
+# 承载：四个工作区 SPA、唯一 API 入口 api.、对象存储直出 cdn.、内网 Dify 反代 dify.。
+#
+# 证书：生产由 Caddy 自己向 ACME 申请与续期（443 的 TLS-ALPN 为主、80 的 HTTP-01 兜底），
+#      运维不再需要把证书塞进 GitHub Secrets。
+#      非生产（测试环境冒烟）由 entrypoint 只注入 `tls internal`（自签），**不申请公共证书**——
+#      冒烟不占证书配额，也不要求公网解析指向测试机。
+#      ⚠️ 不要再叠 `auto_https off`：它的语义是「不要 HTTPS」，叠加后会在 :443 上明文服务，
+#      TLS 握手直接失败（2026-10-22 冒烟实测，健康检查永远拿不到 200）。
+# 占位符：一律用 Caddy 原生的 {$VAR} 语法（由 Caddyfile 解析器直接展开），**不做 envsubst**——
+#      多一层文本替换就多一条「模板里的占位符与替换清单不一致」的部署面。
+#      本文件允许出现的环境变量只有六个：DOMAIN / BACKEND_HOST_PORT / EDGE_ORIGIN_TOKEN /
+#      CADDY_GLOBAL / CADDY_TLS / CADDY_ACME_LINE（结构锁见 backend/internal/deploy/caddy_topology_test.go）。
+#      ⚠️ 可选行为的写法必须是「整行占位符」（空值 ⇒ 展开成空行），不能写成
+#      `email {$VAR}`：变量为空时那行会退化成光秃秃的 `email`，Caddy 直接拒解析
+#      （2026-10-22 testing 冒烟实测，这是只有真跑才暴露的形态）。
+# 生成区：投递分档匹配器由 backend/cmd/gen-deploy 覆写，勿手改。
+
+{
+	{$CADDY_GLOBAL}
+	{$CADDY_ACME_LINE}
+}
+
+# ===== 片段：回源到后端的 API 出口 =====
+# 命中回源鉴权 token 的请求（EdgeOne 回源）与其余直连请求分两条路走。
+# EdgeOne 的 X-Forwarded-For 语义（票 #1746）：token 命中才采信 EO-Connecting-IP，
+# 且**只给这一个值**（不追加对端）——Caddy 默认会把对端追加到 XFF 末尾，
+# 那会让后端把边缘节点当成客户端 IP（限流键聚合、访问日志失真）。
+(backend_api) {
+	@from_edge header X-Origin-Token {$EDGE_ORIGIN_TOKEN}
+	handle @from_edge {
+		reverse_proxy 127.0.0.1:{$BACKEND_HOST_PORT} {
+			header_up X-Forwarded-For {http.request.header.EO-Connecting-IP}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:{$BACKEND_HOST_PORT}
+	}
+}
+
+# ===== 片段：SPA 工作区 =====
+# 每个工作区同源提供页面与 /api（前端 baseURL 是 /api，跨子域只发生在页面跳转时）。
+(spa_workspace) {
+	{$CADDY_TLS}
+	encode zstd gzip
+
+	# health 必须是 handle 链的第一环：Caddy 的 handle 互斥，
+	# 放在链外的 `respond @health` 会被下面那条兜底 handle 抢先吞掉（实测 404）。
+	handle /health {
+		respond "ok" 200
+	}
+	handle /api/* {
+		import backend_api
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server {
+			precompressed gzip
+		}
+	}
+
+	# SPA 入口 HTML 禁止缓存：index.html 内容随发布变化，缓存旧 SPA 会让用户拿到旧应用。
+	# 子块静态资源（带内容哈希）走下面的长缓存覆盖。
+	header {
+		Cache-Control "no-cache, no-store, must-revalidate"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	@assets path /assets/*
+	header @assets Cache-Control "public, immutable"
+}
+
+# ===== api：唯一后端入口 =====
+# 移动端、门户（EdgeOne）回源、残值 BFF 都打这里；页面域名与它解耦，
+# 下次换页面域名时这三条链路一行都不用动。
+api.{$DOMAIN} {
+	{$CADDY_TLS}
+	encode zstd gzip
+
+	handle /health {
+		respond "ok" 200
+	}
+	handle /swagger* {
+		import backend_api
+	}
+	handle /api/* {
+		import backend_api
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# ===== 四个工作区 =====
+training.{$DOMAIN} {
+	import spa_workspace
+}
+
+mentor.{$DOMAIN} {
+	import spa_workspace
+}
+
+manage.{$DOMAIN} {
+	import spa_workspace
+}
+
+recruit.{$DOMAIN} {
+	import spa_workspace
+}
+
+# ===== 残值评估：已迁走，本块只做 301 =====
+# 前端已迁到和润门户（Nuxt，路径 /valuation），本仓只保留后端与数据。
+# 老书签 / 已发出的链接在这里 301 过去；本仓不再有估值 SPA。
+valuation.{$DOMAIN} {
+	{$CADDY_TLS}
+	redir https://valuation.hrwai.cn/valuation{http.request.uri} permanent
+}
+
+# ===== cdn：对象存储直出（资源域，仅 GET/HEAD）=====
+# 本块只有两类直出（对象存储前缀与 /reports/），其余一律 404 —— 不吐 SPA、不反代后端：
+# 漏配的前缀立刻暴露，而不是伪装成 200。
+cdn.{$DOMAIN} {
+	{$CADDY_TLS}
+
+	# >>> gen-deploy:caddy-delivery 生成区起（以下到止标记由 backend/cmd/gen-deploy 覆写，勿手改）
+# ===== 对象存储直出的投递分档（ADR-0066 决策 2 / 票 #1364）=====
+# 唯一事实源：backend/internal/filestore/file_type_table.go 的 class 列；
+# 再生成：cd backend && go run ./cmd/gen-deploy；
+# 同步契约：backend/internal/deploy/caddy_delivery_gen_test.go（改表不改本段即红）。
+# 语义与后端 staticHandler 的 applyUploadDeliveryHeaders 对齐：safe 内联、
+# unsafe 与 unknown 强制下载。Content-Type 不在这里覆写（#1364 决策 3）——
+# attachment 已是下载语义，覆写收益为零且会把 RGW 回的正确 MIME 弄丢。
+# 匹配器一律 path_regexp + (?i)：nginx 原用 ~* 不区分大小写，Caddy 的 path 区分，
+# 这条 (?i) 就是「.JPG 与 .jpg 同档」的唯一保证。
+
+# safe 档：16 项 —— inline（内联预览：PDF 内联与图片/视频直出依赖它）
+@delivery_inline path_regexp (?i)\.(bmp|doc|docx|gif|jpeg|jpg|mp4|pdf|png|ppt|pptx|webm|webp|xls|xlsx|zip)$
+
+# unsafe 档：9 项 —— attachment（显式登记：行为同兜底，登记是为了让「想过它」留在生成物里）
+@delivery_unsafe path_regexp (?i)\.(cjs|htm|html|js|mjs|svg|svgz|xhtml|xml)$
+# <<< gen-deploy:caddy-delivery 生成区止
+
+	# 写方法拦截同样必须进 handle 链：链外的 `respond @write_methods` 会被下面的
+	# handle 互斥路由吞掉（线上实测 POST 返回 404 而非 403，见 #1759）。
+	@write_methods method POST PUT PATCH DELETE
+	handle @write_methods {
+		respond "Forbidden" 403
+	}
+
+	handle /reports/* {
+		rewrite * /forklift-files{http.request.uri}
+		header Content-Disposition "attachment"
+		header @delivery_inline Content-Disposition "inline"
+		header X-Content-Type-Options "nosniff"
+		header Cache-Control "public, max-age=3600"
+		reverse_proxy 172.17.1.42:8088
+	}
+
+	# ⚠️ 这里必须用「正向匹配 + 独立兜底」，**不要**写 `not path ...`：
+	# 2026-10-22 线上实测，那条 `@not_object_store` 对所有路径都成立 ⇒ 全部请求被本站
+	# `respond 404` 拦掉（正文是 9 字节的 "Not Found"，不是 RGW 的 NoSuchKey），
+	# 表现为「RGW 里明明有对象、cdn 却 404」（学员头像就是这样废掉的）。
+	@object_store path /featured/* /avatars/* /contributions/* /resumes/* /images/forum/* /images/questions/* /images/chapters/* /images/ai-assistant/* /chapters/* /slides/* /uploads/*
+	handle @object_store {
+		rewrite * /forklift-files{http.request.uri}
+		header Content-Disposition "attachment"
+		header @delivery_inline Content-Disposition "inline"
+		header X-Content-Type-Options "nosniff"
+		header Cache-Control "public, max-age=86400"
+		reverse_proxy 172.17.1.42:8088
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# ===== dify：内网 Dify + 知识库图片反代 =====
+# Dify 大量使用 SSE，需关闭缓冲（Caddy 的 flush_interval -1 等价于 nginx 的 proxy_buffering off）。
+dify.{$DOMAIN} {
+	{$CADDY_TLS}
+
+	handle /kbimg/* {
+		@kbimg_write not method GET HEAD
+		respond @kbimg_write "Forbidden" 403
+		uri strip_prefix /kbimg
+		rewrite * /forklift-files{http.request.uri}
+		reverse_proxy 172.17.1.42:8088
+	}
+
+	handle {
+		reverse_proxy 172.17.1.46:80 {
+			flush_interval -1
+		}
+	}
+}
+
+# ===== 根域与 www：一跳 301 到培训入口 =====
+gdyidao.cn, www.gdyidao.cn {
+	{$CADDY_TLS}
+	redir https://training.{$DOMAIN}{http.request.uri} permanent
+}

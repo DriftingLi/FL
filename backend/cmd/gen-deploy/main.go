@@ -1,19 +1,19 @@
 // Command gen-deploy 再生成部署面产物（ADR-0047 §5 / spec #932 / 票 #1364）——**生成勿改**：
 //
 //	① deploy/env.defaults       部署默认值：读 internal/deploy.EnvVars 声明表整份覆写
-//	② frontend/nginx-host.conf  RGW 直出的投递分档 map：读 service 的类型表，
+//	② frontend/Caddyfile       RGW 直出的投递分档匹配器：读 service 的类型表，
 //	   只覆写文件里两行标记之间的**生成区**，区外内容原样保留（ADR-0066 决策 2 / #1364）
 //
 // 用法：
 //
 //	cd backend && go run ./cmd/gen-deploy             # 两份产物全部再生成
 //	cd backend && go run ./cmd/gen-deploy -only env   # 只生成 deploy/env.defaults
-//	cd backend && go run ./cmd/gen-deploy -only nginx # 只生成 nginx-host.conf 的生成区
+//	cd backend && go run ./cmd/gen-deploy -only caddy # 只生成 Caddyfile 的生成区
 //	cd backend && go run ./cmd/gen-deploy -out <path> # 只把 env.defaults 写到显式路径（调试/CI）
 //
 // 两份产物的同步契约都是「现算结果 == 磁盘内容」字节级全等（codegen.AssertInSync），
-// 见 internal/deploy/topology_test.go 与 internal/deploy/nginx_delivery_gen_test.go。
-// CI 的新鲜度锁用 `-only nginx`（.github/workflows/ci.yml 的 frontend-check），
+// 见 internal/deploy/topology_test.go 与 internal/deploy/caddy_delivery_gen_test.go。
+// CI 的新鲜度锁用 `-only caddy`（.github/workflows/ci.yml 的 frontend-check），
 // 判据由 main_test.go 钉住：产物名写错必须非零退出，不得「什么都没生成还报绿」。
 package main
 
@@ -35,7 +35,7 @@ type target struct {
 // targets 本命令负责的全部产物（顺序即执行顺序）。
 var targets = []target{
 	{"env", deploy.EnvDefaultsGen},
-	{"nginx", deploy.NginxDeliveryMapGen},
+	{"caddy", deploy.CaddyDeliveryGen},
 }
 
 // generate 落盘一个产物（测试注入假的 generate 以断言「选了谁、选了几个」）。
@@ -51,7 +51,7 @@ func main() {
 func run(args []string, gen func(codegen.Spec, string) error) error {
 	fs := flag.NewFlagSet("gen-deploy", flag.ContinueOnError)
 	out := fs.String("out", "", fmt.Sprintf("只生成 env.defaults 到指定路径（默认从当前目录向上定位 %s）", deploy.EnvDefaultsGen.Hint))
-	only := fs.String("only", "", "只生成指定产物（env | nginx），默认全部")
+	only := fs.String("only", "", "只生成指定产物（env | caddy），默认全部")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func run(args []string, gen func(codegen.Spec, string) error) error {
 	if *only != "" {
 		t, ok := findTarget(*only)
 		if !ok {
-			return fmt.Errorf("-only 取值 %q 不是产物名（env | nginx）", *only)
+			return fmt.Errorf("-only 取值 %q 不是产物名（env | caddy）", *only)
 		}
 		return gen(t.spec, "")
 	}

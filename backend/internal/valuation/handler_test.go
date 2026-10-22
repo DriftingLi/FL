@@ -469,6 +469,7 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 		valuationSvc, NewBatteryRULService(),
 		&memReportGenerator{}, st,
 		nil, // ValuationAuthService 未装配：本 seam 覆盖的公开评估路径不触达 /auth/*
+		nil, // ValuationLoginFunc 未装配：覆盖的公开路径不触达 /auth/login
 	)
 	return r, dict, evalStore, batteryStore
 }

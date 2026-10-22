@@ -142,7 +142,7 @@
 - 对象存储：S3 兼容网关（Ceph RGW）
 - 文档转换：LibreOffice sidecar（`libreoffice-sidecar/`）
 - 编排：Docker Compose
-- 反向代理 / 静态托管：Nginx（host-network 监听 80/443，SSL 终止 + `/api` 反代 + 静态托管 + 对象存储反代）
+- 反向代理 / 静态托管：Caddy（host-network 监听 80/443，**证书自动申请与续期** + `/api` 反代 + 静态托管 + 对象存储反代）
 - CI/CD：GitHub Actions（`ci.yml` / `cd.yml` / `testing-smoke.yml` / `pr-evidence.yml`），公网 SSH 部署到自托管服务器
 - 备选：Cloudflare Pages（`frontend/wrangler.jsonc`）
 
@@ -181,8 +181,7 @@
 │   │                             #   assets / icons）
 │   ├── scripts/                  # 前端侧守卫与扫描器（scan-el-components.mjs 等）
 │   ├── Dockerfile
-│   ├── nginx-host.conf           # 生产 host 网络模式 Nginx（SSL；www=301+API、cdn=对象存储、其余子域=SPA）
-│   ├── nginx.default.conf        # 镜像内置 Nginx 配置（template，envsubst 渲染）
+│   ├── Caddyfile                 # 生产 host 网络模式 Caddy（自动证书；api=后端入口、cdn=对象存储、其余子域=SPA）
 │   ├── docker-entrypoint.sh
 │   ├── wrangler.jsonc            # Cloudflare Pages 备选部署
 │   └── .env.example
@@ -210,7 +209,7 @@
 │   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库；代码百科 `reference/CODE_WIKI.md` 住这里）
 ├── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml / pr-evidence.yml）
 ├── deploy.sh                     # 本地 / 手动一键部署
-└── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Nginx 前端）
+└── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Caddy 前端）
 ```
 
 ## 环境要求
@@ -444,7 +443,7 @@ ls backend/migrations/*.up.sql | sed 's#.*/##'
 - `redis`（Redis 7，仅内网，LRU 淘汰、禁用持久化）
 - `libreoffice`（文档转换 sidecar）
 - `backend`（Go 后端，仅内网，经前端反代访问）
-- `frontend`（Nginx，host 网络监听 80/443：SSL 终止 + `/api` 反代 + 静态托管 + 对象存储前缀反代）
+- `frontend`（Caddy，host 网络监听 80/443：证书自动签发 + `/api` 反代 + 静态托管 + 对象存储前缀反代）
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
@@ -454,26 +453,29 @@ docker compose -f docker-compose.prod.yml up -d
 
 `scripts/deploy-remote.sh` 通过公网 SSH 将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback` 回滚到上一个版本；备份默认落在 `/opt/forklift-backups`。配套脚本：`setup-server.sh`（初始化）、`lxc-install-docker.sh` / `lxc-setup-ssh.sh`（LXC 容器初始化）、`backup-daily.sh` / `rbd-snap-hourly.sh`（定时备份与快照）。
 
-### 域名与资源域（官网迁 EdgeOne 后，票 #1742）
+### 域名与资源域（双域族，票 #1756 / ADR-0077）
 
-官网门户已从本机房迁到腾讯云 EdgeOne，本仓 nginx 收成三个职责面：
+**和润**（门户 + 残值评估）在 `hrwai.cn`，**易道**（培训 / 讲师 / 管理 / 招聘）在 `gdyidao.cn`。本仓反代只服务后者；`hrwai.cn` 与本机没有直接关系（除 EdgeOne 回源到 `api.<domain>`）。旧域 `gccsmile.com` 按硬切口径整体退役，不留 301。
 
-| host | 职责 | 注意 |
-| --- | --- | --- |
-| `www.<domain>` | 页面路径 301 到 `https://www.hrwai.cn`；`/api/`、`/swagger`、`/health`、`/ai-assistant` 照旧 | 301 必须写在 `location` 里（提到 server 级会短路 API 与资源出口，issue #496）；同一块也收 `www.hrwai.cn` 作为回源 Host，对它的页面路径直接 404（防止 301 到自己成环） |
-| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，其余 404 | 投递分档头随路径走（ADR-0066）；旧域同名路径 301 到这里，老外链不碎 |
-| 裸域 | 一跳 301 到新站 | 不再经 www 二次跳 |
+| host | 职责 |
+| --- | --- |
+| `api.<domain>` | **唯一 API 入口**：`/api`、`/swagger`、`/health`。移动端、门户回源、残值 BFF 都打这里 —— 页面域名与它解耦，下次换页面域名这三条链路不用动 |
+| `training` / `mentor` / `manage` / `recruit`.`<domain>` | 四个工作区 SPA（同源 `/api` 反代） |
+| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，未知前缀 404（不吐 SPA） |
+| `dify.<domain>` | 内网 Dify 与知识库图片反代（SSE 不缓冲） |
+| `valuation.<domain>` | **过渡期**仍由本仓 SPA 服务；北迁完成后改为 301 到 `valuation.hrwai.cn` |
+| 裸域 / `www.<domain>` | 一跳 301 到培训入口 |
 
-**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到本机；回源 Host 用旧域还是新站主域都落进同一个 server 块（两个 `server_name` 都收），因此不必在控制台钉死 Host 改写。
+**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到 `https://api.<domain>`。回源鉴权见下节（`X-Origin-Token`）。
 
-**回填旧 URL**（一次性，票 #1742）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。
+**回填旧 URL**（一次性，票 #1742；#1756 换域时按同一口径再跑一次，用 `-from`/`-to` 指新前缀）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。**切换日必须先 dry-run 记账、执行后第二次命中 0 行**，否则切完历史图片全碎。
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
 docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
 ```
 
-**客户端 IP：EdgeOne 回源鉴权（票 #1746）**。经 EdgeOne 回源时 nginx 的 `$remote_addr` 是边缘节点，但 EdgeOne 会带 `EO-Connecting-IP`（实测为真实客户端；同一次请求里的 `X-Forwarded-For` / `X-Real-IP` 都只是边缘链路）。门户（EdgeOne Pages）的 `/api` 代理回源时带 `X-Origin-Token`，nginx **只有 token 命中才采信** `EO-Connecting-IP`（`frontend/nginx-host.conf` 开头的三个 map），否则沿用「追加对端」的语义 —— 直连源站伪造该头无效。
+**客户端 IP：EdgeOne 回源鉴权（票 #1746）**。经 EdgeOne 回源时反代看到的对端是边缘节点，但 EdgeOne 会带 `EO-Connecting-IP`（实测为真实客户端；同一次请求里的 `X-Forwarded-For` / `X-Real-IP` 都只是边缘链路）。门户（EdgeOne Pages）的 `/api` 代理回源时带 `X-Origin-Token`，**只有 token 命中才采信** `EO-Connecting-IP`（`frontend/Caddyfile` 的 `(backend_api)` 片段：命中走单独的 `handle`，`header_up` 只给这一个值、不追加对端），否则沿用「追加对端」的语义 —— 直连源站伪造该头无效。
 
 - **两处同值**：本仓部署 secret `EDGE_ORIGIN_TOKEN`（production / testing 两个 environment 都要）+ 门户 Pages 环境变量 `NUXT_API_ORIGIN_TOKEN`。
 - **fail closed**：模板启用鉴权而 token 为空时，前端容器入口直接拒绝启动 —— 空键会匹配空头，等于信任所有人的 `EO-Connecting-IP`。
@@ -494,7 +496,7 @@ grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
 三条口径，少一条就会得出错结论：
 
 1. **必须带 `-a`**。该文件含二进制字节，不加 `-a` 时 `grep` 只回一句 `binary file matches` 而**不给计数** —— 看着像 0，其实什么都没数。
-2. **别用 nginx 的 access.log**。`forklift-frontend-prod` 是 `network_mode: host`，容器内 `/var/log/nginx/access.log` 只是**软链到 `/dev/stdout`**，访问行进 docker `json-file` 驱动；而 **CD 每次部署都重建容器 ⇒ 历史清零**。实测（2026-09-30）该窗口只剩 10.2 小时 / 8875 行，且窗口内 `/api/**` 的 POST 一条都没有（只有扫描器探针）——在那里面「命中 0」与「没有流量」**不可区分**。
+2. **别用反代容器的访问日志**。`forklift-frontend-prod` 是 `network_mode: host`，反代的访问行直接进 docker `json-file` 驱动（不出落在文件里的 access.log）；而 **CD 每次部署都重建容器 ⇒ 历史清零**。实测（2026-09-30）该窗口只剩 10.2 小时 / 8875 行，且窗口内 `/api/**` 的 POST 一条都没有（只有扫描器探针）——在那里面「命中 0」与「没有流量」**不可区分**。
 3. **计数不带方向，要回到行里看**。日志行由 `logger/access.go` 逐请求写一条 JSON：`{method, path, status, duration_ms, ip, user_id, user_role, request_id}`。判「是不是集成客户端在调」看 `user_id` / `user_role` 与同一 `ip` 前后的请求时序，而不是只看总数（2026-09-30 那次就是靠这个把「33 天 1 次」定性成人为试探而非使用）。
 
 留存边界：`app.log` 由 lumberjack 按 `LOG_DIR=/data/logs`、`LOG_MAX_SIZE_MB`（生产 100）、`LOG_MAX_BACKUPS`（7）、`LOG_MAX_AGE_DAYS`（30）、`LOG_COMPRESS` 轮转（实现 `backend/internal/logger/logger.go` 的 `newRotatingFile`），跨容器重建留存；实测窗口 33 天 / 13.5 万行。⚠️ 归档只在**越过大小阈值时**才产生，所以「卷里只有一个 app.log」不等于「没配轮转」。
