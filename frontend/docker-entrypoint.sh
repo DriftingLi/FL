@@ -36,6 +36,16 @@ fi
 # 非生产：关掉自动 HTTPS 并改用内部自签，冒烟不占公共证书配额、也不要求公网解析指向测试机。
 # 判据是 TLS_MODE 而不是 APP_ENV：两套环境都声明自己 APP_ENV=production（后端行为一致），
 # 证书策略却是部署面的事实，必须单独一个开关，否则测试冒烟会去给生产域名申请证书。
+# ACME 账户邮箱也是「可选行」：写成 `email {$VAR}` 时，VAR 为空会让这行退化成光秃秃的
+# `email`，Caddy 直接拒解析（2026-10-22 testing 冒烟实测）。所以整行由这里拼。
+if [ -n "${CADDY_ACME_EMAIL:-}" ]; then
+    CADDY_ACME_LINE="email ${CADDY_ACME_EMAIL}"
+else
+    CADDY_ACME_LINE=""
+fi
+export CADDY_ACME_LINE
+echo "[caddy-entrypoint] ACME 邮箱: ${CADDY_ACME_EMAIL:-（未配置，用 Caddy 默认匿名账户）}"
+
 if [ "${TLS_MODE:-auto}" = "auto" ]; then
     CADDY_TLS=""
     CADDY_GLOBAL=""

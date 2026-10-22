@@ -7,13 +7,16 @@
 #      **不申请公共证书**——冒烟不占证书配额，也不要求公网解析指向测试机。
 # 占位符：一律用 Caddy 原生的 {$VAR} 语法（由 Caddyfile 解析器直接展开），**不做 envsubst**——
 #      多一层文本替换就多一条「模板里的占位符与替换清单不一致」的部署面。
-#      本文件允许出现的环境变量只有五个：DOMAIN / BACKEND_HOST_PORT / EDGE_ORIGIN_TOKEN /
-#      CADDY_GLOBAL / CADDY_TLS（结构锁见 backend/internal/deploy/caddy_topology_test.go）。
+#      本文件允许出现的环境变量只有六个：DOMAIN / BACKEND_HOST_PORT / EDGE_ORIGIN_TOKEN /
+#      CADDY_GLOBAL / CADDY_TLS / CADDY_ACME_LINE（结构锁见 backend/internal/deploy/caddy_topology_test.go）。
+#      ⚠️ 可选行为的写法必须是「整行占位符」（空值 ⇒ 展开成空行），不能写成
+#      `email {$VAR}`：变量为空时那行会退化成光秃秃的 `email`，Caddy 直接拒解析
+#      （2026-10-22 testing 冒烟实测，这是只有真跑才暴露的形态）。
 # 生成区：投递分档匹配器由 backend/cmd/gen-deploy 覆写，勿手改。
 
 {
 	{$CADDY_GLOBAL}
-	email {$CADDY_ACME_EMAIL}
+	{$CADDY_ACME_LINE}
 }
 
 # ===== 片段：回源到后端的 API 出口 =====

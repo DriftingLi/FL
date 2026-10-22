@@ -129,7 +129,7 @@ func TestCaddyfilePlaceholderLock(t *testing.T) {
 		"EDGE_ORIGIN_TOKEN": true,
 		"CADDY_GLOBAL":      true,
 		"CADDY_TLS":         true,
-		"CADDY_ACME_EMAIL":  true,
+		"CADDY_ACME_LINE":   true,
 	}
 	re := regexp.MustCompile(`\{\$([A-Z0-9_]+)\}`)
 	seen := map[string]bool{}
