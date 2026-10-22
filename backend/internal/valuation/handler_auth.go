@@ -123,8 +123,8 @@ func (h *ValuationAuthHandler) Me(c *gin.Context) {
 // 结构上覆盖不到 `/api/valuation/auth/logout`，写那一路就是一枚恒空的死代码。可达性由
 // TestValuationLogout_刷新Cookie到不了本端点 钉住 —— 谁把 Path 放宽到 `/`（把 7 天凭证挂到全站
 // 每一个请求上）就会在那里判红，被迫在这里重新决策，而不是让代码与 ADR 各说一套。
-// 仓内的估值工作区不走这个入口（`ValuationLayout.vue` 的退出调 `authStore.signOut()` →
-// 主 `/api/auth/logout`，Cookie 与族判定都在那里生效）；本端点是 `API.md` 对外列着的兼容入口。
+// 公开界面已北迁门户仓（2026-10），本仓不再有估值工作区的退出路径；门户那侧的登出走主
+// `/api/auth/logout` 与 BFF 自己的会话端点。本端点是 `API.md` 对外列着的兼容入口。
 //
 // #1412 起标废弃（维护者 2026-09-30 定 B 方案：先对外宣告、留一个发布周期的观察窗口，真正的
 // 移除另票且由人执行）。`@Deprecated` 让它进生成契约而不只是散文 —— 观察窗口结束时按「有无带

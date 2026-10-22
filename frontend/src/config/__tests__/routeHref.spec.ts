@@ -13,7 +13,8 @@
 //      为空、并带「合成违例必须判红」的负向探针。之所以走 AST 而不是正则：`href('Login')` 与
 //      `'/login'` 在正则下都长得像「引号里的东西」，只有类型化的表达式才分得开派生与手拼。
 //
-// 唯一的例外是**站点根** `"/"`：ValuationLayout 的 logo 指向 legacy `/` 重定向记录，那条记录按
+// 唯一的例外是**站点根** `"/"`：legacy `/` 重定向记录由子域名与角色条件分流（残值布局的 logo
+// 曾是它的调用方，该布局已随 2026-10 北迁删除，但重定向记录本身还在），那条记录按
 // 子域名与角色条件分流、没有唯一目标页，也就没有可派生的 RouteName。这个例外盖不住真实页面——
 // 下面「描述符表里没有 `path === '/'` 的记录」那条把它证成了性质：表里任何页面路径都比 `/` 长，
 // 所以「以 `/` 开头且后面还有字符」覆盖了全部页面。
@@ -308,7 +309,7 @@ describe('href()：跳转入口由页面描述符表派生（票8b）', () => {
   it('RouteName 派生自本表：每条记录都带不重复的 name、绝对 path 与 component（名单与路径同处一张表）', () => {
     const names = pages.map(p => p.name as string)
     expect(new Set(names).size).toBe(names.length)
-    expect(names.length).toBeGreaterThan(70)
+    expect(names.length).toBeGreaterThan(60)
     for (const page of pages) {
       expect(page.path.startsWith('/'), page.name + ' 的 path 必须是绝对路径').toBe(true)
       expect(typeof page.component).toBe('function')

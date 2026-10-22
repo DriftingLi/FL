@@ -36,17 +36,19 @@ const CREDENTIAL_ONBOARDING: RouteName = 'CredentialOnboarding'
 
 /**
  * 工作区：产品区语义（≠子域名）。
- * training 学员培训（含 AI 助手）；tutor 导师工作区（mentor. 子域名）；valuation 残值评估；
+ * training 学员培训（含 AI 助手）；tutor 导师工作区（mentor. 子域名）；
  * recruit 企业招聘；manage 管理后台（manage. 子域名，内部子域类型 admin）；
  * auth 主体系认证页（/login /register /forgot-password，无单一目标子域名）。
+ *
+ * 残值评估（valuation）本来也是一个工作区，2026-10 起公开界面迁到门户仓
+ * （valuation.hrwai.cn/valuation），本仓不再有该工作区的任何路由。
  */
-export type Workspace = 'training' | 'tutor' | 'valuation' | 'recruit' | 'manage' | 'auth'
+export type Workspace = 'training' | 'tutor' | 'recruit' | 'manage' | 'auth'
 
 /** 工作区 → 目标子域名（auth 无单一目标子域名，由 subdomainBoundaryStep 特判） */
 export const WORKSPACE_SUBDOMAIN: Record<Exclude<Workspace, 'auth'>, SubdomainType> = {
   training: 'training',
   tutor: 'tutor',
-  valuation: 'valuation',
   recruit: 'recruit',
   manage: 'admin'
 }
@@ -129,15 +131,10 @@ export const subdomainBoundaryStep: GuardStep = (input, state) => {
   const ws = workspaceOf(input)
 
   // 主体系认证页（/login /register /forgot-password）：无单一目标子域名——
-  // main → 跳 training（主域名不再承载登录）；valuation → 内部重定向到估值认证页；其余子域名自留登录页
+  // main → 跳 training（主域名不再承载登录）；其余子域名自留登录页
   if (ws === 'auth') {
     if (state.subdomain === 'main') {
       return { action: 'external', target: 'training', path: input.fullPath }
-    }
-    if (state.subdomain === 'valuation') {
-      if (input.path === '/register') return { action: 'redirect', to: '/valuation/register' }
-      if (input.path === '/forgot-password') return { action: 'redirect', to: '/valuation/forgot-password' }
-      return { action: 'redirect', to: '/valuation/login' }
     }
     return null
   }
@@ -158,23 +155,15 @@ export const authPageStep: GuardStep = (input, state) => {
   const ws = workspaceOf(input)
   // 主体系认证页 → 按当前子域名回对应工作区（到不了的角色由下一步的子域身份匹配拦回登录页）
   if (ws === 'auth') return { action: 'workspace-home' }
-  // 估值认证页 → 已登录学员回评估历史
-  const isAuthPage = input.matched.some(record => record.authPage === true)
-  if (isAuthPage && ws === 'valuation' && state.role === 'hrwai_user') {
-    return { action: 'redirect', to: '/valuation/history' }
-  }
   return null
 }
 
-/** 步骤 3：需登录而未登录 → 清登录态并回认证页（估值工作区回估值登录页）。 */
+/** 步骤 3：需登录而未登录 → 清登录态并回认证页。 */
 export const authRequiredStep: GuardStep = (input, state) => {
   const requiresAuth = input.matched.some(record => record.requiresAuth === true)
   if (!requiresAuth) return { action: 'allow' }
   if (state.hasValidToken) return null
-  const to = workspaceOf(input) === 'valuation'
-    ? { path: '/valuation/login', query: { redirect: input.fullPath } }
-    : { path: '/login', query: { redirect: input.fullPath } }
-  return { action: 'redirect', to, clearAuth: true }
+  return { action: 'redirect', to: { path: '/login', query: { redirect: input.fullPath } }, clearAuth: true }
 }
 
 /**
@@ -184,7 +173,7 @@ export const authRequiredStep: GuardStep = (input, state) => {
  * 清登录态回**本子域**登录页并携带回跳。放在角色校验之前：否则学员会被 workspaceFallback
  * 弹向 /training，再被子域边界整页跳去 training 子域（原缺陷路径），永远到不了本子域登录页。
  * clearAuth 先清再重定向：管线重跑时未登录 → authRequiredStep 常规引导登录；登录页属 auth
- * 工作区不再触发本步骤，无循环。IP 直连（无子域概念）与共号子域（training/valuation/main）
+ * 工作区不再触发本步骤，无循环。IP 直连（无子域概念）与共号子域（training/main）
  * 旁路，身份语义交给既有角色/能力校验。
  */
 export const subdomainRoleStep: GuardStep = (input, state) => {
@@ -232,7 +221,7 @@ export const roleStep: GuardStep = (input, state) => {
 
 /**
  * 可见性不足时的统一回落：管理员回**自己看得见的**管理页、导师回导师工作台、
- * 估值受限页回估值首页、其余回学员工作区。
+ * 其余回学员工作区。
  *
  * 管理员这一支不再是「回工作台」写死的那一条（#1638）：dashboard 自己也要能力位，
  * 一个能力集为空的账号会在 dashboard 上无限重定向，vue-router 中止导航 ⇒ 整页空白。
@@ -264,8 +253,6 @@ function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision 
     if (state.role === 'tutor') {
       return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
     }
-    // 学员/未知角色访问估值受限页 → 回估值首页（公开，无需登录）
-    if (workspaceOf(input) === 'valuation') return { action: 'redirect', to: '/valuation' }
     // 其余 → 学员工作区
     return { action: 'redirect', to: '/training' }
   })()

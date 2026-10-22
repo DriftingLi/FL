@@ -36,7 +36,6 @@ function routeMeta(page: PageDescriptor): Record<string, unknown> {
   // 布局值一致，故 meta 内容零变化。
   meta.requiresAuth = page.requiresAuth
   if (page.authPage) meta.authPage = true
-  if (page.isValuationAuthPage) meta.isValuationAuthPage = true
   if (page.roles) meta.roles = page.roles
   if (page.capability) meta.capability = page.capability
   // 缓存位（#1620）：SidebarLayout 读它决定该页是否进 keep-alive 的 include 名单
@@ -47,9 +46,7 @@ function routeMeta(page: PageDescriptor): Record<string, unknown> {
 /** 布局根的子路由重定向：没有对应页面描述符，但必须保留（URL 兼容）。 */
 const layoutRedirects: Partial<Record<LayoutKey, RouteRecordRaw[]>> = {
   // 管理端根路径进仪表盘
-  manage: [{ path: '', redirect: href('AdminDashboard') }],
-  // 设计稿把估值表单提升为首页：/valuation/input 等同于 /valuation
-  valuation: [{ path: 'input', redirect: href('ValuationHome') }]
+  manage: [{ path: '', redirect: href('AdminDashboard') }]
 }
 
 /** 描述符 → 布局子记录。 */
@@ -111,9 +108,6 @@ const legacyRedirects: RouteRecordRaw[] = [
       const subPath = (to.params.pathMatch as string[])?.[0] || ''
 
       // 特殊路径映射
-      if (subPath === 'valuation' || subPath.startsWith('valuation/')) {
-        return '/' + subPath
-      }
       if (subPath === 'ai-generate') {
         return '/ai-assistant'
       }

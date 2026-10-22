@@ -10,9 +10,9 @@
  *
  *   两者刻意不同名。残值模块靠 DOM 作用域遮蔽换色，若把 --color-brand-* 提升为全局
  *   变量，会击穿两处依赖「变量未定义 → 走 fallback」的写法：
- *     1. layouts/ValuationLayout.vue —— 根元素不带 .valuation-root，topbar 在作用域外
- *     2. pages/ai-assistant/*.vue    —— var(--color-brand-500, #0EA5E9) 兜底链
- *   结果：残值页头变青、页面主体仍蓝，同屏割裂。故禁止全局定义 --color-brand-*。
+ *     1. pages/admin/ValuationConfigManage.vue —— 根元素带 .valuation-root，域名下的取色
+ *     2. pages/ai-assistant/*.vue             —— var(--color-brand-500, #0EA5E9) 兜底链
+ *   结果：残值配置页的页头变青、页面主体仍蓝，同屏割裂。故禁止全局定义 --color-brand-*。
  */
 :root {
   /* ===== 品牌主色 - 石墨青 Graphite Teal ===== */
