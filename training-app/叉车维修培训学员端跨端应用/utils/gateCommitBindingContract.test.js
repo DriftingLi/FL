@@ -105,6 +105,37 @@ function scanContract(sources) {
     );
   });
 
+  // K6（#1770）：-PostToIssue 是正式名，-PostToPr 保留为别名（同值转发）——
+  // 删掉别名 = 旧调用点（draft 里的 pwsh 命令、外部会话）当场静默丢证据，而门脚本仍报绿。
+  sources.callers.forEach(({ rel, text }) => {
+    must(
+      violations,
+      /\[int\]\$PostToIssue\s*=\s*0/.test(text),
+      'K6',
+      `${rel} 缺少正式参数 [int]$PostToIssue`,
+    );
+    must(
+      violations,
+      /if\s*\(\$PostToIssue\s*-gt\s*0\)\s*\{\s*\$PostToPr\s*=\s*\$PostToIssue\s*\}/.test(text),
+      'K6',
+      `${rel} 必须把 -PostToIssue 转给 -PostToPr（旧名别名）`,
+    );
+  });
+
+  // K7（#1770）：判据评论必须贴 commit（Send-GateComment），不许再回到 `gh pr comment`
+  // （PR 号做键 ⇒ 证据只能出现在开 PR 之后 ⇒ 首推必红）。
+  must(violations, countDefs(lib, 'Send-GateComment') === 1, 'K7', `${LIB_REL} 必须恰好定义一次 function Send-GateComment`);
+  must(violations, countDefs(lib, 'Get-GateRepoSlug') === 1, 'K7', `${LIB_REL} 必须恰好定义一次 function Get-GateRepoSlug`);
+  sources.callers.forEach(({ rel, text }) => {
+    must(
+      violations,
+      /Send-GateComment\s+-ProjectDir\s+\S+\s+-Sha\s+\S+\s+-Reachable/.test(text),
+      'K7',
+      `${rel} 的门评论必须走 Send-GateComment -ProjectDir <dir> -Sha <sha> -Reachable <bool>`,
+    );
+    must(violations, !/gh pr comment/.test(text), 'K7', `${rel} 又出现了 gh pr comment（判据评论必须贴 commit）`);
+  });
+
   return violations;
 }
 
@@ -120,7 +151,7 @@ describe('门评论 sha 绑定口径接线（#1695）', () => {
     expect(scanContract(readAll())).toEqual([]);
   });
 
-  test('K1/K2/K3/K4/K5 注入违规必须被检出（防「恒绿」假守护）', () => {
+  test('K1–K7 注入违规必须被检出（防「恒绿」假守护）', () => {
     const real = readAll();
     const patchCaller = (rel, fn) => ({
       ...real,
@@ -135,6 +166,10 @@ describe('门评论 sha 绑定口径接线（#1695）', () => {
       ['K3', patchCaller('scripts/mp-weixin-check.ps1', (t) => t.replace(/- commit: \$sha/g, '- sha: $sha'))],
       ['K4', patchCaller('scripts/device-capture.ps1', (t) => t.replace(/Push-ArchiveCommit/g, 'PushArchiveX'))],
       ['K5', patchCaller('scripts/emulator-smoke.ps1', (t) => t + "\nfunction Get-HeadSha { param([string]$ProjectDir) return '' }\n")],
+      // #1770：旧名别名被删 / 门评论退回 gh pr comment / lib 的口径函数被改名，都必须被抓
+      ['K6', patchCaller('scripts/dev-finish.ps1', (t) => t.replace(/if \(\$PostToIssue -gt 0\) \{ \$PostToPr = \$PostToIssue \}/, ''))],
+      ['K7', patchCaller('scripts/compile-check.ps1', (t) => t.replace(/Send-GateComment/, 'gh pr comment -x'))],
+      ['K7', { ...real, lib: real.lib.replace(/function Send-GateComment \{/, 'function SendGateX {') }],
     ];
     cases.forEach(([code, patched]) => {
       const found = scanContract(patched);

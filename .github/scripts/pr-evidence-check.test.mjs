@@ -1097,6 +1097,21 @@ test('#1770 S2 commit 评论不绕过 marker / sha 绑定：缺 gate-evidence �
   assert.equal(r2.ok, false, '没有 commit 行的 commit 评论被当成了证据');
 });
 
+// #1770 S1：归档目录键从 PR 号换成**票号**（同为数字段，正则不变）——
+// 「还没开 PR 就该能取证」是这一票的前提，键一改就废。
+test('#1770 S1 归档目录键 = 票号：docs/verification/<模块>/<票号>/ 照认，非数字键仍不认', async () => {
+  const withKey = (key) =>
+    FULL_EVIDENCE.replaceAll(
+      'docs/verification/exam/624/exam-home-after.jpg',
+      `docs/verification/exam/${key}/exam-home-after.jpg`,
+    );
+  const ok = await run({ body: withKey('1770') });
+  assert.equal(ok.ok, true, ok.errors.join('；'));
+  const bad = await run({ body: withKey('feat-1770') });
+  assert.equal(bad.ok, false, '非数字目录键被当成了可核验产物（票号必须是纯数字段）');
+  assert.match(bad.errors.join(), /可核验/);
+});
+
 test('#1770 S2 判据面只认 PR 评论 + commit 评论：票（issue）评论不进判据（签名里没有第三来源）', () => {
   const src = readFileSync(validatorPath, 'utf8');
   const start = src.indexOf('export async function validatePrEvidence(');

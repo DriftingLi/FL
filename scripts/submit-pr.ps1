@@ -42,18 +42,25 @@ try {
 
     # ③ run 链接：交给同一支 node（--fill-body）补，PowerShell 不再自己拼字符串 ——
     # 「占位不补 / 已有链接不补」两个判据也就只有一个实现，可被单测钉住。
-    $fill = (& node $cli --fill-body --body-file $BodyFile) | Out-String
-    try { $fillJson = $fill | ConvertFrom-Json } catch { throw "补 ③ 行没吐出 JSON：$fill" }
-    if ($fillJson.filled) {
-        Write-Host "③ 行已自动补上 ci-summary run 链接：$($fillJson.ciRun.url)"
-    } elseif ($fillJson.reason -eq 'already-has-run') {
-        Write-Host '③ 行已有 run 链接，未改动'
-    } elseif ($fillJson.reason -in @('conclusion-placeholder', 'no-conclusion-field')) {
-        throw "③ 行的结论还没写（$($fillJson.reason)）：先在正文写清结论（如「两腿全绿」），再重跑 —— 补链接不替你写结论"
-    } elseif ($fillJson.reason -eq 'no-gate-3-line') {
-        throw '正文里没有 ③ 行：按模板补一行（行首 ③、含「结论：」）'
+    #
+    # 但**预检已经绿就别补**：非运行时面 PR 按约定只写「免（未命中运行时面）」，正文里本来就没有 ③ 行，
+    # 此时去补会以 no-gate-3-line 误报（#1770 自己的 PR 就是这一类，踩过一次）。
+    if ($probeJson.ok) {
+        Write-Host '预检已绿：正文无需补 ③ run 链接'
     } else {
-        throw "③ 行补链接失败：$($fillJson.reason)"
+        $fill = (& node $cli --fill-body --body-file $BodyFile) | Out-String
+        try { $fillJson = $fill | ConvertFrom-Json } catch { throw "补 ③ 行没吐出 JSON：$fill" }
+        if ($fillJson.filled) {
+            Write-Host "③ 行已自动补上 ci-summary run 链接：$($fillJson.ciRun.url)"
+        } elseif ($fillJson.reason -eq 'already-has-run') {
+            Write-Host '③ 行已有 run 链接，未改动'
+        } elseif ($fillJson.reason -in @('conclusion-placeholder', 'no-conclusion-field')) {
+            throw "③ 行的结论还没写（$($fillJson.reason)）：先在正文写清结论（如「两腿全绿」），再重跑 —— 补链接不替你写结论"
+        } elseif ($fillJson.reason -eq 'no-gate-3-line') {
+            throw '正文里没有 ③ 行：按模板补一行（行首 ③、含「结论：」）'
+        } else {
+            throw "③ 行补链接失败：$($fillJson.reason)"
+        }
     }
 
     # 第二遍：正文补完后再判一次，绿了才建 PR（这一步与 CI 同一份判据）。
