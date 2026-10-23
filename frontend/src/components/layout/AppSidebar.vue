@@ -8,8 +8,9 @@
   >
     <slot name="top" :collapsed="effectiveCollapsed" />
 
-    <!-- 分隔线 -->
-    <div class="sidebar-divider"></div>
+    <!-- 内部分隔线：工作区入口（#top 插槽）与导航列之间。内缩 --space-4、用通用分隔线色
+         （这是「组与组」的分隔，不是外壳边界，所以不参与十字细线那条缝） -->
+    <div class="mx-4 h-px shrink-0 bg-line"></div>
 
     <!-- 导航菜单：每一行都由 AppSidebarItem 渲染（三层嵌套 × 外链/router-link 的 9 份 markup
          收进那一个项级 module，票9 / ADR-0060 §9）；本组件只留分组编排与判定接线。 -->
@@ -89,8 +90,11 @@
       </template>
     </nav>
 
-    <!-- 底部功能区 -->
-    <div class="sidebar-divider"></div>
+    <!-- 外壳底缝（#1811）：与内容列页脚的上边框是**同一条线**，故满幅（不内缩）、走
+         --color-border-seam（与顶栏下沿、侧栏右缘同源）。
+         原先这里用 --color-border-light + 内缩：浅色下 #F1F5F9 落在 #F8FAFC 底上几乎同值，
+         线等于没画，于是外壳上半部有十字细线、下半部的底边却断掉。 -->
+    <div class="h-px shrink-0 bg-[var(--color-border-seam)]"></div>
     <div class="sidebar-footer">
       <div class="footer-row">
         <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
@@ -202,14 +206,6 @@ function isRouteActive(item: NavItem): boolean {
 
 .app-sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
-}
-
-/* 分隔线 */
-.sidebar-divider {
-  height: 1px;
-  background: var(--color-border-light);
-  margin: 0 var(--space-4);
-  flex-shrink: 0;
 }
 
 /* 导航菜单 */

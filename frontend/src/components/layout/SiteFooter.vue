@@ -2,8 +2,12 @@
   <!-- 站点页脚（#1756 第一批）：内容列底部细条，展示运营主体与备案号。
        形态取参照图的窄条布局：左侧品牌标识、右侧主体信息用竖线分隔，不做多列大页脚。
        落点由外壳决定（SidebarLayout 挂在内容列末尾、AuthPageShell 挂在整个认证页末尾），
-       组件本身不带定位样式 —— 它只负责「说什么」，不负责「放哪里」。 -->
-  <footer class="site-footer mt-10 border-t border-line px-6 py-4">
+       组件本身不带定位样式 —— 它只负责「说什么」，不负责「放哪里」。
+
+       上边框的**线色**是个例外（#1811）：它和侧栏「收起侧栏」上方那条是**同一条外壳底缝**，
+       必须走 --color-border-seam。此前用 border-line（= --color-border-light，#F1F5F9），
+       与 --color-bg-page（#F8FAFC）几乎同值，浅色主题下这条线等于没画。 -->
+  <footer class="site-footer mt-10 border-t border-[var(--color-border-seam)] px-6 py-4">
     <div
       class="site-footer-inner mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-ink-muted"
     >
