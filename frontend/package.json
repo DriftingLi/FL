@@ -26,7 +26,7 @@
     "marked-highlight": "^2.2.4",
     "marked-katex-extension": "^5.1.13",
     "markstream-vue": "^2.0.20",
-    "mermaid": "^11.17.2",
+    "mermaid": "^12.2.0",
     "pdfjs-dist": "^4.4.168",
     "pinia": "^4.1.0",
     "stream-diffs": "^0.0.2",
