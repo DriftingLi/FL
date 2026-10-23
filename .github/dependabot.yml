@@ -7,7 +7,10 @@
 #
 # 刻意不覆盖的两个位置：
 # - `training-app/叉车维修培训学员端跨端应用`：移动端由 @zhengcookie 负责，其 PR 要过
-#   真机验收门（四门 + 证据），机器开的依赖 PR 到不了那道门，只会变成红单；
+#   真机验收门（四门 + 证据），机器开的依赖 PR 到不了那道门，只会变成红单。
+#   ⚠️ 这条**只管版本更新**：**安全更新（security updates）不看本文件** —— 它按依赖图全仓扫描，
+#   只要仓库开着 automated-security-fixes，这个目录照样会冒出 PR（2026-10-23 实测：#1808
+#   brace-expansion、#1809 jest 27→30）。遇到就走票转交移动端（先例 #1813），别以为是配置漏了；
 # - `unpackage/**`：构建产物（未入库），不是依赖清单。
 version: 2
 
@@ -61,6 +64,12 @@ updates:
       - dependency-name: katex
         update-types:
           - version-update:semver-minor
+          - version-update:semver-major
+      # mermaid 11 → 12 是大版本，且**没有对应告警**（依赖图上 mermaid 0 条）。
+      # 它是 vite 里的按需 chunk（LAZY_PEERS，约 3MB）、渲染入口在 utils/markstreamRuntime，
+      # 单测覆盖不到「图真的画出来了」—— 升级要真浏览器验三种图 × 两套主题。跟踪 #1822。
+      - dependency-name: mermaid
+        update-types:
           - version-update:semver-major
 
   # ===== GitHub Actions =====
