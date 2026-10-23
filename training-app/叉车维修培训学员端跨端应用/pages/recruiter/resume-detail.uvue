@@ -152,8 +152,7 @@
     import { companyDisabledNotice } from '../../utils/recruitDisplay'
     import { errMsg, toStr } from '../../api/helpers'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import type { RecruitResumeCard, RecruitCertification, RecruitContactPlain } from '../../api/recruit'
-    import type { ResumeExperience } from '../../types/index'
+    import type { RecruitResumeCard, RecruitCertification, RecruitContactPlain, ResumeExperience } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 

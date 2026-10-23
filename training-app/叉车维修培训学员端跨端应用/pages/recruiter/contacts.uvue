@@ -69,7 +69,7 @@
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
     import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import type { RecruitContactRequest } from '../../api/recruit'
+    import type { RecruitContactRequest } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 

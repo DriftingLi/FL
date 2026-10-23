@@ -56,7 +56,7 @@
     import { describeRecruitApplicationStatus } from '../../utils/recruitDisplay'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import type { RecruitApplication } from '../../api/recruit'
+    import type { RecruitApplication } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 

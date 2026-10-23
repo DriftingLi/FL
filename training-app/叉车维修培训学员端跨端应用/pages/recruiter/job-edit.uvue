@@ -69,9 +69,9 @@
     import {
         createRecruitJobApi,
         updateRecruitJobApi,
-        getRecruitJobDetailApi,
-        type RecruitJobInput
+        getRecruitJobDetailApi
     } from '../../api/recruit'
+    import type { RecruitJobInput } from '../../types/index'
     import { ensureRecruiterSession } from '../../utils/recruitGuard'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 

@@ -523,7 +523,7 @@ const MODULES = {
     ],
     extractDirs: ['pages/recruiter/components'],
     crossModuleConsumers: [],
-    /** 超预算：resume-detail.uvue 702 / api/recruit.uts 675 */
+    /** 超预算：resume-detail.uvue 685（实测 2026-10-23；api/recruit.uts 已回线内 594，#1735 拆出 DTO） */
     budget: 'pending',
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
