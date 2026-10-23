@@ -64,7 +64,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
   - ⚠️ 命中 `testutil.NewPostgresDB` 的 Postgres 契约用例，本机无 `DATABASE_URL` 会**干净 skip** ⇒ 看到 `ok` ≠ 测过，首跑在 CI（详见 checks.md「两条纪律」）。
 - **前端**（`frontend/`；全量 `npm test` = `vitest run`）
   - 单文件：`npx vitest run src/api/__tests__/page.spec.ts`
-  - 按名：`npx vitest run -t "用例名片段"`
+  - 按名：`npx vitest run -t "用例名片段"`（vitest 5 起匹配的是 `describe > test` 全名，跨分段时用 ` > ` 或 `.*`，别用空格，详见 checks.md）
 - **移动端**（`training-app/叉车维修培训学员端跨端应用/`；全量 `npm test` = `npm run test:unit && npm run test:behavior` —— ③ 门自 #1702 起**两腿**：`test:unit` 接线腿（`jest.config.unit.js`）+ `test:behavior` 行为腿（`jest.config.behavior.js`），两腿各自 `-i` 串行）
   - 单文件：`npx jest --config <该套件所在腿的 config> <相对路径>`；按名加 `-t "片段"`。**选错腿的 config 会让 jest 当那个套件不存在**（0 套件，长得像绿）—— 套件归哪一腿问 `node scripts/classify-guards.mjs`
   - 运行时面（① 真机 / ② 微信开发者工具 / ③ 契约门）另走别处、需真机环境，不在本命令射程——见下方「验收门」与移动端 `training-app/…/AGENTS.md`。

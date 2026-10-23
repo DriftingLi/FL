@@ -47,7 +47,7 @@
 `cd frontend` 后：
 
 - `npm run type-check`（vue-tsc）
-- `npm test`（vitest）
+- `npm test`（vitest 5；CLI 的两个口径变化见本段末「vitest 4 → 5」）
 - 新建 spec 一律用 `epLite()`（`src/test/element-lite.ts`）按需注册 EP 组件，**禁止全量挂载 `plugins: [ElementPlus]`** —— 全量挂载是 CourseCatalog flaky（CI 2 核下 import 争抢超时）的根因；组件清单可用 `node scripts/scan-el-components.mjs` 扫描
 - 已收敛控件守卫：`node scripts/check-el-controls.mjs --all`（CI 在 frontend-check 里跑全量；本地也可 `--diff origin/master` 只看新增行）。守卫判定逻辑的自检：`node --test scripts/check-el-controls.test.mjs`
 - api seam 守卫（ADR-0053 §7）：`node scripts/check-api-seam.mjs --all`（页面与业务组件不得直接引用 `@/api/request` / `@/api/client`；同样在 frontend-check 跑全量，本地可 `--diff origin/master`）。自检：`node --test scripts/check-api-seam.test.mjs`。逐条登记的例外写在脚本的 `ALLOWLIST`（每条带理由）
@@ -59,7 +59,12 @@
   - CI：frontend-check 的 `--all` 全量 + 增量门（五个守卫按 `--diff origin/<默认分支>` 跑），自检在 el-controls-selftest job
 - **AI 助手发送编排守卫（第十一波 / ADR-0056 §10 / #1104）**：`node scripts/check-ai-assistant-send.mjs --all`（本地可 `--diff origin/master`）—— `pages/ai-assistant/**` 不得再出现发送编排（`sendMessage` / `streamChat` 两个入口名字），一轮发送的编排与三种终态（done / error / aborted）只许在 `stores/aiAssistant.ts` 的 `send` / `finalizeTurn` 里；页面只提交「正文 + 差异参数」，失败/中断读 `lastTurnError` 渲染重试。自检：`node --test scripts/check-ai-assistant-send.test.mjs`（11 例，含 `--diff` fail-closed 与端到端判绿）
 - **分页容器归位锁（第十三波 ADR-0060 决策 6 / 票 6）**：`src/api/__tests__/page.spec.ts`（随 `npm test` 跑，无需单独命令）。口径是 **vitest 内的源码扫描而不是 shell 脚本**，形态照 `src/utils/__tests__/statusWordsTemplate.spec.ts`：`pages/` 与 `components/` 的每个 `.vue` 取 `<script>` 段用 `typescript` 真解析成 AST，判 `useAdminTable` 的 `fetch` adapter **有没有返回带 `list:` / `items:` 键的对象字面量**——分页容器属于 api 侧（`api/page.ts` 的 `Page<T>` + 唯一构造器 `toPage`），页面 adapter 的合法形态只有 `return someApi.listX(...)`。按**形状**判红不按文件名登记，新页面无从绕开；存量断言是「当前命中集合为空」，没有白名单。为什么必须走 AST：页面里 `const { list: items } = useAdminTable(…)` 的解构改名长得一模一样，正则会把这十几处合法写法全部误判。防恒绿：同文件断言「AST 数到的 useAdminTable 实例数 == 正则数到的 == 带可解析 fetch 的实例数」（扫描面静默失灵即红）+ 合成违规片段必须判红（`list:` 老形态、换成 `items:` 的绕行形态、concise body、三元分支四种）与合法形态不得判红（直接 return api 容器 / 解构改名 / adapter 内拼参数没 return / `toPage(rows, rows.length)`）。
-- 覆盖率：`npx vitest run --coverage`（istanbul provider，text + html 报告落 `coverage/`，不设阈值不挂门禁）；baseline（2026-09-10）：全站 lines 33.3%，admin 10.4% 为最大盲区
+- 覆盖率：`npx vitest run --coverage`（istanbul provider，text + html 报告落 `coverage/`，不设阈值不挂门禁）；baseline（2026-10-23）：**279 个文件**、全站 lines **52.87%**，`src/pages/admin/` **31.3%** 仍是最大盲区（2026-09-10 那次是 33.3% / 10.4%，涨的是测试量不是口径）
+- **vitest 4 → 5（#1788）三条会影响写测试的口径**：
+  - **`clearMocks` 默认变 true**：每个用例前 `vi.clearAllMocks()`（实现留着，只清调用记录）⇒ 「跨用例累计调用次数」的写法不再成立。本仓 149 个文件按新默认全绿，故未显式回填 `clearMocks: false`；新写用例若需要跨用例累计，自己显式声明。
+  - **`-t` 匹配的是 ` > ` 拼起来的全名**（此前用空格拼）：只跨单个分段边界的片段会失配——`-t "登录 守卫"` 变 `-t "登录 > 守卫"`，或干脆只写单段 `-t 守卫`。
+  - **`vi.mock` / `vi.unmock` / `vi.hoisted` 写在函数或 `describe` 里由「告警」升为「抛错」**（它们本来就会被提升到模块顶层）。本仓现状 0 处嵌套，守住即可。
+  - 覆盖率插件把第三方 istanbul 包换成了自研 fork（`istanbul-lib-*` / `istanbul-reports` / `@istanbuljs/schema` → `@vitest/istanbul-lib-*`，少 21 个包）；**`@babel/core` 仍在**，只是改由 fork 依赖并随之从 7.x 升到 8.0.7（插桩器，与业务产物无关）。另一处口径变化：`coverage.include/exclude` 改为按「相对项目根的路径」匹配（去掉 picomatch 的 `contains`）—— 同一份源码两版实测报出**同样的 279 个文件**，口径未漂。
 
 ## 部署配置
 
