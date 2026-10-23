@@ -195,7 +195,9 @@ describe('worktree 初始化真源（运行期）', () => {
     //    jest.config.unit.js 会把本文件当「不存在」（0 命中，本条当场变红，2026-10-18 实测）。
     //    换成 all 才是「token 真的能选中本文件」这句自指要证的形状。
     const out = execFileSync(process.execPath,
-      [JEST_ENTRY, '--config', 'jest.config.all.js', '--listTests', '--testPathPattern', 'wtBootstrap'],
+      // jest 30 把 CLI 选项 `--testPathPattern` 改名为 `--testPathPatterns`（旧名直接报错退出，
+      // 本套件 W7 在 jest 30 上因此红过）；`--listTests` 的收窄语义不变。
+      [JEST_ENTRY, '--config', 'jest.config.all.js', '--listTests', '--testPathPatterns', 'wtBootstrap'],
       { cwd: ROOT, encoding: 'utf8', timeout: 180000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
     const suites = String(out).split(/\r?\n/).map((l) => l.trim()).filter((l) => l.endsWith('.test.js'));
     expect(suites.some((l) => norm(l).endsWith('utils/wtBootstrapBehavior.test.js'))).toBe(true);
