@@ -45,17 +45,30 @@ function emptyFilters() {
 
 /**
  * 把 `api/recruit.uts` 跑起来，并记录它发出的每一次请求。
- * @param {{ statusCode?: number, data?: object, reject?: Error }} reply 下一次 get/post 的应答
+ * @param {{ statusCode?: number, data?: object, reject?: Error,
+ *           download?: object, downloads?: object[], renew?: boolean }} reply
+ *   下一次 get/post 的应答；`downloads` 为**逐次**下载应答队列（#1736 续期重发），
+ *   `renew` 控制 `renewOrExpire` 替身返回（true ⇒ 翻转 token 槽，模拟刷新写回）。
  */
 function loadRecruit(reply = {}) {
   const calls = [];
+  // #1736：token 必须能在「续期」前后**变化**——renew 替身成功时翻转 token 槽，
+  // 断言重发带的是新 token（钉住实现里「每次发出都重新取 header」那条行为）。
+  const tokenState = { current: 'recruiter-access-token' };
+  const renewCalls = [];
   const uni = {
     downloadFileCalls: [],
     openDocumentCalls: [],
     toasts: [],
     downloadFile(opts) {
       uni.downloadFileCalls.push(opts);
-      const r = reply.download || { statusCode: 200, tempFilePath: '/tmp/masked.pdf' };
+      let r;
+      if (reply.downloads) {
+        const i = Math.min(uni.downloadFileCalls.length - 1, reply.downloads.length - 1);
+        r = reply.downloads[i];
+      } else {
+        r = reply.download || { statusCode: 200, tempFilePath: '/tmp/masked.pdf' };
+      }
       if (r.fail) opts.fail(r.fail);
       else opts.success(r);
     },
@@ -106,12 +119,19 @@ function loadRecruit(reply = {}) {
     },
     errMsg: (e, fallback) => (e instanceof Error && e.message ? e.message : fallback),
     STORAGE_KEY_TOKEN: 'auth_token',
-    getStorage: () => 'recruiter-access-token',
+    getStorage: () => tokenState.current,
+    // #1736：下载 401 的续期出口。替身记录**全参数**（forToken/allowRetry/silent），
+    // true ⇒ 翻转 token 槽（模拟刷新写回新 token）后 resolve true；默认 false = 刷新真失败。
+    renewOrExpire: (forToken, allowRetry, silent) => {
+      renewCalls.push({ forToken, allowRetry, silent });
+      if (reply.renew === true) tokenState.current = 'recruiter-refreshed-token';
+      return Promise.resolve(reply.renew === true);
+    },
     uni,
   };
 
   const mod = loadUts(RECRUIT, bindings);
-  return { mod, calls, uni };
+  return { mod, calls, uni, renewCalls };
 }
 
 describe('A. 简历库列表：page_size=20 + 8 维筛选的形状', () => {
@@ -345,11 +365,15 @@ describe('C. 打码 PDF：下载后交系统打开（不当 JSON 信封解析）
     expect(uni.openDocumentCalls.length).toBe(0);
   });
 
-  test('C3：401 ⇒ 明确提示重新登录，不当成「文件失败」', async () => {
-    const { mod, uni } = loadRecruit({ download: { statusCode: 401 } });
+  test('C3：401 ⇒ 先走续期出口（不再「见 401 就 hint」），刷新真失败 ⇒ 提示重新登录、不重发', async () => {
+    const { mod, uni, renewCalls } = loadRecruit({ download: { statusCode: 401 } });
     const message = await mod.downloadAndOpenMaskedResumePdfApi(7);
     expect(message).toBe('登录已过期，请重新登录');
     expect(uni.openDocumentCalls.length).toBe(0);
+    // 续期出口被真的调用，且参数形态 = (实发旧 token, allowRetry=true, silent=true)
+    // silent=true 是下载契约（resolve 字符串交页面 toast），续期侧不再弹一份
+    expect(renewCalls).toEqual([{ forToken: 'recruiter-access-token', allowRetry: true, silent: true }]);
+    expect(uni.downloadFileCalls.length).toBe(1); // 刷新失败 ⇒ 不重发
   });
 
   test('C4：系统没有能打开 PDF 的应用 ⇒ 明确提示，不静默', async () => {
@@ -363,6 +387,40 @@ describe('C. 打码 PDF：下载后交系统打开（不当 JSON 信封解析）
     expect(await mod.downloadAndOpenMaskedResumePdfApi(7)).toBe('文件下载超时，请稍后重试');
     const { mod: mod2 } = loadRecruit({ download: { fail: { errMsg: 'downloadFile:fail unknown' } } });
     expect(await mod2.downloadAndOpenMaskedResumePdfApi(7)).toBe('文件下载失败，请检查网络后重试');
+  });
+
+  test('C7（#1736 验收①）：401 → 续期成功 → 带**新** token 重发一次 → 200 ⇒ 成功（三段顺序可断言）', async () => {
+    const { mod, uni, renewCalls } = loadRecruit({
+      downloads: [{ statusCode: 401 }, { statusCode: 200, tempFilePath: '/tmp/masked.pdf' }],
+      renew: true,
+    });
+    const message = await mod.downloadAndOpenMaskedResumePdfApi(7);
+    expect(message).toBe('');
+    // 顺序：第一次发出（旧 token）→ renewOrExpire（键=实发旧 token）→ 第二次发出（新 token）
+    expect(uni.downloadFileCalls.length).toBe(2);
+    expect(uni.downloadFileCalls[0].header.Authorization).toBe('Bearer recruiter-access-token');
+    expect(renewCalls).toEqual([{ forToken: 'recruiter-access-token', allowRetry: true, silent: true }]);
+    expect(uni.downloadFileCalls[1].header.Authorization).toBe('Bearer recruiter-refreshed-token');
+    expect(uni.openDocumentCalls.length).toBe(1);
+  });
+
+  test('C8（#1736 验收①后半）：重发仍 401 ⇒ 回落 unauthorizedHint，**不发第三次**', async () => {
+    const { mod, uni, renewCalls } = loadRecruit({
+      downloads: [{ statusCode: 401 }, { statusCode: 401 }],
+      renew: true,
+    });
+    const message = await mod.downloadAndOpenMaskedResumePdfApi(7);
+    expect(message).toBe('登录已过期，请重新登录');
+    expect(uni.downloadFileCalls.length).toBe(2);
+    expect(renewCalls.length).toBe(1); // 重发的 401 不再进续期（isRetry 终态）
+    expect(uni.openDocumentCalls.length).toBe(0);
+  });
+
+  test('C9（#1736 对齐面）：非 401 的失败形态零变化——404 仍带状态码、不进续期', async () => {
+    const { mod, renewCalls } = loadRecruit({ download: { statusCode: 404 } });
+    const message = await mod.downloadAndOpenMaskedResumePdfApi(7);
+    expect(message).toContain('404');
+    expect(renewCalls.length).toBe(0);
   });
 
   test('C6：上传 PDF 与打码 PDF 走**同一个**出路（同一函数、只有路径不同）', () => {

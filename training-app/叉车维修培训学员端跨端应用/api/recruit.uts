@@ -37,7 +37,7 @@
  * 故每个端点都在这里显式构造 DTO，页面层只消费 DTO。
  * DTO 类型定义已迁至 `types/recruit.uts`（经 `types/index` 消费，#1735），本文件只留映射与出口。
  */
-import { post, getMapped, postMapped, putMapped, requestMapped, FORBIDDEN_MESSAGE_PREFIX } from './request'
+import { post, getMapped, postMapped, putMapped, requestMapped, FORBIDDEN_MESSAGE_PREFIX, renewOrExpire } from './request'
 import { decodePage } from './envelope'
 import type { Page } from './envelope'
 // ⚠️ `API_BASE_URL` 来自 `config/env`，**不是** `./request`（`request.uts` 并不 export 它）。
@@ -532,6 +532,68 @@ export function getRecruitResumeContactApi(userId : number) : Promise<RecruitCon
 // ── 下载后交系统打开（打码 PDF 与上传 PDF 共用的**唯一**出路）──────────────
 
 /**
+ * 发出一次下载；401 续期后**递归重发一次**（isRetry=true）。
+ * 模块级函数（同 `request.uts` 的 `doUpload` / `doSingleRequest` 的理由：续期后要递归重发，
+ * UTS→Kotlin 对「自引用的局部 lambda」支持不可靠）。
+ *
+ * @param isRetry 是否已是续期后的重发（true ⇒ 再 401 就是真失效，回落 hint）
+ */
+function doDownloadOnce(fullURL : string, isRetry : boolean, unauthorizedHint : string, resolve : (value : string) => void) : void {
+    // 每次发出都重新取 token 建 header：续期重发必须带**新** token（首包 401 之后 token 才会被替换）
+    const token = getStorage(STORAGE_KEY_TOKEN)
+    const header : UTSJSONObject = {
+        Authorization: 'Bearer ' + token,
+    } as UTSJSONObject
+    uni.downloadFile({
+        url: fullURL,
+        header: header,
+        success: (res) => {
+            const statusCode = res.statusCode
+            if (statusCode == 401) {
+                // 401 不「见就 hint」：先走统一续期规则（#1736，对齐 #1704 的 `doUpload`——
+                // 规则单点在 `renewOrExpire`，内部 `gateRefresh` 单飞），成功则带新 token 重发一次
+                if (isRetry) {
+                    resolve(unauthorizedHint)
+                    return
+                }
+                // silent=true：下载契约是 resolve 字符串、页面拿它 toast，续期侧不再弹一份（避免双 toast）
+                renewOrExpire(token, true, true).then((retried : boolean) => {
+                    if (retried) {
+                        doDownloadOnce(fullURL, true, unauthorizedHint, resolve)
+                    } else {
+                        // 刷新**真的**失败：renewOrExpire 内部已做终态（清态 + 跳登录），这里只把文案交回页面
+                        resolve(unauthorizedHint)
+                    }
+                })
+                return
+            }
+            if (statusCode != 200) {
+                resolve('文件下载失败（' + statusCode.toString() + '）')
+                return
+            }
+            // 下载成功即打开：系统没有能打开 PDF 的应用时给明确提示，不静默
+            // ⚠️ **不得**传 `showMenu`：该参数在本仓 UTS/基座版本下不存在，编译期报
+            //    `No parameter with name 'showMenu' found.`（2026-09-20 编译门抓获）。
+            //    仓内两处先例（`api/material.uts:120`、`pages/courses/chapter-view.uvue:281`）都没有它。
+            uni.openDocument({
+                filePath: res.tempFilePath,
+                fileType: 'pdf',
+                success: () : void => { resolve('') },
+                fail: () : void => { resolve('无法打开此文件') },
+            })
+        },
+        fail: (err) => {
+            const errMsgText = err.errMsg
+            if (errMsgText != null && errMsgText.indexOf('timeout') >= 0) {
+                resolve('文件下载超时，请稍后重试')
+            } else {
+                resolve('文件下载失败，请检查网络后重试')
+            }
+        },
+    })
+}
+
+/**
  * 下载并打开一个**带鉴权**的文件（打码 PDF / 已授权后的上传 PDF 共用）
  *
  * @param path 以 `/` 开头的 API 相对路径（下载要带 Authorization，必须自己拼 baseURL：
@@ -542,46 +604,14 @@ export function getRecruitResumeContactApi(userId : number) : Promise<RecruitCon
  * **为什么不解析响应体**：端点是 `application/pdf` 原始二进制（`inline`，非统一信封），
  * 拿它当 JSON 信封解析必失败。鉴权仍走 Bearer（`recruit.resume_pdf` 能力位），
  * 而不是 cookie —— 原生端不存在 cookie 通道。
+ *
+ * **401 走续期链**（#1736）：首 401 → `renewOrExpire` → 成功带新 token 重发一次；
+ * 重发仍 401 / 刷新真失败 ⇒ 回落 `unauthorizedHint`（页面 toast 形态不变），
+ * token 过期不再让用户静默失败。
  */
 export function downloadAndOpenAuthedFile(path : string, unauthorizedHint : string) : Promise<string> {
-    const token = getStorage(STORAGE_KEY_TOKEN)
-    const header : UTSJSONObject = {
-        Authorization: 'Bearer ' + token,
-    } as UTSJSONObject
     return new Promise<string>((resolve) => {
-        uni.downloadFile({
-            url: API_BASE_URL + path,
-            header: header,
-            success: (res) => {
-                const statusCode = res.statusCode
-                if (statusCode == 401) {
-                    resolve(unauthorizedHint)
-                    return
-                }
-                if (statusCode != 200) {
-                    resolve('文件下载失败（' + statusCode.toString() + '）')
-                    return
-                }
-                // 下载成功即打开：系统没有能打开 PDF 的应用时给明确提示，不静默
-                // ⚠️ **不得**传 `showMenu`：该参数在本仓 UTS/基座版本下不存在，编译期报
-                //    `No parameter with name 'showMenu' found.`（2026-09-20 编译门抓获）。
-                //    仓内两处先例（`api/material.uts:120`、`pages/courses/chapter-view.uvue:281`）都没有它。
-                uni.openDocument({
-                    filePath: res.tempFilePath,
-                    fileType: 'pdf',
-                    success: () : void => { resolve('') },
-                    fail: () : void => { resolve('无法打开此文件') },
-                })
-            },
-            fail: (err) => {
-                const errMsgText = err.errMsg
-                if (errMsgText != null && errMsgText.indexOf('timeout') >= 0) {
-                    resolve('文件下载超时，请稍后重试')
-                } else {
-                    resolve('文件下载失败，请检查网络后重试')
-                }
-            },
-        })
+        doDownloadOnce(API_BASE_URL + path, false, unauthorizedHint, resolve)
     }).catch((e) : string => {
         console.error('[downloadAndOpenAuthedFile] failed:', e)
         return errMsg(e, '文件下载失败')

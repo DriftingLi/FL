@@ -30,7 +30,7 @@ function parseArgs(argv) {
     ws: 'ws://127.0.0.1:9420',
     requireRoot: '',
     timeoutMs: 90000,
-    api: 'https://www.gccsmile.com/api',
+    api: 'https://api.gdyidao.cn/api',
     stepTimeoutMs: 15000,
     attempts: 3,
     retryDelayMs: 4000,
