@@ -794,15 +794,34 @@ function Publish-PrefilterComment {
         foreach ($noteLine in @($binding.NoteLines)) { $body = $body + "`n" + $noteLine }
         # 刻意用 prefilter: 前缀，而不是验收门证据那套标记，避免被校验器当成门证据
         $body = "<!-- prefilter:device-capture -->`n" + $body
-        # #1770：判据评论贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+        # #1770/#1841：判据评论先贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+        # commit 端点回 404 时号码评论升格为正式证据落点（显式降级，不判红）。
         $sent = Send-GateComment -ProjectDir $ProjectRoot -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
-        if ($sent.CommitOk) { Write-Log "评论已贴到 commit ${sha}：$($sent.CommitUrl)" }
-        else { Write-Log '评论未贴到 commit（判据面缺证据，门结论不受影响）' }
-        if ($PrNumber -gt 0) {
-            if ($sent.IssueOk) { Write-Log "展示副本已贴 #$PrNumber：$($sent.IssueUrl)" }
-            else { Write-Log "展示副本未贴 #$PrNumber（判据面不受影响）" }
+        # #1841：commit 评论端点 404 是降级（证据落点换成票评论），不是错误 —— 机检行 + 人读行 + Notes 都要打出来；
+        # 门结论（exit code）在任何投递失败下都不变（#1209）。
+        if ($sent.CommitUnavailable -and $sent.EvidenceUrl) {
+            Write-Log "GATE_COMMENT_DEGRADED tier=issue url=$($sent.EvidenceUrl)"
+            Write-Log "证据主键降级：commit 评论不可用（HTTP 404）→ 落点 $($sent.EvidenceUrl)"
+            foreach ($note in @($sent.Notes)) { Write-Log $note }
         }
-        foreach ($e in @($sent.Errors)) { Write-Log "  评论投递：$e" }
+        elseif ($sent.CommitKind -eq 'failed' -or @($sent.Errors).Count -gt 0) {
+            $gateCommentFailReason = (@($sent.Errors) | Where-Object { "$_".Trim() } | Select-Object -Last 1)
+            Write-Log "GATE_COMMENT_FAILED reason=$gateCommentFailReason"
+            Write-Log '评论未贴到 commit（判据面缺证据，门结论不受影响）'
+            if ($PrNumber -gt 0) {
+                if ($sent.IssueOk) { Write-Log "展示副本已贴 #$PrNumber：$($sent.IssueUrl)" }
+                else { Write-Log "展示副本未贴 #$PrNumber（判据面不受影响）" }
+            }
+            foreach ($e in @($sent.Errors)) { Write-Log "  评论投递：$e" }
+        }
+        else {
+            if ($sent.CommitOk) { Write-Log "评论已贴到 commit ${sha}：$($sent.CommitUrl)" }
+            if ($PrNumber -gt 0) {
+                if ($sent.IssueOk) { Write-Log "展示副本已贴 #$PrNumber：$($sent.IssueUrl)" }
+                else { Write-Log "展示副本未贴 #$PrNumber（判据面不受影响）" }
+            }
+            foreach ($e in @($sent.Errors)) { Write-Log "  评论投递：$e" }
+        }
     } catch {
         Write-Log "贴 PR 评论失败（不影响结论）：$($_.Exception.Message)"
     }

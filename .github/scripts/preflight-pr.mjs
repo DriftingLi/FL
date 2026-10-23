@@ -17,7 +17,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { validatePrEvidence } from './lib/gate-validator.mjs';
+import { validatePrEvidence, issueNumbersInBody } from './lib/gate-validator.mjs';
 
 const USAGE = [
   '用法: node .github/scripts/preflight-pr.mjs [选项]',
@@ -108,6 +108,12 @@ function prCommentBodies(repo, pr) {
   return arr.map((c) => (c && c.body) || '');
 }
 
+/** 票（issue）评论正文——#1841 起与 PR 评论同进候选（commit 评论端点恒 404 时的降级落点）。 */
+function issueCommentBodies(repo, n) {
+  const arr = ghJson(['api', `repos/${repo}/issues/${n}/comments?per_page=100`]) || [];
+  return arr.map((c) => (c && c.body) || '');
+}
+
 function prBody(pr) {
   const view = ghJson(['pr', 'view', String(pr), '--json', 'body']);
   return (view && view.body) || '';
@@ -171,13 +177,13 @@ export function fillCiLine(body, url) {
 }
 
 function render(ctx) {
-  const { args, commit, author, compare, gateComments, commitComments, shas, ciRun, result } = ctx;
+  const { args, commit, author, compare, gateComments, commitComments, issueComments, shas, ciRun, result } = ctx;
   const lines = [];
   lines.push('#1770 预检（与 CI 同一份判据：.github/scripts/lib/gate-validator.mjs）');
   lines.push(`  commit   ${commit.slice(0, 12)}`);
   lines.push(`  base     ${args.base}（compare ${compare.status}，${compare.files.length} 个文件${compare.truncated ? '，已截断' : ''}）`);
   lines.push(`  author   ${author ? "@" + author : "（未知）"}`);
-  lines.push(`  证据     正文 ${ctx.hasBody ? '有' : '无'} · PR 评论 ${gateComments.length} 条 · commit 评论 ${commitComments.length} 条（${shas.length} 个 commit）`);
+  lines.push(`  证据     正文 ${ctx.hasBody ? '有' : '无'} · PR 评论 ${gateComments.length} 条 · commit 评论 ${commitComments.length} 条（${shas.length} 个 commit） · 票评论 ${issueComments.length} 条（正文关联的票）`);
   if (ciRun) lines.push(`  ci-summary  ${ciRun.conclusion || '?'} ${ciRun.url || '（无链接）'}`);
   lines.push("");
   for (const key of ['①', '②', '③', '④', '④b']) {
@@ -236,6 +242,9 @@ async function main(argv) {
   const shas = [...new Set([...commitRangeShas(args.base, commit), commit])].slice(-30);
   const commitComments = shas.flatMap((sha) => commitCommentBodies(repo, sha));
   const gateComments = args.pr ? prCommentBodies(repo, args.pr) : [];
+  // #1841：票评论也进候选（本仓 commit 评论端点恒 404 ⇒ 门脚本降级把同一份证据贴到票上）。
+  // 「哪些票」由校验器里同一个函数定（正文显式关联，≤5 张）——本地预检与 CI 不许两套口径。
+  const issueComments = issueNumbersInBody(body).flatMap((n) => issueCommentBodies(repo, n));
   const author = currentLogin();
   const compareCache = new Map();
   const fetchCompare = (from, to) => {
@@ -253,12 +262,12 @@ async function main(argv) {
     compareCache.set(key, value);
     return value;
   };
-  const result = await validatePrEvidence({ files: compare.files, body, author, gateComments, commitComments, headSha: commit, fetchCompare });
+  const result = await validatePrEvidence({ files: compare.files, body, author, gateComments, commitComments, issueComments, headSha: commit, fetchCompare });
   const ciRun = pickCiSummaryRun(checkRuns(repo, commit), commit);
   if (args.json) {
     console.log(JSON.stringify({ ok: result.ok, errors: result.errors, notes: result.notes, gates: result.gates, commit, base: args.base, author, ciRun }, null, 2));
   } else {
-    console.log(render({ args, commit, author, compare, gateComments, commitComments, shas, ciRun, result, hasBody }));
+    console.log(render({ args, commit, author, compare, gateComments, commitComments, issueComments, shas, ciRun, result, hasBody }));
   }
   return result.ok ? 0 : 1;
 }

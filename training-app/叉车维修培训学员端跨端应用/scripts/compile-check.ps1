@@ -267,18 +267,32 @@ function Publish-GateComment {
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
-    # #1770：判据评论贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
-    # 这里不再假设 PR 存在（新流程：证据齐了再开 PR）；号码只是「归档目录键 / 展示副本落点 / 批次标识」。
+    # #1770/#1841：判据评论先贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
+    # commit 端点回 404 时号码评论升格为正式证据落点（显式降级，不判红）；号码仍是「归档目录键 / 批次标识」。
     try {
         $sent = Send-GateComment -ProjectDir $Project -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
-        if ($sent.CommitOk) {
-            Write-Host "✅ 已贴 commit $short 的 ④ 门评论：$($sent.CommitUrl)" -ForegroundColor Green
-        } else {
-            Write-Host "[warn] 贴 commit $short 的 ④ 门评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
+        # #1841：commit 评论端点 404 是降级（证据落点换成票评论），不是错误 —— 机检行 + 人读行 + Notes 都要打出来；
+        # 门结论（exit code）在任何投递失败下都不变（#1209）。
+        if ($sent.CommitUnavailable -and $sent.EvidenceUrl) {
+            Write-Host "GATE_COMMENT_DEGRADED tier=issue url=$($sent.EvidenceUrl)"
+            Write-Host "证据主键降级：commit 评论不可用（HTTP 404）→ 落点 $($sent.EvidenceUrl)"
+            foreach ($note in @($sent.Notes)) { Write-Host $note }
         }
-        if ($PrNumber -gt 0) {
-            if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
-            else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
+        elseif ($sent.CommitKind -eq 'failed' -or @($sent.Errors).Count -gt 0) {
+            $gateCommentFailReason = (@($sent.Errors) | Where-Object { "$_".Trim() } | Select-Object -Last 1)
+            Write-Host "GATE_COMMENT_FAILED reason=$gateCommentFailReason"
+            Write-Host "[warn] 贴 commit $short 的 ④ 门评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
+            if ($PrNumber -gt 0) {
+                if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
+                else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
+            }
+        }
+        elseif ($sent.CommitOk) {
+            Write-Host "✅ 已贴 commit $short 的 ④ 门评论：$($sent.CommitUrl)" -ForegroundColor Green
+            if ($PrNumber -gt 0) {
+                if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
+                else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
+            }
         }
     } catch {
         Write-Host "[warn] 贴 ④ 门评论失败（门结论不受影响）：$_" -ForegroundColor Yellow

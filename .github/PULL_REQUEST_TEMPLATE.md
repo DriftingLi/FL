@@ -1,7 +1,7 @@
 <!--
 合并方式固定 Squash and merge；目标分支固定 master（本模板此前写在移动端目录下且写着 main，GitHub 读不到、分支名也是错的）。
 master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence 在本仓是**可见检查**（本仓有可用 admin 通道，但裁定不装必检——逐 PR 审批成本高于约束收益）。
-**证据主键是 commit 评论（#1770）**：证据出在 commit 上（门脚本 `-PostToIssue <票号>` 贴 commit 判据评论 + 票/PR 展示副本）→ `preflight-pr.ps1` 预检绿 → 再由 `submit-pr.ps1` 建 PR。**先开 PR 再补证据的老顺序已废弃**。
+**证据主键是 sha 绑定的门评论（#1770；#1841 起含降级常态）**：证据出在门脚本的 sha 绑定评论上——正常贴 commit；本仓 `POST /repos/<owner>/<repo>/commits/<sha>/comments` 长期回 HTTP 404（[#1838](https://github.com/DriftingLi/FL/issues/1838) 复盘）时**降级把同一份评论贴到正文关联的票**（`Closes #N` / `Refs #N` / issue 直链，≤5 张；marker 与 `commit: <sha>` 不变，脚本打印降级结论与落点 URL）→ `preflight-pr.ps1` 预检绿 → 再由 `submit-pr.ps1` 建 PR。**先开 PR 再补证据的老顺序已废弃**。
 真正的阻塞是行为约束：**证据段由人签收，签收后 agent 可直接合并** —— 人工门已收缩为 **①b**（只在命中「能力面」时必过），其「执行人」栏由人给出原文（agent 代录）；**①a**（agent 出证的逐页截图，按一次分支收口跑）的执行人栏允许写「agent 执行」（2026-09-16 修订，见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0016-真机门的人工性收缩与按批取证.md`）。证据填齐即可合并，不必停在「待人工签收」；例外通道（「已接受未验证风险」）仍由人执行合并。口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**必须写全路径**：该 ADR 属**移动端编号体系**，根仓库另有一个同名的 `docs/adr/ADR-0008-字典描述符驱动的管理面.md`，只写 `docs/adr/0008-…` 在根目录解析不到）。
 -->
 
@@ -33,7 +33,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 字段格式固定：执行人（④ / ② / ①a 填执行会话所用账号并注明「agent 执行」；含 ①b 时必须是**人**给出的原文，agent 只可代录） · 日期（YYYY-MM-DD） · 复测对象 · 结论（含产物）
 「待人工」「⏳」或只有勾选 = 缺证据，pr-evidence 会直接红；结论必须引用可核验产物：
 截图及其链接、CI run 链接、.ci-verify/kotlin-all.log（④c）/ .ci-verify/build.log（④a）（只写「已验证」不算）。
-**可核验产物认这三种（#1770）**：GitHub 附件 / Markdown 图片 · 仓库内 `docs/verification/<模块>/<数字>/<页名>.<ext>`（数字 = **票号**；旧 PR 号目录仍被接受） · sha 绑定的门评论链接 `#issuecomment-<id>`（**commit 评论**是判据评论、**票/PR 评论**是展示副本，两种 id 同源）。裸本地产物路径与任意 http(s) 链接一律不认。
+**可核验产物认这三种（#1770）**：GitHub 附件 / Markdown 图片 · 仓库内 `docs/verification/<模块>/<数字>/<页名>.<ext>`（数字 = **票号**；旧 PR 号目录仍被接受） · sha 绑定的门评论链接 `#issuecomment-<id>`（commit 评论、PR 评论与 **PR 正文关联的票评论**——#1841 起 commit 评论 HTTP 404 时的正式落点——都在候选集，id 同源、判据同构）。裸本地产物路径与任意 http(s) 链接一律不认。
 ④ 的证据可由脚本贴的「sha 绑定评论」承载：本仓 `npm run build:kotlin-all` 不转发参数，
 要贴评论请直接跑 `pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -PostToIssue <票号>`
 （dev 面同理 `scripts/compile-check.ps1 -PostToIssue <票号>`，仅门通过时贴；`-PostToPr` 是旧别名，一个版本后退役）；正文该行写「见评论 <链接>」即可。
@@ -45,7 +45,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 `app.json.pages` 每页有 `.js`；**产物坏了判 `exit 1`（门未过）**，与「环境不可用 `exit 2`」分开 ——
 坏产物会让开发者工具白屏、`pageStack` 永不应答，别再把它当「环境 / 锁 / 端口」问题去查。
 **但「执行人」栏仍须由人签收**：agent 只产出证据（`MP_WEIXIN_RESULT` + 截图），不得代填执行人、不得写「已通过」。
-校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head 绑定」的评论，不校真伪（候选集 = **PR 评论 + commit 评论**；**票评论不进判据**）：
+校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head 绑定」的评论，不校真伪（候选集 = **PR 评论 + commit 评论 + PR 正文关联的票评论**；票的取法见 `issueNumbersInBody`——`Closes` / `Refs` / issue 直链、去重 ≤5 张，**未关联的票不进判据**；三来源同构，**不放宽**）：
 绑定 = `commit` **等于** head sha，**或**它是 head 的**祖先**且二者之间没有运行时面（`*.uvue` / `*.uts` / 三份 json）改动
 （2026-09-12 放宽，免去 master 前进一次就重跑重贴的 churn）；其间运行时面动过、或不是祖先，仍须重跑并重贴。
 带 `-PostToIssue` 时 ② 还会把截图**压缩入库**到当前分支的 `docs/verification/<模块>/<票号>/<页名>-after.<ext>`

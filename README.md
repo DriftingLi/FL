@@ -508,12 +508,12 @@ grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
 
 ### CI/CD（GitHub Actions）
 
-触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开启的 PR）testing 冒烟部署**；**PR 事件默认不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）——**唯一例外是 `pr-evidence.yml`**，它只读 PR 正文 / PR 评论 / **commit 评论**（#1770 起的证据主键）/ 改动清单，不 checkout、不构建、不部署；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。
+触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开启的 PR）testing 冒烟部署**；**PR 事件默认不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）——**唯一例外是 `pr-evidence.yml`**，它只读 PR 正文 / PR 评论 / **commit 评论**（#1770 起的证据主键）/ **PR 正文关联的票评论**（#1841 起：本仓 commit 评论 POST 长期 HTTP 404 时的降级落点，正文 `Closes` / `Refs #N` / issue 直链关联、去重 ≤5 张）/ 改动清单，不 checkout、不构建、不部署；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。
 
 - `ci.yml`：`changes`（变更检测，决定哪些 job 该跑）→ `backend-lint`（gofmt / go vet / golangci-lint / swagger 新鲜度 / 两条后端守卫 `--all`）→ `backend-test`（`-race` + cover，含 Postgres service）→ `frontend-check`（type-check + build + vitest + 五条前端守卫 `--all` 与增量门）→ `security-scan` → `migration-check`（真跑 up→列对账→down 到底）→ `mobile-test`（仅命中移动端面）→ `el-controls-selftest` / `pr-evidence-selftest`（守卫与门自身的判据自检）→ `ci-summary`（汇总并派发 testing 部署）
 - `cd.yml`：`gate`（解析目标环境 + 生产门禁）→ 构建并推送镜像（ghcr.io：backend / frontend / libreoffice，内容未变则跳过）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚；testing 环境探活通过后停容器 → `notify`
 - `testing-smoke.yml`：PR 开启时，若该 commit 尚无冒烟记录则补发一次 testing 部署
-- `pr-evidence.yml`：验收证据段结构校验（只对命中运行时面的 PR 判红；判据源码在 `.github/scripts/lib/gate-validator.mjs`，与 `mobile-gates.yml` 同源；证据候选 = PR 正文 / PR 评论 / commit 评论；产物路径认 `docs/verification/<模块>/<票号>/`、GitHub 附件、sha 绑定门评论）
+- `pr-evidence.yml`：验收证据段结构校验（只对命中运行时面的 PR 判红；判据源码在 `.github/scripts/lib/gate-validator.mjs`，与 `mobile-gates.yml` 同源；证据候选 = PR 正文 / PR 评论 / commit 评论 / **PR 正文关联的票评论**（#1841 起，commit 评论 HTTP 404 的降级落点，同 marker / sha 绑定 / 祖先 / 其间运行时面 / fail-closed 判据、不放宽）；产物路径认 `docs/verification/<模块>/<票号>/`、GitHub 附件、sha 绑定门评论）
 
 合并门禁：ruleset「protect master」要求必检 `ci-summary` 通过且分支与 master 同步 —— squash 会在 master 生成从未跑过 CI 的新 SHA，生产 `gate` 靠回查来源 PR 的结论对齐。
 

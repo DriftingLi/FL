@@ -11,14 +11,17 @@
 // 本文件里一律注桩（cmp() / compareStub()），**不发任何真实网络请求**。
 //
 // 2026-10-22（#1770）：证据主键改为 commit sha——新增 commitComments 入参的单测（commit 评论能承载门证据，
-// 又没有绕过 marker/sha 绑定判据）；票（issue）评论仍不进判据。
+// 又没有绕过 marker/sha 绑定判据）。
+// 2026-10-23（#1841）：commit 评论端点对本仓恒 404（#1838）⇒ 门脚本降级把同一份评论贴到票上，
+// 票评论因此成为**第三个候选来源**。它不放宽任何判据（同 marker / 同 sha 绑定 / 同祖先判定），
+// 差别只在「候选从哪儿来」——由 issueNumbersInBody 决定读哪些票（PR 正文显式关联，≤5 张）。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { validatePrEvidence as validate } from './lib/gate-validator.mjs';
+import { validatePrEvidence as validate, issueNumbersInBody } from './lib/gate-validator.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const workflowPath = path.resolve(SCRIPT_DIR, '..', 'workflows', 'pr-evidence.yml');
@@ -1112,11 +1115,83 @@ test('#1770 S1 归档目录键 = 票号：docs/verification/<模块>/<票号>/ �
   assert.match(bad.errors.join(), /可核验/);
 });
 
-test('#1770 S2 判据面只认 PR 评论 + commit 评论：票（issue）评论不进判据（签名里没有第三来源）', () => {
+// ============================================================
+// #1841：commit 评论端点对本仓恒 404（#1838）⇒ 门脚本把**同一份**评论改贴到票上，
+// 票评论因此进候选。判据一个字不放宽：同 marker、同 `commit: <sha>`、同祖先判定、同 fail-closed；
+// 差别只有「候选从哪儿来」，且读哪些票由 issueNumbersInBody 定（PR 正文显式关联，≤5 张）。
+// ============================================================
+
+test('#1841 票评论承载门证据：marker + `commit: <head>` ⇒ ④ 照常绑上并判绿', async () => {
+  const r = await run({ body: dropLines(['- ④ ']), issueComments: [gate4Comment(SHA)], headSha: SHA });
+  assert.equal(r.ok, true, r.errors.join('；'));
+});
+
+test('#1841 票评论与 commit 评论**同构**：同一份正文换个落点，结论与 ④ 门状态逐字相同', async () => {
+  const body = dropLines(['- ④ ']);
+  const asCommit = await run({ body, commitComments: [gate4Comment(SHA)], headSha: SHA });
+  const asIssue = await run({ body, issueComments: [gate4Comment(SHA)], headSha: SHA });
+  assert.equal(asCommit.ok, true, asCommit.errors.join('；'));
+  assert.deepEqual(
+    { ok: asIssue.ok, gate4: asIssue.gates['④'] },
+    { ok: asCommit.ok, gate4: asCommit.gates['④'] },
+    '同构：同一份正文落在 commit 评论与票评论上，判定必须一致（否则「降级」就变成了「换判据」）',
+  );
+  // 祖先口径也照走：票评论上的绑定同样要问 compare，不能因为「票上的」就跳过祖先判定
+  const { fn, counts } = trueAncestor(DOC_FILES);
+  const anc = await run({ body, issueComments: [gate4Comment(ANC)], headSha: HEAD, fetchCompare: fn });
+  assert.equal(counts.calls, 1, '票评论的祖先绑定也必须真问一次 compare');
+  assert.equal(anc.ok, true, anc.errors.join('；'));
+});
+
+test('#1841 票评论不绕过任何判据：缺 marker / 缺 commit 行 / 绑的不是祖先 / 其后运行时面变了 ⇒ 逐条判红', async () => {
+  const body = dropLines(['- ④ ']);
+  const noMarker = ['- commit: ' + SHA, '- 结论（含产物）：KOTLIN_ALL_RESULT errors=0', ''].join('\n');
+  const r1 = await run({ body, issueComments: [noMarker], headSha: SHA });
+  assert.equal(r1.ok, false, '没有 gate-evidence 标记的票评论被当成了证据');
+
+  const noSha = ['<!-- gate-evidence:④ -->', '- 结论（含产物）：KOTLIN_ALL_RESULT errors=0', ''].join('\n');
+  const r2 = await run({ body, issueComments: [noSha], headSha: SHA });
+  assert.equal(r2.ok, false, '没有 commit 行的票评论被当成了证据');
+
+  const diverged = compareStub({ status: 'diverged', mergeBaseSha: 'c'.repeat(40), files: [], filesTruncated: false });
+  const r3 = await run({ body, issueComments: [gate4Comment(ANC)], headSha: HEAD, fetchCompare: diverged.fn });
+  assert.equal(r3.ok, false, '绑在非祖先 sha 上的票评论被放行了');
+  assert.match(r3.errors.join(), /不是当前 head 的祖先/);
+
+  const moved = trueAncestor(UVUE_FILES);
+  const r4 = await run({ body, issueComments: [gate4Comment(ANC)], headSha: HEAD, fetchCompare: moved.fn });
+  assert.equal(r4.ok, false, '绑定之后运行时面已变的票评论被放行了（降级不许顺带放宽「免重跑」）');
+});
+
+test('#1841 issueNumbersInBody：认 Closes/Refs/Resolves 与 issue 直链，剥 HTML 注释、去重、≤5 张', () => {
+  assert.deepEqual(issueNumbersInBody('Closes #1841'), [1841]);
+  assert.deepEqual(issueNumbersInBody('refs: #12 与 Refs #13'), [12, 13]);
+  assert.deepEqual(issueNumbersInBody('见 https://github.com/DriftingLi/FL/issues/99'), [99]);
+  assert.deepEqual(issueNumbersInBody('closes #7\nhttps://github.com/o/r/issues/7'), [7], '同一张票只算一次');
+  assert.deepEqual(
+    issueNumbersInBody('<!-- Closes #883 -->\n真关联 closes #1841'),
+    [1841],
+    '模板注释里的历史票号不得进候选（模板注释塞满了 #1770/#883 …）',
+  );
+  const many = Array.from({ length: 9 }, (_, i) => `Closes #${100 + i}`).join('\n');
+  assert.equal(issueNumbersInBody(many).length, 5, '候选上限 5 张：超出即截断，不是全收');
+  assert.deepEqual(issueNumbersInBody(''), []);
+  assert.deepEqual(issueNumbersInBody(null), []);
+});
+
+test('#1841 判据面第三来源是票评论，且三个消费者都真的把它喂进校验器（少一路就会出现假分歧）', () => {
   const src = readFileSync(validatorPath, 'utf8');
   const start = src.indexOf('export async function validatePrEvidence(');
   assert.ok(start >= 0, '判据模块里找不到导出的校验器');
   const sig = src.slice(start, src.indexOf(') {', start));
-  assert.match(sig, /commitComments/);
-  assert.doesNotMatch(sig, /issueComments|ticketComments/);
+  assert.match(sig, /issueComments/, '票评论（降级落点）必须是候选来源之一');
+  assert.match(src, /export function issueNumbersInBody\(/, '「哪些票算候选」必须由判据模块决定，不许写进 workflow');
+
+  for (const wf of ['pr-evidence.yml', 'mobile-gates.yml']) {
+    const w = readFileSync(path.resolve(SCRIPT_DIR, '..', 'workflows', wf), 'utf8');
+    assert.match(w, /issueComments/, `${wf} 没有把票评论传给校验器 ⇒ 降级后的证据在真门上等于没贴`);
+    assert.match(w, /issueNumbersInBody/, `${wf} 没有用同一个函数决定读哪些票 ⇒ 又与判据面分叉了`);
+  }
+  const pre = readFileSync(path.resolve(SCRIPT_DIR, 'preflight-pr.mjs'), 'utf8');
+  assert.match(pre, /issueComments/, '本地预检没同步票评论 ⇒ 会出现「本地说没绑、CI 说绿」');
 });
