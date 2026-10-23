@@ -71,12 +71,6 @@ export type MockExamHistoryItem = {
     completed_at : string
 }
 
-/** 模拟考试历史结果 */
-export type MockExamHistoryResult = {
-    items : MockExamHistoryItem[]
-    total : number
-}
-
 /** 错题项 */
 export type WrongQuestionItem = {
     question_id : number

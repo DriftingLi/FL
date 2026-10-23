@@ -15,8 +15,9 @@
  */
 import { getMapped, post, postMapped } from './request'
 import { toNumber, toStr, toBool } from './helpers'
-import { decodePage } from './envelope'
-import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, MockExamResult, MockExamResultDetail, MockExamHistoryItem, MockExamHistoryResult, ExamQuestion, QuestionOption } from '../types/index'
+import { getPaged } from './envelope'
+import type { Page } from './envelope'
+import type { MockExamStartParams, MockExamInfo, MockExamSaveParams, MockExamResult, MockExamResultDetail, MockExamHistoryItem, ExamQuestion, QuestionOption } from '../types/index'
 
 
 
@@ -160,22 +161,6 @@ function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
 }
 
 /**
- * 从 UTSJSONObject 构造 MockExamHistoryResult
- * @note 数组键的三级回退（原 exams → items → records 的嵌套 if-else）收敛为**一次** keys 声明
- *       （ADR-0037 PR-D：键序即回退序）。`total` 走信封（缺 ⇒ 回落 items.length，旧读法缺省 0 ——
- *       两个值在唯一消费方 pages/profile/mock-exam-records 的判底式 `records.length >= total` 下
- *       同解）；`page_size` 改填**请求** pageSize（旧读法拿响应回显的每页大小，属载体）。
- */
-function buildMockExamHistoryResult(data : UTSJSONObject, url : string, page : number, pageSize : number) : MockExamHistoryResult {
-	const paged = decodePage<MockExamHistoryItem>(data, url, page, pageSize, (obj : UTSJSONObject) : MockExamHistoryItem => buildMockExamHistoryItem(obj), ['exams', 'items', 'records'])
-	const result : MockExamHistoryResult = {
-		items: paged.items,
-		total: paged.total,
-	} as MockExamHistoryResult
-	return result
-}
-
-/**
  * 开始模拟考试
  * @param count 题目数量，默认 0（后端使用默认值 40）
  * @param duration 考试时长（分钟），默认 90
@@ -237,14 +222,15 @@ export function getMockExamResultApi(mockExamId : number) : Promise<MockExamResu
  * 获取模拟考试历史
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 10
+ * @note 数组键的三级回退（原 exams → items → records 的嵌套 if-else）收敛为**一次** keys 声明
+ *       （ADR-0037 PR-D：键序即回退序）。`total` 走信封（缺 ⇒ 回落 items.length）。
+ *       #1737：三参壳 buildMockExamHistoryResult 消亡，装载直接交给 `getPaged`（出口 Page<MockExamHistoryItem>）；
+ *       路由字面量因此只出现一处 —— 幻影路由锁（examContract「每条路由都在 backend mock_exam.go 已注册」）
+ *       按带前导斜杠的字面量计数，不会多出消费点。
+ *       不吞错：失败原样上抛，交消费方的可见错误态（见文件头 @note）。
  */
-export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<MockExamHistoryResult> {
-	const params : UTSJSONObject = {
-		page: page.toString(),
-		page_size: pageSize.toString(),
-	} as UTSJSONObject
-	// 不吞错：失败原样上抛，交消费方的可见错误态（见文件头 @note）
-	// 信封 warn 标签写成不带前导斜杠的形态：幻影路由锁（examContract「每条路由都在 backend mock_exam.go 已注册」）
-	// 按带前导斜杠的路由字面量计数，同一路由的第二处字面量会被当成多出来的消费点。
-	return getMapped<MockExamHistoryResult>('/mock-exam/history', params, (data : UTSJSONObject) : MockExamHistoryResult => buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize))
+export function getMockExamHistoryApi(page : number = 1, pageSize : number = 10) : Promise<Page<MockExamHistoryItem>> {
+	return getPaged<MockExamHistoryItem>('/mock-exam/history', page, pageSize, (obj : UTSJSONObject) : MockExamHistoryItem => {
+		return buildMockExamHistoryItem(obj)
+	}, null, ['exams', 'items', 'records'])
 }

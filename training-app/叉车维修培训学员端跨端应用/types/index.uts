@@ -8,7 +8,7 @@ export { type UserInfo, type LoginParams, type CodeLoginParams, type LoginResult
 export { type ForumTopic, type ForumReply, type ForumTopicDetail, type LikeTopicResult, type MyRepliesResult } from './forum'
 export { type CourseItem, type SpecialtyItem, type LevelItem, type CourseListResult, type ChapterItem, type ChapterFile, type ChapterDetail, type CourseDetail, type CoursePrereq, type MaterialItem, type MaterialDownloadInfo, type TagItem } from './course'
 export { type QuestionOption, type Question, type SubmitAnswerParams, type SubmitAnswerResult, type PracticeStats, type PracticeHistoryItem, type PracticeHistoryResult, type PracticeProgress, type PracticeOverview, type AnswerState, type QuestionComment, type CommentListResult, type QuestionNote, type KnowledgeTag } from './practice'
-export { type ExamQuestion, type MockExamStartParams, type MockExamInfo, type MockExamSaveParams, type MockExamResultDetail, type MockExamResult, type MockExamHistoryItem, type MockExamHistoryResult, type WrongQuestionItem, type WrongQuestionStats } from './exam'
+export { type ExamQuestion, type MockExamStartParams, type MockExamInfo, type MockExamSaveParams, type MockExamResultDetail, type MockExamResult, type MockExamHistoryItem, type WrongQuestionItem, type WrongQuestionStats } from './exam'
 export { type AiChatMessage, type AiModel, type AiUserModel, type AiSession, type AiSessionMessage, type AiDiagnosisBrandOption, type AiDiagnosisFaultCodeItem, type AiDiagnosisFaultCodePage, type AiDiagnosisSource, type AiChatSettings, type AIModelOption, type AIFunctionItem } from './ai'
 export { type NotificationItem, type NotificationListResult } from './notification'
 export { type CredentialItem, type CredentialGroup, type CredentialSwitchResult } from './credential'
