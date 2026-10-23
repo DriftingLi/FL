@@ -129,7 +129,7 @@ export function aiManualUrl(subpath : string) : string {
 	}
 	// ⚠️ `/ai-assistant` 段**必须在这里拼**：web 的 `manualUrl` 写 `${API_BASE_URL}/diagnosis/manual/…`
 	// 是对的，因为 **web 的** `API_BASE_URL` 本身已含 `/ai-assistant`（`frontend/src/api/aiAssistant.ts`）；
-	// 而移动端的 `API_BASE_URL` 是 `https://www.gccsmile.com/api`（`config/env.uts`）——照抄 web 的
+	// 而移动端的 `API_BASE_URL` 是 `https://api.gdyidao.cn/api`（`config/env.uts`）——照抄 web 的
 	// 表达式会**少拼一段**，结果是每张手册溯源图 404（2026-09-16 实测：丢段 → 404；
 	// 带上 → 200 / image/png / 109,488 bytes）。
 	// 守护见 `utils/aiDiagnosisSourcesContract.test.js` ⑦：断言**产物**（含本段）且带变异自检。

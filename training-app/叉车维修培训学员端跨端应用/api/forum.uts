@@ -21,7 +21,7 @@ import { FORMAT_TEXT } from '../utils/forumBody'
  * 获取帖子列表
  * @param page 页码，默认 1
  * @param pageSize 每页条数，默认 10
- * @param scope 范围，默认 general（对应 https://training.gccsmile.com/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10）
+ * @param scope 范围，默认 general（对应 https://api.gdyidao.cn/api/forum/topics?scope=general&sort=latest&order=desc&page=1&page_size=10）
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
  * @param featured 精选过滤（#742 契约，勿改名）：'true' | 'false'，空串表示不过滤
