@@ -442,6 +442,25 @@ function scanPlan(plan) {
   }
   must(P.authRelative === 'scripts\\mp-weixin-auth.mjs', 'C25', '注入脚本相对路径不是 scripts\\mp-weixin-auth.mjs');
 
+  // ---- C26（#1816）：直达探针的**组级 navigation 形态**——部分达成不得塌缩成整组 skip ----
+  //   2026-10-23 实测：2 页里 index 达成、login 截图 automator 超时 ⇒ 旧实现整组只剩 skip(reason=…)，
+  //   已达成页的成功读数被一页 miss 吞掉。形态必须由计划声明（ok / partial / skip / n/a），
+  //   partial 必须带 ok=/skip= 两个计数（只说「部分」等于没说缺几页）。
+  if (dp) {
+    const ns = dp.navigationShapes;
+    must(Boolean(ns), 'C26', 'directPages 缺 navigationShapes 节（组级 navigation 形态没有唯一真源）');
+    if (ns) {
+      ['ok', 'partial', 'skip', 'envEarly'].forEach((k) => {
+        must(String(ns[k] || '').length > 0, 'C26', `directPages.navigationShapes 缺 ${k} 形态（组级形态值域必须可枚举）`);
+      });
+      must(String(ns.partial || '').includes('partial(ok='), 'C26', 'navigationShapes.partial 必须形如 partial(ok=<N>,skip=<M>)（计数要出现在结果行）');
+      must(String(ns.partial || '').includes('skip='), 'C26', 'navigationShapes.partial 缺 skip=<M> 计数（只说「部分达成」等于没说缺几页）');
+      must(String(ns.skip || '').includes('skip(reason='), 'C26', 'navigationShapes.skip 必须是 skip(reason=<slug>) 形态（与 skipReasons 同源）');
+      must(String(ns.envEarly || '') === 'n/a', 'C26', 'navigationShapes.envEarly 必须是 n/a（环境早退没走到导航，不得写成 ok/skip）');
+    }
+    must((dp.criteria || []).join('\n').includes('partial'), 'C26', 'directPages.criteria 未写 partial 形态（部分达成必须如实报告，不得塌缩成整组 skip）');
+  }
+
   return violations;
 }
 
@@ -556,6 +575,11 @@ function scanContract(sources) {
   must(/未证实/.test(s), 'C13', '脚本头未写明「未证实」（版本组合问题留给后续排查，不得宣称已定位根因）');
   must(/首跑/.test(s), 'C13', '脚本头未写明首跑校准要求');
   must(s.includes("$metricValues['navigationSkipReason']"), 'C13', '可选字段 navigationSkipReason 未做成「降级时才写」（不降级就不该出现）');
+
+  // C26（#1816）结果行与日志面：组级 partial 必须真的写出来，且不得写成 PASS
+  must(s.includes('"partial(ok=$navOkCount,skip=$navSkipCount)"'), 'C26', '结果行没有把组级部分达成写成 partial(ok=N,skip=M)（一页 miss 不许吞掉同组成功读数）');
+  must(s.includes('navigation=PARTIAL'), 'C26', '日志缺 `navigation=PARTIAL ok=… skip=…` 行（部分达成必须进日志，不能只在内存里）');
+  must(s.includes("Get-Prop $nav 'pages'"), 'C26', '未从 navigation.pages 读页级读数（未达成页的页级原因与已达成页的读数都必须可追溯）');
 
   // C14 贴评论调用不得断链（缺续行反引号会把参数变成另一条命令）。
   // **只对代码行判**（#914 收窄）：`<# … #>` 帮助文本与 `#` 注释里的 bullet 不是续行参数 ——
@@ -967,6 +991,14 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C25', (p) => { const x = p.steps.find((y) => y.id === 'auth-inject'); x.criteria = ['跑注入']; return p; }],
       ['C25', (p) => { p.paths.authRelative = 'scripts\\nope.mjs'; return p; }],
       ['C25', (p) => { p.directPages.skipReasons = p.directPages.skipReasons.filter((r) => r !== 'auth-session-unavailable'); return p; }],
+      // C26：组级 navigation 形态被改坏（缺节/缺形态/partial 无计数/skip 形态漂移/envEarly 漂移/判据未写 partial）
+      ['C26', (p) => { delete p.directPages.navigationShapes; return p; }],
+      ['C26', (p) => { delete p.directPages.navigationShapes.partial; return p; }],
+      ['C26', (p) => { p.directPages.navigationShapes.partial = 'partial'; return p; }],
+      ['C26', (p) => { p.directPages.navigationShapes.partial = 'partial(ok=<N>)'; return p; }],
+      ['C26', (p) => { p.directPages.navigationShapes.skip = 'skip'; return p; }],
+      ['C26', (p) => { p.directPages.navigationShapes.envEarly = 'environ'; return p; }],
+      ['C26', (p) => { p.directPages.criteria = p.directPages.criteria.filter((c) => !c.includes('partial')); return p; }],
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -1093,6 +1125,10 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, script: real.script.replace('$agg.shots += @($pj.shots)', '') }],
       ['C24', { ...real, script: real.script.replace('shots = @($agg.shots)', 'shots = @()') }],
       ['C24', { ...real, script: real.script.replace('@(@($ArchivedRel) | Where-Object { $_ })', '@($ArchivedRel)') }],
+      // C26：结果行/日志的 partial 形态被拆（部分达成退回「整组 skip 或说不清」）
+      ['C26', { ...real, script: real.script.replace('partial(ok=$navOkCount,skip=$navSkipCount)', 'partial') }],
+      ['C26', { ...real, script: real.script.replace('navigation=PARTIAL', 'navigation=SKIP') }],
+      ['C26', { ...real, script: real.script.replace("Get-Prop $nav 'pages'", "Get-Prop $nav 'pagez'") }],
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);
