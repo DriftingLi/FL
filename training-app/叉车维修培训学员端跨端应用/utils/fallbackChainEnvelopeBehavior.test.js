@@ -184,6 +184,9 @@ function loadRecruit(raw, calls = [], file = RECRUIT_UTS, opt = {}) {
     errMsg: h.errMsg,
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'recruiter-access-token',
+    // #1736：recruit.uts 新增的续期出口绑定（本文件的下载替身是 no-op，不会走到调用；
+    // 缺这条会命中 utsHarness 的 fail-closed「缺绑定」红）
+    renewOrExpire: () => Promise.resolve(false),
     uni: { showToast: () => {}, downloadFile: () => {}, openDocument: () => {} },
   });
   return { mod, calls };
