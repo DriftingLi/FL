@@ -100,7 +100,8 @@
     （`allRoutesVisited` / `screenshotsProduced` 在降级时值为字符串 `skip`，**不得**写成 `true`，见守护测试 C13；
     导航在可用机器上时这两条按「每步导航后当前页 == 目标页」判，**不拿导航前读到的 pageStack 去比所有路由**——
     那样恒假、会让健康机器上的门永远过不去）。
-    结果行的 `navigation=` 取值域：`ok`（逐页导航可用，或直达探针全部达成）/ `skip(reason)`（降级）/ `n/a`（环境早退，没走到导航）。
+    结果行的 `navigation=` 取值域：`ok`（逐页导航可用，或直达探针全部达成）/ `partial(ok=<N>,skip=<M>)`（直达探针部分达成：
+    N 页达成、M 页未达成——未达成页的读数不得连累已达成页，见 #1816）/ `skip(reason)`（降级）/ `n/a`（环境早退，没走到导航）。
     **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，**留给后续排查**，
     不得据此宣称「已定位根因」；**首跑校准**要求人工核对结果行的 `navigation=` 字段（ADR-0008 ② 段）。
 
@@ -109,8 +110,10 @@
     导航 API**，页身份判据 = 冷启动落地页 `pageStack[0]` 等于目标路由（真机侧同手法先例 #1678）。`-Pages auto`（缺省）
     = 入口页 + 本 PR 改动页（git diff 命中 `pages/**/*.uvue`）；`-Pages none` 关闭直达走旧导航组；`-Pages <csv>` 指定清单。
     每页取证 = 截图（按现行入仓判据落 `docs/verification/<模块>/<PR号>/<页名>.png`）+ 该页 console error/exception
-    读数（`errorsTotal` 语义不变：逐页累加，重试不重复计数）。有页未达成 ⇒ `navigation=skip(reason=…)` 显式记录
-    （reason ∈ direct-page-unsupported / page-not-in-build / app-json-invalid），**既不当通过也不当失败**；
+    读数（`errorsTotal` 语义不变：逐页累加，重试不重复计数）。未达成页**逐页**记入 `navigation.pages`（#1816），组级形态：
+    全部达成 ⇒ `ok`、部分达成 ⇒ `partial(ok=<N>,skip=<M>)`（已达成页读数照常计入，**不得**被未达成页整组塌缩）、
+    全部未达成 ⇒ `navigation=skip(reason=…)`（reason ∈ direct-page-unsupported / page-not-in-build / app-json-invalid），
+    **三种都既不当通过也不当失败**；
     直达冷启动/会话失败 ⇒ env-blocked（exit 2）。逐页读数行（`direct-page …` / `direct-total …`）进日志与
     sha 绑定评论，供 0039 窗口主门取证成本校准。换页只动 dist 构建产物，**源头 `pages.json` 一个字不改**（ADR-0038 决策 2）。
 
@@ -598,11 +601,20 @@ function New-GatePlan {
             attempts = 2
             retryDelaySeconds = $ProbeRetryDelaySeconds
             skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable')
+            # 组级 navigation 形态（#1816）：部分达成必须如实出 partial，不得塌缩成整组 skip ——
+            # 否则一页 miss 会吞掉同组其它页的成功读数（2026-10-23 实测：index 达成 + login 截图超时 ⇒ 组级只剩 skip）。
+            navigationShapes = [ordered]@{
+                ok = 'ok'
+                partial = 'partial(ok=<N>,skip=<M>)'
+                skip = 'skip(reason=<slug>)'
+                envEarly = 'n/a'
+            }
             criteria = @(
                 '直达 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针不得调用 reLaunch/navigateTo',
                 '页身份判据 = 冷启动落地页 pageStack[0] 等于目标路由（与 #1678 真机侧「以进入页面日志为准」同源）',
                 '换前 ConvertFrom-Json 校验、换后读回复验首项；用毕从备份还原 app.json 并复验（finally 路径）',
                 '机制不成立 ⇒ navigation=skip(reason=…) 显式记录：不冒充门失败、不冒充取证成立；console error 照常进 failures',
+                '部分达成（有页达成、有页未达成）⇒ navigation=partial(ok=<N>,skip=<M>)：已达成页读数照常计入门结论，未达成页逐页记入 navigation.pages，不得塌缩成整组 skip（#1816）',
                 '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准'
             )
         }
@@ -1824,6 +1836,8 @@ try {
         $firstJson = $null
         $missReason = ''
         $missPages = @()
+        # 页级读数（#1816）：每一页（达成 / 未达成）都记一条，组级 partial 与 navigation.pages 都从这里出
+        $pageReports = @()
         $directEnv = $false
         $probeJson = $null
         # 会话两相（#1690 run12）：auth-inject 步取用点唯一 —— 守护 C12/C18 按「首个 -Id 字面量取用点」定位。
@@ -1859,6 +1873,7 @@ try {
                 # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
                 Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
                 $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
+                $pageReports += [pscustomobject]@{ page = $pg; status = 'skip'; reason = "$sw"; shot = ''; elapsedSeconds = 0 }
                 if (-not $missReason) { $missReason = $sw }
                 $missPages += $pg
                 continue
@@ -1903,12 +1918,22 @@ try {
             $line = "direct-page $pg reached=$([bool]$reached) errors=$($pj.errorsTotal) exceptions=$($pj.exceptionsTotal) logs=$($pj.logsTotal) shot=$shotLeaf elapsed=$([int]([double]$emOne / 1000))s"
             Write-Log $line
             $directLines += $line
+            $pageReason = ''
             if (-not $reached) {
                 $nr = "$(Get-Prop $navOne 'reason')"
                 # 会话注入不可用时，miss 的真实原因是缺会话，不得冒充「直达机制不支持」（#1690）
                 $mrAuth = ($Auth -ne 'off' -and -not $authOk)
-                if (-not $missReason) { $missReason = $(if ($mrAuth) { 'auth-session-unavailable' } elseif ($nr) { $nr } else { 'direct-page-unsupported' }) }
+                $pageReason = $(if ($mrAuth) { 'auth-session-unavailable' } elseif ($nr) { $nr } else { 'direct-page-unsupported' })
+                if (-not $missReason) { $missReason = $pageReason }
                 $missPages += $pg
+            }
+            # 页级读数（#1816）：达成与未达成**都**记——只记 miss 会让组级形态塌缩成 skip，吞掉已达成页的成功读数
+            $pageReports += [pscustomobject]@{
+                page = $pg
+                status = $(if ($reached) { 'ok' } else { 'skip' })
+                reason = $pageReason
+                shot = $shotLeaf
+                elapsedSeconds = [int]([double]$emOne / 1000)
             }
         }
         # 用毕还原（ADR-0038 决策 2）：env 早退路径也走这里；finally 里的 Restore-DistAppJson 靠哨兵幂等不再重复
@@ -1927,12 +1952,18 @@ try {
             # 列出的页全部不在构建产物 ⇒ 零取证：**不得**当通过（failures ⇒ exit 1 门未过）
             $agg.failures += '断言未过：直达探针没有任何被接受的运行（列出的页都不在构建产物中）'
         }
+        $okPageList = @($pageReports | Where-Object { $_.status -eq 'ok' })
+        $skipPageList = @($pageReports | Where-Object { $_.status -ne 'ok' })
         if ($directEnv) {
-            $navAgg = [pscustomobject]@{ status = 'n/a'; reason = 'env-early-exit'; detail = 'env-early-exit'; at = 'direct-loop'; skippedAssertions = @(); skippedSteps = @() }
+            $navAgg = [pscustomobject]@{ status = 'n/a'; reason = 'env-early-exit'; detail = 'env-early-exit'; at = 'direct-loop'; skippedAssertions = @(); skippedSteps = @(); pages = @($pageReports) }
         } elseif ($missPages.Count -eq 0 -and $firstJson) {
-            $navAgg = [pscustomobject]@{ status = 'ok'; reason = ''; detail = 'cold-start-direct'; at = "direct-loop($($directList.Count)页)"; skippedAssertions = @(); skippedSteps = @() }
+            $navAgg = [pscustomobject]@{ status = 'ok'; reason = ''; detail = 'cold-start-direct'; at = "direct-loop($($directList.Count)页)"; skippedAssertions = @(); skippedSteps = @(); pages = @($pageReports) }
+        } elseif ($okPageList.Count -gt 0 -and $firstJson) {
+            # 部分达成（#1816）：已达成页读数照常计入门结论；未达成页逐页记入 pages / skippedSteps，
+            # **不得**塌缩成整组 skip（否则一页 miss 吞掉同组其它页的成功读数）
+            $navAgg = [pscustomobject]@{ status = 'partial'; reason = $missReason; detail = 'cold-start-direct-partial'; at = "direct-loop(ok=$($okPageList.Count),skip=$($skipPageList.Count))"; skippedAssertions = @('allRoutesVisited'); skippedSteps = @($missPages); pages = @($pageReports) }
         } else {
-            $navAgg = [pscustomobject]@{ status = 'skip'; reason = $missReason; detail = $missReason; at = 'direct-loop'; skippedAssertions = @('allRoutesVisited', 'screenshotsProduced'); skippedSteps = @($missPages) }
+            $navAgg = [pscustomobject]@{ status = 'skip'; reason = $missReason; detail = $missReason; at = 'direct-loop'; skippedAssertions = @('allRoutesVisited', 'screenshotsProduced'); skippedSteps = @($missPages); pages = @($pageReports) }
         }
         $probeJson = [pscustomobject]@{
             connected = (-not $directEnv)
@@ -2000,9 +2031,13 @@ try {
     $nav = Get-Prop $probeJson 'navigation'
     $navStatus = "$(Get-Prop $nav 'status')"
     $navSkip = ($navStatus -eq 'skip')
+    $navPartial = ($navStatus -eq 'partial')
     $navReason = "$(Get-Prop $nav 'detail')"
-    # ok = 逐页导航可用；skip(unsupported) = 导航 API 不可用（诚实降级）；n/a = 没走到导航（环境早退）
-    $navField = if ($navSkip) { "skip($(Get-Prop $nav 'reason'))" } elseif ($navStatus -eq 'ok') { 'ok' } else { 'n/a' }
+    $navPageReports = @(Get-Prop $nav 'pages')
+    $navOkCount = @($navPageReports | Where-Object { "$(Get-Prop $_ 'status')" -eq 'ok' }).Count
+    $navSkipCount = @($navPageReports | Where-Object { "$(Get-Prop $_ 'status')" -ne 'ok' }).Count
+    # ok = 逐页导航可用；partial = 直达部分达成（#1816，已达成页读数照常计入）；skip(unsupported) = 导航 API 不可用（诚实降级）；n/a = 没走到导航（环境早退）
+    $navField = if ($navSkip) { "skip($(Get-Prop $nav 'reason'))" } elseif ($navPartial) { "partial(ok=$navOkCount,skip=$navSkipCount)" } elseif ($navStatus -eq 'ok') { 'ok' } else { 'n/a' }
     # 结果行：**按门计划声明的字段清单**拼（顺序与字段名都在计划里，Format-GateMetricLine 只取值）
     $metricValues = [ordered]@{
         appid = "$productAppId"
@@ -2043,6 +2078,18 @@ try {
             Write-Host '    首跑请人工核对结果行的 navigation= 字段与 direct-total 时长行（0039 窗口主门成本校准）。' -ForegroundColor Yellow
         }
         Write-Host "    $skipLine" -ForegroundColor Yellow
+    }
+    if ($navPartial) {
+        # 部分达成（#1816）：结果行已写 partial(ok=N,skip=M)；这里把页级读数与未达成页原因写进日志，
+        # 让「一页 miss」不再表现为「整组没取证」（黄字提醒与 SKIP 分开，避免读成同一件事）
+        $partialLine = "navigation=PARTIAL ok=$navOkCount skip=$navSkipCount " +
+            "skippedSteps=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedSteps') -join ','))"
+        Write-Log $partialLine
+        Write-Host ''
+        Write-Host "⚠️  部分达成：直达探针 $navOkCount 页已取证 / $navSkipCount 页未达成 = PARTIAL（#1816）" -ForegroundColor Yellow
+        Write-Host '    已达成页的 console/exception 读数与截图**照常计入**门结论，不得被未达成页整组塌缩。' -ForegroundColor Yellow
+        Write-Host '    未达成页的页级原因见 navigation.pages 与日志的 direct-page 读数行；**不得**把 PARTIAL 当 PASS。' -ForegroundColor Yellow
+        Write-Host "    $partialLine" -ForegroundColor Yellow
     }
 
     # P2：门通过时把截图**压缩入库**到 PR 分支（docs/verification/<模块>/<PR号>/<页名>-after.<ext>）
