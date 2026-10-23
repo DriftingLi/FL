@@ -1195,3 +1195,19 @@ test('#1841 判据面第三来源是票评论，且三个消费者都真的把�
   const pre = readFileSync(path.resolve(SCRIPT_DIR, 'preflight-pr.mjs'), 'utf8');
   assert.match(pre, /issueComments/, '本地预检没同步票评论 ⇒ 会出现「本地说没绑、CI 说绿」');
 });
+
+// #1841 兼容窗口：默认分支上的旧版判据模块还没有 issueNumbersInBody 导出。
+// 两个 workflow 的 evalValidator 必须容忍这一点（typeof 对未声明标识符安全），
+// 退化成「票评论来源未启用」而不是把整个 job 打红 —— PR #1843 首跑就栽在这里。
+test('evalValidator 兼容旧版模块：没有 issueNumbersInBody 时不报错，票来源按未启用处理', () => {
+  for (const wf of ['pr-evidence.yml', 'mobile-gates.yml']) {
+    const src = readFileSync(path.resolve(SCRIPT_DIR, '..', 'workflows', wf), 'utf8');
+    const tail = src.match(/return \{ validatePrEvidence[^`]*?\};/);
+    assert.ok(tail, `${wf} 找不到 evalValidator 的返回表达式`);
+    // 用「旧版模块」+ 该返回表达式求值：旧模块只定义 validatePrEvidence。
+    const api = new Function(`function validatePrEvidence() { return 'legacy'; }\n${tail[0]}`)();
+    assert.equal(typeof api.validatePrEvidence, 'function', `${wf} 旧模块下主判据仍必须可用`);
+    assert.equal(api.validatePrEvidence(), 'legacy');
+    assert.equal(api.issueNumbersInBody, null, `${wf} 旧模块下票来源必须退化为 null（fail-closed）`);
+  }
+});

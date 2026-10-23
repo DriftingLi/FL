@@ -120,8 +120,10 @@ jobs:
                 return Buffer.from(data.content || '', data.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8');
               };
               // 判据面的两个纯函数一起取：主判据 + 「PR 正文关联了哪些票」（#1841，决定哪些票评论进候选）。
+              // 兼容窗口：默认分支上的旧版模块还没有 issueNumbersInBody，typeof 对未声明标识符安全，
+              // 取不到返回 null ⇒ 票评论来源按未启用处理（fail-closed，不报错）。
               const evalValidator = (src) => new Function(
-                `${String(src).replace(/^export /gm, '')}\nreturn { validatePrEvidence, issueNumbersInBody };`,
+                `${String(src).replace(/^export /gm, '')}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`,
               )();
               const loadValidator = async (ref) => {
                 try {
@@ -132,7 +134,7 @@ jobs:
                     /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
                   );
                   if (!m) throw new Error('判据同源中断：既没有 gate-validator.mjs，也没有内联标记块');
-                  return new Function(`${m[1]}\nreturn { validatePrEvidence, issueNumbersInBody };`)();
+                  return new Function(`${m[1]}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`)();
                 }
               };
               let validate;
