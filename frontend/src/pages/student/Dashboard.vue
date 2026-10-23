@@ -174,7 +174,6 @@ const recentLearning = ref<QuickCardItem[]>([])
 // 学习统计 section（骨架/加载/空态/tab 切换/图表组装收敛在 useRoleDashboard）
 // #1355：本页面只用它的「取数出口 + 写回出口」两条，写回时机由下面的 apply 槽统一给。
 const {
-  chartRef,
   timeTabs,
   currentTab,
   stats,
