@@ -45,6 +45,13 @@ const DRAWER_UVUE = path.join(ROOT, 'pages', 'recruiter', 'components', 'recruit
 const PROJECTION_GO = path.join(REPO_ROOT, 'backend', 'internal', 'resume', 'projection.go');
 
 const recruitSrc = readText(RECRUIT_UTS);
+/**
+ * #1735：DTO 类型定义已从 `api/recruit.uts` 迁到 `types/recruit.uts`（映射 / 端点 / 下载留在 api 侧）。
+ * A3 / A5 / B3 / F1 的类型面与 R7 的字段对账面因此读**新文件**——**改读目标，不是删锁**：
+ * 判据一字未改，只换真源所在文件。
+ */
+const RECRUIT_TYPES_UTS = path.join(ROOT, 'types', 'recruit.uts');
+const recruitTypesSrc = readText(RECRUIT_TYPES_UTS);
 const requestSrc = readText(REQUEST_UTS);
 /**
  * #1734 两轴拆分后，403/404 的**写端真源**（状态码前缀常量 + handleStatus 分支）沉在
@@ -129,9 +136,9 @@ describe('A. 脱敏字段清单与真源 resume/projection.go 逐项对账', () 
   });
 
   test('A3：真源字段 → 移动端 TypeScript 类型逐项齐备', () => {
-    const block = recruitSrc.slice(
-      recruitSrc.indexOf('export type RecruitResumeCard = {'),
-      recruitSrc.indexOf('}', recruitSrc.indexOf('export type RecruitResumeCard = {')),
+    const block = recruitTypesSrc.slice(
+      recruitTypesSrc.indexOf('export type RecruitResumeCard = {'),
+      recruitTypesSrc.indexOf('}', recruitTypesSrc.indexOf('export type RecruitResumeCard = {')),
     );
     const missing = [];
     desensitizeFieldsFromTruth().forEach((goField) => {
@@ -166,9 +173,9 @@ describe('A. 脱敏字段清单与真源 resume/projection.go 逐项对账', () 
       expect(cardMapper).not.toContain(`obj['${key}']`);
     });
     // `region`（现居地）与脱敏卡无关：卡片模型里不得有承接它的字段
-    const cardType = recruitSrc.slice(
-      recruitSrc.indexOf('export type RecruitResumeCard = {'),
-      recruitSrc.indexOf('}', recruitSrc.indexOf('export type RecruitResumeCard = {')),
+    const cardType = recruitTypesSrc.slice(
+      recruitTypesSrc.indexOf('export type RecruitResumeCard = {'),
+      recruitTypesSrc.indexOf('}', recruitTypesSrc.indexOf('export type RecruitResumeCard = {')),
     );
     expect(cardType).not.toMatch(/\bregion\s*:/);
     expect(cardType).not.toMatch(/\bcontact_phone\s*:/);
@@ -206,9 +213,9 @@ describe('B. 未授权态：只渲染真源清单内字段 + 给打码 PDF 次�
 
   test('B3：脱敏卡的持证**已去图** —— 只有编号/有效期，没有证件原图', () => {
     // 卡片模型上无图片字段
-    const certType = recruitSrc.slice(
-      recruitSrc.indexOf('export type RecruitCertification = {'),
-      recruitSrc.indexOf('}', recruitSrc.indexOf('export type RecruitCertification = {')),
+    const certType = recruitTypesSrc.slice(
+      recruitTypesSrc.indexOf('export type RecruitCertification = {'),
+      recruitTypesSrc.indexOf('}', recruitTypesSrc.indexOf('export type RecruitCertification = {')),
     );
     expect(certType).not.toMatch(/image/i);
     // 未授权面的模板只用编号/有效期
@@ -318,9 +325,11 @@ describe('D. 筛选抽屉 = 后端 8 维（不多不少）+ 列表加载更多 p
   test('D3：region 未做本地归一（不拼省、不补「市」）—— 归一交给后端 RegionCityName', () => {
     expect(drawerSrc).toContain('region: region.value.trim()');
     expect(drawerSrc).not.toContain("+ '/'");
-    expect(recruitSrc).toContain('RegionCityName');
-    // 移动端不得自带一份「市名 → 苏州市」的映射表
+    // 「归一是后端职责」这句承重注释随 DTO 迁到 types/recruit.uts（#1735）
+    expect(recruitTypesSrc).toContain('RegionCityName');
+    // 移动端不得自带一份「市名 → 苏州市」的映射表（两侧都不得有）
     expect(recruitSrc).not.toMatch(/苏州市|浙江省|江苏省/);
+    expect(recruitTypesSrc).not.toMatch(/苏州市|浙江省|江苏省/);
   });
 
   test('D4：列表「加载更多」按 page_size=20（RECRUIT_PAGE_SIZE 单点），且页码由请求侧自记', () => {
@@ -460,6 +469,9 @@ describe('R6. components 下的相对 import 深度必须三层（④a 编译门
     expect(drawerSrc).toContain("from '../../../api/helpers'");
     expect(drawerSrc).not.toContain("from '../../api/recruit'");
     expect(drawerSrc).not.toContain("from '../../api/helpers'");
+    // #1735 后类型 import 也在这条路径纪律内（值仍走 api/recruit，类型走 types/index）
+    expect(drawerSrc).toContain("from '../../../types/index'");
+    expect(drawerSrc).not.toContain("from '../../types/index'");
   });
 
   test('R6d：锁自检 —— 合成坏样本必须被同一正则命中，好样本不命中', () => {
@@ -546,12 +558,12 @@ describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit �
   };
 
   test('R7a：两面都解析得出来（fail-closed：解析不到 = 锁失效，不是通过）', () => {
-    expect(parseFields(recruitSrc, 'RecruitResumeFilters')).not.toBeNull();
+    expect(parseFields(recruitTypesSrc, 'RecruitResumeFilters')).not.toBeNull();
     expect(parseDrawerProps(drawerSrc)).not.toBeNull();
   });
 
   test('R7b：defineProps 标量 props（除 show）↔ api 层 8 维逐字对账（camel→snake 归一、保序）', () => {
-    const api = parseFields(recruitSrc, 'RecruitResumeFilters');
+    const api = parseFields(recruitTypesSrc, 'RecruitResumeFilters');
     const dp = parseDrawerProps(drawerSrc);
     expect(dp.nonScalar).toEqual([]);
     expect(camelToSnake('positionId')).toBe('position_id'); // 归一器自检（归一错 ⇒ 对账全盘失真）
@@ -577,7 +589,7 @@ describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit �
   });
 
   test('R7d：emit 载荷同源 —— 两端参数是 api 层同一个类（名义兼容，反向 CCE 一并消除）', () => {
-    expect(drawerSrc).toMatch(/import\s+type\s*\{\s*RecruitResumeFilters\s*\}\s*from\s*'\.\.\/\.\.\/\.\.\/api\/recruit'/);
+    expect(drawerSrc).toMatch(/import\s+type\s*\{\s*RecruitResumeFilters\s*\}\s*from\s*'\.\.\/\.\.\/\.\.\/types\/index'/);
     const apply = drawerSrc.slice(drawerSrc.indexOf('function onApply'), drawerSrc.indexOf('function onClose'));
     expect(apply).toContain('const next : RecruitResumeFilters =');
     expect(apply).toContain('} as RecruitResumeFilters');
@@ -590,7 +602,7 @@ describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit �
     const start = librarySrc.indexOf('<recruiter-filter-drawer');
     expect(start).toBeGreaterThan(-1);
     const tag = librarySrc.slice(start, librarySrc.indexOf('/>', start));
-    const api = parseFields(recruitSrc, 'RecruitResumeFilters');
+    const api = parseFields(recruitTypesSrc, 'RecruitResumeFilters');
     api.forEach((f) => {
       // 声明 camelCase、模板绑 kebab（Vue 归一；先例 :item-answer → itemAnswer）
       expect(tag).toContain(`:${f.replace(/_/g, '-')}="filters.${f}"`);
@@ -606,11 +618,78 @@ describe('R7. 抽屉 filters 平铺标量 props 与 api 层逐字对账 + emit �
     expect(b).toEqual(['x']);
     expect(a).not.toEqual(b); // 少一维必须判不等
     // 对账面同样自检：模拟抽屉漏掉 salaryMax 一维，必须与 api 判不等
-    const api = parseFields(recruitSrc, 'RecruitResumeFilters');
+    const api = parseFields(recruitTypesSrc, 'RecruitResumeFilters');
     const drawerLike = ['show', 'region', 'positionId', 'credentialId', 'salaryMin', 'salaryMax', 'experienceMin', 'jobNature', 'availableIn'];
     const dims = (ns) => ns.filter((n) => n !== 'show').map(camelToSnake);
     expect(dims(drawerLike)).toEqual(api);
     expect(dims(drawerLike.filter((n) => n !== 'salaryMax'))).not.toEqual(api);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T. DTO 迁出 api 层（#1735）：类型落 types/recruit.uts，映射与出口留在 api/recruit.uts
+// ---------------------------------------------------------------------------
+
+/**
+ * 背景：#1735 把 api/recruit.uts 的 12 个 DTO 类型定义搬到 types/recruit.uts（job / points /
+ * featured / notification / search 已是这个形态：DTO 落 `types/<域>.uts`，页面经 `types/index`
+ * 消费，api 层只做映射与出口）。本组是本票的**新增面**——上面 A3/A5/B3/F1/R7 只是换真源文件，
+ * 这一组才判「搬得干净、没有留下第二处真源」。
+ *
+ * 判据取法与 `utils/apiBatchAContract.test.js` 的 job 段同构（那边 DOMAINS 不含 recruit，
+ * 故 recruit 的同族锁落在这里，不新开测试文件——新增 suite 会连带炸 devFinishContract 的用例计数）。
+ */
+const TYPES_INDEX_UTS = path.join(ROOT, 'types', 'index.uts');
+const typesIndexSrc = readText(TYPES_INDEX_UTS);
+
+/** 本票搬走的 12 个 DTO（票面写「9 个」，实测 12 个 —— 见正文的差异说明） */
+const RECRUIT_DTOS = [
+  'RecruitJob', 'RecruitJobListResult', 'RecruitJobInput',
+  'RecruitApplication', 'RecruitApplicationListResult', 'RecruitMe',
+  'RecruitCertification', 'RecruitResumeCard', 'RecruitResumeListResult',
+  'RecruitResumeFilters', 'RecruitContactPlain', 'RecruitContactRequest',
+];
+
+describe('T. DTO 落 types/recruit.uts（#1735）：单一真源 + api 层零内联 + 消费面重定向', () => {
+  test('T1：12 个 DTO 全部在 types/recruit.uts 里声明', () => {
+    RECRUIT_DTOS.forEach((t) => {
+      expect(recruitTypesSrc).toContain(`export type ${t} = {`);
+    });
+  });
+
+  test('T2：api/recruit.uts 零内联 `export type`，类型一律经 types/index 消费', () => {
+    expect(recruitSrc).not.toMatch(/^export type /m);
+    expect(recruitSrc).toMatch(/import\s+type\s*\{[^}]*\bRecruitResumeCard\b[^}]*\}\s*from\s*'\.\.\/types\/index'/);
+    // 值导出仍在 api 侧（搬家不动出口面）
+    RECRUIT_DTOS.forEach((t) => {
+      expect(recruitSrc).not.toContain(`export type ${t}`);
+    });
+  });
+
+  test('T3：types/index barrel re-export recruit 类型（UTS 合法形态：inline type modifier）', () => {
+    expect(typesIndexSrc).toMatch(/export\s*\{[^}]*\btype RecruitResumeFilters\b[^}]*\}\s*from\s*'\.\/recruit'/);
+    RECRUIT_DTOS.forEach((t) => {
+      expect(typesIndexSrc).toContain(`type ${t}`);
+    });
+  });
+
+  test('T4：消费面的 type import 指向 types/index，值 import 仍指向 api/recruit', () => {
+    // 页面/工具：类型不再从 api/recruit 取
+    [librarySrc, detailSrc, drawerSrc, readText(path.join(ROOT, 'utils', 'recruitDisplay.uts')),
+      readText(path.join(ROOT, 'pages', 'recruiter', 'jobs.uvue')),
+      readText(path.join(ROOT, 'pages', 'recruiter', 'home.uvue')),
+      readText(path.join(ROOT, 'pages', 'recruiter', 'contacts.uvue')),
+      readText(path.join(ROOT, 'pages', 'recruiter', 'applications.uvue')),
+      readText(path.join(ROOT, 'pages', 'recruiter', 'job-edit.uvue')),
+    ].forEach((src) => {
+      expect(src).not.toMatch(/import\s+type\s*\{[^}]*\}\s*from\s*'\.\.(?:\/\.\.)*\/api\/recruit'/);
+      expect(src).not.toMatch(/import\s*\{[^}]*\btype\s/); // inline type modifier 混在值 import 里也不许回来
+    });
+    // 值出口没搬家（抽两处代表：列表页的加载入口、抽屉的 chip 文案常量）
+    expect(librarySrc).toContain("from '../../api/recruit'");
+    expect(drawerSrc).toContain("from '../../../api/recruit'");
+    // 类型确实是从 types/index 取的（不是就地重声明）
+    expect(drawerSrc).not.toMatch(/^\s*type\s+RecruitResumeFilters\w*\s*=/m);
   });
 });
 
@@ -643,8 +722,8 @@ describe('F. 卡面 company_disabled：字段边界只认真值 + 详情页「�
   test('F1：真源确有此键且是 omitempty ⇒ 移动端两处边界逐字同一个归一形状，且不写 false 分支', () => {
     expect(cardCompanyDisabledTagFromTruth()).toBe('company_disabled,omitempty');
     // 类型面：键在，且归一成 boolean（可空性由**字段边界**收口，不下渗给页面）
-    const typeStart = recruitSrc.indexOf('export type RecruitResumeCard = {');
-    const cardType = recruitSrc.slice(typeStart, recruitSrc.indexOf('}', typeStart));
+    const typeStart = recruitTypesSrc.indexOf('export type RecruitResumeCard = {');
+    const cardType = recruitTypesSrc.slice(typeStart, recruitTypesSrc.indexOf('}', typeStart));
     expect(cardType).toMatch(/company_disabled\s*:\s*boolean/);
     // 映射面：缺席式键在**两处边界**逐字同一个归一形状（一个键折成两种形状 = 暗示它们不等价）
     const norm = "company_disabled: toBool(obj['company_disabled']),";

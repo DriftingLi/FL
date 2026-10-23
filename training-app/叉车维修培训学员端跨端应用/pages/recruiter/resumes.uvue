@@ -100,7 +100,7 @@
     import RecruiterTabBar from './components/recruiter-tab-bar.uvue'
     import RecruiterFilterDrawer from './components/recruiter-filter-drawer.uvue'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import type { RecruitResumeCard, RecruitResumeFilters } from '../../api/recruit'
+    import type { RecruitResumeCard, RecruitResumeFilters } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 

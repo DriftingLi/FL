@@ -26,7 +26,7 @@
  * @note 本模块**零 import 依赖**（只用 `import type`）：这样它既能被页面消费，
  *       也能被 `utsHarness.loadUts` 直接执行，不需要注入任何绑定。
  */
-import type { RecruitContactRequest } from '../api/recruit'
+import type { RecruitContactRequest } from '../types/index'
 
 /** 一天毫秒数（过期判定与剩余天数的唯一基数） */
 const MS_PER_DAY = 86400000

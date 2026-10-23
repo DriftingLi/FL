@@ -92,7 +92,7 @@
     //    ⚠️ error18 的适用面是 **defineProps 的类型展开**（#1207 实测），不是「组件里用 import type」：
     //    组件内 `import type` 注解的生产先例 `pages/forum/components/forum-contribution-form.uvue:61`。
     //    守护：`utils/recruiterResumeContract.test.js` 的 R7d（载荷同源锁）。
-    import type { RecruitResumeFilters } from '../../../api/recruit'
+    import type { RecruitResumeFilters } from '../../../types/index'
     // ⚠️ `filters` **对象不作为 prop 下发**（#1322 血账）：对象 prop 在编译产物里会裂成两个互不相关的
     //    open class —— 父页传入值的运行时类是 `RecruitResumeFiltersReactiveObject : RecruitResumeFilters`，
     //    props 代理按**声明类型**强转 ⇒ 任何重复声明的就地类型都是 `ClassCastException`

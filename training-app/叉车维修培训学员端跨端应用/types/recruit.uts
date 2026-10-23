@@ -1,0 +1,195 @@
+/**
+ * 招聘模块类型（DTO）
+ *
+ * 契约事实源：后端招聘侧 DTO —— `recruit_service.go`（职位 / 简历库）、`contact_service.go`（交换申请 /
+ * 明文联系方式）、`resume_projection.go` 的 `desensitize()`（脱敏卡字段清单）。#1735 时这组类型从
+ * `api/recruit.uts` 内联声明迁到本文件（与 job / points / featured / notification / search 等已收紧域同构：
+ * DTO 落 `types/<域>.uts`，页面经 `types/index` 消费，api 层只做映射与出口）。
+ */
+import type { ResumeExperience } from './resume'
+
+// ── P2 的类型（职位段 / 投递 / 我的）────────────────────────────────────────
+
+/** 招聘者我的职位（`GET /recruit/jobs`，`JobPostingService.List(MineOnly=true)`；含 closed 与强制下架历史） */
+export type RecruitJob = {
+    id : number
+    title : string
+    region : string
+    salary_text : string
+    experience_req : string
+    status : string
+    forced_offline : boolean
+    offline_reason : string
+    published_at : string
+    updated_at : string
+}
+
+/** 我的职位列表结果（后端 `service.JobListResult`：只有 items / total，**没有任何投递计数**） */
+export type RecruitJobListResult = {
+    items : RecruitJob[]
+    total : number
+}
+
+/**
+ * 发布 / 编辑职位的输入 —— 字段与 web `JobPostingInput`（`frontend/src/api/job.ts`）逐字同源（ADR-0028 ② 推翻 0021 ③）。
+ * `position_id` / `salary_min` / `salary_max` 可缺席（后端 `*int`）；`title` + `position_id` 必填由页面判。
+ */
+export type RecruitJobInput = {
+    title : string
+    position_id : number | null
+    region : string
+    salary_min : number | null
+    salary_max : number | null
+    salary_text : string
+    experience_req : string
+    description : string
+}
+
+/** 投递（企业侧脱敏：`student_real_name_masked`，无手机/微信/PDF/证书原图） */
+export type RecruitApplication = {
+    id : number
+    job_posting_id : number
+    job_title : string
+    student_user_id : number
+    student_real_name_masked : string
+    status : string
+    employer_viewed_at : string
+    created_at : string
+    updated_at : string
+    resume_updated_at_snapshot : string
+}
+
+/** 按职位查看投递的结果（后端 `RecruiterApplicationListResult`，**unread_count 在这里**） */
+export type RecruitApplicationListResult = {
+    items : RecruitApplication[]
+    total : number
+    unread_count : number
+    job_title : string
+}
+
+/** 招聘者自助信息（`GET /recruit/me`，后端 `RecruitMeDTO` 只回 3 个字段） */
+export type RecruitMe = {
+    user_id : number
+    account : string
+    role : string
+}
+
+// ── P3 的类型（简历库 / 脱敏卡 / 明文联系方式）───────────────────────────────
+
+/** 工作经历项复用 `types/resume.uts` 的 `ResumeExperience`（单一真源，键名对齐后端 resume_experiences）。 */
+
+/** 打码卡里的一条持证（`resume_certifications` 元素，后端白名单已去 `image_urls`）。 */
+export type RecruitCertification = {
+    credential_id : number
+    cert_no : string
+    expire_date : string
+}
+
+/**
+ * 脱敏简历卡 —— 字段清单 = `resume_projection.go` 的 `desensitize()`，**逐项对齐、不得增删**。
+ * 刻意没有：真实姓名 / 现居地（region）/ 电话 / 微信 / 上传 PDF / 工作照（photos）/ 证件原图。
+ */
+export type RecruitResumeCard = {
+    user_id : number
+    /** 已打码（后端 `MaskRealName`：1 字→*，2 字→首+*，≥3 字→首+中间*+尾） */
+    real_name : string
+    real_name_masked : string
+    expected_position_id : number | null
+    expected_position_extra : string
+    expected_regions : string[]
+    salary_min : number | null
+    salary_max : number | null
+    salary_negotiable : boolean
+    available_in : string
+    job_nature : string
+    experience_years : number
+    self_intro : string
+    resume_experiences : ResumeExperience[]
+    resume_certifications : RecruitCertification[]
+    updated_at : string
+    /** 企业视角联系状态：none / pending / approved（#489 回填） */
+    contact_state : string
+    /** 授权来源：recruiter / application */
+    contact_source : string
+    /**
+     * 「授权在、明文已收回」那一格（ADR-0064 决策 5 / #1267）：**缺席式**可选键，
+     * 出现即恒 `true` ⇒ 这里归一成 boolean，消费面只判真值。
+     * 徽章那一格（`contact_state`）仍按授权事实投影，**不**因企业被停用而降级 ——
+     * 词表「授权有效态」：授权存在 ≠ 授权可用，可用性另开一格说。
+     */
+    company_disabled : boolean
+}
+
+/** 简历库列表结果（后端 `RecruitListResult`：**只有 items / total**，无 page / page_size 回显）。 */
+export type RecruitResumeListResult = {
+    items : RecruitResumeCard[]
+    total : number
+}
+
+/**
+ * 简历库筛选参数 —— **只有这 8 维**（ADR-0022 ② 的可用维度清单，`api/recruit.go:60-88`）。
+ *
+ * 后端另有精确匹配与上限两维，**本轮不用**（ADR-0022 ②）⇒ 这里不承接。
+ *
+ * `region` 传**市名**（如「杭州市」/「杭州」）：后端 `applyFilters` 先 `RegionCityName` 归一
+ * 再按市名精确匹配 `expected_regions` 元素的第 2 段（直辖市一段）。
+ * 移动端与 web `Resumes.vue` 同源：web 用 `joinRegionPath` 拼出的两段串同样被 `RegionCityName`
+ * 取到第 2 段 ⇒ **归一是后端的职责，这里不自造格式**。
+ */
+export type RecruitResumeFilters = {
+    region : string
+    position_id : number | null
+    credential_id : number | null
+    salary_min : number | null
+    salary_max : number | null
+    experience_min : number | null
+    job_nature : string
+    available_in : string
+}
+
+/**
+ * 已授权后的明文联系方式 —— **恰好 6 键**，来自 `contact.go` 的 `GetContact` 响应
+ * （`real_name / contact_phone / wechat / resume_file_url / photos / resume_certifications`）。
+ *
+ * `photos` 与 `resume_certifications` 是**已授权后**才出现的原始值（含 image_urls / 原图），
+ * 与脱敏卡的 `resume_certifications`（已去图）**不是同一份东西**，类型上分开表达。
+ */
+export type RecruitContactPlain = {
+    real_name : string
+    contact_phone : string
+    wechat : string
+    resume_file_url : string
+    photos : string[]
+    resume_certifications : UTSJSONObject[]
+}
+
+// ── 交换申请：P2 与 P3 共用同一个 DTO 与同一个字符串端点 ──────────────────────
+
+/**
+ * 我发起的交换申请（`GET /recruit/contact-requests`，`ListForRecruiter`）
+ *
+ * ⚠️ 招聘者侧 DTO **不含学员姓名**（`contact_service.go:57-83` 只有 `student_user_id`）——
+ * 列表与紧迫行都不得显示「某某学员」，做不到就不要写。
+ * `status` 是服务端事实；`expires_at` 是 `created_at + 14 天`（`contact_service.go:37` 常量，
+ * `:289` 签发处）。
+ * **服务端读取时不按 `expires_at` 判状态**（ADR-0022 已知缺口）⇒ 「已过期」由客户端算
+ * （`utils/recruitDisplay.uts`），且过期项**不给任何操作入口**。
+ *
+ * `company_disabled` 是**缺席式可选键**（后端 `contact_service.go:80` 的
+ * `json:"company_disabled,omitempty"`，唯一赋值点 `:215-218` 是「授权在、明文已收回」）：
+ * 出现即恒为 `true`，故本层把它归一成 boolean，消费面只判 `=== true`。
+ * 端点覆盖：**本端点**与**简历卡**（`recruit_service.go:75`，#1298 补发）各有一格，两处同键同措辞；
+ * `ContactPlainDTO`（`contact_service.go:101-108`）**仍无此键** —— 取明文失败时是三态 403
+ * （`backend/internal/api/contact.go:108-127`），不是「200 但少一段」。
+ */
+export type RecruitContactRequest = {
+    id : number
+    student_user_id : number
+    message : string
+    status : string
+    created_at : string
+    updated_at : string
+    expires_at : string
+    source : string
+    company_disabled : boolean
+}
