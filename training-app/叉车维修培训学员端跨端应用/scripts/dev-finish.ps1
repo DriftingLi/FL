@@ -1000,7 +1000,8 @@ Write-Step 3 9 '单元测试'
 . (Join-Path $PSScriptRoot 'lib\contract-tests.ps1')
 $testPattern = Get-ContractTestPattern
 try {
-    $testOutput = & npx jest --config jest.config.all.js -i --testPathPattern $testPattern --forceExit 2>&1 | Out-String
+    # jest 30 把 CLI 选项 `--testPathPattern` 改名为 `--testPathPatterns`（旧名直接报错退出）。
+    $testOutput = & npx jest --config jest.config.all.js -i --testPathPatterns $testPattern --forceExit 2>&1 | Out-String
 }
 catch {
     $testOutput = "$($_.Exception.Message)"
