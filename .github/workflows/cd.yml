@@ -243,7 +243,7 @@ jobs:
 
       - name: 构建并推送后端镜像
         if: steps.content.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: backend
           push: true
@@ -306,7 +306,7 @@ jobs:
 
       - name: 构建并推送前端镜像
         if: steps.content.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: frontend
           push: true
@@ -369,7 +369,7 @@ jobs:
 
       - name: 构建并推送 LibreOffice sidecar 镜像
         if: steps.content.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: libreoffice-sidecar
           push: true
