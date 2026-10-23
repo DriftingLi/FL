@@ -33,7 +33,7 @@
     "stream-markdown-parser": "^1.2.11",
     "vditor": "^3.11.2",
     "vue": "^3.5.44",
-    "vue-router": "^4.2.5",
+    "vue-router": "^5.4.0",
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
@@ -45,7 +45,7 @@
     "happy-dom": "^21.0.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.3",
-    "vite": "^6.0.5",
+    "vite": "^7.3.7",
     "vitest": "^4.1.10",
     "vue-tsc": "^3.3.13"
   }
