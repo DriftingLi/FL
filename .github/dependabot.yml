@@ -70,6 +70,9 @@ updates:
       - ci
 
   # ===== 容器基础镜像 =====
+  # Go 镜像不许机器人单边升 minor/major：本仓要求「镜像里的 Go = CI 的 GO_VERSION」
+  # （见 docs/agents/security-scan.md §2），而升 Go 要同时改 ci.yml / cd.yml / Dockerfile。
+  # 补丁版（1.26.10 → 1.26.11 这类安全补丁）仍然自动开 PR。
   - package-ecosystem: docker
     directory: /backend
     schedule:
@@ -81,7 +84,13 @@ updates:
     labels:
       - dependencies
       - docker
+    ignore:
+      - dependency-name: golang
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
 
+  # Node 大版本跟 LTS 走（当前 24 Krypton），同样由人同步 CI 的 NODE_VERSION 与镜像 tag。
   - package-ecosystem: docker
     directory: /frontend
     schedule:
@@ -93,6 +102,10 @@ updates:
     labels:
       - dependencies
       - docker
+    ignore:
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: docker
     directory: /libreoffice-sidecar

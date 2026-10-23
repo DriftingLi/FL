@@ -80,6 +80,9 @@ OSV / Dependabot 给的是「版本命中」，不是「可达」。要判可达
 cd backend && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
+**CI 里已经跑着**：`security-scan` job 装固定版本的 `govulncheck`（v1.7.0）跑全后端，前端跑
+`npm audit --audit-level=high`，Dockerfile 走 Trivy —— 这道门 PR 上本来就有，本地跑只是为了推之前先看见。
+
 本仓实测（2026-10-22）：用**生产同款** `go1.26.10` 跑 → `0 vulnerabilities`（标准库 0 条可达）；
 用当时的本机 `go1.27.1` 跑 → `13 vulnerabilities from the Go standard library` 全部可达。
 同一份代码、同一天，差别只在工具链 —— 所以「本机扫出来一片红」先别慌，先看用的是哪个 Go。
