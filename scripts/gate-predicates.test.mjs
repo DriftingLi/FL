@@ -31,7 +31,9 @@ test('ci-summary 聚合：两个 workflow 都调单点脚本，且不再内联�
   // （该 job 原先刻意不 checkout，脚本一上线它就 127——这条锁把这一课钉住）
   for (const wf of ['.github/workflows/cd.yml', '.github/workflows/testing-smoke.yml']) {
     const src = read(wf)
-    assert.ok(/actions\/checkout@v4/.test(src), wf + ' 需要 checkout（聚合脚本在工作区里）')
+    // 判据是「这个 workflow 会 checkout 工作区」，不是「用哪个大版本」——
+    // 2026-10-23 升 actions/checkout v4→v7 时这里因为写死 v4 误判红过一次（#1799）。
+    assert.ok(/uses:\s*actions\/checkout@v\d+/.test(src), wf + ' 需要 checkout（聚合脚本在工作区里）')
   }
 })
 
