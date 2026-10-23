@@ -105,7 +105,7 @@ function loadStudent(raw, calls = [], file = STUDENT_UTS, opt = {}) {
 function loadForum(raw, calls = [], files = {}, opt = {}) {
   const h = helpers();
   const gm = opt.reject ? makeRejectingGetMapped(opt.reject, calls) : makeGetMapped(raw, calls);
-  const env = envelopeFor(h, gm);
+  const env = files.envelope ? loadUts(files.envelope, envelopeBindings({ getMapped: gm, toNumber: h.toNumber })) : envelopeFor(h, gm);
   const dtoMod = loadUts(files.dto || FORUM_DTO_UTS, { ...h, ...env });
   const mod = loadUts(files.api || FORUM_UTS, {
     getPaged: env.getPaged,
@@ -558,20 +558,20 @@ describe('forum：topics 具名键站点 + 回显页数不参与判据（PR-C #1
     await expect(mod.getForumTopicsApi()).rejects.toThrow();
   });
 
-  it('必红 M7：topics 键改坏 ⇒ 空列表', async () => {
-    const dtoFile = mutateUts(FORUM_DTO_UTS, [["['topics']", "['items']"]], 'forumDto.uts');
-    const { mod } = loadForum(TOPICS_RAW, [], { dto: dtoFile });
+  it('必红 M7：topics 键改坏 ⇒ 空列表（keys 已迁到请求侧 api/forum.uts，#1737）', async () => {
+    const apiFile = mutateUts(FORUM_UTS, [["['topics']", "['items']"]], 'forum.uts');
+    const { mod } = loadForum(TOPICS_RAW, [], { api: apiFile });
     const got = await mod.getMyTopicsApi(3, 10);
     expect(got.items).toEqual([]);
   });
 
-  it('必红 M8：hasMore 改回读后端回显页数 ⇒ 末页误判「还有更多」', async () => {
-    const dtoFile = mutateUts(
-      FORUM_DTO_UTS,
-      [['hasMore: paged.hasMore,', "hasMore: toNumber(obj['pages'], 0) > page,"]],
-      'forumDto.uts'
+  it('必红 M8：hasMore 改回读后端回显页数 ⇒ 末页误判「还有更多」（推导已单点化到 envelope.uts，#1737）', async () => {
+    const envFile = mutateUts(
+      ENVELOPE_UTS,
+      [['hasMore = page * pageSize < total', "hasMore = toNumber(data['pages'], 0) > page"]],
+      'envelope.uts'
     );
-    const { mod } = loadForum(TOPICS_RAW, [], { dto: dtoFile });
+    const { mod } = loadForum(TOPICS_RAW, [], { envelope: envFile });
     const got = await mod.getMyTopicsApi(3, 10);
     expect(got.hasMore).toBe(true); // 回显 pages=4 > 3；绿用例断言的是 false
   });

@@ -468,11 +468,11 @@ describe('api 收紧契约（forum 域经 mapper-callback 出口家族，refs #6
     expect(src).not.toMatch(/import\s*\{[^}]*\bput\b[^}]*\}\s*from\s*'\.\/request'/);
   });
 
-  it('GET 面经 getMapped 且映射函数为既有 builder（buildTopicListResult/buildTopicDetail）', () => {
-    expect(src).toContain('getMapped<ForumTopicListResult>(\'/forum/topics\'');
-    // PR-C（#1663）：builder 签名扩为 (obj, url, page, pageSize)——信封 url 与页参由出口闭包传入，两个站点各钉各的
-    expect(src).toContain('buildTopicListResult(data, \'/forum/topics\', page, pageSize)');
-    expect(src).toContain('buildTopicListResult(data, \'/forum/my-topics\', page, pageSize)');
+  it('GET 面列表两站点经信封 getPaged（#1737 三参壳消亡），详情仍经既有 builder', () => {
+    // #1737：列表出口从 getMapped + 三参自算壳改为 getPaged（Page<ForumTopic>，hasMore 由信封推导）
+    expect(src).toContain("getPaged<ForumTopic>('/forum/topics'");
+    expect(src).toContain("getPaged<ForumTopic>('/forum/my-topics'");
+    expect(src).not.toMatch(/buildTopicListResult/);
     expect(src).toContain('getMapped<ForumTopicDetail>(url');
     // PR-D（#1664）：详情的回复分页也走信封出口，url / 页参由出口闭包传入；
     // 采纳两站点（POST/DELETE）复用同一 builder，按详情接口的同款缺省 (1, 20) 传占位页参
@@ -709,23 +709,23 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
  * 两侧各一条：请求侧必须从 `./forumDto` 取构造层；构造侧必须只做映射（不许长出请求出口）。
  */
 describe('DTO 构造层拆分锁（#1218：请求形态与响应构造分家）', () => {
-  it('api/forum.uts 从 ./forumDto 取构造层（5 个 builder 都在 import 里）', () => {
+  it('api/forum.uts 从 ./forumDto 取构造层（4 个 builder 都在 import 里，#1737 起列表壳消亡）', () => {
     const src = read('api/forum.uts');
-    for (const name of ['buildReply', 'buildTopic', 'buildTopicListResult', 'buildTopicDetail', 'buildLikeResult']) {
+    for (const name of ['buildReply', 'buildTopic', 'buildTopicDetail', 'buildLikeResult']) {
       expect(src).toMatch(new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'\\.\\/forumDto'`));
     }
   });
 
   it('api/forum.uts 不再自带构造层（extract* / build* 的 `function` 定义一个都不留）', () => {
     const src = read('api/forum.uts');
-    for (const name of ['extractAuthorName', 'extractAuthorId', 'extractAuthorAvatar', 'extractImages', 'buildReply', 'buildTopic', 'buildTopicListResult', 'buildTopicDetail', 'buildLikeResult']) {
+    for (const name of ['extractAuthorName', 'extractAuthorId', 'extractAuthorAvatar', 'extractImages', 'buildReply', 'buildTopic', 'buildTopicDetail', 'buildLikeResult']) {
       expect(src).not.toMatch(new RegExp(`function\\s+${name}\\s*\\(`));
     }
   });
 
-  it('api/forumDto.uts 九个构造函数都在（extract 4 + build 5），且零请求出口', () => {
+  it('api/forumDto.uts 八个构造函数都在（extract 4 + build 4，#1737 起列表壳消亡），且零请求出口', () => {
     const dto = readForumDto();
-    for (const name of ['extractAuthorName', 'extractAuthorId', 'extractAuthorAvatar', 'extractImages', 'buildReply', 'buildTopic', 'buildTopicListResult', 'buildTopicDetail', 'buildLikeResult']) {
+    for (const name of ['extractAuthorName', 'extractAuthorId', 'extractAuthorAvatar', 'extractImages', 'buildReply', 'buildTopic', 'buildTopicDetail', 'buildLikeResult']) {
       expect(dto).toContain(`export function ${name}(`);
     }
     // 构造层只碰响应对象：不 import request 层，也不出现任何请求出口调用
