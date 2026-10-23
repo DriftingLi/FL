@@ -607,6 +607,9 @@ function scanContract(sources) {
   must(s.includes("Get-Prop $script:GatePlan['directPages'] 'guestPhase'"), 'C27', '执行路径未从计划 guestPhase 取游客页族（会手抄第二份清单）');
   must(s.includes('landed-elsewhere'), 'C27', '执行路径未记 landed-elsewhere(<落地页>) 页级 reason（落地到别处会被冒充成 direct-page-unsupported）');
   must(!/\$isEntry\)\s*\{\s*$/m.test(s) || s.includes('$isGuestPage'), 'C27', '分相仍以 $isEntry 单相判定（游客页会被注 auth 会话后自己跳走）');
+  // Get-Prop 必须字典感知：计划是真源（[ordered]），而 [ordered] 的键不是 PSObject 属性。
+  // 2026-10-23 实测：不改这一处时 $guestRoutes 恒为空、登录页照旧被注会话，只有真跑才照得出来。
+  must(s.includes('$Object -is [System.Collections.IDictionary]'), 'C27', 'Get-Prop 不读字典键（[ordered] 计划被读成 $null，声明形同虚设）');
 
   // C14 贴评论调用不得断链（缺续行反引号会把参数变成另一条命令）。
   // **只对代码行判**（#914 收窄）：`<# … #>` 帮助文本与 `#` 注释里的 bullet 不是续行参数 ——
@@ -1168,6 +1171,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
   ['C27', { ...real, script: real.script.replace(/\$isGuestPage/g, '$isEntry') }],
   ['C27', { ...real, script: real.script.replace("Get-Prop $script:GatePlan['directPages'] 'guestPhase'", "Get-Prop $script:GatePlan['directPages'] 'guestPhaze'") }],
   ['C27', { ...real, script: real.script.replace(/landed-elsewhere/g, 'direct-page-unsupported') }],
+  ['C27', { ...real, script: real.script.replace('$Object -is [System.Collections.IDictionary]', '$false') }],
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);

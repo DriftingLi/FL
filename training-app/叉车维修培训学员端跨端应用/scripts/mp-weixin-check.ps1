@@ -381,6 +381,10 @@ function Get-Prop {
     if ($null -eq $Object) { return $null }
     $p = $Object.PSObject.Properties[$Name]
     if ($p) { return $p.Value }
+    # 字典（`[ordered]@{}` / `@{}`）的键**不是** PSObject 属性：#1817 实测 `Get-Prop $plan 'routes'`
+    # 静默回 $null，计划里声明的游客页族被读成空清单（游客页照旧被注 auth 会话），
+    # 而源码文本面的守护照样全绿 —— 读不到配置比读错配置更难发现。字典按 key 取。
+    if ($Object -is [System.Collections.IDictionary] -and $Object.Contains($Name)) { return $Object[$Name] }
     return $null
 }
 
