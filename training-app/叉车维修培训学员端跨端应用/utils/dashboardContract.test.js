@@ -68,10 +68,10 @@ describe('notification 域收紧（dashboard 未读轮询数据源）', () => {
   it('getNotificationsApi / getUnreadCountApi 经 getMapped，列表装载走信封出口（PR-D #1664），侧计数器 unread_count 与 count 保持手读', () => {
     const list = fnBodyOf(src, 'getNotificationsApi');
     expect(list).toContain('getMapped<NotificationListResult>');
-    // `data` 之后跟信封归一的附加实参（url / page / pageSize，ADR-0037 PR-D）
-    expect(list).toMatch(/\(data : UTSJSONObject\) : NotificationListResult => buildNotificationListResult\(data[^)]*\)/);
-    expect(src).toMatch(/function buildNotificationListResult/);
-    expect(src).toMatch(/decodePage<NotificationItem>/);
+    // mapper 箭头包裹（#1737：三参壳消亡，装载内联）
+    expect(list).toMatch(/\(data : UTSJSONObject\) : NotificationListResult => \{/);
+    expect(list).toContain("decodePage<NotificationItem>(data, '/notifications'");
+    expect(src).not.toMatch(/function buildNotificationListResult/);
     expect(src).toContain("toNumber(data['unread_count'])");
     const unread = fnBodyOf(src, 'getUnreadCountApi');
     expect(unread).toContain("getMapped<number>('/notifications/unread-count'");
