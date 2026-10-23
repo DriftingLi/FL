@@ -27,7 +27,7 @@
     "style:loop": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/style-loop.ps1"
   },
   "devDependencies": {
-    "jest": "^27.0.4",
-    "jest-environment-node": "^27.5.1"
+    "jest": "^30.5.2",
+    "jest-environment-node": "^30.5.2"
   }
 }
