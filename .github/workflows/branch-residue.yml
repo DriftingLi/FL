@@ -24,7 +24,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Branch residue scan（dry-run，MERGED 残留即红）
         env:

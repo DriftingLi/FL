@@ -103,7 +103,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: github.event_name == 'push'
         with:
           fetch-depth: 1
@@ -202,7 +202,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 检出 CI 验证过的那个 commit(inputs.ref 优先,否则当前 HEAD)
           ref: ${{ env.DEPLOY_REF }}
@@ -231,7 +231,7 @@ jobs:
       - name: 提取镜像标签
         if: steps.content.outputs.exists != 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_BACKEND }}
 
@@ -243,7 +243,7 @@ jobs:
 
       - name: 构建并推送后端镜像
         if: steps.content.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: backend
           push: true
@@ -266,7 +266,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.DEPLOY_REF }}
 
@@ -294,7 +294,7 @@ jobs:
       - name: 提取镜像标签
         if: steps.content.outputs.exists != 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_FRONTEND }}
 
@@ -306,7 +306,7 @@ jobs:
 
       - name: 构建并推送前端镜像
         if: steps.content.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: frontend
           push: true
@@ -329,7 +329,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.content.outputs.content_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.DEPLOY_REF }}
 
@@ -357,7 +357,7 @@ jobs:
       - name: 提取镜像标签
         if: steps.content.outputs.exists != 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_LIBREOFFICE }}
 
@@ -369,7 +369,7 @@ jobs:
 
       - name: 构建并推送 LibreOffice sidecar 镜像
         if: steps.content.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: libreoffice-sidecar
           push: true
@@ -530,7 +530,7 @@ jobs:
       # 此处只兜「脚本整体」——慢回源场景由本预算容纳，不再与 600s 拉取超时互相收割。
       DEPLOY_CMD_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '3000' || '4500' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.DEPLOY_REF }}
 
