@@ -39,7 +39,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.10.5",
-    "@vitejs/plugin-vue": "^5.0.3",
+    "@vitejs/plugin-vue": "^6.0.10",
     "@vitest/coverage-istanbul": "^4.1.11",
     "@vue/test-utils": "^2.5.1",
     "happy-dom": "^20.11.1",
