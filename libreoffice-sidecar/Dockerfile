@@ -8,7 +8,8 @@
 FROM python:3.12-alpine
 
 # 安装 LibreOffice + poppler-utils + 中日韩字体
-# Pillow 10.4.0 在 alpine 上提供 musllinux wheel，无需额外编译依赖
+# Pillow 13.0.0 在 alpine 上仍提供 musllinux wheel（pillow-13.0.0-cp312-cp312-musllinux_1_2_x86_64.whl，
+# 已对本仓的 python:3.12-alpine 实测 pip 直装成功），无需额外编译依赖；13.x 起不再支持 Python 3.10，本镜像 3.12 不受影响
 RUN apk add --no-cache \
         libreoffice \
         poppler-utils \
