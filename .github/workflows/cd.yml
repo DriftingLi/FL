@@ -49,7 +49,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.26.10" # 与 ci.yml 同源（#1623 / #1744）：生产镜像用同一个补丁版
-  NODE_VERSION: "22"
+  NODE_VERSION: "24"
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend
   IMAGE_FRONTEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-frontend
@@ -208,7 +208,7 @@ jobs:
           ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -271,7 +271,7 @@ jobs:
           ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -334,7 +334,7 @@ jobs:
           ref: ${{ env.DEPLOY_REF }}
 
       - name: 登录 GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
