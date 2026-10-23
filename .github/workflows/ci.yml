@@ -31,7 +31,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: dorny/paths-filter@v4
@@ -59,7 +59,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -158,7 +158,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -198,7 +198,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -320,7 +320,7 @@ jobs:
     if: always() && (needs.backend-test.result == 'success' || needs.frontend-check.result == 'success')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         if: needs.changes.outputs.backend == 'true'
@@ -395,7 +395,7 @@ jobs:
       # 迁移 / 对账 / 回滚三步共用同一个空库连接串（服务容器见上方 services.postgres）
       DATABASE_URL: postgres://migrateuser:migratepass@localhost:5432/forklift_migrate?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -480,7 +480,7 @@ jobs:
       run:
         working-directory: training-app/叉车维修培训学员端跨端应用
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
@@ -562,7 +562,7 @@ jobs:
   pr-evidence-selftest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -580,7 +580,7 @@ jobs:
   el-controls-selftest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -713,7 +713,7 @@ jobs:
       # gh CLI 需要 git 仓库上下文,必须先 checkout 代码
       # !cancelled()：run 被并发取消时,if: always() 的 ci-summary 仍会执行,
       # 不加这道判断会让「已被放弃的旧提交」照常派发部署（实测发生过）
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: success() && !cancelled() && github.event_name == 'push'
 
       - name: 判定是否部署 testing
