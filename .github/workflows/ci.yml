@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
@@ -161,7 +161,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
@@ -182,7 +182,7 @@ jobs:
         run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 10m
 
       - name: 上传覆盖率报告
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-coverage
           path: backend/coverage.txt
@@ -217,7 +217,7 @@ jobs:
       # 时那两个 job 根本不跑，锁必须在这个面上也真跑一次。判据与上面的「Swagger 产物新鲜度」
       # 同形：现算 → git diff 必须为空（同一次现算也顺带证明再生成是幂等的）。
       - name: Set up Go（部署面生成物新鲜度用）
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
@@ -324,7 +324,7 @@ jobs:
 
       - name: Set up Go
         if: needs.changes.outputs.backend == 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
@@ -398,7 +398,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum

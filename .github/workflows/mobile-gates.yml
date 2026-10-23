@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         # 管家自身出错（取 diff 失败 / 判据块读不到）时：不改评论、只在跑摘要留痕，绝不判红
         continue-on-error: true
         env:

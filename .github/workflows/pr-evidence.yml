@@ -49,7 +49,7 @@ jobs:
   pr-evidence:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         with:
           script: |
             // ==== 判据来源（#1770）：校验器只有一份源码 .github/scripts/lib/gate-validator.mjs ====
