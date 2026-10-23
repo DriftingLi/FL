@@ -15,7 +15,7 @@
             :model-value="normalBinding?.config_id || 0"
             placeholder="请选择配置"
             style="width: 100%"
-            @update:model-value="(val: number) => handleAssistantBind(AI_ASSISTANT_MODE_KEYS[0], val)"
+            @update:model-value="(val: number) => handleAssistantBind(MODE_KEY_NORMAL, val)"
           >
             <el-option :value="0" label="未绑定" />
             <el-option
@@ -33,7 +33,7 @@
             :model-value="expertBinding?.config_id || 0"
             placeholder="请选择配置"
             style="width: 100%"
-            @update:model-value="(val: number) => handleAssistantBind(AI_ASSISTANT_MODE_KEYS[1], val)"
+            @update:model-value="(val: number) => handleAssistantBind(MODE_KEY_EXPERT, val)"
           >
             <el-option :value="0" label="未绑定" />
             <el-option
@@ -181,6 +181,10 @@ defineOptions({ name: 'AISettings' })
 
 import { ref, computed, onMounted } from 'vue'
 import { AI_ASSISTANT_MODE_KEYS } from '@/config/aiFeatures'
+
+// 模板里不做下标取值：vue-tsc 3 在模板中会把该导入当 ref 去取 .value（该类型没有），
+// 这里先解成两个具名常量，模板只引用标识符。
+const [MODE_KEY_NORMAL, MODE_KEY_EXPERT] = AI_ASSISTANT_MODE_KEYS
 import { ElMessage, type FormInstance, type FormItemRule } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
