@@ -55,6 +55,13 @@ updates:
         update-types:
           - patch
           - minor
+    ignore:
+      # katex 0.19 装不上：marked-katex-extension@5.1.13（当前最新）的 peer 是 `>=0.16 <0.19`，
+      # 升上去 npm ci 直接 ERESOLVE（#1787 里实测过）。上游放宽 peer 后删掉这条；跟踪 #1788。
+      - dependency-name: katex
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
 
   # ===== GitHub Actions =====
   - package-ecosystem: github-actions
