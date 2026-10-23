@@ -292,10 +292,14 @@ describe('#988 诊断来源资料消费契约', () => {
 
     it('锚点：`API_BASE_URL` 不含 `/ai-assistant` ⇒ 构造器必须自己带上这一段', () => {
       const env = read('config/env.uts');
-      expect(env).toContain("const DEV_API_BASE_URL = 'https://www.gccsmile.com/api'");
-      expect(env).toContain("const PROD_API_BASE_URL = 'https://www.gccsmile.com/api'");
+      // 域名口径：ADR-0077 决策 2「API 入口独立成 api.<domain>」；旧域 www.gccsmile.com
+      // 2026-10-23 硬切退役（A 记录不存在，#1802 实测 DNS 名称不存在）。
+      expect(env).toContain("const DEV_API_BASE_URL = 'https://api.gdyidao.cn/api'");
+      expect(env).toContain("const PROD_API_BASE_URL = 'https://api.gdyidao.cn/api'");
       // 若哪天 base 自带 /ai-assistant，这条会红 —— 那时才允许改构造器（并同步本组）。
       expect(env).not.toContain('/api/ai-assistant');
+      // 反向：退役域不得再回到基址（#1802 的判据本身就是「活引用归零」）。
+      expect(env).not.toContain('gccsmile.com');
     });
 
     it('`aiManualUrl` 拼出 `/ai-assistant/diagnosis/manual/` **全段**', () => {
@@ -311,12 +315,14 @@ describe('#988 诊断来源资料消费契约', () => {
 
     it('产物形状：三片拼起来 == 直连实测可用的那条 URL', () => {
       // 三片 = base（config/env.uts 的常量） + 段（构造器自己拼） + 已编码子路径。
-      const BASE = 'https://www.gccsmile.com/api';
+      const BASE = 'https://api.gdyidao.cn/api';
       const SEGMENT = '/ai-assistant/diagnosis/manual/';
       const SUBPATH = 'ep_byd_pmw20_service_manual_en/page_85_643.png';
-      // 这条 URL 是 2026-09-16 直连生产验过的：带段 → 200 / image/png；丢段 → 404。
+      // 这条 URL 直连生产验过：带段 → 200 / image/png；丢段 → 404。
+      // 换域后重新实测（2026-10-23，新域 api.gdyidao.cn）：
+      //   HTTP 200 / content-type: image/png / 109,488 bytes —— 与旧域读数逐字一致。
       expect(BASE + SEGMENT + SUBPATH).toBe(
-        'https://www.gccsmile.com/api/ai-assistant/diagnosis/manual/ep_byd_pmw20_service_manual_en/page_85_643.png');
+        'https://api.gdyidao.cn/api/ai-assistant/diagnosis/manual/ep_byd_pmw20_service_manual_en/page_85_643.png');
       const body = fnBody(API, 'export function aiManualUrl');
       expect(body).toContain("API_BASE_URL + '" + SEGMENT + "'");   // 与上面同一个 SEGMENT 常量
       expect(body).toContain("segs.join('/')");                     // 子路径那一片
@@ -347,13 +353,13 @@ describe('#988 诊断来源资料消费契约', () => {
       // strip 之后留给代理的是**带根**形状 `fault_images/<中文目录>/<文件名>` —— 后端
       // `resolveStaticSubpath` 的 staticRoots 认它（绝对形状一律拒）。
       // strip 本身的行为面在 `aiSourcesDisplay.test.js`（真单测），这里只钉三片拼出的产物。
-      const BASE = 'https://www.gccsmile.com/api';
+      const BASE = 'https://api.gdyidao.cn/api';
       const SEGMENT = '/ai-assistant/diagnosis/manual/';
       const SUBPATH = 'fault_images/制动系统/1721219449286.png';
       const encoded = SUBPATH.split('/').map((s) => encodeURIComponent(s)).join('/');
-      // 实测值：HTTP 200 / image/png / 92,929 bytes（旧口径丢段 → 404）。
+      // 实测值（2026-10-23 新域复测）：HTTP 200 / image/png / 92,929 bytes（旧口径丢段 → 404）。
       expect(BASE + SEGMENT + encoded).toBe(
-        'https://www.gccsmile.com/api/ai-assistant/diagnosis/manual/'
+        'https://api.gdyidao.cn/api/ai-assistant/diagnosis/manual/'
         + 'fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png');
     });
 
