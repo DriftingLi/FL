@@ -28,25 +28,25 @@
     "markstream-vue": "^2.0.20",
     "mermaid": "^11.17.2",
     "pdfjs-dist": "^4.4.168",
-    "pinia": "^2.1.7",
+    "pinia": "^4.1.0",
     "stream-diffs": "^0.0.2",
     "stream-markdown-parser": "^1.2.11",
     "vditor": "^3.11.2",
     "vue": "^3.5.44",
-    "vue-router": "^4.2.5",
+    "vue-router": "^5.4.0",
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.10.5",
     "@vitejs/plugin-vue": "^6.0.10",
-    "@vitest/coverage-istanbul": "^4.1.11",
+    "@vitest/coverage-istanbul": "^5.0.5",
     "@vue/test-utils": "^2.5.1",
     "happy-dom": "^21.0.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.3",
-    "vite": "^6.0.5",
-    "vitest": "^4.1.10",
+    "vite": "^7.3.7",
+    "vitest": "^5.0.5",
     "vue-tsc": "^3.3.13"
   }
 }
