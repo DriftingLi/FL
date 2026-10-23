@@ -89,7 +89,7 @@ function mutatedCopy(absFile, replacements, prefix) {
   return file;
 }
 
-/** 一批成功响应（信封字段与 `ForumTopicListResult` 同形：items / total / hasMore） */
+/** 一批成功响应（信封字段与 `Page<ForumTopic>` 同形：items / total / hasMore；#1737 起列表出口就是它） */
 const page1 = (items, hasMore = true) => ({ items, total: items.length + (hasMore ? 10 : 0), hasMore });
 
 // ===== ① 查询语义与 pageSize 逐字照旧 =====

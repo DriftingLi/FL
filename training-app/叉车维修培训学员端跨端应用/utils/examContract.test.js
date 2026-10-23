@@ -166,8 +166,18 @@ describe('域 api 收紧（T07 / ADR-0007）：DTO 函数经 mapper-callback 出
     'startMockExamApi',
     'resumeMockExamApi',
     'getMockExamResultApi',
-    'getMockExamHistoryApi',
   ];
+
+  it('getMockExamHistoryApi 经信封 getPaged（#1737 三参壳消亡），keys 三级回退就近声明', () => {
+    const start = api.indexOf('export function getMockExamHistoryApi');
+    expect(start).toBeGreaterThan(-1);
+    const body = api.slice(start, api.indexOf('\n}', start));
+    expect(body).toContain("getPaged<MockExamHistoryItem>('/mock-exam/history'");
+    expect(body).toContain("['exams', 'items', 'records']");
+    expect(body).not.toContain('getMapped<');
+    // 三参自算壳在 api 层零命中（#1737 票面验收）
+    expect(api).not.toMatch(/function\s+buildMockExamHistoryResult/);
+  });
 
   it.each(DTO_FNS)('%s 经 mapper 出口（getMapped/postMapped + 箭头包裹 build*）', (name) => {
     const start = api.indexOf('export function ' + name);

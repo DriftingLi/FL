@@ -43,14 +43,6 @@ export type ForumTopic = {
     ip_city : string
 }
 
-/** 帖子列表响应 */
-export type ForumTopicListResult = {
-    items : ForumTopic[]
-    total : number
-    /** PR-F #1666：翻页终止判据（= page*pageSize < total，由 decodePage 推导）；取代已删的 page / pages 回显 */
-    hasMore : boolean
-}
-
 /** 帖子回复 */
 export type ForumReply = {
     id : number

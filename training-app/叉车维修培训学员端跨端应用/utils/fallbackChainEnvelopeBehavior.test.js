@@ -91,7 +91,7 @@ function loadQuestionInteraction(raw, calls = [], file = QUESTION_INTERACTION_UT
   return { mod, calls };
 }
 
-/** 装载 mockExam.uts（imports：getMapped/post/postMapped + toNumber/toStr/toBool + decodePage） */
+/** 装载 mockExam.uts（imports：getMapped/post/postMapped + toNumber/toStr/toBool + getPaged；#1737 起历史装载走信封出口） */
 function loadMockExam(raw, calls = [], file = MOCK_EXAM_UTS, opt = {}) {
   const h = helpers();
   const gm = opt.reject ? makeRejecting(calls) : makeResponder(raw, calls, 'mapped');
@@ -104,6 +104,7 @@ function loadMockExam(raw, calls = [], file = MOCK_EXAM_UTS, opt = {}) {
     toStr: h.toStr,
     toBool: h.toBool,
     decodePage: env.decodePage,
+    getPaged: env.getPaged,
   });
   return { mod, calls };
 }
@@ -248,12 +249,12 @@ describe('A. getCommentsApi：手写回退链收敛为模块默认键序（PR-B 
 // ===== B. 三级回退链 + 吞错删除：mockExam =====
 
 describe('B. mockExam 历史：三级 if-else 收敛为一次 keys 声明，吞错分支已删', () => {
-  it('exams 优先于 records（键序即回退序）；结果只留 items / total（PR-F #1666 删 page/page_size）', async () => {
+  it('exams 优先于 records（键序即回退序）；出口是信封 Page（items / total / hasMore，#1737）', async () => {
     const { mod, calls } = loadMockExam({ exams: [EXAM_ROW], records: [EXAM_ROW, EXAM_ROW], total: 7 });
     const got = await mod.getMockExamHistoryApi(2, 5);
     expect(got.items.length).toBe(1);
     expect(got.total).toBe(7);
-    expect(Object.keys(got).sort()).toEqual(['items', 'total']); // 结构性：分页回显字段已不可表达
+    expect(Object.keys(got).sort()).toEqual(['hasMore', 'items', 'total']); // 结构性：分页回显字段已不可表达
     expect(calls[0].url).toBe('/mock-exam/history');
     expect(calls[0].params).toEqual({ page: '2', page_size: '5' });
   });
@@ -277,10 +278,10 @@ describe('B. mockExam 历史：三级 if-else 收敛为一次 keys 声明，吞�
     expect(got.items.length).toBe(2);
   });
 
-  it('M3 必红：把吞错 .catch 加回来 → 失败不再上抛', async () => {
+  it('M3 必红：把吞错 .catch 加回 getPaged 出口 → 失败不再上抛', async () => {
     const file = mutateUts(MOCK_EXAM_UTS, [[
-      "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize))",
-      "buildMockExamHistoryResult(data, 'mock-exam/history', page, pageSize)).catch(() => Promise.resolve({ items: [], total: 0 }))",
+      "	}, null, ['exams', 'items', 'records'])",
+      "	}, null, ['exams', 'items', 'records']).catch(() => Promise.resolve({ items: [], total: 0 }))",
     ]], 'mockExam.uts');
     const { mod } = loadMockExam({}, [], file, { reject: true });
     await expect(mod.getMockExamHistoryApi(1, 10)).resolves.toEqual({ items: [], total: 0 });
