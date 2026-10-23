@@ -8,8 +8,10 @@ name: PR - 验收证据校验
 # #1770 起：**证据主键是 commit sha，不是 PR 号**——证据齐了、贴到 commit 上，再开 PR。判据源码移到
 # `.github/scripts/lib/gate-validator.mjs`（单一来源，mobile-gates 与本地预检读同一份）；本 job 不 checkout，
 # 用 repos.getContent 取该文件文本 → 剥 `export` → new Function 求值。取的是**默认分支**上的版本（PR 改不了自己的判据）。
-# 证据来源三处：PR 正文（结构）、PR 评论、**commit 评论**（`gh api repos/{owner}/{repo}/commits/<sha>/comments`）。
-# 票（issue）评论**不进判据**——那是给人看的展示面，判据面与展示面两处关联会腐。
+# 证据来源四处：PR 正文（结构）、PR 评论、**commit 评论**（`gh api repos/{owner}/{repo}/commits/<sha>/comments`）、
+# 以及 **PR 正文关联的票评论**（`Closes #N` / `Refs #N` / issue 直链，去重 ≤5 张）。票评论自 #1841 起进候选：
+# 本仓 commit 评论 POST 长期 HTTP 404（#1838 复盘），门脚本据此**降级**把同一份评论贴到票上当正式落点；
+# 三者**同构**（marker / sha 绑定 / 祖先判定 / 其间运行时面 / fail-closed 全不变），未在正文关联的票不进判据。
 #
 # 它只校验「证据段的结构与产物字段是否存在」，**不校验真伪** —— 真伪由维护者读日志/截图判定（ADR-0008 明确不做）。
 # 截图产物的判据是**结构性**的（2026-09-12 修订）：只认 GitHub 托管图片（附件/Markdown 图片）、仓库内
@@ -64,8 +66,15 @@ jobs:
               }
               return Buffer.from(data.content, data.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8');
             };
+            // 判据面需要的两个纯函数：主判据 + 「PR 正文关联了哪些票」（#1841）。
+            // 后者也住在校验器里而不是这里：它决定**哪些票的评论进候选**，属判据的一部分；
+            // 写进 workflow 就是第二份口径（#1770 拆掉的那类分叉）。
+            // 兼容窗口：默认分支上的旧版模块还没有 issueNumbersInBody。typeof 对未声明的标识符安全，
+            // 取不到就返回 null，调用方把「票评论」这条来源按未启用处理（fail-closed，不报错）。
             const evalValidator = (srcText) =>
-              new Function(`${srcText.replace(/^export /gm, '')}\nreturn validatePrEvidence;`)();
+              new Function(
+                `${srcText.replace(/^export /gm, '')}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`,
+              )();
             const loadValidator = async (ref) => {
               try {
                 return evalValidator(await readRepoFile('.github/scripts/lib/gate-validator.mjs', ref));
@@ -73,12 +82,12 @@ jobs:
                 const wf = await readRepoFile('.github/workflows/pr-evidence.yml', ref);
                 const m = wf.match(/\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/);
                 if (!m) throw e;
-                return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
+                return new Function(`${m[1]}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`)();
               }
             };
 
             const pr = context.payload.pull_request;
-            const validatePrEvidence = await loadValidator(pr.base.ref);
+            const { validatePrEvidence, issueNumbersInBody } = await loadValidator(pr.base.ref);
 
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner, repo, pull_number: pr.number, per_page: 100,
@@ -115,7 +124,6 @@ jobs:
               }
             };
             // S2（#1770）：证据主键改为 **commit sha** —— 门评论可以直接贴在 commit 上（证据齐了再开 PR）。
-            // 候选集 = PR 评论 + commit 评论（同一套 marker / sha 绑定判据）；**票（issue）评论不进判据**。
             // 为什么不止读 head 的 commit 评论：证据可能贴在一个仍是 head 祖先的旧 commit 上（绑定判据允许），
             // 于是把本 PR 的提交逐个取一遍（取最近 30 个，足够覆盖证据所在的那次推送）。
             const prCommits = await github.paginate(github.rest.pulls.listCommits, {
@@ -129,10 +137,28 @@ jobs:
               });
               for (const c of cs) commitComments.push(c.body || '');
             }
+            // #1841：commit 评论端点对本仓恒 404（#1838）⇒ 门脚本把**同一份**正文（marker + `commit: <sha>`）
+            // 改贴到票上当正式落点，票评论因此进候选。只认 **PR 正文显式关联的票**（`Closes #N` / `Refs #N`，≤5 张），
+            // 未关联的票不进判据——否则「别的票上的证据」能被任意 PR 复用。
+            // 过渡窗口：base 分支尚未带这条改动时没有 issueNumbersInBody ⇒ 本来源不启用（fail-closed，而非报错）。
+            const issueNumbers =
+              typeof issueNumbersInBody === 'function' ? issueNumbersInBody(pr.body || '') : [];
+            const issueComments = [];
+            for (const n of issueNumbers) {
+              try {
+                const cs = await github.paginate(github.rest.issues.listComments, {
+                  owner, repo, issue_number: n, per_page: 100,
+                });
+                for (const c of cs) issueComments.push(c.body || '');
+              } catch (e) {
+                // 票评论取不到不影响 PR 评论 / commit 评论两条既有来源；这一路按「没有候选」处理。
+                core.warning(`listComments(#${n}) 失败：${e && e.message ? e.message : e}`);
+              }
+            }
 
             const result = await validatePrEvidence({
               files, body: pr.body || '', author: pr.user.login,
-              gateComments, commitComments, headSha: pr.head.sha, fetchCompare,
+              gateComments, commitComments, issueComments, headSha: pr.head.sha, fetchCompare,
             });
 
 

@@ -7,14 +7,41 @@
 //   ② .github/workflows/mobile-gates.yml —— 同上（判据同源，不另算口径）
 //   ③ .github/scripts/pr-evidence-check.test.mjs / 本地预检 preflight-pr.mjs —— 直接 import
 //
-// 纯函数：输入 files/body/author/gateComments/commitComments/headSha/fetchCompare，
+// 纯函数：输入 files/body/author/gateComments/commitComments/issueComments/headSha/fetchCompare，
 // 输出 { ok, errors, notes, runtime, needs4b, lowRiskRuntime, gates }。
 // fetchCompare 是**注入的**取数回调（测试里注桩，不打网络）：入参 { base, head }，返回
 // { status, mergeBaseSha, files, filesTruncated }；取不到即返回 null（fail-closed）。
 // 因注入了异步回调，本函数返回 Promise；调用方必须 await。
+//
+// 2026-10-23（#1841）候选来源新增**票（issue）评论**。原因不是判据想松：GitHub 对本仓
+// `POST /repos/{owner}/{repo}/commits/{sha}/comments` 长期回 HTTP 404（同 token 在别的仓正常，
+// 复盘见 #1838），门脚本据此**降级**——同一份评论（marker 与 `commit: <sha>` 一字不改）改贴到票上
+// 当正式落点。票评论若不进候选，降级后的证据在判据面等于没贴。
+// **同构，不放宽**：marker、`commit: <sha>`、祖先判定、其间运行时面未变、fail-closed 全部沿用，
+// 只是「去哪儿找候选」多了一处。哪些票算候选由下面的 `issueNumbersInBody` 定（PR 正文显式关联的票），
+// 调用方按它取数后喂进 `issueComments`；**未关联的票不进判据**（判据面与展示面各认一处关联会腐）。
 // ============================================================================
+
+// 「这张 PR 关联了哪些票」：`Closes #N` / `Refs #N` 之类关键字 + issue 直链。
+// 为什么写在校验器而不是调用方：它决定**哪些票的评论被当候选**，属判据的一部分；写进 workflow
+// 就成了第二份口径（#1770 拆掉的那类分叉）。
+// 必须剥 HTML 注释：PR 模板注释里塞满了历史票号（#1770 / #883…），不剥会全被拉成候选。
+// 上限 5 张：候选越多，「别的票上的证据」被误认成本 PR 证据的面积越大；正常 PR 只关联 1–2 张。
+export function issueNumbersInBody(body) {
+  const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
+  const nums = new Set();
+  for (const m of clean.matchAll(/(?:closes|fixes|refs|resolves|related\s+to)\s*:?\s*#(\d+)/gi)) {
+    nums.add(Number(m[1]));
+  }
+  for (const m of clean.matchAll(/https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/(\d+)/gi)) {
+    nums.add(Number(m[1]));
+  }
+  return [...nums].filter((n) => Number.isInteger(n) && n > 0).slice(0, 5);
+}
+
 export async function validatePrEvidence({
-  files, body, author, gateComments = [], commitComments = [], headSha = '', fetchCompare = null,
+  files, body, author, gateComments = [], commitComments = [], issueComments = [], headSha = '',
+  fetchCompare = null,
 }) {
   const RUNTIME_JSON = ['manifest.json', 'pages.json', 'platformConfig.json'];
   const isRuntimeFile = (p) => {
@@ -167,12 +194,13 @@ export async function validatePrEvidence({
   // 门评论：任一候选「绑上」即算满足；全都不满足时把**最有信息量的那条**原因带进错误文案。
   // 顺序上先判「commit 恰好等于 head」的候选（不打 compare，也就不会因 API 抖动把一条本可用的评论拖红）；
   // 祖先口径的候选排在后面 —— 于是「老评论绑旧 sha + 新评论绑新 sha」共存时优先认新评论。
-  // 候选来源（#1770）：PR 评论 + **commit 评论**。
-  // commit 评论是证据主键改为 commit sha 之后的正路：证据齐了、贴到 commit 上，再开 PR。
-  // 也正因为要读它，旧用法「-PostToPr <PR号>」才仍然有效（展示副本落在 PR 评论上，同一套绑定判据认）。
-  // **票（issue）评论不进判据**：展示面与判据面两处关联会腐，票上的副本只给人看。
+  // 候选来源（#1770、#1841）：PR 评论 + **commit 评论** + **正文关联的票评论**。
+  // commit 评论是「证据先于 PR 存在」的正路：证据齐了、贴到 commit 上，再开 PR。
+  // 票评论是 #1841 的**降级落点**：本仓 commit 评论端点恒 404（#1838），门脚本把同一份正文改贴到票上。
+  // 它不是宽松档——候选只在 `isGateEvidenceFor` 通过后产生，marker / `commit: <sha>` / 祖先判定一条不少。
+  // 哪些票算候选不在这里决定：调用方按 `issueNumbersInBody(body)` 取数喂进来（未关联的票不进判据）。
   const gateComment = async (gateKey) => {
-    const candidates = [...(gateComments || []), ...(commitComments || [])]
+    const candidates = [...(gateComments || []), ...(commitComments || []), ...(issueComments || [])]
       .map((c) => (typeof c === 'string' ? c : ((c && c.body) || '')))
       .filter((t) => isGateEvidenceFor(t, gateKey));
     if (candidates.length === 0) return { hit: undefined, reason: '' };

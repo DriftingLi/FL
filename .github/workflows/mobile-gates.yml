@@ -119,7 +119,12 @@ jobs:
                 const data = res.data || {};
                 return Buffer.from(data.content || '', data.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8');
               };
-              const evalValidator = (src) => new Function(`${String(src).replace(/^export /gm, '')}\nreturn validatePrEvidence;`)();
+              // 判据面的两个纯函数一起取：主判据 + 「PR 正文关联了哪些票」（#1841，决定哪些票评论进候选）。
+              // 兼容窗口：默认分支上的旧版模块还没有 issueNumbersInBody，typeof 对未声明标识符安全，
+              // 取不到返回 null ⇒ 票评论来源按未启用处理（fail-closed，不报错）。
+              const evalValidator = (src) => new Function(
+                `${String(src).replace(/^export /gm, '')}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`,
+              )();
               const loadValidator = async (ref) => {
                 try {
                   return evalValidator(await readRepoFile('.github/scripts/lib/gate-validator.mjs', ref));
@@ -129,15 +134,16 @@ jobs:
                     /\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/,
                   );
                   if (!m) throw new Error('判据同源中断：既没有 gate-validator.mjs，也没有内联标记块');
-                  return new Function(`${m[1]}\nreturn validatePrEvidence;`)();
+                  return new Function(`${m[1]}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`)();
                 }
               };
               let validate;
+              let issueNumbersInBody;
               try {
-                validate = await loadValidator(headSha);
+                ({ validatePrEvidence: validate, issueNumbersInBody } = await loadValidator(headSha));
               } catch (e) {
                 core.warning(`从 head 取判据失败（${e.message}），退回默认分支版本。`);
-                validate = await loadValidator(pr.base.ref);
+                ({ validatePrEvidence: validate, issueNumbersInBody } = await loadValidator(pr.base.ref));
               }
 
               // compare 回调：与 pr-evidence.yml 里那份逐字同义（祖先判定 + 运行时面比对 + 截断即 fail-closed）
@@ -171,6 +177,22 @@ jobs:
                 });
                 for (const c of cs) commitComments.push(c.body || '');
               }
+              // #1841：票评论也是候选（commit 评论端点对本仓恒 404 ⇒ 门脚本降级把证据贴到票上）。
+              // 与 pr-evidence.yml 逐字同义：只认正文显式关联的票（≤5 张），取不到就按「没有候选」。
+              // 少了这一路，管家会与真门分歧：真门认了票上的降级证据，管家说没绑。
+              const issueNumbers =
+                typeof issueNumbersInBody === 'function' ? issueNumbersInBody(pr.body || '') : [];
+              const issueComments = [];
+              for (const n of issueNumbers) {
+                try {
+                  const cs = await github.paginate(github.rest.issues.listComments, {
+                    owner, repo, issue_number: n, per_page: 100,
+                  });
+                  for (const c of cs) issueComments.push(c.body || '');
+                } catch (e) {
+                  core.warning(`listComments(#${n}) 失败：${e && e.message ? e.message : e}`);
+                }
+              }
 
               const result = await validate({
                 files,
@@ -178,6 +200,7 @@ jobs:
                 author: (pr.user && pr.user.login) || '',
                 gateComments,
                 commitComments,
+                issueComments,
                 headSha,
                 fetchCompare,
               });
