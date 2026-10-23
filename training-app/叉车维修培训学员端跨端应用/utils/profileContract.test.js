@@ -46,6 +46,13 @@ describe('student 域收紧（profile 主页面数据源）', () => {
       expect(body).not.toContain('.catch(');
       expect(body).not.toContain('getMock');
     });
+  it('getStudentCoursesApi 装载内联信封出口 decodeList（#1737 三参壳 buildStudentCourseListResult 消亡）', () => {
+    const body = fnBodyOf(src, 'getStudentCoursesApi');
+    expect(body).toContain("decodeList<StudentCourse>(data, '/student/courses'");
+    expect(body).toContain("['courses']");
+    expect(body).toContain("data['continue_learning']");
+    expect(src).not.toMatch(/function\s+buildStudentCourseListResult/);
+  });
   it('getRecordsApi 改走信封出口 getPaged（PR-F #1666 页面侧重命名：出口统一 Page<StudyRecord>）', () => {
     const body = fnBodyOf(src, 'getRecordsApi');
     expect(body).toContain('getPaged<StudyRecord>');

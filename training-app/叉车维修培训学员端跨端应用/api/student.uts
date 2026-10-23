@@ -226,24 +226,6 @@ function buildChapterProgress(obj : UTSJSONObject) : StudentCourseChapterProgres
 	} as StudentCourseChapterProgress
 }
 
-/**
- * 从 UTSJSONObject 构造 StudentCourseListResult
- * 数组走信封归一出口 decodeList（ADR-0037 PR-C），数组键 courses 显式声明；
- * 本端点响应无 total（后端只回 courses 与 continue_learning 兄弟键），decodePage 会恒打 no-total 警，故走 decodeList
- */
-function buildStudentCourseListResult(data : UTSJSONObject, url : string) : StudentCourseListResult {
-	const courses : StudentCourse[] = decodeList<StudentCourse>(data, url, (obj : UTSJSONObject) : StudentCourse => buildStudentCourse(obj), ['courses'])
-	let continueLearning : StudentCourse | null = null
-	const clRaw = data['continue_learning']
-	if (clRaw != null) {
-		continueLearning = buildStudentCourse(clRaw as UTSJSONObject)
-	}
-	return {
-		courses: courses,
-		continue_learning: continueLearning,
-	} as StudentCourseListResult
-}
-
 /** 从 UTSJSONObject 构造 StudentCourseDetail（course 基字段 + chapters 进度） */
 function buildStudentCourseDetailResult(data : UTSJSONObject) : StudentCourseDetail {
 	const base = buildStudentCourse(data)
@@ -277,9 +259,23 @@ function buildStudentCourseDetailResult(data : UTSJSONObject) : StudentCourseDet
 /**
  * 我的课程列表（含最后学习位置与 continue_learning）
  * GET /api/student/courses
+ * @note 数组走信封归一出口 decodeList（ADR-0037 PR-C），数组键 courses 显式声明；
+ *       本端点响应无 total（后端只回 courses 与 continue_learning 兄弟键），decodePage 会恒打 no-total 警，故走 decodeList。
+ *       #1737：三参壳 buildStudentCourseListResult 消亡，装载内联进 mapper 箭头（兄弟键 continue_learning 同一处读出）。
  */
 export function getStudentCoursesApi() : Promise<StudentCourseListResult> {
-	return getMapped<StudentCourseListResult>('/student/courses', null, (data : UTSJSONObject) : StudentCourseListResult => buildStudentCourseListResult(data, '/student/courses'))
+	return getMapped<StudentCourseListResult>('/student/courses', null, (data : UTSJSONObject) : StudentCourseListResult => {
+		const courses : StudentCourse[] = decodeList<StudentCourse>(data, '/student/courses', (obj : UTSJSONObject) : StudentCourse => buildStudentCourse(obj), ['courses'])
+		let continueLearning : StudentCourse | null = null
+		const clRaw = data['continue_learning']
+		if (clRaw != null) {
+			continueLearning = buildStudentCourse(clRaw as UTSJSONObject)
+		}
+		return {
+			courses: courses,
+			continue_learning: continueLearning,
+		} as StudentCourseListResult
+	})
 }
 
 /**
