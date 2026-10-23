@@ -86,7 +86,7 @@
               <el-input v-model="exp.start_month" placeholder="开始年月" class="min-w-[120px] flex-1" />
               <el-input v-model="exp.end_month" placeholder="结束年月" class="min-w-[120px] flex-1" />
               <el-input v-model="exp.desc" placeholder="描述" class="min-w-[120px] flex-1" />
-              <UiButton variant="text" @click="removeExp(idx)" class="text-bad">删除</UiButton>
+              <UiButton variant="text" @click="removeExp(Number(idx))" class="text-bad">删除</UiButton>
             </div>
             <UiButton variant="primary" text @click="addExp">新增经历</UiButton>
           </div>
@@ -99,7 +99,7 @@
               </el-select>
               <el-input v-model="cert.cert_no" placeholder="证书编号" class="min-w-[120px] flex-1" />
               <el-input v-model="cert.expire_date" placeholder="有效期" class="min-w-[120px] flex-1" />
-              <UiButton variant="text" @click="removeCert(idx)" class="text-bad">删除</UiButton>
+              <UiButton variant="text" @click="removeCert(Number(idx))" class="text-bad">删除</UiButton>
             </div>
             <UiButton variant="primary" text @click="addCert">新增持证</UiButton>
           </div>
@@ -121,7 +121,7 @@
             <div class="mt-2 flex w-full flex-col gap-1">
               <span v-for="(p, i) in form.photos" :key="i" class="flex items-center gap-2 text-xs">
                 <span class="max-w-[200px] truncate text-ink-2">{{ p }}</span>
-                <UiButton variant="text" @click="removePhoto(i)" class="text-bad">删除</UiButton>
+                <UiButton variant="text" @click="removePhoto(Number(i))" class="text-bad">删除</UiButton>
               </span>
             </div>
           </div>

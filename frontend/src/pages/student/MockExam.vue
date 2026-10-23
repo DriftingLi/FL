@@ -80,7 +80,7 @@
           class="detail-item mb-2 rounded-[8px] p-2.5"
           :class="d.is_correct === true ? 'bg-ok-soft' : d.is_correct === false ? 'bg-bad-soft' : ''"
         >
-          <p><strong>第{{ idx + 1 }}题：</strong>{{ d.content }}</p>
+          <p><strong>第{{ Number(idx) + 1 }}题：</strong>{{ d.content }}</p>
           <p>你的答案：{{ d.user_answer || '未作答' }} | 正确答案：{{ d.correct_answer }}</p>
           <!-- 本题得分与总分同源（ADR-0068 决策 3）：短答不再并排展示「0 分」与「AI 评分」两个数 -->
           <p>本题得分：{{ d.score }} / {{ d.max_score }}</p>
@@ -120,7 +120,7 @@ const examResult = ref<any>({})
 const history = ref<MockExamHistoryItem[]>([])
 
 // 答题会话编排（进入/续时/断点续传/交卷顺序约束收敛进 useExamSession）
-const { inExam, currentIdx, remainingTime, questions, answers, shellRef, start, saveProgress, submit, reset } = useExamSession({
+const { inExam, currentIdx, remainingTime, questions, answers, start, saveProgress, submit, reset } = useExamSession({
   enter: async () => {
     if (paperMode.value) {
       const res = await realExamApi.startExam(paperId.value)
