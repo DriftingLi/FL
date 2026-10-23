@@ -49,13 +49,21 @@ export function useStudyTracker(adapters: StudyTrackerAdapters) {
     }
   }
 
+  /** 按挂钟重算已学秒数（计时与自动上报两个计时器都要在触发点对齐，不能依赖彼此的先后） */
+  function syncStudySeconds() {
+    if (studyStartTime) {
+      studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
+    }
+  }
+
   function startTimers() {
-    studyTimer = setInterval(() => {
-      if (studyStartTime) {
-        studySeconds.value = Math.floor((Date.now() - studyStartTime) / 1000)
-      }
-    }, 1000)
+    studyTimer = setInterval(syncStudySeconds, 1000)
     autoReportTimer = setInterval(() => {
+      // 60s 自动上报与 1s 计时同刻到期，谁先跑不受保证（vitest 4 → 5 实测顺序相反；
+      // 浏览器定时器队列按「到期时间 + 入队先后」排，60s 那个入队更早，同样可能先跑）。
+      // 若这里先跑而 studySeconds 还停在 59，增量 < 60 会被阈值整轮跳过、拖到 120s 才报。
+      // 故上报前先按挂钟对齐，把「计数」与「二次计时器的触发顺序」解耦。
+      syncStudySeconds()
       void reportIncremental(false)
     }, REPORT_THRESHOLD_SECONDS * 1000)
   }
