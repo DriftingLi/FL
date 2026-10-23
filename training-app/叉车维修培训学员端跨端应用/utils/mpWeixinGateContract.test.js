@@ -461,6 +461,27 @@ function scanPlan(plan) {
     must((dp.criteria || []).join('\n').includes('partial'), 'C26', 'directPages.criteria 未写 partial 形态（部分达成必须如实报告，不得塌缩成整组 skip）');
   }
 
+  // ---- C27（#1817）：会话分相判据 = 入口页 ∪ 游客页族，不得用「是否入口页」单相判据 ----
+  //   2026-10-23 实测：login 这类游客页被注 auth 会话后自己 reLaunch 到 dashboard，
+  //   冷启动落地页 ≠ 目标页 ⇒ 截 miss-login.png 撞 automator 应答超时，页级 reason 还被冒充成
+  //   direct-page-unsupported。判据的真源必须由计划声明（routes 清单 + rationale），不得散落。
+  if (dp) {
+    const gp = dp.guestPhase;
+    must(Boolean(gp), 'C27', 'directPages 缺 guestPhase 节（会话分相判据没有唯一真源）');
+    if (gp) {
+      const gr = Array.isArray(gp.routes) ? gp.routes : [];
+      must(gr.length > 0, 'C27', 'guestPhase.routes 为空（游客页族必须可枚举，不能靠执行侧猜）');
+      ['pages/login/login', 'pages/register/register'].forEach((r) => {
+        must(gr.includes(r), 'C27', `guestPhase.routes 缺 ${r}（已登录会自己跳走的页必须走 guest 相）`);
+      });
+      must(String(gp.rationale || '').includes('游客页族'), 'C27', 'guestPhase 缺 rationale（分相判据的来由必须写在计划里，否则后人会照「入口页」单相改回去）');
+      must(String(gp.mode || '') === 'guest', 'C27', 'guestPhase.mode 必须是 guest（游客页族走 guest 相清会话）');
+    }
+    const gpc = (dp.criteria || []).join('\n');
+    must(gpc.includes('游客页族'), 'C27', 'directPages.criteria 未写「游客页族」分相判据（#1817）');
+    must(gpc.includes('landed-elsewhere'), 'C27', 'directPages.criteria 未写 landed-elsewhere 页级 reason（落地到别处必须点名落到哪）');
+  }
+
   return violations;
 }
 
@@ -580,6 +601,15 @@ function scanContract(sources) {
   must(s.includes('"partial(ok=$navOkCount,skip=$navSkipCount)"'), 'C26', '结果行没有把组级部分达成写成 partial(ok=N,skip=M)（一页 miss 不许吞掉同组成功读数）');
   must(s.includes('navigation=PARTIAL'), 'C26', '日志缺 `navigation=PARTIAL ok=… skip=…` 行（部分达成必须进日志，不能只在内存里）');
   must(s.includes("Get-Prop $nav 'pages'"), 'C26', '未从 navigation.pages 读页级读数（未达成页的页级原因与已达成页的读数都必须可追溯）');
+
+  // C27（#1817）执行侧面：分相判据必须真的接在「游客页族」上，且落地到别处要点名
+  must(s.includes('$isGuestPage'), 'C27', '执行路径缺 $isGuestPage（分相判据必须是入口页 ∪ 游客页族，不能只看 $isEntry）');
+  must(s.includes("Get-Prop $script:GatePlan['directPages'] 'guestPhase'"), 'C27', '执行路径未从计划 guestPhase 取游客页族（会手抄第二份清单）');
+  must(s.includes('landed-elsewhere'), 'C27', '执行路径未记 landed-elsewhere(<落地页>) 页级 reason（落地到别处会被冒充成 direct-page-unsupported）');
+  must(!/\$isEntry\)\s*\{\s*$/m.test(s) || s.includes('$isGuestPage'), 'C27', '分相仍以 $isEntry 单相判定（游客页会被注 auth 会话后自己跳走）');
+  // Get-Prop 必须字典感知：计划是真源（[ordered]），而 [ordered] 的键不是 PSObject 属性。
+  // 2026-10-23 实测：不改这一处时 $guestRoutes 恒为空、登录页照旧被注会话，只有真跑才照得出来。
+  must(s.includes('$Object -is [System.Collections.IDictionary]'), 'C27', 'Get-Prop 不读字典键（[ordered] 计划被读成 $null，声明形同虚设）');
 
   // C14 贴评论调用不得断链（缺续行反引号会把参数变成另一条命令）。
   // **只对代码行判**（#914 收窄）：`<# … #>` 帮助文本与 `#` 注释里的 bullet 不是续行参数 ——
@@ -999,6 +1029,14 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C26', (p) => { p.directPages.navigationShapes.skip = 'skip'; return p; }],
       ['C26', (p) => { p.directPages.navigationShapes.envEarly = 'environ'; return p; }],
       ['C26', (p) => { p.directPages.criteria = p.directPages.criteria.filter((c) => !c.includes('partial')); return p; }],
+  // C27：会话分相判据被改坏（缺节/空清单/缺关键页/mode 漂移/判据未写）
+  ['C27', (p) => { delete p.directPages.guestPhase; return p; }],
+  ['C27', (p) => { p.directPages.guestPhase.routes = []; return p; }],
+  ['C27', (p) => { p.directPages.guestPhase.routes = p.directPages.guestPhase.routes.filter((r) => r !== 'pages/login/login'); return p; }],
+  ['C27', (p) => { p.directPages.guestPhase.mode = 'auth'; return p; }],
+  ['C27', (p) => { p.directPages.guestPhase.rationale = '随便写的'; return p; }],
+  ['C27', (p) => { p.directPages.criteria = p.directPages.criteria.filter((c) => !c.includes('游客页族')); return p; }],
+  ['C27', (p) => { p.directPages.criteria = p.directPages.criteria.filter((c) => !c.includes('landed-elsewhere')); return p; }],
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -1129,6 +1167,11 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C26', { ...real, script: real.script.replace('partial(ok=$navOkCount,skip=$navSkipCount)', 'partial') }],
       ['C26', { ...real, script: real.script.replace('navigation=PARTIAL', 'navigation=SKIP') }],
       ['C26', { ...real, script: real.script.replace("Get-Prop $nav 'pages'", "Get-Prop $nav 'pagez'") }],
+  // C27：执行侧分相判据被拆（退回 $isEntry 单相 / 手抄清单 / 落地原因被冒充）
+  ['C27', { ...real, script: real.script.replace(/\$isGuestPage/g, '$isEntry') }],
+  ['C27', { ...real, script: real.script.replace("Get-Prop $script:GatePlan['directPages'] 'guestPhase'", "Get-Prop $script:GatePlan['directPages'] 'guestPhaze'") }],
+  ['C27', { ...real, script: real.script.replace(/landed-elsewhere/g, 'direct-page-unsupported') }],
+  ['C27', { ...real, script: real.script.replace('$Object -is [System.Collections.IDictionary]', '$false') }],
     ];
     cases.forEach(([rule, sources], caseIndex) => {
       const found = scanContract(sources);

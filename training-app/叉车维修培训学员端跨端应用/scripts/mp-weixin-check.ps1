@@ -381,6 +381,10 @@ function Get-Prop {
     if ($null -eq $Object) { return $null }
     $p = $Object.PSObject.Properties[$Name]
     if ($p) { return $p.Value }
+    # 字典（`[ordered]@{}` / `@{}`）的键**不是** PSObject 属性：#1817 实测 `Get-Prop $plan 'routes'`
+    # 静默回 $null，计划里声明的游客页族被读成空清单（游客页照旧被注 auth 会话），
+    # 而源码文本面的守护照样全绿 —— 读不到配置比读错配置更难发现。字典按 key 取。
+    if ($Object -is [System.Collections.IDictionary] -and $Object.Contains($Name)) { return $Object[$Name] }
     return $null
 }
 
@@ -600,7 +604,18 @@ function New-GatePlan {
             probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
             attempts = 2
             retryDelaySeconds = $ProbeRetryDelaySeconds
-            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable')
+            skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable', 'landed-elsewhere')
+            # 会话分相（#1817）：相判据是「该页在无会话时是否为合法落地页」，**不是**「是否入口页」。
+            # 游客页族 = 已登录会自己 reLaunch 走的页（index.uvue:81 / login.uvue:242 / register.uvue:168 /
+            # recruiter/login.uvue:101）——无会话时它们才是合法落地页；给它们注 auth 会话，冷启动必然落到
+            # dashboard 之类的别处，截图就成了「别的页」（2026-10-23 实测：login 注 auth ⇒ 落地 dashboard ⇒
+            # 截 miss-login.png 撞 automator 应答超时）。入口页由 $isEntry 覆盖，不在清单里重复。
+            guestPhase = [ordered]@{
+                param = '--auth'
+                mode = 'guest'
+                routes = @('pages/login/login', 'pages/register/register', 'pages/recruiter/login')
+                rationale = '游客页族 = 已登录会自己 reLaunch 走的页面；这些页无会话时才是合法落地页，故走 guest 相（清会话），其余登录态页走 auth 相（注入）'
+            }
             # 组级 navigation 形态（#1816）：部分达成必须如实出 partial，不得塌缩成整组 skip ——
             # 否则一页 miss 会吞掉同组其它页的成功读数（2026-10-23 实测：index 达成 + login 截图超时 ⇒ 组级只剩 skip）。
             navigationShapes = [ordered]@{
@@ -615,7 +630,9 @@ function New-GatePlan {
                 '换前 ConvertFrom-Json 校验、换后读回复验首项；用毕从备份还原 app.json 并复验（finally 路径）',
                 '机制不成立 ⇒ navigation=skip(reason=…) 显式记录：不冒充门失败、不冒充取证成立；console error 照常进 failures',
                 '部分达成（有页达成、有页未达成）⇒ navigation=partial(ok=<N>,skip=<M>)：已达成页读数照常计入门结论，未达成页逐页记入 navigation.pages，不得塌缩成整组 skip（#1816）',
-                '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准'
+                '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准',
+                '会话分相判据 = 入口页 ∪ 游客页族（guestPhase.routes），不得用「是否入口页」单相判据：游客页被注 auth 会话会自己跳走，落地页 ≠ 目标页（#1817）',
+                '未达成页若落地到别处，页级 reason 记 landed-elsewhere(<落地页>)，不得一律记 direct-page-unsupported（#1817）'
             )
         }
         steps = $steps
@@ -1844,12 +1861,19 @@ try {
         # guest 相（入口页，清会话）/ auth 相（其余页，探针前注入）都在**当页冷启动之前**执行——
         # storage 跨 IDE 重启持久（实测），冷启动后 app 直接消费；冷启动后再注入救不回当页落地。
         $authStep = Get-GateStep -Plan $script:GatePlan -Id 'auth-inject'
+        # 游客页族（#1817）：相判据的**声明侧**真源 = 计划里的 guestPhase.routes（不在这里手抄第二份清单）
+        $guestPhase = Get-Prop $script:GatePlan['directPages'] 'guestPhase'
+        $guestRoutes = @(Get-Prop $guestPhase 'routes')
         $authOk = $true
         $authField = 'off'
         if ($Auth -ne 'off') { $authField = 'none(no-auth-pages)' }
         foreach ($pg in $directList) {
             $leaf = ($pg -split '/')[-1]
             $isEntry = ($pg -eq $entryRoute)
+            # 相判据（#1817）：入口页 ∪ 游客页族 ⇒ guest；其余 ⇒ auth。
+            # 旧实现只看 $isEntry，login/register 这类游客页被注了 auth 会话后自己跳走（落地 dashboard），
+            # 截图取到的是「别的页」且常撞 automator 超时 ⇒ 页级 reason 被记成 direct-page-unsupported，真因被掩掉。
+            $isGuestPage = ($isEntry -or ($guestRoutes -contains $pg))
             # 每页（含入口页）一律 会话相→换页→冷启动→探针（#1690 实测修正）。
             # 入口页不换页不可靠：上一相窗口落在别的页 ⇒ 靠换页写盘（Switch 恒 Set-Content +
             # 键序轮转 ⇒ 字节必变 ⇒ 强制重编译）保证冷启动从目标页起。
@@ -1857,7 +1881,7 @@ try {
             #   remove 不跨重启落盘、set 落盘 ⇒ 盖帽用 setStorageSync 写坏值）；
             # 其余页 = auth（探针前注入，幂等 existing 秒返；上一相注入失败/被 app 401 清掉 ⇒ 本页自愈重注）。
             if ($Auth -ne 'off') {
-                if ($isEntry) {
+                if ($isGuestPage) {
                     $ag = Invoke-AuthInject -AuthStep $authStep -PageTag "guest($leaf)" -Mode 'guest'
                     $authOk = [bool]$ag.ok
                     if (-not $ag.ok) { Write-Host ">>> guest 相游客盖帽未成（$($ag.reason)）：入口页若被弹走如实记 miss，不假绿" -ForegroundColor Yellow }
@@ -1923,7 +1947,12 @@ try {
                 $nr = "$(Get-Prop $navOne 'reason')"
                 # 会话注入不可用时，miss 的真实原因是缺会话，不得冒充「直达机制不支持」（#1690）
                 $mrAuth = ($Auth -ne 'off' -and -not $authOk)
-                $pageReason = $(if ($mrAuth) { 'auth-session-unavailable' } elseif ($nr) { $nr } else { 'direct-page-unsupported' })
+                # 落地页（#1817）：探针在 steps[-1].currentPage 里如实记了冷启动落到的页；
+                # 落到别处 ⇒ 页级 reason 点名落到哪（landed-elsewhere(<落地页>)），不再一律冒充 direct-page-unsupported。
+                $landed = ''
+                $stepList = @(Get-Prop $pj 'steps')
+                if ($stepList.Count -gt 0) { $landed = "$(Get-Prop (@($stepList)[-1]) 'currentPage')" }
+                $pageReason = $(if ($mrAuth) { 'auth-session-unavailable' } elseif ($landed -and $landed -ne $pg) { "landed-elsewhere($landed)" } elseif ($nr) { $nr } else { 'direct-page-unsupported' })
                 if (-not $missReason) { $missReason = $pageReason }
                 $missPages += $pg
             }
