@@ -107,14 +107,15 @@ describe('favorite 域收紧（收藏段）', () => {
     expect(src).toMatch(/import\s*\{[^}]*getMapped[^}]*\}\s*from\s*'\.\/request'/);
     expect(src).toMatch(/import\s*\{[^}]*postMapped[^}]*\}\s*from\s*'\.\/request'/);
   });
-  it('getFavoritesApi 经 getMapped 箭头包裹 builder（具名函数直传触发 Kotlin error17，#685），后端 favorites 字段兼容与分页默认值保持', () => {
+  it('getFavoritesApi 经 getMapped 箭头包裹、装载内联 decodePage（#1737 三参壳消亡），具名键 favorites 由 keys 声明承载', () => {
     const body = fnBodyOf(src, 'getFavoritesApi');
     expect(body).toContain('getMapped<');
     // mapper 必须箭头包裹：UTS→Kotlin 不支持具名顶层函数直传高阶参数（error17）
-    // `data` 之后可跟信封归一的附加实参（url / page / pageSize，ADR-0037 PR-D #1664）
-    expect(body).toMatch(/getMapped<FavoriteListResult>\([^)]*\(data : UTSJSONObject\) : FavoriteListResult => buildFavoriteListResult\(data[^)]*\)/);
+    expect(body).toMatch(/getMapped<FavoriteListResult>\([^)]*\(data : UTSJSONObject\) : FavoriteListResult => \{/);
+    expect(body).toContain("decodePage<FavoriteItem>(data, '/favorites'");
     const b = read('api/favorite.uts');
-    expect(b).toMatch(/function buildFavoriteListResult/);
+    // #1737：三参自算家族的载体整体消亡 —— api 层不许再有 buildXxxListResult 壳
+    expect(b).not.toMatch(/function buildFavoriteListResult/);
     // 具名键 favorites 改由信封出口的 keys 声明承载（PR-D），不再是手写索引读
     expect(b).toContain("['favorites']");
   });
