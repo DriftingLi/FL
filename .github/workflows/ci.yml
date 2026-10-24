@@ -37,15 +37,6 @@ jobs:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
-          # 与本分支**分叉点**比，而不是与「最近一次 push 的 before」比（#1852）：
-          # 把 master 合进功能分支时，merge commit 的 before..after 差异里带着 master 上所有改动
-          # —— 以前那会让 backend / frontend / mobile 三条腿一起重跑（实测一次 10 分钟），
-          # 而本分支实际只改了一两个前端文件。给了 base 之后走 git merge-base，
-          # 「这条分支相对 master 改了什么」正好就是要跑的那部分。
-          # 必须是 origin/master（远程跟踪引用）而不是裸 master：checkout 出来的工作区只有
-          # 被检出的那条分支是本地分支，`git merge-base HEAD master` 在 runner 上解析不到（实测
-          # 2026-10-24：写裸 master 时 merge-base 落空并静默退回「事件 before」，三条腿照旧全跑）。
-          base: origin/master
           filters: |
             backend:
               - 'backend/**'
