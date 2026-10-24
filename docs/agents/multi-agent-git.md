@@ -16,6 +16,8 @@
 
 - **提交前验分支归属**：`git branch --show-current` + `git log --oneline origin/master..HEAD`，确认 HEAD 与待推提交属本会话任务，不在别的会话占用的分支上落 commit。
 
+- **子代理配额与门链互斥（2026-10-24 实测，#1845-#1848 交付会话）**：宿主对后台子代理的并发上限实测 **2**，且主会话跑 HBuilderX / 开发者工具类门时配额被进一步挤占——超配派发**当场失败**（`user/model concurrency limit exceeded`），进行中的子代理也可能被杀（当日 #1846/#1847 各损失 42/36 分钟重跑）。纪律：**implementer 一次只派一张**（上一张完成再派下一张），主会话跑 ④/② 门期间不派工；子代理跑 jest 全量两腿与主会话只读操作不冲突。
+
 - **发现游离提交先取证、勿覆盖**：工作区被并发切走、自己的 commit 在 `git branch` 里消失时，用 `git log --oneline <sha>` + `git diff <sha> origin/master -- <paths>` 只读确认内容是否已在 master；已在则不 push、不 `reset`，交 gc 自然回收，绝不 `cherry-pick` 造冲突。
 
 - **绝不** **`git add -A`**：共享工作区常混有其他会话/工具的未提交改动（如 `forum.uts`、`.aider-desk/`、`.monitor/`），只 `git add <本次文件>`。
