@@ -8,7 +8,7 @@
           <UiSwitch :model-value="visibilityOpen" @change="toggleVisibility" />
         </div>
       </div>
-      <div v-if="viewCount > 0" class="rounded-card border border-line bg-ui-50 px-4 py-3 mb-4 text-sm text-ink">
+      <div v-if="viewCount > 0" class="rounded-card border border-line bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-4 py-3 mb-4 text-sm text-ink">
         近 7 天 {{ viewCount }} 家企业查看过你的简历
       </div>
 
