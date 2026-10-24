@@ -5,7 +5,7 @@
         <h2 class="real-exam-title m-0 mb-1.5 text-2xl leading-[1.2] text-ink">真题练习</h2>
         <p class="real-exam-sub m-0 text-[13px] text-ink-3">
           当前证件：<strong>{{ currentCredentialName || '—' }}</strong>
-          <span class="real-exam-sub-sep mx-1.5 text-ink-muted">·</span>
+          <span class="real-exam-sub-sep mx-1.5 text-ink-3">·</span>
           共 {{ papers.length }} 套
         </p>
       </div>
@@ -35,7 +35,7 @@
         <div class="timeline-year-head mb-2.5 flex items-center gap-2.5">
           <span class="timeline-dot size-2.5 shrink-0 rounded-full bg-ui-500 ring-4 ring-ui-100"></span>
           <span class="timeline-year-label text-base font-bold text-ink">{{ year }}</span>
-          <span class="timeline-year-count rounded-pill border border-line bg-canvas px-2 py-0.5 text-xs text-ink-muted">{{ list.length }}套</span>
+          <span class="timeline-year-count rounded-pill border border-line bg-canvas px-2 py-0.5 text-xs text-ink-3">{{ list.length }}套</span>
         </div>
         <div class="timeline-cards ml-5 flex flex-col gap-2.5 border-l border-dashed border-line-strong pl-4">
           <UiCard

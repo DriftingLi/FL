@@ -187,7 +187,7 @@ const props = withDefaults(
 
 .item-arrow {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-default);
@@ -202,7 +202,7 @@ const props = withDefaults(
   align-items: center;
   justify-content: center;
   padding: var(--space-8) var(--space-4);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: var(--text-sm);
 }
 </style>

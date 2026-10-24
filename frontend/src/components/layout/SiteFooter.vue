@@ -9,7 +9,7 @@
        与 --color-bg-page（#F8FAFC）几乎同值，浅色主题下这条线等于没画。 -->
   <footer class="site-footer mt-10 border-t border-[var(--color-border-seam)] px-6 py-4">
     <div
-      class="site-footer-inner mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-ink-muted"
+      class="site-footer-inner mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-ink-3"
     >
       <span class="flex items-center gap-2">
         <img :src="logoSrc" alt="HRWAI" class="h-5 w-5 rounded-ctl object-cover" />

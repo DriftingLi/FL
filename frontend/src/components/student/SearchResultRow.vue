@@ -14,7 +14,7 @@
         </template>
       </span>
     </div>
-    <div v-if="hitLabel" class="mt-0.5 text-[12px] text-ink-muted">{{ hitLabel }}</div>
+    <div v-if="hitLabel" class="mt-0.5 text-[12px] text-ink-3">{{ hitLabel }}</div>
   </div>
 </template>
 

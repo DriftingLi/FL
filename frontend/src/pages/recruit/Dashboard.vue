@@ -14,7 +14,7 @@
         <p class="mt-1 text-sm text-ink-3">查看已公开的学员简历</p>
         <router-link
           :to="href('RecruitResumes')"
-          class="mt-3 inline-flex items-center gap-1 rounded-ctl bg-ui-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ui-600"
+          class="mt-3 inline-flex items-center gap-1 rounded-ctl bg-ui-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ui-600"
         >
           进入简历库
         </router-link>

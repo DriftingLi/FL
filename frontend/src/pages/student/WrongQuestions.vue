@@ -48,7 +48,7 @@
             <UiCheckbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
             <UiTag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</UiTag>
             <UiTag v-if="item.is_redone" tone="success" size="small">已重做</UiTag>
-            <el-icon class="fav-star cursor-pointer text-lg text-ink-muted hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
+            <el-icon class="fav-star cursor-pointer text-lg text-ink-3 hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
               <StarFilled v-if="item.favorited" /><Star v-else />
             </el-icon>
           </div>
