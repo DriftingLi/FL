@@ -4,6 +4,7 @@
     class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border border-line bg-panel text-base leading-none text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:underline disabled:cursor-default disabled:opacity-35"
     :disabled="disabled"
     :title="dir === 'prev' ? '上一页' : '下一页'"
+    :aria-label="dir === 'prev' ? '上一页' : '下一页'"
     @click="emit('page')"
   >
     {{ dir === 'prev' ? '‹' : '›' }}
