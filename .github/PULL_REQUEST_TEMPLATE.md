@@ -55,12 +55,14 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 `scripts/lib/hx-busy.ps1` 的「锁 + 忙探测 + 等待上限」；维护者正在用 GUI 时脚本会等到上限后 `exit 2`
 （环境不可用，绝不抢占主程序），日志里打 `HX_BUSY wait=<秒> result=...`。**跑完任何 HBuilderX 门后先
 `git status` 看 `manifest.json` 是否被 HBuilderX 回写改脏**（它会把 mp-weixin.appid 置 null），脏了就还原再继续。
-低风险运行时面：改动集**只有** .uts 逻辑（无 .uvue、无三份 json、无 uni_modules）时，①② 两行**可以整行不写**；
-若写了就写「免（低风险运行时面：仅 .uts 逻辑改动）」——代价是真机/渲染类问题推迟到发版前 ① 全量冒烟兜底。
+①a 降级常态（ADR-0043，2026-10-23，移动端编号体系）：真机逐页取证降级为**发版前一次**（发版冒烟），运行时面 PR 的 ① 行
+固定写 `免（①a 降级发版前一次，ADR-0043）`（执行人 / 日期仍须填，复测对象可写「无」）；② 触发面命中（三份 json /
+MP-WEIXIN 条件编译）时每个运行时面 PR 必跑——**低风险分层已退役**，纯 .uts 不再免 ②（0043 决策 3/8；校验器认新免行 +
+过渡期双白名单，判据票 #1859）。旧窗口写法 `SKIP·待批收口` 过渡期暂认。
 例外通道：正文写明「已接受未验证风险」+ 理由 + 事后验证计划，检查会打警告放行，但**这类 PR 必须由人执行合并**。
 -->
 
-- ① Android 真机逐页截图对比（**①a**：agent 出证、按一次分支收口跑；**①b**：命中「能力面」时由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
+- ① Android 真机逐页截图对比（**①a**：已降级为发版前一次，正文写免行 `免（①a 降级发版前一次，ADR-0043）`；**①b**：命中「能力面」时由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
 - ② 微信开发者工具无报错（半自动：可跑 `scripts/mp-weixin-check.ps1` 产出证据，执行人栏仍由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `MP_WEIXIN_RESULT` + 截图 `.ci-verify/*.png`；也可写「见评论 <链接>」）：
 - ③ `npm run test:unit`（接线腿）+ `npm run test:behavior`（行为腿）两腿全绿 — 结论（含产物，贴 CI run 链接；本地落盘入口 `npm run test:unit:gate` 会给两条 `TEST_*_RESULT` 机检行）：
 - ④ 本地编译门（默认 ④c `npm run build:kotlin-all`；dev 面追加 ④a `npm run build:compile`） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `.ci-verify/kotlin-all.log` 或 `.ci-verify/build.log`；也可写「见评论 <链接>」）：
