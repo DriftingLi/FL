@@ -111,6 +111,7 @@
                       variant="text"
                       size="small"
                       class="text-bad"
+                      aria-label="删除文件"
                       @click.stop="handleDeleteFile(file)"
                     >
                       <el-icon><Delete /></el-icon>

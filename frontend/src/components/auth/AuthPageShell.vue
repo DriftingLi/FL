@@ -39,7 +39,7 @@
       </main>
 
       <section v-if="altModes.length" class="alt-area mt-[22px]">
-        <div class="divider mb-4 flex items-center gap-2.5 text-xs text-ink-muted">{{ dividerText }}</div>
+        <div class="divider mb-4 flex items-center gap-2.5 text-xs text-ink-3">{{ dividerText }}</div>
         <div class="alt-row flex justify-center gap-[22px]">
           <button
             v-for="m in altModes"
@@ -54,7 +54,7 @@
               class="ic flex h-11 w-11 items-center justify-center rounded-card border border-line bg-panel text-ink-3 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:border-ui-300 group-hover:underline"
               :class="m.key === 'wechat'
                 ? 'group-aria-pressed:border-[var(--wechat-green)] group-aria-pressed:bg-[var(--wechat-green)] group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(7,193,96,0.28)]'
-                : 'group-aria-pressed:border-ui-500 group-aria-pressed:bg-ui-500 group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(13,148,136,0.28)]'"
+                : 'group-aria-pressed:border-ui-500 group-aria-pressed:bg-ui-600 group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(13,148,136,0.28)]'"
             >
               <component :is="m.icon" :size="19" />
             </span>
@@ -224,7 +224,7 @@ function goMain() {
 }
 
 .auth-page .form-input .el-input__prefix-inner {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .auth-page .form-footer {
@@ -233,7 +233,7 @@ function goMain() {
 
 .auth-page .footer-text {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .auth-page .footer-link {

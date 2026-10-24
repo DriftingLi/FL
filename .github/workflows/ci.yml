@@ -40,6 +40,9 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              # 生成物：aiFeatures.ts 由 backend/internal/aiassistant 渲染，契约测试（TestFrontendAIFeaturesTSInSync）
+              # 住在后端。只改这个前端文件时若不带后端，生成物与模板漂移会一路绿到合并（#1892 实测踩中）。
+              - 'frontend/src/config/aiFeatures.ts'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
@@ -308,14 +311,21 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-ai-assistant-send.mjs --all
 
+      # 无障碍档位守卫（#1892）：低对比度文字档不得回流。token 对比度矩阵锁在
+      # frontend/src/assets/styles/__tests__/contrast.spec.ts（随 npm test 跑）；本步管「用法」。
+      # 判定逻辑的自检在 el-controls-selftest job。
+      - name: 无障碍档位守卫（低对比度文字档）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-a11y.mjs --all
+
       # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
-      # 跑一遍四个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
+      # 跑一遍六个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
       # （同一条 scanSource，只是再按新增行号过滤），它补的是两件事：① CI 里真的走通「取 diff →
       # 解析新增行 → 扫描」这条管道（收敛前 check-async-section 的 --diff 因实参形态错恒 0 违规）；
       # ② --diff 自身 fail-closed（base 解析不了 / git diff 失败 / 新增文件读不出来都非零退出）。
       # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
       # 取不回 → 本步红。浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
-      - name: 守卫增量门（四个守卫只看相对默认分支的新增行）
+      - name: 守卫增量门（六个守卫只看相对默认分支的新增行）
         working-directory: ${{ github.workspace }}
         run: |
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
@@ -327,6 +337,7 @@ jobs:
           node scripts/check-async-section.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-api-consumers.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-ai-assistant-send.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-a11y.mjs --diff "origin/$DEFAULT_BRANCH"
 
       - name: 前端单元测试
         run: npm test
@@ -659,6 +670,9 @@ jobs:
 
       - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
         run: node --test scripts/check-ai-assistant-send.test.mjs
+
+      - name: 表驱动单测（无障碍档位守卫判定逻辑）
+        run: node --test scripts/check-a11y.test.mjs
 
       # ADR-0056 §11 / #1100：消费面覆盖锁的判定面（嵌套泛型实参 / 变量路径 / 欠条销账 / 死条目）
       - name: 表驱动单测（契约消费面覆盖锁判定逻辑）

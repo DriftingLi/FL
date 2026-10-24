@@ -41,7 +41,7 @@ function onPopoverShow() {
     @show="onPopoverShow"
   >
     <template #reference>
-      <button class="icon-btn notification-btn" title="通知">
+      <button class="icon-btn notification-btn" title="通知" aria-label="通知">
         <el-badge
           :value="unreadCount"
           :hidden="unreadCount === 0"

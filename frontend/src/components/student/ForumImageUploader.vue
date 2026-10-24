@@ -26,6 +26,7 @@
         <el-image :src="resolveFileUrl(url)" fit="cover" class="h-full w-full" />
         <button
           type="button"
+          aria-label="移除图片"
           class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-panel transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-bad/90"
           @click="removeImage(index)"
         >

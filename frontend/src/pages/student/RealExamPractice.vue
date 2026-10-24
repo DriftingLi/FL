@@ -13,7 +13,7 @@
         <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
         <el-icon
           class="fav-star cursor-pointer text-lg"
-          :class="favorited ? 'text-warn' : 'text-ink-muted'"
+          :class="favorited ? 'text-warn' : 'text-ink-3'"
           @click="handleToggleFavorite"
         >
           <StarFilled v-if="favorited" /><Star v-else />

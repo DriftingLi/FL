@@ -363,7 +363,8 @@ describe('UiSegmentTabs（分段选项卡）', () => {
   it('指示条用实心品牌色而非 bg-panel 或浅底档（防与卡片/灰底同色隐身）', () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     const bar = w.find('[aria-hidden="true"]')
-    expect(bar.classes()).toContain('bg-ui-500')
+    // 600 档：白字压在指示条上 5.47:1（500 档只有 3.74，激活标签读不清，#1892）
+    expect(bar.classes()).toContain('bg-ui-600')
     // #CCFBF1 / #F0FDFA 压在 bg-canvas 上肉眼就是灰白，等于没改
     expect(bar.classes()).not.toContain('bg-panel')
     expect(bar.classes()).not.toContain('bg-ui-100')
