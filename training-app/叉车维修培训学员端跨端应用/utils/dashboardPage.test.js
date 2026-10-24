@@ -84,15 +84,16 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('顶部导航三个图标（搜索 / 通知 / 购物车）必须可见（历史 bug：icon 文本为空导致图标消失；#1602 迁移后经 AppNavBar right-icons 数组流入）', () => {
+  it('顶部导航两个图标（通知 / 购物车）必须可见（历史 bug：icon 文本为空导致图标消失；#1602 迁移后经 AppNavBar right-icons 数组流入；#1846 收敛：🔍 移出页头进宫格，右槽 3→2 图标）', () => {
     // 旧形态：页内三枚 class="nav-icon-text"；迁移后：模板绑定 :right-icons + 脚本数组真源。
     expect(template).toContain(':right-icons="navRightIcons"');
     const arr = src.match(/navRightIcons\s*:\s*string\[\]\s*=\s*\[([^\]]*)\]/);
     expect(arr).not.toBeNull();
     const icons = [...arr[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
-    // #979 M2：dashboard 补全局搜索入口，故由 2 变 3
-    expect(icons.length).toBe(3);
-    expect(icons).toEqual(['🔍', '🔔', '🛒']);
+    // #1846：右槽最长内容形态须落在典型可用槽宽内（约 164rpx）——2×(44+24)=136rpx 在界内；
+    // 3 图标 ≈204rpx 超宽，溢出向右顶进胶囊间隙带（spec 20261023 §4.2，几何复验归真机门）
+    expect(icons.length).toBe(2);
+    expect(icons).toEqual(['🔔', '🛒']);
     for (const icon of icons) {
       expect(icon.trim().length).toBeGreaterThan(0);
     }
@@ -105,12 +106,14 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(template).toContain('class="notice-arrow"');
   });
 
-  it('功能宫格为四列（25% 宽），且没有占位死入口', () => {
+  it('功能宫格为四列（25% 宽），且没有占位死入口；#1846 搜索入口自页头移入宫格（第 5 格同宽换行）', () => {
     expect(template).toContain('menu-item--col4');
     expect(styleBlock).toContain('.menu-item--col4');
     expect(styleBlock).toMatch(/\.menu-item--col4\s*\{[^}]*width:\s*25%/);
     const entries = menuEntries();
-    expect(entries.length).toBe(4);
+    expect(entries.length).toBe(5);
+    // 移出页头的入口页内可达（#1846）：全局搜索必须作为宫格条目在册
+    expect(entries.map((e) => e.path)).toContain('/pages/search/search');
     for (const item of entries) {
       expect(item.available).toBe(true);
       expect(item.path.length).toBeGreaterThan(0);
