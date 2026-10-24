@@ -107,8 +107,8 @@ describe('CheckInPage 打卡页（ADR-0028）', () => {
     const wrapper = await mountPage()
 
     // 上月/下月补位格与本月格 DOM 形状完全相同（同一个 div.relative + span.font-medium 里的数字），
-    // 模板没有可辨识属性 ⇒ 按 cellClass 里只给非本月格的 text-ink-muted（CheckInPage.vue:250）收窄。
-    const monthCells = wrapper.findAll('div.relative').filter((cell) => !cell.classes().includes('text-ink-muted'))
+    // 模板没有可辨识属性 ⇒ 按 cellClass 里只给非本月格的 text-ink-3（CheckInPage.vue:250）收窄。
+    const monthCells = wrapper.findAll('div.relative').filter((cell) => !cell.classes().includes('text-ink-3'))
     const cellByDay = (d: number) => monthCells.find((cell) => cell.find('span.font-medium').text() === String(d))
 
     // 反向钉住「歧义真实存在」：号数 30 在整张网里出现两枚（8 月 30 补位 + 9 月 30 今日）。

@@ -240,7 +240,7 @@ onMounted(() => {
 }
 
 .scheduled-hint {
-  color: var(--el-color-warning, var(--color-text-muted));
+  color: var(--el-color-warning, var(--color-text-tertiary));
 }
 
 :deep(.el-table) {

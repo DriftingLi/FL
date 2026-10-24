@@ -63,7 +63,7 @@ function goBack() {
             :href="targetUrl"
             target="_blank"
             rel="noopener noreferrer nofollow"
-            class="inline-flex items-center rounded-ctl bg-ui-500 px-4 py-2 text-sm text-white no-underline hover:bg-ui-600"
+            class="inline-flex items-center rounded-ctl bg-ui-600 px-4 py-2 text-sm text-white no-underline hover:bg-ui-600"
           >
             继续访问
           </a>
