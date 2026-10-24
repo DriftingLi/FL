@@ -44,6 +44,7 @@ export interface AIFeatureConfig {
   key: AIFeatureKey
   title: string
   routePath: string
+  welcome: string
   /** AI 助手欢迎区入口卡片的一句话描述 */
   entryDesc: string
   icon: Component
