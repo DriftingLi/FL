@@ -102,7 +102,7 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
 }
 
 .nav-item:hover {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
   background: var(--color-bg-page);
 }
 

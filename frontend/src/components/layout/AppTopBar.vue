@@ -246,7 +246,7 @@ async function onCommand(command: string) {
 
 .topbar-burger:hover {
   background: var(--color-bg-card);
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 /* 中区：与内容列左边缘对齐（内容区左右各 --space-6 内边距） */
@@ -284,7 +284,7 @@ async function onCommand(command: string) {
 
 .topbar-menu-btn:hover {
   background: var(--color-bg-card);
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .topbar-menu-arrow {
@@ -349,7 +349,7 @@ async function onCommand(command: string) {
 
 .topbar-menu-check {
   margin-left: auto;
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .topbar-menu-item.is-danger {

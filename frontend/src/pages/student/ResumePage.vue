@@ -37,7 +37,7 @@
           </UiButton>
           <UiButton v-if="resumeFileUrl" size="small" variant="danger" plain :loading="deletingPdf" @click="deletePdf">删除 PDF 附件</UiButton>
           <input ref="pdfInput" type="file" accept=".pdf" hidden @change="onPdfChange" />
-          <span v-if="resumeFileUrl" class="text-xs text-ink-3">附件：<a :href="resumeFileUrl" target="_blank" class="text-ui-600">查看上传简历</a></span>
+          <span v-if="resumeFileUrl" class="text-xs text-ink-3">附件：<a :href="resumeFileUrl" target="_blank" class="text-ui-soft-ink">查看上传简历</a></span>
         </div>
 
         <!-- 内嵌自己的打码在线简历 PDF（所见即招聘者所见，#485/#491） -->

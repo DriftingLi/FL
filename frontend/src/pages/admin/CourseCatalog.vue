@@ -615,7 +615,7 @@ onMounted(() => {
 }
 
 .cc-move-icon:hover {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .cc-level-row {

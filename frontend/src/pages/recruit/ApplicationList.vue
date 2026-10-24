@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
-      <router-link :to="href('RecruitJobManage')" class="text-sm text-ui-600 hover:text-ui-700">← 返回职位管理</router-link>
+      <router-link :to="href('RecruitJobManage')" class="text-sm text-ui-soft-ink hover:underline">← 返回职位管理</router-link>
     </div>
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-bold text-ink">投递列表{{ jobTitle ? `：${jobTitle}` : '' }}</h1>
@@ -80,7 +80,7 @@
           <div><span class="text-ink-3">姓名：</span>{{ contact.real_name }}</div>
           <div><span class="text-ink-3">电话：</span>{{ contact.contact_phone }}</div>
           <div><span class="text-ink-3">微信：</span>{{ contact.wechat }}</div>
-          <div v-if="contact.resume_file_url"><span class="text-ink-3">附件：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-600">下载上传简历</a></div>
+          <div v-if="contact.resume_file_url"><span class="text-ink-3">附件：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-soft-ink">下载上传简历</a></div>
         </div>
         <div v-else-if="contactLoading" class="text-xs text-ink-3">联系方式加载中…</div>
         <div v-else-if="contactError" class="text-xs text-red-500">{{ contactError }}</div>

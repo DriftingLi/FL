@@ -4,7 +4,7 @@
       <h1 class="m-0 text-2xl font-semibold text-ink">每日打卡</h1>
       <RouterLink
         :to="href('PointsLedger')"
-        class="inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
+        class="inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:underline"
       >
         积分明细
         <el-icon><ArrowRight /></el-icon>
@@ -15,7 +15,7 @@
     <div class="mb-4 grid grid-cols-3 gap-3">
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
         <div class="text-[11px] tracking-[0.04em] text-ink-3">连续打卡</div>
-        <div class="font-heading text-2xl font-extrabold text-ui-600">{{ calendar.streak }}<span class="ml-1 text-xs font-semibold text-ink-3">天</span></div>
+        <div class="font-heading text-2xl font-extrabold text-ui-soft-ink">{{ calendar.streak }}<span class="ml-1 text-xs font-semibold text-ink-3">天</span></div>
       </div>
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
         <div class="text-[11px] tracking-[0.04em] text-ink-3">累计打卡</div>
@@ -61,7 +61,7 @@
         </div>
 
         <div class="mb-3 flex items-center gap-3 text-[13px] text-ink">
-          每日 <span class="font-semibold text-ui-600">+5</span>
+          每日 <span class="font-semibold text-ui-soft-ink">+5</span>
           <span class="text-line-strong">|</span>
           连续满
           <span class="font-semibold">3</span> 天 +5
@@ -97,7 +97,7 @@
           <span class="ml-auto text-xs text-ink-3">按累计天数排序</span>
         </div>
         <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-[13px] text-ink">
-          我的排名：<span class="font-bold text-ui-600">NO.{{ rankMe.rank }}</span>
+          我的排名：<span class="font-bold text-ui-soft-ink">NO.{{ rankMe.rank }}</span>
           <span class="mx-1.5 text-line-strong">|</span>
           累计 <span class="font-semibold">{{ rankMe.total }}</span> 天
           <span class="mx-1.5 text-line-strong">|</span>

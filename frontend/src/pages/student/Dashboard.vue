@@ -42,7 +42,7 @@
             </router-link>
             <router-link
               :to="href('CourseList')"
-              class="inline-flex items-center gap-1 rounded-ctl border border-line-strong bg-panel px-4 py-2 text-sm text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
+              class="inline-flex items-center gap-1 rounded-ctl border border-line-strong bg-panel px-4 py-2 text-sm text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:underline"
             >
               浏览全部课程
               <el-icon><ArrowRight /></el-icon>

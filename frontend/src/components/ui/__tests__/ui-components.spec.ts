@@ -428,7 +428,8 @@ describe('UiUnderlineTabs（下划线选项卡）', () => {
     const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
     const active = w.findAll('button')[0]
     expect(active.classes()).toContain('border-ui-500')
-    expect(active.classes()).toContain('text-ui-600')
+    // #1887：激活态文字用会翻转的品牌墨色（text-ui-600 是固定色阶，深色下压在面板上只有 2.7:1）
+    expect(active.classes()).toContain('text-ui-soft-ink')
     expect(active.classes()).not.toContain('border-panel')
     const inactive = w.findAll('button')[1]
     expect(inactive.classes()).toContain('border-transparent')

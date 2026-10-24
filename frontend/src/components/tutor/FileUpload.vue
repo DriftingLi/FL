@@ -21,7 +21,7 @@
       @click="triggerSelect"
     >
       <el-icon class="upload-icon mb-2 text-[var(--color-text-disabled)]" :size="40"><UploadFilled /></el-icon>
-      <p class="upload-text text-ink-2 text-sm mb-2">将文件拖到此处，或<em class="not-italic text-ui-500">点击上传</em></p>
+      <p class="upload-text text-ink-2 text-sm mb-2">将文件拖到此处，或<em class="not-italic text-ui-soft-ink">点击上传</em></p>
       <p class="upload-tip text-ink-muted text-xs my-1">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
       <p class="upload-tip text-ink-muted text-xs my-1">视频文件最大200MB，其他文件最大50MB</p>
     </div>

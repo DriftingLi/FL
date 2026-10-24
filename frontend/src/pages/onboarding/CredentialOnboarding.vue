@@ -223,7 +223,7 @@ onMounted(() => {
   color: var(--color-success-strong, #059669);
 }
 .check-icon {
-  color: var(--color-primary-500);
+  color: var(--color-primary-soft-ink);
   font-size: 18px;
 }
 .actions {

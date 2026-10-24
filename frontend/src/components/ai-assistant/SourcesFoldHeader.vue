@@ -11,7 +11,7 @@
       >▶</span>
       {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template>
     </span>
-    <span class="whitespace-nowrap text-ui-600">{{ open ? '收起 ▴' : '展开 ▾' }}</span>
+    <span class="whitespace-nowrap text-ui-soft-ink">{{ open ? '收起 ▴' : '展开 ▾' }}</span>
   </div>
 </template>
 

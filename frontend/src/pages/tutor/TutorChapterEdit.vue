@@ -100,7 +100,7 @@
                     :class="{ 'border-ui-500 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))]': selectedFileId === file.file_id }"
                     @click="selectFile(file.file_id)"
                   >
-                    <el-icon class="shrink-0 text-ui-500" :size="18" :class="group.iconClass">
+                    <el-icon class="shrink-0 text-ui-soft-ink" :size="18" :class="group.iconClass">
                       <component :is="group.icon" />
                     </el-icon>
                     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -293,7 +293,7 @@ const TYPE_ORDER = ['video', 'document', 'ppt']
  */
 const TYPE_CONFIG: Record<string, { label: string; icon: Component; iconClass: string }> = {
   video: { label: '视频', icon: VideoCamera, iconClass: 'text-bad' },
-  document: { label: '文档', icon: Document, iconClass: 'text-ui-500' },
+  document: { label: '文档', icon: Document, iconClass: 'text-ui-soft-ink' },
   ppt: { label: 'PPT', icon: Document, iconClass: 'text-warn' }
 }
 
