@@ -166,7 +166,6 @@ jobs:
               .addHeading('验收证据校验（ADR-0008）', 3)
               .addRaw(`命中运行时面的文件：${result.runtime.length} 个`).addEOL()
               .addList(result.runtime.length ? result.runtime : ['（无）'])
-              .addRaw(`运行时面分层：${result.lowRiskRuntime ? '低风险运行时面（仅 .uts 逻辑改动）⇒ 免 ① ②' : '常规运行时面（① ② 按触发条件必过）'}`).addEOL()
               .addRaw(`④b release 云打包门：${result.needs4b ? '触发（触及打包面：三份 json / utssdk 原生面 / *.aar / libs/*.jar）' : '未触发'}`).addEOL()
               .addList([...result.notes, ...result.errors.map((e) => `❌ ${e}`)])
               .write();
