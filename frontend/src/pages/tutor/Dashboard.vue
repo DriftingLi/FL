@@ -13,9 +13,10 @@
         <div class="h-32 rounded-card border border-line bg-panel" />
         <UiSkeleton variant="card" :count="2" />
       </template>
-      <!-- Welcome Banner -->
+      <!-- Welcome Banner：底色/描边是「品牌色浅混面板 token」现算的（固定色阶 ui-50 / ui-100 不随主题翻转，
+           深色下会变成亮块 —— 管理端在 #1750 修过，这里补上，判据见 docs/verification/tooling/1880/） -->
       <section
-        class="rounded-card border border-ui-100 bg-gradient-to-br from-ui-50 to-panel p-6 sm:p-8"
+        class="rounded-card border border-[color-mix(in_srgb,var(--color-ui-500)_18%,var(--color-line-strong))] bg-gradient-to-br from-[color-mix(in_srgb,var(--color-ui-500)_8%,var(--color-panel))] to-panel p-6 sm:p-8"
       >
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div class="min-w-0">
