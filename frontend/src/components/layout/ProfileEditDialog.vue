@@ -154,7 +154,7 @@ defineExpose({ open })
 
 .hint {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   margin: 0;
 }
 

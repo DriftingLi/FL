@@ -83,9 +83,10 @@ describe('UiButton', () => {
 })
 
 describe('UiTag / UiBadge', () => {
-  it('brand 标签叠加品牌浅底色', () => {
+  it('brand 标签叠加品牌浅底色（#1882：软底 token，随主题翻转）', () => {
     const w = mountWith(UiTag, { tone: 'brand' })
-    expect(w.classes()).toContain('bg-ui-50')
+    expect(w.classes()).toContain('bg-ui-soft')
+    expect(w.classes()).toContain('text-ui-soft-ink')
   })
 
   it('角标数量超过 max 显示为 max+', () => {
@@ -362,7 +363,8 @@ describe('UiSegmentTabs（分段选项卡）', () => {
   it('指示条用实心品牌色而非 bg-panel 或浅底档（防与卡片/灰底同色隐身）', () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     const bar = w.find('[aria-hidden="true"]')
-    expect(bar.classes()).toContain('bg-ui-500')
+    // 600 档：白字压在指示条上 5.47:1（500 档只有 3.74，激活标签读不清，#1892）
+    expect(bar.classes()).toContain('bg-ui-600')
     // #CCFBF1 / #F0FDFA 压在 bg-canvas 上肉眼就是灰白，等于没改
     expect(bar.classes()).not.toContain('bg-panel')
     expect(bar.classes()).not.toContain('bg-ui-100')
@@ -427,7 +429,8 @@ describe('UiUnderlineTabs（下划线选项卡）', () => {
     const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
     const active = w.findAll('button')[0]
     expect(active.classes()).toContain('border-ui-500')
-    expect(active.classes()).toContain('text-ui-600')
+    // #1887：激活态文字用会翻转的品牌墨色（text-ui-600 是固定色阶，深色下压在面板上只有 2.7:1）
+    expect(active.classes()).toContain('text-ui-soft-ink')
     expect(active.classes()).not.toContain('border-panel')
     const inactive = w.findAll('button')[1]
     expect(inactive.classes()).toContain('border-transparent')
@@ -608,9 +611,10 @@ describe('UiTag（tone 唯一入口扩展，#766 C2）', () => {
     expect(w.classes()).toContain('ml-1.5')
   })
 
-  it('旧 API 零 diff：tone=brand 的品牌样式仍在（断言根，同既有测试）', () => {
+  it('旧 API 零 diff：tone=brand 的品牌样式仍在（断言根，同既有测试；#1882 起是软底 token）', () => {
     const w = mountWith(UiTag, { tone: 'brand', effect: 'light' })
-    expect(w.classes()).toContain('bg-ui-50')
+    expect(w.classes()).toContain('bg-ui-soft')
+    expect(w.classes()).toContain('text-ui-soft-ink')
   })
 })
 

@@ -3,7 +3,7 @@
     <div class="flex items-baseline gap-2.5">
       <span class="max-w-[50%] shrink-0 truncate text-sm text-ink">
         <template v-for="(seg, i) in titleSegments" :key="'t' + i">
-          <mark v-if="seg.hit" class="bg-transparent font-semibold text-ui-600">{{ seg.text }}</mark>
+          <mark v-if="seg.hit" class="bg-transparent font-semibold text-ui-soft-ink">{{ seg.text }}</mark>
           <template v-else>{{ seg.text }}</template>
         </template>
       </span>
@@ -14,7 +14,7 @@
         </template>
       </span>
     </div>
-    <div v-if="hitLabel" class="mt-0.5 text-[12px] text-ink-muted">{{ hitLabel }}</div>
+    <div v-if="hitLabel" class="mt-0.5 text-[12px] text-ink-3">{{ hitLabel }}</div>
   </div>
 </template>
 

@@ -15,7 +15,7 @@
     <!-- 每日打卡入口（ADR-0028：打卡已迁独立页 /training/check-in，论坛只留跳转） -->
     <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="goCheckIn">
       <div class="flex items-center gap-2 text-[13px] text-ink">
-        <el-icon class="text-base text-ui-500"><Calendar /></el-icon>
+        <el-icon class="text-base text-ui-soft-ink"><Calendar /></el-icon>
         <span>每日打卡赚积分</span>
       </div>
       <UiButton variant="text" size="small">去看看</UiButton>

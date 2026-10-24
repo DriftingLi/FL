@@ -61,8 +61,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 ::selection {
-  background-color: var(--color-primary-100);
-  color: var(--color-primary-800);
+  background-color: var(--color-primary-soft-strong);
+  color: var(--color-primary-soft-ink);
 }
 
 ::-webkit-scrollbar {

@@ -13,6 +13,7 @@
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
+- **票面验收口径只引已合库 ADR**（2026-10-24 立，#1845-#1848 复盘）：开票时 What to build / Acceptance criteria 里引用的规则，只引**已合并进 master 的 ADR/文档**；「已裁定未落库」的口径先落库再进票面——两套口径并存时（如 #1853/#1858 那种文档包与判据包分飞的场景），执行会话无法机械判定哪套生效，只能人肉考古（当日实测代价：票面引 0040/0039 窗口径、而退役窗口的 0043 处于已裁定未合库态）。
 
 从 `git remote -v` 推断 repo；在 clone 内运行时，`gh` 会自动处理。
 

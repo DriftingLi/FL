@@ -4,7 +4,7 @@
       <h1 class="m-0 text-2xl font-semibold text-ink">每日打卡</h1>
       <RouterLink
         :to="href('PointsLedger')"
-        class="inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:text-ui-600"
+        class="inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:underline"
       >
         积分明细
         <el-icon><ArrowRight /></el-icon>
@@ -15,7 +15,7 @@
     <div class="mb-4 grid grid-cols-3 gap-3">
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
         <div class="text-[11px] tracking-[0.04em] text-ink-3">连续打卡</div>
-        <div class="font-heading text-2xl font-extrabold text-ui-600">{{ calendar.streak }}<span class="ml-1 text-xs font-semibold text-ink-3">天</span></div>
+        <div class="font-heading text-2xl font-extrabold text-ui-soft-ink">{{ calendar.streak }}<span class="ml-1 text-xs font-semibold text-ink-3">天</span></div>
       </div>
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
         <div class="text-[11px] tracking-[0.04em] text-ink-3">累计打卡</div>
@@ -43,14 +43,14 @@
         <!-- 月份切换 + 打卡按钮 -->
         <div class="mb-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-1">
-            <UiButton variant="text" size="small" @click="prevMonth">‹</UiButton>
+            <UiButton variant="text" size="small" aria-label="上个月" @click="prevMonth">‹</UiButton>
             <span class="min-w-24 text-center text-[13px] font-semibold text-ink-2">{{ viewYear }}年{{ viewMonth }}月</span>
-            <UiButton variant="text" size="small" @click="nextMonth">›</UiButton>
+            <UiButton variant="text" size="small" aria-label="下个月" @click="nextMonth">›</UiButton>
           </div>
           <div class="flex items-center gap-2">
             <!-- 连续段图例：主色实心=当前连续；浅底=已断开的打卡；灰底=未打卡 -->
             <span class="hidden items-center gap-1 text-[11px] text-ink-3 sm:flex">
-              <i class="inline-block size-2.5 rounded-[3px] bg-ui-500"></i>连续中
+              <i class="inline-block size-2.5 rounded-[3px] bg-ui-600"></i>连续中
               <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-ui-100"></i>已断开
               <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-canvas border border-line"></i>未打卡
             </span>
@@ -61,7 +61,7 @@
         </div>
 
         <div class="mb-3 flex items-center gap-3 text-[13px] text-ink">
-          每日 <span class="font-semibold text-ui-600">+5</span>
+          每日 <span class="font-semibold text-ui-soft-ink">+5</span>
           <span class="text-line-strong">|</span>
           连续满
           <span class="font-semibold">3</span> 天 +5
@@ -96,8 +96,8 @@
           <span class="text-[15px] font-bold text-ink">打卡排行</span>
           <span class="ml-auto text-xs text-ink-3">按累计天数排序</span>
         </div>
-        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-ui-50 px-3 py-2.5 text-center text-[13px] text-ink">
-          我的排名：<span class="font-bold text-ui-600">NO.{{ rankMe.rank }}</span>
+        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-[13px] text-ink">
+          我的排名：<span class="font-bold text-ui-soft-ink">NO.{{ rankMe.rank }}</span>
           <span class="mx-1.5 text-line-strong">|</span>
           累计 <span class="font-semibold">{{ rankMe.total }}</span> 天
           <span class="mx-1.5 text-line-strong">|</span>
@@ -247,11 +247,12 @@ const calendarCells = computed<CalendarCell[]>(() => {
 
 function cellClass(cell: CalendarCell) {
   return {
-    'bg-canvas text-ink-muted': !cell.isCurrentMonth,
-    'bg-ui-50 font-semibold': cell.isToday && !cell.checked,
-    'bg-ui-100 text-ink-2': cell.checked && !cell.inActiveStreak && !cell.isToday,
-    'bg-ui-500 text-panel': cell.checked && cell.inActiveStreak && !cell.isToday,
-    'bg-ui-600 text-panel': cell.checked && cell.inActiveStreak && cell.isToday,
+    'bg-canvas text-ink-3': !cell.isCurrentMonth,
+    'bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] font-semibold': cell.isToday && !cell.checked,
+    'bg-[color-mix(in_srgb,var(--color-ui-500)_18%,var(--color-panel))] text-ink-2': cell.checked && !cell.inActiveStreak && !cell.isToday,
+    // 连续段内的已打卡格：统一实心品牌 600（白字 5.47:1）；今天靠 ring 区分，不再用 500/600 两档
+    // —— 两个档次原来只差一档色阶，肉眼几乎不可辨，却让对象字面量出现同名键（后者覆盖前者）。
+    'bg-ui-600 text-panel': cell.checked && cell.inActiveStreak,
     'ring-2 ring-inset ring-ui-400': cell.isToday
   }
 }

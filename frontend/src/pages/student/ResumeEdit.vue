@@ -107,7 +107,7 @@
         <el-form-item label="PDF附件">
           <div class="text-xs text-ink-3">
             <template v-if="form.resume_file_url">
-              <a :href="form.resume_file_url" target="_blank" class="text-ui-600">查看当前附件</a>
+              <a :href="form.resume_file_url" target="_blank" class="text-ui-soft-ink">查看当前附件</a>
               <span>（上传/更换/删除请在预览页操作区进行）</span>
             </template>
             <span v-else>未上传附件</span>

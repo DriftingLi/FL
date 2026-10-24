@@ -302,7 +302,7 @@ onMounted(() => {
   line-height: 1.3;
 }
 
-.stat-value.blue { color: var(--color-primary-500); }
+.stat-value.blue { color: var(--color-primary-soft-ink); }
 .stat-value.green { color: var(--color-success); }
 .stat-value.orange { color: var(--color-warning); }
 .stat-value.gray { color: var(--color-text-tertiary); }

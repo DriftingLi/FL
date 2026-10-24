@@ -59,7 +59,7 @@ function select(option: UiUnderlineOption) {
       class="-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-2.5 py-2 text-sm font-[inherit] transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] disabled:cursor-not-allowed disabled:opacity-50"
       :class="
         modelValue === opt.value
-          ? 'border-ui-500 text-ui-600'
+          ? 'border-ui-500 text-ui-soft-ink'
           : 'border-transparent text-ink-3 hover:text-ink-2'
       "
       @click="select(opt)"

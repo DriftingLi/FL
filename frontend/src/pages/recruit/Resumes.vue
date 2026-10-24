@@ -88,7 +88,7 @@
           </div>
           <router-link
             :to="href('RecruitResumeDetail', { id: String(item.user_id) })"
-            class="shrink-0 text-xs font-medium text-ui-600 hover:text-ui-700"
+            class="shrink-0 text-xs font-medium text-ui-soft-ink hover:underline"
           >
             查看详情
           </router-link>

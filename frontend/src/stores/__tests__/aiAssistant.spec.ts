@@ -589,3 +589,21 @@ describe('双模式未绑定时的空态引导（#1061）', () => {
     await expect(p).resolves.toBeUndefined()
   })
 })
+
+// 发送闸门（canSend）纳入会话装载态：selectSession 先设 currentSessionId 再 await，
+// 这段窗口里发出的轮次会被随后到达的装载结果整体覆盖（乐观落下的用户消息直接消失）。
+describe('发送闸门纳入了会话装载态', () => {
+  it('装载中关门、装载完复位', async () => {
+    const store = createStore()
+    expect(store.canSend).toBe(true)
+
+    const pending = store.selectSession(11)
+    expect(store.messagesLoading).toBe(true)
+    expect(store.canSend).toBe(false)
+
+    await pending
+    await flush()
+    expect(store.messagesLoading).toBe(false)
+    expect(store.canSend).toBe(true)
+  })
+})

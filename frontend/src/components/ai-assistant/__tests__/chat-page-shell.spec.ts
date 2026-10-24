@@ -83,7 +83,6 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, a
       loginRedirect: '/ai-assistant',
       welcomeIcon: { template: '<i/>' },
       welcomeTitle: '欢迎标题',
-      welcomeDesc: '欢迎描述',
       ...props
     },
     slots,
@@ -131,13 +130,12 @@ describe('ChatPageShell 槽位', () => {
     expect(w.findAll('.suggestion-page')[1].text()).toContain('四')
   })
 
-  it('欢迎区横排：一句话标题无副标题（welcomeDesc 不再渲染）', () => {
-    const w = mountShell({ welcomeTitle: '上传图纸即读懂部件原理', welcomeDesc: '旧副标题不应出现' })
+  it('欢迎区横排：只有一句话标题，没有副标题位（welcomeDesc 通道已删）', () => {
+    const w = mountShell({ welcomeTitle: '上传图纸即读懂部件原理' })
     const head = w.find('.welcome-head')
     expect(head.exists()).toBe(true)
-    expect(head.text()).toContain('上传图纸即读懂部件原理')
+    expect(head.text()).toBe('上传图纸即读懂部件原理')
     expect(w.find('.welcome-desc').exists()).toBe(false)
-    expect(w.text()).not.toContain('旧副标题不应出现')
   })
 
   it('气泡自动换行不省略（无 truncate，超长撑开）', () => {
@@ -464,5 +462,194 @@ describe('ChatPageShell 助手图片预览', () => {
     viewer.vm.$emit('close')
     await nextTick()
     expect(w.find('.assistant-image-viewer').exists()).toBe(false)
+  })
+})
+
+// ===== 输入法（CJK 选词）守卫 =====
+// 键盘事件必须手工 dispatch：@vue/test-utils 的 trigger 不接受 isComposing / keyCode 这类 init。
+function dispatchEnter(el: Element, patch: Partial<KeyboardEvent> = {}) {
+  const evt = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+  for (const [k, v] of Object.entries(patch)) {
+    Object.defineProperty(evt, k, { configurable: true, value: v })
+  }
+  el.dispatchEvent(evt)
+  return evt
+}
+
+describe('ChatPageShell 输入法守卫（CJK 选词不误发）', () => {
+  it('组字中按 Enter 不发送（isComposing），也不抢输入法的默认行为', () => {
+    const w = mountShell({ canSend: true })
+    const evt = dispatchEnter(w.find('textarea').element, { isComposing: true })
+    expect(evt.defaultPrevented).toBe(false)
+    expect(w.emitted('send')).toBeFalsy()
+  })
+
+  it('组字中按 Enter 不发送（keyCode 229 的兼容路径）', () => {
+    const w = mountShell({ canSend: true })
+    dispatchEnter(w.find('textarea').element, { keyCode: 229 })
+    expect(w.emitted('send')).toBeFalsy()
+  })
+
+  it('选词确认后的伴生 Enter 被拦截，且哨兵立刻复位（下一次真击键畅通）', () => {
+    const w = mountShell({ canSend: true })
+    // 组合事件必须**同步**派发：`await trigger` 会刷一轮渲染，happy-dom 下这轮能吃掉上百毫秒，
+    // 把 100ms 的伴生窗口直接耗光（真实浏览器里 compositionend 与伴生 keydown 同一任务内到达）。
+    const wrapEl = w.find('.input-wrap').element as HTMLElement
+    wrapEl.dispatchEvent(new Event('compositionstart', { bubbles: true }))
+    wrapEl.dispatchEvent(new Event('compositionend', { bubbles: true }))
+
+    const ghost = dispatchEnter(w.find('textarea').element)
+    expect(ghost.defaultPrevented).toBe(true)
+    expect(w.emitted('send')).toBeFalsy()
+
+    dispatchEnter(w.find('textarea').element)
+    expect(w.emitted('send')).toHaveLength(1)
+  })
+
+  it('选完词 200ms 后按 Enter 正常发送（窗口不吞真正的发送键）', () => {
+    const w = mountShell({ canSend: true })
+    const wrapEl = w.find('.input-wrap').element as HTMLElement
+    wrapEl.dispatchEvent(new Event('compositionend', { bubbles: true }))
+    const base = performance.now()
+    const spy = vi.spyOn(performance, 'now').mockReturnValue(base + 200)
+    try {
+      dispatchEnter(w.find('textarea').element)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(w.emitted('send')).toHaveLength(1)
+  })
+
+  it('发送闸门关着时 Enter 不再被 preventDefault（还能敲换行）', () => {
+    const w = mountShell({ canSend: false })
+    const evt = dispatchEnter(w.find('textarea').element)
+    expect(evt.defaultPrevented).toBe(false)
+    expect(w.emitted('send')).toBeFalsy()
+  })
+})
+
+// ===== 视口跟随（回翻用户不被流式吐字夺走视口）=====
+// happy-dom 的滚动几何恒为 0：按用例桩掉 scrollHeight / clientHeight / scrollTop，
+// 断言的是「组件的跟随判定与滚底动作」，不是真实布局。
+interface ScrollerStubOptions {
+  scrollHeight?: number
+  clientHeight?: number
+  scrollTop?: number
+}
+
+function stubScroller(el: HTMLElement, opts: ScrollerStubOptions = {}) {
+  const scrollHeight = opts.scrollHeight ?? 1000
+  const clientHeight = opts.clientHeight ?? 400
+  let top = opts.scrollTop ?? 0
+  const scrollCalls: ScrollToOptions[] = []
+  Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => scrollHeight })
+  Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => clientHeight })
+  Object.defineProperty(el, 'scrollTop', {
+    configurable: true,
+    get: () => top,
+    set: (v: number) => { top = v }
+  })
+  // 平滑滚动的落点交给桩记录：只断言组件「请求滚到哪里、用不用 smooth」
+  Object.defineProperty(el, 'scrollTo', {
+    configurable: true,
+    value: (options: ScrollToOptions) => {
+      scrollCalls.push(options)
+      top = options.top ?? top
+    }
+  })
+  return { read: () => top, scrollCalls }
+}
+
+describe('ChatPageShell 视口跟随（回翻不被夺走）', () => {
+  /** 挂一个「有消息」的壳，并按给定 scrollTop 制造贴底 / 回翻状态 */
+  async function mountChatting(scrollTop = 0) {
+    mocks.store = makeStore({ messages: [{ id: 1, role: 'user', content: '问题' }] })
+    const w = mountShell({})
+    const list = w.find('.message-list')
+    const stub = stubScroller(list.element as HTMLElement, { scrollTop })
+    list.element.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    return { w, ...stub }
+  }
+
+  it('贴底时不出现入口，流式追加自动跟随', async () => {
+    const { w, read } = await mountChatting(600) // 1000 - 600 - 400 = 0，贴底
+    expect(w.find('.scroll-to-bottom').exists()).toBe(false)
+
+    mocks.store.streamingContent = '新片段'
+    await nextTick()
+    await nextTick()
+    expect(read()).toBe(1000)
+  })
+
+  it('回翻时流式追加不夺视口，入口改说「有新回复」', async () => {
+    const { w, read } = await mountChatting(0) // 距底 600px
+    expect(w.find('.scroll-to-bottom').text()).toContain('回到底部')
+
+    mocks.store.streaming = true
+    mocks.store.streamingContent = '新片段'
+    await nextTick()
+    await nextTick()
+    expect(read()).toBe(0)
+    expect(w.find('.scroll-to-bottom').text()).toContain('有新回复')
+  })
+
+  it('点击入口回到最新：请求平滑滚底并隐藏入口', async () => {
+    const { w, read, scrollCalls } = await mountChatting(0)
+    await w.find('.scroll-to-bottom').trigger('click')
+    expect(read()).toBe(1000)
+    expect(scrollCalls.at(-1)).toMatchObject({ top: 1000, behavior: 'smooth' })
+    expect(w.find('.scroll-to-bottom').exists()).toBe(false)
+  })
+
+  it('发送新一轮（追加用户消息）强制落底，即使此前在回翻', async () => {
+    const { read } = await mountChatting(0)
+    mocks.store.messages.push({ id: 2, role: 'user', content: '再问一次' })
+    await nextTick()
+    expect(read()).toBe(1000)
+  })
+
+  it('会话装载完成时落底（装载期间不抢滚，避免滚在上一会话的内容上）', async () => {
+    mocks.store = makeStore({ messagesLoading: true, messages: [] })
+    const w = mountShell({})
+    const { read } = stubScroller(w.find('.message-list').element as HTMLElement, { scrollTop: 0 })
+
+    mocks.store.messagesLoading = false
+    await nextTick()
+    expect(read()).toBe(1000)
+  })
+})
+
+// ===== 空态与文案收敛 =====
+describe('ChatPageShell 空态与文案', () => {
+  it('会话装载中不渲染欢迎区（不与「会话加载中…」同屏）', () => {
+    mocks.store = makeStore({ messagesLoading: true, messages: [] })
+    const w = mountShell({})
+    expect(w.find('.welcome-area').exists()).toBe(false)
+    expect(w.find('.message-loading-more').exists()).toBe(true)
+  })
+
+  it('游客提示只有一句：侧栏空列表与欢迎区各一处，侧栏底不再重复', () => {
+    mocks.store = makeStore({ isLoggedIn: false, sessions: [] })
+    const w = mountShell({})
+    expect(w.find('.guest-hint').text()).toBe('登录后可保存对话历史')
+    // 命中 2 处（侧栏空列表 + 欢迎区）；侧栏底部那行重复文案已删
+    expect(w.text().split('登录后可保存对话历史')).toHaveLength(3)
+  })
+
+  it('占位文案由壳统一拼上发送提示（页面只传任务片段）', () => {
+    const w = mountShell({ inputPlaceholder: '描述故障现象' })
+    expect(w.find('textarea').attributes('placeholder')).toBe('描述故障现象（Enter 发送，Shift+Enter 换行）')
+  })
+})
+
+// ===== 可访问性：纯图标按钮必须有可读名字 =====
+describe('ChatPageShell 可访问性', () => {
+  it('纯图标按钮带 aria-label，title 仍保留', () => {
+    const w = mountShell({ suggestions: ['一', '二', '三', '四'] })
+    const collapse = w.find('button[aria-label="收起侧栏"]')
+    expect(collapse.exists()).toBe(true)
+    expect(collapse.attributes('title')).toBe('收起侧栏')
+    expect(w.find('.suggestion-pager button').attributes('aria-label')).toBe('上一页')
   })
 })

@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">资料审核（昵称 / 头像）</span>
-          <UiButton :icon="Refresh" circle @click="load"/>
+          <UiButton :icon="Refresh" circle aria-label="刷新" @click="load"/>
         </div>
       </template>
 

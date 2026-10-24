@@ -21,9 +21,9 @@
       @click="triggerSelect"
     >
       <el-icon class="upload-icon mb-2 text-[var(--color-text-disabled)]" :size="40"><UploadFilled /></el-icon>
-      <p class="upload-text text-ink-2 text-sm mb-2">将文件拖到此处，或<em class="not-italic text-ui-500">点击上传</em></p>
-      <p class="upload-tip text-ink-muted text-xs my-1">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
-      <p class="upload-tip text-ink-muted text-xs my-1">视频文件最大200MB，其他文件最大50MB</p>
+      <p class="upload-text text-ink-2 text-sm mb-2">将文件拖到此处，或<em class="not-italic text-ui-soft-ink">点击上传</em></p>
+      <p class="upload-tip text-ink-3 text-xs my-1">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
+      <p class="upload-tip text-ink-3 text-xs my-1">视频文件最大200MB，其他文件最大50MB</p>
     </div>
 
     <input
@@ -56,7 +56,7 @@
           :class="file.status === 'error' ? 'border-bad bg-bad-soft' : file.status === 'success' ? 'border-ok bg-ok-soft' : ''"
         >
           <div class="file-info flex items-center gap-2.5 flex-1 min-w-0 max-[768px]:basis-full">
-            <el-icon class="file-type-icon text-ink-muted shrink-0" :size="20">
+            <el-icon class="file-type-icon text-ink-3 shrink-0" :size="20">
               <component :is="getFileIcon(file.ext)" />
             </el-icon>
             <div class="file-detail flex-1 min-w-0">
@@ -66,13 +66,13 @@
                   {{ getFileTypeLabel(file.category) }}
                 </UiTag>
               </div>
-              <span class="file-size text-xs text-ink-muted mt-0.5">{{ formatSize(file.size) }}</span>
+              <span class="file-size text-xs text-ink-3 mt-0.5">{{ formatSize(file.size) }}</span>
             </div>
           </div>
 
           <div class="file-status-area w-[180px] shrink-0 max-[768px]:flex-[1_1_calc(100%-80px)] max-[768px]:w-auto">
             <template v-if="file.status === 'pending'">
-              <span class="status-text status-pending text-[13px] text-ink-muted">等待上传</span>
+              <span class="status-text status-pending text-[13px] text-ink-3">等待上传</span>
             </template>
             <template v-else-if="file.status === 'uploading'">
               <el-progress
@@ -97,10 +97,10 @@
           </div>
 
           <div class="file-actions flex items-center gap-1.5 shrink-0">
-            <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle @click.stop="retryFile(file)">
+            <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle aria-label="重试上传" @click.stop="retryFile(file)">
               <el-icon><RefreshRight /></el-icon>
             </UiButton>
-            <UiButton variant="danger" plain size="small" circle @click.stop="removeFile(file)">
+            <UiButton variant="danger" plain size="small" circle aria-label="移除文件" @click.stop="removeFile(file)">
               <el-icon><Delete /></el-icon>
             </UiButton>
           </div>

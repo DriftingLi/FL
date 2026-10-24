@@ -21,19 +21,19 @@
         <el-dropdown-item command="light">
           <span class="flex items-center gap-2">
             <el-icon class="w-4" :size="14"><Sunny /></el-icon>浅色
-            <el-icon v-if="themeStore.mode === 'light'" class="ml-auto text-ui-600" :size="14"><Check /></el-icon>
+            <el-icon v-if="themeStore.mode === 'light'" class="ml-auto text-ui-soft-ink" :size="14"><Check /></el-icon>
           </span>
         </el-dropdown-item>
         <el-dropdown-item command="dark">
           <span class="flex items-center gap-2">
             <el-icon class="w-4" :size="14"><Moon /></el-icon>深色
-            <el-icon v-if="themeStore.mode === 'dark'" class="ml-auto text-ui-600" :size="14"><Check /></el-icon>
+            <el-icon v-if="themeStore.mode === 'dark'" class="ml-auto text-ui-soft-ink" :size="14"><Check /></el-icon>
           </span>
         </el-dropdown-item>
         <el-dropdown-item command="system">
           <span class="flex items-center gap-2">
             <el-icon class="w-4" :size="14"><Monitor /></el-icon>跟随系统
-            <el-icon v-if="themeStore.mode === 'system'" class="ml-auto text-ui-600" :size="14"><Check /></el-icon>
+            <el-icon v-if="themeStore.mode === 'system'" class="ml-auto text-ui-soft-ink" :size="14"><Check /></el-icon>
           </span>
         </el-dropdown-item>
       </el-dropdown-menu>

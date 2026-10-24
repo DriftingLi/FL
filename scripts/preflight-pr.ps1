@@ -12,6 +12,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 同 submit-pr.ps1（#1853 范围追加）：node 输出按控制台代码页解码会吞 UTF-8 多字节字符的尾节，
+# 入口先钉 UTF-8 与控制台代码页解耦（判据在 .github/scripts/lib/gate-validator.mjs，不在这里）。
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {

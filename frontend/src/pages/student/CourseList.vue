@@ -137,7 +137,7 @@
       <template #header>
         <div class="detail-header flex items-center justify-between gap-3 pr-6">
           <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
-          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle @click="toggleCourseFavorite"/>
+          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle :aria-label="courseFavorited ? '取消收藏课程' : '收藏课程'" @click="toggleCourseFavorite"/>
         </div>
       </template>
       <div v-loading="detailLoading">
@@ -204,7 +204,7 @@
                 class="chapter-row flex cursor-pointer items-center gap-3 border-b border-line px-4 py-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas last:border-b-0"
                 @click="goToChapter(ch)"
               >
-                <span class="chapter-index flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-ui-100 text-xs font-semibold text-ui-600">{{ i + 1 }}</span>
+                <span class="chapter-index flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-ui-soft-strong text-xs font-semibold text-ui-soft-ink">{{ i + 1 }}</span>
                 <span class="chapter-title flex-1 text-sm text-ink">{{ ch.title }}</span>
                 <UiTag v-if="chapterCompleted(ch.chapter_id)" size="small" tone="success" effect="plain">已完成</UiTag>
                 <span v-if="ch.duration" class="chapter-duration text-xs text-ink-3">{{ ch.duration }}分钟</span>

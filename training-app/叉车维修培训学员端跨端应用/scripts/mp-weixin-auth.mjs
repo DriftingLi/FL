@@ -14,8 +14,10 @@
 //       写成非 JSON 盖帽（removeStorageSync 实测不跨 IDE 重启落盘、set 落盘——run13 实证不对称）：
 //       应用启动 restoreFromStorage 走 uObj==null 分支 resetAuthState（stores/auth.uts:194，只动内存
 //       不动 storage）⇒ welcome 页以游客态留在入口页。盖帽/注入都须发生在当页冷启动**之前**。
-// 诚实降级：任何一步失败 ⇒ ok=false + kebab reason，由调用方记 SKIP（auth-session-unavailable），
-//       绝不冒充取证成立。
+// 诚实降级：任何一步失败 ⇒ ok=false + kebab reason + detail，由调用方记 SKIP（auth-session-unavailable），
+//       绝不冒充取证成立。#1863 起调用方（mp-weixin-check.ps1）已执行该条款：auth 相 ok=false ⇒ 该页
+//       记 SKIP 且**不换页不冷启动**（#1845 实证：注入失败后 storage 旧过期 token 复活、路由判据可通过
+//       而截图实拍业务层 401 态）；失败 detail 随结果行 auth= 字段透传（HTTP 状态 / 网络错误 / 超时可归因）。
 // 输出：单行 `MP_WEIXIN_AUTH {json}`（调用方只看这行，不看退出码）。
 //       json = {ok, status: existing|injected|cleared|none, user, reason, detail, elapsedMs} —— 不含令牌。
 // 红线：不调 mp.close()（会话留给后续探针，同 mp-weixin-probe.mjs 纪律）；单步全部带超时
@@ -223,7 +225,11 @@ async function main() {
       data = body.data;
     }
   } catch (e) {
+    // #1863：网络错误要可归因——fetch 失败的 message 往往只有「fetch failed」，真实类别在
+    // cause.code（ECONNREFUSED / ENOTFOUND / CERT_* 等）；超时走 withTimeout 的 TIMEOUT(ms) @ label。
     apiDetail = String((e && e.message) || e).slice(0, 160);
+    const causeCode = String((e && e.cause && (e.cause.code || e.cause.message)) || '');
+    if (causeCode) apiDetail += ' cause=' + causeCode.slice(0, 60);
   }
   if (!data) {
     finish({ ok: false, status: 'none', reason: 'wx-login-api-failed', detail: apiDetail });

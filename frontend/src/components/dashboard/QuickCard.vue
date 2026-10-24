@@ -112,13 +112,13 @@ const props = withDefaults(
   gap: 2px;
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-primary-500);
+  color: var(--color-primary-soft-ink);
   text-decoration: none;
   transition: color var(--duration-fast) var(--ease-default);
 }
 
 .card-more:hover {
-  color: var(--color-primary-700);
+  color: var(--color-primary-soft-ink);
 }
 
 .card-more .el-icon {
@@ -179,15 +179,15 @@ const props = withDefaults(
   font-weight: var(--font-medium);
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .item-arrow {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-default);
@@ -202,7 +202,7 @@ const props = withDefaults(
   align-items: center;
   justify-content: center;
   padding: var(--space-8) var(--space-4);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: var(--text-sm);
 }
 </style>

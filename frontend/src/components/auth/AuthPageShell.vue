@@ -32,29 +32,29 @@
       >
         <button
           type="button"
-          class="back inline-block cursor-pointer border-0 bg-transparent p-0 pb-4 text-[13px] text-ui-600 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-700"
+          class="back inline-block cursor-pointer border-0 bg-transparent p-0 pb-4 text-[13px] text-ui-soft-ink transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline"
           @click="goMain"
         >← {{ backLabel }}</button>
         <slot :name="`alt-${m.key}`" />
       </main>
 
       <section v-if="altModes.length" class="alt-area mt-[22px]">
-        <div class="divider mb-4 flex items-center gap-2.5 text-xs text-ink-muted">{{ dividerText }}</div>
+        <div class="divider mb-4 flex items-center gap-2.5 text-xs text-ink-3">{{ dividerText }}</div>
         <div class="alt-row flex justify-center gap-[22px]">
           <button
             v-for="m in altModes"
             :key="m.key"
             type="button"
             class="alt group flex cursor-pointer flex-col items-center gap-1.5 border-0 bg-transparent p-1 text-xs transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] aria-pressed:font-semibold"
-            :class="m.key === 'wechat' ? 'aria-pressed:text-[var(--wechat-green)]' : 'aria-pressed:text-ui-600'"
+            :class="m.key === 'wechat' ? 'aria-pressed:text-[var(--wechat-green)]' : 'aria-pressed:text-ui-soft-ink'"
             :aria-pressed="activeAlt === m.key"
             @click="selectAlt(m.key)"
           >
             <span
-              class="ic flex h-11 w-11 items-center justify-center rounded-card border border-line bg-panel text-ink-3 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:border-ui-300 group-hover:text-ui-600"
+              class="ic flex h-11 w-11 items-center justify-center rounded-card border border-line bg-panel text-ink-3 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:border-ui-300 group-hover:underline"
               :class="m.key === 'wechat'
                 ? 'group-aria-pressed:border-[var(--wechat-green)] group-aria-pressed:bg-[var(--wechat-green)] group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(7,193,96,0.28)]'
-                : 'group-aria-pressed:border-ui-500 group-aria-pressed:bg-ui-500 group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(13,148,136,0.28)]'"
+                : 'group-aria-pressed:border-ui-500 group-aria-pressed:bg-ui-600 group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(13,148,136,0.28)]'"
             >
               <component :is="m.icon" :size="19" />
             </span>
@@ -224,7 +224,7 @@ function goMain() {
 }
 
 .auth-page .form-input .el-input__prefix-inner {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .auth-page .form-footer {
@@ -233,19 +233,19 @@ function goMain() {
 
 .auth-page .footer-text {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .auth-page .footer-link {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary-500);
+  color: var(--color-primary-soft-ink);
   text-decoration: none;
   margin-left: 4px;
   transition: color var(--duration-fast) var(--ease-default);
 }
 
 .auth-page .footer-link:hover {
-  color: var(--color-primary-700);
+  color: var(--color-primary-soft-ink);
 }
 </style>

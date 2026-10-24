@@ -8,7 +8,7 @@
           <UiSwitch :model-value="visibilityOpen" @change="toggleVisibility" />
         </div>
       </div>
-      <div v-if="viewCount > 0" class="rounded-card border border-line bg-ui-50 px-4 py-3 mb-4 text-sm text-ink">
+      <div v-if="viewCount > 0" class="rounded-card border border-line bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-4 py-3 mb-4 text-sm text-ink">
         近 7 天 {{ viewCount }} 家企业查看过你的简历
       </div>
 
@@ -37,7 +37,7 @@
           </UiButton>
           <UiButton v-if="resumeFileUrl" size="small" variant="danger" plain :loading="deletingPdf" @click="deletePdf">删除 PDF 附件</UiButton>
           <input ref="pdfInput" type="file" accept=".pdf" hidden @change="onPdfChange" />
-          <span v-if="resumeFileUrl" class="text-xs text-ink-3">附件：<a :href="resumeFileUrl" target="_blank" class="text-ui-600">查看上传简历</a></span>
+          <span v-if="resumeFileUrl" class="text-xs text-ink-3">附件：<a :href="resumeFileUrl" target="_blank" class="text-ui-soft-ink">查看上传简历</a></span>
         </div>
 
         <!-- 内嵌自己的打码在线简历 PDF（所见即招聘者所见，#485/#491） -->

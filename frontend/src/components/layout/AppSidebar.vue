@@ -236,7 +236,7 @@ function isRouteActive(item: NavItem): boolean {
 .nav-group-label {
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   padding: var(--space-3) var(--space-3) var(--space-1);
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -246,11 +246,11 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-label.is-active {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-label.is-active .nav-group-icon {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-label.is-accordion {
@@ -259,7 +259,7 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-label.is-accordion:hover {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-arrow {
@@ -274,7 +274,7 @@ function isRouteActive(item: NavItem): boolean {
 
 .nav-group-icon {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -283,13 +283,13 @@ function isRouteActive(item: NavItem): boolean {
   align-items: center;
   justify-content: center;
   padding: var(--space-2);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   cursor: default;
 }
 
 .nav-group-icon-only.is-active {
-  color: var(--color-primary-600);
-  background: var(--color-primary-50);
+  color: var(--color-primary-soft-ink);
+  background: var(--color-primary-soft);
   border-radius: var(--radius-md);
 }
 
@@ -306,13 +306,13 @@ function isRouteActive(item: NavItem): boolean {
 .nav-sub-group-label {
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   padding: var(--space-2) var(--space-3) var(--space-1) calc(var(--space-3) + 12px);
   white-space: nowrap;
 }
 
 .nav-sub-group-label.is-active {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-tooltip-title {

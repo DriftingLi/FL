@@ -36,7 +36,7 @@
             class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-[13px] text-ink-2"
           >
             <span class="cursor-pointer" @click="searchWith(kw)">{{ kw }}</span>
-            <el-icon class="cursor-pointer text-ink-muted hover:text-bad" @click="onRemoveHistory(kw)"><Close /></el-icon>
+            <el-icon class="cursor-pointer text-ink-3 hover:text-bad" @click="onRemoveHistory(kw)"><Close /></el-icon>
           </span>
         </div>
       </template>
@@ -75,7 +75,7 @@
                 <span class="text-xs text-ink-3">{{ section.data.total }} 条</span>
                 <span
                   v-if="section.data.total > section.data.items.length"
-                  class="ml-auto cursor-pointer text-[13px] text-ui-600"
+                  class="ml-auto cursor-pointer text-[13px] text-ui-soft-ink"
                   @click="onTypeChange(section.key)"
                 >查看全部</span>
               </div>
@@ -90,7 +90,7 @@
                   <SearchResultRow :item="item" :keyword="keyword" />
                 </div>
               </template>
-              <div v-else class="py-1 text-[13px] text-ink-muted">无匹配结果</div>
+              <div v-else class="py-1 text-[13px] text-ink-3">无匹配结果</div>
             </div>
             </template>
             <UiEmptyState v-else description="没有找到相关内容">

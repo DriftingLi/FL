@@ -6,28 +6,28 @@
           <span class="text-sm text-ink">修改头像</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <el-avatar :size="32" :src="avatarUrl || undefined" class="shrink-0 bg-[image:var(--gradient-brand)] text-panel">{{ letter }}</el-avatar>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
         <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openNickname">
           <span class="text-sm text-ink">修改昵称</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <span class="max-w-[180px] truncate">{{ userInfo.username || '未设置' }}</span>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
         <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openCompany">
           <span class="text-sm text-ink">单位</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <span class="max-w-[180px] truncate">{{ userInfo.company || '未填写' }}</span>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
         <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openAccount">
           <span class="text-sm text-ink">我的帐号</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <span class="max-w-[180px] truncate">{{ userInfo.account || '未生成' }}</span>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
       </div>
@@ -35,20 +35,20 @@
       <div class="overflow-hidden rounded-card bg-panel shadow-card">
         <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openPassword">
           <span class="text-sm text-ink">修改密码</span>
-          <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon></span>
+          <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon></span>
         </div>
         <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openPhone">
           <span class="text-sm text-ink">更换手机号</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <span class="max-w-[180px] truncate">{{ maskedPhone }}</span>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
         <div class="flex cursor-pointer items-center justify-between border-b border-line px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas last:border-b-0" @click="openEmail">
           <span class="text-sm text-ink">更换邮箱</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <span class="max-w-[180px] truncate">{{ userInfo.email || '未绑定' }}</span>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
       </div>
@@ -58,7 +58,7 @@
           <span class="text-sm text-ink">我的简历</span>
           <span class="flex items-center gap-2 text-sm text-ink-3">
             <span class="max-w-[180px] truncate">{{ resumeVisibilityText }}</span>
-            <el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon>
+            <el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon>
           </span>
         </div>
       </div>
@@ -66,7 +66,7 @@
       <div class="overflow-hidden rounded-card bg-panel shadow-card">
         <div class="flex cursor-pointer items-center justify-between px-4 py-4 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas active:bg-canvas" @click="openDelete">
           <span class="text-sm text-danger">注销帐号</span>
-          <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-muted"><ArrowRight /></el-icon></span>
+          <span class="flex items-center gap-2 text-sm text-ink-3"><el-icon class="text-sm text-ink-3"><ArrowRight /></el-icon></span>
         </div>
       </div>
 

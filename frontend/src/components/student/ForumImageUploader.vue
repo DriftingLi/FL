@@ -26,6 +26,7 @@
         <el-image :src="resolveFileUrl(url)" fit="cover" class="h-full w-full" />
         <button
           type="button"
+          aria-label="移除图片"
           class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-panel transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-bad/90"
           @click="removeImage(index)"
         >
@@ -110,8 +111,8 @@ const zoneTitle = computed(() => (isFull.value ? `最多 ${props.max} 张图片`
 const zoneClass = computed(() => {
   if (isFull.value) return 'cursor-not-allowed border-line bg-canvas text-ink-3 opacity-70'
   if (uploading.value) return 'cursor-wait border-line-strong bg-canvas text-ink-2 opacity-80'
-  if (dragging.value) return 'cursor-copy border-ui-500 bg-ui-50 text-ui-600'
-  return 'cursor-pointer border-line-strong bg-canvas text-ink-2 hover:border-ui-500 hover:bg-ui-50 hover:text-ui-600'
+  if (dragging.value) return 'cursor-copy border-ui-soft-ink bg-ui-soft text-ui-soft-ink'
+  return 'cursor-pointer border-line-strong bg-canvas text-ink-2 hover:border-ui-soft-ink hover:bg-ui-soft hover:text-ui-soft-ink'
 })
 
 function triggerSelect() {

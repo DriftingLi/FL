@@ -27,7 +27,7 @@ const MIN_H: Record<string, string> = { sm: 'min-h-20', md: 'min-h-32', lg: 'min
     role="status"
     aria-live="polite"
   >
-    <el-icon class="animate-spin text-ui-500" :class="ICON[props.size]">
+    <el-icon class="animate-spin text-ui-soft-ink" :class="ICON[props.size]">
       <Loading />
     </el-icon>
     <span v-if="props.tip" class="text-xs text-ink-3">{{ props.tip }}</span>
