@@ -26,8 +26,8 @@
  * 9) 零直发请求 + 域 api 出口：页面不碰 api 层；`useLoginForm` 只经 `api/auth.uts`；
  *    `getCaptchaApi` 的 DTO 化与 `sendCodeApi` 的裸透传白名单**理由**在 `#650` 已落锁
  *    （`utils/forgotPasswordContract.test.js` / `registerContract.test.js`），本文件只补登录侧消费面
- * 10) 行为保持点：四模式分支 / 模式切换清零 / 图形验证码前置与失败刷新 / 60s 倒计时 /
- *    四通道校验文案逐字 / 协议勾选的 password 例外 / 成功后跳转两分支 / 招聘者入口 /
+ * 10) 行为保持点：三模式分支（#1879 起微信档退役）/ 模式切换清零 / 图形验证码前置与失败刷新 / 60s 倒计时 /
+ *    三通道校验文案逐字 / 协议勾选的 password 例外 / 成功后跳转两分支 / 招聘者入口 /
  *    键盘「完成」= 提交 —— 逐项仍在
  *
  * 本套件是**接线守护**（源码文本 + harness 结构事实，不构成 ③ 门的行为证据，见 `docs/agents/guards.md`）：
@@ -76,9 +76,17 @@ const LINE_BUDGET = 600;
  * ② 样式块：`.status-bar` 底色 `#ffffff` → `$bg-header`（`uni.scss` 里 `$bg-header: #ffffff`，**同值字面替换，零像素变化**）
  *    —— 判据源 ui-spec §7.1「N06 页面自垫状态栏走 token」+ §9 指标1（声明位 hex 必须 ∈ token 值集合 ∪ §1.6 白名单）。
  * ⇒ 两把 sha 同步前进；块内规则数、其余每一条声明逐字节不变。
+ *
+ * ⚠️ **#1879 第四次显式变更（grill 定案 2026-10-24，同样不是绕过）**：登录页微信模式整体退役
+ * （微信一键登录收敛为欢迎页唯一入口，见票 #1879）。模板块删四处 —— `mode == 'wechat'` 展示区块、
+ * 底部 `#ifdef MP-WEIXIN` 块（含两行指令行与「微信登录」切换链接，**本票显式推翻 #1478 裁定 2
+ * 对这一处的范围裁定**，按 ADR-0008「删除指令行同样算」② 门从免变必过）、`<LoginProviderEntry>`
+ * 挂载行、主按钮的 `'btn-wechat'` class 绑定，另改两行注释；样式块删两条规则（`.wx-intro` /
+ * `.btn-login.btn-wechat`）。⇒ 两把 sha 同步前进；其余每一行逐字节不变。
+ * 现测：两把 sha 均由本文件同款 `block()` 重算；判别力自检照旧。
  */
-const TEMPLATE_SHA256 = '4b8eb5e3b0ddd9524e8e7839aade8c1efd902e2320903c8f9dffd43e109a36de';
-const STYLE_SHA256 = '411eea573f1b25a12c97c76546af164ba71a6fec0174c1ec3274886165bea9f4';
+const TEMPLATE_SHA256 = '815d2642493d414cb234bce8abbae1ae9e7a30eeb308093665b8ba8b4f2d5914';
+const STYLE_SHA256 = 'e2721f6549fdf1dbd5511cfc5fb14a63a0dcbc4755cd035e035615eba244b47d';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -138,13 +146,13 @@ function templateRoots(tpl) {
 }
 
 /**
- * 页面作用域：两个模块私有 composable 的解构名 + 跨切面探测件的解构名 + 壳层自有函数 + `biometric` 实例
- * （`useLoginProviders` 是 #1478 起的共享探测件，登记在 `INFRA.files`，模板绑的 `wechatAvailable`
- * 由它解构而来 —— 加进来是**扩大**判据面：模板多一个根标识符，少一个定义即红）
+ * 页面作用域：两个模块私有 composable 的解构名 + 壳层自有函数 + `biometric` 实例
+ * （#1879 起登录页不再消费跨切面探测件 `useLoginProviders` —— 微信模式退役后无剩余解构面；
+ * 探测件本身仍在，消费方只剩着陆页）
  */
 function pageScope() {
   const page = read(PAGE);
-  const names = new Set([...destructuredNames(page, 'useLoginForm'), ...destructuredNames(page, 'useBiometricGate'), ...destructuredNames(page, 'useLoginProviders')]);
+  const names = new Set([...destructuredNames(page, 'useLoginForm'), ...destructuredNames(page, 'useBiometricGate')]);
   for (const m of page.matchAll(/function ([A-Za-z_$][\w$]*)\(/g)) names.add(m[1]);
   for (const m of page.matchAll(/const ([A-Za-z_$][\w$]*)\s*=/g)) names.add(m[1]);
   return names;
@@ -164,7 +172,7 @@ describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必�
     }
   });
 
-  it('样式块**逐字节**未变；模板块停在 #1484 的新基线上（两把 sha 锁，改一字符即红）', () => {
+  it('样式块与模板块停在 #1879 退役后的新基线上（两把 sha 锁，改一字符即红）', () => {
     const tpl = pageTemplate();
     const style = block(read(PAGE), 'style');
     expect(tpl.length).toBeGreaterThan(8000);
@@ -194,12 +202,12 @@ describe('composable 接线契约（T13 拆分：两个模块私有 composable �
     const page = read(PAGE);
     expect(page).toContain("from './composables/useLoginForm'");
     expect(page).toContain("from './composables/useBiometricGate'");
-    expect(page).toContain('= useLoginForm(biometric, wechatLoginReady.value)');
+    expect(page).toContain('= useLoginForm(biometric)');
     expect(page).toContain('= useBiometricGate(biometric, username, password, rememberMe)');
   });
 
   it('两个 composable 都有显式返回类型与 `as` 标注（Kotlin error18 规避）', () => {
-    expect(read(FORM)).toMatch(/export function useLoginForm\(biometric : UseBiometricResult, wechatLoginReady : boolean\) : UseLoginFormResult \{/);
+    expect(read(FORM)).toMatch(/export function useLoginForm\(biometric : UseBiometricResult\) : UseLoginFormResult \{/);
     expect(read(FORM)).toContain('} as UseLoginFormResult');
     expect(read(GATE)).toMatch(/export function useBiometricGate\(/);
     expect(read(GATE)).toContain(') : UseBiometricGateResult {');
@@ -384,10 +392,11 @@ describe('零直发请求 + 域 api 出口（票面 ⑤：页面层不直接发�
 
   it('登录侧只消费 getCaptchaApi / sendCodeApi 两个域出口（register 专属出口不得回流登录页）', () => {
     const form = read(FORM);
-    for (const fn of ['getCaptchaApi', 'sendCodeApi', 'loginByCode', 'loginByWechat', 'auth.login(']) {
-      expect(form).toContain(fn.replace('auth.login(', 'login('));
+    // #1879 起微信提交分支退役 ⇒ loginByWechat 不再是登录侧消费面（App 端链路归 #1482，见其票面）
+    for (const fn of ['getCaptchaApi', 'sendCodeApi', 'loginByCode', 'login(']) {
+      expect(form).toContain(fn);
     }
-    for (const fn of ['registerApi', 'emailRegisterApi', 'sendPhoneCodeApi', 'resetPasswordApi']) {
+    for (const fn of ['registerApi', 'emailRegisterApi', 'sendPhoneCodeApi', 'resetPasswordApi', 'loginByWechat']) {
       expect(form).not.toContain(fn);
     }
   });
@@ -413,11 +422,12 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
   const form = read(FORM);
   const tpl = pageTemplate();
 
-  it('四种登录方式分支齐备，默认仍是手机号验证码', () => {
+  it('三种登录方式分支齐备，默认仍是手机号验证码（#1879 起微信档退役，不得回流）', () => {
     expect(form).toContain("const mode = ref<string>('phone')");
-    for (const probe of ['<template v-if="mode == \'password\'">', "<template v-else-if=\"mode == 'phone'\">", "<template v-else-if=\"mode == 'wechat'\">", '<template v-else>']) {
+    for (const probe of ['<template v-if="mode == \'password\'">', "<template v-else-if=\"mode == 'phone'\">", '<template v-else>']) {
       expect(tpl).toContain(probe);
     }
+    expect(tpl).not.toContain("mode == 'wechat'");
     expect(tpl).toContain("{{ countdown > 0 ? countdown + 's' : '获取验证码' }}");
   });
 
@@ -443,13 +453,13 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(fnBodyOf(form, 'clearCountdownTimer')).toContain('const timer = countdownTimer');
   });
 
-  it('四通道校验文案逐字仍在（手机 / 账号密码 / 微信放行 / 邮箱）', () => {
+  it('三通道校验文案逐字仍在（手机 / 账号密码 / 邮箱；#1879 起微信放行分支随模式退役）', () => {
     const v = fnBodyOf(form, 'validate');
     expect(v).toContain("if (phoneCode.value.length != 6) return '请输入 6 位验证码'");
     expect(v).toContain("if (username.value.length == 0) return '请输入用户名或手机号'");
     // #1262：口令档由「只判下限」翻成 6-20 区间，文案与注册页 / 后端规则源逐字同形（同规则在 auth_service.go:401 另有一份内联判据）
     expect(v).toContain("if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'");
-    expect(v).toContain("if (mode.value == 'wechat') {\n            return ''");
+    expect(v).not.toContain("mode.value == 'wechat'");
     expect(v).toContain("if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'");
     const pn = fnBodyOf(form, 'validatePhoneNum');
     expect(pn).toContain("if (p.length != 11) return '请输入 11 位手机号'");
@@ -474,16 +484,16 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(tpl).toContain("v-if=\"mode != 'password'\"");
   });
 
-  it('提交：四路分派 + 凭据落地三态 + 失败累计验证码错次', () => {
+  it('提交：三路分派 + 凭据落地三态 + 失败累计验证码错次（#1879 起微信分支退役）', () => {
     const body = fnBodyOf(form, 'onSubmit');
     expect(body).toContain("if (mode.value == 'phone') {");
     expect(body).toContain('await auth.loginByCode({');
-    expect(body).toContain('const result = await auth.loginByWechat()');
+    expect(body).not.toContain('loginByWechat');
     expect(body).toContain('await auth.login({');
     expect(body).toContain('if (biometric.isSupported.value) {');
     expect(body).toContain('saveAccountOnly(uname)');
     expect(body).toContain('clearSecureCredentials()');
-    expect(body).toContain("if (mode.value != 'password' && mode.value != 'wechat') {");
+    expect(body).toContain("if (mode.value != 'password') {");
     expect(body).toContain("if (m.indexOf('验证码') >= 0)");
     expect(body).toContain('wrongAttempts.value += 1');
     expect(body).toContain("let msg = '登录失败，请重试'");
@@ -510,10 +520,10 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(chooseCertAt(outlet.replace('uni.reLaunch({ url: \'/pages/guide/choose-cert\' })', 'uni.reLaunch({ url: \'/pages/dashboard/dashboard\' })'))).toBe(0);
   });
 
-  it('主按钮文案三态与验证码提示三档逐字仍在', () => {
+  it('主按钮文案两态与验证码提示三档逐字仍在（#1879 起微信态随模式退役）', () => {
     const btn = form.slice(form.indexOf('const btnText = computed<string>'));
     expect(btn).toContain("if (loading.value) return '登录中...'");
-    expect(btn).toContain("if (mode.value == 'wechat') return '微信一键登录'");
+    expect(btn).not.toContain('微信一键登录');
     expect(btn).toContain("return '登 录'");
     const hint = form.slice(form.indexOf('const codeHint = computed<string>'));
     expect(hint).toContain("return '验证码错误次数过多，请点击获取验证码重新发送'");

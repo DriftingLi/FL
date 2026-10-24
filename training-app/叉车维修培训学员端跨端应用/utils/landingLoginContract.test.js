@@ -244,8 +244,10 @@ describe('AC 2 分端主入口（R1：锁「探测可用⇒微信分支 / 不可
 
 /** 指令行 = 行首（可缩进）的 `<!--` / `//` / `*` 后跟 `#ifdef|ifndef|endif` */
 const IFDEF_LINE_RE = /^[ \t]*(?:<!--|\/\/|\*)[ \t]*#(?:ifdef|ifndef|endif)\b.*$/gm;
-/** BASE（83e0d2f9）实测计数：启动页原本就没有条件编译；登录页那条 `#ifdef MP-WEIXIN` + `#endif` 成对 2 行 */
-const IFDEF_BASE = { [PAGE]: 0, [LOGIN_PAGE]: 2 };
+/** BASE 计数：启动页原本就没有条件编译；登录页那条 `#ifdef MP-WEIXIN` + `#endif` 已随 #1879
+ *  登录页微信模式退役而**显式拆除**（grill 定案 2026-10-24 推翻 #1478 裁定 2 对这一处的范围裁定，
+ *  按 ADR-0008「删除指令行同样算」② 门从免变必过）⇒ 两页 BASE 都是 0。 */
+const IFDEF_BASE = { [PAGE]: 0, [LOGIN_PAGE]: 0 };
 
 const ifdefCount = (src) => (src.match(IFDEF_LINE_RE) || []).length;
 
@@ -254,19 +256,20 @@ describe('AC `#ifdef` 指令行增删数 = 0（② 门触发面，两个运行�
     expect(ifdefCount(read(rel))).toBe(IFDEF_BASE[rel]);
   });
 
-  it('登录页那条 MP-WEIXIN **没被拆**（成对仍在，微信入口的编译面不变）', () => {
+  it('登录页那条 MP-WEIXIN **已被拆**（#1879 显式决定：微信模式退役，两行指令行不得回流）', () => {
     const src = read(LOGIN_PAGE);
-    expect(ifdefCount(src)).toBe(2);
-    expect(/<!--\s*#ifdef\s+MP-WEIXIN\s*-->/.test(src)).toBe(true);
-    expect(/<!--\s*#endif\s*-->/.test(src)).toBe(true);
+    expect(ifdefCount(src)).toBe(0);
+    expect(/<!--\s*#ifdef\s+MP-WEIXIN\s*-->/.test(src)).toBe(false);
+    expect(/<!--\s*#endif\s*-->/.test(src)).toBe(false);
   });
 
-  it('判别力：给启动页加一行 MP-WEIXIN、或把登录页那条拆掉，计数都必须变（锁不是恒真）', () => {
+  it('判别力：给启动页加一行 MP-WEIXIN、或给登录页加回一行，计数都必须变（锁不是恒真）', () => {
     const injected = read(PAGE) + '\n            <!-- #ifdef MP-WEIXIN -->\n';
     expect(ifdefCount(injected)).toBe(1);
-    const split = read(LOGIN_PAGE).replace(/<!--\s*#ifdef\s+MP-WEIXIN\s*-->/, '<!-- moved out -->');
-    expect(ifdefCount(split)).toBe(1);
+    const reintroduced = read(LOGIN_PAGE) + '\n        <!-- #ifdef MP-WEIXIN -->\n';
+    expect(ifdefCount(reintroduced)).toBe(1);
     expect(ifdefCount(read(PAGE))).toBe(0);
+    expect(ifdefCount(read(LOGIN_PAGE))).toBe(0);
   });
 });
 
@@ -571,18 +574,17 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
   });
 });
 
-describe('AC 探测件两页共享同一符号（平台判据全仓唯一，两份实现即红）', () => {
+describe('AC 探测件共享同一符号（平台判据全仓唯一，两份实现即红）', () => {
   const sources = allSources();
 
-  it('两页都 import 根 composables/useLoginProviders 并解构**两个能力面**（展示面 + 接通面）', () => {
-    for (const rel of [PAGE, LOGIN_PAGE]) {
-      expect(read(rel)).toContain("import { useLoginProviders } from '../../composables/useLoginProviders'");
-    }
-    // #1484 显式变更（不是绕过）：登录页多解构一个**端别面** `isAppPlatform` 作入口件的挂载条件。
-    // 判据仍是**逐字**的、且按页各自写死 —— 两页各一条，谁改名谁红；摘掉「只解构两个面」这条
-    // 统一断言的代价由下方「探测件返回面」那条 it 的字段逐一钉死接住（探测件多一个字段没有，页面少解构一个名字，两处都红）。
+  it('着陆页 import 根 composables/useLoginProviders 并解构**两个能力面**（展示面 + 接通面）', () => {
+    expect(read(PAGE)).toContain("import { useLoginProviders } from '../../composables/useLoginProviders'");
+    // #1484 显式变更（不是绕过）：登录页曾多解构一个**端别面** `isAppPlatform` 作入口件的挂载条件。
+    // #1879 起登录页微信模式退役 ⇒ 登录页不再 import 探测件（消费面只剩着陆页一处），反向钉死防回流。
+    // 摘掉「只解构两个面」这条统一断言的代价由下方「探测件返回面」那条 it 的字段逐一钉死接住
+    // （探测件多一个字段没有，页面少解构一个名字，两处都红）。
     expect(read(PAGE)).toContain('const { wechatAvailable, wechatLoginReady } = useLoginProviders()');
-    expect(read(LOGIN_PAGE)).toContain('const { wechatAvailable, wechatLoginReady, isAppPlatform } = useLoginProviders()');
+    expect(read(LOGIN_PAGE)).not.toContain('useLoginProviders');
   });
 
   it('两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）只出现在探测件里 —— 多一个文件即「两份实现」', () => {
