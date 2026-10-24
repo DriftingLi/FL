@@ -169,6 +169,27 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
     const s = read('pages/index/index.uvue');
     expect(s).toMatch(/if \(auth\.isLoggedIn\.value\)[\s\S]*?uni\.reLaunch\(\{[\s\S]*?\/pages\/dashboard\/dashboard/);
   });
+
+  it('search 顶部行右端「取消」受 capsuleLeft 约束：右 padding = 750 − capsuleLeft + 24（#1845）', () => {
+    const s = read('pages/search/search.uvue');
+    // 动态让位只能走内联 style（uvue 无 var()/calc()，先例 app-nav-bar 的 rightSlotStyle）
+    expect(s).toMatch(/<view class="search-header"\s+:style="searchHeaderStyle"/);
+    // 值取自唯一测量层 useSafeArea 的 capsuleLeft；右缘 = 胶囊左边线 − 24rpx
+    expect(s).toMatch(/safeArea\.value\.capsuleLeft/);
+    expect(s).toMatch(/750\s*-\s*capsuleLeft\s*\+\s*CAPSULE_CLEARANCE/);
+    // 间隙常量与页头件 RIGHT_SLOT_CLEARANCE 同值（24），两处漂移在此显形
+    expect(s).toMatch(/CAPSULE_CLEARANCE\s*=\s*24/);
+    expect(read('components/app-nav-bar/app-nav-bar.uvue')).toMatch(/RIGHT_SLOT_CLEARANCE\s*=\s*24/);
+  });
+
+  it('防回潮：N06 现形态里唯一「顶部行右端可点元素」的 search 必须保留让位结构（#1845）', () => {
+    // 锚定现形态：search 是 N06 六页中唯一在自绘头部行右端放可点元素（取消按钮）的页。
+    // 让位结构与锚点共存：取消按钮还在顶部行右端一天，searchHeaderStyle 就得在
+    //（拆掉它 = 回到「右缘贴屏右缘 24rpx」的胶囊冲突形态）。几何验收留真机（ADR-0035 T4 口径）。
+    const s = read('pages/search/search.uvue');
+    expect(s).toMatch(/class="search-cancel"/);
+    expect(s).toMatch(/:style="searchHeaderStyle"/);
+  });
 });
 
 describe('批6 mall 补漏（裁定 A：#1595 台账行 25 判 N03，批3 清单漏收，本批归位）', () => {
