@@ -50,6 +50,13 @@
  *       注入脚本 scripts/mp-weixin-auth.mjs 走 callWxMethod('login') → POST /auth/wx-login →
  *       setStorageSync 四键（与 setAuthData 对齐），令牌绝不入结果行、脚本不得 mp.close（会话留给探针）。
  *
+ *   C26 **publish 前秒级环境预探**（#1860）：门计划第一步是 env-preprobe（exec=none，**只读**不操控 IDE），
+ *       判据库 scripts/lib/mp-weixin-preprobe.ps1；楔死态签名 = 「.ide 端口文件在但其服务端口试连不上」，
+ *       是**否定性闸门**（只拦楔死，不肯定性放行）；exit 2 归属 = ide-port-unreachable（envReasons 在列）。
+ *   C27 **产物内容指纹自动 -SkipBuild**（#1860）：判据库 scripts/lib/mp-weixin-build-fingerprint.ps1，
+ *       指纹键 = 输入集内容哈希 + 产物内容哈希 + HBuilderX 版本令牌（三组件全等才命中）；命中翻
+ *       $SkipBuild 并重建门计划；落盘在产物合法/appid 断言都过之后；失配方向 fail 向重建。
+ *
  * 设计沿用本仓既有守护测试的形态（见 utils/kotlinAllGateContract.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
  *
@@ -81,6 +88,7 @@ const PR_TEMPLATE_REL = path.join('..', '..', '.github', 'PULL_REQUEST_TEMPLATE.
 
 // 门计划的步骤序列（② 的全部外部动作，按执行顺序；-DryRun 输出的 steps[].id 必须逐字等于它）
 const PLAN_SEQUENCE = [
+  'env-preprobe',
   'devtools-quit',
   'devtools-close',
   'devtools-open',
@@ -307,13 +315,19 @@ function scanPlan(plan) {
       `port-listening 的 attempts（${portStep.attempts}）与预算 timeouts.autoAttempts（${T.autoAttempts}）不一致 —— 端口预算必须与整段尝试同源`);
   }
 
-  // ---- C22：pre-flight quit 清场（#1634）—— quit 必须是第一步，且在 close 之前 ----
+  // ---- C22：pre-flight quit 清场（#1634）—— quit 必须先于一切会话步骤，且在 close 之前 ----
   // 病根：脚本启动（IPC 链）下，残留/堆叠的未初始化 IDE 实例会让 open 把项目窗口叠成白屏（连菜单/Console
   // 都没有）。close 只关项目窗口、对未初始化实例无能为力 ⇒ 必须先 quit 退出整个 IDE。判据（唯一真源仍是
-  // 计划）：quit 是第一步、argv 写死 `quit`、声明进程归零轮询（waitSeconds）与失败只警告的语义、不判 exit 2。
+  // 计划）：quit 先于 close/open/auto、argv 写死 `quit`、声明进程归零轮询（waitSeconds）与失败只警告的
+  // 语义、不判 exit 2。#1860：计划第一步是 env-preprobe（**只读**预探，不操控 IDE）——「quit 是第一步」
+  // 收窄为「quit 是第一个会话步骤，其前只允许只读的 env-preprobe」。
   must(Boolean(quitStep), 'C22', '计划里没有 pre-flight `cli.bat quit` 步（残留 IDE 实例会把项目窗口叠成白屏，#1634）');
   if (quitStep) {
-    must(ids.indexOf('devtools-quit') === 0, 'C22', 'quit 不是第一步（清场必须发生在 close/open/auto 之前）');
+    must(
+      ids.indexOf('devtools-quit') === 1 && ids[0] === 'env-preprobe',
+      'C22',
+      'quit 前面只允许只读的 env-preprobe（#1860），清场本身必须发生在 close/open/auto 之前'
+    );
     must(argvOf(quitStep)[0] === 'quit', 'C22', 'quit 的 argv 不是 `quit`（清场要退出整个 IDE，不是 close 项目窗口）');
     must(Number.isFinite(quitStep.waitSeconds) && quitStep.waitSeconds > 0, 'C22', 'quit 缺进程归零轮询预算（waitSeconds）');
     must(Number.isFinite(quitStep.timeoutSeconds) && quitStep.timeoutSeconds > 0, 'C22', 'quit 缺超时兜底');
@@ -876,6 +890,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     // 预算与 exit 2 归属：谁决定 exit 2 要能机检
     expect(realPlan.timeouts.portWait).toBe(realPlan.steps.find((s) => s.id === 'port-listening').waitSeconds);
     expect(realPlan.exit2.map((e) => e.step + ':' + e.reason)).toEqual([
+      'env-preprobe:ide-port-unreachable',
       'devtools-open:devtools-open-timeout',
       'devtools-auto:auto-timeout',
       'port-listening:port-not-listening',
@@ -1205,15 +1220,62 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     returns.forEach((r) => expect(r).toMatch(/Rel\s*=/));
   });
 
-  it('C22：pre-flight quit 清场在计划里是第一步（#1634 白屏病根）', () => {
+  it('C22：pre-flight quit 清场在计划里先于一切会话步骤（#1634 白屏病根；#1860 起计划第一步是只读预探）', () => {
     const quit = realPlan.steps.find((s) => s.id === 'devtools-quit');
-    expect(realPlan.steps[0].id).toBe('devtools-quit');
+    // #1860：env-preprobe 是新的计划第一步 —— 只读（.ide 端口文件 + TCP 试连），不操控 IDE，
+    // 排在 quit 之前只是「先探后动」；**第一个会话步骤仍是 quit**（本条不变量的本意）。
+    expect(realPlan.steps[0].id).toBe('env-preprobe');
+    expect(realPlan.steps[1].id).toBe('devtools-quit');
     expect(quit.argv).toEqual(['quit']);
     expect(quit.exit2).toEqual([]); // 失败只警告，不判 exit 2
     expect(quit.criteria.join(' ')).toContain('白屏');
+    expect(quit.criteria.join(' ')).toContain('#1860'); // quit 前先清点 IDE 进程（0 个 ⇒ 不 quit）
     // quit 在 close 之前：close 只关项目窗口，清残留 IDE 实例必须先 quit
     expect(realPlan.steps.map((s) => s.id).indexOf('devtools-quit'))
       .toBeLessThan(realPlan.steps.map((s) => s.id).indexOf('devtools-close'));
+  });
+
+  it('C26：publish 前秒级预探在计划里是第一步（#1860：否定性闸门，只拦楔死态）', () => {
+    const pre = realPlan.steps.find((s) => s.id === 'env-preprobe');
+    expect(pre.exec).toBe('none'); // 只读：不发命令、不操控 IDE
+    expect(pre.argv).toEqual([]);
+    const criteria = pre.criteria.join(' ');
+    expect(criteria).toContain('否定性'); // 只拦楔死，不肯定性放行
+    expect(criteria).toContain('ide-port-unreachable');
+    expect(pre.exit2).toEqual([{ on: 'unreachable', reason: 'ide-port-unreachable' }]);
+    // exit 2 归属必须进 envReasons 白名单（结果行 reason= 的取值域）
+    expect(realPlan.branches.envBlocked.envReasons).toContain('ide-port-unreachable');
+    // 预算在计划里（timeouts 是唯一真源）
+    expect(realPlan.timeouts.preprobeMs).toBeGreaterThan(0);
+  });
+
+  it('C26-wiring：门脚本真的调预探判据库（dot-source + 调用 + 计划预算取用），-Doctor 跳过', () => {
+    const code = stripCommentLines(real.script).join('\n');
+    expect(code).toContain("lib\\mp-weixin-preprobe.ps1'");
+    expect(code).toContain('Test-MpWeixinDevToolsSessionReachable');
+    expect(code).toContain("timeouts']['preprobeMs");
+    expect(code).toContain('if (-not $Doctor) {');
+    // 否定性闸门的 exit 2 走结果行构造器（形状由 mp-weixin-env.ps1 单点保证，不裸拼字符串）
+    const body = code.slice(code.indexOf('Test-MpWeixinDevToolsSessionReachable'));
+    expect(body).toContain("New-MpWeixinEnvResultLine -Prefix $($script:GatePlan.resultLine.prefix) -Reason 'ide-port-unreachable'");
+    // 楔死早退路径跳过 finally 的 close：close 对死端口 .ide 会自启 IDE 再关（#1860 要消的自启族），
+    // 且本路径从未创建自动化会话、无残留可收 —— 收尾哨兵必须真的被 close 函数消费。
+    expect(code).toMatch(/\$script:skipFinalClose = \$true/);
+    expect(psFunctionBody(code, 'function Invoke-DevToolsClose')).toContain('if ($script:skipFinalClose) { return }');
+  });
+
+  it('C27：产物内容指纹自动 -SkipBuild（#1860：三组件全等才命中，fail 向重建）', () => {
+    const code = stripCommentLines(real.script).join('\n');
+    expect(code).toContain("lib\\mp-weixin-build-fingerprint.ps1'");
+    expect(code).toContain('Test-MpWeixinBuildFingerprintHit');
+    expect(code).toContain('Save-MpWeixinBuildFingerprint');
+    // 命中 ⇒ 翻 $SkipBuild 且重建计划（mode.skipBuild 是计划面字段，翻值不重建 = 计划与执行脱节）
+    expect(code).toMatch(/\$SkipBuild = \$true\s*\$script:GatePlan = New-ThisGatePlan -UsePort \$Port/s);
+    // 落盘只在「本轮真构建过」的分支（-SkipBuild 下不重写指纹）
+    expect(code).toMatch(/if \(-not \$SkipBuild\) \{\s*try \{\s*\$fpSave = Save-MpWeixinBuildFingerprint/s);
+    // 判据库的行为守护存在（三组件语义在 lib 测试里真执行，不在契约里抄第二份）
+    expect(fs.existsSync(path.join(ROOT, 'utils/mpWeixinBuildFingerprintBehavior.test.js'))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, 'utils/mpWeixinGatePreprobeBehavior.test.js'))).toBe(true);
   });
 
   it('C22：执行侧真的跑 pre-flight（取计划步骤 + 进程归零轮询 + -Doctor 跳过 + 绝不 kill）', () => {
