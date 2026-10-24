@@ -122,7 +122,9 @@ import { goBack } from '../../utils/navigation'
     }
 
     .timer-text {
-        font-size: 32rpx;
+        /* 宽度预算（票 1847）：右槽单段 MM:SS 最长 5 字符，26rpx × 5 × 0.94 ≈ 122rpx，
+           低于 150rpx 预算与典型可用槽宽约 164rpx（顶部布局调研 §4.2 记 32rpx 时约 150rpx 临界） */
+        font-size: 26rpx;
         font-weight: bold;
         color: #ffffff;
         font-family: monospace;
