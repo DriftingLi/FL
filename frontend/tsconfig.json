@@ -1,9 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    // ES2022：源码里确实用了 Array.prototype.at（测试与页面都有），而 vite 的构建目标是
+    // baseline-widely-available（≈ES2022），运行面本来就够。
+    // 此前声明 ES2020 也能过 —— 那是「库集被别处顺带撑宽」的巧合：换 @types/node 24 之后
+    // 立刻变成一片 TS2550。巧合的具体来源没追到（@types/node 与 undici-types 都只引 es2020），
+    // 但这不影响结论：配置应当按源码实际用到的 API 声明（#1833）。
+    "target": "ES2022",
     "useDefineForClassFields": true,
     "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
 
     "moduleResolution": "bundler",
