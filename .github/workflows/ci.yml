@@ -500,19 +500,28 @@ jobs:
     # ×1 否决：边际只多省 1 个 job，装箱维度归零、腿增长无缓冲。behavior ×4 恰在收益顶，不动；
     # 权重表漂移（表计权 444s vs 实测 ~534s）另票重采，不在这条 job 上修。
     # fail-fast: false —— 每片都要出结论，别让首片红把其余片的判读信息掐掉。
-    # 腿名 → config（连同各腿片数）的映射只写在 matrix.include 这一处，步骤里用 matrix.config，
-    # 不另造清单。
+    # 腿名 → config（连同各腿总片数）的映射只写在 matrix.include 这一处，步骤里用 matrix.config，
+    # 不另造清单。unit 片集 = 顶层 leg × shard 全积 exclude 掉 3/4 两片 ⇒ 只剩 1、2。别把 shard 集
+    # 直接写进 include 的数组值里——GitHub **不展开 include 里的数组**、每个对象只落一个组合
+    # （2026-10-24 run 40085045853 实测：两腿各 1 个 job、matrix.shard 原样是数组），与 jest 27
+    # 对 `--shard` 的静默忽略同型的坑。
     strategy:
       fail-fast: false
       matrix:
+        leg: [unit, behavior]
+        shard: [1, 2, 3, 4]
+        exclude:
+          # unit 腿 ×2（#1890）：从全积摘掉第 3/4 片。
+          - leg: unit
+            shard: 3
+          - leg: unit
+            shard: 4
         include:
           - leg: unit
             config: jest.config.unit.js
-            shard: [1, 2]
             shards: 2
           - leg: behavior
             config: jest.config.behavior.js
-            shard: [1, 2, 3, 4]
             shards: 4
     defaults:
       run:
