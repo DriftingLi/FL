@@ -48,7 +48,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 功能入口网格 */
     .menu-grid {
         flex-direction: row;
@@ -63,7 +63,7 @@
         align-items: center;
     }
 
-    /* 截图稿为四列宫格：条目各占四分之一宽（四项一行，#1846 搜索移入后第五项换行续排同宽） */
+    /* 截图稿为四列宫格：条目各占四分之一宽（四项一行，票 1846 搜索移入后第五项换行续排同宽；样式块禁 # 票号引用，同 search 页先例口径） */
     .menu-item--col4 {
         width: 25%;
     }
