@@ -2,7 +2,7 @@
     <!-- 功能入口网格 -->
     <view class="menu-grid">
         <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item"
-            :class="{ 'menu-item--col4': idx < 4 }" @click="onMenuClick(item)">
+            :class="{ 'menu-item--col4': idx < 5 }" @click="onMenuClick(item)">
             <view class="menu-icon-box" :style="{ backgroundColor: item.color }">
                 <text class="menu-icon-text">{{ item.icon }}</text>
             </view>
@@ -22,6 +22,8 @@
         color : string
         path : string
         available : boolean
+        /** #1846：搜索自页头右槽移入宫格。搜索页「取消」走 navigateBack，须压栈进入；其余主目的地维持 reLaunch 清栈 */
+        push ?: boolean
     }
 
     const menuItems : MenuItem[] = [
@@ -29,11 +31,17 @@
         { key: 'question-bank', title: '题库练习', icon: '📚', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
         { key: 'materials', title: '学习资料', icon: '📚', color: '#2979ff', path: '/pages/resources/materials', available: true },
         { key: 'exam-info', title: '考情资讯', icon: '📣', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
+        // #1846：页头 🔍 的页内可达落点（色值复用本格既有蓝，不新色）
+        { key: 'search', title: '全局搜索', icon: '🔍', color: '#2979ff', path: '/pages/search/search', available: true, push: true },
     ]
 
     function onMenuClick(item : MenuItem) : void {
         if (!item.available || item.path.length == 0) {
             uni.showToast({ title: UNAVAILABLE_TOAST, icon: 'none' })
+            return
+        }
+        if (item.push == true) {
+            uni.navigateTo({ url: item.path })
             return
         }
         uni.reLaunch({ url: item.path })
@@ -55,7 +63,7 @@
         align-items: center;
     }
 
-    /* 截图稿为四列宫格：前四项各占四分之一宽 */
+    /* 截图稿为四列宫格：条目各占四分之一宽（四项一行，#1846 搜索移入后第五项换行续排同宽） */
     .menu-item--col4 {
         width: 25%;
     }

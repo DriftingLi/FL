@@ -1,7 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <!-- #1608 批5 N05：手写 .status-bar + .header 收口进 app-nav-bar（transparent，页面自垫渐变底）；
-             原左槽 ✉️ 与右槽「发帖」合并进页头件 #right 槽（胶囊让位由组件右槽样式承担，功能不减）。 -->
+        <!-- #1608 批5 N05：手写 .status-bar + .header 收口进 app-nav-bar（transparent，页面自垫渐变底）。
+             #1846 收敛：右槽仅留 ✉️（单图标 64rpx 落在典型可用槽宽内），发帖 pill 下沉页内搜索栏右端
+             （胶囊下方、无冲突；落点见下方 res-search-bar）。 -->
         <app-nav-bar transparent :left-icon="''" title="学员论坛">
             <template #right>
                 <view class="msg-icon-wrap" @click="onMsgClick">
@@ -10,18 +11,18 @@
                         <text class="msg-badge-text">{{ unreadCount > 99 ? '99+' : unreadCount.toString() }}</text>
                     </view>
                 </view>
-                <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口 -->
-                <view v-if="currentTab !== 'experience'" class="header-right" @click="onCreate">
-                    <text class="header-action" @click="onCreate">发帖</text>
-                </view>
             </template>
         </app-nav-bar>
         <ForumTabBar :current-tab="currentTab" :avatar-url="avatarUrl" @switch-tab="onSwitchTab" @personal-activity="onPersonalActivity" />
-        <!-- 搜索栏（点击即进发布，故与 header 同口径：经验 Tab 不显示） -->
-        <view v-if="currentTab !== 'experience'" class="res-search-bar" @click="onCreate">
-            <view class="res-search-input-wrap">
+        <!-- 搜索栏（点击即进发布）：#1846 发帖 pill 自页头右槽下沉至本栏右端，与栏本体同走 onCreate；
+             经验 Tab 是只读策展流（ADR-0040），学员不能自称考经，故两者随同一 v-if 隐藏 -->
+        <view v-if="currentTab !== 'experience'" class="res-search-bar">
+            <view class="res-search-input-wrap" @click="onCreate">
                 <text class="res-search-placeholder">写下你此刻的想法</text>
                 <text class="res-search-icon">🔍</text>
+            </view>
+            <view class="create-pill" @click="onCreate">
+                <text class="create-pill-text">发帖</text>
             </view>
         </view>
         <!-- 精选筛选（#742 批次三）：三 Tab 通用轴，资源 Tab 不显示 -->
@@ -209,7 +210,8 @@
     }
 
     /* #1608 批5 N05：.status-bar/.header/.header-left/.header-title 随页头件收口删除；
-       以下保留的是 #right 槽内容（✉️ 徽标 + 发帖 pill）的自有样式。 */
+       #1846：发帖 pill 自页头右槽下沉，样式随落点迁至搜索栏段（视觉参数原样）。以下保留的
+       是 #right 槽内容（✉️ 徽标）的自有样式。 */
 
     /* 消息图标 */
     .msg-icon-wrap {
@@ -244,40 +246,23 @@
         font-weight: bold;
     }
 
-    .header-right {
-        /* 固定宽度避免被 flex:1 的标题挤压消失 */
-        width: 120rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        background-color: rgba(41, 121, 255, 0.12);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .header-action {
-        font-size: 28rpx;
-        color: #2979ff;
-        font-weight: bold;
-    }
-
-    .content-scroll {
-        flex: 1;
-        height: 0;
-    }
-
-    /* 搜索栏 */
+    /* 搜索栏：行内右端挂发帖 pill（#1846 下沉落点，胶囊下方无冲突） */
     .res-search-bar {
         background-color: transparent;
         padding: 16rpx 32rpx 20rpx;
+        flex-direction: row;
+        align-items: center;
     }
 
     .res-search-input-wrap {
+        flex: 1;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
         background-color: #ffffff;
         border-radius: 36rpx;
         padding: 16rpx 24rpx;
+        margin-right: 20rpx;
     }
 
     .res-search-icon {
@@ -289,6 +274,27 @@
         font-size: 28rpx;
         color: #999999;
         flex: 1;
+    }
+
+    /* 发帖 pill（#1846 自页头右槽下沉，宽高与色值沿用原形态） */
+    .create-pill {
+        width: 120rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        background-color: rgba(41, 121, 255, 0.12);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .create-pill-text {
+        font-size: 28rpx;
+        color: #2979ff;
+        font-weight: bold;
+    }
+
+    .content-scroll {
+        flex: 1;
+        height: 0;
     }
 
     /* 帖子列表 */

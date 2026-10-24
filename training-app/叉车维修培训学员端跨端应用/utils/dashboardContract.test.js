@@ -357,9 +357,9 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(all).not.toContain('certNameMap');
   });
 
-  it('静态数据完整性：宫格 4 入口 / Tab 2 / 筛选标签 3 / 热门考证 2（课程 4 卡 mock 已由 #1422 退役，绝迹锁见 coursesContract #1422 组）', () => {
+  it('静态数据完整性：宫格 5 入口（#1846 搜索自页头移入）/ Tab 2 / 筛选标签 3 / 热门考证 2（课程 4 卡 mock 已由 #1422 退役，绝迹锁见 coursesContract #1422 组）', () => {
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
-    for (const t of ['课程商城', '题库练习', '学习资料', '考情资讯']) expect(menu).toContain(t);
+    for (const t of ['课程商城', '题库练习', '学习资料', '考情资讯', '全局搜索']) expect(menu).toContain(t);
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
     expect(course).toContain("['热门课程', '精品课程']");
     expect(course).toContain("['全部', '实操技能', '综合评审']");
@@ -371,9 +371,10 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     for (const lv of ['五级', '四级', '三级', '二级', '一级']) expect(dd).toContain(lv);
   });
 
-  it('跳转语义保持：宫格 reLaunch、课程/新闻 navigateTo、公告与更多同路 featured-list', () => {
+  it('跳转语义保持：宫格默认 reLaunch（#1846 例外：搜索格 push 走 navigateTo）、课程/新闻 navigateTo、公告与更多同路 featured-list', () => {
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
     expect(menu).toContain('uni.reLaunch({ url: item.path })');
+    // #1846：搜索格压栈语义在 searchContract M2 钉住（navigateTo 字面量断言），此处只锁默认档不回退
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
     // #1422：mock id 直跳真实详情是本项目要修的 bug ⇒ 点击改为 emit 真 course_id、由页面统一跳转
     // （navigateTo 字面量留在组件会让 dashboardPage 的跳转契约扫不到注册页，故跳转归页面、此处锁 emit）

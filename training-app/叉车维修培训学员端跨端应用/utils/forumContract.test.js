@@ -248,11 +248,12 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     expect(createPage).toContain("{ label: '知识问答', value: 'question' }");
   });
 
-  it('经验 tab 无任何发布入口（只读策展流）：header 发帖与搜索栏均按 currentTab 隐藏', () => {
-    // 三个入口都点进 onCreate（发布），经验 tab 下必须全部不渲染——
+  it('经验 tab 无任何发布入口（只读策展流）：搜索栏（含发帖 pill）与空态按钮按 currentTab 隐藏', () => {
+    // 入口都点进 onCreate（发布），经验 tab 下必须全部不渲染——
     // 学员不能自称考经，让按钮留着只会把用户送进一个必然落到 discussion 的表单。
-    expect(page).toMatch(/v-if="currentTab !== 'experience'" class="header-right"/);
+    // #1846：发帖 pill 自页头右槽下沉进搜索栏右端，随 res-search-bar 同一 v-if 隐藏（不再单独挂条件）
     expect(page).toMatch(/v-if="currentTab !== 'experience'" class="res-search-bar"/);
+    expect(page).toMatch(/class="create-pill"[\s\S]{0,120}?@click="onCreate"/);
     // 空态按钮同期（先前的批次已加）
     expect(page).toMatch(/v-if="currentTab !== 'experience'" class="empty-btn"/);
     // 悬浮按钮本就只在广场显示

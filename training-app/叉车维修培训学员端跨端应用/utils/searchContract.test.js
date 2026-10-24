@@ -58,10 +58,12 @@ describe('M1 落点：每条结果都能打开（ADR-0049 决策 2）', () => {
 });
 
 describe('M2 入口：dashboard 顶部栏有搜索', () => {
-  it('dashboard 有搜索按钮且指向搜索页（#1602 迁移：入口经 AppNavBar 多图标右槽分发到 onSearchClick）', () => {
+  it('dashboard 有搜索入口且指向搜索页（#1846：入口自页头右槽移入功能宫格；搜索页「取消」走返回栈，宫格该格保持 navigateTo 不清栈）', () => {
     expect(DASHBOARD).toContain('@right-click="onNavRightClick"');
-    expect(DASHBOARD).toContain('onSearchClick()');
-    expect(DASHBOARD).toContain("uni.navigateTo({ url: '/pages/search/search' })");
+    const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
+    expect(menu).toContain("path: '/pages/search/search'");
+    // 触发行为不变：原页头 🔍 即 navigateTo（practice/mall 同款），移入宫格后不得改走 reLaunch 断掉「取消」的返回栈
+    expect(menu).toMatch(/uni\.navigateTo\(\{\s*url: item\.path\s*\}\)/);
   });
 
   it('入口不止一处：题库页与商城页的既有入口未被破坏', () => {

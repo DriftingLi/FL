@@ -1,7 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- #1602 迁移：页头收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
-             状态栏占位由页头件内化；右槽多图标按胶囊左边线让位（透明变体，N05 页面自垫底色）。 -->
+             状态栏占位由页头件内化；右槽多图标按胶囊左边线让位（透明变体，N05 页面自垫底色）。
+             #1846 收敛：右槽 3→2 图标（🔍 移出，落点进下方功能宫格），最长内容形态落回典型可用槽宽内。 -->
         <AppNavBar variant="plain" transparent :left-icon="''" :title="navTitle" :right-icons="navRightIcons"
             @left-click="onCertTap" @right-click="onNavRightClick" />
 
@@ -92,8 +93,11 @@
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // #1602 迁移：页头右槽三图标（🔍🔔🛒），经 AppNavBar 的胶囊让位右槽排布
-    const navRightIcons : string[] = ['🔍', '🔔', '🛒']
+    // 页头右槽两图标（🔔🛒），经 AppNavBar 的胶囊让位右槽排布。
+    // #1846 收敛：🔍（全局搜索）移出页头——3 图标约 204rpx 超典型可用槽宽（约 164rpx），溢出向右顶进
+    // 胶囊间隙带；入口下沉功能宫格（dashboard-menu-grid），触发行为不变（仍 navigateTo 压栈，
+    // 搜索页「取消」依赖返回栈）。
+    const navRightIcons : string[] = ['🔔', '🛒']
 
     // ---- 证件切换流（composable 持有） ----
     const {
@@ -137,10 +141,8 @@
         uni.navigateTo({ url: '/pages/notifications/notifications' })
     }
 
-    /** 全局搜索入口（#979 M2：此前只有题库页与商城页能进搜索，dashboard 无入口） */
-    function onSearchClick() : void {
-        uni.navigateTo({ url: '/pages/search/search' })
-    }
+    // #1846：onSearchClick 随页头 🔍 一并退役——搜索跳转归宫格条目（path 常量 + push 语义，
+    // dashboard-menu-grid 内自导航），页面不再持入口函数。
 
     // 页面显示时刷新数据
     onShow(() => {
@@ -176,11 +178,9 @@
         uni.showToast({ title: '购物车功能开发中', icon: 'none' })
     }
 
-    /** #1602 迁移：AppNavBar 多图标右槽分发（索引序同 navRightIcons）。须声明在被引用函数之后（UTS codegen 顺序敏感）。 */
+    /** AppNavBar 多图标右槽分发（索引序同 navRightIcons；#1846 起 🔍 已移出，0=通知、1=购物车）。须声明在被引用函数之后（UTS codegen 顺序敏感）。 */
     function onNavRightClick(idx : number) : void {
         if (idx == 0) {
-            onSearchClick()
-        } else if (idx == 1) {
             onNotificationClick()
         } else {
             onCartClick()
