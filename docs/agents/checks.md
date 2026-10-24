@@ -96,6 +96,13 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 
 改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+### 依赖告警面：Dependabot alerts ≠ 可触达漏洞（2026-10-24 清理，#1873）
+
+- **「有没有漏洞」以 `govulncheck ./...` 为准**（CI 的 `security-scan` 每次跑同一条命令），不以安全页上的告警数。
+- 2026-10-24 清过一批：21 条 open 告警（17 × `x/crypto` / 3 × `x/net` / 1 × `jwt/v5`）的 `dependency.manifest_path` **全是 `backend-go/go.mod`** —— 该路径在 monorepo 合并后已不存在（现为 `backend/go.mod`），是 GitHub 依赖图里留着的**已删除清单快照**（`/dependency-graph/sbom` 对同样三个包各返回新旧两条版本）。实际版本 `x/crypto v0.58.0` > 0.52.0、`x/net v0.60.0` > 0.55.0、`jwt/v5 v5.3.1` > 5.2.2，**告警范围早就越过了**；21 条已按 `inaccurate` 逐条 dismiss（评论里写了同样的话）。
+- **再冒出来先看 `manifest_path`**：`backend-go/go.mod` ⇒ 照上面 dismiss，别去升 `go.mod`（升了也不会关）；若是 `backend/go.mod` ⇒ 那是真问题，按常规升级处理。
+- 依赖图快照没有公开接口能清，只能等 GitHub 侧重算 —— 这不是可修的代码问题。
+
 ## CI 触发模型与 `backend-test` 分片（2026-10-24，#1856 结论 / #1862）
 
 - **`changes` 的 paths-filter 默认基准就是 `default_branch` 的 merge-base**，不是 `github.event.before`。`dorny/paths-filter@v4` 在 push 事件里只有当 `base` 传的是 **commit SHA** 或**与被推分支同名**时才会退到 `before`（`src/main.ts` 的 `isBaseSha || isBaseSameAsHead` 分支），否则一律 `git diff master...HEAD`（三点比较）。⇒ 「把 master 合进功能分支」**本来就不会**把 master 的改动算进差异；**别**给这个 step 传 `base:` —— 传分支名是 no-op（那正是默认值），传 `origin/master` 还会硬失败 `couldn't find remote ref`（它把 `base` 当远端分支名去 `git fetch origin <base>`）。
