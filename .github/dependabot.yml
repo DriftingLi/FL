@@ -68,12 +68,6 @@ updates:
       # 三个 npm 大版本各有独立评估票（2026-10-23 那轮周任务一次开了三张），收口前先 ignore ——
       # 与 katex 同一套路：机器人别每周开一张合不了的 PR，方向由票决定。
       # （mermaid 那条已在 #1822 评估完成后删掉：11 → 12 已升，后续 13.x 让机器人正常开 PR。）
-      - dependency-name: vite          # 8.x 换构建内核（rolldown），manualChunks 必须重验 —— #1831
-        update-types:
-          - version-update:semver-major
-      - dependency-name: pdfjs-dist    # 4 → 6 跨两个大版本，必须真开一份 PDF 才敢升 —— #1832
-        update-types:
-          - version-update:semver-major
       - dependency-name: "@types/node"  # 目标是对齐 CI/镜像的 Node 24，不是本机 26 —— #1833
         update-types:
           - version-update:semver-major
