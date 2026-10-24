@@ -288,8 +288,8 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-icon-only.is-active {
-  color: var(--color-primary-600);
-  background: var(--color-primary-50);
+  color: var(--color-primary-soft-ink);
+  background: var(--color-primary-soft);
   border-radius: var(--radius-md);
 }
 

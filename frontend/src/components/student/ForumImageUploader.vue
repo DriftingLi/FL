@@ -110,8 +110,8 @@ const zoneTitle = computed(() => (isFull.value ? `最多 ${props.max} 张图片`
 const zoneClass = computed(() => {
   if (isFull.value) return 'cursor-not-allowed border-line bg-canvas text-ink-3 opacity-70'
   if (uploading.value) return 'cursor-wait border-line-strong bg-canvas text-ink-2 opacity-80'
-  if (dragging.value) return 'cursor-copy border-ui-500 bg-ui-50 text-ui-600'
-  return 'cursor-pointer border-line-strong bg-canvas text-ink-2 hover:border-ui-500 hover:bg-ui-50 hover:text-ui-600'
+  if (dragging.value) return 'cursor-copy border-ui-soft-ink bg-ui-soft text-ui-soft-ink'
+  return 'cursor-pointer border-line-strong bg-canvas text-ink-2 hover:border-ui-soft-ink hover:bg-ui-soft hover:text-ui-soft-ink'
 })
 
 function triggerSelect() {

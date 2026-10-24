@@ -215,8 +215,8 @@ onMounted(() => {
   border-radius: var(--radius-full);
 }
 .badge.special {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
 }
 .badge.skill {
   background: var(--color-success-light, #ECFDF5);

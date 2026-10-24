@@ -70,7 +70,26 @@
   --color-violet-200: #DDD6FE;
   --color-violet-500: #8B5CF6;
 
-  --color-text-primary: #0F172A;
+  /*
+ * 品牌「浅底 + 深字」配对（#1882）。
+ *
+ * 为什么需要它：`primary-50/100` 是**固定色阶**（`[data-theme="dark"]` 不重定义），拿它当填充时
+ * 深色下就是一块浅色底。A 类（填充固定 + 墨色翻转）可以只换填充；B 类是**成对**写法
+ * （`bg-ui-50 text-ui-600`），只换填充会变成深底深字 ⇒ 必须成对换。
+ *
+ * 结构照语义色的既有做法（`success-light` ↔ `success-strong` 两个都翻）：
+ * - 浅色档：品牌 500 以 12% / 18% 混面板底色，浅色下 ≈ 原来的 50 / 100 档；
+ * - 深字档：浅色下是 primary-700，`[data-theme="dark"]` 段翻成 primary-300。
+ * 面板色本身会翻，所以两个填充档不需要单独的深色定义（混出来的颜色自动变深）。
+ */
+--color-primary-soft: color-mix(in srgb, var(--color-primary-500) 12%, var(--color-bg-card));
+--color-primary-soft-strong: color-mix(in srgb, var(--color-primary-500) 18%, var(--color-bg-card));
+--color-primary-soft-ink: #115E59;
+/* 紫调同构一对：管理端角色徽标用（violet-50 同样是固定色阶） */
+--color-violet-soft: color-mix(in srgb, var(--color-violet-500) 12%, var(--color-bg-card));
+--color-violet-soft-ink: #5B21B6;
+
+--color-text-primary: #0F172A;
   --color-text-secondary: #475569;
   --color-text-tertiary: #64748B;
   --color-text-muted: #94A3B8;
@@ -216,6 +235,9 @@
   --color-text-inverse: #FFFFFF;
   --color-text-on-dark: #F1F5F9;
 
+  /* ===== 品牌 soft 配对：深字翻浅青（填充靠面板色自动变深，不用重定义） ===== */
+  --color-primary-soft-ink: #5EEAD4;
+  --color-violet-soft-ink: #C4B5FD;
   /* ===== 边框 ===== */
   --color-border: #334155;
   --color-border-light: #273449;

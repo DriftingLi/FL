@@ -452,8 +452,8 @@ onMounted(() => {
 
 .quick-option-chip.active {
   border-color: var(--color-primary-600);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
   font-weight: 600;
 }
 

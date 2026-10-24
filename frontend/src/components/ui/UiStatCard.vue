@@ -35,7 +35,7 @@ const numericValue = computed(() => {
 
 
 const TONE: Record<string, string> = {
-  brand: 'bg-ui-50 text-ui-600',
+  brand: 'bg-ui-soft text-ui-soft-ink',
   ok: 'bg-ok-soft text-ok',
   warn: 'bg-warn-soft text-warn',
   bad: 'bg-bad-soft text-bad',

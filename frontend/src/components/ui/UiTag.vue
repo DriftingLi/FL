@@ -47,7 +47,7 @@ const EP_TYPE: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'in
 // 再叠 bg 会把实心标签的底色盖成浅色。
 const toneClass = computed(() => {
   if (props.tone !== 'brand') return undefined
-  return props.effect === 'light' ? 'border-ui-200 bg-ui-50 text-ui-700' : 'text-ui-700'
+  return props.effect === 'light' ? 'border-ui-200 bg-ui-soft text-ui-soft-ink' : 'text-ui-soft-ink'
 })
 
 // 旧值 sm/md 与 EP 原值 small/default/large 并存：前者是论坛域的历史 API，后者
