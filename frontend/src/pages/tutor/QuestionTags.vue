@@ -353,7 +353,9 @@ onMounted(() => {
 }
 
 .tag-row.active {
-  background: var(--color-primary-50);
+  /* 固定色阶 primary-50 在深色下不翻转（#F0FDFA），而 .tag-name 用的是翻转的 text-primary
+     ⇒ 深色下白字压浅青底读不清。改成品牌色浅混面板 token（同 #1750 的做法）。 */
+  background: color-mix(in srgb, var(--color-primary-500) 12%, var(--color-bg-card));
 }
 
 .tag-name {

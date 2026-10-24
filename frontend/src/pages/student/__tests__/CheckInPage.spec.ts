@@ -50,6 +50,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** 已打卡但断开连续段的历史格底色：品牌色浅混面板（#1880 token 审计后替代固定色阶 bg-ui-100）。 */
+const HIST_FILL = 'bg-[color-mix(in_srgb,var(--color-ui-500)_18%,var(--color-panel))]'
+
 describe('CheckInPage 打卡页（ADR-0028）', () => {
   it('概览条渲染连续/累计，今日未打卡时按钮可打卡', async () => {
     const { y, m } = shanghaiNow()
@@ -116,10 +119,10 @@ describe('CheckInPage 打卡页（ADR-0028）', () => {
     const todayCell = cellByDay(30)
     expect(todayCell).toBeTruthy()
     expect(todayCell!.classes()).toContain('bg-ui-600')
-    // 月内第 1 天（已断开的历史打卡）为浅底 bg-ui-100，非实心
+    // 月内第 1 天（已断开的历史打卡）为浅底（品牌浅混面板 = 随主题翻转，非固定色阶），非实心
     const histCell = cellByDay(1)
     expect(histCell).toBeTruthy()
-    expect(histCell!.classes()).toContain('bg-ui-100')
+    expect(histCell!.classes()).toContain(HIST_FILL)
     expect(histCell!.classes()).not.toContain('bg-ui-500')
     expect(histCell!.classes()).not.toContain('bg-ui-600')
   })

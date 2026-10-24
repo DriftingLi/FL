@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-2">
     <!-- 加载骨架 -->
-    <div v-if="loading" class="flex h-[420px] flex-col items-center justify-center gap-3 rounded-card border border-line bg-ui-50 text-sm text-ink-3">
+    <div v-if="loading" class="flex h-[420px] flex-col items-center justify-center gap-3 rounded-card border border-line bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] text-sm text-ink-3">
       <UiLoading size="lg" />
       <span>简历加载中…</span>
     </div>
