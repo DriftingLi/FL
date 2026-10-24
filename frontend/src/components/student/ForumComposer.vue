@@ -145,6 +145,7 @@ function onKeydown(event: KeyboardEvent) {
         :loading="props.submitting"
         :disabled="!canSubmit"
         title="发表回复（Ctrl / Cmd + Enter）"
+        aria-label="发表回复"
         @click="submit"
       />
     </div>

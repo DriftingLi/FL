@@ -9,7 +9,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">论坛管理</span>
-          <UiButton :icon="Refresh" circle @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
+          <UiButton :icon="Refresh" circle aria-label="刷新" @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
         </div>
       </template>
 

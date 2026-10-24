@@ -14,7 +14,7 @@
       </div>
       <div class="stat-item">
         <span class="stat-label">易错项</span>
-        <span class="stat-value" :style="{ color: commonWrong ? 'var(--color-danger)' : 'var(--color-text-muted)' }">{{ commonWrong || '—' }}</span>
+        <span class="stat-value" :style="{ color: commonWrong ? 'var(--color-danger)' : 'var(--color-text-tertiary)' }">{{ commonWrong || '—' }}</span>
       </div>
     </div>
   </div>
@@ -64,6 +64,6 @@ const accuracyText = computed(() => {
 .result-header .wrong { color: var(--color-danger); }
 .result-stats { display: flex; justify-content: space-between; text-align: center; }
 .stat-item { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.stat-label { font-size: 12px; color: var(--color-text-muted); }
+.stat-label { font-size: 12px; color: var(--color-text-tertiary); }
 .stat-value { font-size: 15px; font-weight: 600; }
 </style>

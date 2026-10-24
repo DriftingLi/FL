@@ -43,14 +43,14 @@
         <!-- 月份切换 + 打卡按钮 -->
         <div class="mb-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-1">
-            <UiButton variant="text" size="small" @click="prevMonth">‹</UiButton>
+            <UiButton variant="text" size="small" aria-label="上个月" @click="prevMonth">‹</UiButton>
             <span class="min-w-24 text-center text-[13px] font-semibold text-ink-2">{{ viewYear }}年{{ viewMonth }}月</span>
-            <UiButton variant="text" size="small" @click="nextMonth">›</UiButton>
+            <UiButton variant="text" size="small" aria-label="下个月" @click="nextMonth">›</UiButton>
           </div>
           <div class="flex items-center gap-2">
             <!-- 连续段图例：主色实心=当前连续；浅底=已断开的打卡；灰底=未打卡 -->
             <span class="hidden items-center gap-1 text-[11px] text-ink-3 sm:flex">
-              <i class="inline-block size-2.5 rounded-[3px] bg-ui-500"></i>连续中
+              <i class="inline-block size-2.5 rounded-[3px] bg-ui-600"></i>连续中
               <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-ui-100"></i>已断开
               <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-canvas border border-line"></i>未打卡
             </span>
@@ -247,11 +247,12 @@ const calendarCells = computed<CalendarCell[]>(() => {
 
 function cellClass(cell: CalendarCell) {
   return {
-    'bg-canvas text-ink-muted': !cell.isCurrentMonth,
+    'bg-canvas text-ink-3': !cell.isCurrentMonth,
     'bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] font-semibold': cell.isToday && !cell.checked,
     'bg-[color-mix(in_srgb,var(--color-ui-500)_18%,var(--color-panel))] text-ink-2': cell.checked && !cell.inActiveStreak && !cell.isToday,
-    'bg-ui-500 text-panel': cell.checked && cell.inActiveStreak && !cell.isToday,
-    'bg-ui-600 text-panel': cell.checked && cell.inActiveStreak && cell.isToday,
+    // 连续段内的已打卡格：统一实心品牌 600（白字 5.47:1）；今天靠 ring 区分，不再用 500/600 两档
+    // —— 两个档次原来只差一档色阶，肉眼几乎不可辨，却让对象字面量出现同名键（后者覆盖前者）。
+    'bg-ui-600 text-panel': cell.checked && cell.inActiveStreak,
     'ring-2 ring-inset ring-ui-400': cell.isToday
   }
 }

@@ -49,13 +49,13 @@
         </el-dropdown>
 
         <UiTooltip content="画中画" placement="top">
-          <UiButton size="small" class="control-btn" @click="togglePiP" :disabled="!pipSupported">
+          <UiButton aria-label="画中画" size="small" class="control-btn" @click="togglePiP" :disabled="!pipSupported">
             <el-icon><Monitor /></el-icon>
           </UiButton>
         </UiTooltip>
 
         <UiTooltip content="下载" placement="top">
-          <UiButton size="small" class="control-btn" @click="downloadVideo">
+          <UiButton aria-label="下载" size="small" class="control-btn" @click="downloadVideo">
             <el-icon><Download /></el-icon>
           </UiButton>
         </UiTooltip>

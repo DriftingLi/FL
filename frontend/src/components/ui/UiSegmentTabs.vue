@@ -11,7 +11,7 @@
  *    （浅色 #FFFFFF on #FFFFFF、深色 #1E293B on #1E293B）。
  * 2. 也**不能**用浅底档（bg-ui-50/100 = #F0FDFA/#CCFBF1）—— 压在 bg-canvas 灰胶囊底上
  *    亮度差太小，肉眼就是一块灰白，等于没改（2026-09-08 首版踩过，用户反馈「还是灰色」）。
- * 用实心品牌色 bg-ui-500 + 反白字：两套主题下都与背景有强对比。深色模式里它与
+ * 用实心品牌色 bg-ui-600 + 反白字：两套主题下都与背景有强对比。深色模式里它与
  * 品牌按钮同色系，属既有视觉语言，不突兀。
  *
  * ⚠️ 层叠约束：按钮**必须** bg-transparent。项目刻意不引 Tailwind preflight，button 保留
@@ -130,7 +130,7 @@ onUnmounted(() => {
     -->
     <div
       aria-hidden="true"
-      class="absolute left-0 top-0 rounded-[4px] bg-ui-500 shadow-sm"
+      class="absolute left-0 top-0 rounded-[4px] bg-ui-600 shadow-sm"
       :class="
         ready
           ? 'transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none'
