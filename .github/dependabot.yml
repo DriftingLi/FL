@@ -71,9 +71,6 @@ updates:
       - dependency-name: vite          # 8.x 换构建内核（rolldown），manualChunks 必须重验 —— #1831
         update-types:
           - version-update:semver-major
-      - dependency-name: pdfjs-dist    # 4 → 6 跨两个大版本，必须真开一份 PDF 才敢升 —— #1832
-        update-types:
-          - version-update:semver-major
       - dependency-name: "@types/node"  # 目标是对齐 CI/镜像的 Node 24，不是本机 26 —— #1833
         update-types:
           - version-update:semver-major
