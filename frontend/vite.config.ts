@@ -141,6 +141,68 @@ for (const peer of LAZY_PEERS) {
   }
 }
 
+/**
+ * 分块判据的**单一来源**：模块 id → chunk 名（`undefined` = 不归置，交给打包器默认分块）。
+ *
+ * vite 7 时代它以 `build.rollupOptions.output.manualChunks` 的身份出现；vite 8 换 rolldown 后，
+ * `manualChunks` 退化成兼容垫片（只能返回一个名字，且会被「捕获 + 递归带依赖」改写），
+ * 所以现在由下面的 `CHUNK_GROUPS` 把它翻译成原生 `codeSplitting.groups`（#1831）。
+ */
+function chunkNameOf(id: string): string | undefined {
+  // CSS 模块**不按包归置**：把 .css 归进某个 chunk 会让那个 chunk 变成「必须静态加载」的
+  // 依赖——实测把入口 import 的 katex.min.css 归进 katex chunk 后，545KB 的 katex JS
+  // 被一起拖进首屏（Route chunk 还会跟着继承）。样式交给 vite 默认的 CSS 分组。
+  if (id.endsWith('.css')) return undefined
+  // vite 的 preload helper（虚拟模块，动态 import 注入 CSS 用）若不显式归置，
+  // 会被自然聚进 markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 P0-1）
+  if (id.includes('vite/preload-helper')) return 'vendor'
+  if (!id.includes('node_modules')) return undefined
+  if (id.includes('/element-plus/') || id.includes('@element-plus/')) return 'element-plus'
+  if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'
+  if (id.includes('/vditor/')) return 'vditor'
+  if (id.includes('/marked') || id.includes('highlight.js')) return 'markdown'
+  // 重型可选渲染 peer（#900）：连同各自独占依赖闭包单独成 chunk。
+  // 它们只在「页面上真的出现公式 / 图表 / 增强代码块」时才该被下载，
+  // 因此绝不能落进下面那个 vendor 兜底（vendor 被入口静态引用，会拖进首屏）。
+  const lazyPeerChunk = LAZY_PEER_CHUNKS.get(packageNameOf(id))
+  if (lazyPeerChunk) return lazyPeerChunk
+  if (id.includes('markstream-vue') || id.includes('markstream-core') || id.includes('stream-markdown-parser')) return 'markdown-stream'
+  if (id.includes('/dayjs/')) return 'dayjs'
+  if (id.includes('/vuedraggable/') || id.includes('/sortablejs/')) return 'draggable'
+  if (id.includes('/vue') || id.includes('/pinia') || id.includes('/axios') || id.includes('/@vue/')) {
+    return 'vue-vendor'
+  }
+  return 'vendor'
+}
+
+/** chunk 名的声明顺序 = 判定顺序（各组的 test 互斥，顺序只影响可读性）。 */
+const CHUNK_NAMES: string[] = [
+  'element-plus',
+  'echarts',
+  'vditor',
+  'markdown',
+  ...LAZY_PEERS,
+  'markdown-stream',
+  'dayjs',
+  'draggable',
+  'vue-vendor',
+  'vendor'
+]
+
+/**
+ * rolldown 原生分组表（#1831）。一个 chunk 名一个组，`test` 就是 `chunkNameOf` 的那个名字 ——
+ * 判据仍只有一处。
+ *
+ * `includeDependenciesRecursively: false` 是必须的：rolldown 默认会把「被捕获模块的依赖」
+ * 递归带进同一组，实测把 element-plus 依赖的 lodash-es（214 个模块）整包拖进 element-plus、
+ * 把 vue 运行时也拽过去，同时把 preload helper 塞进 markdown-stream（首屏 +708KB）。
+ * 本仓的「独占依赖闭包」是 `dependencyClosure()` 在构建期现算的，比递归捕获精确。
+ */
+const CHUNK_GROUPS = CHUNK_NAMES.map((name) => ({
+  name,
+  test: (id: string) => chunkNameOf(id) === name
+}))
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -212,36 +274,11 @@ export default defineConfig({
     // 关闭后动态 import 裸加载，原生 module 图仍并行发现依赖；preload 提示的损失可接受。
     modulePreload: false,
     chunkSizeWarningLimit: 700,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        // 按第三方库拆分 vendor chunk，避免 Element Plus / ECharts / PDF 等
-        // 大依赖打进入口 chunk（此前两个入口 chunk 均超 1.1MB）
-        manualChunks(id) {
-          // CSS 模块**不按包归置**：把 .css 归进某个 chunk 会让那个 chunk 变成「必须静态加载」的
-          // 依赖——实测把入口 import 的 katex.min.css 归进 katex chunk 后，545KB 的 katex JS
-          // 被一起拖进首屏（Route chunk 还会跟着继承）。样式交给 vite 默认的 CSS 分组。
-          if (id.endsWith('.css')) return undefined
-          // vite 的 preload helper（虚拟模块，动态 import 注入 CSS 用）若不显式归置，
-          // 会被自然聚进 markdown-stream 大 chunk，导致 entry 静态依赖整个 924KB（#748 P0-1）
-          if (id.includes('vite/preload-helper')) return 'vendor'
-          if (!id.includes('node_modules')) return undefined
-          if (id.includes('/element-plus/') || id.includes('@element-plus/')) return 'element-plus'
-          if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'
-          if (id.includes('/pdfjs-dist/')) return 'pdfjs'
-          if (id.includes('/vditor/')) return 'vditor'
-          if (id.includes('/marked') || id.includes('highlight.js')) return 'markdown'
-          // 重型可选渲染 peer（#900）：连同各自独占依赖闭包单独成 chunk。
-          // 它们只在「页面上真的出现公式 / 图表 / 增强代码块」时才该被下载，
-          // 因此绝不能落进下面那个 vendor 兜底（vendor 被入口静态引用，会拖进首屏）。
-          const lazyPeerChunk = LAZY_PEER_CHUNKS.get(packageNameOf(id))
-          if (lazyPeerChunk) return lazyPeerChunk
-          if (id.includes('markstream-vue') || id.includes('markstream-core') || id.includes('stream-markdown-parser')) return 'markdown-stream'
-          if (id.includes('/dayjs/')) return 'dayjs'
-          if (id.includes('/vuedraggable/') || id.includes('/sortablejs/')) return 'draggable'
-          if (id.includes('/vue') || id.includes('/pinia') || id.includes('/axios') || id.includes('/@vue/')) {
-            return 'vue-vendor'
-          }
-          return 'vendor'
+        codeSplitting: {
+          includeDependenciesRecursively: false,
+          groups: CHUNK_GROUPS
         }
       }
     }

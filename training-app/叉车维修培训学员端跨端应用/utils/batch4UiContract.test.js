@@ -118,6 +118,13 @@ describe('批4 特殊页右槽形态（app-nav-bar 槽位承载）', () => {
     const src = read('pages/exam/mock-exam.uvue');
     expect(src).toMatch(/<template #right>[\s\S]*?timerDisplay[\s\S]*?<\/template>/);
     expect(src).toContain('timer-text');
+    // 右槽宽度预算（票 1847）：单段倒计时最长 5 字符（MM:SS），估算法 = 字号 × 5 × 0.94em/字符
+    //（顶部布局调研 §4.2 对 32rpx 记约 150rpx 的口径），预算 ≤150rpx、典型可用槽宽约 164rpx 留余量
+    const m = src.match(/\.timer-text\s*\{[^}]*?font-size:\s*(\d+)rpx/);
+    expect(m).not.toBeNull();
+    const size = Number(m[1]);
+    expect(size).toBeLessThanOrEqual(26);
+    expect(size * 5 * 0.94).toBeLessThanOrEqual(150);
   });
 
   it('notebook 右槽保留新建入口；notifications 右槽保留全部已读', () => {

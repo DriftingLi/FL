@@ -1,0 +1,45 @@
+{
+  "cases": {
+    "case-a": {
+      "iframe": true,
+      "src": "blob:http://127.0.0.1:5199/f8cbcc20-de1b-424b-892a-4d79d65cf4ac",
+      "size": [
+        1232,
+        420
+      ],
+      "text": ""
+    },
+    "case-b": {
+      "iframe": false,
+      "src": null,
+      "size": null,
+      "text": "简历加载失败 重试"
+    },
+    "case-c": {
+      "iframe": true,
+      "src": "/report.pdf",
+      "size": [
+        1232,
+        559
+      ],
+      "text": "evaluation_report.pdf"
+    },
+    "case-d": {
+      "iframe": false,
+      "src": null,
+      "size": null,
+      "text": "missing.pdf 下载文档在新窗口打开"
+    }
+  },
+  "pdf": {
+    "bytes": 77673,
+    "header": "%PDF-1.4",
+    "pages": 3
+  },
+  "iframeTotal": 2,
+  "nonAppFrames": [
+    "blob:http://127.0.0.1:5199/f8cbcc20-de1b-424b-892a-4d79d65cf4ac",
+    "about:blank",
+    "about:blank"
+  ]
+}
