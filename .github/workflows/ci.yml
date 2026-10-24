@@ -125,12 +125,23 @@ jobs:
         run: node scripts/check-comment-cleanliness.mjs --all
 
   # ============================================================
-  # Stage 3: 后端 - 单元测试
+  # Stage 3: 后端 - 单元测试（按包分片，LPT 装箱）
+  #   分片的收益下限由**最慢的包**决定：实测 internal/api 单包 400.2s，而整个 job 571s ⇒
+  #   两片（api + 零头一片、其余 64 包一片）就够，再多切只是多烧 runner（k=2/3/4 的墙钟
+  #   模型都卡在 400s，见 #1862）。权重表 scripts/go-package-timings.json、切片器
+  #   scripts/go-shard.mjs；本片为空 ⇒ 切片器退出码 3 让 job 红（空片绝不许当绿），
+  #   判据自检在 el-controls-selftest（scripts/go-shard.test.mjs）。
+  #   与 backend-lint **并行**（needs 里去掉它）：两者无任何产物依赖，串行只白等 140s。
+  #   代价：lint 红时不再抢在 10 分钟测试之前报错 —— 一次失败多烧 ~7 min runner 时间。
   # ============================================================
   backend-test:
-    needs: [backend-lint, changes]
+    needs: [changes]
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:15-alpine
@@ -166,12 +177,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: 运行单元测试
+      - name: 运行单元测试（第 ${{ matrix.shard }}/2 片）
         env:
           DATABASE_URL: postgres://testuser:testpass@localhost:5432/forklift_test?sslmode=disable
           REDIS_ADDR: localhost:6379
           REDIS_PASSWORD: ""
           REDIS_DB: "0"
+          SHARD: ${{ matrix.shard }}
+          SHARDS: '2'
         # -timeout 收回 10m（2026-09-29，#1366 测试面瘦身）：先前抬到 20m 是止血——internal/api
         # 单包串行 -race -cover 实测压到 ~600s 线（一次 runner 抖动即「panic: test timed out after
         # 10m0s」的与改动无关假红）。#1366 给非 PG 契约用例加 t.Parallel（并把 gin 模式位与
@@ -179,12 +192,28 @@ jobs:
         # 4 核同环境实测（-race -cover、PG 起）internal/api 由 553s 降到 297s、0 数据竞态、覆盖率不变
         # 77.4%；PG 契约用例仍串行（golang-migrate 的 pg_advisory_lock 是全库级，并发建 schema 只会
         # 互相排队）。包级预算回到默认 10m 线内且留有余量，故收回抬高、恢复这条线本应承担的门禁意义。
-        run: go test ./... -race -cover -coverprofile=coverage.txt -timeout 10m
+        run: |
+          set -euo pipefail
+          # 判据不另造清单：本片跑哪些包由切片器按 go list 现算，权重表只影响**分到哪片**、
+          # 不影响**会不会被测到**（两片并集恒等于 go list ./...，自检里钉死）。空片 fail-closed。
+          go list ./... > /tmp/all-packages.txt
+          total=$(grep -c . /tmp/all-packages.txt || true)
+          if [ "$total" -eq 0 ]; then
+            echo "错误: go list 取到 0 个包（判据失效，不许当绿）"
+            exit 1
+          fi
+          node ../scripts/go-shard.mjs --shard "$SHARD" --shards "$SHARDS" \
+            --list /tmp/all-packages.txt --weights ../scripts/go-package-timings.json \
+            > /tmp/shard-packages.txt
+          mapfile -t PKGS < /tmp/shard-packages.txt
+          echo "本片从 $total 个包里取 ${#PKGS[@]} 个："
+          printf '  %s\n' "${PKGS[@]}"
+          go test "${PKGS[@]}" -race -cover -coverprofile=coverage.txt -timeout 10m
 
-      - name: 上传覆盖率报告
+      - name: 上传覆盖率报告（第 ${{ matrix.shard }}/2 片）
         uses: actions/upload-artifact@v7
         with:
-          name: backend-coverage
+          name: backend-coverage-${{ matrix.shard }}
           path: backend/coverage.txt
 
   # ============================================================
@@ -596,6 +625,11 @@ jobs:
       # ci-summary 门禁自身的判据（真实缺陷 #2）：依赖闭包 + needs==check 清单相等。
       - name: 表驱动单测（CI 汇总门禁判定逻辑）
         run: node --test scripts/ci-summary-needs.test.mjs
+
+      # backend-test 分片器（#1862）：分片是「哪些包会被测到」的判据 —— 它坏了，CI 会照常
+      # 跑完两片却漏测一部分包（或某片空转假绿）。LPT 装箱 / 未知包兜底 / 空片 fail-closed 全钉住。
+      - name: 表驱动单测（backend-test 分片器 LPT 装箱判据）
+        run: node --test scripts/go-shard.test.mjs
 
       # 部署面两条常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
       # 此前它们只在本地被引用、CI 零触发（2026-09-17 架构评审登记项）—— 一并接上。
