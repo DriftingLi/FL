@@ -15,7 +15,7 @@
     <!-- vditor 挂载点 -->
     <div ref="vditorRef" class="md-vditor-host flex-1 overflow-hidden relative"></div>
     <!-- 加载中遮罩：Vditor 内部模块未就绪前覆盖，避免用户在未 ready 时切换模式触发 VditorIRDOM2Md undefined -->
-    <div v-if="!isReady" class="md-loading absolute inset-0 z-10 flex items-center justify-center text-sm text-ink-muted pointer-events-all">
+    <div v-if="!isReady" class="md-loading absolute inset-0 z-10 flex items-center justify-center text-sm text-ink-3 pointer-events-all">
       <span>编辑器加载中…</span>
     </div>
   </div>

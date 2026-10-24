@@ -182,10 +182,10 @@
 
     <template #alt-wechat>
       <div class="wechat-box w-full">
-        <div class="wechat-qr-placeholder flex flex-col items-center gap-2.5 border-2 border-dashed border-line-strong rounded-card bg-canvas px-4 py-7 text-ink-muted">
+        <div class="wechat-qr-placeholder flex flex-col items-center gap-2.5 border-2 border-dashed border-line-strong rounded-card bg-canvas px-4 py-7 text-ink-3">
           <el-icon :size="42"><ChatDotRound /></el-icon>
           <p class="wechat-title m-0 text-[15px] font-semibold text-ink-3">扫码登录（即将开放）</p>
-          <span class="wechat-tip text-center text-xs leading-normal text-ink-muted">微信授权暂未配置，待开放平台配置完成后开放</span>
+          <span class="wechat-tip text-center text-xs leading-normal text-ink-3">微信授权暂未配置，待开放平台配置完成后开放</span>
         </div>
       </div>
     </template>

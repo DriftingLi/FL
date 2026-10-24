@@ -236,7 +236,7 @@ function isRouteActive(item: NavItem): boolean {
 .nav-group-label {
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   padding: var(--space-3) var(--space-3) var(--space-1);
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -274,7 +274,7 @@ function isRouteActive(item: NavItem): boolean {
 
 .nav-group-icon {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -283,7 +283,7 @@ function isRouteActive(item: NavItem): boolean {
   align-items: center;
   justify-content: center;
   padding: var(--space-2);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   cursor: default;
 }
 
@@ -306,7 +306,7 @@ function isRouteActive(item: NavItem): boolean {
 .nav-sub-group-label {
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   padding: var(--space-2) var(--space-3) var(--space-1) calc(var(--space-3) + 12px);
   white-space: nowrap;
 }
