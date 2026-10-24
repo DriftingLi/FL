@@ -2,8 +2,8 @@
   <!-- 小胶囊（方案 B 工具栏）：图标 + 文字 + 可选角标，单行不换行 -->
   <button
     type="button"
-    class="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
-    :class="active ? 'border-ui-600 bg-ui-50 font-semibold text-ui-600' : ''"
+    class="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
+    :class="active ? 'border-ui-soft-ink bg-ui-soft font-semibold text-ui-soft-ink' : ''"
     @click="emit('click', $event)"
   >
     <el-icon v-if="iconComponent" :size="14"><component :is="iconComponent" /></el-icon>

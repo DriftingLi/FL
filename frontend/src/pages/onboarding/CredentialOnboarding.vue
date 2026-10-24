@@ -180,15 +180,15 @@ onMounted(() => {
   padding: 14px;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
-  background: white;
+  background: var(--color-bg-card);
 }
 .credential-card:hover {
   border-color: var(--color-primary-300);
-  background: var(--color-primary-50);
+  background: color-mix(in srgb, var(--color-primary-500) 12%, var(--color-bg-card));
 }
 .credential-card.active {
   border-color: var(--color-primary-500);
-  background: var(--color-primary-50);
+  background: color-mix(in srgb, var(--color-primary-500) 12%, var(--color-bg-card));
   box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
 }
 .card-name {
@@ -215,8 +215,8 @@ onMounted(() => {
   border-radius: var(--radius-full);
 }
 .badge.special {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
 }
 .badge.skill {
   background: var(--color-success-light, #ECFDF5);

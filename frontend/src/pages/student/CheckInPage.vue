@@ -96,7 +96,7 @@
           <span class="text-[15px] font-bold text-ink">打卡排行</span>
           <span class="ml-auto text-xs text-ink-3">按累计天数排序</span>
         </div>
-        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-ui-50 px-3 py-2.5 text-center text-[13px] text-ink">
+        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-[13px] text-ink">
           我的排名：<span class="font-bold text-ui-600">NO.{{ rankMe.rank }}</span>
           <span class="mx-1.5 text-line-strong">|</span>
           累计 <span class="font-semibold">{{ rankMe.total }}</span> 天
@@ -248,8 +248,8 @@ const calendarCells = computed<CalendarCell[]>(() => {
 function cellClass(cell: CalendarCell) {
   return {
     'bg-canvas text-ink-muted': !cell.isCurrentMonth,
-    'bg-ui-50 font-semibold': cell.isToday && !cell.checked,
-    'bg-ui-100 text-ink-2': cell.checked && !cell.inActiveStreak && !cell.isToday,
+    'bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] font-semibold': cell.isToday && !cell.checked,
+    'bg-[color-mix(in_srgb,var(--color-ui-500)_18%,var(--color-panel))] text-ink-2': cell.checked && !cell.inActiveStreak && !cell.isToday,
     'bg-ui-500 text-panel': cell.checked && cell.inActiveStreak && !cell.isToday,
     'bg-ui-600 text-panel': cell.checked && cell.inActiveStreak && cell.isToday,
     'ring-2 ring-inset ring-ui-400': cell.isToday

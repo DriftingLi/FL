@@ -26,7 +26,7 @@
             :key="c.code"
             type="button"
             class="flex w-full items-center justify-between rounded-ctl border-0 bg-transparent px-2.5 py-2 text-left text-[13px] transition-colors duration-150"
-            :class="c.active ? 'bg-ui-50 font-semibold text-ui-600' : 'text-ink-2 hover:bg-canvas'"
+            :class="c.active ? 'bg-ui-soft font-semibold text-ui-soft-ink' : 'text-ink-2 hover:bg-canvas'"
             @click="selectCategory(c.code)"
           >
             <span class="truncate">{{ c.title }}</span>

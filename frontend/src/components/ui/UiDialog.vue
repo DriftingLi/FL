@@ -111,7 +111,7 @@ function onClosed() {
       <div class="flex items-start gap-3">
         <div
           v-if="props.icon"
-          class="flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ui-50 text-ui-600"
+          class="flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ui-soft text-ui-soft-ink"
         >
           <el-icon class="text-lg"><component :is="props.icon" /></el-icon>
         </div>

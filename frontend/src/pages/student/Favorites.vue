@@ -45,12 +45,12 @@
             class="h-12 w-16 shrink-0 rounded-[6px] object-cover"
           >
             <template #error>
-              <div class="flex h-12 w-16 shrink-0 items-center justify-center rounded-[6px] bg-ui-50 text-xl font-semibold text-ui-500">
+              <div class="flex h-12 w-16 shrink-0 items-center justify-center rounded-[6px] bg-ui-soft text-xl font-semibold text-ui-soft-ink">
                 {{ typeLabel(item.target_type).charAt(0) }}
               </div>
             </template>
           </el-image>
-          <div v-else class="flex h-12 w-16 shrink-0 items-center justify-center rounded-[6px] bg-ui-50 text-xl font-semibold text-ui-500">
+          <div v-else class="flex h-12 w-16 shrink-0 items-center justify-center rounded-[6px] bg-ui-soft text-xl font-semibold text-ui-soft-ink">
             {{ typeLabel(item.target_type).charAt(0) }}
           </div>
 

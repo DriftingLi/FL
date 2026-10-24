@@ -313,15 +313,15 @@ async function onCommand(command: string) {
   flex-shrink: 0;
   padding: 1px var(--space-2);
   border-radius: var(--radius-full);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
   font-size: var(--text-xs);
 }
 
 .topbar-role-badge.student,
 .topbar-role-badge.recruiter {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
 }
 
 .topbar-role-badge.tutor {
@@ -330,8 +330,8 @@ async function onCommand(command: string) {
 }
 
 .topbar-role-badge.admin {
-  background: var(--color-violet-50);
-  color: var(--color-violet-500);
+  background: var(--color-violet-soft);
+  color: var(--color-violet-soft-ink);
 }
 
 .topbar-menu-label {

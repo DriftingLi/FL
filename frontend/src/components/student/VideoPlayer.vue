@@ -269,6 +269,6 @@ onBeforeUnmount(() => {
 
 .video-error {
   padding: 40px 20px;
-  background: #fff;
+  background: var(--color-bg-card);
 }
 </style>

@@ -97,7 +97,7 @@
                     v-for="file in group.files"
                     :key="file.file_id"
                     class="flex cursor-pointer items-center gap-2.5 rounded-ctl border border-line bg-panel px-3 py-2.5 transition-colors hover:border-ui-500"
-                    :class="{ 'border-ui-500 bg-ui-50': selectedFileId === file.file_id }"
+                    :class="{ 'border-ui-500 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))]': selectedFileId === file.file_id }"
                     @click="selectFile(file.file_id)"
                   >
                     <el-icon class="shrink-0 text-ui-500" :size="18" :class="group.iconClass">

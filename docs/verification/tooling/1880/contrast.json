@@ -1,0 +1,357 @@
+{
+  "rows": [
+    {
+      "theme": "light",
+      "key": "resume-skeleton",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(100, 116, 139)",
+      "ratio": 4.56
+    },
+    {
+      "theme": "light",
+      "key": "resume-skeleton",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(100, 116, 139)",
+      "ratio": 4.13
+    },
+    {
+      "theme": "light",
+      "key": "resume-hint",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.12
+    },
+    {
+      "theme": "light",
+      "key": "resume-hint",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 15.49
+    },
+    {
+      "theme": "light",
+      "key": "checkin-rank",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.12
+    },
+    {
+      "theme": "light",
+      "key": "checkin-rank",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 15.49
+    },
+    {
+      "theme": "light",
+      "key": "checkin-today",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.12
+    },
+    {
+      "theme": "light",
+      "key": "checkin-today",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 15.49
+    },
+    {
+      "theme": "light",
+      "key": "checkin-hist",
+      "variant": "before",
+      "bg": "rgb(204, 251, 241)",
+      "fg": "rgb(71, 85, 105)",
+      "ratio": 6.72
+    },
+    {
+      "theme": "light",
+      "key": "checkin-hist",
+      "variant": "after",
+      "bg": "color(srgb 0.829176 0.924471 0.916)",
+      "fg": "rgb(71, 85, 105)",
+      "ratio": 6.11
+    },
+    {
+      "theme": "light",
+      "key": "qtags-active",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.12
+    },
+    {
+      "theme": "light",
+      "key": "qtags-active",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 15.49
+    },
+    {
+      "theme": "light",
+      "key": "qoption-selected",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.12
+    },
+    {
+      "theme": "light",
+      "key": "qoption-selected",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 15.49
+    },
+    {
+      "theme": "light",
+      "key": "chapter-file-selected",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.12
+    },
+    {
+      "theme": "light",
+      "key": "chapter-file-selected",
+      "variant": "after",
+      "bg": "color(srgb 0.886118 0.949647 0.944)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 15.49
+    },
+    {
+      "theme": "light",
+      "key": "credential-card",
+      "variant": "before",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.85
+    },
+    {
+      "theme": "light",
+      "key": "credential-card",
+      "variant": "after",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.85
+    },
+    {
+      "theme": "light",
+      "key": "exam-toolbar",
+      "variant": "before",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.85
+    },
+    {
+      "theme": "light",
+      "key": "exam-toolbar",
+      "variant": "after",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.85
+    },
+    {
+      "theme": "light",
+      "key": "video-error",
+      "variant": "before",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.85
+    },
+    {
+      "theme": "light",
+      "key": "video-error",
+      "variant": "after",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 23, 42)",
+      "ratio": 17.85
+    },
+    {
+      "theme": "dark",
+      "key": "resume-skeleton",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(148, 163, 184)",
+      "ratio": 2.46
+    },
+    {
+      "theme": "dark",
+      "key": "resume-skeleton",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(148, 163, 184)",
+      "ratio": 4.94
+    },
+    {
+      "theme": "dark",
+      "key": "resume-hint",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.05
+    },
+    {
+      "theme": "dark",
+      "key": "resume-hint",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 11.56
+    },
+    {
+      "theme": "dark",
+      "key": "checkin-rank",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.05
+    },
+    {
+      "theme": "dark",
+      "key": "checkin-rank",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 11.56
+    },
+    {
+      "theme": "dark",
+      "key": "checkin-today",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.05
+    },
+    {
+      "theme": "dark",
+      "key": "checkin-today",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 11.56
+    },
+    {
+      "theme": "dark",
+      "key": "checkin-hist",
+      "variant": "before",
+      "bg": "rgb(204, 251, 241)",
+      "fg": "rgb(203, 213, 225)",
+      "ratio": 1.32
+    },
+    {
+      "theme": "dark",
+      "key": "checkin-hist",
+      "variant": "after",
+      "bg": "color(srgb 0.105647 0.236314 0.285725)",
+      "fg": "rgb(203, 213, 225)",
+      "ratio": 7.88
+    },
+    {
+      "theme": "dark",
+      "key": "qtags-active",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.05
+    },
+    {
+      "theme": "dark",
+      "key": "qtags-active",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 11.56
+    },
+    {
+      "theme": "dark",
+      "key": "qoption-selected",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.05
+    },
+    {
+      "theme": "dark",
+      "key": "qoption-selected",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 11.56
+    },
+    {
+      "theme": "dark",
+      "key": "chapter-file-selected",
+      "variant": "before",
+      "bg": "rgb(240, 253, 250)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.05
+    },
+    {
+      "theme": "dark",
+      "key": "chapter-file-selected",
+      "variant": "after",
+      "bg": "color(srgb 0.109647 0.211137 0.267608)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 11.56
+    },
+    {
+      "theme": "dark",
+      "key": "credential-card",
+      "variant": "before",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.1
+    },
+    {
+      "theme": "dark",
+      "key": "credential-card",
+      "variant": "after",
+      "bg": "rgb(30, 41, 59)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 13.35
+    },
+    {
+      "theme": "dark",
+      "key": "exam-toolbar",
+      "variant": "before",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.1
+    },
+    {
+      "theme": "dark",
+      "key": "exam-toolbar",
+      "variant": "after",
+      "bg": "rgb(30, 41, 59)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 13.35
+    },
+    {
+      "theme": "dark",
+      "key": "video-error",
+      "variant": "before",
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 1.1
+    },
+    {
+      "theme": "dark",
+      "key": "video-error",
+      "variant": "after",
+      "bg": "rgb(30, 41, 59)",
+      "fg": "rgb(241, 245, 249)",
+      "ratio": 13.35
+    }
+  ],
+  "errors": []
+}
