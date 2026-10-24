@@ -6,10 +6,10 @@
 
 ## 为什么需要这张表（判据，逐项实测）
 
-- **技能根现测（2026-10-24 清理后）**：Matt Pocock 集**只装一份**——全局 `C:\Users\ZHENG\.agents\skills\`（上游 `mattpocock/skills` 本体，`~/.agents/.skill-lock.json` 可验）；`~/.qoder/skills\` 的甲板旧快照 24 个同名重复已删（余 README 与 `obsidian-official-cli`、`resolving-merge-conflicts` 两个非重复目录）。技能根装在**用户级** ⇒ 对本机所有会话生效，**与仓里写不写约定无关**。
+- **技能根现测（2026-10-24 清理后）**：Matt Pocock 集**只装一份**——全局 `~/.agents/skills/`（上游 `mattpocock/skills` 本体，`~/.agents/.skill-lock.json` 可验）；`~/.qoder/skills\` 的甲板旧快照 24 个同名重复已删（余 README 与 `obsidian-official-cli`、`resolving-merge-conflicts` 两个非重复目录）。技能根装在**用户级** ⇒ 对本机所有会话生效，**与仓里写不写约定无关**。
 - **默认入口必须落在常驻文件里**：技能触发词让位于用户指令（`AGENTS.md` 等），而按需读的 `docs/agents/*.md` 只能作补充细则——这就是本文件与根 `AGENTS.md`「Skill routing」段分两半的原因：**摘要常驻、全表在案**。（superpowers「每次会话注入、只有 AGENTS.md 压得住」的那段旧理据已随其退场删除，历史实测见下条与移动端语义负担文档。）
 - **全局根 51 个技能目录里 24 个带 `disable-model-invocation: true`**（2026-10-24 现测；含目录式路由器 `ask-matt` 自己）⇒ 它们不进模型的自主清单，只有人能 `/` 唤起；「谁存在、何时用」这笔认知负担没有自动出口。
-- **用量实测**（`C:\Users\ZHENG\.qoder\skill-usage.json`，用户级、跨项目累计，无项目维度）：`code-review` 9、`superpowers:brainstorming` 2、`superpowers:systematic-debugging` 1、`codebase-design` 1、`research` 1 —— 调试意图走的是 superpowers 那份而 `diagnosing-bugs` 零使用，说明**竞争已经打过、Matt 侧输了**，本表是事后裁决而非预防。
+- **用量实测**（`~/.qoder/skill-usage.json`，用户级、跨项目累计，无项目维度）：`code-review` 9、`superpowers:brainstorming` 2、`superpowers:systematic-debugging` 1、`codebase-design` 1、`research` 1 —— 调试意图走的是 superpowers 那份而 `diagnosing-bugs` 零使用，说明**竞争已经打过、Matt 侧输了**，本表是事后裁决而非预防。
 
 完整的语义负担测量、提问形态清点与三套技能的重叠矩阵见
 `training-app/叉车维修培训学员端跨端应用/docs/skill-语义负担与路由裁决-2026-10-03.md`（§②–§⑨）。
