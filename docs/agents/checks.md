@@ -96,6 +96,13 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 
 改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+## CI 触发模型与 `backend-test` 分片（2026-10-24，#1856 结论 / #1862）
+
+- **`changes` 的 paths-filter 默认基准就是 `default_branch` 的 merge-base**，不是 `github.event.before`。`dorny/paths-filter@v4` 在 push 事件里只有当 `base` 传的是 **commit SHA** 或**与被推分支同名**时才会退到 `before`（`src/main.ts` 的 `isBaseSha || isBaseSameAsHead` 分支），否则一律 `git diff master...HEAD`（三点比较）。⇒ 「把 master 合进功能分支」**本来就不会**把 master 的改动算进差异；**别**给这个 step 传 `base:` —— 传分支名是 no-op（那正是默认值），传 `origin/master` 还会硬失败 `couldn't find remote ref`（它把 `base` 当远端分支名去 `git fetch origin <base>`）。
+- **改 `.github/workflows/**` 必然三条腿全跑**（`backend` / `frontend` / `mobile` 三个 filter 都含该模式；有意的，工作流坏了影响所有 job）。判断 filter 是否正常，看 `changes` job 日志里的 `Detected N changed files` —— 它应当等于**本分支自己的**改动数，而不是 master 合并进来的那些。
+- **`backend-test` 按包分两片**（LPT 装箱）：权重表 `scripts/go-package-timings.json`（表里没有的包按 `defaultSeconds` 计权，照样会被排进某一片，不会丢）、切片器 `scripts/go-shard.mjs`（本片为空 ⇒ **退出码 3**，job 直接红）。分片下限由**最慢的包**决定（`internal/api` 400.2s / 全量 948.1s）⇒ **k=2 已到顶**，再多切只多烧 runner；要再快只能拆这个包。改权重表不是「调参」而是**门禁参数**：表坏了只让负载不均、不会漏测（两片并集恒等于 `go list ./...`，`scripts/go-shard.test.mjs` 钉死）。
+- `backend-test` 与 `backend-lint` **并行**（两者无产物依赖）：省 140s 墙钟，代价是 lint 红时不再抢在 10 分钟测试之前报错。
+
 ## 运行时面判定与证据校验的机器语义（2026-10-15 从根 `AGENTS.md` 迁入，判据源 `.github/scripts/lib/gate-validator.mjs`）
 
 **执行面是仓库级**：`.github/workflows/pr-evidence.yml` 对**每一个 PR** 运行，但**只对命中运行时面**（`*.uvue` / `*.uts` / training-app 下的三份 json）**的 PR 校验正文的 `## 验收证据` 段** —— 未命中时校验器在校验段**之前**就放行（`runtime.length === 0` 早退，用例见 `.github/scripts/pr-evidence-check.test.mjs`「非运行时面 PR：即使正文为空也通过」），命中而缺段则直接判红；未命中运行时面时仍**约定**写 `免（未命中运行时面）`（先例 #908）。适用范围不限于移动端。
