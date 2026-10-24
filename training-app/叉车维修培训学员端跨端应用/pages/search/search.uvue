@@ -3,7 +3,7 @@
 		<view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 
 		<!-- 搜索栏：主色区 + 白色胶囊输入（对齐 course-detail / featured-list 等非 tabBar 页的既有写法） -->
-		<view class="search-header">
+		<view class="search-header" :style="searchHeaderStyle">
 			<view class="search-input-wrap">
 				<text class="search-icon">🔍</text>
 				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、章节、题目、精选、帖子"
@@ -127,6 +127,22 @@
 	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult, HighlightSegment } from '../../types/index'
 
 	const safeArea = useSafeArea()
+
+	// 胶囊让位（#1845）：N06 自绘页不受页头件避让保护，搜索头行右端「取消」按钮
+	// 的右缘自行钉在胶囊左边线 − 24rpx（与 app-nav-bar 的 RIGHT_SLOT_CLEARANCE 同间隙值）。
+	// uvue 不支持 var()/calc()，动态值走内联 style 分项覆盖（先例：app-nav-bar 的
+	// rightSlotStyle 内联 margin-right 覆盖 class 值）；非小程序端 capsuleLeft = 0
+	// ⇒ 返回空串不设约束，维持样式表里 .search-header 的 24rpx 右 padding 基线。
+	const CAPSULE_CLEARANCE = 24 // 取消按钮与胶囊的视觉间隙（rpx），与页头件同值
+	const searchHeaderStyle = computed((): string => {
+		const capsuleLeft = safeArea.value.capsuleLeft
+		if (capsuleLeft <= 0) {
+			return ''
+		}
+		// 右 padding = 750 − capsuleLeft + 24 ⇒ 行内内容右缘 = 胶囊左边线 − 24
+		const paddingRight = Math.max(24, 750 - capsuleLeft + CAPSULE_CLEARANCE)
+		return 'padding-right: ' + paddingRight + 'rpx;'
+	})
 
 	type TypeTab = { label: string; value: string }
 	const typeTabs: TypeTab[] = [
@@ -417,6 +433,7 @@
 		background-color: $primary-color;
 	}
 
+	/* 右 padding 24rpx 是基线；小程序端被内联 searchHeaderStyle 按 capsuleLeft 让位覆盖（票 1845；样式块禁 # 票号引用） */
 	.search-header {
 		flex-direction: row;
 		align-items: center;

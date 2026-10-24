@@ -2,16 +2,21 @@ name: PR - testing 冒烟补齐
 
 # 为什么需要这条 workflow：
 # ci.yml 的 testing 冒烟只在「分支 push 且该分支当时已有 open PR」时派发。
-# 但开发流程是「先 push、再开 PR」——纯文档改动的 CI 只要 ~20 秒就结束，
+# 但开发流程是「先 push、再开 PR」—— 纯文档改动的 CI 只要 ~20 秒就结束，
 # 那一刻 PR 还不存在，冒烟就被跳过，该 commit 因此永远缺少冒烟记录；
 # 而 cd.yml 的生产 gate 要求这条记录，合并后会被阻断（实测复现于 PR #473）。
 #
-# 本 workflow 在 PR 开启时补齐这条记录。它只在「CI 已绿 且 尚无冒烟记录」时动作，
-# 不重跑 CI、不重复部署，因此不违背「PR 不触发 CI/CD」的初衷：
-# 它补的是缺失的那一次，正常流程下都是空跑（秒级退出）。
+# #1852：本 job 自 2026-10-24 起是 **ruleset 必过检查**，于是它必须先于合并跑完并派发冒烟 ——
+# 否则会出现「检查还在排队、auto-merge 已经把 head 分支删掉」的竞态：实测
+# `gh workflow run --ref <分支>` → `HTTP 422: No ref found` ⇒ 没有 deployment 记录 ⇒ gate 阻断生产。
+# 两条配套约束（缺一条这个必过检查就会误伤）：
+#   1. `types` 必须含 `synchronize`：PR 开了之后再推新 commit，新 head sha 也要有这条检查
+#      （必过检查在某个 sha 上缺失 = 那个 sha 永远合不了）；
+#   2. 收到事件时 CI 往往还没跑完 —— 所以这里**等** ci-summary 出结论（最多 15 分钟），
+#      绿了才派发；CI 红就直接放行（合并本就被 ci-summary 挡着）。
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [master]
 
 permissions:
@@ -21,14 +26,16 @@ permissions:
   deployments: read
 
 concurrency:
+  # cancel-in-progress：同一个 PR 连推多个 commit 时，旧 sha 的等待已经没有意义
   group: smoke-${{ github.event.pull_request.head.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   ensure-testing-smoke:
-    # 跳过草稿 PR：草稿阶段不该占 testing 机器
+    # 跳过草稿 PR：草稿阶段不该占 testing 机器（标记 ready_for_review 时会再触发一次）
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       # ADR-0053 §10：ci-summary 的聚合收成了单点脚本（scripts/ci-summary-status.sh），
       # 本 job 原先刻意不 checkout（gh 用 --repo 显式指定仓库），但脚本文件必须存在于工作区 ——
@@ -39,12 +46,13 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: 判定并补发 testing 冒烟
+      - name: 等 CI 结论并补发 testing 冒烟
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.event.pull_request.head.sha }}
           REF: ${{ github.head_ref }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
 
@@ -53,15 +61,29 @@ jobs:
             exit 0
           fi
 
-          # 与 cd.yml gate 共用同一份聚合实现（ADR-0053 §10 的单点）
-          CI=$(bash scripts/ci-summary-status.sh "$SHA")
+          # ===== 1. 等 ci-summary 出结论（missing/other = 还没跑完）=====
+          # 上限 15 分钟：本仓最长的一条腿是 backend-test（实测 9~10 分钟），留足余量。
+          DEADLINE=$(( $(date +%s) + 900 ))
+          while :; do
+            # 与 cd.yml gate 共用同一份聚合实现（ADR-0053 §10 的单点）
+            CI=$(bash scripts/ci-summary-status.sh "$SHA")
+            case "$CI" in
+              success|failure) break ;;
+            esac
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+              echo "::error::等不到 commit ${SHA:0:8} 的 ci-summary 结论（15 分钟），无法判定是否需要补发冒烟"
+              exit 1
+            fi
+            echo "ci-summary=$CI（尚未出结论），20 秒后重试…"
+            sleep 20
+          done
+
           if [ "$CI" != "success" ]; then
-            # 含 CI 仍在跑（missing/other）与 CI 失败（failure）两种情况：
-            # 前者跑完会自己派发冒烟，后者本就不该部署
-            echo "ci-summary=$CI，无需补发（CI 未跑完或已失败）" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "ci-summary=$CI，CI 未通过 ⇒ 不补发冒烟（合并本就被 ci-summary 挡住）" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
+          # ===== 2. 已有记录就不重复部署 =====
           DEP=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
                  --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | length")
           if [ "$DEP" != "0" ]; then
@@ -69,10 +91,14 @@ jobs:
             exit 0
           fi
 
+          # ===== 3. 派发 =====
           echo ">>> CI 已绿但缺冒烟记录（CI 跑完早于开 PR），补发 testing 部署" | tee -a "$GITHUB_STEP_SUMMARY"
           # 与 ci.yml 的派发方式保持一致：--ref 用分支名，使 CD run 与部署记录的 sha == 被测 SHA
-          # （workflow_dispatch 的 --ref 不接受裸 SHA，实测 422 No ref found，只能给分支/标签名）。
+          # （workflow_dispatch 的 --ref 不接受裸 SHA；`refs/pull/<n>/head` 也实测 422 —— #1852 里试过）。
           # 必须显式 --repo：本 job 不 checkout，gh 没有 git 上下文可推断仓库
-          gh workflow run cd.yml --repo "$GITHUB_REPOSITORY" \
-            --ref "$REF" -f ref="$SHA" -f environment=testing
-          echo "| 补发 | PR #${{ github.event.pull_request.number }} · commit \`${SHA:0:8}\` → testing |" >> "$GITHUB_STEP_SUMMARY"
+          if ! gh workflow run cd.yml --repo "$GITHUB_REPOSITORY" \
+                 --ref "$REF" -f ref="$SHA" -f environment=testing; then
+            echo "::error::派发失败（分支 ${REF} 可能已被删除）。这是 #1852 描述过的竞态：本检查若为必过检查，正常应发生在合并之前；走人工合并时请用应急通道 gh workflow run cd.yml -f environment=production -f ref=${SHA}"
+            exit 1
+          fi
+          echo "| 补发 | PR #${PR_NUMBER} · commit `${SHA:0:8}` → testing |" >> "$GITHUB_STEP_SUMMARY"
