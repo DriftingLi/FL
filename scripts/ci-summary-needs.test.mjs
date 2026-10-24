@@ -14,7 +14,9 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const CI = readFileSync(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8')
+// 归一换行：Windows 工作树按 core.autocrlf=true 是 CRLF、CI 是 LF，不归一的话本地跑这条自检
+// 会在 jobBlock 的 `l === '  job:'` 上判「找不到 job」——判据一样，只是别让跑的人以为门坏了。
+const CI = readFileSync(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8').replace(/\r\n/g, '\n')
 
 /** 切出某个顶层 job 的文本块（从 `  name:` 到下一个顶层 job 或文件尾）。 */
 function jobBlock(name) {
