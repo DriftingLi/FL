@@ -1,0 +1,100 @@
+{
+  "step1_mounted": {
+    "ir": true,
+    "sv": true,
+    "toolbarItems": 15,
+    "text": "# 一级标题这是**粗体**、*斜体*与 `行内代码`。```​jsconst answer = 42 const answer = 42 ​```列A列B12",
+    "tabs": [
+      "预览编辑",
+      "源码"
+    ]
+  },
+  "step2_source_mode": {
+    "clicked": true,
+    "sv": true,
+    "textHasHeading": true,
+    "textHasTyped": true
+  },
+  "step3_back_to_ir": {
+    "clicked": true,
+    "ir": true,
+    "textHasHeading": true,
+    "preserved": true,
+    "darkTargets": [
+      [
+        ".vditor",
+        1
+      ],
+      [
+        ".vditor-reset",
+        4
+      ],
+      [
+        ".vditor-toolbar__item",
+        15
+      ],
+      [
+        ".vditor-ir",
+        1
+      ],
+      [
+        ".vditor-panel",
+        2
+      ],
+      [
+        ".vditor-hint",
+        2
+      ],
+      [
+        ".vditor-counter",
+        0
+      ]
+    ]
+  },
+  "darkStyle": {
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(241, 245, 249)"
+  },
+  "typed": true,
+  "vditorRequests": [
+    [
+      "/node_modules/vditor/dist/index.css",
+      200
+    ],
+    [
+      "/vditor/dist/js/lute/lute.min.js",
+      200
+    ],
+    [
+      "/vditor/dist/js/icons/ant.js",
+      200
+    ],
+    [
+      "/vditor/dist/css/content-theme/light.css",
+      200
+    ],
+    [
+      "/vditor/dist/js/highlight.js/styles/github.min.css",
+      200
+    ],
+    [
+      "/vditor/dist/js/highlight.js/highlight.min.js?v=11.7.0",
+      200
+    ],
+    [
+      "/vditor/dist/js/highlight.js/third-languages.js?v=1.0.1",
+      200
+    ],
+    [
+      "/vditor/dist/js/icons/ant.js",
+      304
+    ],
+    [
+      "/vditor/dist/js/icons/ant.js",
+      304
+    ]
+  ],
+  "vditorNon200": [],
+  "externalRequests": [],
+  "consoleErrors": []
+}
