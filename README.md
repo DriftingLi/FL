@@ -124,14 +124,14 @@
 ### 前端（frontend）
 
 - 框架：Vue 3.4 + TypeScript 5.7
-- 构建：Vite 6
+- 构建：Vite 8（rolldown 内核；分块判据在 `frontend/vite.config.ts` 的 `CHUNK_GROUPS`）
 - UI：Element Plus 2.5 + @element-plus/icons-vue + Tailwind CSS v4（与既有 scoped 样式增量共存）
 - 状态管理：Pinia 2.1
 - 路由：vue-router 4（子域名多工作区 + 角色守卫）
 - HTTP：axios（access 过期自动刷新重试）
 - 图表：ECharts 6（DimensionRadar / FutureValueChart / BatteryRadar）
 - 其他：dayjs、marked + marked-highlight + highlight.js、markstream-vue、vditor、vuedraggable、element-china-area-data
-- 测试：vitest 4 + @vue/test-utils + happy-dom
+- 测试：vitest 5 + @vue/test-utils + happy-dom
 
 ### 移动端（training-app）
 
