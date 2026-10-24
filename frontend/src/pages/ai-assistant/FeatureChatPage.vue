@@ -447,7 +447,7 @@ onMounted(() => {
 
 .quick-option-chip:hover {
   border-color: var(--color-primary-400);
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .quick-option-chip.active {
@@ -552,7 +552,7 @@ onMounted(() => {
 }
 
 .catalog-fault-item b {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
   font-size: 13px;
   min-width: 34px;
 }

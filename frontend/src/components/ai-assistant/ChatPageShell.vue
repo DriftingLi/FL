@@ -72,7 +72,7 @@
 
       <!-- 功能页：返回链接 -->
       <div v-if="backLinkTo" class="px-3 pb-1">
-        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ui-600">
+        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:underline">
           <el-icon :size="14"><ArrowLeft /></el-icon>{{ backLinkText }}
         </router-link>
       </div>
@@ -151,7 +151,7 @@
             >
               {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
-            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-600">{{ displayName }}</router-link>
+            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline">{{ displayName }}</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
               <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多">
                 <el-icon :size="14"><More /></el-icon>
@@ -228,7 +228,7 @@
           <slot name="welcome-bottom" />
 
           <div v-if="!store.isLoggedIn" class="guest-hint mt-8 text-[13px] text-ink-3">
-            您当前以游客身份使用，<a href="javascript:void(0)" class="font-semibold text-ui-600 no-underline hover:underline" @click="goLogin">登录</a> 后可保存对话历史
+            您当前以游客身份使用，<a href="javascript:void(0)" class="font-semibold text-ui-soft-ink no-underline hover:underline" @click="goLogin">登录</a> 后可保存对话历史
           </div>
         </div>
 

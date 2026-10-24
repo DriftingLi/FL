@@ -56,7 +56,7 @@
           </div>
         </div>
 
-        <el-icon class="shrink-0 text-ink-muted transition-colors duration-150 group-hover:text-ui-600 max-sm:hidden">
+        <el-icon class="shrink-0 text-ink-muted transition-colors duration-150 group-hover:underline max-sm:hidden">
           <ArrowRight />
         </el-icon>
       </UiCard>

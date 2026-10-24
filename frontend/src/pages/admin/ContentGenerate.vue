@@ -325,7 +325,7 @@ loadCourses()
   gap: 4px;
   margin-left: 12px;
   font-size: 13px;
-  color: var(--color-primary-500);
+  color: var(--color-primary-soft-ink);
 }
 
 .progress-count {
@@ -359,7 +359,7 @@ loadCourses()
 }
 
 .progress-status.processing {
-  color: var(--color-primary-500);
+  color: var(--color-primary-soft-ink);
 }
 
 .progress-status.completed {

@@ -75,7 +75,7 @@ function onPopoverShow() {
 
 .icon-btn:hover {
   background: var(--color-bg-page, #f8fafc);
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .notification-btn {

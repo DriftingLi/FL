@@ -165,7 +165,7 @@ function closeTab(tab: AdminTab): void {
 .admin-tab.is-active {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
   font-weight: var(--font-medium);
 }
 

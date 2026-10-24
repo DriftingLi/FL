@@ -145,7 +145,7 @@ function onMoreSelect(key: string) {
         <div class="reply-actions-right ml-auto flex items-center gap-3">
           <button
             type="button"
-            class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none text-ink-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:text-ui-500"
+            class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none text-ink-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:underline"
             @click="emit('reply-to', reply)"
           >
             <el-icon><ChatDotRound /></el-icon>
