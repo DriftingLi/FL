@@ -79,8 +79,13 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   // 当轮助手消息 id（三种终态共用同一条消息位；= 用户消息 id + 1，避免同毫秒撞键）
   let turnMsgId = 0
 
-  /** 发送闸门（唯一表述）：无在飞轮次即可接受新一轮；草稿是否就绪由页面按 UI 态并入（#1104） */
-  const canSend = computed(() => !streaming.value)
+  /**
+   * 发送闸门（唯一表述）：无在飞轮次、且不在装载某个会话的消息时，才接受新一轮。
+   * 装载中必须关门：`selectSession` 先设 `currentSessionId` 再 await，这段窗口里发出的轮次
+   * 会被随后到达的装载结果整体覆盖（乐观落下的那条用户消息直接消失）。
+   * 草稿是否就绪仍由页面按 UI 态并入（#1104）。
+   */
+  const canSend = computed(() => !streaming.value && !messagesLoading.value)
 
   /**
    * 当轮失败/中断的独立通道（#1104）：壳据此渲染重试入口，重试原样重发该轮输入与差异参数。

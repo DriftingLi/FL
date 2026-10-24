@@ -596,7 +596,7 @@ function New-GatePlan {
             param = 'Pages'
             modes = @('auto', 'none', '<csv>')
             mode = $PagesMode
-            autoSource = 'git diff --name-only origin/master...HEAD 命中 pages/**/*.uvue（本 PR 改动页）'
+            autoSource = 'Get-MpWeixinChangedUvuePages（scripts/lib/mp-weixin-pages.ps1，#1853）：git -c core.quotepath=false + UTF-8 显式解码 diff --name-only origin/master...HEAD 命中 pages/**/*.uvue（本 PR 改动页）'
             mechanism = 'cold-start-direct'
             swapTarget = 'app.json'
             swapNote = '只换构建产物 app.json 的 pages 首项；不动源头 pages.json（运行时面判据来源，ADR-0038 决策 2）'
@@ -1196,6 +1196,10 @@ function Invoke-AuthInject {
 # 守护用夹具**真执行**这些函数（utils/mpWeixinGateEnvBehavior.test.js / mpWeixinGateResultLineBehavior.test.js），
 # 不对源码文本断言（C20 先例）。分支声明形状见 GATE_PLAN 的 branches 键。
 . (Join-Path $PSScriptRoot 'lib\mp-weixin-env.ps1')
+# -Pages auto 的改动页清单判据（#1853）：真源在 scripts/lib/mp-weixin-pages.ps1（编码层双解耦的
+# 根因叙事见该库头注释），守护用真实 git 仓 + gb2312 反条件**真执行**它
+# （utils/mpWeixinGatePagesBehavior.test.js），不对源码文本断言（C20 先例）。
+. (Join-Path $PSScriptRoot 'lib\mp-weixin-pages.ps1')
 # sha 绑定口径（#1695）：评论里的 `- commit:` 只绑「GitHub 点得开」的提交 ——
 # 判定与 push 收在 lib/gate-commit.ps1（头注释写明 A/B/C 三级口径）。
 . (Join-Path $PSScriptRoot 'lib\gate-commit.ps1')
@@ -1843,10 +1847,16 @@ try {
         try { $entryRoute = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])" } catch { $entryRoute = '' }
         $want = @()
         if ($Pages -eq 'auto') {
-            # auto 判据 = 本 PR 改动页；git 不可用 / 无 origin/master 参照（如 detached 树）⇒ 空清单，
-            # 直达只剩入口页一张（等价旧取证面，不冒充「改动页已核」）。
-            $gd = @(& git -C $Project diff --name-only 'origin/master...HEAD' 2>$null | ForEach-Object { "$_" })
-            $want = @($gd | Where-Object { $_ -match '(^|/)pages/.+\.uvue$' } | ForEach-Object { ($_ -replace '^.*?/pages/', 'pages/') -replace '\.uvue$', '' } | Select-Object -Unique)
+            # auto 判据 = 本 PR 改动页，真源在 scripts/lib/mp-weixin-pages.ps1（#1853，编码层双解耦见该库头）。
+            # git 不可用 / 无 origin/master 参照（如 detached 树）⇒ Ok=$false：空清单 + [warn] 显式说破，
+            # 直达只剩入口页一张（等价旧取证面，不冒充「改动页已核」）；diff 可用但无 pages/**.uvue
+            # 改动 ⇒ Ok=$true 的空清单（本来就没有，不算降级）。
+            $autoPages = Get-MpWeixinChangedUvuePages -Project $Project
+            $want = @($autoPages.Pages)
+            if (-not $autoPages.Ok) {
+                Write-Host "[warn] auto 页清单：git diff 不可用（$($autoPages.Reason)），直达降级为仅入口页（不冒充改动页已核）" -ForegroundColor Yellow
+                Write-Log "auto-pages degraded reason=$($autoPages.Reason)"
+            }
         } else {
             $want = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         }

@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
-      <router-link :to="href('JobPlaza')" class="text-sm text-ui-600 hover:text-ui-700">← 返回职位广场</router-link>
+      <router-link :to="href('JobPlaza')" class="text-sm text-ui-soft-ink hover:underline">← 返回职位广场</router-link>
     </div>
 
     <UiAsyncSection

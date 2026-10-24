@@ -190,6 +190,35 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
     expect(s).toMatch(/class="search-cancel"/);
     expect(s).toMatch(/:style="searchHeaderStyle"/);
   });
+
+  it('N06 负面机检：其余自绘三页头部区不得长出可点元素形态（#1845 复审）', () => {
+    // 头部段口径（按 2026-10-24 三页现状锚定）：自 class="status-bar" 占位起、至各自
+    // 内容区起点类止（index=.hero、login=.form、profile-setup=.section）——三页该段现状
+    // 为居中 logo/标题（index=.page-tag、login/profile-setup=.header），零可点元素。
+    // 段内出现 @click/@tap 即红：三页是自绘头部、无页头件的胶囊让位保护，头部右端长出
+    // 可点元素就会顶进胶囊矩形；将来真要长，正路是 search 先例的 capsuleLeft 内联让位
+    //（见上两条 #1845 断言），届时须先改本断言补让位判据、不得静默长出。
+    // 宽口径说明：不分左右端（@tap 仓内确有使用，如 personal-activity 的列表项），
+    // 现三页头部段 0 命中、无误差代价；锚点缺失或错位同样判红（fail-closed，
+    // 模板重构必须带着本断言一起改）。
+    const zones = [
+      ['pages/index/index.uvue', 'class="hero"'],
+      ['pages/login/login.uvue', 'class="form"'],
+      ['pages/profile-setup/profile-setup.uvue', 'class="section"'],
+    ];
+    const bad = [];
+    for (const [p, contentMarker] of zones) {
+      const src = read(p);
+      const start = src.indexOf('class="status-bar"');
+      const end = src.indexOf(contentMarker);
+      if (start < 0 || end <= start) {
+        bad.push(`${p}: 头部段锚点漂移（status-bar@${start} → ${contentMarker}@${end}）`);
+      } else if (/@(click|tap)\b/.test(src.slice(start, end))) {
+        bad.push(`${p}: 头部段出现 @click/@tap 可点元素`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
 });
 
 describe('批6 mall 补漏（裁定 A：#1595 台账行 25 判 N03，批3 清单漏收，本批归位）', () => {

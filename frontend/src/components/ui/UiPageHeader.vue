@@ -20,7 +20,7 @@ const emit = defineEmits<{ back: [] }>()
     <button
       v-if="props.back"
       type="button"
-      class="mb-2 inline-flex items-center gap-1 rounded-ctl px-1 py-0.5 text-sm text-ink-3 transition-colors duration-150 hover:bg-canvas hover:text-ui-600"
+      class="mb-2 inline-flex items-center gap-1 rounded-ctl px-1 py-0.5 text-sm text-ink-3 transition-colors duration-150 hover:bg-canvas hover:underline"
       @click="emit('back')"
     >
       <el-icon><ArrowLeft /></el-icon>

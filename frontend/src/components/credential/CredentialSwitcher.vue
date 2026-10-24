@@ -188,8 +188,8 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .current-badge.special_operation {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
 }
 .current-badge.skill_level {
   background: var(--color-success-light);
@@ -211,8 +211,8 @@ onMounted(async () => {
   cursor: pointer;
 }
 .collapsed-icon:hover {
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
 }
 
 </style>

@@ -1,11 +1,8 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="" @left-click="onBack" divider>
-            <template #right>
-                <text v-if="!isSingle" class="nav-timer">⏱ {{ session.timerText.value }}</text>
-                <text v-if="!isSingle" class="nav-progress ml-24">{{ session.currentIndex.value + 1 }}/{{ session.questions.value.length }}</text>
-            </template>
-        </app-nav-bar>
+        <!-- 右槽腾空（票 1847）：⏱计时+题号进度两段最长合计约 270rpx，超典型可用槽宽约 164rpx（顶部布局调研 §4.2），
+             按 ui-spec §5.1「放不下 = 移出页头」下沉到底部操作条，不再顶进胶囊间隙带 -->
+        <app-nav-bar title="" @left-click="onBack" divider></app-nav-bar>
         <view v-if="session.loading.value && session.questions.value.length == 0" class="loading-wrap">
             <text class="loading-text">正在加载题目...</text>
         </view>
@@ -83,6 +80,11 @@
             <view class="bottom-placeholder"></view>
         </scroll-view>
         <view v-if="session.questions.value.length > 0" class="bottom-bar">
+            <!-- 计时+题号进度（票 1847）：自页头右槽下沉至此，scroll 外固定底条答题全程可见；单题承载不计时 -->
+            <view v-if="!isSingle" class="bottom-status">
+                <text class="bottom-status-timer">⏱ {{ session.timerText.value }}</text>
+                <text class="bottom-status-progress">{{ session.currentIndex.value + 1 }}/{{ session.questions.value.length }}</text>
+            </view>
             <view class="bottom-actions">
                 <view v-if="!isSingle" class="bottom-icon-btn" @click="session.onToggleAnswerCard()">
                     <image class="bottom-icon-img" src="/static/icons/answer-card.png" mode="aspectFit" />
@@ -206,9 +208,6 @@
 <style lang="scss">
     .page { display: flex; background-color: $bg-color; flex-direction: column; }
 
-    .nav-timer { font-size: 26rpx; color: $text-color-placeholder; }
-    .nav-progress { font-size: 28rpx; color: $text-color; font-weight: 500; }
-    .nav-right { width: 120rpx; flex-direction: row; align-items: center; justify-content: flex-end; }
     .content-scroll { flex: 1; height: 0; }
     .question-section { padding: 32rpx 32rpx 0; }
     .question-type-row { flex-direction: row; margin-bottom: 16rpx; }
@@ -270,6 +269,9 @@
     .note-delete-text { font-size: 24rpx; color: #f44336; }
     .note-autosave { font-size: 22rpx; color: $text-disabled; }
     .bottom-bar { padding: 16rpx 24rpx; padding-bottom: 32rpx; background-color: $card-bg; border-top: 1rpx solid $border-color-light; }
+    .bottom-status { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 12rpx; }
+    .bottom-status-timer { font-size: 26rpx; color: $text-color-placeholder; }
+    .bottom-status-progress { font-size: 28rpx; color: $text-color; font-weight: 500; }
     .bottom-actions { flex-direction: row; align-items: center; }
     .bottom-icon-btn { width: 100rpx; flex-direction: column; align-items: center; justify-content: center; padding: 8rpx 0; }
     .bottom-icon-img { width: 44rpx; height: 44rpx; margin-bottom: 4rpx; }
@@ -315,7 +317,6 @@
     .summary-btn-primary-text { font-size: 28rpx; font-weight: bold; color: $card-bg; }
     .summary-btn-secondary-text { font-size: 28rpx; font-weight: bold; color: $text-color-secondary; }
     .ml-16 { margin-left: 16rpx; }
-    .ml-24 { margin-left: 24rpx; }
     .mr-12-mb-12 { margin-right: 12rpx; margin-bottom: 12rpx; }
     .mr-20-mb-20 { margin-right: 20rpx; margin-bottom: 20rpx; }
 </style>

@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "theme": "light",
+      "key": "panel",
+      "variant": "before",
+      "ratio": 5.47,
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(15, 118, 110)"
+    },
+    {
+      "theme": "light",
+      "key": "panel",
+      "variant": "after",
+      "ratio": 7.58,
+      "bg": "rgb(255, 255, 255)",
+      "fg": "rgb(17, 94, 89)"
+    },
+    {
+      "theme": "light",
+      "key": "canvas",
+      "variant": "before",
+      "ratio": 5.23,
+      "bg": "rgb(248, 250, 252)",
+      "fg": "rgb(15, 118, 110)"
+    },
+    {
+      "theme": "light",
+      "key": "canvas",
+      "variant": "after",
+      "ratio": 7.25,
+      "bg": "rgb(248, 250, 252)",
+      "fg": "rgb(17, 94, 89)"
+    },
+    {
+      "theme": "light",
+      "key": "viewer-exception",
+      "variant": "after",
+      "ratio": 4.25,
+      "bg": "rgb(22, 33, 62)",
+      "fg": "rgb(13, 148, 136)"
+    },
+    {
+      "theme": "dark",
+      "key": "panel",
+      "variant": "before",
+      "ratio": 2.67,
+      "bg": "rgb(30, 41, 59)",
+      "fg": "rgb(15, 118, 110)"
+    },
+    {
+      "theme": "dark",
+      "key": "panel",
+      "variant": "after",
+      "ratio": 9.89,
+      "bg": "rgb(30, 41, 59)",
+      "fg": "rgb(94, 234, 212)"
+    },
+    {
+      "theme": "dark",
+      "key": "canvas",
+      "variant": "before",
+      "ratio": 3.26,
+      "bg": "rgb(15, 23, 42)",
+      "fg": "rgb(15, 118, 110)"
+    },
+    {
+      "theme": "dark",
+      "key": "canvas",
+      "variant": "after",
+      "ratio": 12.07,
+      "bg": "rgb(15, 23, 42)",
+      "fg": "rgb(94, 234, 212)"
+    },
+    {
+      "theme": "dark",
+      "key": "viewer-exception",
+      "variant": "after",
+      "ratio": 4.25,
+      "bg": "rgb(22, 33, 62)",
+      "fg": "rgb(13, 148, 136)"
+    }
+  ],
+  "errors": []
+}

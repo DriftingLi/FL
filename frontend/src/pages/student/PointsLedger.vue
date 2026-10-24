@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[960px] px-4 pb-10">
     <div class="mb-4 flex items-center gap-1 text-sm">
-      <RouterLink :to="href('TaskCenter')" class="text-ink-3 transition-colors hover:text-ui-600">任务中心</RouterLink>
+      <RouterLink :to="href('TaskCenter')" class="text-ink-3 transition-colors hover:underline">任务中心</RouterLink>
       <span class="text-ink-3">/</span>
       <h1 class="m-0 text-xl font-semibold text-ink">积分明细</h1>
     </div>

@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
-      <router-link :to="href('RecruitResumes')" class="text-sm text-ui-600 hover:text-ui-700">← 返回简历库</router-link>
+      <router-link :to="href('RecruitResumes')" class="text-sm text-ui-soft-ink hover:underline">← 返回简历库</router-link>
     </div>
 
     <UiAsyncSection
@@ -47,7 +47,7 @@
           <div><span class="text-ink-3">姓名：</span>{{ contact.real_name }}</div>
           <div><span class="text-ink-3">电话：</span>{{ contact.contact_phone }}</div>
           <div><span class="text-ink-3">微信：</span>{{ contact.wechat }}</div>
-          <div v-if="contact.resume_file_url"><span class="text-ink-3">PDF：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-600">查看 PDF</a></div>
+          <div v-if="contact.resume_file_url"><span class="text-ink-3">PDF：</span><a :href="contact.resume_file_url" target="_blank" class="text-ui-soft-ink">查看 PDF</a></div>
           <!-- #489：授权后补齐证书原图与工作照 -->
           <div v-if="contactPhotos.length" class="mt-2"><span class="text-ink-3">工作照：</span>
             <div class="mt-1 flex flex-wrap gap-2">

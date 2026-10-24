@@ -8,7 +8,7 @@
 //   ③ .github/scripts/pr-evidence-check.test.mjs / 本地预检 preflight-pr.mjs —— 直接 import
 //
 // 纯函数：输入 files/body/author/gateComments/commitComments/issueComments/headSha/fetchCompare，
-// 输出 { ok, errors, notes, runtime, needs4b, lowRiskRuntime, gates }。
+// 输出 { ok, errors, notes, runtime, needs4b, gates }。
 // fetchCompare 是**注入的**取数回调（测试里注桩，不打网络）：入参 { base, head }，返回
 // { status, mergeBaseSha, files, filesTruncated }；取不到即返回 null（fail-closed）。
 // 因注入了异步回调，本函数返回 Promise；调用方必须 await。
@@ -108,18 +108,10 @@ export async function validatePrEvidence({
   const errors = [];
   const notes = [];
 
-  // 低风险运行时面（ADR-0008，2026-09-11 修订）：改动只在 .uts 逻辑层，
-  // 不含任何 .uvue（模板/样式面）、不含三份 json、不含 uni_modules ⇒ 免 ① ②，只留 ③ + ④。
-  const LOW_RISK_NON_RUNTIME = /(\/|\.)(test\.js|md)$|jest\.config.*\.js$/;
-  const isLowRiskUtChange = (f) => {
-    const p = f.filename;
-    if (!p.startsWith('training-app/')) return true; // 非移动端文件不影响本判据
-    if (/\.uvue$/.test(p)) return false; // 模板/样式面 → 不算低风险
-    if (/uni_modules\//.test(p)) return false; // 原生插件面 → 不算低风险
-    if (p.endsWith('.uts')) return true; // 仅 .uts 逻辑
-    return LOW_RISK_NON_RUNTIME.test(p); // 测试/文档/配置
-  };
-  const lowRiskRuntime = runtime.length > 0 && files.every((f) => isLowRiskUtChange(f));
+  // 低风险运行时面分层已于 2026-10-24 整体退役（ADR-0043 决策 3/8，票 #1859）：
+  // ① 半被 ①a 降级常态吞掉（免行 `免（①a 降级发版前一次，ADR-0043）`，见下方 ① 门判据），
+  // ② 半被「触发面命中即必跑」覆盖——纯 .uts 命中 MP-WEIXIN 条件编译不再免 ②。原判据
+  // （LOW_RISK_NON_RUNTIME / isLowRiskUtChange / lowRiskRuntime 输出字段）随之删除，不留第二套口径。
 
   // P1：④ 本地编译门与 ② 微信开发者工具门的结果可由「sha 绑定的 PR 评论」承载（脚本输出免手抄进正文）。
   // 判据只为「结构与 sha 绑定」，不校真伪（与正文证据同一口径）：评论须同时带
@@ -256,13 +248,13 @@ export async function validatePrEvidence({
   });
   const gates = {
     // ① 门没有「sha 绑定评论」承载路径，结构化字段只服务 mobile-gates 的渲染：
-    // 「窗口口径跳过」必须与「已取证 / 还缺」区分开 —— 跳过要可见，不能长得像已取证（#1766）。
-    '①': { required: runtime.length > 0 && !lowRiskRuntime, bound: false, skipped: false },
+    // 「免行跳过（①a 降级 / 窗口过渡）」必须与「已取证 / 还缺」区分开 —— 跳过要可见，不能长得像已取证（#1766）。
+    '①': { required: runtime.length > 0, bound: false, skipped: false },
     '②': {
       ...collectGate(g2),
-      // 与上面 GATES 循环同一判据（requires: 'mpweixin' + 低风险面减免），别在这里另算
-      required: Boolean(needs2) && !lowRiskRuntime,
-      why: Boolean(needs2) && !lowRiskRuntime ? needs2Why.slice(0, 5) : [],
+      // 与上面 GATES 循环同一判据（requires: 'mpweixin'），别在这里另算
+      required: Boolean(needs2),
+      why: Boolean(needs2) ? needs2Why.slice(0, 5) : [],
     },
     '④': {
       ...collectGate(g4),
@@ -273,19 +265,14 @@ export async function validatePrEvidence({
 
   if (runtime.length === 0) {
     notes.push(`未命中运行时面（改动 ${files.length} 个文件），按 ADR-0008 免人工门与 ④ 编译门。`);
-    return { ok: true, errors, notes, runtime, needs4b, lowRiskRuntime, gates };
-  }
-
-  if (lowRiskRuntime) {
-    notes.push('低风险运行时面（仅 .uts 逻辑改动，无 .uvue / 三份 json / uni_modules）⇒ 按 ADR-0008 减免 ① 真机与 ② 微信开发者工具；③ 与 ④ 仍必过。');
-    notes.push('低风险面的代价：真机/渲染类问题推迟到发版前的 ① 全量逐页冒烟兜底（发布前置条款）。');
+    return { ok: true, errors, notes, runtime, needs4b, gates };
   }
 
   const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
   const head = clean.match(/^##\s*验收证据\s*$/m);
   if (!head) {
     errors.push('缺 `## 验收证据` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。');
-    return { ok: false, errors, notes, runtime, needs4b, lowRiskRuntime, gates };
+    return { ok: false, errors, notes, runtime, needs4b, gates };
   }
   const rest = clean.slice(head.index + head[0].length);
   const next = rest.search(/^##\s/m);
@@ -356,7 +343,6 @@ export async function validatePrEvidence({
   for (const gate of GATES) {
     if (gate.requires === 'mpweixin' && !needs2) continue;
     if (gate.requires === '4b' && !needs4b) continue;
-    if (lowRiskRuntime && (gate.key === '①' || gate.key === '②')) continue;
     // ④ 的门证据已由 sha 绑定的 PR 评论承载 → 跳过字段校验（正文该行可写「见评论 <链接>」）
     if (gate.key === '④' && gate4Comment) {
       notes.push(`④ 本地编译门：证据来自 PR 评论（${boundPhrase(gate4Comment)}）。`);
@@ -384,17 +370,25 @@ export async function validatePrEvidence({
       const end = i + 1 < marks.length ? marks[i + 1].index : line.length;
       values[m[1]] = line.slice(start, end).replace(/[·|]\s*$/, '').trim();
     });
-    // ① 门的窗口期口径（#1766，2026-10-22；移动端 ADR-0039 / 0040 决策 1）：
-    // 小程序优先窗口期内真机逐页取证**不跑**，① 门「结论」如实写 `SKIP·待批收口`。
-    // 判据只认**带「待批收口」字样**的标记（裸 `SKIP` / 「跳过」语义不明，仍走截图判据判红）；
-    // 跳过的是「取证」不是「签收」：执行人须非占位、日期须为 YYYY-MM-DD（下面两条校验**不**绕过）；
-    // 窗口期无实机可测 ⇒ 仅「复测对象」在跳过时允许写「无」（占位判定对这一个字段豁免）。
-    // ②③④④b 一律不受此分支影响（窗口口径只属于 ① 门）。
-    // **必须**以 `SKIP` 开头：真正的截图结论里若顺手写了「待批收口后再补」，不能被误判成跳过
-    // （否则「已有证据」会被渲染成「跳过」）。判据：`^SKIP` 且含「待批收口」。
+    // ① 门的免行判据——**双白名单过渡**（#1859，2026-10-24；ADR-0043 决策 1/8）：
+    //   · 新口径（0043 常态，主通道）：结论 `免（①a 降级发版前一次，ADR-0043）`——①a 永久降级为
+    //     「发版前一次」（发版冒烟），运行时面 PR 不再逐 PR 真机取证，该行是显式声明的审计痕迹。
+    //     判据**只认字样不认文件**：`免` 开头 + 含「①a 降级发版前一次」+ 含「ADR-0043」——
+    //     判据包（本改动）与文档包（#1858，ADR-0043 本体入库）谁先合入都不悬空。
+    //   · 旧口径（0039/0040 窗口，过渡期暂留）：结论 `^SKIP` 且含「待批收口」——窗口机制已被
+    //     0043 退役，「待批收口」从此指向不存在的未来；退场判据 = 本判据与 #1858 都合入后，
+    //     第一个用新写法完整过门的运行时面 PR 出现 ⇒ 立小票删旧通道（防双轨永久化）。
+    // 两通道共同语义：跳过的是「取证」不是「签收」——执行人须非占位、日期须为 YYYY-MM-DD
+    // （下面两条校验**不**绕过）；降级期无实机可测 ⇒ 仅「复测对象」允许写「无」（占位判定对这一个字段豁免）。
+    // ②③④④b 一律不受此分支影响（免行只属于 ① 门）。
+    // **必须**打头（`免` / `SKIP`）：真截图结论里若顺手写了这些字样，不能被误判成跳过
+    // （否则「已有证据」会被渲染成「跳过」）。
     const conclusion1 = String(values['结论'] || '');
+    const degraded1a = gate.key === '①'
+      && /^\s*免/u.test(conclusion1) && /①a\s*降级发版前一次/.test(conclusion1) && /ADR-0043/.test(conclusion1);
     const windowSkip = gate.key === '①'
       && /^\s*SKIP\b/i.test(conclusion1) && /待批收口/.test(conclusion1);
+    const exempt1a = degraded1a || windowSkip;
     const errorsBefore = errors.length;
     for (const field of gate.fields) {
       const v = values[field];
@@ -402,7 +396,7 @@ export async function validatePrEvidence({
         errors.push(`${where}：缺字段「${field}」。`);
         continue;
       }
-      if (windowSkip && field === '复测对象' && /^(无|暂无)$/.test(v)) continue;
+      if (exempt1a && field === '复测对象' && /^(无|暂无)$/.test(v)) continue;
       if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
     }
     if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
@@ -412,15 +406,17 @@ export async function validatePrEvidence({
     if (gate.fields.includes('执行人') && values['执行人'] === `@${author}`) {
       notes.push(`${where}：执行人与 PR 作者是同一账号（${author}）——本仓单账号，机械上分不出人与 agent；agent 不得代填该字段。`);
     }
-    // 窗口口径跳过：不走截图判据，但**留下可见的 notes**（跳过 ≠ 免签收，也不许静默）。
+    // 免行跳过：不走截图判据，但**留下可见的 notes**（跳过 ≠ 免签收，也不许静默）。
     // 只有该行自身没有报错才算跳过：执行人占位 / 日期不是 YYYY-MM-DD 时这行仍红，
-    // 且不得记成 skipped —— 否则管家会替一条不合格的行渲染「⏭ 跳过（窗口口径）」。
-    if (windowSkip && errors.length === errorsBefore) {
+    // 且不得记成 skipped —— 否则管家会替一条不合格的行渲染「⏭ 跳过」。
+    if (exempt1a && errors.length === errorsBefore) {
       gates['①'].skipped = true;
-      notes.push(`${where}：跳过（窗口口径）——「结论」写的是「${values['结论']}」；按移动端 ADR-0039 / 0040 窗口期不跑真机逐页取证，待批收口后再补证。`);
+      notes.push(degraded1a
+        ? `${where}：跳过（①a 降级常态，ADR-0043）——「结论」写的是「${values['结论']}」；①a 已降级为发版前一次（发版冒烟），本 PR 不做逐页真机取证。`
+        : `${where}：跳过（窗口口径·过渡期旧写法）——「结论」写的是「${values['结论']}」；窗口机制已被 ADR-0043 退役，旧写法暂按双白名单认（退场判据见 #1859）。`);
       continue;
     }
-    if (windowSkip) continue; // 该行已红：不再叠加「须引用可核验截图」这条噪音，红因保持精确
+    if (exempt1a) continue; // 该行已红：不再叠加「须引用可核验截图」这条噪音，红因保持精确
     if (values['结论'] && !artifactOk(gate.artifact, values['结论'])) {
       const hint = {
         screenshot: '须引用**可核验**的截图：GitHub 附件/Markdown 图片、仓库内 `docs/verification/<模块>/<票号>/<页名>.<ext>`（目录键须为数字段），或 sha 绑定门评论链接（`#issuecomment-<id>`）；裸本地产物路径（`.ci-verify/*.png` 等）与任意 http(s) 链接不算证据',
@@ -445,7 +441,6 @@ export async function validatePrEvidence({
       ],
       runtime,
       needs4b,
-      lowRiskRuntime,
       gates,
     };
   }
@@ -453,7 +448,7 @@ export async function validatePrEvidence({
   // 命中了 MP-WEIXIN 面，而不是让人去猜/去试措辞（旧判据下唯一「排查手段」是改文档措辞重推）。
   if (needs2) {
     notes.push(
-      `② 触发面命中（MP-WEIXIN 面）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}（低风险运行时面时仍按分层减免）。`,
+      `② 触发面命中（MP-WEIXIN 面，ADR-0043 起为常态主门、无低风险减免）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}。`,
     );
   } else {
     notes.push('未命中 MP-WEIXIN 面（条件编译段增删 / manifest.json / platformConfig.json 改动）→ 第②门免（ADR-0008）。');
@@ -466,12 +461,12 @@ export async function validatePrEvidence({
   if (gate2Comment && g2.reason && !/commit == head/.test(g2.reason)) {
     notes.push(`② 门证据的绑定口径：${g2.reason}（放宽判据见 ADR-0008）。`);
   }
-  // 有 gate-evidence 评论但没绑上 ⇒ 即使该门因触发条件被跳过（低风险面免 ①② 等），也要明示它不算数
+  // 有 gate-evidence 评论但没绑上 ⇒ 即使该门因触发条件被跳过（如 ② 未命中 MP-WEIXIN 面），也要明示它不算数
   // 有 gate-evidence 评论但没绑上，**且这门的失败确实走到了「缺行」这条分支**时补一条 notes。
-  // 判据：门没绑上**且**报错里没带过该原因 ⇒ 这门的失败被触发条件或评论路径跳过了（例如低风险面免 ①②）
+  // 判据：门没绑上**且**报错里没带过该原因 ⇒ 这门的失败被触发条件或评论路径跳过了
   // ⇒ 必须留痕，别让人以为评论已经被接受（删掉下面这行的判断会让「免的门」静默吞掉一条作废评论）。
   for (const [k, why] of Object.entries(gateReason)) {
     if (why && !errors.some((e) => e.includes(why))) notes.push(`${k} 门证据未绑上：${why}`);
   }
-  return { ok: errors.length === 0, errors, notes, runtime, needs4b, lowRiskRuntime, gates };
+  return { ok: errors.length === 0, errors, notes, runtime, needs4b, gates };
 }

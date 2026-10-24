@@ -246,11 +246,11 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-label.is-active {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-label.is-active .nav-group-icon {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-label.is-accordion {
@@ -259,7 +259,7 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-label.is-accordion:hover {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-arrow {
@@ -288,8 +288,8 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-icon-only.is-active {
-  color: var(--color-primary-600);
-  background: var(--color-primary-50);
+  color: var(--color-primary-soft-ink);
+  background: var(--color-primary-soft);
   border-radius: var(--radius-md);
 }
 
@@ -312,7 +312,7 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-sub-group-label.is-active {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .nav-group-tooltip-title {

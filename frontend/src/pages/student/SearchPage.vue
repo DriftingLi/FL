@@ -75,7 +75,7 @@
                 <span class="text-xs text-ink-3">{{ section.data.total }} 条</span>
                 <span
                   v-if="section.data.total > section.data.items.length"
-                  class="ml-auto cursor-pointer text-[13px] text-ui-600"
+                  class="ml-auto cursor-pointer text-[13px] text-ui-soft-ink"
                   @click="onTypeChange(section.key)"
                 >查看全部</span>
               </div>

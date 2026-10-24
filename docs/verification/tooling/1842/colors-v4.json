@@ -1,0 +1,11 @@
+{
+  "colors": {
+    "body": "rgb(241, 245, 249)",
+    "tableTd": "rgba(0, 0, 0, 0)",
+    "tableTh": "rgba(0, 0, 0, 0)",
+    "codeBg": "rgb(15, 23, 42)",
+    "hljsBg": "rgb(255, 255, 255)",
+    "toolbarSvg": "rgb(148, 163, 184)"
+  },
+  "errors": []
+}

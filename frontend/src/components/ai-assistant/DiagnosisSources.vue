@@ -38,7 +38,7 @@
             :href="pdfProxyUrl(source)"
             target="_blank"
             rel="noopener"
-            class="text-ui-600 no-underline hover:underline"
+            class="text-ui-soft-ink no-underline hover:underline"
           >打开 PDF 来源</a>
           <span v-if="!source.metadata?.source_url && !source.metadata?.page_start">暂无来源资料</span>
         </div>

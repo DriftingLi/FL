@@ -112,13 +112,13 @@ const props = withDefaults(
   gap: 2px;
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-primary-500);
+  color: var(--color-primary-soft-ink);
   text-decoration: none;
   transition: color var(--duration-fast) var(--ease-default);
 }
 
 .card-more:hover {
-  color: var(--color-primary-700);
+  color: var(--color-primary-soft-ink);
 }
 
 .card-more .el-icon {
@@ -179,8 +179,8 @@ const props = withDefaults(
   font-weight: var(--font-medium);
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
   white-space: nowrap;
   flex-shrink: 0;
 }

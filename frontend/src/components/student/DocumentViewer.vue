@@ -198,6 +198,8 @@ watch(resolvedSrc, (newVal) => {
   flex: 1;
 }
 
+/* 工具栏底色是 --color-viewer-bar（**常暗**，不随主题翻），所以这里保持固定品牌色；
+   换成会翻的 soft-ink 会让浅色主题下变成深青压深底（#115E59 on #16213E ≈ 2.4:1）。 */
 .toolbar-icon {
   color: var(--color-primary-500);
   flex-shrink: 0;

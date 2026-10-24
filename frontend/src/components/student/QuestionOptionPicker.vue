@@ -48,7 +48,7 @@ function optionClass(key: string): Record<string, boolean> {
 .q-options { display: flex; flex-direction: column; gap: 8px; }
 .q-option { display: flex; align-items: center; padding: 10px 15px; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; transition: all var(--duration-base) var(--ease-default); }
 .q-option:hover { border-color: var(--color-primary-500); }
-.q-option.selected { border-color: var(--color-primary-500); background: var(--color-primary-50); }
+.q-option.selected { border-color: var(--color-primary-500); background: color-mix(in srgb, var(--color-primary-500) 12%, var(--color-bg-card)); }
 .q-option.opt-correct { border-color: var(--color-success); background: var(--color-success-light); }
 .q-option.opt-wrong { border-color: var(--color-danger); background: var(--color-danger-light); }
 .opt-label { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: var(--color-bg-page); margin-right: 10px; font-weight: bold; flex-shrink: 0; }

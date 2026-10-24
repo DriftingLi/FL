@@ -96,6 +96,13 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 
 改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+### 依赖告警面：Dependabot alerts ≠ 可触达漏洞（2026-10-24 清理，#1873）
+
+- **「有没有漏洞」以 `govulncheck ./...` 为准**（CI 的 `security-scan` 每次跑同一条命令），不以安全页上的告警数。
+- 2026-10-24 清过一批：21 条 open 告警（17 × `x/crypto` / 3 × `x/net` / 1 × `jwt/v5`）的 `dependency.manifest_path` **全是 `backend-go/go.mod`** —— 该路径在 monorepo 合并后已不存在（现为 `backend/go.mod`），是 GitHub 依赖图里留着的**已删除清单快照**（`/dependency-graph/sbom` 对同样三个包各返回新旧两条版本）。实际版本 `x/crypto v0.58.0` > 0.52.0、`x/net v0.60.0` > 0.55.0、`jwt/v5 v5.3.1` > 5.2.2，**告警范围早就越过了**；21 条已按 `inaccurate` 逐条 dismiss（评论里写了同样的话）。
+- **再冒出来先看 `manifest_path`**：`backend-go/go.mod` ⇒ 照上面 dismiss，别去升 `go.mod`（升了也不会关）；若是 `backend/go.mod` ⇒ 那是真问题，按常规升级处理。
+- 依赖图快照没有公开接口能清，只能等 GitHub 侧重算 —— 这不是可修的代码问题。
+
 ## CI 触发模型与 `backend-test` 分片（2026-10-24，#1856 结论 / #1862）
 
 - **`changes` 的 paths-filter 默认基准就是 `default_branch` 的 merge-base**，不是 `github.event.before`。`dorny/paths-filter@v4` 在 push 事件里只有当 `base` 传的是 **commit SHA** 或**与被推分支同名**时才会退到 `before`（`src/main.ts` 的 `isBaseSha || isBaseSameAsHead` 分支），否则一律 `git diff master...HEAD`（三点比较）。⇒ 「把 master 合进功能分支」**本来就不会**把 master 的改动算进差异；**别**给这个 step 传 `base:` —— 传分支名是 no-op（那正是默认值），传 `origin/master` 还会硬失败 `couldn't find remote ref`（它把 `base` 当远端分支名去 `git fetch origin <base>`）。
@@ -111,9 +118,11 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 
 **开 PR 的时机（2026-09-15 裁定）**：一个 PR = **一件做完且已在目标环境验证过的事** —— 先把事做完、验完，**再**开 PR；不得边做边开、不得把 PR 当进度容器，也不得把「未命中运行时面 ⇒ 免四门」当成「不需要验证」（工具链 / 脚本类改动的验收判据是「**它要达成的那个行为在真实链路上成立**」，例如改截图判据就得跑一次真机 🟡 并留下产物）。完成定义（DoD）、例外通道与反例见 `docs/agents/release.md`。
 
-**「低风险运行时面」的豁免是逐文件的**（判据源里 `isLowRiskUtChange` / `LOW_RISK_NON_RUNTIME` 那组判定）：改动集里**每一个**文件都必须落在白名单内（`*.uts` / `*test.js` / `*.md` / `jest.config*.js`）。顺手改一处 `training-app/**/scripts/*.ps1`（**哪怕只是给契约套件补一条 token 注册**）⇒ **拿不到这条逐文件豁免**（`.ps1` 不在白名单）。但**别把「拿不到豁免」与「①② 变必过」写成一句因果**——这是**两个不同源的过滤器**，各判各的：① `.ps1` **不命中运行时面判定**（判据源的 `RUNTIME_JSON` / `needs2` / `runtime` 与低风险白名单 `isLowRiskUtChange` 只认 `*.uvue` / `*.uts` / training-app 下三份 json），所以一个**只含 `.ps1`** 的 PR 走「未命中运行时面 ⇒ `runtime.length === 0`、校验器在 `## 验收证据` 段**之前**早退放行」那条路径，**① 真机与 ② 微信并不会因此变必过**；② 真正会多跑的是 **CI 的 `mobile-test`（＝ ③）**，它的判据是另一个源——`ci.yml` 的 `changes.mobile = 'training-app/**'`，该目录下**任何**文件（含 `.ps1` / `.md`）都命中。⇒ 把工具改动**拆成独立 PR** 仍是正解（非运行时面 ⇒ 免证据段，可立即合并），但代价是「多跑一次 ③」，**不是**「①② 双双变必过」。
+**① 行免行白名单（2026-10-24 起，ADR-0043（移动端）决策 1/8，判据票 #1859）**：运行时面 PR 的 ① 行固定写 `免（①a 降级发版前一次，ADR-0043）`——①a 真机逐页取证降级为**发版前一次**（发版冒烟）。判据**只认字样不认文件**（`免` 开头 + 含「①a 降级发版前一次」+ 含「ADR-0043」，判据包与文档包谁先合入都不悬空）；跳过的是「取证」不是「签收」——执行人非占位、日期 YYYY-MM-DD 仍是硬判据，复测对象可写「无」。旧窗口写法 `SKIP·待批收口` **过渡期双白名单暂认**，退场判据 = #1859 与文档包 #1858 都合入后，**第一个用新写法完整过门的运行时面 PR** 出现 ⇒ 立小票删旧通道。
 
-**② 的「机器必检面」与「窗口执行面」是两件事**（2026-10-20 补）：`pr-evidence` 的 `needs2` 只认 **MP-WEIXIN 面**（正文的 `平台：MP-WEIXIN` 指令行 / `manifest.json` / `platformConfig.json`）——纯 `.uvue` 改动在校验器里判 `②` **不必强制出现**；而窗口纪律（移动端 `docs/adr/0040`）要求**每个运行时面 PR 都执行 ②**，因为它是唯一能看见小程序渲染差异的门。两者各判各的：`needs2` 决定**证据段里 ② 行是否强制**，窗口纪律决定**要不要真跑**。⇒ 纯 `.uvue` 的 PR 仍要跑 ②（窗口内），只是正文可以按模板写 `免`；别把校验器的「免」当成不必执行。
+**「低风险运行时面」豁免已整体退役**（2026-10-24 起，ADR-0043（移动端）决策 8，判据票 #1859）：判据源已删 `isLowRiskUtChange` / `LOW_RISK_NON_RUNTIME` 与输出字段 `lowRiskRuntime`——纯 `.uts` 不再免 ①（改走上面的 ①a 免行），也不再因「低风险」免 ②（② 触发面命中即必跑；纯 `.uts` 增删 MP-WEIXIN 条件编译指令行同样点亮 ②）。当年的历史经验仍有效：它曾是**逐文件白名单**（改动集里每一个文件都得落在 `*.uts` / `*test.js` / `*.md` / `jest.config*.js` 内），且「拿不到豁免」与「①② 变必过」**从来是两个不同源的过滤器**——`.ps1` 等文件不命中运行时面判定（`runtime.length === 0` ⇒ 早退放行），①② 不会因此变必过；真正会多跑的是 **CI 的 `mobile-test`（＝ ③）**（`ci.yml` 的 `changes.mobile = 'training-app/**'`，该目录下任何文件都命中）。⇒ 把工具改动**拆成独立 PR** 仍是正解，代价是「多跑一次 ③」，**不是**「①② 双双变必过」。
+
+**② 的「机器必检面」与「执行纪律面」是两件事**（2026-10-20 补；2026-10-24 随 ADR-0043 改写）：`pr-evidence` 的 `needs2` 只认 **MP-WEIXIN 面**（条件编译指令行 / `manifest.json` / `platformConfig.json`）——纯 `.uvue` 改动在校验器里判 `②` **不必强制出现**；而 0043 决策 3 把「每个运行时面 PR 都执行 ②」从窗口口径升为**常态主门**（它是唯一能看见小程序渲染差异的门）。两者各判各的：`needs2` 决定**证据段里 ② 行是否强制**，常态纪律决定**要不要真跑**。⇒ 纯 `.uvue` 的 PR 仍要跑 ②，只是正文可以按模板写 `免`；别把校验器的「免」当成不必执行。触发判据只认三份 json 与 MP-WEIXIN 条件编译、纯 `.uvue` / `.uts` 无 ② 机检兜底——该脆弱性随 0043 永久化（纪律兜底）。
 
 ## 成本量尺：实付 token（2026-10-17 立，#1705）
 

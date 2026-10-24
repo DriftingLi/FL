@@ -194,6 +194,24 @@ const gate4Comment = (sha) =>
 const dropLines = (prefixes) =>
   FULL_EVIDENCE.split('\n').filter((l) => !prefixes.some((p) => l.startsWith(p))).join('\n');
 
+// ①a 降级常态免行（ADR-0043 决策 1/8；#1859 起为校验器白名单，与窗口旧写法双白名单过渡）。
+// 字段结构与窗口口径行（下方 WINDOW_LINE）一致：跳过取证不跳签收。
+const DEGRADED_1A_LINE = (fields = {}) => {
+  const f = {
+    执行人: '@DriftingLi',
+    日期: '2026-10-24',
+    复测对象: '无',
+    结论: '免（①a 降级发版前一次，ADR-0043）',
+    ...fields,
+  };
+  return `- ① Android 真机逐页截图对比 — 执行人：${f.执行人} · 日期：${f.日期} · 复测对象：${f.复测对象} · 结论（含产物）：${f.结论}`;
+};
+/** 把 ① 行换成给定行，其余四门证据保持完整（本文件多处共用） */
+const bodyWith1Line = (line) => {
+  const old = FULL_EVIDENCE.split('\n').find((l) => l.startsWith('- ① '));
+  return FULL_EVIDENCE.replace(old, line);
+};
+
 test('④b 打包面：pages.json 改动 → 触发 ④b，缺行即红', async () => {
   const r = await run({ files: [uvue('pages.json', { status: 'modified' })], body: FULL_EVIDENCE });
   assert.equal(r.needs4b, true);
@@ -266,20 +284,32 @@ test('P1：正文 ④ 行照写（见评论）也不受评论路径影响', asyn
   assert.match(r.notes.join(), /sha 绑定 a20d2e2/);
 });
 
-test('风险分层：仅 .uts 逻辑 + 测试改动 → 免 ①②，③④齐备即绿', async () => {
+// 2026-10-24 改写（#1859，ADR-0043 决策 3/8）：低风险分层退役 ⇒ 纯 .uts 不再免 ①；
+// ① 行改走 ①a 降级免行（或真取证）。② 的触发面判据不变（MP-WEIXIN 面）——纯 .uts 未命中仍免 ②。
+test('①a 降级常态：纯 .uts 改动不再免 ① —— ①② 行都不写 ⇒ 红（缺 ① 行）', async () => {
   const files = [uvue('utils/foo.uts'), uvue('utils/foo.test.js')];
   const body = dropLines(['- ① ', '- ② ']);
   const r = await run({ files, body });
-  assert.equal(r.lowRiskRuntime, true);
-  assert.equal(r.ok, true, r.errors.join('；'));
-  assert.match(r.notes.join(), /低风险运行时面/);
+  assert.equal(r.ok, false, '低风险分层已退役（ADR-0043 决策 8）：纯 .uts 的 ① 行不能整行不写');
+  assert.match(r.errors.join(), /① Android 真机逐页截图/);
 });
 
-test('风险分层：含 .uvue 的改动不算低风险 → 缺 ① 行仍红', async () => {
+test('①a 降级常态：纯 .uts 改动 + ① 行写免行 ⇒ 绿（未命中 MP-WEIXIN 面 ⇒ ② 仍免）', async () => {
+  const files = [uvue('utils/foo.uts'), uvue('utils/foo.test.js')];
+  const body = `${dropLines(['- ② ']).replace(
+    FULL_EVIDENCE.split('\n').find((l) => l.startsWith('- ① ')),
+    DEGRADED_1A_LINE(),
+  )}`;
+  const r = await run({ files, body });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /①a 降级/);
+  assert.doesNotMatch(r.notes.join(), /低风险运行时面/);
+});
+
+test('①a 降级常态：.uvue 改动缺 ① 行 ⇒ 仍红（分层退役后不再有「低风险免 ①」通道）', async () => {
   const files = [uvue('pages/x/x.uvue'), uvue('utils/foo.uts')];
   const body = dropLines(['- ① ']);
   const r = await run({ files, body });
-  assert.equal(r.lowRiskRuntime, false);
   assert.equal(r.ok, false);
   assert.match(r.errors.join(), /①/);
   assert.doesNotMatch(r.notes.join(), /低风险运行时面/);
@@ -660,9 +690,10 @@ test('h) 放宽不放真伪：compare 结果里只有文件名判据，不看 pa
 });
 
 test('i) 未绑上的门证据在**该门被跳过**时也必须留痕（notes），不得静默丢弃', async () => {
-  // 低风险运行时面（仅 .uts 逻辑）⇒ ①② 免；给一条「其间改了运行时面」的 ② 评论
+  // 纯 .uts（无 MP-WEIXIN 面）⇒ ② 免行；① 走 ①a 降级免行（低风险分层已退役，#1859）。
+  // 给一条「其间改了运行时面」的 ② 评论：② 未被点亮 ⇒ 这条评论的失败被触发条件跳过，必须留痕。
   const files = [uvue('utils/foo.uts')];
-  const body = dropLines(['- ① ', '- ② ']);
+  const body = bodyWith1Line(DEGRADED_1A_LINE()).split('\n').filter((l) => !l.startsWith('- ② ')).join('\n');
   const { fn } = trueAncestor(UVUE_FILES);
   const r = await run({ files, body, gateComments: [gate2Comment(ANC)], headSha: HEAD, fetchCompare: fn });
   assert.equal(r.ok, true, r.errors.join('；'));
@@ -905,7 +936,7 @@ test('gates：④ 门评论绑当前 head ⇒ bound 且回填实际 commit 前 7
   assert.equal(r.gates['④'].reason, '');
 });
 
-test('gates：② required 由 MP-WEIXIN 面点亮（低风险 .uts 面则免），绑定同理', async () => {
+test('gates：② required 由 MP-WEIXIN 面点亮；纯 .uts 命中条件编译同样点亮（低风险分层已退役）', async () => {
   const hit = await run({
     files: mpWeixinFiles(),
     body: FULL_EVIDENCE,
@@ -916,13 +947,24 @@ test('gates：② required 由 MP-WEIXIN 面点亮（低风险 .uts 面则免）
   assert.equal(hit.gates['②'].bound, true);
   assert.equal(hit.gates['②'].commit, SHA.slice(0, 7));
 
-  const lowRisk = await run({
+  // 旧「低风险 .uts 面 ⇒ 免 ②」已退役（ADR-0043 决策 3/8，#1859）：
+  // 纯 .uts 改动只要 diff 增删 MP-WEIXIN 条件编译指令行 ⇒ ② 照样 required（决策 3 的对称代价）。
+  const utsDirective = await run({
+    files: [uvue('composables/useBiometric.uts', { patch: '@@ -1,2 +1,3 @@\n+        // #ifdef APP || MP-WEIXIN\n' })],
+    body: '',
+    headSha: SHA,
+  });
+  assert.equal(utsDirective.gates['②'].required, true, '纯 .uts 命中 MP-WEIXIN 条件编译 ⇒ ② 必跑');
+  assert.equal(utsDirective.gates['④'].required, true);
+
+  // 未命中 MP-WEIXIN 面的纯 .uts ⇒ ② 仍免：触发面判的是交付形态（json / 条件编译），不是风险分层。
+  const plain = await run({
     files: [{ filename: 'training-app/叉车维修培训学员端跨端应用/utils/exam-session.uts', status: 'modified', patch: '' }],
     body: '',
     headSha: SHA,
   });
-  assert.equal(lowRisk.gates['②'].required, false, '低风险运行时面（仅 .uts）应免 ②（ADR-0008）');
-  assert.equal(lowRisk.gates['④'].required, true, '低风险面 ④ 仍必过（ADR-0008）');
+  assert.equal(plain.gates['②'].required, false);
+  assert.equal(plain.gates['④'].required, true);
 });
 
 // ============================================================
@@ -934,6 +976,9 @@ test('gates：② required 由 MP-WEIXIN 面点亮（低风险 .uts 面则免）
 //     故「复测对象：无」在跳过时不算占位；
 //   - ②③④④b 判据一字不动（窗口口径不是万能免死金牌）；
 //   - 结构化 gates['①'] 必须让「跳过（窗口口径）」与「已取证 / 还缺」可区分（跳过必须可见）。
+//   2026-10-24（#1859，ADR-0043）：窗口机制已被 0043 退役，本组用例转为**过渡期双白名单**的
+//   旧通道回归——新口径见下方「①a 降级常态」组；首个用新写法完整过门的运行时面 PR 出现后
+//   立小票删旧通道（#1859 退出判据）。
 // ============================================================
 const WINDOW_LINE = (fields = {}) => {
   const f = {
@@ -945,16 +990,14 @@ const WINDOW_LINE = (fields = {}) => {
   };
   return `- ① Android 真机逐页截图对比 — 执行人：${f.执行人} · 日期：${f.日期} · 复测对象：${f.复测对象} · 结论（含产物）：${f.结论}`;
 };
-/** 把 ① 行换成给定行，其余四门证据保持完整 */
-const bodyWith1 = (line) => {
-  const old = FULL_EVIDENCE.split('\n').find((l) => l.startsWith('- ① '));
-  return FULL_EVIDENCE.replace(old, line);
-};
+/** 把 ① 行换成给定行，其余四门证据保持完整 —— 实现已上移至文件顶部（bodyWith1Line，#1859 起多处共用） */
+const bodyWith1 = bodyWith1Line;
 
-test('① 窗口期：结论写 SKIP·待批收口（复测对象：无）⇒ 绿，且 notes 明示「跳过（窗口口径）」', async () => {
+test('① 窗口期：结论写 SKIP·待批收口（复测对象：无）⇒ 绿，notes 明示过渡期旧写法跳过', async () => {
   const r = await run({ body: bodyWith1(WINDOW_LINE()) });
   assert.equal(r.ok, true, r.errors.join('；'));
-  assert.match(r.notes.join(), /跳过（窗口口径）/);
+  assert.match(r.notes.join(), /跳过（窗口口径·过渡期旧写法）/);
+  assert.match(r.notes.join(), /ADR-0043 退役/, '旧通道的 notes 必须点明窗口已被 0043 退役（不得读成窗口仍有效）');
 
   // 成对对照：「复测对象：无」的豁免只属于窗口口径 —— 同样写「无」但结论换成真截图 ⇒ 仍按占位判红。
   const red = await run({
@@ -1050,24 +1093,96 @@ test('gates：① 区分「窗口口径跳过」/「已取证」/「还缺」三
   assert.equal(missing.ok, false);
 });
 
-test('gates：低风险 .uts 面 ① 免 ⇒ required=false，且不是「跳过」', async () => {
+test('gates：纯 .uts 面 ① 仍 required（低风险分层退役，#1859）——免行写得对才 skipped', async () => {
   const r = await run({
     files: [{ filename: 'training-app/叉车维修培训学员端跨端应用/utils/exam-session.uts', status: 'modified', patch: '' }],
-    body: '',
+    body: bodyWith1Line(DEGRADED_1A_LINE()),
   });
-  assert.equal(r.gates['①'].required, false);
-  assert.equal(r.gates['①'].skipped, false);
+  assert.equal(r.gates['①'].required, true, '退役后 ① 的 required 只看运行时面命中，不再看风险分层');
+  assert.equal(r.gates['①'].skipped, true);
+  assert.equal(r.gates['①'].bound, false);
+  assert.equal(r.ok, true, r.errors.join('；'));
 });
 
-test('静态自检：管家渲染 ① 行时必须区分「跳过（窗口口径）」与 ✅/❌（跳过不许长得像已取证）', () => {
+// ============================================================
+// ①a 降级常态免行（ADR-0043 决策 1/8，#1859 新白名单；与上组窗口旧写法构成双白名单过渡）
+//   · 判据只认字样不认文件：结论以 `免` 开头 + 含「①a 降级发版前一次」+ 含「ADR-0043」——
+//     文档包（#1858）与本判据谁先合入都不悬空；
+//   · 与窗口口径同构：跳过的是「取证」不是「签收」（执行人 / 日期硬判据照走、复测对象可写「无」）；
+//   · ②③④④b 一律不受影响；裸 `免` / 缺字样 ⇒ 仍走截图判据判红。
+// ============================================================
+test('①a 降级常态：结论写免行（复测对象：无）⇒ 绿，notes 明示「①a 降级」且 gates 记 skipped', async () => {
+  const r = await run({ body: bodyWith1Line(DEGRADED_1A_LINE()) });
+  assert.equal(r.ok, true, r.errors.join('；'));
+  assert.match(r.notes.join(), /①a 降级/);
+  assert.equal(r.gates['①'].skipped, true);
+  assert.equal(r.gates['①'].bound, false, '免行不是取证 ⇒ bound 必须为 false');
+
+  // 成对对照：「复测对象：无」的豁免只属于免行/跳过口径 —— 同样写「无」但结论换成真截图 ⇒ 仍按占位判红。
+  const red = await run({
+    body: bodyWith1Line(DEGRADED_1A_LINE({ 结论: '逐页截图 docs/verification/exam/624/exam-home-after.jpg' })),
+  });
+  assert.equal(red.ok, false, '非免行口径的「复测对象：无」必须仍按占位判红（豁免不许外溢）');
+  assert.match(red.errors.join(), /复测对象/);
+});
+
+test('①a 降级常态：只认完整字样 —— 裸「免」/ 缺「降级发版前一次」/ 缺「ADR-0043」⇒ 仍红', async () => {
+  for (const conclusion of [
+    '免',
+    '免（①a 降级）',
+    '免（①a 降级发版前一次）',
+    '免（低风险运行时面：仅 .uts 逻辑改动）',
+    '①a 降级发版前一次，ADR-0043（不以「免」开头）',
+  ]) {
+    const r = await run({ body: bodyWith1Line(DEGRADED_1A_LINE({ 结论: conclusion })) });
+    assert.equal(r.ok, false, `「${conclusion}」不该被认作 ①a 降级免行`);
+    assert.match(r.errors.join(), /截图/, `「${conclusion}」应仍按截图判据报错`);
+    assert.equal(r.gates['①'].skipped, false, `「${conclusion}」不得记成跳过`);
+  }
+});
+
+test('①a 降级常态：免行不等于免签收 —— 执行人 / 日期 / 复测对象仍是硬判据', async () => {
+  const exec = await run({ body: bodyWith1Line(DEGRADED_1A_LINE({ 执行人: '待人工' })) });
+  assert.equal(exec.ok, false);
+  assert.match(exec.errors.join(), /执行人/);
+  assert.equal(exec.gates['①'].skipped, false, '执行人占位时不许记成跳过');
+
+  const date = await run({ body: bodyWith1Line(DEGRADED_1A_LINE({ 日期: '发版前' })) });
+  assert.equal(date.ok, false);
+  assert.match(date.errors.join(), /日期/);
+  assert.equal(date.gates['①'].skipped, false, '日期不合格时不许记成跳过');
+
+  const target = await run({ body: bodyWith1Line(DEGRADED_1A_LINE({ 复测对象: '待人工' })) });
+  assert.equal(target.ok, false);
+  assert.match(target.errors.join(), /复测对象/);
+});
+
+test('①a 降级常态：免行只对 ① 生效 —— ② 结论写同样字句仍按截图判据判红', async () => {
+  const r = await run({
+    files: mpWeixinFiles(),
+    body: FULL_EVIDENCE.replace(/结论（含产物）：入口页无报错 [^\n]*/, '结论（含产物）：免（①a 降级发版前一次，ADR-0043）'),
+  });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /②/);
+  assert.match(r.errors.join(), /截图/);
+});
+
+test('①a 降级常态：也不能替别的门兜底 —— ③ 行缺失时照样红', async () => {
+  const r = await run({ body: bodyWith1Line(DEGRADED_1A_LINE()).replace(/^- ③ .*\n/m, '') });
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /③/);
+  assert.doesNotMatch(r.errors.join(), /①/);
+});
+
+test('静态自检：管家渲染 ① 行时必须区分「跳过（免行口径）」与 ✅/❌（跳过不许长得像已取证）', () => {
   const gatesPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'workflows', 'mobile-gates.yml');
   const src = readFileSync(gatesPath, 'utf8');
   assert.match(src, /result\.gates\['①'\]/, '管家没读 gates[①] ⇒ ① 行的跳过状态无从渲染');
   assert.match(src, /g1\.skipped\s*\?/, '管家没按 skipped 分支渲染 ⇒ 跳过会与「已取证」混为一谈');
-  assert.match(src, /跳过（窗口口径）/, '管家渲染文案里缺少「跳过（窗口口径）」标记');
-  assert.match(src, /① Android 真机逐页截图/, '管家表格里没有 ① 行 ⇒ 窗口口径跳过在 PR 上不可见');
+  assert.match(src, /跳过（①a 降级常态 \/ 窗口过渡）/, '管家渲染文案里缺少「跳过（①a 降级常态 / 窗口过渡）」标记（双白名过渡，#1859）');
+  assert.match(src, /① Android 真机逐页截图/, '管家表格里没有 ① 行 ⇒ 免行跳过在 PR 上不可见');
   // 兜底不许把「算不出来」写成「免」：head 校验器读不到时会退回 base 旧版（不产 gates[①]），
-  // 此时 required 必须由 runtime / lowRiskRuntime 现算，否则 .uvue PR 会被渲染成「免门」。
+  // 此时 required 必须由 runtime 现算，否则 .uvue PR 会被渲染成「免门」。
   assert.match(src, /required:\s*\(result\.runtime/, '管家兜底把 ① 默认成免门 ⇒ 旧校验器下 .uvue PR 会被错误显示为免');
 });
 

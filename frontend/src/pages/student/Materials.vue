@@ -155,7 +155,7 @@ const {
 const staggerStyle = useStagger()
 
 const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  document: { label: '文档', icon: Document, color: 'var(--color-primary-500)', bg: 'var(--color-primary-50)' },
+  document: { label: '文档', icon: Document, color: 'var(--color-primary-soft-ink)', bg: 'var(--color-primary-soft)' },
   video: { label: '视频', icon: VideoCamera, color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
   ppt: { label: 'PPT', icon: Document, color: 'var(--color-warning)', bg: 'var(--color-warning-light)' },
   image: { label: '图片', icon: Picture, color: 'var(--color-success)', bg: 'var(--color-success-light)' }

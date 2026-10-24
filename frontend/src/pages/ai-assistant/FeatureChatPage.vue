@@ -6,7 +6,6 @@
     back-link-text="返回 AI 助手"
     :welcome-icon="feature?.icon || ChatDotRound"
     :welcome-title="feature?.title || ''"
-    :welcome-desc="feature?.welcome || ''"
     :suggestions="feature?.suggestions || []"
     :input-placeholder="inputPlaceholder"
     :can-send="draftReady"
@@ -155,7 +154,7 @@
         multiple
         @change="handleImageSelect"
       >
-        <UiButton :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片"/>
+        <UiButton :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片" aria-label="上传图片"/>
       </UiUpload>
     </template>
   </ChatPageShell>
@@ -194,13 +193,12 @@ const maxImages = computed(() => feature.value?.maxImages ?? 4)
 const isDiagnosis = computed(() => isDiagnosisFeature(feature.value?.key))
 
 const inputText = ref('')
+// 只给任务片段：统一的「（Enter 发送，Shift+Enter 换行）」由壳拼上（文案单点在 ChatPageShell）
 const inputPlaceholder = computed(() => {
-  if (isDiagnosis.value) {
-    return '描述故障现象或上传现场照片...（Enter 发送，Shift+Enter 换行）'
-  }
+  if (isDiagnosis.value) return '描述故障现象或上传现场照片...'
   return supportsImage.value
-    ? '输入问题或上传图纸/习题图片...（Enter 发送，Shift+Enter 换行）'
-    : '输入您的问题...（Enter 发送，Shift+Enter 换行）'
+    ? '输入问题或上传图纸/习题图片...'
+    : '输入您的问题...'
 })
 
 // ===== 智能维修诊断：筛选折叠（T2 默认折叠，不再撑爆空态居中）=====
@@ -447,13 +445,13 @@ onMounted(() => {
 
 .quick-option-chip:hover {
   border-color: var(--color-primary-400);
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
 }
 
 .quick-option-chip.active {
   border-color: var(--color-primary-600);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-soft-ink);
   font-weight: 600;
 }
 
@@ -552,7 +550,7 @@ onMounted(() => {
 }
 
 .catalog-fault-item b {
-  color: var(--color-primary-600);
+  color: var(--color-primary-soft-ink);
   font-size: 13px;
   min-width: 34px;
 }

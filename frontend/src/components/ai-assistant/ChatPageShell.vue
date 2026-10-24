@@ -17,6 +17,7 @@
         <button
           class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
           :title="isMobile ? '打开会话栏' : '展开侧栏'"
+          :aria-label="isMobile ? '打开会话栏' : '展开侧栏'"
           @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
         >
           <el-icon :size="16"><component :is="isMobile ? Operation : Expand" /></el-icon>
@@ -26,6 +27,7 @@
           class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="store.streaming"
           :title="newSessionTitle"
+          :aria-label="newSessionTitle"
           @click="emit('new-session')"
         >
           <el-icon :size="16"><Plus /></el-icon>
@@ -55,6 +57,7 @@
           <button
             class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink"
             title="收起侧栏"
+            aria-label="收起侧栏"
             @click="collapsed = true"
           >
             <el-icon :size="16"><Fold /></el-icon>
@@ -64,6 +67,7 @@
           v-else
           class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3"
           title="关闭"
+          aria-label="关闭会话栏"
           @click="mobileDrawerOpen = false"
         >
           <el-icon :size="16"><Close /></el-icon>
@@ -72,7 +76,7 @@
 
       <!-- 功能页：返回链接 -->
       <div v-if="backLinkTo" class="px-3 pb-1">
-        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ui-600">
+        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:underline">
           <el-icon :size="14"><ArrowLeft /></el-icon>{{ backLinkText }}
         </router-link>
       </div>
@@ -93,7 +97,7 @@
       <div class="sidebar-title px-4 pb-1 pt-4 text-xs font-medium text-ink-3">会话历史</div>
       <div v-loading="store.sessionsLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
         <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions px-3 py-8 text-center text-[13px] text-ink-3">
-          {{ store.isLoggedIn ? '暂无会话，点击"开启新对话"开始' : '登录后可查看会话历史' }}
+          {{ store.isLoggedIn ? '暂无会话，点击"开启新对话"开始' : GUEST_LOGIN_HINT }}
         </div>
         <template v-for="g in groupedSessions" :key="g.label">
           <div class="px-3 pb-1 pt-3 text-[11px] text-ink-3">{{ g.label }}</div>
@@ -123,10 +127,10 @@
               </template>
             </div>
             <div v-if="editingSessionId !== s.id" class="session-actions flex gap-0.5">
-              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-50 hover:text-ui-600" title="重命名" @click.stop="startRename(s)">
+              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-soft hover:text-ui-soft-ink" title="重命名" aria-label="重命名会话" @click.stop="startRename(s)">
                 <el-icon :size="14"><Edit /></el-icon>
               </button>
-              <button class="session-delete shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" @click.stop="handleDeleteSession(s.id)">
+              <button class="session-delete shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" aria-label="删除会话" @click.stop="handleDeleteSession(s.id)">
                 <el-icon :size="14"><Delete /></el-icon>
               </button>
             </div>
@@ -147,13 +151,13 @@
             />
             <div
               v-else
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-100 text-[13px] font-semibold text-ui-700"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-soft-strong text-[13px] font-semibold text-ui-soft-ink"
             >
               {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
-            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-600">{{ displayName }}</router-link>
+            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline">{{ displayName }}</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
-              <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多">
+              <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多" aria-label="更多">
                 <el-icon :size="14"><More /></el-icon>
               </button>
               <template #dropdown>
@@ -167,7 +171,6 @@
         </template>
         <template v-else>
           <UiButton variant="primary" class="w-full" @click="goLogin">登录 HRWAI 账号</UiButton>
-          <div class="mt-2 text-center text-xs text-ink-3">登录后可保存对话历史</div>
         </template>
       </div>
     </aside>
@@ -183,7 +186,7 @@
       <div
         ref="messageListRef"
         class="message-list mx-auto w-full p-6 max-[768px]:p-4"
-        :class="isWelcome ? 'row-start-1 max-w-[760px] self-end justify-self-center overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto'"
+        :class="isWelcome ? 'row-start-1 max-w-[760px] self-end justify-self-center overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto [scrollbar-gutter:stable]'"
       >
         <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题）。
              定位：grid 第一行 + self-end 贴住输入框上沿，不把输入框往下推 -->
@@ -213,7 +216,7 @@
                   <div
                     v-for="s in page"
                     :key="s"
-                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
                     :title="s"
                     @click="emit('suggest', s)"
                   >
@@ -227,9 +230,12 @@
 
           <slot name="welcome-bottom" />
 
-          <div v-if="!store.isLoggedIn" class="guest-hint mt-8 text-[13px] text-ink-3">
-            您当前以游客身份使用，<a href="javascript:void(0)" class="font-semibold text-ui-600 no-underline hover:underline" @click="goLogin">登录</a> 后可保存对话历史
-          </div>
+          <button
+            v-if="!store.isLoggedIn"
+            type="button"
+            class="guest-hint mt-8 inline-block cursor-pointer border-0 bg-transparent p-0 text-[13px] text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-soft-ink"
+            @click="goLogin"
+          >{{ GUEST_LOGIN_HINT }}</button>
         </div>
 
         <!-- 消息加载中（选中会话拉取正文；侧栏不锁，失败由选中逻辑弹提示） -->
@@ -242,7 +248,7 @@
 
         <!-- 消息列表（安全渲染单点：助手内容统一 markstream escape） -->
         <div v-for="msg in store.messages" :key="msg.id" class="message-item mb-6 flex gap-3" :class="[msg.role, msg.role === 'user' ? 'flex-row-reverse' : '']">
-          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl" :class="msg.role === 'user' ? 'bg-ui-600 text-white' : 'bg-ui-100 text-ui-600'">
+          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl" :class="msg.role === 'user' ? 'bg-ui-600 text-white' : 'bg-ui-soft-strong text-ui-soft-ink'">
             <el-icon v-if="msg.role === 'user'" :size="18"><User /></el-icon>
             <el-icon v-else :size="18"><ChatDotRound /></el-icon>
           </div>
@@ -278,7 +284,7 @@
 
         <!-- 流式输出中 -->
         <div v-if="store.streaming" class="message-item assistant mb-6 flex gap-3">
-          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-ui-100 text-ui-600">
+          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-ui-soft-strong text-ui-soft-ink">
             <el-icon :size="18"><ChatDotRound /></el-icon>
           </div>
           <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">
@@ -304,6 +310,20 @@
         <div v-if="store.lastUsage" class="usage-footnote pb-1 pr-1 text-right text-[11px] text-ink-3">
           本轮消耗 {{ store.lastUsage.points_cost }} 分 · {{ (store.lastUsage.total_tokens / 1000).toFixed(1) }}k tokens · 余额 {{ store.lastUsage.balance }}
         </div>
+
+        <!-- 回到最新：粘在滚动视口底部的零高容器（不占布局、不推内容），只在用户回翻时出现 -->
+        <div v-if="!isWelcome" class="sticky bottom-0 z-10 h-0">
+          <div class="absolute inset-x-0 bottom-3 flex justify-center">
+            <button
+              v-if="!atBottom"
+              type="button"
+              class="scroll-to-bottom cursor-pointer rounded-pill border border-line bg-panel px-3 py-1.5 text-xs text-ink-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ink"
+              @click="resumeFollow"
+            >
+              {{ store.streaming ? '有新回复 ↓' : '回到底部 ↓' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 输入区（空态：grid 第二行精确居中；有消息：沉底 dock） -->
@@ -322,14 +342,14 @@
           <span class="turn-error-text min-w-0 flex-1 truncate">{{ turnErrorText }}</span>
           <UiButton variant="primary" @click="handleRetry">重试</UiButton>
         </div>
-        <div class="input-wrap flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']">
+        <div class="input-wrap flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd">
           <slot v-if="!raisedInput" name="input-prefix" />
           <el-input
             :model-value="inputText"
             type="textarea"
             :rows="raisedInput ? 4 : 2"
             :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }"
-            :placeholder="inputPlaceholder"
+            :placeholder="composerPlaceholder"
             resize="none"
             @keydown.enter="handleEnter"
             @update:model-value="emit('update:inputText', $event as string)"
@@ -423,14 +443,13 @@ const props = withDefaults(
     /** 欢迎区图标/一句话标题（标题即功能介绍，无副标题） */
     welcomeIcon: Component
     welcomeTitle: string
-    /** @deprecated 副标题已下线（欢迎区横排无副标题位），保留仅防旧调用传参炸裂 */
-    welcomeDesc?: string
     /** 预设提示词（点击后 emit('suggest', text)） */
     suggestions?: string[]
     /** 会话重命名（主页专用能力） */
     enableRename?: boolean
     /** 输入区拉高布局（主页：模式选择器 footer） */
     raisedInput?: boolean
+    /** 输入框占位文案的任务片段 —— 统一发送提示（Enter / Shift+Enter）由壳在其后拼上 */
     inputPlaceholder?: string
     /** 页面侧草稿就绪（文本非空 / 图片队列就绪）；壳再与 store.canSend 合成唯一发送判据（#1104） */
     canSend?: boolean
@@ -440,7 +459,7 @@ const props = withDefaults(
     suggestions: () => [],
     enableRename: false,
     raisedInput: false,
-    inputPlaceholder: '输入您的问题...（Enter 发送，Shift+Enter 换行）',
+    inputPlaceholder: '输入您的问题...',
     canSend: false
   }
 )
@@ -461,8 +480,16 @@ const homeUrl = buildSubdomainUrl('main', '/')
 // 运行时绑定（避免测试环境对静态资源 URL 的编译期解析）
 const logoSrc = '/images/HRWAIlogo.jpg'
 const displayName = computed(() => authStore.userInfo?.username || 'HRWAI 用户')
-// 空状态判定（欢迎区渲染条件 + 消息列表垂直居中开关）
-const isWelcome = computed(() => store.messages.length === 0 && !store.streaming)
+/** 游客提示唯一文案：侧栏空列表与欢迎区共用（侧栏底不再重复一遍同样的句子） */
+const GUEST_LOGIN_HINT = '登录后可保存对话历史'
+/** 发送提示后缀（唯一一份）：页面只传任务片段，避免同一句话在四处手抄后各走各的 */
+const SEND_HINT = '（Enter 发送，Shift+Enter 换行）'
+const composerPlaceholder = computed(() => `${props.inputPlaceholder}${SEND_HINT}`)
+// 空状态判定（欢迎区渲染条件 + 消息列表垂直居中开关）：**加载中也算非空态** ——
+// 否则点会话那一瞬欢迎区与「会话加载中…」同屏，建议词还能点进一个尚未装载完的会话。
+const isWelcome = computed(
+  () => store.messages.length === 0 && !store.streaming && !store.messagesLoading
+)
 
 // 发送判据单点（#1104）：页面草稿就绪（prop）× store 闸门（无在飞轮次）——
 // Enter 与发送按钮读同一个值，页面不再有「Enter 直通」的旁路。
@@ -472,6 +499,8 @@ const canSend = computed(() => Boolean(props.canSend && store.canSend))
 const newSessionTitle = computed(() => (store.streaming ? '生成中，请先停止再开启新对话' : '开启新对话'))
 
 const messageListRef = ref<HTMLElement>()
+// 是否贴底（跟随开关）：滚动时更新，既决定是否自动跟随，也决定「回到最新」入口出不出
+const atBottom = ref(true)
 
 // ===== 助手气泡图片点击放大（正文 markdown 图 + 来源面板缩略图共用一个预览器）=====
 // markstream 的图片节点只给 cursor-pointer、不管预览，来源面板此前也只是普通 <img>
@@ -517,10 +546,13 @@ onMounted(() => {
   mql = window.matchMedia('(max-width: 768px)')
   syncViewport(mql)
   mql.addEventListener('change', syncViewport)
+  // 滚动才更新跟随开关（passive：只读几何，不阻塞合成器）
+  messageListRef.value?.addEventListener('scroll', syncFollowState, { passive: true })
 })
 
 onBeforeUnmount(() => {
   mql?.removeEventListener('change', syncViewport)
+  messageListRef.value?.removeEventListener('scroll', syncFollowState)
 })
 
 watch(collapsed, v => {
@@ -686,12 +718,40 @@ watch(() => props.suggestions, () => {
   suggestionPage.value = 0
 })
 
-// ===== 输入与发送 =====
+// ===== 输入与发送：CJK 选词守卫 + 单一发送判据 =====
+// 两件不同的事，别混成一句「一段时间内都拦」：
+//   ① 组字中（Chrome keyCode 229 / isComposing）的 Enter 属于输入法，是选词确认，连 preventDefault 都不该抢；
+//   ② 部分输入法在 compositionend 之后还会补一个 keyCode 13 的伴生 Enter —— 不拦就会把半截拼音发出去。
+// ② 的窗口取 100ms 而不是常见的 500ms：伴生键与 compositionend 同一个任务里到达，
+// 500ms 会把「鼠标点完候选词、0.3 秒后按下的真发送键」一起吃掉。拦截后立刻复位，不误吞下一次真击键。
+const IME_ENTER_GRACE_MS = 100
+const composing = ref(false)
+// 哨兵不能是 0：否则页面加载后 100ms 内的第一次 Enter 会被算成「刚选完词」而误吞
+let lastCompositionEndAt: number | null = null
+
+function onCompositionStart() {
+  composing.value = true
+}
+
+function onCompositionEnd() {
+  composing.value = false
+  lastCompositionEndAt = performance.now()
+}
+
 function handleEnter(e: KeyboardEvent) {
   if (e.shiftKey) return
-  e.preventDefault()
-  // #1104：Enter 与发送按钮读同一判据（此前 Enter 直通、不看 canSend），不可发送时不发出 send
+  // ① 组字中：这一下 Enter 归输入法（选词确认），放行原生默认行为
+  if (composing.value || e.isComposing || e.keyCode === 229) return
+  // ② 选词确认后伴生到达的 Enter：吃掉它并立刻复位
+  if (lastCompositionEndAt !== null && performance.now() - lastCompositionEndAt < IME_ENTER_GRACE_MS) {
+    lastCompositionEndAt = null
+    e.preventDefault()
+    return
+  }
+  // #1104：Enter 与发送按钮读同一判据。闸门关着就保留原生换行
+  //（此前无条件 preventDefault，连换行也一并吃掉）
   if (!canSend.value) return
+  e.preventDefault()
   emit('send')
 }
 
@@ -711,16 +771,54 @@ async function handleRetry() {
   }
 }
 
-// ===== 自动滚底（拖底） =====
-async function scrollToBottom() {
-  await nextTick()
-  if (messageListRef.value) {
-    messageListRef.value.scrollTop = messageListRef.value.scrollHeight
-  }
+// ===== 视口跟随（拖底）=====
+// 无条件滚底是桌面端的经典刺点：用户趁流式吐字向上翻历史，每来一个 chunk 就被拽回底部。
+// 判据只此一处（距底 ≤ 40px），跟随与「回到最新」入口共用同一份判定。
+const BOTTOM_FOLLOW_THRESHOLD_PX = 40
+
+function distanceFromBottom(el: HTMLElement): number {
+  return el.scrollHeight - el.scrollTop - el.clientHeight
 }
 
-watch(() => store.messages.length, () => scrollToBottom())
-watch(() => store.streamingContent, () => scrollToBottom(), { flush: 'post' })
+function syncFollowState() {
+  const el = messageListRef.value
+  if (!el) return
+  atBottom.value = distanceFromBottom(el) <= BOTTOM_FOLLOW_THRESHOLD_PX
+}
+
+/**
+ * 滚到底。smooth 只给用户主动点击用（并尊重 prefers-reduced-motion）；
+ * 内容增长触发的跟随一律瞬时，避免动画追不上流式吐字。
+ */
+function scrollToBottom(smooth = false) {
+  const el = messageListRef.value
+  if (!el) return
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  if (smooth && !reduced && typeof el.scrollTo === 'function') {
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  } else {
+    el.scrollTop = el.scrollHeight
+  }
+  atBottom.value = true
+}
+
+/** 「回到最新」入口：复位跟随再滚，避免下一帧又被贴底判定弹回 */
+function resumeFollow() {
+  scrollToBottom(true)
+}
+
+watch(() => store.messages.length, (next, prev) => {
+  if (next <= prev) return
+  // 用户刚发出的那条一定贴底；assistant 落库不抢正在回翻的视口
+  if (store.messages[next - 1]?.role === 'user' || atBottom.value) scrollToBottom()
+}, { flush: 'post' })
+watch(() => store.streamingContent, () => {
+  if (atBottom.value) scrollToBottom()
+}, { flush: 'post' })
+// 会话切换：等消息装载完再落底（加载期间列表里还是上一会话的内容，抢滚会滚错位置）
+watch(() => store.messagesLoading, (_loading, wasLoading) => {
+  if (wasLoading && !_loading) scrollToBottom()
+}, { flush: 'post' })
 </script>
 
 <style scoped>
