@@ -95,3 +95,48 @@ describe('#1602 骨架层基建契约', () => {
         expect(m['app-plus'].safearea).toBeDefined();
     });
 });
+
+// #1848 死件防复活：components/common/ 两死件（platform-nav-bar.uvue 写死 padding-right: 80rpx 避胶囊、
+// page-container.uvue padding-right: 10rpx）已按 ADR-0035:69「直接删除，非新决策」清理。本段两向守护：
+// 引用回潮（E）与 80rpx 魔数避让（F，射程扩自上面 D 段的 app-nav-bar 单点）。依据 spec 20261023 §2.4/§4.4、ui-spec §10。
+describe('#1848 死件防复活契约', () => {
+    // 引用面 = .uvue/.uts/.json 与源码 .js；排除 *.test.js（本文件自身含被扫串）、node_modules/unpackage（walk 已排）
+    function sourceFiles(exts) {
+        const out = [];
+        for (const ext of exts) walk(ROOT, ext, out);
+        return out.filter((f) => !f.endsWith('.test.js'));
+    }
+
+    it('E: 全仓源文件不得引用两死件（标签/路径/import/easycom 形态）', () => {
+        // 匹配口径：
+        // - <platform-nav-bar 标签形态——组件名全仓唯一，标签即复活信号；
+        // - components/common/platform-nav-bar / components/common/page-container 路径串——
+        //   相对 import（../../components/common/…）、别名 import（@/components/common/…）、
+        //   easycom 自定义规则的串都含该子串；
+        // - 不匹配裸 <page-container 标签：page-container 是常见词且是微信原生组件名，
+        //   裸标签会误伤无关用法；而 uni-app x 无 import/easycom 接线的裸标签本就不编译，
+        //   接线必含路径串，路径锚定即覆盖真漏点（票 #1848 口径）。
+        const patterns = [
+            /<platform-nav-bar/,
+            /components\/common\/platform-nav-bar/,
+            /components\/common\/page-container/,
+        ];
+        const hits = [];
+        for (const f of sourceFiles(['.uvue', '.uts', '.json', '.js'])) {
+            const src = readText(f);
+            for (const re of patterns) {
+                if (re.test(src)) hits.push(`${f.replace(/\\/g, '/')} 命中 ${re}`);
+            }
+        }
+        expect(hits).toEqual([]);
+    });
+
+    it('F: 全仓 .uvue 不得出现 padding-right: 80rpx 魔数避让（D 段射程扩全仓）', () => {
+        // 匹配口径：精确匹配 padding-right: 80rpx（容空白），非任意 80rpx——全仓 .uvue 现有约 70 处
+        // height/width/font-size 等正当 80rpx 用法（2026-10-24 实测 0 处 padding-right 形态），
+        // 宽口径必误伤；魔数避让的历史形态正是死件 platform-nav-bar 的 padding-right 写法。
+        const re = /padding-right\s*:\s*80rpx/;
+        const hits = walk(ROOT, '.uvue').filter((f) => re.test(readText(f)));
+        expect(hits.map((f) => f.replace(/\\/g, '/'))).toEqual([]);
+    });
+});
