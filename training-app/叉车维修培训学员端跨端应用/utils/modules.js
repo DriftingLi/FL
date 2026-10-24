@@ -81,13 +81,6 @@ const INFRA = {
     // 口径落跨切面基础设施（同款先例：`components/app-*` 整族）。登记为 INFRA 而非某模块私有，
     // 是为了让另一页 import 它时**不构成跨模块私有件消费**（那会触发连锁消费者锁）。
     'components/login-agreement',
-    // 'components/login-provider-entry' —— #1484：登录提供方入口件（微信档现已挂载，Apple 槽位靠
-    // `provider` prop 复用同一件）。同 login-agreement 的口径落跨切面基础设施而非某模块私有：
-    // 它是**入口的展示形态**而非登录页的表单态，着陆页 `pages/index` 将来接同一形态时不应触发
-    // 跨模块私有件消费锁（`MODULES.login.crossModuleConsumers` 现为 []，执法点
-    // landingLoginContract.test.js 的 crossModuleConsumers 断言）。不登记则 `modulesDeclarationContract` E2「零隐形文件」判红
-    // （判据本体 contractHarness.js:354）。
-    'components/login-provider-entry',
     'config',
     'constants',
     'stores',
@@ -114,8 +107,8 @@ const INFRA = {
    *   手写载体数（见 `utils/pagedListAdoptionContract.test.js` 的 `HAND_ROLLED_BASELINE`），不是消费方；
    *   现消费方是 `composables/useTopicFeed.uts` 一处，其余列表页仍手写装载协议，逐票迁）
    * - `composables/useLoginProviders.uts` —— #1478 的登录提供方能力探测件：返回「微信登录可用吗」这一
-   *   **能力判断**，被 index（着陆页主 CTA 分叉）与 login（微信登录入口显隐，后续 #1484 的 disabled）
-   *   共同消费 ⇒ 落根 `composables/` 中立位置，两页 import **同一符号**（票面判据「不是两份实现」）。
+   *   **能力判断**，现被 index（着陆页主 CTA 分叉）消费（login 页的消费面已随 #1879 登录页微信模式
+   *   退役而退出）⇒ 落根 `composables/` 中立位置，着陆页 import **同一符号**（票面判据「不是两份实现」）。
    */
   files: [
     'App.uvue',

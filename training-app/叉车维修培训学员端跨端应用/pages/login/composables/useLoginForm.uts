@@ -22,8 +22,6 @@ import { saveSecureCredentials, saveAccountOnly, clearSecureCredentials } from '
 import { afterLoginSuccess } from '../../../utils/loginOutlet'
 // #1478 第 1 轮评审 F2：「详情页建设中」这句 toast 同样提为全仓单点（三页共用，见 utils/agreementNotice）
 import { showAgreementNotice } from '../../../utils/agreementNotice'
-// #1487 ①a 真机口径（2026-10-03）：入口展示但链路未接通时的提示文案 —— 与着陆页点击链共用同一单点
-import { WECHAT_NOT_WIRED_NOTICE } from '../../../composables/useLoginProviders'
 import type { UseBiometricResult } from '../../../composables/useBiometric'
 
 /**
@@ -56,7 +54,6 @@ export type UseLoginFormResult = {
     refreshCaptcha : () => void
     clearCountdownTimer : () => void
     switchMode : (m : string) => void
-    onProviderPick : (provider : string) => void
     toggleAgree : () => void
     togglePasswordVisible : () => void
     showAgreement : (name : string) => void
@@ -71,10 +68,11 @@ export type UseLoginFormResult = {
 /**
  * @param biometric 页面壳层持有的唯一生物识别实例（提交时按设备支持性决定「存完整凭据」还是「仅记住账号」）
  */
-export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : boolean) : UseLoginFormResult {
+export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResult {
     const auth = useAuthStore()
 
-    // 登录方式：password（账号密码，默认） | phone（手机验证码） | wechat（微信一键） | email（邮箱验证码）
+    // 登录方式：password（账号密码，默认） | phone（手机验证码） | email（邮箱验证码）
+    // （wechat 档已随 #1879 退役：微信一键登录只保留欢迎页主 CTA 一条界面）
     const mode = ref<string>('phone')
 
     // 手机号 + 验证码
@@ -148,36 +146,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
         countdown.value = 0
         wrongAttempts.value = 0
         loadCaptcha()
-    }
-
-    /**
-     * #1484：登录提供方入口件的点击门禁（App 端微信入口 → 这里）。
-     *
-     * 为什么住在 composable 而不是入口件里：`.uvue` 在 node 里跑不了 ⇒ 票面最重那条判据「**禁用态下
-     * 点击 ⇒ 请求层被调次数 = 0**」只有落在这里才能被 jest 真跑（`utils/loginProviderEntry.test.js`
-     * A 组数的是请求层次数，不是源码字面量）。入口件只负责渲染与把点到的 provider 交出来。
-     *
-     * 顺序就是判据：未接通 ⇒ 提示并返回，**在 `switchMode` 之前**。切模式不是无害动作 —— 它会经
-     * `loadCaptcha()` 打一次图形验证码接口，那已经是请求 ⇒ 「先切后拦」等于把票面那条写反。
-     * 同一条「拦在任何请求之前」的顺序口径，与着陆页 `useLandingLogin.onWechatLogin` 和协议勾选
-     * 拦截（`onSubmit` 的第一道）保持一致。
-     *
-     * 未列出的 provider（例如将来的 `apple`）⇒ 什么都不做：入口件按 provider 参数化，但**本票只
-     * 接通微信一条**，放行未知值等于给一个不兑现的入口。
-     *
-     * TODO(#1482)：App 端接通后**不得**复用本文件既有的 `mode == 'wechat'` 提交链 —— 那条走
-     * `auth.loginByWechat()` → `/auth/wx-login`（小程序 `jscode2session`）。拿 App 端的 code 去换
-     * 是必然失败的接法（移动应用走 `/sns/oauth2/access_token`，两套凭证两个端点；见 #1482 与
-     * `docs/design/1482-app-wechat-login.md` §3.3）。端别分流由 #1482 落，本票只保证
-     * 「未接通时点不动，且不骗人」。
-     */
-    function onProviderPick(provider : string) : void {
-        if (provider != 'wechat') return
-        if (wechatLoginReady == false) {
-            uni.showToast({ title: WECHAT_NOT_WIRED_NOTICE, icon: 'none' })
-            return
-        }
-        switchMode(provider)
     }
 
     function toggleAgree() : void {
@@ -281,10 +249,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
             if (password.value.length < 6 || password.value.length > 20) return '密码长度需为 6-20 位'
             return ''
         }
-        // 微信一键登录：无需输入表单，直接通过校验
-        if (mode.value == 'wechat') {
-            return ''
-        }
         const t = email.value.trim()
         if (t.length == 0) return '请输入邮箱'
         if (t.indexOf('@') <= 0 || t.indexOf('.') <= 0) return '邮箱格式不正确'
@@ -294,10 +258,10 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
     }
 
     /**
-     * 微信登录成功后的落地分叉已搬出本文件（#1478）：现居 `utils/loginOutlet.uts` 的
-     * `afterLoginSuccess(isNew)` —— 新用户走 choose-cert、老用户进 dashboard 两条分支
-     * **逐字未改**（连同两条 toast 文案与 800/500ms 延时），搬走的动机是着陆页要复用同一条
-     * 出口，而不是在 `pages/index` 再抄一份。本文件两处调用点因此指向那个共享符号。
+     * 登录成功后的落地分叉现居 `utils/loginOutlet.uts` 的 `afterLoginSuccess(isNew)` ——
+     * 新用户走 choose-cert、老用户进 dashboard 两条分支**逐字未改**（连同两条 toast 文案与
+     * 800/500ms 延时），搬走的动机是着陆页要复用同一条出口，而不是在 `pages/index` 再抄一份。
+     * #1879 起本文件的微信提交分支退役，phone / email / password 三路共用这一个出口调用点。
      */
     async function onSubmit() : Promise<void> {
         // 账号密码登录不强制勾选协议（账号已是注册过的用户）
@@ -307,13 +271,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
                 uni.showToast({ title: errAgree, icon: 'none' })
                 return
             }
-        }
-        // #1487 ①a 真机口径（2026-10-03）：微信入口在移动端**保留样式**，但真实链路尚未接通
-        // （App 端微信 SDK 未配置，见 #1482）⇒ 与着陆页同一口径：友好提示、**不发请求**。
-        // 位置与着陆页一致：协议拦截之后、任何副作用之前。
-        if (mode.value == 'wechat' && wechatLoginReady == false) {
-            uni.showToast({ title: WECHAT_NOT_WIRED_NOTICE, icon: 'none' })
-            return
         }
         const err = validate()
         if (err.length > 0) {
@@ -337,14 +294,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
                     channel: 'email',
                     code: emailCode.value,
                 })
-            } else if (mode.value == 'wechat') {
-                // 微信一键登录：uni.login({provider:'weixin'}) → 后端换 token + userInfo
-                const result = await auth.loginByWechat()
-                uni.hideLoading()
-                const isNew = result != null && result.isNew === true
-                afterLoginSuccess(isNew)
-                loading.value = false
-                return
             } else {
                 const uname = username.value.trim()
                 await auth.login({
@@ -368,7 +317,7 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
         } catch (e) {
             uni.hideLoading()
             console.error('[login] failed:', e)
-            if (mode.value != 'password' && mode.value != 'wechat') {
+            if (mode.value != 'password') {
                 const m = e instanceof Error ? (e as Error).message : ''
                 if (m.indexOf('验证码') >= 0) {
                     wrongAttempts.value += 1
@@ -399,10 +348,9 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
         return '6 位数字验证码，5 分钟内有效'
     })
 
-    // 主按钮文字：按模式区分；微信模式下显示"微信一键登录"
+    // 主按钮文字：加载中与常态两态
     const btnText = computed<string>(() : string => {
         if (loading.value) return '登录中...'
-        if (mode.value == 'wechat') return '微信一键登录'
         return '登 录'
     })
 
@@ -446,7 +394,6 @@ export function useLoginForm(biometric : UseBiometricResult, wechatLoginReady : 
         refreshCaptcha: () => refreshCaptcha(),
         clearCountdownTimer: () => clearCountdownTimer(),
         switchMode: (m : string) => switchMode(m),
-        onProviderPick: (provider : string) => onProviderPick(provider),
         toggleAgree: () => toggleAgree(),
         togglePasswordVisible: () => togglePasswordVisible(),
         showAgreement: (name : string) => showAgreement(name),
