@@ -97,10 +97,10 @@
           </div>
 
           <div class="file-actions flex items-center gap-1.5 shrink-0">
-            <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle @click.stop="retryFile(file)">
+            <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle aria-label="重试上传" @click.stop="retryFile(file)">
               <el-icon><RefreshRight /></el-icon>
             </UiButton>
-            <UiButton variant="danger" plain size="small" circle @click.stop="removeFile(file)">
+            <UiButton variant="danger" plain size="small" circle aria-label="移除文件" @click.stop="removeFile(file)">
               <el-icon><Delete /></el-icon>
             </UiButton>
           </div>

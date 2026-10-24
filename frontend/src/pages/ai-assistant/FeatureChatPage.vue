@@ -135,7 +135,7 @@
       <div v-if="pendingImages.length" class="pending-images">
         <div v-for="(p, i) in pendingImages" :key="p.previewUrl" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
-          <button class="pending-image-remove" title="移除" @click="removePendingImage(i)">
+          <button class="pending-image-remove" title="移除" aria-label="移除待发送图片" @click="removePendingImage(i)">
             <el-icon :size="12"><Close /></el-icon>
           </button>
           <div v-if="p.uploading" class="pending-image-mask">上传中</div>
