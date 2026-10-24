@@ -142,7 +142,7 @@ defineExpose({ begin })
 </script>
 
 <style scoped>
-.exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: var(--color-bg-card); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .exam-title { font-size: 16px; font-weight: bold; }
 .timer { font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
 .timer.warning { color: var(--color-danger); }
