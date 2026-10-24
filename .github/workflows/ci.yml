@@ -40,6 +40,9 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              # 生成物：aiFeatures.ts 由 backend/internal/aiassistant 渲染，契约测试（TestFrontendAIFeaturesTSInSync）
+              # 住在后端。只改这个前端文件时若不带后端，生成物与模板漂移会一路绿到合并（#1892 实测踩中）。
+              - 'frontend/src/config/aiFeatures.ts'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
