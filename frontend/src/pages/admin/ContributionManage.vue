@@ -179,7 +179,7 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <span class="card-title">资料投稿管理</span>
-          <UiButton :icon="Refresh" circle @click="activeTab === 'pending' ? loadPending() : loadReports()" />
+          <UiButton :icon="Refresh" circle aria-label="刷新" @click="activeTab === 'pending' ? loadPending() : loadReports()" />
         </div>
       </template>
 

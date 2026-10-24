@@ -43,9 +43,9 @@
         <!-- 月份切换 + 打卡按钮 -->
         <div class="mb-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-1">
-            <UiButton variant="text" size="small" @click="prevMonth">‹</UiButton>
+            <UiButton variant="text" size="small" aria-label="上个月" @click="prevMonth">‹</UiButton>
             <span class="min-w-24 text-center text-[13px] font-semibold text-ink-2">{{ viewYear }}年{{ viewMonth }}月</span>
-            <UiButton variant="text" size="small" @click="nextMonth">›</UiButton>
+            <UiButton variant="text" size="small" aria-label="下个月" @click="nextMonth">›</UiButton>
           </div>
           <div class="flex items-center gap-2">
             <!-- 连续段图例：主色实心=当前连续；浅底=已断开的打卡；灰底=未打卡 -->
