@@ -7,10 +7,10 @@
       </div>
       <div class="toolbar-right">
         <UiTooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
-          <UiButton :icon="FullScreen" circle size="small" @click="openInNewTab"/>
+          <UiButton aria-label="在新窗口打开" :icon="FullScreen" circle size="small" @click="openInNewTab"/>
         </UiTooltip>
         <UiTooltip content="下载" placement="bottom">
-          <UiButton :icon="Download" circle size="small" @click="downloadFile"/>
+          <UiButton aria-label="下载" :icon="Download" circle size="small" @click="downloadFile"/>
         </UiTooltip>
       </div>
     </div>
