@@ -65,14 +65,9 @@ updates:
         update-types:
           - version-update:semver-minor
           - version-update:semver-major
-      # mermaid 11 → 12 是大版本，且**没有对应告警**（依赖图上 mermaid 0 条）。
-      # 它是 vite 里的按需 chunk（LAZY_PEERS，约 3MB）、渲染入口在 utils/markstreamRuntime，
-      # 单测覆盖不到「图真的画出来了」—— 升级要真浏览器验三种图 × 两套主题。跟踪 #1822。
-      - dependency-name: mermaid
-        update-types:
-          - version-update:semver-major
       # 三个 npm 大版本各有独立评估票（2026-10-23 那轮周任务一次开了三张），收口前先 ignore ——
-      # 与 katex / mermaid 同一套路：机器人别每周开一张合不了的 PR，方向由票决定。
+      # 与 katex 同一套路：机器人别每周开一张合不了的 PR，方向由票决定。
+      # （mermaid 那条已在 #1822 评估完成后删掉：11 → 12 已升，后续 13.x 让机器人正常开 PR。）
       - dependency-name: vite          # 8.x 换构建内核（rolldown），manualChunks 必须重验 —— #1831
         update-types:
           - version-update:semver-major
