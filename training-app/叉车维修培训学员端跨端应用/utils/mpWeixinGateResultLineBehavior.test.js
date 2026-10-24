@@ -85,54 +85,8 @@ function makePortDeadDevTools(dir) {
   return H.makeFakeDevTools(dir);
 }
 
-/** 把探针桩重写成「输出一条 MP_WEIXIN_PROBE JSON 行」的形状（fixture 默认桩是注释，跑不出结果）。 */
-function writeProbeStub(dir, probeJson) {
-  fs.writeFileSync(
-    path.join(dir, 'scripts', 'mp-weixin-probe.mjs'),
-    `console.log('MP_WEIXIN_PROBE ' + JSON.stringify(${JSON.stringify(probeJson)}));\n`,
-    'utf8'
-  );
-}
-
-/** 就绪闸门桩：门在 ready-gate 步骤用 node 执行 scripts/mp-weixin-ready.mjs（--ws 指向桩端口）。 */
-function writeReadyStub(dir, readyJson) {
-  fs.writeFileSync(
-    path.join(dir, 'scripts', 'mp-weixin-ready.mjs'),
-    `console.log('MP_WEIXIN_READY ' + JSON.stringify(${JSON.stringify(readyJson)}));\n`,
-    'utf8'
-  );
-}
-
-/** 三分共用的探针 JSON 骨架（failures 空 ⇒ 通过；纯断言失败 ⇒ 门未过；带前缀 ⇒ 环境受阻）。
- *  connected 必给：真探针顶层 result 恒有该字段（scripts/mp-weixin-probe.mjs 的初始化），
- *  直达分支的重试判据读它（mp-weixin-check.ps1 的 Invoke-DirectProbe）——桩缺字段 ⇒ StrictMode 抛。
- *  navigation 取直达形状（status ok/cold-start-direct）：Pages=auto 默认走直达分支，
- *  真探针在直达 argv 下只会写 ok 或 skip(direct-page-unsupported)（probe.mjs 的 direct 段），不再 n/a。 */
-function probeFixture(failures) {
-  return {
-    probeOk: failures.length === 0,
-    connected: true,
-    entryPage: 'pages/index/index',
-    pageStack: ['pages/index/index'],
-    errorsTotal: 0,
-    exceptionsTotal: 0,
-    logsTotal: 0,
-    shots: [{ path: 'x.png', isPng: true, width: 10, height: 10, bytes: 99 }],
-    navigation: { status: 'ok', reason: '', detail: 'cold-start-direct', at: 'direct:pages/index/index', skippedAssertions: [], skippedSteps: [] },
-    failures,
-    steps: []
-  };
-}
-
-/** 就绪闸门合格 JSON（ok:true 才能过就绪闸门；sdkVersion/ideVersion 进 metric 行）。 */
-function readyFixture() {
-  return {
-    ws: 'ws://127.0.0.1:0', ok: true, reason: null, detail: null,
-    portReadyAt: 0.1, sdkReadyAt: 0.2, pageStackAt: 0.3,
-    ideVersion: '1.06.2412050', sdkVersion: '3.8.10',
-    pageStack: ['pages/index/index'], elapsedMs: 300, timeline: [], requireStack: true, requireRoot: true
-  };
-}
+// 探针/就绪闸门桩与两份合格 JSON 已收进共享夹具（#1655 与 #1863 两套直达循环守护共用，防复制品漂移）
+const { writeProbeStub, writeReadyStub, probeFixture, readyFixture } = H;
 
 /** 真跑门（起子进程；超时预算压到秒级，探针只跑一次）。 */
 function runGate(dir, fakeCli, port, extraArgs) {
