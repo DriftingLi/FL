@@ -130,7 +130,7 @@
 - 路由：vue-router 4（子域名多工作区 + 角色守卫）
 - HTTP：axios（access 过期自动刷新重试）
 - 图表：ECharts 6（DimensionRadar / FutureValueChart / BatteryRadar）
-- 其他：dayjs、marked + marked-highlight + highlight.js、markstream-vue、pdfjs-dist、vditor、vuedraggable、element-china-area-data
+- 其他：dayjs、marked + marked-highlight + highlight.js、markstream-vue、vditor、vuedraggable、element-china-area-data
 - 测试：vitest 4 + @vue/test-utils + happy-dom
 
 ### 移动端（training-app）

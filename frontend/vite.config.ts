@@ -227,7 +227,6 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined
           if (id.includes('/element-plus/') || id.includes('@element-plus/')) return 'element-plus'
           if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'
-          if (id.includes('/pdfjs-dist/')) return 'pdfjs'
           if (id.includes('/vditor/')) return 'vditor'
           if (id.includes('/marked') || id.includes('highlight.js')) return 'markdown'
           // 重型可选渲染 peer（#900）：连同各自独占依赖闭包单独成 chunk。
