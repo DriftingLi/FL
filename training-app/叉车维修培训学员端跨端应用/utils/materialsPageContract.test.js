@@ -34,9 +34,9 @@ describe('学习资料入口（#814）', () => {
     expect(menu).toContain("path: '/pages/resources/materials'");
   });
 
-  it('首页九宫格仍 4 格，顺序与原型一致（课程商城 / 题库练习 / 学习资料 / 考情资讯）', () => {
+  it('首页九宫格原型 4 格顺序不变，#1846 追加第 5 格「全局搜索」（页头 🔍 移出的页内落点）', () => {
     const keys = [...menu.matchAll(/\{\s*key: '([^']+)'/g)].map((m) => m[1]);
-    expect(keys).toEqual(['course-mall', 'question-bank', 'materials', 'exam-info']);
+    expect(keys).toEqual(['course-mall', 'question-bank', 'materials', 'exam-info', 'search']);
   });
 
   it('profile 工具宫格「学习资料」已接线（非 available:false 死格子）', () => {

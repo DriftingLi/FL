@@ -131,17 +131,26 @@ describe('批5 N05 页面自垫底色（页头透明后背景由页面承担，�
 });
 
 describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
-  it('forum 右槽保留消息徽标入口与发帖 pill（迁移不丢功能，v-if 条件原样）', () => {
+  it('forum 右槽仅保留消息徽标入口（#1846 收敛：发帖 pill 下沉页内搜索栏右端；✉️ 单图标 64rpx 落在典型可用槽宽约 164rpx 内）', () => {
     const s = read('pages/forum/forum.uvue');
-    expect(s).toMatch(/<template #right>[\s\S]*?msg-icon-wrap[\s\S]*?msg-badge[\s\S]*?header-right[\s\S]*?<\/template>/);
-    expect(s).toMatch(/v-if="currentTab !== 'experience'"/);
+    // 右槽只剩 ✉️（含未读徽标）；发帖 pill 不得回流页头（右槽超宽会顶进胶囊矩形，spec 20261023 §4.2）
+    const right = /<template #right>([\s\S]*?)<\/template>/.exec(s);
+    expect(right).not.toBeNull();
+    expect(right[1]).toMatch(/msg-icon-wrap[\s\S]*?msg-badge/);
+    expect(right[1]).not.toMatch(/create-pill|header-right|发帖/);
+    // 移出页头的入口页内可达（#1846）：搜索栏右端 pill 与搜索栏本体同走 onCreate（触发行为不变）
+    expect(s).toMatch(/v-if="currentTab !== 'experience'" class="res-search-bar"/);
+    expect(s).toMatch(/class="create-pill"[\s\S]{0,120}?@click="onCreate"/);
   });
 
-  it('dashboard 页头保留证件下拉标题与三图标右槽（#1602 形态不动：🔍🔔🛒 走 rightIcons）', () => {
+  it('dashboard 页头保留证件下拉标题与两图标右槽（#1846 收敛：🔍 移出页头进功能宫格，右槽 3→2 图标防超宽；#1602 形态其余不动）', () => {
     const s = read('pages/dashboard/dashboard.uvue');
     expect(s).toMatch(/:right-icons="navRightIcons"/);
-    expect(s).toMatch(/navRightIcons\s*:\s*string\[\]\s*=\s*\['🔍', '🔔', '🛒'\]/);
+    expect(s).toMatch(/navRightIcons\s*:\s*string\[\]\s*=\s*\['🔔', '🛒'\]/);
+    expect(s).not.toContain("['🔍', '🔔', '🛒']");
     expect(s).toMatch(/<AppNavBar[^>]*@left-click="onCertTap"/);
+    // 移出页头的入口页内可达（#1846）：宫格补全局搜索格（静态面与跳转语义另由 dashboardContract / searchContract M2 钉住）
+    expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).toContain("path: '/pages/search/search'");
   });
 
   it('resume 页头右槽 🔔 通知入口 + 左返回（title 空）', () => {
