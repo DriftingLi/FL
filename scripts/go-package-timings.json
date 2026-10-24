@@ -1,7 +1,7 @@
 {
-  "_comment": "backend-test 分片的包级权重（go test 的 `ok <pkg> <n>s` 墙钟，单位秒）。判据面在 scripts/go-shard.mjs。权重是**经验值不是判据**：表里没有的包按 defaultSeconds 计权，不会丢；跑得比它慢的新包记得回来补表。",
+  "_comment": "backend-test 分片的包级权重（go test 的 ok 行墙钟，单位秒）。判据面在 scripts/go-shard.mjs。权重是经验值不是判据：表里没有的包按 defaultSeconds 计权，不会丢；跑得比它慢的新包记得回来补表。重新生成用 scripts/gen-go-timings.mjs（别手改数字）。",
   "measuredAt": "2026-10-24",
-  "measuredFrom": "run 40053157308 / job 120750662027（ubuntu-latest 4 核、-race -cover -timeout 10m、Postgres 15 + Redis 7 service）；65 个含测试的包合计 948.1s，最长 internal/api 400.2s。0.2 = 无测试文件的包（只编译+报覆盖率）。",
+  "measuredFrom": "run 40053157308 / job 120750662027（ubuntu-latest 4 核、-race -cover -timeout 10m、Postgres 15 + Redis 7 service）；65 个含测试的包合计 948.1s，最长 internal/api 400.2s。0.2 = 无测试文件的包（只编译 + 报覆盖率）。",
   "defaultSeconds": 10,
   "packages": {
     "forklift-training/internal/api": 400.2,
