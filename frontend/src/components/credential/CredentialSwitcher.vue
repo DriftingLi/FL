@@ -158,7 +158,7 @@ onMounted(async () => {
 }
 .switcher-label {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   margin-bottom: 6px;
   letter-spacing: 0.03em;
 }

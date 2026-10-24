@@ -137,7 +137,7 @@
       <template #header>
         <div class="detail-header flex items-center justify-between gap-3 pr-6">
           <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
-          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle @click="toggleCourseFavorite"/>
+          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle :aria-label="courseFavorited ? '取消收藏课程' : '收藏课程'" @click="toggleCourseFavorite"/>
         </div>
       </template>
       <div v-loading="detailLoading">

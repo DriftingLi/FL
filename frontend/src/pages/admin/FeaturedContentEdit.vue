@@ -402,7 +402,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: 13px;
   background: var(--color-bg-page);
 }
@@ -432,7 +432,7 @@ onMounted(() => {
 .publish-hint {
   font-size: 12px;
   line-height: 1.6;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 @media (max-width: 768px) {

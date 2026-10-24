@@ -15,11 +15,11 @@ const props = withDefaults(
 )
 
 const TONE: Record<string, string> = {
-  brand: 'bg-ui-500',
+  brand: 'bg-ui-600',
   ok: 'bg-ok',
   warn: 'bg-warn',
   bad: 'bg-bad',
-  neutral: 'bg-ink-muted'
+  neutral: 'bg-ink-3'
 }
 </script>
 

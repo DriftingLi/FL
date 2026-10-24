@@ -583,7 +583,7 @@ function New-GatePlan {
         argv = @($AuthPath, '--ws', $ws, '--require-root', $AutoRoot, '--timeout-ms', '150000')
         timeoutSeconds = 300
         awaitCompletion = $true
-        criteria = @('判成败只看输出 MP_WEIXIN_AUTH 结果行（退出码不作判据）', 'status ∈ existing|injected|cleared|none：none ⇒ 后续页如实记 miss(reason=auth-session-unavailable)，不判 exit 2', '结果行不得含令牌：只带 user 标识与耗时', '幂等：已有会话 ⇒ existing 即返回；guest 相写盖帽 ⇒ cleared', '落盘确认（#1690 run13）：写/盖帽后必须等标记出现在 WeappStorage 盘上才放行冷启动——IDE 异步刷盘且 quit 不冲刷')
+        criteria = @('判成败只看输出 MP_WEIXIN_AUTH 结果行（退出码不作判据）', 'status ∈ existing|injected|cleared|none：auth 相 none ⇒ 该页立即记 SKIP(reason=auth-session-unavailable) 且不换页不冷启动不探针（#1863：路由判据不得独自放行，#1845 实证路由可通过而内容是 401 态）；guest 相 none 只告警不改判（游客页无会话才是合法落地态，落地判据兜）', 'auth 相失败 detail（reason + HTTP 状态/网络错误/超时）透传进结果行 auth= 字段（#1863：wx-login-api-failed 必须可归因）', '结果行不得含令牌：只带 user 标识与耗时', '幂等：已有会话 ⇒ existing 即返回；guest 相写盖帽 ⇒ cleared', '落盘确认（#1690 run13）：写/盖帽后必须等标记出现在 WeappStorage 盘上才放行冷启动——IDE 异步刷盘且 quit 不冲刷')
         exit2 = @()
     }
 
@@ -615,7 +615,8 @@ function New-GatePlan {
         $resultFields += [ordered]@{ name = $n }
     }
     $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
-    # 会话注入（#1690）读数：auth=existing|injected|none:<reason>；只在直达循环启用时出现（可选字段）
+    # 会话注入（#1690）读数：auth=existing|injected|none(reason[:detail-slug])——detail-slug 是
+    # HTTP 状态/网络错误/超时的归因类别（#1863）；只在直达循环启用时出现（可选字段）
     $resultFields += [ordered]@{ name = 'auth'; optional = $true }
     $resultFields += [ordered]@{ name = 'log' }
 
@@ -685,7 +686,8 @@ function New-GatePlan {
                 '部分达成（有页达成、有页未达成）⇒ navigation=partial(ok=<N>,skip=<M>)：已达成页读数照常计入门结论，未达成页逐页记入 navigation.pages，不得塌缩成整组 skip（#1816）',
                 '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准',
                 '会话分相判据 = 入口页 ∪ 游客页族（guestPhase.routes），不得用「是否入口页」单相判据：游客页被注 auth 会话会自己跳走，落地页 ≠ 目标页（#1817）',
-                '未达成页若落地到别处，页级 reason 记 landed-elsewhere(<落地页>)，不得一律记 direct-page-unsupported（#1817）'
+                '未达成页若落地到别处，页级 reason 记 landed-elsewhere(<落地页>)，不得一律记 direct-page-unsupported（#1817）',
+                'auth 相页在注入 ok=false 时记 skip(reason=auth-session-unavailable) 且不换页不冷启动（#1863）：路由判据不得独自放行（#1845 实证——注入失败后旧过期 token 复活、路由可通过而内容是业务层 401 态）'
             )
         }
         steps = $steps
@@ -1281,6 +1283,8 @@ function Invoke-AuthInject {
     # 会话注入（#1690）：argv 取自门计划（唯一真源）；判成败只看 MP_WEIXIN_AUTH 结果行（退出码不作判据）。
     # 失败**不判环境受阻**：返回 ok=false + kebab reason，由调用方把该页如实记 miss —— 注入不可用
     # 既不得升级成 exit 2，也不得冒充取证成立。脚本自身幂等（已有会话 ⇒ existing 即返）。
+    # #1863：detail 一并透传（HTTP 状态 / 网络错误 cause / 超时）—— 调用方要把失败归因带进结果行，
+    # #1845 实测 reason=wx-login-api-failed 无 detail 时无法归因。
     $argv = @($AuthStep.argv) + @('--mode', $Mode)
     $r = Invoke-Process -FilePath $nodeExe -Arguments $argv -TimeoutSeconds $AuthStep.timeoutSeconds -Tag "auth-inject($PageTag)"
     Write-Log "`n>>> auth-inject($PageTag)`n$($r.Output)"
@@ -1288,8 +1292,8 @@ function Invoke-AuthInject {
     foreach ($line in ($r.Output -split "`r?`n")) {
         if ($line -match '^\s*MP_WEIXIN_AUTH\s+(\{.*\})\s*$') { try { $json = ($Matches[1] | ConvertFrom-Json) } catch { $json = $null } }
     }
-    if (-not $json) { return @{ ok = $false; status = 'none'; reason = 'no-auth-result' } }
-    return @{ ok = ((Get-Prop $json 'ok') -eq $true); status = "$(Get-Prop $json 'status')"; reason = "$(Get-Prop $json 'reason')" }
+    if (-not $json) { return @{ ok = $false; status = 'none'; reason = 'no-auth-result'; detail = '' } }
+    return @{ ok = ((Get-Prop $json 'ok') -eq $true); status = "$(Get-Prop $json 'status')"; reason = "$(Get-Prop $json 'reason')"; detail = "$(Get-Prop $json 'detail')" }
 }
 
 # ---------- P1：门通过时把结果贴成「sha 绑定」的 PR 评论（② 门结果免手抄）----------
@@ -2064,8 +2068,25 @@ try {
                 } else {
                     $ai = Invoke-AuthInject -AuthStep $authStep -PageTag "auth($leaf)" -Mode 'auth'
                     $authOk = [bool]$ai.ok
-                    $authField = $(if ($ai.ok) { $ai.status } else { "none($($ai.reason))" })
+                    # #1863：auth 失败 detail 透传进结果行（可归因：HTTP 状态 / 网络错误 / 超时）。
+                    # 结果行 token 是空格分隔的，detail 先压成无空白 slug；原样全文在日志 auth-inject 段。
+                    $aiDetail = ("$($ai.detail)".Trim() -replace '\s+', '_')
+                    if ($aiDetail.Length -gt 60) { $aiDetail = $aiDetail.Substring(0, 60) }
+                    $authField = $(if ($ai.ok) { $ai.status } else { "none($($ai.reason)$(if ($aiDetail) { ':' + $aiDetail }))" })
                     Write-Host ">>> auth 相会话注入（#1690）$leaf：ok=$([bool]$ai.ok) status=$authField" -ForegroundColor $(if ($ai.ok) { 'Green' } else { 'Yellow' })
+                    if (-not $ai.ok) {
+                        # #1863 诚实降级（mp-weixin-auth.mjs 头注条款的调用方执行）：注入失败 ⇒ 该页没有
+                        # 有效的登录态，冷启动拍到的只能是业务层 401 态（#1845 实证：storage 旧过期 token
+                        # 复活、路由停在目标页 ⇒ 路由判据独自放行、截图实拍「登录已过期」Toast）⇒ 该页记
+                        # SKIP、**不换页不冷启动不探针**，不得让 navigation=ok 全绿。guest 相不在此列：
+                        # 游客页无会话才是合法落地态，由落地判据兜（#1817）。
+                        Write-Log "direct-page $pg reached=skip(reason=auth-session-unavailable) (page not launched: auth inject failed reason=$($ai.reason) detail=$($ai.detail))"
+                        $directLines += "direct-page $pg reached=skip(reason=auth-session-unavailable) errors=- exceptions=- logs=- shot=- elapsed=-"
+                        $pageReports += [pscustomobject]@{ page = $pg; status = 'skip'; reason = 'auth-session-unavailable'; shot = ''; elapsedSeconds = 0 }
+                        if (-not $missReason) { $missReason = 'auth-session-unavailable' }
+                        $missPages += $pg
+                        continue
+                    }
                 }
             }
             $sw = Switch-DistAppJsonFirstPage -Path $distAppJson -TargetRoute $pg
@@ -2154,8 +2175,10 @@ try {
             Write-Host "[error] 直达探针环境受阻（页：$($directList -join ',')）：$($agg.failures -join ' / ')" -ForegroundColor Red
         }
         if (-not $firstJson -and -not $directEnv) {
-            # 列出的页全部不在构建产物 ⇒ 零取证：**不得**当通过（failures ⇒ exit 1 门未过）
-            $agg.failures += '断言未过：直达探针没有任何被接受的运行（列出的页都不在构建产物中）'
+            # 列出的页零取证（不在构建产物 / #1863 起 auth 注入失败整组 SKIP 同理）⇒ **不得**当通过
+            # （failures ⇒ exit 1 门未过）；missReason 写进失败原文，归因不靠猜。
+            $zeroWhy = $(if ($missReason) { "页零取证（miss reason=$missReason；产物缺页或会话注入不可用）" } else { '列出的页都不在构建产物中' })
+            $agg.failures += "断言未过：直达探针没有任何被接受的运行（$zeroWhy）"
         }
         $okPageList = @($pageReports | Where-Object { $_.status -eq 'ok' })
         $skipPageList = @($pageReports | Where-Object { $_.status -ne 'ok' })
