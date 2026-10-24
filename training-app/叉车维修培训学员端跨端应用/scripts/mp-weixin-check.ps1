@@ -122,6 +122,23 @@
     `cli.bat quit` 退出整个 IDE 并轮询 wechatdevtools 进程归零（60s 超时只 [warn]），再走 close → open → auto。
     quit/轮询失败不判 exit 2；**红线：不得用 Stop-Process 替代 quit**（运行中 kill IDE 是 ADR-0008 红线）。
     步骤与预算声明在门计划的 `devtools-quit` 步（唯一真源）；-Doctor 跳过（体检不操控 IDE）。
+    #1860 收紧：quit **之前先清点 IDE 进程** —— 0 个 ⇒ 不执行 quit。`cli quit` 在 IDE 未运行时会**自启**
+    一个无项目实例并占住服务端口（官方 `--port` 全局选项「没启动则会启动」的同族机制；2026-10-23 本机实测：
+    自启实例占 43005 ⇒ open 120s 超时 ⇒ 一轮 9–26 min 白烧）。quit 只在「确实有 IDE 在跑」时发起。
+
+    **② 白烧收敛三件套（#1860）**：把「环境被楔死」的暴露点从 publish+open 之后（9–26 min/轮）提到秒级
+    （范式依据 docs/design/20261024-验收门成本fix与证据复用实践调研.md §1.2：Playwright webServer
+    贵步骤前先探就绪 / 熔断器「likely to fail 就立即失败」/ 微信 HTTP 文档官方检测法）。
+      ① pre-flight quit 防自启（上段）。
+      ② **publish 前秒级预探**（门计划 `env-preprobe` 步，判据库 `scripts/lib/mp-weixin-preprobe.ps1`）：
+         读 `.ide` 端口文件 + TCP 试连，**否定性闸门** —— 只拦「端口文件在但试连不上」的楔死态
+         （exit 2 env-blocked，reason=ide-port-unreachable，在 publish 之前退出、不进重试循环），
+         其余一律放行并**不冒充**「会话已就绪」（就绪判据仍是协议级的 SDKVersion + pageStack，归就绪闸门）。
+      ③ **产物内容指纹自动 -SkipBuild**（判据库 `scripts/lib/mp-weixin-build-fingerprint.ps1`）：
+         指纹键 = 构建输入集内容哈希 + 产物目录内容哈希 + HBuilderX 版本令牌，三组件全等 ⇒ 自动跳
+         publish（同树重跑省 ≈2–3 min，#1443 实测）；任一组件失配 / 算不出 / 指纹损坏 ⇒ 重建
+         （fail 向重建，不拿旧产物出绿）。指纹落产物目录内（`.mp-weixin-build-fingerprint.json`）
+         ＝ 作用域当前树，跨 worktree 不共享，产物被清时自然失效。
 
     **判成败一律解析输出，绝不看退出码**：HBuilderX CLI 失败时退出码恒为 0（如实测「项目不存在，请先导入」仍返回 0），
     开发者工具 `cli.bat` 与探针的退出码同样不作为门结论。
@@ -211,6 +228,11 @@
 .PARAMETER PostToPr
     `-PostToIssue` 的**别名**（同值，一个版本后退役）。
 
+.PARAMETER IdeUserDataRoot
+    预探（#1860）的 `.ide` 端口文件用户目录根**注入点**（行为守护与楔死态验收用）。
+    缺省空串 = 探测本机标准用户目录（%APPDATA% / %LOCALAPPDATA% 下两种工具目录名）。
+    显式给出即**只**探这个根 —— 不碰真实用户目录，测试夹具因此可密封。
+
 .PARAMETER DryRun
     只打印门计划（单行 `GATE_PLAN {json}`）后 exit 0：**不执行任何外部命令、不写工作树、不接 HBuilderX**。
     用途是让守护断言「行为输出」而不是源码文本（#914）：JSON 覆盖步骤序列 / 每步参数与判据 / 超时预算与
@@ -256,6 +278,8 @@ param(
     # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
     [int]$PostToIssue = 0,
     [int]$PostToPr = 0,
+    # 预探（#1860）的 .ide 用户目录根注入点：空 = 标准位置；显式 = 只探该根（测试密封用）
+    [string]$IdeUserDataRoot = '',
     [switch]$DryRun
 )
 
@@ -281,6 +305,10 @@ $script:closed = $false
 # pre-flight quit 的幂等哨兵（#1634）：与 $script:closed 同款，必须先初始化 —— 严格模式下
 # 未设置的 $script:quitDone 会在 if 判定时抛「无法检索变量」（m00099 夹具实测：整段重试一次都没跑就 exit 2）
 $script:quitDone = $false
+# 楔死早退路径的收尾哨兵（#1860）：预探判楔死 exit 2 时，finally 的 close 会读到死端口 ⇒ cli **自启**
+# 一个 IDE 再去关它（2026-10-24 楔死验收实测：close 输出「IDE server started successfully…43005」）。
+# 本路径从未创建自动化会话、无残留可收，楔死处置本就指向人工 ⇒ 置位跳过 close。
+$script:skipFinalClose = $false
 # 任意页直达探针（#1682）的 app.json 备份哨兵：与 $script:closed 同款先初始化（严格模式下
 # 未设置会在 finally 判定抛「无法检索变量」）；Restore-DistAppJson 以「备份为 null」当幂等哨兵。
 $script:AppJsonBackup = $null
@@ -427,12 +455,35 @@ function New-GatePlan {
     $entryUrl = if (@($RouteList).Count -gt 0) { $RouteList[0] } else { '' }
     $steps = @()
 
+    # -1) 环境预探（#1860）：publish 之前的**秒级否定性预探** —— 把「环境被楔死」的暴露点从
+    #     publish+open 之后（9–26 min/轮）提到秒级。判据库 scripts/lib/mp-weixin-preprobe.ps1
+    #     （官方检测法：用户目录端口文件 + 尝试连接）。⚠️ 只做**否定性闸门**：只拦「.ide 端口文件
+    #     在但其服务端口试连不上」的楔死态；其余一律放行且不冒充「会话已就绪」（就绪判据归就绪闸门）。
+    #     本步**只读**（不操控 IDE、不发命令），故排在 quit 之前（quit 是第一个会话步骤）；
+    #     -Doctor 跳过（体检自带逐层报告）。试连预算写死在 timeouts.preprobeMs（计划是预算唯一真源）。
+    $steps += [ordered]@{
+        id = 'env-preprobe'
+        tag = 'env-preprobe'
+        exec = 'none'
+        argv = @()
+        criteria = @(
+            'publish 之前的秒级否定性预探（#1860）：读 .ide 端口文件 + TCP 试连，楔死态提前到 publish 之前判 exit 2（不烧构建与重试预算）',
+            '楔死态签名（最窄，勿放宽）= 端口文件存在 + 端口可解析 + 试连失败 ⇒ exit 2 reason=ide-port-unreachable，处置提示指向人工重启开发者工具（门绝不 kill IDE，ADR-0008 红线）',
+            '端口文件不存在（IDE 未运行，冷起点）或试连可达 ⇒ 放行 —— 不做肯定性放行、不冒充「会话已就绪」（预探判错会把可跑环境误报成 env-blocked，调研 §1.2 条 1 风险条款）',
+            '端口文件内容不可解析 ⇒ 放行（宁可漏拦交给就绪闸门，不误杀可跑环境）',
+            '-Doctor 跳过本步（体检自带逐层报告）；行为守护 utils/mpWeixinGatePreprobeBehavior.test.js 真执行判据库'
+        )
+        exit2 = @([ordered]@{ on = 'unreachable'; reason = 'ide-port-unreachable' })
+    }
+
     # 0) quit：跑门前**清场** —— 退出整个开发者工具 IDE（#1634）。病根：用脚本（IPC 链）启动时，残留/堆叠的
     #    未初始化 IDE 实例会让后面的 open 把项目窗口叠进白屏（连菜单/Console 都没有；双击 exe 启动不复现）。
     #    close 只关项目窗口、对未初始化实例无能为力 ⇒ 必须 quit（等价于 ADR-0008 的 pre-flight 处置：
     #    跑前先 `cli.bat quit` 清场，实测有效）。门本就独占 IDE，quit 关整个工具没有额外代价。
     #    ⚠️ 红线（ADR-0008）：运行中**不许 kill IDE** —— 收拾残留只能走 quit，不得用 Stop-Process 替代。
     #    进程归零的轮询预算（waitSeconds）与本步超时同源，都写死在这里（计划是预算的唯一真源）。
+    #    #1860 收紧：quit **之前先清点 IDE 进程** —— 0 个 ⇒ 不执行 quit（quit 在 IDE 未运行时会自启
+    #    无项目实例占住服务端口，官方 --port「没启动则会启动」的同族机制；2026-10-23 实测占 43005）。
     $steps += [ordered]@{
         id = 'devtools-quit'
         tag = 'devtools-quit'
@@ -444,6 +495,7 @@ function New-GatePlan {
         logged = $true
         criteria = @(
             '跑门前先 cli.bat quit 退出整个 IDE：脚本启动（IPC 链）下残留/堆叠的未初始化实例会让 open 把项目窗口叠进白屏（#1634）',
+            '#1860：quit 之前先清点 IDE 进程（wechatdevtools/微信开发者工具 双名匹配）—— 0 个 ⇒ 不执行 quit（防 quit 自启无项目实例占服务端口）',
             'quit 之后轮询 wechatdevtools 进程归零（最多 60 秒）；归零不了只 [warn] 继续 —— IDE 收不掉时 quit 重试无益，白屏风险记日志、由后续 open/auto/就绪闸门的判据兜',
             '本步失败只警告，不判 exit 2（不得用 Stop-Process 替代 quit：运行中 kill IDE 是 ADR-0008 红线）',
             '-Doctor 跳过本步（体检不操控 IDE）'
@@ -650,6 +702,8 @@ function New-GatePlan {
             probeTimeoutMs = $ProbeTimeoutMs
             probeAttempts = $ProbeAttempts
             probeRetryDelay = $ProbeRetryDelaySeconds
+            # 预探（#1860）单次 TCP 试连预算（毫秒）：秒级预探的「秒」就是它
+            preprobeMs = 2000
         }
         exit2 = $exit2Summary
         resultLine = [ordered]@{ prefix = 'MP_WEIXIN_RESULT'; fields = $resultFields }
@@ -674,7 +728,8 @@ function New-GatePlan {
                     'no-ready-result', 'automation-not-ready', 'probe-timeout', 'no-probe-result',
                     'no-probe', 'no-routes',
                     'automation-unreachable', 'automation-timeout', 'automation-unknown',
-                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception', 'port-held-after-quit'
+                    'automator-missing', 'page-stack-empty', 'probe-env', 'exception', 'port-held-after-quit',
+                    'ide-port-unreachable'
                 )
             }
         }
@@ -884,6 +939,35 @@ if (-not $nodeExe) {
     exit 2
 }
 
+# ---------- 产物内容指纹 ⇒ 自动 -SkipBuild（#1860）----------
+# 白烧场景 = 同树重跑（#1494 §0.1 失败轮 / #1443 实测 -SkipBuild 省 ≈2–3 min）：环境失败轮重跑时
+# publish 会重建一模一样的产物。「产物未变」机判化 —— 指纹键三组件**全等才命中**（判据库
+# scripts/lib/mp-weixin-build-fingerprint.ps1，范式依据调研 §1.2 条 2）：
+#   inputs   = 构建输入集内容哈希 —— 源码变了必不命中（防「改了源码却拿旧产物出绿」的假证据）；
+#   product  = 产物目录内容哈希（排除指纹文件自身）—— 产物被换/被改必不命中（「产物或版本变化 ⇒ 必然重建」）；
+#   hbuilderx = HBuilderX 版本令牌（目录版本号 + cli.exe 内容哈希；姊妹篇坑位 6b：工具版本会翻结论）。
+# 失配方向一律 **fail 向重建**：任一组件算不出 / 指纹缺失或损坏 ⇒ 重建，绝不猜命中。
+# 作用域 = 当前树：指纹落产物目录内（.mp-weixin-build-fingerprint.json），跨 worktree 不共享，
+# 产物被清时自然失效。「门结论只对这份产物成立」语义不变 —— 指纹只是把「产物没变」机判化。
+# 命中即翻 $SkipBuild 并**重建门计划**（mode.skipBuild 是计划面字段，翻值不重建 = 计划与执行脱节；
+# 同款先例：端口被占换端口后重建计划）。-Doctor 跳过（体检不构建）；显式 -SkipBuild 无指纹事。
+if (-not $SkipBuild -and -not $Doctor) {
+    . (Join-Path $PSScriptRoot 'lib\mp-weixin-build-fingerprint.ps1')
+    $fpVersion = Get-MpWeixinHBuilderXVersionToken -HbxRoot $hbxRoot -CliExe $cliExe
+    $fpHit = $null
+    if ("$fpVersion") { $fpHit = Test-MpWeixinBuildFingerprintHit -Project $Project -Dist $dist -HBuilderXVersion $fpVersion }
+    if ($fpHit -and $fpHit.Hit) {
+        Write-Host ">>> 产物指纹命中 ⇒ 自动 -SkipBuild（$($fpHit.Detail)）" -ForegroundColor Yellow
+        Write-Log "AUTO_SKIP_BUILD $($fpHit.Reason) version=$($fpVersion -replace 'cli=[0-9a-f]+', 'cli=<sha256>')"
+        $SkipBuild = $true
+        $script:GatePlan = New-ThisGatePlan -UsePort $Port
+    } elseif ($fpHit) {
+        Write-Log "build-fingerprint miss reason=$($fpHit.Reason)（$($fpHit.Detail)）"
+    } else {
+        Write-Log 'build-fingerprint check skipped reason=hbuilderx-version-unavailable（版本令牌算不出 ⇒ 必重建，fail 向重建）'
+    }
+}
+
 # 端口占用已在**门计划构造之前**处理掉（换空闲端口 + 重建计划）—— 见上面 `Get-FreeAutoPort` 段。
 # 这里不再判一次：残留会话会让 `cli.bat auto` **静默复用它**（端口在监听、ws 接得上，但 `Tool.getInfo`
 # 无应答 ⇒ 就绪闸门 reason=sdk-version-missing），只 warning 等于把「复用死会话」当成正常路径
@@ -937,6 +1021,9 @@ function Invoke-DevToolsClose {
     if ($script:closed) { return }
     $script:closed = $true
     if (-not $devTools) { return }
+    # #1860：楔死早退路径不收尾 —— close 对死端口 .ide 会自启 IDE 再关（cli 自启同族），且本路径
+    # 从未创建自动化会话、无残留可收；处置已指向人工，跳过（哨兵见 $script:skipFinalClose 声明处）。
+    if ($script:skipFinalClose) { return }
     # 参数（含 --project 与超时）一律取自门计划，不再写死在调用点（#914：判据面 = 计划，不是源码文本）
     $closeStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-close'
     try {
@@ -958,8 +1045,35 @@ function Invoke-DevToolsClose {
 # #1682 冒烟实测：直达分支的**第二次 close→open→auto 循环**（同一 IDE 进程内）会稳定复现此白屏形态
 # （getInfo 全程 no-reply 直到 120s 超时），close 修不好、quit 重启即恢复（实测 12s 就绪）
 # ⇒ 本函数体抽成 Invoke-DevToolsQuitAndPoll 供直达冷启动的重试轮升级调用（哨兵语义只留 pre-flight）。
+# 端口收摊轮询（#1690 run5 语义）：等自动化端口随进程/服务关净；预算内关不掉 ⇒ $false
+# （port-held-after-quit，直达冷启动据此诚实记环境性）。quit 路径与 #1860 的 0 进程跳过路径共用。
+function Wait-MpWeixinAutoPortReleased {
+    param([int]$Port, [int]$BudgetSeconds = 60)
+    $held = 0
+    while ($held -lt $BudgetSeconds) {
+        if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -eq 0) { return $true }
+        Start-Sleep -Seconds 1
+        $held++
+    }
+    return $false
+}
+
 function Invoke-DevToolsQuitAndPoll {
     if (-not $devTools) { return }
+    # #1860：quit 之前先清点 IDE 进程 —— 0 个 ⇒ 不执行 quit。`cli quit` 在 IDE 未运行时会**自启**
+    # 一个无项目实例并占住服务端口（官方 `--port` 全局选项「没启动则会启动」的同族机制；2026-10-23
+    # 本机实测：自启实例占 43005 ⇒ open 120s 超时 ⇒ 一轮 9–26 min 白烧）。quit 只在「确实有 IDE 在跑」
+    # 时才有意义；IDE 本体的退出仍只走 cli quit（这里只是不发起 quit，Stop-Process 红线不破）。
+    $ideProcsBefore = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' })
+    if ($ideProcsBefore.Count -eq 0) {
+        Write-Log "quit：IDE 进程数 = 0（wechatdevtools/微信开发者工具 双名匹配）⇒ 跳过 cli quit（防 quit 自启无项目实例占服务端口，#1860）"
+        # 没跑 quit ⇒ 没有「quit 后静置」问题（10s 静置与进程归零轮询都是 quit 的善后，一并跳过）；
+        # 但**端口收摊判据照旧**（Wait-MpWeixinAutoPortReleased 同一真源）：端口仍被占（垂死的自动化
+        # 服务/别的进程）时等它关净，关不掉 ⇒ port-held-after-quit（诚实，不冒充干净）。
+        if (Wait-MpWeixinAutoPortReleased -Port $Port) { return $true }
+        Write-Log "quit：自动化端口 $Port 60s 后仍在 listening（无 IDE 进程 ⇒ 占端口的是别的服务）⇒ port-held-after-quit（照实报，不 kill）"
+        return $false
+    }
     $quitStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-quit'
     try {
         $r = Invoke-Process -FilePath $devTools -Arguments $quitStep.argv -TimeoutSeconds $quitStep.timeoutSeconds -Tag $quitStep.tag
@@ -1003,12 +1117,7 @@ function Invoke-DevToolsQuitAndPoll {
     Start-Sleep -Seconds 10
     # 端口收摊判据（#1690 run5）：垂死实例会**占住自动化端口**，open/auto 接上去骑旧会话。
     # 等端口随进程关净；预算内关不掉 ⇒ 返回 $false，直达冷启动据此记 port-held-after-quit（环境性，诚实）。
-    $held = 0
-    while ($held -lt 60) {
-        if (@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue).Count -eq 0) { return $true }
-        Start-Sleep -Seconds 1
-        $held++
-    }
+    if (Wait-MpWeixinAutoPortReleased -Port $Port) { return $true }
     Write-Log "quit：自动化端口 $Port 60s 后仍在 listening（垂死实例占会话）⇒ 直达冷启动判 port-held-after-quit"
     return $false
 }
@@ -1504,6 +1613,29 @@ function Publish-ScreenshotArchive {
 # ---------- 主流程 ----------
 $exitCode = 2
 try {
+    # -1) publish 之前的环境秒级预探（#1860，门计划 env-preprobe 步）：**否定性闸门** —— 只拦
+    #     「.ide 端口文件在但试连不上」的楔死态，把「环境被楔死」的暴露点从 publish+open 之后
+    #     （9–26 min/轮）提到秒级；其余一律放行且**不冒充**「会话已就绪」（就绪判据归就绪闸门）。
+    #     试连预算取自计划 timeouts.preprobeMs（计划是预算唯一真源）；-Doctor 跳过（体检自带逐层报告）。
+    #     判据库 scripts/lib/mp-weixin-preprobe.ps1（行为守护 utils/mpWeixinGatePreprobeBehavior.test.js）。
+    if (-not $Doctor) {
+        . (Join-Path $PSScriptRoot 'lib\mp-weixin-preprobe.ps1')
+        $preRoots = @()
+        if ("$IdeUserDataRoot") { $preRoots = @($IdeUserDataRoot) }
+        $pre = Test-MpWeixinDevToolsSessionReachable -UserDataRoots $preRoots -ConnectTimeoutMs ([int]$script:GatePlan['timeouts']['preprobeMs'])
+        Write-Log "pre-probe: $($pre.Observed)"
+        Write-Host ">>> pre-probe（#1860 否定性预探）：$($pre.Observed)"
+        if ($pre.Wedged) {
+            Write-Host '[error] 开发者工具环境楔死（.ide 端口文件在但服务端口试连不上）⇒ publish 之前判 env-blocked（exit 2），不烧构建与重试预算。' -ForegroundColor Red
+            Write-Host '        处置（人工执行）：退出并重启微信开发者工具，或清点残留 IDE 进程后重开；本门绝不 kill IDE（ADR-0008 红线）。' -ForegroundColor Red
+            Write-Log (New-MpWeixinEnvResultLine -Prefix $($script:GatePlan.resultLine.prefix) -Reason 'ide-port-unreachable' -Failures @("环境不可用：开发者工具 .ide 端口文件在但服务端口试连不上（$(@($pre.DeadPorts) -join ', '))"))
+            # finally 的 close 在此路径会读死端口 ⇒ cli 自启 IDE 再关（#1860 三件套要消的正是自启族）；
+            # 本门从未创建自动化会话、无残留可收 ⇒ 跳过收尾，处置交人工。
+            $script:skipFinalClose = $true
+            exit 2
+        }
+    }
+
     # HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）：-SkipBuild 下不接主程序
     if (-not $SkipBuild) {
         . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
@@ -1627,6 +1759,25 @@ try {
         Write-Host '        产物落成 touristappid = manifest 的 mp-weixin.appid 为 null/缺失（游客态）。' -ForegroundColor Red
         Write-Log "MP_WEIXIN_RESULT errors=1 stage=appid product=$productAppId expected=$AppId"
         exit 1
+    }
+
+    # 指纹落盘（#1860）：只有**本轮真构建过**（走到这里时 -SkipBuild 仍为 false = 没被指纹/人工跳过）
+    # 且产物合法性 / appid 两道 exit 1 断言都过了才写 —— 产物坏不写（下次必然重建）。
+    # 写失败只警告，不影响门结论（fail 向重建：没写成 = 下次没有指纹 = 重建）。
+    if (-not $SkipBuild) {
+        try {
+            $fpSave = Save-MpWeixinBuildFingerprint -Project $Project -Dist $dist -HBuilderXVersion $fpVersion
+            if ($fpSave.Saved) {
+                Write-Log "build-fingerprint saved $($fpSave.Detail)"
+                Write-Host ">>> 产物指纹已落盘（下次同树重跑命中即自动 -SkipBuild）"
+            } else {
+                Write-Log "build-fingerprint NOT saved reason=$($fpSave.Reason)（$($fpSave.Detail)）"
+                Write-Host "[warn] 产物指纹未落盘（$($fpSave.Reason)）—— 下次重跑将重建（fail 向重建）" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "[warn] 产物指纹落盘异常（不影响门结论，下次将重建）：$_" -ForegroundColor Yellow
+            Write-Log "build-fingerprint save exception: $_"
+        }
     }
 
     # 4) 清残留自动化会话 + 4.5) 重开项目窗口 + 5) 开自动化端口 —— **当作一个可重试的单元**（坑位 6）：

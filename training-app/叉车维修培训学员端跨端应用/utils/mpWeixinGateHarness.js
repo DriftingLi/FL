@@ -105,6 +105,10 @@ function gateArgs(scriptPath, fixture, fakeCli, port, extraArgs) {
   return [
     '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-File', scriptPath,
     '-Project', fixture.dir, '-SkipBuild', '-DevToolsCli', fakeCli,
+    // #1860 预探的 .ide 用户目录根注入：指向夹具内**不存在的空根** ⇒ 门预探只会看到
+    // 「端口文件不存在（冷起点）⇒ 放行」。不注这个，门会读本机真实用户目录 —— 开发机上
+    // IDE 开着 / 残留崩溃 .ide 都会让行为随环境漂移（守护必须密封，不随环境变红变绿）。
+    '-IdeUserDataRoot', path.join(fixture.dir, 'ide-root'),
     '-Port', String(port), '-PortWaitSeconds', '1', '-OpenTimeoutSeconds', '20',
     '-AutoTimeoutSeconds', '20', '-AutoRetryDelaySeconds', '0', '-HxNoWait'
   ].concat(extraArgs || []);
