@@ -7,7 +7,6 @@
     :suggestions="suggestions"
     enable-rename
     raised-input
-    :input-placeholder="'输入您的问题...（Enter 发送，Shift+Enter 换行）'"
     :can-send="draftReady"
     v-model:input-text="inputText"
     @send="handleSend"
