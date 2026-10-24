@@ -83,9 +83,10 @@ describe('UiButton', () => {
 })
 
 describe('UiTag / UiBadge', () => {
-  it('brand 标签叠加品牌浅底色', () => {
+  it('brand 标签叠加品牌浅底色（#1882：软底 token，随主题翻转）', () => {
     const w = mountWith(UiTag, { tone: 'brand' })
-    expect(w.classes()).toContain('bg-ui-50')
+    expect(w.classes()).toContain('bg-ui-soft')
+    expect(w.classes()).toContain('text-ui-soft-ink')
   })
 
   it('角标数量超过 max 显示为 max+', () => {
@@ -608,9 +609,10 @@ describe('UiTag（tone 唯一入口扩展，#766 C2）', () => {
     expect(w.classes()).toContain('ml-1.5')
   })
 
-  it('旧 API 零 diff：tone=brand 的品牌样式仍在（断言根，同既有测试）', () => {
+  it('旧 API 零 diff：tone=brand 的品牌样式仍在（断言根，同既有测试；#1882 起是软底 token）', () => {
     const w = mountWith(UiTag, { tone: 'brand', effect: 'light' })
-    expect(w.classes()).toContain('bg-ui-50')
+    expect(w.classes()).toContain('bg-ui-soft')
+    expect(w.classes()).toContain('text-ui-soft-ink')
   })
 })
 

@@ -33,7 +33,7 @@
         @click="goToEdit(chapter.chapter_id)"
       >
         <span
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ui-50 text-[13px] font-semibold text-ui-600"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ui-soft text-[13px] font-semibold text-ui-soft-ink"
         >
           {{ String(index + 1).padStart(2, '0') }}
         </span>

@@ -32,7 +32,7 @@
         <!-- 顺序练习 -->
         <UiCard variant="raised" class="stagger-in" :style="stagger(0)">
           <div class="flex items-center gap-2">
-            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-50 text-ui-600">
+            <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-soft text-ui-soft-ink">
               <el-icon :size="20"><Sort /></el-icon>
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>

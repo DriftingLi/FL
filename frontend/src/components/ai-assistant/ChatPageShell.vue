@@ -123,7 +123,7 @@
               </template>
             </div>
             <div v-if="editingSessionId !== s.id" class="session-actions flex gap-0.5">
-              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-50 hover:text-ui-600" title="重命名" @click.stop="startRename(s)">
+              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-soft hover:text-ui-soft-ink" title="重命名" @click.stop="startRename(s)">
                 <el-icon :size="14"><Edit /></el-icon>
               </button>
               <button class="session-delete shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" @click.stop="handleDeleteSession(s.id)">
@@ -147,7 +147,7 @@
             />
             <div
               v-else
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-100 text-[13px] font-semibold text-ui-700"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-soft-strong text-[13px] font-semibold text-ui-soft-ink"
             >
               {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
@@ -213,7 +213,7 @@
                   <div
                     v-for="s in page"
                     :key="s"
-                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-50 hover:text-ui-600"
+                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
                     :title="s"
                     @click="emit('suggest', s)"
                   >
@@ -242,7 +242,7 @@
 
         <!-- 消息列表（安全渲染单点：助手内容统一 markstream escape） -->
         <div v-for="msg in store.messages" :key="msg.id" class="message-item mb-6 flex gap-3" :class="[msg.role, msg.role === 'user' ? 'flex-row-reverse' : '']">
-          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl" :class="msg.role === 'user' ? 'bg-ui-600 text-white' : 'bg-ui-100 text-ui-600'">
+          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl" :class="msg.role === 'user' ? 'bg-ui-600 text-white' : 'bg-ui-soft-strong text-ui-soft-ink'">
             <el-icon v-if="msg.role === 'user'" :size="18"><User /></el-icon>
             <el-icon v-else :size="18"><ChatDotRound /></el-icon>
           </div>
@@ -278,7 +278,7 @@
 
         <!-- 流式输出中 -->
         <div v-if="store.streaming" class="message-item assistant mb-6 flex gap-3">
-          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-ui-100 text-ui-600">
+          <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-ui-soft-strong text-ui-soft-ink">
             <el-icon :size="18"><ChatDotRound /></el-icon>
           </div>
           <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">

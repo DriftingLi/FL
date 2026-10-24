@@ -107,8 +107,8 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
 }
 
 .nav-item.active {
-  color: var(--color-primary-600);
-  background: var(--color-primary-50);
+  color: var(--color-primary-soft-ink);
+  background: var(--color-primary-soft);
   font-weight: var(--font-medium);
 }
 

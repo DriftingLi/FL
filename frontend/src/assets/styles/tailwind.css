@@ -96,6 +96,13 @@
   --color-ui-accent-500: var(--color-accent-500);
   --color-ui-accent-600: var(--color-accent-600);
 
+  /* 品牌「浅底 + 深字」配对的原子类：#1882 —— bg-ui-soft / text-ui-soft-ink（会随主题翻转） */
+  --color-ui-soft: var(--color-primary-soft);
+  --color-ui-soft-strong: var(--color-primary-soft-strong);
+  --color-ui-soft-ink: var(--color-primary-soft-ink);
+  --color-ui-violet-soft: var(--color-violet-soft);
+  --color-ui-violet-soft-ink: var(--color-violet-soft-ink);
+
   /* 字体：font-sans / font-heading / font-code */
   --font-sans: var(--font-body);
   --font-heading: var(--font-display), var(--font-body);

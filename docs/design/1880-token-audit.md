@@ -77,6 +77,44 @@
 照 `ok-soft` / `ok-strong` 的既有做法（那两个本来就翻），然后 `bg-ui-50 text-ui-600` → `bg-ui-soft text-ui-soft-ink`。
 那是**设计系统改动**（新增一对 token + 迁 31 处），需要设计侧拍板，单独立票。
 
+
+## B 类收编（2026-10-24，#1882 落地）
+
+按本票建议引入**会翻转的一对 token**，没有逐个改填充：
+
+| token（design-tokens） | 浅色 | 深色 | @theme 原子类 |
+| --- | --- | --- | --- |
+| `--color-primary-soft` | `color-mix(品牌 500 12%, bg-card)` | 同左（**bg-card 自己翻**） | `bg-ui-soft` |
+| `--color-primary-soft-strong` | `color-mix(品牌 500 18%, bg-card)` | 同左 | `bg-ui-soft-strong` |
+| `--color-primary-soft-ink` | `#115E59`（primary-700） | `#5EEAD4`（primary-300） | `text-ui-soft-ink` |
+| `--color-violet-soft` / `-soft-ink` | 12% 紫混面板 / `#5B21B6` | 同左 / `#C4B5FD` | 紫调徽标用（scoped CSS 直接引用变量） |
+
+**关键设计**：填充档不需要在深色段重定义 —— 它混的是 `--color-bg-card`，那个 token 本来就会翻，
+所以"深色下浅底"从机制上不再可能。只有字色需要一对（浅色深青 / 深色浅青）。
+
+迁移 **32 处**（18 处类名 + 14 处 CSS 声明），覆盖 AI 助手会话壳、签到/收藏/课程/题库/帮助中心、`UiDialog` /
+`UiStatCard` / `UiTag`、侧栏激活态、顶栏角色徽标（含紫调那枚）、凭据切换器、目录项、仪表盘徽标、
+`::selection`、Element 下拉 hover。
+
+实测（脚手架并排修前/修后，浅深两主题各取一次 `computedStyle`）：
+
+| 场景 | 深色对比度 前→后 | 深色底色亮度 前→后 |
+| --- | --- | --- |
+| `bg-ui-50 text-ui-600` → `bg-ui-soft text-ui-soft-ink` | 5.25 → **8.56** | 0.957 → **0.033** |
+| `bg-ui-100 text-ui-700` → soft-strong 版 | 6.73 → **7.91** | 0.882 → **0.040** |
+| 侧栏/导航激活态（scoped） | 5.25 → **8.56** | 0.957 → 0.033 |
+| 管理端紫调徽标 | **3.86（不达 AA） → 6.97** | 0.907 → 0.032 |
+| `::selection` | 8.41 → 7.91 | 0.882 → 0.040 |
+| Element 下拉 hover | 7.27 → 8.56 | 0.957 → 0.033 |
+
+底色亮度 25 倍下降 = "暗页面上的亮块"消失；顺带把紫调徽标的 3.86（低于 AA）修到 6.97。
+浅色侧 6.1~7.8，全部达标。截图 `docs/verification/tooling/1882/soft-{light,dark}.png`，原始值同目录 `soft-contrast.json`。
+
+### 故意没迁的 1 处
+
+`student/CheckInPage.vue:54` 的 `bg-ui-100` 是「已断开」的**状态小圆点**（2.5×2.5px，上面没有文字）。
+它固定浅青在两种主题下都醒目，换成软底反而会糊进背景 —— 状态指示器要的是可见性，不是表面协调。
+
 ## 复现
 
 ```powershell
