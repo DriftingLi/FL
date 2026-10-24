@@ -16,6 +16,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 本机控制台是 GBK（#1853 范围追加）：node 的 stdout 是 UTF-8 JSON，`& node` 直捕按控制台代码页
+# 解码会把「①」等字符的 UTF-8 尾字节与后随 `"` 拼成双字节对**吞掉引号** ⇒ 键名截断 ⇒
+# ConvertFrom-Json 必炸「预检没吐出 JSON」（2026-10-24 两次复现）。入口先钉 UTF-8，
+# 让下面三处 `& node` 的捕获与控制台代码页解耦；与判据解耦的本机 git 配置不改。
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
