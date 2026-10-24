@@ -131,12 +131,29 @@ describe('#1848 死件防复活契约', () => {
         expect(hits).toEqual([]);
     });
 
-    it('F: 全仓 .uvue 不得出现 padding-right: 80rpx 魔数避让（D 段射程扩全仓）', () => {
-        // 匹配口径：精确匹配 padding-right: 80rpx（容空白），非任意 80rpx——全仓 .uvue 现有约 70 处
-        // height/width/font-size 等正当 80rpx 用法（2026-10-24 实测 0 处 padding-right 形态），
-        // 宽口径必误伤；魔数避让的历史形态正是死件 platform-nav-bar 的 padding-right 写法。
-        const re = /padding-right\s*:\s*80rpx/;
-        const hits = walk(ROOT, '.uvue').filter((f) => re.test(readText(f)));
+    it('F: 全仓 .uvue 不得出现右向 80rpx 魔数避让——展开 padding-right 与 padding 简写右值两种形态（D 段射程扩全仓）', () => {
+        // 匹配口径（#1845-1848 复审收紧，判据 = 右向 80rpx）：
+        // - 展开写法：padding-right: 80rpx（容空白）——魔数避让的历史形态，正是死件
+        //   platform-nav-bar 的写法；padding-left/top/bottom 不在射程（非避让向）。
+        // - 简写写法：padding: <值列表> 里落在**右向值位**的 80rpx。段序（CSS/uvue 同序）：
+        //   1 段 = 全向；2 段 = 上下 右左；3 段 = 上 右 下；4 段 = 上 右 下 左——右向位
+        //   一律是第 2 段（仅 1 段时即该值）。复审草案曾拟「简写任意位置的 80rpx 都报」
+        //   的宽口径，实测推翻：全仓 .uvue 简写含 80rpx 共 14 处、全部落在上/下位
+        //   （padding: 80rpx 0 / 160rpx 0 80rpx 等空态与底距留白），右向位 0 命中——
+        //   宽口径会把这 14 处正当写法一并判红，故按右向判据收口。
+        // 非任意 80rpx——全仓 .uvue 现有约 70 处 height/width/font-size 等正当 80rpx 用法，
+        // 全 80rpx 宽口径必误伤。
+        const expandedRe = /padding-right\s*:\s*80rpx/;
+        const shorthandRe = /padding\s*:\s*([^;{}]+)/g;
+        const rightDir80 = (src) => {
+            if (expandedRe.test(src)) return true;
+            for (const m of src.matchAll(shorthandRe)) {
+                const values = m[1].replace(/!important/g, '').trim().split(/\s+/);
+                if ((values.length === 1 ? values[0] : values[1]) === '80rpx') return true;
+            }
+            return false;
+        };
+        const hits = walk(ROOT, '.uvue').filter((f) => rightDir80(readText(f)));
         expect(hits.map((f) => f.replace(/\\/g, '/'))).toEqual([]);
     });
 });
