@@ -4,6 +4,8 @@
 // banner 与 QuickCard 三列因角色语义差异留在各页面（薄 adapter 注入数据），QuickCard 组件复用不变。
 import { ref, computed, watch, nextTick } from 'vue'
 import { useECharts } from './useECharts'
+import { chartTheme } from '@/utils/chartTheme'
+import { useThemeStore } from '@/stores/theme'
 import type { StudyStats } from '@/api/student'
 
 /** 归一化后的按天统计：days/labels/data/active_days 直接复用学员 StudyStats 形状，
@@ -36,6 +38,7 @@ export interface RoleDashboardOptions {
 export function useRoleDashboard(options: RoleDashboardOptions) {
   const chartRef = ref<HTMLElement | null>(null)
   const { init: initChart } = useECharts(chartRef)
+  const themeStore = useThemeStore()
 
   const timeTabs = options.timeTabs
   const currentTab = ref(timeTabs[0]?.value ?? '')
@@ -94,16 +97,18 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
     // ECharts "Can't get DOM width or height" 警告，直接跳过
     if (statsEmpty.value) return
 
+    const t = chartTheme()
+
     const labels = stats.value.labels
     const data = stats.value.data
 
     const common = {
       tooltip: {
         trigger: 'axis',
-        backgroundColor: '#fff',
-        borderColor: '#E2E8F0',
+        backgroundColor: t.tooltip.backgroundColor,
+        borderColor: t.tooltip.borderColor,
         borderWidth: 1,
-        textStyle: { color: '#0F172A' },
+        textStyle: t.tooltip.textStyle,
         extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;',
         valueFormatter: (val: any) => `${val} ${options.unit}`
       },
@@ -117,8 +122,8 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
       xAxis: {
         type: 'category',
         data: labels,
-        axisLabel: { fontSize: 11, color: '#64748B' },
-        axisLine: { lineStyle: { color: '#E2E8F0' } },
+        axisLabel: { fontSize: 11, color: t.text },
+        axisLine: { lineStyle: { color: t.axisLine } },
         axisTick: { show: false }
       }
     }
@@ -126,10 +131,10 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
     const yAxis: Record<string, unknown> = {
       type: 'value',
       name: options.yAxisName,
-      nameTextStyle: { color: '#94A3B8', fontSize: 11 },
+      nameTextStyle: { color: t.text, fontSize: 11 },
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#F1F5F9' } }
+      splitLine: { lineStyle: { color: t.splitLine } }
     }
     if (options.seriesType === 'bar') {
       yAxis.minInterval = 1
@@ -144,7 +149,7 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
               data,
               barWidth: '40%',
               itemStyle: {
-                color: '#0D9488',
+                color: t.series[0],
                 borderRadius: [4, 4, 0, 0]
               }
             }
@@ -156,8 +161,8 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
               smooth: true,
               symbol: 'circle',
               symbolSize: 6,
-              lineStyle: { color: '#0D9488', width: 2.5 },
-              itemStyle: { color: '#0D9488', borderWidth: 2, borderColor: '#fff' },
+              lineStyle: { color: t.series[0], width: 2.5 },
+              itemStyle: { color: t.series[0], borderWidth: 2, borderColor: t.pieBorderColor },
               areaStyle: {
                 color: {
                   type: 'linear',
@@ -180,6 +185,11 @@ export function useRoleDashboard(options: RoleDashboardOptions) {
       series
     })
   }
+
+  // 主题切换：option 里的颜色是快照，必须按新主题重绘
+  watch(() => themeStore.resolved, () => {
+    if (stats.value && !statsEmpty.value) renderChart()
+  })
 
   // #506 渲染自治：容器一旦挂载且已有 stats 即补渲染——首屏骨架包裹图表（chartRef
   // 晚于数据出现）不再需要调用方手动编排渲染时机。渲染条件与 renderChart 内一致。

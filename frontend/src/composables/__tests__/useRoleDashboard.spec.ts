@@ -3,8 +3,14 @@
 // #506：mock useECharts 观测渲染触发——「容器晚于数据挂载」（首屏骨架包裹图表）自动补渲染。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import { useRoleDashboard } from '@/composables/useRoleDashboard'
 import type { RoleDashboardStats } from '@/composables/useRoleDashboard'
+
+// composable 里要读主题 store（切换主题时重绘图表），单测里给它一个 active pinia
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 const { initSpy } = vi.hoisted(() => ({ initSpy: vi.fn() }))
 

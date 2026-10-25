@@ -103,13 +103,13 @@
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'Statistics' })
 
-import { ref, onMounted, nextTick } from 'vue'
-// 按需引入（方案 11.9）：与 useECharts 共用 @/utils/echarts 的注册清单
-import echarts from '@/utils/echarts'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { downloadExport, type ExportKind } from '@/api/export'
 import { useECharts } from '@/composables/useECharts'
+import { chartTheme } from '@/utils/chartTheme'
+import { useThemeStore } from '@/stores/theme'
 import UiButton from '@/components/ui/UiButton.vue'
 import { formatDurationCn, getProgressColor } from '@/utils/format'
 
@@ -120,6 +120,7 @@ const barChartRef = ref<HTMLDivElement | null>(null)
 const progressChartRef = ref<HTMLDivElement | null>(null)
 const { init: initBarChart } = useECharts(barChartRef)
 const { init: initProgressChart } = useECharts(progressChartRef)
+const themeStore = useThemeStore()
 
 async function handleExport(kind: ExportKind) {
   exporting.value = kind
@@ -140,6 +141,8 @@ const formatDuration = formatDurationCn
 
 function renderBarChart() {
   if (courseStats.value.length === 0) return
+
+  const t = chartTheme()
 
   const sortedStats = [...courseStats.value].sort((a, b) => b.study_count - a.study_count)
   const names = sortedStats.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
@@ -164,7 +167,7 @@ function renderBarChart() {
     xAxis: {
       type: 'category',
       data: names,
-      axisLabel: { rotate: 20, fontSize: 11 }
+      axisLabel: { rotate: 20, fontSize: 11, color: t.text }
     },
     yAxis: [
       { type: 'value', name: '人数' },
@@ -176,10 +179,7 @@ function renderBarChart() {
         type: 'bar',
         data: counts,
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#409eff' },
-            { offset: 1, color: '#79bbff' }
-          ])
+          color: t.series[0]
         },
         barWidth: '30%'
       },
@@ -189,10 +189,7 @@ function renderBarChart() {
         yAxisIndex: 1,
         data: durations,
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#67c23a' },
-            { offset: 1, color: '#95d475' }
-          ])
+          color: t.series[1]
         },
         barWidth: '30%'
       }
@@ -202,6 +199,8 @@ function renderBarChart() {
 
 function renderProgressChart() {
   if (courseStats.value.length === 0) return
+
+  const t = chartTheme()
 
   const names = courseStats.value.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const progressData = courseStats.value.map(c => Math.round(c.avg_progress * 100) / 100)
@@ -220,7 +219,7 @@ function renderProgressChart() {
     xAxis: {
       type: 'category',
       data: names,
-      axisLabel: { rotate: 20, fontSize: 11 }
+      axisLabel: { rotate: 20, fontSize: 11, color: t.text }
     },
     yAxis: {
       type: 'value',
@@ -233,7 +232,7 @@ function renderProgressChart() {
         data: progressData.map(val => ({
           value: val,
           itemStyle: {
-            color: val >= 100 ? '#67c23a' : val >= 60 ? '#409eff' : val >= 30 ? '#e6a23c' : '#f56c6c'
+            color: val >= 100 ? t.status.ok : val >= 60 ? t.series[0] : val >= 30 ? t.status.warn : t.status.bad
           }
         })),
         barWidth: '40%',
@@ -263,6 +262,11 @@ async function loadStatistics() {
     console.error('加载统计数据失败:', error)
   }
 }
+
+watch(() => themeStore.resolved, () => {
+  renderBarChart()
+  renderProgressChart()
+})
 
 onMounted(() => {
   loadStatistics()

@@ -63,12 +63,14 @@
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AdminDashboard' })
 
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 import { href } from '@/config/pages'
 import { useECharts } from '@/composables/useECharts'
+import { chartTheme } from '@/utils/chartTheme'
+import { useThemeStore } from '@/stores/theme'
 import { displayNameOf } from '@/types/user'
 import { formatDurationCompact } from '@/utils/format'
 
@@ -106,10 +108,12 @@ const quickActions = [
 // 时长格式（紧凑）：抽到 utils/format（#796）——与 Statistics 的中文格式是同名不同语义
 const formatDuration = formatDurationCompact
 
-const brandColors = ['#2563EB', '#3B82F6', '#60A5FA', '#10B981', '#34D399', '#F59E0B', '#FBBF24', '#8B5CF6']
+const themeStore = useThemeStore()
 
 function renderBarChart() {
   if (courseStats.value.length === 0) return
+
+  const t = chartTheme()
 
   const names = courseStats.value.map(c => c.name.length > 8 ? c.name.substring(0, 8) + '...' : c.name)
   const counts = courseStats.value.map(c => c.study_count)
@@ -119,16 +123,16 @@ function renderBarChart() {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: '#fff',
-      borderColor: '#E2E8F0',
+      backgroundColor: t.tooltip.backgroundColor,
+      borderColor: t.tooltip.borderColor,
       borderWidth: 1,
-      textStyle: { color: '#111827' },
+      textStyle: t.tooltip.textStyle,
       extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
     },
     legend: {
       data: ['学习人数', '学习时长(分钟)'],
       top: 0,
-      textStyle: { color: '#4B5563', fontSize: 12 }
+      textStyle: { color: t.text, fontSize: 12 }
     },
     grid: {
       left: '3%',
@@ -139,12 +143,12 @@ function renderBarChart() {
     xAxis: {
       type: 'category',
       data: names,
-      axisLabel: { rotate: 15, fontSize: 11, color: '#6B7280' },
-      axisLine: { lineStyle: { color: '#E2E8F0' } },
+      axisLabel: { rotate: 15, fontSize: 11, color: t.text },
+      axisLine: { lineStyle: { color: t.axisLine } },
       axisTick: { show: false }
     },
     yAxis: [
-      { type: 'value', name: '人数', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#F1F5F9' } } },
+      { type: 'value', name: '人数', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: t.splitLine } } },
       { type: 'value', name: '时长(分钟)', axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } }
     ],
     series: [
@@ -152,7 +156,7 @@ function renderBarChart() {
         name: '学习人数',
         type: 'bar',
         data: counts,
-        itemStyle: { color: '#2563EB', borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: t.series[0], borderRadius: [4, 4, 0, 0] },
         barWidth: '30%'
       },
       {
@@ -160,7 +164,7 @@ function renderBarChart() {
         type: 'bar',
         yAxisIndex: 1,
         data: durations,
-        itemStyle: { color: '#10B981', borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: t.series[1], borderRadius: [4, 4, 0, 0] },
         barWidth: '30%'
       }
     ]
@@ -169,6 +173,8 @@ function renderBarChart() {
 
 function renderPieChart() {
   if (courseStats.value.length === 0) return
+
+  const t = chartTheme()
 
   const data = courseStats.value.map(c => ({
     name: c.name.length > 10 ? c.name.substring(0, 10) + '...' : c.name,
@@ -183,7 +189,7 @@ function renderPieChart() {
         bottom: 0,
         left: 'center' as const,
         type: 'scroll' as const,
-        textStyle: { fontSize: 11, color: '#4B5563' },
+        textStyle: { fontSize: 11, color: t.text },
         itemWidth: 10,
         itemHeight: 10,
         itemGap: 8
@@ -192,21 +198,21 @@ function renderPieChart() {
         orient: 'vertical' as const,
         right: 10,
         top: 'center' as const,
-        textStyle: { fontSize: 12, color: '#4B5563' }
+        textStyle: { fontSize: 12, color: t.text }
       }
 
   initPieChart({
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c}%',
-      backgroundColor: '#fff',
-      borderColor: '#E2E8F0',
+      backgroundColor: t.tooltip.backgroundColor,
+      borderColor: t.tooltip.borderColor,
       borderWidth: 1,
-      textStyle: { color: '#111827' },
+      textStyle: t.tooltip.textStyle,
       extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
     },
     legend,
-    color: brandColors,
+    color: [...t.series],
     series: [
       {
         type: 'pie',
@@ -216,7 +222,7 @@ function renderPieChart() {
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 6,
-          borderColor: '#fff',
+          borderColor: t.pieBorderColor,
           borderWidth: 2
         },
         label: { show: false },
@@ -232,6 +238,12 @@ function renderPieChart() {
     ]
   })
 }
+
+// 主题切换：option 里的颜色是快照，必须按新主题重绘
+watch(() => themeStore.resolved, () => {
+  renderBarChart()
+  renderPieChart()
+})
 
 function handleResize() {
   // 跨越移动端断点时重新初始化饼图，切换 legend 布局避免重叠（容器缩放由 useECharts 处理）
