@@ -52,6 +52,21 @@
   --color-danger-strong: #B91C1C;
   --color-info-strong: #374151;
 
+  /*
+   * 语义「实心填充 + 其上文字」成对档（#1895）。
+   *
+   * 为什么不能拿 -strong 当填充：-strong 是**深色主题下会翻成浅色**的深字档（如
+   * warning-strong 在深色下是 #FCD34D），白字压上去只有 1.3:1。填充档必须自成一对，
+   * 且两主题各自定义：浅色用深填充配白字，深色用亮填充配深字。
+   * 判据锁在 src/assets/styles/__tests__/contrast.spec.ts（fill ↔ on-fill ≥ 4.5）。
+   */
+  --fill-ok: #047857;
+  --on-fill-ok: #FFFFFF;
+  --fill-warn: #B45309;
+  --on-fill-warn: #FFFFFF;
+  --fill-bad: #B91C1C;
+  --on-fill-bad: #FFFFFF;
+
   /* 互动语义色 - 玫红（点赞等热互动）。与 ok/warn/bad 同构三元组：
    * -soft 浅底 / 主色 / -strong 深字；暖红区别于 bad 的正红，承担「热互动」识别。
    * 命名 --rose-*（非 --color-rose-*）：@theme 桥接键占用 --color-rose-* 命名空间，
@@ -262,6 +277,14 @@
   --rose: #FB7185;
   --rose-soft: #3D111F;
   --rose-strong: #FDA4AF;
+
+  /* 语义填充档在深色下翻成亮填充 + 深字（浅色那套填充压深底看不出形状，且白字仍不达标） */
+  --fill-ok: #34D399;
+  --on-fill-ok: #052E22;
+  --fill-warn: #FBBF24;
+  --on-fill-warn: #451A03;
+  --fill-bad: #F87171;
+  --on-fill-bad: #450A0A;
 
   /* ===== 阴影：深底上投影变「泛光」，弱化 + 拉高 ===== */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);

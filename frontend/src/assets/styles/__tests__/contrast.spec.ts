@@ -111,7 +111,11 @@ const PAIRS: Array<[string, string, string, number]> = [
   ['品牌浅底深字 / 品牌浅底', 'color-primary-soft-ink', 'color-primary-soft', 4.5],
   ['成功深字 / 成功浅底', 'color-success-strong', 'color-success-light', 4.5],
   ['警告深字 / 警告浅底', 'color-warning-strong', 'color-warning-light', 4.5],
-  ['危险深字 / 危险浅底', 'color-danger-strong', 'color-danger-light', 4.5]
+  ['危险深字 / 危险浅底', 'color-danger-strong', 'color-danger-light', 4.5],
+  // 实心填充成对档（#1895）：浅色深底配白字、深色亮底配深字
+  ['成功填充文字 / 成功填充', 'on-fill-ok', 'fill-ok', 4.5],
+  ['警告填充文字 / 警告填充', 'on-fill-warn', 'fill-warn', 4.5],
+  ['危险填充文字 / 危险填充', 'on-fill-bad', 'fill-bad', 4.5]
 ]
 
 for (const [theme, tokens] of [

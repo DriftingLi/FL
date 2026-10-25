@@ -8,7 +8,7 @@
   >
     <el-icon v-if="iconComponent" :size="14"><component :is="iconComponent" /></el-icon>
     <slot>{{ label }}</slot>
-    <i v-if="badge" class="bg-ok rounded-pill px-1.5 py-px text-[10px] font-semibold not-italic leading-[1.4] text-white">{{ badge }}</i>
+    <i v-if="badge" class="bg-ok-fill text-ok-on rounded-pill px-1.5 py-px text-[10px] font-semibold not-italic leading-[1.4]">{{ badge }}</i>
   </button>
 </template>
 

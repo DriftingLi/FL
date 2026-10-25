@@ -76,8 +76,8 @@
                   {{ levelNameOf(course.level_id) }}
                 </span>
                 <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges absolute right-2 top-2 flex gap-1">
-                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad px-2 py-0.5 text-[11px] font-semibold text-panel">热门</span>
-                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn px-2 py-0.5 text-[11px] font-semibold text-panel">精品</span>
+                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad-fill text-bad-on px-2 py-0.5 text-[11px] font-semibold">热门</span>
+                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn-fill text-warn-on px-2 py-0.5 text-[11px] font-semibold">精品</span>
                 </div>
               </template>
               <template #meta>

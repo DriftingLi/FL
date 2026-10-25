@@ -11,9 +11,12 @@
  *   2. `var(--color-text-muted)` —— 同上，只是写法在 `<style>` 里；正文用 `--color-text-tertiary`。
  *   3. 同一行既有 `bg-ui-500` 又有 `text-white` / `text-panel` —— 白字压在 brand-500 上只有 3.74:1；
  *      填充抬到 `bg-ui-600`（5.47:1）。`bg-ui-500` 单独出现（圆点、指示条这类无文字图形）不判。
+ *   4. 同一行既有 `bg-ok` / `bg-warn` / `bg-bad` 又有浅字 —— 白字压在语义主色上是 2.54 / 1.87 / 3.75；
+ *      填充与文字必须成对用 `bg-*-fill` + `text-*-on`（#1895，两主题各自 ≥4.5）。`-soft` 与单独出现的
+ *      状态点不判。
  *
- * 为什么白名单为空：这三类在 2026-10-24 的收口里已全部清零（45 处 muted + 10 处 brand-500），
- * 规则可以绝对化执行。确有例外时逐条登记并写明理由，不要放宽规则本身。
+ * 为什么白名单为空：这几类在 2026-10-24 / 10-25 的收口里已全部清零（45 处 muted + 10 处 brand-500 +
+ * 5 处语义填充），规则可以绝对化执行。确有例外时逐条登记并写明理由，不要放宽规则本身。
  *
  * 用法：
  *   node scripts/check-a11y.mjs --all  [目录]   全量扫描（默认 frontend/src；有违规则退出 1）
@@ -68,6 +71,13 @@ const BRAND_FILL_RE = /\bbg-ui-500\b/
 const LIGHT_TEXT_RE = /\btext-(?:white|panel)\b/
 
 /**
+ * 语义主色当填充 + 浅字（#1895）：白字压在 success/warning/danger 主色上是
+ * 2.54 / 1.87 / 3.75，全部低于 4.5；填充请用成对的 `bg-*-fill` + `text-*-on`。
+ * `(?![\w-])` 是为了不误伤 `bg-ok-fill` / `bg-ok-soft` 这类同前缀档。
+ */
+const SEMANTIC_FILL_RE = /\bbg-(?:ok|warn|bad)(?![\w-])/
+
+/**
  * 扫一份源码，返回违规列表（1-based 行号 + 规则 id + 原文）。
  * 路径不在守卫面即整体放行。
  */
@@ -90,6 +100,15 @@ export function scanSource(source, file) {
         rule: 'brand-fill-500',
         text: line.trim(),
         why: '白字压在 bg-ui-500 上 3.74:1，填充请用 bg-ui-600（5.47）'
+      })
+    }
+    if (SEMANTIC_FILL_RE.test(line) && LIGHT_TEXT_RE.test(line)) {
+      violations.push({
+        file,
+        line: i + 1,
+        rule: 'semantic-fill',
+        text: line.trim(),
+        why: '白字压在 bg-ok/warn/bad 上只有 2.54/1.87/3.75，请用成对的 bg-*-fill + text-*-on'
       })
     }
   }
@@ -116,7 +135,7 @@ export const GUARD_SPEC = {
       '===== 无障碍档位守卫：低对比度文字档（#1892）=====',
       '扫描目录: ' + ctx.scanDirRel,
       '守卫面: ' + GUARDED_PATH_SEGMENT + '**/*.vue',
-      '禁入写法: text-ink-muted / var(--color-text-muted) / bg-ui-500 配 text-white|text-panel',
+      '禁入写法: text-ink-muted / var(--color-text-muted) / bg-ui-500 或 bg-ok|warn|bad 配 text-white|text-panel',
       '---'
     ],
     ok: (ctx) =>
