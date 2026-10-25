@@ -68,11 +68,6 @@
                 </view>
             </template>
 
-            <!-- ===== 微信一键登录 ===== -->
-            <template v-else-if="mode == 'wechat'">
-                <view class="wx-intro"></view>
-            </template>
-
             <!-- ===== 邮箱验证码登录 ===== -->
             <template v-else>
                 <view class="form-item">
@@ -108,12 +103,12 @@
                 </view>
             </template>
 
-            <!-- 协议勾选 + 注册引导（手机号/邮箱/微信方式展示）
+            <!-- 协议勾选 + 注册引导（手机号/邮箱方式展示）
                  #1478 抽成共享件 components/login-agreement（与着陆页同源同文案）；
                  「非 password 模式才显示」的门槛条件留在本页，口径由 loginContract 继续执法 -->
             <LoginAgreement v-if="mode != 'password'" :channel="mode" :agreed="agreed" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
             <!-- 登录按钮 -->
-            <button class="btn-login" :class="{ 'btn-login-disabled': loading, 'btn-wechat': mode == 'wechat' }"
+            <button class="btn-login" :class="{ 'btn-login-disabled': loading }"
                 :disabled="loading" @click="onSubmit">
                 {{ btnText }}
             </button>
@@ -137,29 +132,12 @@
 
         </view>
 
-        <!-- 底部登录方式切换：手机号 / 微信（仅小程序端，App 未配微信 SDK） / 邮箱 -->
+        <!-- 底部登录方式切换：手机号 / 邮箱 -->
         <view class="mode-switch">
             <text class="mode-link" :class="{ 'mode-link-active': mode == 'phone' }" @click="switchMode('phone')">手机验证码</text>
-            <!-- #ifdef MP-WEIXIN -->
-            <!-- #1478 裁定 2：本块两条**指令行**一字不动（增删数 = 0，② 门触发面），改用运行期
-                 探测件决定显隐 —— 编译面仍只有小程序端有这行，运行面再加一道「能力可用」判断，
-                 探测结论与着陆页取的是同一符号 —— 根 composables/useLoginProviders 解构出的
-                 `wechatAvailable`（模板里不得出现「import 函数 + 左括号」形态，Kotlin error18）。 -->
-            <text class="mode-sep" v-if="wechatAvailable">|</text>
-            <text class="mode-link" v-if="wechatAvailable" :class="{ 'mode-link-active': mode == 'wechat' }" @click="switchMode('wechat')">微信登录</text>
-            <!-- #endif -->
             <text class="mode-sep">|</text>
             <text class="mode-link" :class="{ 'mode-link-active': mode == 'email' }" @click="switchMode('email')">邮箱验证码</text>
         </view>
-
-        <!-- #1484：App 端微信登录入口（常驻样式位 + 禁用态 + 明示文案）。
-             为什么小程序端不挂这里：小程序端的入口就是上面那条 `.mode-link`，它住在
-             `#ifdef MP-WEIXIN` 块内（#1478 裁定 2 要求该块两条指令行一字不动）⇒ 两端各有一条入口，
-             不出现「同一个微信入口在小程序端渲染两次」。
-             门禁不在模板里：`@pick` 交出去之后由 useLoginForm.onProviderPick 决定拦还是放行
-             （未接通 ⇒ 只给提示、零请求；判据可被 jest 真跑，见 utils/loginProviderEntry.test.js A 组）。
-             挂载条件 `isAppPlatform` 是端别，不是接通态 ⇒ #1482 配好微信 SDK 后本行零改动，入口自己转可用。 -->
-        <LoginProviderEntry v-if="isAppPlatform" :provider="'wechat'" :ready="wechatLoginReady" @pick="onProviderPick" />
 
         <!-- 切回账号密码登录的小入口：仅在非密码模式下显示 -->
         <view class="back-password" v-if="mode != 'password'" @click="switchMode('password')">
@@ -177,23 +155,14 @@
     import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
     import { useAuthStore } from '../../stores/auth'
     import { useBiometric } from '../../composables/useBiometric'
-    import { useLoginProviders } from '../../composables/useLoginProviders'
     import { useLoginForm } from './composables/useLoginForm'
     import { useBiometricGate } from './composables/useBiometricGate'
     import { useSafeArea } from '../../utils/system'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
-    // #1484：登录提供方入口件（App 端常驻样式位 + 禁用态 + 明示文案）。落点选登录页而非着陆页：
-    // 着陆页那侧 #1478/#1487 已有主 CTA，本票只补登录页这条次级链，两个战场不重叠。
-    import LoginProviderEntry from '../../components/login-provider-entry/login-provider-entry.uvue'
 
     const auth = useAuthStore()
     // N06 自垫状态栏：高度取自 utils/system.uts 唯一真源（#1602/#1609），页面不再自行探测
     const safeArea = useSafeArea()
-    // 微信登录入口的显隐由**运行期能力探测**决定（#1478 裁定 2：条件编译指令行增删数为 0）；
-    // 着陆页 `pages/index/index.uvue` 引用的是同一个符号，两页不各写一份探测逻辑。
-    // 第三个面 `isAppPlatform` 是**挂载条件**（#1484）：入口件挂不挂 = 端别；按钮禁不禁 = 接通面。
-    // 两者必须分开——用「展示面 && 未接通」当挂载条件，#1482 接通那天 App 入口会自己消失。
-    const { wechatAvailable, wechatLoginReady, isAppPlatform } = useLoginProviders()
     // 生物识别实例只有一个：门控 checkSupport 写入的 isSupported 与模板读取的必须是同一份
     const biometric = useBiometric()
 
@@ -221,7 +190,6 @@
         loadCaptcha,
         clearCountdownTimer,
         switchMode,
-        onProviderPick,
         toggleAgree,
         togglePasswordVisible,
         showAgreement,
@@ -232,7 +200,7 @@
         goRegister,
         goForgotPassword,
         goRecruiterLogin,
-    } = useLoginForm(biometric, wechatLoginReady.value)
+    } = useLoginForm(biometric)
 
     // 生物识别门控面（回填 / 快捷登录 / 取消勾选清除），凭据 ref 由表单态注入
     const { showedStored, quickLoginLabel, initBiometricGate, onQuickLogin, toggleRemember } = useBiometricGate(biometric, username, password, rememberMe)
@@ -433,12 +401,6 @@
         color: #999999;
     }
 
-    /* ===== 微信一键登录展示区 ===== */
-    .wx-intro {
-        align-items: center;
-        padding: 60rpx 0 40rpx 0;
-    }
-
     /* 协议行样式（.agree-row / .agree-text / .agree-link）已于 #1478 随协议件抽走，
        落点 components/login-agreement/login-agreement.uvue 的 .la-* 规则；
        下面 .checkbox / .checkbox-checked / .check-mark 仍被「记住密码」行使用，不得跟着删。 */
@@ -524,11 +486,6 @@
         font-weight: bold;
         text-align: center;
         border: none;
-    }
-
-    /* 微信模式下按钮改用微信绿 */
-    .btn-login.btn-wechat {
-        background-color: #07C160;
     }
 
     .btn-login-disabled {

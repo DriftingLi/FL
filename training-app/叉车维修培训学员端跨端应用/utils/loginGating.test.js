@@ -5,7 +5,7 @@
  * 1) 入口显隐：仅在"存在已保存凭据 && 设备支持生物识别"时显示快捷登录入口
  * 2) 门控顺序：authenticate 通过才 loadSecureCredentials 回填；失败不回填不清除
  * 3) 取消勾选：立即 clearSecureCredentials 并收起入口
- * 4) 保存时机：仅账号密码登录成功后保存（含 refresh_token）；微信一键登录不触及凭据
+ * 4) 保存时机：仅账号密码登录成功后保存（含 refresh_token）；验证码两通道不触及凭据
  * 5) 快捷登录：authenticate → loadSecureCredentials → auth.quickLogin(u, p) → reLaunch；失败降级回填
  * 6) 孤儿凭据自愈：确定性不支持 + 完整凭据 → 降级仅账号；API 失败（definitive=false）不清理
  *
