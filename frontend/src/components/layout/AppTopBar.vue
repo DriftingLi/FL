@@ -12,18 +12,9 @@
  * 一个入口一处职责。
  */
 import { computed } from 'vue'
-import type { Component } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  ArrowDown,
-  Check,
-  Monitor,
-  Moon,
-  Operation,
-  Sunny,
-  SwitchButton,
-  UserFilled
-} from '@element-plus/icons-vue'
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore, type ThemeMode } from '@/stores/theme'
@@ -65,10 +56,10 @@ const showNotifications = computed(
  * 外观三态。Element Plus 2.14 的下拉**不支持嵌套子菜单**，故这里平铺三项 + 分组标题，
  * 交互与语义与「外观」子菜单一致（单选、当前项打勾）。
  */
-const themeOptions: Array<{ mode: ThemeMode; label: string; icon: Component }> = [
-  { mode: 'light', label: '浅色', icon: Sunny },
-  { mode: 'dark', label: '深色', icon: Moon },
-  { mode: 'system', label: '跟随系统', icon: Monitor }
+const themeOptions: Array<{ mode: ThemeMode; label: string; icon: IconName }> = [
+  { mode: 'light', label: '浅色', icon: 'sun' },
+  { mode: 'dark', label: '深色', icon: 'moon' },
+  { mode: 'system', label: '跟随系统', icon: 'theme-system' }
 ]
 
 async function onCommand(command: string) {
@@ -103,7 +94,7 @@ async function onCommand(command: string) {
         aria-label="打开菜单"
         @click="$emit('open-mobile')"
       >
-        <el-icon :size="20"><Operation /></el-icon>
+        <UiIcon name="menu" :size="20" />
       </button>
       <img v-if="avatarUrl" :src="avatarUrl" class="topbar-avatar" alt="头像" />
       <span v-else class="topbar-avatar is-fallback">{{ initial }}</span>
@@ -121,8 +112,8 @@ async function onCommand(command: string) {
 
       <el-dropdown trigger="click" placement="bottom-end" @command="onCommand">
         <button type="button" class="topbar-menu-btn" aria-label="用户菜单">
-          <el-icon :size="18"><UserFilled /></el-icon>
-          <el-icon class="topbar-menu-arrow" :size="12"><ArrowDown /></el-icon>
+          <UiIcon name="user" :size="18" />
+          <UiIcon name="chevron-down" class="topbar-menu-arrow" :size="12" />
         </button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -137,16 +128,14 @@ async function onCommand(command: string) {
               :command="'theme:' + opt.mode"
             >
               <span class="topbar-menu-item">
-                <el-icon :size="14"><component :is="opt.icon" /></el-icon>
+                <UiIcon :name="opt.icon" :size="14" />
                 {{ opt.label }}
-                <el-icon v-if="themeStore.mode === opt.mode" class="topbar-menu-check" :size="14">
-                  <Check />
-                </el-icon>
+                <UiIcon v-if="themeStore.mode === opt.mode" name="check" class="topbar-menu-check" :size="14" />
               </span>
             </el-dropdown-item>
             <el-dropdown-item divided command="logout">
               <span class="topbar-menu-item is-danger">
-                <el-icon :size="14"><SwitchButton /></el-icon>
+                <UiIcon name="log-out" :size="14" />
                 退出登录
               </span>
             </el-dropdown-item>

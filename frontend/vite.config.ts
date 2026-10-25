@@ -167,6 +167,9 @@ function chunkNameOf(id: string): string | undefined {
   const lazyPeerChunk = LAZY_PEER_CHUNKS.get(packageNameOf(id))
   if (lazyPeerChunk) return lazyPeerChunk
   if (id.includes('markstream-vue') || id.includes('markstream-core') || id.includes('stream-markdown-parser')) return 'markdown-stream'
+  // 图标形变（ADR-0079）：只在 UiIcon 的 morph 分支里被**动态** import。必须单独成 chunk ——
+  // 落进 vendor 就等于首屏背上整套形变运行时（vendor 被入口静态引用，实测 +10KB gzip）。
+  if (id.includes('/morphicons/')) return 'morphicons'
   if (id.includes('/dayjs/')) return 'dayjs'
   if (id.includes('/vuedraggable/') || id.includes('/sortablejs/')) return 'draggable'
   if (id.includes('/vue') || id.includes('/pinia') || id.includes('/axios') || id.includes('/@vue/')) {
@@ -183,6 +186,7 @@ const CHUNK_NAMES: string[] = [
   'markdown',
   ...LAZY_PEERS,
   'markdown-stream',
+  'morphicons',
   'dayjs',
   'draggable',
   'vue-vendor',

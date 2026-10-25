@@ -7,33 +7,27 @@
       aria-label="切换主题"
       title="切换主题"
     >
-      <el-icon v-if="themeStore.resolved === 'dark'" :size="18"><Moon /></el-icon>
-      <svg v-else-if="themeStore.mode === 'system'" class="h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3a9 9 0 0 0 0 18V3Z" fill="currentColor" opacity="0.9"/>
-        <path d="M12 6a6 6 0 0 0 0 12 8 8 0 0 1 0-12Z" fill="var(--color-bg-card)"/>
-        <path d="M12 3a9 9 0 0 1 9 9 9 9 0 0 1-9 9V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M16.8 6.2l1.4-1.4M21 12h2M16.8 17.8l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      <el-icon v-else :size="18"><Sunny /></el-icon>
+      <!-- 主题三态是同一个位置上的三张图形：形状变了，所以走形变（ADR-0079） -->
+      <UiIcon :name="themeIcon" :size="18" morph />
     </button>
     <template #dropdown>
       <el-dropdown-menu>
         <el-dropdown-item command="light">
           <span class="flex items-center gap-2">
-            <el-icon class="w-4" :size="14"><Sunny /></el-icon>浅色
-            <el-icon v-if="themeStore.mode === 'light'" class="ml-auto text-ui-soft-ink" :size="14"><Check /></el-icon>
+            <UiIcon name="sun" :size="14" />浅色
+            <UiIcon v-if="themeStore.mode === 'light'" name="check" class="ml-auto text-ui-soft-ink" :size="14" />
           </span>
         </el-dropdown-item>
         <el-dropdown-item command="dark">
           <span class="flex items-center gap-2">
-            <el-icon class="w-4" :size="14"><Moon /></el-icon>深色
-            <el-icon v-if="themeStore.mode === 'dark'" class="ml-auto text-ui-soft-ink" :size="14"><Check /></el-icon>
+            <UiIcon name="moon" :size="14" />深色
+            <UiIcon v-if="themeStore.mode === 'dark'" name="check" class="ml-auto text-ui-soft-ink" :size="14" />
           </span>
         </el-dropdown-item>
         <el-dropdown-item command="system">
           <span class="flex items-center gap-2">
-            <el-icon class="w-4" :size="14"><Monitor /></el-icon>跟随系统
-            <el-icon v-if="themeStore.mode === 'system'" class="ml-auto text-ui-soft-ink" :size="14"><Check /></el-icon>
+            <UiIcon name="theme-system" :size="14" />跟随系统
+            <UiIcon v-if="themeStore.mode === 'system'" name="check" class="ml-auto text-ui-soft-ink" :size="14" />
           </span>
         </el-dropdown-item>
       </el-dropdown-menu>
@@ -50,8 +44,10 @@
  * - variant="ghost"：透明无边框、hover 反色 —— ChatPageShell 悬浮胶囊与侧栏 header 内嵌用
  * - fixed：附加右上角固定定位（SidebarLayout / AuthPageShell 需悬浮于内容区；移动端加大触控目标）
  */
-import { Moon, Sunny, Check, Monitor } from '@element-plus/icons-vue'
+import { computed } from 'vue'
 import { useThemeStore, type ThemeMode } from '@/stores/theme'
+import type { IconName } from '@/icons/registry'
+import UiIcon from './UiIcon.vue'
 
 withDefaults(
   defineProps<{
@@ -62,6 +58,15 @@ withDefaults(
 )
 
 const themeStore = useThemeStore()
+
+/**
+ * 触发器的图形 = 当前外观三态之一：位置固定、只有形状变，正是形变的用场。
+ * 「跟随系统」优先于 resolved —— 否则系统处在深色时会被伪装成「深色」。
+ */
+const themeIcon = computed<IconName>(() => {
+  if (themeStore.mode === 'system') return 'theme-system'
+  return themeStore.resolved === 'dark' ? 'moon' : 'sun'
+})
 
 // 两种触发器外观（类串集中定义，色值全走 token）
 const cardClass =

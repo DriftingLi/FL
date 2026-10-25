@@ -183,6 +183,14 @@
   发布时间由编辑者指定（ADR-0076）：填过去的时刻即**补录**（保存即发布，但按该时刻进入时间轴），填未来的时刻即**定时发布**（`scheduled_at` 落库 + 进程内守护 `featured-scheduled-publish` 每分钟落成已发布；定时期间对访客完全不可见），留空则保存后立即发布。排序与上/下一篇始终以 `published_at` 为唯一时间轴，故补录会改变文章位置（预期行为）。
   _Avoid_: 「精选内容」（同一个东西的另一种写法，与首页区块「内容精选轮播」不一致）、「精选」（裸用）；把「定时中」当成第三个 `status` 取值说（它是「草稿 + 有 `scheduled_at`」的组合）；说「到点会推送」（到点只是公开可读，没有通知）。
 - **内容精选归档页（news archive）**：`/news`（全部）+ `/news/[category]`（四类）分页列表页，是每条已发布内容的可发现入口（首页轮播只展示前 6 条）；支持排序：最新资讯（按 `published_at`）/ 热点资讯（按 `view_count`）。
+
+## 图标与动效
+
+- **图标注册表（icon registry）**：`frontend/src/icons/registry.ts` 的「语义名 → 24 网格图形数据」映射，全站唯一的数据源（ADR-0079）。名字用 kebab-case 的**语义名**（`sun` / `theme-system` / `panel-left-close`），不是上游库的 PascalCase 名 —— 换数据源时调用方零改动。
+  _Avoid_: 把 Element Plus 图标组件、`lucide-react` 的组件当数据源（注册表只吃 `[tag, attrs]` 形状的图形数据）。
+- **图标名（icon name）**：注册表的键，`IconName` 由注册表类型推断，写错在 `npm run type-check` 阶段就红；运行期未登记的名字降级为警示图形（`circle-alert`）并在开发环境告警。渲染只走 `UiIcon` 单一入口，静态默认 `1em`。
+- **动效预设（motion preset）**：`frontend/src/config/motion.ts` 里的弹簧档（`snappy` / `smooth` / `bouncy`）与降级口径（`reducedMotion` 默认 `user`）的单点。只管 rAF 驱动的形变；CSS 过渡仍归 `design-tokens.css` 的 `--duration-*` / `--ease-*`，两者不互相替代。
+
 ## 接口契约
 
 - **响应信封（response envelope）**：所有 JSON 端点的统一外壳 `{code, message, data}`（ADR-0005）。`code` 与 HTTP 状态码同语义；错误时 `data` 为 `null`；AI 流式对话与文件下载不走信封。信封内的业务载荷一律称 **data**。
