@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { validatePrEvidence as validate, issueNumbersInBody } from './lib/gate-validator.mjs';
+import { validatePrEvidence as validate, issueNumbersInBody, GATE_EVIDENCE } from './lib/gate-validator.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const workflowPath = path.resolve(SCRIPT_DIR, '..', 'workflows', 'pr-evidence.yml');
@@ -1325,4 +1325,117 @@ test('evalValidator 兼容旧版模块：没有 issueNumbersInBody 时不报错�
     assert.equal(api.validatePrEvidence(), 'legacy');
     assert.equal(api.issueNumbersInBody, null, `${wf} 旧模块下票来源必须退化为 null（fail-closed）`);
   }
+});
+
+// -------------------- #1920：描述符是判据真源（换口径 ⇒ 判定随之改变） --------------------
+
+const EXEMPT_LINE = '- ① Android 真机逐页截图对比 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：无 · 结论（含产物）：免（①a 降级发版前一次，ADR-0043）';
+
+test('#1920 描述符驱动 ① 免行判据：换掉口径，同一份正文从绿变红', async () => {
+  const exemptBody = FULL_EVIDENCE.replace(/^- ① .*$/m, EXEMPT_LINE);
+  const before = await run({ body: exemptBody });
+  assert.equal(before.ok, true, before.errors.join('；'));
+  assert.match(before.notes.join(), /跳过（①a 降级常态/);
+
+  const saved = GATE_EVIDENCE.exemptions['①'];
+  try {
+    // 只在描述符里换口径：旧字样不再被认 ⇒ 该行退回截图判据 ⇒ 红
+    GATE_EVIDENCE.exemptions['①'] = [
+      { id: 'test', prefix: '^\\s*TEST-EXEMPT', text: 'TEST-EXEMPT', requireAll: ['TEST-EXEMPT'], note: 'driving', skippedNote: '跳过（driving 口径）——「结论」写的是「{conclusion}」。' },
+    ];
+    const strict = await run({ body: exemptBody });
+    assert.equal(strict.ok, false, '描述符改了、判定却没变 —— 说明判据仍是第二份字面量');
+    assert.match(strict.errors.join(), /①/);
+
+    // 新口径写进同一行 ⇒ 又绿（跳过的是取证，不是签收：执行人/日期仍须合格）
+    const swapped = FULL_EVIDENCE.replace(
+      /^- ① .*$/m,
+      '- ① Android 真机逐页截图对比 — 执行人：@DriftingLi · 日期：2026-09-11 · 复测对象：Pixel 8 · 结论（含产物）：TEST-EXEMPT',
+    );
+    const relaxed = await run({ body: swapped });
+    assert.equal(relaxed.ok, true, relaxed.errors.join('；'));
+    assert.match(relaxed.notes.join(), /跳过（driving/);
+  } finally {
+    GATE_EVIDENCE.exemptions['①'] = saved;
+  }
+});
+
+// ============================================================
+// GATE_EVIDENCE 描述符的守护测试（#1920）
+// ============================================================
+//
+// 描述符是「验收证据行该长什么样」的唯一真源，两个消费者按**同一段字节**读它：
+//   · node 侧：lib/gate-validator.mjs 把它当对象字面量（CI 里被 new Function 求值）
+//   · PowerShell 侧：training-app/…/scripts/lib/gate-evidence.ps1 抽出同一块文本 ConvertFrom-Json
+//
+// 所以这里钉三件事：
+//   1. marker 块存在，且块内是**严格 JSON**（不加注释、不加尾逗号）——PowerShell 只能用 JSON 读；
+//   2. 结构与判据要求相符（门集合、必填字段、① 免行两种口径）；
+//   3. 模块里真正被校验器使用的那个绑定，与块内 JSON 逐字段相同（防止「块是文档、真源在别处」）。
+//
+// marker 取**整行**（含 `// `）：否则 indexOf 会落回行内的 `=====`，切片尾部带上注释前缀。
+const DESCRIPTOR_BEGIN = '// ===== GATE_EVIDENCE_DESCRIPTOR BEGIN =====';
+const DESCRIPTOR_END = '// ===== GATE_EVIDENCE_DESCRIPTOR END =====';
+
+/** 抽出 marker 块内的严格 JSON 文本（与 PowerShell 侧同一段字节）。 */
+function extractDescriptorText(source) {
+  const b = source.indexOf(DESCRIPTOR_BEGIN);
+  const e = source.indexOf(DESCRIPTOR_END);
+  if (b < 0 || e < 0 || e < b) return null;
+  const block = source.slice(b + DESCRIPTOR_BEGIN.length, e).trim();
+  const body = block
+    .replace(/^export\s+const\s+GATE_EVIDENCE\s*=\s*/, '')
+    .replace(/;\s*$/, '')
+    .trim();
+  return body.length ? body : null;
+}
+
+test('描述符块存在且是严格 JSON（PowerShell 侧只能读 JSON）', () => {
+  const src = readFileSync(validatorPath, 'utf8');
+  const text = extractDescriptorText(src);
+  assert.ok(text, 'gate-validator.mjs 里找不到 GATE_EVIDENCE 描述符 marker 块');
+  // 严格 JSON：注释与尾逗号都会在这里炸
+  const parsed = JSON.parse(text);
+  assert.equal(typeof parsed.schemaVersion, 'number');
+});
+
+test('描述符覆盖五个门，且每门声明必填字段与产物类别', () => {
+  const gates = GATE_EVIDENCE.gates;
+  assert.ok(Array.isArray(gates) && gates.length >= 5);
+  assert.deepEqual(
+    gates.map((g) => g.key),
+    ['①', '②', '③', '④', '④b'],
+  );
+  for (const g of gates) {
+    assert.ok(g.label, `${g.key} 缺 label`);
+    assert.ok(Array.isArray(g.fields) && g.fields.includes('结论'), `${g.key} 缺「结论」字段`);
+    assert.ok(g.artifact, `${g.key} 缺 artifact`);
+  }
+  // ③ 只有结论一个字段（不要求执行人/日期）——本票要保住这条既有语义
+  assert.deepEqual(gates.find((g) => g.key === '③').fields, ['结论']);
+  // ② 只在命中微信面时要求（requires 由触发面判定读）
+  assert.equal(gates.find((g) => g.key === '②').requires, 'mpweixin');
+  assert.equal(gates.find((g) => g.key === '④b').requires, '4b');
+});
+
+test('① 免行两种口径都写在描述符里，且与校验器现役判据同字', () => {
+  const ex = GATE_EVIDENCE.exemptions;
+  assert.ok(ex && Array.isArray(ex['①']) && ex['①'].length >= 2);
+  const ids = ex['①'].map((x) => x.id);
+  assert.ok(ids.includes('1a'), '缺 ①a 降级常态免行（ADR-0043）');
+  assert.ok(ids.includes('window'), '缺窗口过渡旧写法（#1859 退场判据）');
+  const degraded = ex['①'].find((x) => x.id === '1a');
+  assert.equal(degraded.text, '免（①a 降级发版前一次，ADR-0043）');
+  // 判据只认字样：前缀 + 必须同时出现的字样，逐条落在描述符里
+  assert.ok(degraded.prefix);
+  assert.ok(degraded.requireAll.includes('①a 降级发版前一次'));
+  assert.ok(degraded.requireAll.includes('ADR-0043'));
+  const window = ex['①'].find((x) => x.id === 'window');
+  assert.ok(window.requireAll.includes('待批收口'));
+});
+
+test('模块内被校验器使用的绑定与块内 JSON 一致（防「块是文档」）', () => {
+  const src = readFileSync(validatorPath, 'utf8');
+  const parsed = JSON.parse(extractDescriptorText(src));
+  assert.deepEqual(JSON.parse(JSON.stringify(GATE_EVIDENCE)), parsed);
 });

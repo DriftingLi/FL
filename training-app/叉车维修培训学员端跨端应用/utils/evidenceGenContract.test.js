@@ -156,3 +156,97 @@ describe('evidence-gen.ps1 与 pr-evidence 校验器的对齐（真跑 + 真校�
     expect(line4).not.toMatch(/build\.log/);
   });
 });
+
+// -------------------- #1920：描述符是唯一真源（pwsh 侧与 node 侧读同一段字节） --------------------
+
+const EVIDENCE_LIB = path.join(ROOT, 'scripts', 'lib', 'gate-evidence.ps1');
+const REPO_ROOT = path.resolve(ROOT, '..', '..');
+const PR_TEMPLATE = path.resolve(REPO_ROOT, '.github', 'PULL_REQUEST_TEMPLATE.md');
+
+describe('#1920 证据描述符（GATE_EVIDENCE）单一真源', () => {
+  const shell = resolveShell();
+  const validatorSrc = fs.readFileSync(VALIDATOR, 'utf8');
+  const descriptor = new Function(`${validatorSrc.replace(/^export /gm, '')}\nreturn GATE_EVIDENCE;`)();
+  const q = (p) => `'${p.replace(/\\/g, '/')}'`;
+
+  function runPs(statements) {
+    const r = spawnSync(shell, ['-NoProfile', '-Command', statements.join('; ')], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`pwsh 退出码 ${r.status}：${(r.stderr || '').trim()}`);
+    return (r.stdout || '').trim();
+  }
+
+  // 把同一份校验器文本挪到临时仓库根：改描述符 = 改那一份字节，绝不碰真仓库文件
+  function tempRootWith(mutate) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-desc-'));
+    const dir = path.join(root, '.github', 'scripts', 'lib');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'gate-validator.mjs'), mutate(validatorSrc), 'utf8');
+    return root;
+  }
+
+  test('pwsh 读到的描述符与 node import 的是同一份（门/字段/免行/行形态）', () => {
+    const root = tempRootWith((s) => s);
+    const out = runPs([
+      `. ${q(EVIDENCE_LIB)}`,
+      `$d = Get-GateEvidenceDescriptor -RepoRoot ${q(root)}`,
+      [
+        'ConvertTo-Json -Compress -InputObject ([pscustomobject]@{',
+        'heading = $d.heading;',
+        'conclusionLabel = $d.conclusionLabel;',
+        'separator = $d.fieldSeparator.display;',
+        'prefix = $d.listItem.prefix;',
+        'gates = @($d.gates | ForEach-Object { "$($_.key)|$($_.label)|$($_.fields -join \',\')|$($_.artifact)" });',
+        'ex1a = $d.exemptions.' + "'①'" + '[0].text',
+        '})',
+      ].join(' '),
+    ]);
+    const got = JSON.parse(out);
+    expect(got.heading).toBe(descriptor.heading);
+    expect(got.conclusionLabel).toBe(descriptor.conclusionLabel);
+    expect(got.separator).toBe(descriptor.fieldSeparator.display);
+    expect(got.prefix).toBe(descriptor.listItem.prefix);
+    expect(got.gates).toEqual(
+      descriptor.gates.map((g) => `${g.key}|${g.label}|${g.fields.join(',')}|${g.artifact}`),
+    );
+    expect(got.ex1a).toBe(descriptor.exemptions['①'][0].text);
+  });
+
+  test('改描述符 ⇒ 生成的行跟着变（生成侧没有第二份字面量）', () => {
+    const root = tempRootWith((s) =>
+      s
+        .replace('"display": " · "', '"display": " / "')
+        .replace('"label": "npm run test:unit / test:behavior 两腿全绿"', '"label": "TEMP-LABEL"'),
+    );
+    const out = runPs([
+      `. ${q(EVIDENCE_LIB)}`,
+      `$d = Get-GateEvidenceDescriptor -RepoRoot ${q(root)}`,
+      `Format-GateEvidenceRow -Descriptor $d -Gate (Get-GateEvidenceGate -Key '①' -Descriptor $d) -Values @{ '执行人'='agent 执行'; '日期'='2026-10-25'; '复测对象'='无'; '结论'='免（①a 降级发版前一次，ADR-0043）' }`,
+      `Format-GateEvidenceRow -Descriptor $d -Gate (Get-GateEvidenceGate -Key '③' -Descriptor $d) -Values @{ '结论'='x' }`,
+    ]);
+    const [row1, row3] = out.split(/\r?\n/);
+    expect(row1).toContain('Android 真机逐页截图对比');
+    expect(row1).toContain(' / '); // 分隔符来自描述符，而不是生成器里写死
+    expect(row1).not.toContain(' · ');
+    expect(row3).toBe('- ③ TEMP-LABEL — 结论（含产物）：x');
+  });
+
+  test('生成器与预检侧不留第二份门形状字面量', () => {
+    const gen = readText(path.join(ROOT, GEN_REL));
+    expect(gen).not.toMatch(/- ① /);
+    expect(gen).not.toMatch(/Android 真机逐页截图对比/);
+    const pre = readText(path.resolve(REPO_ROOT, '.github', 'scripts', 'preflight-pr.mjs'));
+    expect(pre).not.toMatch(/\['①', '②', '③'/);
+    expect(pre).not.toMatch(/\\u6838\\u5fc3/); // 占位词表已不再内联（此断言只为锚住改法）
+  });
+
+  test('PR 模板的五门行与描述符同序、同结论栏名', () => {
+    const tpl = readText(PR_TEMPLATE);
+    const rows = tpl.split(/\r?\n/).filter((l) => /^- [①②③④]/.test(l));
+    expect(rows.map((l) => l.match(/^- ([①②③④]b?)/)[1])).toEqual(descriptor.gates.map((g) => g.key));
+    // 模板行允许在结论栏里加括号说明（如 ② 的「引用 MP_WEIXIN_RESULT…」），故只钉「含结论栏词干」
+    for (const l of rows) {
+      expect(l).toContain(descriptor.conclusionField);
+      expect(l).toContain('含产物');
+    }
+  });
+});

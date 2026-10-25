@@ -17,7 +17,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { validatePrEvidence, issueNumbersInBody } from './lib/gate-validator.mjs';
+import { validatePrEvidence, issueNumbersInBody, GATE_EVIDENCE } from './lib/gate-validator.mjs';
 
 const USAGE = [
   '用法: node .github/scripts/preflight-pr.mjs [选项]',
@@ -148,9 +148,16 @@ function checkRuns(repo, sha) {
   return (payload && payload.check_runs) || [];
 }
 
-const CI_RUN_LINK = /actions\/runs\/\d+/;
+// 判据形状同样取自描述符（#1920）：CI run 链接、占位词表、行前缀、结论字段、门的顺序都不在这里另写一份。
+const re = (spec) => new RegExp(spec.source, spec.flags || '');
+const CI_RUN_LINK = re(GATE_EVIDENCE.artifacts['ci-run']);
 // 与校验器的 PLACEHOLDER 同词表：这些值代表「还没填」，往里补链接会把它从「如实判红」变成「假绿」。
-const PLACEHOLDER_VALUE = /^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\/?a|无|暂无)$/i;
+const PLACEHOLDER_VALUE = re(GATE_EVIDENCE.placeholder);
+const LIST_ITEM_PREFIX = new RegExp(GATE_EVIDENCE.listItem.prefixStrip);
+const CONCLUSION_FIELD = new RegExp(
+  `(${GATE_EVIDENCE.conclusionField}(?:[（(][^）)]*[）)])?\\s*[：:]\\s*)(.*)$`,
+);
+const GATE_KEYS = GATE_EVIDENCE.gates.map((g) => g.key);
 
 /**
  * 把 ci-summary 的 run 链接补进正文 ③ 行（#1770 S4）——只补链接，不改结论文字。
@@ -165,10 +172,10 @@ export function fillCiLine(body, url) {
   const link = String(url || '');
   if (!CI_RUN_LINK.test(link)) return { body: text, filled: false, reason: 'url-invalid' };
   const lines = text.split(/\r?\n/);
-  const idx = lines.findIndex((l) => l.replace(/^\s*[-*]\s+/, '').startsWith('③'));
+  const idx = lines.findIndex((l) => l.replace(LIST_ITEM_PREFIX, '').startsWith('③'));
   if (idx === -1) return { body: text, filled: false, reason: 'no-gate-3-line' };
   if (CI_RUN_LINK.test(lines[idx])) return { body: text, filled: false, reason: 'already-has-run' };
-  const m = lines[idx].match(/(结论(?:[（(][^）)]*[）)])?\s*[：:]\s*)(.*)$/);
+  const m = lines[idx].match(CONCLUSION_FIELD);
   if (!m) return { body: text, filled: false, reason: 'no-conclusion-field' };
   const value = m[2].trim().replace(/[（(]\s*[）)]\s*$/, '').trim();
   if (PLACEHOLDER_VALUE.test(value)) return { body: text, filled: false, reason: 'conclusion-placeholder' };
@@ -186,7 +193,7 @@ function render(ctx) {
   lines.push(`  证据     正文 ${ctx.hasBody ? '有' : '无'} · PR 评论 ${gateComments.length} 条 · commit 评论 ${commitComments.length} 条（${shas.length} 个 commit） · 票评论 ${issueComments.length} 条（正文关联的票）`);
   if (ciRun) lines.push(`  ci-summary  ${ciRun.conclusion || '?'} ${ciRun.url || '（无链接）'}`);
   lines.push("");
-  for (const key of ['①', '②', '③', '④', '④b']) {
+  for (const key of GATE_KEYS) {
     const gate = result.gates && result.gates[key];
     if (!gate) continue;
     const state = gate.required === false ? '— 免' : gate.bound ? '✅ 已绑' : '❌ 未绑';
