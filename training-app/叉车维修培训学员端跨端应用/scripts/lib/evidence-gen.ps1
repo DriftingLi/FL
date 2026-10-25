@@ -59,13 +59,20 @@ function New-Evidence {
 
     $date = Get-Date -Format 'yyyy-MM-dd'
 
+    # 形状的唯一真源（#1920）：五门 / 字段 / 行形态 / ① 免行口径都从判据源读，本模块只负责填值。
+    . (Join-Path $PSScriptRoot 'gate-evidence.ps1')
+    $descriptor = Get-GateEvidenceDescriptor
+
     # 🟢 快速模式：不生成文件
     if ($Level -eq 'quick') {
+        # 建议句与 ① 免行同源（#1920/#1859）：旧版这里还写着「低风险运行时面」的退役口径，
+        # 照它写正文会被 pr-evidence 判红 —— 字面量在这里就等于第二个真源。
+        $exemptText = [string]$descriptor.exemptions.'①'[0].text
         return [pscustomobject]@{
             Generated = $false
             Path      = ''
             Content   = ''
-            Message   = '免（低风险运行时面：仅 .uvue 样式/文案改动）'
+            Message   = $exemptText
         }
     }
 
@@ -100,11 +107,17 @@ function New-Evidence {
     }
 
     $lines = @()
-    $lines += '## 验收证据'
+    $lines += [string]$descriptor.heading
     $lines += ''
-    $lines += "- ① Android 真机逐页截图对比 — 执行人：$Executor · 日期：$date · 复测对象：$shotSubject · 结论（含产物）：$shotText"
-    $lines += "- ③ npm run test:unit 全绿 — 结论（含产物）：$ciText"
-    $lines += "- ④ 本地编译门（默认 ④c） — 执行人：$Executor · 日期：$date · 复测对象：npm run build:kotlin-all · 结论（含产物）：$compileText"
+    $lines += Format-GateEvidenceRow -Descriptor $descriptor -Gate (Get-GateEvidenceGate -Key '①' -Descriptor $descriptor) -Values @{
+        '执行人' = $Executor; '日期' = $date; '复测对象' = $shotSubject; '结论' = $shotText
+    }
+    $lines += Format-GateEvidenceRow -Descriptor $descriptor -Gate (Get-GateEvidenceGate -Key '③' -Descriptor $descriptor) -Values @{
+        '结论' = $ciText
+    }
+    $lines += Format-GateEvidenceRow -Descriptor $descriptor -Gate (Get-GateEvidenceGate -Key '④' -Descriptor $descriptor) -Values @{
+        '执行人' = $Executor; '日期' = $date; '复测对象' = 'npm run build:kotlin-all'; '结论' = $compileText
+    }
 
     $contentText = $lines -join "`n"
 

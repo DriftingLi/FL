@@ -39,6 +39,142 @@ export function issueNumbersInBody(body) {
   return [...nums].filter((n) => Number.isInteger(n) && n > 0).slice(0, 5);
 }
 
+// 「验收证据行该长什么样」的**唯一真源**（#1920）。
+//
+// 为什么写在这里而不是单独的 .json：#1770 起两份 workflow（pr-evidence.yml / mobile-gates.yml）都
+// **不 checkout**，用 `repos.getContent` 取**本文件文本** → 剥 `export` → `new Function` 求值；
+// pr-evidence.yml 还留着「取不到就退回 yml 内联块」的兜底。把形状搬到独立 .json 需要三处 loader 各改
+// 一遍、且兜底块还得再抄一份 —— 那正好造出第三个来源，与本票的目的相反。所以形状留在本文件里，
+// 用 marker 圈出一段**严格 JSON**：node 侧当对象字面量读，PowerShell 侧（证据生成器 / 投递侧）
+// 抽同一段字节 `ConvertFrom-Json`。两个消费者读的字节完全相同。
+//
+// 块内规则（PowerShell 的 JSON 解析器不认别的东西）：**不加注释、不加尾逗号、正则只给 source 与 flags**。
+// 改形状 = 改这段 JSON + 改它的守护测试（`.github/scripts/gate-evidence-descriptor.test.mjs`）。
+// 门的**语义**（各门判什么、触发面、fail-closed 顺序）不在这里，也不因改它而变。
+// 已知扩展位：`anchor`（页锚）与「断言数」由 #1919 追加；消费者忽略未知字段。
+// ===== GATE_EVIDENCE_DESCRIPTOR BEGIN =====
+export const GATE_EVIDENCE = {
+  "schemaVersion": 1,
+  "ticket": 1920,
+  "heading": "## 验收证据",
+  "marker": {
+    "source": "<!--\\s*gate-evidence:{key}\\s*-->",
+    "keyPlaceholder": "{key}"
+  },
+  "listItem": {
+    "source": "^\\s*[-*]\\s",
+    "prefixStrip": "^\\s*[-*]\\s+",
+    "prefix": "- "
+  },
+  "fieldNames": ["执行人", "日期", "复测对象", "结论"],
+  "conclusionField": "结论",
+  "conclusionLabel": "结论（含产物）",
+  "fieldSeparator": {
+    "strip": "[·|]\\s*$",
+    "display": " · "
+  },
+  "placeholder": {
+    "source": "^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\\/?a|无|暂无)$",
+    "flags": "i"
+  },
+  "date": {
+    "source": "\\d{4}-\\d{2}-\\d{2}"
+  },
+  "exemptSubject": {
+    "source": "^(无|暂无)$"
+  },
+  "gates": [
+    {
+      "key": "①",
+      "label": "Android 真机逐页截图对比",
+      "fields": ["执行人", "日期", "复测对象", "结论"],
+      "artifact": "screenshot",
+      "noSubjectWhenExempt": true
+    },
+    {
+      "key": "②",
+      "label": "微信开发者工具无报错（半自动：agent 可执行 scripts/mp-weixin-check.ps1）",
+      "fields": ["执行人", "日期", "复测对象", "结论"],
+      "artifact": "screenshot",
+      "requires": "mpweixin"
+    },
+    {
+      "key": "③",
+      "label": "npm run test:unit / test:behavior 两腿全绿",
+      "fields": ["结论"],
+      "artifact": "ci-run"
+    },
+    {
+      "key": "④",
+      "label": "本地编译门（默认 ④c 整模块；dev 面追加 ④a）",
+      "fields": ["执行人", "日期", "复测对象", "结论"],
+      "artifact": "compile-log"
+    },
+    {
+      "key": "④b",
+      "label": "release 云打包（触及打包面时）",
+      "fields": ["执行人", "日期", "复测对象", "结论"],
+      "artifact": "any",
+      "requires": "4b"
+    }
+  ],
+  "exemptions": {
+    "①": [
+      {
+        "id": "1a",
+        "prefix": "^\\s*免",
+        "text": "免（①a 降级发版前一次，ADR-0043）",
+        "requireAll": ["①a 降级发版前一次", "ADR-0043"],
+        "note": "①a 降级常态，ADR-0043",
+        "skippedNote": "跳过（①a 降级常态，ADR-0043）——「结论」写的是「{conclusion}」；①a 已降级为发版前一次（发版冒烟），本 PR 不做逐页真机取证。"
+      },
+      {
+        "id": "window",
+        "prefix": "^\\s*SKIP\\b",
+        "prefixFlags": "i",
+        "text": "SKIP — 待批收口（窗口过渡旧写法；窗口机制已被 ADR-0043 退役，仅过渡期认）",
+        "requireAll": ["待批收口"],
+        "note": "窗口口径·过渡期旧写法",
+        "skippedNote": "跳过（窗口口径·过渡期旧写法）——「结论」写的是「{conclusion}」；窗口机制已被 ADR-0043 退役，旧写法暂按双白名单认（退场判据见 #1859）。"
+      }
+    ]
+  },
+  "artifacts": {
+    "screenshot": {
+      "issueCommentLink": { "source": "#issuecomment-\\d+" },
+      "repoVerification": {
+        "source": "docs\\/verification\\/[^\\s/`\"'<>]+\\/\\d+\\/[^\\s/`\"'<>]+\\.(?:png|jpe?g|webp|gif|bmp)\\b",
+        "flags": "i"
+      },
+      "githubHost": {
+        "source": "^https:\\/\\/(?:github\\.com\\/user-attachments\\/|[^\\s/]*user-images\\.githubusercontent\\.com\\/)"
+      },
+      "inlineGithubImage": {
+        "source": "(?:https:\\/\\/github\\.com\\/user-attachments\\/|https:\\/\\/[^\\s/]*user-images\\.githubusercontent\\.com\\/)[^\\s)`\"']*"
+      },
+      "markdownImage": {
+        "source": "!\\[[^\\]]*\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)",
+        "flags": "g"
+      },
+      "imageExt": {
+        "source": "\\.(?:png|jpe?g|webp|gif|bmp)\\b",
+        "flags": "i"
+      }
+    },
+    "ci-run": { "source": "actions\\/runs\\/\\d+" },
+    "compile-log": { "source": "build\\.log|kotlin-all\\.log" },
+    "any": { "source": "\\S" }
+  },
+  "verification": {
+    "root": "docs/verification",
+    "display": "docs/verification/<模块>/<票号>/<页名>.<ext>"
+  }
+};
+// ===== GATE_EVIDENCE_DESCRIPTOR END =====
+
+// 描述符里的正则只存 { source, flags }（PowerShell 的 JSON 解析器不认正则字面量）；node 侧在此还原。
+const toRe = (spec) => new RegExp(spec.source, spec.flags || '');
+
 export async function validatePrEvidence({
   files, body, author, gateComments = [], commitComments = [], issueComments = [], headSha = '',
   fetchCompare = null,
@@ -131,8 +267,11 @@ export async function validatePrEvidence({
   // 不得因 API 异常而放行。判定仍是**只校绑定形态、不校真伪**（不校验那次编译是否真的按该 sha 跑过）。
   const RUNTIME_LABEL = '.uvue / .uts / 三份 json';
   const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.startsWith(a));
-  const isGateEvidenceFor = (text, gateKey) =>
-    new RegExp('<!--\\s*gate-evidence:' + gateKey + '\\s*-->').test(text);
+  // 门评论的 marker 形态同样来自描述符（#1920）：投递侧与判据侧认同一个字符串。
+  const markerRe = (gateKey) => new RegExp(
+    GATE_EVIDENCE.marker.source.split(GATE_EVIDENCE.marker.keyPlaceholder).join(gateKey),
+  );
+  const isGateEvidenceFor = (text, gateKey) => markerRe(gateKey).test(text);
   const gateCommitIn = (text) => {
     const m = text.match(/commit:\s*`?([0-9a-fA-F]{7,40})`?/);
     return m ? m[1].toLowerCase() : '';
@@ -284,15 +423,12 @@ export async function validatePrEvidence({
   // 该通道的约束改由 AGENTS.md 的「agent 不得自合触及运行时面的 PR」承担。
   const riskDeclared = /已接受未验证风险/.test(clean) && /事后验证计划/.test(clean);
 
-  const GATES = [
-    { key: '①', label: 'Android 真机逐页截图对比', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot' },
-    { key: '②', label: '微信开发者工具无报错（半自动：agent 可执行 scripts/mp-weixin-check.ps1）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'screenshot', requires: 'mpweixin' },
-    // 标签文案是给人读的（#1702 两腿）；判据只认行首 key（matchesGate），改文案不动校验语义。
-    { key: '③', label: 'npm run test:unit / test:behavior 两腿全绿', fields: ['结论'], artifact: 'ci-run' },
-    { key: '④', label: '本地编译门（默认 ④c 整模块；dev 面追加 ④a）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'compile-log' },
-    { key: '④b', label: 'release 云打包（触及打包面时）', fields: ['执行人', '日期', '复测对象', '结论'], artifact: 'any', requires: '4b' },
-  ];
-  const PLACEHOLDER = /^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\/?a|无|暂无)$/i;
+  // 五门的形状（key / label / 必填字段 / 产物类别 / 触发条件）来自描述符 GATE_EVIDENCE —— #1920 前
+  // 这套字面量在本文件、evidence-gen.ps1、PULL_REQUEST_TEMPLATE.md、preflight-pr.mjs 各有一份。
+  // 本处只留「字段怎么用」，形状改动发生在描述符里。
+  // 标签文案是给人读的（#1702 两腿）；判据只认行首 key（matchesGate），改文案不动校验语义。
+  const GATES = GATE_EVIDENCE.gates;
+  const PLACEHOLDER = toRe(GATE_EVIDENCE.placeholder);
   // 截图证据的**结构性判据**（2026-09-12 修订，ADR-0008「截图证据的结构性判据」）：
   // 旧判据是过宽的子串正则（`https?:\/\/` / `.ci-verify\/\S+\.png` / `mp-weixin\.png`）——
   // 在「结论」里贴个**本地产物路径**或随手一个链接就能让这门结构上被判满足（假绿）。
@@ -301,29 +437,33 @@ export async function validatePrEvidence({
   // ③ 指向 sha 绑定门评论的链接（`#issuecomment-<id>`）。
   // **明确不接受**裸 `.ci-verify/*.png` 之类的本地产物路径与任意 http(s) 链接（不在仓库里、读不到）。
   // 仍然**只校结构、不校真伪**（ADR-0008「明确不做」）：不校验链接可达、不校验图片内容。
-  const IMAGE_EXT = /\.(?:png|jpe?g|webp|gif|bmp)\b/i;
-  const GITHUB_IMAGE_HOST = /^https:\/\/(?:github\.com\/user-attachments\/|[^\s/]*user-images\.githubusercontent\.com\/)/;
-  // 仓库内路径：docs/verification/<模块>/<票号>/<页名>.<ext>（目录键必须是数字段）
-  const REPO_VERIFICATION = /docs\/verification\/[^\s/`"'<>]+\/\d+\/[^\s/`"'<>]+\.(?:png|jpe?g|webp|gif|bmp)\b/i;
+  // 产物判据的正则同样来自描述符（#1920）：门「认不认这张截图」这件事只有一个真源。
+  const A = GATE_EVIDENCE.artifacts;
+  const IMAGE_EXT = toRe(A.screenshot.imageExt);
+  const GITHUB_IMAGE_HOST = toRe(A.screenshot.githubHost);
+  const REPO_VERIFICATION = toRe(A.screenshot.repoVerification);
+  const ISSUE_COMMENT_LINK = toRe(A.screenshot.issueCommentLink);
+  const INLINE_GITHUB_IMAGE = toRe(A.screenshot.inlineGithubImage);
+  const MARKDOWN_IMAGE = toRe(A.screenshot.markdownImage);
   const isScreenshotArtifact = (value) => {
     const v = String(value || '');
     if (!v) return false;
     // ③ sha 绑定门评论链接（评论本身已按 gate-evidence 标记 + commit sha 绑定到 head）
-    if (/#issuecomment-\d+/.test(v)) return true;
+    if (ISSUE_COMMENT_LINK.test(v)) return true;
     // ② 仓库内路径（可点开预览、可核验）
     if (REPO_VERIFICATION.test(v)) return true;
     // ① GitHub 托管的图片：附件 / 图床直链
-    if (/(?:https:\/\/github\.com\/user-attachments\/|https:\/\/[^\s/]*user-images\.githubusercontent\.com\/)[^\s)`"']*/.test(v)) return true;
+    if (INLINE_GITHUB_IMAGE.test(v)) return true;
     // Markdown 图片语法：远程图片（GitHub 托管或带图片扩展名的 http(s) URL）或仓库内路径；
     // **相对路径不得指向本地产物**（`.ci-verify/x.png` 之类不在仓库里、渲染即裂图、无从核验）。
-    const mdImages = [...v.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
+    const mdImages = [...v.matchAll(MARKDOWN_IMAGE)].map((m) => m[1]);
     return mdImages.some((u) => (/^https?:\/\//i.test(u) ? (GITHUB_IMAGE_HOST.test(u) || IMAGE_EXT.test(u)) : REPO_VERIFICATION.test(u)));
   };
   const ARTIFACT = {
     screenshot: isScreenshotArtifact,
-    'ci-run': /actions\/runs\/\d+/,
-    'compile-log': /build\.log|kotlin-all\.log/,
-    any: /\S/,
+    'ci-run': toRe(A['ci-run']),
+    'compile-log': toRe(A['compile-log']),
+    any: toRe(A.any),
   };
   const artifactOk = (kind, value) => {
     const spec = ARTIFACT[kind];
@@ -332,14 +472,22 @@ export async function validatePrEvidence({
 
   // ④ 门一行，但 ④b 行同样含「④」——按行首编号匹配（行首 ④ 后紧跟字母 a/b 的属于 ④a/④b 行），
   // 免得只填了 ④b 就算过了 ④
+  // 证据行的**行形态**也来自描述符：列表项前缀、字段名与字段分隔符（#1920）。
+  const LIST_ITEM = toRe(GATE_EVIDENCE.listItem);
+  const LIST_ITEM_PREFIX = new RegExp(GATE_EVIDENCE.listItem.prefixStrip);
+  const FIELD_MARK = new RegExp(
+    `(${GATE_EVIDENCE.fieldNames.join('|')})(?:[（(][^）)]*[）)])?\\s*[：:]\\s*`,
+    'g',
+  );
+  const FIELD_SEP = new RegExp(GATE_EVIDENCE.fieldSeparator.strip);
   const matchesGate = (line, gate) => {
-    const core = line.replace(/^\s*[-*]\s+/, '');
+    const core = line.replace(LIST_ITEM_PREFIX, '');
     if (!core.startsWith(gate.key)) return false;
     if (gate.key === '④') return !/[ab]/.test(core.charAt(1));
     return true;
   };
 
-  const lines = section.split('\n').filter((l) => /^\s*[-*]\s/.test(l));
+  const lines = section.split('\n').filter((l) => LIST_ITEM.test(l));
   for (const gate of GATES) {
     if (gate.requires === 'mpweixin' && !needs2) continue;
     if (gate.requires === '4b' && !needs4b) continue;
@@ -363,12 +511,12 @@ export async function validatePrEvidence({
       continue;
     }
     // 解析「字段：值」，字段之间用 · 或 | 分隔
-    const marks = [...line.matchAll(/(执行人|日期|复测对象|结论)(?:[（(][^）)]*[）)])?\s*[：:]\s*/g)];
+    const marks = [...line.matchAll(FIELD_MARK)];
     const values = {};
     marks.forEach((m, i) => {
       const start = m.index + m[0].length;
       const end = i + 1 < marks.length ? marks[i + 1].index : line.length;
-      values[m[1]] = line.slice(start, end).replace(/[·|]\s*$/, '').trim();
+      values[m[1]] = line.slice(start, end).replace(FIELD_SEP, '').trim();
     });
     // ① 门的免行判据——**双白名单过渡**（#1859，2026-10-24；ADR-0043 决策 1/8）：
     //   · 新口径（0043 常态，主通道）：结论 `免（①a 降级发版前一次，ADR-0043）`——①a 永久降级为
@@ -383,12 +531,14 @@ export async function validatePrEvidence({
     // ②③④④b 一律不受此分支影响（免行只属于 ① 门）。
     // **必须**打头（`免` / `SKIP`）：真截图结论里若顺手写了这些字样，不能被误判成跳过
     // （否则「已有证据」会被渲染成「跳过」）。
-    const conclusion1 = String(values['结论'] || '');
-    const degraded1a = gate.key === '①'
-      && /^\s*免/u.test(conclusion1) && /①a\s*降级发版前一次/.test(conclusion1) && /ADR-0043/.test(conclusion1);
-    const windowSkip = gate.key === '①'
-      && /^\s*SKIP\b/i.test(conclusion1) && /待批收口/.test(conclusion1);
-    const exempt1a = degraded1a || windowSkip;
+    const conclusion1 = String(values[GATE_EVIDENCE.conclusionField] || '');
+    // 免行口径来自描述符（#1920）：一道门可以有多条豁免（① 的 1a 与窗口过渡旧写法），
+    // 每条 = 行首前缀 + 必须同时出现的字样。判据**只认字样不认文件**，与改动前同义。
+    const exemption = (GATE_EVIDENCE.exemptions[gate.key] || []).find(
+      (e) => new RegExp(e.prefix, e.prefixFlags || '').test(conclusion1)
+        && e.requireAll.every((s) => conclusion1.includes(s)),
+    );
+    const exempt1a = Boolean(exemption);
     const errorsBefore = errors.length;
     for (const field of gate.fields) {
       const v = values[field];
@@ -396,7 +546,7 @@ export async function validatePrEvidence({
         errors.push(`${where}：缺字段「${field}」。`);
         continue;
       }
-      if (exempt1a && field === '复测对象' && /^(无|暂无)$/.test(v)) continue;
+      if (exempt1a && field === '复测对象' && toRe(GATE_EVIDENCE.exemptSubject).test(v)) continue;
       if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
     }
     if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
@@ -411,9 +561,8 @@ export async function validatePrEvidence({
     // 且不得记成 skipped —— 否则管家会替一条不合格的行渲染「⏭ 跳过」。
     if (exempt1a && errors.length === errorsBefore) {
       gates['①'].skipped = true;
-      notes.push(degraded1a
-        ? `${where}：跳过（①a 降级常态，ADR-0043）——「结论」写的是「${values['结论']}」；①a 已降级为发版前一次（发版冒烟），本 PR 不做逐页真机取证。`
-        : `${where}：跳过（窗口口径·过渡期旧写法）——「结论」写的是「${values['结论']}」；窗口机制已被 ADR-0043 退役，旧写法暂按双白名单认（退场判据见 #1859）。`);
+      // 文案也是形状的一部分（#1920）：跳过句整句来自描述符，本处只做 {conclusion} 插值。
+      notes.push(`${where}：${String(exemption.skippedNote || '').replace('{conclusion}', String(values['结论'] || ''))}`);
       continue;
     }
     if (exempt1a) continue; // 该行已红：不再叠加「须引用可核验截图」这条噪音，红因保持精确
