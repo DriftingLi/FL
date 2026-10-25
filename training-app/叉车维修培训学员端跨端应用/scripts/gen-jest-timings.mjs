@@ -108,7 +108,7 @@ function main(argv) {
   for (const k of keys) ordered[k] = suites[k]
   const payload = {
     schema: 1,
-    note: `逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：${source}。表里没列到的套件按 defaultSeconds 计权。`,
+    note: `逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：${source}。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。`,
     defaultSeconds: args.defaultSeconds,
     suites: ordered,
   }
