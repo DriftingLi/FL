@@ -118,6 +118,15 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 
 按本条约定清理 hint 时**跳过这两条**。
 
+## 图标（ADR-0079）
+
+- **唯一入口** `UiIcon`：**图标是数据不是组件**。注册表在 `icons/registry.ts`，`IconName` 由它推断 —— 名字写错 `npm run type-check` 直接红；运行期未登记的名字回落警示图形并在**开发环境**告警（生产静默降级），不白屏。
+- **尺寸**：默认 `1em`（跟随字号，与旧 `el-icon` 同口径，迁移零位移）；要固定值就传数字（px）。图标控件的**命中区**另见 ADR-0078（桌面 28 / 移动 40），与本条不冲突。
+- **形变只在形状真的改变时用**：`morph` 是显式开关，白名单 = 主题三态、侧栏折叠、收藏/举报/删除的描边↔实心、上传结果。同形状换方向（箭头旋转）与纯填充开关（心形，同一个 `d`）走 CSS，不用形变。
+- **可访问名**：有 `label` 即 `role="img"` + `<title>`；没有就是装饰性图形（`aria-hidden`）。纯图标按钮的 `aria-label` 仍按 #1893 的口径挂在按钮上，不靠图标自证。
+- **不得**：业务代码 import `@element-plus/icons-vue`、写 `<el-icon>`、手写 `viewBox="0 0 24 24"` 的 svg —— 守卫 `node scripts/check-icons.mjs --all` 报红；迁移期例外逐条登记在 `scripts/icon-legacy-baseline.json`，**只减不增**（迁干净的文件必须删行，自检会拦）。
+- **动效参数单点**：`config/motion.ts`。弹簧档与降级口径（`reducedMotion` 默认 `user`，跟随系统）只在那里改；CSS 过渡仍归 `design-tokens.css`，两套机制各管各的动画面。
+
 ## Tailwind 增量共存四条边界规则
 
 项目已引入 Tailwind CSS v4，与既有 `<style scoped>` 长期共存（详细背景见 `.workbuddy/plans/student-ui-redesign.md`）。共存期间遵守：
