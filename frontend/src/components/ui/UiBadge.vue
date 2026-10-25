@@ -16,10 +16,19 @@ const props = withDefaults(
 
 const TONE: Record<string, string> = {
   brand: 'bg-ui-600',
-  ok: 'bg-ok',
-  warn: 'bg-warn',
-  bad: 'bg-bad',
+  ok: 'bg-ok-fill',
+  warn: 'bg-warn-fill',
+  bad: 'bg-bad-fill',
   neutral: 'bg-ink-3'
+}
+
+/** 计数文字与填充成对（#1895）：浅色深底配白字、深色亮底配深字，两主题都 ≥4.5 */
+const TONE_TEXT: Record<string, string> = {
+  brand: 'text-white',
+  ok: 'text-ok-on',
+  warn: 'text-warn-on',
+  bad: 'text-bad-on',
+  neutral: 'text-white'
 }
 </script>
 
@@ -31,8 +40,8 @@ const TONE: Record<string, string> = {
   />
   <span
     v-else-if="props.count > 0"
-    class="inline-flex min-w-[18px] items-center justify-center rounded-pill px-1.5 py-0.5 text-xs font-medium leading-none text-white"
-    :class="TONE[props.tone]"
+    class="inline-flex min-w-[18px] items-center justify-center rounded-pill px-1.5 py-0.5 text-xs font-medium leading-none"
+    :class="[TONE[props.tone], TONE_TEXT[props.tone]]"
   >
     {{ props.count > props.max ? `${props.max}+` : props.count }}
   </span>

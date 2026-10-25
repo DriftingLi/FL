@@ -149,4 +149,15 @@
   --color-rose: var(--rose);
   --color-rose-soft: var(--rose-soft);
   --color-rose-strong: var(--rose-strong);
+
+  /*
+   * 语义「实心填充 + 其上文字」成对档（#1895）：bg-ok-fill / text-ok-on …
+   * 填充档与文字档必须成对用 —— 单独把 text-ok（主色）铺在浅底上属于 -soft 那一族。
+   */
+  --color-ok-fill: var(--fill-ok);
+  --color-ok-on: var(--on-fill-ok);
+  --color-warn-fill: var(--fill-warn);
+  --color-warn-on: var(--on-fill-warn);
+  --color-bad-fill: var(--fill-bad);
+  --color-bad-on: var(--on-fill-bad);
 }

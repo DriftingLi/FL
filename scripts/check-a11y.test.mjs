@@ -47,6 +47,34 @@ test('放行：bg-ui-500 单独出现（圆点 / 指示条等无文字图形）'
   assert.deepEqual(scanSource('<div class="absolute bg-ui-500 shadow-sm" />', VUE), [])
 })
 
+test('命中：语义主色当填充配浅字（#1895）', () => {
+  const ok = scanSource('<span class="bg-ok text-white">5</span>', VUE)
+  assert.equal(ok.length, 1)
+  assert.equal(ok[0].rule, 'semantic-fill')
+
+  const warn = scanSource('<span class="bg-warn text-panel">精品</span>', VUE)
+  assert.equal(warn.length, 1)
+  assert.equal(warn[0].rule, 'semantic-fill')
+
+  const bad = scanSource('<span class="rounded-pill bg-bad px-2 text-[11px] text-panel">热门</span>', VUE)
+  assert.equal(bad.length, 1)
+})
+
+test('放行：成对的 bg-*-fill + text-*-on（两主题都 ≥4.5）', () => {
+  assert.deepEqual(scanSource('<span class="bg-ok-fill text-ok-on">5</span>', VUE), [])
+  assert.deepEqual(scanSource('<span class="bg-warn-fill text-warn-on">精品</span>', VUE), [])
+  assert.deepEqual(scanSource('<span class="bg-bad-fill text-bad-on">热门</span>', VUE), [])
+})
+
+test('放行：-soft 浅底配深字（不是实心填充）', () => {
+  assert.deepEqual(scanSource('<span class="bg-ok-soft text-ok-strong">已通过</span>', VUE), [])
+  assert.deepEqual(scanSource('<span class="bg-bad-soft text-bad">失败</span>', VUE), [])
+})
+
+test('放行：bg-ok 单独出现（状态点，无文字）', () => {
+  assert.deepEqual(scanSource('<i class="bg-ok rounded-full size-2"></i>', VUE), [])
+})
+
 test('放行：text-ink-3 / var(--color-text-tertiary)', () => {
   assert.deepEqual(scanSource('<p class="text-ink-3">提示</p>', VUE), [])
   assert.deepEqual(scanSource('.hint { color: var(--color-text-tertiary); }', VUE), [])
