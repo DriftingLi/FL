@@ -144,6 +144,12 @@
             <text class="back-password-link">账号密码登录</text>
         </view>
 
+        <!-- 微信一键登录入口（#1908）：纯导航回欢迎页——微信一键登录收敛为欢迎页唯一界面
+             （ADR-0032 2026-10-24 修订），本页不得内嵌微信登录链路；两端直出、不加端别门禁（展示面口径） -->
+        <view class="wechat-entry">
+            <button class="btn-wechat" @click="goWechatLanding">微信一键登录</button>
+        </view>
+
         <!-- 招聘者入口：纯文字链接，复用既有 link 样式（ADR-0022 ② / ④ 步骤 P1） -->
         <view class="recruiter-entry" @click="goRecruiterLogin">
             <text class="back-password-link">招聘者登录</text>
@@ -250,6 +256,11 @@
 
     function onCaptchaInput(e : InputEvent) : void {
         captchaValue.value = e.detail.value
+    }
+
+    // 切回欢迎页走 reLaunch：401 顶出场景页面栈里只有登录页自身，navigateBack 无处可回（#1908）
+    function goWechatLanding() : void {
+        uni.reLaunch({ url: '/pages/index/index' })
     }
 </script>
 
@@ -535,5 +546,24 @@
         border-bottom-style: solid;
         border-bottom-color: #2979ff;
         padding-bottom: 2rpx;
+    }
+
+    /* ===== 微信一键登录入口（描边次级按钮，#1908；#07C160 走 uiHexWhitelist） ===== */
+    .wechat-entry {
+        padding: 0 56rpx 30rpx 56rpx;
+    }
+
+    /* 技法同 .code-btn（白底细描边圆角），色取微信品牌绿；次级于 .btn-login：无实底、不加粗、字号小一档 */
+    .btn-wechat {
+        width: 100%;
+        height: 96rpx;
+        line-height: 96rpx;
+        padding: 0;
+        font-size: 30rpx;
+        color: #07C160;
+        background-color: #ffffff;
+        border: 2rpx solid #07C160;
+        border-radius: 48rpx;
+        text-align: center;
     }
 </style>

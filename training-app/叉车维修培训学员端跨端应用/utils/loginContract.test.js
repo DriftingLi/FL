@@ -84,9 +84,19 @@ const LINE_BUDGET = 600;
  * 挂载行、主按钮的 `'btn-wechat'` class 绑定，另改两行注释；样式块删两条规则（`.wx-intro` /
  * `.btn-login.btn-wechat`）。⇒ 两把 sha 同步前进；其余每一行逐字节不变。
  * 现测：两把 sha 均由本文件同款 `block()` 重算；判别力自检照旧。
+ *
+ * ⚠️ **#1908 第五次显式变更（grill 定案 2026-10-25，同样不是绕过）**：登录页补「微信一键登录」
+ * 纯导航入口（回欢迎页，兑现 ADR-0032 2026-10-24 修订节「产品若要，另立票」条款）。
+ * 模板块：`back-password` 与 `recruiter-entry` 之间新增一条常显入口块（注释 2 行 + view/button 3 行）；
+ * 样式块：新增两条规则（`.wechat-entry` / `.btn-wechat`，描边次级按钮技法同 `.code-btn`，
+ * `#07C160` 走 uiHexWhitelist 既有条目）。脚本块新增局部函数 `goWechatLanding`（`uni.reLaunch`
+ * 回欢迎页——401 顶出场景栈里只有本页，navigateBack 无处可回）。**不内嵌微信登录链路**：
+ * 接通面消费页仍为 1（欢迎页唯一界面，#1879 裁决原样）；两端直出、**不新增 `#ifdef`**
+ * （landingLoginContract 的计数锁 0 不破）；欢迎页零改动。
+ * ⇒ 两把 sha 同步前进；其余每一行逐字节不变。判别力自检照旧。
  */
-const TEMPLATE_SHA256 = '815d2642493d414cb234bce8abbae1ae9e7a30eeb308093665b8ba8b4f2d5914';
-const STYLE_SHA256 = 'e2721f6549fdf1dbd5511cfc5fb14a63a0dcbc4755cd035e035615eba244b47d';
+const TEMPLATE_SHA256 = '3e2d1d81407dabf5d39902ea21104a9be9d6e33b7eed580993a8e52585a8ee54';
+const STYLE_SHA256 = '955473dd40c097378a61d0b3e36b1eb54bab555060482358b5c31a4278ef1f89';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
