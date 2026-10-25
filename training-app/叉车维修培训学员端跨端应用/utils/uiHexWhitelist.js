@@ -116,7 +116,7 @@ module.exports = {
     '#F2F4F7': 'pages/index/index.uvue cta-secondary 底——次级按钮中性浅灰，$bg-color(#f8f8f8) 近似但值不等，待真机裁',
     '#1E9FFF': 'pages/index/index.uvue cta-secondary-text 字色——uView 系蓝文字，token 表无对应，待蓝系 token 票裁',
     '#E0E2EA': 'pages/login/login.uvue、pages/register/register.uvue、pages/forgot-password/forgot-password.uvue 区号与输入分隔竖线——中性灰蓝分隔，$border-color(#e5e5e5) 近似但值不等，待灰阶 token 票裁',
-    '#07C160': 'pages/profile-setup/profile-setup.uvue 头像虚线框（登录页微信按钮底已随 #1879 微信模式退役拆除，本条因 profile-setup 仍在用而保留）——微信品牌绿属外部品牌标识色，改走 token 即失真，不入 token 体系',
+    '#07C160': 'pages/profile-setup/profile-setup.uvue 头像虚线框 + pages/login/login.uvue btn-wechat 描边次级按钮的边框与字色（#1908 纯导航入口；按钮底仍白，随 #1879 拆除的「按钮底」用途未复活）——微信品牌绿属外部品牌标识色，改走 token 即失真，不入 token 体系',
     '#15803D': 'pages/forgot-password/forgot-password.uvue 成功态按钮按下底——#22C55E 的深一档配对（green-700），同上待成功系 token 票裁',
     '#14532D': 'pages/forgot-password/forgot-password.uvue 成功态深绿字——green-900，token 表无对应',
     '#86EFAC': 'pages/forgot-password/forgot-password.uvue 成功态浅绿字——green-300，token 表无对应',
