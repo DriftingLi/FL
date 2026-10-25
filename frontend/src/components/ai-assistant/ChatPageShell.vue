@@ -15,7 +15,7 @@
           <img :src="logoSrc" alt="和润天下" class="h-7 w-7 rounded-ctl object-cover" />
         </a>
         <button
-          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
+          class="floating-icon-btn flex h-8 w-8 max-md:h-10 max-md:w-10 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink"
           :title="isMobile ? '打开会话栏' : '展开侧栏'"
           :aria-label="isMobile ? '打开会话栏' : '展开侧栏'"
           @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
@@ -24,7 +24,7 @@
         </button>
         <button
           v-if="store.isLoggedIn"
-          class="floating-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+          class="floating-icon-btn flex h-8 w-8 max-md:h-10 max-md:w-10 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="store.streaming"
           :title="newSessionTitle"
           :aria-label="newSessionTitle"
