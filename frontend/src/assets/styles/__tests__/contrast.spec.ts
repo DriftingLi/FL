@@ -152,7 +152,10 @@ const overridesCss = readFileSync(resolve(__dirname, '../element-overrides.css')
 const elOverridesLight = decls(blockOf(overridesCss, /(?:^|\n):root\s*\{/))
 const elOverridesDark = decls(blockOf(overridesCss, /(?:^|\n)\[data-theme="dark"\]\s*\{/))
 const elLight = { ...lightTokens, ...elOverridesLight }
-const elDark = { ...darkTokens, ...elOverridesDark }
+// 深色档要按 CSS 的层叠顺序叠：浅色 → 浅色覆盖 → 深色 token → 深色覆盖。
+// 只叠深色覆盖会丢掉「深色块没重定义、只在浅色块定义过」的变量（如 --el-color-primary-light-9，
+// 品牌色阶整体不翻，深色块里根本没有它）。
+const elDark = { ...lightTokens, ...elOverridesLight, ...darkTokens, ...elOverridesDark }
 
 /** 错误提示文字色走 danger-strong（element-overrides.css 末段已把 message/alert 指过去） */
 const EP_ERROR_TEXT = 'color-danger-strong'
@@ -174,6 +177,36 @@ for (const [theme, tokens] of [
       const ratio = contrast(resolveToken(EP_ERROR_TEXT, tokens), resolveToken(EP_ERROR_SURFACE, tokens))
       expect(ratio, `错误提示实测 ${ratio.toFixed(2)}:1（${theme}）`).toBeGreaterThanOrEqual(4.5)
     })
+  })
+}
+
+// ---- 标签文字档（#1954）：light / plain 效果的字压在两种底上都要 ≥4.5 ----
+// [type, -light-9 上的字, 卡片底上的字] —— primary 的两档不同：
+// light 效果的浅青底两主题都不翻（用 -700），plain 的底是卡片会翻（深色用 soft-ink）。
+const TAG_INKS: Array<[string, string, string]> = [
+  ['success', 'color-success-strong', 'color-success-strong'],
+  ['warning', 'color-warning-strong', 'color-warning-strong'],
+  ['danger', 'color-danger-strong', 'color-danger-strong'],
+  ['info', 'color-info-strong', 'color-info-strong'],
+  ['primary', 'color-primary-700', 'color-primary-soft-ink']
+]
+
+for (const [theme, tokens] of [
+  ['浅色', elLight],
+  ['深色', elDark]
+] as const) {
+  describe(`标签文字档（${theme}）`, () => {
+    for (const [type, ink, cardInk] of TAG_INKS) {
+      it(`${type} 标签文字压在 -light-9 上 ≥ 4.5:1`, () => {
+        const ratio = contrast(resolveToken(ink, tokens), resolveToken(`el-color-${type}-light-9`, tokens))
+        expect(ratio, `${type} 标签实测 ${ratio.toFixed(2)}:1（${theme}）`).toBeGreaterThanOrEqual(4.5)
+      })
+
+      it(`${type} 标签文字压在卡片底上（plain）≥ 4.5:1`, () => {
+        const ratio = contrast(resolveToken(cardInk, tokens), resolveToken('color-bg-card', tokens))
+        expect(ratio, `${type} plain 标签实测 ${ratio.toFixed(2)}:1（${theme}）`).toBeGreaterThanOrEqual(4.5)
+      })
+    }
   })
 }
 
