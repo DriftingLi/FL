@@ -1,0 +1,27 @@
+# #1919 变异必红证据（mutation run，2026-10-26）
+# 变异内容：mp-weixin-check.ps1 GATE_PLAN directPages.anchors 的 login 锚点 text 临时改为「锚点错值变异」（不 commit，跑完还原）
+# 命令：npm run build:mp-weixin-check -- -Pages pages/login/login
+# 期望：exit 1 且 failures 含锚点断言未过（可归因、不带「环境不可用：」前缀）
+
+--- mp-weixin-check.ps1 侧（1919-mutation-run.log 关键行）---
+>>> [automator-probe(direct:pages/login/login)#1] C:\Program Files\nodejs\node.exe D:\FL\wt-1919\training-app\叉车维修培训学员端跨端应用\scripts\mp-weixin-probe.mjs --ws ws://127.0.0.1:9420 --expect-page pages/login/login --shot-dir D:\FL\wt-1919\training-app\叉车维修培训学员端跨端应用\.ci-verify --require-root C:\Users\ZHENG\AppData\Local\Temp\mp-weixin-automator --timeout-ms 60000 --assert-selector .app-title --assert-text 锚点错值变异
+❌ ② 未过：1 条断言未过 ——
+   锚点断言未过：.app-title 期望「锚点错值变异」实得「叉车维修培训系统」
+完整日志：D:\FL\wt-1919\training-app\叉车维修培训学员端跨端应用\.ci-verify\mp-weixin.log
+
+--- mp-weixin.log 侧（probe JSON 与结果行）---
+MP_WEIXIN_PROBE {"ws":"ws://127.0.0.1:9420","connected":true,"automatorFrom":"C:\\Users\\ZHENG\\AppData\\Local\\Temp\\mp-weixin-automator","routes":[],"pageStack":["pages/login/login"],"entryPage":"pages/login/login","steps":[{"label":"direct-login","route":"pages/login/login","navigate":"none","direct":true,"ok":true,"currentPage":"pages/login/login","shot":"D:\\FL\\wt-1919\\training-app\\叉车维修培训学员端跨端应用\\.ci-verify\\login.png"}],"shots":[{"name":"login","route":"pages/login/login","path":"D:\\FL\\wt-1919\\training-app\\叉车维修培训学员端跨端应用\\.ci-verify\\login.png","bytes":55764,"sig":"89504e470d0a1a0a","isPng":true,"width":461,"height":997}],"logsTotal":0,"errorsTotal":0,"exceptionsTotal":0,"consoleTail":[],"elapsedMs":4006,"connectError":null,"navigation":{"status":"ok","reason":"","detail":"cold-start-direct","at":"direct:pages/login/login","skippedAssertions":[],"skippedSteps":[]},"assertions":{"connected":true,"pageStackNonEmpty":true,"entryPageInStack":true,"noConsoleErrors":true,"noExceptions":true,"currentPageScreenshot":true,"allRoutesVisited":true,"screenshotsProduced":true},"failures":["锚点断言未过：.app-title 期望「锚点错值变异」实得「叉车维修培训系统」"],"anchors":{"total":1,"passed":0,"skipped":0,"items":[{"selector":".app-title","expected":"锚点错值变异","elapsedMs":29,"actual":"叉车维修培训系统","ok":false}]},"probeOk":false}
+
+direct-page pages/login/login reached=True errors=0 exceptions=0 logs=0 shot=login.png elapsed=4s
+direct-pages: dist app.json 已从备份还原并复验（首项=pages/index/index）
+direct-total pages=2 accepted=2 elapsed=127s
+
+MP_WEIXIN_RESULT appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 logsTotal=0 shots=2 navigation=ok ready=18s sdk=3.17.4 ide=2.02.2608070 auth=none(no-auth-pages) asserts=1 log=.ci-verify/mp-weixin.log
+shots: D:\FL\wt-1919\training-app\叉车维修培训学员端跨端应用\.ci-verify\index.png 461x997 74746B | D:\FL\wt-1919\training-app\叉车维修培训学员端跨端应用\.ci-verify\login.png 461x997 55764B
+MP_WEIXIN_RESULT errors=1 failures=锚点断言未过：.app-title 期望「锚点错值变异」实得「叉车维修培训系统」 appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 logsTotal=0 shots=2 navigation=ok ready=18s sdk=3.17.4 ide=2.02.2608070 auth=none(no-auth-pages) asserts=1 log=.ci-verify/mp-weixin.log
+
+>>> devtools-close
+
+--- 判定 ---
+门进程实测退出码：GATE_EXIT=1（npm run 透传）。
+failures 不以「环境不可用：」开头 ⇒ 直达循环按可验证子集判 exit 1（非 env 归类）；probe JSON anchors.total=1 passed=0 且入口页 index 无锚点照常 accepted ⇒ 未声明页不新增失败面。
