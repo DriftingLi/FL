@@ -164,6 +164,13 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 
 **样式入口只有一个**：`src/assets/styles/tailwind.css`，新增全局样式写进它或它 `@import` 的文件，不要在 `main.ts` 里再加 import。
 
+## 响应式（ADR-0084 / 0085 / 0086）
+
+- **管理端只保桌面**（ADR-0084）：验收宽度是 1280 / 1024；375 / 768 只保证「不崩」——**无页面级横向溢出**即可，不承诺能完成业务动作。
+- **管理端 ≤768 的 `@media` 只允许「防溢出 / 换行」类兜底**；字号、间距、内边距这类观感微调**不再新增**（新增即违规）。存量逐条判定见 `docs/design/1965-管理端媒体查询判定.md`。
+- **学员端必守 375×667**（ADR-0085）：PR 验收必须含 **375 宽截图**；本地可用 `node scripts/check-student-375.mjs` 复核（需要 dev server + 开了远程调试的 Chromium）。
+- **宽表只横滚、不降列**（ADR-0086）：`el-table` 保留表体横滚；固定列**只允许「操作」一列固定在右**。
+
 ## 不得触碰的边界
 
 - `--color-brand-*` 属**残值域**专用（`assets/styles/valuation-tokens.css` 在 `.valuation-root` 内定义），**禁止提升为全局变量** —— 会击穿 `pages/admin/ValuationConfigManage.vue` 与 `pages/ai-assistant/*` 两处依赖「变量未定义 → 走 fallback」的写法。培训域品牌色用 `--color-primary-*`。

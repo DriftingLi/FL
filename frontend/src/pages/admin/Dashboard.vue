@@ -504,13 +504,4 @@ onUnmounted(() => {
   }
 }
 
-@media screen and (max-width: 480px) {
-  .stat-value {
-    font-size: var(--text-xl);
-  }
-
-  .stat-label {
-    font-size: var(--text-xs);
-  }
-}
 </style>
