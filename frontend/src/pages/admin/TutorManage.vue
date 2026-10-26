@@ -272,7 +272,7 @@ onMounted(() => {
 }
 
 .page-header h2 {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--color-text-primary);
 }
 
@@ -289,7 +289,7 @@ onMounted(() => {
   }
 
   .page-header h2 {
-    font-size: 18px;
+    font-size: var(--text-lg);
   }
 
 

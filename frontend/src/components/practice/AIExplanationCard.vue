@@ -23,6 +23,6 @@ const displayText = computed(() => {
 /* 容器样式（描边/圆角/内距/底色）已由 UiCard 承担，此处只留外边距 */
 .ai-card { margin-bottom:12px; }
 .card-title { font-weight: var(--font-semibold); color: var(--color-text-primary); }
-.loading { color: var(--color-text-tertiary); font-size:13px; }
-.content { white-space:pre-wrap; color: var(--color-text-secondary); font-size:14px; line-height:1.6; }
+.loading { color: var(--color-text-tertiary); font-size:var(--text-sm); }
+.content { white-space:pre-wrap; color: var(--color-text-secondary); font-size:var(--text-sm); line-height:1.6; }
 </style>

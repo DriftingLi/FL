@@ -634,13 +634,13 @@ onMounted(loadList)
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .report-target {
   margin-left: 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .report-done {
@@ -674,7 +674,7 @@ onMounted(loadList)
    那两条现在由 ForumContent 的原子类按格式分支决定（纯文本才保留换行）。
    同一元素同一属性既有 scoped 类又有原子类会构成双写（ui-conventions R3）。 */
 .topic-content-text {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-primary);
   line-height: 1.7;
 }
@@ -696,7 +696,7 @@ onMounted(loadList)
 
 /* 行内追加形态的失败提示（#1102）：与按钮同一行，按钮本身即重试入口 */
 .reply-error {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-danger);
 }
 
@@ -722,7 +722,7 @@ onMounted(loadList)
 }
 
 .reply-quote {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   background: var(--color-bg-page);
   border-radius: 6px;
@@ -730,7 +730,7 @@ onMounted(loadList)
 }
 
 .reply-time {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 
@@ -741,14 +741,14 @@ onMounted(loadList)
 .reply-content {
   margin-top: 4px;
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .reply-loading {
   color: var(--color-text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 </style>

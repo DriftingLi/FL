@@ -92,13 +92,13 @@ onMounted(load)
 /* 容器样式（描边/圆角/内距/底色）与卡片页眉布局已由 UiCard 承担，此处只留外边距 */
 .comment-card { margin-bottom:12px; }
 .card-title { font-weight: var(--font-semibold); color: var(--color-text-primary); }
-.empty { color: var(--color-text-tertiary); font-size:13px; }
+.empty { color: var(--color-text-tertiary); font-size:var(--text-sm); }
 .list { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
 .comment-item { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:8px 0; border-bottom:1px solid var(--color-border-light); }
 .comment-main { flex:1; display:flex; flex-direction:column; gap:4px; }
 .comment-author { display:flex; align-items:center; gap:6px; }
-.username { font-size:12px; color: var(--color-text-primary); font-weight: var(--font-medium); }
-.comment-item .content { flex:1; font-size:13px; color: var(--color-text-secondary); word-break:break-word; }
+.username { font-size:var(--text-xs); color: var(--color-text-primary); font-weight: var(--font-medium); }
+.comment-item .content { flex:1; font-size:var(--text-sm); color: var(--color-text-secondary); word-break:break-word; }
 .input-row { display:flex; gap:8px; margin-top:8px; }
-.time { font-size:11px; color: var(--color-text-disabled); margin-left:4px; }
+.time { font-size:var(--text-xs); color: var(--color-text-disabled); margin-left:4px; }
 </style>

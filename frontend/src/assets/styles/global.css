@@ -46,6 +46,7 @@ textarea:focus-visible,
 }
 
 html {
+  /* font-scale-root：布局基准（rem 尺度由它派生），不并入字号阶梯，守卫按标记放行 */
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
   /* 期 7：兜底防横向滚动（个别页面遗漏的溢出由这里吞掉，而不是出现横向滚动条）。
@@ -147,6 +148,7 @@ h1, h2, h3, h4, h5, h6 {
  */
 @media screen and (max-width: 768px) {
   html {
+    /* font-scale-root：≤768px 的 rem 基准（14px） */
     font-size: 14px;
   }
 
@@ -196,7 +198,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .el-table {
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 
   .el-form--inline .el-form-item {
@@ -215,6 +217,7 @@ h1, h2, h3, h4, h5, h6 {
 
 @media screen and (max-width: 480px) {
   html {
+    /* font-scale-root：≤480px 的 rem 基准（13px） */
     font-size: 13px;
   }
 

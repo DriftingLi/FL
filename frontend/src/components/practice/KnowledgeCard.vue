@@ -22,5 +22,5 @@ defineProps<{ tags: any[] }>()
 .knowledge-card { margin-bottom:12px; }
 .card-title { font-weight: var(--font-semibold); color: var(--color-text-primary); }
 .content { min-height:24px; }
-.empty { color: var(--color-text-tertiary); font-size:13px; }
+.empty { color: var(--color-text-tertiary); font-size:var(--text-sm); }
 </style>

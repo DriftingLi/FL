@@ -62,6 +62,6 @@ onMounted(load)
 /* 容器样式（描边/圆角/内距/底色）与卡片页眉布局已由 UiCard 承担，此处只留外边距 */
 .note-card { margin-bottom:12px; }
 .card-title { font-weight: var(--font-semibold); color: var(--color-text-primary); }
-.content { white-space:pre-wrap; color: var(--color-text-secondary); font-size:13px; display:flex; justify-content:space-between; gap:8px; }
-.empty { color: var(--color-text-tertiary); font-size:13px; }
+.content { white-space:pre-wrap; color: var(--color-text-secondary); font-size:var(--text-sm); display:flex; justify-content:space-between; gap:8px; }
+.empty { color: var(--color-text-tertiary); font-size:var(--text-sm); }
 </style>

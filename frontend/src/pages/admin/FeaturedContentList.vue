@@ -228,7 +228,7 @@ onMounted(() => {
 
 .page-header h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--color-text-primary);
 }

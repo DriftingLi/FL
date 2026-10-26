@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
 
 .slide-title {
   color: var(--color-viewer-text);
-  font-size: 14px;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
 
 .slide-counter {
   color: var(--color-viewer-text);
-  font-size: 14px;
+  font-size: var(--text-sm);
   min-width: 60px;
   text-align: center;
   user-select: none;
@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
 
 .thumbnail-num {
   color: var(--color-viewer-text-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .ppt-loading {
@@ -483,7 +483,7 @@ onBeforeUnmount(() => {
   }
 
   .slide-counter {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 
   .thumbnail-strip {
@@ -501,7 +501,7 @@ onBeforeUnmount(() => {
   }
 
   .thumbnail-num {
-    font-size: 9px;
+    font-size: var(--text-xs);
   }
 }
 </style>

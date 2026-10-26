@@ -233,7 +233,7 @@ onMounted(load)
   margin-bottom: 16px;
 }
 .page-header h2 {
-  font-size: 20px;
+  font-size: var(--text-xl);
   margin: 0;
 }
 </style>

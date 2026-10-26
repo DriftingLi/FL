@@ -149,7 +149,7 @@ defineExpose({ refresh })
 }
 
 .notification-title {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary, #1e293b);
 }
@@ -158,7 +158,7 @@ defineExpose({ refresh })
   padding: 32px 0;
   text-align: center;
   color: var(--color-text-tertiary, #94a3b8);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .notification-list {
@@ -194,7 +194,7 @@ defineExpose({ refresh })
 }
 
 .notification-item-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary, #1e293b);
 }
@@ -205,7 +205,7 @@ defineExpose({ refresh })
 
 .notification-item-content {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary, #475569);
   line-height: 1.5;
   word-break: break-all;
@@ -213,14 +213,14 @@ defineExpose({ refresh })
 
 .notification-item-time {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary, #94a3b8);
 }
 
 .notification-footer {
   padding-top: 8px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary, #94a3b8);
 }
 </style>

@@ -82,5 +82,5 @@ defineExpose({ open })
 <style scoped>
 .avatar-edit { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .avatar-preview { display: flex; align-items: center; gap: 12px; }
-.hint { font-size: 12px; color: #909399; margin: 0; }
+.hint { font-size: var(--text-xs); color: #909399; margin: 0; }
 </style>

@@ -122,7 +122,7 @@ const props = withDefaults(
 }
 
 .card-more .el-icon {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .card-body {
@@ -186,7 +186,7 @@ const props = withDefaults(
 }
 
 .item-arrow {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   flex-shrink: 0;
   opacity: 0;

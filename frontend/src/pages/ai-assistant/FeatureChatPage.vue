@@ -420,7 +420,7 @@ onMounted(() => {
 }
 
 .quick-option-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
   font-weight: 600;
 }
@@ -438,7 +438,7 @@ onMounted(() => {
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-card);
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
 }
@@ -480,7 +480,7 @@ onMounted(() => {
 }
 
 .catalog-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
   font-weight: 600;
   line-height: 28px;
@@ -493,7 +493,7 @@ onMounted(() => {
 }
 
 .catalog-loading {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 
@@ -512,7 +512,7 @@ onMounted(() => {
   border-radius: 8px;
   background: var(--color-bg-field, var(--color-bg-card));
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   outline: none;
 }
 
@@ -521,7 +521,7 @@ onMounted(() => {
 }
 
 .catalog-fault-total {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 
@@ -551,13 +551,13 @@ onMounted(() => {
 
 .catalog-fault-item b {
   color: var(--color-primary-soft-ink);
-  font-size: 13px;
+  font-size: var(--text-sm);
   min-width: 34px;
 }
 
 .catalog-fault-item span {
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -616,7 +616,7 @@ onMounted(() => {
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.5);
   color: #fff;
-  font-size: 11px;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   justify-content: center;

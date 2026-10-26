@@ -207,7 +207,7 @@ watch(resolvedSrc, (newVal) => {
 
 .file-name {
   color: var(--color-viewer-text);
-  font-size: 14px;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -275,7 +275,7 @@ watch(resolvedSrc, (newVal) => {
 
 .unsupported-tip {
   margin-top: 12px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   text-align: center;
   padding: 0 20px;
@@ -296,7 +296,7 @@ watch(resolvedSrc, (newVal) => {
   }
 
   .file-name {
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 }
 </style>

@@ -266,7 +266,7 @@ function isRouteActive(item: NavItem): boolean {
 
 .nav-group-arrow {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition: transform var(--duration-fast) var(--ease-default);
 }
 
@@ -275,7 +275,7 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-icon {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
@@ -296,7 +296,7 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-icon-only .el-icon {
-  font-size: 16px;
+  font-size: var(--text-base);
 }
 
 .nav-group-children {
@@ -320,11 +320,11 @@ function isRouteActive(item: NavItem): boolean {
 .nav-group-tooltip-title {
   font-weight: var(--font-semibold);
   margin-bottom: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .nav-group-tooltip-item {
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.7;
   opacity: 0.9;
 }

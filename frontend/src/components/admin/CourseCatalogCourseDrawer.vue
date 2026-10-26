@@ -351,7 +351,7 @@ defineExpose({ open })
 }
 
 .cc-hours-unit {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 

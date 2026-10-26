@@ -45,7 +45,7 @@ withDefaults(
 }
 .field-label {
   display: block;
-  font-size: 14px;
+  font-size: var(--fs-sm, 14px);
   font-weight: 500;
   margin-bottom: 6px;
   color: var(--color-text-secondary, #475569);

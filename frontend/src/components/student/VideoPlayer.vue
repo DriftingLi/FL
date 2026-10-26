@@ -264,7 +264,7 @@ onBeforeUnmount(() => {
   --el-button-hover-border-color: transparent;
   --el-button-hover-text-color: #fff;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .video-error {
