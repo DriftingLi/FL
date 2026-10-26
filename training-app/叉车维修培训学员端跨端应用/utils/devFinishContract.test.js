@@ -273,6 +273,23 @@ function scenarios(dir) {
     TIME_LINE,
   ].join('\r\n');
 
+  // #1996：脏树关联场景。夹具取自 #1989 的真实形态（未提交的 AGENTS.md 让
+  // agentsLayeringContract 的 L2 判红），外加一条「守护源码点名 dirty 文件」的规则样本：
+  // fooGuard 与 config/widget.md 不共享 token，只靠「守护源码逐字点名」才能关联上。
+  const dirtyProj = path.join(dir, 'dirty-assoc-proj');
+  fs.mkdirSync(path.join(dirtyProj, 'utils'), { recursive: true });
+  fs.writeFileSync(path.join(dirtyProj, 'utils', 'fooGuard.test.js'), '// 这个守护读 config/widget.md\n', 'utf8');
+  const dirtyAssoc = [
+    'FAIL utils/agentsLayeringContract.test.js (7.421 s)',
+    `${BULLET} agentsLayeringContract ${SUIT} L2 不抄写（例外登记须精确）`,
+    '      Expected: []',
+    'FAIL utils/fooGuard.test.js (1.234 s)',
+    `${BULLET} fooGuard ${SUIT} 读真实文件`,
+    '      Expected: "config/widget.md"',
+    'Test Suites: 2 failed, 0 passed, 2 total',
+    'Tests: 2 failed, 2 total',
+    TIME_LINE,
+  ].join('\r\n');
   const spec = {
     green: { output: failOutput, exitCode: 0, maxBytes: 2048 },
     fail: { output: failOutput, exitCode: 1, maxBytes: 2048 },
@@ -281,9 +298,19 @@ function scenarios(dir) {
     noStructure: { output: `E${'x'.repeat(6000)}`, exitCode: 1, maxBytes: 2048 },
     tinyBudget: { output: oneCase, exitCode: 1, maxBytes: 160 },
     dupAndConsole: { output: dupAndConsole, exitCode: 1, maxBytes: 2048 },
+    dirtyAssoc: {
+      output: dirtyAssoc,
+      exitCode: 1,
+      maxBytes: 2048,
+      dirtyFiles: [' M AGENTS.md', ' M config/widget.md', '?? unrelated/notes.txt'],
+      projectDir: dirtyProj,
+    },
   };
   for (const [name, sc] of Object.entries(spec)) {
     sc.path = path.join(dir, `${name}.txt`); // eslint-disable-line no-param-reassign
+    // #1996：默认无未提交改动 / 无项目根 ⇒ 既有场景的产物形状逐字节不变。
+    if (!sc.dirtyFiles) sc.dirtyFiles = []; // eslint-disable-line no-param-reassign
+    if (!sc.projectDir) sc.projectDir = ''; // eslint-disable-line no-param-reassign
   }
   // 绿跑那条**故意**放进一个不存在的子目录：这样「不碰文件系统」是可断言的事实
   // （父目录有没有被建出来），而不是只靠「文件不在」这种目录本来就在的弱断言。
@@ -325,7 +352,7 @@ function runSummaryScenarios() {
     '  $r = $null',
     '  $thrown = $null',
     '  try {',
-    '    $r = New-TestFailureSummary -Output $sc.output -Path $sc.path -ExitCode ([int]$sc.exitCode) -MaxBytes ([int]$sc.maxBytes)',
+    '    $r = New-TestFailureSummary -Output $sc.output -Path $sc.path -ExitCode ([int]$sc.exitCode) -MaxBytes ([int]$sc.maxBytes) -DirtyFiles @($sc.dirtyFiles) -ProjectDir $sc.projectDir',
     '  } catch {',
     '    $thrown = $_.Exception.Message',
     '  }',
@@ -448,6 +475,10 @@ describe('New-TestFailureSummary 失败摘要（#1526，行为级：真执行被
     // 落盘字节数 = 返回对象报的字节数（无 BOM、无编码链加的字）
     expect(f.bytes).toBe(f.fileBytes);
     expect(f.bytes).toBeLessThanOrEqual(2048);
+    // #1996：干净树（未传 DirtyFiles / 没有未提交改动）⇒ 脏树关联段与 stash 首行提示都不出现。
+    // 这一段只作可见性，没有脏树就不该给读者增加噪声（票面验收②的「不出现」那一支）。
+    expect(f.content).not.toContain('可能相关');
+    expect(f.content).not.toContain('git stash');
   });
 
   test('S3: 60 条长用例名 ⇒ 仍 ≤2 KB，且**明说**丢了多少条（静默截断＝换一种看不见）', () => {
@@ -527,6 +558,33 @@ describe('New-TestFailureSummary 失败摘要（#1526，行为级：真执行被
     expect(d.bytes).toBe(d.fileBytes);
     expect(d.bytes).toBeLessThanOrEqual(2048);
     expect(d.missing).toBe('');
+  });
+
+  // #1996：脏树假红（#1989 的真实事故形态）——摘要要指认「失败套件 ↔ 未提交改动」，
+  // 但**只作可见性**：措辞固定「可能相关，不作判据」，判定仍只看 exit code。
+  // 两条命中规则各一条样本：① agentsLayeringContract ↔ AGENTS.md（camelCase token）；
+  // ② fooGuard 源码点名 config/widget.md（套件名与文件名不共享 token，只靠「读真实文件的守护」规则）。
+  test('S8: 脏树关联（#1996）：失败套件 ↔ 未提交改动 + 首行 stash 提示，措辞标「可能相关，不作判据」', () => {
+    const d = ctx.parsed.dirtyAssoc;
+    expect(d.thrown).toBe(null);
+    expect(d.exists).toBe(true);
+    // 首行提示：脏树假红的处置是 stash / 提交后复跑，不是改代码
+    expect(d.content.startsWith('若为脏树所致')).toBe(true);
+    expect(d.content).toContain('git stash');
+    expect(d.content).toContain('不要当代码回归修');
+    // 关联段：真实案例那一行必须整条活着（套件名 + dirty 文件 + 命中理由）
+    expect(d.content).toContain('可能相关，不作判据');
+    expect(d.content).toMatch(/utils\/agentsLayeringContract\.test\.js（1 个）：/);
+    expect(d.content).toContain('- M AGENTS.md（套件名 token 命中：agents）');
+    // 第二条命中规则：守护源码点名 dirty 文件
+    expect(d.content).toMatch(/utils\/fooGuard\.test\.js（1 个）：/);
+    expect(d.content).toContain('- M config/widget.md（守护源码点名该文件）');
+    // 没关联上的脏文件也要可见（否则读者仍不知道树是脏的）
+    expect(d.content).toContain('未匹配到失败套件的改动');
+    expect(d.content).toContain('unrelated/notes.txt');
+    // 体积承诺不破
+    expect(d.bytes).toBe(d.fileBytes);
+    expect(d.bytes).toBeLessThanOrEqual(2048);
   });
 });
 
@@ -1246,12 +1304,15 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     const callText = branch.slice(artifactsCall, branch.indexOf('\n\n', artifactsCall));
     expect(callText).toContain('-HeadSha $headSha');
     expect(callText).toContain('-WorktreeState $worktreeState');
+    // #1996：脏树关联的输入也由调用点喂（摘要件用，机检行不追加任何字段）
+    expect(callText).toContain('-DirtyFiles $porcelain');
+    expect(callText).toContain('-ProjectDir $ProjectDir');
     // ---- 取数那一腿也得在分支里（#1556 复核补）----
     //   先前只钉「参数接线」：把 `$worktreeState` 在分支里写死成 `'clean'`、参数不动 ⇒ **全绿**，
     //   字段还在但不再反映工作树 —— 而那枚字段存在的唯一理由就是「head 相同不等于内容相同」。
     //   这三条仍是**接线**（读源码文本），不构成 ③ 的行为证据；行为面由 U11–U14 真执行 +
     //   本票真链路成对取证兜（`dirty=dirty` 与 `dirty=clean` 各一腿）。
-    expect(branch).toMatch(/git -C \$ProjectDir status --porcelain/);
+    expect(branch).toMatch(/git -C \$ProjectDir .*status --porcelain/);
     expect(branch).toMatch(/\$porcelain\.Count -gt 0/);
     expect(branch).not.toMatch(/\$worktreeState\s*=\s*'[A-Za-z]'/);
     // dot-source 共享库必须**早于**取 sha：顺序反了不会报错，只会让机检行恒为 `head=?`
@@ -1495,6 +1556,9 @@ describe('③ 门本地快路径（#1654）', () => {
     expect(callText).toContain('-Mode local');
     expect(callText).toContain('-HeadSha $headSha');
     expect(callText).toContain('-WorktreeState $worktreeState');
+    // #1996：脏树关联的输入也由调用点喂（摘要件用，机检行不追加任何字段）
+    expect(callText).toContain('-DirtyFiles $porcelain');
+    expect(callText).toContain('-ProjectDir $ProjectDir');
     expect(callText).not.toContain('-Leg behavior'); // 接线腿 = 默认腿，不显式写
     const behaviorCallText = branch.slice(artifactsCalls[1].index, branch.indexOf('\n\n', artifactsCalls[1].index));
     expect(behaviorCallText).toContain('-Mode local');
@@ -1512,7 +1576,7 @@ describe('③ 门本地快路径（#1654）', () => {
     expect((branch.match(/Get-HeadSha -ProjectDir/g) || []).length).toBe(1);
     expect(branch).toContain('lib\\gate-common.ps1');
     expect(branch.indexOf('lib\\gate-common.ps1')).toBeLessThan(branch.indexOf('Get-HeadSha -ProjectDir'));
-    expect(branch).toMatch(/git -C \$ProjectDir status --porcelain/);
+    expect(branch).toMatch(/git -C \$ProjectDir .*status --porcelain/);
     expect(branch).not.toMatch(/function Get-HeadSha/);
     // -PostToPr 在快路径分支只警告不贴评论（sha 绑定评论是全量门的证据通道）
     expect(branch).toContain('$PostToPr -gt 0');
