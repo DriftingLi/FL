@@ -326,14 +326,22 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-icons.mjs --all
 
+      # 字号阶梯守卫（#1894 / ADR-0080）：字号只走 token 阶梯（12/14/16/18/20/24/30），
+      # 禁 `text-[<数字>px]` / `text-[<数字>rem]` 直写（`em` 是相对单位、放行）。
+      # 收口后当前树实测 0 处（116 处直写已全部映射到阶梯），规则绝对化执行。
+      # 判定逻辑的自检在 el-controls-selftest job。
+      - name: 字号阶梯守卫（字号只走 token 阶梯）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-font-scale.mjs --all
+
       # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
-      # 跑一遍七个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
+      # 跑一遍八个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
       # （同一条 scanSource，只是再按新增行号过滤），它补的是两件事：① CI 里真的走通「取 diff →
       # 解析新增行 → 扫描」这条管道（收敛前 check-async-section 的 --diff 因实参形态错恒 0 违规）；
       # ② --diff 自身 fail-closed（base 解析不了 / git diff 失败 / 新增文件读不出来都非零退出）。
       # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
       # 取不回 → 本步红。浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
-      - name: 守卫增量门（七个守卫只看相对默认分支的新增行）
+      - name: 守卫增量门（八个守卫只看相对默认分支的新增行）
         working-directory: ${{ github.workspace }}
         run: |
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
@@ -347,6 +355,7 @@ jobs:
           node scripts/check-ai-assistant-send.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-a11y.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-icons.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-font-scale.mjs --diff "origin/$DEFAULT_BRANCH"
 
       - name: 前端单元测试
         run: npm test
@@ -685,6 +694,11 @@ jobs:
 
       - name: 表驱动单测（无障碍档位守卫判定逻辑）
         run: node --test scripts/check-a11y.test.mjs
+
+      # #1894 / ADR-0080：字号阶梯守卫的判定面（px / rem / 变体前缀 / 最近档提示 / 注释与
+      # `em` 与 `text-[var(…)]` 负例），外加 CLI 全量防假红。
+      - name: 表驱动单测（字号阶梯守卫判定逻辑）
+        run: node --test scripts/check-font-scale.test.mjs
 
       # ADR-0079 / 票 #1911：四条判据的正例与负例（注释 / <script> 字符串 / 非 24 网格 / 带 name），
       # 外加「迁移期基线只减不增」（登记了却不再违规 → 报红，逼着删行）。

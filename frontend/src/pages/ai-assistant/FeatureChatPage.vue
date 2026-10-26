@@ -4,7 +4,7 @@
     :login-redirect="route.fullPath"
     :back-link-to="href('AIAssistant')"
     back-link-text="返回 AI 助手"
-    :welcome-icon="feature?.icon || ChatDotRound"
+    :welcome-icon="feature?.icon || 'message-circle'"
     :welcome-title="feature?.title || ''"
     :suggestions="feature?.suggestions || []"
     :input-placeholder="inputPlaceholder"
@@ -136,7 +136,7 @@
         <div v-for="(p, i) in pendingImages" :key="p.previewUrl" class="pending-image-item">
           <img :src="p.previewUrl" class="pending-image-thumb" alt="待发送图片" />
           <button class="pending-image-remove" title="移除" aria-label="移除待发送图片" @click="removePendingImage(i)">
-            <el-icon :size="12"><Close /></el-icon>
+            <UiIcon name="x" :size="12" />
           </button>
           <div v-if="p.uploading" class="pending-image-mask">上传中</div>
         </div>
@@ -154,20 +154,20 @@
         multiple
         @change="handleImageSelect"
       >
-        <UiButton :icon="Picture" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片" aria-label="上传图片"/>
+        <UiButton :icon="'image'" circle :disabled="store.streaming || pendingImages.length >= maxImages" title="上传图片" aria-label="上传图片"/>
       </UiUpload>
     </template>
   </ChatPageShell>
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
 // 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
-import { ChatDotRound, Picture, Close } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import { useAIAssistantStore, type SendOptions } from '@/stores/aiAssistant'

@@ -10,7 +10,7 @@
         <el-option label="简答题" value="short_answer" />
       </el-select>
       <UiButton @click="toggleSort">
-        <el-icon class="mr-1"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
+        <UiIcon :name="sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'" class="mr-1" />
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
       </UiButton>
       <UiCheckbox v-model="filterFavorited">收藏</UiCheckbox>
@@ -48,13 +48,11 @@
             <UiCheckbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
             <UiTag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</UiTag>
             <UiTag v-if="item.is_redone" tone="success" size="small">已重做</UiTag>
-            <el-icon class="fav-star cursor-pointer text-lg text-ink-3 hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
-              <StarFilled v-if="item.favorited" /><Star v-else />
-            </el-icon>
+            <UiIcon :name="item.favorited ? 'star-filled' : 'star'" class="fav-star cursor-pointer text-lg text-ink-3 hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)" />
           </div>
-          <span class="text-[13px] text-bad">错误 {{ item.wrong_count }} 次 · 最近 {{ formatDateTime(item.last_wrong_at) }}</span>
+          <span class="text-sm text-bad">错误 {{ item.wrong_count }} 次 · 最近 {{ formatDateTime(item.last_wrong_at) }}</span>
         </div>
-        <p class="mb-2.5 text-[15px] leading-[1.6]">{{ item.question?.content }}</p>
+        <p class="mb-2.5 text-base leading-[1.6]">{{ item.question?.content }}</p>
         <!-- 题干配图（#1077）：故障识图题的图此前在列表里完全不可见 -->
         <img
           v-if="item.question?.image_url"
@@ -106,13 +104,13 @@
         <template v-else>
           <!-- 折叠态「答案与解析」（#1077）：不重做也能复习。默认收起，同一时间只开一道 -->
           <div v-if="answerOpenId === item.question_id" class="mb-2.5 rounded-card border border-line bg-canvas px-3 py-2.5">
-            <div class="mb-1 text-[13px] text-ink-3">
+            <div class="mb-1 text-sm text-ink-3">
               我上次选的答案：<span class="font-semibold text-bad">{{ item.last_user_answer || '（无作答记录）' }}</span>
             </div>
-            <div class="mb-1 text-[13px] text-ink-3">
+            <div class="mb-1 text-sm text-ink-3">
               正确答案：<span class="font-semibold text-ok-strong">{{ item.question?.answer || '—' }}</span>
             </div>
-            <div class="text-[13px] leading-[1.6] text-ink-2">
+            <div class="text-sm leading-[1.6] text-ink-2">
               解析：{{ item.question?.explanation || '暂无解析' }}
             </div>
           </div>
@@ -141,9 +139,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Star, StarFilled, SortDown, SortUp } from '@element-plus/icons-vue'
 import { wrongQuestionApi, type WrongQuestionItem } from '@/api/wrongQuestion'
 import { typeMap } from '@/constants/question'
 import { downloadBlob } from '@/composables/useReportDownload'

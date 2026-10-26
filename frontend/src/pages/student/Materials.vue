@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[960px] p-5">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-[22px] text-ink">学习资料</h2>
+      <h2 class="text-2xl text-ink">学习资料</h2>
       <UiSegmentTabs
         v-model="activeTab"
         :options="[
@@ -54,10 +54,10 @@
             class="flex size-11 shrink-0 items-center justify-center rounded-[8px]"
             :style="{ background: typeConfig(item.content_type).bg, color: typeConfig(item.content_type).color }"
           >
-            <el-icon :size="20"><component :is="typeConfig(item.content_type).icon" /></el-icon>
+            <UiIcon :name="typeConfig(item.content_type).icon" :size="20" />
           </div>
           <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-[15px] font-medium text-ink">{{ item.file_name }}</span>
+            <span class="truncate text-base font-medium text-ink">{{ item.file_name }}</span>
             <span class="truncate text-xs text-ink-3">
               {{ item.course_name }}<template v-if="item.chapter_title"> · {{ item.chapter_title }}</template>
             </span>
@@ -65,7 +65,7 @@
           <div class="flex shrink-0 items-center gap-3">
             <span class="whitespace-nowrap text-xs text-ink-3">{{ formatSize(item.file_size) }} · {{ formatLocaleDateTime(item.created_at || '') }}</span>
             <UiButton variant="primary" link size="small" @click="download(item)">
-              <el-icon><Download /></el-icon>
+              <UiIcon name="download" />
               下载
             </UiButton>
           </div>
@@ -93,8 +93,9 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, onMounted } from 'vue'
-import { Document, VideoCamera, Picture, Download } from '@element-plus/icons-vue'
 import { materialApi, type MaterialItem } from '@/api/material'
 import { courseApi, type CourseSummary } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
@@ -154,11 +155,11 @@ const {
 
 const staggerStyle = useStagger()
 
-const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  document: { label: '文档', icon: Document, color: 'var(--color-primary-soft-ink)', bg: 'var(--color-primary-soft)' },
-  video: { label: '视频', icon: VideoCamera, color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
-  ppt: { label: 'PPT', icon: Document, color: 'var(--color-warning)', bg: 'var(--color-warning-light)' },
-  image: { label: '图片', icon: Picture, color: 'var(--color-success)', bg: 'var(--color-success-light)' }
+const TYPE_CONFIG: Record<string, { label: string; icon: IconName; color: string; bg: string }> = {
+  document: { label: '文档', icon: 'file-text', color: 'var(--color-primary-soft-ink)', bg: 'var(--color-primary-soft)' },
+  video: { label: '视频', icon: 'video', color: 'var(--color-danger)', bg: 'var(--color-danger-light)' },
+  ppt: { label: 'PPT', icon: 'file-text', color: 'var(--color-warning)', bg: 'var(--color-warning-light)' },
+  image: { label: '图片', icon: 'image', color: 'var(--color-success)', bg: 'var(--color-success-light)' }
 }
 
 function typeConfig(contentType?: string) {

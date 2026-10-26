@@ -16,7 +16,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { WarningFilled } from '@element-plus/icons-vue'
 import { epLite } from '@/test/element-lite'
 import type { StudentCourseItem, StudyRecordItem, StudyStats } from '@/api/student'
 
@@ -92,10 +91,7 @@ function coursesPayload(courses: StudentCourseItem[], continueLearning: StudentC
 function mountPage() {
   return mount(Dashboard, {
     global: {
-      plugins: [epLite()],
-      // UiErrorState 的图标在生产由 main.ts 全局注册；错误态用例需要它，否则 vue 报 unresolved
-      components: { WarningFilled },
-      stubs: { 'router-link': { props: ['to'], template: '<span><slot /></span>' } }
+      plugins: [epLite()],      stubs: { 'router-link': { props: ['to'], template: '<span><slot /></span>' } }
     }
   })
 }

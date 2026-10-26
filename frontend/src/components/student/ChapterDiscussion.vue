@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 章节讨论（章节页内嵌）
  *
@@ -12,7 +13,6 @@
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { EditPen, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat } from '@/api/forum'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
@@ -258,8 +258,8 @@ watch(() => props.chapterId, () => {
   <div class="rounded-card border border-line bg-panel p-5 shadow-card max-md:p-3.5">
     <!-- 头部 -->
     <div class="mb-4 flex items-center justify-between gap-3">
-      <h3 class="m-0 text-[17px] font-semibold text-ink">章节讨论</h3>
-      <UiButton variant="primary" size="small" :icon="EditPen" @click="openCreate">发新帖</UiButton>
+      <h3 class="m-0 text-lg font-semibold text-ink">章节讨论</h3>
+      <UiButton variant="primary" size="small" :icon="'square-pen'" @click="openCreate">发新帖</UiButton>
     </div>
 
     <!-- 列表四段式（#1054）：错误态 → 骨架 → 内容 → 空态由 UiAsyncSection 编排 -->
@@ -298,10 +298,7 @@ watch(() => props.chapterId, () => {
               {{ formatRelativeTime(topic.created_at)
               }}<template v-if="regionLabel(topic)"> · {{ regionLabel(topic) }}</template>
             </span>
-            <el-icon class="ml-auto">
-              <ArrowUp v-if="expandedTopicId === topic.id" />
-              <ArrowDown v-else />
-            </el-icon>
+            <UiIcon :name="expandedTopicId === topic.id ? 'chevron-up' : 'chevron-down'" class="ml-auto" />
           </div>
         </div>
 

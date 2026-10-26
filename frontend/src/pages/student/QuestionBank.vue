@@ -33,7 +33,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(0)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-soft text-ui-soft-ink">
-              <el-icon :size="20"><Sort /></el-icon>
+              <UiIcon name="arrow-up-down" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
           </div>
@@ -57,7 +57,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(1)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ok-soft text-ok">
-              <el-icon :size="20"><MagicStick /></el-icon>
+              <UiIcon name="wand-sparkles" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">随机练习</h3>
           </div>
@@ -76,7 +76,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(2)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-warn-soft text-warn">
-              <el-icon :size="20"><Filter /></el-icon>
+              <UiIcon name="funnel" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">专项练习</h3>
           </div>
@@ -102,7 +102,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(3)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-accent-400/10 text-ui-accent-600">
-              <el-icon :size="20"><CollectionTag /></el-icon>
+              <UiIcon name="bookmark" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">标签练习</h3>
           </div>
@@ -139,9 +139,9 @@
     <!-- ===== 刷题中 ===== -->
     <div v-if="mode" class="mt-2.5">
       <div class="mb-[15px] flex items-center justify-between rounded-[8px] bg-panel px-[15px] py-2.5 shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
-        <div class="text-[15px] text-ink">
+        <div class="text-base text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
-          <span class="ml-3 text-[13px] text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
+          <span class="ml-3 text-sm text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
           <UiTag v-if="mode === 'sequential'" size="small" tone="primary" style="margin-left: 10px">顺序练习</UiTag>
           <UiTag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}
@@ -221,8 +221,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, watch, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'

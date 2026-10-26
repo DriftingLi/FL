@@ -20,15 +20,15 @@
              不再硬写「暗底专用」的白 8% 与浅色文字（#1619 侧栏改浅底后那套配色失效）。 -->
         <button
           type="button"
-          class="flex items-center gap-2 rounded-md border border-line bg-panel px-2.5 py-1.5 text-[13px] text-ink-2 transition-colors hover:text-ink"
+          class="flex items-center gap-2 rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink"
           :class="collapsed ? 'justify-center' : ''"
           aria-label="全局搜索"
           @click="openSearch"
         >
-          <el-icon><Search /></el-icon>
+          <UiIcon name="search" />
           <template v-if="!collapsed">
             <span>搜索</span>
-            <span class="ml-auto rounded border border-line px-1 text-[11px] text-ink-3">⌘K</span>
+            <span class="ml-auto rounded border border-line px-1 text-xs text-ink-3">⌘K</span>
           </template>
         </button>
       </div>
@@ -37,10 +37,10 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, h, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
 import SidebarLayout from './SidebarLayout.vue'
 import { href } from '@/config/pages'
 import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'

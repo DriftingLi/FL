@@ -2,27 +2,26 @@
   <!-- 小胶囊（方案 B 工具栏）：图标 + 文字 + 可选角标，单行不换行 -->
   <button
     type="button"
-    class="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
+    class="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-sm text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
     :class="active ? 'border-ui-soft-ink bg-ui-soft font-semibold text-ui-soft-ink' : ''"
     @click="emit('click', $event)"
   >
-    <el-icon v-if="iconComponent" :size="14"><component :is="iconComponent" /></el-icon>
+    <UiIcon :name="icon" v-if="icon" :size="14" />
     <slot>{{ label }}</slot>
-    <i v-if="badge" class="bg-ok-fill text-ok-on rounded-pill px-1.5 py-px text-[10px] font-semibold not-italic leading-[1.4]">{{ badge }}</i>
+    <i v-if="badge" class="bg-ok-fill text-ok-on rounded-pill px-1.5 py-px text-xs font-semibold not-italic leading-[1.4]">{{ badge }}</i>
   </button>
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // 小胶囊：AI 助手主界面功能入口与诊断筛选/快捷问的共用形态（消 twin class 串重复）。
-import { computed } from 'vue'
-import * as EPIcons from '@element-plus/icons-vue'
-import type { Component } from 'vue'
+import type { IconName } from '@/icons/registry'
 
 const props = withDefaults(
   defineProps<{
     label?: string
-    /** EP 图标组件引用（与 AIAssistantPage/UiActionChip 同形）；字符串则按全局名解析 */
-    icon?: string | Component
+    /** 注册表图标名 */
+    icon?: IconName
     badge?: string
     active?: boolean
   }>(),
@@ -33,10 +32,4 @@ const emit = defineEmits<{
   (e: 'click', ev: MouseEvent): void
 }>()
 
-/** 图标归一化：组件引用直用；字符串先找 EP 内置（诊断筛选 ⚙ 无内置则回退 emoji 由调用方 label 自带） */
-const iconComponent = computed(() => {
-  if (!props.icon) return null
-  if (typeof props.icon !== 'string') return props.icon
-  return (EPIcons as Record<string, Component>)[props.icon] ?? null
-})
 </script>

@@ -24,9 +24,9 @@
             :class="{ 'is-active': isGroupActiveLocal(item) }"
             @click="onGroupToggle(item.key)"
           >
-            <el-icon v-if="item.icon" class="nav-group-icon"><component :is="item.icon" /></el-icon>
+            <NavIcon :icon="item.icon" v-if="item.icon" class="nav-group-icon" />
             <span>{{ item.label }}</span>
-            <el-icon class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }"><ArrowDown /></el-icon>
+            <UiIcon name="chevron-down" class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }" />
           </div>
           <UiTooltip v-else placement="right" :show-after="300">
             <template #content>
@@ -41,7 +41,7 @@
               </div>
             </template>
             <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActiveLocal(item) }">
-              <el-icon><component :is="item.icon" /></el-icon>
+              <NavIcon :icon="item.icon" />
             </div>
           </UiTooltip>
           <div v-show="isGroupExpandedLocal(item.key)" class="nav-group-children">
@@ -98,7 +98,8 @@
     <div class="sidebar-footer">
       <div class="footer-row">
         <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
-          <component :is="effectiveCollapsed ? Expand : Fold" class="collapse-icon" />
+          <!-- 收起/展开是同一按钮上的两个方向：形状变了，所以走形变（ADR-0079 白名单） -->
+          <UiIcon :name="effectiveCollapsed ? 'panel-left-open' : 'panel-left-close'" morph class="collapse-icon" />
           <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
         </button>
       </div>
@@ -108,9 +109,10 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
+import NavIcon from './NavIcon.vue'
 import { computed, reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Expand, Fold, ArrowDown } from '@element-plus/icons-vue'
 import {
   isNavRouteActive,
   isGroupExpanded,

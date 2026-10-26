@@ -19,7 +19,7 @@
     :class="{ 'nav-sub-item': level === 3 }"
   >
     <div class="nav-item-icon">
-      <el-icon><component :is="item.icon" /></el-icon>
+      <NavIcon :icon="item.icon" />
     </div>
     <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
   </a>
@@ -30,19 +30,20 @@
     :class="{ 'nav-sub-item': level === 3, active }"
   >
     <div class="nav-item-icon">
-      <el-icon><component :is="item.icon" /></el-icon>
+      <NavIcon :icon="item.icon" />
     </div>
     <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
   </router-link>
   <a v-else href="#" class="nav-item" :class="{ 'nav-sub-item': level === 3 }" @click.prevent>
     <div class="nav-item-icon">
-      <el-icon><component :is="item.icon" /></el-icon>
+      <NavIcon :icon="item.icon" />
     </div>
     <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
   </a>
 </template>
 
 <script setup lang="ts">
+import NavIcon from './NavIcon.vue'
 import { computed } from 'vue'
 import type { NavItem } from '@/config/navigation'
 

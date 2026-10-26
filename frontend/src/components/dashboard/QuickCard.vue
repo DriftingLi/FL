@@ -4,7 +4,7 @@
       <h3 class="card-title">{{ title }}</h3>
       <router-link v-if="moreLink" :to="moreLink" class="card-more">
         查看全部
-        <el-icon><ArrowRight /></el-icon>
+        <UiIcon name="arrow-right" />
       </router-link>
     </div>
     <div class="card-body">
@@ -22,7 +22,7 @@
           <div v-if="item.badge" class="item-badge" :style="item.badgeStyle || {}">
             {{ item.badge }}
           </div>
-          <el-icon v-if="item.to" class="item-arrow"><ArrowRight /></el-icon>
+          <UiIcon name="arrow-right" v-if="item.to" class="item-arrow" />
         </router-link>
       </div>
       <div v-else class="card-empty">
@@ -33,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowRight } from '@element-plus/icons-vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import type { RouteLocationRaw } from 'vue-router'
 
 export interface QuickCardItem {

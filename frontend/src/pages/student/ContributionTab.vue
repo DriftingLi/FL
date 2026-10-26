@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 学员投稿 tab（#517）：资料广场 + 「只看我的」私有视图 + 上传投稿抽屉。
  * 挂在 /training/materials 页内作为「学员投稿」tab 内容。
@@ -6,7 +7,6 @@
  */
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, UploadFilled, Plus, Document, Warning, View } from '@element-plus/icons-vue'
 import { contributionApi, type ContributionFile, type ContributionItem, type ContributionStatus } from '@/api/contribution'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
@@ -332,7 +332,7 @@ defineExpose({ loadMine })
         @update:model-value="onViewChange"
       />
       <UiButton v-if="activeView === 'plaza'" variant="primary" size="small" @click="openUpload">
-        <el-icon><Plus /></el-icon>
+        <UiIcon name="plus" />
         上传资料
       </UiButton>
     </div>
@@ -364,11 +364,11 @@ defineExpose({ loadMine })
             class="border-b border-line px-5 py-4 last:border-b-0">
             <div class="flex items-start gap-3">
               <div class="flex size-11 shrink-0 items-center justify-center rounded-[8px] bg-primary-50 text-primary-500">
-                <el-icon :size="20"><Document /></el-icon>
+                <UiIcon name="file-text" :size="20" />
               </div>
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-[15px] font-medium text-ink">{{ item.title }}</span>
+                  <span class="truncate text-base font-medium text-ink">{{ item.title }}</span>
                 </div>
                 <p class="mt-0.5 line-clamp-2 text-xs text-ink-3">{{ item.intro }}</p>
                 <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
@@ -379,11 +379,11 @@ defineExpose({ loadMine })
               </div>
               <div class="flex shrink-0 flex-col items-end gap-1.5">
                 <UiButton variant="primary" link size="small" @click="openDetail(item)">
-                  <el-icon><View /></el-icon>
+                  <UiIcon name="eye" />
                   查看
                 </UiButton>
                 <UiButton link size="small" @click="onReport(item)">
-                  <el-icon><Warning /></el-icon>
+                  <UiIcon name="triangle-alert" />
                   举报
                 </UiButton>
               </div>
@@ -412,8 +412,8 @@ defineExpose({ loadMine })
             <div class="flex items-center gap-3">
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-[15px] font-medium text-ink">{{ item.title }}</span>
-                  <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
+                  <span class="truncate text-base font-medium text-ink">{{ item.title }}</span>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
                 </div>
                 <div v-if="item.reject_reason" class="mt-1 text-xs text-danger">驳回/下架原因：{{ item.reject_reason }}</div>
                 <div class="mt-1 text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }} · {{ item.downloads_count }} 次下载</div>
@@ -452,7 +452,7 @@ defineExpose({ loadMine })
         <div>
           <label class="mb-1 block text-sm text-ink-2">文件（1–5 个，{{ FILE_TYPE_HINT }}）</label>
           <label class="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-card border border-dashed border-line py-5 text-ink-3 transition-colors hover:border-primary-300 hover:text-primary-500">
-            <el-icon :size="22" class="mb-1"><UploadFilled /></el-icon>
+            <UiIcon name="upload-cloud" :size="22" class="mb-1" />
             <span class="text-xs">点击选择文件{{ uploading ? '（上传中…）' : '' }}</span>
             <input type="file" multiple class="hidden" :disabled="uploading || uploadFiles.length >= MAX_FILES" @change="onPickFiles" />
           </label>
@@ -478,7 +478,7 @@ defineExpose({ loadMine })
       <el-skeleton v-if="detailLoading" :rows="5" animated />
       <div v-else-if="detailItem" class="flex flex-col gap-3.5">
         <div>
-          <div class="text-[16px] font-medium text-ink">{{ detailItem.title }}</div>
+          <div class="text-base font-medium text-ink">{{ detailItem.title }}</div>
           <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
             <span>{{ detailItem.author?.anonymous ? '匿名学员' : detailItem.author?.username || '—' }}</span>
             <span>{{ detailItem.downloads_count }} 次下载</span>
@@ -492,12 +492,12 @@ defineExpose({ loadMine })
             <div v-for="file in (detailItem.files || [])" :key="file.file_id"
               class="flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-2">
               <span class="flex min-w-0 items-center gap-2 text-sm text-ink">
-                <el-icon class="shrink-0" :size="16"><Document /></el-icon>
+                <UiIcon name="file-text" class="shrink-0" :size="16" />
                 <span class="truncate">{{ file.file_name }}</span>
                 <span class="shrink-0 text-xs text-ink-3">{{ formatSize(file.file_size) }}</span>
               </span>
               <UiButton variant="primary" link size="small" @click="downloadFile(file)">
-                <el-icon><Download /></el-icon>
+                <UiIcon name="download" />
                 下载
               </UiButton>
             </div>

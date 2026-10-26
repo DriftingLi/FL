@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[900px] px-4 pb-10">
     <div class="back-bar mb-3">
-      <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回列表</UiButton>
+      <UiButton variant="text" :icon="'arrow-left'" @click="goBack">返回列表</UiButton>
     </div>
 
     <UiAsyncSection
@@ -63,16 +63,16 @@
           <ForumContent
             :content="topic.content"
             :format="toForumContentFormat(topic.content_format)"
-            class="topic-content text-[15px] leading-[1.8] text-ink"
+            class="topic-content text-base leading-[1.8] text-ink"
           />
           <ForumImageGallery :images="topic.images" />
           <!-- 帖子操作行：左统计、右互动。浏览/回复数取自列（与详情分页 total 同源），点赞数由操作 chip 承载，不重复渲染。 -->
-          <div class="topic-stats mt-4 flex flex-wrap items-center gap-3 text-[13px] text-ink-3">
+          <div class="topic-stats mt-4 flex flex-wrap items-center gap-3 text-sm text-ink-3">
             <span class="inline-flex items-center gap-1">
-              <el-icon><View /></el-icon>{{ topic.view_count }} 次浏览
+              <UiIcon name="eye" />{{ topic.view_count }} 次浏览
             </span>
             <span class="inline-flex items-center gap-1">
-              <el-icon><ChatDotRound /></el-icon>{{ topic.reply_count }} 条回复
+              <UiIcon name="message-circle" />{{ topic.reply_count }} 条回复
             </span>
             <div class="topic-actions ml-auto flex items-center gap-3">
               <UiActionChip
@@ -109,7 +109,7 @@
               ]"
               @update:model-value="(v: string) => { replySort = v as 'latest' | 'hot'; handleReplySortChange() }"
             />
-            <UiButton size="small" :icon="replyOrder==='asc'? ArrowUp : ArrowDown" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</UiButton>
+            <UiButton size="small" :icon="replyOrder==='asc'? 'chevron-up' : 'chevron-down'" @click="toggleReplyOrder">{{ replyOrder==='asc' ? '正序' : '逆序' }}</UiButton>
           </div>
         </div>
         <template v-if="replies.length > 0">
@@ -184,10 +184,10 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, View, ChatDotRound, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, toForumContentFormat, type ForumTopicItem, type ForumReplyItem, type ForumContentFormat, type ForumTopicDetailData } from '@/api/forum'
 import { useFavorite } from '@/composables/useFavorite'
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'

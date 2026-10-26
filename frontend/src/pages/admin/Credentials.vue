@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>证件管理</h2>
       <UiButton variant="primary" @click="openDialog()">
-        <el-icon><Plus /></el-icon> 新增证件
+        <UiIcon name="plus" /> 新增证件
       </UiButton>
     </div>
 
@@ -88,12 +88,12 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'CredentialManage' })
 
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { credentialApi, type CredentialDict, type CredentialPayload } from '@/api/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'

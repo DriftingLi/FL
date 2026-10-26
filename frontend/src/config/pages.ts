@@ -1,3 +1,4 @@
+import type { IconName } from '@/icons/registry'
 // 页面描述符（ADR-0047 §2 / spec #930）：**一个页面的唯一事实源**。
 //
 // 一张描述符同时回答四件事——路由记录（path / component / meta）、导航项（分组 / 标签 /
@@ -20,32 +21,6 @@ import type { RouteLocationNamedRaw, RouteParamsRaw } from 'vue-router'
 import { describeRole } from '@/utils/roleWords'
 import type { AuthzCapability } from './authz'
 import { AI_FEATURE_SLUG_PATTERN } from './aiFeatures'
-import {
-  HomeFilled,
-  Notebook,
-  EditPen,
-  Document,
-  CircleCloseFilled,
-  MagicStick,
-  Search,
-  Files,
-  Star,
-  DataAnalysis,
-  User,
-  TrendCharts,
-  UserFilled,
-  ChatDotRound,
-  PriceTag,
-  Setting,
-  Memo,
-  QuestionFilled,
-  CircleCheck,
-  FolderOpened,
-  CollectionTag,
-  Trophy,
-  Calendar,
-  OfficeBuilding
-} from '@element-plus/icons-vue'
 
 /** 布局键：一个页面最多属于一个布局外壳。 */
 export type LayoutKey = 'training' | 'tutor' | 'manage' | 'recruit' | 'valuation'
@@ -58,7 +33,7 @@ export interface PageNav {
   /** 侧栏分组 key（见 navGroups） */
   group: string
   label: string
-  icon?: Component
+  icon?: IconName | Component
   /** 除本页 routeName 外还应高亮的路由（详情页归属） */
   activeRouteNames?: readonly RouteName[]
   routeParams?: Record<string, string | number>
@@ -141,21 +116,21 @@ export const layouts: LayoutDef[] = [
 export interface NavGroup {
   key: string
   label: string
-  icon?: Component
+  icon?: IconName | Component
 }
 
 export const navGroups: Record<string, NavGroup[]> = {
   training: [
-    { key: 'learning', label: '学习中心', icon: HomeFilled },
-    { key: 'exam', label: '题库与考试', icon: EditPen },
-    { key: 'interactive', label: '互动与工具', icon: ChatDotRound },
-    { key: 'personal', label: '个人', icon: User }
+    { key: 'learning', label: '学习中心', icon: 'house-filled' },
+    { key: 'exam', label: '题库与考试', icon: 'square-pen' },
+    { key: 'interactive', label: '互动与工具', icon: 'message-circle' },
+    { key: 'personal', label: '个人', icon: 'user' }
   ],
   manage: [
-    { key: 'overview', label: '总览', icon: DataAnalysis },
-    { key: 'user-content', label: '用户与内容', icon: User },
-    { key: 'teaching', label: '教学管理', icon: FolderOpened },
-    { key: 'system', label: '系统', icon: Setting }
+    { key: 'overview', label: '总览', icon: 'chart-pie' },
+    { key: 'user-content', label: '用户与内容', icon: 'user' },
+    { key: 'teaching', label: '教学管理', icon: 'folder-open' },
+    { key: 'system', label: '系统', icon: 'settings' }
   ]
 }
 
@@ -172,16 +147,16 @@ const pagesData = [
   { name: 'ForgotPassword', path: '/forgot-password', component: () => import('@/pages/auth/ForgotPassword.vue'), workspace: 'auth', requiresAuth: false, authPage: true },
 
   // ---------- 学员工作区（TrainingLayout）----------
-  { name: 'StudentDashboard', path: '/training', component: () => import('@/pages/student/Dashboard.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'learning', label: '仪表盘', icon: HomeFilled, exact: true, order: 1 } },
-  { name: 'CourseList', path: '/training/courses', component: () => import('@/pages/student/CourseList.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'course.learn', nav: { group: 'learning', label: '课程中心', icon: Notebook, activeRouteNames: ['ChapterView'], order: 2 } },
-  { name: 'StudentSearch', path: '/training/search', component: () => import('@/pages/student/SearchPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'search.use', nav: { group: 'learning', label: '全局搜索', icon: Search, order: 4 } },
-  { name: 'StudentMaterials', path: '/training/materials', component: () => import('@/pages/student/Materials.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'material.read', nav: { group: 'learning', label: '学习资料', icon: Files, order: 3 } },
-  { name: 'StudentFavorites', path: '/training/favorites', component: () => import('@/pages/student/Favorites.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'favorite.manage', nav: { group: 'personal', label: '我的收藏', icon: Star, order: 3 } },
+  { name: 'StudentDashboard', path: '/training', component: () => import('@/pages/student/Dashboard.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'learning', label: '仪表盘', icon: 'house-filled', exact: true, order: 1 } },
+  { name: 'CourseList', path: '/training/courses', component: () => import('@/pages/student/CourseList.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'course.learn', nav: { group: 'learning', label: '课程中心', icon: 'notebook', activeRouteNames: ['ChapterView'], order: 2 } },
+  { name: 'StudentSearch', path: '/training/search', component: () => import('@/pages/student/SearchPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'search.use', nav: { group: 'learning', label: '全局搜索', icon: 'search', order: 4 } },
+  { name: 'StudentMaterials', path: '/training/materials', component: () => import('@/pages/student/Materials.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'material.read', nav: { group: 'learning', label: '学习资料', icon: 'files', order: 3 } },
+  { name: 'StudentFavorites', path: '/training/favorites', component: () => import('@/pages/student/Favorites.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'favorite.manage', nav: { group: 'personal', label: '我的收藏', icon: 'star', order: 3 } },
   // 我的笔记（ADR-0055）：题目笔记的汇集读面 + 独立笔记 CRUD。
   // 能力点用 student.access（学员工作区入口）而非新建能力位：笔记是纯用户私有数据，
   // 后端 /api/notes 与既有 /api/questions/:id/note 一样只要求登录（口径见 ADR-0055）。
-  { name: 'StudentNotebook', path: '/training/notes', component: () => import('@/pages/student/Notebook.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'personal', label: '我的笔记', icon: Memo, order: 4 } },
-  { name: 'ForumPage', path: '/training/forum', component: () => import('@/pages/student/ForumPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'forum.participate', nav: { group: 'interactive', label: '学员论坛', icon: ChatDotRound, activeRouteNames: ['ForumDetail'], order: 1 } },
+  { name: 'StudentNotebook', path: '/training/notes', component: () => import('@/pages/student/Notebook.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'personal', label: '我的笔记', icon: 'sticky-note', order: 4 } },
+  { name: 'ForumPage', path: '/training/forum', component: () => import('@/pages/student/ForumPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'forum.participate', nav: { group: 'interactive', label: '学员论坛', icon: 'message-circle', activeRouteNames: ['ForumDetail'], order: 1 } },
   { name: 'ForumAsk', path: '/training/forum/ask', component: () => import('@/pages/student/ForumAskPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'forum.participate' },
   { name: 'ForumDetail', path: '/training/forum/:topicId', component: () => import('@/pages/student/ForumDetail.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'forum.participate' },
   // 外链中转页是**独立页面**：不挂布局外壳（无侧栏、无主题切换入口），只继承全局主题。
@@ -191,75 +166,75 @@ const pagesData = [
   // ADR-0049 决策 4：搜索结果的落点（无落点者不得进搜索结果）
   { name: 'StudentFeaturedDetail', path: '/training/featured/:id', component: () => import('@/pages/student/FeaturedDetail.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access' },
   { name: 'StudentQuestionDetail', path: '/training/questions/:id', component: () => import('@/pages/student/QuestionDetail.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'question.practice' },
-  { name: 'QuestionBank', path: '/training/question-bank', component: () => import('@/pages/student/QuestionBank.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'question.practice', nav: { group: 'exam', label: '题库练习', icon: EditPen, order: 1 } },
-  { name: 'MockExam', path: '/training/mock-exam', component: () => import('@/pages/student/MockExam.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'mock_exam.take', nav: { group: 'exam', label: '模拟考试', icon: Document, order: 2 } },
-  { name: 'WrongQuestions', path: '/training/wrong-questions', component: () => import('@/pages/student/WrongQuestions.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'question.practice', nav: { group: 'exam', label: '错题本', icon: CircleCloseFilled, order: 3 } },
-  { name: 'RealExamPapers', path: '/training/real-exam', component: () => import('@/pages/student/RealExamPapers.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'real_exam.take', nav: { group: 'exam', label: '真题练习', icon: Document, parent: 'QuestionBank' } },
+  { name: 'QuestionBank', path: '/training/question-bank', component: () => import('@/pages/student/QuestionBank.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'question.practice', nav: { group: 'exam', label: '题库练习', icon: 'square-pen', order: 1 } },
+  { name: 'MockExam', path: '/training/mock-exam', component: () => import('@/pages/student/MockExam.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'mock_exam.take', nav: { group: 'exam', label: '模拟考试', icon: 'file-text', order: 2 } },
+  { name: 'WrongQuestions', path: '/training/wrong-questions', component: () => import('@/pages/student/WrongQuestions.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'question.practice', nav: { group: 'exam', label: '错题本', icon: 'circle-x-filled', order: 3 } },
+  { name: 'RealExamPapers', path: '/training/real-exam', component: () => import('@/pages/student/RealExamPapers.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'real_exam.take', nav: { group: 'exam', label: '真题练习', icon: 'file-text', parent: 'QuestionBank' } },
   { name: 'RealExamPractice', path: '/training/real-exam/practice/:paperId', component: () => import('@/pages/student/RealExamPractice.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'real_exam.take' },
-  { name: 'CheckIn', path: '/training/check-in', component: () => import('@/pages/student/CheckInPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'check_in.use', nav: { group: 'personal', label: '每日打卡', icon: Calendar, order: 2 } },
-  { name: 'TaskCenter', path: '/training/task-center', component: () => import('@/pages/student/TaskCenter.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'points.use', nav: { group: 'personal', label: '任务中心', icon: Trophy, order: 1 } },
+  { name: 'CheckIn', path: '/training/check-in', component: () => import('@/pages/student/CheckInPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'check_in.use', nav: { group: 'personal', label: '每日打卡', icon: 'calendar', order: 2 } },
+  { name: 'TaskCenter', path: '/training/task-center', component: () => import('@/pages/student/TaskCenter.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'points.use', nav: { group: 'personal', label: '任务中心', icon: 'trophy', order: 1 } },
   { name: 'PointsLedger', path: '/training/task-center/points', component: () => import('@/pages/student/PointsLedger.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'points.use' },
-  { name: 'StudentProfile', path: '/training/profile', component: () => import('@/pages/student/Profile.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'personal', label: '个人资料', icon: User, order: 5 } },
-  { name: 'StudentResume', path: '/training/resume', component: () => import('@/pages/student/ResumePage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'resume.manage', nav: { group: 'personal', label: '我的简历', icon: Document, order: 6 } },
+  { name: 'StudentProfile', path: '/training/profile', component: () => import('@/pages/student/Profile.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'personal', label: '个人资料', icon: 'user', order: 5 } },
+  { name: 'StudentResume', path: '/training/resume', component: () => import('@/pages/student/ResumePage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'resume.manage', nav: { group: 'personal', label: '我的简历', icon: 'file-text', order: 6 } },
   { name: 'StudentResumeEdit', path: '/training/resume/edit', component: () => import('@/pages/student/ResumeEdit.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'resume.manage' },
-  { name: 'JobPlaza', path: '/training/jobs', component: () => import('@/pages/student/JobPlaza.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '职位广场', icon: OfficeBuilding, activeRouteNames: ['JobDetail'], order: 7 } },
+  { name: 'JobPlaza', path: '/training/jobs', component: () => import('@/pages/student/JobPlaza.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '职位广场', icon: 'building-2', activeRouteNames: ['JobDetail'], order: 7 } },
   { name: 'JobDetail', path: '/training/jobs/:id', component: () => import('@/pages/student/JobDetail.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply' },
-  { name: 'MyApplications', path: '/training/applications', component: () => import('@/pages/student/MyApplications.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '我的投递', icon: Document, order: 8 } },
+  { name: 'MyApplications', path: '/training/applications', component: () => import('@/pages/student/MyApplications.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '我的投递', icon: 'file-text', order: 8 } },
   { name: 'CredentialOnboarding', path: '/training/onboarding/credential', component: () => import('@/pages/onboarding/CredentialOnboarding.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access' },
 
   // ---------- 导师工作区（TutorLayout）----------
-  { name: 'TutorDashboard', path: '/training/tutor', component: () => import('@/pages/tutor/Dashboard.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '仪表盘', icon: HomeFilled, exact: true, order: 1 } },
-  { name: 'TutorCourses', path: '/training/tutor/courses', component: () => import('@/pages/tutor/TutorCourses.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '我的课程', icon: Notebook, activeRouteNames: ['TutorChapterManage', 'TutorChapterEdit'], order: 2 } },
+  { name: 'TutorDashboard', path: '/training/tutor', component: () => import('@/pages/tutor/Dashboard.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '仪表盘', icon: 'house-filled', exact: true, order: 1 } },
+  { name: 'TutorCourses', path: '/training/tutor/courses', component: () => import('@/pages/tutor/TutorCourses.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '我的课程', icon: 'notebook', activeRouteNames: ['TutorChapterManage', 'TutorChapterEdit'], order: 2 } },
   { name: 'TutorChapterManage', path: '/training/tutor/course/:id/chapters', component: () => import('@/pages/tutor/ChapterManage.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access' },
   { name: 'TutorChapterEdit', path: '/training/tutor/course/:courseId/chapter/:chapterId', component: () => import('@/pages/tutor/TutorChapterEdit.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access' },
-  { name: 'TutorQuestionManage', path: '/training/tutor/question-manage', component: () => import('@/pages/tutor/QuestionManage.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '题库管理', icon: EditPen, activeRouteNames: ['TutorQuestionCreate', 'TutorQuestionTags'], order: 3 } },
+  { name: 'TutorQuestionManage', path: '/training/tutor/question-manage', component: () => import('@/pages/tutor/QuestionManage.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '题库管理', icon: 'square-pen', activeRouteNames: ['TutorQuestionCreate', 'TutorQuestionTags'], order: 3 } },
   { name: 'TutorQuestionCreate', path: '/training/tutor/question-create', component: () => import('@/pages/tutor/QuestionCreate.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author' },
-  { name: 'TutorQuestionTags', path: '/training/tutor/question-tags', component: () => import('@/pages/tutor/QuestionTags.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '标签管理', icon: CollectionTag, order: 4 } },
+  { name: 'TutorQuestionTags', path: '/training/tutor/question-tags', component: () => import('@/pages/tutor/QuestionTags.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '标签管理', icon: 'bookmark', order: 4 } },
 
   // 残值评估的公开界面已迁门户仓（valuation.hrwai.cn/valuation，2026-10）；
   // 本仓只保留管理端的「残值配置」（ValuationConfigManage），它挂在 manage 工作区下。
 
   // ---------- AI 助手（顶层，可选登录；归属 training 工作区）----------
-  { name: 'AIAssistant', path: '/ai-assistant', component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use', nav: { group: 'interactive', label: 'AI助手', icon: MagicStick, activeRouteNames: ['AIAssistantFeature'], order: 2 } },
+  { name: 'AIAssistant', path: '/ai-assistant', component: () => import('@/pages/ai-assistant/AIAssistantPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use', nav: { group: 'interactive', label: 'AI助手', icon: 'wand-sparkles', activeRouteNames: ['AIAssistantFeature'], order: 2 } },
   // 帮助中心（#1079）：分类 + 手风琴 Q&A，搜索走端上过滤（不新增搜索接口、不进全局搜索域）
-  { name: 'StudentHelpCenter', path: '/training/help', component: () => import('@/pages/student/HelpCenter.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'faq.read', nav: { group: 'interactive', label: '帮助中心', icon: QuestionFilled, order: 3 } },
+  { name: 'StudentHelpCenter', path: '/training/help', component: () => import('@/pages/student/HelpCenter.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'faq.read', nav: { group: 'interactive', label: '帮助中心', icon: 'circle-question-filled', order: 3 } },
   { name: 'AIAssistantFeature', path: '/ai-assistant/:featureKey(' + AI_FEATURE_SLUG_PATTERN + ')', component: () => import('@/pages/ai-assistant/FeatureChatPage.vue'), workspace: 'training', requiresAuth: false, capability: 'ai_assistant.use' },
 
   // ---------- 管理端（AdminLayout）----------
-  { name: 'AdminDashboard', path: '/admin/dashboard', component: () => import('@/pages/admin/Dashboard.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin.access', keepAlive: true, nav: { group: 'overview', label: '仪表盘', icon: DataAnalysis, order: 1 } },
-  { name: 'Statistics', path: '/admin/statistics', component: () => import('@/pages/admin/Statistics.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'statistics.read', keepAlive: true, nav: { group: 'overview', label: '统计分析', icon: TrendCharts, order: 2 } },
-  { name: 'HrwaiUserManage', path: '/admin/hrwai-users', component: () => import('@/pages/admin/HrwaiUserManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'hrwai_user.manage', keepAlive: true, nav: { group: 'user-content', label: '用户管理', icon: User, order: 1 } },
-  { name: 'ProfileReview', path: '/admin/profile-review', component: () => import('@/pages/admin/ProfileReview.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'profile.review', keepAlive: true, nav: { group: 'user-content', label: '资料审核', icon: CircleCheck, order: 2 } },
-  { name: 'TutorManage', path: '/admin/tutors', component: () => import('@/pages/admin/TutorManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'tutor.manage', keepAlive: true, nav: { group: 'user-content', label: `${describeRole('tutor')}管理`, icon: UserFilled, order: 3 } },
-  { name: 'RecruiterManage', path: '/admin/recruiters', component: () => import('@/pages/admin/RecruiterManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'recruiter.manage', keepAlive: true, nav: { group: 'user-content', label: '招聘者管理', icon: OfficeBuilding, order: 4 } },
-  { name: 'ForumManage', path: '/admin/forum-manage', component: () => import('@/pages/admin/ForumManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'forum.moderate', keepAlive: true, nav: { group: 'user-content', label: '论坛管理', icon: ChatDotRound, order: 5 } },
-  { name: 'ContributionManage', path: '/admin/contribution-manage', component: () => import('@/pages/admin/ContributionManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'contribution.review', keepAlive: true, nav: { group: 'user-content', label: '投稿管理', icon: Document, order: 6 } },
-  { name: 'CourseCatalog', path: '/admin/course-catalog', component: () => import('@/pages/admin/CourseCatalog.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'course.manage', keepAlive: true, nav: { group: 'teaching', label: '课程管理', icon: FolderOpened, order: 1 } },
-  { name: 'PositionManage', path: '/admin/positions', component: () => import('@/pages/admin/PositionManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'position.manage', keepAlive: true, nav: { group: 'teaching', label: '岗位管理', icon: CollectionTag, order: 2 } },
-  { name: 'CredentialManage', path: '/admin/credentials', component: () => import('@/pages/admin/Credentials.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'credential.manage', keepAlive: true, nav: { group: 'teaching', label: '证件管理', icon: CollectionTag, order: 3 } },
-  { name: 'QuestionReview', path: '/admin/question-review', component: () => import('@/pages/admin/QuestionReview.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'question.review', keepAlive: true, nav: { group: 'teaching', label: '题库审核', icon: EditPen, order: 4 } },
-  { name: 'AuditLogs', path: '/admin/audit-logs', component: () => import('@/pages/admin/AuditLogs.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'audit.read', keepAlive: true, nav: { group: 'system', label: '审计日志', icon: Memo, order: 1 } },
-  { name: 'AdminInspection', path: '/admin/inspection', component: () => import('@/pages/admin/Inspection.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'inspection.read', keepAlive: true, nav: { group: 'system', label: '巡检视图', icon: DataAnalysis, order: 2 } },
-  { name: 'ValuationConfigManage', path: '/admin/valuation-config', component: () => import('@/pages/admin/ValuationConfigManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'valuation.config', keepAlive: true, nav: { group: 'system', label: '残值配置', icon: PriceTag, order: 3 } },
-  { name: 'AISettings', path: '/admin/ai-settings', component: () => import('@/pages/admin/AISettings.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'ai_config.manage', keepAlive: true, nav: { group: 'system', label: 'AI 配置', icon: Setting, order: 4 } },
-  { name: 'ContentGenerate', path: '/admin/content-generate', component: () => import('@/pages/admin/ContentGenerate.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'content.generate', nav: { group: 'system', label: '内容生成', icon: MagicStick, order: 5 } },
-  { name: 'AdminFeaturedContentList', path: '/admin/featured-content', component: () => import('@/pages/admin/FeaturedContentList.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'featured.manage', keepAlive: true, nav: { group: 'system', label: '内容精选', icon: Document, order: 6, activeRouteNames: ['AdminFeaturedContentEdit'] } },
+  { name: 'AdminDashboard', path: '/admin/dashboard', component: () => import('@/pages/admin/Dashboard.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin.access', keepAlive: true, nav: { group: 'overview', label: '仪表盘', icon: 'chart-pie', order: 1 } },
+  { name: 'Statistics', path: '/admin/statistics', component: () => import('@/pages/admin/Statistics.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'statistics.read', keepAlive: true, nav: { group: 'overview', label: '统计分析', icon: 'chart-line', order: 2 } },
+  { name: 'HrwaiUserManage', path: '/admin/hrwai-users', component: () => import('@/pages/admin/HrwaiUserManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'hrwai_user.manage', keepAlive: true, nav: { group: 'user-content', label: '用户管理', icon: 'user', order: 1 } },
+  { name: 'ProfileReview', path: '/admin/profile-review', component: () => import('@/pages/admin/ProfileReview.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'profile.review', keepAlive: true, nav: { group: 'user-content', label: '资料审核', icon: 'circle-check', order: 2 } },
+  { name: 'TutorManage', path: '/admin/tutors', component: () => import('@/pages/admin/TutorManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'tutor.manage', keepAlive: true, nav: { group: 'user-content', label: `${describeRole('tutor')}管理`, icon: 'user-filled', order: 3 } },
+  { name: 'RecruiterManage', path: '/admin/recruiters', component: () => import('@/pages/admin/RecruiterManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'recruiter.manage', keepAlive: true, nav: { group: 'user-content', label: '招聘者管理', icon: 'building-2', order: 4 } },
+  { name: 'ForumManage', path: '/admin/forum-manage', component: () => import('@/pages/admin/ForumManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'forum.moderate', keepAlive: true, nav: { group: 'user-content', label: '论坛管理', icon: 'message-circle', order: 5 } },
+  { name: 'ContributionManage', path: '/admin/contribution-manage', component: () => import('@/pages/admin/ContributionManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'contribution.review', keepAlive: true, nav: { group: 'user-content', label: '投稿管理', icon: 'file-text', order: 6 } },
+  { name: 'CourseCatalog', path: '/admin/course-catalog', component: () => import('@/pages/admin/CourseCatalog.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'course.manage', keepAlive: true, nav: { group: 'teaching', label: '课程管理', icon: 'folder-open', order: 1 } },
+  { name: 'PositionManage', path: '/admin/positions', component: () => import('@/pages/admin/PositionManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'position.manage', keepAlive: true, nav: { group: 'teaching', label: '岗位管理', icon: 'bookmark', order: 2 } },
+  { name: 'CredentialManage', path: '/admin/credentials', component: () => import('@/pages/admin/Credentials.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'credential.manage', keepAlive: true, nav: { group: 'teaching', label: '证件管理', icon: 'bookmark', order: 3 } },
+  { name: 'QuestionReview', path: '/admin/question-review', component: () => import('@/pages/admin/QuestionReview.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'question.review', keepAlive: true, nav: { group: 'teaching', label: '题库审核', icon: 'square-pen', order: 4 } },
+  { name: 'AuditLogs', path: '/admin/audit-logs', component: () => import('@/pages/admin/AuditLogs.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'audit.read', keepAlive: true, nav: { group: 'system', label: '审计日志', icon: 'sticky-note', order: 1 } },
+  { name: 'AdminInspection', path: '/admin/inspection', component: () => import('@/pages/admin/Inspection.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'inspection.read', keepAlive: true, nav: { group: 'system', label: '巡检视图', icon: 'chart-pie', order: 2 } },
+  { name: 'ValuationConfigManage', path: '/admin/valuation-config', component: () => import('@/pages/admin/ValuationConfigManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'valuation.config', keepAlive: true, nav: { group: 'system', label: '残值配置', icon: 'tag', order: 3 } },
+  { name: 'AISettings', path: '/admin/ai-settings', component: () => import('@/pages/admin/AISettings.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'ai_config.manage', keepAlive: true, nav: { group: 'system', label: 'AI 配置', icon: 'settings', order: 4 } },
+  { name: 'ContentGenerate', path: '/admin/content-generate', component: () => import('@/pages/admin/ContentGenerate.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'content.generate', nav: { group: 'system', label: '内容生成', icon: 'wand-sparkles', order: 5 } },
+  { name: 'AdminFeaturedContentList', path: '/admin/featured-content', component: () => import('@/pages/admin/FeaturedContentList.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'featured.manage', keepAlive: true, nav: { group: 'system', label: '内容精选', icon: 'file-text', order: 6, activeRouteNames: ['AdminFeaturedContentEdit'] } },
   { name: 'AdminFeaturedContentEdit', path: '/admin/featured-content/edit/:id?', component: () => import('@/pages/admin/FeaturedContentEdit.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'featured.manage' },
-  { name: 'AdminFaqManage', path: '/admin/faq', component: () => import('@/pages/admin/FaqManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'faq.manage', keepAlive: true, nav: { group: 'system', label: '帮助中心管理', icon: QuestionFilled, order: 7 } },
+  { name: 'AdminFaqManage', path: '/admin/faq', component: () => import('@/pages/admin/FaqManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'faq.manage', keepAlive: true, nav: { group: 'system', label: '帮助中心管理', icon: 'circle-question-filled', order: 7 } },
   // 授权管理两页（#1621 段4）：能力键只挂受保护角色 ⇒ 只有超管看得见这两项（侧栏与守卫同源）。
   // 编辑态页面按 ADR-0073 **不进 keep-alive**（避免把未保存的勾选缓存成"看起来已生效"）。
-  { name: 'AdminRoleManage', path: '/admin/roles', component: () => import('@/pages/admin/RoleManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_role.manage', nav: { group: 'system', label: '角色权限', icon: Setting, order: 7 } },
-  { name: 'AdminAccountManage', path: '/admin/accounts', component: () => import('@/pages/admin/AccountManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_account.manage', keepAlive: true, nav: { group: 'system', label: '管理员管理', icon: UserFilled, order: 6 } },
+  { name: 'AdminRoleManage', path: '/admin/roles', component: () => import('@/pages/admin/RoleManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_role.manage', nav: { group: 'system', label: '角色权限', icon: 'settings', order: 7 } },
+  { name: 'AdminAccountManage', path: '/admin/accounts', component: () => import('@/pages/admin/AccountManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_account.manage', keepAlive: true, nav: { group: 'system', label: '管理员管理', icon: 'user-filled', order: 6 } },
   // 「无管理权限」页（#1638）：**刻意不声明 capability** —— 它是「一个能力位都没有」的落点
   // （守卫 adminLandingPage 的兜底），再要求能力就是自锁；不进侧栏（无 nav），也不进 keep-alive。
   { name: 'AdminNoAccess', path: '/admin/no-access', component: () => import('@/pages/admin/NoAccess.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, title: '无管理权限' },
 
   // ---------- 招聘端（RecruitLayout）----------
-  { name: 'RecruitDashboard', path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: HomeFilled, exact: true, order: 1 } },
-  { name: 'RecruitResumes', path: '/recruit/resumes', component: () => import('@/pages/recruit/Resumes.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'application.review', nav: { group: 'recruit', label: '简历库', icon: Document, activeRouteNames: ['RecruitResumeDetail'], order: 2 } },
+  { name: 'RecruitDashboard', path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: 'house-filled', exact: true, order: 1 } },
+  { name: 'RecruitResumes', path: '/recruit/resumes', component: () => import('@/pages/recruit/Resumes.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'application.review', nav: { group: 'recruit', label: '简历库', icon: 'file-text', activeRouteNames: ['RecruitResumeDetail'], order: 2 } },
   { name: 'RecruitResumeDetail', path: '/recruit/resumes/:id', component: () => import('@/pages/recruit/ResumeDetail.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'application.review' },
-  { name: 'RecruitRequests', path: '/recruit/requests', component: () => import('@/pages/recruit/MyRequests.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'contact.request', nav: { group: 'recruit', label: '我的申请', icon: Document, order: 3 } },
-  { name: 'RecruitJobManage', path: '/recruit/jobs', component: () => import('@/pages/recruit/JobManage.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'job.manage', nav: { group: 'recruit', label: '职位管理', icon: OfficeBuilding, activeRouteNames: ['RecruitApplicationList'], order: 4 } },
+  { name: 'RecruitRequests', path: '/recruit/requests', component: () => import('@/pages/recruit/MyRequests.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'contact.request', nav: { group: 'recruit', label: '我的申请', icon: 'file-text', order: 3 } },
+  { name: 'RecruitJobManage', path: '/recruit/jobs', component: () => import('@/pages/recruit/JobManage.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'job.manage', nav: { group: 'recruit', label: '职位管理', icon: 'building-2', activeRouteNames: ['RecruitApplicationList'], order: 4 } },
   { name: 'RecruitApplicationList', path: '/recruit/jobs/:id/applications', component: () => import('@/pages/recruit/ApplicationList.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'application.review' }
 
 ] as const
@@ -295,7 +270,7 @@ export function href(name: RouteName, params?: RouteParamsRaw): RouteLocationNam
 export interface DerivedNavItem {
   key: string
   label: string
-  icon?: Component
+  icon?: IconName | Component
   routeName?: RouteName
   activeRouteNames?: readonly RouteName[]
   routeParams?: Record<string, string | number>
@@ -332,13 +307,13 @@ export interface ExternalNavItem {
   key: string
   label: string
   group: string
-  icon?: Component
+  icon?: IconName | Component
   externalUrl: string
 }
 
 export const externalNavItems: Record<string, ExternalNavItem[]> = {
   training: [
     // 门户已迁 EdgeOne（票 #1742）：主域 www.hrwai.cn；旧域只留「301 + API」。
-    { key: 'featured', label: '内容精选', group: 'interactive', icon: Document, externalUrl: 'https://www.hrwai.cn/news' }
+    { key: 'featured', label: '内容精选', group: 'interactive', icon: 'file-text', externalUrl: 'https://www.hrwai.cn/news' }
   ]
 }

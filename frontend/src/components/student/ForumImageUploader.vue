@@ -27,10 +27,10 @@
         <button
           type="button"
           aria-label="移除图片"
-          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-[10px] text-white transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] after:absolute after:-inset-1.5 after:content-[''] hover:bg-black/80 max-md:after:-inset-3"
+          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-xs text-white transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] after:absolute after:-inset-1.5 after:content-[''] hover:bg-black/80 max-md:after:-inset-3"
           @click="removeImage(index)"
         >
-          <el-icon><Close /></el-icon>
+          <UiIcon name="x" />
         </button>
       </div>
     </div>
@@ -44,23 +44,8 @@
       :title="zoneTitle"
       @click="triggerSelect"
     >
-      <el-icon v-if="uploading" class="animate-spin text-base"><Loading /></el-icon>
-      <!-- 纸夹用内联 SVG：EP 图标集里没有语义合适的纸夹，且这样能与工具栏图标同一套描边风格 -->
-      <svg
-        v-else
-        class="size-4 shrink-0"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path
-          d="M20.5 11.5l-8.2 8.2a5.4 5.4 0 0 1-7.6-7.6l8.2-8.2a3.6 3.6 0 0 1 5.1 5.1l-8.2 8.2a1.8 1.8 0 0 1-2.6-2.6l7.6-7.6"
-        />
-      </svg>
+      <UiIcon name="loader-circle" v-if="uploading" class="animate-spin text-base" />
+      <UiIcon v-else name="paperclip" :stroke-width="1.8" class="text-base" />
       <span>{{ uploading ? '上传中…' : '粘贴、拖拽或点击添加图片' }}</span>
       <span class="text-xs text-ink-3">{{ props.modelValue.length }}/{{ props.max }}</span>
     </button>
@@ -77,8 +62,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Loading, Close } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { useForumImageUpload } from '@/composables/useForumImageUpload'
 

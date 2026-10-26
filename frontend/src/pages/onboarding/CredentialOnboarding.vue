@@ -23,7 +23,7 @@
               <div class="card-desc">{{ c.description }}</div>
               <div class="card-footer">
                 <span class="badge special">特种作业</span>
-                <el-icon v-if="selectedId === c.id" class="check-icon"><CircleCheckFilled /></el-icon>
+                <UiIcon name="circle-check-filled" v-if="selectedId === c.id" class="check-icon" />
               </div>
             </div>
           </div>
@@ -43,7 +43,7 @@
               <div class="card-desc">{{ c.description }}</div>
               <div class="card-footer">
                 <span class="badge skill">L{{ c.level }} · {{ levelText(c.level) }}</span>
-                <el-icon v-if="selectedId === c.id" class="check-icon"><CircleCheckFilled /></el-icon>
+                <UiIcon name="circle-check-filled" v-if="selectedId === c.id" class="check-icon" />
               </div>
             </div>
           </div>
@@ -60,9 +60,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { CircleCheckFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { useCredentialStore } from '@/stores/credential'

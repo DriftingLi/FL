@@ -35,7 +35,7 @@
         <div class="rounded-card border border-line bg-panel p-4">
           <div class="text-xs text-ink-3">积分有效期</div>
           <div class="mt-1 inline-flex items-center gap-1.5 rounded-pill bg-ok-soft px-2.5 py-1 text-xs font-semibold text-ok-strong">
-            <el-icon><CircleCheckFilled /></el-icon>当前永久有效
+            <UiIcon name="circle-check-filled" />当前永久有效
           </div>
         </div>
       </div>
@@ -47,7 +47,7 @@
           :options="filterOptions"
           @update:model-value="(v: string) => { filter = v as 'all' | 'in' | 'out' }"
         />
-        <UiButton variant="ghost" size="small" class="ml-auto" :icon="QuestionFilled" @click="rulesVisible = true">积分规则</UiButton>
+        <UiButton variant="ghost" size="small" class="ml-auto" :icon="'circle-question-filled'" @click="rulesVisible = true">积分规则</UiButton>
       </div>
 
       <!-- 流水列表 -->
@@ -124,8 +124,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, onMounted } from 'vue'
-import { CircleCheckFilled, QuestionFilled } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { pointsApi, type PointsBalance, type PointsLedgerData } from '@/api/points'
 import { ledgerReasonMeta, deltaKind } from '@/utils/pointsReason'

@@ -1,7 +1,7 @@
 <template>
   <div class="ppt-viewer" ref="containerRef">
     <div v-if="loading" class="ppt-loading">
-      <el-icon class="loading-icon" :size="32"><Loading /></el-icon>
+      <UiIcon name="loader-circle" class="loading-icon" :size="32" />
       <span>幻灯片加载中...</span>
     </div>
 
@@ -23,13 +23,13 @@
         <span class="slide-title">{{ fileName }}</span>
         <div class="ppt-actions">
           <UiTooltip content="重新生成幻灯片" placement="bottom">
-            <UiButton aria-label="重新生成幻灯片" :icon="Refresh" circle size="small" :loading="regenerating" @click="regenerateSlides"/>
+            <UiButton aria-label="重新生成幻灯片" :icon="'rotate-cw'" circle size="small" :loading="regenerating" @click="regenerateSlides"/>
           </UiTooltip>
           <UiTooltip content="全屏演示" placement="bottom">
-            <UiButton aria-label="全屏演示" :icon="Rank" circle size="small" @click="toggleFullscreen"/>
+            <UiButton aria-label="全屏演示" :icon="'chart-no-axes-column'" circle size="small" @click="toggleFullscreen"/>
           </UiTooltip>
           <UiTooltip content="下载" placement="bottom">
-            <UiButton aria-label="下载" :icon="Download" circle size="small" @click="downloadFile"/>
+            <UiButton aria-label="下载" :icon="'download'" circle size="small" @click="downloadFile"/>
           </UiTooltip>
         </div>
       </div>
@@ -55,9 +55,9 @@
 
       <div class="ppt-footer">
         <div class="slide-nav">
-          <UiButton :icon="ArrowLeft" circle aria-label="上一页" @click="prevSlide" :disabled="currentSlideIndex <= 0"/>
+          <UiButton :icon="'arrow-left'" circle aria-label="上一页" @click="prevSlide" :disabled="currentSlideIndex <= 0"/>
           <span class="slide-counter">{{ currentSlideIndex + 1 }} / {{ slides.length }}</span>
-          <UiButton :icon="ArrowRight" circle aria-label="下一页" @click="nextSlide" :disabled="currentSlideIndex >= slides.length - 1"/>
+          <UiButton :icon="'arrow-right'" circle aria-label="下一页" @click="nextSlide" :disabled="currentSlideIndex >= slides.length - 1"/>
         </div>
       </div>
 
@@ -80,8 +80,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Download, Rank, Loading, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'

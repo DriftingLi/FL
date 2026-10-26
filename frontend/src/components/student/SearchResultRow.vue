@@ -7,14 +7,14 @@
           <template v-else>{{ seg.text }}</template>
         </template>
       </span>
-      <span class="truncate text-[13px] text-ink-3">
+      <span class="truncate text-sm text-ink-3">
         <template v-for="(seg, i) in snippetSegments" :key="'s' + i">
           <mark v-if="seg.hit" class="bg-transparent font-semibold text-ink-2">{{ seg.text }}</mark>
           <template v-else>{{ seg.text }}</template>
         </template>
       </span>
     </div>
-    <div v-if="hitLabel" class="mt-0.5 text-[12px] text-ink-3">{{ hitLabel }}</div>
+    <div v-if="hitLabel" class="mt-0.5 text-xs text-ink-3">{{ hitLabel }}</div>
   </div>
 </template>
 

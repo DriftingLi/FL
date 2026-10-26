@@ -36,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 主题切换按钮（全站统一）：三态下拉菜单（浅色/深色/跟随系统，当前项打勾），
  * 替代旧的 cycle() 循环按钮（交互对齐 DeepSeek）。
@@ -47,7 +48,6 @@
 import { computed } from 'vue'
 import { useThemeStore, type ThemeMode } from '@/stores/theme'
 import type { IconName } from '@/icons/registry'
-import UiIcon from './UiIcon.vue'
 
 withDefaults(
   defineProps<{

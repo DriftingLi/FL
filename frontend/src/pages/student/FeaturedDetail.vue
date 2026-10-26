@@ -2,7 +2,7 @@
   <div class="mx-auto max-w-[960px] p-5">
     <div class="mb-3">
       <UiButton variant="text" size="small" @click="goBack">
-        <el-icon><ArrowLeft /></el-icon>
+        <UiIcon name="arrow-left" />
         <span class="ml-1">返回</span>
       </UiButton>
     </div>
@@ -20,8 +20,8 @@
         <UiSkeleton variant="card" :count="1"  />
       </template>
       <template v-if="detail">
-      <h1 class="text-[22px] leading-[1.4] text-ink">{{ detail.title }}</h1>
-      <div class="mt-2 flex items-center gap-2.5 text-[13px] text-ink-3">
+      <h1 class="text-2xl leading-[1.4] text-ink">{{ detail.title }}</h1>
+      <div class="mt-2 flex items-center gap-2.5 text-sm text-ink-3">
         <UiTag tone="primary" size="small">{{ detail.category_label }}</UiTag>
         <span v-if="detail.source">{{ detail.source }}</span>
         <span>{{ publishedText }}</span>
@@ -32,7 +32,7 @@
       <PublishMarkdown :content="detail.content" subset="featured" class="mt-4 rounded-card bg-panel p-5 shadow-card" />
 
       <section v-if="detail.related.length > 0" class="mt-4 rounded-card bg-panel p-5 shadow-card">
-        <h2 class="mb-2 text-[15px] font-semibold text-ink">相关阅读</h2>
+        <h2 class="mb-2 text-base font-semibold text-ink">相关阅读</h2>
         <div
           v-for="rel in detail.related"
           :key="rel.content_id"
@@ -55,11 +55,11 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // 内容精选详情（ADR-0049 决策 4）：搜索结果与收藏页的「内容精选」落点，
 // 自包含在训练域内 —— 不把学员带去官网门户（独立仓，且会离开工作区）。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { featuredApi } from '@/api/featured'
 import type { FeaturedContentDetailDTO } from '@/api/generated/featured'

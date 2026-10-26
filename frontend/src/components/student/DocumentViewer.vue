@@ -2,15 +2,15 @@
   <div class="document-viewer">
     <div class="doc-toolbar">
       <div class="toolbar-left">
-        <el-icon :size="18" class="toolbar-icon"><Document /></el-icon>
+        <UiIcon name="file-text" :size="18" class="toolbar-icon" />
         <span class="file-name" :title="fileName">{{ fileName || '文档' }}</span>
       </div>
       <div class="toolbar-right">
         <UiTooltip v-if="canPreview" content="在新窗口打开" placement="bottom">
-          <UiButton aria-label="在新窗口打开" :icon="FullScreen" circle size="small" @click="openInNewTab"/>
+          <UiButton aria-label="在新窗口打开" :icon="'maximize'" circle size="small" @click="openInNewTab"/>
         </UiTooltip>
         <UiTooltip content="下载" placement="bottom">
-          <UiButton aria-label="下载" :icon="Download" circle size="small" @click="downloadFile"/>
+          <UiButton aria-label="下载" :icon="'download'" circle size="small" @click="downloadFile"/>
         </UiTooltip>
       </div>
     </div>
@@ -27,7 +27,7 @@
       ></iframe>
 
       <div v-if="loading && canPreview" class="doc-loading">
-        <el-icon class="loading-icon" :size="32"><Loading /></el-icon>
+        <UiIcon name="loader-circle" class="loading-icon" :size="32" />
         <span>文档加载中...</span>
       </div>
 
@@ -35,7 +35,7 @@
       <div v-if="!canPreview" class="doc-unsupported">
         <UiEmptyState :description="unsupportedMessage">
           <UiButton variant="primary" @click="downloadFile">
-            <el-icon><Download /></el-icon> 下载文档
+            <UiIcon name="download" /> 下载文档
           </UiButton>
           <UiButton @click="openInNewTab">在新窗口打开</UiButton>
         </UiEmptyState>
@@ -53,8 +53,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
-import { Document, Download, FullScreen, Loading } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'

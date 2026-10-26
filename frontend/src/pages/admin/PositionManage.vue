@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-bold text-ink">岗位管理</h1>
       <UiButton variant="primary" @click="openDialog()">
-        <el-icon><Plus /></el-icon> 新增岗位
+        <UiIcon name="plus" /> 新增岗位
       </UiButton>
     </div>
 
@@ -60,13 +60,13 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'PositionManage' })
 
 import { ref, reactive, onMounted } from 'vue'
 import { useAdminTable } from '@/composables/useAdminTable'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { positionApi } from '@/api/position'
 import { toPage } from '@/api/page'

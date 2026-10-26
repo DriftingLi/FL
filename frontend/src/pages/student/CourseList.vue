@@ -76,8 +76,8 @@
                   {{ levelNameOf(course.level_id) }}
                 </span>
                 <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges absolute right-2 top-2 flex gap-1">
-                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad-fill text-bad-on px-2 py-0.5 text-[11px] font-semibold">热门</span>
-                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn-fill text-warn-on px-2 py-0.5 text-[11px] font-semibold">精品</span>
+                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad-fill text-bad-on px-2 py-0.5 text-xs font-semibold">热门</span>
+                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn-fill text-warn-on px-2 py-0.5 text-xs font-semibold">精品</span>
                 </div>
               </template>
               <template #meta>
@@ -137,7 +137,7 @@
       <template #header>
         <div class="detail-header flex items-center justify-between gap-3 pr-6">
           <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
-          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle :aria-label="courseFavorited ? '取消收藏课程' : '收藏课程'" @click="toggleCourseFavorite"/>
+          <UiButton v-if="detailCourse" :icon="courseFavorited ? 'star-filled' : 'star'" :type="courseFavorited ? 'warning' : 'default'" circle :aria-label="courseFavorited ? '取消收藏课程' : '收藏课程'" @click="toggleCourseFavorite"/>
         </div>
       </template>
       <div v-loading="detailLoading">
@@ -190,7 +190,7 @@
               tone="brand"
               class="progress-bar flex-1"
             />
-            <span class="progress-text whitespace-nowrap text-[13px] text-ink-3">
+            <span class="progress-text whitespace-nowrap text-sm text-ink-3">
               已完成 {{ courseLearning.completed_chapters ?? 0 }}/{{ courseLearning.total_chapters ?? detailChapters.length }} 章
             </span>
           </div>
@@ -208,7 +208,7 @@
                 <span class="chapter-title flex-1 text-sm text-ink">{{ ch.title }}</span>
                 <UiTag v-if="chapterCompleted(ch.chapter_id)" size="small" tone="success" effect="plain">已完成</UiTag>
                 <span v-if="ch.duration" class="chapter-duration text-xs text-ink-3">{{ ch.duration }}分钟</span>
-                <el-icon class="chapter-arrow text-ink-3"><ArrowRight /></el-icon>
+                <UiIcon name="arrow-right" class="chapter-arrow text-ink-3" />
               </div>
             </div>
             <UiEmptyState v-else description="该课程暂无章节内容" size="sm" />
@@ -220,9 +220,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'

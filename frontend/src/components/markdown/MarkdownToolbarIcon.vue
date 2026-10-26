@@ -15,9 +15,9 @@ defineProps<{
 </script>
 
 <template>
-  <span v-if="name === 'heading3'" class="text-[11px] leading-none font-semibold tracking-tight">H3</span>
-  <span v-else-if="name === 'bold'" class="text-[13px] leading-none font-bold">B</span>
-  <span v-else-if="name === 'italic'" class="font-serif text-[13px] leading-none italic">I</span>
+  <span v-if="name === 'heading3'" class="text-xs leading-none font-semibold tracking-tight">H3</span>
+  <span v-else-if="name === 'bold'" class="text-sm leading-none font-bold">B</span>
+  <span v-else-if="name === 'italic'" class="font-serif text-sm leading-none italic">I</span>
   <svg
     v-else
     class="size-4 shrink-0"

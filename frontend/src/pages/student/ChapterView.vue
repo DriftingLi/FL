@@ -26,7 +26,7 @@
     <template v-if="chapterDetail">
       <div class="chapter-header mb-5">
         <div class="header-left flex flex-wrap items-center gap-2.5">
-          <h1 class="chapter-title m-0 text-[22px] font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
+          <h1 class="chapter-title m-0 text-2xl font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
           <UiTag
             v-if="chapterDetail.study_status === 'completed'"
             tone="success"
@@ -58,13 +58,11 @@
         >
           <template #option="{ option }">
             <span v-if="option.value === 'content'" class="inline-flex items-center gap-1.5">
-              <el-icon :size="16"><Document /></el-icon>
+              <UiIcon name="file-text" :size="16" />
               {{ option.label }}
             </span>
             <span v-else class="inline-flex items-center gap-1.5">
-              <el-icon :size="16" :style="{ color: optionColor(option as any) }">
-                <component :is="optionIcon(option as any)" />
-              </el-icon>
+              <UiIcon :name="optionIcon(option as any)" :size="16" :style="{ color: optionColor(option as any) }" />
               {{ option.label }}
               <UiTag size="small" tone="info" class="ml-0.5 scale-[0.85]">{{ optionCount(option as any) }}</UiTag>
             </span>
@@ -73,7 +71,7 @@
 
         <template v-if="activeTab === 'content' && chapterDetail.content">
           <PublishMarkdown
-            class="content-text mb-5 text-[15px] leading-[1.8] text-ink"
+            class="content-text mb-5 text-base leading-[1.8] text-ink"
             :content="chapterDetail.content"
           />
         </template>
@@ -121,7 +119,7 @@
       <div class="chapter-navigation flex items-center justify-between border-t border-line py-4">
         <div class="nav-prev max-w-[45%]">
           <UiButton variant="text" :disabled="!chapterDetail.previous_chapter_id" @click="navigateToChapter(chapterDetail.previous_chapter_id ?? 0)">
-            <el-icon><ArrowLeft /></el-icon>
+            <UiIcon name="arrow-left" />
             <div class="nav-btn-content flex flex-col gap-0.5" v-if="chapterDetail.previous_chapter_id">
               <span class="nav-label text-xs text-ink-3">上一章节</span>
               <span class="nav-title max-w-[200px] truncate text-sm text-ink max-md:max-w-[120px]">{{ getPrevChapterTitle }}</span>
@@ -136,7 +134,7 @@
               <span class="nav-title max-w-[200px] truncate text-sm text-ink max-md:max-w-[120px]">{{ getNextChapterTitle }}</span>
             </div>
             <span v-else class="nav-label text-xs text-ink-3">没有下一章节</span>
-            <el-icon><ArrowRight /></el-icon>
+            <UiIcon name="arrow-right" />
           </UiButton>
         </div>
       </div>
@@ -146,9 +144,10 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, VideoCamera, Document, Picture } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type ChapterDetail } from '@/api/course'
 import { studentApi, type StudentChapterProgress } from '@/api/student'
@@ -281,11 +280,11 @@ const chapterFiles = computed(() => {
 })
 
 const TYPE_ORDER = ['video', 'document', 'ppt', 'image']
-const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-  video: { label: '视频', icon: VideoCamera, color: 'var(--color-danger)' },
-  document: { label: '文档', icon: Document, color: 'var(--color-primary-500)' },
-  ppt: { label: 'PPT', icon: Document, color: 'var(--color-warning)' },
-  image: { label: '图片', icon: Picture, color: 'var(--color-success)' }
+const TYPE_CONFIG: Record<string, { label: string; icon: IconName; color: string }> = {
+  video: { label: '视频', icon: 'video', color: 'var(--color-danger)' },
+  document: { label: '文档', icon: 'file-text', color: 'var(--color-primary-500)' },
+  ppt: { label: 'PPT', icon: 'file-text', color: 'var(--color-warning)' },
+  image: { label: '图片', icon: 'image', color: 'var(--color-success)' }
 }
 
 const fileGroups = computed(() => {
@@ -302,7 +301,7 @@ const fileGroups = computed(() => {
     .map(type => ({
       type,
       label: TYPE_CONFIG[type]?.label || type,
-      icon: TYPE_CONFIG[type]?.icon || Document,
+      icon: TYPE_CONFIG[type]?.icon || 'file-text',
       color: TYPE_CONFIG[type]?.color || 'var(--color-text-tertiary)',
       files: groups[type]
     }))

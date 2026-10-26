@@ -33,32 +33,30 @@
         @click="goToEdit(chapter.chapter_id)"
       >
         <span
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ui-soft text-[13px] font-semibold text-ui-soft-ink"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ui-soft text-sm font-semibold text-ui-soft-ink"
         >
           {{ String(index + 1).padStart(2, '0') }}
         </span>
 
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[15px] font-medium text-ink">{{ chapter.title }}</p>
+          <p class="truncate text-base font-medium text-ink">{{ chapter.title }}</p>
           <div class="mt-2 flex flex-wrap items-center gap-3">
             <UiTag :tone="contentTypeTone(chapter.content_type || '')">
               {{ contentTypeLabel(chapter.content_type || '') }}
             </UiTag>
             <span v-if="chapter.duration" class="inline-flex items-center gap-1 text-xs text-ink-3">
-              <el-icon><Timer /></el-icon> {{ chapter.duration }}分钟
+              <UiIcon name="timer" /> {{ chapter.duration }}分钟
             </span>
             <span v-if="getFileCount(chapter) > 0" class="inline-flex items-center gap-1 text-xs text-ink-3">
-              <el-icon><Document /></el-icon> {{ getFileCount(chapter) }} 个文件
+              <UiIcon name="file-text" /> {{ getFileCount(chapter) }} 个文件
             </span>
             <span v-if="chapter.content" class="inline-flex items-center gap-1 text-xs text-ok">
-              <el-icon><EditPen /></el-icon> 含正文
+              <UiIcon name="square-pen" /> 含正文
             </span>
           </div>
         </div>
 
-        <el-icon class="shrink-0 text-ink-3 transition-colors duration-150 group-hover:underline max-sm:hidden">
-          <ArrowRight />
-        </el-icon>
+        <UiIcon name="arrow-right" class="shrink-0 text-ink-3 transition-colors duration-150 group-hover:underline max-sm:hidden" />
       </UiCard>
     </div>
       <template #empty>
@@ -74,9 +72,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight, Timer, Document, EditPen } from '@element-plus/icons-vue'
 import { tutorApi, type TutorChapter, type TutorCourse } from '@/api/tutor'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiTag from '@/components/ui/UiTag.vue'
