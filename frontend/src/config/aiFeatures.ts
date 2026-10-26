@@ -1,10 +1,11 @@
-import type { IconName } from '@/icons/registry'
 // 生成文件，勿手改（ADR-0030 前端 AI 功能配置窄域 codegen 试点，#613）。
 // 唯一事实源：后端 AI 功能注册表 backend/internal/aiassistant/feature_registry.go。
 // 再生成：cd backend && go run ./cmd/gen-aifeatures
 // 同步契约：backend/internal/aiassistant/features_codegen_test.go 将本文件与注册表渲染结果
 // 全等比对，手改或注册表变更未再生成时后端测试即红。功能键与展示名由注册表派生；
 // 路由/文案/图标等展示数据在 aiFeatureUI.ts 手写维护，新增功能键时需同步补齐。
+// 图标是**注册表里的语义名**（ADR-0079 / #1912），不是 Vue 组件引用。
+import type { IconName } from '@/icons/registry'
 import { aiFeatureUI } from './aiFeatureUI'
 
 // 收录规则：注册表中管理端单绑定且声明计费的专项对话功能（与后端 featureChatKeys 同口径），
