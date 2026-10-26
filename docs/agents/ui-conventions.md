@@ -127,6 +127,13 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 - **不得**：业务代码 import `@element-plus/icons-vue`、写 `<el-icon>`、手写 `viewBox="0 0 24 24"` 的 svg —— 守卫 `node scripts/check-icons.mjs --all` 报红；迁移期例外逐条登记在 `scripts/icon-legacy-baseline.json`，**只减不增**（迁干净的文件必须删行，自检会拦）。
 - **动效参数单点**：`config/motion.ts`。弹簧档与降级口径（`reducedMotion` 默认 `user`，跟随系统）只在那里改；CSS 过渡仍归 `design-tokens.css`，两套机制各管各的动画面。
 
+## 字号（ADR-0080）
+
+- **只有七档**：`text-xs` 12 / `text-sm` 14 / `text-base` 16 / `text-lg` 18 / `text-xl` 20 / `text-2xl` 24 / `text-3xl` 30（取值源是 `design-tokens.css` 的 `--text-*`）。
+- **不得直写**：`text-[13px]` 这类任意值一律换阶梯档。映射是**唯一解、等距向上取**：13→`text-sm`、15→`text-base`、17→`text-lg`、22→`text-2xl`（与 `UiPageHeader` 的页标题同档）。守卫 `node scripts/check-font-scale.mjs --all` 报红。三条放行面写清免得误当漏网：`em`（`text-[1em]` 是图标跟随父字号）、`text-[var(…)]`（颜色）、`leading-[…]`（行高没有阶梯，别为整齐去收）。
+- **scoped `font-size: 13px` 不在射程**：那是 R2 冻结区页面的既有样式，随该页改版时顺手换 token / 原子类，不为统一单开存量清扫（ADR-0080 决策 3）。
+- **行高不跟字号走**：`text-*` 会带上 Tailwind 的默认行高（`text-sm` 1.43 / `text-base` 1.5）；要 1.6 / 1.8 这类阅读行高就显式写 `leading-[…]`。
+
 ## Tailwind 增量共存四条边界规则
 
 项目已引入 Tailwind CSS v4，与既有 `<style scoped>` 长期共存（详细背景见 `.workbuddy/plans/student-ui-redesign.md`）。共存期间遵守：

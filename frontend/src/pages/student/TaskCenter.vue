@@ -6,17 +6,17 @@
 
     <div class="mb-4 flex flex-wrap items-center gap-4 rounded-card border border-line bg-panel px-4 py-3.5 shadow-card">
       <div class="flex min-w-[90px] flex-col gap-0.5">
-        <span class="text-[11px] tracking-[0.04em] text-ink-3">当前积分</span>
+        <span class="text-xs tracking-[0.04em] text-ink-3">当前积分</span>
         <span class="font-heading text-xl font-extrabold text-ink">{{ points.balance }}</span>
       </div>
       <div class="h-8 w-px bg-line"></div>
       <div class="flex min-w-[90px] flex-col gap-0.5">
-        <span class="text-[11px] tracking-[0.04em] text-ink-3">今日可得</span>
+        <span class="text-xs tracking-[0.04em] text-ink-3">今日可得</span>
         <span class="font-heading text-base font-extrabold text-ink">+{{ todayEarnable }}</span>
       </div>
       <div class="h-8 w-px bg-line"></div>
       <div class="flex min-w-[90px] flex-col gap-0.5">
-        <span class="text-[11px] tracking-[0.04em] text-ink-3">累计获得</span>
+        <span class="text-xs tracking-[0.04em] text-ink-3">累计获得</span>
         <span class="font-heading text-base font-extrabold text-ink">{{ points.totalEarned }}</span>
       </div>
       <RouterLink
@@ -48,7 +48,7 @@
         :style="staggerStyle(gi)"
       >
         <div class="mb-2.5 flex items-center gap-2">
-          <span class="text-[15px] font-bold text-ink">{{ group.label }}</span>
+          <span class="text-base font-bold text-ink">{{ group.label }}</span>
           <span class="text-xs text-ink-3">{{ group.desc }}</span>
           <span class="ml-auto rounded-pill border border-line bg-canvas px-2 py-0.5 text-xs text-ink-3">{{ group.tasks.length }}项</span>
         </div>
@@ -79,7 +79,7 @@
                     tone="brand"
                     class="w-[90px] shrink-0"
                   />
-                  <span class="font-mono text-[11px] text-ink-3">{{ task.progress }}/{{ task.total }}</span>
+                  <span class="font-mono text-xs text-ink-3">{{ task.progress }}/{{ task.total }}</span>
                 </div>
               </div>
             </div>

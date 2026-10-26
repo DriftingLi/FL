@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[1200px]">
     <div class="practice-toolbar mb-3.5 flex flex-wrap items-center justify-between gap-3">
-      <div class="progress-text text-[13px] text-ink-3">
+      <div class="progress-text text-sm text-ink-3">
         <span class="paper-title mr-3 font-semibold text-ink">{{ paperTitle }}</span>
         <span class="progress-stats ml-1">第 {{ currentIdx + 1 }}/{{ questions.length }} 题 · 已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
       </div>
@@ -16,7 +16,7 @@
           @click="handleToggleFavorite" />
       </div>
       <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image mb-2.5 max-w-full rounded-[8px]" loading="lazy" decoding="async" />
-      <p class="q-content m-0 mb-4 whitespace-pre-wrap text-[15px] leading-[1.7] text-ink">{{ currentQuestion.content }}</p>
+      <p class="q-content m-0 mb-4 whitespace-pre-wrap text-base leading-[1.7] text-ink">{{ currentQuestion.content }}</p>
 
       <QuestionOptionPicker
         v-if="currentQuestion.type !== 'short_answer'"

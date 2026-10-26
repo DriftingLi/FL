@@ -54,7 +54,7 @@
         </div>
         <div class="mt-auto pt-2">
           <div v-if="item.company_name" class="text-xs text-ink-2 truncate">{{ item.company_name }}</div>
-          <div class="mt-1 text-[10px] text-ink-3">发布于 {{ item.published_at.slice(0, 10) }}</div>
+          <div class="mt-1 text-xs text-ink-3">发布于 {{ item.published_at.slice(0, 10) }}</div>
         </div>
       </router-link>
     </div>

@@ -14,15 +14,15 @@
     <!-- 概览：连击 / 累计 / 今日得分 -->
     <div class="mb-4 grid grid-cols-3 gap-3">
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
-        <div class="text-[11px] tracking-[0.04em] text-ink-3">连续打卡</div>
+        <div class="text-xs tracking-[0.04em] text-ink-3">连续打卡</div>
         <div class="font-heading text-2xl font-extrabold text-ui-soft-ink">{{ calendar.streak }}<span class="ml-1 text-xs font-semibold text-ink-3">天</span></div>
       </div>
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
-        <div class="text-[11px] tracking-[0.04em] text-ink-3">累计打卡</div>
+        <div class="text-xs tracking-[0.04em] text-ink-3">累计打卡</div>
         <div class="font-heading text-2xl font-extrabold text-ink">{{ calendar.total }}<span class="ml-1 text-xs font-semibold text-ink-3">天</span></div>
       </div>
       <div class="rounded-card border border-line bg-panel px-4 py-3 text-center shadow-card">
-        <div class="text-[11px] tracking-[0.04em] text-ink-3">今日得分</div>
+        <div class="text-xs tracking-[0.04em] text-ink-3">今日得分</div>
         <div class="font-heading text-2xl font-extrabold text-warn-strong">{{ todayPointsText }}</div>
       </div>
     </div>
@@ -44,12 +44,12 @@
         <div class="mb-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-1">
             <UiButton variant="text" size="small" aria-label="上个月" @click="prevMonth">‹</UiButton>
-            <span class="min-w-24 text-center text-[13px] font-semibold text-ink-2">{{ viewYear }}年{{ viewMonth }}月</span>
+            <span class="min-w-24 text-center text-sm font-semibold text-ink-2">{{ viewYear }}年{{ viewMonth }}月</span>
             <UiButton variant="text" size="small" aria-label="下个月" @click="nextMonth">›</UiButton>
           </div>
           <div class="flex items-center gap-2">
             <!-- 连续段图例：主色实心=当前连续；浅底=已断开的打卡；灰底=未打卡 -->
-            <span class="hidden items-center gap-1 text-[11px] text-ink-3 sm:flex">
+            <span class="hidden items-center gap-1 text-xs text-ink-3 sm:flex">
               <i class="inline-block size-2.5 rounded-[3px] bg-ui-600"></i>连续中
               <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-ui-100"></i>已断开
               <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-canvas border border-line"></i>未打卡
@@ -60,7 +60,7 @@
           </div>
         </div>
 
-        <div class="mb-3 flex items-center gap-3 text-[13px] text-ink">
+        <div class="mb-3 flex items-center gap-3 text-sm text-ink">
           每日 <span class="font-semibold text-ui-soft-ink">+5</span>
           <span class="text-line-strong">|</span>
           连续满
@@ -78,11 +78,11 @@
             <div
               v-for="cell in calendarCells"
               :key="cell.key"
-              class="relative border-b border-r border-canvas py-2.5 text-center text-[13px] text-ink [&:nth-child(7n)]:border-r-0"
+              class="relative border-b border-r border-canvas py-2.5 text-center text-sm text-ink [&:nth-child(7n)]:border-r-0"
               :class="cellClass(cell)"
             >
               <span class="font-medium">{{ cell.day }}</span>
-              <span v-if="cell.checked && cell.points > 0" class="absolute right-0.5 top-0.5 text-[9px] leading-none text-ink-3">
+              <span v-if="cell.checked && cell.points > 0" class="absolute right-0.5 top-0.5 text-xs leading-none text-ink-3">
                 +{{ cell.points }}
               </span>
             </div>
@@ -93,10 +93,10 @@
       <!-- 排行榜 -->
       <div class="mt-5">
         <div class="mb-2.5 flex items-center gap-2">
-          <span class="text-[15px] font-bold text-ink">打卡排行</span>
+          <span class="text-base font-bold text-ink">打卡排行</span>
           <span class="ml-auto text-xs text-ink-3">按累计天数排序</span>
         </div>
-        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-[13px] text-ink">
+        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-sm text-ink">
           我的排名：<span class="font-bold text-ui-soft-ink">NO.{{ rankMe.rank }}</span>
           <span class="mx-1.5 text-line-strong">|</span>
           累计 <span class="font-semibold">{{ rankMe.total }}</span> 天
@@ -113,7 +113,7 @@
               <template #default="{ row }">
                 <div class="flex items-center gap-2">
                   <el-avatar :size="24" :src="row.user.avatar_url || undefined">{{ (row.user.username || '?').charAt(0).toUpperCase() }}</el-avatar>
-                  <span class="text-[13px] text-ink">{{ row.user.username }}</span>
+                  <span class="text-sm text-ink">{{ row.user.username }}</span>
                   <UiTag v-if="row.today_checked" tone="success" class="ml-1.5">今日已打卡</UiTag>
                 </div>
               </template>

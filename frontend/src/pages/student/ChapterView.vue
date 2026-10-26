@@ -26,7 +26,7 @@
     <template v-if="chapterDetail">
       <div class="chapter-header mb-5">
         <div class="header-left flex flex-wrap items-center gap-2.5">
-          <h1 class="chapter-title m-0 text-[22px] font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
+          <h1 class="chapter-title m-0 text-2xl font-semibold text-ink max-md:text-lg">{{ chapterDetail.title }}</h1>
           <UiTag
             v-if="chapterDetail.study_status === 'completed'"
             tone="success"
@@ -71,7 +71,7 @@
 
         <template v-if="activeTab === 'content' && chapterDetail.content">
           <PublishMarkdown
-            class="content-text mb-5 text-[15px] leading-[1.8] text-ink"
+            class="content-text mb-5 text-base leading-[1.8] text-ink"
             :content="chapterDetail.content"
           />
         </template>

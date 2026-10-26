@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[960px] p-5">
     <div class="mb-4">
-      <h2 class="text-[22px] text-ink">全局搜索</h2>
+      <h2 class="text-2xl text-ink">全局搜索</h2>
     </div>
 
     <div class="mb-5 flex gap-3">
@@ -26,21 +26,21 @@
     <div v-if="!searched" class="rounded-card bg-panel p-5 shadow-card">
       <template v-if="history.length > 0">
         <div class="mb-3 flex items-center justify-between">
-          <span class="text-[15px] font-semibold text-ink">搜索历史</span>
+          <span class="text-base font-semibold text-ink">搜索历史</span>
           <UiButton variant="text" size="small" @click="onClearHistory">清空</UiButton>
         </div>
         <div class="flex flex-wrap gap-2">
           <span
             v-for="kw in history"
             :key="kw"
-            class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-[13px] text-ink-2"
+            class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-sm text-ink-2"
           >
             <span class="cursor-pointer" @click="searchWith(kw)">{{ kw }}</span>
             <UiIcon name="x" class="cursor-pointer text-ink-3 hover:text-bad" @click="onRemoveHistory(kw)" />
           </span>
         </div>
       </template>
-      <p v-else class="text-[13px] text-ink-3">输入关键词，搜索课程、章节正文、题目、内容精选与帖子</p>
+      <p v-else class="text-sm text-ink-3">输入关键词，搜索课程、章节正文、题目、内容精选与帖子</p>
     </div>
 
     <template v-else>
@@ -71,11 +71,11 @@
             <template v-if="!isAllEmpty">
             <div v-for="section in sections" :key="section.key" class="border-b border-line py-3.5 last:border-b-0">
               <div class="mb-2 flex items-baseline gap-2.5">
-                <span class="text-[15px] font-semibold text-ink">{{ section.label }}</span>
+                <span class="text-base font-semibold text-ink">{{ section.label }}</span>
                 <span class="text-xs text-ink-3">{{ section.data.total }} 条</span>
                 <span
                   v-if="section.data.total > section.data.items.length"
-                  class="ml-auto cursor-pointer text-[13px] text-ui-soft-ink"
+                  class="ml-auto cursor-pointer text-sm text-ui-soft-ink"
                   @click="onTypeChange(section.key)"
                 >查看全部</span>
               </div>
@@ -90,7 +90,7 @@
                   <SearchResultRow :item="item" :keyword="keyword" />
                 </div>
               </template>
-              <div v-else class="py-1 text-[13px] text-ink-3">无匹配结果</div>
+              <div v-else class="py-1 text-sm text-ink-3">无匹配结果</div>
             </div>
             </template>
             <UiEmptyState v-else description="没有找到相关内容">

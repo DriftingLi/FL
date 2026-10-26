@@ -4,7 +4,7 @@
       <div class="mb-4 flex items-center justify-between">
         <UiButton variant="text" @click="goBack">返回</UiButton>
         <div class="flex items-center gap-2">
-          <span class="text-[13px] text-ink-2">公开给招聘方</span>
+          <span class="text-sm text-ink-2">公开给招聘方</span>
           <UiSwitch :model-value="visibilityOpen" @change="toggleVisibility" />
         </div>
       </div>

@@ -39,8 +39,8 @@
             <UiTag v-else size="small" tone="info">独立笔记</UiTag>
             <span class="ml-auto text-xs text-ink-3">{{ formatDateTime(n.updated_at) }}</span>
           </div>
-          <p class="mb-1 text-[15px] font-semibold text-ink">{{ noteTitle(n.content) }}</p>
-          <p v-if="noteExcerpt(n.content)" class="mb-2.5 text-[13px] leading-[1.6] text-ink-2">
+          <p class="mb-1 text-base font-semibold text-ink">{{ noteTitle(n.content) }}</p>
+          <p v-if="noteExcerpt(n.content)" class="mb-2.5 text-sm leading-[1.6] text-ink-2">
             {{ noteExcerpt(n.content) }}
           </p>
           <div class="flex gap-2">

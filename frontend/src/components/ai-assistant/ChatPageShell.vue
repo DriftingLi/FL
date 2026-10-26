@@ -50,7 +50,7 @@
       <div class="sidebar-header flex items-center justify-between px-3 py-3">
         <a :href="homeUrl" class="flex min-w-0 items-center gap-2 no-underline">
           <img :src="logoSrc" alt="和润天下" class="logo-img h-8 w-8 shrink-0 rounded-ctl object-cover" />
-          <span class="logo-sub truncate text-[11px] tracking-[0.1em] text-ink-3">{{ logoSub }}</span>
+          <span class="logo-sub truncate text-xs tracking-[0.1em] text-ink-3">{{ logoSub }}</span>
         </a>
         <div class="flex shrink-0 items-center gap-1" v-if="!isMobile">
           <ThemeToggle variant="ghost" />
@@ -76,7 +76,7 @@
 
       <!-- 功能页：返回链接 -->
       <div v-if="backLinkTo" class="px-3 pb-1">
-        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:underline">
+        <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-sm text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:underline">
           <UiIcon name="arrow-left" :size="14" />{{ backLinkText }}
         </router-link>
       </div>
@@ -96,11 +96,11 @@
       <!-- 会话列表（五档时间分组；加载态只描述列表本身，消息加载态在消息区） -->
       <div class="sidebar-title px-4 pb-1 pt-4 text-xs font-medium text-ink-3">会话历史</div>
       <div v-loading="store.sessionsLoading" class="session-list flex-1 overflow-y-auto px-2 pb-2">
-        <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions px-3 py-8 text-center text-[13px] text-ink-3">
+        <div v-if="store.sessions.length === 0 && !store.sessionsLoading" class="empty-sessions px-3 py-8 text-center text-sm text-ink-3">
           {{ store.isLoggedIn ? '暂无会话，点击"开启新对话"开始' : GUEST_LOGIN_HINT }}
         </div>
         <template v-for="g in groupedSessions" :key="g.label">
-          <div class="px-3 pb-1 pt-3 text-[11px] text-ink-3">{{ g.label }}</div>
+          <div class="px-3 pb-1 pt-3 text-xs text-ink-3">{{ g.label }}</div>
           <div
             v-for="s in g.sessions"
             :key="s.id"
@@ -122,8 +122,8 @@
                 @blur="commitRename(s.id)"
               />
               <template v-else>
-                <span class="session-title truncate text-[13px] font-medium text-ink" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
-                <span class="session-time text-[11px] text-ink-3">{{ formatShortDateTime(s.updated_at) }}</span>
+                <span class="session-title truncate text-sm font-medium text-ink" @dblclick.stop="startRename(s)">{{ s.title || '新会话' }}</span>
+                <span class="session-time text-xs text-ink-3">{{ formatShortDateTime(s.updated_at) }}</span>
               </template>
             </div>
             <div v-if="editingSessionId !== s.id" class="session-actions flex gap-0.5">
@@ -151,11 +151,11 @@
             />
             <div
               v-else
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-soft-strong text-[13px] font-semibold text-ui-soft-ink"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-pill bg-ui-soft-strong text-sm font-semibold text-ui-soft-ink"
             >
               {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
-            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline">{{ displayName }}</router-link>
+            <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-sm font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline">{{ displayName }}</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
               <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多" aria-label="更多">
                 <UiIcon name="ellipsis" :size="14" />
@@ -216,7 +216,7 @@
                   <div
                     v-for="s in page"
                     :key="s"
-                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-[13px] leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
+                    class="suggestion-bubble min-w-0 flex-1 cursor-pointer whitespace-normal break-words rounded-card border border-line bg-panel px-3.5 py-2.5 text-left text-sm leading-[1.5] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
                     :title="s"
                     @click="emit('suggest', s)"
                   >
@@ -233,13 +233,13 @@
           <button
             v-if="!store.isLoggedIn"
             type="button"
-            class="guest-hint mt-8 inline-block cursor-pointer border-0 bg-transparent p-0 text-[13px] text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-soft-ink"
+            class="guest-hint mt-8 inline-block cursor-pointer border-0 bg-transparent p-0 text-sm text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:text-ui-soft-ink"
             @click="goLogin"
           >{{ GUEST_LOGIN_HINT }}</button>
         </div>
 
         <!-- 消息加载中（选中会话拉取正文；侧栏不锁，失败由选中逻辑弹提示） -->
-        <div v-if="store.messagesLoading" class="message-loading-more flex items-center justify-center gap-2 py-8 text-[13px] text-ink-3">
+        <div v-if="store.messagesLoading" class="message-loading-more flex items-center justify-center gap-2 py-8 text-sm text-ink-3">
           <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
           <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
           <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
@@ -307,7 +307,7 @@
         </div>
 
         <!-- 当轮计费脚注（#620：usage 走 store 独立 lastUsage 通道，由壳渲染；消息正文不含计费文本） -->
-        <div v-if="store.lastUsage" class="usage-footnote pb-1 pr-1 text-right text-[11px] text-ink-3">
+        <div v-if="store.lastUsage" class="usage-footnote pb-1 pr-1 text-right text-xs text-ink-3">
           本轮消耗 {{ store.lastUsage.points_cost }} 分 · {{ (store.lastUsage.total_tokens / 1000).toFixed(1) }}k tokens · 余额 {{ store.lastUsage.balance }}
         </div>
 
@@ -337,7 +337,7 @@
              这里给可重发入口；重试原样重发该轮输入与差异参数（图片/结构化过滤） -->
         <div
           v-if="store.lastTurnError"
-          class="turn-error mb-2 flex items-center justify-between gap-3 rounded-ctl border border-line bg-bad-soft px-3 py-2 text-[13px] text-bad"
+          class="turn-error mb-2 flex items-center justify-between gap-3 rounded-ctl border border-line bg-bad-soft px-3 py-2 text-sm text-bad"
         >
           <span class="turn-error-text min-w-0 flex-1 truncate">{{ turnErrorText }}</span>
           <UiButton variant="primary" @click="handleRetry">重试</UiButton>

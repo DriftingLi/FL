@@ -69,7 +69,7 @@
           </div>
 
           <div class="file-status-area w-[180px] shrink-0 max-[768px]:flex-[1_1_calc(100%-80px)] max-[768px]:w-auto">
-            <span v-if="file.status === 'pending'" class="status-text status-pending text-[13px] text-ink-3">等待上传</span>
+            <span v-if="file.status === 'pending'" class="status-text status-pending text-sm text-ink-3">等待上传</span>
             <div v-else class="status-done flex items-center gap-1.5">
               <!--
                 同一个图标换名字：转圈 → 对勾 / 叉号，形状真的变了才用形变（ADR-0079 白名单）。
@@ -79,7 +79,7 @@
                 :name="file.status === 'uploading' ? 'loader-circle' : file.status === 'success' ? 'circle-check' : 'circle-x'"
                 morph
                 :class="[
-                  'status-icon text-[18px]',
+                  'status-icon text-lg',
                   file.status === 'uploading' ? 'animate-spin text-ink-3' : '',
                   file.status === 'success' ? 'success-icon text-ok' : '',
                   file.status === 'error' ? 'error-icon text-bad' : ''
@@ -92,8 +92,8 @@
                 :show-text="true"
                 class="file-progress flex-1"
               />
-              <span v-else-if="file.status === 'success'" class="status-text status-success text-[13px] text-ok">上传成功</span>
-              <span v-else class="status-text status-error text-[13px] text-bad">上传失败</span>
+              <span v-else-if="file.status === 'success'" class="status-text status-success text-sm text-ok">上传成功</span>
+              <span v-else class="status-text status-error text-sm text-bad">上传失败</span>
             </div>
           </div>
 

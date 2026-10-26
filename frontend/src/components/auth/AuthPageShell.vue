@@ -32,7 +32,7 @@
       >
         <button
           type="button"
-          class="back inline-block cursor-pointer border-0 bg-transparent p-0 pb-4 text-[13px] text-ui-soft-ink transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline"
+          class="back inline-block cursor-pointer border-0 bg-transparent p-0 pb-4 text-sm text-ui-soft-ink transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline"
           @click="goMain"
         >← {{ backLabel }}</button>
         <slot :name="`alt-${m.key}`" />

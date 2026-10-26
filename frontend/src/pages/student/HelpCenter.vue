@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[960px]">
     <h2 class="mb-1 mt-0 text-2xl font-semibold text-ink">帮助中心</h2>
-    <p class="mb-4 mt-0 text-[13px] text-ink-3">先搜关键词，或从左侧分类里找。</p>
+    <p class="mb-4 mt-0 text-sm text-ink-3">先搜关键词，或从左侧分类里找。</p>
 
     <el-input v-model="keyword" class="mb-4" placeholder="搜索问题关键词" clearable />
 
@@ -25,7 +25,7 @@
             v-for="c in categoryNav"
             :key="c.code"
             type="button"
-            class="flex w-full items-center justify-between rounded-ctl border-0 bg-transparent px-2.5 py-2 text-left text-[13px] transition-colors duration-150"
+            class="flex w-full items-center justify-between rounded-ctl border-0 bg-transparent px-2.5 py-2 text-left text-sm transition-colors duration-150"
             :class="c.active ? 'bg-ui-soft font-semibold text-ui-soft-ink' : 'text-ink-2 hover:bg-canvas'"
             @click="selectCategory(c.code)"
           >
@@ -42,12 +42,12 @@
             :key="g.code"
             class="mb-3 overflow-hidden rounded-card border border-line bg-panel"
           >
-            <div v-if="g.title" class="border-b border-line px-4 py-2.5 text-[13px] font-semibold text-ink-3">
+            <div v-if="g.title" class="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink-3">
               {{ g.title }}
             </div>
             <el-collapse class="help-collapse">
               <el-collapse-item v-for="e in g.entries" :key="e.id" :title="e.question" :name="String(e.id)">
-                <p class="m-0 whitespace-pre-wrap text-[14px] leading-[1.7] text-ink-2">{{ e.answer }}</p>
+                <p class="m-0 whitespace-pre-wrap text-sm leading-[1.7] text-ink-2">{{ e.answer }}</p>
               </el-collapse-item>
             </el-collapse>
           </section>

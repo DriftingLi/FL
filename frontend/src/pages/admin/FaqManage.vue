@@ -43,7 +43,7 @@
       <!-- 条目 -->
       <template v-else>
         <div class="mb-3 flex items-center gap-2">
-          <span class="text-[13px] text-ink-3">按分类筛选</span>
+          <span class="text-sm text-ink-3">按分类筛选</span>
           <el-select v-model="entryFilterCategoryId" placeholder="全部分类" clearable style="width: 200px" @change="handleEntryFilterChange">
             <el-option v-for="c in categories" :key="c.id" :label="c.title" :value="c.id" />
           </el-select>
@@ -77,15 +77,15 @@
       @confirm="saveCategory"
     >
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">标识（小写字母 / 数字 / 下划线，2-64 位）</div>
+        <div class="mb-1 text-sm text-ink-3">标识（小写字母 / 数字 / 下划线，2-64 位）</div>
         <el-input v-model="categoryForm.code" placeholder="如 account" />
       </div>
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">名称</div>
+        <div class="mb-1 text-sm text-ink-3">名称</div>
         <el-input v-model="categoryForm.title" placeholder="如 账号与登录" />
       </div>
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">排序（小的在前）</div>
+        <div class="mb-1 text-sm text-ink-3">排序（小的在前）</div>
         <el-input-number v-model="categoryForm.sort_order" :min="0" />
       </div>
       <UiCheckbox v-model="categoryForm.enabled">启用（停用后学员端不再展示该分类）</UiCheckbox>
@@ -101,21 +101,21 @@
       @confirm="saveEntry"
     >
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">所属分类</div>
+        <div class="mb-1 text-sm text-ink-3">所属分类</div>
         <el-select v-model="entryForm.category_id" placeholder="请选择分类" style="width: 100%">
           <el-option v-for="c in categories" :key="c.id" :label="c.title" :value="c.id" />
         </el-select>
       </div>
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">问题</div>
+        <div class="mb-1 text-sm text-ink-3">问题</div>
         <el-input v-model="entryForm.question" maxlength="200" show-word-limit placeholder="学员会怎么问？" />
       </div>
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">答案（纯文本，换行原样展示）</div>
+        <div class="mb-1 text-sm text-ink-3">答案（纯文本，换行原样展示）</div>
         <el-input v-model="entryForm.answer" type="textarea" :rows="6" maxlength="4000" show-word-limit />
       </div>
       <div class="mb-3">
-        <div class="mb-1 text-[13px] text-ink-3">排序（小的在前）</div>
+        <div class="mb-1 text-sm text-ink-3">排序（小的在前）</div>
         <el-input-number v-model="entryForm.sort_order" :min="0" />
       </div>
       <UiCheckbox v-model="entryForm.published">发布（停用后学员端不可见）</UiCheckbox>

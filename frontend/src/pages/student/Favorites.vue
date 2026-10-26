@@ -1,7 +1,7 @@
 <template>
   <div class="p-5">
     <div class="mb-3">
-      <h2 class="text-[22px] text-ink">我的收藏</h2>
+      <h2 class="text-2xl text-ink">我的收藏</h2>
     </div>
 
     <!-- #511：分类 tab 统一分段控件 -->
@@ -59,7 +59,7 @@
               <UiTag size="small" :tone="typeTagColor(item.target_type)" effect="plain">
                 {{ typeLabel(item.target_type) }}
               </UiTag>
-              <span class="truncate text-[15px] font-medium text-ink">{{ item.title || `${typeLabel(item.target_type)} #${item.target_id}` }}</span>
+              <span class="truncate text-base font-medium text-ink">{{ item.title || `${typeLabel(item.target_type)} #${item.target_id}` }}</span>
             </div>
             <span v-if="item.created_at" class="text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }}</span>
           </div>

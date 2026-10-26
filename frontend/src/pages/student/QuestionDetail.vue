@@ -43,7 +43,7 @@
         />
       </div>
 
-      <p class="text-[15px] leading-[1.7] text-ink">{{ question.content }}</p>
+      <p class="text-base leading-[1.7] text-ink">{{ question.content }}</p>
       <img v-if="question.image_url" :src="question.image_url" alt="" class="mt-3 max-h-[320px] rounded-card" />
 
       <div class="mt-4">

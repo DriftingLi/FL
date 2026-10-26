@@ -23,7 +23,7 @@
           </el-form-item>
         </el-form>
         <div v-else class="text-center">
-          <p class="m-0 mb-4 text-[13px] text-ink-3">整卷限时作答，交卷后出成绩与逐题解析。</p>
+          <p class="m-0 mb-4 text-sm text-ink-3">整卷限时作答，交卷后出成绩与逐题解析。</p>
           <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
         </div>
       </el-card>
@@ -84,8 +84,8 @@
           <p>你的答案：{{ d.user_answer || '未作答' }} | 正确答案：{{ d.correct_answer }}</p>
           <!-- 本题得分与总分同源（ADR-0068 决策 3）：短答不再并排展示「0 分」与「AI 评分」两个数 -->
           <p>本题得分：{{ d.score }} / {{ d.max_score }}</p>
-          <p v-if="d.ai_comment" class="text-[13px] text-ink-3">AI 评语：{{ d.ai_comment }}</p>
-          <p v-if="d.explanation" class="text-[13px] text-ink-3">解析：{{ d.explanation }}</p>
+          <p v-if="d.ai_comment" class="text-sm text-ink-3">AI 评语：{{ d.ai_comment }}</p>
+          <p v-if="d.explanation" class="text-sm text-ink-3">解析：{{ d.explanation }}</p>
         </div>
       </el-card>
     </div>

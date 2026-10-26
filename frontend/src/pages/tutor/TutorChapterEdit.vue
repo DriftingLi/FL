@@ -46,7 +46,7 @@
           <el-tab-pane label="图文" name="content">
             <div class="flex flex-col gap-3">
               <div class="flex items-center justify-between">
-                <span class="text-[13px] text-ink-3">使用 Markdown 编辑，支持实时预览</span>
+                <span class="text-sm text-ink-3">使用 Markdown 编辑，支持实时预览</span>
                 <div class="flex items-center gap-2">
                   <UiButton size="small" @click="openPreview">发布端预览</UiButton>
                   <UiButton
@@ -192,7 +192,7 @@
         </el-form-item>
         <el-form-item label="预计时长">
           <el-input-number v-model="metaForm.duration" :min="0" :max="9999" />
-          <span class="ml-2 text-[13px] text-ink-3">分钟</span>
+          <span class="ml-2 text-sm text-ink-3">分钟</span>
         </el-form-item>
       </el-form>
     </UiDialog>

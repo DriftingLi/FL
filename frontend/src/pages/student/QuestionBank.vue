@@ -139,9 +139,9 @@
     <!-- ===== 刷题中 ===== -->
     <div v-if="mode" class="mt-2.5">
       <div class="mb-[15px] flex items-center justify-between rounded-[8px] bg-panel px-[15px] py-2.5 shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
-        <div class="text-[15px] text-ink">
+        <div class="text-base text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
-          <span class="ml-3 text-[13px] text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
+          <span class="ml-3 text-sm text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
           <UiTag v-if="mode === 'sequential'" size="small" tone="primary" style="margin-left: 10px">顺序练习</UiTag>
           <UiTag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}

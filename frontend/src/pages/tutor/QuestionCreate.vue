@@ -80,7 +80,7 @@
               accept=".png,.jpg,.jpeg,.gif,.webp,.bmp"
             >
               <img v-if="form.image_url" :src="form.image_url" class="block w-[300px] max-h-[200px] object-contain" />
-              <div v-else class="flex h-40 w-[300px] flex-col items-center justify-center gap-2 text-[13px] text-ink-3">
+              <div v-else class="flex h-40 w-[300px] flex-col items-center justify-center gap-2 text-sm text-ink-3">
                 <UiIcon name="plus" :size="28" />
                 <span>点击上传图片</span>
               </div>

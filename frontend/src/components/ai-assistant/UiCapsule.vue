@@ -2,13 +2,13 @@
   <!-- 小胶囊（方案 B 工具栏）：图标 + 文字 + 可选角标，单行不换行 -->
   <button
     type="button"
-    class="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-[13px] text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
+    class="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-panel px-3.5 py-1.5 text-sm text-ink-2 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:bg-ui-soft hover:text-ui-soft-ink"
     :class="active ? 'border-ui-soft-ink bg-ui-soft font-semibold text-ui-soft-ink' : ''"
     @click="emit('click', $event)"
   >
     <UiIcon :name="icon" v-if="icon" :size="14" />
     <slot>{{ label }}</slot>
-    <i v-if="badge" class="bg-ok-fill text-ok-on rounded-pill px-1.5 py-px text-[10px] font-semibold not-italic leading-[1.4]">{{ badge }}</i>
+    <i v-if="badge" class="bg-ok-fill text-ok-on rounded-pill px-1.5 py-px text-xs font-semibold not-italic leading-[1.4]">{{ badge }}</i>
   </button>
 </template>
 

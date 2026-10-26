@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[960px] p-5">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-[22px] text-ink">学习资料</h2>
+      <h2 class="text-2xl text-ink">学习资料</h2>
       <UiSegmentTabs
         v-model="activeTab"
         :options="[
@@ -57,7 +57,7 @@
             <UiIcon :name="typeConfig(item.content_type).icon" :size="20" />
           </div>
           <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-[15px] font-medium text-ink">{{ item.file_name }}</span>
+            <span class="truncate text-base font-medium text-ink">{{ item.file_name }}</span>
             <span class="truncate text-xs text-ink-3">
               {{ item.course_name }}<template v-if="item.chapter_title"> · {{ item.chapter_title }}</template>
             </span>
