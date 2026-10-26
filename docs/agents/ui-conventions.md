@@ -130,8 +130,10 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 ## 字号（ADR-0080）
 
 - **只有七档**：`text-xs` 12 / `text-sm` 14 / `text-base` 16 / `text-lg` 18 / `text-xl` 20 / `text-2xl` 24 / `text-3xl` 30（取值源是 `design-tokens.css` 的 `--text-*`）。
-- **不得直写**：`text-[13px]` 这类任意值一律换阶梯档。映射是**唯一解、等距向上取**：13→`text-sm`、15→`text-base`、17→`text-lg`、22→`text-2xl`（与 `UiPageHeader` 的页标题同档）。守卫 `node scripts/check-font-scale.mjs --all` 报红。三条放行面写清免得误当漏网：`em`（`text-[1em]` 是图标跟随父字号）、`text-[var(…)]`（颜色）、`leading-[…]`（行高没有阶梯，别为整齐去收）。
-- **scoped `font-size: 13px` 不在射程**：那是 R2 冻结区页面的既有样式，随该页改版时顺手换 token / 原子类，不为统一单开存量清扫（ADR-0080 决策 3）。
+- **两条路都走 token**：工具类用阶梯档，禁 `text-[13px]` 这类任意值；scoped 样式写 `font-size: var(--text-*)`（残值域三个文件可用自家的 `var(--fs-sm, 14px)`）。映射是**唯一解、等距向上取**：13→`text-sm`、15→`text-base`、17→`text-lg`、22→`text-2xl`（与 `UiPageHeader` 的页标题同档）。守卫 `node scripts/check-font-scale.mjs --all` 报红（两条规则：`arbitrary-font-size` 管工具类，`literal-font-size` 管 scoped 声明）。
+- **两类字面量是规则的一部分**（别当成漏网去"顺手收"）：① **展示级 28 / 40 / 44 / 64px** —— 大号数字与占位字形，不进七档，取值登记在守卫 `DISPLAY_TIER`；② **`html` 的三档 rem 基准**（16 / 14 / 13）—— 它派生整个 rem 尺度，声明上一行必须带 `font-scale-root` 标记，token 化等于「整体缩放页面」。
+- **其余放行面**：`text-[var(…)]` 是颜色、`text-[1em]` 是图标跟随父字号、`leading-[…]` 行高没有阶梯（别为整齐去收行高）、`font-size: inherit`。
+- **已知接缝**：scoped 的 token 是 **px**，工具类 `text-*` 是 **rem**；`html` 在 ≤768 / ≤480 把基准降到 14 / 13px，同一档字号在窄屏上会差 81–93%（既有事实，统一会动全站节奏，见 ADR-0080 决策 4）。
 - **行高不跟字号走**：`text-*` 会带上 Tailwind 的默认行高（`text-sm` 1.43 / `text-base` 1.5）；要 1.6 / 1.8 这类阅读行高就显式写 `leading-[…]`。
 
 ## Tailwind 增量共存四条边界规则

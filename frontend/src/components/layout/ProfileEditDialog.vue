@@ -153,7 +153,7 @@ defineExpose({ open })
 }
 
 .hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   margin: 0;
 }
@@ -165,7 +165,7 @@ defineExpose({ open })
 }
 
 .nickname-label {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary);
 }

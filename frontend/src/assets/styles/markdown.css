@@ -1,12 +1,12 @@
 .markdown-body {
   color: #303133;
-  font-size: 15px;
+  font-size: var(--text-base);
   line-height: 1.8;
   word-wrap: break-word;
 }
 
 .markdown-body h1 {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: #1a1a1a;
   margin: 24px 0 16px;
@@ -15,7 +15,7 @@
 }
 
 .markdown-body h2 {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: #303133;
   margin: 20px 0 12px;
@@ -24,14 +24,14 @@
 }
 
 .markdown-body h3 {
-  font-size: 17px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: #303133;
   margin: 16px 0 10px;
 }
 
 .markdown-body h4 {
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: #606266;
   margin: 14px 0 8px;
@@ -63,7 +63,7 @@
   width: 100%;
   border-collapse: collapse;
   margin: 14px 0;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .markdown-body thead th {
@@ -100,7 +100,7 @@
 
 .markdown-body code {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
   background-color: #f5f7fa;
   padding: 2px 6px;
   border-radius: 3px;
@@ -120,7 +120,7 @@
   background: none;
   padding: 0;
   color: #303133;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -159,27 +159,27 @@
 
 @media screen and (max-width: 768px) {
   .markdown-body {
-    font-size: 14px;
+    font-size: var(--text-sm);
   }
 
   .markdown-body h1 {
-    font-size: 20px;
+    font-size: var(--text-xl);
   }
 
   .markdown-body h2 {
-    font-size: 18px;
+    font-size: var(--text-lg);
   }
 
   .markdown-body h3 {
-    font-size: 16px;
+    font-size: var(--text-base);
   }
 
   .markdown-body h4 {
-    font-size: 14px;
+    font-size: var(--text-sm);
   }
 
   .markdown-body table {
-    font-size: 13px;
+    font-size: var(--text-sm);
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -192,15 +192,15 @@
 
   .markdown-body pre {
     padding: 12px;
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .markdown-body pre code {
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .markdown-body code {
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .markdown-body blockquote {

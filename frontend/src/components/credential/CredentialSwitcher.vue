@@ -182,7 +182,7 @@ onMounted(async () => {
   max-width: 140px;
 }
 .current-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 1px 5px;
   border-radius: var(--radius-full);
   white-space: nowrap;

@@ -291,7 +291,7 @@ loadCourses()
 }
 
 .page-header h2 {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--color-text-primary);
   margin-bottom: 8px;
 }
@@ -324,7 +324,7 @@ loadCourses()
   align-items: center;
   gap: 4px;
   margin-left: 12px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-primary-soft-ink);
 }
 
@@ -338,7 +338,7 @@ loadCourses()
 }
 
 .progress-card h3 {
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--color-text-primary);
   margin-bottom: 16px;
 }
@@ -348,7 +348,7 @@ loadCourses()
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 
@@ -396,7 +396,7 @@ loadCourses()
 }
 
 .status-icon {
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .status-icon.success {
@@ -409,13 +409,13 @@ loadCourses()
 
 .chapter-title {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-primary);
   min-width: 100px;
 }
 
 .error-msg {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-danger);
 }
 
@@ -445,7 +445,7 @@ loadCourses()
   }
 
   .page-header h2 {
-    font-size: 18px;
+    font-size: var(--text-lg);
   }
 
   .result-item {
@@ -456,7 +456,7 @@ loadCourses()
 @media screen and (max-width: 480px) {
   .generate-card :deep(.el-form-item__label) {
     width: 70px !important;
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 }
 </style>

@@ -199,7 +199,7 @@ function goMain() {
 .auth-page .auth-btn {
   width: 100%;
   height: 48px;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   border-radius: 12px;
   letter-spacing: 0.08em;
@@ -233,12 +233,12 @@ function goMain() {
 }
 
 .auth-page .footer-text {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-tertiary);
 }
 
 .auth-page .footer-link {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-primary-soft-ink);
   text-decoration: none;

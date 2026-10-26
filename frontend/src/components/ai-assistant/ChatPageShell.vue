@@ -822,7 +822,7 @@ watch(() => store.messagesLoading, (_loading, wasLoading) => {
   background: transparent;
   padding: 0;
   box-shadow: none !important;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 

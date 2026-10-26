@@ -59,11 +59,11 @@ const accuracyText = computed(() => {
   background: var(--color-bg-card);
   margin-bottom: 12px;
 }
-.result-header { font-size: 14px; color: var(--color-text-primary); margin-bottom: 16px; }
+.result-header { font-size: var(--text-sm); color: var(--color-text-primary); margin-bottom: 16px; }
 .result-header .correct { color: var(--color-success); }
 .result-header .wrong { color: var(--color-danger); }
 .result-stats { display: flex; justify-content: space-between; text-align: center; }
 .stat-item { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.stat-label { font-size: 12px; color: var(--color-text-tertiary); }
-.stat-value { font-size: 15px; font-weight: 600; }
+.stat-label { font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.stat-value { font-size: var(--text-base); font-weight: 600; }
 </style>

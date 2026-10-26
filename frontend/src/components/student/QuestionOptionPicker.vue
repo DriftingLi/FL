@@ -54,5 +54,5 @@ function optionClass(key: string): Record<string, boolean> {
 .opt-label { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: var(--color-bg-page); margin-right: 10px; font-weight: bold; flex-shrink: 0; }
 .q-options--compact { gap: 6px; margin-bottom: 10px; }
 .q-options--compact .q-option { padding: 8px 12px; border-radius: 6px; }
-.q-options--compact .opt-label { width: 24px; height: 24px; line-height: 24px; margin-right: 8px; font-size: 12px; }
+.q-options--compact .opt-label { width: 24px; height: 24px; line-height: 24px; margin-right: 8px; font-size: var(--text-xs); }
 </style>

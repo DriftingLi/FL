@@ -130,7 +130,7 @@ onMounted(load)
 }
 
 .page-header h2 {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--color-text-primary);
 }
 
@@ -140,7 +140,7 @@ onMounted(load)
   padding: 12px;
   background: var(--color-bg-page);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
 

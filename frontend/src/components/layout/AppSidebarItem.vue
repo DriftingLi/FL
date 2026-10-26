@@ -144,7 +144,7 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
 }
 
 .nav-item-icon .el-icon {
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 
 .nav-item-label {

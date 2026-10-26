@@ -141,7 +141,7 @@ onMounted(() => {
   padding: 32px;
 }
 .title {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0 0 8px;
@@ -157,7 +157,7 @@ onMounted(() => {
   margin-top: 20px;
 }
 .group-title {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0 0 12px;
@@ -198,7 +198,7 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 .card-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   line-height: 1.4;
   min-height: 32px;
@@ -210,7 +210,7 @@ onMounted(() => {
   justify-content: space-between;
 }
 .badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 6px;
   border-radius: var(--radius-full);
 }
@@ -224,7 +224,7 @@ onMounted(() => {
 }
 .check-icon {
   color: var(--color-primary-soft-ink);
-  font-size: 18px;
+  font-size: var(--text-lg);
 }
 .actions {
   margin-top: 28px;

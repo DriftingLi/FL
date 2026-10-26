@@ -43,5 +43,5 @@ defineExpose({ open })
 </script>
 
 <style scoped>
-.hint { font-size: 12px; color: #e6a23c; margin-top: 8px; }
+.hint { font-size: var(--text-xs); color: #e6a23c; margin-top: 8px; }
 </style>

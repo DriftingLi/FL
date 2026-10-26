@@ -286,7 +286,7 @@ onBeforeUnmount(() => {
 
 .zoom-text {
   color: var(--color-viewer-text);
-  font-size: 13px;
+  font-size: var(--text-sm);
   min-width: 48px;
   text-align: center;
   user-select: none;
@@ -329,7 +329,7 @@ onBeforeUnmount(() => {
 
   .zoom-text {
     min-width: 36px;
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 }
 </style>

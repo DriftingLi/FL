@@ -47,5 +47,5 @@ defineExpose({ open })
 
 <style scoped>
 .delete-content { display:flex; flex-direction:column; gap:12px; }
-.confirm-text { font-size:13px; color:#606266; margin:0; }
+.confirm-text { font-size:var(--text-sm); color:#606266; margin:0; }
 </style>

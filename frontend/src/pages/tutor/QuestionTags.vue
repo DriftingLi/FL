@@ -320,7 +320,7 @@ onMounted(() => {
 }
 
 .page-header h2 {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--color-text-primary);
 }
 
@@ -360,13 +360,13 @@ onMounted(() => {
 
 .tag-name {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-primary);
   font-weight: 500;
 }
 
 .tag-count {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 
@@ -386,7 +386,7 @@ onMounted(() => {
 }
 
 .no-tag {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-disabled);
 }
 

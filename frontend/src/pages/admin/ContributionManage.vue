@@ -299,8 +299,8 @@ onMounted(() => {
 /* 页面布局与表格（沿用 admin 既有卡片风格；变量随 admin 主题） */
 .contribution-manage-page { padding: 16px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
-.card-title { font-size: 16px; font-weight: 600; }
-.file-link { display: block; color: var(--el-color-primary); font-size: 12px; line-height: 1.8; }
+.card-title { font-size: var(--text-base); font-weight: 600; }
+.file-link { display: block; color: var(--el-color-primary); font-size: var(--text-xs); line-height: 1.8; }
 .file-link:hover { text-decoration: underline; }
 .report-done { color: var(--color-text-muted, #999999); }
 .text-muted { color: var(--color-text-muted, #909399); margin-top: 2px; }

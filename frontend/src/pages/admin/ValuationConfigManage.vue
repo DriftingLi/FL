@@ -881,7 +881,7 @@ function onRefresh() {
 }
 .dirty-dot {
   color: var(--color-accent-500);
-  font-size: 10px;
+  font-size: var(--fs-xs, 12px);
   line-height: 1;
 }
 .section-toolbar {

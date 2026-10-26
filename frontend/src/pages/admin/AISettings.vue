@@ -411,7 +411,7 @@ onMounted(() => {
 }
 
 .page-header h2 {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--color-text-primary);
 }
 
@@ -421,7 +421,7 @@ onMounted(() => {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--color-text-primary);
   font-weight: 500;
   margin-bottom: 16px;
@@ -430,7 +430,7 @@ onMounted(() => {
 .mono {
   font-family: 'Courier New', monospace;
   word-break: break-all;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .feature-label {
@@ -457,14 +457,14 @@ onMounted(() => {
 }
 
 .dual-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-text-primary);
 }
 
 .dual-hint {
   margin-top: 12px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   line-height: 1.5;
 }
@@ -481,7 +481,7 @@ onMounted(() => {
   }
 
   .page-header h2 {
-    font-size: 18px;
+    font-size: var(--text-lg);
   }
 
   .el-table {

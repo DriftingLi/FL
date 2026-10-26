@@ -283,7 +283,7 @@ onMounted(() => {
 }
 
 .page-header h2 {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--color-text-primary);
 }
 
@@ -312,7 +312,7 @@ onMounted(() => {
 .stat-value.gray { color: var(--color-text-tertiary); }
 
 .stat-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-text-tertiary);
   margin-top: 6px;
 }
@@ -331,7 +331,7 @@ onMounted(() => {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -362,7 +362,7 @@ onMounted(() => {
   }
 
   .stat-value {
-    font-size: 22px;
+    font-size: var(--text-2xl);
   }
 
   .chart-row .el-col {
@@ -376,11 +376,11 @@ onMounted(() => {
 
 @media screen and (max-width: 480px) {
   .stat-value {
-    font-size: 18px;
+    font-size: var(--text-lg);
   }
 
   .stat-label {
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 }
 </style>

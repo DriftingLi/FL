@@ -52,7 +52,7 @@ defineProps<{
   align-items: center;
 }
 .page-header-icon {
-  font-size: 24px;
+  font-size: var(--fs-2xl, 24px);
   color: var(--color-text, #0F172A);
   line-height: 1;
 }

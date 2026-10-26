@@ -193,7 +193,7 @@ onMounted(load)
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -210,12 +210,12 @@ onMounted(load)
 }
 
 .user-name {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-primary);
 }
 
 .user-username {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 

@@ -115,7 +115,7 @@ onMounted(() => {
 /* 模式未绑定提示（限免角标已收敛进 UiCapsule 组件） */
 .model-warning {
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-warning-strong);
   margin-top: 8px;
 }

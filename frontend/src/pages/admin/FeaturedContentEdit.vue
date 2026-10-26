@@ -359,7 +359,7 @@ onMounted(() => {
 
 .page-header h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -403,12 +403,8 @@ onMounted(() => {
   justify-content: center;
   gap: 8px;
   color: var(--color-text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   background: var(--color-bg-page);
-}
-
-.cover-placeholder .el-icon {
-  font-size: 28px;
 }
 
 .cover-actions {
@@ -430,7 +426,7 @@ onMounted(() => {
 }
 
 .publish-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.6;
   color: var(--color-text-tertiary);
 }

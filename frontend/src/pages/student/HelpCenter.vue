@@ -149,7 +149,7 @@ onMounted(() => {
   min-height: 46px;
   padding: 0 16px;
   border-bottom-color: var(--color-line);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: var(--font-medium);
   line-height: 1.5;
   color: var(--color-text-primary);

@@ -609,7 +609,7 @@ onMounted(() => {
 
 .cc-move-icon {
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--color-text-tertiary);
   transition: color var(--duration-fast) var(--ease-default);
 }
@@ -640,13 +640,13 @@ onMounted(() => {
 
 .cc-cell-dim {
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   margin-left: 6px;
 }
 
 .cc-cell-warn {
   color: var(--color-danger);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .cc-pagination {

@@ -347,5 +347,5 @@ onMounted(() => {
 <style scoped>
 .recruiter-manage-page { padding: 16px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.page-header h2 { font-size: 18px; font-weight: 600; margin: 0; }
+.page-header h2 { font-size: var(--text-lg); font-weight: 600; margin: 0; }
 </style>
