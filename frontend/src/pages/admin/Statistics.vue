@@ -46,24 +46,24 @@
 
     <el-row :gutter="20" class="chart-row">
       <el-col :xs="24" :sm="12">
-        <el-card class="chart-card">
+        <UiCard divider>
           <template #header>
             <span class="card-title">课程学习热度排行</span>
           </template>
           <div ref="barChartRef" class="chart-container"></div>
-        </el-card>
+        </UiCard>
       </el-col>
       <el-col :xs="24" :sm="12">
-        <el-card class="chart-card">
+        <UiCard divider>
           <template #header>
             <span class="card-title">课程平均进度对比</span>
           </template>
           <div ref="progressChartRef" class="chart-container"></div>
-        </el-card>
+        </UiCard>
       </el-col>
     </el-row>
 
-    <el-card class="table-card">
+    <UiCard divider class="table-card">
       <template #header>
         <span class="card-title">数据导出</span>
       </template>
@@ -78,9 +78,9 @@
           评估记录
         </UiButton>
       </div>
-    </el-card>
+    </UiCard>
 
-    <el-card class="table-card">
+    <UiCard divider class="table-card">
       <template #header>
         <span class="card-title">课程学习详细数据</span>
       </template>
@@ -107,7 +107,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+    </UiCard>
   </div>
 </template>
 
@@ -125,6 +125,7 @@ import { chartTheme } from '@/utils/chartTheme'
 import { useThemeStore } from '@/stores/theme'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 import { formatDurationCn, getProgressColor } from '@/utils/format'
 
 const overview = ref<any>({})
@@ -309,24 +310,16 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.chart-card {
-  height: 380px;
-}
-
-.chart-card :deep(.el-card__body) {
-  padding: 10px 16px;
-  height: calc(100% - 56px);
-}
-
 .card-title {
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
+/* 容器由 UiCard 承担；图表固定高度，卡片高度随之自然落定（原 380px 靠 el-card 头部 56px 反算） */
 .chart-container {
   width: 100%;
-  height: 100%;
+  height: 300px;
   min-height: 260px;
 }
 
@@ -353,8 +346,8 @@ onMounted(() => {
     margin-bottom: 12px;
   }
 
-  .chart-card {
-    height: 320px;
+  .chart-container {
+    height: 250px;
   }
 }
 

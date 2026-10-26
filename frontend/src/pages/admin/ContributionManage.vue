@@ -26,6 +26,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 import { useAdminTable } from '@/composables/useAdminTable'
 
 const activeTab = ref<'pending' | 'reports'>('pending')
@@ -174,12 +175,17 @@ onMounted(() => {
 
 <template>
   <div class="contribution-manage-page">
-    <el-card>
+    <UiCard divider>
       <template #header>
-        <div class="card-header">
-          <span class="card-title">资料投稿管理</span>
-          <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="activeTab === 'pending' ? loadPending() : loadReports()" />
-        </div>
+        <span class="card-title">资料投稿管理</span>
+      </template>
+      <template #actions>
+        <UiButton
+          :icon="'rotate-cw'"
+          circle
+          aria-label="刷新"
+          @click="activeTab === 'pending' ? loadPending() : loadReports()"
+        />
       </template>
 
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
@@ -291,14 +297,13 @@ onMounted(() => {
     align="center" class="mt-4" />
         
       </template>
-    </el-card>
+      </UiCard>
   </div>
 </template>
 
 <style scoped>
 /* 页面布局与表格（沿用 admin 既有卡片风格；变量随 admin 主题） */
 .contribution-manage-page { padding: 16px; }
-.card-header { display: flex; align-items: center; justify-content: space-between; }
 .card-title { font-size: var(--text-base); font-weight: 600; }
 .file-link { display: block; color: var(--el-color-primary); font-size: var(--text-xs); line-height: 1.8; }
 .file-link:hover { text-decoration: underline; }

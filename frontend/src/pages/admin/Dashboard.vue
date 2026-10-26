@@ -24,25 +24,21 @@
     </div>
 
     <div class="chart-row">
-      <el-card class="chart-card">
+      <UiCard divider>
         <template #header>
-          <div class="chart-card-header">
-            <span class="card-title">课程学习热度排行</span>
-          </div>
+          <span class="card-title">课程学习热度排行</span>
         </template>
         <div ref="barChartRef" class="chart-container"></div>
-      </el-card>
-      <el-card class="chart-card">
+      </UiCard>
+      <UiCard divider>
         <template #header>
-          <div class="chart-card-header">
-            <span class="card-title">课程平均进度</span>
-          </div>
+          <span class="card-title">课程平均进度</span>
         </template>
         <div ref="pieChartRef" class="chart-container"></div>
-      </el-card>
+      </UiCard>
     </div>
 
-    <el-card class="quick-actions-card">
+    <UiCard divider>
       <template #header>
         <span class="card-title">快捷操作</span>
       </template>
@@ -54,7 +50,7 @@
           <span class="action-label">{{ action.label }}</span>
         </div>
       </div>
-    </el-card>
+    </UiCard>
   </div>
 </template>
 
@@ -62,6 +58,7 @@
 import type { IconName } from '@/icons/registry'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AdminDashboard' })
@@ -335,53 +332,17 @@ onUnmounted(() => {
   gap: var(--space-4);
 }
 
-.chart-card {
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-xs);
-}
-
-.chart-card :deep(.el-card__header) {
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.chart-card :deep(.el-card__body) {
-  padding: var(--space-3) var(--space-5);
-  height: 320px;
-}
-
-.chart-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .card-title {
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   color: var(--color-text-primary);
 }
 
+/* 容器（圆角/描边/阴影/内距）由 UiCard 承担，这里只留图表的固定高度 */
 .chart-container {
   width: 100%;
-  height: 100%;
+  height: 320px;
   min-height: 260px;
-}
-
-.quick-actions-card {
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-xs);
-}
-
-.quick-actions-card :deep(.el-card__header) {
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.quick-actions-card :deep(.el-card__body) {
-  padding: var(--space-4) var(--space-5);
 }
 
 .quick-actions {
@@ -430,7 +391,7 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .chart-card :deep(.el-card__body) {
+  .chart-container {
     height: 280px;
   }
 }

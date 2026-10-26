@@ -5,12 +5,17 @@
 -->
 <template>
   <div class="forum-manage-page">
-    <el-card>
+    <UiCard divider>
       <template #header>
-        <div class="card-header">
-          <span class="card-title">论坛管理</span>
-          <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
-        </div>
+        <span class="card-title">论坛管理</span>
+      </template>
+      <template #actions>
+        <UiButton
+          :icon="'rotate-cw'"
+          circle
+          aria-label="刷新"
+          @click="activeMainTab === 'reports' ? loadReports() : loadList()"
+        />
       </template>
 
       <el-tabs v-model="activeMainTab" @tab-change="handleMainTabChange">
@@ -269,7 +274,7 @@
     align="center" class="mt-4" />
       
       </template>
-    </el-card>
+      </UiCard>
   </div>
 </template>
 
@@ -304,6 +309,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 // 帖子列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表一并托管。
 // 解构改名保持模板零改动；keyword 为页面自管筛选轴（由 fetch adapter 读取）。
@@ -627,12 +633,6 @@ onMounted(loadList)
 </script>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
 .card-title {
   font-size: var(--text-base);
   font-weight: 600;

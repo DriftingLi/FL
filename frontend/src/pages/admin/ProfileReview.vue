@@ -1,11 +1,11 @@
 <template>
   <div class="profile-review-page">
-    <el-card>
+    <UiCard divider>
       <template #header>
-        <div class="card-header">
-          <span class="card-title">资料审核（昵称 / 头像）</span>
-          <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="load"/>
-        </div>
+        <span class="card-title">资料审核（昵称 / 头像）</span>
+      </template>
+      <template #actions>
+        <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="load" />
       </template>
 
       <el-tabs v-model="activeStatus" @tab-change="handleTabChange">
@@ -85,7 +85,7 @@
       @current-change="load"
     align="center" class="mt-4" />
       
-    </el-card>
+      </UiCard>
 
     <UiDialog v-model="rejectDialogVisible" title="驳回修改" width="480px" confirm-text="确认驳回" :confirm-loading="submitting" @confirm="reject">
       <el-input
@@ -117,6 +117,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 // 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
 const {
@@ -186,12 +187,6 @@ onMounted(load)
 </script>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
 .card-title {
   font-size: var(--text-base);
   font-weight: 600;

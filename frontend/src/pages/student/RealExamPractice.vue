@@ -8,7 +8,7 @@
       <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
     </div>
 
-    <el-card v-if="currentQuestion" v-loading="loading" class="question-card">
+    <UiCard v-if="currentQuestion" v-loading="loading" class="question-card">
       <div class="question-header mb-3 flex items-center justify-between">
         <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
         <UiIcon :name="favorited ? 'star-filled' : 'star'" class="fav-star cursor-pointer text-lg"
@@ -62,7 +62,7 @@
         </UiButton>
         <UiButton variant="primary" v-else @click="confirmQuit">完成练习</UiButton>
       </div>
-    </el-card>
+    </UiCard>
   </div>
 </template>
 
@@ -88,6 +88,7 @@ import NoteCard from '@/components/practice/NoteCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -190,8 +191,5 @@ start('paper')
 </script>
 
 <style scoped>
-/* el-card 内部 body 内距是 EP 内部结构覆盖（R1 允许 :deep） */
-.question-card :deep(.el-card__body) {
-  padding: 20px;
-}
+/* 容器（圆角/描边/阴影/内距 20px）由 UiCard 承担 */
 </style>

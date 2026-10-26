@@ -4,7 +4,7 @@
       <h2>审计日志</h2>
     </div>
 
-    <el-card>
+    <UiCard>
       <UiFilterBar>
         <template #filters>
 
@@ -63,7 +63,7 @@
       @current-change="load"
     />
       </div>
-    </el-card>
+    </UiCard>
   </div>
 </template>
 
@@ -81,6 +81,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { describeRole } from '@/utils/roleWords'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const query = reactive<{ role: string; keyword: string }>({
   role: '',

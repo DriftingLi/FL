@@ -11,7 +11,7 @@
 
     <el-row :gutter="20">
       <el-col :xs="24" :md="18">
-        <el-card class="question-card">
+        <UiCard class="question-card">
           <div class="question-header">
             <UiTag>{{ (typeMap as Record<string, string>)[currentQ.type] }}</UiTag>
             <span>第 {{ currentIndex + 1 }}/{{ questions.length }} 题<span v-if="showScore">（{{ currentQ.score }}分）</span></span>
@@ -26,21 +26,21 @@
             @select="key => toggleOpt(currentQ.id, key, currentQ.type === 'multi_choice')"
           />
           <el-input v-else v-model="answers[currentQ.id]" type="textarea" :rows="4" placeholder="请输入答案" />
-        </el-card>
+        </UiCard>
         <div class="nav-buttons">
           <UiButton @click="currentIndex--" :disabled="currentIndex === 0">上一题</UiButton>
           <UiButton @click="currentIndex++" :disabled="currentIndex === questions.length - 1">下一题</UiButton>
         </div>
       </el-col>
       <el-col :xs="24" :md="6">
-        <el-card class="answer-card">
+        <UiCard class="answer-card">
           <h4>答题卡</h4>
           <div class="card-grid">
             <div v-for="(q, idx) in questions" :key="q.id"
                  class="card-item" :class="{ current: idx === currentIndex, answered: isAnswered(q.id) }"
                  @click="currentIndex = idx">{{ idx + 1 }}</div>
           </div>
-        </el-card>
+        </UiCard>
       </el-col>
     </el-row>
   </div>
@@ -59,6 +59,7 @@ import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 // 答题会话壳：考试进行中的工具栏/倒计时/题目卡片/答题卡/交卷交互。
 // 练习/考试共享同一交互形态；持久化与交卷后的流程由页面注入回调。
