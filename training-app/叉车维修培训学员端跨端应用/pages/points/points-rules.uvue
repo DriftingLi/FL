@@ -1,0 +1,226 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <app-nav-bar title="积分规则" @left-click="onBack" divider />
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 获得规则：分值与后端任务配置逐条一致（#1943 验收口径） -->
+            <view class="section-card">
+                <text class="section-title">积分怎么获得</text>
+
+                <text class="group-title">每日任务（每天 0 点北京时间重置，每项当日可领 1 次）</text>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">每日登录</text>
+                        <text class="rule-desc">每日进入任务中心即可领取</text>
+                    </view>
+                    <text class="rule-points">+5</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">每日答题 1 次</text>
+                        <text class="rule-desc">每日完成任意练习/模考 1 次</text>
+                    </view>
+                    <text class="rule-points">+10</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">浏览 3 篇帖子</text>
+                        <text class="rule-desc">每日浏览 3 篇帖子</text>
+                    </view>
+                    <text class="rule-points">+5</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">发布 1 篇帖子</text>
+                        <text class="rule-desc">每日发布 1 篇帖子</text>
+                    </view>
+                    <text class="rule-points">+10</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">回复 3 次</text>
+                        <text class="rule-desc">每日回复 3 次</text>
+                    </view>
+                    <text class="rule-points">+10</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">完成 1 次模考</text>
+                        <text class="rule-desc">每日完成 1 次模考</text>
+                    </view>
+                    <text class="rule-points">+20</text>
+                </view>
+
+                <text class="group-title">新手任务（终身一次）</text>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">完善基础资料</text>
+                        <text class="rule-desc">上传头像且设置昵称</text>
+                    </view>
+                    <text class="rule-points">+10</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">完善联系资料</text>
+                        <text class="rule-desc">填写单位且绑定手机/邮箱</text>
+                    </view>
+                    <text class="rule-points">+10</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">选定目标证件</text>
+                        <text class="rule-desc">完成 onboarding 选定当前证件</text>
+                    </view>
+                    <text class="rule-points">+10</text>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">完成首节课程</text>
+                        <text class="rule-desc">完成首节课程学习</text>
+                    </view>
+                    <text class="rule-points">+20</text>
+                </view>
+
+                <text class="section-note">问答被采纳、帖子被加精等社区奖励也会加分，实际分值以「积分明细」记录为准。</text>
+            </view>
+
+            <!-- 使用规则：单项分值由商品/课程自身定价决定，不写死在本页 -->
+            <view class="section-card">
+                <text class="section-title">积分怎么用</text>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">兑换课程</text>
+                        <text class="rule-desc">积分兑换的课程在课程详情页展示所需分值</text>
+                    </view>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">兑换真题套卷</text>
+                        <text class="rule-desc">所需分值在真题页展示</text>
+                    </view>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">积分商城</text>
+                        <text class="rule-desc">商城商品所需分值在商城页展示</text>
+                    </view>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">AI 学习助手</text>
+                        <text class="rule-desc">与 AI 学习助手对话按用量扣减积分</text>
+                    </view>
+                </view>
+                <text class="section-note">每一次获得和消耗都会在「积分明细」里有记录。</text>
+            </view>
+
+            <!-- 有效期：根 ADR-0082 裁定积分暂不过期，本页不写过时条款 -->
+            <view class="section-card">
+                <text class="section-title">积分有效期</text>
+                <text class="valid-text">积分暂不过期：当前获得的积分永久有效，不会到期清零。</text>
+                <text class="valid-text">如果将来引入有效期规则，会提前公告并同步更新本页面。</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import { goBack } from '../../utils/navigation'
+
+    /**
+     * 积分规则静态页（#1943）。
+     *
+     * 文案事实源（改动先核对这三处，再同步本页）：
+     * - 任务分值：backend/migrations 000002 种子 + 000021/000034 调整（现行 10 项任务）
+     * - 消耗口径：backend 兑换链路（课程 points_price / 真题 / 商城 SKU / AI 按用量）
+     * - FAQ 口径：backend/migrations/000036_faq.up.sql points 类条目
+     * 有效期口径：根 ADR-0082「积分暂不过期」——不写「即将过期」类文案、不写返点条款。
+     *
+     * 已知漂移风险：后端票 03（浏览课程任务三件套）尚未落地；若该任务合入，
+     * 本页「每日任务」清单需同步补一行。
+     */
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    function onBack() : void {
+        goBack()
+    }
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: $bg-color;
+        flex-direction: column;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .section-card {
+        margin: 24rpx;
+        padding: 32rpx;
+        background-color: $card-bg;
+        border-radius: $radius-md;
+        flex-direction: column;
+    }
+
+    .section-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-bottom: 20rpx;
+    }
+
+    .group-title {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+        margin-top: 8rpx;
+        margin-bottom: 12rpx;
+    }
+
+    .rule-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 12rpx;
+        padding-bottom: 12rpx;
+    }
+
+    .rule-texts {
+        flex: 1;
+        flex-direction: column;
+        margin-right: 24rpx;
+    }
+
+    .rule-name {
+        font-size: 28rpx;
+        color: $text-color;
+        margin-bottom: 6rpx;
+    }
+
+    .rule-desc {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+    }
+
+    .rule-points {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $success-color;
+    }
+
+    .section-note {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+        margin-top: 20rpx;
+    }
+
+    .valid-text {
+        font-size: 28rpx;
+        color: $text-color;
+        line-height: 44rpx;
+        margin-bottom: 12rpx;
+    }
+</style>

@@ -28,6 +28,7 @@ function stripComments(src) {
 const apiSrc = stripComments(read('api/points.uts'));
 const typesSrc = read('types/points.uts');
 const detailSrc = read('pages/points/points-detail.uvue');
+const rulesSrc = read('pages/points/points-rules.uvue');
 const taskSrc = stripComments(read('pages/points/task-center.uvue'));
 const chapterSrc = stripComments(read('pages/courses/chapter-view.uvue'));
 const profileSrc = read('pages/profile/profile.uvue');
@@ -201,8 +202,13 @@ describe('points-detail.uvue 接线（切实路由 + 失败可见）', () => {
     expect(detailSrc).toMatch(/'all'/);
   });
 
-  it('「即将过期」按条目 expires_at 客户端筛（后端过期维度仍待补，见 #709 待后端清单）', () => {
-    expect(detailSrc).toContain('expiringWithinDays');
+  it('「即将过期」筛选整体退役（根 ADR-0082：积分暂不过期，#1943）', () => {
+    expect(detailSrc).not.toContain('expiringWithinDays');
+    expect(detailSrc).not.toContain('只看即将过期');
+  });
+
+  it('「积分规则」死标签接上跳转（#1943 静态规则页）', () => {
+    expect(detailSrc).toContain('/pages/points/points-rules');
   });
 
   it('加载失败呈现可见错误态并可重试（不再静默显示占位流水）', () => {
@@ -217,6 +223,45 @@ describe('points-detail.uvue 接线（切实路由 + 失败可见）', () => {
     expect(tpl).not.toMatch(/item\.action/);
     expect(tpl).not.toMatch(/item\.description/);
     expect(tpl).not.toMatch(/item\.source_type/);
+  });
+});
+
+describe('points-rules.uvue 静态规则页（#1943：分值对齐后端配置 + 明示暂不过期）', () => {
+  it('获取段 10 项任务逐条对齐现行后端配置（000002 种子 + 000021/000034 调整）', () => {
+    const rows = [
+      ['每日登录', '5'],
+      ['每日答题 1 次', '10'],
+      ['浏览 3 篇帖子', '5'],
+      ['发布 1 篇帖子', '10'],
+      ['回复 3 次', '10'],
+      ['完成 1 次模考', '20'],
+      ['完善基础资料', '10'],
+      ['完善联系资料', '10'],
+      ['选定目标证件', '10'],
+      ['完成首节课程', '20'],
+    ];
+    for (const [name, points] of rows) {
+      const i = rulesSrc.indexOf('rule-name">' + name + '</text>');
+      expect(i).toBeGreaterThan(-1);
+      const j = rulesSrc.indexOf('rule-points">+' + points + '<', i);
+      expect(j).toBeGreaterThan(i);
+      expect(j - i).toBeLessThan(220);
+    }
+  });
+
+  it('每日组写明 0 点北京时间重置口径（FAQ 000036 points 类）', () => {
+    expect(rulesSrc).toContain('每天 0 点北京时间重置');
+  });
+
+  it('有效期段明示暂不过期；模板可见文案无「即将过期」、无返点条款（根 ADR-0082 决策 4/5）', () => {
+    const tpl = tplOf(rulesSrc);
+    expect(tpl).toContain('积分暂不过期');
+    expect(tpl).not.toContain('即将过期');
+    expect(tpl).not.toContain('每实付');
+  });
+
+  it('pages.json 注册规则页路由', () => {
+    expect(read('pages.json')).toContain('pages/points/points-rules');
   });
 });
 
