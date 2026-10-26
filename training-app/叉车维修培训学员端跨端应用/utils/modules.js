@@ -413,7 +413,7 @@ const MODULES = {
 
   points: {
     extraDirs: [],
-    files: ['api/points.uts', 'pages/points/points-detail.uvue', 'pages/points/task-center.uvue'],
+    files: ['api/points.uts', 'pages/points/points-detail.uvue', 'pages/points/points-rules.uvue', 'pages/points/task-center.uvue'],
     extractDirs: [],
     // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
     // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）

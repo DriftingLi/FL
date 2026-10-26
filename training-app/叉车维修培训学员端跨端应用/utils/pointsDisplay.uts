@@ -8,11 +8,8 @@
  *   - 任务 code（后端 Claim 落账 Reason 即任务 code，映射成任务标题）
  * 根因是流水条目缺 display_title 字段，两端各维护一份文案表并非终态——已列入 #709 待后端清单。
  *
- * 日期数学不重抄：序比较用 utils/checkinCalendar.uts 的 dateOrder，日期串用 utils/format.uts 的 formatDate。
  */
 import type { PointsTaskItem } from '../types/index'
-import { normalizeDate, parseDate, dateOrder, shiftDate } from './checkinCalendar'
-import { formatDate } from './format'
 
 /**
  * 流水事由中文：命中映射表用表内文案；redeem_<sku> 动态键按前缀识别；
@@ -98,22 +95,6 @@ export function deltaKind(delta : number) : string {
 	return 'out'
 }
 
-/**
- * 条目是否「即将过期」：expires_at 非空、未过期，且落在 [refDate, refDate+days] 内。
- * #509 设计位：首版后端恒 null → 本判定恒 false，「即将过期」筛选出空列表是正确表现
- * （过期维度要真筛，得后端补 expires_at 点亮与筛选参数，见 #709 待后端清单）。
- */
-export function expiringWithinDays(expiresAt : string | null, refDate : string, days : number) : boolean {
-	if (expiresAt == null) return false
-	const e = normalizeDate(expiresAt!)
-	if (parseDate(e) == null) return false
-	const eo = dateOrder(e)
-	const start = dateOrder(normalizeDate(refDate))
-	const end = dateOrder(shiftDate(normalizeDate(refDate), days))
-	// 已过期（早于参考日）不算「即将」
-	if (eo < start) return false
-	return eo <= end
-}
 
 /** 今日可得（口径同 Web TaskCenter todayEarnable：未领取任务的 points 之和） */
 export function earnablePoints(tasks : PointsTaskItem[]) : number {
@@ -124,9 +105,4 @@ export function earnablePoints(tasks : PointsTaskItem[]) : number {
 		}
 	}
 	return sum
-}
-
-/** 今日日期 YYYY-MM-DD（本地时区，客户端筛选基准；日期串一律走 utils/format.uts） */
-export function todayDateStr() : string {
-	return formatDate(Date.now(), 'YYYY-MM-DD')
 }

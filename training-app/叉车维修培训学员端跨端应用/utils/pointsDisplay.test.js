@@ -14,36 +14,6 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 // ===== 镜像实现（与 pointsDisplay.uts 保持一致）=====
 
-function normalizeDate(date) {
-  if (date.length > 10) return date.substring(0, 10);
-  return date;
-}
-
-function parseDate(date) {
-  const parts = date.split('-');
-  if (parts.length !== 3) return null;
-  const y = parseInt(parts[0]);
-  const m = parseInt(parts[1]);
-  const d = parseInt(parts[2]);
-  if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
-  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
-  return { y, m, d };
-}
-
-function shiftDate(date, deltaDays) {
-  const p = parseDate(date);
-  if (p == null) return date;
-  const dt = new Date(p.y, p.m - 1, p.d + deltaDays);
-  const pad = (n) => (n < 10 ? '0' + n : '' + n);
-  return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
-}
-
-function dayOrder(date) {
-  const p = parseDate(date);
-  if (p == null) return 0;
-  return p.y * 10000 + p.m * 100 + p.d;
-}
-
 const REASON_LABELS = {
   ai_tokens: 'AI 学习助手对话',
   redeem_course: '兑换课程',
@@ -101,17 +71,6 @@ function deltaText(delta) {
 
 function deltaKind(delta) {
   return delta >= 0 ? 'in' : 'out';
-}
-
-function expiringWithinDays(expiresAt, refDate, days) {
-  if (expiresAt == null) return false;
-  const e = normalizeDate(expiresAt);
-  if (parseDate(e) == null) return false;
-  const eo = dayOrder(e);
-  const start = dayOrder(normalizeDate(refDate));
-  const end = dayOrder(shiftDate(normalizeDate(refDate), days));
-  if (eo < start) return false;
-  return eo <= end;
 }
 
 function earnablePoints(tasks) {
@@ -203,38 +162,6 @@ describe('ledgerRefTypeText / deltaText / deltaKind', () => {
   });
 });
 
-describe('expiringWithinDays：「即将过期」客户端筛（#509 设计位）', () => {
-  const today = '2026-09-08';
-
-  it('expires_at 为 null（首版全部永久有效）恒 false —— 空列表是正确表现', () => {
-    expect(expiringWithinDays(null, today, 30)).toBe(false);
-  });
-
-  it('窗口内 [今日, 今日+days] 命中，越界与已过期不命中', () => {
-    expect(expiringWithinDays('2026-09-08', today, 30)).toBe(true);
-    expect(expiringWithinDays('2026-10-08', today, 30)).toBe(true);
-    expect(expiringWithinDays('2026-10-09', today, 30)).toBe(false);
-    expect(expiringWithinDays('2026-09-07', today, 30)).toBe(false);
-  });
-
-  it('RFC3339 带时间/时区后缀按日期位比较', () => {
-    expect(expiringWithinDays('2026-09-20T00:30:00+08:00', today, 30)).toBe(true);
-  });
-
-  it('跨月跨年窗口边界（11-30 + 30 天 = 12-30；12-20 + 30 天 = 2027-01-19）', () => {
-    expect(expiringWithinDays('2026-12-20', '2026-11-30', 30)).toBe(true);
-    expect(expiringWithinDays('2026-12-31', '2026-11-30', 30)).toBe(false);
-    expect(expiringWithinDays('2027-01-05', '2026-12-20', 30)).toBe(true);
-    expect(expiringWithinDays('2027-01-19', '2026-12-20', 30)).toBe(true);
-    expect(expiringWithinDays('2027-01-20', '2026-12-20', 30)).toBe(false);
-  });
-
-  it('非法日期串兜底 false（后端契约漂移不崩页面）', () => {
-    expect(expiringWithinDays('0000-00-00', today, 30)).toBe(false);
-    expect(expiringWithinDays('garbage', today, 30)).toBe(false);
-  });
-});
-
 describe('earnablePoints：今日可得上限（口径同 Web todayEarnable）', () => {
   it('todo / claimable 计入，claimed 排除', () => {
     const tasks = [
@@ -296,21 +223,6 @@ describe('ledgerIconClass / ledgerIconGlyph：ref_type → 图标（class 与字
   });
 });
 
-describe('todayDateStr：客户端筛选基准日', () => {
-  it('委托 utils/format.uts 的 formatDate（本文件不重抄日期数学）', () => {
-    const src = readText(path.join(__dirname, 'pointsDisplay.uts'));
-    expect(src).toContain("import { formatDate } from './format'");
-    expect(src).toContain("formatDate(Date.now(), 'YYYY-MM-DD')");
-  });
-
-  it('不再回退成手写 pad：todayDateStr 只留一行委托', () => {
-    const src = readText(path.join(__dirname, 'pointsDisplay.uts'));
-    // 镜像侧行为已由 expiringWithinDays 用例覆盖（同一份日期口径）；此处锁委托形态
-    const fn = src.slice(src.indexOf('export function todayDateStr'));
-    expect(fn).not.toMatch(/getMonth\(\)/);
-  });
-});
-
 const WEB_TABLE = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'utils', 'pointsReason.ts');
 // 全仓 checkout 才跑得动跨端比对；单模块局部 checkout 时显式 skip（在报告里可见，不假绿）
 const describeWeb = fs.existsSync(WEB_TABLE) ? describe : describe.skip;
@@ -352,8 +264,9 @@ describe('镜像同步：pointsDisplay.uts 与本文件表逐键一致', () => {
     expect(src).toContain("if (delta >= 0) return '积分获得'");
   });
 
-  it('.uts 不再自带日历数学：序比较与日期串都委托既有 util', () => {
-    expect(src).toContain("import { normalizeDate, parseDate, dateOrder, shiftDate } from './checkinCalendar'");
+  it('.uts 无日历数学残留（#1943 过期筛选退役后不再 import 日期 util）', () => {
+    expect(src).not.toContain('checkinCalendar');
+    expect(src).not.toContain('formatDate');
     expect(src).not.toContain('y * 10000');
   });
 });
