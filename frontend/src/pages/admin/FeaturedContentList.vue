@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>内容精选管理</h2>
       <UiButton variant="primary" @click="goCreate">
-        <el-icon><Plus /></el-icon> 新建内容
+        <UiIcon name="plus" /> 新建内容
       </UiButton>
     </div>
 
@@ -66,7 +66,7 @@
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
             <UiButton variant="primary" link size="small">
-              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              操作<UiIcon name="chevron-down" class="el-icon--right" />
             </UiButton>
             <template #dropdown>
               <el-dropdown-menu>
@@ -97,13 +97,13 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AdminFeaturedContentList' })
 
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { adminFeaturedApi, featuredCategoryOptions, categoryLabel, type FeaturedContentAdminListDTO } from '@/api/featured'
 import { useConfirm } from '@/composables/useConfirm'

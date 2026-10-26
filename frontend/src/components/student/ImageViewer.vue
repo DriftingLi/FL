@@ -2,25 +2,25 @@
   <div class="image-viewer" ref="containerRef">
     <div class="image-toolbar">
       <UiTooltip content="缩小" placement="bottom">
-        <UiButton aria-label="缩小" :icon="ZoomOut" circle size="small" @click="zoomOut" :disabled="scale <= 0.1"/>
+        <UiButton aria-label="缩小" :icon="'zoom-out'" circle size="small" @click="zoomOut" :disabled="scale <= 0.1"/>
       </UiTooltip>
       <span class="zoom-text">{{ Math.round(scale * 100) }}%</span>
       <UiTooltip content="放大" placement="bottom">
-        <UiButton aria-label="放大" :icon="ZoomIn" circle size="small" @click="zoomIn" :disabled="scale >= 5"/>
+        <UiButton aria-label="放大" :icon="'zoom-in'" circle size="small" @click="zoomIn" :disabled="scale >= 5"/>
       </UiTooltip>
       <el-divider direction="vertical" />
       <UiTooltip content="适合窗口" placement="bottom">
-        <UiButton aria-label="适合窗口" :icon="FullScreen" circle size="small" @click="fitToWindow"/>
+        <UiButton aria-label="适合窗口" :icon="'maximize'" circle size="small" @click="fitToWindow"/>
       </UiTooltip>
       <UiTooltip content="原始大小" placement="bottom">
-        <UiButton aria-label="原始大小" :icon="RefreshRight" circle size="small" @click="resetZoom"/>
+        <UiButton aria-label="原始大小" :icon="'rotate-cw'" circle size="small" @click="resetZoom"/>
       </UiTooltip>
       <el-divider direction="vertical" />
       <UiTooltip content="全屏" placement="bottom">
-        <UiButton aria-label="全屏" :icon="Rank" circle size="small" @click="toggleFullscreen"/>
+        <UiButton aria-label="全屏" :icon="'chart-no-axes-column'" circle size="small" @click="toggleFullscreen"/>
       </UiTooltip>
       <UiTooltip content="下载" placement="bottom">
-        <UiButton aria-label="下载" :icon="Download" circle size="small" @click="downloadFile"/>
+        <UiButton aria-label="下载" :icon="'download'" circle size="small" @click="downloadFile"/>
       </UiTooltip>
     </div>
 
@@ -56,7 +56,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { ZoomIn, ZoomOut, FullScreen, Download, RefreshRight, Rank } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'

@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // 课程目录管理弹窗表单（专业方向/课程等级/证书模板）：从 CourseCatalog 拆分，逻辑原样保留。
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -201,7 +201,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
   <UiDialog v-model="certificateDialogVisible" title="证书模板管理" width="720px" destroy-on-close>
     <div class="certificate-header">
       <UiButton variant="primary" size="small" @click="openCertificateForm()">
-        <el-icon><Plus /></el-icon> 新增模板
+        <UiIcon name="plus" /> 新增模板
       </UiButton>
     </div>
     <el-table :data="certificateTemplates" stripe border size="small" v-loading="certificateLoading">

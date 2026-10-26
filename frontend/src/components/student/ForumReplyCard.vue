@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 论坛回复卡（ADR-0042）：帖子详情与章节讨论共用的一份回复渲染。
  *
@@ -16,7 +17,6 @@
  * 内嵌面板不套详情页尺寸，避免把课程页的展开区撑长。
  */
 import { computed } from 'vue'
-import { ChatDotRound } from '@element-plus/icons-vue'
 import { toForumContentFormat, type ForumReplyItem } from '@/api/forum'
 import { displayName, authorLetter, regionLabel } from '@/utils/forumDisplay'
 import { formatRelativeTime } from '@/utils/format'
@@ -148,7 +148,7 @@ function onMoreSelect(key: string) {
             class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none text-ink-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:underline"
             @click="emit('reply-to', reply)"
           >
-            <el-icon><ChatDotRound /></el-icon>
+            <UiIcon name="message-circle" />
             <span>回复</span>
           </button>
           <UiActionChip

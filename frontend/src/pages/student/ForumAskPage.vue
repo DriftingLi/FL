@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[760px] px-4 pb-10">
     <div class="mb-3">
-      <UiButton variant="text" :icon="ArrowLeft" @click="goBack">返回问答</UiButton>
+      <UiButton variant="text" :icon="'arrow-left'" @click="goBack">返回问答</UiButton>
     </div>
 
     <UiCard padding="lg">
@@ -31,7 +31,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
 import ForumPostForm from '@/components/student/ForumPostForm.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'

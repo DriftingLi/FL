@@ -6,7 +6,7 @@
     <div v-if="collapsed" class="collapsed-view">
       <UiTooltip :content="current?.name || '选择证件'" placement="right" :show-after="300">
         <div class="collapsed-icon" @click="switcherVisible = true">
-          <el-icon><Notebook /></el-icon>
+          <UiIcon name="notebook" />
         </div>
       </UiTooltip>
     </div>
@@ -63,10 +63,10 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, watch, onMounted, computed } from 'vue'
 import { useCredentialStore } from '@/stores/credential'
 import type { CredentialDict } from '@/api/credential'
-import { Notebook } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'

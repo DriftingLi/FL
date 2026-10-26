@@ -13,7 +13,7 @@
         <div class="stat-indicator" :style="{ background: stat.color }"></div>
         <div class="stat-body">
           <div class="stat-icon-wrap" :style="{ background: stat.bgColor }">
-            <el-icon :size="22" :style="{ color: stat.color }"><component :is="stat.icon" /></el-icon>
+            <UiIcon :name="stat.icon" :size="22" :style="{ color: stat.color }" />
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stat.value }}</div>
@@ -49,7 +49,7 @@
       <div class="quick-actions">
         <div class="quick-action" v-for="action in quickActions" :key="action.label" @click="$router.push(action.to)">
           <div class="action-icon-wrap" :style="{ background: action.bgColor }">
-            <el-icon :size="20" :style="{ color: action.color }"><component :is="action.icon" /></el-icon>
+            <UiIcon :name="action.icon" :size="20" :style="{ color: action.color }" />
           </div>
           <span class="action-label">{{ action.label }}</span>
         </div>
@@ -59,12 +59,13 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AdminDashboard' })
 
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { User, UserFilled, Notebook, Timer, TrendCharts, MagicStick } from '@element-plus/icons-vue'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 import { href } from '@/config/pages'
@@ -91,18 +92,20 @@ function checkMobile() {
   isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
 }
 
-const statItems = ref([
-  { label: '学员总数', value: '0', icon: User, color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
-  { label: '今日活跃学员', value: '0', icon: UserFilled, color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
-  { label: '课程总数', value: '0', icon: Notebook, color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
-  { label: '总学习时长', value: '0', icon: Timer, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
+interface StatItem { label: string; value: string; icon: IconName; color: string; bgColor: string }
+const statItems = ref<StatItem[]>([
+  { label: '学员总数', value: '0', icon: 'user', color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
+  { label: '今日活跃学员', value: '0', icon: 'user-filled', color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
+  { label: '课程总数', value: '0', icon: 'notebook', color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
+  { label: '总学习时长', value: '0', icon: 'timer', color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
 ])
 
-const quickActions = [
-  { label: '用户管理', to: href('HrwaiUserManage'), icon: User, color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
-  { label: '课程管理', to: href('CourseCatalog'), icon: Notebook, color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
-  { label: '统计分析', to: href('Statistics'), icon: TrendCharts, color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
-  { label: '内容生成', to: href('ContentGenerate'), icon: MagicStick, color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
+interface QuickAction { label: string; to: ReturnType<typeof href>; icon: IconName; color: string; bgColor: string }
+const quickActions: QuickAction[] = [
+  { label: '用户管理', to: href('HrwaiUserManage'), icon: 'user', color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
+  { label: '课程管理', to: href('CourseCatalog'), icon: 'notebook', color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
+  { label: '统计分析', to: href('Statistics'), icon: 'chart-line', color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
+  { label: '内容生成', to: href('ContentGenerate'), icon: 'wand-sparkles', color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
 ]
 
 // 时长格式（紧凑）：抽到 utils/format（#796）——与 Statistics 的中文格式是同名不同语义

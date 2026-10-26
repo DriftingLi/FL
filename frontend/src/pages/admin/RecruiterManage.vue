@@ -3,7 +3,7 @@
 <div class="page-header">
 <h2>企业招聘者管理</h2>
 <UiButton variant="primary" @click="openAddDialog">
-<el-icon><Plus /></el-icon> 新增招聘者
+<UiIcon name="plus" /> 新增招聘者
 </UiButton>
 </div>
 <UiFilterBar>
@@ -17,7 +17,7 @@ style="width: 280px"
 @clear="search"
 @keyup.enter="search"
 >
-<template #prefix><el-icon><Search /></el-icon></template>
+<template #prefix><UiIcon name="search" /></template>
 </el-input>
 <UiButton variant="primary" @click="search">搜索</UiButton>
         </template>
@@ -44,7 +44,7 @@ style="width: 280px"
 <template #default="{ row }">
 <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
 <UiButton variant="primary" link size="small">
-操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+操作<UiIcon name="chevron-down" class="el-icon--right" />
 </UiButton>
 <template #dropdown>
 <el-dropdown-menu>
@@ -142,12 +142,12 @@ style="width: 280px"
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'RecruiterManage' })
 
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 import { adminApi, type AdminRecruiter } from '@/api/admin'

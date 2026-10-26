@@ -11,7 +11,6 @@ defineOptions({ name: 'ContributionManage' })
  */
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
 import {
   adminContributionApi,
   type ContributionItem,
@@ -179,7 +178,7 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <span class="card-title">资料投稿管理</span>
-          <UiButton :icon="Refresh" circle aria-label="刷新" @click="activeTab === 'pending' ? loadPending() : loadReports()" />
+          <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="activeTab === 'pending' ? loadPending() : loadReports()" />
         </div>
       </template>
 

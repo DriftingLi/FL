@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 溢出菜单：卡片/列表项右上角「⋯」触发的**治理动作收纳**。
  *
@@ -8,7 +9,6 @@
  * 菜单项与**可见性判定都归调用方**：组件不认识任何业务语义（「自己的回复不显示举报」
  * 是调用方的规则，不是这里的 if）；items 为空时连触发按钮都不渲染，省掉一个永远点不出东西的入口。
  */
-import { MoreFilled } from '@element-plus/icons-vue'
 
 export interface UiMoreMenuItem {
   key: string
@@ -42,7 +42,7 @@ const emit = defineEmits<{ select: [key: string] }>()
       :aria-label="label"
       :title="label"
     >
-      <el-icon><MoreFilled /></el-icon>
+      <UiIcon name="ellipsis" />
     </button>
     <template #dropdown>
       <el-dropdown-menu>

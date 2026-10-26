@@ -25,7 +25,7 @@
           aria-label="全局搜索"
           @click="openSearch"
         >
-          <el-icon><Search /></el-icon>
+          <UiIcon name="search" />
           <template v-if="!collapsed">
             <span>搜索</span>
             <span class="ml-auto rounded border border-line px-1 text-[11px] text-ink-3">⌘K</span>
@@ -37,10 +37,10 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, h, onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
 import SidebarLayout from './SidebarLayout.vue'
 import { href } from '@/config/pages'
 import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'

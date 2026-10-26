@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref } from 'vue'
-import { Bell } from '@element-plus/icons-vue'
 import NotificationPanelBody from './NotificationPanelBody.vue'
 
 /**
@@ -48,7 +48,7 @@ function onPopoverShow() {
           :max="99"
           class="notification-badge"
         >
-          <el-icon><Bell /></el-icon>
+          <UiIcon name="bell" />
         </el-badge>
       </button>
     </template>

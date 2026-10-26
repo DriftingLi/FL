@@ -26,7 +26,7 @@
       </video>
 
       <div v-if="buffering" class="video-buffering">
-        <el-icon class="buffering-icon" :size="36"><Loading /></el-icon>
+        <UiIcon name="loader-circle" class="buffering-icon" :size="36" />
       </div>
 
       <div class="video-controls-overlay">
@@ -50,13 +50,13 @@
 
         <UiTooltip content="画中画" placement="top">
           <UiButton aria-label="画中画" size="small" class="control-btn" @click="togglePiP" :disabled="!pipSupported">
-            <el-icon><Monitor /></el-icon>
+            <UiIcon name="monitor" />
           </UiButton>
         </UiTooltip>
 
         <UiTooltip content="下载" placement="top">
           <UiButton aria-label="下载" size="small" class="control-btn" @click="downloadVideo">
-            <el-icon><Download /></el-icon>
+            <UiIcon name="download" />
           </UiButton>
         </UiTooltip>
       </div>
@@ -65,8 +65,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onBeforeUnmount } from 'vue'
-import { Download, Loading, Monitor } from '@element-plus/icons-vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'

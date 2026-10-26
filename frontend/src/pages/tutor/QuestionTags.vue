@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>题库标签管理</h2>
       <UiButton variant="primary" @click="openTagDialog()">
-        <el-icon><Plus /></el-icon> 新增标签
+        <UiIcon name="plus" /> 新增标签
       </UiButton>
     </div>
 
@@ -146,8 +146,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { trainingApi, type QuestionTag } from '@/api/training'
 import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'

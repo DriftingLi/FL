@@ -56,7 +56,7 @@
                 ? 'group-aria-pressed:border-[var(--wechat-green)] group-aria-pressed:bg-[var(--wechat-green)] group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(7,193,96,0.28)]'
                 : 'group-aria-pressed:border-ui-500 group-aria-pressed:bg-ui-600 group-aria-pressed:text-white group-aria-pressed:shadow-[0_4px_10px_rgba(13,148,136,0.28)]'"
             >
-              <component :is="m.icon" :size="19" />
+              <UiIcon :name="m.icon" :size="19" />
             </span>
             <span>{{ m.label }}</span>
           </button>
@@ -75,7 +75,8 @@
 </template>
 
 <script setup lang="ts">
-import type { Component } from 'vue'
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 
@@ -84,7 +85,7 @@ export type AltModeKey = 'email' | 'phone' | 'wechat'
 export interface AltMode {
   key: AltModeKey
   label: string
-  icon: Component
+  icon: IconName
 }
 
 const props = withDefaults(

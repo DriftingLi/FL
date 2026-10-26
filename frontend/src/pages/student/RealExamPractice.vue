@@ -11,13 +11,9 @@
     <el-card v-if="currentQuestion" v-loading="loading" class="question-card">
       <div class="question-header mb-3 flex items-center justify-between">
         <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
-        <el-icon
-          class="fav-star cursor-pointer text-lg"
+        <UiIcon :name="favorited ? 'star-filled' : 'star'" class="fav-star cursor-pointer text-lg"
           :class="favorited ? 'text-warn' : 'text-ink-3'"
-          @click="handleToggleFavorite"
-        >
-          <StarFilled v-if="favorited" /><Star v-else />
-        </el-icon>
+          @click="handleToggleFavorite" />
       </div>
       <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image mb-2.5 max-w-full rounded-[8px]" loading="lazy" decoding="async" />
       <p class="q-content m-0 mb-4 whitespace-pre-wrap text-[15px] leading-[1.7] text-ink">{{ currentQuestion.content }}</p>
@@ -71,10 +67,10 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Star, StarFilled } from '@element-plus/icons-vue'
 import { realExamApi } from '@/api/realExam'
 import { practiceModeApi } from '@/api/practiceMode'
 import { typeMap } from '@/constants/question'

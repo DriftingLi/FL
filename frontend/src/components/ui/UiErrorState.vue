@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import UiButton from './UiButton.vue'
 
 /**
@@ -21,7 +22,7 @@ const emit = defineEmits<{ retry: [] }>()
 
 <template>
   <div class="flex flex-col items-center justify-center gap-3 py-10 text-center">
-    <el-icon class="text-2xl text-bad"><WarningFilled /></el-icon>
+    <UiIcon name="triangle-alert-filled" class="text-2xl text-bad" />
 
     <div>
       <p class="font-heading text-base font-semibold text-ink">{{ props.title }}</p>

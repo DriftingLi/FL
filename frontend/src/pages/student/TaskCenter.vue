@@ -24,7 +24,7 @@
         class="ml-auto inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:underline"
       >
         积分明细
-        <el-icon><ArrowRight /></el-icon>
+        <UiIcon name="arrow-right" />
       </RouterLink>
     </div>
 
@@ -65,9 +65,9 @@
                 class="flex size-9 shrink-0 items-center justify-center rounded-full text-lg"
                 :class="iconTone(task.status)"
               >
-                <el-icon v-if="task.status === 'claimed'"><CircleCheckFilled /></el-icon>
-                <el-icon v-else-if="task.status === 'claimable'"><Trophy /></el-icon>
-                <el-icon v-else><List /></el-icon>
+                <UiIcon name="circle-check-filled" v-if="task.status === 'claimed'" />
+                <UiIcon name="trophy" v-else-if="task.status === 'claimable'" />
+                <UiIcon name="list" v-else />
               </div>
               <div class="min-w-0 flex-1">
                 <div class="mb-0.5 text-sm font-semibold text-ink">{{ task.title }}</div>
@@ -100,9 +100,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CircleCheckFilled, Trophy, List, ArrowRight } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { pointsApi, type PointsTaskItem } from '@/api/points'
 import { groupLabelMap, groupDescMap, claimDupMessage, isClaimExhausted } from '@/utils/taskCenter'

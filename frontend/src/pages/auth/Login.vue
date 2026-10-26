@@ -19,11 +19,11 @@
           <el-input
             v-model="formData.username"
             :placeholder="usernamePlaceholder"
-            prefix-icon="User"
             size="large"
             class="form-input"
-            @keyup.enter="handleLogin"
-          />
+            @keyup.enter="handleLogin">
+            <template #prefix><UiIcon name="user" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item prop="password">
@@ -31,12 +31,12 @@
             v-model="formData.password"
             type="password"
             placeholder="请输入密码"
-            prefix-icon="Lock"
             show-password
             size="large"
             class="form-input"
-            @keyup.enter="handleLogin"
-          />
+            @keyup.enter="handleLogin">
+            <template #prefix><UiIcon name="lock" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -60,11 +60,11 @@
           <el-input
             v-model="formData.email"
             placeholder="请输入邮箱"
-            prefix-icon="Message"
             size="large"
             class="form-input"
-            @keyup.enter="handleLogin"
-          />
+            @keyup.enter="handleLogin">
+            <template #prefix><UiIcon name="mail" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -93,12 +93,12 @@
             <el-input
               v-model="formData.code"
               placeholder="6位邮箱验证码"
-              prefix-icon="Message"
               size="large"
               class="form-input code-input"
               maxlength="6"
-              @keyup.enter="handleLogin"
-            />
+              @keyup.enter="handleLogin">
+            <template #prefix><UiIcon name="mail" /></template>
+          </el-input>
             <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
             </UiButton>
@@ -126,12 +126,12 @@
           <el-input
             v-model="formData.phone"
             placeholder="请输入手机号"
-            prefix-icon="Phone"
             size="large"
             class="form-input"
             maxlength="11"
-            @keyup.enter="handleLogin"
-          />
+            @keyup.enter="handleLogin">
+            <template #prefix><UiIcon name="phone" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -160,12 +160,12 @@
             <el-input
               v-model="formData.code"
               placeholder="6位手机验证码"
-              prefix-icon="Message"
               size="large"
               class="form-input code-input"
               maxlength="6"
-              @keyup.enter="handleLogin"
-            />
+              @keyup.enter="handleLogin">
+            <template #prefix><UiIcon name="mail" /></template>
+          </el-input>
             <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
             </UiButton>
@@ -183,7 +183,7 @@
     <template #alt-wechat>
       <div class="wechat-box w-full">
         <div class="wechat-qr-placeholder flex flex-col items-center gap-2.5 border-2 border-dashed border-line-strong rounded-card bg-canvas px-4 py-7 text-ink-3">
-          <el-icon :size="42"><ChatDotRound /></el-icon>
+          <UiIcon name="message-circle" :size="42" />
           <p class="wechat-title m-0 text-[15px] font-semibold text-ink-3">扫码登录（即将开放）</p>
           <span class="wechat-tip text-center text-xs leading-normal text-ink-3">微信授权暂未配置，待开放平台配置完成后开放</span>
         </div>
@@ -202,6 +202,7 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { href } from '@/config/pages'
@@ -210,7 +211,6 @@ import { authApi } from '@/api/auth'
 import { isSafeRedirect } from '@/utils/authRedirect'
 import type { UserProfile } from '@/types/user'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Message, Phone, ChatDotRound } from '@element-plus/icons-vue'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
 import { useSendCode } from '@/composables/useSendCode'
 import { useCaptcha } from '@/composables/useCaptcha'
@@ -322,9 +322,9 @@ const usernamePlaceholder = computed(() =>
 const altModes = computed<AltMode[]>(() =>
   currentRole === 'hrwai_user'
     ? [
-        { key: 'email', label: '邮箱验证码', icon: Message },
-        { key: 'phone', label: '手机验证码', icon: Phone },
-        { key: 'wechat', label: '微信扫码', icon: ChatDotRound }
+        { key: 'email', label: '邮箱验证码', icon: 'message-square' },
+        { key: 'phone', label: '手机验证码', icon: 'phone' },
+        { key: 'wechat', label: '微信扫码', icon: 'message-circle' }
       ]
     : []
 )

@@ -81,7 +81,7 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, a
       logoSub: 'AI 叉车助手 · 测试',
       inputText: '',
       loginRedirect: '/ai-assistant',
-      welcomeIcon: { template: '<i/>' },
+      welcomeIcon: 'message-circle',
       welcomeTitle: '欢迎标题',
       ...props
     },

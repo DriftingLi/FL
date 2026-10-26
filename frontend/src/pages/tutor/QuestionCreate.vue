@@ -81,7 +81,7 @@
             >
               <img v-if="form.image_url" :src="form.image_url" class="block w-[300px] max-h-[200px] object-contain" />
               <div v-else class="flex h-40 w-[300px] flex-col items-center justify-center gap-2 text-[13px] text-ink-3">
-                <el-icon :size="28"><Plus /></el-icon>
+                <UiIcon name="plus" :size="28" />
                 <span>点击上传图片</span>
               </div>
             </UiUpload>
@@ -154,9 +154,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'

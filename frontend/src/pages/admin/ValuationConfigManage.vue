@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'ValuationConfigManage' })
@@ -17,7 +18,6 @@ defineOptions({ name: 'ValuationConfigManage' })
 // useDirtyDraft 五态（dirty 检测/仅存变更/重置/保存 loading/成功 reload）是页面专属，留页面。
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh, Check, RefreshLeft, ArrowDown } from '@element-plus/icons-vue'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import {
   adminResources,
@@ -462,7 +462,7 @@ function onRefresh() {
     <div class="app-container">
       <PageHeader title="残值评估配置" subtitle="valuation config">
         <template #actions>
-          <UiButton :icon="Refresh" @click="onRefresh">刷新当前</UiButton>
+          <UiButton :icon="'rotate-cw'" @click="onRefresh">刷新当前</UiButton>
         </template>
       </PageHeader>
 
@@ -471,7 +471,7 @@ function onRefresh() {
         <el-tab-pane label="原价表" name="originalPrices">
           <div class="tab-toolbar">
             <span class="tab-tip">维护叉车基准原价记录（学生端表单级联查询依赖此表）</span>
-            <UiButton variant="primary" :icon="Plus" @click="openCreate">新增</UiButton>
+            <UiButton variant="primary" :icon="'plus'" @click="openCreate">新增</UiButton>
           </div>
           <UiFilterBar>
         <template #filters>
@@ -504,7 +504,7 @@ function onRefresh() {
               size="small"
               style="width: 160px"
             />
-            <UiButton :icon="RefreshLeft" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
+            <UiButton :icon="'rotate-ccw'" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
         </template>
       </UiFilterBar>
           <UiAsyncSection
@@ -538,7 +538,7 @@ function onRefresh() {
               <template #default="{ row }">
                 <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
                   <UiButton variant="primary" link size="small">
-                    操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                    操作<UiIcon name="chevron-down" class="el-icon--right" />
                   </UiButton>
                   <template #dropdown>
                     <el-dropdown-menu>
@@ -585,8 +585,8 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">影响时间衰减、使用强度、置信区间等核心计算</span>
                 <div class="section-actions">
-                  <UiButton :icon="RefreshLeft" size="small" @click="resetCoefficients">重置</UiButton>
-                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingCoefficients" :disabled="!isCoefficientsDirty()" @click="saveCoefficients">
+                  <UiButton :icon="'rotate-ccw'" size="small" @click="resetCoefficients">重置</UiButton>
+                  <UiButton variant="primary" :icon="'check'" size="small" :loading="savingCoefficients" :disabled="!isCoefficientsDirty()" @click="saveCoefficients">
                     保存本节
                   </UiButton>
                 </div>
@@ -624,8 +624,8 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Kb = k_brand，直接作为品牌系数参与 Kt_adj 计算</span>
                 <div class="section-actions">
-                  <UiButton :icon="RefreshLeft" size="small" @click="resetBrands">重置</UiButton>
-                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingBrands" :disabled="!isBrandsDirty()" @click="saveBrands">
+                  <UiButton :icon="'rotate-ccw'" size="small" @click="resetBrands">重置</UiButton>
+                  <UiButton variant="primary" :icon="'check'" size="small" :loading="savingBrands" :disabled="!isBrandsDirty()" @click="saveBrands">
                     保存本节
                   </UiButton>
                 </div>
@@ -667,8 +667,8 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Kc = base_coefficient，按车况评级 A~E 给出基础调整系数</span>
                 <div class="section-actions">
-                  <UiButton :icon="RefreshLeft" size="small" @click="resetConditionRatings">重置</UiButton>
-                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingConditionRatings" :disabled="!isConditionRatingsDirty()" @click="saveConditionRatings">
+                  <UiButton :icon="'rotate-ccw'" size="small" @click="resetConditionRatings">重置</UiButton>
+                  <UiButton variant="primary" :icon="'check'" size="small" :loading="savingConditionRatings" :disabled="!isConditionRatingsDirty()" @click="saveConditionRatings">
                     保存本节
                   </UiButton>
                 </div>
@@ -712,8 +712,8 @@ function onRefresh() {
                   Kc 修正项：油漆/保养为加性叠加（base + bonus），证件为乘性扣减（×(1-pct)），缺双证时复合放大
                 </span>
                 <div class="section-actions">
-                  <UiButton :icon="RefreshLeft" size="small" @click="resetKcModifiers">重置</UiButton>
-                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingKcModifiers" :disabled="!isKcModifiersDirty()" @click="saveKcModifiers">
+                  <UiButton :icon="'rotate-ccw'" size="small" @click="resetKcModifiers">重置</UiButton>
+                  <UiButton variant="primary" :icon="'check'" size="small" :loading="savingKcModifiers" :disabled="!isKcModifiersDirty()" @click="saveKcModifiers">
                     保存本节
                   </UiButton>
                 </div>
@@ -751,9 +751,9 @@ function onRefresh() {
               <div class="section-toolbar">
                 <span class="section-tip">Km = coefficient，按省市区域调整市场系数</span>
                 <div class="section-actions">
-                  <UiButton variant="success" :icon="Plus" size="small" @click="openCreateRegion">新增区域</UiButton>
-                  <UiButton :icon="RefreshLeft" size="small" @click="resetRegionCoefficients">重置</UiButton>
-                  <UiButton variant="primary" :icon="Check" size="small" :loading="savingRegionCoefficients" :disabled="!isRegionCoefficientsDirty()" @click="saveRegionCoefficients">
+                  <UiButton variant="success" :icon="'plus'" size="small" @click="openCreateRegion">新增区域</UiButton>
+                  <UiButton :icon="'rotate-ccw'" size="small" @click="resetRegionCoefficients">重置</UiButton>
+                  <UiButton variant="primary" :icon="'check'" size="small" :loading="savingRegionCoefficients" :disabled="!isRegionCoefficientsDirty()" @click="saveRegionCoefficients">
                     保存本节
                   </UiButton>
                 </div>

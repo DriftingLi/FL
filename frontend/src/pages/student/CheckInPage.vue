@@ -7,7 +7,7 @@
         class="inline-flex items-center gap-1 rounded-pill border border-line-strong bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:underline"
       >
         积分明细
-        <el-icon><ArrowRight /></el-icon>
+        <UiIcon name="arrow-right" />
       </RouterLink>
     </div>
 
@@ -139,9 +139,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowRight } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { checkInApi, type CheckInDay, type CheckInRankItem } from '@/api/checkin'
 import { shanghaiDateStr } from '@/utils/format'

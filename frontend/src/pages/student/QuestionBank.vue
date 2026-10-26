@@ -33,7 +33,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(0)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-soft text-ui-soft-ink">
-              <el-icon :size="20"><Sort /></el-icon>
+              <UiIcon name="arrow-up-down" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
           </div>
@@ -57,7 +57,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(1)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ok-soft text-ok">
-              <el-icon :size="20"><MagicStick /></el-icon>
+              <UiIcon name="wand-sparkles" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">随机练习</h3>
           </div>
@@ -76,7 +76,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(2)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-warn-soft text-warn">
-              <el-icon :size="20"><Filter /></el-icon>
+              <UiIcon name="funnel" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">专项练习</h3>
           </div>
@@ -102,7 +102,7 @@
         <UiCard variant="raised" class="stagger-in" :style="stagger(3)">
           <div class="flex items-center gap-2">
             <span class="grid h-9 w-9 place-items-center rounded-ctl bg-ui-accent-400/10 text-ui-accent-600">
-              <el-icon :size="20"><CollectionTag /></el-icon>
+              <UiIcon name="bookmark" :size="20" />
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">标签练习</h3>
           </div>
@@ -221,8 +221,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, watch, onMounted } from 'vue'
-import { Sort, MagicStick, Filter, CollectionTag } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
