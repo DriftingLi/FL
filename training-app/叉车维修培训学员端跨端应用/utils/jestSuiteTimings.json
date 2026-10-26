@@ -1,19 +1,21 @@
 {
   "schema": 1,
-  "note": "逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：GitHub Actions ubuntu-latest，ci.yml run 40111032652（feat/1879，#1899 落地后 mobile-test = unit×2 + behavior×4 全绿 run，2026-10-24）的 behavior 腿四片日志（jest 只打印 ≥5s 的套件耗时 ⇒ 本表只列慢套件）。pwsh 类套件单次方差大（wirelessDebugBehavior 两次采集 108.4s ↔ 202.5s，#1900），按单次采集如实计权、不做均值平滑——最慢片下界 = max(总/4, 最慢套件)，装箱不追方差。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。",
+  "note": "逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：GitHub Actions ubuntu-latest 近 3 个 run 的 behavior 腿四片日志合并（40318212465 / 40315157065 / 40325736773，2026-10-26），同套件取三跑最大值（最坏观测），不做均值平滑（#1900）。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。",
   "defaultSeconds": 1,
   "suites": {
-    "utils/wirelessDebugBehavior.test.js": 202.491,
-    "utils/kotlinAllProcessCaptureBehavior.test.js": 68.751,
-    "utils/deviceCaptureTierBehavior.test.js": 40.892,
-    "utils/emulatorSmokeTierBehavior.test.js": 33.277,
-    "utils/autoScreenshotStabilityBehavior.test.js": 25.466,
-    "utils/wirelessDebugBoundedTextBehavior.test.js": 17.261,
-    "utils/styleLoopBehavior.test.js": 16.96,
-    "utils/mpWeixinGateContract.test.js": 10.413,
-    "utils/emulatorSmokeBoundedTextBehavior.test.js": 8.51,
-    "utils/kotlinAllStaleExportBehavior.test.js": 8.202,
-    "utils/mpWeixinBuildFingerprintBehavior.test.js": 5.29,
-    "utils/wtBootstrapBehavior.test.js": 5.206
+    "utils/wirelessDebugBehavior.test.js": 207.777,
+    "utils/kotlinAllProcessCaptureBehavior.test.js": 74.75,
+    "utils/deviceCaptureTierBehavior.test.js": 48.968,
+    "utils/emulatorSmokeTierBehavior.test.js": 31.084,
+    "utils/autoScreenshotStabilityBehavior.test.js": 25.268,
+    "utils/styleLoopBehavior.test.js": 23.575,
+    "utils/wirelessDebugBoundedTextBehavior.test.js": 17.986,
+    "utils/mpWeixinGateContract.test.js": 14.079,
+    "utils/frontierBehavior.test.js": 12.799,
+    "utils/kotlinAllStaleExportBehavior.test.js": 12.105,
+    "utils/capabilitySurfaceBehavior.test.js": 9.379,
+    "utils/emulatorSmokeBoundedTextBehavior.test.js": 8.764,
+    "utils/levelDetectBehavior.test.js": 8.721,
+    "utils/mpWeixinBuildFingerprintBehavior.test.js": 6.09
   }
 }
