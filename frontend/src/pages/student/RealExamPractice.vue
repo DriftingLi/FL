@@ -41,7 +41,7 @@
           :question-type="currentQuestion.type"
         />
         <AIExplanationCard :ai-explanation="(lastResult as any).ai_explanation" :fallback-explanation="lastResult.explanation" />
-        <el-alert
+        <UiAlert
           :title="lastResult.is_correct ? '回答正确' : '回答错误'"
           :type="lastResult.is_correct ? 'success' : 'error'"
           :closable="false"
@@ -89,6 +89,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -475,7 +475,7 @@ defineExpose({ loadMine })
     </el-drawer>
     <!-- 投稿详情：元信息 + 文件清单逐个下载（列表不带 files，打开时拉 detail） -->
     <UiDialog v-model="detailVisible" title="投稿详情" width="520px" append-to-body>
-      <el-skeleton v-if="detailLoading" :rows="5" animated />
+      <UiSkeleton v-if="detailLoading" variant="text" :rows="5" />
       <div v-else-if="detailItem" class="flex flex-col gap-3.5">
         <div>
           <div class="text-base font-medium text-ink">{{ detailItem.title }}</div>

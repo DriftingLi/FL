@@ -8,14 +8,14 @@
       <UiTooltip content="放大" placement="bottom">
         <UiButton aria-label="放大" :icon="'zoom-in'" circle size="small" @click="zoomIn" :disabled="scale >= 5"/>
       </UiTooltip>
-      <el-divider direction="vertical" />
+      <UiDivider orientation="vertical" />
       <UiTooltip content="适合窗口" placement="bottom">
         <UiButton aria-label="适合窗口" :icon="'maximize'" circle size="small" @click="fitToWindow"/>
       </UiTooltip>
       <UiTooltip content="原始大小" placement="bottom">
         <UiButton aria-label="原始大小" :icon="'rotate-cw'" circle size="small" @click="resetZoom"/>
       </UiTooltip>
-      <el-divider direction="vertical" />
+      <UiDivider orientation="vertical" />
       <UiTooltip content="全屏" placement="bottom">
         <UiButton aria-label="全屏" :icon="'chart-no-axes-column'" circle size="small" @click="toggleFullscreen"/>
       </UiTooltip>
@@ -60,6 +60,7 @@ import { resolveFileUrl } from '@/utils/fileUrl'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
+import UiDivider from '@/components/ui/UiDivider.vue'
 
 const props = defineProps({
   src: { type: String, required: true },

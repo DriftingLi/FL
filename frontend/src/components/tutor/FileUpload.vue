@@ -85,11 +85,11 @@
                   file.status === 'error' ? 'error-icon text-bad' : ''
                 ]"
               />
-              <el-progress
+              <UiProgress
                 v-if="file.status === 'uploading'"
-                :percentage="file.percentage"
+                :value="file.percentage"
                 :stroke-width="6"
-                :show-text="true"
+                show-label
                 class="file-progress flex-1"
               />
               <span v-else-if="file.status === 'success'" class="status-text status-success text-sm text-ok">上传成功</span>
@@ -120,6 +120,7 @@ import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiProgress from '@/components/ui/UiProgress.vue'
 
 interface FileItem {
   uid: number

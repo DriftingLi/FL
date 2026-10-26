@@ -8,11 +8,13 @@
         <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="load" />
       </template>
 
-      <el-tabs v-model="activeStatus" @tab-change="handleTabChange">
-        <el-tab-pane label="待审核" name="pending" />
-        <el-tab-pane label="已通过" name="approved" />
-        <el-tab-pane label="已拒绝" name="rejected" />
-      </el-tabs>
+      <!-- 参数选择（同一列表换筛选条件）→ 胶囊，登记表「参数选择」行 -->
+      <UiSegmentTabs
+        v-model="activeStatus"
+        :options="statusOptions"
+        class="mb-3"
+        @change="handleTabChange"
+      />
 
       <el-table v-loading="loading" :data="list" stripe style="width: 100%">
         <el-table-column prop="id" label="ID" width="70" />
@@ -118,6 +120,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 // 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
 const {
@@ -155,6 +158,12 @@ const table = useAdminTable<ProfileChangeRequest>({
   }
 })
 const { loading, list, total, currentPage, pageSize, load, handleAction } = table
+
+const statusOptions = [
+  { label: '待审核', value: 'pending' },
+  { label: '已通过', value: 'approved' },
+  { label: '已拒绝', value: 'rejected' }
+]
 
 function handleTabChange() {
   table.applyFilters({ status: activeStatus.value })

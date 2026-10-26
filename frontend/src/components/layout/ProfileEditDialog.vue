@@ -20,7 +20,7 @@
         </div>
       </div>
 
-      <el-divider />
+      <UiDivider />
 
       <div class="nickname-row">
         <label class="nickname-label">昵称</label>
@@ -51,6 +51,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
+import UiDivider from '@/components/ui/UiDivider.vue'
 
 const authStore = useAuthStore()
 
