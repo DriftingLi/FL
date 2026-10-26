@@ -7,7 +7,8 @@
  * 下面几条不变量上，本测试就是守这几条：
  *   C1 输入 = HBuilderX CLI 构建产物（unpackage\dist\build\mp-weixin），不另造构建；探针在同目录 scripts/
  *   C2 顺序写死 `cli.bat close` → `cli.bat auto`；**auto 必须等它跑完**（中途 kill ⇒ 端口永不监听，2026-09-12 实测）
- *   C3 「pageStack 非空」必须是**前置断言**；探针不得用元素级 API（page.$() 会挂起 15s，且会触发 `$(` 检测）
+ *   C3 「pageStack 非空」必须是**前置断言**；禁令已收窄（#1917 裁决 + #1919 落锁）：page.waitFor(选择器) 全文件禁、
+ *       导航 API 在锚点段内禁；page.$ + element.text() 锚点断言放行（正向自检锁「不再误伤」）
  *   C4 判成败只看输出：不得出现 $LASTEXITCODE；必须解析 MP_WEIXIN_PROBE / MP_WEIXIN_RESULT 与 publish 文案
  *   C5 端口监听面风险必须写明（实测绑 `::` 通配地址，CLI 无法收窄），且必须轮询端口延迟出现
  *   C6 结果评论格式 == `gate-evidence:②` + `commit: <sha>`；只在门通过（exit 0）分支贴
@@ -103,7 +104,7 @@ const RESULT_MANDATORY = [
   'appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal',
   'shots', 'navigation', 'ready', 'sdk', 'ide', 'log'
 ];
-const RESULT_OPTIONAL = ['navigationSkipReason', 'auth'];
+const RESULT_OPTIONAL = ['navigationSkipReason', 'auth', 'asserts'];
 
 /**
  * 取一个 PowerShell 函数的函数体（花括号配对）。
@@ -427,6 +428,20 @@ function scanPlan(plan) {
     must(sr.length > 0, 'C24', 'directPages.skipReasons 为空（SKIP reason 值域必须可枚举——诚实降级的前提）');
     sr.forEach((r) => must(/^[a-z0-9-]+$/.test(r), 'C24', `skipReasons 值 ${r} 不是 kebab-case slug`));
     must(sr.includes('direct-page-unsupported'), 'C24', 'skipReasons 缺 direct-page-unsupported（落地页≠目标路由必须记 SKIP）');
+    // ---- 锚点元素断言（#1919）的计划面声明：锚点表是唯一真源，形状与首期锚点值都锁 ----
+    const anchors = dp.anchors;
+    must(Boolean(anchors) && Object.keys(anchors).length > 0, 'C24', 'directPages.anchors 缺失或为空（锚点表必须由计划声明，执行侧不得硬编码锚点）');
+    if (anchors) {
+      Object.keys(anchors).forEach((k) => {
+        must(/^pages(\/[a-z0-9-]+)+$/.test(k), 'C24', `anchors 键 ${k} 不是页面路由形态（/^pages(\\/[a-z0-9-]+)+$/）`);
+        const a = anchors[k] || {};
+        must(typeof a.selector === 'string' && a.selector.startsWith('.'), 'C24', `anchors[${k}].selector 不是类选择器（uni-app x 不能跨组件选择，锚点必须页面级可达）`);
+        must(typeof a.text === 'string' && a.text.length > 0, 'C24', `anchors[${k}].text 为空（element.text() 精确比对需要期望值）`);
+      });
+      const loginAnchor = anchors['pages/login/login'];
+      // 首期锚点精确 pin（#1917 单验值）：改锚点必须重新单验并同步判据，不许静默漂移
+      must(Boolean(loginAnchor) && loginAnchor.selector === '.app-title' && loginAnchor.text === '叉车维修培训系统', 'C24', 'login 锚点不是 {.app-title, 叉车维修培训系统}（#1917 单验值，改动须重新单验并同步判据）');
+    }
     const dc = (dp.criteria || []).join('\n');
     must(dc.includes('冷启动'), 'C24', 'directPages.criteria 未写冷启动直达机制');
     must(dc.includes('还原'), 'C24', 'directPages.criteria 未写还原纪律');
@@ -519,15 +534,39 @@ function scanContract(sources) {
   // 计划的 exit2 声明了「timeout ⇒ exit 2」，代码就得真的有 TimedOut 判据 —— 声明与实现两边都要有。
   must(s.includes('$auto.TimedOut'), 'C2', 'auto 缺超时兜底（执行侧必须有 TimedOut 判据，计划声明的 exit 2 才有落点）');
 
-  // C3 pageStack 前置断言 + 禁止元素级 API
+  // C3 pageStack 前置断言 + 禁令收窄（#1917 裁决 + #1919 落锁）：
+  //   page.waitFor(选择器) 全文件禁（#1917 实测挂起 8s，条件等待用轮询 page.$）；
+  //   导航 API 在锚点段 [C3-anchor-begin]–[C3-anchor-end] 内禁（段标记缺失判红 = fail-closed）；
+  //   page.$ + element.text() 锚点断言放行（正向自检锁「不再误伤」，见放行语义锁用例）。
   must(probe.includes('pageStackNonEmpty'), 'C3', '探针缺 pageStack 非空前置断言');
   must(probe.includes('getPageMetaByWebviewId'), 'C3', '探针未记录 pageStack 空导致的误导弹错（#883 坑位 1）');
+  // 锚点参数入口被拆 ⇒ 红（--assert-selector / --assert-text 是锚点断言的唯一入口）
+  must(probe.includes("'--assert-selector'") && probe.includes("'--assert-text'"), 'C3', '探针缺 --assert-selector/--assert-text 解析（#1919 锚点断言入口被拆）');
   probe.split(/\r?\n/).forEach((line, idx) => {
     if (/^\s*\/\//.test(line)) return; // 注释里提 API 名是允许的；本守护守的是「别用」
-    if (/\$\(|getElementByXpath/.test(line) && !/pageStack|mp\.pageStack/.test(line)) {
-      violations.push('C3 第 ' + (idx + 1) + ' 行用了元素级 API（page.$ 会挂起 15s，#883 坑位 3）');
+    if (/page\.waitFor\(\s*['"`]/.test(line)) {
+      violations.push('C3 第 ' + (idx + 1) + ' 行用了 page.waitFor(选择器)（#1917 实测挂起 8s，条件等待用轮询 page.$）');
     }
   });
+  // 锚点段内禁 waitFor/导航 API；段标记缺失本身判红（段扫失去范围不得静默放行）。
+  // 终点标记从 begin 标记**所在行之后**起找：probe 头注里自述扫法时会含 [C3-anchor-end] 字面量，
+  // 直接 indexOf 会命中注释行、把段扫范围塌缩成一行（#1919 实测踩过）。
+  const anchorBeginAt = probe.indexOf('[C3-anchor-begin]');
+  let anchorEndAt = -1;
+  if (anchorBeginAt !== -1) {
+    const beginLineEnd = probe.indexOf('\n', anchorBeginAt);
+    anchorEndAt = probe.indexOf('[C3-anchor-end]', beginLineEnd === -1 ? anchorBeginAt : beginLineEnd);
+  }
+  if (anchorBeginAt === -1 || anchorEndAt === -1 || anchorEndAt <= anchorBeginAt) {
+    violations.push('C3 探针缺 [C3-anchor-begin]/[C3-anchor-end] 标记（锚点段扫失去范围，fail-closed）');
+  } else {
+    probe.slice(anchorBeginAt, anchorEndAt).split(/\r?\n/).forEach((line, idx) => {
+      if (/^\s*\/\//.test(line)) return;
+      if (/page\.waitFor\(|\bmp\.(reLaunch|navigateTo)\(/.test(line)) {
+        violations.push('C3 锚点段第 ' + (idx + 1) + ' 行用了 waitFor/导航 API（锚点段只许 page.$ + element.text()，#1917/#1919）');
+      }
+    });
+  }
 
   // C4 判成败只看输出
   must(!/\$LASTEXITCODE/.test(s), 'C4', '出现 $LASTEXITCODE：CLI 退出码恒为 0，判成败不得依赖退出码');
@@ -795,6 +834,9 @@ function scanContract(sources) {
   must(probe.includes("'--expect-page'"), 'C24', '探针未解析 --expect-page 参数');
   must(probe.includes('cold-start-direct'), 'C24', '探针未记录直达达成的机制标识');
   must(probe.includes('direct-page-unsupported'), 'C24', '探针未记录直达未达成的 SKIP reason');
+  // ---- 锚点断言（#1919）执行侧两条文本 pin：计划消费 + 参数拼接（拆掉任一条 ⇒ 门静默不跑锚点）----
+  must(s.includes("Get-Prop $DirectPages 'anchors'"), 'C24', '执行路径未消费 directPages.anchors（锚点表没进 argv，门静默不跑锚点）');
+  must(s.includes("'--assert-selector'"), 'C24', '执行路径未拼接 --assert-selector（锚点断言没接进直达探针 argv）');
 
   // ---- C25（#1690）执行侧：会话注入必须真实接线 ----
   must(s.includes("[string]$Auth = 'auto'"), 'C25', '门脚本缺 -Auth 参数声明（#1690 交付物载体；判到默认值 auto，防前缀掩盖缺席）');
@@ -1052,6 +1094,11 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
   ['C27', (p) => { p.directPages.guestPhase.rationale = '随便写的'; return p; }],
   ['C27', (p) => { p.directPages.criteria = p.directPages.criteria.filter((c) => !c.includes('游客页族')); return p; }],
   ['C27', (p) => { p.directPages.criteria = p.directPages.criteria.filter((c) => !c.includes('landed-elsewhere')); return p; }],
+  // C24 锚点表（#1919）：缺表 / login 锚点漂移 / 非类选择器 ⇒ 计划面红
+  ['C24', (p) => { delete p.directPages.anchors; return p; }],
+  ['C24', (p) => { p.directPages.anchors['pages/login/login'].selector = '.subtitle'; return p; }],
+  ['C24', (p) => { p.directPages.anchors['pages/login/login'].text = '登录'; return p; }],
+  ['C24', (p) => { p.directPages.anchors['pages/login/login'] = { selector: 'view', text: 'x' }; return p; }],
     ];
     cases.forEach(([rule, mutate], caseIndex) => {
       const found = scanPlan(mutate(clone()));
@@ -1081,7 +1128,10 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C1', { ...real, script: real.script.replace(/scripts\\mp-weixin-probe\.mjs/g, 'scripts\\other.mjs') }],
       ['C2', { ...real, script: real.script.replace(/\$auto\.TimedOut/g, '$autoX.TimedOut') }],
       ['C3', { ...real, probe: real.probe.replace(/pageStackNonEmpty/g, 'stackOk') }],
-      ['C3', { ...real, probe: real.probe + '\nconst el = await page.$("view");\n' }],
+      // C3 禁令收窄后的变异面：waitFor 引号形态（全文件禁）/ 锚点段内塞导航 API / 拆 --assert-* 入口
+      ['C3', { ...real, probe: real.probe + '\nawait page.waitFor(".app-title");\n' }],
+      ['C3', { ...real, probe: real.probe.replace('// [C3-anchor-end]', "mp.reLaunch('/pages/index/index');\n// [C3-anchor-end]") }],
+      ['C3', { ...real, probe: real.probe.replace(/'--assert-text'/g, "'--assert-tx'") }],
       ['C4', { ...real, script: real.script + '\nif ($LASTEXITCODE -ne 0) { exit 1 }\n' }],
       ['C4', { ...real, script: real.script.replace(/MP_WEIXIN_PROBE/g, 'PROBE_X') }],
       ['C4', { ...real, script: real.script.replace(/MP_WEIXIN_RESULT/g, 'RESULT_X') }],
@@ -1198,6 +1248,13 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
 
   it('真实文件：零违规', () => {
     expect(scanContract(real)).toEqual([]);
+  });
+
+  it('C3 放行语义锁：page.$+element.text() 锚点写法不得再被判违规（#1917/#1919 正向自检）', () => {
+    // 禁令收窄的镜像断言：若有人把 C3 误改回「禁一切元素级 API」，这条必须先红——
+    // 否则变异自检全绿也只证明「还禁着」，证明不了「放行了」。
+    const withAnchor = { ...real, probe: real.probe + '\nconst el = await page.$(".app-title");\nconst t = await el.text();\n' };
+    expect(scanContract(withAnchor).filter((v) => v.startsWith('C3'))).toEqual([]);
   });
 
   it('C4：门结论只来自探针 JSON 输出，不来自任何退出码', () => {

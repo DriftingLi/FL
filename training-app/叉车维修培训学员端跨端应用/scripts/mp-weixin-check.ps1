@@ -24,8 +24,9 @@
          （本脚本把这一步写死），并把「pageStack 非空」作为**前置断言**（探针里判 exit 2 环境不可用）。
       2. `mp.screenshot()` 挂在 **MiniProgram** 上，不在 Page 上（`page.screenshot is not a function`），
          且不返回内容 ⇒ 产物只能靠落盘 PNG 取。
-      3. `page.$()` 元素级断言在 0.12.1 + Stable v2.01.2510290 组合下**不可用**（挂起 15s 超时）
-         ⇒ 本门只做 page 级导航 + console/exception 判定 + 整页截图，**不得**加元素级断言。
+      3. `page.$()` 元素级断言 2026-09-18 原测判不可用（就绪闸门早跑窗口的产物）→ 2026-10-25 #1917 裁决
+         证伪（`page.$('.app-title')` 8ms 可用）→ #1919 落锁收窄：`page.waitFor(选择器)` 与导航 API 仍禁；
+         `page.$` + `element.text()` 锚点断言放行（仅直达模式，8s 步超时）。
 
     **时序坑位 4（2026-09-12 复测钉死，直接决定这门红还是绿）**：`cli.bat close` 会把项目窗口**一起关掉**，
     而 `cli.bat auto` **不会重开** ⇒ 少了重开这一步，`pageStack` **恒空**（所有 page 级 API 报误导弹错）。
@@ -597,7 +598,7 @@ function New-GatePlan {
         attempts = $ProbeAttempts
         retryDelaySeconds = $ProbeRetryDelaySeconds
         awaitCompletion = $true
-        criteria = @('判成败只看输出 MP_WEIXIN_PROBE（HBuilderX CLI / cli.bat / 探针的退出码都不作判据）', 'pageStack 非空是前置断言，为空判环境不可用', '元素级 API 一律不得引入（page.$ 会挂起 15s）')
+        criteria = @('判成败只看输出 MP_WEIXIN_PROBE（HBuilderX CLI / cli.bat / 探针的退出码都不作判据）', 'pageStack 非空是前置断言，为空判环境不可用', '`page.waitFor(选择器)` 与导航 API 仍禁（#1917 实测挂起 8s / 恒败）、`page.$`+`element.text()` 锚点断言放行（#1919）')
         exit2 = @([ordered]@{ on = 'timeout'; reason = 'probe-timeout' })
     }
 
@@ -618,6 +619,8 @@ function New-GatePlan {
     # 会话注入（#1690）读数：auth=existing|injected|none(reason[:detail-slug])——detail-slug 是
     # HTTP 状态/网络错误/超时的归因类别（#1863）；只在直达循环启用时出现（可选字段）
     $resultFields += [ordered]@{ name = 'auth'; optional = $true }
+    # 锚点断言执行数（#1919）：只在有锚点执行时出现——无锚点跑次 Format-GateMetricLine 跳过它，结果行逐字节不变
+    $resultFields += [ordered]@{ name = 'asserts'; optional = $true }
     $resultFields += [ordered]@{ name = 'log' }
 
     return [ordered]@{
@@ -678,6 +681,13 @@ function New-GatePlan {
                 skip = 'skip(reason=<slug>)'
                 envEarly = 'n/a'
             }
+            # 锚点元素断言（#1919 · #1917 裁决承接）：逐页可选 {selector, text}，探针以
+            # --assert-selector/--assert-text 按序配对执行（page.$ → element.text() 精确比对，8s 步超时）。
+            # 首期只声明 login 页（#1917 裁决实验单验过的锚点）；uni-app x 不能跨组件选择 ⇒ 锚点必须页面级可达，
+            # **新锚点逐页单验后才可加**。不在表里的页 argv 不变（诚实降级面，不新增失败面）。
+            anchors = [ordered]@{
+                'pages/login/login' = [ordered]@{ selector = '.app-title'; text = '叉车维修培训系统' }
+            }
             criteria = @(
                 '直达 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针不得调用 reLaunch/navigateTo',
                 '页身份判据 = 冷启动落地页 pageStack[0] 等于目标路由（与 #1678 真机侧「以进入页面日志为准」同源）',
@@ -687,7 +697,9 @@ function New-GatePlan {
                 '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准',
                 '会话分相判据 = 入口页 ∪ 游客页族（guestPhase.routes），不得用「是否入口页」单相判据：游客页被注 auth 会话会自己跳走，落地页 ≠ 目标页（#1817）',
                 '未达成页若落地到别处，页级 reason 记 landed-elsewhere(<落地页>)，不得一律记 direct-page-unsupported（#1817）',
-                'auth 相页在注入 ok=false 时记 skip(reason=auth-session-unavailable) 且不换页不冷启动（#1863）：路由判据不得独自放行（#1845 实证——注入失败后旧过期 token 复活、路由可通过而内容是业务层 401 态）'
+                'auth 相页在注入 ok=false 时记 skip(reason=auth-session-unavailable) 且不换页不冷启动（#1863）：路由判据不得独自放行（#1845 实证——注入失败后旧过期 token 复活、路由可通过而内容是业务层 401 态）',
+                '锚点断言只走 page.$+element.text()（8s 步超时、精确比对），失败进 failures ⇒ 门红可归因（不得以「环境不可用：」开头，避免被直达循环整组转 exit 2）',
+                '不在 anchors 表的页行为与此前完全一致（argv 不变、不新增失败面）'
             )
         }
         steps = $steps
@@ -1260,6 +1272,13 @@ function Invoke-DirectProbe {
     # 重试判据与旧逐页导航不同：**只在会话级短暂失败上重试**（没拿到结果行 / 没连上）；
     # 一旦连上，页报错/直达未达成都是**真实读数**，重试会把 errorsTotal 重复计数 ⇒ 不重试。
     $argv = @($DirectPages.probeArgv | ForEach-Object { if ("$_" -eq '<page>') { $Page } else { $_ } })
+    # 锚点断言（#1919）：anchors 表命中该页才追加 --assert-selector/--assert-text（按序配对）；
+    # 未命中页 argv 不变（诚实降级面——不新增失败面）。表真源在门计划 directPages.anchors。
+    $anchors = Get-Prop $DirectPages 'anchors'
+    $anchorOne = Get-Prop $anchors $Page
+    if ($anchorOne) {
+        $argv += @('--assert-selector', "$(Get-Prop $anchorOne 'selector')", '--assert-text', "$(Get-Prop $anchorOne 'text')")
+    }
     $json = $null
     $timedOut = $false
     $attempts = [Math]::Max(1, [int]$DirectPages.attempts)
@@ -2029,7 +2048,7 @@ try {
         # 不再写第二处 -Id 字面量——守护 C12/C18 的注入判据按「首个取用点」定位，重复取用会让注入失配）
         $coldSteps = [ordered]@{ open = $openStep; auto = $autoStep; port = $portStep; ready = $readyStep }
         $directStart = Get-Date
-        $agg = @{ errors = 0; exceptions = 0; logs = 0; shots = @(); steps = @(); failures = @() }
+        $agg = @{ errors = 0; exceptions = 0; logs = 0; shots = @(); steps = @(); failures = @(); anchorsTotal = 0 }
         $firstJson = $null
         $missReason = ''
         $missPages = @()
@@ -2130,6 +2149,8 @@ try {
             $agg.shots += @($pj.shots)
             $agg.steps += @($pj.steps)
             $agg.failures += @($pj.failures)
+            # 锚点执行数聚合（#1919）：旧导航组路径的探针 JSON 无 anchors 字段 ⇒ Get-Prop 回 null → 0
+            $agg.anchorsTotal += [int](Get-Prop (Get-Prop $pj 'anchors') 'total')
             $navOne = Get-Prop $pj 'navigation'
             $reached = ("$(Get-Prop $navOne 'status')" -eq 'ok')
             $pngOne = @($pj.shots | Where-Object { Get-Prop $_ 'isPng' })
@@ -2207,6 +2228,8 @@ try {
             navigation = $navAgg
             consoleTail = @()
             elapsedMs = ($directElapsed * 1000)
+            # 锚点执行数（#1919）：随聚合透出，metricValues 据此写 optional asserts 字段
+            anchorsTotal = $agg.anchorsTotal
         }
     } else {
     # 探针重试：开发者工具把项目/小程序拉起来是**异步**的（实测连接与 pageStack 常在第 2–3 次才就绪，
@@ -2219,7 +2242,7 @@ try {
         Write-Log $probe.Output
         Write-Host $probe.Output
         if ($probe.TimedOut) {
-            Write-Host "[error] 探针超时（$($probeStep.timeoutSeconds) 秒）：元素级 API 会静默挂起，本门不得引入它们（#883 坑位 3）。" -ForegroundColor Red
+            Write-Host "[error] 探针超时（$($probeStep.timeoutSeconds) 秒）：``page.waitFor(选择器)`` 与导航 API 会静默挂起仍禁（#883/#1917）；锚点断言自带 8s 步超时不糊成整门超时（#1919）。" -ForegroundColor Red
             Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=probe-timeout'
             exit 2
         }
@@ -2285,6 +2308,9 @@ try {
     if ($navSkip) { $metricValues['navigationSkipReason'] = "$navReason" }
     # 会话注入读数（#1690）：只在直达循环启用且未关闭注入时出现（计划里 optional）
     if ($directList.Count -gt 0 -and $Auth -ne 'off') { $metricValues['auth'] = "$authField" }
+    # 锚点执行数（#1919）：只在有锚点执行时写——无锚点跑次该 token 缺席、结果行逐字节不变（计划里 optional）
+    $anchorsTotal = [int](Get-Prop $probeJson 'anchorsTotal')
+    if ($anchorsTotal -gt 0) { $metricValues['asserts'] = "$anchorsTotal" }
     $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"
