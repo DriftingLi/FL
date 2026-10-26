@@ -885,6 +885,10 @@ function Invoke-BehaviorLeg {
     # ---- 拼一份与 jest 同形的汇总（最后一个匹配者 = 本腿的总量，与拆分前的取数口径一致）----
     $wall = [Math]::Round($timer.Elapsed.TotalSeconds, 3)
     $passedSuites = $attempted - $failedSuites
+    # 续跑汇总只覆盖本次实际执行的套件 —— 不标注会被人当成整腿证据。
+    if ($ResumeFrom -gt 0) {
+        & $append "Resumed: partial run (from suite $ResumeFrom of $planned, skipped $($ResumeFrom - 1)) - summary below covers only this run's suites`r`n"
+    }
     if ($failedSuites -gt 0) {
         & $append "Test Suites: $failedSuites failed, $passedSuites passed, $attempted total`r`n"
     } else {
