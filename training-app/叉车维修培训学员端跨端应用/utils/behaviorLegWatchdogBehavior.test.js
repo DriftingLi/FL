@@ -24,6 +24,23 @@ jest.setTimeout(180000);
 const ROOT = path.resolve(__dirname, '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'dev-finish.ps1');
 
+// ⚠️ Windows-only：被测物 dev-finish.ps1 用 ComSpec 起子进程（cmd /d /s /c），且 ubuntu CI 上没有 pwsh
+//    ⇒ 平台不满足时整组 skip 并打印原因。fail-closed 只保留给「pwsh 在、但脚本抛错」。
+const hasPwsh = (() => {
+  if (process.platform !== 'win32') return false;
+  try {
+    execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const describeWin = hasPwsh ? describe : describe.skip;
+if (!hasPwsh) {
+  // eslint-disable-next-line no-console
+  console.warn('[#1994] 跳过看门狗守护：platform=' + process.platform + '（dev-finish.ps1 是 Windows 工具）');
+}
+
 const FAKE_JEST = [
   "'use strict';",
   "const fs = require('fs');",
@@ -148,7 +165,7 @@ function runScenarios() {
   return JSON.parse(fs.readFileSync(resultPath, 'utf8'));
 }
 
-describe('行为腿看门狗 / 总超时 / 断点续跑（#1994，假 jest + 假套件，真执行真产物）', () => {
+describeWin('行为腿看门狗 / 总超时 / 断点续跑（#1994，假 jest + 假套件，真执行真产物）', () => {
   let ctx;
   beforeAll(() => { ctx = runScenarios(); });
 
