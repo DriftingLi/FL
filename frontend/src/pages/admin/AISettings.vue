@@ -108,18 +108,7 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right" align="center">
           <template #default="{ row }">
-            <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <UiButton variant="primary" size="small">
-                操作<UiIcon name="chevron-down" class="el-icon--right" />
-              </UiButton>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="test">测试</el-dropdown-item>
-                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>
@@ -175,7 +164,6 @@
 </template>
 
 <script setup lang="ts">
-import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AISettings' })
@@ -194,6 +182,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])
@@ -394,6 +383,15 @@ async function handleBind(featureKey: string, configId: number) {
 onMounted(() => {
   loadAll()
 })
+
+/** 行内「操作」菜单：测试 / 编辑 / 删除走菜单收纳（登记表「菜单收纳」行） */
+function actionItems(_row: AIConfig): UiMoreMenuItem[] {
+  return [
+    { key: 'test', label: '测试' },
+    { key: 'edit', label: '编辑' },
+    { key: 'delete', label: '删除', divided: true }
+  ]
+}
 </script>
 
 <style scoped>

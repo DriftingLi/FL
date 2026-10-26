@@ -61,17 +61,7 @@
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
             <template v-if="row.status === 'pending'">
-              <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-                <UiButton variant="primary" link size="small">
-                  操作<UiIcon name="chevron-down" class="el-icon--right" />
-                </UiButton>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="approve">通过</el-dropdown-item>
-                    <el-dropdown-item command="reject">驳回</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+              <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
             </template>
             <UiTag v-else :tone="row.status === 'approved' ? 'success' : 'danger'" size="small">
               {{ row.status === 'approved' ? '已通过' : '已拒绝' }}
@@ -121,6 +111,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 // 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
 const {
@@ -193,6 +184,14 @@ function openReject(row: ProfileChangeRequest) {
 /* 驳回提交已由 useRejectReasonDialog 的 submit（解构为 reject）承载 */
 
 onMounted(load)
+
+/** 行内「操作」菜单：审核动作（通过 / 驳回）走菜单收纳 */
+function actionItems(_row: ProfileChangeRequest): UiMoreMenuItem[] {
+  return [
+    { key: 'approve', label: '通过' },
+    { key: 'reject', label: '驳回' }
+  ]
+}
 </script>
 
 <style scoped>

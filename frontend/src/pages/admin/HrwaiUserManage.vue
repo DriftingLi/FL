@@ -19,6 +19,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -158,6 +159,15 @@ async function handleResetPwd() {
 onMounted(() => {
   table.load()
 })
+
+/** 行内「操作」菜单：低频治理动作（重置密码 / 启停 / 删除）走菜单收纳（登记表「菜单收纳」行） */
+function actionItems(row: HrwaiUser): UiMoreMenuItem[] {
+  return [
+    { key: 'resetPwd', label: '重置密码' },
+    { key: 'toggle', label: row.status === 1 ? '禁用' : '启用' },
+    { key: 'delete', label: '删除', divided: true }
+  ]
+}
 </script>
 
 <template>
@@ -226,18 +236,7 @@ onMounted(() => {
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-            <UiButton variant="primary" link size="small">
-              操作<UiIcon name="chevron-down" class="el-icon--right" />
-            </UiButton>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
-                <el-dropdown-item command="toggle">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
-                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
         </template>
       </el-table-column>
     </el-table>

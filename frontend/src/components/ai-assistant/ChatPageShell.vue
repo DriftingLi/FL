@@ -156,17 +156,7 @@
               {{ (authStore.userInfo?.username || '?').charAt(0) }}
             </div>
             <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-sm font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline">{{ displayName }}</router-link>
-            <el-dropdown trigger="click" @command="handleUserCommand">
-              <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多" aria-label="更多">
-                <UiIcon name="ellipsis" :size="14" />
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="profile">个人资料</el-dropdown-item>
-                  <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <UiMoreMenu :items="userMenuItems" @select="handleUserCommand" />
           </div>
         </template>
         <template v-else>
@@ -396,6 +386,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/icons/registry'
 import UiIcon from '@/components/ui/UiIcon.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 // AI 聊天壳（#398）：顶部栏/会话侧栏/消息列表/输入区/自动滚底为壳实现，
 // 差异槽位化——主页模式选择器（input-footer-left）与模型告警（input-extra）、
 // 功能页图片队列（input-above/input-prefix）与快捷选项（welcome）。
@@ -665,6 +656,12 @@ async function handleDeleteSession(id: number) {
 function goLogin() {
   router.push({ ...href('Login'), query: { redirect: props.loginRedirect } })
 }
+
+/** 侧栏用户行的「⋯」：个人资料 / 退出登录（低频动作走菜单收纳） */
+const userMenuItems: UiMoreMenuItem[] = [
+  { key: 'profile', label: '个人资料' },
+  { key: 'logout', label: '退出登录', divided: true }
+]
 
 async function handleUserCommand(cmd: string) {
   if (cmd === 'profile') {

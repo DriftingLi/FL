@@ -147,22 +147,7 @@
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <UiButton variant="primary" link size="small">
-                操作<UiIcon name="chevron-down" class="el-icon--right" />
-              </UiButton>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                  <el-dropdown-item command="toggle">
-                    {{ row.status === 1 ? '下架' : '上架' }}
-                  </el-dropdown-item>
-                  <el-dropdown-item v-if="canSortCourses" command="moveUp">上移</el-dropdown-item>
-                  <el-dropdown-item v-if="canSortCourses" command="moveDown">下移</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
           </template>
         </el-table-column>
         <template #empty>
@@ -228,6 +213,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 const submitting = ref(false)
 
@@ -552,6 +538,20 @@ onMounted(() => {
   loadCertificateTemplates()
   loadCredentials()
 })
+
+/** 行内「操作」菜单：编辑 / 上下架 / 排序 / 删除走菜单收纳（登记表「菜单收纳」行） */
+function actionItems(row: AdminCourseItem): UiMoreMenuItem[] {
+  const items: UiMoreMenuItem[] = [
+    { key: 'edit', label: '编辑' },
+    { key: 'toggle', label: row.status === 1 ? '下架' : '上架' }
+  ]
+  // 排序项只在有排序能力时出现（调用方判可见性，组件不认识语义）
+  if (canSortCourses.value) {
+    items.push({ key: 'moveUp', label: '上移' }, { key: 'moveDown', label: '下移' })
+  }
+  items.push({ key: 'delete', label: '删除', divided: true })
+  return items
+}
 </script>
 
 <style scoped>
