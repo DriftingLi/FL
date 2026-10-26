@@ -2,9 +2,9 @@
 /**
  * 无障碍档位守卫（#1892）：把「压不住 4.5:1 的文字色」挡在源码层。
  *
- * 背景：前端 8 个守卫（el-controls / api-seam / async-section / api-consumers /
+ * 背景：本守卫出现前，已有的 8 个守卫（el-controls / api-seam / async-section / api-consumers /
  * ai-assistant-send / render-error-face / catalog-sort / comment-cleanliness）没有一个看颜色，
- * 对比度只能靠人眼与临时审计。token 矩阵锁在 `frontend/src/assets/styles/__tests__/contrast.spec.ts`
+ * 对比度只能靠人眼与临时审计。现行守卫清单（11 个，含本守卫）与增量门口径见 docs/agents/checks.md。token 矩阵锁在 `frontend/src/assets/styles/__tests__/contrast.spec.ts`
  * （判据是全局 token 之间的关系，不是逐行源码模式）；本守卫只管**用法**：
  *
  *   1. `text-ink-muted` —— 该档在浅色 2.45:1、深色 3.07:1，当正文用读不清；正文用 `text-ink-3`（≥4.5）。
