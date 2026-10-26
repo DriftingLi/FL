@@ -2,7 +2,7 @@
   <div class="mx-auto max-w-[960px] p-5">
     <div class="mb-3">
       <UiButton variant="text" size="small" @click="goBack">
-        <el-icon><ArrowLeft /></el-icon>
+        <UiIcon name="arrow-left" />
         <span class="ml-1">返回</span>
       </UiButton>
     </div>
@@ -55,11 +55,11 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // 内容精选详情（ADR-0049 决策 4）：搜索结果与收藏页的「内容精选」落点，
 // 自包含在训练域内 —— 不把学员带去官网门户（独立仓，且会离开工作区）。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { featuredApi } from '@/api/featured'
 import type { FeaturedContentDetailDTO } from '@/api/generated/featured'

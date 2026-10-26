@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 页面大标题：路由级页面顶部。
  * `back` 为 true 时显示返回按钮，点击事件交给调用方决定（前进/后退/go(-1) 语义各异）。
@@ -23,7 +24,7 @@ const emit = defineEmits<{ back: [] }>()
       class="mb-2 inline-flex items-center gap-1 rounded-ctl px-1 py-0.5 text-sm text-ink-3 transition-colors duration-150 hover:bg-canvas hover:underline"
       @click="emit('back')"
     >
-      <el-icon><ArrowLeft /></el-icon>
+      <UiIcon name="arrow-left" />
       <span>返回</span>
     </button>
 

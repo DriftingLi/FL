@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 管理端标签栏（#1620，ADR-0073）。
  *
@@ -14,7 +15,6 @@
  */
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Close } from '@element-plus/icons-vue'
 
 import { adminLandingPage, tabOwnerOf, pageTitleOf } from '@/config/navigation'
 import { holdsCapability } from '@/utils/authzRuntime'
@@ -105,7 +105,7 @@ function closeTab(tab: AdminTab): void {
           :aria-label="`关闭 ${tab.title}`"
           @click.stop="closeTab(tab)"
         >
-          <el-icon :size="12"><Close /></el-icon>
+          <UiIcon name="x" :size="12" />
         </button>
       </div>
       <template #dropdown>

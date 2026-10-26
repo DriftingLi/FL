@@ -55,7 +55,7 @@
           >
             <img v-if="form.cover_image" :src="resolveFileUrl(form.cover_image)" class="cover-preview" alt="封面预览" />
             <div v-else class="cover-placeholder">
-              <el-icon><Plus /></el-icon>
+              <UiIcon name="plus" />
               <span>点击上传封面</span>
             </div>
           </UiUpload>
@@ -146,9 +146,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'

@@ -31,7 +31,7 @@
             class="inline-flex items-center gap-1 rounded-ctl bg-ui-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-ui-600"
           >
             管理课程
-            <el-icon><ArrowRight /></el-icon>
+            <UiIcon name="arrow-right" />
           </router-link>
         </div>
       </section>
@@ -51,8 +51,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
-import { ArrowRight } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import QuickCard from '@/components/dashboard/QuickCard.vue'

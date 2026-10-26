@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 加载指示：自写的块级/行内占位，用来替代一部分全屏 `v-loading`
  * （全屏遮罩会打断阅读节奏，局部占位能让页面骨架先立起来）。
@@ -27,9 +28,7 @@ const MIN_H: Record<string, string> = { sm: 'min-h-20', md: 'min-h-32', lg: 'min
     role="status"
     aria-live="polite"
   >
-    <el-icon class="animate-spin text-ui-soft-ink" :class="ICON[props.size]">
-      <Loading />
-    </el-icon>
+    <UiIcon name="loader-circle" class="animate-spin text-ui-soft-ink" :class="ICON[props.size]" />
     <span v-if="props.tip" class="text-xs text-ink-3">{{ props.tip }}</span>
   </div>
 </template>

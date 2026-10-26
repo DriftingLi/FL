@@ -18,17 +18,12 @@ import './assets/styles/tailwind.css'
 
 import App from './App.vue'
 import router from './router'
-import icons from './icons'
 import { useAuthStore } from './stores/auth'
 import { useThemeStore } from './stores/theme'
 import { setupMarkstreamRuntime } from './utils/markstreamRuntime'
 
 const app = createApp(App)
 const pinia = createPinia()
-
-for (const [key, component] of Object.entries(icons)) {
-  app.component(key, component)
-}
 
 app.use(pinia)
 

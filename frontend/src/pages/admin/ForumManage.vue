@@ -9,7 +9,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">论坛管理</span>
-          <UiButton :icon="Refresh" circle aria-label="刷新" @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
+          <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="activeMainTab === 'reports' ? loadReports() : loadList()"/>
         </div>
       </template>
 
@@ -104,7 +104,7 @@
           @keyup.enter="handleSearch"
         >
           <template #prefix>
-            <el-icon><Search /></el-icon>
+            <UiIcon name="search" />
           </template>
         </el-input>
         </template>
@@ -274,13 +274,13 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'ForumManage' })
 
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Search } from '@element-plus/icons-vue'
 import {
   adminForumApi,
   forumTabQuery,

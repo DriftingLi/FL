@@ -2,7 +2,7 @@
   <div class="ai-settings-page">
     <div class="page-header">
       <h2>AI 配置</h2>
-      <UiButton variant="primary" :icon="Plus" @click="openCreateDialog">新建配置</UiButton>
+      <UiButton variant="primary" :icon="'plus'" @click="openCreateDialog">新建配置</UiButton>
     </div>
 
     <!-- AI助手双模式绑定（单绑×2，与其它功能分开） -->
@@ -110,7 +110,7 @@
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
               <UiButton variant="primary" size="small">
-                操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                操作<UiIcon name="chevron-down" class="el-icon--right" />
               </UiButton>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -175,6 +175,7 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AISettings' })
@@ -186,7 +187,6 @@ import { AI_ASSISTANT_MODE_KEYS } from '@/config/aiFeatures'
 // 这里先解成两个具名常量，模板只引用标识符。
 const [MODE_KEY_NORMAL, MODE_KEY_EXPERT] = AI_ASSISTANT_MODE_KEYS
 import { ElMessage, type FormInstance, type FormItemRule } from 'element-plus'
-import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type AIConfig, type FeatureBinding } from '@/api/admin'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'

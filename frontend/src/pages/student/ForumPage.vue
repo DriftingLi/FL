@@ -2,12 +2,12 @@
   <div class="mx-auto max-w-[960px] px-4 pb-10">
     <div class="forum-header mb-4 flex items-start justify-between gap-4 max-md:flex-col">
       <h1 class="m-0 mb-1.5 text-2xl font-semibold text-ink">学员论坛</h1>
-      <UiButton variant="primary" v-if="mainTab === 'question'" size="large" :icon="EditPen" @click="goAsk">
+      <UiButton variant="primary" v-if="mainTab === 'question'" size="large" :icon="'square-pen'" @click="goAsk">
         我要提问
       </UiButton>
       <!-- 经验 Tab 是只读策展流（ADR-0040）：学员不能自称考经，故不提供发布入口；
            发布者只能在讨论/提问之间选，想被认定经验要先发成讨论帖再由管理端认定。 -->
-      <UiButton v-else-if="mainTab !== 'experience'" variant="primary" size="large" :icon="EditPen" @click="openCreateDialog">
+      <UiButton v-else-if="mainTab !== 'experience'" variant="primary" size="large" :icon="'square-pen'" @click="openCreateDialog">
         发布新帖
       </UiButton>
     </div>
@@ -15,7 +15,7 @@
     <!-- 每日打卡入口（ADR-0028：打卡已迁独立页 /training/check-in，论坛只留跳转） -->
     <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="goCheckIn">
       <div class="flex items-center gap-2 text-[13px] text-ink">
-        <el-icon class="text-base text-ui-soft-ink"><Calendar /></el-icon>
+        <UiIcon name="calendar" class="text-base text-ui-soft-ink" />
         <span>每日打卡赚积分</span>
       </div>
       <UiButton variant="text" size="small">去看看</UiButton>
@@ -68,7 +68,7 @@
           ]"
           @update:model-value="(v: string) => { topicSort = v as 'latest' | 'hot'; handleSortChange() }"
         />
-        <UiButton size="small" :icon="topicOrder === 'asc' ? ArrowUp : ArrowDown" @click="toggleTopicOrder">
+        <UiButton size="small" :icon="topicOrder === 'asc' ? 'chevron-up' : 'chevron-down'" @click="toggleTopicOrder">
           {{ topicOrder === 'asc' ? '正序' : '逆序' }}
         </UiButton>
       </div>
@@ -175,16 +175,16 @@
               <span>{{ formatRelativeTime(topic.created_at) }}</span>
               <span class="ml-auto flex items-center gap-1">
                 <span v-if="topic.images && topic.images.length > 0" class="mr-2.5 inline-flex items-center gap-0.5 text-warn">
-                  <el-icon><Picture /></el-icon>
+                  <UiIcon name="image" />
                   {{ topic.images.length }}
                 </span>
-                <el-icon><View /></el-icon>
+                <UiIcon name="eye" />
                 {{ topic.view_count }}
                 <span class="ml-2.5 inline-flex items-center gap-0.5 text-bad">
                   <span class="text-xs leading-none">{{ topic.liked_by_me ? '♥' : '♡' }}</span>
                   {{ topic.likes_count || 0 }}
                 </span>
-                <el-icon class="ml-2.5"><ChatDotRound /></el-icon>
+                <UiIcon name="message-circle" class="ml-2.5" />
                 {{ topic.reply_count }}
               </span>
             </div>
@@ -210,7 +210,7 @@
     <UiDialog
       v-model="createDialogVisible"
       title="发布新帖"
-      :icon="EditPen"
+      :icon="'square-pen'"
       width="640px"
       confirm-text="发布"
       :confirm-loading="postForm?.submitting"
@@ -227,9 +227,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { EditPen, View, ChatDotRound, Picture, Calendar, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import { forumApi, forumTabQuery, type ForumCategory, type ForumTopicItem, type MyReplyItem } from '@/api/forum'
 import { formatRelativeTime } from '@/utils/format'
 import { markdownToPlainText } from '@/utils/markdownText'

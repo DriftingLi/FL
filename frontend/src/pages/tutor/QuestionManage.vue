@@ -83,7 +83,7 @@
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
               <UiButton variant="primary" link size="small">
-                操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                操作<UiIcon name="chevron-down" class="el-icon--right" />
               </UiButton>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -151,9 +151,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'

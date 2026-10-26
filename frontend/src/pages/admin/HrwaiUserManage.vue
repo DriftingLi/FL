@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'HrwaiUserManage' })
@@ -7,7 +8,6 @@ defineOptions({ name: 'HrwaiUserManage' })
 // 对应后端 /api/admin/hrwai-users/*(统一管理 hrwai_users 表)
 // 合并原学员管理与评估用户管理,支持分页列表 + 关键词搜索 + 新增 + 编辑 + 重置密码 + 启用/禁用 + 删除
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { adminApi, type HrwaiUser } from '@/api/admin'
@@ -165,7 +165,7 @@ onMounted(() => {
     <div class="page-header">
       <h2>HRWAI 用户管理</h2>
       <UiButton variant="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon> 新增用户
+        <UiIcon name="plus" /> 新增用户
       </UiButton>
     </div>
 
@@ -181,7 +181,7 @@ onMounted(() => {
         @keyup.enter="search"
       >
         <template #prefix>
-          <el-icon><Search /></el-icon>
+          <UiIcon name="search" />
         </template>
       </el-input>
       <UiButton variant="primary" @click="search">搜索</UiButton>
@@ -228,7 +228,7 @@ onMounted(() => {
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
             <UiButton variant="primary" link size="small">
-              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              操作<UiIcon name="chevron-down" class="el-icon--right" />
             </UiButton>
             <template #dropdown>
               <el-dropdown-menu>

@@ -17,7 +17,6 @@
  * 否则没宽度的边会被渲染成 3px。
  */
 import { computed, ref } from 'vue'
-import { Promotion } from '@element-plus/icons-vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
@@ -139,7 +138,7 @@ function onKeydown(event: KeyboardEvent) {
     <div class="mt-2 flex items-center justify-end gap-2">
       <UiButton
         variant="primary"
-        :icon="Promotion"
+        :icon="'send'"
         circle
         size="small"
         :loading="props.submitting"

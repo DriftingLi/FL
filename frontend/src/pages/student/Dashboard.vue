@@ -38,14 +38,14 @@
               class="inline-flex items-center gap-1 rounded-ctl bg-ui-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-ui-600"
             >
               继续学习：{{ continueLearning.last_chapter_title || continueLearning.course_name }}
-              <el-icon><ArrowRight /></el-icon>
+              <UiIcon name="arrow-right" />
             </router-link>
             <router-link
               :to="href('CourseList')"
               class="inline-flex items-center gap-1 rounded-ctl border border-line-strong bg-panel px-4 py-2 text-sm text-ink-2 transition-colors duration-150 hover:border-ui-300 hover:underline"
             >
               浏览全部课程
-              <el-icon><ArrowRight /></el-icon>
+              <UiIcon name="arrow-right" />
             </router-link>
           </div>
         </div>
@@ -57,7 +57,7 @@
           label="学习时长"
           :value="overviewStats.minutes"
           unit="分钟"
-          icon="Clock"
+          icon="clock"
           tone="brand"
           :loading="statsLoading"
           count-to
@@ -66,7 +66,7 @@
           label="活跃天数"
           :value="overviewStats.activeDays"
           unit="天"
-          icon="Calendar"
+          icon="calendar"
           tone="ok"
           :loading="statsLoading"
           count-to
@@ -75,7 +75,7 @@
           label="日均学习"
           :value="overviewStats.perDay"
           unit="分钟/天"
-          icon="TrendCharts"
+          icon="chart-line"
           tone="warn"
           :loading="statsLoading"
           count-to
@@ -129,8 +129,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
-import { ArrowRight } from '@element-plus/icons-vue'
 import type { RouteLocationRaw } from 'vue-router'
 import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
