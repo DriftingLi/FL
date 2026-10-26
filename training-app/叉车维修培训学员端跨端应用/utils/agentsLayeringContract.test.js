@@ -9,7 +9,8 @@
  *   L1 常驻预算  —— `AGENTS.md` 长度 ≤ `residentMax`，**只降不升**的棘轮（同 guardClassification H2 的写法）
  *   L2 不抄写    —— `AGENTS.md` 不得含与根 `AGENTS.md` / 根 `docs/agents/*.md` **逐字相同**的长行；
  *                   例外只有 `DUP_ALLOWED` 那几条「指向同一真源的指针句」，且登记必须精确
- *                   （多抄一条即红、登记的行不再重复也即红）。先例：ADR-0020 ④-6（同源模板残骸）
+ *                   （多抄一条即红、登记的行不再重复也即红）；表格分隔行按形态排除（#1955）。
+ *                   先例：ADR-0020 ④-6（同源模板残骸）
  *   L3 命令必注册 —— `AGENTS.md` 点名的每条 `npm run X` 必须真存在于某个 `package.json` 的 scripts 里
  *                   （移动端自己的或 `frontend/` 的——本文档会点到别的栈的命令）。
  *                   先例：ADR-0020 ④-6 校正的「**本项目没有这个脚本**」那类残骸
@@ -51,11 +52,18 @@ const RESIDENT_MAX = 16000;
 const DUP_MIN_LEN = 20;
 
 /**
- * 表头分隔线（`| --- | --- |`）是 markdown 结构件不是内容：按 :50 注释立的意图
- * （分隔线逐字相同不构成抄写）用形状滤掉。#1938 合入后 4 列表分隔线两侧同现，
- * 长度 26 越过 DUP_MIN_LEN 造成误报——补形状过滤，不放宽长度阈值（长句真抄写仍要判红）。
+ * Markdown 表格分隔行（`| --- |:---:|`）是版面结构、不是内容，长度门槛管不到它
+ * （4 列分隔行就有 25 字符，比多数真抄写行还长）⇒ 单独按形态排除（#1955）。
  */
-const TABLE_SEP_RE = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
+function isTableSeparator(t) {
+  if (!t.includes('|')) return false;
+  const cells = t
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((c) => c.trim());
+  return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+}
 
 /**
  * L2 例外登记：与根层逐字相同**且应当**逐字相同的指针句（一句话把读者送去真源）。
@@ -119,13 +127,13 @@ function scan(s) {
   for (const [name, text] of Object.entries(s.rootDocs)) {
     for (const raw of text.split('\n')) {
       const t = raw.trim();
-      if (t.length >= DUP_MIN_LEN && !TABLE_SEP_RE.test(t) && !origin.has(t)) origin.set(t, name);
+      if (t.length >= DUP_MIN_LEN && !isTableSeparator(t) && !origin.has(t)) origin.set(t, name);
     }
   }
   const dup = new Set();
   for (const raw of s.agents.split('\n')) {
     const t = raw.trim();
-    if (t.length >= DUP_MIN_LEN && !TABLE_SEP_RE.test(t) && origin.has(t)) dup.add(t);
+    if (t.length >= DUP_MIN_LEN && !isTableSeparator(t) && origin.has(t)) dup.add(t);
   }
   for (const t of dup) {
     if (!allowed.includes(t)) v.push(`L2: 与 ${origin.get(t)} 逐字同行的长句（第二真源）：${t.slice(0, 48)}`);
@@ -304,6 +312,28 @@ describe('AGENTS.md 分层守护：检测有效性（注入违规必红，防空
   test.each(cases)('%s：%s', (id, _why, mutate) => {
     const s0 = synth();
     expect(of(scan(synth(mutate(s0))), id).length).toBeGreaterThan(0);
+  });
+
+  test('L2：表格分隔行逐字相同不判红（版面结构不是内容，#1955）', () => {
+    const s0 = synth();
+    const sep = '| --- | --- | --- | --- |';
+    const s = synth({
+      agents: `${s0.agents}\n${sep}`,
+      rootDocs: { ...s0.rootDocs, 'docs/agents/ui-conventions.md': `# 约定\n${sep}\n` },
+    });
+    expect(of(scan(s), 'L2')).toEqual([]);
+  });
+
+  test('L2：放宽只放过分隔行 —— 与表格同抄的真长句仍判红（成对取证）', () => {
+    const s0 = synth();
+    const sep = '| --- | --- | --- | --- |';
+    const s = synth({
+      agents: `${s0.agents}\n${sep}\n${BRANCH_ONLY}`,
+      rootDocs: { ...s0.rootDocs, 'docs/agents/ui-conventions.md': `# 约定\n${sep}\n` },
+    });
+    const hits = of(scan(s), 'L2');
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toContain(BRANCH_ONLY.slice(0, 20));
   });
 
   test('L5：ADR 命名规约的 NNNN 占位符不算悬空引用', () => {
