@@ -179,7 +179,12 @@ function New-TestFailureSummary {
         [int]$ExitCode = 1,
         [int]$MaxBytes = 2048,
         [int]$MaxEntries = 30,
-        [int]$DetailLines = 2
+        [int]$DetailLines = 2,
+        # #1996：脏树关联（只作可见性，不作判据）。由**调用点**喂 git status --porcelain 的原始行，
+        # 函数本体不跑 git（与 HeadSha / WorktreeState 同一条边界，#1556）；$ProjectDir 只用于
+        # 「守护源码点名了某个 dirty 文件」这条命中规则，取不到就只留 token 规则。
+        [string[]]$DirtyFiles = @(),
+        [string]$ProjectDir = ''
     )
     if ($ExitCode -eq 0) { return $null }
 
@@ -256,7 +261,134 @@ function New-TestFailureSummary {
     # 只有说明、没有用例条目的形态 —— 那时原因拿到了，不该报「什么都没抓到」。
     if ($suites.Count -eq 0 -and $cases.Count -eq 0 -and $notes.Count -eq 0) { $missing.Add('失败套件 / 失败用例名') }
 
-    $head = @(
+    # ---- 脏树关联（#1996）：只作可见性，不作判据 ----
+    # 存在理由：脏树（未提交的 AGENTS.md 一行改动）能让 agentsLayeringContract 判红，而摘要只写
+    # 「1 个套件失败」⇒ 读者要自己考古才排除「代码回归」。这里给出**启发式**关联，措辞固定
+    # 「可能相关，不作判据」：判红仍只看 exit code（#1546：摘要只作可见性），关联错/漏都不改结论。
+    #
+    # 两条命中规则：
+    #   ① 套件名 token ↔ dirty 路径 / 文件名 token（camelCase 与 kebab 都拆开，大小写无关）；
+    #   ② 守护源码里逐字点名了该 dirty 文件（文件名或相对路径）——「读真实文件的守护」这一族
+    #      套件名往往与文件名不共享 token（如 agentsLayeringContract ↔ AGENTS.md），故补这条。
+    # dirty 行来自调用点的 `git status --porcelain`（本函数不跑 git，与 HeadSha / WorktreeState 同一边界）。
+    # 只列前 $assocMaxHits 个命中、每个套件最多 $assocPerSuite 个文件 ⇒ 关联段自身不会撑爆 2 KB。
+    $assocMaxHits = 8
+    $assocPerSuite = 5
+    $dirtyEntries = [System.Collections.Generic.List[object]]::new()
+    $assocLines = [System.Collections.Generic.List[string]]::new()
+    if (@($DirtyFiles).Count -gt 0) {
+        $stopTokens = @('test', 'tests', 'spec', 'contract', 'behavior', 'behaviour', 'utils', 'util',
+            'index', 'jest', 'config', 'script', 'scripts', 'gate', 'result', 'suite', 'case', 'cases',
+            'file', 'files', 'main', 'src', 'lib', 'docs', 'md', 'js', 'ts', 'mjs', 'cjs', 'json', 'ps1')
+        $tokenize = {
+            param([string]$Text)
+            if ([string]::IsNullOrWhiteSpace($Text)) { return @() }
+            $s = "$Text"
+            # ⚠️ 必须用 `-creplace`（区分大小写）：`-replace` 默认忽略大小写，`[A-Z]` 会连小写一起匹配，
+            #    于是 "agentsLayeringContract" 被拆成 a/ge/nt/… 而不是 agents/Layering/Contract（本票实测踩过）。
+            $s = $s -creplace '([a-z0-9])([A-Z])', '$1 $2'
+            $s = $s -creplace '([A-Z]+)([A-Z][a-z])', '$1 $2'
+            $out = [System.Collections.Generic.List[string]]::new()
+            foreach ($t in [regex]::Split($s.ToLowerInvariant(), '[^a-z0-9]+')) {
+                if ($t.Length -ge 3 -and $stopTokens -notcontains $t) { $out.Add($t) }
+            }
+            return $out.ToArray()
+        }
+        foreach ($raw in @($DirtyFiles)) {
+            if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+            $dline = "$raw".TrimEnd()
+            if ($dline.Length -lt 4) { continue }
+            $dstatus = $dline.Substring(0, 2).Trim()
+            $drel = $dline.Substring(3).Trim()
+            if ($drel -match '^(.+) -> (.+)$') { $drel = $matches[2].Trim() }
+            if ($drel.Length -ge 2 -and $drel.StartsWith('"') -and $drel.EndsWith('"')) {
+                $drel = $drel.Substring(1, $drel.Length - 2)
+                $drel = $drel -replace '\\"', '"' -replace '\\\\', '\'
+            }
+            if (-not $drel) { continue }
+            $dleaf = Split-Path -Leaf $drel
+            $dstem = [System.IO.Path]::GetFileNameWithoutExtension($dleaf)
+            $dtokens = @(@(& $tokenize $drel) + @(& $tokenize $dstem) | Sort-Object -Unique)
+            $dirtyEntries.Add([pscustomobject]@{ Status = $dstatus; Rel = $drel; Leaf = $dleaf; Tokens = $dtokens })
+        }
+
+        if ($dirtyEntries.Count -gt 0) {
+            $suiteRels = [System.Collections.Generic.List[string]]::new()
+            $seenSuiteRel = [System.Collections.Generic.HashSet[string]]::new()
+            foreach ($s in $suites) {
+                if ("$s" -match '(?:^|\s)FAIL\s+(\S+\.test\.[A-Za-z0-9]+)') {
+                    $srel = $matches[1]
+                    if ($seenSuiteRel.Add($srel)) { $null = $suiteRels.Add($srel) }
+                }
+            }
+            $assocHits = [ordered]@{}
+            $matchedRels = [System.Collections.Generic.HashSet[string]]::new()
+            foreach ($srel in $suiteRels) {
+                $sleaf = Split-Path -Leaf $srel
+                $sstem = $sleaf -replace '\.test\.[^.]+$', ''
+                $stokens = @(& $tokenize $sstem)
+                $guardSrc = ''
+                if ($ProjectDir) {
+                    $guardPath = $(if ([System.IO.Path]::IsPathRooted($srel)) { $srel } else { Join-Path $ProjectDir $srel })
+                    try {
+                        if (Test-Path -LiteralPath $guardPath -PathType Leaf) {
+                            $guardSrc = [System.IO.File]::ReadAllText($guardPath, $utf8)
+                        }
+                    }
+                    catch { $guardSrc = '' }
+                }
+                $hits = [System.Collections.Generic.List[object]]::new()
+                foreach ($d in $dirtyEntries) {
+                    $why = ''
+                    $common = @($stokens | Where-Object { $d.Tokens -contains $_ })
+                    if ($common.Count -gt 0) { $why = "套件名 token 命中：$($common -join '/')" }
+                    elseif ($guardSrc -and ($guardSrc.Contains($d.Leaf) -or $guardSrc.Contains($d.Rel))) {
+                        $why = '守护源码点名该文件'
+                    }
+                    if ($why -and $hits.Count -lt $assocPerSuite) {
+                        $hits.Add([pscustomobject]@{ Status = $d.Status; Rel = $d.Rel; Why = $why })
+                        $null = $matchedRels.Add($d.Rel)
+                    }
+                }
+                if ($hits.Count -gt 0) { $assocHits[$srel] = $hits }
+            }
+
+            $assocLines.Add('可能相关的未提交改动（启发式：套件名 token / 守护源码点名的文件 ↔ git status；可能相关，不作判据）：')
+            if ($assocHits.Count -eq 0) {
+                $assocLines.Add("  未找到与失败套件可能相关的未提交改动（可能相关，不作判据）；本次未提交改动共 $($dirtyEntries.Count) 个。")
+            }
+            else {
+                $shownHits = 0
+                $hiddenHits = 0
+                foreach ($kv in $assocHits.GetEnumerator()) {
+                    if ($shownHits -ge $assocMaxHits) { $hiddenHits += $kv.Value.Count; continue }
+                    $assocLines.Add("  $($kv.Key)（$($kv.Value.Count) 个）：")
+                    foreach ($h in $kv.Value) {
+                        if ($shownHits -ge $assocMaxHits) { $hiddenHits++; continue }
+                        $hitLine = "    - $(if ($h.Status) { "$($h.Status) " } else { '' })$($h.Rel)（$($h.Why)）"
+                        if ($hitLine.Length -gt 180) { $hitLine = $hitLine.Substring(0, 180) + '...' }
+                        $assocLines.Add($hitLine)
+                        $shownHits++
+                    }
+                }
+                if ($hiddenHits -gt 0) { $assocLines.Add("  ...另有 $hiddenHits 个关联未列出（可能相关，不作判据）。") }
+            }
+            $unmatched = @($dirtyEntries | Where-Object { -not $matchedRels.Contains($_.Rel) })
+            if ($unmatched.Count -gt 0) {
+                $preview = @($unmatched | Select-Object -First 5 | ForEach-Object { "$(if ($_.Status) { "$($_.Status) " } else { '' })$($_.Rel)" })
+                $moreText = $(if ($unmatched.Count -gt 5) { " 等 $($unmatched.Count) 个" } else { '' })
+                $assocLines.Add("  未匹配到失败套件的改动：$($preview -join '、')$moreText（可能相关，不作判据）")
+            }
+        }
+    }
+
+    $head = @()
+    # #1996：有未提交改动时，**首行**先给处置提示 —— 脏树假红的修复动作是 stash / 提交后复跑，
+    # 不是去改那个「红了」的代码。没有未提交改动时不写这一行（无脏可 stash，写了只是噪声）。
+    if ($dirtyEntries.Count -gt 0) {
+        $head += '若为脏树所致，先 git stash / 提交后复跑确认，不要当代码回归修（本次有未提交改动，见下方「可能相关」，不作判据）。'
+    }
+    $head += @(
         "dev-finish 单元测试失败摘要（jest exit=$ExitCode，生成于 $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))）"
         '本文件是人读出口，不作门禁输入：判定仍以单元测试的 exit code 为准。'
         ''
@@ -291,6 +423,11 @@ function New-TestFailureSummary {
         if ($keptSuites.Count -gt 0) {
             $parts.Add("失败套件（列出 $($keptSuites.Count) / 共 $($suites.Count) 个）：")
             foreach ($s in $keptSuites) { $parts.Add("  $($s.Trim())") }
+            $parts.Add('')
+        }
+        # 脏树关联段（#1996）：只作可见性，措辞固定「可能相关，不作判据」；没有未提交改动时整段不出现。
+        if ($assocLines.Count -gt 0) {
+            foreach ($a in $assocLines) { $parts.Add($a) }
             $parts.Add('')
         }
         if ($keptCases.Count -gt 0) {
@@ -435,6 +572,11 @@ function Write-UnitGateArtifacts {
         # 其余（含带空格的串）一律归一为 `?` —— 机检行是一行 `key=value`，不能被输入撑成两行。
         [string]$HeadSha = '',
         [string]$WorktreeState = '',
+        # #1996：脏树关联（只作可见性，不作判据）。与 HeadSha / WorktreeState 同一条边界 ——
+        # `git status --porcelain` 的原文由**调用点**喂进来，本函数不跑 git；原样转交摘要件，
+        # **不进机检行**（机检行字段语义零变化）。
+        [string[]]$DirtyFiles = @(),
+        [string]$ProjectDir = '',
         # 机检行身份（#1654）：'gate' = 全量门（`npm run test:unit`，-i 串行）发 `TEST_UNIT_RESULT`；
         # 'local' = 本地快路径（`npm run test:unit:local`，并行）发 `TEST_UNIT_LOCAL_RESULT` 且多带
         # 一枚 `mode=local`。两行**必须可判读地区分**（票面验收①）：Select-String 按首 token 就能分流，
@@ -510,7 +652,7 @@ function Write-UnitGateArtifacts {
     $summary = $null
     $summaryError = ''
     try {
-        $summary = New-TestFailureSummary -Output $Output -Path $SummaryPath -ExitCode $ExitCode -MaxBytes $MaxBytes
+        $summary = New-TestFailureSummary -Output $Output -Path $SummaryPath -ExitCode $ExitCode -MaxBytes $MaxBytes -DirtyFiles $DirtyFiles -ProjectDir $ProjectDir
     }
     catch {
         $summaryError = "$($_.Exception.Message)" -replace '\s+', ' '
@@ -1105,8 +1247,11 @@ if ($UnitLocal) {
     # 工作树脏净 = `git status --porcelain` 非空即 dirty（含未跟踪），与 -UnitGate 分支同形；
     # 取不到留空串 ⇒ 机检行写 `dirty=?`，不猜、也不参与任何判红路径 —— 判据仍只有 jest 那一个退出码。
     $worktreeState = ''
+    # #1996：porcelain 原文另喂给失败摘要做「失败套件 ↔ 未提交改动」的启发式关联（只作可见性）；
+    # `core.quotepath=false` 让中文路径原样出现（否则被 octal 转义，token 规则会失配）。
+    $porcelain = @()
     try {
-        $porcelain = @(& git -C $ProjectDir status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
+        $porcelain = @(& git -C $ProjectDir -c core.quotepath=false status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
         if ($LASTEXITCODE -eq 0) { $worktreeState = $(if ($porcelain.Count -gt 0) { 'dirty' } else { 'clean' }) }
     } catch {
         $worktreeState = ''
@@ -1126,7 +1271,7 @@ if ($UnitLocal) {
     $art = Write-UnitGateArtifacts -Output $localOutput -LogPath $localLogPath -SummaryPath $localSummaryPath `
         -ExitCode $localExitCode -DurationSeconds ([int]((Get-Date) - $unitLocalStarted).TotalSeconds) `
         -LogRef '.ci-verify/test-unit-local.log' -SummaryRef '.ci-verify/test-unit-local-failure.txt' `
-        -HeadSha $headSha -WorktreeState $worktreeState -Mode local
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir -Mode local
 
     # 报告块与全量门两腿共用同一个纯展示函数（#1702）：同样的 8 行只写一份。
     Write-UnitGateArtifactReport -Art $art -LogPath $localLogPath -SummaryPath $localSummaryPath
@@ -1143,7 +1288,7 @@ if ($UnitLocal) {
     $artBehaviorLocal = Write-UnitGateArtifacts -Output $behaviorLocalOutput -LogPath $behaviorLocalLogPath -SummaryPath $behaviorLocalSummaryPath `
         -ExitCode $behaviorLocalExitCode -DurationSeconds ([int]((Get-Date) - $behaviorLocalStarted).TotalSeconds) `
         -LogRef '.ci-verify/test-behavior-local.log' -SummaryRef '.ci-verify/test-behavior-local-failure.txt' `
-        -HeadSha $headSha -WorktreeState $worktreeState -Mode local -Leg behavior
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir -Mode local -Leg behavior
 
     Write-UnitGateArtifactReport -Art $artBehaviorLocal -LogPath $behaviorLocalLogPath -SummaryPath $behaviorLocalSummaryPath
 
@@ -1190,8 +1335,11 @@ if ($UnitGate) {
     # 「head 没动而内容已经不是那份」的形态，只比 sha 会把它读成 clean）。取不到留空串 ⇒ 机检行写 `dirty=?`，
     # 不猜、也不参与任何判红路径 —— 判据仍只有 jest 那一个退出码。
     $worktreeState = ''
+    # #1996：porcelain 原文另喂给失败摘要做「失败套件 ↔ 未提交改动」的启发式关联（只作可见性）；
+    # `core.quotepath=false` 让中文路径原样出现（否则被 octal 转义，token 规则会失配）。
+    $porcelain = @()
     try {
-        $porcelain = @(& git -C $ProjectDir status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
+        $porcelain = @(& git -C $ProjectDir -c core.quotepath=false status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
         if ($LASTEXITCODE -eq 0) { $worktreeState = $(if ($porcelain.Count -gt 0) { 'dirty' } else { 'clean' }) }
     } catch {
         $worktreeState = ''
@@ -1211,7 +1359,7 @@ if ($UnitGate) {
     $art = Write-UnitGateArtifacts -Output $unitOutput -LogPath $unitLogPath -SummaryPath $unitSummaryPath `
         -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $unitStarted).TotalSeconds) `
         -LogRef '.ci-verify/test-unit.log' -SummaryRef '.ci-verify/test-unit-failure.txt' `
-        -HeadSha $headSha -WorktreeState $worktreeState
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir
 
     Write-UnitGateArtifactReport -Art $art -LogPath $unitLogPath -SummaryPath $unitSummaryPath
 
@@ -1255,7 +1403,7 @@ if ($UnitGate) {
         -StalledSuite $behaviorStalledSuite -StalledReason $behaviorStalledReason -Stalls $behaviorStalls `
         -StallLimitSeconds $BehaviorStallSeconds -LegTimeoutSeconds $BehaviorTotalTimeoutSeconds `
         -LogRef '.ci-verify/test-behavior.log' -SummaryRef '.ci-verify/test-behavior-failure.txt' `
-        -HeadSha $headSha -WorktreeState $worktreeState
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir
     Write-UnitGateArtifactReport -Art $artBehavior -LogPath $behaviorLogPath -SummaryPath $behaviorSummaryPath
 
     Write-Host ''
