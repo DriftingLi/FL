@@ -1178,7 +1178,11 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     //   8 行 × 0.8s，4s 时 Tee 版控制台已有 3 行、Out-String 版还是空的）—— 那样「日志里有进度行」
     //   成立、「跑的人看得见进度」不成立，正是本票要修的那件事。两件事分开钉：调用点形状 + 兜法本体。
     expect(branch).toMatch(/^ {8}\$unitOutput = Invoke-GateLegCommand \{ & npm run test:unit \}$/m);
-    expect(branch).toMatch(/^ {8}\$behaviorOutput = Invoke-GateLegCommand \{ & npm run test:behavior \}$/m);
+    // #1994：行为腿改成逐套件驱动（`Invoke-BehaviorLeg`）。执行器仍是 package.json 那一条
+    // `npm run test:behavior --`（只在尾部追加 --runTestsByPath）—— 所以下面「不抄 jest 参数」的判据不变。
+    expect(branch).toMatch(/^ {8}\$behaviorRun = Invoke-BehaviorLeg -ProjectDir \$ProjectDir -Runner \$behaviorRunner `$/m);
+    expect(branch).toContain("npm run test:behavior --");
+    expect(branch).toMatch(/^ {8}\$behaviorExitCode = \$behaviorRun\.ExitCode$/m);
     expect(branch).not.toMatch(/npm run test:(unit|behavior)[^\r\n]*\|\s*Out-String/);
     const helperStart = scriptSrc.indexOf('function Invoke-GateLegCommand {');
     expect(helperStart).toBeGreaterThan(-1);
@@ -1208,8 +1212,15 @@ describe('Write-UnitGateArtifacts 全量单测门落盘（#1546，行为级：�
     const behaviorCallAt = branch.indexOf('$artBehavior = Write-UnitGateArtifacts -Output');
     expect(unitCallAt).toBeGreaterThan(-1);
     expect(behaviorCallAt).toBeGreaterThan(unitCallAt);
-    expect(branch.slice(unitCallAt, unitCallAt + 900)).not.toContain('-Leg');
+    expect(branch.slice(unitCallAt, behaviorCallAt)).not.toContain('-Leg');
     expect(branch.slice(behaviorCallAt, behaviorCallAt + 900)).toContain('-Leg behavior');
+    // #1994：看门狗读数必须由**调用点**喂进机检行（函数本体只负责格式化，不自己跑套件）
+    const behaviorCallText = branch.slice(behaviorCallAt, branch.indexOf('\n    Write-UnitGateArtifactReport', behaviorCallAt));
+    expect(behaviorCallText).toContain('-StalledSuite $behaviorStalledSuite');
+    expect(behaviorCallText).toContain('-StalledReason $behaviorStalledReason');
+    expect(behaviorCallText).toContain('-ResumeFrom $BehaviorResumeFrom');
+    expect(behaviorCallText).toContain('-PlannedSuites $behaviorPlanned');
+    expect(behaviorCallText).toContain('-Stalls $behaviorStalls');
     // ---- 判定只看退出码：合成退出码是分支最后一件事（其后不再有别的评价逻辑）----
     // ⚠️ 不能用 `indexOf('exit $gateExit')` —— 那串字面量也出现在给人看的那行
     //    「③ 门未过（exit $gateExit：…）」里，取到的第一处不是语句而是文案。
@@ -1526,7 +1537,10 @@ describe('③ 门本地快路径（#1654）', () => {
     expect(pkg.scripts['test:behavior']).toBe('jest --config jest.config.behavior.js -i');
     expect(pkg.scripts['test:behavior:local']).toBe('jest --config jest.config.behavior.js');
     expect(pkg.scripts['test:behavior:local']).not.toMatch(/\s-i\b/);
-    expect((gateBranch.match(/& npm run test:behavior(?!:)/g) || [])).toEqual(['& npm run test:behavior']);
+    // #1994：行为腿的 npm 入口从 `& npm run test:behavior` 变成执行器默认值 `npm run test:behavior --`
+    // （逐套件驱动时在尾部追加 --runTestsByPath）。不变式仍是「分支里只出现那一条、且不出现 local 那条」。
+    expect((gateBranch.match(/npm run test:behavior(?!:)/g) || [])).toEqual(['npm run test:behavior']);
+    expect(gateBranch).toContain("npm run test:behavior --");
     expect(gateBranch).not.toContain('test:behavior:local');
     // `npm test` 是两腿的串行合成（不是只跑接线那一半）：一键全量不该悄悄少跑行为面。
     expect(pkg.scripts.test).toBe('npm run test:unit && npm run test:behavior');

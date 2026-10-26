@@ -88,7 +88,29 @@ param(
     [int]$HxWaitSeconds = 1800,
     # 透传给 hx-run 的超时（编译段 / 部署轮询）。2026-09-14 实测本项目冷缓存下
     # 编译可超 900 秒 ⇒ 默认取 1800，避免把「慢」误判成「环境不可用」。
-    [int]$HxRunTimeoutSeconds = 1800
+    [int]$HxRunTimeoutSeconds = 1800,
+    # ---- ③ 行为腿看门狗（#1994）----
+    # 行为腿改成**逐套件驱动**（每次 jest 只跑一个套件）：只有这样，某个套件真卡住时才能只终止它、
+    # 继续下一套件，并让 `-BehaviorResumeFrom` 有「第 i 个」这个稳定起点。
+    # 套件级 stall 阈值 = 该套件**上次输出**之后允许的静默秒数（reporter 的心跳行 / 任何 stdout
+    # 都算一次心跳）。默认 900 s 是保守值：2026-10-18 实测最长单套件 ≈ 480 s
+    # （utils/mpWeixinGateResultLineBehavior.test.js ≈ 8 分钟）⇒ 留近两倍余量，不把「慢」误判成「卡死」。
+    # 参数化是为了让假套件在秒级验证（阈值 2–3 s），而不是把真门调紧。
+    [ValidateRange(1, 86400)]
+    [int]$BehaviorStallSeconds = 900,
+    # 腿级总超时（秒）：整条行为腿从第一个套件起超过它 ⇒ 停止并写 `stalled=<suite>` 机检行，
+    # 退出码沿用门语义（非绿）。0 = 关闭腿级上限（只保留套件级看门狗）。默认 5400 s 同样取保守值
+    # （行为腿 2026-10-18 实测 ≈ 1140 s；留足 CI 机器抖动与冷缓存的余量）。
+    [ValidateRange(0, 86400)]
+    [int]$BehaviorTotalTimeoutSeconds = 5400,
+    # 断点续跑：从第 i 个套件开始（1 起），不重跑 1..i-1。0 = 从头跑。
+    # 序号口径 = `jest --listTests`（与 jest 自己的串行执行序同源）里的位置；机检行写 `resumedFrom=`。
+    [ValidateRange(0, 100000)]
+    [int]$BehaviorResumeFrom = 0,
+    # 测试/排障用的执行器覆盖：默认空串 ⇒ `npm run test:behavior --`（package.json 里那一条，
+    # 不在脚本里抄第二份 jest 参数）。假 jest 用 `node <fake>` 走同一条协议（--listTests /
+    # --runTestsByPath <path>）。正常门调用点不传它。
+    [string]$BehaviorRunner = ''
 )
 
 Set-StrictMode -Version Latest
@@ -422,7 +444,18 @@ function Write-UnitGateArtifacts {
         # 腿（#1702，2026-10-18）：'unit' = 接线腿（`npm run test:unit`）；'behavior' = 行为腿
         # （`npm run test:behavior`）。首 token 由「腿 × 模式」共同决定，默认 'unit' ⇒ 既有调用点逐字节不变。
         [ValidateSet('unit', 'behavior')]
-        [string]$Leg = 'unit'
+        [string]$Leg = 'unit',
+        # ---- #1994：行为腿看门狗的读数（**只增不改**：默认分支/默认腿的机检行逐字节不变）----
+        # 这些字段只在 `-Leg behavior` 时出现在行里；取不到就写 `?`（与 `missing=` 同口径），
+        # 不省略、不补 0。它们**不参与任何判红路径** —— 判据仍只有调用方手里那个退出码。
+        [string]$StalledSuite = '',
+        [string]$StalledReason = '',
+        [int]$ResumeFrom = 0,
+        [int]$PlannedSuites = -1,
+        [int]$CompletedSuites = -1,
+        [int]$Stalls = 0,
+        [int]$StallLimitSeconds = 0,
+        [int]$LegTimeoutSeconds = -1
     )
     $utf8 = [System.Text.Encoding]::UTF8
     $lines = @($Output -split "\r?\n")
@@ -447,10 +480,14 @@ function Write-UnitGateArtifacts {
         if ($m.Success) { return [int]$m.Groups[1].Value }
         return 0
     }
-    $suitesFailed = & $grab $suiteLine 'failed'
-    $suitesTotal = & $grab $suiteLine 'total'
-    $testsFailed = & $grab $testLine 'failed'
-    $testsTotal = & $grab $testLine 'total'
+    # `Tests: ?` / `Test Suites: ?` 是行为腿看门狗在「被 kill 的套件拿不到汇总」时写的**显式未知**
+    # （#1994）。它与「有行但没有某类别」（jest 省略零值）是两件事：后者读成 0，前者必须读成「读不出」，
+    # 否则 `tests=?` 会退化成 `tests=0` —— 把「不知道」伪装成「零条」。只有整行正文是 `?` 才算未知。
+    $unknownLine = { param([string]$Line) if ([string]::IsNullOrWhiteSpace("$Line")) { return $false }; return ("$Line".Trim() -match ':\s*\?\s*$') }
+    $suitesFailed = $(if (& $unknownLine "$suiteLine") { $null } else { & $grab $suiteLine 'failed' })
+    $suitesTotal = $(if (& $unknownLine "$suiteLine") { $null } else { & $grab $suiteLine 'total' })
+    $testsFailed = $(if (& $unknownLine "$testLine") { $null } else { & $grab $testLine 'failed' })
+    $testsTotal = $(if (& $unknownLine "$testLine") { $null } else { & $grab $testLine 'total' })
     $timeText = ''
     if (@($timeLine).Count -gt 0 -and -not [string]::IsNullOrWhiteSpace("$timeLine")) {
         $timeRaw = ("$timeLine" -replace '^\s*Time:\s*', '').Trim()
@@ -527,6 +564,21 @@ function Write-UnitGateArtifacts {
         "dirty=$dirtyText"
     )
     if ($isLocal) { $parts += 'mode=local' }
+    # #1994：行为腿的五枚看门狗读数。字段**恒在**（取不到写 `?`）—— 「这一腿有没有卡过」必须能
+    # 从一行机检行回答，不能靠「字段缺席」表达。unit 腿不追加任何字段 ⇒ 既有行逐字节不变。
+    if ($Leg -eq 'behavior') {
+        $parts += "planned=$(if ($PlannedSuites -ge 0) { $PlannedSuites } else { '?' })"
+        $parts += "completed=$(if ($CompletedSuites -ge 0) { $CompletedSuites } else { '?' })"
+        $parts += "resumedFrom=$ResumeFrom"
+        $parts += "stalls=$Stalls"
+        $stallText = $(if ([string]::IsNullOrWhiteSpace($StalledSuite)) { 'none' } else { "$StalledSuite" })
+        # 套件名会进 `key=value` 单行 ⇒ 非法值（带空白）归一为 `?`，绝不把一行撑成两截。
+        if ($stallText -match '\s') { $stallText = '?' }
+        $parts += "stalled=$stallText"
+        if ($StalledReason) { $parts += "stalledReason=$StalledReason" }
+        $parts += "stallLimit=$(if ($StallLimitSeconds -gt 0) { "${StallLimitSeconds}s" } else { '?' })"
+        $parts += "legTimeout=$(if ($LegTimeoutSeconds -gt 0) { "${LegTimeoutSeconds}s" } elseif ($LegTimeoutSeconds -eq 0) { 'off' } else { '?' })"
+    }
     if ($staleSummary) { $parts += "staleSummary=$staleSummary" }
     if ($missing.Count -gt 0) { $parts += "missing=$(@($missing) -join '|')" }
     if ($summaryError) { $parts += "summaryError=$summaryError" }
@@ -557,6 +609,12 @@ function Write-UnitGateArtifacts {
         SummaryError = $summaryError
         StaleSummary = $staleSummary
         Mode         = $Mode
+        StalledSuite = $StalledSuite
+        StalledReason = $StalledReason
+        ResumeFrom   = $ResumeFrom
+        PlannedSuites = $PlannedSuites
+        CompletedSuites = $CompletedSuites
+        Stalls       = $Stalls
     }
 }
 
@@ -616,6 +674,257 @@ function Invoke-GateLegCommand {
     & $Command 2>&1 | Tee-Object -Variable legLines | Out-Host
     # 渲染收在收集之后：日志落盘要的是与旧路径同形的整段文本（Out-String 干的就是这件事）。
     return ($legLines | Out-String)
+}
+
+<#
+.SYNOPSIS
+    跑③门行为腿：**逐套件**驱动 jest，带套件级 stall 看门狗、腿级总超时与断点续跑（#1994）。
+
+.DESCRIPTION
+    为什么按套件起进程（而不是一条 `npm run test:behavior` 跑到底）：「卡住的套件终止后继续下一套件」
+    与「从第 i 个套件继续」这两件事，在**单个** jest 进程内都做不到 —— jest 没有「杀掉一个套件、
+    接着跑下一个」的接口。逐套件起进程后：
+      · 每个套件自己一个进程树 ⇒ 卡住时只 kill 这一棵树，下一套件照常起；
+      · 套件序 = `jest --listTests` 的顺序（与 `-i` 串行执行序同源）⇒ 第 i 个套件是稳定起点；
+      · 每个进程仍走 package.json 里**那一条** `npm run test:behavior --`（只在尾部追加
+        `--runTestsByPath`）⇒ 不在本文件抄第二份 jest 参数（#974 的 pattern 双份漂移同形）。
+
+    看门狗口径（一行一个事实，写进日志原文）：
+      · 套件级 stall：某套件自**上次输出**（reporter 的 JEST_SUITE 心跳行 / 任何 stdout/stderr）
+        起超过 `-StallSeconds` ⇒ kill 该套件进程树，记 `JEST_SUITE i=k/N status=STALL secs=…`，
+        继续下一套件；已完成的套件读数照常累加。
+      · 腿级总超时：从第一个套件起超过 `-TotalTimeoutSeconds` ⇒ 停止整腿，记 `stalled=<suite>`
+        （reason=leg-timeout），退出码非零 —— **不给「卡住算绿」**。
+      · 断点续跑：`-ResumeFrom k` ⇒ 跳过 1..k-1，只跑 k..N；输出里写 `JEST_SUITE_RESUME` 行，
+        机检行写 `resumedFrom=k`，拼接读数如实标注（没跑的前缀不装成跑过）。
+
+    汇总行：逐套件跑完时 jest 只会给「这一套」的 `Test Suites:/Tests:/Time:`；本函数把**本次腿内**
+    的套件数/用例数累加，并在输出末尾拼一份与 jest 同形的汇总行（`Write-UnitGateArtifacts` 取最后
+    一条 ⇒ 机检行语义与拆分前一致）。某个套件被 kill、拿不到它的 `Tests:` 时，**不补 0**：
+    不拼 `Tests:` 行 ⇒ 机检行 `tests=?` + `missing=tests`（与既有 `missing=` 同一口径）。
+
+    纯函数边界：只读套件清单、只写临时输出文件；不改判据、不重试、不吞失败。返回对象的 ExitCode
+    是**本腿**的结论（任一失败/STALL/超时 ⇒ 非零）。
+.#>
+function Invoke-BehaviorLeg {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ProjectDir,
+        [Parameter(Mandatory = $true)][string]$Runner,
+        [int]$StallSeconds = 900,
+        [int]$TotalTimeoutSeconds = 5400,
+        [int]$ResumeFrom = 0,
+        [int]$PollMilliseconds = 200
+    )
+    $utf8 = [System.Text.Encoding]::UTF8
+    $legStarted = Get-Date
+    $sb = [System.Text.StringBuilder]::new()
+    $append = { param([string]$Text) if ($null -ne $Text -and $Text.Length -gt 0) { [void]$sb.Append($Text) } }
+
+    # ---- 套件清单：走同一条 npm 脚本，`--listTests` 由 jest 自己兑现（不做第二份 testMatch 计算）----
+    $listPsi = [System.Diagnostics.ProcessStartInfo]::new()
+    $listPsi.FileName = $env:ComSpec
+    $listPsi.Arguments = '/d /s /c "' + $Runner + ' --listTests"'
+    $listPsi.UseShellExecute = $false
+    $listPsi.RedirectStandardOutput = $true
+    $listPsi.RedirectStandardError = $true
+    $listPsi.CreateNoWindow = $true
+    $listProc = [System.Diagnostics.Process]::Start($listPsi)
+    $listOut = $listProc.StandardOutput.ReadToEnd()
+    $listErr = $listProc.StandardError.ReadToEnd()
+    $listProc.WaitForExit()
+    $suites = @($listOut -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+    $planned = $suites.Count
+    if ($planned -eq 0) {
+        & $append "JEST_SUITE_PLAN total=0 note=未列出任何行为套件（--listTests 为空或命令没起来）`r`n"
+        & $append ($listErr + "`r`n")
+        return [pscustomobject]@{
+            Output = $sb.ToString(); ExitCode = 1; StalledSuite = ''; StalledReason = '';
+            Stalls = 0; Completed = 0; Planned = 0; ResumeFrom = $ResumeFrom;
+            StallSeconds = $StallSeconds; TotalTimeoutSeconds = $TotalTimeoutSeconds
+        }
+    }
+    if ($ResumeFrom -gt $planned) { throw "-BehaviorResumeFrom $ResumeFrom 超出本次行为腿套件数 $planned" }
+    $startIndex = $(if ($ResumeFrom -gt 0) { $ResumeFrom - 1 } else { 0 })
+    if ($ResumeFrom -gt 0) {
+        & $append "JEST_SUITE_RESUME from=$ResumeFrom total=$planned skipped=$($ResumeFrom - 1) note=只跑第 $ResumeFrom..$planned 个套件，前 $($ResumeFrom - 1) 个未在本跑执行`r`n"
+        Write-Host "JEST_SUITE_RESUME from=$ResumeFrom total=$planned skipped=$($ResumeFrom - 1)" -ForegroundColor DarkYellow
+    }
+
+    # 增量读一个正在增长的文件（jest 的 stdout/stderr）。进程被 kill 时最后一段也要读出来。
+    $readNew = {
+        param([string]$Path, [ref]$Pos)
+        if (-not (Test-Path -LiteralPath $Path)) { return '' }
+        try {
+            $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+        } catch { return '' }
+        try {
+            if ($fs.Length -le $Pos.Value) { return '' }
+            [void]$fs.Seek($Pos.Value, [System.IO.SeekOrigin]::Begin)
+            $buf = [byte[]]::new($fs.Length - $Pos.Value)
+            $read = $fs.Read($buf, 0, $buf.Length)
+            $Pos.Value += $read
+            return $utf8.GetString($buf, 0, $read)
+        } finally { $fs.Dispose() }
+    }
+
+    $stalledSuite = ''
+    $stalledReason = ''
+    $stalls = 0
+    $completed = 0
+    $attempted = 0
+    $failedSuites = 0
+    $normalFailures = 0
+    $testsTotalSum = 0
+    $testsFailedSum = 0
+    $testsKnown = $true
+    $exitCode = 0
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+
+    for ($idx = $startIndex; $idx -lt $planned; $idx++) {
+        $i = $idx + 1
+        $suite = $suites[$idx]
+        $rel = $suite
+        try { $rel = [System.IO.Path]::GetRelativePath($ProjectDir, $suite).Replace('\', '/') } catch { $rel = $suite }
+
+        # 腿级总超时：到点就连下一个套件也不起，直接收口（stalled=当前该跑的套件）。
+        if ($TotalTimeoutSeconds -gt 0 -and $timer.Elapsed.TotalSeconds -ge $TotalTimeoutSeconds) {
+            $stalledSuite = $rel; $stalledReason = 'leg-timeout'
+            & $append "JEST_SUITE i=$i/$planned status=STALL secs=0 reason=leg-timeout file=$rel`r`n"
+            if ($exitCode -eq 0) { $exitCode = 1 }
+            break
+        }
+
+        $suiteStarted = Get-Date
+        Write-Host "JEST_SUITE_START i=$i/$planned file=$rel" -ForegroundColor DarkCyan
+        $tmpBase = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "fl-behavior-$PID-$i")
+        $outFile = "$tmpBase.out.log"
+        $errFile = "$tmpBase.err.log"
+        Remove-Item -LiteralPath $outFile, $errFile -ErrorAction SilentlyContinue
+
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $env:ComSpec
+        $psi.Arguments = '/d /s /c "' + $Runner + ' --runTestsByPath "' + $suite + '" > "' + $outFile + '" 2> "' + $errFile + '"' + '"'
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.EnvironmentVariables['FL_BEHAVIOR_SUITE_OFFSET'] = "$($i - 1)"
+        $psi.EnvironmentVariables['FL_BEHAVIOR_SUITE_TOTAL'] = "$planned"
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $outPos = [ref]0
+        $errPos = [ref]0
+        $lastBeat = Get-Date
+        $killed = $false
+        $killReason = ''
+        while (-not $proc.HasExited) {
+            $chunk = & $readNew $outFile $outPos
+            if ($chunk) {
+                & $append $chunk
+                Write-Host -NoNewline $chunk
+                $lastBeat = Get-Date
+            }
+            $errChunk = & $readNew $errFile $errPos
+            if ($errChunk) {
+                & $append $errChunk
+                $lastBeat = Get-Date
+            }
+            $now = Get-Date
+            if (($now - $lastBeat).TotalSeconds -ge $StallSeconds) { $killed = $true; $killReason = 'stall'; break }
+            if ($TotalTimeoutSeconds -gt 0 -and $timer.Elapsed.TotalSeconds -ge $TotalTimeoutSeconds) { $killed = $true; $killReason = 'leg-timeout'; break }
+            Start-Sleep -Milliseconds $PollMilliseconds
+        }
+        if ($killed -and -not $proc.HasExited) {
+            # 只 kill 本套件的进程树（jest 子进程）；不碰 HBuilderX / 主程序 / 别的会话。
+            try { $proc.Kill($true) } catch { try { $proc.Kill() } catch { } }
+            try { [void]$proc.WaitForExit(5000) } catch { }
+        } elseif (-not $proc.HasExited) {
+            $proc.WaitForExit()
+        }
+        # 收尾再读一次：进程退出 / 被 kill 前最后写出的那段不能丢。
+        $tail = & $readNew $outFile $outPos
+        if ($tail) { & $append $tail; Write-Host -NoNewline $tail }
+        $tailErr = & $readNew $errFile $errPos
+        if ($tailErr) { & $append $tailErr }
+        $suiteSecs = [Math]::Round(((Get-Date) - $suiteStarted).TotalSeconds, 1)
+        $attempted += 1
+
+        if ($killed) {
+            $stalls += 1
+            $stalledSuite = $rel
+            $stalledReason = $killReason
+            $failedSuites += 1
+            $testsKnown = $false
+            $reasonText = $(if ($killReason) { " reason=$killReason" } else { '' })
+            $line = "JEST_SUITE i=$i/$planned status=STALL secs=$suiteSecs$reasonText file=$rel"
+            & $append ($line + "`r`n")
+            Write-Host $line -ForegroundColor Red
+            if ($exitCode -eq 0) { $exitCode = 1 }
+            if ($killReason -eq 'leg-timeout') { break }
+            continue
+        }
+
+        $completed += 1
+        $code = $proc.ExitCode
+        if ($code -ne 0) { $failedSuites += 1; $normalFailures += 1; if ($exitCode -eq 0) { $exitCode = $code } }
+
+        # 这一套自己的汇总行：`Tests:` 拿不到 ⇒ 整腿的 Tests 总数不可知（不补 0）。
+        $suiteText = ''
+        if (Test-Path -LiteralPath $outFile) { $suiteText = [System.IO.File]::ReadAllText($outFile, $utf8) }
+        # 真 jest 把汇总行写 stderr（假 jest 的守护写 stdout）⇒ 两个流都要解析，否则 tests 恒为 ?。
+        if (Test-Path -LiteralPath $errFile) { $suiteText += "`r`n" + [System.IO.File]::ReadAllText($errFile, $utf8) }
+        $suiteLines = @($suiteText -split "\r?\n")
+        $tLine = @($suiteLines | Where-Object { $_ -match '^\s*Tests:\s' } | Select-Object -Last 1)
+        if (@($tLine).Count -eq 0 -or [string]::IsNullOrWhiteSpace("$tLine")) {
+            $testsKnown = $false
+        } else {
+            $tm = [regex]::Match("$tLine", '(\d+)\s+total')
+            if ($tm.Success) { $testsTotalSum += [int]$tm.Groups[1].Value } else { $testsKnown = $false }
+            $fm = [regex]::Match("$tLine", '(\d+)\s+failed')
+            if ($fm.Success) { $testsFailedSum += [int]$fm.Groups[1].Value }
+        }
+        Remove-Item -LiteralPath $outFile, $errFile -ErrorAction SilentlyContinue
+    }
+
+    # ---- 拼一份与 jest 同形的汇总（最后一个匹配者 = 本腿的总量，与拆分前的取数口径一致）----
+    $wall = [Math]::Round($timer.Elapsed.TotalSeconds, 3)
+    $passedSuites = $attempted - $failedSuites
+    # 续跑汇总只覆盖本次实际执行的套件 —— 不标注会被人当成整腿证据。
+    if ($ResumeFrom -gt 0) {
+        & $append "Resumed: partial run (from suite $ResumeFrom of $planned, skipped $($ResumeFrom - 1)) - summary below covers only this run's suites`r`n"
+    }
+    if ($failedSuites -gt 0) {
+        & $append "Test Suites: $failedSuites failed, $passedSuites passed, $attempted total`r`n"
+    } else {
+        & $append "Test Suites: $passedSuites passed, $attempted total`r`n"
+    }
+    if ($testsKnown) {
+        $testsPassedSum = $testsTotalSum - $testsFailedSum
+        if ($testsFailedSum -gt 0) {
+            & $append "Tests: $testsFailedSum failed, $testsPassedSum passed, $testsTotalSum total`r`n"
+        } else {
+            & $append "Tests: $testsTotalSum passed, $testsTotalSum total`r`n"
+        }
+    } else {
+        # `Tests: ?` 是**有意**的形态：`Write-UnitGateArtifacts` 取最后一条汇总行，若这里什么都不写，
+        # 它会把「最后一个套件自己的 Tests 行」当成整腿总量（实测：3 套件里 1 个被 kill ⇒ tests=1）。
+        # 写 `?` 后它能解析失败 ⇒ 机检行 tests=? + missing=tests，不补 0（与 missing= 同口径）。
+        & $append "Tests: ?`r`n"
+    }
+    & $append "Time: $wall s`r`n"
+    return [pscustomobject]@{
+        Output = $sb.ToString()
+        ExitCode = $exitCode
+        StalledSuite = $stalledSuite
+        StalledReason = $stalledReason
+        Stalls = $stalls
+        Completed = $completed
+        Planned = $planned
+        ResumeFrom = $ResumeFrom
+        StallSeconds = $StallSeconds
+        TotalTimeoutSeconds = $TotalTimeoutSeconds
+        TestsKnown = $testsKnown
+        FailedSuites = $failedSuites
+        WallSeconds = $wall
+    }
 }
 
 <#
@@ -866,6 +1175,7 @@ if ($UnitGate) {
     #    而不是等十几分钟之后才怀疑卡死（#1656 的判读纪律：慢 ≠ 卡死）。数字取自 `docs/adr/0042` 的实跑记录，
     #    只在两腿都被重跑并实测时更新 —— 别拿估算改它。
     Write-Host '本次预期 ≈ 20 分钟（2026-10-18 两腿实测合计 1172 s）：先接线腿（test:unit，120 个纯逻辑 / 接线套件，≈ 1 分钟），再行为腿（test:behavior，70 个直接执行被测面的行为套件，≈ 19 分钟 —— 光 utils/mpWeixinGateResultLineBehavior.test.js 一套就约 8 分钟）；逐套件心跳行 JEST_SUITE i=… 会不断出现，但单个超长套件内静默数分钟属设计内（-i 串行，#1410），不是卡死' -ForegroundColor Cyan
+    Write-Host "  行为腿看门狗：套件级 stall=${BehaviorStallSeconds}s（自上次输出起算）/ 腿级总超时=$(if ($BehaviorTotalTimeoutSeconds -gt 0) { "${BehaviorTotalTimeoutSeconds}s" } else { 'off' })；-BehaviorResumeFrom <i> 从第 i 个套件续跑" -ForegroundColor Cyan
     Write-Host '=== ③ 门（两腿：test:unit 接线 + test:behavior 行为）：每腿 日志 +（仅红跑）失败摘要 + 一条机检行 ===' -ForegroundColor Cyan
     Write-Host "  日志（绿跑也落，落原文）：$unitLogPath / $behaviorLogPath"
     Write-Host "  摘要（只有红跑才落）：$unitSummaryPath / $behaviorSummaryPath"
@@ -910,18 +1220,42 @@ if ($UnitGate) {
     # 读成「这一半没问题」，正是本票要防的形态。行为腿的每行 `JEST_SUITE i=…/N` 就是串行下的进度心跳
     # （`-i` 不动，#1410 裁定不变；单个套件内部仍可能长静默，故入口第一行要写预期时长）。
     $behaviorStarted = Get-Date
+    # 行为腿的执行器：默认就是 package.json 里那一条（只在尾部追加 `--runTestsByPath`），
+    # 不在本文件抄第二份 jest 参数（#974）；`-BehaviorRunner` 只给假 jest / 排障用。
+    $behaviorRunner = $(if ($BehaviorRunner) { $BehaviorRunner } else { 'npm run test:behavior --' })
+    $behaviorRun = $null
     try {
-        $behaviorOutput = Invoke-GateLegCommand { & npm run test:behavior }
+        $behaviorRun = Invoke-BehaviorLeg -ProjectDir $ProjectDir -Runner $behaviorRunner `
+            -StallSeconds $BehaviorStallSeconds -TotalTimeoutSeconds $BehaviorTotalTimeoutSeconds `
+            -ResumeFrom $BehaviorResumeFrom
+        $behaviorOutput = $behaviorRun.Output
+        $behaviorExitCode = $behaviorRun.ExitCode
     }
     catch {
-        # 与第一腿同形：EAP=Stop 下原生命令写 stderr 可能抛 ⇒ 异常文本当输出继续，判定仍取退出码。
+        # 与第一腿同形：EAP=Stop 下原生命令写 stderr / 参数越界都可能抛 ⇒ 异常文本当输出继续，
+        # 但结论**非绿**：看门狗自己炸掉不能变成一次绿跑（不给「卡住算绿」）。
         $behaviorOutput = "$($_.Exception.Message)"
+        $behaviorExitCode = 1
     }
-    $behaviorExitCode = $LASTEXITCODE
+    $behaviorPlanned = -1
+    $behaviorCompleted = -1
+    $behaviorStalls = 0
+    $behaviorStalledSuite = ''
+    $behaviorStalledReason = ''
+    if ($null -ne $behaviorRun) {
+        $behaviorPlanned = $behaviorRun.Planned
+        $behaviorCompleted = $behaviorRun.Completed
+        $behaviorStalls = $behaviorRun.Stalls
+        $behaviorStalledSuite = $behaviorRun.StalledSuite
+        $behaviorStalledReason = $behaviorRun.StalledReason
+    }
     $artBehavior = Write-UnitGateArtifacts -Output $behaviorOutput -LogPath $behaviorLogPath -SummaryPath $behaviorSummaryPath `
-        -ExitCode $behaviorExitCode -DurationSeconds ([int]((Get-Date) - $behaviorStarted).TotalSeconds) `
+        -ExitCode $behaviorExitCode -Leg behavior -DurationSeconds ([int]((Get-Date) - $behaviorStarted).TotalSeconds) `
+        -PlannedSuites $behaviorPlanned -CompletedSuites $behaviorCompleted -ResumeFrom $BehaviorResumeFrom `
+        -StalledSuite $behaviorStalledSuite -StalledReason $behaviorStalledReason -Stalls $behaviorStalls `
+        -StallLimitSeconds $BehaviorStallSeconds -LegTimeoutSeconds $BehaviorTotalTimeoutSeconds `
         -LogRef '.ci-verify/test-behavior.log' -SummaryRef '.ci-verify/test-behavior-failure.txt' `
-        -HeadSha $headSha -WorktreeState $worktreeState -Leg behavior
+        -HeadSha $headSha -WorktreeState $worktreeState
     Write-UnitGateArtifactReport -Art $artBehavior -LogPath $behaviorLogPath -SummaryPath $behaviorSummaryPath
 
     Write-Host ''
