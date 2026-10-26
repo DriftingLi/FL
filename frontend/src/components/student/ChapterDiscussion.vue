@@ -258,7 +258,7 @@ watch(() => props.chapterId, () => {
   <div class="rounded-card border border-line bg-panel p-5 shadow-card max-md:p-3.5">
     <!-- 头部 -->
     <div class="mb-4 flex items-center justify-between gap-3">
-      <h3 class="m-0 text-[17px] font-semibold text-ink">章节讨论</h3>
+      <h3 class="m-0 text-lg font-semibold text-ink">章节讨论</h3>
       <UiButton variant="primary" size="small" :icon="'square-pen'" @click="openCreate">发新帖</UiButton>
     </div>
 

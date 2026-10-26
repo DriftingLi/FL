@@ -33,13 +33,13 @@
         @click="goToEdit(chapter.chapter_id)"
       >
         <span
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ui-soft text-[13px] font-semibold text-ui-soft-ink"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ui-soft text-sm font-semibold text-ui-soft-ink"
         >
           {{ String(index + 1).padStart(2, '0') }}
         </span>
 
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[15px] font-medium text-ink">{{ chapter.title }}</p>
+          <p class="truncate text-base font-medium text-ink">{{ chapter.title }}</p>
           <div class="mt-2 flex flex-wrap items-center gap-3">
             <UiTag :tone="contentTypeTone(chapter.content_type || '')">
               {{ contentTypeLabel(chapter.content_type || '') }}

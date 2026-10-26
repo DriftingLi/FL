@@ -13,7 +13,7 @@ import UiIcon from '@/components/ui/UiIcon.vue'
  * 治理动作（举报 / 删除）只出现在 ⋯ 里。UiMoreMenu 只认 items；**「自己的内容不显示举报」这条规则**
  * 收在本组件与帖子卡各自的 items 计算里（调用方只提供事实 `isOwn`），不在模板层散判。
  *
- * density：详情页 comfortable（38px 头像 / text-sm）；章节讨论 compact（26px / 13px）——
+ * density：详情页 comfortable（38px 头像 / text-sm）；章节讨论 compact（26px / text-xs）——
  * 内嵌面板不套详情页尺寸，避免把课程页的展开区撑长。
  */
 import { computed } from 'vue'
@@ -60,7 +60,7 @@ const compact = computed(() => props.density === 'compact')
 const region = computed(() => regionLabel(props.reply))
 const avatarSize = computed(() => (compact.value ? 26 : 38))
 const contentClass = computed(() =>
-  compact.value ? 'text-[13px] leading-[1.6]' : 'text-sm leading-[1.7]'
+  compact.value ? 'text-xs leading-[1.6]' : 'text-sm leading-[1.7]'
 )
 const isTopicAuthor = computed(
   () => props.topicAuthorId != null && props.reply.author.user_id === props.topicAuthorId
@@ -100,7 +100,7 @@ function onMoreSelect(key: string) {
     <div class="reply-main min-w-0 flex-1">
       <!-- 昵称行：昵称 ›（被回复人小头像 + 名）·标签·  ······ ⋯ -->
       <div class="reply-meta flex flex-wrap items-center" :class="compact ? 'gap-1.5' : 'gap-2'">
-        <span class="author-name font-semibold text-ink" :class="compact ? 'text-[13px]' : 'text-sm'">
+        <span class="author-name font-semibold text-ink" :class="compact ? 'text-xs' : 'text-sm'">
           {{ displayName(reply.author) }}
         </span>
         <span

@@ -84,7 +84,7 @@
         </div>
         <div class="mt-auto flex items-end justify-between gap-2 pt-2">
           <div class="min-w-0">
-            <div class="text-[10px] text-ink-3">更新于 {{ item.updated_at.slice(0, 10) }}</div>
+            <div class="text-xs text-ink-3">更新于 {{ item.updated_at.slice(0, 10) }}</div>
           </div>
           <router-link
             :to="href('RecruitResumeDetail', { id: String(item.user_id) })"

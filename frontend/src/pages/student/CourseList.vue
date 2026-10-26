@@ -76,8 +76,8 @@
                   {{ levelNameOf(course.level_id) }}
                 </span>
                 <div v-if="course.is_hot || course.is_featured" class="cc-cover-badges absolute right-2 top-2 flex gap-1">
-                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad-fill text-bad-on px-2 py-0.5 text-[11px] font-semibold">热门</span>
-                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn-fill text-warn-on px-2 py-0.5 text-[11px] font-semibold">精品</span>
+                  <span v-if="course.is_hot" class="cc-cover-badge rounded-pill bg-bad-fill text-bad-on px-2 py-0.5 text-xs font-semibold">热门</span>
+                  <span v-if="course.is_featured" class="cc-cover-badge rounded-pill bg-warn-fill text-warn-on px-2 py-0.5 text-xs font-semibold">精品</span>
                 </div>
               </template>
               <template #meta>
@@ -190,7 +190,7 @@
               tone="brand"
               class="progress-bar flex-1"
             />
-            <span class="progress-text whitespace-nowrap text-[13px] text-ink-3">
+            <span class="progress-text whitespace-nowrap text-sm text-ink-3">
               已完成 {{ courseLearning.completed_chapters ?? 0 }}/{{ courseLearning.total_chapters ?? detailChapters.length }} 章
             </span>
           </div>

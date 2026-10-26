@@ -71,7 +71,7 @@
       </div>
 
       <div class="logout-row flex justify-center rounded-card bg-panel p-1 shadow-card">
-        <UiButton variant="primary" class="w-full p-3.5 text-[15px]" @click="handleLogout">退出当前账号</UiButton>
+        <UiButton variant="primary" class="w-full p-3.5 text-base" @click="handleLogout">退出当前账号</UiButton>
       </div>
     </div>
 

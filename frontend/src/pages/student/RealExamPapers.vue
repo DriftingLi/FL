@@ -3,7 +3,7 @@
     <div class="mb-[18px] flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 class="real-exam-title m-0 mb-1.5 text-2xl leading-[1.2] text-ink">真题练习</h2>
-        <p class="real-exam-sub m-0 text-[13px] text-ink-3">
+        <p class="real-exam-sub m-0 text-sm text-ink-3">
           当前证件：<strong>{{ currentCredentialName || '—' }}</strong>
           <span class="real-exam-sub-sep mx-1.5 text-ink-3">·</span>
           共 {{ papers.length }} 套

@@ -6,7 +6,7 @@
   >
     <span class="inline-flex items-center gap-1">
       <span
-        class="inline-block text-[10px] transition-transform duration-[var(--duration-fast)] ease-[var(--ease-default)]"
+        class="inline-block text-xs transition-transform duration-[var(--duration-fast)] ease-[var(--ease-default)]"
         :class="open ? 'rotate-90' : ''"
       >▶</span>
       {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template>

@@ -63,11 +63,11 @@
           <ForumContent
             :content="topic.content"
             :format="toForumContentFormat(topic.content_format)"
-            class="topic-content text-[15px] leading-[1.8] text-ink"
+            class="topic-content text-base leading-[1.8] text-ink"
           />
           <ForumImageGallery :images="topic.images" />
           <!-- 帖子操作行：左统计、右互动。浏览/回复数取自列（与详情分页 total 同源），点赞数由操作 chip 承载，不重复渲染。 -->
-          <div class="topic-stats mt-4 flex flex-wrap items-center gap-3 text-[13px] text-ink-3">
+          <div class="topic-stats mt-4 flex flex-wrap items-center gap-3 text-sm text-ink-3">
             <span class="inline-flex items-center gap-1">
               <UiIcon name="eye" />{{ topic.view_count }} 次浏览
             </span>

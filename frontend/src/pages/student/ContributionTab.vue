@@ -368,7 +368,7 @@ defineExpose({ loadMine })
               </div>
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-[15px] font-medium text-ink">{{ item.title }}</span>
+                  <span class="truncate text-base font-medium text-ink">{{ item.title }}</span>
                 </div>
                 <p class="mt-0.5 line-clamp-2 text-xs text-ink-3">{{ item.intro }}</p>
                 <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
@@ -412,8 +412,8 @@ defineExpose({ loadMine })
             <div class="flex items-center gap-3">
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-[15px] font-medium text-ink">{{ item.title }}</span>
-                  <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
+                  <span class="truncate text-base font-medium text-ink">{{ item.title }}</span>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
                 </div>
                 <div v-if="item.reject_reason" class="mt-1 text-xs text-danger">驳回/下架原因：{{ item.reject_reason }}</div>
                 <div class="mt-1 text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }} · {{ item.downloads_count }} 次下载</div>
@@ -478,7 +478,7 @@ defineExpose({ loadMine })
       <el-skeleton v-if="detailLoading" :rows="5" animated />
       <div v-else-if="detailItem" class="flex flex-col gap-3.5">
         <div>
-          <div class="text-[16px] font-medium text-ink">{{ detailItem.title }}</div>
+          <div class="text-base font-medium text-ink">{{ detailItem.title }}</div>
           <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
             <span>{{ detailItem.author?.anonymous ? '匿名学员' : detailItem.author?.username || '—' }}</span>
             <span>{{ detailItem.downloads_count }} 次下载</span>

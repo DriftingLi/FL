@@ -14,7 +14,7 @@
 
     <!-- 每日打卡入口（ADR-0028：打卡已迁独立页 /training/check-in，论坛只留跳转） -->
     <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="goCheckIn">
-      <div class="flex items-center gap-2 text-[13px] text-ink">
+      <div class="flex items-center gap-2 text-sm text-ink">
         <UiIcon name="calendar" class="text-base text-ui-soft-ink" />
         <span>每日打卡赚积分</span>
       </div>
@@ -116,7 +116,7 @@
               <UiTag size="small" tone="info">回复</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ reply.topic_title || '原帖已删除' }}</h3>
             </div>
-            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ summaryOfReply(reply) }}</p>
+            <p class="mt-1.5 mb-2 line-clamp-2 text-sm text-ink-2">{{ summaryOfReply(reply) }}</p>
             <div class="flex items-center gap-1.5 text-xs text-ink-3">
               <span>{{ formatRelativeTime(reply.created_at) }}</span>
             </div>
@@ -168,7 +168,7 @@
               <UiTag v-if="topic.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
               <h3 class="m-0 truncate text-base font-semibold text-ink">{{ topic.title }}</h3>
             </div>
-            <p class="mt-1.5 mb-2 line-clamp-2 text-[13px] text-ink-2">{{ summaryOf(topic) }}</p>
+            <p class="mt-1.5 mb-2 line-clamp-2 text-sm text-ink-2">{{ summaryOf(topic) }}</p>
             <div class="flex items-center gap-1.5 text-xs text-ink-3">
               <span>{{ displayName(topic.author) }}</span>
               <span class="text-[var(--color-border-dark)]">·</span>

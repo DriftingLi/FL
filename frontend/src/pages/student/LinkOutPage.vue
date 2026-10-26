@@ -52,7 +52,7 @@ function goBack() {
       <template v-if="targetUrl">
         <p class="mt-2 mb-0 text-sm text-ink-2">你将要访问的是站外地址：</p>
         <!-- 目标地址是不可信输入：按文本渲染，不解析为 HTML -->
-        <p class="mt-3 mb-0 break-all rounded-[6px] border border-line bg-canvas px-3 py-2 text-left text-[13px] text-ink-2">
+        <p class="mt-3 mb-0 break-all rounded-[6px] border border-line bg-canvas px-3 py-2 text-left text-sm text-ink-2">
           {{ targetUrl }}
         </p>
         <p class="mt-3 mb-0 text-xs text-ink-3">站外内容由第三方提供，请自行判断其可靠性。</p>
