@@ -143,11 +143,11 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(s).toMatch(/class="create-pill"[\s\S]{0,120}?@click="onCreate"/);
   });
 
-  it('dashboard 页头保留证件下拉标题与两图标右槽（#1846 收敛：🔍 移出页头进功能宫格，右槽 3→2 图标防超宽；#1602 形态其余不动）', () => {
+  it('dashboard 页头保留证件下拉标题与单图标右槽（#1846 收敛：🔍 移出页头进功能宫格，3→2；🛒 移出页头——商城入口已在宫格「课程商城」，右槽 2→1；#1602 形态其余不动）', () => {
     const s = read('pages/dashboard/dashboard.uvue');
     expect(s).toMatch(/:right-icons="navRightIcons"/);
-    expect(s).toMatch(/navRightIcons\s*:\s*string\[\]\s*=\s*\['🔔', '🛒'\]/);
-    expect(s).not.toContain("['🔍', '🔔', '🛒']");
+    expect(s).toMatch(/navRightIcons\s*:\s*string\[\]\s*=\s*\['🔔'\]/);
+    expect(s).not.toContain("'🛒'");
     expect(s).toMatch(/<AppNavBar[^>]*@left-click="onCertTap"/);
     // 移出页头的入口页内可达（#1846）：宫格补全局搜索格（静态面与跳转语义另由 dashboardContract / searchContract M2 钉住）
     expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).toContain("path: '/pages/search/search'");

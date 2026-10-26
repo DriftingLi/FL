@@ -2,7 +2,8 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- #1602 迁移：页头收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
              状态栏占位由页头件内化；右槽多图标按胶囊左边线让位（透明变体，N05 页面自垫底色）。
-             #1846 收敛：右槽 3→2 图标（🔍 移出，落点进下方功能宫格），最长内容形态落回典型可用槽宽内。 -->
+             #1846 收敛：右槽 3→2 图标（🔍 移出，落点进下方功能宫格），最长内容形态落回典型可用槽宽内。
+             🛒 随之移出页头（右槽 2→1）：商城入口已在下方功能宫格「课程商城」，页头重复占位。 -->
         <AppNavBar variant="plain" transparent :left-icon="''" :title="navTitle" :right-icons="navRightIcons"
             @left-click="onCertTap" @right-click="onNavRightClick" />
 
@@ -93,11 +94,11 @@
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // 页头右槽两图标（🔔🛒），经 AppNavBar 的胶囊让位右槽排布。
+    // 页头右槽单图标（🔔），经 AppNavBar 的胶囊让位右槽排布。
     // #1846 收敛：🔍（全局搜索）移出页头——3 图标约 204rpx 超典型可用槽宽（约 164rpx），溢出向右顶进
     // 胶囊间隙带；入口下沉功能宫格（dashboard-menu-grid），触发行为不变（仍 navigateTo 压栈，
-    // 搜索页「取消」依赖返回栈）。
-    const navRightIcons : string[] = ['🔔', '🛒']
+    // 搜索页「取消」依赖返回栈）。🛒 同理移出页头：商城入口已在宫格「课程商城」，页头不再重复。
+    const navRightIcons : string[] = ['🔔']
 
     // ---- 证件切换流（composable 持有） ----
     const {
@@ -174,16 +175,10 @@
         uni.navigateTo({ url: '/pages/courses/course-detail?id=' + course.course_id.toString() })
     }
 
-    function onCartClick() : void {
-        uni.showToast({ title: '购物车功能开发中', icon: 'none' })
-    }
-
-    /** AppNavBar 多图标右槽分发（索引序同 navRightIcons；#1846 起 🔍 已移出，0=通知、1=购物车）。须声明在被引用函数之后（UTS codegen 顺序敏感）。 */
+    /** AppNavBar 右槽点击（单图标 🔔=通知，0=🔔；-1 为槽位空点，无入口可落）。须声明在被引用函数之后（UTS codegen 顺序敏感）。 */
     function onNavRightClick(idx : number) : void {
         if (idx == 0) {
             onNotificationClick()
-        } else {
-            onCartClick()
         }
     }
 
