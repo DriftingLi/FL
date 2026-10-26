@@ -1,9 +1,8 @@
 <template>
-  <!-- 导师端：与学员端一致的石墨青暗底侧栏 + 紧凑密度 + 内容限宽居中。
-       AdminLayout 不传这些 prop，走默认值（=改造前行为），管理端零 diff。 -->
+  <!-- 导师端：与其余三端同一套外壳（默认密度）+ 内容限宽居中。
+       侧栏密度自 ADR-0081 起只剩单档（原 compact 变体已退役），四端观感一致。 -->
   <SidebarLayout
     :menu-items="tutorNav"
-    sidebar-density="compact"
     content-width="narrow"
   />
 </template>

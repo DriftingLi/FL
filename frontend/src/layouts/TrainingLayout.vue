@@ -1,9 +1,8 @@
 <template>
-  <!-- 学员端：紧凑密度 + 内容限宽居中（#1619 起外壳由 SidebarLayout 统一提供顶栏，
+  <!-- 学员端：内容限宽居中（#1619 起外壳由 SidebarLayout 统一提供顶栏，
        侧栏不再是深色体系，「配色随侧栏 theme」的那套 prop 随之退役）。 -->
   <SidebarLayout
     :menu-items="currentMenuItems"
-    sidebar-density="compact"
     content-width="narrow"
   >
     <!-- 证件切换器（全局过滤器）：坐顶栏中区最左、与内容列对齐（ADR-0072）。

@@ -12,7 +12,6 @@
       :menu-items="menuItems"
       :collapsed="collapsed"
       :mobile-open="mobileOpen"
-      :density="props.sidebarDensity"
       :class="{ 'sidebar-mobile-open': mobileOpen }"
       @toggle-collapse="handleToggleCollapse"
     >
@@ -94,8 +93,6 @@ const props = withDefaults(
      * - `narrow`：内容限宽 1280px 居中，宽屏下避免行过长
      */
     contentWidth?: 'full' | 'narrow'
-    /** 透传给 AppSidebar，不传则沿用其默认值 `default` */
-    sidebarDensity?: 'default' | 'compact'
     /**
      * 进 keep-alive 缓存的组件名（#1620）。缺省空数组 = 不缓存任何页面（= 改造前行为），
      * 由管理端布局传入（名单由页面描述符派生，见 config/navigation.ts 的 keepAliveNames）。
