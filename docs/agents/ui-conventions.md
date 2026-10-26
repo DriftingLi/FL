@@ -306,7 +306,7 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 | 固定色阶当填充（B 类） | 31 处成对 chip：深色下是「暗页上的亮块」，但对比度不变 | `docs/design/1880-token-audit.md` 另票 | 逐个换翻转填充会变「深底深字」，必须先有新的成对 token |
 | 打印 | 全库 `@media print` **0 条** | 未立票 | 打印会把顶栏、侧栏、页脚一起印出来；要支持得单独定一版稿 |
 | 响应式 | 172 个 `.vue` 里 **39 个**有响应式处理（26 条 `@media` + 1 处 `matchMedia` + 41 处 `sm:`/`md:` 工具类，并集 39）；断点集中在 768px | 口径已定（ADR-0084/0085/0086，见上「响应式」节），**迁移按页面族另开票**，不是没有判据 | 现状不违规：管理端 ≤768 只承诺不崩、学员端必守 375；逐个页面「顺手加断点」会违反 ADR-0084 的「管理端 ≤768 只允许防溢出类兜底」 |
-| 卡片容器三写法 | `UiCard` 24 / `el-card` 27 / 本地容器类 29 | **ADR-0087 草稿待签字**；签字前不迁 | 现在改会动 13 个文件的垂直节奏（el-card 的内边距在 `.el-card__body` 上），必须分批带截图 |
+| 卡片容器三写法 | `UiCard` 24 / `el-card` 27 / 本地容器类 29 | **ADR-0087 已签字（2026-10-26）**，迁移按批推进（批一 = 仪表盘 + 统计分析） | 一次性改会动 13 个文件的垂直节奏（el-card 的内边距在 `.el-card__body` 上），必须分批带截图 |
 | 指标卡三形态 | `UiStatCard` 只在学员端 6 处；管理端 8 处是两套写法（仪表盘 `.stat-card` 4、统计分析 `el-card.stat-card` 4） | 并入 ADR-0087 批一（仪表盘 + 统计分析同屏可对照） | 直接迁会丢掉版式差异（居中 / 左侧色条 / 图标位），得先补 `layout` / `accent` 两档 |
 | Element Plus 内置文案 | 分页 `Total 26`（34 处）、行内确认 `Yes/No`（5 处）等，全站未配 locale | [#1971](https://github.com/DriftingLi/FL/issues/1971) 已立票 | 只给单个组件传中文文案治不了 `el-date-picker` / `el-upload`；要修就 `ElConfigProvider + zhCn` 一处修全站，并回归分页/气泡/日期三处 |
 | 标签 `effect="dark"` | 白字压在语义主色填充上：warning **2.15** / success 2.54 / primary 3.74 / danger 3.76 / info 4.83（全站 7 处，如「✓ 已解决」） | #1954 只收口 light / plain 的文字档；改实心填充属观感裁定 | 要修得把填充换成**不翻转**的深色（danger `#B91C1C` 等）；别只换 ink —— 深色主题下 `-strong` 会翻成浅色，白字压上去只剩 1.6:1 |
