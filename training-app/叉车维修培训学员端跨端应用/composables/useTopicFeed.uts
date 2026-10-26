@@ -49,7 +49,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
     let requestToken = 0
     const sortField = ref<string>('latest') // latest | hot
     const sortOrder = ref<string>('desc')   // desc | asc
-    // 知识问答筛选：recommend（mock，暂以热度代替）| hot | latest
+    // 知识问答筛选：recommend | hot | latest（#1952：推荐由现成热度排序承接，与最热同排序源，无独立推荐算法）
     const qaSort = ref<string>('recommend')
     // 知识问答状态筛选（#740，两态按父票 #707 裁定）：''（全部）| resolved（已解决）| open（未解决）
     const qaStatus = ref<string>('')
@@ -74,7 +74,7 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         let sort = sortField.value
         let order = sortOrder.value
         if (currentTab.value === 'hot') {
-            // 知识问答：只列提问帖；推荐/最热都映射后端 hot（推荐暂无独立算法，mock 占位），最新映射 latest
+            // 知识问答：只列提问帖；推荐/最热共用后端 hot 排序源（#1952 定案，真推荐算法不立项），最新映射 latest
             scope = 'all'
             category = 'question'
             order = 'desc'
