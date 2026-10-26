@@ -37,9 +37,10 @@
       </template>
 
       <div>
-      <el-card
+      <UiCard
         v-for="(item, i) in wrongList"
         :key="item.id"
+        padding="base"
         class="stagger-in mb-3"
         :style="staggerStyle(i)"
       >
@@ -122,7 +123,7 @@
             <UiButton variant="danger" size="small" @click="removeWrong(item.question_id)">移出</UiButton>
           </div>
         </template>
-      </el-card>
+      </UiCard>
       <UiPagination
       v-model:current-page="page"
       :page-size="pageSize"
@@ -167,6 +168,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 
 
