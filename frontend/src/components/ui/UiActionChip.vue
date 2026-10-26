@@ -46,31 +46,29 @@ const props = withDefaults(
 
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 
-/** 内置图标 path（outline → filled 双形态，激活自动切换） */
-const PATHS: Record<string, { outline: string; filled: string }> = {
-  like: {
-    outline: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z',
-    filled: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'
-  },
-  fav: {
-    outline: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
-    filled: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z'
-  },
-  report: {
-    outline: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7',
-    filled: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zm0 7v-7'
-  },
-  delete: {
-    outline: 'M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
-    filled: 'M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m4 3v9m6-9v9'
-  }
-}
+/** 内置字形："描边 ↔ 实心"成对登记在注册表里（chip-* / chip-*-filled，#1913） */
+const CHIP_ICONS = ['like', 'fav', 'report', 'delete'] as const
+type ChipIcon = (typeof CHIP_ICONS)[number]
+const CHIP_ICON_SET: Readonly<Record<string, true>> = { like: true, fav: true, report: true, delete: true }
 
-const builtin = computed(() => (typeof props.icon === 'string' && props.icon in PATHS ? props.icon as keyof typeof PATHS : null))
-/** 非内置图标：调用方给的是注册表名（内置 like/fav/report/delete 走上面的 SVG 分支） */
-const customIcon = computed(() => (builtin.value ? null : ((props.icon as IconName | undefined) ?? null)))
+const builtin = computed<ChipIcon | null>(() => {
+  const icon = props.icon
+  if (typeof icon !== 'string') return null
+  if (!(icon in CHIP_ICON_SET)) return null
+  return icon as ChipIcon
+})
 
-const path = computed(() => (builtin.value ? PATHS[builtin.value][props.active ? 'filled' : 'outline'] : ''))
+/** 交给 UiIcon 的名字：内置字形按激活态切 -filled，外部图标原样透传 */
+const chipIcon = computed<IconName | null>(() => {
+  if (builtin.value) return ('chip-' + builtin.value + (props.active ? '-filled' : '')) as IconName
+  return (props.icon as IconName | undefined) ?? null
+})
+
+/**
+ * 只有「形状真的变了」才走形变：心动两态是同一个 d（只换填充），形变无处可动，保持 CSS；
+ * 星形/旗/桶的描边与实心是两套路径 —— 正是形变的宿主（ADR-0079 白名单）。
+ */
+const chipMorph = computed(() => builtin.value !== null && builtin.value !== 'like')
 
 const chipClass = computed(() => {
   const active = props.active
@@ -106,21 +104,7 @@ const baseClass = computed(() =>
     :class="[baseClass, chipClass]"
     @click="(ev: MouseEvent) => emit('click', ev)"
   >
-    <!-- 内置 SVG（激活切 filled；stroke 线型 → fill 实心） -->
-    <svg
-      v-if="builtin"
-      class="size-3.5 flex-none"
-      viewBox="0 0 24 24"
-      :fill="active ? 'currentColor' : 'none'"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      :aria-hidden="label ? undefined : 'true'"
-    >
-      <path :d="path" />
-    </svg>
-    <UiIcon :name="customIcon" v-else-if="customIcon" class="size-3.5 text-[1em]" />
+    <UiIcon v-if="chipIcon" :name="chipIcon" :morph="chipMorph" class="size-3.5 flex-none text-[1em]" />
     <span v-if="!compact && label">{{ label }}</span>
     <span v-if="count !== undefined && count > 0" class="font-mono tabular-nums">{{ count }}</span>
     <span v-if="compact && label" class="sr-only">{{ label }}</span>

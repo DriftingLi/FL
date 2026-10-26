@@ -9,6 +9,7 @@ import { epLite } from '@/test/element-lite'
 
 import UiBadge from '../UiBadge.vue'
 import UiButton from '../UiButton.vue'
+import UiIcon from '../UiIcon.vue'
 import UiCard from '../UiCard.vue'
 import UiCountTo from '../UiCountTo.vue'
 import UiDialog from '../UiDialog.vue'
@@ -330,6 +331,22 @@ describe('UiActionChip（操作药丸）', () => {
     const w = mountWith(UiActionChip, { label: '点赞', disabled: true })
     await w.trigger('click')
     expect(w.emitted('click')).toBeFalsy()
+  })
+
+  it('内置字形按激活态切到实心版，且只有形状真的变的那几组开形变', () => {
+    const outline = mountWith(UiActionChip, { label: '收藏', icon: 'fav' })
+    const o = outline.findComponent(UiIcon)
+    expect(o.props('name')).toBe('chip-fav')
+    expect(o.props('morph')).toBe(true)
+
+    const filled = mountWith(UiActionChip, { label: '收藏', icon: 'fav', active: true })
+    expect(filled.findComponent(UiIcon).props('name')).toBe('chip-fav-filled')
+    expect(filled.findComponent(UiIcon).props('morph')).toBe(true)
+
+    // 心形两态是同一个 d（只换填充）——不进形变，保持 CSS 切换
+    const heart = mountWith(UiActionChip, { label: '点赞', icon: 'like' })
+    expect(heart.findComponent(UiIcon).props('name')).toBe('chip-like')
+    expect(heart.findComponent(UiIcon).props('morph')).toBe(false)
   })
 })
 

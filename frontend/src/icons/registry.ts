@@ -211,7 +211,19 @@ export const ICONS = {
   'message-circle': MessageCircle,
   phone: Phone,
   'wand-sparkles': WandSparkles,
-  monitor: Monitor
+  monitor: Monitor,
+
+  // ── 操作药丸的双形态字形（描边 ↔ 实心成套，#1913）───────
+  // 这四组是 UiActionChip 14px 下的定制字形（描边与实心**成套**设计），不属于通用图标集，
+  // 但它们是「同一位置、两个形状」，正好是形变的宿主：激活时由描边长成实心。
+  'chip-like': [['path', { d: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z' }]],
+  'chip-like-filled': [['path', { d: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z', fill: 'currentColor', stroke: 'none' }]],
+  'chip-fav': [['path', { d: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z' }]],
+  'chip-fav-filled': [['path', { d: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z', fill: 'currentColor', stroke: 'none' }]],
+  'chip-report': [['path', { d: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7' }]],
+  'chip-report-filled': [['path', { d: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zm0 7v-7', fill: 'currentColor', stroke: 'none' }]],
+  'chip-delete': [['path', { d: 'M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' }]],
+  'chip-delete-filled': [['path', { d: 'M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m4 3v9m6-9v9', fill: 'currentColor', stroke: 'none' }]]
 } as const satisfies Record<string, IconNode>
 
 /** 注册表里的全部语义名。 */
