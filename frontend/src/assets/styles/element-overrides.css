@@ -34,6 +34,18 @@
   --el-color-danger-light-9: #FEF2F2;
   --el-color-danger-dark-2: #DC2626;
 
+  /*
+   * error 家族（#1934）：EP 的 el-message 与 error 型 el-alert 走的是 --el-color-error*，
+   * 不是 --el-color-danger*。此前只覆盖 danger，这两处一直回落出厂红（#F56C6C on #FEF0F0
+   * = 2.61:1）。七档与 danger 同值，单点维护；文字色另见文件末「错误提示文字」段。
+   */
+  --el-color-error: var(--color-danger);
+  --el-color-error-light-3: #FCA5A5;
+  --el-color-error-light-5: #FECACA;
+  --el-color-error-light-7: #FEE2E2;
+  --el-color-error-light-9: #FEF2F2;
+  --el-color-error-dark-2: #DC2626;
+
   --el-color-info: var(--color-info);
   --el-color-info-light-3: #9CA3AF;
   --el-color-info-light-5: #D1D5DB;
@@ -58,7 +70,7 @@
   --el-text-color-primary: var(--color-text-primary);
   --el-text-color-regular: var(--color-text-secondary);
   --el-text-color-secondary: var(--color-text-tertiary);
-  --el-text-color-placeholder: var(--color-text-disabled);
+  --el-text-color-placeholder: var(--color-text-placeholder);
   --el-text-color-disabled: var(--color-text-disabled);
 
   --el-border-color: var(--color-border);
@@ -126,6 +138,12 @@
   --el-color-danger-light-7: #B91C1C;
   --el-color-danger-light-9: #3D1115;
   --el-color-danger-dark-2: #FCA5A5;
+
+  --el-color-error-light-3: #F87171;
+  --el-color-error-light-5: #EF4444;
+  --el-color-error-light-7: #B91C1C;
+  --el-color-error-light-9: #3D1115;
+  --el-color-error-dark-2: #FCA5A5;
 
   --el-color-info-light-3: #9CA3AF;
   --el-color-info-light-5: #6B7280;
@@ -322,4 +340,44 @@
 
 .el-table__empty-block {
   color: var(--color-text-tertiary);
+}
+
+/*
+ * 错误提示文字（#1934）：EP 把 --el-color-error 当文字色打在 -light-9 浅底上 ——
+ * 浅色 #EF4444 on #FEF2F2 = 3.44:1、深色 #EF4444 on #3D1115 = 4.33:1，两主题都压不住 4.5。
+ * 出厂值换成 dark-2 也不够（#DC2626 on #FEF2F2 = 4.41），故走语义深字档
+ * --color-danger-strong：它本来就是「与 -light 浅底配对」的那一档，浅色 #B91C1C = 5.91、
+ * 深色 #FCA5A5 on #3D1115 = 8.58。判据锁在 __tests__/contrast.spec.ts。
+ */
+.el-message--error {
+  --el-message-text-color: var(--color-danger-strong);
+}
+
+.el-alert--error.is-light,
+.el-alert--error.is-light .el-alert__description {
+  color: var(--color-danger-strong);
+}
+
+/*
+ * 标签文字档（#1954）：EP 拿 --el-color-<type>（主色档）当标签文字，打在 -light-9 浅底上 ——
+ * warning 2.07 / success 2.41 / danger 3.44 / primary 3.59 / info 4.39，五类全在 4.5 以下。
+ * 统一改走语义深字档（-strong 两主题各自翻转，浅/深都 ≥4.84）。
+ *
+ * :not(.el-tag--dark) 是刻意的：本段只收 light / plain 两种效果，实心标签（白字压主色填充）
+ * 一行不碰 —— 它的问题（2.15–3.76）与解耦方式不同（要换填充），记在 ui-conventions 的已知缺口。
+ *
+ * primary 特殊：EP 的 --el-color-primary-light-9 在深色块不翻转（品牌色阶整体不翻），
+ * 所以 light 效果用不翻的 --color-primary-700（浅青底两主题都是深青），
+ * 而 plain 效果的底是卡片色（会翻）→ 深色下必须换成会翻的 --color-primary-soft-ink，
+ * 否则就是「深青压深底」1.93:1。
+ */
+.el-tag.el-tag--success:not(.el-tag--dark) { --el-tag-text-color: var(--color-success-strong); }
+.el-tag.el-tag--warning:not(.el-tag--dark) { --el-tag-text-color: var(--color-warning-strong); }
+.el-tag.el-tag--danger:not(.el-tag--dark) { --el-tag-text-color: var(--color-danger-strong); }
+.el-tag.el-tag--error:not(.el-tag--dark) { --el-tag-text-color: var(--color-danger-strong); }
+.el-tag.el-tag--info:not(.el-tag--dark) { --el-tag-text-color: var(--color-info-strong); }
+.el-tag.el-tag--primary:not(.el-tag--dark) { --el-tag-text-color: var(--color-primary-700); }
+
+[data-theme="dark"] .el-tag--plain.el-tag--primary {
+  --el-tag-text-color: var(--color-primary-soft-ink);
 }

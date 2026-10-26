@@ -107,6 +107,9 @@ const PAIRS: Array<[string, string, string, number]> = [
   ['次要 ink2 / 卡片底', 'color-text-secondary', 'color-bg-card', 4.5],
   ['三级 ink3 / 页面底', 'color-text-tertiary', 'color-bg-page', 4.5],
   ['三级 ink3 / 卡片底', 'color-text-tertiary', 'color-bg-card', 4.5],
+  // 占位符独立成档（#1934）：此前借 disabled，浅色只有 1.42:1
+  ['占位符 / 页面底', 'color-text-placeholder', 'color-bg-page', 4.5],
+  ['占位符 / 卡片底', 'color-text-placeholder', 'color-bg-card', 4.5],
   ['主按钮白字 / 品牌 600 填充', '#FFFFFF', 'color-primary-600', 4.5],
   ['品牌浅底深字 / 品牌浅底', 'color-primary-soft-ink', 'color-primary-soft', 4.5],
   ['成功深字 / 成功浅底', 'color-success-strong', 'color-success-light', 4.5],
@@ -141,6 +144,72 @@ for (const [theme, tokens] of [
   })
 }
 
+// ---- Element Plus 变量面（#1934）：EP 自己的语义色阶，判据在 element-overrides.css ----
+// 为什么单开一段：上面的矩阵只读 design-tokens.css，EP 的变量映射一直不在判据里 ——
+// 「error 家族漏覆盖」这个 bug 就是这么活下来的（message 文字回落出厂红，矩阵一无所知）。
+const overridesCss = readFileSync(resolve(__dirname, '../element-overrides.css'), 'utf8')
+/** element-overrides.css 的 :root 在文件首行、前面没有换行，故选择器要带 ^ 分支 */
+const elOverridesLight = decls(blockOf(overridesCss, /(?:^|\n):root\s*\{/))
+const elOverridesDark = decls(blockOf(overridesCss, /(?:^|\n)\[data-theme="dark"\]\s*\{/))
+const elLight = { ...lightTokens, ...elOverridesLight }
+// 深色档要按 CSS 的层叠顺序叠：浅色 → 浅色覆盖 → 深色 token → 深色覆盖。
+// 只叠深色覆盖会丢掉「深色块没重定义、只在浅色块定义过」的变量（如 --el-color-primary-light-9，
+// 品牌色阶整体不翻，深色块里根本没有它）。
+const elDark = { ...lightTokens, ...elOverridesLight, ...darkTokens, ...elOverridesDark }
+
+/** 错误提示文字色走 danger-strong（element-overrides.css 末段已把 message/alert 指过去） */
+const EP_ERROR_TEXT = 'color-danger-strong'
+const EP_ERROR_SURFACE = 'el-color-error-light-9'
+
+for (const [theme, tokens] of [
+  ['浅色', elLight],
+  ['深色', elDark]
+] as const) {
+  describe(`Element 语义色阶（${theme}）`, () => {
+    it('error 家族六档与 danger 同值（EP 的 message / alert 走 error，漏覆盖会静默回落出厂红）', () => {
+      for (const suffix of ['', '-light-3', '-light-5', '-light-7', '-light-9', '-dark-2']) {
+        expect(tokens[`el-color-error${suffix}`], `--el-color-error${suffix} 与 danger 不一致（${theme}）`)
+          .toBe(tokens[`el-color-danger${suffix}`])
+      }
+    })
+
+    it('错误提示文字压在错误浅底上 ≥ 4.5:1', () => {
+      const ratio = contrast(resolveToken(EP_ERROR_TEXT, tokens), resolveToken(EP_ERROR_SURFACE, tokens))
+      expect(ratio, `错误提示实测 ${ratio.toFixed(2)}:1（${theme}）`).toBeGreaterThanOrEqual(4.5)
+    })
+  })
+}
+
+// ---- 标签文字档（#1954）：light / plain 效果的字压在两种底上都要 ≥4.5 ----
+// [type, -light-9 上的字, 卡片底上的字] —— primary 的两档不同：
+// light 效果的浅青底两主题都不翻（用 -700），plain 的底是卡片会翻（深色用 soft-ink）。
+const TAG_INKS: Array<[string, string, string]> = [
+  ['success', 'color-success-strong', 'color-success-strong'],
+  ['warning', 'color-warning-strong', 'color-warning-strong'],
+  ['danger', 'color-danger-strong', 'color-danger-strong'],
+  ['info', 'color-info-strong', 'color-info-strong'],
+  ['primary', 'color-primary-700', 'color-primary-soft-ink']
+]
+
+for (const [theme, tokens] of [
+  ['浅色', elLight],
+  ['深色', elDark]
+] as const) {
+  describe(`标签文字档（${theme}）`, () => {
+    for (const [type, ink, cardInk] of TAG_INKS) {
+      it(`${type} 标签文字压在 -light-9 上 ≥ 4.5:1`, () => {
+        const ratio = contrast(resolveToken(ink, tokens), resolveToken(`el-color-${type}-light-9`, tokens))
+        expect(ratio, `${type} 标签实测 ${ratio.toFixed(2)}:1（${theme}）`).toBeGreaterThanOrEqual(4.5)
+      })
+
+      it(`${type} 标签文字压在卡片底上（plain）≥ 4.5:1`, () => {
+        const ratio = contrast(resolveToken(cardInk, tokens), resolveToken('color-bg-card', tokens))
+        expect(ratio, `${type} plain 标签实测 ${ratio.toFixed(2)}:1（${theme}）`).toBeGreaterThanOrEqual(4.5)
+      })
+    }
+  })
+}
+
 describe('矩阵本身没有静默失灵', () => {
   it('两个块都解析出了足量 token，且关键底色与源文件一致', () => {
     expect(Object.keys(lightTokens).length).toBeGreaterThan(20)
@@ -155,5 +224,12 @@ describe('矩阵本身没有静默失灵', () => {
     const soft = resolveValue('var(--color-primary-soft)', lightTokens)
     expect(soft).toMatch(/^#[0-9A-F]{6}$/)
     expect(soft).not.toBe(lightTokens['color-primary-500'].toUpperCase())
+  })
+
+  it('Element 覆盖面解析成功，且占位符不再借 disabled（#1934）', () => {
+    expect(Object.keys(elOverridesLight).length).toBeGreaterThan(40)
+    expect(Object.keys(elOverridesDark).length).toBeGreaterThan(10)
+    expect(resolveToken('color-text-placeholder', lightTokens)).toBe(resolveToken('color-text-tertiary', lightTokens))
+    expect(resolveToken('color-text-placeholder', darkTokens)).toBe('#94A3B8')
   })
 })
