@@ -10,6 +10,11 @@
  * 它**不**改任何判据：不设超时、不重试、不吞失败、不替代默认 reporter（两个 reporter 并存，
  * `reporters: ['default', ...]`）—— 默认 reporter 的汇总行仍是 `Write-UnitGateArtifacts` 取数的唯一来源。
  *
+ * #1994 接线：行为腿可以被 dev-finish 逐套件驱动（看门狗要能只掐掉一个套件并继续），那时每次
+ * jest 进程只跑一个套件、`numTotalTestSuites`=1。调用方经环境变量给出**全局** offset/total，
+ * reporter 只负责把序号接上去；两个变量都不在时（CI 直接跑 jest / 本地 `npm test`）输出与拆分前逐字一致。
+ * 环境变量是本仓内部契约（`FL_BEHAVIOR_SUITE_OFFSET` / `FL_BEHAVIOR_SUITE_TOTAL`），不是 jest 公开接口。
+ *
  * 行格式（供人读 + 供 grep，均为 `key=value` 空格分隔的单行）：
  *   JEST_SUITE_PLAN total=<N> started=<hh:mm:ss> note=...
  *   JEST_SUITE i=<k>/<N> status=PASS|FAIL secs=<s> elapsed=<s> tests=<n> failed=<n> file=utils/x.test.js
@@ -37,6 +42,7 @@ class SuiteProgressReporter {
     this.done = 0;
     this.passed = 0;
     this.failed = 0;
+    this.offset = 0;
   }
 
   onRunStart(results) {
@@ -44,7 +50,11 @@ class SuiteProgressReporter {
     this.done = 0;
     this.passed = 0;
     this.failed = 0;
-    this.total = (results && results.numTotalTestSuites) || 0;
+    const offset = Number.parseInt(process.env.FL_BEHAVIOR_SUITE_OFFSET || '', 10);
+    const globalTotal = Number.parseInt(process.env.FL_BEHAVIOR_SUITE_TOTAL || '', 10);
+    this.offset = Number.isFinite(offset) && offset > 0 ? offset : 0;
+    const localTotal = (results && results.numTotalTestSuites) || 0;
+    this.total = Number.isFinite(globalTotal) && globalTotal > 0 ? globalTotal : localTotal;
     say(
       'JEST_SUITE_PLAN total=' + this.total +
         ' started=' + clock() +
@@ -69,7 +79,7 @@ class SuiteProgressReporter {
     const abs = test && test.path ? test.path : '';
     const rel = abs ? path.relative(process.cwd(), abs).split(path.sep).join('/') : '?';
     say(
-      'JEST_SUITE i=' + this.done + '/' + (this.total || '?') +
+      'JEST_SUITE i=' + (this.offset + this.done) + '/' + (this.total || '?') +
         ' status=' + (ok ? 'PASS' : 'FAIL') +
         ' secs=' + secs +
         ' elapsed=' + elapsed +
