@@ -153,7 +153,7 @@
         <UiButton size="small" @click="confirmQuit">退出练习</UiButton>
       </div>
 
-      <el-card v-if="currentQuestion" class="mb-[15px]">
+      <UiCard v-if="currentQuestion" class="mb-[15px]">
         <div class="mb-[15px] flex items-center gap-2">
           <UiTag size="small">{{ typeMap[currentQuestion.type] || '题目' }}</UiTag>
           <!-- #511：收藏统一药丸（激活琥珀填充） -->
@@ -215,7 +215,7 @@
             下一题
           </UiButton>
         </div>
-      </el-card>
+      </UiCard>
     </div>
   </div>
 </template>

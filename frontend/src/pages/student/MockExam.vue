@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto max-w-[1200px]">
     <div v-if="!inExam && !examFinished" class="exam-start">
-      <el-card>
+      <UiCard>
         <h2>{{ paperMode ? `真题考试：${paperTitle}` : '模拟考试' }}</h2>
         <el-form v-if="!paperMode" :model="examForm" label-width="100px">
           <el-form-item label="题目数量">
@@ -26,9 +26,9 @@
           <p class="m-0 mb-4 text-sm text-ink-3">整卷限时作答，交卷后出成绩与逐题解析。</p>
           <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
         </div>
-      </el-card>
+      </UiCard>
 
-      <el-card class="mt-5" v-if="history.length > 0">
+      <UiCard class="mt-5" v-if="history.length > 0">
         <h3>历史记录</h3>
         <el-table :data="history" stripe>
           <el-table-column prop="score" label="得分" width="80" />
@@ -41,7 +41,7 @@
             </template>
           </el-table-column>
         </el-table>
-      </el-card>
+      </UiCard>
     </div>
 
     <AnsweringSessionShell
@@ -57,7 +57,7 @@
     />
 
     <div v-if="examFinished" class="exam-result">
-      <el-card>
+      <UiCard>
         <h2>考试结果</h2>
         <div class="my-5 text-center">
           <div class="score-circle mb-2.5 inline-flex size-[150px] flex-col items-center justify-center rounded-full border-[6px] border-bad" :class="examResult.accuracy >= 60 ? 'border-ok' : ''">
@@ -68,9 +68,9 @@
           <p>正确：{{ examResult.correct_count }}/{{ examResult.total_questions }}题</p>
         </div>
         <UiButton variant="primary" @click="resetExam">返回</UiButton>
-      </el-card>
+      </UiCard>
 
-      <el-card v-if="examResult.details" class="mt-[15px]">
+      <UiCard v-if="examResult.details" class="mt-[15px]">
         <h3>答题详情</h3>
         <!-- 判色三态（ADR-0068）：is_correct 为 null = 未判对错（简答），既不是对也不是错 —— 
              它现在也拿得到得分，标红会变成「8/10 分却画成错题」。 -->
@@ -87,7 +87,7 @@
           <p v-if="d.ai_comment" class="text-sm text-ink-3">AI 评语：{{ d.ai_comment }}</p>
           <p v-if="d.explanation" class="text-sm text-ink-3">解析：{{ d.explanation }}</p>
         </div>
-      </el-card>
+      </UiCard>
     </div>
   </div>
 </template>
@@ -103,6 +103,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const route = useRoute()
 const router = useRouter()

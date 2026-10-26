@@ -13,8 +13,17 @@ const props = withDefaults(
     /** flat 描边卡片；raised 带投影；interactive 可点击，带 hover / tap 反馈 */
     variant?: 'flat' | 'raised' | 'interactive'
     padding?: 'none' | 'sm' | 'base' | 'md' | 'lg'
+    /**
+     * 头部下的分隔线。开着时 header 行下方补一条 `border-line` + 内缩的下内边距，
+     * 用来区分「标题行」与「内容区」（管理端列表卡、图表卡的常态）。
+     *
+     * 与 `el-card` 的 header 分隔线差别只在**端点**：EP 那条是通栏的，
+     * 这里跟着卡片内边距内缩（#1974 迁移时的统一口径 —— 通栏线要么靠负 margin 伪造，
+     * 要么把 header 移出 padded 区，两种都得给卡片加结构性 API，不值得）。
+     */
+    divider?: boolean
   }>(),
-  { variant: 'flat', padding: 'md' }
+  { variant: 'flat', padding: 'md', divider: false }
 )
 
 const PADDING: Record<string, string> = {
@@ -46,7 +55,8 @@ const VARIANT: Record<string, string> = {
   >
     <header
       v-if="$slots.header || $slots.actions"
-      class="mb-4 flex items-center justify-between gap-3"
+      class="flex items-center justify-between gap-3"
+      :class="props.divider ? 'mb-4 border-b border-line pb-4' : 'mb-4'"
     >
       <div class="min-w-0">
         <slot name="header" />

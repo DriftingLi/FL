@@ -9,9 +9,11 @@
 
     <el-row :gutter="16" class="tags-layout">
       <el-col :xs="24" :md="10" :lg="8">
-        <el-card shadow="never" class="tags-card">
+        <UiCard divider class="tags-card">
           <template #header>
             <span>考点标签</span>
+          </template>
+          <template #actions>
             <UiTag size="small" tone="info" class="tags-count">{{ tags.length }}</UiTag>
           </template>
           <div v-loading="tagsLoading">
@@ -37,11 +39,11 @@
             </div>
             <UiEmptyState v-if="!tagsLoading && tags.length === 0" description="暂无标签" size="sm" />
           </div>
-        </el-card>
+        </UiCard>
       </el-col>
 
       <el-col :xs="24" :md="14" :lg="16">
-        <el-card shadow="never" class="questions-card">
+        <UiCard divider class="questions-card">
           <template #header>
             <span>{{ currentTagId ? `打标「${currentTagName}」下的题目` : '全部题目 · 选择题目并指定标签' }}</span>
           </template>
@@ -109,7 +111,7 @@
             @current-change="load"
             @size-change="search"
           />
-        </el-card>
+        </UiCard>
       </el-col>
     </el-row>
 
@@ -160,6 +162,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)

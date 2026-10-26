@@ -7,7 +7,7 @@
       </UiButton>
     </div>
 
-    <el-card shadow="never">
+    <UiCard>
       <UiFilterBar>
         <template #filters>
           <el-select v-model="filterCategory" placeholder="类别" clearable style="width: 160px">
@@ -48,7 +48,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+    </UiCard>
 
     <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -102,6 +102,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import UiCard from '@/components/ui/UiCard.vue'
 
 const list = ref<CredentialDict[]>([])
 
