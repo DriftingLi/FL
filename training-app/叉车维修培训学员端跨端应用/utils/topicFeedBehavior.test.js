@@ -12,6 +12,8 @@
  *
  * 判据（每条都对应票面验收）：
  *   ① tab→query 映射与 `pageSize` 逐字照旧（迁的是装载协议，不是查询语义）；
+ *     #1952（摘 mock）追加：默认「推荐」的列表条目必须来自后端响应（无本地假数据源），
+ *     且「推荐→最热」并存走同一排序源 sort=hot、「最新」映射 sort=latest。
  *   ② **切 Tab 换代**：旧 Tab 的响应迟到时不得写进新 Tab 的列表，也不得把新代的数据拼歪；
  *   ③ 触底追加递第 2 页、在飞重入只发一次；
  *   ④ 终止判据来自信封的 `hasMore`（`noMore` 是它的派生取反），到底后不再发请求；
@@ -21,7 +23,8 @@
  *   ① 把 `reset` 分支从 `loadFirst` 换成 `onLoadMore` ⇒ ②「切 Tab 换代」判红；
  *   ② 把信封的 `hasMore` 写死成 `true` ⇒ ④「到底不再发」判红；
  *   ③ 删掉失败分支的 toast ⇒ ⑤ 判红；
- *   ④ 拆掉换代令牌 ⇒ ②「旧代失败不得弹 toast」判红。
+ *   ④ 拆掉换代令牌 ⇒ ②「旧代失败不得弹 toast」判红；
+ *   ⑤ qaSort→sort 映射写死成 `hot` ⇒ #1952「最新映射 latest」判红。
  */
 const fs = require('fs');
 const os = require('os');
@@ -112,6 +115,27 @@ describe('首屏：`loadTopics(true)` 换到第 1 页，查询语义不变', () 
     expect(calls[0].args).toEqual([1, 10, 'all', 'hot', 'desc', 'question', '', '', '']);
     calls[0].resolve(page1(['q']));
     await flush();
+    // #1952（摘 mock）：默认「推荐」渲染的就是这次响应里的条目 —— 列表没有本地假数据源
+    expect(api.topics.value).toEqual(['q']);
+  });
+
+  it('知识问答「推荐」与「最热」并存（#1952）：切到最热仍发同一排序源 sort=hot，切最新映射 latest', async () => {
+    const { api, calls, toasts } = harness('hot');
+    api.loadTopics(true);                        // 默认 recommend ⇒ sort=hot
+    calls[0].resolve(page1(['r1']));
+    await flush();
+    api.onQaSortChange('hot');                   // 推荐→最热：同排序源，仍是一次真实请求（并存不报错）
+    expect(calls.length).toBe(2);
+    expect(calls[1].args).toEqual([1, 10, 'all', 'hot', 'desc', 'question', '', '', '']);
+    calls[1].resolve(page1(['h1']));
+    await flush();
+    expect(api.topics.value).toEqual(['h1']);
+    api.onQaSortChange('latest');                // 最新 ⇒ sort=latest（三档里唯一不同映射）
+    expect(calls[2].args).toEqual([1, 10, 'all', 'latest', 'desc', 'question', '', '', '']);
+    calls[2].resolve(page1(['l1'], false));
+    await flush();
+    expect(api.topics.value).toEqual(['l1']);
+    expect(toasts).toEqual([]);                  // 全程无失败提示
   });
 
   it('备考经验 tab：scope=all、category 清空、isExperience=true、默认排序 latest', async () => {
@@ -316,6 +340,19 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
     // 坏实现在旧代失败时照样 toast ⇒ 真源上「换代后 toasts 为空」判红
     expect(broken.toasts.map((t) => t.title)).toEqual(['加载帖子失败']);
     expect(broken.api.topics.value).toEqual(['q1']);
+  });
+
+  it('必红 · qaSort→sort 映射写死成 `hot`（latest 档失效）⇒ #1952「切最新映射 latest」判红', async () => {
+    const broken = harnessAt(
+      mutatedCopy(FEED_UTS, [[
+        "sort = qaSort.value == 'latest' ? 'latest' : 'hot'",
+        "sort = 'hot'",
+      ]], 'topic-feed-qasort-'),
+      'hot',
+    );
+    broken.api.onQaSortChange('latest');
+    // 坏实现把三档全压成 hot ⇒ 真源上 args[3]==='latest' 的断言判红
+    expect(broken.calls[0].args[3]).toBe('hot');
   });
 
   it('必红 · 删掉失败分支的 toast ⇒ 用户可见的失败提示消失，⑤ 判红', async () => {

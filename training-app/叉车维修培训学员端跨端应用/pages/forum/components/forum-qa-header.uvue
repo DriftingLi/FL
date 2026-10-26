@@ -21,7 +21,7 @@
             </view>
         </view>
 
-        <!-- 知识问答：推荐/最热/最新（推荐为热度 mock，后端暂无推荐算法） -->
+        <!-- 知识问答：推荐/最热/最新（推荐由现成热度排序承接 #1952，与最热同排序源；真推荐算法不立项） -->
         <view class="qa-filter-bar">
             <view class="qa-chip" :class="{ active: qaSort === 'recommend' }" @click="onSort('recommend')">
                 <text class="qa-chip-text" :class="{ active: qaSort === 'recommend' }">推荐</text>
