@@ -136,7 +136,7 @@
             class="mt-1 max-h-[300px] max-w-full rounded-card"
           />
         </div>
-        <el-alert
+        <UiAlert
           v-if="currentQuestion.status === 'draft' && currentQuestion.reject_reason"
           title="该题目已被管理员驳回"
           type="error"
@@ -171,6 +171,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }

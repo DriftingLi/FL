@@ -75,7 +75,8 @@ describe('Materials 学习资料页（#517 双 tab）', () => {
       }
     })
     await flushPromises()
-    const tabs = w.findAll('button')
+    // 「课程资料 / 学员投稿」是两份不同的列表 → 面板切换用原生 el-tabs（登记表「面板切换」行）
+    const tabs = w.findAll('.el-tabs__item')
     const contribTab = tabs.find((b) => b.text().includes('学员投稿'))
     expect(contribTab).toBeTruthy()
     await contribTab!.trigger('click')

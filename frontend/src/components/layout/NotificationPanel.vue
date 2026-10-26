@@ -2,6 +2,7 @@
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref } from 'vue'
 import NotificationPanelBody from './NotificationPanelBody.vue'
+import UiBadge from '@/components/ui/UiBadge.vue'
 
 /**
  * 通知入口。
@@ -42,14 +43,9 @@ function onPopoverShow() {
   >
     <template #reference>
       <button class="icon-btn notification-btn" title="通知" aria-label="通知">
-        <el-badge
-          :value="unreadCount"
-          :hidden="unreadCount === 0"
-          :max="99"
-          class="notification-badge"
-        >
+        <UiBadge :count="unreadCount" :max="99" class="notification-badge">
           <UiIcon name="bell" />
-        </el-badge>
+        </UiBadge>
       </button>
     </template>
 

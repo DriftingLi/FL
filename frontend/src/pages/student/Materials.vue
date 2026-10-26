@@ -2,14 +2,13 @@
   <div class="mx-auto max-w-[960px] p-5">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-2xl text-ink">学习资料</h2>
-      <UiSegmentTabs
-        v-model="activeTab"
-        :options="[
-          { label: '课程资料', value: 'material' },
-          { label: '学员投稿', value: 'contribution' }
-        ]"
-      />
     </div>
+
+    <!-- 面板切换（课程资料 / 学员投稿是两份不同的列表）→ 原生 el-tabs，登记表「面板切换」行 -->
+    <el-tabs v-model="activeTab" class="mb-3">
+      <el-tab-pane label="课程资料" name="material" />
+      <el-tab-pane label="学员投稿" name="contribution" />
+    </el-tabs>
 
     <template v-if="activeTab === 'material'">
     <div class="mb-4">
@@ -108,7 +107,6 @@ import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import ContributionTab from './ContributionTab.vue'
 

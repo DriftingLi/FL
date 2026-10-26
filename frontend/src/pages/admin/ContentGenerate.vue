@@ -61,11 +61,11 @@
 
     <UiCard v-if="generateTask" padding="lg" class="progress-card">
       <h3>生成进度</h3>
-      <el-progress
-        :percentage="progressPercent"
+      <UiProgress
+        :value="progressPercent"
         :status="generateTask.status === 'completed' ? 'success' : (generateTask.status === 'failed' ? 'exception' : '')"
         :stroke-width="20"
-        :text-inside="true"
+        text-inside
         style="margin-bottom: 16px"
       />
       <div class="progress-detail">
@@ -127,6 +127,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiProgress from '@/components/ui/UiProgress.vue'
 
 interface GenerateCourse {
   course_id: number
