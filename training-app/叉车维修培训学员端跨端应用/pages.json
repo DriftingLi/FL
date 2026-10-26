@@ -328,6 +328,13 @@
             }
         },
         {
+            "path": "pages/points/points-rules",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "积分规则"
+            }
+        },
+        {
             "path": "pages/resources/my-purchases",
             "style": {
                 "navigationStyle": "custom",

@@ -453,10 +453,4 @@ loadCourses()
   }
 }
 
-@media screen and (max-width: 480px) {
-  .generate-card :deep(.el-form-item__label) {
-    width: 70px !important;
-    font-size: var(--text-sm);
-  }
-}
 </style>

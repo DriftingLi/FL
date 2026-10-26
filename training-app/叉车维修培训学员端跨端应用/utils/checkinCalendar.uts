@@ -67,7 +67,6 @@ export function getTodayPoints(days : CheckInCalendarDay[], today : string) : nu
 
 /**
  * YYYY-MM-DD → y*10000+m*100+d 的可比较数值（Kotlin 端无 String 序比较，与 Web 端统一数值定序）
- * 导出位（#709）：积分流水「即将过期」窗口比较复用同一份日历数学，不再各处重抄。
  */
 export function dateOrder(date : string) : number {
     const p = parseDate(date)

@@ -21,7 +21,7 @@
 | **意图** | 用户要做的那件事。判「同一意图」用**三轴**：① **目标**（选一个看下去 / 选一个存下来 / 确认一个动作 / 把一个对象当入口…）；② **后果**（是否产生持久化、是否改变你正在操作的对象）；③ **可逆性 / 影响半径**（能否撤销、影响是当前一行还是整页 —— 「交卷」与「仅解除关联」不在这根轴的同一处）。三轴都相同才是同一意图。**层级（页面级 / 卡片级）不是轴** —— 同一意图只有一个视觉语法，层级只派生**尺寸档**（高度 / 字重 / 间距），不派生第二形态。**容器（卡片等）不受意图约束，受档位表约束**；只有可点击的入口才受它约束（**ADR-0083**，2026-10-26；票 #1957）。 |
 | **封装层** | `components/ui/` 下的自建组件集合。业务页面**不得直接使用 Element Plus 控件**，一律经此层（ADR-0035）。例外：`el-table`（197 处，走全局样式覆盖，ADR-0037）与 `el-radio` / `el-radio-button`（组内内容项，ADR-0038）。 |
 | **分段控件** | `UiSegmentTabs`，带滑动指示条的选项卡。激活态必须用品牌语义色，**不可用 `bg-panel`** —— 与卡片同值会让滑块在卡片内彻底隐身（浅色 `#FFFFFF` on `#FFFFFF`、深色 `#1E293B` on `#1E293B`，两套主题都失效）。 |
-| **下划线 tab** | `UiUnderlineTabs`，**视图档位**用（临时切换看什么，如 编写/预览）。**数据档位**（会被保存的选择，如 纯文本/Markdown）仍用 `UiSegmentTabs`（胶囊 + 实心品牌色滑块）。两者**不可互换**：同一卡片里并排两组同款胶囊，用户分不清哪组会永久保存。激活下划线必须用品牌语义色 `--color-ui-*`，**不可 `bg-panel`**（与卡片同值会隐身，同分段控件的硬约束）；调用方给顶栏 1px 底边，组件用 `-mb-px` 压住它。 |
+| **下划线 tab** | `UiUnderlineTabs`，**视图切换**用（临时切换看什么，如 编写/预览）。**参数选择**（列表筛选 + 会被保存的取值，如 纯文本/Markdown、最新/最热）仍用 `UiSegmentTabs`（胶囊 + 实心品牌色滑块）。两者**不可互换**：同一卡片里并排两组同款胶囊，用户分不清哪组会永久保存。判据与落点见下「意图登记表」（2026-10-26 修正：原词条把胶囊说成「数据档 = 会被保存」，但实测 20 处胶囊里 17 处是列表筛选，见 #1957）。激活下划线必须用品牌语义色 `--color-ui-*`，**不可 `bg-panel`**（与卡片同值会隐身，同分段控件的硬约束）；调用方给顶栏 1px 底边，组件用 `-mb-px` 压住它。 |
 | **图标工具栏** | `MarkdownToolbar`，一排图标按钮：**每个按钮都要有 `UiTooltip` 中文提示 + `aria-label`**（文案与图标名的唯一来源是命令表 `utils/markdownToolbar.ts`，不许在组件里另抄）。置灰用 `aria-disabled` + 视觉降透明度，**不用原生 `disabled`** —— 原生 disabled 的按钮不派发鼠标事件，提示气泡会整排消失。**按钮承诺的判据**：按钮插进去的语法必须**在本端预览与发布所用的同一渲染单点上真能渲染**（不是「在某个 markdown 实例上能解析」——裸 `new MarkdownIt()` 与生产实例的插件集不同，结论会相反）；新增按钮逐条过**准入三判据**（频率 / 无对等轻量替代 / 渲染面无歧义降级），见 ADR-0052 的二次 grilling 补记。 |
 | **空态两级** | 独立占据内容区的空态（整页 / 列表 / 面板）用 `UiEmptyState`；**卡片正文内嵌**的一行提示保留纯文案（统一 `text-ink-3`），不塞组件 —— 后者换成组件会多出图标与整块留白，比问题本身更重。 |
 | **列表四段式** | `UiAsyncSection`：**空态 → 错误态（+ retry）→ 骨架 → 内容**的唯一编排实现（props `loading` / `error` / `empty` / `retrying`，slots `default` / `empty` / `error` / `skeleton`，`@retry`）。页面只提供 loader 与 slot，**不得再手写四分支链**。空态判据与「筛选变化回第一页」在 `useAsyncPage` 内，不再各页手写（ADR-0053）。**判据只认 `isEmpty`**（第十一波 #1101）：新增 `:empty=` 只允许 `isEmpty`（composable 返回的，或页面里 `const isEmpty = …` 具名派生的）或登记例外，不得再写 `x.length === 0` / `!data` / 写死 `false`——守卫 `check-async-section` 机械拦截。**404 = 空态、其余 = 错误态**：`useAsyncPage` 提供 `loadErrorKind`（复用 `api/client.ts` 的 `ApiErrorKind`），资源不存在时 `isEmpty` 同样为真，**详情页不再自建「未找到」布尔**；判据形状特殊（一个 loader 写两个列表、以 total 为准）的页面复用 `utils/listState.ts` 的 `isEmptyValue` / `isEmptyList`，不要再抄一份表达式。**追加式分页（「加载更多」）只有 `useAsyncPage({ mode: 'append' })` 一个入口**（`itemsRef` + `loadMore` / `hasMore` / `loadingMore` / `reset`），页面不得再手算页码与累积。**表格页是它的一档**（`skeleton="none"`）：`el-table` 保留自带 loading 遮罩，空态仍按本表「表格」行（ADR-0037）——不为统一观感把 10+ 个管理页的加载态换掉。展示型第 5 态（如章节不存在）用 `UiEmptyState` + action 表达，**不自造状态**。 |
@@ -37,6 +37,117 @@
 | **页面过渡与页面根** | 内容列的页面切换过渡**不得用 `mode="out-in"`**（#1631）：它的放行条件是「离场动画完成」的回调，而**根节点不是单个元素**的页面在渲染器里走 Fragment 分支、那个回调永不触发 ⇒ `state.isLeaving` 永久为真、**内容区从切走那一刻起永久空白**（刷新才恢复）。管理端「管理员管理」的根恰好是多分支组件 `UiAsyncSection`（Vue 警告 `renders non-element root node that cannot be animated`）。现状：默认模式 + **离场即时隐藏**（`.inner-fade-leave-active { display: none }`）+ 只保留进入动画；回归锁 `layouts/__tests__/SidebarLayoutCache.spec.ts`（**必须显式 `stubs: { transition: false }`** —— @vue/test-utils 默认把 `<transition>` 换成 stub，stub 掉就等于把被测行为删掉，用例会假绿）。**页面组件模板尽量单根**（多根仍可用，只是没有进入动画）；直接以多分支组件为根时自包一层容器。 |
 | **能力的中文名** | 能力键（`admin_role.manage` 这类）与资源域**不得原样印给用户看**：展示名走 `utils/capabilityWords.ts`（`describeCapability` / `describeCapabilityDomain`），词表是 `Record<AuthzCapability, string>` 与 `Record<CapabilityDomain, string>` 的**穷尽**映射 —— 后端加能力而前端产物没再生成时 `npm run type-check` 直接红（键集合的事实源仍是 `config/authz.ts`，域由键的模板字面量推断，不另立清单）；未登记的键回落为原键（降级可见，不静默留空）。角色权限页（`pages/admin/RoleManage.vue`）是当前唯一消费面，原始键留在勾选框的 `title` 上供对照后端日志。 |
 | **侧栏导航行** | 侧栏每一项由 `components/layout/AppSidebarItem.vue` **这一个**项级渲染 module 出行（行种类外链 `<a>` / `<router-link>` / 目标未就绪的不可点行，只在它的 `kind` 判据上分档），`AppSidebar.vue` 只管分组编排（分组标题、展开态、折叠态 tooltip）。**不得在任一层级里另抄一份 `<a>`/`<router-link>` markup**（第十三波 票9 前：三层嵌套各写两遍、共 9 份）。高亮与展开判定一律走 `config/navigation.ts` 的纯函数（`isNavRouteActive` / `isGroupExpanded` / `toggleGroupExpanded` / `flattenLeaves` / `isGroupActive`，测试面 `config/__tests__/navigation.spec.ts`），**组件里不自建匹配逻辑**。项级样式（`.nav-item` 一族）随组件下沉到 `AppSidebarItem.vue` 的 scoped 块——`scoped` 不穿子组件，祖先选择器（`.app-sidebar.collapsed`）仍照常命中。**密度只有单档**：`density` / `sidebarDensity` 与 `is-compact` 一档已随 ADR-0081 退役（四端统一到管理端那档），不要再为某一端加回来。 |
+
+### 意图登记表（ADR-0083 / #1957）
+
+> **判重与判「新意图」只用三轴**；层级（页面级 / 卡片级）不是轴，只派生尺寸档。三轴全同 = 同一意图，必须收敛到一个形态。
+> 「唯一形态」= **迁移完成后**应当出现的那个；存量里的第二种写法写在括号里（待迁），那是「要消失的」，**不是备选**。
+> 取证与逐条清单：[1957-UI形态盘点](../design/1957-UI形态盘点.md)；截图：`docs/verification/1957/`。
+
+| 意图 | 三轴：目标 / 后果 / 可逆性·影响半径 | 唯一形态 | 存量 |
+| --- | --- | --- | --- |
+| **命令动作** | 执行一个会改变数据的动作 / 提交或写入 / 用 variant 表达危险度 | `UiButton` | 326 |
+| **图标动作** | 同屏内快速操作 / 局部、单对象 / 多为视图级、可逆 | 原生 `<button>` + `UiIcon`（命中区按 ADR-0078：桌面 28 / 移动 40） | 39（封装层内 6 / 组件 26 / 页面 7） |
+| **互动计数动作** | 表达或撤销一次社交动作 / 写一次计数 / 可撤销、单条 | `UiActionChip` | 7 |
+| **快捷入口** | 一次点击填好查询或输入 / 只读查询 / 当前面板 | `UiCapsule` | 2 |
+| **菜单收纳** | 收低频、破坏性动作 / 打开菜单，不直接改数据 / 可取消 | `UiMoreMenu` | 2（+ `el-dropdown` 14 待迁） |
+| **主题切换** | 换外观 / 只改本地偏好 / 随时切回 | `ThemeToggle` | 3 |
+| **参数选择** | 换一组筛选条件，或选一个会被保存的取值 / 重新查询或写入设置 / 当前列表或字段 | `UiSegmentTabs` | 18（+ `el-tabs` 2 待迁：`ProfileReview`、`ForumManage` 内层） |
+| **视图切换** | 换呈现方式（编写/预览）/ 不改数据 / 当前输入区 | `UiUnderlineTabs` | 2 |
+| **面板切换** | 换一整块工作区 / 整块替换，可能丢未保存编辑 / **整个内容区** | `el-tabs`（原生，登记） | 4（+ `UiSegmentTabs` 2 待迁：`FaqManage` 分类/条目、`Materials` 课程资料/学员投稿） |
+| **布尔开关** | 立即生效 / 立即写入 / 单字段 | `UiSwitch` | 9 |
+| **多选** | 选若干项再提交 / 提交时写入 / 单表单 | `UiCheckboxGroup`（组内 `el-checkbox` 登记） | 3 |
+| **单选组** | 互斥选一个再提交 / 提交时写入 / 单表单 | `UiRadioGroup`（组内 `el-radio` / `el-radio-button` 登记） | 8 |
+| **下拉选择** | 从数据源选一个 / 提交时写入 / 单字段 | `UiSelect` | 3（+ `el-select` 57 待迁，按域分批） |
+| **文本输入** | 输入文本 / 提交时写入 / 单字段 | `UiInput` | 15（+ `el-input` 169 待迁，按域分批） |
+| **结构化值输入** | 数值 / 日期 / 级联 / 提交时写入 / 单字段 | 原生 `el-input-number` / `el-date-picker` / `el-cascader`（登记） | 25 |
+| **文件上传** | 选或拖文件 / 提交时写入 / 可重选 | `UiUpload` | 5 |
+| **分面筛选** | 按维度收窄结果并显示计数 / 重新查询 / 当前列表 | `FacetCard` + `FacetItem`（**成对唯一**，不拆用） | 卡片 6 + 项 13 / 3 页 |
+| **行内确认** | 确认一次半径 = 一行的删除 / 立即执行 / 一行 | `el-popconfirm`（原生，登记；参考元素必须是 `UiButton` 的 `link` 档） | 5 |
+| **模态确认** | 确认一次跨行或不可逆动作 / 打断后执行 / 一次操作或一批 | `useConfirm().confirm` / `.confirmDanger` | 45 实例 / 46 调用 |
+| **输入式确认** | 带输入再执行（如驳回填原因）/ 写入后执行 / 一条记录 | `useConfirm().prompt` | 1 |
+| **模态对话** | 收集一次输入、阻断 / 提交后写入 / 当前任务 | `UiDialog` | 56 |
+| **侧边抽屉** | 看或改长内容、保留列表上下文 / 提交后写入 / 当前对象 | `el-drawer`（原生，登记） | 4 |
+| **气泡提示** | 补充说明、不承载动作 / 无 / — | `UiTooltip` | 18 |
+| **富内容气泡** | 气泡里承载小段富内容 / 无 / — | `el-popover`（原生，登记） | 1 |
+| **卡片容器** | **不受意图约束** —— 受下「容器档位表」约束 | `UiCard` 或页面本地容器类 | UiCard 24 / 本地容器 29 / `el-card` 27（待退场，ADR-0087） |
+| **指标卡** | 一眼读一个数 / 只读 / 一屏 | `UiStatCard` | 6（+ 管理端 8 待迁，ADR-0087） |
+| **空态** | 告诉这里没内容 / 只读 / 一块区域 | `UiEmptyState` | 59 |
+| **错误态** | 失败并可重试 / 只读 / 一块区域 | `UiErrorState`（或被 `UiAsyncSection` 的四态覆盖） | 6 |
+| **异步四态编排** | 空 / 错 / 骨架 / 内容的唯一编排 / — / 一块区域 | `UiAsyncSection` | 50 |
+| **提示条** | 常驻提示 / 只读 / 一块区域 | `UiAlert` | 2（+ `el-alert` 6 待迁） |
+| **分页** | 翻页 / 只读 / 当前列表 | `UiPagination` | 34 |
+| **骨架** | 加载占位 / 无 / 一块区域 | `UiSkeleton` | 38（+ `el-skeleton` 2 待迁） |
+| **行内加载** | 加载指示 / 无 / 行内 | `UiLoading` | 1 |
+| **进度** | 百分比 / 无 / 一块区域 | `UiProgress` | 2（+ `el-progress` 3 待迁） |
+| **计数角标** | 一个图标上的数字 / 只读 / 一个图标 | `UiBadge` | 0（+ `el-badge` 1 待迁） |
+
+**结构件**（无判重问题，单点形态；不在意图约束内，但也不得另起第二种写法）：
+
+| 件 | 唯一形态 | 存量 |
+| --- | --- | --- |
+| 数据表 | `<el-table>`（ADR-0037，**不封装**） | 32 / 173 列 |
+| 导航行 | `AppSidebarItem` | — |
+| 页签 | `AdminTabBar` | — |
+| 页面标题 | `UiPageHeader` | 5 |
+| 区块标题 | `UiSectionHeader` | 2 |
+| 表单字段壳 | `UiFormField` | 5 |
+| 筛选栏容器 | `UiFilterBar` | 13 |
+| 图标 | `UiIcon`（唯一入口，`check-icons` 守卫） | 194 |
+| 图标形变 | `UiIconMorph`（`UiIcon morph` 的底层，不直接落点） | 0 |
+| 计数动画 | `UiCountTo`（只经 `UiStatCard` 使用，不当独立件落点） | 1（在 `UiStatCard` 内） |
+| 分割线 | `UiDivider` | 0（+ `el-divider` 4 待迁） |
+| 头像 | `el-avatar`（原生，登记） | 15 |
+| 图片 | `el-image` + 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
+| 折叠面板 | `el-collapse`（原生，登记） | 2 / 6 |
+| 描述列表 | `el-descriptions`（原生，登记） | 1 / 6 |
+| 布局栅格 | `el-row` / `el-col`（EP 布局，登记） | 4 / 10 |
+
+**登记表怎么用**（三条，回答「拿不准怎么办」）：
+
+1. **先问三轴**：新落点想用第二种写法时，先指出**哪一轴**与现有行不同。指不出来 = 同一意图，必须用那一行的形态。
+2. **容器查档位表，入口查登记表**：卡片、面板、抽屉壳这类容器不判意图（ADR-0083 决策 3），只管四项档位；只有**可点击的入口**才受「一意图一形态」约束。
+3. **原生 + 登记不是欠账**：`el-tabs`（面板切换）、`el-drawer`、`el-popconfirm`、`el-avatar`、`el-collapse`、`el-descriptions` 是**判过之后决定不封装**的（落点少、结构样式差异大、薄封装挡不住结构），不是「还没迁」。哪天落点数或结构需求变了，先改这张表再动代码。
+
+### 容器档位表（ADR-0083 / #1957）
+
+> 容器（卡片、面板、抽屉壳、区块框）的外观**只能取档内值**。页面本地容器类允许存在，但**只许取值，不许自造**。值只有两个出处：scoped 写 `var(--radius-*)` / `var(--space-*)`，模板写 `rounded-card` / `rounded-ctl` / `rounded-pill`（`tailwind.css` 的语义别名，解析到 `design-tokens.css`）。
+> 早于本表的写法怎么收敛，逐条清单在 [1957 附录](../design/1957-附录-scoped取值清单.md)。
+
+**圆角（4 档）**
+
+| 档 | 别名 / token | 值 | 用于 |
+| --- | --- | --- | --- |
+| 卡片 | `rounded-card` / `--radius-lg` | 12px | 卡片、面板、弹层、抽屉 |
+| 控件 | `rounded-ctl` / `--radius-md` | 8px | 输入、按钮、图标钮、小容器、内嵌块 |
+| 胶囊 | `rounded-pill` / `--radius-full` | 9999px | 胶囊、标签、头像、圆点（`50%` 真圆等价） |
+| 零 | `rounded-none` | 0 | 贴边、表格内、无缝拼接 |
+
+越档归这里：**16px 一律回卡片档**（现存 7 处）；**6px / 4px / 3px / 10px 一律回控件档**（现存 42 处，其中裸 `rounded` 12 处）；**2px 归零档**；`0 var(--radius-full) var(--radius-full) 0`（侧栏项左贴边）登记例外。
+
+**内边距（4 档，仅容器卡片）**
+
+| 档 | 值 | 模板类 |
+| --- | --- | --- |
+| snug | 12 | `p-3` |
+| base | 16 | `p-4` |
+| roomy | 20 | `p-5` |
+| loose | 24 | `p-6` |
+
+复合值（如 `20px 16px`）**不是越档**：横竖各取一档即可。越档的只有 `8px` / `10px`（→ snug）、`14px`（→ base）、`32px` / `40px`（→ loose）。
+
+**描边（1 档）**：`1px solid var(--color-border-light)`（模板 `border-line`）。更强的 `--color-border`（`border-line-strong`）只允许用在「结果卡 / 选中态」这类**要压过同屏其它卡片**的地方，并且必须逐条登记（现存 1 处：`.result-card`）。
+
+**阴影（4 档）**
+
+| 档 | 别名 / token | 用于 |
+| --- | --- | --- |
+| 无 | `none` | 贴边容器、页内 section |
+| 卡片 | `shadow-card` / `--shadow-xs` | 默认卡片 |
+| 悬起 | `shadow-raised` / `--shadow-md` | 可点卡片 hover |
+| 弹层 | `--shadow-lg` | 对话框 / 抽屉 / popper（EP 自带，页面不写） |
+
+**不是阴影的别写成阴影**：选中环（`0 0 0 2px …`）与 inset 描边环（`0 0 0 1px … inset`）用 `outline` / `border` 表达，现存 4 处待改。
 
 ### 状态词表（联络授权 / 投递）（第十一波 #1103 / ADR-0056 §8）
 
@@ -164,6 +275,13 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 
 **样式入口只有一个**：`src/assets/styles/tailwind.css`，新增全局样式写进它或它 `@import` 的文件，不要在 `main.ts` 里再加 import。
 
+## 响应式（ADR-0084 / 0085 / 0086）
+
+- **管理端只保桌面**（ADR-0084）：验收宽度是 1280 / 1024；375 / 768 只保证「不崩」——**无页面级横向溢出**即可，不承诺能完成业务动作。
+- **管理端 ≤768 的 `@media` 只允许「防溢出 / 换行」类兜底**；字号、间距、内边距这类观感微调**不再新增**（新增即违规）。存量逐条判定见 `docs/design/1965-管理端媒体查询判定.md`。
+- **学员端必守 375×667**（ADR-0085）：PR 验收必须含 **375 宽截图**；本地可用 `node scripts/check-student-375.mjs` 复核（需要 dev server + 开了远程调试的 Chromium）。
+- **宽表只横滚、不降列**（ADR-0086）：`el-table` 保留表体横滚；固定列**只允许「操作」一列固定在右**。
+
 ## 不得触碰的边界
 
 - `--color-brand-*` 属**残值域**专用（`assets/styles/valuation-tokens.css` 在 `.valuation-root` 内定义），**禁止提升为全局变量** —— 会击穿 `pages/admin/ValuationConfigManage.vue` 与 `pages/ai-assistant/*` 两处依赖「变量未定义 → 走 fallback」的写法。培训域品牌色用 `--color-primary-*`。
@@ -187,5 +305,8 @@ node scripts/check-el-controls.mjs --diff origin/master   # 只看新增行（�
 | --- | --- | --- | --- |
 | 固定色阶当填充（B 类） | 31 处成对 chip：深色下是「暗页上的亮块」，但对比度不变 | `docs/design/1880-token-audit.md` 另票 | 逐个换翻转填充会变「深底深字」，必须先有新的成对 token |
 | 打印 | 全库 `@media print` **0 条** | 未立票 | 打印会把顶栏、侧栏、页脚一起印出来；要支持得单独定一版稿 |
-| 响应式 | 172 个 `.vue` 里 **39 个**有响应式处理（26 条 `@media` + 1 处 `matchMedia` + 41 处 `sm:`/`md:` 工具类，并集 39）；断点集中在 768px | #1937 盘点中 | 各页自行决定，同类页面行为不一致；只改单个页面会加剧不一致 |
+| 响应式 | 172 个 `.vue` 里 **39 个**有响应式处理（26 条 `@media` + 1 处 `matchMedia` + 41 处 `sm:`/`md:` 工具类，并集 39）；断点集中在 768px | 口径已定（ADR-0084/0085/0086，见上「响应式」节），**迁移按页面族另开票**，不是没有判据 | 现状不违规：管理端 ≤768 只承诺不崩、学员端必守 375；逐个页面「顺手加断点」会违反 ADR-0084 的「管理端 ≤768 只允许防溢出类兜底」 |
+| 卡片容器三写法 | `UiCard` 24 / `el-card` 27 / 本地容器类 29 | **ADR-0087 已签字（2026-10-26）**，迁移按批推进（批一 = 仪表盘 + 统计分析） | 一次性改会动 13 个文件的垂直节奏（el-card 的内边距在 `.el-card__body` 上），必须分批带截图 |
+| 指标卡三形态 | `UiStatCard` 只在学员端 6 处；管理端 8 处是两套写法（仪表盘 `.stat-card` 4、统计分析 `el-card.stat-card` 4） | 并入 ADR-0087 批一（仪表盘 + 统计分析同屏可对照） | 直接迁会丢掉版式差异（居中 / 左侧色条 / 图标位），得先补 `layout` / `accent` 两档 |
+| Element Plus 内置文案 | 分页 `Total 26`（34 处）、行内确认 `Yes/No`（5 处）等，全站未配 locale | [#1971](https://github.com/DriftingLi/FL/issues/1971) 已立票 | 只给单个组件传中文文案治不了 `el-date-picker` / `el-upload`；要修就 `ElConfigProvider + zhCn` 一处修全站，并回归分页/气泡/日期三处 |
 | 标签 `effect="dark"` | 白字压在语义主色填充上：warning **2.15** / success 2.54 / primary 3.74 / danger 3.76 / info 4.83（全站 7 处，如「✓ 已解决」） | #1954 只收口 light / plain 的文字档；改实心填充属观感裁定 | 要修得把填充换成**不翻转**的深色（danger `#B91C1C` 等）；别只换 ink —— 深色主题下 `-strong` 会翻成浅色，白字压上去只剩 1.6:1 |

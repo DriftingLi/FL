@@ -4,30 +4,43 @@
       <h2>统计分析</h2>
     </div>
 
+    <!-- 指标卡：唯一形态 UiStatCard（ADR-0087），本页用居中无图标档 -->
     <el-row :gutter="20" class="stat-cards">
       <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value blue">{{ overview.total_students || 0 }}</div>
-          <div class="stat-label">学员总数</div>
-        </el-card>
+        <UiStatCard
+          layout="plain"
+          hoverable
+          label="学员总数"
+          :value="overview.total_students || 0"
+          tone="brand"
+        />
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value green">{{ overview.active_today || 0 }}</div>
-          <div class="stat-label">今日活跃学员</div>
-        </el-card>
+        <UiStatCard
+          layout="plain"
+          hoverable
+          label="今日活跃学员"
+          :value="overview.active_today || 0"
+          tone="ok"
+        />
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value orange">{{ overview.total_courses || 0 }}</div>
-          <div class="stat-label">课程总数</div>
-        </el-card>
+        <UiStatCard
+          layout="plain"
+          hoverable
+          label="课程总数"
+          :value="overview.total_courses || 0"
+          tone="warn"
+        />
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-value gray">{{ formatDuration(overview.total_study_duration || 0) }}</div>
-          <div class="stat-label">总学习时长</div>
-        </el-card>
+        <UiStatCard
+          layout="plain"
+          hoverable
+          label="总学习时长"
+          :value="formatDuration(overview.total_study_duration || 0)"
+          tone="neutral"
+        />
       </el-col>
     </el-row>
 
@@ -111,6 +124,7 @@ import { useECharts } from '@/composables/useECharts'
 import { chartTheme } from '@/utils/chartTheme'
 import { useThemeStore } from '@/stores/theme'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiStatCard from '@/components/ui/UiStatCard.vue'
 import { formatDurationCn, getProgressColor } from '@/utils/format'
 
 const overview = ref<any>({})
@@ -291,32 +305,6 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.stat-card {
-  text-align: center;
-  padding: 0;
-}
-
-.stat-card :deep(.el-card__body) {
-  padding: 20px;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: bold;
-  line-height: 1.3;
-}
-
-.stat-value.blue { color: var(--color-primary-soft-ink); }
-.stat-value.green { color: var(--color-success); }
-.stat-value.orange { color: var(--color-warning); }
-.stat-value.gray { color: var(--color-text-tertiary); }
-
-.stat-label {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
-  margin-top: 6px;
-}
-
 .chart-row {
   margin-bottom: 20px;
 }
@@ -361,10 +349,6 @@ onMounted(() => {
     margin-bottom: 12px;
   }
 
-  .stat-value {
-    font-size: var(--text-2xl);
-  }
-
   .chart-row .el-col {
     margin-bottom: 12px;
   }
@@ -374,13 +358,4 @@ onMounted(() => {
   }
 }
 
-@media screen and (max-width: 480px) {
-  .stat-value {
-    font-size: var(--text-lg);
-  }
-
-  .stat-label {
-    font-size: var(--text-xs);
-  }
-}
 </style>
