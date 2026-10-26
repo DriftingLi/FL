@@ -374,13 +374,4 @@ onMounted(() => {
   }
 }
 
-@media screen and (max-width: 480px) {
-  .stat-value {
-    font-size: var(--text-lg);
-  }
-
-  .stat-label {
-    font-size: var(--text-xs);
-  }
-}
 </style>
