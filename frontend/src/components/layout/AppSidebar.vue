@@ -1,10 +1,7 @@
 <template>
   <aside
     class="app-sidebar"
-    :class="{
-      collapsed: effectiveCollapsed,
-      'is-compact': props.density === 'compact'
-    }"
+    :class="{ collapsed: effectiveCollapsed }"
   >
     <slot name="top" :collapsed="effectiveCollapsed" />
 
@@ -125,20 +122,11 @@ import { isNavItemRenderable } from '@/config/navigation'
 import AppSidebarItem from '@/components/layout/AppSidebarItem.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 
-const props = withDefaults(
-  defineProps<{
-    menuItems: NavItem[]
-    collapsed: boolean
-    mobileOpen?: boolean
-    /**
-     * 纵向密度。
-     * - `default`：**默认值 = 改造前行为**
-     * - `compact`：收紧导航项与用户信息区的纵向间距
-     */
-    density?: 'default' | 'compact'
-  }>(),
-  { density: 'default' }
-)
+const props = defineProps<{
+  menuItems: NavItem[]
+  collapsed: boolean
+  mobileOpen?: boolean
+}>()
 
 defineEmits<{
   'toggle-collapse': []
@@ -285,6 +273,8 @@ function isRouteActive(item: NavItem): boolean {
   align-items: center;
   justify-content: center;
   padding: var(--space-2);
+  /* 图标尺寸：UiIcon 默认 1em，靠容器字号给到 16px（ADR-0081 / 原 .el-icon 规则的接替） */
+  font-size: var(--text-base);
   color: var(--color-text-tertiary);
   cursor: default;
 }
@@ -293,10 +283,6 @@ function isRouteActive(item: NavItem): boolean {
   color: var(--color-primary-soft-ink);
   background: var(--color-primary-soft);
   border-radius: var(--radius-md);
-}
-
-.nav-group-icon-only .el-icon {
-  font-size: var(--text-base);
 }
 
 .nav-group-children {
@@ -384,16 +370,5 @@ function isRouteActive(item: NavItem): boolean {
 
 .footer-btn-label {
   font-size: var(--text-sm);
-}
-
-/* 密度（density）变体
- *
- * 恒深侧栏体系（is-dark / sidebarTheme / --color-bg-sidebar 三件套）已整体退役（#1619 / ADR-0072）：
- * 外壳三块同底后，「侧栏自带一套深色」不再有调用方，留着就是无人走的分支。
- * 现存的变体只剩密度一档。 */
-
-/* compact：收紧纵向间距（原身份区那一档随身份区迁往顶栏而去掉） */
-.app-sidebar.is-compact .nav-group-label {
-  padding: var(--space-2) var(--space-3) var(--space-1);
 }
 </style>

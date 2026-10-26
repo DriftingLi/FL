@@ -6,9 +6,10 @@
 
     样式：`scoped` 不穿子组件，所以 .nav-item / .nav-item-icon / .nav-item-label 一族规则
     随本组件下沉（与 NotificationPanel → NotificationPanelBody 同一手法）。
-    `.app-sidebar.collapsed|is-compact` 是**祖先**选择器，作用域属性只加在最后一个复合选择器上
+    `.app-sidebar.collapsed` 是**祖先**选择器，作用域属性只加在最后一个复合选择器上
     （即本组件根节点），因此这些变体照常命中，声明顺序与特异性与改造前逐字一致。
-    （原 `is-dark` 一档已随恒深侧栏退役，#1619 / ADR-0072。）
+    （原 `is-dark` 一档已随恒深侧栏退役，#1619 / ADR-0072；原 `is-compact` 一档已随
+    密度单档退役，ADR-0081。）
   -->
   <a
     v-if="kind === 'external'"
@@ -141,9 +142,9 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.nav-item-icon .el-icon {
+  /* 图标尺寸：UiIcon 默认 1em。图标迁到 UiIcon 后（#1912）这里原先的
+     `.nav-item-icon .el-icon { font-size: var(--text-lg) }` 再也匹配不上，
+     图标实际跌到派生的 1em（≈16px）；改成容器字号后仍是 18px（ADR-0081）。 */
   font-size: var(--text-lg);
 }
 
@@ -155,13 +156,5 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* 密度（density）变体：恒深侧栏的 is-dark 覆盖已整体退役（#1619 / ADR-0072），
- * 导航行的配色现在只有一套（跟随主题 token）。 */
-
-/* compact：收紧纵向间距 */
-.app-sidebar.is-compact .nav-item {
-  padding: 6px var(--space-3);
 }
 </style>

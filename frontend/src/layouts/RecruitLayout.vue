@@ -1,8 +1,7 @@
 <template>
-  <!-- 企业招聘端：与学员/导师一致的石墨青暗底侧栏 + 紧凑密度 + 内容限宽居中 -->
+  <!-- 企业招聘端：与其余三端同一套外壳（默认密度）+ 内容限宽居中 -->
   <SidebarLayout
     :menu-items="recruiterNav"
-    sidebar-density="compact"
     content-width="narrow"
   />
 </template>
