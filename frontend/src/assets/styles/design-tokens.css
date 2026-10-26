@@ -109,6 +109,13 @@
   --color-text-tertiary: #64748B;
   --color-text-muted: #94A3B8;
   --color-text-disabled: #CBD5E1;
+  /*
+   * 占位符档（#1934）：**不借 disabled** —— 禁用态本就该低对比（浅色 #CBD5E1 = 1.42:1），
+   * 而占位符说的是「这里该填什么」，要读得清。语义上它就是三级文字，故别名到
+   * --color-text-tertiary（浅 #64748B / 深 #94A3B8，页面底与卡片底两主题都 ≥4.5）。
+   * 只在 :root 声明一份：别名随 tertiary 在深色块翻转，不需要第二个定义。
+   */
+  --color-text-placeholder: var(--color-text-tertiary);
   --color-text-inverse: #FFFFFF;
   --color-text-on-dark: #F1F5F9;
 
