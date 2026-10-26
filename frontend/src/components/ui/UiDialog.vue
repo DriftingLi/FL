@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import UiButton from './UiButton.vue'
 
 /**
@@ -27,7 +29,7 @@ const props = withDefaults(
     /** 标题下的浅色说明行 */
     subtitle?: string
     /** 头部图标，接受全局注册名或组件引用（与 UiButton.icon 同款放宽） */
-    icon?: string | object
+    icon?: IconName
     /** 宽度，直接透传给 el-dialog */
     width?: string | number
     /** 垂直居中。EP 默认贴顶 15vh，故默认 false 保持现状 */
@@ -113,7 +115,7 @@ function onClosed() {
           v-if="props.icon"
           class="flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ui-soft text-ui-soft-ink"
         >
-          <el-icon class="text-lg"><component :is="props.icon" /></el-icon>
+          <UiIcon :name="props.icon" class="text-lg" />
         </div>
         <div class="min-w-0 flex-1">
           <slot name="header">

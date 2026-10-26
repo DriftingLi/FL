@@ -30,8 +30,8 @@
             @select="selectDirection(d.specialty_id)"
           />
           <span class="cc-nav-move">
-            <el-icon class="cc-move-icon" @click.stop="moveDirection(d, -1)"><CaretTop /></el-icon>
-            <el-icon class="cc-move-icon" @click.stop="moveDirection(d, 1)"><CaretBottom /></el-icon>
+            <UiIcon name="chevron-up" class="cc-move-icon" @click.stop="moveDirection(d, -1)" />
+            <UiIcon name="chevron-down" class="cc-move-icon" @click.stop="moveDirection(d, 1)" />
           </span>
         </div>
 
@@ -62,8 +62,8 @@
             @select="selectLevel(l.level_id)"
           />
           <span class="cc-nav-move">
-            <el-icon class="cc-move-icon" @click.stop="moveLevel(l, -1)"><CaretTop /></el-icon>
-            <el-icon class="cc-move-icon" @click.stop="moveLevel(l, 1)"><CaretBottom /></el-icon>
+            <UiIcon name="chevron-up" class="cc-move-icon" @click.stop="moveLevel(l, -1)" />
+            <UiIcon name="chevron-down" class="cc-move-icon" @click.stop="moveLevel(l, 1)" />
           </span>
         </div>
       </FacetCard>
@@ -76,7 +76,7 @@
 
         <el-input v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1">
           <template #prefix>
-            <el-icon><Search /></el-icon>
+            <UiIcon name="search" />
           </template>
         </el-input>
         <el-select v-model="credentialId" placeholder="全部证件" clearable style="width: 160px" @change="currentPage = 1">
@@ -149,7 +149,7 @@
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
               <UiButton variant="primary" link size="small">
-                操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                操作<UiIcon name="chevron-down" class="el-icon--right" />
               </UiButton>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -204,12 +204,12 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'CourseCatalog' })
 
 import { ref, computed, onMounted } from 'vue'
-import { Search, ArrowDown, CaretTop, CaretBottom } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'

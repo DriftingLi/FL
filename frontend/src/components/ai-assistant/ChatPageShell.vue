@@ -20,7 +20,7 @@
           :aria-label="isMobile ? '打开会话栏' : '展开侧栏'"
           @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
         >
-          <el-icon :size="16"><component :is="isMobile ? Operation : Expand" /></el-icon>
+          <UiIcon :name="isMobile ? 'menu' : 'panel-left-open'" :size="16" />
         </button>
         <button
           v-if="store.isLoggedIn"
@@ -30,7 +30,7 @@
           :aria-label="newSessionTitle"
           @click="emit('new-session')"
         >
-          <el-icon :size="16"><Plus /></el-icon>
+          <UiIcon name="plus" :size="16" />
         </button>
         <!-- 主题切换（三态下拉菜单） -->
         <ThemeToggle variant="ghost" />
@@ -60,7 +60,7 @@
             aria-label="收起侧栏"
             @click="collapsed = true"
           >
-            <el-icon :size="16"><Fold /></el-icon>
+            <UiIcon name="panel-left-close" :size="16" />
           </button>
         </div>
         <button
@@ -70,14 +70,14 @@
           aria-label="关闭会话栏"
           @click="mobileDrawerOpen = false"
         >
-          <el-icon :size="16"><Close /></el-icon>
+          <UiIcon name="x" :size="16" />
         </button>
       </div>
 
       <!-- 功能页：返回链接 -->
       <div v-if="backLinkTo" class="px-3 pb-1">
         <router-link :to="backLinkTo" class="back-link flex items-center gap-1.5 rounded-ctl px-2 py-1.5 text-[13px] text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:underline">
-          <el-icon :size="14"><ArrowLeft /></el-icon>{{ backLinkText }}
+          <UiIcon name="arrow-left" :size="14" />{{ backLinkText }}
         </router-link>
       </div>
 
@@ -89,7 +89,7 @@
           :title="newSessionTitle"
           @click="emit('new-session')"
         >
-          <el-icon :size="15"><Plus /></el-icon>开启新对话
+          <UiIcon name="plus" :size="15" />开启新对话
         </button>
       </div>
 
@@ -128,10 +128,10 @@
             </div>
             <div v-if="editingSessionId !== s.id" class="session-actions flex gap-0.5">
               <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-soft hover:text-ui-soft-ink" title="重命名" aria-label="重命名会话" @click.stop="startRename(s)">
-                <el-icon :size="14"><Edit /></el-icon>
+                <UiIcon name="pencil" :size="14" />
               </button>
               <button class="session-delete shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" aria-label="删除会话" @click.stop="handleDeleteSession(s.id)">
-                <el-icon :size="14"><Delete /></el-icon>
+                <UiIcon name="trash-2" :size="14" />
               </button>
             </div>
           </div>
@@ -158,7 +158,7 @@
             <router-link :to="href('StudentProfile')" class="profile-link min-w-0 truncate text-[13px] font-medium text-ink-2 no-underline transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:underline">{{ displayName }}</router-link>
             <el-dropdown trigger="click" @command="handleUserCommand">
               <button class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-ink-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:bg-panel hover:text-ink" title="更多" aria-label="更多">
-                <el-icon :size="14"><More /></el-icon>
+                <UiIcon name="ellipsis" :size="14" />
               </button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -193,7 +193,7 @@
         <div v-if="isWelcome" class="welcome-area w-full px-6 pb-3 pt-6 text-center">
           <div class="welcome-head mx-auto flex max-w-[760px] items-center justify-center gap-3 text-left">
             <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
-              <el-icon :size="28"><component :is="welcomeIcon" /></el-icon>
+              <UiIcon :name="welcomeIcon" :size="28" />
             </div>
             <h2 class="welcome-title m-0 text-xl font-bold leading-snug text-ink">{{ welcomeTitle }}</h2>
           </div>
@@ -249,8 +249,8 @@
         <!-- 消息列表（安全渲染单点：助手内容统一 markstream escape） -->
         <div v-for="msg in store.messages" :key="msg.id" class="message-item mb-6 flex gap-3" :class="[msg.role, msg.role === 'user' ? 'flex-row-reverse' : '']">
           <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl" :class="msg.role === 'user' ? 'bg-ui-600 text-white' : 'bg-ui-soft-strong text-ui-soft-ink'">
-            <el-icon v-if="msg.role === 'user'" :size="18"><User /></el-icon>
-            <el-icon v-else :size="18"><ChatDotRound /></el-icon>
+            <UiIcon name="user" v-if="msg.role === 'user'" :size="18" />
+            <UiIcon name="message-circle" v-else :size="18" />
           </div>
           <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">
             <template v-if="msg.role === 'user'">
@@ -285,7 +285,7 @@
         <!-- 流式输出中 -->
         <div v-if="store.streaming" class="message-item assistant mb-6 flex gap-3">
           <div class="message-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-ui-soft-strong text-ui-soft-ink">
-            <el-icon :size="18"><ChatDotRound /></el-icon>
+            <UiIcon name="message-circle" :size="18" />
           </div>
           <div class="message-content max-w-[75%] max-[768px]:max-w-[85%]">
             <div v-if="store.streamingContent" class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink" @click="openImagePreview">
@@ -360,19 +360,19 @@
               <slot name="input-footer-left" />
             </div>
             <div class="input-actions shrink-0">
-              <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
+              <UiButton variant="primary" v-if="!store.streaming" :icon="'send'" :disabled="!canSend" @click="emit('send')">
                 发送
               </UiButton>
-              <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
+              <UiButton variant="danger" v-else :icon="'pause'" @click="store.stopStreaming">
                 停止
               </UiButton>
             </div>
           </div>
           <div v-else class="input-actions shrink-0">
-            <UiButton variant="primary" v-if="!store.streaming" :icon="Promotion" :disabled="!canSend" @click="emit('send')">
+            <UiButton variant="primary" v-if="!store.streaming" :icon="'send'" :disabled="!canSend" @click="emit('send')">
               发送
             </UiButton>
-            <UiButton variant="danger" v-else :icon="VideoPause" @click="store.stopStreaming">
+            <UiButton variant="danger" v-else :icon="'pause'" @click="store.stopStreaming">
               停止
             </UiButton>
           </div>
@@ -394,28 +394,15 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 // AI 聊天壳（#398）：顶部栏/会话侧栏/消息列表/输入区/自动滚底为壳实现，
 // 差异槽位化——主页模式选择器（input-footer-left）与模型告警（input-extra）、
 // 功能页图片队列（input-above/input-prefix）与快捷选项（welcome）。
 // 安全渲染单点：助手内容统一 markstream-vue + html-policy="escape"，AI 域不再有裸 v-html。
-import { ref, computed, useSlots, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
+import { ref, computed, useSlots, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, type RouteLocationRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import {
-  Plus,
-  Delete,
-  Edit,
-  ArrowLeft,
-  User,
-  ChatDotRound,
-  Promotion,
-  VideoPause,
-  Operation,
-  Close,
-  More,
-  Expand,
-  Fold
-} from '@element-plus/icons-vue'
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 import { href } from '@/config/pages'
@@ -441,7 +428,7 @@ const props = withDefaults(
     backLinkTo?: RouteLocationRaw
     backLinkText?: string
     /** 欢迎区图标/一句话标题（标题即功能介绍，无副标题） */
-    welcomeIcon: Component
+    welcomeIcon: IconName
     welcomeTitle: string
     /** 预设提示词（点击后 emit('suggest', text)） */
     suggestions?: string[]

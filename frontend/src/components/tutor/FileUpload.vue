@@ -20,7 +20,7 @@
       @drop.prevent="handleDrop"
       @click="triggerSelect"
     >
-      <el-icon class="upload-icon mb-2 text-[var(--color-text-disabled)]" :size="40"><UploadFilled /></el-icon>
+      <UiIcon name="upload-cloud" class="upload-icon mb-2 text-[var(--color-text-disabled)]" :size="40" />
       <p class="upload-text text-ink-2 text-sm mb-2">将文件拖到此处，或<em class="not-italic text-ui-soft-ink">点击上传</em></p>
       <p class="upload-tip text-ink-3 text-xs my-1">支持格式：PDF 文档、PPT、MP4、WebM（图片请粘贴到图文正文）</p>
       <p class="upload-tip text-ink-3 text-xs my-1">视频文件最大200MB，其他文件最大50MB</p>
@@ -56,9 +56,7 @@
           :class="file.status === 'error' ? 'border-bad bg-bad-soft' : file.status === 'success' ? 'border-ok bg-ok-soft' : ''"
         >
           <div class="file-info flex items-center gap-2.5 flex-1 min-w-0 max-[768px]:basis-full">
-            <el-icon class="file-type-icon text-ink-3 shrink-0" :size="20">
-              <component :is="getFileIcon(file.ext)" />
-            </el-icon>
+            <UiIcon :name="getFileIcon(file.ext)" class="file-type-icon text-ink-3 shrink-0" :size="20" />
             <div class="file-detail flex-1 min-w-0">
               <div class="file-name-row flex items-center gap-2">
                 <span class="file-name text-sm text-ink overflow-hidden text-ellipsis whitespace-nowrap max-w-[260px] max-[768px]:max-w-[160px]" :title="file.name">{{ file.name }}</span>
@@ -84,13 +82,13 @@
             </template>
             <template v-else-if="file.status === 'success'">
               <div class="status-done flex items-center gap-1.5">
-                <el-icon class="status-icon success-icon text-[18px] text-ok"><CircleCheck /></el-icon>
+                <UiIcon name="circle-check" class="status-icon success-icon text-[18px] text-ok" />
                 <span class="status-text status-success text-[13px] text-ok">上传成功</span>
               </div>
             </template>
             <template v-else-if="file.status === 'error'">
               <div class="status-done flex items-center gap-1.5">
-                <el-icon class="status-icon error-icon text-[18px] text-bad"><CircleClose /></el-icon>
+                <UiIcon name="circle-x" class="status-icon error-icon text-[18px] text-bad" />
                 <span class="status-text status-error text-[13px] text-bad">上传失败</span>
               </div>
             </template>
@@ -98,10 +96,10 @@
 
           <div class="file-actions flex items-center gap-1.5 shrink-0">
             <UiButton variant="warning" v-if="file.status === 'error'" size="small" circle aria-label="重试上传" @click.stop="retryFile(file)">
-              <el-icon><RefreshRight /></el-icon>
+              <UiIcon name="rotate-cw" />
             </UiButton>
             <UiButton variant="danger" plain size="small" circle aria-label="移除文件" @click.stop="removeFile(file)">
-              <el-icon><Delete /></el-icon>
+              <UiIcon name="trash-2" />
             </UiButton>
           </div>
         </div>
@@ -111,16 +109,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed } from 'vue'
-import {
-  UploadFilled,
-  Document,
-  VideoCamera,
-  RefreshRight,
-  CircleCheck,
-  CircleClose,
-  Delete
-} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { tutorApi } from '@/api/tutor'
 import type { UiTagTone } from '@/components/ui/UiTag.vue'
@@ -270,8 +260,8 @@ function formatSize(bytes: number) {
 function getFileIcon(ext: string) {
   const category = getFileCategory(ext)
   switch (category) {
-    case 'video': return VideoCamera
-    default: return Document
+    case 'video': return 'video'
+    default: return 'file-text'
   }
 }
 

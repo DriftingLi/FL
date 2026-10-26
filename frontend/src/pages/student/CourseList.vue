@@ -137,7 +137,7 @@
       <template #header>
         <div class="detail-header flex items-center justify-between gap-3 pr-6">
           <span class="detail-header-title text-lg font-semibold text-ink">{{ detailCourse?.name || '课程详情' }}</span>
-          <UiButton v-if="detailCourse" :icon="courseFavorited ? StarFilled : Star" :type="courseFavorited ? 'warning' : 'default'" circle :aria-label="courseFavorited ? '取消收藏课程' : '收藏课程'" @click="toggleCourseFavorite"/>
+          <UiButton v-if="detailCourse" :icon="courseFavorited ? 'star-filled' : 'star'" :type="courseFavorited ? 'warning' : 'default'" circle :aria-label="courseFavorited ? '取消收藏课程' : '收藏课程'" @click="toggleCourseFavorite"/>
         </div>
       </template>
       <div v-loading="detailLoading">
@@ -208,7 +208,7 @@
                 <span class="chapter-title flex-1 text-sm text-ink">{{ ch.title }}</span>
                 <UiTag v-if="chapterCompleted(ch.chapter_id)" size="small" tone="success" effect="plain">已完成</UiTag>
                 <span v-if="ch.duration" class="chapter-duration text-xs text-ink-3">{{ ch.duration }}分钟</span>
-                <el-icon class="chapter-arrow text-ink-3"><ArrowRight /></el-icon>
+                <UiIcon name="arrow-right" class="chapter-arrow text-ink-3" />
               </div>
             </div>
             <UiEmptyState v-else description="该课程暂无章节内容" size="sm" />
@@ -220,9 +220,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { courseApi, type CourseDetail, type CourseSummary } from '@/api/course'
 import { studentApi, type StudentCourseDetail } from '@/api/student'

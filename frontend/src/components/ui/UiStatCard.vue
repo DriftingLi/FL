@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed } from 'vue'
 import UiCountTo from './UiCountTo.vue'
 
@@ -15,7 +17,7 @@ const props = withDefaults(
     unit?: string
     /** 环比变化，正=上升 负=下降；不传则不显示 */
     trend?: number
-    icon?: string
+    icon?: IconName
     tone?: 'brand' | 'ok' | 'warn' | 'bad' | 'neutral'
     loading?: boolean
     /**
@@ -68,7 +70,7 @@ const TONE: Record<string, string> = {
         class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl"
         :class="TONE[props.tone]"
       >
-        <el-icon><component :is="props.icon" /></el-icon>
+        <UiIcon :name="props.icon" />
       </span>
     </div>
 

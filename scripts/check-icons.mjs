@@ -52,6 +52,13 @@ const BARE_ICON_SVG = /<svg\b[^>]*\bviewBox\s*=\s*["']0 0 24 24["']/
  */
 export const RENDERER_FILES = ['/components/ui/UiIcon.vue']
 
+/**
+ * 内置双形态字形：`UiActionChip` 的点赞/收藏/举报/删除是「描边 ↔ 实心」两套**成套**路径
+ * （激活即填色），不是单个图标；它们随 #1913 接形变时再登记进注册表（那时需要计划表）。
+ * 例外只免 `bare-svg-icon` 一条 —— import 与 name 两条判据照查。
+ */
+export const BUILTIN_GLYPH_FILES = ['/components/ui/UiActionChip.vue']
+
 /** `<UiIcon …>` 开标签（单行）。 */
 const UI_ICON_TAG = /<UiIcon\b[^>]*>/g
 
@@ -121,9 +128,11 @@ export function findViolations(source) {
 export function scanSource(source, filePath) {
   if (!isGuardedPath(filePath)) return []
   const rel = String(filePath).replace(/\\/g, '/')
-  const isRenderer = RENDERER_FILES.some((suffix) => rel.endsWith(suffix))
+  const exemptBareSvg =
+    RENDERER_FILES.some((suffix) => rel.endsWith(suffix)) ||
+    BUILTIN_GLYPH_FILES.some((suffix) => rel.endsWith(suffix))
   const violations = findViolations(source)
-  return isRenderer ? violations.filter((v) => v.rule !== 'bare-svg-icon') : violations
+  return exemptBareSvg ? violations.filter((v) => v.rule !== 'bare-svg-icon') : violations
 }
 
 /** 违规项 → 一行报告。 */

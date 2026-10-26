@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span class="card-title">资料审核（昵称 / 头像）</span>
-          <UiButton :icon="Refresh" circle aria-label="刷新" @click="load"/>
+          <UiButton :icon="'rotate-cw'" circle aria-label="刷新" @click="load"/>
         </div>
       </template>
 
@@ -40,12 +40,12 @@
           <template #default="{ row }">
             <div v-if="row.field_type === 'nickname'" class="value-cell">
               <span class="old-value">{{ row.old_value || '（空）' }}</span>
-              <el-icon class="arrow"><ArrowRight /></el-icon>
+              <UiIcon name="arrow-right" class="arrow" />
               <span class="new-value">{{ row.new_value }}</span>
             </div>
             <div v-else class="avatar-value-cell">
               <el-avatar :size="36" :src="row.old_value || undefined">旧</el-avatar>
-              <el-icon class="arrow"><ArrowRight /></el-icon>
+              <UiIcon name="arrow-right" class="arrow" />
               <el-avatar :size="36" :src="row.new_value || undefined">新</el-avatar>
             </div>
           </template>
@@ -61,7 +61,7 @@
             <template v-if="row.status === 'pending'">
               <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
                 <UiButton variant="primary" link size="small">
-                  操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  操作<UiIcon name="chevron-down" class="el-icon--right" />
                 </UiButton>
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -101,13 +101,13 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'ProfileReview' })
 
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, ArrowRight, ArrowDown } from '@element-plus/icons-vue'
 import { adminApi, type ProfileChangeRequest } from '@/api/admin'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { useRejectReasonDialog } from '@/composables/useRejectReasonDialog'

@@ -2,7 +2,7 @@
   <div class="mx-auto max-w-[760px] p-5">
     <div class="mb-3">
       <UiButton variant="text" size="small" @click="goBack">
-        <el-icon><ArrowLeft /></el-icon>
+        <UiIcon name="arrow-left" />
         <span class="ml-1">返回</span>
       </UiButton>
     </div>
@@ -87,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // 题目承载页（ADR-0049 决策 4）：搜索结果的「题目」落点。
 //
 // 口径：**练习同源**——单题会话走 usePracticeSession 的 single 变体（与错题重做同一形态），
@@ -97,7 +98,6 @@ import { computed, onMounted, ref } from 'vue'
 import { href } from '@/config/pages'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
 // by-id 取题复用既有题库 API（端点同一，读路径由后端按能力分流：#981 之后学员走题库池口径）
 import { questionBankApi } from '@/api/questionBank'
 import { practiceModeApi } from '@/api/practiceMode'
