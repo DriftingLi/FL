@@ -51,6 +51,13 @@ const RESIDENT_MAX = 16000;
 const DUP_MIN_LEN = 20;
 
 /**
+ * 表头分隔线（`| --- | --- |`）是 markdown 结构件不是内容：按 :50 注释立的意图
+ * （分隔线逐字相同不构成抄写）用形状滤掉。#1938 合入后 4 列表分隔线两侧同现，
+ * 长度 26 越过 DUP_MIN_LEN 造成误报——补形状过滤，不放宽长度阈值（长句真抄写仍要判红）。
+ */
+const TABLE_SEP_RE = /^\|(?:\s*:?-{3,}:?\s*\|)+$/;
+
+/**
  * L2 例外登记：与根层逐字相同**且应当**逐字相同的指针句（一句话把读者送去真源）。
  * 判据是「它是路由、不是内容」——抄路牌不开第二真源。新增必须写明理由。
  */
@@ -112,13 +119,13 @@ function scan(s) {
   for (const [name, text] of Object.entries(s.rootDocs)) {
     for (const raw of text.split('\n')) {
       const t = raw.trim();
-      if (t.length >= DUP_MIN_LEN && !origin.has(t)) origin.set(t, name);
+      if (t.length >= DUP_MIN_LEN && !TABLE_SEP_RE.test(t) && !origin.has(t)) origin.set(t, name);
     }
   }
   const dup = new Set();
   for (const raw of s.agents.split('\n')) {
     const t = raw.trim();
-    if (t.length >= DUP_MIN_LEN && origin.has(t)) dup.add(t);
+    if (t.length >= DUP_MIN_LEN && !TABLE_SEP_RE.test(t) && origin.has(t)) dup.add(t);
   }
   for (const t of dup) {
     if (!allowed.includes(t)) v.push(`L2: 与 ${origin.get(t)} 逐字同行的长句（第二真源）：${t.slice(0, 48)}`);
