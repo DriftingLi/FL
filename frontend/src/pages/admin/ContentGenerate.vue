@@ -48,11 +48,11 @@
 
         <el-form-item>
           <UiButton variant="primary" size="large" :loading="generating || isTaskRunning" :disabled="!selectedCourseId || selectedChapterIds.length === 0 || isTaskRunning" @click="handleGenerate">
-            <el-icon><MagicStick /></el-icon>
+            <UiIcon name="wand-sparkles" />
             {{ isTaskRunning ? '生成中...' : '开始生成' }}
           </UiButton>
           <span v-if="isTaskRunning" class="generating-tip">
-            <el-icon class="is-loading"><Loading /></el-icon>
+            <UiIcon name="loader-circle" class="is-loading" />
             正在生成，请勿重复提交
           </span>
         </el-form-item>
@@ -73,7 +73,7 @@
           已完成 {{ generateTask.completed || 0 }} / {{ generateTask.total }} 个章节
         </span>
         <span v-if="generateTask.status === 'processing'" class="progress-status processing">
-          <el-icon class="is-loading"><Loading /></el-icon> 正在调用 AI 生成内容，预计每个章节约 20-40 秒...
+          <UiIcon name="loader-circle" class="is-loading" /> 正在调用 AI 生成内容，预计每个章节约 20-40 秒...
         </span>
         <span v-else-if="generateTask.status === 'completed'" class="progress-status completed">
           生成完成
@@ -82,7 +82,7 @@
           生成失败
         </span>
         <span v-else-if="generateTask.status === 'pending'" class="progress-status pending">
-          <el-icon class="is-loading"><Loading /></el-icon> 任务排队中...
+          <UiIcon name="loader-circle" class="is-loading" /> 任务排队中...
         </span>
       </div>
 
@@ -93,8 +93,8 @@
           class="result-item"
           :class="{ 'result-success': item.status === 'success', 'result-failed': item.status === 'failed' }"
         >
-          <el-icon v-if="item.status === 'success'" class="status-icon success"><CircleCheck /></el-icon>
-          <el-icon v-else class="status-icon failed"><CircleClose /></el-icon>
+          <UiIcon name="circle-check" v-if="item.status === 'success'" class="status-icon success" />
+          <UiIcon name="circle-x" v-else class="status-icon failed" />
           <span class="chapter-title">{{ item.title }}</span>
           <UiTag :tone="item.status === 'success' ? 'success' : 'danger'" size="small">
             {{ item.status === 'success' ? '生成成功' : '生成失败' }}
@@ -117,8 +117,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onUnmounted } from 'vue'
-import { MagicStick, CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { adminApi, type GenerateTask } from '@/api/admin'
 import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'

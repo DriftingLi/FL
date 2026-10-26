@@ -1,3 +1,4 @@
+import type { IconName } from '@/icons/registry'
 import type { Component } from 'vue'
 import type { AuthzCapability } from './authz'
 import type { RouteName } from './pages'
@@ -28,7 +29,7 @@ export interface NavItem {
   activeRouteNames?: readonly RouteName[]
   /** 目标路由需要的动态参数（如章节页 ChapterView 需要 courseId/chapterId）。 */
   routeParams?: Record<string, string | number>
-  icon?: Component
+  icon?: IconName | Component
   children?: NavItem[]
   /** 外链地址（用于内容精选等跨子域跳转） */
   externalUrl?: string

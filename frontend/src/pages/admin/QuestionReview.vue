@@ -56,7 +56,7 @@
         <template #default="{ row }">
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
             <UiButton variant="primary" link size="small">
-              操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              操作<UiIcon name="chevron-down" class="el-icon--right" />
             </UiButton>
             <template #dropdown>
               <el-dropdown-menu>
@@ -136,13 +136,13 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'QuestionReview' })
 
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
 import { questionBankApi } from '@/api/questionBank'
 import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { Question } from '@/types/question'

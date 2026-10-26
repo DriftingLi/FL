@@ -16,7 +16,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ElTable } from 'element-plus/es/components/table/index.mjs'
-import { WarningFilled } from '@element-plus/icons-vue'
 import { epLite } from '@/test/element-lite'
 import type { AlgorithmParameters } from '@/api/valuation/admin'
 
@@ -91,10 +90,7 @@ function draftCounts(w: ReturnType<typeof mount>): number[] {
 async function mountOnAlgorithmTab() {
   const w = mount(ValuationConfigManage, {
     global: {
-      plugins: [epLite()],
-      // UiErrorState 的图标在生产由 main.ts 全局注册；错误态用例需要它，否则 vue 报 unresolved
-      components: { WarningFilled },
-      stubs: { 'el-table-column': true }
+      plugins: [epLite()],      stubs: { 'el-table-column': true }
     }
   })
   await flushPromises()

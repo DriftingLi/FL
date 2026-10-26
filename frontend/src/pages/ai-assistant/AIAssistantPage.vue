@@ -2,7 +2,7 @@
   <ChatPageShell
     logo-sub="AI 叉车助手 · HRWAI"
     login-redirect="/ai-assistant"
-    :welcome-icon="ChatDotRound"
+    :welcome-icon="'message-circle'"
     welcome-title="选购维保故障操作，叉车问题一问即答"
     :suggestions="suggestions"
     enable-rename
@@ -50,7 +50,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound } from '@element-plus/icons-vue'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
 import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import { useAIAssistantStore } from '@/stores/aiAssistant'

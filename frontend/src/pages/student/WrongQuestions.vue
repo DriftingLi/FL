@@ -10,7 +10,7 @@
         <el-option label="简答题" value="short_answer" />
       </el-select>
       <UiButton @click="toggleSort">
-        <el-icon class="mr-1"><SortDown v-if="sortOrder === 'desc'" /><SortUp v-else /></el-icon>
+        <UiIcon :name="sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'" class="mr-1" />
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
       </UiButton>
       <UiCheckbox v-model="filterFavorited">收藏</UiCheckbox>
@@ -48,9 +48,7 @@
             <UiCheckbox :model-value="selectedIds.has(item.question_id)" @change="(val:boolean)=>toggleSelect(item.question_id, val)" />
             <UiTag size="small">{{ item.question?.type ? (typeMap as Record<string, string>)[item.question.type] : '' }}</UiTag>
             <UiTag v-if="item.is_redone" tone="success" size="small">已重做</UiTag>
-            <el-icon class="fav-star cursor-pointer text-lg text-ink-3 hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)">
-              <StarFilled v-if="item.favorited" /><Star v-else />
-            </el-icon>
+            <UiIcon :name="item.favorited ? 'star-filled' : 'star'" class="fav-star cursor-pointer text-lg text-ink-3 hover:text-warn" :class="item.favorited ? 'text-warn' : ''" @click="toggleFavorite(item)" />
           </div>
           <span class="text-[13px] text-bad">错误 {{ item.wrong_count }} 次 · 最近 {{ formatDateTime(item.last_wrong_at) }}</span>
         </div>
@@ -141,9 +139,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Star, StarFilled, SortDown, SortUp } from '@element-plus/icons-vue'
 import { wrongQuestionApi, type WrongQuestionItem } from '@/api/wrongQuestion'
 import { typeMap } from '@/constants/question'
 import { downloadBlob } from '@/composables/useReportDownload'

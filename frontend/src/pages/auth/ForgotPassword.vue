@@ -23,12 +23,12 @@
           <el-input
             v-model="formData.phone"
             placeholder="请输入注册手机号"
-            prefix-icon="Phone"
             size="large"
             class="form-input"
             maxlength="11"
-            @keyup.enter="handleSubmit"
-          />
+            @keyup.enter="handleSubmit">
+            <template #prefix><UiIcon name="phone" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -57,12 +57,12 @@
             <el-input
               v-model="formData.code"
               placeholder="6位手机验证码"
-              prefix-icon="Message"
               size="large"
               class="form-input code-input"
               maxlength="6"
-              @keyup.enter="handleSubmit"
-            />
+              @keyup.enter="handleSubmit">
+            <template #prefix><UiIcon name="mail" /></template>
+          </el-input>
             <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
             </UiButton>
@@ -74,11 +74,11 @@
             v-model="formData.password"
             type="password"
             placeholder="新密码（6-20位）"
-            prefix-icon="Lock"
             show-password
             size="large"
-            class="form-input"
-          />
+            class="form-input">
+            <template #prefix><UiIcon name="lock" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item prop="confirmPassword">
@@ -86,12 +86,12 @@
             v-model="formData.confirmPassword"
             type="password"
             placeholder="确认新密码"
-            prefix-icon="Lock"
             show-password
             size="large"
             class="form-input"
-            @keyup.enter="handleSubmit"
-          />
+            @keyup.enter="handleSubmit">
+            <template #prefix><UiIcon name="lock" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -115,11 +115,11 @@
           <el-input
             v-model="formData.email"
             placeholder="请输入注册邮箱"
-            prefix-icon="Message"
             size="large"
             class="form-input"
-            @keyup.enter="handleSubmit"
-          />
+            @keyup.enter="handleSubmit">
+            <template #prefix><UiIcon name="mail" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -148,12 +148,12 @@
             <el-input
               v-model="formData.code"
               placeholder="6位邮箱验证码"
-              prefix-icon="Message"
               size="large"
               class="form-input code-input"
               maxlength="6"
-              @keyup.enter="handleSubmit"
-            />
+              @keyup.enter="handleSubmit">
+            <template #prefix><UiIcon name="mail" /></template>
+          </el-input>
             <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
             </UiButton>
@@ -165,11 +165,11 @@
             v-model="formData.password"
             type="password"
             placeholder="新密码（6-20位）"
-            prefix-icon="Lock"
             show-password
             size="large"
-            class="form-input"
-          />
+            class="form-input">
+            <template #prefix><UiIcon name="lock" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item prop="confirmPassword">
@@ -177,12 +177,12 @@
             v-model="formData.confirmPassword"
             type="password"
             placeholder="确认新密码"
-            prefix-icon="Lock"
             show-password
             size="large"
             class="form-input"
-            @keyup.enter="handleSubmit"
-          />
+            @keyup.enter="handleSubmit">
+            <template #prefix><UiIcon name="lock" /></template>
+          </el-input>
         </el-form-item>
 
         <el-form-item>
@@ -208,7 +208,6 @@ import { useRouter } from 'vue-router'
 import { href } from '@/config/pages'
 import { authApi } from '@/api/auth'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Message } from '@element-plus/icons-vue'
 import { useSendCode } from '@/composables/useSendCode'
 import { useCaptcha } from '@/composables/useCaptcha'
 import { useAuthFlow } from '@/composables/useAuthFlow'
@@ -270,7 +269,7 @@ const formData = reactive({
   confirmPassword: ''
 })
 
-const altModes: AltMode[] = [{ key: 'email', label: '邮箱找回', icon: Message }]
+const altModes: AltMode[] = [{ key: 'email', label: '邮箱找回', icon: 'message-square' }]
 
 function onSelectAlt(key: AltModeKey | null) {
   flow.setMode((key === 'email' ? 'email' : 'phone') as ResetMode)

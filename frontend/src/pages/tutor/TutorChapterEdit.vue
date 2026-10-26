@@ -30,7 +30,7 @@
       >
         <template #actions>
           <UiButton size="small" @click="openMetaDialog">
-            <el-icon><Edit /></el-icon> 编辑信息
+            <UiIcon name="pencil" /> 编辑信息
           </UiButton>
         </template>
       </UiPageHeader>
@@ -55,7 +55,7 @@
                     :disabled="!contentChanged"
                     @click="saveContent"
                   >
-                    <el-icon><Check /></el-icon> 保存正文
+                    <UiIcon name="check" /> 保存正文
                   </UiButton>
                 </div>
               </div>
@@ -74,9 +74,7 @@
           <el-tab-pane v-for="group in fileGroups" :key="group.type" :name="group.type">
             <template #label>
               <span class="inline-flex items-center gap-1">
-                <el-icon :size="16" :class="group.iconClass">
-                  <component :is="group.icon" />
-                </el-icon>
+                <UiIcon :name="group.icon" :size="16" :class="group.iconClass" />
                 {{ group.label }}
                 <UiTag class="ml-1">{{ group.files.length }}</UiTag>
               </span>
@@ -88,7 +86,7 @@
                 <div class="mb-3 flex items-center justify-between">
                   <h3 class="text-sm font-semibold text-ink">已上传文件（{{ group.files.length }}）</h3>
                   <UiButton size="small" @click="openUploadDialog(group.type)">
-                    <el-icon><Upload /></el-icon> 上传{{ group.label }}
+                    <UiIcon name="upload" /> 上传{{ group.label }}
                   </UiButton>
                 </div>
 
@@ -100,9 +98,7 @@
                     :class="{ 'border-ui-500 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))]': selectedFileId === file.file_id }"
                     @click="selectFile(file.file_id)"
                   >
-                    <el-icon class="shrink-0 text-ui-soft-ink" :size="18" :class="group.iconClass">
-                      <component :is="group.icon" />
-                    </el-icon>
+                    <UiIcon :name="group.icon" class="shrink-0 text-ui-soft-ink" :size="18" :class="group.iconClass" />
                     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span class="truncate text-sm text-ink" :title="file.file_name">{{ file.file_name }}</span>
                       <span v-if="file.file_size" class="text-xs text-ink-3">{{ formatSize(file.file_size) }}</span>
@@ -114,7 +110,7 @@
                       aria-label="删除文件"
                       @click.stop="handleDeleteFile(file)"
                     >
-                      <el-icon><Delete /></el-icon>
+                      <UiIcon name="trash-2" />
                     </UiButton>
                   </div>
                 </div>
@@ -153,7 +149,7 @@
             :disabled="!chapterDetail.previous_chapter_id"
             @click="navigateToChapter(chapterDetail.previous_chapter_id)"
           >
-            <el-icon><ArrowLeft /></el-icon>
+            <UiIcon name="arrow-left" />
             <span v-if="chapterDetail.previous_chapter_id" class="flex flex-col items-start max-md:items-start">
               <span class="text-xs text-ink-3">上一章节</span>
               <span class="mt-0.5 text-sm font-medium text-ink">{{ getPrevChapterTitle }}</span>
@@ -173,7 +169,7 @@
               <span class="mt-0.5 text-sm font-medium text-ink">{{ getNextChapterTitle }}</span>
             </span>
             <span v-else class="text-xs text-ink-3">没有下一章节</span>
-            <el-icon><ArrowRight /></el-icon>
+            <UiIcon name="arrow-right" />
           </UiButton>
         </div>
       </nav>
@@ -231,12 +227,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, type Component } from 'vue'
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  ArrowLeft, ArrowRight, Edit, Check, Upload, Delete,
-  VideoCamera, Document
-} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
@@ -292,10 +286,10 @@ const TYPE_ORDER = ['video', 'document', 'ppt']
  * 色调改用语义 token：视频沿用原有红色系（bad）、PPT 沿用橙黄（warn），
  * 文档由 Element 默认蓝改为品牌石墨青 ui-500。
  */
-const TYPE_CONFIG: Record<string, { label: string; icon: Component; iconClass: string }> = {
-  video: { label: '视频', icon: VideoCamera, iconClass: 'text-bad' },
-  document: { label: '文档', icon: Document, iconClass: 'text-ui-soft-ink' },
-  ppt: { label: 'PPT', icon: Document, iconClass: 'text-warn' }
+const TYPE_CONFIG: Record<string, { label: string; icon: IconName; iconClass: string }> = {
+  video: { label: '视频', icon: 'video', iconClass: 'text-bad' },
+  document: { label: '文档', icon: 'file-text', iconClass: 'text-ui-soft-ink' },
+  ppt: { label: 'PPT', icon: 'file-text', iconClass: 'text-warn' }
 }
 
 // Vditor 图片上传走 /api/tutor/upload-image（返回 Vditor 期望的 {code,msg,data:{succMap}} 格式）。
@@ -318,7 +312,7 @@ const fileGroups = computed(() => {
   return TYPE_ORDER.map((type) => ({
     type,
     label: TYPE_CONFIG[type]?.label || type,
-    icon: TYPE_CONFIG[type]?.icon || Document,
+    icon: TYPE_CONFIG[type]?.icon || 'file-text',
     iconClass: TYPE_CONFIG[type]?.iconClass || 'text-ink-3',
     files: groups[type] || []
   }))

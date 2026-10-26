@@ -3,7 +3,7 @@
     <div class="exam-toolbar">
       <div v-if="title" class="exam-title">{{ title }}</div>
       <div class="timer" :class="{ warning: remainingTime < 300 }">
-        <el-icon><Timer /></el-icon>
+        <UiIcon name="timer" />
         <span>{{ formatClock(remainingTime) }}</span>
       </div>
       <UiButton variant="danger" @click="confirmSubmit">交卷</UiButton>
@@ -47,8 +47,8 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, watch } from 'vue'
-import { Timer } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Question } from '@/types/question'
 import { typeMap } from '@/constants/question'

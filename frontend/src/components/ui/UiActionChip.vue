@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 操作药丸：图标 + 文字 + 计数的圆角按钮，统一点赞/收藏/举报/删除等行内互动。
  *
@@ -15,7 +17,7 @@ import { computed } from 'vue'
 const props = withDefaults(
   defineProps<{
     /** 图标：内置 key 或组件引用/全局名（内置 key 优先，激活可切实心） */
-    icon?: string | object
+    icon?: IconName | 'like' | 'fav' | 'report' | 'delete'
     /** 主文字 */
     label?: string
     /** 计数（tabular-nums） */
@@ -65,6 +67,9 @@ const PATHS: Record<string, { outline: string; filled: string }> = {
 }
 
 const builtin = computed(() => (typeof props.icon === 'string' && props.icon in PATHS ? props.icon as keyof typeof PATHS : null))
+/** 非内置图标：调用方给的是注册表名（内置 like/fav/report/delete 走上面的 SVG 分支） */
+const customIcon = computed(() => (builtin.value ? null : ((props.icon as IconName | undefined) ?? null)))
+
 const path = computed(() => (builtin.value ? PATHS[builtin.value][props.active ? 'filled' : 'outline'] : ''))
 
 const chipClass = computed(() => {
@@ -115,7 +120,7 @@ const baseClass = computed(() =>
     >
       <path :d="path" />
     </svg>
-    <el-icon v-else-if="icon" class="size-3.5 text-[1em]"><component :is="icon" /></el-icon>
+    <UiIcon :name="customIcon" v-else-if="customIcon" class="size-3.5 text-[1em]" />
     <span v-if="!compact && label">{{ label }}</span>
     <span v-if="count !== undefined && count > 0" class="font-mono tabular-nums">{{ count }}</span>
     <span v-if="compact && label" class="sr-only">{{ label }}</span>

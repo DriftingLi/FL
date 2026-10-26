@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IconName } from '@/icons/registry'
+import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 按钮：包 `el-button`，收敛 variant / block / 图标写法。
  *
@@ -21,7 +23,7 @@ const props = withDefaults(
      * 图标：既接受全局注册名（字符串），也接受组件引用（`:icon="Plus"`）。
      * 存量 el-button 两种写法都在用，故类型放宽 —— 两者都能直接喂给 `<component :is>`。
      */
-    icon?: string | object
+    icon?: IconName
     /** 圆形图标按钮（EP 的 circle），仅图标、无文字时用 */
     circle?: boolean
     /**
@@ -79,9 +81,7 @@ const EP_TYPE: Record<string, 'primary' | 'default' | 'danger' | 'success' | 'wa
     :circle="props.circle"
     :class="props.block ? 'w-full' : undefined"
   >
-    <el-icon v-if="props.icon">
-      <component :is="props.icon" />
-    </el-icon>
+    <UiIcon :name="props.icon" v-if="props.icon" />
     <slot />
   </el-button>
 </template>

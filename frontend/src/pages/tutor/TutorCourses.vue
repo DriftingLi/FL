@@ -96,7 +96,7 @@
                 <div class="flex items-center justify-between text-xs text-ink-3">
                   <span>{{ course.chapter_count || 0 }} 个章节</span>
                   <UiButton size="small">
-                    管理章节 <el-icon><ArrowRight /></el-icon>
+                    管理章节 <UiIcon name="arrow-right" />
                   </UiButton>
                 </div>
               </template>
@@ -127,9 +127,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight } from '@element-plus/icons-vue'
 import { href } from '@/config/pages'
 import { tutorApi, type CourseDTO } from '@/api/tutor'
 import { trainingApi } from '@/api/training'

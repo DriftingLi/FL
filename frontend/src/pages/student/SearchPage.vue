@@ -16,7 +16,7 @@
         @clear="resetSearch"
       >
         <template #prefix>
-          <el-icon><Search /></el-icon>
+          <UiIcon name="search" />
         </template>
       </el-input>
       <UiButton variant="primary" size="large" :loading="loading" @click="submitSearch">搜索</UiButton>
@@ -36,7 +36,7 @@
             class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-[13px] text-ink-2"
           >
             <span class="cursor-pointer" @click="searchWith(kw)">{{ kw }}</span>
-            <el-icon class="cursor-pointer text-ink-3 hover:text-bad" @click="onRemoveHistory(kw)"><Close /></el-icon>
+            <UiIcon name="x" class="cursor-pointer text-ink-3 hover:text-bad" @click="onRemoveHistory(kw)" />
           </span>
         </div>
       </template>
@@ -138,9 +138,9 @@
 </template>
 
 <script setup lang="ts">
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Close, Search } from '@element-plus/icons-vue'
 import { searchApi, type SearchAllResult, type SearchItem, type SearchPageResult, type SearchType } from '@/api/search'
 import { contentObjectBySearchType, searchableContentObjects, type ContentObjectTarget } from '@/config/contentObjects'
 import { isEmptyValue } from '@/utils/listState'
