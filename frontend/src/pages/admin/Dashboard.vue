@@ -8,19 +8,19 @@
       </div>
     </div>
 
+    <!-- 指标卡：唯一形态 UiStatCard（ADR-0087），本页用 icon-left + 色条 + 悬停档 -->
     <div class="stat-cards">
-      <div class="stat-card" v-for="stat in statItems" :key="stat.label">
-        <div class="stat-indicator" :style="{ background: stat.color }"></div>
-        <div class="stat-body">
-          <div class="stat-icon-wrap" :style="{ background: stat.bgColor }">
-            <UiIcon :name="stat.icon" :size="22" :style="{ color: stat.color }" />
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stat.value }}</div>
-            <div class="stat-label">{{ stat.label }}</div>
-          </div>
-        </div>
-      </div>
+      <UiStatCard
+        v-for="stat in statItems"
+        :key="stat.label"
+        layout="icon-left"
+        accent
+        hoverable
+        :label="stat.label"
+        :value="stat.value"
+        :icon="stat.icon"
+        :tone="stat.tone"
+      />
     </div>
 
     <div class="chart-row">
@@ -61,6 +61,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/icons/registry'
 import UiIcon from '@/components/ui/UiIcon.vue'
+import UiStatCard from '@/components/ui/UiStatCard.vue'
 // keep-alive 的 include 按**组件名**匹配：名必须与路由名（页面描述符的 name）一致，
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'AdminDashboard' })
@@ -92,12 +93,14 @@ function checkMobile() {
   isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
 }
 
-interface StatItem { label: string; value: string; icon: IconName; color: string; bgColor: string }
+// 色调只取语义档（brand/ok/warn/neutral），不再逐卡手写色值：
+// 同一批指标在仪表盘与统计分析两页必须同色（ADR-0087 批一）。
+interface StatItem { label: string; value: string; icon: IconName; tone: 'brand' | 'ok' | 'warn' | 'neutral' }
 const statItems = ref<StatItem[]>([
-  { label: '学员总数', value: '0', icon: 'user', color: 'var(--color-primary-600)', bgColor: 'var(--color-primary-50)' },
-  { label: '今日活跃学员', value: '0', icon: 'user-filled', color: 'var(--color-success)', bgColor: 'var(--color-success-light)' },
-  { label: '课程总数', value: '0', icon: 'notebook', color: 'var(--color-warning)', bgColor: 'var(--color-warning-light)' },
-  { label: '总学习时长', value: '0', icon: 'timer', color: 'var(--color-violet-500)', bgColor: 'var(--color-violet-50)' }
+  { label: '学员总数', value: '0', icon: 'user', tone: 'brand' },
+  { label: '今日活跃学员', value: '0', icon: 'user-filled', tone: 'ok' },
+  { label: '课程总数', value: '0', icon: 'notebook', tone: 'warn' },
+  { label: '总学习时长', value: '0', icon: 'timer', tone: 'neutral' }
 ])
 
 interface QuickAction { label: string; to: ReturnType<typeof href>; icon: IconName; color: string; bgColor: string }
@@ -324,60 +327,6 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-4);
-}
-
-.stat-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  border: 1px solid var(--color-border-light);
-  overflow: hidden;
-  position: relative;
-  transition: all var(--duration-normal) var(--ease-default);
-}
-
-.stat-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-
-.stat-indicator {
-  width: 4px;
-  height: 100%;
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-
-.stat-body {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-5);
-}
-
-.stat-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-value {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-  color: var(--color-text-primary);
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
-  margin-top: 2px;
 }
 
 .chart-row {

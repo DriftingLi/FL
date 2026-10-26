@@ -47,8 +47,10 @@ export const FONT_STEP = {
 
 /**
  * 展示级字号：大号统计数字 / 占位字形，**不进七档**。
- * 现状 5 处（`ProfileEditDialog` 头像字 28、`Statistics` 统计值 28、`CourseCard` 封面占位字 40、
+ * 现状 4 处（`ProfileEditDialog` 头像字 28、`CourseCard` 封面占位字 40、
  * 残值 `.num-hero` 44 / 64）。新增展示级取值要改这里并在 ADR-0080 登记，不许就地写别的 px。
+ * 注意本档只放行 **scoped 的 `font-size:`**；模板里的 `text-[28px]` 仍判红（工具类必须走七档，
+ * 需要展示级大字的组件用 `text-3xl` 或把字号留在页面的 scoped 块里 —— #1973 实测踩过）。
  */
 export const DISPLAY_TIER = new Set([28, 40, 44, 64])
 

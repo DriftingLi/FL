@@ -122,6 +122,44 @@ describe('UiStatCard', () => {
     const w = mountWith(UiStatCard, { label: 'a', value: 42, loading: true })
     expect(w.text()).not.toContain('42')
   })
+
+  // 版式三档（ADR-0087 决策 2）：默认档必须等于改造前的外观，另两档各锁一条结构特征
+  it('默认档 icon-right：标签在数值之上，图标块靠右', () => {
+    const w = mountWith(UiStatCard, { label: '学习时长', value: 1, icon: 'timer' })
+    const html = w.html()
+    expect(html.indexOf('学习时长')).toBeLessThan(html.indexOf('tabular-nums'))
+    expect(w.find('.flex-row-reverse').exists()).toBe(true)
+    expect(w.find('.h-9').exists()).toBe(true)
+  })
+
+  it('layout=icon-left：数值在标签之上，图标块 44px', () => {
+    const w = mountWith(UiStatCard, { label: '学员总数', value: 26, icon: 'user', layout: 'icon-left' })
+    const html = w.html()
+    expect(html.indexOf('tabular-nums')).toBeLessThan(html.indexOf('学员总数'))
+    expect(w.find('.h-11').exists()).toBe(true)
+    expect(w.find('.flex-row-reverse').exists()).toBe(false)
+  })
+
+  it('layout=plain：居中且不渲染图标块', () => {
+    const w = mountWith(UiStatCard, { label: '学员总数', value: 26, icon: 'user', layout: 'plain' })
+    expect(w.find('.h-11').exists()).toBe(false)
+    expect(w.find('.h-9').exists()).toBe(false)
+    expect(w.classes()).toContain('text-center')
+  })
+
+  it('accent 渲染左侧色条，颜色跟 tone 走', () => {
+    expect(mountWith(UiStatCard, { label: 'a' }).find('.absolute').exists()).toBe(false)
+    const w = mountWith(UiStatCard, { label: 'a', accent: true, tone: 'ok' })
+    expect(w.find('.absolute').exists()).toBe(true)
+    expect(w.find('.absolute').classes()).toContain('bg-ok')
+  })
+
+  it('hoverable 打开悬停抬升', () => {
+    expect(mountWith(UiStatCard, { label: 'a' }).classes().join(' ')).not.toContain('hover:-translate-y-0.5')
+    expect(mountWith(UiStatCard, { label: 'a', hoverable: true }).classes().join(' ')).toContain(
+      'hover:-translate-y-0.5'
+    )
+  })
 })
 
 describe('UiEmptyState / UiErrorState', () => {
