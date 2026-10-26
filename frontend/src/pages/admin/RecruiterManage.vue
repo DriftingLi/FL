@@ -42,18 +42,7 @@ style="width: 280px"
 </el-table-column>
 <el-table-column label="操作" width="110" fixed="right" align="center">
 <template #default="{ row }">
-<el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-<UiButton variant="primary" link size="small">
-操作<UiIcon name="chevron-down" class="el-icon--right" />
-</UiButton>
-<template #dropdown>
-<el-dropdown-menu>
-<el-dropdown-item command="edit">编辑企业信息</el-dropdown-item>
-<el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
-<el-dropdown-item command="toggle">{{ row.status === 1 ? '禁用' : '启用' }}</el-dropdown-item>
-</el-dropdown-menu>
-</template>
-</el-dropdown>
+<UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
 </template>
 </el-table-column>
 </el-table>
@@ -160,6 +149,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -342,6 +332,15 @@ async function handleSubmit() {
 onMounted(() => {
   load()
 })
+
+/** 行内「操作」菜单：低频治理动作（编辑企业信息 / 重置密码 / 启停）走菜单收纳 */
+function actionItems(row: AdminRecruiter): UiMoreMenuItem[] {
+  return [
+    { key: 'edit', label: '编辑企业信息' },
+    { key: 'resetPwd', label: '重置密码' },
+    { key: 'toggle', label: row.status === 1 ? '禁用' : '启用' }
+  ]
+}
 </script>
 
 <style scoped>

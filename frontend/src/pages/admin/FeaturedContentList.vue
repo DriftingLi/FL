@@ -64,21 +64,7 @@
       <el-table-column prop="sort_order" label="排序" width="80" align="center" />
       <el-table-column label="操作" width="90" fixed="right" align="center">
         <template #default="{ row }">
-          <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-            <UiButton variant="primary" link size="small">
-              操作<UiIcon name="chevron-down" class="el-icon--right" />
-            </UiButton>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                <!-- 立即发布：草稿与定时中都能用（定时项提前上线，不必改时间；#1748 用户故事 17） -->
-                <el-dropdown-item v-if="rowState(row) !== 'published'" command="publish">立即发布</el-dropdown-item>
-                <!-- 转为草稿：只对定时行出现 —— 它是「取消排期」这类内容的唯一出口 -->
-                <el-dropdown-item v-if="rowState(row) === 'scheduled'" command="cancelSchedule">转为草稿</el-dropdown-item>
-                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
         </template>
       </el-table-column>
     </el-table>
@@ -115,6 +101,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 const router = useRouter()
 
@@ -212,6 +199,17 @@ async function handleDelete(id: number) {
 onMounted(() => {
   load()
 })
+
+/** 行内「操作」菜单：编辑 / 发布态动作 / 删除走菜单收纳（登记表「菜单收纳」行） */
+function actionItems(row: FeaturedContentAdminListDTO): UiMoreMenuItem[] {
+  const items: UiMoreMenuItem[] = [{ key: 'edit', label: '编辑' }]
+  // 立即发布：草稿与定时中都能用（定时项提前上线，不必改时间；#1748 用户故事 17）
+  if (rowState(row) !== 'published') items.push({ key: 'publish', label: '立即发布' })
+  // 转为草稿：只对定时行出现 —— 它是「取消排期」这类内容的唯一出口
+  if (rowState(row) === 'scheduled') items.push({ key: 'cancelSchedule', label: '转为草稿' })
+  items.push({ key: 'delete', label: '删除', divided: true })
+  return items
+}
 </script>
 
 <style scoped>

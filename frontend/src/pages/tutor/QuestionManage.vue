@@ -81,19 +81,7 @@
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <UiButton variant="primary" link size="small">
-                操作<UiIcon name="chevron-down" class="el-icon--right" />
-              </UiButton>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="view">查看</el-dropdown-item>
-                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                  <el-dropdown-item v-if="row.status === 'draft'" command="review">提交审核</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>
@@ -151,7 +139,6 @@
 </template>
 
 <script setup lang="ts">
-import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -172,6 +159,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
@@ -291,5 +279,16 @@ async function handleDelete(row: Question) {
   } catch {
     /* 错误已由拦截器提示 */
   }
+}
+
+/** 行内「操作」菜单：查看 / 编辑 / 提交审核 / 删除走菜单收纳（登记表「菜单收纳」行） */
+function actionItems(row: Question): UiMoreMenuItem[] {
+  const items: UiMoreMenuItem[] = [
+    { key: 'view', label: '查看' },
+    { key: 'edit', label: '编辑' }
+  ]
+  if (row.status === 'draft') items.push({ key: 'review', label: '提交审核' })
+  items.push({ key: 'delete', label: '删除', divided: true })
+  return items
 }
 </script>
