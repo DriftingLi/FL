@@ -22,7 +22,7 @@
     >
       <template #skeleton>
         <div class="empty-wrap rounded-card border border-line bg-panel py-6">
-          <el-skeleton :rows="4" animated />
+          <UiSkeleton variant="text" :rows="4" />
         </div>
       </template>
       <template #empty>
@@ -82,6 +82,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 
 const router = useRouter()
 const credentialStore = useCredentialStore()

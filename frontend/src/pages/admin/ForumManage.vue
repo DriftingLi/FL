@@ -94,12 +94,8 @@
       <UiFilterBar>
         <template #filters>
 
-        <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-          <el-tab-pane label="全部帖子" name="all" />
-          <el-tab-pane label="综合讨论区" name="discussion" />
-          <el-tab-pane label="问答区" name="question" />
-          <el-tab-pane label="备考经验" name="experience" />
-        </el-tabs>
+        <!-- 参数选择（同一列表换版块筛选）→ 胶囊，登记表「参数选择」行 -->
+        <UiSegmentTabs v-model="activeTab" :options="topicTabOptions" @change="handleTabChange" />
         <el-input
           v-model="keyword"
           placeholder="搜索标题 / 内容"
@@ -310,6 +306,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
 // 帖子列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表一并托管。
 // 解构改名保持模板零改动；keyword 为页面自管筛选轴（由 fetch adapter 读取）。
@@ -425,6 +422,13 @@ async function handleReport(row: AdminForumReportItem) {
 function displayName(author: AdminForumTopic['author']) {
   return author.username
 }
+
+const topicTabOptions = [
+  { label: '全部帖子', value: 'all' },
+  { label: '综合讨论区', value: 'discussion' },
+  { label: '问答区', value: 'question' },
+  { label: '备考经验', value: 'experience' }
+]
 
 function handleTabChange() {
   currentPage.value = 1

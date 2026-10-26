@@ -92,7 +92,7 @@
 
             <p class="mt-1.5 text-xs text-ink-3">支持格式：PNG、JPG、JPEG、GIF、WebP、BMP，最大5MB</p>
 
-            <el-divider>或手动输入URL</el-divider>
+            <UiDivider label="或手动输入URL" />
             <UiInput v-model="form.image_url" placeholder="输入图片URL地址" clearable />
           </div>
         </el-form-item>
@@ -173,6 +173,7 @@ import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiDivider from '@/components/ui/UiDivider.vue'
 
 const route = useRoute()
 const router = useRouter()

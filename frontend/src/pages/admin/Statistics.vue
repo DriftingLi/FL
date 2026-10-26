@@ -98,11 +98,11 @@
         </el-table-column>
         <el-table-column label="平均进度" width="200" align="center">
           <template #default="{ row }">
-            <el-progress
-              :percentage="row.avg_progress || 0"
-              :color="getProgressColor(row.avg_progress)"
+            <UiProgress
+              :value="row.avg_progress || 0"
+              :tone="progressTone(row.avg_progress)"
               :stroke-width="16"
-              :text-inside="true"
+              text-inside
             />
           </template>
         </el-table-column>
@@ -126,7 +126,16 @@ import { useThemeStore } from '@/stores/theme'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
 import UiCard from '@/components/ui/UiCard.vue'
-import { formatDurationCn, getProgressColor } from '@/utils/format'
+import { formatDurationCn } from '@/utils/format'
+import UiProgress from '@/components/ui/UiProgress.vue'
+
+/** 进度 → 语义档：原来直接返回色值，UiProgress 只认 tone（阈值与 utils/format 的旧实现一致） */
+function progressTone(progress: number): 'ok' | 'brand' | 'warn' | 'bad' {
+  if (progress >= 100) return 'ok'
+  if (progress >= 60) return 'brand'
+  if (progress >= 30) return 'warn'
+  return 'bad'
+}
 
 const overview = ref<any>({})
 const courseStats = ref<{ name: string; study_count: number; total_duration: number; avg_progress: number }[]>([])

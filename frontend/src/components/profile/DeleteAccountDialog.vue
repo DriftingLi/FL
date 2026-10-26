@@ -1,7 +1,7 @@
 <template>
   <UiDialog v-model="visible" title="注销帐号" width="440px" confirm-text="确认注销" :confirm-loading="loading" :confirm-disabled="input.trim()!==account" @confirm="confirm">
     <div class="delete-content">
-      <el-alert type="warning" :closable="false" show-icon title="注销后账号及所有学习数据将被永久删除且不可恢复，论坛发言将匿名化为“已注销用户”。" />
+      <UiAlert type="warning" :closable="false" show-icon title="注销后账号及所有学习数据将被永久删除且不可恢复，论坛发言将匿名化为“已注销用户”。" />
       <p class="confirm-text">请输入你的账号 <strong>{{ account }}</strong> 以确认注销：</p>
       <el-input v-model="input" placeholder="请输入账号" />
     </div>
@@ -16,6 +16,7 @@ import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()

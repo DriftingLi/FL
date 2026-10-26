@@ -96,7 +96,7 @@
           <p><strong>图片：</strong></p>
           <img :src="currentQuestion.image_url" style="max-width: 100%; max-height: 300px; border-radius: 8px" />
         </div>
-        <el-alert
+        <UiAlert
           v-if="currentQuestion.status === 'draft' && currentQuestion.reject_reason"
           title="该题目已被驳回"
           type="error"
@@ -156,6 +156,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, UiTagTone> = { draft: 'info', pending: 'warning', published: 'success' }

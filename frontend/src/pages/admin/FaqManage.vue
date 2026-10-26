@@ -7,7 +7,10 @@
       </UiButton>
     </div>
 
-    <UiSegmentTabs v-model="tab" :options="tabOptions" class="mb-4" @change="handleTabChange" />
+    <!-- 面板切换（分类 / 条目是两张不同的表）→ 原生 el-tabs，登记表「面板切换」行 -->
+    <el-tabs v-model="tab" class="mb-4" @tab-change="handleTabChange">
+      <el-tab-pane v-for="opt in tabOptions" :key="opt.value" :label="opt.label" :name="opt.value" />
+    </el-tabs>
 
     <UiAsyncSection
       :error="loadError"
@@ -143,7 +146,6 @@ import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 

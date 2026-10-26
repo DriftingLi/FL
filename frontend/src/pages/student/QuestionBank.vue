@@ -185,7 +185,7 @@
             :question-type="currentQuestion.type"
           />
           <AIExplanationCard :ai-explanation="(lastResult as any).ai_explanation" :fallback-explanation="lastResult.explanation" />
-          <el-alert
+          <UiAlert
             v-if="lastResult.ai_score !== undefined && lastResult.ai_score !== null"
             :title="lastResult.is_correct ? '回答正确' : '回答错误'"
             :type="lastResult.is_correct ? 'success' : 'error'"
@@ -193,8 +193,8 @@
             show-icon
           >
             <div>AI 评分：{{ lastResult.ai_score }} 分 · {{ lastResult.ai_comment || '' }}</div>
-          </el-alert>
-          <el-alert
+          </UiAlert>
+          <UiAlert
             v-else
             :title="lastResult.is_correct ? '回答正确' : '回答错误'"
             :type="lastResult.is_correct ? 'success' : 'error'"
@@ -256,6 +256,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useCredentialStore } from '@/stores/credential'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 
