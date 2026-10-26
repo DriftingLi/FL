@@ -6,9 +6,9 @@
 //      —— 根因是自动化会话里没有页面被打开，不是版本不兼容。处置 = 调用方先 `cli.bat close` 再 `cli.bat auto`。
 //   2. `mp.screenshot()` 挂在 **MiniProgram** 上，不在 Page 上（`page.screenshot is not a function`）；
 //      它**不返回内容**，产物只能靠落盘文件取（本脚本读 PNG IHDR 自证）。
-//   3. `page.$()` 元素级断言在当前版本组合下**不可用**（实测挂起 15s 超时）⇒ 本探针只用
-//      **page 级**导航（`mp.reLaunch` / `mp.navigateTo`，注意都在 MiniProgram 上）+ console/exception 读取，
-//      **不得**引入元素级断言。
+//   3. `page.$()` 元素级断言 2026-09-18 原测判不可用（就绪闸门早跑窗口的产物）→ 2026-10-25 #1917 裁决证伪
+//      （`page.$('.app-title')` 8ms 可用、`element.text()` 精确匹配可用）→ #1919 落锁收窄：
+//      `page.waitFor(选择器)` 与导航 API 仍禁；`page.$` + `element.text()` 锚点断言放行（仅直达模式）。
 //
 // 2026-09-12 复测（**诚实降级，不许假绿**）：本机 `miniprogram-automator@0.12.1` 下 `mp.reLaunch` / `mp.navigateTo`
 //   **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` / `mp.screenshot` 正常 ⇒
@@ -49,6 +49,7 @@ function parseArgs(argv) {
   const out = {
     ws: 'ws://127.0.0.1:9420', routes: [], shotDir: '', entryUrl: '', requireRoot: '',
     timeoutMs: 30000, pageTimeoutMs: 10000, settleMs: 2000, tailMax: 40, expectPage: '',
+    assertSelectors: [], assertTexts: [],
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -61,6 +62,8 @@ function parseArgs(argv) {
     else if (a === '--timeout-ms') out.timeoutMs = Number(val());
     else if (a === '--page-timeout-ms') out.pageTimeoutMs = Number(val());
     else if (a === '--expect-page') out.expectPage = String(val() || '').trim();
+    else if (a === '--assert-selector') out.assertSelectors.push(String(val() || '').trim());
+    else if (a === '--assert-text') out.assertTexts.push(String(val() || '').trim());
   }
   return out;
 }
@@ -76,6 +79,62 @@ function withTimeout(promise, ms, label) {
     }),
   ]);
 }
+
+// ---------- 锚点元素断言（#1919 落锁 · #1917 裁决承接）----------
+// [C3-anchor-begin]（C3 守护扫本标记到 [C3-anchor-end] 之间的非注释行：禁 waitFor/导航 API）
+const ANCHOR_STEP_TIMEOUT_MS = 8000; // element-probe 同款步超时（E3 判据 <15000：挂起与报错分得开）
+// pairs = [[selector, expectedText], ...]；返回 { total, passed, skipped, items }。
+// 失败文案以「锚点断言」开头、**绝不带 `环境不可用：` 前缀**（门侧直达循环对该前缀整组转 exit 2）。
+async function runAnchorAssertions(mp, pairs, reached, result) {
+  const out = { total: 0, passed: 0, skipped: 0, items: [] };
+  if (!pairs || pairs.length === 0) return out;
+  if (!reached) {
+    // 页身份都没建立 ⇒ 与直达 SKIP 同口径：全 skip、不产生 failures
+    for (const [sel] of pairs) {
+      out.total += 1; out.skipped += 1;
+      out.items.push({ selector: sel, skipped: true, skipReason: 'direct-page-unsupported' });
+    }
+    return out;
+  }
+  let page = null;
+  try {
+    page = await withTimeout(mp.currentPage(), ANCHOR_STEP_TIMEOUT_MS, 'mp.currentPage');
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    for (const [sel] of pairs) {
+      out.total += 1;
+      out.items.push({ selector: sel, error: '拿不到当前页：' + msg });
+      result.failures.push('锚点断言无法执行（拿不到当前页：' + msg + '）');
+    }
+    return out;
+  }
+  for (const [sel, expected] of pairs) {
+    out.total += 1;
+    const item = { selector: sel, expected, elapsedMs: 0 };
+    const t0 = Date.now();
+    try {
+      const el = await withTimeout(page.$(sel), ANCHOR_STEP_TIMEOUT_MS, 'page.$(' + sel + ')');
+      if (!el) {
+        // uni-app x 不能跨组件选择 ⇒ 锚点必须页面级可达
+        item.error = '锚点元素不可达（page.$ 解析为 null：uni-app x 不能跨组件选择，锚点必须页面级可达）';
+        result.failures.push('锚点断言未过：' + sel + ' 元素不可达（page.$ 解析为 null）');
+      } else {
+        const actual = await withTimeout(el.text(), ANCHOR_STEP_TIMEOUT_MS, 'element.text(' + sel + ')');
+        item.actual = String(actual);
+        item.ok = item.actual === expected; // 精确匹配（#1917 裁决口径）
+        if (item.ok) out.passed += 1;
+        else result.failures.push('锚点断言未过：' + sel + ' 期望「' + expected + '」实得「' + item.actual + '」');
+      }
+    } catch (e) {
+      item.error = String((e && e.message) || e);
+      result.failures.push('锚点断言未过：' + sel + ' 执行失败（' + item.error + '）');
+    }
+    item.elapsedMs = Date.now() - t0;
+    out.items.push(item);
+  }
+  return out;
+}
+// [C3-anchor-end]
 
 // 导航降级的判定（**诚实降级**：SKIP 不等于 PASS，也不等于 FAIL）
 const NAV_SKIP_REASON = 'unsupported';
@@ -153,6 +212,8 @@ const result = {
   // navigation：ok = 逐页导航断言可用；skip = 导航 API 不可用 ⇒ 该组断言记 SKIP（reason=navigation-api-unsupported）
   navigation: { status: 'pending', reason: '', detail: '', at: '', skippedAssertions: [], skippedSteps: [] },
   assertions: {}, failures: [],
+  // anchors：锚点元素断言结果（#1919）——JSON 恒有该字段，门侧聚合好读
+  anchors: { total: 0, passed: 0, skipped: 0, items: [] },
 };
 
 function finish(envUnavailable) {
@@ -203,6 +264,24 @@ function finish(envUnavailable) {
   const probeOk = result.failures.length === 0;
   console.log('MP_WEIXIN_PROBE ' + JSON.stringify({ ...result, probeOk }));
   process.exit(probeOk ? 0 : envUnavailable ? 2 : 1);
+}
+
+// 锚点参数校验（#1919，parseArgs 之后、finish 可用处）：
+// 两数不等 ⇒ 参数错配 fail-closed 早退（exit 1，不连会话就红）；
+// 有锚点但无 --expect-page ⇒ 锚点断言只在直达模式受支持——**不早退**（照跑原取证面，收尾时 failures 判红）。
+const anchorPairs = [];
+for (let i = 0; i < Math.max(args.assertSelectors.length, args.assertTexts.length); i += 1) {
+  anchorPairs.push([args.assertSelectors[i] || '', args.assertTexts[i] || '']);
+}
+if (args.assertSelectors.length !== args.assertTexts.length) {
+  const msg = '参数不配对：--assert-selector 与 --assert-text 数目不一致（'
+    + args.assertSelectors.length + ' vs ' + args.assertTexts.length + '）';
+  console.error('[error] ' + msg);
+  result.failures.push(msg);
+  finish(false);
+}
+if (anchorPairs.length > 0 && !args.expectPage) {
+  result.failures.push('锚点断言只在直达模式（--expect-page）受支持：非直达模式下锚点不执行，判未过（锚点断言）');
 }
 
 const loaded = loadAutomator();
@@ -324,12 +403,15 @@ if (args.expectPage) {
       else step.error = shotErr;
     }
   }
+  // 锚点断言（#1919）：截图在前、锚点在后——锚点挂起 8s 也不吃掉截图证据（截图=人证，锚点=判定面）
+  result.anchors = await runAnchorAssertions(mp, anchorPairs, reached, result);
   result.steps.push(step);
   result.navigation = reached
     ? { status: 'ok', reason: '', detail: 'cold-start-direct', at: 'direct:' + target, skippedAssertions: [], skippedSteps: [] }
     : { status: 'skip', reason: 'direct-page-unsupported', detail: 'direct-page-unsupported', at: 'direct:' + target, skippedAssertions: [], skippedSteps: [] };
   console.log('[direct] ' + (reached ? 'ok' : 'skip') + ' page=' + target + ' current=' + step.currentPage
-    + ' errors=' + result.errorsTotal + ' exceptions=' + result.exceptionsTotal + ' shot=' + (step.shot || '-'));
+    + ' errors=' + result.errorsTotal + ' exceptions=' + result.exceptionsTotal + ' shot=' + (step.shot || '-')
+    + ' anchors=' + result.anchors.passed + '/' + result.anchors.total);
   await new Promise((r) => setTimeout(r, args.settleMs));
   finish(false);
 }
