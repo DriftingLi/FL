@@ -869,6 +869,8 @@ function Invoke-BehaviorLeg {
         # 这一套自己的汇总行：`Tests:` 拿不到 ⇒ 整腿的 Tests 总数不可知（不补 0）。
         $suiteText = ''
         if (Test-Path -LiteralPath $outFile) { $suiteText = [System.IO.File]::ReadAllText($outFile, $utf8) }
+        # 真 jest 把汇总行写 stderr（假 jest 的守护写 stdout）⇒ 两个流都要解析，否则 tests 恒为 ?。
+        if (Test-Path -LiteralPath $errFile) { $suiteText += "`r`n" + [System.IO.File]::ReadAllText($errFile, $utf8) }
         $suiteLines = @($suiteText -split "\r?\n")
         $tLine = @($suiteLines | Where-Object { $_ -match '^\s*Tests:\s' } | Select-Object -Last 1)
         if (@($tLine).Count -eq 0 -or [string]::IsNullOrWhiteSpace("$tLine")) {

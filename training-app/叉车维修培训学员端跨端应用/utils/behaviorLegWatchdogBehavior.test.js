@@ -46,6 +46,11 @@ const FAKE_JEST = [
   "    console.log('Time: 4.0 s');",
   '    process.exit(0);',
   '  }, 4000);',
+  "} else if (mode === 'STDERR') {",
+  "  console.error('Test Suites: 1 passed, 1 total');",
+  "  console.error('Tests: 2 passed, 2 total');",
+  "  console.error('Time: 0.05 s');",
+  "  process.exit(0);",
   "} else if (mode === 'FAIL') {",
   "  console.log('Test Suites: 1 failed, 1 total');",
   "  console.log('Tests: 1 failed, 1 total');",
@@ -76,6 +81,7 @@ function runScenarios() {
     resume: { suites: { 'a.test.js': 'OK', 'b.test.js': 'OK', 'c.test.js': 'OK' }, stall: 30, timeout: 0, resume: 2 },
     legTimeout: { suites: { 'a.test.js': 'SLEEP4', 'b.test.js': 'OK', 'c.test.js': 'OK' }, stall: 60, timeout: 2, resume: 0 },
     allGreen: { suites: { 'a.test.js': 'OK', 'b.test.js': 'OK' }, stall: 30, timeout: 0, resume: 0 },
+    stderrSummary: { suites: { 'a.test.js': 'STDERR', 'b.test.js': 'STDERR' }, stall: 30, timeout: 0, resume: 0 },
     failed: { suites: { 'a.test.js': 'FAIL', 'b.test.js': 'OK' }, stall: 30, timeout: 0, resume: 0 },
   };
   const cases = {};
@@ -213,6 +219,14 @@ describe('行为腿看门狗 / 总超时 / 断点续跑（#1994，假 jest + 假
     expect(f.resultLine).toContain('suitesFailed=1');
     expect(f.resultLine).toMatch(/\bexit=1\b/);
     expect(f.resultLine).toContain('stalled=none');
+  });
+
+  test('W7: 汇总行写 stderr（真 jest 形态）时 tests 仍能解析，不得退化成 ?', () => {
+    const s = ctx.stderrSummary;
+    expect(s.exitCode).toBe(0);
+    expect(s.resultLine).toContain('tests=4');
+    expect(s.resultLine).not.toContain('missing=tests');
+    expect(s.output).toMatch(/Test Suites: 2 passed, 2 total/);
   });
 });
 
