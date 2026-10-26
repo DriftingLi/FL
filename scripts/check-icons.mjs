@@ -53,11 +53,10 @@ const BARE_ICON_SVG = /<svg\b[^>]*\bviewBox\s*=\s*["']0 0 24 24["']/
 export const RENDERER_FILES = ['/components/ui/UiIcon.vue']
 
 /**
- * 内置双形态字形：`UiActionChip` 的点赞/收藏/举报/删除是「描边 ↔ 实心」两套**成套**路径
- * （激活即填色），不是单个图标；它们随 #1913 接形变时再登记进注册表（那时需要计划表）。
- * 例外只免 `bare-svg-icon` 一条 —— import 与 name 两条判据照查。
+ * 例外只到渲染器本体为止：`UiActionChip` 的双形态字形已在 #1913 登记进注册表
+ * （`chip-* / chip-*-filled`），不再需要按文件豁免。
  */
-export const BUILTIN_GLYPH_FILES = ['/components/ui/UiActionChip.vue']
+export const BUILTIN_GLYPH_FILES = []
 
 /** `<UiIcon …>` 开标签（单行）。 */
 const UI_ICON_TAG = /<UiIcon\b[^>]*>/g

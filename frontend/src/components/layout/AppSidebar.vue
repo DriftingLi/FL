@@ -98,7 +98,8 @@
     <div class="sidebar-footer">
       <div class="footer-row">
         <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
-          <UiIcon :name="effectiveCollapsed ? 'panel-left-open' : 'panel-left-close'" class="collapse-icon" />
+          <!-- 收起/展开是同一按钮上的两个方向：形状变了，所以走形变（ADR-0079 白名单） -->
+          <UiIcon :name="effectiveCollapsed ? 'panel-left-open' : 'panel-left-close'" morph class="collapse-icon" />
           <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
         </button>
       </div>
