@@ -95,6 +95,7 @@ export function loadRegistry(markdown) {
   const native = new Set()
   const pending = new Set()
   const children = new Map()
+  const wrapperOf = new Map()
 
   // 意图表：cells = [意图, 三轴, 唯一形态, 存量]；结构件表：cells = [件, 唯一形态, 存量]
   for (const cells of [...intent.rows, ...structural.rows]) {
@@ -103,6 +104,14 @@ export function loadRegistry(markdown) {
     for (const tag of tagsIn(form)) native.add(tag)
     for (const tag of tagsIn(stock)) pending.add(tag)
   }
+  // 欠账标签 → 它该改用的封装件（只用于报告措辞，不参与判定）：
+  // 意图表「存量」写了 `el-input` 待迁、「唯一形态」写了 `UiInput` ⇒ 映射成立。
+  for (const cells of intent.rows) {
+    const wrapper = (String(cells[2]).match(/`(Ui[A-Za-z]+)`/) ?? [])[1]
+    if (!wrapper) continue
+    for (const tag of tagsIn(cells[3])) wrapperOf.set(tag, wrapper)
+  }
+
   for (const cells of childTable.rows) {
     // 一格可以写多个子件（`el-option` / `el-option-group`、`el-radio` / `el-radio-button`）：
     // 只取第一个会让同格里的第二个子件落进「未登记」—— 那正是本表要消灭的假红。
@@ -119,6 +128,7 @@ export function loadRegistry(markdown) {
     native,
     pending,
     children,
+    wrapperOf,
     counts: { native: native.size, pending: pending.size, children: children.size, tables: tables.length }
   }
 }

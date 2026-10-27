@@ -72,29 +72,32 @@
     <UiDialog v-model="dialogVisible" :title="editing ? '编辑职位' : '发布职位'" width="560px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submit">
       <el-form label-width="90px">
         <el-form-item label="职位名" required>
-          <el-input v-model="form.title" maxlength="100" placeholder="如：叉车维修技师" />
+          <UiInput v-model="form.title" :maxlength="100" placeholder="如：叉车维修技师" />
         </el-form-item>
         <el-form-item label="岗位" required>
-          <el-select v-model="form.position_id" placeholder="选择岗位" class="!w-full">
-            <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
-          </el-select>
+          <UiSelect
+            v-model="form.position_id"
+            :options="positionOptions"
+            placeholder="选择岗位"
+            class="!w-full"
+          />
         </el-form-item>
         <el-form-item label="地区">
-          <el-input v-model="form.region" maxlength="100" placeholder="如：江苏苏州" />
+          <UiInput v-model="form.region" :maxlength="100" placeholder="如：江苏苏州" />
         </el-form-item>
         <el-form-item label="薪资">
           <div class="flex items-center gap-2">
-            <el-input v-model.number="form.salary_min" type="number" placeholder="下限" class="!w-24" />
+            <UiInput v-model.number="form.salary_min" type="number" placeholder="下限" class="!w-24" />
             <span>-</span>
-            <el-input v-model.number="form.salary_max" type="number" placeholder="上限" class="!w-24" />
-            <el-input v-model="form.salary_text" placeholder="如：6-9K / 面议" class="!w-32" />
+            <UiInput v-model.number="form.salary_max" type="number" placeholder="上限" class="!w-24" />
+            <UiInput v-model="form.salary_text" placeholder="如：6-9K / 面议" class="!w-32" />
           </div>
         </el-form-item>
         <el-form-item label="经验要求">
-          <el-input v-model="form.experience_req" maxlength="100" placeholder="如：2年" />
+          <UiInput v-model="form.experience_req" :maxlength="100" placeholder="如：2年" />
         </el-form-item>
         <el-form-item label="职位描述">
-          <el-input v-model="form.description" type="textarea" :rows="4" maxlength="5000" show-word-limit />
+          <UiInput v-model="form.description" type="textarea" :rows="4" :maxlength="5000" show-word-limit />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -102,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { jobApi, type JobPosting, type JobPostingInput } from '@/api/job'
@@ -115,6 +118,8 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 interface PositionItem {
   position_id: number
@@ -123,6 +128,11 @@ interface PositionItem {
 
 const items = ref<JobPosting[]>([])
 const positions = ref<PositionItem[]>([])
+
+/** 岗位字典 → UiSelect 的 {label,value} */
+const positionOptions = computed<UiSelectOption[]>(() =>
+  positions.value.map((p) => ({ label: p.name, value: p.position_id }))
+)
 const dialogVisible = ref(false)
 const editing = ref(false)
 const submitting = ref(false)

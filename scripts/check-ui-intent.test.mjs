@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { classify, loadRegistry, loadRegistryFromFile } from './lib/ui-intent-registry.mjs'
-import { findIntentViolations, findStyleViolations, scanSource } from './check-ui-intent.mjs'
+import { findIntentViolations, findStyleViolations, scanSource, setStrictNewCode } from './check-ui-intent.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -197,6 +197,31 @@ test('扫描面：干净源码必须判绿（防守卫恒红）', () => {
 test('CLI --all 在当前树上全绿（防假红）', () => {
   const out = execFileSync(process.execPath, ['scripts/check-ui-intent.mjs', '--all'], { cwd: ROOT, encoding: 'utf8' })
   assert.match(out, /无违规/)
+})
+
+// ---------------- ⑤ 新代码必用（#1981 的生效点）
+
+test('模式敏感：按域分批的标签在 --all 放行、在新代码口径下报红', () => {
+  const src = sfc(['  <el-input v-model="x" />', '  <el-select v-model="y" />'].join('\n'))
+  setStrictNewCode(false)
+  try {
+    assert.deepEqual(scanSource(src, 'pages/a.vue'), [], '存量口径应放行')
+    setStrictNewCode(true)
+    const strict = scanSource(src, 'pages/a.vue')
+    assert.equal(strict.length, 2, '新增行口径应两条都报')
+    assert.deepEqual(strict.map((v) => v.wrapper).sort(), ['UiInput', 'UiSelect'])
+  } finally {
+    setStrictNewCode(false)
+  }
+})
+
+test('模式敏感：封装件内部不受影响（components/ui 整面放行）', () => {
+  setStrictNewCode(true)
+  try {
+    assert.deepEqual(scanSource(sfc('  <el-input />'), 'components/ui/UiFoo.vue'), [])
+  } finally {
+    setStrictNewCode(false)
+  }
 })
 
 test('classify：四类归法可区分', () => {

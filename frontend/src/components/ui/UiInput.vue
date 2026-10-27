@@ -10,7 +10,11 @@
  */
 import { ref } from 'vue'
 
-const value = defineModel<string>({ default: '' })
+/**
+ * `number` / `null` 也要收：存量里有 `v-model.number` 的数值输入（薪资区间）与
+ * `ref<number | null>` 的绑定，容器档位与封装层的目的是**收口形态**，不是收窄值域。
+ */
+const value = defineModel<string | number | null>({ default: '' })
 
 /**
  * 内层 el-input 实例：只为**选区编辑**（Markdown 工具栏）暴露原生 textarea。
@@ -26,7 +30,7 @@ withDefaults(
     disabled?: boolean
     clearable?: boolean
     /** textarea / password 等；默认 text，与 el-input 自身默认值一致 */
-    type?: 'text' | 'textarea' | 'password'
+    type?: 'text' | 'textarea' | 'password' | 'number'
     /** 仅 type="textarea" 生效。不传时 el-input 取自身默认值 2 */
     rows?: number
     /** 最大输入长度。EP 的 show-word-limit 依赖它，不传则无计数 */
