@@ -1,7 +1,7 @@
 // 本文件：反代层（Caddy）的结构锁 —— 它是 `caddy validate` 的静态替身 + 部署面接线锁。
 //
 // 判据读的都是**真实产物**（frontend/Caddyfile、frontend/docker-entrypoint.sh、
-// docker-compose.prod.yml、.github/workflows/cd.yml），不读生成器中间值：
+// deploy/docker-compose.prod.yml、.github/workflows/cd.yml），不读生成器中间值：
 // 结构锁要防的正是「产物被改坏了而生成器还很开心」。
 //
 // 这批锁从 nginx 时代原样搬过来（nginx_topology_test.go / nginx_edgeone_test.go），
@@ -218,8 +218,8 @@ func TestCaddyCDNScopeLock(t *testing.T) {
 // TestDeployChainUsesCaddy 接线锁：部署链必须真的用上这些产物，且旧证书机制不得复活。
 // 少了这条，改坏 docker-compose 的挂载点、或有人把 SSL Secrets 加回来，上面所有锁都照绿。
 func TestDeployChainUsesCaddy(t *testing.T) {
-	compose := readRepoFile(t, "docker-compose.prod.yml")
-	if !strings.Contains(compose, "./frontend/Caddyfile:/etc/caddy/Caddyfile:ro") {
+	compose := readRepoFile(t, "deploy/docker-compose.prod.yml")
+	if !strings.Contains(compose, "../frontend/Caddyfile:/etc/caddy/Caddyfile:ro") {
 		t.Error("compose 没有挂载 frontend/Caddyfile（容器里跑的还是镜像自带的旧配置）")
 	}
 	if !strings.Contains(compose, "caddy-data:/data") {
@@ -244,14 +244,14 @@ func TestDeployChainUsesCaddy(t *testing.T) {
 		}
 	}
 	// TLS_MODE 必须同时出现在**两处写盘**里：cd.yml 生成 /tmp/deploy-env.sh，
-	// deploy-remote.sh 把它写进 $DEPLOY_PATH/.env（compose 只读后者）。
+	// deploy/deploy.py 把它写进 $DEPLOY_PATH/.env（compose 只读后者）。
 	// 少一处的实测后果：testing 回落到 auto，去申请生产域名的公共证书 ⇒ 容器起不来、
 	// 健康检查红、回滚也救不回来（2026-10-22 两次冒烟）。
 	if !strings.Contains(cd, "TLS_MODE") {
 		t.Error("cd.yml 没有把 TLS_MODE 写进远端环境变量文件：compose 会回落到 auto")
 	}
-	remote := readRepoFile(t, "scripts/deploy-remote.sh")
-	if !strings.Contains(remote, "TLS_MODE=") {
-		t.Error("deploy-remote.sh 没有把 TLS_MODE 写进 .env：远程 compose 读不到它")
+	remote := readRepoFile(t, "deploy/deploy.py")
+	if !strings.Contains(remote, "TLS_MODE") || !strings.Contains(remote, "render_env_file") {
+		t.Error("deploy/deploy.py 没有把 TLS_MODE 写进 .env：远程 compose 读不到它")
 	}
 }

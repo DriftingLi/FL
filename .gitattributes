@@ -1,6 +1,11 @@
 # 强制 shell 脚本使用 LF 行尾，避免 Linux 容器中 ^M: bad interpreter 错误
 *.sh text eol=lf
 
+# 根 Makefile 与部署 CLI（Python）必须 LF：Make 的 recipe 里带 CR 会把 \r 拼进命令，
+# Python shebang 带 CR 在 Linux 上直接 "bad interpreter"（Windows autocrlf=true 检出成 CRLF）。
+Makefile text eol=lf
+*.py text eol=lf
+
 # Dockerfile 也强制 LF
 Dockerfile text eol=lf
 

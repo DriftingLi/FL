@@ -346,8 +346,8 @@ export const GUARD_SPEC = {
     violation: (v) => v.file + ':' + v.line + ': ' + v.method + ' ' + v.pattern + ' —— ' + v.reason + '\n      ' + v.text,
     footer: (ctx) => [
       '---',
-      '共 ' + ctx.count + ' 处。端点要进生成面：后端注解 → cd backend && make swagger → ' +
-        'go run ./cmd/gen-apitypes，并在 backend/internal/apitypes/domains.go 登记该端点。',
+      '共 ' + ctx.count + ' 处。端点要进生成面：后端注解 → make swagger（仓库根）→ ' +
+        'make gen-apitypes，并在 backend/internal/apitypes/domains.go 登记该端点。',
       '存量欠条（' + Object.keys(ALLOWLIST).length + ' 条，逐条登记理由）：',
       ...allowlistLines()
     ]

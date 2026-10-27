@@ -21,7 +21,7 @@ const defaultRoutePath = "/proc/net/route"
 // warnIfGatewayNotTrusted 在声明了可信代理、但本机默认网关不在其中时告警。
 // 网关由调用方传入（applyTrustedProxies 传 defaultGateway()），便于测试覆盖两侧分支。
 // 不自动信任网关：网关是不是一个会清洗请求头的代理是部署事实，不能猜
-// （见 docker-compose.prod.yml 的 TRUSTED_PROXIES 注释）。
+// （见 deploy/docker-compose.prod.yml 的 TRUSTED_PROXIES 注释）。
 func warnIfGatewayNotTrusted(gateway string, proxies []string, logger *zap.Logger) {
 	if gateway == "" || ipCoveredByProxies(proxies, gateway) {
 		return

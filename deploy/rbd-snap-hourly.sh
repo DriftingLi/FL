@@ -1,7 +1,7 @@
 #!/bin/bash
 # ===== 每小时 RBD 快照：forklift-data/pgdata =====
 # crash-consistent 快照（PG 有 WAL，恢复时自动回放）；误操作回滚用
-# 离线逻辑备份由每日 pg_dump（存 RGW + 异地）承担，见 scripts/backup-daily
+# 离线逻辑备份由每日 pg_dump（存 RGW + 异地）承担，见 deploy/backup-daily.sh
 # 保留最近 KEEP 份，超出即删除最旧
 IMG="forklift-data/pgdata"
 KEEP=30

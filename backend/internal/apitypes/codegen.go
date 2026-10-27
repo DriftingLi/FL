@@ -71,7 +71,7 @@ type Spec struct {
 func LoadSpec(path string) (*Spec, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("读取 swagger 产物失败（先 cd backend && make swagger）: %w", err)
+		return nil, fmt.Errorf("读取 swagger 产物失败（先仓库根 make swagger）: %w", err)
 	}
 	var spec Spec
 	if err := json.Unmarshal(raw, &spec); err != nil {

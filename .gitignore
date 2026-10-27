@@ -11,9 +11,14 @@ frontend/node_modules/
 frontend/node_modules_old/
 frontend/dist/
 frontend/.vite/
+frontend/coverage/
 frontend/build*.log
 # vditor 本地 CDN 资源（由 vite.config.ts 中 vditor-static-copy 插件从 node_modules/vditor/dist 复制生成）
 frontend/public/vditor/dist/
+
+# ===== Python（deploy/deploy.py 与部署判据测试）=====
+__pycache__/
+*.pyc
 
 # ===== Node (通用) =====
 node_modules/

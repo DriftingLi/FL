@@ -1,8 +1,14 @@
 # ===== 生产环境 Docker Compose 编排 =====
-# 架构：PostgreSQL + Go 后端 + Nginx 前端（全栈 Docker 部署）
+# 架构：PostgreSQL + Go 后端 + Caddy 前端（全栈 Docker 部署）
 # 前端容器兼任 SSL 终止 + API 反代 + 静态文件托管
-# 使用：docker compose -f docker-compose.prod.yml up -d
-# 前置：确保 .env 已正确配置
+# 使用（从部署根目录）：
+#   docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d
+# 前置：确保部署根目录的 .env 已正确配置（deploy/deploy.py 会自动生成）。
+#
+# 项目名固定：compose 文件从仓库根迁到 deploy/ 后，compose 默认项目名会变成目录名
+# deploy，命名卷随之从 forklift-training_pgdata-prod 改名为 deploy_pgdata-prod ——
+# 那等于换一个空库启动。这里钉住历史项目名，保证升级部署不丢数据卷。
+name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 
 services:
   # ==========================================
@@ -101,7 +107,7 @@ services:
   # ==========================================
   libreoffice:
     build:
-      context: ./libreoffice-sidecar
+      context: ../libreoffice-sidecar
       dockerfile: Dockerfile
     image: ${LIBREOFFICE_IMAGE:-forklift-libreoffice:latest}
     container_name: forklift-libreoffice-prod
@@ -133,7 +139,7 @@ services:
   # ==========================================
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     image: ${BACKEND_IMAGE:-forklift-backend:latest}
     container_name: forklift-backend-prod
@@ -293,7 +299,7 @@ services:
     security_opt:
       - apparmor=unconfined
     # healthcheck 保持禁用：host 网络模式下容器内没有独立网络命名空间，
-    # 真实探活由 deploy-remote.sh 在宿主机侧执行（HTTPS 443 /health，PR #483）。
+    # 真实探活由 deploy/deploy.py 在宿主机侧执行（HTTPS 443 /health，PR #483）。
     # 历史注：早期「host 网络下 wget 行为异常导致误报 unhealthy」的归因有误——
     # 真实原因是 80 端口 server 级 return 301 抢在 location 匹配前执行（issue #496），
     # /health 实际返回 301，wget 跟随重定向后因证书不匹配而失败。
@@ -313,7 +319,7 @@ services:
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
     volumes:
       # 反代配置（Caddy 原生 {$VAR} 占位符，不做 envsubst）
-      - ./frontend/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../frontend/Caddyfile:/etc/caddy/Caddyfile:ro
       # 证书与 OCSP 缓存：Caddy 自己申请、自己续期，落在命名卷里跨重启保留
       - caddy-data:/data
     deploy:
