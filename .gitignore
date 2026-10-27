@@ -218,3 +218,20 @@ node_modules.broken/
 # （8f01cec9，2026-09-24），故只锚定仓根、只按后缀收：合法生成物从不落在仓根。
 # ⚠️ 清理时别对这类名字用通配 rm —— 仓根可能同时有「未跟踪的新产物」与「已跟踪的存量件」。
 /*deploy-env.sh
+
+# ===== 本地会话产物（不入库）=====
+# 判据：可再生成、带本机路径或凭据、run 结束即弃。2026-10-27 归置主树时实测
+# 仓根 .gh-token-tmp 存明文 GitHub token（gho_…）且没有任何规则挡它 —— 一次 git add .
+# 就会把它带进版本库；同批还留下 $null（坏重定向）与 .unit-*.txt 这类 run 垃圾件。
+# .ci-verify/ 是门跑产物（dev-loop.md 口径：随树回收消失）；注意其下 3 个文件是早就入库的
+# 存量件，gitignore 不 untrack 已跟踪文件，它们的变更/删除仍照旧受版本控制。
+# 要长期保留的可核验产物请走 docs/verification/（pr-evidence 认那个路径）。
+.ci-verify/
+.ci-research/
+.research-wx/
+.gh-token-tmp
+.gh-token-*
+.unit-*.txt
+.baseline-fails.txt
+.scratch-*
+$null
