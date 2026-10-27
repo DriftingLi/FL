@@ -12,7 +12,7 @@
 
 ## 0. 置顶结论（先说最要紧的）
 
-1. **「一次好几个小时」不是单个门慢，而是同一棵树上「排队 + 返工 + 冷缓存」三件事叠加。** 仓内 `AGENTS.md:221` 已把这笔账点破：「慢的从来不是编译，而是这三样：返工（编译期诊断拖到真机才发现，两次各约 5 分钟）、排队（等另一会话的 `hx-agent.lock`，一次约 10 分钟）、卡死（launch 挂住，白等约 20 分钟才到上限）」。日志坐实排队量级：`HX_BUSY wait=592`（`1024-kotlin-all.log:19`）、`wait=454`（`1024-mp-weixin-2.out.log:46`）——这两段等待各自就 7.5–10 分钟，且**比被等的编译本身还长**。
+1. **「一次好几个小时」不是单个门慢，而是同一棵树上「排队 + 返工 + 冷缓存」三件事叠加。** 仓内 `AGENTS.md:221` 已把这笔账点破：「慢的从来不是编译，而是这三样：返工（编译期诊断拖到真机才发现，两次各约 5 分钟）、排队（等另一会话的 `hx-agent.lock`，一次约 10 分钟）、卡死（launch 挂住，白等约 20 分钟才到上限）」。日志坐实排队量级：`HX_BUSY wait=592`（`1024-kotlin-all.log:19`）、`wait=454`（`1024-mp-weixin-2.out.log:46`）——这两段等待各自就 7.5–10 分钟，且**比被等的编译本身还长**。（注 #2002：引文中锁排队「一次约 10 分钟」为旧口径已退役——现测 125 次取锁 wait=0×89、均值 15 s、中位 0 s，#1987。）
 2. **最省时的三件事都是「零代码改动、流程/习惯即生效」**：① 编译期诊断一律先 `hx:compile-only` 拦在本地、别拖到真机（`AGENTS.md:301`）；② 改完攒齐一批再进真机阶段、提交仍按主题拆（`AGENTS.md:258-260`）；③ 跑完任何 HBuilderX 门立刻 `git status` 核对还原 `manifest.json`/`pages.json`（`AGENTS.md:308,325`）。这三条文档都写了，但 `git log` 显示同一类返工仍在反复发生（近 2.5 月 290 条移动端提交里，标题含「判据」22、含「回写」15、含「取证/证据」17、含「pr-evidence」6）。
 3. **结构性天花板要认清、别再当优化目标**：HBuilderX 是单实例串行资源（`AGENTS.md:236` 原话「架构约束，不是可以调优的缺陷」）、真机/模拟器必须连（DCloud 官方，见 C.7）、①b 能力面必须人、④c 整模块编译无差量（`kotlin-all-check.ps1:10-18` 的门语义本身就是「复刻整模块」）。并行编排（Sandcastle）已被仓内判据否掉多树并行、且 A 方案已落地受阻（`TOPIC.md:81,111-120`）——**引入并行/换编排工具不是可提的方向**。
 4. **唯一有真实增量空间、且需改代码的一条**：`dev-finish.ps1` 的临界区先跑重的 ④ 编译（热 257 s / 冷 826–901 s）才走到设备步骤（`TOPIC.md:126`），把「拿编译诊断」和「占设备取证」的顺序倒过来、并把 `hx:compile-only` 作为取设备锁之前的前置轻量步，能在失败时**省下整段设备占用**——但这会牵动锁交接与 F6–F10 守护，回归风险要单列（见 D 条 5）。
@@ -29,7 +29,7 @@
 | 2 | 写码 + ③ 契约门 `test:unit`（jest 串行 `-i`） | 全量 146 套件串行 ~236 s；历史单票 71 套件 92.46 s；并行变体 `test:unit:local` 60–90 s | `jest.config.unit.js:2-12`（-i 串行/236 s/并行 60-90 s 口径）；`.ci-verify/1024-test-unit.log:95-98`（71 passed, 92.46 s）；`AGENTS.md:265` | 写码可并行；③ 只读磁盘文本可并行（不取锁不占设备） | 否 |
 | 3 | `hx:compile-only`（拿编译诊断，非门） | **热缓存 257 s / 冷或上次被打断后 826–901+ s**（≈3.5–15 min，波动极大） | `AGENTS.md:210`；`.scratch/sandcastle-afk-topic/TOPIC.md:23` | 否（排 HBuilderX 队列） | 否 |
 | 4 | ④c 整模块 Kotlin 编译门 `build:kotlin-all` | **取锁等待 131–592 s**（排队）+ publish 编译 34–38 s + kotlinc 全量 95–97 个 `.kt`（classes 1257–1289）；**无差量** | `.ci-verify/1024-kotlin-all.log:19-78`（wait=592）、`:87-96`（publish 21:56:17→21:56:51≈34 s）、`:100`（files=97 classes=1289）；`.ci-verify/kotlin-all-run.out:32`（wait=131）、`:54`（files=95）；`scripts/kotlin-all-check.ps1:10-18`（整模块复刻语义）、`:42`（publish 全量重写） | 否（单实例 + 全量） | 否（agent 可执行） |
-| 5 | ④a 全量编译门 `build:compile`（干净缓存重建） | 4.8–8 分钟；`-Clean:$false` 为增量模式但仅 dev 专属面用 | `AGENTS.md:195`；`scripts/compile-check.ps1:27-28,49`（`--cleanCache true` 默认全量）、`:42`（增量示例） | 否 | 否 |
+| 5 | ④a 全量编译门 `build:compile`（干净缓存重建） | 4.8–8 分钟（已退役，权威见 dev-loop.md 时间账，#2002）；`-Clean:$false` 为增量模式但仅 dev 专属面用 | `AGENTS.md:195`；`scripts/compile-check.ps1:27-28,49`（`--cleanCache true` 默认全量）、`:42`（增量示例） | 否 | 否 |
 | 6 | `hx:run` 真运行（非门，收口前部署） | 一轮合计 236–287 s（编译 205–261 s + 推送/启动 15–21 s）；日志一次 incremental `compile=150 total=188` | `AGENTS.md:212,218`；`.ci-verify/1024-hx-run.log:32-45`（mode=incremental compile=150 total=188） | 否（单实例） | 否 |
 | 7 | ② 微信开发者工具门 `mp-weixin-check` | **成功 ≈4.5 min/次**；单次失败样本：取锁 wait=454 + publish 编 48 页≈160 s + 就绪窗口 `App.getPageStack` 24–34 s + `auto` 首枪空/`devtools-auto 超过 180 秒未返回已终止` | `scripts/mp-weixin-check.ps1:6`（≈4.5 min）、`:39-52`（就绪里程碑 24-34 s、探针 30 s 落中间）、`:57-66`（auto 首枪空重跑、-PortWaitSeconds 180）；`.ci-verify/1024-mp-weixin-2.out.log:46`（wait=454）、`:61-355`（编 48 页≈160 s）、`:380-381`（180 s 超时→该次②门失败）；`AGENTS.md:322` | 否（占 HBuilderX IPC + 工具单实例） | 半自动：agent 跑，「执行人」栏由人签 |
 | 8 | ①a 真机自动取证 | 文档口径「真机 10–20 分钟」；默认只截当前前台 1 页、`-Pages` 每页标 SKIP；dev-finish 步骤 6 只截改动页、上限 5 页 | `docs/adr/0016:11`（真机 10-20 min）、`:21`（按一次分支收口）；`scripts/device-capture.ps1:47-52`（默认不切页只截前台）；`scripts/dev-finish.ps1:63,270-272`（`$MaxScreenshotPages=5`） | 否（单设备/单实例） | agent 出证（①a 非人门） |
@@ -37,7 +37,7 @@
 | 10 | PR 验收证据 + CI + 合并部署 | `cd.yml` gate 最多轮询 15 分钟；旧证据绑定口径下「每次 sync 使已贴证据作废、必须重跑重贴」（#624 反复被拖的主因，2026-09-12 已放宽为「祖先+运行时面未变」） | `docs/agents/release.md:12`（gate 轮询 15 min）；`.github/workflows/pr-evidence.yml:137-140`（放宽动因）；`AGENTS.md:333`（只校结构不校真伪、不装必检+approve） | CI 可并行（ubuntu，不受本地单实例约束） | 能力面签收/合并由人 |
 
 **最耗时前 3（按对单票墙钟的贡献）**
-1. **单实例排队 + 冷缓存编译争抢**：`HX_BUSY wait` 实测 131–592 s（`1024-kotlin-all.log:19`、`1024-mp-weixin-2.out.log:46`、`kotlin-all-run.out:32`），叠加冷编译 826–901 s（`AGENTS.md:210`）——③ 之外的 ④/②/`hx:*` 全排同一条 HBuilderX 队列，等待经常比工作本身长，且 `AGENTS.md:222` 记「一次约 10 分钟」。
+1. **单实例排队 + 冷缓存编译争抢**：`HX_BUSY wait` 实测 131–592 s（`1024-kotlin-all.log:19`、`1024-mp-weixin-2.out.log:46`、`kotlin-all-run.out:32`），叠加冷编译 826–901 s（`AGENTS.md:210`）——③ 之外的 ④/②/`hx:*` 全排同一条 HBuilderX 队列，等待经常比工作本身长，且 `AGENTS.md:222` 记「一次约 10 分钟」（旧口径已退役，#2002；现测锁排队均值 15 s、中位 0 s，#1987）。
 2. **② 微信开发者工具门**：成功也要 ≈4.5 min（`mp-weixin-check.ps1:6`），且就绪窗口 24–34 s、`auto` 首枪常空、单次实测直接 180 s 超时判失败（`1024-mp-weixin-2.out.log:380-381`）——是四门里失败/重跑面最大的。
 3. **返工（同件事重复跑门）**：编译期诊断拖到真机 2×≈5 min（`AGENTS.md:221,301`）、pr-evidence 格式/绑定重贴（`pr-evidence.yml:139` #624）、取证判据反复改（`git log` 近 2.5 月「判据」22 次、「回写」15 次、「取证/证据」17 次）。**返工是最大且最隐蔽的黑洞**。
 
