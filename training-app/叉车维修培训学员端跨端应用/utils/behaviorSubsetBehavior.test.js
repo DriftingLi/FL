@@ -79,7 +79,7 @@ const FAKE_JEST = [
  *   legSubset  —— 假 jest 列 3 个套件、只交 2 个 ⇒ 只这 2 个起进程、planned=2、退出码 0
  *   legMissing —— 交一个清单里没有的名字 ⇒ 非绿 + 逐点点名 + **一个套件都没起**
  *   resultLine —— `Write-UnitGateArtifacts -Mode changed` 的首 token / mode 字段；默认模式逐字不变
- *   subset     —— 真调 `Get-BehaviorSubset`（与 node 工具同源）；工具路径不存在 ⇒ Ok=$false
+ *   subset     —— 真调 `Get-BehaviorSubset`（与 node 工具同源；改动清单固定一份，**不读工作树**）；工具路径不存在 ⇒ Ok=$false
  *   changedGit —— 临时 git 仓库：已跟踪改动 + **未跟踪** 文件都要在清单里
  */
 function runHarness() {
@@ -138,10 +138,13 @@ function runHarness() {
     '$out[\'resultLine\'] = @{ changed = $artChanged.ResultLine; gate = $artGate.ResultLine }',
     '',
     '# ---- ④ 子集计算的接线（真调工具 / 工具缺失 fail-closed）----',
-    '$p = @(Get-ChangedPathsForSubset -ProjectDir $spec.projectDir)',
-    '$real = Get-BehaviorSubset -ProjectDir $spec.projectDir -Changed $p',
-    "$bogus = Get-BehaviorSubset -ProjectDir $spec.projectDir -Changed @('utils/markdown.uts') -ToolRelative 'scripts/no-such-tool.mjs'",
-    "$out['subset'] = @{ changedCount = $p.Count; ok = $real.Ok; total = $real.Total; subsetCount = @($real.Subset).Count; first = @($real.Subset)[0]; explainLines = @($real.Explain).Count; explainHead = @($real.Explain)[0]; bogusOk = $bogus.Ok; bogusError = $bogus.Error }",
+    '# 改动清单**写死一份**，不从工作树取：收口时工作树通常是干净的，而「此刻恰好有未提交改动」的守护',
+    '# 在全量跑里必红、单跑时又恰好绿（2026-10-27 全量实测踩到，红在 @($real.Subset)[0] 越界）。',
+    '# 取改动清单这条接线由 ⑤ 的临时仓库承担 —— 那里脏/未跟踪状态是自己造的，可控。',
+    "$changed = @('utils/markdown.uts')",
+    '$real = Get-BehaviorSubset -ProjectDir $spec.projectDir -Changed $changed',
+    "$bogus = Get-BehaviorSubset -ProjectDir $spec.projectDir -Changed $changed -ToolRelative 'scripts/no-such-tool.mjs'",
+    "$out['subset'] = @{ changedCount = $real.ChangedCount; ok = $real.Ok; total = $real.Total; subsetCount = @($real.Subset).Count; first = (@($real.Subset) | Select-Object -First 1); explainLines = @($real.Explain).Count; explainHead = (@($real.Explain) | Select-Object -First 1); bogusOk = $bogus.Ok; bogusError = $bogus.Error }",
     '',
     '# ---- ⑤ 改动清单要看见未跟踪文件 ----',
     "$repo = Join-Path $spec.tmp 'gitrepo'",
@@ -271,7 +274,7 @@ describeWin('#2034 行为腿受影响子集：接线（假 jest / 真 Invoke-Beh
 
   test('S4: Get-BehaviorSubset 的取数与工具同源；工具缺失 ⇒ Ok=$false 且 Error 点名（不静默 0 套件）', () => {
     const s = ctx.subset;
-    expect(s.changedCount).toBeGreaterThan(0);
+    expect(s.changedCount).toBe(1); // 交给它 1 条改动 ⇒ 工具回的 changedCount 就是 1（不是从工作树推的）
     expect(s.ok).toBe(true);
     expect(s.total).toBeGreaterThan(0);
     expect(s.subsetCount).toBeGreaterThan(0);
