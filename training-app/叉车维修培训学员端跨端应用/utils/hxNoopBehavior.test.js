@@ -97,6 +97,22 @@ function noop(dir, marker) {
   return out.split(/\r?\n/).pop().trim();
 }
 
+/**
+ * 同上，但同时带回 `Reason`（#2027 复审指出的弱点）：
+ * 只断言 `Noop=false` 的话，「因为 git status 失败而放行」与「因为 rev-parse 失败而放行」
+ * 两种**不同的提前返回**长得一模一样 ⇒ 测试会为错误的理由变绿。
+ */
+function noopDetail(dir, marker) {
+  const out = runPs([
+    `. ${psq(LIB)}`,
+    `$r = Test-HxNoopRerun -Project ${psq(dir)} -MarkerPath ${psq(marker)}`,
+    '"$($r.Noop)|$($r.Reason)"',
+  ]);
+  const line = out.split(/\r?\n/).pop().trim();
+  const sep = line.indexOf('|');
+  return { noop: line.slice(0, sep), reason: line.slice(sep + 1) };
+}
+
 describe('hx-noop 预检的行为（真跑 PowerShell）', () => {
   it('无标记 ⇒ 放行（fail-safe 起点）', () => {
     const { dir } = makeRepo();
@@ -141,6 +157,9 @@ describe('hx-noop 预检的行为（真跑 PowerShell）', () => {
     const r = spawnSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
     expect(r.status).toBe(0);
 
-    expect(noop(dir, marker)).toBe('False');
+    const verdict = noopDetail(dir, marker);
+    expect(verdict.noop).toBe('False');
+    // 必须因为**这一条**放行：否则 rev-parse 之类的其它提前返回也会让上一行变绿（假通过）
+    expect(verdict.reason).toContain('git status 失败');
   });
 });

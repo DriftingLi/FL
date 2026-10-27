@@ -5,8 +5,8 @@
 .DESCRIPTION
     **起因（实测数据，不是推测）**：`.ci-verify` 里累积的 12 条 `HX_RUN` 机检行显示——
 
-      正常增量轮次：compile 40–130 秒、total **45–287 秒**（中位 73 秒）；
-      3/12 次 `exit=env`：**643 / 906 / 906 秒**，合计 2455 秒 = 总墙钟 4514 秒的 **54%**。
+      正常轮很快，长尾全是「无变更重跑」的白等（占比过半）。**逐轮数字、归因与算法只认
+      `docs/agents/dev-loop.md`「时间账与三样慢」** —— 本处不复述，避免「抄写→漂移」。
 
     其中两次 `deployed=false` 的日志里，App 仍然在设备上每 30 秒轮询
     `/api/notifications/unread-count` ⇒ **部署其实成立**，只是 `www` 目录 mtime 没前进
@@ -30,6 +30,10 @@
       · **只新增、未被 git 跟踪、且没碰 `pages.json`** 的文件算「无变更」⇒ 那种场景用 `-Force`。
         反之 `pages.json` 本身是跟踪文件，新增页面必然改它 ⇒ 能被捕获。
       · 标记文件只在 `exit=ok`（`deployed=true`）成功后写；失败轮次不写、也不覆盖旧标记。
+      · **标记只编码 git 状态（headSha），不含设备身份、也不含「App 还在设备上」。**
+        所以 `pm clear` / 重装基座 / 换一台设备之后，`headSha` 仍等于 HEAD ⇒ 仍会判「跳过」，
+        而被清空的 `www` 不会被发现。那种场景加 `-Force`（或先删 `.ci-verify/last-deploy.json`）。
+        刻意不探设备：探设备要在取锁前调 adb，与「预检只碰 git」的设计冲突。
 
     **fail-safe（绝不因为「猜」挡掉一次真需要的部署）**：
       标记缺失 / 读不出 / 缺 `headSha` / git 不可用 / HEAD 取不到

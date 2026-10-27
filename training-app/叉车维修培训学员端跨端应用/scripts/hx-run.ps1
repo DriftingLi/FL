@@ -761,17 +761,12 @@ if ($CompileOnly) {
     $launchArgs += @('--deviceId', $target.Serial)
 }
 
-# ---------- 日志 ----------
+# ---------- 日志目录（表头留到预检之后再写）----------
+# #2027 复审（Spec 范围蔓延）：表头那一步是 Set-Content（**截断**）。若排在预检之前，
+# 每次「无变更跳过」都会把上一轮的完整日志抹成只剩表头 + 一行 [noop] ⇒ 事后无法复盘。
+# 故这里只建目录，表头挪到预检之后。
 $logDir = Split-Path -Parent $LogPath
 if ($logDir) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
-Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
-    "# hx-run 开始 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
-    "# mode = $mode（本脚本不是门：门 = ④a compile-check.ps1 全量 / ④c kotlin-all-check.ps1）",
-    "# cli = $cliPath",
-    "# project = $Project",
-    "# device = $($target.Serial)（$($target.Mode)）",
-    "# wait = $WaitSeconds 秒上限；本脚本绝不 kill HBuilderX / cli / 主程序"
-)
 
 # ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
 . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
@@ -782,12 +777,15 @@ Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
 . (Join-Path $PSScriptRoot 'lib\hx-noop.ps1')
 
 # ---------- 预检：无代码变更就别再上一遍真机（#2027）----------
-# 实测口径（.ci-verify 里 12 条历史 HX_RUN 机检行）：正常增量轮 total 45–161 秒（中位 73 秒），
-# 但 3/12 次 exit=env 吃掉 643 / 906 / 906 秒 = 总墙钟 4514 秒的 54%。其中两次 deployed=false 的
-# 日志里 App 仍在设备上每 30 秒轮询 /api/notifications/unread-count ⇒ **部署成立、判据未前进**，
-# 于是白等满 -TimeoutSeconds。根因是「代码没变又跑了一遍」：www mtime 不动 ⇒ 判未部署。
+# 依据（**不在此复述数字**，避免「抄写→漂移」）：逐轮机检行、归因与占比的算法全在
+# docs/agents/dev-loop.md「时间账与三样慢」—— 那里的数字是唯一真源，本处只留结论。
+# 结论：正常轮很快，长尾全是「无变更重跑」的白等 —— 部署其实成立（App 仍在设备上轮询接口），
+# 只是 www mtime 不动 ⇒ 判「未部署」⇒ 白等满 -TimeoutSeconds。根因：代码没变又跑了一遍。
 # 为什么只用 git、且必须排在 Wait-HxFree **之前**：C7 要求任何 HBuilderX 交互都在忙检测之后；
-# 本预检不取锁、不碰 cli、不碰 adb —— 无活时连锁都不取。
+# 本预检**自身**不取锁、不碰 cli、不碰 adb —— 无活时连锁都不取。
+# ⚠️ 但它排在设备解析（Resolve-AdbExe / Resolve-TargetDevice）**之后**：没有 adb 或没有在线设备时，
+# 脚本在那两步就已 exit 2，走不到这里 ⇒「无变更秒级跳过」以**能解析到设备**为前提。
+# 这是刻意的（真跑本来就要设备）；写清楚是为了不让注释替代码吹牛（Spec 轴 (a)1）。
 # -CompileOnly 不适用（它本来就不碰设备）；要强制重跑用 -Force。
 $noopMarkerPath = Join-Path (Join-Path $Project '.ci-verify') 'last-deploy.json'
 if (-not $CompileOnly -and -not $Force) {
@@ -796,7 +794,7 @@ if (-not $CompileOnly -and -not $Force) {
         Write-Host ''
         Write-Host "⏭️ 预检：**无代码变更** ⇒ 不做这次真机部署。$($noopVerdict.Reason)" -ForegroundColor Yellow
         Write-Host '   上一轮已部署成功且 HEAD/工作树都没变 ⇒ 再 launch 设备侧事实不会前进，' -ForegroundColor Yellow
-        Write-Host "   按判据会判「未部署」并白等满 $TimeoutSeconds 秒（实测出现过 590 秒 / 900 秒）。" -ForegroundColor Yellow
+        Write-Host "   按判据会判「未部署」并白等满 $TimeoutSeconds 秒（历史上多次真的白等到上限）。" -ForegroundColor Yellow
         Write-Host '   确实需要重跑（重启 App / 重拍截图）：加 -Force。' -ForegroundColor Yellow
         if ($LogPath) { Add-Content -LiteralPath $LogPath -Value "[noop] 跳过：$($noopVerdict.Reason)" -Encoding utf8 -ErrorAction SilentlyContinue }
         Write-HxRunResult -Mode $mode -Compile 0 -Deploy 0 -Total 0 -Exit 'env' -LogFile $LogPath
@@ -804,6 +802,16 @@ if (-not $CompileOnly -and -not $Force) {
     }
     if ($noopVerdict.Reason) { Write-Host ">>> 预检放行：$($noopVerdict.Reason)" -ForegroundColor DarkGray }
 }
+
+# ---------- 日志表头（预检之后才截断，见上方说明）----------
+Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
+    "# hx-run 开始 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+    "# mode = $mode（本脚本不是门：门 = ④a compile-check.ps1 全量 / ④c kotlin-all-check.ps1）",
+    "# cli = $cliPath",
+    "# project = $Project",
+    "# device = $($target.Serial)（$($target.Mode)）",
+    "# wait = $WaitSeconds 秒上限；本脚本绝不 kill HBuilderX / cli / 主程序"
+)
 
 $hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPath
 try {
