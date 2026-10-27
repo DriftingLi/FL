@@ -77,9 +77,10 @@ function Get-ContractTestPattern {
     #                    （`npx jest --listTests` 过滤实测见 1568 README），再加一格就是第二真源。
     #                    **同一 token 顺带命中**，不新增格子 —— 先例 #1560 把腿追加进已在册套件）
     # wirelessDebugBoundedText → 行为层：#1568 的 Invoke-Adb 收口点（16 个调用方，且它是设备掉线时的自愈工具）。
-    #                  ⚠️ 刻意取**窄 token**：`wirelessDebug` 会顺带命中 #1564 的
-    #                  wirelessDebugBehavior（B1–B6 现测 81.2 s，含真起后台 keep 与心跳循环），
-    #                  而收窄门里要的是这一族真执行腿（现测 25.1 s）。#1564 那两条维持不注册（其裁定在 #1564 的 PR）。
+    #                  ⚠️ 刻意取**窄 token**：`wirelessDebug` 会顺带命中 #1564 的行为腿
+    #                  （原 wirelessDebugBehavior 2026-10-27 起按 #1998 拆成 Ensure / KeepRecover / StopReap
+    #                  三件；该族 B1–B6 当时现测 81.2 s，含真起后台 keep 与心跳循环），
+    #                  而收窄门里要的是这一族真执行腿（现测 25.1 s）。#1564 那一族维持不注册（其裁定在 #1564 的 PR）。
     # gateCommit       → gateCommitBindingBehavior（行为层：#1695 门评论 sha 绑定口径 ——
     #                    真建 bare 远端 + monorepo 形状工作树（ProjectDir 是仓库子目录，`--relative` 那条腿才有
     #                    判别力），真跑 git 判「远端可达 / 仅本地归档提交 / 混着非归档改动 / 推不动」四种形态。

@@ -1,9 +1,11 @@
 {
   "schema": 1,
-  "note": "逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：GitHub Actions ubuntu-latest，ci.yml run 40111032652（feat/1879，#1899 落地后 mobile-test = unit×2 + behavior×4 全绿 run，2026-10-24）的 behavior 腿四片日志（jest 只打印 ≥5s 的套件耗时 ⇒ 本表只列慢套件）。pwsh 类套件单次方差大（wirelessDebugBehavior 两次采集 108.4s ↔ 202.5s，#1900），按单次采集如实计权、不做均值平滑——最慢片下界 = max(总/4, 最慢套件)，装箱不追方差。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。",
+  "note": "逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：GitHub Actions ubuntu-latest，ci.yml run 40111032652（feat/1879，#1899 落地后 mobile-test = unit×2 + behavior×4 全绿 run，2026-10-24）的 behavior 腿四片日志（jest 只打印 ≥5s 的套件耗时 ⇒ 本表只列慢套件）。pwsh 类套件单次方差大（#1900：原 wirelessDebugBehavior 两次采集 108.4s ↔ 202.5s），按单次采集如实计权、不做均值平滑——最慢片下界 = max(总/4, 最慢套件)，装箱不追方差。2026-10-27 #1998 把 wirelessDebugBehavior（202.491s）按用例形态拆成 Ensure/KeepRecover/StopReap 三件，三键 = 202.491 按本机逐用例 jest 计时占比（B6 3.224/B1 7.149/B2 5.444/B3 10.111/B4 13.617/B5 11.104/B7 8.979，合计 59.628s，Win11 pwsh 7.6.3 逐条 -t 实测）保和拆分（99.95/34.34/68.20），未做 CI 重采——下次全绿 run 可用 scripts/gen-jest-timings.mjs 重采校正。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。",
   "defaultSeconds": 1,
   "suites": {
-    "utils/wirelessDebugBehavior.test.js": 202.491,
+    "utils/wirelessDebugEnsureBehavior.test.js": 99.95,
+    "utils/wirelessDebugKeepRecoverBehavior.test.js": 34.34,
+    "utils/wirelessDebugStopReapBehavior.test.js": 68.20,
     "utils/kotlinAllProcessCaptureBehavior.test.js": 68.751,
     "utils/deviceCaptureTierBehavior.test.js": 40.892,
     "utils/emulatorSmokeTierBehavior.test.js": 33.277,
