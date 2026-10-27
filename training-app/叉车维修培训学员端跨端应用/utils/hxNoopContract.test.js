@@ -23,6 +23,11 @@
  *   N9 `[Console]::OutputEncoding = UTF8` 必须钉死（日志 mojibake 的唯一真源；
  *      实测本文件此前 `OutputEncoding` 出现 0 次，而 dev-finish / style-loop / mp-weixin-check 各 2 次）。
  *
+ * ★ 本文件是**接线守护**（只读源码文本）。按 `docs/agents/guards.md` 末节第 3 问，它必须点名
+ *   **兜底行为的那条行为守护** —— 「缺后者会假绿」。那条守护是 `utils/hxNoopBehavior.test.js`
+ *   （`spawnSync` 起子进程真跑 `Test-HxNoopRerun`，含「git status 失败 ⇒ 必须放行」的成对断言）。
+ *   N10 把这条点名**机器化**：被点名的文件必须存在、且必须真的有执行调用 —— 改个名不算数。
+ *
  * 形态沿用本仓既有守护测试（见 utils/hxRunContract.test.js）：
  *   先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
  */
@@ -34,6 +39,8 @@ const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = 'scripts/lib/hx-noop.ps1';
 const SCRIPT_REL = 'scripts/hx-run.ps1';
+/** 兜底行为的那条行为守护（guards.md 末节第 3 问要求的「后者」）。 */
+const BEHAVIOR_REL = 'utils/hxNoopBehavior.test.js';
 
 function readSource(rel) {
   return readText(path.join(ROOT, rel));
@@ -105,11 +112,21 @@ function scanNoopContract(sources) {
     '未钉 [Console]::OutputEncoding = UTF8 ⇒ 重定向捕获的 cli 中文输出会按 GBK 解码成 mojibake'
   );
 
+  // ---- N10 接线守护必须点名兜底行为守护，且那条守护得是真的（guards.md 末节第 3 问）----
+  const behavior = sources.behavior || '';
+  must(behavior.length > 0, 'N10', '点名的行为守护读不到（被删或改名 ⇒ 这条接线失去兜底）');
+  must(
+    /require\(\s*['"]child_process['"]\s*\)/.test(behavior) && /spawnSync\s*\(/.test(behavior),
+    'N10',
+    '点名的行为守护没有执行调用（child_process + spawnSync）⇒ 它自己也是接线守护，兜底是假的'
+  );
+  must(/Test-HxNoopRerun/.test(behavior), 'N10', '点名的行为守护没有真跑 Test-HxNoopRerun ⇒ 兜的不是这条接线');
+
   return violations;
 }
 
 function realSources() {
-  return { lib: readSource(LIB_REL), script: readSource(SCRIPT_REL) };
+  return { lib: readSource(LIB_REL), script: readSource(SCRIPT_REL), behavior: readSource(BEHAVIOR_REL) };
 }
 
 describe('hx-run 无代码变更预检 + 日志编码（#2027）', () => {
@@ -194,6 +211,18 @@ describe('hx-run 无代码变更预检 + 日志编码（#2027）', () => {
         script: base.script.replace('try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }', ''),
       };
       expect(scanNoopContract(broken).join('\n')).toContain('N9');
+    });
+
+    it('N10 点名的"行为守护"其实是纯文本守护 ⇒ 检出', () => {
+      const broken = {
+        ...base,
+        behavior: "const { readText } = require('./utsHarness');\nconst s = readText('scripts/lib/hx-noop.ps1');\n",
+      };
+      expect(scanNoopContract(broken).join('\n')).toContain('N10');
+    });
+
+    it('N10 点名的文件被删 ⇒ 检出', () => {
+      expect(scanNoopContract({ ...base, behavior: '' }).join('\n')).toContain('N10');
     });
   });
 });

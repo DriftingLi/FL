@@ -5,7 +5,7 @@
 .DESCRIPTION
     **起因（实测数据，不是推测）**：`.ci-verify` 里累积的 12 条 `HX_RUN` 机检行显示——
 
-      正常增量轮次：compile 40–130 秒、total **45–161 秒**（中位 73 秒）；
+      正常增量轮次：compile 40–130 秒、total **45–287 秒**（中位 73 秒）；
       3/12 次 `exit=env`：**643 / 906 / 906 秒**，合计 2455 秒 = 总墙钟 4514 秒的 **54%**。
 
     其中两次 `deployed=false` 的日志里，App 仍然在设备上每 30 秒轮询
@@ -85,8 +85,23 @@ function Test-HxNoopRerun {
         return $result
     }
 
+    # ⚠️ 这里**必须**看 git 的退出码，且与 hxRunContract C6「判成败只解析 stdout」不冲突：
+    #    C6 的理由是「HBuilderX cli 失败时退出码恒 0」，而 **git 的退出码是可信的**。
+    #    `git status` 失败（索引损坏 / 并发 agent 的 index.lock / dubious ownership）时输出为空；
+    #    若把它当成「工作树干净」就会判「没活」并**跳过一次真需要的部署** —— 正是本文件开头
+    #    承诺绝不发生的事（Spec 轴 (c)1，2026-10-27 复审）。⇒ 拿不准就放行：Noop 保持 $false。
     $dirty = @()
-    try { $dirty = @(& git -C $Project status --porcelain --untracked-files=no 2>$null) } catch { $dirty = @() }
+    $statusOk = $false
+    try {
+        $dirty = @(& git -C $Project status --porcelain --untracked-files=no 2>$null)
+        $statusOk = ($LASTEXITCODE -eq 0)
+    } catch {
+        $statusOk = $false
+    }
+    if (-not $statusOk) {
+        $result.Reason = 'git status 失败（索引损坏 / index.lock / dubious ownership）⇒ 拿不准 ⇒ 照常跑'
+        return $result
+    }
     $dirtyLines = @($dirty | Where-Object { "$_".Trim() -ne '' })
     if ($dirtyLines.Count -gt 0) {
         $result.Reason = "工作树有 $($dirtyLines.Count) 处跟踪文件改动 ⇒ 有活"

@@ -460,8 +460,13 @@ function Invoke-CliStep {
     $seconds = [int]$sw.Elapsed.TotalSeconds
 
     $out = ''
-    if (Test-Path -LiteralPath $outFile) { $out += (Get-Content -LiteralPath $outFile -Raw) }
-    if (Test-Path -LiteralPath $errFile) { $out += (Get-Content -LiteralPath $errFile -Raw) }
+    # #2027：读回时**必须显式声明 UTF-8**。`Start-Process -RedirectStandardOutput` 写的是 cli 的原始
+    # 字节；`Get-Content -Raw` 不给 `-Encoding` 时按**宿主默认**解码（pwsh 7 = UTF-8，
+    # Windows PowerShell 5.1 = ANSI/cp936），在 5.1 上就是 .ci-verify 里那个 `鈥峓number]鈥?200`。
+    # 诚实声明：本仓 CI 跑 pwsh 7，这条**没有判别力测试**（在 7 上写不写都一样）⇒ 只做防御性显式化，
+    # 不新造一条没有行为守护兜底的接线守护（guards.md 末节第 3 问）。
+    if (Test-Path -LiteralPath $outFile) { $out += (Get-Content -LiteralPath $outFile -Raw -Encoding utf8) }
+    if (Test-Path -LiteralPath $errFile) { $out += (Get-Content -LiteralPath $errFile -Raw -Encoding utf8) }
     Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
 
     if (-not $exited) {
@@ -532,7 +537,8 @@ function Get-CapturedOutput {
     foreach ($f in @($OutFile, $ErrFile)) {
         if (-not $f) { continue }
         if (-not (Test-Path -LiteralPath $f)) { continue }
-        try { $out += (Get-Content -LiteralPath $f -Raw -ErrorAction Stop) } catch { }
+        # 主读回路径，UTF-8 显式化的理由见 Get-CapturedOutput 上方那段（#2027）
+        try { $out += (Get-Content -LiteralPath $f -Raw -Encoding utf8 -ErrorAction Stop) } catch { }
     }
     return "$out"
 }
