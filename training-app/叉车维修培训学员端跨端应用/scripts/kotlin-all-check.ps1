@@ -161,6 +161,9 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
     "# project = $Project",
     "# 输入 = $AppResourceRelative（appResource 产物）；严禁改用 $DevCacheRelative（dev 缓存不是自洽编译单元）"
 )
+# #2001 阶段时间戳：录制器指向本门日志（纯追加 [STAGE]/STAGE_SUMMARY 行，不改门判据）
+. (Join-Path $PSScriptRoot 'lib\gate-stages.ps1')
+Initialize-GateStageRecorder -LogPath $logPath
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
 
 # ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
@@ -174,12 +177,14 @@ if ($SkipPublish) {
     Write-Host '>>> -SkipPublish：不接 HBuilderX，跳过忙检测与互斥锁（kotlinc 段不依赖主程序）' -ForegroundColor Yellow
     Write-Host '    ⚠️ 同时**跳过新鲜度判据**：本次编译的产物是否覆盖当前树，由调用方保证 —— 结果行记 freshness=skipped(skip-publish)。' -ForegroundColor Yellow
 } else {
+    Start-GateStage -Name 'hx-wait'
     $hx = Wait-HxFree -CliExe (Join-Path (Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli) 'cli.exe') -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
 }
 try {
 # ---------- 1) 可选：导出 appResource 产物 ----------
 $hbxRoot = Resolve-HBuilderXRoot -Explicit $HBuilderX -ExplicitCli $Cli
 if (-not $SkipPublish) {
+    Start-GateStage -Name 'publish'
     if (-not $hbxRoot) {
         Write-Host '[error] 找不到可用的 HBuilderX（需含 cli.exe 与 plugins/）。用 -HBuilderX <安装根> 指定。' -ForegroundColor Red
         Write-Log 'KOTLIN_ALL_RESULT errors=env reason=hbuilderx-not-found'
@@ -296,6 +301,7 @@ if (-not $SkipPublish) {
     Write-Log "publish 产物 .kt = $($publishEval.KtCount)（新鲜度 $($publishEval.Freshness)）"
 }
 
+Start-GateStage -Name 'collect'
 # ---------- 2) 收集 appResource 产物里的 .kt ----------
 $appResourceDir = Join-Path $Project $AppResourceRelative
 if (-not (Test-Path -LiteralPath $appResourceDir)) {
@@ -313,6 +319,7 @@ if ($ktFiles.Count -eq 0) {
     exit 2
 }
 
+Start-GateStage -Name 'toolchain'
 # ---------- 3) 定位自带工具链 ----------
 if (-not $hbxRoot) {
     Write-Host '[error] 找不到 HBuilderX 安装根（需要 plugins/ 下的 kotlinc、Corretto、UTS 插件、lib2）。' -ForegroundColor Red
@@ -337,6 +344,7 @@ $classOutDir = Join-Path $logDir 'kotlin-class'
 if (Test-Path -LiteralPath $classOutDir) { Remove-Item -LiteralPath $classOutDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $classOutDir | Out-Null
 
+Start-GateStage -Name 'kotlinc'
 # ---------- 4) 整模块编译（HBuilderX 自带 kotlinc + UTS 编译器插件）----------
 $javaArgs = @(
     '-Xmx2g', '--add-opens', 'java.base/java.util=ALL-UNNAMED',
@@ -366,6 +374,7 @@ $errorLines = @([regex]::Matches($result.Output, $ErrorLinePattern) | ForEach-Ob
 $classCount = @(Get-ChildItem -LiteralPath $classOutDir -Recurse -Filter *.class -File -ErrorAction SilentlyContinue).Count
 $summary = "KOTLIN_ALL_RESULT errors=$($errorLines.Count) classes=$classCount files=$($ktFiles.Count) input=$AppResourceRelative freshness=$freshnessVerdict log=$logPath"
 Write-Log "`n$summary"
+Stop-GateStage
 
 if ($errorLines.Count -gt 0) {
     Write-Host ''

@@ -148,10 +148,15 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $started = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 Set-Content -LiteralPath $logPath -Value "# compile-check 开始 $started`n# cli = $CliPath`n# project = $Project`n# clean = $Clean" -Encoding utf8
 
+# #2001 阶段时间戳：录制器指向本门日志（纯追加 [STAGE]/STAGE_SUMMARY 行，不改门判据）
+. (Join-Path $PSScriptRoot 'lib\gate-stages.ps1')
+Initialize-GateStageRecorder -LogPath $logPath
+
 $script:timedOutStep = $null
 
 # ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
 . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+Start-GateStage -Name 'hx-wait'
 $hx = Wait-HxFree -CliExe $CliPath -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
 try {
 
@@ -194,13 +199,17 @@ Write-Host "cli   = $CliPath"
 Write-Host "proj  = $Project"
 Write-Host "log   = $logPath"
 
+Start-GateStage -Name 'hx-prepare'
 Invoke-CliStep @('open') -StepTimeout 180 | Out-Null
+Start-GateStage -Name 'project-open'
 Invoke-CliStep @('project', 'open', '--path', $Project) -StepTimeout 180 | Out-Null
 
+Start-GateStage -Name 'compile-launch'
 $launchArgs = @('launch', 'app-android', '--project', $Project, '--compile', 'true')
 if ($Clean) { $launchArgs += @('--cleanCache', 'true') }
 Invoke-CliStep $launchArgs -StepTimeout $TimeoutSeconds | Out-Null
 
+Start-GateStage -Name 'audit'
 $all = Get-Content -LiteralPath $logPath -Raw
 
 if ($script:timedOutStep -or $all -match '与主程序的连接已中断|启动超时') {
@@ -217,6 +226,7 @@ $errorLines = @(Get-Content -LiteralPath $logPath |
 
 $result = "COMPILE_RESULT errors=$($errorLines.Count) clean=$Clean log=$logPath"
 Add-Content -LiteralPath $logPath -Value "`n$result" -Encoding utf8
+Stop-GateStage
 
 if ($errorLines.Count -gt 0) {
     Write-Host ''
