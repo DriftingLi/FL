@@ -26,7 +26,9 @@
    路径由 README / checks.md / CD 统一改为 `deploy/...`。
 3. **显式变更计划**：按「容器状态 + 镜像内容（image ID）+ compose config-hash」逐服务判定
    `skip / start / create / recreate / blocked`，只对非 `skip` 的服务执行
-   `up -d --no-deps`。`--plan`（`--json`）只读输出计划。
+   `up -d`（**不带 `--no-deps`** —— compose 的 config-hash 包含 `depends_on`，带它会让
+   backend/frontend 的容器标签哈希与 `config --hash` 永久不一致、每次部署都被判「配置变更」重建）。
+   `--plan`（`--json`）只读输出计划。
 4. **数据服务与业务服务分治**：`postgres` / `redis` 默认永不因应用镜像变更而重建；检测到配置
    漂移（例如 `PG_VOLUME` 被改）时判 `blocked` 并中止，必须显式 `--force-data-services`。
    `--force` 只重建应用服务。

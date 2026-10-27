@@ -152,8 +152,48 @@ class ApplyAppTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertNotIn("--wait", calls[0])
         self.assertNotIn("--wait-timeout", calls[0])
+        # 不能带 --no-deps：depends_on 会让容器标签哈希与 config --hash 永久不同，导致
+        # backend/frontend 每次部署都被判「配置变更」重建（2026-10-27 实测）。
+        self.assertNotIn("--no-deps", calls[0])
         self.assertEqual(calls[0][-1], "backend")
         self.assertEqual(d.applied, ["backend"])
+
+
+class CleanupConflictTest(unittest.TestCase):
+    def test_short_id_is_normalized_before_managed_check(self):
+        # docker ps -aq 是 12 位短 ID，compose ps -q 是 64 位；不归一化会把本项目容器
+        # 误判成「另一个 compose 项目」并逐次告警（2026-10-27 生产实测）。
+        d = deploy.Deployer.__new__(deploy.Deployer)
+        d.compose_project_args = []
+        d.profiles = []
+        d.mode = "deploy"
+        d.compose_file = Path("/tmp/compose.yml")
+        d.env_file = Path("/tmp/.env")
+        d._compose = lambda: ["docker", "compose"]
+        calls = []
+
+        def cp(out="", rc=0):
+            return SimpleNamespace(returncode=rc, stdout=out, stderr="")
+
+        def run(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd == ["docker", "ps", "-a", "--format", "{{.Names}}"]:
+                return cp("forklift-backend-prod\n")
+            if cmd == ["docker", "compose", "ps", "-a", "-q"]:
+                return cp("full-id\n")
+            if cmd[:3] == ["docker", "ps", "-aq"]:
+                return cp("short-id\n")
+            if cmd[:3] == ["docker", "inspect"] and "{{.Id}}" in cmd:
+                return cp("full-id\n")
+            if "{{json .Config.Labels}}" in cmd:
+                return cp('{"com.docker.compose.project":"forklift-training"}')
+            return cp()
+
+        d.run = run
+        d.cleanup_conflicting_containers()
+        self.assertFalse(any("{{json .Config.Labels}}" in c for c in calls),
+                         "本项目容器不应进入「另一个 compose 项目」分支")
+        self.assertFalse(any(c[:3] == ["docker", "rm", "-f"] for c in calls))
 
 
 class PureFunctionsTest(unittest.TestCase):

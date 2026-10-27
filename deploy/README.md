@@ -67,7 +67,10 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 5. 确保 postgres / redis 在运行，等待数据库就绪；
 6. 迁移兼容性预检（镜像内迁移版本不得落后于数据库）；
 7. 等待备份完成 → 清 dirty → **先迁移**；
-8. 算应用计划，只对变化的服务 `up -d --no-deps`（backend 先于 frontend，libreoffice 最先）；
+8. 算应用计划，只对变化的服务 `up -d`（backend 先于 frontend，libreoffice 最先）。
+   **不带 `--no-deps`**：compose 的 config-hash 包含 `depends_on`，带它创建出的容器标签哈希
+   与 `compose config --hash` 永远不同，backend/frontend 会被判「配置变更」每次重建。
+   数据服务仍由 `plan_data` 的 blocked 保护，`up <app>` 不会重建未变化的依赖；
 9. 后端 / 前端真实 HTTP 健康检查；
 10. 清理悬空镜像、旧镜像、旧备份。
 
