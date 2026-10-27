@@ -8,7 +8,7 @@
 
 | 帧 | 文件 | median | darkFrac | 白面板行范围 | mask |
 |---|---|---|---|---|---|
-| 修复前基线（#1650 12/12 帧） | docs/verification/mp-weixin/1650/ | — | ≤0.03 | 7–8% 屏高 | NONE（遮罩一帧未画） |
+| 修复前基线（#1650 12/12 帧） | [#1650 归档分支 @ `0fd0dea6` 下的 `docs/verification/mp-weixin/1650/`](https://github.com/DriftingLi/FL/tree/0fd0dea6/training-app/%E5%8F%89%E8%BD%A6%E7%BB%B4%E4%BF%AE%E5%9F%B9%E8%AE%AD%E5%AD%A6%E5%91%98%E7%AB%AF%E8%B7%A8%E7%AB%AF%E5%BA%94%E7%94%A8/docs/verification/mp-weixin/1650)（**勿合主干；`master` 无此目录**） | — | ≤0.03 | 7–8% 屏高 | NONE（遮罩一帧未画） |
 | 修复后·关闭态（未开浮层） | dashboard-overlay-closed.png | 227 | 0.00 | [665..898] | NONE（无浮层） |
 | 修复后·开启态（浮层已开） | dashboard-overlay-open.png | 246 | 0.00 | [499..898] | 面板 [499..898] = **40% 屏高满屏面板** + 顶部暗条（40% 黑遮罩压暗状态栏） |
 | 判读器判别力对照（dashboard 自身 filter 抽屉，absolute 先例，遮挡后变暗判读正确） | 探针会话帧（已删，判读值见 git 历史探针 8 记录） | 137 | — | [680..723] | SHALLOW（判读器正确识别暗层） |
