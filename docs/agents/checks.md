@@ -16,7 +16,7 @@
   1. 它为每个测试建**随机 schema** 并跑真实 `migrations/`，`DATABASE_URL` 未设时干净 `t.Skip` ⇒ 本机（无 PG）看到 `ok` **不等于测过**；这类测试的首跑在 CI（`backend-test` 带 PG 15 + `-race`，`migration-check` 真跑 up→列对账→down 到底），写的时候就按「CI 才第一次真跑」准备，别把 skip 当验证。
   2. 目录类断言**必须按 schema 收窄**：`go test ./...` 并发跑多个包、共用同一个测试库，而 `pg_indexes` / `pg_constraint` / `information_schema.columns` 是**全库视图** ⇒ 不加 `schemaname = current_schema()`（或 join `pg_namespace` 后按 `nspname` 收窄）就会数到别的包那份同名对象（#1197 首跑正是「CHECK 数到 2 行」）。存量同类隐患：`internal/api/forum_experience_migration_contract_test.go` 的 `information_schema.columns` 查询未带 schema 条件。
 - 端点错误面守卫（第十三波 ADR-0060 决策 1 / 票 1b）：`node scripts/check-render-error-face.mjs --all`（本地可 `--diff origin/master` 只看新增行）—— `RenderFunc` 已不含 `err` 参数，错误面归端点骨架无条件渲染，所以 HTTP 面文件（`internal/api` 整目录，**加**任意域包的 `handler*.go`，ADR-0070 决策 5——估值域出口自 #1514 波 9 起也叫 `handler*.go`，那条曾为它单独开的整目录判据已作为死条目删除）的 `Render` 闭包内不得再出现 `response.ServerError/BadRequest/NotFound/Unauthorized/Forbidden`、`renderStatus(` 或 `xxxErrStatus.renderError(`；状态码与固定文案写进本端点的 `ErrStatus`（单码用 `httpx.ErrStatusAll` / `httpx.ErrStatusAllMsg`，哨兵用 `httpx.ErrStatusEntry`，`Sentinel == nil` 表示无条件命中且抢在 `*ParseError` 规则之前；骨架与这些表类型自 #1445 P0-B 起住在 `backend/pkg/httpx`）。需要非信封错误形状的面走 raw handler（不留逃生槽）。域包的 HTTP 出口**必须**命名为 `handler*.go`（`GUARDED_FILE_PREFIXES=['handler']` + `GUARDED_FILE_ROOT='backend/internal/'`）——换个名字守卫就看不见（静默）。自检：`node --test scripts/check-render-error-face.test.mjs`；CI 在 backend-lint 跑 `--all`、判定逻辑自检在 el-controls-selftest
-- 改了 handler 的 swagger 注解（`@Success` / `@Param` / `@Router` 等）或**任何进出响应 DTO 的字段**（含可空性）后：`cd backend && make swagger` 再生成 `backend/docs/{docs.go,swagger.json,swagger.yaml}`，**再** `go run ./cmd/gen-apitypes` 再生成 `frontend/src/api/generated/*.ts`，两者与改动一并提交 —— CI 的 backend-lint 有**新鲜度锁**（按钉住的 swag 版本再生成后要求工作树干净），生成物过期直接红。
+- 改了 handler 的 swagger 注解（`@Success` / `@Param` / `@Router` 等）或**任何进出响应 DTO 的字段**（含可空性）后：仓库根 `make swagger` 再生成 `backend/docs/{docs.go,swagger.json,swagger.yaml}`，**再** `make gen-apitypes` 再生成 `frontend/src/api/generated/*.ts`，两者与改动一并提交 —— CI 的 backend-lint 有**新鲜度锁**（按钉住的 swag 版本再生成后要求工作树干净），生成物过期直接红。
   ⚠️ **顺序是硬的**：`internal/apitypes/codegen_test.go` 把前端生成文件与 Go 注解渲染结果全等比对，所以「先跑 `go test ./...` 再 `make swagger`」会先给你一个绿、几秒后变红（2026-09-20 #1197 实测踩到：全量套件通过后再生成 swagger，`apitypes` 随即判红）。收口顺序固定为 gofmt/vet → 再生成（swagger → gen-apitypes）→ `go test ./...` → 前端检查。
 - 改过**响应字段的两个 struct tag** 时（`nullability:` 可空性表态 / `fact:` 消费点对齐，词汇见 `CONTEXT.md`「接口契约」）：这两把锁都按**生成物**读射程，所以顺序同上（先 `make swagger` 再跑测试）。它们管的东西不同，别混成一条：
   - `nullability:"nullable"` 要在 `internal/core/nullable_declaration_test.go` 的 `nullableOutlets*` 表里举出一个真 marshal 出 `null` 的出口；`nonnil` 要在 `nonnilOutlets*`（`internal/core`、`internal/api` 或**域包**那张——按**组装发生在哪一层**选，ADR-0070 决策 9）里举出一个真发 `[]` / `{}` 的出口；同一把钥匙跨包只许有一个举证地（锁里有 owner 表逐键认领）。锁在 `internal/apitypes/nullability_lock_test.go`。**这一张是欠账表**：未举证的数量钉成常量（判据 3/4），只准减，涨与降都要人改常量并同步注释里的算式。
@@ -50,8 +50,9 @@
 - `npm test`（vitest 5；CLI 的两个口径变化见本段末「vitest 4 → 5」）
 - 新建 spec 一律用 `epLite()`（`src/test/element-lite.ts`）按需注册 EP 组件，**禁止全量挂载 `plugins: [ElementPlus]`** —— 全量挂载是 CourseCatalog flaky（CI 2 核下 import 争抢超时）的根因；组件清单可用 `node scripts/scan-el-components.mjs` 扫描
 - 已收敛控件守卫：`node scripts/check-el-controls.mjs --all`（CI 在 frontend-check 里跑全量；本地也可 `--diff origin/master` 只看新增行）。守卫判定逻辑的自检：`node --test scripts/check-el-controls.test.mjs`
+- **UI 意图登记制守卫（ADR-0083 决策 6 / #1982）**：`node scripts/check-ui-intent.mjs --all`（同样在 frontend-check 跑全量 + 增量门，本地可 `--diff origin/master`）。**黑名单换成白名单**：判据是 `docs/agents/ui-conventions.md` 的「意图登记表」，`scanSource` 当场解析那份 markdown，**不落第二份清单**（派生逻辑在 `scripts/lib/ui-intent-registry.mjs`，`--emit-registry <file>` 只写不读、供排查）。两条规则：① 根 `<template>` 里的 `el-*` 必须落在「原生登记 / 按域分批 / 子件」三种形态之一（封装层 `components/ui/**` 不进①面；子件的父件也得登记，否则判「孤儿」）；② `border-radius` / `box-shadow` 的**纯字面量**必须是档内值（`0` / `50%` / `none`），其余走 token（含 `var(` 的复合值一律放行）。登记表改表头会让守卫**抛错**而不是静默放行。自检：`node --test scripts/check-ui-intent.test.mjs`（20 例，含「合成违规必须判红」「干净源码必须判绿」「CLI --all 防假红」三个防恒绿用例，以及「子件表父件必须能解析」的死条目锁）
 - api seam 守卫（ADR-0053 §7）：`node scripts/check-api-seam.mjs --all`（页面与业务组件不得直接引用 `@/api/request` / `@/api/client`；同样在 frontend-check 跑全量，本地可 `--diff origin/master`）。自检：`node --test scripts/check-api-seam.test.mjs`。逐条登记的例外写在脚本的 `ALLOWLIST`（每条带理由）
-- **守卫 runner 单点（第十一波）**：**十一个**守卫（api-seam / el-controls / async-section / 契约消费面覆盖锁 / AI 助手发送编排 / 无障碍档位 / 字号阶梯 / 端点错误面 / 目录排序第二源 / 注释三态 / 图标入口）的 runner 面（argv 解析 / 走查 / `--diff` 取 diff 文本 / allowlist 放行 / 报告与退出码）收在 `scripts/lib/guard.mjs`，守卫文件只留判定面与措辞（`GUARDED_*` 常量 + `scanSource` + `GUARD_SPEC`；新增守卫只需实现 `scanSource`）。`--diff` 是 **fail-closed** 的：base 解析不了、`git diff` 失败、新增文件读不出来都报错并非零退出，不会静默判绿（历史上 `--diff` 曾因实参形态错而恒 0 违规、CI 只跑 `--all` 无人接住）。runner 自带表驱动自测：`node --test scripts/guard.test.mjs`（合成 diff 正/负样本 + 纯删除 diff 的「跳过」判据 + ALLOWLIST 行号级放行的正/负样本与缺基线 fail-closed + 真实 git 的 `--diff` 回归锁 + fail-closed 面 + 三个守卫的 CLI 面）；CI 在 frontend-check 里除 `--all` 全量外，另有增量门按 `--diff origin/<默认分支>` 跑**前端侧那八个**守卫（含下面的消费面覆盖锁、AI 助手发送编排守卫与图标入口守卫）——第十三波新增的两条（端点错误面 / 目录排序第二源）判的是后端文件，由 `backend-lint` 跑 `--all`，不进这条增量门
+- **守卫 runner 单点（第十一波）**：**十二个**守卫（api-seam / el-controls / 意图登记制 / async-section / 契约消费面覆盖锁 / AI 助手发送编排 / 无障碍档位 / 字号阶梯 / 端点错误面 / 目录排序第二源 / 注释三态 / 图标入口）的 runner 面（argv 解析 / 走查 / `--diff` 取 diff 文本 / allowlist 放行 / 报告与退出码）收在 `scripts/lib/guard.mjs`，守卫文件只留判定面与措辞（`GUARDED_*` 常量 + `scanSource` + `GUARD_SPEC`；新增守卫只需实现 `scanSource`）。`--diff` 是 **fail-closed** 的：base 解析不了、`git diff` 失败、新增文件读不出来都报错并非零退出，不会静默判绿（历史上 `--diff` 曾因实参形态错而恒 0 违规、CI 只跑 `--all` 无人接住）。runner 自带表驱动自测：`node --test scripts/guard.test.mjs`（合成 diff 正/负样本 + 纯删除 diff 的「跳过」判据 + ALLOWLIST 行号级放行的正/负样本与缺基线 fail-closed + 真实 git 的 `--diff` 回归锁 + fail-closed 面 + 三个守卫的 CLI 面）；CI 在 frontend-check 里除 `--all` 全量外，另有增量门按 `--diff origin/<默认分支>` 跑**前端侧那九个**守卫（含下面的消费面覆盖锁、AI 助手发送编排守卫与图标入口守卫）——第十三波新增的两条（端点错误面 / 目录排序第二源）判的是后端文件，由 `backend-lint` 跑 `--all`，不进这条增量门
   - **ALLOWLIST 在 `--diff` 下是行号级的（#1123 收掉上一版的已知洞）**：例外文件先取**基线内容**（默认 `git show <base>:<path>`，经注入面 `io.readBaseline`）跑一次 `scanSource` 得「基线违规行号集合」，只放行落在集合里的行 —— 往存量例外文件里新增违规、或把违规挪到别的行号，增量门照报（此前整文件放行，等于给例外文件开了永久后门）；**基线取不到即非零退出**，不静默退回整文件放行。例外文件必须仍在判定面内（`isGuardedPath` 不再吞 allowlist，豁免的唯一宿主是 runner；`guard.test.mjs` 有契约锁）。`--all` 仍是整体放行，逐字不变。
 - **契约消费面覆盖锁（第十一波 / ADR-0056 §11 / #1100）**：`node scripts/check-api-consumers.mjs --all`（本地可 `--diff origin/master` 只看新增行）—— `frontend/src/api/**` 里请求调用（`.get/.post/.put/.delete/.patch`，含嵌套泛型 `get<PagedResult<T>>`）的第一个实参路径字面量，归一后必须落在 `backend/internal/apitypes/domains.go` 的域端点集内（消费了未登记端点即红；路径由变量给出的**不判绿**，判「无法静态判定」）。自检：`node --test scripts/check-api-consumers.test.mjs`
   - 存量欠条逐条登记在脚本 `ALLOWLIST`（键 = `<仓库相对文件>::<METHOD> <归一模式>`，现状 **0 条** —— #1120 把 `valuation/admin.ts` 的 `createCrud` 动态拼装改成「显式资源 → 显式路径」的具名方法表后销清；历史留痕见下一行），**补一个销一个**：条目对应的端点一旦登记进域声明表，`--all` 会把它判红（销账信号），照脚本头部的「销账操作单」删行；条目挂在文件里已经没有的消费上，自测判红（不许有死条目）
@@ -75,16 +76,26 @@
 
 ## 部署配置
 
-改 `docker-compose*.yml` / `deploy.sh` 后可用 `docker compose -f docker-compose.prod.yml config -q` 做语法校验。
+部署面自 ADR-0088 起聚合到 `deploy/`：`deploy/deploy.py`（Python 3 标准库，单 CLI）、`deploy/docker-compose.prod.yml`、`deploy/env.defaults`、初始化 / 备份 / 巡检脚本与 `deploy/systemd/`。改部署面后至少跑：
 
-**迁移失败即中止部署**（第十一波 / #1099）：`scripts/deploy-remote.sh` 的 `run_migration` 失败不再降级为 `log_warn` 后继续，而是 `return 1`、调用点 `exit 1`（默认路径必须中止）。线上事故确需带「新代码跑在旧 schema」这个已知风险继续时，显式声明 `ALLOW_MIGRATION_FAILURE=1`（变量名与理由写在脚本「迁移」配置段，判定点只有一处：`migration_failure_action`）；未显式声明一律中止，不得靠改日志绕过。
+```bash
+docker compose -f deploy/docker-compose.prod.yml config -q   # 语法校验
+python3 deploy/deploy.py --plan                              # 只读：打印本次会动哪些容器
+python3 -m unittest discover -s deploy/tests -p 'test_*.py'  # 增量计划 / 回滚 / 迁移门纯判定
+node --test deploy/tests/deploy-migration-gate.test.mjs
+node --test deploy/tests/deploy-rollback-plan.test.mjs
+```
+
+**按变更重启**（ADR-0088）：部署前按「容器状态 + 镜像内容（image ID）+ compose config-hash」算计划，只对 `skip` 之外的服务执行 `up -d --no-deps`。`postgres` / `redis` 是**数据服务**：默认永不因应用镜像变更而重建；检测到配置漂移（例如 `PG_VOLUME` 被改）时判 `blocked` 并中止，必须显式 `--force-data-services` 才允许重建。`--force` 只重建应用服务（backend / frontend / libreoffice）。`--plan --json` 给机器读的计划。
+
+**迁移失败即中止部署**（第十一波 / #1099）：`deploy/deploy.py` 的 `run_migration` 失败不再降级为 `log_warn` 后继续，而是抛出 `DeployError`、`main` 返回 1（默认路径必须中止）。线上事故确需带「新代码跑在旧 schema」这个已知风险继续时，显式声明 `ALLOW_MIGRATION_FAILURE=1`（变量名与理由写在脚本「迁移」配置段，判定点只有一处：`migration_failure_action`）；未显式声明一律中止，不得靠改日志绕过。
 
 两条门的语义不同，别混用（2026-09-17 澄清；**没有**「唯一逃生开关」这回事）：
 
 - `SKIP_MIGRATION=true`（CD 的 workflow_dispatch 输入）：**迁移前一整段跳过** `run_migration` —— 迁移根本不跑，也就不存在失败与否；用于已知无需迁移的场景（如仅回滚版本）。
 - `ALLOW_MIGRATION_FAILURE=1`：迁移**照跑**，失败后带「新代码跑在旧 schema」的已知风险继续部署；默认（未声明）= 失败即中止。
 
-两者的判定都是显式声明，默认路径一律 fail-closed。常驻判据物：`node --test scripts/deploy-migration-gate.test.mjs`（dry-run 入口 `bash scripts/deploy-remote.sh --migration-gate`，断言「未声明 ⇒ abort / =1 ⇒ continue」，不跑 docker）。
+两者的判定都是显式声明，默认路径一律 fail-closed。常驻判据物：`node --test deploy/tests/deploy-migration-gate.test.mjs`（dry-run 入口 `python3 deploy/deploy.py --migration-gate`，断言「未声明 ⇒ abort / =1 ⇒ continue」，不跑 docker）。
 
 CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpine` 上空库真跑三步，共用 job 级 `DATABASE_URL`：
 

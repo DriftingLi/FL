@@ -35,7 +35,7 @@ const previewList = computed(() => (props.images || []).map(u => resolveFileUrl(
 .gallery-image {
   width: 100px;
   height: 100px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: zoom-in;
   flex-shrink: 0;
 }

@@ -301,9 +301,9 @@ loadCourses()
 .generate-card {
   /* 同 FeaturedContentEdit：卡片底色用「表面」token，--color-text-inverse 深色下仍是白 */
   background: var(--color-bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-xs);
   margin-bottom: 20px;
 }
 
@@ -383,7 +383,7 @@ loadCourses()
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-page);
   flex-wrap: wrap;
 }
@@ -425,7 +425,7 @@ loadCourses()
   overflow-y: auto;
   padding: 16px;
   background: var(--color-bg-page);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 @media screen and (max-width: 768px) {

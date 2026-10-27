@@ -20,17 +20,17 @@
 
 ```bash
 # 1) dry-run：只报每表命中行数，不落库
-docker compose -f docker-compose.prod.yml run --rm backend \
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend \
   /app/bin/backfill-asset-domain -from https://cdn.gccsmile.com/ -to https://cdn.gdyidao.cn/
 
 # 2) 把上一步的行数抄进 PR #1757 的评论（记账，事后可比对）
 
 # 3) 落库（整轮一个事务）
-docker compose -f docker-compose.prod.yml run --rm backend \
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend \
   /app/bin/backfill-asset-domain -from https://cdn.gccsmile.com/ -to https://cdn.gdyidao.cn/ -write
 
 # 4) 幂等自证：第二次必须命中 0 行
-docker compose -f docker-compose.prod.yml run --rm backend \
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend \
   /app/bin/backfill-asset-domain -from https://cdn.gccsmile.com/ -to https://cdn.gdyidao.cn/
 ```
 
@@ -104,7 +104,7 @@ EdgeOne 控制台：门户项目的 API 回源地址 `https://www.gccsmile.com` 
 
 | 现象 | 判据 | 处置 |
 | --- | --- | --- |
-| 证书签不下来 | `openssl s_client` 报的是自签或旧证书 | **不合并**（此时尚未切换）；已合并则该域不可用，按 `deploy-remote.sh --rollback` 回上一镜像 |
+| 证书签不下来 | `openssl s_client` 报的是自签或旧证书 | **不合并**（此时尚未切换）；已合并则该域不可用，按 `python3 deploy/deploy.py rollback` 回上一镜像 |
 | 四端登录循环 | 登录后又被守卫打回登录页 | 查 `AUTH_COOKIE_DOMAIN` 与 `CORS_ORIGINS` 是否漏改；必要时把 `DOMAIN` 临时改回旧值**并重新部署**（旧域此时仍在） |
 | 图片全碎 | `cdn` 返回 404 且对象存在 | 回填没做完就切了 ⇒ 重跑第 1 步（幂等），修完再验 |
 | 后端拿不到真实 IP | 访问日志里 IP 是边缘节点 | 查 `EDGE_ORIGIN_TOKEN` 是否为空（入口应 fail closed 拒启）与回源头是否命中 |

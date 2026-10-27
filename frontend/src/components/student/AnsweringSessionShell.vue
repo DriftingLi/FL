@@ -25,7 +25,7 @@
             :multi-choice="currentQ.type === 'multi_choice'"
             @select="key => toggleOpt(currentQ.id, key, currentQ.type === 'multi_choice')"
           />
-          <el-input v-else v-model="answers[currentQ.id]" type="textarea" :rows="4" placeholder="请输入答案" />
+          <UiInput v-else v-model="(answers[currentQ.id] as string)" type="textarea" :rows="4" placeholder="请输入答案" />
         </UiCard>
         <div class="nav-buttons">
           <UiButton @click="currentIndex--" :disabled="currentIndex === 0">上一题</UiButton>
@@ -60,6 +60,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 答题会话壳：考试进行中的工具栏/倒计时/题目卡片/答题卡/交卷交互。
 // 练习/考试共享同一交互形态；持久化与交卷后的流程由页面注入回调。
@@ -143,18 +144,18 @@ defineExpose({ begin })
 </script>
 
 <style scoped>
-.exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: var(--color-bg-card); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.exam-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px 15px; background: var(--color-bg-card); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); }
 .exam-title { font-size: var(--text-base); font-weight: bold; }
 .timer { font-size: var(--text-xl); font-weight: bold; display: flex; align-items: center; gap: 8px; }
 .timer.warning { color: var(--color-danger); }
 .question-card { margin-bottom: 15px; }
 .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.q-image { max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 10px; }
+.q-image { max-width: 100%; max-height: 250px; border-radius: var(--radius-md); margin-bottom: 10px; }
 .q-content { font-size: var(--text-base); line-height: 1.8; margin-bottom: 15px; }
 .nav-buttons { display: flex; justify-content: center; gap: 15px; margin: 15px 0; }
 .answer-card h4 { margin-bottom: 10px; }
 .card-grid { display: flex; flex-wrap: wrap; gap: 5px; }
-.card-item { width: 32px; height: 32px; line-height: 32px; text-align: center; border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; font-size: var(--text-xs); }
+.card-item { width: 32px; height: 32px; line-height: 32px; text-align: center; border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-xs); }
 .card-item.current { border-color: var(--color-primary-500); background: var(--color-primary-500); color: #fff; }
 .card-item.answered { border-color: var(--color-success); background: var(--color-success-light); }
 </style>

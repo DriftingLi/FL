@@ -22,6 +22,8 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const props = defineProps<{
   credentialId?: number | null
@@ -363,7 +365,7 @@ defineExpose({ loadMine })
           <div v-for="item in contributions" :key="item.id"
             class="border-b border-line px-5 py-4 last:border-b-0">
             <div class="flex items-start gap-3">
-              <div class="flex size-11 shrink-0 items-center justify-center rounded-[8px] bg-primary-50 text-primary-500">
+              <div class="flex size-11 shrink-0 items-center justify-center rounded-ctl bg-primary-50 text-primary-500">
                 <UiIcon name="file-text" :size="20" />
               </div>
               <div class="min-w-0 flex-1">
@@ -413,7 +415,7 @@ defineExpose({ loadMine })
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="truncate text-base font-medium text-ink">{{ item.title }}</span>
-                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
+                  <span class="shrink-0 rounded-pill px-2 py-0.5 text-xs" :class="STATUS_CLASS[item.status as ContributionStatus]">{{ STATUS_LABEL[item.status as ContributionStatus] }}</span>
                 </div>
                 <div v-if="item.reject_reason" class="mt-1 text-xs text-danger">驳回/下架原因：{{ item.reject_reason }}</div>
                 <div class="mt-1 text-xs text-ink-3">{{ formatLocaleDateTime(item.created_at) }} · {{ item.downloads_count }} 次下载</div>
@@ -434,20 +436,18 @@ defineExpose({ loadMine })
       <div class="flex flex-col gap-4">
         <div>
           <label class="mb-1 block text-sm text-ink-2">目标证件 <span class="text-danger">*</span></label>
-          <el-select v-model="uploadCredentialId" placeholder="选择资料所属证件" class="w-full">
-            <el-option v-for="c in credentialOptions" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
+          <UiSelect v-model="uploadCredentialId" placeholder="选择资料所属证件" class="w-full" :options="(credentialOptions).map((c) => ({ label: c.name, value: c.id }))" />
           <p v-if="uploadCredentialId && uploadCredentialId !== (props.credentialId ?? credentialStore.current?.id)" class="mt-1 text-xs text-ink-3">
             该稿将归属所选证件，切到该证件下可见
           </p>
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">标题 <span class="text-danger">*</span></label>
-          <el-input v-model="uploadTitle" maxlength="120" placeholder="如：叉车液压系统常见故障排查手册" show-word-limit />
+          <UiInput v-model="uploadTitle" :maxlength="120" placeholder="如：叉车液压系统常见故障排查手册" show-word-limit />
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">简介 <span class="text-danger">*</span></label>
-          <el-input v-model="uploadIntro" type="textarea" :rows="3" maxlength="2000" placeholder="这份资料讲了什么、适合谁、整理自哪里" show-word-limit />
+          <UiInput v-model="uploadIntro" type="textarea" :rows="3" :maxlength="2000" placeholder="这份资料讲了什么、适合谁、整理自哪里" show-word-limit />
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">文件（1–5 个，{{ FILE_TYPE_HINT }}）</label>
@@ -457,7 +457,7 @@ defineExpose({ loadMine })
             <input type="file" multiple class="hidden" :disabled="uploading || uploadFiles.length >= MAX_FILES" @change="onPickFiles" />
           </label>
           <div v-if="uploadFiles.length > 0" class="mt-2 flex flex-col gap-1.5">
-            <div v-for="(f, idx) in uploadFiles" :key="f.file_url + idx" class="flex items-center justify-between rounded-lg bg-canvas px-3 py-2 text-xs">
+            <div v-for="(f, idx) in uploadFiles" :key="f.file_url + idx" class="flex items-center justify-between rounded-card bg-canvas px-3 py-2 text-xs">
               <span class="truncate text-ink">{{ f.file_name }} <span class="text-ink-3">({{ formatSize(f.file_size) }})</span></span>
               <button type="button" class="text-ink-3 hover:text-danger" @click="removeUploadFile(idx)">移除</button>
             </div>
@@ -490,7 +490,7 @@ defineExpose({ loadMine })
           <div class="mb-1.5 text-xs text-ink-3">文件（{{ detailItem.files?.length || 0 }}）</div>
           <div class="flex flex-col gap-1.5">
             <div v-for="file in (detailItem.files || [])" :key="file.file_id"
-              class="flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-2">
+              class="flex items-center justify-between gap-2 rounded-card bg-canvas px-3 py-2">
               <span class="flex min-w-0 items-center gap-2 text-sm text-ink">
                 <UiIcon name="file-text" class="shrink-0" :size="16" />
                 <span class="truncate">{{ file.file_name }}</span>

@@ -61,7 +61,7 @@ function onPopoverShow() {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary, #475569);
   cursor: pointer;

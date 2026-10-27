@@ -109,13 +109,13 @@
             @click="handleSelectSession(s.id)"
           >
             <div class="session-info flex min-w-0 flex-1 flex-col gap-0.5">
-              <el-input
+              <UiInput
                 v-if="enableRename && editingSessionId === s.id"
                 v-model="editingTitle"
                 size="small"
                 :ref="(el: any) => { if (el) editInputRef = el }"
                 placeholder="输入新标题"
-                maxlength="100"
+                :maxlength="100"
                 @click.stop
                 @keydown.enter.prevent="commitRename(s.id)"
                 @keydown.esc.prevent="cancelRename"
@@ -127,10 +127,10 @@
               </template>
             </div>
             <div v-if="editingSessionId !== s.id" class="session-actions flex gap-0.5">
-              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-soft hover:text-ui-soft-ink" title="重命名" aria-label="重命名会话" @click.stop="startRename(s)">
+              <button v-if="enableRename" class="session-rename shrink-0 cursor-pointer rounded-ctl border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-ui-soft hover:text-ui-soft-ink" title="重命名" aria-label="重命名会话" @click.stop="startRename(s)">
                 <UiIcon name="pencil" :size="14" />
               </button>
-              <button class="session-delete shrink-0 cursor-pointer rounded border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" aria-label="删除会话" @click.stop="handleDeleteSession(s.id)">
+              <button class="session-delete shrink-0 cursor-pointer rounded-ctl border-0 bg-transparent p-1 opacity-0 transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)] group-hover:opacity-100 hover:bg-bad-soft hover:text-bad" title="删除" aria-label="删除会话" @click.stop="handleDeleteSession(s.id)">
                 <UiIcon name="trash-2" :size="14" />
               </button>
             </div>
@@ -182,7 +182,7 @@
              定位：grid 第一行 + self-end 贴住输入框上沿，不把输入框往下推 -->
         <div v-if="isWelcome" class="welcome-area w-full px-6 pb-3 pt-6 text-center">
           <div class="welcome-head mx-auto flex max-w-[760px] items-center justify-center gap-3 text-left">
-            <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
+            <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-card bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
               <UiIcon :name="welcomeIcon" :size="28" />
             </div>
             <h2 class="welcome-title m-0 text-xl font-bold leading-snug text-ink">{{ welcomeTitle }}</h2>
@@ -230,9 +230,9 @@
 
         <!-- 消息加载中（选中会话拉取正文；侧栏不锁，失败由选中逻辑弹提示） -->
         <div v-if="store.messagesLoading" class="message-loading-more flex items-center justify-center gap-2 py-8 text-sm text-ink-3">
-          <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
-          <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
-          <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+          <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+          <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+          <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
           会话加载中…
         </div>
 
@@ -289,9 +289,9 @@
               />
             </div>
             <div v-else class="message-loading flex gap-1 py-1">
-              <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
-              <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
-              <span class="loading-dot h-2 w-2 rounded-full bg-ui-400"></span>
+              <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+              <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+              <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
             </div>
           </div>
         </div>
@@ -332,19 +332,9 @@
           <span class="turn-error-text min-w-0 flex-1 truncate">{{ turnErrorText }}</span>
           <UiButton variant="primary" @click="handleRetry">重试</UiButton>
         </div>
-        <div class="input-wrap flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd">
+        <div class="input-wrap flex items-center gap-2 rounded-card border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd">
           <slot v-if="!raisedInput" name="input-prefix" />
-          <el-input
-            :model-value="inputText"
-            type="textarea"
-            :rows="raisedInput ? 4 : 2"
-            :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }"
-            :placeholder="composerPlaceholder"
-            resize="none"
-            @keydown.enter="handleEnter"
-            @update:model-value="emit('update:inputText', $event as string)"
-            :disabled="store.streaming"
-          />
+          <UiInput :model-value="inputText" type="textarea" :rows="raisedInput ? 4 : 2" :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }" :placeholder="composerPlaceholder" resize="none" @keydown.enter="handleEnter" @update:model-value="emit('update:inputText', $event as string)" :disabled="store.streaming" />
           <div v-if="raisedInput" class="input-footer flex items-center justify-between gap-3">
             <div class="mode-selector flex items-center gap-2">
               <slot name="input-footer-left" />
@@ -405,6 +395,7 @@ import SuggestionArrow from '@/components/ai-assistant/SuggestionArrow.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(
@@ -818,6 +809,8 @@ watch(() => store.messagesLoading, (_loading, wasLoading) => {
   border: none;
   background: transparent;
   padding: 0;
+  /* !important 是必需的：EP 的 `.el-textarea__inner:focus` 用伪类提权到与本类同级，
+     不带它时聚焦态会把 EP 自己的 1px inset 描边画回这个已置空的输入框。 */
   box-shadow: none !important;
   font-size: var(--text-sm);
   line-height: 1.6;

@@ -43,6 +43,9 @@ jobs:
               # 生成物：aiFeatures.ts 由 backend/internal/aiassistant 渲染，契约测试（TestFrontendAIFeaturesTSInSync）
               # 住在后端。只改这个前端文件时若不带后端，生成物与模板漂移会一路绿到合并（#1892 实测踩中）。
               - 'frontend/src/config/aiFeatures.ts'
+              # 部署面漂移锁（backend/internal/deploy）读 deploy/ 下的 compose / deploy.py /
+              # env.defaults；只改部署面时若不跑 backend-test，默认值漂移会一路绿到合并。
+              - 'deploy/**'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
@@ -280,6 +283,14 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node scripts/check-el-controls.mjs --all
 
+      # UI 意图登记制守卫（ADR-0083 决策 6 / #1982）：黑名单换成白名单 —— 登记表就是判据，
+      # 模板里出现登记表之外的 el-* 即红（原生登记 / 按域分批 / 子件 三种形态之外），容器外观的
+      # 纯字面量圆角与阴影同样红。数据源是 docs/agents/ui-conventions.md 的登记表，运行时派生，
+      # 不落第二份清单。判定逻辑的自检在 el-controls-selftest job。
+      - name: UI 意图登记制守卫（未登记的裸 el-* / 越档的容器外观字面量）
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-ui-intent.mjs --all
+
       # api seam 守卫（ADR-0053 §7 / spec #1049）：页面与业务组件不得直接引用请求层。
       # 同样用全量模式：本次收口把 18 处调用点全部收回 api 模块，当前树实测 0 违规
       # （唯一例外在脚本白名单里逐条登记了理由）。判定逻辑的自检在 api-seam-selftest。
@@ -335,13 +346,13 @@ jobs:
         run: node scripts/check-font-scale.mjs --all
 
       # 守卫增量门（ADR-0056 §5 / #1094）：除上面的 --all 全量外，再按「相对默认分支的新增行」
-      # 跑一遍八个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
+      # 跑一遍九个守卫。**口径要说准**：增量门不比全量更严——判定面是同一棵树 --all 的子集
       # （同一条 scanSource，只是再按新增行号过滤），它补的是两件事：① CI 里真的走通「取 diff →
       # 解析新增行 → 扫描」这条管道（收敛前 check-async-section 的 --diff 因实参形态错恒 0 违规）；
       # ② --diff 自身 fail-closed（base 解析不了 / git diff 失败 / 新增文件读不出来都非零退出）。
       # 本 job 的 checkout 是浅克隆（默认 depth=1），base 历史不在工作区里，这里显式取回默认分支；
       # 取不回 → 本步红。浅历史里没有 merge base，added-lines 会按它既有的 CI 口径退成双点 diff。
-      - name: 守卫增量门（八个守卫只看相对默认分支的新增行）
+      - name: 守卫增量门（九个守卫只看相对默认分支的新增行）
         working-directory: ${{ github.workspace }}
         run: |
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
@@ -349,6 +360,7 @@ jobs:
           # 不会建 origin/<branch>（本机用浅克隆实测过），守卫会因 base 不可得而红。
           git fetch --no-tags --depth=1 origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           node scripts/check-el-controls.mjs --diff "origin/$DEFAULT_BRANCH"
+          node scripts/check-ui-intent.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-api-seam.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-async-section.mjs --diff "origin/$DEFAULT_BRANCH"
           node scripts/check-api-consumers.mjs --diff "origin/$DEFAULT_BRANCH"
@@ -667,6 +679,11 @@ jobs:
       - name: 表驱动单测（守卫判定逻辑）
         run: node --test scripts/check-el-controls.test.mjs
 
+      # ADR-0083 决策 6 / #1982：派生（文档 → 集合）+ 两条规则的判定面，外加「合成违规必须判红」
+      # 「干净源码必须判绿」「CLI --all 防假红」三个防恒绿用例。
+      - name: 表驱动单测（UI 意图登记制守卫判定逻辑）
+        run: node --test scripts/check-ui-intent.test.mjs
+
       - name: 表驱动单测（api seam 守卫判定逻辑）
         run: node --test scripts/check-api-seam.test.mjs
 
@@ -682,12 +699,20 @@ jobs:
       - name: 表驱动单测（backend-test 分片器 LPT 装箱判据）
         run: node --test scripts/go-shard.test.mjs
 
-      # 部署面两条常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
+      # 部署面常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
       # 此前它们只在本地被引用、CI 零触发（2026-09-17 架构评审登记项）—— 一并接上。
+      # ADR-0088 起判据物随部署面迁到 deploy/tests/（脚本本体 deploy/deploy.py，纯标准库 Python）。
       - name: 表驱动单测（回滚计划与镜像自证判定逻辑）
-        run: node --test scripts/deploy-rollback-plan.test.mjs
+        run: node --test deploy/tests/deploy-rollback-plan.test.mjs
       - name: 表驱动单测（迁移失败门判定逻辑）
-        run: node --test scripts/deploy-migration-gate.test.mjs
+        run: node --test deploy/tests/deploy-migration-gate.test.mjs
+      # 增量部署的核心判据：container/image/config-hash → 动作（skip/start/create/recreate/blocked）。
+      # 数据服务配置漂移必须 blocked（不许自动重建），--force 也不许波及数据服务。
+      - name: 单元测试（部署变更计划判定逻辑）
+        run: python3 -m unittest discover -s deploy/tests -p 'test_*.py' -v
+      # 部署面聚合后 compose 在 deploy/ 下；至少让 YAML / 相对路径 / 插值在 CI 里过一遍。
+      - name: 部署 compose 语法校验
+        run: docker compose -f deploy/docker-compose.prod.yml config -q
 
       - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
         run: node --test scripts/check-ai-assistant-send.test.mjs

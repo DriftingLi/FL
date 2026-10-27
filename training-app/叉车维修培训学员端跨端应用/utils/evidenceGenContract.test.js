@@ -169,8 +169,17 @@ describe('#1920 证据描述符（GATE_EVIDENCE）单一真源', () => {
   const descriptor = new Function(`${validatorSrc.replace(/^export /gm, '')}\nreturn GATE_EVIDENCE;`)();
   const q = (p) => `'${p.replace(/\\/g, '/')}'`;
 
+  // #2013：无控制台形态（stdout 被重定向 / dev-finish 逐套件驱动）下，子 pwsh 的
+  // `[Console]::OutputEncoding` 退回本机 ANSI 码页（本机 = gb2312）⇒ 中文描述符按 GBK 写出，
+  // Node 按 utf8 解码成「## ����֤��」形态。修法与 scripts/dev-finish.ps1 顶部同款：
+  // 让子进程自己把输出码页钉成 UTF-8（非控制台环境赋值可能抛，try/catch 兜住），
+  // 而不是把断言降级成 ASCII token —— #1920 验的就是「中文描述符两侧同源」。
+  const UTF8_OUTPUT_PREAMBLE = 'try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }';
+
   function runPs(statements) {
-    const r = spawnSync(shell, ['-NoProfile', '-Command', statements.join('; ')], { encoding: 'utf8' });
+    const r = spawnSync(shell, ['-NoProfile', '-Command', [UTF8_OUTPUT_PREAMBLE].concat(statements).join('; ')], {
+      encoding: 'utf8',
+    });
     if (r.status !== 0) throw new Error(`pwsh 退出码 ${r.status}：${(r.stderr || '').trim()}`);
     return (r.stdout || '').trim();
   }

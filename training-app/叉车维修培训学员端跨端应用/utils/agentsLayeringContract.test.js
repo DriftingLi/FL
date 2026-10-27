@@ -71,7 +71,8 @@ function isTableSeparator(t) {
  */
 const DUP_ALLOWED = [
   'Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.',
-  '五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）。See `docs/agents/triage-labels.md`.',
+  // ↑ triage 登记 2026-10-27 划掉（#2002 自查）：根层该句经 #2003 扩写「唯一变体」后，
+  // 移动端对应行不再与之逐字相同 ⇒ 登记失效；若日后把移动端该行同步成根层新句，须以新句重登。
   'AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.',
 ];
 

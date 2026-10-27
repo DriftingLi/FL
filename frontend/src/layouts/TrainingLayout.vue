@@ -19,7 +19,7 @@
              不再硬写「暗底专用」的白 8% 与浅色文字（#1619 侧栏改浅底后那套配色失效）。 -->
         <button
           type="button"
-          class="flex items-center gap-2 rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink"
+          class="flex items-center gap-2 rounded-ctl border border-line bg-panel px-2.5 py-1.5 text-sm text-ink-2 transition-colors hover:text-ink"
           :class="collapsed ? 'justify-center' : ''"
           aria-label="全局搜索"
           @click="openSearch"
@@ -27,7 +27,7 @@
           <UiIcon name="search" />
           <template v-if="!collapsed">
             <span>搜索</span>
-            <span class="ml-auto rounded border border-line px-1 text-xs text-ink-3">⌘K</span>
+            <span class="ml-auto rounded-ctl border border-line px-1 text-xs text-ink-3">⌘K</span>
           </template>
         </button>
       </div>

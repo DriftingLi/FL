@@ -17,7 +17,11 @@
  *   P5 **jest 自己的口径**与分类器一致：真起子进程跑 --listTests，两腿套件数 = 分类器读数，
  *      且两腿清单的并集 = 全量清单、无重复（P2/P3 只验字符串，P5 验 jest 真认）
  *   P6 心跳行格式（JEST_SUITE i=k/N status=… secs=… elapsed=… file=…）由 reporter 自己产出：
- *      喂合成结果，断言三行 token 齐全、PASS/FAIL 与失败数如实 —— 钉产物，不钉源码文本
+ *      喂合成结果，断言三行 token 齐全、PASS/FAIL 与失败数如实 —— 钉产物，不钉源码文本。
+ *      合成场景前必须隔离 `FL_BEHAVIOR_SUITE_*`（驱动 env，语义由 behaviorLegWatchdogBehavior 的 W6
+ *      单独守着）：dev-finish 逐套件驱动时这两个变量就在进程里，reporter 正确地优先用全局数，
+ *      不隔离会让本条在驱动腿里假装变红（行里是全局套件数——本机现测 81、票面那次 78——而非 2，#2013）。
+ *      存/清/恢复经 `utils/behaviorSuiteEnv.js`，与 W6 同一份 env 词汇，不各写一遍。
  *
  * 运行前提：需要 node（起 jest 子进程做 P5）。不可用时 fail-closed 抛错，不 skip
  * （本仓先例：utils/guardClassification.test.js / pngDiffBehavior.test.js）。
@@ -28,6 +32,8 @@ const path = require('path');
 // 读仓内源码/配置一律走共享读者（ADR-0019 读取层归一）——裸 readFileSync 会被
 // scripts/check-contract-read.mjs 判违规（CRLF 下多行锚点静默失配，守护形同不存在）。
 const { readText } = require('./utsHarness');
+// #2013：驱动 env 的存/清/恢复与 behaviorLegWatchdogBehavior 共用一件，不各写一遍。
+const { withBehaviorSuiteEnv } = require('./behaviorSuiteEnv');
 
 const ROOT = path.join(__dirname, '..');
 const UTILS = __dirname;
@@ -117,17 +123,24 @@ describe('③ 门两腿的形状（#1702）', () => {
       return true;
     };
     try {
-      const reporter = new SuiteProgressReporter();
-      reporter.onRunStart({ numTotalTestSuites: 2 });
-      reporter.onTestResult(
-        { path: path.join(UTILS, 'aaa.test.js') },
-        { numPassingTests: 3, numFailingTests: 0, perfStats: { runtime: 1200 } }
-      );
-      reporter.onTestResult(
-        { path: path.join(UTILS, 'bbb.test.js') },
-        { numPassingTests: 1, numFailingTests: 2, perfStats: { runtime: 3400 }, testExecError: null }
-      );
-      reporter.onRunComplete({}, { numTotalTestSuites: 2, numPassedTestSuites: 1, numFailedTestSuites: 1 });
+      // #2013：本条断言的是**合成场景**（喂 numTotalTestSuites=2 ⇒ total=2）。而 dev-finish 逐套件
+      // 驱动行为腿时会把全局 planned/offset 注入子进程 env（本仓内部契约，语义由 W6 单独守着）——
+      // 驱动形态下本套件必然继承那一对 env，reporter **正确地**优先用全局数 ⇒ 不隔离就只在驱动形态下变红
+      // （本机现测行为腿 81 套 ⇒ total=81；票面那次是 78 套）。隔离点放测试侧：
+      // reporter 的 env 优先级语义不许为测试开分支。
+      withBehaviorSuiteEnv({ offset: null, total: null }, () => {
+        const reporter = new SuiteProgressReporter();
+        reporter.onRunStart({ numTotalTestSuites: 2 });
+        reporter.onTestResult(
+          { path: path.join(UTILS, 'aaa.test.js') },
+          { numPassingTests: 3, numFailingTests: 0, perfStats: { runtime: 1200 } }
+        );
+        reporter.onTestResult(
+          { path: path.join(UTILS, 'bbb.test.js') },
+          { numPassingTests: 1, numFailingTests: 2, perfStats: { runtime: 3400 }, testExecError: null }
+        );
+        reporter.onRunComplete({}, { numTotalTestSuites: 2, numPassedTestSuites: 1, numFailedTestSuites: 1 });
+      });
     } finally {
       process.stdout.write = original;
     }

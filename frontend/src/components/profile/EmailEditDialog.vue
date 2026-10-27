@@ -2,11 +2,11 @@
   <UiDialog v-model="visible" :title="title" width="440px" confirm-text="确认修改" :confirm-loading="submitting" @confirm="submit">
     <el-form label-width="0">
       <el-form-item>
-        <el-input v-model="target" placeholder="请输入新邮箱" maxlength="50" />
+        <UiInput v-model="target" placeholder="请输入新邮箱" :maxlength="50" />
       </el-form-item>
       <el-form-item>
         <div class="code-row">
-          <el-input v-model="code" placeholder="6位验证码" maxlength="6" @keyup.enter="submit" />
+          <UiInput v-model="code" placeholder="6位验证码" :maxlength="6" @keyup.enter="submit" />
           <UiButton :disabled="countdown > 0 || sending" @click="sendCode">{{ sending ? '发送中...' : countdown > 0 ? countdown + 's 后重发' : '获取验证码' }}</UiButton>
         </div>
       </el-form-item>
@@ -24,6 +24,7 @@ import { useVerifyDialog } from '@/composables/useVerifyDialog'
 import { ref } from 'vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const authStore = useAuthStore()
 const { remaining: countdown, send } = useSendCode({ purpose: 'bind', sendCode: (ch, tgt) => authApi.sendProfileCode({ channel: ch, target: tgt }) })

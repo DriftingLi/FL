@@ -36,7 +36,7 @@
         <div
           v-for="rel in detail.related"
           :key="rel.content_id"
-          class="cursor-pointer rounded-[6px] px-2 py-2 text-sm text-ink hover:bg-canvas"
+          class="cursor-pointer rounded-ctl px-2 py-2 text-sm text-ink hover:bg-canvas"
           @click="open(rel.content_id)"
         >{{ rel.title }}</div>
       </section>

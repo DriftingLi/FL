@@ -28,42 +28,30 @@
         <div class="diagnosis-catalog">
           <div class="catalog-row">
             <span class="catalog-label">品牌</span>
-            <el-select
+            <UiSelect
               v-model="selectedBrand"
               size="small"
               placeholder="选择品牌"
               filterable
               clearable
               class="catalog-select"
+              :options="brands"
               @change="onBrandChange($event as string)"
-            >
-              <el-option
-                v-for="b in brands"
-                :key="b.value"
-                :value="b.value"
-                :label="b.label"
-              />
-            </el-select>
+            />
             <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
           </div>
           <div v-if="selectedBrand && selectedBrand !== 'all'" class="catalog-row">
             <span class="catalog-label">车型</span>
-            <el-select
+            <UiSelect
               v-model="selectedModel"
               size="small"
               placeholder="选择车型"
               filterable
               clearable
               class="catalog-select"
+              :options="modelOptions"
               @change="onModelChange"
-            >
-              <el-option
-                v-for="m in models"
-                :key="m"
-                :value="m"
-                :label="m"
-              />
-            </el-select>
+            />
           </div>
           <div class="catalog-row" v-if="selectedBrand || faultTotal">
             <span class="catalog-label">故障码</span>
@@ -180,6 +168,7 @@ import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
 import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 const store = useAIAssistantStore()
 const router = useRouter()
@@ -215,6 +204,9 @@ const filterSummary = computed(() => {
 // ===== 智能维修诊断：品牌/车型联动（/diagnosis/brands|models 动态数据源）=====
 const brands = ref<DiagnosisBrandOption[]>([])
 const models = ref<string[]>([])
+
+/** 车型下拉：后端给的是字符串数组，UiSelect 要 {label,value} */
+const modelOptions = computed<UiSelectOption[]>(() => models.value.map((m) => ({ label: m, value: m })))
 const selectedBrand = ref('')
 const selectedModel = ref('')
 const catalogLoading = ref(false)
@@ -434,7 +426,7 @@ onMounted(() => {
 
 .quick-option-chip {
   padding: 4px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-card);
   color: var(--color-text-secondary);
@@ -468,7 +460,7 @@ onMounted(() => {
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid var(--color-border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-bg-card);
 }
 
@@ -509,7 +501,7 @@ onMounted(() => {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--color-border-light);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-field, var(--color-bg-card));
   color: var(--color-text-primary);
   font-size: var(--text-sm);
@@ -538,7 +530,7 @@ onMounted(() => {
   gap: 10px;
   padding: 8px 12px;
   border: 1px solid var(--color-border-light);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-card);
   text-align: left;
   cursor: pointer;
@@ -585,7 +577,7 @@ onMounted(() => {
   width: 64px;
   height: 64px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border-light);
 }
 
@@ -613,7 +605,7 @@ onMounted(() => {
 .pending-image-mask {
   position: absolute;
   inset: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(15, 23, 42, 0.5);
   color: #fff;
   font-size: var(--text-xs);

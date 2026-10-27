@@ -14,13 +14,13 @@
       />
       <el-form v-else v-loading="loading" label-width="96px" @submit.prevent>
         <el-form-item label="真实姓名">
-          <el-input v-model="form.real_name" maxlength="20" placeholder="填写真实姓名" />
+          <UiInput v-model="form.real_name" :maxlength="20" placeholder="填写真实姓名" />
         </el-form-item>
         <el-form-item label="联系电话">
-          <el-input v-model="form.contact_phone" maxlength="50" placeholder="给招聘方拨打的号码" />
+          <UiInput v-model="form.contact_phone" :maxlength="50" placeholder="给招聘方拨打的号码" />
         </el-form-item>
         <el-form-item label="微信">
-          <el-input v-model="form.wechat" maxlength="50" placeholder="微信号" />
+          <UiInput v-model="form.wechat" :maxlength="50" placeholder="微信号" />
         </el-form-item>
         <el-form-item label="现居地">
           <el-cascader
@@ -34,9 +34,7 @@
           />
         </el-form-item>
         <el-form-item label="期望岗位">
-          <el-select v-model="form.expected_position_id" clearable placeholder="选择岗位">
-            <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
-          </el-select>
+          <UiSelect v-model="form.expected_position_id" clearable placeholder="选择岗位" :options="(positions).map((p) => ({ label: p.name, value: p.position_id }))" />
         </el-form-item>
         <el-form-item label="意向地区">
           <el-cascader
@@ -58,34 +56,25 @@
           </div>
         </el-form-item>
         <el-form-item label="到岗时间">
-          <el-select v-model="form.available_in" clearable placeholder="选择">
-            <el-option label="随时" value="immediate" />
-            <el-option label="1周内" value="1w" />
-            <el-option label="2周内" value="2w" />
-            <el-option label="1月内" value="1m" />
-          </el-select>
+          <UiSelect v-model="form.available_in" clearable placeholder="选择" :options="[{ label: '随时', value: 'immediate' }, { label: '1周内', value: '1w' }, { label: '2周内', value: '2w' }, { label: '1月内', value: '1m' }]" />
         </el-form-item>
         <el-form-item label="用工性质">
-          <el-select v-model="form.job_nature" clearable placeholder="选择">
-            <el-option label="全职" value="fulltime" />
-            <el-option label="兼职" value="parttime" />
-            <el-option label="合同" value="contract" />
-          </el-select>
+          <UiSelect v-model="form.job_nature" clearable placeholder="选择" :options="[{ label: '全职', value: 'fulltime' }, { label: '兼职', value: 'parttime' }, { label: '合同', value: 'contract' }]" />
         </el-form-item>
         <el-form-item label="工作年限">
           <el-input-number v-model="form.experience_years" :min="0" :max="50" />
         </el-form-item>
         <el-form-item label="自我介绍">
-          <el-input v-model="form.self_intro" type="textarea" :rows="4" maxlength="1000" show-word-limit placeholder="简要介绍" />
+          <UiInput v-model="form.self_intro" type="textarea" :rows="4" :maxlength="1000" show-word-limit placeholder="简要介绍" />
         </el-form-item>
         <el-form-item label="工作经历">
           <div class="flex w-full flex-col gap-2">
             <div v-for="(exp, idx) in form.resume_experiences" :key="idx" class="flex flex-wrap items-center gap-2">
-              <el-input v-model="exp.company" placeholder="单位" class="min-w-[120px] flex-1" />
-              <el-input v-model="exp.role" placeholder="岗位" class="min-w-[120px] flex-1" />
-              <el-input v-model="exp.start_month" placeholder="开始年月" class="min-w-[120px] flex-1" />
-              <el-input v-model="exp.end_month" placeholder="结束年月" class="min-w-[120px] flex-1" />
-              <el-input v-model="exp.desc" placeholder="描述" class="min-w-[120px] flex-1" />
+              <UiInput v-model="exp.company" placeholder="单位" class="min-w-[120px] flex-1" />
+              <UiInput v-model="exp.role" placeholder="岗位" class="min-w-[120px] flex-1" />
+              <UiInput v-model="exp.start_month" placeholder="开始年月" class="min-w-[120px] flex-1" />
+              <UiInput v-model="exp.end_month" placeholder="结束年月" class="min-w-[120px] flex-1" />
+              <UiInput v-model="exp.desc" placeholder="描述" class="min-w-[120px] flex-1" />
               <UiButton variant="text" @click="removeExp(Number(idx))" class="text-bad">删除</UiButton>
             </div>
             <UiButton variant="primary" text @click="addExp">新增经历</UiButton>
@@ -94,11 +83,9 @@
         <el-form-item label="持证信息">
           <div class="flex w-full flex-col gap-2">
             <div v-for="(cert, idx) in form.resume_certifications" :key="idx" class="flex flex-wrap items-center gap-2">
-              <el-select v-model="cert.credential_id" clearable placeholder="证件" class="min-w-[120px] flex-1">
-                <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
-              </el-select>
-              <el-input v-model="cert.cert_no" placeholder="证书编号" class="min-w-[120px] flex-1" />
-              <el-input v-model="cert.expire_date" placeholder="有效期" class="min-w-[120px] flex-1" />
+              <UiSelect v-model="cert.credential_id" clearable placeholder="证件" class="min-w-[120px] flex-1" :options="(credentials).map((c) => ({ label: c.name, value: c.id }))" />
+              <UiInput v-model="cert.cert_no" placeholder="证书编号" class="min-w-[120px] flex-1" />
+              <UiInput v-model="cert.expire_date" placeholder="有效期" class="min-w-[120px] flex-1" />
               <UiButton variant="text" @click="removeCert(Number(idx))" class="text-bad">删除</UiButton>
             </div>
             <UiButton variant="primary" text @click="addCert">新增持证</UiButton>
@@ -147,6 +134,8 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const router = useRouter()
 const saving = ref(false)

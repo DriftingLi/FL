@@ -65,7 +65,7 @@ function coverClass() {
 <style scoped>
 .cc-card {
   background: var(--color-bg-card);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
   box-shadow: var(--shadow-xs);
@@ -90,7 +90,7 @@ function coverClass() {
 
 /* compact：列表态，取消上浮、收紧尺寸（上面的 grid 规则保持零改动） */
 .cc-card.is-compact:hover {
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   transform: none;
 }
 

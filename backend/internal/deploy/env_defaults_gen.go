@@ -10,7 +10,7 @@ import (
 )
 
 // NotFoundRepoRoot 未能在 cwd 及其祖先里找到仓库根时的错误信息（逐字沿用）。
-const NotFoundRepoRoot = "未找到仓库根（docker-compose.prod.yml）：请在仓库内运行，或用 -out 指定输出路径"
+const NotFoundRepoRoot = "未找到仓库根（deploy/docker-compose.prod.yml）：请在仓库内运行，或用 -out 指定输出路径"
 
 // EnvDefaultsGen gen-deploy：部署拓扑声明表 → deploy/env.defaults。
 // 输出目录（deploy/）在建库较早的阶段可能不存在，故开启 MkdirAll。
@@ -18,8 +18,8 @@ var EnvDefaultsGen = codegen.Spec{
 	Name: "gen-deploy",
 	Hint: "deploy/env.defaults",
 	Locate: func(dir string) (string, bool) {
-		// 仓库根判据：docker-compose.prod.yml
-		if st, err := os.Stat(filepath.Join(dir, "docker-compose.prod.yml")); err == nil && !st.IsDir() {
+		// 仓库根判据：deploy/docker-compose.prod.yml（ADR-0088 起部署面聚合到 deploy/）
+		if st, err := os.Stat(filepath.Join(dir, "deploy", "docker-compose.prod.yml")); err == nil && !st.IsDir() {
 			return filepath.Join(dir, "deploy", "env.defaults"), true
 		}
 		return "", false

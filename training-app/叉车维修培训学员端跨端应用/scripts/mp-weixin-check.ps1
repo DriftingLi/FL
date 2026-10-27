@@ -869,6 +869,9 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
 # 端口被残留会话占用而换端口这条事实必须进日志（结果行字段清单是固定的，塞不进新字段）
 if ($portSwitchNote) { Write-Log "PORT_SWITCH $portSwitchNote" }
+# #2001 阶段时间戳：录制器指向本门日志（纯追加 [STAGE]/STAGE_SUMMARY 行，不改门判据）
+. (Join-Path $PSScriptRoot 'lib\gate-stages.ps1')
+Initialize-GateStageRecorder -LogPath $logPath
 
 # ---------- -Doctor：逐层体检的记录与报告（只读；结论只用于诊断，**不是门的通过结论**）----------
 $script:DoctorRows = [System.Collections.Generic.List[object]]::new()
@@ -1662,6 +1665,7 @@ try {
     # HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）：-SkipBuild 下不接主程序
     if (-not $SkipBuild) {
         . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+        Start-GateStage -Name 'wait-hx'
         $hx = Wait-HxFree -CliExe $cliExe -TimeoutSeconds $HxWaitSeconds -NoWait:$HxNoWait -LogPath $logPath
     }
     Write-Host "proj  = $Project"
@@ -1671,6 +1675,7 @@ try {
     Write-Host "log   = $logPath"
 
     if (-not $SkipBuild) {
+        Start-GateStage -Name 'publish'
         # 0) **源 manifest 的 appid 前置断言（fail-closed）** —— 实测坑位（2026-09-12）：
         #    HBuilderX 在**首次导入 / 编译项目时会回写工作树的 manifest.json，把 mp-weixin.appid 置为 null**
         #    （实测 mtime 与 publish 启动同秒），于是产物 project.config.json 落成 touristappid，
@@ -1813,6 +1818,7 @@ try {
     # 0) Pre-flight（#1634，重试单元**之前**跑一次，幂等）：quit 清掉残留/堆叠的 IDE 实例 —— 脚本启动（IPC 链）
     #    下残留实例会让 open 把项目窗口叠成白屏（连菜单/Console 都没有；#1634 票面形态）。-Doctor 不跑
     #    （体检不操控 IDE）；quit/轮询失败只 [warn]，不判 exit 2，红线是不得用 Stop-Process 替代 quit。
+    Start-GateStage -Name 'automation'
     if (-not $Doctor) { Invoke-DevToolsPreflightQuit }
     $attempts = [Math]::Max(1, [int]$script:GatePlan['timeouts']['autoAttempts'])
     $retryDelaySeconds = [Math]::Max(0, [int]$script:GatePlan['timeouts']['autoRetryDelay'])
@@ -1982,6 +1988,7 @@ try {
         exit 2
     }
 
+    Start-GateStage -Name 'auto-probe'
     $probeStep = Get-GateStep -Plan $script:GatePlan -Id 'automator-probe'
     $probeArgs = $probeStep.argv
     $probeTimeoutSec = $probeStep.timeoutSeconds
@@ -2314,6 +2321,7 @@ try {
     $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"
+    Stop-GateStage
     Write-Log ("shots: " + (@($shotPng | ForEach-Object { "$($_.path) $(Get-Prop $_ 'width')x$(Get-Prop $_ 'height') $(Get-Prop $_ 'bytes')B" }) -join ' | '))
     if ($navSkip) {
         $skipLine = "navigation=SKIP reason=$navReason skippedAssertions=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedAssertions') -join ',')) " +

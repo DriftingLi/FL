@@ -5,7 +5,7 @@
     </div>
 
     <div class="mb-5 flex gap-3">
-      <el-input
+      <UiInput
         ref="inputRef"
         v-model="keyword"
         size="large"
@@ -18,7 +18,7 @@
         <template #prefix>
           <UiIcon name="search" />
         </template>
-      </el-input>
+      </UiInput>
       <UiButton variant="primary" size="large" :loading="loading" @click="submitSearch">搜索</UiButton>
     </div>
 
@@ -33,7 +33,7 @@
           <span
             v-for="kw in history"
             :key="kw"
-            class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-sm text-ink-2"
+            class="inline-flex items-center gap-1.5 rounded-pill bg-canvas px-3 py-1 text-sm text-ink-2"
           >
             <span class="cursor-pointer" @click="searchWith(kw)">{{ kw }}</span>
             <UiIcon name="x" class="cursor-pointer text-ink-3 hover:text-bad" @click="onRemoveHistory(kw)" />
@@ -83,7 +83,7 @@
                 <div
                   v-for="item in section.data.items"
                   :key="item.type + '-' + item.id"
-                  class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+                  class="rounded-ctl px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
                   :class="itemTarget(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                   @click="goItem(item)"
                 >
@@ -107,7 +107,7 @@
               <div
                 v-for="item in pageResult.items"
                 :key="item.type + '-' + item.id"
-                class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+                class="rounded-ctl px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
                 :class="itemTarget(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                 @click="goItem(item)"
               >
@@ -154,6 +154,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -20,6 +20,11 @@
  *   4. 表单域与布局类 EP（el-input / el-form / el-select / el-icon / el-row …）—— 尚未封装的例外。
  */
 import { isDirectRun, runGuardCli } from './lib/guard.mjs'
+import { visibleTemplateLines } from './lib/vue-template.mjs'
+
+// 判定面（根 <template> 可见行）的实现住在 lib/vue-template.mjs：check-icons 与本文件、以及
+// check-ui-intent（#1982）共用同一份。导出面保留，历史 import 面不变。
+export { visibleTemplateLines }
 
 /** 守卫集：已收敛到封装层的控件，业务代码出现即违规。 */
 export const GUARDED_CONTROLS = [
@@ -44,53 +49,7 @@ export function isAllowedPath(filePath) {
   return ALLOWED_PATH_SEGMENTS.some((seg) => normalized.includes(seg))
 }
 
-/**
- * 取根 <template> 块的可见行（1-based 行号 + 去掉注释后的文本）。
- * 无根模板（如纯 script 组件）→ 空数组，即无判定面。
- */
-export function visibleTemplateLines(source) {
-  const lines = String(source).split('\n')
-  let start = -1
-  let end = -1
-  for (let i = 0; i < lines.length; i++) {
-    if (start < 0) {
-      if (/^\s*<template[\s>]/.test(lines[i])) start = i + 1
-      continue
-    }
-    // 取**最后一个**闭合标签：具名插槽的 <template #footer> 也会出现 </template>，
-    // 若取第一个就会在插槽处提前收尾 —— 那等于把文件后半段的模板静默漏检（假绿）。
-    if (/^\s*<\/template>\s*$/.test(lines[i])) end = i
-  }
-  if (start < 0) return []
-  if (end < 0) end = lines.length
 
-  const out = []
-  let inComment = false
-  for (let i = start; i < end; i++) {
-    const raw = lines[i]
-    let text = raw
-    if (inComment) {
-      const close = text.indexOf('-->')
-      if (close < 0) continue
-      text = text.slice(close + 3)
-      inComment = false
-    }
-    // 同一行可能有多段注释：循环剥离
-    for (;;) {
-      const open = text.indexOf('<!--')
-      if (open < 0) break
-      const close = text.indexOf('-->', open + 4)
-      if (close < 0) {
-        text = text.slice(0, open)
-        inComment = true
-        break
-      }
-      text = text.slice(0, open) + ' ' + text.slice(close + 3)
-    }
-    out.push({ line: i + 1, text, raw })
-  }
-  return out
-}
 
 /** 单文件组件源码 → 违规项（不做路径放行判断，供表驱动自检直接喂文本）。 */
 export function findViolations(source) {

@@ -4,9 +4,9 @@
 # ======================================================================
 # 在目标服务器上执行一次，用于初始化部署环境。
 # 用法（在服务器上以 root 或 sudo 用户执行）：
-#   curl -sSL https://raw.githubusercontent.com/.../scripts/setup-server.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/.../deploy/setup-server.sh | bash
 # 或手动执行：
-#   bash setup-server.sh
+#   bash deploy/setup-server.sh（仓库根目录）
 # ======================================================================
 set -euo pipefail
 

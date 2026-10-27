@@ -89,7 +89,7 @@ function onMoreSelect(key: string) {
     :class="[
       compact ? 'gap-2 py-3' : 'gap-3 py-4',
       reply.is_accepted
-        ? 'is-accepted relative -mx-2 my-1.5 rounded-[8px] bg-ok-soft p-3 pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-ok'
+        ? 'is-accepted relative -mx-2 my-1.5 rounded-ctl bg-ok-soft p-3 pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-pill before:bg-ok'
         : ''
     ]"
   >
@@ -145,7 +145,7 @@ function onMoreSelect(key: string) {
         <div class="reply-actions-right ml-auto flex items-center gap-3">
           <button
             type="button"
-            class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none text-ink-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:underline"
+            class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-ctl border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none text-ink-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:underline"
             @click="emit('reply-to', reply)"
           >
             <UiIcon name="message-circle" />

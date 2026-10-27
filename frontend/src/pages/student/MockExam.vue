@@ -5,18 +5,10 @@
         <h2>{{ paperMode ? `真题考试：${paperTitle}` : '模拟考试' }}</h2>
         <el-form v-if="!paperMode" :model="examForm" label-width="100px">
           <el-form-item label="题目数量">
-            <el-select v-model="examForm.count">
-              <el-option label="20 题" :value="20" />
-              <el-option label="40 题（默认）" :value="40" />
-              <el-option label="60 题" :value="60" />
-            </el-select>
+            <UiSelect v-model="examForm.count" :options="[{ label: '20 题', value: 20 }, { label: '40 题（默认）', value: 40 }, { label: '60 题', value: 60 }]" />
           </el-form-item>
           <el-form-item label="考试时长">
-            <el-select v-model="examForm.duration">
-              <el-option label="60分钟" :value="60" />
-              <el-option label="90分钟" :value="90" />
-              <el-option label="120分钟" :value="120" />
-            </el-select>
+            <UiSelect v-model="examForm.duration" :options="[{ label: '60分钟', value: 60 }, { label: '90分钟', value: 90 }, { label: '120分钟', value: 120 }]" />
           </el-form-item>
           <el-form-item>
             <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
@@ -60,7 +52,7 @@
       <UiCard>
         <h2>考试结果</h2>
         <div class="my-5 text-center">
-          <div class="score-circle mb-2.5 inline-flex size-[150px] flex-col items-center justify-center rounded-full border-[6px] border-bad" :class="examResult.accuracy >= 60 ? 'border-ok' : ''">
+          <div class="score-circle mb-2.5 inline-flex size-[150px] flex-col items-center justify-center rounded-pill border-[6px] border-bad" :class="examResult.accuracy >= 60 ? 'border-ok' : ''">
             <span class="text-4xl font-bold">{{ examResult.total_score }}</span>
             <span class="text-sm text-ink-3">/{{ examResult.max_score }}</span>
           </div>
@@ -77,7 +69,7 @@
         <div
           v-for="(d, idx) in examResult.details"
           :key="idx"
-          class="detail-item mb-2 rounded-[8px] p-2.5"
+          class="detail-item mb-2 rounded-ctl p-2.5"
           :class="d.is_correct === true ? 'bg-ok-soft' : d.is_correct === false ? 'bg-bad-soft' : ''"
         >
           <p><strong>第{{ Number(idx) + 1 }}题：</strong>{{ d.content }}</p>
@@ -104,6 +96,7 @@ import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vu
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -33,37 +33,19 @@
         </el-form-item>
 
         <el-form-item label="所属证件" required>
-          <el-select v-model="form.credential_id" placeholder="必选" class="w-full">
-            <el-option-group label="特种作业">
-              <el-option
-                v-for="c in credentials.filter((x) => x.category === 'special_operation')"
-                :key="c.id"
-                :label="c.name"
-                :value="c.id"
-              />
-            </el-option-group>
-            <el-option-group label="技能等级">
-              <el-option
-                v-for="c in credentials.filter((x) => x.category === 'skill_level')"
-                :key="c.id"
-                :label="c.name"
-                :value="c.id"
-              />
-            </el-option-group>
-          </el-select>
+          <UiSelect v-model="form.credential_id" :groups="credentialGroups" placeholder="必选" class="w-full" />
         </el-form-item>
 
         <el-form-item label="考点标签">
-          <el-select
+          <UiSelect
             v-model="form.tag_ids"
+            :options="tagOptions"
             multiple
             filterable
             collapse-tags
             placeholder="选择标签（可多选）"
             class="w-full"
-          >
-            <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
-          </el-select>
+          />
         </el-form-item>
 
         <el-form-item label="题干" required>
@@ -165,7 +147,7 @@ import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
-import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
+import UiSelect, { type UiSelectOption, type UiSelectGroup } from '@/components/ui/UiSelect.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -195,6 +177,23 @@ const TYPE_OPTIONS: UiSelectOption[] = [
 const submitting = ref(false)
 const tags = ref<{ id: number; name: string }[]>([])
 const credentials = ref<CredentialDict[]>([])
+/** 所属证件：按类别分两组（原 el-option-group 的形态） */
+const credentialGroups = computed<UiSelectGroup[]>(() => [
+  {
+    label: '特种作业',
+    options: credentials.value
+      .filter((c) => c.category === 'special_operation')
+      .map((c) => ({ label: c.name, value: c.id }))
+  },
+  {
+    label: '技能等级',
+    options: credentials.value
+      .filter((c) => c.category === 'skill_level')
+      .map((c) => ({ label: c.name, value: c.id }))
+  }
+])
+/** 考点标签 → {label,value} */
+const tagOptions = computed<UiSelectOption[]>(() => tags.value.map((t) => ({ label: t.name, value: t.id })))
 const multiAnswer = ref<string[]>([])
 const imageUploading = ref(false)
 

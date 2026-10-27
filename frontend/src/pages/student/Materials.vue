@@ -12,21 +12,7 @@
 
     <template v-if="activeTab === 'material'">
     <div class="mb-4">
-      <el-select
-        v-model="courseFilter"
-        placeholder="全部课程"
-        clearable
-        filterable
-        class="w-[280px]"
-        @change="handleFilterChange"
-      >
-        <el-option
-          v-for="course in courses"
-          :key="course.course_id"
-          :label="course.name"
-          :value="course.course_id"
-        />
-      </el-select>
+      <UiSelect v-model="courseFilter" placeholder="全部课程" clearable filterable class="w-[280px]" @change="handleFilterChange" :options="(courses).map((course) => ({ label: course.name, value: course.course_id }))" />
     </div>
 
     <div class="min-h-[200px] rounded-card bg-panel shadow-card">
@@ -50,7 +36,7 @@
           :style="staggerStyle(i)"
         >
           <div
-            class="flex size-11 shrink-0 items-center justify-center rounded-[8px]"
+            class="flex size-11 shrink-0 items-center justify-center rounded-ctl"
             :style="{ background: typeConfig(item.content_type).bg, color: typeConfig(item.content_type).color }"
           >
             <UiIcon :name="typeConfig(item.content_type).icon" :size="20" />
@@ -108,6 +94,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 import ContributionTab from './ContributionTab.vue'
 
 const activeTab = ref<'material' | 'contribution'>('material')

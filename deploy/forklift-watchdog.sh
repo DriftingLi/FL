@@ -6,7 +6,7 @@
 # 提示、没人看得到故障。本脚本把「没人知道」变成「6 分钟内有一封邮件」。
 #
 # 装法（pve-02，生产应用宿主）：
-#   install -m 755 scripts/forklift-watchdog.sh /usr/local/bin/forklift-watchdog.sh
+#   install -m 755 deploy/forklift-watchdog.sh /usr/local/bin/forklift-watchdog.sh
 #   install -m 644 deploy/systemd/forklift-watchdog.{service,timer} \
 #       deploy/systemd/forklift-alert@.service /etc/systemd/system/
 #   printf '%s\n' 'WATCH_TO_EMAIL=you@example.com' > /etc/forklift-watchdog.env  # 再补 SMTP_*
@@ -131,7 +131,7 @@ probe_public_brands() {
 
 # 前端「在跑」≠「在服务」：frontend 是 network_mode: host，compose 里 healthcheck 被显式
 # disable（#496 血账：host 网络下容器内 wget 跟随 301 → 证书不匹配 → 误报 unhealthy）。
-# 判据与 deploy-remote.sh 的宿主侧探活同口径（#483）：打 **api.<domain> 的 /health，只认 200**。
+# 判据与 deploy/deploy.py 的宿主侧探活同口径（#483）：打 **api.<domain> 的 /health，只认 200**。
 #
 # 为什么不再打 https://localhost（#1760，2026-10-22 切换日实测）：
 # 那是 nginx 时代的事实 —— 443 上有 default_server 兜任何 Host。反代换成 Caddy 后没有

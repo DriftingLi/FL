@@ -11,6 +11,8 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const props = defineProps<{
   directions: CatalogDirectionNode[]
@@ -230,27 +232,16 @@ defineExpose({ open })
   <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="560px">
     <el-form ref="courseFormRef" :model="drawerForm" :rules="courseRules" label-width="96px">
       <el-form-item label="所属证件" prop="credential_id">
-        <el-select v-model="drawerForm.credential_id" placeholder="必选" style="width: 100%">
-          <el-option-group label="特种作业">
-            <el-option v-for="c in credentials.filter((x: any) => x.category === 'special_operation')" :key="c.id" :label="c.name" :value="c.id" />
-          </el-option-group>
-          <el-option-group label="技能等级">
-            <el-option v-for="c in credentials.filter((x: any) => x.category === 'skill_level')" :key="c.id" :label="c.name" :value="c.id" />
-          </el-option-group>
-        </el-select>
+        <UiSelect v-model="drawerForm.credential_id" placeholder="必选" style="width: 100%" :groups="[{ label: '特种作业', options: credentials.filter((x) => x.category === 'special_operation').map((c) => ({ label: c.name, value: c.id })) }, { label: '技能等级', options: credentials.filter((x) => x.category === 'skill_level').map((c) => ({ label: c.name, value: c.id })) }]" />
       </el-form-item>
       <el-form-item label="课程名称" prop="name">
-        <el-input v-model="drawerForm.name" placeholder="课程名称" maxlength="50" />
+        <UiInput v-model="drawerForm.name" placeholder="课程名称" :maxlength="50" />
       </el-form-item>
       <el-form-item label="专业方向" prop="specialty_id">
-        <el-select v-model="drawerForm.specialty_id" placeholder="必选" style="width: 100%">
-          <el-option v-for="d in directions" :key="d.specialty_id" :label="d.name" :value="d.specialty_id" />
-        </el-select>
+        <UiSelect v-model="drawerForm.specialty_id" placeholder="必选" style="width: 100%" :options="(directions).map((d) => ({ label: d.name, value: d.specialty_id }))" />
       </el-form-item>
       <el-form-item label="课程等级" prop="level_id">
-        <el-select v-model="drawerForm.level_id" placeholder="必选" style="width: 100%">
-          <el-option v-for="l in levels" :key="l.level_id" :label="l.name" :value="l.level_id" />
-        </el-select>
+        <UiSelect v-model="drawerForm.level_id" placeholder="必选" style="width: 100%" :options="(levels).map((l) => ({ label: l.name, value: l.level_id }))" />
       </el-form-item>
       <el-form-item label="学时">
         <div class="cc-hours">
@@ -265,30 +256,13 @@ defineExpose({ open })
         <span class="cc-hours-unit">分钟</span>
       </el-form-item>
       <el-form-item label="证书模板">
-        <el-select v-model="drawerForm.certificate_template_id" clearable placeholder="不关联" style="width: 100%">
-          <el-option v-for="t in certificateTemplates" :key="t.id" :label="t.name" :value="t.id" />
-        </el-select>
+        <UiSelect v-model="drawerForm.certificate_template_id" clearable placeholder="不关联" style="width: 100%" :options="(certificateTemplates).map((t) => ({ label: t.name, value: t.id }))" />
       </el-form-item>
       <el-form-item label="前置课程">
-        <el-select
-          v-model="drawerForm.prerequisite_course_ids"
-          multiple
-          filterable
-          collapse-tags
-          placeholder="选择需先完成的课程"
-          style="width: 100%"
-        >
-          <el-option
-            v-for="c in courseOptions"
-            :key="c.course_id"
-            :label="c.name"
-            :value="c.course_id"
-            :disabled="c.course_id === drawerForm.course_id"
-          />
-        </el-select>
+        <UiSelect v-model="drawerForm.prerequisite_course_ids" multiple filterable collapse-tags placeholder="选择需先完成的课程" style="width: 100%" :options="(courseOptions).map((c) => ({ label: c.name, value: c.course_id, disabled: c.course_id === drawerForm.course_id }))" />
       </el-form-item>
       <el-form-item label="课程简介">
-        <el-input v-model="drawerForm.description" type="textarea" :rows="2" maxlength="500" />
+        <UiInput v-model="drawerForm.description" type="textarea" :rows="2" :maxlength="500" />
       </el-form-item>
       <el-form-item label="上架状态">
         <UiRadioGroup v-model="drawerForm.status">
@@ -312,12 +286,12 @@ defineExpose({ open })
       <div v-for="(ch, i) in drawerChapters" :key="ch.chapter_id" class="cc-chapter-row">
         <span class="cc-chapter-idx">{{ i + 1 }}</span>
         <span class="cc-chapter-title">{{ ch.title }}</span>
-        <el-link :underline="'never'" @click="openChapterDialog(ch)">编辑</el-link>
-        <el-link :underline="'never'" @click="moveChapter(ch, -1)">上移</el-link>
-        <el-link :underline="'never'" @click="moveChapter(ch, 1)">下移</el-link>
+        <UiButton link size="small" @click="openChapterDialog(ch)">编辑</UiButton>
+        <UiButton link size="small" @click="moveChapter(ch, -1)">上移</UiButton>
+        <UiButton link size="small" @click="moveChapter(ch, 1)">下移</UiButton>
         <el-popconfirm title="确定删除该章节？" @confirm="handleDeleteChapter(ch)">
           <template #reference>
-            <el-link type="danger" :underline="'never'">删除</el-link>
+            <UiButton variant="danger" link size="small">删除</UiButton>
           </template>
         </el-popconfirm>
       </div>
@@ -334,7 +308,7 @@ defineExpose({ open })
   <UiDialog v-model="chapterDialogVisible" :title="chapterForm.chapter_id ? '编辑章节' : '新增章节'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submitChapter">
     <el-form ref="chapterFormRef" :model="chapterForm" :rules="chapterRules" label-width="90px">
       <el-form-item label="章节标题" prop="title">
-        <el-input v-model="chapterForm.title" placeholder="章节标题" maxlength="100" />
+        <UiInput v-model="chapterForm.title" placeholder="章节标题" :maxlength="100" />
       </el-form-item>
       <el-form-item label="时长(分钟)">
         <el-input-number v-model="chapterForm.duration" :min="0" :max="9999" style="width: 100%" />

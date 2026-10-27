@@ -92,7 +92,7 @@ const chipClass = computed(() => {
 /** 基础类：无边框变体去掉 border 与药丸内边距（图标+计数紧贴，照截图的操作行形态） */
 const baseClass = computed(() =>
   props.borderless
-    ? 'inline-flex cursor-pointer items-center gap-1 rounded-[6px] border-0 bg-transparent px-1.5 py-1 text-xs font-medium leading-none transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50'
+    ? 'inline-flex cursor-pointer items-center gap-1 rounded-ctl border-0 bg-transparent px-1.5 py-1 text-xs font-medium leading-none transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50'
     : 'inline-flex cursor-pointer items-center gap-1.5 rounded-pill border px-2.5 py-1.5 text-xs font-medium leading-none transition-all duration-150 hover:-translate-y-px disabled:pointer-events-none disabled:opacity-50'
 )
 </script>

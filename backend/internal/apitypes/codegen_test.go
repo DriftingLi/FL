@@ -25,7 +25,7 @@ func specPath(t *testing.T) string {
 func TestFrontendAPITypesInSync(t *testing.T) {
 	spec, err := LoadSpec(specPath(t))
 	if err != nil {
-		t.Fatalf("读取 swagger 产物失败（先 cd backend && make swagger）: %v", err)
+		t.Fatalf("读取 swagger 产物失败（先仓库根 make swagger）: %v", err)
 	}
 	if len(Domains) == 0 {
 		t.Fatal("声明表为空，拒绝静默通过")

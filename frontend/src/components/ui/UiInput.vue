@@ -10,7 +10,11 @@
  */
 import { ref } from 'vue'
 
-const value = defineModel<string>({ default: '' })
+/**
+ * `number` / `null` 也要收：存量里有 `v-model.number` 的数值输入（薪资区间）与
+ * `ref<number | null>` 的绑定，容器档位与封装层的目的是**收口形态**，不是收窄值域。
+ */
+const value = defineModel<string | number | null>({ default: '' })
 
 /**
  * 内层 el-input 实例：只为**选区编辑**（Markdown 工具栏）暴露原生 textarea。
@@ -26,7 +30,7 @@ withDefaults(
     disabled?: boolean
     clearable?: boolean
     /** textarea / password 等；默认 text，与 el-input 自身默认值一致 */
-    type?: 'text' | 'textarea' | 'password'
+    type?: 'text' | 'textarea' | 'password' | 'number'
     /** 仅 type="textarea" 生效。不传时 el-input 取自身默认值 2 */
     rows?: number
     /** 最大输入长度。EP 的 show-word-limit 依赖它，不传则无计数 */
@@ -41,6 +45,11 @@ withDefaults(
      *        —— 论坛输入区用它，让高亮落在外层卡片边框上而不是文本框本身。
      */
     variant?: 'boxed' | 'bare'
+    /**
+     * 以下四项**不是 prop，是插槽**（#1981 批次 0）：`#prefix` / `#suffix` / `#prepend` / `#append`
+     * 原样透传给 `el-input`。存量里 `#prefix` 命中 6 个文件（搜索框放大镜、密码框锁标），
+     * 不补这一处，管理端与认证页那两批就迁不动 —— 他们只能留在裸 `el-input` 上。
+     */
   }>(),
   {
     size: 'default',
@@ -81,7 +90,13 @@ defineExpose({
     :maxlength="maxlength"
     :show-word-limit="showWordLimit"
     :autosize="autosize"
-  />
+  >
+    <!-- 四个槽按需透传：不传就不渲染，el-input 侧看到的是「没有这个插槽」而不是空壳 -->
+    <template v-if="$slots.prepend" #prepend><slot name="prepend" /></template>
+    <template v-if="$slots.append" #append><slot name="append" /></template>
+    <template v-if="$slots.prefix" #prefix><slot name="prefix" /></template>
+    <template v-if="$slots.suffix" #suffix><slot name="suffix" /></template>
+  </el-input>
 </template>
 
 <style scoped>

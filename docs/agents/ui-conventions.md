@@ -50,7 +50,7 @@
 | **图标动作** | 同屏内快速操作 / 局部、单对象 / 多为视图级、可逆 | 原生 `<button>` + `UiIcon`（命中区按 ADR-0078：桌面 28 / 移动 40） | 39（封装层内 6 / 组件 26 / 页面 7） |
 | **互动计数动作** | 表达或撤销一次社交动作 / 写一次计数 / 可撤销、单条 | `UiActionChip` | 7 |
 | **快捷入口** | 一次点击填好查询或输入 / 只读查询 / 当前面板 | `UiCapsule` | 2 |
-| **菜单收纳** | 收低频、破坏性动作 / 打开菜单，不直接改数据 / 可取消 | `UiMoreMenu`（两档触发：卡片/列表项 `⋯` / 表格「操作 ▾」） | 12（+ 2 处非收纳不迁：顶栏用户菜单、播放器倍速） |
+| **菜单收纳** | 收低频、破坏性动作 / 打开菜单，不直接改数据 / 可取消 | `UiMoreMenu`（两档触发：卡片/列表项 `⋯` / 表格「操作 ▾」）；**触发方式不是「⋯ 按钮」的三处保留原生 `el-dropdown`**：顶栏用户菜单 / 页签右键菜单 / 播放器倍速 | 16（含表格行内动作；3 处非收纳不迁，见左）。形态判据见下「行内动作的形态规则」 |
 | **主题切换** | 换外观 / 只改本地偏好 / 随时切回 | `ThemeToggle` | 3 |
 | **参数选择** | 换一组筛选条件，或选一个会被保存的取值 / 重新查询或写入设置 / 当前列表或字段 | `UiSegmentTabs` | 18（+ `el-tabs` 2 待迁：`ProfileReview`、`ForumManage` 内层） |
 | **视图切换** | 换呈现方式（编写/预览）/ 不改数据 / 当前输入区 | `UiUnderlineTabs` | 2 |
@@ -58,8 +58,8 @@
 | **布尔开关** | 立即生效 / 立即写入 / 单字段 | `UiSwitch` | 9 |
 | **多选** | 选若干项再提交 / 提交时写入 / 单表单 | `UiCheckboxGroup`（组内 `el-checkbox` 登记） | 3 |
 | **单选组** | 互斥选一个再提交 / 提交时写入 / 单表单 | `UiRadioGroup`（组内 `el-radio` / `el-radio-button` 登记） | 8 |
-| **下拉选择** | 从数据源选一个 / 提交时写入 / 单字段 | `UiSelect` | 3（+ `el-select` 57 待迁，按域分批） |
-| **文本输入** | 输入文本 / 提交时写入 / 单字段 | `UiInput` | 15（+ `el-input` 169 待迁，按域分批） |
+| **下拉选择** | 从数据源选一个 / 提交时写入 / 单字段 | `UiSelect` | 3（+ `el-select` 22 待迁，按域分批；批次与顺序见 [1981 方案](../design/1981-表单域收口方案.md)） |
+| **文本输入** | 输入文本 / 提交时写入 / 单字段 | `UiInput` | 15（+ `el-input` 101 待迁，按域分批；同上。逐文件清单见 [1981 盘点](../design/1981-表单域存量盘点.md)） |
 | **结构化值输入** | 数值 / 日期 / 级联 / 提交时写入 / 单字段 | 原生 `el-input-number` / `el-date-picker` / `el-cascader`（登记） | 25 |
 | **文件上传** | 选或拖文件 / 提交时写入 / 可重选 | `UiUpload` | 5 |
 | **分面筛选** | 按维度收窄结果并显示计数 / 重新查询 / 当前列表 | `FacetCard` + `FacetItem`（**成对唯一**，不拆用） | 卡片 6 + 项 13 / 3 页 |
@@ -98,10 +98,23 @@
 | 计数动画 | `UiCountTo`（只经 `UiStatCard` 使用，不当独立件落点） | 1（在 `UiStatCard` 内） |
 | 分割线 | `UiDivider` | 0（+ `el-divider` 4 待迁） |
 | 头像 | `el-avatar`（原生，登记） | 15 |
-| 图片 | `el-image` + 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
+| 图片 | `el-image` / `el-image-viewer`（EP 自带全屏查看器，`el-image` 配套）+ 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
 | 折叠面板 | `el-collapse`（原生，登记） | 2 / 6 |
 | 描述列表 | `el-descriptions`（原生，登记） | 1 / 6 |
 | 布局栅格 | `el-row` / `el-col`（EP 布局，登记） | 4 / 10 |
+| 表单容器 | `el-form`（原生，登记；字段壳 `el-form-item` 见下「子件」） | 38 |
+
+**子件**（随父件：只在某个父件内部合法，父件被登记即子件被登记。它们没有独立意图，不参与判重，也不单独落点）：
+
+| 子件 | 父件 |
+| --- | --- |
+| `el-form-item` | `el-form` |
+| `el-option` / `el-option-group` | `el-select` |
+| `el-table-column` | `el-table` |
+| `el-tab-pane` | `el-tabs` |
+| `el-collapse-item` | `el-collapse` |
+| `el-descriptions-item` | `el-descriptions` |
+| `el-dropdown-menu` / `el-dropdown-item` | `el-dropdown` |
 
 **登记表怎么用**（三条，回答「拿不准怎么办」）：
 
@@ -109,10 +122,26 @@
 2. **容器查档位表，入口查登记表**：卡片、面板、抽屉壳这类容器不判意图（ADR-0083 决策 3），只管四项档位；只有**可点击的入口**才受「一意图一形态」约束。
 3. **原生 + 登记不是欠账**：`el-tabs`（面板切换）、`el-drawer`、`el-popconfirm`、`el-avatar`、`el-collapse`、`el-descriptions` 是**判过之后决定不封装**的（落点少、结构样式差异大、薄封装挡不住结构），不是「还没迁」。哪天落点数或结构需求变了，先改这张表再动代码。
 
+### 行内动作的形态规则（#2005）
+
+表格「操作」列只有两种形态，按**列内可能出现的最大动作数**判（不按行动态切换 —— 否则同一页会出现「同行不同形」）：
+
+| 条件 | 形态 |
+| --- | --- |
+| 恒为 **1** 个动作 | 平铺单个 `UiButton link` |
+| **≥2** 个动作 | `UiMoreMenu trigger="text"`（「操作 ▾」），列宽固定 **90** |
+| **例外**：审核 / 处置队列的**结论动作**（通过 / 驳回 / 下架 / 标记已处理） | 平铺 `link`，保一次点击 |
+
+- **为什么留这个例外**：审核队列的工作循环就是「逐行判定」，每行多一次点击 = 队列处理速度下降。判据是动作的性质（对一条待处理记录下结论），不是页面名 —— 别拿它当「不想进菜单」的通用逃生口。
+- **破坏性动作只进菜单**，`divided: true` 与上一项隔开；确认走 `useConfirm`（模态），行内 `el-popconfirm` 不再用于删除。
+- **平铺一律 `link` 文字档**：行内一排描边 / 实心小按钮在密集表格里最抢眼，与「密度中偏高」的基调相反。
+- **暂时不允许的菜单项**用 `disabled` + `hint`（原生 title 说明原因），**不要把它藏掉** —— 藏掉会让人以为没这个操作。
+- 判据的自动化：未来守卫可数 `items` 或按钮数核对本表（#1982 的登记制守卫预留了这个面）。
+
 ### 容器档位表（ADR-0083 / #1957）
 
 > 容器（卡片、面板、抽屉壳、区块框）的外观**只能取档内值**。页面本地容器类允许存在，但**只许取值，不许自造**。值只有两个出处：scoped 写 `var(--radius-*)` / `var(--space-*)`，模板写 `rounded-card` / `rounded-ctl` / `rounded-pill`（`tailwind.css` 的语义别名，解析到 `design-tokens.css`）。
-> 早于本表的写法怎么收敛，逐条清单在 [1957 附录](../design/1957-附录-scoped取值清单.md)。
+> 早于本表的写法怎么收敛、现在还剩什么，逐条清单在 [1957 附录](../design/1957-附录-scoped取值清单.md)（#1979 / #1980 收敛后用同一脚本重新生成）。
 
 **圆角（4 档）**
 
@@ -123,7 +152,11 @@
 | 胶囊 | `rounded-pill` / `--radius-full` | 9999px | 胶囊、标签、头像、圆点（`50%` 真圆等价） |
 | 零 | `rounded-none` | 0 | 贴边、表格内、无缝拼接 |
 
-越档归这里：**16px 一律回卡片档**（现存 7 处）；**6px / 4px / 3px / 10px 一律回控件档**（现存 42 处，其中裸 `rounded` 12 处）；**2px 归零档**；`0 var(--radius-full) var(--radius-full) 0`（侧栏项左贴边）登记例外。
+**收敛完成（#1979）**，越档 0 处：16px / 10px / 6px / 4px / 3px / 2px 与裸 `rounded` 已全部归位（scoped 侧写 `var(--radius-*)`，模板侧写 `rounded-card` / `rounded-ctl` / `rounded-pill`，含方向变体 `rounded-bl-ctl`）。
+
+三种写法**不算越档**、保留原样：`border-radius: 50%`（真圆，与胶囊档等价）、`border-radius: 0 !important`（零档值，`!important` 是对抗 vditor 内联样式的）、以及模板里的 `rounded-none`。
+
+**唯一登记例外**：`0 var(--radius-full) var(--radius-full) 0`（`AppSidebarItem` 的侧栏项左贴边）。
 
 **内边距（4 档，仅容器卡片）**
 
@@ -147,7 +180,14 @@
 | 悬起 | `shadow-raised` / `--shadow-md` | 可点卡片 hover |
 | 弹层 | `--shadow-lg` | 对话框 / 抽屉 / popper（EP 自带，页面不写） |
 
-**不是阴影的别写成阴影**：选中环（`0 0 0 2px …`）与 inset 描边环（`0 0 0 1px … inset`）用 `outline` / `border` 表达，现存 4 处待改。
+**收敛完成（#1980）**：`--shadow-sm` 不再被页面引用。它原本是 `xs` 与 `md` 之间的第五档，而仅剩的 3 处全都落在 hover / elevated 态 —— 归到卡片档会与底座同档（hover 看不出变化），所以按档位表落到**悬起档**（`var(--shadow-md)`），卡片的高亮阶梯因此固定为 `xs`（静置）→ `md`（悬起）。
+
+**不是阴影的别写成阴影**：选中环用 `outline` 表达（`.credential-card.active` 的 `0 0 0 2px` 已改，#1980）。
+
+两类**登记例外**（各自有理由，不是漏改）：
+
+- **着色按下光晕**（2 处，`AuthPageShell` 的备用登录方式）：`group-aria-pressed:shadow-[0_4px_10px_rgba(…)]`。着色光晕用 4 档中性 token 表达不出来，去掉则按下态丢掉品牌色反馈。
+- **inset 描边环**（3 处，`AuthPageShell` 的 `.el-input__wrapper` 常态 / hover / 聚焦）：这是 Element Plus 给输入框画边框的固有手法（`border: none` + `0 0 0 1px … inset`），我们的代码只换颜色、不换机制。改成 `border` 要连带覆写 `box-shadow: none`，还会绕开 EP 自己的 `transition: box-shadow`，收益不抵风险。
 
 ### 状态词表（联络授权 / 投递）（第十一波 #1103 / ADR-0056 §8）
 
