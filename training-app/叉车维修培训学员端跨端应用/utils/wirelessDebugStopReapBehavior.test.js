@@ -12,7 +12,7 @@
  *   B5+B7 合并件 185.6s 超腿内总/4，不拆则四片配平无解）。
  * - 其余三件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugKeepRecoverBehavior.test.js（B3）、
  *   wirelessDebugStopHangBehavior.test.js（B7 收挂在飞的 adb 调用）
- * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40443976624 重采；StopReap/StopHang 两键按本机逐用例占比保和拆分）。
+ * - 拆分后各件耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40452269933 重采）。
  *
  *   B5 `watch` 起了后台 keep ⇒ `stop` 必须**按同一个 pid** 收掉、收完进程真没了。
  *      血账：入仓改名后归属判据里写死的旧文件名不再命中 ⇒ watch 恒报 spawn_unconfirmed、

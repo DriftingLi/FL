@@ -11,7 +11,7 @@
  *   （run 40443976624：B5+B7 合并件 185.6s 超腿内总/4，不单独成件则四片配平无解）；其回归钉语义见下。
  * - 其余三件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugKeepRecoverBehavior.test.js（B3）、
  *   wirelessDebugStopReapBehavior.test.js（B5 按 pid 收 stop）
- * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40443976624 重采；StopReap/StopHang 两键按本机逐用例占比保和拆分）。
+ * - 拆分后各件耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40452269933 重采）。
  *
  *   B7 `stop` 收 keep 时必须连**正在跑的那次 adb 调用**一起收（#1718）。
  *      血账：只杀 keep 的 pid 时，Windows 上那次调用还多一层 cmd.exe；桩进程活下来并握着 keep 从

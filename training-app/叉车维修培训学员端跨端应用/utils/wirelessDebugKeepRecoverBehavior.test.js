@@ -10,7 +10,7 @@
  * - 本件单列理由：B3 是唯一带「长驻进程 + mDNS 重发现」形态的用例，单列后可独立计时与加速，不牵连选路语义用例。
  * - 其余三件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugStopReapBehavior.test.js（B5 按 pid 收 stop）、
  *   wirelessDebugStopHangBehavior.test.js（B7 收挂在飞的 adb 调用）
- * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40443976624 重采；StopReap/StopHang 两键按本机逐用例占比保和拆分）。
+ * - 拆分后各件耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40452269933 重采）。
  *
  *   B3 设备从 `adb devices` 里消失 ⇒ keep 自己经 mDNS 重发现并接回（LOST → SAMEPORT/NEWPORT → RECOVERED），
  *      且全程不发 kill-server（adb server 与 HBuilderX 共享，行为层再钉一次）。

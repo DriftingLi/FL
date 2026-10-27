@@ -10,7 +10,7 @@
  * - 本件单列理由：B6/B1/B2 同属 ensure 的三条选路语义（fail-closed / 死记录在前 / 回落 mDNS），B4 开关写回同为「单发命令、无后台进程」形态且共享 no_channel / fail-closed 边界。
  * - 其余三件：wirelessDebugKeepRecoverBehavior.test.js（B3 keep 自愈）、wirelessDebugStopReapBehavior.test.js（B5 按 pid 收 stop）、
  *   wirelessDebugStopHangBehavior.test.js（B7 收挂在飞的 adb 调用）
- * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40443976624 重采；StopReap/StopHang 两键按本机逐用例占比保和拆分）。
+ * - 拆分后各件耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40452269933 重采）。
  *
  *   B6 一条候选都试不活 ⇒ ensure 判 unconnected、退出码非 0、对设备零写入（fail-closed 真断言）。
  *      防的是「连不上却报 connected」——门照着那个假 serial 去跑就是白跑一轮真机。
