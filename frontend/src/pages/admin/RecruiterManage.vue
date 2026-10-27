@@ -40,7 +40,7 @@ style="width: 280px"
 <el-table-column prop="created_at" label="创建时间" width="180" align="center">
 <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
 </el-table-column>
-<el-table-column label="操作" width="110" fixed="right" align="center">
+<el-table-column label="操作" width="90" fixed="right" align="center">
 <template #default="{ row }">
 <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
 </template>

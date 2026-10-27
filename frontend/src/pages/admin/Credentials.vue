@@ -37,14 +37,9 @@
             <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</UiTag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right" align="center">
+        <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <UiButton variant="primary" link size="small" @click="openDialog(row)">编辑</UiButton>
-            <el-popconfirm title="确定删除？" @confirm="handleDelete(row)">
-              <template #reference>
-                <UiButton variant="danger" link size="small">删除</UiButton>
-              </template>
-            </el-popconfirm>
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>
@@ -103,6 +98,8 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 const list = ref<CredentialDict[]>([])
 
@@ -210,8 +207,20 @@ async function handleSubmit() {
   }
 }
 
+/** 行内「操作」菜单：编辑 / 删除（删除进菜单后确认走模态，与其它列表页一致） */
+const actionItems = (_row: CredentialDict): UiMoreMenuItem[] => [
+  { key: 'edit', label: '编辑' },
+  { key: 'delete', label: '删除', divided: true }
+]
+
+function handleAction(key: string, row: CredentialDict) {
+  if (key === 'edit') openDialog(row)
+  else if (key === 'delete') handleDelete(row)
+}
+
 async function handleDelete(row: CredentialDict) {
   try {
+    await useConfirm().confirmDanger('确定删除该证件？删除后引用它的课程会失去关联。', '删除证件')
     await credentialApi.deleteCredential(row.id)
     ElMessage.success('已删除')
     await load()
