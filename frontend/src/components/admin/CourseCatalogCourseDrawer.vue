@@ -312,12 +312,12 @@ defineExpose({ open })
       <div v-for="(ch, i) in drawerChapters" :key="ch.chapter_id" class="cc-chapter-row">
         <span class="cc-chapter-idx">{{ i + 1 }}</span>
         <span class="cc-chapter-title">{{ ch.title }}</span>
-        <el-link :underline="'never'" @click="openChapterDialog(ch)">编辑</el-link>
-        <el-link :underline="'never'" @click="moveChapter(ch, -1)">上移</el-link>
-        <el-link :underline="'never'" @click="moveChapter(ch, 1)">下移</el-link>
+        <UiButton link size="small" @click="openChapterDialog(ch)">编辑</UiButton>
+        <UiButton link size="small" @click="moveChapter(ch, -1)">上移</UiButton>
+        <UiButton link size="small" @click="moveChapter(ch, 1)">下移</UiButton>
         <el-popconfirm title="确定删除该章节？" @confirm="handleDeleteChapter(ch)">
           <template #reference>
-            <el-link type="danger" :underline="'never'">删除</el-link>
+            <UiButton variant="danger" link size="small">删除</UiButton>
           </template>
         </el-popconfirm>
       </div>

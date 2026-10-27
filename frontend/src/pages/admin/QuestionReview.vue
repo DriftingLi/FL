@@ -83,7 +83,7 @@
         <p v-if="currentQuestion.scoring_criteria"><strong>评分标准：</strong>{{ currentQuestion.scoring_criteria }}</p>
         <div v-if="currentQuestion.image_url" style="margin-top: 10px">
           <p><strong>图片：</strong></p>
-          <img :src="currentQuestion.image_url" style="max-width: 100%; max-height: 300px; border-radius: 8px" />
+          <img :src="currentQuestion.image_url" style="max-width: 100%; max-height: 300px; border-radius: var(--radius-md)" />
         </div>
         <UiAlert
           v-if="currentQuestion.status === 'draft' && currentQuestion.reject_reason"
