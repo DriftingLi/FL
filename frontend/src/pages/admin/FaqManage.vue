@@ -35,10 +35,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="entry_count" label="条目数" width="90" />
-        <el-table-column label="操作" width="150">
+        <el-table-column label="操作" width="90">
           <template #default="{ row }">
-            <UiButton size="small" @click="openEditCategory(row)">编辑</UiButton>
-            <UiButton class="ml-2" variant="danger" size="small" @click="handleDeleteCategory(row)">删除</UiButton>
+            <UiMoreMenu trigger="text" :items="categoryItems(row)" @select="(k: string) => onCategoryAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>
@@ -60,10 +59,9 @@
               <UiTag size="small" :tone="row.published ? 'success' : 'info'">{{ row.published ? '已发布' : '停用' }}</UiTag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150">
+          <el-table-column label="操作" width="90">
             <template #default="{ row }">
-              <UiButton size="small" @click="openEditEntry(row)">编辑</UiButton>
-              <UiButton class="ml-2" variant="danger" size="small" @click="handleDeleteEntry(row)">删除</UiButton>
+              <UiMoreMenu trigger="text" :items="entryItems(row)" @select="(k: string) => onEntryAction(k, row)" />
             </template>
           </el-table-column>
         </el-table>
@@ -148,6 +146,7 @@ import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 const tabOptions = [
   { label: '分类', value: 'categories' },
@@ -223,6 +222,28 @@ async function saveCategory() {
   } finally {
     saving.value = false
   }
+}
+
+/** 分类表的行内「操作」菜单 */
+const categoryItems = (_row: AdminFaqCategory): UiMoreMenuItem[] => [
+  { key: 'edit', label: '编辑' },
+  { key: 'delete', label: '删除', divided: true }
+]
+
+function onCategoryAction(key: string, row: AdminFaqCategory) {
+  if (key === 'edit') openEditCategory(row)
+  else if (key === 'delete') handleDeleteCategory(row)
+}
+
+/** 条目表的行内「操作」菜单 */
+const entryItems = (_row: AdminFaqEntry): UiMoreMenuItem[] => [
+  { key: 'edit', label: '编辑' },
+  { key: 'delete', label: '删除', divided: true }
+]
+
+function onEntryAction(key: string, row: AdminFaqEntry) {
+  if (key === 'edit') openEditEntry(row)
+  else if (key === 'delete') handleDeleteEntry(row)
 }
 
 async function handleDeleteCategory(row: AdminFaqCategory) {

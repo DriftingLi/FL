@@ -58,10 +58,12 @@
         <el-table-column v-if="activeStatus === 'rejected'" label="驳回原因" min-width="140">
           <template #default="{ row }">{{ row.reject_reason || '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right" align="center">
+        <el-table-column label="操作" width="140" fixed="right" align="center">
           <template #default="{ row }">
             <template v-if="row.status === 'pending'">
-              <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
+              <!-- 审核主操作：逐行判定的工作循环，留平铺（登记表「行内动作」的例外） -->
+              <UiButton variant="success" link size="small" @click="approve(row)">通过</UiButton>
+              <UiButton variant="danger" link size="small" @click="openReject(row)">驳回</UiButton>
             </template>
             <UiTag v-else :tone="row.status === 'approved' ? 'success' : 'danger'" size="small">
               {{ row.status === 'approved' ? '已通过' : '已拒绝' }}
@@ -111,7 +113,6 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
-import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 // 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
 const {
@@ -135,20 +136,16 @@ function displayName(row: ProfileChangeRequest) {
   return row.username
 }
 
-// admin 列表状态机：本页只声明 fetch 与行操作 adapter
+// admin 列表状态机：本页只声明 fetch（行操作是平铺按钮，直接调 handler，不再过 adapter）
 const table = useAdminTable<ProfileChangeRequest>({
   fetch: (paging, filters) =>
     adminApi.listProfileReviews({
       status: String(filters.status || 'pending'),
       page: paging.page,
       page_size: paging.pageSize
-    }),
-  actions: {
-    approve,
-    reject: openReject
-  }
+    })
 })
-const { loading, list, total, currentPage, pageSize, load, handleAction } = table
+const { loading, list, total, currentPage, pageSize, load } = table
 
 const statusOptions = [
   { label: '待审核', value: 'pending' },
@@ -184,14 +181,6 @@ function openReject(row: ProfileChangeRequest) {
 /* 驳回提交已由 useRejectReasonDialog 的 submit（解构为 reject）承载 */
 
 onMounted(load)
-
-/** 行内「操作」菜单：审核动作（通过 / 驳回）走菜单收纳 */
-function actionItems(_row: ProfileChangeRequest): UiMoreMenuItem[] {
-  return [
-    { key: 'approve', label: '通过' },
-    { key: 'reject', label: '驳回' }
-  ]
-}
 </script>
 
 <style scoped>

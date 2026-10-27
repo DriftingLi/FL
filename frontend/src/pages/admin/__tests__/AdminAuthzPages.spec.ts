@@ -146,10 +146,14 @@ describe('管理员管理页', () => {
   it('重置口令：填新口令提交 → 调 resetAdminPassword（口令不合规不发请求）', async () => {
     const w = mount(AccountManage, { global: { plugins: [epLite()] } })
     await flushPromises()
-    // 每行两个动作：先「重置口令」，后「删除」
-    const resetBtns = w.findAll('button').filter(b => b.text().includes('重置口令'))
-    expect(resetBtns.length).toBe(2)
-    await resetBtns[resetBtns.length - 1].trigger('click')
+    // 每行一个「操作 ▾」菜单，菜单项是「重置口令 / 删除」（行内动作 ≥2 一律走菜单，登记表「行内动作」行）
+    const menus = w.findAllComponents({ name: 'UiMoreMenu' })
+    expect(menus.length).toBe(2)
+    expect(menus[menus.length - 1].props('items').map((i: { label: string }) => i.label)).toEqual([
+      '重置口令',
+      '删除'
+    ])
+    await menus[menus.length - 1].vm.$emit('select', 'reset')
     await flushPromises()
     const input = w.find('#admin-account-new-password')
     expect(input.exists()).toBe(true)
@@ -171,10 +175,10 @@ describe('管理员管理页', () => {
   it('删除：确认后调 deleteAdminAccount', async () => {
     const w = mount(AccountManage, { global: { plugins: [epLite()] } })
     await flushPromises()
-    // 每行一个删除按钮：取最后一行（运营甲，非受保护）——受保护账号由后端 409 拦，前端不预判
-    const delBtns = w.findAll('button').filter(b => b.text().includes('删除'))
-    expect(delBtns.length).toBe(2)
-    await delBtns[delBtns.length - 1].trigger('click')
+    // 取最后一行的菜单（运营甲，非受保护）——受保护账号由后端 409 拦，前端不预判
+    const menus = w.findAllComponents({ name: 'UiMoreMenu' })
+    expect(menus.length).toBe(2)
+    await menus[menus.length - 1].vm.$emit('select', 'delete')
     await flushPromises()
     expect(h.confirm).toHaveBeenCalled()
     expect(h.deleteAccount).toHaveBeenCalledWith(2)

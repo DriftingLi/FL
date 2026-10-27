@@ -8,6 +8,8 @@ import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type Certifi
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 defineProps<{
   certificateTemplates: CertificateTemplate[]
@@ -157,8 +159,20 @@ async function submitCertificate() {
   }
 }
 
+/** 行内「操作」菜单：编辑 / 删除（删除进菜单后确认走模态） */
+const actionItems = (_row: CertificateTemplate): UiMoreMenuItem[] => [
+  { key: 'edit', label: '编辑' },
+  { key: 'delete', label: '删除', divided: true }
+]
+
+function handleAction(key: string, tpl: CertificateTemplate) {
+  if (key === 'edit') openCertificateForm(tpl)
+  else if (key === 'delete') handleDeleteCertificate(tpl)
+}
+
 async function handleDeleteCertificate(tpl: CertificateTemplate) {
   try {
+    await useConfirm().confirmDanger('确定删除该证书模板？', '删除模板')
     // trainingApi 已解包信封：成功即业务成功
     await trainingApi.deleteCertificateTemplate(tpl.id)
     ElMessage.success('已删除')
@@ -214,14 +228,9 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         </template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="160" show-overflow-tooltip />
-      <el-table-column label="操作" width="120" align="center">
+      <el-table-column label="操作" width="90" align="center">
         <template #default="{ row }">
-          <UiButton link size="small" @click="openCertificateForm(row)">编辑</UiButton>
-          <el-popconfirm title="确定删除该模板？" @confirm="handleDeleteCertificate(row)">
-            <template #reference>
-              <UiButton variant="danger" link size="small">删除</UiButton>
-            </template>
-          </el-popconfirm>
+          <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
         </template>
       </el-table-column>
     </el-table>

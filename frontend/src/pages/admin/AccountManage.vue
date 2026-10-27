@@ -24,6 +24,7 @@ import UiFormField from '@/components/ui/UiFormField.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 
 defineOptions({ name: 'AdminAccountManage' })
 
@@ -153,6 +154,17 @@ async function resetPassword(): Promise<void> {
   }
 }
 
+/** 行内「操作」菜单：重置口令 / 删除（删除进菜单后确认走模态） */
+const actionItems = (_row: AdminAccountDTO): UiMoreMenuItem[] => [
+  { key: 'reset', label: '重置口令' },
+  { key: 'delete', label: '删除', divided: true }
+]
+
+function handleAction(key: string, row: AdminAccountDTO) {
+  if (key === 'reset') openReset(row)
+  else if (key === 'delete') remove(row)
+}
+
 /** 删除管理员。确认框只问「删不删」，拦得住的是后端（409 文案由拦截器 toast）。 */
 async function remove(account: AdminAccountDTO): Promise<void> {
   try {
@@ -214,12 +226,9 @@ async function remove(account: AdminAccountDTO): Promise<void> {
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="190" fixed="right" align="center">
+        <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <span class="account-row-actions">
-              <UiButton size="small" @click="openReset(row)">重置口令</UiButton>
-              <UiButton size="small" @click="remove(row)">删除</UiButton>
-            </span>
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>

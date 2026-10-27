@@ -188,6 +188,29 @@
   color: #ffffff;
 }
 
+/*
+ * is-link / is-text 必须真的「没有底」。
+ *
+ * 上面 .el-button--primary 用的是 background 简写，会把品牌渐变一并写进 background-image；
+ * 而 EP 的 .el-button.is-link 只清 background-color —— 渐变留下、白字压在上面，于是
+ * variant="primary" link 渲染成「实心渐变药丸」，与作者写的意图正相反（#1995 实测：
+ * computed bgColor 透明、bgImage 仍是 linear-gradient，而同一格里的 danger link 是纯红字）。
+ *
+ * 这里按同色系的墨色重设前景，并显式 background: none 连渐变一起清掉。别删。
+ */
+.el-button--primary.is-link,
+.el-button--primary.is-text {
+  background: none;
+  --el-button-text-color: var(--color-primary-600);
+  color: var(--color-primary-600);
+}
+
+.el-button--primary.is-link:hover,
+.el-button--primary.is-text:hover {
+  background: none;
+  color: var(--color-primary-700);
+}
+
 .el-button:hover {
   transform: translateY(-1px);
 }

@@ -222,41 +222,9 @@
         <el-table-column label="创建时间" width="160" align="center">
           <template #default="{ row }">{{ formatLocaleDateTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="230" fixed="right" align="center">
+        <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
-            <div class="flex items-center justify-center gap-1.5">
-              <UiButton
-                v-if="!row.is_experience"
-                variant="secondary"
-                size="small"
-                @click="designateExperience(row)"
-              >认定经验</UiButton>
-              <UiButton
-                v-else
-                variant="secondary"
-                size="small"
-                @click="revokeExperience(row)"
-              >取消经验认定</UiButton>
-              <!-- 经验蕴含精选：经验帖不得直接撤精（后端 400），禁用并给逃生口 -->
-              <UiTooltip v-if="row.is_featured && row.is_experience" content="备考经验帖蕴含精选位，请先取消经验认定">
-                <span>
-                  <UiButton variant="secondary" size="small" disabled>取消精选</UiButton>
-                </span>
-              </UiTooltip>
-              <UiButton
-                v-else-if="!row.is_featured"
-                variant="secondary"
-                size="small"
-                @click="featureTopic(row)"
-              >加精</UiButton>
-              <UiButton
-                v-else
-                variant="secondary"
-                size="small"
-                @click="unfeatureTopic(row)"
-              >取消精选</UiButton>
-              <UiButton variant="danger" size="small" @click="deleteTopic(row)">删除</UiButton>
-            </div>
+            <UiMoreMenu trigger="text" :items="topicItems(row)" @select="(k: string) => onTopicAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>
@@ -304,7 +272,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
-import UiTooltip from '@/components/ui/UiTooltip.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 
@@ -507,6 +475,44 @@ async function loadMoreReplies(topicId: number) {
   } finally {
     replyLoadingMoreIds.value = replyLoadingMoreIds.value.filter((id) => id !== topicId)
   }
+}
+
+/**
+ * 帖子表的行内「操作」菜单。
+ * 「经验」与「精选」互斥：经验帖不得直接撤精（后端 400），所以那项置灰 + 给一条逃生说明，
+ * 而不是把它藏掉 —— 藏掉会让人以为没这个操作。
+ */
+function topicItems(row: AdminForumTopic): UiMoreMenuItem[] {
+  const items: UiMoreMenuItem[] = [
+    row.is_experience
+      ? { key: 'revokeExperience', label: '取消经验认定' }
+      : { key: 'designateExperience', label: '认定经验' }
+  ]
+  if (row.is_featured && row.is_experience) {
+    items.push({
+      key: 'unfeatureTopic',
+      label: '取消精选',
+      disabled: true,
+      hint: '备考经验帖蕴含精选位，请先取消经验认定'
+    })
+  } else if (row.is_featured) {
+    items.push({ key: 'unfeatureTopic', label: '取消精选' })
+  } else {
+    items.push({ key: 'featureTopic', label: '加精' })
+  }
+  items.push({ key: 'delete', label: '删除', tone: 'danger', divided: true })
+  return items
+}
+
+function onTopicAction(key: string, row: AdminForumTopic) {
+  const handlers: Record<string, (r: AdminForumTopic) => void | Promise<void>> = {
+    designateExperience,
+    revokeExperience,
+    featureTopic,
+    unfeatureTopic,
+    deleteTopic
+  }
+  handlers[key]?.(row)
 }
 
 async function deleteTopic(row: AdminForumTopic) {

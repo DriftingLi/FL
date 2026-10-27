@@ -26,14 +26,9 @@
             <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</UiTag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" align="center">
+        <el-table-column label="操作" width="90" align="center">
           <template #default="{ row }">
-            <UiButton link size="small" @click="openDialog(row)">编辑</UiButton>
-            <el-popconfirm title="删除岗位不会删除职位/简历，仅解除关联，确定？" @confirm="handleDelete(row)">
-              <template #reference>
-                <UiButton variant="danger" link size="small">删除</UiButton>
-              </template>
-            </el-popconfirm>
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
           </template>
         </el-table-column>
       </el-table>
@@ -75,6 +70,8 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 interface PositionItem {
   position_id: number
@@ -145,8 +142,20 @@ async function handleSubmit() {
   }
 }
 
+/** 行内「操作」菜单：编辑 / 删除（删除进菜单后确认走模态，文案沿用原来的「仅解除关联」） */
+const actionItems = (_row: PositionItem): UiMoreMenuItem[] => [
+  { key: 'edit', label: '编辑' },
+  { key: 'delete', label: '删除', divided: true }
+]
+
+function handleAction(key: string, row: PositionItem) {
+  if (key === 'edit') openDialog(row)
+  else if (key === 'delete') handleDelete(row)
+}
+
 async function handleDelete(item: PositionItem) {
   try {
+    await useConfirm().confirmDanger('删除岗位不会删除职位/简历，仅解除关联，确定？', '删除岗位')
     await positionApi.remove(item.position_id)
     ElMessage.success('岗位已删除')
     load()

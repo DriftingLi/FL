@@ -25,6 +25,10 @@ export interface UiMoreMenuItem {
   tone?: 'default' | 'danger'
   /** 该项之前加一条分隔线（承接 EP 的 divided，删除项常用） */
   divided?: boolean
+  /** 置灰不可点：业务上暂时不允许，但要让用户看见「有这么一项」（ForumManage 的经验+精选互斥） */
+  disabled?: boolean
+  /** 置灰原因，落到 title 上给原生浮层（禁用项点不出气泡，只剩这条逃生说明） */
+  hint?: string
 }
 
 withDefaults(defineProps<{
@@ -73,6 +77,8 @@ const emit = defineEmits<{ select: [key: string] }>()
           :key="it.key"
           :command="it.key"
           :divided="it.divided"
+          :disabled="it.disabled"
+          :title="it.hint"
           :class="it.tone === 'danger' ? 'text-bad' : ''"
         >
           {{ it.label }}
