@@ -19,7 +19,7 @@
       </div>
     </div>
     <div class="input-row">
-      <el-input v-model="input" placeholder="写下你的评论" size="small" style="flex:1" @keyup.enter="handleSubmit" />
+      <UiInput v-model="input" placeholder="写下你的评论" size="small" style="flex:1" @keyup.enter="handleSubmit" />
       <UiButton variant="primary" size="small" :loading="submitting" @click="handleSubmit">发布</UiButton>
     </div>
 
@@ -47,6 +47,7 @@ import { questionInteractionApi } from '@/api/questionInteraction'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const props = defineProps<{ questionId: number }>()
 const authStore = useAuthStore()

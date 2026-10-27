@@ -11,7 +11,7 @@
     <div v-else class="empty">暂无笔记</div>
 
     <UiDialog v-model="dialogVisible" title="笔记" width="480px" confirm-text="保存" :confirm-loading="saving" @confirm="handleSave">
-      <el-input v-model="input" type="textarea" :rows="5" placeholder="记录你的笔记" maxlength="2000" show-word-limit />
+      <UiInput v-model="input" type="textarea" :rows="5" placeholder="记录你的笔记" :maxlength="2000" show-word-limit />
     </UiDialog>
   </UiCard>
 </template>
@@ -22,6 +22,7 @@ import { questionInteractionApi } from '@/api/questionInteraction'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const props = defineProps<{ questionId: number }>()
 const note = ref<any>(null)

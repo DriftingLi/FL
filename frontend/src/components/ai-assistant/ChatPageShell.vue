@@ -109,13 +109,13 @@
             @click="handleSelectSession(s.id)"
           >
             <div class="session-info flex min-w-0 flex-1 flex-col gap-0.5">
-              <el-input
+              <UiInput
                 v-if="enableRename && editingSessionId === s.id"
                 v-model="editingTitle"
                 size="small"
                 :ref="(el: any) => { if (el) editInputRef = el }"
                 placeholder="输入新标题"
-                maxlength="100"
+                :maxlength="100"
                 @click.stop
                 @keydown.enter.prevent="commitRename(s.id)"
                 @keydown.esc.prevent="cancelRename"
@@ -334,17 +334,7 @@
         </div>
         <div class="input-wrap flex items-center gap-2 rounded-card border border-line bg-panel px-3 py-2 shadow-card transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] focus-within:border-ui-400" :class="[raisedInput ? 'input-wrap--raised min-h-[132px] flex-col items-stretch p-3 gap-3' : '', !raisedInput && !!slots['input-prefix'] ? 'has-image items-end' : '']" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd">
           <slot v-if="!raisedInput" name="input-prefix" />
-          <el-input
-            :model-value="inputText"
-            type="textarea"
-            :rows="raisedInput ? 4 : 2"
-            :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }"
-            :placeholder="composerPlaceholder"
-            resize="none"
-            @keydown.enter="handleEnter"
-            @update:model-value="emit('update:inputText', $event as string)"
-            :disabled="store.streaming"
-          />
+          <UiInput :model-value="inputText" type="textarea" :rows="raisedInput ? 4 : 2" :autosize="raisedInput ? { minRows: 3, maxRows: 8 } : { minRows: 1, maxRows: 6 }" :placeholder="composerPlaceholder" resize="none" @keydown.enter="handleEnter" @update:model-value="emit('update:inputText', $event as string)" :disabled="store.streaming" />
           <div v-if="raisedInput" class="input-footer flex items-center justify-between gap-3">
             <div class="mode-selector flex items-center gap-2">
               <slot name="input-footer-left" />
@@ -405,6 +395,7 @@ import SuggestionArrow from '@/components/ai-assistant/SuggestionArrow.vue'
 import { buildSubdomainUrl } from '@/utils/subdomain'
 import { formatShortDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(

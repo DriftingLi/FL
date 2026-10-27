@@ -24,13 +24,7 @@
 
       <div class="nickname-row">
         <label class="nickname-label">昵称</label>
-        <el-input
-          v-model="nickname"
-          maxlength="30"
-          show-word-limit
-          placeholder="论坛展示名（1-30 字）"
-          :disabled="nicknamePending"
-        />
+        <UiInput v-model="nickname" :maxlength="30" show-word-limit placeholder="论坛展示名（1-30 字）" :disabled="nicknamePending" />
         <div class="nickname-actions">
           <UiTag v-if="nicknamePending" tone="warning" size="small">昵称审核中</UiTag>
           <UiButton variant="primary" v-else :loading="savingNickname" @click="saveNickname">
@@ -52,6 +46,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
 import UiDivider from '@/components/ui/UiDivider.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const authStore = useAuthStore()
 
