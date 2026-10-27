@@ -16,6 +16,10 @@
 					<view class="function-icon-box">
 						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
 						<text v-else class="function-icon-emoji">{{ item.icon }}</text>
+						<!-- 限免角标：`freePreview` 是后端功能注册表的**限免声明位**（本格不扣积分），
+						     客户端唯一的可见消费面就在宫格上 —— 声明位只写进常量、界面上不显示，
+						     学员就看不到「这一格免费」。判定仍只读注册表镜像，页面不另立条件。 -->
+						<text v-if="item.freePreview" class="function-free-badge">限免</text>
 					</view>
 					<text class="function-title">{{ item.title }}</text>
 				</view>
@@ -674,6 +678,9 @@
 		align-items: center;
 		justify-content: center;
 		margin-bottom: 10rpx;
+		/* 限免角标的定位基准（uvue 只支持 class 选择器，角标用绝对定位挂到图标右上角，
+		   不额外占宫格高度 —— 加一行文字到图标下方会把整排图标的标题基线顶歪） */
+		position: relative;
 	}
 
 	.function-icon-img {
@@ -683,6 +690,22 @@
 
 	.function-icon-emoji {
 		font-size: 68rpx;
+	}
+
+	/* 限免角标（`freePreview` 的可见面）：暖色轴与本页「解锁专业版」横幅同一色意（权益/优惠），
+	   绿轴在本页已被「已解锁」占用 —— 两态也不该撞色。实色 + 反白字，字号取 $font-size-xs，
+	   圆角取 $radius-pill（ui-spec §5.9 角标形态；只换色，不改形态）。 */
+	.function-free-badge {
+		position: absolute;
+		top: -8rpx;
+		right: -16rpx;
+		background-color: $warning-color;
+		color: $text-color-inverse;
+		font-size: $font-size-xs;
+		font-weight: bold;
+		line-height: 26rpx;
+		padding: 0 8rpx;
+		border-radius: $radius-pill;
 	}
 
 	.function-title {

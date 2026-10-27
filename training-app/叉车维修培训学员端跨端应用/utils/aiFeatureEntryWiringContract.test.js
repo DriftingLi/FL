@@ -130,6 +130,13 @@ function regionInvariantHolds(src) {
   return scopeAlwaysEmpty(src, arg) ? true : rendersRegionSessionList(src);
 }
 
+/** 页面是否**按限免位渲染角标**（角标的 v-if 判据必须是 `item.freePreview`，不是写死的 key 或常显）。 */
+function freeBadgeWired(src) {
+  const code = stripCodeComments(src);
+  return /<text v-if="item\.freePreview"[^>]*class="function-free-badge"[^>]*>限免<\/text>/.test(code)
+    && /\.function-free-badge\s*\{/.test(code);
+}
+
 describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
   describe('① 常量表：注册表的 4 项专项功能，格格带键', () => {
     it('宫格项类型：featureKey / freePreview 均为**必填**（没有键的格子写不出来）', () => {
@@ -180,6 +187,17 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       for (const k of ['drawing', 'exercise', 'knowledge']) {
         expect(tileLine(k)).toMatch(/freePreview: false/);
       }
+    });
+
+    it('限免位在页面上**真被消费**：宫格角标由 `item.freePreview` 决定（只写进常量 = 学员看不到限免）', () => {
+      expect(freeBadgeWired(PAGE)).toBe(true);
+      // 判别力：角标删掉 ⇒ 红；判据换成写死常显（不受限免位控制）⇒ 也红
+      expect(
+        freeBadgeWired(PAGE.replace(/\s*<text v-if="item\.freePreview"[^>]*>限免<\/text>/, ''))
+      ).toBe(false);
+      expect(
+        freeBadgeWired(PAGE.replace('v-if="item.freePreview"', ''))
+      ).toBe(false);
     });
   });
 
