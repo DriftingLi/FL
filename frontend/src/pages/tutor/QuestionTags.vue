@@ -51,7 +51,7 @@
           <UiFilterBar>
         <template #filters>
 
-            <el-input
+            <UiInput
               v-model="searchKeyword"
               placeholder="搜索题干"
               clearable
@@ -59,9 +59,14 @@
               @keyup.enter="search"
               @clear="search"
             />
-            <el-select v-model="filterType" placeholder="题型" clearable style="width: 130px" @change="applyQuestionFilters">
-              <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
-            </el-select>
+            <UiSelect
+              v-model="filterType"
+              :options="questionTypeOptions"
+              placeholder="题型"
+              clearable
+              style="width: 130px"
+              @change="applyQuestionFilters"
+            />
             <UiButton variant="primary" @click="search">查询</UiButton>
             <UiButton variant="success" v-if="selectedIds.length > 0" @click="openTagAssign(selectedIds)">
               批量打标 ({{ selectedIds.length }})
@@ -119,10 +124,10 @@
     <UiDialog v-model="tagDialogVisible" :title="tagForm.id ? '编辑标签' : '新增标签'" width="420px" destroy-on-close confirm-text="保存" :confirm-loading="tagSubmitting" @confirm="submitTag">
       <el-form ref="tagFormRef" :model="tagForm" :rules="tagRules" label-width="80px">
         <el-form-item label="标签名" prop="name">
-          <el-input v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" maxlength="30" show-word-limit @keyup.enter="submitTag" />
+          <UiInput v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" :maxlength="30" show-word-limit @keyup.enter="submitTag" />
         </el-form-item>
         <el-form-item label="编码" prop="code">
-          <el-input v-model="tagForm.code" placeholder="唯一编码，如 HYDRAULIC" maxlength="30" @keyup.enter="submitTag" />
+          <UiInput v-model="tagForm.code" placeholder="唯一编码，如 HYDRAULIC" :maxlength="30" @keyup.enter="submitTag" />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -131,16 +136,15 @@
     <UiDialog v-model="tagAssignVisible" :title="`题目打标（${tagAssignQuestionIds.length} 题）`" width="460px" destroy-on-close confirm-text="保存" :confirm-loading="tagSubmitting" @confirm="submitTagAssign">
       <el-form label-width="80px">
         <el-form-item label="选择标签">
-          <el-select
+          <UiSelect
             v-model="tagAssignTagIds"
+            :options="tagOptions"
             multiple
             filterable
             collapse-tags
             placeholder="选择要关联的标签"
             style="width: 100%"
-          >
-            <el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id" />
-          </el-select>
+          />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -163,8 +167,12 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 const tags = ref<QuestionTag[]>([])
+/** 标签 → UiSelect 的 {label,value}（打标对话框的多选） */
+const tagOptions = computed<UiSelectOption[]>(() => tags.value.map((t) => ({ label: t.name, value: t.id })))
 const tagsLoading = ref(false)
 const currentTagId = ref<number | null>(null)
 

@@ -180,10 +180,10 @@
     <UiDialog v-model="metaDialogVisible" title="编辑章节信息" width="500px" confirm-text="保存" :confirm-loading="savingMeta" @confirm="saveMeta">
       <el-form :model="metaForm" label-width="100px">
         <el-form-item label="章节标题">
-          <el-input v-model="metaForm.title" placeholder="请输入章节标题" maxlength="100" show-word-limit />
+          <UiInput v-model="metaForm.title" placeholder="请输入章节标题" :maxlength="100" show-word-limit />
         </el-form-item>
         <el-form-item label="章节描述">
-          <el-input
+          <UiInput
             v-model="metaForm.description"
             type="textarea"
             :rows="3"
@@ -250,6 +250,7 @@ import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()

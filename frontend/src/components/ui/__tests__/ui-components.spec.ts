@@ -237,6 +237,60 @@ describe('UiInput / UiSelect', () => {
     const w = mountWith(UiSelect, { options: OPTIONS })
     expect(w.html()).toContain('el-select')
   })
+
+  // #1981 批次 0：存量里 `#prefix` 命中 6 个文件（搜索框放大镜、密码框锁标），
+  // 不补这层透传，管理端与认证页那两批就迁不动。断言落在 EP 自己的容器类上。
+  it('UiInput 透传 #prefix / #suffix 到 el-input 的对应位置', () => {
+    const w = mount(UiInput, {
+      slots: { prefix: '<span class="probe-prefix">搜</span>', suffix: '<span class="probe-suffix">后</span>' },
+      global: { plugins: [epLite()] }
+    })
+    expect(w.find('.el-input__prefix .probe-prefix').exists()).toBe(true)
+    expect(w.find('.el-input__suffix .probe-suffix').exists()).toBe(true)
+  })
+
+  it('UiInput 不传槽时不渲染空壳（el-input 侧看到的是「没有这个插槽」）', () => {
+    const w = mountWith(UiInput, {})
+    expect(w.find('.el-input__prefix').exists()).toBe(false)
+  })
+
+  it('UiInput 透传 #prepend / #append（输入组）', () => {
+    const w = mount(UiInput, {
+      slots: { prepend: '<span class="probe-pre">https://</span>', append: '<span class="probe-app">.com</span>' },
+      global: { plugins: [epLite()] }
+    })
+    expect(w.find('.el-input-group__prepend .probe-pre').exists()).toBe(true)
+    expect(w.find('.el-input-group__append .probe-app').exists()).toBe(true)
+  })
+
+  // 分组是 UiSelect 原有契约表达不了的形态（存量 7 处，`options` 平铺放不下）。
+  // 用 stub 替掉 el-select：真件把选项渲染进 teleport 出去的下拉，首帧 DOM 里看不到，
+  // 断言会变成「测 EP 的懒渲染」而不是「测我们给了什么」。
+  it('UiSelect 按 groups 渲染 el-option-group（与 options 互斥，groups 优先）', () => {
+    const w = mount(UiSelect, {
+      props: {
+        options: [{ label: '不该出现', value: 'no' }],
+        groups: [
+          { label: '特种作业', options: [{ label: '叉车', value: 1 }] },
+          { label: '技能等级', options: [{ label: '中级', value: 2 }] }
+        ]
+      },
+      global: { stubs: { 'el-select': { template: '<div class="probe-select"><slot /></div>' } } }
+    })
+    const html = w.html()
+    // 未注册的 el-option(-group) 在 stub 里按原生未知标签渲染，直接数开标签
+    expect((html.match(/<el-option-group/g) ?? []).length).toBe(2)
+    expect((html.match(/<el-option[ >]/g) ?? []).length).toBe(2)
+    // 给了 groups 就抑制平铺 options（互斥，避免同屏两份）
+    expect(html).not.toContain('不该出现')
+  })
+
+  it('UiSelect 的 multiple / filterable 落到 el-select', () => {
+    const w = mountWith(UiSelect, { options: OPTIONS, multiple: true, filterable: true })
+    const select = w.findComponent({ name: 'ElSelect' })
+    expect(select.props('multiple')).toBe(true)
+    expect(select.props('filterable')).toBe(true)
+  })
 })
 
 // el-dialog 把内容 teleport 到 body，有两个坑：

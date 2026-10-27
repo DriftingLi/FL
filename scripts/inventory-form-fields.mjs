@@ -71,9 +71,11 @@ export function inventory() {
     let option = 0
     let optionGroup = 0
     for (const { text } of lines) {
-      input += (text.match(/<el-input\b/g) ?? []).length
-      select += (text.match(/<el-select\b/g) ?? []).length
-      option += (text.match(/<el-option\b/g) ?? []).length
+      // `\b` 在 `el-input-number` 的 `-` 前成立 ⇒ 必须显式排除带后缀的兄弟标签。
+      // 初版踩过：把 21 处 `el-input-number` 全算成 `el-input`，170 报成 191。
+      input += (text.match(/<el-input(?![\w-])/g) ?? []).length
+      select += (text.match(/<el-select(?![\w-])/g) ?? []).length
+      option += (text.match(/<el-option(?![\w-])/g) ?? []).length
       optionGroup += (text.match(/<el-option-group\b/g) ?? []).length
     }
     if (input + select === 0) continue
