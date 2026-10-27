@@ -119,6 +119,35 @@ describe('hx-noop 预检的行为（真跑 PowerShell）', () => {
     expect(noop(dir, markerPath(dir))).toBe('False');
   });
 
+  /**
+   * S2 接缝（原计划里有、第一轮漏掉的那条；Standards 指出 N8 只有文本守护）。
+   * 期望值 headSha 取自 **git**，不是按实现的算法重算 —— 避免 `/tdd` 点名的套套逻辑。
+   */
+  it('写标记：落盘 headSha = 当前 HEAD；非仓库不抛、只返 false', () => {
+    const { dir, head } = makeRepo();
+    const marker = path.join(dir, '.ci-verify', 'last-deploy.json');
+
+    const ok = runPs([
+      `. ${psq(LIB)}`,
+      `Write-HxDeployMarker -Project ${psq(dir)} -MarkerPath ${psq(marker)}`,
+    ]);
+    expect(ok.split(/\r?\n/).pop().trim()).toBe('True');
+
+    const payload = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    expect(payload.headSha).toBe(head);
+    expect(typeof payload.ts).toBe('string');
+
+    // 非仓库 ⇒ 不抛、返回 false（标记只是省时间，不能因为它把一次成功部署判红）
+    const notRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'hxnoop-nr-'));
+    const m2 = path.join(notRepo, 'm.json');
+    const bad = runPs([
+      `. ${psq(LIB)}`,
+      `Write-HxDeployMarker -Project ${psq(notRepo)} -MarkerPath ${psq(m2)}`,
+    ]);
+    expect(bad.split(/\r?\n/).pop().trim()).toBe('False');
+    expect(fs.existsSync(m2)).toBe(false);
+  });
+
   it('标记存在 + HEAD 未变 + 工作树干净 ⇒ 跳过', () => {
     const { dir, head } = makeRepo();
     const marker = writeMarker(dir, { headSha: head, ts: 'test' });
