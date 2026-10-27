@@ -12,31 +12,7 @@
     </div>
     <div v-else class="expanded-view">
       <div v-if="!props.compact" class="switcher-label">当前证件</div>
-      <el-select
-        v-model="selectedId"
-        placeholder="请选择证件"
-        size="small"
-        class="credential-select"
-        :loading="credentialStore.loading"
-        @change="handleChange"
-      >
-        <el-option-group label="特种作业上岗证">
-          <el-option
-            v-for="c in credentialStore.grouped.special_operation"
-            :key="c.id"
-            :label="c.name"
-            :value="c.id"
-          />
-        </el-option-group>
-        <el-option-group label="工程机械维修工">
-          <el-option
-            v-for="c in credentialStore.grouped.skill_level"
-            :key="c.id"
-            :label="levelLabel(c)"
-            :value="c.id"
-          />
-        </el-option-group>
-      </el-select>
+      <UiSelect v-model="selectedId" placeholder="请选择证件" size="small" class="credential-select" :loading="credentialStore.loading" @change="handleChange" :groups="[{ label: '特种作业上岗证', options: (credentialStore.grouped.special_operation).map((c) => ({ label: c.name, value: c.id })) }, { label: '工程机械维修工', options: (credentialStore.grouped.skill_level).map((c) => ({ label: levelLabel(c), value: c.id })) }]" />
       <div v-if="current && !props.compact" class="current-meta">
         <span class="current-name">{{ current.name }}</span>
         <span class="current-badge" :class="current.category">{{ categoryLabel(current.category) }}</span>
@@ -45,19 +21,7 @@
 
     <!-- collapsed 展开为 dialog 选择 -->
     <UiDialog v-model="switcherVisible" title="切换证件" width="380px" append-to-body confirm-text="确定" :confirm-loading="switching" @confirm="switcherVisible = false">
-      <el-select
-        v-model="selectedId"
-        placeholder="请选择证件"
-        style="width: 100%"
-        @change="handleChange"
-      >
-        <el-option-group label="特种作业上岗证">
-          <el-option v-for="c in credentialStore.grouped.special_operation" :key="c.id" :label="c.name" :value="c.id" />
-        </el-option-group>
-        <el-option-group label="工程机械维修工">
-          <el-option v-for="c in credentialStore.grouped.skill_level" :key="c.id" :label="levelLabel(c)" :value="c.id" />
-        </el-option-group>
-      </el-select>
+      <UiSelect v-model="selectedId" placeholder="请选择证件" style="width: 100%" @change="handleChange" :groups="[{ label: '特种作业上岗证', options: (credentialStore.grouped.special_operation).map((c) => ({ label: c.name, value: c.id })) }, { label: '工程机械维修工', options: (credentialStore.grouped.skill_level).map((c) => ({ label: levelLabel(c), value: c.id })) }]" />
     </UiDialog>
   </div>
 </template>
@@ -70,6 +34,7 @@ import type { CredentialDict } from '@/api/credential'
 import { ElMessage } from 'element-plus'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const props = withDefaults(
   defineProps<{
