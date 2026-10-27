@@ -1,38 +1,28 @@
 /**
- * 真机无线调试入口的**行为**守护（scripts/wireless-debug.ps1，#1564）
+ * 真机无线调试入口的**行为**守护（scripts/wireless-debug.ps1，#1564）—— #1998 拆分件 2/4
  *
- * 为什么不能只有静态契约（utils/wirelessDebugContract.test.js）：源码文本断言在
- * 「算法被改坏但字面量还在」时**不会红**——本仓已经实测过「全绿可以恒真」这件事。
- * 本文件真起 pwsh、真跑脚本，把 adb 换成一份**可编程的假载体**（node + .bat，
- * 形态沿用 utils/mpWeixinGateHarness.js 的 makeFakeDevTools），钉六条只有跑起来才看得见的行为：
+ * 原单套件 utils/wirelessDebugBehavior.test.js（202.5s，run 40111032652）是 CI 行为腿四片的关键路径，
+ * 按用例形态拆成四件，本件 = keep 生命周期（B3 掉线自愈：LOST → SAMEPORT/NEWPORT → RECOVERED）。拆分口径：
+ * - 用例与断言**逐字沿用**原套件，只重组不重写；四件合计覆盖原 B1–B7 全部七条（不重叠不遗漏）。
+ * - 夹具段逐字复制到每个拆分件——这是有意的：scripts/classify-guards.mjs 按文件自身的
+ *   「代码级执行调用 + 仓内载体字面量」判行为腿，藏进共享夹具会被判成接线腿。
+ *   全程在 ADR-0042 边界内：不动 -i、不动分片机制、不删改被测断言、不新建第三份被测面清单。
+ * - 本件单列理由：B3 是唯一带「长驻进程 + mDNS 重发现」形态的用例，单列后可独立计时与加速，不牵连选路语义用例。
+ * - 其余三件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugStopReapBehavior.test.js（B5 按 pid 收 stop）、
+ *   wirelessDebugStopHangBehavior.test.js（B7 收挂在飞的 adb 调用）
+ * - 拆分后各件耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40452269933 重采）。
  *
- *   B1 候选表里**死记录排在前面** ⇒ 结论必须是那个活端口。
- *      防的是「信第一条 mDNS 记录」。现测（2026-10-07）：这台机器的表里活端口与一个恒 10061 的旧端口并列。
- *   B2 显式 `-Serial` 与 state.json 存的都是**死端口** ⇒ 必须回落到 mDNS 的活端口。
- *      防的是「拿到已知端口就当结论、连不上就直接退出」。B1 管「选错候选」，B2 管「不回落」——两支不同的失败模式。
  *   B3 设备从 `adb devices` 里消失 ⇒ keep 自己经 mDNS 重发现并接回（LOST → SAMEPORT/NEWPORT → RECOVERED），
  *      且全程不发 kill-server（adb server 与 HBuilderX 共享，行为层再钉一次）。
- *   B4 开关读到 0 ⇒ `on` 写回 1；关掉写入时 ⇒ 一个字都不写。后半支防「无条件改设备」那类退化。
- *   B5 `watch` 起了后台 keep ⇒ `stop` 必须**按同一个 pid** 收掉、收完进程真没了。
- *      血账：入仓改名后归属判据里写死的旧文件名不再命中 ⇒ watch 恒报 spawn_unconfirmed、
- *      stop 恒报 not_running，而 keep 进程还在后台跑（留孤儿）。这条就是那起事故的回归钉。
- *      同一条腿还顺带钉住「-AdbExe 必须传给子进程」：漏传时子进程根本不碰指定载体，calls.log 会是空的。
  *
- *   B6 一条候选都试不活 ⇒ ensure 判 unconnected、退出码非 0、对设备零写入（fail-closed 真断言）。
- *      防的是「连不上却报 connected」——门照着那个假 serial 去跑就是白跑一轮真机。
- *
- *   B7 `stop` 收 keep 时必须连**正在跑的那次 adb 调用**一起收（#1718）。
- *      血账：只杀 keep 的 pid 时，Windows 上那次调用还多一层 cmd.exe；桩进程活下来并握着 keep 从
- *      调用方（jest）继承的 stdout 管道 ⇒ 汇总行永远不打、进程挂 20+ 分钟。这条腿先让 `shell echo hb`
- *      停在半空证明确有调用在飞，再断言 stop 之后夹具目录名不再出现在任何进程命令行里。
- *
- * 平台口径（2026-10-07 修订，**六条在 Windows 与 CI 的 ubuntu 上都真跑**）：假载体按平台落成
+ * 平台口径（2026-10-07 修订，**1条在 Windows 与 CI 的 ubuntu 上都真跑**）：假载体按平台落成
  * `.bat` / `sh` 两种壳，pwsh 两侧都在。上一版把 B1–B5 写成「非 Windows 直接 return」⇒ CI 里那五条是
  * **永不执行的空体**（正是 `docs/agents/guards.md` #1156 要防的「全绿可以恒真」），而当时补的那条
  * 「非 Windows 不得报成功」断的是**代码里并不存在的平台禁令**：CI 现测 ubuntu 上脚本照跑、照报
  * `result=connected` ⇒ 该断言判红（run 37595419950，`Tests: 1 failed, 3073 passed, 3074 total`）。
  * 真机上的 Windows 实链读数（受控断链 2 秒自愈那一段）记在 #1564 的 PR 正文。
  */
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -222,50 +212,12 @@ const verdict = (out, action) => {
   return [...out.matchAll(re)].map((m) => ({ result: m[1], serial: m[2] }));
 };
 
-describe('wireless-debug.ps1 行为守护（#1564）', () => {
+describe('wireless-debug.ps1 行为守护（#1564）—— keep 掉线自愈（#1998 拆分件 2/4）', () => {
   // #1718：每条用例结束都按夹具目录把漏下的桩进程收干净。这不是「顺手打扫」——
   // 漏下任何一个，它都可能握着本进程（jest -i）继承出去的 stdout 管道，整条行为腿就永远等不到 EOF。
   afterEach(() => {
     for (const fx of FIXTURES.splice(0)) killStubProcesses(fx.dir);
   });
-
-  it('B6 无候选可试 ⇒ ensure 判 unconnected、退出码非 0、对设备零写入（fail-closed，两侧平台都跑）', () => {
-    const fx = makeFixture({ records: [], connected: [] }); // mDNS 空表 + 没有已知端口
-    const r = runTool(fx, ['-Action', 'ensure'], 60000);
-    expect(r.status).not.toBe(0); // 现测（2026-10-07 Windows）exit=3
-    expect(r.stdout).toMatch('result=unconnected');
-    expect(r.stdout).not.toMatch(/result=connected|result=paired_connected/);
-    const seq = callsParsed(fx);
-    expect(seq.some((c) => c.startsWith('connect '))).toBe(false); // 没候选就不许盲试端口
-    expect(seq.join('|')).not.toMatch('kill-server');
-    expect(adbState(fx).toggleWrites || []).toEqual([]); // 失败路径一个字节都不写设备
-    expect(toolState(fx).serial).toBeNull(); // 不把失败当成功落盘
-  }, 60000);
-
-  it('B1 候选表死记录在前 ⇒ 结论必须是活端口（不得信第一条 mDNS 记录）', () => {
-    const fx = makeFixture({ records: [{ ep: DEAD, alive: false }, { ep: LIVE, alive: true }] });
-    const r = runTool(fx, ['-Action', 'ensure']);
-    const v = verdict(r.stdout, 'ensure').find((x) => x.result === 'connected');
-    expect(v).toBeDefined();
-    expect(v.serial).toBe(LIVE);
-    const seq = callsParsed(fx);
-    expect(seq.join('|')).toMatch('mdns services'); // 候选表来源确实是 mDNS
-    const connects = seq.filter((c) => c.startsWith('connect '));
-    expect(connects[0]).toContain(DEAD); // 先试了排在前面那条
-    expect(connects.some((c) => c.includes(LIVE))).toBe(true);
-    expect(seq.join('|')).not.toMatch('kill-server');
-  }, 60000);
-
-  it('B2 -Serial 与 state.json 都是死端口 ⇒ 必须回落到 mDNS 的活端口', () => {
-    const fx = makeFixture({ records: [{ ep: LIVE, alive: true }] });
-    seedToolState(fx, GONE); // 上次成功、如今已死的端口
-    const r = runTool(fx, ['-Action', 'ensure', '-Serial', DEAD]);
-    const v = verdict(r.stdout, 'ensure').find((x) => x.result === 'connected');
-    expect(v).toBeDefined();
-    expect(v.serial).toBe(LIVE);
-    expect(r.stdout).not.toContain('result=connected serial=' + DEAD); // 死端口不得当结论
-    expect(toolState(fx).serial).toBe(LIVE); // 回落结果要落盘，下次冷启动别再试死端口
-  }, 60000);
 
   it('B3 设备从表里消失 ⇒ keep 经 mDNS 自己接回（LOST→SAMEPORT/NEWPORT→RECOVERED），全程不 kill-server', () => {
     const fx = makeFixture({ emptyDevicesFirst: 3 }); // 前 3 次 devices 报空 = 链路掉了
@@ -295,72 +247,4 @@ describe('wireless-debug.ps1 行为守护（#1564）', () => {
     expect(seq).toMatch('mdns services'); // 重发现走 mDNS，不是原地重试同端口
     expect(seq).not.toMatch('kill-server');
   }, 90000);
-
-  it('B4 开关读到 0 ⇒ on 写回 1；关掉写入 ⇒ 设备一个字节都不改', () => {
-    // 前提：`on` 只在**已有 adb 通道**时才谈得上写开关——没有通道时它必须判 no_channel（那是产品的边界，
-    // 不是缺陷：无通道意味着手机侧重置过，任何脚本都开不了那个开关）。所以这里先接上一条 live transport。
-    const a = makeFixture({ toggle: '0', connected: [LIVE] });
-    const r = runTool(a, ['-Action', 'on']);
-    expect(verdict(r.stdout, 'on').map((x) => x.result)).toContain('written');
-    expect(adbState(a).toggleWrites || []).toEqual(['1']); // 只写过「开」方向，且只写这一次
-
-    const noChannel = makeFixture({ toggle: '0', connected: [] });
-    const r0 = runTool(noChannel, ['-Action', 'on']);
-    expect(verdict(r0.stdout, 'on').map((x) => x.result)).toContain('no_channel');
-    expect(adbState(noChannel).toggleWrites || []).toEqual([]); // 没通道就绝不能留下半次写入
-
-    const b = makeFixture({ toggle: '1', connected: [LIVE] });
-    const r2 = runTool(b, ['-Action', 'on', '-ReassertToggle:$false']);
-    expect(verdict(r2.stdout, 'on').map((x) => x.result)).toContain('readonly');
-    expect(adbState(b).toggleWrites || []).toEqual([]);
-  }, 60000);
-
-  it('B5 watch 起的 keep ⇒ stop 按同一 pid 收掉、进程真没了（且子进程用的是指定 adb）', () => {
-    const fx = makeFixture();
-    const w = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1', '-SlowBeatEvery', '2', '-MaxHours', '1']);
-    const m = /watcher_pid=(\d+)/.exec(w.stdout);
-    // 红的时候必须把工具的真回话带出来：CI 在 ubuntu 上判红过（run 37597381121），而 expect(m).toBeTruthy()
-    // 只印得出 `Received: null`，看不出是 spawn_unconfirmed 还是子进程当场炸了。
-    if (!m) throw new Error('watch 没回 watcher_pid ⇒ exit=' + w.status + ' out=' + JSON.stringify(w.stdout.slice(-600)));
-    expect(m).toBeTruthy(); // 归属判据写死旧名时这里恒报 spawn_unconfirmed
-    const pid = Number(m[1]);
-    const w2 = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1']);
-    expect(w2.stdout).toMatch('already_running'); // 不叠第二个循环
-    sleep(2500); // 等子进程至少跑出一次 adb 调用
-    const s = runTool(fx, ['-Action', 'stop']);
-    expect(s.stdout).toContain('killed_pid=' + pid);
-    expect(pidAlive(pid)).toBe(false); // 真消失，而不是「报了个 not_running」
-    expect(fs.existsSync(path.join(fx.stateDir, 'watch.pid'))).toBe(false);
-    // 漏传 -AdbExe 的话，calls.log 里只会有父进程那次 watch 的 version 检查，keep 全在打真 adb
-    const seq = callsParsed(fx);
-    expect(seq.some((c) => c.includes('echo hb') || c.startsWith('devices') || c.startsWith('connect '))).toBe(true);
-  }, 90000);
-
-  it('B7 stop 收 keep 时连它正在跑的那次 adb 调用一起收掉（#1718：残留会吊住调用方管道）', () => {
-    // 复现口径：让 `shell echo hb` 停在半空（真机上的「正跑到一半」），这时 stop 只杀 keep 的 pid
-    // 就会留下 cmd.exe / node 两个桩进程 —— 实测它们握着本进程继承出去的 stdout 管道，jest 于是永不退出。
-    const fx = makeFixture({ connected: [LIVE], hangEchoMs: 30000 });
-    seedToolState(fx, LIVE); // 直接进连接态：省掉重发现，让 `shell echo hb` 尽快在飞
-    const w = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1', '-SlowBeatEvery', '10', '-MaxHours', '1']);
-    const m = /watcher_pid=(\d+)/.exec(w.stdout);
-    if (!m) throw new Error('watch 没回 watcher_pid ⇒ exit=' + w.status + ' out=' + JSON.stringify(w.stdout.slice(-600)));
-    const t0 = Date.now();
-    while (Date.now() - t0 < 20000) {
-      if (callsParsed(fx).some((c) => c.includes('shell echo hb'))) break;
-      sleep(200);
-    }
-    // 先证明「确实有一次 adb 调用在飞」——否则这条用例会退化成空跑（hang 没生效时它恒绿）
-    expect(callsParsed(fx).some((c) => c.includes('shell echo hb'))).toBe(true);
-    expect(stubProcessPids(fx.dir).length).toBeGreaterThan(0); // 在飞的那次调用此刻一定有一个桩进程
-
-    const s = runTool(fx, ['-Action', 'stop']);
-    expect(s.stdout).toContain('killed_pid=' + m[1]);
-    const t1 = Date.now();
-    let left = stubProcessPids(fx.dir);
-    while (left.length && Date.now() - t1 < 5000) {
-      sleep(100);
-      left = stubProcessPids(fx.dir);
-    }
-    expect(left).toEqual([]); // keep 的整棵子树都收了，没有握着调用方管道的孤儿
-  }, 120000);
 });

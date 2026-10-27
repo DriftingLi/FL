@@ -6,7 +6,7 @@
  *
  * #1711 的四片用的是 `NR % 4`：按**清单顺序**轮转，完全不看单套件耗时。实测 run 39113010218
  * 四片墙钟 **1:48 / 1:03 / 2:26 / 3:36** —— 慢并不是因为总量，而是因为单个慢套件
- * （`utils/wirelessDebugBehavior.test.js` 独占 108.4 s）连同它前后一段被塞进同一片。
+ * （当时的 `utils/wirelessDebugBehavior.test.js` 独占 108.4 s；该套件 2026-10-27 已按 #1998 拆成 Ensure / KeepRecover / StopReap / StopHang 四件）连同它前后一段被塞进同一片。
  * 装箱后每片目标 = `max(总耗时/n, 最慢套件)`，四片都靠近总耗时/4，慢片才有得压。
  *
  * ## 判据（谁都不新造清单）
@@ -22,8 +22,8 @@
  * 计入 —— 新增套件会让分片略微不均，但绝不会让门变红或退化成长尾（这是有意的取舍：宁可不均匀，
  * 也不要求每个 PR 都回去重采耗时）。
  *
- * 权重是**单次采集**：pwsh 类套件单次方差大（#1900 实测 `wirelessDebugBehavior` 两次采集
- * 108s ↔ 202s），最慢片下界 `max(总耗时/n, 最慢套件)` 随之摆动 —— 装箱保证「不比最慢套件
+ * 权重是**单次采集**：pwsh 类套件单次方差大（#1900 实测原 `wirelessDebugBehavior` 两次采集
+ * 108s ↔ 202s；该套件已按 #1998 拆成四件，timings 三键由 CI run 40452269933 全量重采（StopReap/StopHang 为分片实测，KeepRecover 未达 ≥5s 采集阈值按 defaultSeconds=1 计权）），最慢片下界 `max(总耗时/n, 最慢套件)` 随之摆动 —— 装箱保证「不比最慢套件
  * 更慢、其余片贴均值」，**压不掉方差本身**（重采如实记录、不做均值平滑，#1900 裁定）。
  *
  * 重采：`node scripts/gen-jest-timings.mjs --log <gh run view --log 的输出>`（CI 口径）

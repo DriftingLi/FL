@@ -1,19 +1,22 @@
 {
   "schema": 1,
-  "note": "逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：GitHub Actions ubuntu-latest，ci.yml run 40111032652（feat/1879，#1899 落地后 mobile-test = unit×2 + behavior×4 全绿 run，2026-10-24）的 behavior 腿四片日志（jest 只打印 ≥5s 的套件耗时 ⇒ 本表只列慢套件）。pwsh 类套件单次方差大（wirelessDebugBehavior 两次采集 108.4s ↔ 202.5s，#1900），按单次采集如实计权、不做均值平滑——最慢片下界 = max(总/4, 最慢套件)，装箱不追方差。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。",
+  "note": "逐套件耗时（秒），用于 ③ 门分片配平（#1715）。采集来源：CI run 40452269933（PR #2022 二拆后首 run 四片 job 日志合并，0cdb202a）。改这里请同时改 scripts/jest-fanout.mjs 的注释与 scripts/jest-fanout.test.mjs 的自测用例。表里没列到的套件按 defaultSeconds 计权。",
   "defaultSeconds": 1,
   "suites": {
-    "utils/wirelessDebugBehavior.test.js": 202.491,
-    "utils/kotlinAllProcessCaptureBehavior.test.js": 68.751,
-    "utils/deviceCaptureTierBehavior.test.js": 40.892,
-    "utils/emulatorSmokeTierBehavior.test.js": 33.277,
-    "utils/autoScreenshotStabilityBehavior.test.js": 25.466,
-    "utils/wirelessDebugBoundedTextBehavior.test.js": 17.261,
-    "utils/styleLoopBehavior.test.js": 16.96,
-    "utils/mpWeixinGateContract.test.js": 10.413,
-    "utils/emulatorSmokeBoundedTextBehavior.test.js": 8.51,
-    "utils/kotlinAllStaleExportBehavior.test.js": 8.202,
-    "utils/mpWeixinBuildFingerprintBehavior.test.js": 5.29,
-    "utils/wtBootstrapBehavior.test.js": 5.206
+    "utils/wirelessDebugStopReapBehavior.test.js": 94.938,
+    "utils/wirelessDebugStopHangBehavior.test.js": 90.692,
+    "utils/kotlinAllProcessCaptureBehavior.test.js": 69.314,
+    "utils/deviceCaptureTierBehavior.test.js": 45.503,
+    "utils/emulatorSmokeTierBehavior.test.js": 29.513,
+    "utils/styleLoopBehavior.test.js": 25.548,
+    "utils/autoScreenshotStabilityBehavior.test.js": 24.281,
+    "utils/kotlinAllStaleExportBehavior.test.js": 18.999,
+    "utils/wirelessDebugBoundedTextBehavior.test.js": 15.536,
+    "utils/wirelessDebugEnsureBehavior.test.js": 14.071,
+    "utils/frontierBehavior.test.js": 9.861,
+    "utils/emulatorSmokeBoundedTextBehavior.test.js": 8.87,
+    "utils/mpWeixinGateContract.test.js": 7.526,
+    "utils/frontierRunPlan.test.js": 6.486,
+    "utils/devFinishContract.test.js": 5.183
   }
 }
