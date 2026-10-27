@@ -64,7 +64,7 @@ function mustRun(r, label) {
 }
 
 const INIT = [
-  '$log = Join-Path $env:TEMP ("gate-stages-probe-" + [guid]::NewGuid().ToString("N") + ".log")',
+  '$tmp = if ($env:TMPDIR) { $env:TMPDIR } elseif ($env:TEMP) { $env:TEMP } else { "/tmp" }; $log = Join-Path $tmp ("gate-stages-probe-" + [guid]::NewGuid().ToString("N") + ".log")',
   'Initialize-GateStageRecorder -LogPath $log',
 ];
 const IO = (lines) => ['$out = Get-Content -LiteralPath $log -Raw'].concat(lines);
@@ -116,7 +116,7 @@ describe('gate-stages 录制器（#2001 行为守护）', () => {
 
   test('B7: 注入早于记录 10 分钟的 WallStart ⇒ delta 超阈 ⇒ check=fail', () => {
     const r = runProbe([
-      '$log = Join-Path $env:TEMP ("gate-stages-probe-" + [guid]::NewGuid().ToString("N") + ".log")',
+      '$tmp = if ($env:TMPDIR) { $env:TMPDIR } elseif ($env:TEMP) { $env:TEMP } else { "/tmp" }; $log = Join-Path $tmp ("gate-stages-probe-" + [guid]::NewGuid().ToString("N") + ".log")',
       '$fake = (Get-Date).AddMinutes(-10)',
       'Initialize-GateStageRecorder -LogPath $log -WallStart $fake',
       'Start-GateStage -Name "s1"',
