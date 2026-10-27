@@ -60,7 +60,7 @@
             class="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
           >
             <div
-              class="flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
+              class="flex size-8 shrink-0 items-center justify-center rounded-card text-sm font-bold"
               :class="deltaKind(item.delta) === 'in' ? 'bg-ok-soft text-ok-strong' : 'bg-bad-soft text-bad-strong'"
             >
               {{ deltaKind(item.delta) === 'in' ? '＋' : '－' }}

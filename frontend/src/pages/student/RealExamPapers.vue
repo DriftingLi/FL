@@ -33,7 +33,7 @@
     <div class="variant-c-timeline flex flex-col gap-5">
       <div v-for="[year, list] in grouped" :key="year" class="timeline-year">
         <div class="timeline-year-head mb-2.5 flex items-center gap-2.5">
-          <span class="timeline-dot size-2.5 shrink-0 rounded-full bg-ui-500 ring-4 ring-ui-100"></span>
+          <span class="timeline-dot size-2.5 shrink-0 rounded-pill bg-ui-500 ring-4 ring-ui-100"></span>
           <span class="timeline-year-label text-base font-bold text-ink">{{ year }}</span>
           <span class="timeline-year-count rounded-pill border border-line bg-canvas px-2 py-0.5 text-xs text-ink-3">{{ list.length }}套</span>
         </div>

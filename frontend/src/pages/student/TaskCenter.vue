@@ -62,7 +62,7 @@
           >
             <div class="flex min-w-0 flex-1 items-start gap-3">
               <div
-                class="flex size-9 shrink-0 items-center justify-center rounded-full text-lg"
+                class="flex size-9 shrink-0 items-center justify-center rounded-pill text-lg"
                 :class="iconTone(task.status)"
               >
                 <UiIcon name="circle-check-filled" v-if="task.status === 'claimed'" />

@@ -434,7 +434,7 @@ onMounted(() => {
 
 .quick-option-chip {
   padding: 4px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-card);
   color: var(--color-text-secondary);
@@ -468,7 +468,7 @@ onMounted(() => {
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid var(--color-border-light);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-bg-card);
 }
 
@@ -509,7 +509,7 @@ onMounted(() => {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--color-border-light);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-field, var(--color-bg-card));
   color: var(--color-text-primary);
   font-size: var(--text-sm);
@@ -538,7 +538,7 @@ onMounted(() => {
   gap: 10px;
   padding: 8px 12px;
   border: 1px solid var(--color-border-light);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-card);
   text-align: left;
   cursor: pointer;
@@ -585,7 +585,7 @@ onMounted(() => {
   width: 64px;
   height: 64px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border-light);
 }
 
@@ -613,7 +613,7 @@ onMounted(() => {
 .pending-image-mask {
   position: absolute;
   inset: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(15, 23, 42, 0.5);
   color: #fff;
   font-size: var(--text-xs);

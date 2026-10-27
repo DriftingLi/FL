@@ -33,7 +33,7 @@
           <span
             v-for="kw in history"
             :key="kw"
-            class="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-sm text-ink-2"
+            class="inline-flex items-center gap-1.5 rounded-pill bg-canvas px-3 py-1 text-sm text-ink-2"
           >
             <span class="cursor-pointer" @click="searchWith(kw)">{{ kw }}</span>
             <UiIcon name="x" class="cursor-pointer text-ink-3 hover:text-bad" @click="onRemoveHistory(kw)" />
@@ -83,7 +83,7 @@
                 <div
                   v-for="item in section.data.items"
                   :key="item.type + '-' + item.id"
-                  class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+                  class="rounded-ctl px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
                   :class="itemTarget(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                   @click="goItem(item)"
                 >
@@ -107,7 +107,7 @@
               <div
                 v-for="item in pageResult.items"
                 :key="item.type + '-' + item.id"
-                class="rounded-[6px] px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+                class="rounded-ctl px-2.5 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
                 :class="itemTarget(item) ? 'cursor-pointer hover:bg-canvas' : ''"
                 @click="goItem(item)"
               >

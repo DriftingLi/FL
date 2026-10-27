@@ -1,5 +1,5 @@
 <template>
-  <div class="md-editor flex flex-col overflow-hidden rounded-[6px] border border-line-strong bg-panel" :style="{ height: bodyHeight }">
+  <div class="md-editor flex flex-col overflow-hidden rounded-ctl border border-line-strong bg-panel" :style="{ height: bodyHeight }">
     <!--
       模式切换 Tab：形态单点收在 UiUnderlineTabs（与论坛输入框同一件）——
       原来是本组件手搓的下划线 tab，属于全站第三处 tab 形态，#1017 一并收敛。

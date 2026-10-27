@@ -174,7 +174,7 @@ watch(resolvedSrc, (newVal) => {
   display: flex;
   flex-direction: column;
   background: var(--color-viewer-bg);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
 }

@@ -140,7 +140,7 @@ onMounted(load)
   margin: 0;
   padding: 12px;
   background: var(--color-bg-page);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }

@@ -50,9 +50,9 @@
           <div class="flex items-center gap-2">
             <!-- 连续段图例：主色实心=当前连续；浅底=已断开的打卡；灰底=未打卡 -->
             <span class="hidden items-center gap-1 text-xs text-ink-3 sm:flex">
-              <i class="inline-block size-2.5 rounded-[3px] bg-ui-600"></i>连续中
-              <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-ui-100"></i>已断开
-              <i class="ml-2 inline-block size-2.5 rounded-[3px] bg-canvas border border-line"></i>未打卡
+              <i class="inline-block size-2.5 rounded-pill bg-ui-600"></i>连续中
+              <i class="ml-2 inline-block size-2.5 rounded-pill bg-ui-100"></i>已断开
+              <i class="ml-2 inline-block size-2.5 rounded-pill bg-canvas border border-line"></i>未打卡
             </span>
             <UiButton variant="primary" size="small" :loading="checking" :disabled="calendar.today_checked" @click="doCheckIn">
               {{ calendar.today_checked ? '今日已打卡' : '立即打卡' }}
@@ -70,7 +70,7 @@
           <span class="text-xs text-ink-3">（断签重新起算，跨档当日随打卡到账）</span>
         </div>
 
-        <div class="overflow-hidden rounded-[8px] border border-line">
+        <div class="overflow-hidden rounded-ctl border border-line">
           <div class="grid grid-cols-7 bg-canvas">
             <span v-for="w in weekdays" :key="w" class="py-1.5 text-center text-xs text-ink-3">{{ w }}</span>
           </div>
@@ -96,7 +96,7 @@
           <span class="text-base font-bold text-ink">打卡排行</span>
           <span class="ml-auto text-xs text-ink-3">按累计天数排序</span>
         </div>
-        <div v-if="rankMe" class="mb-3 rounded-[8px] border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-sm text-ink">
+        <div v-if="rankMe" class="mb-3 rounded-ctl border border-ui-100 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))] px-3 py-2.5 text-center text-sm text-ink">
           我的排名：<span class="font-bold text-ui-soft-ink">NO.{{ rankMe.rank }}</span>
           <span class="mx-1.5 text-line-strong">|</span>
           累计 <span class="font-semibold">{{ rankMe.total }}</span> 天

@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
 .video-player-wrapper {
   width: 100%;
   background: #000;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
 }
