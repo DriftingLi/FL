@@ -27,7 +27,7 @@ ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -trimpath -buildvcs=false -ldflags="-s -w" -o /bin/server ./cmd/server
 RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 # 一次性运维命令（票 #1742 的资源 URL 回填）：编译进镜像，部署后可在容器里跑
-#   docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain
+#   docker compose -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain
 RUN go build -trimpath -buildvcs=false -ldflags="-s -w" -o /bin/backfill-asset-domain ./cmd/backfill-asset-domain
 
 # ----- Runtime 阶段：轻量运行时镜像 -----

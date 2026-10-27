@@ -35,24 +35,25 @@ func TestEnvDefaultsInSync(t *testing.T) {
 // runtimeEnvDefaults 与 layerDivergences 的判据），既不做「抽中立叶子表让 config 派生」，
 // 也不给运行期加一条指向本包的依赖边（被否备选见 ADR-0060）。
 func TestEnvDefaultsNoDrift(t *testing.T) {
-	// 声明这些默认值的**全部**位置都要进锁：漏一个就漏一处漂移（deploy.sh 的 ${DB_USER:-forklift}
-	// 此前在锁外，ADR-0053 §10）。deployFiles 是部署侧（shell/compose/GitHub 表达式三种写法），
+	// 声明这些默认值的**全部**位置都要进锁：漏一个就漏一处漂移（ADR-0053 §10）。
+	// deployFiles 是部署侧（shell / compose / GitHub 表达式 / Python getenv 兜底四种写法），
 	// runtimeFiles 是运行期侧（viper 形态，ADR-0060 票5 起纳入；比对判据见该段注释）。
 	deployFiles := []string{
-		filepath.Join("..", "..", "..", "docker-compose.prod.yml"),
-		filepath.Join("..", "..", "..", "scripts", "deploy-remote.sh"),
-		filepath.Join("..", "..", "..", "deploy.sh"),
+		filepath.Join("..", "..", "..", "deploy", "docker-compose.prod.yml"),
+		filepath.Join("..", "..", "..", "deploy", "deploy.py"),
 		filepath.Join("..", "..", "..", ".github", "workflows", "cd.yml"),
 	}
 	runtimeFiles := []string{
 		// 测试的 cwd 是 backend/internal/deploy，运行期配置在同级的 internal/config 下。
 		filepath.Join("..", "config", "config.go"),
 	}
-	// 两种默认值写法都要认：
+	// 三种默认值写法都要认：
 	//   shell/compose 形态  ${VAR:-default}
 	//   GitHub 表达式形态    ${{ secrets.VAR || 'default' }}（cd.yml 的 env: 段用它，曾是漏检面）
+	//   Python 兜底形态      getenv("VAR", "default")（deploy.py 读不到 env.defaults 时的最后兜底）
 	pat := regexp.MustCompile(`([A-Z_][A-Z0-9_]*):-([^}]*)}`)
 	ghaPat := regexp.MustCompile(`secrets\.([A-Z_][A-Z0-9_]*)\s*\|\|\s*'([^']*)'`)
+	pyPat := regexp.MustCompile(`getenv\("([A-Z_][A-Z0-9_]*)", "([^"]*)"\)`)
 	dollar := string(rune(36))
 	var violations []string
 	checked := 0
@@ -68,6 +69,7 @@ func TestEnvDefaultsNoDrift(t *testing.T) {
 			}
 			matches := pat.FindAllStringSubmatch(line, -1)
 			matches = append(matches, ghaPat.FindAllStringSubmatch(line, -1)...)
+			matches = append(matches, pyPat.FindAllStringSubmatch(line, -1)...)
 			for _, m := range matches {
 				name, def := m[1], m[2]
 				v, ok := Lookup(name)
@@ -395,27 +397,31 @@ func TestEnvDefaultsIsConsumed(t *testing.T) {
 		t.Fatal("CD 的打包清单里没有 deploy/env.defaults：远端 source 会失败")
 	}
 	// 生成物是**整体 export** 的，而 compose 的取值优先级是「shell 环境 > .env」：
-	// 镜像引用由 deploy-remote.sh 按 registry + tag 现算后写进 .env（不 export），
+	// 镜像引用由 deploy/deploy.py 按 registry + tag 现算后写进 .env（不 export），
 	// 一旦生成物把 BACKEND_IMAGE/FRONTEND_IMAGE/LIBREOFFICE_IMAGE 留在环境里，就会盖掉计算值，
 	// compose 转而去 Docker Hub 拉不存在的 forklift-backend:latest（2026-09-13 testing 冒烟实测）。
 	if !strings.Contains(cd, "unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE") {
 		t.Fatal("CD 的环境变量文件没有 unset 生成物里的镜像名：会把部署脚本算好的镜像引用盖掉")
 	}
-	// 2026-09-13 生产事故的文本级回归锁：部署脚本**不得**再 source 生成物。
-	// source 是无条件赋值，它把 CD 传入的 PG_VOLUME（生产真实数据目录 /srv/ceph/pgdata）盖成
-	// 默认值 pgdata-prod，compose 遂把 postgres 挂到另一个空卷，表现为「生产数据全没了」。
-	remote, err := os.ReadFile(filepath.Join("..", "..", "..", "scripts", "deploy-remote.sh"))
+	// 2026-09-13 生产事故的文本级回归锁：部署脚本只能把生成物当「内存默认值」，
+	// 绝不能 source 或写回进程环境 —— 那会把 CD 传入的 PG_VOLUME
+	// （生产真实数据目录 /srv/ceph/pgdata）盖成 pgdata-prod，compose 挂到空卷。
+	remote, err := os.ReadFile(filepath.Join("..", "..", "..", "deploy", "deploy.py"))
 	if err != nil {
-		t.Fatalf("读取 scripts/deploy-remote.sh 失败: %v", err)
+		t.Fatalf("读取 deploy/deploy.py 失败: %v", err)
 	}
-	for i, line := range strings.Split(string(remote), "\n") {
+	src := string(remote)
+	if !strings.Contains(src, "set_defaults(load_env_defaults(") {
+		t.Fatal("deploy/deploy.py 没有通过 load_env_defaults 读取生成物（或接线被摘掉了）")
+	}
+	for i, line := range strings.Split(src, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
-			continue // 注释里提到生成物是允许的
+			continue
 		}
-		if (strings.HasPrefix(trimmed, ". ") || strings.HasPrefix(trimmed, "source ")) &&
-			strings.Contains(trimmed, "env.defaults") {
-			t.Fatalf("deploy-remote.sh:%d 又 source 了生成物（会无条件覆盖 CD 传入的环境）：%s", i+1, trimmed)
+		if strings.Contains(trimmed, "os.environ.update(load_env_defaults") ||
+			(strings.Contains(trimmed, "os.environ[") && strings.Contains(trimmed, "load_env_defaults")) {
+			t.Fatalf("deploy/deploy.py:%d 把生成物写回了进程环境（会无条件覆盖 CD 传入的值）：%s", i+1, trimmed)
 		}
 	}
 }
