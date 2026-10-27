@@ -11,28 +11,29 @@
     <!-- 筛选栏 -->
     <UiCard variant="flat" padding="sm" class="mb-4">
       <div class="flex flex-wrap items-center gap-2">
-        <el-select
+        <UiSelect
           v-model="browseCredentialId"
+          :options="credentialOptions"
           placeholder="所属证件"
           clearable
           class="!w-[180px]"
           @change="loadData"
-        >
-          <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
-        </el-select>
-        <el-select v-model="filters.type" placeholder="题型" clearable class="!w-[130px]">
-          <el-option label="单选题" value="single_choice" />
-          <el-option label="多选题" value="multi_choice" />
-          <el-option label="判断题" value="true_false" />
-          <el-option label="故障识图" value="fault_image" />
-          <el-option label="简答题" value="short_answer" />
-        </el-select>
-        <el-select v-model="filters.status" placeholder="状态" clearable class="!w-[120px]">
-          <el-option label="草稿" value="draft" />
-          <el-option label="待审核" value="pending" />
-          <el-option label="已发布" value="published" />
-        </el-select>
-        <el-input
+        />
+        <UiSelect
+          v-model="filters.type"
+          :options="QUESTION_TYPE_OPTIONS"
+          placeholder="题型"
+          clearable
+          class="!w-[130px]"
+        />
+        <UiSelect
+          v-model="filters.status"
+          :options="QUESTION_STATUS_OPTIONS"
+          placeholder="状态"
+          clearable
+          class="!w-[120px]"
+        />
+        <UiInput
           v-model="filters.keyword"
           placeholder="搜索题目"
           clearable
@@ -160,6 +161,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
@@ -171,6 +174,24 @@ const statusTone: Record<string, 'neutral' | 'warning' | 'success'> = {
 }
 
 const credentials = ref<CredentialDict[]>([])
+/** 所属证件 → {label,value} */
+const credentialOptions = computed<UiSelectOption[]>(() =>
+  credentials.value.map((c) => ({ label: c.name, value: c.id }))
+)
+/** 题型筛选（静态枚举，原先是五个内联 el-option） */
+const QUESTION_TYPE_OPTIONS: UiSelectOption[] = [
+  { label: '单选题', value: 'single_choice' },
+  { label: '多选题', value: 'multi_choice' },
+  { label: '判断题', value: 'true_false' },
+  { label: '故障识图', value: 'fault_image' },
+  { label: '简答题', value: 'short_answer' }
+]
+/** 状态筛选 */
+const QUESTION_STATUS_OPTIONS: UiSelectOption[] = [
+  { label: '草稿', value: 'draft' },
+  { label: '待审核', value: 'pending' },
+  { label: '已发布', value: 'published' }
+]
 /** 「浏览指定证件」：导师端筛选栏选择的证件（非「当前证件」——导师没有 current_credential_id）。 */
 const browseCredentialId = ref<number | null>(null)
 const questions = ref<Question[]>([])

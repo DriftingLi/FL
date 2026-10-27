@@ -41,6 +41,11 @@ withDefaults(
      *        —— 论坛输入区用它，让高亮落在外层卡片边框上而不是文本框本身。
      */
     variant?: 'boxed' | 'bare'
+    /**
+     * 以下四项**不是 prop，是插槽**（#1981 批次 0）：`#prefix` / `#suffix` / `#prepend` / `#append`
+     * 原样透传给 `el-input`。存量里 `#prefix` 命中 6 个文件（搜索框放大镜、密码框锁标），
+     * 不补这一处，管理端与认证页那两批就迁不动 —— 他们只能留在裸 `el-input` 上。
+     */
   }>(),
   {
     size: 'default',
@@ -81,7 +86,13 @@ defineExpose({
     :maxlength="maxlength"
     :show-word-limit="showWordLimit"
     :autosize="autosize"
-  />
+  >
+    <!-- 四个槽按需透传：不传就不渲染，el-input 侧看到的是「没有这个插槽」而不是空壳 -->
+    <template v-if="$slots.prepend" #prepend><slot name="prepend" /></template>
+    <template v-if="$slots.append" #append><slot name="append" /></template>
+    <template v-if="$slots.prefix" #prefix><slot name="prefix" /></template>
+    <template v-if="$slots.suffix" #suffix><slot name="suffix" /></template>
+  </el-input>
 </template>
 
 <style scoped>
