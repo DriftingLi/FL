@@ -28,7 +28,7 @@ Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tra
 
 ### Triage labels
 
-五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）。See `docs/agents/triage-labels.md`.
+五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）；唯一变体：`ready-for-agent` 在移动端票用 **`ready-for-mobile-agent`**。See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
