@@ -36,7 +36,36 @@ const RIGHT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawe
 const LEFT = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-drawer-left.uvue');
 const NAV = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-nav.uvue');
 const NAVBAR = path.join(__dirname, '..', 'components', 'app-nav-bar', 'app-nav-bar.uvue');
+const PAGE_PATH = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 const read = (p) => readText(p);
+
+/**
+ * 左入口**可见性**判据（2026-10-27）—— 与上面 ④（右入口可点）同源的左半边。
+ *
+ * 现场：左抽屉（最近对话）自 #947 起就是好的，`@left-click="toggleSidebarLeft"` 也接好了，
+ * 但页头左槽的 `leftIcon` 默认空串 ⇒ AppNavBar 的 `.nav-bar-left` 内 text 不渲染 ⇒ 槽 view
+ * 零宽零高 ⇒ **命中区不存在**（#1677 A 的「有动作、无可点面」形态）。真机表现就是「AI 助手页
+ * 没有任何地方能打开历史会话」，只有点标题碰巧代发（左槽空置时的代发，见 appNavBarLeftEntryContract）——
+ * 那属于兜底，不能当入口。
+ *
+ * 三件串成一条：① 左槽真有字形；② 页面把它接到开左抽屉；③ 抽屉真的在页面里渲染并绑会话列表。
+ * 缺任一件，用户都打不开会话列表。
+ */
+function leftEntryVisible(nav, page) {
+  const v = [];
+  const m = nav.match(/leftIcon:\s*'([^']*)'/);
+  const glyph = m ? m[1] : '';
+  if (glyph.length === 0) {
+    v.push('页头左槽无字形（leftIcon 为空）⇒ 左槽零宽零高、无命中区，会话列表打不开');
+  }
+  if (!/@left-click="toggleSidebarLeft"/.test(page)) {
+    v.push('页面未把 left-click 接到 toggleSidebarLeft（点了也开不了抽屉）');
+  }
+  if (!/<AiChatDrawerLeft[^>]*:sessions="sessions"/.test(page)) {
+    v.push('页面未渲染左侧会话抽屉，或抽屉未绑会话列表（开了也是空的）');
+  }
+  return v;
+}
 
 describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样式）', () => {
   const right = read(RIGHT);
@@ -78,5 +107,51 @@ describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样�
     expect(navBar).toMatch(/rightSlotWidth/);
     // 右抽屉 left 锚定继续保留（#947 实测组合）
     expect(right).toMatch(/\.drawer-right\s*\{[^}]*left:\s*30%/);
+  });
+});
+
+describe('左入口可见性（最近对话 / 会话列表，2026-10-27）', () => {
+  const nav = read(NAV);
+  const page = read(PAGE_PATH);
+
+  it('① 左槽有字形：leftIcon 默认非空（空 ⇒ 零宽零高、无命中区）', () => {
+    expect(nav).toMatch(/leftIcon:\s*'[^']+'/);
+  });
+
+  it('② 字形仍是 BMP 符号（非 BMP 代理对曾被吃成空串，血账见 recruiter-tab-bar 注释）', () => {
+    const glyph = (nav.match(/leftIcon:\s*'([^']*)'/) || [])[1];
+    // 全部码位都 ≤ 0xFFFF ⇒ 不是代理对
+    const allBmp = Array.from(glyph).every((ch) => ch.codePointAt(0) <= 0xffff);
+    expect(allBmp).toBe(true);
+  });
+
+  it('③ 三件齐备：字形 + 点击接到开左抽屉 + 抽屉绑会话列表，零违规', () => {
+    expect(leftEntryVisible(nav, page)).toEqual([]);
+  });
+
+  it('④ 判别力：把 leftIcon 改回空串 / 拆掉点击接线 / 不渲染抽屉 ⇒ 各自报红', () => {
+    expect(leftEntryVisible(nav.replace(/leftIcon:\s*'[^']*'/, "leftIcon: ''"), page).join()).toMatch(
+      /左槽无字形/
+    );
+    expect(leftEntryVisible(nav, page.replace('@left-click="toggleSidebarLeft"', '')).join()).toMatch(
+      /未把 left-click 接到 toggleSidebarLeft/
+    );
+    expect(
+      leftEntryVisible(nav, page.replace(/<AiChatDrawerLeft[\s\S]*?\/>/, '')).join()
+    ).toMatch(/未渲染左侧会话抽屉/);
+  });
+
+  /**
+   * ⑤ 标题恒居中（2026-10-27）：左槽一旦有字形，AppNavBar 的 §5.1 就把标题切左对齐 ——
+   * 「☰ AI 助手 ⋯」全挤在左上角。聊天页要三段式居中，故透传 centerTitle，默认开。
+   * 这条锁两件事：prop 真的透传到 AppNavBar（不是写在 props 里没人用）、且默认值是 true
+   * （默认 false ⇒ 页头又退回左对齐，而这不会报任何错）。
+   */
+  it('⑤ 标题恒居中：center-title 透传到页头且默认开', () => {
+    expect(nav).toMatch(/:center-title="centerTitle"/);
+    expect(nav).toMatch(/centerTitle:\s*true/);
+    // 判别力：默认值翻成 false 或拆掉透传 ⇒ 两条断言各自失配
+    expect(nav.replace(/centerTitle:\s*true/, 'centerTitle: false')).not.toMatch(/centerTitle:\s*true/);
+    expect(nav.replace(':center-title="centerTitle"', '')).not.toMatch(/:center-title="centerTitle"/);
   });
 });

@@ -2,21 +2,23 @@
     <view class="nav-bar" :class="[navBgClass, { 'nav-bar--transparent': transparent, 'nav-bar--divider': divider }]">
         <view class="status-bar" :class="statusBarBgClass" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
         <view class="nav-bar-body">
-            <view class="nav-bar-side nav-bar-left" @click="onLeftClick">
+            <view class="nav-bar-side nav-bar-left" :class="{ 'nav-bar-side--front': centerTitle }"
+                @click="onLeftClick">
                 <text v-if="leftIcon.length > 0" class="nav-bar-icon" :class="titleColorClass">{{ leftIcon }}</text>
             </view>
-            <view class="nav-bar-title-block" :class="{ 'nav-bar-title-block--center': !leftOverlap }"
-                @click="onTitleBlockClick">
+            <view class="nav-bar-title-block" :class="titleBlockClass" @click="onTitleBlockClick">
                 <text v-if="title.length > 0" class="nav-bar-title" :class="titleColorClass">{{ title }}</text>
                 <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
             </view>
-            <view v-if="rightIcons.length > 0" class="nav-bar-right" :style="rightSlotStyle">
+            <view v-if="rightIcons.length > 0" class="nav-bar-right" :class="{ 'nav-bar-side--front': centerTitle }"
+                :style="rightSlotStyle">
                 <view v-for="(icon, idx) in rightIcons" :key="idx" class="nav-bar-right-item"
                     @click="onRightItemClick(idx)">
                     <text class="nav-bar-icon" :class="titleColorClass">{{ icon }}</text>
                 </view>
             </view>
-            <view v-else class="nav-bar-side nav-bar-right" :style="rightSlotStyle" @click="onRightClick">
+            <view v-else class="nav-bar-side nav-bar-right" :class="{ 'nav-bar-side--front': centerTitle }"
+                :style="rightSlotStyle" @click="onRightClick">
                 <slot name="right"></slot>
             </view>
         </view>
@@ -40,6 +42,15 @@
         subtitle ?: string
         /** N03 分隔线：border-bottom 1rpx $border-color-light（#1592 白底带分隔线套） */
         divider ?: boolean
+        /**
+         * 标题恒居中（2026-10-27 AI 助手页头）。默认 false ⇒ 全仓现有调用方零 diff。
+         *
+         * 为什么需要这个 prop：左槽一有字形，`leftOverlap` 就成立、标题自动切左对齐（§5.1，
+         * 那是对「证件名/返回箭头」这类页头定的）。聊天页要的是「☰ | AI 助手 | ⋯」的三段式，
+         * 标题必须居中 —— 且必须**脱流**才算真居中：右槽为让开小程序胶囊带了 width + 大段
+         * margin-right，标题若留在流内，只能在「左槽 → 右槽」的剩余宽度里居中，视线上必然偏左。
+         */
+        centerTitle ?: boolean
     }>(), {
         title: '',
         leftIcon: '‹',
@@ -48,7 +59,8 @@
         transparent: false,
         variant: 'plain',
         subtitle: '',
-        divider: false
+        divider: false,
+        centerTitle: false
     })
 
     const emit = defineEmits(['leftClick', 'rightClick'])
@@ -59,6 +71,18 @@
 
     // 标题是否被左槽内容顶开（左槽有 icon 且有标题时走左对齐形态；否则居中，§5.1）
     const leftOverlap = computed((): boolean => props.leftIcon.length > 0 && props.title.length > 0)
+
+    /**
+     * 标题块形态类（2026-10-27）：`centerTitle` 优先于 §5.1 的 leftOverlap 判定。
+     * 两者是互斥语义 —— §5.1 说的是「左槽有字时让位给左槽」，centerTitle 说的是
+     * 「左槽有字也要居中，让位靠脱流解决」。先判 centerTitle，避免两条规则打架。
+     */
+    const titleBlockClass = computed((): string => {
+        if (props.centerTitle) {
+            return 'nav-bar-title-block--floating-center'
+        }
+        return leftOverlap.value ? '' : 'nav-bar-title-block--center'
+    })
 
     // 胶囊让位（#1592）：右槽单行定宽，右缘 ≤ 胶囊左边线 − 视觉间隙；放不下由页面移出次要动作。
     // 坐标系修正（#1602 真链路复验发现）：槽在 .nav-bar-body 的内容盒里，内容盒右缘 =
@@ -165,6 +189,8 @@
         align-items: center;
         height: 88rpx;
         padding: 0 $spacing-md;
+        /* 标题居中形态的定位包含块：centerTitle 时标题块脱流（两侧槽仍在流内、位置不变） */
+        position: relative;
     }
 
     .nav-bar-side {
@@ -172,6 +198,15 @@
         align-items: center;
         /* 与右槽的最小间距：长标题经 ellipsis 收敛，不会顶到图标 */
         margin-right: 24rpx;
+    }
+
+    /* 两侧槽抬到脱流标题块之上（仅 centerTitle 时挂上）。
+       脱流标题块跨全宽 ⇒ 它会盖住左槽 ☰ 与右槽 ⋯，两处都点不动。本仓无 `pointer-events`
+       先例（grep 全仓 0 处），故用 z-index 分层；`position: relative` 只为让 z-index 生效，
+       元素仍在流内、位置与尺寸一概不变。 */
+    .nav-bar-side--front {
+        position: relative;
+        z-index: 2;
     }
 
     .nav-bar-left {
@@ -210,6 +245,26 @@
     .nav-bar-title-block--center {
         align-items: center;
         margin-left: 0;
+    }
+
+    /* 标题恒居中（centerTitle）：脱流 + 两侧**对称内缩**，居中点仍是整条 bar 的中心。
+       用 left + width 定宽而不是 left+right 双锚点 —— 后者依赖 uvue 对双锚点拉伸的支持，
+       本仓零先例。高度沿用 .nav-bar-title-block 的 88rpx + justify-content:center ⇒ 垂直居中。
+
+       为什么内缩 88rpx 而不是铺满全宽：左槽占 [24rpx, 68rpx]（$spacing-md padding + 44rpx 字形），
+       内缩到 88rpx 留 20rpx 余量 ⇒ 标题块**物理上不覆盖左槽**。这是给「点了没反应」留的
+       几何兜底：v-if 形态下若某条渲染路径不认 z-index，铺满全宽的透明块会把 ☰ 的命中区
+       整个盖掉（不报错、不崩，只是点不动）。内缩对称，所以居中点不变。
+       右侧仍会压到右槽的空白段（右槽 [338rpx, 532rpx]，图标在右端），靠 DOM 顺序
+       （右槽在标题块之后绘制）+ z-index 兜住，不靠几何。 */
+    .nav-bar-title-block--floating-center {
+        position: absolute;
+        left: 88rpx;
+        top: 0;
+        width: 574rpx;
+        align-items: center;
+        margin-left: 0;
+        z-index: 1;
     }
 
     .nav-bar-subtitle {
