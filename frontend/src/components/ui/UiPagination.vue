@@ -17,7 +17,7 @@ const props = withDefaults(
   defineProps<{
     /** 总条数（必填） */
     total: number
-    /** 是否显示「共 X 条」 */
+    /** 是否显示「共 X 条」（文案由 EP 的 locale 决定，中文包下即 `共 {total} 条`；见 utils/elementPlusLocale.ts） */
     showTotal?: boolean
     /** 是否显示每页条数选择器 */
     showSizes?: boolean
