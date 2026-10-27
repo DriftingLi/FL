@@ -3,7 +3,7 @@
     <h2 class="mb-1 mt-0 text-2xl font-semibold text-ink">帮助中心</h2>
     <p class="mb-4 mt-0 text-sm text-ink-3">先搜关键词，或从左侧分类里找。</p>
 
-    <el-input v-model="keyword" class="mb-4" placeholder="搜索问题关键词" clearable />
+    <UiInput v-model="keyword" class="mb-4" placeholder="搜索问题关键词" clearable />
 
     <UiAsyncSection
       :error="loadError"
@@ -68,6 +68,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const center = ref<HelpCenter>({ categories: [] })
 const keyword = ref('')

@@ -63,9 +63,7 @@
           </div>
           <div class="mt-3 flex items-center justify-between gap-2">
             <span class="text-sm text-ink-3">每次题量</span>
-            <el-select v-model="randomCount" size="small" class="w-[110px]">
-              <el-option v-for="o in randomCountOptions" :key="o.value" :label="o.label" :value="o.value" />
-            </el-select>
+            <UiSelect v-model="randomCount" size="small" class="w-[110px]" :options="(randomCountOptions).map((o) => ({ label: o.label, value: o.value }))" />
           </div>
           <UiButton variant="success" block class="mt-4" :loading="loading" @click="startFree()">
             开始练习
@@ -82,9 +80,7 @@
           </div>
           <div class="mt-3 flex items-center justify-between gap-2">
             <span class="text-sm text-ink-3">题型</span>
-            <el-select v-model="specialType" size="small" placeholder="选择题型" class="w-[130px]">
-              <el-option v-for="o in questionTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
-            </el-select>
+            <UiSelect v-model="specialType" size="small" placeholder="选择题型" class="w-[130px]" :options="(questionTypeOptions).map((o) => ({ label: o.label, value: o.value }))" />
           </div>
           <UiButton
             variant="warning"
@@ -108,16 +104,7 @@
           </div>
           <div class="mt-3 flex items-center justify-between gap-2">
             <span class="text-sm text-ink-3">考点标签</span>
-            <el-select
-              v-model="tagPracticeId"
-              size="small"
-              filterable
-              placeholder="选择标签"
-              class="w-[130px]"
-              :loading="tagsLoading"
-            >
-              <el-option v-for="t in tags" :key="t.id" :label="`${t.name}（${t.question_count ?? 0}题）`" :value="t.id" />
-            </el-select>
+            <UiSelect v-model="tagPracticeId" size="small" filterable placeholder="选择标签" class="w-[130px]" :loading="tagsLoading" :options="(tags).map((t) => ({ label: `${t.name}（${t.question_count ?? 0}题）`, value: t.id }))" />
           </div>
           <p v-if="tagPracticeId && tagProgress.total > 0" class="mt-2 text-xs text-ink-3">
             {{ tagProgress.completed }}/{{ tagProgress.total }} 已练习
@@ -172,7 +159,7 @@
           :user-answer="submitted ? answers[currentQuestion.id] : undefined"
           @select="key => { if (!currentQuestion) return; toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice') }"
         />
-        <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
+        <UiInput v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
         <div v-if="submitted && lastResult" class="result-area">
           <AnswerResultCard
@@ -257,6 +244,8 @@ import { useCredentialStore } from '@/stores/credential'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 // null = 入口；'sequential' | 'free' | 'tag' = 刷题中
 

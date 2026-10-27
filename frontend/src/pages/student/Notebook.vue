@@ -71,7 +71,7 @@
       :confirm-loading="saving"
       @confirm="handleSave"
     >
-      <el-input v-model="draft" type="textarea" :rows="6" placeholder="记点什么…" maxlength="2000" show-word-limit />
+      <UiInput v-model="draft" type="textarea" :rows="6" placeholder="记点什么…" :maxlength="2000" show-word-limit />
     </UiDialog>
   </div>
 </template>
@@ -94,6 +94,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 分段控件的三态口径与后端 scope 参数同名（ADR-0055），不另造端上词表。
 const scopeOptions = [

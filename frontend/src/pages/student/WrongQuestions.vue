@@ -2,13 +2,7 @@
   <div class="mx-auto max-w-[900px]">
     <h2>错题本</h2>
     <div class="mb-3 flex flex-wrap items-center gap-2.5">
-      <el-select v-model="filterType" placeholder="题型筛选" clearable style="width: 150px">
-        <el-option label="单选题" value="single_choice" />
-        <el-option label="多选题" value="multi_choice" />
-        <el-option label="判断题" value="true_false" />
-        <el-option label="故障识图" value="fault_image" />
-        <el-option label="简答题" value="short_answer" />
-      </el-select>
+      <UiSelect v-model="filterType" placeholder="题型筛选" clearable style="width: 150px" :options="[{ label: '单选题', value: 'single_choice' }, { label: '多选题', value: 'multi_choice' }, { label: '判断题', value: 'true_false' }, { label: '故障识图', value: 'fault_image' }, { label: '简答题', value: 'short_answer' }]" />
       <UiButton @click="toggleSort">
         <UiIcon :name="sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'" class="mr-1" />
         {{ sortOrder === 'desc' ? '最新错误在前' : '最早错误在前' }}
@@ -95,7 +89,7 @@
               :disabled="submitted"
               @select="selectRedoOption"
             />
-            <el-input v-else v-model="textAnswer" type="textarea" :rows="3" placeholder="请输入答案" :disabled="submitted" />
+            <UiInput v-else v-model="textAnswer" type="textarea" :rows="3" placeholder="请输入答案" :disabled="submitted" />
             <div class="mt-2 flex gap-2">
               <UiButton variant="primary" size="small" :disabled="!canSubmit" @click="submitRedo">提交</UiButton>
               <UiButton size="small" @click="closeRedo">取消</UiButton>
@@ -169,6 +163,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 
 

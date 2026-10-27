@@ -3,13 +3,11 @@
     <h1 class="text-xl font-bold text-ink">职位广场</h1>
 
     <div class="rounded-card border border-line bg-panel p-4 flex flex-wrap gap-2">
-      <el-select v-model="filters.position_id" clearable placeholder="岗位" class="!w-40" @change="applyFilters">
-        <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
-      </el-select>
-      <el-input v-model="filters.region" placeholder="地区" clearable class="!w-32" @change="applyFilters" />
-      <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="applyFilters" />
-      <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="applyFilters" />
-      <el-input v-model="filters.experience" placeholder="经验要求" clearable class="!w-28" @change="applyFilters" />
+      <UiSelect v-model="filters.position_id" clearable placeholder="岗位" class="!w-40" @change="applyFilters" :options="(positions).map((p) => ({ label: p.name, value: p.position_id }))" />
+      <UiInput v-model="filters.region" placeholder="地区" clearable class="!w-32" @change="applyFilters" />
+      <UiInput v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="applyFilters" />
+      <UiInput v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="applyFilters" />
+      <UiInput v-model="filters.experience" placeholder="经验要求" clearable class="!w-28" @change="applyFilters" />
     </div>
 
     <!-- 空态 / 错误态（+retry）/ 首屏骨架：判据与互斥由 useAsyncPage + UiAsyncSection 负责（#1101） -->
@@ -79,6 +77,8 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const items = ref<JobPosting[]>([])
 const BATCH = 20

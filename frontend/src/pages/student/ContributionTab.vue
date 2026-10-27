@@ -22,6 +22,8 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const props = defineProps<{
   credentialId?: number | null
@@ -434,20 +436,18 @@ defineExpose({ loadMine })
       <div class="flex flex-col gap-4">
         <div>
           <label class="mb-1 block text-sm text-ink-2">目标证件 <span class="text-danger">*</span></label>
-          <el-select v-model="uploadCredentialId" placeholder="选择资料所属证件" class="w-full">
-            <el-option v-for="c in credentialOptions" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
+          <UiSelect v-model="uploadCredentialId" placeholder="选择资料所属证件" class="w-full" :options="(credentialOptions).map((c) => ({ label: c.name, value: c.id }))" />
           <p v-if="uploadCredentialId && uploadCredentialId !== (props.credentialId ?? credentialStore.current?.id)" class="mt-1 text-xs text-ink-3">
             该稿将归属所选证件，切到该证件下可见
           </p>
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">标题 <span class="text-danger">*</span></label>
-          <el-input v-model="uploadTitle" maxlength="120" placeholder="如：叉车液压系统常见故障排查手册" show-word-limit />
+          <UiInput v-model="uploadTitle" :maxlength="120" placeholder="如：叉车液压系统常见故障排查手册" show-word-limit />
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">简介 <span class="text-danger">*</span></label>
-          <el-input v-model="uploadIntro" type="textarea" :rows="3" maxlength="2000" placeholder="这份资料讲了什么、适合谁、整理自哪里" show-word-limit />
+          <UiInput v-model="uploadIntro" type="textarea" :rows="3" :maxlength="2000" placeholder="这份资料讲了什么、适合谁、整理自哪里" show-word-limit />
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">文件（1–5 个，{{ FILE_TYPE_HINT }}）</label>

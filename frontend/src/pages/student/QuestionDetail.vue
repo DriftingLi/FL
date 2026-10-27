@@ -74,7 +74,7 @@
             :disabled="submitted"
             @select="onSelect"
           />
-          <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" />
+          <UiInput v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" />
           <div class="mt-3 flex gap-2">
             <UiButton variant="primary" size="small" :disabled="!canSubmit" :loading="submitting" @click="onSubmit">提交</UiButton>
             <UiButton size="small" @click="goQuestionBank">去题库练习</UiButton>
@@ -117,6 +117,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const route = useRoute()
 const router = useRouter()
