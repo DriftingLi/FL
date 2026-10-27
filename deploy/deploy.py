@@ -553,9 +553,15 @@ class Deployer:
             return
         managed = {line.strip() for line in (ps.stdout or "").splitlines() if line.strip()}
         for name in names & set(KNOWN_CONTAINERS):
+            # docker ps -aq 默认给 12 位短 ID，compose ps -q 给 64 位完整 ID；
+            # 直接比较字符串会把本项目容器误判成「另一个 compose 项目」（2026-10-27 实测）。
             cid = self.run(["docker", "ps", "-aq", "--filter", f"name=^/{name}$"],
                            check=False, capture=True).stdout.strip()
-            if not cid or cid in managed:
+            if not cid:
+                continue
+            full_id = self.run(["docker", "inspect", "-f", "{{.Id}}", cid],
+                               check=False, capture=True).stdout.strip()
+            if not full_id or full_id in managed:
                 continue
             labels = self.run(["docker", "inspect", "-f", "{{json .Config.Labels}}", cid],
                               check=False, capture=True)
@@ -1236,7 +1242,13 @@ class Deployer:
             # 不传 --wait：compose 的 wait 只看容器 healthcheck，backend 的 start_period
             # 会在 testing 的 30s 预算下误报「application not healthy after 30s」
             # （2026-10-27 实测；容器其实已在正常启动）。真正的就绪判据交给下方 health_check 的 HTTP 轮询。
-            args = ["up", "-d", "--no-deps"]
+            #
+            # 不能带 --no-deps：compose 的 config-hash 包含 depends_on，而 --no-deps 创建出的容器
+            # 标签哈希与 compose config --hash 永远不同 —— backend / frontend 因此每次都被判
+            # 「compose 配置变更」重建（2026-10-27 实测：no-deps=1e85… vs config/normal=7f1f…）。
+            # 去掉后 up 与 config 用同一份哈希；数据服务仍由 plan_data 的 blocked 保护，
+            # 且 up <app> 不会重建未变化的依赖（--force-recreate 也只作用于指定服务）。
+            args = ["up", "-d"]
             if self.opts.force:
                 args += ["--force-recreate"]
             if self.opts.remove_orphans:
@@ -1378,13 +1390,14 @@ class Deployer:
 
     def deploy(self) -> None:
         self.preflight()
-        self.cleanup_conflicting_containers()
         # 先解析代理/镜像源，再写 .env —— 否则代理回退后 .env 里的镜像引用会与实际拉取路径不一致。
         self.login_registry()
         self.ensure_registry_proxy()
         if self.mode != "local":
             self.write_env_file()
         self._validate_compose()
+        # 放在 .env 落盘之后：同名残留清理与后续 up / 变更计划必须用同一个 compose 项目名。
+        self.cleanup_conflicting_containers()
         self.capture_previous_images()
 
         backup_thread: Optional[threading.Thread] = None
@@ -1521,7 +1534,7 @@ class Deployer:
 
         for service in (s for s in ("backend", "frontend")
                         if (s == "backend" and backend_changed) or (s == "frontend" and frontend_changed)):
-            args = ["up", "-d", "--no-deps", "--force-recreate"]
+            args = ["up", "-d", "--force-recreate"]
             args.append(service)
             log_info(f">>> 回滚重建 {service}")
             cp = self.run(self._compose() + args, check=False)
