@@ -64,7 +64,7 @@
 
     <!-- 举报弹窗 -->
     <UiDialog v-model="showReportDialog" title="举报职位" width="440px" confirm-text="提交举报" :confirm-loading="reporting" @confirm="confirmReport">
-      <el-input v-model="reportReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写举报原因（如：交培训费包分配、冒用别家公司名义）" />
+      <UiInput v-model="reportReason" type="textarea" :rows="3" :maxlength="500" show-word-limit placeholder="请填写举报原因（如：交培训费包分配、冒用别家公司名义）" />
     </UiDialog>
   </div>
 </template>
@@ -80,6 +80,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const route = useRoute()
 const data = ref<JobPosting | null>(null)

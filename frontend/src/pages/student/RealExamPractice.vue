@@ -28,7 +28,7 @@
         :user-answer="submitted ? answers[currentQuestion.id] : undefined"
         @select="key => { if (!currentQuestion) return; toggleOption(currentQuestion.id, key, currentQuestion.type === 'multi_choice') }"
       />
-      <el-input v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
+      <UiInput v-else v-model="textAnswer" type="textarea" :rows="4" placeholder="请输入答案" :disabled="submitted" />
 
       <div v-if="submitted && lastResult" class="result-area mt-4 flex flex-col gap-3">
         <AnswerResultCard
@@ -90,6 +90,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const route = useRoute()
 const router = useRouter()

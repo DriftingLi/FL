@@ -5,7 +5,7 @@
     </div>
 
     <div class="mb-5 flex gap-3">
-      <el-input
+      <UiInput
         ref="inputRef"
         v-model="keyword"
         size="large"
@@ -18,7 +18,7 @@
         <template #prefix>
           <UiIcon name="search" />
         </template>
-      </el-input>
+      </UiInput>
       <UiButton variant="primary" size="large" :loading="loading" @click="submitSearch">搜索</UiButton>
     </div>
 
@@ -154,6 +154,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -5,18 +5,10 @@
         <h2>{{ paperMode ? `真题考试：${paperTitle}` : '模拟考试' }}</h2>
         <el-form v-if="!paperMode" :model="examForm" label-width="100px">
           <el-form-item label="题目数量">
-            <el-select v-model="examForm.count">
-              <el-option label="20 题" :value="20" />
-              <el-option label="40 题（默认）" :value="40" />
-              <el-option label="60 题" :value="60" />
-            </el-select>
+            <UiSelect v-model="examForm.count" :options="[{ label: '20 题', value: 20 }, { label: '40 题（默认）', value: 40 }, { label: '60 题', value: 60 }]" />
           </el-form-item>
           <el-form-item label="考试时长">
-            <el-select v-model="examForm.duration">
-              <el-option label="60分钟" :value="60" />
-              <el-option label="90分钟" :value="90" />
-              <el-option label="120分钟" :value="120" />
-            </el-select>
+            <UiSelect v-model="examForm.duration" :options="[{ label: '60分钟', value: 60 }, { label: '90分钟', value: 90 }, { label: '120分钟', value: 120 }]" />
           </el-form-item>
           <el-form-item>
             <UiButton variant="primary" size="large" @click="startExam" :loading="loading">开始考试</UiButton>
@@ -104,6 +96,7 @@ import AnsweringSessionShell from '@/components/student/AnsweringSessionShell.vu
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const route = useRoute()
 const router = useRouter()
