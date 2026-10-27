@@ -15,31 +15,51 @@
         class="!w-44"
         @change="applyFilters"
       />
-      <el-select v-model="filters.position_id" clearable placeholder="期望岗位" class="!w-36" @change="applyFilters">
-        <!-- #492：期望岗位选项与学员简历同源（positions 岗位字典），参数 position_id -->
-        <el-option v-for="p in positions" :key="p.position_id" :label="p.name" :value="p.position_id" />
-      </el-select>
-      <el-select v-model="filters.credential_id" clearable placeholder="证书" class="!w-36" @change="applyFilters">
-        <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
-      </el-select>
-      <el-input v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="applyFilters" />
-      <el-input v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="applyFilters" />
-      <el-select v-model="filters.experience_min" clearable placeholder="经验年限" class="!w-32" @change="applyFilters">
-        <!-- #492：经验年限档位「N 年及以上」（后端 >= 匹配） -->
-        <el-option v-for="n in experienceOptions" :key="String(n)" :label="`${n}年及以上`" :value="n" />
-      </el-select>
-      <el-select v-model="filters.job_nature" clearable placeholder="用工性质" class="!w-32" @change="applyFilters">
-        <!-- #492：新增用工性质筛选 -->
-        <el-option label="全职" value="fulltime" />
-        <el-option label="兼职" value="parttime" />
-        <el-option label="合同" value="contract" />
-      </el-select>
-      <el-select v-model="filters.available_in" clearable placeholder="到岗时间" class="!w-32" @change="applyFilters">
-        <el-option label="随时" value="immediate" />
-        <el-option label="1周内" value="1w" />
-        <el-option label="2周内" value="2w" />
-        <el-option label="1月内" value="1m" />
-      </el-select>
+      <!-- #492：期望岗位选项与学员简历同源（positions 岗位字典），参数 position_id -->
+      <UiSelect
+        v-model="filters.position_id"
+        :options="positionOptions"
+        clearable
+        placeholder="期望岗位"
+        class="!w-36"
+        @change="applyFilters"
+      />
+      <UiSelect
+        v-model="filters.credential_id"
+        :options="credentialOptions"
+        clearable
+        placeholder="证书"
+        class="!w-36"
+        @change="applyFilters"
+      />
+      <UiInput v-model.number="filters.salary_min" placeholder="最低薪资" type="number" clearable class="!w-28" @change="applyFilters" />
+      <UiInput v-model.number="filters.salary_max" placeholder="最高薪资" type="number" clearable class="!w-28" @change="applyFilters" />
+      <!-- #492：经验年限档位「N 年及以上」（后端 >= 匹配） -->
+      <UiSelect
+        v-model="filters.experience_min"
+        :options="experienceOptions.map((n) => ({ label: n + '年及以上', value: n }))"
+        clearable
+        placeholder="经验年限"
+        class="!w-32"
+        @change="applyFilters"
+      />
+      <!-- #492：新增用工性质筛选 -->
+      <UiSelect
+        v-model="filters.job_nature"
+        :options="JOB_NATURE_OPTIONS"
+        clearable
+        placeholder="用工性质"
+        class="!w-32"
+        @change="applyFilters"
+      />
+      <UiSelect
+        v-model="filters.available_in"
+        :options="AVAILABLE_IN_OPTIONS"
+        clearable
+        placeholder="到岗时间"
+        class="!w-32"
+        @change="applyFilters"
+      />
     </div>
 
     <!-- 空态 / 错误态（+retry）/ 首屏骨架：判据与互斥由 useAsyncPage + UiAsyncSection 负责（#1101） -->
@@ -119,6 +139,8 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 const BATCH = 20
 const items = ref<RecruitResumeItem[]>([])
@@ -217,6 +239,26 @@ const credentials = ref<any[]>([])
 const regionOptions = buildCityLevelRegionOptions()
 // #492：经验档位「N 年及以上」
 const experienceOptions = [1, 3, 5, 10]
+
+/** 期望岗位 / 证书：字典 → UiSelect 的 {label,value} */
+const positionOptions = computed<UiSelectOption[]>(() =>
+  positions.value.map((p) => ({ label: p.name, value: p.position_id }))
+)
+const credentialOptions = computed<UiSelectOption[]>(() =>
+  credentials.value.map((c) => ({ label: c.name, value: c.id }))
+)
+/** 用工性质 / 到岗时间：静态枚举（原先是内联 el-option） */
+const JOB_NATURE_OPTIONS: UiSelectOption[] = [
+  { label: "全职", value: "fulltime" },
+  { label: "兼职", value: "parttime" },
+  { label: "合同", value: "contract" }
+]
+const AVAILABLE_IN_OPTIONS: UiSelectOption[] = [
+  { label: "随时", value: "immediate" },
+  { label: "1周内", value: "1w" },
+  { label: "2周内", value: "2w" },
+  { label: "1月内", value: "1m" }
+]
 
 async function loadMeta() {
   try {

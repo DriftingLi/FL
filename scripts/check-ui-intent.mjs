@@ -38,6 +38,21 @@ export function isWrapperPath(filePath) {
   return ('/' + p).includes(WRAPPER_SEGMENT)
 }
 
+/**
+ * 「新代码必用」开关（#1981 的生效点）。
+ *
+ * `--all`（存量）：「按域分批」的标签**放行** —— 那是登记在案的迁移面。
+ * `--diff`（新增行）：同样两个标签**不放行** —— 新增行就是新代码，没有「欠账」的资格。
+ * 判据仍是同一份登记表，只是对「存量」与「新增」用了两种口径。
+ */
+let strictNewCode = false
+export function setStrictNewCode(v) {
+  strictNewCode = Boolean(v)
+}
+export function isStrictNewCode() {
+  return strictNewCode
+}
+
 let cachedRegistry = null
 /** 派生结果按进程缓存：一个 `--all` 会扫 170+ 个文件，重复解析文档没有意义。 */
 export function getRegistry() {
@@ -61,6 +76,10 @@ export function findIntentViolations(source, registry, filePath) {
     while ((m = re.exec(text))) {
       const tag = m[1]
       const verdict = classify(tag, reg)
+      if (verdict.kind === 'pending' && strictNewCode) {
+        violations.push({ rule: 'intent', line, tag, text: raw.trim(), pending: true, wrapper: reg.wrapperOf.get(tag) })
+        continue
+      }
       if (verdict.kind !== 'unknown') continue
       violations.push({ rule: 'intent', line, tag, text: raw.trim(), orphanParent: verdict.orphan ? verdict.parent : null })
     }
@@ -119,6 +138,9 @@ export function scanSource(source, filePath) {
 }
 
 function describe(v) {
+  if (v.rule === 'intent' && v.pending) {
+    return '[' + '①意图' + '] <' + v.tag + '>  按域分批的**存量**欠账：新代码必须用 ' + (v.wrapper ?? '封装件')
+  }
   if (v.rule === 'intent') {
     const why = v.orphanParent
       ? '子件 <' + v.tag + '> 的父件 <' + v.orphanParent + '> 没有登记'
@@ -193,5 +215,7 @@ if (isDirectRun(import.meta.url)) {
     }
     process.exit(emitRegistry(argv[1]))
   }
+  // 增量门 = 新代码：把「按域分批」的欠账也算违规（#1981 的「新代码必用」生效点）。
+  if (argv[0] === '--diff') setStrictNewCode(true)
   runGuardCli(GUARD_SPEC)
 }

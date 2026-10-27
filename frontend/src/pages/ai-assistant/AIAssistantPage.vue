@@ -29,10 +29,17 @@
 
     <!-- 输入区差异内容：双模式下拉框 -->
     <template #input-footer-left>
-      <el-select v-model="selectedMode" size="small" :disabled="store.streaming" class="mode-select" style="width: 112px">
-        <el-option value="normal" label="普通模式" :disabled="!store.modeModels.normal" />
-        <el-option value="expert" label="专家模式" :disabled="!store.modeModels.expert" />
-      </el-select>
+      <UiSelect
+        v-model="selectedMode"
+        size="small"
+        :disabled="store.streaming"
+        class="mode-select"
+        style="width: 112px"
+        :options="[
+          { label: '普通模式', value: 'normal', disabled: !store.modeModels.normal },
+          { label: '专家模式', value: 'expert', disabled: !store.modeModels.expert }
+        ]"
+      />
     </template>
 
     <!-- 输入区差异内容：模式未绑定提示 -->

@@ -62,7 +62,7 @@
         </div>
       </div>
       <UiDialog v-model="showDialog" title="申请交换联系方式" width="420px" confirm-text="提交申请" :confirm-loading="submitting" @confirm="submitRequest">
-        <el-input v-model="message" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
+        <UiInput v-model="message" type="textarea" :rows="3" :maxlength="200" show-word-limit placeholder="请填写申请附言（1-200字）" />
       </UiDialog>
     </div>
     </UiAsyncSection>
@@ -82,6 +82,7 @@ import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import OnlineResumePdf from '@/components/recruit/OnlineResumePdf.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const route = useRoute()
 const data = ref<RecruitResumeItem | null>(null)

@@ -2,6 +2,8 @@
 export interface UiSelectOption {
   label: string
   value: string | number
+  /** 单项禁用（如「该模型未配置」）：透传给 el-option 的 disabled */
+  disabled?: boolean
 }
 
 /** 分组形态：渲染成 `el-option-group`（存量 8 处，`options` 平铺表达不了）。 */
@@ -20,13 +22,11 @@ export interface UiSelectGroup {
  *   - `options`：平铺（原有形态，零改动）
  *   - `groups` ：分组 —— 渲染成 `el-option-group` 套 `el-option`；与 `options` 互斥，`groups` 优先
  *   - 自定义    ：`#options` 插槽，原样落到 `el-select` 里（远程搜索、自定义模板这类）
+ *
+ * 值可以是单值（默认）或数组（`multiple`）。写成联合而不是两个组件：多选与单选是**同一意图**
+ * （从数据源选），登记表「一意图一形态」，拆成 `UiMultiSelect` 就是第二种写法了。
+ * `null` 也要收：EP 的 clearable 清空态在存量里被写成 `ref<number | null>(null)`。
  */
-/**
- * 值可以是单值（默认）或数组（`multiple`）。
- * 写成联合而不是两个组件：`multiple` 与单选是**同一意图**（从数据源选），
- * 登记表「一意图一形态」，拆成 `UiMultiSelect` 就是第二种写法了。
- */
-/** `null` 也要收：EP 的 clearable 清空态在存量里被写成 `ref<number | null>(null)`。 */
 const value = defineModel<string | number | null | Array<string | number> | undefined>({ default: undefined })
 
 withDefaults(
@@ -80,6 +80,7 @@ withDefaults(
           :key="opt.value"
           :label="opt.label"
           :value="opt.value"
+          :disabled="opt.disabled"
         />
       </el-option-group>
       <el-option
@@ -87,6 +88,7 @@ withDefaults(
         :key="opt.value"
         :label="opt.label"
         :value="opt.value"
+        :disabled="opt.disabled"
       />
     </slot>
   </el-select>
