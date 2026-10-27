@@ -12,7 +12,7 @@
       <div
         v-for="(source, si) in sources"
         :key="source.id ?? si"
-        class="mt-2.5 rounded-[10px] border border-line bg-panel px-3 py-2.5 text-sm leading-[1.6] text-ink-2"
+        class="mt-2.5 rounded-ctl border border-line bg-panel px-3 py-2.5 text-sm leading-[1.6] text-ink-2"
       >
         <img
           v-for="imagePath in sourceImages(source.text)"

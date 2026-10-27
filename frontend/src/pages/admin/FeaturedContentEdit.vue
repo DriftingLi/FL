@@ -367,9 +367,9 @@ onMounted(() => {
 .edit-card {
   /* 卡片底色用「表面」token：--color-text-inverse 在深色下仍是白，等于把整张卡刷成白板 */
   background: var(--color-bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 32px 40px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-xs);
 }
 
 .cover-uploader {
@@ -377,7 +377,7 @@ onMounted(() => {
   width: 280px;
   height: 158px;
   border: 1px dashed var(--color-border-dark);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
   transition: border-color var(--duration-base) var(--ease-default);

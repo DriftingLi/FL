@@ -128,7 +128,7 @@
 ### 容器档位表（ADR-0083 / #1957）
 
 > 容器（卡片、面板、抽屉壳、区块框）的外观**只能取档内值**。页面本地容器类允许存在，但**只许取值，不许自造**。值只有两个出处：scoped 写 `var(--radius-*)` / `var(--space-*)`，模板写 `rounded-card` / `rounded-ctl` / `rounded-pill`（`tailwind.css` 的语义别名，解析到 `design-tokens.css`）。
-> 早于本表的写法怎么收敛，逐条清单在 [1957 附录](../design/1957-附录-scoped取值清单.md)。
+> 早于本表的写法怎么收敛、现在还剩什么，逐条清单在 [1957 附录](../design/1957-附录-scoped取值清单.md)（#1979 / #1980 收敛后用同一脚本重新生成）。
 
 **圆角（4 档）**
 
@@ -139,7 +139,11 @@
 | 胶囊 | `rounded-pill` / `--radius-full` | 9999px | 胶囊、标签、头像、圆点（`50%` 真圆等价） |
 | 零 | `rounded-none` | 0 | 贴边、表格内、无缝拼接 |
 
-越档归这里：**16px 一律回卡片档**（现存 7 处）；**6px / 4px / 3px / 10px 一律回控件档**（现存 42 处，其中裸 `rounded` 12 处）；**2px 归零档**；`0 var(--radius-full) var(--radius-full) 0`（侧栏项左贴边）登记例外。
+**收敛完成（#1979）**，越档 0 处：16px / 10px / 6px / 4px / 3px / 2px 与裸 `rounded` 已全部归位（scoped 侧写 `var(--radius-*)`，模板侧写 `rounded-card` / `rounded-ctl` / `rounded-pill`，含方向变体 `rounded-bl-ctl`）。
+
+三种写法**不算越档**、保留原样：`border-radius: 50%`（真圆，与胶囊档等价）、`border-radius: 0 !important`（零档值，`!important` 是对抗 vditor 内联样式的）、以及模板里的 `rounded-none`。
+
+**唯一登记例外**：`0 var(--radius-full) var(--radius-full) 0`（`AppSidebarItem` 的侧栏项左贴边）。
 
 **内边距（4 档，仅容器卡片）**
 
@@ -163,7 +167,14 @@
 | 悬起 | `shadow-raised` / `--shadow-md` | 可点卡片 hover |
 | 弹层 | `--shadow-lg` | 对话框 / 抽屉 / popper（EP 自带，页面不写） |
 
-**不是阴影的别写成阴影**：选中环（`0 0 0 2px …`）与 inset 描边环（`0 0 0 1px … inset`）用 `outline` / `border` 表达，现存 4 处待改。
+**收敛完成（#1980）**：`--shadow-sm` 不再被页面引用。它原本是 `xs` 与 `md` 之间的第五档，而仅剩的 3 处全都落在 hover / elevated 态 —— 归到卡片档会与底座同档（hover 看不出变化），所以按档位表落到**悬起档**（`var(--shadow-md)`），卡片的高亮阶梯因此固定为 `xs`（静置）→ `md`（悬起）。
+
+**不是阴影的别写成阴影**：选中环用 `outline` 表达（`.credential-card.active` 的 `0 0 0 2px` 已改，#1980）。
+
+两类**登记例外**（各自有理由，不是漏改）：
+
+- **着色按下光晕**（2 处，`AuthPageShell` 的备用登录方式）：`group-aria-pressed:shadow-[0_4px_10px_rgba(…)]`。着色光晕用 4 档中性 token 表达不出来，去掉则按下态丢掉品牌色反馈。
+- **inset 描边环**（3 处，`AuthPageShell` 的 `.el-input__wrapper` 常态 / hover / 聚焦）：这是 Element Plus 给输入框画边框的固有手法（`border: none` + `0 0 0 1px … inset`），我们的代码只换颜色、不换机制。改成 `border` 要连带覆写 `box-shadow: none`，还会绕开 EP 自己的 `transition: box-shadow`，收益不抵风险。
 
 ### 状态词表（联络授权 / 投递）（第十一波 #1103 / ADR-0056 §8）
 

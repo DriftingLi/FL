@@ -50,7 +50,7 @@
           :style="staggerStyle(i)"
         >
           <div
-            class="flex size-11 shrink-0 items-center justify-center rounded-[8px]"
+            class="flex size-11 shrink-0 items-center justify-center rounded-ctl"
             :style="{ background: typeConfig(item.content_type).bg, color: typeConfig(item.content_type).color }"
           >
             <UiIcon :name="typeConfig(item.content_type).icon" :size="20" />

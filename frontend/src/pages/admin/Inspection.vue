@@ -50,7 +50,7 @@
       >
         <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
         <div v-else class="grid gap-2">
-        <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+        <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
           <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
           <div class="text-ink-3">{{ item.created_at }}</div>
         </div>
@@ -89,7 +89,7 @@
       >
         <div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
         <div v-else class="grid gap-2">
-          <div v-for="item in views" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div v-for="item in views" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
             <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
           </div>
         </div>
@@ -124,7 +124,7 @@
       >
         <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
         <div v-else class="grid gap-2">
-          <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
             <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ describeContactRequest(item.status).label }}</div>
             <div class="text-ink-3">{{ item.created_at }}</div>
           </div>
@@ -161,7 +161,7 @@
       >
         <div v-if="jobsLoading" class="text-sm text-ink-3">加载中...</div>
         <div v-else class="grid gap-2">
-          <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
             <div class="flex items-center justify-between gap-2">
               <div>
                 <span class="font-semibold text-ink">{{ item.title }}</span>
@@ -206,7 +206,7 @@
       >
         <div v-if="reportsLoading" class="text-sm text-ink-3">加载中...</div>
         <div v-else class="grid gap-2">
-          <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded p-2 text-xs">
+          <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
             <div class="flex items-center justify-between gap-2">
               <div>
                 <span class="font-semibold text-ink">{{ item.job_title }}</span>

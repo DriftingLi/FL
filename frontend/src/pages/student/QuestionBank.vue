@@ -138,7 +138,7 @@
 
     <!-- ===== 刷题中 ===== -->
     <div v-if="mode" class="mt-2.5">
-      <div class="mb-[15px] flex items-center justify-between rounded-[8px] bg-panel px-[15px] py-2.5 shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
+      <div class="mb-[15px] flex items-center justify-between rounded-ctl bg-panel px-[15px] py-2.5 shadow-card">
         <div class="text-base text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
           <span class="ml-3 text-sm text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
@@ -159,7 +159,7 @@
           <!-- #511：收藏统一药丸（激活琥珀填充） -->
           <UiActionChip icon="fav" :label="favorited ? '已收藏' : '收藏'" tone="fav" :active="favorited" compact @click="toggleFavorite" />
         </div>
-        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="mb-2.5 max-h-[250px] max-w-full rounded-[8px]" loading="lazy" decoding="async" />
+        <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="mb-2.5 max-h-[250px] max-w-full rounded-ctl" loading="lazy" decoding="async" />
         <p class="mb-[15px] whitespace-pre-wrap text-base leading-[1.8]">{{ currentQuestion.content }}</p>
 
         <QuestionOptionPicker

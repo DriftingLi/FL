@@ -54,7 +54,7 @@ const accuracyText = computed(() => {
 /* 色值全部走全局语义 token（#554）：EP 默认调色板残留清零，深浅主题自动跟随 */
 .result-card {
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 16px;
   background: var(--color-bg-card);
   margin-bottom: 12px;

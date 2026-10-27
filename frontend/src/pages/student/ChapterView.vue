@@ -99,7 +99,7 @@
             </template>
             <template v-else-if="activeGroup.type === 'image'">
               <div class="image-gallery grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-md:grid-cols-1">
-                <div v-for="file in activeGroup.files" :key="file.file_id" class="gallery-item overflow-hidden rounded-[8px]">
+                <div v-for="file in activeGroup.files" :key="file.file_id" class="gallery-item overflow-hidden rounded-ctl">
                   <ImageViewer :src="file.file_url" :fileName="file.file_name" />
                 </div>
               </div>

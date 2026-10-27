@@ -15,7 +15,7 @@
           :class="favorited ? 'text-warn' : 'text-ink-3'"
           @click="handleToggleFavorite" />
       </div>
-      <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image mb-2.5 max-w-full rounded-[8px]" loading="lazy" decoding="async" />
+      <img v-if="currentQuestion.image_url" :src="currentQuestion.image_url" class="q-image mb-2.5 max-w-full rounded-ctl" loading="lazy" decoding="async" />
       <p class="q-content m-0 mb-4 whitespace-pre-wrap text-base leading-[1.7] text-ink">{{ currentQuestion.content }}</p>
 
       <QuestionOptionPicker

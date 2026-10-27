@@ -66,7 +66,7 @@ const props = withDefaults(
 <style scoped>
 .quick-card {
   background: var(--color-bg-card);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-xs);
   overflow: hidden;
@@ -74,13 +74,13 @@ const props = withDefaults(
 }
 
 .quick-card:hover {
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 /* elevated：投影更重 + hover 轻微上浮。
    单独的 transition 声明放在变体里，上面的 plain 规则保持零改动。 */
 .quick-card.is-elevated {
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   transition:
     box-shadow var(--duration-normal) var(--ease-default),
     transform var(--duration-normal) var(--ease-default);

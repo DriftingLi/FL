@@ -60,7 +60,7 @@
       <UiCard>
         <h2>考试结果</h2>
         <div class="my-5 text-center">
-          <div class="score-circle mb-2.5 inline-flex size-[150px] flex-col items-center justify-center rounded-full border-[6px] border-bad" :class="examResult.accuracy >= 60 ? 'border-ok' : ''">
+          <div class="score-circle mb-2.5 inline-flex size-[150px] flex-col items-center justify-center rounded-pill border-[6px] border-bad" :class="examResult.accuracy >= 60 ? 'border-ok' : ''">
             <span class="text-4xl font-bold">{{ examResult.total_score }}</span>
             <span class="text-sm text-ink-3">/{{ examResult.max_score }}</span>
           </div>
@@ -77,7 +77,7 @@
         <div
           v-for="(d, idx) in examResult.details"
           :key="idx"
-          class="detail-item mb-2 rounded-[8px] p-2.5"
+          class="detail-item mb-2 rounded-ctl p-2.5"
           :class="d.is_correct === true ? 'bg-ok-soft' : d.is_correct === false ? 'bg-bad-soft' : ''"
         >
           <p><strong>第{{ Number(idx) + 1 }}题：</strong>{{ d.content }}</p>

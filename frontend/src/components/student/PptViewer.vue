@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: var(--color-viewer-bg);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
 }
@@ -334,8 +334,8 @@ onBeforeUnmount(() => {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   cursor: pointer;
 }
 
@@ -399,7 +399,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   cursor: pointer;
   border: 2px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   transition: border-color var(--duration-base) var(--ease-default), transform var(--duration-base) var(--ease-default);
   display: flex;
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
   height: 45px;
   object-fit: cover;
   display: block;
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .thumbnail-num {

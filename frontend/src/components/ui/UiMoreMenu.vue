@@ -63,7 +63,7 @@ const emit = defineEmits<{ select: [key: string] }>()
     <button
       v-else
       type="button"
-      class="more-menu-trigger inline-flex cursor-pointer items-center justify-center rounded-[6px] border-0 bg-transparent p-1 text-base leading-none text-ink-3 transition-colors duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink-2"
+      class="more-menu-trigger inline-flex cursor-pointer items-center justify-center rounded-ctl border-0 bg-transparent p-1 text-base leading-none text-ink-3 transition-colors duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas hover:text-ink-2"
       :aria-label="label"
       :title="label"
     >

@@ -130,7 +130,7 @@ onUnmounted(() => {
     -->
     <div
       aria-hidden="true"
-      class="absolute left-0 top-0 rounded-[4px] bg-ui-600 shadow-sm"
+      class="absolute left-0 top-0 rounded-ctl bg-ui-600 shadow-card"
       :class="
         ready
           ? 'transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none'
@@ -148,7 +148,7 @@ onUnmounted(() => {
       type="button"
       role="tab"
       :aria-selected="modelValue === opt.value"
-      class="relative z-10 cursor-pointer rounded-[4px] bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
+      class="relative z-10 cursor-pointer rounded-ctl bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
       :class="modelValue === opt.value ? 'text-white' : 'text-ink-3 hover:text-ink-2'"
       :style="equal ? { flex: '1 1 0' } : undefined"
       @click="select(opt)"

@@ -21,13 +21,13 @@
       <div
         v-for="(url, index) in props.modelValue"
         :key="url + index"
-        class="relative size-12 shrink-0 overflow-hidden rounded-[6px] border border-line"
+        class="relative size-12 shrink-0 overflow-hidden rounded-ctl border border-line"
       >
         <el-image :src="resolveFileUrl(url)" fit="cover" class="h-full w-full" />
         <button
           type="button"
           aria-label="移除图片"
-          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-[6px] border-0 bg-black/55 p-0 text-xs text-white transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] after:absolute after:-inset-1.5 after:content-[''] hover:bg-black/80 max-md:after:-inset-3"
+          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-ctl border-0 bg-black/55 p-0 text-xs text-white transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] after:absolute after:-inset-1.5 after:content-[''] hover:bg-black/80 max-md:after:-inset-3"
           @click="removeImage(index)"
         >
           <UiIcon name="x" />
@@ -38,7 +38,7 @@
     <!-- 上传入口：整块虚线区，点击 / 粘贴 / 拖拽三入口（图二） -->
     <button
       type="button"
-      class="flex w-full items-center justify-center gap-2 rounded-[6px] border border-dashed px-3 py-3 text-sm transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
+      class="flex w-full items-center justify-center gap-2 rounded-ctl border border-dashed px-3 py-3 text-sm transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)]"
       :class="zoneClass"
       :aria-disabled="isFull ? 'true' : undefined"
       :title="zoneTitle"
