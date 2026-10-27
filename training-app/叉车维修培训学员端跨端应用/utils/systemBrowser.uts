@@ -8,8 +8,12 @@
  * `Intent.ACTION_VIEW` + `Uri.parse`，用 `UTSAndroid.getUniActivity()` 拿框架建好的 activity。
  *
  * 平台边界（fail-safe，别在跨端页里混原生）：只有 **APP-ANDROID** 真开浏览器；其余端
- * （mp-weixin / iOS / 鸿蒙 / H5）本函数是**空实现** —— 由调用方（论坛块组件）在 mp-weixin
- * 等端改走「复制链接 + toast」，不在这一层兜（⑩-8 的按端分叉具名在调用处）。
+ * （mp-weixin / iOS / 鸿蒙 / H5）本函数是**空实现** —— 由调用方 `utils/externalLinkDispatch.uts`
+ * 在 mp-weixin 端改走「复制链接 + toast」，不在这一层兜（⑩-8 的按端分叉具名在分派处，#2035 起）。
+ *
+ * @note 行为缝边界：本文件 import 段是安卓**默认导入**形态，`utsHarness.loadUts` 对它 fail-closed
+ * ⇒ 原生支无行为守护，例外登记与承重/钉法见 `docs/agents/guards.md`「例外登记」段；
+ * 可测编排（弹窗 + 副作用分派）住在 `utils/externalLinkDispatch.uts`。
  *
  * @note 具名导入：error15 规定原生/插件必须逐个具名引入，`import *` 会 Kotlin 编译失败。
  */

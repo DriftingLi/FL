@@ -1,0 +1,56 @@
+/**
+ * 论坛正文外链点击的**编排**（ADR-0025 ⑩-8/⑩-9；#2035 自 `.uvue` 抽出）。
+ *
+ * 为什么单独成模块：「空链接闸 → 确认弹窗 → 确认后按端分叉」原先整段住在 `.uvue` 的 script 里，
+ * 而渲染层进不了 ``loadUts` 的行为缝（模板/样式在 node 里不跑）⇒ 这段编排**行为与接线双零**
+ * （#2019 报告 §8 发现 1 的守护空洞）。抽到 `.utils/`` 即可真执行：
+ * `.externalLinkDispatchBehavior.test.js`` 断言编排（弹窗与按钮字样 / 确认闸 / 副作用落点，成对取证），
+ * `.systemBrowserWiringContract.test.js`` 钉端分叉的**区域归属**与 error15 具名导入接线。
+ *
+ * **边界（本模块是搬家，不是重写）**：⑩-8 按端分叉的结论不动 —— App-Android 经原生 Intent 直开、
+ * mp-weixin 退化「复制链接 + toast」（小程序打不开任意外链是平台事实）；⑩-9「站内链接也弹」不动。
+ * 端分叉的**排他性**仍是编译期条件编译（`#ifdef`），由接线守护钉区域归属；node 行为缝里 `#ifdef`
+ * 是惰性注释、两支同时执行 ⇒ 行为断言按「两支都记录到」的口径成立，别把双支同响当成病灶。
+ *
+ * 协议闸**不在这里、也不该在这里**：`.run.link` 出自 `.utils/markdownInline.uts` 的 `inlineLinkSafe`
+ * （http(s) 白名单，`.markdownInlineBehavior.test.js` ④ 组已成对钉死），到这里的链接只可能 http(s)。
+ */
+import { forumLinkDomain } from './forumBody'
+import { openExternalBrowser } from './systemBrowser'
+
+/**
+ * 确认弹窗的正文（⑩-8：显示**目标域名**而非整条 URL —— 少一屏路径噪音、多一眼「我要去哪」）。
+ * 域名投影走格式轴转发 `.forumLinkDomain`（渲染面不直引 `.markdownInline` 的既有口径，`markdownContract` 钉）。
+ */
+export function externalLinkModalContent(link : string) : string {
+    return '即将离开应用访问：' + forumLinkDomain(link)
+}
+
+/**
+ * 可点 run 的完整编排：空链接 ⇒ 零副作用（UGC 正文绝不因脏 run 惊扰）；否则弹确认框 ——
+ * 取消 ⇒ 零副作用，确认 ⇒ 按端分叉（区域归属由接线守护钉死）。
+ * 弹窗字样与按钮名是 ⑩-8 的摩擦面本身，改口径必须过本模块的行为套件。
+ */
+export function dispatchExternalLinkTap(link : string) : void {
+    if (link.length == 0) return
+    uni.showModal({
+        title: '打开外部链接',
+        content: externalLinkModalContent(link),
+        confirmText: '打开',
+        cancelText: '取消',
+        success: (res) => {
+            if (!res.confirm) return
+            // #ifdef APP-ANDROID
+            openExternalBrowser(link)
+            // #endif
+            // #ifdef MP-WEIXIN
+            uni.setClipboardData({
+                data: link,
+                success: () => {
+                    uni.showToast({ title: '链接已复制', icon: 'none' })
+                }
+            })
+            // #endif
+        }
+    })
+}
