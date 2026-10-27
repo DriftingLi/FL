@@ -12,6 +12,9 @@ import { ElMessageBox } from 'element-plus'
  * 只注入统一默认值，不裁剪能力：调用方传入的 options 覆盖默认值，
  * `ElMessageBox` 的其余选项（`distinguishCancelAndClose`、`showCancelButton` 等）原样可用。
  */
+// 显式写死而不是吃 EP 的 locale 默认值：`confirmDanger` 会把确认钮换成「删除」，
+// 取消钮仍取这里。与全站中文包（utils/elementPlusLocale.ts）同值，但不受它左右 ——
+// 确认框的措辞属于业务文案，不该随组件库语言包漂。
 const BASE = {
   confirmButtonText: '确定',
   cancelButtonText: '取消',
