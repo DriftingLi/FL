@@ -22,6 +22,7 @@
  *     E5 设备日志 + 编译诊断混在一起 ⇒ **只报编译诊断行**
  *     E6 「0 error」否证行 ⇒ 不判失败
  *     E7 空输入 ⇒ 返回**数组**（不是 $null；StrictMode 下 `$null.Count` 会抛）
+ *     E8 血账 #917 的「编译成功 / 已停止运行...」正常收口行 ⇒ **不判失败**（#2045 补的样品）
  *
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip** ——
  * 与仓库先例 mpWeixinGateContract.test.js:143 一致；静默跳过等于假绿。
@@ -55,6 +56,15 @@ const COMPILE_DIAGNOSTICS = [
 const COMPILE_ERROR_WITH_FILELINE = 'utils/secureStorage.uts:134:8 error: identity equality is deprecated';
 
 const ZERO_ERROR_LINES = ['编译完成: 0 error, 0 warning', 'errors: 0'];
+
+/**
+ * 血账 #917 族（登记见根 `docs/agents/ledger.md`:24；成因原文 `docs/agents/dev-loop.md`:384）：
+ * `--compile` 的官方语义是「仅编译代码」，于是输出以「编译成功 → 已停止运行...」收尾 ——
+ * 那是**正常收口行**，从前被读成「运行失败」并追了整整一票。
+ * #2045 把它补成**反向题**（本票对第三形态只加样品、不搬家：判据已在 lib）：
+ * 这两行一律**不得判红**，否则「仅编译拿诊断」这条捷径当场变成假失败。
+ */
+const COMPILE_ONLY_OK_LINES = ['编译成功', '已停止运行...'];
 
 function powershellExe() {
   return 'pwsh';
@@ -178,5 +188,11 @@ describe('错误行判定行为级守护（ADR-0012，运行期）', () => {
     mustRun(r);
     expect(pick(r.stdout, 'COUNT')).toBe('0');
     expect(pick(r.stdout, 'ISARRAY')).toBe('True');
+  });
+
+  test('E8: 「编译成功 → 已停止运行...」是仅编译的正常收口 ⇒ 不得判红（血账 #917 反向题，#2045 加样品）', () => {
+    const r = probe(COMPILE_ONLY_OK_LINES);
+    mustRun(r);
+    expect({ count: pick(r.stdout, 'COUNT'), hits: hits(r.stdout) }).toEqual({ count: '0', hits: [] });
   });
 });
