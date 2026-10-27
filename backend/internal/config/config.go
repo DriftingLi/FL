@@ -45,7 +45,7 @@ type Config struct {
 	// 默认空 = 不信任任何代理。gin 的默认值是「信任所有代理」（0.0.0.0/0），
 	// 那会让请求头里的 X-Forwarded-For 决定服务端认定的客户端 IP——按 IP 限流、
 	// 审计日志、IP 属地都会变成客户端可随意伪造的值，故这里显式收敛为
-	// 「只有部署声明的代理才被信任」。取值见 docker-compose.prod.yml 的 TRUSTED_PROXIES。
+	// 「只有部署声明的代理才被信任」。取值见 deploy/docker-compose.prod.yml 的 TRUSTED_PROXIES。
 	TrustedProxies []string
 	// CaptchaEnabled 图形验证码开关（生产默认开启、其他默认关闭；显式 true/false 可覆盖）。
 	CaptchaEnabled   bool

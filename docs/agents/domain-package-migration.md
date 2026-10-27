@@ -53,7 +53,7 @@
 6. **域声明表**：`internal/apitypes/domains.go` 该域 `Roots` 的 `service.*` 改 `<域>.*`。
 7. **证据表随域搬**：见第 6 节。
 8. **同步锁与清单**：见第 3 节（尤其域声明表、`testutil.responseStaticPackages` 与两把 fact 计数锁）。
-9. **重生成与验证**：见第 5 节。顺序是硬的：gofmt/vet → `make swagger` → `go run ./cmd/gen-apitypes` → `go test ./...` → 前端检查。
+9. **重生成与验证**：见第 5 节。顺序是硬的：gofmt/vet → `make swagger` → `make gen-apitypes` → `make test` → 前端检查。
 
 ## 3. 必须同步的锁与清单
 
@@ -153,7 +153,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - [ ] 该域已在 `internal/apitypes/domains.go` 声明（域包自动进 `ResponsePackages`）；两把 fact 计数锁与文案已同步（多一域即 34→35，红是刻意的签字位）
 - [ ] `nullability_lock_test.go` 的 `nonNilEvidenceSources` / `sweptDirs` 已加域包；域内证据表键已换包前缀；旧表里的键已删
 - [ ] 没引入新的反向边：`go test ./internal/layers/` 过（三条方向规矩）；下游要业务层类型时走消费方接口反转（第 7.1 节）；在 `pkg/httpx` 新增解析出口时同步了 `queryParseHelperNames`
-- [ ] `make swagger` + `go run ./cmd/gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
+- [ ] `make swagger` + `make gen-apitypes` 后：swagger diff 只有机械改名、`git diff --stat -- frontend` 为空
 - [ ] 旧符号（`XxxService` / `RegisterXxxRoutes` / 旧包前缀键）全仓残留 = 0
 - [ ] 域有两条蓝图时（`/x` 与 `/admin/x`）：`RegisterRoutes` / `RegisterAdminRoutes` 与 `handler` / `adminHandler` 分居 `handler.go` / `handler_admin.go`，两个注册函数都只收自己需要的依赖
 - [ ] 搬走的**私有**助手在包内还有调用点，或者被删掉：本地 `go build` / `go vet` 报不出「未使用」（那是 `unused` 的活，只在 CI `backend-lint` 兜）；自查方式是对每个进新包的私有函数数一遍**剥掉注释**后的包内引用
@@ -163,7 +163,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 ## 10. 波次与 PR 纪律
 
 - 一波 1 个 PR、**≤3 个域**、diff ≤1500 行；域的顺序按 P1 计划公布的四波（faq / notification 是试点批）。
-- 生成链顺序是硬的：gofmt/vet → `make swagger` → `go run ./cmd/gen-apitypes` → `go test ./...` → 前端检查（`internal/apitypes/codegen_test.go` 把前端生成物与注解渲染结果全等比对，顺序弄反会先绿后红）。
+- 生成链顺序是硬的：gofmt/vet → `make swagger` → `make gen-apitypes` → `make test` → 前端检查（`internal/apitypes/codegen_test.go` 把前端生成物与注解渲染结果全等比对，顺序弄反会先绿后红）。
 - 每个 PR 合并即触发 production 部署（master push ⇒ `cd.yml`）⇒ PR 正文必须留一行披露。
 
 ### 10.1 共享叶子与跨文件共享件的落点（P2 判据：出边为零，或单向无环）

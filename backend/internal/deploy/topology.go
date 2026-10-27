@@ -3,10 +3,11 @@
 // 背景：同一份 .env 默认值此前在 `.github/workflows/cd.yml`、`scripts/deploy-remote.sh`、
 // `docker-compose.prod.yml` 各写一遍，且已经漂移（REDIS_POOL_SIZE 20/10/20）。本包把「变量名 +
 // 默认值」收成一张 Go 声明表（与 internal/aiassistant/feature_registry.go 同构），由
-// cmd/gen-deploy 渲染出 shell 可 source 的 `deploy/env.defaults`，并由测试断言三份部署文件
+// cmd/gen-deploy 渲染出 shell 可 source 的 `deploy/env.defaults`，并由测试断言部署文件
 // 与声明表逐字一致——漂移从「人工 diff 发现」变成「go test 报红」。
 //
-// 本期只做声明 + 生成 + 断言，不改动部署脚本的执行路径（见 spec #932 决策 5）。
+// ADR-0088 起部署面聚合到 `deploy/`（compose → `deploy/docker-compose.prod.yml`，
+// 部署脚本 → `deploy/deploy.py`）；Python 侧只把生成物读进内存默认值，不 source、不写 os.environ。
 //
 // 片四（spec #940）把生成物接进了部署链路：cd.yml 生成的环境变量文件**先 source 它**，
 // 在其之上只补写「secrets / 环境确实提供了值的变量」；因此 cd.yml 里不再出现声明表内变量的
@@ -36,6 +37,7 @@ var EnvVars = []EnvVar{
 	{Name: "AUTH_COOKIE_SECURE", Default: "true", Desc: "Cookie 是否仅 HTTPS"},
 	{Name: "BACKEND_HOST_PORT", Default: "8080", Desc: "后端对外发布端口"},
 	{Name: "BACKEND_IMAGE", Default: "forklift-backend:latest", Desc: "后端镜像"},
+	{Name: "COMPOSE_PROJECT_NAME", Default: "forklift-training", Desc: "Compose 项目名（固定以保留命名卷，ADR-0088）"},
 	{Name: "DB_USER", Default: "forklift", Desc: "Postgres 用户"},
 	{Name: "DIAGNOSIS_ASSISTANT_URL", Default: "http://172.17.1.23:8000", Desc: "外部诊断 RAG 服务地址（ADR-0032）"},
 	{Name: "DOMAIN", Default: "localhost", Desc: "主域名"},
@@ -96,7 +98,8 @@ func RenderEnvDefaults() (string, error) {
 	b.WriteString("# 同步契约：backend/internal/deploy/topology_test.go 与本文件全等比对，\n")
 	b.WriteString("# 并由漂移锁断言 compose 的默认值一致。\n")
 	b.WriteString("# 消费方：CD 生成的环境变量文件 source 本文件（spec #940 片四 / ADR-0047 §5），\n")
-	b.WriteString("# 随后只覆盖「secrets / 环境确实提供了值」的变量。\n")
+	b.WriteString("# 随后只覆盖「secrets / 环境确实提供了值」的变量；deploy/deploy.py 另以内存默认值读取\n")
+	b.WriteString("# 本文件（不 source、不写 os.environ，ADR-0088）。\n")
 	for _, v := range EnvVars {
 		fmt.Fprintf(&b, "# %s\n", v.Desc)
 		fmt.Fprintf(&b, "export %s=%s\n", v.Name, shellQuote(v.Default))

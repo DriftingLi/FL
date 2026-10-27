@@ -13,18 +13,29 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+
+function pythonBin() {
+  const candidates = [process.env.PYTHON, process.platform === 'win32' ? 'python' : 'python3', 'python3', 'python'].filter(Boolean)
+  for (const candidate of candidates) {
+    const r = spawnSync(candidate, ['--version'], { stdio: 'ignore' })
+    if (!r.error && r.status === 0) return candidate
+  }
+  throw new Error('找不到 Python 解释器（用 PYTHON 环境变量指定，例如 PYTHON=python3）')
+}
+
+const PY = pythonBin()
 
 /** 跑一次回滚计划 dry-run，返回打印出的 KEY=VALUE 表（不碰 docker、不写文件）。 */
 function plan(env) {
-  const out = execFileSync('bash', ['scripts/deploy-remote.sh', '--rollback-plan'], {
+  const out = execFileSync(PY, ['deploy/deploy.py', '--rollback-plan'], {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   const kv = {}
-  for (const line of out.trim().split('\n')) {
+  for (const line of out.trim().split(/\r?\n/)) {
     const m = line.match(/^([A-Z_]+)=(.*)$/)
     if (m) kv[m[1]] = m[2]
   }
@@ -58,7 +69,7 @@ test('回滚计划：无 tag / unknown / 缺省 ⇒ 空（调用方按「无历�
 
 /** 跑一次 --image-match dry-run，返回 {status, out}：退出码就是自证判据。 */
 function imageMatch(actual, expected) {
-  const r = spawnSync('bash', ['scripts/deploy-remote.sh', '--image-match', actual, expected], {
+  const r = spawnSync(PY, ['deploy/deploy.py', '--image-match', actual, expected], {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...process.env },
@@ -76,17 +87,17 @@ test('镜像自证：一致 ⇒ 退出码 0；不一致 ⇒ 非零且打印 mism
 })
 
 // 结构判据（照 check-async-section.mjs 的文本守卫手法）：回滚必须只改 tag 变量、必须带自证，
-// 且不得再出现历史那份「export BACKEND_IMAGE=」—— write_env_file 不读它，正是空操作回滚的成因。
-test('回滚接线：只改 IMAGE_TAG_* + write_env_file + assert_running_image，且不再 export BACKEND_IMAGE', () => {
-  const src = readFileSync(resolve(ROOT, 'scripts/deploy-remote.sh'), 'utf8')
-  const start = src.indexOf('do_rollback() {')
+// 且不得把历史镜像写回进程环境 —— write_env_file 不读它，正是空操作回滚的成因。
+test('回滚接线：只改 tag + write_env_file + assert_running_image，且不写 BACKEND_IMAGE 环境变量', () => {
+  const src = readFileSync(resolve(ROOT, 'deploy/deploy.py'), 'utf8')
+  const start = src.indexOf('def do_rollback(')
   assert.ok(start > 0, '找不到 do_rollback')
-  const end = src.indexOf('\nmain\n', start)
+  const end = src.indexOf('# ---------------------------------------------------------------- down', start)
   const body = src.slice(start, end > 0 ? end : src.length)
-  for (const needle of ['export IMAGE_TAG_BACKEND=', 'export IMAGE_TAG_FRONTEND=', 'write_env_file', 'assert_running_image']) {
+  for (const needle of ['self.tag_backend =', 'self.tag_frontend =', 'write_env_file', 'assert_running_image']) {
     assert.ok(body.includes(needle), 'do_rollback 缺少：' + needle)
   }
-  for (const banned of ['export BACKEND_IMAGE=', 'export FRONTEND_IMAGE=']) {
-    assert.ok(!body.includes(banned), 'do_rollback 又出现 ' + banned + '（write_env_file 不读它 ⇒ 空操作回滚回归）')
+  for (const banned of ['os.environ', 'export BACKEND_IMAGE', 'export FRONTEND_IMAGE']) {
+    assert.ok(!body.includes(banned), 'do_rollback 又出现 ' + banned + '（容易绕过 .env ⇒ 空操作回滚回归）')
   }
 })

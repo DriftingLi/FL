@@ -43,6 +43,9 @@ jobs:
               # 生成物：aiFeatures.ts 由 backend/internal/aiassistant 渲染，契约测试（TestFrontendAIFeaturesTSInSync）
               # 住在后端。只改这个前端文件时若不带后端，生成物与模板漂移会一路绿到合并（#1892 实测踩中）。
               - 'frontend/src/config/aiFeatures.ts'
+              # 部署面漂移锁（backend/internal/deploy）读 deploy/ 下的 compose / deploy.py /
+              # env.defaults；只改部署面时若不跑 backend-test，默认值漂移会一路绿到合并。
+              - 'deploy/**'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
@@ -696,12 +699,20 @@ jobs:
       - name: 表驱动单测（backend-test 分片器 LPT 装箱判据）
         run: node --test scripts/go-shard.test.mjs
 
-      # 部署面两条常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
+      # 部署面常驻判据物（真实缺陷 #3 的回滚标签解析与镜像自证 + #1099 的迁移失败分支）。
       # 此前它们只在本地被引用、CI 零触发（2026-09-17 架构评审登记项）—— 一并接上。
+      # ADR-0088 起判据物随部署面迁到 deploy/tests/（脚本本体 deploy/deploy.py，纯标准库 Python）。
       - name: 表驱动单测（回滚计划与镜像自证判定逻辑）
-        run: node --test scripts/deploy-rollback-plan.test.mjs
+        run: node --test deploy/tests/deploy-rollback-plan.test.mjs
       - name: 表驱动单测（迁移失败门判定逻辑）
-        run: node --test scripts/deploy-migration-gate.test.mjs
+        run: node --test deploy/tests/deploy-migration-gate.test.mjs
+      # 增量部署的核心判据：container/image/config-hash → 动作（skip/start/create/recreate/blocked）。
+      # 数据服务配置漂移必须 blocked（不许自动重建），--force 也不许波及数据服务。
+      - name: 单元测试（部署变更计划判定逻辑）
+        run: python3 -m unittest discover -s deploy/tests -p 'test_*.py' -v
+      # 部署面聚合后 compose 在 deploy/ 下；至少让 YAML / 相对路径 / 插值在 CI 里过一遍。
+      - name: 部署 compose 语法校验
+        run: docker compose -f deploy/docker-compose.prod.yml config -q
 
       - name: 表驱动单测（AI 助手发送编排守卫判定逻辑）
         run: node --test scripts/check-ai-assistant-send.test.mjs

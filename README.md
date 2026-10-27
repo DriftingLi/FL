@@ -174,10 +174,9 @@
 │   ├── pkg/{httpx,paging,response}/   # HTTP 解析出口与端点骨架 / 分页 / 统一响应
 │   ├── migrations/               # 迁移脚本（000001 ~ 000040，共 40 组，up/down 成对）
 │   ├── docs/                     # Swagger 生成产物（docs.go / swagger.json|yaml）
-│   ├── Dockerfile / Makefile
+│   ├── Dockerfile / entrypoint.sh
 │   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice + backend
-│   ├── docker-compose.local.yml / docker-compose.override.yml.example
-│   └── init-db.sql
+│   └── docker-compose.override.yml.example
 ├── frontend/                     # Vue3 前端（forklift-training-frontend）
 │   ├── src/                      # 源码（api / pages / components / layouts / stores / router /
 │   │                             #   composables / utils / config / types / constants / test /
@@ -190,35 +189,39 @@
 │   └── .env.example
 ├── training-app/
 │   └── 叉车维修培训学员端跨端应用/  # uni-app x 学员端移动 App
-├── deploy/                       # 部署事实声明物（env.defaults 生成物）与 systemd 单元
+├── deploy/                       # 部署面（ADR-0088，全部部署相关文件聚合于此）
+│   ├── deploy.py                 # 部署 CLI（按变更重启 / 迁移 / 回滚 / 健康检查）
+│   ├── docker-compose.prod.yml   # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Caddy 前端）
+│   ├── env.defaults              # 部署默认值生成物（唯一事实源 backend/internal/deploy）
+│   ├── setup-server.sh / lxc-install-docker.sh / lxc-setup-ssh.sh   # 服务器初始化
+│   ├── backup-daily.sh / rbd-snap-hourly.sh / forklift-watchdog.sh  # 备份、快照、存活巡检
+│   ├── systemd/                  # 巡检 timer / service 单元
+│   └── tests/                    # 增量计划 / 回滚 / 迁移门的常驻判据物（Python + Node）
 ├── libreoffice-sidecar/          # 文档转换服务镜像（PPT → WebP、简历 PDF）
 ├── viz/                          # 设计提案 / 设计系统静态原型（HTML，仅参考）
 ├── scripts/
-│   ├── deploy-remote.sh          # 服务器远程部署（支持 --rollback；迁移失败默认中止）
-│   ├── setup-server.sh           # 服务器初始化（含 /etc/cron.d/forklift-maintenance）
-│   ├── lxc-install-docker.sh / lxc-setup-ssh.sh   # LXC 容器初始化
-│   ├── backup-daily.sh / rbd-snap-hourly.sh       # 定时备份与快照
 │   ├── check-*.mjs               # 八条静态守卫（api-seam / el-controls / async-section /
 │   │                             #   api-consumers / ai-assistant-send / render-error-face / catalog-sort /
 │   │                             #   comment-cleanliness）；每条配同名 .test.mjs 自检，runner 面在 lib/guard.mjs
-│   ├── guard.test.mjs / gate-predicates.test.mjs / deploy-migration-gate.test.mjs
-│   │                             # 守卫 runner、CD 门禁谓词、迁移门的可执行判据（CI 在跑）
+│   ├── guard.test.mjs / gate-predicates.test.mjs
+│   │                             # 守卫 runner、CD 门禁谓词（CI 在跑）
 │   └── audit-api-annotations.mjs / ci-summary-status.sh   # 注解审计 / CI 汇总状态
 ├── docs/                         # `.gitignore` 忽略 `docs/*`，五个例外入库：`adr/`、`agents/`、`design/`、`README.md`、`verification/`
-│   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0070（71 篇，入库，核心资产）
+│   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0088（89 篇，入库，核心资产）
 │   ├── agents/                   # AI/agent 工作约定（入库，由根 AGENTS.md 导航；权威检查流程在 checks.md）
 │   ├── design/                   # 调研与实测账本（入库，如 1445 契约测试审计）
 │   ├── verification/             # 验收产物（真机截图等）——`pr-evidence.yml` 认的可核验路径之一
 │   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库；代码百科 `reference/CODE_WIKI.md` 住这里）
-├── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml / pr-evidence.yml）
-├── deploy.sh                     # 本地 / 手动一键部署
-└── docker-compose.prod.yml       # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Caddy 前端）
+├── Makefile                      # 仓库根命令入口（后端构建 / 测试 / 生成 / 迁移 / 本地依赖）
+└── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml / pr-evidence.yml）
 ```
 
 ## 环境要求
 
 - Go ≥ 1.26（`go.mod` 与 CI 都钉 1.26；本机可以是更新的版本）
 - Node.js ≥ 20（CI 用 22）
+- Python 3.9+（仅部署 CLI `deploy/deploy.py`；目标服务器 Debian / PVE 自带 `python3`）
+- GNU Make（仓库根 `Makefile`；Windows 可用 Git Bash / WSL）
 - Docker + Docker Compose（本地依赖与生产编排）
 - PostgreSQL 15、Redis 7（由 docker-compose 提供或已有实例）
 - HBuilderX（仅移动端开发需要）
@@ -234,10 +237,9 @@ docker compose up -d          # postgres :5432 / redis :6379 / libreoffice :8000
 
 `backend/docker-compose.yml` 把后端容器的 8080 映射到宿主机 **18080**，前端 dev 代理默认指向 `127.0.0.1:18080`。
 
-### 2. 执行迁移并启动后端
+### 2. 执行迁移并启动后端（仓库根目录）
 
 ```bash
-cd backend
 make migrate-up               # 执行数据库迁移（亦可 make dev 一步到位）
 make run                      # 启动服务，默认 :8080
 ```
@@ -251,13 +253,12 @@ curl http://localhost:8080/api/health
 
 Swagger（非生产环境默认开启）：<http://localhost:8080/swagger/index.html>
 
-### 3. 启动前端
+### 3. 启动前端（仓库根目录）
 
 ```bash
-cd frontend
-cp .env.example .env.local    # 按需修改子域名
-npm install
-npm run dev                   # 默认 :5173
+cp frontend/.env.example frontend/.env.local   # 按需修改子域名
+make frontend-install
+make frontend-dev                              # 默认 :5173
 ```
 
 开发服务器已配置代理：`/api` 与 `/static` 转发至 `http://127.0.0.1:18080`。本地多子域名开发需在 `hosts` 添加：
@@ -363,15 +364,17 @@ npm run dev                   # 默认 :5173
 
 ## 常用命令
 
-### 后端（在 `backend/` 下）
+### 后端（在仓库根目录）
 
 ```bash
-make build           # 编译二进制到 bin/server
+make build           # 编译二进制到 backend/bin/server
 make run             # go run ./cmd/server
 make test            # 运行测试（-race -cover）
+make vet             # go vet ./...
 make lint            # 代码检查（golangci-lint）
 make fmt / tidy      # 格式化 / 整理依赖
 make swagger         # 重新生成 Swagger 文档
+make gen             # swagger -> apitypes -> aifeatures（顺序固定）
 make migrate-up      # 执行数据库迁移
 make migrate-down    # 回滚最近一次迁移
 make dev             # dev-up + migrate-up + run（一步到位）
@@ -385,16 +388,23 @@ go run ./cmd/migrate up
 go run ./cmd/migrate down
 ```
 
-### 前端（在 `frontend/` 下）
+### 前端（在仓库根目录）
 
 ```bash
-npm install          # 安装依赖
-npm run dev          # 启动开发服务器（:5173）
-npm run build        # 生产构建（dist/）
-npm run preview      # 预览构建产物
-npm run type-check   # vue-tsc 类型检查
-npm test             # vitest 单元测试
+make frontend-install    # npm ci（按 package-lock）
+make frontend-dev        # Vite 开发服务器 :5173
+make frontend-build      # 生产构建（含 precompress）
+make frontend-preview    # 预览构建产物
+make frontend-typecheck  # vue-tsc --noEmit
+make frontend-test       # vitest run
+make frontend-test-watch # vitest watch
+make frontend-coverage   # vitest run --coverage
+make frontend-check      # typecheck + test
+make frontend-clean      # 清理 dist / coverage / .vite
+make check-all           # 后端 check + 前端 check
 ```
+
+等价的原生命令是 `cd frontend && npm install / npm run dev / ...`；`make` 只是从仓库根统一入口。
 
 ### 移动端（在 `training-app/叉车维修培训学员端跨端应用/` 下）
 
@@ -412,7 +422,7 @@ ls backend/migrations/*.up.sql | sed 's#.*/##'
 
 配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → `check-columns` 三段对账（模型期望的列 ⊆ 实际列；关键偏唯一索引登记表 ⇔ migrations 逐字相等；登记表 ⇒ `pg_indexes` 存在性，按 `current_schema()` 收窄）→ `migrate down` 回空库并**反向断言**对账报缺表。判据细节与「哪几段本机不连库就能红」见 `docs/agents/checks.md`。
 
-执行 / 回滚：`make migrate-up` / `make migrate-down`，或直接 `go run ./cmd/migrate up|down|version|force|check-columns`。**部署侧的迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续，见 `docs/agents/checks.md`）。
+执行 / 回滚（仓库根）：`make migrate-up` / `make migrate-down`，或直接 `go run ./cmd/migrate up|down|version|force|check-columns`（在 `backend/` 下）。**部署侧的迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续，见 `docs/agents/checks.md`）。
 
 ## 测试与检查
 
@@ -421,26 +431,29 @@ ls backend/migrations/*.up.sql | sed 's#.*/##'
 - **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。
   ⚠️ 本机（Windows）**目前跑不了 `golangci-lint`**：v1.64.8 构建于 go 1.26.4，面对本机 go 1.27.1 直接失败 ⇒ 本地三条 + CI 的 `backend-lint` 兜底。WSL 环境下 Go 工具链在 `~/go/bin`。
 - **守卫**：改前端 UI / api 消费面 / 端点错误面 / 目录排序后跑对应 `node scripts/check-*.mjs --all`（本地可用 `--diff origin/master` 只看新增行），自检 `node --test scripts/*.test.mjs`。
-- **前端**（`frontend/`）：`npm run type-check`（vue-tsc）、`npm test`（vitest）
-- **部署配置**：改 `docker-compose*.yml` / `deploy.sh` 后 `docker compose -f docker-compose.prod.yml config -q`
+- **前端**（`frontend/`）：`make frontend-typecheck`（vue-tsc）、`make frontend-test`（vitest）
+- **部署配置**：改 `deploy/` 下文件后 `docker compose -f deploy/docker-compose.prod.yml config -q`；变更计划判定 `python3 deploy/deploy.py --plan`；纯判定自测 `python3 -m unittest discover -s deploy/tests -p 'test_*.py'` 与 `node --test deploy/tests/deploy-migration-gate.test.mjs deploy/tests/deploy-rollback-plan.test.mjs`
 - **安全检测**：触及认证 / 授权 / 密钥 / DB 连接 / AI 生成代码时跑 DeepSec（Shield），确认无新增 critical/high
 
 ## 部署
 
+部署面自 ADR-0088 起**聚合在 [`deploy/`](deploy/)**：部署 CLI、生产 compose、默认值生成物、服务器初始化 / 备份 / 巡检脚本、systemd 单元与部署判据测试都在这里。详细说明见 [`deploy/README.md`](deploy/README.md)。
+
+**按变更重启**：`deploy/deploy.py` 先按「容器状态 + 镜像内容（ID）+ compose config-hash」算计划，只重建真正变化的服务；`postgres` / `redis` 是数据服务，默认永不因应用变更而重建（配置漂移会中止，需显式 `--force-data-services`）。`--force` 只重建应用服务。
+
 ### 本地 / 手动一键部署
 
 ```bash
-./deploy.sh                      # 交互式确认后部署到生产
-./deploy.sh production           # 直接部署到生产
-./deploy.sh production --skip-build     # 跳过构建步骤（仅重启）
-./deploy.sh production --skip-migrate   # 跳过数据库迁移
+python3 deploy/deploy.py local                 # 构建前端 → 迁移 → 按变更部署 → 健康检查
+python3 deploy/deploy.py local --skip-build    # 跳过前端构建
+python3 deploy/deploy.py local --skip-migrate  # 跳过数据库迁移
 ```
 
-脚本流程：环境检查 → 加载 `.env` → 构建前端 → 数据库迁移 → `docker compose` 部署 → 健康检查。当前脚本仅支持 `production` 一个环境（testing 由 CD 流水线自动部署并探活后停容器）。
+本地模式读取 `backend/.env`、不覆盖它；compose 项目名用仓库目录名（小写），避免与生产的 `forklift-training_*` 命名卷撞名。testing 由 CD 流水线自动部署并探活后停容器。
 
 ### 生产编排
 
-`docker-compose.prod.yml` 编排五个服务：
+`deploy/docker-compose.prod.yml` 编排五个服务：
 
 - `postgres`（PostgreSQL 15，持久化卷 `pgdata-prod`）
 - `redis`（Redis 7，仅内网，LRU 淘汰、禁用持久化）
@@ -449,12 +462,18 @@ ls backend/migrations/*.up.sql | sed 's#.*/##'
 - `frontend`（Caddy，host 网络监听 80/443：证书自动签发 + `/api` 反代 + 静态托管 + 对象存储前缀反代）
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d
 ```
 
 ### 远程部署（自托管服务器）
 
-`scripts/deploy-remote.sh` 通过公网 SSH 将构建产物部署到服务器 `/opt/forklift-training`，支持 `--rollback` 回滚到上一个版本；备份默认落在 `/opt/forklift-backups`。配套脚本：`setup-server.sh`（初始化）、`lxc-install-docker.sh` / `lxc-setup-ssh.sh`（LXC 容器初始化）、`backup-daily.sh` / `rbd-snap-hourly.sh`（定时备份与快照）。
+CD 通过公网 SSH 把 `deploy/deploy.py` 与 compose / Caddyfile 上传到服务器 `/opt/forklift-training`，再执行 `python3 deploy/deploy.py`：
+
+- `python3 deploy/deploy.py --plan`：只打印本次会动哪些容器（`--json` 机器可读）；
+- `python3 deploy/deploy.py rollback`：回滚到 `backups/last-version.txt` 记录的上一个版本（只重建 tag 变化的服务并自证运行镜像）；
+- `python3 deploy/deploy.py down`：停栈（testing 冒烟收尾用，命名卷保留）。
+
+备份默认落在 `$DEPLOY_PATH/backups`。配套脚本：`deploy/setup-server.sh`（初始化）、`deploy/lxc-install-docker.sh` / `deploy/lxc-setup-ssh.sh`（LXC 容器初始化）、`deploy/backup-daily.sh` / `deploy/rbd-snap-hourly.sh`（定时备份与快照）、`deploy/forklift-watchdog.sh`（存活巡检）。
 
 ### 域名与资源域（双域族，票 #1756 / ADR-0077）
 
@@ -474,8 +493,8 @@ docker compose -f docker-compose.prod.yml up -d
 **回填旧 URL**（一次性，票 #1742；#1756 换域时按同一口径再跑一次，用 `-from`/`-to` 指新前缀）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。**切换日必须先 dry-run 记账、执行后第二次命中 0 行**，否则切完历史图片全碎。
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
-docker compose -f docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
 ```
 
 **客户端 IP：EdgeOne 回源鉴权（票 #1746）**。经 EdgeOne 回源时反代看到的对端是边缘节点，但 EdgeOne 会带 `EO-Connecting-IP`（实测为真实客户端；同一次请求里的 `X-Forwarded-For` / `X-Real-IP` 都只是边缘链路）。门户（EdgeOne Pages）的 `/api` 代理回源时带 `X-Origin-Token`，**只有 token 命中才采信** `EO-Connecting-IP`（`frontend/Caddyfile` 的 `(backend_api)` 片段：命中走单独的 `handle`，`header_up` 只给这一个值、不追加对端），否则沿用「追加对端」的语义 —— 直连源站伪造该头无效。

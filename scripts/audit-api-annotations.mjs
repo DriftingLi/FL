@@ -5,7 +5,7 @@
  * 用法：node scripts/audit-api-annotations.mjs [--json]
  *
  * 输入：
- *   backend/docs/swagger.json   —— 注解产物（唯一事实源；再生成：cd backend && make swagger）
+ *   backend/docs/swagger.json   —— 注解产物（唯一事实源；再生成：仓库根 make swagger）
  *   API.md                      —— 手写契约文档（人类可读叙述面）
  *
  * 输出四段：
