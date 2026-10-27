@@ -6,11 +6,13 @@ CI 在 backend-test 之后单独跑这一步；Node 的两个 dry-run 判据物�
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 MODULE_PATH = HERE.parent / "deploy.py"
@@ -123,6 +125,35 @@ class DecideServiceTest(unittest.TestCase):
         )
         self.assertEqual([d.service for d in decisions], ["postgres", "redis", "backend", "frontend"])
         self.assertEqual([d.action for d in decisions], ["skip", "skip", "recreate", "skip"])
+
+
+class ApplyAppTest(unittest.TestCase):
+    def test_app_up_does_not_use_compose_wait(self):
+        # 2026-10-27 生产前测试环境实测：compose --wait 的 healthcheck 在 backend
+        # start_period 内会 30s 超时并返回非零，但容器其实已正常启动。部署脚本不再用
+        # --wait，改由 health_check 的 HTTP 轮询判定就绪；这里锁住这个形状。
+        d = deploy.Deployer.__new__(deploy.Deployer)
+        d.opts = argparse.Namespace(force=False, remove_orphans=False)
+        d.applied = []
+        d.compose_project_args = []
+        d.profiles = []
+        d.mode = "deploy"
+        d.compose_file = Path("/tmp/compose.yml")
+        d.env_file = Path("/tmp/.env")
+        d._compose = lambda: ["docker", "compose"]
+        calls = []
+
+        def run(cmd, **kwargs):
+            calls.append(cmd)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        d.run = run
+        d.apply_app([deploy.Decision("backend", "create", "容器不存在", "img:new")])
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("--wait", calls[0])
+        self.assertNotIn("--wait-timeout", calls[0])
+        self.assertEqual(calls[0][-1], "backend")
+        self.assertEqual(d.applied, ["backend"])
 
 
 class PureFunctionsTest(unittest.TestCase):

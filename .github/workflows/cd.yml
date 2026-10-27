@@ -519,9 +519,8 @@ jobs:
       SKIP_BACKUP: ${{ needs.gate.outputs.environment == 'testing' && 'true' || 'false' }}
       # testing 不启用 libreoffice profile（省 500MB 镜像传输）；production 必须 full
       COMPOSE_PROFILES: ${{ needs.gate.outputs.environment == 'production' && 'full' || '' }}
-      # testing 缩短健康检查轮询与 compose --wait 超时，快速通过即停容器
+      # testing 缩短健康检查轮询，快速通过即停容器
       HEALTH_CHECK_RETRIES: ${{ needs.gate.outputs.environment == 'testing' && '8' || '20' }}
-      UP_WAIT_TIMEOUT: ${{ needs.gate.outputs.environment == 'testing' && '30' || '60' }}
       # 远程部署脚本整体超时（秒）：pve-01 上曾出现 docker 命令挂起导致 ssh 步骤
       # 卡死 17+ 分钟（脚本内各命令虽有零散超时，但没有整体兜底），拖死 gate 轮询。
       # testing 正常 2~3 分钟；production 正常 5~11 分钟。
@@ -702,7 +701,6 @@ jobs:
             printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
             printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
             printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"
-            printf 'export UP_WAIT_TIMEOUT=%q\n' "${UP_WAIT_TIMEOUT:-60}"
             # 整体超时必须写进远程 env 文件：job env 不会自动传进 ssh 远端 shell
             printf 'export DEPLOY_CMD_TIMEOUT=%q\n' "${DEPLOY_CMD_TIMEOUT:-600}"
           } > /tmp/deploy-env.sh

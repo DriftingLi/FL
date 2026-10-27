@@ -390,7 +390,6 @@ class Deployer:
             self.frontend_ref = self._to_proxy(self.frontend_ref)
             self.libreoffice_ref = self._to_proxy(self.libreoffice_ref)
 
-        self.up_wait_timeout = env_int("UP_WAIT_TIMEOUT", 60)
         self.health_retries = env_int("HEALTH_CHECK_RETRIES", 20)
         self.health_interval = env_int("HEALTH_CHECK_INTERVAL", 6)
         self.skip_migration = getenv("SKIP_MIGRATION", "false").lower() == "true" or bool(opts.skip_migrate)
@@ -1234,9 +1233,10 @@ class Deployer:
             label = {"skip": "跳过", "start": "启动", "create": "创建", "recreate": "重建", "blocked": "阻止"}[d.action]
             log_info(f">>> {d.service}: {label} — {d.reason}")
         for d in changes:
+            # 不传 --wait：compose 的 wait 只看容器 healthcheck，backend 的 start_period
+            # 会在 testing 的 30s 预算下误报「application not healthy after 30s」
+            # （2026-10-27 实测；容器其实已在正常启动）。真正的就绪判据交给下方 health_check 的 HTTP 轮询。
             args = ["up", "-d", "--no-deps"]
-            if d.service != "frontend":
-                args += ["--wait", "--wait-timeout", str(self.up_wait_timeout)]
             if self.opts.force:
                 args += ["--force-recreate"]
             if self.opts.remove_orphans:
@@ -1522,8 +1522,6 @@ class Deployer:
         for service in (s for s in ("backend", "frontend")
                         if (s == "backend" and backend_changed) or (s == "frontend" and frontend_changed)):
             args = ["up", "-d", "--no-deps", "--force-recreate"]
-            if service != "frontend":
-                args += ["--wait", "--wait-timeout", str(self.up_wait_timeout)]
             args.append(service)
             log_info(f">>> 回滚重建 {service}")
             cp = self.run(self._compose() + args, check=False)
