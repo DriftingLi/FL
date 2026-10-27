@@ -8,6 +8,7 @@
 			:transparent="transparent"
 			:left-icon="leftIcon"
 			:right-icon="rightIcon"
+			:center-title="centerTitle"
 			@left-click="onLeftClick"
 			@right-click="onMenuClick"
 		/>
@@ -24,12 +25,23 @@
 		transparent?: boolean
 		leftIcon?: string
 		rightIcon?: string
+		/**
+		 * 标题恒居中（默认开）。左槽有了 ☰ 之后，§5.1 的「左槽有字 ⇒ 标题左对齐」会把页头
+		 * 变成「☰ AI 助手 ⋯」挤在左边；聊天页要的是三段式居中（2026-10-27 裁定）。
+		 */
+		centerTitle?: boolean
 	}>(), {
 		statusBarHeight: 0,
 		subtitle: '维修助手',
 		transparent: true,
-		leftIcon: '',
-		rightIcon: '⋯'
+		// 左槽 = 「最近对话」会话抽屉的**唯一可见入口**（2026-10-27）。原先默认空串 ⇒
+		// AppNavBar 左槽内 text 不渲染 ⇒ 槽 view 零宽零高，`@left-click="toggleSidebarLeft"`
+		// 的命中区不存在（抽屉早在 #947 就修好了，却没有任何可点面），会话只能在标题上
+		// 「点一下碰巧出来」—— 那正是 #1677 A 的「有动作、无可点面」形态。
+		// 字形用 BMP 符号 ☰（U+2630），与本仓先例 recruiter-tab-bar 同源（刻意避开非 BMP 代理对 emoji）。
+		leftIcon: '☰',
+		rightIcon: '⋯',
+		centerTitle: true
 	})
 
 	const emit = defineEmits(['leftClick', 'menuClick'])

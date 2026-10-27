@@ -130,6 +130,34 @@ function regionInvariantHolds(src) {
   return scopeAlwaysEmpty(src, arg) ? true : rendersRegionSessionList(src);
 }
 
+/** 页面是否**按限免位渲染小签**（判据必须是 `item.freePreview`，不是写死的 key 或常显）。 */
+const FREE_BADGE_BLOCK = /[ \t]*<view v-if="item\.freePreview" class="function-free-badge">[\s\S]*?<\/view>/;
+
+/**
+ * 限免小签接线判据（2026-10-27 B 版形态：标题下方独立一行）。
+ *
+ * 四条同时成立才算接线，缺一条都是「学员看不到限免」或「看到了但样子是坏的」：
+ *   ① 判定只读注册表镜像 `item.freePreview`（写死常显 = 与后端注册表脱钩）；
+ *   ② 外层 view 承载底色/边、内层 text 只承载「限免」字形（`<text>` 画 border 本仓无先例）；
+ *   ③ 小签**位于标题之后**（脱流压图标 = 与橙黄图标同色系黏成一团，② 首帧实测过的缺陷）；
+ *   ④ 不得回到绝对定位（形态回退必须红，否则「改回旧形态」这条会静默通过）。
+ */
+function freeBadgeWired(src) {
+  const code = stripCodeComments(src);
+  const badgeIdx = code.indexOf('class="function-free-badge"');
+  const titleIdx = code.indexOf('class="function-title"');
+  const badgeBlock = (code.match(/\.function-free-badge\s*\{[^}]*\}/) || [''])[0];
+  return (
+    /<view v-if="item\.freePreview" class="function-free-badge">\s*<text class="function-free-badge-text">限免<\/text>\s*<\/view>/.test(code)
+    && badgeIdx > 0
+    && titleIdx > 0
+    && badgeIdx > titleIdx
+    && !/position\s*:\s*absolute/.test(badgeBlock)
+    && /\.function-free-badge\s*\{/.test(code)
+    && /\.function-free-badge-text\s*\{/.test(code)
+  );
+}
+
 describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
   describe('① 常量表：注册表的 4 项专项功能，格格带键', () => {
     it('宫格项类型：featureKey / freePreview 均为**必填**（没有键的格子写不出来）', () => {
@@ -180,6 +208,34 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       for (const k of ['drawing', 'exercise', 'knowledge']) {
         expect(tileLine(k)).toMatch(/freePreview: false/);
       }
+    });
+
+    it('限免位在页面上**真被消费**：宫格小签由 `item.freePreview` 决定（只写进常量 = 学员看不到限免）', () => {
+      expect(freeBadgeWired(PAGE)).toBe(true);
+      // 判别力：小签删掉 ⇒ 红；判据换成写死常显（不受限免位控制）⇒ 也红；
+      // 只剩底色却没有字形（view 空壳）⇒ 同样红（结构锁必须咬住「限免」二字）
+      expect(freeBadgeWired(PAGE.replace(FREE_BADGE_BLOCK, ''))).toBe(false);
+      expect(freeBadgeWired(PAGE.replace('v-if="item.freePreview"', ''))).toBe(false);
+      expect(
+        freeBadgeWired(PAGE.replace('<text class="function-free-badge-text">限免</text>', ''))
+      ).toBe(false);
+    });
+
+    it('小签在**标题下方**、且不回到绝对定位（形态回退必须红）', () => {
+      // ① 顺序：把整块搬到标题之前（= 回到压图标的老位置）⇒ 红
+      const block = (PAGE.match(FREE_BADGE_BLOCK) || [''])[0];
+      expect(block.length).toBeGreaterThan(0);
+      const movedUp = PAGE.replace(FREE_BADGE_BLOCK, '').replace(
+        '<text class="function-title">{{ item.title }}</text>',
+        block + '\n\t\t\t\t\t<text class="function-title">{{ item.title }}</text>'
+      );
+      expect(freeBadgeWired(movedUp)).toBe(false);
+      // ② 形态：给小签加回 position:absolute ⇒ 红（脱流压图标 = 同色系黏成一团）
+      const absAgain = PAGE.replace(
+        '.function-free-badge {',
+        '.function-free-badge {\n\t\tposition: absolute;'
+      );
+      expect(freeBadgeWired(absAgain)).toBe(false);
     });
   });
 

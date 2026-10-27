@@ -25,7 +25,7 @@
             :multi-choice="currentQ.type === 'multi_choice'"
             @select="key => toggleOpt(currentQ.id, key, currentQ.type === 'multi_choice')"
           />
-          <el-input v-else v-model="answers[currentQ.id]" type="textarea" :rows="4" placeholder="请输入答案" />
+          <UiInput v-else v-model="(answers[currentQ.id] as string)" type="textarea" :rows="4" placeholder="请输入答案" />
         </UiCard>
         <div class="nav-buttons">
           <UiButton @click="currentIndex--" :disabled="currentIndex === 0">上一题</UiButton>
@@ -60,6 +60,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 答题会话壳：考试进行中的工具栏/倒计时/题目卡片/答题卡/交卷交互。
 // 练习/考试共享同一交互形态；持久化与交卷后的流程由页面注入回调。

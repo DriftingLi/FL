@@ -3,15 +3,15 @@
     <el-form label-width="0">
       <el-form-item>
         <div class="code-row">
-          <el-input v-model="code" placeholder="短信验证码" maxlength="6" @keyup.enter="submit" />
+          <UiInput v-model="code" placeholder="短信验证码" :maxlength="6" @keyup.enter="submit" />
           <UiButton :disabled="countdown > 0 || sending" @click="sendCode">{{ sending ? '发送中...' : countdown > 0 ? countdown + 's 后重发' : '获取验证码' }}</UiButton>
         </div>
       </el-form-item>
       <el-form-item>
-        <el-input v-model="password" type="password" show-password placeholder="新密码（6-20位）" />
+        <UiInput v-model="password" type="password" show-password placeholder="新密码（6-20位）" />
       </el-form-item>
       <el-form-item>
-        <el-input v-model="confirm" type="password" show-password placeholder="确认新密码" @keyup.enter="submit" />
+        <UiInput v-model="confirm" type="password" show-password placeholder="确认新密码" @keyup.enter="submit" />
       </el-form-item>
     </el-form>
   </UiDialog>
@@ -26,6 +26,7 @@ import { useSendCode } from '@/composables/useSendCode'
 import { useVerifyDialog } from '@/composables/useVerifyDialog'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const authStore = useAuthStore()
 const visible = ref(false)

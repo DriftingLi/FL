@@ -18,6 +18,14 @@
 						<text v-else class="function-icon-emoji">{{ item.icon }}</text>
 					</view>
 					<text class="function-title">{{ item.title }}</text>
+					<!-- 限免小签：`freePreview` 是后端功能注册表的**限免声明位**（本格不扣积分），
+					     客户端唯一的可见消费面就在宫格上 —— 声明位只写进常量、界面上不显示，
+					     学员就看不到「这一格免费」。判定仍只读注册表镜像，页面不另立条件。
+					     位置在**标题下方独立一行**：压在图标右上角会与本格橙黄图标同色系黏成一团
+					     （② 首帧实测），且「限免」与标题同行必然把长标题挤成两行（见样式处尺寸推论）。 -->
+					<view v-if="item.freePreview" class="function-free-badge">
+						<text class="function-free-badge-text">限免</text>
+					</view>
 				</view>
 			</view>
 		</view>
@@ -685,10 +693,45 @@
 		font-size: 68rpx;
 	}
 
+	/* 限免小签（`freePreview` 的可见面）：暖色轴与本页「解锁专业版」横幅同一色意（权益/优惠），
+	   绿轴在本页已被「已解锁」占用 —— 两态也不该撞色。底/边/字三色直接沿用横幅那三个值
+	   （$warning-tint #fff3e0 / #ffd9a8 / #8a4b00），学员不必学第二套橙色语义。
+	   形态取「浅底 + 细边 + 小字」而非实色反白：它挂在标题旁属于**标注**，
+	   实色胶囊在宫格里视觉重量等同按钮，会把图标压下去。 */
+	/*
+	 * 位置：标题**下方独立一行**，不再压图标右上角（2026-10-27 B 版裁定）。两条硬理由：
+	 *   ① 压在图标上会与本格橙黄图标同色系黏成一团（② 首帧实测，加白描边也只能勉强分开）；
+	 *   ② 与标题同行放不下 —— 4 列格宽 19% ≈ 71px（750 设计宽 ÷ 2），「智能维修诊断」6 字
+	 *      @20rpx ≈ 60px，同行只剩 11px，「限免」两个汉字（≈20px）必然把标题挤成两行
+	 *      （原型实测「智能维修诊 / 断」）。这条是纯尺寸推论，换机型不会变。
+	 * 代价如实记：该格比邻格高 ≈ 32rpx，宫格整行高度随最高格走；四格图标仍同基线
+	 * （各格内容自顶排列，行高由最高格决定，矮格不会被拉伸居中）。
+	 */
+	.function-free-badge {
+		margin-top: 6rpx;
+		height: 26rpx;
+		padding: 0 8rpx;
+		align-items: center;
+		justify-content: center;
+		background-color: $warning-tint;
+		border: 1rpx solid #ffd9a8;
+		border-radius: $radius-pill;
+	}
+
+	.function-free-badge-text {
+		font-size: $font-size-xs;
+		line-height: $font-size-xs;
+		font-weight: bold;
+		color: #8a4b00;
+	}
+
 	.function-title {
 		font-size: 20rpx;
 		color: #333333;
 		text-align: center;
+		/* 单行收敛：格宽只够 6 字（71px ≈ 7 字 @20rpx），限免小签再占一行后
+		   任何意外换行都会让四格标题基线错开 */
+		lines: 1;
 	}
 
 	.prompt-list {

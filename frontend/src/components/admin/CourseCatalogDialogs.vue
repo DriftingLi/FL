@@ -9,6 +9,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 defineProps<{
@@ -191,10 +192,10 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
   <UiDialog v-model="directionDialogVisible" :title="directionForm.specialty_id ? '编辑专业方向' : '新增专业方向'" width="460px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submitDirection">
     <el-form ref="directionFormRef" :model="directionForm" :rules="nameRules" label-width="80px">
       <el-form-item label="名称" prop="name">
-        <el-input v-model="directionForm.name" placeholder="如：操作、维修、安全、电池" maxlength="30" />
+        <UiInput v-model="directionForm.name" placeholder="如：操作、维修、安全、电池" :maxlength="30" />
       </el-form-item>
       <el-form-item label="编码" prop="code">
-        <el-input v-model="directionForm.code" placeholder="唯一编码，如 OPERATE" maxlength="30" />
+        <UiInput v-model="directionForm.code" placeholder="唯一编码，如 OPERATE" :maxlength="30" />
       </el-form-item>
     </el-form>
   </UiDialog>
@@ -203,10 +204,10 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
   <UiDialog v-model="levelDialogVisible" :title="levelForm.level_id ? '编辑课程等级' : '新增课程等级'" width="460px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="submitLevel">
     <el-form ref="levelFormRef" :model="levelForm" :rules="nameRules" label-width="80px">
       <el-form-item label="等级名称" prop="name">
-        <el-input v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" maxlength="30" />
+        <UiInput v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" :maxlength="30" />
       </el-form-item>
       <el-form-item label="编码" prop="code">
-        <el-input v-model="levelForm.code" placeholder="唯一编码，如 BEGINNER" maxlength="30" />
+        <UiInput v-model="levelForm.code" placeholder="唯一编码，如 BEGINNER" :maxlength="30" />
       </el-form-item>
     </el-form>
   </UiDialog>
@@ -243,16 +244,16 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
   <UiDialog v-model="certificateFormVisible" :title="certificateForm.id ? '编辑模板' : '新增模板'" width="480px" destroy-on-close append-to-body confirm-text="保存" :confirm-loading="submitting" @confirm="submitCertificate">
     <el-form ref="certificateFormRef" :model="certificateForm" :rules="certificateRules" label-width="110px">
       <el-form-item label="模板名称" prop="name">
-        <el-input v-model="certificateForm.name" placeholder="如：叉车维修技能培训合格证书" maxlength="50" />
+        <UiInput v-model="certificateForm.name" placeholder="如：叉车维修技能培训合格证书" :maxlength="50" />
       </el-form-item>
       <el-form-item label="编码" prop="code">
-        <el-input v-model="certificateForm.code" placeholder="唯一编码，如 FORKLIFT_MAINTENANCE_CERT" maxlength="30" />
+        <UiInput v-model="certificateForm.code" placeholder="唯一编码，如 FORKLIFT_MAINTENANCE_CERT" :maxlength="30" />
       </el-form-item>
       <el-form-item label="有效期(天)" prop="validity_days">
         <el-input-number v-model="certificateForm.validity_days" :min="1" :max="36500" style="width: 100%" />
       </el-form-item>
       <el-form-item label="说明">
-        <el-input v-model="certificateForm.description" type="textarea" :rows="3" maxlength="300" />
+        <UiInput v-model="certificateForm.description" type="textarea" :rows="3" :maxlength="300" />
       </el-form-item>
     </el-form>
   </UiDialog>
