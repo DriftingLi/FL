@@ -444,14 +444,13 @@ function buildMap(mobileRoot) {
  * @param {object} opts
  * @param {boolean} opts.bprimeAlways  b′ 名单是否**常驻**（见下方注释）
  */
-function select(map, mobileRoot, changed, opts = {}) {
+function select(map, changed, opts = {}) {
   const reasons = new Map(); // suite -> Set(why)
   const add = (suite, why) => {
     if (!reasons.has(suite)) reasons.set(suite, new Set());
     reasons.get(suite).add(why);
   };
 
-  const changedKeys = new Set(changed.map((c) => key(c)));
   // 闭包在「相对路径」空间里算，回到 index 时换回 basename（index 是 basename 索引，故意过覆盖）
   const polluted = importClosure(seedsOf(changed, map), map.importInverse);
   const viaClosure = new Set([...polluted].map((x) => key(x)));
@@ -564,11 +563,10 @@ if (has('health')) {
   const map = buildMap(mobileRoot);
   const { profiles } = map;
 
-  // ① 目录读取者：依赖的是「目录里有什么」，不是某个文件 ⇒ 单文件映射对它们无效
-  const DIR_READERS = /\breaddirSync\s*\(|\breaddir\s*\(|\bglobSync\s*\(|require\(['"]glob/;
-  const dirReaders = profiles
-    .filter((p) => DIR_READERS.test(fs.readFileSync(path.join(mobileRoot, p.suite), 'utf8')))
-    .map((p) => p.suite);
+  // ① 目录读取者：依赖的是「目录里有什么」，不是某个文件 ⇒ 单文件映射对它们无效。
+  // 与 `select()` 的目录边**同一套判据**（`dirTokens`），否则报告里会出现两个数：
+  // 裸正则会把 `readdirSync(tmpProject)`（断言临时目录为空，不是仓库依赖）也算进来。
+  const dirReaders = profiles.filter((p) => p.dirs.size > 0).map((p) => `${p.suite}  →  ${[...p.dirs].join(', ')}`);
 
   // ② import 图解析完整性：每个相对 spec 都要能落到盘上，否则闭包边是假的
   const missing = map.unresolvedImports;
@@ -697,7 +695,7 @@ if (has('verify-capture')) {
 
   const deps = [...new Set(cases.map((c) => c.dep))];
   const sel = new Map();
-  for (const d of deps) sel.set(d, new Set(select(map, mobileRoot, [d]).subset));
+  for (const d of deps) sel.set(d, new Set(select(map, [d]).subset));
 
   const bad = cases.filter((c) => !sel.get(c.dep).has(c.suite));
   const pairs = cases.length;
@@ -746,7 +744,7 @@ if (has('batch')) {
   console.log('case\t改动数\t子集\t占比');
   const sizes = [];
   for (const c of cases) {
-    const { subset } = select(map, mobileRoot, c.files, { bprimeAlways: !has('no-bprime-always') });
+    const { subset } = select(map, c.files, { bprimeAlways: !has('no-bprime-always') });
     sizes.push(subset.length);
     console.log(`${c.id}\t${c.files.length}\t${subset.length}\t${fmtPct(subset.length, total)}`);
   }
@@ -770,7 +768,7 @@ if (has('changed') || has('changed-from')) {
     process.exit(2);
   }
   const map = buildMap(mobileRoot);
-  const { subset, reasons, uncovered } = select(map, mobileRoot, changed, {
+  const { subset, reasons, uncovered } = select(map, changed, {
     bprimeAlways: !has('no-bprime-always'),
   });
   console.log(`改动 ${changed.length} 个文件 ⇒ 应跑 ${subset.length}/${map.profiles.length} 个行为套件 (${fmtPct(subset.length, map.profiles.length)})\n`);
