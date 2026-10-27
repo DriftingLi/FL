@@ -17,6 +17,9 @@
       验证 = 对同一份合成日志，搬前（脚本内联）与搬后（本库）输出全等（题库 F0 钉这条等价）。
       之后**只有一种**情形允许动措辞：题库首跑抓到的漏网族（血账 #4 的 `Could not resolve`），
       且修复与新增族同票、同 PR、附血账行号。
+      —— 首跑真的抓到了（#2045：题库 11 条用例里恰有 G0/G4 两条红，其余 9 条绿），
+      修复见 `Get-CompileGateErrorLines` 体内那条注释；搬家那一笔本身一字未改（等价验证：
+      18 份合成样本搬前/搬后输出全等，不等=0）。
 
     为什么两份判据不合成一棵（合一 = 独立候选票，不在本票射程）
       **输入面本就不同**：④a 吃 HBuilderX CLI 的编译日志（插件诊断 `[plugin:uni:…]`、中文诊断、
@@ -59,8 +62,18 @@
  #>
 function Get-CompileGateErrorLines {
     param([string]$Output)
+    # #2045 修复（搬家后的**唯一**一次措辞改动，题库首跑抓到的现行）：
+    #   补 `Could not resolve` 族 —— 这一族行内不含 `error` 一词，`\berror\b` 结构上不可能命中，
+    #   于是编译不过的树照样打 `COMPILE_RESULT errors=0 clean=True` 且自陈 ✅。
+    #   血账行号：根 `docs/agents/ledger.md`:18（#4，实测 `Could not resolve` 命中 1、脚本判据命中 0，#1196）；
+    #   成因原文：移动端 `docs/adr/0008-移动端验收门与证据.md`「2026-09-20 修订（④ 本地编译门判据盲区）」
+    #   与其「后续（刻意本轮不做）」段；逐行对照：`docs/verification/recruiter-workspace/1207/README.md`
+    #   「同一批日志行对两条 pattern 的现测对照」表第一行。
+    #   销账证据：`utils/gateErrorLinesBehavior.test.js` G0/G4（真执行本函数，喂上面那两行原文）。
+    #   ⚠️ 同族在第三条判据 `lib/hx-errors.ps1`（hx-run 日常路径）仍缺 —— 本票射程只到 ④ 的两处，
+    #   那条单独记进根 ledger，合一票处理。
     return @("$Output" -split "`r?`n" |
-        Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败' } |
+        Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|Could not resolve' } |
         Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
 }
 
