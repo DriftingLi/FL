@@ -33,10 +33,12 @@
  *       给改动文件，打印应跑套件（含被触发的全局边与原因）。
  *   node scripts/behavior-suite-deps.mjs --changed-from stdin
  *       同上，但改动清单从 stdin 读（每行一个路径，`git diff --name-only` 直接喂）。
- *   node scripts/behavior-suite-deps.mjs --changed-json [--changed-from stdin]
- *       同上，但把结果打成 JSON（`total` / `subset` / `reasons` / `uncovered` / `explain`）。
+ *   node scripts/behavior-suite-deps.mjs --changed-json --changed <file> [<file>…]
+ *   node scripts/behavior-suite-deps.mjs --changed-json --changed-from stdin
+ *       与上面两条同义，但把结果打成 JSON（`total` / `subset` / `reasons` / `uncovered` / `explain`）。
  *       `explain` 就是 `--changed` 那份人读文本的逐行数组 ⇒ 脚本打印它即可，不必重排格式。
  *       只多一种**输出形态**，判据与人类输出一字不动（#2034 接进 dev-finish 用）。
+ *       ⚠️ `--changed-json` 必须与 `--changed` / `--changed-from` 之一同给（单独给它没有改动清单）。
  *
  * ── 不做的事 ──
  * 不执行任何测试、不联网、不写文件（只打 stdout）。只读。
@@ -824,7 +826,7 @@ console.error(
     '  node scripts/behavior-suite-deps.mjs --json',
     '  node scripts/behavior-suite-deps.mjs --changed <file> [<file>…]',
     '  node scripts/behavior-suite-deps.mjs --changed-from stdin',
-    '  node scripts/behavior-suite-deps.mjs --changed-json [--changed-from stdin]',
+    '  node scripts/behavior-suite-deps.mjs --changed-json --changed <file> [<file>…]',
   ].join('\n')
 );
 process.exit(2);

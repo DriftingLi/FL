@@ -86,9 +86,8 @@ function Get-BehaviorSubset {
         Ok / ExitCode / Error          结论与失败原文（Ok=$false 时 Subset 无意义）
         ChangedCount / Total           改动数 / 行为腿套件总数（**现测**，不来自任何文档）
         Subset                         相对路径数组（`utils/xxxBehavior.test.js` 形态）
-        Reasons                        @{ suite = @(原因…) }
-        Uncovered                      没命中任何套件的改动（工具如实报的那几条）
-        Explain                        工具那份人读报告的逐行数组（调用方原样打印）
+        Explain                        工具那份人读报告的逐行数组（调用方原样打印 ——
+                                       原因行、未命中警告、尾行提示全在里面）
 
       子集为空 ⇒ Ok=$false（不把「没跑」当绿）。
     #>
@@ -96,8 +95,6 @@ function Get-BehaviorSubset {
     param(
         [Parameter(Mandatory = $true)][string]$ProjectDir,
         [string[]]$Changed = @(),
-        # 只给排障 / 守护用：默认走 PATH 里的 node。
-        [string]$NodeExe = 'node',
         [string]$ToolRelative = 'scripts/behavior-suite-deps.mjs'
     )
 
@@ -108,8 +105,6 @@ function Get-BehaviorSubset {
         ChangedCount = @($Changed | Where-Object { $_ }).Count
         Total        = 0
         Subset       = @()
-        Reasons      = @{}
-        Uncovered    = @()
         Explain      = @()
     }
 
@@ -121,7 +116,8 @@ function Get-BehaviorSubset {
 
     $utf8 = [System.Text.Encoding]::UTF8
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName = $NodeExe
+    # 执行器取 PATH 里的 node：工具是 ESM 脚本，本仓所有入口都这么起（不引第二个 node 路径真源）。
+    $psi.FileName = 'node'
     # ArgumentList（不是拼一个字符串）：路径里有空格/中文也不用自己转义
     [void]$psi.ArgumentList.Add($tool)
     [void]$psi.ArgumentList.Add('--changed-json')
@@ -139,7 +135,7 @@ function Get-BehaviorSubset {
 
     try { $proc = [System.Diagnostics.Process]::Start($psi) }
     catch {
-        $result.Error = "起不来 node（$NodeExe）：$($_.Exception.Message)"
+        $result.Error = "起不来 node（PATH 里没有）：$($_.Exception.Message)"
         return $result
     }
 
@@ -178,14 +174,9 @@ function Get-BehaviorSubset {
         return $result
     }
 
-    $reasons = @{}
-    foreach ($prop in $json.reasons.PSObject.Properties) { $reasons[$prop.Name] = @($prop.Value) }
-
     $result.Total = [int]$json.total
     $result.ChangedCount = [int]$json.changedCount
     $result.Subset = $subset
-    $result.Reasons = $reasons
-    $result.Uncovered = @($json.uncovered | Where-Object { $_ })
     $result.Explain = @($json.explain | ForEach-Object { "$_" })
     $result.Ok = $true
     return $result

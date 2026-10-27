@@ -158,7 +158,7 @@ describe('③ 门两腿的形状（#1702）', () => {
     expect(lines[3]).toMatch(/^JEST_SUITE_DONE total=2 passed=1 failed=1 elapsed=\d+\.\d$/);
   });
 
-  test('P7: 四条 npm 入口逐字面量 —— 腿与 config 的对应关系不许在 package.json 里漂', () => {
+  test('P7: 五条 npm 入口逐字面量 —— 腿与 config 的对应关系不许在 package.json 里漂', () => {
     // 为什么钉这里：P2/P3 钉的是 config 的内容，可「哪条命令跑哪条腿」这一层在 package.json。
     // 手改一条（比如把 test:behavior 指回 unit 的 config）会让两腿都「绿」，而行为腿其实一次没跑 ——
     // 与 #974 同形的第二真源漂移。devFinishContract 的 L3 钉的是脚本里那四个调用点，这一条钉被调的命令本身。
@@ -173,5 +173,7 @@ describe('③ 门两腿的形状（#1702）', () => {
     // 门入口两条仍指向同一个脚本的 -UnitGate / -UnitLocal（拆腿没有多开入口）
     expect(s['test:unit:gate']).toContain('scripts/dev-finish.ps1 -UnitGate');
     expect(s['test:unit:gate:local']).toContain('scripts/dev-finish.ps1 -UnitLocal');
+    // #2034 第五条入口：本地收口（行为腿受影响子集）—— 指错脚本就等于「改了本地跑哪一批」这件事没接线
+    expect(s['test:unit:changed']).toContain('scripts/dev-finish.ps1 -Changed');
   });
 });

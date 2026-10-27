@@ -1255,6 +1255,7 @@ if ($DryRun) {
     Write-Host "  -Device:              ${Device:-<自动检测>}"
     Write-Host "  -Level:               ${Level:-<自动判定>}"
     Write-Host "  -Compile:             $Compile   # quick 下是否做编译期诊断（Q-B）"
+    Write-Host "  -Changed:             $Changed   # 收口时行为腿只跑受影响子集（#2034；-DryRun 下不执行）"
     Write-Host "  -Distribute:          $Distribute"
     Write-Host "  -UpdateBaseline:      $UpdateBaseline"
     Write-Host "  -PixelThreshold:      $PixelThreshold   # 步骤 7 像素差阈值（0.005 = 0.5%）；像素层判不了时回退 MD5"
@@ -1283,7 +1284,8 @@ if ($DryRun) {
 #   为什么是独立模式、而不是 -UnitGate 上的一枚开关：③ 门全量的证据面是「两腿全跑」。
 #   把子集塞进 -UnitGate，会让「少跑过套件的一次绿」与「门全量绿」长得一模一样 —— 而贴 sha 绑定
 #   评论那条路径读的正是这两行机检行。所以本模式自报身份（`TEST_*_CHANGED_RESULT` + `mode=changed`），
-#   且**不贴**评论、不进 CI。它替代的是「本地收口每次都在付的 20 分钟行为腿全量」（#2019 §7.2）。
+#   且**不贴**评论、不进 CI。它替代的是「本地收口每次都在付一遍行为腿全量」这笔钱
+#   （时间账只有一份：`docs/agents/dev-loop.md`「本地收口走行为腿子集」，本文件不复写数字）。
 #   「改哪些 ⇒ 跑哪些」的判据不在这里：判据与四条兜底边住在 `scripts/behavior-suite-deps.mjs`
 #   （覆盖率报告 `docs/design/2019-行为腿受影响子集覆盖率报告.md` §5）。本分支只做三件事：
 #   取改动 → 原样打印工具给的原因行 → 把子集交给既有行为腿跑法（`Invoke-BehaviorLeg -OnlySuites`）。
@@ -1303,6 +1305,11 @@ if ($Changed) {
     if ($PostToPr -gt 0) {
         Write-Host '  ⚠️ -PostToIssue 只在 -UnitGate（③ 门全量）生效：子集跑不是门的证据，本模式不贴评论' -ForegroundColor DarkYellow
     }
+    if ($BehaviorRunner) {
+        # `-i` 的保证来自 package.json 那条 `npm run test:behavior`（自带 -i）；覆盖执行器就绕过了它。
+        # 只警告不拒：排障/守护需要假 jest 走同一条协议，但读结果的人必须知道串行语义不是本次的承诺。
+        Write-Host '  ⚠️ -BehaviorRunner 覆盖了 package.json 的 `npm run test:behavior`（那条自带 -i）：本次不保证串行语义，只给假 jest / 排障用' -ForegroundColor DarkYellow
+    }
     . (Join-Path $PSScriptRoot 'lib\behavior-subset.ps1')
     . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
     $headSha = Get-HeadSha -ProjectDir $ProjectDir
@@ -1320,7 +1327,7 @@ if ($Changed) {
     try {
         $changedPaths = @(Get-ChangedPathsForSubset -ProjectDir $ProjectDir)
         if ($changedPaths.Count -eq 0) {
-            Write-Result $false '无改动 ⇒ 算不出「受影响子集」。要么先改点东西，要么走 -UnitGate 全量门（0 套件不等于绿）'
+            Write-Result $false '无改动 ⇒ 算不出「受影响子集」（本模式看的是相对 HEAD 的工作树改动：已提交的改动不在其中）。要么先改点东西，要么走 -UnitGate 全量门（0 套件不等于绿）'
             exit 2
         }
         $subsetInfo = Get-BehaviorSubset -ProjectDir $ProjectDir -Changed $changedPaths
