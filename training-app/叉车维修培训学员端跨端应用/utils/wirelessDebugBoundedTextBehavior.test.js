@@ -7,7 +7,7 @@
  *
  * 本文件**真起 pwsh、真跑脚本**，adb 换成可编程的假载体（node + `.bat` / `.sh`，形态沿用
  * utils/wirelessDebugEnsureBehavior.test.js 的 makeFixture——原 utils/wirelessDebugBehavior.test.js
- * 已按 #1998 拆成 Ensure / KeepRecover / StopReap 三件，夹具各自内联），钉五条只有跑起来才看得见的行为：
+ * 已按 #1998 拆成 Ensure / KeepRecover / StopReap / StopHang 四件，夹具各自内联），钉五条只有跑起来才看得见的行为：
  *
  *   WBD1 挂死腿：mDNS 那一次调用永不返回 ⇒ 到预算就**给结论**（ensure 照旧判 unconnected、退出码非 0），
  *        且 actions.log 点名「哪一次调用 / 多大预算」（票面 AC：「不返回」必须是可见结论）。

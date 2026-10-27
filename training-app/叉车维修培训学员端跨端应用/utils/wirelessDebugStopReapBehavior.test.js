@@ -1,25 +1,23 @@
 /**
- * 真机无线调试入口的**行为**守护（scripts/wireless-debug.ps1，#1564）—— #1998 拆分件 3/3
+ * 真机无线调试入口的**行为**守护（scripts/wireless-debug.ps1，#1564）—— #1998 拆分件 3/4
  *
  * 原单套件 utils/wirelessDebugBehavior.test.js（202.5s，run 40111032652）是 CI 行为腿四片的关键路径，
- * 按用例形态拆成三件，本件 = stop 收尾（B5 按 pid 收 watcher / B7 连正在飞的 adb 调用一起收）。拆分口径：
- * - 用例与断言**逐字沿用**原套件，只重组不重写；三件合计覆盖原 B1–B7 全部七条（不重叠不遗漏）。
+ * 按用例形态拆成四件，本件 = stop 按 pid 收尾（B5）。拆分口径：
+ * - 用例与断言**逐字沿用**原套件，只重组不重写；四件合计覆盖原 B1–B7 全部七条（不重叠不遗漏）。
  * - 夹具段逐字复制到每个拆分件——这是有意的：scripts/classify-guards.mjs 按文件自身的
  *   「代码级执行调用 + 仓内载体字面量」判行为腿，藏进共享夹具会被判成接线腿。
  *   全程在 ADR-0042 边界内：不动 -i、不动分片机制、不删改被测断言、不新建第三份被测面清单。
- * - 本件单列理由：B5 与 B7 同属 stop 生命周期（B5 钉 pid 归属与「真没了」，B7 防 #1718 那类握着调用方管道的孤儿），语义同源。
- * - 其余两件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugKeepRecoverBehavior.test.js（B3）
- * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（按本机逐用例占比保和拆分）。
+ * - 本件单列理由：B5 是「watch 起的 keep 必须按同一个 pid 收掉、收完真没了」的归属回归钉；B7 独立成件
+ *   （wirelessDebugStopHangBehavior.test.js）是因为 CI 实测其 hang 口径远比 B5 贵（run 40443976624：
+ *   B5+B7 合并件 185.6s 超腿内总/4，不拆则四片配平无解）。
+ * - 其余三件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugKeepRecoverBehavior.test.js（B3）、
+ *   wirelessDebugStopHangBehavior.test.js（B7 收挂在飞的 adb 调用）
+ * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40443976624 重采；StopReap/StopHang 两键按本机逐用例占比保和拆分）。
  *
  *   B5 `watch` 起了后台 keep ⇒ `stop` 必须**按同一个 pid** 收掉、收完进程真没了。
  *      血账：入仓改名后归属判据里写死的旧文件名不再命中 ⇒ watch 恒报 spawn_unconfirmed、
  *      stop 恒报 not_running，而 keep 进程还在后台跑（留孤儿）。这条就是那起事故的回归钉。
  *      同一条腿还顺带钉住「-AdbExe 必须传给子进程」：漏传时子进程根本不碰指定载体，calls.log 会是空的。
- *
- *   B7 `stop` 收 keep 时必须连**正在跑的那次 adb 调用**一起收（#1718）。
- *      血账：只杀 keep 的 pid 时，Windows 上那次调用还多一层 cmd.exe；桩进程活下来并握着 keep 从
- *      调用方（jest）继承的 stdout 管道 ⇒ 汇总行永远不打、进程挂 20+ 分钟。这条腿先让 `shell echo hb`
- *      停在半空证明确有调用在飞，再断言 stop 之后夹具目录名不再出现在任何进程命令行里。
  *
  * 平台口径（2026-10-07 修订，**六条在 Windows 与 CI 的 ubuntu 上都真跑**）：假载体按平台落成
  * `.bat` / `sh` 两种壳，pwsh 两侧都在。上一版把 B1–B5 写成「非 Windows 直接 return」⇒ CI 里那五条是
@@ -218,7 +216,7 @@ const verdict = (out, action) => {
   return [...out.matchAll(re)].map((m) => ({ result: m[1], serial: m[2] }));
 };
 
-describe('wireless-debug.ps1 行为守护（#1564）—— stop 收尾（#1998 拆分件 3/3）', () => {
+describe('wireless-debug.ps1 行为守护（#1564）—— stop 按 pid 收尾（#1998 拆分件 3/4）', () => {
   // #1718：每条用例结束都按夹具目录把漏下的桩进程收干净。这不是「顺手打扫」——
   // 漏下任何一个，它都可能握着本进程（jest -i）继承出去的 stdout 管道，整条行为腿就永远等不到 EOF。
   afterEach(() => {
@@ -245,32 +243,4 @@ describe('wireless-debug.ps1 行为守护（#1564）—— stop 收尾（#1998 �
     const seq = callsParsed(fx);
     expect(seq.some((c) => c.includes('echo hb') || c.startsWith('devices') || c.startsWith('connect '))).toBe(true);
   }, 90000);
-
-  it('B7 stop 收 keep 时连它正在跑的那次 adb 调用一起收掉（#1718：残留会吊住调用方管道）', () => {
-    // 复现口径：让 `shell echo hb` 停在半空（真机上的「正跑到一半」），这时 stop 只杀 keep 的 pid
-    // 就会留下 cmd.exe / node 两个桩进程 —— 实测它们握着本进程继承出去的 stdout 管道，jest 于是永不退出。
-    const fx = makeFixture({ connected: [LIVE], hangEchoMs: 30000 });
-    seedToolState(fx, LIVE); // 直接进连接态：省掉重发现，让 `shell echo hb` 尽快在飞
-    const w = runTool(fx, ['-Action', 'watch', '-IntervalSeconds', '1', '-SlowBeatEvery', '10', '-MaxHours', '1']);
-    const m = /watcher_pid=(\d+)/.exec(w.stdout);
-    if (!m) throw new Error('watch 没回 watcher_pid ⇒ exit=' + w.status + ' out=' + JSON.stringify(w.stdout.slice(-600)));
-    const t0 = Date.now();
-    while (Date.now() - t0 < 20000) {
-      if (callsParsed(fx).some((c) => c.includes('shell echo hb'))) break;
-      sleep(200);
-    }
-    // 先证明「确实有一次 adb 调用在飞」——否则这条用例会退化成空跑（hang 没生效时它恒绿）
-    expect(callsParsed(fx).some((c) => c.includes('shell echo hb'))).toBe(true);
-    expect(stubProcessPids(fx.dir).length).toBeGreaterThan(0); // 在飞的那次调用此刻一定有一个桩进程
-
-    const s = runTool(fx, ['-Action', 'stop']);
-    expect(s.stdout).toContain('killed_pid=' + m[1]);
-    const t1 = Date.now();
-    let left = stubProcessPids(fx.dir);
-    while (left.length && Date.now() - t1 < 5000) {
-      sleep(100);
-      left = stubProcessPids(fx.dir);
-    }
-    expect(left).toEqual([]); // keep 的整棵子树都收了，没有握着调用方管道的孤儿
-  }, 120000);
 });

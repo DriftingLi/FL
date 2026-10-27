@@ -1,15 +1,16 @@
 /**
- * 真机无线调试入口的**行为**守护（scripts/wireless-debug.ps1，#1564）—— #1998 拆分件 2/3
+ * 真机无线调试入口的**行为**守护（scripts/wireless-debug.ps1，#1564）—— #1998 拆分件 2/4
  *
  * 原单套件 utils/wirelessDebugBehavior.test.js（202.5s，run 40111032652）是 CI 行为腿四片的关键路径，
- * 按用例形态拆成三件，本件 = keep 生命周期（B3 掉线自愈：LOST → SAMEPORT/NEWPORT → RECOVERED）。拆分口径：
- * - 用例与断言**逐字沿用**原套件，只重组不重写；三件合计覆盖原 B1–B7 全部七条（不重叠不遗漏）。
+ * 按用例形态拆成四件，本件 = keep 生命周期（B3 掉线自愈：LOST → SAMEPORT/NEWPORT → RECOVERED）。拆分口径：
+ * - 用例与断言**逐字沿用**原套件，只重组不重写；四件合计覆盖原 B1–B7 全部七条（不重叠不遗漏）。
  * - 夹具段逐字复制到每个拆分件——这是有意的：scripts/classify-guards.mjs 按文件自身的
  *   「代码级执行调用 + 仓内载体字面量」判行为腿，藏进共享夹具会被判成接线腿。
  *   全程在 ADR-0042 边界内：不动 -i、不动分片机制、不删改被测断言、不新建第三份被测面清单。
  * - 本件单列理由：B3 是唯一带「长驻进程 + mDNS 重发现」形态的用例，单列后可独立计时与加速，不牵连选路语义用例。
- * - 其余两件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugStopReapBehavior.test.js（B5/B7）
- * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（按本机逐用例占比保和拆分）。
+ * - 其余三件：wirelessDebugEnsureBehavior.test.js（B6/B1/B2/B4）、wirelessDebugStopReapBehavior.test.js（B5 按 pid 收 stop）、
+ *   wirelessDebugStopHangBehavior.test.js（B7 收挂在飞的 adb 调用）
+ * - 拆分后估摊耗时与推导读 utils/jestSuiteTimings.json 的 note（CI run 40443976624 重采；StopReap/StopHang 两键按本机逐用例占比保和拆分）。
  *
  *   B3 设备从 `adb devices` 里消失 ⇒ keep 自己经 mDNS 重发现并接回（LOST → SAMEPORT/NEWPORT → RECOVERED），
  *      且全程不发 kill-server（adb server 与 HBuilderX 共享，行为层再钉一次）。
@@ -211,7 +212,7 @@ const verdict = (out, action) => {
   return [...out.matchAll(re)].map((m) => ({ result: m[1], serial: m[2] }));
 };
 
-describe('wireless-debug.ps1 行为守护（#1564）—— keep 掉线自愈（#1998 拆分件 2/3）', () => {
+describe('wireless-debug.ps1 行为守护（#1564）—— keep 掉线自愈（#1998 拆分件 2/4）', () => {
   // #1718：每条用例结束都按夹具目录把漏下的桩进程收干净。这不是「顺手打扫」——
   // 漏下任何一个，它都可能握着本进程（jest -i）继承出去的 stdout 管道，整条行为腿就永远等不到 EOF。
   afterEach(() => {
