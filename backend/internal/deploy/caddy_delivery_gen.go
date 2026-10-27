@@ -324,14 +324,14 @@ func spliceRegion(full, region string) (string, error) {
 	return full[:i] + "\n" + region + full[j:], nil
 }
 
-// repoRoot 从当前目录逐级向上找仓库根（判据同 EnvDefaultsGen：docker-compose.prod.yml）。
+// repoRoot 从当前目录逐级向上找仓库根（判据同 EnvDefaultsGen：deploy/docker-compose.prod.yml）。
 func repoRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 	for {
-		if st, err := os.Stat(filepath.Join(dir, "docker-compose.prod.yml")); err == nil && !st.IsDir() {
+		if st, err := os.Stat(filepath.Join(dir, "deploy", "docker-compose.prod.yml")); err == nil && !st.IsDir() {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

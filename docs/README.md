@@ -8,7 +8,7 @@
 
 | 目录 | 入库 | 用途 |
 | --- | --- | --- |
-| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…`，71 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
+| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…` ~ `ADR-0088`，89 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
 | `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git / handoff-验收门） |
 | `docs/README.md` | ✅ | 本索引 |
 | `docs/verification/` | ✅ | 验收产物（真机截图等），按 `<模块>/<票号>/` 分目录存放（#1770 起目录键 = 票号；旧 PR 号目录同为数字段、仍被接受）——`pr-evidence` 认的可核验产物路径之一，不按「方案文档」归档 |
@@ -45,8 +45,8 @@
 
 ### docs/adr/（入库）
 
-71 篇，文件名一律 `ADR-NNNN-主题.md`（如 `ADR-0001-验证码通道适配器seam`、`ADR-0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
-<!-- 计数基线 2026-10-04（ADR-0070 入库后）；新增 ADR 时同步这里，或按 `ls docs/adr/ADR-*.md | wc -l` 重算。 -->
+89 篇，文件名一律 `ADR-NNNN-主题.md`（如 `ADR-0001-验证码通道适配器seam`、`ADR-0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
+<!-- 计数基线 2026-10-27（ADR-0088 入库后）；新增 ADR 时同步这里，或按 `ls docs/adr/ADR-*.md | wc -l` 重算。 -->
 
 ### docs/plans/（本地，当前为空）
 
