@@ -214,16 +214,7 @@ async function remove(account: AdminAccountDTO): Promise<void> {
         </el-table-column>
         <el-table-column label="所挂角色" min-width="200">
           <template #default="{ row }">
-            <el-select
-              :model-value="selectedRoleId(row)"
-              :loading="savingId === row.admin_id"
-              placeholder="选择角色"
-              class="account-role-select"
-              @change="(value: number) => assign(row, value)"
-            >
-              <el-option v-for="role in roleOptions" :key="role.value" :label="role.label" :value="role.value" />
-              <el-option v-if="!row.role_id" label="（未授权）" :value="0" />
-            </el-select>
+            <UiSelect :model-value="selectedRoleId(row)" :loading="savingId === row.admin_id" placeholder="选择角色" class="account-role-select" @change="(value: number) => assign(row, value)" :options="[...(roleOptions).map((role) => ({ label: role.label, value: role.value })), { label: '（未授权）', value: 0 }]" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">

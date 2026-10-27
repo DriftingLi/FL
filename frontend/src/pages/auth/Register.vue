@@ -20,38 +20,20 @@
         @submit.prevent
       >
         <el-form-item prop="nickname">
-          <el-input
-            v-model="formData.nickname"
-            placeholder="昵称（1-30字，展示用）"
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.nickname" placeholder="昵称（1-30字，展示用）" size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="id-card" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item prop="phone">
-          <el-input
-            v-model="formData.phone"
-            placeholder="请输入手机号"
-            size="large"
-            class="form-input"
-            maxlength="11"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.phone" placeholder="请输入手机号" size="large" class="form-input" :maxlength="11" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="phone" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item>
           <div class="captcha-row">
-            <el-input
-              v-model="captchaValue"
-              placeholder="图形验证码"
-              size="large"
-              class="form-input captcha-input"
-              maxlength="4"
-              @keyup.enter="handleSendCode"
-            />
+            <UiInput v-model="captchaValue" placeholder="图形验证码" size="large" class="form-input captcha-input" :maxlength="4" @keyup.enter="handleSendCode"  />
             <img
               v-if="captchaImage"
               :src="captchaImage"
@@ -65,15 +47,9 @@
 
         <el-form-item prop="code">
           <div class="code-row">
-            <el-input
-              v-model="formData.code"
-              placeholder="6位手机验证码"
-              size="large"
-              class="form-input code-input"
-              maxlength="6"
-              @keyup.enter="handleRegister">
+            <UiInput v-model="formData.code" placeholder="6位手机验证码" size="large" class="form-input code-input" :maxlength="6" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="mail" /></template>
-          </el-input>
+          </UiInput>
             <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
             </UiButton>
@@ -81,39 +57,21 @@
         </el-form-item>
 
         <el-form-item prop="password">
-          <el-input
-            v-model="formData.password"
-            type="password"
-            placeholder="设置密码（6-20位，用于账号密码登录）"
-            show-password
-            size="large"
-            class="form-input">
+          <UiInput v-model="formData.password" type="password" placeholder="设置密码（6-20位，用于账号密码登录）" show-password size="large" class="form-input">
             <template #prefix><UiIcon name="lock" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item prop="confirmPassword">
-          <el-input
-            v-model="formData.confirmPassword"
-            type="password"
-            placeholder="确认密码"
-            show-password
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.confirmPassword" type="password" placeholder="确认密码" show-password size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="lock" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item prop="company">
-          <el-input
-            v-model="formData.company"
-            placeholder="您的公司（选填）"
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.company" placeholder="您的公司（选填）" size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="building-2" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item>
@@ -134,37 +92,20 @@
         @submit.prevent
       >
         <el-form-item prop="nickname">
-          <el-input
-            v-model="formData.nickname"
-            placeholder="昵称（1-30字，展示用）"
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.nickname" placeholder="昵称（1-30字，展示用）" size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="id-card" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item prop="email">
-          <el-input
-            v-model="formData.email"
-            placeholder="请输入邮箱"
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.email" placeholder="请输入邮箱" size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="mail" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item>
           <div class="captcha-row">
-            <el-input
-              v-model="captchaValue"
-              placeholder="图形验证码"
-              size="large"
-              class="form-input captcha-input"
-              maxlength="4"
-              @keyup.enter="handleSendCode"
-            />
+            <UiInput v-model="captchaValue" placeholder="图形验证码" size="large" class="form-input captcha-input" :maxlength="4" @keyup.enter="handleSendCode"  />
             <img
               v-if="captchaImage"
               :src="captchaImage"
@@ -178,15 +119,9 @@
 
         <el-form-item prop="code">
           <div class="code-row">
-            <el-input
-              v-model="formData.code"
-              placeholder="6位邮箱验证码"
-              size="large"
-              class="form-input code-input"
-              maxlength="6"
-              @keyup.enter="handleRegister">
+            <UiInput v-model="formData.code" placeholder="6位邮箱验证码" size="large" class="form-input code-input" :maxlength="6" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="mail" /></template>
-          </el-input>
+          </UiInput>
             <UiButton :disabled="countdown > 0 || codeSending" size="large" class="code-btn" @click="handleSendCode">
               {{ codeSending ? '发送中...' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
             </UiButton>
@@ -194,39 +129,21 @@
         </el-form-item>
 
         <el-form-item prop="password">
-          <el-input
-            v-model="formData.password"
-            type="password"
-            placeholder="设置密码（6-20位，用于账号密码登录）"
-            show-password
-            size="large"
-            class="form-input">
+          <UiInput v-model="formData.password" type="password" placeholder="设置密码（6-20位，用于账号密码登录）" show-password size="large" class="form-input">
             <template #prefix><UiIcon name="lock" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item prop="confirmPassword">
-          <el-input
-            v-model="formData.confirmPassword"
-            type="password"
-            placeholder="确认密码"
-            show-password
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.confirmPassword" type="password" placeholder="确认密码" show-password size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="lock" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item prop="company">
-          <el-input
-            v-model="formData.company"
-            placeholder="您的公司（选填）"
-            size="large"
-            class="form-input"
-            @keyup.enter="handleRegister">
+          <UiInput v-model="formData.company" placeholder="您的公司（选填）" size="large" class="form-input" @keyup.enter="handleRegister">
             <template #prefix><UiIcon name="building-2" /></template>
-          </el-input>
+          </UiInput>
         </el-form-item>
 
         <el-form-item>
@@ -269,6 +186,7 @@ import {
   confirmPasswordRule
 } from '@/utils/validate'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()

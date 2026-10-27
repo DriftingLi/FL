@@ -82,14 +82,7 @@
       </UiCard>
 
     <UiDialog v-model="rejectDialogVisible" title="驳回修改" width="480px" confirm-text="确认驳回" :confirm-loading="submitting" @confirm="reject">
-      <el-input
-        v-model="rejectReason"
-        type="textarea"
-        :rows="3"
-        maxlength="200"
-        show-word-limit
-        placeholder="请输入驳回原因（选填）"
-      />
+      <UiInput v-model="rejectReason" type="textarea" :rows="3" :maxlength="200" show-word-limit placeholder="请输入驳回原因（选填）"  />
     </UiDialog>
   </div>
 </template>
@@ -113,6 +106,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 驳回理由弹窗：#795 三域共用弹窗状态机；提交动作由本页注入（资料审核驳回为终态）
 const {
