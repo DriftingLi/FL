@@ -10,30 +10,9 @@
     <UiFilterBar>
         <template #filters>
 
-      <el-select
-        v-model="filterCategory"
-        placeholder="全部分类"
-        clearable
-        style="width: 160px"
-        @change="handleFilterChange"
-      >
-        <el-option
-          v-for="opt in featuredCategoryOptions"
-          :key="opt.value"
-          :label="opt.label"
-          :value="opt.value"
-        />
-      </el-select>
+      <UiSelect v-model="filterCategory" placeholder="全部分类" clearable style="width: 160px" @change="handleFilterChange" :options="(featuredCategoryOptions).map((opt) => ({ label: opt.label, value: opt.value }))" />
       <!-- 三态过滤（#1748）：「定时」不是一个 status 取值，故参数由 status(0/1) 改为 state -->
-      <el-select
-        v-model="filterState"
-        placeholder="全部状态"
-        clearable
-        style="width: 140px"
-        @change="handleFilterChange"
-      >
-        <el-option v-for="opt in stateOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-      </el-select>
+      <UiSelect v-model="filterState" placeholder="全部状态" clearable style="width: 140px" @change="handleFilterChange" :options="(stateOptions).map((opt) => ({ label: opt.label, value: opt.value }))" />
       <UiButton variant="primary" @click="handleFilterChange">查询</UiButton>
       <UiButton @click="resetFilter">重置</UiButton>
         </template>
@@ -102,6 +81,7 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const router = useRouter()
 

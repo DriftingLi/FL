@@ -9,16 +9,9 @@
 <UiFilterBar>
         <template #filters>
 
-<el-input
-v-model="searchKeyword"
-placeholder="搜索企业名或账号"
-clearable
-style="width: 280px"
-@clear="search"
-@keyup.enter="search"
->
+<UiInput v-model="searchKeyword" placeholder="搜索企业名或账号" clearable style="width: 280px" @clear="search" @keyup.enter="search">
 <template #prefix><UiIcon name="search" /></template>
-</el-input>
+</UiInput>
 <UiButton variant="primary" @click="search">搜索</UiButton>
         </template>
       </UiFilterBar>
@@ -59,31 +52,31 @@ style="width: 280px"
 <UiDialog v-model="dialogVisible" title="新增企业招聘者" width="520px" destroy-on-close confirm-text="确认创建" :confirm-loading="submitting" @confirm="handleSubmit">
 <el-form ref="formRef" :model="formData" :rules="formRules" label-width="110px">
 <el-form-item label="用户名" prop="username">
-<el-input v-model="formData.username" placeholder="请输入用户名" maxlength="20" />
+<UiInput v-model="formData.username" placeholder="请输入用户名" :maxlength="20"  />
 </el-form-item>
 <el-form-item label="密码" prop="password">
-<el-input v-model="formData.password" type="password" placeholder="请输入密码（6-20位）" maxlength="20" show-password />
+<UiInput v-model="formData.password" type="password" placeholder="请输入密码（6-20位）" :maxlength="20" show-password  />
 </el-form-item>
 <el-form-item label="企业名称" prop="company_name">
-<el-input v-model="formData.company_name" placeholder="请输入企业名称" />
+<UiInput v-model="formData.company_name" placeholder="请输入企业名称"  />
 </el-form-item>
 <el-form-item label="统一社会信用代码" prop="credit_code">
-<el-input v-model="formData.credit_code" placeholder="请输入统一社会信用代码" />
+<UiInput v-model="formData.credit_code" placeholder="请输入统一社会信用代码"  />
 </el-form-item>
 <el-form-item label="经营范围" prop="business_scope">
-<el-input v-model="formData.business_scope" placeholder="请输入经营范围" />
+<UiInput v-model="formData.business_scope" placeholder="请输入经营范围"  />
 </el-form-item>
 <el-form-item label="联系人" prop="contact_name">
-<el-input v-model="formData.contact_name" placeholder="请输入联系人" />
+<UiInput v-model="formData.contact_name" placeholder="请输入联系人"  />
 </el-form-item>
 <el-form-item label="联系电话" prop="contact_phone">
-<el-input v-model="formData.contact_phone" placeholder="请输入联系电话" />
+<UiInput v-model="formData.contact_phone" placeholder="请输入联系电话"  />
 </el-form-item>
 <el-form-item label="联系邮箱" prop="contact_email">
-<el-input v-model="formData.contact_email" placeholder="请输入联系邮箱" />
+<UiInput v-model="formData.contact_email" placeholder="请输入联系邮箱"  />
 </el-form-item>
 <el-form-item label="企业微信">
-<el-input v-model="formData.wechat" placeholder="选填，学员同意交换后可加" maxlength="100" />
+<UiInput v-model="formData.wechat" placeholder="选填，学员同意交换后可加" :maxlength="100"  />
 </el-form-item>
 </el-form>
 </UiDialog>
@@ -91,28 +84,28 @@ style="width: 280px"
 <UiDialog v-model="editDialogVisible" title="编辑企业信息" width="520px" destroy-on-close confirm-text="保存修改" :confirm-loading="editing" @confirm="handleEditSubmit">
 <el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="110px">
 <el-form-item label="用户名" prop="username">
-<el-input v-model="editForm.username" placeholder="请输入用户名（4-20位字母/数字/下划线）" maxlength="20" />
+<UiInput v-model="editForm.username" placeholder="请输入用户名（4-20位字母/数字/下划线）" :maxlength="20"  />
 </el-form-item>
 <el-form-item label="企业名称" prop="company_name">
-<el-input v-model="editForm.company_name" placeholder="请输入企业名称" />
+<UiInput v-model="editForm.company_name" placeholder="请输入企业名称"  />
 </el-form-item>
 <el-form-item label="统一社会信用代码" prop="credit_code">
-<el-input v-model="editForm.credit_code" placeholder="请输入统一社会信用代码" />
+<UiInput v-model="editForm.credit_code" placeholder="请输入统一社会信用代码"  />
 </el-form-item>
 <el-form-item label="经营范围" prop="business_scope">
-<el-input v-model="editForm.business_scope" placeholder="请输入经营范围" />
+<UiInput v-model="editForm.business_scope" placeholder="请输入经营范围"  />
 </el-form-item>
 <el-form-item label="联系人" prop="contact_name">
-<el-input v-model="editForm.contact_name" placeholder="请输入联系人" />
+<UiInput v-model="editForm.contact_name" placeholder="请输入联系人"  />
 </el-form-item>
 <el-form-item label="联系电话" prop="contact_phone">
-<el-input v-model="editForm.contact_phone" placeholder="请输入联系电话" />
+<UiInput v-model="editForm.contact_phone" placeholder="请输入联系电话"  />
 </el-form-item>
 <el-form-item label="联系邮箱" prop="contact_email">
-<el-input v-model="editForm.contact_email" placeholder="请输入联系邮箱" />
+<UiInput v-model="editForm.contact_email" placeholder="请输入联系邮箱"  />
 </el-form-item>
 <el-form-item label="企业微信">
-<el-input v-model="editForm.wechat" placeholder="选填，学员同意交换后可加" maxlength="100" />
+<UiInput v-model="editForm.wechat" placeholder="选填，学员同意交换后可加" :maxlength="100"  />
 </el-form-item>
 </el-form>
 </UiDialog>
@@ -123,7 +116,7 @@ style="width: 280px"
 <span>{{ pwdForm.username }}</span>
 </el-form-item>
 <el-form-item label="新密码" prop="password">
-<el-input v-model="pwdForm.password" type="password" placeholder="请输入新密码（6-20位）" maxlength="20" show-password />
+<UiInput v-model="pwdForm.password" type="password" placeholder="请输入新密码（6-20位）" :maxlength="20" show-password  />
 </el-form-item>
 </el-form>
 </UiDialog>
@@ -150,6 +143,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const dialogVisible = ref(false)
 const submitting = ref(false)

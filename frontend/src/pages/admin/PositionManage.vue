@@ -38,13 +38,13 @@
     <UiDialog v-model="dialogVisible" :title="editing ? '编辑岗位' : '新增岗位'" width="480px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
         <el-form-item label="岗位名称" prop="name">
-          <el-input v-model="form.name" maxlength="50" placeholder="如：叉车维修技师" />
+          <UiInput v-model="form.name" :maxlength="50" placeholder="如：叉车维修技师"  />
         </el-form-item>
         <el-form-item label="编码" prop="code">
-          <el-input v-model="form.code" maxlength="30" placeholder="唯一编码，如：maintenance_tech" />
+          <UiInput v-model="form.code" :maxlength="30" placeholder="唯一编码，如：maintenance_tech"  />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" maxlength="200" />
+          <UiInput v-model="form.description" type="textarea" :rows="2" :maxlength="200"  />
         </el-form-item>
         <el-form-item label="状态">
           <UiSwitch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
@@ -71,6 +71,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 interface PositionItem {

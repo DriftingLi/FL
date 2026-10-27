@@ -79,16 +79,27 @@ test('派生：真文档可解析，且原生集里确实有原生登记件', ()
   for (const tag of ['el-tabs', 'el-drawer', 'el-popconfirm', 'el-avatar', 'el-table', 'el-image', 'el-dropdown']) {
     assert.ok(reg.native.has(tag), tag + ' 应在原生集')
   }
-  for (const tag of ['el-input', 'el-select', 'el-alert', 'el-skeleton']) {
+  // #1981 收口：表单域两行不再「按域分批」—— 页面里出现它们就是违规，不再是欠账。
+  for (const tag of ['el-alert', 'el-skeleton', 'el-progress', 'el-card']) {
     assert.ok(reg.pending.has(tag), tag + ' 应在按域分批集')
+  }
+  for (const tag of ['el-input', 'el-select']) {
+    assert.ok(!reg.pending.has(tag), tag + ' 已完成迁移，不该再登记为按域分批')
+    assert.ok(!reg.native.has(tag), tag + ' 不是原生形态')
   }
   assert.ok(reg.children.size >= 7, '子件表至少 7 个标签')
 })
 
 test('派生：子件表的父件必须能解析（写错父件名 = 静默放行整个子件）', () => {
   const reg = loadRegistryFromFile()
+  // #1981 收口后 `el-input` / `el-select` 不再是「按域分批」的页面形态，而是**封装层的内部件**
+  // （各自的 `Ui*` 里用）。子件仍随父件，但父件这类「只在封装层内合法」的标签要单独认。
+  const WRAPPER_INNER = ['el-input', 'el-select']
   const unresolved = [...reg.children].filter(([, parent]) =>
-    !reg.native.has(parent) && !reg.pending.has(parent) && !reg.children.has(parent)
+    !reg.native.has(parent) &&
+    !reg.pending.has(parent) &&
+    !reg.children.has(parent) &&
+    !WRAPPER_INNER.includes(parent)
   )
   assert.deepEqual(unresolved, [], '子件指向了未登记的父件：' + JSON.stringify(unresolved))
 })
@@ -202,14 +213,14 @@ test('CLI --all 在当前树上全绿（防假红）', () => {
 // ---------------- ⑤ 新代码必用（#1981 的生效点）
 
 test('模式敏感：按域分批的标签在 --all 放行、在新代码口径下报红', () => {
-  const src = sfc(['  <el-input v-model="x" />', '  <el-select v-model="y" />'].join('\n'))
+  const src = sfc(['  <el-card />', '  <el-alert />'].join('\n'))
   setStrictNewCode(false)
   try {
     assert.deepEqual(scanSource(src, 'pages/a.vue'), [], '存量口径应放行')
     setStrictNewCode(true)
     const strict = scanSource(src, 'pages/a.vue')
     assert.equal(strict.length, 2, '新增行口径应两条都报')
-    assert.deepEqual(strict.map((v) => v.wrapper).sort(), ['UiInput', 'UiSelect'])
+    assert.deepEqual(strict.map((v) => v.wrapper).sort(), ['UiAlert', 'UiCard'])
   } finally {
     setStrictNewCode(false)
   }
@@ -218,7 +229,7 @@ test('模式敏感：按域分批的标签在 --all 放行、在新代码口径�
 test('模式敏感：封装件内部不受影响（components/ui 整面放行）', () => {
   setStrictNewCode(true)
   try {
-    assert.deepEqual(scanSource(sfc('  <el-input />'), 'components/ui/UiFoo.vue'), [])
+    assert.deepEqual(scanSource(sfc('  <el-card />'), 'components/ui/UiFoo.vue'), [])
   } finally {
     setStrictNewCode(false)
   }

@@ -8,42 +8,19 @@
     <div class="edit-card" v-loading="loading">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="标题" prop="title">
-          <el-input
-            v-model="form.title"
-            placeholder="请输入文章标题"
-            maxlength="200"
-            show-word-limit
-          />
+          <UiInput v-model="form.title" placeholder="请输入文章标题" :maxlength="200" show-word-limit  />
         </el-form-item>
 
         <el-form-item label="分类" prop="category">
-          <el-select v-model="form.category" placeholder="请选择分类" style="width: 100%">
-            <el-option
-              v-for="opt in featuredCategoryOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
+          <UiSelect v-model="form.category" placeholder="请选择分类" style="width: 100%" :options="(featuredCategoryOptions).map((opt) => ({ label: opt.label, value: opt.value }))" />
         </el-form-item>
 
         <el-form-item label="来源">
-          <el-input
-            v-model="form.source"
-            placeholder="请输入来源（如：和润天下、行业媒体等）"
-            maxlength="100"
-          />
+          <UiInput v-model="form.source" placeholder="请输入来源（如：和润天下、行业媒体等）" :maxlength="100"  />
         </el-form-item>
 
         <el-form-item label="摘要">
-          <el-input
-            v-model="form.summary"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入文章摘要（最多500字，将展示在首页卡片）"
-            maxlength="500"
-            show-word-limit
-          />
+          <UiInput v-model="form.summary" type="textarea" :rows="3" placeholder="请输入文章摘要（最多500字，将展示在首页卡片）" :maxlength="500" show-word-limit  />
         </el-form-item>
 
         <el-form-item label="封面图">
@@ -163,6 +140,8 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const route = useRoute()
 const router = useRouter()

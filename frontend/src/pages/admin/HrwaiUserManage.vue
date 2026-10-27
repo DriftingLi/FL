@@ -20,6 +20,7 @@ import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 新增弹窗
 const dialogVisible = ref(false)
@@ -182,18 +183,11 @@ function actionItems(row: HrwaiUser): UiMoreMenuItem[] {
     <UiFilterBar>
         <template #filters>
 
-      <el-input
-        v-model="searchKeyword"
-        placeholder="搜索账号 / 昵称 / 手机号"
-        clearable
-        style="width: 280px"
-        @clear="search"
-        @keyup.enter="search"
-      >
+      <UiInput v-model="searchKeyword" placeholder="搜索账号 / 昵称 / 手机号" clearable style="width: 280px" @clear="search" @keyup.enter="search">
         <template #prefix>
           <UiIcon name="search" />
         </template>
-      </el-input>
+      </UiInput>
       <UiButton variant="primary" @click="search">搜索</UiButton>
         </template>
       </UiFilterBar>
@@ -261,26 +255,22 @@ function actionItems(row: HrwaiUser): UiMoreMenuItem[] {
      confirm-text="确认" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="90px">
         <el-form-item label="手机号" prop="phone">
-          <el-input
-            v-model="formData.phone"
-            placeholder="请输入手机号"
-            maxlength="11"
-          />
+          <UiInput v-model="formData.phone" placeholder="请输入手机号" :maxlength="11"  />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="formData.password" type="password" placeholder="请输入密码（6-20字符）" maxlength="20" show-password />
+          <UiInput v-model="formData.password" type="password" placeholder="请输入密码（6-20字符）" :maxlength="20" show-password  />
         </el-form-item>
         <el-form-item label="账号" prop="account">
-          <el-input v-model="formData.account" placeholder="选填，缺省自动生成（4-20位字母/数字/下划线）" maxlength="20" />
+          <UiInput v-model="formData.account" placeholder="选填，缺省自动生成（4-20位字母/数字/下划线）" :maxlength="20"  />
         </el-form-item>
         <el-form-item label="昵称" prop="username">
-          <el-input v-model="formData.username" placeholder="选填，缺省自动生成" maxlength="30" />
+          <UiInput v-model="formData.username" placeholder="选填，缺省自动生成" :maxlength="30"  />
         </el-form-item>
         <el-form-item label="邮箱" prop="email">
-          <el-input v-model="formData.email" placeholder="选填" maxlength="50" />
+          <UiInput v-model="formData.email" placeholder="选填" :maxlength="50"  />
         </el-form-item>
         <el-form-item label="公司" prop="company">
-          <el-input v-model="formData.company" placeholder="选填" maxlength="50" />
+          <UiInput v-model="formData.company" placeholder="选填" :maxlength="50"  />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -297,7 +287,7 @@ function actionItems(row: HrwaiUser): UiMoreMenuItem[] {
           <span>{{ pwdFormData.name }}</span>
         </el-form-item>
         <el-form-item label="新密码" prop="password">
-          <el-input v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" maxlength="20" show-password />
+          <UiInput v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" :maxlength="20" show-password  />
         </el-form-item>
       </el-form>
     </UiDialog>

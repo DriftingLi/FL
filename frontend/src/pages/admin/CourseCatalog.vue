@@ -74,23 +74,14 @@
       <UiFilterBar>
         <template #filters>
 
-        <el-input v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1">
+        <UiInput v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1">
           <template #prefix>
             <UiIcon name="search" />
           </template>
-        </el-input>
-        <el-select v-model="credentialId" placeholder="全部证件" clearable style="width: 160px" @change="currentPage = 1">
-          <el-option v-for="c in credentials" :key="c.id" :label="c.name" :value="c.id" />
-        </el-select>
-        <el-select v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1">
-          <el-option label="已上架" :value="1" />
-          <el-option label="未上架" :value="0" />
-        </el-select>
-        <el-select v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1">
-          <el-option label="热门" value="hot" />
-          <el-option label="精品" value="featured" />
-          <el-option label="全部" value="all" />
-        </el-select>
+        </UiInput>
+        <UiSelect v-model="credentialId" placeholder="全部证件" clearable style="width: 160px" @change="currentPage = 1" :options="(credentials).map((c) => ({ label: c.name, value: c.id }))" />
+        <UiSelect v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1" :options="[{ label: '已上架', value: 1 }, { label: '未上架', value: 0 }]" />
+        <UiSelect v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1" :options="[{ label: '热门', value: 'hot' }, { label: '精品', value: 'featured' }, { label: '全部', value: 'all' }]" />
         <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
         </template>
       </UiFilterBar>
@@ -214,6 +205,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const submitting = ref(false)
 

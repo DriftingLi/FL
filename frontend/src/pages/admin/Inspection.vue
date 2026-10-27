@@ -26,16 +26,9 @@
     <div class="rounded-card border border-line bg-panel p-4">
       <div class="flex items-center gap-2 mb-3">
         <span class="text-sm font-semibold text-ink">问答积分流水</span>
-        <el-select v-model="domain" class="!w-44">
-          <el-option label="问答域" value="forum_topic" />
-          <el-option label="跨业务域全量" value="" />
-        </el-select>
-        <el-select v-model="reason" placeholder="按原因筛选" clearable class="!w-40" @change="loadLedger">
-          <el-option label="答主被采纳" value="accepted_bonus" />
-          <el-option label="楼主采纳" value="accept_action" />
-          <el-option label="违规回收" value="rollback" />
-        </el-select>
-        <el-input v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger" />
+        <UiSelect v-model="domain" class="!w-44" :options="[{ label: '问答域', value: 'forum_topic' }, { label: '跨业务域全量', value: '' }]" />
+        <UiSelect v-model="reason" placeholder="按原因筛选" clearable class="!w-40" @change="loadLedger" :options="[{ label: '答主被采纳', value: 'accepted_bonus' }, { label: '楼主采纳', value: 'accept_action' }, { label: '违规回收', value: 'rollback' }]" />
+        <UiInput v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger"  />
         <UiButton size="small" @click="loadLedger">刷新</UiButton>
       </div>
       <UiAsyncSection
@@ -146,7 +139,7 @@
     <div class="rounded-card border border-line bg-panel p-4">
       <div class="flex items-center gap-2 mb-3">
         <span class="text-sm font-semibold text-ink">招聘职位巡检</span>
-        <el-input v-model="jobFilterRecruiter" placeholder="按企业 ID 筛" clearable class="!w-32" @change="loadJobs" />
+        <UiInput v-model="jobFilterRecruiter" placeholder="按企业 ID 筛" clearable class="!w-32" @change="loadJobs"  />
         <UiButton size="small" @click="loadJobs">刷新</UiButton>
       </div>
       <UiAsyncSection
@@ -234,7 +227,7 @@
 
     <UiDialog v-model="forceOfflineVisible" title="强制下架职位" width="440px" confirm-text="确认下架" :confirm-loading="forceOfflineing" @confirm="confirmForceOffline">
       <div class="text-sm text-ink">职位「{{ forceOfflineJob?.title }}」将被强制下架，学员侧立即不可见，企业不能自行重新上架。</div>
-      <el-input v-model="forceOfflineReason" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请填写下架原因（将邮件通知企业）" />
+      <UiInput v-model="forceOfflineReason" type="textarea" :rows="3" :maxlength="500" show-word-limit placeholder="请填写下架原因（将邮件通知企业）"  />
     </UiDialog>
   </div>
 </template>
@@ -255,6 +248,8 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 // #411：默认锁定问答域（forum_topic），显式切换才跨域全量——卡片标题与内容同域。
 const domain = ref<'forum_topic' | ''>('forum_topic')

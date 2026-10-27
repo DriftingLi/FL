@@ -10,18 +10,11 @@
     <UiFilterBar>
         <template #filters>
 
-      <el-input
-        v-model="searchKeyword"
-        placeholder="搜索用户名或姓名"
-        clearable
-        style="width: 280px"
-        @clear="search"
-        @keyup.enter="search"
-      >
+      <UiInput v-model="searchKeyword" placeholder="搜索用户名或姓名" clearable style="width: 280px" @clear="search" @keyup.enter="search">
         <template #prefix>
           <UiIcon name="search" />
         </template>
-      </el-input>
+      </UiInput>
       <UiButton variant="primary" @click="search">搜索</UiButton>
         </template>
       </UiFilterBar>
@@ -68,13 +61,13 @@
      confirm-text="确认添加" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="100px">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="formData.username" placeholder="请输入用户名（3-20字符）" maxlength="20" show-word-limit />
+          <UiInput v-model="formData.username" placeholder="请输入用户名（3-20字符）" :maxlength="20" show-word-limit  />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="formData.password" type="password" placeholder="请输入密码（6-20字符）" maxlength="20" show-password />
+          <UiInput v-model="formData.password" type="password" placeholder="请输入密码（6-20字符）" :maxlength="20" show-password  />
         </el-form-item>
         <el-form-item label="姓名" prop="name">
-          <el-input v-model="formData.name" placeholder="请输入姓名（2-10字符）" maxlength="10" show-word-limit />
+          <UiInput v-model="formData.name" placeholder="请输入姓名（2-10字符）" :maxlength="10" show-word-limit  />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -91,7 +84,7 @@
           <span>{{ pwdFormData.name }}</span>
         </el-form-item>
         <el-form-item label="新密码" prop="password">
-          <el-input v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" maxlength="20" show-password />
+          <UiInput v-model="pwdFormData.password" type="password" placeholder="请输入新密码（6-20字符）" :maxlength="20" show-password  />
         </el-form-item>
       </el-form>
     </UiDialog>
@@ -118,6 +111,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import { describeRole } from '@/utils/roleWords'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 type TutorRow = AdminTutor
 
