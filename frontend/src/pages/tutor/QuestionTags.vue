@@ -347,7 +347,7 @@ onMounted(() => {
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-bg-page);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: background var(--duration-base) var(--ease-default);
 }
 

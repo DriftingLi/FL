@@ -30,7 +30,7 @@
         <span>发布于 {{ data.published_at.slice(0, 10) }}</span>
       </div>
 
-      <div class="mt-4 rounded border border-line bg-panel p-3 text-sm">
+      <div class="mt-4 rounded-ctl border border-line bg-panel p-3 text-sm">
         <div class="text-xs font-semibold text-ink-3">企业信息</div>
         <div class="mt-1 text-ink">企业：{{ data.company_name || '-' }}</div>
         <div class="text-ink">主营：{{ data.business_scope || '-' }}</div>

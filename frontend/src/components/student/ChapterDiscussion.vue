@@ -278,7 +278,7 @@ watch(() => props.chapterId, () => {
       <div
         v-for="topic in topics"
         :key="topic.id"
-        class="mb-3 overflow-hidden rounded-[10px] border border-line last:mb-0"
+        class="mb-3 overflow-hidden rounded-ctl border border-line last:mb-0"
       >
         <div
           class="cursor-pointer px-3.5 py-3 transition-colors duration-[var(--duration-tap)] ease-[var(--ease-default)] hover:bg-canvas"
@@ -316,7 +316,7 @@ watch(() => props.chapterId, () => {
             <ForumImageGallery :images="expandedTopic?.images" />
 
             <!-- 回复流 -->
-            <div class="rounded-[8px] bg-panel px-3 py-1 max-md:px-2">
+            <div class="rounded-ctl bg-panel px-3 py-1 max-md:px-2">
               <template v-if="replies.length > 0">
                 <!-- 与帖子详情共用同一份回复渲染（含点赞 / 举报 / ⋯）；
                      密度取 compact：内嵌面板不套详情页尺寸，避免撑长课程页展开区。 -->

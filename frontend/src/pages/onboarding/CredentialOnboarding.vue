@@ -189,7 +189,8 @@ onMounted(() => {
 .credential-card.active {
   border-color: var(--color-primary-500);
   background: color-mix(in srgb, var(--color-primary-500) 12%, var(--color-bg-card));
-  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+  /* 选中环不是投影（容器档位表「不是阴影的别写成阴影」），改用 outline */
+  outline: 2px solid rgba(13, 148, 136, 0.15);
 }
 .card-name {
   font-size: var(--text-sm);

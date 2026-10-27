@@ -9,7 +9,7 @@
   <div class="auth-page flex min-h-screen flex-col bg-panel">
     <div class="flex flex-1 items-center justify-center p-6 max-[480px]:p-4">
     <div
-      class="auth-card w-full max-w-[420px] rounded-card border border-line bg-panel px-10 pt-11 pb-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] max-[480px]:px-[22px] max-[480px]:pt-8 max-[480px]:pb-[22px]"
+      class="auth-card w-full max-w-[420px] rounded-card border border-line bg-panel px-10 pt-11 pb-7 shadow-card max-[480px]:px-[22px] max-[480px]:pt-8 max-[480px]:pb-[22px]"
     >
       <!-- 明暗模式切换（三态下拉菜单）。认证页是独立布局、不走 SidebarLayout，
            曾漏装导致深色偏好用户在登录页看到崩坏画面且无法切回（#554），故补于此。 -->
@@ -188,7 +188,7 @@ function goMain() {
 .auth-page .captcha-img {
   height: 40px;
   width: 110px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   cursor: pointer;
   background: var(--color-bg-page);
@@ -201,13 +201,13 @@ function goMain() {
   height: 48px;
   font-size: var(--text-base);
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   letter-spacing: 0.08em;
   margin-top: 8px;
 }
 
 .auth-page .form-input .el-input__wrapper {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 4px 14px;
   box-shadow: 0 0 0 1px var(--color-border) inset;
   transition: all var(--duration-base) var(--ease-default);

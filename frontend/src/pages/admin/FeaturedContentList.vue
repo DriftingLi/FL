@@ -242,7 +242,7 @@ function actionItems(row: FeaturedContentAdminListDTO): UiMoreMenuItem[] {
 }
 
 :deep(.el-table) {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 </style>

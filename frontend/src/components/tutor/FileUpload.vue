@@ -52,7 +52,7 @@
         <div
           v-for="file in fileList"
           :key="file.uid"
-          class="file-item flex items-center gap-3 p-3 border border-line rounded-[6px] transition-[border-color,background-color] duration-[var(--duration-normal)] ease-[var(--ease-default)] max-[768px]:flex-wrap max-[768px]:gap-2"
+          class="file-item flex items-center gap-3 p-3 border border-line rounded-ctl transition-[border-color,background-color] duration-[var(--duration-normal)] ease-[var(--ease-default)] max-[768px]:flex-wrap max-[768px]:gap-2"
           :class="file.status === 'error' ? 'border-bad bg-bad-soft' : file.status === 'success' ? 'border-ok bg-ok-soft' : ''"
         >
           <div class="file-info flex items-center gap-2.5 flex-1 min-w-0 max-[768px]:basis-full">

@@ -203,7 +203,7 @@ defineExpose({
 
 <template>
   <div
-    class="forum-md-input rounded-[10px] border border-line bg-panel transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-within:border-ui-500"
+    class="forum-md-input rounded-ctl border border-line bg-panel transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-within:border-ui-500"
     @paste="onPaste"
     @dragover="onDragOver"
     @dragleave="onDragLeave"

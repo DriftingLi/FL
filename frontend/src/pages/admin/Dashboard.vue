@@ -130,7 +130,7 @@ function renderBarChart() {
       borderColor: t.tooltip.borderColor,
       borderWidth: 1,
       textStyle: t.tooltip.textStyle,
-      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
+      extraCssText: 'box-shadow: var(--shadow-md); border-radius: var(--radius-md);'
     },
     legend: {
       data: ['学习人数', '学习时长(分钟)'],
@@ -212,7 +212,7 @@ function renderPieChart() {
       borderColor: t.tooltip.borderColor,
       borderWidth: 1,
       textStyle: t.tooltip.textStyle,
-      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 8px;'
+      extraCssText: 'box-shadow: var(--shadow-md); border-radius: var(--radius-md);'
     },
     legend,
     color: [...t.series],
@@ -302,7 +302,7 @@ onUnmounted(() => {
 .welcome-banner {
   background: color-mix(in srgb, var(--color-violet-500) 8%, var(--color-bg-card));
   border: 1px solid color-mix(in srgb, var(--color-violet-500) 18%, var(--color-border));
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   padding: var(--space-6) var(--space-8);
   color: var(--color-text-primary);
 }

@@ -54,7 +54,7 @@ function run(key: MarkdownCommandKey) {
       <UiTooltip :content="item.label" placement="bottom" :show-after="300">
         <button
           type="button"
-          class="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-0 bg-transparent text-ink-2 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)]"
+          class="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-ctl border-0 bg-transparent text-ink-2 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)]"
           :class="disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-canvas hover:text-ink'"
           :aria-label="item.label"
           :aria-disabled="disabled ? 'true' : undefined"

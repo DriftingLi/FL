@@ -735,7 +735,7 @@ onMounted(loadList)
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   background: var(--color-bg-page);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 1px 6px;
 }
 
