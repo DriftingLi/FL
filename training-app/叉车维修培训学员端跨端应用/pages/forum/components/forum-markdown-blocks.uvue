@@ -37,8 +37,8 @@
     // 只经**格式轴**拿 runs（与「档位决策不收在模板里」同一条接线口径，ADR-0025 P2 新决策 1）：
     // 本组件不许出现 `parseMarkdown` / `SUBSET_`，也不直引 utils/markdownInline —— 由
     // markdownContract 的论坛面组钉住。
-    import { forumInlineRuns, forumLinkDomain } from '../../../utils/forumBody'
-    import { openExternalBrowser } from '../../../utils/systemBrowser'
+    import { forumInlineRuns } from '../../../utils/forumBody'
+    import { dispatchExternalLinkTap } from '../../../utils/externalLinkDispatch'
     import type { MarkdownInlineRun } from '../../../utils/markdownInline'
 
     const props = withDefaults(defineProps<{
@@ -80,39 +80,15 @@
     const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
 
     /**
-     * ⑩-8：点可点 run（`link` 非空 ⇒ 已过协议闸，只可能 http(s)）弹 `showModal` 显示**目标域名**，
-     * 确认后 App-Android 走 `openExternalBrowser`（原生 Intent，见 `utils/systemBrowser.uts`：uni-app x
-     * **不支持 plus、`uni.openURL` ④c 判 unresolved**）、**mp-weixin 退化为复制链接 + toast**（小程序
-     * 打不开任意外链是平台事实，跨端分叉必须具名）。⑩-9：**站内链接也弹** —— app 内任何外链都是离开
-     * app，站内页在移动端没有对应路由，故**不设** `isSameSiteUrl` 直开快路径（那句的适用面收窄为 Web）。
+     * ⑩-8：点可点 run（`link` 非空 ⇒ 已过协议闸，只可能 http(s)）。确认弹窗 + 按端分叉的**编排**
+     * 已抽到 `utils/externalLinkDispatch.uts`（#2035：留在本组件就进不了 `loadUts` 行为缝，
+     * 行为与接线双零）⇒ 本层只剩一行委托；弹窗字样 / 确认闸 / 分叉口径的变化一律过那边的套件。
      *
      * ⚠️ 嵌套**子 `<text>`** 的点击：App 端要 HBuilderX ≥ 4.51（本机 5.23 满足）；小程序端「子 text
-     * 能否被点」文档未承诺（ADR-0025 §6）⇒ 本段**只能真机 ①a 验**「点了确实响应」，jest/④c 测不出。
+     * 能否被点」文档未承诺（ADR-0025 §6）⇒ 「点了确实响应」仍**只能真机 ①a 验**，jest/④c 测不出。
      */
     const onRunTap = (run : MarkdownInlineRun) : void => {
-        const link = run.link
-        if (link.length == 0) return
-        const domain = forumLinkDomain(link)
-        uni.showModal({
-            title: '打开外部链接',
-            content: '即将离开应用访问：' + domain,
-            confirmText: '打开',
-            cancelText: '取消',
-            success: (res) => {
-                if (!res.confirm) return
-                // #ifdef APP-ANDROID
-                openExternalBrowser(link)
-                // #endif
-                // #ifdef MP-WEIXIN
-                uni.setClipboardData({
-                    data: link,
-                    success: () => {
-                        uni.showToast({ title: '链接已复制', icon: 'none' })
-                    }
-                })
-                // #endif
-            }
-        })
+        dispatchExternalLinkTap(run.link)
     }
 </script>
 

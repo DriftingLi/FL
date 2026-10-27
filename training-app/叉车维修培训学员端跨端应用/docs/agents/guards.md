@@ -61,6 +61,17 @@
   > `guardClassification.test.js` 的 H5 台账同步划掉。**先例是 #1237**（收藏落点守护切到 utsHarness）：迁移**不必**等 S6a 单独开票，
   > 谁的票的 ③ 承重证据落在这个模块上，谁就顺手迁。
 
+## 例外登记：行为缝射程外的原生支
+
+- **`systemBrowser.uts` 的 APP-ANDROID 原生 Intent 支 —— 无行为守护（#2035 登记）。**
+  原因：该文件 import 段是 `import Intent from 'android.content.Intent'`（UTS 原生类逐名**默认导入**形态），
+  `utsHarness.importedNames` 对默认导入 **fail-closed**（只认 `import { … }`）⇒ 整文件进不了行为缝；
+  且该支在非 App 端不编译、其余端是空实现，node 里无从观察原生效果。
+  **行为面承重**：`externalLinkDispatchBehavior.test.js`（编排真执行：空链接闸 / 弹窗字样 / 确认闸 /
+  副作用落点，成对取证）；**接线面钉死**：`systemBrowserWiringContract.test.js`（具名导入 /
+  唯一调用点在 APP-ANDROID 区内 / null 静默 return 先于 startActivity）。
+  协议闸与域名投影另有 `markdownInlineBehavior.test.js` ④/域名组（不在本例外射程）。
+
 ## 新增守护时要回答的（写进 PR 正文即可）
 
 1. 它是**行为**还是**接线**守护？（跑 `node scripts/classify-guards.mjs` 看它落在哪一类）
