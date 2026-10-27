@@ -173,6 +173,9 @@ param(
     [int]$WaitSeconds = 120,
     [switch]$DryRun,
     [switch]$CompileOnly,
+    # #2027：「无代码变更」预检的逃生门。预检只挡「上一轮已部署成功且 HEAD/工作树都没变」这一种，
+    # 但重启 App / 重拍截图确实可能需要在无变更时重跑 ⇒ 给显式开关，不靠猜、也不放宽默认。
+    [switch]$Force,
     [int]$StepTimeoutSeconds = 180,
     [int]$TimeoutSeconds = 900,
     [int]$DeployStallSeconds = 300,
@@ -187,6 +190,13 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# 日志乱码的唯一真源（#2027）：不钉这一行，重定向捕获 cli 的 UTF-8 输出会按 GBK(cp936) 解码
+# ⇒ `鈥峓number]鈥?200` 这类 mojibake 落进 .ci-verify/hx-run.log。实测 2026-10-27：本文件此前
+# `OutputEncoding` 出现 **0** 次，而 dev-finish.ps1 / style-loop.ps1 / mp-weixin-check.ps1 各 2 次。
+# 同族血账：#1542 缺陷 5、auto-screenshot S20、#2013 B 项（子 pwsh 退回 gb2312）。
+# 非控制台环境设置可能抛 ⇒ try 兜住（先例 = dev-finish.ps1 顶部同款写法）。
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 
 # ---------- 常量 ----------
 
@@ -763,6 +773,32 @@ Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
 . (Join-Path $PSScriptRoot 'lib\hx-deploy.ps1')
 # 错误行判定的纯函数（ADR-0012）：同理抽成 lib —— 真运行路径必须能断言「设备日志不算失败」
 . (Join-Path $PSScriptRoot 'lib\hx-errors.ps1')
+. (Join-Path $PSScriptRoot 'lib\hx-noop.ps1')
+
+# ---------- 预检：无代码变更就别再上一遍真机（#2027）----------
+# 实测口径（.ci-verify 里 12 条历史 HX_RUN 机检行）：正常增量轮 total 45–161 秒（中位 73 秒），
+# 但 3/12 次 exit=env 吃掉 643 / 906 / 906 秒 = 总墙钟 4514 秒的 54%。其中两次 deployed=false 的
+# 日志里 App 仍在设备上每 30 秒轮询 /api/notifications/unread-count ⇒ **部署成立、判据未前进**，
+# 于是白等满 -TimeoutSeconds。根因是「代码没变又跑了一遍」：www mtime 不动 ⇒ 判未部署。
+# 为什么只用 git、且必须排在 Wait-HxFree **之前**：C7 要求任何 HBuilderX 交互都在忙检测之后；
+# 本预检不取锁、不碰 cli、不碰 adb —— 无活时连锁都不取。
+# -CompileOnly 不适用（它本来就不碰设备）；要强制重跑用 -Force。
+$noopMarkerPath = Join-Path (Join-Path $Project '.ci-verify') 'last-deploy.json'
+if (-not $CompileOnly -and -not $Force) {
+    $noopVerdict = Test-HxNoopRerun -Project $Project -MarkerPath $noopMarkerPath
+    if ($noopVerdict.Noop) {
+        Write-Host ''
+        Write-Host "⏭️ 预检：**无代码变更** ⇒ 不做这次真机部署。$($noopVerdict.Reason)" -ForegroundColor Yellow
+        Write-Host '   上一轮已部署成功且 HEAD/工作树都没变 ⇒ 再 launch 设备侧事实不会前进，' -ForegroundColor Yellow
+        Write-Host "   按判据会判「未部署」并白等满 $TimeoutSeconds 秒（实测出现过 590 秒 / 900 秒）。" -ForegroundColor Yellow
+        Write-Host '   确实需要重跑（重启 App / 重拍截图）：加 -Force。' -ForegroundColor Yellow
+        if ($LogPath) { Add-Content -LiteralPath $LogPath -Value "[noop] 跳过：$($noopVerdict.Reason)" -Encoding utf8 -ErrorAction SilentlyContinue }
+        Write-HxRunResult -Mode $mode -Compile 0 -Deploy 0 -Total 0 -Exit 'env' -LogFile $LogPath
+        exit 2
+    }
+    if ($noopVerdict.Reason) { Write-Host ">>> 预检放行：$($noopVerdict.Reason)" -ForegroundColor DarkGray }
+}
+
 $hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPath
 try {
 
@@ -943,6 +979,11 @@ Write-Host ''
 Write-Host "✅ 已 $mode 运行到 $($target.Serial)（device_mode=$($target.Mode)）：设备侧事实相对基线前进。" -ForegroundColor Green
 Write-Host "   那个运行会话**仍然活着**（真运行不自己收口）；要停就在 HBuilderX 里点「停止」—— 本脚本绝不 kill。" -ForegroundColor Green
 Write-Host "   本脚本不是门：收口前记得跑中循环（npm run test:unit + npm run build:kotlin-all）。" -ForegroundColor Green
+# #2027：记下「这一轮成功部署」的 HEAD，供下一轮取锁前的无变更预检。
+# 只在成功路径写；失败轮不写、也不覆盖旧标记（旧标记对应的是上一次**真**成功）。
+if (Write-HxDeployMarker -Project $Project -MarkerPath $noopMarkerPath) {
+    Write-Host "   已记部署标记：$noopMarkerPath（下一轮同 HEAD 且无改动会被预检挡下，省掉白等）" -ForegroundColor DarkGray
+}
 Write-HxRunResult -Mode $mode -Compile $segment.Compile -Deploy $segment.Deploy -Total $totalSeconds -Exit 'ok' -LogFile $LogPath
 exit 0
 
