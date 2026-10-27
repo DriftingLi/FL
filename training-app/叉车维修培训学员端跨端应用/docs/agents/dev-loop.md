@@ -38,7 +38,7 @@
 `hx-run.ps1` 会打印分段表与机检行 `HX_RUN mode=… compile=… deploy=… total=… exit=…`，另加部署判据行 `HX_RUN_DEPLOY deployed=… www=… pid_after=…`。
 
 **「无代码变更重跑」的白等（2026-10-27 实测，读 `.ci-verify` 累积的 12 轮历史机检行）**：增量轮 `total` = 45 / 57 / 68 / 78 / 161 / 267 秒（**中位 73 秒**，正常轮范围 **45–267 秒**——**别再写「45–161 秒」**，267 在区间外；**287 也别算进来**，那一轮是 `exit=fail`）；另有 3 轮 `exit=env` = **643 / 906 / 906 秒**，合计 2455 秒 = 12 轮总墙钟 4514 秒的 **54%**。其中两次（906 / 906）的 `hx-run.log` 里 App 仍在设备上每 30 秒轮询 `/api/notifications/unread-count` ⇒ **部署成立、判据未前进**（`www` mtime 不动）⇒ 等满 `-TimeoutSeconds`；根因是**代码没变又跑了一遍**。**643 秒那次未归因**，别把它算进这条。
-对策（#2027）：`scripts/lib/hx-noop.ps1` 的 `Test-HxNoopRerun` 在**取锁之前**只用 git 判「有没有活」（标记 `.ci-verify/last-deploy.json` 只在 `exit=ok` 之后写）；无活 ⇒ 秒级 `exit 2`。要强制重跑（重启 App / 重拍截图）加 `-Force`。
+对策（#2027）：`scripts/lib/hx-noop.ps1` 的 `Test-HxNoopRerun` 在**取锁之前**只用 git 判「有没有活」（标记 `.ci-verify/last-deploy.json` 只在 `exit=ok` 之后写）；无活 ⇒ 秒级 `exit 2`。要强制重跑（重启 App / 重拍截图）加 `-Force`。**判据选型、它与 ADR-0046「规则不进脚本」为何不矛盾、以及「标记不含设备身份」这条边界，全在移动端 `docs/adr/0047-内循环无变更预检与部署标记.md`（须写全路径，移动端编号体系）。**
 **读指标时的坑**：跳过也发 `exit=env`（C5 只认 ok / fail / env 三个出口），所以「秒级跳过」会抬高上面那个 `exit=env` 的**分母** —— 判读看**时长**，不看条数。
 
 ## 真运行会话常驻与收口（原文，2026-09-13 实测）
