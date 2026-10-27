@@ -18,6 +18,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+// #2013：驱动 env 的存/清/恢复与 jestSplitContract 的 P6 共用一件（同一份 env 词汇）。
+const { withBehaviorSuiteEnv } = require('./behaviorSuiteEnv');
 
 jest.setTimeout(180000);
 
@@ -252,24 +254,22 @@ describe('reporter 的全局序号接线（#1994）', () => {
     const Reporter = require('../scripts/jest-reporter-suite-progress.js');
     const writes = [];
     const origWrite = process.stdout.write;
-    const origOffset = process.env.FL_BEHAVIOR_SUITE_OFFSET;
-    const origTotal = process.env.FL_BEHAVIOR_SUITE_TOTAL;
     process.stdout.write = (chunk) => { writes.push(String(chunk)); return true; };
     try {
-      process.env.FL_BEHAVIOR_SUITE_OFFSET = '41';
-      process.env.FL_BEHAVIOR_SUITE_TOTAL = '75';
-      const rep = new Reporter();
-      rep.onRunStart({ numTotalTestSuites: 1 });
-      rep.onTestResult({ path: path.join(__dirname, 'a.test.js') }, { numPassingTests: 2, numFailingTests: 0, perfStats: { runtime: 900 } });
-      delete process.env.FL_BEHAVIOR_SUITE_OFFSET;
-      delete process.env.FL_BEHAVIOR_SUITE_TOTAL;
-      const local = new Reporter();
-      local.onRunStart({ numTotalTestSuites: 2 });
-      local.onTestResult({ path: path.join(__dirname, 'b.test.js') }, { numPassingTests: 1, numFailingTests: 0, perfStats: { runtime: 100 } });
+      // #2013：env 的存/清/恢复与 jestSplitContract 的 P6 共用 utils/behaviorSuiteEnv.js
+      //（那一条要**隔离**驱动 env，本条要**断言**它 —— 同一份词汇，两种要求）。
+      withBehaviorSuiteEnv({ offset: 41, total: 75 }, () => {
+        const rep = new Reporter();
+        rep.onRunStart({ numTotalTestSuites: 1 });
+        rep.onTestResult({ path: path.join(__dirname, 'a.test.js') }, { numPassingTests: 2, numFailingTests: 0, perfStats: { runtime: 900 } });
+      });
+      withBehaviorSuiteEnv({ offset: null, total: null }, () => {
+        const local = new Reporter();
+        local.onRunStart({ numTotalTestSuites: 2 });
+        local.onTestResult({ path: path.join(__dirname, 'b.test.js') }, { numPassingTests: 1, numFailingTests: 0, perfStats: { runtime: 100 } });
+      });
     } finally {
       process.stdout.write = origWrite;
-      if (origOffset === undefined) delete process.env.FL_BEHAVIOR_SUITE_OFFSET; else process.env.FL_BEHAVIOR_SUITE_OFFSET = origOffset;
-      if (origTotal === undefined) delete process.env.FL_BEHAVIOR_SUITE_TOTAL; else process.env.FL_BEHAVIOR_SUITE_TOTAL = origTotal;
     }
     const text = writes.join('');
     expect(text).toContain('JEST_SUITE_PLAN total=75 ');
