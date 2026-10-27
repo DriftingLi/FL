@@ -140,4 +140,18 @@ describe('左入口可见性（最近对话 / 会话列表，2026-10-27）', () 
       leftEntryVisible(nav, page.replace(/<AiChatDrawerLeft[\s\S]*?\/>/, '')).join()
     ).toMatch(/未渲染左侧会话抽屉/);
   });
+
+  /**
+   * ⑤ 标题恒居中（2026-10-27）：左槽一旦有字形，AppNavBar 的 §5.1 就把标题切左对齐 ——
+   * 「☰ AI 助手 ⋯」全挤在左上角。聊天页要三段式居中，故透传 centerTitle，默认开。
+   * 这条锁两件事：prop 真的透传到 AppNavBar（不是写在 props 里没人用）、且默认值是 true
+   * （默认 false ⇒ 页头又退回左对齐，而这不会报任何错）。
+   */
+  it('⑤ 标题恒居中：center-title 透传到页头且默认开', () => {
+    expect(nav).toMatch(/:center-title="centerTitle"/);
+    expect(nav).toMatch(/centerTitle:\s*true/);
+    // 判别力：默认值翻成 false 或拆掉透传 ⇒ 两条断言各自失配
+    expect(nav.replace(/centerTitle:\s*true/, 'centerTitle: false')).not.toMatch(/centerTitle:\s*true/);
+    expect(nav.replace(':center-title="centerTitle"', '')).not.toMatch(/:center-title="centerTitle"/);
+  });
 });
