@@ -17,7 +17,10 @@
  *   P5 **jest 自己的口径**与分类器一致：真起子进程跑 --listTests，两腿套件数 = 分类器读数，
  *      且两腿清单的并集 = 全量清单、无重复（P2/P3 只验字符串，P5 验 jest 真认）
  *   P6 心跳行格式（JEST_SUITE i=k/N status=… secs=… elapsed=… file=…）由 reporter 自己产出：
- *      喂合成结果，断言三行 token 齐全、PASS/FAIL 与失败数如实 —— 钉产物，不钉源码文本
+ *      喂合成结果，断言三行 token 齐全、PASS/FAIL 与失败数如实 —— 钉产物，不钉源码文本。
+ *      合成场景前必须隔离 `FL_BEHAVIOR_SUITE_*`（驱动 env，语义由 behaviorLegWatchdogBehavior 的 W6
+ *      单独守着）：dev-finish 逐套件驱动时这两个变量就在进程里，reporter 正确地优先用全局数，
+ *      不隔离会让本条在驱动腿里假装变红（total=78 而非 2，#2013）
  *
  * 运行前提：需要 node（起 jest 子进程做 P5）。不可用时 fail-closed 抛错，不 skip
  * （本仓先例：utils/guardClassification.test.js / pngDiffBehavior.test.js）。
@@ -112,6 +115,14 @@ describe('③ 门两腿的形状（#1702）', () => {
     const SuiteProgressReporter = require('../scripts/jest-reporter-suite-progress.js');
     const writes = [];
     const original = process.stdout.write;
+    // #2013：本用例断言的是**合成场景**（喂 numTotalTestSuites=2 ⇒ total=2）。而 dev-finish 逐套件
+    // 驱动行为腿时会把全局 planned/offset 注入子进程 env（本仓内部契约，语义由 W6 单独守着）——
+    // 驱动形态下本套件必然继承那一对 env，reporter 正确地优先用全局数 ⇒ P6 会在驱动腿里假装变红
+    // （total=78），而同机直跑是绿的。隔离点只能放测试侧：reporter 的 env 优先级语义不许为测试开分支。
+    const origOffset = process.env.FL_BEHAVIOR_SUITE_OFFSET;
+    const origTotal = process.env.FL_BEHAVIOR_SUITE_TOTAL;
+    delete process.env.FL_BEHAVIOR_SUITE_OFFSET;
+    delete process.env.FL_BEHAVIOR_SUITE_TOTAL;
     process.stdout.write = (chunk) => {
       writes.push(String(chunk));
       return true;
@@ -130,6 +141,8 @@ describe('③ 门两腿的形状（#1702）', () => {
       reporter.onRunComplete({}, { numTotalTestSuites: 2, numPassedTestSuites: 1, numFailedTestSuites: 1 });
     } finally {
       process.stdout.write = original;
+      if (origOffset === undefined) delete process.env.FL_BEHAVIOR_SUITE_OFFSET; else process.env.FL_BEHAVIOR_SUITE_OFFSET = origOffset;
+      if (origTotal === undefined) delete process.env.FL_BEHAVIOR_SUITE_TOTAL; else process.env.FL_BEHAVIOR_SUITE_TOTAL = origTotal;
     }
 
     const lines = writes.join('').split('\n').filter((l) => l.startsWith('JEST_SUITE'));
