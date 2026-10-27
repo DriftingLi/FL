@@ -15,7 +15,7 @@
  *   B3 设备从 `adb devices` 里消失 ⇒ keep 自己经 mDNS 重发现并接回（LOST → SAMEPORT/NEWPORT → RECOVERED），
  *      且全程不发 kill-server（adb server 与 HBuilderX 共享，行为层再钉一次）。
  *
- * 平台口径（2026-10-07 修订，**六条在 Windows 与 CI 的 ubuntu 上都真跑**）：假载体按平台落成
+ * 平台口径（2026-10-07 修订，**1条在 Windows 与 CI 的 ubuntu 上都真跑**）：假载体按平台落成
  * `.bat` / `sh` 两种壳，pwsh 两侧都在。上一版把 B1–B5 写成「非 Windows 直接 return」⇒ CI 里那五条是
  * **永不执行的空体**（正是 `docs/agents/guards.md` #1156 要防的「全绿可以恒真」），而当时补的那条
  * 「非 Windows 不得报成功」断的是**代码里并不存在的平台禁令**：CI 现测 ubuntu 上脚本照跑、照报

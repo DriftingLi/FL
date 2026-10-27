@@ -23,7 +23,7 @@
  * 也不要求每个 PR 都回去重采耗时）。
  *
  * 权重是**单次采集**：pwsh 类套件单次方差大（#1900 实测原 `wirelessDebugBehavior` 两次采集
- * 108s ↔ 202s；该套件已按 #1998 拆成四件，timings 四键由 CI run 40452269933 全量重采（StopReap/StopHang 为分片实测）），最慢片下界 `max(总耗时/n, 最慢套件)` 随之摆动 —— 装箱保证「不比最慢套件
+ * 108s ↔ 202s；该套件已按 #1998 拆成四件，timings 三键由 CI run 40452269933 全量重采（StopReap/StopHang 为分片实测，KeepRecover 未达 ≥5s 采集阈值按 defaultSeconds=1 计权）），最慢片下界 `max(总耗时/n, 最慢套件)` 随之摆动 —— 装箱保证「不比最慢套件
  * 更慢、其余片贴均值」，**压不掉方差本身**（重采如实记录、不做均值平滑，#1900 裁定）。
  *
  * 重采：`node scripts/gen-jest-timings.mjs --log <gh run view --log 的输出>`（CI 口径）
