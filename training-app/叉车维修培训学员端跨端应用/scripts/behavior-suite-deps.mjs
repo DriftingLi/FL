@@ -33,6 +33,10 @@
  *       给改动文件，打印应跑套件（含被触发的全局边与原因）。
  *   node scripts/behavior-suite-deps.mjs --changed-from stdin
  *       同上，但改动清单从 stdin 读（每行一个路径，`git diff --name-only` 直接喂）。
+ *   node scripts/behavior-suite-deps.mjs --changed-json [--changed-from stdin]
+ *       同上，但把结果打成 JSON（`total` / `subset` / `reasons` / `uncovered` / `explain`）。
+ *       `explain` 就是 `--changed` 那份人读文本的逐行数组 ⇒ 脚本打印它即可，不必重排格式。
+ *       只多一种**输出形态**，判据与人类输出一字不动（#2034 接进 dev-finish 用）。
  *
  * ── 不做的事 ──
  * 不执行任何测试、不联网、不写文件（只打 stdout）。只读。
@@ -755,6 +759,30 @@ if (has('batch')) {
   process.exit(0);
 }
 
+/**
+ * `--changed` 的人读报告（#2034）。抽成函数只为「同一份格式只有一个来源」：
+ * `--changed` 逐行打它、`--changed-json` 把它整段放进 `explain`（调用方原样打印，
+ * 不必在 PowerShell 里再抄一遍格式）。
+ */
+function formatChangedReport({ changedCount, subset, reasons, uncovered, total }) {
+  const lines = [];
+  lines.push(`改动 ${changedCount} 个文件 ⇒ 应跑 ${subset.length}/${total} 个行为套件 (${fmtPct(subset.length, total)})`);
+  lines.push('');
+  for (const s of subset) {
+    lines.push(`  ${s}`);
+    lines.push(`      ← ${reasons[s].join(' | ')}`);
+  }
+  if (uncovered.length) {
+    lines.push('');
+    lines.push('⚠️ 以下改动未命中任何套件（本地不会跑任何东西 —— 确认是否真的没有行为守护覆盖）：');
+    for (const u of uncovered) lines.push(`  ${u}`);
+  }
+  lines.push('');
+  lines.push('# 直接喂给 jest：');
+  lines.push(`  npx jest --config jest.config.behavior.js --runTestsByPath ${subset.join(' ')}`);
+  return lines;
+}
+
 if (has('changed') || has('changed-from')) {
   let changed;
   if (has('changed-from')) {
@@ -771,13 +799,21 @@ if (has('changed') || has('changed-from')) {
   const { subset, reasons, uncovered } = select(map, changed, {
     bprimeAlways: !has('no-bprime-always'),
   });
-  console.log(`改动 ${changed.length} 个文件 ⇒ 应跑 ${subset.length}/${map.profiles.length} 个行为套件 (${fmtPct(subset.length, map.profiles.length)})\n`);
-  for (const s of subset) console.log(`  ${s}\n      ← ${[...reasons.get(s)].join(' | ')}`);
-  if (uncovered.length) {
-    console.log(`\n⚠️ 以下改动未命中任何套件（本地不会跑任何东西 —— 确认是否真的没有行为守护覆盖）：`);
-    for (const u of uncovered) console.log(`  ${u}`);
+  const report = {
+    changedCount: changed.length,
+    total: map.profiles.length,
+    subset,
+    reasons: Object.fromEntries(subset.map((s) => [s, [...reasons.get(s)]])),
+    uncovered,
+  };
+  const explain = formatChangedReport(report);
+  if (has('changed-json')) {
+    // 机器可读面（#2034）：只有**输出形态**不同，判据与人类输出一字不动。
+    // `explain` 与 `--changed` 是同一个数组 ⇒ 脚本不需要自己重排格式，也不会与它漂移。
+    console.log(JSON.stringify({ ...report, explain }, null, 2));
+  } else {
+    console.log(explain.join('\n'));
   }
-  console.log(`\n# 直接喂给 jest：\n  npx jest --config jest.config.behavior.js --runTestsByPath ${subset.join(' ')}`);
   process.exit(0);
 }
 
@@ -788,6 +824,7 @@ console.error(
     '  node scripts/behavior-suite-deps.mjs --json',
     '  node scripts/behavior-suite-deps.mjs --changed <file> [<file>…]',
     '  node scripts/behavior-suite-deps.mjs --changed-from stdin',
+    '  node scripts/behavior-suite-deps.mjs --changed-json [--changed-from stdin]',
   ].join('\n')
 );
 process.exit(2);

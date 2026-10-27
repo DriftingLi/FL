@@ -40,6 +40,7 @@
     npm run dev:finish -- -DryRun
     npm run test:unit:gate                 # ③ 门两腿（test:unit + test:behavior）：每腿 日志 + （红跑）摘要 + 机检行
     pwsh scripts/dev-finish.ps1 -UnitGate -PostToIssue 1546   # 同上，并把结果贴成 sha 绑定评论（判据先贴 commit；404 时降级为票评论）
+    npm run test:unit:changed              # 本地收口行为腿的**受影响子集**（#2034 / ADR-0046 步骤 3）：现算、现打印原因行
 #>
 [CmdletBinding()]
 param(
@@ -64,6 +65,14 @@ param(
     # 不进九步管线、不取 HBuilderX 锁、不碰设备；位置在 -UnitGate **之前** ⇒
     # `-UnitGate -UnitLocal` 同时给时本地快路径优先（它本来就是给「不想等全量」的时刻用的）。
     [switch]$UnitLocal,
+    # ---- 本地收口「改动子集」（#2034，ADR-0046 步骤 3）----
+    # 与 -UnitGate 同构的落盘模式，只改一件事：**行为腿跑受影响子集**（接线腿仍全量）。
+    # 子集由 `scripts/behavior-suite-deps.mjs --changed-json` 现算（每跑现测，不缓存成文件）；
+    # 四条兜底边（门脚本 / 套件集合 / 页面集合 / b′ 名单）由工具判定，本脚本只接线不重写判据。
+    # 机检行用独立首 token（`TEST_*_CHANGED_RESULT` + `mode=changed`）：它不是 ③ 门全量，
+    # 少跑过套件的绿**不能**被读成门绿 ⇒ 不贴 sha 绑定评论、不进 CI。
+    # 位置在 -UnitLocal 之前 ⇒ `-UnitGate -Changed` 同时给时本模式优先（与 -UnitLocal 的取舍同形）。
+    [switch]$Changed,
     # 与 ②④ 两条门脚本同名同义：把本次结果贴成 sha 绑定的评论（0 = 不贴）。
     # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
     # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
@@ -581,7 +590,10 @@ function Write-UnitGateArtifacts {
         # 'local' = 本地快路径（`npm run test:unit:local`，并行）发 `TEST_UNIT_LOCAL_RESULT` 且多带
         # 一枚 `mode=local`。两行**必须可判读地区分**（票面验收①）：Select-String 按首 token 就能分流，
         # 不会把快路径的绿算到全量门头上。默认 'gate' ⇒ 既有调用点（-UnitGate 分支）逐字节不变。
-        [ValidateSet('gate', 'local')]
+        # 'changed'（#2034）= 本地收口的行为腿**受影响子集**：发 `TEST_UNIT_CHANGED_RESULT` /
+        # `TEST_BEHAVIOR_CHANGED_RESULT` + `mode=changed`。它跑的套件比全量少 ⇒ **绝不能**与 gate 同 token，
+        # 否则一次子集绿会被读成「③ 门全量绿」（这正是本仓反复出现的假绿形态）。
+        [ValidateSet('gate', 'local', 'changed')]
         [string]$Mode = 'gate',
         # 腿（#1702，2026-10-18）：'unit' = 接线腿（`npm run test:unit`）；'behavior' = 行为腿
         # （`npm run test:behavior`）。首 token 由「腿 × 模式」共同决定，默认 'unit' ⇒ 既有调用点逐字节不变。
@@ -679,8 +691,9 @@ function Write-UnitGateArtifacts {
     # 首 token = 腿 × 模式（#1702）：接线腿逐字节沿用 `TEST_UNIT_*`（既有读者 / 守护按旧形态读到的行不变），
     # 行为腿换成 `TEST_BEHAVIOR_*` —— 「哪一腿」与「门还是本地」是两问，一个 token 只答一问。
     $isLocal = ($Mode -eq 'local')
+    $isChanged = ($Mode -eq 'changed')
     $legToken = $(if ($Leg -eq 'behavior') { 'BEHAVIOR' } else { 'UNIT' })
-    $headToken = "TEST_${legToken}_" + $(if ($isLocal) { 'LOCAL_RESULT' } else { 'RESULT' })
+    $headToken = "TEST_${legToken}_" + $(if ($isLocal) { 'LOCAL_RESULT' } elseif ($isChanged) { 'CHANGED_RESULT' } else { 'RESULT' })
     $show = { param($v) $(if ($null -eq $v) { '?' } else { "$v" }) }
     # 引用性两枚的归一（#1556）：`head=` 只收「非空且不含空白」的串，`dirty=` 只收 `clean` / `dirty` 两个字面值，
     # 其余一律 `?`。取不到时**保留字段**写 `?` —— 省略字段或补空串都会让「上一次那行」变得不可比，
@@ -706,6 +719,8 @@ function Write-UnitGateArtifacts {
         "dirty=$dirtyText"
     )
     if ($isLocal) { $parts += 'mode=local' }
+    # `mode=changed` 同理：子集跑法自报身份，读的人不必去「套件数对不对」里反推它是哪一档。
+    if ($isChanged) { $parts += 'mode=changed' }
     # #1994：行为腿的五枚看门狗读数。字段**恒在**（取不到写 `?`）—— 「这一腿有没有卡过」必须能
     # 从一行机检行回答，不能靠「字段缺席」表达。unit 腿不追加任何字段 ⇒ 既有行逐字节不变。
     if ($Leg -eq 'behavior') {
@@ -839,6 +854,9 @@ function Invoke-GateLegCommand {
         （reason=leg-timeout），退出码非零 —— **不给「卡住算绿」**。
       · 断点续跑：`-ResumeFrom k` ⇒ 跳过 1..k-1，只跑 k..N；输出里写 `JEST_SUITE_RESUME` 行，
         机检行写 `resumedFrom=k`，拼接读数如实标注（没跑的前缀不装成跑过）。
+      · 子集：`-OnlySuites <相对路径…>` ⇒ 只跑 `--listTests` 里真有的那些（#2034，ADR-0046 步骤 3）；
+        交给我的名字里有任何一个不在清单里 ⇒ 非绿收口并逐个点名 `JEST_SUITE_SUBSET_MISSING`。
+        套件清单的真源不变（还是 `--listTests`），这里只做「从它里面挑」。
 
     汇总行：逐套件跑完时 jest 只会给「这一套」的 `Test Suites:/Tests:/Time:`；本函数把**本次腿内**
     的套件数/用例数累加，并在输出末尾拼一份与 jest 同形的汇总行（`Write-UnitGateArtifacts` 取最后
@@ -856,6 +874,10 @@ function Invoke-BehaviorLeg {
         [int]$StallSeconds = 900,
         [int]$TotalTimeoutSeconds = 5400,
         [int]$ResumeFrom = 0,
+        # ---- #2034：只跑交给我的那批套件（ADR-0046 步骤 3 的「受影响子集」）----
+        # 空数组 = 不筛（既有调用点逐字节不变）。传了就必须**全部**在 `--listTests` 里出现：
+        # 缺一个即 fail-closed —— 静默跳过会让「少跑了」长得像绿，而 0 套件在本仓正是假绿的经典形态。
+        [string[]]$OnlySuites = @(),
         [int]$PollMilliseconds = 200
     )
     $utf8 = [System.Text.Encoding]::UTF8
@@ -876,6 +898,43 @@ function Invoke-BehaviorLeg {
     $listErr = $listProc.StandardError.ReadToEnd()
     $listProc.WaitForExit()
     $suites = @($listOut -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+
+    # ---- 子集过滤（#2034）：只在显式传 -OnlySuites 时生效，默认路径逐字节不变 ----
+    # 口径：套件集合的**真源仍是** `--listTests`（本腿到底有哪些套件），这里只做「从它里面挑」。
+    # 于是「子集里的名字在真清单里不存在」能被发现并当场判非绿（清单漂移 / 路径拼错 / 改了腿）。
+    $requested = @($OnlySuites | Where-Object { $_ -and "$_".Trim() })
+    if ($requested.Count -gt 0) {
+        $listed = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($s in $suites) {
+            $relKey = $s
+            try { $relKey = [System.IO.Path]::GetRelativePath($ProjectDir, $s).Replace('\', '/') } catch { $relKey = $s }
+            $listed[$relKey] = $s
+        }
+        $kept = @()
+        $missingSuites = @()
+        foreach ($r in $requested) {
+            $k = ("$r".Trim() -replace '\\', '/').TrimStart('.', '/')
+            if ($listed.ContainsKey($k)) { $kept += $listed[$k] } else { $missingSuites += "$r" }
+        }
+        $subsetNote = "JEST_SUITE_SUBSET requested=$($requested.Count) listed=$($suites.Count) selected=$($kept.Count) missing=$($missingSuites.Count)"
+        & $append ($subsetNote + "`r`n")
+        Write-Host $subsetNote -ForegroundColor DarkCyan
+        if ($missingSuites.Count -gt 0) {
+            # 逐个点名，不缩写成「缺 3 个」：要能直接照着改调用点。
+            foreach ($m in $missingSuites) {
+                & $append "JEST_SUITE_SUBSET_MISSING file=$m`r`n"
+                Write-Host "JEST_SUITE_SUBSET_MISSING file=$m" -ForegroundColor Red
+            }
+            return [pscustomobject]@{
+                Output = $sb.ToString(); ExitCode = 1; StalledSuite = ''; StalledReason = '';
+                Stalls = 0; Completed = 0; Planned = 0; ResumeFrom = $ResumeFrom;
+                StallSeconds = $StallSeconds; TotalTimeoutSeconds = $TotalTimeoutSeconds;
+                TestsKnown = $false; FailedSuites = 0; WallSeconds = 0
+            }
+        }
+        $suites = @($kept)
+    }
+
     $planned = $suites.Count
     if ($planned -eq 0) {
         & $append "JEST_SUITE_PLAN total=0 note=未列出任何行为套件（--listTests 为空或命令没起来）`r`n"
@@ -1217,6 +1276,135 @@ if ($DryRun) {
         Write-Host $line
     }
     exit 0
+}
+
+# ============================================================
+# 本地收口「改动子集」（#2034，ADR-0046 步骤 3）：接线腿全量 + 行为腿**受影响子集**
+#   为什么是独立模式、而不是 -UnitGate 上的一枚开关：③ 门全量的证据面是「两腿全跑」。
+#   把子集塞进 -UnitGate，会让「少跑过套件的一次绿」与「门全量绿」长得一模一样 —— 而贴 sha 绑定
+#   评论那条路径读的正是这两行机检行。所以本模式自报身份（`TEST_*_CHANGED_RESULT` + `mode=changed`），
+#   且**不贴**评论、不进 CI。它替代的是「本地收口每次都在付的 20 分钟行为腿全量」（#2019 §7.2）。
+#   「改哪些 ⇒ 跑哪些」的判据不在这里：判据与四条兜底边住在 `scripts/behavior-suite-deps.mjs`
+#   （覆盖率报告 `docs/design/2019-行为腿受影响子集覆盖率报告.md` §5）。本分支只做三件事：
+#   取改动 → 原样打印工具给的原因行 → 把子集交给既有行为腿跑法（`Invoke-BehaviorLeg -OnlySuites`）。
+#   位置：-DryRun 之后（「不执行任何操作」的承诺优先）、-UnitLocal 之前 —— 既有分支的切片边界
+#   （`-UnitLocal` 与 `-UnitGate` 两段之间的那段）一个字都不动。
+# ============================================================
+if ($Changed) {
+    $changedStarted = Get-Date
+    $ciDir = Join-Path $ProjectDir '.ci-verify'
+    $changedUnitLog = Join-Path $ciDir 'test-unit-changed.log'
+    $changedUnitSummary = Join-Path $ciDir 'test-unit-changed-failure.txt'
+    $changedBehaviorLog = Join-Path $ciDir 'test-behavior-changed.log'
+    $changedBehaviorSummary = Join-Path $ciDir 'test-behavior-changed-failure.txt'
+    Write-Host '=== 本地收口（改动子集）：接线腿全量 + 行为腿受影响子集（ADR-0046 步骤 3）===' -ForegroundColor Cyan
+    Write-Host '  子集每跑现测（不缓存成文件；套件数一律现测，任何地方都不写死）；纯静态计算，无副作用'
+    Write-Host "  日志（绿跑也落，落原文）：$changedUnitLog / $changedBehaviorLog"
+    if ($PostToPr -gt 0) {
+        Write-Host '  ⚠️ -PostToIssue 只在 -UnitGate（③ 门全量）生效：子集跑不是门的证据，本模式不贴评论' -ForegroundColor DarkYellow
+    }
+    . (Join-Path $PSScriptRoot 'lib\behavior-subset.ps1')
+    . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
+    $headSha = Get-HeadSha -ProjectDir $ProjectDir
+    $worktreeState = ''
+    $porcelain = @()
+    try {
+        $porcelain = @(& git -C $ProjectDir -c core.quotepath=false status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() })
+        if ($LASTEXITCODE -eq 0) { $worktreeState = $(if ($porcelain.Count -gt 0) { 'dirty' } else { 'clean' }) }
+    } catch {
+        $worktreeState = ''
+    }
+
+    # ---- 前置步骤：本次改动 ⇒ 该跑哪些行为套件（含未跟踪文件，#2034） ----
+    $subsetInfo = $null
+    try {
+        $changedPaths = @(Get-ChangedPathsForSubset -ProjectDir $ProjectDir)
+        if ($changedPaths.Count -eq 0) {
+            Write-Result $false '无改动 ⇒ 算不出「受影响子集」。要么先改点东西，要么走 -UnitGate 全量门（0 套件不等于绿）'
+            exit 2
+        }
+        $subsetInfo = Get-BehaviorSubset -ProjectDir $ProjectDir -Changed $changedPaths
+    }
+    catch {
+        Write-Result $false "取改动 / 算子集失败（环境问题，不是测试结论）：$($_.Exception.Message)"
+        exit 2
+    }
+    # 工具那份人读报告**原样**打印：每条套件后面挂着它为什么被选中（direct / import-closure /
+    # 兜底边 bprime-always / page-set / gate-script / suite-set），不是一个光秃秃的套件列表。
+    foreach ($line in @($subsetInfo.Explain)) { Write-Host $line }
+    if (-not $subsetInfo.Ok) {
+        Write-Result $false "子集算不出来：$($subsetInfo.Error)（不以「没跑」当绿）"
+        exit 2
+    }
+    Write-Host ''
+    Write-Host "  行为腿执行：逐套件 npm run test:behavior -- --runTestsByPath <suite>（-i 串行由 package.json 那条提供；上面工具尾行那条 npx jest 不带 -i，不是本次的跑法 —— 同批默认并行会 flake，#2019 §7.2 注 1）" -ForegroundColor DarkGray
+    Write-Host "  判据：子集跑绿；全量（CI 4 片 / -UnitGate）只看「有没有**新**红」—— 本地全量本来就有环境噪声红（#2019 §7.2 注 2）" -ForegroundColor DarkGray
+
+    # ---- 接线腿：与全量门同一条命令（全量、-i 串行），不是第二份 jest 参数 ----
+    $changedUnitStarted = Get-Date
+    $unitOutput = ''
+    $unitExitCode = 1
+    try {
+        $unitOutput = Invoke-GateLegCommand { & npm run test:unit }
+        $unitExitCode = $LASTEXITCODE
+    }
+    catch {
+        $unitOutput = "$($_.Exception.Message)"
+        $unitExitCode = 1
+    }
+    $artUnitChanged = Write-UnitGateArtifacts -Output $unitOutput -LogPath $changedUnitLog -SummaryPath $changedUnitSummary `
+        -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $changedUnitStarted).TotalSeconds) `
+        -LogRef '.ci-verify/test-unit-changed.log' -SummaryRef '.ci-verify/test-unit-changed-failure.txt' `
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir -Mode changed
+    Write-UnitGateArtifactReport -Art $artUnitChanged -LogPath $changedUnitLog -SummaryPath $changedUnitSummary
+
+    # ---- 行为腿：只有「跑哪些套件」不同，看门狗 / 续跑 / 汇总口径全走既有实现 ----
+    $changedBehaviorStarted = Get-Date
+    $changedBehaviorRunner = $(if ($BehaviorRunner) { $BehaviorRunner } else { 'npm run test:behavior --' })
+    $behaviorRun = $null
+    try {
+        $behaviorRun = Invoke-BehaviorLeg -ProjectDir $ProjectDir -Runner $changedBehaviorRunner `
+            -StallSeconds $BehaviorStallSeconds -TotalTimeoutSeconds $BehaviorTotalTimeoutSeconds `
+            -ResumeFrom $BehaviorResumeFrom -OnlySuites $subsetInfo.Subset
+        $behaviorOutput = $behaviorRun.Output
+        $behaviorExitCode = $behaviorRun.ExitCode
+    }
+    catch {
+        # 与 -UnitGate 同形：看门狗自己炸掉不能变成一次绿跑（不给「卡住算绿」）。
+        $behaviorOutput = "$($_.Exception.Message)"
+        $behaviorExitCode = 1
+    }
+    $behaviorPlannedChanged = -1
+    $behaviorCompletedChanged = -1
+    $behaviorStallsChanged = 0
+    $behaviorStalledSuiteChanged = ''
+    $behaviorStalledReasonChanged = ''
+    if ($null -ne $behaviorRun) {
+        $behaviorPlannedChanged = $behaviorRun.Planned
+        $behaviorCompletedChanged = $behaviorRun.Completed
+        $behaviorStallsChanged = $behaviorRun.Stalls
+        $behaviorStalledSuiteChanged = $behaviorRun.StalledSuite
+        $behaviorStalledReasonChanged = $behaviorRun.StalledReason
+    }
+    $artBehaviorChanged = Write-UnitGateArtifacts -Output $behaviorOutput -LogPath $changedBehaviorLog -SummaryPath $changedBehaviorSummary `
+        -ExitCode $behaviorExitCode -Leg behavior -Mode changed `
+        -DurationSeconds ([int]((Get-Date) - $changedBehaviorStarted).TotalSeconds) `
+        -PlannedSuites $behaviorPlannedChanged -CompletedSuites $behaviorCompletedChanged -ResumeFrom $BehaviorResumeFrom `
+        -StalledSuite $behaviorStalledSuiteChanged -StalledReason $behaviorStalledReasonChanged -Stalls $behaviorStallsChanged `
+        -StallLimitSeconds $BehaviorStallSeconds -LegTimeoutSeconds $BehaviorTotalTimeoutSeconds `
+        -LogRef '.ci-verify/test-behavior-changed.log' -SummaryRef '.ci-verify/test-behavior-changed-failure.txt' `
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir
+    Write-UnitGateArtifactReport -Art $artBehaviorChanged -LogPath $changedBehaviorLog -SummaryPath $changedBehaviorSummary
+
+    Write-Host ''
+    Write-Host "  两腿合计 wall=$([int]((Get-Date) - $changedStarted).TotalSeconds)s（行为腿自己的 wall= 在 TEST_BEHAVIOR_CHANGED_RESULT 那行）" -ForegroundColor Yellow
+    # 合成退出码：先红者胜（与全量门同一条）—— 行为腿红了不得被接线腿的绿盖掉。
+    $changedExit = 0
+    if ($artUnitChanged.ExitCode -ne 0) { $changedExit = $artUnitChanged.ExitCode }
+    if ($artBehaviorChanged.ExitCode -ne 0 -and $changedExit -eq 0) { $changedExit = $artBehaviorChanged.ExitCode }
+    if ($changedExit -eq 0) { Write-Result $true '本地收口（改动子集）两腿都过：接线腿全量 + 行为腿受影响子集（子集现测，含四条兜底边）' }
+    else { Write-Result $false "本地收口（改动子集）未过（exit $changedExit：接线腿 exit=$($artUnitChanged.ExitCode) / 行为腿 exit=$($artBehaviorChanged.ExitCode)）" }
+    exit $changedExit
 }
 
 # ============================================================
