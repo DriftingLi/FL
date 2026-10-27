@@ -60,8 +60,23 @@ function scanContract(sources) {
   if (!script.includes('KOTLIN_ALL_RESULT')) {
     violations.push('C3 缺少 KOTLIN_ALL_RESULT 结果行（无法机检成败）');
   }
-  if (!/ErrorLinePattern\s*=\s*'/.test(script) || !/\[regex\]::Matches\(\$result\.Output, \$ErrorLinePattern\)/.test(script)) {
-    violations.push('C3 未用 ErrorLinePattern 解析输出判定成败');
+  // C3（#2045 改写锚点，不是放宽锚点）：判据本体已搬进 scripts/lib/gate-error-lines.ps1，
+  // 脚本内不该再有那条字面量。锚点因此从「脚本内声明判据字面量」换成「脚本 dot-source 判据库
+  // + 调用点在真路径上」；判据内容这一侧改由 utils/gateErrorLinesBehavior.test.js **真执行**举证
+  // （血账 #4/#5 的历史错题喂进去），「门绕开判据」这一侧由
+  // utils/gateErrorLinesWiringContract.test.js 的变异样本举证。三条都在同一个 PR 里落地。
+  if (!/lib[\\/]gate-error-lines\.ps1/.test(script)) {
+    violations.push('C3 门脚本未 dot-source 错误行判据库 scripts/lib/gate-error-lines.ps1');
+  }
+  if (!/Get-KotlincGateErrorMatches/.test(script)) {
+    violations.push('C3 门脚本未调用判据库的计数判据（KOTLIN_ALL_RESULT 的 errors= 必须出自它）');
+  }
+  if (!/Select-KotlincGateErrorLines/.test(script)) {
+    violations.push('C3 门脚本未调用判据库的打印判据（失败日志的行必须出自同一份判据）');
+  }
+  // C3b 反向断言：字面量若长回脚本，就成了第二真源，两份各漂各的正是血账 #4 的活法。
+  if (/ErrorLinePattern\s*=/.test(script)) {
+    violations.push('C3b 门脚本里又内联了错误行判据字面量（判据唯一住 scripts/lib/gate-error-lines.ps1）');
   }
   if (/\$LASTEXITCODE/.test(script)) {
     violations.push('C4 出现 $LASTEXITCODE：CLI 退出码恒为 0，判成败不得依赖退出码');
@@ -133,6 +148,10 @@ describe('④ 本地编译门契约（#870 T2 / 2026-09-11 修订）', () => {
       ['C2', { ...real, script: real.script + '\n$dev = "unpackage\\cache\\.app-android\\src"\n' }],
       ['C2', { ...real, script: real.script + '\n$kt = Get-ChildItem (Join-Path $Project "unpackage\\cache\\.app-android\\src") -Recurse -Filter *.kt\n' }],
       ['C3', { ...real, script: real.script.replace(/KOTLIN_ALL_RESULT/g, 'RESULT_X') }],
+      ['C3', { ...real, script: real.script.replace(/lib[\\/]gate-error-lines\.ps1/g, 'lib/gate-other.ps1') }],
+      ['C3', { ...real, script: real.script.replace(/Get-KotlincGateErrorMatches/g, 'Get-WhateverMatches') }],
+      ['C3', { ...real, script: real.script.replace(/Select-KotlincGateErrorLines/g, 'Print-WhateverLines') }],
+      ['C3b', { ...real, script: real.script + "\n$ErrorLinePattern = '(?m)(^\\s*e: )'\n" }],
       ['C4', { ...real, script: real.script + '\nif ($LASTEXITCODE -ne 0) { exit 1 }\n' }],
       ['C5', { ...real, script: real.script.replace(/uts-kotlin-compiler-plugin\.jar/g, 'plugin.jar') }],
       ['C6', { ...real, script: real.script.replace(/非等价/g, '等价性待定') }],

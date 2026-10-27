@@ -82,8 +82,9 @@ $ErrorActionPreference = 'Stop'
 # （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
 if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
 
-# 出错行判据：kotlinc 的「路径:行:列: error:」与 `e: ` 前缀两种形态
-$ErrorLinePattern = '(?m)(^\s*e: )|(:\d+:\d+: *error:)'
+# 出错行判据（kotlinc 的「路径:行:列: error:」与 `e: ` 前缀两种形态）已搬进
+# lib/gate-error-lines.ps1（#2045）：逐字保形，判据内容由 ③ 门题库**真执行**举证，接线由契约钉。
+# 本脚本不得再内联这份字面量（第二真源；机检 = utils/gateErrorLinesWiringContract.test.js W4）。
 $AppResourceRelative = 'unpackage\resources\app-android'
 $DevCacheRelative = 'unpackage\cache\.app-android'
 
@@ -92,6 +93,9 @@ $DevCacheRelative = 'unpackage\cache\.app-android'
 # 那里零副作用（只有函数与常量），故 `utils/kotlinAllStaleExportBehavior.test.js` 可以 dot-source 它
 # 并**真执行**这两条判据 —— 判据留在本脚本里就只能读源码文本断言，而接线守护不构成 ③ 证据（#1272）。
 . (Join-Path $PSScriptRoot 'lib\publish-freshness.ps1')
+# ④c 的错误行判据（计数与打印两形）住在 lib/gate-error-lines.ps1，理由同上（#2045）：
+# 两份判据共用同一份常量，「计数说有过、打印说没有」这种矛盾在结构上不可能出现。
+. (Join-Path $PSScriptRoot 'lib\gate-error-lines.ps1')
 
 function Test-PeHeader {
     param([string]$Path)
@@ -370,7 +374,7 @@ if ($result.TimedOut) {
     exit 2
 }
 
-$errorLines = @([regex]::Matches($result.Output, $ErrorLinePattern) | ForEach-Object { $_.Value })
+$errorLines = @(Get-KotlincGateErrorMatches -Output $result.Output)
 $classCount = @(Get-ChildItem -LiteralPath $classOutDir -Recurse -Filter *.class -File -ErrorAction SilentlyContinue).Count
 $summary = "KOTLIN_ALL_RESULT errors=$($errorLines.Count) classes=$classCount files=$($ktFiles.Count) input=$AppResourceRelative freshness=$freshnessVerdict log=$logPath"
 Write-Log "`n$summary"
@@ -379,7 +383,7 @@ Stop-GateStage
 if ($errorLines.Count -gt 0) {
     Write-Host ''
     Write-Host "❌ ④c 未过：整模块编译报 $($errorLines.Count) 条 error ——" -ForegroundColor Red
-    ($result.Output -split "`n" | Where-Object { $_ -match $ErrorLinePattern } | Select-Object -First 20) |
+    (Select-KotlincGateErrorLines -Output $result.Output | Select-Object -First 20) |
         ForEach-Object { Write-Host "   $($_.Trim())" -ForegroundColor Red }
     Write-Host "完整日志：$logPath" -ForegroundColor Yellow
     exit 1

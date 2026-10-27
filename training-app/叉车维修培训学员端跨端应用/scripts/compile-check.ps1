@@ -220,9 +220,13 @@ if ($script:timedOutStep -or $all -match '与主程序的连接已中断|启动�
     exit 2
 }
 
-$errorLines = @(Get-Content -LiteralPath $logPath |
-    Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败' } |
-    Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
+# 错误行判据住 lib/gate-error-lines.ps1（#2045，血账 #4/#5 的防假绿切片）：
+# 内联在门里时它只能被**读源码文本**断言，而「字面量还在、算法被改坏」的文本断言不会红。
+# 现在判据由 utils/gateErrorLinesBehavior.test.js 真执行（喂血账历史错题），接线由
+# utils/gateErrorLinesWiringContract.test.js 钉（dot-source + 调用点在真路径上）。
+# 输入用本段开头读好的 raw 全文（$all），与原先「逐行读文件」等价：同一道管道、判据一字未改。
+. (Join-Path $PSScriptRoot 'lib\gate-error-lines.ps1')
+$errorLines = @(Get-CompileGateErrorLines -Output $all)
 
 $result = "COMPILE_RESULT errors=$($errorLines.Count) clean=$Clean log=$logPath"
 Add-Content -LiteralPath $logPath -Value "`n$result" -Encoding utf8
