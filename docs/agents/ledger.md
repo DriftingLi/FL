@@ -55,6 +55,6 @@
   - `check-branch-residue.ps1` 接合并后自动触发点（防 #15/#22 复发——#1718 族已四犯，这是簿上最高优先复）→ **#1723 立票跟进**
   - ~~② 门产物未变默认 `-SkipBuild`（压 #11 的失败轮成本）~~ → 已落地（#1860 指纹自动 `-SkipBuild`，2026-10-24）
   - 每页成本预估器（#1/#2/§5 第一条）
-  - `cleanup-orphan-worktrees.ps1` 的 targets 表按现状重写或废弃（#23 遗留物）→ **已加 STALE-GUARD 拦停（#1724 合并），重写待办在 #1723**
+  - ~~`cleanup-orphan-worktrees.ps1` 的 targets 表按现状重写或废弃（#23 遗留物）~~ → **已按「废弃」处置（2026-10-27）**：脚本自 #1724 起带 STALE-GUARD 拦停，targets 表始终未按现状重写；本地 `wt-` 目录已清零，脚本无再跑场景，**删除**。判据 `git worktree list` 现为单棵树，清理改用 README 里那条一次性命令即可
   - `Invoke-Process` 两份现存写法逐份核超时语义（#6 收敛后未复核）
   - cd.yml gate 主题尾缀 (#N) 的 PR/issue 判型回退（#24，2026-10-20 首犯）
