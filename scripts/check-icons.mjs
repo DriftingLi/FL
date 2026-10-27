@@ -25,9 +25,10 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDirectRun, runGuardCli } from './lib/guard.mjs'
-// 根 <template> 的取行口（跳注释、取最后一个 </template>）与 check-el-controls 同一份实现：
-// 判定面不同、边界规则相同，抄第二份迟早两边跑偏。
-import { visibleTemplateLines } from './check-el-controls.mjs'
+// 根 <template> 的取行口（跳注释、取最后一个 </template>）是 lib/vue-template.mjs 的单点实现：
+// check-el-controls / check-ui-intent 与本文件共用同一份 —— 判定面不同、边界规则相同，
+// 抄第二份迟早两边跑偏。
+import { visibleTemplateLines } from './lib/vue-template.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 

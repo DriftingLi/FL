@@ -50,7 +50,7 @@
 | **图标动作** | 同屏内快速操作 / 局部、单对象 / 多为视图级、可逆 | 原生 `<button>` + `UiIcon`（命中区按 ADR-0078：桌面 28 / 移动 40） | 39（封装层内 6 / 组件 26 / 页面 7） |
 | **互动计数动作** | 表达或撤销一次社交动作 / 写一次计数 / 可撤销、单条 | `UiActionChip` | 7 |
 | **快捷入口** | 一次点击填好查询或输入 / 只读查询 / 当前面板 | `UiCapsule` | 2 |
-| **菜单收纳** | 收低频、破坏性动作 / 打开菜单，不直接改数据 / 可取消 | `UiMoreMenu`（两档触发：卡片/列表项 `⋯` / 表格「操作 ▾」） | 16（含表格行内动作；2 处非收纳不迁：顶栏用户菜单、播放器倍速）。形态判据见下「行内动作的形态规则」 |
+| **菜单收纳** | 收低频、破坏性动作 / 打开菜单，不直接改数据 / 可取消 | `UiMoreMenu`（两档触发：卡片/列表项 `⋯` / 表格「操作 ▾」）；**触发方式不是「⋯ 按钮」的三处保留原生 `el-dropdown`**：顶栏用户菜单 / 页签右键菜单 / 播放器倍速 | 16（含表格行内动作；3 处非收纳不迁，见左）。形态判据见下「行内动作的形态规则」 |
 | **主题切换** | 换外观 / 只改本地偏好 / 随时切回 | `ThemeToggle` | 3 |
 | **参数选择** | 换一组筛选条件，或选一个会被保存的取值 / 重新查询或写入设置 / 当前列表或字段 | `UiSegmentTabs` | 18（+ `el-tabs` 2 待迁：`ProfileReview`、`ForumManage` 内层） |
 | **视图切换** | 换呈现方式（编写/预览）/ 不改数据 / 当前输入区 | `UiUnderlineTabs` | 2 |
@@ -98,10 +98,23 @@
 | 计数动画 | `UiCountTo`（只经 `UiStatCard` 使用，不当独立件落点） | 1（在 `UiStatCard` 内） |
 | 分割线 | `UiDivider` | 0（+ `el-divider` 4 待迁） |
 | 头像 | `el-avatar`（原生，登记） | 15 |
-| 图片 | `el-image` + 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
+| 图片 | `el-image` / `el-image-viewer`（EP 自带全屏查看器，`el-image` 配套）+ 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
 | 折叠面板 | `el-collapse`（原生，登记） | 2 / 6 |
 | 描述列表 | `el-descriptions`（原生，登记） | 1 / 6 |
 | 布局栅格 | `el-row` / `el-col`（EP 布局，登记） | 4 / 10 |
+| 表单容器 | `el-form`（原生，登记；字段壳 `el-form-item` 见下「子件」） | 38 |
+
+**子件**（随父件：只在某个父件内部合法，父件被登记即子件被登记。它们没有独立意图，不参与判重，也不单独落点）：
+
+| 子件 | 父件 |
+| --- | --- |
+| `el-form-item` | `el-form` |
+| `el-option` / `el-option-group` | `el-select` |
+| `el-table-column` | `el-table` |
+| `el-tab-pane` | `el-tabs` |
+| `el-collapse-item` | `el-collapse` |
+| `el-descriptions-item` | `el-descriptions` |
+| `el-dropdown-menu` / `el-dropdown-item` | `el-dropdown` |
 
 **登记表怎么用**（三条，回答「拿不准怎么办」）：
 
