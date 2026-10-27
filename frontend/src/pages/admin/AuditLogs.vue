@@ -8,17 +8,15 @@
       <UiFilterBar>
         <template #filters>
 
-        <el-select v-model="query.role" placeholder="角色" clearable style="width: 130px" @change="search()">
-          <el-option :label="describeRole('admin')" value="admin" />
-          <el-option :label="describeRole('tutor')" value="tutor" />
-        </el-select>
-        <el-input
-          v-model="query.keyword"
-          placeholder="搜索操作内容或操作人"
+        <UiSelect
+          v-model="query.role"
+          placeholder="角色"
           clearable
-          style="width: 220px"
-          @keyup.enter="search()"
+          style="width: 130px"
+          :options="[{ label: describeRole('admin'), value: 'admin' }, { label: describeRole('tutor'), value: 'tutor' }]"
+          @change="search()"
         />
+        <UiInput v-model="query.keyword" placeholder="搜索操作内容或操作人" clearable style="width: 220px" @keyup.enter="search()"  />
         <UiButton variant="primary" @click="search()">查询</UiButton>
         </template>
       </UiFilterBar>
@@ -82,6 +80,7 @@ import UiErrorState from '@/components/ui/UiErrorState.vue'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { describeRole } from '@/utils/roleWords'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const query = reactive<{ role: string; keyword: string }>({
   role: '',

@@ -10,11 +10,8 @@
     <UiCard>
       <UiFilterBar>
         <template #filters>
-          <el-select v-model="filterCategory" placeholder="类别" clearable style="width: 160px">
-            <el-option label="特种作业" value="special_operation" />
-            <el-option label="技能等级" value="skill_level" />
-          </el-select>
-          <el-input v-model="keyword" placeholder="搜索编码/名称" clearable style="width: 220px" />
+          <UiSelect v-model="filterCategory" placeholder="类别" clearable style="width: 160px" :options="[{ label: '特种作业', value: 'special_operation' }, { label: '技能等级', value: 'skill_level' }]" />
+          <UiInput v-model="keyword" placeholder="搜索编码/名称" clearable style="width: 220px"  />
         </template>
       </UiFilterBar>
       <el-table :data="filtered" v-loading="loading" stripe>
@@ -48,28 +45,24 @@
     <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="编码" prop="code">
-          <el-input v-model="form.code" placeholder="如 forklift_n1" :disabled="!!form.id" />
+          <UiInput v-model="form.code" placeholder="如 forklift_n1" :disabled="!!form.id"  />
         </el-form-item>
         <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="如 叉车司机N1证" />
+          <UiInput v-model="form.name" placeholder="如 叉车司机N1证"  />
         </el-form-item>
         <el-form-item label="类别" prop="category">
-          <el-select v-model="form.category" placeholder="选择类别" style="width: 100%">
-            <el-option label="特种作业上岗证" value="special_operation" />
-            <el-option label="职业技能等级" value="skill_level" />
-          </el-select>
+          <UiSelect v-model="form.category" placeholder="选择类别" style="width: 100%" :options="[{ label: '特种作业上岗证', value: 'special_operation' }, { label: '职业技能等级', value: 'skill_level' }]" />
         </el-form-item>
         <el-form-item v-if="form.category === 'skill_level'" label="等级" prop="level">
-          <el-select v-model="form.level" placeholder="选择等级 1-5" style="width: 100%">
-            <el-option :label="'五级/初级工'" :value="5" />
-            <el-option :label="'四级/中级工'" :value="4" />
-            <el-option :label="'三级/高级工'" :value="3" />
-            <el-option :label="'二级/技师'" :value="2" />
-            <el-option :label="'一级/高级技师'" :value="1" />
-          </el-select>
+          <UiSelect
+            v-model="form.level"
+            placeholder="选择等级 1-5"
+            style="width: 100%"
+            :options="[{ label: '五级/初级工', value: 5 }, { label: '四级/中级工', value: 4 }, { label: '三级/高级工', value: 3 }, { label: '二级/技师', value: 2 }, { label: '一级/高级技师', value: 1 }]"
+          />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="可选" />
+          <UiInput v-model="form.description" type="textarea" :rows="2" placeholder="可选"  />
         </el-form-item>
         <el-form-item label="排序" prop="sort_order">
           <el-input-number v-model="form.sort_order" :min="0" :max="999" style="width: 100%" />
@@ -99,6 +92,8 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const list = ref<CredentialDict[]>([])

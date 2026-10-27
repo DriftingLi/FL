@@ -11,39 +11,11 @@
       <div class="dual-bind-grid">
         <div class="dual-bind-item">
           <div class="dual-label">普通模式</div>
-          <el-select
-            :model-value="normalBinding?.config_id || 0"
-            placeholder="请选择配置"
-            style="width: 100%"
-            @update:model-value="(val: number) => handleAssistantBind(MODE_KEY_NORMAL, val)"
-          >
-            <el-option :value="0" label="未绑定" />
-            <el-option
-              v-for="cfg in configs"
-              :key="cfg.id"
-              :value="cfg.id"
-              :label="`${cfg.name}（${cfg.model}）`"
-              :disabled="!cfg.is_active"
-            />
-          </el-select>
+          <UiSelect :model-value="normalBinding?.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val: any) => handleAssistantBind(MODE_KEY_NORMAL, val)" :options="[{ label: '未绑定', value: 0 }, ...(configs).map((cfg) => ({ label: `${cfg.name}（${cfg.model}）`, value: cfg.id, disabled: !cfg.is_active }))]" />
         </div>
         <div class="dual-bind-item">
           <div class="dual-label">专家模式</div>
-          <el-select
-            :model-value="expertBinding?.config_id || 0"
-            placeholder="请选择配置"
-            style="width: 100%"
-            @update:model-value="(val: number) => handleAssistantBind(MODE_KEY_EXPERT, val)"
-          >
-            <el-option :value="0" label="未绑定" />
-            <el-option
-              v-for="cfg in configs"
-              :key="cfg.id"
-              :value="cfg.id"
-              :label="`${cfg.name}（${cfg.model}）`"
-              :disabled="!cfg.is_active"
-            />
-          </el-select>
+          <UiSelect :model-value="expertBinding?.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val: any) => handleAssistantBind(MODE_KEY_EXPERT, val)" :options="[{ label: '未绑定', value: 0 }, ...(configs).map((cfg) => ({ label: `${cfg.name}（${cfg.model}）`, value: cfg.id, disabled: !cfg.is_active }))]" />
         </div>
       </div>
       <div class="dual-hint">普通/专家分别单绑定，不向用户暴露模型名；未绑定时该模式不可用</div>
@@ -63,21 +35,7 @@
         </el-table-column>
         <el-table-column label="绑定的配置" min-width="380">
           <template #default="{ row }">
-            <el-select
-              :model-value="row.config_id || 0"
-              placeholder="请选择配置"
-              style="width: 100%"
-              @update:model-value="(val: number) => handleBind(row.feature_key, val)"
-            >
-              <el-option :value="0" label="未绑定" />
-              <el-option
-                v-for="cfg in configs"
-                :key="cfg.id"
-                :value="cfg.id"
-                :label="`${cfg.name}（${cfg.model}）`"
-                :disabled="!cfg.is_active"
-              />
-            </el-select>
+            <UiSelect :model-value="row.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val: any) => handleBind(row.feature_key, val)" :options="[{ label: '未绑定', value: 0 }, ...(configs).map((cfg) => ({ label: `${cfg.name}（${cfg.model}）`, value: cfg.id, disabled: !cfg.is_active }))]" />
           </template>
         </el-table-column>
       </el-table>
@@ -129,31 +87,19 @@
         autocomplete="off"
       >
         <el-form-item label="名称" prop="name">
-          <el-input
-            v-model="form.name"
-            placeholder="如 DeepSeek 主配置、OpenAI 备用"
-            clearable
-            autocomplete="off"
-          />
+          <UiInput v-model="form.name" placeholder="如 DeepSeek 主配置、OpenAI 备用" clearable autocomplete="off"  />
         </el-form-item>
         <el-form-item label="API Key" prop="api_key">
-          <el-input
-            v-model="form.api_key"
-            type="password"
-            show-password
-            :placeholder="dialogMode === 'edit' ? '留空表示不修改' : '请输入完整 API Key'"
-            clearable
-            autocomplete="new-password"
-          />
+          <UiInput v-model="form.api_key" type="password" show-password :placeholder="dialogMode === 'edit' ? '留空表示不修改' : '请输入完整 API Key'" clearable autocomplete="new-password"  />
         </el-form-item>
         <el-form-item label="Base URL" prop="base_url">
-          <el-input v-model="form.base_url" placeholder="https://api.deepseek.com" clearable autocomplete="off" />
+          <UiInput v-model="form.base_url" placeholder="https://api.deepseek.com" clearable autocomplete="off"  />
         </el-form-item>
         <el-form-item label="模型" prop="model">
-          <el-input v-model="form.model" placeholder="deepseek-v4-flash" clearable autocomplete="off" />
+          <UiInput v-model="form.model" placeholder="deepseek-v4-flash" clearable autocomplete="off"  />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" placeholder="可选备注" clearable autocomplete="off" />
+          <UiInput v-model="form.description" placeholder="可选备注" clearable autocomplete="off"  />
         </el-form-item>
         <el-form-item v-if="dialogMode === 'edit'" label="启用状态">
           <UiSwitch v-model="form.is_active" />
@@ -183,6 +129,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])

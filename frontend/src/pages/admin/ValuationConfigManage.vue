@@ -42,6 +42,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // ========== Tab 1: 原价表 ==========
 interface OriginalPriceField {
@@ -484,34 +485,10 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
           <UiFilterBar>
         <template #filters>
 
-            <el-input
-              v-model="originalPriceFilter.brand"
-              placeholder="筛选品牌"
-              clearable
-              size="small"
-              style="width: 140px"
-            />
-            <el-input
-              v-model="originalPriceFilter.vehicle_type"
-              placeholder="筛选车辆类型"
-              clearable
-              size="small"
-              style="width: 140px"
-            />
-            <el-input
-              v-model="originalPriceFilter.series"
-              placeholder="筛选系列"
-              clearable
-              size="small"
-              style="width: 120px"
-            />
-            <el-input
-              v-model="originalPriceFilter.config_type"
-              placeholder="筛选配置类型"
-              clearable
-              size="small"
-              style="width: 160px"
-            />
+            <UiInput v-model="originalPriceFilter.brand" placeholder="筛选品牌" clearable size="small" style="width: 140px"  />
+            <UiInput v-model="originalPriceFilter.vehicle_type" placeholder="筛选车辆类型" clearable size="small" style="width: 140px"  />
+            <UiInput v-model="originalPriceFilter.series" placeholder="筛选系列" clearable size="small" style="width: 120px"  />
+            <UiInput v-model="originalPriceFilter.config_type" placeholder="筛选配置类型" clearable size="small" style="width: 160px"  />
             <UiButton :icon="'rotate-ccw'" size="small" @click="resetOriginalPriceFilter">重置筛选</UiButton>
         </template>
       </UiFilterBar>
@@ -595,14 +572,7 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
                 <el-table-column prop="description" label="参数说明" min-width="320" />
                 <el-table-column label="参数值" width="180">
                   <template #default="{ row }">
-                    <el-input-number
-                      v-model="row.value"
-                      :step="0.001"
-                      :precision="4"
-                      :min="0"
-                      :max="100000"
-                      style="width: 100%"
-                    />
+                    <UiInput v-model="row.value" :step="0.001" :precision="4" :min="0" :max="100000" style="width: 100%"  />
                   </template>
                 </el-table-column>
                               <template #empty>
@@ -633,14 +603,7 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
                 <el-table-column prop="name" label="品牌名称" min-width="180" />
                 <el-table-column label="K_brand 系数" width="180">
                   <template #default="{ row }">
-                    <el-input-number
-                      v-model="row.k_brand"
-                      :step="0.01"
-                      :precision="2"
-                      :min="0"
-                      :max="10"
-                      style="width: 100%"
-                    />
+                    <UiInput v-model="row.k_brand" :step="0.01" :precision="2" :min="0" :max="10" style="width: 100%"  />
                   </template>
                 </el-table-column>
                 <el-table-column label="启用" width="120" align="center">
@@ -676,19 +639,12 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
                 <el-table-column prop="rating" label="评级" width="100" align="center" />
                 <el-table-column label="中文标签" min-width="180">
                   <template #default="{ row }">
-                    <el-input v-model="row.label" placeholder="如 优秀" />
+                    <UiInput v-model="row.label" placeholder="如 优秀"  />
                   </template>
                 </el-table-column>
                 <el-table-column label="基础系数" width="180">
                   <template #default="{ row }">
-                    <el-input-number
-                      v-model="row.base_coefficient"
-                      :step="0.01"
-                      :precision="2"
-                      :min="0"
-                      :max="10"
-                      style="width: 100%"
-                    />
+                    <UiInput v-model="row.base_coefficient" :step="0.01" :precision="2" :min="0" :max="10" style="width: 100%"  />
                   </template>
                 </el-table-column>
                               <template #empty>
@@ -722,14 +678,7 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
                 <el-table-column prop="description" label="参数说明" min-width="380" />
                 <el-table-column label="参数值" width="180">
                   <template #default="{ row }">
-                    <el-input-number
-                      v-model="row.value"
-                      :step="0.01"
-                      :precision="4"
-                      :min="0"
-                      :max="1"
-                      style="width: 100%"
-                    />
+                    <UiInput v-model="row.value" :step="0.01" :precision="4" :min="0" :max="1" style="width: 100%"  />
                   </template>
                 </el-table-column>
                               <template #empty>
@@ -762,14 +711,7 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
                 <el-table-column prop="city" label="城市" width="160" />
                 <el-table-column label="区域系数" width="200">
                   <template #default="{ row }">
-                    <el-input-number
-                      v-model="row.coefficient"
-                      :step="0.01"
-                      :precision="2"
-                      :min="0"
-                      :max="10"
-                      style="width: 100%"
-                    />
+                    <UiInput v-model="row.coefficient" :step="0.01" :precision="2" :min="0" :max="10" style="width: 100%"  />
                   </template>
                 </el-table-column>
                               <template #empty>
@@ -796,18 +738,8 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
             :label="f.label"
             :required="f.required"
           >
-            <el-input
-              v-if="f.type === 'input'"
-              v-model="formData[f.prop]"
-              :placeholder="`请输入${f.label}`"
-            />
-            <el-input-number
-              v-else-if="f.type === 'number'"
-              v-model="formData[f.prop]"
-              :step="f.prop === 'tonnage' || f.prop === 'original_price' ? 0.1 : 1"
-              :precision="f.prop === 'tonnage' || f.prop === 'original_price' ? 2 : 0"
-              style="width: 100%"
-            />
+            <UiInput v-if="f.type === 'input'" v-model="formData[f.prop]" :placeholder="`请输入${f.label}`"  />
+            <UiInput v-else-if="f.type === 'number'" v-model="formData[f.prop]" :step="f.prop === 'tonnage' || f.prop === 'original_price' ? 0.1 : 1" :precision="f.prop === 'tonnage' || f.prop === 'original_price' ? 2 : 0" style="width: 100%"  />
             <UiSwitch
               v-else-if="f.type === 'switch'"
               v-model="formData[f.prop]"
@@ -827,20 +759,13 @@ function actionItems(_row: AdminRow): UiMoreMenuItem[] {
        confirm-text="创建" :confirm-loading="creatingRegion" @confirm="handleCreateRegion">
         <el-form :model="regionCreateForm" label-width="100px">
           <el-form-item label="省份" required>
-            <el-input v-model="regionCreateForm.province" placeholder="如：江苏" />
+            <UiInput v-model="regionCreateForm.province" placeholder="如：江苏"  />
           </el-form-item>
           <el-form-item label="城市" required>
-            <el-input v-model="regionCreateForm.city" placeholder="如：苏州" />
+            <UiInput v-model="regionCreateForm.city" placeholder="如：苏州"  />
           </el-form-item>
           <el-form-item label="区域系数">
-            <el-input-number
-              v-model="regionCreateForm.coefficient"
-              :step="0.01"
-              :precision="2"
-              :min="0"
-              :max="10"
-              style="width: 100%"
-            />
+            <UiInput v-model="regionCreateForm.coefficient" :step="0.01" :precision="2" :min="0" :max="10" style="width: 100%"  />
           </el-form-item>
         </el-form>
       </UiDialog>

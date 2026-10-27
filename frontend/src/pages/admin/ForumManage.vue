@@ -96,18 +96,11 @@
 
         <!-- 参数选择（同一列表换版块筛选）→ 胶囊，登记表「参数选择」行 -->
         <UiSegmentTabs v-model="activeTab" :options="topicTabOptions" @change="handleTabChange" />
-        <el-input
-          v-model="keyword"
-          placeholder="搜索标题 / 内容"
-          clearable
-          style="width: 260px"
-          @clear="handleSearch"
-          @keyup.enter="handleSearch"
-        >
+        <UiInput v-model="keyword" placeholder="搜索标题 / 内容" clearable style="width: 260px" @clear="handleSearch" @keyup.enter="handleSearch">
           <template #prefix>
             <UiIcon name="search" />
           </template>
-        </el-input>
+        </UiInput>
         </template>
       </UiFilterBar>
 
@@ -275,6 +268,7 @@ import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 // 帖子列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表一并托管。
 // 解构改名保持模板零改动；keyword 为页面自管筛选轴（由 fetch adapter 读取）。

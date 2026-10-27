@@ -7,19 +7,7 @@
     <div class="generate-card">
       <el-form label-width="100px">
         <el-form-item label="选择课程">
-          <el-select
-            v-model="selectedCourseId"
-            placeholder="请选择课程"
-            style="width: 100%"
-            @change="handleCourseChange"
-          >
-            <el-option
-              v-for="course in courses"
-              :key="course.course_id"
-              :label="course.name"
-              :value="course.course_id"
-            />
-          </el-select>
+          <UiSelect v-model="selectedCourseId" placeholder="请选择课程" style="width: 100%" @change="handleCourseChange" :options="(courses).map((course) => ({ label: course.name, value: course.course_id }))" />
         </el-form-item>
 
         <el-form-item label="选择章节" v-if="chapters.length > 0">
@@ -128,6 +116,7 @@ import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiProgress from '@/components/ui/UiProgress.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 interface GenerateCourse {
   course_id: number

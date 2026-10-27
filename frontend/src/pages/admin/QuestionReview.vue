@@ -10,19 +10,9 @@
     <UiFilterBar>
         <template #filters>
 
-      <el-select v-model="filters.type" placeholder="题型" clearable style="width: 130px">
-        <el-option label="单选题" value="single_choice" />
-        <el-option label="多选题" value="multi_choice" />
-        <el-option label="判断题" value="true_false" />
-        <el-option label="故障识图" value="fault_image" />
-        <el-option label="简答题" value="short_answer" />
-      </el-select>
-      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px">
-        <el-option label="待审核" value="pending" />
-        <el-option label="已发布" value="published" />
-        <el-option label="草稿" value="draft" />
-      </el-select>
-      <el-input v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData" />
+      <UiSelect v-model="filters.type" placeholder="题型" clearable style="width: 130px" :options="[{ label: '单选题', value: 'single_choice' }, { label: '多选题', value: 'multi_choice' }, { label: '判断题', value: 'true_false' }, { label: '故障识图', value: 'fault_image' }, { label: '简答题', value: 'short_answer' }]" />
+      <UiSelect v-model="filters.status" placeholder="状态" clearable style="width: 120px" :options="[{ label: '待审核', value: 'pending' }, { label: '已发布', value: 'published' }, { label: '草稿', value: 'draft' }]" />
+      <UiInput v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData"  />
       <UiButton variant="primary" @click="loadData">查询</UiButton>
       <UiButton variant="success" v-if="selectedIds.length > 0" @click="batchPublish">
         批量发布 ({{ selectedIds.length }})
@@ -106,14 +96,7 @@
     <UiDialog v-model="rejectDialogVisible" title="填写驳回理由" width="500px">
       <el-form>
         <el-form-item label="驳回理由" required>
-          <el-input
-            v-model="rejectReason"
-            type="textarea"
-            :rows="4"
-            placeholder="请填写驳回理由，讲师将看到此说明"
-            maxlength="500"
-            show-word-limit
-          />
+          <UiInput v-model="rejectReason" type="textarea" :rows="4" placeholder="请填写驳回理由，讲师将看到此说明" :maxlength="500" show-word-limit  />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -146,6 +129,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
 const statusType: Record<string, UiTagTone> = { draft: 'info', pending: 'warning', published: 'success' }
