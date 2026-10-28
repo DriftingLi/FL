@@ -488,8 +488,5 @@ func featuredCategoryLabel(category string) string {
 	if label, ok := featuredCategoryLabels[category]; ok {
 		return label
 	}
-	if category == "news" {
-		return "政策法规"
-	}
 	return "政策法规"
 }

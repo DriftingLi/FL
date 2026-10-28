@@ -1,4 +1,5 @@
 // 内容精选分类扩两态契约（#2063）：考情 / 公告可选、可筛、标签正确；旧四态与非法值行为不变。
+
 package featured
 
 import (
@@ -10,7 +11,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
@@ -37,22 +37,26 @@ func TestFeaturedCategoryExpansionContract(t *testing.T) {
 	}
 
 	// 建两篇新类别内容（一篇考情、一篇公告）
+	ids := make([]int, 0, 2)
 	for _, cat := range []string{"exam", "notice"} {
-		if _, err := svc.Create(FeaturedContentInput{
+		created, err := svc.Create(FeaturedContentInput{
 			Title: cat + " 内容", Category: cat, Summary: "摘要", Content: "# 正文",
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatalf("创建 %s 内容失败: %v", cat, err)
 		}
+		ids = append(ids, created.ContentID)
 	}
 	// 非法类别仍拒
 	if _, err := svc.Create(FeaturedContentInput{Title: "非法", Category: "nope"}); !errors.Is(err, ErrFeaturedCategoryInvalid) {
 		t.Fatalf("非法分类应返回 ErrFeaturedCategoryInvalid, got %v", err)
 	}
 
-	// 把两条置为已发布，按类别可筛
-	if err := db.Model(&model.FeaturedContent{}).Where("category IN ?", []string{"exam", "notice"}).
-		Updates(map[string]any{"status": 1, "published_at": testutil.Now()}).Error; err != nil {
-		t.Fatalf("发布失败: %v", err)
+	// 发布走域出口：新类别同样要能发布（不是只测「列表能筛」）
+	for _, id := range ids {
+		if _, err := svc.Publish(id, nil); err != nil {
+			t.Fatalf("发布 %d 失败: %v", id, err)
+		}
 	}
 	res, err := svc.GetPublicList(1, 10, "exam")
 	if err != nil {

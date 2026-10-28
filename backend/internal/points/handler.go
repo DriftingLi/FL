@@ -1,4 +1,4 @@
-// 本文件：积分域的学员端 HTTP 出口（ADR-0070）——/api/points 蓝图（6 条路由）。
+// 本文件：积分域的学员端 HTTP 出口（ADR-0070）——/api/points 蓝图（7 条路由）。
 // 装配点：internal/api/routes_registry.go 调 points.RegisterRoutes(api, rd.Session, deps.PointsSvc)。
 package points
 
@@ -84,7 +84,7 @@ func (h *handler) GetBalance(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
-// @Param direction query string false "收支方向 in|out（省略=全部；非法值 400）"
+// @Param direction query string false "收支方向 in|out（省略或其它取值=不过滤）"
 // @Success 200 {object} response.R{data=points.PointsLedgerResult} "流水"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/ledger [get]

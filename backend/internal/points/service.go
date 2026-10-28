@@ -858,7 +858,8 @@ func (s *Service) ListShopItems(ctx context.Context, userID int) (*ShopItemsResu
 			// 未登记权益读者的行不是一件可兑商品（如 unlock_real_paper 只是卷价事实源），不进在售列表。
 			continue
 		}
-		owned, err := entitlement.Holds(s.db.WithContext(ctx), userID, entSKU, refID)
+		// 逐行查权益（在售量级是个位数）；批量 IN 留给上量那天，口径仍只经 HasEntitlement 一处。
+		owned, err := s.HasEntitlement(userID, entSKU, refID)
 		if err != nil {
 			return nil, err
 		}

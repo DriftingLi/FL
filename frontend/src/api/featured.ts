@@ -45,8 +45,8 @@ export const featuredCategoryOptions = [
 
 /** 获取分类中文标签 */
 export function categoryLabel(category: string): string {
-  // 未知类别回落成**原值**，不再静默冒充「政策法规」（#2063）：字典扩两态后，
-  // 旧回落会把「考情」显示成「政策法规」——错标不报错，比空串更糟。
+  // 未知类别回落成**原值**，不再静默冒充「政策法规」（#2063）：字典会继续扩、后端也可能先行
+  // 上线新类别，此时把不认识的值显示成别的一类等于静默错标——错标不报错，比原值更糟。
   return featuredCategoryLabels[category] ?? category
 }
 

@@ -1,4 +1,5 @@
 // 商城在售列表契约（#2064）：在售判据与兑换同源、已拥有按人算、未登录 401。
+
 package points
 
 import (
@@ -21,7 +22,7 @@ import (
 )
 
 // newShopItemsRouter 自装学员端 /api/points 面（只挂 RegisterRoutes，不走装配根）。
-func newShopItemsRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *security.Session, *config.Config) {
+func newShopItemsRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *security.Session) {
 	t.Helper()
 	testutil.SetTestGinMode()
 	cfg := &config.Config{JWTSecretKey: "contract-test-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
@@ -29,7 +30,7 @@ func newShopItemsRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *security.Sessi
 	svc := NewService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
 	r := gin.New()
 	RegisterRoutes(r.Group("/api"), sess, svc)
-	return r, sess, cfg
+	return r, sess
 }
 
 // seedShopItems 三行：可兑且在售 / 已下架 / 在售但未登记权益读者。
@@ -52,7 +53,7 @@ func seedShopItems(t *testing.T, db *gorm.DB) {
 	}
 }
 
-func TestShopItemsListOnlySellableAndOwnedPerUser(t *testing.T) {
+func TestShopItemsListContract(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
 	buyer := testutil.SeedStudent(t, db, "shopBuyer", "pwd")
 	other := testutil.SeedStudent(t, db, "shopOther", "pwd")
@@ -61,7 +62,7 @@ func TestShopItemsListOnlySellableAndOwnedPerUser(t *testing.T) {
 		t.Fatalf("设余额失败: %v", err)
 	}
 
-	r, sess, _ := newShopItemsRouter(t, db)
+	r, sess := newShopItemsRouter(t, db)
 	token, err := sess.Issue(int(buyer.ID), buyer.Account, "hrwai_user")
 	if err != nil {
 		t.Fatalf("签发 token 失败: %v", err)
@@ -115,8 +116,7 @@ func TestShopItemsListOnlySellableAndOwnedPerUser(t *testing.T) {
 	if len(after.Items) != 1 || !after.Items[0].Owned {
 		t.Fatalf("兑换后本人 owned 应为 true, got %+v", after.Items)
 	}
-	otherSvc := NewService(db, zap.NewNop(), clock.Real(), notification.NewService(db, zap.NewNop()))
-	res, err := otherSvc.ListShopItems(context.Background(), other.ID)
+	res, err := svc.ListShopItems(context.Background(), other.ID)
 	if err != nil {
 		t.Fatalf("他人列表失败: %v", err)
 	}

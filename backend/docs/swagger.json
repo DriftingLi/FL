@@ -10688,8 +10688,8 @@
                         "in": "query"
                     },
                     {
-                        "type": "boolean",
-                        "description": "免费/付费筛选：true 付费（积分兑换价 \u003e 0）/ false 免费（积分价为空或 0）/ 省略不过滤",
+                        "type": "string",
+                        "description": "免费/付费筛选 true|false（true 付费：积分兑换价 \u003e 0；false 免费：为空或 0）；省略不过滤",
                         "name": "paid",
                         "in": "query"
                     }
@@ -10711,6 +10711,12 @@
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -14241,7 +14247,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "收支方向 in|out（省略=全部；非法值 400）",
+                        "description": "收支方向 in|out（省略或其它取值=不过滤）",
                         "name": "direction",
                         "in": "query"
                     }

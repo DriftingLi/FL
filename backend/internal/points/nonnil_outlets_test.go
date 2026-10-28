@@ -54,7 +54,7 @@ func outletPointsTasksNone(t *testing.T) any {
 }
 
 // outletShopItemsNone 商城在售列表：一件在售商品都没有时 items 是空集。
-// 播用户只为满足 ListShopItems 的用户维度（Owned 判据按 user_id 查权益）。
+// 造用户只为满足 ListShopItems 的用户维度（Owned 判据按 user_id 查权益）。
 func outletShopItemsNone(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)

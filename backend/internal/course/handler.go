@@ -84,8 +84,9 @@ var unreadableFaces404 = []error{
 // @Param level_id query int false "等级ID"
 // @Param credential_id query int false "目标证件ID"
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
-// @Param paid query boolean false "免费/付费筛选：true 付费（积分兑换价 > 0）/ false 免费（积分价为空）/ 省略不过滤"
+// @Param paid query string false "免费/付费筛选 true|false（true 付费：积分兑换价 > 0；false 免费：为空或 0）；省略不过滤"
 // @Success 200 {object} response.R{data=CoursePageResult} "success"
+// @Failure 400 {object} response.R "参数错误"
 // @Router /courses [get]
 func (h *handler) ListCourses(c *gin.Context) {
 	httpx.Endpoint[courseListReq, CoursePageResult]{
@@ -366,8 +367,7 @@ type courseListReq struct {
 	Paid         *bool
 }
 
-// parsePaidFilter 解析免费/付费筛选（#2071）：省略 = 不过滤；true = 付费（积分兑换价 > 0）；
-// false = 免费（积分价为空）。判据是积分兑换价 points_price，不是现金价。
+// parsePaidFilter 把 paid 查询串转成 CourseListOptions.Paid（语义见该字段）；其余取值一律 400。
 func parsePaidFilter(raw string) (*bool, error) {
 	switch raw {
 	case "":
