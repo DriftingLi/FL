@@ -956,6 +956,16 @@ if (-not $nodeExe) {
     exit 2
 }
 
+# ---------- publish 参数：本轮唯一构造点（#2048）----------
+# 为什么要提前到这里构造：指纹的第四道比对必须在**判命中之前**就知道本轮会用哪条命令 —— publish
+# 参数住在 .ps1 里，而 .ps1 与 scripts/ 都被构建输入集排除（#2048 G1：改命令不动任何哈希组件、旧产物
+# 原样在盘 ⇒ 三组件照样全等 ⇒ 命中 ⇒ 跳过 publish ⇒ 新命令从未执行、门在旧命令产物上出绿）。
+# 构造点唯一 ⇒ 比对侧与执行侧用同一份数组，不存在「比 A 跑 B」的两份真相。
+. (Join-Path $PSScriptRoot 'lib\mp-weixin-build-fingerprint.ps1')
+$publishArgs = @('publish', 'mp-weixin', '--project', $Project)
+if ($AppId) { $publishArgs += @('--appid', $AppId) }
+$buildCommandKey = Get-MpWeixinBuildCommandKey -Arguments $publishArgs
+
 # ---------- 产物内容指纹 ⇒ 自动 -SkipBuild（#1860）----------
 # 白烧场景 = 同树重跑（#1494 §0.1 失败轮 / #1443 实测 -SkipBuild 省 ≈2–3 min）：环境失败轮重跑时
 # publish 会重建一模一样的产物。「产物未变」机判化 —— 指纹键三组件**全等才命中**（判据库
@@ -969,10 +979,9 @@ if (-not $nodeExe) {
 # 命中即翻 $SkipBuild 并**重建门计划**（mode.skipBuild 是计划面字段，翻值不重建 = 计划与执行脱节；
 # 同款先例：端口被占换端口后重建计划）。-Doctor 跳过（体检不构建）；显式 -SkipBuild 无指纹事。
 if (-not $SkipBuild -and -not $Doctor) {
-    . (Join-Path $PSScriptRoot 'lib\mp-weixin-build-fingerprint.ps1')
     $fpVersion = Get-MpWeixinHBuilderXVersionToken -HbxRoot $hbxRoot -CliExe $cliExe
     $fpHit = $null
-    if ("$fpVersion") { $fpHit = Test-MpWeixinBuildFingerprintHit -Project $Project -Dist $dist -HBuilderXVersion $fpVersion }
+    if ("$fpVersion") { $fpHit = Test-MpWeixinBuildFingerprintHit -Project $Project -Dist $dist -HBuilderXVersion $fpVersion -BuildCommand $buildCommandKey }
     if ($fpHit -and $fpHit.Hit) {
         Write-Host ">>> 产物指纹命中 ⇒ 自动 -SkipBuild（$($fpHit.Detail)）" -ForegroundColor Yellow
         Write-Log "AUTO_SKIP_BUILD $($fpHit.Reason) version=$($fpVersion -replace 'cli=[0-9a-f]+', 'cli=<sha256>')"
@@ -1718,9 +1727,9 @@ try {
             }
         }
 
-        # 2) 构建 mp-weixin —— HBuilderX 构建成功后**自己**拉起开发者工具并打开项目（#883 实测）
-        $publishArgs = @('publish', 'mp-weixin', '--project', $Project)
-        if ($AppId) { $publishArgs += @('--appid', $AppId) }
+        # 2) 构建 mp-weixin —— HBuilderX 构建成功后**自己**拉起开发者工具并打开项目（#883 实测）。
+        #    $publishArgs 在指纹判定之前唯一构造（#2048），这里**不得再拼一次**：拼两次就是两份真相，
+        #    第四道比对会退化成「比对用 A、执行用 B」的假保险。
         $pub = Invoke-Process -FilePath $cliExe -Arguments $publishArgs -TimeoutSeconds $PublishTimeoutSeconds -Tag 'publish-mp-weixin'
         Write-Log "`n>>> publish-mp-weixin`n$($pub.Output)"
         Write-Host $pub.Output
@@ -1794,7 +1803,7 @@ try {
     # 写失败只警告，不影响门结论（fail 向重建：没写成 = 下次没有指纹 = 重建）。
     if (-not $SkipBuild) {
         try {
-            $fpSave = Save-MpWeixinBuildFingerprint -Project $Project -Dist $dist -HBuilderXVersion $fpVersion
+            $fpSave = Save-MpWeixinBuildFingerprint -Project $Project -Dist $dist -HBuilderXVersion $fpVersion -BuildCommand $buildCommandKey
             if ($fpSave.Saved) {
                 Write-Log "build-fingerprint saved $($fpSave.Detail)"
                 Write-Host ">>> 产物指纹已落盘（下次同树重跑命中即自动 -SkipBuild）"
