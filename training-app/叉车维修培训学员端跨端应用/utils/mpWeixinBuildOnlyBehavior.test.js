@@ -6,7 +6,8 @@
  *   把 `exit 0` 挪到 automation 之后、或把切点抬到产物判据之前，守护照样绿（C20 先例：判据看着在、实际静默失效）。
  * 四组用例各钉一面：
  *   G1 计划面：`-DryRun -BuildOnly` ⇒ 结果行换 token、字段换成本轮真能读的六项、会话段步骤整段不在计划里。
- *      列着「这轮不跑」的步骤就是两份真相，故这条断言的是**计划的步骤集合**，不是注释。
+ *      列着「这轮不跑」的步骤就是两份真相，故这条断言的是**计划的步骤集合**，不是注释。**跨平台**（-DryRun
+ *      在端口/环境检查之前退出）。
  *   G2 收口面：`-BuildOnly -SkipBuild` 真跑到切点（产物合法性之后）⇒ exit 0、
  *      结果行 `MP_WEIXIN_BUILDONLY_RESULT … build=skipped(explicit)`（**不假装构建过**）、
  *      假开发者工具只收到一次 `close`（finally 收尾）—— 没有 quit / open / auto ⇒ 会话段真没跑。
@@ -14,8 +15,14 @@
  *      不靠调用点自觉；先例：异常兜底行曾硬写 MP_WEIXIN_RESULT）。
  *   G4 publish 面（Windows）：把 node 复本当 `cli.exe`、在项目根放一份 `publish.js` 冒充「导出成功」
  *      ⇒ 真走 publish 分支：`build=publish`（而不是 skipped）、`elapsed=<N>s`、产物判据照跑、退出码 0，
- *      且会话段仍未跑（假开发者工具只有 close）。非 Windows：同一条命令**真断言** exit 2
- *      `reason=hbuilderx-not-found`（PE 头判据不可能过）—— 不静默跳过。
+ *      且会话段仍未跑（假开发者工具只有 close）。
+ *
+ * ⚠️ **为什么 G2–G4 是 Windows 专属、且非 Windows 有一条独立的真断言**（2026-10-28 CI 实测纠正）：
+ *   `scripts/mp-weixin-check.ps1` 的端口面用 Windows 专有的 `Get-NetTCPConnection`，它排在环境检查
+ *   与日志初始化**之前** ⇒ 在 Linux（CI 的 ubuntu-latest）上任何一次 ② 链路都在那里以 exit 1 结束、
+ *   **一行结果行都写不出来**。这不是本守护的缺陷，是 ② 门在 POSIX 不可跑（ADR-0008 托管 CI 段）。
+ *   早前本文件曾断言「POSIX 会走 exit 2 reason=hbuilderx-not-found」—— 那是错的（CI 实测 exit 1、
+ *   日志为空），已改成下面这条 fail-closed 真断言（既有守护同款口径，不静默跳过）。
  *
  * 执行调用留在本文件（③ 门分类器按文件自身判行为守护 —— H4 纪律，见 mpWeixinGateHarness 头注释）。
  */
@@ -62,7 +69,7 @@ function rmFixture(dir) {
 describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
   jest.setTimeout(600000);
 
-  it('G1 计划面：-DryRun -BuildOnly 换 token / 换字段 / 会话段步骤不进计划', () => {
+  it('G1 计划面：-DryRun -BuildOnly 换 token / 换字段 / 会话段步骤不进计划（跨平台）', () => {
     const fixture = H.makeFixture();
     try {
       const out = execFileSync('pwsh', [
@@ -88,6 +95,7 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
   });
 
   it('G2 收口面：-BuildOnly -SkipBuild 跑到切点后退出，结果行如实写 build=skipped(explicit)', async () => {
+    if (!H.IS_WIN) return; // POSIX 由下一条 fail-closed 用例真断言（见文件头「为什么 G2–G4 是 Windows 专属」）
     const fixture = H.makeFixture();
     try {
       const fakeCli = H.makeFakeDevTools(fixture.dir);
@@ -107,6 +115,7 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
   });
 
   it('G3 门未过面：产物不合法 ⇒ exit 1，且结果行仍是 BUILDONLY token', async () => {
+    if (!H.IS_WIN) return; // 同上
     const fixture = H.makeFixture();
     try {
       // 非法 JSON 产物（#1210 判据面：project.config.json 不可解析 ⇒ stage=product-json）
@@ -123,13 +132,14 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
     } finally { rmFixture(fixture.dir); }
   });
 
-  it('G4 publish 面：build=publish 且会话段仍不跑（非 Windows 真断言 PE 头判据的失败面）', async () => {
+  it('G4 publish 面：build=publish 且会话段仍不跑', async () => {
+    if (!H.IS_WIN) return; // 同上
     const fixture = H.makeFixture();
     try {
       const fakeCli = H.makeFakeDevTools(fixture.dir);
       const port = await H.freePort();
       // 假 HBuilderX：node 复本充 cli.exe（Windows 上 node.exe 有 MZ 头 ⇒ 过 Test-PeHeader；
-      // POSIX 上 PE 头判据必不过 ⇒ 下面走「真断言 exit 2」分支，不静默跳过）。
+      // POSIX 上该判据不可能过，且 ② 链路本身跑不起来 —— 故本用例只在 Windows 上执行）。
       const hbxDir = path.join(fixture.dir, 'hbx');
       fs.mkdirSync(hbxDir, { recursive: true });
       const cli = path.join(hbxDir, 'cli.exe');
@@ -143,31 +153,38 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
       const skipAt = base.indexOf('-SkipBuild');
       const args = base.slice(0, skipAt).concat(base.slice(skipAt + 1), ['-BuildOnly', '-Cli', cli]);
       let status;
-      let stdout = '';
       try {
-        stdout = execFileSync('pwsh', args, { cwd: H.ROOT, encoding: 'utf8', timeout: 600000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+        execFileSync('pwsh', args, { cwd: H.ROOT, encoding: 'utf8', timeout: 600000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
         status = 0;
       } catch (e) {
         status = e.status;
-        stdout = String(e.stdout || '') + String(e.stderr || '');
       }
 
+      const line = resultLine(fixture, 'MP_WEIXIN_BUILDONLY_RESULT');
       const log = H.gateLog(fixture);
-      if (H.IS_WIN) {
-        const line = resultLine(fixture, 'MP_WEIXIN_BUILDONLY_RESULT');
-        expect(status).toBe(0);
-        // build=publish（真构建过）+ elapsed 是本轮 publish 墙钟，不是 n/a
-        expect(line).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=wx38c3e31b16a7ced0 pages=1 product=ok build=publish elapsed=\d+s log=\.ci-verify\/mp-weixin\.log$/m);
-        // 会话段仍未跑：只有 finally 的 close（quit / open / auto 一次都没有）
-        expect(H.verbsOf(fakeCli)).toEqual(['close']);
-        expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
-      } else {
-        // POSIX：PE 头判据不过 ⇒ 环境受阻，但**分流仍成立**（BUILDONLY token，不是 ② 的）
-        expect(status).toBe(2);
-        expect(log).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT errors=env-blocked reason=hbuilderx-not-found$/m);
-        expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
-        expect(stdout).toMatch(/hbuilderx-not-found|HBuilderX/);
-      }
+      expect(status).toBe(0);
+      // build=publish（真构建过）+ elapsed 是本轮 publish 墙钟，不是 n/a
+      expect(line).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=wx38c3e31b16a7ced0 pages=1 product=ok build=publish elapsed=\d+s log=\.ci-verify\/mp-weixin\.log$/m);
+      // 会话段仍未跑：只有 finally 的 close（quit / open / auto 一次都没有）
+      expect(H.verbsOf(fakeCli)).toEqual(['close']);
+      expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('非 Windows：build-only 在 POSIX 上 fail-closed（真断言，不静默跳过）', async () => {
+    if (H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      // 真断言的是「在 POSIX 上 ② 链路根本走不到结果行」：端口面用 Windows 专有的 Get-NetTCPConnection，
+      // 它排在环境检查与日志初始化之前 ⇒ 非零退出、且 build-only 与 ② 两个 token 都不出现。
+      // 这条不是「跳过」：一旦脚本将来在 POSIX 上真能跑通（例如端口面被跨平台化），它会当场提醒改写成真判据。
+      expect(r.status).not.toBe(0);
+      const log = H.gateLog(fixture);
+      expect(log).not.toMatch(/^MP_WEIXIN_BUILDONLY_RESULT /m);
+      expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
     } finally { rmFixture(fixture.dir); }
   });
 });
