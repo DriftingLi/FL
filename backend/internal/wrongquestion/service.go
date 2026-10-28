@@ -143,7 +143,8 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 			question = &dto
 		}
 		var topWrongOption *string
-		if ans, ok := topWrong[wq.QuestionID]; ok && ans != "" {
+		// 装载器已把空答案过滤掉，这里只剩「有没有」。
+		if ans, ok := topWrong[wq.QuestionID]; ok {
 			v := ans
 			topWrongOption = &v
 		}
@@ -175,6 +176,11 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 // 样本太小时「最多人选错」只是一两个人的偶然，不当作系统性误区（#2068）。
 const topWrongOptionMinSample = 5
 
+// shortAnswerQuestionType 简答题**没有选项**：它的 user_answer 是自由文本，把「最多人写的那段话」
+// 当易错项外发等于泄漏别人的作答，且字段名/语义都对不上。单题全站统计 questionStats 早就有这条守卫，
+// 这里必须同口径（#2068 评审阻断项）。
+const shortAnswerQuestionType = "short_answer"
+
 // loadTopWrongOptions 批量取每题的「最多人选错的选项」（#2068）。
 //
 // 口径（可复算）：分母 = 该题全部作答次数（question_practice_record，按题目聚合、不限学员）；
@@ -191,9 +197,10 @@ func (s *Service) loadTopWrongOptions(questionIDs []int) map[int]string {
 		Total      int64 `gorm:"column:total"`
 	}
 	s.db.Model(&model.QuestionPracticeRecord{}).
-		Select("question_id, COUNT(*) AS total").
-		Where("question_id IN ?", questionIDs).
-		Group("question_id").Scan(&totals)
+		Joins("JOIN question ON question.id = question_practice_record.question_id").
+		Select("question_practice_record.question_id AS question_id, COUNT(*) AS total").
+		Where("question_practice_record.question_id IN ? AND question.type <> ?", questionIDs, shortAnswerQuestionType).
+		Group("question_practice_record.question_id").Scan(&totals)
 	totalByQuestion := make(map[int]int64, len(totals))
 	for _, t := range totals {
 		totalByQuestion[t.QuestionID] = t.Total
@@ -205,9 +212,12 @@ func (s *Service) loadTopWrongOptions(questionIDs []int) map[int]string {
 		Cnt        int64  `gorm:"column:cnt"`
 	}
 	s.db.Model(&model.QuestionPracticeRecord{}).
-		Select("question_id, user_answer, COUNT(*) AS cnt").
-		Where("question_id IN ? AND is_correct = ? AND user_answer <> ''", questionIDs, false).
-		Group("question_id, user_answer").Scan(&rows)
+		Joins("JOIN question ON question.id = question_practice_record.question_id").
+		Select("question_practice_record.question_id AS question_id, user_answer, COUNT(*) AS cnt").
+		Where("question_practice_record.question_id IN ? AND question_practice_record.is_correct = ? "+
+			"AND question_practice_record.user_answer <> '' AND question.type <> ?",
+			questionIDs, false, shortAnswerQuestionType).
+		Group("question_practice_record.question_id, user_answer").Scan(&rows)
 
 	best := make(map[int]struct {
 		Answer string

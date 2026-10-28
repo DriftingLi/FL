@@ -242,10 +242,22 @@ func (s *Service) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO, error) {
 	return &dto, nil
 }
 
+// jobStatusOpen 职位「在招」状态值（库层默认值也是它）。
+const jobStatusOpen = "open"
+
 // GetForStudent 学员职位详情（#488）：仅 open 且未强制下架，回填学员视角投递状态。
 // jobVisibleToStudent 学员可见性谓词：open 且未被强制下架（Get 与 GetForStudent 共用）。
 func jobVisibleToStudent(m *model.JobPosting) bool {
-	return m.Status == "open" && !m.ForcedOffline
+	return m.Status == jobStatusOpen && !m.ForcedOffline
+}
+
+// VisibleToStudentScope 学员可见性谓词的**查询侧形态**：open 且未被强制下架。
+//
+// 与 jobVisibleToStudent 同一判据的两种形态（行内 / SQL）。跨域消费者（收藏的目标校验与快照回填）
+// 按它过滤，条件只在本域改一次——否则「收藏里点得进去、详情 404」会静默复发（#2067 的失效口径
+// 就是「不给坏链接」）。
+func VisibleToStudentScope(q *gorm.DB) *gorm.DB {
+	return q.Where("status = ? AND forced_offline = ?", jobStatusOpen, false)
 }
 
 func (s *Service) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error) {

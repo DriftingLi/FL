@@ -6,6 +6,7 @@
 package wrongquestion
 
 import (
+	"encoding/json"
 	"testing"
 
 	"forklift-training/internal/model"
@@ -24,6 +25,8 @@ func TestWrongQuestionTopWrongOptionContract(t *testing.T) {
 	q2 := testutil.SeedQuestion(t, db, "single_choice", "样本不足题", "A")
 	// q3：并列（X×3 / Y×3，无正确） ⇒ 字典序升序取 X
 	q3 := testutil.SeedQuestion(t, db, "single_choice", "并列题", "Z")
+	// q4：简答题（自由文本，没有「选项」）⇒ 绝不外发他人作答（与 questionStats 同一条守卫）
+	q4 := testutil.SeedQuestion(t, db, "short_answer", "简答题", "参考答案")
 
 	records := []model.QuestionPracticeRecord{
 		{StudentID: student.ID, QuestionID: q1.ID, IsCorrect: false, UserAnswer: "B", CreatedAt: now},
@@ -41,13 +44,19 @@ func TestWrongQuestionTopWrongOptionContract(t *testing.T) {
 		{StudentID: student.ID, QuestionID: q3.ID, IsCorrect: false, UserAnswer: "Y", CreatedAt: now},
 		{StudentID: student.ID, QuestionID: q3.ID, IsCorrect: false, UserAnswer: "Y", CreatedAt: now},
 		{StudentID: student.ID, QuestionID: q3.ID, IsCorrect: false, UserAnswer: "Y", CreatedAt: now},
+		{StudentID: student.ID, QuestionID: q4.ID, IsCorrect: false, UserAnswer: "学员甲的自由作答", CreatedAt: now},
+		{StudentID: student.ID, QuestionID: q4.ID, IsCorrect: false, UserAnswer: "学员甲的自由作答", CreatedAt: now},
+		{StudentID: student.ID, QuestionID: q4.ID, IsCorrect: false, UserAnswer: "学员甲的自由作答", CreatedAt: now},
+		{StudentID: student.ID, QuestionID: q4.ID, IsCorrect: false, UserAnswer: "学员甲的自由作答", CreatedAt: now},
+		{StudentID: student.ID, QuestionID: q4.ID, IsCorrect: false, UserAnswer: "学员甲的自由作答", CreatedAt: now},
+		{StudentID: student.ID, QuestionID: q4.ID, IsCorrect: true, UserAnswer: "参考答案", CreatedAt: now},
 	}
 	for i := range records {
 		if err := db.Create(&records[i]).Error; err != nil {
 			t.Fatalf("建作答记录失败: %v", err)
 		}
 	}
-	for _, q := range []*model.Question{q1, q2, q3} {
+	for _, q := range []*model.Question{q1, q2, q3, q4} {
 		wq := model.WrongQuestion{
 			StudentID: student.ID, QuestionID: q.ID, WrongCount: 1,
 			LastWrongAt: now, CreatedAt: now,
@@ -74,5 +83,28 @@ func TestWrongQuestionTopWrongOptionContract(t *testing.T) {
 	}
 	if v := got[q3.ID]; v == nil || *v != "X" {
 		t.Fatalf("q3 并列应按字典序取 X, got %v", v)
+	}
+	if v := got[q4.ID]; v != nil {
+		t.Fatalf("简答题不该有易错项（自由文本不是选项）, got %v", *v)
+	}
+
+	// 缺省态在 JSON 上成立（x-optional）：有值 ⇒ 键在；无值 ⇒ 键缺席（不是空串、也不是 null）。
+	raw, err := json.Marshal(page.Items)
+	if err != nil {
+		t.Fatalf("marshal 失败: %v", err)
+	}
+	var items []map[string]any
+	if err := json.Unmarshal(raw, &items); err != nil {
+		t.Fatalf("unmarshal 失败: %v", err)
+	}
+	byQuestion := make(map[int]map[string]any, len(items))
+	for _, it := range items {
+		byQuestion[int(it["question_id"].(float64))] = it
+	}
+	if v, ok := byQuestion[q1.ID]["top_wrong_option"]; !ok || v != "B" {
+		t.Fatalf("q1 的 top_wrong_option 键应在且为 B, got %v/%v", v, ok)
+	}
+	if _, ok := byQuestion[q2.ID]["top_wrong_option"]; ok {
+		t.Fatalf("q2 样本不足时该键应缺席（不是空串）: %+v", byQuestion[q2.ID])
 	}
 }

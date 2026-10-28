@@ -1,5 +1,5 @@
 // 本文件：通用收藏（ADR-0018）—— target_type + target_id 多态收藏，
-// 覆盖 course/chapter/question/featured/topic；user+type+id 唯一约束保证幂等。
+// 覆盖 course/chapter/question/featured/topic/job；user+type+id 唯一约束保证幂等。
 package favorite
 
 import (
@@ -12,6 +12,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/course"
+	"forklift-training/internal/job"
 	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/scope"
@@ -173,9 +174,8 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 		// 学员侧只认「在招且未被强制下架」：closed / forced_offline 与不存在同对待，
 		// 收藏面因此不会给出一个点进去是下架页的坏链接（#2067 的失效口径＝过滤）。
 		var cnt int64
-		if err := db.Model(&model.JobPosting{}).
-			Where("id = ? AND status = ? AND forced_offline = ?", targetID, "open", false).
-			Count(&cnt).Error; err != nil {
+		if err := job.VisibleToStudentScope(db.Model(&model.JobPosting{})).
+			Where("id = ?", targetID).Count(&cnt).Error; err != nil {
 			return err
 		}
 		if cnt == 0 {
@@ -228,8 +228,8 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 	case FavoriteTargetJob:
 		var jobs []model.JobPosting
 		// 与写时校验同一判据：下架/强制下线的职位在这一支也查不回来 ⇒ 列表里不出现。
-		db.Select("id, recruiter_id, title, region").
-			Where("id IN ? AND status = ? AND forced_offline = ?", ids, "open", false).Find(&jobs)
+		job.VisibleToStudentScope(db.Select("id, recruiter_id, title, region")).
+			Where("id IN ?", ids).Find(&jobs)
 		recruiterIDs := make([]int, 0, len(jobs))
 		for _, j := range jobs {
 			recruiterIDs = append(recruiterIDs, j.RecruiterID)

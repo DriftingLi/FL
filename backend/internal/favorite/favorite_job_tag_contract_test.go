@@ -155,9 +155,12 @@ func TestFavoriteJobAndQuestionTagContract(t *testing.T) {
 	}
 	var afterClose FavoritePageResult
 	decodeData(do(http.MethodGet, "/api/favorites?target_type=job", nil), &afterClose)
-	// 「过滤」的口径落在 items 上：Total 仍是**收藏行数**（既有五类同形状——快照查不到的行照样算进
-	// 分页总数，只是不出现在 items 里）。这一条写进票面，免得下游把 Total 当可见条目数。
+	// 失效口径 = 过滤：条目不再出现在 items；而 Total 仍是**收藏行数**（既有五类同形状——快照
+	// 查不到的行照样算进分页总数）。两条都断言，免得下游把 Total 当可见条目数。
 	if len(afterClose.Favorites) != 0 {
 		t.Fatalf("下架后职位收藏不应出现在 items 里, got %+v", afterClose)
+	}
+	if afterClose.Total != 1 {
+		t.Fatalf("Total 是收藏行数（不随快照可见性变化），应为 1, got %d", afterClose.Total)
 	}
 }
