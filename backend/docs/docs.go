@@ -16615,7 +16615,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "success",
+                        "description": "success（未写笔记时 data 为 null）",
                         "schema": {
                             "allOf": [
                                 {
@@ -16625,7 +16625,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.Note"
+                                            "$ref": "#/definitions/note.QuestionNoteDTO"
                                         }
                                     }
                                 }
@@ -16692,7 +16692,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/model.Note"
+                                            "$ref": "#/definitions/note.QuestionNoteDTO"
                                         }
                                     }
                                 }
@@ -16700,7 +16700,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "题目ID无效",
+                        "description": "题目ID无效/图片张数或地址不合法",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -28073,27 +28073,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.Note": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "question_id": {
-                    "description": "QuestionID 挂载的题目；nil = 独立笔记。用指针而非零值哨兵：题目 id 从 1 起，\n拿 0 表达「不挂题」会把「没挂」和「挂了不存在的题」混成一谈。",
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "model.QuestionTag": {
             "type": "object",
             "properties": {
@@ -28135,6 +28114,13 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "images": {
+                    "description": "Images 恒发 []（无图时不缺席）：消费端可直接遍历，不必先判空。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "question_content": {
                     "type": "string"
                 },
@@ -28163,6 +28149,33 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "note.QuestionNoteDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "question_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
                     "type": "integer"
                 }
             }

@@ -27,6 +27,11 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrNoteNotFound, Status: http.StatusNotFound},
 		{Sentinel: ErrNoteContentEmpty, Status: http.StatusBadRequest},
 		{Sentinel: ErrNoteContentTooLong, Status: http.StatusBadRequest},
+		// #2069：图片三档是**输入不合法**（张数/地址/文件），必须显式落 400——
+		// 本域 fallback 是 500（未具名的库故障要落 500），不能靠兜底。
+		{Sentinel: ErrNoteImagesTooMany, Status: http.StatusBadRequest},
+		{Sentinel: ErrNoteImageNotAllowed, Status: http.StatusBadRequest},
+		{Sentinel: ErrNoteImageMissing, Status: http.StatusBadRequest},
 	},
 	Fallback: http.StatusInternalServerError,
 }
@@ -106,7 +111,8 @@ func (h *handler) List(c *gin.Context) {
 // createNoteReq 新建独立笔记请求。
 type createNoteReq struct {
 	UserID  int
-	Content string `json:"content"`
+	Content string   `json:"content"`
+	Images  []string `json:"images"`
 }
 
 // Create 新建独立笔记
@@ -116,7 +122,7 @@ type createNoteReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object true "笔记" example({"content":"我的笔记"})
+// @Param body body object true "笔记" example({"content":"我的笔记","images":["/static/uploads/images/forum/x.png"]})
 // @Success 201 {object} response.R{data=NoteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
@@ -126,15 +132,16 @@ func (h *handler) Create(c *gin.Context) {
 	httpx.Endpoint[createNoteReq, NoteDTO]{
 		Parse: func(c *gin.Context) (*createNoteReq, error) {
 			var body struct {
-				Content string `json:"content"`
+				Content string   `json:"content"`
+				Images  []string `json:"images"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, httpx.BadRequest("参数错误")
 			}
-			return &createNoteReq{UserID: middleware.CurrentUserID(c), Content: body.Content}, nil
+			return &createNoteReq{UserID: middleware.CurrentUserID(c), Content: body.Content, Images: body.Images}, nil
 		},
 		Invoke: func(ctx context.Context, req *createNoteReq) (*NoteDTO, error) {
-			n, err := h.svc.Create(req.UserID, req.Content)
+			n, err := h.svc.Create(req.UserID, req.Content, req.Images)
 			if err != nil {
 				return nil, err
 			}
@@ -149,11 +156,12 @@ func (h *handler) Create(c *gin.Context) {
 	}.Handle(c)
 }
 
-// updateNoteReq 改笔记正文请求。
+// updateNoteReq 改笔记正文请求（图片整组替换：#2069）。
 type updateNoteReq struct {
 	UserID  int
 	ID      int
-	Content string `json:"content"`
+	Content string   `json:"content"`
+	Images  []string `json:"images"`
 }
 
 // Update 改笔记正文
@@ -164,7 +172,7 @@ type updateNoteReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "笔记 ID"
-// @Param body body object true "笔记" example({"content":"我的笔记"})
+// @Param body body object true "笔记" example({"content":"我的笔记","images":["/static/uploads/images/forum/x.png"]})
 // @Success 200 {object} response.R{data=NoteDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 401 {object} response.R "未认证"
@@ -179,15 +187,16 @@ func (h *handler) Update(c *gin.Context) {
 				return nil, err
 			}
 			var body struct {
-				Content string `json:"content"`
+				Content string   `json:"content"`
+				Images  []string `json:"images"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
 				return nil, httpx.BadRequest("参数错误")
 			}
-			return &updateNoteReq{UserID: middleware.CurrentUserID(c), ID: id, Content: body.Content}, nil
+			return &updateNoteReq{UserID: middleware.CurrentUserID(c), ID: id, Content: body.Content, Images: body.Images}, nil
 		},
 		Invoke: func(ctx context.Context, req *updateNoteReq) (*NoteDTO, error) {
-			n, err := h.svc.Update(req.ID, req.UserID, req.Content)
+			n, err := h.svc.Update(req.ID, req.UserID, req.Content, req.Images)
 			if err != nil {
 				return nil, err
 			}

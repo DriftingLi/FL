@@ -257,3 +257,66 @@ func TestForumImage_CleanupOrphanImages_Empty(t *testing.T) {
 		t.Fatalf("空列表不应删除任何文件，实际: %v", st.deleted)
 	}
 }
+
+// TestForumImage_CleanupOrphans_ProtectsAllPrefixUsers 复用 images/forum/ 前缀的每一个域都在引用集里
+// （#2070 反馈 / #2069 笔记）。
+//
+// 这条测的是**唯一的跨域耦合点**：那些域没有自己的上传通道（ADR-0066 决策 5：不新建通道），
+// 所以它们的图必须被这轮清理算进引用集，否则会在 24h 后被静默删掉——清理是「成功」的、
+// 没有报警，只有用户侧逐渐变成裂图。
+func TestForumImage_CleanupOrphans_ProtectsAllPrefixUsers(t *testing.T) {
+	svc, db, st := newForumImageTestSvc(t)
+	user := seedForumUser(t, db, "ref")
+
+	topicImg := "/static/uploads/images/forum/topicref_1000000000000.webp"
+	noteImg := "/static/uploads/images/forum/noteref_1000000000000.webp"
+	feedbackImg := "/static/uploads/images/forum/feedbackref_1000000000000.webp"
+	orphan := "/static/uploads/images/forum/orphan_1000000000000.webp"
+
+	if err := db.Create(&model.ForumTopic{
+		UserID: user.ID, Title: "标题", Content: "内容",
+		Images: marshalImageURLs([]string{topicImg}), CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("插入主题失败: %v", err)
+	}
+	if err := db.Create(&model.Note{
+		UserID: user.ID, Content: "带图笔记",
+		Images: marshalImageURLs([]string{noteImg}), UpdatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("插入笔记失败: %v", err)
+	}
+	if err := db.Create(&model.Feedback{
+		UserID: user.ID, Content: "带图反馈", Status: model.FeedbackStatusPending,
+		Images: marshalImageURLs([]string{feedbackImg}), CreatedAt: testutil.Now(), UpdatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("插入反馈失败: %v", err)
+	}
+	st.files = []string{topicImg, noteImg, feedbackImg, orphan}
+
+	cleaned := svc.CleanupOrphans(context.Background())
+	if cleaned != 1 || len(st.deleted) != 1 || st.deleted[0] != orphan {
+		t.Fatalf("只有真悬空的那张该被删：cleaned=%d deleted=%v", cleaned, st.deleted)
+	}
+
+	// 删掉笔记与反馈之后，它们的图**退出引用集**——下一轮清理会把它们当悬空收掉
+	// （这就是「删除笔记后旧图进入可清理集」的机制，不在删除路径里同步删存储）。
+	if err := db.Where("user_id = ?", user.ID).Delete(&model.Note{}).Error; err != nil {
+		t.Fatalf("删笔记失败: %v", err)
+	}
+	if err := db.Where("user_id = ?", user.ID).Delete(&model.Feedback{}).Error; err != nil {
+		t.Fatalf("删反馈失败: %v", err)
+	}
+	// 假存储的 Delete 不会把它从 List 里摘掉（真存储会），这里手动摘掉上一轮删掉的那张，
+	// 否则第二轮会把它再删一次，计数失真。
+	st.files = []string{topicImg, noteImg, feedbackImg}
+	st.deleted = nil
+	cleaned = svc.CleanupOrphans(context.Background())
+	if cleaned != 2 {
+		t.Fatalf("笔记与反馈删掉后，两张图应进入可清理集，实际清理 %d 张: %v", cleaned, st.deleted)
+	}
+	for _, u := range st.deleted {
+		if u == topicImg {
+			t.Fatalf("仍被主题引用的图不该被删: %v", st.deleted)
+		}
+	}
+}

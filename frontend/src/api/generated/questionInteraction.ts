@@ -13,7 +13,7 @@
 //   DELETE /questions/{question_id}/note
 //   GET  /questions/{question_id}/knowledge
 //
-// 覆盖的 Go 类型：Note / QuestionTag / QuestionCommentDTO / QuestionCommentPageResult
+// 覆盖的 Go 类型：QuestionTag / QuestionNoteDTO / QuestionCommentDTO / QuestionCommentPageResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -25,14 +25,6 @@
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
-export interface Note {
-  content: string
-  id: number
-  question_id: number
-  updated_at: string
-  user_id: number
-}
-
 export interface QuestionTag {
   code: string
   created_at: string
@@ -43,6 +35,15 @@ export interface QuestionTag {
   sort_order: number
   status: number
   updated_at: string
+}
+
+export interface QuestionNoteDTO {
+  content: string
+  id: number
+  images: string[]
+  question_id: number | null
+  updated_at: string
+  user_id: number
 }
 
 export interface QuestionCommentDTO {

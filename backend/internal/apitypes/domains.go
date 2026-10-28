@@ -290,7 +290,9 @@ var Domains = []Domain{
 		Roots: []string{
 			"questioninteraction.QuestionCommentPageResult",
 			"questioninteraction.QuestionCommentDTO",
-			"model.Note",
+			// #2069：笔记的返回形状从 model.Note 换成显式 DTO（加 images 又不让模型的 JSONB
+			// 落进响应闭包被表态锁追着要 nullability tag）。
+			"note.QuestionNoteDTO",
 			"model.QuestionTag",
 		},
 		Endpoints: []Endpoint{

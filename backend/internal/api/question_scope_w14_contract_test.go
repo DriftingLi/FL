@@ -31,6 +31,7 @@ import (
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/questioninteraction"
 	"forklift-training/internal/security"
+	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
 
@@ -113,7 +114,9 @@ func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 
 	r := gin.New()
 	api := r.Group("/api")
-	deps := newContractDeps(t, db, cfg)
+	// 同一装配链，只是多给一个真存储：笔记图片的「文件真实存在」那一档（#2069）要在
+	// ErrStatus 面打得出 400，nil storage 会让它落成 500（ErrNoteStorageUnconfigured）。
+	deps := newContractDepsWithStorage(t, db, cfg, storage.NewLocalStorage(t.TempDir()))
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	note.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.NoteSvc)
 	questioninteraction.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionCommentSvc, deps.NoteSvc, deps.QuestionKnowledgeSvc)
