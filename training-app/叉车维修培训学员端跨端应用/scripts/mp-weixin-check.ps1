@@ -157,6 +157,27 @@
     并断言这份 JSON**，不再断言调用点源码文本 —— 这样把调用点原文抽进共享库时，守护不会失配（原口径下
     唯一的「修法」是放宽守护，等于把防护拆掉）。决策与代价见 `docs/adr/0008-移动端验收门与证据.md`。
 
+    **build-only 模式 `-BuildOnly`（#1861 第一段）**：同一条 ② 链路的**构建面**载体 —— 跑到「publish 成功行 +
+    产物合法性（#1210）+ 指纹落盘」为止，**会话段整段跳过**（pre-flight quit / close→open→auto 重试单元 /
+    就绪闸门 / 探针 / 截图入库 / 贴门评论），不打开自动化会话、不等页面就绪。入口
+    `npm run build:mp-weixin-buildonly`；形态沿 ④a 的 `hx-run.ps1 -CompileOnly`（官方语义「仅编译代码」，
+    同族范式：开关 + 真跑 + 真跳过，不抽库、不建薄壳）。
+    补的是 #1670 盲格：纯 `.uvue` / `.uts` 改动（没有 MP-WEIXIN 行、没有三份 json）时 ② 的判据认不出编译面，
+    ADR-0043 决策 3 只写了「靠纪律」。**它不是 ② 的替代** —— console error / exception / pageStack / 截图
+    一概未取证 ⇒ 建成它**不构成**降频 ② 的理由（#1861「边界（已裁定）」段；C1 裁定不删门）。
+    三条与 ② 不同的处置（#1861 2026-10-28 裁定）：
+      ① **不跑 appid 断言**（源 manifest 那条 fail-closed 与产物 appid 那条都跳过）。理由：不上传 ⇒ 产物落
+         `touristappid` 无害（`Get-MpWeixinProductReport` 只解析取值、不比对期望），而 HBuilderX 首次导入/编译
+         会回写工作树 `manifest.json` 把 `mp-weixin.appid` 置 null（ADR-0008 实测，mtime 与 publish 启动同秒），
+         保留断言 ⇒ **第二次起必假红**。实读到的 appid 仍写进结果行，不藏。
+      ② **跑完打印脏改提示**（`git status` 核对 `manifest.json` / `pages.json`；脏了 `git checkout --` 还原，
+         `pages.json` 的 `condition` 段属本地开发配置、禁止提交）；脚本自身**不自动改工作树**。
+      ③ 结果行 token 换成 **`MP_WEIXIN_BUILDONLY_RESULT`**（与 ② 的 `MP_WEIXIN_RESULT` 可判读分流，同
+         `TEST_UNIT_LOCAL_RESULT` 先例），三条产出路径（通过 / 门未过 / 异常）都用它 —— 前缀只有一个取值点
+         （门计划的 `resultLine.prefix`），不靠调用方自觉。
+    退出码与 ② 同形（0 通过 / 1 产物不合法 / 2 环境受阻）；**不贴 ② 门评论**（`-PostToIssue` 只提示忽略，
+    ⑤ 行的评论形态由 #2049 落地）。
+
     **非等价声明（勿删）**：② ≠ ① 真机门，也 ≠ ④b 云打包门。
       ② 只证明「小程序端在开发者工具里打开入口页 + 被改页时 console 无 error、无 exception」；
       **挡不住**的类别（#883 逐条实测）：`content://` 上传、生物识别门控（开发者工具明确回
@@ -209,6 +230,14 @@
     跳过 `cli publish mp-weixin`（构建）。适用于已有新鲜产物、只想重跑自动化判定的场合。
     注意：跳过构建后开发者工具里打开的仍是上一次的产物，门结论只对那份产物成立。
 
+.PARAMETER BuildOnly
+    构建面模式（#1861 第一段）：只跑「publish + 产物合法性 + 指纹落盘」，会话段整段跳过（不等页面就绪、
+    不开自动化会话、不截图、不贴评论）。退出码与 ② 同形（0 通过 / 1 产物不合法 / 2 环境受阻），
+    结果行 token 为 `MP_WEIXIN_BUILDONLY_RESULT`。
+    可与 `-SkipBuild` 同时给出（= 只查现有产物的合法性，结果行写 `build=skipped(explicit)`，**不假装构建过**）；
+    与 `-Doctor` 互斥（体检不构建、本模式要构建 ⇒ 同给按用法错误 exit 2）。
+    `-BuildOnly` 下**不跑** appid 断言（理由见脚本头），实读 appid 仍写进结果行。
+
 .PARAMETER AutoAttempts
     `close → open → auto → 端口` 这一段的**整段**重试次数（默认 3）。实测冷起点 / IDE 重启窗口下
     第一次 `auto` 会「回显 √ 但端口不起」或「直接挂住」⇒ 单发必红（见脚本头坑位 6）。
@@ -245,6 +274,7 @@
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -Routes 'pages/index/index,pages/login/login'
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -DryRun
+    npm run build:mp-weixin-buildonly          # = -BuildOnly：只跑构建面（#1861）
 #>
 [CmdletBinding()]
 param(
@@ -259,6 +289,8 @@ param(
     # 会话注入（#1690）：auto = 直达循环前与每页冷启动后注入登录态（幂等，已登录即 existing）；off = 不注入。
     [string]$Auth = 'auto',
     [switch]$SkipBuild,
+    # 构建面模式（#1861 第一段）：跑到「publish + 产物合法性 + 指纹落盘」为止，会话段整段跳过。
+    [switch]$BuildOnly,
     [int]$PublishTimeoutSeconds = 900,
     [int]$AutoTimeoutSeconds = 180,
     [int]$AutoAttempts = 3,
@@ -313,12 +345,26 @@ $script:skipFinalClose = $false
 # 任意页直达探针（#1682）的 app.json 备份哨兵：与 $script:closed 同款先初始化（严格模式下
 # 未设置会在 finally 判定抛「无法检索变量」）；Restore-DistAppJson 以「备份为 null」当幂等哨兵。
 $script:AppJsonBackup = $null
+# 门计划引用（#1861）：结果行的前缀、步骤、预算、exit 2 归属都从它取 ⇒ 未建计划前保持 $null，
+# 好让 `Get-GateResultPrefix` 在早期 exit 路径上安全回落到 ② 的默认前缀（严格模式下未定义变量会抛）。
+$script:GatePlan = $null
+# 指纹命中而自动跳过 publish 的哨兵（#1861）：-BuildOnly 的结果行要如实区分
+# build=publish / build=skipped(fingerprint) / build=skipped(explicit) —— 不能把「没构建」写成「构建过」。
+$script:buildSkippedByFingerprint = $false
 # -PortWaitSeconds 由 90 抬到 180（2026-09-13）：-Doctor 首跑实测到一次「cli.bat auto 回显 √ auto、
 # 端口 90s 内始终没监听」，紧接着同一命令 8s 内就起来了 ⇒ **这一条只抬预算，不是修复**：病根未定位，
 # 已如实记进 ADR-0008 ② 段的待排查项；遇到它时结果行是 reason=port-not-listening，-Doctor 的 L6 会标 FAIL。
 # -Doctor：只做环境体检（不接 HBuilderX、不构建、不跑探针、不贴评论、**不产出门的通过结论**），
 # 逐层给 OK/WARN/FAIL。它复用主流程的 close → open → auto → 就绪闸门，所以体检走的就是门真正的路径。
 if ($Doctor) { $SkipBuild = $true }
+
+# -BuildOnly 与 -Doctor 互斥（#1861）：-Doctor **不构建**（它自己把 $SkipBuild 置位），而 build-only 的全部意义
+# 就是真构建 ⇒ 两者同给没有可解释的语义。按**用法错误** exit 2（不产结果行）：与「不像 uni-app-x 项目根」
+# 那条早期 exit 2 同形 —— 门结论只能由构建面判据产出，用法错误不该冒充门未过或环境受阻。
+if ($BuildOnly -and $Doctor) {
+    Write-Host '[error] -BuildOnly 与 -Doctor 互斥：-Doctor 只体检环境（不构建），-BuildOnly 要真构建。二选一。' -ForegroundColor Red
+    exit 2
+}
 
 # 临时根：**不能只读 $env:TEMP** —— Linux 上（CI 跑 -DryRun）只有 TMPDIR，$env:TEMP 为 $null，
 # 而 Join-Path 拿到 $null 会直接抛（Set-StrictMode 下同理）⇒ 显式兜底到 .NET 的临时目录。
@@ -449,6 +495,7 @@ function New-GatePlan {
         [int]$PublishTimeoutSeconds,
         [bool]$SkipBuild,
         [bool]$Doctor,
+        [bool]$BuildOnly,
         [int]$PostToPr,
         [string]$PagesMode
     )
@@ -602,6 +649,15 @@ function New-GatePlan {
         exit2 = @([ordered]@{ on = 'timeout'; reason = 'probe-timeout' })
     }
 
+    # -BuildOnly（#1861）：**会话段步骤不进计划** —— 计划是「这轮真会跑什么」的唯一真源，列着不跑的步骤
+    # 就是两份真相。保留的只有构建面仍要用的两步：env-preprobe（publish 之前的秒级否定性预探）与
+    # devtools-close（finally 里收掉 publish 自启的开发者工具实例 —— 这条正是「不建薄壳」的主要理由之一）。
+    # 会话段步骤（devtools-quit / devtools-open / auto / 就绪闸门 / probe）整段不执行，其 exit 2 归属
+    # 随 $exit2Summary 的摊平自动消失（归属只声明给计划里真有的步骤）。
+    if ($BuildOnly) {
+        $steps = @($steps | Where-Object { @('env-preprobe', 'devtools-close') -contains "$($_['id'])" })
+    }
+
     # exit 2 归属的**汇总视图**：把每步的 exit2 摊平 + 标出是哪一步决定的（守护断言两者一致）。
     $exit2Summary = @()
     foreach ($st in $steps) {
@@ -611,22 +667,32 @@ function New-GatePlan {
     }
 
     # 结果行字段清单：执行路径**按这份清单**拼结果行（Format-GateMetricLine），所以它与实际输出同一真源。
+    # -BuildOnly 是**另一套字段**（#1861）：会话段那些读数（pageStack / entry / shots / sdk / ide …）本轮
+    # 根本不存在，列着就是逼执行路径填假值；build-only 只声明它真能读到的六项。
     $resultFields = @()
-    foreach ($n in @('appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal', 'shots', 'navigation', 'ready', 'sdk', 'ide')) {
-        $resultFields += [ordered]@{ name = $n }
+    if ($BuildOnly) {
+        # build = publish | skipped(fingerprint) | skipped(explicit)：**不把「没构建」写成「构建过」**。
+        # elapsed = 本轮 publish 段墙钟（秒）；跳过构建时写 n/a。appid = 产物实读值（本模式不断言，只如实上报）。
+        foreach ($n in @('appid', 'pages', 'product', 'build', 'elapsed', 'log')) {
+            $resultFields += [ordered]@{ name = $n }
+        }
+    } else {
+        foreach ($n in @('appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal', 'shots', 'navigation', 'ready', 'sdk', 'ide')) {
+            $resultFields += [ordered]@{ name = $n }
+        }
+        $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
+        # 会话注入（#1690）读数：auth=existing|injected|none(reason[:detail-slug])——detail-slug 是
+        # HTTP 状态/网络错误/超时的归因类别（#1863）；只在直达循环启用时出现（可选字段）
+        $resultFields += [ordered]@{ name = 'auth'; optional = $true }
+        # 锚点断言执行数（#1919）：只在有锚点执行时出现——无锚点跑次 Format-GateMetricLine 跳过它，结果行逐字节不变
+        $resultFields += [ordered]@{ name = 'asserts'; optional = $true }
+        $resultFields += [ordered]@{ name = 'log' }
     }
-    $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
-    # 会话注入（#1690）读数：auth=existing|injected|none(reason[:detail-slug])——detail-slug 是
-    # HTTP 状态/网络错误/超时的归因类别（#1863）；只在直达循环启用时出现（可选字段）
-    $resultFields += [ordered]@{ name = 'auth'; optional = $true }
-    # 锚点断言执行数（#1919）：只在有锚点执行时出现——无锚点跑次 Format-GateMetricLine 跳过它，结果行逐字节不变
-    $resultFields += [ordered]@{ name = 'asserts'; optional = $true }
-    $resultFields += [ordered]@{ name = 'log' }
 
     return [ordered]@{
         schema = 'gate-plan/1'
         gate = '②'
-        mode = [ordered]@{ dryRun = $true; skipBuild = $SkipBuild; doctor = $Doctor; postToPr = $PostToPr }
+        mode = [ordered]@{ dryRun = $true; skipBuild = $SkipBuild; doctor = $Doctor; buildOnly = $BuildOnly; postToPr = $PostToPr }
         paths = [ordered]@{
             project = $Project
             dist = $Dist
@@ -720,7 +786,12 @@ function New-GatePlan {
             preprobeMs = 2000
         }
         exit2 = $exit2Summary
-        resultLine = [ordered]@{ prefix = 'MP_WEIXIN_RESULT'; fields = $resultFields }
+        # 结果行前缀**唯一声明点**（#1861）：-BuildOnly 换成独立 token ⇒ 与 ② 的 MP_WEIXIN_RESULT 可判读分流
+        # （同 TEST_UNIT_LOCAL_RESULT 先例）。执行路径一律经 Get-GateResultPrefix 取值，不硬写。
+        resultLine = [ordered]@{
+            prefix = $(if ($BuildOnly) { 'MP_WEIXIN_BUILDONLY_RESULT' } else { 'MP_WEIXIN_RESULT' })
+            fields = $resultFields
+        }
         # 结果行三分声明（#1655 / ADR-0036 处置二）：本计划的三种结果行形状与各自出口码。
         # 通过分支的判别 = errors= token 的**缺席**：'<none>' 是占位声明，产物不写这个 token，
         # 「errors=0」语义由 metric 行的 errorsTotal=0 承载（既有产物形状，零回归）。
@@ -813,7 +884,7 @@ function New-ThisGatePlan {
         -PortWaitSeconds $PortWaitSeconds -ReadyWaitSeconds $ReadyWaitSeconds -ProbeTimeoutMs $ProbeTimeoutMs `
         -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
         -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
-        -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -PostToPr $PostToPr `
+        -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -BuildOnly ([bool]$BuildOnly) -PostToPr $PostToPr `
         -PagesMode $Pages
 }
 $script:GatePlan = New-ThisGatePlan -UsePort $Port
@@ -867,6 +938,24 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
     "# 门计划（GATE_PLAN）是步骤/参数/预算/结果行字段的唯一真源；见 New-GatePlan 与 -DryRun"
 )
 function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
+# -BuildOnly 的脏改提示（#1861 2026-10-28 裁定「跑完打印脏改提示」）：publish 经 HBuilderX 会回写工作树 ——
+# manifest.json 的 mp-weixin.appid 可能被置 null、pages.json 可能被写入 condition（GUI 选的启动页，属本地开发
+# 配置、禁止提交）。脚本**不自动改工作树**（自动 checkout 会把用户真实的改动一起抹掉），只把核对与还原动作印出来。
+function Write-BuildOnlyWorktreeHint {
+    Write-Host ''
+    Write-Host '>>> 脏改提示（build-only 不自动改工作树，请人工核对）：' -ForegroundColor Yellow
+    Write-Host '    git status --porcelain -- manifest.json pages.json' -ForegroundColor Yellow
+    Write-Host '    · manifest.json 的 mp-weixin.appid 被置 null（HBuilderX 回写）⇒ git checkout -- manifest.json' -ForegroundColor Yellow
+    Write-Host '    · pages.json 的 condition 段是 GUI 选的启动页（本地开发配置）⇒ 禁止提交，git checkout -- pages.json' -ForegroundColor Yellow
+}
+# 结果行前缀的**唯一取值点**（#1861）：门计划按 mode 声明（`-BuildOnly` ⇒ MP_WEIXIN_BUILDONLY_RESULT，
+# 与 ② 的 MP_WEIXIN_RESULT 可判读分流，同 TEST_UNIT_LOCAL_RESULT 先例）。早期 exit 路径（计划已建但
+# 未走主流程）与异常兜底都从这里取 —— 不靠各调用点自觉，否则分流会被「某处硬写前缀」破坏
+# （先例：脚本异常兜底行曾硬写 MP_WEIXIN_RESULT，-BuildOnly 下异常就会打成 ② 的 token）。
+function Get-GateResultPrefix {
+    if ($script:GatePlan -and $script:GatePlan['resultLine']) { return [string]$script:GatePlan['resultLine']['prefix'] }
+    return 'MP_WEIXIN_RESULT'
+}
 # 端口被残留会话占用而换端口这条事实必须进日志（结果行字段清单是固定的，塞不进新字段）
 if ($portSwitchNote) { Write-Log "PORT_SWITCH $portSwitchNote" }
 # #2001 阶段时间戳：录制器指向本门日志（纯追加 [STAGE]/STAGE_SUMMARY 行，不改门判据）
@@ -918,15 +1007,20 @@ function Get-DoctorExitCode {
     return 0
 }
 
-if (-not (Test-Path -LiteralPath $probePath)) {
-    Write-Host "[error] 缺探针脚本：$probePath" -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-probe'
-    exit 2
-}
-if ($routeList.Count -eq 0) {
-    Write-Host '[error] -Routes 为空：至少给一个入口页路由' -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-routes'
-    exit 2
+# 探针脚本 / 路由 / node 都是**会话面**的前置：-BuildOnly 下不跑探针、不开自动化会话 ⇒ 它们缺失不该把
+# 构建面判成环境受阻（否则一个「只缺 automator 依赖」的机器会把编译机检假红）。判据面收窄，不是放宽：
+# 构建面真正要的东西（HBuilderX + 开发者工具）照旧在下面两条硬前置里。
+if (-not $BuildOnly) {
+    if (-not (Test-Path -LiteralPath $probePath)) {
+        Write-Host "[error] 缺探针脚本：$probePath" -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=no-probe"
+        exit 2
+    }
+    if ($routeList.Count -eq 0) {
+        Write-Host '[error] -Routes 为空：至少给一个入口页路由' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=no-routes"
+        exit 2
+    }
 }
 
 # ---------- 环境面 ----------
@@ -936,24 +1030,28 @@ $devTools = Resolve-DevToolsCli -Explicit $DevToolsCli
 if (-not $SkipBuild) {
     if (-not $hbxRoot) {
         Write-Host '[error] 找不到可用的 HBuilderX（需含 cli.exe 与 plugins/）。用 -HBuilderX <安装根> 或 -Cli <cli.exe> 指定。' -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=hbuilderx-not-found'
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=hbuilderx-not-found"
         exit 2
     }
 } elseif ($Cli -and -not $hbxRoot) {
     Write-Host "[error] 指定的 cli.exe 不可用（不存在或 PE 头损坏）：$Cli" -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=cli-unusable'
+    Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=cli-unusable"
     exit 2
 }
 if (-not $devTools) {
     Write-Host '[error] 找不到微信开发者工具 cli.bat。用 -DevToolsCli <路径> 指定。' -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=devtools-not-found'
+    Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=devtools-not-found"
     exit 2
 }
-$nodeExe = (Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1).Source
-if (-not $nodeExe) {
-    Write-Host '[error] 找不到 node（跑探针需要 Node.js + miniprogram-automator）。' -ForegroundColor Red
-    Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=node-not-found'
-    exit 2
+# node 只为探针（miniprogram-automator）而存在：-BuildOnly 不跑探针 ⇒ 不把它当构建面前置（同上面的收窄理由）。
+$nodeExe = $null
+if (-not $BuildOnly) {
+    $nodeExe = (Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    if (-not $nodeExe) {
+        Write-Host '[error] 找不到 node（跑探针需要 Node.js + miniprogram-automator）。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=node-not-found"
+        exit 2
+    }
 }
 
 # ---------- publish 参数：本轮唯一构造点（#2048）----------
@@ -987,6 +1085,9 @@ if (-not $SkipBuild -and -not $Doctor) {
         Write-Log "AUTO_SKIP_BUILD $($fpHit.Reason) version=$($fpVersion -replace 'cli=[0-9a-f]+', 'cli=<sha256>')"
         $SkipBuild = $true
         $script:GatePlan = New-ThisGatePlan -UsePort $Port
+        # 如实记账（#1861）：-BuildOnly 的结果行要区分「本轮真构建过」与「指纹命中跳过」，不许含混。
+        # 写在计划重建之后，保持「翻 $SkipBuild ⇒ 立刻重建计划」这条不变量的相邻性（守护 C27 钉的就是它）。
+        $script:buildSkippedByFingerprint = $true
     } elseif ($fpHit) {
         Write-Log "build-fingerprint miss reason=$($fpHit.Reason)（$($fpHit.Detail)）"
     } else {
@@ -1647,6 +1748,8 @@ function Publish-ScreenshotArchive {
 
 # ---------- 主流程 ----------
 $exitCode = 2
+# publish 段墙钟（#1861 ④）：-BuildOnly 的结果行读它；-SkipBuild / 指纹跳过时保持 0（结果行写 n/a）。
+$publishSeconds = 0
 try {
     # -1) publish 之前的环境秒级预探（#1860，门计划 env-preprobe 步）：**否定性闸门** —— 只拦
     #     「.ide 端口文件在但试连不上」的楔死态，把「环境被楔死」的暴露点从 publish+open 之后
@@ -1700,12 +1803,20 @@ try {
         Write-Log "源 manifest mp-weixin.appid = '$srcAppId'（期望 '$AppId'）"
         Write-Host "源 manifest mp-weixin.appid = $srcAppId（期望 $AppId）"
         if ($AppId -and $srcAppId -ne $AppId) {
-            Write-Host "[error] 源 manifest 的 mp-weixin.appid 与期望不一致：manifest='$srcAppId' 期望='$AppId'" -ForegroundColor Red
-            Write-Host '        这正是 HBuilderX 回写 manifest.json 把 appid 置 null 的痕迹（2026-09-12 实测）；' -ForegroundColor Red
-            Write-Host '        产物 appid 只会取自 manifest（CLI 的 --appid 不改产物）⇒ 此时跑出来的门是「游客 appid 下的门」，不能算数。' -ForegroundColor Red
-            Write-Host "        处置：先 `git checkout -- manifest.json` 还原真实 appid，再重跑本门。" -ForegroundColor Red
-            Write-Log "MP_WEIXIN_RESULT errors=1 stage=manifest-appid manifest=$srcAppId expected=$AppId"
-            exit 1
+            if ($BuildOnly) {
+                # -BuildOnly **跳过**这条断言（#1861 2026-10-28 裁定）：本模式不上传 ⇒ 产物落 touristappid 无害；
+                # 而 HBuilderX 首次导入/编译会把工作树 manifest.json 的 mp-weixin.appid 置 null（正上方坑位），
+                # 保留断言 ⇒ **第二次起必假红**。实读值照常进日志与结果行，不藏（下面的脏改提示负责提醒还原）。
+                Write-Host ">>> -BuildOnly：源 manifest appid='$srcAppId' 与期望 '$AppId' 不一致 —— 本模式不做 appid 断言（不上传，产物落 touristappid 无害）" -ForegroundColor Yellow
+                Write-Log "build-only: manifest-appid 不断言 manifest='$srcAppId' expected='$AppId'"
+            } else {
+                Write-Host "[error] 源 manifest 的 mp-weixin.appid 与期望不一致：manifest='$srcAppId' 期望='$AppId'" -ForegroundColor Red
+                Write-Host '        这正是 HBuilderX 回写 manifest.json 把 appid 置 null 的痕迹（2026-09-12 实测）；' -ForegroundColor Red
+                Write-Host '        产物 appid 只会取自 manifest（CLI 的 --appid 不改产物）⇒ 此时跑出来的门是「游客 appid 下的门」，不能算数。' -ForegroundColor Red
+                Write-Host "        处置：先 `git checkout -- manifest.json` 还原真实 appid，再重跑本门。" -ForegroundColor Red
+                Write-Log "$(Get-GateResultPrefix) errors=1 stage=manifest-appid manifest=$srcAppId expected=$AppId"
+                exit 1
+            }
         }
 
         # 1) 唤醒主程序 + 无人值守导入（HBuilderX 只认「已导入项目」，publish 未导入会报「项目不存在，请先导入」）
@@ -1717,12 +1828,12 @@ try {
             Write-Host $r.Output
             if ($r.Output -match '与主程序的连接已中断|启动超时') {
                 Write-Host '[error] HBuilderX CLI 连不上主程序：受限/沙箱会话会阻断 CLI↔主程序的本地 IPC。' -ForegroundColor Red
-                Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=cli-ipc-blocked'
+                Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=cli-ipc-blocked"
                 exit 2
             }
             if ($r.TimedOut) {
                 Write-Host "[error] $($step.Tag) 超时（$PublishTimeoutSeconds 秒）" -ForegroundColor Red
-                Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=timeout'
+                Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=timeout"
                 exit 2
             }
         }
@@ -1730,29 +1841,34 @@ try {
         # 2) 构建 mp-weixin —— HBuilderX 构建成功后**自己**拉起开发者工具并打开项目（#883 实测）。
         #    $publishArgs 在指纹判定之前唯一构造（#2048），这里**不得再拼一次**：拼两次就是两份真相，
         #    第四道比对会退化成「比对用 A、执行用 B」的假保险。
+        #    墙钟单独计（#1861 ④）：-BuildOnly 的结果行要报 publish 段秒数（参照值 161 s / 48 页、227 s / 59 页），
+        #    不从 [STAGE] 行反推 —— 那些行在早退路径上可能缺席。
+        $pubSw = [System.Diagnostics.Stopwatch]::StartNew()
         $pub = Invoke-Process -FilePath $cliExe -Arguments $publishArgs -TimeoutSeconds $PublishTimeoutSeconds -Tag 'publish-mp-weixin'
+        $pubSw.Stop()
+        $publishSeconds = [int]$pubSw.Elapsed.TotalSeconds
         Write-Log "`n>>> publish-mp-weixin`n$($pub.Output)"
         Write-Host $pub.Output
         if ($pub.Output -match '与主程序的连接已中断') {
             Write-Host '[error] HBuilderX CLI 连不上主程序（见日志）。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=cli-ipc-blocked'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=cli-ipc-blocked"
             exit 2
         }
         if ($pub.TimedOut) {
             Write-Host "[error] publish 超时（$PublishTimeoutSeconds 秒）" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=timeout'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=timeout"
             exit 2
         }
         # 成败一律解析输出（CLI 退出码不可用）
         if ($pub.Output -notmatch '导出微信小程序成功|编译成功') {
             Write-Host '[error] publish 未报「导出微信小程序成功」（见日志）：先解决构建失败，再跑 ②。' -ForegroundColor Red
             Write-Host '        提示：HBuilderX 按**项目名（目录名）**解析，同名目录会被误命中 ⇒ 请用唯一目录名（#883 坑位）。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=1 stage=publish reason=no-artifact'
+            Write-Log "$(Get-GateResultPrefix) errors=1 stage=publish reason=no-artifact"
             exit 1
         }
         if (-not (Test-Path -LiteralPath (Join-Path $dist 'app.json'))) {
             Write-Host "[error] 产物不完整（缺 app.json）：$dist" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=1 stage=publish reason=incomplete-artifact'
+            Write-Log "$(Get-GateResultPrefix) errors=1 stage=publish reason=incomplete-artifact"
             exit 1
         }
     } else {
@@ -1760,7 +1876,7 @@ try {
         Write-Host ">>> -SkipBuild：跳过 publish（用现有产物；门结论只对这份产物成立）" -ForegroundColor Yellow
         if (-not (Test-Path -LiteralPath (Join-Path $dist 'app.json'))) {
             Write-Host "[error] 没有可用产物（缺 $dist\app.json）：去掉 -SkipBuild 或先跑一次构建。" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-dist'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=no-dist"
             exit 2
         }
     }
@@ -1781,7 +1897,7 @@ try {
         Write-Host '        这是**产物坏了**（构建被中断 / 写盘不完整），不是环境不可用 ⇒ 判门未过（exit 1）。' -ForegroundColor Red
         Write-Host '        处置：先 `Remove-Item -Recurse -Force <产物目录>` 干净重建（`npm run build:mp-weixin-check`），再重跑本门。' -ForegroundColor Red
         Write-Host '        排查提示：产物坏掉时开发者工具常见白屏 + `routeTo appLaunch timeout`，那不是「环境/锁/端口」问题。' -ForegroundColor Red
-        Write-Log "MP_WEIXIN_RESULT errors=1 stage=$($product.stage) detail=$($product.detail)"
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=$($product.stage) detail=$($product.detail)"
         exit 1
     }
 
@@ -1791,11 +1907,18 @@ try {
     Write-Log "产物 appid = '$productAppId'（期望 '$AppId'）"
     Write-Host "产物 appid = $productAppId（期望 $AppId）"
     if ($AppId -and $productAppId -ne $AppId) {
-        Write-Host "[error] 产物 appid 与期望不一致：产物=$productAppId 期望=$AppId" -ForegroundColor Red
-        Write-Host '        appid 来源是 manifest.json 的 mp-weixin.appid（不是本脚本的 -AppId，也不是 CLI 的 --appid）；' -ForegroundColor Red
-        Write-Host '        产物落成 touristappid = manifest 的 mp-weixin.appid 为 null/缺失（游客态）。' -ForegroundColor Red
-        Write-Log "MP_WEIXIN_RESULT errors=1 stage=appid product=$productAppId expected=$AppId"
-        exit 1
+        if ($BuildOnly) {
+            # -BuildOnly 下这条也**不断言**（与源 manifest 那条同源同因）：产物 appid 由 manifest 决定，
+            # 回写后必然 touristappid；本模式不上传 ⇒ 无害，且产物结构判据（#1210）已照跑。
+            Write-Host ">>> -BuildOnly：产物 appid='$productAppId' 与期望 '$AppId' 不一致 —— 本模式不做 appid 断言（不上传；产物结构判据已过）" -ForegroundColor Yellow
+            Write-Log "build-only: product-appid 不断言 product='$productAppId' expected='$AppId'"
+        } else {
+            Write-Host "[error] 产物 appid 与期望不一致：产物=$productAppId 期望=$AppId" -ForegroundColor Red
+            Write-Host '        appid 来源是 manifest.json 的 mp-weixin.appid（不是本脚本的 -AppId，也不是 CLI 的 --appid）；' -ForegroundColor Red
+            Write-Host '        产物落成 touristappid = manifest 的 mp-weixin.appid 为 null/缺失（游客态）。' -ForegroundColor Red
+            Write-Log "$(Get-GateResultPrefix) errors=1 stage=appid product=$productAppId expected=$AppId"
+            exit 1
+        }
     }
 
     # 指纹落盘（#1860）：只有**本轮真构建过**（走到这里时 -SkipBuild 仍为 false = 没被指纹/人工跳过）
@@ -1815,6 +1938,41 @@ try {
             Write-Host "[warn] 产物指纹落盘异常（不影响门结论，下次将重建）：$_" -ForegroundColor Yellow
             Write-Log "build-fingerprint save exception: $_"
         }
+    }
+
+    # ---------- -BuildOnly 的收口（#1861 第一段）----------
+    # 切点 = 上面「产物合法性 + 指纹落盘」之后、会话段之前（`Start-GateStage -Name 'automation'` 是唯一分界）。
+    # 走到这里说明构建面的三条判据都成立：publish 成功行已解析、产物合法性（#1210）已过、指纹已落盘。
+    # 之后整段（pre-flight quit / close→open→auto 重试 / 就绪闸门 / 探针 / 截图入库 / 贴门评论）**不执行** ——
+    # build-only 的全部价值就是「拿编译面判据而不付会话成本」，跑进去等于又变成 ②。
+    # ⚠️ 两条必须继承的东西仍在：`finally` 的 `Invoke-DevToolsClose`（publish 尾段 5–6 ms 内**必自启**微信
+    # 开发者工具，收掉那个自启实例靠的就是这条 finally —— 抽库/薄壳方案没有它）与 `Release-HxLock`（同 finally）。
+    # `exit` 位于 try 内时会照常执行 finally（2026-10-28 实测），故这里用 exit 而不写绕过 finally 的收尾。
+    if ($BuildOnly) {
+        # build= 只报**事实**：publish（真构建）/ skipped(fingerprint)（指纹命中，见 #1860）/
+        # skipped(explicit)（人显式 -SkipBuild ⇒ 只查产物，不冒充构建过）。
+        $buildMode = if (-not $SkipBuild) { 'publish' } elseif ($script:buildSkippedByFingerprint) { 'skipped(fingerprint)' } else { 'skipped(explicit)' }
+        $buildOnlyValues = [ordered]@{
+            appid = "$productAppId"
+            pages = "$($product.pages)"
+            product = 'ok'
+            build = $buildMode
+            elapsed = $(if (-not $SkipBuild) { "${publishSeconds}s" } else { 'n/a' })
+            log = $logRelative
+        }
+        $buildOnlyLine = "$($script:GatePlan.resultLine.prefix) " + (Format-GateMetricLine -Plan $script:GatePlan -Values $buildOnlyValues)
+        Write-Log "`n$buildOnlyLine"
+        # 阶段收尾：只有真跑过 HBuilderX 段（wait-hx / publish）才有未闭段；-SkipBuild 下从未 Start ⇒ 硬 Stop 会抛。
+        if (-not $SkipBuild) { Stop-GateStage }
+        Write-Host ''
+        Write-Host "✅ mp-weixin build-only 通过（构建面）：$buildOnlyLine" -ForegroundColor Green
+        Write-Host '   非等价声明：build-only 只证明「publish 成功 + 产物合法」，**不是** ② 的替代 ——' -ForegroundColor Yellow
+        Write-Host '   console error / exception / pageStack / 截图一概未取证（ADR-0043 决策 3 不动：建成它不构成降频 ② 的理由）。' -ForegroundColor Yellow
+        if ($PostToPr -gt 0) {
+            Write-Host '   注意：-BuildOnly 不贴 ② 门评论（-PostToIssue 在本模式下被忽略）；⑤ 行的评论形态由 #2049 落地。' -ForegroundColor Yellow
+            Write-Log 'build-only: -PostToIssue 忽略（本模式不产出 ② 门评论）'
+        }
+        exit 0
     }
 
     # 4) 清残留自动化会话 + 4.5) 重开项目窗口 + 5) 开自动化端口 —— **当作一个可重试的单元**（坑位 6）：
@@ -1867,7 +2025,7 @@ try {
             $lastReason = 'devtools-open-timeout'
             if ($attempt -lt $attempts) { continue }
             Write-Host "[error] cli.bat open 超时（$OpenTimeoutSeconds 秒）：项目窗口未重开 ⇒ auto 不会替你重开 ⇒ pageStack 必为空格。" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=devtools-open-timeout'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=devtools-open-timeout"
             exit 2
         }
 
@@ -1884,7 +2042,7 @@ try {
             if ($Doctor) { Add-DoctorRow -Layer 'L6 自动化端口' -Verdict 'FAIL' -Detail "第 $attempt/$attempts 次尝试：cli.bat auto 超时（$AutoTimeoutSeconds 秒）：自动化端口没开起来（残留会话多时见过此形态）" }
             if ($attempt -lt $attempts) { continue }
             Write-Host "[error] cli.bat auto 超时（$AutoTimeoutSeconds 秒，整段重试 $attempts 次用尽）" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=auto-timeout'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=auto-timeout"
             exit 2
         }
         $usingAppId = ''
@@ -1894,7 +2052,7 @@ try {
         Write-Host "cli auto 回显 AppID = $usingAppId"
         if ($AppId -and $usingAppId -and $usingAppId -ne $AppId) {
             Write-Host "[error] cli.bat auto 使用的 AppID（$usingAppId）与期望（$AppId）不一致。" -ForegroundColor Red
-            Write-Log "MP_WEIXIN_RESULT errors=1 stage=auto-appid using=$usingAppId expected=$AppId"
+            Write-Log "$(Get-GateResultPrefix) errors=1 stage=auto-appid using=$usingAppId expected=$AppId"
             exit 1
         }
 
@@ -1920,7 +2078,7 @@ try {
     }
     if (-not $listening) {
         Write-Host "[error] 自动化端口 $Port 未监听：cli.bat auto 未真正生效（整段 close → open → auto 重试 $attempts 次用尽）。" -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=port-not-listening'
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=port-not-listening"
         exit 2
     }
 
@@ -1934,7 +2092,7 @@ try {
         if (-not $npmCmd) { $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
         if (-not $npmCmd) {
             Write-Host '[error] 找不到 npm：无法准备 miniprogram-automator。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=npm-not-found'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=npm-not-found"
             exit 2
         }
         New-Item -ItemType Directory -Force -Path $autoRoot | Out-Null
@@ -1945,7 +2103,7 @@ try {
         Write-Host $npmStep.Output
         if (-not (Test-Path -LiteralPath $autoModule)) {
             Write-Host '[error] miniprogram-automator 装不上（见日志）：探针无法连自动化端口。' -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=automator-install-failed'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=automator-install-failed"
             exit 2
         }
     }
@@ -1960,7 +2118,7 @@ try {
     #      哪个里程碑 —— 不再笼统说成「端口连不上」。
     if (-not (Test-Path -LiteralPath $readyPath)) {
         Write-Host "[error] 缺就绪闸门脚本：$readyPath" -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-ready-gate'
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=no-ready-gate"
         exit 2
     }
     # 命令、超时、wait 预算一律取自门计划（计划里写明判据：SDKVersion + App.getPageStack）
@@ -1976,7 +2134,7 @@ try {
     }
     if (-not $readyJson) {
         Write-Host '[error] 就绪闸门未输出可解析的 MP_WEIXIN_READY 结果行（见日志）。' -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-ready-result'
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=no-ready-result"
         exit 2
     }
     $readyElapsed = Get-Prop $readyJson 'elapsedMs'
@@ -1993,7 +2151,7 @@ try {
     if (-not $readyOk) {
         Write-Host "[error] 自动化会话未就绪（reason=$(Get-Prop $readyJson 'reason')）：$(Get-Prop $readyJson 'detail')" -ForegroundColor Red
         Write-Host '        注意：端口是通的 —— 这不是「端口连不上」，是会话还没到可用状态（坑位 5）。' -ForegroundColor Red
-        Write-Log "MP_WEIXIN_RESULT errors=env-blocked reason=automation-not-ready detail=$(Get-Prop $readyJson 'detail')"
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=automation-not-ready detail=$(Get-Prop $readyJson 'detail')"
         exit 2
     }
 
@@ -2259,7 +2417,7 @@ try {
         Write-Host $probe.Output
         if ($probe.TimedOut) {
             Write-Host "[error] 探针超时（$($probeStep.timeoutSeconds) 秒）：``page.waitFor(选择器)`` 与导航 API 会静默挂起仍禁（#883/#1917）；锚点断言自带 8s 步超时不糊成整门超时（#1919）。" -ForegroundColor Red
-            Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=probe-timeout'
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=probe-timeout"
             exit 2
         }
         # **只看输出**：解析探针的 MP_WEIXIN_PROBE JSON（退出码不作判据）
@@ -2284,7 +2442,7 @@ try {
 
     if (-not $probeJson) {
         Write-Host '[error] 探针未输出可解析的 MP_WEIXIN_PROBE 结果行（见日志）。' -ForegroundColor Red
-        Write-Log 'MP_WEIXIN_RESULT errors=env-blocked reason=no-probe-result'
+        Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=no-probe-result"
         exit 2
     }
 
@@ -2420,7 +2578,9 @@ try {
     }
 } catch {
     Write-Host "[error] ② 脚本异常：$_" -ForegroundColor Red
-    Write-Log (New-MpWeixinEnvResultLine -Prefix 'MP_WEIXIN_RESULT' -Reason 'exception' -Failures @("环境不可用：脚本异常（$_）"))
+    # 前缀取自计划（#1861）：异常兜底此前**硬写** MP_WEIXIN_RESULT，-BuildOnly 下异常就会打成 ② 的 token，
+    # 分流被破坏 ⇒ 改走 Get-GateResultPrefix（计划未建时它自己回落到默认前缀，不在这里再写一份）。
+    Write-Log (New-MpWeixinEnvResultLine -Prefix (Get-GateResultPrefix) -Reason 'exception' -Failures @("环境不可用：脚本异常（$_）"))
     $exitCode = 2
 } finally {
     # 任意页直达探针（#1682）：异常/早退路径也必须还原 dist app.json（幂等，主路径已还原则是空操作；
@@ -2432,6 +2592,9 @@ try {
     if (Get-Command Release-HxLock -ErrorAction SilentlyContinue) { Release-HxLock }
     # -Doctor：无论从哪条路径退出都要把逐层体检报告打出来（早期 exit 也要能看到结论）
     if ($Doctor) { Write-DoctorReport }
+    # -BuildOnly（#1861 裁定「跑完打印脏改提示」）：**每条退出路径**都提示，且只在真的可能回写过工作树时
+    # 有意义 —— 这里不判「回写过没有」（那要跑 git、且会把「没脏」也当成结论），只把核对动作印给人。
+    if ($BuildOnly) { Write-BuildOnlyWorktreeHint }
 }
 
 # P1：仅门通过时贴「sha 绑定」评论（门结果免手抄；gh 不可用/取不到 sha 只警告，不改门结论）
@@ -2455,7 +2618,7 @@ if ($exitCode -eq 0 -and $PostToPr -gt 0) {
             -DirectPageLines @($directLines)
     } catch {
         Write-Host "[warn] 贴 ② 门评论失败（门结论不受影响，退出码仍为 $exitCode）：$_" -ForegroundColor Yellow
-        Write-Log "MP_WEIXIN_RESULT comment=FAILED exit=$exitCode detail=$_"
+        Write-Log "$(Get-GateResultPrefix) comment=FAILED exit=$exitCode detail=$_"
     }
 }
 exit $exitCode
