@@ -1,0 +1,38 @@
+/**
+ * 内容精选 `source` 字段的**双形态**判别（#1939 定断 2026-10-28）
+ *
+ * 为什么是双形态而不是新字段：`source` 在数据面是「来源名称」（迁移注释 '来源（如：公司官网、新华网）'、
+ * 管理端占位「请输入来源（如：和润天下、行业媒体等）」、API.md 示例 "source": "官网"），而根 CONTEXT.md
+ * 「内容精选」词条又写「报名入口/成绩查询的外链由 `source` 字段承载」——两处权威同一列。定断：
+ * **列不变，形态自解释** —— 填的是 http(s) 完整链接就当作外链（详情页给「查看原文」），
+ * 填的是名称就只当来源展示。改动后端或改解析器档位（让正文 `[文](url)` 可点）分别要新票/动共享件，
+ * 都不在本票射程内。
+ *
+ * 判据必须是**白名单协议**（只认 http/https）：`javascript:` / `data:` / 相对路径一律不当外链 ——
+ * 与 `utils/markdownInline.uts` 的 `inlineLinkSafe` 同一口径，别在第二处放行新协议。
+ */
+export function isExternalSourceUrl(source : string) : boolean {
+    if (source.length < 8) return false
+    const head = source.substring(0, 8).toLowerCase()
+    if (head == 'https://') return true
+    if (source.length < 7) return false
+    return source.substring(0, 7).toLowerCase() == 'http://'
+}
+
+/** 展示用：外链形态时只露域名（整条 URL 挤在元信息行里没有可读性） */
+export function sourceDomainOf(source : string) : string {
+    let rest = source
+    if (rest.length >= 8 && rest.substring(0, 8).toLowerCase() == 'https://') {
+        rest = rest.substring(8)
+    } else if (rest.length >= 7 && rest.substring(0, 7).toLowerCase() == 'http://') {
+        rest = rest.substring(7)
+    }
+    // ⚠️ 不落 Int 中间量：`rest.length` 推断成 Kotlin `Int`，而 `rest.indexOf` 在 UTS 里是
+    // `Number` ⇒ `end = slash` 会报 assignment type mismatch（④ 门 errors=2 实测）。
+    // 改成「按顺序截字符串」，不再跨类型赋值。
+    const slash = rest.indexOf('/')
+    if (slash >= 0) rest = rest.substring(0, slash)
+    const query = rest.indexOf('?')
+    if (query >= 0) rest = rest.substring(0, query)
+    return rest
+}

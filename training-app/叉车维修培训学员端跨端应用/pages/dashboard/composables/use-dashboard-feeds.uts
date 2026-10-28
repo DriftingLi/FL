@@ -13,12 +13,14 @@ import { getFeaturedContentsApi } from '../../../api/featured'
 import { getUnreadCountApi } from '../../../api/notification'
 import { getCourseListApi } from '../../../api/course'
 import type { StudentCourse, FeaturedContentItem, CourseItem } from '../../../types/index'
+import { DASHBOARD_NEWS_CATEGORIES, DASHBOARD_NEWS_LIMIT, mergeDashboardNews } from '../../../utils/dashboardNews'
 
 export type UseDashboardFeedsResult = {
     unreadCount : Ref<number>
     continueLearning : Ref<StudentCourse | null>
     myCourses : Ref<StudentCourse[]>
     newsList : Ref<FeaturedContentItem[]>
+    newsFailed : Ref<boolean>
     hotCourses : Ref<CourseItem[]>
     loadMyCourses : () => Promise<void>
     loadFeaturedContents : () => Promise<void>
@@ -71,16 +73,29 @@ export function useDashboardFeeds() : UseDashboardFeedsResult {
         }
     }
 
-    // ---- 精选内容（从 API 加载） ----
+    // ---- 精选内容（#1939：类别范围 = 考情 + 行业新闻 + 政策法规）----
+    // 公开列表只支持单个 category（#2063 边界：不加多值参数）⇒ 按类别各取一次再合并；
+    // 合并 / 去重 / 倒序 / 截断在 utils/dashboardNews 的纯函数里（行为腿真执行它）。
     const newsList = ref<FeaturedContentItem[]>([])
+    /** 三个类别**全部**失败：失败态与空态分开（#816 口径），拉不到不能说成「暂无资讯」 */
+    const newsFailed = ref<boolean>(false)
 
     async function loadFeaturedContents() : Promise<void> {
-        try {
-            const result = await getFeaturedContentsApi(1, 5)
-            newsList.value = result.items
-        } catch (e) {
-            console.warn('[dashboard] loadFeaturedContents failed:', e)
+        const groups : FeaturedContentItem[][] = []
+        let failedCount = 0
+        for (let i = 0; i < DASHBOARD_NEWS_CATEGORIES.length; i++) {
+            try {
+                const result = await getFeaturedContentsApi(1, DASHBOARD_NEWS_LIMIT, DASHBOARD_NEWS_CATEGORIES[i])
+                groups.push(result.items)
+            } catch (e) {
+                // 单类别失败不拦整块：首页只是 5 条预告（「更多」进列表页），
+                // 一个类别抖动不该把整块清空；只有全失败才落失败态。
+                failedCount = failedCount + 1
+                console.warn('[dashboard] loadFeaturedContents failed:', e)
+            }
         }
+        newsList.value = mergeDashboardNews(groups, DASHBOARD_NEWS_LIMIT)
+        newsFailed.value = failedCount == DASHBOARD_NEWS_CATEGORIES.length
     }
 
     // ---- 首页课程区（#1422：真实课程 + 热门口径，替代写死的 mock 数组） ----
@@ -103,6 +118,7 @@ export function useDashboardFeeds() : UseDashboardFeedsResult {
         continueLearning: continueLearning,
         myCourses: myCourses,
         newsList: newsList,
+        newsFailed: newsFailed,
         hotCourses: hotCourses,
         loadMyCourses: () => loadMyCourses(),
         loadFeaturedContents: () => loadFeaturedContents(),

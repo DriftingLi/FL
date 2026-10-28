@@ -1,13 +1,16 @@
 <template>
-    <!-- 新闻资讯板块 ——T05 手术自 dashboard.uvue 逐段搬出 -->
+    <!-- 新闻资讯板块 ——T05 手术自 dashboard.uvue 逐段搬出；#1939 接三类别真实内容 + 空态 / 失败态 -->
     <view class="news-section">
         <view class="section-header">
             <text class="section-title">新闻资讯</text>
             <text class="section-more" @click="onMore">更多</text>
         </view>
         <view class="section-underline"></view>
-        <view class="news-list">
-            <view v-for="(news, idx) in newsList" :key="idx" class="news-item" @click="onNewsClick(news)">
+        <!-- 失败态与空态分开（#816 口径）：拉不到不能说成「暂无资讯」 -->
+        <app-empty-state v-if="newsList.length == 0 && failed" text="资讯加载失败" action-text="重试" @action="onRetry" />
+        <app-empty-state v-else-if="newsList.length == 0" icon="📰" text="暂无资讯" />
+        <view v-else class="news-list">
+            <view v-for="news in newsList" :key="news.content_id" class="news-item" @click="onNewsClick(news)">
                 <text class="news-icon">+</text>
                 <text class="news-title" :style="{ flex: 1 }">{{ news.title }}</text>
                 <text class="news-date" v-if="news.published_at">{{ news.published_at }}</text>
@@ -18,14 +21,18 @@
 
 <script setup lang="uts">
     import type { FeaturedContentItem } from '../../../types/index'
+    import appEmptyState from '../../../components/app-empty-state/app-empty-state.uvue'
 
     const props = withDefaults(defineProps<{
         newsList? : FeaturedContentItem[]
+        /** 三类别**全部**取数失败（与「无数据」区分开） */
+        failed? : boolean
     }>(), {
-        newsList: () => [] as FeaturedContentItem[]
+        newsList: () => [] as FeaturedContentItem[],
+        failed: false
     })
 
-    const emit = defineEmits(['click', 'more'])
+    const emit = defineEmits(['click', 'more', 'retry'])
 
     function onNewsClick(news : FeaturedContentItem) : void {
         emit('click', news)
@@ -33,6 +40,10 @@
 
     function onMore() : void {
         emit('more')
+    }
+
+    function onRetry() : void {
+        emit('retry')
     }
 </script>
 

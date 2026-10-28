@@ -18,9 +18,14 @@
                 <!-- 元信息 -->
                 <view class="article-meta">
                     <text v-if="detail!.category_label.length > 0" class="meta-category">{{ detail!.category_label }}</text>
-                    <text v-if="detail!.source.length > 0" class="meta-text">{{ detail!.source }}</text>
+                    <!-- #1939 定断：source 双形态 —— 名称原样展示，完整链接只露域名 -->
+                    <text v-if="detail!.source.length > 0" class="meta-text">{{ sourceLabel }}</text>
                     <text v-if="detail!.published_at.length > 0" class="meta-text">{{ displayTime(detail!.published_at) }}</text>
                     <text class="meta-text">{{ detail!.view_count }} 阅读</text>
+                </view>
+                <!-- 原文外链：只有 source 是 http(s) 完整链接时才有（名称形态不造按钮） -->
+                <view v-if="hasSourceLink" class="source-link" @click="onOpenSource">
+                    <text class="source-link-text">查看原文</text>
                 </view>
                 <!-- 封面图 -->
                 <view v-if="detail!.cover_image.length > 0" class="cover-wrap">
@@ -69,6 +74,8 @@ import { goBack } from '../../utils/navigation'
     import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'
     import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
+    import { isExternalSourceUrl, sourceDomainOf } from '../../utils/featuredSource'
+    import { dispatchExternalLinkTap } from '../../utils/externalLinkDispatch'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
@@ -90,6 +97,26 @@ import { goBack } from '../../utils/navigation'
         if (detail.value == null || detail.value!.content.length == 0) return []
         return parseMarkdown(detail.value!.content, SUBSET_FEATURED)
     })
+
+    /** 元信息里那一行的来源文案：链接形态只展示域名，名称形态原样 */
+    const sourceLabel = computed<string>(() : string => {
+        if (detail.value == null) return ''
+        const src = detail.value!.source
+        if (isExternalSourceUrl(src)) return sourceDomainOf(src)
+        return src
+    })
+
+    /** 是否给出「查看原文」：协议闸在 utils/featuredSource（只认 http/https） */
+    const hasSourceLink = computed<boolean>(() : boolean => {
+        if (detail.value == null) return false
+        return isExternalSourceUrl(detail.value!.source)
+    })
+
+    /** 确认弹窗 + 按端分叉一律复用论坛那条编排（⑩-8/⑩-9），本页不自建第二份 */
+    function onOpenSource() : void {
+        if (detail.value == null) return
+        dispatchExternalLinkTap(detail.value!.source)
+    }
 
     function getHeadingSize(level : number) : string {
         if (level == 1) return '38rpx'
@@ -181,6 +208,22 @@ import { goBack } from '../../utils/navigation'
 
     .content-scroll {
         flex: 1;
+    }
+
+    /* #1939：原文外链按钮（source 为完整链接时才渲染；文字样式只能落在 text 上） */
+    .source-link {
+        margin: 0 32rpx 16rpx 32rpx;
+        padding: 16rpx 0;
+        border-radius: 12rpx;
+        border-width: 2rpx;
+        border-style: solid;
+        border-color: #2979ff;
+        align-items: center;
+    }
+
+    .source-link-text {
+        font-size: 28rpx;
+        color: #2979ff;
     }
 
     .loading-wrap {

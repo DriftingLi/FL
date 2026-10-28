@@ -1,0 +1,77 @@
+/**
+ * 首页新闻板块取数口径（#1939）
+ *
+ * 类别范围 = 考情 + 行业新闻 + 政策法规（字典值 exam / industry / news）。#2063 的六态里
+ * 公司动态（company）与产品资讯（product）不进 app，公告（notice）不重复进首页。
+ * 后端公开列表只支持**单个** category（#2063 边界：不加多值参数）⇒ 消费侧按类别各发一次，
+ * 本模块只负责合并。纯函数、不碰网络，故 utsHarness 能真执行（断言产物而不是源码片段）。
+ */
+import type { FeaturedContentItem } from '../types/index'
+
+/** 板块消费的类别（顺序即请求顺序，不决定最终排序） */
+export const DASHBOARD_NEWS_CATEGORIES : string[] = ['exam', 'industry', 'news']
+
+/** 板块卡片位 */
+export const DASHBOARD_NEWS_LIMIT : number = 5
+
+/**
+ * 排序键：把 `YYYY-MM-DDTHH:mm:ss` 压成一个整数（年*13 + 月 每级进位都 ≤ 4 位，跨端安全）。
+ *
+ * 为什么不用「直接比字符串」或 `Date.parse`：字符串的 `>` 在 UTS→Kotlin 的映射本仓没有先例，
+ * `Date.parse` 对带时区的 ISO 三端行为不一；而 `substring` + `parseInt` 在本仓都有既有用法。
+ * 不解析时区段：内容由同一管理端写入、时区同一。
+ * 长度不足（缺发布时间 / 只有日期）一律返回 0 ⇒ 垫底，而不是当成「最新」。
+ */
+function sortKeyOf(publishedAt : string) : number {
+    if (publishedAt.length < 19) return 0
+    const y = parseInt(publishedAt.substring(0, 4))
+    const mo = parseInt(publishedAt.substring(5, 7))
+    const d = parseInt(publishedAt.substring(8, 10))
+    const h = parseInt(publishedAt.substring(11, 13))
+    const mi = parseInt(publishedAt.substring(14, 16))
+    const s = parseInt(publishedAt.substring(17, 19))
+    return ((((y * 13 + mo) * 32 + d) * 24 + h) * 60 + mi) * 60 + s
+}
+
+/**
+ * 插入一项并按 published_at 倒序落位；同 content_id 已在表内则跳过（去重）。
+ * 空发布时间**垫底**而不是当最新：缺发布时间的内容不该霸占首页第一条。
+ * 不用 Array.sort 的比较器、不用 splice/slice —— 两者在 UTS 跨端支持面没把握，
+ * 手写 push 组装在 Kotlin / Swift / 小程序三端都稳。
+ */
+function insertByPublishedDesc(sorted : FeaturedContentItem[], item : FeaturedContentItem) : FeaturedContentItem[] {
+    for (let d = 0; d < sorted.length; d++) {
+        if (sorted[d].content_id == item.content_id) return sorted
+    }
+    const key = sortKeyOf(item.published_at)
+    let at = sorted.length
+    for (let j = 0; j < sorted.length; j++) {
+        if (key > sortKeyOf(sorted[j].published_at)) {
+            // 数值比较（不是字符串比较）：见 sortKeyOf 的口径说明
+            at = j
+            break
+        }
+    }
+    const next : FeaturedContentItem[] = []
+    for (let k = 0; k < at; k++) next.push(sorted[k])
+    next.push(item)
+    for (let k = at; k < sorted.length; k++) next.push(sorted[k])
+    return next
+}
+
+/** 多个类别的条目 → 去重 → 按发布时间倒序 → 取前 limit（limit <= 0 表示不限） */
+export function mergeDashboardNews(groups : FeaturedContentItem[][], limit : number) : FeaturedContentItem[] {
+    let sorted : FeaturedContentItem[] = []
+    for (let g = 0; g < groups.length; g++) {
+        const rows = groups[g]
+        for (let i = 0; i < rows.length; i++) {
+            sorted = insertByPublishedDesc(sorted, rows[i])
+        }
+    }
+    if (limit > 0 && sorted.length > limit) {
+        const cut : FeaturedContentItem[] = []
+        for (let i = 0; i < limit; i++) cut.push(sorted[i])
+        return cut
+    }
+    return sorted
+}
