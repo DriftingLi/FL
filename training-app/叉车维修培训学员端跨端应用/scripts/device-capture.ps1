@@ -213,6 +213,23 @@ param(
     [string]$Module = 'device',
     [string]$ArchiveModule = '',
     [switch]$NoArchive,
+    # ④-1（#2077 加固四项·其一）重试上限与熔断是两件事，分两个参数：
+    # - PageRetryLimit：同一页取不到产物时**再试几次**（不含头一次）。通道偶发一次不返回不该算缺口。
+    # - CircuitBreakAfter：**连续**几页取不到产物就停整条链 —— 已产页照落盘，剩下的页明报没跑，不假装跑完。
+    #   默认 3 的依据是成本账不是手感：逐页载体单页实测约 235 秒（docs/agents/dev-loop.md 的逐页时间账，
+    #   量于 23049RAD8C）⇒ 取 1 会让任意一次偶发把 #1864 的 60 页冒烟切成一夜几段；取 5 是链路真死时
+    #   白等约 20 分钟。取 3 = 最多多白等约 12 分钟后收工。BSD4 要求的「一页超时后下一句照跑」由重试
+    #   承接（要打破连续阈值得先连坏 3 页），本改动不与之冲突。
+    [int]$PageRetryLimit = 2,
+    [int]$CircuitBreakAfter = 3,
+    # ④-2（#2077 加固四项·其二）断点续跑：读归档目录里上一次留下的清单，跳过**已经拿到产物**的页。
+    # 只为 #1864 的分夜冒烟服务：INCOMPLETE 阻断发版，但它的处置是「修工具 / 修环境后续跑」（0043 决策 6），
+    # 没有续跑就得整批重采 —— 那是把「已产页照落盘」省下的时间又赔回去。
+    [switch]$Resume,
+    # ④-4（#2077 加固四项·其四）设备状态归一：把影响取证可比性的三项只读读数（电量 / 屏幕亮度 /
+    # 通知栏是否占顶）打进汇总、结果行与归档。异常读数记 WARN、不进失败清单 —— 设备状态不是产品缺陷，
+    # 判红会把「该给设备充电」写成「该修 App」（0043 决策 6 的 WARN 转人裁语义）。
+    [switch]$NoDeviceState,
     # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
     # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
     [int]$PostToIssue = 0,
@@ -277,6 +294,17 @@ $script:FinalTotals = [pscustomobject]@{
     RuntimeCrashes = 0; ProcessDeaths = 0; FatalSamples = @(); AnrSamples = @(); TimedOut = $false
 }
 $script:PageResultsAll = @()
+# ④-1（#2077）缺口账本：$script:CaptureGaps 收「这一页没拿到产物」的原始失败文案（同一条也进
+# $failures，好让既有那几条逐字锁的锚点一个都不动）；$gapStreak 是**连续**计数，够 CircuitBreakAfter 就熔断。
+$script:CaptureGaps = @()
+$script:BreakTriggered = $false
+$script:BreakAfterPages = 0
+# ④-2（#2077）续跑台账：$script:ManifestDone = 上一次已拿到产物的页；$script:ResumedSkipped = 本次靠它跳过的页。
+$script:ManifestDone = @{}
+$script:ResumedSkipped = @()
+# ④-4（#2077）设备状态读数与它的 WARN 清单（WARN 不进 $failures，见 param 注释）。
+$script:DeviceState = [pscustomobject]@{ BatteryPct = ''; Charging = ''; Brightness = ''; StatusBar = ''; Note = '' }
+$script:StateWarns = @()
 
 function Write-Log {
     param([string]$Message)
@@ -414,6 +442,134 @@ function Get-ForegroundInfo {
         }
     }
     return [pscustomobject]@{ Component = ''; Raw = ''; Source = ''; TimedOut = [bool]$r.TimedOut }
+}
+
+# ================= 设备状态（只读：dumpsys battery / display / statusbar）（#2077 加固四项·其四）=================
+# 为什么归一这三项：像素比对与白屏判定的可比性依赖设备侧条件——电量过低时厂商 ROM 会限频并压暗、
+# 手动低亮度会让「页面看起来白屏」与「屏幕就是暗」读成同一张图、通知栏展开时截到的是系统层而非本页。
+# 这三项**只读取数、只记 WARN、绝不进失败清单**：设备状态不是被测应用的缺陷，判红会把「该给设备充电」
+# 写成「该修 App」（0043 决策 6 的 WARN 转人裁）。字段名按 AOSP 的 dumpsys 形态取；本机 2510DRK44C
+# 三条读数**已于 2026-10-28 在 2510DRK44C（serial f0bae674）上标定**，格式按该机实测取，不按 AOSP 猜：
+#   · 电量：`dumpsys battery` 的 `level:`（该机 = 100）、充电看 powered 行的 true 或 `status:` 数字（该机 = 5）；
+#   · 亮度：该机给的是 `Display Brightness=0.06371731` 与 `mBrightnessState=`，**没有** AOSP 那份裸 `mBrightness=`；
+#   · 通知栏：该机 `dumpsys statusbar` **没有** `mExpanded`，改看 `dumpsys window windows` 里 NotificationShade
+#     窗口的 `mViewVisibility`（0x0 = 可见 / 铺满系统层，0x4 与 0x8 = 不可见）。
+# 取不到一律回 `n/a` 并记 WARN，不猜值、不拿默认数冒充实测（换机型要重新标定这三条）。
+function Get-DeviceState {
+    param([int]$BudgetSeconds = 15)
+    $pick = { param([string]$Text, [string]$Pattern)
+        $m = [regex]::Match($Text, $Pattern)
+        if ($m.Success) { return $m.Groups[1].Value }
+        return 'n/a'
+    }
+    $batt = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'battery') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
+    $disp = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'display') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
+    $win  = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'window', 'windows') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
+    # 通知栏：先取读数再拼对象，「NotifShade 标题行 → 它自己的 mViewVisibility」在该机实测隔 11 行
+    # （352 → 363），窗口给 20 行留余量；调用只做一次，别在对象字面量里重复求值。
+    $shadeVis = & $pick ([string]$win.Text) 'NotificationShade\}\s*:\s*(?:[^\n]*\n){0,20}?[^\n]*mViewVisibility=0x([0-9a-fA-F]+)'
+    $shade = if ($shadeVis -eq 'n/a') { 'n/a' } elseif ($shadeVis -eq '0') { 'true' } else { 'false' }
+    $st = [pscustomobject]@{
+        BatteryPct = & $pick ([string]$batt.Text) 'level:\s*([0-9]+)'
+        # Charging 认两种真机形态：powered 行的 true，或 status: 的数字（AOSP 1=未知 2=充电 3=放电 4=未充 5=充满）。
+        # 只认 true 会在多数 ROM 上恒回 n/a —— 那等于这一项根本没归一，只是长得像有读数（#2077 stub 腿实测）。
+        Charging   = $(if ((& $pick ([string]$batt.Text) '(?:AC powered|USB powered|Wireless powered):\s*true') -ne 'n/a') { 'powered' }
+                      else { & $pick ([string]$batt.Text) 'status:\s*([0-9]+)' })
+        Brightness = & $pick ([string]$disp.Text) '(?:Display Brightness|mBrightnessState|mBrightnessFull|mBrightness)[=:]\s*([0-9.]+)'
+        StatusBar  = $shade
+        TimedOut   = [bool]($batt.TimedOut -or $disp.TimedOut -or $win.TimedOut)
+        # Note 必须在返回值里存在：状态块声明了它，而本函数会把整个对象换掉 —— StrictMode 下
+        # 汇总行读 .Note 会直接抛，把一次可判的取证塌成 UNUSABLE（#2077 真链路 stub 腿实测到此）。
+        Note       = ''
+    }
+    $warn = @()
+    if ($st.BatteryPct -match '^[0-9]+$' -and [int]$st.BatteryPct -lt 20) { $warn += ('battery=' + $st.BatteryPct + '%（<20 ⇒ ROM 可能限频压暗，像素比对基线不可比）') }
+    if ($st.Brightness -ne 'n/a' -and $st.Brightness -match '^[0-9.]+$' -and [double]$st.Brightness -lt 0.05) { $warn += ('brightness=' + $st.Brightness + '（过暗 ⇒ 白屏判定不可读）') }
+    if ($st.StatusBar -eq 'true') { $warn += 'notification-shade=open（截图含系统层而非本页）' }
+    foreach ($one in @($batt, $disp, $win)) {
+        if ($one.TimedOut) { $warn += ('device-state 调用未在 ' + $BudgetSeconds + ' 秒内返回（tier=device-state）—— 没读到，不是设备没这项') }
+    }
+    return [pscustomobject]@{ State = $st; Warns = @($warn) }
+}
+
+# ④-3（#2077）产物入库补齐「读数 + 结果行」。截图本来就随票落 docs/verification/device/<票号>/（#1770 起
+# 目录键是号码），缺的是让那目录**自证**的两件：门结论行本身、以及支撑它的环境读数。补上之后，读归档目录
+# 的人不必再回日志文件才能判断「这次是测过了还是没测上」（0043 决策 6 的 INCOMPLETE 尤其需要这一格）。
+# 两个落点共用这一份：本地取证目录（每次都有）与仓库归档目录（入库成功时）——路径推导不自抄第二份。
+function Write-ReadingsFiles {
+    param([string]$Dir, [string]$Status)
+    if (-not $Dir) { return '' }
+    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return '' }
+    # 每行都写成**双引号内插值**（不用 `'x=' + $y` 拼接）：逗号分隔的数组字面量里，`+` 拼接的条目会被
+    # 拆成多个数组元素（#2077 stub 腿实测：readings.txt 一度 15 行变 42 行、每个字段名独占一行）。
+    # 既有 $summary 那一族一直用内插值写法，这里与它同形，不自创第二种。
+    $lines = @(
+        "device-capture 读数与结果行（#2077 ④-3 产物入库）",
+        "generated=$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
+        "DEVICE_CAPTURE_RESULT=$Status",
+        "device=serial=$($script:Serial) model=$($script:DeviceModel)",
+        "foreground=$($script:Foreground.Component) package=$($script:TargetPackage)",
+        "DEVICE_STATE battery=$($script:DeviceState.BatteryPct)% charging=$($script:DeviceState.Charging) brightness=$($script:DeviceState.Brightness) shade=$($script:DeviceState.StatusBar) note=$($script:DeviceState.Note)",
+        "state_warn=$(@($script:StateWarns) -join ' | ')",
+        "CAPTURE_GAP pages=$(@($script:CaptureGaps).Count) broken=$(if ($script:BreakTriggered) { 'YES' } else { 'no' }) breakThreshold=$CircuitBreakAfter retryLimit=$PageRetryLimit",
+        "RESUME given=$(if ($Resume) { 'YES' } else { 'no' }) skipped=$(@($script:ResumedSkipped).Count) ledger=$manifestPath",
+        "pages=$(@($script:PageResultsAll | ForEach-Object { "$($_.Page)=$($_.Status)" }) -join ',')",
+        "read_only_guarantee=adb devices / exec-out screencap / shell dumpsys / shell logcat -d 四项只读，未做写操作"
+    )
+    $out = Join-Path $Dir 'readings.txt'
+    Set-Content -LiteralPath $out -Value ($lines -join "`r`n") -Encoding UTF8
+    Write-Log ('读数与结果行已写：' + $out)
+    return $out
+}
+
+# ================= 加固四项的可测单元（#2077）=================
+# 为什么单独成函数：#1562 / #1568 的行为腿都是「AST 抽出函数 + 假 adb 真跑」那一套形态 ——
+# 熔断与续跑的判定若留在 main 里，行为腿就取不到它，只能靠接线级正则断言（guards.md：接线守护不构成证据）。
+# 这两个单元**不碰设备**，是纯逻辑：给读数就给结论，因此断路腿与正常腿都能在 CI 上确定性复现。
+
+# ④-1（#2077）结论按**成因**分，不按条数猜（0043 决策 6：FAIL 修产品 / INCOMPLETE 修工具与环境）。
+# 通道成因的文案自带两种形状 ——「未在 N 秒内返回」与「0 字节」（#1562 / #1568 定的原话，
+# 那几条既有失败清单条目一个字没改，这里只是把它们认成「没测上」而不是「测出问题」）；
+# 其余失败（FATAL EXCEPTION / ANR / 页身份哈希撞车 / 前台不是目标包）才是产品侧信号 ⇒ FAIL。
+# 为什么要分：以前设备掉线、通道不返回也一律落 FAIL，读结论的人会去查 App，而该查的是工具或那根线。
+# FAIL 优先：既发现产品问题又没采全时，产品缺陷是更强更可操作的信号，
+# 而「没采全」另有 CAPTURE_GAP 结论行与结果行里的缺口计数同时可见，不会被这一格吞掉。
+function Resolve-StatusWord {
+    param([array]$Failures, [array]$CaptureGaps, [bool]$Broken)
+    $channelRx = '未在 [0-9]+ 秒内返回|0 字节|取不到前台 Activity'
+    $product = @($Failures | Where-Object { -not ($_ -match $channelRx) })
+    if (@($product).Count -gt 0) { return 'FAIL' }
+    if ((@($CaptureGaps).Count -gt 0) -or $Broken) { return 'INCOMPLETE' }
+    return 'PASS'
+}
+
+# ④-1（#2077）连续缺口计数：拿到产物就归零，没拿到就 +1。抽出来是因为「归零」这一半最容易被写错 ——
+# 写成「有失败就 +1」会让一次产品缺陷把连续数顶到阈值、把整链熔断，而熔断的处置（修工具）与时机都不对。
+function Update-GapStreak {
+    param([int]$Streak, [bool]$NoProduct)
+    if (-not $NoProduct) { return 0 }
+    return $Streak + 1
+}
+
+# ④-2（#2077）续跑台账：一行一页（页 TAB 截图 TAB 结论）。随产随写而不是跑完一次性写 ——
+# 链子在任意一页被掐掉（这正是熔断与掉线的主场景），前面记下的页仍然续得上。
+# 读回时 GAP 行不算已产：上一轮没拿到产物的页，这一轮仍要重采。
+function Read-CaptureLedger {
+    param([string]$Path)
+    $done = @{}
+    if (-not $Path) { return $done }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $done }
+    foreach ($line in (Get-Content -LiteralPath $Path -Encoding UTF8)) {
+        $cols = @($line -split "`t")
+        if (@($cols).Count -ge 2 -and $cols[0] -and $cols[1] -ne 'GAP') { $done[$cols[0]] = $cols[1] }
+    }
+    return $done
+}
+
+function Add-CaptureLedger {
+    param([string]$Path, [string]$Page, [string]$Shot)
+    if (-not $Path -or -not $Page) { return }
+    Add-Content -LiteralPath $Path -Value ($Page + "`t" + $Shot + "`tPASS") -Encoding UTF8
 }
 
 function Get-PackageFromComponent {
@@ -725,6 +881,8 @@ function Archive-Screenshots {
 
     $targetDir = Join-Path $ProjectRoot (Join-Path 'docs\verification' (Join-Path $ArchiveModuleName "$PrNumber"))
     New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+    # ④-3（#2077）读数与结果行随票同目录（复用同一份写法，不另起第二处路径推导）。
+    Write-ReadingsFiles -Dir $targetDir -Status $script:FinalStatus | Out-Null
 
     $skippedPages = @()
     if ($usable.Count -gt $ArchiveMaxCount) {
@@ -848,10 +1006,24 @@ Write-Log ('运行时间：' + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
 Write-Log "adb=$AdbExe  Device=$(if ($Device) { $Device } else { '(自动取唯一在线设备)' })  Pages=$Pages  切页=$CanStart"
 if ($ForbidStart) { Write-Log '-NoStartApp/-SkipAppStart 已生效：本次不发任何 am start（优先级高于 -AllowAppStart，fail-safe）' }
 
-$exitCodes = @{ Pass = 0; Assert = 1; Unusable = 2 }
+$exitCodes = @{ Pass = 0; Assert = 1; Unusable = 2; Incomplete = 3 }
 $pageResults = @()
 $failures = @()
 $notes = @()
+# ④-1（#2077）连续缺口计数 = 熔断的分子（够 CircuitBreakAfter 就停整条链）。
+# ④-2（#2077）续跑台账：每拿下一页的产物就 append 一行，-Resume 时读回来跳过已采页。
+$gapStreak = 0
+$manifestPath = Join-Path $VerifyRoot 'captured.tsv'
+
+if ($Resume) {
+    $script:ManifestDone = Read-CaptureLedger -Path $manifestPath
+    if (@($script:ManifestDone.Keys).Count -gt 0) {
+        Write-Log ("-Resume：台账 $manifestPath 里有 $($script:ManifestDone.Count) 页已产，本次跳过这几页")
+    } else {
+        Write-Log "-Resume：台账不存在（$($manifestPath)）⇒ 本次按全量跑，不假装续上了"
+        $notes += '-Resume 给了但没有台账（第一次跑不带 -Resume，产物目录里才会有 captured.tsv）'
+    }
+}
 
 try {
     if (-not (Test-Path -LiteralPath $AdbExe -PathType Leaf)) {
@@ -859,6 +1031,20 @@ try {
     }
     $script:Serial = Resolve-DeviceSerial -Requested $Device
     Write-Log "设备：serial=$($script:Serial) model=$($script:DeviceModel)"
+
+    # ④-4（#2077）设备状态归一：三项只读读数进汇总 / 结果行 / 归档。异常只记 WARN（转人裁），
+    # **不进**失败清单 —— 判红会把「该给设备充电」写成「该修 App」（0043 决策 6）。
+    if ($NoDeviceState) {
+        $script:DeviceState.Note = 'skipped（-NoDeviceState）'
+        Write-Log "设备状态：本次按 -NoDeviceState 跳过"
+    } else {
+        $ds = Get-DeviceState -BudgetSeconds $AdbTextCallTimeoutSeconds
+        $script:DeviceState = $ds.State
+        $script:StateWarns = @($ds.Warns)
+        Write-Log ("设备状态：battery=" + $script:DeviceState.BatteryPct + "% charging=" + $script:DeviceState.Charging +
+            " brightness=" + $script:DeviceState.Brightness + " shade=" + $script:DeviceState.StatusBar)
+        foreach ($w in @($script:StateWarns)) { Write-Log "  WARN 设备状态：$w" }
+    }
 
     # 窗口起点必须先于一切取证动作取（否则本次动作产生的日志会落在窗口外）
     $baseline = Get-LogcatBaseline
@@ -891,25 +1077,67 @@ try {
         if (@($pageList).Count -eq 1) { $shotName = (Convert-PageToFileName -Page $pageList[0] -Suffix 'current') }
         Write-Log "只读取证：不切页，仅对**当前前台**采 1 张图 -> $shotName"
         $shot = Export-Screenshot -Name $shotName
+        # ④-1（#2077）重试上限：只读取证就一页，通道偶发不返回 / 零字节先在同一页上重试，
+        # 用尽仍拿不到产物才记缺口。预算不变：每次都是一条有界调用（D12 的单次超时口径一个字没动）。
+        $retryUsed = 0
+        while ($retryUsed -lt $PageRetryLimit -and ($shot.TimedOut -or $shot.Bytes -le 0)) {
+            $retryUsed = $retryUsed + 1
+            Write-Log ("  重试 $retryUsed/$PageRetryLimit：$shotName 上一次" + $(if ($shot.TimedOut) { "未在 $AdbCallTimeoutSeconds 秒内返回" } else { "落了 0 字节" }))
+            $shot = Export-Screenshot -Name $shotName
+        }
         $script:ShotRecords = @($shot)
+        if ($Resume) {
+            # 只读模式压根没逐页（就采当前前台 1 页）⇒ -Resume 在这里没有可跳过的页，如实说，不假装续跑生效。
+            Write-Log "  -Resume 在只读模式下无可跳过的页（本链只采当前前台 1 页；逐页续跑请配 -AllowAppStart 或走 -FullRepo 载体 #2078）"
+        }
         foreach ($page in $pageList) {
             Write-Log "  SKIP：$page —— 未切页：切页默认关闭"
             $pageResults += [pscustomobject]@{ Page = $page; Status = 'SKIP'; Detail = '未切页：切页默认关闭'; Shot = $shot.Name }
         }
         if ($shot.TimedOut) { $failures += "截图调用未在 $AdbCallTimeoutSeconds 秒内返回（$shotName）—— 是 adb 通道不返回，不是设备没亮屏" }
         elseif ($shot.Bytes -le 0) { $failures += "截图未落盘或为 0 字节（$shotName）" }
+        # ④-1（#2077）上面两条既有失败文案**一字未动**（它们同时是 #1562/#1568 的锚点），这里只是**多**记一笔
+        # 成因分类：拿不到产物属「没测上」（0043 决策 6 的 INCOMPLETE，处置指向工具），不是产品缺陷。
+        if ($shot.TimedOut -or $shot.Bytes -le 0) {
+            $script:CaptureGaps += "只读取证未拿到产物（$shotName，重试 $retryUsed 次）"
+            $gapStreak = $gapStreak + 1
+        }
     } else {
         # ---------------- 显式切页模式（只有 -AllowAppStart 才可达） ----------------
         if (-not $script:TargetPackage) {
             Fail-Environment '切页模式需要目标包名：既没给 -Package，也取不到当前前台包名'
         }
         foreach ($page in $pageList) {
+            # ④-2（#2077）断点续跑：台账里已拿到产物的页直接跳过（不重采、不算缺口）。
+            if ($Resume -and $script:ManifestDone.ContainsKey($page)) {
+                $shotOfRecord = [string]$script:ManifestDone[$page]
+                Write-Log "── 跳过：$page（-Resume：上次已产 $shotOfRecord）"
+                $script:ResumedSkipped += $page
+                $pageResults += [pscustomobject]@{ Page = $page; Status = 'RESUMED'; Detail = '断点续跑跳过（上次已拿到产物）'; Shot = $shotOfRecord }
+                continue
+            }
+            if ($script:BreakTriggered) {
+                # ④-1（#2077）熔断之后剩下的页**明报没跑**：已产页照落盘，没跑的写清楚是没跑，
+                # 不拿「跑完了但都 SKIP」冒充一整批采完（0043 决策 6「零产物不得冒充绿」的同一把尺）。
+                Write-Log "  GAP：$page —— 熔断已触发，本次不再尝试"
+                $pageResults += [pscustomobject]@{ Page = $page; Status = 'GAP'; Detail = "熔断未跑（已连续 $($script:BreakAfterPages) 页取不到产物）"; Shot = '' }
+                continue
+            }
             Write-Log "── 切页：$page（-AllowAppStart 已显式开启）"
             Start-AppPage -Page $page
             Start-Sleep -Seconds $PageSettleSeconds
             $fg = Get-ForegroundInfo
             $script:Foreground = $fg
             $shot = Export-Screenshot -Name (Convert-PageToFileName -Page $page -Suffix 'after')
+            # ④-1（#2077）同一页重试到 PageRetryLimit 才算一次缺口。**重试只重拍截图、不重发 am start**：
+            # 切页本身已被定性为机械不可用（D11 三条根因），重发没有意义，而 D2 要的「唯一 am start 调用点」
+            # 也维持一处不变。偶发一次通道不返回因此先在同一页上消化掉，不至于把连续计数顶上去。
+            $retryUsed = 0
+            while ($retryUsed -lt $PageRetryLimit -and ($shot.TimedOut -or $shot.Bytes -le 0)) {
+                $retryUsed = $retryUsed + 1
+                Write-Log ("  重试 $retryUsed/$PageRetryLimit：$page 上一次" + $(if ($shot.TimedOut) { "未在 $AdbCallTimeoutSeconds 秒内返回" } else { "落了 0 字节" }))
+                $shot = Export-Screenshot -Name (Convert-PageToFileName -Page $page -Suffix 'after')
+            }
             $script:ShotRecords += $shot
             $pageFail = @()
             if (-not $fg.Component) { $pageFail += '取不到前台 Activity' }
@@ -927,6 +1155,22 @@ try {
             }
             Write-Log "  前台=$($fg.Component) 截图=$($shot.Name) 判定=$status"
             $pageResults += [pscustomobject]@{ Page = $page; Status = $status; Detail = ($pageFail -join '；'); Shot = $shot.Name }
+            # ④-1（#2077）缺口 → 连续计数 → 熔断。判据只看**有没有产物**（帧没拿到 = 这一页没测上），
+            # 拿到产物但断言报红（FATAL / 页身份 / 前台不是目标包）属产品侧信号，不算缺口、会把连续数归零。
+            if ($shot.TimedOut -or $shot.Bytes -le 0) {
+                $script:CaptureGaps += "$page -> 取不到产物（重试 $retryUsed 次后仍" + $(if ($shot.TimedOut) { " 通道未返回" } else { " 零字节" }) + "）"
+                $gapStreak = Update-GapStreak -Streak $gapStreak -NoProduct $true
+                if ($gapStreak -ge $CircuitBreakAfter) {
+                    $script:BreakTriggered = $true
+                    $script:BreakAfterPages = $gapStreak
+                    Write-Log "  熔断：连续 $gapStreak 页取不到产物（阈值 $CircuitBreakAfter）⇒ 整链停，已产页照落盘，剩下的页明报未跑"
+                }
+            } elseif (@($pageFail).Count -eq 0) {
+                $gapStreak = Update-GapStreak -Streak $gapStreak -NoProduct $false
+                # ④-2（#2077）台账 append：这一页真拿到产物了才记账，供下次 -Resume 跳过。
+                # 每页一行、随产随写（不是跑完一次性写）：链子在任意一页被掐掉，前面记下的页仍然续得上。
+                Add-CaptureLedger -Path $manifestPath -Page $page -Shot $shot.Name
+            }
         }
 
         # ---- 页身份 fail-closed：多页截图哈希相同 ⇒ 切页没真的生效 ----
@@ -1010,6 +1254,13 @@ try {
         #（token 与 emulator-smoke 的 C11 同名，读日志的人不必记两套名字）
         "LOGCAT_INCONCLUSIVE=$(if ($final.TimedOut) { 1 } else { 0 })",
         "页身份断言：$(if ($CanStart) { '已启用 —— 多页截图哈希相同即判 FAIL（防切页静默失效）' } else { '不适用（未切页）' })",
+        # ④-4（#2077）设备状态三项读数进汇总（WARN 不判 FAIL，见 param 注释）。
+        "DEVICE_STATE battery=$($script:DeviceState.BatteryPct)% charging=$($script:DeviceState.Charging) brightness=$($script:DeviceState.Brightness) shade=$($script:DeviceState.StatusBar) warn=$(@($script:StateWarns).Count) note=$($script:DeviceState.Note)",
+        # ④-1（#2077）缺口与熔断是**可见的结论行**，不只埋在日志里：读结论的人要能一眼看出
+        # 「这批没采完」与「这批采完了但有产品问题」是两件事（0043 决策 6）。
+        "CAPTURE_GAP pages=$(@($script:CaptureGaps).Count) consecutiveStreakAtBreak=$($script:BreakAfterPages) breakThreshold=$CircuitBreakAfter retriedPerPage=$PageRetryLimit broken=$(if ($script:BreakTriggered) { 'YES' } else { 'no' })",
+        # ④-2（#2077）续跑台账：跳过几页、台账在哪、本次新记几页。
+        "RESUME given=$(if ($Resume) { 'YES' } else { 'no' }) skipped=$(@($script:ResumedSkipped).Count) ledger=$manifestPath",
         "目录=$VerifyRoot  日志=$LogPath"
     )
     $summary | ForEach-Object { Write-Log $_ }
@@ -1017,10 +1268,18 @@ try {
     if (@($failures).Count -gt 0) { $failures | ForEach-Object { Write-Log "断言失败：$_" } }
 
     $script:PageResultsAll = $pageResults
-    $statusWord = 'PASS'
-    if (@($failures).Count -gt 0) { $statusWord = 'FAIL' }
-    Write-Result $statusWord (("页面 " + (($pageResults | ForEach-Object { "$($_.Page)=$($_.Status)" }) -join ', ')) + "  前台=$($script:Foreground.Component)  logcat窗口行数=$($final.WindowLines)  FATAL=$($final.FatalCount)  ANRin包=$($final.AnrPkgCount)")
+    # ④-1（#2077）按**成因**分三种结论，不是按条数猜（0043 决策 6：FAIL 修产品 / INCOMPLETE 修工具与环境）：
+    #   · 通道成因的文案自带两种形状 ——「未在 N 秒内返回」与「0 字节」（#1562 / #1568 定的原话，
+    #     那两条既有失败清单条目一个字没改，这里只是把它们认成「没测上」而不是「测出问题」）；
+    #   · 其余失败（FATAL EXCEPTION / ANR / 页身份哈希撞车 / 前台不是目标包）才是产品侧信号 ⇒ FAIL。
+    # 为什么要改这一格：以前设备掉道、通道不返回也一律落 FAIL，读结论的人会去查 App，而该查的是工具
+    # 或那根 USB 线 —— 这正是决策 6 把 INCOMPLETE 单列出来的理由。**FAIL 优先**：既发现问题又没采全时，
+    # 产品缺陷是更强更可操作的信号，而「没采全」由上面 CAPTURE_GAP 那行与结果行里的 gap 计数同时可见。
+    $statusWord = Resolve-StatusWord -Failures $failures -CaptureGaps $script:CaptureGaps -Broken $script:BreakTriggered
+    Write-Result $statusWord (("页面 " + (($pageResults | ForEach-Object { "$($_.Page)=$($_.Status)" }) -join ', ')) + "  前台=$($script:Foreground.Component)  logcat窗口行数=$($final.WindowLines)  FATAL=$($final.FatalCount)  ANRin包=$($final.AnrPkgCount)" + "  缺口页=$(@($script:CaptureGaps).Count) 熔断=$(if ($script:BreakTriggered) { 'YES' } else { 'no' }) 续跑跳过=$(@($script:ResumedSkipped).Count) 设备状态WARN=$(@($script:StateWarns).Count)")
     $script:FinalStatus = $statusWord
+    # ④-3（#2077）本地取证目录每次都留读数（入库失败也留，否则断路腿什么产物都没有）。
+    Write-ReadingsFiles -Dir $VerifyRoot -Status $statusWord | Out-Null
 } catch {
     Write-Log "脚本异常：$($_.Exception.Message)"
     Write-Result 'UNUSABLE' $_.Exception.Message
@@ -1033,7 +1292,10 @@ try {
 
 if ($PostToPr -gt 0) {
     $archived = @()
-    if ($script:FinalStatus -eq 'PASS' -or $script:FinalStatus -eq 'FAIL') {
+    # ④-1 / ④-3（#2077）归档门槛加上 INCOMPLETE：熔断时**已产页照落盘**是票面 ④-1 的硬要求，
+    # 旧条件把 INCOMPLETE 排除在外，等于「一熔断就把已经拍到的证据一起扔掉」——那正是零产物冒充绿的反面，
+    # 也是断路腿无法取证的原因。UNUSABLE（环境不可用）仍然不归档：那时连一次有效取证都没开始。
+    if ($script:FinalStatus -eq 'PASS' -or $script:FinalStatus -eq 'FAIL' -or $script:FinalStatus -eq 'INCOMPLETE') {
         $archived = Archive-Screenshots -Shots $script:ShotRecords -PrNumber $PostToPr
     }
     $shotLines = @()
@@ -1074,5 +1336,9 @@ if ($PostToPr -gt 0) {
 }
 
 if ($script:FinalStatus -eq 'FAIL') { exit $exitCodes.Assert }
+# ④-1（#2077）INCOMPLETE 单独一个非零出口（0043 决策 6：同样阻断发版，但处置指向工具 / 环境）。
+# 判成败仍以 DEVICE_CAPTURE_RESULT 为准（D7：不得依赖退出码）；给独立出口码只为让无人值守的
+# 分夜冒烟能在 shell 层把「该修工具」与「该修 App」分开记，不为它新增任何判据。
+if ($script:FinalStatus -eq 'INCOMPLETE') { exit $exitCodes.Incomplete }
 if ($script:FinalStatus -eq 'UNUSABLE') { exit $exitCodes.Unusable }
 exit $exitCodes.Pass
