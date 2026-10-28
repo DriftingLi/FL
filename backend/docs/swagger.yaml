@@ -1453,6 +1453,10 @@ definitions:
     type: object
   favorite.FavoriteDTO:
     properties:
+      company:
+        description: Company / Region 仅 target_type = job 有意义（职位卡最小字段）；其余类型省略该键（x-optional）。
+        type: string
+        x-optional: true
       course_id:
         description: |-
           CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
@@ -1465,6 +1469,17 @@ definitions:
         type: string
       favorite_id:
         type: integer
+      region:
+        type: string
+        x-optional: true
+      tags:
+        description: |-
+          Tags 题库标签（法规/结构/液压…），收藏面按它在「题目」类型内部下钻一层，只有 question 有值；
+          其余类型与无标签的题一律发 `[]`（nonnil 表态：集合出口不吐 null，客户端不必判空再遍历）。
+          一题多标签时顺序按标签 sort_order。
+        items:
+          $ref: '#/definitions/favorite.FavoriteTagDTO'
+        type: array
       target_id:
         type: integer
       target_type:
@@ -1484,6 +1499,13 @@ definitions:
         type: integer
       total:
         type: integer
+    type: object
+  favorite.FavoriteTagDTO:
+    properties:
+      tag_id:
+        type: integer
+      tag_name:
+        type: string
     type: object
   featured.FeaturedContentAdminDetailDTO:
     properties:
@@ -2648,6 +2670,11 @@ definitions:
     properties:
       accuracy:
         type: number
+      by_tag:
+        description: ByTag 考点标签维度的正确率（#2068）：与 by_type 并列、不替换；只含有作答的标签。
+        items:
+          $ref: '#/definitions/practicemode.PracticeTagStat'
+        type: array
       by_type:
         additionalProperties:
           $ref: '#/definitions/practicemode.PracticeTypeStat'
@@ -2657,6 +2684,19 @@ definitions:
       total:
         type: integer
       wrong:
+        type: integer
+    type: object
+  practicemode.PracticeTagStat:
+    properties:
+      accuracy:
+        type: number
+      correct:
+        type: integer
+      tag_id:
+        type: integer
+      tag_name:
+        type: string
+      total:
         type: integer
     type: object
   practicemode.PracticeTypeStat:
@@ -4326,6 +4366,12 @@ definitions:
         type: integer
       student_id:
         type: integer
+      top_wrong_option:
+        description: |-
+          TopWrongOption 该题历史上「最多人选错的选项」（#2068）：只统计 is_correct=false 且答案非空的作答
+          （正确项因此天然排除）；该题作答总数 < 5 时不返回该键——缺省不是空串，客户端据此决定不展示。
+        type: string
+        x-optional: true
       wrong_count:
         type: integer
     type: object
@@ -10913,10 +10959,14 @@ paths:
       - application/json
       description: 分页查询收藏，快照回填；支持按 target_type 过滤
       parameters:
-      - description: 目标类型 course/chapter/question/featured/topic
+      - description: 目标类型 course/chapter/question/featured/topic/job
         in: query
         name: target_type
         type: string
+      - description: 题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）
+        in: query
+        name: tag_id
+        type: integer
       - default: 1
         description: 页码
         in: query

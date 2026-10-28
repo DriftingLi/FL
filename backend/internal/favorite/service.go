@@ -28,6 +28,7 @@ const (
 	FavoriteTargetQuestion = "question"
 	FavoriteTargetFeatured = "featured"
 	FavoriteTargetTopic    = "topic"
+	FavoriteTargetJob      = "job"
 )
 
 // Service 通用收藏服务。
@@ -53,6 +54,19 @@ type FavoriteDTO struct {
 	Title     string `json:"title"`
 	Cover     string `json:"cover"`
 	CreatedAt string `json:"created_at"`
+	// Company / Region 仅 target_type = job 有意义（职位卡最小字段）；其余类型省略该键（x-optional）。
+	Company string `json:"company,omitempty" extensions:"x-optional"`
+	Region  string `json:"region,omitempty" extensions:"x-optional"`
+	// Tags 题库标签（法规/结构/液压…），收藏面按它在「题目」类型内部下钻一层，只有 question 有值；
+	// 其余类型与无标签的题一律发 `[]`（nonnil 表态：集合出口不吐 null，客户端不必判空再遍历）。
+	// 一题多标签时顺序按标签 sort_order。
+	Tags []FavoriteTagDTO `json:"tags" nullability:"nonnil"`
+}
+
+// FavoriteTagDTO 题库标签的最小引用（下钻分组用，不带描述等编辑面字段）。
+type FavoriteTagDTO struct {
+	TagID   int    `json:"tag_id"`
+	TagName string `json:"tag_name"`
 }
 
 // FavoritePageResult 收藏分页结果。
@@ -69,7 +83,10 @@ type favoriteTargetMeta struct {
 	Cover string
 	// CourseID 目标所属课程（仅章节有意义，其余类型为 0）；与 FavoriteDTO.CourseID 同口径。
 	CourseID int
-	Found    bool
+	// Company / Region 仅职位有意义（职位卡最小字段），其余类型为空串。
+	Company string
+	Region  string
+	Found   bool
 }
 
 // validateFavoriteTarget 校验收藏目标类型合法且存在/可见。
@@ -93,9 +110,13 @@ var (
 	ErrFavTargetQuestionRejected = errors.New("题目不存在或不可收藏")
 	ErrFavTargetFeaturedRejected = errors.New("内容不存在或不可收藏")
 	ErrFavTargetTopicNotFound    = errors.New("帖子不存在")
-	ErrFavTargetTypeUnsupported  = errors.New("收藏类型仅支持 course/chapter/question/featured/topic")
-	ErrFavTargetIDInvalid        = errors.New("收藏目标 ID 无效")
-	ErrFavoriteNotFound          = errors.New("收藏不存在")
+	ErrFavTargetJobRejected      = errors.New("职位不存在或已停止招聘")
+	ErrFavTargetTypeUnsupported  = errors.New("收藏类型仅支持 course/chapter/question/featured/topic/job")
+	// ErrFavTagFilterRequiresQuestion tag_id 过滤只在「收藏的题目」这一支有意义：
+	// 标签是题库的维度，课程/章节/职位没有，静默忽略会让调用方以为过滤生效了。
+	ErrFavTagFilterRequiresQuestion = errors.New("tag_id 过滤仅支持 target_type=question")
+	ErrFavTargetIDInvalid           = errors.New("收藏目标 ID 无效")
+	ErrFavoriteNotFound             = errors.New("收藏不存在")
 )
 
 func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope questionbank.QuestionReadScope) error {
@@ -148,6 +169,18 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 		if cnt == 0 {
 			return ErrFavTargetTopicNotFound
 		}
+	case FavoriteTargetJob:
+		// 学员侧只认「在招且未被强制下架」：closed / forced_offline 与不存在同对待，
+		// 收藏面因此不会给出一个点进去是下架页的坏链接（#2067 的失效口径＝过滤）。
+		var cnt int64
+		if err := db.Model(&model.JobPosting{}).
+			Where("id = ? AND status = ? AND forced_offline = ?", targetID, "open", false).
+			Count(&cnt).Error; err != nil {
+			return err
+		}
+		if cnt == 0 {
+			return ErrFavTargetJobRejected
+		}
 	default:
 		return ErrFavTargetTypeUnsupported
 	}
@@ -192,8 +225,61 @@ func favoriteTargetsMeta(db *gorm.DB, targetType string, ids []int) map[int]favo
 		for _, r := range rows {
 			result[int(r.ID)] = favoriteTargetMeta{Title: r.Title, Found: true}
 		}
+	case FavoriteTargetJob:
+		var jobs []model.JobPosting
+		// 与写时校验同一判据：下架/强制下线的职位在这一支也查不回来 ⇒ 列表里不出现。
+		db.Select("id, recruiter_id, title, region").
+			Where("id IN ? AND status = ? AND forced_offline = ?", ids, "open", false).Find(&jobs)
+		recruiterIDs := make([]int, 0, len(jobs))
+		for _, j := range jobs {
+			recruiterIDs = append(recruiterIDs, j.RecruiterID)
+		}
+		companies := loadRecruiterCompanies(db, recruiterIDs)
+		for _, j := range jobs {
+			result[j.ID] = favoriteTargetMeta{
+				Title: j.Title, Region: j.Region, Company: companies[j.RecruiterID], Found: true,
+			}
+		}
 	}
 	return result
+}
+
+// loadRecruiterCompanies recruiter_id → company_name（职位卡「企业」一格）。
+// 查不动按空串降级：企业名缺失不该让整页收藏 500。
+func loadRecruiterCompanies(db *gorm.DB, ids []int) map[int]string {
+	out := make(map[int]string, len(ids))
+	if len(ids) == 0 {
+		return out
+	}
+	var rows []model.RecruiterUser
+	db.Select("id, company_name").Where("id IN ?", ids).Find(&rows)
+	for _, r := range rows {
+		out[r.ID] = r.CompanyName
+	}
+	return out
+}
+
+// loadQuestionTags question_id → 标签（按 sort_order、id 排序，供收藏面「题目」类型下钻）。
+func (s *Service) loadQuestionTags(questionIDs []int) map[int][]FavoriteTagDTO {
+	out := make(map[int][]FavoriteTagDTO, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return out
+	}
+	var rows []struct {
+		QuestionID int    `gorm:"column:question_id"`
+		TagID      int    `gorm:"column:tag_id"`
+		TagName    string `gorm:"column:tag_name"`
+	}
+	s.db.Table("question_tag_relation AS r").
+		Joins("JOIN question_tag AS t ON t.id = r.tag_id").
+		Select("r.question_id AS question_id, t.id AS tag_id, t.name AS tag_name").
+		Where("r.question_id IN ?", questionIDs).
+		Order("t.sort_order ASC, t.id ASC").
+		Scan(&rows)
+	for _, r := range rows {
+		out[r.QuestionID] = append(out[r.QuestionID], FavoriteTagDTO{TagID: r.TagID, TagName: r.TagName})
+	}
+	return out
 }
 
 // Add 收藏（幂等：已收藏直接返回既有条目）。
@@ -223,6 +309,13 @@ func (s *Service) Add(userID int, targetType string, targetID int, qScope questi
 	if meta, ok := favoriteTargetsMeta(s.db, targetType, []int{targetID})[targetID]; ok {
 		// Add / List 两条路径共用同一 meta ⇒ course_id 同口径，零额外查询（#1089 Q2）。
 		dto.Title, dto.Cover, dto.CourseID = meta.Title, meta.Cover, meta.CourseID
+		dto.Company, dto.Region = meta.Company, meta.Region
+	}
+	dto.Tags = []FavoriteTagDTO{}
+	if targetType == FavoriteTargetQuestion {
+		if tags, ok := s.loadQuestionTags([]int{targetID})[targetID]; ok {
+			dto.Tags = tags
+		}
 	}
 	return &dto, nil
 }
@@ -256,8 +349,11 @@ func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any
 }
 
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
-func (s *Service) List(userID int, targetType string, page, pageSize int, credentialID *int) (*FavoritePageResult, error) {
+func (s *Service) List(userID int, targetType string, page, pageSize int, credentialID, tagID *int) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
+	if tagID != nil && targetType != FavoriteTargetQuestion {
+		return nil, ErrFavTagFilterRequiresQuestion
+	}
 	rows, total, page, pageSize, err := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
 		"created_at DESC, favorite_id DESC",
 		func(q *gorm.DB) *gorm.DB {
@@ -276,6 +372,11 @@ func (s *Service) List(userID int, targetType string, page, pageSize int, creden
 				q = q.Where("(target_type NOT IN (?, ?) OR (target_type = ? AND target_id IN ("+courseSub+")) OR (target_type = ? AND target_id IN ("+questionSub+")))",
 					FavoriteTargetCourse, FavoriteTargetQuestion, FavoriteTargetCourse, courseArgs[0], FavoriteTargetQuestion, questionArgs[0])
 			}
+			// 题目内部按题库标签下钻一层（#2067）：关系表对 (question, tag) 唯一 ⇒ 不会重复行。
+			if tagID != nil && targetType == FavoriteTargetQuestion {
+				q = q.Joins("JOIN question_tag_relation ON question_tag_relation.question_id = favorite.target_id").
+					Where("question_tag_relation.tag_id = ?", *tagID)
+			}
 			return q
 		})
 	if err != nil {
@@ -291,10 +392,22 @@ func (s *Service) List(userID int, targetType string, page, pageSize int, creden
 		for t, ids := range byType {
 			metas[t] = favoriteTargetsMeta(s.db, t, ids)
 		}
+		// 题目条目的标签一次批量载入（下钻分组用）；其余类型不查这张关系表。
+		var questionTags map[int][]FavoriteTagDTO
+		if byType[FavoriteTargetQuestion] != nil {
+			questionTags = s.loadQuestionTags(byType[FavoriteTargetQuestion])
+		}
 		for _, r := range rows {
 			dto := favoriteToDTO(&r)
 			if meta, ok := metas[r.TargetType][r.TargetID]; ok && meta.Found {
 				dto.Title, dto.Cover, dto.CourseID = meta.Title, meta.Cover, meta.CourseID
+				dto.Company, dto.Region = meta.Company, meta.Region
+				dto.Tags = []FavoriteTagDTO{}
+				if r.TargetType == FavoriteTargetQuestion {
+					if tags, ok := questionTags[r.TargetID]; ok {
+						dto.Tags = tags
+					}
+				}
 				items = append(items, dto)
 			}
 		}

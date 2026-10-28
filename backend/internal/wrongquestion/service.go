@@ -66,7 +66,10 @@ type WrongQuestionDTO struct {
 	Question       *questionbank.QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
 	QuestionID     int                       `json:"question_id"`
 	StudentID      int                       `json:"student_id"`
-	WrongCount     int                       `json:"wrong_count"`
+	// TopWrongOption 该题历史上「最多人选错的选项」（#2068）：只统计 is_correct=false 且答案非空的作答
+	// （正确项因此天然排除）；该题作答总数 < 5 时不返回该键——缺省不是空串，客户端据此决定不展示。
+	TopWrongOption *string `json:"top_wrong_option,omitempty" extensions:"x-optional"`
+	WrongCount     int     `json:"wrong_count"`
 }
 
 // WrongQuestionPageDTO 错题本分页（字段按 JSON key 字母序：items / page / page_size / total）。
@@ -128,6 +131,7 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 	questions := questionbank.LoadQuestionsByIDs(s.db, questionIDs)
 	favoriteIDs := s.loadFavoriteIDs(studentID, questionIDs)
 	lastAnswers := s.loadLastUserAnswers(studentID, questionIDs)
+	topWrong := s.loadTopWrongOptions(questionIDs)
 
 	result := make([]WrongQuestionDTO, 0, len(items))
 	for i := range items {
@@ -137,6 +141,11 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 		if q, ok := questions[wq.QuestionID]; ok {
 			dto := questionbank.NewQuestionDTO(q, true)
 			question = &dto
+		}
+		var topWrongOption *string
+		if ans, ok := topWrong[wq.QuestionID]; ok && ans != "" {
+			v := ans
+			topWrongOption = &v
 		}
 		result = append(result, WrongQuestionDTO{
 			CreatedAt:      timefmt.FormatISO(wq.CreatedAt),
@@ -150,6 +159,7 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 			Question:       question,
 			QuestionID:     wq.QuestionID,
 			StudentID:      wq.StudentID,
+			TopWrongOption: topWrongOption,
 			WrongCount:     wq.WrongCount,
 		})
 	}
@@ -159,6 +169,66 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 		PageSize: pageSize,
 		Total:    total,
 	}, nil
+}
+
+// topWrongOptionMinSample 易错项的最少样本量：与单题全站统计（practicemode.questionStats）同阈值，
+// 样本太小时「最多人选错」只是一两个人的偶然，不当作系统性误区（#2068）。
+const topWrongOptionMinSample = 5
+
+// loadTopWrongOptions 批量取每题的「最多人选错的选项」（#2068）。
+//
+// 口径（可复算）：分母 = 该题全部作答次数（question_practice_record，按题目聚合、不限学员）；
+// 分子 = 按 user_answer 分组的 is_correct=false 次数；空答案不计（空提交不是「选错某个选项」）。
+// 正确项因此不进候选——判错行的 user_answer 本来就不等于正确答案。并列按答案字典序升序取第一条，
+// 保证同一份数据每次返回同一个值。两次批量查询覆盖整页（禁 N+1）。
+func (s *Service) loadTopWrongOptions(questionIDs []int) map[int]string {
+	out := make(map[int]string, len(questionIDs))
+	if len(questionIDs) == 0 {
+		return out
+	}
+	var totals []struct {
+		QuestionID int   `gorm:"column:question_id"`
+		Total      int64 `gorm:"column:total"`
+	}
+	s.db.Model(&model.QuestionPracticeRecord{}).
+		Select("question_id, COUNT(*) AS total").
+		Where("question_id IN ?", questionIDs).
+		Group("question_id").Scan(&totals)
+	totalByQuestion := make(map[int]int64, len(totals))
+	for _, t := range totals {
+		totalByQuestion[t.QuestionID] = t.Total
+	}
+
+	var rows []struct {
+		QuestionID int    `gorm:"column:question_id"`
+		UserAnswer string `gorm:"column:user_answer"`
+		Cnt        int64  `gorm:"column:cnt"`
+	}
+	s.db.Model(&model.QuestionPracticeRecord{}).
+		Select("question_id, user_answer, COUNT(*) AS cnt").
+		Where("question_id IN ? AND is_correct = ? AND user_answer <> ''", questionIDs, false).
+		Group("question_id, user_answer").Scan(&rows)
+
+	best := make(map[int]struct {
+		Answer string
+		Cnt    int64
+	}, len(rows))
+	for _, r := range rows {
+		if totalByQuestion[r.QuestionID] < topWrongOptionMinSample {
+			continue
+		}
+		cur, seen := best[r.QuestionID]
+		if !seen || r.Cnt > cur.Cnt || (r.Cnt == cur.Cnt && r.UserAnswer < cur.Answer) {
+			best[r.QuestionID] = struct {
+				Answer string
+				Cnt    int64
+			}{Answer: r.UserAnswer, Cnt: r.Cnt}
+		}
+	}
+	for q, b := range best {
+		out[q] = b.Answer
+	}
+	return out
 }
 
 // loadLastUserAnswers 批量查询每题「学员最近一次作答」的答案（question_id → user_answer）。

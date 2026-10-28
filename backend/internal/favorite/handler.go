@@ -50,7 +50,8 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param target_type query string false "目标类型 course/chapter/question/featured/topic"
+// @Param target_type query string false "目标类型 course/chapter/question/featured/topic/job"
+// @Param tag_id query int false "题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Success 200 {object} response.R{data=FavoritePageResult} "success"
@@ -60,7 +61,8 @@ func (h *handler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	credID := middleware.CredentialIDPtr(c)
 	resp, err := h.svc.List(userID, c.Query("target_type"),
-		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID)
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID,
+		httpx.QueryIDPtr(c, "tag_id"))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -113,6 +115,7 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrFavTargetQuestionRejected, Status: http.StatusBadRequest},
 		{Sentinel: ErrFavTargetFeaturedRejected, Status: http.StatusBadRequest},
 		{Sentinel: ErrFavTargetTopicNotFound, Status: http.StatusBadRequest},
+		{Sentinel: ErrFavTargetJobRejected, Status: http.StatusBadRequest},
 		{Sentinel: ErrFavTargetTypeUnsupported, Status: http.StatusBadRequest},
 	},
 	Fallback: http.StatusInternalServerError,
