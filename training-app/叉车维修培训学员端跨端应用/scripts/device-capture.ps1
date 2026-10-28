@@ -449,8 +449,12 @@ function Get-ForegroundInfo {
 # 手动低亮度会让「页面看起来白屏」与「屏幕就是暗」读成同一张图、通知栏展开时截到的是系统层而非本页。
 # 这三项**只读取数、只记 WARN、绝不进失败清单**：设备状态不是被测应用的缺陷，判红会把「该给设备充电」
 # 写成「该修 App」（0043 决策 6 的 WARN 转人裁）。字段名按 AOSP 的 dumpsys 形态取；本机 2510DRK44C
-# **尚未在真机上标定过这三条读数**（加固会话里设备在 `adb devices` 显示 `offline`，见 #2077 现测段）
-# ⇒ 取不到一律回 `n/a` 并记 WARN，不猜值、不拿默认数冒充实测。
+# 三条读数**已于 2026-10-28 在 2510DRK44C（serial f0bae674）上标定**，格式按该机实测取，不按 AOSP 猜：
+#   · 电量：`dumpsys battery` 的 `level:`（该机 = 100）、充电看 powered 行的 true 或 `status:` 数字（该机 = 5）；
+#   · 亮度：该机给的是 `Display Brightness=0.06371731` 与 `mBrightnessState=`，**没有** AOSP 那份裸 `mBrightness=`；
+#   · 通知栏：该机 `dumpsys statusbar` **没有** `mExpanded`，改看 `dumpsys window windows` 里 NotificationShade
+#     窗口的 `mViewVisibility`（0x0 = 可见 / 铺满系统层，0x4 与 0x8 = 不可见）。
+# 取不到一律回 `n/a` 并记 WARN，不猜值、不拿默认数冒充实测（换机型要重新标定这三条）。
 function Get-DeviceState {
     param([int]$BudgetSeconds = 15)
     $pick = { param([string]$Text, [string]$Pattern)
@@ -460,16 +464,20 @@ function Get-DeviceState {
     }
     $batt = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'battery') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
     $disp = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'display') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
-    $bar  = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'statusbar') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
+    $win  = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'window', 'windows') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
+    # 通知栏：先取读数再拼对象，「NotifShade 标题行 → 它自己的 mViewVisibility」在该机实测隔 11 行
+    # （352 → 363），窗口给 20 行留余量；调用只做一次，别在对象字面量里重复求值。
+    $shadeVis = & $pick ([string]$win.Text) 'NotificationShade\}\s*:\s*(?:[^\n]*\n){0,20}?[^\n]*mViewVisibility=0x([0-9a-fA-F]+)'
+    $shade = if ($shadeVis -eq 'n/a') { 'n/a' } elseif ($shadeVis -eq '0') { 'true' } else { 'false' }
     $st = [pscustomobject]@{
         BatteryPct = & $pick ([string]$batt.Text) 'level:\s*([0-9]+)'
         # Charging 认两种真机形态：powered 行的 true，或 status: 的数字（AOSP 1=未知 2=充电 3=放电 4=未充 5=充满）。
         # 只认 true 会在多数 ROM 上恒回 n/a —— 那等于这一项根本没归一，只是长得像有读数（#2077 stub 腿实测）。
         Charging   = $(if ((& $pick ([string]$batt.Text) '(?:AC powered|USB powered|Wireless powered):\s*true') -ne 'n/a') { 'powered' }
                       else { & $pick ([string]$batt.Text) 'status:\s*([0-9]+)' })
-        Brightness = & $pick ([string]$disp.Text) 'mBrightness(?:Full)?[=:]\s*([0-9.]+)'
-        StatusBar  = & $pick ([string]$bar.Text) 'mExpanded[=:]\s*(true|false)'
-        TimedOut   = [bool]($batt.TimedOut -or $disp.TimedOut -or $bar.TimedOut)
+        Brightness = & $pick ([string]$disp.Text) '(?:Display Brightness|mBrightnessState|mBrightnessFull|mBrightness)[=:]\s*([0-9.]+)'
+        StatusBar  = $shade
+        TimedOut   = [bool]($batt.TimedOut -or $disp.TimedOut -or $win.TimedOut)
         # Note 必须在返回值里存在：状态块声明了它，而本函数会把整个对象换掉 —— StrictMode 下
         # 汇总行读 .Note 会直接抛，把一次可判的取证塌成 UNUSABLE（#2077 真链路 stub 腿实测到此）。
         Note       = ''
@@ -478,7 +486,7 @@ function Get-DeviceState {
     if ($st.BatteryPct -match '^[0-9]+$' -and [int]$st.BatteryPct -lt 20) { $warn += ('battery=' + $st.BatteryPct + '%（<20 ⇒ ROM 可能限频压暗，像素比对基线不可比）') }
     if ($st.Brightness -ne 'n/a' -and $st.Brightness -match '^[0-9.]+$' -and [double]$st.Brightness -lt 0.05) { $warn += ('brightness=' + $st.Brightness + '（过暗 ⇒ 白屏判定不可读）') }
     if ($st.StatusBar -eq 'true') { $warn += 'notification-shade=open（截图含系统层而非本页）' }
-    foreach ($one in @($batt, $disp, $bar)) {
+    foreach ($one in @($batt, $disp, $win)) {
         if ($one.TimedOut) { $warn += ('device-state 调用未在 ' + $BudgetSeconds + ' 秒内返回（tier=device-state）—— 没读到，不是设备没这项') }
     }
     return [pscustomobject]@{ State = $st; Warns = @($warn) }
